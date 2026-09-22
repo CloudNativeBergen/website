@@ -46,6 +46,12 @@ const FIELDS = [
   'genderSelfDescribe',
   'country',
   'consent',
+  // #1148. In FIELDS because `SpeakerAdminDetail` promises it — see that type
+  // for why an editor reading this payload needs the true value. It is NOT in
+  // the 'writes back' case below: the live admin modal reads its speaker from
+  // `getSpeakers`, not from here, and saying otherwise would overstate what
+  // this line protects today.
+  'socialTagOptOut',
   'slug',
   'image',
 ]

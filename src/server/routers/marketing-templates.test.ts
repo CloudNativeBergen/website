@@ -174,12 +174,16 @@ beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'] })
   vi.setSystemTime(new Date('2026-12-01T10:00:00Z'))
   h.getConference.mockResolvedValue({ conference: CONFERENCE, error: null })
-  h.tenantRead.mockImplementation(async (_q: string, p: { id: string }) =>
-    p.id.includes(OURS)
-      ? { _type: 'planTemplate', orgId: 'org-A' }
-      : p.id.includes(THEIRS)
-        ? { _type: 'planTemplate', orgId: 'org-B' }
-        : null,
+  h.tenantRead.mockImplementation(async (_q: string, p: { id?: string }) =>
+    // The short-code batch mint (short-links spec §2.2) reads the codes the
+    // conference already holds before the expansion materializes any Task.
+    _q.includes('defined(shortCode)') || !p.id
+      ? []
+      : p.id.includes(OURS)
+        ? { _type: 'planTemplate', orgId: 'org-A' }
+        : p.id.includes(THEIRS)
+          ? { _type: 'planTemplate', orgId: 'org-B' }
+          : null,
   )
   h.getPlanId.mockResolvedValue('marketingPlan.conf-A')
   h.getPlanView.mockResolvedValue(null)

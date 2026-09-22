@@ -6,6 +6,8 @@ const h = vi.hoisted(() => ({
   error: false,
   commits: 0,
 }))
+const revalidateTag = vi.hoisted(() => vi.fn())
+vi.mock('next/cache', () => ({ revalidateTag }))
 vi.mock('@/lib/sanity/client', () => ({
   clientReadUncached: { fetch: vi.fn() },
   clientWrite: {
@@ -45,6 +47,8 @@ vi.mock('@/lib/sanity/client', () => ({
   },
 }))
 import { createMarketingTask } from '../sanity'
+import { sequentialShortCodes } from '../short-code'
+import { shortLinkIndexTag } from '@/lib/cache/tags'
 beforeEach(() => {
   h.docs = []
   h.error = false
@@ -76,6 +80,7 @@ function records(channel: 'bluesky' | 'linkedin' = 'bluesky') {
     body: '',
     alt: '',
     origin: 'manual',
+    newShortCode: sequentialShortCodes(),
     newId: (type) => `${type}-${channel}-${counter++}`,
   })
 }
@@ -101,6 +106,21 @@ it('commits empty draft post/variant/Task and divergence together', async () => 
   expect(h.docs.find((d) => d._id === 'plan')).toMatchObject({
     structurallyEdited: true,
   })
+})
+it('expires the conference code index, and only when the commit LANDED', async () => {
+  // A manually added Task carries a NEW code (short-links spec §2.4). If the
+  // membership set is not expired, its short link answers the HOME PAGE.
+  revalidateTag.mockClear()
+  expect(await createMarketingTask(records(), 'conf')).toBe(true)
+  expect(revalidateTag).toHaveBeenCalledWith(shortLinkIndexTag('conf'), {
+    expire: 0,
+  })
+  // A refused commit wrote no code, so there is nothing to invalidate.
+  revalidateTag.mockClear()
+  h.error = true
+  expect(await createMarketingTask(records(), 'conf')).toBe(false)
+  expect(revalidateTag).not.toHaveBeenCalled()
+  h.error = false
 })
 it('keeps a requested sibling in the same transaction and rolls back every record on conflict', async () => {
   const rows = records()

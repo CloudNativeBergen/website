@@ -51,6 +51,7 @@ const variant: SocialPostVariant = {
   usesCustomTime: false,
   claimedAt: null,
   submission: null,
+  shortCode: null,
   link: 'https://cloudnativebergen.dev/tickets?utm_source=linkedin&utm_medium=social&utm_campaign=tickets&utm_content=early-bird',
   attachments: [{ source: 'att-wide', crop: null, altOverride: null }],
   publishResult: null,

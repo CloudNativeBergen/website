@@ -84,6 +84,18 @@ export interface SpeakerInput extends SpeakerBase {
    * {@link Speaker.messagingEmailDefault}.
    */
   messagingEmailDefault?: boolean
+  /**
+   * "Don't tag me in social posts" (#1148, MARKETING_TAGGING_SPEC §3.2).
+   *
+   * NOT a consent grant, so it is not in {@link SpeakerConsent}: every member
+   * there records a permission granted, this records one withheld. Absent
+   * counts as NOT opted out.
+   *
+   * The companion `socialTagOptOutAt` is DELIBERATELY ABSENT from this type.
+   * It is the server's record of when the opt-out was made and is stamped by
+   * `updateSpeaker`; a client-supplied value is discarded.
+   */
+  socialTagOptOut?: boolean
 }
 
 /**
@@ -203,6 +215,17 @@ export interface Speaker extends SpeakerBase {
    * all existing speaker docs with no migration.
    */
   messagingEmailDefault?: boolean
+  /**
+   * The speaker asked not to be @-mentioned in marketing posts about them or
+   * their talk (#1148). Absent means NOT opted out. Mirrors the write-side
+   * {@link SpeakerInput.socialTagOptOut}.
+   */
+  socialTagOptOut?: boolean
+  /**
+   * When {@link socialTagOptOut} was set, stamped SERVER-SIDE. Written and
+   * cleared only together with the boolean, and never accepted from a client.
+   */
+  socialTagOptOutAt?: string
 }
 
 /**
@@ -246,6 +269,18 @@ export interface SpeakerAdminDetail {
   country?: string | null
   consent?: SpeakerConsent
   image?: string
+  /**
+   * #1148. Projected so this endpoint cannot hand an organizer surface a
+   * `false`-looking `undefined` for a speaker who HAS opted out.
+   *
+   * NOT a live bug today: `SpeakerManagementModal` reads its speaker from
+   * `getSpeakers` (a `...` spread), and `speaker.admin.getById` has no UI
+   * consumer yet. It is projected because anything that edits a speaker through
+   * THIS payload would submit a withdrawal an organizer may not make, and every
+   * save of that person would then be refused — a failure that arrives as
+   * `undefined`, not as an error.
+   */
+  socialTagOptOut?: boolean
 }
 
 export interface SpeakerWithTalks extends Speaker {

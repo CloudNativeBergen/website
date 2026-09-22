@@ -404,9 +404,11 @@ describe('Campaign cascade gates', () => {
       {
         _id: 't',
         _rev: 't-rev',
+        shortCode: null,
         variant: {
           _id: 'v',
           _rev: 'v-rev',
+          shortCode: null,
           status,
           postId: 'post',
           ownPost: true,

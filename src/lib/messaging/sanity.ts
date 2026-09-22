@@ -1625,7 +1625,17 @@ export async function addMessage({
   body: string
   reopen?: boolean
   /** Server-authorized outreach Task; completion commits atomically with delivery. */
-  marketingTask?: { id: string; rev: string }
+  marketingTask?: {
+    id: string
+    rev: string
+    /**
+     * Extra fields to land in the SAME compare-and-set patch — the outreach
+     * `shortCode` backfill (short-links spec §2.2), which must not take a
+     * second patch of its own: that would advance the revision this one
+     * compare-and-sets on.
+     */
+    fields?: Record<string, unknown>
+  }
 }): Promise<Message> {
   const now = new Date().toISOString()
   const messageId = `message.${nanoid()}`
@@ -1678,7 +1688,9 @@ export async function addMessage({
 
   if (marketingTask) {
     transaction.patch(marketingTask.id, (patch) =>
-      patch.ifRevisionId(marketingTask.rev).set({ messageId }),
+      patch
+        .ifRevisionId(marketingTask.rev)
+        .set({ ...marketingTask.fields, messageId }),
     )
   }
   await transaction.commit()

@@ -64,6 +64,9 @@ function speakerDoc(
       privacyPolicyVersion: '2025-01',
     },
     messagingEmailDefault: false,
+    // Opted out of social-post tags (#1148), with the time it was set.
+    socialTagOptOut: true,
+    socialTagOptOutAt: '2026-09-22T10:30:00.000Z',
     // The duplicate-merge recovery trail (#1027): each entry is a FULL COPY of
     // a speaker record a merge deleted, so the sweep has to clear it.
     mergedWith: [
@@ -199,6 +202,10 @@ describe('the field patch — replace, never unset', () => {
       'gender',
       'country',
       'messagingEmailDefault',
+      // The tag opt-out and its timestamp (#1148): a dated refusal about
+      // accounts whose links this same plan unsets.
+      'socialTagOptOut',
+      'socialTagOptOutAt',
       // The merge trail holds ANOTHER person's deleted record — name, email,
       // bio, possibly gender/country. Leaving it would keep personal data alive
       // on a document we have just told someone was erased.

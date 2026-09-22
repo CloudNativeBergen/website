@@ -108,6 +108,9 @@ const survivorDoc: MergeSpeakerDoc = {
 
 const loserDoc: MergeSpeakerDoc = {
   _id: LOSER,
+  // Real documents always carry one, and the loser's revision is the
+  // precondition that stops a concurrent opt-out being deleted unread.
+  _rev: 'rev-loser',
   _type: 'speaker',
   name: 'Ada L',
   email: 'ada.l@work.io',
@@ -232,6 +235,37 @@ describe('mergeSpeakers (transaction wrapper)', () => {
     expect(deleteMock).toHaveBeenCalledWith(LOSER)
     expect(txOrder[txOrder.length - 1]).toBe('delete')
     expect(txOrder.slice(0, -1).every((op) => op === 'patch')).toBe(true)
+  })
+
+  it('REVISION-GUARDS the loser, so a concurrent opt-out cannot be deleted unread', async () => {
+    // The loser's `socialTagOptOut` is read at plan time and carried UP onto
+    // the survivor (#1148). Sanity has no precondition on `delete`, so without
+    // a guarded patch the loser is the ONE document in the transaction nobody
+    // checks: an opt-out ticked between the read and the commit is deleted
+    // without ever being copied — a refusal silently lost by an operator
+    // action. A stale revision must 409 the whole transaction instead.
+    const { committed, err } = await mergeSpeakers({
+      survivorId: SURVIVOR,
+      loserId: LOSER,
+      actor: { _id: 'admin-1', name: 'Admin' },
+      dryRun: false,
+    })
+    expect(err).toBeNull()
+    expect(committed).toBe(true)
+
+    const loserPatch = patchOps.find((p) => p.id === LOSER)
+    expect(
+      loserPatch,
+      'the loser must be patched, not only deleted',
+    ).toBeTruthy()
+    expect(loserPatch!.rev).toBe('rev-loser')
+
+    // The patch itself must change nothing — the document is deleted on the
+    // next op, and the precondition is its only purpose.
+    expect(loserPatch!.set ?? {}).toEqual({})
+
+    // And the delete still comes last, after every patch.
+    expect(txOrder[txOrder.length - 1]).toBe('delete')
   })
 
   it('applies an operator field selection, and the dry run predicts it exactly', async () => {

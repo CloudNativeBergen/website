@@ -7,6 +7,7 @@ import {
   type RedatableTask,
   type RedatableCampaign,
 } from './redate'
+import { sequentialShortCodes } from './short-code'
 
 const conference: SeedConference = {
   _id: 'conf-A',
@@ -29,6 +30,7 @@ function fixture() {
     includeOptional: [],
     ownerId: 'owner',
     now: '2026-09-14T10:00:00.000Z',
+    newShortCode: sequentialShortCodes(),
     newId: (type) => `${type}.${++n}`,
   })
   const tasks: RedatableTask[] = seed.tasks.map((task) => {

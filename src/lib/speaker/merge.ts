@@ -73,6 +73,9 @@ export interface MergeSpeakerDoc {
   consent?: unknown
   image?: unknown
   imageURL?: string
+  /** #1148 — carried up to the survivor, never dropped. */
+  socialTagOptOut?: boolean
+  socialTagOptOutAt?: string
   [key: string]: unknown
 }
 
@@ -894,6 +897,32 @@ export function computeSurvivorFieldMerge(
     set.organizations = orgsAfter
   }
 
+  // socialTagOptOut — the SURVIVOR is opted out if EITHER side was (#1148).
+  //
+  // NOT a gap-fill and NOT selectable. An operator merging two records of one
+  // person must not be able to undo a refusal to be @-mentioned, by choice or
+  // by accident: only the speaker may clear it, and a merge is not the speaker.
+  // The union is therefore one-directional — a loser's opt-out is carried up, a
+  // survivor's is never dropped. The loser's timestamp comes with it when there
+  // is one, because that is when the person actually asked.
+  if (loser.socialTagOptOut === true || survivor.socialTagOptOut === true) {
+    if (survivor.socialTagOptOut !== true) {
+      set.socialTagOptOut = true
+      filledFromLoser.push('socialTagOptOut')
+    }
+    // THE EARLIEST of the two stamps, not the survivor's. Survivor selection
+    // is about which record is canonical and has nothing to do with when the
+    // person objected; keeping the later one would date a still-active
+    // objection to after it was actually made. Only moves the value BACKWARDS,
+    // so it can never invent a refusal that had not happened yet.
+    const earliest = [survivor.socialTagOptOutAt, loser.socialTagOptOutAt]
+      .filter((at): at is string => typeof at === 'string' && at !== '')
+      .sort()[0]
+    if (earliest !== undefined && earliest !== survivor.socialTagOptOutAt) {
+      set.socialTagOptOutAt = earliest
+    }
+  }
+
   // Per-field choices: email by the verification-aware rule, the rest gap-fill.
   // An explicit `selections` entry overrides the recommendation.
   const fields: MergeFieldChoice[] = []
@@ -1389,7 +1418,14 @@ export function buildMergePlan(
 }
 
 /** The speaker field holding the merge recovery trail, and its item `_type`. */
-export const MERGE_HISTORY_FIELD = 'mergedWith'
+export /**
+ * A field that never exists on a speaker. Unsetting it is a no-op whose only
+ * purpose is to carry an `ifRevisionId` precondition onto the loser, because
+ * Sanity's `delete` mutation takes no revision of its own.
+ */
+const MERGE_REVISION_GUARD_FIELD = '__mergeRevisionGuard'
+
+const MERGE_HISTORY_FIELD = 'mergedWith'
 const MERGE_HISTORY_ITEM_TYPE = 'speakerMergeRecord'
 
 /**
@@ -1806,6 +1842,28 @@ export async function mergeSpeakers(
         })
       }
       transaction.delete(rec.deleteId)
+    }
+    // REVISION-GUARD THE LOSER, for the same reason the survivor and every
+    // referencing document are guarded — and with a sharper consequence.
+    //
+    // The loser's `socialTagOptOut` is read at plan time and carried UP onto
+    // the survivor (#1148). Sanity has no precondition on `delete`, so without
+    // this the loser was the one document in the transaction nobody checked:
+    // an opt-out ticked between the read and the commit would be deleted
+    // without ever being copied — a refusal to be @-mentioned, silently lost
+    // by an operator action, which is precisely what the one-directional merge
+    // rule exists to prevent. (The mirror case, a withdrawal in that window,
+    // would be overwritten by a stale `true`.)
+    //
+    // The precondition rides a harmless no-op unset of a field that does not
+    // exist; the document is deleted on the next line regardless. A stale
+    // revision 409s the WHOLE transaction and the operator retries against a
+    // fresh read, exactly as a concurrent survivor edit already does.
+    const loserRev = (loser as MergeSpeakerDoc | null)?._rev
+    if (typeof loserRev === 'string') {
+      transaction.patch(loserId, (p) =>
+        p.ifRevisionId(loserRev).unset([MERGE_REVISION_GUARD_FIELD]),
+      )
     }
     // Delete the loser LAST so all inbound references are already repointed.
     transaction.delete(loserId)

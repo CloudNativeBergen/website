@@ -41,6 +41,7 @@ describe('editorValueFrom', () => {
         usesCustomTime: true,
         claimedAt: null,
         submission: null,
+        shortCode: null,
         link: null,
         attachments: [],
         publishResult: null,

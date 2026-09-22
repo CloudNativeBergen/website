@@ -128,6 +128,7 @@ function variant(
     usesCustomTime: false,
     claimedAt: null,
     submission: null,
+    shortCode: null,
     link: null,
     attachments: [],
     publishResult: null,

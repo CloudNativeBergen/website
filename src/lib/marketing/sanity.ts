@@ -32,6 +32,7 @@ import type {
   TaskView,
 } from './types'
 import type { TaskSubjectRef } from './pages'
+import { expireShortLinkIndex } from './short-link-cache'
 
 /**
  * Sanity persistence for the Marketing Plan. Seeding writes everything in ONE
@@ -86,6 +87,9 @@ export function variantDocument(v: SeedVariant, conference: Ref, now: string) {
     platform: v.platform,
     body: v.body,
     link: v.link,
+    // Minted by the caller's batch mint; `/go/<shortCode>` resolves to the
+    // path and query of `link` above (short-links spec §2.1).
+    shortCode: v.shortCode,
     status: v.status,
     scheduledAt: v.scheduledAt,
     usesCustomTime: false,
@@ -123,6 +127,8 @@ export function taskDocument(t: SeedTask, conference: Ref) {
     })),
     ...(t.variantId ? { variant: weakRef(t.variantId) } : {}),
     ...(t.targetPage ? { targetPage: t.targetPage } : {}),
+    // Outreach Kinds only; a publishing Task's code is on its variant (§2.1).
+    ...(t.shortCode ? { shortCode: t.shortCode } : {}),
     ...(t.subject ? { subject: weakRef(t.subject._id) } : {}),
     ...(t.copyEdited ? { copyEdited: true } : {}),
     ...(t.verbatimCopy ? { verbatimCopy: true } : {}),
@@ -207,6 +213,9 @@ export async function commitSeedPlan(
     }
     throw error
   }
+  // A created variant or outreach Task carries a NEW code, so the
+  // conference's membership set is out of date (short-links spec §2.4).
+  expireShortLinkIndex(seed.plan.conferenceId)
   return { committed: true }
 }
 
@@ -430,6 +439,7 @@ interface RawTaskEditor extends RawTaskView {
   approvedByName: string | null
   assigneeName: string | null
   targetPage: string | null
+  shortCode: string | null
   instructions: string | null
   verbatimCopy: boolean | null
   externalUrl: string | null
@@ -473,7 +483,7 @@ export async function getTaskEditorData(
       _rev,
       "approvedByName": approvedBy->name,
       "assigneeName": assignee->name,
-      targetPage, instructions, externalUrl, skipReason, origin,
+      targetPage, shortCode, instructions, externalUrl, skipReason, origin,
       "verbatimCopy": verbatimCopy == true && copyEdited != true,
       "assetUrl": asset.asset->url,
       "assetId": asset.asset._ref,
@@ -494,6 +504,7 @@ export async function getTaskEditorData(
     approvedByName: row.approvedByName ?? null,
     assigneeName: row.assigneeName ?? null,
     targetPage: row.targetPage ?? null,
+    shortCode: row.shortCode ?? null,
     instructions: row.instructions ?? null,
     verbatimCopy: row.verbatimCopy === true,
     externalUrl: row.externalUrl ?? null,
@@ -655,7 +666,18 @@ export interface ApproveTaskInput {
    * Publishing Kind: the variant that moves `draft → scheduled` (§3.2),
    * with the tagged link re-derived at approval (§3.4).
    */
-  variant: { id: string; rev: string; scheduledAt: string; link: string } | null
+  variant: {
+    id: string
+    rev: string
+    scheduledAt: string
+    link: string
+    /**
+     * The `/go/<code>` code, minted by the caller when the variant predates
+     * the field (short-links spec §2.2). It rides the approval so the
+     * backfill happens in the mutation that re-derives the link.
+     */
+    shortCode: string
+  } | null
 }
 
 /**
@@ -668,12 +690,13 @@ export async function approveTask(input: ApproveTaskInput): Promise<boolean> {
   const now = getCurrentDateTime()
   const tx = clientWrite.transaction()
   if (input.variant) {
-    const { id, rev, scheduledAt, link } = input.variant
+    const { id, rev, scheduledAt, link, shortCode } = input.variant
     tx.patch(id, (p) =>
       p.ifRevisionId(rev).set({
         status: 'scheduled',
         scheduledAt,
         link,
+        shortCode,
         attemptCount: 0,
         updatedAt: now,
       }),
@@ -1108,5 +1131,9 @@ export async function createMarketingTask(
       }),
     )
   }
-  return commitOrConflict(tx)
+  const landed = await commitOrConflict(tx)
+  // A created variant or outreach Task carries a NEW code, so the
+  // conference's membership set is out of date (short-links spec §2.4).
+  if (landed) expireShortLinkIndex(conferenceId)
+  return landed
 }

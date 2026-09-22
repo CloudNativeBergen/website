@@ -218,6 +218,8 @@ export interface BeatContext {
   /** The Task id for a generated key (deterministic in production). */
   taskId: (key: string) => string
   newId: (type: string) => string
+  /** Short-code source: the caller's batch mint (short-links spec §2.2). */
+  newShortCode: () => string
   /**
    * `(utm_campaign, utm_content)` pairs (`publishedPair`) whose post has
    * ALREADY been published in this edition.
@@ -291,6 +293,7 @@ export function buildSubjectBeat(
         subject,
         origin: input.origin,
         newId: input.newId,
+        newShortCode: input.newShortCode,
       }),
     )
   }
@@ -345,6 +348,7 @@ export function expandSubjectlessCadence(
           prerequisiteIds: [],
           origin: 'expansion',
           newId: input.newId,
+          newShortCode: input.newShortCode,
         }),
       )
     }
