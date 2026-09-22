@@ -555,6 +555,19 @@ describe('getSocialVariantEditorData — the editor read', () => {
     })
   })
 
+  it("projects the variant's OWN conference domains, for the first-comment rule (#1134)", async () => {
+    h.dataset = [
+      conference('conf-A'),
+      conference('conf-B'),
+      post('post-conf-A', 'conf-A'),
+      variant('v-1', 'conf-A'),
+    ]
+    const data = await getSocialVariantEditorData('v-1')
+    // A VALUE, not a shape: the editor that gets `[]` silently enforces
+    // nothing, and `conf-B.example.no` would be another tenant's.
+    expect(data?.conferenceDomains).toEqual(['conf-A.example.no'])
+  })
+
   it('never follows a post reference into another conference', async () => {
     h.dataset = [
       conference('conf-A'),
