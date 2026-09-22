@@ -13,6 +13,7 @@ import { richTextImageUrl } from '@/lib/homepage/richTextImage'
 import {
   countLength,
   getPlatformConstraints,
+  ownDomainUrlsIn,
 } from '@/lib/social/provider/constraints'
 import { postUrlExample, postUrlIssue } from '@/lib/social/provider/manual'
 import { renditionDownloadUrl, renditionRect } from '@/lib/social/rendition'
@@ -33,6 +34,11 @@ export interface ManualPostViewProps {
   error?: string | null
   /** Source image URL; defaults to the CDN. Stories inject data URIs. */
   imageSrc?: (asset: SocialPostAttachment) => string
+  /**
+   * The conference's own domains. Used only to WARN: a body that reached this
+   * view already cannot be refused here (see {@link ManualPostView}).
+   */
+  conferenceDomains?: readonly string[]
 }
 
 const defaultImageSrc = (asset: SocialPostAttachment) =>
@@ -52,6 +58,7 @@ export function ManualPostView({
   saving = false,
   error = null,
   imageSrc = defaultImageSrc,
+  conferenceDomains = [],
 }: ManualPostViewProps) {
   const platform = SOCIAL_PLATFORM_LABELS[variant.platform]
   const constraints = getPlatformConstraints(variant.platform)
@@ -101,6 +108,20 @@ export function ManualPostView({
   const linkInBody =
     link !== null && placement !== null && placement !== 'comment'
   const linkAppended = linkInBody && !variant.body.includes(link)
+  /**
+   * A body that reached this view carrying a link to our own site, on a
+   * platform where the link is the first comment (spec §3.1, #1134). Save,
+   * schedule and approve all refuse it, so this is a variant that got past
+   * them BEFORE the rule existed — a draft materialized from the 2026.1
+   * built-in — or one whose conference gained the domain afterwards. There
+   * is no migration (rewriting edited copy is not ours to do) and an
+   * `awaiting-manual` variant can no longer be edited, so the only honest
+   * thing is to say so here rather than present the text as ready to copy.
+   */
+  const strayInBody =
+    placement === 'comment'
+      ? ownDomainUrlsIn(variant.body, conferenceDomains)
+      : []
   const copyText = linkAppended ? `${variant.body}\n\n${link}` : variant.body
   const copyLength = constraints
     ? countLength(copyText, constraints.counting)
@@ -146,6 +167,18 @@ export function ManualPostView({
             </li>
           ))}
       </ol>
+
+      {strayInBody.length > 0 && (
+        <p
+          role="alert"
+          className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200"
+        >
+          The text below still contains {strayInBody.join(', ')}. On {platform}{' '}
+          the link belongs in the first comment, not the post — this text was
+          written before that rule. Delete it from the text after pasting, and
+          post the link as the first comment instead.
+        </p>
+      )}
 
       {missingImages > 0 && (
         <p

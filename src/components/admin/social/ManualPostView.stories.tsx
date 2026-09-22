@@ -206,6 +206,50 @@ export const NoPlatformRules: Story = {
   },
 }
 
+/**
+ * A LinkedIn variant materialized from the 2026.1 built-in, handed over before
+ * the first-comment rule existed (#1134). It cannot be refused here — it is
+ * already `awaiting-manual`, which is no longer editable — and there is no
+ * migration, so the view says what to do instead of presenting the text as
+ * ready to copy.
+ */
+export const LegacyLinkInBody: Story = {
+  args: {
+    variant: {
+      ...variant,
+      body: `Early-bird tickets for Cloud Native Bergen 2027 are live.\n\nTickets → ${variant.link}\n\n#CloudNativeBergen`,
+    },
+    conferenceDomains: ['cloudnativebergen.dev'],
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const warning = canvas
+      .getAllByRole('alert')
+      .find((el) => /first comment/i.test(el.textContent ?? ''))
+    await expect(warning).toBeDefined()
+    await expect(warning).toHaveTextContent('utm_content=early-bird')
+    await expect(warning).toHaveTextContent(/delete it from the text/i)
+  },
+}
+
+export const LegacyLinkInBodyDark: Story = {
+  args: LegacyLinkInBody.args,
+  parameters: { theme: 'dark', backgrounds: { default: 'dark' } },
+}
+
+/** The same body WITHOUT the conference domains: nothing to compare, no warning. */
+export const LegacyLinkInBodyNoDomains: Story = {
+  args: { variant: LegacyLinkInBody.args!.variant },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(
+      canvas
+        .queryAllByRole('alert')
+        .filter((el) => /first comment/i.test(el.textContent ?? '')),
+    ).toHaveLength(0)
+  },
+}
+
 export const AwaitingManualDark: Story = {
   parameters: { theme: 'dark', backgrounds: { default: 'dark' } },
 }
