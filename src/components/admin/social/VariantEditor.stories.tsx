@@ -450,9 +450,28 @@ export const NoPlatformRulesYet: Story = {
     docs: {
       description: {
         story:
-          'A platform without an adapter: no counter, no crop, the editor says nothing is checked.',
+          'A platform without an adapter: no counter, no crop, the editor says nothing is checked — including about the LINK. With no constraints there is no `linkPlacement` to look up, so the field must not claim a link card while the rules summary right above says nothing is known.',
       },
     },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(canvas.getByText(/no platform rules are known/i)).toBeVisible()
+    // A VALUE, and the two must agree: the hint names no placement at all.
+    await expect(
+      canvas.getByText('Add it where Mastodon takes a link.'),
+    ).toBeVisible()
+    await expect(canvas.queryByText(/link card/i)).toBeNull()
+    await expect(canvas.queryByText(/first comment/i)).toBeNull()
+  },
+}
+
+export const NoPlatformRulesYetDark: Story = {
+  args: NoPlatformRulesYet.args,
+  parameters: {
+    theme: 'dark',
+    backgrounds: { default: 'dark' },
+    docs: { description: { story: 'The same, in dark mode.' } },
   },
 }
 

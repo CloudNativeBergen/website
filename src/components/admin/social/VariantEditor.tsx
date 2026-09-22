@@ -60,6 +60,8 @@ const defaultImageSrc = (asset: SocialPostAttachment) =>
 /**
  * What the Link field says the platform does with it. Keyed by
  * {@link LinkPlacement} so nothing here branches on the platform name.
+ * Consulted ONLY when a platform is described: with no constraints there is
+ * no placement to look up, and the field says so rather than guessing.
  */
 const LINK_HINTS: Record<LinkPlacement, (platform: string) => string> = {
   body: () => 'Shown in the body text.',
@@ -206,9 +208,14 @@ export function VariantEditor({
                       ? ` It is posted as the first comment on ${platformLabel}, so keep it out of the body.`
                       : ''
                   }`
-                : LINK_HINTS[constraints?.linkPlacement ?? 'card'](
-                    platformLabel,
-                  )}
+                : constraints
+                  ? LINK_HINTS[constraints.linkPlacement](platformLabel)
+                  : // No adapter describes this platform, so we do not know
+                    // where the link goes. Saying "a link card" here would
+                    // contradict the rules summary directly above, which says
+                    // nothing is known — and it is the same wording the
+                    // copy-ready view uses for the same case.
+                    `Add it where ${platformLabel} takes a link.`}
             </p>
             <Issues
               id={`${id}-link-issues`}
