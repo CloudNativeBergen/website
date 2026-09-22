@@ -1326,6 +1326,26 @@ describe('the confirm sweep (#1128)', () => {
     expect(summary.confirmDeferred).toBe(1)
   })
 
+  it("keeps the sweep inside ONE ORGANIZATION's 15-minute vendor budget", async () => {
+    // The cap is global and confirms are NOT put through `pickFairly`, so one
+    // organization can occupy every slot in a tick. Buffer's 100-per-15-min
+    // is per account, i.e. per organization — so the worst case that matters
+    // is one org taking the whole cap on every tick.
+    //
+    // Pinned as ARITHMETIC, not as the literal 5: the test above uses the
+    // constant symbolically and therefore follows it wherever it goes. This
+    // one fails if someone raises the cap back over budget, which is exactly
+    // how it was wrong before (10 * 15 = 150 against a budget of 100).
+    const TICKS_PER_15_MIN = 15
+    const VENDOR_BUDGET_PER_15_MIN = 100
+    const worstCaseReads = MAX_CONFIRMS_PER_TICK * TICKS_PER_15_MIN
+
+    expect(worstCaseReads).toBeLessThanOrEqual(VENDOR_BUDGET_PER_15_MIN)
+    // And leaves room for the dispatches the sweep shares the tick with,
+    // rather than consuming the budget exactly.
+    expect(worstCaseReads).toBeLessThan(VENDOR_BUDGET_PER_15_MIN)
+  })
+
   it('reads at most MAX_CONFIRMS_PER_TICK submissions — the store is asked for no more', async () => {
     const store = new MemoryVariantStore(
       Array.from({ length: MAX_CONFIRMS_PER_TICK + 3 }, (_, i) =>

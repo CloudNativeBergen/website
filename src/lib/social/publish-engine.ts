@@ -122,10 +122,32 @@ export const PUBLISH_START_RESERVE_MS = 35_000
  */
 export const CONFIRM_READ_TIMEOUT_MS = 5_000
 /**
- * How many submissions one tick reads back. Buffer allows 100 requests per
- * 15 minutes across everything we do, and dispatch needs its share.
+ * How many submissions one tick reads back.
+ *
+ * THE ARITHMETIC, because the previous number did not survive it. Buffer's
+ * 100-requests-per-15-minutes is per ACCOUNT, and an account is one tenant
+ * organization — so the budget this cap has to respect is per organization,
+ * not global. This cap is global and, unlike the dispatch list, confirms are
+ * NOT put through `pickFairly`: `submittedLimit` is a flat limit on
+ * `findWork`, so a single organization can occupy every slot in a tick.
+ *
+ * At 10 per tick and one tick a minute that is 150 reads per 15 minutes for
+ * that organization — half again over its whole budget, before dispatch has
+ * spent anything. At 5 it is at most 75, which leaves room for the publishes
+ * the sweep shares the tick with.
+ *
+ * What 5 costs: with the backoff in `confirmIntervalMs` one submission takes
+ * roughly 10 reads across the 15-minute window, so this services about seven
+ * concurrent submissions per organization. Past that, submissions are read
+ * less often and some may reach `CONFIRM_TIMEOUT_MINUTES` and settle
+ * `ambiguous` — a real cost, and the reason not to cut it further.
+ *
+ * NOT the final answer. Per-conference fairness for confirms, and a budget
+ * shared with dispatch rather than two independent caps, belong with the
+ * adapter that actually spends the quota (#1129). Nothing here counts a
+ * single real Buffer request yet.
  */
-export const MAX_CONFIRMS_PER_TICK = 10
+export const MAX_CONFIRMS_PER_TICK = 5
 
 export const DEFAULT_TICK_LIMIT = 50
 /**
