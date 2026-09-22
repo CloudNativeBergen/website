@@ -78,12 +78,17 @@ export function SpeakerDetailsForm({
   // grouped with the consent checkboxes below — those record permissions the
   // speaker gave, this records one they withheld. Absent means not opted out.
   //
-  // THE FORM IS AUTHORITATIVE for this field: a save emits whatever this state
-  // holds, so a caller that passes a `speaker` missing the loaded value would
-  // submit a withdrawal the speaker never asked for. Every call site reads the
-  // speaker through a projection that carries it.
-  const [socialTagOptOut, setSocialTagOptOut] = useState(
-    speaker?.socialTagOptOut ?? false,
+  // `boolean | undefined`, NOT `boolean`, and the difference is the whole
+  // safety property. `undefined` means THIS FORM WAS NEVER TOLD, and the emit
+  // below then omits the key entirely, so the save says nothing about the
+  // opt-out and the writer leaves it alone. Collapsing that to `false` would
+  // make a speaker loaded through a projection that does not carry the field —
+  // or an admin list row that went stale — submit a WITHDRAWAL nobody asked
+  // for, which for the speaker's own save is silent data loss and for an
+  // organizer's is a refusal they cannot explain. Any click on the checkbox
+  // makes it a boolean, so a real answer is always emitted.
+  const [socialTagOptOut, setSocialTagOptOut] = useState<boolean | undefined>(
+    speaker?.socialTagOptOut,
   )
 
   const [dataProcessingConsent, setDataProcessingConsent] = useState(
@@ -132,7 +137,7 @@ export function SpeakerDetailsForm({
     setSpeakerGenderSelfDescribe(speaker?.genderSelfDescribe ?? '')
     setSpeakerCountry(speaker?.country ?? '')
     setSpeakerLinks(speaker?.links?.length ? speaker.links : [''])
-    setSocialTagOptOut(speaker?.socialTagOptOut ?? false)
+    setSocialTagOptOut(speaker?.socialTagOptOut)
     setDataProcessingConsent(speaker?.consent?.dataProcessing?.granted ?? false)
     setMarketingConsent(speaker?.consent?.marketing?.granted ?? false)
     setPublicProfileConsent(speaker?.consent?.publicProfile?.granted ?? false)
@@ -245,7 +250,9 @@ export function SpeakerDetailsForm({
           ? speakerGenderSelfDescribe
           : null,
       country: speakerCountry || null,
-      socialTagOptOut,
+      // Omitted when this form was never told the stored value — see the state
+      // declaration. An omitted key is "no opinion"; `false` is "withdraw it".
+      ...(typeof socialTagOptOut === 'boolean' && { socialTagOptOut }),
       ...(speakerImage && imageChanged && { image: speakerImage }),
       consent: {
         dataProcessing: {
@@ -486,7 +493,7 @@ export function SpeakerDetailsForm({
                 <Checkbox
                   name="social-tag-opt-out"
                   label="Don't tag me in social posts"
-                  value={socialTagOptOut}
+                  value={socialTagOptOut === true}
                   setValue={setSocialTagOptOut}
                 >
                   <HelpText>

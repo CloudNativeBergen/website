@@ -242,6 +242,25 @@ describe('the speaker sets and clears their own opt-out', () => {
     expect(stored().socialTagOptOutAt).toBe('2027-03-01T08:00:00.000Z')
   })
 
+  it('PRESERVES a stored opt-out when the save says nothing about it', async () => {
+    // The distinction the whole design rests on: an ABSENT key is "no
+    // opinion", only an explicit `false` is a withdrawal. A form fed a speaker
+    // from a projection that does not carry the field, or a narrow caller that
+    // writes one column, must not silently undo a refusal.
+    //
+    // This starts from an opted-out document ON PURPOSE. The "off by default"
+    // case below starts from a clean one and would pass even if this branch
+    // unset the pair.
+    await speakerCaller().update({ name: 'Alice', socialTagOptOut: true })
+
+    vi.setSystemTime(new Date('2027-05-05T05:05:05.000Z'))
+    await speakerCaller().update({ name: 'Alice Renamed', bio: 'New bio' })
+
+    expect(stored().name).toBe('Alice Renamed')
+    expect(stored().socialTagOptOut).toBe(true)
+    expect(stored().socialTagOptOutAt).toBe(NOW)
+  })
+
   it('is OFF by default — an ordinary save writes neither field', async () => {
     await speakerCaller().update({ name: 'Alice Speaker', bio: 'New bio' })
 
@@ -301,6 +320,19 @@ describe('an organizer may SET the opt-out and may never clear it', () => {
     // A `false` from an organizer is never WRITTEN either, so a concurrent
     // opt-out cannot be overwritten by a stale admin form.
     expect(stored().socialTagOptOut).toBeUndefined()
+  })
+
+  it('PRESERVES a stored opt-out when the organizer save says nothing about it', async () => {
+    await speakerCaller().update({ name: 'Alice', socialTagOptOut: true })
+
+    await organizerCaller().admin.update({
+      id: 'spk-1',
+      data: { name: 'Alice Renamed' },
+    })
+
+    expect(stored().name).toBe('Alice Renamed')
+    expect(stored().socialTagOptOut).toBe(true)
+    expect(stored().socialTagOptOutAt).toBe(NOW)
   })
 
   it('survives a save that reduces to an EMPTY patch', async () => {

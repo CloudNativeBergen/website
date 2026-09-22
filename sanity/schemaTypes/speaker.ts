@@ -608,7 +608,10 @@ export default defineType({
       title: 'Opted out of social-post tags',
       type: 'boolean',
       readOnly: true,
-      initialValue: false,
+      // NO `initialValue`. Absent IS the off state, and a default would write
+      // an explicit `false` onto every Studio-created speaker — a second way to
+      // say the same thing, and one that a form reading a stale row would
+      // submit back as a withdrawal.
       description:
         'The speaker asked not to be tagged (@-mentioned) in marketing posts about them or their talk. Absent means not opted out. Managed by the app; only the speaker can clear it.',
     }),

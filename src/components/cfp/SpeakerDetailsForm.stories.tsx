@@ -315,6 +315,34 @@ export const SocialTagOptOut: Story = {
   },
 }
 
+/**
+ * A speaker loaded WITHOUT the field — a narrow projection, or an admin list
+ * row that predates the opt-out. The box renders unticked, and the form emits
+ * NO `socialTagOptOut` key at all, so saving says nothing about the opt-out
+ * instead of withdrawing one. Emitting `false` here is the silent-data-loss
+ * bug this story exists to catch.
+ */
+export const SocialTagOptOutUnknown: Story = {
+  args: {
+    speaker: filledSpeaker,
+    setSpeaker: fn(),
+    email: 'alice@gmail.com',
+    emails: mockEmails,
+    mode: 'profile',
+  },
+  play: async ({ args, canvas }) => {
+    const box = canvas.getByRole('checkbox', {
+      name: /don.t tag me in social posts/i,
+    })
+    await expect(box).not.toBeChecked()
+    await waitFor(() => expect(args.setSpeaker).toHaveBeenCalled())
+    const emitted = (args.setSpeaker as ReturnType<typeof fn>).mock.calls.at(
+      -1,
+    )![0]
+    expect(emitted).not.toHaveProperty('socialTagOptOut')
+  },
+}
+
 /** The same form, opt-out OFF (the default), in dark mode. */
 export const SocialTagOptOutDark: Story = {
   args: {
@@ -333,6 +361,8 @@ export const SocialTagOptOutDark: Story = {
     const box = canvas.getByRole('checkbox', {
       name: /don.t tag me in social posts/i,
     })
+    // Unticked because this speaker has no stored value — see
+    // `SocialTagOptOutUnknown` for what that means for the SAVE.
     await expect(box).not.toBeChecked()
   },
 }
