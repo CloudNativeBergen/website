@@ -285,6 +285,47 @@ export const PublishingScheduled: Story = {
   },
 }
 
+/**
+ * LinkedIn handed to an asynchronous publisher (#1128): accepted, not live
+ * yet. In flight — no editor, no approve controls, no delete.
+ */
+export const PublishingSubmitted: Story = {
+  parameters: {
+    msw: {
+      handlers: handlers(
+        fixture(
+          {
+            key: 'cfpOpen:linkedin',
+            channel: 'linkedin',
+            status: 'submitted',
+            approvedAt: '2026-09-14T09:12:00.000Z',
+            approvedByName: 'Bob Builder',
+            date: '2027-01-10T07:00:00.000Z',
+          },
+          variant({
+            platform: 'linkedin',
+            status: 'submitted',
+            scheduledAt: '2027-01-10T07:00:00.000Z',
+            attemptCount: 1,
+            submission: {
+              vendorPostId: 'buffer-6f2a',
+              submittedAt: '2027-01-10T07:00:11.000Z',
+              lastCheckedAt: '2027-01-10T07:00:41.000Z',
+            },
+            attempts: [
+              {
+                _key: 'a1',
+                at: '2027-01-10T07:00:11.000Z',
+                outcome: 'submitted',
+              },
+            ],
+          }),
+        ),
+      ),
+    },
+  },
+}
+
 /** LinkedIn at due time: the copy-ready view with the required URL. */
 export const ManualAwaitingPost: Story = {
   parameters: {
