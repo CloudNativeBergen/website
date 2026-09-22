@@ -281,7 +281,8 @@ export const SelfDescribedGender: Story = {
  */
 export const SocialTagOptOut: Story = {
   args: {
-    speaker: { ...filledSpeaker, socialTagOptOut: true },
+    speaker: filledSpeaker,
+    storedSocialTagOptOut: true,
     setSpeaker: fn(),
     email: 'alice@gmail.com',
     emails: mockEmails,
@@ -316,7 +317,8 @@ export const SocialTagOptOut: Story = {
  */
 export const SocialTagOptOutTogglesOff: Story = {
   args: {
-    speaker: { ...filledSpeaker, socialTagOptOut: true },
+    speaker: filledSpeaker,
+    storedSocialTagOptOut: true,
     setSpeaker: fn(),
     email: 'alice@gmail.com',
     emails: mockEmails,
@@ -407,7 +409,8 @@ export const SocialTagOptOutUnknown: Story = {
  */
 export const SocialTagOptOutOrganizerLocked: Story = {
   args: {
-    speaker: { ...filledSpeaker, socialTagOptOut: true },
+    speaker: filledSpeaker,
+    storedSocialTagOptOut: true,
     setSpeaker: fn(),
     emails: [],
     mode: 'profile',
@@ -437,7 +440,8 @@ export const SocialTagOptOutOrganizerUntouched: Story = {
     // withdrawn since, so an untouched save must say NOTHING rather than
     // resend `true` and restore what only they may undo. A story whose speaker
     // has no stored value cannot tell the two behaviours apart.
-    speaker: { ...filledSpeaker, socialTagOptOut: true },
+    speaker: filledSpeaker,
+    storedSocialTagOptOut: true,
     setSpeaker: fn(),
     emails: [],
     mode: 'profile',
@@ -501,24 +505,21 @@ export const SocialTagOptOutResyncs: Story = {
   },
   render: (args) => {
     const ResyncDemo = () => {
-      const [speaker, setSpeakerProp] = useState<SpeakerInput>({
-        ...filledSpeaker,
-        socialTagOptOut: true,
-      })
+      const [stored, setStored] = useState<boolean | undefined>(true)
       return (
         <div className="space-y-4">
           <button
             type="button"
             className="rounded-md bg-brand-cloud-blue px-3 py-2 text-sm text-white"
             onClick={() =>
-              // Same NAME, new value — exactly what a refetch delivers after
-              // the speaker withdraws the opt-out somewhere else.
-              setSpeakerProp((prev) => ({ ...prev, socialTagOptOut: false }))
+              // Same speaker, new STORED value — exactly what a refetch
+              // delivers after they withdraw the opt-out somewhere else.
+              setStored(false)
             }
           >
             Simulate another tab clearing it
           </button>
-          <SpeakerDetailsForm {...args} speaker={speaker} />
+          <SpeakerDetailsForm {...args} storedSocialTagOptOut={stored} />
         </div>
       )
     }
@@ -558,13 +559,11 @@ export const SocialTagOptOutSurvivesAMirroringParent: Story = {
   },
   render: (args) => {
     const MirrorDemo = () => {
-      const [speaker, setSpeakerState] = useState<SpeakerInput>({
-        ...filledSpeaker,
-        socialTagOptOut: true,
-      })
+      const [speaker, setSpeakerState] = useState<SpeakerInput>(filledSpeaker)
       return (
         <SpeakerDetailsForm
           {...args}
+          storedSocialTagOptOut
           speaker={speaker}
           setSpeaker={(updated) =>
             setSpeakerState((prev) => ({ ...prev, ...updated }))
@@ -620,7 +619,8 @@ export const SocialTagOptOutDark: Story = {
  */
 export const SocialTagOptOutMobile: Story = {
   args: {
-    speaker: { ...filledSpeaker, socialTagOptOut: true },
+    speaker: filledSpeaker,
+    storedSocialTagOptOut: true,
     setSpeaker: fn(),
     email: 'alice@gmail.com',
     emails: mockEmails,
