@@ -482,6 +482,61 @@ export const SocialTagOptOutOrganizerSets: Story = {
   },
 }
 
+/**
+ * A REFRESHED prop for the SAME person must update the checkbox (#1148).
+ *
+ * The form's big initialiser has a name-based early return, so for one person
+ * it never runs again — a speaker who cleared their opt-out in another tab
+ * would otherwise keep seeing a ticked box here. The opt-out is therefore
+ * resynced by an effect of its own, keyed on the value.
+ */
+export const SocialTagOptOutResyncs: Story = {
+  args: {
+    speaker: filledSpeaker,
+    setSpeaker: fn(),
+    emails: [],
+    mode: 'profile',
+    showEmailField: false,
+    onSocialTagOptOutChange: fn(async () => {}),
+  },
+  render: (args) => {
+    const ResyncDemo = () => {
+      const [speaker, setSpeakerProp] = useState<SpeakerInput>({
+        ...filledSpeaker,
+        socialTagOptOut: true,
+      })
+      return (
+        <div className="space-y-4">
+          <button
+            type="button"
+            className="rounded-md bg-brand-cloud-blue px-3 py-2 text-sm text-white"
+            onClick={() =>
+              // Same NAME, new value — exactly what a refetch delivers after
+              // the speaker withdraws the opt-out somewhere else.
+              setSpeakerProp((prev) => ({ ...prev, socialTagOptOut: false }))
+            }
+          >
+            Simulate another tab clearing it
+          </button>
+          <SpeakerDetailsForm {...args} speaker={speaker} />
+        </div>
+      )
+    }
+    return <ResyncDemo />
+  },
+  play: async ({ canvas, userEvent }) => {
+    const box = canvas.getByRole('checkbox', {
+      name: /don.t tag me in social posts/i,
+    })
+    await expect(box).toBeChecked()
+
+    await userEvent.click(
+      canvas.getByRole('button', { name: /simulate another tab/i }),
+    )
+    await waitFor(() => expect(box).not.toBeChecked())
+  },
+}
+
 /** The same form, opt-out OFF (the default), in dark mode. */
 export const SocialTagOptOutDark: Story = {
   args: {
