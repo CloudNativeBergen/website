@@ -223,6 +223,53 @@ describe('the link is the first comment (#1134)', () => {
     }
   })
 
+  it('reads the URL the way a browser would: case, trailing punctuation, port, userinfo, a subdomain of ours', () => {
+    for (const url of [
+      'HTTPS://CloudNativeBergen.NO/tickets',
+      'https://cloudnativebergen.no:8443/tickets',
+      'https://x@cloudnativebergen.no/tickets',
+      'https://www.cloudnativebergen.no/tickets',
+      'https://sub.konf.app/x',
+    ]) {
+      const issues = validatePublishInput(linkedin, body(`Read more: ${url}`), {
+        conferenceDomains: OWN,
+      })
+      expect(
+        issues.map((i) => i.field),
+        url,
+      ).toEqual(['body'])
+    }
+    // Sentence punctuation around the URL is trimmed off the URL the message
+    // names — copy written by hand ends a link with a full stop far more
+    // often than a URL legitimately ends with one.
+    for (const text of [
+      'Tickets (https://cloudnativebergen.no/tickets).',
+      'Tickets: https://cloudnativebergen.no/tickets,',
+      'See [tickets](https://cloudnativebergen.no/tickets) now',
+    ]) {
+      const issues = validatePublishInput(linkedin, body(text), {
+        conferenceDomains: OWN,
+      })
+      expect(
+        issues.map((i) => i.field),
+        text,
+      ).toEqual(['body'])
+      expect(issues[0].message, text).toContain(
+        'remove https://cloudnativebergen.no/tickets from the text.',
+      )
+    }
+  })
+
+  it('is not fooled by a host that merely ENDS with ours', () => {
+    expect(
+      validatePublishInput(
+        linkedin,
+        body('https://cloudnativebergen.no.evil.example/x'),
+        { conferenceDomains: OWN },
+      ),
+    ).toEqual([])
+  })
+
   it('leaves URLs on other hosts alone', () => {
     expect(
       validatePublishInput(
