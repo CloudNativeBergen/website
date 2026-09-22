@@ -184,7 +184,7 @@ export const LinkedIn: Story = {
     const preview = canvas.getByText(/linkedin preview/i).parentElement!
     await expect(within(preview).getByText(/^first comment$/i)).toBeVisible()
     await expect(
-      within(preview).queryByText('2027.CLOUDNATIVEBERGEN.DEV'),
+      within(preview).queryByText('2027.cloudnativebergen.dev'),
     ).toBeNull()
   },
 }
@@ -265,7 +265,7 @@ export const Bluesky: Story = {
     await expect(canvas.getByText(/shown as a link card/i)).toBeVisible()
     const preview = canvas.getByText(/bluesky preview/i).parentElement!
     await expect(
-      within(preview).getByText('2027.CLOUDNATIVEBERGEN.DEV'),
+      within(preview).getByText('2027.cloudnativebergen.dev'),
     ).toBeVisible()
     await expect(within(preview).queryByText(/^first comment$/i)).toBeNull()
   },
