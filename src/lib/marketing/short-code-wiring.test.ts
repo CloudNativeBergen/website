@@ -134,5 +134,4 @@ describe('a whole plan mints distinct codes', () => {
     expect(new Set(codes).size).toBe(codes.length)
     for (const code of codes) expect(code).toMatch(/^[a-hjkmnp-z2-9]{6}$/)
   })
-
 })

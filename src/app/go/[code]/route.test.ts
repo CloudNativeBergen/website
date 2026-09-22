@@ -28,11 +28,15 @@ interface FakeDoc {
 let dataset: FakeDoc[] = []
 const sanityFetch = vi.fn(
   async (query: string, params: Record<string, string>) => {
+    // The predicates are read out of the QUERY, not assumed: a query that
+    // drops one stops filtering on it here too, exactly as the real dataset
+    // would. Binding `$conferenceId` as a parameter proves nothing on its own.
+    const scoped = query.includes('conference._ref == $conferenceId')
     const excludesDrafts = query.includes('!(_id in path("drafts.**"))')
     const excludesVersions = query.includes('!(_id in path("versions.**"))')
     const hit = dataset.find(
       (d) =>
-        d.conferenceId === params.conferenceId &&
+        (!scoped || d.conferenceId === params.conferenceId) &&
         d.shortCode === params.code &&
         !(excludesDrafts && d._id.startsWith('drafts.')) &&
         !(excludesVersions && d._id.startsWith('versions.')),
