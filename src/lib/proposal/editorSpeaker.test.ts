@@ -80,7 +80,7 @@ describe('resolveEditorSpeaker', () => {
       CURRENT_USER,
       'spk-ada',
     )
-    expect(resolved._id).toBe('spk-ada')
+    expect((resolved as { _id?: string })._id).toBe('spk-ada')
     expect(resolved.socialTagOptOut).toBe(true)
   })
 

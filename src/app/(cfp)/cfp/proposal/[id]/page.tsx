@@ -23,7 +23,6 @@ import { ChatBubbleLeftRightIcon } from '@heroicons/react/24/outline'
 import { isConferenceOver } from '@/lib/conference/state'
 import { BackLink } from '@/components/BackButton'
 import { buildUrlWithImpersonation } from '@/lib/impersonation'
-import { Speaker } from '@/lib/speaker/types'
 
 interface ProposalViewPageProps {
   params: Promise<{
