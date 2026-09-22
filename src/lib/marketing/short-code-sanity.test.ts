@@ -60,30 +60,39 @@ describe('shortCodeMinterFor — one query per batch', () => {
 
 describe('shortCodeForMutation — the backfill (spec §2.2)', () => {
   it('keeps a code the document already has, and reads nothing', async () => {
-    await expect(shortCodeForMutation('conf-1', 'abc987')).resolves.toBe(
-      'abc987',
-    )
+    await expect(shortCodeForMutation('conf-1', 'abc987')).resolves.toEqual({
+      code: 'abc987',
+      minted: false,
+    })
     expect(read).not.toHaveBeenCalled()
   })
 
   it('normalizes a stored code rather than minting a second one', async () => {
-    await expect(shortCodeForMutation('conf-1', 'ABC987')).resolves.toBe(
-      'abc987',
-    )
+    await expect(shortCodeForMutation('conf-1', 'ABC987')).resolves.toEqual({
+      code: 'abc987',
+      // NOT minted: the code already existed, so the conference's membership
+      // set is unchanged and callers must not expire the index (§2.4).
+      minted: false,
+    })
     expect(read).not.toHaveBeenCalled()
   })
 
-  it('mints for a document that predates the field', async () => {
+  it('mints for a document that predates the field, and SAYS it minted', async () => {
     read.mockResolvedValue([])
-    const code = await shortCodeForMutation('conf-1', null)
+    const { code, minted } = await shortCodeForMutation('conf-1', null)
     expect(normalizeShortCode(code)).toBe(code)
+    // On the VALUE: the flag is what gates the index expiry, and getting it
+    // wrong in this direction leaves a freshly posted link answering the
+    // home page until the index ages out.
+    expect(minted).toBe(true)
     expect(read).toHaveBeenCalledTimes(1)
   })
 
   it('mints for a stored value that is not a code', async () => {
     read.mockResolvedValue([])
-    const code = await shortCodeForMutation('conf-1', 'NOT-A-CODE')
+    const { code, minted } = await shortCodeForMutation('conf-1', 'NOT-A-CODE')
     expect(code).not.toBe('NOT-A-CODE')
     expect(normalizeShortCode(code)).toBe(code)
+    expect(minted).toBe(true)
   })
 })

@@ -825,6 +825,39 @@ describe('outreach creation and destination editing', () => {
     })
   })
 
+  it('does NOT expire the code INDEX when the Task ALREADY had a code', async () => {
+    // The membership set only changes when a code comes into EXISTENCE.
+    // Expiring it for a Task that already had one throws away the
+    // conference's cached index on every destination edit, which is the one
+    // read the index exists to avoid (§2.4). The per-document entry must
+    // still go, because the destination really did change.
+    task.shortCode = 'abc987'
+    revalidateTag.mockClear()
+    await caller().task.update({
+      taskId: send.taskId,
+      rev: send.rev,
+      targetPage: '/cfp',
+    })
+    expect(h.update.mock.calls[0][2].shortCode).toBe('abc987')
+    expect(revalidateTag).toHaveBeenCalledWith(shortLinkTag(send.taskId), {
+      expire: 0,
+    })
+    expect(revalidateTag).not.toHaveBeenCalledWith(
+      shortLinkIndexTag('conf-A'),
+      { expire: 0 },
+    )
+  })
+
+  it('does NOT expire the code INDEX when a SEND finds a code already there', async () => {
+    task.shortCode = 'abc987'
+    revalidateTag.mockClear()
+    await caller().task.sendOutreach(send)
+    expect(revalidateTag).not.toHaveBeenCalledWith(
+      shortLinkIndexTag('conf-A'),
+      { expire: 0 },
+    )
+  })
+
   it('EXPIRES the code INDEX when an outreach SEND backfills a code', async () => {
     // The send writes a code into `addMessage`'s compare-and-set patch. If
     // the membership set is not expired, the code the organizer has just

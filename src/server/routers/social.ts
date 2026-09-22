@@ -445,7 +445,7 @@ export const socialRouter = router({
           ...(input.timing.mode === 'default' && post.rev
             ? { followsPost: { id: variant.postId, rev: post.rev } }
             : {}),
-          ...(shortCode ? { shortCode } : {}),
+          ...(shortCode ? { shortCode: shortCode.code } : {}),
           ...(task
             ? {
                 task: {
@@ -474,9 +474,10 @@ export const socialRouter = router({
       // (§2.5); a variant with no code matches no tag and this is a no-op.
       if (taskOwned) {
         expireShortLink(variant._id)
-        // The save may have BACKFILLED a code onto a variant that predated
-        // the field, so the conference's membership set is out of date (§2.4).
-        expireShortLinkIndex(variant.conferenceId)
+        // ONLY when this save actually MINTED a code. A variant that already
+        // had one leaves the membership set identical, and expiring it there
+        // would drop the conference's cached index on every save (§2.4).
+        if (shortCode?.minted) expireShortLinkIndex(variant.conferenceId)
       }
       return {
         success: true as const,

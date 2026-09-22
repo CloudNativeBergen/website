@@ -56,6 +56,22 @@ export async function shortCodeMinterFor(
 }
 
 /**
+ * What {@link shortCodeForMutation} resolved, and WHETHER IT MINTED.
+ *
+ * `minted` is the whole point of the shape. The conference's code INDEX (the
+ * membership set `/go/<code>` answers unknown codes from) only changes when a
+ * code comes into existence. A mutation that merely re-reads the code a
+ * document already had leaves the set identical, so expiring the index there
+ * throws away a cached read for nothing — on every save, approve, update and
+ * send. Callers gate `expireShortLinkIndex` on this flag.
+ */
+export interface MutationShortCode {
+  code: string
+  /** `true` only when this call created a code that did not exist before. */
+  minted: boolean
+}
+
+/**
  * The code a document should carry, for a mutation that is about to need its
  * link: the one it already has, or a freshly minted one.
  *
@@ -67,8 +83,8 @@ export async function shortCodeMinterFor(
 export async function shortCodeForMutation(
   conferenceId: string,
   existing: string | null | undefined,
-): Promise<string> {
+): Promise<MutationShortCode> {
   const current = normalizeShortCode(existing)
-  if (current) return current
-  return (await shortCodeMinterFor(conferenceId))()
+  if (current) return { code: current, minted: false }
+  return { code: (await shortCodeMinterFor(conferenceId))(), minted: true }
 }

@@ -168,8 +168,12 @@ export async function conferenceShortCodeIndex(
   const codes = await scopedFetch<unknown>(
     clientReadUncached,
     { conferenceId },
-    `*[_type in ["socialPostVariant", "marketingTask"] && defined(shortCode) && !(_id in path("drafts.**")) && !(_id in path("versions.**"))].shortCode`,
-    {},
+    // SLICED to the cap + 1. Without the slice the over-cap branch below
+    // still transfers every code before discarding the lot — paying the full
+    // cost of an index it then refuses to build. One extra row is enough to
+    // tell "at the cap" from "over it".
+    `*[_type in ["socialPostVariant", "marketingTask"] && defined(shortCode) && !(_id in path("drafts.**")) && !(_id in path("versions.**"))][0...$cap].shortCode`,
+    { cap: SHORT_LINK_INDEX_CAP + 1 },
   )
   // A shape we do not recognise must not be read as "this conference holds no
   // codes" — that would send every real short link to the home page. Fail
