@@ -83,16 +83,23 @@ export function ManualPostView({
     (a) => !byKey.has(a.source),
   ).length
   const link = variant.link?.trim() || null
-  // Where the link goes by hand (spec §3.1, #1134). `comment` (LinkedIn) is
-  // the one placement that keeps the link OUT of the copied text: it is a
-  // step of its own, posted right after the post. `card` (Bluesky) and `body`
-  // both put the URL in the text — a card is what the platform makes OF a URL
-  // in the text when a human posts it — so the tagged link is appended unless
-  // the body already carries it, and following the steps cannot publish
-  // without the approved link.
-  const placement = constraints?.linkPlacement ?? 'body'
+  // Where the link goes by hand (spec §3.1, #1134).
+  //
+  //   `comment` (LinkedIn) — the one placement that keeps the link OUT of the
+  //     copied text. It is a step of its own, posted right after the post.
+  //     Nothing here can verify the organizer actually posted that comment:
+  //     "mark as posted" checks the POST's address and no more.
+  //   `card` (Bluesky) / `body` — the URL goes in the text; a card is what the
+  //     platform makes OF a URL in the text when a human posts it. The tagged
+  //     link is appended unless the body already carries it, so for these two
+  //     following the steps cannot publish without the approved link.
+  //   no constraints (a platform no adapter describes) — unchanged from before
+  //     #1134: the link is neither appended nor a comment, it is its own
+  //     "Copy the link" step with no claim about where it goes.
+  const placement = constraints?.linkPlacement ?? null
   const linkAsComment = link !== null && placement === 'comment'
-  const linkInBody = link !== null && placement !== 'comment'
+  const linkInBody =
+    link !== null && placement !== null && placement !== 'comment'
   const linkAppended = linkInBody && !variant.body.includes(link)
   const copyText = linkAppended ? `${variant.body}\n\n${link}` : variant.body
   const copyLength = constraints

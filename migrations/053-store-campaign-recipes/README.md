@@ -27,8 +27,10 @@ alone. It refuses to run against a Template that is not `2026.1`.
 moved to `2026.2` with #1134 (LinkedIn skeletons lost `{url}`; the link is the
 first comment). Backfilling today's copy onto a plan seeded from `2026.1` would
 rewrite wording nobody chose, so the migration reads the snapshot and never the
-live built-in. `index.test.ts` pins its SHA-256 — the same digest it pinned
-while it still read the live built-in — so the snapshot cannot drift. When 053
+live built-in. `index.test.ts` pins the SHA-256 of its
+`[key, recipes]` pairs — the same digest it pinned while it still read the live
+built-in — so the Recipes 053 writes cannot drift. (Campaign `title`, `start`,
+`end` and `triggers` are outside that digest; 053 never writes them.) When 053
 has run on every dataset, the snapshot goes with the migration.
 
 ## Order

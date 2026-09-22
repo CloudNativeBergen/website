@@ -179,6 +179,13 @@ export const LinkedIn: Story = {
     await expect(
       canvas.getByText(/the link goes in the first comment/i),
     ).toBeVisible()
+    // The preview shows the link where the platform puts it: a comment under
+    // the post, never the link CARD Bluesky gets.
+    const preview = canvas.getByText(/linkedin preview/i).parentElement!
+    await expect(within(preview).getByText(/^first comment$/i)).toBeVisible()
+    await expect(
+      within(preview).queryByText('2027.CLOUDNATIVEBERGEN.DEV'),
+    ).toBeNull()
   },
 }
 
@@ -249,9 +256,18 @@ export const Bluesky: Story = {
     docs: {
       description: {
         story:
-          'Bluesky rules: 300 graphemes, at most four images, alt text mandatory. The second image carries a per-variant crop override and an alt override.',
+          'Bluesky rules: 300 graphemes, at most four images, alt text mandatory, and the link as a CARD — unchanged by #1134. The second image carries a per-variant crop override and an alt override.',
       },
     },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(canvas.getByText(/shown as a link card/i)).toBeVisible()
+    const preview = canvas.getByText(/bluesky preview/i).parentElement!
+    await expect(
+      within(preview).getByText('2027.CLOUDNATIVEBERGEN.DEV'),
+    ).toBeVisible()
+    await expect(within(preview).queryByText(/^first comment$/i)).toBeNull()
   },
 }
 

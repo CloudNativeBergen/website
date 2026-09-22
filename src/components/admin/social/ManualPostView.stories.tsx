@@ -183,6 +183,29 @@ export const OverLimitWithLink: Story = {
   },
 }
 
+/**
+ * A platform no adapter describes yet: unchanged from before #1134 — the link
+ * is neither appended to the text nor called a first comment, it is its own
+ * "Copy the link" step.
+ */
+export const NoPlatformRules: Story = {
+  args: { variant: { ...variant, platform: 'mastodon' } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const text = canvas
+      .getByRole('button', { name: /copy text/i })
+      .closest('section')
+    await expect(text).not.toHaveTextContent('utm_content=early-bird')
+    const linkSection = canvas
+      .getByRole('button', { name: /copy link/i })
+      .closest('section')
+    await expect(linkSection).toHaveTextContent(
+      'Add it where Mastodon takes a link.',
+    )
+    await expect(canvas.getByText(/^copy the link$/i)).toBeVisible()
+  },
+}
+
 export const AwaitingManualDark: Story = {
   parameters: { theme: 'dark', backgrounds: { default: 'dark' } },
 }

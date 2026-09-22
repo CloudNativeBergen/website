@@ -1224,6 +1224,25 @@ describe('LinkedIn: the link is the first comment', () => {
     ).resolves.toMatchObject({ success: true })
   })
 
+  it('has nothing to compare against when the conference lists no domains: the rule fails OPEN', async () => {
+    // The default `h.getConference` fixture carries NO `domains`, which is
+    // what a misconfigured tenant looks like. Deliberate: the rule is an
+    // editorial constraint, not a tenancy boundary, and refusing a body it
+    // cannot judge would block every save. Pinned so the choice is visible.
+    h.getSocialPostVariant.mockResolvedValue(
+      variant({ body: `Tickets are live → ${OURS}`, link: OURS }),
+    )
+    await expect(
+      social().scheduleVariant({ variantId: 'variant-ours' }),
+    ).resolves.toMatchObject({ success: true })
+    // …and the SAME body is refused the moment the conference has the domain,
+    // so this is the domains being empty, not the rule being absent.
+    withDomains()
+    await expect(
+      social().scheduleVariant({ variantId: 'variant-ours' }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+  })
+
   it('accepts a LinkedIn body that says the link is in the comments', async () => {
     withDomains()
     h.getSocialPostVariant.mockResolvedValue(
