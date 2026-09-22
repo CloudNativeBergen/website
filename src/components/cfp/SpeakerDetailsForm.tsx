@@ -130,6 +130,12 @@ export function SpeakerDetailsForm({
   // a cached list and can be stale, and replaying a stale `true` would restore
   // an opt-out the speaker has since withdrawn — which only they may do.
   const [socialTagTouched, setSocialTagTouched] = useState(false)
+  // Whether the control was CLICKED AT ALL this session, which is a different
+  // question from whether its value now differs from the loaded one. A save
+  // with no click must put nothing in the payload; a click that was undone
+  // must put an explicit `undefined` there, to overwrite what the first click
+  // already merged into the parent. Omission cannot do the second job.
+  const [socialTagInteracted, setSocialTagInteracted] = useState(false)
   const [socialTagSaveState, setSocialTagSaveState] = useState<
     'idle' | 'saving' | 'saved' | 'error'
   >('idle')
@@ -155,6 +161,7 @@ export function SpeakerDetailsForm({
     // Compared as booleans on purpose: the loaded value is `undefined` when
     // the field is absent, and absent and `false` are the same answer here.
     setSocialTagTouched((next === true) !== (storedSocialTagOptOut === true))
+    setSocialTagInteracted(true)
     // An organizer's value travels with the admin save; there is no self-write
     // endpoint for someone else's document.
     if (socialTagActor !== 'self') return
@@ -361,12 +368,13 @@ export function SpeakerDetailsForm({
       // key, so the writer still hears "no opinion" and leaves the stored
       // value alone. `false` reaches the server only as a deliberate
       // withdrawal, which it refuses for an organizer anyway.
-      ...(socialTagActor === 'organizer' && {
-        socialTagOptOut:
-          socialTagTouched && typeof socialTagOptOut === 'boolean'
-            ? socialTagOptOut
-            : undefined,
-      }),
+      ...(socialTagActor === 'organizer' &&
+        socialTagInteracted && {
+          socialTagOptOut:
+            socialTagTouched && typeof socialTagOptOut === 'boolean'
+              ? socialTagOptOut
+              : undefined,
+        }),
       ...(speakerImage && imageChanged && { image: speakerImage }),
       consent: {
         dataProcessing: {
