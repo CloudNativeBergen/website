@@ -6,6 +6,8 @@ const h = vi.hoisted(() => ({
   ops: [] as { op: string; id?: string; arg?: unknown }[],
   commitError: null as null | (Error & { statusCode?: number }),
 }))
+// The index expiry calls `revalidateTag`, which needs a request scope.
+vi.mock('next/cache', () => ({ revalidateTag: vi.fn() }))
 vi.mock('@/lib/sanity/client', () => ({
   clientReadUncached: { fetch: vi.fn() },
   clientWrite: {
@@ -50,6 +52,7 @@ import { emptyRecords } from '../materialize'
 import { BUILTIN_TEMPLATE } from '../template'
 import { libraryEntry } from '.'
 import { commitBuiltinCampaign, saveCampaignRecipes } from './sanity'
+import { sequentialShortCodes } from '../short-code'
 
 const speakerCard = libraryEntry('speakerCard')
 const base = {
@@ -110,6 +113,7 @@ describe('commitBuiltinCampaign', () => {
       includeOptional: [],
       ownerId: 'sp-owner',
       now: '2026-12-01T00:00:00.000Z',
+      newShortCode: sequentialShortCodes(),
       newId: (() => {
         let n = 0
         return (type: string) => `${type}.${++n}`

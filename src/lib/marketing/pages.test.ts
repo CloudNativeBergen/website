@@ -73,6 +73,27 @@ describe('sitePathIssue', () => {
   )
 
   it.each([
+    ['/go/abc987', 'a short link'],
+    ['/go/ABC987', 'a short link, uppercase'],
+    ['/go', 'the short-link root'],
+    ['/go/', 'the short-link root with a slash'],
+    ['/GO/abc987', 'a short link, uppercase segment'],
+    ['/program/../go/abc987', 'a short link reached through ..'],
+    ['/go\\abc987', 'a short link written with a backslash'],
+  ])('refuses %s (%s) — a link never points at a link (spec 2.3)', (path) => {
+    // A Task whose destination is its OWN code, or two Tasks pointing at
+    // each other's, is a redirect loop the visitor's browser has to break.
+    expect(sitePathIssue(path)).not.toBeNull()
+  })
+
+  it('still accepts a path that merely BEGINS with the letters go', () => {
+    // The guard is the `/go` SEGMENT, not the prefix: refusing these would
+    // quietly make real pages unreachable as destinations.
+    expect(sitePathIssue('/going-further')).toBeNull()
+    expect(sitePathIssue('/gods')).toBeNull()
+  })
+
+  it.each([
     ['', 'empty'],
     ['tickets', 'no leading slash'],
     ['//evil.example', 'protocol-relative'],

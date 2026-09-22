@@ -6,6 +6,7 @@ import { visionTool } from '@sanity/vision'
 import { defineConfig } from 'sanity'
 import { structureTool } from 'sanity/structure'
 import { slugOnSave } from './sanity/actions/slugOnSave'
+import { shortCodeSafeActions } from './sanity/actions/shortCodeSafeActions'
 import { inlineSvgInput } from '@starefossen/sanity-plugin-inline-svg-input'
 
 // Go to https://www.sanity.io/docs/api-versioning to learn how API versioning works
@@ -39,8 +40,11 @@ export default defineConfig({
   ],
 
   document: {
-    actions: (prev) =>
-      prev.map((originalAction) =>
+    actions: (prev, context) =>
+      // Duplicate is removed for the types carrying a `/go/<code>` short code
+      // BEFORE the publish wrapper, so a duplicated document can never share
+      // a code with the original (short-links spec §2.2).
+      shortCodeSafeActions(prev, context.schemaType).map((originalAction) =>
         originalAction.action === 'publish'
           ? slugOnSave(originalAction)
           : originalAction,

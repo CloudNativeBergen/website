@@ -187,6 +187,14 @@ export default defineType({
       type: 'string',
     }),
     defineField({
+      name: 'shortCode',
+      title: 'Short code',
+      description:
+        'Outreach Kinds only: the `/go/<code>` short link for the derived tagged link. Minted once and never changed. A publishing Task carries its code on the variant instead.',
+      type: 'string',
+      readOnly: true,
+    }),
+    defineField({
       name: 'subject',
       title: 'Subject',
       description:
