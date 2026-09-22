@@ -133,6 +133,33 @@ export function ownDomainUrlsIn(
 }
 
 /**
+ * Spec §3.1 (#1134): on a platform that posts the link as the FIRST COMMENT,
+ * the body may not link to the conference's own site.
+ *
+ * Split out of {@link validatePublishInput} because the publish engine needs
+ * exactly THIS rule before it hands a variant to an organizer — and only this
+ * one. Running the whole validator there would re-apply the media rules, and
+ * an image deleted from the post since scheduling would turn a hand-over into
+ * a failure, which the copy-ready view has always handled with a banner
+ * instead. One implementation, two callers, no drift.
+ */
+export function firstCommentIssues(
+  constraints: PlatformConstraints,
+  text: string,
+  conferenceDomains: readonly string[] = [],
+): ValidationIssue[] {
+  if (constraints.linkPlacement !== 'comment') return []
+  const ours = ownDomainUrlsIn(text, conferenceDomains)
+  if (ours.length === 0) return []
+  return [
+    {
+      field: 'body',
+      message: `The link is posted as the first comment, never in the body: remove ${ours.join(', ')} from the text.`,
+    },
+  ]
+}
+
+/**
  * Pure. Runs live in the editor, at schedule time, at save time and again
  * at publish, against the same constraints object.
  */
@@ -217,15 +244,9 @@ export function validatePublishInput(
   // re-derived at save and again at approval, so an exact match would miss
   // exactly the already-materialized drafts this rule exists to catch. URLs
   // on other hosts are someone else's page and are left alone.
-  if (constraints.linkPlacement === 'comment') {
-    const ours = ownDomainUrlsIn(input.text, context.conferenceDomains ?? [])
-    if (ours.length > 0) {
-      issues.push({
-        field: 'body',
-        message: `The link is posted as the first comment, never in the body: remove ${ours.join(', ')} from the text.`,
-      })
-    }
-  }
+  issues.push(
+    ...firstCommentIssues(constraints, input.text, context.conferenceDomains),
+  )
 
   return issues
 }

@@ -12,6 +12,10 @@ import {
   STALE_CLAIM_MINUTES,
 } from './state-machine'
 import { resolvePublishMedia } from './media'
+import {
+  firstCommentIssues,
+  getPlatformConstraints,
+} from './provider/constraints'
 import type { PublishableVariant, SocialVariantStore } from './store'
 import type { PublishAttempt, SocialPostVariant } from './types'
 
@@ -330,6 +334,38 @@ async function dispatch(
   }
 
   if (!adapter) {
+    // A MANUAL hand-over is the last point at which this variant is ours, and
+    // it is the one transition that does not run `validate` — there is no
+    // adapter to run it. Spec §3.1 (#1134): a body that links to our own site
+    // on a first-comment platform must not be handed to an organizer as
+    // ready to post. It got past save, schedule and approve only because it
+    // was written before the rule existed (or the conference gained the
+    // domain since), and `awaiting-manual` is NOT editable — so refusing
+    // here, which lands the variant in `failed`, is what gives the organizer
+    // a way to fix the copy and schedule it again.
+    //
+    // Deliberately THIS rule and no other: re-running the whole validator
+    // would fail a hand-over over an image deleted from the post since
+    // scheduling, which the copy-ready view has always shown as a banner.
+    const constraints = getPlatformConstraints(claimed.platform)
+    const issues = constraints
+      ? firstCommentIssues(constraints, claimed.body, claimed.conferenceDomains)
+      : []
+    if (issues.length > 0) {
+      await settle(
+        claimed,
+        {
+          ok: false,
+          kind: 'rejected',
+          message: issues.map((i) => `${i.field}: ${i.message}`).join('; '),
+        },
+        store,
+        now,
+        summary,
+        onFailed,
+      )
+      return null
+    }
     const landed = await store.transition(
       claimed._id,
       {
