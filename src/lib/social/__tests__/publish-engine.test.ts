@@ -22,7 +22,10 @@ const minutesAgo = (m: number) =>
 function fakeAdapter(
   outcome: PublishOutcome | Error,
   issues: ValidationIssue[] = [],
-): SocialPublishAdapter & { publish: ReturnType<typeof vi.fn> } {
+): SocialPublishAdapter & {
+  publish: ReturnType<typeof vi.fn>
+  validate: ReturnType<typeof vi.fn>
+} {
   return {
     platform: 'bluesky',
     constraints: {
@@ -38,7 +41,7 @@ function fakeAdapter(
       maxBytes: null,
       linkCardDisplacesImages: false,
     },
-    validate: () => issues,
+    validate: vi.fn(() => issues),
     publish: vi.fn(async () => {
       if (outcome instanceof Error) throw outcome
       return outcome
@@ -272,9 +275,9 @@ describe('runPublishTick — due scan and dispatch', () => {
   it('treats a validate() that throws as rejected and never calls publish', async () => {
     const store = new MemoryVariantStore([makeVariant()])
     const adapter = fakeAdapter({ ok: true, externalId: 'never' })
-    adapter.validate = () => {
+    adapter.validate.mockImplementation(() => {
       throw new Error('bad grapheme lib')
-    }
+    })
 
     const summary = await runPublishTick({
       store,
@@ -303,6 +306,28 @@ describe('runPublishTick — due scan and dispatch', () => {
     expect(summary).toMatchObject({ failed: 1, requeued: 0 })
     expect(store.get('variant-1').attempts[0]).toMatchObject({
       outcome: 'ambiguous',
+    })
+  })
+})
+
+describe("runPublishTick — the adapter's pre-publish validation", () => {
+  it("hands validate the variant's conference domains, so the tenant rules apply at publish too (#1134)", async () => {
+    const store = new MemoryVariantStore(
+      [makeVariant()],
+      {},
+      { 'conf-1': ['cloudnativebergen.no'] },
+    )
+    const adapter = fakeAdapter({ ok: true, externalId: 'at://1' })
+    await runPublishTick({
+      store,
+      resolveAdapter: async () => adapter,
+      now: NOW,
+    })
+    expect(adapter.publish).toHaveBeenCalledTimes(1)
+    // A VALUE: `{}` here would silently disable every tenant-dependent rule
+    // on the last line of defence before a post goes out.
+    expect(adapter.validate.mock.calls[0][1]).toEqual({
+      conferenceDomains: ['cloudnativebergen.no'],
     })
   })
 })

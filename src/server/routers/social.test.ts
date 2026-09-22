@@ -1149,7 +1149,6 @@ describe('social.updateVariant timing on a queued variant', () => {
   })
 })
 
-
 /**
  * Spec §3.1 (#1134). The rule lives in the shared validator; what is proven
  * HERE is that the two write paths reach it WITH the request conference's
