@@ -77,6 +77,34 @@ describe('validateEditorValue', () => {
     expect(v.issues).toEqual([])
   })
 
+  it('applies the first-comment rule live, with the domains the editor read carried (#1134)', () => {
+    const body =
+      'Tickets are live → https://cloudnativebergen.no/tickets?utm_campaign=earlyBird'
+    const refused = validateEditorValue(
+      { ...base, body },
+      PLATFORM_CONSTRAINTS.linkedin,
+      [],
+      ['cloudnativebergen.no'],
+    )
+    expect(refused.byField.body).toEqual([
+      expect.stringContaining('first comment'),
+    ])
+    // The rule is the editor's only because the domains reached it: the same
+    // body with no domains, and the same body on Bluesky, are both accepted.
+    expect(
+      validateEditorValue({ ...base, body }, PLATFORM_CONSTRAINTS.linkedin, [])
+        .issues,
+    ).toEqual([])
+    expect(
+      validateEditorValue(
+        { ...base, body },
+        PLATFORM_CONSTRAINTS.bluesky,
+        [],
+        ['cloudnativebergen.no'],
+      ).byField.body,
+    ).toEqual([])
+  })
+
   it('flags an alt override that blanks the alt text', () => {
     const v = validateEditorValue(
       {
