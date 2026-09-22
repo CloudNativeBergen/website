@@ -40,6 +40,10 @@ const dataset: Doc[] = [
     name: 'Ada',
     email: 'ada@example.com',
     organizations: [ref('org-A')],
+    // Ada is opted out TOO, so "Ada sees null for Grace" cannot pass merely
+    // because the dataset had nothing to leak in that direction.
+    socialTagOptOut: true,
+    socialTagOptOutAt: '2026-05-05T00:00:00.000Z',
   },
   {
     _id: 'spk-grace',
@@ -98,6 +102,36 @@ describe('getProposal — the co-speaker payload (#1148)', () => {
     // two lines fail the moment the projection hands either one back.
     expect(grace!.socialTagOptOut).toBeNull()
     expect(grace!.socialTagOptOutAt).toBeNull()
+  })
+
+  it('DOES tell Ada her OWN opt-out — she has to be able to withdraw it', async () => {
+    // The other half of the same field, and the half a blanket null broke:
+    // `[id]/page.tsx` picks the caller's own entry out of `speakers[]` and
+    // hands it to `ProposalForm`, so nulling everyone made an opted-out
+    // speaker's own checkbox render unticked in their own editor.
+    const speakers = await speakersSeenBy({
+      id: 'talk-1',
+      speakerId: 'spk-grace', // Grace is the one reading now.
+      isOrganizer: false,
+    })
+
+    const grace = speakers.find((s) => s.name === 'Grace')!
+    expect(grace.socialTagOptOut).toBe(true)
+
+    // …and Ada, the third party in this direction, is still withheld.
+    const ada = speakers.find((s) => s.name === 'Ada')!
+    expect(ada.socialTagOptOut).toBeNull()
+  })
+
+  it('never returns anyone’s timestamp, not even the caller’s', async () => {
+    const speakers = await speakersSeenBy({
+      id: 'talk-1',
+      speakerId: 'spk-grace',
+      isOrganizer: false,
+    })
+    expect(
+      speakers.find((s) => s.name === 'Grace')!.socialTagOptOutAt,
+    ).toBeNull()
   })
 
   it('still carries the co-speaker fields the form actually renders', async () => {
