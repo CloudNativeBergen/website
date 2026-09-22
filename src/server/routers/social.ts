@@ -574,11 +574,19 @@ export const socialRouter = router({
         // the id marketing snapshots project. Supplying a missing address must
         // add to what we know, never trade one fact for another.
         publishResult: { ...variant.publishResult, url: input.url },
-        attempt: {
-          at: getCurrentDateTime(),
-          outcome: 'manual',
-          by: ctx.speaker._id,
-        },
+        // A URL-only update on an already-published variant is NOT a manual
+        // publication: the vendor published it, and an `attempts[]` entry
+        // saying `manual` would misstate who put the post live. The audit
+        // entry is for the two paths that actually complete a post by hand.
+        ...(variant.status === 'published'
+          ? {}
+          : {
+              attempt: {
+                at: getCurrentDateTime(),
+                outcome: 'manual' as const,
+                by: ctx.speaker._id,
+              },
+            }),
       })
     }),
 })

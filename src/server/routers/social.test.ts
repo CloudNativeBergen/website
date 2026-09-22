@@ -628,6 +628,11 @@ describe('social.markPosted', () => {
       }),
       { ifRevision: 'rev-7' },
     )
+    // The vendor published this post, so supplying its address records NO
+    // manual attempt — an `attempts[]` entry saying `manual` would name the
+    // organizer as the publisher. The awaiting-manual and failed paths above
+    // and below are the controls that still record one.
+    expect(h.transition.mock.calls[0][1]).not.toHaveProperty('attempt')
   })
 
   it('REFUSES to overwrite an address the variant already has', async () => {

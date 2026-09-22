@@ -624,6 +624,63 @@ describe('findWork — the composed due/stale scan', () => {
     ).toEqual(['busy-0', 'busy-1', 'busy-2', 'busy-3'])
   })
 
+  it('rotates WHICH CONFERENCES get confirm slots across ticks when there are more than the cap', async () => {
+    // Round-robin is fair within a tick only. Six conferences with one
+    // submission each against a cap of five: in document order the same five
+    // would be read every minute and the sixth never — until it timed out
+    // `ambiguous` without a single vendor read. Lanes are ordered by their
+    // head's confirm key, so a conference just read sorts to the back.
+    const ids = ['a', 'b', 'c', 'd', 'e', 'f']
+    const submitted = (c: string, lastCheckedAt?: string) =>
+      variant(`${c}-1`, c, {
+        status: 'submitted',
+        scheduledAt: null,
+        submission: {
+          vendorPostId: `buffer-${c}`,
+          submittedAt: '2026-09-13T09:30:00Z',
+          ...(lastCheckedAt ? { lastCheckedAt } : {}),
+        },
+      })
+    const bounds = { ...BOUNDS, perConference: 10, submittedLimit: 5 }
+
+    // Tick 1: nothing has been read yet; document order decides, `f` waits.
+    h.dataset = [...ids.map((c) => conference(c)), ...ids.map((c) => submitted(c))]
+    const tick1 = await sanitySocialVariantStore.findWork(
+      NOW,
+      STALE_BEFORE,
+      bounds,
+    )
+    expect(tick1.submitted.map((v) => v._id)).toEqual([
+      'a-1',
+      'b-1',
+      'c-1',
+      'd-1',
+      'e-1',
+    ])
+
+    // Tick 2: the five read are stamped, in the order the sweep reached them.
+    // ON THE VALUE: `f` is read now, and the one that waits is `e` — the most
+    // recently read — not `f` again.
+    h.dataset = [
+      ...ids.map((c) => conference(c)),
+      ...ids.map((c, i) =>
+        c === 'f' ? submitted(c) : submitted(c, `2026-09-13T09:59:0${i}Z`),
+      ),
+    ]
+    const tick2 = await sanitySocialVariantStore.findWork(
+      NOW,
+      STALE_BEFORE,
+      bounds,
+    )
+    expect(tick2.submitted.map((v) => v._id)).toEqual([
+      'f-1',
+      'a-1',
+      'b-1',
+      'c-1',
+      'd-1',
+    ])
+  })
+
   it('orders the confirm sweep by LEAST RECENTLY CHECKED, so a capped slice cannot be monopolised', async () => {
     h.dataset = [
       conference('c1'),

@@ -218,6 +218,29 @@ function roundRobin<T>(
   return picked
 }
 
+/**
+ * Order the per-conference lanes by their HEAD's confirm key — the same
+ * `coalesce(lastCheckedAt, submittedAt)` the read sorts each lane by — so the
+ * conference read longest ago goes first.
+ *
+ * Round-robin is fair within a tick, not across ticks: with more submitting
+ * conferences than `submittedLimit`, lanes in document order hand the same
+ * first N conferences a slot every minute and the rest none, until they time
+ * out `ambiguous` without a single vendor read. A conference that was just
+ * read has its head stamped, which sorts it to the back — the rotation the
+ * lane order already gives submissions, applied to conferences. Stable, so
+ * lanes that tie keep the read's order.
+ */
+function leastRecentlyCheckedFirst<
+  T extends { submission: RawVariant['submission'] },
+>(groups: readonly (readonly T[] | null)[]): (readonly T[])[] {
+  const key = (lane: readonly T[]) =>
+    lane[0]?.submission?.lastCheckedAt ?? lane[0]?.submission?.submittedAt ?? ''
+  return groups
+    .map((group) => group ?? [])
+    .sort((a, b) => key(a).localeCompare(key(b)))
+}
+
 export const sanitySocialVariantStore: SocialVariantStore = {
   async findWork(now, staleBefore, bounds) {
     // groq-global: one conference's due variants, correlated to the parent
@@ -292,9 +315,10 @@ export const sanitySocialVariantStore: SocialVariantStore = {
             : null,
       })),
       stale: (result?.stale ?? []).map(normalizeVariant),
-      submitted: roundRobin(result?.submitted ?? [], bounds.submittedLimit).map(
-        normalizeVariant,
-      ),
+      submitted: roundRobin(
+        leastRecentlyCheckedFirst(result?.submitted ?? []),
+        bounds.submittedLimit,
+      ).map(normalizeVariant),
     }
   },
 
