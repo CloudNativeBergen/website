@@ -88,6 +88,8 @@ function clearTenantVars() {
     'TENANT_CNDN_BLUESKY_APP_PASSWORD',
     'TENANT_CNDN_ANALYTICS_PROJECT_ID',
     'TENANT_CNDN_ANALYTICS_API_KEY',
+    'TENANT_CNDN_BUFFER_API_KEY',
+    'TENANT_CNDN_BUFFER_LINKEDIN_CHANNEL_ID',
   ]) {
     vi.stubEnv(name, '')
   }
@@ -251,6 +253,12 @@ describe('resolveTenantEnvSlug — the mapping is an operator-only Sanity field'
     )
     expect(tenantEnvVarName(SLUG, 'analytics', 'API_KEY')).toBe(
       'TENANT_CNDN_ANALYTICS_API_KEY',
+    )
+    expect(tenantEnvVarName(SLUG, 'buffer', 'API_KEY')).toBe(
+      'TENANT_CNDN_BUFFER_API_KEY',
+    )
+    expect(tenantEnvVarName(SLUG, 'buffer', 'LINKEDIN_CHANNEL_ID')).toBe(
+      'TENANT_CNDN_BUFFER_LINKEDIN_CHANNEL_ID',
     )
   })
 })
@@ -821,6 +829,62 @@ describe('EnvPerOrgSecretsStore — analytics (#1009)', () => {
     const store = new EnvPerOrgSecretsStore()
     expect(await store.get(CNDN, 'analytics')).not.toBeNull()
     expect(await store.get('org-unknown', 'analytics')).toBeNull()
+  })
+})
+
+describe('EnvPerOrgSecretsStore — buffer (#1127)', () => {
+  const FULL = {
+    apiKey: 'buffer-api-key',
+    linkedinChannelId: 'buffer-linkedin-channel-id',
+  }
+
+  function setFullCredentials() {
+    vi.stubEnv('TENANT_CNDN_BUFFER_API_KEY', FULL.apiKey)
+    vi.stubEnv('TENANT_CNDN_BUFFER_LINKEDIN_CHANNEL_ID', FULL.linkedinChannelId)
+  }
+
+  it('resolves the API key and pinned LinkedIn channel id as one credential', async () => {
+    clearTenantVars()
+    setFullCredentials()
+    expect(await new EnvPerOrgSecretsStore().get(CNDN, 'buffer')).toEqual(FULL)
+  })
+
+  it('ignores an API key without a LinkedIn channel id', async () => {
+    clearTenantVars()
+    setFullCredentials()
+    const store = new EnvPerOrgSecretsStore()
+    expect(await store.get(CNDN, 'buffer')).toEqual(FULL)
+
+    vi.stubEnv('TENANT_CNDN_BUFFER_LINKEDIN_CHANNEL_ID', '')
+    expect(await store.get(CNDN, 'buffer')).toBeNull()
+  })
+
+  it('ignores a LinkedIn channel id without an API key', async () => {
+    clearTenantVars()
+    setFullCredentials()
+    const store = new EnvPerOrgSecretsStore()
+    expect(await store.get(CNDN, 'buffer')).toEqual(FULL)
+
+    vi.stubEnv('TENANT_CNDN_BUFFER_API_KEY', '')
+    expect(await store.get(CNDN, 'buffer')).toBeNull()
+  })
+
+  it('short-circuits without an organization lookup when neither value is set', async () => {
+    clearTenantVars()
+    expect(await new EnvPerOrgSecretsStore().get(CNDN, 'buffer')).toBeNull()
+    expect(org.getOrganizationSecretEnvSlugs).not.toHaveBeenCalled()
+  })
+
+  it('never returns CNDN credentials for another organization', async () => {
+    clearTenantVars()
+    setFullCredentials()
+    orgsAre([
+      { _id: CNDN, secretEnvSlug: SLUG },
+      { _id: 'org-b', secretEnvSlug: 'ORGB' },
+    ])
+    const store = new EnvPerOrgSecretsStore()
+    expect(await store.get(CNDN, 'buffer')).toEqual(FULL)
+    expect(await store.get('org-b', 'buffer')).toBeNull()
   })
 })
 

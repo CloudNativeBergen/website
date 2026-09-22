@@ -42,6 +42,7 @@ unioned as `SecretFamily`:
 | `badge`     | `BadgeSigningCredentials` | `BADGE_ISSUER_RSA_PRIVATE_KEY`, `BADGE_ISSUER_RSA_PUBLIC_KEY`, `BADGE_ISSUER_ED25519_SEED`, `BADGE_ISSUER_RSA_ONLY`                                                          |
 | `bluesky`   | `BlueskyCredentials`      | `BLUESKY_IDENTIFIER`, `BLUESKY_APP_PASSWORD` (the conference account's app password, #1005; both or nothing)                                                                 |
 | `analytics` | `AnalyticsCredentials`    | `POSTHOG_PROJECT_ID`, `POSTHOG_API_KEY` (the project id and a project-scoped `phx_` personal key with `query:read`, #1009; both or nothing)                                  |
+| `buffer`    | `BufferCredentials`       | Per-org only: `TENANT_<SLUG>_BUFFER_API_KEY`, `TENANT_<SLUG>_BUFFER_LINKEDIN_CHANNEL_ID` (pinned channel id; both or nothing; no platform-env fallback, #1127)               |
 
 `TicketingCredentials` is imported from the provider layer (#634), never
 re-declared, so the secret layer and the provider layer cannot drift apart.
@@ -312,8 +313,9 @@ comparison since #43. A freshly set slug can take up to an hour to be seen, whic
 is moot in practice: the variables it names need a Vercel redeploy anyway, and a
 redeploy is a cold cache.
 
-**Families and fields** (only families with a wired consumer are served; every
-other family — `slack`, `push`, `badge` — returns `null` here and falls through):
+**Families and fields** (only families with a documented discrete-env contract
+are served; every other family — `slack`, `push`, `badge` — returns `null` here
+and falls through. `buffer` is a seam until its consumer lands in #1129):
 
 | Family      | Variables                                                                                                   | Required                 |
 | ----------- | ----------------------------------------------------------------------------------------------------------- | ------------------------ |
@@ -321,6 +323,7 @@ other family — `slack`, `push`, `badge` — returns `null` here and falls thro
 | `ticketing` | `TENANT_<SLUG>_CHECKIN_API_KEY`, `TENANT_<SLUG>_CHECKIN_API_SECRET`, `TENANT_<SLUG>_CHECKIN_WEBHOOK_SECRET` | **all three**            |
 | `bluesky`   | `TENANT_<SLUG>_BLUESKY_IDENTIFIER`, `TENANT_<SLUG>_BLUESKY_APP_PASSWORD`                                    | **both**                 |
 | `analytics` | `TENANT_<SLUG>_ANALYTICS_PROJECT_ID`, `TENANT_<SLUG>_ANALYTICS_API_KEY`                                     | **both**                 |
+| `buffer`    | `TENANT_<SLUG>_BUFFER_API_KEY`, `TENANT_<SLUG>_BUFFER_LINKEDIN_CHANNEL_ID`                                  | **both**                 |
 
 The ticketing segment is `CHECKIN`, not `TICKETING`, because the bag is
 Checkin-shaped: it mirrors the platform's `CHECKIN_*` vars. A **Tito** tenant's
@@ -467,6 +470,7 @@ no error, just no workshop emails.
 | badge     | `resolveTenantSecrets(orgId, 'badge')`                                              | **Seam only.** Env-only; signing keys thread through pure config (TODO in `badge/config.ts`).                                                                                                                                                                                                                                                                                                                                                                            |
 | bluesky   | `resolveSocialCredentials(orgId, 'bluesky')` (`src/lib/social/provider/index.ts`)   | **Wired (#1005).** The resolved bag IS the organization's Bluesky connection: the publish cron builds a `BlueskyPublishAdapter` from it, and an organization without one has manual Bluesky variants. Per-org first, then the platform env for the platform org only.                                                                                                                                                                                                    |
 | analytics | `resolveMarketingAnalyticsProvider(orgId)` (`src/lib/marketing/analytics/index.ts`) | **Resolver in place (#1009), first consumer is the snapshot cron.** The bag is read access to the organization's PostHog project; the resolver hands back a `PostHogAnalyticsProvider` or `null` (no Outcomes for that organization). The public `phc_` ingest token is NOT a secret and lives on the organization document instead. Per-org first, then the platform env for the platform org only.                                                                     |
+| buffer    | None yet                                                                            | **Seam only (#1127).** A Buffer account belongs to one tenant organization, so this family is per-org only (`TENANT_<SLUG>_BUFFER_*`) with no platform-env fallback. The Buffer publishing adapter/consumer lands in #1129; LinkedIn remains manual until then.                                                                                                                                                                                                          |
 
 The one remaining direct `platformCheckinCredentials()` consumer is the inbound
 `/api/webhooks/checkin/ticket-sold` route, which verifies a signature **before**
