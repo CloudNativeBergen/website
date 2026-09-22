@@ -303,6 +303,22 @@ describe('an organizer may SET the opt-out and may never clear it', () => {
     expect(stored().socialTagOptOut).toBeUndefined()
   })
 
+  it('survives a save that reduces to an EMPTY patch', async () => {
+    // `socialTagOptOut: false` on a speaker who is not opted out is the ONLY
+    // key in the payload, and it resolves to no operation at all — so the
+    // writer commits a patch with an empty `set` and nothing else. Sanity's
+    // real patch builder has to accept that rather than throw, or an organizer
+    // opening and saving an untouched admin form would see a 500.
+    const result = await organizerCaller().admin.update({
+      id: 'spk-1',
+      data: { socialTagOptOut: false },
+    })
+
+    expect(result._id).toBe('spk-1')
+    expect(stored().name).toBe('Alice Speaker')
+    expect(stored().socialTagOptOut).toBeUndefined()
+  })
+
   it('cannot forge the timestamp either', async () => {
     await organizerCaller().admin.update({
       id: 'spk-1',
