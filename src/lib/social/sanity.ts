@@ -304,7 +304,12 @@ export const sanitySocialVariantStore: SocialVariantStore = {
       staleBefore: staleBefore.toISOString(),
     })
     // One verification read per conference per tick, not per variant: the
-    // due list is grouped by conference already.
+    // due list is grouped by conference already. FAIL OPEN per conference:
+    // the first-comment rule is editorial and already says nothing when the
+    // list is empty, so a verification read that throws (a Sanity timeout,
+    // a record that does not hydrate) must not take the whole tick down —
+    // the stale sweep, the confirm sweep and every other tenant's dispatch
+    // ride on this one call.
     const verifiedByConference = new Map<string, Promise<string[]>>()
     const domainsFor = (raw: {
       conferenceId: string | null
@@ -313,7 +318,15 @@ export const sanitySocialVariantStore: SocialVariantStore = {
       const key = raw.conferenceId ?? ''
       let pending = verifiedByConference.get(key)
       if (!pending) {
-        pending = verifiedDomains(normalizeDomainList(raw.conferenceDomains))
+        pending = verifiedDomains(
+          normalizeDomainList(raw.conferenceDomains),
+        ).catch((error: unknown) => {
+          console.error(
+            `[social] could not verify the domains of conference ${key}; the first-comment rule is skipped this tick:`,
+            error instanceof Error ? error.message : error,
+          )
+          return []
+        })
         verifiedByConference.set(key, pending)
       }
       return pending

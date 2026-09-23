@@ -56,6 +56,13 @@ async function run(query: string, params: Record<string, unknown> = {}) {
   return value.get()
 }
 
+const verification = vi.hoisted(() => ({
+  verifiedDomains: vi.fn(async (claimed: readonly string[]) => [...claimed]),
+}))
+vi.mock('@/lib/domain-verification/routing', () => ({
+  verifiedDomains: verification.verifiedDomains,
+}))
+
 vi.mock('@/lib/sanity/client', () => ({
   clientWrite: {
     fetch: run,
@@ -387,6 +394,58 @@ describe('findWork — the composed due/stale scan', () => {
       ['c2.example.no'],
     ])
     expect(h.queries).toHaveLength(1)
+  })
+
+  it('FAILS OPEN per conference when a domain-verification read throws — the tick goes on', async () => {
+    // Under routing enforcement `verifiedDomains` reads records. One Sanity
+    // timeout for one conference must not reject `findWork` and take the
+    // stale sweep, the confirm sweep and every other tenant's dispatch down
+    // with it; the first-comment rule is editorial and already says nothing
+    // on an empty list.
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    verification.verifiedDomains.mockClear()
+    verification.verifiedDomains.mockImplementation(async (claimed) => {
+      if (claimed.includes('c2.example.no')) throw new Error('Sanity timeout')
+      return [...claimed]
+    })
+    try {
+      h.dataset = [
+        conference('c1'),
+        conference('c2'),
+        variant('v1', 'c1', { scheduledAt: '2026-09-13T09:00:00Z' }),
+        variant('w1', 'c2', { scheduledAt: '2026-09-13T09:00:00Z' }),
+        variant('w2', 'c2', { scheduledAt: '2026-09-13T09:01:00Z' }),
+      ]
+      const work = await sanitySocialVariantStore.findWork(
+        NOW,
+        STALE_BEFORE,
+        BOUNDS,
+      )
+      // ON THE VALUE: every due row is still handed over; the failing
+      // conference's rows carry no domains (rule skipped), the other keeps
+      // its list; the read was attempted once for the failing conference.
+      expect(work.due.map((v) => v._id).sort()).toEqual(['v1', 'w1', 'w2'])
+      expect(work.due.find((v) => v._id === 'v1')?.conferenceDomains).toEqual([
+        'c1.example.no',
+      ])
+      expect(work.due.find((v) => v._id === 'w1')?.conferenceDomains).toEqual(
+        [],
+      )
+      expect(work.due.find((v) => v._id === 'w2')?.conferenceDomains).toEqual(
+        [],
+      )
+      expect(
+        verification.verifiedDomains.mock.calls.filter((c) =>
+          c[0].includes('c2.example.no'),
+        ),
+      ).toHaveLength(1)
+      expect(error).toHaveBeenCalledTimes(1)
+    } finally {
+      error.mockRestore()
+      verification.verifiedDomains.mockImplementation(async (claimed) => [
+        ...claimed,
+      ])
+    }
   })
 
   it('never returns a Studio draft twin or a Content Release version copy', async () => {

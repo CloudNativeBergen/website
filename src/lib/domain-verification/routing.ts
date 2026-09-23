@@ -37,17 +37,19 @@ export async function verifiedDomains(
   now: Date = new Date(),
 ): Promise<string[]> {
   if (!isRoutingEnforced()) return [...claimed]
-  const kept: string[] = []
-  for (const entry of claimed) {
-    const normalized = normalizeDomain(entry)
-    if (normalized.startsWith('*.')) {
-      kept.push(entry)
-      continue
-    }
-    const record = await getDomainVerification(normalized.replace(/:\d+$/, ''))
-    if (record && isRoutingEligible(record, now)) kept.push(entry)
-  }
-  return kept
+  // The reads are independent; in parallel, so a tick's latency before its
+  // first dispatch does not grow with the number of entries.
+  const verdicts = await Promise.all(
+    claimed.map(async (entry) => {
+      const normalized = normalizeDomain(entry)
+      if (normalized.startsWith('*.')) return true
+      const record = await getDomainVerification(
+        normalized.replace(/:\d+$/, ''),
+      )
+      return record !== null && isRoutingEligible(record, now)
+    }),
+  )
+  return claimed.filter((_, i) => verdicts[i])
 }
 
 /**
