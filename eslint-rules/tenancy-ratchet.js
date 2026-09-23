@@ -7,9 +7,10 @@
  * has leaked through; it is configured as `'warn'` because a tail of
  * pre-existing unscoped reads would otherwise block CI, and nothing in CI reads
  * warnings. So the detector fires and the code ships anyway. This script is the
- * thing that reads it: it re-runs ESLint over the repo, counts that ONE rule per
- * file, and fails when any file carries MORE warnings than the checked-in
- * baseline (`no-unscoped-groq.baseline.json`).
+ * thing that reads it: it re-runs ESLint over the repo (in CI, off the
+ * `.eslintcache` the lint step just wrote — see countWarnings), counts that ONE
+ * rule per file, and fails when any file carries MORE warnings than the
+ * checked-in baseline (`no-unscoped-groq.baseline.json`).
  *
  *   node eslint-rules/tenancy-ratchet.js            # check   (pnpm lint:tenancy)
  *   node eslint-rules/tenancy-ratchet.js --update   # rewrite (pnpm lint:tenancy:update)
@@ -66,6 +67,7 @@
 'use strict'
 
 const fs = require('node:fs')
+const os = require('node:os')
 const path = require('node:path')
 
 const RULE_ID = 'tenancy/no-unscoped-groq'
@@ -130,9 +132,34 @@ function countRuleMessages(result) {
 }
 
 /** Lint the repo exactly as `eslint .` does and count RULE_ID per file. */
-async function countWarnings() {
+async function countWarnings({ cache }) {
   const { ESLint } = require('eslint')
-  const eslint = new ESLint({ cwd: REPO_ROOT })
+  // `cache: true` reads and writes the SAME `.eslintcache` that `pnpm lint`
+  // (`eslint --cache .`) maintains — ESLint stores every file's result there,
+  // warnings and suppressed messages included, keyed on file content and
+  // config hash. In CI this step runs straight after `pnpm lint`, so every
+  // file is a cache hit and the ratchet costs seconds instead of relinting
+  // the repo a second time. Without a warm cache it lints as before.
+  //
+  // The cache key does NOT cover the rule's implementation (functions are
+  // dropped from the config hash), so on a machine with a warm cache an edit
+  // to `no-unscoped-groq.js` or `groq-scope-engine.js` keeps reporting the
+  // OLD rule's output — and `pnpm lint` shares that cache, so nothing
+  // self-corrects until a linted file or the config changes. That is why the
+  // cache is used ONLY in CI (fresh checkout, no cache can predate the rule
+  // edit) and never on the `--update` path, which writes the baseline.
+  //
+  // With `cache: false` ESLint DELETES `cacheLocation` (eslint.js, "clean up
+  // any stale cache"), which would wipe the developer's `.eslintcache` on
+  // every local ratchet run. Point the uncached run at a throwaway path so
+  // the real cache survives.
+  const eslint = new ESLint({
+    cwd: REPO_ROOT,
+    cache,
+    cacheLocation: cache
+      ? '.eslintcache'
+      : path.join(os.tmpdir(), 'tenancy-ratchet-nocache'),
+  })
   const results = await eslint.lintFiles(['.'])
   const counts = {}
   for (const result of results) {
@@ -215,7 +242,9 @@ function updateBaseline(
 
 async function main() {
   const update = process.argv.includes('--update')
-  const current = await countWarnings()
+  // CI is the only place a warm cache is guaranteed fresh; see countWarnings.
+  const useCache = !update && process.env.CI === 'true'
+  const current = await countWarnings({ cache: useCache })
 
   if (update) {
     return updateBaseline(current, {

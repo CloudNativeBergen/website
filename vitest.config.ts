@@ -106,45 +106,56 @@ export default defineConfig({
       // flaky. Raise these as coverage improves; never lower them. Only these
       // globbed files are gated — there is no global threshold, so other files
       // are never checked. Run via `pnpm test:coverage`.
-      thresholds: {
-        'src/lib/auth.ts': {
-          statements: 67,
-          branches: 64,
-          functions: 60,
-          lines: 70,
-        },
-        // Covered by auth-link-abuse.test.ts (signLinkIntent/verifyLinkIntent
-        // integrity, expiry, provider-binding, forgery) plus the jwt-callback
-        // path. Measured ~98/93/83/98 on 2026-07; ratcheted up a few points.
-        'src/lib/auth-link.ts': {
-          statements: 92,
-          branches: 88,
-          functions: 80,
-          lines: 92,
-        },
-        'src/lib/speaker/sanity.ts': {
-          statements: 61,
-          branches: 61,
-          functions: 63,
-          lines: 61,
-        },
-        'src/lib/profile/server.ts': {
-          statements: 84,
-          branches: 75,
-          functions: 95,
-          lines: 85,
-        },
-        // proxy.ts is covered by __tests__/lib/auth/proxy.test.ts (routing,
-        // production dev-tools/impersonation guards, sign-in redirect, test-mode
-        // bypass). Measured 100/~96/100/100 on 2026-07; ratcheted a few points
-        // below to lock in coverage without flakiness.
-        'src/proxy.ts': {
-          statements: 95,
-          branches: 90,
-          functions: 90,
-          lines: 95,
-        },
-      },
+      //
+      // CI runs the suite as shards (`--shard=i/n --reporter=blob`) and judges
+      // thresholds ONCE, in the job that runs `--merge-reports --coverage`.
+      // A shard sees only a slice of each module's callers, so its own
+      // numbers are meaningless and would fail the gate on every run. Keyed on
+      // the `--shard` flag itself (not an env var anything could export):
+      // a shard cannot also be the merge, and the merge never passes it.
+      // `scripts/assert-gated-coverage.ts` checks after the merge that every
+      // file listed here is actually in the merged report.
+      thresholds: process.argv.some((a) => a.startsWith('--shard'))
+        ? undefined
+        : {
+            'src/lib/auth.ts': {
+              statements: 67,
+              branches: 64,
+              functions: 60,
+              lines: 70,
+            },
+            // Covered by auth-link-abuse.test.ts (signLinkIntent/verifyLinkIntent
+            // integrity, expiry, provider-binding, forgery) plus the jwt-callback
+            // path. Measured ~98/93/83/98 on 2026-07; ratcheted up a few points.
+            'src/lib/auth-link.ts': {
+              statements: 92,
+              branches: 88,
+              functions: 80,
+              lines: 92,
+            },
+            'src/lib/speaker/sanity.ts': {
+              statements: 61,
+              branches: 61,
+              functions: 63,
+              lines: 61,
+            },
+            'src/lib/profile/server.ts': {
+              statements: 84,
+              branches: 75,
+              functions: 95,
+              lines: 85,
+            },
+            // proxy.ts is covered by __tests__/lib/auth/proxy.test.ts (routing,
+            // production dev-tools/impersonation guards, sign-in redirect, test-mode
+            // bypass). Measured 100/~96/100/100 on 2026-07; ratcheted a few points
+            // below to lock in coverage without flakiness.
+            'src/proxy.ts': {
+              statements: 95,
+              branches: 90,
+              functions: 90,
+              lines: 95,
+            },
+          },
     },
   },
 })
