@@ -129,11 +129,11 @@ Reads an optional `TENANT_SECRETS_JSON` env var: a JSON map
 }
 ```
 
-It is **provider-agnostic** for `ticketing`, `email` and `slack`, which is why it
-remains the only per-org source that can carry a Tito ticketing bag: any
-non-empty object is a hit. The pair-shaped families (`bluesky`, `analytics`,
+It is **provider-agnostic** for every family except the pair-shaped ones, which
+is why it remains the only per-org source that can carry a Tito ticketing bag:
+any non-empty object is a hit. The pair-shaped families (`bluesky`, `analytics`,
 `buffer`) are the exception — both fields or nothing, an incomplete bag is
-logged **once** and ignored. A malformed blob is likewise logged **once** and
+logged **once per bag per blob** and ignored. A malformed blob is likewise logged **once** and
 treated as empty (never throws), so a bad payload degrades to the env fallback
 rather than breaking every tenant.
 

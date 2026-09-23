@@ -284,6 +284,8 @@ export class JsonEnvSecretsStore implements TenantSecretsStore {
   private cacheKey: string | undefined
   private parsed: TenantSecretsJson | null = null
   private warned = false
+  /** `orgId/family` bags already reported incomplete for the CURRENT blob. */
+  private warnedBags = new Set<string>()
 
   private load(): TenantSecretsJson | null {
     const raw = process.env.TENANT_SECRETS_JSON
@@ -293,6 +295,9 @@ export class JsonEnvSecretsStore implements TenantSecretsStore {
       return null
     }
     if (raw === this.cacheKey) return this.parsed
+    // A new blob is a new chance: what it says about each bag is reported
+    // once again, then never repeated until it changes.
+    this.warnedBags.clear()
     try {
       this.parsed = JSON.parse(raw) as TenantSecretsJson
       this.warned = false
@@ -338,9 +343,16 @@ export class JsonEnvSecretsStore implements TenantSecretsStore {
       creds as Record<string, unknown>,
     )
     if (missing.length > 0) {
-      console.warn(
-        `[secrets] TENANT_SECRETS_JSON entry for ${orgId}/${family} is missing ${missing.join(', ')}; ignoring the whole bag (both or nothing)`,
-      )
+      // ONCE per bag per blob, not per call: the publish cron resolves
+      // credentials for every due variant every minute, so a per-call warning
+      // is a log flood for as long as the bag stays half.
+      const key = `${orgId}/${family}`
+      if (!this.warnedBags.has(key)) {
+        this.warnedBags.add(key)
+        console.warn(
+          `[secrets] TENANT_SECRETS_JSON entry for ${key} is missing ${missing.join(', ')}; ignoring the whole bag (both or nothing)`,
+        )
+      }
       return null
     }
     return creds as FamilyCredentials<F>

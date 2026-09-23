@@ -339,6 +339,28 @@ describe('JsonEnvSecretsStore', () => {
     warn.mockRestore()
   })
 
+  it('warns about a half bag ONCE per blob, not once per call — the cron asks every minute', async () => {
+    const store = new JsonEnvSecretsStore()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    vi.stubEnv(
+      'TENANT_SECRETS_JSON',
+      JSON.stringify({ 'org-1': { buffer: { apiKey: 'k' } } }),
+    )
+    expect(await store.get('org-1', 'buffer')).toBeNull()
+    expect(await store.get('org-1', 'buffer')).toBeNull()
+    expect(await store.get('org-1', 'buffer')).toBeNull()
+    expect(warn).toHaveBeenCalledTimes(1)
+    // A CHANGED blob is reported again — the operator may have edited it.
+    vi.stubEnv(
+      'TENANT_SECRETS_JSON',
+      JSON.stringify({ 'org-1': { buffer: { linkedinChannelId: 'ch' } } }),
+    )
+    expect(await store.get('org-1', 'buffer')).toBeNull()
+    expect(warn).toHaveBeenCalledTimes(2)
+    expect(warn.mock.calls[1][0]).toContain('apiKey')
+    warn.mockRestore()
+  })
+
   it('applies the same both-or-nothing to the bluesky and analytics pairs', async () => {
     // The docs table promised it for these two as well; the blob was the
     // one source that did not keep the promise.
