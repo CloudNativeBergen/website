@@ -8,6 +8,7 @@ import {
   landingUtm,
   parseTenantAnalyticsConfig,
   posthogRewrites,
+  optInUtmBridge,
   withConference,
   withoutExcludedEarlierPages,
 } from './config'
@@ -270,5 +271,62 @@ describe('the ingestion rewrites', () => {
   it('does not advertise itself', () => {
     expect(POSTHOG_INGEST_PATH).not.toMatch(/posthog|ingest|analytics|track/i)
     expect(ANALYTICS_CONFIG_ELEMENT_ID).toBeTruthy()
+  })
+})
+
+describe('optInUtmBridge', () => {
+  const LANDING = { utm_campaign: 'cfp-open', utm_content: 't1' }
+
+  it('leaves every event before $opt_in alone', () => {
+    // A cookieless visitor attributes through the landing pageview reading the
+    // address bar; stamping later events would change that (#1000 finding 2).
+    const bridge = optInUtmBridge(LANDING)
+    const event = { event: '$autocapture', properties: { $pathname: '/' } }
+    expect(bridge(event)).toBe(event)
+  })
+
+  it('stamps $opt_in and every later untagged event of this page load', () => {
+    const bridge = optInUtmBridge(LANDING)
+    expect(
+      bridge({ event: '$opt_in', properties: { utm_campaign: null } })
+        .properties,
+    ).toEqual(LANDING)
+    expect(bridge({ event: '$pageview', properties: {} }).properties).toEqual(
+      LANDING,
+    )
+  })
+
+  it('never overrides an event that carries its own utm_*', () => {
+    const bridge = optInUtmBridge(LANDING)
+    bridge({ event: '$opt_in' })
+    const tagged = { event: '$pageview', properties: { utm_source: 'news' } }
+    expect(bridge(tagged)).toBe(tagged)
+  })
+
+  it('does nothing for an untagged landing', () => {
+    const bridge = optInUtmBridge({})
+    bridge({ event: '$opt_in' })
+    const event = { event: '$pageview', properties: {} }
+    expect(bridge(event)).toBe(event)
+  })
+
+  it('runs inside before_send', () => {
+    const beforeSend = buildPosthogOptions(
+      { token: TOKEN, conference: 'conf-1' },
+      LANDING,
+    ).before_send
+    if (typeof beforeSend !== 'function') throw new Error('before_send')
+    const send = (event: string) =>
+      (
+        beforeSend({ event, properties: { $pathname: '/' } } as never) as {
+          properties?: Record<string, unknown>
+        } | null
+      )?.properties
+    expect(send('$pageview')?.utm_campaign).toBeUndefined()
+    expect(send('$opt_in')?.utm_campaign).toBe('cfp-open')
+    expect(send('$pageview')).toMatchObject({
+      utm_campaign: 'cfp-open',
+      conference: 'conf-1',
+    })
   })
 })

@@ -1,5 +1,11 @@
 import posthog from 'posthog-js'
 import {
+  CFP_LANDING_PATH,
+  rememberLandingUtm,
+  sessionStorageOrNull,
+} from '@/lib/marketing/landing-utm'
+import { scheduleUtmStrip } from './address-bar'
+import {
   ANALYTICS_CONFIG_ELEMENT_ID,
   buildPosthogOptions,
   isAnalyticsExcludedPath,
@@ -96,18 +102,68 @@ function waitForEligibleRoute(win: Window): Promise<void> {
   })
 }
 
-export async function initTenantAnalytics(win: Window): Promise<void> {
-  if (!(await waitForConfigElement(win))) return
-  const config = readConfigElement(win.document)
-  if (!config) return
+/**
+ * DEVELOPMENT ONLY: the real-browser acceptance run
+ * (`scripts/verify-utm-strip.mjs`) drives a headless Chromium, which the SDK
+ * drops as a bot, and must not count as the real conference. The query flag
+ * lifts the bot filter and files the run under `verify-test`, the value the
+ * #1000 harness used. `process.env.NODE_ENV` is inlined at build time, so a
+ * production bundle carries none of this.
+ */
+export const VERIFY_RUN_PARAM = '__ph_verify'
 
-  // Captured BEFORE the route wait and BEFORE init: the bridge needs the URL
-  // the visitor LANDED on, and the SDK's own pageview may already be in
-  // flight by the time Accept is clicked.
+function verificationOverrides(
+  win: Window,
+  config: TenantAnalyticsConfig,
+): {
+  config: TenantAnalyticsConfig
+  options: { opt_out_useragent_filter?: true }
+} {
+  if (process.env.NODE_ENV === 'production') return { config, options: {} }
+  if (!new URLSearchParams(win.location.search).has(VERIFY_RUN_PARAM)) {
+    return { config, options: {} }
+  }
+  return {
+    config: { ...config, conference: 'verify-test' },
+    options: { opt_out_useragent_filter: true },
+  }
+}
+
+export async function initTenantAnalytics(win: Window): Promise<void> {
+  // Everything that reads the LANDING URL runs here, before the first await:
+  // the address bar loses its `utm_*` shortly after (spec §3, #1146), and the
+  // config element can stream in later than that deadline.
+  //
+  // 1. The CFP first-touch stash. `LandingUtmCapture` writes the same value
+  //    once React has hydrated, which can be after the strip; this write is
+  //    first and that one becomes a no-op.
+  if (win.location.pathname === CFP_LANDING_PATH) {
+    rememberLandingUtm(sessionStorageOrNull(), win.location.search)
+  }
+  // 2. The landing UTMs for the Accept bridge (`optInUtmBridge`,
+  //    `applyConsentChoice`), held in memory for the life of the page.
   const utm = landingUtm(win.location.search)
+  // 3. The strip itself: after the SDK's first `$pageview`, or the deadline.
+  const strip = scheduleUtmStrip(win)
+  // No SDK runs on an excluded route, so there is no pageview to wait for.
+  if (isAnalyticsExcludedPath(win.location.pathname)) strip.now()
+
+  if (!(await waitForConfigElement(win))) return
+  const parsed = readConfigElement(win.document)
+  if (!parsed) {
+    // Analytics is off for this page (malformed token): nothing will read
+    // the address bar.
+    strip.now()
+    return
+  }
+  const { config, options } = verificationOverrides(win, parsed)
 
   await waitForEligibleRoute(win)
 
-  posthog.init(config.token, buildPosthogOptions(config))
+  posthog.init(config.token, {
+    ...buildPosthogOptions(config, utm),
+    ...options,
+  })
+  strip.afterFirstPageview(posthog)
   publishAnalyticsRuntime(win, { client: posthog, config, landingUtm: utm })
 }

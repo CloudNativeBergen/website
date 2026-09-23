@@ -32,6 +32,13 @@ export interface ConsentContext {
  * property registered before consent — so without the two calls after it, an
  * accepting visitor's CTA clicks would fall out of the conference-filtered
  * query entirely (#1000 findings 4–5; spec §6.1 "Accept bridge", mandatory).
+ * They cannot move BEFORE the opt-in: its reset would wipe them.
+ *
+ * The events the SDK captures INSIDE `opt_in_capturing()` (`$opt_in`, the
+ * entry event of the new session) run before either call; `before_send`
+ * stamps the landing UTMs on those (`optInUtmBridge` in `./config`), because
+ * by then the address bar has usually been stripped (spec §3, #1146). The
+ * `register_for_session` below is what carries them past this page load.
  *
  * Decline: opt out, then re-register `conference`. Under `cookieless_mode:
  * 'on_reject'` the SDK keeps counting cookielessly and persists the denial

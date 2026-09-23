@@ -1,5 +1,6 @@
 import type { CaptureResult, PostHogConfig } from 'posthog-js'
 import { CTA_CAPTURE_ATTR, resolvePosthogToken } from '@/lib/analytics'
+import { UTM_PARAMS } from '@/lib/marketing/strip-utm'
 import { POSTHOG_INGEST_PATH } from './ingest'
 
 export { POSTHOG_INGEST_PATH, posthogRewrites } from './ingest'
@@ -96,14 +97,6 @@ export function keepAnalyticsEvent(
   return pathname === null ? true : !isAnalyticsExcludedPath(pathname)
 }
 
-const UTM_KEYS = [
-  'utm_source',
-  'utm_medium',
-  'utm_campaign',
-  'utm_content',
-  'utm_term',
-] as const
-
 /**
  * The landing URL's UTM parameters, captured at init and replayed into the
  * client session on Accept. Cookieless visitors attribute through the server
@@ -114,7 +107,7 @@ const UTM_KEYS = [
 export function landingUtm(search: string): Record<string, string> {
   const params = new URLSearchParams(search)
   const out: Record<string, string> = {}
-  for (const key of UTM_KEYS) {
+  for (const key of UTM_PARAMS) {
     const value = params.get(key)?.trim()
     if (value) out[key] = value
   }
@@ -122,11 +115,40 @@ export function landingUtm(search: string): Record<string, string> {
 }
 
 /**
+ * The first half of the Accept bridge (spec §3, #1146). `opt_in_capturing()`
+ * resets persistence and then captures `$opt_in` — the first event of the new
+ * client session, the one its entry UTMs are derived from — and, when the
+ * landing pageview had not gone out yet, a fresh `$pageview`, all INSIDE the
+ * call. A `register_for_session` made before it is wiped by the reset, one
+ * made after it is too late, and the address bar no longer has the tags once
+ * they have been stripped. So from the `$opt_in` event on, every event of this
+ * page load that carries no `utm_*` of its own gets the landing UTMs held in
+ * memory. Events BEFORE `$opt_in` are left alone: a cookieless visitor keeps
+ * being attributed exactly as before, through the landing pageview and the
+ * server session (#1000 finding 2).
+ */
+export function optInUtmBridge(
+  landing: Record<string, string>,
+): <E extends OutgoingEvent>(event: E) => E {
+  let optedIn = false
+  return (event) => {
+    if (event.event === '$opt_in') optedIn = true
+    if (!optedIn || Object.keys(landing).length === 0) return event
+    const props = event.properties ?? {}
+    const tagged = UTM_PARAMS.some(
+      (key) => props[key] !== undefined && props[key] !== null,
+    )
+    if (tagged) return event
+    return { ...event, properties: { ...props, ...landing } }
+  }
+}
+
+/**
  * Guarantee `conference` on EVERY event. `register({ conference })` in
  * `loaded` covers the normal path, but the SDK resets persistence inside
- * `opt_in_capturing()` and captures both `$opt_in` and a fresh `$pageview`
- * BEFORE the consent bridge can re-register — and that pageview is the entry
- * event of the accepted session, the one attribution keys on. Stamping it here
+ * `opt_in_capturing()` and captures `$opt_in` (and a fresh `$pageview` when
+ * the landing one has not gone out yet) BEFORE the consent bridge can
+ * re-register — the entry event of the accepted session. Stamping it here
  * closes that window for every SDK-internal capture, whatever else changes.
  */
 export function withConference<E extends OutgoingEvent>(
@@ -179,7 +201,10 @@ function currentPathname(): string | null {
 /** The `posthog.init` options for one tenant. See spec §6.1 for each choice. */
 export function buildPosthogOptions(
   config: TenantAnalyticsConfig,
+  /** The landing URL's `utm_*` (`landingUtm`), for the Accept bridge. */
+  landing: Record<string, string> = {},
 ): Partial<PostHogConfig> {
+  const bridge = optInUtmBridge(landing)
   return {
     api_host: POSTHOG_INGEST_PATH,
     ui_host: 'https://eu.posthog.com',
@@ -207,7 +232,10 @@ export function buildPosthogOptions(
     },
     before_send: (event: CaptureResult | null) =>
       event && keepAnalyticsEvent(event, currentPathname())
-        ? withConference(withoutExcludedEarlierPages(event), config.conference)
+        ? withConference(
+            bridge(withoutExcludedEarlierPages(event)),
+            config.conference,
+          )
         : null,
     loaded: (ph) => {
       ph.register({ conference: config.conference })
