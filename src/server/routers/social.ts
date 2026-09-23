@@ -19,6 +19,7 @@ import {
   getSocialPostEditorInputs,
   getSocialPostVariant,
   getSocialVariantEditorData,
+  getConferenceDomainsForRule,
   listSocialPostVariants,
   sanitySocialVariantStore,
   updateSocialPostDefaultTime,
@@ -31,6 +32,7 @@ import { isSocialPlatform } from '@/lib/social/provider'
 import { postUrlIssue } from '@/lib/social/provider/manual'
 import {
   getPlatformConstraints,
+  needsOwnDomains,
   validatePublishInput,
 } from '@/lib/social/provider/constraints'
 import { offAspectOverrides, resolvePublishMedia } from '@/lib/social/media'
@@ -46,6 +48,7 @@ import {
 } from '@/lib/marketing/short-link-cache'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import type {
+  SocialPlatform,
   SocialPostAttachment,
   SocialPostVariant,
   SocialVariantAttachment,
@@ -60,6 +63,23 @@ const EDITABLE_STATUSES: readonly VariantStatus[] = [
   'scheduled',
   'failed',
 ]
+
+/**
+ * The request conference's own `domains[]` — what the first-comment rule
+ * (spec §3.1, #1134) compares a body's URLs against. `[]` when the conference
+ * lists none, so the rule says nothing rather than refusing a body it cannot
+ * judge; a FAILED read propagates and fails the mutation, as any other read
+ * would.
+ */
+async function currentConferenceDomains(
+  platform: SocialPlatform,
+): Promise<readonly string[]> {
+  // Only the first-comment rule reads them; every other platform's save must
+  // not depend on (or fail with) this extra read. UNCACHED, by the resolved
+  // id: see `getConferenceDomainsForRule`.
+  if (!needsOwnDomains(platform)) return []
+  return getConferenceDomainsForRule(await resolveConferenceId())
+}
 
 function issuesToError(issues: ValidationIssue[]): TRPCError {
   return new TRPCError({
@@ -305,6 +325,7 @@ export const socialRouter = router({
         variant.conferenceId,
       )
       const issues = await scheduleIssues(variant, post.attachments, {
+        conferenceDomains: await currentConferenceDomains(variant.platform),
         taskOwned: !!(await getTaskForVariant(
           variant._id,
           variant.conferenceId,
@@ -400,7 +421,9 @@ export const socialRouter = router({
       )
       const constraints = getPlatformConstraints(variant.platform)
       const issues = constraints
-        ? validatePublishInput(constraints, publishInput)
+        ? validatePublishInput(constraints, publishInput, {
+            conferenceDomains: await currentConferenceDomains(variant.platform),
+          })
         : []
       // A queued post keeps the scheduling rule: no placeholder goes out.
       // Only a Task's post carries placeholders in the first place.

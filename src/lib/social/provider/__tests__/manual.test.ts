@@ -11,7 +11,25 @@ describe('ManualChannelProvider (spec §4.2, #1006)', () => {
     expect(provider.platform).toBe('linkedin')
     expect(provider.constraints).toBe(PLATFORM_CONSTRAINTS.linkedin)
     expect(provider.constraints.maxLength).toBe(3000)
-    expect(provider.constraints.linkInBody).toBe(true)
+    expect(provider.constraints.linkPlacement).toBe('comment')
+  })
+
+  it('passes the tenant context through to the shared rules (#1134)', () => {
+    const inBody = input(
+      'Tickets → https://cloudnativebergen.no/tickets?utm_source=linkedin',
+    )
+    const context = { conferenceDomains: ['cloudnativebergen.no'] }
+    expect(provider.validate(inBody, context)).toEqual(
+      validatePublishInput(PLATFORM_CONSTRAINTS.linkedin, inBody, context),
+    )
+    expect(provider.validate(inBody, context)).toEqual([
+      {
+        field: 'body',
+        message: expect.stringContaining('first comment'),
+      },
+    ])
+    // Without the tenant's domains the host rule has nothing to compare to.
+    expect(provider.validate(inBody)).toEqual([])
   })
 
   it('validates exactly as the editor does (same function, same rules)', () => {

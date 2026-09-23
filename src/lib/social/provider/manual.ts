@@ -6,6 +6,7 @@ import {
 } from './constraints'
 import type {
   PlatformConstraints,
+  PublishContext,
   PublishInput,
   PublishOutcome,
   SocialPublishAdapter,
@@ -34,8 +35,11 @@ export class ManualChannelProvider implements SocialPublishAdapter {
     this.constraints = PLATFORM_CONSTRAINTS[platform]
   }
 
-  validate(input: PublishInput): ValidationIssue[] {
-    return validatePublishInput(this.constraints, input)
+  validate(
+    input: PublishInput,
+    context: PublishContext = {},
+  ): ValidationIssue[] {
+    return validatePublishInput(this.constraints, input, context)
   }
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars -- the contract's argument; a manual channel has nothing to send it to

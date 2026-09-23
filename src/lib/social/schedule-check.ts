@@ -50,7 +50,15 @@ export function placeholderIssues(input: {
 export async function scheduleIssues(
   variant: SocialPostVariant,
   postAttachments: SocialPostAttachment[],
-  options: { taskOwned?: boolean } = {},
+  options: {
+    taskOwned?: boolean
+    /**
+     * The conference's own `domains[]`. REQUIRED, not defaulted: the
+     * first-comment rule (spec §3.1, #1134) is silent without it, and a
+     * caller that forgot would look green while enforcing nothing.
+     */
+    conferenceDomains: readonly string[]
+  },
 ): Promise<ValidationIssue[]> {
   const constraints = getPlatformConstraints(variant.platform)
   const media = resolvePublishMedia(
@@ -75,11 +83,14 @@ export async function scheduleIssues(
     const placeholders = placeholderIssues(input)
     if (placeholders.length > 0) return placeholders
   }
-  // Validation only: no card is fetched here, so no link-card hosts.
+  // Validation only: no card is FETCHED here, so no link-card hosts. The
+  // tenant's domains still reach `validate` as context — that rule compares
+  // strings and makes no request.
+  const context = { conferenceDomains: options.conferenceDomains }
   const adapter = await resolveSocialPublishAdapter({
     ...variant,
     conferenceDomains: [],
   })
-  if (adapter) return adapter.validate(input)
-  return constraints ? validatePublishInput(constraints, input) : []
+  if (adapter) return adapter.validate(input, context)
+  return constraints ? validatePublishInput(constraints, input, context) : []
 }

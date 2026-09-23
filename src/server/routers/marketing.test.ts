@@ -66,7 +66,10 @@ import type { Context } from '@/server/trpc'
 import type { SeedPlan } from '@/lib/marketing/seed'
 import { placeholdersIn } from '@/lib/marketing/placeholders'
 import { publishedPair } from '@/lib/marketing/recipes'
-import { BUILTIN_TEMPLATE } from '@/lib/marketing/template'
+import {
+  BUILTIN_TEMPLATE,
+  BUILTIN_TEMPLATE_VERSION,
+} from '@/lib/marketing/template'
 import { marketingRouter } from './marketing'
 
 const t = initTRPC.context<Context>().create()
@@ -117,7 +120,7 @@ const CONFERENCE = {
 const builtin = (includeOptional: string[] = []) => ({
   source: {
     type: 'builtin' as const,
-    templateVersion: '2026.1' as const,
+    templateVersion: BUILTIN_TEMPLATE_VERSION,
     includeOptional,
   },
 })
@@ -152,7 +155,7 @@ describe('marketing.plan.create — shape', () => {
       _id: `marketingPlan.${CONF_A}`,
       conferenceId: CONF_A,
       ownerId: ADMIN_ID,
-      templateVersion: '2026.1',
+      templateVersion: BUILTIN_TEMPLATE_VERSION,
     })
     for (const record of [
       ...seed.campaigns,
@@ -262,7 +265,14 @@ describe('marketing.plan.create — shape', () => {
       expect(variant.link).toMatch(
         /^https:\/\/cloudnativebergen\.dev\/.*utm_source=(linkedin|bluesky)&utm_medium=social&utm_campaign=[a-zA-Z]+&utm_content=/,
       )
-      expect(variant.body).toContain(variant.link)
+      // Bluesky resolves the tagged link into the copy (the card is made of
+      // it); LinkedIn keeps it off the body — it is the first comment
+      // (spec §3.1, #1134) — and carries it on the variant all the same.
+      if (variant.platform === 'linkedin') {
+        expect(variant.body, task.key).not.toContain(variant.link)
+      } else {
+        expect(variant.body, task.key).toContain(variant.link)
+      }
     }
     // Every Task is assigned to the plan owner.
     for (const task of seed.tasks) expect(task.assigneeId).toBe(ADMIN_ID)

@@ -45,6 +45,7 @@ import {
 import { handoffStudioAttachment } from '@/lib/social/sanity'
 import { createHash, randomUUID } from 'node:crypto'
 import { TRPCError } from '@trpc/server'
+import { needsOwnDomains } from '@/lib/social/provider/constraints'
 import { adminProcedure, resolveConferenceId, router } from '@/server/trpc'
 import { loadReport } from '@/lib/marketing/report'
 import { buildReportCsv } from '@/lib/marketing/report-csv'
@@ -183,6 +184,7 @@ import {
 import {
   getSocialPostDefaultTime,
   getSocialPostEditorInputs,
+  getConferenceDomainsForRule,
   getSocialVariantEditorData,
 } from '@/lib/social/sanity'
 import { scheduleIssues } from '@/lib/social/schedule-check'
@@ -1336,10 +1338,11 @@ export const marketingRouter = router({
           // The tagged link is re-derived here (spec §3.4) and written with
           // the approval, so a stale or hand-edited variant never goes out
           // without the attribution the Task is measured by.
+          const conference = await requireConference()
           let link: string
           try {
             link = taggedUrl({
-              baseUrl: conferenceBaseUrl(await requireConference()),
+              baseUrl: conferenceBaseUrl(conference),
               targetPage: task.targetPage,
               channel: task.channel,
               campaignKey: data.campaign.key,
@@ -1358,7 +1361,16 @@ export const marketingRouter = router({
           const issues = await scheduleIssues(
             { ...v, link },
             post.attachments,
-            { taskOwned: true },
+            {
+              taskOwned: true,
+              // LIVE, by the variant's conference (already tenancy-guarded),
+              // not `conference.domains` from the cached loader — approve is
+              // the enforcement point Task-owned drafts actually go through,
+              // and it must apply the same list save and the tick apply.
+              conferenceDomains: needsOwnDomains(v.platform)
+                ? await getConferenceDomainsForRule(v.conferenceId)
+                : [],
+            },
           )
           if (issues.length > 0) {
             throw new TRPCError({

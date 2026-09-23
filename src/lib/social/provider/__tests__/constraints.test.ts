@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   PLATFORM_CONSTRAINTS,
   countLength,
@@ -13,18 +13,19 @@ const media = (alt = 'A crowd at the keynote') => ({
 })
 
 describe('platform constraints', () => {
-  it('LinkedIn counts characters up to 3,000 and allows a link in the body', () => {
+  it('LinkedIn counts characters up to 3,000 and puts the link in the first comment', () => {
     const c = PLATFORM_CONSTRAINTS.linkedin
     expect(c.maxLength).toBe(3000)
     expect(c.counting).toBe('characters')
-    expect(c.linkInBody).toBe(true)
+    expect(c.linkPlacement).toBe('comment')
   })
 
-  it('Bluesky counts graphemes up to 300 and takes at most four images', () => {
+  it('Bluesky counts graphemes up to 300, takes at most four images, and shows the link as a card', () => {
     const c = PLATFORM_CONSTRAINTS.bluesky
     expect(c.maxLength).toBe(300)
     expect(c.counting).toBe('graphemes')
     expect(c.maxImages).toBe(4)
+    expect(c.linkPlacement).toBe('card')
   })
 
   it('has no constraints for a platform without an adapter', () => {
@@ -166,6 +167,415 @@ describe('the link card displaces images (#1005)', () => {
     ).toEqual([{ field: 'body', message: '5000 bytes, the limit is 3000.' }])
     expect(
       validatePublishInput(PLATFORM_CONSTRAINTS.linkedin, { text, media: [] }),
+    ).toEqual([])
+  })
+})
+
+/**
+ * Spec §3.1 (#1134): where the platform posts the link as the FIRST COMMENT,
+ * the body may not carry a link to the conference's own site. The rule is on
+ * the HOST, never an exact match against `input.link`: the body's URL is
+ * frozen when the Task is materialized while `link` is re-derived at save and
+ * again at approval, so the two differ in exactly the cases that matter.
+ */
+describe('the link is the first comment (#1134)', () => {
+  const OWN = ['cloudnativebergen.no', '*.konf.app']
+  const linkedin = PLATFORM_CONSTRAINTS.linkedin
+  const bluesky = PLATFORM_CONSTRAINTS.bluesky
+
+  const body = (text: string) => ({ text, media: [] })
+
+  it('refuses a LinkedIn body carrying the tagged link to our own site', () => {
+    const issues = validatePublishInput(
+      linkedin,
+      {
+        ...body(
+          'Tickets are live → https://cloudnativebergen.no/tickets?utm_source=linkedin&utm_campaign=earlyBird',
+        ),
+        // Re-derived at approval: a DIFFERENT string from the one in the body.
+        link: 'https://cloudnativebergen.no/tickets?utm_source=linkedin&utm_campaign=finalPush',
+      },
+      { conferenceDomains: OWN },
+    )
+    expect(issues).toHaveLength(1)
+    expect(issues[0].field).toBe('body')
+    expect(issues[0].message).toContain('first comment')
+    expect(issues[0].message).toContain(
+      'https://cloudnativebergen.no/tickets?utm_source=linkedin&utm_campaign=earlyBird',
+    )
+  })
+
+  it('refuses an UNTAGGED body link and one tagged for an earlier target page', () => {
+    for (const url of [
+      'https://cloudnativebergen.no/tickets',
+      'https://cloudnativebergen.no/cfp?utm_source=linkedin&utm_campaign=cfp',
+      'http://cloudnativebergen.no/',
+    ]) {
+      const issues = validatePublishInput(linkedin, body(`Read more: ${url}`), {
+        conferenceDomains: OWN,
+      })
+      expect(
+        issues.map((i) => i.field),
+        url,
+      ).toEqual(['body'])
+      expect(issues[0].message, url).toContain(url)
+    }
+  })
+
+  it('reads the URL the way a browser would: case, trailing punctuation, port, userinfo, a subdomain of ours', () => {
+    for (const url of [
+      'HTTPS://CloudNativeBergen.NO/tickets',
+      'https://cloudnativebergen.no:8443/tickets',
+      'https://x@cloudnativebergen.no/tickets',
+      'https://www.cloudnativebergen.no/tickets',
+    ]) {
+      const issues = validatePublishInput(linkedin, body(`Read more: ${url}`), {
+        conferenceDomains: OWN,
+      })
+      expect(
+        issues.map((i) => i.field),
+        url,
+      ).toEqual(['body'])
+    }
+    // Sentence punctuation around the URL is trimmed off the URL the message
+    // names — copy written by hand ends a link with a full stop far more
+    // often than a URL legitimately ends with one.
+    for (const text of [
+      'Tickets (https://cloudnativebergen.no/tickets).',
+      'Tickets: https://cloudnativebergen.no/tickets,',
+      'See [tickets](https://cloudnativebergen.no/tickets) now',
+    ]) {
+      const issues = validatePublishInput(linkedin, body(text), {
+        conferenceDomains: OWN,
+      })
+      expect(
+        issues.map((i) => i.field),
+        text,
+      ).toEqual(['body'])
+      expect(issues[0].message, text).toContain(
+        'remove https://cloudnativebergen.no/tickets from the text.',
+      )
+    }
+  })
+
+  it('matches a domains[] entry that carries a dev port, which the generated URL keeps', () => {
+    // `conferenceBaseUrl` derives `http://localhost:3000/...` from the entry
+    // `localhost:3000`, but `URL.hostname` is `localhost`. Comparing the two
+    // as stored would never match the URL we generated ourselves.
+    for (const [entry, url] of [
+      ['localhost:3000', 'http://localhost:3000/tickets'],
+      ['example.com:8443', 'https://example.com:8443/tickets'],
+    ] as const) {
+      const issues = validatePublishInput(linkedin, body(`Tickets → ${url}`), {
+        conferenceDomains: [entry],
+      })
+      expect(
+        issues.map((i) => i.field),
+        entry,
+      ).toEqual(['body'])
+      expect(issues[0].message, entry).toContain(url)
+    }
+  })
+
+  it('treats the apex and www of the listed edition host as ours — but not its siblings', () => {
+    // Production lists the edition host (`2026.cloudnativedays.no`). The URL
+    // an organizer types by hand is the apex, which redirects straight to
+    // it. A SIBLING is a different site: on a shared zone it is another
+    // tenant's (see the platform-zone test below).
+    for (const url of [
+      'https://cloudnativedays.no/tickets',
+      'https://www.cloudnativedays.no/tickets',
+      'https://www.2026.cloudnativedays.no/tickets',
+    ]) {
+      const issues = validatePublishInput(linkedin, body(`Tickets → ${url}`), {
+        conferenceDomains: ['2026.cloudnativedays.no'],
+      })
+      expect(
+        issues.map((i) => i.field),
+        url,
+      ).toEqual(['body'])
+    }
+    expect(
+      validatePublishInput(
+        linkedin,
+        body('https://blog.cloudnativedays.no/post'),
+        {
+          conferenceDomains: ['2026.cloudnativedays.no'],
+        },
+      ),
+    ).toEqual([])
+  })
+
+  it('keeps tenants minted on the PLATFORM zone apart: their host is the whole site, the zone apex is not theirs', () => {
+    // `konf.run` is not on the Public Suffix List, so by registrable domain
+    // every hosted tenant would be one site. With the zone configured, a
+    // hosted tenant's entry matches itself and what is under it, nothing
+    // beside it — not another tenant's edition, not the platform's own apex.
+    vi.stubEnv('PLATFORM_DOMAIN_SUFFIX', 'konf.run')
+    try {
+      const own = { conferenceDomains: ['acme.konf.run'] }
+      for (const url of [
+        'https://acme.konf.run/tickets',
+        'https://www.acme.konf.run/tickets',
+      ]) {
+        expect(
+          validatePublishInput(linkedin, body(`See ${url}`), own).map(
+            (i) => i.field,
+          ),
+          url,
+        ).toEqual(['body'])
+      }
+      for (const url of [
+        'https://other-tenant.konf.run/tickets',
+        'https://konf.run/',
+        'https://www.konf.run/',
+      ]) {
+        expect(
+          validatePublishInput(linkedin, body(`See ${url}`), own),
+          url,
+        ).toEqual([])
+      }
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
+  it('takes the zone from the CONTEXT when given, so the browser agrees with the server', () => {
+    // The browser has no PLATFORM_DOMAIN_SUFFIX. With the server's value in
+    // the context the same body validates the same in both places; with
+    // `null` (no zone) the platform apex would count as ours.
+    vi.stubEnv('PLATFORM_DOMAIN_SUFFIX', '')
+    try {
+      const own = ['acme.konf.run']
+      const bodyText = body('See https://konf.run/')
+      expect(
+        validatePublishInput(linkedin, bodyText, {
+          conferenceDomains: own,
+          platformZone: 'konf.run',
+        }),
+      ).toEqual([])
+      expect(
+        validatePublishInput(linkedin, bodyText, {
+          conferenceDomains: own,
+          platformZone: null,
+        }).map((i) => i.field),
+      ).toEqual(['body'])
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
+  it('an entry that IS the platform zone owns the apex alone, never the tenants under it', () => {
+    // The operator's own conference may list `konf.run`; that must not make
+    // every tenant's edition its site.
+    const ctx = { conferenceDomains: ['konf.run'], platformZone: 'konf.run' }
+    expect(
+      validatePublishInput(linkedin, body('https://konf.run/pricing'), ctx).map(
+        (i) => i.field,
+      ),
+    ).toEqual(['body'])
+    expect(
+      validatePublishInput(
+        linkedin,
+        body('https://acme.konf.run/tickets'),
+        ctx,
+      ),
+    ).toEqual([])
+  })
+
+  it('handles a NESTED platform zone: the tenant host is the site, not the zone owner apex', () => {
+    // `PLATFORM_DOMAIN_SUFFIX=events.example.com`: the tenant's registrable
+    // apex is `example.com`, which is not the zone — comparing the two let
+    // `https://example.com/about` read as the tenant's own site and blocked
+    // Save. What matters is whether the ENTRY sits under the zone.
+    const ctx = {
+      conferenceDomains: ['acme.events.example.com'],
+      platformZone: 'events.example.com',
+    }
+    expect(
+      validatePublishInput(
+        linkedin,
+        body('https://acme.events.example.com/x'),
+        ctx,
+      ).map((i) => i.field),
+    ).toEqual(['body'])
+    for (const url of [
+      'https://example.com/about',
+      'https://www.example.com/about',
+      'https://other.events.example.com/x',
+    ]) {
+      expect(
+        validatePublishInput(linkedin, body(`See ${url}`), ctx),
+        url,
+      ).toEqual([])
+    }
+    // And the other way round: the conference that owns the zone's PARENT
+    // (`example.com`) owns its own hosts, never the tenants minted under the
+    // nested zone — those are other conferences.
+    const parent = {
+      conferenceDomains: ['example.com'],
+      platformZone: 'events.example.com',
+    }
+    expect(
+      validatePublishInput(
+        linkedin,
+        body('https://www.example.com/about'),
+        parent,
+      ).map((i) => i.field),
+    ).toEqual(['body'])
+    for (const url of [
+      'https://other.events.example.com/tickets',
+      'https://acme.events.example.com/tickets',
+    ]) {
+      expect(
+        validatePublishInput(linkedin, body(`See ${url}`), parent),
+        url,
+      ).toEqual([])
+    }
+  })
+
+  it('compares IDN hosts the way the parser writes them', () => {
+    // `URL.hostname` is punycode; a `domains[]` entry is typed in Unicode.
+    for (const [entry, url] of [
+      ['blåbærsyltetøy.no', 'https://blåbærsyltetøy.no/x'],
+      ['xn--blbrsyltety-y8ao3x.no', 'https://blåbærsyltetøy.no/x'],
+      ['blåbærsyltetøy.no', 'https://xn--blbrsyltety-y8ao3x.no/x'],
+    ] as const) {
+      expect(
+        validatePublishInput(linkedin, body(`Se ${url}`), {
+          conferenceDomains: [entry],
+        }).map((i) => i.field),
+        `${entry} ← ${url}`,
+      ).toEqual(['body'])
+    }
+  })
+
+  it('reads a fully-qualified host (trailing dot) and a bare www. host as the same site', () => {
+    // WHATWG parsing keeps the terminal dot, DNS does not; LinkedIn
+    // autolinks a bare `www.` host exactly as a full URL.
+    for (const url of [
+      'https://cloudnativebergen.no./tickets',
+      'www.cloudnativebergen.no/tickets',
+    ]) {
+      const issues = validatePublishInput(linkedin, body(`Tickets → ${url}`), {
+        conferenceDomains: OWN,
+      })
+      expect(
+        issues.map((i) => i.field),
+        url,
+      ).toEqual(['body'])
+      expect(issues[0].message, url).toContain(url)
+    }
+  })
+
+  it('ignores WILDCARD entries: a hosting zone is not a site, and other tenants share it', () => {
+    // Production lists `*.vercel.app` for previews. Every speaker demo on the
+    // same zone would otherwise read as ours — and on `*.konf.app` so would
+    // another tenant's edition.
+    for (const [entries, url] of [
+      [['*.vercel.app'], 'https://speaker-demo.vercel.app/'],
+      [OWN, 'https://sub.konf.app/x'],
+      [OWN, 'https://my.konf.app/x'],
+    ] as const) {
+      expect(
+        validatePublishInput(linkedin, body(`See ${url}`), {
+          conferenceDomains: entries,
+        }),
+        url,
+      ).toEqual([])
+    }
+  })
+
+  it('keeps sites on a shared PRIVATE suffix apart: our vercel.app project is not every vercel.app project', () => {
+    expect(
+      validatePublishInput(linkedin, body('https://cndn.vercel.app/tickets'), {
+        conferenceDomains: ['cndn.vercel.app'],
+      }).map((i) => i.field),
+    ).toEqual(['body'])
+    expect(
+      validatePublishInput(linkedin, body('https://demo.vercel.app/tickets'), {
+        conferenceDomains: ['cndn.vercel.app'],
+      }),
+    ).toEqual([])
+  })
+
+  it('names the Recipe as the place to fix, because materializing keeps re-creating the link', () => {
+    const [issue] = validatePublishInput(
+      linkedin,
+      body('https://cloudnativebergen.no/tickets'),
+      { conferenceDomains: OWN },
+    )
+    expect(issue.message).toContain('Recipe')
+  })
+
+  it('is not fooled by a host that merely ENDS with ours', () => {
+    expect(
+      validatePublishInput(
+        linkedin,
+        body('https://cloudnativebergen.no.evil.example/x'),
+        { conferenceDomains: OWN },
+      ),
+    ).toEqual([])
+  })
+
+  it('leaves URLs on other hosts alone', () => {
+    expect(
+      validatePublishInput(
+        linkedin,
+        body(
+          'The CNCF landscape (https://landscape.cncf.io) is worth a look. Also https://notcloudnativebergen.no/x',
+        ),
+        { conferenceDomains: OWN },
+      ),
+    ).toEqual([])
+  })
+
+  it('accepts a LinkedIn body with no link at all, and one that only names us', () => {
+    expect(
+      validatePublishInput(
+        linkedin,
+        {
+          ...body('Tickets are live. Link in the comments.'),
+          link: 'https://cloudnativebergen.no/tickets',
+        },
+        { conferenceDomains: OWN },
+      ),
+    ).toEqual([])
+    expect(
+      validatePublishInput(
+        linkedin,
+        body('See cloudnativebergen.no for the programme'),
+        { conferenceDomains: OWN },
+      ),
+    ).toEqual([])
+  })
+
+  it('leaves Bluesky (a link CARD) untouched with the same body and domains', () => {
+    expect(
+      validatePublishInput(
+        bluesky,
+        {
+          ...body('Tickets are live → https://cloudnativebergen.no/tickets'),
+          link: 'https://cloudnativebergen.no/tickets',
+        },
+        { conferenceDomains: OWN },
+      ),
+    ).toEqual([])
+  })
+
+  it('says nothing when the conference has no domains to compare against', () => {
+    expect(
+      validatePublishInput(
+        linkedin,
+        body('Tickets → https://cloudnativebergen.no/tickets'),
+        { conferenceDomains: [] },
+      ),
+    ).toEqual([])
+    expect(
+      validatePublishInput(
+        linkedin,
+        body('Tickets → https://cloudnativebergen.no/tickets'),
+      ),
     ).toEqual([])
   })
 })

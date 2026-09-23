@@ -105,8 +105,44 @@ const meta = {
 export default meta
 type Story = StoryObj<typeof meta>
 
-/** LinkedIn takes the link in the body, so "Copy text" carries it. */
+/**
+ * LinkedIn posts the link as the FIRST COMMENT (spec §3.1, #1134): the copied
+ * text does NOT carry it, the Link section is a copy-ready step of its own,
+ * and the numbered steps say when to post it.
+ */
 export const AwaitingManual: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const text = canvas
+      .getByRole('button', { name: /copy text/i })
+      .closest('section')
+    await expect(text).not.toHaveTextContent('utm_content=early-bird')
+    await expect(text).not.toHaveTextContent('The link is added at the end.')
+
+    const linkSection = canvas
+      .getByRole('button', { name: /copy link/i })
+      .closest('section')
+    await expect(linkSection).toHaveTextContent('utm_content=early-bird')
+    await expect(linkSection).toHaveTextContent(/first comment/i)
+    await expect(
+      canvas.getByText(/add the link as the first comment/i),
+    ).toBeVisible()
+  },
+}
+
+/**
+ * Bluesky is `linkPlacement: 'card'` and is UNCHANGED by #1134: posting by
+ * hand, the URL in the text is what makes the card, so it is still appended
+ * to the copied text unless the body already carries it.
+ */
+export const BlueskyLinkAppended: Story = {
+  args: {
+    variant: {
+      ...variant,
+      platform: 'bluesky',
+      body: 'Early-bird tickets for #CloudNativeBergen 2027 are live 🎟️',
+    },
+  },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
     const text = canvas
@@ -117,12 +153,13 @@ export const AwaitingManual: Story = {
   },
 }
 
-/** A body that already carries the link is copied as written. */
+/** A Bluesky body that already carries the link is copied as written. */
 export const LinkAlreadyInBody: Story = {
   args: {
     variant: {
       ...variant,
-      body: `Tickets: ${variant.link}\n\nGrab yours before 1 December.`,
+      platform: 'bluesky',
+      body: `Tickets: ${variant.link}`,
     },
   },
   play: async ({ canvasElement }) => {
@@ -135,14 +172,83 @@ export const LinkAlreadyInBody: Story = {
   },
 }
 
-/** A body near the cap plus the appended link overshoots: say so. */
+/** A Bluesky body near the 300-grapheme cap plus the appended link overshoots. */
 export const OverLimitWithLink: Story = {
-  args: { variant: { ...variant, body: 'x'.repeat(2950) } },
+  args: {
+    variant: { ...variant, platform: 'bluesky', body: 'x'.repeat(290) },
+  },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
     await expect(canvas.getAllByRole('alert')[0]).toHaveTextContent(
       /shorten the text/i,
     )
+  },
+}
+
+/**
+ * A platform no adapter describes yet: unchanged from before #1134 — the link
+ * is neither appended to the text nor called a first comment, it is its own
+ * "Copy the link" step.
+ */
+export const NoPlatformRules: Story = {
+  args: { variant: { ...variant, platform: 'mastodon' } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const text = canvas
+      .getByRole('button', { name: /copy text/i })
+      .closest('section')
+    await expect(text).not.toHaveTextContent('utm_content=early-bird')
+    const linkSection = canvas
+      .getByRole('button', { name: /copy link/i })
+      .closest('section')
+    await expect(linkSection).toHaveTextContent(
+      'Add it where Mastodon takes a link.',
+    )
+    await expect(canvas.getByText(/^copy the link$/i)).toBeVisible()
+  },
+}
+
+/**
+ * A LinkedIn variant materialized from the 2026.1 built-in, handed over before
+ * the first-comment rule existed (#1134). It cannot be refused here — it is
+ * already `awaiting-manual`, which is no longer editable — and there is no
+ * migration, so the view says what to do instead of presenting the text as
+ * ready to copy.
+ */
+export const LegacyLinkInBody: Story = {
+  args: {
+    variant: {
+      ...variant,
+      body: `Early-bird tickets for Cloud Native Bergen 2027 are live.\n\nTickets → ${variant.link}\n\n#CloudNativeBergen`,
+    },
+    conferenceDomains: ['cloudnativebergen.dev'],
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const warning = canvas
+      .getAllByRole('alert')
+      .find((el) => /first comment/i.test(el.textContent ?? ''))
+    await expect(warning).toBeDefined()
+    await expect(warning).toHaveTextContent('utm_content=early-bird')
+    await expect(warning).toHaveTextContent(/delete it from the text/i)
+  },
+}
+
+export const LegacyLinkInBodyDark: Story = {
+  args: LegacyLinkInBody.args,
+  parameters: { theme: 'dark', backgrounds: { default: 'dark' } },
+}
+
+/** The same body WITHOUT the conference domains: nothing to compare, no warning. */
+export const LegacyLinkInBodyNoDomains: Story = {
+  args: { variant: LegacyLinkInBody.args!.variant },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(
+      canvas
+        .queryAllByRole('alert')
+        .filter((el) => /first comment/i.test(el.textContent ?? '')),
+    ).toHaveLength(0)
   },
 }
 

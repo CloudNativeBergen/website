@@ -49,6 +49,7 @@ describe('editorValueFrom', () => {
         attemptCount: 0,
       },
       post: { attachments: [], defaultScheduledAt: null },
+      conferenceDomains: [],
     })
     // Oslo is UTC+2 on 5 October.
     expect(value.timing).toEqual({
@@ -59,6 +60,31 @@ describe('editorValueFrom', () => {
 })
 
 describe('validateEditorValue', () => {
+  it('applies the SERVER-resolved platform zone, so the browser never blocks a save the router accepts', () => {
+    // The browser has no PLATFORM_DOMAIN_SUFFIX. A hosted tenant linking the
+    // platform's own apex is fine on the server; without the zone the live
+    // rule would call it ours and Save would be disabled on the issue.
+    const linking = { ...base, body: 'See https://konf.run/' }
+    const withZone = validateEditorValue(
+      linking,
+      PLATFORM_CONSTRAINTS.linkedin,
+      [],
+      ['acme.konf.run'],
+      'konf.run',
+    )
+    expect(withZone.byField.body ?? []).toEqual([])
+    const withoutZone = validateEditorValue(
+      linking,
+      PLATFORM_CONSTRAINTS.linkedin,
+      [],
+      ['acme.konf.run'],
+      null,
+    )
+    expect(withoutZone.byField.body).toEqual([
+      expect.stringContaining('first comment'),
+    ])
+  })
+
   it('counts Bluesky graphemes and flags a body over the limit', () => {
     const v = validateEditorValue(
       { ...base, body: '🇳🇴'.repeat(301) },
@@ -76,6 +102,34 @@ describe('validateEditorValue', () => {
       [],
     )
     expect(v.issues).toEqual([])
+  })
+
+  it('applies the first-comment rule live, with the domains the editor read carried (#1134)', () => {
+    const body =
+      'Tickets are live → https://cloudnativebergen.no/tickets?utm_campaign=earlyBird'
+    const refused = validateEditorValue(
+      { ...base, body },
+      PLATFORM_CONSTRAINTS.linkedin,
+      [],
+      ['cloudnativebergen.no'],
+    )
+    expect(refused.byField.body).toEqual([
+      expect.stringContaining('first comment'),
+    ])
+    // The rule is the editor's only because the domains reached it: the same
+    // body with no domains, and the same body on Bluesky, are both accepted.
+    expect(
+      validateEditorValue({ ...base, body }, PLATFORM_CONSTRAINTS.linkedin, [])
+        .issues,
+    ).toEqual([])
+    expect(
+      validateEditorValue(
+        { ...base, body },
+        PLATFORM_CONSTRAINTS.bluesky,
+        [],
+        ['cloudnativebergen.no'],
+      ).byField.body,
+    ).toEqual([])
   })
 
   it('flags an alt override that blanks the alt text', () => {

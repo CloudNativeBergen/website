@@ -56,6 +56,13 @@ async function run(query: string, params: Record<string, unknown> = {}) {
   return value.get()
 }
 
+const verification = vi.hoisted(() => ({
+  verifiedDomains: vi.fn(async (claimed: readonly string[]) => [...claimed]),
+}))
+vi.mock('@/lib/domain-verification/routing', () => ({
+  verifiedDomains: verification.verifiedDomains,
+}))
+
 vi.mock('@/lib/sanity/client', () => ({
   clientWrite: {
     fetch: run,
@@ -88,6 +95,8 @@ import {
   sanitySocialVariantStore,
   updateSocialPostDefaultTime,
   updateSocialVariantContent,
+  getConferenceDomainsForRule,
+  VERIFY_DOMAINS_TIMEOUT_MS,
 } from '@/lib/social/sanity'
 
 const NOW = new Date('2026-09-13T10:00:00.000Z')
@@ -387,6 +396,164 @@ describe('findWork — the composed due/stale scan', () => {
       ['c2.example.no'],
     ])
     expect(h.queries).toHaveLength(1)
+  })
+
+  it("DEFERS a conference's first-comment variants when its verification read throws; card platforms still dispatch with the RAW list", async () => {
+    // Under routing enforcement `verifiedDomains` reads records. One Sanity
+    // timeout for one conference must not reject `findWork` (the stale and
+    // confirm sweeps and every other tenant ride on it), must not dispatch a
+    // LinkedIn body with the rule silently off, and must not strip the list
+    // a Bluesky link card is built from — that post would go out without
+    // its card, irreversibly. So: LinkedIn waits a tick, Bluesky keeps the
+    // raw list, the neighbour is untouched.
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    verification.verifiedDomains.mockClear()
+    verification.verifiedDomains.mockImplementation(async (claimed) => {
+      if (claimed.includes('c2.example.no')) throw new Error('Sanity timeout')
+      return [...claimed]
+    })
+    try {
+      h.dataset = [
+        conference('c1'),
+        conference('c2'),
+        variant('v1', 'c1', {
+          platform: 'linkedin',
+          scheduledAt: '2026-09-13T09:00:00Z',
+        }),
+        variant('w1', 'c2', {
+          platform: 'linkedin',
+          scheduledAt: '2026-09-13T09:00:00Z',
+        }),
+        variant('w2', 'c2', {
+          platform: 'bluesky',
+          scheduledAt: '2026-09-13T09:01:00Z',
+        }),
+      ]
+      const work = await sanitySocialVariantStore.findWork(
+        NOW,
+        STALE_BEFORE,
+        BOUNDS,
+      )
+      // ON THE VALUE: the LinkedIn variant of the failing conference is NOT
+      // in this tick; the Bluesky one is, with the raw list; the neighbour
+      // keeps its verified list; the read was attempted once and logged once.
+      expect(work.due.map((v) => v._id).sort()).toEqual(['v1', 'w2'])
+      expect(work.due.find((v) => v._id === 'v1')?.conferenceDomains).toEqual([
+        'c1.example.no',
+      ])
+      expect(work.due.find((v) => v._id === 'w2')?.conferenceDomains).toEqual([
+        'c2.example.no',
+      ])
+      expect(
+        verification.verifiedDomains.mock.calls.filter((c) =>
+          c[0].includes('c2.example.no'),
+        ),
+      ).toHaveLength(1)
+      expect(error).toHaveBeenCalledTimes(1)
+    } finally {
+      error.mockRestore()
+      verification.verifiedDomains.mockImplementation(async (claimed) => [
+        ...claimed,
+      ])
+    }
+  })
+
+  it('deferred first-comment variants cannot fill the window and starve a card platform in the same conference', async () => {
+    // Twelve overdue LinkedIn variants whose verification keeps failing, and
+    // one later Bluesky variant. With ONE per-conference window of ten, the
+    // same ten LinkedIn rows were read every tick, deferred every tick, and
+    // the Bluesky one — which needs no verification — was never read.
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    verification.verifiedDomains.mockImplementation(async () => {
+      throw new Error('Sanity timeout')
+    })
+    try {
+      h.dataset = [
+        conference('c1'),
+        ...Array.from({ length: 12 }, (_, i) =>
+          variant(`li-${i}`, 'c1', {
+            platform: 'linkedin',
+            scheduledAt: `2026-09-13T08:${String(i).padStart(2, '0')}:00Z`,
+          }),
+        ),
+        variant('bsky', 'c1', {
+          platform: 'bluesky',
+          scheduledAt: '2026-09-13T09:30:00Z',
+        }),
+      ]
+      const work = await sanitySocialVariantStore.findWork(NOW, STALE_BEFORE, {
+        ...BOUNDS,
+        perConference: 10,
+      })
+      // ON THE VALUE: the Bluesky variant is dispatched this tick, with its
+      // raw list; the LinkedIn ones wait.
+      expect(work.due.map((v) => v._id)).toEqual(['bsky'])
+      expect(work.due[0].conferenceDomains).toEqual(['c1.example.no'])
+      expect(h.queries).toHaveLength(1)
+    } finally {
+      error.mockRestore()
+      verification.verifiedDomains.mockImplementation(async (claimed) => [
+        ...claimed,
+      ])
+    }
+  })
+
+  it('never verifies for a card platform: Bluesky rows carry the raw list without a read', async () => {
+    verification.verifiedDomains.mockClear()
+    h.dataset = [
+      conference('c1'),
+      variant('b1', 'c1', {
+        platform: 'bluesky',
+        scheduledAt: '2026-09-13T09:00:00Z',
+      }),
+    ]
+    const work = await sanitySocialVariantStore.findWork(
+      NOW,
+      STALE_BEFORE,
+      BOUNDS,
+    )
+    expect(work.due.map((v) => v.conferenceDomains)).toEqual([
+      ['c1.example.no'],
+    ])
+    expect(verification.verifiedDomains).not.toHaveBeenCalled()
+  })
+
+  it('does not wait longer than VERIFY_DOMAINS_TIMEOUT_MS for a verification read that hangs — the variant waits a tick', async () => {
+    // The Sanity client's own timeout is minutes; the cron has sixty seconds
+    // for everything. A read that never returns is bounded and the
+    // conference falls back to no rule, like a read that throws.
+    vi.useFakeTimers()
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    verification.verifiedDomains.mockClear()
+    verification.verifiedDomains.mockImplementation(
+      () => new Promise<string[]>(() => {}),
+    )
+    try {
+      h.dataset = [
+        conference('c1'),
+        variant('v1', 'c1', {
+          platform: 'linkedin',
+          scheduledAt: '2026-09-13T09:00:00Z',
+        }),
+      ]
+      const pending = sanitySocialVariantStore.findWork(
+        NOW,
+        STALE_BEFORE,
+        BOUNDS,
+      )
+      await vi.advanceTimersByTimeAsync(VERIFY_DOMAINS_TIMEOUT_MS + 1)
+      const work = await pending
+      // Deferred, not dispatched with the rule off: it is picked up next tick.
+      expect(work.due).toEqual([])
+      expect(error).toHaveBeenCalledTimes(1)
+      expect(String(error.mock.calls[0][1])).toContain('longer than')
+    } finally {
+      error.mockRestore()
+      vi.useRealTimers()
+      verification.verifiedDomains.mockImplementation(async (claimed) => [
+        ...claimed,
+      ])
+    }
   })
 
   it('never returns a Studio draft twin or a Content Release version copy', async () => {
@@ -877,7 +1044,79 @@ const post = (
   ...overrides,
 })
 
+describe('getConferenceDomainsForRule — the live read the mutations validate against', () => {
+  it('returns the conference domains by id — executed GROQ, not a mock', async () => {
+    // The first version went through `scopedFetch`, which prepends
+    // `conference._ref == $conferenceId`; a conference document has no such
+    // field, so the read was null → [] and the first-comment rule was silently
+    // OFF at save, schedule and approve. Every router test mocked this
+    // function away. This one runs the query.
+    h.dataset = [conference('conf-A'), conference('conf-B')]
+    expect(await getConferenceDomainsForRule('conf-A')).toEqual([
+      'conf-A.example.no',
+    ])
+    expect(await getConferenceDomainsForRule('conf-B')).toEqual([
+      'conf-B.example.no',
+    ])
+    // An unknown id is an empty list, never another tenant's.
+    expect(await getConferenceDomainsForRule('conf-nope')).toEqual([])
+  })
+})
+
 describe('getSocialVariantEditorData — the editor read', () => {
+  it('still loads a LinkedIn editor when the verification read throws or hangs — the warning is advisory', async () => {
+    // This read serves mark-posted, delete and set-date too; save, schedule
+    // and approve re-read and refuse for themselves. So a failing or hanging
+    // verification read must not turn into an error, or a timeout of the
+    // Sanity client's length, on every Task flow.
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    h.dataset = [
+      conference('conf-A'),
+      post('post-conf-A', 'conf-A'),
+      variant('v-li', 'conf-A', { platform: 'linkedin' }),
+    ]
+    try {
+      verification.verifiedDomains.mockImplementation(async () => {
+        throw new Error('Sanity timeout')
+      })
+      const thrown = await getSocialVariantEditorData('v-li')
+      expect(thrown?.variant._id).toBe('v-li')
+      expect(thrown?.conferenceDomains).toEqual([])
+
+      vi.useFakeTimers()
+      verification.verifiedDomains.mockImplementation(
+        () => new Promise<string[]>(() => {}),
+      )
+      const pending = getSocialVariantEditorData('v-li')
+      await vi.advanceTimersByTimeAsync(VERIFY_DOMAINS_TIMEOUT_MS + 1)
+      const hung = await pending
+      expect(hung?.variant._id).toBe('v-li')
+      expect(hung?.conferenceDomains).toEqual([])
+      expect(error).toHaveBeenCalledTimes(2)
+    } finally {
+      vi.useRealTimers()
+      error.mockRestore()
+      verification.verifiedDomains.mockImplementation(async (claimed) => [
+        ...claimed,
+      ])
+    }
+  })
+
+  it('verifies the domains only for a first-comment platform; a Bluesky editor takes the raw list with no read', async () => {
+    verification.verifiedDomains.mockClear()
+    h.dataset = [
+      conference('conf-A'),
+      post('post-conf-A', 'conf-A'),
+      variant('v-bsky', 'conf-A', { platform: 'bluesky' }),
+      variant('v-li', 'conf-A', { platform: 'linkedin' }),
+    ]
+    const bsky = await getSocialVariantEditorData('v-bsky')
+    expect(bsky?.conferenceDomains).toEqual(['conf-A.example.no'])
+    expect(verification.verifiedDomains).not.toHaveBeenCalled()
+    await getSocialVariantEditorData('v-li')
+    expect(verification.verifiedDomains).toHaveBeenCalledTimes(1)
+  })
+
   it('projects the variant with its post attachments, sizing from asset metadata', async () => {
     h.dataset = [
       conference('conf-A'),
@@ -932,6 +1171,19 @@ describe('getSocialVariantEditorData — the editor read', () => {
       width: 2000,
       height: 1000,
     })
+  })
+
+  it("projects the variant's OWN conference domains, for the first-comment rule (#1134)", async () => {
+    h.dataset = [
+      conference('conf-A'),
+      conference('conf-B'),
+      post('post-conf-A', 'conf-A'),
+      variant('v-1', 'conf-A'),
+    ]
+    const data = await getSocialVariantEditorData('v-1')
+    // A VALUE, not a shape: the editor that gets `[]` silently enforces
+    // nothing, and `conf-B.example.no` would be another tenant's.
+    expect(data?.conferenceDomains).toEqual(['conf-A.example.no'])
   })
 
   it('never follows a post reference into another conference', async () => {

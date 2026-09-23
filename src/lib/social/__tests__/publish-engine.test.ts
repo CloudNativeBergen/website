@@ -25,7 +25,10 @@ const minutesAgo = (m: number) =>
 function fakeAdapter(
   outcome: PublishOutcome | Error,
   issues: ValidationIssue[] = [],
-): SocialPublishAdapter & { publish: ReturnType<typeof vi.fn> } {
+): SocialPublishAdapter & {
+  publish: ReturnType<typeof vi.fn>
+  validate: ReturnType<typeof vi.fn>
+} {
   return {
     platform: 'bluesky',
     constraints: {
@@ -36,12 +39,12 @@ function fakeAdapter(
       requiresImage: false,
       requiresAlt: true,
       urlLengthCost: null,
-      linkInBody: true,
+      linkPlacement: 'card',
       imageAspectRatio: null,
       maxBytes: null,
       linkCardDisplacesImages: false,
     },
-    validate: () => issues,
+    validate: vi.fn(() => issues),
     publish: vi.fn(async () => {
       if (outcome instanceof Error) throw outcome
       return outcome
@@ -275,9 +278,9 @@ describe('runPublishTick — due scan and dispatch', () => {
   it('treats a validate() that throws as rejected and never calls publish', async () => {
     const store = new MemoryVariantStore([makeVariant()])
     const adapter = fakeAdapter({ ok: true, externalId: 'never' })
-    adapter.validate = () => {
+    adapter.validate.mockImplementation(() => {
       throw new Error('bad grapheme lib')
-    }
+    })
 
     const summary = await runPublishTick({
       store,
@@ -306,6 +309,108 @@ describe('runPublishTick — due scan and dispatch', () => {
     expect(summary).toMatchObject({ failed: 1, requeued: 0 })
     expect(store.get('variant-1').attempts[0]).toMatchObject({
       outcome: 'ambiguous',
+    })
+  })
+})
+
+describe('runPublishTick — the MANUAL hand-over (spec §3.1, #1134)', () => {
+  const OURS =
+    'https://cloudnativebergen.no/tickets?utm_source=linkedin&utm_campaign=earlyBird'
+
+  /**
+   * A LinkedIn variant scheduled BEFORE the first-comment rule existed: it
+   * passed save, schedule and approve under the old rules, resolves no
+   * adapter, and would otherwise be handed to an organizer as ready to post.
+   */
+  const legacy = () =>
+    new MemoryVariantStore(
+      [
+        makeVariant({
+          platform: 'linkedin',
+          body: `Tickets are live → ${OURS}`,
+          link: OURS,
+        }),
+      ],
+      {},
+      { 'conf-1': ['cloudnativebergen.no'] },
+    )
+
+  it('refuses to hand over a body that links to our own site, so the organizer can still fix it', async () => {
+    const store = legacy()
+    const summary = await runPublishTick({
+      store,
+      resolveAdapter: noAdapter,
+      now: NOW,
+    })
+    // Fails on the variant being ACCEPTED into the manual queue.
+    expect(summary.awaitingManual).toBe(0)
+    expect(summary.failed).toBe(1)
+    const doc = store.get('variant-1')
+    expect(doc.status).toBe('failed')
+    // `failed` IS editable (EDITABLE_STATUSES), `awaiting-manual` is not —
+    // that is the whole point of refusing rather than handing over.
+    expect(doc.attempts[0]).toMatchObject({
+      outcome: 'rejected',
+      error: expect.stringContaining('first comment'),
+    })
+    expect(doc.attempts[0].error).toContain(OURS)
+  })
+
+  it('still hands over the same variant when the conference has no such domain', async () => {
+    const store = new MemoryVariantStore([
+      makeVariant({ platform: 'linkedin', body: `Tickets → ${OURS}` }),
+    ])
+    const summary = await runPublishTick({
+      store,
+      resolveAdapter: noAdapter,
+      now: NOW,
+    })
+    expect(summary.awaitingManual).toBe(1)
+    expect(store.get('variant-1').status).toBe('awaiting-manual')
+  })
+
+  it('still hands over a clean LinkedIn body, and a Bluesky body carrying the link', async () => {
+    for (const overrides of [
+      {
+        platform: 'linkedin' as const,
+        body: 'Tickets — link in the comments.',
+      },
+      { platform: 'bluesky' as const, body: `Tickets → ${OURS}` },
+    ]) {
+      const store = new MemoryVariantStore(
+        [makeVariant(overrides)],
+        {},
+        { 'conf-1': ['cloudnativebergen.no'] },
+      )
+      const summary = await runPublishTick({
+        store,
+        resolveAdapter: noAdapter,
+        now: NOW,
+      })
+      expect(summary.awaitingManual, overrides.platform).toBe(1)
+      expect(store.get('variant-1').status).toBe('awaiting-manual')
+    }
+  })
+})
+
+describe("runPublishTick — the adapter's pre-publish validation", () => {
+  it("hands validate the variant's conference domains, so the tenant rules apply at publish too (#1134)", async () => {
+    const store = new MemoryVariantStore(
+      [makeVariant()],
+      {},
+      { 'conf-1': ['cloudnativebergen.no'] },
+    )
+    const adapter = fakeAdapter({ ok: true, externalId: 'at://1' })
+    await runPublishTick({
+      store,
+      resolveAdapter: async () => adapter,
+      now: NOW,
+    })
+    expect(adapter.publish).toHaveBeenCalledTimes(1)
+    // A VALUE: `{}` here would silently disable every tenant-dependent rule
+    // on the last line of defence before a post goes out.
+    expect(adapter.validate.mock.calls[0][1]).toEqual({
+      conferenceDomains: ['cloudnativebergen.no'],
     })
   })
 })

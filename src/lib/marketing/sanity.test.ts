@@ -39,7 +39,7 @@ vi.mock('@/lib/sanity/client', () => ({
 import { getGenerationContext } from './generation-sanity'
 import { commitSeedPlan, getPlanView } from './sanity'
 import { expandTemplate } from './seed'
-import { BUILTIN_TEMPLATE } from './template'
+import { BUILTIN_TEMPLATE, BUILTIN_TEMPLATE_VERSION } from './template'
 import { sequentialShortCodes } from './short-code'
 import { shortLinkIndexTag } from '@/lib/cache/tags'
 
@@ -418,7 +418,7 @@ describe('commitSeedPlan', () => {
       _id: 'marketingPlan.conf-A',
       _type: 'marketingPlan',
       owner: { _ref: 'sp-owner', _weak: true },
-      templateVersion: '2026.1',
+      templateVersion: BUILTIN_TEMPLATE_VERSION,
     })
   })
 
