@@ -409,6 +409,29 @@ describe('the link is the first comment (#1134)', () => {
         url,
       ).toEqual([])
     }
+    // And the other way round: the conference that owns the zone's PARENT
+    // (`example.com`) owns its own hosts, never the tenants minted under the
+    // nested zone — those are other conferences.
+    const parent = {
+      conferenceDomains: ['example.com'],
+      platformZone: 'events.example.com',
+    }
+    expect(
+      validatePublishInput(
+        linkedin,
+        body('https://www.example.com/about'),
+        parent,
+      ).map((i) => i.field),
+    ).toEqual(['body'])
+    for (const url of [
+      'https://other.events.example.com/tickets',
+      'https://acme.events.example.com/tickets',
+    ]) {
+      expect(
+        validatePublishInput(linkedin, body(`See ${url}`), parent),
+        url,
+      ).toEqual([])
+    }
   })
 
   it('compares IDN hosts the way the parser writes them', () => {

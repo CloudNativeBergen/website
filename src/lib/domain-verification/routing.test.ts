@@ -257,7 +257,8 @@ describe('verifiedDomains — what the first-comment rule may call ours (#1134)'
         NOW,
       ),
     ).toEqual(['2026.example.com', '*.vercel.app'])
+    // Read by the SAME key sync writes: the port stays (a dev entry).
     await verifiedDomains(['localhost:3000'], NOW)
-    expect(getDomainVerification).toHaveBeenCalledWith('localhost')
+    expect(getDomainVerification).toHaveBeenCalledWith('localhost:3000')
   })
 })

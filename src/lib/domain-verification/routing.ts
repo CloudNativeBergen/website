@@ -43,9 +43,9 @@ export async function verifiedDomains(
     claimed.map(async (entry) => {
       const normalized = normalizeDomain(entry)
       if (normalized.startsWith('*.')) return true
-      const record = await getDomainVerification(
-        normalized.replace(/:\d+$/, ''),
-      )
+      // The record is keyed exactly as the entry is written (`sync.ts`
+      // stores `normalizeDomain(entry)`, port included), so no port strip.
+      const record = await getDomainVerification(normalized)
       return record !== null && isRoutingEligible(record, now)
     }),
   )
