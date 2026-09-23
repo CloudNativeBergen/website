@@ -45,7 +45,6 @@ import {
 import { handoffStudioAttachment } from '@/lib/social/sanity'
 import { createHash, randomUUID } from 'node:crypto'
 import { TRPCError } from '@trpc/server'
-import { verifiedDomains } from '@/lib/domain-verification/routing'
 import { adminProcedure, resolveConferenceId, router } from '@/server/trpc'
 import { loadReport } from '@/lib/marketing/report'
 import { buildReportCsv } from '@/lib/marketing/report-csv'
@@ -184,6 +183,7 @@ import {
 import {
   getSocialPostDefaultTime,
   getSocialPostEditorInputs,
+  getConferenceDomainsForRule,
   getSocialVariantEditorData,
 } from '@/lib/social/sanity'
 import { scheduleIssues } from '@/lib/social/schedule-check'
@@ -1362,8 +1362,12 @@ export const marketingRouter = router({
             post.attachments,
             {
               taskOwned: true,
-              conferenceDomains: await verifiedDomains(
-                conference.domains ?? [],
+              // LIVE, by the variant's conference (already tenancy-guarded),
+              // not `conference.domains` from the cached loader — approve is
+              // the enforcement point Task-owned drafts actually go through,
+              // and it must apply the same list save and the tick apply.
+              conferenceDomains: await getConferenceDomainsForRule(
+                v.conferenceId,
               ),
             },
           )

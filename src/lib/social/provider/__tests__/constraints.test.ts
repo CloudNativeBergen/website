@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   PLATFORM_CONSTRAINTS,
   countLength,
@@ -277,14 +277,15 @@ describe('the link is the first comment (#1134)', () => {
     }
   })
 
-  it('treats the SITE as ours, not only the listed host: apex, www and siblings of the edition entry', () => {
+  it('treats the apex and www of the listed edition host as ours — but not its siblings', () => {
     // Production lists the edition host (`2026.cloudnativedays.no`). The URL
     // an organizer types by hand is the apex, which redirects straight to
-    // it; `www.` and a sibling subdomain land on the same site too.
+    // it. A SIBLING is a different site: on a shared zone it is another
+    // tenant's (see the platform-zone test below).
     for (const url of [
       'https://cloudnativedays.no/tickets',
       'https://www.cloudnativedays.no/tickets',
-      'https://blog.cloudnativedays.no/post',
+      'https://www.2026.cloudnativedays.no/tickets',
     ]) {
       const issues = validatePublishInput(linkedin, body(`Tickets → ${url}`), {
         conferenceDomains: ['2026.cloudnativedays.no'],
@@ -292,6 +293,65 @@ describe('the link is the first comment (#1134)', () => {
       expect(
         issues.map((i) => i.field),
         url,
+      ).toEqual(['body'])
+    }
+    expect(
+      validatePublishInput(
+        linkedin,
+        body('https://blog.cloudnativedays.no/post'),
+        {
+          conferenceDomains: ['2026.cloudnativedays.no'],
+        },
+      ),
+    ).toEqual([])
+  })
+
+  it('keeps tenants minted on the PLATFORM zone apart: their host is the whole site, the zone apex is not theirs', () => {
+    // `konf.run` is not on the Public Suffix List, so by registrable domain
+    // every hosted tenant would be one site. With the zone configured, a
+    // hosted tenant's entry matches itself and what is under it, nothing
+    // beside it — not another tenant's edition, not the platform's own apex.
+    vi.stubEnv('PLATFORM_DOMAIN_SUFFIX', 'konf.run')
+    try {
+      const own = { conferenceDomains: ['acme.konf.run'] }
+      for (const url of [
+        'https://acme.konf.run/tickets',
+        'https://www.acme.konf.run/tickets',
+      ]) {
+        expect(
+          validatePublishInput(linkedin, body(`See ${url}`), own).map(
+            (i) => i.field,
+          ),
+          url,
+        ).toEqual(['body'])
+      }
+      for (const url of [
+        'https://other-tenant.konf.run/tickets',
+        'https://konf.run/',
+        'https://www.konf.run/',
+      ]) {
+        expect(
+          validatePublishInput(linkedin, body(`See ${url}`), own),
+          url,
+        ).toEqual([])
+      }
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
+  it('compares IDN hosts the way the parser writes them', () => {
+    // `URL.hostname` is punycode; a `domains[]` entry is typed in Unicode.
+    for (const [entry, url] of [
+      ['blåbærsyltetøy.no', 'https://blåbærsyltetøy.no/x'],
+      ['xn--blbrsyltety-y8ao3x.no', 'https://blåbærsyltetøy.no/x'],
+      ['blåbærsyltetøy.no', 'https://xn--blbrsyltety-y8ao3x.no/x'],
+    ] as const) {
+      expect(
+        validatePublishInput(linkedin, body(`Se ${url}`), {
+          conferenceDomains: [entry],
+        }).map((i) => i.field),
+        `${entry} ← ${url}`,
       ).toEqual(['body'])
     }
   })

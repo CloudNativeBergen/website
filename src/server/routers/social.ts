@@ -65,8 +65,9 @@ const EDITABLE_STATUSES: readonly VariantStatus[] = [
 /**
  * The request conference's own `domains[]` — what the first-comment rule
  * (spec §3.1, #1134) compares a body's URLs against. `[]` when the conference
- * cannot be read: the rule then says nothing rather than refusing a body it
- * cannot judge, and every other rule still applies.
+ * lists none, so the rule says nothing rather than refusing a body it cannot
+ * judge; a FAILED read propagates and fails the mutation, as any other read
+ * would.
  */
 async function currentConferenceDomains(): Promise<readonly string[]> {
   // UNCACHED, by the resolved id: see `getConferenceDomainsForRule`.

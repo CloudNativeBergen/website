@@ -26,6 +26,7 @@ vi.mock('next/cache', () => ({
 }))
 
 const h = vi.hoisted(() => ({
+  getConferenceDomains: vi.fn(async (): Promise<readonly string[]> => []),
   getStudioTask: vi.fn(),
   getRenderSiblings: vi.fn(),
   handoffStudioAttachment: vi.fn(),
@@ -73,7 +74,7 @@ vi.mock('@/lib/marketing/sanity', () => ({
   deleteTask: h.deleteTask,
 }))
 vi.mock('@/lib/social/sanity', () => ({
-  getConferenceDomainsForRule: vi.fn(async () => []),
+  getConferenceDomainsForRule: h.getConferenceDomains,
   handoffStudioAttachment: h.handoffStudioAttachment,
   getSocialVariantEditorData: h.getSocialVariantEditorData,
   getSocialPostVariant: h.getSocialPostVariant,
@@ -390,13 +391,17 @@ describe('marketing.task.approve', () => {
     expect(h.approveTask.mock.calls[0][0].variant.link).toBe(derived)
   })
 
-  it('hands the request conference own domains to the shared validation (#1134)', async () => {
+  it('hands the LIVE own domains to the shared validation, by the variant conference (#1134)', async () => {
+    // The cached conference (`CONFERENCE.domains`) lists cloudnativebergen.dev;
+    // the live read says something else. The live one is what approve must
+    // apply — the same list save and the publish tick apply — or a domain
+    // just added in the Studio passes approval and fails at publish.
+    h.getConferenceDomains.mockResolvedValue(['live.cloudnativebergen.no'])
     await marketing().task.approve({ taskId: 'task-ours' })
-    // Without them the first-comment rule is silent and an approval that
-    // carries our URL in the body would go through looking green.
+    expect(h.getConferenceDomains).toHaveBeenCalledWith(CONF_A)
     expect(h.scheduleIssues.mock.calls[0][2]).toEqual({
       taskOwned: true,
-      conferenceDomains: ['cloudnativebergen.dev'],
+      conferenceDomains: ['live.cloudnativebergen.no'],
     })
   })
 

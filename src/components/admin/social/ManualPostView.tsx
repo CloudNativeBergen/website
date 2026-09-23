@@ -120,7 +120,7 @@ export function ManualPostView({
    * thing is to say so here rather than present the text as ready to copy.
    */
   const strayInBody =
-    placement === 'comment'
+    placement === 'comment' && variant.status !== 'published'
       ? ownDomainUrlsIn(variant.body, conferenceDomains)
       : []
   const copyText = linkAppended ? `${variant.body}\n\n${link}` : variant.body
@@ -206,8 +206,10 @@ export function ManualPostView({
         >
           The text below still contains {strayInBody.join(', ')}. On {platform}{' '}
           the link belongs in the first comment, not the post — this text was
-          written before that rule. Delete it from the text after pasting, and
-          post the link as the first comment instead.
+          written before that rule.{' '}
+          {postMayBeLive
+            ? 'If you do post it by hand, delete it from the text first and post the link as the first comment.'
+            : 'Delete it from the text after pasting, and post the link as the first comment instead.'}
         </p>
       )}
 

@@ -1,5 +1,6 @@
 import { getDomain } from 'tldts'
 import { normalizeDomain } from '@/lib/conference/domains'
+import { platformDomainSuffix } from '@/lib/domain-verification/platform'
 import type { SocialPlatform } from '../types'
 import type {
   LengthCounting,
@@ -102,30 +103,52 @@ function registrableDomain(host: string): string | null {
 }
 
 /**
- * True when `host` is on the conference's OWN site: it shares a registrable
- * domain with a `domains[]` entry. That is what "our site" means editorially
- * — the edition host `2026.cloudnativedays.no` is listed, and the apex
- * `cloudnativedays.no` an organizer types by hand redirects straight to it,
- * as does `www.` and any sibling subdomain. Matching the entry exactly, or
- * only its subdomains, let the most natural URL through.
+ * A hostname the way the URL parser writes it — lower-case, punycode, no
+ * terminal dot — so an IDN `domains[]` entry typed in Unicode compares equal
+ * to the `URL.hostname` of a link to it. `null` for something that is not a
+ * hostname at all.
+ */
+function canonicalHost(host: string): string | null {
+  try {
+    return new URL(`https://${host}`).hostname.replace(/\.$/, '')
+  } catch {
+    return null
+  }
+}
+
+/**
+ * True when `host` is on the conference's OWN site. Per `domains[]` entry
+ * (wildcards skipped: `*.vercel.app` is a hosting zone, not a site):
  *
- * WILDCARD entries (`*.vercel.app`) are hosting zones the routing layer
- * serves previews from, not a site: they are skipped here, or every
- * speaker's and sponsor's demo on the same zone would read as ours.
+ * - the entry itself, or anything UNDER it (`www.`, a deeper path host);
+ * - the entry's registrable APEX and `www.` of it — the edition host
+ *   `2026.cloudnativedays.no` is what is listed, and the apex an organizer
+ *   types by hand redirects straight to it;
+ * - but NOT other siblings under that apex, and NOT the apex when the entry
+ *   is a tenant host minted on the platform's own zone (`acme.konf.run`):
+ *   `konf.run` is not on the Public Suffix List, so by registrable domain
+ *   every hosted tenant would be one site and a post naming another
+ *   conference's edition, or the platform itself, would be refused as ours.
+ *   The zone comes from `PLATFORM_DOMAIN_SUFFIX`, so this last exclusion
+ *   applies where that is set: on the server, which is what refuses.
  *
- * A host with no registrable domain (`localhost`, an IP) falls back to an
- * exact match. The entry's `:port` is dropped first: a dev entry such as
- * `localhost:3000` carries one and `conferenceBaseUrl` KEEPS it in the links
- * it derives, while `URL.hostname` never does.
+ * A host with no registrable domain (`localhost`, an IP) matches exactly. The
+ * entry's `:port` is dropped first: a dev entry such as `localhost:3000`
+ * carries one and `conferenceBaseUrl` KEEPS it in the links it derives, while
+ * `URL.hostname` never does.
  */
 function isOwnDomain(host: string, domains: readonly string[]): boolean {
-  const hostSite = registrableDomain(host)
+  const zone = platformDomainSuffix()
   return domains.some((entry) => {
-    const e = normalizeDomain(entry).replace(/:\d+$/, '')
-    if (!e || e.startsWith('*.')) return false
-    if (e === host) return true
-    const entrySite = registrableDomain(e)
-    return hostSite !== null && entrySite !== null && hostSite === entrySite
+    const raw = normalizeDomain(entry).replace(/:\d+$/, '')
+    if (!raw || raw.startsWith('*.')) return false
+    const e = canonicalHost(raw)
+    if (!e) return false
+    if (host === e || host.endsWith(`.${e}`)) return true
+    const apex = registrableDomain(e)
+    if (!apex || apex === e) return false
+    if (zone !== null && apex === zone) return false
+    return host === apex || host === `www.${apex}`
   })
 }
 
@@ -146,8 +169,10 @@ export function ownDomainUrlsIn(
     try {
       // A bare `www.` host has no scheme for the parser; LinkedIn treats it
       // as https. A fully-qualified `example.no.` keeps its terminal dot
-      // through WHATWG parsing; `registrableDomain` reads through it.
-      host = new URL(/^www\./i.test(url) ? `https://${url}` : url).hostname
+      // through WHATWG parsing but names the same host.
+      host = new URL(
+        /^www\./i.test(url) ? `https://${url}` : url,
+      ).hostname.replace(/\.$/, '')
     } catch {
       continue
     }
