@@ -303,6 +303,14 @@ describe('optInUtmBridge', () => {
     expect(bridge(tagged)).toBe(tagged)
   })
 
+  it('never stamps a cookieless event, even after an Accept', () => {
+    // Accept, then Decline on the privacy page: the SDK is cookieless again.
+    const bridge = optInUtmBridge(LANDING)
+    bridge({ event: '$opt_in' })
+    const event = { event: '$pageview', properties: { $cookieless_mode: true } }
+    expect(bridge(event)).toBe(event)
+  })
+
   it('does nothing for an untagged landing', () => {
     const bridge = optInUtmBridge({})
     bridge({ event: '$opt_in' })

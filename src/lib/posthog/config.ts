@@ -123,9 +123,10 @@ export function landingUtm(search: string): Record<string, string> {
  * made after it is too late, and the address bar no longer has the tags once
  * they have been stripped. So from the `$opt_in` event on, every event of this
  * page load that carries no `utm_*` of its own gets the landing UTMs held in
- * memory. Events BEFORE `$opt_in` are left alone: a cookieless visitor keeps
- * being attributed exactly as before, through the landing pageview and the
- * server session (#1000 finding 2).
+ * memory. Events BEFORE `$opt_in`, and cookieless events after a later
+ * Decline, are left alone: a cookieless visitor keeps being attributed exactly
+ * as before, through the landing pageview and the server session (#1000
+ * finding 2).
  */
 export function optInUtmBridge(
   landing: Record<string, string>,
@@ -135,6 +136,9 @@ export function optInUtmBridge(
     if (event.event === '$opt_in') optedIn = true
     if (!optedIn || Object.keys(landing).length === 0) return event
     const props = event.properties ?? {}
+    // A later Decline revokes the consent but not this page load: cookieless
+    // events are never stamped, whatever happened before them.
+    if (props.$cookieless_mode === true) return event
     const tagged = UTM_PARAMS.some((key) => props[key] != null)
     if (tagged) return event
     return { ...event, properties: { ...props, ...landing } }

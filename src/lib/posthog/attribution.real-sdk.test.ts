@@ -31,7 +31,7 @@ function sentEvents(name: string): SentEvent[] {
 }
 const tick = (ms = 20) => new Promise((resolve) => setTimeout(resolve, ms))
 
-beforeAll(() => {
+beforeAll(async () => {
   window.history.replaceState(null, '', LANDING)
   const element = document.createElement('div')
   element.id = ANALYTICS_CONFIG_ELEMENT_ID
@@ -49,16 +49,26 @@ beforeAll(() => {
       sent.push(event as SentEvent)
     }
   })
+  // Every test below starts from this one landing: init, the SDK's own
+  // landing pageview, and the strip it triggers.
+  await initTenantAnalytics(window)
+  await tick()
 })
+function accept() {
+  const runtime = getAnalyticsRuntime(window)
+  if (!runtime) throw new Error('runtime not published')
+  applyConsentChoice(runtime.client, 'accept', {
+    conference: runtime.config.conference,
+    landingUtm: runtime.landingUtm,
+  })
+  return runtime
+}
 afterAll(() => {
   vi.restoreAllMocks()
 })
 
 describe('landing on a tagged URL, real SDK', () => {
-  it('the cookieless landing pageview carries the tags, then the bar is clean', async () => {
-    await initTenantAnalytics(window)
-    await tick()
-
+  it('the cookieless landing pageview carries the tags, then the bar is clean', () => {
     const [landing] = sentEvents('$pageview')
     expect(landing?.properties).toMatchObject({
       utm_campaign: 'c1',
@@ -73,14 +83,8 @@ describe('landing on a tagged URL, real SDK', () => {
   })
 
   it('accepting AFTER the strip still carries the campaign into the new session', async () => {
-    const runtime = getAnalyticsRuntime(window)
-    if (!runtime) throw new Error('runtime not published')
     sent.length = 0
-
-    applyConsentChoice(runtime.client, 'accept', {
-      conference: runtime.config.conference,
-      landingUtm: runtime.landingUtm,
-    })
+    accept()
     // A later event of the accepted visit, sent without waiting for a batch.
     posthog.capture('later_click', {}, { send_instantly: true })
     await tick()
@@ -102,5 +106,20 @@ describe('landing on a tagged URL, real SDK', () => {
     })
     // Same client session: the campaign rides the session the $opt_in opened.
     expect(later?.properties.$session_id).toBe(optIn?.properties.$session_id)
+  })
+
+  it('declining after an Accept stops the stamping: cookieless events stay as before', async () => {
+    const runtime = accept()
+    applyConsentChoice(runtime.client, 'decline', {
+      conference: runtime.config.conference,
+      landingUtm: runtime.landingUtm,
+    })
+    sent.length = 0
+    posthog.capture('after_decline', {}, { send_instantly: true })
+    await tick()
+
+    const [after] = sentEvents('after_decline')
+    expect(after?.properties.$cookieless_mode).toBe(true)
+    expect(after?.properties.utm_campaign ?? null).toBeNull()
   })
 })
