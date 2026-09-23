@@ -202,6 +202,20 @@ async function scenarioCookieless(browser, base) {
     loc.length === loc.atLanding,
     `history.length ${loc.atLanding} -> ${loc.length}`,
   )
+  // The Next router keeps its own copy of the URL and rewrites the address
+  // bar from it on every router state change; a strip it did not see would
+  // come back on the next refresh.
+  await page.waitForFunction(() => window.next?.router, null, {
+    timeout: 60_000,
+  })
+  await page.evaluate(() => window.next.router.refresh())
+  await sleep(3000)
+  const afterRefresh = await page.evaluate(() => location.search)
+  check(
+    'A: still clean after a router refresh',
+    !afterRefresh.includes('utm_'),
+    afterRefresh,
+  )
   const [first] = (await events(page)).filter((e) => e.event === '$pageview')
   check(
     'A: landing $pageview captured cookieless WITH the tags, before the strip',

@@ -47,14 +47,33 @@ export function withoutUtm(href: string): string | null {
 }
 
 /**
- * Rewrite the CURRENT history entry without its `utm_*`: `replaceState` with
- * the entry's own state (the Next.js router keeps its tree there), never
- * `pushState`, so the back button behaves exactly as before. Returns whether
- * anything was rewritten; a clean URL is left alone.
+ * The entry's state minus the Next.js router's "this write is mine" markers.
+ * The app router patches `history.replaceState` and, for a state carrying
+ * `__NA` (or the pages router's `_N`), passes the call straight through
+ * WITHOUT updating its own copy of the URL. That copy is what it writes back
+ * into the address bar on its next state change (a refresh, a server action),
+ * so a strip it did not see would put the tags back. Without the markers the
+ * patch treats this as an external write: it syncs its URL and re-attaches its
+ * own internal state itself. Every other key is kept.
+ */
+function withoutRouterMarkers(state: unknown): unknown {
+  if (typeof state !== 'object' || state === null) return state
+  const { __NA: _na, _N: _n, ...rest } = state as Record<string, unknown>
+  return rest
+}
+
+/**
+ * Rewrite the CURRENT history entry without its `utm_*`: `replaceState`,
+ * never `pushState`, so the back button behaves exactly as before. Returns
+ * whether anything was rewritten; a clean URL is left alone.
  */
 export function stripUtmFromAddressBar(win: Window): boolean {
   const stripped = withoutUtm(win.location.href)
   if (stripped === null) return false
-  win.history.replaceState(win.history.state, '', stripped)
+  win.history.replaceState(
+    withoutRouterMarkers(win.history.state),
+    '',
+    stripped,
+  )
   return true
 }

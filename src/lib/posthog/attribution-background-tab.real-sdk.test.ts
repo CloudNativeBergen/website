@@ -39,7 +39,7 @@ beforeAll(() => {
     '_send_request',
   ).mockImplementation((options) => {
     const { url, data } = options as { url: string; data: unknown }
-    if (!new URL(url, 'http://x').pathname.endsWith('/e/')) return
+    if (!/\/e\/?(\?|$)/.test(new URL(url, 'http://x').pathname + '?')) return
     for (const event of Array.isArray(data) ? data : [data]) {
       sent.push(event as (typeof sent)[number])
     }

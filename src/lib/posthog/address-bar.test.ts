@@ -97,6 +97,38 @@ describe('scheduleUtmStrip', () => {
     expect(window.location.search).toBe('?keep=1')
   })
 
+  it('pauses the deadline while the tab is hidden and resumes the rest', () => {
+    scheduleUtmStrip(window)
+    vi.advanceTimersByTime(1000)
+    setVisibility('hidden')
+    document.dispatchEvent(new Event('visibilitychange'))
+    vi.advanceTimersByTime(UTM_STRIP_DEADLINE_MS * 10)
+    expect(window.location.search).toContain('utm_campaign=c1')
+
+    setVisibility('visible')
+    document.dispatchEvent(new Event('visibilitychange'))
+    vi.advanceTimersByTime(UTM_STRIP_DEADLINE_MS - 1000 - 1)
+    expect(window.location.search).toContain('utm_campaign=c1')
+    vi.advanceTimersByTime(1)
+    expect(window.location.search).toBe('?keep=1')
+  })
+
+  it('leaves the URL alone once the visitor has navigated off the landing', () => {
+    const schedule = scheduleUtmStrip(window)
+    window.history.replaceState(null, '', '/program?utm_campaign=app-link')
+    vi.advanceTimersByTime(UTM_STRIP_DEADLINE_MS)
+    schedule.now()
+    expect(window.location.search).toBe('?utm_campaign=app-link')
+  })
+
+  it('still strips when only the hash changed', () => {
+    scheduleUtmStrip(window)
+    window.location.hash = '#later'
+    vi.advanceTimersByTime(UTM_STRIP_DEADLINE_MS)
+    expect(window.location.search).toBe('?keep=1')
+    expect(window.location.hash).toBe('#later')
+  })
+
   it('now() strips immediately and cancels the rest', () => {
     const client = fakeClient()
     const schedule = scheduleUtmStrip(window)

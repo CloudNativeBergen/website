@@ -135,9 +135,7 @@ export function optInUtmBridge(
     if (event.event === '$opt_in') optedIn = true
     if (!optedIn || Object.keys(landing).length === 0) return event
     const props = event.properties ?? {}
-    const tagged = UTM_PARAMS.some(
-      (key) => props[key] !== undefined && props[key] !== null,
-    )
+    const tagged = UTM_PARAMS.some((key) => props[key] != null)
     if (tagged) return event
     return { ...event, properties: { ...props, ...landing } }
   }

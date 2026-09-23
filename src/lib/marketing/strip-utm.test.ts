@@ -1,7 +1,7 @@
 /**
  * @vitest-environment jsdom
  */
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { stripUtmFromAddressBar, withoutUtm } from './strip-utm'
 
 const BASE = 'https://2026.cloudnativedays.no'
@@ -82,5 +82,37 @@ describe('stripUtmFromAddressBar', () => {
     const replace = vi.spyOn(window.history, 'replaceState')
     expect(stripUtmFromAddressBar(window)).toBe(false)
     expect(replace).not.toHaveBeenCalled()
+  })
+})
+
+describe('stripUtmFromAddressBar under the Next.js app router', () => {
+  // The router's patch, as in next/dist/client/components/app-router.js: a
+  // state carrying `__NA` is passed through without the router learning the
+  // new URL; anything else updates the router's URL first.
+  let routerUrl: string | null = null
+  const original = window.history.replaceState.bind(window.history)
+  beforeEach(() => {
+    routerUrl = null
+    window.history.replaceState(
+      { __NA: true, custom: 1 },
+      '',
+      '/?utm_campaign=c&keep=1',
+    )
+    window.history.replaceState = function (data, unused, url) {
+      if (data?.__NA || data?._N) return original(data, unused, url)
+      const next = { ...(data ?? {}), __NA: window.history.state?.__NA }
+      if (url) routerUrl = String(url)
+      return original(next, unused, url)
+    }
+  })
+  afterEach(() => {
+    window.history.replaceState = original
+    window.history.replaceState(null, '', '/')
+  })
+
+  it('lets the router see the stripped URL and keeps every other state key', () => {
+    expect(stripUtmFromAddressBar(window)).toBe(true)
+    expect(routerUrl).toBe(`${window.location.origin}/?keep=1`)
+    expect(window.history.state).toEqual({ __NA: true, custom: 1 })
   })
 })

@@ -41,7 +41,13 @@ export function scheduleUtmStrip(
   if (withoutUtm(win.location.href) === null) return DONE
 
   const doc = win.document
+  // The landing, as pathname + query. A client-side navigation before the
+  // strip moves the visitor to a URL that is not a landing (an app link that
+  // happens to carry `utm_*` included), so the strip then leaves it alone.
+  const landing = win.location.pathname + win.location.search
   let done = false
+  let remaining = deadlineMs
+  let startedAt = 0
   let timer: ReturnType<typeof setTimeout> | undefined
   let unsubscribe: (() => void) | undefined
 
@@ -49,21 +55,32 @@ export function scheduleUtmStrip(
     if (done) return
     done = true
     clearTimeout(timer)
-    doc.removeEventListener('visibilitychange', onVisible)
+    doc.removeEventListener('visibilitychange', onVisibility)
     unsubscribe?.()
-    stripUtmFromAddressBar(win)
+    if (win.location.pathname + win.location.search === landing) {
+      stripUtmFromAddressBar(win)
+    }
   }
 
-  // The deadline only runs while the page is visible. A link opened in a
-  // background tab gets its first pageview when the tab is first shown (the
-  // SDK defers it until then), and that pageview must still see the tags.
-  function onVisible() {
-    if (doc.visibilityState !== 'visible') return
-    doc.removeEventListener('visibilitychange', onVisible)
-    timer = setTimeout(now, deadlineMs)
+  // The deadline only counts time the page is visible. The SDK defers its
+  // first pageview while the page is hidden (a link opened in a background
+  // tab, or a tab switched away before the SDK was ready), and that pageview
+  // must still see the tags when it finally fires.
+  function run() {
+    startedAt = Date.now()
+    timer = setTimeout(now, remaining)
   }
-  if (doc.visibilityState === 'visible') timer = setTimeout(now, deadlineMs)
-  else doc.addEventListener('visibilitychange', onVisible)
+  function onVisibility() {
+    if (doc.visibilityState === 'visible') {
+      if (timer === undefined) run()
+    } else if (timer !== undefined) {
+      clearTimeout(timer)
+      timer = undefined
+      remaining = Math.max(0, remaining - (Date.now() - startedAt))
+    }
+  }
+  doc.addEventListener('visibilitychange', onVisibility)
+  if (doc.visibilityState === 'visible') run()
 
   return {
     now,
