@@ -168,7 +168,8 @@ full 60 seconds is about 60 MB, inside the gallery's 100 MB.
 **The proof comes first** (§9). Nobody has seen a canvas become an MP4 with sound in this codebase,
 and the parts of the support matrix that matter are undocumented.
 
-**Measured in [the proof's report](MARKETING_STUDIO_VIDEO_PROOF.md):** H.264 encodes in all three browsers, but Safari stalls without `latencyMode: 'realtime'` and Firefox fails with it (§1, §6 there).
+**Measured in [the proof's report](MARKETING_STUDIO_VIDEO_PROOF.md)** (macOS only): H.264 encodes
+in all three browsers, but the latency mode has to be chosen per browser (§1, §6 and §8 there).
 
 ## 6. Music
 
@@ -200,7 +201,8 @@ AAC beside the video.
   notice, or are told to use another browser, and measures the AAC priming offset so sound and
   picture line up.
 
-**Measured in [the proof's report](MARKETING_STUDIO_VIDEO_PROOF.md):** Firefox has no native AAC and the add-on works (an MPL-2.0 wrapper around LGPL-2.1+ libavcodec, about 254 KB gzip); the priming offset is 2112 samples native and 1024 with the add-on, measured at export time and trimmed (§2, §4, §8 there).
+**Measured in [the proof's report](MARKETING_STUDIO_VIDEO_PROOF.md)** (macOS only): the add-on
+encoder's licence, size and behaviour, and the priming offset, are in §2, §4 and §8 there.
 
 ## 7. Projects
 
