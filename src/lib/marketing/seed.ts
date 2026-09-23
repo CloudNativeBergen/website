@@ -63,6 +63,8 @@ export interface SeedInput {
   now: string
   /** Id source, injectable for determinism; receives the document type. */
   newId: (type: string) => string
+  /** Short-code source: the caller's batch mint (short-links spec §2.2). */
+  newShortCode: () => string
   /**
    * `(utm_campaign, utm_content)` pairs (`publishedPair`) whose post has
    * ALREADY been published in this edition, from the surviving variants'
@@ -168,7 +170,7 @@ export function seedsAtCreation(recipe: TaskRecipe): boolean {
 }
 
 export function expandTemplate(input: SeedInput): SeedPlan {
-  const { template, conference, ownerId, now, newId } = input
+  const { template, conference, ownerId, now, newId, newShortCode } = input
   const optionalKeys = new Set(
     template.campaigns.filter((c) => c.optional).map((c) => c.key),
   )
@@ -291,6 +293,7 @@ export function expandTemplate(input: SeedInput): SeedPlan {
             .filter((id): id is string => id !== undefined),
           origin: 'template',
           newId,
+          newShortCode,
         }),
       )
     }
@@ -306,6 +309,7 @@ export function expandTemplate(input: SeedInput): SeedPlan {
       now,
       taskId: () => newId('marketingTask'),
       newId,
+      newShortCode,
     })
     campaign.generatedKeys = countdown.tasks.map((t) => t.key)
     appendRecords(records, countdown)

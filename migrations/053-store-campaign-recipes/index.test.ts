@@ -7,6 +7,7 @@ import { BUILTIN_TEMPLATE } from '../../src/lib/marketing/template'
 import { backfillCampaign } from './backfill'
 import migration from './index'
 import { TEMPLATE_2026_1 } from './template-2026.1'
+import { sequentialShortCodes } from '@/lib/marketing/short-code'
 
 type Doc = Record<string, unknown>
 interface Patch {
@@ -130,6 +131,7 @@ describe('migration 053', () => {
         values: {},
         assigneeId: 'owner',
         taskId: (key) => key,
+        newShortCode: sequentialShortCodes(),
         newId: (type) => type,
       }).tasks.map((t) => t.key)
     const live = expand([])

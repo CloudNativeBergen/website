@@ -26,6 +26,7 @@ import {
 import type { SeedPlan } from '../seed'
 import type { TaskRecipe } from '../template/types'
 import type { CampaignTrigger } from '../types'
+import { expireShortLinkIndex } from '../short-link-cache'
 
 const LIVE = `!(_id in path("drafts.**")) && !(_id in path("versions.**"))`
 
@@ -136,7 +137,11 @@ export async function saveCampaignRecipes(input: {
       .setIfMissing(ownerIfMissing(input.actorId))
       .set({ structurallyEdited: true, updatedAt: now }),
   )
-  return commitOrConflict(tx)
+  const landed = await commitOrConflict(tx)
+  // A created variant or outreach Task carries a NEW code, so the
+  // conference's membership set is out of date (short-links spec §2.4).
+  if (landed) expireShortLinkIndex(input.conferenceId)
+  return landed
 }
 
 /**
@@ -211,5 +216,9 @@ export async function commitBuiltinCampaign(
       .setIfMissing(ownerIfMissing(seed.plan.ownerId))
       .set({ structurallyEdited: true, updatedAt: now }),
   )
-  return commitOrConflict(tx)
+  const committed = await commitOrConflict(tx)
+  // A created variant or outreach Task carries a NEW code, so the
+  // conference's membership set is out of date (short-links spec §2.4).
+  if (committed) expireShortLinkIndex(seed.plan.conferenceId)
+  return committed
 }

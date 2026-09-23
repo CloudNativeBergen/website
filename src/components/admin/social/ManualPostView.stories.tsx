@@ -50,6 +50,7 @@ const variant: SocialPostVariant = {
   scheduledAt: '2026-09-13T09:00:00.000Z',
   usesCustomTime: false,
   claimedAt: null,
+  shortCode: null,
   link: 'https://cloudnativebergen.dev/tickets?utm_source=linkedin&utm_medium=social&utm_campaign=tickets&utm_content=early-bird',
   attachments: [{ source: 'att-wide', crop: null, altOverride: null }],
   publishResult: null,

@@ -131,6 +131,14 @@ export default defineType({
       type: 'url',
     }),
     defineField({
+      name: 'shortCode',
+      title: 'Short code',
+      description:
+        'The `/go/<code>` short link for this variant. Minted once when the Task is created and never changed; `link` above stays the long tagged URL.',
+      type: 'string',
+      readOnly: true,
+    }),
+    defineField({
       name: 'scheduledAt',
       title: 'Scheduled at',
       description:

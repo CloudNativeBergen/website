@@ -12,6 +12,7 @@ import { formatConferenceDateLong, osloLocalInputToIso } from '@/lib/time'
 import type { VariantStatus } from '@/lib/social/types'
 import { taggedUrl } from './link'
 import type { Milestone, ResolvedMilestone } from './milestones'
+import { isOutreach } from './outreach'
 import {
   eventTagFor,
   resolvePlaceholders,
@@ -153,6 +154,11 @@ export interface SeedTask {
   alt?: string
   instructions?: string
   subject?: SubjectLink
+  /**
+   * Outreach Kinds only: the `/go/<code>` code for the link the message carries
+   * (short-links spec §2.1). A publishing Task's code lives on its variant.
+   */
+  shortCode?: string
   /** The copy is an organizer's own words, not the Template's (§3.1). */
   copyEdited?: boolean
   /** Seeded from a Template Recipe that kept an edition's literal copy. */
@@ -175,6 +181,8 @@ export interface SeedVariant {
   platform: MarketingChannel
   body: string
   link: string
+  /** The `/go/<code>` code this variant's short link resolves through (§2.1). */
+  shortCode: string
   scheduledAt: string
   status: VariantStatus
 }
@@ -215,6 +223,15 @@ export interface MaterializeInput {
   origin: TaskOrigin
   /** Id source for the post and variant; receives the document type. */
   newId: (type: string) => string
+  /**
+   * Short-code source, drawn by the CALLER's batch mint (short-links spec
+   * §2.2). This module is pure and cannot check a draw against the
+   * conference's existing codes, so — exactly as for ids — the codes come in.
+   * Called at most once per Task: for the variant of a publishing Task, or for
+   * an outreach Task itself. A copied Task draws a NEW code here, never the
+   * source's.
+   */
+  newShortCode: () => string
   /** Overrides for the body/alt (a copied Task keeps its edited copy). */
   body?: string
   alt?: string
@@ -258,6 +275,8 @@ export function materializeTask(input: MaterializeInput): TaskRecords {
 
   if (r.kind !== 'publishing') {
     if (r.targetPage) task.targetPage = r.targetPage
+    // Outreach only: its `{url}` is the one non-publishing link a reader sees.
+    if (isOutreach(r.kind)) task.shortCode = input.newShortCode()
     task.dueAt = input.at
     task.status = 'open'
     return { tasks: [task], posts: [], variants: [] }
@@ -298,6 +317,7 @@ export function materializeTask(input: MaterializeInput): TaskRecords {
         platform: channel,
         body,
         link,
+        shortCode: input.newShortCode(),
         scheduledAt: input.at,
         status: 'draft',
       },

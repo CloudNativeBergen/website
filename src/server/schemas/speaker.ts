@@ -67,6 +67,24 @@ export const SpeakerInputSchema = z
     company: z.string().nullable().optional().transform(nullToUndefined),
     // Default email delivery for speaker↔organizer messages (messaging M2).
     messagingEmailDefault: z.boolean().optional(),
+    // "Don't tag me in social posts" (#1148) is DELIBERATELY ABSENT here, and
+    // its absence is a guard rather than an oversight.
+    //
+    // This is the SELF BULK profile save. Every one of its callers keeps a
+    // `speakerData` object seeded from the loaded profile and merges partial
+    // form updates into it, then submits the whole thing — so the value the
+    // profile held WHEN THE PAGE LOADED rides along on every save, however
+    // carefully the form declines to emit it. A speaker who unticked the box,
+    // watched it save and then pressed "Update Profile" had their withdrawal
+    // silently undone. "Only the speaker can clear it" became "nobody can."
+    //
+    // Naming the key here would make that stale value authoritative. Leaving it
+    // out means a bulk profile save can neither set NOR clear the opt-out, no
+    // matter what any client sends — the guard holds for callers that do not
+    // exist yet. The only self-service writer is the narrow
+    // `speaker.setSocialTagOptOut` mutation, which carries exactly one boolean
+    // and nothing stale. Organizers reach it through `SpeakerUpdateSchema`
+    // below, where an explicit toggle is the only thing that sends it.
   })
   .refine(
     (data) => {
@@ -112,6 +130,11 @@ const SpeakerInputBaseSchema = z.object({
   company: z.string().nullable().optional().transform(nullToUndefined),
   // Default email delivery for speaker↔organizer messages (messaging M2).
   messagingEmailDefault: z.boolean().optional(),
+  // "Don't tag me in social posts" (#1148). See `SpeakerInputSchema` above for
+  // why naming it matters and why the timestamp is not named. Reached by the
+  // ORGANIZER through `SpeakerUpdateSchema`, who may set it but never clear it
+  // — that rule lives in the writer, not here.
+  socialTagOptOut: z.boolean().optional(),
 })
 
 // Admin-specific speaker creation (includes email)

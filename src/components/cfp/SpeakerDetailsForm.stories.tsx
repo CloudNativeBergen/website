@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
-import { fn } from 'storybook/test'
+import { expect, fn, waitFor } from 'storybook/test'
 import { useState } from 'react'
 import { SpeakerDetailsForm } from './SpeakerDetailsForm'
 import { SpeakerInput, Flags } from '@/lib/speaker/types'
@@ -269,6 +269,400 @@ export const SelfDescribedGender: Story = {
           'Speaker who chose "Prefer to self-describe", revealing the optional free-text gender input, plus an optional country of residence.',
       },
     },
+  },
+}
+
+/**
+ * The social-post tag opt-out (#1148). The checkbox sits with the links it is
+ * about, and this story loads a speaker who has ALREADY opted out — which also
+ * pins that the form echoes the stored value rather than defaulting to off. A
+ * form that rendered it unchecked here would submit a withdrawal the speaker
+ * never asked for on the next save.
+ */
+export const SocialTagOptOut: Story = {
+  args: {
+    speaker: filledSpeaker,
+    storedSocialTagOptOut: true,
+    setSpeaker: fn(),
+    email: 'alice@gmail.com',
+    emails: mockEmails,
+    mode: 'profile',
+  },
+  // ASSERTION ONLY, no interaction. This is the story the screenshots are taken
+  // from, and a `play` that clicked the box would leave the capture showing the
+  // opposite state — which is how a "here is the ticked checkbox" screenshot
+  // ends up showing an unticked one. The click lives in
+  // `SocialTagOptOutTogglesOff` below.
+  play: async ({ canvas }) => {
+    const box = canvas.getByRole('checkbox', {
+      name: /don.t tag me in social posts/i,
+    })
+    await expect(box).toBeChecked()
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'A speaker who has ticked "Don\'t tag me in social posts". Off by default; the box reflects the stored value.',
+      },
+    },
+  },
+}
+
+/**
+ * Unticking it. Rendering the box correctly is only half the contract: the new
+ * value has to reach `setSpeaker`, or the save sends nothing about the opt-out
+ * and the round-trip proved in `speaker.socialTagOptOut.test.ts` never gets the
+ * chance to run.
+ */
+export const SocialTagOptOutTogglesOff: Story = {
+  args: {
+    speaker: filledSpeaker,
+    storedSocialTagOptOut: true,
+    setSpeaker: fn(),
+    email: 'alice@gmail.com',
+    emails: mockEmails,
+    mode: 'profile',
+    onSocialTagOptOutChange: fn(async () => {}),
+  },
+  play: async ({ args, canvas, userEvent }) => {
+    const box = canvas.getByRole('checkbox', {
+      name: /don.t tag me in social posts/i,
+    })
+    await expect(box).toBeChecked()
+
+    await userEvent.click(box)
+    await expect(box).not.toBeChecked()
+
+    // AUTOSAVED, not queued into the bulk payload. `ProposalForm`'s Save Draft
+    // never writes the speaker, so a value that only reached `setSpeaker`
+    // would be lost with a success message on screen.
+    await waitFor(() =>
+      expect(args.onSocialTagOptOutChange).toHaveBeenLastCalledWith(false),
+    )
+
+    // ANNOUNCED, not merely rendered. This autosave is the whole persistence
+    // mechanism for the control — there is no save button to confirm it — so
+    // the result has to reach a screen reader.
+    await waitFor(() =>
+      expect(canvas.getByRole('status')).toHaveTextContent(/saved/i),
+    )
+    const emitted = (args.setSpeaker as ReturnType<typeof fn>).mock.calls.at(
+      -1,
+    )![0]
+    expect(emitted).not.toHaveProperty('socialTagOptOut')
+  },
+}
+
+/**
+ * The write failed. The checkbox must go BACK — a box that stays ticked after a
+ * failed save is a promise we did not keep.
+ */
+export const SocialTagOptOutSaveFails: Story = {
+  args: {
+    speaker: filledSpeaker,
+    setSpeaker: fn(),
+    email: 'alice@gmail.com',
+    emails: mockEmails,
+    mode: 'profile',
+    onSocialTagOptOutChange: fn(async () => {
+      throw new Error('network')
+    }),
+  },
+  play: async ({ canvas, userEvent }) => {
+    const box = canvas.getByRole('checkbox', {
+      name: /don.t tag me in social posts/i,
+    })
+    await userEvent.click(box)
+    await waitFor(() => expect(box).not.toBeChecked())
+    // The failure is announced too, through the same live region.
+    await waitFor(() =>
+      expect(canvas.getByRole('status')).toHaveTextContent(/nothing changed/i),
+    )
+  },
+}
+
+/**
+ * A speaker loaded WITHOUT the field — a narrow projection, or an admin list
+ * row that predates the opt-out. The box renders unticked, and the form emits
+ * NO `socialTagOptOut` key at all, so saving says nothing about the opt-out
+ * instead of withdrawing one. Emitting `false` here is the silent-data-loss
+ * bug this story exists to catch.
+ */
+export const SocialTagOptOutLiveRegionIsAlwaysPresent: Story = {
+  args: {
+    speaker: filledSpeaker,
+    setSpeaker: fn(),
+    emails: [],
+    mode: 'profile',
+    showEmailField: false,
+    onSocialTagOptOutChange: fn(async () => {}),
+  },
+  play: async ({ canvas }) => {
+    // Mounted with nothing to say. A live region inserted at the same moment
+    // as its text is unreliably announced; one already in the DOM is not.
+    const status = canvas.getByRole('status')
+    await expect(status).toBeInTheDocument()
+    await expect(status).toBeEmptyDOMElement()
+  },
+}
+
+export const SocialTagOptOutUnknown: Story = {
+  args: {
+    speaker: filledSpeaker,
+    setSpeaker: fn(),
+    email: 'alice@gmail.com',
+    emails: mockEmails,
+    mode: 'profile',
+  },
+  play: async ({ args, canvas }) => {
+    const box = canvas.getByRole('checkbox', {
+      name: /don.t tag me in social posts/i,
+    })
+    await expect(box).not.toBeChecked()
+    await waitFor(() => expect(args.setSpeaker).toHaveBeenCalled())
+    const emitted = (args.setSpeaker as ReturnType<typeof fn>).mock.calls.at(
+      -1,
+    )![0]
+    expect(emitted).not.toHaveProperty('socialTagOptOut')
+  },
+}
+
+/**
+ * THE ORGANIZER VIEW of a speaker who has already opted out. The control is
+ * one-way: an organizer may set an opt-out on someone's behalf but never
+ * withdraw one, so once it is set the checkbox is disabled rather than
+ * inviting a click the server answers with FORBIDDEN — which would fail the
+ * whole profile edit.
+ */
+export const SocialTagOptOutOrganizerLocked: Story = {
+  args: {
+    speaker: filledSpeaker,
+    storedSocialTagOptOut: true,
+    setSpeaker: fn(),
+    emails: [],
+    mode: 'profile',
+    showEmailField: false,
+    socialTagActor: 'organizer',
+  },
+  play: async ({ canvas }) => {
+    const box = canvas.getByRole('checkbox', {
+      name: /don.t tag me in social posts/i,
+    })
+    await expect(box).toBeChecked()
+    await expect(box).toBeDisabled()
+    await expect(canvas.getByText(/only they can undo it/i)).toBeInTheDocument()
+  },
+}
+
+/**
+ * An organizer save that did NOT touch the checkbox must emit no key at all.
+ * The admin row comes from an hourly-cached list and can be stale while the
+ * modal is open; replaying an untouched `true` would restore an opt-out the
+ * speaker has since withdrawn, which only they may do.
+ */
+export const SocialTagOptOutOrganizerUntouched: Story = {
+  args: {
+    // A speaker who IS opted out in the row this form loaded. That is the
+    // stale-replay case: the row is hourly-cached and the speaker may have
+    // withdrawn since, so an untouched save must say NOTHING rather than
+    // resend `true` and restore what only they may undo. A story whose speaker
+    // has no stored value cannot tell the two behaviours apart.
+    speaker: filledSpeaker,
+    storedSocialTagOptOut: true,
+    setSpeaker: fn(),
+    emails: [],
+    mode: 'profile',
+    showEmailField: false,
+    socialTagActor: 'organizer',
+  },
+  play: async ({ args, canvas, userEvent }) => {
+    // Edit an UNRELATED field, exactly as an organizer fixing a typo would.
+    const bio = canvas.getByLabelText(/bio/i)
+    await userEvent.type(bio, '!')
+
+    await waitFor(() => expect(args.setSpeaker).toHaveBeenCalled())
+    const emitted = (args.setSpeaker as ReturnType<typeof fn>).mock.calls.at(
+      -1,
+    )![0]
+    expect(emitted).not.toHaveProperty('socialTagOptOut')
+  },
+}
+
+/** Once an organizer really toggles it, the value does ride the admin save. */
+export const SocialTagOptOutOrganizerSets: Story = {
+  args: {
+    speaker: filledSpeaker,
+    setSpeaker: fn(),
+    emails: [],
+    mode: 'profile',
+    showEmailField: false,
+    socialTagActor: 'organizer',
+  },
+  play: async ({ args, canvas, userEvent }) => {
+    const box = canvas.getByRole('checkbox', {
+      name: /don.t tag me in social posts/i,
+    })
+    await expect(box).not.toBeDisabled()
+    await userEvent.click(box)
+
+    await waitFor(() =>
+      expect(args.setSpeaker).toHaveBeenLastCalledWith(
+        expect.objectContaining({ socialTagOptOut: true }),
+      ),
+    )
+  },
+}
+
+/**
+ * A REFRESHED prop for the SAME person must update the checkbox (#1148).
+ *
+ * The form's big initialiser has a name-based early return, so for one person
+ * it never runs again — a speaker who cleared their opt-out in another tab
+ * would otherwise keep seeing a ticked box here. The opt-out is therefore
+ * resynced by an effect of its own, keyed on the value.
+ */
+export const SocialTagOptOutResyncs: Story = {
+  args: {
+    speaker: filledSpeaker,
+    setSpeaker: fn(),
+    emails: [],
+    mode: 'profile',
+    showEmailField: false,
+    onSocialTagOptOutChange: fn(async () => {}),
+  },
+  render: (args) => {
+    const ResyncDemo = () => {
+      const [stored, setStored] = useState<boolean | undefined>(true)
+      return (
+        <div className="space-y-4">
+          <button
+            type="button"
+            className="rounded-md bg-brand-cloud-blue px-3 py-2 text-sm text-white"
+            onClick={() =>
+              // Same speaker, new STORED value — exactly what a refetch
+              // delivers after they withdraw the opt-out somewhere else.
+              setStored(false)
+            }
+          >
+            Simulate another tab clearing it
+          </button>
+          <SpeakerDetailsForm {...args} storedSocialTagOptOut={stored} />
+        </div>
+      )
+    }
+    return <ResyncDemo />
+  },
+  play: async ({ canvas, userEvent }) => {
+    const box = canvas.getByRole('checkbox', {
+      name: /don.t tag me in social posts/i,
+    })
+    await expect(box).toBeChecked()
+
+    await userEvent.click(
+      canvas.getByRole('button', { name: /simulate another tab/i }),
+    )
+    await waitFor(() => expect(box).not.toBeChecked())
+  },
+}
+
+/**
+ * THE MIRRORING PARENT (#1148). Every other story passes `setSpeaker: fn()`, a
+ * no-op — which is exactly why this class of bug got through once already.
+ *
+ * Real parents feed the emitted object straight back in as the `speaker` prop.
+ * Because the form deliberately OMITS the opt-out key when it has no opinion
+ * about it, a parent that REPLACED its state would drop the loaded `true` on
+ * the very first emit, the form would read its own output as news from the
+ * server, and the box would untick on mount. All three parents merge.
+ */
+export const SocialTagOptOutSurvivesAMirroringParent: Story = {
+  args: {
+    speaker: filledSpeaker,
+    setSpeaker: fn(),
+    emails: [],
+    mode: 'profile',
+    showEmailField: false,
+    socialTagActor: 'organizer',
+  },
+  render: (args) => {
+    const MirrorDemo = () => {
+      const [speaker, setSpeakerState] = useState<SpeakerInput>(filledSpeaker)
+      return (
+        <SpeakerDetailsForm
+          {...args}
+          storedSocialTagOptOut
+          speaker={speaker}
+          setSpeaker={(updated) =>
+            setSpeakerState((prev) => ({ ...prev, ...updated }))
+          }
+        />
+      )
+    }
+    return <MirrorDemo />
+  },
+  play: async ({ canvas, userEvent }) => {
+    const box = canvas.getByRole('checkbox', {
+      name: /don.t tag me in social posts/i,
+    })
+    // Still ticked after the form's own emit has round-tripped…
+    await expect(box).toBeChecked()
+
+    // …and after an unrelated edit pushes another emit through the parent.
+    await userEvent.type(canvas.getByLabelText(/bio/i), '!')
+    await waitFor(() => expect(box).toBeChecked())
+    // The one-way lock depends on the same prop, so it must survive too.
+    await expect(box).toBeDisabled()
+  },
+}
+
+/** The same form, opt-out OFF (the default), in dark mode. */
+export const SocialTagOptOutDark: Story = {
+  args: {
+    speaker: filledSpeaker,
+    setSpeaker: fn(),
+    email: 'alice@gmail.com',
+    emails: mockEmails,
+    mode: 'profile',
+  },
+  // `globals`, NOT `parameters.theme`: this file has no local theme decorator,
+  // so dark is resolved by the GLOBAL decorator in `.storybook/preview.tsx`,
+  // which reads `context.globals.theme`. Setting `parameters.theme` here would
+  // render light and the screenshot would quietly be of the wrong thing.
+  globals: { theme: 'dark' },
+  play: async ({ canvas }) => {
+    const box = canvas.getByRole('checkbox', {
+      name: /don.t tag me in social posts/i,
+    })
+    // Unticked because this speaker has no stored value — see
+    // `SocialTagOptOutUnknown` for what that means for the SAVE.
+    await expect(box).not.toBeChecked()
+  },
+}
+
+/**
+ * Phone width. `.storybook/test-runner.ts` renders every story at 1280x720, so
+ * without an explicit viewport there is no regression net for the narrow
+ * layout of this checkbox and its help text.
+ */
+export const SocialTagOptOutMobile: Story = {
+  args: {
+    speaker: filledSpeaker,
+    storedSocialTagOptOut: true,
+    setSpeaker: fn(),
+    email: 'alice@gmail.com',
+    emails: mockEmails,
+    mode: 'profile',
+  },
+  parameters: {
+    layout: 'fullscreen',
+    viewport: { defaultViewport: 'mobile1' },
+  },
+  play: async ({ canvas }) => {
+    const box = canvas.getByRole('checkbox', {
+      name: /don.t tag me in social posts/i,
+    })
+    await expect(box).toBeChecked()
   },
 }
 

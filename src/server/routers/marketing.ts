@@ -49,6 +49,15 @@ import { loadReport } from '@/lib/marketing/report'
 import { buildReportCsv } from '@/lib/marketing/report-csv'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { conferenceBaseUrl } from '@/lib/conference/baseUrl'
+import {
+  shortCodeForMutation,
+  shortCodeMinterFor,
+  type MutationShortCode,
+} from '@/lib/marketing/short-code-sanity'
+import {
+  expireShortLink,
+  expireShortLinkIndex,
+} from '@/lib/marketing/short-link-cache'
 import type { Conference } from '@/lib/conference/types'
 import { requireDocumentInCurrentConference } from '@/server/tenancy'
 import {
@@ -632,6 +641,7 @@ export const marketingRouter = router({
                 ownerId: ctx.speaker._id,
                 now,
                 newId: (type) => `${type}.${randomUUID()}`,
+                newShortCode: await shortCodeMinterFor(conference._id),
                 // A whole-plan delete keeps published posts on purpose, so
                 // seeding afterwards must not re-offer what already went out.
                 publishedKeys: await publishedTaskKeys(conference._id),
@@ -694,6 +704,8 @@ export const marketingRouter = router({
           ownerId: ctx.speaker._id,
           now: getCurrentDateTime(),
           newId: (type) => `${type}.${randomUUID()}`,
+          // A copied variant gets a NEW code, never the source's (§2.2).
+          newShortCode: await shortCodeMinterFor(conference._id),
           publishedKeys: await publishedTaskKeys(conference._id),
         })
         const result = await commitSeedPlan(copy)
@@ -794,6 +806,9 @@ export const marketingRouter = router({
         const slot = (channel: typeof input.channel) =>
           slotAt(date, slotTimeFor({ kind: input.kind, channel }))
         const id = `marketingTask.${randomUUID()}`
+        // One batch for this Task and its optional sibling, so the two cannot
+        // draw the same code (§2.2).
+        const newShortCode = await shortCodeMinterFor(conferenceId)
         const buildTask = (
           taskId: string,
           channel: typeof input.channel,
@@ -826,6 +841,7 @@ export const marketingRouter = router({
             body: '',
             alt: '',
             newId: (type) => `${type}.${randomUUID()}`,
+            newShortCode,
           })
         }
         // The schema admits exactly one of `anchor` and `dueAt`.
@@ -984,19 +1000,37 @@ export const marketingRouter = router({
             message:
               'The conversation no longer matches this outreach recipient.',
           })
+        // Resolved BEFORE the transaction so the caller can tell a backfill
+        // from a re-read: only a real mint changes the membership set (§2.4).
+        const outreachCode = await shortCodeForMutation(
+          conferenceId,
+          task.shortCode,
+        )
         let message
         try {
           message = await addMessage({
             conversationId,
             authorId: ctx.speaker._id,
             body: input.body,
-            marketingTask: { id: task._id, rev: input.rev },
+            marketingTask: {
+              id: task._id,
+              rev: input.rev,
+              // §2.2: the send is a mutation that needs the link, so an
+              // outreach Task predating the field mints here — in the same
+              // compare-and-set that records the message.
+              fields: { shortCode: outreachCode.code },
+            },
           })
         } catch (error) {
           if ((error as { statusCode?: number })?.statusCode === 409)
             throw conflict()
           throw error
         }
+        // ONLY when the send actually BACKFILLED a code onto an outreach Task
+        // that predated the field. A Task that already had one leaves the
+        // membership set identical (§2.4). There is no `expireShortLink`
+        // here: the destination did not change.
+        if (outreachCode.minted) expireShortLinkIndex(conferenceId)
         // No later Task patch: delivery and completion have already committed together.
         const delivered = message
         const sfcId = sponsor?._id
@@ -1068,7 +1102,7 @@ export const marketingRouter = router({
     update: adminProcedure
       .input(UpdateTaskSchema)
       .mutation(async ({ input }) => {
-        const { data } = await loadTask(input.taskId)
+        const { conferenceId, data } = await loadTask(input.taskId)
         if (input.targetPage !== undefined && !isOutreach(data.task.kind)) {
           throw new TRPCError({
             code: 'BAD_REQUEST',
@@ -1085,7 +1119,17 @@ export const marketingRouter = router({
           })
         }
         const fields: Record<string, unknown> = {}
-        if (input.targetPage !== undefined) fields.targetPage = input.targetPage
+        let updateCode: MutationShortCode | undefined
+        if (input.targetPage !== undefined) {
+          fields.targetPage = input.targetPage
+          // The outreach destination is the link: this is the mutation that
+          // needs it, so a Task that predates the field mints here (§2.2).
+          updateCode = await shortCodeForMutation(
+            conferenceId,
+            data.task.shortCode,
+          )
+          fields.shortCode = updateCode.code
+        }
         const unset: string[] = []
         if (input.title !== undefined) fields.title = input.title
         for (const key of ['instructions', 'externalUrl'] as const) {
@@ -1103,6 +1147,13 @@ export const marketingRouter = router({
           ))
         ) {
           throw conflict()
+        }
+        // A rewritten destination changes what `/go/<code>` resolves to (§2.5).
+        if (input.targetPage !== undefined) {
+          expireShortLink(data.task._id)
+          // ONLY when the write actually backfilled a code. A Task that
+          // already had one leaves the membership set identical (§2.4).
+          if (updateCode?.minted) expireShortLinkIndex(conferenceId)
         }
         return { success: true as const }
       }),
@@ -1236,11 +1287,15 @@ export const marketingRouter = router({
             })
           }
         }
+        // Whether THIS approval minted the variant's code — only a mint
+        // changes the conference's membership set (§2.4).
+        let approveMinted = false
         let variantStep: {
           id: string
           rev: string
           scheduledAt: string
           link: string
+          shortCode: string
         } | null = null
         if (task.kind === 'publishing') {
           if (!task.targetPage || !task.channel) {
@@ -1308,7 +1363,20 @@ export const marketingRouter = router({
               message: issues.map((i) => `${i.field}: ${i.message}`).join('; '),
             })
           }
-          variantStep = { id: v._id, rev: v._rev, scheduledAt, link }
+          const approveCode = await shortCodeForMutation(
+            conferenceId,
+            v.shortCode,
+          )
+          approveMinted = approveCode.minted
+          variantStep = {
+            id: v._id,
+            rev: v._rev,
+            scheduledAt,
+            link,
+            // §2.2: a variant that predates the field gets its code in the
+            // first MUTATION that needs its link — this is one of them.
+            shortCode: approveCode.code,
+          }
         }
         const landed = await approveTask({
           taskId: task._id,
@@ -1318,6 +1386,14 @@ export const marketingRouter = router({
           variant: variantStep,
         })
         if (!landed) throw conflict()
+        // The approval rewrote `link`, so `/go/<code>` now resolves somewhere
+        // else. EXPIRE the entry rather than serving it stale (§2.5).
+        if (variantStep) {
+          expireShortLink(variantStep.id)
+          // ONLY when approve actually BACKFILLED a code onto a variant that
+          // predated the field (§2.4).
+          if (approveMinted) expireShortLinkIndex(conferenceId)
+        }
         return {
           success: true as const,
           ceilingWarnings: variantStep
@@ -1543,6 +1619,12 @@ export const marketingRouter = router({
           .map((s) => s._id),
       })
       if (!landed) throw conflict()
+      // A deleted Task's short link now falls back to the home page (§2.1's
+      // known hole): EXPIRE both entries rather than let them age out (§2.5).
+      expireShortLink(task._id)
+      if (variantRef) expireShortLink(variantRef.id)
+      // Both codes leave the conference's membership set (§2.4).
+      expireShortLinkIndex(conferenceId)
       return { success: true as const }
     }),
   }),
@@ -1769,6 +1851,7 @@ export const marketingRouter = router({
           ownerId: plan.ownerId ?? ctx.speaker._id,
           now: getCurrentDateTime(),
           newId: (type) => `${type}.${randomUUID()}`,
+          newShortCode: await shortCodeMinterFor(conference._id),
           // Re-adding a deleted Campaign must not re-offer what already went
           // out, exactly as a reseed does not.
           publishedKeys: await publishedTaskKeys(conference._id),
@@ -1827,6 +1910,7 @@ export const marketingRouter = router({
                   now: getCurrentDateTime(),
                   taskId: (key) => generatedTaskId(campaign._id, key),
                   newId: (type) => `${type}.${randomUUID()}`,
+                  newShortCode: await shortCodeMinterFor(conferenceId),
                 })
               : emptyRecords()
           await saveRecipes(conferenceId, ctx.speaker._id, campaign, {

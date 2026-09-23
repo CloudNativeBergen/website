@@ -133,6 +133,12 @@ export interface SocialPostVariant {
   /** ISO datetime of the current `publishing` claim. */
   claimedAt: string | null
   link: string | null
+  /**
+   * The `/go/<code>` code for a Task-owned variant (short-links spec §2.1).
+   * `null` on a standalone post's variant, and on a Task-owned one that
+   * predates the field until its next mutation mints one.
+   */
+  shortCode: string | null
   attachments: SocialVariantAttachment[]
   publishResult: PublishResult | null
   /** Audit trail: every attempt outcome, never cleared. */

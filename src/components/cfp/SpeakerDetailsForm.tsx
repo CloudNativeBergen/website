@@ -38,6 +38,38 @@ interface SpeakerDetailsFormProps {
   className?: string
   onImageUpload?: (file: File) => Promise<{ assetId: string; url: string }>
   onEmailSelect?: (email: string) => Promise<void>
+  /**
+   * WHOSE profile this is, for the tag opt-out only (#1148).
+   *
+   * `self` (default) AUTOSAVES the checkbox through a narrow mutation and keeps
+   * it out of the bulk payload, because `ProposalForm`'s Save Draft never
+   * writes the speaker at all.
+   *
+   * `organizer` cannot autosave somebody else's document, so the value rides
+   * the admin payload — but ONLY after a real toggle (a stale cached row must
+   * never be replayed over a fresher value), and the control is one-way,
+   * because only the speaker may withdraw an opt-out.
+   */
+  socialTagActor?: 'self' | 'organizer'
+  /**
+   * Overrides the `self` autosave write, the way `onEmailSelect` overrides the
+   * email one. Lets a story or a host exercise the control without a network
+   * call; the default is the narrow `speaker.setSocialTagOptOut` mutation.
+   */
+  onSocialTagOptOutChange?: (value: boolean) => Promise<void>
+  /**
+   * The opt-out AS THE SERVER HOLDS IT — deliberately a prop of its own rather
+   * than a field of `speaker` (#1148).
+   *
+   * `speaker` is the parent's PENDING BULK PAYLOAD: parents merge this form's
+   * partial updates into it and submit the whole object. Anything this form
+   * reads from there it has effectively also queued for saving, which is how a
+   * withdrawn opt-out came back — the loaded `true` sat in that object and rode
+   * the next bulk save. Reading the displayed value from a separate prop breaks
+   * that coupling: the checkbox can show the truth without the truth being
+   * resubmitted.
+   */
+  storedSocialTagOptOut?: boolean
 }
 
 export function SpeakerDetailsForm({
@@ -52,6 +84,9 @@ export function SpeakerDetailsForm({
   className = '',
   onImageUpload,
   onEmailSelect,
+  socialTagActor = 'self',
+  onSocialTagOptOutChange,
+  storedSocialTagOptOut,
 }: SpeakerDetailsFormProps) {
   const defaultImageUpload = useSpeakerImageUpload()
   const [speakerName, setSpeakerName] = useState(speaker?.name ?? '')
@@ -74,6 +109,78 @@ export function SpeakerDetailsForm({
   const [speakerLinks, setSpeakerLinks] = useState(
     speaker?.links?.length ? speaker.links : [''],
   )
+  // "Don't tag me in social posts" (#1148). NOT a consent grant, so it is not
+  // grouped with the consent checkboxes below — those record permissions the
+  // speaker gave, this records one they withheld. Absent means not opted out.
+  //
+  // `boolean | undefined`, NOT `boolean`, and the difference is the whole
+  // safety property. `undefined` means THIS FORM WAS NEVER TOLD, and the emit
+  // below then omits the key entirely, so the save says nothing about the
+  // opt-out and the writer leaves it alone. Collapsing that to `false` would
+  // make a speaker loaded through a projection that does not carry the field —
+  // or an admin list row that went stale — submit a WITHDRAWAL nobody asked
+  // for, which for the speaker's own save is silent data loss and for an
+  // organizer's is a refusal they cannot explain. Any click on the checkbox
+  // makes it a boolean, so a real answer is always emitted.
+  const [socialTagOptOut, setSocialTagOptOut] = useState<boolean | undefined>(
+    storedSocialTagOptOut,
+  )
+  // Whether the person at the keyboard actually touched the control in this
+  // session. An untouched organizer save must send NOTHING: its row comes from
+  // a cached list and can be stale, and replaying a stale `true` would restore
+  // an opt-out the speaker has since withdrawn — which only they may do.
+  const [socialTagTouched, setSocialTagTouched] = useState(false)
+  // Whether the control was CLICKED AT ALL this session, which is a different
+  // question from whether its value now differs from the loaded one. A save
+  // with no click must put nothing in the payload; a click that was undone
+  // must put an explicit `undefined` there, to overwrite what the first click
+  // already merged into the parent. Omission cannot do the second job.
+  const [socialTagInteracted, setSocialTagInteracted] = useState(false)
+  const [socialTagSaveState, setSocialTagSaveState] = useState<
+    'idle' | 'saving' | 'saved' | 'error'
+  >('idle')
+  const socialTagMutation = api.speaker.setSocialTagOptOut.useMutation()
+  // ONE-WAY for an organizer: they may set an opt-out on a speaker's behalf but
+  // never withdraw one, so once it is set the control stops being an action
+  // they can take. Without this the form invites a click the server answers
+  // with FORBIDDEN, failing the whole profile edit.
+  const socialTagLocked =
+    socialTagActor === 'organizer' && storedSocialTagOptOut === true
+
+  async function handleSocialTagOptOutChange(next: boolean) {
+    setSocialTagOptOut(next)
+    // TOUCHED means "differs from what was loaded", not "was clicked".
+    //
+    // An organizer who ticks this and unticks it again has asked for nothing,
+    // but a click-counter would still emit `socialTagOptOut: false` — and if
+    // the speaker opted out since that (cached, stale) admin row was read, the
+    // server sees an organizer trying to CLEAR an opt-out and refuses the
+    // whole profile edit with FORBIDDEN. The organizer cannot explain a
+    // refusal for a control they put back.
+    //
+    // Compared as booleans on purpose: the loaded value is `undefined` when
+    // the field is absent, and absent and `false` are the same answer here.
+    setSocialTagTouched((next === true) !== (storedSocialTagOptOut === true))
+    setSocialTagInteracted(true)
+    // An organizer's value travels with the admin save; there is no self-write
+    // endpoint for someone else's document.
+    if (socialTagActor !== 'self') return
+
+    setSocialTagSaveState('saving')
+    try {
+      if (onSocialTagOptOutChange) {
+        await onSocialTagOptOutChange(next)
+      } else {
+        await socialTagMutation.mutateAsync({ socialTagOptOut: next })
+      }
+      setSocialTagSaveState('saved')
+    } catch {
+      // Put the box back: the stored value did not change, and a checkbox that
+      // stays ticked after a failed write is a promise we did not keep.
+      setSocialTagOptOut(!next)
+      setSocialTagSaveState('error')
+    }
+  }
 
   const [dataProcessingConsent, setDataProcessingConsent] = useState(
     speaker?.consent?.dataProcessing?.granted ?? false,
@@ -134,6 +241,18 @@ export function SpeakerDetailsForm({
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setSpeakerEmail(email ?? '')
   }, [email])
+
+  // RESYNCED ON ITS OWN, deliberately outside the big initialiser above, whose
+  // early return fires only when the NAME changes. For the same person that
+  // effect never runs again, so a value refreshed from the server — the speaker
+  // clearing their opt-out in another tab — would never reach this checkbox.
+  // Keyed on the VALUE, so a re-render that changes nothing cannot clobber a
+  // toggle in flight.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSocialTagOptOut(storedSocialTagOptOut)
+    setSocialTagTouched(false)
+  }, [storedSocialTagOptOut])
 
   const emailOptions = new Map(
     emails.map((email) => [email.email, email.email]),
@@ -233,6 +352,29 @@ export function SpeakerDetailsForm({
           ? speakerGenderSelfDescribe
           : null,
       country: speakerCountry || null,
+      // The SELF path autosaves this field and never puts it here, so a Save
+      // Draft that writes only the proposal cannot lose it. The ORGANIZER path
+      // sends it only after a real toggle, so an untouched (possibly stale)
+      // admin row is never replayed. Either way an omitted key means "no
+      // opinion" to the writer, and only `false` withdraws.
+      // The organizer path ALWAYS carries the key, and sends `undefined` when
+      // the control was not touched or was put back where it was found.
+      //
+      // Omitting it is not the same as reverting it, because every parent
+      // MERGES this object into state it already holds: the first tick emits
+      // `true`, that lands in the parent, and a later omission cannot take it
+      // back — the save would set an opt-out the organizer had visibly undone.
+      // An explicit `undefined` overwrites it, and the input schema strips the
+      // key, so the writer still hears "no opinion" and leaves the stored
+      // value alone. `false` reaches the server only as a deliberate
+      // withdrawal, which it refuses for an organizer anyway.
+      ...(socialTagActor === 'organizer' &&
+        socialTagInteracted && {
+          socialTagOptOut:
+            socialTagTouched && typeof socialTagOptOut === 'boolean'
+              ? socialTagOptOut
+              : undefined,
+        }),
       ...(speakerImage && imageChanged && { image: speakerImage }),
       consent: {
         dataProcessing: {
@@ -264,6 +406,9 @@ export function SpeakerDetailsForm({
     speakerGenderSelfDescribe,
     speakerCountry,
     speakerLinks,
+    socialTagOptOut,
+    socialTagTouched,
+    socialTagActor,
     speakerImage,
     imageChanged,
     dataProcessingConsent,
@@ -467,6 +612,62 @@ export function SpeakerDetailsForm({
                     add={addSpeakerLink}
                   />
                 ))}
+              </div>
+              <div className="mt-6 border-t border-brand-frosted-steel pt-6 dark:border-gray-600">
+                <Checkbox
+                  name="social-tag-opt-out"
+                  label="Don't tag me in social posts"
+                  value={socialTagOptOut === true}
+                  setValue={handleSocialTagOptOutChange}
+                  disabled={socialTagLocked || socialTagSaveState === 'saving'}
+                >
+                  <HelpText>
+                    We promote the programme on social media, and we are
+                    preparing to <strong>tag (@-mention)</strong> the accounts
+                    you list above in posts about you or your talk &mdash; you
+                    gave us those links for your public profile and for
+                    promotion, and a tag puts the post in your followers&rsquo;
+                    feeds so you can reshare it.{' '}
+                    <strong>We are not tagging anyone yet.</strong> Tick this
+                    box and we never will: your name is written out in plain
+                    text instead, in every post not yet published. It changes
+                    nothing else about your profile.
+                  </HelpText>
+                  {socialTagLocked && (
+                    <HelpText>
+                      This speaker asked not to be tagged. You can set this on
+                      someone&rsquo;s behalf, but only they can undo it.
+                    </HelpText>
+                  )}
+                  {/*
+                   * A LIVE REGION, mounted for the whole life of the control
+                   * rather than only while there is something to say. This
+                   * autosave IS the persistence for this checkbox — there is no
+                   * save button to confirm it — so a speaker using a screen
+                   * reader would otherwise get no confirmation that their
+                   * opt-out stuck. A region inserted at the same moment as its
+                   * text is unreliably announced; one that is already there and
+                   * changes is not. Empty and unstyled when idle, so it adds no
+                   * layout.
+                   */}
+                  {socialTagActor === 'self' && (
+                    <div role="status" aria-live="polite">
+                      {socialTagSaveState !== 'idle' && (
+                        <HelpText>
+                          {socialTagSaveState === 'saving' && 'Saving…'}
+                          {socialTagSaveState === 'saved' &&
+                            'Saved. This applies to every post not yet published.'}
+                          {socialTagSaveState === 'error' && (
+                            <span className="text-red-600 dark:text-red-400">
+                              Could not save that just now &mdash; nothing
+                              changed. Please try again.
+                            </span>
+                          )}
+                        </HelpText>
+                      )}
+                    </div>
+                  )}
+                </Checkbox>
               </div>
             </fieldset>
           </div>

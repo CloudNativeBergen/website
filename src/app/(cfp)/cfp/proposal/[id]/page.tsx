@@ -8,6 +8,7 @@ import {
   resolveCurrentOrgId,
 } from '@/lib/authz/organizer'
 import { getSpeaker } from '@/lib/speaker/sanity'
+import { resolveEditorSpeaker } from '@/lib/proposal/editorSpeaker'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { ProposalReadOnlyView } from '@/components/cfp/ProposalReadOnlyView'
 import { ProposalForm } from '@/components/cfp/ProposalForm'
@@ -22,7 +23,6 @@ import { ChatBubbleLeftRightIcon } from '@heroicons/react/24/outline'
 import { isConferenceOver } from '@/lib/conference/state'
 import { BackLink } from '@/components/BackButton'
 import { buildUrlWithImpersonation } from '@/lib/impersonation'
-import { Speaker } from '@/lib/speaker/types'
 
 interface ProposalViewPageProps {
   params: Promise<{
@@ -164,20 +164,15 @@ export default async function ProposalViewPage({
     proposal.status === 'accepted' ||
     proposal.status === 'confirmed'
   ) {
-    let speakerData: { name: string; email: string } = currentUserSpeaker
-
-    if (proposal.speakers && Array.isArray(proposal.speakers)) {
-      const currentUserSpeakerData = proposal.speakers.find(
-        (s): s is Speaker =>
-          typeof s === 'object' &&
-          s !== null &&
-          '_id' in s &&
-          s._id === session.speaker._id,
-      )
-      if (currentUserSpeakerData) {
-        speakerData = currentUserSpeakerData
-      }
-    }
+    // Extracted (#1148): the proposal payload withholds OTHER speakers' tag
+    // opt-out, and this is where the caller's own entry is picked out of it.
+    // See `resolveEditorSpeaker` for why those two facts have to be tested
+    // together.
+    const speakerData = resolveEditorSpeaker(
+      proposal.speakers,
+      currentUserSpeaker,
+      session.speaker._id,
+    )
 
     return (
       <div className="mx-auto max-w-7xl">

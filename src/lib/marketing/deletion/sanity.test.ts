@@ -1,6 +1,11 @@
 /** @vitest-environment node */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { evaluate, parse } from 'groq-js'
+import { sequentialShortCodes } from '../short-code'
+import { shortLinkIndexTag, shortLinkTag } from '@/lib/cache/tags'
+
+const revalidateTag = vi.hoisted(() => vi.fn())
+vi.mock('next/cache', () => ({ revalidateTag }))
 
 const h = vi.hoisted(() => ({
   dataset: [] as Record<string, unknown>[],
@@ -160,6 +165,7 @@ function task(n: number, status = 'draft', campaign = 'camp') {
 }
 const byId = (id: string) => h.dataset.find((row) => row._id === id)
 beforeEach(() => {
+  revalidateTag.mockClear()
   h.commits = 0
   h.batchSizes.length = 0
   h.failCommit = 0
@@ -971,6 +977,90 @@ describe('deletion read and refusals', () => {
   })
 })
 
+describe('short-link entries of a chunked delete (short-links spec §2.5)', () => {
+  /** A Task and variant that both carry a code, plus one that carries none. */
+  function coded() {
+    const rows = [...task(0), ...task(1)]
+    Object.assign(rows[0], { shortCode: 'aaaaaa', kind: 'speakerOutreach' })
+    Object.assign(rows[1], { shortCode: 'bbbbbb' })
+    return rows
+  }
+
+  it('EXPIRES every deleted code, per Task, across the chunks', async () => {
+    h.dataset.push(...coded())
+    const tree = await readDeletionTree('conf-A')
+    expect(
+      await deletePlanTree({
+        conferenceId: 'conf-A',
+        tree: tree!,
+        deletePlan: true,
+      }),
+    ).toBe(true)
+    const tags = revalidateTag.mock.calls.map((c) => c[0])
+    expect(tags).toContain(shortLinkTag('task-0'))
+    expect(tags).toContain(shortLinkTag('variant-0'))
+    // The uncoded Task and variant are not tagged at all.
+    expect(tags).not.toContain(shortLinkTag('task-1'))
+    expect(tags).not.toContain(shortLinkTag('variant-1'))
+    for (const [, profile] of revalidateTag.mock.calls) {
+      expect(profile).toEqual({ expire: 0 })
+    }
+  })
+
+  it('EXPIRES the conference code INDEX as well as the per-document entries', async () => {
+    h.dataset.push(...coded())
+    const tree = await readDeletionTree('conf-A')
+    await deletePlanTree({
+      conferenceId: 'conf-A',
+      tree: tree!,
+      deletePlan: true,
+    })
+    expect(revalidateTag).toHaveBeenCalledWith(shortLinkIndexTag('conf-A'), {
+      expire: 0,
+    })
+  })
+
+  it('EXPIRES them when a later chunk THROWS, not only when it conflicts', async () => {
+    // `commitOrConflict` rethrows anything that is not a revision conflict —
+    // a network error, a Sanity 5xx — and the earlier chunks have already
+    // destroyed their documents by then.
+    for (let n = 0; n < 15; n++) h.dataset.push(...task(n))
+    Object.assign(byId('task-0')!, { shortCode: 'aaaaaa' })
+    const tree = await readDeletionTree('conf-A')
+    h.beforeCommit = (n) => {
+      if (n === 2) throw new Error('network is down')
+    }
+    await expect(
+      deletePlanTree({ conferenceId: 'conf-A', tree: tree!, deletePlan: true }),
+    ).rejects.toThrow('network is down')
+    expect(revalidateTag).toHaveBeenCalledWith(shortLinkTag('task-0'), {
+      expire: 0,
+    })
+  })
+
+  it('EXPIRES them even when a later chunk fails, because earlier ones committed', async () => {
+    for (let n = 0; n < 15; n++) h.dataset.push(...task(n))
+    Object.assign(byId('task-0')!, { shortCode: 'aaaaaa' })
+    const tree = await readDeletionTree('conf-A')
+    h.beforeCommit = (n) => {
+      if (n === 2) {
+        byId('variant-6')!._rev = 'publisher-claim'
+        byId('variant-6')!.status = 'publishing'
+      }
+    }
+    expect(
+      await deletePlanTree({
+        conferenceId: 'conf-A',
+        tree: tree!,
+        deletePlan: true,
+      }),
+    ).toBe(false)
+    expect(revalidateTag).toHaveBeenCalledWith(shortLinkTag('task-0'), {
+      expire: 0,
+    })
+  })
+})
+
 describe('transaction boundary safety', () => {
   it('a publisher claim at a chunk boundary rolls back the entire Task bundle', async () => {
     for (let n = 0; n < 15; n++) h.dataset.push(...task(n))
@@ -1253,6 +1343,7 @@ describe('delete and seed again', () => {
         includeOptional: [],
         ownerId: 'owner',
         now: '2026-09-14T10:00:00Z',
+        newShortCode: sequentialShortCodes(),
         newId: (type) => `${type}.${++sequence}`,
       })
     const original = seed()

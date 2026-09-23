@@ -234,12 +234,15 @@ export function Checkbox({
   value,
   setValue,
   children,
+  disabled = false,
 }: {
   name: string
   label: string
   value?: boolean
   setValue: (val: boolean) => void
   children?: React.ReactNode
+  /** The `disabled:` styles below were already written for this. */
+  disabled?: boolean
 }) {
   return (
     <div className="flex gap-3">
@@ -250,6 +253,7 @@ export function Checkbox({
             name={name}
             type="checkbox"
             checked={value}
+            disabled={disabled}
             onChange={(e) => setValue(e.target.checked)}
             className="col-start-1 row-start-1 appearance-none rounded-sm border border-gray-300 bg-white checked:border-indigo-600 checked:bg-indigo-600 indeterminate:border-indigo-600 indeterminate:bg-indigo-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:border-gray-300 disabled:bg-gray-100 disabled:checked:bg-gray-100 dark:border-white/10 dark:bg-white/5 dark:checked:border-indigo-500 dark:checked:bg-indigo-500 dark:indeterminate:border-indigo-500 dark:indeterminate:bg-indigo-500 dark:focus-visible:outline-indigo-500 dark:disabled:border-white/5 dark:disabled:bg-white/10 dark:disabled:checked:bg-white/10 forced-colors:appearance-auto"
           />

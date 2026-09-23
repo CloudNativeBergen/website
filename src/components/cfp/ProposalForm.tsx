@@ -34,6 +34,34 @@ import {
 } from '@/lib/marketing/landing-utm'
 import type { ProposalUtmTags } from '@/lib/proposal/types'
 
+/**
+ * Preferences that have their OWN narrow autosave mutation and are therefore
+ * never part of a bulk profile payload (#1148).
+ *
+ * `speaker` state here is seeded from the whole loaded speaker and submitted
+ * wholesale, so a value loaded at mount is re-sent on submit. For a field the
+ * speaker can change ELSEWHERE while this form sits open, that re-send is a
+ * stale write that silently undoes the newer narrow save. `socialTagOptOut`
+ * is already kept out by `SpeakerDetailsForm` omitting it; `messagingEmailDefault`
+ * is edited on `CFPProfilePage` and was not, so a proposal submitted after
+ * changing it there reverted it.
+ *
+ * This form edits neither, so dropping both is a pure removal of staleness.
+ * Listing them in one place is the point: a third narrow autosave must be
+ * added here too, and a name in this array is cheaper to notice than a bug.
+ */
+const NARROWLY_AUTOSAVED_SPEAKER_FIELDS = [
+  'socialTagOptOut',
+  'socialTagOptOutAt',
+  'messagingEmailDefault',
+] as const
+
+function withoutNarrowlyAutosavedFields<T extends object>(speaker: T): T {
+  const next = { ...speaker } as Record<string, unknown>
+  for (const field of NARROWLY_AUTOSAVED_SPEAKER_FIELDS) delete next[field]
+  return next as T
+}
+
 export function ProposalForm({
   initialProposal,
   initialSpeaker,
@@ -353,7 +381,9 @@ export function ProposalForm({
       }
 
       try {
-        const updatedSpeaker = await updateSpeakerMutation.mutateAsync(speaker)
+        const updatedSpeaker = await updateSpeakerMutation.mutateAsync(
+          withoutNarrowlyAutosavedFields(speaker),
+        )
         await update({ speaker: updatedSpeaker })
       } catch {
         window.scrollTo(0, 0)
@@ -472,7 +502,19 @@ export function ProposalForm({
             </div>
             <SpeakerDetailsForm
               speaker={speaker}
-              setSpeaker={setSpeaker}
+              // MERGE, never replace (#1148). `SpeakerDetailsForm` OMITS a key
+              // it has no opinion about — the tag opt-out when it was never
+              // told the stored value, or when the speaker's own copy is
+              // autosaved instead of queued here. Replacing state with that
+              // partial object would drop the loaded value on the first emit,
+              // and the form would then see its own output as news from the
+              // server. `CFPProfilePage` has always merged for this reason.
+              setSpeaker={(updated) =>
+                setSpeaker((prev) => ({ ...prev, ...updated }))
+              }
+              // From the LOADED speaker, not from `speaker` state — that state
+              // is the bulk payload this form submits (#1148).
+              storedSocialTagOptOut={initialSpeaker?.socialTagOptOut}
               email={userEmail}
               emails={emails}
             />

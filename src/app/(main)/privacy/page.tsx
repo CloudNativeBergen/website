@@ -46,6 +46,7 @@ import {
   HandRaisedIcon,
   UserMinusIcon,
   TicketIcon,
+  MegaphoneIcon,
 } from '@heroicons/react/24/outline'
 import { cacheLife, cacheTag } from 'next/cache'
 import { conferenceTag, organizationTag } from '@/lib/cache/tags'
@@ -115,7 +116,7 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
     )
   }
 
-  const lastUpdated = 'August 6, 2026'
+  const lastUpdated = 'September 22, 2026'
   const legal = await resolveLegalConfig(conference)
   const contactEmail = legal.contactEmail
   // EMPTY when no legal entity could be resolved. `legal.controllerResolved`
@@ -288,6 +289,11 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                               and used only for aggregate diversity reporting)
                             </li>
                             <li>• Local speaker status (optional)</li>
+                            <li>
+                              • Whether you have asked not to be tagged in
+                              social posts, and when you asked (see Social Media
+                              Promotion &amp; Tagging below)
+                            </li>
                             <li>
                               • Web push notification subscriptions (browser
                               endpoint and device type), stored only if you opt
@@ -593,6 +599,87 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                           event documentation and community engagement. You can
                           untag yourself at any time through your speaker
                           profile or by contacting us.
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Social Media Promotion & Tagging */}
+                    <div className="rounded-lg border border-violet-200 bg-violet-50 p-6 dark:border-violet-800 dark:bg-violet-900/20">
+                      <h3 className="mb-4 flex items-center text-lg font-semibold text-violet-800 dark:text-violet-200">
+                        <MegaphoneIcon className="mr-3 h-5 w-5" />
+                        Social Media Promotion &amp; Tagging
+                      </h3>
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div>
+                          <h4 className="mb-2 font-medium text-violet-800 dark:text-violet-200">
+                            What We Do
+                          </h4>
+                          <ul className="space-y-1 text-sm text-violet-700 dark:text-violet-300">
+                            <li>
+                              • <strong>We are not tagging anyone yet.</strong>{' '}
+                              This describes what we are preparing to do, so you
+                              can tell us now if you would rather we did not
+                            </li>
+                            <li>
+                              • We promote the programme on our social media
+                              channels, including posts about a speaker and
+                              their talk
+                            </li>
+                            <li>
+                              • Once it is switched on, such a post{' '}
+                              <strong>may tag</strong> (@-mention) the social
+                              accounts you listed on your speaker profile, so it
+                              reaches your followers and you can reshare it
+                            </li>
+                            <li>
+                              • We only ever tag accounts you gave us yourself.
+                              We do not look up accounts you have not listed
+                            </li>
+                          </ul>
+                        </div>
+                        <div>
+                          <h4 className="mb-2 font-medium text-violet-800 dark:text-violet-200">
+                            Your Control
+                          </h4>
+                          <ul className="space-y-1 text-sm text-violet-700 dark:text-violet-300">
+                            <li>
+                              • Tick{' '}
+                              <strong>
+                                &quot;Don&apos;t tag me in social posts&quot;
+                              </strong>{' '}
+                              on your speaker profile and we will write your
+                              name out in plain text instead
+                            </li>
+                            <li>
+                              • Your choice is recorded now and will be honoured
+                              from the very first tagged post &mdash; it takes
+                              effect for every post not yet published, including
+                              ones already written and scheduled
+                            </li>
+                            <li>
+                              • Posts already published are not changed. Ask us
+                              and we will take one down where we can
+                            </li>
+                            <li>
+                              • Organizers can set this for you if you ask them
+                              to, but only you can undo it
+                            </li>
+                          </ul>
+                        </div>
+                      </div>
+                      <div className="mt-3 rounded-lg bg-violet-100 p-2 dark:bg-violet-800/30">
+                        <p className="text-xs text-violet-800 dark:text-violet-200">
+                          <strong>Status:</strong> Tagging is not live. Nothing
+                          reads this preference yet; it is stored so that it is
+                          already in force on the day the first tagged post goes
+                          out. <strong>Legal Basis:</strong> Legitimate interest
+                          in promoting the conference and its programme. The
+                          accounts we tag are the links you gave us for your
+                          public speaker profile and for promotional material,
+                          and tagging is a use of those same links. Because it
+                          is a more visible use than displaying them, you can
+                          object to it on its own with the checkbox above,
+                          without changing anything else about your profile.
                         </p>
                       </div>
                     </div>

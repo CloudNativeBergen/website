@@ -44,6 +44,7 @@ const VARIANT_PROJECTION = groq`{
   usesCustomTime,
   claimedAt,
   link,
+  shortCode,
   attachments[]{ source, crop{ x, y, width, height }, altOverride },
   publishResult,
   attempts[]{ _key, at, outcome, error, "by": by._ref },
@@ -88,6 +89,7 @@ interface RawVariant {
   usesCustomTime: boolean | null
   claimedAt: string | null
   link: string | null
+  shortCode: string | null
   attachments:
     | {
         source: string | null
@@ -115,6 +117,7 @@ function normalizeVariant(raw: RawVariant): SocialPostVariant {
     usesCustomTime: raw.usesCustomTime === true,
     claimedAt: raw.claimedAt ?? null,
     link: raw.link ?? null,
+    shortCode: raw.shortCode ?? null,
     attachments: normalizeVariantAttachments(raw.attachments),
     publishResult: raw.publishResult ?? null,
     attempts: (raw.attempts ?? []).map((a) => ({
@@ -675,6 +678,12 @@ export async function updateSocialVariantContent(
      */
     task?: { id: string; rev: string; targetPage: string }
     /**
+     * The `/go/<code>` code the variant should carry (short-links spec §2.2).
+     * Given only for a Task-owned variant; a variant that predates the field
+     * is backfilled here, in the mutation that rewrites its `link`.
+     */
+    shortCode?: string
+    /**
      * The Marketing Task whose copy this save rewrites (spec §3.1): the flag
      * is what tells a later plan copy that an organizer touched the text,
      * rather than guessing from the Template skeleton.
@@ -694,6 +703,7 @@ export async function updateSocialVariantContent(
         ...(a.crop ? { crop: a.crop } : {}),
         ...(a.altOverride !== null ? { altOverride: a.altOverride } : {}),
       })),
+      ...(options.shortCode ? { shortCode: options.shortCode } : {}),
       scheduledAt: content.scheduledAt,
       usesCustomTime: content.usesCustomTime,
       updatedAt: now,

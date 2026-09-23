@@ -127,6 +127,7 @@ function variant(
     scheduledAt: '2026-10-01T08:00:00.000Z',
     usesCustomTime: false,
     claimedAt: null,
+    shortCode: null,
     link: null,
     attachments: [],
     publishResult: null,
