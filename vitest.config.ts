@@ -110,9 +110,12 @@ export default defineConfig({
       // CI runs the suite as shards (`--shard=i/n --reporter=blob`) and judges
       // thresholds ONCE, in the job that runs `--merge-reports --coverage`.
       // A shard sees only a slice of each module's callers, so its own
-      // numbers are meaningless and would fail the gate on every run; the
-      // shard steps set this variable to opt out. Nothing else should.
-      thresholds: process.env.VITEST_SKIP_COVERAGE_THRESHOLDS
+      // numbers are meaningless and would fail the gate on every run. Keyed on
+      // the `--shard` flag itself (not an env var anything could export):
+      // a shard cannot also be the merge, and the merge never passes it.
+      // `scripts/assert-gated-coverage.ts` checks after the merge that every
+      // file listed here is actually in the merged report.
+      thresholds: process.argv.some((a) => a.startsWith('--shard'))
         ? undefined
         : {
             'src/lib/auth.ts': {

@@ -321,6 +321,16 @@ reads it.
   query _moved_ into another file are the same event to a path-keyed baseline;
   regenerate, and the diff should show the same counts under the new path.
 
+In CI the ratchet does not lint the repo a second time: it reads the
+`.eslintcache` that the `Run linter` step (`eslint --cache .`) wrote a step
+earlier, which ESLint keys on file content and config — so the check costs ~2s
+instead of ~50s. Two consequences for whoever edits the **rule itself**
+(`no-unscoped-groq.js`, `groq-scope-engine.js`): the cache key does not include
+rule code, so a warm local cache keeps reporting the old rule's counts (`pnpm
+lint` shares it) until you `rm .eslintcache`; and for that reason the ratchet
+only uses the cache when `CI=true`, and never on `--update`, which writes the
+baseline.
+
 It freezes the count, not the code: changing a query in place inside a file that
 already warns is invisible to it, as is anything the rule does not see
 (`scripts/` is allowlisted and runs with the write token — a known gap), and an

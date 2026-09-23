@@ -114,6 +114,8 @@ jobs:
     timeout-minutes: 15
     strategy:
       fail-fast: false
+      # To add a shard, append here AND in the other matrix below; the fan-in
+      # jobs read the count from strategy.job-total.
       matrix:
         shard: [1, 2]
 
@@ -147,15 +149,14 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # Thresholds are skipped here on purpose (see vitest.config.ts): a shard
-      # sees a slice of the callers, so only the merged report can judge them.
+      # Thresholds are skipped on a shard (vitest.config.ts keys that on the
+      # `--shard` flag): a shard sees a slice of the callers, so only the
+      # merged report can judge them.
       - name: Run tests (shard ${{ matrix.shard }}/${{ strategy.job-total }}) with coverage
         run: >
           pnpm vitest run --coverage
           --reporter=default --reporter=blob
           --shard=${{ matrix.shard }}/${{ strategy.job-total }}
-        env:
-          VITEST_SKIP_COVERAGE_THRESHOLDS: 1
 
       - name: Upload blob report
         if: always()
@@ -164,13 +165,19 @@ jobs:
           name: vitest-blob-${{ matrix.shard }}
           # Vitest 5 writes blob reports here (not `.vitest-reports/`).
           path: .vitest/blob/
-          retention-days: 1
+          # Long enough that `gh run rerun --failed` days later still finds the
+          # blobs of the shards it did not rerun; the merge step below also
+          # refuses to run on fewer blobs than shards.
+          retention-days: 7
           if-no-files-found: error
+          overwrite: true
 
   tests:
     name: Tests
     needs: tests-shard
-    if: always()
+    # Not `always()`: that is true on a CANCELLED run too, and every superseded
+    # PR push would then spend a checkout+install to report "cancelled".
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -220,6 +227,21 @@ jobs:
           echo "::error::tests-shard result is '${{ needs.tests-shard.result }}'"
           exit 1
 
+      # A rerun after the artifacts expired, or a download that matched fewer
+      # artifacts than shards, would merge a PARTIAL suite and judge the auth
+      # thresholds on half the callers. Refuse unless every shard's blob is here.
+      - name: Require one blob per shard
+        run: |
+          # Vitest names each blob `blob-<index>-<total>.json`, so the files
+          # themselves say how many shards there were.
+          total=$(ls .vitest/blob/blob-*.json | head -1 | sed -E 's/.*blob-[0-9]+-([0-9]+)\.json/\1/')
+          missing=0
+          for i in $(seq 1 "$total"); do
+            [ -f ".vitest/blob/blob-$i-$total.json" ] || { echo "::error::blob-$i-$total.json is missing"; missing=1; }
+          done
+          echo "shards=$total blobs=$(ls .vitest/blob/blob-*.json | wc -l | tr -d ' ')"
+          [ "$missing" -eq 0 ]
+
       # Merges every shard's results into one report and applies the scoped
       # auth coverage thresholds from vitest.config.ts (only the auth modules
       # listed there are instrumented; unrelated files can never fail this).
@@ -227,16 +249,23 @@ jobs:
       - name: Merge shard reports and apply scoped auth coverage gate
         run: pnpm vitest run --merge-reports --coverage
 
+      # A threshold glob that matches no file in the merged map passes
+      # silently. Prove every gated file was actually judged.
+      - name: Assert every gated file is in the merged coverage report
+        run: pnpm tsx scripts/assert-gated-coverage.ts
+
   # Same shape as the vitest shards: ~1,900 stories at ~0.15s each on a
   # 4-vCPU runner is the whole job, and the runner is not worker-bound
   # (--maxWorkers=100% measured no faster than 50%). Each shard builds the
-  # static Storybook itself (~6s) rather than passing it between jobs.
+  # static Storybook itself (~13s) rather than passing it between jobs.
   storybook-shard:
     name: Storybook Tests (shard ${{ matrix.shard }}/${{ strategy.job-total }})
     runs-on: ubuntu-latest
     timeout-minutes: 15
     strategy:
       fail-fast: false
+      # To add a shard, append here AND in the other matrix below; the fan-in
+      # jobs read the count from strategy.job-total.
       matrix:
         shard: [1, 2]
 
@@ -287,7 +316,7 @@ jobs:
   storybook:
     name: Storybook Tests
     needs: storybook-shard
-    if: always()
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
