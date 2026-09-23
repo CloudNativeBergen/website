@@ -1,28 +1,6 @@
 import { defineConfig } from 'vitest/config'
 import path from 'path'
 
-const INCLUDE = ['**/__tests__/**/*.test.ts?(x)', '**/?(*.)+(spec|test).ts?(x)']
-
-/** Tests that reassign `process.env.TZ` mid-run; see `projects` below. */
-const TZ_MUTATING_TESTS = [
-  '__tests__/lib/time.test.ts',
-  '__tests__/lib/program/time-utils.test.ts',
-]
-
-const EXCLUDE = [
-  'node_modules',
-  '.next',
-  'storybook-static',
-  // Ignore copies of the suite living inside git worktrees (e.g. those
-  // created under .claude/worktrees/*). Without this, the `**/__tests__/**`
-  // include glob picks up stale duplicate suites and reports false failures.
-  '**/worktrees/**',
-  '.claude/worktrees/**',
-  // Playwright e2e specs (e2e/*.spec.ts) are run by `pnpm test:e2e`, not
-  // vitest; the `**/*.spec.ts` include glob would otherwise pick them up.
-  'e2e/**',
-]
-
 export default defineConfig({
   // Redirect Vite's .env loading to a directory without .env files.
   // This prevents EPERM crashes in sandboxed/CI environments that can't
@@ -73,39 +51,21 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
-    // `include` lives on the projects, not here: `extends: true` CONCATENATES
-    // arrays, so a root include would leak into the forks project and run the
-    // whole suite twice.
-    exclude: EXCLUDE,
-    setupFiles: ['./vitest.setup.ts'],
-    // Two pools. Vitest's phase breakdown for this suite is ~85% per-file
-    // fixed cost (import, setup, environment) and ~15% test bodies, and a
-    // worker THREAD pays far less of that than a forked process: the whole
-    // suite ran 118s -> 84s locally on the switch. Threads have one hard
-    // limit — `process.env.TZ` is read once per process, so a test that
-    // mutates it at runtime silently sees the old zone. The two files that do
-    // exactly that stay on `forks`; everything else runs on `threads`.
-    // Root `exclude`/`coverage`/aliases apply to both via `extends: true`
-    // (arrays concatenate, so each project's exclude ADDS to the root list).
-    projects: [
-      {
-        extends: true,
-        test: {
-          name: 'threads',
-          pool: 'threads',
-          include: INCLUDE,
-          exclude: [...TZ_MUTATING_TESTS],
-        },
-      },
-      {
-        extends: true,
-        test: {
-          name: 'forks-tz',
-          pool: 'forks',
-          include: TZ_MUTATING_TESTS,
-        },
-      },
+    include: ['**/__tests__/**/*.test.ts?(x)', '**/?(*.)+(spec|test).ts?(x)'],
+    exclude: [
+      'node_modules',
+      '.next',
+      'storybook-static',
+      // Ignore copies of the suite living inside git worktrees (e.g. those
+      // created under .claude/worktrees/*). Without this, the `**/__tests__/**`
+      // include glob picks up stale duplicate suites and reports false failures.
+      '**/worktrees/**',
+      '.claude/worktrees/**',
+      // Playwright e2e specs (e2e/*.spec.ts) are run by `pnpm test:e2e`, not
+      // vitest; the `**/*.spec.ts` include glob would otherwise pick them up.
+      'e2e/**',
     ],
+    setupFiles: ['./vitest.setup.ts'],
     server: {
       deps: {
         // The inline-svg Studio plugin is externalized by default, which makes

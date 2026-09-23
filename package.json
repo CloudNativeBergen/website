@@ -29,7 +29,7 @@
     "build-storybook": "storybook build",
     "build-storybook:test": "storybook build --test",
     "storybook:test": "test-storybook --maxWorkers=50%",
-    "storybook:test-ci": "concurrently -k -s first -n \"SB,TEST\" -c \"magenta,blue\" \"pnpm build-storybook:test --quiet && npx http-server storybook-static --port 6006 --silent\" \"wait-on tcp:127.0.0.1:6006 && test-storybook --maxWorkers=100%\"",
+    "storybook:test-ci": "concurrently -k -s first -n \"SB,TEST\" -c \"magenta,blue\" \"pnpm build-storybook:test --quiet && npx http-server storybook-static --port 6006 --silent\" \"wait-on tcp:127.0.0.1:6006 && pnpm storybook:test\"",
     "sanity": "sanity",
     "manage-orphaned-files": "tsx scripts/manage-orphaned-files.ts",
     "analyze-code": "tsx scripts/analyze-code-lines.ts",
