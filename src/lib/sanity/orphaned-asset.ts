@@ -20,9 +20,11 @@ export interface OrphanedAssetDeletion {
  * fetchable on `cdn.sanity.io` forever. It is only safe to delete once no
  * document of any type, in any tenant, references the asset — a gallery image,
  * a post or another speaker may share it — so the reference count is checked
- * first and a non-zero count keeps the asset and reports it. `references()`
- * sees drafts and release versions too. A failed count (`-1`) also keeps it:
- * fail closed.
+ * first and a non-zero count keeps the asset and reports it. The count runs
+ * under the `raw` perspective so it sees drafts and release versions too; the
+ * API's default perspective became `published` at v2025-02-19, which would
+ * read a confident 0 for an asset only a draft still uses. A failed count
+ * (`-1`) also keeps it: fail closed.
  */
 async function deleteAssetIfOrphaned(
   assetId: string | null,
@@ -37,7 +39,7 @@ async function deleteAssetIfOrphaned(
       // an object because Sanity errors on a bare scalar count projection.
       groq`{ "n": count(*[references($assetId)]) }`,
       { assetId },
-      { cache: 'no-store' },
+      { cache: 'no-store', perspective: 'raw' },
     )
     remainingReferences = result?.n ?? -1
   } catch {

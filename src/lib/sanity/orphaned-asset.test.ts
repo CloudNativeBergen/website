@@ -32,14 +32,17 @@ beforeEach(() => {
 })
 
 describe.each(cases)('$name', ({ fn, id }) => {
-  it('sends the unscoped, uncached reference count: no type or tenant filter', async () => {
+  it('sends the unscoped, uncached, raw-perspective reference count: no type or tenant filter', async () => {
     fetchMock.mockResolvedValue({ n: 0 })
     await fn(id)
     expect(fetchMock).toHaveBeenCalledTimes(1)
     expect(fetchMock).toHaveBeenCalledWith(
       '{ "n": count(*[references($assetId)]) }',
       { assetId: id },
-      { cache: 'no-store' },
+      // `raw` is pinned per request: the API's default perspective became
+      // `published` at v2025-02-19, which hides draft-only and release-version
+      // references and would read a confident 0 for an asset a draft still uses.
+      { cache: 'no-store', perspective: 'raw' },
     )
   })
 
