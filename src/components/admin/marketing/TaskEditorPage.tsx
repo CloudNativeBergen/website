@@ -671,6 +671,7 @@ function PublishingSection({
           variant={v}
           postAttachments={variant.post.attachments}
           conferenceDomains={variant.conferenceDomains}
+          platformZone={variant.platformZone ?? null}
           saving={markPosted.isPending}
           error={manualError}
           onMarkPosted={(url) => {

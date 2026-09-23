@@ -40,6 +40,8 @@ export interface ManualPostViewProps {
    * view already cannot be refused here (see {@link ManualPostView}).
    */
   conferenceDomains?: readonly string[]
+  /** The platform zone as the server resolved it; see `PublishContext`. */
+  platformZone?: string | null
 }
 
 const defaultImageSrc = (asset: SocialPostAttachment) =>
@@ -60,6 +62,7 @@ export function ManualPostView({
   error = null,
   imageSrc = defaultImageSrc,
   conferenceDomains = [],
+  platformZone = null,
 }: ManualPostViewProps) {
   const platform = SOCIAL_PLATFORM_LABELS[variant.platform]
   const constraints = getPlatformConstraints(variant.platform)
@@ -121,7 +124,7 @@ export function ManualPostView({
    */
   const strayInBody =
     placement === 'comment' && variant.status !== 'published'
-      ? ownDomainUrlsIn(variant.body, conferenceDomains)
+      ? ownDomainUrlsIn(variant.body, conferenceDomains, platformZone)
       : []
   const copyText = linkAppended ? `${variant.body}\n\n${link}` : variant.body
   const copyLength = constraints

@@ -129,22 +129,32 @@ function canonicalHost(host: string): string | null {
  *   `konf.run` is not on the Public Suffix List, so by registrable domain
  *   every hosted tenant would be one site and a post naming another
  *   conference's edition, or the platform itself, would be refused as ours.
- *   The zone comes from `PLATFORM_DOMAIN_SUFFIX`, so this last exclusion
- *   applies where that is set: on the server, which is what refuses.
+ *   The zone is `PLATFORM_DOMAIN_SUFFIX`; the server resolves it and hands
+ *   it to the browser in the editor read (`platformZone`), so the live
+ *   editor and the router agree — the editor disables Save on an issue, so
+ *   a stricter browser rule would block copy the server accepts.
  *
  * A host with no registrable domain (`localhost`, an IP) matches exactly. The
  * entry's `:port` is dropped first: a dev entry such as `localhost:3000`
  * carries one and `conferenceBaseUrl` KEEPS it in the links it derives, while
  * `URL.hostname` never does.
  */
-function isOwnDomain(host: string, domains: readonly string[]): boolean {
-  const zone = platformDomainSuffix()
+function isOwnDomain(
+  host: string,
+  domains: readonly string[],
+  platformZone: string | null | undefined,
+): boolean {
+  const zone =
+    platformZone === undefined ? platformDomainSuffix() : platformZone
   return domains.some((entry) => {
     const raw = normalizeDomain(entry).replace(/:\d+$/, '')
     if (!raw || raw.startsWith('*.')) return false
     const e = canonicalHost(raw)
     if (!e) return false
-    if (host === e || host.endsWith(`.${e}`)) return true
+    if (host === e) return true
+    // An entry that IS the platform zone (the operator's own conference)
+    // owns the apex alone, never the tenant hosts minted under it.
+    if (host.endsWith(`.${e}`)) return e !== zone
     const apex = registrableDomain(e)
     if (!apex || apex === e) return false
     if (zone !== null && apex === zone) return false
@@ -160,6 +170,7 @@ function isOwnDomain(host: string, domains: readonly string[]): boolean {
 export function ownDomainUrlsIn(
   text: string,
   domains: readonly string[] = [],
+  platformZone?: string | null,
 ): string[] {
   if (domains.length === 0) return []
   const found: string[] = []
@@ -176,7 +187,7 @@ export function ownDomainUrlsIn(
     } catch {
       continue
     }
-    if (isOwnDomain(host, domains)) found.push(url)
+    if (isOwnDomain(host, domains, platformZone)) found.push(url)
   }
   return found
 }
@@ -196,9 +207,10 @@ export function firstCommentIssues(
   constraints: PlatformConstraints,
   text: string,
   conferenceDomains: readonly string[] = [],
+  platformZone?: string | null,
 ): ValidationIssue[] {
   if (constraints.linkPlacement !== 'comment') return []
-  const ours = ownDomainUrlsIn(text, conferenceDomains)
+  const ours = ownDomainUrlsIn(text, conferenceDomains, platformZone)
   if (ours.length === 0) return []
   return [
     {
@@ -294,7 +306,12 @@ export function validatePublishInput(
   // exactly the already-materialized drafts this rule exists to catch. URLs
   // on other hosts are someone else's page and are left alone.
   issues.push(
-    ...firstCommentIssues(constraints, input.text, context.conferenceDomains),
+    ...firstCommentIssues(
+      constraints,
+      input.text,
+      context.conferenceDomains,
+      context.platformZone,
+    ),
   )
 
   return issues

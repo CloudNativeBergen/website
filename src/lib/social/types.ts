@@ -195,6 +195,12 @@ export interface SocialVariantEditorData {
    * #1134), which needs to know which hosts are ours.
    */
   conferenceDomains: string[]
+  /**
+   * The platform's hosting zone as the SERVER resolves it, so the browser's
+   * live rule keeps hosted tenants apart exactly as the router does (see
+   * `PublishContext.platformZone`). Optional for fixtures; the read sets it.
+   */
+  platformZone?: string | null
 }
 
 /** The list-view row for the admin variant table. */

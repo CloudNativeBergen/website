@@ -340,6 +340,49 @@ describe('the link is the first comment (#1134)', () => {
     }
   })
 
+  it('takes the zone from the CONTEXT when given, so the browser agrees with the server', () => {
+    // The browser has no PLATFORM_DOMAIN_SUFFIX. With the server's value in
+    // the context the same body validates the same in both places; with
+    // `null` (no zone) the platform apex would count as ours.
+    vi.stubEnv('PLATFORM_DOMAIN_SUFFIX', '')
+    try {
+      const own = ['acme.konf.run']
+      const bodyText = body('See https://konf.run/')
+      expect(
+        validatePublishInput(linkedin, bodyText, {
+          conferenceDomains: own,
+          platformZone: 'konf.run',
+        }),
+      ).toEqual([])
+      expect(
+        validatePublishInput(linkedin, bodyText, {
+          conferenceDomains: own,
+          platformZone: null,
+        }).map((i) => i.field),
+      ).toEqual(['body'])
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
+  it('an entry that IS the platform zone owns the apex alone, never the tenants under it', () => {
+    // The operator's own conference may list `konf.run`; that must not make
+    // every tenant's edition its site.
+    const ctx = { conferenceDomains: ['konf.run'], platformZone: 'konf.run' }
+    expect(
+      validatePublishInput(linkedin, body('https://konf.run/pricing'), ctx).map(
+        (i) => i.field,
+      ),
+    ).toEqual(['body'])
+    expect(
+      validatePublishInput(
+        linkedin,
+        body('https://acme.konf.run/tickets'),
+        ctx,
+      ),
+    ).toEqual([])
+  })
+
   it('compares IDN hosts the way the parser writes them', () => {
     // `URL.hostname` is punycode; a `domains[]` entry is typed in Unicode.
     for (const [entry, url] of [

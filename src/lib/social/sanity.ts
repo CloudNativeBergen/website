@@ -5,6 +5,7 @@ import { outcomeMayBeLive } from './state-machine'
 import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
 import { scopedFetch } from '@/lib/sanity/scoped'
 import { verifiedDomains } from '@/lib/domain-verification/routing'
+import { platformDomainSuffix } from '@/lib/domain-verification/platform'
 import { getCurrentDateTime } from '@/lib/time'
 import { placeholderIssues } from './schedule-check'
 import type { ValidationIssue } from './provider/types'
@@ -771,12 +772,15 @@ export async function getSocialVariantEditorData(
     conferenceDomains: await verifiedDomains(
       normalizeDomainList(row.conferenceDomains),
     ),
+    platformZone: platformDomainSuffix(),
   }
 }
 
 /**
  * The conference's `domains[]` as the first-comment rule (spec §3.1) reads
- * them for a mutation: UNCACHED, by the id the request already resolved.
+ * them for a mutation: UNCACHED, by the id the request already resolved. A
+ * failed read (or, under routing enforcement, a failed verification read)
+ * propagates and fails the mutation; only the publish tick fails open.
  * The cached conference loader can hold a list edited in the hosted Studio
  * for as long as its tag lives, and the editor's projection is live — so a
  * save could refuse a domain the organizer had just removed, or accept one

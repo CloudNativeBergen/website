@@ -28,6 +28,8 @@ export interface VariantEditorProps {
   constraints: PlatformConstraints | null
   /** The conference's own domains, for the rules that depend on them. */
   conferenceDomains?: readonly string[]
+  /** The platform zone as the server resolved it; see `PublishContext`. */
+  platformZone?: string | null
   postAttachments: SocialPostAttachment[]
   /** ISO instant the variant follows when timing is `default`. */
   postDefaultScheduledAt: string | null
@@ -82,6 +84,7 @@ export function VariantEditor({
   platform,
   constraints,
   conferenceDomains,
+  platformZone = null,
   postAttachments,
   postDefaultScheduledAt,
   value,
@@ -110,8 +113,9 @@ export function VariantEditor({
         constraints,
         postAttachments,
         conferenceDomains,
+        platformZone,
       ),
-    [value, constraints, postAttachments, conferenceDomains],
+    [value, constraints, postAttachments, conferenceDomains, platformZone],
   )
   const overLimit =
     constraints !== null && validation.length > constraints.maxLength

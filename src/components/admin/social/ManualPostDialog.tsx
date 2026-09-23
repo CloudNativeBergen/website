@@ -93,6 +93,7 @@ export function ManualPostDialog({
           variant={loaded.variant}
           postAttachments={loaded.post.attachments}
           conferenceDomains={loaded.conferenceDomains}
+          platformZone={loaded.platformZone ?? null}
           saving={
             markPosted.isPending &&
             markPosted.variables?.variantId === loaded.variant._id

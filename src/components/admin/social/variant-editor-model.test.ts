@@ -60,6 +60,31 @@ describe('editorValueFrom', () => {
 })
 
 describe('validateEditorValue', () => {
+  it('applies the SERVER-resolved platform zone, so the browser never blocks a save the router accepts', () => {
+    // The browser has no PLATFORM_DOMAIN_SUFFIX. A hosted tenant linking the
+    // platform's own apex is fine on the server; without the zone the live
+    // rule would call it ours and Save would be disabled on the issue.
+    const linking = { ...base, body: 'See https://konf.run/' }
+    const withZone = validateEditorValue(
+      linking,
+      PLATFORM_CONSTRAINTS.linkedin,
+      [],
+      ['acme.konf.run'],
+      'konf.run',
+    )
+    expect(withZone.byField.body ?? []).toEqual([])
+    const withoutZone = validateEditorValue(
+      linking,
+      PLATFORM_CONSTRAINTS.linkedin,
+      [],
+      ['acme.konf.run'],
+      null,
+    )
+    expect(withoutZone.byField.body).toEqual([
+      expect.stringContaining('first comment'),
+    ])
+  })
+
   it('counts Bluesky graphemes and flags a body over the limit', () => {
     const v = validateEditorValue(
       { ...base, body: '🇳🇴'.repeat(301) },

@@ -85,6 +85,14 @@ export interface PublishInput {
  */
 export interface PublishContext {
   conferenceDomains?: readonly string[]
+  /**
+   * The platform's own hosting zone (`PLATFORM_DOMAIN_SUFFIX`), which the
+   * first-comment rule needs to keep hosted tenants apart. `undefined` means
+   * "resolve it from the environment" — right on the server, and `null` in
+   * the browser, where that variable does not exist. The editor read carries
+   * the server's value so the live editor and the router agree.
+   */
+  platformZone?: string | null
 }
 
 export type PublishFailureKind =
