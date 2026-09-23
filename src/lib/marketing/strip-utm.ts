@@ -56,10 +56,13 @@ export function withoutUtm(href: string): string | null {
  * patch treats this as an external write: it syncs its URL and re-attaches its
  * own internal state itself. Every other key is kept.
  */
+const ROUTER_MARKERS: ReadonlySet<string> = new Set(['__NA', '_N'])
+
 function withoutRouterMarkers(state: unknown): unknown {
   if (typeof state !== 'object' || state === null) return state
-  const { __NA: _na, _N: _n, ...rest } = state as Record<string, unknown>
-  return rest
+  return Object.fromEntries(
+    Object.entries(state).filter(([key]) => !ROUTER_MARKERS.has(key)),
+  )
 }
 
 /**
