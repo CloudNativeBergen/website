@@ -19,6 +19,7 @@ import {
   getSocialPostEditorInputs,
   getSocialPostVariant,
   getSocialVariantEditorData,
+  getConferenceDomainsForRule,
   listSocialPostVariants,
   sanitySocialVariantStore,
   updateSocialPostDefaultTime,
@@ -67,8 +68,8 @@ const EDITABLE_STATUSES: readonly VariantStatus[] = [
  * cannot judge, and every other rule still applies.
  */
 async function currentConferenceDomains(): Promise<readonly string[]> {
-  const { conference } = await getConferenceForCurrentDomain()
-  return conference?.domains ?? []
+  // UNCACHED, by the resolved id: see `getConferenceDomainsForRule`.
+  return getConferenceDomainsForRule(await resolveConferenceId())
 }
 
 function issuesToError(issues: ValidationIssue[]): TRPCError {

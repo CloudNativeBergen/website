@@ -667,6 +667,7 @@ function PublishingSection({
         <ManualPostView
           variant={v}
           postAttachments={variant.post.attachments}
+          conferenceDomains={variant.conferenceDomains}
           saving={markPosted.isPending}
           error={manualError}
           onMarkPosted={(url) => {

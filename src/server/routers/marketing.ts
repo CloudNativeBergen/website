@@ -44,6 +44,7 @@ import {
 import { handoffStudioAttachment } from '@/lib/social/sanity'
 import { createHash, randomUUID } from 'node:crypto'
 import { TRPCError } from '@trpc/server'
+import { verifiedDomains } from '@/lib/domain-verification/routing'
 import { adminProcedure, resolveConferenceId, router } from '@/server/trpc'
 import { loadReport } from '@/lib/marketing/report'
 import { buildReportCsv } from '@/lib/marketing/report-csv'
@@ -1355,7 +1356,12 @@ export const marketingRouter = router({
           const issues = await scheduleIssues(
             { ...v, link },
             post.attachments,
-            { taskOwned: true, conferenceDomains: conference.domains ?? [] },
+            {
+              taskOwned: true,
+              conferenceDomains: await verifiedDomains(
+                conference.domains ?? [],
+              ),
+            },
           )
           if (issues.length > 0) {
             throw new TRPCError({

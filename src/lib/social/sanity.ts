@@ -3,6 +3,7 @@ import { groq } from 'next-sanity'
 import { mediaDeletionBlockers } from './media-deletion'
 import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
 import { scopedFetch } from '@/lib/sanity/scoped'
+import { verifiedDomains } from '@/lib/domain-verification/routing'
 import { getCurrentDateTime } from '@/lib/time'
 import { placeholderIssues } from './schedule-check'
 import type { ValidationIssue } from './provider/types'
@@ -209,19 +210,38 @@ export const sanitySocialVariantStore: SocialVariantStore = {
       now: now.toISOString(),
       staleBefore: staleBefore.toISOString(),
     })
+    // One verification read per conference per tick, not per variant: the
+    // due list is grouped by conference already.
+    const verifiedByConference = new Map<string, Promise<string[]>>()
+    const domainsFor = (raw: {
+      conferenceId: string | null
+      conferenceDomains: (string | null)[] | null
+    }) => {
+      const key = raw.conferenceId ?? ''
+      let pending = verifiedByConference.get(key)
+      if (!pending) {
+        pending = verifiedDomains(normalizeDomainList(raw.conferenceDomains))
+        verifiedByConference.set(key, pending)
+      }
+      return pending
+    }
+    const dueVariants = await Promise.all(
+      (result?.due ?? [])
+        .flat()
+        .map(async (raw): Promise<PublishableVariant> => ({
+          ...normalizeVariant(raw),
+          postAttachments: normalizePostAttachments(raw.postAttachments),
+          conferenceDomains: await domainsFor(raw),
+          marketingTaskId: raw.marketingTaskId,
+          postCreatedBy:
+            typeof raw.postCreatedBy === 'string' &&
+            raw.postCreatedBy.length > 0
+              ? raw.postCreatedBy
+              : null,
+        })),
+    )
     return {
-      due: (result?.due ?? []).flat().map((raw): PublishableVariant => ({
-        ...normalizeVariant(raw),
-        postAttachments: normalizePostAttachments(raw.postAttachments),
-        conferenceDomains: (raw.conferenceDomains ?? []).filter(
-          (d): d is string => typeof d === 'string' && d.length > 0,
-        ),
-        marketingTaskId: raw.marketingTaskId,
-        postCreatedBy:
-          typeof raw.postCreatedBy === 'string' && raw.postCreatedBy.length > 0
-            ? raw.postCreatedBy
-            : null,
-      })),
+      due: dueVariants,
       stale: (result?.stale ?? []).map(normalizeVariant),
     }
   },
@@ -622,10 +642,40 @@ export async function getSocialVariantEditorData(
   return {
     variant: normalizeVariant(row.variant),
     post: normalizePostInputs(row.post),
-    conferenceDomains: (row.conferenceDomains ?? []).filter(
-      (d): d is string => typeof d === 'string' && d.length > 0,
+    conferenceDomains: await verifiedDomains(
+      normalizeDomainList(row.conferenceDomains),
     ),
   }
+}
+
+/**
+ * The conference's `domains[]` as the first-comment rule (spec §3.1) reads
+ * them for a mutation: UNCACHED, by the id the request already resolved.
+ * The cached conference loader can hold a list edited in the hosted Studio
+ * for as long as its tag lives, and the editor's projection is live — so a
+ * save could refuse a domain the organizer had just removed, or accept one
+ * they had just added while the publish tick, reading live, refused it.
+ */
+export async function getConferenceDomainsForRule(
+  conferenceId: string,
+): Promise<readonly string[]> {
+  const domains = await scopedFetch<(string | null)[] | null>(
+    clientReadUncached,
+    { conferenceId },
+    `*[_type == "conference" && _id == $conferenceId][0].domains`,
+    { conferenceId },
+    { cache: 'no-store' },
+  )
+  return verifiedDomains(normalizeDomainList(domains))
+}
+
+/** `conference->domains` as projected: drop nulls and empty strings. */
+function normalizeDomainList(
+  raw: (string | null)[] | null | undefined,
+): string[] {
+  return (raw ?? []).filter(
+    (d): d is string => typeof d === 'string' && d.length > 0,
+  )
 }
 
 /**

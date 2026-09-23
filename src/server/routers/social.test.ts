@@ -39,6 +39,7 @@ const h = vi.hoisted(() => ({
   transition: vi.fn(),
   resolveAdapter: vi.fn(),
   getSocialVariantEditorData: vi.fn(),
+  getConferenceDomains: vi.fn(),
   getSocialPostEditorInputs: vi.fn(),
   updateSocialVariantContent: vi.fn(),
   addSocialPostAttachment: vi.fn(),
@@ -60,6 +61,7 @@ vi.mock('@/lib/social/sanity', () => ({
   getSocialPostDefaultTime: h.getSocialPostDefaultTime,
   sanitySocialVariantStore: { transition: h.transition },
   getSocialVariantEditorData: h.getSocialVariantEditorData,
+  getConferenceDomainsForRule: h.getConferenceDomains,
   getSocialPostEditorInputs: h.getSocialPostEditorInputs,
   updateSocialVariantContent: h.updateSocialVariantContent,
   addSocialPostAttachment: h.addSocialPostAttachment,
@@ -139,6 +141,7 @@ function variant(
 
 beforeEach(() => {
   vi.clearAllMocks()
+  h.getConferenceDomains.mockResolvedValue([])
   h.getConference.mockResolvedValue({
     conference: { _id: CONF_A, organization: { _ref: ORG_A } },
     domain: 'localhost',
@@ -1160,15 +1163,29 @@ describe('LinkedIn: the link is the first comment', () => {
   const OURS =
     'https://cloudnativebergen.no/tickets?utm_source=linkedin&utm_medium=social&utm_campaign=earlyBird&utm_content=ticketsOpen%3Alinkedin'
   const withDomains = () =>
+    h.getConferenceDomains.mockResolvedValue(['cloudnativebergen.no'])
+
+  it('reads the domains UNCACHED by the resolved conference id, not from the cached conference', async () => {
+    // The cached loader can hold a list edited in the hosted Studio for as
+    // long as its tag lives. Here the cached conference carries a STALE list
+    // with the domain removed, the live read still has it: the live one
+    // decides. Also proves the rule never takes the id from the client.
     h.getConference.mockResolvedValue({
-      conference: {
-        _id: CONF_A,
-        organization: { _ref: ORG_A },
-        domains: ['cloudnativebergen.no'],
-      },
+      conference: { _id: CONF_A, organization: { _ref: ORG_A }, domains: [] },
       domain: 'cloudnativebergen.no',
       error: null,
     })
+    withDomains()
+    h.getSocialPostVariant.mockResolvedValue(
+      variant({ body: `Tickets are live → ${OURS}`, link: OURS }),
+    )
+    await expect(
+      social().scheduleVariant({ variantId: 'variant-ours' }),
+    ).rejects.toMatchObject({
+      message: expect.stringContaining('first comment'),
+    })
+    expect(h.getConferenceDomains).toHaveBeenCalledWith(CONF_A)
+  })
 
   const save = (body: string, link: string | null = null) =>
     social().updateVariant({

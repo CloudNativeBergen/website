@@ -210,7 +210,6 @@ describe('the link is the first comment (#1134)', () => {
       'https://cloudnativebergen.no/tickets',
       'https://cloudnativebergen.no/cfp?utm_source=linkedin&utm_campaign=cfp',
       'http://cloudnativebergen.no/',
-      'https://my.konf.app/x',
     ]) {
       const issues = validatePublishInput(linkedin, body(`Read more: ${url}`), {
         conferenceDomains: OWN,
@@ -229,7 +228,6 @@ describe('the link is the first comment (#1134)', () => {
       'https://cloudnativebergen.no:8443/tickets',
       'https://x@cloudnativebergen.no/tickets',
       'https://www.cloudnativebergen.no/tickets',
-      'https://sub.konf.app/x',
     ]) {
       const issues = validatePublishInput(linkedin, body(`Read more: ${url}`), {
         conferenceDomains: OWN,
@@ -277,6 +275,83 @@ describe('the link is the first comment (#1134)', () => {
       ).toEqual(['body'])
       expect(issues[0].message, entry).toContain(url)
     }
+  })
+
+  it('treats the SITE as ours, not only the listed host: apex, www and siblings of the edition entry', () => {
+    // Production lists the edition host (`2026.cloudnativedays.no`). The URL
+    // an organizer types by hand is the apex, which redirects straight to
+    // it; `www.` and a sibling subdomain land on the same site too.
+    for (const url of [
+      'https://cloudnativedays.no/tickets',
+      'https://www.cloudnativedays.no/tickets',
+      'https://blog.cloudnativedays.no/post',
+    ]) {
+      const issues = validatePublishInput(linkedin, body(`Tickets → ${url}`), {
+        conferenceDomains: ['2026.cloudnativedays.no'],
+      })
+      expect(
+        issues.map((i) => i.field),
+        url,
+      ).toEqual(['body'])
+    }
+  })
+
+  it('reads a fully-qualified host (trailing dot) and a bare www. host as the same site', () => {
+    // WHATWG parsing keeps the terminal dot, DNS does not; LinkedIn
+    // autolinks a bare `www.` host exactly as a full URL.
+    for (const url of [
+      'https://cloudnativebergen.no./tickets',
+      'www.cloudnativebergen.no/tickets',
+    ]) {
+      const issues = validatePublishInput(linkedin, body(`Tickets → ${url}`), {
+        conferenceDomains: OWN,
+      })
+      expect(
+        issues.map((i) => i.field),
+        url,
+      ).toEqual(['body'])
+      expect(issues[0].message, url).toContain(url)
+    }
+  })
+
+  it('ignores WILDCARD entries: a hosting zone is not a site, and other tenants share it', () => {
+    // Production lists `*.vercel.app` for previews. Every speaker demo on the
+    // same zone would otherwise read as ours — and on `*.konf.app` so would
+    // another tenant's edition.
+    for (const [entries, url] of [
+      [['*.vercel.app'], 'https://speaker-demo.vercel.app/'],
+      [OWN, 'https://sub.konf.app/x'],
+      [OWN, 'https://my.konf.app/x'],
+    ] as const) {
+      expect(
+        validatePublishInput(linkedin, body(`See ${url}`), {
+          conferenceDomains: entries,
+        }),
+        url,
+      ).toEqual([])
+    }
+  })
+
+  it('keeps sites on a shared PRIVATE suffix apart: our vercel.app project is not every vercel.app project', () => {
+    expect(
+      validatePublishInput(linkedin, body('https://cndn.vercel.app/tickets'), {
+        conferenceDomains: ['cndn.vercel.app'],
+      }).map((i) => i.field),
+    ).toEqual(['body'])
+    expect(
+      validatePublishInput(linkedin, body('https://demo.vercel.app/tickets'), {
+        conferenceDomains: ['cndn.vercel.app'],
+      }),
+    ).toEqual([])
+  })
+
+  it('names the Recipe as the place to fix, because materializing keeps re-creating the link', () => {
+    const [issue] = validatePublishInput(
+      linkedin,
+      body('https://cloudnativebergen.no/tickets'),
+      { conferenceDomains: OWN },
+    )
+    expect(issue.message).toContain('Recipe')
   })
 
   it('is not fooled by a host that merely ENDS with ours', () => {

@@ -1,4 +1,5 @@
-import { domainServesHost, normalizeDomain } from '@/lib/conference/domains'
+import { getDomain } from 'tldts'
+import { normalizeDomain } from '@/lib/conference/domains'
 import type { SocialPlatform } from '../types'
 import type {
   LengthCounting,
@@ -77,34 +78,54 @@ export function countLength(text: string, counting: LengthCounting): number {
 }
 
 /**
- * Every http(s) URL in a run of text. Deliberately greedy on the URL body and
- * then trimmed of trailing sentence punctuation, because copy written by hand
- * ends links with a full stop or a closing bracket far more often than a URL
- * legitimately ends with one.
+ * Every http(s) URL in a run of text — and every bare `www.` host, which
+ * LinkedIn autolinks exactly as it does a scheme-carrying URL. Deliberately
+ * greedy on the URL body and then trimmed of trailing sentence punctuation,
+ * because copy written by hand ends links with a full stop or a closing
+ * bracket far more often than a URL legitimately ends with one.
  */
-const URL_IN_TEXT = /https?:\/\/[^\s<>"'`\\]+/gi
+const URL_IN_TEXT = /(?:https?:\/\/|www\.)[^\s<>"'`\\]+/gi
 
 function trimTrailingPunctuation(url: string): string {
   return url.replace(/[.,;:!?)\]}'"»…]+$/u, '')
 }
 
 /**
- * True when `host` is the conference's OWN — an exact `domains[]` entry, a
- * host the entry's routing wildcard serves ({@link domainServesHost}, the
- * predicate `getConferenceForDomain` resolves with), or a subdomain of a bare
- * entry (an organizer pasting `www.` of the apex they own).
+ * The registrable domain (eTLD+1) of a host, with the Public Suffix List's
+ * PRIVATE section honoured — so `cndn.vercel.app` is its own site and a
+ * sponsor's `demo.vercel.app` is a different one, exactly as browsers scope
+ * cookies. `null` for IP literals, single-label hosts (`localhost`) and hosts
+ * that are themselves a public suffix.
+ */
+function registrableDomain(host: string): string | null {
+  return getDomain(host, { allowPrivateDomains: true })
+}
+
+/**
+ * True when `host` is on the conference's OWN site: it shares a registrable
+ * domain with a `domains[]` entry. That is what "our site" means editorially
+ * — the edition host `2026.cloudnativedays.no` is listed, and the apex
+ * `cloudnativedays.no` an organizer types by hand redirects straight to it,
+ * as does `www.` and any sibling subdomain. Matching the entry exactly, or
+ * only its subdomains, let the most natural URL through.
  *
- * The entry's `:port` is dropped first. A `domains[]` entry may carry one (a
- * dev entry such as `localhost:3000`, which `conferenceBaseUrl` KEEPS in the
- * links it derives), while `URL.hostname` never does — comparing the two
- * as-is would never match the very URL we generated.
+ * WILDCARD entries (`*.vercel.app`) are hosting zones the routing layer
+ * serves previews from, not a site: they are skipped here, or every
+ * speaker's and sponsor's demo on the same zone would read as ours.
+ *
+ * A host with no registrable domain (`localhost`, an IP) falls back to an
+ * exact match. The entry's `:port` is dropped first: a dev entry such as
+ * `localhost:3000` carries one and `conferenceBaseUrl` KEEPS it in the links
+ * it derives, while `URL.hostname` never does.
  */
 function isOwnDomain(host: string, domains: readonly string[]): boolean {
+  const hostSite = registrableDomain(host)
   return domains.some((entry) => {
     const e = normalizeDomain(entry).replace(/:\d+$/, '')
-    if (!e) return false
-    if (domainServesHost(e, host)) return true
-    return !e.startsWith('*.') && host.endsWith(`.${e}`)
+    if (!e || e.startsWith('*.')) return false
+    if (e === host) return true
+    const entrySite = registrableDomain(e)
+    return hostSite !== null && entrySite !== null && hostSite === entrySite
   })
 }
 
@@ -123,7 +144,13 @@ export function ownDomainUrlsIn(
     const url = trimTrailingPunctuation(match[0])
     let host: string
     try {
-      host = new URL(url).hostname
+      // A bare `www.` host has no scheme for the parser; LinkedIn treats it
+      // as https. A fully-qualified `example.no.` keeps its terminal dot
+      // through WHATWG parsing but resolves to the same name — drop it, or
+      // that spelling would slip past every entry.
+      host = new URL(/^www\./i.test(url) ? `https://${url}` : url).hostname
+        .toLowerCase()
+        .replace(/\.$/, '')
     } catch {
       continue
     }
@@ -154,7 +181,7 @@ export function firstCommentIssues(
   return [
     {
       field: 'body',
-      message: `The link is posted as the first comment, never in the body: remove ${ours.join(', ')} from the text.`,
+      message: `The link is posted as the first comment, never in the body: remove ${ours.join(', ')} from the text. If it came from a Recipe or Template, fix that too, or the next draft will carry it again.`,
     },
   ]
 }

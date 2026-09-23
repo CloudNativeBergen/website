@@ -73,6 +73,7 @@ vi.mock('@/lib/marketing/sanity', () => ({
   deleteTask: h.deleteTask,
 }))
 vi.mock('@/lib/social/sanity', () => ({
+  getConferenceDomainsForRule: vi.fn(async () => []),
   handoffStudioAttachment: h.handoffStudioAttachment,
   getSocialVariantEditorData: h.getSocialVariantEditorData,
   getSocialPostVariant: h.getSocialPostVariant,

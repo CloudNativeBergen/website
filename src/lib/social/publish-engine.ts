@@ -354,11 +354,7 @@ async function dispatch(
     if (issues.length > 0) {
       await settle(
         claimed,
-        {
-          ok: false,
-          kind: 'rejected',
-          message: issues.map((i) => `${i.field}: ${i.message}`).join('; '),
-        },
+        rejectedOutcome(issues),
         store,
         now,
         summary,
@@ -549,6 +545,15 @@ function publishInputFor(
   }
 }
 
+/** Validation issues as the terminal `rejected` outcome, one wording for every caller. */
+function rejectedOutcome(issues: readonly ValidationIssue[]): PublishOutcome {
+  return {
+    ok: false,
+    kind: 'rejected',
+    message: issues.map((i) => `${i.field}: ${i.message}`).join('; '),
+  }
+}
+
 /**
  * Validate defensively, then publish. An adapter that THROWS has broken its
  * contract (typed outcomes are the API), and since we cannot tell whether the
@@ -571,15 +576,7 @@ async function attemptPublish(
       message: `Adapter validate threw: ${error instanceof Error ? error.message : String(error)}`,
     }
   }
-  if (issues.length > 0) {
-    return {
-      ok: false,
-      kind: 'rejected',
-      message: issues
-        .map((issue) => `${issue.field}: ${issue.message}`)
-        .join('; '),
-    }
-  }
+  if (issues.length > 0) return rejectedOutcome(issues)
   try {
     return await adapter.publish(input)
   } catch (error) {

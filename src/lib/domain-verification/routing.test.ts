@@ -8,7 +8,7 @@ vi.mock('./sanity', () => ({
   getDomainVerification: (hostname: string) => getDomainVerification(hostname),
 }))
 
-const { isHostRoutable } = await import('./routing')
+const { isHostRoutable, verifiedDomains } = await import('./routing')
 
 const NOW = new Date('2026-07-01T12:00:00.000Z')
 
@@ -220,5 +220,44 @@ describe('isHostRoutable', () => {
         await isHostRoutable('kubeday.konf.run', ['kubeday.konf.run'], NOW),
       ).toBe(false)
     })
+  })
+})
+
+describe('verifiedDomains — what the first-comment rule may call ours (#1134)', () => {
+  it('passes every claim through while routing is not enforced, without a read', async () => {
+    process.env.DOMAIN_VERIFICATION_ENFORCE_ROUTING = 'false'
+    expect(
+      await verifiedDomains([
+        '2026.example.com',
+        '*.vercel.app',
+        'localhost:3000',
+      ]),
+    ).toEqual(['2026.example.com', '*.vercel.app', 'localhost:3000'])
+    expect(getDomainVerification).not.toHaveBeenCalled()
+  })
+
+  it('under enforcement keeps only routing-eligible claims, and wildcards untouched', async () => {
+    getDomainVerification.mockImplementation(async (hostname) =>
+      hostname === '2026.example.com'
+        ? record({ hostname })
+        : hostname === 'pending.example.com'
+          ? record({ hostname, status: 'pending', verifiedAt: null })
+          : null,
+    )
+    // ON THE VALUE: the unproved claim and the recordless one are gone, the
+    // proved one and the wildcard stay; the dev port is stripped for the read.
+    expect(
+      await verifiedDomains(
+        [
+          '2026.example.com',
+          'pending.example.com',
+          'nothing.example.com',
+          '*.vercel.app',
+        ],
+        NOW,
+      ),
+    ).toEqual(['2026.example.com', '*.vercel.app'])
+    await verifiedDomains(['localhost:3000'], NOW)
+    expect(getDomainVerification).toHaveBeenCalledWith('localhost')
   })
 })

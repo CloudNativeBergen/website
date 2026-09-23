@@ -24,6 +24,33 @@ function isRoutingEnforced(env: NodeJS.ProcessEnv = process.env): boolean {
 }
 
 /**
+ * The subset of a conference's `domains[]` claims that count as ITS OWN for
+ * an editorial rule (the first-comment rule, spec §3.1: "the conference's
+ * own verified `domains[]`"). Mirrors the routing gate exactly: with the
+ * flag off every claim counts, as it does for routing today; with it on, a
+ * claim counts only when its record is routing-eligible, so a hostname an
+ * organizer added but has not proved is not "ours" to refuse links to.
+ * Wildcard entries are passed through untouched (the rule ignores them).
+ */
+export async function verifiedDomains(
+  claimed: readonly string[],
+  now: Date = new Date(),
+): Promise<string[]> {
+  if (!isRoutingEnforced()) return [...claimed]
+  const kept: string[] = []
+  for (const entry of claimed) {
+    const normalized = normalizeDomain(entry)
+    if (normalized.startsWith('*.')) {
+      kept.push(entry)
+      continue
+    }
+    const record = await getDomainVerification(normalized.replace(/:\d+$/, ''))
+    if (record && isRoutingEligible(record, now)) kept.push(entry)
+  }
+  return kept
+}
+
+/**
  * May `host` be served by the conference whose `domains[]` matched it?
  *
  * Resolves the `domains[]` ENTRY that produced the match (the exact host, or the

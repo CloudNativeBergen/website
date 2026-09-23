@@ -40,6 +40,7 @@ function variant(
     scheduledAt: '2027-06-01T08:00:00.000Z',
     usesCustomTime: false,
     claimedAt: null,
+    shortCode: null,
     link: OURS,
     attachments: [],
     publishResult: null,
