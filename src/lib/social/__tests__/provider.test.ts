@@ -9,6 +9,13 @@ import {
 import { BlueskyPublishAdapter } from '../provider/bluesky'
 import { BufferPublishAdapter } from '../provider/buffer'
 import { makeVariant } from './memory-store'
+
+// The domain-verification gate the resolver consults for link-card hosts;
+// spied so a test can see whether dispatch paid for it at all.
+const routable = vi.hoisted(() => vi.fn(async () => true))
+vi.mock('@/lib/domain-verification/routing', () => ({
+  isHostRoutable: routable,
+}))
 import type { SocialPlatform } from '../types'
 
 describe('adapter factory and resolver — hardened against stored values', () => {
@@ -121,6 +128,24 @@ describe('LinkedIn through Buffer (#1129)', () => {
       resolveSocialPublishAdapter(linkedin(), secrets),
     ).resolves.toBeNull()
     expect(secrets).toHaveBeenCalledWith(makeVariant().orgId, 'buffer')
+  })
+
+  it('LinkedIn never pays for link-card host checks; Bluesky, which builds cards, does', async () => {
+    routable.mockClear()
+    const domains = ['cloudnativedays.no']
+    const li = await resolveSocialPublishAdapter(
+      { ...makeVariant({ platform: 'linkedin' }), conferenceDomains: domains },
+      async () => bag,
+    )
+    expect(li).toBeInstanceOf(BufferPublishAdapter)
+    expect(routable).not.toHaveBeenCalled()
+
+    const bsky = await resolveSocialPublishAdapter(
+      { ...makeVariant({ platform: 'bluesky' }), conferenceDomains: domains },
+      async () => ({ identifier: 'cndn.bsky.social', appPassword: 'x' }),
+    )
+    expect(bsky).toBeInstanceOf(BlueskyPublishAdapter)
+    expect(routable).toHaveBeenCalledWith('cloudnativedays.no', domains)
   })
 
   it('the factory never builds LinkedIn from an empty bag any more', () => {

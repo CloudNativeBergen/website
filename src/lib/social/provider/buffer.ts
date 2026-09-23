@@ -137,14 +137,23 @@ type Answer =
        */
       code: string | undefined
       /**
-       * An error below the root field (`path` longer than one): the root
-       * resolver RAN — for a create, the post may exist — and a nested
-       * failure nulled the answer on its way up.
+       * An EXECUTION error — one carrying a `path`, even just the root
+       * field's: the resolver started, so for a create the post may exist.
+       * A request-level error (auth, throttle, a malformed document) has no
+       * path: nothing ran.
        */
-      nested: boolean
+      executed: boolean
       message: string
     }
-  | { kind: 'data'; data: Record<string, unknown> }
+  | {
+      kind: 'data'
+      data: Record<string, unknown>
+      /**
+       * Field errors that came WITH data: a requested field may have been
+       * nulled, so a read built on it is not a verdict.
+       */
+      fieldErrors?: string
+    }
 
 interface ChannelShape {
   service?: unknown
@@ -256,6 +265,14 @@ export class BufferPublishAdapter implements SocialPublishAdapter {
       input: { id: this.credentials.channelId },
     })
     if (answer.kind !== 'data') return checkFailure(answer, this.platform)
+    // A field the check depends on may have been nulled: not a verdict on
+    // the channel, and nothing was created.
+    if (answer.fieldErrors) {
+      return checkFailure(
+        { kind: 'no-answer', message: answer.fieldErrors },
+        this.platform,
+      )
+    }
     const channel = answer.data.channel as ChannelShape | null | undefined
     if (!channel || typeof channel !== 'object') {
       return checkFailure(
@@ -322,9 +339,10 @@ export class BufferPublishAdapter implements SocialPublishAdapter {
     if (answer.kind === 'data') {
       return createPayloadOutcome(answer.data.createPost)
     }
-    // createPost ran and something beneath it failed: whatever the code
-    // says, the post may exist, so no code may authorise a retry.
-    if (answer.kind === 'errors' && answer.nested) {
+    // createPost started executing and failed: whatever the code says,
+    // the post may exist, so no code may authorise a retry. Typed union
+    // refusals (above) stay definitive.
+    if (answer.kind === 'errors' && answer.executed) {
       return ambiguous(answer.message)
     }
     const refused = keyOrThrottleFailure(answer)
@@ -425,7 +443,9 @@ export class BufferPublishAdapter implements SocialPublishAdapter {
       return {
         kind: 'errors',
         code,
-        nested: errors.some((e) => Array.isArray(e.path) && e.path.length > 1),
+        executed: errors.some(
+          (e) => Array.isArray(e.path) && e.path.length > 0,
+        ),
         message: `${operationName}: ${firstMessage ?? 'error'}${code ? ` (${code})` : ''}`,
       }
     }
@@ -435,7 +455,13 @@ export class BufferPublishAdapter implements SocialPublishAdapter {
         message: `${operationName}: answer has no data`,
       }
     }
-    return { kind: 'data', data: data as Record<string, unknown> }
+    return errors.length > 0
+      ? {
+          kind: 'data',
+          data: data as Record<string, unknown>,
+          fieldErrors: `${operationName}: ${firstMessage ?? 'field error'}`,
+        }
+      : { kind: 'data', data: data as Record<string, unknown> }
   }
 }
 
@@ -496,7 +522,14 @@ function confirmOutcome(answer: Answer): ConfirmCheck {
             message: `Buffer post read failed: ${answer.message}`,
           }
     case 'data':
-      return confirmCheckOf(answer.data.post)
+      // `status` or `externalLink` may have been nulled by a field error;
+      // settling on that would lose the URL for good. Read again later.
+      return answer.fieldErrors
+        ? {
+            state: 'unreadable',
+            message: `Buffer post read failed: ${answer.fieldErrors}`,
+          }
+        : confirmCheckOf(answer.data.post)
   }
 }
 

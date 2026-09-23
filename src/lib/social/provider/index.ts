@@ -6,6 +6,7 @@ import type { AdapterResolver } from '../publish-engine'
 import { BlueskyPublishAdapter } from './bluesky'
 import { BlueskyEngagementProvider } from './bluesky-engagement'
 import { BufferPublishAdapter } from './buffer'
+import { getPlatformConstraints } from './constraints'
 import type { SocialEngagementProvider, SocialPublishAdapter } from './types'
 
 export type {
@@ -178,8 +179,15 @@ export const resolveSocialPublishAdapter = async (
     secrets,
   )
   if (!credentials) return null
+  // Only a `card` platform builds a link card; for the rest (LinkedIn's
+  // link is a comment) the domain-verification reads would be pure cost
+  // on the dispatch path.
+  const buildsCards =
+    getPlatformConstraints(variant.platform)?.linkPlacement === 'card'
   return getSocialPublishAdapter(variant.platform, credentials, {
-    linkCardHosts: await linkCardHostsFor(variant.conferenceDomains),
+    linkCardHosts: buildsCards
+      ? await linkCardHostsFor(variant.conferenceDomains)
+      : [],
   })
 }
 

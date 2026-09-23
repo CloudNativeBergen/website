@@ -205,6 +205,27 @@ describe('BufferPublishAdapter — the pinned channel check (spec §2)', () => {
     },
   )
 
+  it('a channel answer with a field error beside it is transient: no verdict on the channel, nothing created', async () => {
+    const { calls, outcome } = await publishWith({
+      channel: {
+        rawBody: {
+          data: {
+            channel: {
+              id: CHANNEL_ID,
+              service: 'linkedin',
+              type: 'page',
+              descriptor: 'LinkedIn Page',
+              linkShortening: { isEnabled: false },
+            },
+          },
+          errors: [{ message: 'partial', path: ['channel', 'descriptor'] }],
+        },
+      },
+    })
+    expect(outcome).toMatchObject({ ok: false, kind: 'transient' })
+    expect(callsNamed(calls, 'CreatePost')).toEqual([])
+  })
+
   it('a 4xx on the check is our bug, not weather: rejected, never retried every tick', async () => {
     const { calls, outcome } = await publishWith({ channel: 'http-400' })
     expect(outcome).toMatchObject({ ok: false, kind: 'rejected' })
@@ -345,6 +366,16 @@ describe('BufferPublishAdapter — failure at create (spec §3.3)', () => {
     expect(outcome).toMatchObject({ ok: false, kind: 'ambiguous' })
   })
 
+  it.each(['RATE_LIMIT_EXCEEDED', 'UNAUTHORIZED'])(
+    'a %s execution error AT createPost (path ["createPost"]) is ambiguous — the resolver started',
+    async (errorCode) => {
+      const { outcome } = await publishWith({
+        create: { errorCode, path: ['createPost'] },
+      })
+      expect(outcome).toMatchObject({ ok: false, kind: 'ambiguous' })
+    },
+  )
+
   it('errors that disagree on their code are ambiguous, never the first one’s verdict', async () => {
     const { outcome } = await publishWith({
       create: {
@@ -466,6 +497,34 @@ describe('BufferPublishAdapter — confirm (spec §3.2)', () => {
       })
     },
   )
+
+  it('sent, but with a field error beside it, is unreadable — the URL it nulled would be lost for good', async () => {
+    buffer({
+      post: {
+        rawBody: {
+          data: {
+            post: {
+              id: POST_ID,
+              status: 'sent',
+              externalLink: null,
+              error: null,
+            },
+          },
+          errors: [
+            {
+              message: 'Could not resolve externalLink',
+              path: ['post', 'externalLink'],
+              extensions: { code: 'UNEXPECTED' },
+            },
+          ],
+        },
+      },
+    })
+    await expect(adapter().confirm(POST_ID)).resolves.toMatchObject({
+      state: 'unreadable',
+      message: expect.stringContaining('externalLink'),
+    })
+  })
 
   it('an error whose fields are not the documented strings is unreadable, not a throw', async () => {
     buffer({
