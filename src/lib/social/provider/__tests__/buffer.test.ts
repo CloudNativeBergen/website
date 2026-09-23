@@ -205,6 +205,19 @@ describe('BufferPublishAdapter — the pinned channel check (spec §2)', () => {
     },
   )
 
+  it('a 4xx on the check is our bug, not weather: rejected, never retried every tick', async () => {
+    const { calls, outcome } = await publishWith({ channel: 'http-400' })
+    expect(outcome).toMatchObject({ ok: false, kind: 'rejected' })
+    expect(callsNamed(calls, 'CreatePost')).toEqual([])
+  })
+
+  it('a refused key reported with the channel field nulled is still credential-expired', async () => {
+    const { outcome } = await publishWith({
+      channel: { errorCode: 'UNAUTHORIZED', nulledField: true },
+    })
+    expect(outcome).toMatchObject({ ok: false, kind: 'credential-expired' })
+  })
+
   it('a check that outlives its call timeout is transient — the create was never sent', async () => {
     const { calls, outcome } = await publishWith(
       { delayMs: { channel: 500 } },
@@ -306,6 +319,11 @@ describe('BufferPublishAdapter — failure at create (spec §3.3)', () => {
     ],
     ['NOT_FOUND in errors[]', { errorCode: 'NOT_FOUND' }, 'rejected'],
     ['UNEXPECTED in errors[]', { errorCode: 'UNEXPECTED' }, 'ambiguous'],
+    [
+      'UNAUTHORIZED with createPost nulled rather than data',
+      { errorCode: 'UNAUTHORIZED', nulledField: true },
+      'credential-expired',
+    ],
     // A 4xx refused the request itself (a malformed document); a 5xx may be
     // a gateway giving up on a create that went through.
     ['HTTP 400', 'http-400' as const, 'rejected'],
@@ -397,10 +415,15 @@ describe('BufferPublishAdapter — confirm (spec §3.2)', () => {
     })
   })
 
-  it('NOT_FOUND → gone', async () => {
-    buffer({ post: { errorCode: 'NOT_FOUND' } })
-    await expect(adapter().confirm(POST_ID)).resolves.toEqual({ state: 'gone' })
-  })
+  it.each([false, true])(
+    'NOT_FOUND → gone (post field nulled: %s)',
+    async (nulledField) => {
+      buffer({ post: { errorCode: 'NOT_FOUND', nulledField } })
+      await expect(adapter().confirm(POST_ID)).resolves.toEqual({
+        state: 'gone',
+      })
+    },
+  )
 
   it.each([
     ['a system error', { errorCode: 'UNEXPECTED' }],

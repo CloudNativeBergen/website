@@ -5,7 +5,6 @@ import type {
   ConfirmCheck,
   PlatformConstraints,
   PublishContext,
-  PublishFailureKind,
   PublishInput,
   PublishOutcome,
   SocialPublishAdapter,
@@ -139,12 +138,7 @@ interface ChannelShape {
   linkShortening?: { isEnabled?: unknown } | null
 }
 
-type Failure = {
-  ok: false
-  kind: PublishFailureKind
-  message: string
-  retryAfter?: Date
-}
+type Failure = Extract<PublishOutcome, { ok: false }>
 
 export class BufferPublishAdapter implements SocialPublishAdapter {
   readonly platform: BufferPlatform
@@ -219,11 +213,12 @@ export class BufferPublishAdapter implements SocialPublishAdapter {
   }
 
   async confirm(vendorPostId: string): Promise<ConfirmCheck> {
-    const fetchImpl: typeof fetch = (url, init) =>
-      this.fetchImpl(url, {
-        ...init,
-        signal: AbortSignal.timeout(this.confirmTimeoutMs),
-      })
+    // Our OWN abort: the engine's timeout only races this read.
+    const fetchImpl = withDeadline(
+      this.fetchImpl,
+      Date.now() + this.confirmTimeoutMs,
+      this.confirmTimeoutMs,
+    )
     const answer = await this.request(fetchImpl, 'GetPost', POST_QUERY, {
       input: { id: vendorPostId },
     })
@@ -251,29 +246,13 @@ export class BufferPublishAdapter implements SocialPublishAdapter {
     const answer = await this.request(fetchImpl, 'GetChannel', CHANNEL_QUERY, {
       input: { id: this.credentials.channelId },
     })
-    const label = SOCIAL_PLATFORM_LABELS[this.platform]
-    const prefix = `Buffer could not check the pinned ${label} channel`
-    switch (answer.kind) {
-      case 'no-answer':
-        return {
-          ok: false,
-          kind: 'transient',
-          message: `${prefix}: ${answer.message}`,
-        }
-      case 'http':
-        return preCreateHttpFailure(answer, prefix)
-      case 'errors':
-        return preCreateErrorsFailure(answer, prefix)
-      case 'data':
-        break
-    }
+    if (answer.kind !== 'data') return checkFailure(answer, this.platform)
     const channel = answer.data.channel as ChannelShape | null | undefined
     if (!channel || typeof channel !== 'object') {
-      return {
-        ok: false,
-        kind: 'transient',
-        message: `${prefix}: no channel in the answer`,
-      }
+      return checkFailure(
+        { kind: 'no-answer', message: 'GetChannel: no channel in the answer' },
+        this.platform,
+      )
     }
     const problems = this.channelProblems(channel)
     if (problems.length === 0) return null
@@ -299,9 +278,12 @@ export class BufferPublishAdapter implements SocialPublishAdapter {
         `it is a ${descriptor}, not a ${label} ${want.typeLabel} — connect the ${want.typeLabel} in Buffer and pin its channel id`,
       )
     }
-    if (channel.linkShortening?.isEnabled !== false) {
+    // A shortened link drops the UTM tags attribution depends on. The schema
+    // makes the flag non-null; anything but `false` is not proof it is off.
+    const shortening = channel.linkShortening?.isEnabled
+    if (shortening !== false) {
       problems.push(
-        'link shortening is on, which drops the UTM tags — turn it off for this channel in Buffer',
+        `${shortening === true ? 'link shortening is on' : 'Buffer did not say link shortening is off'}, and a shortened link drops the UTM tags — turn link shortening off for this channel in Buffer`,
       )
     }
     return problems
@@ -328,52 +310,27 @@ export class BufferPublishAdapter implements SocialPublishAdapter {
 
   /** Spec §3.3, after the create request may have been sent. */
   private createOutcome(answer: Answer): PublishOutcome {
+    if (answer.kind === 'data') {
+      return createPayloadOutcome(answer.data.createPost)
+    }
+    const refused = keyOrThrottleFailure(answer)
+    if (refused) return refused
     switch (answer.kind) {
       case 'no-answer':
-        // A timeout, a dropped connection — or the deadline refusing to
-        // start it, which the budget check above makes unreachable; treated
-        // as sent, the safe direction.
+        // A timeout, a dropped connection, an unreadable body — or the
+        // deadline refusing to start it, which the budget check above makes
+        // unreachable. Treated as sent: the safe direction.
         return ambiguous(answer.message)
       case 'http':
-        if (answer.status === 429) return rateLimited(answer)
-        if (answer.status === 401) {
-          return {
-            ok: false,
-            kind: 'credential-expired',
-            message: buffer401(answer.message),
-          }
-        }
-        // A 4xx other than those refused the request itself; a 5xx may have
-        // been a gateway giving up on a create that went through.
-        return answer.status >= 400 && answer.status < 500
-          ? {
-              ok: false,
-              kind: 'rejected',
-              message: `Buffer refused the post: ${answer.message}`,
-            }
+        // A 4xx refused the request itself (a malformed document); a 5xx may
+        // be a gateway giving up on a create that went through.
+        return answer.status < 500
+          ? rejected(`Buffer refused the post: ${answer.message}`)
           : ambiguous(answer.message)
       case 'errors':
-        switch (answer.code) {
-          case 'UNAUTHORIZED':
-            return {
-              ok: false,
-              kind: 'credential-expired',
-              message: buffer401(answer.message),
-            }
-          case 'RATE_LIMIT_EXCEEDED':
-            return { ok: false, kind: 'rate-limited', message: answer.message }
-          case 'FORBIDDEN':
-          case 'NOT_FOUND':
-            return {
-              ok: false,
-              kind: 'rejected',
-              message: `Buffer refused the post: ${answer.message}`,
-            }
-          default:
-            return ambiguous(answer.message)
-        }
-      case 'data':
-        return createPayloadOutcome(answer.data.createPost)
+        return answer.code === 'FORBIDDEN' || answer.code === 'NOT_FOUND'
+          ? rejected(`Buffer refused the post: ${answer.message}`)
+          : ambiguous(answer.message)
     }
   }
 
@@ -430,10 +387,14 @@ export class BufferPublishAdapter implements SocialPublishAdapter {
       )
     }
     const data = body?.data
-    if (
-      firstError &&
-      (data === null || data === undefined || typeof data !== 'object')
-    ) {
+    // A system error nulls the (non-null) root field, and GraphQL may then
+    // null `data` itself or leave `{ field: null }`: either way no field
+    // carries an answer, so the error is the answer.
+    const answered =
+      data !== null &&
+      typeof data === 'object' &&
+      Object.values(data).some((value) => value !== null && value !== undefined)
+    if (firstError && !answered) {
       return {
         kind: 'errors',
         code: firstError.extensions?.code,
@@ -471,7 +432,7 @@ function createPayloadOutcome(payload: unknown): PublishOutcome {
         : ambiguous('createPost succeeded without a post id')
     }
     case 'UnauthorizedError':
-      return { ok: false, kind: 'credential-expired', message: buffer401(text) }
+      return credentialExpired(text)
     case 'LimitReachedError':
       // A plan or posting limit: a 5-minute retry only burns quota.
       return {
@@ -517,54 +478,61 @@ function confirmCheckOf(post: unknown): ConfirmCheck {
         : 'Buffer reported an error on the post without a message'
     return { state: 'failed', message }
   }
+  // `sending`/`scheduled`, and also `draft`/`needs_approval` (a channel
+  // with an approval policy): the latter never progress on their own and
+  // settle `ambiguous` at the confirm timeout.
   return { state: 'pending' }
 }
 
-function preCreateHttpFailure(
-  answer: Extract<Answer, { kind: 'http' }>,
-  prefix: string,
-): Failure {
-  if (answer.status === 429) return rateLimited(answer)
-  if (answer.status === 401) {
-    return {
-      ok: false,
-      kind: 'credential-expired',
-      message: buffer401(answer.message),
+/**
+ * The rows every phase shares: a refused key is `credential-expired`, a
+ * throttle is `rate-limited` — both answered BEFORE Buffer did anything, so
+ * they hold after the create was sent too. `null` for anything else.
+ */
+function keyOrThrottleFailure(answer: Answer): Failure | null {
+  if (answer.kind === 'http') {
+    if (answer.status === 401) return credentialExpired(answer.message)
+    if (answer.status === 429) return rateLimited(answer)
+  }
+  if (answer.kind === 'errors') {
+    if (answer.code === 'UNAUTHORIZED') return credentialExpired(answer.message)
+    // Buffer documents throttling as an HTTP 429; this body-only form has
+    // no Retry-After, so the engine's own backoff applies.
+    if (answer.code === 'RATE_LIMIT_EXCEEDED') {
+      return {
+        ok: false,
+        kind: 'rate-limited',
+        message: `Buffer rate limit reached: ${answer.message}`,
+      }
     }
+  }
+  return null
+}
+
+/** The channel check did not answer with a channel; nothing was created. */
+function checkFailure(
+  answer: Exclude<Answer, { kind: 'data' }>,
+  platform: BufferPlatform,
+): Failure {
+  const refused = keyOrThrottleFailure(answer)
+  if (refused) return refused
+  if (
+    answer.kind === 'errors' &&
+    (answer.code === 'NOT_FOUND' || answer.code === 'FORBIDDEN')
+  ) {
+    return rejected(
+      `The pinned channel id is not a channel this Buffer API key can use (${answer.message}) — check the channel id in Buffer and the tenant secret.`,
+    )
+  }
+  // A 4xx on a fixed query is our bug, not weather: retrying every tick
+  // only burns quota.
+  if (answer.kind === 'http' && answer.status < 500) {
+    return rejected(`Buffer refused the channel check: ${answer.message}`)
   }
   return {
     ok: false,
     kind: 'transient',
-    message: `${prefix}: ${answer.message}`,
-  }
-}
-
-function preCreateErrorsFailure(
-  answer: Extract<Answer, { kind: 'errors' }>,
-  prefix: string,
-): Failure {
-  switch (answer.code) {
-    case 'UNAUTHORIZED':
-      return {
-        ok: false,
-        kind: 'credential-expired',
-        message: buffer401(answer.message),
-      }
-    case 'RATE_LIMIT_EXCEEDED':
-      return { ok: false, kind: 'rate-limited', message: answer.message }
-    case 'NOT_FOUND':
-    case 'FORBIDDEN':
-      return {
-        ok: false,
-        kind: 'rejected',
-        message: `The pinned channel id is not a channel this Buffer API key can use (${answer.message}) — check the channel id in Buffer and the tenant secret.`,
-      }
-    default:
-      return {
-        ok: false,
-        kind: 'transient',
-        message: `${prefix}: ${answer.message}`,
-      }
+    message: `Buffer could not check the pinned ${SOCIAL_PLATFORM_LABELS[platform]} channel: ${answer.message}`,
   }
 }
 
@@ -595,6 +563,14 @@ function rateLimited(answer: Extract<Answer, { kind: 'http' }>): Failure {
     message: `Buffer rate limit reached: ${answer.message}`,
     ...(answer.retryAfter ? { retryAfter: answer.retryAfter } : {}),
   }
+}
+
+function rejected(message: string): Failure {
+  return { ok: false, kind: 'rejected', message }
+}
+
+function credentialExpired(message: string): Failure {
+  return { ok: false, kind: 'credential-expired', message: buffer401(message) }
 }
 
 function ambiguous(message: string): Failure {

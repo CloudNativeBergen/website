@@ -46,7 +46,15 @@ export type Fault =
   | 'http-429'
   | 'http-502'
   | 'not-json'
-  | { errorCode: string; message?: string }
+  | {
+      errorCode: string
+      message?: string
+      /**
+       * `{ data: { <field>: null }, errors }` instead of `data: null` — the
+       * other form GraphQL may give a failed root field.
+       */
+      nulledField?: boolean
+    }
 
 export interface BufferBehaviour {
   /** The pinned channel as Buffer reports it (merged over a valid page). */
@@ -91,7 +99,7 @@ function isFault(value: unknown): value is Fault {
   )
 }
 
-function faultResponse(fault: Fault): Response {
+function faultResponse(fault: Fault, field: string): Response {
   if (fault === 'network') return HttpResponse.error()
   if (fault === 'http-400') {
     return HttpResponse.json(
@@ -136,7 +144,7 @@ function faultResponse(fault: Fault): Response {
     })
   }
   return HttpResponse.json({
-    data: null,
+    data: fault.nulledField ? { [field]: null } : null,
     errors: [
       {
         message: fault.message ?? `Buffer ${fault.errorCode}`,
@@ -166,7 +174,7 @@ export function buffer(behaviour: BufferBehaviour = {}): RecordedCall[] {
       if (operationName === 'GetChannel') {
         if (behaviour.delayMs?.channel) await delay(behaviour.delayMs.channel)
         const channel = behaviour.channel
-        if (isFault(channel)) return faultResponse(channel)
+        if (isFault(channel)) return faultResponse(channel, 'channel')
         return HttpResponse.json({
           data: { channel: { ...LINKEDIN_PAGE, ...channel } },
         })
@@ -177,13 +185,13 @@ export function buffer(behaviour: BufferBehaviour = {}): RecordedCall[] {
           __typename: 'PostActionSuccess',
           post: { id: POST_ID },
         }
-        if (isFault(create)) return faultResponse(create)
+        if (isFault(create)) return faultResponse(create, 'createPost')
         return HttpResponse.json({ data: { createPost: create } })
       }
       if (operationName === 'GetPost') {
         if (behaviour.delayMs?.post) await delay(behaviour.delayMs.post)
         const post = behaviour.post
-        if (isFault(post)) return faultResponse(post)
+        if (isFault(post)) return faultResponse(post, 'post')
         return HttpResponse.json({
           data: {
             post: {
