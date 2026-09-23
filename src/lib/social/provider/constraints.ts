@@ -146,11 +146,8 @@ export function ownDomainUrlsIn(
     try {
       // A bare `www.` host has no scheme for the parser; LinkedIn treats it
       // as https. A fully-qualified `example.no.` keeps its terminal dot
-      // through WHATWG parsing but resolves to the same name — drop it, or
-      // that spelling would slip past every entry.
+      // through WHATWG parsing; `registrableDomain` reads through it.
       host = new URL(/^www\./i.test(url) ? `https://${url}` : url).hostname
-        .toLowerCase()
-        .replace(/\.$/, '')
     } catch {
       continue
     }
