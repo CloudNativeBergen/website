@@ -56,6 +56,12 @@ export const BUFFER_MIN_CREATE_BUDGET_MS = 12_000
  * abort of our own a hung request would outlive the sweep.
  */
 export const BUFFER_CONFIRM_TIMEOUT_MS = 4_000
+/**
+ * The most a `Retry-After` may push a post: Buffer's throttle window is
+ * 15 minutes (guides/api-limits), so a longer value is not a Buffer
+ * throttle, and honouring it verbatim would park the variant for years.
+ */
+export const BUFFER_MAX_RETRY_AFTER_MS = 60 * 60 * 1000
 
 /**
  * What the pinned channel must be, per platform (spec §2): Buffer's
@@ -536,9 +542,10 @@ function confirmOutcome(answer: Answer): ConfirmCheck {
         message: `Buffer post read failed: ${answer.message}`,
       }
     case 'errors':
-      // Only a NOT_FOUND on the post lookup itself says the post is gone; one
-      // beneath it is a failed field.
-      return answer.code === 'NOT_FOUND' && !answer.nested
+      // Only a NOT_FOUND from the post lookup itself (the resolver ran, path
+      // `["post"]`) says the post is gone: one beneath it is a failed field,
+      // and one with no path never looked the post up.
+      return answer.code === 'NOT_FOUND' && answer.executed && !answer.nested
         ? { state: 'gone' }
         : {
             state: 'unreadable',
@@ -654,15 +661,20 @@ function httpAnswer(
   }
 }
 
-/** `Retry-After` is seconds on Buffer (guides/api-limits); an HTTP date is accepted too. */
+/**
+ * `Retry-After` is seconds on Buffer (guides/api-limits); an HTTP date is
+ * accepted too. A non-positive value is "now" (no date, so the engine's own
+ * backoff applies — `Date.parse('0')` would otherwise read as the year
+ * 2000), and nothing may reach past {@link BUFFER_MAX_RETRY_AFTER_MS}.
+ */
 function retryAfterOf(header: string | null, now: Date): Date | undefined {
   if (!header) return undefined
   const seconds = Number(header)
-  if (Number.isFinite(seconds) && seconds > 0) {
-    return new Date(now.getTime() + seconds * 1000)
-  }
-  const date = Date.parse(header)
-  return Number.isFinite(date) ? new Date(date) : undefined
+  const at = Number.isFinite(seconds)
+    ? now.getTime() + seconds * 1000
+    : Date.parse(header)
+  if (!Number.isFinite(at) || at <= now.getTime()) return undefined
+  return new Date(Math.min(at, now.getTime() + BUFFER_MAX_RETRY_AFTER_MS))
 }
 
 function rateLimited(answer: Extract<Answer, { kind: 'http' }>): Failure {

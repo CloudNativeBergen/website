@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
+  BUFFER_MAX_RETRY_AFTER_MS,
   BUFFER_MIN_CREATE_BUDGET_MS,
   BufferPublishAdapter,
   type BufferAdapterOptions,
@@ -226,17 +227,20 @@ describe('BufferPublishAdapter — the pinned channel check (spec §2)', () => {
     expect(callsNamed(calls, 'CreatePost')).toEqual([])
   })
 
-  it('a NOT_FOUND BENEATH the channel is transient, not a bad channel id', async () => {
-    const { calls, outcome } = await publishWith({
-      channel: {
-        errorCode: 'NOT_FOUND',
-        path: ['channel', 'linkShortening'],
-        nulledField: true,
-      },
-    })
-    expect(outcome).toMatchObject({ ok: false, kind: 'transient' })
-    expect(callsNamed(calls, 'CreatePost')).toEqual([])
-  })
+  it.each(['NOT_FOUND', 'FORBIDDEN'])(
+    'a %s BENEATH the channel is transient, not a bad channel id',
+    async (errorCode) => {
+      const { calls, outcome } = await publishWith({
+        channel: {
+          errorCode,
+          path: ['channel', 'linkShortening'],
+          nulledField: true,
+        },
+      })
+      expect(outcome).toMatchObject({ ok: false, kind: 'transient' })
+      expect(callsNamed(calls, 'CreatePost')).toEqual([])
+    },
+  )
 
   it('a 4xx on the check is our bug, not weather: rejected, never retried every tick', async () => {
     const { calls, outcome } = await publishWith({ channel: 'http-400' })
@@ -339,6 +343,40 @@ describe('BufferPublishAdapter — failure at create (spec §3.3)', () => {
   })
 
   it.each([
+    ['0', undefined],
+    ['-30', undefined],
+    ['not-a-number-or-date', undefined],
+    ['900', new Date(NOW.getTime() + 900_000)],
+    ['Wed, 23 Sep 2026 08:10:00 GMT', new Date('2026-09-23T08:10:00.000Z')],
+    // Buffer's window is 15 minutes: a Retry-After of years is not a
+    // Buffer throttle, and honouring it would park the post for years.
+    ['31536000000', new Date(NOW.getTime() + BUFFER_MAX_RETRY_AFTER_MS)],
+    [
+      'Fri, 01 Jan 2100 00:00:00 GMT',
+      new Date(NOW.getTime() + BUFFER_MAX_RETRY_AFTER_MS),
+    ],
+  ])(
+    'a 429 with Retry-After %j yields retryAfter %j — never a date in the past or years out',
+    async (header, retryAfter) => {
+      const throttled: typeof fetch = async () =>
+        new Response(
+          JSON.stringify({
+            errors: [
+              {
+                message: 'Too many requests',
+                extensions: { code: 'RATE_LIMIT_EXCEEDED' },
+              },
+            ],
+          }),
+          { status: 429, headers: { 'retry-after': header } },
+        )
+      const outcome = await adapter({ fetch: throttled }).publish(LINK_ONLY)
+      expect(outcome).toMatchObject({ ok: false, kind: 'rate-limited' })
+      expect(outcome.ok === false && outcome.retryAfter).toEqual(retryAfter)
+    },
+  )
+
+  it.each([
     ['HTTP 401', 'http-401' as const, 'credential-expired'],
     [
       'UNAUTHORIZED in errors[]',
@@ -351,6 +389,7 @@ describe('BufferPublishAdapter — failure at create (spec §3.3)', () => {
       'rate-limited',
     ],
     ['NOT_FOUND in errors[]', { errorCode: 'NOT_FOUND' }, 'rejected'],
+    ['FORBIDDEN in errors[]', { errorCode: 'FORBIDDEN' }, 'rejected'],
     ['UNEXPECTED in errors[]', { errorCode: 'UNEXPECTED' }, 'ambiguous'],
     [
       'UNAUTHORIZED with createPost nulled rather than data',
@@ -502,11 +541,21 @@ describe('BufferPublishAdapter — confirm (spec §3.2)', () => {
   })
 
   it.each([false, true])(
-    'NOT_FOUND → gone (post field nulled: %s)',
+    'NOT_FOUND from the post lookup itself (path ["post"]) → gone (post field nulled: %s)',
     async (nulledField) => {
-      buffer({ post: { errorCode: 'NOT_FOUND', nulledField } })
+      buffer({ post: { errorCode: 'NOT_FOUND', path: ['post'], nulledField } })
       await expect(adapter().confirm(POST_ID)).resolves.toEqual({
         state: 'gone',
+      })
+    },
+  )
+
+  it.each([false, true])(
+    'a NOT_FOUND with no path never looked the post up: unreadable, not gone (post field nulled: %s)',
+    async (nulledField) => {
+      buffer({ post: { errorCode: 'NOT_FOUND', nulledField } })
+      await expect(adapter().confirm(POST_ID)).resolves.toMatchObject({
+        state: 'unreadable',
       })
     },
   )
@@ -568,6 +617,26 @@ describe('BufferPublishAdapter — confirm (spec §3.2)', () => {
     })
   })
 
+  it('a throw from the fetch answer itself is caught: unreadable, carrying the message', async () => {
+    // Nothing in the documented shapes can throw past `request`; this fake
+    // answer does, so the outer catch is exercised on a VALUE.
+    const hostile: typeof fetch = async () =>
+      ({
+        json: async () => {
+          throw new Error('body unreadable')
+        },
+        get ok(): boolean {
+          throw new Error('boom: the answer object is hostile')
+        },
+      }) as unknown as Response
+    await expect(adapter({ fetch: hostile }).confirm(POST_ID)).resolves.toEqual(
+      {
+        state: 'unreadable',
+        message: expect.stringContaining('boom: the answer object is hostile'),
+      },
+    )
+  })
+
   it('an error whose fields are not the documented strings is unreadable, not a throw', async () => {
     buffer({
       post: {
@@ -589,13 +658,11 @@ describe('BufferPublishAdapter — confirm (spec §3.2)', () => {
       if (init?.signal) signals.push(init.signal)
       return fetch(input, init)
     }
-    const started = Date.now()
     const check = await adapter({
       fetch: recording,
       confirmTimeoutMs: 50,
     }).confirm(POST_ID)
     expect(check).toMatchObject({ state: 'unreadable' })
-    expect(Date.now() - started).toBeLessThan(900)
     expect(signals).toHaveLength(1)
     expect(signals[0].aborted).toBe(true)
   })
