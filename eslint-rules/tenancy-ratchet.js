@@ -132,7 +132,13 @@ function countRuleMessages(result) {
 /** Lint the repo exactly as `eslint .` does and count RULE_ID per file. */
 async function countWarnings() {
   const { ESLint } = require('eslint')
-  const eslint = new ESLint({ cwd: REPO_ROOT })
+  // `cache: true` reads and writes the SAME `.eslintcache` that `pnpm lint`
+  // (`eslint --cache .`) maintains — ESLint stores every file's result there,
+  // warnings and suppressed messages included, keyed on file content and
+  // config hash. In CI this step runs straight after `pnpm lint`, so every
+  // file is a cache hit and the ratchet costs seconds instead of relinting
+  // the repo a second time. Without a warm cache it lints as before.
+  const eslint = new ESLint({ cwd: REPO_ROOT, cache: true })
   const results = await eslint.lintFiles(['.'])
   const counts = {}
   for (const result of results) {

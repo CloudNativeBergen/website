@@ -9,6 +9,15 @@ on:
   push:
     branches: ['main']
 
+# A push to a PR branch supersedes the run already in flight for it; let the
+# stale one die instead of finishing a 5-job matrix nobody will read. Only
+# pull_request runs share a group (per ref). main pushes and merge-queue runs
+# get a group of their own (the run id), so they are never cancelled AND never
+# queue behind each other.
+concurrency:
+  group: pr-checks-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   quality-checks:
     name: Quality Checks
@@ -122,13 +131,15 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Run tests
-        run: pnpm run test
-
-      - name: Run scoped auth coverage gate
-        # Enforces the per-file coverage ratchets in vitest.config.ts, scoped
-        # ONLY to the security-critical auth modules. Unrelated files are not
-        # instrumented, so they can never fail this gate.
+      # ONE run, with coverage on. This used to be `pnpm run test` followed by
+      # `pnpm run test:coverage`, which executed all ~800 files twice: the
+      # coverage flag does not narrow WHICH tests run, only which source files
+      # are instrumented. Per the 2026-09 CI logs that was 233s + 277s on a job
+      # whose critical path is this step. Vitest exits non-zero when any
+      # per-file threshold in vitest.config.ts is missed, so the single run is
+      # both the test gate and the scoped auth coverage gate (only the auth
+      # modules listed there are instrumented; unrelated files never fail it).
+      - name: Run tests with scoped auth coverage gate
         run: pnpm run test:coverage
 
   storybook:
