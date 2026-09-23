@@ -262,7 +262,7 @@ reach.
 [#1171](https://github.com/CloudNativeBergen/website/issues/1171) **the proof**: a 10-second canvas clip with sound exported in Chrome, Safari and Firefox,
 reporting per browser whether H.264 and AAC encode, the add-on AAC encoder's licence and size, export
 time, the AAC priming offset, whether a brand colour survives the encoder, and whether LinkedIn and
-Bluesky take the file. It gates #1177 and #1179 as written — **report: [MARKETING_STUDIO_VIDEO_PROOF.md](MARKETING_STUDIO_VIDEO_PROOF.md)**, which amends both (§8 there); the upload check is still open (§7 there) ·
+Bluesky take the file. It gates #1177 and #1179 as written — **report: [MARKETING_STUDIO_VIDEO_PROOF.md](MARKETING_STUDIO_VIDEO_PROOF.md)**, which amends both (§8 there); exports stay above LinkedIn's 192 kbit/s minimum (§7 there) ·
 [#1172](https://github.com/CloudNativeBergen/website/issues/1172) the logo on the canvas (§4) · [#1173](https://github.com/CloudNativeBergen/website/issues/1173) one "draw at time t" function (§4) — needs #1172 ·
 [#1174](https://github.com/CloudNativeBergen/website/issues/1174) Video mode with scenes and a scrub timeline, cut and fade, preview only (§2, §3) — needs
 #1173 · [#1175](https://github.com/CloudNativeBergen/website/issues/1175) slide and zoom, scene management, the cap, undo (§2, §3) · [#1176](https://github.com/CloudNativeBergen/website/issues/1176) element
