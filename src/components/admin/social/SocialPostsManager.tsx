@@ -10,6 +10,7 @@ import {
   TrashIcon,
 } from '@heroicons/react/24/outline'
 import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
+import { mayAlreadyBeLive } from '@/lib/social/state-machine'
 import { AdminPageHeader } from '@/components/admin/AdminPageHeader'
 import { AdminButton } from '@/components/admin/AdminButton'
 import { useNotification } from '@/components/admin/NotificationProvider'
@@ -48,6 +49,11 @@ const STATUS_STYLES: Record<
   },
   publishing: {
     label: 'Publishing',
+    className:
+      'bg-indigo-50 text-indigo-700 ring-indigo-600/20 dark:bg-indigo-900/30 dark:text-indigo-300',
+  },
+  submitted: {
+    label: 'With the publisher',
     className:
       'bg-indigo-50 text-indigo-700 ring-indigo-600/20 dark:bg-indigo-900/30 dark:text-indigo-300',
   },
@@ -208,6 +214,19 @@ export function SocialPostsManager({
     },
   })
 
+  /**
+   * RETRY IS ONE CLICK, and after an `ambiguous` or `stale-claim` failure the
+   * post may already be live (#1128). Rescheduling then publishes a SECOND
+   * post — `CreatePostInput` has no idempotency key. `ManualPostView` warns
+   * and the Task editor warns; this table's Retry was the third surface and
+   * the only one that could reschedule without the organizer being told.
+   *
+   * A confirmation is the gate rather than a notice, because the check it
+   * asks for happens on the platform, outside this screen.
+   */
+  const [retryRiskTarget, setRetryRiskTarget] =
+    useState<SocialPostVariantListItem | null>(null)
+
   const openSchedule = (variant: SocialPostVariantListItem) => {
     setScheduleTarget(variant)
     const hasDefault = variant.postDefaultScheduledAt !== null
@@ -276,7 +295,14 @@ export function SocialPostsManager({
   // published or in-flight variant, since the server would refuse it.
   const undeletablePosts = new Set(
     rows
-      .filter((v) => v.status === 'published' || v.status === 'publishing')
+      .filter(
+        (v) =>
+          v.status === 'published' ||
+          v.status === 'publishing' ||
+          // In flight with an asynchronous publisher (#1128): the server
+          // refuses the delete for the same reason it refuses `publishing`.
+          v.status === 'submitted',
+      )
       .map((v) => v.postId),
   )
 
@@ -353,7 +379,11 @@ export function SocialPostsManager({
                   key={variant._id}
                   variant={variant}
                   disabled={isBusy}
-                  onSchedule={() => openSchedule(variant)}
+                  onSchedule={() =>
+                    mayAlreadyBeLive(variant)
+                      ? setRetryRiskTarget(variant)
+                      : openSchedule(variant)
+                  }
                   onUnschedule={() =>
                     unschedule.mutate({ variantId: variant._id })
                   }
@@ -469,6 +499,20 @@ export function SocialPostsManager({
           onManualClosed?.()
         }}
         onPosted={invalidate}
+      />
+
+      <ConfirmationModal
+        isOpen={retryRiskTarget !== null}
+        onClose={() => setRetryRiskTarget(null)}
+        onConfirm={() => {
+          const target = retryRiskTarget
+          setRetryRiskTarget(null)
+          if (target) openSchedule(target)
+        }}
+        title="This post may already be live"
+        message="We could not confirm whether it went out. Check the platform first — retrying publishes a SECOND post, and it cannot be taken back. If the post is already there, close this and use “Check & record” instead."
+        confirmButtonText="I checked — retry anyway"
+        variant="danger"
       />
 
       <ConfirmationModal
@@ -641,6 +685,7 @@ function VariantRow({
           )}
           <VariantActions
             status={variant.status}
+            mayBeLive={mayAlreadyBeLive(variant)}
             disabled={disabled}
             onSchedule={onSchedule}
             onUnschedule={onUnschedule}
@@ -665,19 +710,22 @@ function VariantRow({
 }
 
 /**
- * The organizer actions per state: (re-)schedule a draft or failed variant,
- * pull a scheduled one back, open the copy-ready view for an awaiting-manual
- * one. Publishing
- * and published rows have nothing to do here.
+ * The organizer actions per state: schedule a draft, retry OR hand-post a
+ * failed one, pull a scheduled one back, open the copy-ready view for an
+ * awaiting-manual one. Publishing, submitted (in flight with an asynchronous
+ * publisher) and published rows have nothing to do here.
  */
 function VariantActions({
   status,
+  mayBeLive,
   disabled,
   onSchedule,
   onUnschedule,
   onMarkPosted,
 }: {
   status: VariantStatus
+  /** The post may already be on the platform — see `mayAlreadyBeLive`. */
+  mayBeLive: boolean
   disabled: boolean
   onSchedule: () => void
   onUnschedule: () => void
@@ -685,7 +733,6 @@ function VariantActions({
 }) {
   switch (status) {
     case 'draft':
-    case 'failed':
       return (
         <AdminButton
           size="xs"
@@ -693,8 +740,55 @@ function VariantActions({
           disabled={disabled}
           onClick={onSchedule}
         >
-          {status === 'failed' ? 'Retry' : 'Schedule'}
+          Schedule
         </AdminButton>
+      )
+    // A failed variant has two ways out (#1128, spec §5): send it again, or —
+    // when the post DID go out (an ambiguous confirmation, or a publisher
+    // error after the fact) — record it by hand.
+    case 'failed':
+      // When the post may already be live, CHECKING is the primary action and
+      // retrying is the one that needs justifying — the opposite of an
+      // ordinary failure, where nothing was created and retrying is free.
+      return mayBeLive ? (
+        <>
+          <AdminButton
+            size="xs"
+            color="brand"
+            disabled={disabled}
+            onClick={onMarkPosted}
+          >
+            Check &amp; record
+          </AdminButton>
+          <AdminButton
+            size="xs"
+            variant="secondary"
+            disabled={disabled}
+            onClick={onSchedule}
+            title="This post may already be live — retrying publishes a second one."
+          >
+            Retry anyway
+          </AdminButton>
+        </>
+      ) : (
+        <>
+          <AdminButton
+            size="xs"
+            color="brand"
+            disabled={disabled}
+            onClick={onSchedule}
+          >
+            Retry
+          </AdminButton>
+          <AdminButton
+            size="xs"
+            variant="secondary"
+            disabled={disabled}
+            onClick={onMarkPosted}
+          >
+            Post by hand
+          </AdminButton>
+        </>
       )
     case 'awaiting-manual':
       return (
@@ -719,6 +813,7 @@ function VariantActions({
         </AdminButton>
       )
     case 'publishing':
+    case 'submitted':
     case 'published':
       return null
   }

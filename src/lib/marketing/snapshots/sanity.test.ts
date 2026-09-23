@@ -178,6 +178,45 @@ describe('firstPublishedAt', () => {
     expect(firstPublishedAt(null)).toBeNull()
     expect(firstPublishedAt([{ at: null, outcome: 'published' }])).toBeNull()
   })
+
+  // #1128: an asynchronous publisher writes TWO legs — the submit and the
+  // confirmation. Only the confirmation means the post is live. These assert
+  // the VALUE, because both ways of getting this wrong are silent: counting
+  // the submit back-dates `publishedAt` by minutes, and counting neither
+  // leaves it null while the post is live on the platform.
+  it('takes the CONFIRMATION time, never the submit — the submit leg would back-date it', () => {
+    expect(
+      firstPublishedAt([
+        { at: '2026-02-05T08:00:00Z', outcome: 'submitted' },
+        { at: '2026-02-05T08:02:30Z', outcome: 'published' },
+      ]),
+    ).toBe('2026-02-05T08:02:30Z')
+  })
+
+  it('a submission that has not been confirmed yet has no published time at all', () => {
+    expect(
+      firstPublishedAt([{ at: '2026-02-05T08:00:00Z', outcome: 'submitted' }]),
+    ).toBeNull()
+  })
+
+  it('a submission that failed at confirmation has no published time', () => {
+    expect(
+      firstPublishedAt([
+        { at: '2026-02-05T08:00:00Z', outcome: 'submitted' },
+        { at: '2026-02-05T08:15:00Z', outcome: 'ambiguous' },
+      ]),
+    ).toBeNull()
+  })
+
+  it('an ambiguous post the organizer later recorded by hand is published AT THE HAND-POSTING, not at the submit', () => {
+    expect(
+      firstPublishedAt([
+        { at: '2026-02-05T08:00:00Z', outcome: 'submitted' },
+        { at: '2026-02-05T08:15:00Z', outcome: 'ambiguous' },
+        { at: '2026-02-05T09:30:00Z', outcome: 'manual' },
+      ]),
+    ).toBe('2026-02-05T09:30:00Z')
+  })
 })
 
 describe('withinBudget', () => {

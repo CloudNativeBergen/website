@@ -16,6 +16,7 @@ const base = {
   usesCustomTime: false,
   link: null,
   attachments: [],
+  submission: null,
   publishResult: null,
   attempts: [],
   attemptCount: 0,
@@ -89,6 +90,26 @@ const variants: SocialPostVariantListItem[] = [
         error:
           'Publishing claim from 2026-09-10T08:00:12.000Z never completed. Check the platform before retrying.',
       },
+    ],
+  },
+  // #1128: accepted by an asynchronous publisher and waiting for the confirm
+  // sweep. In flight — no actions, and the post cannot be deleted.
+  {
+    ...base,
+    _id: 'v-6',
+    postId: 'post-4',
+    platform: 'linkedin',
+    body: 'Programme is out: three tracks, 42 talks, one hallway.',
+    status: 'submitted',
+    scheduledAt: '2026-09-13T08:00:00.000Z',
+    attemptCount: 1,
+    submission: {
+      vendorPostId: 'buffer-6f2a',
+      submittedAt: '2026-09-13T08:00:11.000Z',
+      lastCheckedAt: '2026-09-13T08:00:41.000Z',
+    },
+    attempts: [
+      { _key: 'a1', at: '2026-09-13T08:00:11.000Z', outcome: 'submitted' },
     ],
   },
 ]

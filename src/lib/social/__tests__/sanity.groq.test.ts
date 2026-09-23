@@ -92,7 +92,12 @@ import {
 
 const NOW = new Date('2026-09-13T10:00:00.000Z')
 const STALE_BEFORE = new Date('2026-09-13T09:45:00.000Z')
-const BOUNDS = { perConference: 2, maxConferences: 50, staleLimit: 50 }
+const BOUNDS = {
+  perConference: 2,
+  maxConferences: 50,
+  staleLimit: 50,
+  submittedLimit: 10,
+}
 
 const conference = (id: string, org = `org-${id}`) => ({
   _id: id,
@@ -237,6 +242,52 @@ describe('deleteSocialPost', () => {
       reason: 'published',
     })
     expect(h.deleted).toEqual([])
+  })
+
+  it('refuses while a variant is SUBMITTED — an asynchronous publisher still holds the post (#1128)', async () => {
+    h.dataset = [
+      variant('s', 'c1', {
+        status: 'submitted',
+        submission: {
+          vendorPostId: 'buffer-1',
+          submittedAt: '2026-09-13T09:50:00Z',
+        },
+      }),
+    ]
+    expect(await deleteSocialPost('post-c1', 'c1')).toEqual({
+      deleted: false,
+      reason: 'in-flight',
+    })
+    // Fails on the ACTION: nothing may be deleted, not merely "no error".
+    expect(h.deleted).toEqual([])
+  })
+
+  it('refuses a FAILED variant that may be live — its last attempt could not confirm (#1128)', async () => {
+    h.dataset = [
+      variant('maybe', 'c1', {
+        status: 'failed',
+        attempts: [
+          { _key: 'a', at: '2026-09-13T09:50:00Z', outcome: 'ambiguous' },
+        ],
+      }),
+    ]
+    expect(await deleteSocialPost('post-c1', 'c1')).toEqual({
+      deleted: false,
+      reason: 'may-be-live',
+    })
+    expect(h.deleted).toEqual([])
+    // The control: a post that failed DEFINITELY never went out and deletes.
+    h.dataset = [
+      variant('never', 'c1', {
+        status: 'failed',
+        attempts: [
+          { _key: 'a', at: '2026-09-13T09:50:00Z', outcome: 'rejected' },
+        ],
+      }),
+    ]
+    expect(await deleteSocialPost('post-c1', 'c1')).toMatchObject({
+      deleted: true,
+    })
   })
 })
 
@@ -414,6 +465,334 @@ describe('findWork — the composed due/stale scan', () => {
       BOUNDS,
     )
     expect(work.stale.map((v) => v._id).sort()).toEqual(['old', 'unknown'])
+  })
+
+  // #1128: the confirm sweep's work rides in the SAME read.
+  it('the confirm sweep returns submitted variants, oldest submission first, capped — and still ONE query', async () => {
+    h.dataset = [
+      conference('c1'),
+      conference('c2'),
+      ...['s3', 's1', 's2'].map((id, i) =>
+        variant(id, 'c1', {
+          status: 'submitted',
+          scheduledAt: null,
+          submission: {
+            vendorPostId: `buffer-${id}`,
+            submittedAt: `2026-09-13T09:5${[3, 1, 2][i]}:00Z`,
+          },
+        }),
+      ),
+      variant('s-other-tenant', 'c2', {
+        status: 'submitted',
+        scheduledAt: null,
+        submission: {
+          vendorPostId: 'buffer-x',
+          submittedAt: '2026-09-13T09:50:00Z',
+        },
+      }),
+      // The never-double-post guard in the READ. A submitted variant KEEPS
+      // its scheduledAt, and that time is in the past the moment the vendor
+      // accepts the post — so only `status == "scheduled"` keeps it out of
+      // the due scan. Its time is older than every due variant's, so a due
+      // scan that let it through would claim and re-post it FIRST.
+      variant('s-still-due-by-time', 'c1', {
+        status: 'submitted',
+        scheduledAt: '2026-09-13T08:00:00Z',
+        submission: {
+          vendorPostId: 'buffer-late',
+          submittedAt: '2026-09-13T09:54:00Z',
+        },
+      }),
+      // Not submitted: must not appear.
+      variant('due-one', 'c1'),
+      variant('claimed', 'c1', {
+        status: 'publishing',
+        claimedAt: '2026-09-13T09:59:00Z',
+      }),
+      // A Studio draft twin and a release version would each be a SECOND
+      // document for the same submission — and a second confirm read.
+      variant('drafts.s1', 'c1', {
+        status: 'submitted',
+        scheduledAt: null,
+        submission: {
+          vendorPostId: 'buffer-s1',
+          submittedAt: '2026-09-13T09:51:00Z',
+        },
+      }),
+      variant('versions.rel1.s1', 'c1', {
+        status: 'submitted',
+        scheduledAt: null,
+        submission: {
+          vendorPostId: 'buffer-s1',
+          submittedAt: '2026-09-13T09:51:00Z',
+        },
+      }),
+    ]
+
+    const work = await sanitySocialVariantStore.findWork(
+      NOW,
+      STALE_BEFORE,
+      BOUNDS,
+    )
+
+    // GROUPED BY CONFERENCE, not globally sorted — changed deliberately.
+    // This used to assert one global oldest-first list, which is exactly what
+    // let one tenant's backlog fill the slice. `perConference` is 2 here, so
+    // c1 contributes its two least-recently-checked (`s1`, `s2`) and c2 its
+    // one; `s3` and `s-still-due-by-time` wait for the next tick rather than
+    // pushing another tenant out of this one.
+    expect(work.submitted.map((v) => v._id).sort()).toEqual(
+      ['s-other-tenant', 's1', 's2'].sort(),
+    )
+    // Within a conference the order is still least-recently-checked first.
+    const c1Ids = work.submitted
+      .filter((v) => v._id.startsWith('s') && v._id !== 's-other-tenant')
+      .map((v) => v._id)
+    expect(c1Ids).toEqual(['s1', 's2'])
+    expect(work.submitted.find((v) => v._id === 's1')?.submission).toEqual({
+      vendorPostId: 'buffer-s1',
+      submittedAt: '2026-09-13T09:51:00Z',
+      lastCheckedAt: null,
+    })
+    // A due variant is never in the submitted list and vice versa.
+    expect(work.due.map((v) => v._id)).toEqual(['due-one'])
+    expect(h.queries).toHaveLength(1)
+  })
+
+  it('a deep backlog in ONE conference cannot starve another tenant', async () => {
+    // Rotation alone does not bound the wait: a conference holding more
+    // submissions than the cap fills every slice, and at 5 a tick 150 of its
+    // rows take half an hour to cycle — past the 15-minute confirm timeout,
+    // so a neighbour's submission fails `ambiguous` because of a backlog that
+    // is not its own. The per-conference bound is what stops that, and it
+    // lives in the READ so the engine never depends on the store's goodwill.
+    h.dataset = [
+      conference('busy'),
+      conference('quiet'),
+      ...Array.from({ length: 12 }, (_, i) =>
+        variant(`busy-${i}`, 'busy', {
+          status: 'submitted',
+          scheduledAt: null,
+          submission: {
+            vendorPostId: `buffer-busy-${i}`,
+            // All older than the quiet tenant's, so a global sort puts every
+            // one of them ahead of it.
+            submittedAt: `2026-09-13T09:0${i % 10}:00Z`,
+          },
+        }),
+      ),
+      variant('quiet-1', 'quiet', {
+        status: 'submitted',
+        scheduledAt: null,
+        submission: {
+          vendorPostId: 'buffer-quiet',
+          submittedAt: '2026-09-13T09:58:00Z',
+        },
+      }),
+    ]
+
+    const work = await sanitySocialVariantStore.findWork(
+      NOW,
+      STALE_BEFORE,
+      BOUNDS,
+    )
+
+    // ON THE VALUE: the quiet tenant is read THIS tick, not in half an hour.
+    expect(work.submitted.map((v) => v._id)).toContain('quiet-1')
+    // And the busy one is held to its share rather than the whole slice.
+    expect(
+      work.submitted.filter((v) => v._id.startsWith('busy-')),
+    ).toHaveLength(BOUNDS.perConference)
+  })
+
+  it('shares confirm slots ROUND-ROBIN under the PRODUCTION ratio (per-conference > total)', async () => {
+    // The previous fairness fix grouped by conference and then took a GLOBAL
+    // PREFIX of the flattened groups. Production passes perConference = 10
+    // against submittedLimit = 5, so the first conference supplied ten rows
+    // and the prefix of five never reached anyone else — fairness in the
+    // tests, none in production. The test above uses the opposite ratio
+    // (2 per conference, 10 total), which is exactly why it could not see it.
+    const PROD_SHAPED = { ...BOUNDS, perConference: 10, submittedLimit: 5 }
+    h.dataset = [
+      conference('busy'),
+      conference('quiet'),
+      ...Array.from({ length: 10 }, (_, i) =>
+        variant(`busy-${i}`, 'busy', {
+          status: 'submitted',
+          scheduledAt: null,
+          submission: {
+            vendorPostId: `buffer-busy-${i}`,
+            submittedAt: `2026-09-13T09:0${i}:00Z`,
+          },
+        }),
+      ),
+      variant('quiet-1', 'quiet', {
+        status: 'submitted',
+        scheduledAt: null,
+        submission: {
+          vendorPostId: 'buffer-quiet',
+          submittedAt: '2026-09-13T09:58:00Z',
+        },
+      }),
+    ]
+
+    const work = await sanitySocialVariantStore.findWork(
+      NOW,
+      STALE_BEFORE,
+      PROD_SHAPED,
+    )
+
+    // ON THE VALUE: the quiet tenant is read this tick…
+    expect(work.submitted.map((v) => v._id)).toContain('quiet-1')
+    // …the total is still capped…
+    expect(work.submitted).toHaveLength(PROD_SHAPED.submittedLimit)
+    // …and the busy tenant gets the rest, oldest-checked first.
+    expect(
+      work.submitted.filter((v) => v._id.startsWith('busy-')).map((v) => v._id),
+    ).toEqual(['busy-0', 'busy-1', 'busy-2', 'busy-3'])
+  })
+
+  it('rotates WHICH CONFERENCES get confirm slots across ticks when there are more than the cap', async () => {
+    // Round-robin is fair within a tick only. Six conferences with one
+    // submission each against a cap of five: in document order the same five
+    // would be read every minute and the sixth never — until it timed out
+    // `ambiguous` without a single vendor read. Lanes are ordered by their
+    // head's confirm key, so a conference just read sorts to the back.
+    const ids = ['a', 'b', 'c', 'd', 'e', 'f']
+    const submitted = (c: string, lastCheckedAt?: string) =>
+      variant(`${c}-1`, c, {
+        status: 'submitted',
+        scheduledAt: null,
+        submission: {
+          vendorPostId: `buffer-${c}`,
+          submittedAt: '2026-09-13T09:30:00Z',
+          ...(lastCheckedAt ? { lastCheckedAt } : {}),
+        },
+      })
+    const bounds = { ...BOUNDS, perConference: 10, submittedLimit: 5 }
+
+    // Tick 1: nothing has been read yet; document order decides, `f` waits.
+    h.dataset = [
+      ...ids.map((c) => conference(c)),
+      ...ids.map((c) => submitted(c)),
+    ]
+    const tick1 = await sanitySocialVariantStore.findWork(
+      NOW,
+      STALE_BEFORE,
+      bounds,
+    )
+    expect(tick1.submitted.map((v) => v._id)).toEqual([
+      'a-1',
+      'b-1',
+      'c-1',
+      'd-1',
+      'e-1',
+    ])
+
+    // Tick 2: the five read are stamped, in the order the sweep reached them.
+    // ON THE VALUE: `f` is read now, and the one that waits is `e` — the most
+    // recently read — not `f` again.
+    h.dataset = [
+      ...ids.map((c) => conference(c)),
+      ...ids.map((c, i) =>
+        c === 'f' ? submitted(c) : submitted(c, `2026-09-13T09:59:0${i}Z`),
+      ),
+    ]
+    const tick2 = await sanitySocialVariantStore.findWork(
+      NOW,
+      STALE_BEFORE,
+      bounds,
+    )
+    expect(tick2.submitted.map((v) => v._id)).toEqual([
+      'f-1',
+      'a-1',
+      'b-1',
+      'c-1',
+      'd-1',
+    ])
+  })
+
+  it('orders the confirm sweep by LEAST RECENTLY CHECKED, so a capped slice cannot be monopolised', async () => {
+    h.dataset = [
+      conference('c1'),
+      // Submitted first, but read a moment ago: it is inside its backoff and
+      // must not hold a slot against a newer submission that has never been
+      // read. Ordering by submittedAt would starve `never-read` until the
+      // older ones settled — or timed out as ambiguous with no vendor call.
+      variant('checked-just-now', 'c1', {
+        status: 'submitted',
+        scheduledAt: null,
+        submission: {
+          vendorPostId: 'buffer-a',
+          submittedAt: '2026-09-13T09:40:00Z',
+          lastCheckedAt: '2026-09-13T09:59:30Z',
+        },
+      }),
+      variant('never-read', 'c1', {
+        status: 'submitted',
+        scheduledAt: null,
+        submission: {
+          vendorPostId: 'buffer-b',
+          submittedAt: '2026-09-13T09:50:00Z',
+        },
+      }),
+      variant('checked-long-ago', 'c1', {
+        status: 'submitted',
+        scheduledAt: null,
+        submission: {
+          vendorPostId: 'buffer-c',
+          submittedAt: '2026-09-13T09:45:00Z',
+          lastCheckedAt: '2026-09-13T09:46:00Z',
+        },
+      }),
+    ]
+    const work = await sanitySocialVariantStore.findWork(NOW, STALE_BEFORE, {
+      ...BOUNDS,
+      submittedLimit: 2,
+    })
+    expect(work.submitted.map((v) => v._id)).toEqual([
+      'checked-long-ago',
+      'never-read',
+    ])
+  })
+
+  it('caps the confirm sweep at submittedLimit so one backlog cannot spend the vendor budget', async () => {
+    h.dataset = [
+      conference('c1'),
+      ...Array.from({ length: 5 }, (_, i) =>
+        variant(`s${i}`, 'c1', {
+          status: 'submitted',
+          scheduledAt: null,
+          submission: {
+            vendorPostId: `buffer-${i}`,
+            submittedAt: `2026-09-13T09:5${i}:00Z`,
+          },
+        }),
+      ),
+    ]
+    const work = await sanitySocialVariantStore.findWork(NOW, STALE_BEFORE, {
+      ...BOUNDS,
+      submittedLimit: 2,
+    })
+    expect(work.submitted.map((v) => v._id)).toEqual(['s0', 's1'])
+  })
+
+  it('a submission with no vendor id is no receipt at all — half a record must not be read back', async () => {
+    h.dataset = [
+      conference('c1'),
+      variant('s1', 'c1', {
+        status: 'submitted',
+        scheduledAt: null,
+        submission: { submittedAt: '2026-09-13T09:50:00Z' },
+      }),
+    ]
+    const work = await sanitySocialVariantStore.findWork(
+      NOW,
+      STALE_BEFORE,
+      BOUNDS,
+    )
+    expect(work.submitted.map((v) => v._id)).toEqual(['s1'])
+    expect(work.submitted[0].submission).toBeNull()
   })
 })
 

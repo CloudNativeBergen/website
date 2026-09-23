@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import clsx from 'clsx'
+import { mayAlreadyBeLive } from '@/lib/social/state-machine'
 import {
   ArrowDownTrayIcon,
   ArrowTopRightOnSquareIcon,
@@ -100,7 +101,16 @@ export function ManualPostView({
     copyLength !== null &&
     copyLength > constraints.maxLength
   const done = variant.status === 'published'
-  const awaiting = variant.status === 'awaiting-manual'
+  // `failed` joins `awaiting-manual` (#1128, spec §5): with an asynchronous
+  // publisher a variant never reaches `awaiting-manual`, so recording a post
+  // that DID go out — after a publisher error, or an `ambiguous`
+  // confirmation — is done from `failed`. `social.markPosted` accepts both.
+  const awaiting =
+    variant.status === 'awaiting-manual' || variant.status === 'failed'
+  // MAY ALREADY BE LIVE (spec §3.3, §5) — `ambiguous` OR `stale-claim`. The
+  // rule lives in `state-machine.ts` so this view and the Task editor's retry
+  // cannot drift apart about which failures are safe to act on.
+  const postMayBeLive = mayAlreadyBeLive(variant)
 
   const [url, setUrl] = useState('')
   const [urlIssue, setUrlIssue] = useState<string | null>(null)
@@ -116,13 +126,20 @@ export function ManualPostView({
   return (
     <div className="space-y-6">
       <ol className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500 dark:text-gray-400">
-        {[
-          'Copy the text',
-          link && !linkInBody ? 'Copy the link' : null,
-          images.length > 0 ? 'Save the image' : null,
-          `Post it on ${platform}`,
-          'Paste the post address below',
-        ]
+        {(postMayBeLive
+          ? [
+              `Check ${platform} for this post`,
+              'If it is there, paste its address below',
+              'Only post it by hand if it is NOT there',
+            ]
+          : [
+              'Copy the text',
+              link && !linkInBody ? 'Copy the link' : null,
+              images.length > 0 ? 'Save the image' : null,
+              `Post it on ${platform}`,
+              'Paste the post address below',
+            ]
+        )
           .filter((step): step is string => step !== null)
           .map((step, index) => (
             <li key={step} className="flex items-center gap-1.5">
@@ -133,6 +150,20 @@ export function ManualPostView({
             </li>
           ))}
       </ol>
+
+      {postMayBeLive && (
+        <p
+          role="alert"
+          className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-900/20 dark:text-amber-200"
+        >
+          <strong className="font-semibold">
+            This post may already be live.
+          </strong>{' '}
+          We could not confirm whether it went out, so check {platform} before
+          doing anything else. If the post is there, paste its address below to
+          record it — do not post it again.
+        </p>
+      )}
 
       {missingImages > 0 && (
         <p
@@ -312,7 +343,7 @@ export function ManualPostView({
       ) : (
         <p className="text-sm text-gray-500 dark:text-gray-400">
           This variant is {variant.status}. Marking it posted becomes possible
-          once it is scheduled and its time has come.
+          once the cron has handed it over, or once it has failed.
         </p>
       )}
     </div>

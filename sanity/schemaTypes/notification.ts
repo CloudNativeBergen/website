@@ -68,6 +68,9 @@ export default defineType({
           // Emitted by the social publish cron when a manual-Channel
           // variant comes due (#1006).
           { title: 'Social Post Due (manual)', value: 'social_manual_due' },
+          // A standalone post (no Task) that failed terminally in the publish
+          // cron (#1128); Task-backed failures use Marketing Task Failed.
+          { title: 'Social Post Failed', value: 'social_publish_failed' },
           { title: 'Marketing Task Due', value: 'marketing_task_due' },
           { title: 'Marketing Task Overdue', value: 'marketing_task_overdue' },
           { title: 'Marketing Task Failed', value: 'marketing_task_failed' },

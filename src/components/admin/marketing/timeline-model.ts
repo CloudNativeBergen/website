@@ -235,6 +235,9 @@ export function chipTone(
   if (
     task.status === 'scheduled' ||
     task.status === 'publishing' ||
+    // `submitted` is in flight exactly as `publishing` is (#1128): the post
+    // is with the vendor and the plan still has it under way.
+    task.status === 'submitted' ||
     task.status === 'open'
   ) {
     return task.kind === 'publishing' ? 'active' : 'planned'
@@ -246,6 +249,7 @@ export const STATUS_LABELS: Record<TaskView['status'], string> = {
   draft: 'Draft',
   scheduled: 'Scheduled',
   publishing: 'Publishing',
+  submitted: 'With the publisher',
   'awaiting-manual': 'Post by hand',
   published: 'Published',
   failed: 'Failed',

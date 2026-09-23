@@ -1,4 +1,13 @@
 import type { DeletionPreview, DeletionTree } from './types'
+import { outcomeMayBeLive } from '@/lib/social/state-machine'
+
+/**
+ * Shared by every deletion path (plan, campaign, Task, standalone post): the
+ * remedy is on the platform, not here, and it is the same whichever screen
+ * the organizer deletes from.
+ */
+export const MAY_BE_LIVE_REFUSAL =
+  'A post may already be live on the platform: its last attempt could not confirm whether it went out. Check the platform first — record its address if it is there, or retry if it is not — and try again; nothing has been changed.'
 
 export class DeletionRefusalError extends Error {}
 
@@ -67,10 +76,31 @@ export function deletionPreview(tree: DeletionTree): DeletionPreview {
       `${tree.draftOnlyRecords} unpublished Studio ${tree.draftOnlyRecords === 1 ? 'draft or scheduled release belongs' : 'drafts or scheduled releases belong'} to this plan and would be left behind with no owner — a release would even recreate ${tree.draftOnlyRecords === 1 ? 'it' : 'them'} later. Publish, discard or unschedule ${tree.draftOnlyRecords === 1 ? 'it' : 'them'} in the Studio first; nothing has been changed.`,
     )
   }
-  if (tree.tasks.some((task) => task.variant?.status === 'publishing')) {
+  // `submitted` is in flight too (#1128): an asynchronous publisher has the
+  // post and may still send it.
+  if (
+    tree.tasks.some(
+      (task) =>
+        task.variant?.status === 'publishing' ||
+        task.variant?.status === 'submitted',
+    )
+  ) {
     throw new DeletionRefusalError(
       'The post is being published right now. Try again in a minute.',
     )
+  }
+  // A FAILED variant whose last attempt could not tell whether the post went
+  // out (#1128). `removedMedia` would treat it as any other unpublished
+  // variant and delete it, the vendor receipt and the post — the record an
+  // organizer needs to reconcile a post that may be on the platform now.
+  if (
+    tree.tasks.some(
+      (task) =>
+        task.variant !== null &&
+        outcomeMayBeLive(task.variant.status, task.variant.lastOutcome),
+    )
+  ) {
+    throw new DeletionRefusalError(MAY_BE_LIVE_REFUSAL)
   }
   const publishedTasks = tree.tasks.filter(
     (task) => task.variant?.status === 'published',
