@@ -41,6 +41,7 @@ export interface RecordedCall {
 
 export type Fault =
   | 'network'
+  | 'http-400'
   | 'http-401'
   | 'http-429'
   | 'http-502'
@@ -92,6 +93,12 @@ function isFault(value: unknown): value is Fault {
 
 function faultResponse(fault: Fault): Response {
   if (fault === 'network') return HttpResponse.error()
+  if (fault === 'http-400') {
+    return HttpResponse.json(
+      { errors: [{ message: 'Syntax Error: Unexpected Name "mutatio"' }] },
+      { status: 400 },
+    )
+  }
   if (fault === 'http-401') {
     return HttpResponse.json(
       {

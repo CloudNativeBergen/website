@@ -1,6 +1,6 @@
 import { SOCIAL_PLATFORM_LABELS } from '../types'
 import { PLATFORM_CONSTRAINTS, validatePublishInput } from './constraints'
-import { PublishDeadlineError, withDeadline } from './deadline'
+import { withDeadline } from './deadline'
 import type {
   ConfirmCheck,
   PlatformConstraints,
@@ -127,7 +127,6 @@ interface GraphQLBody {
 
 /** What one GraphQL round trip produced, before any phase interprets it. */
 type Answer =
-  | { kind: 'unsent'; message: string }
   | { kind: 'no-answer'; message: string }
   | { kind: 'http'; status: number; message: string; retryAfter?: Date }
   | { kind: 'errors'; code: string | undefined; message: string }
@@ -229,7 +228,6 @@ export class BufferPublishAdapter implements SocialPublishAdapter {
       input: { id: vendorPostId },
     })
     switch (answer.kind) {
-      case 'unsent':
       case 'no-answer':
       case 'http':
         return {
@@ -256,7 +254,6 @@ export class BufferPublishAdapter implements SocialPublishAdapter {
     const label = SOCIAL_PLATFORM_LABELS[this.platform]
     const prefix = `Buffer could not check the pinned ${label} channel`
     switch (answer.kind) {
-      case 'unsent':
       case 'no-answer':
         return {
           ok: false,
@@ -332,9 +329,10 @@ export class BufferPublishAdapter implements SocialPublishAdapter {
   /** Spec §3.3, after the create request may have been sent. */
   private createOutcome(answer: Answer): PublishOutcome {
     switch (answer.kind) {
-      case 'unsent':
-        return { ok: false, kind: 'transient', message: answer.message }
       case 'no-answer':
+        // A timeout, a dropped connection — or the deadline refusing to
+        // start it, which the budget check above makes unreachable; treated
+        // as sent, the safe direction.
         return ambiguous(answer.message)
       case 'http':
         if (answer.status === 429) return rateLimited(answer)
@@ -380,9 +378,9 @@ export class BufferPublishAdapter implements SocialPublishAdapter {
   }
 
   /**
-   * One GraphQL round trip, classified by what we KNOW happened: never sent
-   * (`unsent`), sent and no usable answer (`no-answer`), an HTTP refusal, a
-   * system error in `errors[]`, or data. Never throws.
+   * One GraphQL round trip: no usable answer (`no-answer` — a throw, a
+   * timeout, an unreadable body), an HTTP refusal, a system error in
+   * `errors[]`, or data. Never throws; each phase decides what it means.
    */
   private async request(
     fetchImpl: typeof fetch,
@@ -401,9 +399,6 @@ export class BufferPublishAdapter implements SocialPublishAdapter {
         body: JSON.stringify({ operationName, query, variables }),
       })
     } catch (error) {
-      if (error instanceof PublishDeadlineError) {
-        return { kind: 'unsent', message: error.message }
-      }
       return {
         kind: 'no-answer',
         message: `${operationName}: ${errorMessage(error)}`,

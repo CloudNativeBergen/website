@@ -306,6 +306,9 @@ describe('BufferPublishAdapter — failure at create (spec §3.3)', () => {
     ],
     ['NOT_FOUND in errors[]', { errorCode: 'NOT_FOUND' }, 'rejected'],
     ['UNEXPECTED in errors[]', { errorCode: 'UNEXPECTED' }, 'ambiguous'],
+    // A 4xx refused the request itself (a malformed document); a 5xx may be
+    // a gateway giving up on a create that went through.
+    ['HTTP 400', 'http-400' as const, 'rejected'],
     ['a 5xx', 'http-502' as const, 'ambiguous'],
     ['a dropped connection', 'network' as const, 'ambiguous'],
     ['a body that is not JSON', 'not-json' as const, 'ambiguous'],
