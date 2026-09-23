@@ -226,6 +226,18 @@ describe('BufferPublishAdapter — the pinned channel check (spec §2)', () => {
     expect(callsNamed(calls, 'CreatePost')).toEqual([])
   })
 
+  it('a NOT_FOUND BENEATH the channel is transient, not a bad channel id', async () => {
+    const { calls, outcome } = await publishWith({
+      channel: {
+        errorCode: 'NOT_FOUND',
+        path: ['channel', 'linkShortening'],
+        nulledField: true,
+      },
+    })
+    expect(outcome).toMatchObject({ ok: false, kind: 'transient' })
+    expect(callsNamed(calls, 'CreatePost')).toEqual([])
+  })
+
   it('a 4xx on the check is our bug, not weather: rejected, never retried every tick', async () => {
     const { calls, outcome } = await publishWith({ channel: 'http-400' })
     expect(outcome).toMatchObject({ ok: false, kind: 'rejected' })

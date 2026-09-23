@@ -621,6 +621,8 @@ function checkFailure(
   if (refused) return refused
   if (
     answer.kind === 'errors' &&
+    // Beneath the channel is a failed field, not a bad channel id.
+    !answer.nested &&
     (answer.code === 'NOT_FOUND' || answer.code === 'FORBIDDEN')
   ) {
     return rejected(
