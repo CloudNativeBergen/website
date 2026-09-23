@@ -235,7 +235,11 @@ jobs:
         run: |
           # Vitest names each blob `blob-<index>-<total>.json`, so the files
           # themselves say how many shards there were.
-          total=$(ls .vitest/blob/blob-*.json | head -1 | sed -E 's/.*blob-[0-9]+-([0-9]+)\.json/\1/')
+          total=$(ls .vitest/blob/blob-*.json 2>/dev/null | head -1 | sed -E 's/.*blob-[0-9]+-([0-9]+)\.json/\1/')
+          if [ -z "$total" ]; then
+            echo "::error::no blob reports downloaded (artifacts expired, or every shard failed before writing one)"
+            exit 1
+          fi
           missing=0
           for i in $(seq 1 "$total"); do
             [ -f ".vitest/blob/blob-$i-$total.json" ] || { echo "::error::blob-$i-$total.json is missing"; missing=1; }
