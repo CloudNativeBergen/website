@@ -291,10 +291,21 @@ export function mayAlreadyBeLive(variant: {
   status: VariantStatus
   attempts: readonly PublishAttempt[]
 }): boolean {
-  if (variant.status !== 'failed') return false
-  const last = variant.attempts.at(-1)?.outcome
+  return outcomeMayBeLive(variant.status, variant.attempts.at(-1)?.outcome)
+}
+
+/**
+ * The same verdict from a status and the LAST attempt's outcome alone, for
+ * readers that project `attempts[-1].outcome` rather than the whole trail
+ * (the deletion guards). One rule, however the caller got at the fields.
+ */
+export function outcomeMayBeLive(
+  status: VariantStatus | string,
+  lastOutcome: AttemptOutcome | string | null | undefined,
+): boolean {
+  if (status !== 'failed') return false
   return (
-    last !== undefined &&
-    (MAY_BE_LIVE_OUTCOMES as readonly AttemptOutcome[]).includes(last)
+    typeof lastOutcome === 'string' &&
+    (MAY_BE_LIVE_OUTCOMES as readonly string[]).includes(lastOutcome)
   )
 }

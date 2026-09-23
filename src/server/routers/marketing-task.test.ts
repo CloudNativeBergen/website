@@ -94,6 +94,7 @@ vi.mock('@/lib/speaker/sanity', () => ({
   getOrganizersByConference: h.getOrganizersByConference,
 }))
 
+import { MAY_BE_LIVE_REFUSAL } from '@/lib/marketing/deletion'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { evaluate, parse } from 'groq-js'
 import { initTRPC } from '@trpc/server'
@@ -879,6 +880,40 @@ describe('marketing.task.delete', () => {
     expect(revalidateTag).toHaveBeenCalledWith(shortLinkIndexTag(CONF_A), {
       expire: 0,
     })
+  })
+
+  it('refuses to delete a FAILED post that may be live, and still deletes one that failed definitely (#1128)', async () => {
+    // A failed variant fell through to the ordinary delete, which removes
+    // the variant and its post. After `ambiguous` or `stale-claim` the post
+    // may be on the platform now, and that record is what an organizer
+    // reconciles from.
+    h.getSocialVariantEditorData.mockResolvedValue(
+      variantData({
+        status: 'failed',
+        attempts: [
+          { _key: 'a', at: '2026-09-13T09:50:00Z', outcome: 'ambiguous' },
+        ],
+      }),
+    )
+    await expect(
+      marketing().task.delete({ taskId: 'task-ours' }),
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: MAY_BE_LIVE_REFUSAL,
+    })
+    expect(h.deleteTask).not.toHaveBeenCalled()
+
+    // The control, on the ACTION: a rejected post never went out.
+    h.getSocialVariantEditorData.mockResolvedValue(
+      variantData({
+        status: 'failed',
+        attempts: [
+          { _key: 'a', at: '2026-09-13T09:50:00Z', outcome: 'rejected' },
+        ],
+      }),
+    )
+    await marketing().task.delete({ taskId: 'task-ours' })
+    expect(h.deleteTask).toHaveBeenCalledTimes(1)
   })
 
   // `submitted` is in flight exactly as `publishing` is (#1128).

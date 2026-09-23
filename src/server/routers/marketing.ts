@@ -8,6 +8,7 @@ import {
   readDeletionTree,
   deletionPreview,
   deletePlanTree,
+  MAY_BE_LIVE_REFUSAL,
   DeletionRefusalError,
 } from '@/lib/marketing/deletion'
 import { PAGE_OUTCOMES } from '@/lib/marketing/types'
@@ -185,7 +186,10 @@ import {
   getSocialVariantEditorData,
 } from '@/lib/social/sanity'
 import { scheduleIssues } from '@/lib/social/schedule-check'
-import { canOrganizerTransition } from '@/lib/social/state-machine'
+import {
+  canOrganizerTransition,
+  mayAlreadyBeLive,
+} from '@/lib/social/state-machine'
 import type { VariantStatus } from '@/lib/social/types'
 import { getOrganizersByConference } from '@/lib/speaker/sanity'
 import {
@@ -1609,6 +1613,14 @@ export const marketingRouter = router({
               v.status === 'published'
                 ? 'The post has been published; the record is kept.'
                 : 'The post is being published right now. Try again in a minute.',
+          })
+        }
+        // A failed variant that may be live (#1128): the same refusal the
+        // plan and post deletes give, because the remedy is the same.
+        if (mayAlreadyBeLive(v)) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: MAY_BE_LIVE_REFUSAL,
           })
         }
         variantRef = { id: v._id, rev: v._rev, postId: v.postId }

@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { groq } from 'next-sanity'
 import { mediaDeletionBlockers } from './media-deletion'
+import { outcomeMayBeLive } from './state-machine'
 import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
 import { scopedFetch } from '@/lib/sanity/scoped'
 import { getCurrentDateTime } from '@/lib/time'
@@ -538,7 +539,8 @@ export type DeleteSocialPostResult =
   | { deleted: true; variants: number }
   | {
       deleted: false
-      reason: 'in-flight' | 'published' | 'changed' | 'referenced'
+      reason:
+        'in-flight' | 'may-be-live' | 'published' | 'changed' | 'referenced'
     }
   /** A Marketing Task references a variant (spec §2.3): delete the Task instead. */
   | { deleted: false; reason: 'task'; taskId: string }
@@ -569,9 +571,15 @@ export async function deleteSocialPost(
   postId: string,
   conferenceId: string,
 ): Promise<DeleteSocialPostResult> {
-  const query = groq`*[_type == "socialPostVariant" && conference._ref == $conferenceId && post._ref == $postId && !(_id in path("drafts.**")) && !(_id in path("versions.**"))]{ _id, _rev, status, "taskId": *[_type == "marketingTask" && conference._ref == $conferenceId && variant._ref == ^._id && !(_id in path("drafts.**")) && !(_id in path("versions.**"))][0]._id }`
+  const query = groq`*[_type == "socialPostVariant" && conference._ref == $conferenceId && post._ref == $postId && !(_id in path("drafts.**")) && !(_id in path("versions.**"))]{ _id, _rev, status, "lastOutcome": attempts[-1].outcome, "taskId": *[_type == "marketingTask" && conference._ref == $conferenceId && variant._ref == ^._id && !(_id in path("drafts.**")) && !(_id in path("versions.**"))][0]._id }`
   const variants = await clientWrite.fetch<
-    { _id: string; _rev: string; status: string; taskId: string | null }[]
+    {
+      _id: string
+      _rev: string
+      status: string
+      lastOutcome: string | null
+      taskId: string | null
+    }[]
   >(query, { postId, conferenceId })
   const rows = variants ?? []
   const referenced = rows.find((v) => v.taskId)
@@ -586,6 +594,12 @@ export async function deleteSocialPost(
   }
   if (rows.some((v) => v.status === 'published')) {
     return { deleted: false, reason: 'published' }
+  }
+  // A failed variant whose last attempt could not tell whether the post went
+  // out (#1128) may be live; deleting it erases the only record to reconcile
+  // from. Same refusal as the plan and Task deletes.
+  if (rows.some((v) => outcomeMayBeLive(v.status, v.lastOutcome))) {
+    return { deleted: false, reason: 'may-be-live' }
   }
   // Draft twins go with their variant, exactly as the post's own twin goes with
   // the post — and they must be in the delete set before the referrer count

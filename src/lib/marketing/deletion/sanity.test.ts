@@ -134,7 +134,12 @@ vi.mock('@/lib/sanity/client', () => ({
   },
 }))
 
-import { deletionPreview, deletePlanTree, readDeletionTree } from './index'
+import {
+  deletionPreview,
+  deletePlanTree,
+  readDeletionTree,
+  MAY_BE_LIVE_REFUSAL,
+} from '.'
 import { snapshotDocument } from '../snapshots/engine'
 import { commitSeedPlan, getPlanView } from '../sanity'
 import { expandTemplate } from '../seed'
@@ -147,7 +152,12 @@ const doc = (
   _type: string,
   fields: Record<string, unknown> = {},
 ) => ({ _id, _type, _rev: `rev-${_id}`, conference: ref('conf-A'), ...fields })
-function task(n: number, status = 'draft', campaign = 'camp') {
+function task(
+  n: number,
+  status = 'draft',
+  campaign = 'camp',
+  lastOutcome = 'published',
+) {
   return [
     doc(`task-${n}`, 'marketingTask', {
       plan: ref('plan'),
@@ -158,7 +168,7 @@ function task(n: number, status = 'draft', campaign = 'camp') {
       post: ref(`post-${n}`),
       status,
       publishResult: { url: `https://bsky.app/post/${n}` },
-      attempts: [{ outcome: 'published', at: '2026-09-01' }],
+      attempts: [{ outcome: lastOutcome, at: '2026-09-01' }],
     }),
     doc(`post-${n}`, 'socialPost', { title: `Post ${n}` }),
   ]
@@ -323,6 +333,42 @@ describe('deletion read and refusals', () => {
     )
     expect(byId('variant-1')?.status).toBe('submitted')
     expect(h.commits).toBe(0)
+  })
+  it.each(['ambiguous', 'stale-claim'])(
+    'refuses a FAILED variant whose last attempt is %s — the post may be live (#1128)',
+    async (lastOutcome) => {
+      // `removedMedia` treats every non-published variant as deletable, so
+      // this would have erased the variant, its vendor receipt and the post
+      // that an organizer needs to reconcile a post that may be on the
+      // platform right now.
+      h.dataset.push(...task(1, 'failed', 'camp', lastOutcome))
+      const tree = await readDeletionTree('conf-A')
+      expect(() => deletionPreview(tree!)).toThrow(MAY_BE_LIVE_REFUSAL)
+      await expect(
+        deletePlanTree({
+          conferenceId: 'conf-A',
+          tree: tree!,
+          deletePlan: true,
+        }),
+      ).rejects.toThrow(MAY_BE_LIVE_REFUSAL)
+      expect(byId('variant-1')?.status).toBe('failed')
+      expect(h.commits).toBe(0)
+    },
+  )
+  it('still deletes a variant that failed DEFINITELY — nothing was created', async () => {
+    // The control: only the two may-be-live outcomes are protected. A
+    // rejected post never went out, and its Task deletes as before.
+    h.dataset.push(...task(1, 'failed', 'camp', 'rejected'))
+    const tree = await readDeletionTree('conf-A')
+    expect(() => deletionPreview(tree!)).not.toThrow()
+    expect(
+      await deletePlanTree({
+        conferenceId: 'conf-A',
+        tree: tree!,
+        deletePlan: true,
+      }),
+    ).toBe(true)
+    expect(byId('variant-1')).toBeUndefined()
   })
   it('refuses while an unpublished Studio document still references the plan', async () => {
     // marketingTask.campaign/.plan and marketingCampaign.plan are STRONG too,

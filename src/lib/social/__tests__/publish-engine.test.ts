@@ -1033,6 +1033,39 @@ describe('an accepted publish lands in submitted (#1128)', () => {
     expect(summary.errors.join('\n')).toMatch(/do NOT retry/i)
   })
 
+  it('surfaces the CONFIRMED receipt when the settle write throws', async () => {
+    // The vendor said the post is live and named it; the write that would
+    // have recorded that just failed. The sweep's catch logged the Sanity
+    // error alone, the variant stayed `submitted`, and if the vendor record
+    // was gone by the next read it settled `ambiguous` — for a post the
+    // engine had proof of. The submit write and the lost-CAS branch already
+    // surfaced their receipt; this write did not.
+    const store = new MemoryVariantStore([submittedVariant()])
+    store.transition = vi.fn(async () => {
+      throw new Error('Sanity is unreachable')
+    })
+
+    const summary = await runPublishTick({
+      store,
+      resolveAdapter: async () =>
+        asyncAdapter([
+          {
+            state: 'published',
+            externalId: 'urn:li:share:7',
+            url: 'https://www.linkedin.com/feed/update/7',
+          },
+        ]),
+      now: NOW,
+    })
+
+    // ON THE VALUE: the platform's own id and address are in what an
+    // organizer can read, not merely "an error was logged".
+    const errors = summary.errors.join('\n')
+    expect(errors).toContain('urn:li:share:7')
+    expect(errors).toContain('https://www.linkedin.com/feed/update/7')
+    expect(errors).toMatch(/do NOT retry/i)
+  })
+
   it('a synchronous adapter still publishes in one step — Bluesky is untouched', async () => {
     const store = new MemoryVariantStore([makeVariant()])
     const summary = await runPublishTick({

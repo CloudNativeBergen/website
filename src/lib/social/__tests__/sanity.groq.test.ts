@@ -261,6 +261,34 @@ describe('deleteSocialPost', () => {
     // Fails on the ACTION: nothing may be deleted, not merely "no error".
     expect(h.deleted).toEqual([])
   })
+
+  it('refuses a FAILED variant that may be live — its last attempt could not confirm (#1128)', async () => {
+    h.dataset = [
+      variant('maybe', 'c1', {
+        status: 'failed',
+        attempts: [
+          { _key: 'a', at: '2026-09-13T09:50:00Z', outcome: 'ambiguous' },
+        ],
+      }),
+    ]
+    expect(await deleteSocialPost('post-c1', 'c1')).toEqual({
+      deleted: false,
+      reason: 'may-be-live',
+    })
+    expect(h.deleted).toEqual([])
+    // The control: a post that failed DEFINITELY never went out and deletes.
+    h.dataset = [
+      variant('never', 'c1', {
+        status: 'failed',
+        attempts: [
+          { _key: 'a', at: '2026-09-13T09:50:00Z', outcome: 'rejected' },
+        ],
+      }),
+    ]
+    expect(await deleteSocialPost('post-c1', 'c1')).toMatchObject({
+      deleted: true,
+    })
+  })
 })
 
 describe('findWork — the composed due/stale scan', () => {

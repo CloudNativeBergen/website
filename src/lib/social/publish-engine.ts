@@ -528,17 +528,31 @@ async function settleConfirm(
   }
   if (decision.status === 'published') {
     // The CONFIRMATION leg — the only one that joins PUBLISHED_OUTCOMES.
-    const landed = await store.transition(
-      variant._id,
-      {
-        status: 'published',
-        claimedAt: null,
-        submission: checked,
-        publishResult: decision.publishResult,
-        attempt: { at: now.toISOString(), outcome: 'published' },
-      },
-      { ifRevision: variant._rev },
-    )
+    let landed: boolean
+    try {
+      landed = await store.transition(
+        variant._id,
+        {
+          status: 'published',
+          claimedAt: null,
+          submission: checked,
+          publishResult: decision.publishResult,
+          attempt: { at: now.toISOString(), outcome: 'published' },
+        },
+        { ifRevision: variant._rev },
+      )
+    } catch (error) {
+      // THE WRITE THREW after the vendor said the post is live. The sweep's
+      // catch would log the Sanity error alone; the variant stays `submitted`
+      // and is read again next tick — but if the vendor record is gone by
+      // then, it settles `ambiguous` for a post the engine had proof of.
+      // Surfaced with the receipt before rethrowing, as the submit write and
+      // the lost-CAS branch below already do.
+      summary.errors.push(
+        `${variant._id}: the publisher confirmed the post (${decision.publishResult.externalId ?? '?'} ${decision.publishResult.url ?? ''}) but the settle write FAILED (${error instanceof Error ? error.message : String(error)}) — the post IS live; do NOT retry`,
+      )
+      throw error
+    }
     if (landed) {
       summary.confirmPublished++
     } else {

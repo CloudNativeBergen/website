@@ -26,6 +26,7 @@ import {
 } from '@/lib/social/sanity'
 import { getCurrentDateTime } from '@/lib/time'
 import { canOrganizerTransition } from '@/lib/social/state-machine'
+import { MAY_BE_LIVE_REFUSAL } from '@/lib/marketing/deletion'
 import { isSocialPlatform } from '@/lib/social/provider'
 import { postUrlIssue } from '@/lib/social/provider/manual'
 import {
@@ -256,9 +257,11 @@ export const socialRouter = router({
           message:
             result.reason === 'in-flight'
               ? 'A variant is being published right now. Try again in a minute.'
-              : result.reason === 'referenced'
-                ? 'Something still links to this post that deleting it would not remove — an unpublished Studio edit, a scheduled release, or a variant on another edition. Open it in the Studio and clear that first.'
-                : 'A variant of this post has been published; the record is kept.',
+              : result.reason === 'may-be-live'
+                ? MAY_BE_LIVE_REFUSAL
+                : result.reason === 'referenced'
+                  ? 'Something still links to this post that deleting it would not remove — an unpublished Studio edit, a scheduled release, or a variant on another edition. Open it in the Studio and clear that first.'
+                  : 'A variant of this post has been published; the record is kept.',
         })
       }
       return result
