@@ -150,9 +150,10 @@ the mixed track in all (44 ms trimmed plus 21 ms dropped). Two ways to fix the o
   with the same encoder, decode it back through Mediabunny, and find the click. That took 20–163 ms
   and returned exactly 2112 or 1024 in all five browser and encoder pairs. Then drop that many
   samples from the start of the mixed track. The result was **0 samples offset** in every one of
-  them (Chrome native and add-on, Safari native and add-on, Firefox add-on). The first 44 ms of the
-  track is lost, which is under any fade-in. The fix is in the samples themselves, so it does not
-  depend on how a player or a platform's transcoder treats the container.
+  them (Chrome native and add-on, Safari native and add-on, Firefox add-on). Up to 44 ms of the
+  track is trimmed (21 ms with the add-on; 65 ms lost in all on Safari's native path). The fix is
+  in the samples themselves, so it does not depend on how a player or a platform's transcoder
+  treats the container.
 - **An edit list** (`startTimestamp: -2112/48000` on the audio source), tried in Chrome only. It
   made Mediabunny write an `elst` with media time 2112, and ffmpeg then decoded it 0–1 samples off.
   With the edit list ignored it is 2112 off again, so it relies on the player. Not recommended.
