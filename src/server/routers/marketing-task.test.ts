@@ -391,6 +391,19 @@ describe('marketing.task.approve', () => {
     expect(h.approveTask.mock.calls[0][0].variant.link).toBe(derived)
   })
 
+  it('does not read the own domains for a card platform: a Bluesky approval cannot fail on that read', async () => {
+    h.getConferenceDomains.mockRejectedValue(new Error('verification down'))
+    h.getSocialVariantEditorData.mockResolvedValue(
+      variantData({ platform: 'bluesky' }),
+    )
+    await marketing().task.approve({ taskId: 'task-ours' })
+    expect(h.getConferenceDomains).not.toHaveBeenCalled()
+    expect(h.scheduleIssues.mock.calls[0][2]).toEqual({
+      taskOwned: true,
+      conferenceDomains: [],
+    })
+  })
+
   it('hands the LIVE own domains to the shared validation, by the variant conference (#1134)', async () => {
     // The cached conference (`CONFERENCE.domains`) lists cloudnativebergen.dev;
     // the live read says something else. The live one is what approve must

@@ -398,12 +398,14 @@ describe('findWork — the composed due/stale scan', () => {
     expect(h.queries).toHaveLength(1)
   })
 
-  it('FAILS OPEN per conference when a domain-verification read throws — the tick goes on', async () => {
+  it("DEFERS a conference's first-comment variants when its verification read throws; card platforms still dispatch with the RAW list", async () => {
     // Under routing enforcement `verifiedDomains` reads records. One Sanity
-    // timeout for one conference must not reject `findWork` and take the
-    // stale sweep, the confirm sweep and every other tenant's dispatch down
-    // with it; the first-comment rule is editorial and already says nothing
-    // on an empty list.
+    // timeout for one conference must not reject `findWork` (the stale and
+    // confirm sweeps and every other tenant ride on it), must not dispatch a
+    // LinkedIn body with the rule silently off, and must not strip the list
+    // a Bluesky link card is built from — that post would go out without
+    // its card, irreversibly. So: LinkedIn waits a tick, Bluesky keeps the
+    // raw list, the neighbour is untouched.
     const error = vi.spyOn(console, 'error').mockImplementation(() => {})
     verification.verifiedDomains.mockClear()
     verification.verifiedDomains.mockImplementation(async (claimed) => {
@@ -414,28 +416,34 @@ describe('findWork — the composed due/stale scan', () => {
       h.dataset = [
         conference('c1'),
         conference('c2'),
-        variant('v1', 'c1', { scheduledAt: '2026-09-13T09:00:00Z' }),
-        variant('w1', 'c2', { scheduledAt: '2026-09-13T09:00:00Z' }),
-        variant('w2', 'c2', { scheduledAt: '2026-09-13T09:01:00Z' }),
+        variant('v1', 'c1', {
+          platform: 'linkedin',
+          scheduledAt: '2026-09-13T09:00:00Z',
+        }),
+        variant('w1', 'c2', {
+          platform: 'linkedin',
+          scheduledAt: '2026-09-13T09:00:00Z',
+        }),
+        variant('w2', 'c2', {
+          platform: 'bluesky',
+          scheduledAt: '2026-09-13T09:01:00Z',
+        }),
       ]
       const work = await sanitySocialVariantStore.findWork(
         NOW,
         STALE_BEFORE,
         BOUNDS,
       )
-      // ON THE VALUE: every due row is still handed over; the failing
-      // conference's rows carry no domains (rule skipped), the other keeps
-      // its list; the read was attempted once for the failing conference.
-      expect(work.due.map((v) => v._id).sort()).toEqual(['v1', 'w1', 'w2'])
+      // ON THE VALUE: the LinkedIn variant of the failing conference is NOT
+      // in this tick; the Bluesky one is, with the raw list; the neighbour
+      // keeps its verified list; the read was attempted once and logged once.
+      expect(work.due.map((v) => v._id).sort()).toEqual(['v1', 'w2'])
       expect(work.due.find((v) => v._id === 'v1')?.conferenceDomains).toEqual([
         'c1.example.no',
       ])
-      expect(work.due.find((v) => v._id === 'w1')?.conferenceDomains).toEqual(
-        [],
-      )
-      expect(work.due.find((v) => v._id === 'w2')?.conferenceDomains).toEqual(
-        [],
-      )
+      expect(work.due.find((v) => v._id === 'w2')?.conferenceDomains).toEqual([
+        'c2.example.no',
+      ])
       expect(
         verification.verifiedDomains.mock.calls.filter((c) =>
           c[0].includes('c2.example.no'),
@@ -450,7 +458,27 @@ describe('findWork — the composed due/stale scan', () => {
     }
   })
 
-  it('does not wait longer than VERIFY_DOMAINS_TIMEOUT_MS for a verification read that hangs', async () => {
+  it('never verifies for a card platform: Bluesky rows carry the raw list without a read', async () => {
+    verification.verifiedDomains.mockClear()
+    h.dataset = [
+      conference('c1'),
+      variant('b1', 'c1', {
+        platform: 'bluesky',
+        scheduledAt: '2026-09-13T09:00:00Z',
+      }),
+    ]
+    const work = await sanitySocialVariantStore.findWork(
+      NOW,
+      STALE_BEFORE,
+      BOUNDS,
+    )
+    expect(work.due.map((v) => v.conferenceDomains)).toEqual([
+      ['c1.example.no'],
+    ])
+    expect(verification.verifiedDomains).not.toHaveBeenCalled()
+  })
+
+  it('does not wait longer than VERIFY_DOMAINS_TIMEOUT_MS for a verification read that hangs — the variant waits a tick', async () => {
     // The Sanity client's own timeout is minutes; the cron has sixty seconds
     // for everything. A read that never returns is bounded and the
     // conference falls back to no rule, like a read that throws.
@@ -463,7 +491,10 @@ describe('findWork — the composed due/stale scan', () => {
     try {
       h.dataset = [
         conference('c1'),
-        variant('v1', 'c1', { scheduledAt: '2026-09-13T09:00:00Z' }),
+        variant('v1', 'c1', {
+          platform: 'linkedin',
+          scheduledAt: '2026-09-13T09:00:00Z',
+        }),
       ]
       const pending = sanitySocialVariantStore.findWork(
         NOW,
@@ -472,8 +503,8 @@ describe('findWork — the composed due/stale scan', () => {
       )
       await vi.advanceTimersByTimeAsync(VERIFY_DOMAINS_TIMEOUT_MS + 1)
       const work = await pending
-      expect(work.due.map((v) => v._id)).toEqual(['v1'])
-      expect(work.due[0].conferenceDomains).toEqual([])
+      // Deferred, not dispatched with the rule off: it is picked up next tick.
+      expect(work.due).toEqual([])
       expect(error).toHaveBeenCalledTimes(1)
       expect(String(error.mock.calls[0][1])).toContain('longer than')
     } finally {
@@ -993,6 +1024,21 @@ describe('getConferenceDomainsForRule — the live read the mutations validate a
 })
 
 describe('getSocialVariantEditorData — the editor read', () => {
+  it('verifies the domains only for a first-comment platform; a Bluesky editor takes the raw list with no read', async () => {
+    verification.verifiedDomains.mockClear()
+    h.dataset = [
+      conference('conf-A'),
+      post('post-conf-A', 'conf-A'),
+      variant('v-bsky', 'conf-A', { platform: 'bluesky' }),
+      variant('v-li', 'conf-A', { platform: 'linkedin' }),
+    ]
+    const bsky = await getSocialVariantEditorData('v-bsky')
+    expect(bsky?.conferenceDomains).toEqual(['conf-A.example.no'])
+    expect(verification.verifiedDomains).not.toHaveBeenCalled()
+    await getSocialVariantEditorData('v-li')
+    expect(verification.verifiedDomains).toHaveBeenCalledTimes(1)
+  })
+
   it('projects the variant with its post attachments, sizing from asset metadata', async () => {
     h.dataset = [
       conference('conf-A'),

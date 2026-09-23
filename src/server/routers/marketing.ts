@@ -45,6 +45,7 @@ import {
 import { handoffStudioAttachment } from '@/lib/social/sanity'
 import { createHash, randomUUID } from 'node:crypto'
 import { TRPCError } from '@trpc/server'
+import { needsOwnDomains } from '@/lib/social/provider/constraints'
 import { adminProcedure, resolveConferenceId, router } from '@/server/trpc'
 import { loadReport } from '@/lib/marketing/report'
 import { buildReportCsv } from '@/lib/marketing/report-csv'
@@ -1366,9 +1367,9 @@ export const marketingRouter = router({
               // not `conference.domains` from the cached loader — approve is
               // the enforcement point Task-owned drafts actually go through,
               // and it must apply the same list save and the tick apply.
-              conferenceDomains: await getConferenceDomainsForRule(
-                v.conferenceId,
-              ),
+              conferenceDomains: needsOwnDomains(v.platform)
+                ? await getConferenceDomainsForRule(v.conferenceId)
+                : [],
             },
           )
           if (issues.length > 0) {

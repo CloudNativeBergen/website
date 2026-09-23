@@ -201,6 +201,16 @@ export function ownDomainUrlsIn(
 }
 
 /**
+ * Whether the first-comment rule applies to `platform` at all — the only rule
+ * that reads the conference's own domains. Callers use it to skip the domain
+ * (and, under enforcement, verification) reads for every other platform, so
+ * a LinkedIn-only rule can never block a Bluesky save or dispatch.
+ */
+export function needsOwnDomains(platform: SocialPlatform): boolean {
+  return getPlatformConstraints(platform)?.linkPlacement === 'comment'
+}
+
+/**
  * Spec §3.1 (#1134): on a platform that posts the link as the FIRST COMMENT,
  * the body may not link to the conference's own site.
  *

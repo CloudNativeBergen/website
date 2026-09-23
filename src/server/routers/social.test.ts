@@ -1296,6 +1296,21 @@ describe('LinkedIn: the link is the first comment', () => {
   const withDomains = () =>
     h.getConferenceDomains.mockResolvedValue(['cloudnativebergen.no'])
 
+  it('never reads the domains for a card platform: a Bluesky save cannot depend on, or fail with, that read', async () => {
+    h.getConferenceDomains.mockRejectedValue(new Error('verification down'))
+    h.getSocialPostVariant.mockResolvedValue(
+      variant({
+        platform: 'bluesky',
+        body: `Tickets → https://cloudnativebergen.no/tickets`,
+        link: 'https://cloudnativebergen.no/tickets',
+      }),
+    )
+    await expect(
+      social().scheduleVariant({ variantId: 'variant-ours' }),
+    ).resolves.toMatchObject({ success: true })
+    expect(h.getConferenceDomains).not.toHaveBeenCalled()
+  })
+
   it('reads the domains UNCACHED by the resolved conference id, not from the cached conference', async () => {
     // The cached loader can hold a list edited in the hosted Studio for as
     // long as its tag lives. Here the cached conference carries a STALE list

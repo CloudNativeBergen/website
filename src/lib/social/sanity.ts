@@ -10,6 +10,7 @@ import { platformDomainSuffix } from '@/lib/domain-verification/platform'
 import { getCurrentDateTime } from '@/lib/time'
 import { placeholderIssues } from './schedule-check'
 import type { ValidationIssue } from './provider/types'
+import { needsOwnDomains } from './provider/constraints'
 import type {
   PublishableVariant,
   SocialVariantStore,
@@ -315,15 +316,21 @@ export const sanitySocialVariantStore: SocialVariantStore = {
       now: now.toISOString(),
       staleBefore: staleBefore.toISOString(),
     })
-    // One verification read per conference per tick, not per variant: the
-    // due list is grouped by conference already. FAIL OPEN per conference:
-    // the first-comment rule is editorial and already says nothing when the
-    // list is empty, so a verification read that throws (a Sanity timeout,
-    // a record that does not hydrate) must not take the whole tick down —
-    // the stale sweep, the confirm sweep and every other tenant's dispatch
-    // ride on this one call.
-    const verifiedByConference = new Map<string, Promise<string[]>>()
-    const domainsFor = (raw: {
+    // `conferenceDomains` serves TWO readers. Link cards
+    // (`linkCardHostsFor`, every platform) take the RAW list and run their
+    // own routing check. The first-comment rule (comment-placement platforms
+    // only) takes the VERIFIED list — one verification read per conference
+    // per tick, not per variant, because the due list is grouped already.
+    //
+    // When that read throws or hangs (a Sanity timeout, a record that does
+    // not hydrate), the conference's comment-platform variants are DEFERRED
+    // to the next tick: dispatching them with an empty list would skip the
+    // rule, and dispatching a card platform with an empty list would publish
+    // a post without its card, irreversibly. Other platforms in the same
+    // conference, and every other tenant, still dispatch — the stale sweep,
+    // the confirm sweep and every other tenant's dispatch ride on this call.
+    const verifiedByConference = new Map<string, Promise<string[] | null>>()
+    const verifiedFor = (raw: {
       conferenceId: string | null
       conferenceDomains: (string | null)[] | null
     }) => {
@@ -336,29 +343,41 @@ export const sanitySocialVariantStore: SocialVariantStore = {
           `verification read took longer than ${VERIFY_DOMAINS_TIMEOUT_MS} ms`,
         ).catch((error: unknown) => {
           console.error(
-            `[social] could not verify the domains of conference ${key}; the first-comment rule is skipped this tick:`,
+            `[social] could not verify the domains of conference ${key}; its first-comment variants wait for the next tick:`,
             error instanceof Error ? error.message : error,
           )
-          return []
+          return null
         })
         verifiedByConference.set(key, pending)
       }
       return pending
     }
-    const dueVariants = await Promise.all(
+    const dueOrDeferred = await Promise.all(
       (result?.due ?? [])
         .flat()
-        .map(async (raw): Promise<PublishableVariant> => ({
-          ...normalizeVariant(raw),
-          postAttachments: normalizePostAttachments(raw.postAttachments),
-          conferenceDomains: await domainsFor(raw),
-          marketingTaskId: raw.marketingTaskId,
-          postCreatedBy:
-            typeof raw.postCreatedBy === 'string' &&
-            raw.postCreatedBy.length > 0
-              ? raw.postCreatedBy
-              : null,
-        })),
+        .map(async (raw): Promise<PublishableVariant | null> => {
+          const raw_domains = normalizeDomainList(raw.conferenceDomains)
+          let conferenceDomains: string[] = raw_domains
+          if (needsOwnDomains(normalizeVariant(raw).platform)) {
+            const verified = await verifiedFor(raw)
+            if (verified === null) return null
+            conferenceDomains = verified
+          }
+          return {
+            ...normalizeVariant(raw),
+            postAttachments: normalizePostAttachments(raw.postAttachments),
+            conferenceDomains,
+            marketingTaskId: raw.marketingTaskId,
+            postCreatedBy:
+              typeof raw.postCreatedBy === 'string' &&
+              raw.postCreatedBy.length > 0
+                ? raw.postCreatedBy
+                : null,
+          }
+        }),
+    )
+    const dueVariants = dueOrDeferred.filter(
+      (v): v is PublishableVariant => v !== null,
     )
     return {
       due: dueVariants,
@@ -779,12 +798,16 @@ export async function getSocialVariantEditorData(
     conferenceDomains: (string | null)[] | null
   } | null>(query, { variantId })
   if (!row) return null
+  const variant = normalizeVariant(row.variant)
+  const domains = normalizeDomainList(row.conferenceDomains)
   return {
-    variant: normalizeVariant(row.variant),
+    variant,
     post: normalizePostInputs(row.post),
-    conferenceDomains: await verifiedDomains(
-      normalizeDomainList(row.conferenceDomains),
-    ),
+    // Verified only where a rule reads them; a card platform's editor must
+    // not wait on, or fail with, a verification read it never uses.
+    conferenceDomains: needsOwnDomains(variant.platform)
+      ? await verifiedDomains(domains)
+      : domains,
     platformZone: platformDomainSuffix(),
   }
 }
