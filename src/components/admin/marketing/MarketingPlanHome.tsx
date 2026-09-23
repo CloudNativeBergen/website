@@ -7,6 +7,7 @@ import {
   PresentationChartBarIcon,
   MegaphoneIcon,
   PaintBrushIcon,
+  PhotoIcon,
   PlusIcon,
 } from '@heroicons/react/24/outline'
 import { AdminPageHeader } from '@/components/admin/AdminPageHeader'
@@ -38,6 +39,13 @@ const STUDIO_ACTION = {
   icon: <PaintBrushIcon className="size-4" />,
   variant: 'secondary' as const,
 }
+const GALLERY_ACTION = {
+  label: 'Gallery',
+  href: '/admin/marketing/gallery',
+  // The same glyph the admin registry gives the Gallery.
+  icon: <PhotoIcon className="size-4" />,
+  variant: 'secondary' as const,
+}
 const REPORT_ACTION = {
   label: 'Marketing report',
   href: '/admin/marketing/report',
@@ -55,7 +63,8 @@ const POSTS_ACTION = {
 /**
  * The home of the marketing admin page (spec §7): the edition's plan on its
  * Milestone timeline, or the create call-to-action before one exists. The
- * promo studio and the posts table stay one click away in the header.
+ * promo studio, the gallery and the posts table stay one click away in the
+ * header.
  */
 export function MarketingPlanHome({
   conferenceTitle,
@@ -136,6 +145,7 @@ export function MarketingPlanHome({
                 },
                 REPORT_ACTION,
                 STUDIO_ACTION,
+                GALLERY_ACTION,
                 POSTS_ACTION,
               ]
             : [
@@ -147,6 +157,7 @@ export function MarketingPlanHome({
                 },
                 REPORT_ACTION,
                 STUDIO_ACTION,
+                GALLERY_ACTION,
                 POSTS_ACTION,
               ]
         }
