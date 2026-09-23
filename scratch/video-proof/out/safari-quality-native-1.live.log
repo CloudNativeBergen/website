@@ -1,0 +1,13 @@
+[549.0] support {"videoNative":{"avc1.42001f (baseline 3.1)":true,"avc1.420028 (baseline 4.0)":true,"avc1.4d0028 (main 4.0)":true,"avc1.640028 (high 4.0)":true,"avc1.640032 (high 5.0)":true},"audioNativeAac":true,"mbCanEncodeVideoAvc":true,"mbCanEncodeAudioAacBeforeAddon":true,"hasSchedulerYield":false}
+[562.0] audio rendered {"sampleRate":48000,"length":480000,"ch":2}
+[563.0] audio encoder config {"codec":"mp4a.40.2","numberOfChannels":2,"sampleRate":48000,"bitrate":128000,"aac":{"format":"aac"}}
+[563.0] native isConfigSupported(actual audio config) true
+[569.0] audio added {"ms":7}
+[577.0] video encoder config {"codec":"avc1.640020","width":1080,"height":1080,"displayWidth":1080,"displayHeight":1080,"bitrate":8000000,"bitrateMode":"variable","alpha":"discard","framerate":30,"avc":{"format":"avc"}}
+[578.0] isConfigSupported(actual video config) true
+[581.0] frame 0
+[16595.0] STALL: no frame accepted for 15 s {"framesDone":7,"outputState":"started"}
+[16597.0] cancel clicked {"source":"watchdog"}
+[16599.0] canceled {"framesDone":8,"cancelToStoppedMs":2,"outputState":"canceled","scheduledToHandlerMs":null}
+[16599.0] result {"wallMs":16048,"totalMsInclProbe":16063,"framesDone":8,"maxTaskGapMs":25,"heartbeats":2005,"rafPaints":959,"firstError":null,"supportedButFailed":false,"bytes":0}
+[16607.0] DONE

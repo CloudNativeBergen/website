@@ -1,0 +1,57 @@
+{
+  "label": "safari-raw-b31",
+  "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.0 Safari/605.1.15",
+  "events": [
+    {
+      "t": 532,
+      "msg": "raw config",
+      "data": {
+        "cfg": {
+          "codec": "avc1.42001f",
+          "width": 1080,
+          "height": 1080,
+          "bitrate": 8000000,
+          "framerate": 30,
+          "avc": {
+            "format": "avc"
+          }
+        },
+        "supported": true
+      }
+    },
+    {
+      "t": 539,
+      "msg": "raw frame",
+      "data": {
+        "n": 0,
+        "queue": 1,
+        "outputs": 0,
+        "err": null
+      }
+    },
+    {
+      "t": 8586,
+      "msg": "raw STALL",
+      "data": {
+        "n": 8,
+        "queue": 5,
+        "outputs": 0,
+        "err": null
+      }
+    },
+    {
+      "t": 13590,
+      "msg": "raw done",
+      "data": {
+        "ms": 13057,
+        "outputs": 0,
+        "err": "flush timeout 5s",
+        "state": "configured"
+      }
+    }
+  ],
+  "raw": {
+    "outputs": 0,
+    "err": "flush timeout 5s"
+  }
+}

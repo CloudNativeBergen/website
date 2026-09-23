@@ -1,0 +1,17 @@
+[778.0] support {"videoNative":{"avc1.42001f (baseline 3.1)":true,"avc1.420028 (baseline 4.0)":true,"avc1.4d0028 (main 4.0)":true,"avc1.640028 (high 4.0)":true,"avc1.640032 (high 5.0)":true},"audioNativeAac":false,"mbCanEncodeVideoAvc":true,"mbCanEncodeAudioAacBeforeAddon":false,"hasSchedulerYield":true}
+[798.0] video encoder config {"codec":"avc1.640020","width":1080,"height":1080,"displayWidth":1080,"displayHeight":1080,"bitrate":8000000,"bitrateMode":"variable","alpha":"discard","framerate":30,"avc":{"format":"avc"}}
+[798.0] isConfigSupported(actual video config) true
+[798.0] frame 0
+[1013.0] frame 30
+[1171.0] frame 60
+[1311.0] frame 90
+[1451.0] frame 120
+[1599.0] frame 150
+[1749.0] frame 180
+[1886.0] frame 210
+[2270.0] frame 240
+[2815.0] frame 270
+[3269.0] finalized {"finalizeMs":81}
+[3269.0] result {"wallMs":2486,"totalMsInclProbe":2659,"framesDone":300,"maxTaskGapMs":85,"heartbeats":210,"rafPaints":86,"firstError":null,"supportedButFailed":false,"bytes":449502}
+[3326.0] saved "firefox-silent-1.mp4"
+[3347.0] DONE

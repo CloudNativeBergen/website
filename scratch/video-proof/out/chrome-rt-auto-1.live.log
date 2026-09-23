@@ -1,0 +1,21 @@
+[472.1] support {"videoNative":{"avc1.42001f (baseline 3.1)":false,"avc1.420028 (baseline 4.0)":true,"avc1.4d0028 (main 4.0)":true,"avc1.640028 (high 4.0)":true,"avc1.640032 (high 5.0)":true},"audioNativeAac":true,"mbCanEncodeVideoAvc":true,"mbCanEncodeAudioAacBeforeAddon":true,"hasSchedulerYield":true}
+[492.5] audio rendered {"sampleRate":48000,"length":480000,"ch":2}
+[493.4] audio encoder config {"codec":"mp4a.40.2","numberOfChannels":2,"sampleRate":48000,"bitrate":128000,"aac":{"format":"aac"}}
+[493.8] native isConfigSupported(actual audio config) true
+[504.3] audio added {"ms":11.5}
+[507.6] video encoder config {"codec":"avc1.640020","width":1080,"height":1080,"displayWidth":1080,"displayHeight":1080,"bitrate":8000000,"bitrateMode":"variable","alpha":"discard","framerate":30,"latencyMode":"realtime","avc":{"format":"avc"}}
+[524.3] isConfigSupported(actual video config) true
+[525.0] frame 0
+[3681.1] frame 30
+[3968.5] frame 60
+[4251.0] frame 90
+[4542.1] frame 120
+[4846.6] frame 150
+[5130.3] frame 180
+[5410.7] frame 210
+[5695.5] frame 240
+[5981.4] frame 270
+[6374.6] finalized {"finalizeMs":110.9}
+[6375.3] result {"wallMs":5901.399999976158,"totalMsInclProbe":6030.5,"framesDone":300,"maxTaskGapMs":22.399999976158142,"heartbeats":1206,"rafPaints":847,"firstError":null,"supportedButFailed":false,"bytes":346742}
+[6406.1] saved "chrome-rt-auto-1.mp4"
+[6408.6] DONE

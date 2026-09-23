@@ -1,0 +1,169 @@
+{
+  "label": "chrome-addon-2",
+  "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36",
+  "events": [
+    {
+      "t": 563.7000000476837,
+      "msg": "support",
+      "data": {
+        "videoNative": {
+          "avc1.42001f (baseline 3.1)": false,
+          "avc1.420028 (baseline 4.0)": true,
+          "avc1.4d0028 (main 4.0)": true,
+          "avc1.640028 (high 4.0)": true,
+          "avc1.640032 (high 5.0)": true
+        },
+        "audioNativeAac": true,
+        "mbCanEncodeVideoAvc": true,
+        "mbCanEncodeAudioAacBeforeAddon": true,
+        "hasSchedulerYield": true,
+        "mbCanEncodeAudioAacAfterAddon": true
+      }
+    },
+    {
+      "t": 563.8000000715256,
+      "msg": "registered AAC add-on",
+      "data": {
+        "ms": 0
+      }
+    },
+    {
+      "t": 563.8000000715256,
+      "msg": "after add-on canEncodeAudio(aac)",
+      "data": true
+    },
+    {
+      "t": 583.8999999761581,
+      "msg": "audio rendered",
+      "data": {
+        "sampleRate": 48000,
+        "length": 480000,
+        "ch": 2
+      }
+    },
+    {
+      "t": 584.8999999761581,
+      "msg": "audio encoder config",
+      "data": {
+        "codec": "mp4a.40.2",
+        "numberOfChannels": 2,
+        "sampleRate": 48000,
+        "bitrate": 128000,
+        "aac": {
+          "format": "aac"
+        }
+      }
+    },
+    {
+      "t": 591.2000000476837,
+      "msg": "native isConfigSupported(actual audio config)",
+      "data": true
+    },
+    {
+      "t": 1374.5,
+      "msg": "audio added",
+      "data": {
+        "ms": 790.4
+      }
+    },
+    {
+      "t": 1377.8999999761581,
+      "msg": "video encoder config",
+      "data": {
+        "codec": "avc1.640020",
+        "width": 1080,
+        "height": 1080,
+        "displayWidth": 1080,
+        "displayHeight": 1080,
+        "bitrate": 8000000,
+        "bitrateMode": "variable",
+        "alpha": "discard",
+        "framerate": 30,
+        "avc": {
+          "format": "avc"
+        }
+      }
+    },
+    {
+      "t": 1392,
+      "msg": "isConfigSupported(actual video config)",
+      "data": true
+    },
+    {
+      "t": 2435.2000000476837,
+      "msg": "finalized",
+      "data": {
+        "finalizeMs": 50.9
+      }
+    },
+    {
+      "t": 2435.3000000715256,
+      "msg": "result",
+      "data": {
+        "wallMs": 1870.6000000238419,
+        "totalMsInclProbe": 2050.2000000476837,
+        "framesDone": 300,
+        "maxTaskGapMs": 21.799999952316284,
+        "heartbeats": 401,
+        "rafPaints": 98,
+        "firstError": null,
+        "supportedButFailed": false,
+        "bytes": 344854
+      }
+    },
+    {
+      "t": 2457.5,
+      "msg": "saved",
+      "data": "chrome-addon-2.mp4"
+    }
+  ],
+  "support": {
+    "videoNative": {
+      "avc1.42001f (baseline 3.1)": false,
+      "avc1.420028 (baseline 4.0)": true,
+      "avc1.4d0028 (main 4.0)": true,
+      "avc1.640028 (high 4.0)": true,
+      "avc1.640032 (high 5.0)": true
+    },
+    "audioNativeAac": true,
+    "mbCanEncodeVideoAvc": true,
+    "mbCanEncodeAudioAacBeforeAddon": true,
+    "hasSchedulerYield": true,
+    "mbCanEncodeAudioAacAfterAddon": true
+  },
+  "mode": "addon",
+  "audioEncoderConfig": {
+    "codec": "mp4a.40.2",
+    "numberOfChannels": 2,
+    "sampleRate": 48000,
+    "bitrate": 128000,
+    "aac": {
+      "format": "aac"
+    }
+  },
+  "videoEncoderConfig": {
+    "codec": "avc1.640020",
+    "width": 1080,
+    "height": 1080,
+    "displayWidth": 1080,
+    "displayHeight": 1080,
+    "bitrate": 8000000,
+    "bitrateMode": "variable",
+    "alpha": "discard",
+    "framerate": 30,
+    "avc": {
+      "format": "avc"
+    }
+  },
+  "result": {
+    "wallMs": 1870.6000000238419,
+    "totalMsInclProbe": 2050.2000000476837,
+    "framesDone": 300,
+    "maxTaskGapMs": 21.799999952316284,
+    "heartbeats": 401,
+    "rafPaints": 98,
+    "firstError": null,
+    "supportedButFailed": false,
+    "bytes": 344854
+  }
+}

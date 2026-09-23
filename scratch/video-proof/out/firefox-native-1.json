@@ -1,0 +1,116 @@
+{
+  "label": "firefox-native-1",
+  "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:157.0) Gecko/20100101 Firefox/157.0",
+  "events": [
+    {
+      "t": 787,
+      "msg": "support",
+      "data": {
+        "videoNative": {
+          "avc1.42001f (baseline 3.1)": true,
+          "avc1.420028 (baseline 4.0)": true,
+          "avc1.4d0028 (main 4.0)": true,
+          "avc1.640028 (high 4.0)": true,
+          "avc1.640032 (high 5.0)": true
+        },
+        "audioNativeAac": false,
+        "mbCanEncodeVideoAvc": true,
+        "mbCanEncodeAudioAacBeforeAddon": false,
+        "hasSchedulerYield": true
+      }
+    },
+    {
+      "t": 801,
+      "msg": "audio rendered",
+      "data": {
+        "sampleRate": 48000,
+        "length": 480000,
+        "ch": 2
+      }
+    },
+    {
+      "t": 802,
+      "msg": "audio encoder config",
+      "data": {
+        "codec": "mp4a.40.2",
+        "numberOfChannels": 2,
+        "sampleRate": 48000,
+        "bitrate": 128000,
+        "aac": {
+          "format": "aac"
+        }
+      }
+    },
+    {
+      "t": 802,
+      "msg": "native isConfigSupported(actual audio config)",
+      "data": false
+    },
+    {
+      "t": 802,
+      "msg": "FIRST ERROR",
+      "data": {
+        "name": "Error",
+        "message": "This specific encoder configuration (mp4a.40.2, 128000 bps, 2 channels, 48000 Hz) is not supported in this environment. Consider using another codec or changing your audio parameters.",
+        "framesDone": 0
+      }
+    },
+    {
+      "t": 802,
+      "msg": "result",
+      "data": {
+        "wallMs": 11,
+        "totalMsInclProbe": 183,
+        "framesDone": 0,
+        "maxTaskGapMs": 9,
+        "heartbeats": 1,
+        "rafPaints": 2,
+        "firstError": {
+          "name": "Error",
+          "message": "This specific encoder configuration (mp4a.40.2, 128000 bps, 2 channels, 48000 Hz) is not supported in this environment. Consider using another codec or changing your audio parameters.",
+          "framesDone": 0
+        },
+        "supportedButFailed": true,
+        "bytes": 0
+      }
+    }
+  ],
+  "support": {
+    "videoNative": {
+      "avc1.42001f (baseline 3.1)": true,
+      "avc1.420028 (baseline 4.0)": true,
+      "avc1.4d0028 (main 4.0)": true,
+      "avc1.640028 (high 4.0)": true,
+      "avc1.640032 (high 5.0)": true
+    },
+    "audioNativeAac": false,
+    "mbCanEncodeVideoAvc": true,
+    "mbCanEncodeAudioAacBeforeAddon": false,
+    "hasSchedulerYield": true
+  },
+  "mode": "native",
+  "audioEncoderConfig": {
+    "codec": "mp4a.40.2",
+    "numberOfChannels": 2,
+    "sampleRate": 48000,
+    "bitrate": 128000,
+    "aac": {
+      "format": "aac"
+    }
+  },
+  "result": {
+    "wallMs": 11,
+    "totalMsInclProbe": 183,
+    "framesDone": 0,
+    "maxTaskGapMs": 9,
+    "heartbeats": 1,
+    "rafPaints": 2,
+    "firstError": {
+      "name": "Error",
+      "message": "This specific encoder configuration (mp4a.40.2, 128000 bps, 2 channels, 48000 Hz) is not supported in this environment. Consider using another codec or changing your audio parameters.",
+      "framesDone": 0
+    },
+    "supportedButFailed": true,
+    "bytes": 0
+  }
+}

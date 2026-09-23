@@ -1,0 +1,199 @@
+{
+  "label": "safari-rt-cancel-1",
+  "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.0 Safari/605.1.15",
+  "events": [
+    {
+      "t": 610,
+      "msg": "support",
+      "data": {
+        "videoNative": {
+          "avc1.42001f (baseline 3.1)": true,
+          "avc1.420028 (baseline 4.0)": true,
+          "avc1.4d0028 (main 4.0)": true,
+          "avc1.640028 (high 4.0)": true,
+          "avc1.640032 (high 5.0)": true
+        },
+        "audioNativeAac": true,
+        "mbCanEncodeVideoAvc": true,
+        "mbCanEncodeAudioAacBeforeAddon": true,
+        "hasSchedulerYield": false
+      }
+    },
+    {
+      "t": 622,
+      "msg": "audio rendered",
+      "data": {
+        "sampleRate": 48000,
+        "length": 480000,
+        "ch": 2
+      }
+    },
+    {
+      "t": 623,
+      "msg": "audio encoder config",
+      "data": {
+        "codec": "mp4a.40.2",
+        "numberOfChannels": 2,
+        "sampleRate": 48000,
+        "bitrate": 128000,
+        "aac": {
+          "format": "aac"
+        }
+      }
+    },
+    {
+      "t": 624,
+      "msg": "native isConfigSupported(actual audio config)",
+      "data": true
+    },
+    {
+      "t": 628,
+      "msg": "audio added",
+      "data": {
+        "ms": 6
+      }
+    },
+    {
+      "t": 634,
+      "msg": "video encoder config",
+      "data": {
+        "codec": "avc1.640020",
+        "width": 1080,
+        "height": 1080,
+        "displayWidth": 1080,
+        "displayHeight": 1080,
+        "bitrate": 8000000,
+        "bitrateMode": "variable",
+        "alpha": "discard",
+        "framerate": 30,
+        "latencyMode": "realtime",
+        "avc": {
+          "format": "avc"
+        }
+      }
+    },
+    {
+      "t": 637,
+      "msg": "isConfigSupported(actual video config)",
+      "data": true
+    },
+    {
+      "t": 640,
+      "msg": "frame",
+      "data": 0
+    },
+    {
+      "t": 778,
+      "msg": "frame",
+      "data": 30
+    },
+    {
+      "t": 905,
+      "msg": "frame",
+      "data": 60
+    },
+    {
+      "t": 1032,
+      "msg": "frame",
+      "data": 90
+    },
+    {
+      "t": 1261,
+      "msg": "frame",
+      "data": 120
+    },
+    {
+      "t": 1530,
+      "msg": "frame",
+      "data": 150
+    },
+    {
+      "t": 1531,
+      "msg": "cancel clicked",
+      "data": {
+        "source": "scheduled"
+      }
+    },
+    {
+      "t": 1534,
+      "msg": "canceled",
+      "data": {
+        "framesDone": 152,
+        "cancelToStoppedMs": 3,
+        "outputState": "canceled",
+        "scheduledToHandlerMs": 1
+      }
+    },
+    {
+      "t": 1534,
+      "msg": "result",
+      "data": {
+        "wallMs": 923,
+        "totalMsInclProbe": 933,
+        "framesDone": 152,
+        "maxTaskGapMs": 24,
+        "heartbeats": 115,
+        "rafPaints": 55,
+        "firstError": null,
+        "supportedButFailed": false,
+        "bytes": 0
+      }
+    }
+  ],
+  "support": {
+    "videoNative": {
+      "avc1.42001f (baseline 3.1)": true,
+      "avc1.420028 (baseline 4.0)": true,
+      "avc1.4d0028 (main 4.0)": true,
+      "avc1.640028 (high 4.0)": true,
+      "avc1.640032 (high 5.0)": true
+    },
+    "audioNativeAac": true,
+    "mbCanEncodeVideoAvc": true,
+    "mbCanEncodeAudioAacBeforeAddon": true,
+    "hasSchedulerYield": false
+  },
+  "mode": "auto",
+  "audioEncoderConfig": {
+    "codec": "mp4a.40.2",
+    "numberOfChannels": 2,
+    "sampleRate": 48000,
+    "bitrate": 128000,
+    "aac": {
+      "format": "aac"
+    }
+  },
+  "videoEncoderConfig": {
+    "codec": "avc1.640020",
+    "width": 1080,
+    "height": 1080,
+    "displayWidth": 1080,
+    "displayHeight": 1080,
+    "bitrate": 8000000,
+    "bitrateMode": "variable",
+    "alpha": "discard",
+    "framerate": 30,
+    "latencyMode": "realtime",
+    "avc": {
+      "format": "avc"
+    }
+  },
+  "cancel": {
+    "framesDone": 152,
+    "cancelToStoppedMs": 3,
+    "outputState": "canceled",
+    "scheduledToHandlerMs": 1,
+    "source": "scheduled"
+  },
+  "result": {
+    "wallMs": 923,
+    "totalMsInclProbe": 933,
+    "framesDone": 152,
+    "maxTaskGapMs": 24,
+    "heartbeats": 115,
+    "rafPaints": 55,
+    "firstError": null,
+    "supportedButFailed": false,
+    "bytes": 0
+  }
+}

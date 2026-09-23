@@ -114,6 +114,7 @@
     "zod": "^4.5.4"
   },
   "devDependencies": {
+    "@mediabunny/aac-encoder": "1.59.0",
     "@sanity/client": "^7.27.0",
     "@sanity/migrate": "^8.0.2",
     "@sanity/ui": "^4.0.7",
@@ -145,6 +146,7 @@
     "http-server": "^14.1.1",
     "jsdom": "^30.0.1",
     "knip": "~6.26.0",
+    "mediabunny": "1.59.0",
     "msw": "^2.15.0",
     "msw-storybook-addon": "^3.0.0",
     "playwright": "^1.63.0",

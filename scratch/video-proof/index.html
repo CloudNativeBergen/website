@@ -1,0 +1,32 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>Video proof 1171</title>
+<script type="importmap">
+{ "imports": {
+  "mediabunny": "/node_modules/mediabunny/dist/bundles/mediabunny.min.mjs",
+  "@mediabunny/aac-encoder": "/node_modules/@mediabunny/aac-encoder/dist/bundles/mediabunny-aac-encoder.min.mjs"
+} }
+</script>
+<style>
+  body { font: 14px system-ui; margin: 16px; }
+  canvas { width: 270px; height: 270px; border: 1px solid #999; }
+  progress { width: 400px; height: 24px; }
+  #log { white-space: pre-wrap; font: 12px ui-monospace, monospace; background: #f4f4f4; padding: 8px; max-height: 60vh; overflow: auto; }
+  button { font-size: 16px; padding: 6px 14px; }
+</style>
+</head>
+<body>
+<h1>#1171 proof</h1>
+<p>
+  AAC mode:
+  <select id="mode"><option value="auto">auto (add-on only if no native)</option><option value="native">native only</option><option value="addon">force add-on</option><option value="silent">silent (no audio)</option></select>
+  <button id="start">Export</button> <button id="cancel">Cancel</button>
+</p>
+<p><progress id="bar" max="0" value="0"></progress> <span id="pct">0%</span></p>
+<canvas id="c" width="1080" height="1080"></canvas>
+<div id="log"></div>
+<script type="module" src="./proof.js"></script>
+</body>
+</html>

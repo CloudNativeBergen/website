@@ -1,0 +1,14 @@
+[800.0] support {"videoNative":{"avc1.42001f (baseline 3.1)":true,"avc1.420028 (baseline 4.0)":true,"avc1.4d0028 (main 4.0)":true,"avc1.640028 (high 4.0)":true,"avc1.640032 (high 5.0)":true},"audioNativeAac":false,"mbCanEncodeVideoAvc":true,"mbCanEncodeAudioAacBeforeAddon":false,"hasSchedulerYield":true}
+[800.0] registered AAC add-on {"ms":0}
+[800.0] after add-on canEncodeAudio(aac) true
+[966.0] measured priming {"samples":1024,"ms":162}
+[978.0] audio rendered {"sampleRate":48000,"length":480000,"ch":2}
+[979.0] audio encoder config {"codec":"mp4a.40.2","numberOfChannels":2,"sampleRate":48000,"bitrate":128000,"aac":{"format":"aac"}}
+[979.0] native isConfigSupported(actual audio config) false
+[1705.0] audio added {"ms":727}
+[1720.0] video encoder config {"codec":"avc1.640020","width":1080,"height":1080,"displayWidth":1080,"displayHeight":1080,"bitrate":8000000,"bitrateMode":"variable","alpha":"discard","framerate":30,"latencyMode":"realtime","avc":{"format":"avc"}}
+[1721.0] isConfigSupported(actual video config) true
+[1721.0] frame 0
+[1758.0] FIRST ERROR {"name":"EncodingError","message":"The given encoding is not supported.","framesDone":4}
+[1758.0] result {"wallMs":791,"totalMsInclProbe":1138,"framesDone":4,"maxTaskGapMs":32,"heartbeats":128,"rafPaints":108,"firstError":{"name":"EncodingError","message":"The given encoding is not supported.","framesDone":4},"supportedButFailed":true,"bytes":0}
+[1761.0] DONE

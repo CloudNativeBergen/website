@@ -1,0 +1,24 @@
+[779.0] support {"videoNative":{"avc1.42001f (baseline 3.1)":true,"avc1.420028 (baseline 4.0)":true,"avc1.4d0028 (main 4.0)":true,"avc1.640028 (high 4.0)":true,"avc1.640032 (high 5.0)":true},"audioNativeAac":false,"mbCanEncodeVideoAvc":true,"mbCanEncodeAudioAacBeforeAddon":false,"hasSchedulerYield":true}
+[779.0] registered AAC add-on {"ms":0}
+[780.0] after add-on canEncodeAudio(aac) true
+[947.0] measured priming {"samples":1024,"ms":163}
+[956.0] audio rendered {"sampleRate":48000,"length":480000,"ch":2}
+[957.0] audio encoder config {"codec":"mp4a.40.2","numberOfChannels":2,"sampleRate":48000,"bitrate":128000,"aac":{"format":"aac"}}
+[958.0] native isConfigSupported(actual audio config) false
+[1686.0] audio added {"ms":730}
+[1701.0] video encoder config {"codec":"avc1.640020","width":1080,"height":1080,"displayWidth":1080,"displayHeight":1080,"bitrate":8000000,"bitrateMode":"variable","alpha":"discard","framerate":30,"avc":{"format":"avc"}}
+[1701.0] isConfigSupported(actual video config) true
+[1702.0] frame 0
+[1916.0] frame 30
+[2068.0] frame 60
+[2208.0] frame 90
+[2370.0] frame 120
+[2524.0] frame 150
+[2669.0] frame 180
+[2819.0] frame 210
+[2969.0] frame 240
+[3120.0] frame 270
+[3337.0] finalized {"finalizeMs":61}
+[3338.0] result {"wallMs":2391,"totalMsInclProbe":2725,"framesDone":300,"maxTaskGapMs":34,"heartbeats":314,"rafPaints":176,"firstError":null,"supportedButFailed":false,"bytes":570793}
+[3343.0] saved "firefox-calib-1.mp4"
+[3349.0] DONE

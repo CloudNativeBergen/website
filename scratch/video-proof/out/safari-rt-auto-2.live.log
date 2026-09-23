@@ -1,0 +1,21 @@
+[418.0] support {"videoNative":{"avc1.42001f (baseline 3.1)":true,"avc1.420028 (baseline 4.0)":true,"avc1.4d0028 (main 4.0)":true,"avc1.640028 (high 4.0)":true,"avc1.640032 (high 5.0)":true},"audioNativeAac":true,"mbCanEncodeVideoAvc":true,"mbCanEncodeAudioAacBeforeAddon":true,"hasSchedulerYield":false}
+[430.0] audio rendered {"sampleRate":48000,"length":480000,"ch":2}
+[432.0] native isConfigSupported(actual audio config) true
+[432.0] audio encoder config {"codec":"mp4a.40.2","numberOfChannels":2,"sampleRate":48000,"bitrate":128000,"aac":{"format":"aac"}}
+[438.0] audio added {"ms":8}
+[445.0] video encoder config {"codec":"avc1.640020","width":1080,"height":1080,"displayWidth":1080,"displayHeight":1080,"bitrate":8000000,"bitrateMode":"variable","alpha":"discard","framerate":30,"latencyMode":"realtime","avc":{"format":"avc"}}
+[448.0] isConfigSupported(actual video config) true
+[451.0] frame 0
+[587.0] frame 30
+[717.0] frame 60
+[846.0] frame 90
+[1079.0] frame 120
+[1348.0] frame 150
+[1619.0] frame 180
+[1886.0] frame 210
+[2155.0] frame 240
+[2425.0] frame 270
+[2784.0] finalized {"finalizeMs":97}
+[2785.0] result {"wallMs":2366,"totalMsInclProbe":2376,"framesDone":300,"maxTaskGapMs":25,"heartbeats":293,"rafPaints":141,"firstError":null,"supportedButFailed":false,"bytes":294876}
+[2800.0] saved "safari-rt-auto-2.mp4"
+[2805.0] DONE

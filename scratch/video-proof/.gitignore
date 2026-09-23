@@ -1,0 +1,5 @@
+scratch/video-proof/out/*.mp4
+!scratch/video-proof/out/chrome-auto-1.mp4
+!scratch/video-proof/out/safari-rt-auto-1.mp4
+!scratch/video-proof/out/firefox-auto-1.mp4
+scratch/video-proof/out/*.live.log

@@ -1,0 +1,265 @@
+{
+  "label": "chrome-click-cancel",
+  "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36",
+  "events": [
+    {
+      "t": 320.40000009536743,
+      "msg": "support",
+      "data": {
+        "videoNative": {
+          "avc1.42001f (baseline 3.1)": false,
+          "avc1.420028 (baseline 4.0)": true,
+          "avc1.4d0028 (main 4.0)": true,
+          "avc1.640028 (high 4.0)": true,
+          "avc1.640032 (high 5.0)": true
+        },
+        "audioNativeAac": true,
+        "mbCanEncodeVideoAvc": true,
+        "mbCanEncodeAudioAacBeforeAddon": true,
+        "hasSchedulerYield": true
+      }
+    },
+    {
+      "t": 452.7000000476837,
+      "msg": "audio rendered",
+      "data": {
+        "sampleRate": 48000,
+        "length": 2880000,
+        "ch": 2
+      }
+    },
+    {
+      "t": 454,
+      "msg": "audio encoder config",
+      "data": {
+        "codec": "mp4a.40.2",
+        "numberOfChannels": 2,
+        "sampleRate": 48000,
+        "bitrate": 128000,
+        "aac": {
+          "format": "aac"
+        }
+      }
+    },
+    {
+      "t": 454.3000000715256,
+      "msg": "native isConfigSupported(actual audio config)",
+      "data": true
+    },
+    {
+      "t": 855.6000000238419,
+      "msg": "audio added",
+      "data": {
+        "ms": 402.6
+      }
+    },
+    {
+      "t": 859.9000000953674,
+      "msg": "canvas VideoFrame colorSpace",
+      "data": {
+        "fullRange": true,
+        "matrix": "rgb",
+        "primaries": "bt709",
+        "transfer": "iec61966-2-1"
+      }
+    },
+    {
+      "t": 860.2000000476837,
+      "msg": "video encoder config",
+      "data": {
+        "codec": "avc1.640020",
+        "width": 1080,
+        "height": 1080,
+        "displayWidth": 1080,
+        "displayHeight": 1080,
+        "bitrate": 8000000,
+        "bitrateMode": "variable",
+        "alpha": "discard",
+        "framerate": 30,
+        "avc": {
+          "format": "avc"
+        }
+      }
+    },
+    {
+      "t": 876.7000000476837,
+      "msg": "isConfigSupported(actual video config)",
+      "data": true
+    },
+    {
+      "t": 877.4000000953674,
+      "msg": "frame",
+      "data": 0
+    },
+    {
+      "t": 951.4000000953674,
+      "msg": "video decoderConfig from encoder",
+      "data": {
+        "codec": "avc1.640020",
+        "colorSpace": {
+          "fullRange": false,
+          "matrix": "bt709",
+          "primaries": "bt709",
+          "transfer": "iec61966-2-1"
+        }
+      }
+    },
+    {
+      "t": 1096.7000000476837,
+      "msg": "frame",
+      "data": 30
+    },
+    {
+      "t": 1189.9000000953674,
+      "msg": "frame",
+      "data": 60
+    },
+    {
+      "t": 1285.4000000953674,
+      "msg": "frame",
+      "data": 90
+    },
+    {
+      "t": 1378.8000000715256,
+      "msg": "frame",
+      "data": 120
+    },
+    {
+      "t": 1473.9000000953674,
+      "msg": "frame",
+      "data": 150
+    },
+    {
+      "t": 1571.3000000715256,
+      "msg": "frame",
+      "data": 180
+    },
+    {
+      "t": 1664.3000000715256,
+      "msg": "frame",
+      "data": 210
+    },
+    {
+      "t": 1759.9000000953674,
+      "msg": "frame",
+      "data": 240
+    },
+    {
+      "t": 1860.6000000238419,
+      "msg": "frame",
+      "data": 270
+    },
+    {
+      "t": 1954.4000000953674,
+      "msg": "frame",
+      "data": 300
+    },
+    {
+      "t": 2050.7000000476837,
+      "msg": "frame",
+      "data": 330
+    },
+    {
+      "t": 2141.9000000953674,
+      "msg": "cancel clicked",
+      "data": {
+        "source": "click"
+      }
+    },
+    {
+      "t": 2143.5,
+      "msg": "canceled",
+      "data": {
+        "framesDone": 359,
+        "cancelToStoppedMs": 1.6,
+        "outputState": "canceled",
+        "scheduledToHandlerMs": null
+      }
+    },
+    {
+      "t": 2143.8000000715256,
+      "msg": "result",
+      "data": {
+        "wallMs": 1822,
+        "totalMsInclProbe": 1992,
+        "framesDone": 359,
+        "maxTaskGapMs": 69,
+        "heartbeats": 377,
+        "rafPaints": 236,
+        "firstError": null,
+        "supportedButFailed": false,
+        "bytes": 0
+      }
+    }
+  ],
+  "support": {
+    "videoNative": {
+      "avc1.42001f (baseline 3.1)": false,
+      "avc1.420028 (baseline 4.0)": true,
+      "avc1.4d0028 (main 4.0)": true,
+      "avc1.640028 (high 4.0)": true,
+      "avc1.640032 (high 5.0)": true
+    },
+    "audioNativeAac": true,
+    "mbCanEncodeVideoAvc": true,
+    "mbCanEncodeAudioAacBeforeAddon": true,
+    "hasSchedulerYield": true
+  },
+  "mode": "auto",
+  "audioEncoderConfig": {
+    "codec": "mp4a.40.2",
+    "numberOfChannels": 2,
+    "sampleRate": 48000,
+    "bitrate": 128000,
+    "aac": {
+      "format": "aac"
+    }
+  },
+  "canvasFrameColorSpace": {
+    "fullRange": true,
+    "matrix": "rgb",
+    "primaries": "bt709",
+    "transfer": "iec61966-2-1"
+  },
+  "videoEncoderConfig": {
+    "codec": "avc1.640020",
+    "width": 1080,
+    "height": 1080,
+    "displayWidth": 1080,
+    "displayHeight": 1080,
+    "bitrate": 8000000,
+    "bitrateMode": "variable",
+    "alpha": "discard",
+    "framerate": 30,
+    "avc": {
+      "format": "avc"
+    }
+  },
+  "videoDecoderConfig": {
+    "codec": "avc1.640020",
+    "colorSpace": {
+      "fullRange": false,
+      "matrix": "bt709",
+      "primaries": "bt709",
+      "transfer": "iec61966-2-1"
+    }
+  },
+  "cancel": {
+    "framesDone": 359,
+    "cancelToStoppedMs": 1.600000023841858,
+    "outputState": "canceled",
+    "scheduledToHandlerMs": null,
+    "source": "click"
+  },
+  "result": {
+    "wallMs": 1822,
+    "totalMsInclProbe": 1992,
+    "framesDone": 359,
+    "maxTaskGapMs": 69,
+    "heartbeats": 377,
+    "rafPaints": 236,
+    "firstError": null,
+    "supportedButFailed": false,
+    "bytes": 0
+  }
+}

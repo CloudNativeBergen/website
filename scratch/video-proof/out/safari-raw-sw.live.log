@@ -1,0 +1,4 @@
+[575.0] raw config {"cfg":{"codec":"avc1.640020","width":1080,"height":1080,"bitrate":8000000,"framerate":30,"avc":{"format":"avc"},"hardwareAcceleration":"prefer-software"},"supported":true}
+[584.0] raw frame {"n":0,"queue":1,"outputs":0,"err":null}
+[8651.0] raw STALL {"n":8,"queue":5,"outputs":0,"err":null}
+[13657.0] raw done {"ms":13080,"outputs":0,"err":"flush timeout 5s","state":"configured"}

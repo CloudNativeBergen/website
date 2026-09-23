@@ -1,0 +1,211 @@
+{
+  "label": "firefox-cancel-1",
+  "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:157.0) Gecko/20100101 Firefox/157.0",
+  "events": [
+    {
+      "t": 807,
+      "msg": "support",
+      "data": {
+        "videoNative": {
+          "avc1.42001f (baseline 3.1)": true,
+          "avc1.420028 (baseline 4.0)": true,
+          "avc1.4d0028 (main 4.0)": true,
+          "avc1.640028 (high 4.0)": true,
+          "avc1.640032 (high 5.0)": true
+        },
+        "audioNativeAac": false,
+        "mbCanEncodeVideoAvc": true,
+        "mbCanEncodeAudioAacBeforeAddon": false,
+        "hasSchedulerYield": true,
+        "mbCanEncodeAudioAacAfterAddon": true
+      }
+    },
+    {
+      "t": 807,
+      "msg": "registered AAC add-on",
+      "data": {
+        "ms": 0
+      }
+    },
+    {
+      "t": 807,
+      "msg": "after add-on canEncodeAudio(aac)",
+      "data": true
+    },
+    {
+      "t": 822,
+      "msg": "audio rendered",
+      "data": {
+        "sampleRate": 48000,
+        "length": 480000,
+        "ch": 2
+      }
+    },
+    {
+      "t": 822,
+      "msg": "audio encoder config",
+      "data": {
+        "codec": "mp4a.40.2",
+        "numberOfChannels": 2,
+        "sampleRate": 48000,
+        "bitrate": 128000,
+        "aac": {
+          "format": "aac"
+        }
+      }
+    },
+    {
+      "t": 823,
+      "msg": "native isConfigSupported(actual audio config)",
+      "data": false
+    },
+    {
+      "t": 1561,
+      "msg": "audio added",
+      "data": {
+        "ms": 738
+      }
+    },
+    {
+      "t": 1578,
+      "msg": "video encoder config",
+      "data": {
+        "codec": "avc1.640020",
+        "width": 1080,
+        "height": 1080,
+        "displayWidth": 1080,
+        "displayHeight": 1080,
+        "bitrate": 8000000,
+        "bitrateMode": "variable",
+        "alpha": "discard",
+        "framerate": 30,
+        "avc": {
+          "format": "avc"
+        }
+      }
+    },
+    {
+      "t": 1578,
+      "msg": "isConfigSupported(actual video config)",
+      "data": true
+    },
+    {
+      "t": 1578,
+      "msg": "frame",
+      "data": 0
+    },
+    {
+      "t": 1752,
+      "msg": "frame",
+      "data": 30
+    },
+    {
+      "t": 1890,
+      "msg": "frame",
+      "data": 60
+    },
+    {
+      "t": 2028,
+      "msg": "frame",
+      "data": 90
+    },
+    {
+      "t": 2168,
+      "msg": "frame",
+      "data": 120
+    },
+    {
+      "t": 2315,
+      "msg": "frame",
+      "data": 150
+    },
+    {
+      "t": 2319,
+      "msg": "cancel clicked",
+      "data": {
+        "source": "scheduled"
+      }
+    },
+    {
+      "t": 2319,
+      "msg": "canceled",
+      "data": {
+        "framesDone": 152,
+        "cancelToStoppedMs": 0,
+        "outputState": "canceled",
+        "scheduledToHandlerMs": 4
+      }
+    },
+    {
+      "t": 2320,
+      "msg": "result",
+      "data": {
+        "wallMs": 1509,
+        "totalMsInclProbe": 1693,
+        "framesDone": 152,
+        "maxTaskGapMs": 33,
+        "heartbeats": 218,
+        "rafPaints": 143,
+        "firstError": null,
+        "supportedButFailed": false,
+        "bytes": 0
+      }
+    }
+  ],
+  "support": {
+    "videoNative": {
+      "avc1.42001f (baseline 3.1)": true,
+      "avc1.420028 (baseline 4.0)": true,
+      "avc1.4d0028 (main 4.0)": true,
+      "avc1.640028 (high 4.0)": true,
+      "avc1.640032 (high 5.0)": true
+    },
+    "audioNativeAac": false,
+    "mbCanEncodeVideoAvc": true,
+    "mbCanEncodeAudioAacBeforeAddon": false,
+    "hasSchedulerYield": true,
+    "mbCanEncodeAudioAacAfterAddon": true
+  },
+  "mode": "auto",
+  "audioEncoderConfig": {
+    "codec": "mp4a.40.2",
+    "numberOfChannels": 2,
+    "sampleRate": 48000,
+    "bitrate": 128000,
+    "aac": {
+      "format": "aac"
+    }
+  },
+  "videoEncoderConfig": {
+    "codec": "avc1.640020",
+    "width": 1080,
+    "height": 1080,
+    "displayWidth": 1080,
+    "displayHeight": 1080,
+    "bitrate": 8000000,
+    "bitrateMode": "variable",
+    "alpha": "discard",
+    "framerate": 30,
+    "avc": {
+      "format": "avc"
+    }
+  },
+  "cancel": {
+    "framesDone": 152,
+    "cancelToStoppedMs": 0,
+    "outputState": "canceled",
+    "scheduledToHandlerMs": 4,
+    "source": "scheduled"
+  },
+  "result": {
+    "wallMs": 1509,
+    "totalMsInclProbe": 1693,
+    "framesDone": 152,
+    "maxTaskGapMs": 33,
+    "heartbeats": 218,
+    "rafPaints": 143,
+    "firstError": null,
+    "supportedButFailed": false,
+    "bytes": 0
+  }
+}
