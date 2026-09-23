@@ -332,13 +332,18 @@ export const ManualAwaitingPostLegacyOwnLink: Story = {
             approvedByName: 'Bob Builder',
             date: '2027-01-10T07:00:00.000Z',
           },
-          variant({
-            platform: 'linkedin',
-            status: 'awaiting-manual',
-            scheduledAt: '2027-01-10T07:00:00.000Z',
-            body: `The Cloud Native Bergen 2027 call for papers is open: ${BASE_URL}/cfp?utm_source=linkedin&utm_medium=social&utm_campaign=cfp&utm_content=cfpOpen%3Alinkedin`,
-            link: `${BASE_URL}/cfp?utm_source=linkedin&utm_medium=social&utm_campaign=cfp&utm_content=cfpOpen%3Alinkedin`,
-          }),
+          {
+            ...variant({
+              platform: 'linkedin',
+              status: 'awaiting-manual',
+              scheduledAt: '2027-01-10T07:00:00.000Z',
+              body: `The Cloud Native Bergen 2027 call for papers is open: ${BASE_URL}/cfp?utm_source=linkedin&utm_medium=social&utm_campaign=cfp&utm_content=cfpOpen%3Alinkedin`,
+              link: `${BASE_URL}/cfp?utm_source=linkedin&utm_medium=social&utm_campaign=cfp&utm_content=cfpOpen%3Alinkedin`,
+            }),
+            // The site the body links to must be OURS for the warning to
+            // fire; the default fixture lists a different host.
+            conferenceDomains: [new URL(BASE_URL).hostname],
+          },
         ),
       ),
     },
