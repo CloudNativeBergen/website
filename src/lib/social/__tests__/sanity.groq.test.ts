@@ -1064,6 +1064,44 @@ describe('getConferenceDomainsForRule — the live read the mutations validate a
 })
 
 describe('getSocialVariantEditorData — the editor read', () => {
+  it('still loads a LinkedIn editor when the verification read throws or hangs — the warning is advisory', async () => {
+    // This read serves mark-posted, delete and set-date too; save, schedule
+    // and approve re-read and refuse for themselves. So a failing or hanging
+    // verification read must not turn into an error, or a timeout of the
+    // Sanity client's length, on every Task flow.
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    h.dataset = [
+      conference('conf-A'),
+      post('post-conf-A', 'conf-A'),
+      variant('v-li', 'conf-A', { platform: 'linkedin' }),
+    ]
+    try {
+      verification.verifiedDomains.mockImplementation(async () => {
+        throw new Error('Sanity timeout')
+      })
+      const thrown = await getSocialVariantEditorData('v-li')
+      expect(thrown?.variant._id).toBe('v-li')
+      expect(thrown?.conferenceDomains).toEqual([])
+
+      vi.useFakeTimers()
+      verification.verifiedDomains.mockImplementation(
+        () => new Promise<string[]>(() => {}),
+      )
+      const pending = getSocialVariantEditorData('v-li')
+      await vi.advanceTimersByTimeAsync(VERIFY_DOMAINS_TIMEOUT_MS + 1)
+      const hung = await pending
+      expect(hung?.variant._id).toBe('v-li')
+      expect(hung?.conferenceDomains).toEqual([])
+      expect(error).toHaveBeenCalledTimes(2)
+    } finally {
+      vi.useRealTimers()
+      error.mockRestore()
+      verification.verifiedDomains.mockImplementation(async (claimed) => [
+        ...claimed,
+      ])
+    }
+  })
+
   it('verifies the domains only for a first-comment platform; a Bluesky editor takes the raw list with no read', async () => {
     verification.verifiedDomains.mockClear()
     h.dataset = [

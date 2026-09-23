@@ -821,9 +821,23 @@ export async function getSocialVariantEditorData(
     variant,
     post: normalizePostInputs(row.post),
     // Verified only where a rule reads them; a card platform's editor must
-    // not wait on, or fail with, a verification read it never uses.
+    // not wait on, or fail with, a verification read it never uses. And the
+    // editor's use is ADVISORY (save, schedule and approve re-read and
+    // refuse for themselves), while this read serves every Task flow —
+    // mark-posted, delete, set-date — so a verification read that throws or
+    // hangs is bounded and falls back to no live warning, never to an error.
     conferenceDomains: needsOwnDomains(variant.platform)
-      ? await verifiedDomains(domains)
+      ? await withTimeout(
+          verifiedDomains(domains),
+          VERIFY_DOMAINS_TIMEOUT_MS,
+          `verification read took longer than ${VERIFY_DOMAINS_TIMEOUT_MS} ms`,
+        ).catch((error: unknown) => {
+          console.error(
+            `[social] could not verify the domains for the editor of ${variant._id}; the live first-comment warning is off:`,
+            error instanceof Error ? error.message : error,
+          )
+          return []
+        })
       : domains,
     platformZone: platformDomainSuffix(),
   }
