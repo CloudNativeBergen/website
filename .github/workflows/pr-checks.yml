@@ -106,8 +106,9 @@ jobs:
   # job below merges the blobs and is the ONLY place thresholds are judged
   # (a per-shard threshold would be meaningless — each shard sees a slice of
   # the callers). "Tests" is the required status check, so it must keep that
-  # exact name and must report even when a shard fails: `if: always()` plus
-  # an explicit result check does that.
+  # exact name and must report even when a shard FAILS: `if: !cancelled()`
+  # (runs on failure, skips only on a cancelled run) plus an explicit
+  # shard-result check does that.
   tests-shard:
     name: Tests (shard ${{ matrix.shard }}/${{ strategy.job-total }})
     runs-on: ubuntu-latest
