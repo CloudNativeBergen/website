@@ -146,15 +146,20 @@ function isOwnDomain(
 ): boolean {
   const zone =
     platformZone === undefined ? platformDomainSuffix() : platformZone
+  // A host minted on the platform zone belongs to the tenant holding that
+  // host — never to an entry at or above the zone, be it the zone itself
+  // (the operator's conference listing `konf.run`) or an ancestor of a
+  // nested zone (`example.com` above `events.example.com`).
+  const mintedOnZone = zone !== null && host.endsWith(`.${zone}`)
   return domains.some((entry) => {
     const raw = normalizeDomain(entry).replace(/:\d+$/, '')
     if (!raw || raw.startsWith('*.')) return false
     const e = canonicalHost(raw)
     if (!e) return false
     if (host === e) return true
-    // An entry that IS the platform zone (the operator's own conference)
-    // owns the apex alone, never the tenant hosts minted under it.
-    if (host.endsWith(`.${e}`)) return e !== zone
+    if (host.endsWith(`.${e}`)) {
+      return mintedOnZone ? e !== zone && e.endsWith(`.${zone}`) : true
+    }
     // A host minted on the platform zone (`acme.konf.run`, or on a nested
     // zone `acme.events.example.com`) is the whole site: no apex expansion,
     // whatever registrable domain the zone happens to sit under.
