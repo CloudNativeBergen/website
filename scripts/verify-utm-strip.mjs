@@ -63,13 +63,24 @@ function notRun(name, why) {
 
 // ── server ────────────────────────────────────────────────────────────────
 const cleanups = []
+/** Poll until the server answers AS THE TENANT (fetch cannot set `Host`). */
 async function waitFor(url, headers, timeoutMs) {
   const deadline = Date.now() + timeoutMs
+  const status = () =>
+    new Promise((resolve) => {
+      http
+        .get(
+          { host: url.hostname, port: url.port, path: '/', headers },
+          (res) => {
+            res.resume()
+            resolve(res.statusCode ?? 0)
+          },
+        )
+        .on('error', () => resolve(0))
+    })
   while (Date.now() < deadline) {
-    try {
-      const res = await fetch(url, { headers })
-      if (res.status < 500) return
-    } catch {}
+    const code = await status()
+    if (code > 0 && code < 500) return
     await sleep(1000)
   }
   throw new Error(`server at ${url} did not come up`)
@@ -78,6 +89,17 @@ async function waitFor(url, headers, timeoutMs) {
 async function upstream() {
   if (process.env.VERIFY_BASE_URL) return new URL(process.env.VERIFY_BASE_URL)
   const port = Number(process.env.VERIFY_PORT ?? 3947)
+  // A port someone else already serves (another checkout's dev server) would
+  // answer the readiness poll with the WRONG code; refuse rather than test it.
+  await new Promise((resolve, reject) => {
+    const probe = net.createServer()
+    probe.once('error', () =>
+      reject(
+        new Error(`port ${port} is in use; set VERIFY_PORT to a free one`),
+      ),
+    )
+    probe.listen(port, () => probe.close(resolve))
+  })
   const child = spawn('pnpm', ['exec', 'next', 'dev', '-p', String(port)], {
     stdio: ['ignore', 'ignore', 'inherit'],
     detached: true,
