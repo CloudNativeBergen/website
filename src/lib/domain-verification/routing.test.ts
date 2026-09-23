@@ -245,7 +245,7 @@ describe('verifiedDomains — what the first-comment rule may call ours (#1134)'
           : null,
     )
     // ON THE VALUE: the unproved claim and the recordless one are gone, the
-    // proved one and the wildcard stay; the dev port is stripped for the read.
+    // proved one and the wildcard stay.
     expect(
       await verifiedDomains(
         [
@@ -257,8 +257,14 @@ describe('verifiedDomains — what the first-comment rule may call ours (#1134)'
         NOW,
       ),
     ).toEqual(['2026.example.com', '*.vercel.app'])
-    // Read by the SAME key sync writes: the port stays (a dev entry).
-    await verifiedDomains(['localhost:3000'], NOW)
+    // Read by the SAME key sync writes: the port stays (a dev entry), and a
+    // record under that key keeps the entry — on the value, not the call.
+    getDomainVerification.mockImplementation(async (hostname) =>
+      hostname === 'localhost:3000' ? record({ hostname }) : null,
+    )
+    expect(await verifiedDomains(['localhost:3000'], NOW)).toEqual([
+      'localhost:3000',
+    ])
     expect(getDomainVerification).toHaveBeenCalledWith('localhost:3000')
   })
 })

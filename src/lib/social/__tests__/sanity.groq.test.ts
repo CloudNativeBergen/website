@@ -96,6 +96,7 @@ import {
   updateSocialPostDefaultTime,
   updateSocialVariantContent,
   getConferenceDomainsForRule,
+  VERIFY_DOMAINS_TIMEOUT_MS,
 } from '@/lib/social/sanity'
 
 const NOW = new Date('2026-09-13T10:00:00.000Z')
@@ -443,6 +444,41 @@ describe('findWork — the composed due/stale scan', () => {
       expect(error).toHaveBeenCalledTimes(1)
     } finally {
       error.mockRestore()
+      verification.verifiedDomains.mockImplementation(async (claimed) => [
+        ...claimed,
+      ])
+    }
+  })
+
+  it('does not wait longer than VERIFY_DOMAINS_TIMEOUT_MS for a verification read that hangs', async () => {
+    // The Sanity client's own timeout is minutes; the cron has sixty seconds
+    // for everything. A read that never returns is bounded and the
+    // conference falls back to no rule, like a read that throws.
+    vi.useFakeTimers()
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    verification.verifiedDomains.mockClear()
+    verification.verifiedDomains.mockImplementation(
+      () => new Promise<string[]>(() => {}),
+    )
+    try {
+      h.dataset = [
+        conference('c1'),
+        variant('v1', 'c1', { scheduledAt: '2026-09-13T09:00:00Z' }),
+      ]
+      const pending = sanitySocialVariantStore.findWork(
+        NOW,
+        STALE_BEFORE,
+        BOUNDS,
+      )
+      await vi.advanceTimersByTimeAsync(VERIFY_DOMAINS_TIMEOUT_MS + 1)
+      const work = await pending
+      expect(work.due.map((v) => v._id)).toEqual(['v1'])
+      expect(work.due[0].conferenceDomains).toEqual([])
+      expect(error).toHaveBeenCalledTimes(1)
+      expect(String(error.mock.calls[0][1])).toContain('longer than')
+    } finally {
+      error.mockRestore()
+      vi.useRealTimers()
       verification.verifiedDomains.mockImplementation(async (claimed) => [
         ...claimed,
       ])

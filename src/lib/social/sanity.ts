@@ -5,6 +5,7 @@ import { outcomeMayBeLive } from './state-machine'
 import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
 import { scopedFetch } from '@/lib/sanity/scoped'
 import { verifiedDomains } from '@/lib/domain-verification/routing'
+import { withTimeout } from './with-timeout'
 import { platformDomainSuffix } from '@/lib/domain-verification/platform'
 import { getCurrentDateTime } from '@/lib/time'
 import { placeholderIssues } from './schedule-check'
@@ -244,6 +245,16 @@ function leastRecentlyCheckedFirst<
     .sort((a, b) => key(a).localeCompare(key(b)))
 }
 
+/**
+ * How long the tick waits for one conference's domain verification before
+ * skipping the first-comment rule for it. The Sanity client's own timeout is
+ * minutes and the cron has sixty seconds for everything; a read that hangs
+ * must not hold the stale sweep, the confirm sweep and every tenant's
+ * dispatch hostage — the fail-open catch below cannot help a call that never
+ * returns.
+ */
+export const VERIFY_DOMAINS_TIMEOUT_MS = 5_000
+
 export const sanitySocialVariantStore: SocialVariantStore = {
   async findWork(now, staleBefore, bounds) {
     // groq-global: one conference's due variants, correlated to the parent
@@ -319,8 +330,10 @@ export const sanitySocialVariantStore: SocialVariantStore = {
       const key = raw.conferenceId ?? ''
       let pending = verifiedByConference.get(key)
       if (!pending) {
-        pending = verifiedDomains(
-          normalizeDomainList(raw.conferenceDomains),
+        pending = withTimeout(
+          verifiedDomains(normalizeDomainList(raw.conferenceDomains)),
+          VERIFY_DOMAINS_TIMEOUT_MS,
+          `verification read took longer than ${VERIFY_DOMAINS_TIMEOUT_MS} ms`,
         ).catch((error: unknown) => {
           console.error(
             `[social] could not verify the domains of conference ${key}; the first-comment rule is skipped this tick:`,

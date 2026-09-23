@@ -158,7 +158,7 @@ function isOwnDomain(
     if (!e) return false
     if (host === e) return true
     if (host.endsWith(`.${e}`)) {
-      return mintedOnZone ? e !== zone && e.endsWith(`.${zone}`) : true
+      return mintedOnZone ? e.endsWith(`.${zone}`) : true
     }
     // A host minted on the platform zone (`acme.konf.run`, or on a nested
     // zone `acme.events.example.com`) is the whole site: no apex expansion,

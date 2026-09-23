@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { withTimeout } from './with-timeout'
 import type {
   PublishContext,
   PublishInput,
@@ -322,20 +323,6 @@ export async function runPublishTick(
   }
 
   return summary
-}
-
-function withTimeout<T>(
-  promise: Promise<T>,
-  ms: number,
-  message: string,
-): Promise<T> {
-  let timer: ReturnType<typeof setTimeout> | undefined
-  return Promise.race([
-    promise,
-    new Promise<never>((_, reject) => {
-      timer = setTimeout(() => reject(new Error(message)), ms)
-    }),
-  ]).finally(() => clearTimeout(timer))
 }
 
 /**
