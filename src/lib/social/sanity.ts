@@ -11,6 +11,7 @@ import { getCurrentDateTime } from '@/lib/time'
 import { placeholderIssues } from './schedule-check'
 import type { ValidationIssue } from './provider/types'
 import { needsOwnDomains } from './provider/constraints'
+import { SOCIAL_PLATFORMS } from './types'
 import type {
   PublishableVariant,
   SocialVariantStore,
@@ -265,13 +266,25 @@ export const sanitySocialVariantStore: SocialVariantStore = {
     // Content Release copy (`versions.<release>.<id>`) would otherwise be a
     // second due document with its own revision — and post twice.
     const dueOfConference = groq`*[_type == "socialPostVariant" && !(_id in path("drafts.**")) && !(_id in path("versions.**")) && status == "scheduled" && defined(scheduledAt) && dateTime(scheduledAt) <= dateTime($now) && conference._ref == ^._id]`
+    // TWO windows per conference, not one: platforms whose link is the first
+    // comment (their variants can be DEFERRED below when verification is
+    // unavailable) and every other platform. With a single window, ten
+    // overdue LinkedIn variants that keep being deferred would fill it every
+    // tick and a later Bluesky variant in the same conference would never be
+    // read at all. Merged by scheduledAt afterwards, so the engine still sees
+    // oldest-first.
+    const commentPlatforms = SOCIAL_PLATFORMS.filter(needsOwnDomains)
+    // groq-global: the comment-placement half of one conference's due list.
+    const dueComment = groq`${dueOfConference.slice(0, -1)} && platform in $commentPlatforms]`
+    // groq-global: the other half of one conference's due list.
+    const dueOther = groq`${dueOfConference.slice(0, -1)} && !(platform in $commentPlatforms)]`
     // groq-global: the per-minute publish cron sweeps EVERY tenant's due
     // variants in one scan (#785). The scan is grouped by conference so the
-    // fairness bound (at most N per conference) is enforced in the read —
-    // a tenant with a deep backlog cannot fill the window. The correlated
-    // count() runs once per conference document (tens), then the slice
-    // keeps the first N conferences in document order.
-    const due = groq`*[_type == "conference" && count(${dueOfConference}) > 0][0...${bounds.maxConferences}]{ "due": ${dueOfConference} | order(scheduledAt asc)[0...${bounds.perConference}]${DUE_PROJECTION} }.due`
+    // fairness bound (at most N per conference, per window) is enforced in
+    // the read — a tenant with a deep backlog cannot fill the window. The
+    // correlated count() runs once per conference document (tens), then the
+    // slice keeps the first N conferences in document order.
+    const due = groq`*[_type == "conference" && (count(${dueComment}) > 0 || count(${dueOther}) > 0)][0...${bounds.maxConferences}]{ "comment": ${dueComment} | order(scheduledAt asc)[0...${bounds.perConference}]${DUE_PROJECTION}, "other": ${dueOther} | order(scheduledAt asc)[0...${bounds.perConference}]${DUE_PROJECTION} }`
     // groq-global: the same cron's stale-claim sweep, across every tenant.
     const stale = groq`*[_type == "socialPostVariant" && !(_id in path("drafts.**")) && !(_id in path("versions.**")) && status == "publishing" && (!defined(claimedAt) || dateTime(claimedAt) < dateTime($staleBefore))][0...${bounds.staleLimit}]${VARIANT_PROJECTION}`
     // groq-global: one conference's submissions, correlated to the parent
@@ -301,21 +314,27 @@ export const sanitySocialVariantStore: SocialVariantStore = {
     const submitted = groq`*[_type == "conference" && count(${submittedOfConference}) > 0][0...${bounds.maxConferences}]{ "submitted": ${submittedOfConference} | order(coalesce(submission.lastCheckedAt, submission.submittedAt) asc, _id asc)[0...${bounds.perConference}]${VARIANT_PROJECTION} }.submitted`
     // All three sweeps in ONE round trip: the tick runs every minute.
     const query = `{ "due": ${due}, "stale": ${stale}, "submitted": ${submitted} }`
+    type RawDue = RawVariant & {
+      postAttachments: RawPostAttachments
+      conferenceDomains: (string | null)[] | null
+      postCreatedBy: string | null
+      marketingTaskId: string | null
+    }
     const result = await clientWrite.fetch<{
-      due:
-        | (RawVariant & {
-            postAttachments: RawPostAttachments
-            conferenceDomains: (string | null)[] | null
-            postCreatedBy: string | null
-            marketingTaskId: string | null
-          })[][]
-        | null
+      due: { comment: RawDue[] | null; other: RawDue[] | null }[] | null
       stale: RawVariant[] | null
       submitted: RawVariant[][] | null
     }>(query, {
       now: now.toISOString(),
       staleBefore: staleBefore.toISOString(),
+      commentPlatforms,
     })
+    // Per conference: both windows, oldest first across them.
+    const dueRows = (result?.due ?? []).flatMap((group) =>
+      [...(group.comment ?? []), ...(group.other ?? [])].sort((a, b) =>
+        (a.scheduledAt ?? '').localeCompare(b.scheduledAt ?? ''),
+      ),
+    )
     // `conferenceDomains` serves TWO readers. Link cards
     // (`linkCardHostsFor`, every platform) take the RAW list and run their
     // own routing check. The first-comment rule (comment-placement platforms
@@ -353,28 +372,26 @@ export const sanitySocialVariantStore: SocialVariantStore = {
       return pending
     }
     const dueOrDeferred = await Promise.all(
-      (result?.due ?? [])
-        .flat()
-        .map(async (raw): Promise<PublishableVariant | null> => {
-          const raw_domains = normalizeDomainList(raw.conferenceDomains)
-          let conferenceDomains: string[] = raw_domains
-          if (needsOwnDomains(normalizeVariant(raw).platform)) {
-            const verified = await verifiedFor(raw)
-            if (verified === null) return null
-            conferenceDomains = verified
-          }
-          return {
-            ...normalizeVariant(raw),
-            postAttachments: normalizePostAttachments(raw.postAttachments),
-            conferenceDomains,
-            marketingTaskId: raw.marketingTaskId,
-            postCreatedBy:
-              typeof raw.postCreatedBy === 'string' &&
-              raw.postCreatedBy.length > 0
-                ? raw.postCreatedBy
-                : null,
-          }
-        }),
+      dueRows.map(async (raw): Promise<PublishableVariant | null> => {
+        const raw_domains = normalizeDomainList(raw.conferenceDomains)
+        let conferenceDomains: string[] = raw_domains
+        if (needsOwnDomains(normalizeVariant(raw).platform)) {
+          const verified = await verifiedFor(raw)
+          if (verified === null) return null
+          conferenceDomains = verified
+        }
+        return {
+          ...normalizeVariant(raw),
+          postAttachments: normalizePostAttachments(raw.postAttachments),
+          conferenceDomains,
+          marketingTaskId: raw.marketingTaskId,
+          postCreatedBy:
+            typeof raw.postCreatedBy === 'string' &&
+            raw.postCreatedBy.length > 0
+              ? raw.postCreatedBy
+              : null,
+        }
+      }),
     )
     const dueVariants = dueOrDeferred.filter(
       (v): v is PublishableVariant => v !== null,

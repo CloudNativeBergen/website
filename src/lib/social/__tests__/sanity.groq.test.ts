@@ -458,6 +458,46 @@ describe('findWork — the composed due/stale scan', () => {
     }
   })
 
+  it('deferred first-comment variants cannot fill the window and starve a card platform in the same conference', async () => {
+    // Twelve overdue LinkedIn variants whose verification keeps failing, and
+    // one later Bluesky variant. With ONE per-conference window of ten, the
+    // same ten LinkedIn rows were read every tick, deferred every tick, and
+    // the Bluesky one — which needs no verification — was never read.
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    verification.verifiedDomains.mockImplementation(async () => {
+      throw new Error('Sanity timeout')
+    })
+    try {
+      h.dataset = [
+        conference('c1'),
+        ...Array.from({ length: 12 }, (_, i) =>
+          variant(`li-${i}`, 'c1', {
+            platform: 'linkedin',
+            scheduledAt: `2026-09-13T08:${String(i).padStart(2, '0')}:00Z`,
+          }),
+        ),
+        variant('bsky', 'c1', {
+          platform: 'bluesky',
+          scheduledAt: '2026-09-13T09:30:00Z',
+        }),
+      ]
+      const work = await sanitySocialVariantStore.findWork(NOW, STALE_BEFORE, {
+        ...BOUNDS,
+        perConference: 10,
+      })
+      // ON THE VALUE: the Bluesky variant is dispatched this tick, with its
+      // raw list; the LinkedIn ones wait.
+      expect(work.due.map((v) => v._id)).toEqual(['bsky'])
+      expect(work.due[0].conferenceDomains).toEqual(['c1.example.no'])
+      expect(h.queries).toHaveLength(1)
+    } finally {
+      error.mockRestore()
+      verification.verifiedDomains.mockImplementation(async (claimed) => [
+        ...claimed,
+      ])
+    }
+  })
+
   it('never verifies for a card platform: Bluesky rows carry the raw list without a read', async () => {
     verification.verifiedDomains.mockClear()
     h.dataset = [
