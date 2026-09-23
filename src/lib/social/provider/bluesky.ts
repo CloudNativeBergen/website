@@ -42,8 +42,9 @@ import type {
  *  - Facets come from the library's detection (UTF-8 byte offsets, never
  *    hand-computed). A recorded mention is tagged with its recorded DID and
  *    never resolved again; any other handle is resolved as `detectFacets`
- *    would (see `tagMentions`). Bluesky does not unfurl, so the link card is built by
- *    us from our own page's metadata, with the tagged link as its `uri`.
+ *    would (see `tagMentions`). Bluesky does not unfurl, so the link card
+ *    is built by us from our own page's metadata, with the tagged link as
+ *    its `uri`.
  *  - Typed outcomes are the API. Everything BEFORE `createRecord` fires is a
  *    definite non-post (`transient` / `rejected` / …); once it has fired only
  *    a definitive 4xx answer counts as "not created" — everything else is
@@ -471,8 +472,10 @@ function normaliseHandle(handle: string): string {
  * Fills in the DID of every detected mention feature (whose `did` holds the
  * handle until then): the RECORDED DID when the handle was recorded (spec
  * §4.4 — the checked resolution is the one posted), otherwise a resolution
- * through the PDS, concurrently and with `''` on any failure, exactly as
- * `RichText.detectFacets` does. `resolvedFacets` then drops the empties.
+ * through the PDS. That second path mirrors `RichText.detectFacets`, which
+ * cannot skip recorded handles: concurrent, `''` on any failure (dropped by
+ * `resolvedFacets`); unlike it, the handle is sent normalised. A recorded
+ * entry without a DID was never checked and counts as unrecorded.
  */
 async function tagMentions(
   agent: Agent,
@@ -480,7 +483,9 @@ async function tagMentions(
   mentions: readonly PublishMention[],
 ): Promise<void> {
   const recorded = new Map(
-    mentions.map((m) => [normaliseHandle(m.handle), m.did] as const),
+    mentions
+      .filter((m) => m.did)
+      .map((m) => [normaliseHandle(m.handle), m.did] as const),
   )
   const resolutions: Promise<void>[] = []
   for (const facet of facets ?? []) {
@@ -493,15 +498,14 @@ async function tagMentions(
         continue
       }
       resolutions.push(
-        agent.com.atproto.identity
-          .resolveHandle({ handle })
-          .then(
-            (res) => res.data.did,
-            () => '',
-          )
-          .then((resolved) => {
-            feature.did = resolved || ''
-          }),
+        agent.com.atproto.identity.resolveHandle({ handle }).then(
+          (res) => {
+            feature.did = res.data.did || ''
+          },
+          () => {
+            feature.did = ''
+          },
+        ),
       )
     }
   }

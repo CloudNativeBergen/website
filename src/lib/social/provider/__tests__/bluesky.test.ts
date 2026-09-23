@@ -192,6 +192,40 @@ describe('BlueskyPublishAdapter — mentions (spec §4.4 Publish, #1149)', () =>
     expect(resolvedHandles(recorded)).toEqual(['ghost.bsky.social'])
   })
 
+  it('an unrecorded handle written in mixed case is resolved normalised', async () => {
+    const recorded = pds({ resolve: { 'bob.bsky.social': BOB } })
+
+    await adapter().publish({ text: 'Hi @Bob.bsky.social', media: [] })
+
+    expect(createdRecord(recorded).facets).toEqual([
+      {
+        $type: FACET,
+        index: { byteStart: 3, byteEnd: 19 },
+        features: [{ $type: MENTION, did: BOB }],
+      },
+    ])
+    expect(resolvedHandles(recorded)).toEqual(['bob.bsky.social'])
+  })
+
+  it('a recorded entry without a DID was never checked, so its handle is resolved like any other', async () => {
+    const recorded = pds({ resolve: { 'bob.bsky.social': BOB } })
+
+    await adapter().publish({
+      text: 'Hi @bob.bsky.social',
+      media: [],
+      mentions: [{ handle: 'bob.bsky.social', did: '' }],
+    })
+
+    expect(createdRecord(recorded).facets).toEqual([
+      {
+        $type: FACET,
+        index: { byteStart: 3, byteEnd: 19 },
+        features: [{ $type: MENTION, did: BOB }],
+      },
+    ])
+    expect(resolvedHandles(recorded)).toEqual(['bob.bsky.social'])
+  })
+
   it('a recorded mention whose handle is not in the text creates nothing', async () => {
     const recorded = pds()
 
