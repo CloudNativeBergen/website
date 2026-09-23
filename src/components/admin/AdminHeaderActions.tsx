@@ -45,8 +45,9 @@ export function AdminHeaderActions({ items }: AdminHeaderActionsProps) {
 
   return (
     <>
-      {/* Desktop: show all buttons */}
-      <div className="hidden gap-2 lg:flex">
+      {/* Desktop: show all buttons; wrap onto a second row rather than
+          squeezing the page title when the header is short on width. */}
+      <div className="hidden gap-2 lg:flex lg:flex-wrap lg:justify-end">
         {items
           .filter((i) => !i.hidden)
           .map((item) => {
