@@ -383,6 +383,34 @@ describe('the link is the first comment (#1134)', () => {
     ).toEqual([])
   })
 
+  it('handles a NESTED platform zone: the tenant host is the site, not the zone owner apex', () => {
+    // `PLATFORM_DOMAIN_SUFFIX=events.example.com`: the tenant's registrable
+    // apex is `example.com`, which is not the zone — comparing the two let
+    // `https://example.com/about` read as the tenant's own site and blocked
+    // Save. What matters is whether the ENTRY sits under the zone.
+    const ctx = {
+      conferenceDomains: ['acme.events.example.com'],
+      platformZone: 'events.example.com',
+    }
+    expect(
+      validatePublishInput(
+        linkedin,
+        body('https://acme.events.example.com/x'),
+        ctx,
+      ).map((i) => i.field),
+    ).toEqual(['body'])
+    for (const url of [
+      'https://example.com/about',
+      'https://www.example.com/about',
+      'https://other.events.example.com/x',
+    ]) {
+      expect(
+        validatePublishInput(linkedin, body(`See ${url}`), ctx),
+        url,
+      ).toEqual([])
+    }
+  })
+
   it('compares IDN hosts the way the parser writes them', () => {
     // `URL.hostname` is punycode; a `domains[]` entry is typed in Unicode.
     for (const [entry, url] of [

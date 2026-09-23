@@ -789,9 +789,13 @@ export async function getSocialVariantEditorData(
 export async function getConferenceDomainsForRule(
   conferenceId: string,
 ): Promise<readonly string[]> {
-  const domains = await scopedFetch<(string | null)[] | null>(
-    clientReadUncached,
-    { conferenceId },
+  // NOT through `scopedFetch`: that helper prepends `conference._ref ==
+  // $conferenceId`, which a conference document can never satisfy — the read
+  // came back null, normalised to [], and the rule was silently off at save,
+  // schedule and approve while the editor and the tick, reading correctly,
+  // enforced it. The router tests mock this function; the GROQ test does not.
+  const domains = await clientReadUncached.fetch<(string | null)[] | null>(
+    // groq-global-scoped: by-id read of the conference the request resolved.
     `*[_type == "conference" && _id == $conferenceId][0].domains`,
     { conferenceId },
     { cache: 'no-store' },

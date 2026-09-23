@@ -155,9 +155,12 @@ function isOwnDomain(
     // An entry that IS the platform zone (the operator's own conference)
     // owns the apex alone, never the tenant hosts minted under it.
     if (host.endsWith(`.${e}`)) return e !== zone
+    // A host minted on the platform zone (`acme.konf.run`, or on a nested
+    // zone `acme.events.example.com`) is the whole site: no apex expansion,
+    // whatever registrable domain the zone happens to sit under.
+    if (zone !== null && (e === zone || e.endsWith(`.${zone}`))) return false
     const apex = registrableDomain(e)
     if (!apex || apex === e) return false
-    if (zone !== null && apex === zone) return false
     return host === apex || host === `www.${apex}`
   })
 }

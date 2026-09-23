@@ -95,6 +95,7 @@ import {
   sanitySocialVariantStore,
   updateSocialPostDefaultTime,
   updateSocialVariantContent,
+  getConferenceDomainsForRule,
 } from '@/lib/social/sanity'
 
 const NOW = new Date('2026-09-13T10:00:00.000Z')
@@ -934,6 +935,25 @@ const post = (
     },
   ],
   ...overrides,
+})
+
+describe('getConferenceDomainsForRule — the live read the mutations validate against', () => {
+  it('returns the conference domains by id — executed GROQ, not a mock', async () => {
+    // The first version went through `scopedFetch`, which prepends
+    // `conference._ref == $conferenceId`; a conference document has no such
+    // field, so the read was null → [] and the first-comment rule was silently
+    // OFF at save, schedule and approve. Every router test mocked this
+    // function away. This one runs the query.
+    h.dataset = [conference('conf-A'), conference('conf-B')]
+    expect(await getConferenceDomainsForRule('conf-A')).toEqual([
+      'conf-A.example.no',
+    ])
+    expect(await getConferenceDomainsForRule('conf-B')).toEqual([
+      'conf-B.example.no',
+    ])
+    // An unknown id is an empty list, never another tenant's.
+    expect(await getConferenceDomainsForRule('conf-nope')).toEqual([])
+  })
 })
 
 describe('getSocialVariantEditorData — the editor read', () => {
