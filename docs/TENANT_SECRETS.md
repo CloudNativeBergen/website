@@ -3,7 +3,9 @@
 This document describes the per-organization secret **resolution layer** and
 **storage interface** that let each tenant (organization) eventually bring its
 own third-party credentials — while the platform environment stays the default
-for every tenant that has not been provisioned with its own.
+for every tenant that has not been provisioned with its own, for the families
+that have a platform account at all (`buffer` has none: it is per-organization
+only, see the table below).
 
 > **What exists.** The resolution layer, the storage interface and **three**
 > stores — the platform env, a JSON blob, and discrete per-tenant env vars.
@@ -21,9 +23,10 @@ for every tenant that has not been provisioned with its own.
   never stored in the CMS.
 - **Keyed by organization.** The tenant key is `conference.organization._ref`
   (see [Organization Tier](./ORGANIZATION_TIER.md)).
-- **Env stays the fallback / platform default.** Every resolution falls through
-  to the platform environment, so behavior is unchanged until a per-org secret
-  is provisioned.
+- **Env stays the fallback / platform default.** Resolution falls through to
+  the platform environment for every family that has platform credentials, so
+  behavior is unchanged until a per-org secret is provisioned. A per-org-only
+  family (`buffer`, #1127) resolves to nothing instead.
 - **Providers never read `process.env`.** Credentials are injected at the
   boundary — the same rule the ticketing/contract providers already follow (see
   [Integration Adapters](./INTEGRATION_ADAPTERS.md)).
@@ -126,8 +129,11 @@ Reads an optional `TENANT_SECRETS_JSON` env var: a JSON map
 }
 ```
 
-It is **provider-agnostic**, which is why it remains the only per-org source that
-can carry a Tito ticketing bag, and a malformed blob is logged **once** and
+It is **provider-agnostic** for `ticketing`, `email` and `slack`, which is why it
+remains the only per-org source that can carry a Tito ticketing bag: any
+non-empty object is a hit. The pair-shaped families (`bluesky`, `analytics`,
+`buffer`) are the exception — both fields or nothing, an incomplete bag is
+logged **once** and ignored. A malformed blob is likewise logged **once** and
 treated as empty (never throws), so a bad payload degrades to the env fallback
 rather than breaking every tenant.
 
