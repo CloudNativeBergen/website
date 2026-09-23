@@ -1,7 +1,4 @@
-// Deliberately NOT `import 'server-only'`: speaker erasure imports this and
-// runs under plain Node as `pnpm erase-speaker`, where that package throws on
-// import (`__tests__/scripts/erase-speaker-cli.test.ts`). It holds the write
-// client, so it must still only ever be imported from server code.
+import 'server-only'
 import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
 import { groq } from 'next-sanity'
 
