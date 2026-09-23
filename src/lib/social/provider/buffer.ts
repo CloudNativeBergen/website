@@ -115,8 +115,9 @@ const POST_QUERY = `query GetPost($input: PostInput!) {
 }`
 
 interface GraphQLError {
-  message?: string
-  extensions?: { code?: string }
+  message?: unknown
+  path?: unknown
+  extensions?: { code?: unknown } | null
 }
 
 interface GraphQLBody {
@@ -128,7 +129,21 @@ interface GraphQLBody {
 type Answer =
   | { kind: 'no-answer'; message: string }
   | { kind: 'http'; status: number; message: string; retryAfter?: Date }
-  | { kind: 'errors'; code: string | undefined; message: string }
+  | {
+      kind: 'errors'
+      /**
+       * The ONE code every error agrees on, else `undefined`. Mixed codes
+       * are not a verdict any phase may act on.
+       */
+      code: string | undefined
+      /**
+       * An error below the root field (`path` longer than one): the root
+       * resolver RAN — for a create, the post may exist — and a nested
+       * failure nulled the answer on its way up.
+       */
+      nested: boolean
+      message: string
+    }
   | { kind: 'data'; data: Record<string, unknown> }
 
 interface ChannelShape {
@@ -219,25 +234,19 @@ export class BufferPublishAdapter implements SocialPublishAdapter {
       Date.now() + this.confirmTimeoutMs,
       this.confirmTimeoutMs,
     )
-    const answer = await this.request(fetchImpl, 'GetPost', POST_QUERY, {
-      input: { id: vendorPostId },
-    })
-    switch (answer.kind) {
-      case 'no-answer':
-      case 'http':
-        return {
-          state: 'unreadable',
-          message: `Buffer post read failed: ${answer.message}`,
-        }
-      case 'errors':
-        return answer.code === 'NOT_FOUND'
-          ? { state: 'gone' }
-          : {
-              state: 'unreadable',
-              message: `Buffer post read failed: ${answer.message}`,
-            }
-      case 'data':
-        return confirmCheckOf(answer.data.post)
+    try {
+      return confirmOutcome(
+        await this.request(fetchImpl, 'GetPost', POST_QUERY, {
+          input: { id: vendorPostId },
+        }),
+      )
+    } catch (error) {
+      // The contract: confirm never throws. A body shape nothing here
+      // anticipated is still only "we could not read it".
+      return {
+        state: 'unreadable',
+        message: `Buffer post read failed: ${errorMessage(error)}`,
+      }
     }
   }
 
@@ -313,6 +322,11 @@ export class BufferPublishAdapter implements SocialPublishAdapter {
     if (answer.kind === 'data') {
       return createPayloadOutcome(answer.data.createPost)
     }
+    // createPost ran and something beneath it failed: whatever the code
+    // says, the post may exist, so no code may authorise a retry.
+    if (answer.kind === 'errors' && answer.nested) {
+      return ambiguous(answer.message)
+    }
     const refused = keyOrThrottleFailure(answer)
     if (refused) return refused
     switch (answer.kind) {
@@ -377,9 +391,16 @@ export class BufferPublishAdapter implements SocialPublishAdapter {
         message: `${operationName}: unreadable answer (${errorMessage(error)})`,
       }
     }
-    const firstError = Array.isArray(body?.errors) ? body.errors[0] : undefined
+    const errors: GraphQLError[] = Array.isArray(body?.errors)
+      ? body.errors.filter(
+          (e): e is GraphQLError => typeof e === 'object' && e !== null,
+        )
+      : []
+    const firstMessage = errors
+      .map((e) => (typeof e.message === 'string' ? e.message : ''))
+      .find(Boolean)
     if (!response.ok) {
-      const detail = firstError?.message ? ` ${firstError.message}` : ''
+      const detail = firstMessage ? ` ${firstMessage}` : ''
       return httpAnswer(
         response,
         `${operationName}: HTTP ${response.status}${detail}`,
@@ -394,13 +415,18 @@ export class BufferPublishAdapter implements SocialPublishAdapter {
       data !== null &&
       typeof data === 'object' &&
       Object.values(data).some((value) => value !== null && value !== undefined)
-    if (firstError && !answered) {
+    if (errors.length > 0 && !answered) {
+      const codes = new Set(
+        errors.map((e) =>
+          typeof e.extensions?.code === 'string' ? e.extensions.code : '',
+        ),
+      )
+      const code = codes.size === 1 ? [...codes][0] || undefined : undefined
       return {
         kind: 'errors',
-        code: firstError.extensions?.code,
-        message: `${operationName}: ${firstError.message ?? 'error'}${
-          firstError.extensions?.code ? ` (${firstError.extensions.code})` : ''
-        }`,
+        code,
+        nested: errors.some((e) => Array.isArray(e.path) && e.path.length > 1),
+        message: `${operationName}: ${firstMessage ?? 'error'}${code ? ` (${code})` : ''}`,
       }
     }
     if (!data || typeof data !== 'object') {
@@ -450,6 +476,27 @@ function createPayloadOutcome(payload: unknown): PublishOutcome {
     default:
       // UnexpectedError, RestProxyError, or a MutationError added later.
       return ambiguous(`${String(__typename)}: ${text}`)
+  }
+}
+
+/** A `GetPost` answer → the confirm verdict. */
+function confirmOutcome(answer: Answer): ConfirmCheck {
+  switch (answer.kind) {
+    case 'no-answer':
+    case 'http':
+      return {
+        state: 'unreadable',
+        message: `Buffer post read failed: ${answer.message}`,
+      }
+    case 'errors':
+      return answer.code === 'NOT_FOUND'
+        ? { state: 'gone' }
+        : {
+            state: 'unreadable',
+            message: `Buffer post read failed: ${answer.message}`,
+          }
+    case 'data':
+      return confirmCheckOf(answer.data.post)
   }
 }
 

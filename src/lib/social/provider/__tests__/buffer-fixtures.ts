@@ -54,7 +54,11 @@ export type Fault =
        * other form GraphQL may give a failed root field.
        */
       nulledField?: boolean
+      /** The error's `path`; absent is a root-level error. */
+      path?: (string | number)[]
     }
+  /** A 200 whose body is exactly this — for shapes the schema never promised. */
+  | { rawBody: unknown }
 
 export interface BufferBehaviour {
   /** The pinned channel as Buffer reports it (merged over a valid page). */
@@ -95,7 +99,9 @@ export const LINKEDIN_PAGE: ChannelShape = {
 function isFault(value: unknown): value is Fault {
   return (
     typeof value === 'string' ||
-    (typeof value === 'object' && value !== null && 'errorCode' in value)
+    (typeof value === 'object' &&
+      value !== null &&
+      ('errorCode' in value || 'rawBody' in value))
   )
 }
 
@@ -143,12 +149,17 @@ function faultResponse(fault: Fault, field: string): Response {
       headers: { 'content-type': 'text/plain' },
     })
   }
+  if ('rawBody' in fault)
+    return new HttpResponse(JSON.stringify(fault.rawBody), {
+      headers: { 'content-type': 'application/json' },
+    })
   return HttpResponse.json({
     data: fault.nulledField ? { [field]: null } : null,
     errors: [
       {
         message: fault.message ?? `Buffer ${fault.errorCode}`,
         extensions: { code: fault.errorCode },
+        ...(fault.path ? { path: fault.path } : {}),
       },
     ],
   })

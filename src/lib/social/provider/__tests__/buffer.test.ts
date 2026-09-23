@@ -335,6 +335,31 @@ describe('BufferPublishAdapter — failure at create (spec §3.3)', () => {
     expect(outcome).toMatchObject({ ok: false, kind })
   })
 
+  it('an error BENEATH createPost is ambiguous whatever its code — the create ran', async () => {
+    const { outcome } = await publishWith({
+      create: {
+        errorCode: 'RATE_LIMIT_EXCEEDED',
+        path: ['createPost', 'post', 'id'],
+      },
+    })
+    expect(outcome).toMatchObject({ ok: false, kind: 'ambiguous' })
+  })
+
+  it('errors that disagree on their code are ambiguous, never the first one’s verdict', async () => {
+    const { outcome } = await publishWith({
+      create: {
+        rawBody: {
+          data: null,
+          errors: [
+            { message: 'Not authorized', extensions: { code: 'UNAUTHORIZED' } },
+            { message: 'boom', extensions: { code: 'UNEXPECTED' } },
+          ],
+        },
+      },
+    })
+    expect(outcome).toMatchObject({ ok: false, kind: 'ambiguous' })
+  })
+
   it('a success without a post id is ambiguous — something was accepted', async () => {
     const { outcome } = await publishWith({
       create: { __typename: 'PostActionSuccess', post: {} },
@@ -441,6 +466,20 @@ describe('BufferPublishAdapter — confirm (spec §3.2)', () => {
       })
     },
   )
+
+  it('an error whose fields are not the documented strings is unreadable, not a throw', async () => {
+    buffer({
+      post: {
+        rawBody: {
+          data: null,
+          errors: [{ message: { toString: null }, extensions: { code: 7 } }],
+        },
+      },
+    })
+    await expect(adapter().confirm(POST_ID)).resolves.toMatchObject({
+      state: 'unreadable',
+    })
+  })
 
   it('runs under its OWN deadline and ABORTS the read — the engine’s timeout only races it', async () => {
     buffer({ delayMs: { post: 1_000 }, post: { status: 'sent' } })
