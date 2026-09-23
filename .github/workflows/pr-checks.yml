@@ -64,6 +64,9 @@ jobs:
       # of those warnings than eslint-rules/no-unscoped-groq.baseline.json
       # allows. Decreases pass. Raising the ceiling means running
       # `pnpm run lint:tenancy:update` and committing the diff.
+      # ORDER MATTERS: this step reads the `.eslintcache` the linter step above
+      # just wrote, so it costs ~2s. Moved before "Run linter" it silently
+      # relints the whole repo (~50s) — no failure, just the time back.
       - name: Run tenancy lint ratchet
         run: pnpm run lint:tenancy
 

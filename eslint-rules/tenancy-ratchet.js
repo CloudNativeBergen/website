@@ -130,7 +130,7 @@ function countRuleMessages(result) {
 }
 
 /** Lint the repo exactly as `eslint .` does and count RULE_ID per file. */
-async function countWarnings() {
+async function countWarnings({ cache }) {
   const { ESLint } = require('eslint')
   // `cache: true` reads and writes the SAME `.eslintcache` that `pnpm lint`
   // (`eslint --cache .`) maintains — ESLint stores every file's result there,
@@ -138,7 +138,14 @@ async function countWarnings() {
   // config hash. In CI this step runs straight after `pnpm lint`, so every
   // file is a cache hit and the ratchet costs seconds instead of relinting
   // the repo a second time. Without a warm cache it lints as before.
-  const eslint = new ESLint({ cwd: REPO_ROOT, cache: true })
+  //
+  // The cache key does NOT cover the rule's implementation (functions are
+  // dropped from the config hash), so an edit to `no-unscoped-groq.js` or
+  // `groq-scope-engine.js` followed by a cached run reports the OLD rule's
+  // output. A stale CHECK only ever over-counts or under-counts one run and
+  // is corrected by the next lint; a stale `--update` would commit a baseline
+  // built from the old rule. So the write path never uses the cache.
+  const eslint = new ESLint({ cwd: REPO_ROOT, cache })
   const results = await eslint.lintFiles(['.'])
   const counts = {}
   for (const result of results) {
@@ -221,7 +228,7 @@ function updateBaseline(
 
 async function main() {
   const update = process.argv.includes('--update')
-  const current = await countWarnings()
+  const current = await countWarnings({ cache: !update })
 
   if (update) {
     return updateBaseline(current, {
