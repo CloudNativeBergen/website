@@ -57,3 +57,6 @@ certificates
 
 # Storybook screenshots from scripts/shoot-story.mjs
 .shots/
+
+# Vitest blob reports (`--reporter=blob`, merged in CI)
+.vitest/

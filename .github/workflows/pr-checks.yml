@@ -99,10 +99,23 @@ jobs:
       - name: Build Sanity Studio
         run: pnpm sanity build ${{ runner.temp }}/studio -y
 
-  tests:
-    name: Tests
+  # The suite is ~800 files and ~85% per-file fixed cost (import, setup,
+  # environment), so wall time scales with file count and the only lever
+  # that does not touch test code is running fewer files per runner. Each
+  # shard runs its slice WITH coverage and writes a blob report; the "Tests"
+  # job below merges the blobs and is the ONLY place thresholds are judged
+  # (a per-shard threshold would be meaningless — each shard sees a slice of
+  # the callers). "Tests" is the required status check, so it must keep that
+  # exact name and must report even when a shard fails: `if: always()` plus
+  # an explicit result check does that.
+  tests-shard:
+    name: Tests (shard ${{ matrix.shard }}/${{ strategy.job-total }})
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
 
     steps:
       - name: Checkout code
@@ -134,21 +147,97 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # ONE run, with coverage on. This used to be `pnpm run test` followed by
-      # `pnpm run test:coverage`, which executed all ~800 files twice: the
-      # coverage flag does not narrow WHICH tests run, only which source files
-      # are instrumented. Per the 2026-09 CI logs that was 233s + 277s on a job
-      # whose critical path is this step. Vitest exits non-zero when any
-      # per-file threshold in vitest.config.ts is missed, so the single run is
-      # both the test gate and the scoped auth coverage gate (only the auth
-      # modules listed there are instrumented; unrelated files never fail it).
-      - name: Run tests with scoped auth coverage gate
-        run: pnpm run test:coverage
+      # Thresholds are skipped here on purpose (see vitest.config.ts): a shard
+      # sees a slice of the callers, so only the merged report can judge them.
+      - name: Run tests (shard ${{ matrix.shard }}/${{ strategy.job-total }}) with coverage
+        run: >
+          pnpm vitest run --coverage
+          --reporter=default --reporter=blob
+          --shard=${{ matrix.shard }}/${{ strategy.job-total }}
+        env:
+          VITEST_SKIP_COVERAGE_THRESHOLDS: 1
 
-  storybook:
-    name: Storybook Tests
+      - name: Upload blob report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # ratchet:actions/upload-artifact@v4
+        with:
+          name: vitest-blob-${{ matrix.shard }}
+          # Vitest 5 writes blob reports here (not `.vitest-reports/`).
+          path: .vitest/blob/
+          retention-days: 1
+          if-no-files-found: error
+
+  tests:
+    name: Tests
+    needs: tests-shard
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # ratchet:actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # ratchet:actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # ratchet:pnpm/action-setup@v4
+        with:
+          version: 10.24.0
+
+      - name: Get pnpm store directory
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      - name: Setup pnpm cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # ratchet:actions/cache@v4
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Download blob reports
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # ratchet:actions/download-artifact@v4
+        with:
+          pattern: vitest-blob-*
+          path: .vitest/blob/
+          merge-multiple: true
+
+      # Merges every shard's results into one report and applies the scoped
+      # auth coverage thresholds from vitest.config.ts (only the auth modules
+      # listed there are instrumented; unrelated files can never fail this).
+      # Exits non-zero on a failed test in any shard or a missed threshold.
+      - name: Merge shard reports and apply scoped auth coverage gate
+        run: pnpm vitest run --merge-reports --coverage
+
+      # A shard that crashed before writing its blob (OOM, timeout) would be
+      # invisible to the merge. Fail on the shard's own verdict as well.
+      - name: Fail if any shard did not succeed
+        if: needs.tests-shard.result != 'success'
+        run: |
+          echo "::error::tests-shard result is '${{ needs.tests-shard.result }}'"
+          exit 1
+
+  # Same shape as the vitest shards: ~1,900 stories at ~0.15s each on a
+  # 4-vCPU runner is the whole job, and the runner is not worker-bound
+  # (--maxWorkers=100% measured no faster than 50%). Each shard builds the
+  # static Storybook itself (~6s) rather than passing it between jobs.
+  storybook-shard:
+    name: Storybook Tests (shard ${{ matrix.shard }}/${{ strategy.job-total }})
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
 
     steps:
       - name: Checkout code
@@ -186,8 +275,29 @@ jobs:
       - name: Initialize MSW
         run: pnpm msw init public --save=false
 
-      - name: Run Storybook tests
+      # `storybook:test-ci` forwards STORYBOOK_SHARD as `--shard=i/n` to
+      # test-storybook; unset (local runs) it runs every story.
+      - name: Run Storybook tests (shard ${{ matrix.shard }}/${{ strategy.job-total }})
         run: pnpm run storybook:test-ci
+        env:
+          STORYBOOK_SHARD: ${{ matrix.shard }}/${{ strategy.job-total }}
+
+  # Required status check; must keep this exact name. No checkout needed.
+  storybook:
+    name: Storybook Tests
+    needs: storybook-shard
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Fail if any shard did not succeed
+        if: needs.storybook-shard.result != 'success'
+        run: |
+          echo "::error::storybook-shard result is '${{ needs.storybook-shard.result }}'"
+          exit 1
+      - name: All shards green
+        if: needs.storybook-shard.result == 'success'
+        run: echo "All Storybook shards passed"
 
   build:
     name: Build
