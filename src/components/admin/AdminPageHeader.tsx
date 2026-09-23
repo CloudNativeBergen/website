@@ -57,7 +57,9 @@ export function AdminPageHeader({
   return (
     <div className="pb-4">
       <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
+        {/* The title column takes the spare width (down to a floor); only then do the
+            desktop actions shrink and wrap onto a second row. */}
+        <div className="flex items-center gap-3 lg:min-w-80 lg:flex-1">
           {backLink && (
             <Link
               href={backLink.href}
@@ -98,7 +100,7 @@ export function AdminPageHeader({
         </div>
 
         {(actionItems || actions) && (
-          <div className="shrink-0">
+          <div className="shrink-0 lg:min-w-0 lg:shrink">
             {actionItems ? (
               <AdminHeaderActions items={actionItems} />
             ) : (
