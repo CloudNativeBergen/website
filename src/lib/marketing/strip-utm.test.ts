@@ -67,7 +67,7 @@ describe('stripUtmFromAddressBar', () => {
     const push = vi.spyOn(window.history, 'pushState')
     const replace = vi.spyOn(window.history, 'replaceState')
 
-    expect(stripUtmFromAddressBar(window)).toBe(true)
+    expect(stripUtmFromAddressBar(window)).toBe('native')
 
     expect(window.location.search).toBe('?keep=1')
     expect(window.location.hash).toBe('#h')
@@ -80,39 +80,57 @@ describe('stripUtmFromAddressBar', () => {
   it('does not touch history when the URL is already clean', () => {
     window.history.replaceState(null, '', '/?keep=1')
     const replace = vi.spyOn(window.history, 'replaceState')
-    expect(stripUtmFromAddressBar(window)).toBe(false)
+    expect(stripUtmFromAddressBar(window)).toBeNull()
     expect(replace).not.toHaveBeenCalled()
   })
 })
 
-describe('stripUtmFromAddressBar under the Next.js app router', () => {
+describe('stripUtmFromAddressBar and the Next.js app router', () => {
   // The router's patch, as in next/dist/client/components/app-router.js: a
   // state carrying `__NA` is passed through without the router learning the
-  // new URL; anything else updates the router's URL first.
+  // new URL; anything else updates the router's URL and gets the router's
+  // markers copied back from the current entry.
+  const ROUTER_STATE = {
+    __NA: true,
+    __PRIVATE_NEXTJS_INTERNALS_TREE: { tree: ['', {}] },
+    custom: 1,
+  }
   let routerUrl: string | null = null
   const original = window.history.replaceState.bind(window.history)
-  beforeEach(() => {
-    routerUrl = null
-    window.history.replaceState(
-      { __NA: true, custom: 1 },
-      '',
-      '/?utm_campaign=c&keep=1',
-    )
+  function installRouterPatch() {
     window.history.replaceState = function (data, unused, url) {
       if (data?.__NA || data?._N) return original(data, unused, url)
-      const next = { ...(data ?? {}), __NA: window.history.state?.__NA }
+      const current = window.history.state
+      const next = {
+        ...(data ?? {}),
+        __NA: current?.__NA,
+        __PRIVATE_NEXTJS_INTERNALS_TREE:
+          current?.__PRIVATE_NEXTJS_INTERNALS_TREE,
+      }
       if (url) routerUrl = String(url)
       return original(next, unused, url)
     }
+  }
+  beforeEach(() => {
+    routerUrl = null
+    original(ROUTER_STATE, '', '/?utm_campaign=c&keep=1')
   })
   afterEach(() => {
     window.history.replaceState = original
-    window.history.replaceState(null, '', '/')
+    original(null, '', '/')
   })
 
-  it('lets the router see the stripped URL and keeps every other state key', () => {
-    expect(stripUtmFromAddressBar(window)).toBe(true)
+  it('once the patch is installed, the router learns the URL and the state is intact', () => {
+    installRouterPatch()
+    expect(stripUtmFromAddressBar(window)).toBe('router')
     expect(routerUrl).toBe(`${window.location.origin}/?keep=1`)
-    expect(window.history.state).toEqual({ __NA: true, custom: 1 })
+    expect(window.history.state).toEqual(ROUTER_STATE)
+  })
+
+  it('before the patch is installed, the state is written back exactly: Back never reloads', () => {
+    // Next reloads the page on popstate to an entry whose state lacks __NA.
+    expect(stripUtmFromAddressBar(window)).toBe('native')
+    expect(window.location.search).toBe('?keep=1')
+    expect(window.history.state).toEqual(ROUTER_STATE)
   })
 })

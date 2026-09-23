@@ -2,7 +2,12 @@
  * @vitest-environment jsdom
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { scheduleUtmStrip, UTM_STRIP_DEADLINE_MS } from './address-bar'
+import {
+  scheduleUtmStrip,
+  UTM_STRIP_DEADLINE_MS,
+  UTM_STRIP_GUARD_MS,
+  UTM_STRIP_GUARD_TICK_MS,
+} from './address-bar'
 
 const TAGGED = '/?utm_source=x&utm_campaign=c1&utm_content=k1&keep=1#h'
 
@@ -57,8 +62,10 @@ describe('scheduleUtmStrip', () => {
     client.emit('$pageview')
     expect(window.location.search).toBe('?keep=1')
     expect(window.location.hash).toBe('#h')
-    // Done: nothing left listening, nothing left pending.
+    // Done: nothing left listening, and once the guard has run out, nothing
+    // left pending.
     expect(client.listenerCount).toBe(0)
+    vi.advanceTimersByTime(UTM_STRIP_GUARD_MS + UTM_STRIP_GUARD_TICK_MS)
     expect(vi.getTimerCount()).toBe(0)
   })
 
@@ -134,6 +141,7 @@ describe('scheduleUtmStrip', () => {
     const schedule = scheduleUtmStrip(window)
     schedule.now()
     expect(window.location.search).toBe('?keep=1')
+    vi.advanceTimersByTime(UTM_STRIP_GUARD_MS + UTM_STRIP_GUARD_TICK_MS)
     expect(vi.getTimerCount()).toBe(0)
 
     // Late arrivals are no-ops: no second replaceState, no listener kept.
@@ -154,6 +162,58 @@ describe('scheduleUtmStrip', () => {
     window.history.replaceState(null, '', '/program?utm_campaign=later')
     schedule.now()
     expect(window.location.search).toBe('?utm_campaign=later')
+  })
+
+  it('re-strips when the router writes the tagged landing back after the strip', () => {
+    // The Next router snapshots the URL at its first render and replays it on
+    // commit; a strip in between is undone once.
+    const schedule = scheduleUtmStrip(window)
+    schedule.now()
+    expect(window.location.search).toBe('?keep=1')
+    window.history.replaceState(window.history.state, '', TAGGED)
+    vi.advanceTimersByTime(0)
+    expect(window.location.search).toBe('?keep=1')
+    expect(window.location.hash).toBe('#h')
+
+    // …and again later in the guard window.
+    vi.advanceTimersByTime(UTM_STRIP_GUARD_TICK_MS * 5)
+    window.history.replaceState(window.history.state, '', TAGGED)
+    vi.advanceTimersByTime(UTM_STRIP_GUARD_TICK_MS)
+    expect(window.location.search).toBe('?keep=1')
+  })
+
+  it('hands the router the clean URL once it has hydrated, then stops', () => {
+    // Stripped before the router's history patch existed: the router still
+    // holds the tagged URL. When it hydrates (its marker lands on the state)
+    // the guard rewrites the clean URL once through the patch.
+    const schedule = scheduleUtmStrip(window)
+    schedule.now()
+    const original = window.history.replaceState.bind(window.history)
+    let routerUrl: string | null = null
+    original({ __NA: true }, '', window.location.href)
+    window.history.replaceState = (data, unused, url) => {
+      if (data?.__NA) return original(data, unused, url)
+      routerUrl = String(url)
+      return original({ ...(data ?? {}), __NA: true }, unused, url)
+    }
+    try {
+      vi.advanceTimersByTime(UTM_STRIP_GUARD_TICK_MS)
+      expect(routerUrl).toBe(`${window.location.origin}/?keep=1#h`)
+      expect(window.history.state).toEqual({ __NA: true })
+      vi.advanceTimersByTime(UTM_STRIP_GUARD_MS)
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      window.history.replaceState = original
+    }
+  })
+
+  it('gives up re-checking once the guard runs out', () => {
+    const schedule = scheduleUtmStrip(window)
+    schedule.now()
+    vi.advanceTimersByTime(UTM_STRIP_GUARD_MS + UTM_STRIP_GUARD_TICK_MS)
+    window.history.replaceState(null, '', TAGGED)
+    vi.advanceTimersByTime(UTM_STRIP_GUARD_MS)
+    expect(window.location.search).toContain('utm_campaign=c1')
   })
 
   it('never pushes a history entry', () => {

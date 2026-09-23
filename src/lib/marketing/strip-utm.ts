@@ -47,36 +47,69 @@ export function withoutUtm(href: string): string | null {
 }
 
 /**
- * The entry's state minus the Next.js router's "this write is mine" markers.
- * The app router patches `history.replaceState` and, for a state carrying
- * `__NA` (or the pages router's `_N`), passes the call straight through
- * WITHOUT updating its own copy of the URL. That copy is what it writes back
- * into the address bar on its next state change (a refresh, a server action),
- * so a strip it did not see would put the tags back. Without the markers the
- * patch treats this as an external write: it syncs its URL and re-attaches its
- * own internal state itself. Every other key is kept.
+ * The Next.js router's "this history write is mine" markers. The app router
+ * patches `history.replaceState` (once it has hydrated) and, for a state
+ * carrying `__NA` (or the pages router's `_N`), passes the call straight
+ * through WITHOUT updating its own copy of the URL. That copy is what it
+ * writes back into the address bar on its next state change (a refresh, a
+ * server action), so a strip it did not see would put the tags back. A state
+ * WITHOUT the markers is treated as an external write: the patch syncs its URL
+ * and copies `__NA` and its tree back onto the state itself.
+ *
+ * The markers must never be LOST, though: an entry whose state lacks `__NA`
+ * makes the router reload the page when Back lands on it.
  */
-const ROUTER_MARKERS: ReadonlySet<string> = new Set(['__NA', '_N'])
+const ROUTER_MARKERS = ['__NA', '_N'] as const
+
+function hasRouterMarker(state: unknown): boolean {
+  return (
+    typeof state === 'object' &&
+    state !== null &&
+    ROUTER_MARKERS.some((key) => key in state)
+  )
+}
 
 function withoutRouterMarkers(state: unknown): unknown {
-  if (typeof state !== 'object' || state === null) return state
+  if (!hasRouterMarker(state)) return state
   return Object.fromEntries(
-    Object.entries(state).filter(([key]) => !ROUTER_MARKERS.has(key)),
+    Object.entries(state as object).filter(
+      ([key]) => !(ROUTER_MARKERS as readonly string[]).includes(key),
+    ),
   )
 }
 
 /**
- * Rewrite the CURRENT history entry without its `utm_*`: `replaceState`,
- * never `pushState`, so the back button behaves exactly as before. Returns
- * whether anything was rewritten; a clean URL is left alone.
+ * How a URL rewrite landed: `'router'` when the Next router's history patch
+ * took it (the router now knows the URL), `'native'` when it went straight to
+ * the browser (before hydration, or no app router at all).
  */
-export function stripUtmFromAddressBar(win: Window): boolean {
+export type HistoryWrite = 'router' | 'native'
+
+/**
+ * Replace the CURRENT entry's URL, never pushing one, and let the Next router
+ * learn it when its patch is installed. The entry keeps its state: through the
+ * patch the markers are copied back; without the patch (the window between
+ * the router's first render and its effects) the original state is written
+ * back as is, so Back never reloads.
+ */
+export function replaceUrlKeepingState(
+  win: Window,
+  href: string,
+): HistoryWrite {
+  const before: unknown = win.history.state
+  win.history.replaceState(withoutRouterMarkers(before), '', href)
+  if (!hasRouterMarker(before)) return 'native'
+  if (hasRouterMarker(win.history.state)) return 'router'
+  win.history.replaceState(before, '', href)
+  return 'native'
+}
+
+/**
+ * Rewrite the current entry without its `utm_*`. Returns how it landed, or
+ * `null` when the URL was already clean and nothing was written.
+ */
+export function stripUtmFromAddressBar(win: Window): HistoryWrite | null {
   const stripped = withoutUtm(win.location.href)
-  if (stripped === null) return false
-  win.history.replaceState(
-    withoutRouterMarkers(win.history.state),
-    '',
-    stripped,
-  )
-  return true
+  if (stripped === null) return null
+  return replaceUrlKeepingState(win, stripped)
 }

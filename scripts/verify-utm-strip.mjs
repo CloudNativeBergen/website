@@ -238,6 +238,28 @@ async function scenarioCookieless(browser, base) {
     !afterRefresh.includes('utm_'),
     afterRefresh,
   )
+  // Back from a page navigated to after the strip must return to the clean
+  // landing entry through the router, not reload it (Next reloads an entry
+  // whose state lost its `__NA` marker).
+  const stateKeys = await page.evaluate(() => Object.keys(history.state ?? {}))
+  await page.evaluate(() => {
+    window.__notReloaded = true
+    window.next.router.push('/program')
+  })
+  await page.waitForURL(/\/program/, { timeout: 60_000 })
+  await page.goBack({ waitUntil: 'commit' })
+  await sleep(2000)
+  const back = await page.evaluate(() => ({
+    search: location.search,
+    notReloaded: window.__notReloaded === true,
+  }))
+  check(
+    'A: Back to the landing: clean, no reload, state kept its router marker',
+    back.notReloaded &&
+      !back.search.includes('utm_') &&
+      stateKeys.includes('__NA'),
+    JSON.stringify({ ...back, stateKeys }),
+  )
   const [first] = (await events(page)).filter((e) => e.event === '$pageview')
   check(
     'A: landing $pageview captured cookieless WITH the tags, before the strip',

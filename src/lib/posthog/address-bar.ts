@@ -1,4 +1,8 @@
-import { stripUtmFromAddressBar, withoutUtm } from '@/lib/marketing/strip-utm'
+import {
+  replaceUrlKeepingState,
+  stripUtmFromAddressBar,
+  withoutUtm,
+} from '@/lib/marketing/strip-utm'
 
 /**
  * WHEN the landing URL's `utm_*` leave the address bar (spec §3, #1146). The
@@ -16,6 +20,17 @@ import { stripUtmFromAddressBar, withoutUtm } from '@/lib/marketing/strip-utm'
 
 /** How long a landing keeps its tags when no pageview is observed. */
 export const UTM_STRIP_DEADLINE_MS = 3000
+
+/**
+ * After the strip, how long and how often it is re-checked. The Next router
+ * snapshots `location` at its first render and writes that URL back when it
+ * commits; its history patch, which lets it learn a later rewrite, installs
+ * only in an effect after that. A strip landing in between is undone by the
+ * commit (or by the next refresh), so the strip keeps guarding until the
+ * router has taken a rewrite itself.
+ */
+export const UTM_STRIP_GUARD_MS = 3000
+export const UTM_STRIP_GUARD_TICK_MS = 100
 
 /** The slice of the PostHog client the schedule listens to. */
 export interface PageviewSource {
@@ -45,6 +60,12 @@ export function scheduleUtmStrip(
   // strip moves the visitor to a URL that is not a landing (an app link that
   // happens to carry `utm_*` included), so the strip then leaves it alone.
   const landing = win.location.pathname + win.location.search
+  const cleanUrl = new URL(withoutUtm(win.location.href) ?? win.location.href)
+  const cleanLanding = cleanUrl.pathname + cleanUrl.search
+  const onLanding = () => {
+    const here = win.location.pathname + win.location.search
+    return here === landing || here === cleanLanding
+  }
   let done = false
   let remaining = deadlineMs
   let startedAt = 0
@@ -57,9 +78,30 @@ export function scheduleUtmStrip(
     clearTimeout(timer)
     doc.removeEventListener('visibilitychange', onVisibility)
     unsubscribe?.()
-    if (win.location.pathname + win.location.search === landing) {
-      stripUtmFromAddressBar(win)
+    if (!onLanding()) return
+    guard(stripUtmFromAddressBar(win) === 'router')
+  }
+
+  // Re-check on the next macrotask and then every tick until the router has
+  // taken a rewrite (it can no longer write the landing URL back) or the
+  // guard runs out. Re-strip if the tags came back; once the router has
+  // hydrated (its marker is on the state), hand it the clean URL once so its
+  // own copy matches. Stops as soon as the visitor leaves the landing.
+  function guard(routerSynced: boolean) {
+    const until = Date.now() + UTM_STRIP_GUARD_MS
+    let synced = routerSynced
+    const tick = () => {
+      if (!onLanding()) return
+      if (withoutUtm(win.location.href) !== null) {
+        synced = stripUtmFromAddressBar(win) === 'router'
+      } else if (!synced && hasNextMarker(win.history.state)) {
+        synced = replaceUrlKeepingState(win, win.location.href) === 'router'
+      }
+      if (!synced && Date.now() < until) {
+        setTimeout(tick, UTM_STRIP_GUARD_TICK_MS)
+      }
     }
+    setTimeout(tick, 0)
   }
 
   // The deadline only counts time the page is visible. The SDK defers its
@@ -94,4 +136,8 @@ export function scheduleUtmStrip(
       })
     },
   }
+}
+
+function hasNextMarker(state: unknown): boolean {
+  return typeof state === 'object' && state !== null && '__NA' in state
 }
