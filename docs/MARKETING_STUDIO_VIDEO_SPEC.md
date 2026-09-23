@@ -168,6 +168,8 @@ full 60 seconds is about 60 MB, inside the gallery's 100 MB.
 **The proof comes first** (§9). Nobody has seen a canvas become an MP4 with sound in this codebase,
 and the parts of the support matrix that matter are undocumented.
 
+**Measured in [the proof's report](MARKETING_STUDIO_VIDEO_PROOF.md):** H.264 encodes in all three browsers, but Safari stalls without `latencyMode: 'realtime'` and Firefox fails with it (§1, §6 there).
+
 ## 6. Music
 
 One track per video: a start point within the track, a volume, a fade in and a fade out. The
@@ -197,6 +199,8 @@ AAC beside the video.
   we found. The proof settles whether those browsers export with sound, export silent with a clear
   notice, or are told to use another browser, and measures the AAC priming offset so sound and
   picture line up.
+
+**Measured in [the proof's report](MARKETING_STUDIO_VIDEO_PROOF.md):** Firefox has no native AAC and the add-on works (an MPL-2.0 wrapper around LGPL-2.1+ libavcodec, about 254 KB gzip); the priming offset is 2112 samples native and 1024 with the add-on, measured at export time and trimmed (§2, §4, §8 there).
 
 ## 7. Projects
 
@@ -256,7 +260,7 @@ reach.
 [#1171](https://github.com/CloudNativeBergen/website/issues/1171) **the proof**: a 10-second canvas clip with sound exported in Chrome, Safari and Firefox,
 reporting per browser whether H.264 and AAC encode, the add-on AAC encoder's licence and size, export
 time, the AAC priming offset, whether a brand colour survives the encoder, and whether LinkedIn and
-Bluesky take the file. It gates #1177 and #1179 as written ·
+Bluesky take the file. It gates #1177 and #1179 as written — **report: [MARKETING_STUDIO_VIDEO_PROOF.md](MARKETING_STUDIO_VIDEO_PROOF.md)**, which amends both (§8 there) ·
 [#1172](https://github.com/CloudNativeBergen/website/issues/1172) the logo on the canvas (§4) · [#1173](https://github.com/CloudNativeBergen/website/issues/1173) one "draw at time t" function (§4) — needs #1172 ·
 [#1174](https://github.com/CloudNativeBergen/website/issues/1174) Video mode with scenes and a scrub timeline, cut and fade, preview only (§2, §3) — needs
 #1173 · [#1175](https://github.com/CloudNativeBergen/website/issues/1175) slide and zoom, scene management, the cap, undo (§2, §3) · [#1176](https://github.com/CloudNativeBergen/website/issues/1176) element

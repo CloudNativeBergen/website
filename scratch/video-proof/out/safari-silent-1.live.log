@@ -1,9 +1,0 @@
-[651.0] support {"videoNative":{"avc1.42001f (baseline 3.1)":true,"avc1.420028 (baseline 4.0)":true,"avc1.4d0028 (main 4.0)":true,"avc1.640028 (high 4.0)":true,"avc1.640032 (high 5.0)":true},"audioNativeAac":true,"mbCanEncodeVideoAvc":true,"mbCanEncodeAudioAacBeforeAddon":true,"hasSchedulerYield":false}
-[661.0] video encoder config {"codec":"avc1.640020","width":1080,"height":1080,"displayWidth":1080,"displayHeight":1080,"bitrate":8000000,"bitrateMode":"variable","alpha":"discard","framerate":30,"avc":{"format":"avc"}}
-[663.0] isConfigSupported(actual video config) true
-[663.0] frame 0
-[16694.0] STALL: no frame accepted for 15 s {"framesDone":7,"outputState":"started"}
-[16695.0] cancel clicked {"source":"watchdog"}
-[16698.0] canceled {"framesDone":8,"cancelToStoppedMs":3,"outputState":"canceled","scheduledToHandlerMs":null}
-[16698.0] result {"wallMs":16045,"totalMsInclProbe":16060,"framesDone":8,"maxTaskGapMs":33,"heartbeats":1999,"rafPaints":963,"firstError":null,"supportedButFailed":false,"bytes":0}
-[16717.0] DONE

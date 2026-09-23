@@ -1,4 +1,0 @@
-[532.0] raw config {"cfg":{"codec":"avc1.42001f","width":1080,"height":1080,"bitrate":8000000,"framerate":30,"avc":{"format":"avc"}},"supported":true}
-[539.0] raw frame {"n":0,"queue":1,"outputs":0,"err":null}
-[8586.0] raw STALL {"n":8,"queue":5,"outputs":0,"err":null}
-[13590.0] raw done {"ms":13057,"outputs":0,"err":"flush timeout 5s","state":"configured"}

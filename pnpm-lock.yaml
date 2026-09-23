@@ -234,9 +234,6 @@ importers:
         specifier: ^4.5.4
         version: 4.5.4
     devDependencies:
-      '@mediabunny/aac-encoder':
-        specifier: 1.59.0
-        version: 1.59.0(mediabunny@1.59.0)
       '@sanity/client':
         specifier: ^7.27.0
         version: 7.27.0
@@ -330,9 +327,6 @@ importers:
       knip:
         specifier: ~6.26.0
         version: 6.26.0
-      mediabunny:
-        specifier: 1.59.0
-        version: 1.59.0
       msw:
         specifier: ^2.15.0
         version: 2.15.0(@types/node@26.4.1)(typescript@6.0.3)
@@ -2427,11 +2421,6 @@ packages:
     peerDependencies:
       '@types/react': '>=16'
       react: '>=16'
-
-  '@mediabunny/aac-encoder@1.59.0':
-    resolution: {integrity: sha512-qeVtQ9qhUdwQPY49aeONTug1P8gS2IFeR09ZaVTr+88EfpFESRfrN7PGovJM6/Tsku8V0aZcvXClF/KCT2pfVw==}
-    peerDependencies:
-      mediabunny: ^1.0.0
 
   '@module-federation/dts-plugin@2.9.0':
     resolution: {integrity: sha512-uMGqEG/p9odG2BVr7WRbBe2OgrvzBd3LPzcp5WP+bm3djBdUJ4PZ3ozqKp6qpy+NFnlh6vnM815Xn6AXkKy1Vw==}
@@ -4568,12 +4557,6 @@ packages:
 
   '@types/doctrine@0.0.9':
     resolution: {integrity: sha512-eOIHzCUSH7SMfonMG1LsC2f8vxBFtho6NGBznK41R84YzPuvSBzrhEps33IsQiOW9+VL6NQ9DbjQJznk/S4uRA==}
-
-  '@types/dom-mediacapture-transform@0.1.12':
-    resolution: {integrity: sha512-d7/QsLRwF864A5mgIM/YrfiglHoYn7zgCcAoJgW404r+2DwnNr7EBbLnCWpmOMgH8y0te73L1AV6H1bmauaWFw==}
-
-  '@types/dom-webcodecs@0.1.13':
-    resolution: {integrity: sha512-O5hkiFIcjjszPIYyUSyvScyvrBoV3NOEEZx/pMlsu44TKzWNkLVBBxnxJz42in5n3QIolYOcBYFCPZZ0h8SkwQ==}
 
   '@types/esrecurse@4.3.1':
     resolution: {integrity: sha512-xJBAbDifo5hpffDBuHl0Y8ywswbiAp/Wi7Y/GtAgSlZyIABppyurxVueOPE8LUQOxdlgi6Zqce7uoEpqNTeiUw==}
@@ -7919,9 +7902,6 @@ packages:
 
   media-tracks@0.3.5:
     resolution: {integrity: sha512-l54rkKXlLBt3ob3zOLWHcnjvwUmX5bNEZ70igyapOZZC9imzqBmq1oz8p2roiV04KhjblFIi2hetLPF1oYVLRA==}
-
-  mediabunny@1.59.0:
-    resolution: {integrity: sha512-m+nhRFI9gRQaDP22GCZwwL1nTtoAJtzHB7XzZmlff4P17+F/i5wZnDu4cc09a4ae5x41Px/C/GWdiROQHVM4eQ==}
 
   mendoza@3.0.8:
     resolution: {integrity: sha512-iwxgEpSOx9BDLJMD0JAzNicqo9xdrvzt6w/aVwBKMndlA6z/DH41+o60H2uHB0vCR1Xr37UOgu9xFWJHvYsuKw==}
@@ -12651,10 +12631,6 @@ snapshots:
       '@types/react': 19.2.15
       react: 19.2.8
 
-  '@mediabunny/aac-encoder@1.59.0(mediabunny@1.59.0)':
-    dependencies:
-      mediabunny: 1.59.0
-
   '@module-federation/dts-plugin@2.9.0(typescript@6.0.3)':
     dependencies:
       '@module-federation/error-codes': 2.9.0
@@ -15142,12 +15118,6 @@ snapshots:
   '@types/deep-eql@4.0.2': {}
 
   '@types/doctrine@0.0.9': {}
-
-  '@types/dom-mediacapture-transform@0.1.12':
-    dependencies:
-      '@types/dom-webcodecs': 0.1.13
-
-  '@types/dom-webcodecs@0.1.13': {}
 
   '@types/esrecurse@4.3.1': {}
 
@@ -18920,11 +18890,6 @@ snapshots:
   media-engine@2.0.0: {}
 
   media-tracks@0.3.5: {}
-
-  mediabunny@1.59.0:
-    dependencies:
-      '@types/dom-mediacapture-transform': 0.1.12
-      '@types/dom-webcodecs': 0.1.13
 
   mendoza@3.0.8: {}
 
