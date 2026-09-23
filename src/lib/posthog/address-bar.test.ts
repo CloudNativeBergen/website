@@ -114,6 +114,16 @@ describe('scheduleUtmStrip', () => {
     expect(client.on).not.toHaveBeenCalled()
   })
 
+  it('is spent after one strip: it never rewrites a later URL', () => {
+    // Once per landing. A URL the app itself tags later (a client-side
+    // navigation) is not a landing and is not this schedule's business.
+    const schedule = scheduleUtmStrip(window)
+    schedule.now()
+    window.history.replaceState(null, '', '/program?utm_campaign=later')
+    schedule.now()
+    expect(window.location.search).toBe('?utm_campaign=later')
+  })
+
   it('never pushes a history entry', () => {
     const push = vi.spyOn(window.history, 'pushState')
     const replace = vi.spyOn(window.history, 'replaceState')
