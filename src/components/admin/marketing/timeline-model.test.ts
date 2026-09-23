@@ -191,6 +191,14 @@ describe('chipTone', () => {
     expect(chipTone(task({ status: 'scheduled' }), false, '2026-01-01')).toBe(
       'active',
     )
+    // #1128: in flight with an asynchronous publisher reads exactly as
+    // `publishing` does — active, never planned.
+    expect(chipTone(task({ status: 'publishing' }), false, '2026-01-01')).toBe(
+      'active',
+    )
+    expect(chipTone(task({ status: 'submitted' }), false, '2026-01-01')).toBe(
+      'active',
+    )
     expect(chipTone(task({}), false, '2026-01-01')).toBe('planned')
     expect(
       chipTone(

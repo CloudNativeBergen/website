@@ -41,6 +41,7 @@ function variant(
     usesCustomTime: false,
     claimedAt: null,
     shortCode: null,
+    submission: null,
     link: OURS,
     attachments: [],
     publishResult: null,

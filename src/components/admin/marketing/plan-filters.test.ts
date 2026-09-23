@@ -48,13 +48,13 @@ describe('plan filter URLs', () => {
     expect(serializePlanFilters(NO_FILTERS).toString()).toBe('')
     expect(parsePlanFilters(new URLSearchParams())).toEqual(NO_FILTERS)
   })
-  it('Keeps all nine known statuses and drops unknown enum values.', () => {
+  it('Keeps all ten known statuses and drops unknown enum values.', () => {
     const parsed = parsePlanFilters(
       new URLSearchParams(
-        'status=draft,scheduled,publishing,awaiting-manual,published,failed,open,done,skipped,bogus&kind=publishing,bogus&channel=bluesky,bogus&due=bad&view=bad&flag=bad&axis=bad',
+        'status=draft,scheduled,publishing,submitted,awaiting-manual,published,failed,open,done,skipped,bogus&kind=publishing,bogus&channel=bluesky,bogus&due=bad&view=bad&flag=bad&axis=bad',
       ),
     )
-    expect(parsed.status.length).toBe(9)
+    expect(parsed.status.length).toBe(10)
     expect(parsed.status).toEqual(Object.keys(STATUS_LABELS))
     expect(parsed.kind).toEqual(['publishing'])
     expect(parsed.channel).toEqual(['bluesky'])

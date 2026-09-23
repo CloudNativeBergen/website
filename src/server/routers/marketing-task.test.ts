@@ -95,6 +95,7 @@ vi.mock('@/lib/speaker/sanity', () => ({
   getOrganizersByConference: h.getOrganizersByConference,
 }))
 
+import { MAY_BE_LIVE_REFUSAL } from '@/lib/marketing/deletion'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { evaluate, parse } from 'groq-js'
 import { initTRPC } from '@trpc/server'
@@ -210,6 +211,7 @@ function variantData(
       scheduledAt: '2027-01-10T07:00:00.000Z',
       usesCustomTime: false,
       claimedAt: null,
+      submission: null,
       shortCode: null,
       link: 'https://cloudnativebergen.dev/cfp?utm_source=linkedin',
       attachments: [],
@@ -892,15 +894,61 @@ describe('marketing.task.delete', () => {
     })
   })
 
-  it('refuses while the post is in flight or published', async () => {
-    for (const status of ['publishing', 'published'] as const) {
+  it('refuses to delete a FAILED post that may be live, and still deletes one that failed definitely (#1128)', async () => {
+    // A failed variant fell through to the ordinary delete, which removes
+    // the variant and its post. After `ambiguous` or `stale-claim` the post
+    // may be on the platform now, and that record is what an organizer
+    // reconciles from.
+    h.getSocialVariantEditorData.mockResolvedValue(
+      variantData({
+        status: 'failed',
+        attempts: [
+          { _key: 'a', at: '2026-09-13T09:50:00Z', outcome: 'ambiguous' },
+        ],
+      }),
+    )
+    await expect(
+      marketing().task.delete({ taskId: 'task-ours' }),
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: MAY_BE_LIVE_REFUSAL,
+    })
+    expect(h.deleteTask).not.toHaveBeenCalled()
+
+    // The control, on the ACTION: a rejected post never went out.
+    h.getSocialVariantEditorData.mockResolvedValue(
+      variantData({
+        status: 'failed',
+        attempts: [
+          { _key: 'a', at: '2026-09-13T09:50:00Z', outcome: 'rejected' },
+        ],
+      }),
+    )
+    await marketing().task.delete({ taskId: 'task-ours' })
+    expect(h.deleteTask).toHaveBeenCalledTimes(1)
+  })
+
+  // `submitted` is in flight exactly as `publishing` is (#1128).
+  it.each([
+    [
+      'publishing',
+      'The post is being published right now. Try again in a minute.',
+    ],
+    [
+      'submitted',
+      'The post is being published right now. Try again in a minute.',
+    ],
+    ['published', 'The post has been published; the record is kept.'],
+  ] as const)(
+    'refuses to delete a %s post, with its own message',
+    async (status, message) => {
       h.getSocialVariantEditorData.mockResolvedValue(variantData({ status }))
       await expect(
         marketing().task.delete({ taskId: 'task-ours' }),
-      ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
-    }
-    expect(h.deleteTask).not.toHaveBeenCalled()
-  })
+      ).rejects.toMatchObject({ code: 'BAD_REQUEST', message })
+      expect(h.deleteTask).not.toHaveBeenCalled()
+    },
+  )
 
   it('refuses a foreign Task before reading it', async () => {
     await expect(

@@ -1,4 +1,4 @@
-import type { VariantStatus } from '@/lib/social/types'
+import type { AttemptOutcome, VariantStatus } from '@/lib/social/types'
 
 export interface DeletionVariant {
   _id: string
@@ -6,6 +6,12 @@ export interface DeletionVariant {
   /** The `/go/<code>` code, so a delete can EXPIRE its lookup entry (§2.5). */
   shortCode: string | null
   status: VariantStatus
+  /**
+   * The last attempt's outcome: a `failed` variant whose last attempt is
+   * `ambiguous` or `stale-claim` may be live on the platform (#1128), and
+   * deleting it would erase the only record an organizer can reconcile from.
+   */
+  lastOutcome: AttemptOutcome | null
   postId: string | null
   ownPost: boolean
   siblingVariantIds: string[]

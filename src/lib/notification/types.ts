@@ -34,6 +34,11 @@ export type NotificationType =
   // (`src/lib/social/notify.ts`); deep-links to the copy-ready view.
   // Rendered generically by the hub.
   | 'social_manual_due'
+  // A STANDALONE social post (no Task behind it) failed terminally in the
+  // publish cron (#1128). Task-backed failures use `marketing_task_failed`
+  // and link to the Task; these link to the post itself, because there is no
+  // Task to open. Rendered generically by the hub.
+  | 'social_publish_failed'
   | 'marketing_task_due'
   | 'marketing_task_overdue'
   | 'marketing_task_failed'

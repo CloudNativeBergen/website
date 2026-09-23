@@ -27,7 +27,7 @@ export async function readDeletionTree(
         _id, _rev, shortCode,
         "survivingDependantIds": *[_type == "marketingTask" && conference._ref == $conferenceId && ^._id in prerequisites[]._ref && (plan._ref != ^.plan._ref || (defined($campaignId) && campaign._ref != $campaignId)) && !(_id in path("drafts.**")) && !(_id in path("versions.**"))]._id,
         "variant": select(variant->conference._ref == $conferenceId => variant->{
-          _id, _rev, shortCode, status, "postId": post._ref,
+          _id, _rev, shortCode, status, "lastOutcome": attempts[-1].outcome, "postId": post._ref,
           "ownPost": post->conference._ref == $conferenceId,
           "siblingVariantIds": *[_type == "socialPostVariant" && conference._ref == $conferenceId && post._ref == ^.post._ref && _id != ^._id && !(_id in path("drafts.**")) && !(_id in path("versions.**"))]._id,
           "survivingTaskIds": *[_type == "marketingTask" && conference._ref == $conferenceId && variant._ref == ^._id && (plan._ref != ^.^.plan._ref || (defined($campaignId) && campaign._ref != $campaignId)) && !(_id in path("drafts.**")) && !(_id in path("versions.**"))]._id

@@ -97,9 +97,21 @@ export type PublishFailureKind =
  * post definitively was not created. Any uncertainty after the create call has
  * fired (timeouts, ambiguous 5xx) is `ambiguous` — that is what preserves the
  * never-double-post invariant.
+ *
+ * Two successful shapes (#1128, spec §3.2), discriminated by `result`:
+ *
+ * - **published** (the default, and Bluesky's only one): the post is LIVE and
+ *   `externalId` is the platform's own id. `result` is optional here so a
+ *   synchronous adapter keeps the shape it has always returned.
+ * - **accepted**: an asynchronous vendor took the post and will send it later.
+ *   All it has answered with is its OWN id — never the platform's — so it goes
+ *   in `vendorPostId`, and the variant waits in `submitted` until the confirm
+ *   sweep reads it back. Returning this from an adapter whose post is already
+ *   live would mark a live post as not-yet-published.
  */
 export type PublishOutcome =
-  | { ok: true; externalId: string; url?: string }
+  | { ok: true; result?: 'published'; externalId: string; url?: string }
+  | { ok: true; result: 'accepted'; vendorPostId: string }
   | {
       ok: false
       kind: PublishFailureKind
@@ -109,12 +121,41 @@ export type PublishOutcome =
       retryAfter?: Date
     }
 
+/**
+ * What one read of an accepted post found (#1128, spec §3.2/§3.3). Like
+ * {@link PublishOutcome} these are typed answers, not exceptions — and like it,
+ * NOTHING here may say "retry the post": the vendor already has it.
+ *
+ * `unreadable` is OUR failure to ask (timeout, 5xx, throttle), not the post's:
+ * it leaves the variant `submitted` until the confirm timeout runs out.
+ */
+export type ConfirmCheck =
+  /** The vendor has not settled it yet. */
+  | { state: 'pending' }
+  /** Sent. `externalId` is the PLATFORM's id (e.g. `urn:li:share:…`). */
+  | { state: 'published'; externalId?: string; url?: string }
+  /** The vendor reported an error on the post; its free text rides along. */
+  | { state: 'failed'; message: string }
+  /** The vendor no longer has the post (`NOT_FOUND`, deleted in its UI). */
+  | { state: 'gone' }
+  /** We could not read it. Says nothing about the post. */
+  | { state: 'unreadable'; message: string }
+
 export interface SocialPublishAdapter {
   readonly platform: SocialPlatform
   readonly constraints: PlatformConstraints
   /** Pure. Run live in the editor, at schedule time, and again at publish. */
   validate(input: PublishInput, context?: PublishContext): ValidationIssue[]
   publish(input: PublishInput): Promise<PublishOutcome>
+  /**
+   * Read back a post this adapter ACCEPTED (`result: 'accepted'`). Present
+   * only on asynchronous adapters — a synchronous one never reaches
+   * `submitted`, so the confirm sweep has nothing to ask it. A submitted
+   * variant whose adapter cannot answer simply times out as `ambiguous`.
+   *
+   * Never throws: a failure to ask is `{ state: 'unreadable' }`.
+   */
+  confirm?(vendorPostId: string): Promise<ConfirmCheck>
 }
 
 // ---------------------------------------------------------------------------

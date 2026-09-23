@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { groq } from 'next-sanity'
 import { mediaDeletionBlockers } from './media-deletion'
+import { outcomeMayBeLive } from './state-machine'
 import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
 import { scopedFetch } from '@/lib/sanity/scoped'
 import { verifiedDomains } from '@/lib/domain-verification/routing'
@@ -21,6 +22,7 @@ import type {
   SocialPostVariantListItem,
   SocialVariantAttachment,
   SocialVariantEditorData,
+  VariantSubmission,
 } from './types'
 
 /**
@@ -44,6 +46,7 @@ const VARIANT_PROJECTION = groq`{
   scheduledAt,
   usesCustomTime,
   claimedAt,
+  submission{ vendorPostId, submittedAt, lastCheckedAt },
   link,
   shortCode,
   attachments[]{ source, crop{ x, y, width, height }, altOverride },
@@ -89,6 +92,7 @@ interface RawVariant {
   scheduledAt: string | null
   usesCustomTime: boolean | null
   claimedAt: string | null
+  submission: Partial<VariantSubmission> | null
   link: string | null
   shortCode: string | null
   attachments:
@@ -117,6 +121,15 @@ function normalizeVariant(raw: RawVariant): SocialPostVariant {
     scheduledAt: raw.scheduledAt ?? null,
     usesCustomTime: raw.usesCustomTime === true,
     claimedAt: raw.claimedAt ?? null,
+    // A submission is only meaningful with the vendor id that the confirm
+    // sweep reads back; half a receipt is no receipt.
+    submission: raw.submission?.vendorPostId
+      ? {
+          vendorPostId: raw.submission.vendorPostId,
+          submittedAt: raw.submission.submittedAt ?? '',
+          lastCheckedAt: raw.submission.lastCheckedAt ?? null,
+        }
+      : null,
     link: raw.link ?? null,
     shortCode: raw.shortCode ?? null,
     attachments: normalizeVariantAttachments(raw.attachments),
@@ -176,6 +189,60 @@ function attemptDoc(attempt: NonNullable<VariantTransition['attempt']>) {
   }
 }
 
+/**
+ * ROUND-ROBIN across groups until `limit`: one from each group per pass, in
+ * the order the groups arrived, each group keeping its own internal order.
+ *
+ * Grouping the read by conference is not enough on its own. The confirm
+ * sweep's per-conference bound (10) is LARGER than its total (5), so taking a
+ * prefix of the flattened groups handed every slot to whichever conference
+ * came first and none to the rest — fairness that held in tests using the
+ * opposite ratio and not at all in production. Taking one per group per pass
+ * is what makes the per-conference share real whatever the two numbers are.
+ */
+function roundRobin<T>(
+  groups: readonly (readonly T[] | null)[],
+  limit: number,
+): T[] {
+  const lanes = groups.map((group) => group ?? [])
+  const picked: T[] = []
+  for (let pass = 0; picked.length < limit; pass++) {
+    let tookAny = false
+    for (const lane of lanes) {
+      if (pass < lane.length) {
+        picked.push(lane[pass])
+        tookAny = true
+        if (picked.length === limit) return picked
+      }
+    }
+    if (!tookAny) break
+  }
+  return picked
+}
+
+/**
+ * Order the per-conference lanes by their HEAD's confirm key — the same
+ * `coalesce(lastCheckedAt, submittedAt)` the read sorts each lane by — so the
+ * conference read longest ago goes first.
+ *
+ * Round-robin is fair within a tick, not across ticks: with more submitting
+ * conferences than `submittedLimit`, lanes in document order hand the same
+ * first N conferences a slot every minute and the rest none, until they time
+ * out `ambiguous` without a single vendor read. A conference that was just
+ * read has its head stamped, which sorts it to the back — the rotation the
+ * lane order already gives submissions, applied to conferences. Stable, so
+ * lanes that tie keep the read's order.
+ */
+function leastRecentlyCheckedFirst<
+  T extends { submission: RawVariant['submission'] },
+>(groups: readonly (readonly T[] | null)[]): (readonly T[])[] {
+  const key = (lane: readonly T[]) =>
+    lane[0]?.submission?.lastCheckedAt ?? lane[0]?.submission?.submittedAt ?? ''
+  return groups
+    .map((group) => group ?? [])
+    .sort((a, b) => key(a).localeCompare(key(b)))
+}
+
 export const sanitySocialVariantStore: SocialVariantStore = {
   async findWork(now, staleBefore, bounds) {
     // groq-global: one conference's due variants, correlated to the parent
@@ -194,8 +261,33 @@ export const sanitySocialVariantStore: SocialVariantStore = {
     const due = groq`*[_type == "conference" && count(${dueOfConference}) > 0][0...${bounds.maxConferences}]{ "due": ${dueOfConference} | order(scheduledAt asc)[0...${bounds.perConference}]${DUE_PROJECTION} }.due`
     // groq-global: the same cron's stale-claim sweep, across every tenant.
     const stale = groq`*[_type == "socialPostVariant" && !(_id in path("drafts.**")) && !(_id in path("versions.**")) && status == "publishing" && (!defined(claimedAt) || dateTime(claimedAt) < dateTime($staleBefore))][0...${bounds.staleLimit}]${VARIANT_PROJECTION}`
-    // Both sweeps in ONE round trip: the tick runs every minute.
-    const query = `{ "due": ${due}, "stale": ${stale} }`
+    // groq-global: one conference's submissions, correlated to the parent
+    // conference document (`^._id`) of the grouped confirm scan below — the
+    // same shape as `dueOfConference` above, and excluded from drafts and
+    // release versions for the same reason: a Studio twin would be a second
+    // document for one submission, and so a second confirm read.
+    const submittedOfConference = groq`*[_type == "socialPostVariant" && !(_id in path("drafts.**")) && !(_id in path("versions.**")) && status == "submitted" && conference._ref == ^._id]`
+    // groq-global: the same cron's CONFIRM sweep (#1128), across every tenant.
+    //
+    // LEAST RECENTLY CHECKED first, not oldest-submitted: the slice is capped,
+    // and the sweep skips a submission that is inside its backoff — so ordering
+    // by submit time would hand the same capped set back every minute while it
+    // waited, and a newer submission behind it would never be read at all. A
+    // submission just read sorts to the BACK, which rotates the queue.
+    //
+    // GROUPED BY CONFERENCE, like the due scan above, because rotation alone
+    // does not bound the wait. A conference holding more submissions than the
+    // cap can fill every slice: at 5 a tick, 150 of its rows take half an hour
+    // to cycle, and another tenant's submission would sit unread past the
+    // 15-minute confirm timeout — failed `ambiguous` because of a neighbour's
+    // backlog. The per-conference bound lives in the READ, as it does for due
+    // variants, so the engine never depends on the store's goodwill.
+    //
+    // It rides in the SAME read as the two sweeps above rather than costing a
+    // fourth query a minute.
+    const submitted = groq`*[_type == "conference" && count(${submittedOfConference}) > 0][0...${bounds.maxConferences}]{ "submitted": ${submittedOfConference} | order(coalesce(submission.lastCheckedAt, submission.submittedAt) asc, _id asc)[0...${bounds.perConference}]${VARIANT_PROJECTION} }.submitted`
+    // All three sweeps in ONE round trip: the tick runs every minute.
+    const query = `{ "due": ${due}, "stale": ${stale}, "submitted": ${submitted} }`
     const result = await clientWrite.fetch<{
       due:
         | (RawVariant & {
@@ -206,6 +298,7 @@ export const sanitySocialVariantStore: SocialVariantStore = {
           })[][]
         | null
       stale: RawVariant[] | null
+      submitted: RawVariant[][] | null
     }>(query, {
       now: now.toISOString(),
       staleBefore: staleBefore.toISOString(),
@@ -243,6 +336,10 @@ export const sanitySocialVariantStore: SocialVariantStore = {
     return {
       due: dueVariants,
       stale: (result?.stale ?? []).map(normalizeVariant),
+      submitted: roundRobin(
+        leastRecentlyCheckedFirst(result?.submitted ?? []),
+        bounds.submittedLimit,
+      ).map(normalizeVariant),
     }
   },
 
@@ -462,7 +559,8 @@ export type DeleteSocialPostResult =
   | { deleted: true; variants: number }
   | {
       deleted: false
-      reason: 'in-flight' | 'published' | 'changed' | 'referenced'
+      reason:
+        'in-flight' | 'may-be-live' | 'published' | 'changed' | 'referenced'
     }
   /** A Marketing Task references a variant (spec §2.3): delete the Task instead. */
   | { deleted: false; reason: 'task'; taskId: string }
@@ -493,20 +591,35 @@ export async function deleteSocialPost(
   postId: string,
   conferenceId: string,
 ): Promise<DeleteSocialPostResult> {
-  const query = groq`*[_type == "socialPostVariant" && conference._ref == $conferenceId && post._ref == $postId && !(_id in path("drafts.**")) && !(_id in path("versions.**"))]{ _id, _rev, status, "taskId": *[_type == "marketingTask" && conference._ref == $conferenceId && variant._ref == ^._id && !(_id in path("drafts.**")) && !(_id in path("versions.**"))][0]._id }`
+  const query = groq`*[_type == "socialPostVariant" && conference._ref == $conferenceId && post._ref == $postId && !(_id in path("drafts.**")) && !(_id in path("versions.**"))]{ _id, _rev, status, "lastOutcome": attempts[-1].outcome, "taskId": *[_type == "marketingTask" && conference._ref == $conferenceId && variant._ref == ^._id && !(_id in path("drafts.**")) && !(_id in path("versions.**"))][0]._id }`
   const variants = await clientWrite.fetch<
-    { _id: string; _rev: string; status: string; taskId: string | null }[]
+    {
+      _id: string
+      _rev: string
+      status: string
+      lastOutcome: string | null
+      taskId: string | null
+    }[]
   >(query, { postId, conferenceId })
   const rows = variants ?? []
   const referenced = rows.find((v) => v.taskId)
   if (referenced?.taskId) {
     return { deleted: false, reason: 'task', taskId: referenced.taskId }
   }
-  if (rows.some((v) => v.status === 'publishing')) {
+  // `submitted` is in flight exactly as `publishing` is (#1128): an
+  // asynchronous publisher holds the post and may still send it, so deleting
+  // the variant would lose the only record of a post about to go live.
+  if (rows.some((v) => v.status === 'publishing' || v.status === 'submitted')) {
     return { deleted: false, reason: 'in-flight' }
   }
   if (rows.some((v) => v.status === 'published')) {
     return { deleted: false, reason: 'published' }
+  }
+  // A failed variant whose last attempt could not tell whether the post went
+  // out (#1128) may be live; deleting it erases the only record to reconcile
+  // from. Same refusal as the plan and Task deletes.
+  if (rows.some((v) => outcomeMayBeLive(v.status, v.lastOutcome))) {
+    return { deleted: false, reason: 'may-be-live' }
   }
   // Draft twins go with their variant, exactly as the post's own twin goes with
   // the post — and they must be in the delete set before the referrer count
@@ -918,7 +1031,11 @@ export async function handoffStudioAttachment(
   )
   if (!post) return 'unavailable'
   if (post.count > 0) return 'occupied'
-  if (variant.status === 'publishing' || variant.status === 'published')
+  if (
+    variant.status === 'publishing' ||
+    variant.status === 'submitted' ||
+    variant.status === 'published'
+  )
     return 'unavailable'
   // Task-owned queued posts retain the editor's scheduling rule. Drafts may
   // still carry skeletons; a refusal leaves this render's receipt retryable.

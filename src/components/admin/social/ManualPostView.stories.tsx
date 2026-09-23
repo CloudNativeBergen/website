@@ -50,6 +50,7 @@ const variant: SocialPostVariant = {
   scheduledAt: '2026-09-13T09:00:00.000Z',
   usesCustomTime: false,
   claimedAt: null,
+  submission: null,
   shortCode: null,
   link: 'https://cloudnativebergen.dev/tickets?utm_source=linkedin&utm_medium=social&utm_campaign=tickets&utm_content=early-bird',
   attachments: [{ source: 'att-wide', crop: null, altOverride: null }],
@@ -295,6 +296,162 @@ export const AlreadyPosted: Story = {
       },
     },
   },
+}
+
+/**
+ * #1128, spec §5: the manual FALLBACK. With an asynchronous publisher a
+ * variant never reaches `awaiting-manual`, so a post that DID go out is
+ * recorded from `failed` — the same form, the same URL check.
+ */
+export const FailedFallback: Story = {
+  args: {
+    variant: {
+      ...variant,
+      status: 'failed',
+      attempts: [
+        { _key: 'a1', at: '2026-09-13T09:00:07.000Z', outcome: 'submitted' },
+        {
+          _key: 'a2',
+          at: '2026-09-13T09:15:07.000Z',
+          outcome: 'ambiguous',
+          error:
+            'The publisher did not confirm the post within 15 minutes. Check the platform before posting again.',
+        },
+      ],
+    },
+  },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement)
+
+    // The last attempt is `ambiguous`: the post MAY be live. Telling this
+    // organizer to copy the text and post it is how a duplicate gets made by
+    // someone following the instructions correctly.
+    await expect(
+      canvas.getByText(/this post may already be live/i),
+    ).toBeInTheDocument()
+    await expect(
+      canvas.getByText(/check linkedin for this post/i),
+    ).toBeInTheDocument()
+    // The ordinary first instruction must NOT be offered here.
+    await expect(canvas.queryByText(/^post it on linkedin$/i)).toBeNull()
+
+    // Recording the existing post is still the point of the view.
+    const field = canvas.getByLabelText(/address of the published post/i)
+    await userEvent.type(
+      field,
+      'https://www.linkedin.com/posts/cloudnativebergen_activity-7238',
+    )
+    await userEvent.click(
+      canvas.getByRole('button', { name: /mark as posted/i }),
+    )
+    await expect(args.onMarkPosted).toHaveBeenCalledWith(
+      'https://www.linkedin.com/posts/cloudnativebergen_activity-7238',
+    )
+  },
+}
+
+/**
+ * THE CONTROL for {@link FailedFallback}. A failure the publisher reported —
+ * nothing was created — must still get the ordinary "post it by hand" steps,
+ * or the warning above would just be "every failure is scary" rather than a
+ * statement about this one.
+ */
+export const FailedDefinitely: Story = {
+  args: {
+    variant: {
+      ...variant,
+      status: 'failed',
+      attempts: [
+        {
+          _key: 'a1',
+          at: '2026-09-13T09:00:07.000Z',
+          outcome: 'rejected',
+          error: 'The channel is not a LinkedIn company page.',
+        },
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(canvas.getByText(/^post it on linkedin$/i)).toBeInTheDocument()
+    await expect(canvas.queryByText(/may already be live/i)).toBeNull()
+  },
+}
+
+/**
+ * The same state WITHOUT a play function, so the screenshot shows the top of
+ * the view. {@link FailedFallback} types into the address field, which scrolls
+ * the warning out of frame — a capture of it looks fine and proves nothing.
+ */
+export const FailedMayBeLive: Story = {
+  args: {
+    variant: {
+      ...variant,
+      status: 'failed',
+      attempts: [
+        { _key: 'a1', at: '2026-09-13T09:00:07.000Z', outcome: 'submitted' },
+        {
+          _key: 'a2',
+          at: '2026-09-13T09:15:07.000Z',
+          outcome: 'ambiguous',
+          error: 'The publisher did not confirm the post within 15 minutes.',
+        },
+      ],
+    },
+  },
+}
+
+/**
+ * The OTHER may-be-live failure. A cron that claimed the variant and died may
+ * have died AFTER the platform accepted the post — the sweep's own error text
+ * already says "Check the platform before retrying", so the view must not
+ * then say "post it on LinkedIn".
+ */
+export const FailedStaleClaim: Story = {
+  args: {
+    variant: {
+      ...variant,
+      status: 'failed',
+      attempts: [
+        {
+          _key: 'a1',
+          at: '2026-09-13T09:00:07.000Z',
+          outcome: 'stale-claim',
+          error:
+            'Publishing claim from 2026-09-13T08:45:00.000Z never completed. Check the platform before retrying.',
+        },
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(
+      canvas.getByText(/this post may already be live/i),
+    ).toBeInTheDocument()
+    await expect(canvas.queryByText(/^post it on linkedin$/i)).toBeNull()
+  },
+}
+
+export const FailedFallbackDark: Story = {
+  args: {
+    variant: {
+      ...variant,
+      status: 'failed',
+      attempts: [
+        { _key: 'a1', at: '2026-09-13T09:00:07.000Z', outcome: 'submitted' },
+        {
+          _key: 'a2',
+          at: '2026-09-13T09:15:07.000Z',
+          outcome: 'ambiguous',
+          error: 'The publisher did not confirm the post within 15 minutes.',
+        },
+      ],
+    },
+  },
+  // This file resolves dark through its OWN decorator reading
+  // `parameters.theme` (line 83), not through globals — setting the wrong one
+  // renders light and the screenshot looks fine anyway.
+  parameters: { theme: 'dark', backgrounds: { default: 'dark' } },
 }
 
 export const ServerRefusal: Story = {

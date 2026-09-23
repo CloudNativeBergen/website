@@ -27,6 +27,7 @@ import {
 } from '@/lib/social/sanity'
 import { getCurrentDateTime } from '@/lib/time'
 import { canOrganizerTransition } from '@/lib/social/state-machine'
+import { MAY_BE_LIVE_REFUSAL } from '@/lib/marketing/deletion'
 import { isSocialPlatform } from '@/lib/social/provider'
 import { postUrlIssue } from '@/lib/social/provider/manual'
 import {
@@ -268,9 +269,11 @@ export const socialRouter = router({
           message:
             result.reason === 'in-flight'
               ? 'A variant is being published right now. Try again in a minute.'
-              : result.reason === 'referenced'
-                ? 'Something still links to this post that deleting it would not remove — an unpublished Studio edit, a scheduled release, or a variant on another edition. Open it in the Studio and clear that first.'
-                : 'A variant of this post has been published; the record is kept.',
+              : result.reason === 'may-be-live'
+                ? MAY_BE_LIVE_REFUSAL
+                : result.reason === 'referenced'
+                  ? 'Something still links to this post that deleting it would not remove — an unpublished Studio edit, a scheduled release, or a variant on another edition. Open it in the Studio and clear that first.'
+                  : 'A variant of this post has been published; the record is kept.',
         })
       }
       return result
@@ -567,14 +570,41 @@ export const socialRouter = router({
       if (issue) {
         throw new TRPCError({ code: 'BAD_REQUEST', message: issue })
       }
+      // `published → published` is allowed ONLY to supply a missing address
+      // (#1128): an asynchronous confirmation may name a post without a URL,
+      // and a publishing Task reads `publishResult.url` to know it is done.
+      // Overwriting an address we already hold is a different thing entirely
+      // — it would rewrite where a live post is recorded to point — so the
+      // state machine opens the transition and this refuses the rest of it.
+      if (variant.status === 'published' && variant.publishResult?.url) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message:
+            'This post already has an address. Edit it in the Studio if it is wrong.',
+        })
+      }
       return applyOrConflict(variant, {
         status: 'published',
-        publishResult: { url: input.url },
-        attempt: {
-          at: getCurrentDateTime(),
-          outcome: 'manual',
-          by: ctx.speaker._id,
-        },
+        // MERGED, not replaced. The store applies this with `patch.set`, so
+        // `{ url }` alone would overwrite the whole object — and on the
+        // `published → published` path that deletes the `externalId` an
+        // asynchronous confirmation recorded: the platform's own receipt, and
+        // the id marketing snapshots project. Supplying a missing address must
+        // add to what we know, never trade one fact for another.
+        publishResult: { ...variant.publishResult, url: input.url },
+        // A URL-only update on an already-published variant is NOT a manual
+        // publication: the vendor published it, and an `attempts[]` entry
+        // saying `manual` would misstate who put the post live. The audit
+        // entry is for the two paths that actually complete a post by hand.
+        ...(variant.status === 'published'
+          ? {}
+          : {
+              attempt: {
+                at: getCurrentDateTime(),
+                outcome: 'manual' as const,
+                by: ctx.speaker._id,
+              },
+            }),
       })
     }),
 })
