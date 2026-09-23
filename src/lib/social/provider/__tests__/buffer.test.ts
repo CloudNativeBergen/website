@@ -376,6 +376,24 @@ describe('BufferPublishAdapter — failure at create (spec §3.3)', () => {
     },
   )
 
+  it('an HTTP 429 whose body shows createPost executing is ambiguous — the status does not outrank the path', async () => {
+    const { outcome } = await publishWith({
+      create: {
+        status: 429,
+        rawBody: {
+          errors: [
+            {
+              message: 'Too many requests',
+              path: ['createPost'],
+              extensions: { code: 'RATE_LIMIT_EXCEEDED' },
+            },
+          ],
+        },
+      },
+    })
+    expect(outcome).toMatchObject({ ok: false, kind: 'ambiguous' })
+  })
+
   it('errors that disagree on their code are ambiguous, never the first one’s verdict', async () => {
     const { outcome } = await publishWith({
       create: {
@@ -492,6 +510,18 @@ describe('BufferPublishAdapter — confirm (spec §3.2)', () => {
     '%s → unreadable (it says nothing about the post)',
     async (_label, post) => {
       buffer({ post })
+      await expect(adapter().confirm(POST_ID)).resolves.toMatchObject({
+        state: 'unreadable',
+      })
+    },
+  )
+
+  it.each([false, true])(
+    'a NOT_FOUND BENEATH the post is unreadable, not gone (post field nulled: %s)',
+    async (nulledField) => {
+      buffer({
+        post: { errorCode: 'NOT_FOUND', path: ['post', 'status'], nulledField },
+      })
       await expect(adapter().confirm(POST_ID)).resolves.toMatchObject({
         state: 'unreadable',
       })

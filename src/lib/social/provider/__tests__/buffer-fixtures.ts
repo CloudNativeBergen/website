@@ -58,7 +58,7 @@ export type Fault =
       path?: (string | number)[]
     }
   /** A 200 whose body is exactly this — for shapes the schema never promised. */
-  | { rawBody: unknown }
+  | { rawBody: unknown; status?: number }
 
 export interface BufferBehaviour {
   /** The pinned channel as Buffer reports it (merged over a valid page). */
@@ -151,6 +151,7 @@ function faultResponse(fault: Fault, field: string): Response {
   }
   if ('rawBody' in fault)
     return new HttpResponse(JSON.stringify(fault.rawBody), {
+      status: fault.status ?? 200,
       headers: { 'content-type': 'application/json' },
     })
   return HttpResponse.json({

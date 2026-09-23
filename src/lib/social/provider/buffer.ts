@@ -128,7 +128,14 @@ interface GraphQLBody {
 /** What one GraphQL round trip produced, before any phase interprets it. */
 type Answer =
   | { kind: 'no-answer'; message: string }
-  | { kind: 'http'; status: number; message: string; retryAfter?: Date }
+  | {
+      kind: 'http'
+      status: number
+      message: string
+      retryAfter?: Date
+      /** The body carried an execution error (see `errors.executed`). */
+      executed?: boolean
+    }
   | {
       kind: 'errors'
       /**
@@ -143,6 +150,11 @@ type Answer =
        * path: nothing ran.
        */
       executed: boolean
+      /**
+       * An error BELOW the root field (`path` longer than one): the root
+       * value itself was found, and a failed field nulled it on the way up.
+       */
+      nested: boolean
       message: string
     }
   | {
@@ -342,7 +354,10 @@ export class BufferPublishAdapter implements SocialPublishAdapter {
     // createPost started executing and failed: whatever the code says,
     // the post may exist, so no code may authorise a retry. Typed union
     // refusals (above) stay definitive.
-    if (answer.kind === 'errors' && answer.executed) {
+    if (
+      (answer.kind === 'errors' || answer.kind === 'http') &&
+      answer.executed
+    ) {
       return ambiguous(answer.message)
     }
     const refused = keyOrThrottleFailure(answer)
@@ -417,13 +432,20 @@ export class BufferPublishAdapter implements SocialPublishAdapter {
     const firstMessage = errors
       .map((e) => (typeof e.message === 'string' ? e.message : ''))
       .find(Boolean)
+    const pathLengths = errors.map((e) =>
+      Array.isArray(e.path) ? e.path.length : 0,
+    )
+    const executed = pathLengths.some((n) => n > 0)
     if (!response.ok) {
       const detail = firstMessage ? ` ${firstMessage}` : ''
-      return httpAnswer(
-        response,
-        `${operationName}: HTTP ${response.status}${detail}`,
-        this.now(),
-      )
+      return {
+        ...httpAnswer(
+          response,
+          `${operationName}: HTTP ${response.status}${detail}`,
+          this.now(),
+        ),
+        executed,
+      }
     }
     const data = body?.data
     // A system error nulls the (non-null) root field, and GraphQL may then
@@ -443,9 +465,8 @@ export class BufferPublishAdapter implements SocialPublishAdapter {
       return {
         kind: 'errors',
         code,
-        executed: errors.some(
-          (e) => Array.isArray(e.path) && e.path.length > 0,
-        ),
+        executed,
+        nested: pathLengths.some((n) => n > 1),
         message: `${operationName}: ${firstMessage ?? 'error'}${code ? ` (${code})` : ''}`,
       }
     }
@@ -515,7 +536,9 @@ function confirmOutcome(answer: Answer): ConfirmCheck {
         message: `Buffer post read failed: ${answer.message}`,
       }
     case 'errors':
-      return answer.code === 'NOT_FOUND'
+      // Only a NOT_FOUND on the post lookup itself says the post is gone; one
+      // beneath it is a failed field.
+      return answer.code === 'NOT_FOUND' && !answer.nested
         ? { state: 'gone' }
         : {
             state: 'unreadable',
@@ -616,7 +639,11 @@ function checkFailure(
   }
 }
 
-function httpAnswer(response: Response, message: string, now: Date): Answer {
+function httpAnswer(
+  response: Response,
+  message: string,
+  now: Date,
+): Extract<Answer, { kind: 'http' }> {
   return {
     kind: 'http',
     status: response.status,
