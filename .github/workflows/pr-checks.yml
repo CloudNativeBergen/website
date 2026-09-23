@@ -211,20 +211,21 @@ jobs:
           path: .vitest/blob/
           merge-multiple: true
 
+      # A shard that crashed before writing its blob (OOM, timeout) would only
+      # surface below as a confusing merge error. Judge the shards' own verdict
+      # FIRST so the log points at the real cause.
+      - name: Fail if any shard did not succeed
+        if: needs.tests-shard.result != 'success'
+        run: |
+          echo "::error::tests-shard result is '${{ needs.tests-shard.result }}'"
+          exit 1
+
       # Merges every shard's results into one report and applies the scoped
       # auth coverage thresholds from vitest.config.ts (only the auth modules
       # listed there are instrumented; unrelated files can never fail this).
       # Exits non-zero on a failed test in any shard or a missed threshold.
       - name: Merge shard reports and apply scoped auth coverage gate
         run: pnpm vitest run --merge-reports --coverage
-
-      # A shard that crashed before writing its blob (OOM, timeout) would be
-      # invisible to the merge. Fail on the shard's own verdict as well.
-      - name: Fail if any shard did not succeed
-        if: needs.tests-shard.result != 'success'
-        run: |
-          echo "::error::tests-shard result is '${{ needs.tests-shard.result }}'"
-          exit 1
 
   # Same shape as the vitest shards: ~1,900 stories at ~0.15s each on a
   # 4-vCPU runner is the whole job, and the runner is not worker-bound
