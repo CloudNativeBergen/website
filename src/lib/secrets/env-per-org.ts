@@ -464,8 +464,15 @@ export class EnvPerOrgSecretsStore implements TenantSecretsStore {
         return this.analytics(slug) as FamilyCredentials<F> | null
       case 'buffer':
         return this.buffer(slug) as FamilyCredentials<F> | null
-      default:
+      case 'ticketing':
         return this.ticketing(slug) as FamilyCredentials<F> | null
+      default: {
+        // Exhaustive on purpose: a family added to `FAMILY_SEGMENT` without
+        // a case here used to fall through to the tenant's CHECKIN bag under
+        // the wrong family name.
+        const unhandled: never = family
+        throw new Error(`unhandled secret family ${String(unhandled)}`)
+      }
     }
   }
 

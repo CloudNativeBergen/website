@@ -255,6 +255,31 @@ type TenantSecretsJson = Partial<
   Record<string, Partial<Record<SecretFamily, unknown>>>
 >
 
+/**
+ * Families whose bag is only meaningful COMPLETE — the "both or nothing" the
+ * docs table promises. The discrete per-org env store enforces it through its
+ * own `REQUIRED_FIELDS`; without this the JSON blob was a way around it: a
+ * half bag `{ "buffer": { "apiKey": "…" } }` resolved as a hit, shadowed the
+ * chain, and reached the consumer with `linkedinChannelId` undefined.
+ * Ticketing, email and slack stay provider-agnostic on purpose (a Tito bag
+ * has a different shape from a Checkin one).
+ */
+const JSON_REQUIRED_FIELDS: Partial<Record<SecretFamily, readonly string[]>> = {
+  bluesky: ['identifier', 'appPassword'],
+  analytics: ['projectId', 'apiKey'],
+  buffer: ['apiKey', 'linkedinChannelId'],
+}
+
+function missingRequiredFields(
+  family: SecretFamily,
+  creds: Record<string, unknown>,
+): string[] {
+  return (JSON_REQUIRED_FIELDS[family] ?? []).filter((field) => {
+    const value = creds[field]
+    return typeof value !== 'string' || value.trim().length === 0
+  })
+}
+
 export class JsonEnvSecretsStore implements TenantSecretsStore {
   private cacheKey: string | undefined
   private parsed: TenantSecretsJson | null = null
@@ -306,6 +331,16 @@ export class JsonEnvSecretsStore implements TenantSecretsStore {
           `[secrets] TENANT_SECRETS_JSON entry for ${orgId}/${family} is not a non-empty object; ignoring (env fallback applies)`,
         )
       }
+      return null
+    }
+    const missing = missingRequiredFields(
+      family,
+      creds as Record<string, unknown>,
+    )
+    if (missing.length > 0) {
+      console.warn(
+        `[secrets] TENANT_SECRETS_JSON entry for ${orgId}/${family} is missing ${missing.join(', ')}; ignoring the whole bag (both or nothing)`,
+      )
       return null
     }
     return creds as FamilyCredentials<F>

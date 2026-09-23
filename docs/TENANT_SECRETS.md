@@ -33,16 +33,16 @@ for every tenant that has not been provisioned with its own.
 `src/lib/secrets/types.ts` defines one typed credential bag per integration,
 unioned as `SecretFamily`:
 
-| Family      | Type                      | Backing env (platform default)                                                                                                                                               |
-| ----------- | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ticketing` | `TicketingCredentials`    | Checkin: `CHECKIN_API_KEY`, `CHECKIN_API_SECRET`, `CHECKIN_WEBHOOK_SECRET`. Tito: `TITO_API_KEY`, `TITO_WEBHOOK_SECRET` (via `platformTitoCredentials()`, not the env store) |
-| `email`     | `EmailCredentials`        | `RESEND_API_KEY` (+ optional per-org `fallbackFrom`)                                                                                                                         |
-| `slack`     | `SlackCredentials`        | `SLACK_BOT_TOKEN`                                                                                                                                                            |
-| `push`      | `PushCredentials`         | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`                                                                                                                     |
-| `badge`     | `BadgeSigningCredentials` | `BADGE_ISSUER_RSA_PRIVATE_KEY`, `BADGE_ISSUER_RSA_PUBLIC_KEY`, `BADGE_ISSUER_ED25519_SEED`, `BADGE_ISSUER_RSA_ONLY`                                                          |
-| `bluesky`   | `BlueskyCredentials`      | `BLUESKY_IDENTIFIER`, `BLUESKY_APP_PASSWORD` (the conference account's app password, #1005; both or nothing)                                                                 |
-| `analytics` | `AnalyticsCredentials`    | `POSTHOG_PROJECT_ID`, `POSTHOG_API_KEY` (the project id and a project-scoped `phx_` personal key with `query:read`, #1009; both or nothing)                                  |
-| `buffer`    | `BufferCredentials`       | Per-org only: `TENANT_<SLUG>_BUFFER_API_KEY`, `TENANT_<SLUG>_BUFFER_LINKEDIN_CHANNEL_ID` (pinned channel id; both or nothing; no platform-env fallback, #1127)               |
+| Family      | Type                      | Backing env (platform default)                                                                                                                                                             |
+| ----------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `ticketing` | `TicketingCredentials`    | Checkin: `CHECKIN_API_KEY`, `CHECKIN_API_SECRET`, `CHECKIN_WEBHOOK_SECRET`. Tito: `TITO_API_KEY`, `TITO_WEBHOOK_SECRET` (via `platformTitoCredentials()`, not the env store)               |
+| `email`     | `EmailCredentials`        | `RESEND_API_KEY` (+ optional per-org `fallbackFrom`)                                                                                                                                       |
+| `slack`     | `SlackCredentials`        | `SLACK_BOT_TOKEN`                                                                                                                                                                          |
+| `push`      | `PushCredentials`         | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`                                                                                                                                   |
+| `badge`     | `BadgeSigningCredentials` | `BADGE_ISSUER_RSA_PRIVATE_KEY`, `BADGE_ISSUER_RSA_PUBLIC_KEY`, `BADGE_ISSUER_ED25519_SEED`, `BADGE_ISSUER_RSA_ONLY`                                                                        |
+| `bluesky`   | `BlueskyCredentials`      | `BLUESKY_IDENTIFIER`, `BLUESKY_APP_PASSWORD` (the conference account's app password, #1005; both or nothing)                                                                               |
+| `analytics` | `AnalyticsCredentials`    | `POSTHOG_PROJECT_ID`, `POSTHOG_API_KEY` (the project id and a project-scoped `phx_` personal key with `query:read`, #1009; both or nothing)                                                |
+| `buffer`    | `BufferCredentials`       | Per-org only (discrete `TENANT_<SLUG>_BUFFER_API_KEY` + `TENANT_<SLUG>_BUFFER_LINKEDIN_CHANNEL_ID`, or the JSON blob); pinned channel id; both or nothing; no platform-env fallback, #1127 |
 
 `TicketingCredentials` is imported from the provider layer (#634), never
 re-declared, so the secret layer and the provider layer cannot drift apart.
@@ -117,6 +117,11 @@ Reads an optional `TENANT_SECRETS_JSON` env var: a JSON map
     //   "ticketing": { "apiKey": "tito_secret_…", "webhookSecret": "…" },
     "email": { "apiKey": "re_…", "fallbackFrom": "hello@tenant.example" },
     "slack": { "botToken": "xoxb-…" },
+    // Pair-shaped families are BOTH OR NOTHING here too: a half bag is
+    // warned about once and ignored, it never shadows the chain (#1127).
+    "bluesky": { "identifier": "…", "appPassword": "…" },
+    "analytics": { "projectId": "…", "apiKey": "phx_…" },
+    "buffer": { "apiKey": "…", "linkedinChannelId": "…" },
   },
 }
 ```

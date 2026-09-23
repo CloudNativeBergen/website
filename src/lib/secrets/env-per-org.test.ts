@@ -849,14 +849,24 @@ describe('EnvPerOrgSecretsStore — buffer (#1127)', () => {
     expect(await new EnvPerOrgSecretsStore().get(CNDN, 'buffer')).toEqual(FULL)
   })
 
-  it('ignores an API key without a LinkedIn channel id', async () => {
+  it('ignores an API key without a LinkedIn channel id, and warns once naming it', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     clearTenantVars()
     setFullCredentials()
     const store = new EnvPerOrgSecretsStore()
     expect(await store.get(CNDN, 'buffer')).toEqual(FULL)
 
     vi.stubEnv('TENANT_CNDN_BUFFER_LINKEDIN_CHANNEL_ID', '')
-    expect(await store.get(CNDN, 'buffer')).toBeNull()
+    const half = new EnvPerOrgSecretsStore()
+    expect(await half.get(CNDN, 'buffer')).toBeNull()
+    expect(await half.get(CNDN, 'buffer')).toBeNull()
+    // Same net as the bluesky and analytics blocks: the operator is told
+    // WHICH variable is missing, once.
+    expect(warn).toHaveBeenCalledTimes(1)
+    expect(warn.mock.calls[0][0]).toContain(
+      'TENANT_CNDN_BUFFER_LINKEDIN_CHANNEL_ID',
+    )
+    warn.mockRestore()
   })
 
   it('ignores a LinkedIn channel id without an API key', async () => {
