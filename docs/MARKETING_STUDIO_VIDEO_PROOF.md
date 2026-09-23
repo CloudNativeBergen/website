@@ -210,8 +210,15 @@ frame accepted for 15 seconds.
 
 ## 7. Does the file upload and play on LinkedIn and Bluesky?
 
-**Not tested: this box stays open.** Nothing was posted anywhere. What the files measured, beside
-each platform's published limits:
+**Tested by the organizers on 2026-09-23, with `chrome-auto-1.mp4` (Chrome, native AAC, about
+253 kbit/s).** On both LinkedIn and Bluesky it uploaded and played with sound. The click stayed in
+step with the flash and the colour looked right. The test posts were deleted.
+
+The silent `chrome-silent-1.mp4` (179 kbit/s, under LinkedIn's minimum) and the Safari and Firefox
+samples were **not** uploaded. **Decided 2026-09-23: exports stay above 192 kbit/s**, so whether
+LinkedIn takes a file under its minimum does not need testing.
+
+What the files measured, beside each platform's published limits:
 
 |                     | Our files                                                                                                         | LinkedIn ([help a548372](https://www.linkedin.com/help/linkedin/answer/a548372)) | Bluesky ([TechCrunch, 2026-08-26](https://techcrunch.com/2026/08/26/bluesky-now-lets-you-upload-10-minute-long-videos/)) |
 | ------------------- | ----------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
@@ -224,22 +231,11 @@ each platform's published limits:
 
 **Watch the bitrate.** The target is 8 Mbit/s, but on a flat design the encoders spend far less:
 Chrome's video track alone is 177 kbit/s, and **the silent Chrome export, at 179 kbit/s, is already
-under LinkedIn's 192 kbit/s minimum.** Whether LinkedIn rejects it is untested. #1177 should check
-the real bitrate of a typical studio design, and set a minimum (a floor on the quality, or constant
-bitrate) if needed.
-
-**What a person must do (decided 2026-09-23: the organizers do this themselves, on their own test
-accounts):** use a LinkedIn page or profile nobody follows, and a Bluesky account. Upload the three
-sample files from commit `7d65c68a` (`scratch/video-proof/out/chrome-auto-1.mp4`,
-`safari-rt-auto-1.mp4`, `firefox-auto-1.mp4`, and the under-192 kbit/s `chrome-silent-1.mp4`) as a
-video post on each. On each platform, check that it processes, plays with sound, and that the flash
-and the click still land together, and compare the blue against `#1d4ed8` in a screenshot. Then
-delete the posts and record the results here.
+under LinkedIn's 192 kbit/s minimum.** So #1177 must enforce the floor rather than rely on the
+8 Mbit/s target: use a constant-bitrate or quality floor, and check the finished file's bitrate
+(bytes × 8 ÷ duration). If the file is still under 192 kbit/s, re-encode at a higher setting.
 
 ## 8. Recommendation
-
-**#1171 stays open until the LinkedIn and Bluesky upload (§7) is done.** The recommendations below
-do not depend on it, but anything that posts or saves a video for posting should wait for it.
 
 **Decided 2026-09-23: browsers without native AAC export with the add-on;** the LGPL obligation is
 accepted. It worked in all three browsers tested (§2 lists the versions), costs about 254 KB gzip
@@ -279,10 +275,10 @@ notice rather than fail.
 4. **"Exporting twice gives the same frames"** holds only within one browser and one latency mode.
    The test should compare two runs in the same browser.
 
-Also for #1177: check the bitrate against LinkedIn's 192 kbit/s minimum (§7); the silent Chrome
-export is already under it. Safari's `fullRange: true` label (§5) is **not** being raised upstream
-(decided 2026-09-23);
-#1177 may leave it as it is, or override the label itself.
+Also for #1177: **every export must be at least 192 kbit/s (decided 2026-09-23)**, LinkedIn's
+minimum (§7). The silent Chrome export was 179. Safari's `fullRange: true` label (§5) is **not**
+being raised upstream (decided 2026-09-23); #1177 may leave it as it is, or override the label
+itself.
 
 **Does #1179 (music) hold as written? One change:** "apply the proof's measured AAC priming offset"
 treats the offset as one number, and it is not: native AAC on macOS is 2112 samples and the add-on
@@ -299,7 +295,7 @@ licences page (`/privacy` is only for data collection).
 - The real-click cancel was measured only in Chrome. Safari and Firefox used a timer task instead.
 - Freeing the encoder on cancel was not measured, only `output.cancel()` resolving.
 - The 60 s add-on encode time (4–5 s) is extrapolated from the 10 s runs.
-- The LinkedIn and Bluesky upload was not done (§7).
+- Only the Chrome sample with sound was uploaded to LinkedIn and Bluesky (§7).
 - The Safari stall was seen on Safari 27 and macOS 27.0 only. It is not known whether it is a
   regression in this release or long-standing.
 - Colour through a player that honours the `colr` range flag was calculated, not observed.
