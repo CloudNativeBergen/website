@@ -122,6 +122,7 @@ function variant(
       ...overrides,
     },
     post: { attachments: [], defaultScheduledAt: '2027-01-10T17:00:00.000Z' },
+    conferenceDomains: ['cloudnativebergen.no'],
   }
 }
 
@@ -351,6 +352,50 @@ export const ManualAwaitingPost: Story = {
         ),
       ),
     },
+  },
+}
+
+/**
+ * A LEGACY LinkedIn draft (skeleton from before #1134) that reached
+ * awaiting-manual with the link still in its body: the Task page must show
+ * the same own-link warning the Social posts dialog shows, so the organizer
+ * is told to remove it before copying (spec §3.1, §5).
+ */
+export const ManualAwaitingPostLegacyOwnLink: Story = {
+  parameters: {
+    msw: {
+      handlers: handlers(
+        fixture(
+          {
+            key: 'cfpOpen:linkedin',
+            channel: 'linkedin',
+            status: 'awaiting-manual',
+            approvedAt: '2026-09-14T09:12:00.000Z',
+            approvedByName: 'Bob Builder',
+            date: '2027-01-10T07:00:00.000Z',
+          },
+          {
+            ...variant({
+              platform: 'linkedin',
+              status: 'awaiting-manual',
+              scheduledAt: '2027-01-10T07:00:00.000Z',
+              body: `The Cloud Native Bergen 2027 call for papers is open: ${BASE_URL}/cfp?utm_source=linkedin&utm_medium=social&utm_campaign=cfp&utm_content=cfpOpen%3Alinkedin`,
+              link: `${BASE_URL}/cfp?utm_source=linkedin&utm_medium=social&utm_campaign=cfp&utm_content=cfpOpen%3Alinkedin`,
+            }),
+            // The site the body links to must be OURS for the warning to
+            // fire; the default fixture lists a different host.
+            conferenceDomains: [new URL(BASE_URL).hostname],
+          },
+        ),
+      ),
+    },
+  },
+  play: async ({ canvas }) => {
+    // ON THE VALUE: the warning names the URL still in the text. Without
+    // `conferenceDomains` reaching this view, no alert renders at all.
+    const alert = await canvas.findByRole('alert', undefined, { timeout: 5000 })
+    await expect(alert).toHaveTextContent('The text below still contains')
+    await expect(alert).toHaveTextContent(`${BASE_URL}/cfp`)
   },
 }
 

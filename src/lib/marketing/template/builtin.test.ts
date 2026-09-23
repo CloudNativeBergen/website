@@ -23,6 +23,9 @@ const recipes = campaigns.flatMap((c) =>
 describe('built-in Template', () => {
   it('is versioned', () => {
     expect(BUILTIN_TEMPLATE.version).toMatch(/^\d{4}\.\d+$/)
+    // A new version, never an edit of 2026.1: plans seeded from that one keep
+    // the Recipes stored on them and are untouched by this change (#1134).
+    expect(BUILTIN_TEMPLATE.version).not.toBe('2026.1')
   })
 
   it('has the ten Campaigns of spec §5.1 in edition order', () => {
@@ -160,10 +163,19 @@ describe('built-in Template', () => {
     }
   })
 
-  it('carries the tagged link in every publishing skeleton', () => {
-    for (const r of recipes) {
-      if (r.kind !== 'publishing') continue
-      expect(placeholdersIn(r.skeleton!), r.key).toContain('url')
+  it('carries the tagged link in every publishing skeleton EXCEPT LinkedIn, where it is the first comment (§3.1, #1134)', () => {
+    const publishing = recipes.filter((r) => r.kind === 'publishing')
+    const linkedin = publishing.filter((r) => r.channel === 'linkedin')
+    // Guard the guard: a renamed Channel must not empty either side.
+    expect(linkedin.length).toBeGreaterThan(20)
+    expect(publishing.length - linkedin.length).toBeGreaterThan(20)
+    for (const r of publishing) {
+      if (r.channel === 'linkedin') {
+        expect(placeholdersIn(r.skeleton!), r.key).not.toContain('url')
+        expect(r.skeleton!, r.key).toMatch(/first comment/i)
+      } else {
+        expect(placeholdersIn(r.skeleton!), r.key).toContain('url')
+      }
     }
   })
 

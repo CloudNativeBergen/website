@@ -26,6 +26,7 @@ vi.mock('next/cache', () => ({
 }))
 
 const h = vi.hoisted(() => ({
+  getConferenceDomains: vi.fn(async (): Promise<readonly string[]> => []),
   getStudioTask: vi.fn(),
   getRenderSiblings: vi.fn(),
   handoffStudioAttachment: vi.fn(),
@@ -73,6 +74,7 @@ vi.mock('@/lib/marketing/sanity', () => ({
   deleteTask: h.deleteTask,
 }))
 vi.mock('@/lib/social/sanity', () => ({
+  getConferenceDomainsForRule: h.getConferenceDomains,
   handoffStudioAttachment: h.handoffStudioAttachment,
   getSocialVariantEditorData: h.getSocialVariantEditorData,
   getSocialPostVariant: h.getSocialPostVariant,
@@ -220,6 +222,7 @@ function variantData(
       ...overrides,
     },
     post: { attachments: [], defaultScheduledAt: '2027-01-10T07:00:00.000Z' },
+    conferenceDomains: ['conf-a.example.no'],
   }
 }
 
@@ -386,6 +389,33 @@ describe('marketing.task.approve', () => {
       'https://cloudnativebergen.dev/cfp?utm_source=linkedin&utm_medium=social&utm_campaign=cfp&utm_content=cfpOpen%3Alinkedin'
     expect(h.scheduleIssues.mock.calls[0][0].link).toBe(derived)
     expect(h.approveTask.mock.calls[0][0].variant.link).toBe(derived)
+  })
+
+  it('does not read the own domains for a card platform: a Bluesky approval cannot fail on that read', async () => {
+    h.getConferenceDomains.mockRejectedValue(new Error('verification down'))
+    h.getSocialVariantEditorData.mockResolvedValue(
+      variantData({ platform: 'bluesky' }),
+    )
+    await marketing().task.approve({ taskId: 'task-ours' })
+    expect(h.getConferenceDomains).not.toHaveBeenCalled()
+    expect(h.scheduleIssues.mock.calls[0][2]).toEqual({
+      taskOwned: true,
+      conferenceDomains: [],
+    })
+  })
+
+  it('hands the LIVE own domains to the shared validation, by the variant conference (#1134)', async () => {
+    // The cached conference (`CONFERENCE.domains`) lists cloudnativebergen.dev;
+    // the live read says something else. The live one is what approve must
+    // apply — the same list save and the publish tick apply — or a domain
+    // just added in the Studio passes approval and fails at publish.
+    h.getConferenceDomains.mockResolvedValue(['live.cloudnativebergen.no'])
+    await marketing().task.approve({ taskId: 'task-ours' })
+    expect(h.getConferenceDomains).toHaveBeenCalledWith(CONF_A)
+    expect(h.scheduleIssues.mock.calls[0][2]).toEqual({
+      taskOwned: true,
+      conferenceDomains: ['live.cloudnativebergen.no'],
+    })
   })
 
   it('approves although a Prerequisite is still open (never a block)', async () => {

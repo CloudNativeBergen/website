@@ -87,9 +87,27 @@ export interface AnalyticsCredentials {
   apiKey: string
 }
 
+/**
+ * Buffer credentials for the organization's pinned LinkedIn channel (#1127).
+ * Both or nothing: the API key and channel id are inseparable. The channel id
+ * is intentionally pinned, never discovered from Buffer's API. The publishing
+ * adapter lands in #1129.
+ */
+export interface BufferCredentials {
+  apiKey: string
+  linkedinChannelId: string
+}
+
 /** The discriminator union over every credential family. */
 export type SecretFamily =
-  'ticketing' | 'email' | 'slack' | 'push' | 'badge' | 'bluesky' | 'analytics'
+  | 'ticketing'
+  | 'email'
+  | 'slack'
+  | 'push'
+  | 'badge'
+  | 'bluesky'
+  | 'analytics'
+  | 'buffer'
 
 /** Family discriminator → its credential bag. */
 export interface FamilyCredentialsMap {
@@ -100,6 +118,7 @@ export interface FamilyCredentialsMap {
   badge: BadgeSigningCredentials
   bluesky: BlueskyCredentials
   analytics: AnalyticsCredentials
+  buffer: BufferCredentials
 }
 
 /** The credential bag for a given family (defaults to the full union). */

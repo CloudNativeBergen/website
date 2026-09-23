@@ -14,6 +14,7 @@ import { richTextImageUrl } from '@/lib/homepage/richTextImage'
 import {
   countLength,
   getPlatformConstraints,
+  ownDomainUrlsIn,
 } from '@/lib/social/provider/constraints'
 import { postUrlExample, postUrlIssue } from '@/lib/social/provider/manual'
 import { renditionDownloadUrl, renditionRect } from '@/lib/social/rendition'
@@ -34,6 +35,13 @@ export interface ManualPostViewProps {
   error?: string | null
   /** Source image URL; defaults to the CDN. Stories inject data URIs. */
   imageSrc?: (asset: SocialPostAttachment) => string
+  /**
+   * The conference's own domains. Used only to WARN: a body that reached this
+   * view already cannot be refused here (see {@link ManualPostView}).
+   */
+  conferenceDomains?: readonly string[]
+  /** The platform zone as the server resolved it; see `PublishContext`. */
+  platformZone?: string | null
 }
 
 const defaultImageSrc = (asset: SocialPostAttachment) =>
@@ -53,6 +61,8 @@ export function ManualPostView({
   saving = false,
   error = null,
   imageSrc = defaultImageSrc,
+  conferenceDomains = [],
+  platformZone = null,
 }: ManualPostViewProps) {
   const platform = SOCIAL_PLATFORM_LABELS[variant.platform]
   const constraints = getPlatformConstraints(variant.platform)
@@ -84,12 +94,38 @@ export function ManualPostView({
     (a) => !byKey.has(a.source),
   ).length
   const link = variant.link?.trim() || null
-  // What "Copy text" copies. Where the platform takes the link in the body
-  // (LinkedIn), the tagged link is appended unless the body already carries
-  // it — so following the steps cannot publish without the approved link.
-  const linkInBody = Boolean(link && constraints?.linkInBody)
-  const linkAppended =
-    linkInBody && link !== null && !variant.body.includes(link)
+  // Where the link goes by hand (spec §3.1, #1134).
+  //
+  //   `comment` (LinkedIn) — the one placement that keeps the link OUT of the
+  //     copied text. It is a step of its own, posted right after the post.
+  //     Nothing here can verify the organizer actually posted that comment:
+  //     "mark as posted" checks the POST's address and no more.
+  //   `card` (Bluesky) / `body` — the URL goes in the text; a card is what the
+  //     platform makes OF a URL in the text when a human posts it. The tagged
+  //     link is appended unless the body already carries it, so for these two
+  //     following the steps cannot publish without the approved link.
+  //   no constraints (a platform no adapter describes) — unchanged from before
+  //     #1134: the link is neither appended nor a comment, it is its own
+  //     "Copy the link" step with no claim about where it goes.
+  const placement = constraints?.linkPlacement ?? null
+  const linkAsComment = link !== null && placement === 'comment'
+  const linkInBody =
+    link !== null && placement !== null && placement !== 'comment'
+  const linkAppended = linkInBody && !variant.body.includes(link)
+  /**
+   * A body that reached this view carrying a link to our own site, on a
+   * platform where the link is the first comment (spec §3.1, #1134). Save,
+   * schedule and approve all refuse it, so this is a variant that got past
+   * them BEFORE the rule existed — a draft materialized from the 2026.1
+   * built-in — or one whose conference gained the domain afterwards. There
+   * is no migration (rewriting edited copy is not ours to do) and an
+   * `awaiting-manual` variant can no longer be edited, so the only honest
+   * thing is to say so here rather than present the text as ready to copy.
+   */
+  const strayInBody =
+    placement === 'comment' && variant.status !== 'published'
+      ? ownDomainUrlsIn(variant.body, conferenceDomains, platformZone)
+      : []
   const copyText = linkAppended ? `${variant.body}\n\n${link}` : variant.body
   const copyLength = constraints
     ? countLength(copyText, constraints.counting)
@@ -134,9 +170,10 @@ export function ManualPostView({
             ]
           : [
               'Copy the text',
-              link && !linkInBody ? 'Copy the link' : null,
+              link && !linkInBody && !linkAsComment ? 'Copy the link' : null,
               images.length > 0 ? 'Save the image' : null,
               `Post it on ${platform}`,
+              linkAsComment ? 'Add the link as the first comment' : null,
               'Paste the post address below',
             ]
         )
@@ -162,6 +199,20 @@ export function ManualPostView({
           We could not confirm whether it went out, so check {platform} before
           doing anything else. If the post is there, paste its address below to
           record it — do not post it again.
+        </p>
+      )}
+
+      {strayInBody.length > 0 && (
+        <p
+          role="alert"
+          className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200"
+        >
+          The text below still contains {strayInBody.join(', ')}. On {platform}{' '}
+          the link belongs in the first comment, not the post — this text was
+          written before that rule.{' '}
+          {postMayBeLive
+            ? 'If you do post it by hand, delete it from the text first and post the link as the first comment.'
+            : 'Delete it from the text after pasting, and post the link as the first comment instead.'}
         </p>
       )}
 
@@ -204,10 +255,13 @@ export function ManualPostView({
         <Section
           title="Link"
           hint={
-            linkInBody
-              ? `Part of the text above; ${platform} shows a preview from it.`
-              : `Add it where ${platform} takes a link.`
+            linkAsComment
+              ? `Post it as the FIRST COMMENT on your ${platform} post — the link alone, nothing else. It is deliberately not in the text above.`
+              : linkInBody
+                ? `Part of the text above; ${platform} shows a preview from it.`
+                : `Add it where ${platform} takes a link.`
           }
+          hintTone={linkAsComment ? 'strong' : 'muted'}
           action={<CopyButton value={link} label="Copy link" />}
         >
           <a
@@ -359,7 +413,7 @@ function Section({
 }: {
   title: string
   hint?: string
-  hintTone?: 'muted' | 'error'
+  hintTone?: 'muted' | 'strong' | 'error'
   action?: React.ReactNode
   children: React.ReactNode
 }) {
@@ -377,7 +431,9 @@ function Section({
                 'mt-0.5 text-xs',
                 hintTone === 'error'
                   ? 'font-medium text-red-600 dark:text-red-400'
-                  : 'text-gray-400 dark:text-gray-500',
+                  : hintTone === 'strong'
+                    ? 'font-medium text-amber-700 dark:text-amber-400'
+                    : 'text-gray-400 dark:text-gray-500',
               )}
             >
               {hint}

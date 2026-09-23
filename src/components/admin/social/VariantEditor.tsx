@@ -4,7 +4,10 @@ import { useId, useMemo, useState } from 'react'
 import clsx from 'clsx'
 import { AdminButton } from '@/components/admin/AdminButton'
 import { richTextImageUrl } from '@/lib/homepage/richTextImage'
-import type { PlatformConstraints } from '@/lib/social/provider/types'
+import type {
+  LinkPlacement,
+  PlatformConstraints,
+} from '@/lib/social/provider/types'
 import { renditionRect } from '@/lib/social/rendition'
 import {
   SOCIAL_PLATFORM_LABELS,
@@ -23,6 +26,10 @@ export interface VariantEditorProps {
   platform: SocialPlatform
   /** The platform's rules; `null` when no adapter describes it yet. */
   constraints: PlatformConstraints | null
+  /** The conference's own domains, for the rules that depend on them. */
+  conferenceDomains?: readonly string[]
+  /** The platform zone as the server resolved it; see `PublishContext`. */
+  platformZone?: string | null
   postAttachments: SocialPostAttachment[]
   /** ISO instant the variant follows when timing is `default`. */
   postDefaultScheduledAt: string | null
@@ -53,6 +60,19 @@ const defaultImageSrc = (asset: SocialPostAttachment) =>
   richTextImageUrl(asset.assetId, 1200)
 
 /**
+ * What the Link field says the platform does with it. Keyed by
+ * {@link LinkPlacement} so nothing here branches on the platform name.
+ * Consulted ONLY when a platform is described: with no constraints there is
+ * no placement to look up, and the field says so rather than guessing.
+ */
+const LINK_HINTS: Record<LinkPlacement, (platform: string) => string> = {
+  body: () => 'Shown in the body text.',
+  card: () => 'Shown as a link card; you may also mention it in the body.',
+  comment: (platform) =>
+    `Posted as the first comment on ${platform}, on its own — keep it out of the body.`,
+}
+
+/**
  * The single-variant editor (#1007): a split-pane composer with the
  * platform's rules applied live. The left pane edits, the right pane shows
  * the post the way the platform's feed card will — same body, same
@@ -63,6 +83,8 @@ const defaultImageSrc = (asset: SocialPostAttachment) =>
 export function VariantEditor({
   platform,
   constraints,
+  conferenceDomains,
+  platformZone = null,
   postAttachments,
   postDefaultScheduledAt,
   value,
@@ -77,6 +99,7 @@ export function VariantEditor({
   linkLocked = false,
 }: VariantEditorProps) {
   const id = useId()
+  const platformLabel = SOCIAL_PLATFORM_LABELS[platform]
   // Switching default → custom → default must not lose a typed time.
   const [lastCustom, setLastCustom] = useState(
     value.timing.mode === 'custom' ? value.timing.localInput : '',
@@ -84,8 +107,15 @@ export function VariantEditor({
   // An upload / pick in flight: saving now would close the dialog under it.
   const [slotBusy, setSlotBusy] = useState(false)
   const validation = useMemo(
-    () => validateEditorValue(value, constraints, postAttachments),
-    [value, constraints, postAttachments],
+    () =>
+      validateEditorValue(
+        value,
+        constraints,
+        postAttachments,
+        conferenceDomains,
+        platformZone,
+      ),
+    [value, constraints, postAttachments, conferenceDomains, platformZone],
   )
   const overLimit =
     constraints !== null && validation.length > constraints.maxLength
@@ -177,10 +207,19 @@ export function VariantEditor({
             />
             <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
               {linkLocked
-                ? 'Derived from the target page, the campaign and this task; it carries the tracking tags.'
-                : constraints?.linkInBody === false
-                  ? 'Shown as a link card; the platform does not allow links in the body.'
-                  : 'Shown as a link card; you may also mention it in the body.'}
+                ? `Derived from the target page, the campaign and this task; it carries the tracking tags.${
+                    constraints?.linkPlacement === 'comment'
+                      ? ` It is posted as the first comment on ${platformLabel}, so keep it out of the body.`
+                      : ''
+                  }`
+                : constraints
+                  ? LINK_HINTS[constraints.linkPlacement](platformLabel)
+                  : // No adapter describes this platform, so we do not know
+                    // where the link goes. Saying "a link card" here would
+                    // contradict the rules summary directly above, which says
+                    // nothing is known — and it is the same wording the
+                    // copy-ready view uses for the same case.
+                    `Add it where ${platformLabel} takes a link.`}
             </p>
             <Issues
               id={`${id}-link-issues`}
@@ -340,9 +379,9 @@ function RulesSummary({
       : `up to ${constraints.maxImages} images`,
     constraints.requiresAlt ? 'alt text required' : null,
     constraints.requiresImage ? 'image required' : null,
-    constraints.linkInBody
-      ? 'links allowed in the body'
-      : 'links only as a card',
+    constraints.linkPlacement === 'comment'
+      ? 'the link goes in the first comment'
+      : 'links allowed in the body',
   ].filter((p): p is string => p !== null)
   return (
     <p className="rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-600 dark:bg-gray-800 dark:text-gray-300">
@@ -364,7 +403,12 @@ function Issues({ id, messages }: { id: string; messages: string[] }) {
   )
 }
 
-/** The platform's feed card, approximated: author, body, images, link. */
+/**
+ * The platform's feed card, approximated: author, body, images, and the link
+ * WHERE THE PLATFORM PUTS IT — a card below the post, or, on a `comment`
+ * platform, the first comment under it (spec §3.1, #1134). Showing a link
+ * card for LinkedIn would preview something that never goes out.
+ */
 function PreviewCard({
   authorName,
   value,
@@ -438,12 +482,25 @@ function PreviewCard({
           ))}
         </div>
       )}
-      {host && (
+      {host && constraints?.linkPlacement !== 'comment' && (
         <div className="mt-3 rounded-lg border border-gray-200 px-3 py-2 dark:border-gray-700">
           <p className="truncate text-xs text-gray-500 uppercase">{host}</p>
           <p className="truncate text-sm text-gray-800 dark:text-gray-200">
             {link}
           </p>
+        </div>
+      )}
+      {host && constraints?.linkPlacement === 'comment' && (
+        <div className="mt-3 border-t border-gray-200 pt-3 dark:border-gray-700">
+          <p className="mb-1 text-xs font-medium tracking-wide text-gray-500 uppercase">
+            First comment
+          </p>
+          <div className="flex items-start gap-2 rounded-lg bg-gray-50 px-3 py-2 dark:bg-gray-800">
+            <div className="size-6 shrink-0 rounded-full bg-gradient-to-br from-brand-cloud-blue to-indigo-500" />
+            <p className="min-w-0 truncate text-sm text-gray-800 dark:text-gray-200">
+              {link}
+            </p>
+          </div>
         </div>
       )}
     </div>

@@ -19,6 +19,7 @@ import {
   type LinkCardSource,
 } from './link-card'
 import type {
+  PublishContext,
   PublishFailureKind,
   PublishInput,
   PublishMedia,
@@ -243,8 +244,11 @@ export class BlueskyPublishAdapter implements SocialPublishAdapter {
   }
 
   /** Exactly the editor's rules: the shared validator, nothing extra. */
-  validate(input: PublishInput): ValidationIssue[] {
-    return validatePublishInput(this.constraints, input)
+  validate(
+    input: PublishInput,
+    context: PublishContext = {},
+  ): ValidationIssue[] {
+    return validatePublishInput(this.constraints, input, context)
   }
 
   async publish(input: PublishInput): Promise<PublishOutcome> {

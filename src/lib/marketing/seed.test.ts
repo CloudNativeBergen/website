@@ -11,7 +11,7 @@ import {
   type SeedPlan,
 } from './seed'
 import { publishedPair } from './recipes'
-import { BUILTIN_TEMPLATE } from './template'
+import { BUILTIN_TEMPLATE, BUILTIN_TEMPLATE_VERSION } from './template'
 import { placeholdersIn } from './placeholders'
 import {
   getPlatformConstraints,
@@ -94,7 +94,7 @@ describe('expandTemplate — plan and Campaigns', () => {
       _id: 'marketingPlan.conf-A',
       conferenceId: 'conf-A',
       ownerId: 'sp-owner',
-      templateVersion: '2026.1',
+      templateVersion: BUILTIN_TEMPLATE_VERSION,
       createdAt: '2026-09-14T10:00:00.000Z',
     })
   })
@@ -228,7 +228,13 @@ describe('expandTemplate — Tasks', () => {
     expect(variant.link).toBe(
       'https://cloudnativebergen.dev/cfp?utm_source=linkedin&utm_medium=social&utm_campaign=cfp&utm_content=cfpOpen%3Alinkedin',
     )
-    expect(variant.body).toContain(variant.link)
+    // LinkedIn keeps the derived link on the variant and OUT of the body: it
+    // is the first comment (§3.1, #1134). Its Bluesky sibling still carries
+    // the URL in the copy, where the platform makes a card of it.
+    expect(variant.body).not.toContain(variant.link)
+    const bs = byKey(plan, 'cfp', 'cfpOpen:bluesky')
+    const bsVariant = plan.variants.find((v) => v._id === bs.variantId)!
+    expect(bsVariant.body).toContain(bsVariant.link)
     // Every publishing Task has exactly one variant, and every variant a post.
     const publishing = plan.tasks.filter((t) => t.kind === 'publishing')
     expect(plan.variants).toHaveLength(publishing.length)
@@ -418,15 +424,39 @@ describe('expandTemplate — every seeded body passes its Channel rules', () => 
     const failures: string[] = []
     for (const v of plan.variants) {
       const constraints = getPlatformConstraints(v.platform)!
-      const issues = validatePublishInput(constraints, {
-        text: v.body,
-        media: [],
-        link: v.link,
-      })
+      const issues = validatePublishInput(
+        constraints,
+        { text: v.body, media: [], link: v.link },
+        // The conference's own domain, so the first-comment rule (#1134) is
+        // LIVE here: a seeded LinkedIn body that still resolved `{url}` into
+        // the copy fails this test rather than passing it silently.
+        { conferenceDomains: ['cloudnativebergen.dev'] },
+      )
       const task = plan.tasks.find((t) => t.variantId === v._id)!
       for (const i of issues) failures.push(`${task.key}: ${i.message}`)
     }
     expect(failures).toEqual([])
+  })
+
+  it('puts our own URL in every Bluesky body and in no LinkedIn body (§3.1, #1134)', () => {
+    const plan = seed({ includeOptional: ['sponsorAcquisition', 'keynotes'] })
+    const carries = (body: string) =>
+      body.includes('https://cloudnativebergen.dev')
+    const byPlatform = { linkedin: [] as boolean[], bluesky: [] as boolean[] }
+    for (const v of plan.variants) {
+      if (v.platform !== 'linkedin' && v.platform !== 'bluesky') continue
+      byPlatform[v.platform].push(carries(v.body))
+    }
+    // Guard the guard: both sides must be non-empty, or "none carry it" is
+    // true of an empty list and proves nothing.
+    expect(byPlatform.linkedin.length).toBeGreaterThan(20)
+    expect(byPlatform.bluesky.length).toBeGreaterThan(20)
+    expect(byPlatform.linkedin.filter(Boolean)).toEqual([])
+    expect(byPlatform.bluesky.every(Boolean)).toBe(true)
+    // The link itself is still derived and stored on the variant — it is the
+    // first comment now, not absent.
+    const linkedin = plan.variants.filter((v) => v.platform === 'linkedin')
+    expect(linkedin.every((v) => carries(v.link ?? ''))).toBe(true)
   })
 })
 

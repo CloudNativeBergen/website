@@ -10,6 +10,21 @@ import type { SocialPlatform } from '../types'
 export type LengthCounting = 'characters' | 'graphemes'
 
 /**
+ * WHERE the platform takes the post's link (spec §3.1, #1134):
+ *
+ *   `body`    — the link is part of the text and nothing else renders it.
+ *   `card`    — the platform builds a link card from it (Bluesky's external
+ *               embed; posting by hand, the URL in the text is what makes it).
+ *   `comment` — the link is posted as the FIRST COMMENT, alone, and must NOT
+ *               appear in the body: LinkedIn, an organizer's call for reach.
+ *
+ * Replaces the earlier `linkInBody` boolean, which could not tell `card` from
+ * `comment` — both would have been "not in the body" while only one of them
+ * refuses a body that carries the link.
+ */
+export type LinkPlacement = 'body' | 'card' | 'comment'
+
+/**
  * Plain-data, client-safe descriptor of what a platform accepts. The single
  * source of truth for the composer UI, `validate`, and the adapter itself.
  */
@@ -24,8 +39,8 @@ export interface PlatformConstraints {
   requiresAlt: boolean
   /** Characters a URL costs regardless of its length (X-style); null = literal. */
   urlLengthCost: number | null
-  /** Whether a link may appear in the body text (vs. only as an embed). */
-  linkInBody: boolean
+  /** Where the platform takes the link; see {@link LinkPlacement}. */
+  linkPlacement: LinkPlacement
   /**
    * The aspect ratio (width / height) the platform's feed card crops images
    * to; the rendition function centres that crop on the hotspot. `null` when
@@ -59,6 +74,25 @@ export interface PublishInput {
   text: string
   media: PublishMedia[]
   link?: string
+}
+
+/**
+ * What validation needs to know about the TENANT, which no constraints object
+ * can carry: the conference's own `domains[]`. A `comment` platform refuses a
+ * body that links to one of them (spec §3.1), and only the request boundary
+ * knows which those are. Absent (or empty) the host rule simply does not fire,
+ * so a caller that cannot supply it is never wrong — only less helpful.
+ */
+export interface PublishContext {
+  conferenceDomains?: readonly string[]
+  /**
+   * The platform's own hosting zone (`PLATFORM_DOMAIN_SUFFIX`), which the
+   * first-comment rule needs to keep hosted tenants apart. `undefined` means
+   * "resolve it from the environment" — right on the server, and `null` in
+   * the browser, where that variable does not exist. The editor read carries
+   * the server's value so the live editor and the router agree.
+   */
+  platformZone?: string | null
 }
 
 export type PublishFailureKind =
@@ -119,7 +153,7 @@ export interface SocialPublishAdapter {
   readonly platform: SocialPlatform
   readonly constraints: PlatformConstraints
   /** Pure. Run live in the editor, at schedule time, and again at publish. */
-  validate(input: PublishInput): ValidationIssue[]
+  validate(input: PublishInput, context?: PublishContext): ValidationIssue[]
   publish(input: PublishInput): Promise<PublishOutcome>
   /**
    * Read back a post this adapter ACCEPTED (`result: 'accepted'`). Present
