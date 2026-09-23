@@ -238,6 +238,9 @@ delete the posts and record the results here.
 
 ## 8. Recommendation
 
+**#1171 stays open until the LinkedIn and Bluesky upload (§7) is done.** The recommendations below do
+not depend on it, but anything that posts or saves a video for posting should wait for it.
+
 **Browsers without native AAC should export with the add-on,** if the LGPL obligation is accepted.
 It worked in all three browsers tested (§2 lists the versions), costs about 254 KB gzip fetched only
 when needed, and adds about 0.7 s per 10 s of sound, off the main thread. If the licence is not
@@ -249,11 +252,14 @@ add-on worked everywhere it was tried.
 
 1. **Latency mode per browser.** Safari needs `'realtime'`, Firefox must not get it, and Chrome is
    5× slower with it. Do not hardcode either. Before the real export, run a short check at the real
-   size: encode about 10 frames in `'quality'`, then `flush()` under a timeout of about 3 s, and
-   require a chunk for every frame. If it times out or errors, repeat the check in `'realtime'`. If
-   that fails too, refuse. A check that waits for output _without_ flushing would wrongly reject
-   Firefox, whose first chunk only came after all 11 frames had been sent. That check was run
-   after review, with 11 frames:
+   size: encode about 10 frames in `'quality'`, then `flush()`, and require a chunk for every
+   frame. Put **one timeout of about 3 s around the whole check**, the frame submission as well as
+   the flush. In Safari an awaited `CanvasSource.add()` stops resolving after 7–8 frames, so a
+   timeout on the flush alone is never reached. If the check times out or errors, cancel and
+   close that encoder and output, then repeat the check in `'realtime'`. If that fails too,
+   refuse. A check that waits for output _without_ flushing would wrongly reject Firefox, whose
+   first chunk only came after all 11 frames had been sent. The check was run after review with
+   raw WebCodecs, 11 frames submitted without waiting on the queue:
 
    | Probe, 11 frames | Chrome                                 | Safari                                 | Firefox                                 |
    | ---------------- | -------------------------------------- | -------------------------------------- | --------------------------------------- |
@@ -261,7 +267,8 @@ add-on worked everywhere it was tried.
    | `realtime`       | 11 chunks, first at 3.1 s, flush 82 ms | 11 chunks, first at 62 ms, flush 70 ms | the encoder errored and closed          |
 
    So in these three browsers the check picks `quality` in Chrome and Firefox and `realtime` in
-   Safari, in about 0.1–3 s.
+   Safari. Chrome's `realtime` first chunk took 3.1 s, so the timeout must not be much tighter than
+   3 s if the fallback is ever to succeed there.
 
 2. **A stall watchdog.** "A 'supported' encode that then fails shows its error" also has to cover
    an encoder that simply stops: no chunk and no progress for N seconds is an error. It is shown,
