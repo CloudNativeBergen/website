@@ -4,18 +4,18 @@
  * These tests run it for real — no mocked validator — so the first-comment
  * rule (spec §3.1, #1134) is proven at schedule AND at approve at once.
  *
- * A LinkedIn variant resolves no adapter (no `CONNECTION_FAMILY` entry), so
- * nothing here reaches a secret store or the network.
+ * The resolver is mocked to "not connected" by default, so nothing here
+ * reaches a secret store or the network; the connected case hands it the
+ * real Buffer adapter (#1129), whose `validate` is pure.
  */
 import { describe, expect, it, vi } from 'vitest'
 import { scheduleIssues } from '../schedule-check'
-import { ManualChannelProvider } from '../provider/manual'
+import { BufferPublishAdapter } from '../provider/buffer'
 import type { SocialPostVariant } from '../types'
 
 // The ADAPTER branch: `scheduleIssues` delegates to `adapter.validate` when
 // the organization is connected, and falls back to the shared rules when it
-// is not. LinkedIn resolves no adapter today, so the delegating branch needs
-// a resolver of its own or it is never executed.
+// is not. The mock below decides which branch a test takes.
 const resolveAdapter = vi.hoisted(() => vi.fn(async () => null))
 vi.mock('../provider', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../provider')>()),
@@ -100,7 +100,10 @@ describe('scheduleIssues — the link is the first comment (#1134)', () => {
   })
 
   it('gives the ADAPTER the same context when the organization is connected', async () => {
-    const adapter = new ManualChannelProvider('linkedin')
+    const adapter = new BufferPublishAdapter(
+      { apiKey: 'buffer-key', channelId: 'channel-1' },
+      { platform: 'linkedin' },
+    )
     const validate = vi.spyOn(adapter, 'validate')
     resolveAdapter.mockResolvedValueOnce(
       adapter as unknown as Awaited<ReturnType<typeof resolveAdapter>>,

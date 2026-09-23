@@ -5,7 +5,7 @@ import { SOCIAL_PLATFORMS, type SocialPlatform } from '../types'
 import type { AdapterResolver } from '../publish-engine'
 import { BlueskyPublishAdapter } from './bluesky'
 import { BlueskyEngagementProvider } from './bluesky-engagement'
-import { ManualChannelProvider } from './manual'
+import { BufferPublishAdapter } from './buffer'
 import type { SocialEngagementProvider, SocialPublishAdapter } from './types'
 
 export type {
@@ -45,10 +45,10 @@ type AdapterFactory = (
 
 /**
  * The per-platform registry. Bluesky (#1005) publishes with the `bluesky`
- * secret family's app password. LinkedIn (#1006) is the manual Channel:
- * its adapter needs no credentials and only lends the platform's rules —
- * the resolver below never builds it for a tick, because no organization
- * can hold a LinkedIn connection yet (no `CONNECTION_FAMILY` entry).
+ * secret family's app password. LinkedIn (#1129) publishes THROUGH Buffer
+ * with the `buffer` family's personal API key and pinned channel id — both
+ * or nothing, so a half-filled bag builds no adapter and the variant takes
+ * the manual path (#1006) exactly as an unconnected organization's does.
  */
 const ADAPTERS: Partial<Record<SocialPlatform, AdapterFactory>> = {
   bluesky: ({ identifier, appPassword }, { linkCardHosts }) =>
@@ -58,17 +58,26 @@ const ADAPTERS: Partial<Record<SocialPlatform, AdapterFactory>> = {
           { linkCardHosts },
         )
       : null,
-  linkedin: () => new ManualChannelProvider('linkedin'),
+  linkedin: ({ apiKey, linkedinChannelId }) =>
+    apiKey && linkedinChannelId
+      ? new BufferPublishAdapter(
+          { apiKey, channelId: linkedinChannelId },
+          { platform: 'linkedin' },
+        )
+      : null,
 }
 
 /**
  * Which secret family carries a platform's connection. A platform absent
- * here has no integrated channel: its variants are always manual — even
- * when `ADAPTERS` registers a class for it (LinkedIn). Manual mode is
- * derived from THIS table at claim time, never stored on a document.
+ * here has no integrated channel: its variants are always manual. Manual
+ * mode is derived from THIS table at claim time, never stored on a
+ * document. `linkedin → buffer` landed WITH the Buffer adapter (spec §2):
+ * wired earlier it would have handed connected organizations the manual
+ * provider, whose `publish` refuses.
  */
 const CONNECTION_FAMILY: Partial<Record<SocialPlatform, SecretFamily>> = {
   bluesky: 'bluesky',
+  linkedin: 'buffer',
 }
 
 /**
@@ -155,7 +164,10 @@ export async function linkCardHostsFor(
   return allowed
 }
 
-export const resolveSocialPublishAdapter: AdapterResolver = async (variant) => {
+export const resolveSocialPublishAdapter = async (
+  variant: Parameters<AdapterResolver>[0],
+  secrets: SecretsLookup = resolveTenantSecrets,
+): ReturnType<AdapterResolver> => {
   // A platform the registry does not know (a hand-edited document) is
   // manual, never a lookup against arbitrary property names.
   if (!isSocialPlatform(variant.platform)) return null
@@ -163,6 +175,7 @@ export const resolveSocialPublishAdapter: AdapterResolver = async (variant) => {
   const credentials = await resolveSocialCredentials(
     variant.orgId,
     variant.platform,
+    secrets,
   )
   if (!credentials) return null
   return getSocialPublishAdapter(variant.platform, credentials, {
@@ -173,8 +186,9 @@ export const resolveSocialPublishAdapter: AdapterResolver = async (variant) => {
 /**
  * The ENGAGEMENT half of the registry (spec §4.1). Bluesky's counters are
  * public, so its provider takes no credentials and is built unconditionally;
- * LinkedIn is a manual Channel with no API in slice 1, so it has none and a
- * caller gets `null` rather than a stub that always answers nothing.
+ * LinkedIn has none yet — reading its metrics through Buffer is a later
+ * slice (#1129 persists the Buffer post id for it) — so a caller gets
+ * `null` rather than a stub that always answers nothing.
  *
  * A platform absent here simply has no readable engagement — the Snapshot
  * stores `null`, never `0`.

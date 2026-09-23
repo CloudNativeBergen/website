@@ -14,11 +14,18 @@ The integrations using this pattern today:
 - **Social publishing** — `src/lib/social/provider/` (`SocialPublishAdapter`;
   Bluesky integrated via `@atproto/api`, credentials from the `bluesky` secret
   family — see [Tenant secrets](./TENANT_SECRETS.md#wired-consumers); LinkedIn
-  is a **manual Channel**: `ManualChannelProvider` lends the platform's rules
-  only, and since no secret family exists for it the resolver never builds an
-  adapter for a tick — the variant goes to `awaiting-manual` and the organizer
-  posts by hand from the copy-ready view. Manual mode is derived from the
-  absence of a connection, never stored.)
+  is published **through Buffer** (`BufferPublishAdapter`, #1129) for an
+  organization whose `buffer` secret family resolves — a personal API key and
+  a pinned LinkedIn company-page channel. The adapter checks the channel
+  (`service: linkedin`, `type: page`, link shortening off) inside `publish`,
+  shares the post now with the link as the first comment, and returns
+  `accepted`; the confirm sweep reads the LinkedIn URL back later
+  ([spec](./LINKEDIN_VIA_BUFFER_SPEC.md)). An organization without the secret
+  keeps the **manual Channel**: the resolver builds no adapter, the variant
+  goes to `awaiting-manual` and the organizer posts by hand from the
+  copy-ready view. Manual mode is derived from the absence of a connection,
+  never stored. A direct LinkedIn API adapter stays the documented exit,
+  #998.)
 - **Marketing attribution** — `src/lib/marketing/analytics/`
   (`MarketingAnalyticsProvider`; PostHog over the Query API with one HogQL
   query, credentials from the `analytics` secret family, #1009). One method,

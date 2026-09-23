@@ -11,6 +11,7 @@ import {
 } from '@atproto/api'
 import type { BlueskyCredentials } from '@/lib/secrets/types'
 import { fetchImageBytes, ImageFetchError, type ImageBytes } from './bytes'
+import { withDeadline } from './deadline'
 import { PLATFORM_CONSTRAINTS, validatePublishInput } from './constraints'
 import {
   fetchLinkCard,
@@ -61,32 +62,6 @@ export const BLUESKY_PUBLISH_BUDGET_MS = 30_000
 export const BLUESKY_CALL_TIMEOUT_MS = 15_000
 /** Budget that must remain before `createRecord` is even attempted. */
 const MIN_CREATE_BUDGET_MS = 5_000
-
-export class PublishDeadlineError extends Error {
-  constructor() {
-    super('Publish budget exhausted before the request was made')
-    this.name = 'PublishDeadlineError'
-  }
-}
-
-/**
- * A `fetch` that refuses to start past `deadline` and aborts every request
- * at the earlier of its per-call timeout and the deadline. Caller-supplied
- * signals still apply.
- */
-export function withDeadline(
-  fetchImpl: typeof fetch,
-  deadline: number,
-  callTimeoutMs = BLUESKY_CALL_TIMEOUT_MS,
-): typeof fetch {
-  return (input, init) => {
-    const remaining = deadline - Date.now()
-    if (remaining <= 0) return Promise.reject(new PublishDeadlineError())
-    const signals = [AbortSignal.timeout(Math.min(callTimeoutMs, remaining))]
-    if (init?.signal) signals.push(init.signal)
-    return fetchImpl(input, { ...init, signal: AbortSignal.any(signals) })
-  }
-}
 
 export interface BlueskyAdapterOptions {
   /** PDS entry point; the fixture tests point it at MSW. */

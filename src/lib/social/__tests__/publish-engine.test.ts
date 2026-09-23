@@ -777,16 +777,19 @@ describe('the manual Channel hand-over (#1006)', () => {
       (variants: PublishableVariant[]) => Promise<void>
     >(async () => {})
 
+    // The REAL resolver: an organization with no `buffer` secret has no
+    // LinkedIn connection, so the tick gets null (#1129).
+    const noSecrets = vi.fn(async () => null)
     const summary = await runPublishTick({
       store,
-      // The REAL resolver: LinkedIn has no connection family, so it answers
-      // null without consulting the secret store.
-      resolveAdapter: resolveSocialPublishAdapter,
+      resolveAdapter: (variant) =>
+        resolveSocialPublishAdapter(variant, noSecrets),
       onAwaitingManual,
       now: NOW,
     })
 
     expect(summary).toMatchObject({ due: 2, awaitingManual: 2, errors: [] })
+    expect(noSecrets).toHaveBeenCalledWith('org-1', 'buffer')
     expect(publish).not.toHaveBeenCalled()
     expect(onAwaitingManual).toHaveBeenCalledTimes(1)
     const handed = onAwaitingManual.mock.calls[0][0]
@@ -1598,5 +1601,58 @@ describe('the confirm sweep (#1128)', () => {
       now: NOW,
     })
     expect(adapter.confirm).toHaveBeenCalledTimes(MAX_CONFIRMS_PER_TICK)
+  })
+})
+
+describe('LinkedIn through Buffer, end to end (#1129)', () => {
+  it('a connected organization’s variant is submitted to Buffer, then confirmed published by the sweep', async () => {
+    const { resolveSocialPublishAdapter } = await import('../provider')
+    const fixtures = await import('../provider/__tests__/buffer-fixtures')
+    const bag = {
+      apiKey: fixtures.API_KEY,
+      linkedinChannelId: fixtures.CHANNEL_ID,
+    }
+    const secrets = vi.fn(async () => bag)
+    const resolveAdapter = (
+      variant: Parameters<typeof resolveSocialPublishAdapter>[0],
+    ) => resolveSocialPublishAdapter(variant, secrets)
+    const link =
+      'https://cloudnativedays.no/tickets?utm_source=linkedin&utm_medium=social'
+    const store = new MemoryVariantStore([
+      makeVariant({ platform: 'linkedin', link }),
+    ])
+
+    const calls = fixtures.buffer({})
+    const submit = await runPublishTick({ store, resolveAdapter, now: NOW })
+    expect(submit).toMatchObject({ submitted: 1, errors: [] })
+    expect(secrets).toHaveBeenCalledWith('org-1', 'buffer')
+    const [create] = fixtures.callsNamed(calls, 'CreatePost')
+    expect(create.variables.input).toMatchObject({
+      channelId: fixtures.CHANNEL_ID,
+      mode: 'shareNow',
+      metadata: { linkedin: { firstComment: link } },
+    })
+    expect(store.get('variant-1')).toMatchObject({
+      status: 'submitted',
+      submission: { vendorPostId: fixtures.POST_ID },
+      publishResult: null,
+    })
+
+    fixtures.buffer({
+      post: { status: 'sent', externalLink: fixtures.POST_URL },
+    })
+    const confirm = await runPublishTick({
+      store,
+      resolveAdapter,
+      now: new Date(NOW.getTime() + 5 * 60_000),
+    })
+    expect(confirm).toMatchObject({ confirmPublished: 1, errors: [] })
+    expect(store.get('variant-1')).toMatchObject({
+      status: 'published',
+      publishResult: {
+        externalId: fixtures.SHARE_URN,
+        url: fixtures.POST_URL,
+      },
+    })
   })
 })

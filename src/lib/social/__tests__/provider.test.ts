@@ -7,7 +7,7 @@ import {
   resolveSocialPublishAdapter,
 } from '../provider'
 import { BlueskyPublishAdapter } from '../provider/bluesky'
-import { ManualChannelProvider } from '../provider/manual'
+import { BufferPublishAdapter } from '../provider/buffer'
 import { makeVariant } from './memory-store'
 import type { SocialPlatform } from '../types'
 
@@ -62,13 +62,13 @@ describe('the Bluesky connection (#1005)', () => {
     expect(adapter?.platform).toBe('bluesky')
   })
 
-  it('no secret, or a platform with no adapter, is manual', async () => {
+  it('no secret, or a platform with no connection family, is manual', async () => {
     await expect(
       resolveSocialCredentials('org-1', 'bluesky', async () => null),
     ).resolves.toBeNull()
     const secrets = vi.fn(async () => secret)
     await expect(
-      resolveSocialCredentials('org-1', 'linkedin', secrets),
+      resolveSocialCredentials('org-1', 'x', secrets),
     ).resolves.toBeNull()
     expect(secrets).not.toHaveBeenCalled()
   })
@@ -89,27 +89,41 @@ describe('the Bluesky connection (#1005)', () => {
   })
 })
 
-describe('the LinkedIn manual Channel (#1006)', () => {
-  it('the factory knows LinkedIn: a credential-less manual provider with the platform rules', () => {
-    const adapter = getSocialPublishAdapter('linkedin', {})
-    expect(adapter).toBeInstanceOf(ManualChannelProvider)
-    expect(adapter?.constraints.maxLength).toBe(3000)
+describe('LinkedIn through Buffer (#1129)', () => {
+  const bag = { apiKey: 'buffer-key', linkedinChannelId: 'channel-1' }
+  const linkedin = () => ({
+    ...makeVariant({ platform: 'linkedin' }),
+    conferenceDomains: [],
   })
 
-  it('a registered adapter alone does not make a variant automatic: the tick still gets null', async () => {
-    // Manual mode is derived from the absence of a connection. LinkedIn has
-    // no secret family, so no organization can be connected and the secret
-    // store is not even consulted.
-    const secrets = vi.fn(async () => ({ token: 'x' }))
+  it('an organization with a full buffer bag is connected: the tick gets a Buffer adapter for LinkedIn', async () => {
+    const secrets = vi.fn(async () => bag)
+    const adapter = await resolveSocialPublishAdapter(linkedin(), secrets)
+    expect(secrets).toHaveBeenCalledTimes(1)
+    expect(secrets).toHaveBeenCalledWith(makeVariant().orgId, 'buffer')
+    expect(adapter).toBeInstanceOf(BufferPublishAdapter)
+    expect(adapter?.platform).toBe('linkedin')
+    expect(adapter?.constraints.linkPlacement).toBe('comment')
+    expect(typeof adapter?.confirm).toBe('function')
+  })
+
+  it.each([
+    ['no buffer secret', null],
+    ['an api key without the pinned channel', { apiKey: 'buffer-key' }],
+    [
+      'a pinned channel without the api key',
+      { linkedinChannelId: 'channel-1' },
+    ],
+    ['empty strings', { apiKey: '', linkedinChannelId: '' }],
+  ])('%s is manual: the tick gets null', async (_label, found) => {
+    const secrets = vi.fn(async () => found)
     await expect(
-      resolveSocialCredentials('org-1', 'linkedin', secrets),
+      resolveSocialPublishAdapter(linkedin(), secrets),
     ).resolves.toBeNull()
-    expect(secrets).not.toHaveBeenCalled()
-    await expect(
-      resolveSocialPublishAdapter({
-        ...makeVariant({ platform: 'linkedin' }),
-        conferenceDomains: [],
-      }),
-    ).resolves.toBeNull()
+    expect(secrets).toHaveBeenCalledWith(makeVariant().orgId, 'buffer')
+  })
+
+  it('the factory never builds LinkedIn from an empty bag any more', () => {
+    expect(getSocialPublishAdapter('linkedin', {})).toBeNull()
   })
 })
