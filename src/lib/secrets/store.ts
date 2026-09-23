@@ -298,9 +298,11 @@ export class JsonEnvSecretsStore implements TenantSecretsStore {
     // A new blob is a new chance: what it says about each bag is reported
     // once again, then never repeated until it changes.
     this.warnedBags.clear()
+    // Reset BEFORE parsing: a malformed blob replaced by another malformed
+    // blob is a new blob and is reported again.
+    this.warned = false
     try {
       this.parsed = JSON.parse(raw) as TenantSecretsJson
-      this.warned = false
     } catch (err) {
       if (!this.warned) {
         this.warned = true
@@ -332,9 +334,13 @@ export class JsonEnvSecretsStore implements TenantSecretsStore {
       Object.keys(creds).length === 0
     ) {
       if (creds !== undefined && creds !== null) {
-        console.warn(
-          `[secrets] TENANT_SECRETS_JSON entry for ${orgId}/${family} is not a non-empty object; ignoring (env fallback applies)`,
-        )
+        const key = `${orgId}/${family}`
+        if (!this.warnedBags.has(key)) {
+          this.warnedBags.add(key)
+          console.warn(
+            `[secrets] TENANT_SECRETS_JSON entry for ${key} is not a non-empty object; ignoring (env fallback applies)`,
+          )
+        }
       }
       return null
     }

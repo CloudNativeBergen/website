@@ -339,6 +339,25 @@ describe('JsonEnvSecretsStore', () => {
     warn.mockRestore()
   })
 
+  it('warns about a NON-OBJECT entry once per blob too, and reports a second malformed blob', async () => {
+    const store = new JsonEnvSecretsStore()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    vi.stubEnv(
+      'TENANT_SECRETS_JSON',
+      JSON.stringify({ 'org-1': { buffer: {} } }),
+    )
+    expect(await store.get('org-1', 'buffer')).toBeNull()
+    expect(await store.get('org-1', 'buffer')).toBeNull()
+    expect(warn).toHaveBeenCalledTimes(1)
+    // Malformed blob A, then a DIFFERENT malformed blob B: both reported.
+    vi.stubEnv('TENANT_SECRETS_JSON', '{not json')
+    expect(await store.get('org-1', 'buffer')).toBeNull()
+    vi.stubEnv('TENANT_SECRETS_JSON', '{still not json')
+    expect(await store.get('org-1', 'buffer')).toBeNull()
+    expect(warn).toHaveBeenCalledTimes(3)
+    warn.mockRestore()
+  })
+
   it('warns about a half bag ONCE per blob, not once per call — the cron asks every minute', async () => {
     const store = new JsonEnvSecretsStore()
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
