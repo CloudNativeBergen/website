@@ -4,6 +4,7 @@ import type { TenantSecretsStore } from './store'
 import type {
   AnalyticsCredentials,
   BlueskyCredentials,
+  BufferCredentials,
   EmailCredentials,
   FamilyCredentials,
   SecretFamily,
@@ -259,8 +260,9 @@ export async function resolveTenantEnvSlug(
  * The env-var FAMILY segment. Deliberately NOT the `SecretFamily` name for
  * ticketing: the bag this store assembles is CHECKIN-shaped (it mirrors the
  * platform's `CHECKIN_*` vars), and naming it `TICKETING` would imply it can
- * answer for a Tito conference, which it cannot. Only the families with a wired
- * consumer appear here; every other family resolves to `null`.
+ * answer for a Tito conference, which it cannot. Only families with a
+ * documented discrete-env contract appear here; Buffer is a seam until its
+ * consumer lands in #1129. Every other family resolves to `null`.
  *
  * ADDING A FAMILY IS NOT A ONE-LINE CHANGE. Some consumers ask ONE store rather
  * than the chain and would not see the new variables: `resolveConferenceSlackToken`
@@ -273,6 +275,7 @@ const FAMILY_SEGMENT = {
   ticketing: 'CHECKIN',
   bluesky: 'BLUESKY',
   analytics: 'ANALYTICS',
+  buffer: 'BUFFER',
 } as const satisfies Partial<Record<SecretFamily, string>>
 
 type SupportedFamily = keyof typeof FAMILY_SEGMENT
@@ -306,6 +309,7 @@ const REQUIRED_FIELDS = {
   ticketing: ['API_KEY', 'API_SECRET', 'WEBHOOK_SECRET'],
   bluesky: ['IDENTIFIER', 'APP_PASSWORD'],
   analytics: ['PROJECT_ID', 'API_KEY'],
+  buffer: ['API_KEY', 'LINKEDIN_CHANNEL_ID'],
 } as const satisfies Record<SupportedFamily, readonly string[]>
 
 /** What the deployment's environment holds for one family. */
@@ -458,8 +462,17 @@ export class EnvPerOrgSecretsStore implements TenantSecretsStore {
         return this.bluesky(slug) as FamilyCredentials<F> | null
       case 'analytics':
         return this.analytics(slug) as FamilyCredentials<F> | null
-      default:
+      case 'buffer':
+        return this.buffer(slug) as FamilyCredentials<F> | null
+      case 'ticketing':
         return this.ticketing(slug) as FamilyCredentials<F> | null
+      default: {
+        // Exhaustive on purpose: a family added to `FAMILY_SEGMENT` without
+        // a case here used to fall through to the tenant's CHECKIN bag under
+        // the wrong family name.
+        const unhandled: never = family
+        throw new Error(`unhandled secret family ${String(unhandled)}`)
+      }
     }
   }
 
@@ -573,6 +586,14 @@ export class EnvPerOrgSecretsStore implements TenantSecretsStore {
     if (!values) return null
     const [projectId, apiKey] = values
     return { projectId, apiKey }
+  }
+
+  /** Buffer API key + pinned LinkedIn channel id (#1127): both or nothing. */
+  private buffer(slug: string): BufferCredentials | null {
+    const values = this.complete(slug, 'buffer')
+    if (!values) return null
+    const [apiKey, linkedinChannelId] = values
+    return { apiKey, linkedinChannelId }
   }
 
   /**

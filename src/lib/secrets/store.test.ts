@@ -171,6 +171,26 @@ describe('EnvSecretsStore — cross-tenant isolation (#844)', () => {
     'analytics',
   ]
 
+  it('gives NOBODY a buffer bag from the platform env — not even the platform org (#1127)', async () => {
+    // A Buffer account belongs to one tenant organization, so the family is
+    // per-org only, by product decision. That held only because
+    // `platformEnvCredentials` fell through to `default: null`; a `case
+    // 'buffer'` reading these plausible names "for local dev" would have
+    // kept every existing test green while the platform org silently gained
+    // a Buffer connection. The env IS set here, so the assertion is on the
+    // decision, not on an absence.
+    vi.stubEnv('PLATFORM_ORG_ID', PLATFORM)
+    vi.stubEnv('BUFFER_API_KEY', 'buffer-platform-key')
+    vi.stubEnv('BUFFER_LINKEDIN_CHANNEL_ID', 'channel-platform')
+    vi.stubEnv('BUFFER_ACCESS_TOKEN', 'buffer-platform-token')
+    configureEveryFamily()
+    const store = new EnvSecretsStore()
+    // Control: the same env does hand the platform org its other families.
+    expect(await store.get(PLATFORM, 'bluesky')).not.toBeNull()
+    expect(await store.get(PLATFORM, 'buffer')).toBeNull()
+    expect(platformEnvCredentials('buffer')).toBeNull()
+  })
+
   it('refuses a NON-platform org every family the platform org receives', async () => {
     vi.stubEnv('PLATFORM_ORG_ID', PLATFORM)
     configureEveryFamily()
@@ -285,6 +305,101 @@ describe('JsonEnvSecretsStore', () => {
     expect(await store.get('org-a', 'slack')).toBeNull()
     expect(await store.get('org-a', 'email')).toBeNull()
     expect(warn).toHaveBeenCalledTimes(1)
+  })
+
+  it('resolves a COMPLETE buffer bag from the blob, and refuses a half one — both or nothing (#1127)', async () => {
+    // The blob is the second per-org source, and the issue named its shape.
+    // Without the field check a half bag was a hit that shadowed the chain
+    // and reached the consumer with `linkedinChannelId` undefined.
+    const store = new JsonEnvSecretsStore()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    vi.stubEnv(
+      'TENANT_SECRETS_JSON',
+      JSON.stringify({
+        'org-1': { buffer: { apiKey: 'k', linkedinChannelId: 'ch' } },
+      }),
+    )
+    expect(await store.get('org-1', 'buffer')).toEqual({
+      apiKey: 'k',
+      linkedinChannelId: 'ch',
+    })
+    for (const half of [
+      { apiKey: 'k' },
+      { linkedinChannelId: 'ch' },
+      { apiKey: 'k', linkedinChannelId: '   ' },
+    ]) {
+      vi.stubEnv(
+        'TENANT_SECRETS_JSON',
+        JSON.stringify({ 'org-1': { buffer: half } }),
+      )
+      expect(await store.get('org-1', 'buffer')).toBeNull()
+    }
+    expect(warn).toHaveBeenCalledTimes(3)
+    expect(warn.mock.calls[0][0]).toContain('linkedinChannelId')
+    warn.mockRestore()
+  })
+
+  it('warns about a NON-OBJECT entry once per blob too, and reports a second malformed blob', async () => {
+    const store = new JsonEnvSecretsStore()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    vi.stubEnv(
+      'TENANT_SECRETS_JSON',
+      JSON.stringify({ 'org-1': { buffer: {} } }),
+    )
+    expect(await store.get('org-1', 'buffer')).toBeNull()
+    expect(await store.get('org-1', 'buffer')).toBeNull()
+    expect(warn).toHaveBeenCalledTimes(1)
+    // Malformed blob A, then a DIFFERENT malformed blob B: both reported.
+    vi.stubEnv('TENANT_SECRETS_JSON', '{not json')
+    expect(await store.get('org-1', 'buffer')).toBeNull()
+    vi.stubEnv('TENANT_SECRETS_JSON', '{still not json')
+    expect(await store.get('org-1', 'buffer')).toBeNull()
+    expect(warn).toHaveBeenCalledTimes(3)
+    warn.mockRestore()
+  })
+
+  it('warns about a half bag ONCE per blob, not once per call — the cron asks every minute', async () => {
+    const store = new JsonEnvSecretsStore()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    vi.stubEnv(
+      'TENANT_SECRETS_JSON',
+      JSON.stringify({ 'org-1': { buffer: { apiKey: 'k' } } }),
+    )
+    expect(await store.get('org-1', 'buffer')).toBeNull()
+    expect(await store.get('org-1', 'buffer')).toBeNull()
+    expect(await store.get('org-1', 'buffer')).toBeNull()
+    expect(warn).toHaveBeenCalledTimes(1)
+    // A CHANGED blob is reported again — the operator may have edited it.
+    vi.stubEnv(
+      'TENANT_SECRETS_JSON',
+      JSON.stringify({ 'org-1': { buffer: { linkedinChannelId: 'ch' } } }),
+    )
+    expect(await store.get('org-1', 'buffer')).toBeNull()
+    expect(warn).toHaveBeenCalledTimes(2)
+    expect(warn.mock.calls[1][0]).toContain('apiKey')
+    warn.mockRestore()
+  })
+
+  it('applies the same both-or-nothing to the bluesky and analytics pairs', async () => {
+    // The docs table promised it for these two as well; the blob was the
+    // one source that did not keep the promise.
+    const store = new JsonEnvSecretsStore()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    vi.stubEnv(
+      'TENANT_SECRETS_JSON',
+      JSON.stringify({
+        'org-1': {
+          bluesky: { identifier: 'a.bsky.social' },
+          analytics: { projectId: '1', apiKey: 'phx' },
+        },
+      }),
+    )
+    expect(await store.get('org-1', 'bluesky')).toBeNull()
+    expect(await store.get('org-1', 'analytics')).toEqual({
+      projectId: '1',
+      apiKey: 'phx',
+    })
+    warn.mockRestore()
   })
 
   it('ignores a non-object or empty per-org entry (env fallback applies)', async () => {
