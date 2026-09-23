@@ -32,7 +32,7 @@ beforeEach(() => {
 })
 
 describe.each(cases)('$name', ({ fn, id }) => {
-  it('counts references GLOBALLY and uncached: every type, every tenant', async () => {
+  it('sends the unscoped, uncached reference count: no type or tenant filter', async () => {
     fetchMock.mockResolvedValue({ n: 0 })
     await fn(id)
     expect(fetchMock).toHaveBeenCalledTimes(1)

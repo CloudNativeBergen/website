@@ -1335,6 +1335,8 @@ export async function eraseSpeakerInPlace(
     }
 
     // --- phase 3: the image asset ------------------------------------------
+    // Unsetting `speaker.image` leaves the photograph publicly fetchable on
+    // the CDN; the asset itself goes too, unless something else still uses it.
     const imageAsset = await deleteImageAssetIfOrphaned(plan.imageAssetId)
 
     // --- phase 4: caches ----------------------------------------------------

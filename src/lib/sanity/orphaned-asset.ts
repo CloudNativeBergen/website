@@ -1,4 +1,7 @@
-import 'server-only'
+// Deliberately NOT `import 'server-only'`: speaker erasure imports this and
+// runs under plain Node as `pnpm erase-speaker`, where that package throws on
+// import (`__tests__/scripts/erase-speaker-cli.test.ts`). It holds the write
+// client, so it must still only ever be imported from server code.
 import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
 import { groq } from 'next-sanity'
 
@@ -53,7 +56,10 @@ async function deleteAssetIfOrphaned(
   }
 }
 
-/** Delete an image asset (`image-…`) only if nothing references it. */
+/**
+ * Delete an image asset (`image-…`) only if nothing references it. The id's
+ * prefix is not checked; the two names exist so call sites say what they hold.
+ */
 export function deleteImageAssetIfOrphaned(
   assetId: string | null,
 ): Promise<OrphanedAssetDeletion> {
