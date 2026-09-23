@@ -117,11 +117,13 @@ Wall time runs from `output.start()` to finalized, 10 s clip, two runs each:
 | `requestAnimationFrame` callbacks during export | 64–266                                                                                                               | 141–180                                         | 86–187                                          |
 | Cancel                                          | real mouse click at 20 % of a **60 s** clip: handler ran, `output.cancel()` resolved in **1.6 ms**, state `canceled` | timer task: delivered in 1 ms, resolved in 3 ms | timer task: delivered in 4 ms, resolved in 0 ms |
 
-Neither probe measures paint directly. The timer gaps bound how long a click would wait. The
-`requestAnimationFrame` callbacks show the browser kept offering to render, and the progress bar was
-seen moving in the Chrome click run's screenshot. `output.cancel()` resolving, and the output
-reaching state `canceled`, were measured. That the encoder was actually closed and its memory freed
-was **not** measured. One Safari run happened with the window not visible: 0 `requestAnimationFrame`
+Neither probe measures paint or click latency directly. The timer gaps show that the main thread
+was never busy for longer than that between timer callbacks. Browsers may schedule input
+differently from timers, so this is evidence, not a bound. The `requestAnimationFrame` callbacks
+show the browser kept rendering frames. The screenshot of the Chrome click run, taken after the
+cancel, shows the bar stopped at 20 %. `output.cancel()` resolving, and the output reaching state
+`canceled`, were measured. That the encoder was actually closed and its memory freed was **not**
+measured. One Safari run happened with the window not visible: 0 `requestAnimationFrame`
 callbacks and timers throttled. It still finished, in 6.5 s instead of 2.4, which matches the spec's
 reason for avoiding `requestAnimationFrame`.
 
@@ -140,8 +142,9 @@ ffmpeg's decode against the timestamp of the matching flash frame, on every clic
 Every click that was found had the same offset. **Safari's native encoder also loses the start:**
 its files are silent until decoded sample 3,135. The first click, which should land at 2112, is
 missing (9 clicks found, not 10), so about 1,024 input samples (21 ms) never come out. The add-on in
-Safari and both encoders in Chrome keep them. It is harmless under a fade-in, but a track that
-starts on a downbeat loses its first 21 ms in Safari. Two ways to fix the offset were tried:
+Safari and both encoders in Chrome keep them. So a track that starts on a downbeat loses its
+first 21 ms in Safari. With the trim recommended below, Safari's native path loses about 65 ms of
+the mixed track in all (44 ms trimmed plus 21 ms dropped). Two ways to fix the offset were tried:
 
 - **Measure at export time, then trim (recommended).** Encode half a second containing one click
   with the same encoder, decode it back through Mediabunny, and find the click. That took 20–163 ms
@@ -275,8 +278,9 @@ may be enough to raise it with Mediabunny or WebKit.
 **Does #1179 (music) hold as written? One change:** "apply the proof's measured AAC priming offset"
 treats the offset as one number, and it is not: native AAC on macOS is 2112 samples and the add-on
 is 1024. Measure it at export time (§4: 20–163 ms) and trim that many samples from the start of the
-mixed track. Safari's native encoder also drops the first ~21 ms (§4), so the fade-in should cover
-at least that. #1179 should also carry the add-on decision above, including the LGPL notice on a
+mixed track. With the trim, Safari's native encoder loses about 65 ms from the start of the mixed
+track (§4). Either start the audible part of the track after that, or accept the loss under the
+fade-in. #1179 should also carry the add-on decision above, including the LGPL notice on a
 licences page if the add-on ships (`/privacy` is only for data collection).
 
 ## Holes
