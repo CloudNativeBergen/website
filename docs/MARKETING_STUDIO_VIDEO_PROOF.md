@@ -95,7 +95,7 @@ is **not confirmed or refuted**.
   **libavcodec under LGPL-2.1-or-later**. The package includes no LGPL notice and no FFmpeg
   source. Shipping it means shipping LGPL code in our bundle, so we would owe the LGPL notice and a
   pointer to the corresponding source. It is a separately loaded module, which keeps the "can be
-  replaced" requirement easy. **This needs a human decision (see below).**
+  replaced" requirement easy. **Decided 2026-09-23: accepted** (§8).
 - **Size:** the WebAssembly module is 509,386 bytes and is embedded in the JavaScript. The file
   that gets shipped, `mediabunny-aac-encoder.min.mjs`, is **992,176 bytes raw, 253,776 gzip,
   203,236 brotli**. For comparison, `mediabunny.min.mjs` is 683,614 raw and 174,655 gzip. It can be
@@ -228,25 +228,25 @@ under LinkedIn's 192 kbit/s minimum.** Whether LinkedIn rejects it is untested. 
 the real bitrate of a typical studio design, and set a minimum (a floor on the quality, or constant
 bitrate) if needed.
 
-**What a person must do:** agree test accounts with the organizer (a LinkedIn page or profile
-nobody follows, and a Bluesky account). Upload the three sample files from commit `7d65c68a`
-(`scratch/video-proof/out/chrome-auto-1.mp4`, `safari-rt-auto-1.mp4`, `firefox-auto-1.mp4`, and the
-under-192 kbit/s `chrome-silent-1.mp4`) as a
+**What a person must do (decided 2026-09-23: the organizers do this themselves, on their own test
+accounts):** use a LinkedIn page or profile nobody follows, and a Bluesky account. Upload the three
+sample files from commit `7d65c68a` (`scratch/video-proof/out/chrome-auto-1.mp4`,
+`safari-rt-auto-1.mp4`, `firefox-auto-1.mp4`, and the under-192 kbit/s `chrome-silent-1.mp4`) as a
 video post on each. On each platform, check that it processes, plays with sound, and that the flash
 and the click still land together, and compare the blue against `#1d4ed8` in a screenshot. Then
 delete the posts and record the results here.
 
 ## 8. Recommendation
 
-**#1171 stays open until the LinkedIn and Bluesky upload (§7) is done.** The recommendations below do
-not depend on it, but anything that posts or saves a video for posting should wait for it.
+**#1171 stays open until the LinkedIn and Bluesky upload (§7) is done.** The recommendations below
+do not depend on it, but anything that posts or saves a video for posting should wait for it.
 
-**Browsers without native AAC should export with the add-on,** if the LGPL obligation is accepted.
-It worked in all three browsers tested (§2 lists the versions), costs about 254 KB gzip fetched only
-when needed, and adds about 0.7 s per 10 s of sound, off the main thread. If the licence is not
-accepted, **export silent with a clear notice** ("this browser cannot add the music; use Chrome,
-Edge or Safari for sound"). Telling people to switch browser should be the last resort, since the
-add-on worked everywhere it was tried.
+**Decided 2026-09-23: browsers without native AAC export with the add-on;** the LGPL obligation is
+accepted. It worked in all three browsers tested (§2 lists the versions), costs about 254 KB gzip
+fetched only when needed, and adds about 0.7 s per 10 s of sound, off the main thread. The add-on is
+loaded only when native AAC is missing, and its LGPL-2.1 notice (with a pointer to the FFmpeg
+source) goes on a licences page. If the add-on itself fails to load, export silent with a clear
+notice rather than fail.
 
 **Does #1177 (silent export) hold as written? Mostly, with four amendments:**
 
@@ -280,8 +280,9 @@ add-on worked everywhere it was tried.
    The test should compare two runs in the same browser.
 
 Also for #1177: check the bitrate against LinkedIn's 192 kbit/s minimum (§7); the silent Chrome
-export is already under it. And decide whether to correct Safari's `fullRange: true` label (§5); it
-may be enough to raise it with Mediabunny or WebKit.
+export is already under it. Safari's `fullRange: true` label (§5) is **not** being raised upstream
+(decided 2026-09-23);
+#1177 may leave it as it is, or override the label itself.
 
 **Does #1179 (music) hold as written? One change:** "apply the proof's measured AAC priming offset"
 treats the offset as one number, and it is not: native AAC on macOS is 2112 samples and the add-on
@@ -289,7 +290,7 @@ is 1024. Measure it at export time (§4: 20–163 ms) and trim that many samples
 mixed track. With the trim, Safari's native encoder loses about 65 ms from the start of the mixed
 track (§4). Either start the audible part of the track after that, or accept the loss under the
 fade-in. #1179 should also carry the add-on decision above, including the LGPL notice on a
-licences page if the add-on ships (`/privacy` is only for data collection).
+licences page (`/privacy` is only for data collection).
 
 ## Holes
 
