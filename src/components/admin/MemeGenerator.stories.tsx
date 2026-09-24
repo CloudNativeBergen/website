@@ -231,9 +231,9 @@ export const ClassColouredLogoGradientOnDark: Story = {
 
 /**
  * A logo with no viewBox and no size, drawing one thick horizontal line. Its
- * size has to be measured, and `getBBox()` measures geometry only: a line has
- * zero height, so without the stroke's extent it measures as nothing and the
- * generated wordmark is drawn instead.
+ * size has to be measured, and a line's GEOMETRY has zero height — only its
+ * stroke paints. Measuring the painted pixels finds it; measuring geometry
+ * would find nothing and draw the generated wordmark instead.
  */
 export const SizelessStrokedLogo: Story = {
   args: {
@@ -328,7 +328,9 @@ export const SquareLogoFillsWidth: Story = {
 const HOSTILE_LOGO = [
   '<svg>',
   '<desc><meta http-equiv="refresh" content="0;url=#pwned"></desc>',
-  '<style>body{background-image:u\\72l(/__logo-leak-1.png)}@\\69mport "/__logo-leak-2.css";',
+  // @import only counts first in its sheet, so it gets a sheet of its own.
+  '<style>@\\69mport "/__logo-leak-2.css";</style>',
+  '<style>body{background-image:u\\72l(/__logo-leak-1.png)}',
   'body{cursor:image-set("/__logo-leak-3.png" 1x),auto}</style>',
   '<rect width="400" height="100" fill="#facc15"/>',
   '<rect width="1" height="1" fill="url(/__logo-leak-4.svg#a)"/>',
@@ -447,7 +449,99 @@ export const FarFlungSizelessLogo: Story = {
         '<svg><rect x="9000" y="-7000" width="4000" height="1000" fill="#facc15"/></svg>',
     },
   },
-  play: SizelessStrokedLogo.play,
+  play: async ({ canvasElement }) => {
+    // Tight to the painted edge, which only the fine pass achieves: the
+    // coarse one leaves a margin of blank user space round the logo.
+    const box = logoBox()
+    // Pixels 1–4 in from the box edge: past the anti-aliased first pixel and
+    // the fine pass's sub-pixel slack, well inside the coarse pass's margin.
+    const leftEdge = { ...box, x: box.x + 1, width: 3 }
+    const topEdge = { ...box, y: box.y + 1, height: 3 }
+    const canvas = () => canvasElement.querySelector('canvas')!
+    await waitFor(() => {
+      expect(share(canvas(), CANVAS_SIZE, leftEdge, isYellow)).toBeGreaterThan(
+        0.9,
+      )
+      expect(share(canvas(), CANVAS_SIZE, topEdge, isYellow)).toBeGreaterThan(
+        0.9,
+      )
+    })
+  },
+}
+
+/**
+ * A size-less logo sized in %: a full-bleed background and a centred mark.
+ * The % must resolve against one fixed viewport — resolved against the ever
+ * wider search, the background grew and swallowed the mark.
+ */
+export const PercentSizedSizelessLogo: Story = {
+  args: {
+    conferenceLogos: {
+      title: 'Konf',
+      logoBright:
+        '<svg><rect width="100%" height="100%" fill="#1d4ed8"/><circle cx="50%" cy="50%" r="40" fill="#facc15"/></svg>',
+    },
+  },
+  play: async ({ canvasElement }) => {
+    await waitFor(() => {
+      expect(inLogoBox(canvasElement, isBlue)).toBeGreaterThan(0.4)
+      expect(inLogoBox(canvasElement, isYellow)).toBeGreaterThan(0.05)
+    })
+  },
+}
+
+/** A root `color` ATTRIBUTE is the logo's own colour too, and survives Gradient. */
+export const AttributeColouredLogoKeepsItsColour: Story = {
+  args: {
+    conferenceLogos: {
+      title: 'Konf',
+      logoBright:
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 970 234" color="#e11d48"><rect width="970" height="234" fill="currentColor"/></svg>',
+    },
+  },
+  play: StylesheetColouredLogoKeepsItsColour.play,
+}
+
+/**
+ * The fallback tint survives a broken stylesheet of the logo's (an unclosed
+ * comment would swallow a rule appended INTO it).
+ */
+export const MalformedStylesheetStillTinted: Story = {
+  args: {
+    conferenceLogos: {
+      title: 'Konf',
+      logoBright:
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 970 234"><rect width="970" height="234" fill="currentColor"/><style>/* unclosed</style></svg>',
+    },
+  },
+  play: InheritRootColourGradientOnDark.play,
+}
+
+/**
+ * A logo that smuggles a `foreignObject` image in through SMIL — an engine
+ * that taints the canvas for it must not break Download: the logo falls back
+ * instead. (Chromium does not taint; Safari is checked by hand.)
+ */
+export const TaintingLogoStillExports: Story = {
+  args: {
+    conferenceLogos: {
+      title: 'Konf',
+      logoBright:
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 970 234"><rect width="970" height="234" fill="#facc15"/><image width="10" height="10"><set attributeName="href" to="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27%3E%3CforeignObject width=%2710%27 height=%2710%27%3E%3Cdiv xmlns=%27http://www.w3.org/1999/xhtml%27%3Ex%3C/div%3E%3C/foreignObject%3E%3C/svg%3E"/></image></svg>',
+    },
+  },
+  render: (args) => (
+    <MemeGeneratorWithDownload
+      conferenceTitle={args.conferenceLogos?.title}
+      conferenceLogos={args.conferenceLogos}
+    />
+  ),
+  play: async ({ canvasElement }) => {
+    await expectLogoOnCanvas(canvasElement, '#10B981')
+    const preview = canvasElement.querySelector('canvas')!.parentElement!
+    const blob = await captureImage(preview.parentElement!)
+    expect(blob.size).toBeGreaterThan(0)
+  },
 }
 
 export const FallbackGradient: Story = {

@@ -222,10 +222,12 @@ const NO_COLOR = /^(|inherit|initial|unset|revert|revert-layer|currentcolor)$/i
  * - Overriding (monochrome): an inline style on the root, beating any colour
  *   the logo sets — as the overlay's inline style did.
  * - Otherwise (gradient): a rule in a cascade LAYER, which every one of the
- *   logo's own rules beats whatever its order or specificity. It goes into the
- *   logo's existing stylesheet, so no element is added to trip structural
- *   selectors (`:first-child`); a logo without one gets a new `<style>`. A
- *   root colour that names no colour (`inherit`) is removed, or it would win.
+ *   logo's own rules beats whatever its order or specificity. It is its own
+ *   `<style>`, appended LAST: a broken or media-scoped sheet of the logo's
+ *   cannot swallow it, and `:first-child` selectors keep matching (only
+ *   `:last-child`-type ones on the root's children could notice). A root
+ *   colour that names no colour (`inherit`) is removed, or it would win; a
+ *   real colour attribute on the root means no fallback at all.
  */
 export function logoMarkup(element: SVGSVGElement, tint: LogoTint): string {
   const clone = element.cloneNode(true)
@@ -237,16 +239,13 @@ export function logoMarkup(element: SVGSVGElement, tint: LogoTint): string {
     if (NO_COLOR.test(clone.style.getPropertyValue('color').trim())) {
       clone.style.removeProperty('color')
     }
-    if (NO_COLOR.test((clone.getAttribute('color') ?? '').trim())) {
-      clone.removeAttribute('color')
-    }
-    const rule = `@layer logo-tint{:root{color:${tint.color}}}`
-    const sheet = clone.querySelector('style')
-    if (sheet) {
-      sheet.textContent = `${sheet.textContent ?? ''}\n${rule}`
-    } else {
+    const attribute = (clone.getAttribute('color') ?? '').trim()
+    if (NO_COLOR.test(attribute)) clone.removeAttribute('color')
+    // A presentation attribute ranks below every stylesheet rule, layered or
+    // not, so a real colour attribute would lose to the fallback: skip it.
+    if (!attribute || NO_COLOR.test(attribute)) {
       const style = clone.ownerDocument.createElementNS(SVG_NS, 'style')
-      style.textContent = rule
+      style.textContent = `@layer logo-tint{:root{color:${tint.color}}}`
       clone.appendChild(style)
     }
   }
@@ -311,12 +310,81 @@ export type CanvasLogo =
   | { kind: 'image'; image: CanvasImageSource; aspect: number }
   | { kind: 'wordmark'; name: string }
 
+/** The viewport a browser gives an SVG image with no size of its own. */
+const DEFAULT_VIEWPORT = { width: 300, height: 150 }
+
+/** Viewport-relative length attributes, by the axis a % refers to. */
+const PERCENT_AXES: Record<string, 'x' | 'y' | 'diagonal'> = {
+  x: 'x',
+  x1: 'x',
+  x2: 'x',
+  cx: 'x',
+  width: 'x',
+  rx: 'x',
+  y: 'y',
+  y1: 'y',
+  y2: 'y',
+  cy: 'y',
+  height: 'y',
+  ry: 'y',
+  r: 'diagonal',
+}
+
+/** Elements whose geometry is laid out in the viewport (not a bounding box). */
+const VIEWPORT_GEOMETRY =
+  /^(rect|circle|ellipse|line|image|use|text|tspan|svg)$/
+
+/**
+ * Pin a size-less logo's `%` lengths to the default 300×150 viewport, as an
+ * unsized SVG image would resolve them. Measuring draws it through ever
+ * different viewBoxes, and a `%` would resolve against each in turn — a
+ * `width="100%"` background would grow with the search and swallow the logo.
+ * Gradients, patterns and the like are left alone: their `%` is not a
+ * viewport length.
+ */
+export function resolvePercentages(root: Element) {
+  const { width, height } = DEFAULT_VIEWPORT
+  const extent = {
+    x: width,
+    y: height,
+    diagonal: Math.sqrt((width ** 2 + height ** 2) / 2),
+  }
+  for (const element of root.querySelectorAll('*')) {
+    if (!VIEWPORT_GEOMETRY.test(element.localName)) continue
+    if (element.closest('defs, pattern, mask, clipPath, marker, symbol'))
+      continue
+    // Inside a nested <svg>, % refers to that viewport, not the root's.
+    if (element.parentElement?.closest('svg') !== root) continue
+    for (const [name, axis] of Object.entries(PERCENT_AXES)) {
+      const match = /^\s*(-?[\d.]+)%\s*$/.exec(element.getAttribute(name) ?? '')
+      if (match) {
+        element.setAttribute(
+          name,
+          String((Number(match[1]) / 100) * extent[axis]),
+        )
+      }
+    }
+  }
+}
+
 /** Decode SVG markup as an image. Rejects on anything it cannot draw. */
 async function decodeSvg(markup: string): Promise<HTMLImageElement> {
   const image = new Image()
   image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(markup)}`
   await image.decode()
   return image
+}
+
+/**
+ * Throw unless a canvas with `image` drawn on it can still be read. An engine
+ * that taints for an SVG image (older WebKit did for `foreignObject`) would
+ * otherwise break every export later, and the wordmark is the better outcome.
+ */
+function assertReadable(image: CanvasImageSource) {
+  const ctx = document.createElement('canvas').getContext('2d')
+  if (!ctx) return
+  ctx.drawImage(image, 0, 0, 1, 1)
+  ctx.getImageData(0, 0, 1, 1)
 }
 
 /** Side of the square the painted bounds are searched in, in pixels. */
@@ -395,6 +463,7 @@ function reachesEdge(bounds: Frame, area: Frame): boolean {
 async function measuredViewBox(
   element: SVGSVGElement,
 ): Promise<CanvasSvg | null> {
+  resolvePercentages(element)
   let area: Frame = SEARCH_START
   let coarse = await paintedBounds(element, area)
   while ((!coarse || reachesEdge(coarse, area)) && area.width < SEARCH_LIMIT) {
@@ -435,6 +504,7 @@ export async function loadLogoImage(
     if (!prepared?.width || !prepared.height) return null
 
     const image = await decodeSvg(logoMarkup(prepared.element, tint))
+    assertReadable(image)
     return { kind: 'image', image, aspect: prepared.height / prepared.width }
   } catch {
     return null

@@ -9,6 +9,7 @@ import {
   monochromeInk,
   svgForCanvas,
   logoMarkup,
+  resolvePercentages,
   loadLogoImage,
 } from './meme-generator-logo'
 import { wordmarkLayout } from '../BrandWordmark'
@@ -190,19 +191,54 @@ describe('svgForCanvas + logoMarkup', () => {
     ).toBe('#a')
   })
 
-  it('never attaches the parsed logo to the page — it is only ever drawn as an image', () => {
-    const prepared = svgForCanvas(
-      '<svg viewBox="0 0 1 1"><image href="#x"/onerror="x()"/></svg>',
-    )!
-    // Parsed in DOMParser's own, scripting-disabled document; nothing in this
-    // module adopts or imports it into `document`.
-    expect(prepared.element.ownerDocument).not.toBe(document)
-    expect(document.contains(prepared.element)).toBe(false)
-  })
-
   it('rejects markup that is not an SVG', () => {
     expect(svgForCanvas('<div></div>')).toBeNull()
     expect(svgForCanvas('')).toBeNull()
+  })
+})
+
+describe('resolvePercentages', () => {
+  const resolved = (svg: string) => {
+    const element = svgForCanvas(svg)!.element
+    resolvePercentages(element)
+    return element
+  }
+
+  it("resolves a size-less logo's % lengths against the default 300×150 viewport", () => {
+    const root = resolved(
+      '<svg><rect width="100%" height="50%"/><circle cx="50%" cy="50%" r="10%"/></svg>',
+    )
+    const rect = root.querySelector('rect')!
+    expect([rect.getAttribute('width'), rect.getAttribute('height')]).toEqual([
+      '300',
+      '75',
+    ])
+    const circle = root.querySelector('circle')!
+    expect(circle.getAttribute('cx')).toBe('150')
+    expect(circle.getAttribute('cy')).toBe('75')
+    // r is relative to the normalised diagonal, √((w² + h²) / 2).
+    expect(Number(circle.getAttribute('r'))).toBeCloseTo(
+      0.1 * Math.sqrt((300 ** 2 + 150 ** 2) / 2),
+    )
+  })
+
+  it('leaves % inside a nested <svg> alone — it refers to that viewport', () => {
+    const root = resolved(
+      '<svg><svg width="50%" height="20"><rect width="100%"/></svg></svg>',
+    )
+    expect(root.querySelector('svg')!.getAttribute('width')).toBe('150')
+    expect(root.querySelector('rect')!.getAttribute('width')).toBe('100%')
+  })
+
+  it('leaves % that is not a viewport length alone — gradients, stops, patterns', () => {
+    const root = resolved(
+      '<svg><defs><linearGradient x1="0%" x2="100%"><stop offset="50%"/></linearGradient><pattern width="10%"/></defs></svg>',
+    )
+    expect(root.querySelector('linearGradient')!.getAttribute('x2')).toBe(
+      '100%',
+    )
+    expect(root.querySelector('stop')!.getAttribute('offset')).toBe('50%')
+    expect(root.querySelector('pattern')!.getAttribute('width')).toBe('10%')
   })
 })
 
@@ -256,23 +292,36 @@ describe('logoMarkup colour', () => {
     expect(color(root)).toBeUndefined()
   })
 
-  it("puts the rule in the logo's own stylesheet, adding no element", () => {
+  it("adds its own <style> LAST, leaving the logo's sheets and first-child selectors alone", () => {
     const { markup, root } = asImage(
-      '<svg viewBox="0 0 1 1"><rect/><style>rect:first-child{fill:#00f}svg{color:#e11d48}</style></svg>',
+      '<svg viewBox="0 0 1 1"><rect/><style>/* unclosed</style></svg>',
       '#334155',
       false,
     )
-    // A new first child would stop `rect:first-child` matching.
+    // In a separate element: a broken or media-scoped sheet of the logo's
+    // cannot swallow it, and nothing is inserted before the logo's content.
     expect([...root.children].map((child) => child.localName)).toEqual([
       'rect',
       'style',
+      'style',
     ])
-    expect(root.querySelector('style')!.textContent).toContain(
-      'svg{color:#e11d48}',
+    expect(root.querySelector('style')!.textContent).toBe('/* unclosed')
+    expect(root.lastElementChild!.textContent).toBe(
+      '@layer logo-tint{:root{color:#334155}}',
     )
     expect(layerRule(markup)).toBe('#334155')
-    // A rule, not an inline style — inline would beat the logo's stylesheet.
-    expect(color(root)).toBeUndefined()
+  })
+
+  it('adds no fallback when the root has a colour attribute of its own', () => {
+    // A presentation attribute ranks below every stylesheet rule, layered or
+    // not — so the fallback would beat it.
+    const { markup, root } = asImage(
+      '<svg viewBox="0 0 1 1" color="#e11d48"/>',
+      '#334155',
+      false,
+    )
+    expect(layerRule(markup)).toBeUndefined()
+    expect(root.getAttribute('color')).toBe('#e11d48')
   })
 
   it('removes a root colour that names no colour, which would otherwise win', () => {
@@ -432,8 +481,32 @@ describe('logoRasterRequests', () => {
 describe('loadLogoImage', () => {
   const tint = { color: '#000000', override: true }
 
+  it('never puts anything into the page — the logo is only drawn as an image', async () => {
+    const decode = vi.fn<() => Promise<void>>().mockResolvedValue(undefined)
+    Object.defineProperty(HTMLImageElement.prototype, 'decode', {
+      configurable: true,
+      value: decode,
+    })
+    const added: Node[] = []
+    const observer = new MutationObserver((records) =>
+      records.forEach((record) => added.push(...record.addedNodes)),
+    )
+    observer.observe(document, { childList: true, subtree: true })
+    try {
+      await loadLogoImage('<svg viewBox="0 0 10 10"><rect/></svg>', tint)
+      await loadLogoImage('<svg><rect width="10" height="10"/></svg>', tint)
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      expect(decode).toHaveBeenCalled()
+      expect(added).toEqual([])
+    } finally {
+      observer.disconnect()
+      Reflect.deleteProperty(HTMLImageElement.prototype, 'decode')
+    }
+  })
+
   it('never rejects when preparing or measuring throws', async () => {
-    // A size-less logo is measured on a canvas, which jsdom lacks: it throws.
+    // jsdom has no HTMLImageElement#decode, so measuring a size-less logo
+    // (which decodes probe images) throws here.
     await expect(loadLogoImage('<svg><g/></svg>', tint)).resolves.toBeNull()
   })
 
