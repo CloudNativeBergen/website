@@ -14,16 +14,20 @@ import type {
 } from './types'
 
 /**
- * `ManualChannelProvider` (spec §4.2, #1006): the first `SocialPublishAdapter`
- * for LinkedIn. A manual Channel is executed BY HAND — the organizer copies
- * the text and rendition from the copy-ready view, posts on the platform and
- * pastes the post URL back — so this adapter contributes the platform's
- * rules (`constraints`, `validate`) and nothing else. `publish` is a typed
- * refusal that the engine never reaches: manual mode is DERIVED from the
- * organization having no connection for the platform (`provider/index.ts`
- * lists no `CONNECTION_FAMILY` for `linkedin`), so the resolver hands the
- * tick `null` and the variant goes to `awaiting-manual`. A LinkedIn API
- * adapter slots in later behind the same interface once #998 lands.
+ * `ManualChannelProvider` (spec §4.2, #1006): a manual Channel is executed
+ * BY HAND — the organizer copies the text and rendition from the copy-ready
+ * view, posts on the platform and pastes the post URL back — so this adapter
+ * contributes the platform's rules (`constraints`, `validate`) and nothing
+ * else. `publish` is a typed refusal that the engine never reaches: manual
+ * mode is DERIVED from the organization having no connection for the
+ * platform, so the resolver hands the tick `null` and the variant goes to
+ * `awaiting-manual`.
+ *
+ * LinkedIn's AUTOMATIC path is Buffer (`BufferPublishAdapter`, #1129): an
+ * organization whose `buffer` secret family resolves gets its LinkedIn
+ * variants published through its pinned Buffer channel; one without stays
+ * manual. The registry no longer builds this class for LinkedIn. A direct
+ * LinkedIn API adapter remains the documented exit (#998, dormant).
  *
  * Browser-safe: no credentials, no IO, so the copy-ready view can share
  * {@link postUrlIssue} with the router.
