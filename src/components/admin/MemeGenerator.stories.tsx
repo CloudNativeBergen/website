@@ -373,7 +373,6 @@ export const InheritRootColourGradientOnDark: Story = {
     await pickBackground(canvas, 'Slate Gray')
     await openBackgroundAdvanced(canvas)
     await userEvent.click(canvas.getByRole('button', { name: /Gradient/ }))
-    const isWhite: Pixel = (r, g, b) => r > 240 && g > 240 && b > 240
     await waitFor(() =>
       expect(inLogoBox(canvasElement, isWhite)).toBeGreaterThan(0.9),
     )
@@ -430,7 +429,6 @@ export const StylesheetColouredLogoKeepsItsColour: Story = {
     const canvas = within(canvasElement)
     await openBackgroundAdvanced(canvas)
     await userEvent.click(canvas.getByRole('button', { name: /Gradient/ }))
-    const isRed: Pixel = (r, g, b) => r > 200 && g < 60 && b > 50 && b < 110
     await waitFor(() =>
       expect(inLogoBox(canvasElement, isRed)).toBeGreaterThan(0.9),
     )
@@ -693,6 +691,179 @@ export const DownloadWaitsForWordmarkFont: Story = {
     await captureImage(preview.parentElement!)
     // Without the wait, capture finishes after its fixed ~300 ms pause.
     expect(performance.now() - started).toBeGreaterThan(1200)
+  },
+}
+
+/** Click Gradient in the Background & Logo panel. */
+async function chooseGradient(canvasElement: HTMLElement) {
+  const canvas = within(canvasElement)
+  await openBackgroundAdvanced(canvas)
+  await userEvent.click(canvas.getByRole('button', { name: /Gradient/ }))
+}
+
+const isWhite: Pixel = (r, g, b) => r > 240 && g > 240 && b > 240
+const isRed: Pixel = (r, g, b) => r > 200 && g < 60 && b > 50 && b < 110
+
+/**
+ * A logo colouring its root from a PAGE custom property: inline it resolved
+ * against the tenant theme. The image has no such property, so the page's
+ * value must be carried in (here --brand-primary is set to #1d4ed8).
+ */
+export const PageVariableColouredLogo: Story = {
+  args: {
+    conferenceLogos: {
+      title: 'Konf',
+      logoBright:
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 970 234" style="color:var(--brand-primary)"><rect width="970" height="234" fill="currentColor"/></svg>',
+    },
+  },
+  beforeEach: () => {
+    const root = document.documentElement
+    root.style.setProperty('--brand-primary', '#1d4ed8')
+    return () => root.style.removeProperty('--brand-primary')
+  },
+  play: async ({ canvasElement }) => {
+    await chooseGradient(canvasElement)
+    await waitFor(() =>
+      expect(inLogoBox(canvasElement, isBlue)).toBeGreaterThan(0.9),
+    )
+  },
+}
+
+/**
+ * The same, but the page defines no such property: the root colour cannot
+ * resolve, so the fallback tint applies — white on a dark design, not black.
+ */
+export const UnresolvedVariableColourOnDark: Story = {
+  args: {
+    conferenceLogos: {
+      title: 'Konf',
+      logoBright:
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 970 234" style="color:var(--not-on-this-page)"><rect width="970" height="234" fill="currentColor"/></svg>',
+    },
+  },
+  play: InheritRootColourGradientOnDark.play,
+}
+
+/**
+ * `+400pt × +100pt` is a valid length: the image is 4:1, its square viewBox
+ * letterboxed in the middle. Rejected, the logo is fitted as a square.
+ */
+export const PlusSignedLengthsLogo: Story = {
+  args: {
+    conferenceLogos: {
+      title: 'Konf',
+      logoBright:
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="+400pt" height="+100pt"><rect width="100" height="100" fill="#facc15"/></svg>',
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const box = logoBox()
+    const middle = {
+      ...box,
+      x: box.x + box.width * 0.42,
+      width: box.width * 0.16,
+    }
+    const leftQuarter = { ...box, width: box.width * 0.2 }
+    // Fitted as a square, the frame would hang far below the box.
+    const wellBelow = { ...box, y: box.y + box.height + 8, height: 20 }
+    const canvas = () => canvasElement.querySelector('canvas')!
+    await waitFor(() => {
+      expect(share(canvas(), CANVAS_SIZE, middle, isYellow)).toBeGreaterThan(
+        0.9,
+      )
+      expect(share(canvas(), CANVAS_SIZE, leftQuarter, isYellow)).toBeLessThan(
+        0.01,
+      )
+      expect(share(canvas(), CANVAS_SIZE, wellBelow, isYellow)).toBeLessThan(
+        0.01,
+      )
+    })
+  },
+}
+
+/**
+ * Only a width: a browser gives this image 600×150 — the one dimension it
+ * has, and the default for the other — so its `100%` backdrop is 4:1.
+ * Replacing both with 300×150 would make it 2:1 and hang below the box.
+ */
+export const LoneWidthSizelessLogo: Story = {
+  args: {
+    conferenceLogos: {
+      title: 'Konf',
+      logoBright:
+        '<svg width="600"><rect width="100%" height="100%" fill="#facc15"/></svg>',
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const box = logoBox()
+    const wellBelow = { ...box, y: box.y + box.height + 8, height: 20 }
+    const canvas = () => canvasElement.querySelector('canvas')!
+    await waitFor(() => {
+      expect(inLogoBox(canvasElement, isYellow)).toBeGreaterThan(0.9)
+      expect(share(canvas(), CANVAS_SIZE, wellBelow, isYellow)).toBeLessThan(
+        0.01,
+      )
+    })
+  },
+}
+
+/**
+ * A logo that clips itself (`overflow="hidden"`): what lies outside its
+ * 300×150 viewport stays hidden, as it was inline. Here that is a yellow
+ * block at x = 400; only the blue block inside is drawn.
+ */
+export const OverflowHiddenSizelessLogo: Story = {
+  args: {
+    conferenceLogos: {
+      title: 'Konf',
+      logoBright:
+        '<svg overflow="hidden"><rect width="200" height="50" fill="#1d4ed8"/><rect x="400" width="200" height="50" fill="#facc15"/></svg>',
+    },
+  },
+  play: async ({ canvasElement }) => {
+    await waitFor(() => {
+      expect(inLogoBox(canvasElement, isBlue)).toBeGreaterThan(0.5)
+      expect(inLogoBox(canvasElement, isYellow)).toBeLessThan(0.01)
+    })
+  },
+}
+
+/** A colour set in the logo's OWN cascade layer still beats the fallback. */
+export const LayeredLogoColourKept: Story = {
+  args: {
+    conferenceLogos: {
+      title: 'Konf',
+      logoBright:
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 970 234"><style>@layer brand{:root{color:#e11d48}}</style><rect width="970" height="234" fill="currentColor"/></svg>',
+    },
+  },
+  play: async ({ canvasElement }) => {
+    await chooseGradient(canvasElement)
+    await waitFor(() =>
+      expect(inLogoBox(canvasElement, isRed)).toBeGreaterThan(0.9),
+    )
+  },
+}
+
+/**
+ * A size-less logo revealed through a `currentColor` mask: visible only once
+ * tinted (white on this dark design). Measured untinted — black mask — it
+ * paints nothing and falls back to the wordmark.
+ */
+export const CurrentColorMaskedSizelessLogo: Story = {
+  args: {
+    conferenceLogos: {
+      title: 'Konf',
+      logoBright:
+        '<svg><defs><mask id="m"><rect width="400" height="100" fill="currentColor"/></mask></defs><rect width="400" height="100" fill="#facc15" mask="url(#m)"/></svg>',
+    },
+  },
+  play: async ({ canvasElement }) => {
+    await pickBackground(within(canvasElement), 'Slate Gray')
+    await waitFor(() =>
+      expect(inLogoBox(canvasElement, isYellow)).toBeGreaterThan(0.3),
+    )
   },
 }
 

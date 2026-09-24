@@ -138,7 +138,7 @@ const PX_PER_UNIT: Record<string, number> = {
 /** An absolute SVG length in px, e.g. `"200"`, `"50px"`, `"72pt"`. */
 export function absoluteLength(value: string | null): number | undefined {
   const match =
-    value && /^\s*([\d.]+(?:e[+-]?\d+)?)\s*([a-z]*)\s*$/i.exec(value)
+    value && /^\s*\+?([\d.]+(?:e[+-]?\d+)?)\s*([a-z]*)\s*$/i.exec(value)
   const factor = match ? PX_PER_UNIT[match[2].toLowerCase()] : undefined
   const px = match && factor ? Number(match[1]) * factor : NaN
   return px > 0 ? px : undefined
@@ -190,9 +190,7 @@ const SVG_NS = 'http://www.w3.org/2000/svg'
  * Drop editor metadata under a prefix the markup never declares
  * (`<sodipodi:namedview>`, `inkscape:label`). The HTML parser accepted it and
  * nothing renders it, but XML refuses the whole document over it. `xml:` and
- * `xlink:` are bound by the parser and survive. The logo's own
- * `data-logo-root` goes too: only the frame {@link inViewport} builds may
- * carry that marker, or a logo could steer where the tint lands.
+ * `xlink:` are bound by the parser and survive.
  */
 function dropUnboundPrefixes(root: Element) {
   for (const element of [root, ...root.querySelectorAll('*')]) {
@@ -203,10 +201,9 @@ function dropUnboundPrefixes(root: Element) {
     for (const attribute of [...element.attributes]) {
       const { name, namespaceURI } = attribute
       if (
-        name === LOGO_ROOT ||
-        (name.includes(':') &&
-          namespaceURI === null &&
-          !name.startsWith('xmlns:'))
+        name.includes(':') &&
+        namespaceURI === null &&
+        !name.startsWith('xmlns:')
       ) {
         element.removeAttributeNode(attribute)
       }
@@ -217,46 +214,96 @@ function dropUnboundPrefixes(root: Element) {
 /** A root colour that names no colour: an image has nothing to inherit. */
 const NO_COLOR = /^(|inherit|initial|unset|revert|revert-layer|currentcolor)$/i
 
+/** Custom properties the page defines, by name, as a logo may use them. */
+export type PageVariables = Record<string, string>
+
 /**
- * Serialise a prepared logo for an image, tinted per {@link LogoTint}; the
- * tint becomes its `currentColor`. XMLSerializer declares every namespace the
- * markup uses (SVG, xlink).
+ * The page's values of the custom properties `svg` refers to. Inline, a logo
+ * resolved `var(--brand-primary)` against the tenant theme; an image has no
+ * page to resolve against, so the values are carried in (see
+ * {@link tintLogo}). Anything that is not a plain value is skipped.
+ */
+export function pageVariables(svg: string, root: Element): PageVariables {
+  const style = getComputedStyle(root)
+  const variables: PageVariables = {}
+  for (const [, name] of svg.matchAll(/var\(\s*(--[\w-]+)/g)) {
+    const value = style.getPropertyValue(name).trim()
+    if (value && !/[{};<>]/.test(value)) variables[name] = value
+  }
+  return variables
+}
+
+/**
+ * A copy of the logo tinted per {@link LogoTint} — its `currentColor` — and
+ * carrying the page's custom properties. It is what is measured and drawn.
  *
  * - Overriding (monochrome): an inline style on the root, beating any colour
  *   the logo sets — as the overlay's inline style did.
  * - Otherwise (gradient): a rule in a cascade LAYER, which every one of the
- *   logo's own rules beats whatever its order or specificity. It is its own
- *   `<style>`, appended LAST: a broken or media-scoped sheet of the logo's
- *   cannot swallow it, and `:first-child` selectors keep matching (only
- *   `:last-child`-type ones on the root's children could notice). A root
- *   colour that names no colour (`inherit`) is removed, or it would win; a
- *   real colour attribute on the root means no fallback at all.
+ *   logo's own rules beats. The layer is declared FIRST in each of the logo's
+ *   sheets, so the logo's own layers win too; the rule itself is its own
+ *   `<style>`, appended last, so a broken sheet of the logo's cannot swallow
+ *   it and `:first-child` selectors keep matching. A root colour that cannot
+ *   name a colour in the image — `inherit`, or a `var()` the image cannot
+ *   resolve — is removed, or it would win and resolve to black; a real
+ *   colour attribute on the root means no fallback at all.
  */
-export function logoMarkup(element: SVGSVGElement, tint: LogoTint): string {
-  const clone = element.cloneNode(true)
-  if (!(clone instanceof SVGElement)) throw new Error('not an SVG element')
-  // A measured logo is framed (see inViewport); the tint is the logo's.
-  const logo = clone.querySelector(`:scope > svg[${LOGO_ROOT}]`) ?? clone
-  if (!(logo instanceof SVGElement)) throw new Error('not an SVG element')
+export function tintLogo(
+  element: SVGSVGElement,
+  tint: LogoTint,
+  variables: PageVariables = {},
+): SVGSVGElement {
+  const logo = element.cloneNode(true)
+  if (!(logo instanceof SVGSVGElement)) throw new Error('not an SVG element')
+  const sheets = [...logo.querySelectorAll('style')]
+  const css = sheets.map((sheet) => sheet.textContent ?? '').join('\n')
+  const defined = (name: string) =>
+    name in variables || css.includes(`${name}:`) || css.includes(`${name} :`)
+  const namesNoColor = (value: string) =>
+    NO_COLOR.test(value.trim()) ||
+    [...value.matchAll(/var\(\s*(--[\w-]+)\s*(,)?/g)].some(
+      ([, name, fallback]) => !fallback && !defined(name),
+    )
 
+  let fallbackColor = false
   if (tint.override) {
     logo.style.setProperty('color', tint.color)
   } else {
-    if (NO_COLOR.test(logo.style.getPropertyValue('color').trim())) {
+    if (namesNoColor(logo.style.getPropertyValue('color'))) {
       logo.style.removeProperty('color')
     }
-    const attribute = (logo.getAttribute('color') ?? '').trim()
-    if (NO_COLOR.test(attribute)) logo.removeAttribute('color')
+    const attribute = logo.getAttribute('color') ?? ''
+    if (namesNoColor(attribute)) logo.removeAttribute('color')
     // A presentation attribute ranks below every stylesheet rule, layered or
     // not, so a real colour attribute would lose to the fallback: skip it.
-    if (!attribute || NO_COLOR.test(attribute)) {
-      const style = logo.ownerDocument.createElementNS(SVG_NS, 'style')
-      style.textContent = `@layer logo-tint{:root{color:${tint.color}}}`
-      logo.appendChild(style)
+    fallbackColor = !logo.hasAttribute('color')
+  }
+
+  const declarations = [
+    ...Object.entries(variables).map(([name, value]) => `${name}:${value}`),
+    ...(fallbackColor ? [`color:${tint.color}`] : []),
+  ]
+  if (declarations.length) {
+    for (const sheet of sheets) {
+      sheet.textContent = `@layer logo-tint;\n${sheet.textContent ?? ''}`
     }
+    const style = logo.ownerDocument.createElementNS(SVG_NS, 'style')
+    style.textContent = `@layer logo-tint{:root{${declarations.join(';')}}}`
+    logo.appendChild(style)
   }
   if (!logo.style.length) logo.removeAttribute('style')
-  return new XMLSerializer().serializeToString(clone)
+  return logo
+}
+
+/** A tinted logo, serialised for an image (see {@link tintLogo}). */
+export function logoMarkup(
+  element: SVGSVGElement,
+  tint: LogoTint,
+  variables: PageVariables = {},
+): string {
+  return new XMLSerializer().serializeToString(
+    tintLogo(element, tint, variables),
+  )
 }
 
 export interface Frame {
@@ -316,9 +363,6 @@ export type CanvasLogo =
   | { kind: 'image'; image: CanvasImageSource; aspect: number }
   | { kind: 'wordmark'; name: string }
 
-/** Marks the logo's own root inside the frame {@link inViewport} builds. */
-const LOGO_ROOT = 'data-logo-root'
-
 /**
  * A size-less logo, framed for drawing through `viewBox`. The logo keeps a
  * viewport of its own — the 300×150 a browser gives an SVG image with no size
@@ -330,12 +374,25 @@ const LOGO_ROOT = 'data-logo-root'
 function inViewport(element: SVGSVGElement, viewBox: Frame): SVGSVGElement {
   const logo = element.cloneNode(true)
   if (!(logo instanceof SVGSVGElement)) throw new Error('not an SVG element')
-  logo.setAttribute('width', '300')
-  logo.setAttribute('height', '150')
-  logo.setAttribute('overflow', 'visible')
+  // The viewport a browser gives the image: a dimension the logo does state,
+  // else the 300×150 default. Its own clip is kept; otherwise what lies
+  // outside is drawn, so measuring can find it.
+  logo.setAttribute(
+    'width',
+    String(absoluteLength(element.getAttribute('width')) ?? 300),
+  )
+  logo.setAttribute(
+    'height',
+    String(absoluteLength(element.getAttribute('height')) ?? 150),
+  )
+  if (
+    !element.hasAttribute('overflow') &&
+    !element.style.getPropertyValue('overflow')
+  ) {
+    logo.setAttribute('overflow', 'visible')
+  }
   logo.removeAttribute('x')
   logo.removeAttribute('y')
-  logo.setAttribute(LOGO_ROOT, '')
 
   const frame = element.ownerDocument.createElementNS(SVG_NS, 'svg')
   frame.setAttribute(
@@ -468,15 +525,24 @@ export async function loadLogoImage(
   tint: LogoTint,
 ): Promise<CanvasLogo | null> {
   try {
-    let prepared = svgForCanvas(svg)
-    if (prepared && !prepared.width) {
-      prepared = await measuredViewBox(prepared.element)
-    }
-    if (!prepared?.width || !prepared.height) return null
+    const prepared = svgForCanvas(svg)
+    if (!prepared) return null
+    // Tinted first, so a size-less logo is measured as it will be drawn.
+    const logo = tintLogo(
+      prepared.element,
+      tint,
+      pageVariables(svg, document.documentElement),
+    )
+    const drawn = prepared.width
+      ? { ...prepared, element: logo }
+      : await measuredViewBox(logo)
+    if (!drawn?.width || !drawn.height) return null
 
-    const image = await decodeSvg(logoMarkup(prepared.element, tint))
+    const image = await decodeSvg(
+      new XMLSerializer().serializeToString(drawn.element),
+    )
     assertReadable(image)
-    return { kind: 'image', image, aspect: prepared.height / prepared.width }
+    return { kind: 'image', image, aspect: drawn.height / drawn.width }
   } catch {
     return null
   }

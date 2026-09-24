@@ -10,6 +10,7 @@ import {
   svgForCanvas,
   logoMarkup,
   loadLogoImage,
+  absoluteLength,
 } from './meme-generator-logo'
 import { wordmarkLayout } from '../BrandWordmark'
 
@@ -157,6 +158,17 @@ describe('svgForCanvas + logoMarkup', () => {
     ).toMatchObject({ width: 100, height: 100 })
   })
 
+  it('accepts a leading + on a length, and still rejects a negative one', () => {
+    expect(absoluteLength('+200pt')).toBeCloseTo(200 * (96 / 72))
+    expect(absoluteLength(' +50 ')).toBe(50)
+    expect(absoluteLength('-50')).toBeUndefined()
+    expect(
+      svgForCanvas(
+        '<svg viewBox="0 0 100 100" width="+400pt" height="+100pt"/>',
+      ),
+    ).toMatchObject({ width: 400 * (96 / 72), height: 100 * (96 / 72) })
+  })
+
   it('converts absolute units to px', () => {
     expect(
       svgForCanvas('<svg width="150pt" height="1in" viewBox="0 0 1 1"/>'),
@@ -191,18 +203,16 @@ describe('svgForCanvas + logoMarkup', () => {
     expect(root.querySelector('rect')).not.toBeNull()
   })
 
-  it("strips a logo's own data-logo-root, so the tint cannot be steered", () => {
-    // The marker names the logo's root inside a measuring frame; a sized
-    // logo carrying one on a child would otherwise take the tint there.
+  it('always tints the logo root — nothing in the markup can steer it', () => {
     const { root } = asImage(
       '<svg viewBox="0 0 10 10"><svg data-logo-root="" width="5" height="5"/></svg>',
       '#FFFFFF',
       true,
     )
-    expect(root.querySelector('[data-logo-root]')).toBeNull()
     expect(root.getAttribute('style')).toMatch(
       /color:\s*(#FFFFFF|rgb\(255, 255, 255\))/i,
     )
+    expect(root.querySelector('svg')!.getAttribute('style')).toBeNull()
   })
 
   it('keeps xml: and xlink: attributes, which are always bound', () => {
@@ -222,6 +232,57 @@ describe('svgForCanvas + logoMarkup', () => {
   it('rejects markup that is not an SVG', () => {
     expect(svgForCanvas('<div></div>')).toBeNull()
     expect(svgForCanvas('')).toBeNull()
+  })
+})
+
+describe('page variables and layers', () => {
+  const rule = (markup: string) =>
+    /@layer logo-tint\{:root\{([^}]*)\}\}/.exec(markup)?.[1] ?? ''
+  const gradient = { color: '#334155', override: false }
+
+  it("carries the page's value of a custom property the logo uses into the image", () => {
+    const element = svgForCanvas(
+      '<svg viewBox="0 0 1 1" style="color:var(--brand-primary)"><rect fill="currentColor"/></svg>',
+    )!.element
+    const markup = logoMarkup(element, gradient, {
+      '--brand-primary': '#1d4ed8',
+    })
+    expect(rule(markup)).toContain('--brand-primary:#1d4ed8')
+    // The root keeps its own (now resolvable) colour.
+    expect(markup).toMatch(/style="color:\s*var\(--brand-primary\)"/)
+  })
+
+  it('drops a root colour that cannot resolve in the image, so the fallback applies', () => {
+    const element = svgForCanvas(
+      '<svg viewBox="0 0 1 1" style="color:var(--not-on-this-page)"/>',
+    )!.element
+    const markup = logoMarkup(element, gradient)
+    expect(markup).not.toContain('--not-on-this-page')
+    expect(rule(markup)).toContain('color:#334155')
+  })
+
+  it('keeps a root colour whose variable has a fallback, or is defined by the logo', () => {
+    for (const svg of [
+      '<svg viewBox="0 0 1 1" style="color:var(--x, #e11d48)"/>',
+      '<svg viewBox="0 0 1 1" style="color:var(--x)"><style>svg{--x:#e11d48}</style></svg>',
+    ]) {
+      expect(logoMarkup(svgForCanvas(svg)!.element, gradient)).toMatch(
+        /style="color:\s*var\(--x/,
+      )
+    }
+  })
+
+  it("declares the fallback layer before the logo's own, which then win", () => {
+    const element = svgForCanvas(
+      '<svg viewBox="0 0 1 1"><style>@layer brand{:root{color:#e11d48}}</style></svg>',
+    )!.element
+    const doc = new DOMParser().parseFromString(
+      logoMarkup(element, gradient),
+      'image/svg+xml',
+    )
+    const sheets = [...doc.querySelectorAll('style')].map((s) => s.textContent)
+    expect(sheets[0]).toMatch(/^@layer logo-tint;/)
+    expect(sheets.at(-1)).toContain('@layer logo-tint{')
   })
 })
 
@@ -288,7 +349,10 @@ describe('logoMarkup colour', () => {
       'style',
       'style',
     ])
-    expect(root.querySelector('style')!.textContent).toBe('/* unclosed')
+    // The logo's own CSS is kept, behind the layer-order statement only.
+    expect(root.querySelector('style')!.textContent).toBe(
+      '@layer logo-tint;\n/* unclosed',
+    )
     expect(root.lastElementChild!.textContent).toBe(
       '@layer logo-tint{:root{color:#334155}}',
     )
@@ -538,6 +602,44 @@ describe('loadLogoImage', () => {
       expect(added).toEqual([])
     } finally {
       observer.disconnect()
+      browser.restore()
+    }
+  })
+
+  it('frames a size-less logo in the viewport the browser would give it, keeping its own clip', async () => {
+    const browser = fakeBrowser()
+    try {
+      await loadLogoImage(
+        '<svg width="600" overflow="hidden"><rect width="10" height="10"/></svg>',
+        tint,
+      )
+      const logo = new DOMParser()
+        .parseFromString(browser.decoded.at(-1)!, 'image/svg+xml')
+        .documentElement.querySelector(':scope > svg')!
+      // A lone width is kept; the missing height takes the default.
+      expect(logo.getAttribute('width')).toBe('600')
+      expect(logo.getAttribute('height')).toBe('150')
+      expect(logo.getAttribute('overflow')).toBe('hidden')
+    } finally {
+      browser.restore()
+    }
+  })
+
+  it('measures the logo as it will be drawn — tinted', async () => {
+    const browser = fakeBrowser()
+    try {
+      await loadLogoImage(
+        '<svg><rect width="10" height="10" fill="currentColor"/></svg>',
+        {
+          color: '#FFFFFF',
+          override: true,
+        },
+      )
+      expect(browser.decoded.length).toBeGreaterThanOrEqual(3)
+      for (const markup of browser.decoded) {
+        expect(markup).toMatch(/color:\s*(#FFFFFF|rgb\(255, 255, 255\))/i)
+      }
+    } finally {
       browser.restore()
     }
   })
