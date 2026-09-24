@@ -263,11 +263,12 @@ describe('page variables and layers', () => {
 
   it('keeps a root colour whose variable has a fallback, or is defined by the logo', () => {
     for (const svg of [
+      '<svg viewBox="0 0 1 1" style="--x:#e11d48;color:var(--x)"/>',
       '<svg viewBox="0 0 1 1" style="color:var(--x, #e11d48)"/>',
       '<svg viewBox="0 0 1 1" style="color:var(--x)"><style>svg{--x:#e11d48}</style></svg>',
     ]) {
       expect(logoMarkup(svgForCanvas(svg)!.element, gradient)).toMatch(
-        /style="color:\s*var\(--x/,
+        /style="[^"]*color:\s*var\(--x/,
       )
     }
   })

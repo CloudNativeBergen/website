@@ -256,7 +256,12 @@ export function tintLogo(
   const logo = element.cloneNode(true)
   if (!(logo instanceof SVGSVGElement)) throw new Error('not an SVG element')
   const sheets = [...logo.querySelectorAll('style')]
-  const css = sheets.map((sheet) => sheet.textContent ?? '').join('\n')
+  // Where the logo defines custom properties itself: its sheets, and the
+  // root's own inline style (the root has no ancestors to inherit from).
+  const css = [
+    logo.getAttribute('style') ?? '',
+    ...sheets.map((sheet) => sheet.textContent ?? ''),
+  ].join('\n')
   const defined = (name: string) =>
     name in variables || css.includes(`${name}:`) || css.includes(`${name} :`)
   const namesNoColor = (value: string) =>

@@ -829,6 +829,23 @@ export const OverflowHiddenSizelessLogo: Story = {
   },
 }
 
+/** A root colour from a custom property the ROOT itself defines inline. */
+export const RootDefinedVariableColourKept: Story = {
+  args: {
+    conferenceLogos: {
+      title: 'Konf',
+      logoBright:
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 970 234" style="--brand:#e11d48;color:var(--brand)"><rect width="970" height="234" fill="currentColor"/></svg>',
+    },
+  },
+  play: async ({ canvasElement }) => {
+    await chooseGradient(canvasElement)
+    await waitFor(() =>
+      expect(inLogoBox(canvasElement, isRed)).toBeGreaterThan(0.9),
+    )
+  },
+}
+
 /** A colour set in the logo's OWN cascade layer still beats the fallback. */
 export const LayeredLogoColourKept: Story = {
   args: {
