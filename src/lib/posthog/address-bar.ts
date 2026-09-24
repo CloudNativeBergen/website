@@ -34,6 +34,14 @@ export const UTM_STRIP_DEADLINE_MS = 3000
 export const UTM_STRIP_GUARD_MS = 3000
 export const UTM_STRIP_GUARD_TICK_MS = 100
 /**
+ * After a rewrite made behind the router (`'bypass'`), the router still holds
+ * the tagged URL and writes it back on its next commit on this page (a
+ * refresh, a server action), at any time. So while the visitor stays on the
+ * landing the tags are re-checked this often, for as long as it takes. A
+ * re-check is a location read; it writes only when the tags are back.
+ */
+export const UTM_STRIP_WATCH_TICK_MS = 1000
+/**
  * While the state carries the router's marker but its patch is not installed
  * (a reload of a tagged landing keeps the marker from the previous load),
  * the only way to learn whether the patch has arrived is a write, and a
@@ -98,32 +106,40 @@ export function scheduleUtmStrip(
     } catch {
       return
     }
-    guard(write !== 'native')
+    guard(write)
   }
 
-  // Re-check on the next macrotask and then every tick until the rewrite has
-  // settled — the router took it (it can no longer write the landing URL
-  // back) or it was bypassed on purpose — or the guard runs out. Re-strip if
-  // the tags came back; once the router has hydrated (its marker is on the
-  // state), hand it the clean URL once so its own copy matches. Stops as
-  // soon as the visitor leaves the landing.
-  function guard(writeSettled: boolean) {
+  // Re-check on the next macrotask and then every tick. Re-strip if the tags
+  // came back. While the router may not know the clean URL yet, and the
+  // visitor has not interacted, hand it the clean URL once its marker is on
+  // the state (it has hydrated); that settles it. Until then the guard runs
+  // out after UTM_STRIP_GUARD_MS. Once a rewrite had to bypass the router,
+  // the router can write the tags back at any later commit, so the guard
+  // keeps watching, slowly, for as long as the visitor is on the landing.
+  // Stops as soon as the visitor leaves it.
+  function guard(first: HistoryWrite | null) {
     const until = Date.now() + UTM_STRIP_GUARD_MS
-    let settled = writeSettled
+    let last = first
     let ticks = 0
     const tick = () => {
       if (!onLanding()) return
       const probe = ticks++ % UTM_STRIP_GUARD_PROBE_EVERY === 0
       try {
         if (withoutUtm(win.location.href) !== null) {
-          settled = stripUtmFromAddressBar(win) !== 'native'
-        } else if (!settled && probe && hasRouterMarker(win.history.state)) {
-          settled = replaceUrlKeepingState(win, win.location.href) !== 'native'
+          const write = stripUtmFromAddressBar(win)
+          if (write !== null) last = write
+        } else if (
+          last === 'native' &&
+          probe &&
+          hasRouterMarker(win.history.state)
+        ) {
+          last = replaceUrlKeepingState(win, win.location.href)
         }
       } catch {
         return
       }
-      if (!settled && Date.now() < until) {
+      if (last === 'bypass') setTimeout(tick, UTM_STRIP_WATCH_TICK_MS)
+      else if (last === 'native' && Date.now() < until) {
         setTimeout(tick, UTM_STRIP_GUARD_TICK_MS)
       }
     }

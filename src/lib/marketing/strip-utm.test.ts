@@ -92,6 +92,15 @@ describe('stripUtmFromAddressBar', () => {
   })
 })
 
+describe('withoutUtm on a malformed query', () => {
+  it('keeps a key that is not valid percent-encoding instead of throwing', () => {
+    // `decodeURIComponent('%E0')` throws; a throw here would reach
+    // `scheduleUtmStrip` and stop analytics for the page load.
+    expect(withoutUtm(`${BASE}/?%E0=1&utm_campaign=c`)).toBe(`${BASE}/?%E0=1`)
+    expect(withoutUtm(`${BASE}/?%E0=1`)).toBeNull()
+  })
+})
+
 describe('stripUtmFromAddressBar and the Next.js app router', () => {
   // The router's patch, as in next/dist/client/components/app-router.js: a
   // state carrying `__NA` is passed through without the router learning the

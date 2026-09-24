@@ -267,6 +267,31 @@ describe('initTenantAnalytics: the utm_* strip (#1146)', () => {
     await pending
   })
 
+  it('reads the landing before the deadline can strip it, however late the config element is', async () => {
+    // The config element can stream in after the deadline has cleaned the
+    // bar; the stash and the Accept bridge must still hold the landing's tags.
+    window.history.replaceState({}, '', `/cfp${TAGGED_QUERY}`)
+    Object.defineProperty(document, 'readyState', {
+      configurable: true,
+      get: () => 'loading',
+    })
+    const pending = initTenantAnalytics(window)
+    vi.advanceTimersByTime(UTM_STRIP_DEADLINE_MS)
+    expect(window.location.search).toBe('?keep=1')
+    document.body.appendChild(configElement())
+    notifyEligibleRoute(window)
+    await pending
+    expect(init).toHaveBeenCalledTimes(1)
+    expect(getAnalyticsRuntime(window)?.landingUtm).toEqual({
+      utm_source: 'x',
+      utm_campaign: 'c1',
+      utm_content: 'k1',
+    })
+    expect(
+      JSON.parse(window.sessionStorage.getItem(LANDING_UTM_KEY) ?? 'null'),
+    ).toEqual({ source: 'x', campaign: 'c1', content: 'k1' })
+  })
+
   it('writes the CFP first-touch stash before the address bar is stripped', async () => {
     window.history.replaceState({}, '', `/cfp${TAGGED_QUERY}`)
     document.body.appendChild(configElement())

@@ -8,6 +8,7 @@ import {
   UTM_STRIP_GUARD_MS,
   UTM_STRIP_GUARD_PROBE_EVERY,
   UTM_STRIP_GUARD_TICK_MS,
+  UTM_STRIP_WATCH_TICK_MS,
 } from './address-bar'
 
 const TAGGED = '/?utm_source=x&utm_campaign=c1&utm_content=k1&keep=1#h'
@@ -230,7 +231,7 @@ describe('scheduleUtmStrip', () => {
     expect(vi.getTimerCount()).toBe(0)
   })
 
-  it('never hands off to the router once the visitor has interacted, and stops', () => {
+  it('never hands off to the router once the visitor has interacted', () => {
     // A RESTORE dispatched by the hand-off would discard a navigation the
     // visitor started; a bypass write keeps the URL clean and ends the
     // guard's probing.
@@ -246,13 +247,40 @@ describe('scheduleUtmStrip', () => {
     }
     setUserActivation(true)
     try {
-      vi.advanceTimersByTime(UTM_STRIP_GUARD_TICK_MS)
+      vi.advanceTimersByTime(UTM_STRIP_GUARD_MS * 10)
       expect(routerUrls).toEqual([])
       expect(window.location.search).toBe('?keep=1')
-      expect(vi.getTimerCount()).toBe(0)
     } finally {
       window.history.replaceState = original
     }
+  })
+
+  it('after a bypass, strips the tags again whenever the router writes them back', () => {
+    // The router never learned the clean URL, so its next commit on this
+    // page (a refresh, a server action) writes the tagged landing back,
+    // marker and all: long after the guard window.
+    setUserActivation(true)
+    window.history.replaceState({ __NA: true }, '', TAGGED)
+    const schedule = scheduleUtmStrip(window)
+    schedule.now()
+    expect(window.location.search).toBe('?keep=1')
+    for (const later of [UTM_STRIP_GUARD_MS * 4, UTM_STRIP_GUARD_MS * 40]) {
+      vi.advanceTimersByTime(later)
+      window.history.replaceState({ __NA: true }, '', TAGGED)
+      vi.advanceTimersByTime(UTM_STRIP_WATCH_TICK_MS)
+      expect(window.location.search).toBe('?keep=1')
+      expect(window.location.hash).toBe('#h')
+      expect(window.history.state).toEqual({ __NA: true })
+    }
+  })
+
+  it('stops watching once the visitor leaves the landing', () => {
+    setUserActivation(true)
+    window.history.replaceState({ __NA: true }, '', TAGGED)
+    scheduleUtmStrip(window).now()
+    window.history.replaceState({ __NA: true }, '', '/program')
+    vi.advanceTimersByTime(UTM_STRIP_WATCH_TICK_MS)
+    expect(vi.getTimerCount()).toBe(0)
   })
 
   it('probes for the router sparingly while its patch is not installed', () => {

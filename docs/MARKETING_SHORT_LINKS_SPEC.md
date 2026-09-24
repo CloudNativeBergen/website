@@ -222,8 +222,10 @@ page is visible: a link opened in a background tab gets its first `$pageview` wh
 shown, and that pageview must still see the tags. The rewrite goes through the Next router's history
 patch, so the router's own copy of the URL is clean too, but only while the visitor has not yet
 interacted with the page (`navigator.userActivation`): the router treats an external rewrite as a
-RESTORE and discards a navigation in flight, so after an activation the entry is rewritten behind
-the router and its copy stays as it was.
+RESTORE and discards whatever action is in flight, so after an activation the entry is rewritten
+behind the router and its copy stays as it was. That copy is written back on the router's next
+commit on the page (a refresh, a server action), so while the visitor stays on the landing the bar
+is re-checked every second and stripped again.
 
 This applies to every landing with `utm_*`, not only arrivals through `/go/`.
 

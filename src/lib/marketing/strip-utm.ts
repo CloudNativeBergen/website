@@ -95,11 +95,12 @@ export type HistoryWrite = 'router' | 'native' | 'bypass'
 /**
  * Whether the router may be told about a rewrite. A marker-free write reaches
  * it as a RESTORE action, and the router's action queue DISCARDS whatever
- * navigation is pending in favour of it (`app-router-instance.js`): a Link
- * the visitor has just clicked, whose response has not landed, would go
- * nowhere. Only a visitor who has never interacted with the page can have no
- * navigation in flight (programmatic pushes aside), so the router learns the
- * URL only then. Where the activation API is missing, the router is bypassed.
+ * action is pending in favour of it (`app-router-instance.js`): a Link the
+ * visitor has just clicked, whose response has not landed, would go nowhere.
+ * A visitor who has never interacted with the page has none in flight, short
+ * of a `router.push`/`refresh` or server action the page starts on its own
+ * (none found on a public page at mount), so the router learns the URL only then.
+ * Where the activation API is missing, the router is bypassed.
  */
 function routerMayLearn(win: Window): boolean {
   const activation = win.navigator.userActivation as UserActivation | undefined
