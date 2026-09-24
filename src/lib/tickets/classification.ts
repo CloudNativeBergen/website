@@ -334,11 +334,11 @@ export function classifyTicket(
           ? 'proposed'
           : 'unknown',
     comp,
-    grantsWorkshop: workshopAccessOf(ticket.category, context.ticketTypeRoles) === 'granted',
+    grantsWorkshop:
+      workshopAccessOf(ticket.category, context.ticketTypeRoles) === 'granted',
     grantedBy,
   }
 }
-
 
 /**
  * THE MIGRATION BRIDGE, and nothing else.
