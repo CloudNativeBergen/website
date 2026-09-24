@@ -60,6 +60,10 @@ import {
   clientWrite,
 } from '@/lib/sanity/client'
 import { groq } from 'next-sanity'
+import {
+  deleteImageAssetIfOrphaned,
+  type OrphanedAssetDeletion,
+} from '@/lib/sanity/orphaned-asset'
 import { normalizeEmail } from './email'
 
 // ---------------------------------------------------------------------------
@@ -1066,12 +1070,7 @@ export interface EraseSpeakerResult {
   plan: ErasurePlan | null
   committed: boolean
   /** Image asset outcome: deleted, kept (still referenced), or absent. */
-  imageAsset: {
-    id: string | null
-    deleted: boolean
-    /** Remaining references found before the delete; -1 means the read failed. */
-    remainingReferences: number
-  }
+  imageAsset: OrphanedAssetDeletion
   cache: { tags: string[]; revalidated: boolean; error: string | null }
   verification: ErasureVerification | null
   err: Error | null
@@ -1336,6 +1335,8 @@ export async function eraseSpeakerInPlace(
     }
 
     // --- phase 3: the image asset ------------------------------------------
+    // Unsetting `speaker.image` leaves the photograph publicly fetchable on
+    // the CDN; the asset itself goes too, unless something else still uses it.
     const imageAsset = await deleteImageAssetIfOrphaned(plan.imageAssetId)
 
     // --- phase 4: caches ----------------------------------------------------
@@ -1375,47 +1376,6 @@ export async function eraseSpeakerInPlace(
       console.error('Error erasing speaker:', error)
     }
     return { ...empty, err: error as Error }
-  }
-}
-
-/**
- * Delete the profile image ASSET, not just the reference to it.
- *
- * Unsetting `speaker.image` removes the pointer; the photograph stays live and
- * publicly fetchable on `cdn.sanity.io` forever. It is only safe to delete once
- * NOTHING references the asset — a gallery image or another speaker may share
- * it — so the reference count is checked first and a non-zero count keeps the
- * asset and reports it. A failed count (`-1`) also keeps it: fail closed.
- */
-async function deleteImageAssetIfOrphaned(
-  assetId: string | null,
-): Promise<EraseSpeakerResult['imageAsset']> {
-  if (!assetId) return { id: null, deleted: false, remainingReferences: 0 }
-
-  let remainingReferences = -1
-  try {
-    const result = await clientRead.fetch<{ n: number }>(
-      // groq-global: an asset can be shared by documents in any tenant, so the
-      // safety check must see all of them. A bare zero `count()` is wrapped in
-      // an object because Sanity errors on a bare scalar count projection.
-      groq`{ "n": count(*[references($assetId)]) }`,
-      { assetId },
-      { cache: 'no-store' },
-    )
-    remainingReferences = result?.n ?? -1
-  } catch {
-    return { id: assetId, deleted: false, remainingReferences: -1 }
-  }
-
-  if (remainingReferences !== 0) {
-    return { id: assetId, deleted: false, remainingReferences }
-  }
-
-  try {
-    await clientWrite.delete(assetId)
-    return { id: assetId, deleted: true, remainingReferences: 0 }
-  } catch {
-    return { id: assetId, deleted: false, remainingReferences: 0 }
   }
 }
 

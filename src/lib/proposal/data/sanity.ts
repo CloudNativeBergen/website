@@ -281,6 +281,7 @@ export async function getProposal({
         ${EXCLUDE_PRIVATE_SPEAKER_FIELDS},
         "socialTagOptOut": select(_id == $speakerId => socialTagOptOut, null),
         "socialTagOptOutAt": null,
+        "slug": slug.current,
         "image": coalesce(image.asset->url, imageURL),
         ${isOrganizer && includeSubmittedTalks ? `${SUBMITTED_TALKS_PROJECTION},` : ''}
         ${isOrganizer && includePreviousAcceptedTalks ? `${PREVIOUS_ACCEPTED_TALKS_WITH_STATS_PROJECTION},` : ''}
