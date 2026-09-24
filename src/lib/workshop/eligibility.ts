@@ -2,11 +2,15 @@ import {
   resolveTicketingProvider,
   type ConferenceTicketingBinding,
 } from '@/lib/tickets/provider'
-import { typeKey, type TicketTypeRole, workshopAccessOf, type WorkshopAccess } from '@/lib/tickets/classification'
+import {
+  typeKey,
+  type TicketTypeRole,
+  workshopAccessOf,
+  type WorkshopAccess,
+} from '@/lib/tickets/classification'
 import type { EventTicket } from '@/lib/tickets/types'
 import { platformFallbackContact } from '@/lib/email/from'
 import { clientReadUncached } from '@/lib/sanity/client'
-
 
 /**
  * THE ACCESS FIELD, READ LIVE — the other half of "one rule".
