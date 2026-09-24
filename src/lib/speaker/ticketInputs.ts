@@ -24,7 +24,14 @@ interface SpeakerTicketTalk {
     email?: string
     emailedAt?: string
   }[]
-  speakers?: { _id?: string; email?: string; knownEmails?: string[] }[] | null
+  speakers?:
+    | {
+        _id?: string
+        email?: string
+        knownEmails?: string[]
+        ticketEmailGrants?: { email?: string }[]
+      }[]
+    | null
 }
 
 /**
@@ -45,7 +52,7 @@ export async function fetchSpeakerTicketInputs(
   // read.
   const query = groq`*[_type == "talk" && conference._ref == $conferenceId && status in $statuses]{
         issuedSpeakerTickets[]{ speakerId, email, emailedAt },
-        speakers[]->{ _id, email, knownEmails }
+        speakers[]->{ _id, email, knownEmails, ticketEmailGrants }
       }`
 
   let talks: SpeakerTicketTalk[] | null
@@ -72,6 +79,7 @@ export async function fetchSpeakerTicketInputs(
           ...(existing?.emails ?? []),
           speaker.email,
           ...(speaker.knownEmails ?? []),
+          ...(speaker.ticketEmailGrants?.map((g) => g.email) ?? []),
           entry?.email,
         ]),
       ]
