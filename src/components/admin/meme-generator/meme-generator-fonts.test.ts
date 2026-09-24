@@ -177,6 +177,38 @@ describe('loadCanvasFonts', () => {
     }
   })
 
+  // One face that never settles must not hold back the repaint for another
+  // that arrives late.
+  it('reports each late face, even while another never settles', async () => {
+    vi.useFakeTimers()
+    try {
+      let arrive: () => void = () => {}
+      const fonts = {
+        load: vi
+          .fn()
+          .mockReturnValueOnce(new Promise<FontFace[]>(() => {}))
+          .mockReturnValueOnce(
+            new Promise<FontFace[]>((resolve) => (arrive = () => resolve([]))),
+          ),
+      } as unknown as FontFaceSet
+      const onLate = vi.fn()
+      loadCanvasFonts(
+        [
+          { font: 'normal 48px "Inter"', text: 'HI' },
+          { font: 'normal 48px "IBM Plex Sans"', text: 'HI' },
+        ],
+        fonts,
+        { timeout: 3000, onLate },
+      )
+      await vi.advanceTimersByTimeAsync(3000)
+      arrive()
+      await vi.advanceTimersByTimeAsync(0)
+      expect(onLate).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('does not report a face that landed in time', async () => {
     const onLate = vi.fn()
     const fonts = {
