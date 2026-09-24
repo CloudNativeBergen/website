@@ -61,11 +61,18 @@ export function withoutUtm(href: string): string | null {
  */
 const ROUTER_MARKERS = ['__NA', '_N'] as const
 
-function hasRouterMarker(state: unknown): boolean {
+/**
+ * Whether the router would treat this state as its own. Truthiness, exactly
+ * as the patch tests it (`data?.__NA || data?._N`): a state with `__NA:
+ * false` is external to the router and gets nothing copied back.
+ */
+export function hasRouterMarker(state: unknown): boolean {
   return (
     typeof state === 'object' &&
     state !== null &&
-    ROUTER_MARKERS.some((key) => key in state)
+    ROUTER_MARKERS.some((key) =>
+      Boolean((state as Record<string, unknown>)[key]),
+    )
   )
 }
 

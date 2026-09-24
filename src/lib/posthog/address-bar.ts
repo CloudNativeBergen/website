@@ -1,4 +1,5 @@
 import {
+  hasRouterMarker,
   type HistoryWrite,
   replaceUrlKeepingState,
   stripUtmFromAddressBar,
@@ -32,6 +33,14 @@ export const UTM_STRIP_DEADLINE_MS = 3000
  */
 export const UTM_STRIP_GUARD_MS = 3000
 export const UTM_STRIP_GUARD_TICK_MS = 100
+/**
+ * While the state carries the router's marker but its patch is not installed
+ * (a reload of a tagged landing keeps the marker from the previous load),
+ * the only way to learn whether the patch has arrived is a write, and a
+ * write-back after it: two `replaceState` calls. WebKit throttles history
+ * writes to 100 per 30 s, so that probe runs on every Nth tick only.
+ */
+export const UTM_STRIP_GUARD_PROBE_EVERY = 5
 
 /** The slice of the PostHog client the schedule listens to. */
 export interface PageviewSource {
@@ -100,12 +109,14 @@ export function scheduleUtmStrip(
   function guard(routerSynced: boolean) {
     const until = Date.now() + UTM_STRIP_GUARD_MS
     let synced = routerSynced
+    let ticks = 0
     const tick = () => {
       if (!onLanding()) return
+      const probe = ticks++ % UTM_STRIP_GUARD_PROBE_EVERY === 0
       try {
         if (withoutUtm(win.location.href) !== null) {
           synced = stripUtmFromAddressBar(win) === 'router'
-        } else if (!synced && hasNextMarker(win.history.state)) {
+        } else if (!synced && probe && hasRouterMarker(win.history.state)) {
           synced = replaceUrlKeepingState(win, win.location.href) === 'router'
         }
       } catch {
@@ -150,8 +161,4 @@ export function scheduleUtmStrip(
       })
     },
   }
-}
-
-function hasNextMarker(state: unknown): boolean {
-  return typeof state === 'object' && state !== null && '__NA' in state
 }

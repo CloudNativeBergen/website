@@ -6,6 +6,7 @@ import {
   scheduleUtmStrip,
   UTM_STRIP_DEADLINE_MS,
   UTM_STRIP_GUARD_MS,
+  UTM_STRIP_GUARD_PROBE_EVERY,
   UTM_STRIP_GUARD_TICK_MS,
 } from './address-bar'
 
@@ -219,6 +220,36 @@ describe('scheduleUtmStrip', () => {
     })
     expect(() => vi.advanceTimersByTime(UTM_STRIP_GUARD_TICK_MS)).not.toThrow()
     expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('probes for the router sparingly while its patch is not installed', () => {
+    // The state carries the marker (a reload of a tagged landing keeps it)
+    // but no patch exists yet, so every probe costs two replaceState calls.
+    // WebKit throttles history writes (100 per 30 s); the probe must not
+    // spend that budget on its own.
+    window.history.replaceState({ __NA: true }, '', TAGGED)
+    const replace = vi.spyOn(window.history, 'replaceState')
+    scheduleUtmStrip(window).now()
+    vi.advanceTimersByTime(UTM_STRIP_GUARD_MS + UTM_STRIP_GUARD_TICK_MS)
+    const ticks = UTM_STRIP_GUARD_MS / UTM_STRIP_GUARD_TICK_MS + 1
+    const probes = Math.ceil(ticks / UTM_STRIP_GUARD_PROBE_EVERY)
+    // The strip itself (2 writes: strip, marker written back) plus a probe
+    // on every Nth tick (2 writes each).
+    expect(replace).toHaveBeenCalledTimes(2 + probes * 2)
+    expect(replace.mock.calls.length).toBeLessThanOrEqual(16)
+  })
+
+  it('treats a falsy router marker the way the router does: as no marker', () => {
+    // Next's patch checks `data.__NA` for truth; a state with `__NA: false`
+    // is external to it and gets nothing copied back, so probing it could
+    // never succeed and would only burn history writes.
+    window.history.replaceState({ __NA: false }, '', TAGGED)
+    const replace = vi.spyOn(window.history, 'replaceState')
+    scheduleUtmStrip(window).now()
+    expect(window.location.search).toBe('?keep=1')
+    vi.advanceTimersByTime(UTM_STRIP_GUARD_MS + UTM_STRIP_GUARD_TICK_MS)
+    expect(replace).toHaveBeenCalledTimes(1)
+    expect(window.history.state).toEqual({ __NA: false })
   })
 
   it('gives up re-checking once the guard runs out', () => {
