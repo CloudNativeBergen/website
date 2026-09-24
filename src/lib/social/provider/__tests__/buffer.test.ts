@@ -630,6 +630,8 @@ describe('BufferPublishAdapter — failure at create (spec §3.3)', () => {
     ['400', '<html>Bad Request</html>'],
     ['403', '{}'],
     ['404', '{"message":"not found"}'],
+    ['401', '{"errors":[{}]}'],
+    ['400', '{"errors":[{"extensions":{"code":"BAD_USER_INPUT"}}]}'],
   ])(
     'an HTTP %s at create whose body is no GraphQL answer (%s) is ambiguous — Buffer\u2019s own refusals come as errors[]',
     async (status, body) => {

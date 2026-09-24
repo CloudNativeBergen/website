@@ -464,9 +464,14 @@ export class BufferPublishAdapter implements SocialPublishAdapter {
         message: `${operationName}: unreadable answer (${errorMessage(error)})`,
       }
     }
+    // A GraphQL error has a `message` (spec §7.1.2); an entry without one
+    // is no refusal Buffer signed, so it is not counted as an answer.
     const errors: GraphQLError[] = Array.isArray(body?.errors)
       ? body.errors.filter(
-          (e): e is GraphQLError => typeof e === 'object' && e !== null,
+          (e): e is GraphQLError =>
+            typeof e === 'object' &&
+            e !== null &&
+            typeof (e as GraphQLError).message === 'string',
         )
       : []
     const firstMessage = errors
