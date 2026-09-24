@@ -664,6 +664,38 @@ export const DownloadWaitsForSlowLogo: Story = {
   },
 }
 
+/**
+ * Download clicked while the WORDMARK's webfont is still loading (slowed to
+ * 1.5 s here): the canvas shows the fallback font until it lands, so the
+ * capture must wait for it rather than export the fallback.
+ */
+export const DownloadWaitsForWordmarkFont: Story = {
+  beforeEach: () => {
+    const fonts = document.fonts
+    const load = fonts.load.bind(fonts)
+    fonts.load = (font: string, text?: string) =>
+      new Promise<FontFace[]>((resolve) =>
+        setTimeout(() => resolve(load(font, text)), 1500),
+      )
+    return () => {
+      fonts.load = load
+    }
+  },
+  render: (args) => (
+    <MemeGeneratorWithDownload
+      conferenceTitle={args.conferenceLogos?.title}
+      conferenceLogos={args.conferenceLogos}
+    />
+  ),
+  play: async ({ canvasElement }) => {
+    const started = performance.now()
+    const preview = canvasElement.querySelector('canvas')!.parentElement!
+    await captureImage(preview.parentElement!)
+    // Without the wait, capture finishes after its fixed ~300 ms pause.
+    expect(performance.now() - started).toBeGreaterThan(1200)
+  },
+}
+
 export const FallbackGradient: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)

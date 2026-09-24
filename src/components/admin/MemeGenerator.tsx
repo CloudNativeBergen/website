@@ -1,6 +1,13 @@
 'use client'
 
-import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
+import {
+  useState,
+  useRef,
+  useEffect,
+  useLayoutEffect,
+  useCallback,
+  useMemo,
+} from 'react'
 import {
   PhotoIcon,
   ArrowUpTrayIcon,
@@ -447,7 +454,10 @@ export function MemeGenerator({
       })
   }, [drawCanvas])
 
-  useEffect(() => {
+  // A layout effect: the canvas is painted in the same commit that clears
+  // `data-capture-pending`, so a capture never sees the mark gone before the
+  // logo is drawn.
+  useLayoutEffect(() => {
     draw()
   }, [draw])
 
@@ -514,16 +524,21 @@ export function MemeGenerator({
   // whenever it is what gets drawn, including as the fallback for an uploaded
   // logo that could not be rasterised.
   const drawsWordmark = canvasLogo?.kind === 'wordmark'
+  // Which name's face has settled: until then the wordmark is drawn in the
+  // fallback font, and capture waits (see `data-capture-pending`).
+  const [wordmarkReadyFor, setWordmarkReadyFor] = useState<string | null>(null)
+  const wordmarkPending = drawsWordmark && wordmarkReadyFor !== logoName
   useEffect(() => {
     if (!drawsWordmark) return
     let cancelled = false
     const family = wordmarkFontFamily(document.documentElement)
-    if (!family) return
     loadCanvasFonts(
-      [{ font: wordmarkFont(family, 72, false), text: logoName }],
+      family ? [{ font: wordmarkFont(family, 72, false), text: logoName }] : [],
       document.fonts,
     ).then(() => {
-      if (!cancelled) drawRef.current()
+      if (cancelled) return
+      setWordmarkReadyFor(logoName)
+      drawRef.current()
     })
     return () => {
       cancelled = true
@@ -611,7 +626,7 @@ export function MemeGenerator({
     <div
       className="relative mx-auto aspect-square w-[540px] max-w-full overflow-hidden rounded-lg shadow-lg"
       style={{ padding: 0, margin: 'auto' }}
-      data-capture-pending={logoPending || undefined}
+      data-capture-pending={logoPending || wordmarkPending || undefined}
     >
       <canvas
         ref={canvasRef}
