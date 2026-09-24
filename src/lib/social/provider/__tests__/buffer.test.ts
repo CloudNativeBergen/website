@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, onTestFinished, vi } from 'vitest'
 import {
   BUFFER_MAX_RETRY_AFTER_MS,
   BUFFER_MIN_CREATE_BUDGET_MS,
@@ -335,6 +335,38 @@ describe('BufferPublishAdapter — the create budget', () => {
     expect(outcome.ok === false && outcome.message).toMatch(/budget/)
     expect(callsNamed(calls, 'GetChannel')).toHaveLength(1)
     expect(callsNamed(calls, 'CreatePost')).toEqual([])
+  })
+
+  it('a create the deadline refuses to start (the clock jumps past it after the budget check) is transient, not ambiguous — it was never sent', async () => {
+    const calls = buffer({})
+    const realNow = Date.now
+    let afterChannel = 0
+    let channelAnswered = false
+    // The budget check is the first clock read once the channel check has
+    // answered; every read after it lands past the deadline.
+    const now = vi
+      .spyOn(Date, 'now')
+      .mockImplementation(() =>
+        channelAnswered && afterChannel++ > 0
+          ? realNow() + 60 * 60_000
+          : realNow(),
+      )
+    onTestFinished(() => now.mockRestore())
+    const fetchImpl: typeof fetch = async (input, init) => {
+      const response = await fetch(input, init)
+      channelAnswered = true
+      return response
+    }
+
+    const outcome = await adapter({ fetch: fetchImpl }).publish(LINK_ONLY)
+
+    expect(callsNamed(calls, 'GetChannel')).toHaveLength(1)
+    expect(callsNamed(calls, 'CreatePost')).toEqual([])
+    expect(outcome).toMatchObject({ ok: false, kind: 'transient' })
+    // Not the budget check's refusal: this one came from the deadline.
+    expect(outcome.ok === false && outcome.message).toMatch(
+      /before the post was sent to Buffer; it will be retried\. \(CreatePost: Publish budget exhausted before the request was made\)/,
+    )
   })
 })
 

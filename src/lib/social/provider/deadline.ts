@@ -6,7 +6,7 @@
  * that is a post nobody is waiting to record.
  */
 
-class PublishDeadlineError extends Error {
+export class PublishDeadlineError extends Error {
   constructor() {
     super('Publish budget exhausted before the request was made')
     this.name = 'PublishDeadlineError'

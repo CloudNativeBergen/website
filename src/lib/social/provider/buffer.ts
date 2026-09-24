@@ -1,6 +1,6 @@
 import { SOCIAL_PLATFORM_LABELS } from '../types'
 import { PLATFORM_CONSTRAINTS, validatePublishInput } from './constraints'
-import { withDeadline } from './deadline'
+import { PublishDeadlineError, withDeadline } from './deadline'
 import { postUrlIssue } from './manual'
 import type {
   ConfirmCheck,
@@ -134,7 +134,12 @@ interface GraphQLBody {
 
 /** What one GraphQL round trip produced, before any phase interprets it. */
 type Answer =
-  | { kind: 'no-answer'; message: string }
+  | {
+      kind: 'no-answer'
+      message: string
+      /** The deadline refused to start the request: it was never sent. */
+      unsent?: boolean
+    }
   | {
       kind: 'http'
       status: number
@@ -409,9 +414,17 @@ export class BufferPublishAdapter implements SocialPublishAdapter {
     if (refused) return refused
     switch (answer.kind) {
       case 'no-answer':
-        // A timeout, a dropped connection, an unreadable body — or the
-        // deadline refusing to start it, which the budget check above makes
-        // unreachable. Treated as sent: the safe direction.
+        // The deadline refused to start it: nothing reached Buffer, so a
+        // retry cannot double-post. The budget check makes this rare.
+        if (answer.unsent) {
+          return {
+            ok: false,
+            kind: 'transient',
+            message: `Publish budget ran out before the post was sent to Buffer; it will be retried. (${answer.message})`,
+          }
+        }
+        // A timeout, a dropped connection, an unreadable body: the request
+        // may have run. Treated as sent — the safe direction.
         return ambiguous(answer.message)
       case 'http':
         // A 4xx refused the request itself (a malformed document); a 5xx may
@@ -451,6 +464,7 @@ export class BufferPublishAdapter implements SocialPublishAdapter {
       return {
         kind: 'no-answer',
         message: `${operationName}: ${errorMessage(error)}`,
+        ...(error instanceof PublishDeadlineError ? { unsent: true } : {}),
       }
     }
     let body: GraphQLBody | null
