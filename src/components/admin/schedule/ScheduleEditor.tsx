@@ -33,6 +33,7 @@ import {
 } from '@/lib/schedule/reducer'
 import {
   computeUnassigned,
+  computeProposalStatuses,
   scheduledProposalIdsExcludingDay,
 } from '@/lib/schedule/operations'
 import { ProposalExisting } from '@/lib/proposal/types'
@@ -388,10 +389,17 @@ export function ScheduleEditor({
   const isSaving = state.ui.isSaving
   const error = externalChangeError || state.ui.error
 
+  // Compute schedule statuses (isPartiallyScheduled) for ALL proposals so the filter
+  // logic can evaluate "Partials" correctly against the board.
+  const proposalsWithStatus = useMemo(
+    () => computeProposalStatuses(state.proposals, state.schedules),
+    [state.proposals, state.schedules],
+  )
+
   // One filter state for the WHOLE editor, not just the sidebar: the unassigned
   // list filters down to matches, and the board dims the cards that fall out
   // (see `isFilteredOut` below), so both surfaces answer the same question.
-  const filters = useProposalFilters(state.proposals)
+  const filters = useProposalFilters(proposalsWithStatus)
 
   // ANY dirty day means unsaved work — surfaced on both headers' Save button
   // and guarding navigation below.
