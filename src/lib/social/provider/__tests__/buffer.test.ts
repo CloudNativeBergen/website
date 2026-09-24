@@ -579,6 +579,53 @@ describe('BufferPublishAdapter — failure at create (spec §3.3)', () => {
   })
 
   it.each([
+    [
+      'a 401 carrying PostActionSuccess',
+      401,
+      { __typename: 'PostActionSuccess', post: { id: 'created-under-401' } },
+      { ok: true, result: 'accepted', vendorPostId: 'created-under-401' },
+    ],
+    [
+      'a 429 carrying a typed InvalidInputError',
+      429,
+      { __typename: 'InvalidInputError', message: 'text too long' },
+      { ok: false, kind: 'rejected' },
+    ],
+    [
+      'a 429 carrying a typed UnauthorizedError',
+      429,
+      { __typename: 'UnauthorizedError', message: 'key revoked' },
+      { ok: false, kind: 'credential-expired' },
+    ],
+  ])(
+    'the body outranks the status at create: %s',
+    async (_label, status, createPost, expected) => {
+      const { fetchImpl } = createAnswering(
+        () =>
+          new Response(JSON.stringify({ data: { createPost } }), { status }),
+      )
+      const outcome = await adapter({ fetch: fetchImpl }).publish(LINK_ONLY)
+      expect(outcome).toMatchObject(expected)
+    },
+  )
+
+  it('a 429 whose errors[] say UNAUTHORIZED is ambiguous — the status and the body disagree, so neither is a verdict', async () => {
+    const { fetchImpl } = createAnswering(
+      () =>
+        new Response(
+          JSON.stringify({
+            errors: [
+              { message: 'Unauthorized', extensions: { code: 'UNAUTHORIZED' } },
+            ],
+          }),
+          { status: 429 },
+        ),
+    )
+    const outcome = await adapter({ fetch: fetchImpl }).publish(LINK_ONLY)
+    expect(outcome).toMatchObject({ ok: false, kind: 'ambiguous' })
+  })
+
+  it.each([
     ['401', '<html>Unauthorized</html>'],
     ['400', '<html>Bad Request</html>'],
     ['403', '{}'],
@@ -782,6 +829,7 @@ describe('BufferPublishAdapter — confirm (spec §3.2)', () => {
     })
     await expect(adapter().confirm(POST_ID)).resolves.toMatchObject({
       state: 'unreadable',
+      message: expect.stringContaining('HTTP 429'),
     })
   })
 
