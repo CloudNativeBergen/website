@@ -372,19 +372,41 @@ async function paintedBounds(
   }
 }
 
+/** The first search area, in user units; widened while the logo reaches its edge. */
+const SEARCH_START = { x: -2000, y: -2000, width: 6000, height: 6000 }
+const SEARCH_LIMIT = 6_000_000
+
+/** Whether `bounds` reaches the edge of `area` — the logo may carry on past it. */
+function reachesEdge(bounds: Frame, area: Frame): boolean {
+  const slack = (2 * area.width) / PROBE_SIZE
+  return (
+    bounds.x <= area.x + slack ||
+    bounds.y <= area.y + slack ||
+    bounds.x + bounds.width >= area.x + area.width - slack ||
+    bounds.y + bounds.height >= area.y + area.height - slack
+  )
+}
+
 /**
  * Give a size-less SVG the viewBox of what it actually paints: a coarse pass
- * over a wide area of user space, then a fine pass over what it found.
+ * over a wide area of user space — widened tenfold while it finds nothing or
+ * the logo reaches its edge — then a fine pass over what it found.
  */
 async function measuredViewBox(
   element: SVGSVGElement,
 ): Promise<CanvasSvg | null> {
-  const coarse = await paintedBounds(element, {
-    x: -2000,
-    y: -2000,
-    width: 6000,
-    height: 6000,
-  })
+  let area: Frame = SEARCH_START
+  let coarse = await paintedBounds(element, area)
+  while ((!coarse || reachesEdge(coarse, area)) && area.width < SEARCH_LIMIT) {
+    const width = area.width * 10
+    area = {
+      x: area.x + area.width / 2 - width / 2,
+      y: area.y + area.height / 2 - width / 2,
+      width,
+      height: width,
+    }
+    coarse = await paintedBounds(element, area)
+  }
   const box = coarse && (await paintedBounds(element, coarse))
   if (!box) return null
   element.setAttribute(

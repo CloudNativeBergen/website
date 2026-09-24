@@ -435,6 +435,21 @@ export const StylesheetColouredLogoKeepsItsColour: Story = {
   },
 }
 
+/**
+ * A size-less logo drawn far from the origin: measuring must find it wherever
+ * it is, not just in the first area it searches.
+ */
+export const FarFlungSizelessLogo: Story = {
+  args: {
+    conferenceLogos: {
+      title: 'Konf',
+      logoBright:
+        '<svg><rect x="9000" y="-7000" width="4000" height="1000" fill="#facc15"/></svg>',
+    },
+  },
+  play: SizelessStrokedLogo.play,
+}
+
 export const FallbackGradient: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
