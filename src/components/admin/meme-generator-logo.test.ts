@@ -176,6 +176,20 @@ describe('svgForCanvas + logoMarkup', () => {
     expect(root.querySelector('rect')).not.toBeNull()
   })
 
+  it("strips a logo's own data-logo-root, so the tint cannot be steered", () => {
+    // The marker names the logo's root inside a measuring frame; a sized
+    // logo carrying one on a child would otherwise take the tint there.
+    const { root } = asImage(
+      '<svg viewBox="0 0 10 10"><svg data-logo-root="" width="5" height="5"/></svg>',
+      '#FFFFFF',
+      true,
+    )
+    expect(root.querySelector('[data-logo-root]')).toBeNull()
+    expect(root.getAttribute('style')).toMatch(
+      /color:\s*(#FFFFFF|rgb\(255, 255, 255\))/i,
+    )
+  })
+
   it('keeps xml: and xlink: attributes, which are always bound', () => {
     const { root } = asImage(
       '<svg viewBox="0 0 10 10" xml:space="preserve"><use xlink:href="#a"/></svg>',

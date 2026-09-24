@@ -190,7 +190,9 @@ const SVG_NS = 'http://www.w3.org/2000/svg'
  * Drop editor metadata under a prefix the markup never declares
  * (`<sodipodi:namedview>`, `inkscape:label`). The HTML parser accepted it and
  * nothing renders it, but XML refuses the whole document over it. `xml:` and
- * `xlink:` are bound by the parser and survive.
+ * `xlink:` are bound by the parser and survive. The logo's own
+ * `data-logo-root` goes too: only the frame {@link inViewport} builds may
+ * carry that marker, or a logo could steer where the tint lands.
  */
 function dropUnboundPrefixes(root: Element) {
   for (const element of [root, ...root.querySelectorAll('*')]) {
@@ -201,9 +203,10 @@ function dropUnboundPrefixes(root: Element) {
     for (const attribute of [...element.attributes]) {
       const { name, namespaceURI } = attribute
       if (
-        name.includes(':') &&
-        namespaceURI === null &&
-        !name.startsWith('xmlns:')
+        name === LOGO_ROOT ||
+        (name.includes(':') &&
+          namespaceURI === null &&
+          !name.startsWith('xmlns:'))
       ) {
         element.removeAttributeNode(attribute)
       }
@@ -321,7 +324,8 @@ const LOGO_ROOT = 'data-logo-root'
  * viewport of its own — the 300×150 a browser gives an SVG image with no size
  * — nested inside an outer SVG that does the zooming. So every `%` in it, in
  * any element or notation, resolves against that one viewport however the
- * view moves; `overflow: visible` keeps content outside it drawn.
+ * view moves. `overflow: visible` keeps content outside it drawn, unless the
+ * logo sets its own `overflow` (which then clips, as the overlay did).
  */
 function inViewport(element: SVGSVGElement, viewBox: Frame): SVGSVGElement {
   const logo = element.cloneNode(true)

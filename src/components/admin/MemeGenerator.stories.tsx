@@ -578,6 +578,29 @@ export const PercentInDefsAndClipPath: Story = {
   },
 }
 
+/**
+ * Between 1024 and ~1100 px the editor's two columns are narrower than the
+ * 540 px preview. The preview must shrink as a square: squeezed, the canvas
+ * (and now the logo drawn on it) would be distorted.
+ */
+export const NarrowColumnPreviewStaysSquare: Story = {
+  args: { conferenceLogos: UPLOADED_LOGOS },
+  decorators: [
+    (Story) => (
+      <div style={{ width: 960 }}>
+        <Story />
+      </div>
+    ),
+  ],
+  play: async ({ canvasElement }) => {
+    const { width, height } = canvasElement
+      .querySelector('canvas')!
+      .getBoundingClientRect()
+    expect(width).toBeLessThan(540)
+    expect(Math.abs(width - height)).toBeLessThanOrEqual(1)
+  },
+}
+
 export const FallbackGradient: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)

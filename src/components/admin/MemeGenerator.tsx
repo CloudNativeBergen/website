@@ -604,7 +604,7 @@ export function MemeGenerator({
 
   const previewNode = (
     <div
-      className="relative mx-auto h-[540px] w-[540px] max-w-full overflow-hidden rounded-lg shadow-lg"
+      className="relative mx-auto aspect-square w-[540px] max-w-full overflow-hidden rounded-lg shadow-lg"
       style={{ padding: 0, margin: 'auto' }}
     >
       <canvas
