@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { expect, userEvent, waitFor, within } from 'storybook/test'
 import { MemeGenerator } from './MemeGenerator'
 import { MemeGeneratorWithDownload } from './MemeGeneratorWithDownload'
-import { captureImage } from '../common/image-capture'
+import { captureImage } from '../../common/image-capture'
 import {
   CANVAS_SIZE,
   LOGO_PADDING_DEFAULT,

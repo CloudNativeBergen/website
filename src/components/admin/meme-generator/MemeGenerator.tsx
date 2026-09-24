@@ -11,7 +11,7 @@ import {
   ArrowsPointingOutIcon,
   QrCodeIcon,
 } from '@heroicons/react/24/outline'
-import type { ConferenceLogos } from '../common/DashboardLayout'
+import type { ConferenceLogos } from '../../common/DashboardLayout'
 import {
   CANVAS_SIZE,
   BRAND_COLORS,

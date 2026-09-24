@@ -100,7 +100,7 @@ vi.mock('@/lib/proposal/server', () => ({
 vi.mock('@/components/CloudNativePattern', () => ({
   CloudNativePattern: () => <div data-testid="pattern" />,
 }))
-vi.mock('@/components/admin/MemeGeneratorWithDownload', () => ({
+vi.mock('@/components/admin/meme-generator', () => ({
   MemeGeneratorWithDownload: () => <div data-testid="meme-generator" />,
 }))
 vi.mock('@/components/admin/PhotoGalleryWithDownload', () => ({

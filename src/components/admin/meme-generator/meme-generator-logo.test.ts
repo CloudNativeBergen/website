@@ -12,7 +12,7 @@ import {
   loadLogoImage,
   absoluteLength,
 } from './meme-generator-logo'
-import { wordmarkLayout } from '../BrandWordmark'
+import { wordmarkLayout } from '../../BrandWordmark'
 
 describe('isLightBackground', () => {
   it('reads a light colour as light and a dark one as dark', () => {

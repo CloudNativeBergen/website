@@ -3,8 +3,8 @@ import {
   BRAND_GRADIENT_STOPS,
   WORDMARK_FONT,
   wordmarkLayout,
-} from '../BrandWordmark'
-import type { ConferenceLogos } from '../common/DashboardLayout'
+} from '../../BrandWordmark'
+import type { ConferenceLogos } from '../../common/DashboardLayout'
 import { CANVAS_SIZE } from './meme-generator-config'
 
 /**

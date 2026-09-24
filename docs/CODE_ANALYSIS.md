@@ -116,7 +116,7 @@ React components for both the admin interface and public-facing pages.
 
 **Largest Files:**
 
-- `src/components/admin/MemeGenerator.tsx` - 1,105 lines
+- `src/components/admin/meme-generator/MemeGenerator.tsx` - 1,105 lines
 - `src/components/admin/schedule/DroppableTrack.tsx` - 1,041 lines
 - `src/components/travel-support/TravelSupportAdminPage.tsx` - 974 lines
 - `src/components/admin/sponsor/SponsorTierEditor.tsx` - 916 lines
