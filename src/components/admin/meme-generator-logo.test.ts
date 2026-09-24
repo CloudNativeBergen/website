@@ -9,7 +9,6 @@ import {
   monochromeInk,
   svgForCanvas,
   logoMarkup,
-  resolvePercentages,
   loadLogoImage,
 } from './meme-generator-logo'
 import { wordmarkLayout } from '../BrandWordmark'
@@ -194,51 +193,6 @@ describe('svgForCanvas + logoMarkup', () => {
   it('rejects markup that is not an SVG', () => {
     expect(svgForCanvas('<div></div>')).toBeNull()
     expect(svgForCanvas('')).toBeNull()
-  })
-})
-
-describe('resolvePercentages', () => {
-  const resolved = (svg: string) => {
-    const element = svgForCanvas(svg)!.element
-    resolvePercentages(element)
-    return element
-  }
-
-  it("resolves a size-less logo's % lengths against the default 300×150 viewport", () => {
-    const root = resolved(
-      '<svg><rect width="100%" height="50%"/><circle cx="50%" cy="50%" r="10%"/></svg>',
-    )
-    const rect = root.querySelector('rect')!
-    expect([rect.getAttribute('width'), rect.getAttribute('height')]).toEqual([
-      '300',
-      '75',
-    ])
-    const circle = root.querySelector('circle')!
-    expect(circle.getAttribute('cx')).toBe('150')
-    expect(circle.getAttribute('cy')).toBe('75')
-    // r is relative to the normalised diagonal, √((w² + h²) / 2).
-    expect(Number(circle.getAttribute('r'))).toBeCloseTo(
-      0.1 * Math.sqrt((300 ** 2 + 150 ** 2) / 2),
-    )
-  })
-
-  it('leaves % inside a nested <svg> alone — it refers to that viewport', () => {
-    const root = resolved(
-      '<svg><svg width="50%" height="20"><rect width="100%"/></svg></svg>',
-    )
-    expect(root.querySelector('svg')!.getAttribute('width')).toBe('150')
-    expect(root.querySelector('rect')!.getAttribute('width')).toBe('100%')
-  })
-
-  it('leaves % that is not a viewport length alone — gradients, stops, patterns', () => {
-    const root = resolved(
-      '<svg><defs><linearGradient x1="0%" x2="100%"><stop offset="50%"/></linearGradient><pattern width="10%"/></defs></svg>',
-    )
-    expect(root.querySelector('linearGradient')!.getAttribute('x2')).toBe(
-      '100%',
-    )
-    expect(root.querySelector('stop')!.getAttribute('offset')).toBe('50%')
-    expect(root.querySelector('pattern')!.getAttribute('width')).toBe('10%')
   })
 })
 
@@ -481,26 +435,116 @@ describe('logoRasterRequests', () => {
 describe('loadLogoImage', () => {
   const tint = { color: '#000000', override: true }
 
-  it('never puts anything into the page — the logo is only drawn as an image', async () => {
-    const decode = vi.fn<() => Promise<void>>().mockResolvedValue(undefined)
+  /**
+   * jsdom has neither `HTMLImageElement#decode` nor a 2D canvas. Stand both
+   * in, so the WHOLE measuring path runs: every decoded image's markup is
+   * recorded, and each probe "paints" a block in its middle.
+   */
+  function fakeBrowser() {
+    const decoded: string[] = []
+    const decode = vi.fn(function (this: HTMLImageElement) {
+      decoded.push(decodeURIComponent(this.src.split(',')[1]))
+      return Promise.resolve()
+    })
+    const context = {
+      drawImage: vi.fn(),
+      getImageData: (_x: number, _y: number, w: number, h: number) => {
+        const data = new Uint8ClampedArray(w * h * 4)
+        for (let y = Math.floor(h * 0.4); y < Math.ceil(h * 0.6); y++) {
+          for (let x = Math.floor(w * 0.4); x < Math.ceil(w * 0.6); x++) {
+            data[(y * w + x) * 4 + 3] = 255
+          }
+        }
+        return { data }
+      },
+    }
+    const getContext = vi.fn(() => context)
+    const originals = [
+      ['decode', HTMLImageElement.prototype],
+      ['getContext', HTMLCanvasElement.prototype],
+    ] as const
+    const saved = originals.map(
+      ([name, proto]) =>
+        [name, proto, Object.getOwnPropertyDescriptor(proto, name)] as const,
+    )
     Object.defineProperty(HTMLImageElement.prototype, 'decode', {
       configurable: true,
       value: decode,
     })
+    Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', {
+      configurable: true,
+      value: getContext,
+    })
+    const restore = () => {
+      for (const [name, proto, descriptor] of saved) {
+        if (descriptor) Object.defineProperty(proto, name, descriptor)
+        else Reflect.deleteProperty(proto, name)
+      }
+    }
+    return { decoded, getContext, restore }
+  }
+
+  it('never puts anything into the page — the logo is only drawn as an image', async () => {
+    const browser = fakeBrowser()
     const added: Node[] = []
     const observer = new MutationObserver((records) =>
       records.forEach((record) => added.push(...record.addedNodes)),
     )
     observer.observe(document, { childList: true, subtree: true })
     try {
-      await loadLogoImage('<svg viewBox="0 0 10 10"><rect/></svg>', tint)
-      await loadLogoImage('<svg><rect width="10" height="10"/></svg>', tint)
+      const sized = await loadLogoImage(
+        '<svg viewBox="0 0 10 10"><rect/></svg>',
+        tint,
+      )
+      const measured = await loadLogoImage(
+        '<svg><rect width="10" height="10"/></svg>',
+        tint,
+      )
       await new Promise((resolve) => setTimeout(resolve, 0))
-      expect(decode).toHaveBeenCalled()
+      // Both went all the way — the size-less one through every measuring
+      // pass (coarse, fine, final) — without touching the document.
+      expect(sized?.kind).toBe('image')
+      expect(measured?.kind).toBe('image')
+      expect(browser.decoded.length).toBeGreaterThanOrEqual(4)
       expect(added).toEqual([])
     } finally {
       observer.disconnect()
-      Reflect.deleteProperty(HTMLImageElement.prototype, 'decode')
+      browser.restore()
+    }
+  })
+
+  it('draws a size-less logo inside a fixed 300×150 viewport, so its % never moves', async () => {
+    const browser = fakeBrowser()
+    try {
+      await loadLogoImage(
+        '<svg color="#e11d48"><defs><rect id="a" width="100%" height="100%"/></defs><use href="#a"/></svg>',
+        { color: '#FFFFFF', override: true },
+      )
+      // Every probe and the final raster frame the logo the same way.
+      const parsed = browser.decoded.map(
+        (markup) =>
+          new DOMParser().parseFromString(markup, 'image/svg+xml')
+            .documentElement,
+      )
+      expect(parsed.length).toBeGreaterThanOrEqual(3)
+      for (const frame of parsed) {
+        const logo = frame.querySelector(':scope > svg')!
+        expect(frame.getAttribute('viewBox')).toMatch(
+          /^-?[\d.e-]+ -?[\d.e-]+ [\d.e]+ [\d.e]+$/,
+        )
+        expect(logo.getAttribute('width')).toBe('300')
+        expect(logo.getAttribute('height')).toBe('150')
+        expect(logo.getAttribute('overflow')).toBe('visible')
+        // % stays %: the browser resolves it against the logo's own viewport.
+        expect(logo.querySelector('rect')!.getAttribute('width')).toBe('100%')
+      }
+      // The final raster's tint lands on the LOGO's root, beating its own colour.
+      const final = parsed.at(-1)!.querySelector(':scope > svg')!
+      expect(final.getAttribute('style')).toMatch(
+        /color:\s*(#FFFFFF|rgb\(255, 255, 255\))/i,
+      )
+    } finally {
+      browser.restore()
     }
   })
 

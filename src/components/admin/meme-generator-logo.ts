@@ -232,24 +232,27 @@ const NO_COLOR = /^(|inherit|initial|unset|revert|revert-layer|currentcolor)$/i
 export function logoMarkup(element: SVGSVGElement, tint: LogoTint): string {
   const clone = element.cloneNode(true)
   if (!(clone instanceof SVGElement)) throw new Error('not an SVG element')
+  // A measured logo is framed (see inViewport); the tint is the logo's.
+  const logo = clone.querySelector(`:scope > svg[${LOGO_ROOT}]`) ?? clone
+  if (!(logo instanceof SVGElement)) throw new Error('not an SVG element')
 
   if (tint.override) {
-    clone.style.setProperty('color', tint.color)
+    logo.style.setProperty('color', tint.color)
   } else {
-    if (NO_COLOR.test(clone.style.getPropertyValue('color').trim())) {
-      clone.style.removeProperty('color')
+    if (NO_COLOR.test(logo.style.getPropertyValue('color').trim())) {
+      logo.style.removeProperty('color')
     }
-    const attribute = (clone.getAttribute('color') ?? '').trim()
-    if (NO_COLOR.test(attribute)) clone.removeAttribute('color')
+    const attribute = (logo.getAttribute('color') ?? '').trim()
+    if (NO_COLOR.test(attribute)) logo.removeAttribute('color')
     // A presentation attribute ranks below every stylesheet rule, layered or
     // not, so a real colour attribute would lose to the fallback: skip it.
     if (!attribute || NO_COLOR.test(attribute)) {
-      const style = clone.ownerDocument.createElementNS(SVG_NS, 'style')
+      const style = logo.ownerDocument.createElementNS(SVG_NS, 'style')
       style.textContent = `@layer logo-tint{:root{color:${tint.color}}}`
-      clone.appendChild(style)
+      logo.appendChild(style)
     }
   }
-  if (!clone.style.length) clone.removeAttribute('style')
+  if (!logo.style.length) logo.removeAttribute('style')
   return new XMLSerializer().serializeToString(clone)
 }
 
@@ -310,61 +313,33 @@ export type CanvasLogo =
   | { kind: 'image'; image: CanvasImageSource; aspect: number }
   | { kind: 'wordmark'; name: string }
 
-/** The viewport a browser gives an SVG image with no size of its own. */
-const DEFAULT_VIEWPORT = { width: 300, height: 150 }
-
-/** Viewport-relative length attributes, by the axis a % refers to. */
-const PERCENT_AXES: Record<string, 'x' | 'y' | 'diagonal'> = {
-  x: 'x',
-  x1: 'x',
-  x2: 'x',
-  cx: 'x',
-  width: 'x',
-  rx: 'x',
-  y: 'y',
-  y1: 'y',
-  y2: 'y',
-  cy: 'y',
-  height: 'y',
-  ry: 'y',
-  r: 'diagonal',
-}
-
-/** Elements whose geometry is laid out in the viewport (not a bounding box). */
-const VIEWPORT_GEOMETRY =
-  /^(rect|circle|ellipse|line|image|use|text|tspan|svg)$/
+/** Marks the logo's own root inside the frame {@link inViewport} builds. */
+const LOGO_ROOT = 'data-logo-root'
 
 /**
- * Pin a size-less logo's `%` lengths to the default 300×150 viewport, as an
- * unsized SVG image would resolve them. Measuring draws it through ever
- * different viewBoxes, and a `%` would resolve against each in turn — a
- * `width="100%"` background would grow with the search and swallow the logo.
- * Gradients, patterns and the like are left alone: their `%` is not a
- * viewport length.
+ * A size-less logo, framed for drawing through `viewBox`. The logo keeps a
+ * viewport of its own — the 300×150 a browser gives an SVG image with no size
+ * — nested inside an outer SVG that does the zooming. So every `%` in it, in
+ * any element or notation, resolves against that one viewport however the
+ * view moves; `overflow: visible` keeps content outside it drawn.
  */
-export function resolvePercentages(root: Element) {
-  const { width, height } = DEFAULT_VIEWPORT
-  const extent = {
-    x: width,
-    y: height,
-    diagonal: Math.sqrt((width ** 2 + height ** 2) / 2),
-  }
-  for (const element of root.querySelectorAll('*')) {
-    if (!VIEWPORT_GEOMETRY.test(element.localName)) continue
-    if (element.closest('defs, pattern, mask, clipPath, marker, symbol'))
-      continue
-    // Inside a nested <svg>, % refers to that viewport, not the root's.
-    if (element.parentElement?.closest('svg') !== root) continue
-    for (const [name, axis] of Object.entries(PERCENT_AXES)) {
-      const match = /^\s*(-?[\d.]+)%\s*$/.exec(element.getAttribute(name) ?? '')
-      if (match) {
-        element.setAttribute(
-          name,
-          String((Number(match[1]) / 100) * extent[axis]),
-        )
-      }
-    }
-  }
+function inViewport(element: SVGSVGElement, viewBox: Frame): SVGSVGElement {
+  const logo = element.cloneNode(true)
+  if (!(logo instanceof SVGSVGElement)) throw new Error('not an SVG element')
+  logo.setAttribute('width', '300')
+  logo.setAttribute('height', '150')
+  logo.setAttribute('overflow', 'visible')
+  logo.removeAttribute('x')
+  logo.removeAttribute('y')
+  logo.setAttribute(LOGO_ROOT, '')
+
+  const frame = element.ownerDocument.createElementNS(SVG_NS, 'svg')
+  frame.setAttribute(
+    'viewBox',
+    `${viewBox.x} ${viewBox.y} ${viewBox.width} ${viewBox.height}`,
+  )
+  frame.appendChild(logo)
+  return frame
 }
 
 /** Decode SVG markup as an image. Rejects on anything it cannot draw. */
@@ -400,13 +375,8 @@ async function paintedBounds(
   element: SVGSVGElement,
   viewBox: Frame,
 ): Promise<Frame | null> {
-  const probe = element.cloneNode(true)
-  if (!(probe instanceof SVGSVGElement)) return null
+  const probe = inViewport(element, viewBox)
   const scale = PROBE_SIZE / Math.max(viewBox.width, viewBox.height)
-  probe.setAttribute(
-    'viewBox',
-    `${viewBox.x} ${viewBox.y} ${viewBox.width} ${viewBox.height}`,
-  )
   probe.setAttribute('width', String(viewBox.width * scale))
   probe.setAttribute('height', String(viewBox.height * scale))
   probe.setAttribute('preserveAspectRatio', 'xMinYMin meet')
@@ -463,7 +433,6 @@ function reachesEdge(bounds: Frame, area: Frame): boolean {
 async function measuredViewBox(
   element: SVGSVGElement,
 ): Promise<CanvasSvg | null> {
-  resolvePercentages(element)
   let area: Frame = SEARCH_START
   let coarse = await paintedBounds(element, area)
   while ((!coarse || reachesEdge(coarse, area)) && area.width < SEARCH_LIMIT) {
@@ -478,13 +447,11 @@ async function measuredViewBox(
   }
   const box = coarse && (await paintedBounds(element, coarse))
   if (!box) return null
-  element.setAttribute(
-    'viewBox',
-    `${box.x} ${box.y} ${box.width} ${box.height}`,
-  )
-  element.removeAttribute('width')
-  element.removeAttribute('height')
-  return { element, width: box.width, height: box.height }
+  return {
+    element: inViewport(element, box),
+    width: box.width,
+    height: box.height,
+  }
 }
 
 /**

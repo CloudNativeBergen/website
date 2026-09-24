@@ -518,9 +518,11 @@ export const MalformedStylesheetStillTinted: Story = {
 }
 
 /**
- * A logo that smuggles a `foreignObject` image in through SMIL — an engine
- * that taints the canvas for it must not break Download: the logo falls back
- * instead. (Chromium does not taint; Safari is checked by hand.)
+ * A logo that smuggles a `foreignObject` image in through SMIL, which an
+ * engine that taints canvases for it would turn into a failed export. This
+ * pins that Download still works with it. It cannot exercise the read-back
+ * fallback: no current engine taints here (Chromium in CI; Firefox 157 and
+ * Safari 27 checked by hand).
  */
 export const TaintingLogoStillExports: Story = {
   args: {
@@ -541,6 +543,38 @@ export const TaintingLogoStillExports: Story = {
     const preview = canvasElement.querySelector('canvas')!.parentElement!
     const blob = await captureImage(preview.parentElement!)
     expect(blob.size).toBeGreaterThan(0)
+  },
+}
+
+/**
+ * % is a viewport length wherever it appears — here in a `<defs>` shape drawn
+ * through `<use>`, and in a `clipPath` — and must resolve against one fixed
+ * viewport however measuring moves the view. The white backdrop is 300×150;
+ * the clip keeps the left half (150×150) of a red band over it.
+ */
+export const PercentInDefsAndClipPath: Story = {
+  args: {
+    conferenceLogos: {
+      title: 'Konf',
+      logoBright:
+        '<svg><defs><rect id="bg" width="100%" height="100%" fill="#1d4ed8"/><clipPath id="c"><rect width="50%" height="100%"/></clipPath></defs><use href="#bg"/><rect width="300" height="150" fill="#facc15" clip-path="url(#c)"/></svg>',
+    },
+  },
+  play: async ({ canvasElement }) => {
+    // 300×150 drawn at the box width is 360×180: the box (87 tall) shows the
+    // top half — yellow on the left half, blue on the right.
+    const box = logoBox()
+    const left = { ...box, x: box.x + 8, width: box.width / 2 - 16 }
+    const right = {
+      ...box,
+      x: box.x + box.width / 2 + 8,
+      width: box.width / 2 - 16,
+    }
+    const canvas = () => canvasElement.querySelector('canvas')!
+    await waitFor(() => {
+      expect(share(canvas(), CANVAS_SIZE, left, isYellow)).toBeGreaterThan(0.95)
+      expect(share(canvas(), CANVAS_SIZE, right, isBlue)).toBeGreaterThan(0.95)
+    })
   },
 }
 
