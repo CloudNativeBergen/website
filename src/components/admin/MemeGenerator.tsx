@@ -50,6 +50,9 @@ import {
   drawLogo,
   isLightBackground,
   loadLogoImage,
+  logoColor,
+  logoRasterKey,
+  logoRasterRequests,
   placeLogo,
   logoSvgFor,
   monochromeInk,
@@ -235,24 +238,22 @@ export function MemeGenerator({
   const uploadedLogoSvg = logoSvgFor(conferenceLogos, lightBackground)
   const logoName = conferenceLogos?.title?.trim() || PLATFORM_NAME
   const uploadedLogoKey = uploadedLogoSvg
-    ? `${logoVariant === 'monochrome' ? logoInk : ''}|${uploadedLogoSvg}`
+    ? logoRasterKey(uploadedLogoSvg, logoColor(logoVariant, lightBackground))
     : null
 
-  // The uploaded logo is rasterised asynchronously; `key` ties the result to
-  // the SVG and ink it was made from. While a new raster decodes the previous
-  // one stays up, and one that cannot be drawn falls back to the wordmark.
-  const [uploadedLogo, setUploadedLogo] = useState<{
-    key: string
-    logo: CanvasLogo | null
-  } | null>(null)
+  // Every raster the design can switch to, decoded up front (see
+  // logoRasterRequests). One that cannot be drawn falls back to the wordmark;
+  // until the set has decoded, just after mount, there is no logo.
+  const [logoRasters, setLogoRasters] = useState<
+    ReadonlyMap<string, CanvasLogo | null>
+  >(() => new Map())
 
   const canvasLogo = useMemo<CanvasLogo | null>(() => {
     const wordmark: CanvasLogo = { kind: 'wordmark', name: logoName }
     if (!uploadedLogoKey) return wordmark
-    if (uploadedLogo?.key === uploadedLogoKey)
-      return uploadedLogo.logo ?? wordmark
-    return uploadedLogo?.logo ?? null
-  }, [uploadedLogoKey, uploadedLogo, logoName])
+    if (!logoRasters.has(uploadedLogoKey)) return null
+    return logoRasters.get(uploadedLogoKey) ?? wordmark
+  }, [uploadedLogoKey, logoRasters, logoName])
 
   const handleBackgroundImageUpload = (
     e: React.ChangeEvent<HTMLInputElement>,
@@ -485,19 +486,24 @@ export function MemeGenerator({
     }
   }, [fontRequests])
 
+  const logoBright = conferenceLogos?.logoBright
+  const logoDark = conferenceLogos?.logoDark
   useEffect(() => {
-    if (!uploadedLogoSvg || !uploadedLogoKey) return
+    const requests = logoRasterRequests({ logoBright, logoDark })
+    if (requests.length === 0) return
     let cancelled = false
-    loadLogoImage(
-      uploadedLogoSvg,
-      logoVariant === 'monochrome' ? logoInk : undefined,
-    ).then((logo) => {
-      if (!cancelled) setUploadedLogo({ key: uploadedLogoKey, logo })
+    Promise.all(
+      requests.map(
+        async ({ key, svg, color }) =>
+          [key, await loadLogoImage(svg, color)] as const,
+      ),
+    ).then((entries) => {
+      if (!cancelled) setLogoRasters(new Map(entries))
     })
     return () => {
       cancelled = true
     }
-  }, [uploadedLogoSvg, uploadedLogoKey, logoVariant, logoInk])
+  }, [logoBright, logoDark])
 
   // The wordmark is canvas text, so its webfont has to be asked for too.
   useEffect(() => {

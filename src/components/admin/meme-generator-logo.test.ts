@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import {
   isLightBackground,
+  logoColor,
+  logoRasterRequests,
   logoFrame,
   logoSvgFor,
   monochromeInk,
@@ -28,6 +30,21 @@ describe('monochromeInk', () => {
   it('is black on light and white on dark', () => {
     expect(monochromeInk(true)).toBe('#000000')
     expect(monochromeInk(false)).toBe('#FFFFFF')
+  })
+})
+
+describe('logoColor', () => {
+  // An uploaded logo's `currentColor` is what this resolves to. Stored logos
+  // colour their text with `text-brand-slate-gray dark:text-white` classes,
+  // which an SVG loaded as an image cannot see.
+  it('is the monochrome ink in monochrome', () => {
+    expect(logoColor('monochrome', true)).toBe('#000000')
+    expect(logoColor('monochrome', false)).toBe('#FFFFFF')
+  })
+
+  it("is what the logo's own classes meant in gradient: slate on light, white on dark", () => {
+    expect(logoColor('gradient', true)).toBe('#334155')
+    expect(logoColor('gradient', false)).toBe('#FFFFFF')
   })
 })
 
@@ -75,6 +92,14 @@ describe('svgForCanvas', () => {
     )
     expect(result).toMatchObject({ width: 200, height: 50 })
     expect(result?.markup).toContain('viewBox="0 0 200 50"')
+  })
+
+  it('takes its size from width and height when they disagree with the viewBox', () => {
+    // As an image the SVG is width×height, its viewBox letterboxed inside;
+    // fitting it by the viewBox's aspect would stretch it.
+    expect(
+      svgForCanvas('<svg width="200" height="100" viewBox="0 0 100 100"/>'),
+    ).toMatchObject({ width: 200, height: 100 })
   })
 
   it('accepts comma-separated viewBox values', () => {
@@ -220,9 +245,45 @@ describe('withColor', () => {
     )
   })
 
+  it('keeps a style whose value holds the other quote character', () => {
+    expect(
+      withColor(
+        `<svg style="font-family:'Arial';fill:red"><g/></svg>`,
+        '#000000',
+      ),
+    ).toBe(`<svg style="font-family:'Arial';fill:red;color:#000000"><g/></svg>`)
+  })
+
   it('only touches the root element', () => {
     expect(withColor('<svg><g style="opacity:1"/></svg>', '#000000')).toBe(
       '<svg style="color:#000000"><g style="opacity:1"/></svg>',
     )
+  })
+})
+
+describe('logoRasterRequests', () => {
+  it('asks for every tint of every variant a design can switch to, once each', () => {
+    const requests = logoRasterRequests({
+      logoBright: '<svg id="b"/>',
+      logoDark: '<svg id="d"/>',
+    })
+    expect(requests.map(({ svg, color }) => `${svg} ${color}`).sort()).toEqual([
+      '<svg id="b"/> #000000',
+      '<svg id="b"/> #334155',
+      '<svg id="d"/> #FFFFFF',
+    ])
+    expect(new Set(requests.map((r) => r.key)).size).toBe(3)
+  })
+
+  it('tints the light-mode logo for dark backgrounds when there is no dark one', () => {
+    expect(
+      logoRasterRequests({ logoBright: '<svg id="b"/>' })
+        .map((r) => r.color)
+        .sort(),
+    ).toEqual(['#000000', '#334155', '#FFFFFF'])
+  })
+
+  it('asks for nothing without an uploaded logo', () => {
+    expect(logoRasterRequests({ title: 'Konf' })).toEqual([])
   })
 })

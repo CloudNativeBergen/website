@@ -144,6 +144,48 @@ async function pickBackground(canvas: Canvas, name: string) {
   await userEvent.click(canvas.getByTitle(name))
 }
 
+/**
+ * Shaped like the stored Bergen logos: the mark has its own fills, but the
+ * text is `currentColor` under `text-brand-slate-gray dark:text-white` — page
+ * CSS an SVG drawn as an image never sees. Its bar spans x 270–950, y 40–194.
+ */
+const CLASS_COLOURED_LOGO = {
+  title: 'Cloud Native Day Bergen 2025',
+  logoBright:
+    '<svg viewBox="0 0 970 234" xmlns="http://www.w3.org/2000/svg"><circle cx="117" cy="117" r="110" fill="#3B82F6"/><rect x="270" y="40" width="680" height="154" fill="currentColor" class="text-brand-slate-gray dark:text-white"/></svg>',
+}
+
+export const ClassColouredLogoGradientOnDark: Story = {
+  args: { conferenceLogos: CLASS_COLOURED_LOGO },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await pickBackground(canvas, 'Slate Gray')
+    await openBackgroundAdvanced(canvas)
+    await userEvent.click(canvas.getByRole('button', { name: /Gradient/ }))
+
+    // The text bar, inset from its edges. On a dark design it must be light:
+    // unresolved, `currentColor` is black and the name vanishes.
+    const box = logoBox()
+    const scale = box.width / 970
+    await waitFor(() => {
+      const { data } = canvasElement
+        .querySelector('canvas')!
+        .getContext('2d')!
+        .getImageData(
+          Math.round(box.x + 300 * scale),
+          Math.round(box.y + 60 * scale),
+          Math.round(600 * scale),
+          Math.round(100 * scale),
+        )
+      let sum = 0
+      for (let i = 0; i < data.length; i += 4) {
+        sum += (data[i] + data[i + 1] + data[i + 2]) / 3
+      }
+      expect(sum / (data.length / 4)).toBeGreaterThan(200)
+    })
+  },
+}
+
 export const FallbackGradient: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)

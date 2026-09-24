@@ -45,6 +45,19 @@ export function monochromeInk(light: boolean): '#000000' | '#FFFFFF' {
 }
 
 /**
+ * The `currentColor` an uploaded logo is drawn with. Inline, a logo inherits
+ * colour from the page, and stored logos lean on that: their text is
+ * `currentColor` under `text-brand-slate-gray dark:text-white` classes. An SVG
+ * loaded as an image sees no page CSS, so the colour is resolved here — the
+ * monochrome ink, or in gradient what those classes meant, keyed to the
+ * design's background rather than the admin's theme.
+ */
+export function logoColor(variant: LogoVariant, light: boolean): string {
+  if (variant === 'monochrome') return monochromeInk(light)
+  return light ? '#334155' : '#FFFFFF'
+}
+
+/**
  * The uploaded logo for this background: the light-mode logo on a light
  * background, the dark-mode one on a dark background (falling back to the
  * light-mode one, as the site does). The admin's own theme plays no part — it
@@ -56,6 +69,37 @@ export function logoSvgFor(
 ): string | undefined {
   if (!logos?.logoBright) return undefined
   return light ? logos.logoBright : logos.logoDark || logos.logoBright
+}
+
+export interface LogoRasterRequest {
+  key: string
+  svg: string
+  color: string
+}
+
+export function logoRasterKey(svg: string, color: string): string {
+  return `${color}|${svg}`
+}
+
+/**
+ * Every raster the design can switch to — each variant on a light and a dark
+ * background — so all are decoded up front and a background or style change
+ * never draws (or exports) a frame without the logo while one decodes.
+ */
+export function logoRasterRequests(
+  logos: ConferenceLogos | undefined,
+): LogoRasterRequest[] {
+  const requests = new Map<string, LogoRasterRequest>()
+  for (const light of [true, false]) {
+    const svg = logoSvgFor(logos, light)
+    if (!svg) continue
+    for (const variant of ['gradient', 'monochrome'] as const) {
+      const color = logoColor(variant, light)
+      const key = logoRasterKey(svg, color)
+      requests.set(key, { key, svg, color })
+    }
+  }
+  return [...requests.values()]
 }
 
 export interface CanvasSvg {
@@ -104,17 +148,21 @@ export function svgForCanvas(svg: string): CanvasSvg | null {
     ?.trim()
     .split(/[\s,]+/)
     .map(Number)
-  if (box?.length === 4 && box[2] > 0 && box[3] > 0) {
+  const hasBox = box?.length === 4 && box[2] > 0 && box[3] > 0
+  const pixelWidth = pixels(attribute(tag, 'width'))
+  const pixelHeight = pixels(attribute(tag, 'height'))
+
+  // As an image the SVG is sized by width × height when it has both — its
+  // viewBox is letterboxed inside — and by its viewBox otherwise.
+  if (pixelWidth && pixelHeight) {
+    width = pixelWidth
+    height = pixelHeight
+    if (!hasBox) {
+      tag = tag.replace(/^<svg\b/i, `<svg viewBox="0 0 ${width} ${height}"`)
+    }
+  } else if (hasBox) {
     width = box[2]
     height = box[3]
-  } else {
-    width = pixels(attribute(tag, 'width'))
-    height = pixels(attribute(tag, 'height'))
-    if (width && height) {
-      tag = tag.replace(/^<svg\b/i, `<svg viewBox="0 0 ${width} ${height}"`)
-    } else {
-      width = height = undefined
-    }
   }
 
   if (!/\sxmlns\s*=/i.test(tag)) {
@@ -221,26 +269,33 @@ function measuredViewBox(markup: string): CanvasSvg | null {
  */
 export function withColor(markup: string, color: string): string {
   return markup.replace(SVG_OPEN_TAG, (tag) => {
-    const style = /(\sstyle\s*=\s*)(["'])([^"']*)\2/i
+    const style = /(\sstyle\s*=\s*)(?:"([^"]*)"|'([^']*)')/i
     return style.test(tag)
-      ? tag.replace(style, `$1$2$3;color:${color}$2`)
+      ? tag.replace(
+          style,
+          (_, prefix: string, double?: string, single?: string) =>
+            double !== undefined
+              ? `${prefix}"${double};color:${color}"`
+              : `${prefix}'${single};color:${color}'`,
+        )
       : tag.replace(/^<svg\b/i, `<svg style="color:${color}"`)
   })
 }
 
 /**
- * Rasterise an uploaded logo into a decoded image, tinted with `color` when
- * given. Resolves null for markup that cannot be drawn.
+ * Rasterise an uploaded logo into a decoded image, with `color` as its
+ * `currentColor` (see {@link logoColor}). Resolves null for markup that cannot
+ * be drawn.
  */
 export async function loadLogoImage(
   svg: string,
-  color?: string,
+  color: string,
 ): Promise<CanvasLogo | null> {
   let prepared = svgForCanvas(svg)
   if (prepared && !prepared.width) prepared = measuredViewBox(prepared.markup)
   if (!prepared?.width || !prepared.height) return null
 
-  const markup = color ? withColor(prepared.markup, color) : prepared.markup
+  const markup = withColor(prepared.markup, color)
 
   const image = new Image()
   image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(markup)}`
