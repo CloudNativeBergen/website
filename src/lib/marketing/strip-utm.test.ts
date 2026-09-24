@@ -148,6 +148,17 @@ describe('stripUtmFromAddressBar and the Next.js app router', () => {
     expect(window.history.state).toEqual(ROUTER_STATE)
   })
 
+  it('without the activation API, the router is bypassed: a pending navigation cannot be ruled out', () => {
+    installRouterPatch()
+    Object.defineProperty(navigator, 'userActivation', {
+      configurable: true,
+      value: undefined,
+    })
+    expect(stripUtmFromAddressBar(window)).toBe('bypass')
+    expect(window.location.search).toBe('?keep=1')
+    expect(window.history.state).toEqual(ROUTER_STATE)
+  })
+
   it('before the patch is installed, the state is written back exactly: Back never reloads', () => {
     // Next reloads the page on popstate to an entry whose state lacks __NA.
     expect(stripUtmFromAddressBar(window)).toBe('native')
