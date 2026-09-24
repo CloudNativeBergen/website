@@ -141,6 +141,12 @@ type Answer =
       retryAfter?: Date
       /** The body carried an execution error (see `errors.executed`). */
       executed?: boolean
+      /**
+       * The body could not be read (not JSON, or the read was aborted): the
+       * status is all that is known, and it may have arrived after a create
+       * executed.
+       */
+      unread?: boolean
     }
   | {
       kind: 'errors'
@@ -359,10 +365,12 @@ export class BufferPublishAdapter implements SocialPublishAdapter {
     }
     // createPost started executing and failed: whatever the code says,
     // the post may exist, so no code may authorise a retry. Typed union
-    // refusals (above) stay definitive.
+    // refusals (above) stay definitive. A throttle whose body could not be
+    // read is no better: the evidence that would make it a retry is unread.
     if (
       (answer.kind === 'errors' || answer.kind === 'http') &&
-      answer.executed
+      (answer.executed ||
+        (answer.kind === 'http' && answer.unread && answer.status === 429))
     ) {
       return ambiguous(answer.message)
     }
@@ -419,11 +427,14 @@ export class BufferPublishAdapter implements SocialPublishAdapter {
       body = (await response.json()) as GraphQLBody | null
     } catch (error) {
       if (!response.ok) {
-        return httpAnswer(
-          response,
-          `${operationName}: HTTP ${response.status}`,
-          this.now(),
-        )
+        return {
+          ...httpAnswer(
+            response,
+            `${operationName}: HTTP ${response.status}`,
+            this.now(),
+          ),
+          unread: true,
+        }
       }
       return {
         kind: 'no-answer',
@@ -442,7 +453,17 @@ export class BufferPublishAdapter implements SocialPublishAdapter {
       Array.isArray(e.path) ? e.path.length : 0,
     )
     const executed = pathLengths.some((n) => n > 0)
-    if (!response.ok) {
+    const data = body?.data
+    // A system error nulls the (non-null) root field, and GraphQL may then
+    // null `data` itself or leave `{ field: null }`: either way no field
+    // carries an answer, so the error is the answer.
+    const answered =
+      data !== null &&
+      typeof data === 'object' &&
+      Object.values(data).some((value) => value !== null && value !== undefined)
+    // A root field that answered outranks the HTTP status: a create whose
+    // body names the post was a create, whatever the gateway stamped on it.
+    if (!response.ok && !answered) {
       const detail = firstMessage ? ` ${firstMessage}` : ''
       return {
         ...httpAnswer(
@@ -453,14 +474,6 @@ export class BufferPublishAdapter implements SocialPublishAdapter {
         executed,
       }
     }
-    const data = body?.data
-    // A system error nulls the (non-null) root field, and GraphQL may then
-    // null `data` itself or leave `{ field: null }`: either way no field
-    // carries an answer, so the error is the answer.
-    const answered =
-      data !== null &&
-      typeof data === 'object' &&
-      Object.values(data).some((value) => value !== null && value !== undefined)
     if (errors.length > 0 && !answered) {
       const codes = new Set(
         errors.map((e) =>

@@ -351,12 +351,18 @@ describe('BufferPublishAdapter — failure at create (spec §3.3)', () => {
     // Buffer's window is 15 minutes: a Retry-After of years is not a
     // Buffer throttle, and honouring it would park the post for years.
     ['31536000000', new Date(NOW.getTime() + BUFFER_MAX_RETRY_AFTER_MS)],
+    // Past Date's range this would be an Invalid Date, and the engine's
+    // settlement throws on `toISOString()`.
+    [
+      '100000000000000000000',
+      new Date(NOW.getTime() + BUFFER_MAX_RETRY_AFTER_MS),
+    ],
     [
       'Fri, 01 Jan 2100 00:00:00 GMT',
       new Date(NOW.getTime() + BUFFER_MAX_RETRY_AFTER_MS),
     ],
   ])(
-    'a 429 with Retry-After %j yields retryAfter %j — never a date in the past or years out',
+    'a 429 (answered at the check; the parser is shared) with Retry-After %j yields retryAfter %j — never a date in the past or years out',
     async (header, retryAfter) => {
       const throttled: typeof fetch = async () =>
         new Response(
@@ -465,6 +471,71 @@ describe('BufferPublishAdapter — failure at create (spec §3.3)', () => {
       create: { __typename: 'PostActionSuccess', post: {} },
     })
     expect(outcome).toMatchObject({ ok: false, kind: 'ambiguous' })
+  })
+
+  // A fetch that answers the channel check from the fixture and the create
+  // with the given answer — for shapes MSW's JSON helpers cannot build.
+  function createAnswering(answer: () => Response | Promise<Response>) {
+    const calls = buffer({})
+    const fetchImpl: typeof fetch = async (input, init) => {
+      const body = JSON.parse(String(init?.body)) as { operationName?: string }
+      if (body.operationName === 'CreatePost') return answer()
+      return fetch(input, init)
+    }
+    return { calls, fetchImpl }
+  }
+
+  it.each([
+    [
+      'a non-JSON body',
+      () =>
+        new Response('<html>Too Many Requests</html>', {
+          status: 429,
+          headers: { 'retry-after': '30', 'content-type': 'text/html' },
+        }),
+    ],
+    [
+      'a body whose read was aborted',
+      () =>
+        ({
+          ok: false,
+          status: 429,
+          headers: new Headers({ 'retry-after': '30' }),
+          json: async () => {
+            throw new DOMException('The operation was aborted.', 'AbortError')
+          },
+        }) as unknown as Response,
+    ],
+  ])(
+    'an HTTP 429 at create with %s is ambiguous, not rate-limited — the unread body may hold execution evidence',
+    async (_label, answer) => {
+      const { fetchImpl } = createAnswering(answer)
+      const outcome = await adapter({ fetch: fetchImpl }).publish(LINK_ONLY)
+      expect(outcome).toMatchObject({ ok: false, kind: 'ambiguous' })
+    },
+  )
+
+  it('an HTTP 429 whose body carries a PostActionSuccess is accepted with its id — the status does not outrank the post', async () => {
+    const { fetchImpl } = createAnswering(
+      () =>
+        new Response(
+          JSON.stringify({
+            data: {
+              createPost: {
+                __typename: 'PostActionSuccess',
+                post: { id: 'created-under-429' },
+              },
+            },
+          }),
+          { status: 429, headers: { 'retry-after': '30' } },
+        ),
+    )
+    const outcome = await adapter({ fetch: fetchImpl }).publish(LINK_ONLY)
+    expect(outcome).toEqual({
+      ok: true,
+      result: 'accepted',
+      vendorPostId: 'created-under-429',
+    })
   })
 
   it('a create that outlives its call timeout is ambiguous — the request was sent and the post may exist', async () => {
