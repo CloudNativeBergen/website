@@ -385,12 +385,16 @@ export function MemeGenerator({
   // Which set of faces has settled. Until then nothing is painted and capture
   // waits; a face that fails, is missing or times out settles all the same.
   const [textFontsReadyFor, setTextFontsReadyFor] = useState('')
+  // Bumped when a face lands after its load timed out, to repaint in it.
+  const [lateFaces, setLateFaces] = useState(0)
+  const repaintLateFace = () => setLateFaces((count) => count + 1)
   const textFontsPending = fontRequestKey !== textFontsReadyFor
   useEffect(() => {
     let cancelled = false
     loadCanvasFonts(
       fontRequests,
       typeof document === 'undefined' ? undefined : document.fonts,
+      { onLate: () => !cancelled && repaintLateFace() },
     ).then(() => {
       if (!cancelled) setTextFontsReadyFor(fontRequestKey)
     })
@@ -412,6 +416,7 @@ export function MemeGenerator({
     loadCanvasFonts(
       family ? [{ font: wordmarkFont(family, 72, false), text: logoName }] : [],
       document.fonts,
+      { onLate: () => !cancelled && repaintLateFace() },
     ).then(() => {
       if (!cancelled) setWordmarkReadyFor(logoName)
     })
@@ -452,7 +457,7 @@ export function MemeGenerator({
       const ctx = canvas?.getContext('2d')
       if (ctx) drawDesign(ctx, design, { ...assets, brand }, 0)
     }
-  }, [design, assets, capturePending])
+  }, [design, assets, capturePending, lateFaces])
 
   // The overlay carried the logo's accessible name; the canvas now does.
   const canvasLabel = `Meme preview with the ${logoName} logo`

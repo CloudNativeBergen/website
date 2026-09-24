@@ -120,3 +120,50 @@ describe('MemeGenerator painting', () => {
     }
   })
 })
+
+describe('MemeGenerator late font faces', () => {
+  it('repaints once a face lands after its load timed out', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    let paints = 0
+    const ctx = new Proxy(
+      {},
+      {
+        get: (_target, key) =>
+          key === 'measureText'
+            ? () => ({ width: 10 })
+            : key === 'clearRect'
+              ? () => paints++
+              : () => {},
+        set: () => true,
+      },
+    )
+    vi.mocked(HTMLCanvasElement.prototype.getContext).mockReturnValue(
+      ctx as CanvasRenderingContext2D,
+    )
+    let arrive: () => void = () => {}
+    Object.defineProperty(document, 'fonts', {
+      value: {
+        load: vi.fn(
+          () =>
+            new Promise<FontFace[]>((resolve) => (arrive = () => resolve([]))),
+        ),
+      },
+      configurable: true,
+    })
+
+    try {
+      render(<MemeGenerator />)
+      typeInto(screen.getAllByPlaceholderText('Enter your text...')[0], 'Hei')
+      // Timed out: painted once, in the fallback.
+      await vi.advanceTimersByTimeAsync(3000)
+      await waitFor(() => expect(paints).toBeGreaterThan(0))
+      const afterTimeout = paints
+
+      arrive()
+      await waitFor(() => expect(paints).toBeGreaterThan(afterTimeout))
+    } finally {
+      Reflect.deleteProperty(document, 'fonts')
+      vi.useRealTimers()
+    }
+  })
+})
