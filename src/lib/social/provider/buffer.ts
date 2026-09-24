@@ -141,12 +141,14 @@ type Answer =
       retryAfter?: Date
       /** The body carried an execution error (see `errors.executed`). */
       executed?: boolean
+      /** The ONE code the body's errors agree on (see `errors.code`). */
+      code?: string
       /**
-       * The body could not be read (not JSON, or the read was aborted): the
-       * status is all that is known, and it may have arrived after a create
-       * executed.
+       * A root field that answered despite the status: only the create
+       * phase may read it, because there the body is the evidence of what
+       * happened, whatever a gateway stamped on it.
        */
-      unread?: boolean
+      data?: Record<string, unknown>
     }
   | {
       kind: 'errors'
@@ -360,17 +362,31 @@ export class BufferPublishAdapter implements SocialPublishAdapter {
 
   /** Spec §3.3, after the create request may have been sent. */
   private createOutcome(answer: Answer): PublishOutcome {
+    // A body that answered is the answer, whatever the HTTP status: a
+    // PostActionSuccess under a 429 was still a create.
     if (answer.kind === 'data') {
+      return createPayloadOutcome(answer.data.createPost)
+    }
+    if (answer.kind === 'http' && answer.data) {
       return createPayloadOutcome(answer.data.createPost)
     }
     // createPost started executing and failed: whatever the code says,
     // the post may exist, so no code may authorise a retry. Typed union
-    // refusals (above) stay definitive. A throttle whose body could not be
-    // read is no better: the evidence that would make it a retry is unread.
+    // refusals (above) stay definitive.
     if (
       (answer.kind === 'errors' || answer.kind === 'http') &&
-      (answer.executed ||
-        (answer.kind === 'http' && answer.unread && answer.status === 429))
+      answer.executed
+    ) {
+      return ambiguous(answer.message)
+    }
+    // Only a throttle Buffer signed (its documented RATE_LIMIT_EXCEEDED
+    // body, no path) is a definite non-post. A 429 with any other body —
+    // a gateway's, an empty one, one that could not be read — is not
+    // evidence the create never ran.
+    if (
+      answer.kind === 'http' &&
+      answer.status === 429 &&
+      answer.code !== 'RATE_LIMIT_EXCEEDED'
     ) {
       return ambiguous(answer.message)
     }
@@ -427,14 +443,11 @@ export class BufferPublishAdapter implements SocialPublishAdapter {
       body = (await response.json()) as GraphQLBody | null
     } catch (error) {
       if (!response.ok) {
-        return {
-          ...httpAnswer(
-            response,
-            `${operationName}: HTTP ${response.status}`,
-            this.now(),
-          ),
-          unread: true,
-        }
+        return httpAnswer(
+          response,
+          `${operationName}: HTTP ${response.status}`,
+          this.now(),
+        )
       }
       return {
         kind: 'no-answer',
@@ -453,6 +466,12 @@ export class BufferPublishAdapter implements SocialPublishAdapter {
       Array.isArray(e.path) ? e.path.length : 0,
     )
     const executed = pathLengths.some((n) => n > 0)
+    const codes = new Set(
+      errors.map((e) =>
+        typeof e.extensions?.code === 'string' ? e.extensions.code : '',
+      ),
+    )
+    const code = codes.size === 1 ? [...codes][0] || undefined : undefined
     const data = body?.data
     // A system error nulls the (non-null) root field, and GraphQL may then
     // null `data` itself or leave `{ field: null }`: either way no field
@@ -461,9 +480,7 @@ export class BufferPublishAdapter implements SocialPublishAdapter {
       data !== null &&
       typeof data === 'object' &&
       Object.values(data).some((value) => value !== null && value !== undefined)
-    // A root field that answered outranks the HTTP status: a create whose
-    // body names the post was a create, whatever the gateway stamped on it.
-    if (!response.ok && !answered) {
+    if (!response.ok) {
       const detail = firstMessage ? ` ${firstMessage}` : ''
       return {
         ...httpAnswer(
@@ -472,15 +489,11 @@ export class BufferPublishAdapter implements SocialPublishAdapter {
           this.now(),
         ),
         executed,
+        ...(code ? { code } : {}),
+        ...(answered ? { data: data as Record<string, unknown> } : {}),
       }
     }
     if (errors.length > 0 && !answered) {
-      const codes = new Set(
-        errors.map((e) =>
-          typeof e.extensions?.code === 'string' ? e.extensions.code : '',
-        ),
-      )
-      const code = codes.size === 1 ? [...codes][0] || undefined : undefined
       return {
         kind: 'errors',
         code,

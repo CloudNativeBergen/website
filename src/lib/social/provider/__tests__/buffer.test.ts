@@ -242,6 +242,33 @@ describe('BufferPublishAdapter — the pinned channel check (spec §2)', () => {
     },
   )
 
+  it.each([
+    [429, 'rate-limited'],
+    [401, 'credential-expired'],
+  ])(
+    'an HTTP %s at the check whose body still carries a conforming channel is %s — nothing is sent under a refusal',
+    async (status, kind) => {
+      const { calls, outcome } = await publishWith({
+        channel: {
+          rawBody: {
+            data: {
+              channel: {
+                id: CHANNEL_ID,
+                service: 'linkedin',
+                type: 'page',
+                descriptor: 'LinkedIn Page',
+                linkShortening: { isEnabled: false },
+              },
+            },
+          },
+          status,
+        },
+      })
+      expect(outcome).toMatchObject({ ok: false, kind })
+      expect(callsNamed(calls, 'CreatePost')).toEqual([])
+    },
+  )
+
   it('a 4xx on the check is our bug, not weather: rejected, never retried every tick', async () => {
     const { calls, outcome } = await publishWith({ channel: 'http-400' })
     expect(outcome).toMatchObject({ ok: false, kind: 'rejected' })
@@ -495,6 +522,19 @@ describe('BufferPublishAdapter — failure at create (spec §3.3)', () => {
         }),
     ],
     [
+      'a JSON body that is not a GraphQL answer',
+      () =>
+        new Response(JSON.stringify({ message: 'Too Many Requests' }), {
+          status: 429,
+          headers: { 'retry-after': '30' },
+        }),
+    ],
+    [
+      'an empty JSON object',
+      () =>
+        new Response('{}', { status: 429, headers: { 'retry-after': '30' } }),
+    ],
+    [
       'a body whose read was aborted',
       () =>
         ({
@@ -507,7 +547,7 @@ describe('BufferPublishAdapter — failure at create (spec §3.3)', () => {
         }) as unknown as Response,
     ],
   ])(
-    'an HTTP 429 at create with %s is ambiguous, not rate-limited — the unread body may hold execution evidence',
+    'an HTTP 429 at create with %s is ambiguous, not rate-limited — only a throttle Buffer signed is a definite non-post',
     async (_label, answer) => {
       const { fetchImpl } = createAnswering(answer)
       const outcome = await adapter({ fetch: fetchImpl }).publish(LINK_ONLY)
@@ -537,6 +577,24 @@ describe('BufferPublishAdapter — failure at create (spec §3.3)', () => {
       vendorPostId: 'created-under-429',
     })
   })
+
+  it.each([
+    ['401', 'credential-expired'],
+    ['400', 'rejected'],
+  ])(
+    'an HTTP %s at create with an unreadable body keeps its terminal mapping (%s) — never a retry',
+    async (status, kind) => {
+      const { fetchImpl } = createAnswering(
+        () =>
+          new Response(`<html>${status}</html>`, {
+            status: Number(status),
+            headers: { 'content-type': 'text/html' },
+          }),
+      )
+      const outcome = await adapter({ fetch: fetchImpl }).publish(LINK_ONLY)
+      expect(outcome).toMatchObject({ ok: false, kind })
+    },
+  )
 
   it('a create that outlives its call timeout is ambiguous — the request was sent and the post may exist', async () => {
     const { calls, outcome } = await publishWith(
@@ -685,6 +743,27 @@ describe('BufferPublishAdapter — confirm (spec §3.2)', () => {
     await expect(adapter().confirm(POST_ID)).resolves.toMatchObject({
       state: 'unreadable',
       message: expect.stringContaining('externalLink'),
+    })
+  })
+
+  it('an HTTP 429 whose body still says sent is unreadable — a refused read settles nothing', async () => {
+    buffer({
+      post: {
+        rawBody: {
+          data: {
+            post: {
+              id: POST_ID,
+              status: 'sent',
+              externalLink: POST_URL,
+              error: null,
+            },
+          },
+        },
+        status: 429,
+      },
+    })
+    await expect(adapter().confirm(POST_ID)).resolves.toMatchObject({
+      state: 'unreadable',
     })
   })
 
