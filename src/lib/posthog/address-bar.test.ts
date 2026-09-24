@@ -258,19 +258,31 @@ describe('scheduleUtmStrip', () => {
   it('after a bypass, strips the tags again whenever the router writes them back', () => {
     // The router never learned the clean URL, so its next commit on this
     // page (a refresh, a server action) writes the tagged landing back,
-    // marker and all: long after the guard window.
+    // marker and all: long after the guard window. HistoryUpdater's state.
+    const ROUTER_STATE = {
+      __NA: true,
+      __PRIVATE_NEXTJS_INTERNALS_TREE: { tree: ['', {}], renderedSearch: '' },
+    }
     setUserActivation(true)
-    window.history.replaceState({ __NA: true }, '', TAGGED)
+    window.history.replaceState(ROUTER_STATE, '', TAGGED)
     const schedule = scheduleUtmStrip(window)
     schedule.now()
     expect(window.location.search).toBe('?keep=1')
+    const replace = vi.spyOn(window.history, 'replaceState')
     for (const later of [UTM_STRIP_GUARD_MS * 4, UTM_STRIP_GUARD_MS * 40]) {
+      // Watching writes nothing while the bar is clean (WebKit throttles
+      // history writes)…
+      replace.mockClear()
       vi.advanceTimersByTime(later)
-      window.history.replaceState({ __NA: true }, '', TAGGED)
+      expect(replace).not.toHaveBeenCalled()
+      window.history.replaceState(ROUTER_STATE, '', TAGGED)
+      replace.mockClear()
       vi.advanceTimersByTime(UTM_STRIP_WATCH_TICK_MS)
+      // …and exactly one write, keeping the router's state, when it is not.
+      expect(replace).toHaveBeenCalledTimes(1)
       expect(window.location.search).toBe('?keep=1')
       expect(window.location.hash).toBe('#h')
-      expect(window.history.state).toEqual({ __NA: true })
+      expect(window.history.state).toEqual(ROUTER_STATE)
     }
   })
 

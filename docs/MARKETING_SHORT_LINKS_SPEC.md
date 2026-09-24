@@ -221,7 +221,8 @@ blocked or slow: those visitors were never going to be attributed. The timeout r
 page is visible: a link opened in a background tab gets its first `$pageview` when the tab is first
 shown, and that pageview must still see the tags. The rewrite goes through the Next router's history
 patch, so the router's own copy of the URL is clean too, but only while the visitor has not yet
-interacted with the page (`navigator.userActivation`): the router treats an external rewrite as a
+interacted with the page (`navigator.userActivation`; a browser without that API is treated as
+interacted): the router treats an external rewrite as a
 RESTORE and discards whatever action is in flight, so after an activation the entry is rewritten
 behind the router and its copy stays as it was. That copy is written back on the router's next
 commit on the page (a refresh, a server action), so while the visitor stays on the landing the bar
