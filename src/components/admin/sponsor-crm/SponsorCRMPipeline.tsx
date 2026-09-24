@@ -629,6 +629,8 @@ export function SponsorCRMPipeline({
             socialLinks: conference.socialLinks,
             prospectusUrl: conference.sponsorshipCustomization?.prospectusUrl,
             theme: conference.theme,
+            registrationLink: conference.registrationLink,
+            sponsorRegistrationLink: conference.sponsorRegistrationLink,
           }}
         />
       )}
