@@ -161,7 +161,7 @@ export function svgForCanvas(svg: string): CanvasSvg | null {
   const doc = new DOMParser().parseFromString(sanitizeSvg(svg), 'text/html')
   const element = doc.body.querySelector('svg')
   if (!element) return null
-  stripActiveContent(element)
+  makeInert(element)
 
   const box = element
     .getAttribute('viewBox')
@@ -179,40 +179,97 @@ export function svgForCanvas(svg: string): CanvasSvg | null {
   return hasBox ? { element, width: box[2], height: box[3] } : { element }
 }
 
+const SVG_NS = 'http://www.w3.org/2000/svg'
+
+/** An external `url(…)` — anything but a local `#fragment` or inline `data:`. */
+const EXTERNAL_URL = /url\(\s*(['"]?)(?!\s*(?:#|data:))[^)]*\1\s*\)/gi
+
+/** CSS with every external reference and `@import` neutralised. */
+function inertCss(css: string): string {
+  return css.replace(/@import[^;]*;?/gi, '').replace(EXTERNAL_URL, 'none')
+}
+
 /**
- * Remove anything that could run: every `on*` attribute and every script-like
- * element. sanitizeSvg is a regex pass, and the HTML parser finds handlers it
- * misses (`<image/onerror=…>` — `/` separates attributes). The image path
- * cannot run script anyway, but a size-less logo is measured in the live
- * document, so the parsed tree is cleaned before anything is inserted.
+ * Reduce the parsed tree to what an SVG drawn as an image can use, so the
+ * result is inert wherever it goes — a size-less logo is measured in the LIVE
+ * document, and sanitizeSvg is only a regex pass (it misses `<image/onerror>`:
+ * `/` separates attributes for the HTML parser). Everything removed is
+ * something an image ignores anyway, so the picture does not change:
+ *
+ * - elements outside the SVG namespace — HTML smuggled in through `<desc>` or
+ *   `<title>` (`<meta http-equiv=refresh>` would navigate the admin's tab),
+ *   script-like SVG elements, and editor metadata under an undeclared prefix
+ *   (`<sodipodi:namedview>`), which XML refuses to parse;
+ * - `on*` handlers, and attributes under an undeclared prefix (`inkscape:*`);
+ * - external references: `href`s that are not `#local`, `@import`, and
+ *   `url()` pointing off the document.
  */
-function stripActiveContent(root: Element) {
+function makeInert(root: Element) {
   for (const element of [root, ...root.querySelectorAll('*')]) {
     if (
-      /^(script|foreignobject|iframe|embed|object)$/i.test(element.localName)
+      element.namespaceURI !== SVG_NS ||
+      element.localName.includes(':') ||
+      /^(script|foreignobject)$/i.test(element.localName)
     ) {
       element.remove()
       continue
     }
-    for (const { name } of [...element.attributes]) {
-      if (/^on/i.test(name)) element.removeAttribute(name)
+    for (const attribute of [...element.attributes]) {
+      const { name, namespaceURI, value } = attribute
+      const unboundPrefix =
+        name.includes(':') &&
+        namespaceURI === null &&
+        !name.startsWith('xmlns:')
+      if (/^on/i.test(name) || unboundPrefix) {
+        element.removeAttributeNode(attribute)
+      } else if (/(^|:)href$/i.test(name) && !value.trim().startsWith('#')) {
+        element.removeAttributeNode(attribute)
+      } else if (name === 'style') {
+        attribute.value = inertCss(value)
+      }
+    }
+    if (element.localName === 'style') {
+      element.textContent = inertCss(element.textContent ?? '')
     }
   }
 }
 
 /**
  * Serialise a prepared logo for an image, tinted per {@link LogoTint}: the
- * tint becomes the root's `currentColor`, replacing a colour the logo sets on
- * its root only when it overrides. XMLSerializer declares every namespace the
- * markup uses (SVG, xlink).
+ * tint becomes the root's `currentColor`. Overriding (monochrome) it is an
+ * inline style, beating any colour the logo sets; otherwise (gradient) it is
+ * a lowest-priority rule that only fills in where the logo sets none.
+ * XMLSerializer declares every namespace the markup uses (SVG, xlink).
  */
 export function logoMarkup(element: SVGSVGElement, tint: LogoTint): string {
   const clone = element.cloneNode(true)
   if (!(clone instanceof SVGElement)) throw new Error('not an SVG element')
-  const ownColor =
-    clone.style.getPropertyValue('color') || clone.getAttribute('color')
-  if (tint.override || !ownColor) clone.style.setProperty('color', tint.color)
+
+  if (tint.override) {
+    clone.style.setProperty('color', tint.color)
+  } else if (!ownRootColor(clone)) {
+    // Zero specificity and first in the document: a colour the logo sets in
+    // its own stylesheet still wins, as it did over the page's colour inline.
+    const rule = clone.ownerDocument.createElementNS(SVG_NS, 'style')
+    rule.textContent = `:where(:root){color:${tint.color}}`
+    clone.insertBefore(rule, clone.firstChild)
+  }
   return new XMLSerializer().serializeToString(clone)
+}
+
+/**
+ * A colour the logo gives its own root, inline or as an attribute. `inherit`
+ * and friends are not one: an image has nothing to inherit from.
+ */
+function ownRootColor(root: SVGElement): string | undefined {
+  const color = (
+    root.style.getPropertyValue('color') ||
+    root.getAttribute('color') ||
+    ''
+  ).trim()
+  return /^(|inherit|initial|unset|revert|currentcolor)$/i.test(color)
+    ? undefined
+    : color
 }
 
 export interface Frame {

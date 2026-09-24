@@ -9,6 +9,7 @@ import {
   monochromeInk,
   svgForCanvas,
   logoMarkup,
+  loadLogoImage,
 } from './meme-generator-logo'
 import { wordmarkLayout } from '../BrandWordmark'
 
@@ -180,6 +181,47 @@ describe('svgForCanvas + logoMarkup', () => {
     expect(handlers).toEqual([])
   })
 
+  it('drops HTML smuggled in through <desc>/<title> — meta refresh, img, link', () => {
+    const { root } = asImage(
+      '<svg viewBox="0 0 10 10"><desc><meta http-equiv="refresh" content="0;url=http://evil.test/"><img src="http://evil.test/p"><link rel="stylesheet" href="http://evil.test/s"></desc><title>T<video src="http://evil.test/v"></video></title><rect width="10" height="10"/></svg>',
+    )
+    expect(root.querySelector('meta, img, link, video')).toBeNull()
+    expect(root.querySelector('rect')).not.toBeNull()
+  })
+
+  it('drops external references an image would never load, keeping local ones', () => {
+    const { markup, root } = asImage(
+      '<svg viewBox="0 0 10 10"><defs><linearGradient id="g"/></defs>' +
+        '<style>@import url(http://evil.test/a.css);.a{fill:url(http://evil.test/p#g)}.b{fill:url(#g)}</style>' +
+        '<image href="http://evil.test/i.png"/><use href="#g"/>' +
+        '<rect style="fill:url( \'http://evil.test/q\' )"/></svg>',
+    )
+    expect(markup).not.toMatch(/evil\.test|@import/)
+    expect(markup).toContain('url(#g)')
+    expect(root.querySelector('use')!.getAttribute('href')).toBe('#g')
+  })
+
+  it('drops editor metadata under an undeclared prefix, which XML rejects', () => {
+    const { root } = asImage(
+      '<svg viewBox="0 0 10 10"><sodipodi:namedview pagecolor="#fff"/><g inkscape:label="Layer 1"><rect width="10" height="10"/></g></svg>',
+    )
+    expect(root.querySelector('rect')).not.toBeNull()
+  })
+
+  it('keeps xml: and xlink: attributes, which are always bound', () => {
+    const { root } = asImage(
+      '<svg viewBox="0 0 10 10" xml:space="preserve"><use xlink:href="#a"/></svg>',
+    )
+    expect(
+      root.getAttributeNS('http://www.w3.org/XML/1998/namespace', 'space'),
+    ).toBe('preserve')
+    expect(
+      root
+        .querySelector('use')!
+        .getAttributeNS('http://www.w3.org/1999/xlink', 'href'),
+    ).toBe('#a')
+  })
+
   it('rejects markup that is not an SVG', () => {
     expect(svgForCanvas('<div></div>')).toBeNull()
     expect(svgForCanvas('')).toBeNull()
@@ -221,10 +263,41 @@ describe('logoMarkup colour', () => {
     expect(attributed.root.getAttribute('color')).toBe('#e11d48')
   })
 
-  it('fills in a colour when the logo sets none and it is not overriding', () => {
-    expect(
-      color(asImage('<svg viewBox="0 0 1 1"/>', '#334155', false).root),
-    ).toMatch(/^(#334155|rgb\(51, 65, 85\))$/i)
+  // Gradient's tint is a zero-specificity rule, so any colour the logo sets
+  // itself — inline, as an attribute or in its own stylesheet — wins.
+  const fallbackRule = (markup: string) =>
+    /<style>:where\(:root\)\{color:([^}]+)\}<\/style>/.exec(markup)?.[1]
+
+  it('fills in a lowest-priority colour when the logo sets none', () => {
+    const { markup, root } = asImage(
+      '<svg viewBox="0 0 1 1"/>',
+      '#334155',
+      false,
+    )
+    expect(fallbackRule(markup)).toBe('#334155')
+    expect(color(root)).toBeUndefined()
+  })
+
+  it("lets the logo's own stylesheet colour win in gradient", () => {
+    const { markup, root } = asImage(
+      '<svg viewBox="0 0 1 1"><style>svg{color:#e11d48}</style><rect fill="currentColor"/></svg>',
+      '#334155',
+      false,
+    )
+    // A rule, not an inline style — inline would beat the logo's stylesheet.
+    expect(color(root)).toBeUndefined()
+    expect(fallbackRule(markup)).toBe('#334155')
+  })
+
+  it('treats an inherited root colour as no colour: there is nothing to inherit', () => {
+    for (const svg of [
+      '<svg viewBox="0 0 1 1" style="color: inherit"/>',
+      '<svg viewBox="0 0 1 1" color="currentColor"/>',
+    ]) {
+      expect(fallbackRule(asImage(svg, '#FFFFFF', false).markup)).toBe(
+        '#FFFFFF',
+      )
+    }
   })
 
   it('only touches the root element', () => {
@@ -365,5 +438,14 @@ describe('logoRasterRequests', () => {
 
   it('asks for nothing without an uploaded logo', () => {
     expect(logoRasterRequests({ title: 'Konf' })).toEqual([])
+  })
+})
+
+describe('loadLogoImage', () => {
+  it('never rejects: preparation that throws resolves null, and the wordmark is drawn', async () => {
+    // jsdom has no getBBox, so measuring a size-less logo throws here.
+    await expect(
+      loadLogoImage('<svg><g/></svg>', { color: '#000000', override: true }),
+    ).resolves.toBeNull()
   })
 })

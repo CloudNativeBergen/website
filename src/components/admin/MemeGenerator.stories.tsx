@@ -82,7 +82,10 @@ const differsFrom =
 
 /** The light-mode fixture's #1d4ed8 bar. */
 const isBlue: Pixel = (r, g, b) => r < 70 && g > 50 && g < 110 && b > 190
-/** The dark-mode fixture's #facc15 bar (and other yellow fixtures). */
+/**
+ * The dark-mode fixture's #facc15 bar (and other yellow fixtures). It also
+ * matches the Sunbeam Yellow BACKGROUND — never assert it on that preset.
+ */
 const isYellow: Pixel = (r, g, b) => r > 200 && g > 170 && b < 80
 /** Black ink — the monochrome wordmark on a light background. */
 const isInk: Pixel = (r, g, b) => r < 40 && g < 40 && b < 40
@@ -299,8 +302,11 @@ export const SquareLogoFillsWidth: Story = {
     const box = logoBox()
     const leftQuarter = { ...box, width: box.width / 4 }
     const below = { ...box, y: box.y + box.height + 2, height: 30 }
+    // …and no wider than the box: the strip right of it stays background.
+    const right = { ...box, x: box.x + box.width + 2, width: 30 }
     const canvas = () => canvasElement.querySelector('canvas')!
     await waitFor(() => {
+      expect(share(canvas(), CANVAS_SIZE, right, isYellow)).toBeLessThan(0.01)
       expect(
         share(canvas(), CANVAS_SIZE, leftQuarter, isYellow),
       ).toBeGreaterThan(0.95)
@@ -322,7 +328,7 @@ export const HostileLogoRunsNothing: Story = {
     conferenceLogos: {
       title: 'Konf',
       logoBright:
-        '<svg><rect width="400" height="100" fill="#facc15"/><image href="x"/onerror="document.body.dataset.pwned=1"/></svg>',
+        '<svg><desc><meta http-equiv="refresh" content="0;url=#pwned"></desc><rect width="400" height="100" fill="#facc15"/><image href="x"/onerror="document.body.dataset.pwned=1"/></svg>',
     },
   },
   play: async ({ canvasElement }) => {
@@ -330,9 +336,36 @@ export const HostileLogoRunsNothing: Story = {
     await waitFor(() =>
       expect(inLogoBox(canvasElement, isYellow)).toBeGreaterThan(0.3),
     )
-    // …and its handler never ran (give a failed image load time to fire).
+    // …and neither its handler nor its smuggled <meta> refresh ran (give a
+    // failed image load and a 0 s refresh time to fire). The refresh targets
+    // a same-document fragment so a regression shows without leaving the page.
     await new Promise((resolve) => setTimeout(resolve, 500))
     expect(document.body.dataset.pwned).toBeUndefined()
+    expect(window.location.hash).not.toBe('#pwned')
+  },
+}
+
+/**
+ * In gradient the logo's OWN colour wins, even one set in its own stylesheet:
+ * the overlay left a logo's markup alone outside monochrome. The resolved
+ * fallback colour must not override it.
+ */
+export const StylesheetColouredLogoKeepsItsColour: Story = {
+  args: {
+    conferenceLogos: {
+      title: 'Konf',
+      logoBright:
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 970 234"><style>svg{color:#e11d48}</style><rect width="970" height="234" fill="currentColor"/></svg>',
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await openBackgroundAdvanced(canvas)
+    await userEvent.click(canvas.getByRole('button', { name: /Gradient/ }))
+    const isRed: Pixel = (r, g, b) => r > 200 && g < 60 && b > 50 && b < 110
+    await waitFor(() =>
+      expect(inLogoBox(canvasElement, isRed)).toBeGreaterThan(0.9),
+    )
   },
 }
 
