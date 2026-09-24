@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import {
   isLightBackground,
   logoTint,
@@ -169,38 +169,6 @@ describe('svgForCanvas + logoMarkup', () => {
     expect(markup).not.toMatch(/onload|script/)
   })
 
-  it('strips event handlers the regex sanitiser misses', () => {
-    // `/` separates attributes for the HTML parser, so `/onerror=` survives
-    // sanitizeSvg's whitespace-anchored regex yet parses as a real handler.
-    const { root } = asImage(
-      '<svg viewBox="0 0 1 1"><image href="x"/onerror="alert(1)"/><g/onclick="x()"/></svg>',
-    )
-    const handlers = [root, ...root.querySelectorAll('*')].flatMap((el) =>
-      [...el.attributes].map((a) => a.name).filter((n) => /^on/i.test(n)),
-    )
-    expect(handlers).toEqual([])
-  })
-
-  it('drops HTML smuggled in through <desc>/<title> — meta refresh, img, link', () => {
-    const { root } = asImage(
-      '<svg viewBox="0 0 10 10"><desc><meta http-equiv="refresh" content="0;url=http://evil.test/"><img src="http://evil.test/p"><link rel="stylesheet" href="http://evil.test/s"></desc><title>T<video src="http://evil.test/v"></video></title><rect width="10" height="10"/></svg>',
-    )
-    expect(root.querySelector('meta, img, link, video')).toBeNull()
-    expect(root.querySelector('rect')).not.toBeNull()
-  })
-
-  it('drops external references an image would never load, keeping local ones', () => {
-    const { markup, root } = asImage(
-      '<svg viewBox="0 0 10 10"><defs><linearGradient id="g"/></defs>' +
-        '<style>@import url(http://evil.test/a.css);.a{fill:url(http://evil.test/p#g)}.b{fill:url(#g)}</style>' +
-        '<image href="http://evil.test/i.png"/><use href="#g"/>' +
-        '<rect style="fill:url( \'http://evil.test/q\' )"/></svg>',
-    )
-    expect(markup).not.toMatch(/evil\.test|@import/)
-    expect(markup).toContain('url(#g)')
-    expect(root.querySelector('use')!.getAttribute('href')).toBe('#g')
-  })
-
   it('drops editor metadata under an undeclared prefix, which XML rejects', () => {
     const { root } = asImage(
       '<svg viewBox="0 0 10 10"><sodipodi:namedview pagecolor="#fff"/><g inkscape:label="Layer 1"><rect width="10" height="10"/></g></svg>',
@@ -220,6 +188,16 @@ describe('svgForCanvas + logoMarkup', () => {
         .querySelector('use')!
         .getAttributeNS('http://www.w3.org/1999/xlink', 'href'),
     ).toBe('#a')
+  })
+
+  it('never attaches the parsed logo to the page — it is only ever drawn as an image', () => {
+    const prepared = svgForCanvas(
+      '<svg viewBox="0 0 1 1"><image href="#x"/onerror="x()"/></svg>',
+    )!
+    // Parsed in DOMParser's own, scripting-disabled document; nothing in this
+    // module adopts or imports it into `document`.
+    expect(prepared.element.ownerDocument).not.toBe(document)
+    expect(document.contains(prepared.element)).toBe(false)
   })
 
   it('rejects markup that is not an SVG', () => {
@@ -263,10 +241,10 @@ describe('logoMarkup colour', () => {
     expect(attributed.root.getAttribute('color')).toBe('#e11d48')
   })
 
-  // Gradient's tint is a zero-specificity rule, so any colour the logo sets
-  // itself — inline, as an attribute or in its own stylesheet — wins.
-  const fallbackRule = (markup: string) =>
-    /<style>:where\(:root\)\{color:([^}]+)\}<\/style>/.exec(markup)?.[1]
+  // Gradient's tint is a rule in a cascade LAYER, so any colour the logo
+  // sets itself — inline, as an attribute or in its own stylesheet — wins.
+  const layerRule = (markup: string) =>
+    /@layer logo-tint\{:root\{color:([^}]+)\}\}/.exec(markup)?.[1]
 
   it('fills in a lowest-priority colour when the logo sets none', () => {
     const { markup, root } = asImage(
@@ -274,29 +252,39 @@ describe('logoMarkup colour', () => {
       '#334155',
       false,
     )
-    expect(fallbackRule(markup)).toBe('#334155')
+    expect(layerRule(markup)).toBe('#334155')
     expect(color(root)).toBeUndefined()
   })
 
-  it("lets the logo's own stylesheet colour win in gradient", () => {
+  it("puts the rule in the logo's own stylesheet, adding no element", () => {
     const { markup, root } = asImage(
-      '<svg viewBox="0 0 1 1"><style>svg{color:#e11d48}</style><rect fill="currentColor"/></svg>',
+      '<svg viewBox="0 0 1 1"><rect/><style>rect:first-child{fill:#00f}svg{color:#e11d48}</style></svg>',
       '#334155',
       false,
     )
+    // A new first child would stop `rect:first-child` matching.
+    expect([...root.children].map((child) => child.localName)).toEqual([
+      'rect',
+      'style',
+    ])
+    expect(root.querySelector('style')!.textContent).toContain(
+      'svg{color:#e11d48}',
+    )
+    expect(layerRule(markup)).toBe('#334155')
     // A rule, not an inline style — inline would beat the logo's stylesheet.
     expect(color(root)).toBeUndefined()
-    expect(fallbackRule(markup)).toBe('#334155')
   })
 
-  it('treats an inherited root colour as no colour: there is nothing to inherit', () => {
+  it('removes a root colour that names no colour, which would otherwise win', () => {
     for (const svg of [
       '<svg viewBox="0 0 1 1" style="color: inherit"/>',
+      '<svg viewBox="0 0 1 1" style="color: currentColor; opacity: 1"/>',
       '<svg viewBox="0 0 1 1" color="currentColor"/>',
     ]) {
-      expect(fallbackRule(asImage(svg, '#FFFFFF', false).markup)).toBe(
-        '#FFFFFF',
-      )
+      const { markup, root } = asImage(svg, '#FFFFFF', false)
+      expect(color(root)).toBeUndefined()
+      expect(root.getAttribute('color')).toBeNull()
+      expect(layerRule(markup)).toBe('#FFFFFF')
     }
   })
 
@@ -442,10 +430,36 @@ describe('logoRasterRequests', () => {
 })
 
 describe('loadLogoImage', () => {
-  it('never rejects: preparation that throws resolves null, and the wordmark is drawn', async () => {
-    // jsdom has no getBBox, so measuring a size-less logo throws here.
-    await expect(
-      loadLogoImage('<svg><g/></svg>', { color: '#000000', override: true }),
-    ).resolves.toBeNull()
+  const tint = { color: '#000000', override: true }
+
+  it('never rejects when preparing or measuring throws', async () => {
+    // A size-less logo is measured on a canvas, which jsdom lacks: it throws.
+    await expect(loadLogoImage('<svg><g/></svg>', tint)).resolves.toBeNull()
+  })
+
+  it('never rejects when the browser refuses to decode the image', async () => {
+    const decode = vi
+      .fn<() => Promise<void>>()
+      .mockRejectedValue(new DOMException('bad', 'EncodingError'))
+    const original = Object.getOwnPropertyDescriptor(
+      HTMLImageElement.prototype,
+      'decode',
+    )
+    Object.defineProperty(HTMLImageElement.prototype, 'decode', {
+      configurable: true,
+      value: decode,
+    })
+    try {
+      await expect(
+        loadLogoImage('<svg viewBox="0 0 10 10"><rect/></svg>', tint),
+      ).resolves.toBeNull()
+      expect(decode).toHaveBeenCalledTimes(1)
+    } finally {
+      if (original) {
+        Object.defineProperty(HTMLImageElement.prototype, 'decode', original)
+      } else {
+        Reflect.deleteProperty(HTMLImageElement.prototype, 'decode')
+      }
+    }
   })
 })

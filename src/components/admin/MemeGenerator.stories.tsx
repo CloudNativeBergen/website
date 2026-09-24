@@ -318,30 +318,96 @@ export const SquareLogoFillsWidth: Story = {
 }
 
 /**
- * A size-less logo is measured in the live document. sanitizeSvg's regex
- * misses a handler after `/` (`<image/onerror=…>`), which the HTML parser
- * still reads as an attribute — so the parsed tree has to be cleaned before
- * it is inserted, or the handler runs on the admin's page.
+ * A hostile size-less logo. It has to be measured, and it is only ever drawn
+ * as an image — so none of its script, navigation or off-origin loads may
+ * reach the admin's page, however they are spelled. Every load points at a
+ * same-origin `/__logo-leak-*` path, so a request would show in Resource
+ * Timing; the refresh targets `#pwned`, observable without leaving the page;
+ * `href="#x"` is a local reference that still fires `error`.
  */
+const HOSTILE_LOGO = [
+  '<svg>',
+  '<desc><meta http-equiv="refresh" content="0;url=#pwned"></desc>',
+  '<style>body{background-image:u\\72l(/__logo-leak-1.png)}@\\69mport "/__logo-leak-2.css";',
+  'body{cursor:image-set("/__logo-leak-3.png" 1x),auto}</style>',
+  '<rect width="400" height="100" fill="#facc15"/>',
+  '<rect width="1" height="1" fill="url(/__logo-leak-4.svg#a)"/>',
+  '<image href="#x"/onerror="document.body.dataset.pwned=1"/>',
+  '</svg>',
+].join('')
+
 export const HostileLogoRunsNothing: Story = {
-  args: {
-    conferenceLogos: {
-      title: 'Konf',
-      logoBright:
-        '<svg><desc><meta http-equiv="refresh" content="0;url=#pwned"></desc><rect width="400" height="100" fill="#facc15"/><image href="x"/onerror="document.body.dataset.pwned=1"/></svg>',
-    },
-  },
+  args: { conferenceLogos: { title: 'Konf', logoBright: HOSTILE_LOGO } },
   play: async ({ canvasElement }) => {
     // The logo was measured and drawn…
     await waitFor(() =>
       expect(inLogoBox(canvasElement, isYellow)).toBeGreaterThan(0.3),
     )
-    // …and neither its handler nor its smuggled <meta> refresh ran (give a
-    // failed image load and a 0 s refresh time to fire). The refresh targets
-    // a same-document fragment so a regression shows without leaving the page.
+    // …and nothing it asks for happened (give a failed load, a 0 s refresh
+    // and style-driven fetches time to fire).
     await new Promise((resolve) => setTimeout(resolve, 500))
     expect(document.body.dataset.pwned).toBeUndefined()
     expect(window.location.hash).not.toBe('#pwned')
+    expect(
+      performance
+        .getEntriesByType('resource')
+        .map((entry) => entry.name)
+        .filter((name) => name.includes('__logo-leak')),
+    ).toEqual([])
+  },
+}
+
+/** Gradient fills in `currentColor` for a logo that sets it to `inherit`. */
+export const InheritRootColourGradientOnDark: Story = {
+  args: {
+    conferenceLogos: {
+      title: 'Konf',
+      logoBright:
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 970 234" style="color: inherit"><rect width="970" height="234" fill="currentColor"/></svg>',
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await pickBackground(canvas, 'Slate Gray')
+    await openBackgroundAdvanced(canvas)
+    await userEvent.click(canvas.getByRole('button', { name: /Gradient/ }))
+    const isWhite: Pixel = (r, g, b) => r > 240 && g > 240 && b > 240
+    await waitFor(() =>
+      expect(inLogoBox(canvasElement, isWhite)).toBeGreaterThan(0.9),
+    )
+  },
+}
+
+/**
+ * A logo's own stylesheet keeps working under the gradient tint: quoted local
+ * `url("#g")` references and structural selectors (`:first-child`) both.
+ */
+export const StylesheetFeaturesSurviveTint: Story = {
+  args: {
+    conferenceLogos: {
+      title: 'Konf',
+      logoBright:
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 970 234"><rect width="485" height="234"/><rect x="485" width="485" height="234" class="b"/><defs><linearGradient id="g"><stop stop-color="#facc15"/></linearGradient></defs><style>rect:first-child{fill:#1d4ed8}.b{fill:url("#g")}</style></svg>',
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await openBackgroundAdvanced(canvas)
+    await userEvent.click(canvas.getByRole('button', { name: /Gradient/ }))
+    const box = logoBox()
+    const left = { ...box, width: box.width / 2 - 4 }
+    const right = {
+      ...box,
+      x: box.x + box.width / 2 + 4,
+      width: box.width / 2 - 4,
+    }
+    const canvasEl = () => canvasElement.querySelector('canvas')!
+    await waitFor(() => {
+      expect(share(canvasEl(), CANVAS_SIZE, left, isBlue)).toBeGreaterThan(0.9)
+      expect(share(canvasEl(), CANVAS_SIZE, right, isYellow)).toBeGreaterThan(
+        0.9,
+      )
+    })
   },
 }
 

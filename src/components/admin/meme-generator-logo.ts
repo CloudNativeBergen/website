@@ -153,6 +153,11 @@ export function absoluteLength(value: string | null): number | undefined {
  * even draw one without `xmlns`. So the markup is parsed exactly as it was
  * before, as HTML, and re-serialised as XML by {@link logoMarkup}.
  *
+ * The parsed tree is NEVER inserted into the page: it is only ever drawn as
+ * an image, which runs no script, loads nothing external and keeps the
+ * logo's CSS to itself — whatever the markup says. That is the security
+ * boundary; it does not rest on filtering the markup.
+ *
  * Its size is `width` × `height` when both are absolute lengths (the viewBox
  * is letterboxed inside, as the browser sizes the image), else the viewBox.
  * With neither, the caller has to measure one (see {@link loadLogoImage}).
@@ -161,7 +166,7 @@ export function svgForCanvas(svg: string): CanvasSvg | null {
   const doc = new DOMParser().parseFromString(sanitizeSvg(svg), 'text/html')
   const element = doc.body.querySelector('svg')
   if (!element) return null
-  makeInert(element)
+  dropUnboundPrefixes(element)
 
   const box = element
     .getAttribute('viewBox')
@@ -181,65 +186,46 @@ export function svgForCanvas(svg: string): CanvasSvg | null {
 
 const SVG_NS = 'http://www.w3.org/2000/svg'
 
-/** An external `url(…)` — anything but a local `#fragment` or inline `data:`. */
-const EXTERNAL_URL = /url\(\s*(['"]?)(?!\s*(?:#|data:))[^)]*\1\s*\)/gi
-
-/** CSS with every external reference and `@import` neutralised. */
-function inertCss(css: string): string {
-  return css.replace(/@import[^;]*;?/gi, '').replace(EXTERNAL_URL, 'none')
-}
-
 /**
- * Reduce the parsed tree to what an SVG drawn as an image can use, so the
- * result is inert wherever it goes — a size-less logo is measured in the LIVE
- * document, and sanitizeSvg is only a regex pass (it misses `<image/onerror>`:
- * `/` separates attributes for the HTML parser). Everything removed is
- * something an image ignores anyway, so the picture does not change:
- *
- * - elements outside the SVG namespace — HTML smuggled in through `<desc>` or
- *   `<title>` (`<meta http-equiv=refresh>` would navigate the admin's tab),
- *   script-like SVG elements, and editor metadata under an undeclared prefix
- *   (`<sodipodi:namedview>`), which XML refuses to parse;
- * - `on*` handlers, and attributes under an undeclared prefix (`inkscape:*`);
- * - external references: `href`s that are not `#local`, `@import`, and
- *   `url()` pointing off the document.
+ * Drop editor metadata under a prefix the markup never declares
+ * (`<sodipodi:namedview>`, `inkscape:label`). The HTML parser accepted it and
+ * nothing renders it, but XML refuses the whole document over it. `xml:` and
+ * `xlink:` are bound by the parser and survive.
  */
-function makeInert(root: Element) {
+function dropUnboundPrefixes(root: Element) {
   for (const element of [root, ...root.querySelectorAll('*')]) {
-    if (
-      element.namespaceURI !== SVG_NS ||
-      element.localName.includes(':') ||
-      /^(script|foreignobject)$/i.test(element.localName)
-    ) {
+    if (element.localName.includes(':')) {
       element.remove()
       continue
     }
     for (const attribute of [...element.attributes]) {
-      const { name, namespaceURI, value } = attribute
-      const unboundPrefix =
+      const { name, namespaceURI } = attribute
+      if (
         name.includes(':') &&
         namespaceURI === null &&
         !name.startsWith('xmlns:')
-      if (/^on/i.test(name) || unboundPrefix) {
+      ) {
         element.removeAttributeNode(attribute)
-      } else if (/(^|:)href$/i.test(name) && !value.trim().startsWith('#')) {
-        element.removeAttributeNode(attribute)
-      } else if (name === 'style') {
-        attribute.value = inertCss(value)
       }
-    }
-    if (element.localName === 'style') {
-      element.textContent = inertCss(element.textContent ?? '')
     }
   }
 }
 
+/** A root colour that names no colour: an image has nothing to inherit. */
+const NO_COLOR = /^(|inherit|initial|unset|revert|revert-layer|currentcolor)$/i
+
 /**
- * Serialise a prepared logo for an image, tinted per {@link LogoTint}: the
- * tint becomes the root's `currentColor`. Overriding (monochrome) it is an
- * inline style, beating any colour the logo sets; otherwise (gradient) it is
- * a lowest-priority rule that only fills in where the logo sets none.
- * XMLSerializer declares every namespace the markup uses (SVG, xlink).
+ * Serialise a prepared logo for an image, tinted per {@link LogoTint}; the
+ * tint becomes its `currentColor`. XMLSerializer declares every namespace the
+ * markup uses (SVG, xlink).
+ *
+ * - Overriding (monochrome): an inline style on the root, beating any colour
+ *   the logo sets — as the overlay's inline style did.
+ * - Otherwise (gradient): a rule in a cascade LAYER, which every one of the
+ *   logo's own rules beats whatever its order or specificity. It goes into the
+ *   logo's existing stylesheet, so no element is added to trip structural
+ *   selectors (`:first-child`); a logo without one gets a new `<style>`. A
+ *   root colour that names no colour (`inherit`) is removed, or it would win.
  */
 export function logoMarkup(element: SVGSVGElement, tint: LogoTint): string {
   const clone = element.cloneNode(true)
@@ -247,29 +233,25 @@ export function logoMarkup(element: SVGSVGElement, tint: LogoTint): string {
 
   if (tint.override) {
     clone.style.setProperty('color', tint.color)
-  } else if (!ownRootColor(clone)) {
-    // Zero specificity and first in the document: a colour the logo sets in
-    // its own stylesheet still wins, as it did over the page's colour inline.
-    const rule = clone.ownerDocument.createElementNS(SVG_NS, 'style')
-    rule.textContent = `:where(:root){color:${tint.color}}`
-    clone.insertBefore(rule, clone.firstChild)
+  } else {
+    if (NO_COLOR.test(clone.style.getPropertyValue('color').trim())) {
+      clone.style.removeProperty('color')
+    }
+    if (NO_COLOR.test((clone.getAttribute('color') ?? '').trim())) {
+      clone.removeAttribute('color')
+    }
+    const rule = `@layer logo-tint{:root{color:${tint.color}}}`
+    const sheet = clone.querySelector('style')
+    if (sheet) {
+      sheet.textContent = `${sheet.textContent ?? ''}\n${rule}`
+    } else {
+      const style = clone.ownerDocument.createElementNS(SVG_NS, 'style')
+      style.textContent = rule
+      clone.appendChild(style)
+    }
   }
+  if (!clone.style.length) clone.removeAttribute('style')
   return new XMLSerializer().serializeToString(clone)
-}
-
-/**
- * A colour the logo gives its own root, inline or as an attribute. `inherit`
- * and friends are not one: an image has nothing to inherit from.
- */
-function ownRootColor(root: SVGElement): string | undefined {
-  const color = (
-    root.style.getPropertyValue('color') ||
-    root.getAttribute('color') ||
-    ''
-  ).trim()
-  return /^(|inherit|initial|unset|revert|currentcolor)$/i.test(color)
-    ? undefined
-    : color
 }
 
 export interface Frame {
@@ -329,47 +311,89 @@ export type CanvasLogo =
   | { kind: 'image'; image: CanvasImageSource; aspect: number }
   | { kind: 'wordmark'; name: string }
 
-/**
- * Half the widest stroke the logo draws. `getBBox()` measures geometry only, so
- * a viewBox built from it would cut off the outer half of every stroke — and
- * all of a straight line, whose geometry has no width. Markers and filters
- * are not accounted for.
- */
-function strokeExtent(svg: SVGSVGElement): number {
-  let widest = 0
-  for (const element of svg.querySelectorAll('*')) {
-    const style = getComputedStyle(element)
-    if (style.stroke && style.stroke !== 'none') {
-      widest = Math.max(widest, parseFloat(style.strokeWidth) || 0)
-    }
-  }
-  return widest / 2
+/** Decode SVG markup as an image. Rejects on anything it cannot draw. */
+async function decodeSvg(markup: string): Promise<HTMLImageElement> {
+  const image = new Image()
+  image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(markup)}`
+  await image.decode()
+  return image
 }
 
-/** Give a size-less SVG the viewBox of what it actually paints. */
-function measuredViewBox(element: SVGSVGElement): CanvasSvg | null {
-  const host = document.createElement('div')
-  host.style.cssText =
-    'position:absolute;left:-10000px;top:0;visibility:hidden;pointer-events:none'
-  const svg = document.importNode(element, true)
-  host.appendChild(svg)
-  document.body.appendChild(host)
-  try {
-    const box = svg.getBBox()
-    const pad = strokeExtent(svg)
-    const width = box.width + pad * 2
-    const height = box.height + pad * 2
-    if (width <= 0 || height <= 0) return null
-    svg.setAttribute(
-      'viewBox',
-      `${box.x - pad} ${box.y - pad} ${width} ${height}`,
-    )
-    svg.removeAttribute('width')
-    svg.removeAttribute('height')
-    return { element: svg, width, height }
-  } finally {
-    host.remove()
+/** Side of the square the painted bounds are searched in, in pixels. */
+const PROBE_SIZE = 1000
+
+/**
+ * The bounds of what `element` paints inside `viewBox`, found by drawing it
+ * as an image and scanning for non-transparent pixels — so strokes, markers
+ * and filters count, and the logo never touches the live page. Null when it
+ * paints nothing there.
+ */
+async function paintedBounds(
+  element: SVGSVGElement,
+  viewBox: Frame,
+): Promise<Frame | null> {
+  const probe = element.cloneNode(true)
+  if (!(probe instanceof SVGSVGElement)) return null
+  const scale = PROBE_SIZE / Math.max(viewBox.width, viewBox.height)
+  probe.setAttribute(
+    'viewBox',
+    `${viewBox.x} ${viewBox.y} ${viewBox.width} ${viewBox.height}`,
+  )
+  probe.setAttribute('width', String(viewBox.width * scale))
+  probe.setAttribute('height', String(viewBox.height * scale))
+  probe.setAttribute('preserveAspectRatio', 'xMinYMin meet')
+
+  const image = await decodeSvg(new XMLSerializer().serializeToString(probe))
+  const canvas = document.createElement('canvas')
+  canvas.width = Math.ceil(viewBox.width * scale)
+  canvas.height = Math.ceil(viewBox.height * scale)
+  const ctx = canvas.getContext('2d', { willReadFrequently: true })
+  if (!ctx) return null
+  ctx.drawImage(image, 0, 0, canvas.width, canvas.height)
+  const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height)
+
+  let [minX, minY, maxX, maxY] = [Infinity, Infinity, -1, -1]
+  for (let y = 0; y < canvas.height; y++) {
+    for (let x = 0; x < canvas.width; x++) {
+      if (data[(y * canvas.width + x) * 4 + 3] === 0) continue
+      if (x < minX) minX = x
+      if (x > maxX) maxX = x
+      if (y < minY) minY = y
+      if (y > maxY) maxY = y
+    }
   }
+  if (maxX < 0) return null
+  // One pixel of slack each side: a pixel only says the edge is within it.
+  return {
+    x: viewBox.x + (minX - 1) / scale,
+    y: viewBox.y + (minY - 1) / scale,
+    width: (maxX - minX + 3) / scale,
+    height: (maxY - minY + 3) / scale,
+  }
+}
+
+/**
+ * Give a size-less SVG the viewBox of what it actually paints: a coarse pass
+ * over a wide area of user space, then a fine pass over what it found.
+ */
+async function measuredViewBox(
+  element: SVGSVGElement,
+): Promise<CanvasSvg | null> {
+  const coarse = await paintedBounds(element, {
+    x: -2000,
+    y: -2000,
+    width: 6000,
+    height: 6000,
+  })
+  const box = coarse && (await paintedBounds(element, coarse))
+  if (!box) return null
+  element.setAttribute(
+    'viewBox',
+    `${box.x} ${box.y} ${box.width} ${box.height}`,
+  )
+  element.removeAttribute('width')
+  element.removeAttribute('height')
+  return { element, width: box.width, height: box.height }
 }
 
 /**
@@ -384,14 +408,11 @@ export async function loadLogoImage(
   try {
     let prepared = svgForCanvas(svg)
     if (prepared && !prepared.width) {
-      prepared = measuredViewBox(prepared.element)
+      prepared = await measuredViewBox(prepared.element)
     }
     if (!prepared?.width || !prepared.height) return null
 
-    const markup = logoMarkup(prepared.element, tint)
-    const image = new Image()
-    image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(markup)}`
-    await image.decode()
+    const image = await decodeSvg(logoMarkup(prepared.element, tint))
     return { kind: 'image', image, aspect: prepared.height / prepared.width }
   } catch {
     return null
