@@ -139,6 +139,7 @@ interface ActionMenuItemProps {
   children: ReactNode
   variant?: 'default' | 'danger'
   disabled?: boolean
+  title?: string
   href?: string
   download?: boolean | string
 }
@@ -149,6 +150,7 @@ export function ActionMenuItem({
   children,
   variant = 'default',
   disabled = false,
+  title,
   href,
   download,
 }: ActionMenuItemProps) {
