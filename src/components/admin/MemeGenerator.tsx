@@ -11,7 +11,6 @@ import {
   ArrowsPointingOutIcon,
   QrCodeIcon,
 } from '@heroicons/react/24/outline'
-import { ConferenceLogo } from '../ConferenceLogo'
 import type { ConferenceLogos } from '../common/DashboardLayout'
 import QRCodeStyling from 'qr-code-styling'
 import {
@@ -46,6 +45,20 @@ import {
   loadCanvasFonts,
   memeLineText,
 } from './meme-generator-fonts'
+import {
+  brandGradientColors,
+  drawLogo,
+  isLightBackground,
+  loadLogoImage,
+  logoAspect,
+  logoFrame,
+  logoSvgFor,
+  monochromeInk,
+  wordmarkFont,
+  wordmarkFontFamily,
+  type CanvasLogo,
+} from './meme-generator-logo'
+import { PLATFORM_NAME } from '@/lib/branding/platform'
 
 interface MemeGeneratorProps {
   conferenceLogos?: ConferenceLogos
@@ -213,15 +226,30 @@ export function MemeGenerator({
     QR_BACKGROUND_COLOR_DEFAULT,
   )
 
-  const getMonochromeColor = useCallback(() => {
-    if (backgroundImageUrl) return '#FFFFFF'
-    const hex = backgroundColor.replace('#', '')
-    const r = parseInt(hex.substring(0, 2), 16) / 255
-    const g = parseInt(hex.substring(2, 4), 16) / 255
-    const b = parseInt(hex.substring(4, 6), 16) / 255
-    const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b
-    return luminance > 0.5 ? '#000000' : '#FFFFFF'
-  }, [backgroundColor, backgroundImageUrl])
+  // The logo's variant and monochrome ink follow the DESIGN's background, not
+  // the admin's light/dark theme.
+  const lightBackground = isLightBackground({
+    color: backgroundColor,
+    hasImage: Boolean(backgroundImageUrl),
+  })
+  const logoInk = monochromeInk(lightBackground)
+  const uploadedLogoSvg = logoSvgFor(conferenceLogos, lightBackground)
+  const logoName = conferenceLogos?.title?.trim() || PLATFORM_NAME
+  const uploadedLogoKey = uploadedLogoSvg
+    ? `${logoVariant === 'monochrome' ? logoInk : ''}|${uploadedLogoSvg}`
+    : null
+
+  // The uploaded logo is rasterised asynchronously; `key` ties the result to
+  // the SVG and ink it was made from, so a stale raster is never drawn.
+  const [uploadedLogo, setUploadedLogo] = useState<{
+    key: string
+    logo: CanvasLogo | null
+  } | null>(null)
+
+  const canvasLogo = useMemo<CanvasLogo | null>(() => {
+    if (!uploadedLogoKey) return { kind: 'wordmark', name: logoName }
+    return uploadedLogo?.key === uploadedLogoKey ? uploadedLogo.logo : null
+  }, [uploadedLogoKey, uploadedLogo, logoName])
 
   const handleBackgroundImageUpload = (
     e: React.ChangeEvent<HTMLInputElement>,
@@ -363,6 +391,27 @@ export function MemeGenerator({
         const y = centerY - qrSize / 2
         ctx.drawImage(qrImageRef.current, x, y, qrSize, qrSize)
       }
+
+      // Last, so it sits on top of everything as the overlay did.
+      if (canvasLogo) {
+        const root = document.documentElement
+        drawLogo(
+          ctx,
+          canvasLogo,
+          logoFrame({
+            size: logoSize,
+            bottom: logoVerticalPosition,
+            right: logoHorizontalPosition,
+            aspect: logoAspect(canvasLogo),
+          }),
+          {
+            variant: logoVariant,
+            ink: logoInk,
+            fontFamily: wordmarkFontFamily(root),
+            gradient: brandGradientColors(root),
+          },
+        )
+      }
     },
     [
       backgroundColor,
@@ -372,6 +421,12 @@ export function MemeGenerator({
       qrSize,
       qrVerticalPosition,
       qrHorizontalPosition,
+      canvasLogo,
+      logoSize,
+      logoVerticalPosition,
+      logoHorizontalPosition,
+      logoVariant,
+      logoInk,
     ],
   )
 
@@ -427,6 +482,37 @@ export function MemeGenerator({
       cancelled = true
     }
   }, [fontRequests])
+
+  useEffect(() => {
+    if (!uploadedLogoSvg || !uploadedLogoKey) return
+    let cancelled = false
+    loadLogoImage(
+      uploadedLogoSvg,
+      logoVariant === 'monochrome' ? logoInk : undefined,
+    ).then((logo) => {
+      if (!cancelled) setUploadedLogo({ key: uploadedLogoKey, logo })
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [uploadedLogoSvg, uploadedLogoKey, logoVariant, logoInk])
+
+  // The wordmark is canvas text, so its webfont has to be asked for too.
+  useEffect(() => {
+    if (uploadedLogoSvg) return
+    let cancelled = false
+    const family = wordmarkFontFamily(document.documentElement)
+    if (!family) return
+    loadCanvasFonts(
+      [{ font: wordmarkFont(family, 72, false), text: logoName }],
+      document.fonts,
+    ).then(() => {
+      if (!cancelled) drawRef.current()
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [uploadedLogoSvg, logoName])
 
   useEffect(() => {
     if (qrCodeUrl) {
@@ -502,37 +588,8 @@ export function MemeGenerator({
     }
   }, [logoSize, logoVerticalPosition, logoHorizontalPosition])
 
-  const logoStyle =
-    logoVariant === 'monochrome' ? { color: getMonochromeColor() } : undefined
-
-  const logoAspectRatio = 970 / 234
-  const logoHeight = (size: number) => size / logoAspectRatio
-
-  const renderLogo = (scale: number = 1) => (
-    <div
-      className="pointer-events-none absolute"
-      style={{
-        bottom: `${logoVerticalPosition * scale}px`,
-        right: `${logoHorizontalPosition * scale}px`,
-        width: `${logoSize * scale}px`,
-        height: `${logoHeight(logoSize) * scale}px`,
-        margin: 0,
-        padding: 0,
-      }}
-    >
-      {/* ConferenceLogo already picks the uploaded logo when there is one and
-          generates a mark from the conference name when there is not, so the
-          old hasCustomLogo branch (which fell back to a hardcoded wordmark)
-          is gone. `fallbackVariant` still drives the gradient/mono control. */}
-      <ConferenceLogo
-        conference={conferenceLogos}
-        variant="horizontal"
-        fallbackVariant={logoVariant}
-        className="size-full"
-        style={logoStyle}
-      />
-    </div>
-  )
+  // The overlay carried the logo's accessible name; the canvas now does.
+  const canvasLabel = `Meme preview with the ${logoName} logo`
 
   const previewNode = (
     <div
@@ -543,10 +600,11 @@ export function MemeGenerator({
         ref={canvasRef}
         width={CANVAS_SIZE}
         height={CANVAS_SIZE}
+        role="img"
+        aria-label={canvasLabel}
         className="block size-full"
         style={{ margin: 0, padding: 0, display: 'block' }}
       />
-      {renderLogo(0.5)}
     </div>
   )
 
@@ -561,10 +619,11 @@ export function MemeGenerator({
             ref={exportCanvasRef}
             width={CANVAS_SIZE}
             height={CANVAS_SIZE}
+            role="img"
+            aria-label={canvasLabel}
             className="size-full"
             style={{ margin: 0, padding: 0, display: 'block' }}
           />
-          {renderLogo(1)}
         </div>,
       )}
     </div>
