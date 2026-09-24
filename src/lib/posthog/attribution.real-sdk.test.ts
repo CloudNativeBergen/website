@@ -53,7 +53,11 @@ beforeAll(async () => {
   // landing pageview, and the strip it triggers.
   await initTenantAnalytics(window)
   await tick()
+  // Snapshotted here: later tests clear `sent`, and must be able to run in
+  // any order.
+  landingPageview = sentEvents('$pageview')[0]
 })
+let landingPageview: SentEvent | undefined
 function accept() {
   const runtime = getAnalyticsRuntime(window)
   if (!runtime) throw new Error('runtime not published')
@@ -69,7 +73,7 @@ afterAll(() => {
 
 describe('landing on a tagged URL, real SDK', () => {
   it('the cookieless landing pageview carries the tags, then the bar is clean', () => {
-    const [landing] = sentEvents('$pageview')
+    const landing = landingPageview
     expect(landing?.properties).toMatchObject({
       utm_campaign: 'c1',
       utm_content: 'k1',

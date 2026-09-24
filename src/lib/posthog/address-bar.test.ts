@@ -232,6 +232,32 @@ describe('scheduleUtmStrip', () => {
     expect(window.history.length).toBe(lengthBefore)
   })
 
+  it('refuses a second strip of the very same landing URL', () => {
+    // The re-entry guard, on its own: the landing URL is put back verbatim,
+    // so the landing-URL guard would let a second `now()` through.
+    const schedule = scheduleUtmStrip(window)
+    schedule.now()
+    window.history.replaceState(null, '', TAGGED)
+    const replace = vi.spyOn(window.history, 'replaceState')
+    schedule.now()
+    expect(replace).toHaveBeenCalledTimes(0)
+    expect(window.location.search).toContain('utm_campaign=c1')
+  })
+
+  it('never throws out of the SDK capture that triggered it', () => {
+    // `now()` runs inside the SDK's `eventCaptured` emit, BEFORE the event
+    // is queued; an exception there would lose the landing pageview.
+    vi.spyOn(window.history, 'replaceState').mockImplementation(() => {
+      throw new DOMException('too many calls', 'SecurityError')
+    })
+    const client = fakeClient()
+    const schedule = scheduleUtmStrip(window)
+    schedule.afterFirstPageview(client)
+    expect(() => client.emit('$pageview')).not.toThrow()
+    expect(vi.getTimerCount()).toBe(0)
+    expect(client.listenerCount).toBe(0)
+  })
+
   it('arms nothing when the URL has no utm_* to begin with', () => {
     window.history.replaceState(null, '', '/?keep=1')
     const replace = vi.spyOn(window.history, 'replaceState')

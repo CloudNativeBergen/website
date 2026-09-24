@@ -203,7 +203,7 @@ describe('initTenantAnalytics', () => {
 const TAGGED_QUERY = '?utm_source=x&utm_campaign=c1&utm_content=k1&keep=1'
 
 describe('initTenantAnalytics: the utm_* strip (#1146)', () => {
-  it('strips right after the SDK captures its first $pageview, not before', async () => {
+  it('wires the strip to the first $pageview the client reports, not before', async () => {
     window.history.replaceState({}, '', `/${TAGGED_QUERY}#h`)
     document.body.appendChild(configElement())
     await initTenantAnalytics(window)

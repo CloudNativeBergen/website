@@ -1,4 +1,5 @@
 import {
+  type HistoryWrite,
   replaceUrlKeepingState,
   stripUtmFromAddressBar,
   withoutUtm,
@@ -79,7 +80,16 @@ export function scheduleUtmStrip(
     doc.removeEventListener('visibilitychange', onVisibility)
     unsubscribe?.()
     if (!onLanding()) return
-    guard(stripUtmFromAddressBar(win) === 'router')
+    // Never throw: `now()` runs inside the SDK's `eventCaptured` emit,
+    // before the event is queued, so an exception here would lose the
+    // landing pageview.
+    let write: HistoryWrite | null = null
+    try {
+      write = stripUtmFromAddressBar(win)
+    } catch {
+      return
+    }
+    guard(write === 'router')
   }
 
   // Re-check on the next macrotask and then every tick until the router has
@@ -92,10 +102,14 @@ export function scheduleUtmStrip(
     let synced = routerSynced
     const tick = () => {
       if (!onLanding()) return
-      if (withoutUtm(win.location.href) !== null) {
-        synced = stripUtmFromAddressBar(win) === 'router'
-      } else if (!synced && hasNextMarker(win.history.state)) {
-        synced = replaceUrlKeepingState(win, win.location.href) === 'router'
+      try {
+        if (withoutUtm(win.location.href) !== null) {
+          synced = stripUtmFromAddressBar(win) === 'router'
+        } else if (!synced && hasNextMarker(win.history.state)) {
+          synced = replaceUrlKeepingState(win, win.location.href) === 'router'
+        }
+      } catch {
+        return
       }
       if (!synced && Date.now() < until) {
         setTimeout(tick, UTM_STRIP_GUARD_TICK_MS)
