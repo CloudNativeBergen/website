@@ -468,6 +468,9 @@ function normaliseHandle(handle: string): string {
   return handle.replace(/^@/, '').toLowerCase()
 }
 
+/** The atproto DID syntax (atproto.com/specs/did); `@atproto/syntax`'s `isValidDid` agrees. */
+const DID_SYNTAX = /^did:[a-z]+:[a-zA-Z0-9._:%-]*[a-zA-Z0-9._-]$/
+
 /**
  * Fills in the DID of every detected mention feature (whose `did` holds the
  * handle until then): the RECORDED DID when the handle was recorded (spec
@@ -475,7 +478,9 @@ function normaliseHandle(handle: string): string {
  * through the PDS. That second path mirrors `RichText.detectFacets`, which
  * cannot skip recorded handles: concurrent, `''` on any failure (dropped by
  * `resolvedFacets`); unlike it, the handle is sent normalised. A recorded
- * entry without a DID was never checked and counts as unrecorded.
+ * entry without a DID was never checked and counts as unrecorded. A recorded
+ * DID that is not a DID is posted as plain text: resolving the handle again
+ * would post an unchecked DID, and one bad tag must not block the post.
  */
 async function tagMentions(
   agent: Agent,
@@ -494,7 +499,14 @@ async function tagMentions(
       const handle = normaliseHandle(feature.did)
       const did = recorded.get(handle)
       if (did !== undefined) {
-        feature.did = did
+        if (DID_SYNTAX.test(did)) {
+          feature.did = did
+        } else {
+          console.warn(
+            `Bluesky: recorded DID for @${handle} is malformed; posting it untagged`,
+          )
+          feature.did = ''
+        }
         continue
       }
       resolutions.push(

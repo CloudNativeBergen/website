@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, onTestFinished, vi } from 'vitest'
 import { http, HttpResponse } from 'msw'
 import { server } from '../../../../../__tests__/mocks/msw/server'
 import {
@@ -225,6 +225,43 @@ describe('BlueskyPublishAdapter — mentions (spec §4.4 Publish, #1149)', () =>
     ])
     expect(resolvedHandles(recorded)).toEqual(['bob.bsky.social'])
   })
+
+  it.each([
+    ['whitespace', '   '],
+    ['a space inside', 'did:plc: alice'],
+    ['no method', 'alice.bsky.social'],
+  ])(
+    'a recorded DID that is malformed (%s) posts the mention as plain text without resolving it again',
+    async (_, did) => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      onTestFinished(() => warn.mockRestore())
+      const recorded = pds({
+        resolve: { 'alice.bsky.social': ALICE_LIVE, 'bob.bsky.social': BOB },
+      })
+      const text = 'Hi @alice.bsky.social and @bob.bsky.social'
+
+      const outcome = await adapter().publish({
+        text,
+        media: [],
+        mentions: [{ handle: 'alice.bsky.social', did }],
+      })
+
+      expect(outcome).toMatchObject({ ok: true })
+      const record = createdRecord(recorded)
+      expect(record.text).toBe(text)
+      expect(record.facets).toEqual([
+        {
+          $type: FACET,
+          index: { byteStart: 26, byteEnd: 42 },
+          features: [{ $type: MENTION, did: BOB }],
+        },
+      ])
+      expect(resolvedHandles(recorded)).toEqual(['bob.bsky.social'])
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining('@alice.bsky.social'),
+      )
+    },
+  )
 
   it('a recorded mention whose handle is not in the text creates nothing', async () => {
     const recorded = pds()
