@@ -22,7 +22,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'Homepage hero with tagline, description, phase-dependent action buttons (capped at 3, tickets/program prioritized), optional venue line, vanity metrics, and mobile social links. The tickets button advertises the lowest active ticket price when available.',
+          'Homepage hero with tagline, description, phase-dependent action buttons (capped at 3, tickets/program prioritized), optional venue line, vanity metrics, and mobile social links.',
       },
     },
   },
