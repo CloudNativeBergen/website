@@ -631,6 +631,39 @@ export const InlineCssSizedLogo: Story = {
   },
 }
 
+/**
+ * Download clicked while the logo is still rasterising. Decoding is slowed
+ * to 1.5 s here (real complex logos take up to ~2 s); capture must wait for
+ * the logo instead of exporting the canvas without it after its fixed pause.
+ */
+export const DownloadWaitsForSlowLogo: Story = {
+  args: { conferenceLogos: UPLOADED_LOGOS },
+  beforeEach: () => {
+    const decode = HTMLImageElement.prototype.decode
+    HTMLImageElement.prototype.decode = function (this: HTMLImageElement) {
+      return new Promise<void>((resolve) => setTimeout(resolve, 1500)).then(
+        () => decode.call(this),
+      )
+    }
+    return () => {
+      HTMLImageElement.prototype.decode = decode
+    }
+  },
+  render: (args) => (
+    <MemeGeneratorWithDownload
+      conferenceTitle={args.conferenceLogos?.title}
+      conferenceLogos={args.conferenceLogos}
+    />
+  ),
+  play: async ({ canvasElement }) => {
+    // At once, before the raster lands — as an eager click would.
+    const preview = canvasElement.querySelector('canvas')!.parentElement!
+    const blob = await captureImage(preview.parentElement!)
+    const image = await createImageBitmap(blob)
+    expect(share(image, image.width, logoBox(), isBlue)).toBeGreaterThan(0.05)
+  },
+}
+
 export const FallbackGradient: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)

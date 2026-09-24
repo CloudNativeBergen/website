@@ -23,6 +23,25 @@ const waitForImages = async (element: HTMLElement): Promise<void> => {
   )
 }
 
+/** Longest a capture waits for content that is still drawing. */
+const PENDING_TIMEOUT_MS = 10_000
+
+/**
+ * Wait until nothing inside `element` is marked `data-capture-pending` — a
+ * component still drawing asynchronously (the meme generator while its logo
+ * raster decodes) marks itself so a capture does not catch it half-drawn.
+ * Gives up after {@link PENDING_TIMEOUT_MS}: a capture must never hang.
+ */
+const waitForPending = async (element: HTMLElement): Promise<void> => {
+  const started = Date.now()
+  while (
+    element.querySelector('[data-capture-pending]') &&
+    Date.now() - started < PENDING_TIMEOUT_MS
+  ) {
+    await new Promise((resolve) => setTimeout(resolve, 50))
+  }
+}
+
 const updateImageSources = async (element: HTMLElement): Promise<void> => {
   const images = element.querySelectorAll('img')
   const externalImages = Array.from(images).filter(
@@ -93,6 +112,7 @@ export async function captureImage(element: HTMLElement): Promise<Blob> {
   }))
   let canvas: HTMLCanvasElement | undefined
   try {
+    await waitForPending(element)
     await waitForImages(element)
     await updateImageSources(element)
     await new Promise((resolve) => setTimeout(resolve, 300))

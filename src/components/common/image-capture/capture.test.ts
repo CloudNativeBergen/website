@@ -132,4 +132,39 @@ describe('shared studio raster capture', () => {
     await vi.runAllTimersAsync()
     await failure
   })
+
+  it('waits for content marked data-capture-pending to finish before rendering', async () => {
+    const { element } = card()
+    const pending = document.createElement('div')
+    pending.setAttribute('data-capture-pending', '')
+    element.append(pending)
+    const png = new Blob(['rendered pixels'], { type: 'image/png' })
+    h.render.mockResolvedValue(canvas(png))
+
+    const result = captureImage(element)
+    await vi.advanceTimersByTimeAsync(2000)
+    // Still drawing (e.g. a logo raster decoding): nothing captured yet.
+    expect(h.render).not.toHaveBeenCalled()
+
+    pending.removeAttribute('data-capture-pending')
+    await vi.runAllTimersAsync()
+    expect(h.render).toHaveBeenCalledTimes(1)
+    expect(await result).toBe(png)
+  })
+
+  it('captures anyway once the pending wait times out, rather than hanging', async () => {
+    const { element } = card()
+    const pending = document.createElement('div')
+    pending.setAttribute('data-capture-pending', '')
+    element.append(pending)
+    h.render.mockResolvedValue(canvas(new Blob(['x'], { type: 'image/png' })))
+
+    const result = captureImage(element)
+    await vi.advanceTimersByTimeAsync(9000)
+    expect(h.render).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(2000)
+    await vi.runAllTimersAsync()
+    expect(h.render).toHaveBeenCalledTimes(1)
+    await expect(result).resolves.toBeInstanceOf(Blob)
+  })
 })

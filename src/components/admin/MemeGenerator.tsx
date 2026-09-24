@@ -255,6 +255,11 @@ export function MemeGenerator({
     return logoRasters.get(uploadedLogoKey) ?? wordmark
   }, [uploadedLogoKey, logoRasters, logoName])
 
+  // Until the uploaded logo has rasterised, the canvas has no logo: tell the
+  // shared capture (Download, Attach to Task) to wait rather than export it.
+  const logoPending =
+    uploadedLogoKey !== null && !logoRasters.has(uploadedLogoKey)
+
   const handleBackgroundImageUpload = (
     e: React.ChangeEvent<HTMLInputElement>,
   ) => {
@@ -606,6 +611,7 @@ export function MemeGenerator({
     <div
       className="relative mx-auto aspect-square w-[540px] max-w-full overflow-hidden rounded-lg shadow-lg"
       style={{ padding: 0, margin: 'auto' }}
+      data-capture-pending={logoPending || undefined}
     >
       <canvas
         ref={canvasRef}
