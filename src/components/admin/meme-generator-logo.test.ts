@@ -2,7 +2,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   isLightBackground,
-  logoColor,
+  logoTint,
   logoRasterRequests,
   logoFrame,
   logoSvgFor,
@@ -34,18 +34,30 @@ describe('monochromeInk', () => {
   })
 })
 
-describe('logoColor', () => {
+describe('logoTint', () => {
   // An uploaded logo's `currentColor` is what this resolves to. Stored logos
   // colour their text with `text-brand-slate-gray dark:text-white` classes,
   // which an SVG loaded as an image cannot see.
-  it('is the monochrome ink in monochrome', () => {
-    expect(logoColor('monochrome', true)).toBe('#000000')
-    expect(logoColor('monochrome', false)).toBe('#FFFFFF')
+  it("is the monochrome ink in monochrome, overriding the logo's own colour", () => {
+    expect(logoTint('monochrome', true)).toEqual({
+      color: '#000000',
+      override: true,
+    })
+    expect(logoTint('monochrome', false)).toEqual({
+      color: '#FFFFFF',
+      override: true,
+    })
   })
 
-  it("is what the logo's own classes meant in gradient: slate on light, white on dark", () => {
-    expect(logoColor('gradient', true)).toBe('#334155')
-    expect(logoColor('gradient', false)).toBe('#FFFFFF')
+  it("is what the logo's own classes meant in gradient — only where it sets no colour", () => {
+    expect(logoTint('gradient', true)).toEqual({
+      color: '#334155',
+      override: false,
+    })
+    expect(logoTint('gradient', false)).toEqual({
+      color: '#FFFFFF',
+      override: false,
+    })
   })
 })
 
@@ -76,10 +88,10 @@ describe('logoSvgFor', () => {
  * Prepare `svg` and parse the result the way an image is parsed — as XML —
  * failing on anything the XML parser rejects.
  */
-function asImage(svg: string, color = '#000000') {
+function asImage(svg: string, color = '#000000', override = true) {
   const prepared = svgForCanvas(svg)
   if (!prepared) throw new Error('not prepared')
-  const markup = logoMarkup(prepared.element, color)
+  const markup = logoMarkup(prepared.element, { color, override })
   const doc = new DOMParser().parseFromString(markup, 'image/svg+xml')
   expect(doc.querySelector('parsererror')).toBeNull()
   return { prepared, markup, root: doc.documentElement }
@@ -156,6 +168,18 @@ describe('svgForCanvas + logoMarkup', () => {
     expect(markup).not.toMatch(/onload|script/)
   })
 
+  it('strips event handlers the regex sanitiser misses', () => {
+    // `/` separates attributes for the HTML parser, so `/onerror=` survives
+    // sanitizeSvg's whitespace-anchored regex yet parses as a real handler.
+    const { root } = asImage(
+      '<svg viewBox="0 0 1 1"><image href="x"/onerror="alert(1)"/><g/onclick="x()"/></svg>',
+    )
+    const handlers = [root, ...root.querySelectorAll('*')].flatMap((el) =>
+      [...el.attributes].map((a) => a.name).filter((n) => /^on/i.test(n)),
+    )
+    expect(handlers).toEqual([])
+  })
+
   it('rejects markup that is not an SVG', () => {
     expect(svgForCanvas('<div></div>')).toBeNull()
     expect(svgForCanvas('')).toBeNull()
@@ -178,6 +202,29 @@ describe('logoMarkup colour', () => {
     )
     expect(color(root)).toMatch(/^(#000000|rgb\(0, 0, 0\))$/i)
     expect(root.getAttribute('style')).toMatch(/font-family/)
+  })
+
+  it("leaves the logo's own root colour alone when not overriding (gradient)", () => {
+    const styled = asImage(
+      '<svg viewBox="0 0 1 1" style="color:#e11d48"/>',
+      '#334155',
+      false,
+    )
+    expect(color(styled.root)).toMatch(/^(#e11d48|rgb\(225, 29, 72\))$/i)
+
+    const attributed = asImage(
+      '<svg viewBox="0 0 1 1" color="#e11d48"/>',
+      '#334155',
+      false,
+    )
+    expect(color(attributed.root)).toBeUndefined()
+    expect(attributed.root.getAttribute('color')).toBe('#e11d48')
+  })
+
+  it('fills in a colour when the logo sets none and it is not overriding', () => {
+    expect(
+      color(asImage('<svg viewBox="0 0 1 1"/>', '#334155', false).root),
+    ).toMatch(/^(#334155|rgb\(51, 65, 85\))$/i)
   })
 
   it('only touches the root element', () => {
@@ -286,25 +333,34 @@ describe('wordmarkLayout', () => {
 })
 
 describe('logoRasterRequests', () => {
+  const describeRequests = (requests: ReturnType<typeof logoRasterRequests>) =>
+    requests
+      .map(({ svg, tint }) => `${svg} ${tint.color}${tint.override ? '!' : ''}`)
+      .sort()
+
   it('asks for every tint of every variant a design can switch to, once each', () => {
     const requests = logoRasterRequests({
       logoBright: '<svg id="b"/>',
       logoDark: '<svg id="d"/>',
     })
-    expect(requests.map(({ svg, color }) => `${svg} ${color}`).sort()).toEqual([
-      '<svg id="b"/> #000000',
+    expect(describeRequests(requests)).toEqual([
+      '<svg id="b"/> #000000!',
       '<svg id="b"/> #334155',
       '<svg id="d"/> #FFFFFF',
+      '<svg id="d"/> #FFFFFF!',
     ])
-    expect(new Set(requests.map((r) => r.key)).size).toBe(3)
+    expect(new Set(requests.map((r) => r.key)).size).toBe(4)
   })
 
   it('tints the light-mode logo for dark backgrounds when there is no dark one', () => {
     expect(
-      logoRasterRequests({ logoBright: '<svg id="b"/>' })
-        .map((r) => r.color)
-        .sort(),
-    ).toEqual(['#000000', '#334155', '#FFFFFF'])
+      describeRequests(logoRasterRequests({ logoBright: '<svg id="b"/>' })),
+    ).toEqual([
+      '<svg id="b"/> #000000!',
+      '<svg id="b"/> #334155',
+      '<svg id="b"/> #FFFFFF',
+      '<svg id="b"/> #FFFFFF!',
+    ])
   })
 
   it('asks for nothing without an uploaded logo', () => {

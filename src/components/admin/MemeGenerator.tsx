@@ -50,7 +50,7 @@ import {
   drawLogo,
   isLightBackground,
   loadLogoImage,
-  logoColor,
+  logoTint,
   logoRasterKey,
   logoRasterRequests,
   placeLogo,
@@ -238,7 +238,7 @@ export function MemeGenerator({
   const uploadedLogoSvg = logoSvgFor(conferenceLogos, lightBackground)
   const logoName = conferenceLogos?.title?.trim() || PLATFORM_NAME
   const uploadedLogoKey = uploadedLogoSvg
-    ? logoRasterKey(uploadedLogoSvg, logoColor(logoVariant, lightBackground))
+    ? logoRasterKey(uploadedLogoSvg, logoTint(logoVariant, lightBackground))
     : null
 
   // Every raster the design can switch to, decoded up front (see
@@ -494,8 +494,8 @@ export function MemeGenerator({
     let cancelled = false
     Promise.all(
       requests.map(
-        async ({ key, svg, color }) =>
-          [key, await loadLogoImage(svg, color)] as const,
+        async ({ key, svg, tint }) =>
+          [key, await loadLogoImage(svg, tint)] as const,
       ),
     ).then((entries) => {
       if (!cancelled) setLogoRasters(new Map(entries))

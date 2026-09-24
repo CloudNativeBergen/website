@@ -70,16 +70,33 @@ function logoBox(
   return logoFrame({ ...placement, aspect: 1 / LOGO_BOX_ASPECT, fit: 'width' })
 }
 
+type Pixel = (r: number, g: number, b: number) => boolean
+
+/** Differs clearly from `hex` — the fixture colours are all far apart. */
+const differsFrom =
+  (hex: string): Pixel =>
+  (r, g, b) => {
+    const [br, bg, bb] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16))
+    return Math.abs(r - br) + Math.abs(g - bg) + Math.abs(b - bb) > 60
+  }
+
+/** The light-mode fixture's #1d4ed8 bar. */
+const isBlue: Pixel = (r, g, b) => r < 70 && g > 50 && g < 110 && b > 190
+/** The dark-mode fixture's #facc15 bar (and other yellow fixtures). */
+const isYellow: Pixel = (r, g, b) => r > 200 && g > 170 && b < 80
+/** Black ink — the monochrome wordmark on a light background. */
+const isInk: Pixel = (r, g, b) => r < 40 && g < 40 && b < 40
+
 /**
- * Share of `box` that differs from the background colour, with `source`
- * scaled to the 1080 canvas. Samples a REGION, not glyph pixels: Storybook's
- * fonts come from a CDN, so exact glyphs vary.
+ * Share of `box` whose pixels match `pixel`, with `source` scaled to the 1080
+ * canvas. Samples a REGION, not glyph pixels: Storybook's fonts come from a
+ * CDN, so exact glyphs vary.
  */
-function coverage(
+function share(
   source: CanvasImageSource,
   size: number,
   box: Box,
-  background: string,
+  pixel: Pixel,
 ) {
   const canvas = document.createElement('canvas')
   canvas.width = canvas.height = CANVAS_SIZE
@@ -91,18 +108,39 @@ function coverage(
     Math.round(box.width),
     Math.round(box.height),
   ).data
-  const [r, g, b] = [1, 3, 5].map((i) =>
-    parseInt(background.slice(i, i + 2), 16),
-  )
-  let differing = 0
+  let matching = 0
   for (let i = 0; i < data.length; i += 4) {
-    const distance =
-      Math.abs(data[i] - r) +
-      Math.abs(data[i + 1] - g) +
-      Math.abs(data[i + 2] - b)
-    if (distance > 60) differing++
+    if (pixel(data[i], data[i + 1], data[i + 2])) matching++
   }
-  return differing / (data.length / 4)
+  return matching / (data.length / 4)
+}
+
+/** Share of the logo box on the preview canvas matching `pixel`. */
+function inLogoBox(root: HTMLElement, pixel: Pixel, placement?: LogoPlacement) {
+  return share(
+    root.querySelector('canvas')!,
+    CANVAS_SIZE,
+    logoBox(placement),
+    pixel,
+  )
+}
+
+/**
+ * The UPLOADED logo — this variant, not the other one and not the fallback
+ * wordmark — is drawn: its signature colour is in the box, the other
+ * variant's is not.
+ */
+async function expectVariant(
+  root: HTMLElement,
+  variant: 'light' | 'dark',
+  placement?: LogoPlacement,
+) {
+  const [mine, theirs] =
+    variant === 'light' ? [isBlue, isYellow] : [isYellow, isBlue]
+  await waitFor(() => {
+    expect(inLogoBox(root, mine, placement)).toBeGreaterThan(0.05)
+    expect(inLogoBox(root, theirs, placement)).toBeLessThan(0.001)
+  })
 }
 
 /**
@@ -123,11 +161,13 @@ async function expectLogoOnCanvas(
   }
   await waitFor(() => {
     const canvas = root.querySelector('canvas')!
-    expect(coverage(canvas, CANVAS_SIZE, box, background)).toBeGreaterThan(0.05)
+    expect(
+      share(canvas, CANVAS_SIZE, box, differsFrom(background)),
+    ).toBeGreaterThan(0.05)
     if (below.height > 0) {
-      expect(coverage(canvas, CANVAS_SIZE, below, background)).toBeLessThan(
-        0.01,
-      )
+      expect(
+        share(canvas, CANVAS_SIZE, below, differsFrom(background)),
+      ).toBeLessThan(0.01)
     }
   })
 }
@@ -201,23 +241,9 @@ export const SizelessStrokedLogo: Story = {
     },
   },
   play: async ({ canvasElement }) => {
-    const box = logoBox()
-    await waitFor(() => {
-      const { data } = canvasElement
-        .querySelector('canvas')!
-        .getContext('2d')!
-        .getImageData(
-          Math.round(box.x),
-          Math.round(box.y),
-          Math.round(box.width),
-          Math.round(box.height),
-        )
-      let yellow = 0
-      for (let i = 0; i < data.length; i += 4) {
-        if (data[i] > 200 && data[i + 1] > 170 && data[i + 2] < 80) yellow++
-      }
-      expect(yellow / (data.length / 4)).toBeGreaterThan(0.3)
-    })
+    await waitFor(() =>
+      expect(inLogoBox(canvasElement, isYellow)).toBeGreaterThan(0.3),
+    )
   },
 }
 
@@ -236,6 +262,78 @@ export const LegacyMarkupLogo: Story = {
     },
   },
   play: SizelessStrokedLogo.play,
+}
+
+/**
+ * An upload that cannot be drawn (here: it paints nothing measurable) falls
+ * back to the generated wordmark rather than leaving the logo out.
+ */
+export const UndrawableLogoFallsBack: Story = {
+  args: {
+    conferenceLogos: { title: 'Konf', logoBright: '<svg><g/></svg>' },
+  },
+  play: async ({ canvasElement }) => {
+    // Default background, monochrome: the wordmark is black ink.
+    await expectLogoOnCanvas(canvasElement, '#10B981')
+    await waitFor(() =>
+      expect(inLogoBox(canvasElement, isInk)).toBeGreaterThan(0.03),
+    )
+  },
+}
+
+/**
+ * An uploaded logo that is NOT 970:234 keeps the overlay's fit: the box's
+ * width, its own aspect, hanging from the box's top edge — so a square fills
+ * the box's full width and runs on below it. Contained, it would sit as a
+ * small square in the middle of the box.
+ */
+export const SquareLogoFillsWidth: Story = {
+  args: {
+    conferenceLogos: {
+      title: 'Konf',
+      logoBright:
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="#facc15"/></svg>',
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const box = logoBox()
+    const leftQuarter = { ...box, width: box.width / 4 }
+    const below = { ...box, y: box.y + box.height + 2, height: 30 }
+    const canvas = () => canvasElement.querySelector('canvas')!
+    await waitFor(() => {
+      expect(
+        share(canvas(), CANVAS_SIZE, leftQuarter, isYellow),
+      ).toBeGreaterThan(0.95)
+      expect(share(canvas(), CANVAS_SIZE, below, isYellow)).toBeGreaterThan(
+        0.95,
+      )
+    })
+  },
+}
+
+/**
+ * A size-less logo is measured in the live document. sanitizeSvg's regex
+ * misses a handler after `/` (`<image/onerror=…>`), which the HTML parser
+ * still reads as an attribute — so the parsed tree has to be cleaned before
+ * it is inserted, or the handler runs on the admin's page.
+ */
+export const HostileLogoRunsNothing: Story = {
+  args: {
+    conferenceLogos: {
+      title: 'Konf',
+      logoBright:
+        '<svg><rect width="400" height="100" fill="#facc15"/><image href="x"/onerror="document.body.dataset.pwned=1"/></svg>',
+    },
+  },
+  play: async ({ canvasElement }) => {
+    // The logo was measured and drawn…
+    await waitFor(() =>
+      expect(inLogoBox(canvasElement, isYellow)).toBeGreaterThan(0.3),
+    )
+    // …and its handler never ran (give a failed image load time to fire).
+    await new Promise((resolve) => setTimeout(resolve, 500))
+    expect(document.body.dataset.pwned).toBeUndefined()
+  },
 }
 
 export const FallbackGradient: Story = {
@@ -271,6 +369,7 @@ export const UploadedLogoOnLight: Story = {
   play: async ({ canvasElement }) => {
     await pickBackground(within(canvasElement), 'Sky Mist')
     await expectLogoOnCanvas(canvasElement, '#E0F2FE')
+    await expectVariant(canvasElement, 'light')
   },
 }
 
@@ -279,6 +378,7 @@ export const UploadedLogoOnDark: Story = {
   play: async ({ canvasElement }) => {
     await pickBackground(within(canvasElement), 'Slate Gray')
     await expectLogoOnCanvas(canvasElement, '#334155')
+    await expectVariant(canvasElement, 'dark')
   },
 }
 
@@ -308,6 +408,11 @@ export const LogoResized: Story = {
     set(/Logo Distance from Bottom/, 400)
     set(/Logo Distance from Right/, 200)
     await expectLogoOnCanvas(canvasElement, '#334155', {
+      size: 500,
+      bottom: 400,
+      right: 200,
+    })
+    await expectVariant(canvasElement, 'dark', {
       size: 500,
       bottom: 400,
       right: 200,
@@ -380,8 +485,7 @@ export const WithDownload: Story = {
     // The PNG that Download and "Attach to Task" produce carries it.
     const blob = await captureImage(preview.parentElement!)
     const image = await createImageBitmap(blob)
-    expect(coverage(image, image.width, logoBox(), '#10B981')).toBeGreaterThan(
-      0.05,
-    )
+    // …and it is the uploaded logo's light variant, not the fallback.
+    expect(share(image, image.width, logoBox(), isBlue)).toBeGreaterThan(0.05)
   },
 }

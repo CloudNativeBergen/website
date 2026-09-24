@@ -44,17 +44,30 @@ export function monochromeInk(light: boolean): '#000000' | '#FFFFFF' {
   return light ? '#000000' : '#FFFFFF'
 }
 
+export interface LogoTint {
+  /** The colour an uploaded logo's `currentColor` resolves to. */
+  color: string
+  /**
+   * Whether it replaces a colour the logo sets on its own root (monochrome,
+   * as the overlay's inline style did) or only fills in where it sets none
+   * (gradient, where the overlay left the logo's markup alone).
+   */
+  override: boolean
+}
+
 /**
- * The `currentColor` an uploaded logo is drawn with. Inline, a logo inherits
- * colour from the page, and stored logos lean on that: their text is
- * `currentColor` under `text-brand-slate-gray dark:text-white` classes. An SVG
- * loaded as an image sees no page CSS, so the colour is resolved here — the
- * monochrome ink, or in gradient what those classes meant, keyed to the
- * design's background rather than the admin's theme.
+ * How an uploaded logo is tinted. Inline, a logo inherited colour from the
+ * page, and stored logos lean on that: their text is `currentColor` under
+ * `text-brand-slate-gray dark:text-white` classes. An SVG loaded as an image
+ * sees no page CSS, so the colour is resolved here — the monochrome ink, or in
+ * gradient what those classes meant — keyed to the design's background rather
+ * than the admin's theme.
  */
-export function logoColor(variant: LogoVariant, light: boolean): string {
-  if (variant === 'monochrome') return monochromeInk(light)
-  return light ? '#334155' : '#FFFFFF'
+export function logoTint(variant: LogoVariant, light: boolean): LogoTint {
+  if (variant === 'monochrome') {
+    return { color: monochromeInk(light), override: true }
+  }
+  return { color: light ? '#334155' : '#FFFFFF', override: false }
 }
 
 /**
@@ -74,11 +87,11 @@ export function logoSvgFor(
 export interface LogoRasterRequest {
   key: string
   svg: string
-  color: string
+  tint: LogoTint
 }
 
-export function logoRasterKey(svg: string, color: string): string {
-  return `${color}|${svg}`
+export function logoRasterKey(svg: string, tint: LogoTint): string {
+  return `${tint.color}${tint.override ? '!' : ''}|${svg}`
 }
 
 /**
@@ -94,9 +107,9 @@ export function logoRasterRequests(
     const svg = logoSvgFor(logos, light)
     if (!svg) continue
     for (const variant of ['gradient', 'monochrome'] as const) {
-      const color = logoColor(variant, light)
-      const key = logoRasterKey(svg, color)
-      requests.set(key, { key, svg, color })
+      const tint = logoTint(variant, light)
+      const key = logoRasterKey(svg, tint)
+      requests.set(key, { key, svg, tint })
     }
   }
   return [...requests.values()]
@@ -148,6 +161,7 @@ export function svgForCanvas(svg: string): CanvasSvg | null {
   const doc = new DOMParser().parseFromString(sanitizeSvg(svg), 'text/html')
   const element = doc.body.querySelector('svg')
   if (!element) return null
+  stripActiveContent(element)
 
   const box = element
     .getAttribute('viewBox')
@@ -166,15 +180,38 @@ export function svgForCanvas(svg: string): CanvasSvg | null {
 }
 
 /**
- * Serialise a prepared logo for an image, with `color` as the root's
- * `currentColor`. Set as a style property it overrides any colour the logo
- * sets itself, as the overlay's appended inline style did. XMLSerializer
- * declares every namespace the markup uses (SVG, xlink).
+ * Remove anything that could run: every `on*` attribute and every script-like
+ * element. sanitizeSvg is a regex pass, and the HTML parser finds handlers it
+ * misses (`<image/onerror=…>` — `/` separates attributes). The image path
+ * cannot run script anyway, but a size-less logo is measured in the live
+ * document, so the parsed tree is cleaned before anything is inserted.
  */
-export function logoMarkup(element: SVGSVGElement, color: string): string {
+function stripActiveContent(root: Element) {
+  for (const element of [root, ...root.querySelectorAll('*')]) {
+    if (
+      /^(script|foreignobject|iframe|embed|object)$/i.test(element.localName)
+    ) {
+      element.remove()
+      continue
+    }
+    for (const { name } of [...element.attributes]) {
+      if (/^on/i.test(name)) element.removeAttribute(name)
+    }
+  }
+}
+
+/**
+ * Serialise a prepared logo for an image, tinted per {@link LogoTint}: the
+ * tint becomes the root's `currentColor`, replacing a colour the logo sets on
+ * its root only when it overrides. XMLSerializer declares every namespace the
+ * markup uses (SVG, xlink).
+ */
+export function logoMarkup(element: SVGSVGElement, tint: LogoTint): string {
   const clone = element.cloneNode(true)
   if (!(clone instanceof SVGElement)) throw new Error('not an SVG element')
-  clone.style.setProperty('color', color)
+  const ownColor =
+    clone.style.getPropertyValue('color') || clone.getAttribute('color')
+  if (tint.override || !ownColor) clone.style.setProperty('color', tint.color)
   return new XMLSerializer().serializeToString(clone)
 }
 
@@ -279,27 +316,29 @@ function measuredViewBox(element: SVGSVGElement): CanvasSvg | null {
 }
 
 /**
- * Rasterise an uploaded logo into a decoded image, with `color` as its
- * `currentColor` (see {@link logoColor}). Resolves null for markup that cannot
- * be drawn.
+ * Rasterise an uploaded logo into a decoded image, tinted per `tint`.
+ * Never rejects: markup that cannot be prepared, measured or decoded resolves
+ * null, and the caller draws the wordmark instead.
  */
 export async function loadLogoImage(
   svg: string,
-  color: string,
+  tint: LogoTint,
 ): Promise<CanvasLogo | null> {
-  let prepared = svgForCanvas(svg)
-  if (prepared && !prepared.width) prepared = measuredViewBox(prepared.element)
-  if (!prepared?.width || !prepared.height) return null
-
-  const markup = logoMarkup(prepared.element, color)
-  const image = new Image()
-  image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(markup)}`
   try {
+    let prepared = svgForCanvas(svg)
+    if (prepared && !prepared.width) {
+      prepared = measuredViewBox(prepared.element)
+    }
+    if (!prepared?.width || !prepared.height) return null
+
+    const markup = logoMarkup(prepared.element, tint)
+    const image = new Image()
+    image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(markup)}`
     await image.decode()
+    return { kind: 'image', image, aspect: prepared.height / prepared.width }
   } catch {
     return null
   }
-  return { kind: 'image', image, aspect: prepared.height / prepared.width }
 }
 
 /**
