@@ -93,7 +93,7 @@ function pixels(value: string | undefined): number | undefined {
  * the caller has to measure one (see {@link loadLogoImage}).
  */
 export function svgForCanvas(svg: string): CanvasSvg | null {
-  const sanitized = sanitizeSvg(svg ?? '')
+  const sanitized = sanitizeSvg(svg)
   const open = SVG_OPEN_TAG.exec(sanitized)
   if (!open) return null
 
@@ -141,25 +141,44 @@ export interface Frame {
 /**
  * Where the logo is drawn. The overlay was a box `size` wide and
  * `size / LOGO_BOX_ASPECT` tall, `bottom` and `right` pixels in from the
- * canvas corner; the SVG in it took the box's WIDTH and its own aspect ratio,
- * hanging from the box's top edge. `aspect` is the logo's height / width.
+ * canvas corner, and the two kinds of logo sat in it differently:
+ *
+ * - `width` — an UPLOADED logo was wrapped in auto-height elements, so it took
+ *   the box's width and its own aspect ratio, hanging from the box's top edge.
+ * - `contain` — the generated WORDMARK was the box's own child at full size,
+ *   so the SVG's default `xMidYMid meet` fitted it inside the box, centred.
+ *
+ * `aspect` is the logo's height / width.
  */
 export function logoFrame({
   size,
   bottom,
   right,
   aspect,
+  fit,
 }: {
   size: number
   bottom: number
   right: number
   aspect: number
+  fit: 'width' | 'contain'
 }): Frame {
-  return {
+  const box = {
     x: CANVAS_SIZE - right - size,
     y: CANVAS_SIZE - bottom - size / LOGO_BOX_ASPECT,
     width: size,
-    height: size * aspect,
+    height: size / LOGO_BOX_ASPECT,
+  }
+  if (fit === 'width') return { ...box, height: size * aspect }
+
+  const scale = Math.min(box.width, box.height / aspect)
+  const width = scale
+  const height = scale * aspect
+  return {
+    x: box.x + (box.width - width) / 2,
+    y: box.y + (box.height - height) / 2,
+    width,
+    height,
   }
 }
 
@@ -183,16 +202,35 @@ function measuredViewBox(markup: string): CanvasSvg | null {
     svg.setAttribute('viewBox', `${box.x} ${box.y} ${box.width} ${box.height}`)
     svg.removeAttribute('width')
     svg.removeAttribute('height')
-    return { markup: svg.outerHTML, width: box.width, height: box.height }
+    // XMLSerializer, not outerHTML: an image is parsed as XML, and only the
+    // serializer declares namespaces such as xlink that the markup relies on.
+    return {
+      markup: new XMLSerializer().serializeToString(svg),
+      width: box.width,
+      height: box.height,
+    }
   } finally {
     host.remove()
   }
 }
 
 /**
- * Rasterise an uploaded logo into a decoded image. `color` becomes the SVG's
- * `currentColor`, which is how the overlay tinted a logo in monochrome.
- * Resolves null for markup that cannot be drawn.
+ * Give the root `<svg>` a `color`, APPENDED to any style it has so it wins —
+ * exactly what the overlay did through `InlineSvg`'s style prop. This is its
+ * `currentColor`, which is how monochrome tinted an uploaded logo.
+ */
+export function withColor(markup: string, color: string): string {
+  return markup.replace(SVG_OPEN_TAG, (tag) => {
+    const style = /(\sstyle\s*=\s*)(["'])([^"']*)\2/i
+    return style.test(tag)
+      ? tag.replace(style, `$1$2$3;color:${color}$2`)
+      : tag.replace(/^<svg\b/i, `<svg style="color:${color}"`)
+  })
+}
+
+/**
+ * Rasterise an uploaded logo into a decoded image, tinted with `color` when
+ * given. Resolves null for markup that cannot be drawn.
  */
 export async function loadLogoImage(
   svg: string,
@@ -202,13 +240,7 @@ export async function loadLogoImage(
   if (prepared && !prepared.width) prepared = measuredViewBox(prepared.markup)
   if (!prepared?.width || !prepared.height) return null
 
-  const markup = color
-    ? prepared.markup.replace(SVG_OPEN_TAG, (tag) =>
-        /\sstyle\s*=/i.test(tag)
-          ? tag.replace(/\sstyle\s*=\s*"/i, ` style="color:${color};`)
-          : tag.replace(/^<svg\b/i, `<svg style="color:${color}"`),
-      )
-    : prepared.markup
+  const markup = color ? withColor(prepared.markup, color) : prepared.markup
 
   const image = new Image()
   image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(markup)}`
@@ -260,10 +292,23 @@ export interface LogoPaint {
   gradient: [string, string]
 }
 
-export function logoAspect(logo: CanvasLogo): number {
-  if (logo.kind === 'image') return logo.aspect
+export interface LogoPlacement {
+  size: number
+  bottom: number
+  right: number
+}
+
+/** The frame a logo is drawn in, fitted the way its kind was in the DOM. */
+export function placeLogo(logo: CanvasLogo, placement: LogoPlacement): Frame {
+  if (logo.kind === 'image') {
+    return logoFrame({ ...placement, aspect: logo.aspect, fit: 'width' })
+  }
   const layout = wordmarkLayout(logo.name)
-  return layout.viewBoxHeight / layout.viewBoxWidth
+  return logoFrame({
+    ...placement,
+    aspect: layout.viewBoxHeight / layout.viewBoxWidth,
+    fit: 'contain',
+  })
 }
 
 /**
@@ -288,9 +333,6 @@ export function drawLogo(
   const scale = frame.width / layout.viewBoxWidth
 
   ctx.save()
-  ctx.beginPath()
-  ctx.rect(frame.x, frame.y, frame.width, frame.height)
-  ctx.clip()
   ctx.font = wordmarkFont(paint.fontFamily, layout.fontSize * scale)
   ctx.textAlign = 'left'
   ctx.textBaseline = 'alphabetic'

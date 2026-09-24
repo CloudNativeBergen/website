@@ -50,8 +50,7 @@ import {
   drawLogo,
   isLightBackground,
   loadLogoImage,
-  logoAspect,
-  logoFrame,
+  placeLogo,
   logoSvgFor,
   monochromeInk,
   wordmarkFont,
@@ -240,15 +239,19 @@ export function MemeGenerator({
     : null
 
   // The uploaded logo is rasterised asynchronously; `key` ties the result to
-  // the SVG and ink it was made from, so a stale raster is never drawn.
+  // the SVG and ink it was made from. While a new raster decodes the previous
+  // one stays up, and one that cannot be drawn falls back to the wordmark.
   const [uploadedLogo, setUploadedLogo] = useState<{
     key: string
     logo: CanvasLogo | null
   } | null>(null)
 
   const canvasLogo = useMemo<CanvasLogo | null>(() => {
-    if (!uploadedLogoKey) return { kind: 'wordmark', name: logoName }
-    return uploadedLogo?.key === uploadedLogoKey ? uploadedLogo.logo : null
+    const wordmark: CanvasLogo = { kind: 'wordmark', name: logoName }
+    if (!uploadedLogoKey) return wordmark
+    if (uploadedLogo?.key === uploadedLogoKey)
+      return uploadedLogo.logo ?? wordmark
+    return uploadedLogo?.logo ?? null
   }, [uploadedLogoKey, uploadedLogo, logoName])
 
   const handleBackgroundImageUpload = (
@@ -398,11 +401,10 @@ export function MemeGenerator({
         drawLogo(
           ctx,
           canvasLogo,
-          logoFrame({
+          placeLogo(canvasLogo, {
             size: logoSize,
             bottom: logoVerticalPosition,
             right: logoHorizontalPosition,
-            aspect: logoAspect(canvasLogo),
           }),
           {
             variant: logoVariant,

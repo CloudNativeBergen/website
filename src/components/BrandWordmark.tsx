@@ -143,6 +143,12 @@ interface BrandMarkProps {
   style?: React.CSSProperties
 }
 
+/** Brand gradient stops: the custom property and its house fallback. */
+export const BRAND_GRADIENT_STOPS = [
+  { property: '--brand-primary', fallback: '#1d4ed8' },
+  { property: '--brand-accent', fallback: '#06b6d4' },
+] as const
+
 /**
  * The brand gradient, as SVG stops that read the tenant theme.
  *
@@ -150,11 +156,6 @@ interface BrandMarkProps {
  * same custom properties as `bg-brand-gradient` in CSS — including the house
  * hex fallbacks when no tenant theme is injected.
  */
-export const BRAND_GRADIENT_STOPS = [
-  { property: '--brand-primary', fallback: '#1d4ed8' },
-  { property: '--brand-accent', fallback: '#06b6d4' },
-] as const
-
 function BrandGradient({ id }: { id: string }) {
   const [start, end] = BRAND_GRADIENT_STOPS
   return (
@@ -170,13 +171,14 @@ function BrandGradient({ id }: { id: string }) {
   )
 }
 
-/** Shared type styling for both marks. */
+/** The marks' typeface: custom properties holding the families, and weight. */
 export const WORDMARK_FONT = {
   /** Custom properties holding the family lists, in preference order. */
   properties: ['--font-space-grotesk', '--font-inter'],
   weight: 700,
 } as const
 
+/** Shared type styling for both marks. */
 const TYPE_STYLE: React.CSSProperties = {
   fontFamily: `${WORDMARK_FONT.properties.map((p) => `var(${p})`).join(', ')}, sans-serif`,
   fontWeight: WORDMARK_FONT.weight,
@@ -248,7 +250,6 @@ export function BrandWordmark({
 }: BrandMarkProps) {
   const gradientId = useId()
   const label = name.trim() || '?'
-
   const layout = wordmarkLayout(label)
   const fill = variant === 'gradient' ? `url(#${gradientId})` : 'currentColor'
 

@@ -5,6 +5,7 @@ import {
   logoSvgFor,
   monochromeInk,
   svgForCanvas,
+  withColor,
 } from './meme-generator-logo'
 import { wordmarkLayout } from '../BrandWordmark'
 
@@ -109,7 +110,13 @@ describe('logoFrame', () => {
   // bottom-right corner sits at the two slider distances.
   it('places a 970×234 logo exactly in its box', () => {
     expect(
-      logoFrame({ size: 360, bottom: 40, right: 40, aspect: 234 / 970 }),
+      logoFrame({
+        size: 360,
+        bottom: 40,
+        right: 40,
+        aspect: 234 / 970,
+        fit: 'width',
+      }),
     ).toEqual({
       x: 1080 - 40 - 360,
       y: 1080 - 40 - 360 / (970 / 234),
@@ -118,11 +125,55 @@ describe('logoFrame', () => {
     })
   })
 
-  it('keeps the width and top edge for a taller logo, letting it hang lower', () => {
-    const frame = logoFrame({ size: 400, bottom: 0, right: 0, aspect: 1 })
+  it('keeps the width and top edge for a taller uploaded logo, letting it hang lower', () => {
+    const frame = logoFrame({
+      size: 400,
+      bottom: 0,
+      right: 0,
+      aspect: 1,
+      fit: 'width',
+    })
     expect(frame.width).toBe(400)
     expect(frame.height).toBe(400)
     expect(frame.y).toBeCloseTo(1080 - 400 / (970 / 234))
+  })
+})
+
+describe('logoFrame for the wordmark', () => {
+  // The generated wordmark was the box's own `size-full` child, so the SVG's
+  // default preserveAspectRatio (xMidYMid meet) contained and centred it.
+  const box = {
+    x: 680,
+    y: 1040 - 360 / (970 / 234),
+    width: 360,
+    height: 360 / (970 / 234),
+  }
+
+  it('contains a tall (short-name) mark in the box, centred horizontally', () => {
+    const frame = logoFrame({
+      size: 360,
+      bottom: 40,
+      right: 40,
+      aspect: 0.629,
+      fit: 'contain',
+    })
+    expect(frame.height).toBeCloseTo(box.height)
+    expect(frame.y).toBeCloseTo(box.y)
+    expect(frame.width).toBeCloseTo(box.height / 0.629)
+    expect(frame.x + frame.width / 2).toBeCloseTo(box.x + box.width / 2)
+  })
+
+  it('contains a wide mark in the box, centred vertically', () => {
+    const frame = logoFrame({
+      size: 360,
+      bottom: 40,
+      right: 40,
+      aspect: 0.1,
+      fit: 'contain',
+    })
+    expect(frame.width).toBe(360)
+    expect(frame.x).toBe(box.x)
+    expect(frame.y + frame.height / 2).toBeCloseTo(box.y + box.height / 2)
   })
 })
 
@@ -147,5 +198,31 @@ describe('wordmarkLayout', () => {
     const widest = Math.max(...layout.lines.map((line) => line.width))
     const x = layout.lines[0].x
     expect(x * 2 + widest).toBeCloseTo(layout.viewBoxWidth, 0)
+  })
+})
+
+describe('withColor', () => {
+  it('adds a style when there is none', () => {
+    expect(withColor('<svg viewBox="0 0 1 1"><g/></svg>', '#FFFFFF')).toBe(
+      '<svg style="color:#FFFFFF" viewBox="0 0 1 1"><g/></svg>',
+    )
+  })
+
+  it("appends to an existing style so the tint wins over the logo's own colour", () => {
+    expect(withColor('<svg style="color:red"><g/></svg>', '#000000')).toBe(
+      '<svg style="color:red;color:#000000"><g/></svg>',
+    )
+  })
+
+  it('handles a single-quoted style', () => {
+    expect(withColor("<svg style='fill:red'><g/></svg>", '#000000')).toBe(
+      "<svg style='fill:red;color:#000000'><g/></svg>",
+    )
+  })
+
+  it('only touches the root element', () => {
+    expect(withColor('<svg><g style="opacity:1"/></svg>', '#000000')).toBe(
+      '<svg style="color:#000000"><g style="opacity:1"/></svg>',
+    )
   })
 })

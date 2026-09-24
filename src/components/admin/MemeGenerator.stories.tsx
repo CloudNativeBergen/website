@@ -2,6 +2,17 @@ import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { expect, userEvent, waitFor, within } from 'storybook/test'
 import { MemeGenerator } from './MemeGenerator'
 import { MemeGeneratorWithDownload } from './MemeGeneratorWithDownload'
+import { captureImage } from '../common/image-capture'
+import {
+  CANVAS_SIZE,
+  LOGO_PADDING_DEFAULT,
+  LOGO_SIZE_DEFAULT,
+} from './meme-generator-config'
+import {
+  LOGO_BOX_ASPECT,
+  logoFrame,
+  type LogoPlacement,
+} from './meme-generator-logo'
 
 const meta = {
   title: 'Systems/Marketing/Admin/MemeGenerator',
@@ -41,16 +52,45 @@ const UPLOADED_LOGOS = {
 
 type Canvas = ReturnType<typeof within>
 
+interface Box {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+/** The overlay's logo box for these slider values, in canvas pixels. */
+function logoBox(
+  placement: LogoPlacement = {
+    size: LOGO_SIZE_DEFAULT,
+    bottom: LOGO_PADDING_DEFAULT,
+    right: LOGO_PADDING_DEFAULT,
+  },
+): Box {
+  return logoFrame({ ...placement, aspect: 1 / LOGO_BOX_ASPECT, fit: 'width' })
+}
+
 /**
- * Share of the default logo box (360 px wide, 40 px in from the bottom-right
- * corner) that differs from the background colour. Samples the REGION, not
- * glyph pixels: Storybook's fonts come from a CDN, so exact glyphs vary.
+ * Share of `box` that differs from the background colour, with `source`
+ * scaled to the 1080 canvas. Samples a REGION, not glyph pixels: Storybook's
+ * fonts come from a CDN, so exact glyphs vary.
  */
-function logoBoxCoverage(root: HTMLElement, background: string) {
-  const canvas = root.querySelector('canvas')!
-  const data = canvas
-    .getContext('2d')!
-    .getImageData(680, 1040 - 87, 360, 87).data
+function coverage(
+  source: CanvasImageSource,
+  size: number,
+  box: Box,
+  background: string,
+) {
+  const canvas = document.createElement('canvas')
+  canvas.width = canvas.height = CANVAS_SIZE
+  const ctx = canvas.getContext('2d')!
+  ctx.drawImage(source, 0, 0, size, size, 0, 0, CANVAS_SIZE, CANVAS_SIZE)
+  const data = ctx.getImageData(
+    Math.round(box.x),
+    Math.round(box.y),
+    Math.round(box.width),
+    Math.round(box.height),
+  ).data
   const [r, g, b] = [1, 3, 5].map((i) =>
     parseInt(background.slice(i, i + 2), 16),
   )
@@ -65,11 +105,31 @@ function logoBoxCoverage(root: HTMLElement, background: string) {
   return differing / (data.length / 4)
 }
 
-/** The logo is ON the canvas: its box is not just background. */
-async function expectLogoOnCanvas(root: HTMLElement, background: string) {
-  await waitFor(() =>
-    expect(logoBoxCoverage(root, background)).toBeGreaterThan(0.05),
-  )
+/**
+ * The logo is ON the canvas, inside its box: the box is not just background,
+ * and the strip below it is (a mark scaled past its box spills into it).
+ */
+async function expectLogoOnCanvas(
+  root: HTMLElement,
+  background: string,
+  placement?: LogoPlacement,
+) {
+  const box = logoBox(placement)
+  const below = {
+    x: box.x,
+    y: box.y + box.height + 2,
+    width: box.width,
+    height: Math.min(30, CANVAS_SIZE - (box.y + box.height + 2)),
+  }
+  await waitFor(() => {
+    const canvas = root.querySelector('canvas')!
+    expect(coverage(canvas, CANVAS_SIZE, box, background)).toBeGreaterThan(0.05)
+    if (below.height > 0) {
+      expect(coverage(canvas, CANVAS_SIZE, below, background)).toBeLessThan(
+        0.01,
+      )
+    }
+  })
 }
 
 async function openBackgroundAdvanced(canvas: Canvas) {
@@ -89,6 +149,18 @@ export const FallbackGradient: Story = {
     const canvas = within(canvasElement)
     await openBackgroundAdvanced(canvas)
     await userEvent.click(canvas.getByRole('button', { name: /Gradient/ }))
+    await expectLogoOnCanvas(canvasElement, '#10B981')
+  },
+}
+
+/**
+ * A short name makes a TALL wordmark. The overlay contained it in the box;
+ * filling the box's width instead makes it ~2.6× too big and runs it off the
+ * canvas — which the long default title happens to hide.
+ */
+export const ShortTitleWordmark: Story = {
+  args: { conferenceLogos: { title: 'Konf' } },
+  play: async ({ canvasElement }) => {
     await expectLogoOnCanvas(canvasElement, '#10B981')
   },
 }
@@ -141,6 +213,11 @@ export const LogoResized: Story = {
     set(/Logo Size/, 500)
     set(/Logo Distance from Bottom/, 400)
     set(/Logo Distance from Right/, 200)
+    await expectLogoOnCanvas(canvasElement, '#334155', {
+      size: 500,
+      bottom: 400,
+      right: 200,
+    })
   },
 }
 
@@ -199,5 +276,18 @@ export const WithDownload: Story = {
   ),
   play: async ({ canvasElement }) => {
     await expectLogoOnCanvas(canvasElement, '#10B981')
+
+    // Once: the canvas is the only thing drawing the logo — no DOM overlay.
+    const preview = canvasElement.querySelector('canvas')!.parentElement!
+    expect([...preview.children].map((child) => child.tagName)).toEqual([
+      'CANVAS',
+    ])
+
+    // The PNG that Download and "Attach to Task" produce carries it.
+    const blob = await captureImage(preview.parentElement!)
+    const image = await createImageBitmap(blob)
+    expect(coverage(image, image.width, logoBox(), '#10B981')).toBeGreaterThan(
+      0.05,
+    )
   },
 }
