@@ -28,6 +28,8 @@ import { deduplicateTicketsByEmail } from './utils'
 export interface ParticipantTally {
   /** Unique emails across admitting tickets. One human, one count. */
   participants: number
+  /** Unique emails across admitting tickets who ALSO hold workshop access. */
+  workshopParticipants: number
   /** Add-on tickets (admits: false) whose holder also holds a seat. */
   addOnsWithSeat: number
   /**
@@ -92,6 +94,13 @@ export function tallyParticipants(
   const seats = tickets.filter((t) => admits.get(t))
   const participants = deduplicateTicketsByEmail(seats)
   const seatedEmails = new Set(seats.map(emailOf).filter(Boolean))
+  
+  const workshopTickets = tickets.filter((t) => {
+    const c = classified.find((cx) => cx[0] === t);
+    return c && c[1].grantsWorkshop;
+  })
+  const workshopEmails = new Set(workshopTickets.map(emailOf).filter(Boolean))
+  const workshopParticipants = participants.filter((t) => workshopEmails.has(emailOf(t))).length
 
   const addOns = tickets.filter((t) => !admits.get(t))
   const addOnsWithSeat = addOns.filter((t) =>
@@ -100,6 +109,7 @@ export function tallyParticipants(
 
   return {
     participants: participants.length,
+    workshopParticipants,
     addOnsWithSeat,
     addOnsWithoutSeat: addOns.length - addOnsWithSeat,
     repeatTickets: seats.length - participants.length,

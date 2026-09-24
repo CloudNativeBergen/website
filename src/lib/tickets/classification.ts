@@ -131,6 +131,8 @@ export interface TicketClassification {
   comp: boolean | 'unknown'
   /** Who granted it. `null` whenever `comp` is not `true`, and when unattributable. */
   grantedBy: TicketGrantedBy | null
+  /** Does holding this ticket grant workshop access? */
+  grantsWorkshop: boolean
 }
 
 /** One conference's declaration for one provider ticket-type name. */
@@ -169,7 +171,8 @@ export interface TicketClassificationContext {
    * Sponsor names for `sponsorOwningCode`. ABSENT ⇒ no ticket is attributed to
    * a sponsor; attribution is substring matching, and its header documents how
    * an accidental match TAKES OVER the wrong sponsor's row. So it is used here
-   * only to name a grantor — never to decide that a ticket is a comp, and never
+   * only to name a grantor — never to decide that a ticket is a comp,
+    grantsWorkshop: role?.grantsWorkshop ?? false, and never
    * to decide `admits`. A wrong match mislabels a grantor; it cannot move the
    * headcount.
    */
@@ -331,6 +334,7 @@ export function classifyTicket(
           ? 'proposed'
           : 'unknown',
     comp,
+    grantsWorkshop: role?.grantsWorkshop ?? false,
     grantedBy,
   }
 }
