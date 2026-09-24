@@ -1,17 +1,31 @@
 import QRCodeStyling from 'qr-code-styling'
 import type { QrStyle } from './meme-generator-draw'
 
-/** The fields of a QR style, as one comparable key. */
-export function qrStyleKey(style: QrStyle): string {
-  return JSON.stringify([
-    style.url,
-    style.size,
-    style.dotsColor,
-    style.backgroundColor,
-    style.dotsType,
-    style.cornerSquareType,
-    style.cornerDotType,
-  ])
+/** Just the style fields of `qr` — the rest (its position) never reaches the generator. */
+export function pickQrStyle(qr: QrStyle): QrStyle {
+  const {
+    url,
+    size,
+    dotsColor,
+    backgroundColor,
+    dotsType,
+    cornerSquareType,
+    cornerDotType,
+  } = qr
+  return {
+    url,
+    size,
+    dotsColor,
+    backgroundColor,
+    dotsType,
+    cornerSquareType,
+    cornerDotType,
+  }
+}
+
+/** A QR style as one comparable key. */
+export function qrStyleKey(qr: QrStyle): string {
+  return JSON.stringify(pickQrStyle(qr))
 }
 
 /**

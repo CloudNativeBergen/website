@@ -51,10 +51,9 @@ import {
   designIsLight,
   drawDesign,
   type MemeDesign,
-  type QrStyle,
   type Raster,
 } from './meme-generator-draw'
-import { qrStyleKey, renderQrImage } from './meme-generator-qr'
+import { pickQrStyle, qrStyleKey, renderQrImage } from './meme-generator-qr'
 import { PLATFORM_NAME } from '@/lib/branding/platform'
 
 interface MemeGeneratorProps {
@@ -294,37 +293,24 @@ export function MemeGenerator({
     setBackground({ image: null })
   }
 
-  // The QR image depends on its style alone. Its effect lists those fields —
-  // not the design, and not a draw function — so editing text, colours or
+  // The QR image depends on its style alone: the effect is keyed on it — not
+  // on the design, and not on a draw function — so editing text, colours or
   // positions never regenerates it.
-  const {
-    url: qrUrl,
-    size: qrSize,
-    dotsColor: qrDotsColor,
-    backgroundColor: qrBackgroundColor,
-    dotsType: qrDotsType,
-    cornerSquareType: qrCornerSquareType,
-    cornerDotType: qrCornerDotType,
-  } = qr
   const qrKey = qrStyleKey(qr)
+  const qrStyle = useMemo(
+    () => pickQrStyle(qr),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: identity tracks the style, not the QR's position
+    [qrKey],
+  )
   const [qrRaster, setQrRaster] = useState<{
     key: string
     image: CanvasImageSource | null
   } | null>(null)
   useEffect(() => {
-    if (!qrUrl) return
-    const style: QrStyle = {
-      url: qrUrl,
-      size: qrSize,
-      dotsColor: qrDotsColor,
-      backgroundColor: qrBackgroundColor,
-      dotsType: qrDotsType,
-      cornerSquareType: qrCornerSquareType,
-      cornerDotType: qrCornerDotType,
-    }
-    const key = qrStyleKey(style)
+    if (!qrStyle.url) return
+    const key = qrStyleKey(qrStyle)
     let cancelled = false
-    renderQrImage(style).then(
+    renderQrImage(qrStyle).then(
       (image) => !cancelled && setQrRaster({ key, image }),
       // A failed image is settled too: nothing to draw, nothing to wait for.
       () => !cancelled && setQrRaster({ key, image: null }),
@@ -332,16 +318,8 @@ export function MemeGenerator({
     return () => {
       cancelled = true
     }
-  }, [
-    qrUrl,
-    qrSize,
-    qrDotsColor,
-    qrBackgroundColor,
-    qrDotsType,
-    qrCornerSquareType,
-    qrCornerDotType,
-  ])
-  const qrPending = Boolean(qrUrl) && qrRaster?.key !== qrKey
+  }, [qrStyle])
+  const qrPending = Boolean(qr.url) && qrRaster?.key !== qrKey
 
   // The logo's variant and monochrome ink follow the DESIGN's background, not
   // the admin's light/dark theme.
@@ -404,8 +382,8 @@ export function MemeGenerator({
     [fontRequestKey],
   )
 
-  // Which set of faces has settled. Until then the canvas shows the fallback
-  // and capture waits; a face that fails or is missing settles all the same.
+  // Which set of faces has settled. Until then nothing is painted and capture
+  // waits; a face that fails, is missing or times out settles all the same.
   const [textFontsReadyFor, setTextFontsReadyFor] = useState('')
   const textFontsPending = fontRequestKey !== textFontsReadyFor
   useEffect(() => {
@@ -451,10 +429,20 @@ export function MemeGenerator({
     [backgroundRaster, qrRaster, canvasLogo],
   )
 
-  // A layout effect: the canvas is painted in the same commit that clears
-  // `data-capture-pending`, so a capture never sees the mark gone before the
-  // asset is drawn. Font readiness is listed so a face that lands repaints.
+  const capturePending =
+    backgroundPending ||
+    qrPending ||
+    logoPending ||
+    textFontsPending ||
+    wordmarkPending
+
+  // Only a complete frame is painted: while any asset is still loading the
+  // canvas keeps the last one, so no frame shows a fallback font, a stale QR
+  // or a missing logo. A layout effect, so the paint lands in the same commit
+  // that clears `data-capture-pending` and a capture never sees one without
+  // the other.
   useLayoutEffect(() => {
+    if (capturePending) return
     const root = document.documentElement
     const brand = {
       fontFamily: wordmarkFontFamily(root),
@@ -464,14 +452,7 @@ export function MemeGenerator({
       const ctx = canvas?.getContext('2d')
       if (ctx) drawDesign(ctx, design, { ...assets, brand }, 0)
     }
-  }, [design, assets, textFontsReadyFor, wordmarkReadyFor])
-
-  const capturePending =
-    backgroundPending ||
-    qrPending ||
-    logoPending ||
-    textFontsPending ||
-    wordmarkPending
+  }, [design, assets, capturePending])
 
   // The overlay carried the logo's accessible name; the canvas now does.
   const canvasLabel = `Meme preview with the ${logoName} logo`
@@ -963,13 +944,13 @@ export function MemeGenerator({
                     <input
                       type="color"
                       id="qr-dots-color"
-                      value={qrDotsColor}
+                      value={qr.dotsColor}
                       onChange={(e) => setQr({ dotsColor: e.target.value })}
                       className="h-10 w-20 cursor-pointer rounded border border-brand-frosted-steel dark:border-gray-600"
                     />
                     <input
                       type="text"
-                      value={qrDotsColor}
+                      value={qr.dotsColor}
                       onChange={(e) => setQr({ dotsColor: e.target.value })}
                       className="flex-1 rounded border border-brand-frosted-steel bg-brand-glacier-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700"
                       placeholder="#000000"
@@ -985,7 +966,7 @@ export function MemeGenerator({
                     <input
                       type="color"
                       id="qr-bg-color"
-                      value={qrBackgroundColor}
+                      value={qr.backgroundColor}
                       onChange={(e) =>
                         setQr({ backgroundColor: e.target.value })
                       }
@@ -993,7 +974,7 @@ export function MemeGenerator({
                     />
                     <input
                       type="text"
-                      value={qrBackgroundColor}
+                      value={qr.backgroundColor}
                       onChange={(e) =>
                         setQr({ backgroundColor: e.target.value })
                       }
@@ -1009,7 +990,7 @@ export function MemeGenerator({
                     {QR_DOT_TYPES.map((type) => (
                       <ToggleButton
                         key={type.value}
-                        active={qrDotsType === type.value}
+                        active={qr.dotsType === type.value}
                         onClick={() => setQr({ dotsType: type.value })}
                       >
                         {type.name}
@@ -1024,7 +1005,7 @@ export function MemeGenerator({
                     {QR_CORNER_SQUARE_TYPES.map((type) => (
                       <ToggleButton
                         key={type.value}
-                        active={qrCornerSquareType === type.value}
+                        active={qr.cornerSquareType === type.value}
                         onClick={() => setQr({ cornerSquareType: type.value })}
                       >
                         {type.name}
@@ -1039,7 +1020,7 @@ export function MemeGenerator({
                     {QR_CORNER_DOT_TYPES.map((type) => (
                       <ToggleButton
                         key={type.value}
-                        active={qrCornerDotType === type.value}
+                        active={qr.cornerDotType === type.value}
                         onClick={() => setQr({ cornerDotType: type.value })}
                       >
                         {type.name}
@@ -1051,7 +1032,7 @@ export function MemeGenerator({
                 <Slider
                   id="qr-size"
                   label="QR Code Size"
-                  value={qrSize}
+                  value={qr.size}
                   onChange={(size) => setQr({ size })}
                   min={QR_SIZE_MIN}
                   max={QR_SIZE_MAX}

@@ -128,6 +128,29 @@ describe('loadCanvasFonts', () => {
     ).resolves.toBeUndefined()
   })
 
+  // The editor paints only once its faces have settled, so one that never
+  // does must not freeze the preview.
+  it('gives up on a face that never settles', async () => {
+    vi.useFakeTimers()
+    try {
+      const fonts = {
+        load: vi.fn(() => new Promise<FontFace[]>(() => {})),
+      } as unknown as FontFaceSet
+      let settled = false
+      loadCanvasFonts(
+        [{ font: 'normal 48px "Inter"', text: 'HI' }],
+        fonts,
+        3000,
+      ).then(() => (settled = true))
+      await vi.advanceTimersByTimeAsync(2999)
+      expect(settled).toBe(false)
+      await vi.advanceTimersByTimeAsync(1)
+      expect(settled).toBe(true)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('contains a font set that throws synchronously', async () => {
     const fonts = {
       load: vi.fn(() => {

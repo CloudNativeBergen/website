@@ -78,3 +78,45 @@ describe('MemeGenerator QR image', () => {
     )
   })
 })
+
+describe('MemeGenerator painting', () => {
+  it('paints text only once its font face has settled, never in the fallback', async () => {
+    const painted: string[] = []
+    const ctx = new Proxy(
+      {},
+      {
+        get: (_target, key) =>
+          key === 'measureText'
+            ? () => ({ width: 10 })
+            : key === 'fillText'
+              ? (text: string) => painted.push(text)
+              : () => {},
+        set: () => true,
+      },
+    )
+    vi.mocked(HTMLCanvasElement.prototype.getContext).mockReturnValue(
+      ctx as CanvasRenderingContext2D,
+    )
+    let settle: () => void = () => {}
+    const load = vi.fn(
+      () => new Promise<FontFace[]>((resolve) => (settle = () => resolve([]))),
+    )
+    Object.defineProperty(document, 'fonts', {
+      value: { load },
+      configurable: true,
+    })
+
+    try {
+      render(<MemeGenerator />)
+      const [headline] = screen.getAllByPlaceholderText('Enter your text...')
+      typeInto(headline, 'Hei')
+      await waitFor(() => expect(load).toHaveBeenCalled())
+      expect(painted).not.toContain('HEI')
+
+      settle()
+      await waitFor(() => expect(painted).toContain('HEI'))
+    } finally {
+      Reflect.deleteProperty(document, 'fonts')
+    }
+  })
+})
