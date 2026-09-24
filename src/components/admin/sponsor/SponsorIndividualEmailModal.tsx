@@ -50,12 +50,15 @@ export function SponsorIndividualEmailModal({
 }: SponsorIndividualEmailModalProps) {
   const { showNotification } = useNotification()
   const router = useRouter()
-  const saveSponsorLinkMutation = api.conference.updateSponsorRegistrationLink.useMutation()
+  const saveSponsorLinkMutation =
+    api.conference.updateSponsorRegistrationLink.useMutation()
   const [ticketUrl, setTicketUrl] = useState('')
   const [userHasEditedTicketUrl, setUserHasEditedTicketUrl] = useState(false)
   const [savedSponsorLink, setSavedSponsorLink] = useState<string | null>(null)
   const [initialized, setInitialized] = useState(false)
-  const [additionalFields, setAdditionalFields] = useState<Record<string, string | number | boolean>>({})
+  const [additionalFields, setAdditionalFields] = useState<
+    Record<string, string | number | boolean>
+  >({})
 
   const [initialMessage, setInitialMessage] = useState<PortableTextBlock[]>([])
 
@@ -114,8 +117,8 @@ export function SponsorIndividualEmailModal({
   const defaultSubject = getDefaultSubject()
   const sendEmailMutation = api.sponsor.crm.sendEmail.useMutation()
 
-
-  const storedSponsorLink = savedSponsorLink ?? conference.sponsorRegistrationLink ?? ''
+  const storedSponsorLink =
+    savedSponsorLink ?? conference.sponsorRegistrationLink ?? ''
   const trimmedTicketUrl = ticketUrl.trim()
   const publicFallbacks = [
     conference.registrationLink,
@@ -155,7 +158,9 @@ export function SponsorIndividualEmailModal({
         disabled={saveSponsorLinkMutation.isPending}
         className="font-space-grotesk rounded-md border border-gray-300 px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-800"
       >
-        {saveSponsorLinkMutation.isPending ? 'Saving…' : 'Save as conference default'}
+        {saveSponsorLinkMutation.isPending
+          ? 'Saving…'
+          : 'Save as conference default'}
       </button>
       <span className="font-inter text-xs text-gray-500 dark:text-gray-400">
         Stores this link on the conference.
@@ -164,12 +169,13 @@ export function SponsorIndividualEmailModal({
   ) : null
 
   const missingSponsorLinkWarning = !storedSponsorLink && (
-    <div className="rounded-md bg-yellow-50 p-4 dark:bg-yellow-900/30 mb-4">
+    <div className="mb-4 rounded-md bg-yellow-50 p-4 dark:bg-yellow-900/30">
       <h3 className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
         No Sponsor Registration Link
       </h3>
       <p className="mt-2 text-sm text-yellow-700 dark:text-yellow-300">
-        This conference has no sponsor registration link. You can paste one below and save it as the default.
+        This conference has no sponsor registration link. You can paste one
+        below and save it as the default.
       </p>
     </div>
   )
@@ -179,8 +185,14 @@ export function SponsorIndividualEmailModal({
     setUserHasEditedTicketUrl(true)
     setAdditionalFields((prev) => ({ ...prev, ticketUrl: newUrl }))
   }
-  const handleAdditionalFieldsChange = (fields: Record<string, string | number | boolean>) => {
-    if (fields.ticketUrl && typeof fields.ticketUrl === 'string' && !userHasEditedTicketUrl) {
+  const handleAdditionalFieldsChange = (
+    fields: Record<string, string | number | boolean>,
+  ) => {
+    if (
+      fields.ticketUrl &&
+      typeof fields.ticketUrl === 'string' &&
+      !userHasEditedTicketUrl
+    ) {
       setTicketUrl(fields.ticketUrl)
     }
     setAdditionalFields(fields)
