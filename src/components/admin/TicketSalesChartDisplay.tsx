@@ -420,7 +420,10 @@ export function TicketSalesChartDisplay({
   // Revenue) plus the two conditional ones. Kept beside the grid class it
   // feeds, because a count that drifts from the cards re-creates the orphan.
   const cardCount =
-    5 + (freeTicketAllocation ? 1 : 0) + (paidPerformance.nextMilestone ? 1 : 0) + (tally.workshopParticipants > 0 ? 1 : 0)
+    5 +
+    (freeTicketAllocation ? 1 : 0) +
+    (paidPerformance.nextMilestone ? 1 : 0) +
+    (tally.workshopParticipants > 0 ? 1 : 0)
 
   return (
     <div className={className}>
@@ -439,7 +442,9 @@ export function TicketSalesChartDisplay({
           <PerformanceCard
             title="Workshop Participants"
             value={
-              isCertain(tally) ? tally.workshopParticipants : `≈ ${tally.workshopParticipants}`
+              isCertain(tally)
+                ? tally.workshopParticipants
+                : `≈ ${tally.workshopParticipants}`
             }
             subtitle="Participants holding a workshop ticket"
           />

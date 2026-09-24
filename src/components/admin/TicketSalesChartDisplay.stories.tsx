@@ -246,7 +246,7 @@ export const UnverifiedParticipants: Story = {
   args: {
     participantTally: {
       participants: 155,
-  workshopParticipants: 0,
+      workshopParticipants: 0,
       addOnsWithSeat: 0,
       addOnsWithoutSeat: 0,
       repeatTickets: 0,
@@ -265,7 +265,7 @@ export const ProposedParticipantRoles: Story = {
   args: {
     participantTally: {
       participants: 155,
-  workshopParticipants: 0,
+      workshopParticipants: 0,
       addOnsWithSeat: 0,
       addOnsWithoutSeat: 0,
       repeatTickets: 0,
