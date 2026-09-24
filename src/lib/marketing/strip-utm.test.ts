@@ -6,6 +6,13 @@ import { stripUtmFromAddressBar, withoutUtm } from './strip-utm'
 
 const BASE = 'https://2026.cloudnativedays.no'
 
+function setUserActivation(hasBeenActive: boolean) {
+  Object.defineProperty(navigator, 'userActivation', {
+    configurable: true,
+    value: { hasBeenActive, isActive: hasBeenActive },
+  })
+}
+
 describe('withoutUtm', () => {
   it('removes all five utm_* keys and nothing else', () => {
     expect(
@@ -113,6 +120,7 @@ describe('stripUtmFromAddressBar and the Next.js app router', () => {
   }
   beforeEach(() => {
     routerUrl = null
+    setUserActivation(false)
     original(ROUTER_STATE, '', '/?utm_campaign=c&keep=1')
   })
   afterEach(() => {
@@ -124,6 +132,19 @@ describe('stripUtmFromAddressBar and the Next.js app router', () => {
     installRouterPatch()
     expect(stripUtmFromAddressBar(window)).toBe('router')
     expect(routerUrl).toBe(`${window.location.origin}/?keep=1`)
+    expect(window.history.state).toEqual(ROUTER_STATE)
+  })
+
+  it('once the visitor has interacted, the router is bypassed: a navigation in flight survives', () => {
+    // A marker-free write reaches the router as a RESTORE, and the router's
+    // queue discards whatever navigation is pending (a Link just clicked):
+    // the click would be lost. So after any activation the entry is
+    // rewritten behind the router, marker and all.
+    installRouterPatch()
+    setUserActivation(true)
+    expect(stripUtmFromAddressBar(window)).toBe('bypass')
+    expect(window.location.search).toBe('?keep=1')
+    expect(routerUrl).toBeNull()
     expect(window.history.state).toEqual(ROUTER_STATE)
   })
 

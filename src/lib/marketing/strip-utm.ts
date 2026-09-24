@@ -90,20 +90,40 @@ function withoutRouterMarkers(state: unknown): unknown {
  * took it (the router now knows the URL), `'native'` when it went straight to
  * the browser (before hydration, or no app router at all).
  */
-export type HistoryWrite = 'router' | 'native'
+export type HistoryWrite = 'router' | 'native' | 'bypass'
+
+/**
+ * Whether the router may be told about a rewrite. A marker-free write reaches
+ * it as a RESTORE action, and the router's action queue DISCARDS whatever
+ * navigation is pending in favour of it (`app-router-instance.js`): a Link
+ * the visitor has just clicked, whose response has not landed, would go
+ * nowhere. Only a visitor who has never interacted with the page can have no
+ * navigation in flight (programmatic pushes aside), so the router learns the
+ * URL only then. Where the activation API is missing, the router is bypassed.
+ */
+function routerMayLearn(win: Window): boolean {
+  const activation = win.navigator.userActivation as UserActivation | undefined
+  return activation !== undefined && !activation.hasBeenActive
+}
 
 /**
  * Replace the CURRENT entry's URL, never pushing one, and let the Next router
- * learn it when its patch is installed. The entry keeps its state: through the
- * patch the markers are copied back; without the patch (the window between
- * the router's first render and its effects) the original state is written
- * back as is, so Back never reloads.
+ * learn it when its patch is installed and it is safe to tell it (see
+ * {@link routerMayLearn}; otherwise `'bypass'`: the entry is rewritten behind
+ * the router, marker and all, and its own copy of the URL stays as it was).
+ * The entry keeps its state: through the patch the markers are copied back;
+ * without the patch (the window between the router's first render and its
+ * effects) the original state is written back as is, so Back never reloads.
  */
 export function replaceUrlKeepingState(
   win: Window,
   href: string,
 ): HistoryWrite {
   const before: unknown = win.history.state
+  if (hasRouterMarker(before) && !routerMayLearn(win)) {
+    win.history.replaceState(before, '', href)
+    return 'bypass'
+  }
   win.history.replaceState(withoutRouterMarkers(before), '', href)
   if (!hasRouterMarker(before)) return 'native'
   if (hasRouterMarker(win.history.state)) return 'router'

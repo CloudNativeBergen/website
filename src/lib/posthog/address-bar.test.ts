@@ -31,6 +31,13 @@ function fakeClient() {
   }
 }
 
+function setUserActivation(hasBeenActive: boolean) {
+  Object.defineProperty(navigator, 'userActivation', {
+    configurable: true,
+    value: { hasBeenActive, isActive: hasBeenActive },
+  })
+}
+
 function setVisibility(state: DocumentVisibilityState) {
   Object.defineProperty(document, 'visibilityState', {
     configurable: true,
@@ -42,6 +49,7 @@ beforeEach(() => {
   vi.useFakeTimers()
   window.history.replaceState(null, '', TAGGED)
   setVisibility('visible')
+  setUserActivation(false)
 })
 afterEach(() => {
   vi.useRealTimers()
@@ -220,6 +228,31 @@ describe('scheduleUtmStrip', () => {
     })
     expect(() => vi.advanceTimersByTime(UTM_STRIP_GUARD_TICK_MS)).not.toThrow()
     expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('never hands off to the router once the visitor has interacted, and stops', () => {
+    // A RESTORE dispatched by the hand-off would discard a navigation the
+    // visitor started; a bypass write keeps the URL clean and ends the
+    // guard's probing.
+    const schedule = scheduleUtmStrip(window)
+    schedule.now()
+    const original = window.history.replaceState.bind(window.history)
+    const routerUrls: string[] = []
+    original({ __NA: true }, '', window.location.href)
+    window.history.replaceState = (data, unused, url) => {
+      if (data?.__NA) return original(data, unused, url)
+      routerUrls.push(String(url))
+      return original({ ...(data ?? {}), __NA: true }, unused, url)
+    }
+    setUserActivation(true)
+    try {
+      vi.advanceTimersByTime(UTM_STRIP_GUARD_TICK_MS)
+      expect(routerUrls).toEqual([])
+      expect(window.location.search).toBe('?keep=1')
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      window.history.replaceState = original
+    }
   })
 
   it('probes for the router sparingly while its patch is not installed', () => {

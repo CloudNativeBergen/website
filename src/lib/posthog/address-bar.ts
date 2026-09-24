@@ -98,31 +98,32 @@ export function scheduleUtmStrip(
     } catch {
       return
     }
-    guard(write === 'router')
+    guard(write !== 'native')
   }
 
-  // Re-check on the next macrotask and then every tick until the router has
-  // taken a rewrite (it can no longer write the landing URL back) or the
-  // guard runs out. Re-strip if the tags came back; once the router has
-  // hydrated (its marker is on the state), hand it the clean URL once so its
-  // own copy matches. Stops as soon as the visitor leaves the landing.
-  function guard(routerSynced: boolean) {
+  // Re-check on the next macrotask and then every tick until the rewrite has
+  // settled — the router took it (it can no longer write the landing URL
+  // back) or it was bypassed on purpose — or the guard runs out. Re-strip if
+  // the tags came back; once the router has hydrated (its marker is on the
+  // state), hand it the clean URL once so its own copy matches. Stops as
+  // soon as the visitor leaves the landing.
+  function guard(writeSettled: boolean) {
     const until = Date.now() + UTM_STRIP_GUARD_MS
-    let synced = routerSynced
+    let settled = writeSettled
     let ticks = 0
     const tick = () => {
       if (!onLanding()) return
       const probe = ticks++ % UTM_STRIP_GUARD_PROBE_EVERY === 0
       try {
         if (withoutUtm(win.location.href) !== null) {
-          synced = stripUtmFromAddressBar(win) === 'router'
-        } else if (!synced && probe && hasRouterMarker(win.history.state)) {
-          synced = replaceUrlKeepingState(win, win.location.href) === 'router'
+          settled = stripUtmFromAddressBar(win) !== 'native'
+        } else if (!settled && probe && hasRouterMarker(win.history.state)) {
+          settled = replaceUrlKeepingState(win, win.location.href) !== 'native'
         }
       } catch {
         return
       }
-      if (!synced && Date.now() < until) {
+      if (!settled && Date.now() < until) {
         setTimeout(tick, UTM_STRIP_GUARD_TICK_MS)
       }
     }

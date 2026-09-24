@@ -219,7 +219,11 @@ and the hash kept. Where analytics is not configured or the route is analytics-e
 no pageview to wait for and the strip is immediate. A ~3 s timeout strips anyway when the SDK is
 blocked or slow: those visitors were never going to be attributed. The timeout runs only while the
 page is visible: a link opened in a background tab gets its first `$pageview` when the tab is first
-shown, and that pageview must still see the tags.
+shown, and that pageview must still see the tags. The rewrite goes through the Next router's history
+patch, so the router's own copy of the URL is clean too, but only while the visitor has not yet
+interacted with the page (`navigator.userActivation`): the router treats an external rewrite as a
+RESTORE and discards a navigation in flight, so after an activation the entry is rewritten behind
+the router and its copy stays as it was.
 
 This applies to every landing with `utm_*`, not only arrivals through `/go/`.
 
