@@ -708,6 +708,31 @@ describe('BufferPublishAdapter — failure at create (spec §3.3)', () => {
     },
   )
 
+  it.each([
+    [401, 'UNAUTHORIZED'],
+    [400, 'BAD_USER_INPUT'],
+    [403, 'FORBIDDEN'],
+  ])(
+    'an HTTP %s at create whose errors[] disagree (%s beside UNEXPECTED) is ambiguous — the status is no verdict over a split body',
+    async (status, code) => {
+      const { fetchImpl } = createAnswering(
+        () =>
+          new Response(
+            JSON.stringify({
+              data: null,
+              errors: [
+                { message: `Buffer ${code}`, extensions: { code } },
+                { message: 'unexpected', extensions: { code: 'UNEXPECTED' } },
+              ],
+            }),
+            { status },
+          ),
+      )
+      const outcome = await adapter({ fetch: fetchImpl }).publish(LINK_ONLY)
+      expect(outcome).toMatchObject({ ok: false, kind: 'ambiguous' })
+    },
+  )
+
   it('a create that outlives its call timeout is ambiguous — the request was sent and the post may exist', async () => {
     const { calls, outcome } = await publishWith(
       { delayMs: { create: 500 } },
@@ -880,6 +905,32 @@ describe('BufferPublishAdapter — confirm (spec §3.2)', () => {
     await expect(adapter().confirm(POST_ID)).resolves.toMatchObject({
       state: 'unreadable',
       message: expect.stringContaining('externalLink'),
+    })
+  })
+
+  it('a message-less field error beside a sent post is still a field error: unreadable, not published', async () => {
+    buffer({
+      post: {
+        rawBody: {
+          data: {
+            post: {
+              id: POST_ID,
+              status: 'sent',
+              externalLink: null,
+              error: null,
+            },
+          },
+          errors: [
+            {
+              path: ['post', 'externalLink'],
+              extensions: { code: 'UNEXPECTED' },
+            },
+          ],
+        },
+      },
+    })
+    await expect(adapter().confirm(POST_ID)).resolves.toMatchObject({
+      state: 'unreadable',
     })
   })
 

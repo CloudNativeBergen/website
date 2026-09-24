@@ -151,6 +151,11 @@ type Answer =
        */
       bare?: boolean
       /**
+       * The body's errors carry more than one code. A split body is no
+       * verdict, so at create the HTTP status may not stand in for one.
+       */
+      mixed?: boolean
+      /**
        * A root field that answered despite the status: only the create
        * phase may read it, because there the body is the evidence of what
        * happened, whatever a gateway stamped on it.
@@ -395,6 +400,7 @@ export class BufferPublishAdapter implements SocialPublishAdapter {
     if (
       answer.kind === 'http' &&
       (answer.bare ||
+        answer.mixed ||
         (answer.status === 429 && answer.code !== 'RATE_LIMIT_EXCEEDED'))
     ) {
       return ambiguous(answer.message)
@@ -509,6 +515,7 @@ export class BufferPublishAdapter implements SocialPublishAdapter {
         ...(code ? { code } : {}),
         ...(answered ? { data: data as Record<string, unknown> } : {}),
         ...(errors.length === 0 && !answered ? { bare: true } : {}),
+        ...(codes.size > 1 ? { mixed: true } : {}),
       }
     }
     if (errors.length > 0 && !answered) {
@@ -526,7 +533,9 @@ export class BufferPublishAdapter implements SocialPublishAdapter {
         message: `${operationName}: answer has no data`,
       }
     }
-    return errors.length > 0
+    // Any entry beside data counts, message or not: a nulled field is
+    // evidence enough that a read built on it is no verdict.
+    return entries.length > 0
       ? {
           kind: 'data',
           data: data as Record<string, unknown>,
