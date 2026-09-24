@@ -7,6 +7,8 @@ import { Conference } from '@/lib/conference/types'
 import { ProposalsList } from './ProposalsList'
 import { ProposalPreview } from './ProposalPreview'
 import { ProposalManagementModal } from '@/components/admin/ProposalManagementModal'
+import { useMediaQuery } from '@/hooks/useMediaQuery'
+import { ModalShell } from '@/components/ModalShell'
 
 interface ProposalsPageClientProps {
   proposals: ProposalExisting[]
@@ -23,6 +25,7 @@ export function ProposalsPageClient({
   const [selectedProposalId, setSelectedProposalId] = useState<string | null>(
     null,
   )
+  const isDesktop = useMediaQuery('(min-width: 1024px)', true)
   const selectedProposal = selectedProposalId
     ? proposals.find((p) => p._id === selectedProposalId)
     : null
@@ -59,7 +62,7 @@ export function ProposalsPageClient({
           />
         </div>
 
-        {selectedProposal && (
+        {selectedProposal && isDesktop && (
           <div className="fixed inset-y-0 right-0 hidden w-96 overflow-y-auto border-l border-gray-200 bg-white lg:mt-16 lg:block dark:border-gray-700 dark:bg-gray-900">
             <ProposalPreview
               proposal={selectedProposal}
@@ -69,6 +72,25 @@ export function ProposalsPageClient({
           </div>
         )}
       </div>
+
+      {!isDesktop && (
+        <ModalShell
+          isOpen={!!selectedProposal}
+          onClose={() => setSelectedProposalId(null)}
+          size="xl"
+          padded={false}
+          className="h-[90vh] overflow-y-auto"
+          ariaLabel="Proposal Preview"
+        >
+          {selectedProposal && (
+            <ProposalPreview
+              proposal={selectedProposal}
+              conference={conference}
+              onClose={() => setSelectedProposalId(null)}
+            />
+          )}
+        </ModalShell>
+      )}
 
       {/* Create Modal */}
       <ProposalManagementModal

@@ -62,6 +62,7 @@ const tally = (
   overrides: Partial<ParticipantTally> = {},
 ): ParticipantTally => ({
   participants: 44,
+  workshopParticipants: 0,
   addOnsWithSeat: 6,
   addOnsWithoutSeat: 0,
   repeatTickets: 3,

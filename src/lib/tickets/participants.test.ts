@@ -196,6 +196,7 @@ describe('tallyParticipants', () => {
       addOnsWithoutSeat: 0,
       repeatTickets: 0,
       roleBasis: 'declared',
+      workshopParticipants: 0,
     })
   })
 })

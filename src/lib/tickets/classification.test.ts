@@ -62,6 +62,7 @@ describe('classifyTicket', () => {
       admitsSource: 'unknown',
       comp: true,
       grantedBy: 'sponsor',
+      grantsWorkshop: false,
     })
   })
 
@@ -97,6 +98,7 @@ describe('classifyTicket', () => {
       admitsSource: 'unknown',
       comp: false,
       grantedBy: null,
+      grantsWorkshop: false,
     })
   })
 
@@ -146,6 +148,7 @@ describe('classifyTicket', () => {
       admitsSource: 'unknown',
       comp: true,
       grantedBy: 'speaker',
+      grantsWorkshop: false,
     })
   })
 
@@ -196,6 +199,7 @@ describe('classifyTicket', () => {
       admitsSource: 'unknown',
       comp: false,
       grantedBy: null,
+      grantsWorkshop: false,
     })
   })
 
@@ -225,6 +229,7 @@ describe('classifyTicket', () => {
       admitsSource: 'unknown',
       comp: true,
       grantedBy: null,
+      grantsWorkshop: false,
     })
   })
 
