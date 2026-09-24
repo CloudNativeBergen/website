@@ -33,6 +33,13 @@ import type { ProposalUtmTags } from '@/lib/proposal/types'
 export const LANDING_UTM_KEY = 'konf.landingUtm.v1'
 
 /**
+ * The public page a CFP Campaign link points at, and the one landing whose
+ * tags are remembered (`LandingUtmCapture`, and the analytics entry before it
+ * strips the address bar).
+ */
+export const CFP_LANDING_PATH = '/cfp'
+
+/**
  * `window.sessionStorage` where it works, `null` where it does not. The
  * PROPERTY ACCESS itself throws in a browser with site data blocked — before
  * any method the helpers below could guard — so the one place that touches

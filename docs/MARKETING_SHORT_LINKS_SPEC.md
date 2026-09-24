@@ -201,17 +201,32 @@ After the redirect the visitor is on the long URL. Three readers need it first:
   (`src/lib/posthog/config.ts`, #1000). **Stripping before that pageview would unattribute every
   non-consenting visitor.** The pageview is observable: `posthog.on('eventCaptured')`.
 - **PostHog, on Accept.** `initTenantAnalytics` holds the landing UTMs in memory from before init.
-  But `opt_in_capturing()` fires a fresh `$pageview` BEFORE they are replayed with
-  `register_for_session`, and today that pageview gets its UTMs from the address bar. After a strip
-  it would carry none, in a new client session with no entry UTMs. **The landing UTMs must be
-  registered before opting in**, so the opt-in pageview carries them.
-- **CFP first touch.** `landing-utm.ts` stashes to `sessionStorage` on landing.
+  `opt_in_capturing()` resets persistence and then captures, inside the call, `$opt_in` (the first
+  event of the new client session, which its entry UTMs come from) and, only when the landing
+  `$pageview` had not gone out yet, a fresh `$pageview`. Both run BEFORE the replay with
+  `register_for_session`, and after a strip the address bar no longer has the tags. Registering
+  before opting in does not work: the reset wipes it (checked against posthog-js 1.430.3). So the
+  `before_send` chain stamps the in-memory landing UTMs on every event from `$opt_in` on that carries
+  none of its own (`optInUtmBridge`); the `register_for_session` after the opt-in still carries them
+  past this page load. Events before `$opt_in` are untouched, so cookieless attribution is exactly
+  as before.
+- **CFP first touch.** `landing-utm.ts` stashes to `sessionStorage` on landing. The analytics entry
+  writes it synchronously, before any await, so it precedes the strip even when React hydrates late.
 
 So, in order: the CFP stash is written; the SDK's first `$pageview` is captured; then
 `history.replaceState` to the same URL without the five `utm_*` parameters, every other parameter
 and the hash kept. Where analytics is not configured or the route is analytics-excluded, there is
 no pageview to wait for and the strip is immediate. A ~3 s timeout strips anyway when the SDK is
-blocked or slow: those visitors were never going to be attributed.
+blocked or slow: those visitors were never going to be attributed. The timeout runs only while the
+page is visible: a link opened in a background tab gets its first `$pageview` when the tab is first
+shown, and that pageview must still see the tags. The rewrite goes through the Next router's history
+patch, so the router's own copy of the URL is clean too, but only while the visitor has not yet
+interacted with the page (`navigator.userActivation`; a browser without that API is treated as
+interacted): the router treats an external rewrite as a
+RESTORE and discards whatever action is in flight, so after an activation the entry is rewritten
+behind the router and its copy stays as it was. That copy is written back on the router's next
+commit on the page (a refresh, a server action), so while the visitor stays on the landing the bar
+is re-checked every second and stripped again.
 
 This applies to every landing with `utm_*`, not only arrivals through `/go/`.
 
