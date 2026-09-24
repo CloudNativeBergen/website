@@ -579,17 +579,35 @@ describe('BufferPublishAdapter — failure at create (spec §3.3)', () => {
   })
 
   it.each([
-    ['401', 'credential-expired'],
-    ['400', 'rejected'],
+    ['401', '<html>Unauthorized</html>'],
+    ['400', '<html>Bad Request</html>'],
+    ['403', '{}'],
+    ['404', '{"message":"not found"}'],
   ])(
-    'an HTTP %s at create with an unreadable body keeps its terminal mapping (%s) — never a retry',
-    async (status, kind) => {
+    'an HTTP %s at create whose body is no GraphQL answer (%s) is ambiguous — Buffer\u2019s own refusals come as errors[]',
+    async (status, body) => {
+      const { fetchImpl } = createAnswering(
+        () => new Response(body, { status: Number(status) }),
+      )
+      const outcome = await adapter({ fetch: fetchImpl }).publish(LINK_ONLY)
+      expect(outcome).toMatchObject({ ok: false, kind: 'ambiguous' })
+    },
+  )
+
+  it.each([
+    ['401', 'UNAUTHORIZED', 'credential-expired'],
+    ['400', 'BAD_USER_INPUT', 'rejected'],
+  ])(
+    'an HTTP %s at create whose errors[] carry %s (no path) keeps its terminal mapping: %s',
+    async (status, code, kind) => {
       const { fetchImpl } = createAnswering(
         () =>
-          new Response(`<html>${status}</html>`, {
-            status: Number(status),
-            headers: { 'content-type': 'text/html' },
-          }),
+          new Response(
+            JSON.stringify({
+              errors: [{ message: `Buffer ${code}`, extensions: { code } }],
+            }),
+            { status: Number(status) },
+          ),
       )
       const outcome = await adapter({ fetch: fetchImpl }).publish(LINK_ONLY)
       expect(outcome).toMatchObject({ ok: false, kind })

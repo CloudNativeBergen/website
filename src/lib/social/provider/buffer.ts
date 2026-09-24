@@ -144,6 +144,12 @@ type Answer =
       /** The ONE code the body's errors agree on (see `errors.code`). */
       code?: string
       /**
+       * The body was no GraphQL answer at all — not JSON, or JSON with
+       * neither `errors` nor `data`: a gateway's, not Buffer's. It says
+       * nothing about whether the request ran.
+       */
+      bare?: boolean
+      /**
        * A root field that answered despite the status: only the create
        * phase may read it, because there the body is the evidence of what
        * happened, whatever a gateway stamped on it.
@@ -379,14 +385,15 @@ export class BufferPublishAdapter implements SocialPublishAdapter {
     ) {
       return ambiguous(answer.message)
     }
-    // Only a throttle Buffer signed (its documented RATE_LIMIT_EXCEEDED
-    // body, no path) is a definite non-post. A 429 with any other body —
-    // a gateway's, an empty one, one that could not be read — is not
-    // evidence the create never ran.
+    // Buffer's own refusals come as JSON `errors[]`. A non-2xx whose body
+    // is no GraphQL answer — a gateway's HTML, `{}`, one that could not be
+    // read — says nothing about whether the create ran, so it is neither a
+    // retry nor a verdict. Likewise only a throttle Buffer signed (its
+    // documented RATE_LIMIT_EXCEEDED body, no path) is a definite non-post.
     if (
       answer.kind === 'http' &&
-      answer.status === 429 &&
-      answer.code !== 'RATE_LIMIT_EXCEEDED'
+      (answer.bare ||
+        (answer.status === 429 && answer.code !== 'RATE_LIMIT_EXCEEDED'))
     ) {
       return ambiguous(answer.message)
     }
@@ -443,11 +450,14 @@ export class BufferPublishAdapter implements SocialPublishAdapter {
       body = (await response.json()) as GraphQLBody | null
     } catch (error) {
       if (!response.ok) {
-        return httpAnswer(
-          response,
-          `${operationName}: HTTP ${response.status}`,
-          this.now(),
-        )
+        return {
+          ...httpAnswer(
+            response,
+            `${operationName}: HTTP ${response.status}`,
+            this.now(),
+          ),
+          bare: true,
+        }
       }
       return {
         kind: 'no-answer',
@@ -491,6 +501,7 @@ export class BufferPublishAdapter implements SocialPublishAdapter {
         executed,
         ...(code ? { code } : {}),
         ...(answered ? { data: data as Record<string, unknown> } : {}),
+        ...(errors.length === 0 && !answered ? { bare: true } : {}),
       }
     }
     if (errors.length > 0 && !answered) {
