@@ -434,6 +434,21 @@ export function SpeakerTable({
       <ActionMenuItem onClick={() => onPreviewSpeaker(speaker)} icon={EyeIcon}>
         Preview Profile
       </ActionMenuItem>
+      {onSendTicketInvitation && (
+        <ActionMenuItem
+          onClick={() => onSendTicketInvitation(speaker._id)}
+          icon={TicketIcon}
+          disabled={
+            ticketActionsDisabled ||
+            !!ticketActionsUnavailableReason ||
+            (sendingTicketSpeakerIds?.has(speaker._id) ?? false) ||
+            ticketStatuses?.[speaker._id]?.state === 'redeemed' ||
+            ticketStatuses?.[speaker._id]?.state === 'unknown'
+          }
+        >
+          Send Ticket Invitation
+        </ActionMenuItem>
+      )}
       {/* Only for a talk CONFIRMED AT THIS CONFERENCE. Both halves matter:
           an accepted speaker has not said yes yet, and `speaker.proposals` is
           deliberately cross-edition here (the page asks for org-wide proposals),

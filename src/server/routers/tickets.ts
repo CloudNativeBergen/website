@@ -204,7 +204,9 @@ function orderIdsForEvent(
   const orderIds = ticketing.provider
     .fetchEventTickets({ customerId, eventId })
     .then((tickets) => new Set(tickets.map((ticket) => ticket.order_id)))
-  orderIds.catch(() => orderIdsCache.delete(key))
+  orderIds.catch(() => {
+    if (orderIdsCache.get(key)?.orderIds === orderIds) orderIdsCache.delete(key)
+  })
   orderIdsCache.set(key, { expiresAt: now + ORDER_IDS_TTL_MS, orderIds })
   // Keep a long-lived warm instance from growing a map entry per event forever.
   for (const [k, entry] of orderIdsCache) {

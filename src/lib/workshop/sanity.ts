@@ -171,7 +171,9 @@ export async function createWorkshopSignup(
       return fullSignup
     } finally {
       setTimeout(() => {
-        workshopSignupLocks.delete(workshopId)
+        if (workshopSignupLocks.get(workshopId) === lockPromise) {
+          workshopSignupLocks.delete(workshopId)
+        }
       }, 100)
     }
   })()
