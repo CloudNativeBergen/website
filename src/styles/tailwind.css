@@ -322,7 +322,8 @@
     var(--font-ibm-plex-sans), 'IBM Plex Sans', sans-serif;
   --font-family-ibm-plex-mono:
     var(--font-ibm-plex-mono), 'IBM Plex Mono', monospace;
-  --font-family-atkinson: 'Atkinson Hyperlegible', system-ui, sans-serif;
+  --font-family-atkinson:
+    var(--font-atkinson), 'Atkinson Hyperlegible', system-ui, sans-serif;
 
   /* Default font mappings */
   --font-family-sans: var(--font-inter), 'Inter', sans-serif;

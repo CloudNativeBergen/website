@@ -6,6 +6,7 @@ import {
   IBM_Plex_Sans,
   IBM_Plex_Mono,
   Bricolage_Grotesque,
+  Atkinson_Hyperlegible,
 } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/react'
 import { SpeedInsights } from '@vercel/speed-insights/next'
@@ -76,6 +77,16 @@ const bricolageGrotesque = Bricolage_Grotesque({
   subsets: ['latin'],
   display: 'swap',
   variable: '--font-bricolage',
+  preload: false,
+})
+
+// Offered by the meme generator's font picker. Without a face of its own it
+// rendered in whatever the visitor's machine had installed, if anything.
+const atkinsonHyperlegible = Atkinson_Hyperlegible({
+  subsets: ['latin'],
+  weight: ['400', '700'],
+  display: 'swap',
+  variable: '--font-atkinson',
   preload: false,
 })
 
@@ -229,6 +240,7 @@ export default function RootLayout({
         ibmPlexSans.variable,
         ibmPlexMono.variable,
         bricolageGrotesque.variable,
+        atkinsonHyperlegible.variable,
       )}
       suppressHydrationWarning
     >

@@ -1,9 +1,9 @@
 'use client'
 
 import { MemeGenerator } from './MemeGenerator'
-import { DownloadableImage } from '../common/DownloadableImage'
+import { DownloadableImage } from '../../common/DownloadableImage'
 import { PLATFORM_SLUG } from '@/lib/branding/platform'
-import type { ConferenceLogos } from '../common/DashboardLayout'
+import type { ConferenceLogos } from '../../common/DashboardLayout'
 
 interface MemeGeneratorWithDownloadProps {
   conferenceTitle?: string

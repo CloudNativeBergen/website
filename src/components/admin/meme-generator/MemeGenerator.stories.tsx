@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { expect, userEvent, waitFor, within } from 'storybook/test'
 import { MemeGenerator } from './MemeGenerator'
 import { MemeGeneratorWithDownload } from './MemeGeneratorWithDownload'
-import { captureImage } from '../common/image-capture'
+import { captureImage } from '../../common/image-capture'
 import {
   CANVAS_SIZE,
   LOGO_PADDING_DEFAULT,
@@ -1035,5 +1035,106 @@ export const WithDownload: Story = {
     const image = await createImageBitmap(blob)
     // …and it is the uploaded logo's light variant, not the fallback.
     expect(share(image, image.width, logoBox(), isBlue)).toBeGreaterThan(0.05)
+  },
+}
+
+/**
+ * Three text lines and a QR code on the default background: the composition
+ * the before/after comparison of #1173 was taken on.
+ */
+export const HeadlineAndQr: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    // Text Line 3 starts collapsed.
+    await userEvent.click(canvas.getByRole('button', { name: 'Text Line 3' }))
+    const [first, second, third] =
+      canvas.getAllByPlaceholderText('Enter your text...')
+    await userEvent.type(first, 'Cloud Native')
+    await userEvent.type(second, 'CFP is open')
+    await userEvent.type(third, 'Submit by 1 May')
+    await userEvent.type(
+      canvas.getByPlaceholderText('https://example.com'),
+      'https://cndn.no',
+    )
+  },
+}
+
+const isMagenta: Pixel = (r, g, b) => r > 230 && g < 30 && b > 230
+
+/**
+ * An uploaded background shows at once. It used to race its own decode: the
+ * draw ran on the upload's state change, before the image had loaded, and
+ * nothing redrew once it had — so it appeared only on the next edit.
+ */
+export const BackgroundImageAppearsOnUpload: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await openBackgroundAdvanced(canvas)
+
+    const source = document.createElement('canvas')
+    source.width = source.height = 64
+    const ctx = source.getContext('2d')!
+    ctx.fillStyle = '#ff00ff'
+    ctx.fillRect(0, 0, 64, 64)
+    const blob = await new Promise<Blob>((resolve) =>
+      source.toBlob((b) => resolve(b!), 'image/png'),
+    )
+    await userEvent.upload(
+      canvas.getByLabelText(/Upload Background Image/),
+      new File([blob], 'magenta.png', { type: 'image/png' }),
+    )
+
+    // No further interaction: the upload alone must bring the image in.
+    const corner = { x: 0, y: 0, width: 100, height: 100 }
+    await waitFor(() =>
+      expect(
+        share(
+          canvasElement.querySelector('canvas')!,
+          CANVAS_SIZE,
+          corner,
+          isMagenta,
+        ),
+      ).toBeGreaterThan(0.99),
+    )
+    await expect(canvas.getByText('Current: magenta.png')).toBeVisible()
+  },
+}
+
+/**
+ * The text line's horizontal position moves it: left-aligned at 40 %, the
+ * headline starts well inside the canvas instead of at the padding.
+ */
+export const LeftTextFollowsHorizontalPosition: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(
+      canvas.getAllByRole('button', { name: 'Advanced Options' })[1],
+    )
+    await userEvent.type(
+      canvas.getAllByPlaceholderText('Enter your text...')[0],
+      'Hi',
+    )
+    await userEvent.click(canvas.getByRole('button', { name: 'Left' }))
+    const slider = canvas.getByLabelText(
+      /Distance from Left/,
+    ) as HTMLInputElement
+    Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      'value',
+    )!.set!.call(slider, '40')
+    slider.dispatchEvent(new Event('input', { bubbles: true }))
+
+    const isWhite: Pixel = (r, g, b) => r > 240 && g > 240 && b > 240
+    const preview = () => canvasElement.querySelector('canvas')!
+    // The headline's band (30 % down, 120 px type): empty left of 40 %, inked right of it.
+    const band = { y: 264, height: 120 }
+    await waitFor(() => {
+      expect(
+        share(preview(), CANVAS_SIZE, { x: 0, width: 420, ...band }, isWhite),
+      ).toBe(0)
+      expect(
+        share(preview(), CANVAS_SIZE, { x: 432, width: 200, ...band }, isWhite),
+      ).toBeGreaterThan(0.05)
+    })
   },
 }

@@ -107,9 +107,8 @@ describe('loadCanvasFonts', () => {
     ])
   })
 
-  // A font the app never loads (Atkinson Hyperlegible is in the picker but has
-  // no @font-face anywhere) resolves empty, and a broken download rejects.
-  // Neither may stop the caller from redrawing in the fallback.
+  // A family with no @font-face anywhere resolves empty, and a broken download
+  // rejects. Neither may stop the caller from redrawing in the fallback.
   it('resolves when a face is missing or fails to download', async () => {
     const fonts = {
       load: vi
@@ -121,12 +120,109 @@ describe('loadCanvasFonts', () => {
     await expect(
       loadCanvasFonts(
         [
-          { font: 'normal 48px "Atkinson Hyperlegible"', text: 'HI' },
+          { font: 'normal 48px "No Such Family"', text: 'HI' },
           { font: 'normal 48px "IBM Plex Sans"', text: 'HI' },
         ],
         fonts,
       ),
     ).resolves.toBeUndefined()
+  })
+
+  // The editor paints only once its faces have settled, so one that never
+  // does must not freeze the preview.
+  it('gives up on a face that never settles', async () => {
+    vi.useFakeTimers()
+    try {
+      const fonts = {
+        load: vi.fn(() => new Promise<FontFace[]>(() => {})),
+      } as unknown as FontFaceSet
+      let settled = false
+      loadCanvasFonts([{ font: 'normal 48px "Inter"', text: 'HI' }], fonts, {
+        timeout: 3000,
+      }).then(() => (settled = true))
+      await vi.advanceTimersByTimeAsync(2999)
+      expect(settled).toBe(false)
+      await vi.advanceTimersByTimeAsync(1)
+      expect(settled).toBe(true)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  // A face that arrives after the timeout would otherwise leave the canvas in
+  // the fallback until an unrelated edit.
+  it('reports a face that lands after the timeout, and only then', async () => {
+    vi.useFakeTimers()
+    try {
+      let arrive: () => void = () => {}
+      const fonts = {
+        load: vi.fn(
+          () =>
+            new Promise<FontFace[]>((resolve) => (arrive = () => resolve([]))),
+        ),
+      } as unknown as FontFaceSet
+      const onLate = vi.fn()
+      loadCanvasFonts([{ font: 'normal 48px "Inter"', text: 'HI' }], fonts, {
+        timeout: 3000,
+        onLate,
+      })
+      await vi.advanceTimersByTimeAsync(3000)
+      expect(onLate).not.toHaveBeenCalled()
+
+      arrive()
+      await vi.advanceTimersByTimeAsync(0)
+      expect(onLate).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  // One face that never settles must not hold back the repaint for another
+  // that arrives late.
+  it('reports each late face, even while another never settles', async () => {
+    vi.useFakeTimers()
+    try {
+      let arrive: () => void = () => {}
+      const fonts = {
+        load: vi
+          .fn()
+          .mockReturnValueOnce(new Promise<FontFace[]>(() => {}))
+          .mockReturnValueOnce(
+            new Promise<FontFace[]>((resolve) => (arrive = () => resolve([]))),
+          ),
+      } as unknown as FontFaceSet
+      const onLate = vi.fn()
+      loadCanvasFonts(
+        [
+          { font: 'normal 48px "Inter"', text: 'HI' },
+          { font: 'normal 48px "IBM Plex Sans"', text: 'HI' },
+        ],
+        fonts,
+        { timeout: 3000, onLate },
+      )
+      await vi.advanceTimersByTimeAsync(3000)
+      arrive()
+      await vi.advanceTimersByTimeAsync(0)
+      expect(onLate).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not report a face that landed in time', async () => {
+    const onLate = vi.fn()
+    const fonts = {
+      load: vi.fn().mockResolvedValue([]),
+    } as unknown as FontFaceSet
+    await loadCanvasFonts(
+      [{ font: 'normal 48px "Inter"', text: 'HI' }],
+      fonts,
+      {
+        onLate,
+      },
+    )
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(onLate).not.toHaveBeenCalled()
   })
 
   it('contains a font set that throws synchronously', async () => {

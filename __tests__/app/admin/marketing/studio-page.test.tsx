@@ -66,7 +66,7 @@ vi.mock('@/components/admin', () => ({ AdminPageHeader: () => null }))
 vi.mock('@/components/CloudNativePattern', () => ({
   CloudNativePattern: () => null,
 }))
-vi.mock('@/components/admin/MemeGeneratorWithDownload', () => ({
+vi.mock('@/components/admin/meme-generator', () => ({
   MemeGeneratorWithDownload: () => null,
 }))
 vi.mock('@/components/admin/PhotoGalleryWithDownload', () => ({
