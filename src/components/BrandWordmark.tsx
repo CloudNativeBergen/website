@@ -143,6 +143,12 @@ interface BrandMarkProps {
   style?: React.CSSProperties
 }
 
+/** Brand gradient stops: the custom property and its house fallback. */
+export const BRAND_GRADIENT_STOPS = [
+  { property: '--brand-primary', fallback: '#1d4ed8' },
+  { property: '--brand-accent', fallback: '#06b6d4' },
+] as const
+
 /**
  * The brand gradient, as SVG stops that read the tenant theme.
  *
@@ -151,20 +157,78 @@ interface BrandMarkProps {
  * hex fallbacks when no tenant theme is injected.
  */
 function BrandGradient({ id }: { id: string }) {
+  const [start, end] = BRAND_GRADIENT_STOPS
   return (
     <defs>
       <linearGradient id={id} x1="0" y1="0" x2="1" y2="0">
-        <stop offset="0" stopColor="var(--brand-primary, #1d4ed8)" />
-        <stop offset="1" stopColor="var(--brand-accent, #06b6d4)" />
+        <stop
+          offset="0"
+          stopColor={`var(${start.property}, ${start.fallback})`}
+        />
+        <stop offset="1" stopColor={`var(${end.property}, ${end.fallback})`} />
       </linearGradient>
     </defs>
   )
 }
 
+/** The marks' typeface: custom properties holding the families, and weight. */
+export const WORDMARK_FONT = {
+  /** Custom properties holding the family lists, in preference order. */
+  properties: ['--font-space-grotesk', '--font-inter'],
+  weight: 700,
+} as const
+
 /** Shared type styling for both marks. */
 const TYPE_STYLE: React.CSSProperties = {
-  fontFamily: 'var(--font-space-grotesk), var(--font-inter), sans-serif',
-  fontWeight: 700,
+  fontFamily: `${WORDMARK_FONT.properties.map((p) => `var(${p})`).join(', ')}, sans-serif`,
+  fontWeight: WORDMARK_FONT.weight,
+}
+
+export interface WordmarkLine {
+  text: string
+  /** Left edge and baseline, in viewBox units. */
+  x: number
+  y: number
+  /** The width the line is pinned to (`textLength`). */
+  width: number
+}
+
+export interface WordmarkLayout {
+  viewBoxWidth: number
+  viewBoxHeight: number
+  fontSize: number
+  lines: WordmarkLine[]
+}
+
+/**
+ * Where every line of the wordmark for `name` sits, in viewBox units. Shared
+ * by the SVG below and by the meme generator, which draws the same mark on a
+ * canvas and must not drift from it.
+ */
+export function wordmarkLayout(name: string): WordmarkLayout {
+  const label = name.trim() || '?'
+  const singleWidth = estimateTextWidth(label, FONT_SIZE)
+  const twoLines =
+    singleWidth / VIEWBOX_HEIGHT > MAX_SINGLE_LINE_RATIO
+      ? balancedTwoLines(label)
+      : null
+
+  const fontSize = twoLines ? FONT_SIZE_TWO_LINE : FONT_SIZE
+  const texts = twoLines ?? [label]
+  const widths = texts.map((text) => estimateTextWidth(text, fontSize))
+  const padding = Math.max(...widths) * SIDE_PADDING_RATIO
+
+  return {
+    viewBoxWidth: Math.round(Math.max(...widths) + padding * 2),
+    viewBoxHeight: VIEWBOX_HEIGHT,
+    fontSize,
+    lines: texts.map((text, index) => ({
+      text,
+      x: padding,
+      y: twoLines ? BASELINE_TWO_LINE[index] : BASELINE,
+      width: widths[index],
+    })),
+  }
 }
 
 /**
@@ -186,44 +250,32 @@ export function BrandWordmark({
 }: BrandMarkProps) {
   const gradientId = useId()
   const label = name.trim() || '?'
-
-  const singleWidth = estimateTextWidth(label, FONT_SIZE)
-  const twoLines =
-    singleWidth / VIEWBOX_HEIGHT > MAX_SINGLE_LINE_RATIO
-      ? balancedTwoLines(label)
-      : null
-
-  const fontSize = twoLines ? FONT_SIZE_TWO_LINE : FONT_SIZE
-  const lines = twoLines ?? [label]
-  const lineWidths = lines.map((line) => estimateTextWidth(line, fontSize))
-  const textWidth = Math.max(...lineWidths)
-  const padding = textWidth * SIDE_PADDING_RATIO
-  const width = textWidth + padding * 2
+  const layout = wordmarkLayout(label)
   const fill = variant === 'gradient' ? `url(#${gradientId})` : 'currentColor'
 
   return (
     <svg
-      viewBox={`0 0 ${Math.round(width)} ${VIEWBOX_HEIGHT}`}
+      viewBox={`0 0 ${layout.viewBoxWidth} ${layout.viewBoxHeight}`}
       role="img"
       aria-label={label}
       className={className}
       style={style}
     >
       {variant === 'gradient' && <BrandGradient id={gradientId} />}
-      {lines.map((line, index) => (
+      {layout.lines.map((line) => (
         <text
-          key={line}
-          x={padding}
-          y={twoLines ? BASELINE_TWO_LINE[index] : BASELINE}
+          key={line.text}
+          x={line.x}
+          y={line.y}
           // Only the LONGER line is stretched to the box; the shorter one keeps
           // its natural width so the two lines stay flush-left, not justified.
-          textLength={lineWidths[index]}
+          textLength={line.width}
           lengthAdjust="spacingAndGlyphs"
-          fontSize={fontSize}
+          fontSize={layout.fontSize}
           style={TYPE_STYLE}
           fill={fill}
         >
-          {line}
+          {line.text}
         </text>
       ))}
     </svg>

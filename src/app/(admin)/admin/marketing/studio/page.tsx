@@ -352,6 +352,7 @@ export default async function MarketingPage({
                 logoDark: conference.logoDark,
                 logomarkBright: conference.logomarkBright,
                 logomarkDark: conference.logomarkDark,
+                title: conference.title,
               }}
             />
           </div>
