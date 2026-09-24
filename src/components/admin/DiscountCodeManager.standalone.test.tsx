@@ -381,9 +381,7 @@ describe('one listing for both kinds', () => {
     // The user requested that sponsor codes are explicitly filtered out
     // of the custom discount table, since they already appear in the
     // sponsor table above it.
-    expect(
-      within(codeTable()).queryByText('ACMECLOUD1234'),
-    ).toBeNull()
+    expect(within(codeTable()).queryByText('ACMECLOUD1234')).toBeNull()
     expect(
       within(codeRow('COMMUNITY2026')).getByText('Standalone'),
     ).toBeTruthy()

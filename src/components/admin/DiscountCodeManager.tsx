@@ -1256,7 +1256,14 @@ export function DiscountCodeManager({
               />
             )}
             <DataTable<EventDiscountWithUsage>
-              data={useMemo(() => existingDiscounts.filter(d => !d.triggerValue || !sponsorForCode.has(d.triggerValue)), [existingDiscounts, sponsorForCode])}
+              data={useMemo(
+                () =>
+                  existingDiscounts.filter(
+                    (d) =>
+                      !d.triggerValue || !sponsorForCode.has(d.triggerValue),
+                  ),
+                [existingDiscounts, sponsorForCode],
+              )}
               columns={customDiscountColumns}
               keyExtractor={(discount, index) =>
                 discount.triggerValue || String(index)

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useNotification, EmailModal } from '@/components/admin'
+import { useRouter } from 'next/navigation'
 import { SponsorForConferenceExpanded } from '@/lib/sponsor-crm/types'
 import { BroadcastTemplate } from '@/components/email/BroadcastTemplate'
 import { convertStringToPortableTextBlocks } from '@/lib/proposal'
@@ -32,6 +33,8 @@ interface SponsorIndividualEmailModalProps {
     socialLinks?: string[]
     prospectusUrl?: string
     theme?: ConferenceTheme | null
+    registrationLink?: string
+    sponsorRegistrationLink?: string
   }
 }
 
@@ -46,18 +49,38 @@ export function SponsorIndividualEmailModal({
   conference,
 }: SponsorIndividualEmailModalProps) {
   const { showNotification } = useNotification()
+  const router = useRouter()
+  const saveSponsorLinkMutation = api.conference.updateSponsorRegistrationLink.useMutation()
+  const [ticketUrl, setTicketUrl] = useState('')
+  const [userHasEditedTicketUrl, setUserHasEditedTicketUrl] = useState(false)
+  const [savedSponsorLink, setSavedSponsorLink] = useState<string | null>(null)
+  const [initialized, setInitialized] = useState(false)
+  const [additionalFields, setAdditionalFields] = useState<Record<string, string | number | boolean>>({})
+
   const [initialMessage, setInitialMessage] = useState<PortableTextBlock[]>([])
 
   const contacts = sponsorForConference.contactPersons || []
 
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && !initialized) {
       const greeting = `Dear ${sponsorForConference.sponsor.name} team,\n\n`
       const portableTextBlocks = convertStringToPortableTextBlocks(greeting)
       // eslint-disable-next-line react-hooks/set-state-in-effect -- Initialize message template on modal open
       setInitialMessage(portableTextBlocks)
+
+      const defaultTicketUrl =
+        conference.sponsorRegistrationLink ||
+        conference.registrationLink ||
+        `${conferenceBaseUrl(conference)}/tickets`
+
+      setTicketUrl(defaultTicketUrl)
+      setAdditionalFields({ ticketUrl: defaultTicketUrl })
+      setInitialized(true)
+    } else if (!isOpen) {
+      setInitialized(false)
+      setUserHasEditedTicketUrl(false)
     }
-  }, [isOpen, sponsorForConference.sponsor.name])
+  }, [isOpen, initialized, sponsorForConference.sponsor.name, conference])
 
   const getDefaultSubject = () => {
     const status = sponsorForConference.status
@@ -90,6 +113,78 @@ export function SponsorIndividualEmailModal({
 
   const defaultSubject = getDefaultSubject()
   const sendEmailMutation = api.sponsor.crm.sendEmail.useMutation()
+
+
+  const storedSponsorLink = savedSponsorLink ?? conference.sponsorRegistrationLink ?? ''
+  const trimmedTicketUrl = ticketUrl.trim()
+  const publicFallbacks = [
+    conference.registrationLink,
+    `${conferenceBaseUrl(conference)}/tickets`,
+  ]
+  const canSaveSponsorLink =
+    trimmedTicketUrl !== '' &&
+    trimmedTicketUrl !== storedSponsorLink &&
+    !publicFallbacks.includes(trimmedTicketUrl)
+
+  const handleSaveSponsorLink = async () => {
+    try {
+      await saveSponsorLinkMutation.mutateAsync({
+        sponsorRegistrationLink: trimmedTicketUrl,
+      })
+      setSavedSponsorLink(trimmedTicketUrl)
+      router.refresh()
+      showNotification({
+        type: 'success',
+        title: 'Saved to conference',
+        message: 'This link is now the default ticket URL for sponsor emails.',
+      })
+    } catch (error) {
+      showNotification({
+        type: 'error',
+        title: 'Could not save the link',
+        message: `${error instanceof Error ? error.message : 'The conference was not updated'}. The email still uses the link you typed.`,
+      })
+    }
+  }
+
+  const sponsorLinkSaveAction = canSaveSponsorLink ? (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+      <button
+        type="button"
+        onClick={handleSaveSponsorLink}
+        disabled={saveSponsorLinkMutation.isPending}
+        className="font-space-grotesk rounded-md border border-gray-300 px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-800"
+      >
+        {saveSponsorLinkMutation.isPending ? 'Saving…' : 'Save as conference default'}
+      </button>
+      <span className="font-inter text-xs text-gray-500 dark:text-gray-400">
+        Stores this link on the conference.
+      </span>
+    </div>
+  ) : null
+
+  const missingSponsorLinkWarning = !storedSponsorLink && (
+    <div className="rounded-md bg-yellow-50 p-4 dark:bg-yellow-900/30 mb-4">
+      <h3 className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
+        No Sponsor Registration Link
+      </h3>
+      <p className="mt-2 text-sm text-yellow-700 dark:text-yellow-300">
+        This conference has no sponsor registration link. You can paste one below and save it as the default.
+      </p>
+    </div>
+  )
+
+  const handleTicketUrlChange = (newUrl: string) => {
+    setTicketUrl(newUrl)
+    setUserHasEditedTicketUrl(true)
+    setAdditionalFields((prev) => ({ ...prev, ticketUrl: newUrl }))
+  }
+  const handleAdditionalFieldsChange = (fields: Record<string, string | number | boolean>) => {
+    if (fields.ticketUrl && typeof fields.ticketUrl === 'string' && !userHasEditedTicketUrl) {
+      setTicketUrl(fields.ticketUrl)
+    }
+    setAdditionalFields(fields)
+  }
 
   const handleSend = async ({
     subject,
@@ -163,10 +258,23 @@ export function SponsorIndividualEmailModal({
       onSend={handleSend}
       submitButtonText="Send Email"
       storageKey={`sponsor-individual-email-${sponsorForConference._id}`}
-      warningContent={localhostWarning}
+
       previewComponent={createPreview}
       brandColor={emailBrandColor(conference.theme)}
       fromAddress={fromEmail}
+      ticketUrl={ticketUrl}
+      onTicketUrlChange={handleTicketUrlChange}
+      ticketUrlAction={sponsorLinkSaveAction}
+      additionalFields={additionalFields}
+      onAdditionalFieldsChange={handleAdditionalFieldsChange}
+      warningContent={
+        (localhostWarning || missingSponsorLinkWarning) && (
+          <div className="space-y-4">
+            {localhostWarning}
+            {missingSponsorLinkWarning}
+          </div>
+        )
+      }
       templateSelector={({ setSubject, setMessage }) => (
         <SponsorTemplatePicker
           sponsorName={sponsorForConference.sponsor.name}
