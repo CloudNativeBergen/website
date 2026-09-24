@@ -23,6 +23,7 @@ import type {
   PublishFailureKind,
   PublishInput,
   PublishMedia,
+  PublishMention,
   PublishOutcome,
   SocialPublishAdapter,
   ValidationIssue,
@@ -38,9 +39,12 @@ import type {
  *    and a login that fails is never retried here — `credential-expired`
  *    is terminal for the state machine, so the organizer fixes the password
  *    rather than the cron burning the daily budget.
- *  - Facets come from `RichText.detectFacets` (UTF-8 byte offsets, never
- *    hand-computed). Bluesky does not unfurl, so the link card is built by
- *    us from our own page's metadata, with the tagged link as its `uri`.
+ *  - Facets come from the library's detection (UTF-8 byte offsets, never
+ *    hand-computed). A recorded mention is tagged with its recorded DID and
+ *    never resolved again; any other handle is resolved as `detectFacets`
+ *    would (see `tagMentions`). Bluesky does not unfurl, so the link card
+ *    is built by us from our own page's metadata, with the tagged link as
+ *    its `uri`.
  *  - Typed outcomes are the API. Everything BEFORE `createRecord` fires is a
  *    definite non-post (`transient` / `rejected` / …); once it has fired only
  *    a definitive 4xx answer counts as "not created" — everything else is
@@ -308,7 +312,8 @@ export class BlueskyPublishAdapter implements SocialPublishAdapter {
     fetchImpl: typeof fetch,
   ): Promise<AppBskyFeedPost.Record> {
     const richText = new RichText({ text: input.text })
-    await richText.detectFacets(agent)
+    richText.detectFacetsWithoutResolution()
+    await tagMentions(agent, richText.facets, input.mentions ?? [])
     const facets = resolvedFacets(richText.facets)
 
     // The embed slot holds the card OR images (spec §4.1 wants the card
@@ -458,8 +463,77 @@ function hostnameOf(link: string): string {
   }
 }
 
+/** `@Alice.bsky.social` and `alice.bsky.social` are the same handle. */
+function normaliseHandle(handle: string): string {
+  return handle.replace(/^@/, '').toLowerCase()
+}
+
 /**
- * `detectFacets` leaves a mention whose handle did not resolve with an empty
+ * The atproto DID syntax (atproto.com/specs/did), including its 2,048-char
+ * limit — the same check as `@atproto/syntax`'s `isValidDid`.
+ */
+function isValidDid(did: string): boolean {
+  return (
+    did.length <= 2048 &&
+    /^did:[a-z]+:[a-zA-Z0-9._:%-]*[a-zA-Z0-9._-]$/.test(did)
+  )
+}
+
+/**
+ * Fills in the DID of every detected mention feature (whose `did` holds the
+ * handle until then): the RECORDED DID when the handle was recorded (spec
+ * §4.4 — the checked resolution is the one posted), otherwise a resolution
+ * through the PDS. That second path mirrors `RichText.detectFacets`, which
+ * cannot skip recorded handles: concurrent, `''` on any failure (dropped by
+ * `resolvedFacets`); unlike it, the handle is sent normalised. A recorded
+ * entry without a DID was never checked and counts as unrecorded. A recorded
+ * DID that is not a DID is posted as plain text: resolving the handle again
+ * would post an unchecked DID, and one bad tag must not block the post.
+ */
+async function tagMentions(
+  agent: Agent,
+  facets: AppBskyRichtextFacet.Main[] | undefined,
+  mentions: readonly PublishMention[],
+): Promise<void> {
+  const recorded = new Map(
+    mentions
+      .filter((m) => m.did)
+      .map((m) => [normaliseHandle(m.handle), m.did] as const),
+  )
+  const resolutions: Promise<void>[] = []
+  for (const facet of facets ?? []) {
+    for (const feature of facet.features) {
+      if (!AppBskyRichtextFacet.isMention(feature)) continue
+      const handle = normaliseHandle(feature.did)
+      const did = recorded.get(handle)
+      if (did !== undefined) {
+        if (isValidDid(did)) {
+          feature.did = did
+        } else {
+          console.warn(
+            `Bluesky: recorded DID for @${handle} is malformed; posting it untagged`,
+          )
+          feature.did = ''
+        }
+        continue
+      }
+      resolutions.push(
+        agent.com.atproto.identity.resolveHandle({ handle }).then(
+          (res) => {
+            feature.did = res.data.did || ''
+          },
+          () => {
+            feature.did = ''
+          },
+        ),
+      )
+    }
+  }
+  await Promise.all(resolutions)
+}
+
+/**
+ * A mention whose handle did not resolve is left with an empty
  * DID, which the PDS rejects; drop those features (the text still reads as
  * written) and any facet left without features.
  */

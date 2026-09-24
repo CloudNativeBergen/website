@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, onTestFinished, vi } from 'vitest'
 import { http, HttpResponse } from 'msw'
 import { server } from '../../../../../__tests__/mocks/msw/server'
 import {
@@ -22,6 +22,7 @@ import {
   POST_URI,
   RATE_LIMIT_RESET,
   RKEY,
+  resolvedHandles,
 } from './bluesky-fixtures'
 
 const CREDENTIALS = { identifier: 'cndn.bsky.social', appPassword: 'abcd-efgh' }
@@ -97,6 +98,260 @@ describe('BlueskyPublishAdapter — text-only publish', () => {
         ],
       },
     })
+  })
+})
+
+describe('BlueskyPublishAdapter — mentions (spec §4.4 Publish, #1149)', () => {
+  const ALICE = 'did:plc:alicerecorded0000000000000'
+  const ALICE_LIVE = 'did:plc:aliceliveresolve000000000'
+  const BOB = 'did:plc:bobresolved00000000000000'
+  const MENTION = 'app.bsky.richtext.facet#mention'
+  // The library tags mention facets with the union `$type`; link facets not.
+  const FACET = 'app.bsky.richtext.facet'
+
+  function createdRecord(recorded: ReturnType<typeof pds>) {
+    const creates = callsTo(recorded, 'com.atproto.repo.createRecord')
+    expect(creates).toHaveLength(1)
+    return (creates[0].body as { record: Record<string, unknown> }).record
+  }
+
+  it('a recorded mention after an emoji is tagged with the recorded DID at the UTF-8 byte range, and never resolved', async () => {
+    const recorded = pds()
+    const text = 'Great talk 🎉 by @alice.bsky.social'
+
+    const outcome = await adapter().publish({
+      text,
+      media: [],
+      mentions: [{ handle: 'alice.bsky.social', did: ALICE }],
+    })
+
+    expect(outcome).toMatchObject({ ok: true })
+    expect(createdRecord(recorded)).toEqual({
+      $type: 'app.bsky.feed.post',
+      text,
+      createdAt: NOW.toISOString(),
+      facets: [
+        {
+          $type: FACET,
+          // "Great talk " is 11 bytes, the emoji 4, " by " 4: the @ is byte 19.
+          index: { byteStart: 19, byteEnd: 37 },
+          features: [{ $type: MENTION, did: ALICE }],
+        },
+      ],
+    })
+    expect(resolvedHandles(recorded)).toEqual([])
+  })
+
+  it('the recorded DID is posted even when the handle now resolves to another — no second resolution', async () => {
+    const recorded = pds({ resolve: { 'alice.bsky.social': ALICE_LIVE } })
+
+    await adapter().publish({
+      // Detected case and a leading @ on the record still match.
+      text: 'Thanks @Alice.bsky.social',
+      media: [],
+      mentions: [{ handle: '@alice.bsky.social', did: ALICE }],
+    })
+
+    expect(createdRecord(recorded).facets).toEqual([
+      {
+        $type: FACET,
+        index: { byteStart: 7, byteEnd: 25 },
+        features: [{ $type: MENTION, did: ALICE }],
+      },
+    ])
+    expect(resolvedHandles(recorded)).toEqual([])
+  })
+
+  it('an unrecorded handle the PDS knows is resolved once and tagged', async () => {
+    const recorded = pds({ resolve: { 'bob.bsky.social': BOB } })
+
+    await adapter().publish({ text: 'Hi @bob.bsky.social', media: [] })
+
+    expect(createdRecord(recorded).facets).toEqual([
+      {
+        $type: FACET,
+        index: { byteStart: 3, byteEnd: 19 },
+        features: [{ $type: MENTION, did: BOB }],
+      },
+    ])
+    expect(resolvedHandles(recorded)).toEqual(['bob.bsky.social'])
+  })
+
+  it('an unrecorded handle that does not resolve stays plain text and the post still goes out', async () => {
+    const recorded = pds({ resolve: { 'bob.bsky.social': BOB } })
+    const text = 'Hi @ghost.bsky.social'
+
+    const outcome = await adapter().publish({ text, media: [] })
+
+    expect(outcome).toMatchObject({ ok: true, externalId: expect.any(String) })
+    expect(createdRecord(recorded)).toEqual({
+      $type: 'app.bsky.feed.post',
+      text,
+      createdAt: NOW.toISOString(),
+    })
+    expect(resolvedHandles(recorded)).toEqual(['ghost.bsky.social'])
+  })
+
+  it('an unrecorded handle written in mixed case is resolved normalised', async () => {
+    const recorded = pds({ resolve: { 'bob.bsky.social': BOB } })
+
+    await adapter().publish({ text: 'Hi @Bob.bsky.social', media: [] })
+
+    expect(createdRecord(recorded).facets).toEqual([
+      {
+        $type: FACET,
+        index: { byteStart: 3, byteEnd: 19 },
+        features: [{ $type: MENTION, did: BOB }],
+      },
+    ])
+    expect(resolvedHandles(recorded)).toEqual(['bob.bsky.social'])
+  })
+
+  it('a recorded entry without a DID was never checked, so its handle is resolved like any other', async () => {
+    const recorded = pds({ resolve: { 'bob.bsky.social': BOB } })
+
+    await adapter().publish({
+      text: 'Hi @bob.bsky.social',
+      media: [],
+      mentions: [{ handle: 'bob.bsky.social', did: '' }],
+    })
+
+    expect(createdRecord(recorded).facets).toEqual([
+      {
+        $type: FACET,
+        index: { byteStart: 3, byteEnd: 19 },
+        features: [{ $type: MENTION, did: BOB }],
+      },
+    ])
+    expect(resolvedHandles(recorded)).toEqual(['bob.bsky.social'])
+  })
+
+  it.each([
+    ['whitespace', '   '],
+    ['a space inside', 'did:plc: alice'],
+    ['no method', 'alice.bsky.social'],
+    // Regex-valid, but over the protocol's 2,048-char limit.
+    ['too long', `did:plc:${'a'.repeat(2041)}`],
+  ])(
+    'a recorded DID that is malformed (%s) posts the mention as plain text without resolving it again',
+    async (_, did) => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      onTestFinished(() => warn.mockRestore())
+      const recorded = pds({
+        resolve: { 'alice.bsky.social': ALICE_LIVE, 'bob.bsky.social': BOB },
+      })
+      const text = 'Hi @alice.bsky.social and @bob.bsky.social'
+
+      const outcome = await adapter().publish({
+        text,
+        media: [],
+        mentions: [{ handle: 'alice.bsky.social', did }],
+      })
+
+      expect(outcome).toMatchObject({ ok: true })
+      const record = createdRecord(recorded)
+      expect(record.text).toBe(text)
+      expect(record.facets).toEqual([
+        {
+          $type: FACET,
+          index: { byteStart: 26, byteEnd: 42 },
+          features: [{ $type: MENTION, did: BOB }],
+        },
+      ])
+      expect(resolvedHandles(recorded)).toEqual(['bob.bsky.social'])
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining('@alice.bsky.social'),
+      )
+    },
+  )
+
+  it('a recorded DID of exactly 2,048 chars (the protocol limit) is posted', async () => {
+    const did = `did:plc:${'a'.repeat(2040)}`
+    const recorded = pds()
+
+    await adapter().publish({
+      text: 'Hi @alice.bsky.social',
+      media: [],
+      mentions: [{ handle: 'alice.bsky.social', did }],
+    })
+
+    expect(createdRecord(recorded).facets).toEqual([
+      {
+        $type: FACET,
+        index: { byteStart: 3, byteEnd: 21 },
+        features: [{ $type: MENTION, did }],
+      },
+    ])
+    expect(resolvedHandles(recorded)).toEqual([])
+  })
+
+  it('a recorded mention whose handle is not in the text creates nothing', async () => {
+    const recorded = pds()
+
+    await adapter().publish({
+      text: 'No tags here',
+      media: [],
+      mentions: [{ handle: 'alice.bsky.social', did: ALICE }],
+    })
+
+    expect(createdRecord(recorded)).toEqual({
+      $type: 'app.bsky.feed.post',
+      text: 'No tags here',
+      createdAt: NOW.toISOString(),
+    })
+    expect(resolvedHandles(recorded)).toEqual([])
+  })
+
+  it('recorded and unrecorded mentions, a link facet and the link card coexist in one post', async () => {
+    const recorded = pds({
+      resolve: { 'alice.bsky.social': ALICE_LIVE, 'bob.bsky.social': BOB },
+    })
+    hosts()
+    const text =
+      '🎉 @alice.bsky.social with @bob.bsky.social and @ghost.bsky.social — https://cloudnativedays.no/tickets'
+
+    const outcome = await adapter().publish({
+      text,
+      media: [],
+      link: PAGE_URL,
+      mentions: [{ handle: 'alice.bsky.social', did: ALICE }],
+    })
+
+    expect(outcome).toMatchObject({ ok: true })
+    const record = createdRecord(recorded)
+    expect(record.text).toBe(text)
+    expect(record.facets).toEqual([
+      {
+        $type: FACET,
+        index: { byteStart: 5, byteEnd: 23 },
+        features: [{ $type: MENTION, did: ALICE }],
+      },
+      {
+        $type: FACET,
+        index: { byteStart: 29, byteEnd: 45 },
+        features: [{ $type: MENTION, did: BOB }],
+      },
+      {
+        index: { byteStart: 73, byteEnd: 107 },
+        features: [
+          {
+            $type: 'app.bsky.richtext.facet#link',
+            uri: 'https://cloudnativedays.no/tickets',
+          },
+        ],
+      },
+    ])
+    expect(record.embed).toMatchObject({
+      $type: 'app.bsky.embed.external',
+      external: {
+        uri: PAGE_URL,
+        title: 'Tickets & prices — Cloud Native Days',
+      },
+    })
+    expect(resolvedHandles(recorded).sort()).toEqual([
+      'bob.bsky.social',
+      'ghost.bsky.social',
+    ])
   })
 })
 

@@ -70,10 +70,27 @@ export interface PublishMedia {
   alt: string
 }
 
+/**
+ * A tag the variant RECORDED (spec §4.3): the handle as written and the DID
+ * it resolved to when it was checked. The adapter posts this DID and never
+ * resolves the handle again (spec §4.4, Publish) — two resolutions could
+ * disagree, and the one that was checked is the one that must be posted.
+ */
+export interface PublishMention {
+  handle: string
+  did: string
+}
+
 export interface PublishInput {
   text: string
   media: PublishMedia[]
   link?: string
+  /**
+   * Recorded mentions. A handle in the text that is not among them is still
+   * detected and resolved by the platform adapter as before; one of them
+   * whose handle is not in the text creates nothing.
+   */
+  mentions?: readonly PublishMention[]
 }
 
 /**

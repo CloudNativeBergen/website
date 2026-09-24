@@ -37,8 +37,16 @@ export function pngBytes(size = 256): Uint8Array {
 }
 
 export interface Recorded {
-  /** Every request the PDS saw, in order: `[nsid, parsed JSON body | null]`. */
-  calls: { nsid: string; body: unknown; headers: Headers }[]
+  /**
+   * Every request the PDS saw, in order: the nsid, the parsed JSON body
+   * (`null` when not JSON) and the query params (what a GET carries).
+   */
+  calls: {
+    nsid: string
+    body: unknown
+    params: Record<string, string>
+    headers: Headers
+  }[]
   uploads: { encoding: string | null; size: number }[]
 }
 
@@ -58,6 +66,11 @@ export interface PdsBehaviour {
   refresh?: 'ok' | 'refused'
   /** Milliseconds the PDS sits on a call before answering. */
   delayMs?: { login?: number; create?: number }
+  /**
+   * Handle → DID the PDS resolves (`com.atproto.identity.resolveHandle`).
+   * Any other handle is refused with the PDS's 400. Default: nobody.
+   */
+  resolve?: Record<string, string>
 }
 
 const STATUS_BODY = {
@@ -105,7 +118,8 @@ export function pds(behaviour: PdsBehaviour = {}): Recorded {
     const body = type.includes('application/json')
       ? await request.clone().json()
       : null
-    recorded.calls.push({ nsid, body, headers: request.headers })
+    const params = Object.fromEntries(new URL(request.url).searchParams)
+    recorded.calls.push({ nsid, body, params, headers: request.headers })
     return body
   }
   const handlers: HttpHandler[] = [
@@ -189,13 +203,20 @@ export function pds(behaviour: PdsBehaviour = {}): Recorded {
         active: true,
       })
     }),
-    // A mention the text contains would be resolved through the PDS; the
-    // fixture account knows nobody.
-    http.get(`${XRPC}/com.atproto.identity.resolveHandle`, () =>
-      HttpResponse.json(
-        { error: 'InvalidRequest', message: 'Unable to resolve handle' },
-        { status: 400 },
-      ),
+    // A mention the text contains is resolved through the PDS; the fixture
+    // knows only the handles in `behaviour.resolve`.
+    http.get(
+      `${XRPC}/com.atproto.identity.resolveHandle`,
+      async ({ request }) => {
+        await record('com.atproto.identity.resolveHandle', request)
+        const handle = new URL(request.url).searchParams.get('handle') ?? ''
+        const did = behaviour.resolve?.[handle]
+        if (did) return HttpResponse.json({ did })
+        return HttpResponse.json(
+          { error: 'InvalidRequest', message: 'Unable to resolve handle' },
+          { status: 400 },
+        )
+      },
     ),
   ]
   server.use(...handlers)
@@ -255,4 +276,11 @@ export const bufferedFetch: typeof fetch = async (input, init) => {
 
 export function callsTo(recorded: Recorded, nsid: string) {
   return recorded.calls.filter((c) => c.nsid === nsid)
+}
+
+/** The handles the PDS was asked to resolve, in order. */
+export function resolvedHandles(recorded: Recorded): string[] {
+  return callsTo(recorded, 'com.atproto.identity.resolveHandle').map(
+    (c) => c.params.handle,
+  )
 }
