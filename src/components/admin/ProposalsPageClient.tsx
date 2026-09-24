@@ -62,7 +62,7 @@ export function ProposalsPageClient({
           />
         </div>
 
-        {selectedProposal && (
+        {selectedProposal && isDesktop && (
           <div className="fixed inset-y-0 right-0 hidden w-96 overflow-y-auto border-l border-gray-200 bg-white lg:mt-16 lg:block dark:border-gray-700 dark:bg-gray-900">
             <ProposalPreview
               proposal={selectedProposal}
@@ -80,6 +80,7 @@ export function ProposalsPageClient({
           size="xl"
           padded={false}
           className="h-[90vh] overflow-y-auto"
+          ariaLabel="Proposal Preview"
         >
           {selectedProposal && (
             <ProposalPreview

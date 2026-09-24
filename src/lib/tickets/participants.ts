@@ -95,12 +95,14 @@ export function tallyParticipants(
   const participants = deduplicateTicketsByEmail(seats)
   const seatedEmails = new Set(seats.map(emailOf).filter(Boolean))
   
-  const workshopTickets = tickets.filter((t) => {
-    const c = classified.find((cx) => cx[0] === t);
-    return c && c[1].grantsWorkshop;
-  })
+  const workshopGrants = new Map(classified.map(([t, c]) => [t, c.grantsWorkshop]))
+  const workshopTickets = tickets.filter((t) => workshopGrants.get(t))
   const workshopEmails = new Set(workshopTickets.map(emailOf).filter(Boolean))
-  const workshopParticipants = participants.filter((t) => workshopEmails.has(emailOf(t))).length
+  const workshopParticipants = participants.filter((t) => {
+    const email = emailOf(t)
+    if (email && workshopEmails.has(email)) return true
+    return workshopGrants.get(t) || false
+  }).length
 
   const addOns = tickets.filter((t) => !admits.get(t))
   const addOnsWithSeat = addOns.filter((t) =>
