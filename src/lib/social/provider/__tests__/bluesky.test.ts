@@ -230,6 +230,8 @@ describe('BlueskyPublishAdapter — mentions (spec §4.4 Publish, #1149)', () =>
     ['whitespace', '   '],
     ['a space inside', 'did:plc: alice'],
     ['no method', 'alice.bsky.social'],
+    // Regex-valid, but over the protocol's 2,048-char limit.
+    ['too long', `did:plc:${'a'.repeat(2041)}`],
   ])(
     'a recorded DID that is malformed (%s) posts the mention as plain text without resolving it again',
     async (_, did) => {
@@ -262,6 +264,26 @@ describe('BlueskyPublishAdapter — mentions (spec §4.4 Publish, #1149)', () =>
       )
     },
   )
+
+  it('a recorded DID of exactly 2,048 chars (the protocol limit) is posted', async () => {
+    const did = `did:plc:${'a'.repeat(2040)}`
+    const recorded = pds()
+
+    await adapter().publish({
+      text: 'Hi @alice.bsky.social',
+      media: [],
+      mentions: [{ handle: 'alice.bsky.social', did }],
+    })
+
+    expect(createdRecord(recorded).facets).toEqual([
+      {
+        $type: FACET,
+        index: { byteStart: 3, byteEnd: 21 },
+        features: [{ $type: MENTION, did }],
+      },
+    ])
+    expect(resolvedHandles(recorded)).toEqual([])
+  })
 
   it('a recorded mention whose handle is not in the text creates nothing', async () => {
     const recorded = pds()

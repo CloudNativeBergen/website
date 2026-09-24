@@ -468,8 +468,16 @@ function normaliseHandle(handle: string): string {
   return handle.replace(/^@/, '').toLowerCase()
 }
 
-/** The atproto DID syntax (atproto.com/specs/did); `@atproto/syntax`'s `isValidDid` agrees. */
-const DID_SYNTAX = /^did:[a-z]+:[a-zA-Z0-9._:%-]*[a-zA-Z0-9._-]$/
+/**
+ * The atproto DID syntax (atproto.com/specs/did), including its 2,048-char
+ * limit — the same check as `@atproto/syntax`'s `isValidDid`.
+ */
+function isValidDid(did: string): boolean {
+  return (
+    did.length <= 2048 &&
+    /^did:[a-z]+:[a-zA-Z0-9._:%-]*[a-zA-Z0-9._-]$/.test(did)
+  )
+}
 
 /**
  * Fills in the DID of every detected mention feature (whose `did` holds the
@@ -499,7 +507,7 @@ async function tagMentions(
       const handle = normaliseHandle(feature.did)
       const did = recorded.get(handle)
       if (did !== undefined) {
-        if (DID_SYNTAX.test(did)) {
+        if (isValidDid(did)) {
           feature.did = did
         } else {
           console.warn(
