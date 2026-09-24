@@ -375,14 +375,15 @@ describe('creating a standalone code', () => {
 })
 
 describe('one listing for both kinds', () => {
-  it('lists the sponsor code and the standalone code together, labelled', () => {
+  it('does not list sponsor codes in the custom table', () => {
     renderPanel()
 
-    // Both are in the SAME table — the sponsor code used to be filtered out of
-    // it entirely, leaving two disconnected views.
+    // The user requested that sponsor codes are explicitly filtered out
+    // of the custom discount table, since they already appear in the
+    // sponsor table above it.
     expect(
-      within(codeRow('ACMECLOUD1234')).getByText('Sponsor: Acme Cloud'),
-    ).toBeTruthy()
+      within(codeTable()).queryByText('ACMECLOUD1234'),
+    ).toBeNull()
     expect(
       within(codeRow('COMMUNITY2026')).getByText('Standalone'),
     ).toBeTruthy()

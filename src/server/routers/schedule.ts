@@ -416,6 +416,8 @@ export const scheduleRouter = router({
 
         await tx.commit()
         revalidateTag(conferenceTag(conference._id), 'default')
+        revalidateTag('content:program', 'default')
+        revalidateTag('content:speakers', 'default')
 
         // SCHEDULE-CHANGE ALERTS. Publishing is now the ONLY write that changes
         // the public program — draft saves auto-fork and Live mode is read-only
