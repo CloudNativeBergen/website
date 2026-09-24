@@ -186,6 +186,58 @@ export const ClassColouredLogoGradientOnDark: Story = {
   },
 }
 
+/**
+ * A logo with no viewBox and no size, drawing one thick horizontal line. Its
+ * size has to be measured, and `getBBox()` measures geometry only: a line has
+ * zero height, so without the stroke's extent it measures as nothing and the
+ * generated wordmark is drawn instead.
+ */
+export const SizelessStrokedLogo: Story = {
+  args: {
+    conferenceLogos: {
+      title: 'Konf',
+      logoBright:
+        '<svg><line x1="0" y1="50" x2="400" y2="50" stroke="#facc15" stroke-width="100"/></svg>',
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const box = logoBox()
+    await waitFor(() => {
+      const { data } = canvasElement
+        .querySelector('canvas')!
+        .getContext('2d')!
+        .getImageData(
+          Math.round(box.x),
+          Math.round(box.y),
+          Math.round(box.width),
+          Math.round(box.height),
+        )
+      let yellow = 0
+      for (let i = 0; i < data.length; i += 4) {
+        if (data[i] > 200 && data[i + 1] > 170 && data[i + 2] < 80) yellow++
+      }
+      expect(yellow / (data.length / 4)).toBeGreaterThan(0.3)
+    })
+  },
+}
+
+/**
+ * Legacy markup the inline renderer's HTML parser forgave and an image's XML
+ * parser does not: an unbound `xlink:` prefix, an upper-case `VIEWBOX`, no
+ * `xmlns`, and a size in points. Unrepaired it fails to decode and the
+ * generated wordmark is drawn instead of the yellow bar.
+ */
+export const LegacyMarkupLogo: Story = {
+  args: {
+    conferenceLogos: {
+      title: 'Konf',
+      logoBright:
+        '<svg VIEWBOX="0 0 970 234" width="727.5pt" height="175.5pt"><defs><rect id="bar" width="970" height="234" fill="#facc15"/></defs><use xlink:href="#bar"/></svg>',
+    },
+  },
+  play: SizelessStrokedLogo.play,
+}
+
 export const FallbackGradient: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)

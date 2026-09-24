@@ -103,80 +103,79 @@ export function logoRasterRequests(
 }
 
 export interface CanvasSvg {
-  markup: string
-  /** Intrinsic size, when the markup states one. */
+  /** The parsed root, ready to serialise with {@link logoMarkup}. */
+  element: SVGSVGElement
+  /** Intrinsic size in px, when the markup states one. */
   width?: number
   height?: number
 }
 
-const SVG_OPEN_TAG = /<svg\b[^>]*>/i
-
-function attribute(tag: string, name: string): string | undefined {
-  const match = new RegExp(
-    `\\s${name}\\s*=\\s*("([^"]*)"|'([^']*)')`,
-    'i',
-  ).exec(tag)
-  return match ? (match[2] ?? match[3]) : undefined
+/** CSS px per absolute unit. Any other unit (%, em…) gives no intrinsic size. */
+const PX_PER_UNIT: Record<string, number> = {
+  '': 1,
+  px: 1,
+  pt: 96 / 72,
+  pc: 16,
+  in: 96,
+  cm: 96 / 2.54,
+  mm: 96 / 25.4,
+  q: 96 / 101.6,
 }
 
-/** A plain number or a `px` length; percentages and other units are no size. */
-function pixels(value: string | undefined): number | undefined {
-  const match = value && /^\s*([\d.]+)\s*(px)?\s*$/i.exec(value)
-  const n = match ? Number(match[1]) : NaN
-  return n > 0 ? n : undefined
+/** An absolute SVG length in px, e.g. `"200"`, `"50px"`, `"72pt"`. */
+export function absoluteLength(value: string | null): number | undefined {
+  const match =
+    value && /^\s*([\d.]+(?:e[+-]?\d+)?)\s*([a-z]*)\s*$/i.exec(value)
+  const factor = match ? PX_PER_UNIT[match[2].toLowerCase()] : undefined
+  const px = match && factor ? Number(match[1]) * factor : NaN
+  return px > 0 ? px : undefined
 }
 
 /**
  * Make an uploaded logo drawable as a standalone image.
  *
- * Inline in the page an SVG may omit its namespace and its size; as an image
- * it may not — Firefox refuses to draw one without `xmlns`, and one with no
- * `viewBox` or pixel size has no intrinsic dimensions to fit. The stored
- * markup guarantees neither, so the namespace is added and a `viewBox` is
- * derived from `width`/`height` where possible. When there is no size at all,
- * the caller has to measure one (see {@link loadLogoImage}).
+ * Inline, the page parsed a stored logo with the forgiving HTML parser, which
+ * repairs attribute casing (`VIEWBOX`), binds `xlink:` and needs no `xmlns`.
+ * An image is parsed as strict XML and does none of that — Firefox will not
+ * even draw one without `xmlns`. So the markup is parsed exactly as it was
+ * before, as HTML, and re-serialised as XML by {@link logoMarkup}.
+ *
+ * Its size is `width` × `height` when both are absolute lengths (the viewBox
+ * is letterboxed inside, as the browser sizes the image), else the viewBox.
+ * With neither, the caller has to measure one (see {@link loadLogoImage}).
  */
 export function svgForCanvas(svg: string): CanvasSvg | null {
-  const sanitized = sanitizeSvg(svg)
-  const open = SVG_OPEN_TAG.exec(sanitized)
-  if (!open) return null
+  const doc = new DOMParser().parseFromString(sanitizeSvg(svg), 'text/html')
+  const element = doc.body.querySelector('svg')
+  if (!element) return null
 
-  let tag = open[0]
-  let width: number | undefined
-  let height: number | undefined
-  const box = attribute(tag, 'viewBox')
+  const box = element
+    .getAttribute('viewBox')
     ?.trim()
     .split(/[\s,]+/)
     .map(Number)
   const hasBox = box?.length === 4 && box[2] > 0 && box[3] > 0
-  const pixelWidth = pixels(attribute(tag, 'width'))
-  const pixelHeight = pixels(attribute(tag, 'height'))
+  const width = absoluteLength(element.getAttribute('width'))
+  const height = absoluteLength(element.getAttribute('height'))
 
-  // As an image the SVG is sized by width × height when it has both — its
-  // viewBox is letterboxed inside — and by its viewBox otherwise.
-  if (pixelWidth && pixelHeight) {
-    width = pixelWidth
-    height = pixelHeight
-    if (!hasBox) {
-      tag = tag.replace(/^<svg\b/i, `<svg viewBox="0 0 ${width} ${height}"`)
-    }
-  } else if (hasBox) {
-    width = box[2]
-    height = box[3]
+  if (width && height) {
+    if (!hasBox) element.setAttribute('viewBox', `0 0 ${width} ${height}`)
+    return { element, width, height }
   }
+  return hasBox ? { element, width: box[2], height: box[3] } : { element }
+}
 
-  if (!/\sxmlns\s*=/i.test(tag)) {
-    tag = tag.replace(/^<svg\b/i, '<svg xmlns="http://www.w3.org/2000/svg"')
-  }
-
-  return {
-    markup:
-      sanitized.slice(0, open.index) +
-      tag +
-      sanitized.slice(open.index + open[0].length),
-    width,
-    height,
-  }
+/**
+ * Serialise a prepared logo for an image, with `color` as the root's
+ * `currentColor`. Set as a style property it overrides any colour the logo
+ * sets itself, as the overlay's appended inline style did. XMLSerializer
+ * declares every namespace the markup uses (SVG, xlink).
+ */
+export function logoMarkup(element: SVGSVGElement, color: string): string {
+  const clone = element.cloneNode(true)
+  if (!(clone instanceof SVGElement)) throw new Error('not an SVG element')
+  clone.style.setProperty('color', color)
+  return new XMLSerializer().serializeToString(clone)
 }
 
 export interface Frame {
@@ -236,50 +235,47 @@ export type CanvasLogo =
   | { kind: 'image'; image: CanvasImageSource; aspect: number }
   | { kind: 'wordmark'; name: string }
 
-/** Give a size-less SVG the viewBox of what it actually draws. */
-function measuredViewBox(markup: string): CanvasSvg | null {
+/**
+ * Half the widest stroke the logo draws. `getBBox()` measures geometry only, so
+ * a viewBox built from it would cut off the outer half of every stroke — and
+ * all of a straight line, whose geometry has no width. Markers and filters
+ * are not accounted for.
+ */
+function strokeExtent(svg: SVGSVGElement): number {
+  let widest = 0
+  for (const element of svg.querySelectorAll('*')) {
+    const style = getComputedStyle(element)
+    if (style.stroke && style.stroke !== 'none') {
+      widest = Math.max(widest, parseFloat(style.strokeWidth) || 0)
+    }
+  }
+  return widest / 2
+}
+
+/** Give a size-less SVG the viewBox of what it actually paints. */
+function measuredViewBox(element: SVGSVGElement): CanvasSvg | null {
   const host = document.createElement('div')
   host.style.cssText =
     'position:absolute;left:-10000px;top:0;visibility:hidden;pointer-events:none'
-  host.innerHTML = markup
+  const svg = document.importNode(element, true)
+  host.appendChild(svg)
   document.body.appendChild(host)
   try {
-    const svg = host.querySelector('svg')
-    const box = svg?.getBBox()
-    if (!svg || !box || box.width <= 0 || box.height <= 0) return null
-    svg.setAttribute('viewBox', `${box.x} ${box.y} ${box.width} ${box.height}`)
+    const box = svg.getBBox()
+    const pad = strokeExtent(svg)
+    const width = box.width + pad * 2
+    const height = box.height + pad * 2
+    if (width <= 0 || height <= 0) return null
+    svg.setAttribute(
+      'viewBox',
+      `${box.x - pad} ${box.y - pad} ${width} ${height}`,
+    )
     svg.removeAttribute('width')
     svg.removeAttribute('height')
-    // XMLSerializer, not outerHTML: an image is parsed as XML, and only the
-    // serializer declares namespaces such as xlink that the markup relies on.
-    return {
-      markup: new XMLSerializer().serializeToString(svg),
-      width: box.width,
-      height: box.height,
-    }
+    return { element: svg, width, height }
   } finally {
     host.remove()
   }
-}
-
-/**
- * Give the root `<svg>` a `color`, APPENDED to any style it has so it wins —
- * exactly what the overlay did through `InlineSvg`'s style prop. This is its
- * `currentColor`, which is how monochrome tinted an uploaded logo.
- */
-export function withColor(markup: string, color: string): string {
-  return markup.replace(SVG_OPEN_TAG, (tag) => {
-    const style = /(\sstyle\s*=\s*)(?:"([^"]*)"|'([^']*)')/i
-    return style.test(tag)
-      ? tag.replace(
-          style,
-          (_, prefix: string, double?: string, single?: string) =>
-            double !== undefined
-              ? `${prefix}"${double};color:${color}"`
-              : `${prefix}'${single};color:${color}'`,
-        )
-      : tag.replace(/^<svg\b/i, `<svg style="color:${color}"`)
-  })
 }
 
 /**
@@ -292,11 +288,10 @@ export async function loadLogoImage(
   color: string,
 ): Promise<CanvasLogo | null> {
   let prepared = svgForCanvas(svg)
-  if (prepared && !prepared.width) prepared = measuredViewBox(prepared.markup)
+  if (prepared && !prepared.width) prepared = measuredViewBox(prepared.element)
   if (!prepared?.width || !prepared.height) return null
 
-  const markup = withColor(prepared.markup, color)
-
+  const markup = logoMarkup(prepared.element, color)
   const image = new Image()
   image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(markup)}`
   try {

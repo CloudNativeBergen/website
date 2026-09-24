@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { describe, it, expect } from 'vitest'
 import {
   isLightBackground,
@@ -7,7 +8,7 @@ import {
   logoSvgFor,
   monochromeInk,
   svgForCanvas,
-  withColor,
+  logoMarkup,
 } from './meme-generator-logo'
 import { wordmarkLayout } from '../BrandWordmark'
 
@@ -71,27 +72,53 @@ describe('logoSvgFor', () => {
   })
 })
 
-describe('svgForCanvas', () => {
+/**
+ * Prepare `svg` and parse the result the way an image is parsed — as XML —
+ * failing on anything the XML parser rejects.
+ */
+function asImage(svg: string, color = '#000000') {
+  const prepared = svgForCanvas(svg)
+  if (!prepared) throw new Error('not prepared')
+  const markup = logoMarkup(prepared.element, color)
+  const doc = new DOMParser().parseFromString(markup, 'image/svg+xml')
+  expect(doc.querySelector('parsererror')).toBeNull()
+  return { prepared, markup, root: doc.documentElement }
+}
+
+describe('svgForCanvas + logoMarkup', () => {
   it('adds the SVG namespace a standalone image needs', () => {
-    const result = svgForCanvas('<svg viewBox="0 0 970 234"><rect/></svg>')
-    expect(result?.markup).toMatch(
-      /^<svg xmlns="http:\/\/www\.w3\.org\/2000\/svg" viewBox="0 0 970 234">/,
+    const { prepared, root } = asImage(
+      '<svg viewBox="0 0 970 234"><rect/></svg>',
     )
-    expect(result).toMatchObject({ width: 970, height: 234 })
+    expect(root.namespaceURI).toBe('http://www.w3.org/2000/svg')
+    expect(prepared).toMatchObject({ width: 970, height: 234 })
   })
 
-  it('leaves an existing namespace alone', () => {
-    const svg =
-      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 5"></svg>'
-    expect(svgForCanvas(svg)?.markup).toBe(svg)
+  it('binds xlink: for a legacy logo that never declared it', () => {
+    const raw =
+      '<svg viewBox="0 0 10 10"><defs><circle id="m" r="4"/></defs><use xlink:href="#m"/></svg>'
+    // Control: as XML the raw markup does not even parse.
+    const rawDoc = new DOMParser().parseFromString(raw, 'image/svg+xml')
+    expect(rawDoc.querySelector('parsererror')).not.toBeNull()
+
+    const use = asImage(raw).root.querySelector('use')!
+    expect(use.getAttributeNS('http://www.w3.org/1999/xlink', 'href')).toBe(
+      '#m',
+    )
+  })
+
+  it('repairs attribute casing the HTML parser used to repair', () => {
+    const { prepared, root } = asImage(
+      '<svg VIEWBOX="0 0 100 50"><rect/></svg>',
+    )
+    expect(root.getAttribute('viewBox')).toBe('0 0 100 50')
+    expect(prepared).toMatchObject({ width: 100, height: 50 })
   })
 
   it('derives a viewBox from width and height when there is none', () => {
-    const result = svgForCanvas(
-      '<svg xmlns="http://www.w3.org/2000/svg" width="200px" height="50"></svg>',
-    )
-    expect(result).toMatchObject({ width: 200, height: 50 })
-    expect(result?.markup).toContain('viewBox="0 0 200 50"')
+    const { prepared, root } = asImage('<svg width="200px" height="50"></svg>')
+    expect(prepared).toMatchObject({ width: 200, height: 50 })
+    expect(root.getAttribute('viewBox')).toBe('0 0 200 50')
   })
 
   it('takes its size from width and height when they disagree with the viewBox', () => {
@@ -102,6 +129,12 @@ describe('svgForCanvas', () => {
     ).toMatchObject({ width: 200, height: 100 })
   })
 
+  it('converts absolute units to px', () => {
+    expect(
+      svgForCanvas('<svg width="150pt" height="1in" viewBox="0 0 1 1"/>'),
+    ).toMatchObject({ width: 200, height: 96 })
+  })
+
   it('accepts comma-separated viewBox values', () => {
     expect(svgForCanvas('<svg viewBox="0,0,40,10"></svg>')).toMatchObject({
       width: 40,
@@ -109,23 +142,49 @@ describe('svgForCanvas', () => {
     })
   })
 
-  it('reports no size when neither a viewBox nor a pixel size is present', () => {
-    expect(svgForCanvas('<svg width="100%"><rect/></svg>')).toMatchObject({
-      width: undefined,
-      height: undefined,
-    })
+  it('reports no size when neither a viewBox nor an absolute size is present', () => {
+    const result = svgForCanvas('<svg width="100%"><rect/></svg>')
+    expect(result?.element).toBeDefined()
+    expect(result?.width).toBeUndefined()
+    expect(result?.height).toBeUndefined()
   })
 
   it('sanitises before rasterising', () => {
-    const result = svgForCanvas(
+    const { markup } = asImage(
       '<svg viewBox="0 0 1 1" onload="alert(1)"><script>x()</script></svg>',
     )
-    expect(result?.markup).not.toMatch(/onload|script/)
+    expect(markup).not.toMatch(/onload|script/)
   })
 
   it('rejects markup that is not an SVG', () => {
     expect(svgForCanvas('<div></div>')).toBeNull()
     expect(svgForCanvas('')).toBeNull()
+  })
+})
+
+describe('logoMarkup colour', () => {
+  const color = (root: Element) =>
+    /(?:^|;)\s*color:\s*([^;]+)/.exec(root.getAttribute('style') ?? '')?.[1]
+
+  it('sets the root colour', () => {
+    expect(color(asImage('<svg viewBox="0 0 1 1"/>', '#FFFFFF').root)).toMatch(
+      /^(#FFFFFF|rgb\(255, 255, 255\))$/i,
+    )
+  })
+
+  it("overrides the logo's own colour and keeps the rest of its style", () => {
+    const { root } = asImage(
+      `<svg viewBox="0 0 1 1" style="font-family:'Arial';color:red"/>`,
+    )
+    expect(color(root)).toMatch(/^(#000000|rgb\(0, 0, 0\))$/i)
+    expect(root.getAttribute('style')).toMatch(/font-family/)
+  })
+
+  it('only touches the root element', () => {
+    const { root } = asImage(
+      '<svg viewBox="0 0 1 1"><g style="opacity: 1"/></svg>',
+    )
+    expect(root.querySelector('g')!.getAttribute('style')).toBe('opacity: 1')
   })
 })
 
@@ -223,41 +282,6 @@ describe('wordmarkLayout', () => {
     const widest = Math.max(...layout.lines.map((line) => line.width))
     const x = layout.lines[0].x
     expect(x * 2 + widest).toBeCloseTo(layout.viewBoxWidth, 0)
-  })
-})
-
-describe('withColor', () => {
-  it('adds a style when there is none', () => {
-    expect(withColor('<svg viewBox="0 0 1 1"><g/></svg>', '#FFFFFF')).toBe(
-      '<svg style="color:#FFFFFF" viewBox="0 0 1 1"><g/></svg>',
-    )
-  })
-
-  it("appends to an existing style so the tint wins over the logo's own colour", () => {
-    expect(withColor('<svg style="color:red"><g/></svg>', '#000000')).toBe(
-      '<svg style="color:red;color:#000000"><g/></svg>',
-    )
-  })
-
-  it('handles a single-quoted style', () => {
-    expect(withColor("<svg style='fill:red'><g/></svg>", '#000000')).toBe(
-      "<svg style='fill:red;color:#000000'><g/></svg>",
-    )
-  })
-
-  it('keeps a style whose value holds the other quote character', () => {
-    expect(
-      withColor(
-        `<svg style="font-family:'Arial';fill:red"><g/></svg>`,
-        '#000000',
-      ),
-    ).toBe(`<svg style="font-family:'Arial';fill:red;color:#000000"><g/></svg>`)
-  })
-
-  it('only touches the root element', () => {
-    expect(withColor('<svg><g style="opacity:1"/></svg>', '#000000')).toBe(
-      '<svg style="color:#000000"><g style="opacity:1"/></svg>',
-    )
   })
 })
 

@@ -505,9 +505,12 @@ export function MemeGenerator({
     }
   }, [logoBright, logoDark])
 
-  // The wordmark is canvas text, so its webfont has to be asked for too.
+  // The wordmark is canvas text, so its webfont has to be asked for too —
+  // whenever it is what gets drawn, including as the fallback for an uploaded
+  // logo that could not be rasterised.
+  const drawsWordmark = canvasLogo?.kind === 'wordmark'
   useEffect(() => {
-    if (uploadedLogoSvg) return
+    if (!drawsWordmark) return
     let cancelled = false
     const family = wordmarkFontFamily(document.documentElement)
     if (!family) return
@@ -520,7 +523,7 @@ export function MemeGenerator({
     return () => {
       cancelled = true
     }
-  }, [uploadedLogoSvg, logoName])
+  }, [drawsWordmark, logoName])
 
   useEffect(() => {
     if (qrCodeUrl) {
