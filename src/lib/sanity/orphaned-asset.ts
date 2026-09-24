@@ -18,10 +18,13 @@ export interface OrphanedAssetDeletion {
  * document of any type, in any tenant, references the asset — a gallery image,
  * a post or another speaker may share it — so the reference count is checked
  * first and a non-zero count keeps the asset and reports it. The count runs
- * under the `raw` perspective so it sees drafts and release versions too; the
- * API's default perspective became `published` at v2025-02-19, which would
- * read a confident 0 for an asset only a draft still uses. A failed count
- * (`-1`) also keeps it: fail closed.
+ * under the `raw` perspective so it sees drafts: the API's default perspective
+ * became `published` at v2025-02-19, which would read a confident 0 for an
+ * asset only a draft still uses. Known gap: at the client's `apiVersion`
+ * (2023-05-03) `raw` does NOT include Content Release `versions.**` documents,
+ * so a release-only reference also reads 0; Sanity's server-side refusal to
+ * delete a strongly referenced document is the only backstop there. A failed
+ * count (`-1`) also keeps it: fail closed.
  */
 async function deleteAssetIfOrphaned(
   assetId: string | null,
