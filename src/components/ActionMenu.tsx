@@ -173,6 +173,7 @@ export function ActionMenuItem({
           onClick={onClick}
           className={`${baseClasses} ${variantClasses}`}
           role="menuitem"
+          title={title}
           {...extraProps}
         >
           {Icon && <Icon className="h-4 w-4" />}

@@ -2,9 +2,8 @@ import {
   resolveTicketingProvider,
   type ConferenceTicketingBinding,
 } from '@/lib/tickets/provider'
-import {
-  typeKey,
-  type TicketTypeRole,
+import { type TicketTypeRole } from '@/lib/tickets/classification'
+export {
   workshopAccessOf,
   type WorkshopAccess,
 } from '@/lib/tickets/classification'
