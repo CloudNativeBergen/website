@@ -644,6 +644,51 @@ describe('BufferPublishAdapter — failure at create (spec §3.3)', () => {
   )
 
   it.each([
+    [200, 'RATE_LIMIT_EXCEEDED'],
+    [429, 'RATE_LIMIT_EXCEEDED'],
+    [200, 'FORBIDDEN'],
+  ])(
+    'an HTTP %s at create is ambiguous when a %s refusal sits beside a message-less error with the same code that shows createPost ran',
+    async (status, code) => {
+      const { fetchImpl } = createAnswering(
+        () =>
+          new Response(
+            JSON.stringify({
+              data: null,
+              errors: [
+                { message: `Buffer ${code}`, extensions: { code } },
+                { path: ['createPost'], extensions: { code } },
+              ],
+            }),
+            { status, headers: { 'retry-after': '30' } },
+          ),
+      )
+      const outcome = await adapter({ fetch: fetchImpl }).publish(LINK_ONLY)
+      expect(outcome).toMatchObject({ ok: false, kind: 'ambiguous' })
+    },
+  )
+
+  it('a message-less error with another code makes the codes disagree: ambiguous, never a retry', async () => {
+    const { fetchImpl } = createAnswering(
+      () =>
+        new Response(
+          JSON.stringify({
+            data: null,
+            errors: [
+              {
+                message: 'Throttled',
+                extensions: { code: 'RATE_LIMIT_EXCEEDED' },
+              },
+              { extensions: { code: 'UNEXPECTED' } },
+            ],
+          }),
+        ),
+    )
+    const outcome = await adapter({ fetch: fetchImpl }).publish(LINK_ONLY)
+    expect(outcome).toMatchObject({ ok: false, kind: 'ambiguous' })
+  })
+
+  it.each([
     ['401', 'UNAUTHORIZED', 'credential-expired'],
     ['400', 'BAD_USER_INPUT', 'rejected'],
   ])(

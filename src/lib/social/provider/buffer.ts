@@ -466,25 +466,25 @@ export class BufferPublishAdapter implements SocialPublishAdapter {
         message: `${operationName}: unreadable answer (${errorMessage(error)})`,
       }
     }
-    // A GraphQL error has a `message` (spec §7.1.2); an entry without one
-    // is no refusal Buffer signed, so it is not counted as an answer.
-    const errors: GraphQLError[] = Array.isArray(body?.errors)
+    // Every object entry is EVIDENCE: a `path` on any of them means the
+    // resolver ran, and any code among them must agree for a verdict. But a
+    // GraphQL error has a `message` (spec §7.1.2): only such entries make
+    // the body a GraphQL answer (`bare`, `errors` kind) Buffer signed.
+    const entries: GraphQLError[] = Array.isArray(body?.errors)
       ? body.errors.filter(
-          (e): e is GraphQLError =>
-            typeof e === 'object' &&
-            e !== null &&
-            typeof (e as GraphQLError).message === 'string',
+          (e): e is GraphQLError => typeof e === 'object' && e !== null,
         )
       : []
+    const errors = entries.filter((e) => typeof e.message === 'string')
     const firstMessage = errors
       .map((e) => (typeof e.message === 'string' ? e.message : ''))
       .find(Boolean)
-    const pathLengths = errors.map((e) =>
+    const pathLengths = entries.map((e) =>
       Array.isArray(e.path) ? e.path.length : 0,
     )
     const executed = pathLengths.some((n) => n > 0)
     const codes = new Set(
-      errors.map((e) =>
+      entries.map((e) =>
         typeof e.extensions?.code === 'string' ? e.extensions.code : '',
       ),
     )
