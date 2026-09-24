@@ -1,6 +1,7 @@
 import { SOCIAL_PLATFORM_LABELS } from '../types'
 import { PLATFORM_CONSTRAINTS, validatePublishInput } from './constraints'
 import { withDeadline } from './deadline'
+import { postUrlIssue } from './manual'
 import type {
   ConfirmCheck,
   PlatformConstraints,
@@ -280,6 +281,7 @@ export class BufferPublishAdapter implements SocialPublishAdapter {
         await this.request(fetchImpl, 'GetPost', POST_QUERY, {
           input: { id: vendorPostId },
         }),
+        this.platform,
       )
     } catch (error) {
       // The contract: confirm never throws. A body shape nothing here
@@ -575,7 +577,10 @@ function createPayloadOutcome(payload: unknown): PublishOutcome {
 }
 
 /** A `GetPost` answer → the confirm verdict. */
-function confirmOutcome(answer: Answer): ConfirmCheck {
+function confirmOutcome(
+  answer: Answer,
+  platform: BufferPlatform,
+): ConfirmCheck {
   switch (answer.kind) {
     case 'no-answer':
     case 'http':
@@ -601,12 +606,12 @@ function confirmOutcome(answer: Answer): ConfirmCheck {
             state: 'unreadable',
             message: `Buffer post read failed: ${answer.fieldErrors}`,
           }
-        : confirmCheckOf(answer.data.post)
+        : confirmCheckOf(answer.data.post, platform)
   }
 }
 
 /** A `Post` read back → the confirm verdict (spec §3.2). */
-function confirmCheckOf(post: unknown): ConfirmCheck {
+function confirmCheckOf(post: unknown, platform: BufferPlatform): ConfirmCheck {
   if (!post || typeof post !== 'object') {
     return { state: 'unreadable', message: 'Buffer post read returned no post' }
   }
@@ -616,9 +621,15 @@ function confirmCheckOf(post: unknown): ConfirmCheck {
     error?: { message?: unknown } | null
   }
   if (status === 'sent') {
-    if (typeof externalLink !== 'string' || !externalLink)
+    // The same bar a pasted URL must clear (`social.markPosted`): the link
+    // is shown as "Open on LinkedIn" and closes the Task, so a value that is
+    // no LinkedIn post URL is dropped, like a missing one.
+    if (
+      typeof externalLink !== 'string' ||
+      postUrlIssue(platform, externalLink) !== null
+    )
       return { state: 'published' }
-    const urn = /urn:li:[A-Za-z]+:\d+/.exec(externalLink)?.[0]
+    const urn = /urn:li:[A-Za-z]+:\d+/.exec(new URL(externalLink).pathname)?.[0]
     return urn
       ? { state: 'published', externalId: urn, url: externalLink }
       : { state: 'published', url: externalLink }

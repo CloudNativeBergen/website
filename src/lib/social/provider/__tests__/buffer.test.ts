@@ -710,6 +710,31 @@ describe('BufferPublishAdapter — confirm (spec §3.2)', () => {
     })
   })
 
+  it.each([
+    'https://evil.example/feed/update/urn:li:share:1',
+    'https://linkedin.com.evil.example/feed/update/urn:li:share:1',
+    'http://www.linkedin.com/feed/update/urn:li:share:1',
+    'javascript:alert(1)//urn:li:share:1',
+    'https://www.linkedin.com/',
+  ])(
+    'a sent post whose link is no LinkedIn post URL (%s) is published with no URL or id taken from it',
+    async (externalLink) => {
+      buffer({ post: { status: 'sent', externalLink } })
+      await expect(adapter().confirm(POST_ID)).resolves.toEqual({
+        state: 'published',
+      })
+    },
+  )
+
+  it('a URN outside the path of a LinkedIn URL is not the post id', async () => {
+    const url = 'https://www.linkedin.com/company/1234/posts?ref=urn:li:share:1'
+    buffer({ post: { status: 'sent', externalLink: url } })
+    await expect(adapter().confirm(POST_ID)).resolves.toEqual({
+      state: 'published',
+      url,
+    })
+  })
+
   it.each(['sending', 'scheduled', 'draft', 'needs_approval'])(
     '%s → pending',
     async (status) => {
