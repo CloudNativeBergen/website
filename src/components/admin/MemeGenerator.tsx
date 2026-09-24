@@ -1,13 +1,6 @@
 'use client'
 
-import {
-  useState,
-  useRef,
-  useEffect,
-  useLayoutEffect,
-  useCallback,
-  useMemo,
-} from 'react'
+import { useState, useRef, useEffect, useLayoutEffect, useMemo } from 'react'
 import {
   PhotoIcon,
   ArrowUpTrayIcon,
@@ -19,27 +12,17 @@ import {
   QrCodeIcon,
 } from '@heroicons/react/24/outline'
 import type { ConferenceLogos } from '../common/DashboardLayout'
-import QRCodeStyling from 'qr-code-styling'
 import {
   CANVAS_SIZE,
-  DEFAULT_BG_COLOR,
   BRAND_COLORS,
   TEXT_COLOR_PRESETS,
   FONT_FAMILIES,
-  DEFAULT_TEXT_LINES,
   LOGO_SIZE_MIN,
   LOGO_SIZE_MAX,
-  LOGO_SIZE_DEFAULT,
-  LOGO_PADDING_DEFAULT,
   TEXT_PADDING_MIN,
   TEXT_PADDING_MAX,
   QR_SIZE_MIN,
   QR_SIZE_MAX,
-  QR_SIZE_DEFAULT,
-  QR_VERTICAL_POSITION_DEFAULT,
-  QR_HORIZONTAL_POSITION_DEFAULT,
-  QR_DOTS_COLOR_DEFAULT,
-  QR_BACKGROUND_COLOR_DEFAULT,
   QR_DOT_TYPES,
   QR_CORNER_SQUARE_TYPES,
   QR_CORNER_DOT_TYPES,
@@ -54,19 +37,24 @@ import {
 } from './meme-generator-fonts'
 import {
   brandGradientColors,
-  drawLogo,
-  isLightBackground,
   loadLogoImage,
   logoTint,
   logoRasterKey,
   logoRasterRequests,
-  placeLogo,
   logoSvgFor,
-  monochromeInk,
   wordmarkFont,
   wordmarkFontFamily,
   type CanvasLogo,
 } from './meme-generator-logo'
+import {
+  DEFAULT_DESIGN,
+  designIsLight,
+  drawDesign,
+  type MemeDesign,
+  type QrStyle,
+  type Raster,
+} from './meme-generator-draw'
+import { qrStyleKey, renderQrImage } from './meme-generator-qr'
 import { PLATFORM_NAME } from '@/lib/branding/platform'
 
 interface MemeGeneratorProps {
@@ -90,6 +78,15 @@ interface SliderProps {
   max: number
   suffix?: string
   icon?: React.ElementType
+}
+
+function readAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(String(reader.result))
+    reader.onerror = () => reject(reader.error)
+    reader.readAsDataURL(file)
+  })
 }
 
 const ColorButton = ({
@@ -188,23 +185,10 @@ export function MemeGenerator({
 }: MemeGeneratorProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const exportCanvasRef = useRef<HTMLCanvasElement>(null)
-  const imageRef = useRef<HTMLImageElement | null>(null)
-  const qrImageRef = useRef<HTMLImageElement | null>(null)
 
-  const [backgroundColor, setBackgroundColor] = useState(DEFAULT_BG_COLOR)
-  const [backgroundImage, setBackgroundImage] = useState<File | null>(null)
-  const [backgroundImageUrl, setBackgroundImageUrl] = useState<string | null>(
-    null,
-  )
-  const [textLines, setTextLines] = useState<TextLine[]>(DEFAULT_TEXT_LINES)
-  const [logoSize, setLogoSize] = useState(LOGO_SIZE_DEFAULT)
-  const [logoVerticalPosition, setLogoVerticalPosition] =
-    useState(LOGO_PADDING_DEFAULT)
-  const [logoHorizontalPosition, setLogoHorizontalPosition] =
-    useState(LOGO_PADDING_DEFAULT)
-  const [logoVariant, setLogoVariant] = useState<'gradient' | 'monochrome'>(
-    'monochrome',
-  )
+  const [design, setDesign] = useState<MemeDesign>(DEFAULT_DESIGN)
+  const { background, textLines, logo, qr } = design
+
   const [expandedSections, setExpandedSections] = useState<boolean[]>([
     true,
     true,
@@ -216,86 +200,41 @@ export function MemeGenerator({
     false,
     false,
   ])
-  const [qrCodeUrl, setQrCodeUrl] = useState('')
-  const [qrCodeImage, setQrCodeImage] = useState<string | null>(null)
-  const [qrSize, setQrSize] = useState(QR_SIZE_DEFAULT)
-  const [qrVerticalPosition, setQrVerticalPosition] = useState(
-    QR_VERTICAL_POSITION_DEFAULT,
-  )
-  const [qrHorizontalPosition, setQrHorizontalPosition] = useState(
-    QR_HORIZONTAL_POSITION_DEFAULT,
-  )
   const [showQrAdvanced, setShowQrAdvanced] = useState(false)
-  const [qrDotsColor, setQrDotsColor] = useState(QR_DOTS_COLOR_DEFAULT)
-  const [qrDotsType, setQrDotsType] = useState<string>('dots')
-  const [qrCornerSquareType, setQrCornerSquareType] =
-    useState<string>('rounded')
-  const [qrCornerDotType, setQrCornerDotType] = useState<string>('dot')
-  const [qrBackgroundColor, setQrBackgroundColor] = useState(
-    QR_BACKGROUND_COLOR_DEFAULT,
-  )
 
-  // The logo's variant and monochrome ink follow the DESIGN's background, not
-  // the admin's light/dark theme.
-  const lightBackground = isLightBackground({
-    color: backgroundColor,
-    hasImage: Boolean(backgroundImageUrl),
-  })
-  const logoInk = monochromeInk(lightBackground)
-  const uploadedLogoSvg = logoSvgFor(conferenceLogos, lightBackground)
-  const logoName = conferenceLogos?.title?.trim() || PLATFORM_NAME
-  const uploadedLogoKey = uploadedLogoSvg
-    ? logoRasterKey(uploadedLogoSvg, logoTint(logoVariant, lightBackground))
-    : null
+  const setBackground = (patch: Partial<MemeDesign['background']>) =>
+    setDesign((prev) => ({
+      ...prev,
+      background: { ...prev.background, ...patch },
+    }))
 
-  // Every raster the design can switch to, decoded up front (see
-  // logoRasterRequests). One that cannot be drawn falls back to the wordmark;
-  // until the set has decoded, just after mount, there is no logo.
-  const [logoRasters, setLogoRasters] = useState<
-    ReadonlyMap<string, CanvasLogo | null>
-  >(() => new Map())
-
-  const canvasLogo = useMemo<CanvasLogo | null>(() => {
-    const wordmark: CanvasLogo = { kind: 'wordmark', name: logoName }
-    if (!uploadedLogoKey) return wordmark
-    if (!logoRasters.has(uploadedLogoKey)) return null
-    return logoRasters.get(uploadedLogoKey) ?? wordmark
-  }, [uploadedLogoKey, logoRasters, logoName])
-
-  // Until the uploaded logo has rasterised, the canvas has no logo: tell the
-  // shared capture (Download, Attach to Task) to wait rather than export it.
-  const logoPending =
-    uploadedLogoKey !== null && !logoRasters.has(uploadedLogoKey)
-
-  const handleBackgroundImageUpload = (
-    e: React.ChangeEvent<HTMLInputElement>,
-  ) => {
-    const file = e.target.files?.[0]
-    if (file && file.type.startsWith('image/')) {
-      setBackgroundImage(file)
-      const reader = new FileReader()
-      reader.onload = (event) => {
-        const url = event.target?.result as string
-        setBackgroundImageUrl(url)
-        const img = new window.Image()
-        img.onload = () => {
-          imageRef.current = img
-        }
-        img.src = url
+  // A position past the edge the logo's size allows is pulled back in.
+  const setLogo = (patch: Partial<MemeDesign['logo']>) =>
+    setDesign((prev) => {
+      const next = { ...prev.logo, ...patch }
+      const max = CANVAS_SIZE - next.size
+      return {
+        ...prev,
+        logo: {
+          ...next,
+          bottom: Math.min(next.bottom, max),
+          right: Math.min(next.right, max),
+        },
       }
-      reader.readAsDataURL(file)
-    }
-  }
+    })
+
+  const setQr = (patch: Partial<MemeDesign['qr']>) =>
+    setDesign((prev) => ({ ...prev, qr: { ...prev.qr, ...patch } }))
 
   const updateTextLine = (
     index: number,
     property: keyof TextLine,
     value: string | number | boolean,
   ) => {
-    setTextLines((prev) => {
-      const updated = [...prev]
+    setDesign((prev) => {
+      const updated = [...prev.textLines]
       updated[index] = { ...updated[index], [property]: value }
-      return updated
+      return { ...prev, textLines: updated }
     })
   }
 
@@ -315,191 +254,120 @@ export function MemeGenerator({
     })
   }
 
-  const drawCanvas = useCallback(
-    (ctx: CanvasRenderingContext2D) => {
-      ctx.clearRect(0, 0, CANVAS_SIZE, CANVAS_SIZE)
+  // ── Assets ──────────────────────────────────────────────────────────────
+  // Everything the design draws is decoded here, before it reaches the
+  // canvas; `drawDesign` never waits. While any of it is still loading the
+  // preview carries `data-capture-pending`, so Download waits for it.
 
-      if (imageRef.current && backgroundImageUrl) {
-        const img = imageRef.current
-        const hRatio = CANVAS_SIZE / img.width
-        const vRatio = CANVAS_SIZE / img.height
-        const ratio = Math.max(hRatio, vRatio)
-        const centerShiftX = (CANVAS_SIZE - img.width * ratio) / 2
-        const centerShiftY = (CANVAS_SIZE - img.height * ratio) / 2
+  // The background image enters the design only once it has decoded, so the
+  // draw that shows it is the one its arrival triggers.
+  const [backgroundRaster, setBackgroundRaster] = useState<Raster | null>(null)
+  const [backgroundPending, setBackgroundPending] = useState(false)
+  const backgroundUpload = useRef(0)
 
-        ctx.drawImage(
-          img,
-          0,
-          0,
-          img.width,
-          img.height,
-          centerShiftX,
-          centerShiftY,
-          img.width * ratio,
-          img.height * ratio,
-        )
-      } else {
-        ctx.fillStyle = backgroundColor
-        ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE)
-      }
+  const handleBackgroundImageUpload = async (
+    e: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    const file = e.target.files?.[0]
+    if (!file || !file.type.startsWith('image/')) return
+    const upload = ++backgroundUpload.current
+    setBackgroundPending(true)
+    try {
+      const url = await readAsDataUrl(file)
+      const image = new window.Image()
+      image.src = url
+      await image.decode()
+      if (upload !== backgroundUpload.current) return
+      setBackgroundRaster(image)
+      setBackground({ image: { url, name: file.name } })
+    } catch {
+      // An image the browser cannot decode leaves the background as it was.
+    } finally {
+      if (upload === backgroundUpload.current) setBackgroundPending(false)
+    }
+  }
 
-      textLines.forEach((line) => {
-        if (!line.text) return
+  const clearBackgroundImage = () => {
+    backgroundUpload.current++
+    setBackgroundPending(false)
+    setBackgroundRaster(null)
+    setBackground({ image: null })
+  }
 
-        ctx.font = `${canvasFontShorthand(line)}, sans-serif`
-        ctx.fillStyle = line.color
-        ctx.textAlign = line.textAlign
-        ctx.textBaseline = 'middle'
-
-        const displayText = memeLineText(line)
-        const padding = (line.textPadding / 100) * CANVAS_SIZE
-        const maxWidth = CANVAS_SIZE - padding * 2
-
-        const words = displayText.split(' ')
-        const lines: string[] = []
-        let currentLine = ''
-
-        words.forEach((word) => {
-          const testLine = currentLine ? `${currentLine} ${word}` : word
-          const metrics = ctx.measureText(testLine)
-
-          if (metrics.width > maxWidth && currentLine) {
-            lines.push(currentLine)
-            currentLine = word
-          } else {
-            currentLine = testLine
-          }
-        })
-
-        if (currentLine) {
-          lines.push(currentLine)
-        }
-
-        const lineHeight = line.fontSize * 1.2
-        const totalHeight = lines.length * lineHeight
-        const startY =
-          (line.verticalPosition / 100) * CANVAS_SIZE -
-          totalHeight / 2 +
-          lineHeight / 2
-
-        lines.forEach((textLine, index) => {
-          let x: number
-          if (line.textAlign === 'left') {
-            x = padding
-          } else if (line.textAlign === 'right') {
-            x = CANVAS_SIZE - padding
-          } else {
-            x = CANVAS_SIZE / 2
-          }
-          const y = startY + index * lineHeight
-
-          ctx.strokeStyle = 'rgba(0, 0, 0, 0.15)'
-          ctx.lineWidth = 2
-          ctx.strokeText(textLine, x, y)
-          ctx.fillText(textLine, x, y)
-        })
-      })
-
-      if (qrImageRef.current && qrCodeImage) {
-        const centerX = (qrHorizontalPosition / 100) * CANVAS_SIZE
-        const centerY = (qrVerticalPosition / 100) * CANVAS_SIZE
-        const x = centerX - qrSize / 2
-        const y = centerY - qrSize / 2
-        ctx.drawImage(qrImageRef.current, x, y, qrSize, qrSize)
-      }
-
-      // Last, so it sits on top of everything as the overlay did.
-      if (canvasLogo) {
-        const root = document.documentElement
-        drawLogo(
-          ctx,
-          canvasLogo,
-          placeLogo(canvasLogo, {
-            size: logoSize,
-            bottom: logoVerticalPosition,
-            right: logoHorizontalPosition,
-          }),
-          {
-            variant: logoVariant,
-            ink: logoInk,
-            fontFamily: wordmarkFontFamily(root),
-            gradient: brandGradientColors(root),
-          },
-        )
-      }
-    },
-    [
-      backgroundColor,
-      backgroundImageUrl,
-      textLines,
-      qrCodeImage,
-      qrSize,
-      qrVerticalPosition,
-      qrHorizontalPosition,
-      canvasLogo,
-      logoSize,
-      logoVerticalPosition,
-      logoHorizontalPosition,
-      logoVariant,
-      logoInk,
-    ],
-  )
-
-  const draw = useCallback(() => {
-    ;[canvasRef.current, exportCanvasRef.current]
-      .filter(Boolean)
-      .forEach((canvas) => {
-        const ctx = canvas?.getContext('2d')
-        if (ctx) drawCanvas(ctx)
-      })
-  }, [drawCanvas])
-
-  // A layout effect: the canvas is painted in the same commit that clears
-  // `data-capture-pending`, so a capture never sees the mark gone before the
-  // logo is drawn.
-  useLayoutEffect(() => {
-    draw()
-  }, [draw])
-
-  // Which faces the current text needs. Keyed on the faces themselves rather
-  // than on `textLines`: colour, alignment and position edits rewrite that
-  // array without changing a single font, and refiring the loads (plus the
-  // redraw they trigger) on every slider step would be pure churn.
-  const fontRequestKey = textLines
-    .filter((line) => line.text)
-    .map((line) => `${canvasFontShorthand(line)}|${memeLineText(line)}`)
-    .join('\n')
-
-  const fontRequests = useMemo(
-    () => fontRequestsForLines(textLines),
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: identity tracks the requested faces, not every field of every line
-    [fontRequestKey],
-  )
-
-  const drawRef = useRef(draw)
+  // The QR image depends on its style alone. Its effect lists those fields —
+  // not the design, and not a draw function — so editing text, colours or
+  // positions never regenerates it.
+  const {
+    url: qrUrl,
+    size: qrSize,
+    dotsColor: qrDotsColor,
+    backgroundColor: qrBackgroundColor,
+    dotsType: qrDotsType,
+    cornerSquareType: qrCornerSquareType,
+    cornerDotType: qrCornerDotType,
+  } = qr
+  const qrKey = qrStyleKey(qr)
+  const [qrRaster, setQrRaster] = useState<{
+    key: string
+    image: CanvasImageSource | null
+  } | null>(null)
   useEffect(() => {
-    drawRef.current = draw
-  }, [draw])
-
-  // Canvas text never pulls a webfont in on its own (see meme-generator-fonts),
-  // so ask for the faces explicitly and redraw once they land. The draw above
-  // has already painted in the fallback by then, so nothing is blocked on this:
-  // a face that fails, is missing, or never settles simply leaves the canvas
-  // showing what the browser can already render.
-  useEffect(() => {
+    if (!qrUrl) return
+    const style: QrStyle = {
+      url: qrUrl,
+      size: qrSize,
+      dotsColor: qrDotsColor,
+      backgroundColor: qrBackgroundColor,
+      dotsType: qrDotsType,
+      cornerSquareType: qrCornerSquareType,
+      cornerDotType: qrCornerDotType,
+    }
+    const key = qrStyleKey(style)
     let cancelled = false
-
-    loadCanvasFonts(
-      fontRequests,
-      typeof document === 'undefined' ? undefined : document.fonts,
-    ).then(() => {
-      if (!cancelled) drawRef.current()
-    })
-
+    renderQrImage(style).then(
+      (image) => !cancelled && setQrRaster({ key, image }),
+      // A failed image is settled too: nothing to draw, nothing to wait for.
+      () => !cancelled && setQrRaster({ key, image: null }),
+    )
     return () => {
       cancelled = true
     }
-  }, [fontRequests])
+  }, [
+    qrUrl,
+    qrSize,
+    qrDotsColor,
+    qrBackgroundColor,
+    qrDotsType,
+    qrCornerSquareType,
+    qrCornerDotType,
+  ])
+  const qrPending = Boolean(qrUrl) && qrRaster?.key !== qrKey
+
+  // The logo's variant and monochrome ink follow the DESIGN's background, not
+  // the admin's light/dark theme.
+  const lightBackground = designIsLight(design)
+  const uploadedLogoSvg = logoSvgFor(conferenceLogos, lightBackground)
+  const logoName = conferenceLogos?.title?.trim() || PLATFORM_NAME
+  const uploadedLogoKey = uploadedLogoSvg
+    ? logoRasterKey(uploadedLogoSvg, logoTint(logo.variant, lightBackground))
+    : null
+
+  // Every raster the design can switch to, decoded up front (see
+  // logoRasterRequests). One that cannot be drawn falls back to the wordmark;
+  // until the set has decoded, just after mount, there is no logo.
+  const [logoRasters, setLogoRasters] = useState<
+    ReadonlyMap<string, CanvasLogo | null>
+  >(() => new Map())
+
+  const canvasLogo = useMemo<CanvasLogo | null>(() => {
+    const wordmark: CanvasLogo = { kind: 'wordmark', name: logoName }
+    if (!uploadedLogoKey) return wordmark
+    if (!logoRasters.has(uploadedLogoKey)) return null
+    return logoRasters.get(uploadedLogoKey) ?? wordmark
+  }, [uploadedLogoKey, logoRasters, logoName])
+
+  const logoPending =
+    uploadedLogoKey !== null && !logoRasters.has(uploadedLogoKey)
 
   const logoBright = conferenceLogos?.logoBright
   const logoDark = conferenceLogos?.logoDark
@@ -520,12 +388,43 @@ export function MemeGenerator({
     }
   }, [logoBright, logoDark])
 
+  // Fonts are assets too: text wraps by measuring, so a face that lands late
+  // re-wraps the line. Canvas text never pulls a webfont in on its own (see
+  // meme-generator-fonts), so the faces are asked for explicitly. Keyed on
+  // the faces themselves rather than on `textLines`: colour, alignment and
+  // position edits rewrite that array without changing a single font.
+  const fontRequestKey = textLines
+    .filter((line) => line.text)
+    .map((line) => `${canvasFontShorthand(line)}|${memeLineText(line)}`)
+    .join('\n')
+
+  const fontRequests = useMemo(
+    () => fontRequestsForLines(textLines),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: identity tracks the requested faces, not every field of every line
+    [fontRequestKey],
+  )
+
+  // Which set of faces has settled. Until then the canvas shows the fallback
+  // and capture waits; a face that fails or is missing settles all the same.
+  const [textFontsReadyFor, setTextFontsReadyFor] = useState('')
+  const textFontsPending = fontRequestKey !== textFontsReadyFor
+  useEffect(() => {
+    let cancelled = false
+    loadCanvasFonts(
+      fontRequests,
+      typeof document === 'undefined' ? undefined : document.fonts,
+    ).then(() => {
+      if (!cancelled) setTextFontsReadyFor(fontRequestKey)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [fontRequests, fontRequestKey])
+
   // The wordmark is canvas text, so its webfont has to be asked for too —
   // whenever it is what gets drawn, including as the fallback for an uploaded
   // logo that could not be rasterised.
   const drawsWordmark = canvasLogo?.kind === 'wordmark'
-  // Which name's face has settled: until then the wordmark is drawn in the
-  // fallback font, and capture waits (see `data-capture-pending`).
   const [wordmarkReadyFor, setWordmarkReadyFor] = useState<string | null>(null)
   const wordmarkPending = drawsWordmark && wordmarkReadyFor !== logoName
   useEffect(() => {
@@ -536,88 +435,43 @@ export function MemeGenerator({
       family ? [{ font: wordmarkFont(family, 72, false), text: logoName }] : [],
       document.fonts,
     ).then(() => {
-      if (cancelled) return
-      setWordmarkReadyFor(logoName)
-      drawRef.current()
+      if (!cancelled) setWordmarkReadyFor(logoName)
     })
     return () => {
       cancelled = true
     }
   }, [drawsWordmark, logoName])
 
-  useEffect(() => {
-    if (qrCodeUrl) {
-      const qrCode = new QRCodeStyling({
-        width: qrSize * 2,
-        height: qrSize * 2,
-        type: 'canvas',
-        data: qrCodeUrl,
-        dotsOptions: {
-          color: qrDotsColor,
-          type: qrDotsType as
-            | 'rounded'
-            | 'dots'
-            | 'classy'
-            | 'classy-rounded'
-            | 'square'
-            | 'extra-rounded',
-        },
-        backgroundOptions: {
-          color: qrBackgroundColor,
-        },
-        cornersSquareOptions: {
-          type: qrCornerSquareType as 'dot' | 'square' | 'extra-rounded',
-        },
-        cornersDotOptions: {
-          type: qrCornerDotType as 'dot' | 'square',
-        },
-        qrOptions: {
-          errorCorrectionLevel: 'M',
-        },
-      })
+  const assets = useMemo(
+    () => ({
+      background: backgroundRaster,
+      qr: qrRaster?.image ?? null,
+      logo: canvasLogo,
+    }),
+    [backgroundRaster, qrRaster, canvasLogo],
+  )
 
-      qrCode.getRawData('png').then((blob) => {
-        if (blob && blob instanceof Blob) {
-          const reader = new FileReader()
-          reader.onload = () => {
-            const dataUrl = reader.result as string
-            setQrCodeImage(dataUrl)
-            const img = new window.Image()
-            img.onload = () => {
-              qrImageRef.current = img
-              draw()
-            }
-            img.src = dataUrl
-          }
-          reader.readAsDataURL(blob)
-        }
-      })
-    } else {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- Intentional cleanup on qr clear
-      setQrCodeImage(null)
-      qrImageRef.current = null
+  // A layout effect: the canvas is painted in the same commit that clears
+  // `data-capture-pending`, so a capture never sees the mark gone before the
+  // asset is drawn. Font readiness is listed so a face that lands repaints.
+  useLayoutEffect(() => {
+    const root = document.documentElement
+    const brand = {
+      fontFamily: wordmarkFontFamily(root),
+      gradient: brandGradientColors(root),
     }
-  }, [
-    qrCodeUrl,
-    qrSize,
-    qrDotsColor,
-    qrDotsType,
-    qrCornerSquareType,
-    qrCornerDotType,
-    qrBackgroundColor,
-    draw,
-  ])
+    for (const canvas of [canvasRef.current, exportCanvasRef.current]) {
+      const ctx = canvas?.getContext('2d')
+      if (ctx) drawDesign(ctx, design, { ...assets, brand }, 0)
+    }
+  }, [design, assets, textFontsReadyFor, wordmarkReadyFor])
 
-  useEffect(() => {
-    const maxPosition = CANVAS_SIZE - logoSize
-    if (logoVerticalPosition > maxPosition) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- Bounds constraint enforcement
-      setLogoVerticalPosition(maxPosition)
-    }
-    if (logoHorizontalPosition > maxPosition) {
-      setLogoHorizontalPosition(maxPosition)
-    }
-  }, [logoSize, logoVerticalPosition, logoHorizontalPosition])
+  const capturePending =
+    backgroundPending ||
+    qrPending ||
+    logoPending ||
+    textFontsPending ||
+    wordmarkPending
 
   // The overlay carried the logo's accessible name; the canvas now does.
   const canvasLabel = `Meme preview with the ${logoName} logo`
@@ -626,7 +480,7 @@ export function MemeGenerator({
     <div
       className="relative mx-auto aspect-square w-[540px] max-w-full overflow-hidden rounded-lg shadow-lg"
       style={{ padding: 0, margin: 'auto' }}
-      data-capture-pending={logoPending || wordmarkPending || undefined}
+      data-capture-pending={capturePending || undefined}
     >
       <canvas
         ref={canvasRef}
@@ -685,8 +539,8 @@ export function MemeGenerator({
                   <ColorButton
                     key={color.value}
                     color={color}
-                    isActive={backgroundColor === color.value}
-                    onClick={() => setBackgroundColor(color.value)}
+                    isActive={background.color === color.value}
+                    onClick={() => setBackground({ color: color.value })}
                   />
                 ))}
               </div>
@@ -713,8 +567,8 @@ export function MemeGenerator({
                   <input
                     type="color"
                     id="backgroundColor"
-                    value={backgroundColor}
-                    onChange={(e) => setBackgroundColor(e.target.value)}
+                    value={background.color}
+                    onChange={(e) => setBackground({ color: e.target.value })}
                     className="h-10 w-full cursor-pointer rounded border border-brand-frosted-steel dark:border-gray-600"
                   />
                 </div>
@@ -735,17 +589,13 @@ export function MemeGenerator({
               </div>
             )}
 
-            {backgroundImage && (
+            {background.image && (
               <div className="flex items-center gap-4">
                 <p className="flex-1 text-sm text-brand-slate-gray dark:text-gray-300">
-                  Current: {backgroundImage.name}
+                  Current: {background.image.name}
                 </p>
                 <button
-                  onClick={() => {
-                    setBackgroundImage(null)
-                    setBackgroundImageUrl(null)
-                    imageRef.current = null
-                  }}
+                  onClick={clearBackgroundImage}
                   className="flex items-center gap-2 rounded bg-red-500 px-3 py-2 text-sm text-white hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-700"
                   aria-label="Clear background image"
                 >
@@ -760,8 +610,8 @@ export function MemeGenerator({
                 <Slider
                   id="logoSize"
                   label="Logo Size"
-                  value={logoSize}
-                  onChange={setLogoSize}
+                  value={logo.size}
+                  onChange={(size) => setLogo({ size })}
                   min={LOGO_SIZE_MIN}
                   max={LOGO_SIZE_MAX}
                   icon={ArrowsPointingOutIcon}
@@ -771,10 +621,10 @@ export function MemeGenerator({
                 <Slider
                   id="logoVerticalPosition"
                   label="Logo Distance from Bottom"
-                  value={logoVerticalPosition}
-                  onChange={setLogoVerticalPosition}
+                  value={logo.bottom}
+                  onChange={(bottom) => setLogo({ bottom })}
                   min={0}
-                  max={CANVAS_SIZE - logoSize}
+                  max={CANVAS_SIZE - logo.size}
                   icon={AdjustmentsHorizontalIcon}
                   suffix="px"
                 />
@@ -782,10 +632,10 @@ export function MemeGenerator({
                 <Slider
                   id="logoHorizontalPosition"
                   label="Logo Distance from Right"
-                  value={logoHorizontalPosition}
-                  onChange={setLogoHorizontalPosition}
+                  value={logo.right}
+                  onChange={(right) => setLogo({ right })}
                   min={0}
-                  max={CANVAS_SIZE - logoSize}
+                  max={CANVAS_SIZE - logo.size}
                   icon={AdjustmentsHorizontalIcon}
                   suffix="px"
                 />
@@ -794,14 +644,14 @@ export function MemeGenerator({
                   <label className={styles.label}>Logo Style</label>
                   <div className="flex gap-3">
                     <ToggleButton
-                      active={logoVariant === 'gradient'}
-                      onClick={() => setLogoVariant('gradient')}
+                      active={logo.variant === 'gradient'}
+                      onClick={() => setLogo({ variant: 'gradient' })}
                     >
                       Gradient (Color)
                     </ToggleButton>
                     <ToggleButton
-                      active={logoVariant === 'monochrome'}
-                      onClick={() => setLogoVariant('monochrome')}
+                      active={logo.variant === 'monochrome'}
+                      onClick={() => setLogo({ variant: 'monochrome' })}
                     >
                       Monochrome (B&W)
                     </ToggleButton>
@@ -1084,8 +934,8 @@ export function MemeGenerator({
               <input
                 type="url"
                 id="qr-url"
-                value={qrCodeUrl}
-                onChange={(e) => setQrCodeUrl(e.target.value)}
+                value={qr.url}
+                onChange={(e) => setQr({ url: e.target.value })}
                 placeholder="https://example.com"
                 className={styles.input}
               />
@@ -1114,13 +964,13 @@ export function MemeGenerator({
                       type="color"
                       id="qr-dots-color"
                       value={qrDotsColor}
-                      onChange={(e) => setQrDotsColor(e.target.value)}
+                      onChange={(e) => setQr({ dotsColor: e.target.value })}
                       className="h-10 w-20 cursor-pointer rounded border border-brand-frosted-steel dark:border-gray-600"
                     />
                     <input
                       type="text"
                       value={qrDotsColor}
-                      onChange={(e) => setQrDotsColor(e.target.value)}
+                      onChange={(e) => setQr({ dotsColor: e.target.value })}
                       className="flex-1 rounded border border-brand-frosted-steel bg-brand-glacier-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700"
                       placeholder="#000000"
                     />
@@ -1136,13 +986,17 @@ export function MemeGenerator({
                       type="color"
                       id="qr-bg-color"
                       value={qrBackgroundColor}
-                      onChange={(e) => setQrBackgroundColor(e.target.value)}
+                      onChange={(e) =>
+                        setQr({ backgroundColor: e.target.value })
+                      }
                       className="h-10 w-20 cursor-pointer rounded border border-brand-frosted-steel dark:border-gray-600"
                     />
                     <input
                       type="text"
                       value={qrBackgroundColor}
-                      onChange={(e) => setQrBackgroundColor(e.target.value)}
+                      onChange={(e) =>
+                        setQr({ backgroundColor: e.target.value })
+                      }
                       className="flex-1 rounded border border-brand-frosted-steel bg-brand-glacier-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700"
                       placeholder="#FFFFFF"
                     />
@@ -1156,7 +1010,7 @@ export function MemeGenerator({
                       <ToggleButton
                         key={type.value}
                         active={qrDotsType === type.value}
-                        onClick={() => setQrDotsType(type.value)}
+                        onClick={() => setQr({ dotsType: type.value })}
                       >
                         {type.name}
                       </ToggleButton>
@@ -1171,7 +1025,7 @@ export function MemeGenerator({
                       <ToggleButton
                         key={type.value}
                         active={qrCornerSquareType === type.value}
-                        onClick={() => setQrCornerSquareType(type.value)}
+                        onClick={() => setQr({ cornerSquareType: type.value })}
                       >
                         {type.name}
                       </ToggleButton>
@@ -1186,7 +1040,7 @@ export function MemeGenerator({
                       <ToggleButton
                         key={type.value}
                         active={qrCornerDotType === type.value}
-                        onClick={() => setQrCornerDotType(type.value)}
+                        onClick={() => setQr({ cornerDotType: type.value })}
                       >
                         {type.name}
                       </ToggleButton>
@@ -1198,7 +1052,7 @@ export function MemeGenerator({
                   id="qr-size"
                   label="QR Code Size"
                   value={qrSize}
-                  onChange={setQrSize}
+                  onChange={(size) => setQr({ size })}
                   min={QR_SIZE_MIN}
                   max={QR_SIZE_MAX}
                   suffix="px"
@@ -1206,8 +1060,8 @@ export function MemeGenerator({
                 <Slider
                   id="qr-vertical"
                   label="Vertical Position"
-                  value={qrVerticalPosition}
-                  onChange={setQrVerticalPosition}
+                  value={qr.verticalPosition}
+                  onChange={(verticalPosition) => setQr({ verticalPosition })}
                   min={0}
                   max={100}
                   suffix="%"
@@ -1215,8 +1069,10 @@ export function MemeGenerator({
                 <Slider
                   id="qr-horizontal"
                   label="Horizontal Position"
-                  value={qrHorizontalPosition}
-                  onChange={setQrHorizontalPosition}
+                  value={qr.horizontalPosition}
+                  onChange={(horizontalPosition) =>
+                    setQr({ horizontalPosition })
+                  }
                   min={0}
                   max={100}
                   suffix="%"

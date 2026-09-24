@@ -107,9 +107,8 @@ describe('loadCanvasFonts', () => {
     ])
   })
 
-  // A font the app never loads (Atkinson Hyperlegible is in the picker but has
-  // no @font-face anywhere) resolves empty, and a broken download rejects.
-  // Neither may stop the caller from redrawing in the fallback.
+  // A family with no @font-face anywhere resolves empty, and a broken download
+  // rejects. Neither may stop the caller from redrawing in the fallback.
   it('resolves when a face is missing or fails to download', async () => {
     const fonts = {
       load: vi
@@ -121,7 +120,7 @@ describe('loadCanvasFonts', () => {
     await expect(
       loadCanvasFonts(
         [
-          { font: 'normal 48px "Atkinson Hyperlegible"', text: 'HI' },
+          { font: 'normal 48px "No Such Family"', text: 'HI' },
           { font: 'normal 48px "IBM Plex Sans"', text: 'HI' },
         ],
         fonts,
