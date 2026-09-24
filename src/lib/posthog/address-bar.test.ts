@@ -189,22 +189,36 @@ describe('scheduleUtmStrip', () => {
     const schedule = scheduleUtmStrip(window)
     schedule.now()
     const original = window.history.replaceState.bind(window.history)
-    let routerUrl: string | null = null
+    const routerUrls: string[] = []
     original({ __NA: true }, '', window.location.href)
     window.history.replaceState = (data, unused, url) => {
       if (data?.__NA) return original(data, unused, url)
-      routerUrl = String(url)
+      routerUrls.push(String(url))
       return original({ ...(data ?? {}), __NA: true }, unused, url)
     }
     try {
       vi.advanceTimersByTime(UTM_STRIP_GUARD_TICK_MS)
-      expect(routerUrl).toBe(`${window.location.origin}/?keep=1#h`)
+      expect(routerUrls).toEqual([`${window.location.origin}/?keep=1#h`])
       expect(window.history.state).toEqual({ __NA: true })
-      vi.advanceTimersByTime(UTM_STRIP_GUARD_MS)
+      // Stopped right there, not at the end of the guard window: one
+      // hand-off, no further ticks.
       expect(vi.getTimerCount()).toBe(0)
+      vi.advanceTimersByTime(UTM_STRIP_GUARD_MS)
+      expect(routerUrls).toHaveLength(1)
     } finally {
       window.history.replaceState = original
     }
+  })
+
+  it('survives a throwing replaceState inside the guard, and stops', () => {
+    const schedule = scheduleUtmStrip(window)
+    schedule.now()
+    window.history.replaceState(null, '', TAGGED)
+    vi.spyOn(window.history, 'replaceState').mockImplementation(() => {
+      throw new DOMException('too many calls', 'SecurityError')
+    })
+    expect(() => vi.advanceTimersByTime(UTM_STRIP_GUARD_TICK_MS)).not.toThrow()
+    expect(vi.getTimerCount()).toBe(0)
   })
 
   it('gives up re-checking once the guard runs out', () => {
