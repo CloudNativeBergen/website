@@ -601,6 +601,36 @@ export const NarrowColumnPreviewStaysSquare: Story = {
   },
 }
 
+/**
+ * A logo sized only by inline CSS. An SVG image ignores CSS for its size in
+ * every engine (measured: Chromium 150×150, Firefox 300×300, Safari 150×150 —
+ * all the viewBox ratio), so it draws SQUARE: filling the box width and
+ * hanging below it. Honouring the CSS (4:1) would letterbox it instead.
+ */
+export const InlineCssSizedLogo: Story = {
+  args: {
+    conferenceLogos: {
+      title: 'Konf',
+      logoBright:
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" style="width:400px;height:100px"><rect width="100" height="100" fill="#facc15"/></svg>',
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const box = logoBox()
+    const leftQuarter = { ...box, width: box.width * 0.2 }
+    const wellBelow = { ...box, y: box.y + box.height + 8, height: 20 }
+    const canvas = () => canvasElement.querySelector('canvas')!
+    await waitFor(() => {
+      expect(
+        share(canvas(), CANVAS_SIZE, leftQuarter, isYellow),
+      ).toBeGreaterThan(0.9)
+      expect(share(canvas(), CANVAS_SIZE, wellBelow, isYellow)).toBeGreaterThan(
+        0.9,
+      )
+    })
+  },
+}
+
 export const FallbackGradient: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)

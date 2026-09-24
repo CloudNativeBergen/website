@@ -142,6 +142,21 @@ describe('svgForCanvas + logoMarkup', () => {
     ).toMatchObject({ width: 200, height: 100 })
   })
 
+  it('ignores inline CSS width and height, as every engine does for an SVG image', () => {
+    // Measured: Chromium, Firefox 157 and Safari 27 all size an SVG image by
+    // its attributes (else its viewBox ratio) and ignore inline CSS sizes.
+    expect(
+      svgForCanvas(
+        '<svg viewBox="0 0 100 100" width="50" height="50" style="width:200px;height:100px"/>',
+      ),
+    ).toMatchObject({ width: 50, height: 50 })
+    expect(
+      svgForCanvas(
+        '<svg viewBox="0 0 100 100" style="width:400px;height:100px"/>',
+      ),
+    ).toMatchObject({ width: 100, height: 100 })
+  })
+
   it('converts absolute units to px', () => {
     expect(
       svgForCanvas('<svg width="150pt" height="1in" viewBox="0 0 1 1"/>'),
