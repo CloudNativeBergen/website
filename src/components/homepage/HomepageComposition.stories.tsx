@@ -250,7 +250,6 @@ export const Default: Story = {
   args: {
     conference: baseConference,
     sections: getDefaultSections(baseConference),
-    ticketsFromPrice: '3 490',
   },
 }
 
@@ -258,7 +257,6 @@ export const DefaultDark: Story = {
   args: {
     conference: baseConference,
     sections: getDefaultSections(baseConference),
-    ticketsFromPrice: '3 490',
   },
   parameters: { theme: 'dark', backgrounds: { default: 'dark' } },
   decorators: [
@@ -274,7 +272,6 @@ export const Custom: Story = {
   args: {
     conference: baseConference,
     sections: customSections,
-    ticketsFromPrice: '3 490',
   },
 }
 
@@ -282,7 +279,6 @@ export const CustomDark: Story = {
   args: {
     conference: baseConference,
     sections: customSections,
-    ticketsFromPrice: '3 490',
   },
   parameters: { theme: 'dark', backgrounds: { default: 'dark' } },
   decorators: [

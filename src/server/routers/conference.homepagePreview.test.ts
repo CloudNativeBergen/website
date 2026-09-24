@@ -42,10 +42,6 @@ const getPublicTicketTypesMock = vi.fn()
 vi.mock('@/lib/tickets/public', () => ({
   getPublicTicketTypes: (...args: unknown[]) =>
     getPublicTicketTypesMock(...args),
-  getLowestTicketPrice: (tickets: { amount: number }[]) =>
-    tickets.length > 0
-      ? { formatted: '3 490', amount: tickets[0].amount }
-      : null,
   getTicketAvailability: () => 'on-sale',
 }))
 
@@ -138,13 +134,12 @@ describe('conference.homepagePreviewData', () => {
     expect(options.uncached).toBe(true)
   })
 
-  it('returns the conference with the resolved ticket price and availability', async () => {
+  it('returns the conference with the resolved ticket availability', async () => {
     const result = await makeCaller({
       isOrganizer: true,
     }).homepagePreviewData()
 
     expect(result.conference._id).toBe(CONFERENCE_ID)
-    expect(result.ticketsFromPrice).toBe('3 490')
     expect(result.ticketAvailability).toBe('on-sale')
   })
 
@@ -157,7 +152,6 @@ describe('conference.homepagePreviewData', () => {
     }).homepagePreviewData()
 
     expect(result.conference._id).toBe(CONFERENCE_ID)
-    expect(result.ticketsFromPrice).toBeNull()
     expect(result.ticketAvailability).toBeNull()
     errorSpy.mockRestore()
   })
@@ -175,7 +169,6 @@ describe('conference.homepagePreviewData', () => {
       isOrganizer: true,
     }).homepagePreviewData()
 
-    expect(result.ticketsFromPrice).toBeNull()
     expect(result.ticketAvailability).toBeNull()
   })
 
@@ -191,7 +184,7 @@ describe('conference.homepagePreviewData', () => {
     }).homepagePreviewData()
 
     expect(getPublicTicketTypesMock).not.toHaveBeenCalled()
-    expect(result.ticketsFromPrice).toBeNull()
+    expect(result.ticketAvailability).toBeNull()
   })
 
   it('throws NOT_FOUND when the host resolves to no conference', async () => {

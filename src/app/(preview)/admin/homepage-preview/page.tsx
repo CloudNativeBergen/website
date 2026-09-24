@@ -157,7 +157,6 @@ export default function HomepagePreviewPage() {
         sections={composition}
         mode={mode}
         scheme={scheme}
-        ticketsFromPrice={data.ticketsFromPrice}
         ticketAvailability={data.ticketAvailability}
         focusKey={ui.focusKey}
         hoverKey={ui.hoverKey}

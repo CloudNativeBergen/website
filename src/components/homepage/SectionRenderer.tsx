@@ -44,13 +44,12 @@ const warnedUnknownSectionTypes = new Set<string>()
 interface RenderContext {
   conference: Conference
   lifecycle: HomepageLifecycle
-  ticketsFromPrice?: string | null
 }
 
 /** Map ONE section config to its rendered node (or null). */
 function renderSection(
   section: HomepageSection,
-  { conference, lifecycle, ticketsFromPrice }: RenderContext,
+  { conference, lifecycle }: RenderContext,
 ): ReactNode {
   switch (section._type) {
     case 'homepageHero':
@@ -58,7 +57,6 @@ function renderSection(
         <Hero
           conference={conference}
           lifecycle={lifecycle}
-          ticketsFromPrice={ticketsFromPrice}
           headlineOverride={section.heroHeadline}
           subheadlineOverride={section.heroSubheadline}
           ctaOverrides={section.ctaOverrides}
@@ -98,7 +96,6 @@ function renderSection(
           conference={conference}
           section={section}
           lifecycle={lifecycle}
-          ticketsFromPrice={ticketsFromPrice}
         />
       )
     case 'homepageOrganizers':
@@ -107,7 +104,6 @@ function renderSection(
           conference={conference}
           section={section}
           lifecycle={lifecycle}
-          ticketsFromPrice={ticketsFromPrice}
         />
       )
     case 'homepageSponsors':
@@ -176,12 +172,10 @@ function renderSection(
 export function HomepageSectionRenderer({
   sections,
   conference,
-  ticketsFromPrice,
   ticketAvailability,
 }: {
   sections: HomepageSection[]
   conference: Conference
-  ticketsFromPrice?: string | null
   /**
    * Live availability from the ticketing provider (see `getTicketAvailability`).
    * Absent degrades to "on sale" — never to a sold-out claim.
@@ -212,7 +206,6 @@ export function HomepageSectionRenderer({
             {renderSection(section, {
               conference,
               lifecycle,
-              ticketsFromPrice,
             })}
           </Fragment>
         ))}

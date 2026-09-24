@@ -22,12 +22,10 @@ export function OrganizersSectionView({
   conference,
   section,
   lifecycle,
-  ticketsFromPrice,
 }: {
   conference: Conference
   section: OrganizersSection
   lifecycle: HomepageLifecycle
-  ticketsFromPrice?: string | null
 }) {
   const sortedOrganizers =
     conference.organizers
@@ -70,11 +68,7 @@ export function OrganizersSectionView({
           </div>
         )}
 
-        <PhaseCtaRow
-          lifecycle={lifecycle}
-          section="featured-organizers"
-          ticketsFromPrice={ticketsFromPrice}
-        />
+        <PhaseCtaRow lifecycle={lifecycle} section="featured-organizers" />
       </Container>
     </section>
   )

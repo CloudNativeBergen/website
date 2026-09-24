@@ -60,7 +60,7 @@ function isPortableTextEmpty(content?: TypedObject[]): boolean {
 }
 
 /**
- * How a variant lays out the CTA row and the price caption beneath it.
+ * How a variant lays out the CTA row.
  *
  * `center` is what `classic` has always done and is the DEFAULT, so its class
  * strings are byte-identical to the pre-variant literals. `minimal` sets its
@@ -75,22 +75,14 @@ const CTA_ROW_ALIGN: Record<HeroAlign, string> = {
   'center-until-lg': 'sm:justify-center lg:justify-start',
 }
 
-const CTA_CAPTION_ALIGN: Record<HeroAlign, string> = {
-  center: 'text-center',
-  start: 'text-left',
-  'center-until-lg': 'text-center lg:text-left',
-}
-
 function ActionButtons({
   conference,
   lifecycle,
-  ticketsFromPrice,
   ctaOverrides,
   align = 'center',
 }: {
   conference: Conference
   lifecycle: HomepageLifecycle
-  ticketsFromPrice?: string | null
   /**
    * F1 homepage-builder override. When non-empty, these buttons REPLACE the
    * phase-aware CTA row entirely; absent leaves the smart phase behaviour intact.
@@ -183,11 +175,7 @@ function ActionButtons({
   // instead, rather than a button that leads to a dead end.
   if (lifecycle.tickets === 'on-sale') {
     buttons.push({
-      // Checkin.no prices are excl. VAT — disclosed in the caption rendered
-      // under the button row, consistent with the note on /tickets
-      label: ticketsFromPrice
-        ? `Get tickets — from ${ticketsFromPrice} kr`
-        : 'Tickets',
+      label: 'Get tickets',
       href: '/tickets',
       variant: 'primary',
       icon: TicketIcon,
@@ -233,9 +221,6 @@ function ActionButtons({
     ]
   }
 
-  const showsPrice =
-    ticketsFromPrice && displayButtons.some((b) => b.href === '/tickets')
-
   return (
     <>
       <div
@@ -261,17 +246,6 @@ function ActionButtons({
           )
         })}
       </div>
-      {showsPrice && (
-        <p
-          className={clsx(
-            'mt-2',
-            CTA_CAPTION_ALIGN[align],
-            'text-xs text-brand-slate-gray/70 dark:text-gray-400',
-          )}
-        >
-          Ticket prices excl. VAT
-        </p>
-      )}
     </>
   )
 }
@@ -465,7 +439,6 @@ function HeroSocialLinks({ conference }: { conference: Conference }) {
 interface HeroVariantProps {
   conference: Conference
   lifecycle: HomepageLifecycle
-  ticketsFromPrice?: string | null
   headlineOverride?: string
   subheadlineOverride?: string
   ctaOverrides?: HeroCtaOverride[]
@@ -483,7 +456,6 @@ interface HeroVariantProps {
 function ClassicHero({
   conference,
   lifecycle,
-  ticketsFromPrice,
   headlineOverride,
   subheadlineOverride,
   ctaOverrides,
@@ -524,7 +496,6 @@ function ClassicHero({
           <ActionButtons
             conference={conference}
             lifecycle={lifecycle}
-            ticketsFromPrice={ticketsFromPrice}
             ctaOverrides={ctaOverrides}
           />
 
@@ -599,7 +570,6 @@ function ClassicHero({
 function MinimalHero({
   conference,
   lifecycle,
-  ticketsFromPrice,
   headlineOverride,
   subheadlineOverride,
   ctaOverrides,
@@ -648,7 +618,6 @@ function MinimalHero({
           <ActionButtons
             conference={conference}
             lifecycle={lifecycle}
-            ticketsFromPrice={ticketsFromPrice}
             ctaOverrides={ctaOverrides}
             align="start"
           />
@@ -685,7 +654,6 @@ function MinimalHero({
 function EmblemHero({
   conference,
   lifecycle,
-  ticketsFromPrice,
   headlineOverride,
   subheadlineOverride,
   ctaOverrides,
@@ -754,7 +722,6 @@ function EmblemHero({
             <ActionButtons
               conference={conference}
               lifecycle={lifecycle}
-              ticketsFromPrice={ticketsFromPrice}
               ctaOverrides={ctaOverrides}
               align="center-until-lg"
             />
@@ -790,7 +757,6 @@ function EmblemHero({
 
 export function Hero({
   conference,
-  ticketsFromPrice,
   headlineOverride,
   subheadlineOverride,
   ctaOverrides,
@@ -798,8 +764,6 @@ export function Hero({
   variant,
 }: {
   conference: Conference
-  /** Lowest ticket price formatted for display (e.g. "1 234"), excl. VAT */
-  ticketsFromPrice?: string | null
   /**
    * F1 homepage-builder overrides. All optional; when ABSENT the Hero renders
    * exactly today's tagline/description/phase-aware CTAs (pixel-identical
@@ -828,7 +792,6 @@ export function Hero({
   const props: HeroVariantProps = {
     conference,
     lifecycle: resolved,
-    ticketsFromPrice,
     headlineOverride,
     subheadlineOverride,
     ctaOverrides,

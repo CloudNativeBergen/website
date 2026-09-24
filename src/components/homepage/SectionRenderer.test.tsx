@@ -634,7 +634,6 @@ describe('HomepageSectionRenderer — extracted-view DOM equality', () => {
     sections: HomepageSection[],
     conference: Conference,
     props: {
-      ticketsFromPrice?: string | null
       ticketAvailability?: TicketAvailability | null
     } = {},
   ) {
@@ -642,7 +641,6 @@ describe('HomepageSectionRenderer — extracted-view DOM equality', () => {
       <HomepageSectionRenderer
         sections={sections}
         conference={conference}
-        ticketsFromPrice={props.ticketsFromPrice}
         ticketAvailability={props.ticketAvailability}
       />,
     )
@@ -714,7 +712,7 @@ describe('HomepageSectionRenderer — extracted-view DOM equality', () => {
   })
 
   describe('phase CTA row', () => {
-    it('renders the CFP branch with an outline ticket button and price caption', () => {
+    it('renders the CFP branch with an outline ticket button', () => {
       const conference = makeConference({
         cfpStartDate: '2000-01-01',
         cfpEndDate: '2999-01-01',
@@ -723,9 +721,7 @@ describe('HomepageSectionRenderer — extracted-view DOM equality', () => {
         registrationEnabled: true,
         registrationLink: 'https://tickets.example.com',
       })
-      expect(
-        markup(featuredSpeakersOnly, conference, { ticketsFromPrice: '1 500' }),
-      ).toMatchSnapshot()
+      expect(markup(featuredSpeakersOnly, conference)).toMatchSnapshot()
     })
 
     it('renders the tickets branch as the primary CTA', () => {
@@ -735,9 +731,7 @@ describe('HomepageSectionRenderer — extracted-view DOM equality', () => {
         registrationEnabled: true,
         registrationLink: 'https://tickets.example.com',
       })
-      expect(
-        markup(featuredSpeakersOnly, conference, { ticketsFromPrice: '1 500' }),
-      ).toMatchSnapshot()
+      expect(markup(featuredSpeakersOnly, conference)).toMatchSnapshot()
     })
 
     it('renders the info branch plus the sold-out notice', () => {
@@ -749,7 +743,6 @@ describe('HomepageSectionRenderer — extracted-view DOM equality', () => {
       })
       expect(
         markup(organizersOnly, conference, {
-          ticketsFromPrice: '1 500',
           ticketAvailability: 'sold-out',
         }),
       ).toMatchSnapshot()

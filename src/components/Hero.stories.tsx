@@ -65,31 +65,15 @@ const baseConference = {
   ],
 } as unknown as Conference
 
-export const RegistrationOpenWithPrice: Story = {
+export const RegistrationOpen: Story = {
   args: {
     conference: baseConference,
-    ticketsFromPrice: '3 490',
   },
   parameters: {
     docs: {
       description: {
         story:
-          'Registration open with pricing available from Checkin.no: the tickets button advertises the lowest price ("Get tickets — from 3 490 kr excl. VAT"). Venue line and vanity metrics visible. Resize to mobile to verify the long label wraps acceptably.',
-      },
-    },
-  },
-}
-
-export const RegistrationOpenWithoutPrice: Story = {
-  args: {
-    conference: baseConference,
-    ticketsFromPrice: null,
-  },
-  parameters: {
-    docs: {
-      description: {
-        story:
-          'Pricing unavailable (Checkin.no down or unconfigured): the tickets button silently falls back to the plain "Tickets" label.',
+          'Registration open: the hero shows a "Get tickets" button. Venue line and vanity metrics visible.',
       },
     },
   },
@@ -119,7 +103,6 @@ export const ProgramPublished: Story = {
       ...baseConference,
       programDate: '2020-07-15',
     } as unknown as Conference,
-    ticketsFromPrice: '3 490',
   },
   parameters: {
     docs: {
@@ -213,7 +196,6 @@ export const VariantClassic: Story = {
   name: 'Variant: Classic (default)',
   args: {
     conference: baseConference,
-    ticketsFromPrice: '3 490',
     variant: 'classic',
   },
   parameters: {
@@ -230,7 +212,6 @@ export const VariantMinimal: Story = {
   name: 'Variant: Minimal',
   args: {
     conference: baseConference,
-    ticketsFromPrice: '3 490',
     variant: 'minimal',
   },
   parameters: {
@@ -247,7 +228,6 @@ export const VariantEmblem: Story = {
   name: 'Variant: Emblem',
   args: {
     conference: baseConference,
-    ticketsFromPrice: '3 490',
     variant: 'emblem',
   },
   parameters: {
@@ -276,7 +256,6 @@ export const VariantEmblemWithLogomark: Story = {
   name: 'Variant: Emblem (uploaded logomark)',
   args: {
     conference: brandedConference,
-    ticketsFromPrice: '2 950',
     variant: 'emblem',
   },
   parameters: {
@@ -309,7 +288,6 @@ export const VariantMinimalWithAnnouncement: Story = {
         },
       ],
     } as unknown as Conference,
-    ticketsFromPrice: '3 490',
     variant: 'minimal',
   },
   parameters: {

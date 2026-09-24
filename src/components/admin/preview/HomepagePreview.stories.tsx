@@ -173,7 +173,6 @@ const meta = {
     conference: bareConference,
     sections,
     now: NOW,
-    ticketsFromPrice: '3 490',
   },
 } satisfies Meta<typeof HomepagePreview>
 

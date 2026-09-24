@@ -162,7 +162,7 @@ export const CfpOpenFirstEdition: Story = {
 
 /** A returning edition mid-cycle. This is the shape the page has always had. */
 export const ProgrammePublished: Story = {
-  ...page(midCycleConference, { ticketsFromPrice: '3 490' }),
+  ...page(midCycleConference, {}),
   parameters: {
     docs: {
       description: {
@@ -176,7 +176,6 @@ export const ProgrammePublished: Story = {
 /** Same conference, but the provider reports every active type at zero. */
 export const SoldOut: Story = {
   ...page(soldOutConference, {
-    ticketsFromPrice: '3 490',
     ticketAvailability: 'sold-out',
   }),
   parameters: {
@@ -204,7 +203,7 @@ export const PostEvent: Story = {
 
 /** Explicit override: replaces the page, not a banner on it. */
 export const Cancelled: Story = {
-  ...page(cancelledConference, { ticketsFromPrice: '3 490' }),
+  ...page(cancelledConference, {}),
   parameters: {
     docs: {
       description: {

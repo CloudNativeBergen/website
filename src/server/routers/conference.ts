@@ -16,7 +16,6 @@ import { clientWrite, clientReadUncached } from '@/lib/sanity/client'
 import { getConferenceForDomain } from '@/lib/conference/sanity'
 import {
   getPublicTicketTypes,
-  getLowestTicketPrice,
   getTicketAvailability,
   type TicketAvailability,
 } from '@/lib/tickets/public'
@@ -1282,7 +1281,6 @@ export const conferenceRouter = router({
       })
     }
 
-    let ticketsFromPrice: string | null = null
     let ticketAvailability: TicketAvailability | null = null
     if (hasTicketingBinding(conference)) {
       try {
@@ -1290,8 +1288,6 @@ export const conferenceRouter = router({
           ticketingBinding(conference),
         )
         if (ticketData.status === 'ok') {
-          ticketsFromPrice =
-            getLowestTicketPrice(ticketData.tickets)?.formatted ?? null
           // Mirrors the public homepage exactly (free types count toward
           // availability) so the preview shows the same bytes.
           ticketAvailability = getTicketAvailability([
@@ -1307,6 +1303,6 @@ export const conferenceRouter = router({
       }
     }
 
-    return { conference, ticketsFromPrice, ticketAvailability }
+    return { conference, ticketAvailability }
   }),
 })

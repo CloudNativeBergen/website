@@ -24,12 +24,10 @@ export function FeaturedSpeakersSectionView({
   conference,
   section,
   lifecycle,
-  ticketsFromPrice,
 }: {
   conference: Conference
   section: FeaturedSpeakersSection
   lifecycle: HomepageLifecycle
-  ticketsFromPrice?: string | null
 }) {
   // Single source of truth for "is there anything to show": the lifecycle model
   // already answers this (`resolveHomepageContent`), and it is the same
@@ -60,11 +58,7 @@ export function FeaturedSpeakersSectionView({
           <FeaturedSpeakersShelf speakers={speakers} />
         )}
 
-        <PhaseCtaRow
-          lifecycle={lifecycle}
-          section="featured-speakers"
-          ticketsFromPrice={ticketsFromPrice}
-        />
+        <PhaseCtaRow lifecycle={lifecycle} section="featured-speakers" />
       </Container>
     </section>
   )

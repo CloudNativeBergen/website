@@ -23,11 +23,9 @@ import type { HomepageLifecycle } from '@/lib/homepage/lifecycle'
 export function PhaseCtaRow({
   lifecycle,
   section,
-  ticketsFromPrice,
 }: {
   lifecycle: HomepageLifecycle
   section: 'featured-speakers' | 'featured-organizers'
-  ticketsFromPrice?: string | null
 }) {
   const events =
     section === 'featured-speakers'
@@ -48,11 +46,6 @@ export function PhaseCtaRow({
   const ticketsOnSale = tickets === 'on-sale'
   const buttonClassName =
     'inline-flex items-center space-x-2 px-8 py-4 font-semibold'
-  // Checkin.no prices are excl. VAT — disclosed in the caption below the row
-  const ticketsLabel = ticketsFromPrice
-    ? `Get tickets — from ${ticketsFromPrice} kr`
-    : 'Get tickets'
-  const showsPrice = Boolean(ticketsFromPrice) && ticketsOnSale
 
   // "Watch the talks" is a POST-EVENT promise. `hasRecordings` alone is not
   // enough: a recording can be attached to a confirmed talk before the event
@@ -90,7 +83,7 @@ export function PhaseCtaRow({
       data-ph-capture-attribute-cta={events.tickets}
     >
       <TicketIcon className="h-5 w-5" aria-hidden="true" />
-      <span>{ticketsLabel}</span>
+      <span>Get tickets</span>
     </Button>
   )
 
@@ -140,11 +133,6 @@ export function PhaseCtaRow({
       <div className="mt-12 flex flex-col gap-4 sm:flex-row sm:justify-center">
         {buttons}
       </div>
-      {showsPrice && (
-        <p className="mt-2 text-center text-xs text-brand-slate-gray/70 dark:text-gray-400">
-          Ticket prices excl. VAT
-        </p>
-      )}
       {tickets === 'sold-out' && (
         <p className="font-jetbrains mt-4 text-center text-sm font-semibold tracking-wide text-brand-slate-gray/80 uppercase dark:text-gray-300">
           Tickets are sold out

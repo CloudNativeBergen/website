@@ -34,7 +34,6 @@ export interface HomepagePreviewProps {
   sections: HomepageSection[]
   mode?: PreviewMode
   scheme?: PreviewColorScheme
-  ticketsFromPrice?: string | null
   ticketAvailability?: TicketAvailability | null
   /** `_key` of the section whose config is open in the composer rail. */
   focusKey?: string | null
@@ -99,7 +98,6 @@ export function HomepagePreview({
   sections,
   mode = 'design',
   scheme = 'light',
-  ticketsFromPrice,
   ticketAvailability,
   focusKey,
   hoverKey,
@@ -160,7 +158,6 @@ export function HomepagePreview({
           <HomepageSectionRenderer
             sections={sections}
             conference={previewConference}
-            ticketsFromPrice={ticketsFromPrice}
             ticketAvailability={ticketAvailability}
           />
         ) : (
@@ -205,7 +202,6 @@ export function HomepagePreview({
                   // not absent), so the renderer is handed an un-hidden copy.
                   sections={[{ ...rendered.section, hidden: false }]}
                   conference={previewConference}
-                  ticketsFromPrice={ticketsFromPrice}
                   ticketAvailability={ticketAvailability}
                 />
               </PreviewBandFrame>

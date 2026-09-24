@@ -30,7 +30,6 @@ const meta = {
   args: {
     conference: peopleConference,
     lifecycle,
-    ticketsFromPrice: '3 490',
   },
 } satisfies Meta<typeof FeaturedSpeakersSectionView>
 

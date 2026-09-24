@@ -204,7 +204,6 @@ function previewHandlers(forConference: Conference) {
         result: {
           data: {
             conference: forConference,
-            ticketsFromPrice: '3 490',
             ticketAvailability: null,
           },
         },
@@ -228,7 +227,6 @@ function inlinePreview(
       scheme={ui.scheme}
       focusKey={ui.focusKey}
       hoverKey={ui.hoverKey}
-      ticketsFromPrice="3 490"
       now={NOW}
       onSelect={onSelect}
       onHover={onHover}
