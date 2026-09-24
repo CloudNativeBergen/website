@@ -2,7 +2,10 @@ import {
   resolveTicketingProvider,
   type ConferenceTicketingBinding,
 } from '@/lib/tickets/provider'
-import { type TicketTypeRole } from '@/lib/tickets/classification'
+import {
+  type TicketTypeRole,
+  workshopAccessOf,
+} from '@/lib/tickets/classification'
 export {
   workshopAccessOf,
   type WorkshopAccess,
