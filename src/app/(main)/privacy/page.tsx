@@ -633,8 +633,8 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                             <li>
                               • An upload passes through temporary storage and
                               is deleted from there once it is saved. An upload
-                              that is never finished is deleted within about a
-                              day
+                              that is never finished is deleted within about two
+                              days
                             </li>
                           </ul>
                         </div>
