@@ -181,6 +181,16 @@ describe('generation with a Bluesky tagSubject recipe', () => {
     expect(resolveCalls()).toHaveLength(0)
   })
 
+  it('our own account known only by DID: a speaker linking it is not tagged', async () => {
+    ;(store.context!.conference as { socialLinks: string[] }).socialLinks = [
+      `https://bsky.app/profile/${DID}`,
+    ]
+    await confirm()
+    expect(resolveCalls()).toHaveLength(1)
+    expect(variant('bluesky').body).toContain('🎙️ Alice Liddell (SRE)')
+    expect(variant('bluesky').mentions).toBeUndefined()
+  })
+
   it('a handle nobody holds: plain name, an unresolved entry', async () => {
     fetchMock.mockImplementation(async () =>
       Response.json(

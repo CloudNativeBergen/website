@@ -250,6 +250,8 @@ export default defineType({
                     defineField({
                       name: 'tagSubject',
                       title: 'Tag the subject',
+                      description:
+                        'Generated Bluesky copy tags the speaker with their Bluesky handle instead of their name.',
                       type: 'boolean',
                     }),
                     defineField({

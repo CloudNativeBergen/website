@@ -1,6 +1,11 @@
-export { blueskyHandleFromLinks, normaliseHandle } from './handle'
+/*
+ * Tests and callers outside `src/lib/marketing` use this barrel. Modules
+ * inside it import `./tagging/body` and `./tagging/lookup` directly: seeding
+ * (and so `materialize.ts`) is imported by admin stories, and this barrel
+ * pulls in the network resolver.
+ */
+export { blueskyHandleFromLinks, isValidDid, normaliseHandle } from './handle'
 export {
-  isValidDid,
   resolveBlueskyHandle,
   RESOLVE_TIMEOUT_MS,
   type HandleResolution,
@@ -9,6 +14,7 @@ export {
   BLUESKY_MAX_GRAPHEMES,
   joinNames,
   tagBlueskyBody,
+  tagsItsSubject,
   type BlueskyTag,
   type MentionRecord,
   type TagPerson,

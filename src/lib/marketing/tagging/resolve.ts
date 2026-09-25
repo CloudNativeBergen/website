@@ -12,6 +12,7 @@
 
 import { withTimeout } from '@/lib/social/with-timeout'
 import { BLUESKY_APPVIEW_HOST } from '@/lib/social/provider/bluesky-engagement'
+import { isValidDid } from './handle'
 
 export type HandleResolution =
   | { kind: 'resolved'; did: string }
@@ -23,16 +24,7 @@ export const RESOLVE_TIMEOUT_MS = 2_500
 
 export interface ResolveOptions {
   fetch?: typeof fetch
-  host?: string
   timeoutMs?: number
-}
-
-/** The atproto DID syntax, as the publishing adapter checks a recorded DID. */
-export function isValidDid(did: string): boolean {
-  return (
-    did.length <= 2048 &&
-    /^did:[a-z]+:[a-zA-Z0-9._:%-]*[a-zA-Z0-9._-]$/.test(did)
-  )
 }
 
 export async function resolveBlueskyHandle(
@@ -40,9 +32,8 @@ export async function resolveBlueskyHandle(
   options: ResolveOptions = {},
 ): Promise<HandleResolution> {
   const fetchImpl = options.fetch ?? fetch
-  const host = (options.host ?? BLUESKY_APPVIEW_HOST).replace(/\/+$/, '')
   const timeoutMs = options.timeoutMs ?? RESOLVE_TIMEOUT_MS
-  const url = `${host}/xrpc/com.atproto.identity.resolveHandle?handle=${encodeURIComponent(handle)}`
+  const url = `${BLUESKY_APPVIEW_HOST}/xrpc/com.atproto.identity.resolveHandle?handle=${encodeURIComponent(handle)}`
   const controller = new AbortController()
   try {
     // The race is the guarantee; the abort only frees the socket. A fetch

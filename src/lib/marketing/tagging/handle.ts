@@ -14,6 +14,17 @@ const PROFILE_URL =
 const HANDLE =
   /^([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$/
 
+/**
+ * The atproto DID syntax (atproto.com/specs/did), including its 2,048-char
+ * limit — the same check as `@atproto/syntax`'s `isValidDid`.
+ */
+export function isValidDid(did: string): boolean {
+  return (
+    did.length <= 2048 &&
+    /^did:[a-z]+:[a-zA-Z0-9._:%-]*[a-zA-Z0-9._-]$/.test(did)
+  )
+}
+
 /** A handle in its canonical form: no `@`, lower case (handles are case-insensitive). */
 export function normaliseHandle(handle: string): string {
   return handle.trim().replace(/^@/, '').toLowerCase()

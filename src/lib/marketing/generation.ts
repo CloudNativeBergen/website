@@ -54,7 +54,7 @@ import {
   type ResolvedMilestone,
 } from './milestones'
 import { publishedIn } from './recipes'
-import type { BlueskyTag } from './tagging/body'
+import { tagsItsSubject, type BlueskyTag } from './tagging/body'
 import { blueskyTagFor, ownBlueskyHandle } from './tagging/lookup'
 import type { SubjectList, TaskRecipe } from './template/types'
 import type { TaskOrigin, TriggerEvent } from './types'
@@ -338,10 +338,6 @@ function nextCommit(
   }
   return { campaign, records }
 }
-
-/** A recipe whose generated body tags its subject (tagging spec §2, §4.1). */
-const tagsItsSubject = (r: TaskRecipe) =>
-  r.kind === 'publishing' && r.channel === 'bluesky' && r.tagSubject === true
 
 /**
  * Look up the Bluesky tag of every person a pending tagging beat names and

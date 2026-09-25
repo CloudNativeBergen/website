@@ -114,31 +114,33 @@ export function applyEdits(
     .filter((r) => r.kind !== 'publishing' || edits.channels[r.channel!])
     .map((entryRecipe) => {
       // The entry's own default gives way: the edits decide (absent is off).
-      const r = { ...entryRecipe }
+      const r: TaskRecipe = { ...entryRecipe }
       delete r.tagSubject
-      return r
+      if (
+        edits.tagSubject &&
+        r.kind === 'publishing' &&
+        r.channel === 'bluesky'
+      )
+        r.tagSubject = true
+      return {
+        ...r,
+        title: r.kind === 'publishing' ? edits.title : `Render: ${edits.title}`,
+        ...(r.kind === 'publishing'
+          ? { skeleton: edits.channels[r.channel!]!.skeleton }
+          : {}),
+        ...(r.alt ? { alt: edits.alt } : {}),
+        ...(edits.instructions ? { instructions: edits.instructions } : {}),
+        ...(r.cadence
+          ? {
+              cadence: {
+                ...r.cadence,
+                ...(edits.window ?? {}),
+                perWeek,
+              },
+            }
+          : {}),
+      }
     })
-    .map((r) => ({
-      ...r,
-      ...(edits.tagSubject && r.kind === 'publishing' && r.channel === 'bluesky'
-        ? { tagSubject: true }
-        : {}),
-      title: r.kind === 'publishing' ? edits.title : `Render: ${edits.title}`,
-      ...(r.kind === 'publishing'
-        ? { skeleton: edits.channels[r.channel!]!.skeleton }
-        : {}),
-      ...(r.alt ? { alt: edits.alt } : {}),
-      ...(edits.instructions ? { instructions: edits.instructions } : {}),
-      ...(r.cadence
-        ? {
-            cadence: {
-              ...r.cadence,
-              ...(edits.window ?? {}),
-              perWeek,
-            },
-          }
-        : {}),
-    }))
 }
 
 /** Why these edits cannot be saved; empty when they can. */

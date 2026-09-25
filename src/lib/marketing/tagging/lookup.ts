@@ -14,12 +14,16 @@ export interface TagSource {
   socialTagOptOut: boolean | null
 }
 
-/** Our own account's handle, from the conference's `socialLinks`; null without one. */
+/**
+ * Our own account, from the conference's `socialLinks`: a lower-cased handle,
+ * or a DID when the link names the account by DID. Null without one.
+ */
 export function ownBlueskyHandle(
   socialLinks: string[] | null | undefined,
 ): string | null {
-  const handle = deriveBlueskyHandle(socialLinks)
-  return handle ? normaliseHandle(handle) : null
+  const own = deriveBlueskyHandle(socialLinks)
+  if (!own) return null
+  return own.startsWith('did:') ? own : normaliseHandle(own)
 }
 
 /**
@@ -38,7 +42,8 @@ export async function blueskyTagFor(
   const resolution = await resolve(handle).catch((): HandleResolution => ({
     kind: 'unreachable',
   }))
-  return resolution.kind === 'resolved'
-    ? { status: 'tagged', handle, did: resolution.did }
-    : { status: 'unresolved', handle }
+  if (resolution.kind !== 'resolved') return { status: 'unresolved', handle }
+  // A speaker who links our account, when we only know it by DID.
+  if (resolution.did === ownHandle) return null
+  return { status: 'tagged', handle, did: resolution.did }
 }

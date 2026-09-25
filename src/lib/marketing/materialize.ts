@@ -20,6 +20,7 @@ import {
 } from './placeholders'
 import {
   tagBlueskyBody,
+  tagsItsSubject,
   type MentionRecord,
   type TagPerson,
 } from './tagging/body'
@@ -308,10 +309,7 @@ export function materializeTask(input: MaterializeInput): TaskRecords {
   // above and the render never see a handle. A body handed in (a copied
   // Task's) is the organizer's and is kept as it is.
   const tagged =
-    input.body === undefined &&
-    r.tagSubject &&
-    channel === 'bluesky' &&
-    input.tagging?.length
+    input.body === undefined && tagsItsSubject(r) && input.tagging?.length
       ? tagBlueskyBody({
           skeleton: r.skeleton ?? '',
           values: bodyValues,

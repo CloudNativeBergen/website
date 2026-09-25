@@ -11,6 +11,7 @@
 
 import { resolvePlaceholders, type Placeholder } from '../placeholders'
 import { storedKey } from '../recipes'
+import type { TaskRecipe } from '../template/types'
 
 /** Bluesky's limit (`PLATFORM_CONSTRAINTS.bluesky.maxLength`). */
 export const BLUESKY_MAX_GRAPHEMES = 300
@@ -55,6 +56,13 @@ export interface MentionRecord {
   status: 'tagged' | 'unresolved'
 }
 
+/** A recipe whose generated body tags its subject (tagging spec §2, §4.1). */
+export function tagsItsSubject(r: TaskRecipe): boolean {
+  return (
+    r.kind === 'publishing' && r.channel === 'bluesky' && r.tagSubject === true
+  )
+}
+
 /** "Alice", "Alice and Bob", "Alice, Bob and Carol" (spec §4.2). */
 export function joinNames(names: readonly string[]): string {
   if (names.length <= 1) return names[0] ?? ''
@@ -65,10 +73,8 @@ export function tagBlueskyBody(input: {
   skeleton: string
   values: Partial<Record<Placeholder, string>>
   people: readonly TagPerson[]
-  maxGraphemes?: number
 }): { body: string; mentions: MentionRecord[] } {
   const { skeleton, values, people } = input
-  const max = input.maxGraphemes ?? BLUESKY_MAX_GRAPHEMES
   const plain = resolvePlaceholders(skeleton, values)
   if (people.length === 0 || !skeleton.includes('{name}'))
     return { body: plain, mentions: [] }
@@ -85,7 +91,7 @@ export function tagBlueskyBody(input: {
 
   const candidates = people.filter((p) => p.tag?.status === 'tagged')
   let body = render(new Set(candidates))
-  while (candidates.length > 0 && graphemes(body) > max) {
+  while (candidates.length > 0 && graphemes(body) > BLUESKY_MAX_GRAPHEMES) {
     candidates.pop()
     body = render(new Set(candidates))
   }
