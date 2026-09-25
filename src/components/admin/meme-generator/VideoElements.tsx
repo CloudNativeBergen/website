@@ -265,7 +265,9 @@ export function ElementFields({
       <p aria-hidden="true" className="mb-2 text-xs font-semibold">
         Scene {index + 1} animation
       </p>
-      <div className="overflow-x-auto">
+      {/* Positioned, so the fields' visually hidden labels scroll with the
+          table instead of widening the page from past its edge. */}
+      <div className="relative overflow-x-auto">
         <table className="text-left text-xs">
           <thead>
             <tr className="text-brand-slate-gray/80 dark:text-gray-400">
