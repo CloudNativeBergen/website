@@ -113,4 +113,32 @@ describe('picking a file', () => {
     )
     expect(screen.getByText('dropped.png')).toBeTruthy()
   })
+
+  it('ignores a drop while an image is being saved', async () => {
+    const { pick, settle, uploader } = renderForm()
+    let finish: (value: {
+      _id: string
+      softOnSocial: boolean
+    }) => void = () => {}
+    uploader.mockImplementation(
+      () => new Promise((resolve) => (finish = resolve)),
+    )
+    await pick(png('logo.png'))
+    await settle('logo.png', 1200, 1200)
+    fireEvent.change(screen.getByLabelText('Alt text'), {
+      target: { value: 'The logo' },
+    })
+    await act(async () => {
+      fireEvent.submit(screen.getByRole('button', { name: 'Add to gallery' }))
+    })
+    const drop = new Event('drop', { bubbles: true, cancelable: true })
+    Object.assign(drop, { dataTransfer: { files: [png('late.png')] } })
+    await act(async () => {
+      screen.getByTestId('asset-dropzone').dispatchEvent(drop)
+    })
+    expect(reads.has('late.png')).toBe(false)
+    expect(screen.getByText('logo.png')).toBeTruthy()
+    await act(async () => finish({ _id: 'x', softOnSocial: false }))
+    expect(uploader).toHaveBeenCalledTimes(1)
+  })
 })

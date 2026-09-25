@@ -8,7 +8,7 @@ import {
 import {
   deleteMarketingAssetDocument,
   listMarketingAssets,
-  readMarketingAssetImageIds,
+  readMarketingAssetImage,
 } from '@/lib/marketing-asset/sanity'
 import { deleteImageAssetIfOrphaned } from '@/lib/sanity/orphaned-asset'
 
@@ -44,23 +44,25 @@ export const marketingAssetRouter = router({
         input.id,
         'marketingAsset',
       )
-      const imageIds = await readMarketingAssetImageIds(orgId, input.id)
+      const image = await readMarketingAssetImage(orgId, input.id)
       // The documents first: while one exists, it is itself a reference to
       // the image, and the orphan check would always keep the file.
       await deleteMarketingAssetDocument(input.id)
-      const images = await Promise.all(
-        imageIds.map((imageId) => deleteImageAssetIfOrphaned(imageId)),
-      )
-      // The check fails closed: an unreadable count keeps the file. Say which
-      // file, so it can be retried by hand; nothing else will find it.
-      for (const image of images)
-        if (image.remainingReferences === -1)
+      // Only an image this gallery's upload created is its to delete: Sanity
+      // deduplicates identical bytes across tenants, so any other may be
+      // another tenant's, possibly still unreferenced. A Studio draft's own
+      // image is left alone for the same reason.
+      if (image?.createdByUpload && image.assetId) {
+        const result = await deleteImageAssetIfOrphaned(image.assetId)
+        // The check fails closed: an unreadable count keeps the file. Say
+        // which, so it can be retried by hand; nothing else will find it.
+        if (result.remainingReferences === -1)
           console.warn(
-            `Marketing asset ${input.id} deleted; its image ${image.id} was kept because its references could not be counted`,
+            `Marketing asset ${input.id} deleted; its image ${result.id} was kept because its references could not be counted`,
           )
-      return {
-        deleted: true,
-        imageDeleted: images.length > 0 && images.every((i) => i.deleted),
       }
+      // Whether the image went is NOT answered: it would tell the caller
+      // whether any tenant holds those exact bytes.
+      return { deleted: true }
     }),
 })

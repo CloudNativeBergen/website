@@ -76,6 +76,7 @@ export async function POST(request: Request) {
       title,
       alt,
       imageAssetId: moved.asset._id,
+      imageCreatedByUpload: moved.asset.created,
     })
     return NextResponse.json({
       _id: created._id,
@@ -83,9 +84,10 @@ export async function POST(request: Request) {
     })
   } catch (error) {
     console.error('Marketing asset: gallery entry not written', error)
-    // Sanity dedupes identical uploads, so the image may be shared: only an
-    // unreferenced one goes.
-    await deleteImageAssetIfOrphaned(moved.asset._id)
+    // Sanity dedupes identical uploads across tenants: an image it already
+    // held may be another tenant's, possibly not yet referenced, so it is
+    // never ours to delete. A created one goes only if still unreferenced.
+    if (moved.asset.created) await deleteImageAssetIfOrphaned(moved.asset._id)
     return NextResponse.json(
       { error: 'The image could not be added. Try again.' },
       { status: 500 },

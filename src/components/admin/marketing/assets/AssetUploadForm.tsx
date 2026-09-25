@@ -80,6 +80,13 @@ export function AssetUploadForm({
   const [alt, setAlt] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  // Set by reset(); honoured once the picker is enabled again after a render.
+  const refocus = useRef(false)
+  useEffect(() => {
+    if (!refocus.current || saving) return
+    refocus.current = false
+    fileInput.current?.focus()
+  })
 
   useEffect(
     () => () => {
@@ -132,6 +139,10 @@ export function AssetUploadForm({
     setTitle('')
     setAlt('')
     if (fileInput.current) fileInput.current.value = ''
+    // Clear and the submit button both disappear or disable here; keep
+    // keyboard focus on the form, ready for the next image. After the render,
+    // because the picker is still disabled while a save finishes.
+    refocus.current = true
   }
 
   async function save(event: React.FormEvent) {

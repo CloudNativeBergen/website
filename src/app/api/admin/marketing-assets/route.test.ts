@@ -48,6 +48,7 @@ beforeEach(() => {
       url: 'https://cdn/x.png',
       width: 800,
       height: 600,
+      created: true,
     },
   })
   h.create.mockResolvedValue({ _id: 'asset-1' })
@@ -98,6 +99,7 @@ describe('the marketing asset move route', () => {
       title: 'Logo',
       alt: 'The Cloud Native Days logo',
       imageAssetId: 'image-a-800x600-png',
+      imageCreatedByUpload: true,
     })
     expect(await response.json()).toEqual({
       _id: 'asset-1',
@@ -122,6 +124,22 @@ describe('the marketing asset move route', () => {
       expect(h.create).not.toHaveBeenCalled()
     },
   )
+
+  it('keeps an image Sanity already held (another tenant may need it) when the entry cannot be written', async () => {
+    h.move.mockResolvedValue({
+      ok: true,
+      asset: {
+        _id: 'image-shared-800x600-png',
+        url: 'https://cdn/x.png',
+        width: 800,
+        height: 600,
+        created: false,
+      },
+    })
+    h.create.mockRejectedValue(new Error('sanity down'))
+    expect((await POST(request(VALID))).status).toBe(500)
+    expect(h.orphan).not.toHaveBeenCalled()
+  })
 
   it('removes the fresh image when the gallery entry cannot be written', async () => {
     h.create.mockRejectedValue(new Error('sanity down'))

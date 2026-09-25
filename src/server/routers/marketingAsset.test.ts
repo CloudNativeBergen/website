@@ -21,6 +21,7 @@ const h = vi.hoisted(() => ({
   read: vi.fn(),
   del: vi.fn(),
   orphan: vi.fn(),
+  createdByUpload: true as boolean | undefined,
 }))
 vi.mock('@/lib/conference/sanity', () => ({
   getConferenceForCurrentDomain: h.getConference,
@@ -87,6 +88,7 @@ const ROWS = [
 
 beforeEach(() => {
   vi.clearAllMocks()
+  h.createdByUpload = true
   h.getConference.mockResolvedValue({
     conference: { _id: 'conf-A', organization: { _ref: 'org-A' } },
     error: null,
@@ -100,14 +102,13 @@ beforeEach(() => {
       }
       // The asset reads, which must be scoped to the caller's organization.
       if (params.orgId !== 'org-A') throw new Error('unscoped read')
-      if (query.includes('_id in [$id, $draftId]'))
+      if (query.includes('"imageCreatedByUpload"'))
         return params.id === 'asset-ours'
-          ? [
-              'image-logo-800x800-png',
-              'image-logo-800x800-png',
-              'image-draft-1x1-png',
-            ]
-          : []
+          ? {
+              assetId: 'image-logo-800x800-png',
+              imageCreatedByUpload: h.createdByUpload,
+            }
+          : null
       return ROWS
     },
   )
@@ -148,14 +149,12 @@ describe('marketingAsset.list', () => {
 describe('marketingAsset.delete', () => {
   it('deletes our asset, then its image only through the orphan check', async () => {
     const result = await assets().delete({ id: 'asset-ours' })
-    expect(result).toEqual({ deleted: true, imageDeleted: true })
+    // Whether the image went says whether ANY tenant holds those bytes, so
+    // the answer does not include it.
+    expect(result).toEqual({ deleted: true })
     // Its Studio draft goes with it, in the same transaction.
     expect(h.del).toHaveBeenCalledWith(['asset-ours', 'drafts.asset-ours'])
-    // The published image and the draft's own image, each once.
-    expect(h.orphan.mock.calls).toEqual([
-      ['image-logo-800x800-png'],
-      ['image-draft-1x1-png'],
-    ])
+    expect(h.orphan.mock.calls).toEqual([['image-logo-800x800-png']])
     // The document goes first: while it exists it is itself a reference.
     expect(h.del.mock.invocationCallOrder[0]).toBeLessThan(
       h.orphan.mock.invocationCallOrder[0],
@@ -170,7 +169,6 @@ describe('marketingAsset.delete', () => {
     })
     expect(await assets().delete({ id: 'asset-ours' })).toEqual({
       deleted: true,
-      imageDeleted: false,
     })
   })
 
@@ -199,9 +197,20 @@ describe('marketingAsset.delete', () => {
     })
     expect(await assets().delete({ id: 'asset-ours' })).toEqual({
       deleted: true,
-      imageDeleted: false,
     })
     expect(String(warn.mock.calls[0]?.[0])).toContain('image-logo-800x800-png')
+  })
+
+  it.each([
+    ['an image Sanity already held when it was uploaded', false],
+    ['an image of an entry made elsewhere (Studio, older data)', undefined],
+  ])("never deletes %s: it may be another tenant's", async (_, created) => {
+    h.createdByUpload = created
+    expect(await assets().delete({ id: 'asset-ours' })).toEqual({
+      deleted: true,
+    })
+    expect(h.del).toHaveBeenCalled()
+    expect(h.orphan).not.toHaveBeenCalled()
   })
 
   it('refuses a draft id with the same answer, and deletes nothing', async () => {

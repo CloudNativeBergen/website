@@ -16,6 +16,12 @@ type ModalSize = 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl' | '4xl' | '5xl'
 interface ModalShellProps {
   isOpen: boolean
   onClose: () => void
+  /**
+   * Runs once the close transition has finished and the dialog has let go of
+   * focus: the place to move focus somewhere other than the element that
+   * opened it (e.g. when that element was removed).
+   */
+  afterLeave?: () => void
   size?: ModalSize
   children: React.ReactNode
   /** Extra classes applied to the DialogPanel */
@@ -87,6 +93,7 @@ const sheetSizeClasses: Record<ModalSize, string> = {
 export function ModalShell({
   isOpen,
   onClose,
+  afterLeave,
   size = 'md',
   children,
   className = '',
@@ -134,7 +141,7 @@ export function ModalShell({
   const widthClass = isSheet ? sheetSizeClasses[size] : sizeClasses[size]
 
   return (
-    <Transition appear show={isOpen}>
+    <Transition appear show={isOpen} afterLeave={afterLeave}>
       <Dialog
         as="div"
         aria-label={title ? undefined : ariaLabel}

@@ -113,12 +113,13 @@ export function AssetsPage({
   const [deleting, setDeleting] = useState<MarketingAssetRow | null>(null)
   const [confirming, setConfirming] = useState(false)
   const galleryHeading = useRef<HTMLHeadingElement>(null)
+  // Set when a delete succeeds; read once the dialog has finished closing.
+  const deleted = useRef(false)
   const remove = api.marketingAsset.delete.useMutation({
     onSuccess: () => {
       showNotification({ type: 'success', title: 'Asset deleted' })
+      deleted.current = true
       setConfirming(false)
-      // The button that opened the dialog is gone with its card.
-      galleryHeading.current?.focus()
     },
     onError: (error) =>
       showNotification({
@@ -196,6 +197,13 @@ export function AssetsPage({
 
       <ConfirmationModal
         isOpen={confirming}
+        afterLeave={() => {
+          // The button that opened the dialog is gone with its card, so the
+          // dialog cannot hand focus back to it. Only now, after it has let
+          // go of focus, can focus move elsewhere.
+          if (deleted.current) galleryHeading.current?.focus()
+          deleted.current = false
+        }}
         onClose={() => (remove.isPending ? undefined : setConfirming(false))}
         onConfirm={() => deleting && remove.mutate({ id: deleting._id })}
         title={`Delete “${deleting?.title ?? ''}”?`}

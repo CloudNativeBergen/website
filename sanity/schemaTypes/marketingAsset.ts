@@ -75,6 +75,15 @@ export default defineType({
         ),
     }),
     defineField({
+      name: 'imageCreatedByUpload',
+      title: 'Image created by this upload',
+      description:
+        'False when Sanity already held these exact bytes. Only a created image is deleted with the asset.',
+      type: 'boolean',
+      readOnly: true,
+      hidden: true,
+    }),
+    defineField({
       name: 'title',
       title: 'Title',
       type: 'string',

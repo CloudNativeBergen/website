@@ -1,6 +1,25 @@
 import { upload } from '@vercel/blob/client'
 import { marketingAssetPathname } from '@/lib/marketing-asset'
 
+const GENERIC_FAILURE = 'The image could not be added. Try again.'
+
+const EXTENSIONS: Record<string, string> = {
+  'image/png': 'png',
+  'image/jpeg': 'jpg',
+  'image/webp': 'webp',
+}
+
+/**
+ * The filename with an extension taken from the file's type, so the blob's
+ * last segment always has one: where Vercel adds its random suffix then never
+ * depends on a dot elsewhere in the path (an organization id may hold one).
+ */
+function withTypeExtension(file: File): string {
+  const base = file.name.replace(/\.[^./]*$/, '')
+  const ext = EXTENSIONS[file.type]
+  return ext ? `${base}.${ext}` : file.name
+}
+
 export interface AssetDetails {
   title: string
   alt: string
@@ -21,15 +40,22 @@ export type AssetUploader = (
  */
 export function blobAssetUploader(orgId: string): AssetUploader {
   return async (file, details) => {
-    const blob = await upload(
-      marketingAssetPathname(orgId, file.name, Date.now()),
-      file,
-      {
-        access: 'public',
-        handleUploadUrl: '/api/admin/marketing-assets/upload-token',
-        contentType: file.type,
-      },
-    )
+    let blob: { url: string }
+    try {
+      blob = await upload(
+        marketingAssetPathname(orgId, withTypeExtension(file), Date.now()),
+        file,
+        {
+          access: 'public',
+          handleUploadUrl: '/api/admin/marketing-assets/upload-token',
+          contentType: file.type,
+        },
+      )
+    } catch (error) {
+      // The library's text (token, network, Blob API) is not for organizers.
+      console.error('Marketing asset: upload to Blob failed', error)
+      throw new Error(GENERIC_FAILURE)
+    }
     const response = await fetch('/api/admin/marketing-assets', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -41,7 +67,7 @@ export function blobAssetUploader(orgId: string): AssetUploader {
       error?: string
     } | null
     if (!response.ok || !body?._id) {
-      throw new Error(body?.error ?? 'The image could not be added. Try again.')
+      throw new Error(body?.error ?? GENERIC_FAILURE)
     }
     return { _id: body._id, softOnSocial: Boolean(body.softOnSocial) }
   }

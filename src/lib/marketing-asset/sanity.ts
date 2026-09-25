@@ -45,22 +45,33 @@ export async function listMarketingAssets(
 }
 
 /**
- * The image asset ids one of this organization's assets holds, published and
- * Studio draft together: a draft may point at a different image, and both go
- * through the orphan check when the asset is deleted.
+ * The image one of this organization's assets holds, and whether this
+ * gallery's upload CREATED that image. Sanity deduplicates identical bytes
+ * across the whole dataset, so an upload can be handed another tenant's
+ * existing asset; only one this gallery created is ever its to delete.
  */
-export async function readMarketingAssetImageIds(
+export async function readMarketingAssetImage(
   orgId: string,
   id: string,
-): Promise<string[]> {
-  const refs = await scopedFetch<(string | null)[] | null>(
+): Promise<{ assetId: string | null; createdByUpload: boolean } | null> {
+  const row = await scopedFetch<{
+    assetId: string | null
+    imageCreatedByUpload: boolean | null
+  } | null>(
     clientReadUncached,
     { orgId },
-    `*[_type == "marketingAsset" && _id in [$id, $draftId]].image.asset._ref`,
-    { id, draftId: `drafts.${id}` },
+    `*[_type == "marketingAsset" && _id == $id][0]{
+      "assetId": image.asset._ref,
+      "imageCreatedByUpload": imageCreatedByUpload
+    }`,
+    { id },
     { cache: 'no-store' },
   )
-  return [...new Set((refs ?? []).filter((ref): ref is string => !!ref))]
+  if (!row) return null
+  return {
+    assetId: row.assetId,
+    createdByUpload: row.imageCreatedByUpload === true,
+  }
 }
 
 export interface NewMarketingAsset {
@@ -68,6 +79,8 @@ export interface NewMarketingAsset {
   title: string
   alt: string
   imageAssetId: string
+  /** False when Sanity handed back an asset it already held. */
+  imageCreatedByUpload: boolean
 }
 
 /** Create an organization-wide uploaded image. The organization is the caller's. */
@@ -86,6 +99,7 @@ export async function createMarketingAsset(
       _type: 'image',
       asset: { _type: 'reference', _ref: input.imageAssetId },
     },
+    imageCreatedByUpload: input.imageCreatedByUpload,
   })
   return { _id: created._id }
 }

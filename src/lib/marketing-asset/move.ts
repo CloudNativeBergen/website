@@ -1,6 +1,7 @@
 import 'server-only'
 import { Readable } from 'node:stream'
 import { del } from '@vercel/blob'
+import { after } from 'next/server'
 import type { SanityImageAssetDocument } from '@sanity/client'
 import { clientWrite } from '@/lib/sanity/client'
 import { blobStoreHost, checkMarketingAssetBlobUrl } from './blob-url'
@@ -17,11 +18,32 @@ export type MoveRefusal =
 export type MoveResult =
   | {
       ok: true
-      asset: { _id: string; url: string; width: number; height: number }
+      asset: {
+        _id: string
+        url: string
+        width: number
+        height: number
+        /**
+         * False when Sanity already held these exact bytes (assets are
+         * deduplicated by content hash) and handed back an existing asset,
+         * which may be another tenant's. Only a created asset is ever the
+         * gallery's to delete.
+         */
+        created: boolean
+      }
     }
   | { ok: false; reason: MoveRefusal }
 
 class TooLarge extends Error {}
+
+/** How long the blob delete may take, retries included, once it runs. */
+const BLOB_DELETE_DEADLINE_MS = 10_000
+
+/**
+ * Slack for clock skew between this server and Sanity when deciding whether an
+ * asset was created by this upload or already existed.
+ */
+const CREATED_CLOCK_SKEW_MS = 5_000
 
 function concat(chunks: Uint8Array[]): Uint8Array {
   const out = new Uint8Array(chunks.reduce((n, c) => n + c.length, 0))
@@ -48,7 +70,12 @@ function concat(chunks: Uint8Array[]): Uint8Array {
  *     upload the moment it passes the limit, so a lying `content-length` cannot
  *     smuggle a larger file through and nothing is held whole in memory.
  *  4. Once the URL has passed step 1, the blob is deleted whatever happened:
- *     nothing stays in Blob. A delete that fails is left to the orphan sweeper.
+ *     nothing stays in Blob. The delete runs AFTER the response (`after()`),
+ *     bounded, because `@vercel/blob` retries a failing call up to ten times
+ *     with growing waits: awaited here, it could push the route past its
+ *     `maxDuration` after the image was stored and before the gallery entry
+ *     was written. A delete that fails is left to the orphan sweeper.
+ *  5. The whole move shares one deadline: the fetch, the read and the upload.
  */
 export async function moveBlobToSanity(
   url: string,
@@ -57,21 +84,33 @@ export async function moveBlobToSanity(
   const check = checkMarketingAssetBlobUrl(url, orgId, blobStoreHost())
   if (!check.ok) return { ok: false, reason: check.reason }
 
-  try {
-    return await transfer(check.url, check.filename)
-  } finally {
+  const blobUrl = check.url
+  after(async () => {
     try {
-      await del(check.url)
+      await del(blobUrl, {
+        abortSignal: AbortSignal.timeout(BLOB_DELETE_DEADLINE_MS),
+      })
     } catch (error) {
       console.error('Marketing asset: temporary blob not deleted', error)
     }
-  }
+  })
+  return transfer(blobUrl, check.filename, Date.now())
 }
 
-async function transfer(url: string, filename: string): Promise<MoveResult> {
+async function transfer(
+  url: string,
+  filename: string,
+  startedAt: number,
+): Promise<MoveResult> {
+  const deadlineAt = startedAt + SANITY_UPLOAD_DEADLINE_MS
   let response: Response
   try {
-    response = await fetch(url, { redirect: 'error', cache: 'no-store' })
+    response = await fetch(url, {
+      redirect: 'error',
+      cache: 'no-store',
+      // Aborting also errors the body mid-upload, which aborts the upload.
+      signal: AbortSignal.timeout(SANITY_UPLOAD_DEADLINE_MS),
+    })
   } catch {
     return { ok: false, reason: 'fetch' }
   }
@@ -137,10 +176,11 @@ async function transfer(url: string, filename: string): Promise<MoveResult> {
   }
 
   try {
-    const asset = await uploadImageStream(Readable.from(counted()), {
-      filename: displayFilename(filename),
-      contentType: type,
-    })
+    const asset = await uploadImageStream(
+      Readable.from(counted()),
+      { filename: displayFilename(filename), contentType: type },
+      Math.max(0, deadlineAt - Date.now()),
+    )
     const dimensions = asset.metadata?.dimensions
     return {
       ok: true,
@@ -149,6 +189,8 @@ async function transfer(url: string, filename: string): Promise<MoveResult> {
         url: asset.url,
         width: dimensions?.width ?? 0,
         height: dimensions?.height ?? 0,
+        created:
+          Date.parse(asset._createdAt) >= startedAt - CREATED_CLOCK_SKEW_MS,
       },
     }
   } catch (error) {
@@ -173,10 +215,18 @@ async function transfer(url: string, filename: string): Promise<MoveResult> {
 function uploadImageStream(
   body: Readable,
   options: { filename: string; contentType: string },
+  timeoutMs: number,
 ): Promise<SanityImageAssetDocument> {
   return new Promise((resolve, reject) => {
-    // Settled once; every path clears the deadline.
-    const settle = (fn: () => void) => {
+    // Declared before subscribing: the client can fail synchronously INSIDE
+    // subscribe, and that error handler must be able to clear it.
+    let deadline: ReturnType<typeof setTimeout> | undefined
+    // Settled once, by whichever path gets there first; each clears the
+    // deadline.
+    let settled = false
+    const finish = (fn: () => void) => {
+      if (settled) return
+      settled = true
       clearTimeout(deadline)
       fn()
     }
@@ -185,26 +235,27 @@ function uploadImageStream(
       .subscribe({
         next: (event) => {
           if (event.type === 'response')
-            settle(() => resolve(event.body.document))
+            finish(() => resolve(event.body.document))
         },
-        error: (error) => settle(() => reject(error)),
+        error: (error) => finish(() => reject(error)),
         complete: () =>
-          settle(() =>
+          finish(() =>
             reject(new Error('Sanity upload ended without a response')),
           ),
       })
+    if (settled) return
     body.once('error', (error) => {
       subscription.unsubscribe()
-      settle(() => reject(error))
+      finish(() => reject(error))
     })
     // The client sets NO timeout of its own (`timeout: 0`). Give up well
     // before the route's `maxDuration`, so the blob delete and the answer
     // still run instead of the function being killed mid-request.
-    const deadline = setTimeout(() => {
+    deadline = setTimeout(() => {
       subscription.unsubscribe()
       body.destroy()
-      reject(new Error('Sanity upload timed out'))
-    }, SANITY_UPLOAD_DEADLINE_MS)
+      finish(() => reject(new Error('Sanity upload timed out')))
+    }, timeoutMs)
   })
 }
 

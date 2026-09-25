@@ -10,6 +10,13 @@ const h = vi.hoisted(() => ({
   aborted: false,
   cancelled: false,
   pulls: 0,
+  // Work handed to `after()`: it runs once the response has gone.
+  afterTasks: [] as (() => Promise<unknown> | unknown)[],
+  syncThrow: false,
+  handlerThrew: undefined as unknown,
+}))
+vi.mock('next/server', () => ({
+  after: (task: () => Promise<unknown>) => h.afterTasks.push(task),
 }))
 vi.mock('server-only', () => ({}))
 vi.mock('@vercel/blob', () => ({ del: h.del }))
@@ -25,6 +32,19 @@ vi.mock('@/lib/sanity/client', () => ({
             next: (event: unknown) => void
             error: (error: unknown) => void
           }) {
+            // The real client validates options synchronously inside
+            // subscribe, so a bad request errors before subscribe returns.
+            // Like rxjs, an error thrown BY the error handler is not the
+            // subscriber's problem: it is reported elsewhere (rxjs rethrows it
+            // on a later tick) and subscribe returns normally.
+            if (h.syncThrow) {
+              try {
+                observer.error(new Error('invalid options'))
+              } catch (thrown) {
+                h.handlerThrew = thrown
+              }
+              return { unsubscribe() {} }
+            }
             let open = true
             h.upload(...args).then(
               (document: unknown) => {
@@ -91,6 +111,9 @@ const fetchMock = vi.fn()
 beforeEach(() => {
   vi.clearAllMocks()
   h.aborted = false
+  h.afterTasks = []
+  h.syncThrow = false
+  h.handlerThrew = undefined
   h.cancelled = false
   h.pulls = 0
   vi.stubEnv('BLOB_STORE_ID', 'store_abcstore123')
@@ -112,12 +135,19 @@ beforeEach(() => {
       })
       return {
         _id: 'image-abc-1200x630-png',
+        _createdAt: new Date().toISOString(),
         url: 'https://cdn.sanity.io/x.png',
         metadata: { dimensions: { width: 1200, height: 630 } },
       }
     },
   )
 })
+
+/** Run what the move handed to `after()`, as Next does after responding. */
+async function runAfter() {
+  const tasks = h.afterTasks.splice(0)
+  for (const task of tasks) await task()
+}
 afterEach(() => {
   vi.unstubAllEnvs()
   vi.unstubAllGlobals()
@@ -134,7 +164,8 @@ describe('the move refuses a URL it does not own BEFORE fetching it', () => {
     expect(result.ok).toBe(false)
     expect(fetchMock).not.toHaveBeenCalled()
     expect(h.upload).not.toHaveBeenCalled()
-    // A URL we do not own is never deleted either.
+    // A URL we do not own is never deleted either, now or after responding.
+    expect(h.afterTasks).toEqual([])
     expect(h.del).not.toHaveBeenCalled()
   })
 
@@ -157,6 +188,7 @@ describe('the move checks the file itself', () => {
         url: 'https://cdn.sanity.io/x.png',
         width: 1200,
         height: 630,
+        created: true,
       },
     })
     expect(fetchMock).toHaveBeenCalledWith(
@@ -165,7 +197,8 @@ describe('the move checks the file itself', () => {
     )
     expect(h.uploadedBytes).toBe(1000)
     expect(h.uploadedType).toBe('image/png')
-    expect(h.del).toHaveBeenCalledWith(URL_OK)
+    await runAfter()
+    expect(h.del).toHaveBeenCalledWith(URL_OK, expect.anything())
   })
 
   it('refuses a file whose bytes are not an allowed image, whatever its name says', async () => {
@@ -176,7 +209,8 @@ describe('the move checks the file itself', () => {
       reason: 'type',
     })
     expect(h.upload).not.toHaveBeenCalled()
-    expect(h.del).toHaveBeenCalledWith(URL_OK)
+    await runAfter()
+    expect(h.del).toHaveBeenCalledWith(URL_OK, expect.anything())
   })
 
   it('refuses a declared size over the limit without reading the body', async () => {
@@ -193,7 +227,8 @@ describe('the move checks the file itself', () => {
     expect(h.pulls).toBeLessThanOrEqual(1)
     expect(h.cancelled).toBe(true)
     expect(h.upload).not.toHaveBeenCalled()
-    expect(h.del).toHaveBeenCalledWith(URL_OK)
+    await runAfter()
+    expect(h.del).toHaveBeenCalledWith(URL_OK, expect.anything())
   })
 
   it('refuses a body that turns out larger than the limit, whatever the header said', async () => {
@@ -212,7 +247,8 @@ describe('the move checks the file itself', () => {
     expect(h.uploadedBytes).toBeLessThanOrEqual(MARKETING_ASSET_MAX_IMAGE_BYTES)
     // The half-sent request to Sanity is aborted, not left hanging.
     expect(h.aborted).toBe(true)
-    expect(h.del).toHaveBeenCalledWith(URL_OK)
+    await runAfter()
+    expect(h.del).toHaveBeenCalledWith(URL_OK, expect.anything())
   })
 
   it('reports a failed fetch and still deletes the blob', async () => {
@@ -221,7 +257,8 @@ describe('the move checks the file itself', () => {
       ok: false,
       reason: 'fetch',
     })
-    expect(h.del).toHaveBeenCalledWith(URL_OK)
+    await runAfter()
+    expect(h.del).toHaveBeenCalledWith(URL_OK, expect.anything())
   })
 
   it('reports a failed Sanity upload and still deletes the blob', async () => {
@@ -233,7 +270,8 @@ describe('the move checks the file itself', () => {
     })
     // Nobody will read the rest of the blob: it is let go, not left open.
     expect(h.cancelled).toBe(true)
-    expect(h.del).toHaveBeenCalledWith(URL_OK)
+    await runAfter()
+    expect(h.del).toHaveBeenCalledWith(URL_OK, expect.anything())
   })
 
   it('answers a blob that fails while its type is read, and still deletes it', async () => {
@@ -251,7 +289,8 @@ describe('the move checks the file itself', () => {
       reason: 'fetch',
     })
     expect(h.upload).not.toHaveBeenCalled()
-    expect(h.del).toHaveBeenCalledWith(URL_OK)
+    await runAfter()
+    expect(h.del).toHaveBeenCalledWith(URL_OK, expect.anything())
   })
 
   it('answers a blob that fails mid-upload as a failed read, and aborts the upload', async () => {
@@ -272,7 +311,8 @@ describe('the move checks the file itself', () => {
       reason: 'fetch',
     })
     expect(h.aborted).toBe(true)
-    expect(h.del).toHaveBeenCalledWith(URL_OK)
+    await runAfter()
+    expect(h.del).toHaveBeenCalledWith(URL_OK, expect.anything())
   })
 
   it('gives up on a Sanity upload that never answers, before the route is killed', async () => {
@@ -286,9 +326,57 @@ describe('the move checks the file itself', () => {
       await vi.advanceTimersByTimeAsync(1)
       expect(await moved).toEqual({ ok: false, reason: 'upload' })
       expect(h.aborted).toBe(true)
-      expect(h.del).toHaveBeenCalledWith(URL_OK)
+      await runAfter()
+      expect(h.del).toHaveBeenCalledWith(URL_OK, expect.anything())
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('answers before the blob is deleted: a slow, retrying delete runs after the response', async () => {
+    fetchMock.mockResolvedValue(respond(png(100)))
+    h.del.mockImplementation(() => new Promise(() => {}))
+    expect((await moveBlobToSanity(URL_OK, ORG)).ok).toBe(true)
+    // Nothing deleted yet: the delete is queued for after the response...
+    expect(h.del).not.toHaveBeenCalled()
+    expect(h.afterTasks).toHaveLength(1)
+    void h.afterTasks[0]()
+    // ...and bounded, so a Blob outage cannot hold the function open.
+    const [, options] = h.del.mock.calls[0]
+    expect(options.abortSignal).toBeInstanceOf(AbortSignal)
+  })
+
+  it('bounds the blob fetch by the same deadline', async () => {
+    fetchMock.mockResolvedValue(respond(png(100)))
+    await moveBlobToSanity(URL_OK, ORG)
+    expect(fetchMock.mock.calls[0][1].signal).toBeInstanceOf(AbortSignal)
+  })
+
+  it('answers promptly when the Sanity request fails synchronously', async () => {
+    h.syncThrow = true
+    fetchMock.mockResolvedValue(respond(png(100)))
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    try {
+      const moved = moveBlobToSanity(URL_OK, ORG)
+      await vi.advanceTimersByTimeAsync(10)
+      expect(await moved).toEqual({ ok: false, reason: 'upload' })
+      // The error handler itself did not blow up, and no deadline is left.
+      expect(h.handlerThrew).toBeUndefined()
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('reports an image Sanity already held (identical bytes) as not created by this upload', async () => {
+    fetchMock.mockResolvedValue(respond(png(100)))
+    h.upload.mockResolvedValue({
+      _id: 'image-shared-800x800-png',
+      _createdAt: '2020-01-01T00:00:00Z',
+      url: 'https://cdn.sanity.io/shared.png',
+      metadata: { dimensions: { width: 800, height: 800 } },
+    })
+    const result = await moveBlobToSanity(URL_OK, ORG)
+    expect(result.ok && result.asset.created).toBe(false)
   })
 })

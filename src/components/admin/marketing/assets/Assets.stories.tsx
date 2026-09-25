@@ -61,9 +61,7 @@ const ASSETS: MarketingAssetRow[] = [
 function handlers(assets: MarketingAssetRow[] = ASSETS) {
   return [
     http.get('/api/trpc/marketingAsset.list', () => json(assets)),
-    http.post('/api/trpc/marketingAsset.delete', () =>
-      json({ deleted: true, imageDeleted: true }),
-    ),
+    http.post('/api/trpc/marketingAsset.delete', () => json({ deleted: true })),
   ]
 }
 
@@ -196,8 +194,13 @@ export const UploadSoftImage: Story = {
         alt: 'Speaker card for Ada Lovelace',
       }),
     )
-    // The form is ready for the next image.
+    // The form is ready for the next image, and focus is back on its picker.
     await expect(await canvas.findByText('Choose an image')).toBeInTheDocument()
+    await waitFor(() =>
+      expect(document.activeElement).toBe(
+        canvas.getByLabelText('Choose an image'),
+      ),
+    )
   },
 }
 
@@ -240,6 +243,46 @@ export const DeleteAsset: Story = {
     ).toBeInTheDocument()
   },
 }
+/**
+ * After a confirmed delete the dialog closes and its opener is gone with the
+ * card, so keyboard focus lands on the gallery heading, not on the page body.
+ */
+export const DeleteAssetConfirmed: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(
+      await canvas.findByRole('button', {
+        name: 'Delete Logo, dark background',
+      }),
+    )
+    const body = within(document.body)
+    await userEvent.click(await body.findByRole('button', { name: 'Delete' }))
+    await waitFor(
+      () =>
+        expect(document.activeElement).toBe(
+          canvas.getByRole('heading', { name: /In the gallery/ }),
+        ),
+      { timeout: 3000 },
+    )
+  },
+}
+
+/** Clearing the form keeps keyboard focus on it, on the file picker. */
+export const ClearKeepsFocus: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await canvas.findByText('Venue from the harbour')
+    await userEvent.upload(
+      canvas.getByLabelText(/Choose an image/),
+      await png('poster.png', 1200, 1500),
+    )
+    await userEvent.click(await canvas.findByRole('button', { name: 'Clear' }))
+    await expect(document.activeElement).toBe(
+      canvas.getByLabelText('Choose an image'),
+    )
+  },
+}
+
 export const DeleteAssetDark: Story = {
   ...DeleteAsset,
   globals: { theme: 'dark' },

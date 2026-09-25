@@ -23,6 +23,7 @@ import { createClient, type SanityClient } from '@sanity/client'
 const h = vi.hoisted(() => ({ client: null as SanityClient | null }))
 vi.mock('server-only', () => ({}))
 vi.mock('@vercel/blob', () => ({ del: vi.fn(async () => undefined) }))
+vi.mock('next/server', () => ({ after: () => {} }))
 vi.mock('@/lib/sanity/client', () => ({
   get clientWrite() {
     return h.client
@@ -35,6 +36,8 @@ import { MARKETING_ASSET_MAX_IMAGE_BYTES } from './image-type'
 interface Seen {
   bytes: number
   complete: boolean
+  /** The client closed the request before sending all of it. */
+  aborted: boolean
   contentType?: string
 }
 let seen: Seen[] = []
@@ -45,10 +48,14 @@ beforeAll(async () => {
     const record: Seen = {
       bytes: 0,
       complete: false,
+      aborted: false,
       contentType: req.headers['content-type'],
     }
     seen.push(record)
     req.on('data', (chunk: Buffer) => (record.bytes += chunk.length))
+    req.on('close', () => {
+      if (!req.complete) record.aborted = true
+    })
     req.on('end', () => {
       record.complete = true
       res.setHeader('content-type', 'application/json')
@@ -56,6 +63,7 @@ beforeAll(async () => {
         JSON.stringify({
           document: {
             _id: 'image-real-1200x630-png',
+            _createdAt: new Date().toISOString(),
             url: 'https://cdn.sanity.io/x.png',
             metadata: { dimensions: { width: 1200, height: 630 } },
           },
@@ -123,10 +131,16 @@ describe('the move through the real Sanity client', () => {
         url: 'https://cdn.sanity.io/x.png',
         width: 1200,
         height: 630,
+        created: true,
       },
     })
     expect(seen).toEqual([
-      { bytes: 2 * 1024 * 1024, complete: true, contentType: 'image/png' },
+      {
+        bytes: 2 * 1024 * 1024,
+        complete: true,
+        aborted: false,
+        contentType: 'image/png',
+      },
     ])
   })
 
@@ -151,6 +165,8 @@ describe('the move through the real Sanity client', () => {
       await new Promise((resolve) => setTimeout(resolve, 50))
       expect(seen).toHaveLength(1)
       expect(seen[0].complete).toBe(false)
+      // Closed by the client, not merely left hanging half-sent.
+      await vi.waitFor(() => expect(seen[0].aborted).toBe(true))
       expect(seen[0].bytes).toBeLessThanOrEqual(MARKETING_ASSET_MAX_IMAGE_BYTES)
     },
   )
