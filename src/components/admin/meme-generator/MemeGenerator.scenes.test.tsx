@@ -122,6 +122,10 @@ describe('the 60-second cap', () => {
     expect(button('Add scene').getAttribute('aria-describedby')).toBe(
       status().id,
     )
+    // Only the refused control is described by the reason.
+    expect(button('Duplicate scene 1').getAttribute('aria-describedby')).toBe(
+      null,
+    )
   })
 
   it('refuses a copy that would pass it, and says why', () => {
@@ -257,7 +261,7 @@ describe('undo and redo', () => {
 
   it('undoes and redoes design and timeline changes by button', () => {
     openVideo()
-    expect(undoButton()).toHaveProperty('disabled', true)
+    expect(undoButton()).toHaveAttribute('aria-disabled', 'true')
     fireEvent.change(headline(), { target: { value: 'Hei' } })
     fireEvent.click(button('Add scene'))
     enter('Scene 2 length (s)', '5')
@@ -268,14 +272,14 @@ describe('undo and redo', () => {
     expect(sceneLabels()).toEqual(['Scene 1, 3.0 s'])
     fireEvent.click(undoButton())
     expect(headline().value).not.toBe('Hei')
-    expect(undoButton()).toHaveProperty('disabled', true)
+    expect(undoButton()).toHaveAttribute('aria-disabled', 'true')
 
     fireEvent.click(redoButton())
     expect(headline().value).toBe('Hei')
     fireEvent.click(redoButton())
     fireEvent.click(redoButton())
     expect(valueOf(lengthOf(2))).toBe(5)
-    expect(redoButton()).toHaveProperty('disabled', true)
+    expect(redoButton()).toHaveAttribute('aria-disabled', 'true')
   })
 
   it('works by shortcut, and a new change clears redo', () => {
@@ -294,9 +298,9 @@ describe('undo and redo', () => {
     expect(valueOf(lengthOf(1))).toBe(4)
 
     fireEvent.keyDown(document.body, { key: 'z', ctrlKey: true })
-    expect(redoButton()).toHaveProperty('disabled', false)
+    expect(redoButton()).not.toHaveAttribute('aria-disabled')
     fireEvent.change(headline(), { target: { value: 'New' } })
-    expect(redoButton()).toHaveProperty('disabled', true)
+    expect(redoButton()).toHaveAttribute('aria-disabled', 'true')
     fireEvent.keyDown(document.body, { key: 'y', ctrlKey: true })
     expect(valueOf(lengthOf(1))).toBe(3)
   })
@@ -346,7 +350,7 @@ describe('undo and redo', () => {
     expect(headline().value).toBe('Hei')
     fireEvent.click(undoButton())
     expect(headline().value).toBe('')
-    expect(undoButton()).toHaveProperty('disabled', true)
+    expect(undoButton()).toHaveAttribute('aria-disabled', 'true')
   })
 
   it('leaves the shortcut to a seconds field, which holds its own draft', () => {
@@ -401,10 +405,10 @@ describe('undo and redo', () => {
   it('makes no step of a change that changes nothing, so redo survives it', () => {
     scenesOf(50, 10)
     fireEvent.click(undoButton()) // scene 2 back to 3 s
-    expect(redoButton()).toHaveProperty('disabled', false)
+    expect(redoButton()).not.toHaveAttribute('aria-disabled')
     // Typed as the 3 s it already is: no change.
     enter('Scene 2 length (s)', '3')
-    expect(redoButton()).toHaveProperty('disabled', false)
+    expect(redoButton()).not.toHaveAttribute('aria-disabled')
     fireEvent.click(redoButton())
     expect(valueOf(lengthOf(2))).toBe(10)
     // At the cap, a longer length clamps back to the same: still no step.

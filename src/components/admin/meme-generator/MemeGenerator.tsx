@@ -94,7 +94,7 @@ import {
   offscreenLayers,
   type PaintScene,
 } from './meme-generator-frame'
-import { VideoTimeline } from './VideoTimeline'
+import { VideoTimeline, type SceneRefusal } from './VideoTimeline'
 import { useMediaQuery } from '@/hooks/useMediaQuery'
 import { PLATFORM_NAME } from '@/lib/branding/platform'
 
@@ -238,10 +238,11 @@ const HistoryButton = ({
   <button
     type="button"
     onClick={onClick}
-    disabled={!enabled}
+    // Not `disabled`: the button keeps focus after the last step.
+    aria-disabled={!enabled || undefined}
     aria-keyshortcuts={shortcuts}
     title={`${label} (${hint})`}
-    className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${styles.buttonInactive}`}
+    className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-sm transition-colors aria-disabled:cursor-not-allowed aria-disabled:opacity-40 ${styles.buttonInactive}`}
   >
     <Icon className="size-4" aria-hidden="true" />
     {label}
@@ -709,12 +710,12 @@ export function MemeGenerator({
 
   // Why the last scene change was refused, until the history moves on — a
   // change, an undo or a redo clears it.
-  const [refusal, setRefusal] = useState<{
-    reason: string
-    for: typeof history
-  } | null>(null)
-  const refused = refusal?.for === history ? refusal.reason : null
-  const refuse = (reason: string) => setRefusal({ reason, for: history })
+  const [refusal, setRefusal] = useState<
+    (SceneRefusal & { for: typeof history }) | null
+  >(null)
+  const refused = refusal?.for === history ? refusal : null
+  const refuse = (action: SceneRefusal['action'], reason: string) =>
+    setRefusal({ action, reason, for: history })
 
   // A scene list reordered, grown or shrunk as one step, and the playhead put
   // `at` a time in it — during playback the controls follow `editKey`, when
@@ -733,9 +734,12 @@ export function MemeGenerator({
   // playhead goes to its start so the controls edit it — during playback
   // too: it is what was just asked for. Either is refused, with the reason,
   // when it would take the video past a minute.
-  const applySceneChange = (change: ReturnType<typeof addScene>) => {
+  const applySceneChange = (
+    action: 'add' | 'duplicate',
+    change: ReturnType<typeof addScene>,
+  ) => {
     if (!change.ok) {
-      refuse(change.reason)
+      refuse(action, change.reason)
       return
     }
     replaceScenes(
@@ -744,14 +748,15 @@ export function MemeGenerator({
       change.scenes[change.index].key,
     )
   }
-  const addNewScene = () => applySceneChange(addScene(scenes, DEFAULT_DESIGN))
+  const addNewScene = () =>
+    applySceneChange('add', addScene(scenes, DEFAULT_DESIGN))
   const duplicate = (index: number) =>
-    applySceneChange(duplicateScene(scenes, index))
+    applySceneChange('duplicate', duplicateScene(scenes, index))
 
   const remove = (index: number) => {
     const removed = removeScene(scenes, index, time)
     if (!removed.ok) {
-      refuse(removed.reason)
+      refuse('delete', removed.reason)
       return
     }
     replaceScenes(removed.scenes, removed.time)

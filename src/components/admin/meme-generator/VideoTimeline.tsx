@@ -31,6 +31,11 @@ const PX_PER_SECOND = 60
 const SMALL_STEP = 0.1
 const LARGE_STEP = 1
 
+export interface SceneRefusal {
+  action: 'add' | 'duplicate' | 'delete'
+  reason: string
+}
+
 interface VideoTimelineProps {
   scenes: Scene[]
   time: number
@@ -48,7 +53,7 @@ interface VideoTimelineProps {
   onDeleteScene: (index: number) => void
   onMoveScene: (from: number, to: number) => void
   /** Why the last add, copy or delete was refused, if it was. */
-  refusal: string | null
+  refusal: SceneRefusal | null
   onPlayToggle: () => void
   onLoopChange: (loop: boolean) => void
 }
@@ -441,6 +446,9 @@ export function VideoTimeline({
   const transitionId = useId()
   const loopHintId = useId()
   const refusalId = useId()
+  // Only the control whose press was refused is described by the reason.
+  const describedBy = (action: SceneRefusal['action']) =>
+    refusal?.action === action ? refusalId : undefined
 
   // A scene moved keeps focus: React moves its element, and a moved element
   // loses focus in the browser, so it is given back once the list has
@@ -556,7 +564,7 @@ export function VideoTimeline({
         <button
           type="button"
           onClick={onAddScene}
-          aria-describedby={refusal ? refusalId : undefined}
+          aria-describedby={describedBy('add')}
           className={`ml-auto flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm ${styles.buttonInactive}`}
         >
           <PlusIcon className="size-4" aria-hidden="true" />
@@ -570,7 +578,7 @@ export function VideoTimeline({
         role="status"
         className="text-sm text-amber-700 dark:text-amber-400"
       >
-        {refusal && <span className="mb-3 block">{refusal}</span>}
+        {refusal && <span className="mb-3 block">{refusal.reason}</span>}
       </p>
 
       <div className="overflow-x-auto pb-2">
@@ -709,7 +717,7 @@ export function VideoTimeline({
             label={`Duplicate scene ${editingIndex + 1}`}
             icon={DocumentDuplicateIcon}
             text="Duplicate"
-            describedBy={refusal ? refusalId : undefined}
+            describedBy={describedBy('duplicate')}
             onClick={() => onDuplicateScene(editingIndex)}
           />
           <SceneAction
@@ -718,7 +726,7 @@ export function VideoTimeline({
             text="Delete"
             // Not `disabled`: it stays focusable, and a press says why.
             refused={scenes.length === 1}
-            describedBy={refusal ? refusalId : undefined}
+            describedBy={describedBy('delete')}
             onClick={() => onDeleteScene(editingIndex)}
           />
         </div>
