@@ -1316,3 +1316,24 @@ export const VideoTimelineOnPhone: Story = {
     )
   },
 }
+
+/**
+ * Picking a scene puts the playhead exactly on the boundary before it — the
+ * same place as the previous scene's length handle. The handle must be what
+ * a press there hits, or resizing needs the playhead moved away first.
+ */
+export const VideoEdgeAbovePlayhead: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(canvas.getByRole('button', { name: 'Video' }))
+    await userEvent.click(canvas.getByRole('button', { name: 'Add scene' }))
+    await userEvent.click(
+      canvas.getByRole('button', { name: 'Scene 2, 3.0 s' }),
+    )
+
+    const edge = canvas.getByRole('slider', { name: 'Scene 1 length' })
+    const { left, top, width, height } = edge.getBoundingClientRect()
+    const hit = document.elementFromPoint(left + width / 2, top + height / 2)
+    expect(hit?.closest('[role="slider"]')).toBe(edge)
+  },
+}
