@@ -114,23 +114,27 @@ export interface NewMarketingAsset {
 /** Create an organization-wide uploaded image. The organization is the caller's. */
 export async function createMarketingAsset(
   input: NewMarketingAsset,
+  options: { signal?: AbortSignal } = {},
 ): Promise<{ _id: string }> {
-  const created = await clientWrite.create({
-    _type: 'marketingAsset',
-    organization: { _type: 'reference', _ref: input.orgId },
-    scope: 'organization',
-    kind: 'image',
-    source: 'upload',
-    title: input.title,
-    alt: input.alt,
-    image: {
-      _type: 'image',
-      asset: { _type: 'reference', _ref: input.imageAssetId },
+  const created = await clientWrite.create(
+    {
+      _type: 'marketingAsset',
+      organization: { _type: 'reference', _ref: input.orgId },
+      scope: 'organization',
+      kind: 'image',
+      source: 'upload',
+      title: input.title,
+      alt: input.alt,
+      image: {
+        _type: 'image',
+        asset: { _type: 'reference', _ref: input.imageAssetId },
+      },
+      ...(input.createdImageAssetId
+        ? { createdImageAssetId: input.createdImageAssetId }
+        : {}),
     },
-    ...(input.createdImageAssetId
-      ? { createdImageAssetId: input.createdImageAssetId }
-      : {}),
-  })
+    { signal: options.signal },
+  )
   return { _id: created._id }
 }
 

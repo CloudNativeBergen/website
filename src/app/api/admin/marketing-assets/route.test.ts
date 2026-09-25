@@ -8,6 +8,11 @@ const h = vi.hoisted(() => ({
   move: vi.fn(),
   create: vi.fn(),
   orphan: vi.fn(),
+  afterTasks: [] as (() => unknown)[],
+}))
+vi.mock('next/server', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('next/server')>()),
+  after: (task: () => unknown) => h.afterTasks.push(task),
 }))
 vi.mock('@/lib/auth', () => ({ getAuthSession: h.session }))
 vi.mock('@/lib/authz/organizer', () => ({
@@ -38,6 +43,7 @@ const VALID = { url: URL_OK, title: 'Logo', alt: 'The Cloud Native Days logo' }
 
 beforeEach(() => {
   vi.clearAllMocks()
+  h.afterTasks = []
   h.session.mockResolvedValue({ speaker: { _id: 'sp-1' } })
   h.organizer.mockResolvedValue(true)
   h.orgId.mockResolvedValue('org-A')
@@ -94,13 +100,16 @@ describe('the marketing asset move route', () => {
     )
     expect(response.status).toBe(200)
     expect(h.move).toHaveBeenCalledWith(URL_OK, 'org-A')
-    expect(h.create).toHaveBeenCalledWith({
-      orgId: 'org-A',
-      title: 'Logo',
-      alt: 'The Cloud Native Days logo',
-      imageAssetId: 'image-a-800x600-png',
-      createdImageAssetId: 'image-a-800x600-png',
-    })
+    expect(h.create).toHaveBeenCalledWith(
+      {
+        orgId: 'org-A',
+        title: 'Logo',
+        alt: 'The Cloud Native Days logo',
+        imageAssetId: 'image-a-800x600-png',
+        createdImageAssetId: 'image-a-800x600-png',
+      },
+      { signal: expect.any(AbortSignal) },
+    )
     expect(await response.json()).toEqual({
       _id: 'asset-1',
       softOnSocial: true,
@@ -156,12 +165,49 @@ describe('the marketing asset move route', () => {
     })
     h.create.mockRejectedValue(new Error('sanity down'))
     expect((await POST(request(VALID))).status).toBe(500)
+    for (const task of h.afterTasks) await task()
     expect(h.orphan).not.toHaveBeenCalled()
   })
 
   it('removes the fresh image when the gallery entry cannot be written', async () => {
     h.create.mockRejectedValue(new Error('sanity down'))
     expect((await POST(request(VALID))).status).toBe(500)
+    for (const task of h.afterTasks) await task()
+    expect(h.orphan).toHaveBeenCalledWith('image-a-800x600-png')
+  })
+
+  it('gives up on a gallery write that stalls, answering inside maxDuration', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
+    try {
+      let signal: AbortSignal | undefined
+      h.create.mockImplementation(
+        (_input: unknown, options: { signal: AbortSignal }) => {
+          signal = options.signal
+          return new Promise((_, reject) =>
+            options.signal.addEventListener('abort', () =>
+              reject(new Error('aborted')),
+            ),
+          )
+        },
+      )
+      const answered = POST(request(VALID))
+      await vi.advanceTimersByTimeAsync(maxDuration * 1000 - 3_001)
+      expect(signal?.aborted).toBe(false)
+      await vi.advanceTimersByTimeAsync(1)
+      expect(signal?.aborted).toBe(true)
+      expect((await answered).status).toBe(500)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('answers a failed write without waiting on the image cleanup, which runs after', async () => {
+    h.create.mockRejectedValue(new Error('sanity down'))
+    h.orphan.mockImplementation(() => new Promise(() => {}))
+    expect((await POST(request(VALID))).status).toBe(500)
+    expect(h.orphan).not.toHaveBeenCalled()
+    expect(h.afterTasks).toHaveLength(1)
+    void h.afterTasks[0]()
     expect(h.orphan).toHaveBeenCalledWith('image-a-800x600-png')
   })
 })

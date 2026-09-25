@@ -234,6 +234,8 @@ describe('picking a file', () => {
     await act(async () => {
       fireEvent.submit(add.closest('form')!)
     })
-    expect(uploader.mock.calls[0][0].name).toBe('new.png')
+    expect((uploader.mock.calls[0] as unknown as [File])[0].name).toBe(
+      'new.png',
+    )
   })
 })
