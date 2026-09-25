@@ -220,14 +220,14 @@ function uploadImageStream(
   return new Promise((resolve, reject) => {
     // Declared before subscribing: the client can fail synchronously INSIDE
     // subscribe, and that error handler must be able to clear it.
-    let deadline: ReturnType<typeof setTimeout> | undefined
+    const deadline: { timer?: ReturnType<typeof setTimeout> } = {}
     // Settled once, by whichever path gets there first; each clears the
     // deadline.
     let settled = false
     const finish = (fn: () => void) => {
       if (settled) return
       settled = true
-      clearTimeout(deadline)
+      clearTimeout(deadline.timer)
       fn()
     }
     const subscription = clientWrite.observable.assets
@@ -251,7 +251,7 @@ function uploadImageStream(
     // The client sets NO timeout of its own (`timeout: 0`). Give up well
     // before the route's `maxDuration`, so the blob delete and the answer
     // still run instead of the function being killed mid-request.
-    deadline = setTimeout(() => {
+    deadline.timer = setTimeout(() => {
       subscription.unsubscribe()
       body.destroy()
       finish(() => reject(new Error('Sanity upload timed out')))
