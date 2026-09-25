@@ -75,7 +75,7 @@ export function redo<T>(history: History<T>): History<T> {
 }
 
 /** Every state the history can return to, the present included. */
-export const allStates = <T,>(history: History<T>): T[] => [
+export const allStates = <T>(history: History<T>): T[] => [
   ...history.past,
   history.present,
   ...history.future,

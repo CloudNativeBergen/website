@@ -22,7 +22,12 @@ export const TRANSITION_WINDOW = 0.5
 /** A transition that draws both scenes, in its half-second window. */
 export type TransitionStyle = 'fade' | 'slide' | 'zoom'
 export type Transition = 'cut' | TransitionStyle
-export const TRANSITIONS: readonly Transition[] = ['cut', 'fade', 'slide', 'zoom']
+export const TRANSITIONS: readonly Transition[] = [
+  'cut',
+  'fade',
+  'slide',
+  'zoom',
+]
 
 export interface Scene {
   key: string
@@ -114,8 +119,7 @@ export function setSceneDuration(
 
 /** A change to the scene list, or why it was refused. */
 export type SceneChange =
-  | { ok: true; scenes: Scene[]; index: number }
-  | { ok: false; reason: string }
+  { ok: true; scenes: Scene[]; index: number } | { ok: false; reason: string }
 
 function refusal(what: string, seconds: number, scenes: Scene[]) {
   const left = Math.max(tenthsLeft(scenes), 0) / 10
@@ -196,6 +200,21 @@ export function moveScene(
   const next = scenes.filter((_, i) => i !== from)
   next.splice(to, 0, scenes[from])
   return { scenes: next, time: followScene(scenes, next, time) }
+}
+
+/**
+ * Where a scene dragged along the timeline lands: after every other scene
+ * whose centre its own centre, at `centre` seconds, has passed.
+ */
+export function dropIndex(
+  scenes: Scene[],
+  from: number,
+  centre: number,
+): number {
+  return scenes.filter(
+    (_, i) =>
+      i !== from && sceneStart(scenes, i) + scenes[i].duration / 2 < centre,
+  ).length
 }
 
 export function totalDuration(scenes: Scene[]): number {

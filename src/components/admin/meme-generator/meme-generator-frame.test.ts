@@ -147,17 +147,7 @@ describe('drawFrame', () => {
       )
       return log.filter(([call]) => call === 'main.drawImage')
     }
-    expect(at(0)[0]).toEqual([
-      'main.drawImage',
-      { name: 'outgoing' },
-      0,
-      0,
-    ])
-    expect(at(1)[1]).toEqual([
-      'main.drawImage',
-      { name: 'incoming' },
-      0,
-      0,
-    ])
+    expect(at(0)[0]).toEqual(['main.drawImage', { name: 'outgoing' }, 0, 0])
+    expect(at(1)[1]).toEqual(['main.drawImage', { name: 'incoming' }, 0, 0])
   })
 })

@@ -7,6 +7,7 @@ import {
   clampDuration,
   duplicateScene,
   maxSceneDuration,
+  dropIndex,
   moveScene,
   removeScene,
   clampTime,
@@ -197,6 +198,24 @@ describe('moveScene', () => {
   })
 })
 
+describe('dropIndex', () => {
+  // Scenes of 2, 3 and 4 s: centres at 1, 3.5 and 7.
+  const scenes = [scene(2), scene(3), scene(4)]
+
+  it('drops a dragged scene after every other scene whose centre it passed', () => {
+    // Scene 1 (centre 1) dragged to 4: past scene 2's centre, not scene 3's.
+    expect(dropIndex(scenes, 0, 4)).toBe(1)
+    expect(dropIndex(scenes, 0, 8)).toBe(2)
+    expect(dropIndex(scenes, 2, 0.5)).toBe(0)
+    expect(dropIndex(scenes, 2, 2)).toBe(1)
+  })
+
+  it('leaves a scene where it is when it has not passed a centre', () => {
+    expect(dropIndex(scenes, 1, 1.5)).toBe(1)
+    expect(dropIndex(scenes, 1, 6.5)).toBe(1)
+  })
+})
+
 describe('the scenes laid end to end', () => {
   const scenes = [scene(2), scene(3), scene(1.5)]
 
@@ -261,8 +280,14 @@ describe('frameAt', () => {
     const scenes = [scene(2, 'fade'), scene(3)]
     // Just before the window opens, and as it opens.
     expect(frameAt(scenes, 1.74).kind).toBe('scene')
-    expect(frameAt(scenes, 1.75)).toMatchObject({ kind: 'transition', progress: 0 })
-    expect(frameAt(scenes, 2)).toMatchObject({ kind: 'transition', progress: 0.5 })
+    expect(frameAt(scenes, 1.75)).toMatchObject({
+      kind: 'transition',
+      progress: 0,
+    })
+    expect(frameAt(scenes, 2)).toMatchObject({
+      kind: 'transition',
+      progress: 0.5,
+    })
     const late = frameAt(scenes, 2.2)
     expect(late.kind).toBe('transition')
     if (late.kind === 'transition') expect(late.progress).toBeCloseTo(0.9)

@@ -2,17 +2,23 @@
 
 import { useEffect, useId, useRef, useState } from 'react'
 import {
+  ArrowLeftIcon,
   ArrowPathIcon,
+  ArrowRightIcon,
+  DocumentDuplicateIcon,
   PauseIcon,
   PlayIcon,
   PlusIcon,
+  TrashIcon,
 } from '@heroicons/react/24/solid'
 import { styles } from './meme-generator-config'
 import {
-  MAX_SCENE_DURATION,
   MIN_SCENE_DURATION,
   clampDuration,
+  dropIndex,
+  maxSceneDuration,
   TRANSITION_WINDOW,
+  TRANSITIONS,
   sceneStart,
   totalDuration,
   type Scene,
@@ -38,11 +44,26 @@ interface VideoTimelineProps {
   onDurationChange: (index: number, seconds: number) => void
   onTransitionChange: (index: number, transition: Transition) => void
   onAddScene: () => void
+  onDuplicateScene: (index: number) => void
+  onDeleteScene: (index: number) => void
+  onMoveScene: (from: number, to: number) => void
+  /** Why the last add, copy or delete was refused, if it was. */
+  refusal: string | null
   onPlayToggle: () => void
   onLoopChange: (loop: boolean) => void
 }
 
 const seconds = (value: number) => `${value.toFixed(1)} s`
+
+const TRANSITION_NAMES: Record<Transition, string> = {
+  cut: 'Cut',
+  fade: 'Fade',
+  slide: 'Slide',
+  zoom: 'Zoom',
+}
+
+/** How far a scene has to be dragged before it is a move and not a click. */
+const DRAG_THRESHOLD_PX = 6
 
 /**
  * The step an arrow key asks for, or null for any other key. Shift makes it a
@@ -145,6 +166,8 @@ function SecondsField({
           if (event.key === 'Enter') commit()
         }}
         onBlur={commit}
+        // Its draft is its own: the editor's undo shortcut leaves it alone.
+        data-own-undo=""
         className={`${styles.input} w-24 py-1 text-sm tabular-nums`}
       />
     </div>
@@ -154,10 +177,13 @@ function SecondsField({
 function DurationEdge({
   scene,
   index,
+  max,
   onDurationChange,
 }: {
   scene: Scene
   index: number
+  /** What the other scenes leave of the minute. */
+  max: number
   onDurationChange: (index: number, seconds: number) => void
 }) {
   const startDuration = useRef(scene.duration)
@@ -173,7 +199,7 @@ function DurationEdge({
   const resizeByKey = (seconds: number) => {
     // Only a key that changes the length asks: one pressed against a limit
     // changes nothing, and the request would wait for an unrelated resize.
-    if (clampDuration(seconds) === scene.duration) return
+    if (Math.min(clampDuration(seconds), max) === scene.duration) return
     resizedByKey.current = true
     onDurationChange(index, seconds)
   }
@@ -190,7 +216,7 @@ function DurationEdge({
       tabIndex={0}
       aria-label={`Scene ${index + 1} length`}
       aria-valuemin={MIN_SCENE_DURATION}
-      aria-valuemax={MAX_SCENE_DURATION}
+      aria-valuemax={max}
       aria-valuenow={scene.duration}
       aria-valuetext={seconds(scene.duration)}
       aria-orientation="horizontal"
@@ -199,9 +225,7 @@ function DurationEdge({
       onKeyDown={(event) => {
         if (event.key === 'Home' || event.key === 'End') {
           event.preventDefault()
-          resizeByKey(
-            event.key === 'Home' ? MIN_SCENE_DURATION : MAX_SCENE_DURATION,
-          )
+          resizeByKey(event.key === 'Home' ? MIN_SCENE_DURATION : max)
           return
         }
         const step = keyStep(event)
@@ -219,6 +243,167 @@ function DurationEdge({
   )
 }
 
+/**
+ * One scene on the track. A click puts the playhead at its start; the arrows
+ * move the playhead; Alt with an arrow, or a drag, moves the scene itself.
+ */
+function SceneItem({
+  scenes,
+  index,
+  active,
+  onSeek,
+  onMove,
+  onPlayheadKey,
+  onDurationChange,
+}: {
+  scenes: Scene[]
+  index: number
+  active: boolean
+  onSeek: (time: number) => void
+  onMove: (from: number, to: number) => void
+  onPlayheadKey: (event: React.KeyboardEvent) => void
+  onDurationChange: (index: number, seconds: number) => void
+}) {
+  const scene = scenes[index]
+  const start = sceneStart(scenes, index)
+  const isLast = index === scenes.length - 1
+  // Pixels the scene has been dragged, once past the threshold; a drag that
+  // never gets there is a click.
+  const [dragged, setDragged] = useState<number | null>(null)
+  const origin = useRef<number | null>(null)
+  const swallowClick = useRef(false)
+  const endDrag = () => {
+    origin.current = null
+    setDragged(null)
+  }
+  return (
+    <li
+      className={`relative h-full shrink-0 ${dragged !== null ? 'z-40 opacity-80' : ''}`}
+      style={{
+        width: scene.duration * PX_PER_SECOND,
+        transform: dragged !== null ? `translateX(${dragged}px)` : undefined,
+      }}
+    >
+      <button
+        type="button"
+        data-scene-key={scene.key}
+        onClick={() => {
+          if (swallowClick.current) {
+            swallowClick.current = false
+            return
+          }
+          onSeek(start)
+        }}
+        onPointerDown={(event) => {
+          if (event.button !== 0) return
+          event.currentTarget.setPointerCapture?.(event.pointerId)
+          origin.current = event.clientX
+          swallowClick.current = false
+        }}
+        onPointerMove={(event) => {
+          if (origin.current === null) return
+          const dx = event.clientX - origin.current
+          if (dragged === null && Math.abs(dx) < DRAG_THRESHOLD_PX) return
+          setDragged(dx)
+        }}
+        onPointerUp={() => {
+          if (dragged !== null) {
+            swallowClick.current = true
+            const centre = start + scene.duration / 2 + dragged / PX_PER_SECOND
+            onMove(index, dropIndex(scenes, index, centre))
+          }
+          endDrag()
+        }}
+        onPointerCancel={endDrag}
+        onKeyDown={(event) => {
+          if (
+            event.altKey &&
+            (event.key === 'ArrowLeft' || event.key === 'ArrowRight')
+          ) {
+            event.preventDefault()
+            onMove(index, index + (event.key === 'ArrowLeft' ? -1 : 1))
+            return
+          }
+          if (keyStep(event) === null && !/^(Home|End)$/.test(event.key)) return
+          onPlayheadKey(event)
+        }}
+        aria-current={active || undefined}
+        aria-label={`Scene ${index + 1}, ${seconds(scene.duration)}`}
+        aria-keyshortcuts="Alt+ArrowLeft Alt+ArrowRight"
+        aria-roledescription="movable scene"
+        title="Drag, or Alt with an arrow key, to move the scene"
+        className={`flex size-full cursor-grab touch-none flex-col items-start justify-center gap-0.5 overflow-hidden rounded-md border-2 px-2 text-left text-xs select-none active:cursor-grabbing ${
+          active
+            ? 'border-brand-cloud-blue bg-brand-cloud-blue/10 dark:border-blue-400 dark:bg-blue-500/20'
+            : 'border-brand-frosted-steel bg-gray-50 hover:border-brand-cloud-blue/50 dark:border-gray-600 dark:bg-gray-700/60'
+        }`}
+      >
+        <span className="flex items-center gap-1.5 font-semibold whitespace-nowrap">
+          <span
+            aria-hidden="true"
+            className="size-3 shrink-0 rounded-sm border border-black/10 dark:border-white/20"
+            style={{ backgroundColor: scene.design.background.color }}
+          />
+          Scene {index + 1}
+        </span>
+        <span className="tabular-nums">{seconds(scene.duration)}</span>
+      </button>
+      {scene.transition !== 'cut' && !isLast && (
+        <span
+          aria-hidden="true"
+          title={TRANSITION_NAMES[scene.transition]}
+          className="pointer-events-none absolute bottom-1 z-10 h-2 -translate-x-1/2 rounded-full bg-linear-to-r from-brand-cloud-blue/10 via-brand-cloud-blue to-brand-cloud-blue/10 dark:via-blue-400"
+          style={{
+            left: scene.duration * PX_PER_SECOND,
+            width: TRANSITION_WINDOW * PX_PER_SECOND,
+          }}
+        />
+      )}
+      <DurationEdge
+        scene={scene}
+        index={index}
+        max={maxSceneDuration(scenes, index)}
+        onDurationChange={onDurationChange}
+      />
+    </li>
+  )
+}
+
+function SceneAction({
+  label,
+  icon: Icon,
+  text,
+  disabled,
+  refused,
+  describedBy,
+  onClick,
+}: {
+  label: string
+  icon: React.ElementType
+  /** Shown beside the icon; without it the button is the icon alone. */
+  text?: string
+  disabled?: boolean
+  refused?: boolean
+  describedBy?: string
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-disabled={refused || undefined}
+      aria-label={label}
+      aria-describedby={describedBy}
+      title={label}
+      className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-40 aria-disabled:cursor-not-allowed aria-disabled:opacity-40 ${styles.buttonInactive}`}
+    >
+      <Icon className="size-4" aria-hidden="true" />
+      {text}
+    </button>
+  )
+}
+
 export function VideoTimeline({
   scenes,
   time,
@@ -230,6 +415,10 @@ export function VideoTimeline({
   onDurationChange,
   onTransitionChange,
   onAddScene,
+  onDuplicateScene,
+  onDeleteScene,
+  onMoveScene,
+  refusal,
   onPlayToggle,
   onLoopChange,
 }: VideoTimelineProps) {
@@ -251,6 +440,29 @@ export function VideoTimeline({
   )
   const transitionId = useId()
   const loopHintId = useId()
+  const refusalId = useId()
+
+  // A scene moved keeps focus: React moves its element, and a moved element
+  // loses focus in the browser, so it is given back once the list has
+  // settled — a keyboard user presses Alt+→ again and it goes on moving.
+  const list = useRef<HTMLOListElement>(null)
+  const refocus = useRef<string | null>(null)
+  const moveScene = (from: number, to: number) => {
+    if (to < 0 || to >= scenes.length || to === from) return
+    if (list.current?.contains(document.activeElement))
+      refocus.current = scenes[from].key
+    onMoveScene(from, to)
+  }
+  useEffect(() => {
+    const key = refocus.current
+    if (key === null) return
+    refocus.current = null
+    const button = list.current?.querySelector<HTMLElement>(
+      `[data-scene-key="${key}"]`,
+    )
+    button?.focus()
+    button?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' })
+  }, [scenes])
 
   // A playhead moved by KEYBOARD is kept in view: on a narrow screen it
   // would otherwise walk out of the scrolling track with focus still on it.
@@ -344,12 +556,21 @@ export function VideoTimeline({
         <button
           type="button"
           onClick={onAddScene}
+          aria-describedby={refusal ? refusalId : undefined}
           className={`ml-auto flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm ${styles.buttonInactive}`}
         >
           <PlusIcon className="size-4" aria-hidden="true" />
           Add scene
         </button>
       </div>
+      {/* Always in the page, so a refusal is announced when it appears. */}
+      <p
+        id={refusalId}
+        role="status"
+        className="text-sm text-amber-700 empty:hidden dark:text-amber-400"
+      >
+        {refusal}
+      </p>
 
       <div className="overflow-x-auto pb-2">
         <div
@@ -375,71 +596,28 @@ export function VideoTimeline({
             ))}
           </div>
 
-          <ol className="relative mt-1 flex h-14" aria-label="Scenes">
-            {scenes.map((scene, index) => {
-              const start = sceneStart(scenes, index)
-              const active = index === editingIndex
-              return (
-                <li
-                  key={scene.key}
-                  className="relative h-full shrink-0"
-                  style={{ width: scene.duration * PX_PER_SECOND }}
-                >
-                  <button
-                    type="button"
-                    onClick={() => onSeek(start)}
-                    onKeyDown={(event) => {
-                      // The arrows move the playhead; focus goes with it, so
-                      // the change is announced and the next key continues.
-                      if (
-                        keyStep(event) === null &&
-                        !/^(Home|End)$/.test(event.key)
-                      )
-                        return
-                      playhead.current?.focus()
-                      movePlayhead(event)
-                    }}
-                    aria-current={active || undefined}
-                    aria-label={`Scene ${index + 1}, ${seconds(scene.duration)}`}
-                    className={`flex size-full flex-col items-start justify-center gap-0.5 overflow-hidden rounded-md border-2 px-2 text-left text-xs ${
-                      active
-                        ? 'border-brand-cloud-blue bg-brand-cloud-blue/10 dark:border-blue-400 dark:bg-blue-500/20'
-                        : 'border-brand-frosted-steel bg-gray-50 hover:border-brand-cloud-blue/50 dark:border-gray-600 dark:bg-gray-700/60'
-                    }`}
-                  >
-                    <span className="flex items-center gap-1.5 font-semibold whitespace-nowrap">
-                      <span
-                        aria-hidden="true"
-                        className="size-3 shrink-0 rounded-sm border border-black/10 dark:border-white/20"
-                        style={{
-                          backgroundColor: scene.design.background.color,
-                        }}
-                      />
-                      Scene {index + 1}
-                    </span>
-                    <span className="tabular-nums">
-                      {seconds(scene.duration)}
-                    </span>
-                  </button>
-                  {scene.transition === 'fade' && index < scenes.length - 1 && (
-                    <span
-                      aria-hidden="true"
-                      title="Fade"
-                      className="pointer-events-none absolute bottom-1 z-10 h-2 -translate-x-1/2 rounded-full bg-linear-to-r from-brand-cloud-blue/10 via-brand-cloud-blue to-brand-cloud-blue/10 dark:via-blue-400"
-                      style={{
-                        left: scene.duration * PX_PER_SECOND,
-                        width: TRANSITION_WINDOW * PX_PER_SECOND,
-                      }}
-                    />
-                  )}
-                  <DurationEdge
-                    scene={scene}
-                    index={index}
-                    onDurationChange={onDurationChange}
-                  />
-                </li>
-              )
-            })}
+          <ol
+            ref={list}
+            className="relative mt-1 flex h-14"
+            aria-label="Scenes"
+          >
+            {scenes.map((scene, index) => (
+              <SceneItem
+                key={scene.key}
+                scenes={scenes}
+                index={index}
+                active={index === editingIndex}
+                onSeek={onSeek}
+                onMove={moveScene}
+                onPlayheadKey={(event) => {
+                  // The arrows move the playhead; focus goes with it, so
+                  // the change is announced and the next key continues.
+                  playhead.current?.focus()
+                  movePlayhead(event)
+                }}
+                onDurationChange={onDurationChange}
+              />
+            ))}
           </ol>
 
           {/* The playhead spans the ruler and the scenes. */}
@@ -479,7 +657,7 @@ export function VideoTimeline({
           label={`Scene ${editingIndex + 1} length (s)`}
           value={editing.duration}
           min={MIN_SCENE_DURATION}
-          max={MAX_SCENE_DURATION}
+          max={maxSceneDuration(scenes, editingIndex)}
           onCommit={(value) => onDurationChange(editingIndex, value)}
         />
         {!isLast && (
@@ -496,16 +674,53 @@ export function VideoTimeline({
               onChange={(event) =>
                 onTransitionChange(
                   editingIndex,
-                  event.target.value === 'fade' ? 'fade' : 'cut',
+                  TRANSITIONS.find((t) => t === event.target.value) ?? 'cut',
                 )
               }
               className={`${styles.input} py-1 text-sm`}
             >
-              <option value="cut">Cut</option>
-              <option value="fade">Fade</option>
+              {TRANSITIONS.map((transition) => (
+                <option key={transition} value={transition}>
+                  {TRANSITION_NAMES[transition]}
+                </option>
+              ))}
             </select>
           </div>
         )}
+        <div
+          role="group"
+          aria-label={`Scene ${editingIndex + 1}`}
+          className="ml-auto flex flex-wrap gap-1"
+        >
+          <SceneAction
+            label={`Move scene ${editingIndex + 1} earlier`}
+            icon={ArrowLeftIcon}
+            disabled={editingIndex === 0}
+            onClick={() => onMoveScene(editingIndex, editingIndex - 1)}
+          />
+          <SceneAction
+            label={`Move scene ${editingIndex + 1} later`}
+            icon={ArrowRightIcon}
+            disabled={isLast}
+            onClick={() => onMoveScene(editingIndex, editingIndex + 1)}
+          />
+          <SceneAction
+            label={`Duplicate scene ${editingIndex + 1}`}
+            icon={DocumentDuplicateIcon}
+            text="Duplicate"
+            describedBy={refusal ? refusalId : undefined}
+            onClick={() => onDuplicateScene(editingIndex)}
+          />
+          <SceneAction
+            label={`Delete scene ${editingIndex + 1}`}
+            icon={TrashIcon}
+            text="Delete"
+            // Not `disabled`: it stays focusable, and a press says why.
+            refused={scenes.length === 1}
+            describedBy={refusal ? refusalId : undefined}
+            onClick={() => onDeleteScene(editingIndex)}
+          />
+        </div>
       </div>
     </section>
   )
