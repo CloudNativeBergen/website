@@ -13,6 +13,7 @@ import {
   logoFrame,
   type LogoPlacement,
 } from './meme-generator-logo'
+import type { EncoderBackend } from './meme-generator-export'
 
 const meta = {
   title: 'Systems/Marketing/Admin/MemeGenerator',
@@ -1172,6 +1173,12 @@ const midway = (a: string, b: string) =>
 /** A corner no text line, QR code or logo reaches: background only. */
 const BACKGROUND_CORNER: Box = { x: 24, y: 24, width: 120, height: 120 }
 
+/** The timeline's own announcements — the export panel has another. */
+const timelineStatus = (canvas: Canvas) =>
+  within(canvas.getByRole('region', { name: 'Video timeline' })).getByRole(
+    'status',
+  )
+
 async function seekTo(canvas: Canvas, seconds: number) {
   const field = canvas.getByLabelText('Playhead (s)')
   await userEvent.clear(field)
@@ -1568,7 +1575,7 @@ export const VideoScenesByKeyboard: Story = {
     ).toBe('57')
 
     await activate(canvas.getByRole('button', { name: 'Duplicate scene 2' }))
-    expect(canvas.getByRole('status').textContent).toBe(
+    expect(timelineStatus(canvas).textContent).toBe(
       'A copy of scene 2 is 3.0 s and only 0.0 s of the 60 s is left. Shorten a scene first.',
     )
 
@@ -1610,14 +1617,14 @@ async function nearTheCap(canvasElement: HTMLElement) {
   await userEvent.click(canvas.getByRole('button', { name: 'Scene 2, 15.0 s' }))
   await userEvent.selectOptions(canvas.getByLabelText('Into scene 3'), 'slide')
   await userEvent.click(canvas.getByRole('button', { name: 'Add scene' }))
-  await expect(canvas.getByRole('status')).toHaveTextContent(
+  await expect(timelineStatus(canvas)).toHaveTextContent(
     'only 2.0 s of the 60 s is left',
   )
   // Back to the start, so a capture shows the first scenes and their marks;
   // the reason stays, as the scenes have not changed.
   canvas.getByRole('slider', { name: 'Playhead' }).focus()
   await userEvent.keyboard('{Home}')
-  await expect(canvas.getByRole('status')).toHaveTextContent('Shorten a scene')
+  await expect(timelineStatus(canvas)).toHaveTextContent('Shorten a scene')
 }
 
 export const VideoAtTheCap: Story = {
@@ -1892,4 +1899,141 @@ export const VideoDurationDragGivesBarsBack: Story = {
     await waitFor(() => expect(leaves()).toBe('4.5'))
     await expect(edge).toHaveAttribute('aria-valuenow', '5')
   },
+}
+
+// ── Export to MP4 (#1177) ─────────────────────────────────────────────────
+
+/**
+ * Press Export once it will act: on a cold load the fonts can hold it for
+ * up to three seconds, and a press before then is (rightly) ignored.
+ */
+async function pressExport(panel: HTMLElement) {
+  const button = within(panel).getByRole('button', { name: 'Export MP4' })
+  await waitFor(() => expect(button).not.toHaveAttribute('aria-disabled'), {
+    timeout: 5000,
+  })
+  await userEvent.click(button)
+}
+
+/**
+ * The real encoder, whichever way it answers: headless Chromium commonly
+ * has no H.264 encoder, a desktop Chrome does. Where it says no, the refusal
+ * is shown and nothing is made. Where it says yes, a blue scene whose
+ * headline slides up, faded into a green one, exports, and the file is read
+ * back: an H.264 MP4 of the video's length, 1080 wide, over the bitrate floor.
+ */
+export const VideoExportRealEncoder: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(canvas.getByRole('button', { name: 'Video' }))
+    await userEvent.click(canvas.getByRole('button', { name: 'Cloud Blue' }))
+    await typeHeadline(canvas, 'Export me')
+    await userEvent.selectOptions(
+      canvas.getByLabelText('Text 1 entrance'),
+      'slide-up',
+    )
+    await setSeconds(canvas, 'Text 1 enters (s)', 0.5)
+    await userEvent.click(canvas.getByRole('button', { name: 'Add scene' }))
+    await userEvent.click(
+      canvas.getByRole('button', { name: 'Scene 1, 3.0 s' }),
+    )
+    await userEvent.selectOptions(canvas.getByLabelText('Into scene 2'), 'fade')
+
+    const panel = canvas.getByRole('region', { name: 'Export' })
+    const status = within(panel).getByRole('status')
+    const { mediabunnyBackend } = await import('./meme-generator-mediabunny')
+    const supported = await mediabunnyBackend.supports()
+    console.info('[export] H.264 supported:', supported)
+    if (!supported) {
+      await waitFor(() =>
+        expect(status).toHaveTextContent('This browser cannot make MP4 video'),
+      )
+      await userEvent.click(
+        within(panel).getByRole('button', { name: 'Export MP4' }),
+      )
+      expect(within(panel).queryByRole('link')).toBeNull()
+      return
+    }
+    await pressExport(panel)
+    const link = await within(panel).findByRole(
+      'link',
+      { name: /Download video/ },
+      { timeout: 30_000 },
+    )
+    const blob = await (await fetch(link.getAttribute('href')!)).blob()
+    const { ALL_FORMATS, BlobSource, Input } = await import('mediabunny')
+    const input = new Input({
+      source: new BlobSource(blob),
+      formats: ALL_FORMATS,
+    })
+    expect(await input.getMimeType()).toContain('video/mp4')
+    expect(await input.computeDuration()).toBeCloseTo(6, 1)
+    const track = await input.getPrimaryVideoTrack()
+    expect(track?.codec).toBe('avc')
+    expect(track?.displayWidth).toBe(1080)
+    expect((blob.size * 8) / 6).toBeGreaterThanOrEqual(192_000)
+  },
+}
+
+/** An encoder that answers as told, for the states the real one rarely shows. */
+function scriptedEncoder(script: {
+  supported: boolean
+  failAt?: number
+}): EncoderBackend {
+  return {
+    supports: async () => script.supported,
+    probe: async () => true,
+    open: async () => ({
+      add: (timestamp) =>
+        Math.round(timestamp * 30) === script.failAt
+          ? Promise.reject(
+              new Error('EncodingError: The given encoding is not supported.'),
+            )
+          : new Promise((resolve) => setTimeout(resolve, 5)),
+      finish: async () => new Blob([new Uint8Array(1_000_000)]),
+      cancel: async () => {},
+    }),
+  }
+}
+
+/** Where the encoder says no, the button says why and makes nothing. */
+export const VideoExportUnsupported: Story = {
+  args: { encoder: scriptedEncoder({ supported: false }) },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(canvas.getByRole('button', { name: 'Video' }))
+    const panel = canvas.getByRole('region', { name: 'Export' })
+    await waitFor(() =>
+      expect(within(panel).getByRole('status')).toHaveTextContent(
+        'This browser cannot make MP4 video. Use Chrome, Edge or Safari on a computer.',
+      ),
+    )
+    await userEvent.click(
+      within(panel).getByRole('button', { name: 'Export MP4' }),
+    )
+    expect(within(panel).queryByRole('progressbar')).toBeNull()
+    expect(within(panel).queryByRole('link')).toBeNull()
+  },
+}
+
+/** An encoder that said yes, then failed a second in: its error is shown. */
+export const VideoExportFailsMidway: Story = {
+  args: { encoder: scriptedEncoder({ supported: true, failAt: 30 }) },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(canvas.getByRole('button', { name: 'Video' }))
+    const panel = canvas.getByRole('region', { name: 'Export' })
+    await pressExport(panel)
+    await waitFor(() =>
+      expect(within(panel).getByRole('status')).toHaveTextContent(
+        'The export failed. The encoder failed: Error: EncodingError: The given encoding is not supported.',
+      ),
+    )
+    expect(within(panel).queryByRole('link')).toBeNull()
+  },
+}
+
+export const VideoExportFailsMidwayDark: Story = {
+  ...VideoExportFailsMidway,
+  globals: { theme: 'dark' },
 }
