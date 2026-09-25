@@ -21,6 +21,17 @@ import {
   type CanvasLogo,
   type LogoVariant,
 } from './meme-generator-logo'
+import {
+  AT_REST,
+  DRIFT_ZOOM,
+  driftScale,
+  elementStateAt,
+  isAtRest,
+  motionFor,
+  type ElementId,
+  type ElementState,
+  type SceneMotion,
+} from './meme-generator-motion'
 
 /**
  * One meme-generator design, and the one function that draws it.
@@ -92,7 +103,10 @@ export type Raster = CanvasImageSource & { width: number; height: number }
 
 /** A design's decoded assets. Anything missing is simply not drawn. */
 export interface MemeAssets {
-  /** The design's background image, decoded. */
+  /**
+   * The design's background image, decoded — for a drifting scene, the copy
+   * `prescaleForDrift` made of it, so no frame resamples the full photo.
+   */
   background: Raster | null
   /** The QR image for the design's current QR style. */
   qr: CanvasImageSource | null
@@ -145,18 +159,17 @@ export function wrapWords(
   return rows
 }
 
-function drawBackground(
+/**
+ * Cover a `size`-pixel square with `image`, scaled to fill it and centred,
+ * cropping the overflow — then `zoom` times larger again, about the centre.
+ */
+function drawCover(
   ctx: CanvasRenderingContext2D,
-  color: string,
-  image: Raster | null,
+  image: Raster,
+  size: number,
+  zoom: number,
 ) {
-  if (!image) {
-    ctx.fillStyle = color
-    ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE)
-    return
-  }
-  // Cover: scale to fill the square, centred, cropping the overflow.
-  const ratio = Math.max(CANVAS_SIZE / image.width, CANVAS_SIZE / image.height)
+  const ratio = Math.max(size / image.width, size / image.height) * zoom
   const width = image.width * ratio
   const height = image.height * ratio
   ctx.drawImage(
@@ -165,14 +178,75 @@ function drawBackground(
     0,
     image.width,
     image.height,
-    (CANVAS_SIZE - width) / 2,
-    (CANVAS_SIZE - height) / 2,
+    (size - width) / 2,
+    (size - height) / 2,
     width,
     height,
   )
 }
 
-function drawTextLine(ctx: CanvasRenderingContext2D, line: TextLine) {
+/** The side of a background pre-scaled for drift: its largest zoom, 1:1. */
+export const DRIFT_RASTER_SIZE = Math.ceil(CANVAS_SIZE * (1 + DRIFT_ZOOM))
+
+/**
+ * A background cropped and scaled ONCE to the square a drift needs, so each
+ * frame of a drift resamples a ~1200 px square rather than a multi-megapixel
+ * photo. `canvas` is a fresh canvas to draw it into.
+ */
+export function prescaleForDrift<C extends HTMLCanvasElement | OffscreenCanvas>(
+  image: Raster,
+  canvas: C,
+): C {
+  canvas.width = canvas.height = DRIFT_RASTER_SIZE
+  const ctx = canvas.getContext('2d') as CanvasRenderingContext2D | null
+  if (ctx) drawCover(ctx, image, DRIFT_RASTER_SIZE, 1)
+  return canvas
+}
+
+function drawBackground(
+  ctx: CanvasRenderingContext2D,
+  color: string,
+  image: Raster | null,
+  zoom: number,
+) {
+  if (!image) {
+    ctx.fillStyle = color
+    ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE)
+    return
+  }
+  drawCover(ctx, image, CANVAS_SIZE, zoom)
+}
+
+/**
+ * Draw with an element's state applied: its opacity, its offset, and its
+ * scale about `centre`. Transforms what is drawn — never a font size. At rest
+ * nothing is saved or set, so a still draws exactly as it always has.
+ */
+function withState(
+  ctx: CanvasRenderingContext2D,
+  state: ElementState,
+  centre: { x: number; y: number },
+  draw: () => void,
+) {
+  if (state.opacity <= 0) return
+  if (isAtRest(state)) {
+    draw()
+    return
+  }
+  ctx.save()
+  ctx.globalAlpha = state.opacity
+  ctx.translate(centre.x, centre.y + state.offsetY)
+  ctx.scale(state.scale, state.scale)
+  ctx.translate(-centre.x, -centre.y)
+  draw()
+  ctx.restore()
+}
+
+function drawTextLine(
+  ctx: CanvasRenderingContext2D,
+  line: TextLine,
+  state: ElementState,
+) {
   if (!line.text) return
 
   ctx.font = `${canvasFontShorthand(line)}, sans-serif`
@@ -180,6 +254,8 @@ function drawTextLine(ctx: CanvasRenderingContext2D, line: TextLine) {
   ctx.textAlign = line.textAlign
   ctx.textBaseline = 'middle'
 
+  // Wrapped at the line's own size, before any transform: a pop scales the
+  // drawn rows and never re-measures them.
   const { x, maxWidth } = textAnchor(line)
   const rows = wrapWords(
     memeLineText(line),
@@ -188,55 +264,102 @@ function drawTextLine(ctx: CanvasRenderingContext2D, line: TextLine) {
   )
 
   const lineHeight = line.fontSize * 1.2
-  const startY =
-    (line.verticalPosition / 100) * CANVAS_SIZE -
-    (rows.length * lineHeight) / 2 +
-    lineHeight / 2
+  const centreY = (line.verticalPosition / 100) * CANVAS_SIZE
+  const startY = centreY - (rows.length * lineHeight) / 2 + lineHeight / 2
 
-  rows.forEach((row, index) => {
-    const y = startY + index * lineHeight
-    ctx.strokeStyle = 'rgba(0, 0, 0, 0.15)'
-    ctx.lineWidth = 2
-    ctx.strokeText(row, x, y)
-    ctx.fillText(row, x, y)
-  })
+  const paint = () =>
+    rows.forEach((row, index) => {
+      const y = startY + index * lineHeight
+      ctx.strokeStyle = 'rgba(0, 0, 0, 0.15)'
+      ctx.lineWidth = 2
+      ctx.strokeText(row, x, y)
+      ctx.fillText(row, x, y)
+    })
+  if (isAtRest(state)) {
+    paint()
+    return
+  }
+  // The block's centre: the anchor is its middle, left or right edge.
+  const width = Math.max(...rows.map((row) => ctx.measureText(row).width))
+  const centreX =
+    line.textAlign === 'left'
+      ? x + width / 2
+      : line.textAlign === 'right'
+        ? x - width / 2
+        : x
+  withState(ctx, state, { x: centreX, y: centreY }, paint)
+}
+
+/** A scene's motion and length: what `drawDesign` needs to animate it. */
+export interface Animation {
+  motion: SceneMotion
+  /** The scene's length, in seconds. */
+  duration: number
 }
 
 /**
- * Paint `design` at time `time` (seconds). Time is not used yet: every design
- * is a still until scenes and element animation arrive.
+ * Paint `design` at `time` seconds into its scene. With no `animation` it is a
+ * still, every element at rest — Image mode, and a scene nobody animated.
  */
 export function drawDesign(
   ctx: CanvasRenderingContext2D,
   design: MemeDesign,
   assets: MemeAssets,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- the frame's time; read once element animation lands (#1176)
   time: number,
+  animation?: Animation,
 ) {
-  ctx.clearRect(0, 0, CANVAS_SIZE, CANVAS_SIZE)
-  drawBackground(ctx, design.background.color, assets.background)
+  const stateOf = (id: ElementId) =>
+    animation
+      ? elementStateAt(
+          motionFor(animation.motion, id, animation.duration),
+          time,
+        )
+      : AT_REST
+  const zoom =
+    animation?.motion.drift && assets.background
+      ? driftScale(time, animation.duration)
+      : 1
 
-  for (const line of design.textLines) drawTextLine(ctx, line)
+  ctx.clearRect(0, 0, CANVAS_SIZE, CANVAS_SIZE)
+  drawBackground(ctx, design.background.color, assets.background, zoom)
+
+  design.textLines.forEach((line, index) =>
+    drawTextLine(ctx, line, stateOf(`text${index}`)),
+  )
 
   const { qr } = design
   if (qr.url && assets.qr) {
-    const x = (qr.horizontalPosition / 100) * CANVAS_SIZE - qr.size / 2
-    const y = (qr.verticalPosition / 100) * CANVAS_SIZE - qr.size / 2
-    ctx.drawImage(assets.qr, x, y, qr.size, qr.size)
+    const image = assets.qr
+    const centre = {
+      x: (qr.horizontalPosition / 100) * CANVAS_SIZE,
+      y: (qr.verticalPosition / 100) * CANVAS_SIZE,
+    }
+    withState(ctx, stateOf('qr'), centre, () =>
+      ctx.drawImage(
+        image,
+        centre.x - qr.size / 2,
+        centre.y - qr.size / 2,
+        qr.size,
+        qr.size,
+      ),
+    )
   }
 
   // Last, so it sits on top of everything.
   if (assets.logo) {
+    const logo = assets.logo
     const { size, bottom, right, variant } = design.logo
-    drawLogo(
-      ctx,
-      assets.logo,
-      placeLogo(assets.logo, { size, bottom, right }),
-      {
+    const frame = placeLogo(logo, { size, bottom, right })
+    const centre = {
+      x: frame.x + frame.width / 2,
+      y: frame.y + frame.height / 2,
+    }
+    withState(ctx, stateOf('logo'), centre, () =>
+      drawLogo(ctx, logo, frame, {
         variant,
         ink: monochromeInk(designIsLight(design)),
         ...assets.brand,
-      },
+      }),
     )
   }
 }

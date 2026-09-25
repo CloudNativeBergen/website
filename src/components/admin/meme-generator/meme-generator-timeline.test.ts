@@ -21,12 +21,14 @@ import {
   type Transition,
 } from './meme-generator-timeline'
 import { DEFAULT_DESIGN } from './meme-generator-draw'
+import { STILL } from './meme-generator-motion'
 
 const scene = (duration: number, transition: Transition = 'cut'): Scene => ({
   key: `s${duration}${transition}`,
   design: DEFAULT_DESIGN,
   duration,
   transition,
+  motion: STILL,
 })
 
 describe('clampDuration', () => {
@@ -71,6 +73,34 @@ describe('setSceneDuration', () => {
     expect(setSceneDuration(scenes, 0, 5.55).map((s) => s.duration)).toEqual([
       5.6, 4,
     ])
+  })
+
+  it("clamps the shortened scene's element times into it", () => {
+    const bar = { entrance: 'fade', exit: 'pop' } as const
+    const scenes: Scene[] = [
+      {
+        ...scene(5),
+        motion: {
+          drift: true,
+          elements: {
+            text0: { ...bar, enter: 1, leave: 4.5 },
+            logo: { ...bar, enter: 3.5, leave: 4 },
+            qr: { ...bar, enter: 0, leave: 5 },
+          },
+        },
+      },
+      scene(2),
+    ]
+    const [shortened, other] = setSceneDuration(scenes, 0, 3)
+    expect(shortened.motion).toEqual({
+      drift: true,
+      elements: {
+        text0: { ...bar, enter: 1, leave: 3 },
+        logo: { ...bar, enter: 3, leave: 3 },
+        qr: { ...bar, enter: 0, leave: 3 },
+      },
+    })
+    expect(other).toBe(scenes[1])
   })
 })
 

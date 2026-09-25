@@ -2,12 +2,20 @@
 import { describe, it, expect } from 'vitest'
 import {
   DEFAULT_DESIGN,
+  DRIFT_RASTER_SIZE,
   drawDesign,
+  prescaleForDrift,
   textAnchor,
   wrapWords,
+  type Animation,
   type MemeAssets,
   type MemeDesign,
 } from './meme-generator-draw'
+import {
+  DRIFT_ZOOM,
+  PRESET_DURATION,
+  type ElementMotion,
+} from './meme-generator-motion'
 import { CANVAS_SIZE, type TextLine } from './meme-generator-config'
 import type { CanvasLogo } from './meme-generator-logo'
 
@@ -265,5 +273,170 @@ describe('wrapWords', () => {
 
   it('keeps a word longer than the width on its own row', () => {
     expect(wrapWords('aaaaaaaa b', 3, measure)).toEqual(['aaaaaaaa', 'b'])
+  })
+})
+
+describe('drawDesign at a time', () => {
+  const HEADLINE = withLine({
+    text: 'Three words wrapping across rows here',
+    fontSize: 100,
+  })
+  const animated = (
+    elements: Animation['motion']['elements'],
+    drift = false,
+  ): Animation => ({ motion: { drift, elements }, duration: 3 })
+  const bar = (patch: Partial<ElementMotion>): ElementMotion => ({
+    entrance: 'none',
+    exit: 'none',
+    enter: 0,
+    leave: 3,
+    ...patch,
+  })
+  const drawAt = (
+    d: MemeDesign,
+    time: number,
+    animation?: Animation,
+    assets: Partial<MemeAssets> = {},
+  ) => {
+    const { ctx, calls } = recordingContext()
+    drawDesign(ctx, d, { ...NO_ASSETS, ...assets }, time, animation)
+    return calls
+  }
+  const rows = (calls: Call[]) =>
+    named(calls, 'fillText').map(([, text, x, y]) => [text, x, y])
+
+  it('draws an unanimated scene exactly as the still', () => {
+    expect(drawAt(HEADLINE, 1.5, animated({}))).toEqual(draw(HEADLINE))
+  })
+
+  it('wraps the text identically at every frame of a pop, and never changes the font', () => {
+    const pop = animated({ text0: bar({ entrance: 'pop', enter: 1 }) })
+    const still = draw(HEADLINE)
+    expect(rows(still).length).toBeGreaterThan(1)
+    const frames = Math.ceil(PRESET_DURATION.pop * 30) + 1
+    const scales = new Set<unknown>()
+    for (let frame = 0; frame <= frames; frame++) {
+      const calls = drawAt(HEADLINE, 1 + frame / 30, pop)
+      expect(rows(calls)).toEqual(rows(still))
+      expect(named(calls, 'font=')).toEqual(named(still, 'font='))
+      for (const [, x] of named(calls, 'scale')) scales.add(x)
+    }
+    // It really did scale, through more than one size.
+    expect(scales.size).toBeGreaterThan(3)
+  })
+
+  it("scales a pop about the text block's centre", () => {
+    const calls = drawAt(
+      HEADLINE,
+      1,
+      animated({ text0: bar({ entrance: 'pop', enter: 1 }) }),
+    )
+    const y = (HEADLINE.textLines[0].verticalPosition / 100) * CANVAS_SIZE
+    expect(named(calls, 'translate')).toEqual([
+      ['translate', 540, y],
+      ['translate', -540, -y],
+    ])
+    expect(named(calls, 'scale')).toEqual([['scale', 0.8, 0.8]])
+    expect(calls.at(-1)).toEqual(['restore'])
+  })
+
+  it('draws nothing of a line after its exit, or before its entrance', () => {
+    const gone = animated({ text0: bar({ enter: 1, leave: 2 }) })
+    expect(named(drawAt(HEADLINE, 2.5, gone), 'fillText')).toEqual([])
+    expect(named(drawAt(HEADLINE, 0.5, gone), 'fillText')).toEqual([])
+    expect(rows(drawAt(HEADLINE, 1.5, gone))).toEqual(rows(draw(HEADLINE)))
+  })
+
+  it('fades a line by its opacity and slides it 40 px up into place', () => {
+    const slide = animated({ text0: bar({ entrance: 'slide-up' }) })
+    const calls = drawAt(HEADLINE, PRESET_DURATION['slide-up'] / 2, slide)
+    expect(named(calls, 'globalAlpha=')[0][1]).toBeCloseTo(0.875, 10)
+    const [[, , offset]] = named(calls, 'translate')
+    const y = (HEADLINE.textLines[0].verticalPosition / 100) * CANVAS_SIZE
+    expect(offset as number).toBeCloseTo(y + 5, 10)
+  })
+
+  it('animates the logo and the QR code about their own centres', () => {
+    const logo: CanvasLogo = {
+      kind: 'image',
+      image: image(970, 234),
+      aspect: 234 / 970,
+    }
+    const withQr = design({
+      qr: { ...DEFAULT_DESIGN.qr, url: 'https://example.com' },
+    })
+    const calls = drawAt(
+      withQr,
+      0,
+      animated({
+        qr: bar({ entrance: 'pop' }),
+        logo: bar({ entrance: 'pop' }),
+      }),
+      { logo, qr: image(500, 500) },
+    )
+    expect(named(calls, 'scale')).toEqual([
+      ['scale', 0.8, 0.8],
+      ['scale', 0.8, 0.8],
+    ])
+    const qrCentre = [
+      (withQr.qr.horizontalPosition / 100) * CANVAS_SIZE,
+      (withQr.qr.verticalPosition / 100) * CANVAS_SIZE,
+    ]
+    expect(named(calls, 'translate')[0]).toEqual(['translate', ...qrCentre])
+  })
+
+  it('zooms a drifting background image about the centre, and not a colour', () => {
+    const photo = image(DRIFT_RASTER_SIZE, DRIFT_RASTER_SIZE)
+    const drift = animated({}, true)
+    const at = (time: number) =>
+      named(
+        drawAt(DEFAULT_DESIGN, time, drift, { background: photo }),
+        'drawImage',
+      )[0]
+    // At the start it fills the canvas; at the end it is DRIFT_ZOOM larger.
+    expect(at(0)).toEqual([
+      'drawImage',
+      photo,
+      0,
+      0,
+      DRIFT_RASTER_SIZE,
+      DRIFT_RASTER_SIZE,
+      0,
+      0,
+      CANVAS_SIZE,
+      CANVAS_SIZE,
+    ])
+    const end = at(3) as number[]
+    expect(end[8]).toBeCloseTo(CANVAS_SIZE * (1 + DRIFT_ZOOM), 6)
+    expect(end[6]).toBeCloseTo((-CANVAS_SIZE * DRIFT_ZOOM) / 2, 6)
+    expect(drawAt(DEFAULT_DESIGN, 3, drift)).toEqual(draw(DEFAULT_DESIGN))
+  })
+})
+
+describe('prescaleForDrift', () => {
+  it('covers a square at the largest zoom with the photo, once', () => {
+    const { ctx, calls } = recordingContext()
+    const canvas = { width: 0, height: 0, getContext: () => ctx }
+    const photo = image(6000, 4000)
+    const out = prescaleForDrift(photo, canvas as unknown as HTMLCanvasElement)
+    expect(out).toMatchObject({
+      width: DRIFT_RASTER_SIZE,
+      height: DRIFT_RASTER_SIZE,
+    })
+    const side = DRIFT_RASTER_SIZE
+    expect(calls).toEqual([
+      [
+        'drawImage',
+        photo,
+        0,
+        0,
+        6000,
+        4000,
+        (side - side * 1.5) / 2,
+        0,
+        side * 1.5,
+        side,
+      ],
+    ])
   })
 })
