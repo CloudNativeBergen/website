@@ -11,6 +11,7 @@ import { PortableTextBlock as PortableTextBlockForHTML } from '@portabletext/typ
 import { formatConferenceDateLong } from '@/lib/time'
 import { conferenceBaseUrl } from '@/lib/conference/baseUrl'
 import { emailBrandColor, type ConferenceTheme } from '@/lib/branding/theme'
+import { resolveEmailBrandPalette, brandedOr } from '@/lib/branding/email'
 import { createLocalhostWarning } from '@/lib/localhost-warning'
 import { SponsorTemplatePicker } from './SponsorTemplatePicker'
 import { api } from '@/lib/trpc/client'
@@ -211,6 +212,7 @@ export function SponsorIndividualEmailModal({
       sponsorId: sponsorForConference.sponsor._id,
       subject,
       message: messageJSON,
+      ...(trimmedTicketUrl ? { ticketUrl: trimmedTicketUrl } : {}),
     })
 
     showNotification({
@@ -230,6 +232,24 @@ export function SponsorIndividualEmailModal({
     subject: string
     messageHTML: string
   }) => {
+    let finalHtmlContent = messageHTML
+    if (trimmedTicketUrl) {
+      const previewBrand = resolveEmailBrandPalette(
+        emailBrandColor(conference.theme),
+      )
+      const ticketInfo = `
+        <div style="background-color: ${previewBrand.cardBackground}; padding: 20px; border-radius: 12px; margin: 24px 0; border: 1px solid ${previewBrand.cardBorder};">
+          <h3 style="color: ${brandedOr(previewBrand, '#1D4ED8')}; margin-top: 0; margin-bottom: 16px; font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 18px; font-weight: 600;">
+            Ticket Registration
+          </h3>
+          <ul style="margin: 0; padding-left: 20px; color: #334155; font-size: 15px; line-height: 1.6;">
+            <li style="margin-bottom: 0;"><a href="${trimmedTicketUrl}" style="color: ${brandedOr(previewBrand, '#1D4ED8')}; text-decoration: none; font-weight: 500;">${trimmedTicketUrl}</a></li>
+          </ul>
+        </div>
+      `
+      finalHtmlContent += ticketInfo
+    }
+
     return (
       <BroadcastTemplate
         subject={subject}
@@ -239,7 +259,7 @@ export function SponsorIndividualEmailModal({
         eventUrl={conferenceBaseUrl(conference)}
         socialLinks={conference.socialLinks || []}
         brandColor={emailBrandColor(conference.theme)}
-        content={<div dangerouslySetInnerHTML={{ __html: messageHTML }} />}
+        content={<div dangerouslySetInnerHTML={{ __html: finalHtmlContent }} />}
       />
     )
   }

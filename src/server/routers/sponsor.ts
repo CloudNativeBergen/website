@@ -2773,6 +2773,7 @@ export const sponsorRouter = router({
           sponsorId: z.string().min(1),
           subject: z.string().min(1),
           message: z.string().min(1),
+          ticketUrl: z.string().url().optional(),
         }),
       )
       .mutation(async ({ input, ctx }) => {
@@ -2845,10 +2846,27 @@ export const sponsorRouter = router({
           })
         }
 
+        let finalHtmlContent = htmlContent!
+        if (input.ticketUrl) {
+          const brand = resolveEmailBrandPalette(
+            emailBrandColor(conference.theme),
+          )
+          finalHtmlContent += `
+            <div style="background-color: ${brand.cardBackground}; padding: 20px; border-radius: 12px; margin: 24px 0; border: 1px solid ${brand.cardBorder};">
+              <h3 style="color: ${brandedOr(brand, '#1D4ED8')}; margin-top: 0; margin-bottom: 16px; font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 18px; font-weight: 600;">
+                Ticket Registration
+              </h3>
+              <ul style="margin: 0; padding-left: 20px; color: #334155; font-size: 15px; line-height: 1.6;">
+                <li style="margin-bottom: 0;"><a href="${input.ticketUrl}" style="color: ${brandedOr(brand, '#1D4ED8')}; text-decoration: none; font-weight: 500;">${input.ticketUrl}</a></li>
+              </ul>
+            </div>
+          `
+        }
+
         const emailTemplate = renderEmailTemplate({
           conference,
           subject: input.subject,
-          htmlContent: htmlContent!,
+          htmlContent: finalHtmlContent,
           unsubscribeUrl: undefined,
         })
 
