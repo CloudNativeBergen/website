@@ -87,6 +87,7 @@ import {
   allStates,
   canRedo,
   canUndo,
+  mapStates,
   record,
   redo,
   startHistory,
@@ -102,6 +103,9 @@ import type { TimingControl } from './VideoElements'
 import { VideoExport } from './VideoExport'
 import type { EncoderBackend, ExportJob } from './meme-generator-export'
 import { mediabunnyBackend } from './meme-generator-mediabunny'
+import type { BackgroundGallery } from './meme-generator-gallery'
+import { BackgroundGalleryPicker } from './BackgroundGalleryPicker'
+import { KeepInGallery } from './KeepInGallery'
 import { useMediaQuery } from '@/hooks/useMediaQuery'
 import { PLATFORM_NAME } from '@/lib/branding/platform'
 
@@ -110,6 +114,11 @@ interface MemeGeneratorProps {
   wrapPreview?: (node: React.ReactNode) => React.ReactNode
   /** The MP4 encoder; the browser's, unless a story or test gives another. */
   encoder?: EncoderBackend
+  /**
+   * The organization's gallery, for picking a background and keeping an
+   * uploaded one. Without it, backgrounds are local files only.
+   */
+  gallery?: BackgroundGallery
 }
 
 interface ColorButtonProps {
@@ -271,6 +280,7 @@ export function MemeGenerator({
   conferenceLogos,
   wrapPreview,
   encoder = mediabunnyBackend,
+  gallery,
 }: MemeGeneratorProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const exportCanvasRef = useRef<HTMLCanvasElement>(null)
@@ -445,16 +455,62 @@ export function MemeGenerator({
   // The same backgrounds pre-scaled for drift, each made once, the first time
   // a drifting scene draws it — never resampled from the photo per frame.
   const driftRasters = useRef(new Map<string, Raster>())
+  // The file behind each uploaded background, by its data URL, so it can
+  // still be kept in the gallery. Only this session's uploads have one.
+  const uploadedFiles = useRef(new Map<string, File>())
   useEffect(() => {
     const kept = new Set(
       allStates(history).flatMap((states) =>
         states.flatMap((scene) => scene.design.background.image?.url ?? []),
       ),
     )
-    for (const cache of [backgroundRasters.current, driftRasters.current]) {
+    for (const cache of [
+      backgroundRasters.current,
+      driftRasters.current,
+      uploadedFiles.current,
+    ]) {
       for (const url of cache.keys()) if (!kept.has(url)) cache.delete(url)
     }
   }, [history])
+
+  const [backgroundError, setBackgroundError] = useState<string | null>(null)
+  // The editing scene's upload, while it can still be kept.
+  const keptFile = background.image
+    ? uploadedFiles.current.get(background.image.url)
+    : undefined
+
+  /**
+   * Decode an image and make it the background of the scene it was asked
+   * for, even if the playhead moves on meanwhile. Throws when it cannot be
+   * had or decoded, leaving the background as it was.
+   */
+  const loadBackground = async (
+    load: () => Promise<{
+      image: NonNullable<MemeDesign['background']['image']>
+      file?: File
+    }>,
+  ): Promise<void> => {
+    const sceneKey = editingKey
+    const upload = (backgroundUploads.current.get(sceneKey) ?? 0) + 1
+    backgroundUploads.current.set(sceneKey, upload)
+    const isLatest = () => backgroundUploads.current.get(sceneKey) === upload
+    setUploadingScenes((prev) => new Set(prev).add(sceneKey))
+    setBackgroundError(null)
+    try {
+      const { image: next, file } = await load()
+      const image = new window.Image()
+      image.src = next.url
+      await image.decode()
+      if (!isLatest()) return
+      // With the update that shows it, so the prune never sees one without
+      // the other.
+      backgroundRasters.current.set(next.url, image)
+      if (file) uploadedFiles.current.set(next.url, file)
+      setBackground({ image: next }, sceneKey)
+    } finally {
+      if (isLatest()) settleUpload(sceneKey)
+    }
+  }
 
   const handleBackgroundImageUpload = async (
     e: React.ChangeEvent<HTMLInputElement>,
@@ -464,26 +520,55 @@ export function MemeGenerator({
     // still fires a change.
     e.target.value = ''
     if (!file || !file.type.startsWith('image/')) return
-    // The scene the upload was made for, even if the playhead moves on.
-    const sceneKey = editingKey
-    const upload = (backgroundUploads.current.get(sceneKey) ?? 0) + 1
-    backgroundUploads.current.set(sceneKey, upload)
-    const isLatest = () => backgroundUploads.current.get(sceneKey) === upload
-    setUploadingScenes((prev) => new Set(prev).add(sceneKey))
     try {
-      const url = await readAsDataUrl(file)
-      const image = new window.Image()
-      image.src = url
-      await image.decode()
-      if (!isLatest()) return
-      backgroundRasters.current.set(url, image)
-      setBackground({ image: { url, name: file.name } }, sceneKey)
+      await loadBackground(async () => {
+        const url = await readAsDataUrl(file)
+        return { image: { url, name: file.name }, file }
+      })
     } catch {
       // An image the browser cannot decode leaves the background as it was.
-    } finally {
-      if (isLatest()) settleUpload(sceneKey)
     }
   }
+
+  const pickGalleryBackground = async (id: string) => {
+    if (!gallery) return
+    try {
+      await loadBackground(async () => {
+        const picked = await gallery.resolve(id)
+        return {
+          image: { url: picked.url, name: picked.title, galleryAssetId: id },
+        }
+      })
+    } catch {
+      setBackgroundError(
+        'That image could not be loaded. Try again, or choose another.',
+      )
+    }
+  }
+
+  /**
+   * An upload now in the gallery is kept in every state undo and redo can
+   * reach, with no step of its own: it is kept whichever one is shown.
+   */
+  const markKept = (url: string, galleryAssetId: string) =>
+    setHistory((prev) =>
+      mapStates(prev, (states) =>
+        states.map((scene) =>
+          scene.design.background.image?.url === url
+            ? {
+                ...scene,
+                design: {
+                  ...scene.design,
+                  background: {
+                    ...scene.design.background,
+                    image: { ...scene.design.background.image, galleryAssetId },
+                  },
+                },
+              }
+            : scene,
+        ),
+      ),
+    )
 
   const clearBackgroundImage = () => {
     backgroundUploads.current.set(
@@ -491,6 +576,7 @@ export function MemeGenerator({
       (backgroundUploads.current.get(editingKey) ?? 0) + 1,
     )
     settleUpload(editingKey)
+    setBackgroundError(null)
     setBackground({ image: null })
   }
 
@@ -1175,6 +1261,70 @@ export function MemeGenerator({
               </div>
             </div>
 
+            <div className="space-y-3">
+              {gallery && (
+                <BackgroundGalleryPicker
+                  gallery={gallery}
+                  onPick={pickGalleryBackground}
+                />
+              )}
+              <div>
+                <label htmlFor="backgroundImage" className={styles.label}>
+                  <ArrowUpTrayIcon className="mr-1 inline h-4 w-4" />
+                  Upload Background Image
+                </label>
+                <input
+                  type="file"
+                  id="backgroundImage"
+                  accept="image/*"
+                  onChange={handleBackgroundImageUpload}
+                  className="w-full text-sm text-brand-slate-gray file:mr-4 file:rounded file:border-0 file:bg-brand-cloud-blue file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-brand-cloud-blue/90 dark:text-gray-300 dark:file:bg-blue-600 dark:hover:file:bg-blue-700"
+                />
+              </div>
+              {backgroundError && (
+                <p
+                  role="alert"
+                  className="rounded-md bg-red-50 p-3 text-sm text-red-800 dark:bg-red-950/60 dark:text-red-200"
+                >
+                  {backgroundError}
+                </p>
+              )}
+            </div>
+
+            {background.image && (
+              <div className="space-y-3">
+                <div className="flex items-center gap-4">
+                  <p className="min-w-0 flex-1 truncate text-sm text-brand-slate-gray dark:text-gray-300">
+                    Current: {background.image.name}
+                  </p>
+                  <button
+                    onClick={clearBackgroundImage}
+                    className="flex items-center gap-2 rounded bg-red-500 px-3 py-2 text-sm text-white hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-700"
+                    aria-label="Clear background image"
+                  >
+                    <XMarkIcon className="h-4 w-4" />
+                    Clear
+                  </button>
+                </div>
+                {background.image.galleryAssetId ? (
+                  <p className="text-sm text-brand-slate-gray dark:text-gray-400">
+                    In the gallery.
+                  </p>
+                ) : (
+                  gallery &&
+                  keptFile && (
+                    <KeepInGallery
+                      // A fresh form for each upload.
+                      key={background.image.url}
+                      file={keptFile}
+                      keep={gallery.keep}
+                      onKept={(id) => markKept(background.image!.url, id)}
+                    />
+                  )
+                )}
+              </div>
+            )}
+
             <button
               onClick={() => setShowBackgroundAdvanced(!showBackgroundAdvanced)}
               className="flex w-full items-center justify-between text-sm text-brand-slate-gray hover:text-brand-cloud-blue dark:text-gray-400 dark:hover:text-blue-400"
@@ -1201,36 +1351,6 @@ export function MemeGenerator({
                     className="h-10 w-full cursor-pointer rounded border border-brand-frosted-steel dark:border-gray-600"
                   />
                 </div>
-
-                <div>
-                  <label htmlFor="backgroundImage" className={styles.label}>
-                    <ArrowUpTrayIcon className="mr-1 inline h-4 w-4" />
-                    Upload Background Image
-                  </label>
-                  <input
-                    type="file"
-                    id="backgroundImage"
-                    accept="image/*"
-                    onChange={handleBackgroundImageUpload}
-                    className="w-full text-sm text-brand-slate-gray file:mr-4 file:rounded file:border-0 file:bg-brand-cloud-blue file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-brand-cloud-blue/90 dark:text-gray-300 dark:file:bg-blue-600 dark:hover:file:bg-blue-700"
-                  />
-                </div>
-              </div>
-            )}
-
-            {background.image && (
-              <div className="flex items-center gap-4">
-                <p className="flex-1 text-sm text-brand-slate-gray dark:text-gray-300">
-                  Current: {background.image.name}
-                </p>
-                <button
-                  onClick={clearBackgroundImage}
-                  className="flex items-center gap-2 rounded bg-red-500 px-3 py-2 text-sm text-white hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-700"
-                  aria-label="Clear background image"
-                >
-                  <XMarkIcon className="h-4 w-4" />
-                  Clear
-                </button>
               </div>
             )}
 

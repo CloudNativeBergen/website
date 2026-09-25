@@ -57,8 +57,11 @@ export interface QrStyle {
 export interface MemeDesign {
   background: {
     color: string
-    /** An uploaded image, as a data URL, and the file's name for the UI. */
-    image: { url: string; name: string } | null
+    /**
+     * The image: an upload as a data URL, or a gallery image as a same-origin
+     * URL; its name for the UI; and, once it is in the gallery, which asset.
+     */
+    image: { url: string; name: string; galleryAssetId?: string } | null
   }
   textLines: TextLine[]
   logo: {

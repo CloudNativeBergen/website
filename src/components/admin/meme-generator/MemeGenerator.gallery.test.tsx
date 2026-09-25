@@ -1,0 +1,210 @@
+/**
+ * @vitest-environment jsdom
+ *
+ * Gallery images as scene backgrounds (#1180): picked from the organization's
+ * gallery, or an upload kept in it. The gallery is injected, so this pins what
+ * the editor does with it; the server's side (the id proven ours, the
+ * same-origin proxy URL) is marketingAsset.test's, and the real canvas the
+ * story's.
+ */
+import {
+  describe,
+  it,
+  expect,
+  vi,
+  beforeEach,
+  afterEach,
+  onTestFinished,
+} from 'vitest'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import type { MemeAssets, MemeDesign } from './meme-generator-draw'
+import type { BackgroundGallery } from './meme-generator-gallery'
+
+const drawDesign =
+  vi.fn<
+    (ctx: unknown, design: MemeDesign, assets: MemeAssets, time: number) => void
+  >()
+vi.mock('./meme-generator-draw', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./meme-generator-draw')>()),
+  drawDesign: (...args: [unknown, MemeDesign, MemeAssets, number]) =>
+    drawDesign(...args),
+}))
+
+import { MemeGenerator } from './MemeGenerator'
+
+const HALL = {
+  _id: 'asset-hall',
+  title: 'Keynote hall',
+  alt: 'The main hall from the stage',
+  thumbnailUrl: 'https://cdn.sanity.io/images/p/d/hall.jpg?w=240',
+}
+const HALL_URL = '/api/proxy-image?url=hall'
+
+function fakeGallery(overrides: Partial<BackgroundGallery> = {}) {
+  return {
+    images: vi.fn(async () => [HALL]),
+    resolve: vi.fn(async (id: string) => ({
+      _id: id,
+      title: HALL.title,
+      url: HALL_URL,
+    })),
+    keep: vi.fn(async () => ({ _id: 'asset-kept' })),
+    ...overrides,
+  } satisfies BackgroundGallery
+}
+
+beforeEach(() => {
+  drawDesign.mockReset()
+  // A context the draw can be "given"; the draw itself is mocked.
+  vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(
+    {} as unknown as CanvasRenderingContext2D,
+  )
+  Object.defineProperty(HTMLImageElement.prototype, 'decode', {
+    configurable: true,
+    value: () => Promise.resolve(),
+  })
+  onTestFinished(() => {
+    Reflect.deleteProperty(HTMLImageElement.prototype, 'decode')
+  })
+})
+
+afterEach(() => {
+  vi.restoreAllMocks()
+})
+
+const lastDrawn = () => {
+  const [, design, assets] = drawDesign.mock.lastCall!
+  return { image: design.background.image, raster: assets.background }
+}
+const upload = (name = 'photo.png') =>
+  fireEvent.change(screen.getByLabelText(/Upload Background Image/), {
+    target: { files: [new File(['x'], name, { type: 'image/png' })] },
+  })
+
+describe('a gallery image as the background', () => {
+  it('is picked by id and drawn from the URL the gallery resolves', async () => {
+    const gallery = fakeGallery()
+    render(<MemeGenerator gallery={gallery} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Choose from gallery' }))
+    fireEvent.click(await screen.findByRole('button', { name: /Keynote hall/ }))
+
+    await screen.findByText('Current: Keynote hall')
+    expect(gallery.resolve).toHaveBeenCalledWith('asset-hall')
+    await waitFor(() => {
+      expect(lastDrawn().image).toEqual({
+        url: HALL_URL,
+        name: 'Keynote hall',
+        galleryAssetId: 'asset-hall',
+      })
+      expect(lastDrawn().raster).not.toBeNull()
+    })
+    // Already in the gallery: nothing to keep.
+    expect(
+      screen.queryByRole('button', { name: 'Keep in gallery' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('says so when the image cannot be had, and leaves the background as it was', async () => {
+    const gallery = fakeGallery({
+      resolve: vi.fn(async () => {
+        throw new Error('No marketingAsset with that id for this request')
+      }),
+    })
+    render(<MemeGenerator gallery={gallery} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Choose from gallery' }))
+    fireEvent.click(await screen.findByRole('button', { name: /Keynote hall/ }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'That image could not be loaded',
+    )
+    expect(screen.queryByText(/^Current:/)).not.toBeInTheDocument()
+  })
+})
+
+describe('an uploaded background', () => {
+  it('works without being kept, and is never sent anywhere', async () => {
+    const gallery = fakeGallery()
+    render(<MemeGenerator gallery={gallery} />)
+    upload()
+    await screen.findByText('Current: photo.png')
+    await waitFor(() => {
+      expect(lastDrawn().image).toMatchObject({ name: 'photo.png' })
+      expect(lastDrawn().raster).not.toBeNull()
+    })
+    expect(lastDrawn().image?.galleryAssetId).toBeUndefined()
+    expect(gallery.keep).not.toHaveBeenCalled()
+  })
+
+  it('works with no gallery at all, which offers neither picking nor keeping', async () => {
+    render(<MemeGenerator />)
+    upload()
+    await screen.findByText('Current: photo.png')
+    expect(
+      screen.queryByRole('button', { name: 'Choose from gallery' }),
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Keep in gallery' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('is kept in the gallery with a title and the alt text it requires', async () => {
+    const keep = vi.fn(
+      async (_file: File, _details: { title: string; alt: string }) => ({
+        _id: 'asset-kept',
+      }),
+    )
+    render(<MemeGenerator gallery={fakeGallery({ keep })} />)
+    upload('stage-photo.png')
+    await screen.findByText('Current: stage-photo.png')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Keep in gallery' }))
+    const title = screen.getByLabelText('Title') as HTMLInputElement
+    expect(title.value).toBe('stage-photo')
+    const save = screen.getByRole('button', { name: 'Save to gallery' })
+    // No alt text, no save.
+    expect(save).toBeDisabled()
+    fireEvent.change(title, { target: { value: 'The stage' } })
+    fireEvent.change(screen.getByLabelText('Alt text'), {
+      target: { value: 'An empty stage before the keynote' },
+    })
+    fireEvent.click(save)
+
+    await screen.findByText('In the gallery.')
+    expect(keep).toHaveBeenCalledTimes(1)
+    const [file, details] = keep.mock.calls[0]
+    expect(file.name).toBe('stage-photo.png')
+    expect(details).toEqual({
+      title: 'The stage',
+      alt: 'An empty stage before the keynote',
+    })
+    await waitFor(() =>
+      expect(lastDrawn().image?.galleryAssetId).toBe('asset-kept'),
+    )
+    expect(
+      screen.queryByRole('button', { name: 'Keep in gallery' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('shows the gallery’s refusal and stays unkept', async () => {
+    const gallery = fakeGallery({
+      keep: vi.fn(async () => {
+        throw new Error('Use a PNG, JPEG or WebP image.')
+      }),
+    })
+    render(<MemeGenerator gallery={gallery} />)
+    upload()
+    await screen.findByText('Current: photo.png')
+    fireEvent.click(screen.getByRole('button', { name: 'Keep in gallery' }))
+    fireEvent.change(screen.getByLabelText('Alt text'), {
+      target: { value: 'A photo' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Save to gallery' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Use a PNG, JPEG or WebP image.',
+    )
+    expect(lastDrawn().image?.galleryAssetId).toBeUndefined()
+  })
+})
