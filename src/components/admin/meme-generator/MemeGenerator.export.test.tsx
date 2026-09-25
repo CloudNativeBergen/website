@@ -200,4 +200,18 @@ describe('Export MP4', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Video' }))
     expect(screen.getByRole('link', { name: /Download video/ })).toBeVisible()
   })
+
+  it('asks the encoder about support only once Video mode is shown', async () => {
+    const { encoder } = fakeEncoder()
+    const supports = vi.spyOn(encoder, 'supports')
+    render(<MemeGenerator encoder={encoder} />)
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(supports).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Video' }))
+    await waitFor(() => expect(supports).toHaveBeenCalledTimes(1))
+    fireEvent.click(screen.getByRole('button', { name: 'Image' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Video' }))
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(supports).toHaveBeenCalledTimes(1)
+  })
 })

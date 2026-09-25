@@ -73,9 +73,18 @@ export const mediabunnyBackend: EncoderBackend = {
       () => packets++,
     )
     // An abort settles the probe only once the encoder is closed, so the
-    // next check never opens one while this one still holds it.
+    // next check never opens one while this one still holds it. Known hole:
+    // once finalize() has begun, Mediabunny ignores cancel(), so a probe
+    // stuck in its flush settles at once and its encoder may linger — the
+    // proof saw Safari stall in add(), before the flush, never inside it.
     const aborted = new Promise<false>((resolve) => {
       const stop = () => {
+        // A probe that finished is already closed; cancelling it again only
+        // makes Mediabunny warn "Output has already been finalized".
+        if (output.state === 'finalized' || output.state === 'canceled') {
+          resolve(false)
+          return
+        }
         output
           .cancel()
           .catch(() => {})

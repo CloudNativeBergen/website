@@ -36,6 +36,7 @@ vi.mock('mediabunny', () => {
     }
     finalize() {
       log.push('finalize')
+      this.state = 'finalized'
       return Promise.resolve()
     }
   }
@@ -95,5 +96,20 @@ describe('mediabunnyBackend.probe', () => {
       'closed',
       'settled:false',
     ])
+  })
+
+  it('does not cancel a probe that already finished when it is let go of', async () => {
+    const abort = new AbortController()
+    const probe = mediabunnyBackend.probe('quality', abort.signal)
+    await vi.waitFor(() => expect(log).toContain('start'))
+    releaseStart()
+    // The mocked encoder emits no packets, so the probe reports false — what
+    // matters is what happens after it finished.
+    await probe
+    expect(log).toContain('finalize')
+    // pickLatencyMode always aborts a probe once it is done with it.
+    abort.abort()
+    await tick()
+    expect(log).not.toContain('cancel')
   })
 })

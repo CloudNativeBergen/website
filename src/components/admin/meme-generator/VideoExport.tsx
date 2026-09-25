@@ -57,19 +57,26 @@ function statusText(
 }
 
 /**
- * Export to MP4, in the browser. Support is asked of the encoder when the
- * panel appears; where it says no, the button says why and nothing is made.
+ * Export to MP4, in the browser. Support is asked of the encoder the first
+ * time the panel is shown; where it says no, the button says why and nothing
+ * is made.
  */
 export function VideoExport({
   encoder,
   prepare,
   waiting,
+  active,
 }: {
   encoder: EncoderBackend
   /** A snapshot of the video as it is when Export is pressed. */
   prepare: () => ExportJob
   /** True while an image or font the video draws is still loading. */
   waiting: boolean
+  /**
+   * Whether the panel is on screen. Support is asked — and the encoder's
+   * code fetched — only once it first is, so Image mode never loads it.
+   */
+  active: boolean
 }) {
   const [supported, setSupported] = useState<boolean | null>(null)
   const [status, setStatus] = useState<Status>({ kind: 'idle' })
@@ -77,6 +84,7 @@ export function VideoExport({
   const statusId = useId()
 
   useEffect(() => {
+    if (!active || supported !== null) return
     let cancelled = false
     encoder.supports().then(
       (ok) => !cancelled && setSupported(ok),
@@ -85,7 +93,7 @@ export function VideoExport({
     return () => {
       cancelled = true
     }
-  }, [encoder])
+  }, [encoder, active, supported])
 
   // A finished file's URL is let go of when it is replaced, and on leaving.
   const doneUrl = status.kind === 'done' ? status.url : null
