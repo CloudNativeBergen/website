@@ -8,6 +8,7 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import {
+  act,
   render,
   screen,
   fireEvent,
@@ -32,6 +33,22 @@ vi.mock('./meme-generator-draw', async (importOriginal) => ({
   drawDesign: (...args: Parameters<typeof drawDesign>) => drawDesign(...args),
 }))
 
+// Font loading, with the hook a face that lands after its timeout calls.
+let lateFace = () => {}
+vi.mock('./meme-generator-fonts', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./meme-generator-fonts')>()
+  return {
+    ...actual,
+    loadCanvasFonts: (
+      ...args: Parameters<typeof actual.loadCanvasFonts>
+    ): Promise<void> => {
+      const onLate = args[2]?.onLate
+      if (onLate) lateFace = onLate
+      return Promise.resolve()
+    },
+  }
+})
+
 import { MemeGenerator } from './MemeGenerator'
 
 beforeEach(() => {
@@ -53,12 +70,19 @@ afterEach(() => {
 
 interface Fake {
   supported?: boolean
+  /** Bytes each frame adds to the file; 50 kB unless set. */
+  bytesPerFrame?: number
   failAt?: number
   /** Frames from this one on never settle, until the export is cancelled. */
   holdAt?: number
 }
 
-function fakeEncoder({ supported = true, failAt, holdAt }: Fake = {}) {
+function fakeEncoder({
+  supported = true,
+  failAt,
+  holdAt,
+  bytesPerFrame = 50_000,
+}: Fake = {}) {
   const added: number[] = []
   const state = { opened: 0, cancelled: 0 }
   const encoder: EncoderBackend = {
@@ -66,6 +90,7 @@ function fakeEncoder({ supported = true, failAt, holdAt }: Fake = {}) {
     probe: async () => true,
     open: async (): Promise<EncodeSession> => {
       state.opened++
+      let frames = 0
       return {
         add: (timestamp) => {
           const frame = Math.round(timestamp * 30)
@@ -74,11 +99,12 @@ function fakeEncoder({ supported = true, failAt, holdAt }: Fake = {}) {
           if (holdAt !== undefined && frame >= holdAt)
             return new Promise(() => {})
           added.push(frame)
+          frames++
           return Promise.resolve()
         },
-        // 50 kB a frame: comfortably over the bitrate floor.
+        // This session's frames only: a second pass makes a file of its own.
         finish: async () =>
-          new Blob([new Uint8Array(added.length * 50_000)], {
+          new Blob([new Uint8Array(frames * bytesPerFrame)], {
             type: 'video/mp4',
           }),
         cancel: async () => {
@@ -172,7 +198,8 @@ describe('Export MP4', () => {
     })
     // 45 of 90 frames in: half way.
     await waitFor(() => expect(bar).toHaveAttribute('aria-valuenow', '50'))
-    expect(status()).toHaveTextContent('Exporting… 50 %')
+    // The live region names the phase; only the bar carries the number.
+    expect(status()).toHaveTextContent(/^Exporting…$/)
 
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
     await waitFor(() => expect(status()).toHaveTextContent('Export cancelled.'))
@@ -266,5 +293,69 @@ describe('Export MP4', () => {
     expect(
       screen.getByRole('link', { name: /Download video/ }),
     ).toBeInTheDocument()
+  })
+
+  it('keeps the last good file when a re-export fails', async () => {
+    const good = fakeEncoder()
+    const { rerender } = render(<MemeGenerator encoder={good.encoder} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Video' }))
+    await waitFor(() =>
+      expect(exportButton()).not.toHaveAttribute('aria-disabled'),
+    )
+    fireEvent.click(exportButton())
+    await screen.findByRole(
+      'link',
+      { name: /Download video/ },
+      { timeout: 5000 },
+    )
+    rerender(<MemeGenerator encoder={fakeEncoder({ failAt: 10 }).encoder} />)
+    fireEvent.click(exportButton())
+    await waitFor(() =>
+      expect(status()).toHaveTextContent(
+        'The export failed. The encoder failed: Error: EncodingError: the encoder broke Your earlier export is still available.',
+      ),
+    )
+    const link = screen.getByRole('link', { name: /Download earlier export/ })
+    expect(link).toHaveAttribute('href', 'blob:video')
+    expect(URL.revokeObjectURL).not.toHaveBeenCalled()
+  })
+
+  it('marks a finished file out of date when a late font face repaints the video', async () => {
+    const { encoder } = fakeEncoder()
+    openVideo(encoder)
+    fireEvent.change(screen.getAllByPlaceholderText('Enter your text...')[0], {
+      target: { value: 'Hello' },
+    })
+    await waitFor(() =>
+      expect(exportButton()).not.toHaveAttribute('aria-disabled'),
+    )
+    fireEvent.click(exportButton())
+    await screen.findByRole(
+      'link',
+      { name: /Download video/ },
+      { timeout: 5000 },
+    )
+    act(() => lateFace())
+    expect(status()).toHaveTextContent(
+      'The video has changed since this export.',
+    )
+  })
+
+  it("says when a file is under LinkedIn's smallest size", async () => {
+    // 3 s of 800-byte frames: 72,000 bytes, exactly 192 kbit/s.
+    const { encoder } = fakeEncoder({ bytesPerFrame: 800 })
+    openVideo(encoder)
+    await waitFor(() =>
+      expect(exportButton()).not.toHaveAttribute('aria-disabled'),
+    )
+    fireEvent.click(exportButton())
+    await screen.findByRole(
+      'link',
+      { name: /Download video/ },
+      { timeout: 5000 },
+    )
+    expect(status()).toHaveTextContent(
+      'Your video is ready. It is 70 KB, and LinkedIn takes files of 75 KB or more.',
+    )
   })
 })

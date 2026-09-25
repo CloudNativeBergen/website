@@ -22,6 +22,12 @@ export const MIN_BITRATE = 192_000
  * a shorter export is still made — and the organizer is told.
  */
 export const LINKEDIN_MIN_SECONDS = 3
+/**
+ * LinkedIn's smallest file (proof §7: "75 KB"), read as KiB to be safe. A
+ * short flat clip can be over the bitrate floor and still under this: 3 s
+ * at 192 kbit/s is 72,000 bytes.
+ */
+export const LINKEDIN_MIN_BYTES = 75 * 1024
 export const PROBE_FRAMES = 10
 /**
  * Around the whole probe, frames and flush alike (proof §8.1). Longer for
@@ -308,6 +314,7 @@ export async function exportVideo({
 
   const duration = frameCount / FPS
   let bitrate = 0
+  let last: ExportResult | null = null
   for (const [index, encoding] of passes.entries()) {
     if (signal.aborted) throw new ExportCancelled()
     const opening = backend.open(canvas, encoding)
@@ -326,8 +333,14 @@ export async function exportVideo({
         onProgress({ phase: 'encoding', fraction, pass: index + 1 }),
     })
     bitrate = (blob.size * 8) / duration
-    if (bitrate >= MIN_BITRATE) return { blob, bitrate, encoding }
+    // Also re-encoded when the file is under LinkedIn's smallest size…
+    if (bitrate >= MIN_BITRATE && blob.size >= LINKEDIN_MIN_BYTES)
+      return { blob, bitrate, encoding }
+    if (bitrate >= MIN_BITRATE) last = { blob, bitrate, encoding }
   }
+  // …but only the bitrate floor refuses a file: one still under the size,
+  // after every pass, is made, and the panel says it is not for LinkedIn.
+  if (last) return last
   throw new ExportFailed(
     'bitrate',
     `The video came out at ${kbits(bitrate)}, under the ${kbits(MIN_BITRATE)} LinkedIn requires. Try a design with more detail.`,

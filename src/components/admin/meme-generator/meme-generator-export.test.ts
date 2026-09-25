@@ -3,6 +3,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest'
 import {
   ExportCancelled,
   ExportFailed,
+  LINKEDIN_MIN_BYTES,
   MIN_BITRATE,
   PROBE_FAILED_MESSAGE,
   PROBE_TIMEOUT_MS,
@@ -386,5 +387,28 @@ describe('exportVideo', () => {
     await vi.advanceTimersByTimeAsync(1_000)
     expect(await settled).toBeInstanceOf(ExportCancelled)
     expect(log).not.toContain('probe:realtime')
+  })
+
+  it("re-encodes a file over the bitrate floor but under LinkedIn's smallest size", async () => {
+    // 800 bytes a frame over 3 s is exactly 192 kbit/s, yet 72,000 bytes.
+    const { backend, sessions } = fakeBackend({
+      bytesPerFrame: { default: 800, 'every-frame': 1_000 },
+    })
+    const result = await run(backend).promise
+    expect(sessions.map((s) => s.encoding.keyFrames)).toEqual([
+      'default',
+      'every-frame',
+    ])
+    expect(result.blob.size).toBe(90_000)
+    expect(result.blob.size).toBeGreaterThanOrEqual(LINKEDIN_MIN_BYTES)
+  })
+
+  it('still makes a file that stays under the size after every pass', async () => {
+    const { backend } = fakeBackend({
+      bytesPerFrame: { default: 800, 'every-frame': 820 },
+    })
+    const result = await run(backend).promise
+    expect(result.blob.size).toBe(73_800)
+    expect(result.encoding.keyFrames).toBe('every-frame')
   })
 })

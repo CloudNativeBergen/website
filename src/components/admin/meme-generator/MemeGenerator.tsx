@@ -1145,7 +1145,8 @@ export function MemeGenerator({
             prepare={prepareExport}
             waiting={capturePending}
             active={mode === 'video'}
-            revision={scenes}
+            // The scenes, and the late-arriving font faces that repaint them.
+            revision={[scenes, lateFaces]}
           />
         </div>
       </div>
