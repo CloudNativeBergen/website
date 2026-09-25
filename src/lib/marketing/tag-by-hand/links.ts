@@ -35,10 +35,9 @@ function pageUrl(raw: string, sections: readonly string[]): string | null {
 }
 
 /** A speaker's LinkedIn profile: the first `linkedin.com/in/…` link. */
-export function linkedinProfileUrl(
-  links: readonly string[] | null | undefined,
-): string | null {
-  for (const link of links ?? []) {
+export function linkedinProfileUrl(links: unknown): string | null {
+  if (!Array.isArray(links)) return null
+  for (const link of links) {
     const url = typeof link === 'string' ? pageUrl(link, ['in']) : null
     if (url) return url
   }

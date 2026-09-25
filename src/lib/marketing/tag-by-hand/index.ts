@@ -1,4 +1,3 @@
-export { linkedinCompanyUrl, linkedinProfileUrl } from './links'
 export {
   tagByHandEntries,
   type RawTagByHandSubject,

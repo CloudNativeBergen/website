@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { linkedinCompanyUrl, linkedinProfileUrl } from './index'
+import { linkedinCompanyUrl, linkedinProfileUrl } from './links'
+import { tagByHandEntries } from './index'
 
 describe('linkedinProfileUrl', () => {
   it('takes the first linkedin.com/in/ link among a speaker’s links', () => {
@@ -38,6 +39,10 @@ describe('linkedinProfileUrl', () => {
 
   it('finds nothing without a profile link', () => {
     expect(linkedinProfileUrl(undefined)).toBeNull()
+    expect(linkedinProfileUrl('https://www.linkedin.com/in/ada')).toBeNull()
+    expect(
+      linkedinProfileUrl([42, null, 'https://www.linkedin.com/in/ada']),
+    ).toBe('https://www.linkedin.com/in/ada')
     expect(linkedinProfileUrl([])).toBeNull()
     expect(
       linkedinProfileUrl([
@@ -69,5 +74,24 @@ describe('linkedinCompanyUrl', () => {
     expect(linkedinCompanyUrl('https://acme.example/company/acme')).toBeNull()
     expect(linkedinCompanyUrl('https://www.linkedin.com/')).toBeNull()
     expect(linkedinCompanyUrl('https://www.linkedin.com/company/')).toBeNull()
+  })
+})
+
+describe('tagByHandEntries', () => {
+  it('lists one row per page, in the subject’s order', () => {
+    expect(
+      tagByHandEntries({
+        people: [
+          { name: 'Ada', links: ['https://www.linkedin.com/in/ada/'] },
+          { name: 'Ada (again)', links: ['linkedin.com/in/ada?x=1'] },
+          { name: 'Bob', links: ['https://www.linkedin.com/in/bob'] },
+          { name: null, links: ['https://www.linkedin.com/in/nameless'] },
+        ],
+        company: null,
+      }),
+    ).toEqual([
+      { name: 'Ada', url: 'https://www.linkedin.com/in/ada', kind: 'person' },
+      { name: 'Bob', url: 'https://www.linkedin.com/in/bob', kind: 'person' },
+    ])
   })
 })

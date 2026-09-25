@@ -18,16 +18,17 @@ export interface RawTagByHandSubject {
   company: { name: string | null; url: string | null } | null
 }
 
-/** The list, in the subject's own order; people without a profile dropped. */
+/**
+ * The list, in the subject's own order; people without a profile dropped,
+ * and one row per page (a speaker listed twice on a talk, or two speakers
+ * who gave the same link, is one entry to tag).
+ */
 export function tagByHandEntries(
   raw: RawTagByHandSubject | null | undefined,
 ): TagByHandEntry[] {
   if (!raw) return []
   const people = (raw.people ?? []).flatMap((person): TagByHandEntry[] => {
-    const links = Array.isArray(person?.links)
-      ? person.links.filter((l): l is string => typeof l === 'string')
-      : []
-    const url = linkedinProfileUrl(links)
+    const url = linkedinProfileUrl(person?.links)
     return person?.name && url
       ? [{ name: person.name, url, kind: 'person' }]
       : []
@@ -37,5 +38,8 @@ export function tagByHandEntries(
     raw.company?.name && companyUrl
       ? [{ name: raw.company.name, url: companyUrl, kind: 'company' }]
       : []
-  return [...people, ...company]
+  const seen = new Set<string>()
+  return [...people, ...company].filter(
+    (entry) => !seen.has(entry.url) && Boolean(seen.add(entry.url)),
+  )
 }

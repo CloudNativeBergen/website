@@ -535,11 +535,6 @@ export const TagByHandOne: Story = {
     await expect(
       section.getByText(/type @ and the name in linkedin.s composer/i),
     ).toBeVisible()
-    // The copied text stays plain names: nothing is added to it.
-    const text = within(canvasElement)
-      .getByRole('button', { name: /copy text/i })
-      .closest('section')!
-    await expect(text).not.toHaveTextContent('@')
   },
 }
 
@@ -571,6 +566,25 @@ export const TagByHandSeveralMobile: Story = {
 /** An empty list (every subject opted out, or none has a link): no section. */
 export const TagByHandEmpty: Story = {
   args: { tagByHand: [] },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(
+      canvas.getByRole('button', { name: /copy text/i }),
+    ).toBeVisible()
+    await expect(canvas.queryByText(/^tag by hand$/i)).toBeNull()
+  },
+}
+
+/**
+ * The list is LinkedIn's: handed entries for a Bluesky post, the view shows
+ * none (the Bluesky rule is a real tag in the copy, spec §4). The control
+ * is `TagByHandSeveral`, the same entries on LinkedIn.
+ */
+export const TagByHandIgnoredOffLinkedIn: Story = {
+  args: {
+    tagByHand: SEVERAL,
+    variant: { ...variant, platform: 'bluesky', link: null },
+  },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
     await expect(

@@ -434,9 +434,17 @@ describe('getTaskEditorData — the LinkedIn "Tag by hand" list (#1155)', () => 
     expect((await getTaskEditorData('task-li', CONF_A))!.tagByHand).toEqual([])
   })
 
-  it('never sends the subject’s links or opt-out to the client', async () => {
+  it('sends an opted-out speaker’s links and opt-out nowhere in the payload', async () => {
     speaker('sp-1').socialTagOptOut = true
     const data = await getTaskEditorData('task-li', CONF_A)
+    const payload = JSON.stringify(data)
+    expect(payload).not.toContain('ada-l')
+    expect(payload).not.toContain('socialTagOptOut')
+    // The control: the same read without the opt-out carries the link.
+    speaker('sp-1').socialTagOptOut = false
+    expect(
+      JSON.stringify(await getTaskEditorData('task-li', CONF_A)),
+    ).toContain('https://www.linkedin.com/in/ada-l')
     expect(data!.task.subject).toEqual({
       _id: 'sp-1',
       type: 'speaker',

@@ -70,8 +70,11 @@ export function ManualPostView({
   imageSrc = defaultImageSrc,
   conferenceDomains = [],
   platformZone = null,
-  tagByHand = [],
+  tagByHand: tagByHandProp = [],
 }: ManualPostViewProps) {
+  // A LinkedIn list, whoever passes it: on any other platform the hint
+  // (type @ in the composer) would be wrong, so it is never shown there.
+  const tagByHand = variant.platform === 'linkedin' ? tagByHandProp : []
   const platform = SOCIAL_PLATFORM_LABELS[variant.platform]
   const constraints = getPlatformConstraints(variant.platform)
   const aspect = constraints?.imageAspectRatio ?? null
