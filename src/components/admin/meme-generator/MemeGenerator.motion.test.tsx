@@ -222,4 +222,26 @@ describe('what a paint is given', () => {
       expect(assets.background).toMatchObject({ prescaled: true })
     expect(prescaleForDrift).toHaveBeenCalledTimes(1)
   })
+
+  it('undoes one timing control at a time, however quickly the next follows', () => {
+    openVideo()
+    press(slider('Scene 1 Logo enters'), 'ArrowRight')
+    press(slider('Scene 1 Logo enters'), 'ArrowRight')
+    press(slider('Scene 1 Logo leaves'), 'ArrowLeft')
+    expect([
+      valueOf('Scene 1 Logo enters'),
+      valueOf('Scene 1 Logo leaves'),
+    ]).toEqual([0.2, 2.9])
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
+    // The leaves end alone goes back; the two presses on enters were one step.
+    expect([
+      valueOf('Scene 1 Logo enters'),
+      valueOf('Scene 1 Logo leaves'),
+    ]).toEqual([0.2, 3])
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
+    expect([
+      valueOf('Scene 1 Logo enters'),
+      valueOf('Scene 1 Logo leaves'),
+    ]).toEqual([0, 3])
+  })
 })

@@ -98,6 +98,7 @@ import {
   type PaintScene,
 } from './meme-generator-frame'
 import { VideoTimeline, type SceneRefusal } from './VideoTimeline'
+import type { TimingControl } from './VideoElements'
 import { useMediaQuery } from '@/hooks/useMediaQuery'
 import { PLATFORM_NAME } from '@/lib/branding/platform'
 
@@ -849,12 +850,12 @@ export function MemeGenerator({
     index: number,
     id: ElementId,
     motion: ElementMotion,
-    grouped: boolean,
+    control: TimingControl,
   ) =>
     patchMotion(
       index,
       (prev) => ({ ...prev, elements: { ...prev.elements, [id]: motion } }),
-      grouped ? `motion.${id}` : undefined,
+      control ? `motion.${id}.${control}` : undefined,
     )
   const changeDrift = (index: number, drift: boolean) =>
     patchMotion(index, (prev) => ({ ...prev, drift }))

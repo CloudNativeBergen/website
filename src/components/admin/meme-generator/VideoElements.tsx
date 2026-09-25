@@ -23,12 +23,18 @@ import {
   useDrag,
 } from './timeline-controls'
 
-/** A change to one element's bar. `grouped` folds a drag into one undo step. */
+/**
+ * What changed an element's timing. Consecutive changes by one control — a
+ * drag, or keys held on one end — fold into one undo step; a different
+ * control, or a preset picked (null), is a step of its own.
+ */
+export type TimingControl = 'enter' | 'leave' | 'bar' | null
+
 export type ElementChange = (
   index: number,
   id: ElementId,
   motion: ElementMotion,
-  grouped: boolean,
+  control: TimingControl,
 ) => void
 
 const PRESET_NAMES: Record<Preset, string> = {
@@ -140,7 +146,7 @@ function ElementBar({
   duration: number
   /** The scene's start on the track, in pixels. */
   left: number
-  onChange: (motion: ElementMotion) => void
+  onChange: (motion: ElementMotion, control: TimingControl) => void
 }) {
   const start = useRef(motion)
   const body = useDrag(
@@ -156,7 +162,7 @@ function ElementBar({
         duration,
       )
       if (moved.enter !== motion.enter || moved.leave !== motion.leave)
-        onChange(moved)
+        onChange(moved, 'bar')
     },
   )
   const width = (motion.leave - motion.enter) * PX_PER_SECOND
@@ -194,14 +200,14 @@ function ElementBar({
         label={`${name} enters`}
         motion={motion}
         duration={duration}
-        onChange={onChange}
+        onChange={(moved) => onChange(moved, 'enter')}
       />
       <BarEnd
         end="leave"
         label={`${name} leaves`}
         motion={motion}
         duration={duration}
-        onChange={onChange}
+        onChange={(moved) => onChange(moved, 'leave')}
       />
     </div>
   )
@@ -229,8 +235,8 @@ export function ElementBars({
                 motion={motionFor(scene.motion, row.id, scene.duration)}
                 duration={scene.duration}
                 left={sceneStart(scenes, index) * PX_PER_SECOND}
-                onChange={(motion) =>
-                  onElementChange(index, row.id, motion, true)
+                onChange={(motion, control) =>
+                  onElementChange(index, row.id, motion, control)
                 }
               />
             ) : null,
@@ -293,13 +299,13 @@ export function ElementFields({
               const motion = motionFor(scene.motion, element.id, duration)
               const change = (
                 patch: Partial<ElementMotion>,
-                grouped: boolean,
+                control: TimingControl,
               ) =>
                 onElementChange(
                   index,
                   element.id,
                   clampMotion({ ...motion, ...patch }, duration),
-                  grouped,
+                  control,
                 )
               const presetSelect = (which: 'entrance' | 'exit') => (
                 <select
@@ -313,7 +319,7 @@ export function ElementFields({
                           PRESETS.find((p) => p === event.target.value) ??
                           'none',
                       },
-                      false,
+                      null,
                     )
                   }
                   className={`${styles.input} w-28 min-w-28 py-1 text-xs`}
@@ -343,7 +349,10 @@ export function ElementFields({
                       min={0}
                       max={motion.leave}
                       onCommit={(enter) =>
-                        change(moveEnd(motion, 'enter', enter, duration), true)
+                        change(
+                          moveEnd(motion, 'enter', enter, duration),
+                          'enter',
+                        )
                       }
                     />
                   </td>
@@ -356,7 +365,10 @@ export function ElementFields({
                       min={motion.enter}
                       max={duration}
                       onCommit={(leave) =>
-                        change(moveEnd(motion, 'leave', leave, duration), true)
+                        change(
+                          moveEnd(motion, 'leave', leave, duration),
+                          'leave',
+                        )
                       }
                     />
                   </td>
