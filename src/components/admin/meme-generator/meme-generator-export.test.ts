@@ -40,6 +40,8 @@ interface FakeOptions {
   bytesPerFrame?: Partial<Record<Encoding['keyFrames'], number>>
   /** The frame whose add throws, or never settles. */
   failAt?: number
+  /** Only in this pass (1, 2…) does `failAt` throw; in every pass if unset. */
+  failPass?: number
   hangAt?: number
 }
 
@@ -90,7 +92,11 @@ function fakeBackend(options: FakeOptions = {}) {
       return {
         add: (timestamp) => {
           const n = Math.round(timestamp * 30)
-          if (n === options.failAt)
+          if (
+            n === options.failAt &&
+            (options.failPass === undefined ||
+              options.failPass === sessions.indexOf(session) + 1)
+          )
             return Promise.reject(new Error('EncodingError: boom'))
           if (n === options.hangAt) return new Promise(() => {})
           session.frames.push(n)
@@ -410,5 +416,30 @@ describe('exportVideo', () => {
     const result = await run(backend).promise
     expect(result.blob.size).toBe(73_800)
     expect(result.encoding.keyFrames).toBe('every-frame')
+  })
+
+  it('keeps the first file when the retry for size alone fails', async () => {
+    // Pass 1: 72,000 bytes, over the bitrate floor but under the size.
+    const { backend, sessions } = fakeBackend({
+      bytesPerFrame: { default: 800, 'every-frame': 1_000 },
+      failAt: 40,
+      failPass: 2,
+    })
+    const result = await run(backend).promise
+    expect(sessions).toHaveLength(2)
+    expect(result.blob.size).toBe(72_000)
+    expect(result.encoding.keyFrames).toBe('default')
+  })
+
+  it('does not retry a clip shorter than LinkedIn takes just for its size', async () => {
+    // 2 s of 800-byte frames: 48,000 bytes, exactly 192 kbit/s.
+    const { backend, sessions } = fakeBackend({
+      bytesPerFrame: { default: 800, 'every-frame': 1_000 },
+    })
+    const result = await run(backend, {
+      job: { canvas, frameCount: 60, paint: () => {} },
+    }).promise
+    expect(sessions).toHaveLength(1)
+    expect(result.blob.size).toBe(48_000)
   })
 })

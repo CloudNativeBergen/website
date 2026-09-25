@@ -1904,6 +1904,18 @@ export const VideoDurationDragGivesBarsBack: Story = {
 // ── Export to MP4 (#1177) ─────────────────────────────────────────────────
 
 /**
+ * Press Export once it will act: on a cold load the fonts can hold it for
+ * up to three seconds, and a press before then is (rightly) ignored.
+ */
+async function pressExport(panel: HTMLElement) {
+  const button = within(panel).getByRole('button', { name: 'Export MP4' })
+  await waitFor(() => expect(button).not.toHaveAttribute('aria-disabled'), {
+    timeout: 5000,
+  })
+  await userEvent.click(button)
+}
+
+/**
  * The real encoder, whichever way it answers: headless Chromium commonly
  * has no H.264 encoder, a desktop Chrome does. Where it says no, the refusal
  * is shown and nothing is made. Where it says yes, a blue scene whose
@@ -1942,9 +1954,7 @@ export const VideoExportRealEncoder: Story = {
       expect(within(panel).queryByRole('link')).toBeNull()
       return
     }
-    await userEvent.click(
-      within(panel).getByRole('button', { name: 'Export MP4' }),
-    )
+    await pressExport(panel)
     const link = await within(panel).findByRole(
       'link',
       { name: /Download video/ },
@@ -2013,9 +2023,7 @@ export const VideoExportFailsMidway: Story = {
     const canvas = within(canvasElement)
     await userEvent.click(canvas.getByRole('button', { name: 'Video' }))
     const panel = canvas.getByRole('region', { name: 'Export' })
-    await userEvent.click(
-      within(panel).getByRole('button', { name: 'Export MP4' }),
-    )
+    await pressExport(panel)
     await waitFor(() =>
       expect(within(panel).getByRole('status')).toHaveTextContent(
         'The export failed. The encoder failed: Error: EncodingError: The given encoding is not supported.',

@@ -47,17 +47,15 @@ async function openOutput(
 export const mediabunnyBackend: EncoderBackend = {
   async supports() {
     if (typeof VideoEncoder === 'undefined') return false
-    try {
-      const { canEncodeVideo } = await loadMediabunny()
-      return await canEncodeVideo('avc', {
-        width: CANVAS_SIZE,
-        height: CANVAS_SIZE,
-        bitrate: TARGET_BITRATE,
-        frameRate: FPS,
-      })
-    } catch {
-      return false
-    }
+    // A chunk that fails to load rejects, so the panel can offer a retry;
+    // only the encoder itself answers no.
+    const { canEncodeVideo } = await loadMediabunny()
+    return canEncodeVideo('avc', {
+      width: CANVAS_SIZE,
+      height: CANVAS_SIZE,
+      bitrate: TARGET_BITRATE,
+      frameRate: FPS,
+    })
   },
 
   async probe(latencyMode, signal) {

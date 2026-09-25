@@ -358,4 +358,27 @@ describe('Export MP4', () => {
       'Your video is ready. It is 70 KB, and LinkedIn takes files of 75 KB or more.',
     )
   })
+
+  it('offers a retry when the encoder could not be loaded, instead of calling the browser unsupported', async () => {
+    const { encoder } = fakeEncoder()
+    const supports = vi
+      .spyOn(encoder, 'supports')
+      .mockRejectedValueOnce(
+        new Error('Failed to fetch dynamically imported module'),
+      )
+    openVideo(encoder)
+    await waitFor(() =>
+      expect(status()).toHaveTextContent(
+        'The video encoder could not be loaded. Check your connection, then press Export MP4 to try again.',
+      ),
+    )
+    expect(exportButton()).not.toHaveAttribute('aria-disabled')
+    fireEvent.click(exportButton())
+    await waitFor(() => expect(supports).toHaveBeenCalledTimes(2))
+    await waitFor(() =>
+      expect(status()).toHaveTextContent(
+        'H.264, 1080 × 1080, 30 frames a second, silent.',
+      ),
+    )
+  })
 })

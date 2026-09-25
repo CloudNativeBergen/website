@@ -39,6 +39,9 @@ interface ExportedFile {
 const sameRevision = (a: readonly unknown[], b: readonly unknown[]) =>
   a.length === b.length && a.every((part, i) => Object.is(part, b[i]))
 
+const LOAD_FAILED_MESSAGE =
+  'The video encoder could not be loaded. Check your connection, then press Export MP4 to try again.'
+
 const megabytes = (bytes: number) => `${(bytes / 1_000_000).toFixed(1)} MB`
 
 /**
@@ -68,12 +71,13 @@ function linkedInWarnings(file: ExportedFile): string[] {
 
 function statusText(
   status: Status,
-  supported: boolean | null,
+  supported: boolean | 'error' | null,
   waiting: boolean,
   file: ExportedFile | null,
   stale: boolean,
 ): string {
   if (supported === false) return UNSUPPORTED_MESSAGE
+  if (supported === 'error') return LOAD_FAILED_MESSAGE
   const kept = file ? ' Your earlier export is still available.' : ''
   switch (status.kind) {
     case 'running':
@@ -127,7 +131,8 @@ export function VideoExport({
    */
   active: boolean
 }) {
-  const [supported, setSupported] = useState<boolean | null>(null)
+  // null until asked; 'error' when asking failed and may be tried again.
+  const [supported, setSupported] = useState<boolean | 'error' | null>(null)
   const [status, setStatus] = useState<Status>({ kind: 'idle' })
   const [file, setFile] = useState<ExportedFile | null>(null)
   const controller = useRef<AbortController | null>(null)
@@ -138,7 +143,7 @@ export function VideoExport({
     let cancelled = false
     encoder.supports().then(
       (ok) => !cancelled && setSupported(ok),
-      () => !cancelled && setSupported(false),
+      () => !cancelled && setSupported('error'),
     )
     return () => {
       cancelled = true
@@ -163,6 +168,11 @@ export function VideoExport({
   const blocked = supported === false || waiting || running
 
   const start = async () => {
+    // The encoder's code failed to load: pressing Export asks again.
+    if (supported === 'error') {
+      setSupported(null)
+      return
+    }
     if (blocked) return
     const abort = new AbortController()
     controller.current = abort
@@ -277,7 +287,9 @@ export function VideoExport({
         id={statusId}
         role="status"
         className={`mt-2 text-sm ${
-          status.kind === 'failed' || supported === false
+          status.kind === 'failed' ||
+          supported === false ||
+          supported === 'error'
             ? 'text-red-700 dark:text-red-400'
             : ''
         }`}

@@ -73,7 +73,9 @@ export interface EncodeSession {
 export interface EncoderBackend {
   /**
    * Whether the encoder takes H.264 at 1080×1080 and 30 fps — asked about
-   * the exact configuration, never assumed.
+   * the exact configuration, never assumed. Rejects, rather than answering
+   * no, when the question could not be asked (the encoder's code failed to
+   * load): that is worth trying again, an honest no is not.
    */
   supports(): Promise<boolean>
   /**
@@ -317,24 +319,38 @@ export async function exportVideo({
   let last: ExportResult | null = null
   for (const [index, encoding] of passes.entries()) {
     if (signal.aborted) throw new ExportCancelled()
-    const opening = backend.open(canvas, encoding)
-    const session = await answer(opening).catch((error: unknown) => {
-      // One that finishes opening after a cancel or a stall is closed then.
-      void opening.then((late) => late.cancel()).catch(() => {})
+    let blob: Blob
+    try {
+      const opening = backend.open(canvas, encoding)
+      const session = await answer(opening).catch((error: unknown) => {
+        // One that finishes opening after a cancel or a stall is closed then.
+        void opening.then((late) => late.cancel()).catch(() => {})
+        throw error
+      })
+      onProgress({ phase: 'encoding', fraction: 0, pass: index + 1 })
+      blob = await encodePass(session, {
+        frameCount,
+        paint,
+        signal,
+        yieldTask,
+        onFraction: (fraction) =>
+          onProgress({ phase: 'encoding', fraction, pass: index + 1 }),
+      })
+    } catch (error) {
+      // A retry for size alone that fails leaves the file it was retrying:
+      // that one already cleared the bitrate floor. A cancel is a cancel.
+      if (last && !(error instanceof ExportCancelled)) return last
       throw error
-    })
-    onProgress({ phase: 'encoding', fraction: 0, pass: index + 1 })
-    const blob = await encodePass(session, {
-      frameCount,
-      paint,
-      signal,
-      yieldTask,
-      onFraction: (fraction) =>
-        onProgress({ phase: 'encoding', fraction, pass: index + 1 }),
-    })
+    }
     bitrate = (blob.size * 8) / duration
-    // Also re-encoded when the file is under LinkedIn's smallest size…
-    if (bitrate >= MIN_BITRATE && blob.size >= LINKEDIN_MIN_BYTES)
+    // Also re-encoded when the file is under LinkedIn's smallest size — if
+    // it is long enough for LinkedIn at all; a shorter clip cannot be made
+    // LinkedIn-ready by a bigger file, only slower and larger.
+    const sizeMatters = duration >= LINKEDIN_MIN_SECONDS
+    if (
+      bitrate >= MIN_BITRATE &&
+      (!sizeMatters || blob.size >= LINKEDIN_MIN_BYTES)
+    )
       return { blob, bitrate, encoding }
     if (bitrate >= MIN_BITRATE) last = { blob, bitrate, encoding }
   }

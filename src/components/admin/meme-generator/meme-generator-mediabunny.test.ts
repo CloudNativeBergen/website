@@ -10,6 +10,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 const log: string[] = []
 let releaseStart = () => {}
+let canEncodeFails = false
 let releaseCancel = () => {}
 /** Set by a test: `add()` stays pending until the output is cancelled, then rejects. */
 let addWaitsForCancel = false
@@ -58,7 +59,11 @@ vi.mock('mediabunny', () => {
     CanvasSource,
     BufferTarget: class {},
     Mp4OutputFormat: class {},
-    canEncodeVideo: async () => true,
+    canEncodeVideo: async () => {
+      if (canEncodeFails)
+        throw new Error('Failed to fetch dynamically imported module')
+      return true
+    },
   }
 })
 
@@ -142,5 +147,22 @@ describe('mediabunnyBackend.probe', () => {
     releaseCancel()
     await probe
     expect(settled).toBe(true)
+  })
+})
+
+describe('mediabunnyBackend.supports', () => {
+  it('rejects, rather than answering no, when the encoder cannot be loaded', async () => {
+    vi.stubGlobal('VideoEncoder', class {})
+    canEncodeFails = true
+    await expect(mediabunnyBackend.supports()).rejects.toThrow(
+      'Failed to fetch dynamically imported module',
+    )
+    canEncodeFails = false
+    await expect(mediabunnyBackend.supports()).resolves.toBe(true)
+    vi.unstubAllGlobals()
+  })
+
+  it('answers no where there is no VideoEncoder at all', async () => {
+    await expect(mediabunnyBackend.supports()).resolves.toBe(false)
   })
 })
