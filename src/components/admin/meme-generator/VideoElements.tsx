@@ -1,0 +1,408 @@
+'use client'
+
+import { useRef } from 'react'
+import { styles } from './meme-generator-config'
+import {
+  PRESETS,
+  PRESET_DURATION,
+  clampMotion,
+  moveEnd,
+  shiftBar,
+  elementsOf,
+  motionFor,
+  type DrawnElement,
+  type ElementId,
+  type ElementMotion,
+  type Preset,
+} from './meme-generator-motion'
+import { sceneStart, type Scene } from './meme-generator-timeline'
+import {
+  PX_PER_SECOND,
+  SecondsField,
+  keyStep,
+  seconds,
+  useDrag,
+} from './timeline-controls'
+
+/**
+ * What changed an element's timing. Consecutive changes by one control — a
+ * drag, or keys held on one end — fold into one undo step; a different
+ * control, or a preset picked (null), is a step of its own.
+ */
+export type TimingControl = 'enter' | 'leave' | 'bar' | null
+
+export type ElementChange = (
+  index: number,
+  id: ElementId,
+  motion: ElementMotion,
+  control: TimingControl,
+) => void
+
+const PRESET_NAMES: Record<Preset, string> = {
+  none: 'None',
+  fade: 'Fade',
+  'slide-up': 'Slide up',
+  pop: 'Pop',
+}
+
+/**
+ * Every element any scene draws, once each, in timeline order: the order
+ * `elementsOf` gives, as if one design drew them all.
+ */
+function rowsOf(scenes: Scene[]): DrawnElement[] {
+  const drawn = new Map<ElementId, DrawnElement>()
+  for (const scene of scenes)
+    for (const element of elementsOf(scene.design))
+      drawn.set(element.id, element)
+  const lines = Math.max(...scenes.map((s) => s.design.textLines.length))
+  const order: ElementId[] = [
+    ...Array.from({ length: lines }, (_, i) => `text${i}` as const),
+    'qr',
+    'logo',
+  ]
+  return order.flatMap((id) => drawn.get(id) ?? [])
+}
+
+const sameMotion = (a: ElementMotion, b: ElementMotion) =>
+  a.entrance === b.entrance &&
+  a.exit === b.exit &&
+  a.enter === b.enter &&
+  a.leave === b.leave
+
+/** A bar end's hit area, where the bar is wide enough for it. */
+const END_WIDTH_PX = 10
+
+/** One end of a bar: when the element enters, or when it has left. */
+function BarEnd({
+  end,
+  label,
+  motion,
+  duration,
+  barWidth,
+  onChange,
+}: {
+  end: 'enter' | 'leave'
+  label: string
+  motion: ElementMotion
+  duration: number
+  /** The bar's width in pixels: a short bar's ends leave room for its body. */
+  barWidth: number
+  onChange: (motion: ElementMotion) => void
+}) {
+  const start = useRef(motion)
+  const value = motion[end]
+  const [min, max] =
+    end === 'enter' ? [0, motion.leave] : [motion.enter, duration]
+  const set = (to: number) => {
+    const moved = moveEnd(motion, end, to, duration)
+    if (moved[end] !== value) onChange(moved)
+  }
+  const drag = useDrag(
+    () => {
+      start.current = motion
+    },
+    (delta) => set(start.current[end] + delta),
+  )
+  return (
+    <div
+      role="slider"
+      tabIndex={0}
+      aria-label={label}
+      aria-valuemin={min}
+      aria-valuemax={max}
+      aria-valuenow={value}
+      aria-valuetext={seconds(value)}
+      aria-orientation="horizontal"
+      title={
+        end === 'enter'
+          ? 'Drag to change when it enters'
+          : 'Drag to change when it leaves'
+      }
+      {...drag}
+      onKeyDown={(event) => {
+        if (event.key === 'Home' || event.key === 'End') {
+          event.preventDefault()
+          set(event.key === 'Home' ? min : max)
+          return
+        }
+        const step = keyStep(event)
+        if (step === null) return
+        event.preventDefault()
+        set(value + step)
+      }}
+      // Above the playhead, as the scenes' own edges are: it sits on a
+      // scene's start, where every bar that enters at 0 begins.
+      // At most a third of the bar each, so even a 0.1 s bar keeps a middle
+      // to drag it whole by.
+      style={{ width: Math.min(END_WIDTH_PX, barWidth / 3) }}
+      className={`group absolute top-0 z-30 flex h-full cursor-col-resize touch-none justify-center focus:outline-none ${
+        // Inside the bar, never centred on its end: a scene's leave end and
+        // the next scene's enter end would otherwise share the boundary, and
+        // the later one would take every press there.
+        end === 'enter' ? 'left-0' : 'right-0'
+      }`}
+    >
+      <span className="my-0.5 w-1 rounded-full bg-brand-cloud-blue/60 group-hover:bg-brand-cloud-blue group-focus-visible:bg-brand-cloud-blue group-focus-visible:ring-2 group-focus-visible:ring-brand-cloud-blue dark:bg-blue-400/60 dark:group-hover:bg-blue-400 dark:group-focus-visible:bg-blue-400" />
+    </div>
+  )
+}
+
+/**
+ * An element's bar within its scene: it is on screen from one end to the
+ * other. Drag an end to move it; drag the bar to move both at once.
+ */
+function ElementBar({
+  sceneNumber,
+  element,
+  motion,
+  duration,
+  left,
+  onChange,
+}: {
+  sceneNumber: number
+  element: DrawnElement
+  motion: ElementMotion
+  duration: number
+  /** The scene's start on the track, in pixels. */
+  left: number
+  onChange: (motion: ElementMotion, control: TimingControl) => void
+}) {
+  const start = useRef(motion)
+  const body = useDrag(
+    () => {
+      start.current = motion
+    },
+    (delta) => {
+      const moved = shiftBar(start.current, delta, duration)
+      if (moved.enter !== motion.enter || moved.leave !== motion.leave)
+        onChange(moved, 'bar')
+    },
+  )
+  const width = (motion.leave - motion.enter) * PX_PER_SECOND
+  const ramp = (preset: Preset) =>
+    Math.min(PRESET_DURATION[preset] * PX_PER_SECOND, width / 2)
+  const name = `Scene ${sceneNumber} ${element.name}`
+  return (
+    <div
+      className="absolute top-0 h-full"
+      style={{ left: left + motion.enter * PX_PER_SECOND, width }}
+    >
+      <div
+        {...body}
+        aria-hidden="true"
+        title="Drag to move when it enters and leaves"
+        className="relative flex size-full cursor-grab touch-none items-center overflow-hidden rounded border border-brand-cloud-blue/40 bg-brand-cloud-blue/15 px-1.5 text-[10px] leading-none font-medium whitespace-nowrap select-none active:cursor-grabbing dark:border-blue-400/40 dark:bg-blue-500/20"
+      >
+        {/* The entrance and exit, shaded over the time they take. */}
+        {motion.entrance !== 'none' && (
+          <span
+            className="absolute inset-y-0 left-0 bg-linear-to-r from-brand-cloud-blue/40 to-transparent dark:from-blue-400/40"
+            style={{ width: ramp(motion.entrance) }}
+          />
+        )}
+        {motion.exit !== 'none' && (
+          <span
+            className="absolute inset-y-0 right-0 bg-linear-to-l from-brand-cloud-blue/40 to-transparent dark:from-blue-400/40"
+            style={{ width: ramp(motion.exit) }}
+          />
+        )}
+        <span className="relative truncate">{element.name}</span>
+      </div>
+      <BarEnd
+        end="enter"
+        label={`${name} enters`}
+        motion={motion}
+        duration={duration}
+        barWidth={width}
+        onChange={(moved) => onChange(moved, 'enter')}
+      />
+      <BarEnd
+        end="leave"
+        label={`${name} leaves`}
+        motion={motion}
+        duration={duration}
+        barWidth={width}
+        onChange={(moved) => onChange(moved, 'leave')}
+      />
+    </div>
+  )
+}
+
+/** Under the scenes, one row per element and a bar per scene that draws it. */
+export function ElementBars({
+  scenes,
+  onElementChange,
+}: {
+  scenes: Scene[]
+  onElementChange: ElementChange
+}) {
+  const rows = rowsOf(scenes)
+  return (
+    <div role="group" aria-label="Element timings" className="mt-1 space-y-1">
+      {rows.map((row) => (
+        <div key={row.id} className="relative h-5">
+          {scenes.map((scene, index) =>
+            elementsOf(scene.design).some((e) => e.id === row.id) ? (
+              <ElementBar
+                key={scene.key}
+                sceneNumber={index + 1}
+                element={row}
+                motion={motionFor(scene.motion, row.id, scene.duration)}
+                duration={scene.duration}
+                left={sceneStart(scenes, index) * PX_PER_SECOND}
+                onChange={(motion, control) =>
+                  onElementChange(index, row.id, motion, control)
+                }
+              />
+            ) : null,
+          )}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+/**
+ * The scene being edited, element by element: each preset, and each end of
+ * its bar as a number — everything the bars do, without a pointer.
+ */
+export function ElementFields({
+  scene,
+  index,
+  onElementChange,
+  onDriftChange,
+}: {
+  scene: Scene
+  index: number
+  onElementChange: ElementChange
+  onDriftChange: (index: number, drift: boolean) => void
+}) {
+  const elements = elementsOf(scene.design)
+  const { duration } = scene
+  const hasImage = scene.design.background.image !== null
+  return (
+    <fieldset className="mt-4 min-w-0 border-t border-brand-frosted-steel pt-3 dark:border-gray-700">
+      <legend className="sr-only">Scene {index + 1} animation</legend>
+      <p aria-hidden="true" className="mb-2 text-xs font-semibold">
+        Scene {index + 1} animation
+      </p>
+      {/* Positioned, so the fields' visually hidden labels scroll with the
+          table instead of widening the page from past its edge. */}
+      <div className="relative overflow-x-auto">
+        <table className="text-left text-xs">
+          <thead>
+            <tr className="text-brand-slate-gray/80 dark:text-gray-400">
+              <th scope="col" className="py-1 pr-3 font-medium">
+                Element
+              </th>
+              <th scope="col" className="py-1 pr-2 font-medium">
+                Entrance
+              </th>
+              <th scope="col" className="py-1 pr-3 font-medium">
+                Enters (s)
+              </th>
+              <th scope="col" className="py-1 pr-2 font-medium">
+                Exit
+              </th>
+              <th scope="col" className="py-1 font-medium">
+                Leaves (s)
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {elements.map((element) => {
+              const motion = motionFor(scene.motion, element.id, duration)
+              // A commit that changes nothing is no undo step.
+              const change = (
+                patch: Partial<ElementMotion>,
+                control: TimingControl,
+              ) => {
+                const next = clampMotion({ ...motion, ...patch }, duration)
+                if (sameMotion(next, motion)) return
+                onElementChange(index, element.id, next, control)
+              }
+              const presetSelect = (which: 'entrance' | 'exit') => (
+                <select
+                  aria-label={`${element.name} ${which}`}
+                  value={motion[which]}
+                  onChange={(event) =>
+                    change(
+                      {
+                        ...motion,
+                        [which]:
+                          PRESETS.find((p) => p === event.target.value) ??
+                          'none',
+                      },
+                      null,
+                    )
+                  }
+                  className={`${styles.input} w-28 min-w-28 py-1 text-xs`}
+                >
+                  {PRESETS.map((preset) => (
+                    <option key={preset} value={preset}>
+                      {PRESET_NAMES[preset]}
+                    </option>
+                  ))}
+                </select>
+              )
+              return (
+                // Keyed by scene too: a draft belongs to its scene's field.
+                <tr key={`${scene.key}:${element.id}`}>
+                  <th
+                    scope="row"
+                    className="py-1 pr-3 font-medium whitespace-nowrap"
+                  >
+                    {element.name}
+                  </th>
+                  <td className="py-1 pr-2">{presetSelect('entrance')}</td>
+                  <td className="w-24 min-w-24 py-1 pr-3">
+                    <SecondsField
+                      hideLabel
+                      label={`${element.name} enters (s)`}
+                      value={motion.enter}
+                      min={0}
+                      max={motion.leave}
+                      onCommit={(enter) =>
+                        change(
+                          moveEnd(motion, 'enter', enter, duration),
+                          'enter',
+                        )
+                      }
+                    />
+                  </td>
+                  <td className="py-1 pr-2">{presetSelect('exit')}</td>
+                  <td className="w-24 min-w-24 py-1">
+                    <SecondsField
+                      hideLabel
+                      label={`${element.name} leaves (s)`}
+                      value={motion.leave}
+                      min={motion.enter}
+                      max={duration}
+                      onCommit={(leave) =>
+                        change(
+                          moveEnd(motion, 'leave', leave, duration),
+                          'leave',
+                        )
+                      }
+                    />
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+      {hasImage && (
+        <label className="mt-3 flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={scene.motion.drift}
+            onChange={(event) => onDriftChange(index, event.target.checked)}
+            className="size-4 rounded border-brand-frosted-steel text-brand-cloud-blue focus:ring-brand-cloud-blue dark:border-gray-600 dark:bg-gray-700"
+          />
+          Drift: a slow zoom of the background image across the scene
+        </label>
+      )}
+    </fieldset>
+  )
+}

@@ -21,12 +21,14 @@ import {
   type Transition,
 } from './meme-generator-timeline'
 import { DEFAULT_DESIGN } from './meme-generator-draw'
+import { STILL } from './meme-generator-motion'
 
 const scene = (duration: number, transition: Transition = 'cut'): Scene => ({
   key: `s${duration}${transition}`,
   design: DEFAULT_DESIGN,
   duration,
   transition,
+  motion: STILL,
 })
 
 describe('clampDuration', () => {
@@ -71,6 +73,63 @@ describe('setSceneDuration', () => {
     expect(setSceneDuration(scenes, 0, 5.55).map((s) => s.duration)).toEqual([
       5.6, 4,
     ])
+  })
+
+  it("clamps the shortened scene's element times into it", () => {
+    const bar = { entrance: 'fade', exit: 'pop' } as const
+    const scenes: Scene[] = [
+      {
+        ...scene(5),
+        motion: {
+          drift: true,
+          elements: {
+            text0: { ...bar, enter: 1, leave: 4.5 },
+            logo: { ...bar, enter: 3.5, leave: 4 },
+            qr: { ...bar, enter: 0, leave: 5 },
+          },
+        },
+      },
+      scene(2),
+    ]
+    const [shortened, other] = setSceneDuration(scenes, 0, 3)
+    expect(shortened.motion).toEqual({
+      drift: true,
+      elements: {
+        text0: { ...bar, enter: 1, leave: 3 },
+        logo: { ...bar, enter: 3, leave: 3 },
+        qr: { ...bar, enter: 0, leave: 3 },
+      },
+    })
+    expect(other).toBe(scenes[1])
+  })
+
+  it('resizes from where a drag started, so dragging back gives the bars back', () => {
+    const bar = { entrance: 'none', exit: 'none' } as const
+    const origin: Scene = {
+      ...scene(5),
+      motion: {
+        drift: false,
+        elements: { logo: { ...bar, enter: 3.5, leave: 4.5 } },
+      },
+    }
+    const shorter = setSceneDuration([origin], 0, 4, origin)
+    expect(shorter[0].motion.elements.logo).toEqual({
+      ...bar,
+      enter: 3.5,
+      leave: 4,
+    })
+    const back = setSceneDuration(shorter, 0, 5, origin)
+    expect(back[0].motion.elements.logo).toEqual({
+      ...bar,
+      enter: 3.5,
+      leave: 4.5,
+    })
+    // Without the drag's start, the clamp would stick: 3.5–5.
+    expect(setSceneDuration(shorter, 0, 5)[0].motion.elements.logo).toEqual({
+      ...bar,
+      enter: 3.5,
+      leave: 5,
+    })
   })
 })
 
