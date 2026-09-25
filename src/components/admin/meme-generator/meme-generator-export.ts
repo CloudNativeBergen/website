@@ -28,7 +28,13 @@ export const FRAMES_PER_YIELD = 5
 export interface Encoding {
   /** Safari needs `realtime`; Firefox fails with it; Chrome is 5× slower. */
   latencyMode: 'quality' | 'realtime'
-  bitrateMode: 'variable' | 'constant'
+  /**
+   * `every-frame` makes each frame a key frame. It is how a flat design gets
+   * over the bitrate floor: measured in Chrome 154 on macOS, a flat 3 s video
+   * came out at 65 kbit/s at a constant 8 Mbit/s, and 1,478 kbit/s with a key
+   * frame every frame.
+   */
+  keyFrames: 'default' | 'every-frame'
 }
 
 export interface EncodeSession {
@@ -45,7 +51,7 @@ export interface EncoderBackend {
    * Whether the encoder takes H.264 at 1080×1080 and 30 fps — asked about
    * the exact configuration, never assumed.
    */
-  supports(encoding?: Partial<Encoding>): Promise<boolean>
+  supports(): Promise<boolean>
   /**
    * Encode a few frames in `latencyMode` and flush: true if a chunk came
    * back for every frame. Stops when `signal` aborts.
@@ -55,6 +61,13 @@ export interface EncoderBackend {
     signal: AbortSignal,
   ): Promise<boolean>
   open(canvas: HTMLCanvasElement, encoding: Encoding): Promise<EncodeSession>
+}
+
+/** What one export draws: a canvas, and a way to paint frame n onto it. */
+export interface ExportJob {
+  canvas: HTMLCanvasElement
+  frameCount: number
+  paint: (frame: number) => void
 }
 
 export type ExportProgress =
@@ -84,7 +97,8 @@ export class ExportCancelled extends Error {
 export class ExportFailed extends Error {
   name = 'ExportFailed'
   constructor(
-    readonly reason: 'unsupported' | 'encoder' | 'stalled' | 'bitrate',
+    readonly reason:
+      'unsupported' | 'probe' | 'encoder' | 'stalled' | 'bitrate',
     message: string,
   ) {
     super(message)
@@ -93,6 +107,10 @@ export class ExportFailed extends Error {
 
 export const UNSUPPORTED_MESSAGE =
   'This browser cannot make MP4 video. Use Chrome, Edge or Safari on a computer.'
+
+/** The encoder said yes, then did not deliver a short test encode in time. */
+export const PROBE_FAILED_MESSAGE =
+  'The video encoder did not answer a short test in time. Try again; if it keeps happening, try another browser on a computer.'
 
 /**
  * A real task, not a microtask: `scheduler.yield()` where there is one,
@@ -140,6 +158,12 @@ function guarded<T>(
     )
   })
 }
+
+const stalled = () =>
+  new ExportFailed(
+    'stalled',
+    `The encoder stopped responding for ${STALL_TIMEOUT_MS / 1000} seconds.`,
+  )
 
 const kbits = (bitrate: number) => `${Math.round(bitrate / 1000)} kbit/s`
 
@@ -189,11 +213,6 @@ async function encodePass(
   },
 ): Promise<Blob> {
   const { frameCount, paint, signal, yieldTask, onFraction } = options
-  const stalled = () =>
-    new ExportFailed(
-      'stalled',
-      `The encoder stopped responding for ${STALL_TIMEOUT_MS / 1000} seconds.`,
-    )
   try {
     for (let frame = 0; frame < frameCount; frame++) {
       if (signal.aborted) throw new ExportCancelled()
@@ -224,40 +243,40 @@ async function encodePass(
 /**
  * Export `frameCount` frames, each painted by `paint(n)` onto `canvas`, as an
  * MP4 of at least MIN_BITRATE. A file that comes out under it — flat designs
- * do (proof §7) — is encoded again at a constant bitrate.
+ * do (proof §7) — is encoded again with every frame a key frame.
  */
 export async function exportVideo({
   backend,
-  canvas,
-  frameCount,
-  paint,
+  job: { canvas, frameCount, paint },
   onProgress,
   signal,
   yieldTask = yieldToEventLoop,
 }: {
   backend: EncoderBackend
-  canvas: HTMLCanvasElement
-  frameCount: number
-  paint: (frame: number) => void
+  job: ExportJob
   onProgress: (progress: ExportProgress) => void
   signal: AbortSignal
   yieldTask?: () => Promise<void>
 }): Promise<ExportResult> {
   onProgress({ phase: 'checking' })
-  if (!(await backend.supports()))
+  // Nothing here may outlast a cancel, not even asking.
+  const answer = <T>(promise: Promise<T>) =>
+    guarded(promise, signal, STALL_TIMEOUT_MS, stalled)
+  if (!(await answer(backend.supports())))
     throw new ExportFailed('unsupported', UNSUPPORTED_MESSAGE)
   const latencyMode = await pickLatencyMode(backend, signal)
-  if (!latencyMode) throw new ExportFailed('unsupported', UNSUPPORTED_MESSAGE)
+  if (!latencyMode) throw new ExportFailed('probe', PROBE_FAILED_MESSAGE)
 
-  const passes: Encoding[] = [{ latencyMode, bitrateMode: 'variable' }]
-  if (await backend.supports({ latencyMode, bitrateMode: 'constant' }))
-    passes.push({ latencyMode, bitrateMode: 'constant' })
+  const passes: Encoding[] = [
+    { latencyMode, keyFrames: 'default' },
+    { latencyMode, keyFrames: 'every-frame' },
+  ]
 
   const duration = frameCount / FPS
   let bitrate = 0
   for (const [index, encoding] of passes.entries()) {
     if (signal.aborted) throw new ExportCancelled()
-    const session = await backend.open(canvas, encoding)
+    const session = await answer(backend.open(canvas, encoding))
     onProgress({ phase: 'encoding', fraction: 0, pass: index + 1 })
     const blob = await encodePass(session, {
       frameCount,

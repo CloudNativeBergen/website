@@ -99,8 +99,8 @@ import {
 } from './meme-generator-frame'
 import { VideoTimeline, type SceneRefusal } from './VideoTimeline'
 import type { TimingControl } from './VideoElements'
-import { VideoExport, type ExportJob } from './VideoExport'
-import type { EncoderBackend } from './meme-generator-export'
+import { VideoExport } from './VideoExport'
+import type { EncoderBackend, ExportJob } from './meme-generator-export'
 import { mediabunnyBackend } from './meme-generator-mediabunny'
 import { useMediaQuery } from '@/hooks/useMediaQuery'
 import { PLATFORM_NAME } from '@/lib/branding/platform'
@@ -945,19 +945,21 @@ export function MemeGenerator({
   // that clears `data-capture-pending` and a capture never sees one without
   // the other. Scrubbing and playback both paint through `drawFrame`: a time
   // shows the same picture however it was reached.
-  /** Paints scene `index` of `list` at its own time, with its assets. */
+  /**
+   * Paints scene `index` of `list` at its own time. Each scene's decoded
+   * assets are looked up once, now: an export keeps drawing the images it
+   * started with even if an edit meanwhile lets the caches drop them.
+   */
   const scenePainter = useCallback(
     (list: Scene[]): PaintScene => {
       const brand = pageBrand()
+      const assets = list.map(({ design: scene, motion }) => ({
+        ...assetsFor(scene, motion.drift),
+        brand,
+      }))
       return (ctx, { index, time: sceneTime }) => {
         const { design: scene, motion, duration } = list[index]
-        drawDesign(
-          ctx,
-          scene,
-          { ...assetsFor(scene, motion.drift), brand },
-          sceneTime,
-          { motion, duration },
-        )
+        drawDesign(ctx, scene, assets[index], sceneTime, { motion, duration })
       }
     },
     [assetsFor],
@@ -1135,13 +1137,15 @@ export function MemeGenerator({
             onLoopChange={setLoop}
           />
         )}
-        {mode === 'video' && (
+        {/* Kept mounted in Image mode: switching to look at a still never
+            cancels an export or throws away the finished file. */}
+        <div hidden={mode !== 'video'}>
           <VideoExport
             encoder={encoder}
             prepare={prepareExport}
             waiting={capturePending}
           />
-        )}
+        </div>
       </div>
 
       <div className="space-y-3">

@@ -6,22 +6,16 @@ import {
   FilmIcon,
   XMarkIcon,
 } from '@heroicons/react/24/outline'
-import { styles } from './meme-generator-config'
+import { CANVAS_SIZE, styles } from './meme-generator-config'
 import {
   ExportCancelled,
   UNSUPPORTED_MESSAGE,
   exportVideo,
   type EncoderBackend,
+  type ExportJob,
   type ExportProgress,
 } from './meme-generator-export'
 import { FPS } from './meme-generator-timeline'
-
-/** What one export draws: a canvas, and a way to paint frame n onto it. */
-export interface ExportJob {
-  canvas: HTMLCanvasElement
-  frameCount: number
-  paint: (frame: number) => void
-}
 
 type Status =
   | { kind: 'idle' }
@@ -38,6 +32,28 @@ function progressText(progress: ExportProgress) {
   return progress.pass > 1
     ? `Encoding again at a higher bitrate… ${percent}`
     : `Exporting… ${percent}`
+}
+
+function statusText(
+  status: Status,
+  supported: boolean | null,
+  waiting: boolean,
+): string {
+  if (supported === false) return UNSUPPORTED_MESSAGE
+  switch (status.kind) {
+    case 'running':
+      return progressText(status.progress)
+    case 'failed':
+      return `The export failed. ${status.message}`
+    case 'cancelled':
+      return 'Export cancelled.'
+    case 'done':
+      return 'Your video is ready.'
+    case 'idle':
+      return waiting
+        ? 'Waiting for images and fonts to load…'
+        : `H.264, ${CANVAS_SIZE} × ${CANVAS_SIZE}, ${FPS} frames a second, silent.`
+  }
 }
 
 /**
@@ -89,17 +105,18 @@ export function VideoExport({
     if (blocked) return
     const abort = new AbortController()
     controller.current = abort
-    const job = prepare()
     setStatus({ kind: 'running', progress: { phase: 'checking' } })
     try {
+      const job = prepare()
       const result = await exportVideo({
         backend: encoder,
-        canvas: job.canvas,
-        frameCount: job.frameCount,
-        paint: job.paint,
+        job,
         signal: abort.signal,
-        onProgress: (progress) => setStatus({ kind: 'running', progress }),
+        onProgress: (progress) =>
+          !abort.signal.aborted && setStatus({ kind: 'running', progress }),
       })
+      // Left mid-export: no file for a panel that is gone.
+      if (abort.signal.aborted) return
       setStatus({
         kind: 'done',
         url: URL.createObjectURL(result.blob),
@@ -107,6 +124,7 @@ export function VideoExport({
         seconds: job.frameCount / FPS,
       })
     } catch (error) {
+      if (abort.signal.aborted && !(error instanceof ExportCancelled)) return
       setStatus(
         error instanceof ExportCancelled
           ? { kind: 'cancelled' }
@@ -191,19 +209,7 @@ export function VideoExport({
             : ''
         }`}
       >
-        {supported === false
-          ? UNSUPPORTED_MESSAGE
-          : status.kind === 'running'
-            ? progressText(status.progress)
-            : status.kind === 'failed'
-              ? `The export failed. ${status.message}`
-              : status.kind === 'cancelled'
-                ? 'Export cancelled.'
-                : waiting
-                  ? 'Waiting for images and fonts to load…'
-                  : status.kind === 'done'
-                    ? 'Your video is ready.'
-                    : 'H.264, 1080 × 1080, 30 frames a second, silent.'}
+        {statusText(status, supported, waiting)}
       </p>
     </section>
   )

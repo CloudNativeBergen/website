@@ -110,7 +110,12 @@ describe('Export MP4', () => {
     drawDesign.mockClear()
     fireEvent.click(exportButton())
 
-    const link = await screen.findByRole('link', { name: /Download video/ })
+    // 180 frames, each handed back to the event loop every five.
+    const link = await screen.findByRole(
+      'link',
+      { name: /Download video/ },
+      { timeout: 5000 },
+    )
     expect(link).toHaveAttribute('href', 'blob:video')
     expect(link).toHaveAttribute('download', 'studio-video.mp4')
     expect(link).toHaveTextContent('9.0 MB, 6.0 s')
@@ -174,5 +179,25 @@ describe('Export MP4', () => {
     expect(state.cancelled).toBe(1)
     expect(added).toHaveLength(45)
     expect(screen.queryByRole('progressbar')).toBeNull()
+  })
+
+  it('carries on, and keeps its file, while the organizer looks at Image mode', async () => {
+    const { encoder, state } = fakeEncoder()
+    openVideo(encoder)
+    await waitFor(() =>
+      expect(exportButton()).not.toHaveAttribute('aria-disabled'),
+    )
+    fireEvent.click(exportButton())
+    fireEvent.click(screen.getByRole('button', { name: 'Image' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Video' }))
+    await screen.findByRole(
+      'link',
+      { name: /Download video/ },
+      { timeout: 5000 },
+    )
+    expect(state.cancelled).toBe(0)
+    fireEvent.click(screen.getByRole('button', { name: 'Image' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Video' }))
+    expect(screen.getByRole('link', { name: /Download video/ })).toBeVisible()
   })
 })

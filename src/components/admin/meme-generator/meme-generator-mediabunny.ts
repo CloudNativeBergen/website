@@ -35,8 +35,8 @@ async function openOutput(
   const source = new CanvasSource(canvas, {
     codec: 'avc',
     bitrate: TARGET_BITRATE,
-    bitrateMode: encoding.bitrateMode,
     latencyMode: encoding.latencyMode,
+    ...(encoding.keyFrames === 'every-frame' && { keyFrameInterval: 0 }),
     onEncodedPacket: onPacket,
   })
   output.addVideoTrack(source, { frameRate: FPS })
@@ -45,7 +45,7 @@ async function openOutput(
 }
 
 export const mediabunnyBackend: EncoderBackend = {
-  async supports(encoding) {
+  async supports() {
     if (typeof VideoEncoder === 'undefined') return false
     try {
       const { canEncodeVideo } = await loadMediabunny()
@@ -54,7 +54,6 @@ export const mediabunnyBackend: EncoderBackend = {
         height: CANVAS_SIZE,
         bitrate: TARGET_BITRATE,
         frameRate: FPS,
-        ...encoding,
       })
     } catch {
       return false
@@ -70,14 +69,22 @@ export const mediabunnyBackend: EncoderBackend = {
     const { output, source } = await openOutput(
       await loadMediabunny(),
       canvas,
-      { latencyMode, bitrateMode: 'variable' },
+      { latencyMode, keyFrames: 'default' },
       () => packets++,
     )
     const cancel = () => void output.cancel().catch(() => {})
+    // Aborted while the output was starting: the listener would never fire.
+    if (signal.aborted) {
+      cancel()
+      return false
+    }
     signal.addEventListener('abort', cancel)
     try {
       for (let frame = 0; frame < PROBE_FRAMES; frame++) {
-        if (signal.aborted) return false
+        if (signal.aborted) {
+          cancel()
+          return false
+        }
         // A frame that differs from the last, as a real video's do.
         ctx.fillStyle = `hsl(${frame * 36} 70% 50%)`
         ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE)

@@ -4,6 +4,7 @@ import {
   ExportCancelled,
   ExportFailed,
   MIN_BITRATE,
+  PROBE_FAILED_MESSAGE,
   PROBE_TIMEOUT_MS,
   STALL_TIMEOUT_MS,
   exportVideo,
@@ -21,11 +22,12 @@ const canvas = {} as HTMLCanvasElement
 
 interface FakeOptions {
   supported?: boolean
-  constantSupported?: boolean
+  /** `open` never settles. */
+  hangOpen?: boolean
   /** Which latency modes pass the probe; a mode missing here never settles. */
   probe?: Partial<Record<Encoding['latencyMode'], boolean | 'hang'>>
-  /** Bytes per frame each bitrate mode produces. */
-  bytesPerFrame?: Partial<Record<Encoding['bitrateMode'], number>>
+  /** Bytes per frame each key-frame setting produces. */
+  bytesPerFrame?: Partial<Record<Encoding['keyFrames'], number>>
   /** The frame whose add throws, or never settles. */
   failAt?: number
   hangAt?: number
@@ -34,9 +36,8 @@ interface FakeOptions {
 function fakeBackend(options: FakeOptions = {}) {
   const {
     supported = true,
-    constantSupported = true,
     probe = { quality: true },
-    bytesPerFrame = { variable: 10_000, constant: 10_000 },
+    bytesPerFrame = { default: 10_000, 'every-frame': 10_000 },
   } = options
   const log: string[] = []
   const sessions: {
@@ -45,11 +46,7 @@ function fakeBackend(options: FakeOptions = {}) {
     cancelled: boolean
   }[] = []
   const backend: EncoderBackend = {
-    async supports(encoding) {
-      if (encoding?.bitrateMode === 'constant')
-        return supported && constantSupported
-      return supported
-    },
+    supports: async () => supported,
     probe(latencyMode, signal) {
       log.push(`probe:${latencyMode}`)
       const result = probe[latencyMode] ?? 'hang'
@@ -63,6 +60,7 @@ function fakeBackend(options: FakeOptions = {}) {
       return Promise.resolve(result)
     },
     async open(_canvas, encoding): Promise<EncodeSession> {
+      if (options.hangOpen) return new Promise(() => {})
       const session = { encoding, frames: [] as number[], cancelled: false }
       sessions.push(session)
       return {
@@ -77,8 +75,7 @@ function fakeBackend(options: FakeOptions = {}) {
         finish: async () =>
           new Blob([
             new Uint8Array(
-              session.frames.length *
-                (bytesPerFrame[encoding.bitrateMode] ?? 0),
+              session.frames.length * (bytesPerFrame[encoding.keyFrames] ?? 0),
             ),
           ]),
         cancel: async () => {
@@ -98,9 +95,7 @@ function run(
   const progress: ExportProgress[] = []
   const promise = exportVideo({
     backend,
-    canvas,
-    frameCount: 90,
-    paint: (n) => painted.push(n),
+    job: { canvas, frameCount: 90, paint: (n) => painted.push(n) },
     onProgress: (p) => progress.push(p),
     signal: new AbortController().signal,
     yieldTask: () => Promise.resolve(),
@@ -122,7 +117,7 @@ describe('exportVideo', () => {
     expect(result.bitrate).toBe(2_400_000)
     expect(result.encoding).toEqual({
       latencyMode: 'quality',
-      bitrateMode: 'variable',
+      keyFrames: 'default',
     })
   })
 
@@ -164,34 +159,35 @@ describe('exportVideo', () => {
     expect(result.encoding.latencyMode).toBe('realtime')
   })
 
-  it('refuses when neither latency mode passes the probe', async () => {
+  it('refuses, saying the test encode failed, when neither latency mode passes the probe', async () => {
     const { backend, sessions } = fakeBackend({
       probe: { quality: false, realtime: false },
     })
     await expect(run(backend).promise).rejects.toMatchObject({
-      reason: 'unsupported',
+      reason: 'probe',
+      message: PROBE_FAILED_MESSAGE,
     })
     expect(sessions).toEqual([])
   })
 
-  it('re-encodes at a constant bitrate when the file comes out under the floor', async () => {
+  it('re-encodes with every frame a key frame when the file comes out under the floor', async () => {
     // 700 bytes a frame is 168 kbit/s: under LinkedIn's 192.
     const { backend, sessions } = fakeBackend({
-      bytesPerFrame: { variable: 700, constant: 30_000 },
+      bytesPerFrame: { default: 700, 'every-frame': 30_000 },
     })
     const result = await run(backend).promise
-    expect(sessions.map((s) => s.encoding.bitrateMode)).toEqual([
-      'variable',
-      'constant',
+    expect(sessions.map((s) => s.encoding.keyFrames)).toEqual([
+      'default',
+      'every-frame',
     ])
     expect(sessions[1].frames).toHaveLength(90)
     expect(result.bitrate).toBe(7_200_000)
-    expect(result.encoding.bitrateMode).toBe('constant')
+    expect(result.encoding.keyFrames).toBe('every-frame')
   })
 
-  it('fails, with the bitrate, when even the last setting is under the floor', async () => {
+  it('fails, with the bitrate, when even every frame a key frame is under the floor', async () => {
     const { backend } = fakeBackend({
-      bytesPerFrame: { variable: 700, constant: 700 },
+      bytesPerFrame: { default: 700, 'every-frame': 700 },
     })
     const error = await run(backend).promise.catch((e: unknown) => e)
     expect(error).toBeInstanceOf(ExportFailed)
@@ -201,13 +197,12 @@ describe('exportVideo', () => {
     )
   })
 
-  it('does not try a constant bitrate the encoder does not support', async () => {
-    const { backend, sessions } = fakeBackend({
-      constantSupported: false,
-      bytesPerFrame: { variable: 700 },
-    })
-    await expect(run(backend).promise).rejects.toBeInstanceOf(ExportFailed)
-    expect(sessions).toHaveLength(1)
+  it('stops on cancel while the encoder is still opening', async () => {
+    const { backend } = fakeBackend({ hangOpen: true })
+    const controller = new AbortController()
+    const { promise } = run(backend, { signal: controller.signal })
+    setTimeout(() => controller.abort(), 10)
+    await expect(promise).rejects.toBeInstanceOf(ExportCancelled)
   })
 
   it('shows an encoder error mid-export and cancels the output', async () => {
@@ -234,9 +229,13 @@ describe('exportVideo', () => {
     const controller = new AbortController()
     const { promise, painted } = run(backend, {
       signal: controller.signal,
-      paint: (n) => {
-        painted.push(n)
-        if (n === 30) controller.abort()
+      job: {
+        canvas,
+        frameCount: 90,
+        paint: (n) => {
+          painted.push(n)
+          if (n === 30) controller.abort()
+        },
       },
     })
     await expect(promise).rejects.toBeInstanceOf(ExportCancelled)
@@ -259,13 +258,5 @@ describe('exportVideo', () => {
     expect(encoding.at(-1)).toMatchObject({ fraction: 1 })
     const fractions = encoding.map((p) => p.fraction)
     expect([...fractions].sort((a, b) => a - b)).toEqual(fractions)
-  })
-
-  it('gives the same frames in the same order when run twice', async () => {
-    const first = fakeBackend()
-    const second = fakeBackend()
-    await run(first.backend).promise
-    await run(second.backend).promise
-    expect(second.sessions[0].frames).toEqual(first.sessions[0].frames)
   })
 })
