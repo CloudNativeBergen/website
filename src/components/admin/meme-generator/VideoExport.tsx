@@ -259,7 +259,7 @@ export function VideoExport({
             className="h-2 flex-1 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700"
           >
             <div
-              className="h-full rounded-full bg-brand-cloud-blue transition-[width] dark:bg-blue-500"
+              className="h-full rounded-full bg-brand-cloud-blue dark:bg-blue-500"
               style={{ width: `${fraction * 100}%` }}
             />
           </div>
