@@ -16,9 +16,11 @@ export const BACKGROUND_SHORT_SIDE = 1188
 const IMAGE_PROXY_PATH = '/api/proxy-image'
 
 /**
- * The CDN rendition of an image whose short side is at most
- * `BACKGROUND_SHORT_SIDE`, never upscaled (`fit=max`), as WebP: it keeps an
- * alpha channel, and a photo stays far under the proxy's limits.
+ * The CDN rendition a background is drawn from: the centred square of side
+ * `min(BACKGROUND_SHORT_SIDE, short side)`. The canvas covers its square
+ * centred and crops the overflow, so this is exactly the part it shows — and
+ * both sides are capped, so no panorama can ask for a response larger than
+ * the platform sends. Never upscaled; WebP, which keeps an alpha channel.
  */
 export function backgroundRenditionUrl(
   cdnUrl: string,
@@ -26,17 +28,18 @@ export function backgroundRenditionUrl(
   height: number | null,
 ): string {
   const url = new URL(cdnUrl)
-  // Unknown dimensions (never for a Sanity image) size the width.
-  const landscape = !!width && !!height && width > height
-  const short = landscape ? height : width
-  url.search = ''
-  url.searchParams.set(
-    landscape ? 'h' : 'w',
-    String(Math.min(BACKGROUND_SHORT_SIDE, short ?? BACKGROUND_SHORT_SIDE)),
-  )
-  url.searchParams.set('fit', 'max')
-  url.searchParams.set('fm', 'webp')
-  url.searchParams.set('q', '90')
+  // Unknown dimensions (never for a Sanity image) ask for the full square.
+  const shortSide =
+    width && height ? Math.min(width, height) : BACKGROUND_SHORT_SIDE
+  const side = String(Math.min(BACKGROUND_SHORT_SIDE, shortSide))
+  url.search = new URLSearchParams({
+    w: side,
+    h: side,
+    fit: 'crop',
+    crop: 'center',
+    fm: 'webp',
+    q: '90',
+  }).toString()
   return url.toString()
 }
 

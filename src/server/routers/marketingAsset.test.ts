@@ -97,6 +97,7 @@ const DOCS: Record<
   'drafts.asset-ours': { _type: 'marketingAsset', orgId: 'org-A' },
   'asset-theirs': { _type: 'marketingAsset', orgId: 'org-B' },
   'asset-2025': { _type: 'marketingAsset', orgId: 'org-A' },
+  'asset-panorama': { _type: 'marketingAsset', orgId: 'org-A' },
   // Ours, but Studio (which no guard reaches) marked it with B's edition.
   'asset-studio-marked': { _type: 'marketingAsset', orgId: 'org-A' },
   'template-ours': { _type: 'planTemplate', orgId: 'org-A' },
@@ -163,6 +164,22 @@ const BACKGROUNDS: Record<
     url: 'https://cdn.sanity.io/images/p/d/portrait-800x1200.png',
     width: 800,
     height: 1200,
+  },
+  // A panorama: capping only the short side would still ask for 11880 px.
+  'asset-panorama': {
+    title: 'Fjord',
+    alt: 'A fjord from end to end',
+    url: 'https://cdn.sanity.io/images/p/d/fjord-20000x2000.jpg',
+    width: 20000,
+    height: 2000,
+  },
+  // Another organization's, as a read that skipped the guard would find it.
+  'asset-theirs': {
+    title: 'Theirs',
+    alt: 'Not ours',
+    url: 'https://cdn.sanity.io/images/p/d/theirs-2000x2000.jpg',
+    width: 2000,
+    height: 2000,
   },
   // An asset with no image to draw (an audio track, #1178).
   'asset-studio-marked': {
@@ -656,10 +673,10 @@ describe('marketingAsset.background', () => {
       title: 'Keynote hall',
       alt: 'The main hall from the stage',
     })
-    // Landscape: the SHORT side is what covers the square, so it is sized to
-    // 1188 (1080 plus the drift's 10%) and the long side follows.
+    // The centred square the canvas's cover draw shows anyway, at 1188 (1080
+    // plus the drift's 10%): the same pixels, and never more bytes.
     expect(proxied(picked.url)).toBe(
-      'https://cdn.sanity.io/images/p/d/hall-3000x2000.jpg?h=1188&fit=max&fm=webp&q=90',
+      'https://cdn.sanity.io/images/p/d/hall-3000x2000.jpg?w=1188&h=1188&fit=crop&crop=center&fm=webp&q=90',
     )
     const [, params] = backgroundReads()[0]
     expect(params).toMatchObject({ orgId: 'org-A', id: 'asset-ours' })
@@ -668,7 +685,14 @@ describe('marketingAsset.background', () => {
   it('never asks for a rendition larger than the original', async () => {
     const picked = await assets().background({ id: 'asset-2025' })
     expect(proxied(picked.url)).toBe(
-      'https://cdn.sanity.io/images/p/d/portrait-800x1200.png?w=800&fit=max&fm=webp&q=90',
+      'https://cdn.sanity.io/images/p/d/portrait-800x1200.png?w=800&h=800&fit=crop&crop=center&fm=webp&q=90',
+    )
+  })
+
+  it('never asks for more than the square the canvas shows, however long the image', async () => {
+    const picked = await assets().background({ id: 'asset-panorama' })
+    expect(proxied(picked.url)).toBe(
+      'https://cdn.sanity.io/images/p/d/fjord-20000x2000.jpg?w=1188&h=1188&fit=crop&crop=center&fm=webp&q=90',
     )
   })
 
