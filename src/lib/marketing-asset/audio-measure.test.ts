@@ -6,14 +6,21 @@ import {
   sniffAudioType,
 } from './audio-type'
 import {
+  adtsTone,
+  alacM4a,
+  alawWav,
+  behindId3,
+  flacTone,
   m4aTone,
+  m4aWithNoLength,
   mp3OfSeconds,
+  mp3UnderClaimed,
   mp4WithVideo,
   wavOfSeconds,
 } from './__tests__/audio-fixtures'
 
 vi.mock('server-only', () => ({}))
-import { measureAudio } from './audio-measure'
+import { countMp3Seconds, measureAudio } from './audio-measure'
 
 describe('sniffAudioType', () => {
   it.each([
@@ -43,32 +50,82 @@ describe('measureAudio', () => {
     ['M4A', m4aTone(), 'audio/mp4', 1],
   ] as const)('reads the length of a real %s', async (_, bytes, type, s) => {
     const measured = await measureAudio(bytes, type)
-    expect(measured?.durationSeconds).toBeCloseTo(s, 0)
+    expect(measured).toHaveProperty('durationSeconds')
+    expect(
+      (measured as { durationSeconds: number }).durationSeconds,
+    ).toBeCloseTo(s, 0)
   })
+
+  const seconds = async (
+    bytes: Buffer,
+    type: Parameters<typeof measureAudio>[1],
+  ) => {
+    const measured = await measureAudio(bytes, type)
+    return 'durationSeconds' in measured ? measured.durationSeconds : measured
+  }
 
   it('reads an MP3 past ten minutes as past ten minutes', async () => {
-    const measured = await measureAudio(mp3OfSeconds(660), 'audio/mpeg')
-    expect(measured?.durationSeconds).toBeGreaterThan(600)
+    expect(await seconds(mp3OfSeconds(660), 'audio/mpeg')).toBeGreaterThan(600)
   })
 
-  it('reads an MP3 whose VBR header claims ten frames by the frames it holds', async () => {
-    const mp3 = mp3OfSeconds(660, { xingFrames: 10 })
-    const measured = await measureAudio(mp3, 'audio/mpeg')
-    expect(measured?.durationSeconds).toBeGreaterThan(600)
+  it('counts an MP3 whose LAME-style header (frames AND bytes) claims ten frames by the frames it holds', async () => {
+    // The real parser believes the header: prove the premise, then the count.
+    const { parseBuffer } = await import('music-metadata')
+    const mp3 = mp3UnderClaimed(660)
+    const trusted = await parseBuffer(
+      mp3,
+      { mimeType: 'audio/mpeg' },
+      { duration: true },
+    )
+    expect(trusted.format.duration).toBeLessThan(1)
+    expect(await seconds(mp3, 'audio/mpeg')).toBeGreaterThan(600)
   })
 
-  it('refuses an MP4 that holds video, though its container sniffs as M4A', async () => {
-    expect(await measureAudio(mp4WithVideo(), 'audio/mp4')).toBeNull()
+  it('reads an hour of MP3 under 20 MB, headed as two seconds, as an hour', async () => {
+    const hour = mp3UnderClaimed(65 * 60)
+    expect(hour.length).toBeLessThan(20 * 1024 * 1024)
+    expect(await seconds(hour, 'audio/mpeg')).toBeGreaterThan(3600)
   })
 
-  it('refuses bytes whose format is not the sniffed one', async () => {
-    expect(await measureAudio(wavOfSeconds(1), 'audio/mpeg')).toBeNull()
-  })
-
-  it('refuses a WAV header with no readable length', async () => {
+  it('counts frames of every MPEG version, skips junk between them, and finds none in junk', () => {
+    const junk = Buffer.alloc(500, 0x20)
     expect(
-      await measureAudio(Buffer.from('RIFF0000WAVEgarbage'), 'audio/wav'),
-    ).toBeNull()
+      countMp3Seconds(Buffer.concat([mp3OfSeconds(2), junk, mp3OfSeconds(2)])),
+    ).toBeCloseTo(4, 0)
+    // MPEG-2 Layer III, 32 kbit/s at 16 kHz: 144-byte frames of 36 ms.
+    const mpeg2 = Buffer.alloc(144)
+    mpeg2.set([0xff, 0xf3, 0x48, 0xc0])
+    expect(countMp3Seconds(Buffer.concat(Array(100).fill(mpeg2)))).toBeCloseTo(
+      3.6,
+      1,
+    )
+    expect(countMp3Seconds(junk)).toBe(0)
+  })
+
+  it.each([
+    [
+      'an MP4 that holds video, though it sniffs as M4A',
+      mp4WithVideo(),
+      'audio/mp4',
+    ],
+    ['ALAC in an M4A', alacM4a(), 'audio/mp4'],
+    ['AAC (ADTS) behind an ID3 tag', behindId3(adtsTone()), 'audio/mpeg'],
+    ['FLAC behind an ID3 tag', behindId3(flacTone()), 'audio/mpeg'],
+    ['an A-law WAV', alawWav(), 'audio/wav'],
+    ['a WAV sent as MP3', wavOfSeconds(1), 'audio/mpeg'],
+    [
+      'a WAV header and nothing else',
+      Buffer.from('RIFF0000WAVEgarbage'),
+      'audio/wav',
+    ],
+  ] as const)('refuses %s as the wrong type', async (_, bytes, type) => {
+    expect(await measureAudio(bytes, type)).toEqual({ refused: 'type' })
+  })
+
+  it('refuses an M4A whose length cannot be read as unreadable, not as the wrong type', async () => {
+    expect(await measureAudio(m4aWithNoLength(), 'audio/mp4')).toEqual({
+      refused: 'unreadable',
+    })
   })
 
   it('measures a WAV by the bytes it holds, not a header that undersells them', async () => {
@@ -76,8 +133,7 @@ describe('measureAudio', () => {
     // The data chunk claims one second; thirty seconds of samples follow.
     wav.writeUInt32LE(8000, 40)
     wav.writeUInt32LE(36 + 8000, 4)
-    const measured = await measureAudio(wav, 'audio/wav')
-    expect(measured?.durationSeconds).toBeGreaterThan(29)
+    expect(await seconds(wav, 'audio/wav')).toBeGreaterThan(29)
   })
 })
 

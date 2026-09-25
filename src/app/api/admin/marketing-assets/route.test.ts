@@ -7,6 +7,7 @@ const h = vi.hoisted(() => ({
   orgId: vi.fn(),
   move: vi.fn(),
   moveAudio: vi.fn(),
+  discard: vi.fn(),
   orphanFile: vi.fn(),
   create: vi.fn(),
   orphan: vi.fn(),
@@ -25,6 +26,7 @@ vi.mock('@/lib/authz/organizer', () => ({
 vi.mock('@/lib/marketing-asset/move', () => ({
   moveBlobToSanity: h.move,
   moveAudioBlobToSanity: h.moveAudio,
+  discardBlob: h.discard,
 }))
 vi.mock('@/lib/marketing-asset/sanity', () => ({
   createMarketingAsset: h.create,
@@ -344,6 +346,8 @@ describe('an audio track through the move route (#1178)', () => {
     expect(h.moveAudio).not.toHaveBeenCalled()
     expect(h.move).not.toHaveBeenCalled()
     expect(h.create).not.toHaveBeenCalled()
+    // The refused upload is deleted, not left for the sweeper.
+    expect(h.discard).toHaveBeenCalledWith(TRACK_URL, 'org-A')
   })
 
   it('records the SESSION organizer and the SERVER time, whatever the body claims, and keeps no alt text', async () => {
@@ -387,6 +391,10 @@ describe('an audio track through the move route (#1178)', () => {
     ['type', 'Only MP3, M4A and WAV tracks can be added.'],
     ['size', 'The track is larger than 20 MB.'],
     ['length', 'The track is longer than 10 minutes.'],
+    [
+      'unreadable',
+      'The track’s length could not be read. Export it again as MP3, M4A or WAV and retry.',
+    ],
   ] as const)('a %s refusal saves nothing', async (reason, message) => {
     h.moveAudio.mockResolvedValue({ ok: false, reason })
     const response = await POST(request(TRACK))
@@ -403,8 +411,21 @@ describe('an audio track through the move route (#1178)', () => {
     expect(h.orphan).not.toHaveBeenCalled()
   })
 
-  it('still requires alt text of an image', async () => {
+  it('still requires alt text of an image, and discards the upload', async () => {
     expect((await POST(request({ ...VALID, alt: undefined }))).status).toBe(400)
     expect(h.move).not.toHaveBeenCalled()
+    expect(h.discard).toHaveBeenCalledWith(URL_OK, 'org-A')
+  })
+
+  it('discards the upload when the guard refuses its subject', async () => {
+    h.guard.mockRejectedValue(new Error('NOT_FOUND'))
+    expect((await POST(request(TRACK))).status).toBe(400)
+    expect(h.discard).toHaveBeenCalledWith(TRACK_URL, 'org-A')
+    expect(h.moveAudio).not.toHaveBeenCalled()
+  })
+
+  it('never discards on a successful move: the move owns that blob', async () => {
+    expect((await POST(request(TRACK))).status).toBe(200)
+    expect(h.discard).not.toHaveBeenCalled()
   })
 })

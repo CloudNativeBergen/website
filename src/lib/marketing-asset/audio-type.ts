@@ -24,6 +24,8 @@ export const MARKETING_ASSET_AUDIO_TYPE_REFUSAL =
   'Only MP3, M4A and WAV tracks can be added.'
 export const MARKETING_ASSET_AUDIO_SIZE_REFUSAL = `The track is larger than ${MARKETING_ASSET_MAX_AUDIO_BYTES / (1024 * 1024)} MB.`
 export const MARKETING_ASSET_AUDIO_LENGTH_REFUSAL = `The track is longer than ${MARKETING_ASSET_MAX_AUDIO_SECONDS / 60} minutes.`
+export const MARKETING_ASSET_AUDIO_UNREADABLE_REFUSAL =
+  'The track’s length could not be read. Export it again as MP3, M4A or WAV and retry.'
 export const MARKETING_ASSET_RIGHTS_REFUSAL =
   'Confirm that you have the right to use this track in social posts.'
 

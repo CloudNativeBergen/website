@@ -14,9 +14,11 @@ import {
   MARKETING_ASSET_AUDIO_LENGTH_REFUSAL,
   MARKETING_ASSET_AUDIO_SIZE_REFUSAL,
   MARKETING_ASSET_AUDIO_TYPE_REFUSAL,
+  MARKETING_ASSET_AUDIO_UNREADABLE_REFUSAL,
   MARKETING_ASSET_RIGHTS_REFUSAL,
 } from '@/lib/marketing-asset/audio-type'
 import {
+  discardBlob,
   moveAudioBlobToSanity,
   moveBlobToSanity,
   type MoveRefusal,
@@ -54,8 +56,9 @@ const REFUSALS: Refusals = {
   prefix: { status: 400, error: 'That upload is not one of ours.' },
   type: { status: 400, error: MARKETING_ASSET_TYPE_REFUSAL },
   size: { status: 400, error: MARKETING_ASSET_SIZE_REFUSAL },
-  // An image has no length; only the audio move refuses one.
+  // An image has no length; only the audio move refuses these.
   length: { status: 400, error: MARKETING_ASSET_SIZE_REFUSAL },
+  unreadable: { status: 400, error: MARKETING_ASSET_TYPE_REFUSAL },
   fetch: { status: 502, error: 'The upload could not be read. Try again.' },
   upload: { status: 502, error: 'The image could not be stored. Try again.' },
 }
@@ -65,6 +68,7 @@ const AUDIO_REFUSALS: Refusals = {
   type: { status: 400, error: MARKETING_ASSET_AUDIO_TYPE_REFUSAL },
   size: { status: 400, error: MARKETING_ASSET_AUDIO_SIZE_REFUSAL },
   length: { status: 400, error: MARKETING_ASSET_AUDIO_LENGTH_REFUSAL },
+  unreadable: { status: 400, error: MARKETING_ASSET_AUDIO_UNREADABLE_REFUSAL },
   upload: { status: 502, error: 'The track could not be stored. Try again.' },
 }
 
@@ -132,10 +136,15 @@ export async function POST(request: Request) {
       { status: 400 },
     )
   }
+  // From here a refusal before the move leaves an upload nobody will move:
+  // delete it (after the answer) rather than leave it to the sweeper.
+  const discard = () => discardBlob(parsedUrl.data.url, orgId)
   if (!audio && !parsed.data.alt) {
+    discard()
     return NextResponse.json({ error: kind.missing }, { status: 400 })
   }
   if (audio && parsedUrl.data.rightsConfirmed !== true) {
+    discard()
     return NextResponse.json(
       { error: MARKETING_ASSET_RIGHTS_REFUSAL },
       { status: 400 },
@@ -153,6 +162,7 @@ export async function POST(request: Request) {
   try {
     details = await resolveAssetDetailsForCurrentOrg(parsed.data)
   } catch {
+    discard()
     return NextResponse.json(
       {
         error:

@@ -23,7 +23,14 @@ import {
 import { measureAudio } from './audio-measure'
 
 export type MoveRefusal =
-  'host' | 'prefix' | 'fetch' | 'type' | 'size' | 'length' | 'upload'
+  | 'host'
+  | 'prefix'
+  | 'fetch'
+  | 'type'
+  | 'size'
+  | 'length'
+  | 'unreadable'
+  | 'upload'
 
 export type MoveResult =
   | {
@@ -108,6 +115,16 @@ export async function moveBlobToSanity(
   const check = claimBlob(url, orgId)
   if (!check.ok) return check
   return transfer(check.url, check.filename, Date.now())
+}
+
+/**
+ * Delete an upload the route refused before moving it (no rights
+ * confirmation, no alt text, a foreign subject): the form uploads afresh on
+ * every submit, so nothing will ever move this blob. Under the same URL check
+ * as a move — a URL that is not ours is neither fetched nor deleted.
+ */
+export function discardBlob(url: string, orgId: string): void {
+  claimBlob(url, orgId)
 }
 
 /**
@@ -212,7 +229,7 @@ async function transferAudio(
   const type = sniffAudioType(bytes.subarray(0, SNIFF_BYTES))
   if (!type) return { ok: false, reason: 'type' }
   const measured = await measureAudio(bytes, type)
-  if (!measured) return { ok: false, reason: 'type' }
+  if ('refused' in measured) return { ok: false, reason: measured.refused }
   if (measured.durationSeconds > MARKETING_ASSET_MAX_AUDIO_SECONDS)
     return { ok: false, reason: 'length' }
 

@@ -10,6 +10,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Readable } from 'node:stream'
 import {
+  behindId3,
+  flacTone,
+  m4aWithNoLength,
+  mp3UnderClaimed,
   m4aTone,
   mp3OfSeconds,
   mp4WithVideo,
@@ -45,7 +49,7 @@ vi.mock('@/lib/sanity/client', () => ({
   },
 }))
 
-import { moveAudioBlobToSanity } from './move'
+import { discardBlob, moveAudioBlobToSanity } from './move'
 import { MARKETING_ASSET_MAX_AUDIO_BYTES } from './audio-type'
 
 const HOST = 'abcstore123.public.blob.vercel-storage.com'
@@ -126,6 +130,32 @@ describe('the audio move', () => {
     expect(h.upload).not.toHaveBeenCalled()
   })
 
+  it('refuses an hour of MP3 whose header claims ten frames', async () => {
+    fetchMock.mockResolvedValue(respond(mp3UnderClaimed(65 * 60)))
+    expect(await moveAudioBlobToSanity(URL_OK, ORG)).toEqual({
+      ok: false,
+      reason: 'length',
+    })
+    expect(h.upload).not.toHaveBeenCalled()
+  })
+
+  it('refuses FLAC behind an ID3 tag as the wrong type', async () => {
+    fetchMock.mockResolvedValue(respond(behindId3(flacTone())))
+    expect(await moveAudioBlobToSanity(URL_OK, ORG)).toEqual({
+      ok: false,
+      reason: 'type',
+    })
+  })
+
+  it('refuses a track whose length cannot be read with its own reason', async () => {
+    fetchMock.mockResolvedValue(respond(m4aWithNoLength()))
+    expect(await moveAudioBlobToSanity(URL_OK, ORG)).toEqual({
+      ok: false,
+      reason: 'unreadable',
+    })
+    expect(h.upload).not.toHaveBeenCalled()
+  })
+
   it('takes a track of exactly ten minutes less a frame', async () => {
     fetchMock.mockResolvedValue(respond(mp3OfSeconds(599.9)))
     expect((await moveAudioBlobToSanity(URL_OK, ORG)).ok).toBe(true)
@@ -168,5 +198,21 @@ describe('the audio move', () => {
     expect(result).toEqual({ ok: false, reason: 'prefix' })
     expect(fetchMock).not.toHaveBeenCalled()
     expect(h.afterTasks).toEqual([])
+  })
+})
+
+describe('discardBlob', () => {
+  it('deletes an upload of ours after the answer, without fetching it', async () => {
+    discardBlob(URL_OK, ORG)
+    expect(fetchMock).not.toHaveBeenCalled()
+    for (const task of h.afterTasks.splice(0)) await task()
+    expect(h.del).toHaveBeenCalledWith(URL_OK, expect.anything())
+  })
+
+  it('never deletes a URL that is not ours', async () => {
+    discardBlob(URL_OK.replace(ORG, 'org-B'), ORG)
+    discardBlob('https://evil.example/marketing-asset/org-A/x.mp3', ORG)
+    expect(h.afterTasks).toEqual([])
+    expect(h.del).not.toHaveBeenCalled()
   })
 })

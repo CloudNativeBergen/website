@@ -261,7 +261,7 @@ export function AssetUploadForm({
       <h2 className="text-base font-semibold text-gray-900 dark:text-white">
         Add to the gallery
       </h2>
-      <div className="mt-4 grid gap-5 md:grid-cols-[minmax(0,15rem)_minmax(0,1fr)]">
+      <div className="mt-4 grid grid-cols-1 gap-5 md:grid-cols-[minmax(0,15rem)_minmax(0,1fr)]">
         <div>
           <label
             htmlFor={ids.file}
