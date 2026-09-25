@@ -14,9 +14,15 @@ import { deleteBlobWithin } from './blob-delete'
 
 let server: http.Server
 let hits = 0
+/** 'hang' never answers; '503' fails at once, so the library retries. */
+let mode: 'hang' | '503' = 'hang'
 beforeAll(async () => {
-  server = http.createServer(() => {
-    hits++ // never answers
+  server = http.createServer((_req, res) => {
+    hits++
+    if (mode === '503') {
+      res.statusCode = 503
+      res.end('{"error":{"code":"service_unavailable"}}')
+    }
   })
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
   const { port } = server.address() as AddressInfo
@@ -31,6 +37,7 @@ afterAll(async () => {
 
 describe('deleteBlobWithin', () => {
   it('gives up at its deadline against a Blob API that never answers', async () => {
+    mode = 'hang'
     const started = Date.now()
     await expect(
       deleteBlobWithin(
@@ -39,6 +46,22 @@ describe('deleteBlobWithin', () => {
       ),
     ).rejects.toBeTruthy()
     expect(Date.now() - started).toBeLessThan(2_000)
+    expect(hits).toBeGreaterThan(0)
+  })
+
+  it('gives up at its deadline during a retry wait against a failing Blob API', async () => {
+    // Each 5xx starts a retry wait of 1–2 s, doubling; the library does not
+    // watch the signal during a wait, so the deadline must not rely on it.
+    mode = '503'
+    hits = 0
+    const started = Date.now()
+    await expect(
+      deleteBlobWithin(
+        'https://store123.public.blob.vercel-storage.com/marketing-asset/org-A/1790000000000-a.png',
+        1_500,
+      ),
+    ).rejects.toBeTruthy()
+    expect(Date.now() - started).toBeLessThan(1_900)
     expect(hits).toBeGreaterThan(0)
   })
 })

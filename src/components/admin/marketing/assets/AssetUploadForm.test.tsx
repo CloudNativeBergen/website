@@ -163,6 +163,8 @@ describe('picking a file', () => {
     })
     elsewhere.focus()
     await act(async () => finish({ _id: 'x', softOnSocial: false }))
+    // The save finished and the form reset: the effect had its chance.
+    expect(screen.getByLabelText('Choose an image')).toBeTruthy()
     expect(document.activeElement).toBe(elsewhere)
     elsewhere.remove()
   })
@@ -181,5 +183,34 @@ describe('picking a file', () => {
     expect(document.activeElement).toBe(
       screen.getByLabelText('Choose an image'),
     )
+  })
+
+  it('locks the title and alt text while saving, so an edit is not silently lost', async () => {
+    const { pick, settle, uploader } = renderForm()
+    let finish: (value: {
+      _id: string
+      softOnSocial: boolean
+    }) => void = () => {}
+    uploader.mockImplementation(
+      () => new Promise((resolve) => (finish = resolve)),
+    )
+    await pick(png('logo.png'))
+    await settle('logo.png', 1200, 1200)
+    fireEvent.change(screen.getByLabelText('Alt text'), {
+      target: { value: 'The logo' },
+    })
+    await act(async () => {
+      fireEvent.submit(screen.getByRole('button', { name: 'Add to gallery' }))
+    })
+    expect((screen.getByLabelText('Title') as HTMLInputElement).disabled).toBe(
+      true,
+    )
+    expect(
+      (screen.getByLabelText('Alt text') as HTMLTextAreaElement).disabled,
+    ).toBe(true)
+    await act(async () => finish({ _id: 'x', softOnSocial: false }))
+    expect(
+      (screen.getByLabelText('Alt text') as HTMLTextAreaElement).disabled,
+    ).toBe(false)
   })
 })

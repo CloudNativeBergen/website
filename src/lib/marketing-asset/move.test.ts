@@ -316,7 +316,7 @@ describe('the move checks the file itself', () => {
   })
 
   it('gives up on a Sanity upload that never answers, before the route is killed', async () => {
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
     try {
       fetchMock.mockResolvedValue(respond(png(100)))
       h.upload.mockImplementation(() => new Promise(() => {}))

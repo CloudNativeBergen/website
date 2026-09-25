@@ -278,6 +278,8 @@ export function AssetUploadForm({
               id={ids.title}
               required
               maxLength={200}
+              // Locked while saving: the save already sent what is here.
+              disabled={saving}
               value={title}
               onChange={(event) => setTitle(event.target.value)}
               className={INPUT}
@@ -292,6 +294,7 @@ export function AssetUploadForm({
               required
               rows={3}
               maxLength={1000}
+              disabled={saving}
               value={alt}
               onChange={(event) => setAlt(event.target.value)}
               className={INPUT}
