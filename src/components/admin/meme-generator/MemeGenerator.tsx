@@ -99,12 +99,17 @@ import {
 } from './meme-generator-frame'
 import { VideoTimeline, type SceneRefusal } from './VideoTimeline'
 import type { TimingControl } from './VideoElements'
+import { VideoExport, type ExportJob } from './VideoExport'
+import type { EncoderBackend } from './meme-generator-export'
+import { mediabunnyBackend } from './meme-generator-mediabunny'
 import { useMediaQuery } from '@/hooks/useMediaQuery'
 import { PLATFORM_NAME } from '@/lib/branding/platform'
 
 interface MemeGeneratorProps {
   conferenceLogos?: ConferenceLogos
   wrapPreview?: (node: React.ReactNode) => React.ReactNode
+  /** The MP4 encoder; the browser's, unless a story or test gives another. */
+  encoder?: EncoderBackend
 }
 
 interface ColorButtonProps {
@@ -123,6 +128,15 @@ interface SliderProps {
   max: number
   suffix?: string
   icon?: React.ElementType
+}
+
+/** The page's brand font and gradient, which the wordmark paints with. */
+function pageBrand() {
+  const root = document.documentElement
+  return {
+    fontFamily: wordmarkFontFamily(root),
+    gradient: brandGradientColors(root),
+  }
 }
 
 function readAsDataUrl(file: File): Promise<string> {
@@ -256,6 +270,7 @@ const HistoryButton = ({
 export function MemeGenerator({
   conferenceLogos,
   wrapPreview,
+  encoder = mediabunnyBackend,
 }: MemeGeneratorProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const exportCanvasRef = useRef<HTMLCanvasElement>(null)
@@ -930,31 +945,71 @@ export function MemeGenerator({
   // that clears `data-capture-pending` and a capture never sees one without
   // the other. Scrubbing and playback both paint through `drawFrame`: a time
   // shows the same picture however it was reached.
+  /** Paints scene `index` of `list` at its own time, with its assets. */
+  const scenePainter = useCallback(
+    (list: Scene[]): PaintScene => {
+      const brand = pageBrand()
+      return (ctx, { index, time: sceneTime }) => {
+        const { design: scene, motion, duration } = list[index]
+        drawDesign(
+          ctx,
+          scene,
+          { ...assetsFor(scene, motion.drift), brand },
+          sceneTime,
+          { motion, duration },
+        )
+      }
+    },
+    [assetsFor],
+  )
+
   useLayoutEffect(() => {
     if (capturePending) return
-    const root = document.documentElement
-    const brand = {
-      fontFamily: wordmarkFontFamily(root),
-      gradient: brandGradientColors(root),
-    }
-    const paintScene: PaintScene = (ctx, { index, time: sceneTime }) => {
-      const { design: scene, motion, duration } = scenes[index]
-      drawDesign(
-        ctx,
-        scene,
-        { ...assetsFor(scene, motion.drift), brand },
-        sceneTime,
-        { motion, duration },
-      )
-    }
+    const paintScene = scenePainter(scenes)
     for (const canvas of [canvasRef.current, exportCanvasRef.current]) {
       const ctx = canvas?.getContext('2d')
       if (!ctx) continue
       if (mode === 'video')
         drawFrame(ctx, frameAt(scenes, time), paintScene, layers)
-      else drawDesign(ctx, design, { ...assetsFor(design), brand }, 0)
+      // Image mode is the design at rest: no scene motion.
+      else
+        drawDesign(ctx, design, { ...assetsFor(design), brand: pageBrand() }, 0)
     }
-  }, [mode, scenes, design, time, assetsFor, layers, capturePending, lateFaces])
+  }, [
+    mode,
+    scenes,
+    design,
+    time,
+    assetsFor,
+    scenePainter,
+    layers,
+    capturePending,
+    lateFaces,
+  ])
+
+  // An export paints the video as it was when Export was pressed, onto a
+  // canvas of its own — frame n at frame n's time, through the same
+  // `drawFrame` as the preview, so what was scrubbed is what is exported.
+  const prepareExport = (): ExportJob => {
+    const snapshot = scenes
+    const canvas = document.createElement('canvas')
+    canvas.width = canvas.height = CANVAS_SIZE
+    const ctx = canvas.getContext('2d')
+    if (!ctx) throw new Error('No 2D context to export from')
+    const paintScene = scenePainter(snapshot)
+    const exportLayers = offscreenLayers()
+    return {
+      canvas,
+      frameCount: Math.round(totalDuration(snapshot) * FPS),
+      paint: (frame) =>
+        drawFrame(
+          ctx,
+          frameAt(snapshot, frame / FPS),
+          paintScene,
+          exportLayers,
+        ),
+    }
+  }
 
   // The overlay carried the logo's accessible name; the canvas now does.
   const canvasLabel =
@@ -1078,6 +1133,13 @@ export function MemeGenerator({
             refusal={refused}
             onPlayToggle={togglePlayback}
             onLoopChange={setLoop}
+          />
+        )}
+        {mode === 'video' && (
+          <VideoExport
+            encoder={encoder}
+            prepare={prepareExport}
+            waiting={capturePending}
           />
         )}
       </div>
