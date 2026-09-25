@@ -11,6 +11,7 @@ import {
   presetState,
   resizeMotion,
   motionFor,
+  moveEnd,
   type ElementMotion,
 } from './meme-generator-motion'
 import { DEFAULT_DESIGN } from './meme-generator-draw'
@@ -222,5 +223,21 @@ describe('elementsOf', () => {
       { id: 'qr', name: 'QR code' },
       { id: 'logo', name: 'Logo' },
     ])
+  })
+})
+
+describe('moveEnd', () => {
+  const m = motion({ enter: 1, leave: 2 })
+  it('moves one end in tenths, inside the scene', () => {
+    expect(moveEnd(m, 'enter', 0.44, 3)).toEqual(
+      motion({ enter: 0.4, leave: 2 }),
+    )
+    expect(moveEnd(m, 'enter', -5, 3)).toEqual(motion({ enter: 0, leave: 2 }))
+    expect(moveEnd(m, 'leave', 9, 3)).toEqual(motion({ enter: 1, leave: 3 }))
+  })
+
+  it('never carries an end past the other', () => {
+    expect(moveEnd(m, 'enter', 2.5, 3)).toEqual(motion({ enter: 2, leave: 2 }))
+    expect(moveEnd(m, 'leave', 0.5, 3)).toEqual(motion({ enter: 1, leave: 1 }))
   })
 })

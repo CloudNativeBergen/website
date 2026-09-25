@@ -831,39 +831,33 @@ export function MemeGenerator({
 
   // An element's bar: a drag of it, or typing in one of its fields, is one
   // step; a preset picked from a list is a step of its own.
-  const changeElement = (
+  const patchMotion = (
     index: number,
-    id: ElementId,
-    motion: ElementMotion,
-    grouped: boolean,
+    patch: (motion: Scene['motion']) => Scene['motion'],
+    group?: string,
   ) => {
     const key = scenes[index].key
     changeScenes(
       (prev) =>
         prev.map((scene) =>
-          scene.key === key
-            ? {
-                ...scene,
-                motion: {
-                  ...scene.motion,
-                  elements: { ...scene.motion.elements, [id]: motion },
-                },
-              }
-            : scene,
+          scene.key === key ? { ...scene, motion: patch(scene.motion) } : scene,
         ),
-      grouped ? `${key}:motion.${id}` : undefined,
+      group && `${key}:${group}`,
     )
   }
-  const changeDrift = (index: number, drift: boolean) => {
-    const key = scenes[index].key
-    changeScenes((prev) =>
-      prev.map((scene) =>
-        scene.key === key
-          ? { ...scene, motion: { ...scene.motion, drift } }
-          : scene,
-      ),
+  const changeElement = (
+    index: number,
+    id: ElementId,
+    motion: ElementMotion,
+    grouped: boolean,
+  ) =>
+    patchMotion(
+      index,
+      (prev) => ({ ...prev, elements: { ...prev.elements, [id]: motion } }),
+      grouped ? `motion.${id}` : undefined,
     )
-  }
+  const changeDrift = (index: number, drift: boolean) =>
+    patchMotion(index, (prev) => ({ ...prev, drift }))
 
   // Undo and redo put the scenes back; the playhead stays where it is, kept
   // inside the video, so the scene under it is what the controls edit.

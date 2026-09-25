@@ -1732,6 +1732,27 @@ export const VideoElementTimingsDark: Story = {
   globals: { theme: 'dark' },
 }
 
+/**
+ * On a phone the animation table scrolls inside its panel — its selects keep
+ * a readable width — and never widens the page.
+ */
+export const VideoElementTimingsOnPhone: Story = {
+  parameters: { viewport: { defaultViewport: 'phone' } },
+  play: async (context) => {
+    await VideoElementTimings.play!(context)
+    const canvas = within(context.canvasElement)
+    const table = canvas.getByRole('table')
+    const scroller = table.parentElement!
+    expect(scroller.scrollWidth).toBeGreaterThan(scroller.clientWidth)
+    expect(
+      canvas.getByLabelText('Text 1 entrance').getBoundingClientRect().width,
+    ).toBeGreaterThanOrEqual(100)
+    expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(
+      window.innerWidth,
+    )
+  },
+}
+
 /** A photo with a blue band down its left edge and magenta elsewhere. */
 async function bandedPhoto(side: number): Promise<File> {
   const source = document.createElement('canvas')
@@ -1751,9 +1772,10 @@ const isPureBlue: Pixel = (r, g, b) => r < 30 && g < 30 && b > 225
 
 /**
  * Drift on a 25-megapixel photo: the zoom is visible — the band down the
- * left edge, on screen at the start, has zoomed off it by the end — and
- * playback keeps a steady frame rate, as each frame draws the pre-scaled
- * ~1200 px copy rather than resampling the photo.
+ * left edge, on screen at the start, has zoomed off it by the end. That each
+ * frame draws ONE pre-scaled ~1200 px copy, not the photo, is pinned in
+ * MemeGenerator.motion.test; a frame-rate check here would measure the CI
+ * machine (Chromium on an M1 holds 60 fps with or without the copy).
  */
 export const VideoDriftLargePhoto: Story = {
   play: async ({ canvasElement }) => {
@@ -1778,26 +1800,5 @@ export const VideoDriftLargePhoto: Story = {
     await waitFor(() => expect(edge(isPureBlue)).toBeGreaterThan(0.95))
     await seekTo(canvas, 2.9)
     await waitFor(() => expect(edge(isMagenta)).toBeGreaterThan(0.95))
-
-    // Frame gaps across a second of playback from the start.
-    await seekTo(canvas, 0)
-    const gaps: number[] = []
-    let last = performance.now()
-    let sampling = true
-    const tick = (now: number) => {
-      gaps.push(now - last)
-      last = now
-      if (sampling) requestAnimationFrame(tick)
-    }
-    await userEvent.click(canvas.getByRole('button', { name: 'Play' }))
-    requestAnimationFrame(tick)
-    await new Promise((resolve) => setTimeout(resolve, 1000))
-    sampling = false
-    await userEvent.click(canvas.getByRole('button', { name: 'Pause' }))
-    gaps.sort((a, b) => a - b)
-    const p90 = gaps[Math.floor(gaps.length * 0.9)]
-    console.info('[drift] frames', gaps.length, 'p90 gap ms', p90.toFixed(1))
-    expect(gaps.length).toBeGreaterThan(20)
-    expect(p90).toBeLessThan(50)
   },
 }

@@ -193,12 +193,12 @@ export const DRIFT_RASTER_SIZE = Math.ceil(CANVAS_SIZE * (1 + DRIFT_ZOOM))
  * frame of a drift resamples a ~1200 px square rather than a multi-megapixel
  * photo. `canvas` is a fresh canvas to draw it into.
  */
-export function prescaleForDrift<C extends HTMLCanvasElement | OffscreenCanvas>(
+export function prescaleForDrift(
   image: Raster,
-  canvas: C,
-): C {
+  canvas: HTMLCanvasElement,
+): HTMLCanvasElement {
   canvas.width = canvas.height = DRIFT_RASTER_SIZE
-  const ctx = canvas.getContext('2d') as CanvasRenderingContext2D | null
+  const ctx = canvas.getContext('2d')
   if (ctx) drawCover(ctx, image, DRIFT_RASTER_SIZE, 1)
   return canvas
 }

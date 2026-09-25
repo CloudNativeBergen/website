@@ -6,8 +6,8 @@ import { styles } from './meme-generator-config'
 /** The timeline is drawn to scale; sixty seconds scroll sideways. */
 export const PX_PER_SECOND = 60
 
-export const SMALL_STEP = 0.1
-export const LARGE_STEP = 1
+const SMALL_STEP = 0.1
+const LARGE_STEP = 1
 
 export const seconds = (value: number) => `${value.toFixed(1)} s`
 

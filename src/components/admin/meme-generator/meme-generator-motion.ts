@@ -20,7 +20,7 @@ export const PRESET_DURATION: Record<Preset, number> = {
 }
 
 /** How far below its place a sliding element starts, in canvas pixels. */
-export const SLIDE_DISTANCE = 40
+const SLIDE_DISTANCE = 40
 /** How much larger a drifting background is at the end of its scene. */
 export const DRIFT_ZOOM = 0.1
 
@@ -156,6 +156,22 @@ export function clampMotion(
     Math.min(Math.max(tenth(Number.isFinite(t) ? t : 0), 0), duration)
   const enter = within(motion.enter)
   return { ...motion, enter, leave: Math.max(within(motion.leave), enter) }
+}
+
+/**
+ * One end of a bar moved to `seconds`: in tenths, inside the scene, and never
+ * past the other end — an exit never precedes its entrance.
+ */
+export function moveEnd(
+  motion: ElementMotion,
+  end: 'enter' | 'leave',
+  seconds: number,
+  duration: number,
+): ElementMotion {
+  const [min, max] =
+    end === 'enter' ? [0, motion.leave] : [motion.enter, duration]
+  const t = tenth(Number.isFinite(seconds) ? seconds : motion[end])
+  return { ...motion, [end]: Math.min(Math.max(t, min), max) }
 }
 
 /**

@@ -340,6 +340,16 @@ describe('drawDesign at a time', () => {
     expect(calls.at(-1)).toEqual(['restore'])
   })
 
+  it('scales a left or right line about its block, not its anchor', () => {
+    const pop = animated({ text0: bar({ entrance: 'pop' }) })
+    const line = { text: 'abcd', fontSize: 100, horizontalPosition: 20 }
+    // Four characters at half the font size each: a 200 px wide block.
+    const left = drawAt(withLine({ ...line, textAlign: 'left' }), 0, pop)
+    expect(named(left, 'translate')[0][1]).toBe(216 + 100)
+    const right = drawAt(withLine({ ...line, textAlign: 'right' }), 0, pop)
+    expect(named(right, 'translate')[0][1]).toBe(864 - 100)
+  })
+
   it('draws nothing of a line after its exit, or before its entrance', () => {
     const gone = animated({ text0: bar({ enter: 1, leave: 2 }) })
     expect(named(drawAt(HEADLINE, 2.5, gone), 'fillText')).toEqual([])

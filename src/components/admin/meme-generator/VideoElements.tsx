@@ -6,6 +6,7 @@ import {
   PRESETS,
   PRESET_DURATION,
   clampMotion,
+  moveEnd,
   elementsOf,
   motionFor,
   type DrawnElement,
@@ -30,22 +31,29 @@ export type ElementChange = (
   grouped: boolean,
 ) => void
 
-export const PRESET_NAMES: Record<Preset, string> = {
+const PRESET_NAMES: Record<Preset, string> = {
   none: 'None',
   fade: 'Fade',
   'slide-up': 'Slide up',
   pop: 'Pop',
 }
 
-/** Every element any scene draws, once each, in timeline order. */
+/**
+ * Every element any scene draws, once each, in timeline order: the order
+ * `elementsOf` gives, as if one design drew them all.
+ */
 function rowsOf(scenes: Scene[]): DrawnElement[] {
-  const rows = new Map<ElementId, DrawnElement>()
+  const drawn = new Map<ElementId, DrawnElement>()
   for (const scene of scenes)
     for (const element of elementsOf(scene.design))
-      rows.set(element.id, element)
-  const order = (id: ElementId) =>
-    id === 'logo' ? 2 : id === 'qr' ? 1 : Number(id.slice(4)) / 10
-  return [...rows.values()].sort((a, b) => order(a.id) - order(b.id))
+      drawn.set(element.id, element)
+  const lines = Math.max(...scenes.map((s) => s.design.textLines.length))
+  const order: ElementId[] = [
+    ...Array.from({ length: lines }, (_, i) => `text${i}` as const),
+    'qr',
+    'logo',
+  ]
+  return order.flatMap((id) => drawn.get(id) ?? [])
 }
 
 /** One end of a bar: when the element enters, or when it has left. */
@@ -67,8 +75,8 @@ function BarEnd({
   const [min, max] =
     end === 'enter' ? [0, motion.leave] : [motion.enter, duration]
   const set = (to: number) => {
-    const bounded = Math.min(Math.max(Math.round(to * 10) / 10, min), max)
-    if (bounded !== value) onChange({ ...motion, [end]: bounded })
+    const moved = moveEnd(motion, end, to, duration)
+    if (moved[end] !== value) onChange(moved)
   }
   const drag = useDrag(
     () => {
@@ -298,6 +306,7 @@ export function ElementFields({
                   onChange={(event) =>
                     change(
                       {
+                        ...motion,
                         [which]:
                           PRESETS.find((p) => p === event.target.value) ??
                           'none',
@@ -332,7 +341,7 @@ export function ElementFields({
                       min={0}
                       max={motion.leave}
                       onCommit={(enter) =>
-                        change({ enter: Math.min(enter, motion.leave) }, true)
+                        change(moveEnd(motion, 'enter', enter, duration), true)
                       }
                     />
                   </td>
@@ -344,7 +353,9 @@ export function ElementFields({
                       value={motion.leave}
                       min={motion.enter}
                       max={duration}
-                      onCommit={(leave) => change({ leave }, true)}
+                      onCommit={(leave) =>
+                        change(moveEnd(motion, 'leave', leave, duration), true)
+                      }
                     />
                   </td>
                 </tr>
