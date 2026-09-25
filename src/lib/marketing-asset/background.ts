@@ -13,7 +13,7 @@
 export const BACKGROUND_SHORT_SIDE = 1188
 
 /** The same-origin route that relays Sanity CDN images. */
-export const IMAGE_PROXY_PATH = '/api/proxy-image'
+const IMAGE_PROXY_PATH = '/api/proxy-image'
 
 /**
  * The CDN rendition of an image whose short side is at most
