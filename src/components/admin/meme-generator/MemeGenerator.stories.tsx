@@ -2124,19 +2124,25 @@ function readingEncoder(
 
 /**
  * The picker is a `ModalShell`, portalled out of the global decorator's
- * `dark` wrapper; it takes its theme from next-themes, as in the app. The
- * attribute is one nothing styles, so the forced theme never lands on
- * `<html>` as a class and leaks into the stories rendered after this one.
+ * `dark` wrapper; it themes itself from next-themes' `theme`, as in the app.
+ * `defaultTheme` (not `forcedTheme`, which leaves `theme` alone) sets that,
+ * under a storage key nothing writes; and the attribute is one nothing
+ * styles, so no class lands on `<html>` to leak into later stories.
  */
-const withNextTheme: Decorator = (Story, ctx) => (
-  <ThemeProvider
-    attribute="data-story-theme"
-    forcedTheme={ctx.globals.theme === 'dark' ? 'dark' : 'light'}
-    enableSystem={false}
-  >
-    <Story />
-  </ThemeProvider>
-)
+const withNextTheme: Decorator = (Story, ctx) => {
+  const theme = ctx.globals.theme === 'dark' ? 'dark' : 'light'
+  return (
+    <ThemeProvider
+      key={theme}
+      attribute="data-story-theme"
+      defaultTheme={theme}
+      storageKey={`meme-generator-story-theme-${theme}`}
+      enableSystem={false}
+    >
+      <Story />
+    </ThemeProvider>
+  )
+}
 
 async function pickFromGallery(canvas: Canvas) {
   await userEvent.click(
