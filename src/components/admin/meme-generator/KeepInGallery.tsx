@@ -52,7 +52,7 @@ export function KeepInGallery({
   if (!open)
     return (
       <AdminButton variant="secondary" onClick={() => setOpen(true)}>
-        <ArchiveBoxArrowDownIcon className="h-4 w-4" aria-hidden="true" />
+        <ArchiveBoxArrowDownIcon className="size-4" aria-hidden="true" />
         Keep in gallery
       </AdminButton>
     )

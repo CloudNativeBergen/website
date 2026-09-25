@@ -1,4 +1,4 @@
-import type { Meta, StoryObj } from '@storybook/nextjs-vite'
+import type { Decorator, Meta, StoryObj } from '@storybook/nextjs-vite'
 import { expect, userEvent, waitFor, within } from 'storybook/test'
 import { MemeGenerator } from './MemeGenerator'
 import { MemeGeneratorWithDownload } from './MemeGeneratorWithDownload'
@@ -2122,6 +2122,22 @@ function readingEncoder(
   }
 }
 
+/**
+ * The picker is a `ModalShell`, portalled out of the global decorator's
+ * `dark` wrapper; it takes its theme from next-themes, as in the app. The
+ * attribute is one nothing styles, so the forced theme never lands on
+ * `<html>` as a class and leaks into the stories rendered after this one.
+ */
+const withNextTheme: Decorator = (Story, ctx) => (
+  <ThemeProvider
+    attribute="data-story-theme"
+    forcedTheme={ctx.globals.theme === 'dark' ? 'dark' : 'light'}
+    enableSystem={false}
+  >
+    <Story />
+  </ThemeProvider>
+)
+
 async function pickFromGallery(canvas: Canvas) {
   await userEvent.click(
     canvas.getByRole('button', { name: 'Choose from gallery' }),
@@ -2138,10 +2154,13 @@ const exportedFrames: ReturnType<typeof readCanvas>[] = []
 /**
  * A gallery image drawn as the background, previewed and EXPORTED: the
  * canvas is read back — by the preview check and by every exported frame —
- * without throwing, because the image came through the same-origin proxy.
+ * without throwing, for an image at a same-origin URL such as the proxy's.
+ * MSW stands in for the proxy here; the real route is not exercised. The
+ * control below shows the same read DOES throw for a cross-origin image.
  */
 export const BackgroundFromGallery: Story = {
   args: { gallery: storyGallery, encoder: readingEncoder(exportedFrames) },
+  decorators: [withNextTheme],
   parameters: { msw: { handlers: [proxyImage] } },
   play: async ({ canvasElement }) => {
     exportedFrames.length = 0
@@ -2186,22 +2205,47 @@ export const BackgroundFromGalleryDark: Story = {
   globals: { theme: 'dark' },
 }
 
+/**
+ * The negative control: the same pick, with the gallery answering a raw
+ * CROSS-ORIGIN URL — what drawing the CDN's own URL amounts to. The image
+ * loads and draws, and reading the canvas then throws. This is what the
+ * proxy exists to prevent, and it shows the read above can fail.
+ */
+export const CrossOriginBackgroundTaints: Story = {
+  args: {
+    gallery: {
+      ...storyGallery,
+      resolve: async (id) => {
+        // The same Storybook, under its other name: a different origin that
+        // sends no CORS header, so the image loads opaque.
+        const other =
+          location.hostname === 'localhost' ? '127.0.0.1' : 'localhost'
+        return {
+          _id: id,
+          title: 'Keynote hall',
+          url: `${location.protocol}//${other}:${location.port}/images/default-avatar.png`,
+        }
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await pickFromGallery(canvas)
+    await canvas.findByText('Current: Keynote hall')
+    const preview = canvasElement.querySelector('canvas')!
+    await waitFor(() =>
+      expect(readCanvas(preview)).toEqual({
+        ok: false,
+        error: expect.stringContaining('tainted'),
+      }),
+    )
+  },
+}
+
 /** The picker, open, for the screenshot. */
 export const GalleryPickerOpen: Story = {
   args: { gallery: storyGallery },
-  // The dialog is portalled out of the global decorator's `dark` wrapper and
-  // takes its theme from next-themes, as in the app.
-  decorators: [
-    (Story, ctx) => (
-      <ThemeProvider
-        attribute="class"
-        forcedTheme={ctx.globals.theme === 'dark' ? 'dark' : 'light'}
-        enableSystem={false}
-      >
-        <Story />
-      </ThemeProvider>
-    ),
-  ],
+  decorators: [withNextTheme],
   parameters: { msw: { handlers: [proxyImage] } },
   play: async ({ canvasElement }) => {
     await userEvent.click(

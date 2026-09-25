@@ -45,7 +45,7 @@ export function BackgroundGalleryPicker({
         disabled={disabled}
         className="inline-flex items-center gap-2 rounded bg-brand-cloud-blue px-4 py-2 text-sm font-semibold text-white hover:bg-brand-cloud-blue/90 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-blue-600 dark:hover:bg-blue-700"
       >
-        <PhotoIcon className="h-4 w-4" aria-hidden="true" />
+        <PhotoIcon className="size-4" aria-hidden="true" />
         Choose from gallery
       </button>
       <ModalShell

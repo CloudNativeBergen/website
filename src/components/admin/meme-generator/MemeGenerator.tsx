@@ -107,6 +107,10 @@ import type { BackgroundGallery } from './meme-generator-gallery'
 import { BackgroundGalleryPicker } from './BackgroundGalleryPicker'
 import { KeepInGallery } from './KeepInGallery'
 import { useMediaQuery } from '@/hooks/useMediaQuery'
+import {
+  MARKETING_ASSET_IMAGE_TYPES,
+  MARKETING_ASSET_MAX_IMAGE_BYTES,
+} from '@/lib/marketing-asset'
 import { PLATFORM_NAME } from '@/lib/branding/platform'
 
 interface MemeGeneratorProps {
@@ -474,10 +478,19 @@ export function MemeGenerator({
   }, [history])
 
   const [backgroundError, setBackgroundError] = useState<string | null>(null)
-  // The editing scene's upload, while it can still be kept.
-  const keptFile = background.image
+  // The editing scene's upload, while it can still be kept — and only one
+  // the gallery would take: any other image still works, locally.
+  const uploaded = background.image
     ? uploadedFiles.current.get(background.image.url)
     : undefined
+  const keptFile =
+    uploaded &&
+    (MARKETING_ASSET_IMAGE_TYPES as readonly string[]).includes(
+      uploaded.type,
+    ) &&
+    uploaded.size <= MARKETING_ASSET_MAX_IMAGE_BYTES
+      ? uploaded
+      : undefined
 
   /**
    * Decode an image and make it the background of the scene it was asked
@@ -1270,7 +1283,7 @@ export function MemeGenerator({
               )}
               <div>
                 <label htmlFor="backgroundImage" className={styles.label}>
-                  <ArrowUpTrayIcon className="mr-1 inline h-4 w-4" />
+                  <ArrowUpTrayIcon className="mr-1 inline size-4" />
                   Upload Background Image
                 </label>
                 <input
@@ -1302,7 +1315,7 @@ export function MemeGenerator({
                     className="flex items-center gap-2 rounded bg-red-500 px-3 py-2 text-sm text-white hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-700"
                     aria-label="Clear background image"
                   >
-                    <XMarkIcon className="h-4 w-4" />
+                    <XMarkIcon className="size-4" />
                     Clear
                   </button>
                 </div>

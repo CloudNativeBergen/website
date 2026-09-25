@@ -124,7 +124,7 @@ describe('a gallery image as the background', () => {
 })
 
 describe('an uploaded background', () => {
-  it('works without being kept, and is never sent anywhere', async () => {
+  it('works without being kept, and is not kept unless asked', async () => {
     const gallery = fakeGallery()
     render(<MemeGenerator gallery={gallery} />)
     upload()
@@ -135,6 +135,32 @@ describe('an uploaded background', () => {
     })
     expect(lastDrawn().image?.galleryAssetId).toBeUndefined()
     expect(gallery.keep).not.toHaveBeenCalled()
+  })
+
+  it('is not offered for keeping when the gallery would refuse the file, and still works', async () => {
+    const gallery = fakeGallery()
+    render(<MemeGenerator gallery={gallery} />)
+    fireEvent.change(screen.getByLabelText(/Upload Background Image/), {
+      target: { files: [new File(['x'], 'loop.gif', { type: 'image/gif' })] },
+    })
+    await screen.findByText('Current: loop.gif')
+    await waitFor(() => expect(lastDrawn().raster).not.toBeNull())
+    expect(
+      screen.queryByRole('button', { name: 'Keep in gallery' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('is not offered for keeping when it is over the gallery’s size limit', async () => {
+    render(<MemeGenerator gallery={fakeGallery()} />)
+    const big = new File(['x'], 'huge.png', { type: 'image/png' })
+    Object.defineProperty(big, 'size', { value: 21 * 1024 * 1024 })
+    fireEvent.change(screen.getByLabelText(/Upload Background Image/), {
+      target: { files: [big] },
+    })
+    await screen.findByText('Current: huge.png')
+    expect(
+      screen.queryByRole('button', { name: 'Keep in gallery' }),
+    ).not.toBeInTheDocument()
   })
 
   it('works with no gallery at all, which offers neither picking nor keeping', async () => {
