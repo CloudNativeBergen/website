@@ -370,4 +370,21 @@ describe('exportVideo', () => {
     await vi.advanceTimersByTimeAsync(RELEASE_MS)
     expect(await settled).toMatchObject({ reason: 'encoder' })
   })
+
+  it('starts no fallback probe once cancel lands while the last one lets go', async () => {
+    vi.useFakeTimers()
+    const { backend, log } = fakeBackend({
+      probe: { realtime: true },
+      releaseMs: 500,
+    })
+    const controller = new AbortController()
+    const { promise } = run(backend, { signal: controller.signal })
+    const settled = promise.catch((e: unknown) => e)
+    await vi.advanceTimersByTimeAsync(PROBE_TIMEOUT_MS.quality + 100)
+    // Mid-release: the quality probe has been aborted but not let go yet.
+    controller.abort()
+    await vi.advanceTimersByTimeAsync(1_000)
+    expect(await settled).toBeInstanceOf(ExportCancelled)
+    expect(log).not.toContain('probe:realtime')
+  })
 })

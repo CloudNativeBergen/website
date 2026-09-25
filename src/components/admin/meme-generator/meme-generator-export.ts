@@ -193,6 +193,9 @@ async function pickLatencyMode(
   signal: AbortSignal,
 ): Promise<Encoding['latencyMode'] | null> {
   for (const mode of ['quality', 'realtime'] as const) {
+    // A cancel that landed while the last probe was letting go: no new
+    // probe starts, so none can open an encoder after the export stopped.
+    if (signal.aborted) throw new ExportCancelled()
     const probe = new AbortController()
     const stop = () => probe.abort()
     signal.addEventListener('abort', stop)

@@ -11,6 +11,9 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 const log: string[] = []
 let releaseStart = () => {}
 let releaseCancel = () => {}
+/** Set by a test: `add()` stays pending until the output is cancelled, then rejects. */
+let addWaitsForCancel = false
+let rejectAdd = () => {}
 
 vi.mock('mediabunny', () => {
   class Output {
@@ -27,6 +30,7 @@ vi.mock('mediabunny', () => {
     }
     cancel() {
       log.push('cancel')
+      rejectAdd()
       return new Promise<void>((resolve) => {
         releaseCancel = () => {
           log.push('closed')
@@ -43,7 +47,10 @@ vi.mock('mediabunny', () => {
   class CanvasSource {
     add() {
       log.push('add')
-      return Promise.resolve()
+      if (!addWaitsForCancel) return Promise.resolve()
+      return new Promise<void>((_, reject) => {
+        rejectAdd = () => reject(new Error('The output was canceled.'))
+      })
     }
   }
   return {
@@ -59,6 +66,8 @@ import { mediabunnyBackend } from './meme-generator-mediabunny'
 
 beforeEach(() => {
   log.length = 0
+  addWaitsForCancel = false
+  rejectAdd = () => {}
   vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
     fillRect: () => {},
   } as unknown as CanvasRenderingContext2D)
@@ -111,5 +120,27 @@ describe('mediabunnyBackend.probe', () => {
     abort.abort()
     await tick()
     expect(log).not.toContain('cancel')
+  })
+
+  it('settles a probe stuck in add() only once the cancel that stopped it has closed the encoder', async () => {
+    addWaitsForCancel = true
+    const abort = new AbortController()
+    let settled = false
+    const probe = mediabunnyBackend.probe('quality', abort.signal).then(() => {
+      settled = true
+    })
+    await vi.waitFor(() => expect(log).toContain('start'))
+    releaseStart()
+    await vi.waitFor(() => expect(log).toContain('add'))
+    // The measured Safari stall: add() never answers until we cancel.
+    abort.abort()
+    await tick()
+    await tick()
+    expect(settled).toBe(false)
+    // One cancel, not a second one from the rejected add().
+    expect(log.filter((entry) => entry === 'cancel')).toHaveLength(1)
+    releaseCancel()
+    await probe
+    expect(settled).toBe(true)
   })
 })

@@ -110,6 +110,9 @@ export const mediabunnyBackend: EncoderBackend = {
     }
     return Promise.race([
       encode().catch(async () => {
+        // An add() rejected by our own cancel waits for THAT cancel to
+        // finish closing the encoder; a second cancel() can settle at once.
+        if (signal.aborted) return aborted
         await output.cancel().catch(() => {})
         return false
       }),
