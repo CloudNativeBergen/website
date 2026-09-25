@@ -15,6 +15,7 @@ import {
   type MarketingChannel,
   type SubjectSource,
 } from '../types'
+import { isBlueskyPost, tagsItsSubject } from '../tagging/body'
 import type { LibraryEntry } from './entries'
 
 export interface RecipeEdits {
@@ -28,6 +29,11 @@ export interface RecipeEdits {
   /** Entries that carry an image only. */
   alt?: string
   instructions?: string
+  /**
+   * Generated Bluesky copy tags the subject (tagging spec §2). Applies to the
+   * Bluesky post only. Authoritative: absent is off.
+   */
+  tagSubject?: boolean
 }
 
 /** Bounds what one attach creates: a Task, a post and a variant per day. */
@@ -73,6 +79,7 @@ export function editsOf(
   const instructions = stored.find(
     (r) => r.beat === entry.id && r.instructions,
   )?.instructions
+  const tagSubject = posts.some(tagsItsSubject)
   return {
     title: first?.title ?? entry.title,
     channels: Object.fromEntries(
@@ -89,6 +96,7 @@ export function editsOf(
     ...(cadence ? { window: { from: cadence.from, to: cadence.to } } : {}),
     ...(alt ? { alt } : {}),
     ...(instructions ? { instructions } : {}),
+    ...(tagSubject ? { tagSubject: true } : {}),
   }
 }
 
@@ -103,26 +111,31 @@ export function applyEdits(
       return rate === undefined ? [] : [[channel, rate] as const]
     }),
   )
-  return entry.recipes
-    .filter((r) => r.kind !== 'publishing' || edits.channels[r.channel!])
-    .map((r) => ({
-      ...r,
-      title: r.kind === 'publishing' ? edits.title : `Render: ${edits.title}`,
-      ...(r.kind === 'publishing'
-        ? { skeleton: edits.channels[r.channel!]!.skeleton }
-        : {}),
-      ...(r.alt ? { alt: edits.alt } : {}),
-      ...(edits.instructions ? { instructions: edits.instructions } : {}),
-      ...(r.cadence
-        ? {
-            cadence: {
-              ...r.cadence,
-              ...(edits.window ?? {}),
-              perWeek,
-            },
-          }
-        : {}),
-    }))
+  return (
+    entry.recipes
+      .filter((r) => r.kind !== 'publishing' || edits.channels[r.channel!])
+      // The entry's own `tagSubject` gives way: the edits decide (absent is off).
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars -- destructured only to exclude it
+      .map(({ tagSubject: _entryDefault, ...r }) => ({
+        ...r,
+        ...(edits.tagSubject && isBlueskyPost(r) ? { tagSubject: true } : {}),
+        title: r.kind === 'publishing' ? edits.title : `Render: ${edits.title}`,
+        ...(r.kind === 'publishing'
+          ? { skeleton: edits.channels[r.channel!]!.skeleton }
+          : {}),
+        ...(r.alt ? { alt: edits.alt } : {}),
+        ...(edits.instructions ? { instructions: edits.instructions } : {}),
+        ...(r.cadence
+          ? {
+              cadence: {
+                ...r.cadence,
+                ...(edits.window ?? {}),
+                perWeek,
+              },
+            }
+          : {}),
+      }))
+  )
 }
 
 /** Why these edits cannot be saved; empty when they can. */

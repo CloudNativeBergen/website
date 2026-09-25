@@ -147,6 +147,27 @@ describe('runPublishTick — due scan and dispatch', () => {
     })
   })
 
+  it('hands the adapter the recorded mentions, so the checked DID is the one posted', async () => {
+    const mentions = [{ handle: 'alice.dev', did: 'did:plc:alice' }]
+    const store = new MemoryVariantStore([
+      makeVariant({ body: 'Hello @alice.dev', mentions }),
+    ])
+    const adapter = fakeAdapter({ ok: true, externalId: 'x', url: 'y' })
+
+    await runPublishTick({
+      store,
+      resolveAdapter: async () => adapter,
+      now: NOW,
+    })
+
+    expect(adapter.publish).toHaveBeenCalledWith({
+      text: 'Hello @alice.dev',
+      media: [],
+      link: undefined,
+      mentions,
+    })
+  })
+
   it('re-queues a transient failure with backoff and records the attempt', async () => {
     const store = new MemoryVariantStore([makeVariant()])
     const adapter = fakeAdapter({

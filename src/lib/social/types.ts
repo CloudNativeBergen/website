@@ -180,6 +180,12 @@ export interface SocialPostVariant {
    * retried variant gets its full budget while `attempts[]` keeps history.
    */
   attemptCount: number
+  /**
+   * The tags generation checked and recorded (tagging spec §4.3), as the
+   * adapter posts them: only `tagged` entries with their DID — an
+   * `unresolved` one is a plain name in the body and has nothing to post.
+   */
+  mentions?: { handle: string; did: string }[] | null
 }
 
 /** What the single-variant editor loads: the variant and its post's inputs. */

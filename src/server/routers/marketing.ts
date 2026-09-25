@@ -126,6 +126,7 @@ import {
   type LibraryEntry,
   type RecipeEdits,
 } from '@/lib/marketing/library'
+import { TAG_SUBJECT_SWITCHABLE } from '@/lib/marketing/tagging/rollout'
 import {
   commitBuiltinCampaign,
   readCampaignRecipes,
@@ -306,6 +307,20 @@ async function loadRecipeCampaign(input: { campaignId: string; rev: string }) {
         'This Campaign has no stored Recipes yet. Run migration 053, then attach Recipes to it.',
     })
   return { conferenceId, campaign }
+}
+
+/**
+ * Refuses edits that switch tagging on while it cannot yet be switched on
+ * (`TAG_SUBJECT_SWITCHABLE`). Runs BEFORE any read, so the answer is the
+ * same whatever Campaign id came with it.
+ */
+function refuseTagSubjectUntilSwitchable(edits: RecipeEdits | undefined) {
+  if (edits?.tagSubject && !TAG_SUBJECT_SWITCHABLE)
+    throw new TRPCError({
+      code: 'BAD_REQUEST',
+      message:
+        'Tagging speakers is not switched on yet: a speaker who opts out after a post is written must first be honoured when it is published.',
+    })
 }
 
 /**
@@ -1907,6 +1922,7 @@ export const marketingRouter = router({
       attach: adminProcedure
         .input(AttachRecipeSchema)
         .mutation(async ({ ctx, input }) => {
+          refuseTagSubjectUntilSwitchable(input.edits)
           const { conferenceId, campaign } = await loadRecipeCampaign(input)
           const conference = await requireConference()
           const entry = libraryEntry(input.entry)
@@ -1961,6 +1977,7 @@ export const marketingRouter = router({
       update: adminProcedure
         .input(UpdateRecipeSchema)
         .mutation(async ({ ctx, input }) => {
+          refuseTagSubjectUntilSwitchable(input.edits)
           const { conferenceId, campaign } = await loadRecipeCampaign(input)
           const entry = libraryEntry(input.entry)
           if (!hasEntry(campaign, entry)) throw noSuchRecipe(entry)

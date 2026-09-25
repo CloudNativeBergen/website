@@ -248,6 +248,17 @@ export default defineType({
                       type: 'boolean',
                     }),
                     defineField({
+                      name: 'tagSubject',
+                      title: 'Tag the subject',
+                      description:
+                        'Generated Bluesky copy tags the speaker with their Bluesky handle instead of their name. Read-only until a speaker who opts out after a post is written is also honoured when it is published.',
+                      type: 'boolean',
+                      // Tagging spec §7: no generated post carries a tag until the opt-out is
+                      // honoured at generation, save, approval AND publish (#1151, #1152), so
+                      // the switch is not an organizer's to flip in Studio before then.
+                      readOnly: true,
+                    }),
+                    defineField({
                       name: 'alt',
                       title: 'Alt skeleton',
                       type: 'text',

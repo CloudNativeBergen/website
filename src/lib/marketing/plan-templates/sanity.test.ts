@@ -159,6 +159,28 @@ describe('Template Versions in Sanity', () => {
     )
     expect(read!.campaigns[0].recipes).toHaveLength(cfp[0].recipes.length)
   })
+  it('carries tagSubject through a Template Version — the VALUE, not just the shape', async () => {
+    // Tagging spec §2: a missing projection field reads as `undefined`, which
+    // would switch tagging off silently for every plan seeded from it.
+    const speakers = BUILTIN_TEMPLATE.campaigns.find(
+      (c) => c.key === 'speakers',
+    )!
+    const tagging = {
+      ...speakers,
+      recipes: speakers.recipes.map((r) =>
+        r.key === 'speakerCard:bluesky' ? { ...r, tagSubject: true } : r,
+      ),
+    }
+    expect(await save({ campaigns: [tagging] })).toBe(true)
+    const read = await getTemplateVersion('org-A', T1, 1)
+    const recipes = read!.campaigns[0].recipes
+    expect(
+      recipes.find((r) => r.key === 'speakerCard:bluesky')!.tagSubject,
+    ).toBe(true)
+    expect(recipes.filter((r) => r.tagSubject).map((r) => r.key)).toEqual([
+      'speakerCard:bluesky',
+    ])
+  })
   it('two saves cannot both become the same version', async () => {
     expect(await save()).toBe(true)
     expect(await save({ name: 'The other save' })).toBe(false)

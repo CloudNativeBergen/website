@@ -140,6 +140,44 @@ export default defineType({
       readOnly: true,
     }),
     defineField({
+      name: 'mentions',
+      title: 'Mentions',
+      description:
+        'Bluesky tags this body carries, each with the DID it was checked against, and handles generation wanted to tag that did not resolve. The publishing adapter posts the recorded DID and never resolves the handle again.',
+      type: 'array',
+      readOnly: true,
+      of: [
+        defineArrayMember({
+          type: 'object',
+          name: 'socialPostMention',
+          fields: [
+            defineField({ name: 'handle', title: 'Handle', type: 'string' }),
+            defineField({ name: 'did', title: 'DID', type: 'string' }),
+            defineField({
+              name: 'speaker',
+              title: 'Speaker',
+              type: 'reference',
+              to: [{ type: 'speaker' }],
+              weak: true,
+            }),
+            defineField({
+              name: 'name',
+              title: 'Plain name',
+              description: 'What the tag stands for; the text used without it.',
+              type: 'string',
+            }),
+            defineField({
+              name: 'status',
+              title: 'Status',
+              type: 'string',
+              options: { list: ['tagged', 'unresolved'] },
+            }),
+          ],
+          preview: { select: { title: 'handle', subtitle: 'status' } },
+        }),
+      ],
+    }),
+    defineField({
       name: 'scheduledAt',
       title: 'Scheduled at',
       description:

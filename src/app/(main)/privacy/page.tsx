@@ -703,6 +703,13 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                               • We only ever tag accounts you gave us yourself.
                               We do not look up accounts you have not listed
                             </li>
+                            <li>
+                              • Before a post tags a Bluesky account, we check
+                              the handle with Bluesky&apos;s public directory to
+                              confirm the account exists. Only the handle is
+                              sent, and a handle that does not check out is
+                              written as your plain name
+                            </li>
                           </ul>
                         </div>
                         <div>
@@ -737,17 +744,17 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                       </div>
                       <div className="mt-3 rounded-lg bg-violet-100 p-2 dark:bg-violet-800/30">
                         <p className="text-xs text-violet-800 dark:text-violet-200">
-                          <strong>Status:</strong> Tagging is not live. Nothing
-                          reads this preference yet; it is stored so that it is
-                          already in force on the day the first tagged post goes
-                          out. <strong>Legal Basis:</strong> Legitimate interest
-                          in promoting the conference and its programme. The
-                          accounts we tag are the links you gave us for your
-                          public speaker profile and for promotional material,
-                          and tagging is a use of those same links. Because it
-                          is a more visible use than displaying them, you can
-                          object to it on its own with the checkbox above,
-                          without changing anything else about your profile.
+                          <strong>Status:</strong> Tagging is not live. No post
+                          tags anyone yet. This preference is already checked
+                          when a post is written. <strong>Legal Basis:</strong>{' '}
+                          Legitimate interest in promoting the conference and
+                          its programme. The accounts we tag are the links you
+                          gave us for your public speaker profile and for
+                          promotional material, and tagging is a use of those
+                          same links. Because it is a more visible use than
+                          displaying them, you can object to it on its own with
+                          the checkbox above, without changing anything else
+                          about your profile.
                         </p>
                       </div>
                     </div>

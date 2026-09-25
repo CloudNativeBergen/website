@@ -27,6 +27,7 @@ import {
   type TaskRecords,
 } from './materialize'
 import { publishedIn } from './recipes'
+import type { BlueskyTag, TagPerson } from './tagging/body'
 import type { Anchor, Cadence, TaskRecipe } from './template/types'
 import type { MarketingChannel, TaskOrigin } from './types'
 
@@ -118,6 +119,11 @@ export function pickSlot(
 
 export interface GenerationSubject extends SubjectLink {
   values: PlaceholderValues
+  /**
+   * The speakers the subject's `{name}` names, in order (tagging spec §4.1):
+   * the ones a tagging Bluesky body can tag. Absent for a sponsor.
+   */
+  people?: { _id: string; name: string }[]
 }
 
 /**
@@ -136,6 +142,9 @@ export function speakerSubject(
       ...(speaker.title ? { company: speaker.title } : {}),
       ...(talkTitle ? { title: talkTitle } : {}),
     },
+    ...(speaker.name
+      ? { people: [{ _id: speaker._id, name: speaker.name }] }
+      : {}),
   }
 }
 
@@ -258,10 +267,21 @@ export function buildSubjectBeat(
      * waits on them.
      */
     existingRenderIds?: string[]
+    /**
+     * What generation found for each person's Bluesky account (tagging spec
+     * §4.4), by speaker id; null when there is nothing to tag. A person
+     * missing from the map is not tagged.
+     */
+    tags?: ReadonlyMap<string, BlueskyTag | null>
   },
 ): TaskRecords {
   const records = emptyRecords()
   const values = { ...input.values, ...input.subject.values }
+  const tagging: TagPerson[] = (input.subject.people ?? []).map((p) => ({
+    speakerId: p._id,
+    name: p.name,
+    tag: input.tags?.get(p._id) ?? null,
+  }))
   const subject: SubjectLink = {
     _id: input.subject._id,
     type: input.subject.type,
@@ -294,6 +314,7 @@ export function buildSubjectBeat(
         origin: input.origin,
         newId: input.newId,
         newShortCode: input.newShortCode,
+        tagging,
       }),
     )
   }

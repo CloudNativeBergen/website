@@ -310,6 +310,7 @@ export const RecipeEditsSchema = z
       .optional(),
     alt: z.string().trim().max(1000).optional(),
     instructions: z.string().trim().max(5000).optional(),
+    tagSubject: z.boolean().optional(),
   })
   .strict()
 const CampaignRecipeFields = {

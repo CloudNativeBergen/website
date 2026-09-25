@@ -9,6 +9,7 @@ import {
   type AppBskyFeedPost,
   type ComAtprotoRepoUploadBlob,
 } from '@atproto/api'
+import { isValidDid, normaliseHandle } from './bluesky-syntax'
 import type { BlueskyCredentials } from '@/lib/secrets/types'
 import { fetchImageBytes, ImageFetchError, type ImageBytes } from './bytes'
 import { withDeadline } from './deadline'
@@ -436,22 +437,6 @@ function hostnameOf(link: string): string {
   } catch {
     return link
   }
-}
-
-/** `@Alice.bsky.social` and `alice.bsky.social` are the same handle. */
-function normaliseHandle(handle: string): string {
-  return handle.replace(/^@/, '').toLowerCase()
-}
-
-/**
- * The atproto DID syntax (atproto.com/specs/did), including its 2,048-char
- * limit — the same check as `@atproto/syntax`'s `isValidDid`.
- */
-function isValidDid(did: string): boolean {
-  return (
-    did.length <= 2048 &&
-    /^did:[a-z]+:[a-zA-Z0-9._:%-]*[a-zA-Z0-9._-]$/.test(did)
-  )
 }
 
 /**

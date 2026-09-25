@@ -77,6 +77,12 @@ export interface TaskRecipe {
    * being rewritten (Templates spec §6.2): the Task it seeds is flagged.
    */
   verbatim?: boolean
+  /**
+   * Generated copy tags the subject (tagging spec §2): the BODY of a Bluesky
+   * publishing recipe resolves `{name}` with Bluesky handles. Meaningless on
+   * any other Channel. Absent is off.
+   */
+  tagSubject?: boolean
   /** Body for checklist / eventPageUpdate recipes. */
   instructions?: string
   cadence?: Cadence
