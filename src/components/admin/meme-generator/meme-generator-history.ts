@@ -22,6 +22,11 @@ export interface History<T> {
   /** The group the latest step belongs to, while it can still fold. */
   group: string | null
   at: number
+  /**
+   * The oldest step, dropped for the limit when the open step was made —
+   * put back if that step is taken back by a burst that ends where it began.
+   */
+  evicted?: T[]
 }
 
 export function startHistory<T>(present: T): History<T> {
@@ -45,21 +50,23 @@ export function record<T>(
   const before = history.past[history.past.length - 1]
   if (folds && history.past.length > 0 && sameValue(next, before)) {
     return {
-      past: history.past.slice(0, -1),
+      past: [...(history.evicted ?? []), ...history.past.slice(0, -1)],
       present: before,
       future: [],
       group: null,
       at: now,
     }
   }
+  if (folds) return { ...history, present: next, future: [], at: now }
+  const pushed = [...history.past, history.present]
+  const cut = Math.max(pushed.length - HISTORY_LIMIT, 0)
   return {
-    past: folds
-      ? history.past
-      : [...history.past, history.present].slice(-HISTORY_LIMIT),
+    past: pushed.slice(cut),
     present: next,
     future: [],
     group: group ?? null,
     at: now,
+    evicted: pushed.slice(0, cut),
   }
 }
 

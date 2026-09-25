@@ -67,6 +67,20 @@ describe('undo and redo', () => {
     )
   })
 
+  it('loses no step when, with the history full, a burst ends where it began', () => {
+    let history = startHistory(0)
+    for (let i = 1; i <= HISTORY_LIMIT + 1; i++)
+      history = record(history, i, { now: i * 10_000 })
+    const full = history.past
+    history = record(history, 999, { group: 'text', now: 2_000_000 })
+    history = record(history, HISTORY_LIMIT + 1, {
+      group: 'text',
+      now: 2_000_100,
+    })
+    expect(history.present).toBe(HISTORY_LIMIT + 1)
+    expect(history.past).toEqual(full)
+  })
+
   it('keeps the last hundred steps', () => {
     let history = startHistory(0)
     for (let i = 1; i <= HISTORY_LIMIT + 5; i++)
