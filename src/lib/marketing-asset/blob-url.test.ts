@@ -33,6 +33,8 @@ describe('checkMarketingAssetBlobUrl', () => {
 
   it.each([
     ['another organization', ok.replace(ORG, 'kkdemo.org')],
+    // Same length as ours, so only the prefix itself tells them apart.
+    ['another organization of the same id length', ok.replace('days', 'daze')],
     // An org whose id is a PREFIX of ours must not reach our blobs, and ours
     // must not reach one whose id extends ours.
     [
