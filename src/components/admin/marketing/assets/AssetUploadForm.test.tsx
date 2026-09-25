@@ -213,4 +213,27 @@ describe('picking a file', () => {
     await act(async () => finish({ _id: 'x', softOnSocial: false }))
     expect(alt.readOnly).toBe(false)
   })
+
+  it('cannot save the old image while a replacement is still being read', async () => {
+    const { pick, settle, uploader } = renderForm()
+    await pick(png('old.png'))
+    await settle('old.png', 1200, 1200)
+    fireEvent.change(screen.getByLabelText('Alt text'), {
+      target: { value: 'The logo' },
+    })
+    // The replacement is picked; its size read has not landed yet.
+    await pick(png('new.png'))
+    expect(screen.queryByText('old.png')).toBeNull()
+    const add = screen.getByRole('button', { name: 'Add to gallery' })
+    expect((add as HTMLButtonElement).disabled).toBe(true)
+    await act(async () => {
+      fireEvent.submit(add.closest('form')!)
+    })
+    expect(uploader).not.toHaveBeenCalled()
+    await settle('new.png', 1200, 1200)
+    await act(async () => {
+      fireEvent.submit(add.closest('form')!)
+    })
+    expect(uploader.mock.calls[0][0].name).toBe('new.png')
+  })
 })

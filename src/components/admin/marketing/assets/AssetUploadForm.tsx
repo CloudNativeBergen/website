@@ -126,6 +126,9 @@ export function AssetUploadForm({
       setError(refusal)
       return
     }
+    // The earlier image is replaced from this moment, not when the new one's
+    // size has been read: until then there is nothing to save.
+    setPicked(null)
     const dimensions = await readDimensions(file)
     if (seq !== pickSeq.current) return
     setPicked({
