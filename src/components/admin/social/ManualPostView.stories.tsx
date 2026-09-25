@@ -114,8 +114,10 @@ type Story = StoryObj<typeof meta>
 export const AwaitingManual: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
-    // No subject to tag (no `tagByHand`): no list at all.
+    // No subject to tag (no `tagByHand`): no list, and no tagging step.
     await expect(canvas.queryByText(/^tag by hand$/i)).toBeNull()
+    await expect(canvas.getByText(/post it on linkedin/i)).toBeVisible()
+    await expect(canvas.queryByText(/tag the people below/i)).toBeNull()
     const text = canvas
       .getByRole('button', { name: /copy text/i })
       .closest('section')
@@ -535,6 +537,14 @@ export const TagByHandOne: Story = {
     await expect(
       section.getByText(/type @ and the name in linkedin.s composer/i),
     ).toBeVisible()
+    // Tagging happens in the composer, so it is a step BEFORE posting.
+    const steps = within(canvasElement)
+      .getAllByRole('listitem')
+      .map((li) => li.textContent ?? '')
+    const tag = steps.findIndex((s) => /tag the people below/i.test(s))
+    const post = steps.findIndex((s) => /post it on linkedin/i.test(s))
+    await expect(tag).toBeGreaterThan(-1)
+    await expect(tag).toBe(post - 1)
   },
 }
 
@@ -560,7 +570,7 @@ export const TagByHandSeveralDark: Story = {
 
 export const TagByHandSeveralMobile: Story = {
   args: { tagByHand: SEVERAL },
-  parameters: { viewport: { defaultViewport: 'phone' } },
+  parameters: { layout: 'fullscreen', viewport: { defaultViewport: 'phone' } },
 }
 
 /** An empty list (every subject opted out, or none has a link): no section. */

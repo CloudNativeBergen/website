@@ -69,6 +69,9 @@ describe('linkedinCompanyUrl', () => {
     expect(linkedinCompanyUrl('linkedin.com/showcase/acme-cloud/')).toBe(
       'https://www.linkedin.com/showcase/acme-cloud',
     )
+    expect(
+      linkedinCompanyUrl('https://www.linkedin.com/school/uib/?trk=x'),
+    ).toBe('https://www.linkedin.com/school/uib')
   })
 
   it('refuses anything that is not a LinkedIn page', () => {

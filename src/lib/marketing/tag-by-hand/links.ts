@@ -44,9 +44,9 @@ export function linkedinProfileUrl(links: unknown): string | null {
   return null
 }
 
-/** A sponsor's LinkedIn company (or showcase) page. */
+/** A sponsor's LinkedIn company, showcase or school page. */
 export function linkedinCompanyUrl(
   url: string | null | undefined,
 ): string | null {
-  return url ? pageUrl(url, ['company', 'showcase']) : null
+  return url ? pageUrl(url, ['company', 'showcase', 'school']) : null
 }

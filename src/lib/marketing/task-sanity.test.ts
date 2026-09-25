@@ -351,6 +351,7 @@ describe('getTaskEditorData — the LinkedIn "Tag by hand" list (#1155)', () => 
       {
         _id: 'talk-1',
         _type: 'talk',
+        conference: r(CONF_A),
         title: 'Kubernetes at scale',
         speakers: [
           { _key: 'a', ...r('sp-1') },
@@ -363,6 +364,39 @@ describe('getTaskEditorData — the LinkedIn "Tag by hand" list (#1155)', () => 
         _type: 'sponsor',
         name: 'Acme',
         linkedinUrl: 'https://www.linkedin.com/company/acme/?viewAsMember=true',
+      },
+      {
+        _id: 'sfc-1',
+        _type: 'sponsorForConference',
+        conference: r(CONF_A),
+        sponsor: r('sponsor-1'),
+      },
+      // Another tenant's people: a speaker whose only talk is conference B's,
+      // that talk, and a sponsor signed only with conference B.
+      {
+        _id: 'sp-foreign',
+        _type: 'speaker',
+        name: 'Zed',
+        links: ['https://www.linkedin.com/in/zed-foreign'],
+      },
+      {
+        _id: 'talk-foreign',
+        _type: 'talk',
+        conference: r(CONF_B),
+        title: 'Elsewhere',
+        speakers: [{ _key: 'z', ...r('sp-foreign') }],
+      },
+      {
+        _id: 'sponsor-foreign',
+        _type: 'sponsor',
+        name: 'Globex',
+        linkedinUrl: 'https://www.linkedin.com/company/globex',
+      },
+      {
+        _id: 'sfc-foreign',
+        _type: 'sponsorForConference',
+        conference: r(CONF_B),
+        sponsor: r('sponsor-foreign'),
       },
     )
   })
@@ -420,6 +454,25 @@ describe('getTaskEditorData — the LinkedIn "Tag by hand" list (#1155)', () => 
     expect((await getTaskEditorData('task-li', CONF_A))!.tagByHand).toEqual([])
     delete task().subject
     expect((await getTaskEditorData('task-li', CONF_A))!.tagByHand).toEqual([])
+  })
+
+  it.each([
+    ['a speaker whose only talk is another conference’s', 'sp-foreign'],
+    ['another conference’s talk', 'talk-foreign'],
+    ['a sponsor signed only with another conference', 'sponsor-foreign'],
+  ])('lists nobody for %s', async (_, subjectId) => {
+    task().subject = r(subjectId)
+    expect((await getTaskEditorData('task-li', CONF_A))!.tagByHand).toEqual([])
+  })
+
+  it('lists a speaker once they have a talk in this conference', async () => {
+    // The control for the tenancy cases: the same speaker, only the talk's
+    // conference differs.
+    task().subject = r('sp-foreign')
+    h.dataset.find((doc) => doc._id === 'talk-foreign')!.conference = r(CONF_A)
+    expect(
+      (await getTaskEditorData('task-li', CONF_A))!.tagByHand.map((e) => e.url),
+    ).toEqual(['https://www.linkedin.com/in/zed-foreign'])
   })
 
   it('lists nobody for a Task that does not post on LinkedIn', async () => {

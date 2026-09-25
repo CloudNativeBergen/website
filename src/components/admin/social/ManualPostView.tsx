@@ -183,6 +183,7 @@ export function ManualPostView({
               'Copy the text',
               link && !linkInBody && !linkAsComment ? 'Copy the link' : null,
               images.length > 0 ? 'Save the image' : null,
+              tagByHand.length > 0 ? 'Tag the people below' : null,
               `Post it on ${platform}`,
               linkAsComment ? 'Add the link as the first comment' : null,
               'Paste the post address below',
@@ -263,10 +264,11 @@ export function ManualPostView({
       </Section>
 
       {tagByHand.length > 0 && (
-        <Section
-          title="Tag by hand"
-          hint={`Type @ and the name in ${platform}'s composer, then pick them from the list. Pasting @Name does not tag.`}
-        >
+        <Section title="Tag by hand">
+          <p className="mb-2 text-sm text-gray-700 dark:text-gray-300">
+            Type @ and the name in {platform}&apos;s composer, then pick them
+            from the list. Pasting @Name does not tag.
+          </p>
           <ul className="divide-y divide-gray-100 dark:divide-gray-800">
             {tagByHand.map((entry) => (
               <li

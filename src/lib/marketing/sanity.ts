@@ -473,6 +473,13 @@ const SUBJECT_TYPES: Record<string, TaskSubjectRef['type']> = {
  * Campaign is followed only within the conference. The variant's editor
  * data is a separate by-id read (`getSocialVariantEditorData`) the caller
  * makes once this read has proven the variant is the Task's and ours.
+ *
+ * `tagByHand` (tagging spec §5.1) follows the subject reference, which the
+ * Studio lets point at ANY speaker, talk or sponsor. It is therefore gated
+ * on the subject's standing in this conference — a speaker on one of its
+ * talks, one of its talks, a sponsor signed with it — so another tenant's
+ * people never reach the page, and opted-out speakers are filtered here so
+ * their links never leave Sanity.
  */
 export async function getTaskEditorData(
   taskId: string,
@@ -492,10 +499,10 @@ export async function getTaskEditorData(
       "subject": subject->{ _id, _type, "name": coalesce(name, title), "slug": slug.current },
       "tagByHand": select(kind == "publishing" && channel == "linkedin" => subject->{
         "people": select(
-          _type == "speaker" && socialTagOptOut != true => [{ name, links }],
-          _type == "talk" => speakers[@->socialTagOptOut != true]->{ name, links }
+          _type == "speaker" && socialTagOptOut != true && count(*[_type == "talk" && conference._ref == $conferenceId && ^._id in speakers[]._ref]) > 0 => [{ name, links }],
+          _type == "talk" && conference._ref == $conferenceId => speakers[@->socialTagOptOut != true]->{ name, links }
         ),
-        "company": select(_type == "sponsor" => { name, "url": linkedinUrl })
+        "company": select(_type == "sponsor" && count(*[_type == "sponsorForConference" && conference._ref == $conferenceId && sponsor._ref == ^._id]) > 0 => { name, "url": linkedinUrl })
       }),
       "campaign": select(campaign->conference._ref == conference._ref => campaign->{ _id, key, title }),
       "planOwnerId": plan->owner._ref,
