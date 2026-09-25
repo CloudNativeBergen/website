@@ -279,7 +279,10 @@ export function AssetUploadForm({
               required
               maxLength={200}
               // Locked while saving: the save already sent what is here.
-              disabled={saving}
+              // readOnly, not disabled: a disabled field drops focus to
+              // <body>, and a keyboard user who pressed Enter here would be
+              // lost when the save fails.
+              readOnly={saving}
               value={title}
               onChange={(event) => setTitle(event.target.value)}
               className={INPUT}
@@ -294,7 +297,7 @@ export function AssetUploadForm({
               required
               rows={3}
               maxLength={1000}
-              disabled={saving}
+              readOnly={saving}
               value={alt}
               onChange={(event) => setAlt(event.target.value)}
               className={INPUT}

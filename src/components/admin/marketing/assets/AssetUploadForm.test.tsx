@@ -202,15 +202,15 @@ describe('picking a file', () => {
     await act(async () => {
       fireEvent.submit(screen.getByRole('button', { name: 'Add to gallery' }))
     })
-    expect((screen.getByLabelText('Title') as HTMLInputElement).disabled).toBe(
-      true,
-    )
-    expect(
-      (screen.getByLabelText('Alt text') as HTMLTextAreaElement).disabled,
-    ).toBe(true)
+    const title = screen.getByLabelText('Title') as HTMLInputElement
+    const alt = screen.getByLabelText('Alt text') as HTMLTextAreaElement
+    expect(title.readOnly).toBe(true)
+    expect(alt.readOnly).toBe(true)
+    // Not disabled: a browser moves focus off a disabled field, so a keyboard
+    // user who submitted with Enter would lose their place if the save fails.
+    expect(title.disabled).toBe(false)
+    expect(alt.disabled).toBe(false)
     await act(async () => finish({ _id: 'x', softOnSocial: false }))
-    expect(
-      (screen.getByLabelText('Alt text') as HTMLTextAreaElement).disabled,
-    ).toBe(false)
+    expect(alt.readOnly).toBe(false)
   })
 })
