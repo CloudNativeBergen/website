@@ -9,6 +9,7 @@ import {
 import { CANVAS_SIZE, styles } from './meme-generator-config'
 import {
   ExportCancelled,
+  LINKEDIN_MIN_SECONDS,
   UNSUPPORTED_MESSAGE,
   exportVideo,
   type EncoderBackend,
@@ -48,7 +49,9 @@ function statusText(
     case 'cancelled':
       return 'Export cancelled.'
     case 'done':
-      return 'Your video is ready.'
+      return status.seconds < LINKEDIN_MIN_SECONDS
+        ? `Your video is ready. It is ${status.seconds.toFixed(1)} s long, and LinkedIn takes videos of ${LINKEDIN_MIN_SECONDS} s or more.`
+        : 'Your video is ready.'
     case 'idle':
       return waiting
         ? 'Waiting for images and fonts to load…'

@@ -17,6 +17,11 @@ import { FPS, FRAME } from './meme-generator-timeline'
 export const TARGET_BITRATE = 8_000_000
 /** LinkedIn's minimum for a whole file. Every export is at least this. */
 export const MIN_BITRATE = 192_000
+/**
+ * LinkedIn's shortest video, in seconds (proof §7). Bluesky states none, so
+ * a shorter export is still made — and the organizer is told.
+ */
+export const LINKEDIN_MIN_SECONDS = 3
 export const PROBE_FRAMES = 10
 /**
  * Around the whole probe, frames and flush alike (proof §8.1). Longer for

@@ -214,4 +214,25 @@ describe('Export MP4', () => {
     await new Promise((resolve) => setTimeout(resolve, 20))
     expect(supports).toHaveBeenCalledTimes(1)
   })
+
+  it('makes a video shorter than LinkedIn takes, and says so', async () => {
+    const { encoder } = fakeEncoder()
+    openVideo(encoder)
+    fireEvent.change(screen.getByLabelText('Scene 1 length (s)'), {
+      target: { value: '2' },
+    })
+    fireEvent.blur(screen.getByLabelText('Scene 1 length (s)'))
+    await waitFor(() =>
+      expect(exportButton()).not.toHaveAttribute('aria-disabled'),
+    )
+    fireEvent.click(exportButton())
+    await screen.findByRole(
+      'link',
+      { name: /Download video/ },
+      { timeout: 5000 },
+    )
+    expect(status()).toHaveTextContent(
+      'Your video is ready. It is 2.0 s long, and LinkedIn takes videos of 3 s or more.',
+    )
+  })
 })
