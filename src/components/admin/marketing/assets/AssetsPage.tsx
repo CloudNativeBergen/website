@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import {
   ExclamationTriangleIcon,
@@ -52,12 +52,17 @@ function AssetCard({
             type="button"
             onClick={onDelete}
             aria-label={`Delete ${asset.title}`}
-            className="-m-1 rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-600 focus-visible:outline-2 focus-visible:outline-red-600 dark:hover:bg-red-950/60 dark:hover:text-red-400"
+            className="-m-1 rounded p-1 text-gray-500 hover:bg-red-50 hover:text-red-600 focus-visible:outline-2 focus-visible:outline-red-600 dark:hover:bg-red-950/60 dark:hover:text-red-400"
           >
             <TrashIcon className="size-4" aria-hidden />
           </button>
         </div>
-        <p className="line-clamp-2 text-xs text-gray-500 dark:text-gray-400">
+        {/* The image's alt text, shown for checking. Hidden from screen
+            readers, which already read it as the image's alt. */}
+        <p
+          aria-hidden
+          className="line-clamp-2 text-xs text-gray-500 dark:text-gray-400"
+        >
           {asset.alt}
         </p>
         {(Boolean(asset.width && asset.height) || asset.softOnSocial) && (
@@ -104,11 +109,16 @@ export function AssetsPage({
   const utils = api.useUtils()
   const { showNotification } = useNotification()
   const list = api.marketingAsset.list.useQuery()
+  // `confirming` closes the dialog; `deleting` keeps its title while it fades.
   const [deleting, setDeleting] = useState<MarketingAssetRow | null>(null)
+  const [confirming, setConfirming] = useState(false)
+  const galleryHeading = useRef<HTMLHeadingElement>(null)
   const remove = api.marketingAsset.delete.useMutation({
     onSuccess: () => {
       showNotification({ type: 'success', title: 'Asset deleted' })
-      setDeleting(null)
+      setConfirming(false)
+      // The button that opened the dialog is gone with its card.
+      galleryHeading.current?.focus()
     },
     onError: (error) =>
       showNotification({
@@ -142,6 +152,8 @@ export function AssetsPage({
 
       <section aria-labelledby="assets-heading" className="space-y-3">
         <h2
+          ref={galleryHeading}
+          tabIndex={-1}
           id="assets-heading"
           className="text-base font-semibold text-gray-900 dark:text-white"
         >
@@ -167,12 +179,15 @@ export function AssetsPage({
           </p>
         )}
         {assets.length > 0 && (
-          <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4">
+          <ul className="grid grid-cols-1 gap-3 min-[360px]:grid-cols-2 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4">
             {assets.map((asset) => (
               <AssetCard
                 key={asset._id}
                 asset={asset}
-                onDelete={() => setDeleting(asset)}
+                onDelete={() => {
+                  setDeleting(asset)
+                  setConfirming(true)
+                }}
               />
             ))}
           </ul>
@@ -180,8 +195,8 @@ export function AssetsPage({
       </section>
 
       <ConfirmationModal
-        isOpen={deleting !== null}
-        onClose={() => (remove.isPending ? undefined : setDeleting(null))}
+        isOpen={confirming}
+        onClose={() => (remove.isPending ? undefined : setConfirming(false))}
         onConfirm={() => deleting && remove.mutate({ id: deleting._id })}
         title={`Delete “${deleting?.title ?? ''}”?`}
         message="It leaves the gallery. Posts that already use the image keep it."
