@@ -248,17 +248,21 @@ export function VideoTimeline({
   }, [time])
 
   const movePlayhead = (event: React.KeyboardEvent) => {
-    if (event.key === 'Home' || event.key === 'End') {
-      event.preventDefault()
-      movedByKey.current = true
-      onSeek(event.key === 'Home' ? 0 : total)
-      return
-    }
-    const step = keyStep(event)
-    if (step === null) return
+    const target =
+      event.key === 'Home'
+        ? 0
+        : event.key === 'End'
+          ? total
+          : time + (keyStep(event) ?? Number.NaN)
+    if (Number.isNaN(target)) return
     event.preventDefault()
+    // Only a move that lands somewhere new asks to be kept in view: a key
+    // pressed against an end changes nothing, so no render would consume the
+    // request and it would fire on the next frame of playback instead.
+    const clamped = Math.min(Math.max(target, 0), total)
+    if (clamped === time) return
     movedByKey.current = true
-    onSeek(time + step)
+    onSeek(clamped)
   }
 
   return (

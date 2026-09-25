@@ -327,6 +327,22 @@ describe('keeping the playhead in view', () => {
     expect(valueOf(playhead())).toBeGreaterThan(0.5)
     expect(scrollIntoView).not.toHaveBeenCalled()
   })
+
+  it('does not save up a key that did not move it for the next playback frame', () => {
+    const scrollIntoView = vi.fn()
+    Element.prototype.scrollIntoView = scrollIntoView
+    onTestFinished(() => {
+      Reflect.deleteProperty(Element.prototype, 'scrollIntoView')
+    })
+    const clock = manualClock()
+    openVideo()
+    press(playhead(), 'Home') // already at 0: nothing moves
+    press(playhead(), 'ArrowLeft')
+    fireEvent.click(screen.getByRole('button', { name: 'Play' }))
+    clock.advanceTo(500)
+    expect(valueOf(playhead())).toBe(0.5)
+    expect(scrollIntoView).not.toHaveBeenCalled()
+  })
 })
 
 describe('reduced motion switched on mid-playback', () => {
