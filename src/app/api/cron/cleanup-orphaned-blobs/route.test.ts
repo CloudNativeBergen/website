@@ -16,8 +16,8 @@ const blob = (pathname: string, ageMs: number) => ({
 })
 const STORE = [
   blob('proposal-p1-1-slides.pdf', 2 * DAY),
-  blob('marketing-asset-org-A-1790000000000-logo.png', 2 * DAY),
-  blob('marketing-asset-org-B-1790000000000-fresh.png', 60 * 1000),
+  blob('marketing-asset/org-A/1790000000000-logo.png', 2 * DAY),
+  blob('marketing-asset/org-B/1790000000000-fresh.png', 60 * 1000),
   blob('something-else.png', 2 * DAY),
 ]
 
@@ -57,14 +57,14 @@ describe('the orphaned blob sweeper', () => {
   it('never lists outside its two prefixes', async () => {
     await GET(request())
     const prefixes = h.list.mock.calls.map(([options]) => options.prefix)
-    expect(prefixes.sort()).toEqual(['marketing-asset-', 'proposal-'])
+    expect(prefixes.sort()).toEqual(['marketing-asset/', 'proposal-'])
   })
 
   it('follows list() pages, so a busy prefix is swept past its first page', async () => {
-    const old = blob('marketing-asset-org-A-1790000000000-late.png', 2 * DAY)
+    const old = blob('marketing-asset/org-A/1790000000000-late.png', 2 * DAY)
     h.list.mockImplementation(
       async ({ prefix, cursor }: { prefix: string; cursor?: string }) =>
-        prefix !== 'marketing-asset-'
+        prefix !== 'marketing-asset/'
           ? { blobs: [], hasMore: false }
           : cursor === 'page-2'
             ? { blobs: [old], hasMore: false }

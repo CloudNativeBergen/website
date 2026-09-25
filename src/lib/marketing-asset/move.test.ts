@@ -51,12 +51,12 @@ vi.mock('@/lib/sanity/client', () => ({
   },
 }))
 
-import { moveBlobToSanity } from './move'
+import { SANITY_UPLOAD_DEADLINE_MS, moveBlobToSanity } from './move'
 import { MARKETING_ASSET_MAX_IMAGE_BYTES } from './image-type'
 
 const HOST = 'abcstore123.public.blob.vercel-storage.com'
 const ORG = 'org-A'
-const URL_OK = `https://${HOST}/marketing-asset-${ORG}-1790000000000-logo-Xy12Ab.png`
+const URL_OK = `https://${HOST}/marketing-asset/${ORG}/1790000000000-logo-Xy12Ab.png`
 const PNG_HEAD = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]
 
 /** A body delivered in small chunks, so the move must stream, not assume. */
@@ -270,5 +270,22 @@ describe('the move checks the file itself', () => {
     })
     expect(h.aborted).toBe(true)
     expect(h.del).toHaveBeenCalledWith(URL_OK)
+  })
+
+  it('gives up on a Sanity upload that never answers, before the route is killed', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    try {
+      fetchMock.mockResolvedValue(respond(png(100)))
+      h.upload.mockImplementation(() => new Promise(() => {}))
+      const moved = moveBlobToSanity(URL_OK, ORG)
+      await vi.advanceTimersByTimeAsync(SANITY_UPLOAD_DEADLINE_MS - 1)
+      expect(h.aborted).toBe(false)
+      await vi.advanceTimersByTimeAsync(1)
+      expect(await moved).toEqual({ ok: false, reason: 'upload' })
+      expect(h.aborted).toBe(true)
+      expect(h.del).toHaveBeenCalledWith(URL_OK)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

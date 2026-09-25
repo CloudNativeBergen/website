@@ -21,7 +21,7 @@ const TOKEN_LIFETIME_MS = 10 * 60 * 1000
  *
  * Organizer of the request host's organization only, checked before the body
  * is read. The token is bound to a pathname under THIS organization's
- * `marketing-asset-<orgId>-` prefix, to PNG/JPEG/WebP and to the size cap. The
+ * `marketing-asset/<orgId>/` folder, to PNG/JPEG/WebP and to the size cap. The
  * move re-checks all of it from the file itself: this is the first gate, not
  * the only one. No upload-completed callback is registered — the browser hands
  * the URL to the move, and an abandoned upload is the orphan sweeper's.

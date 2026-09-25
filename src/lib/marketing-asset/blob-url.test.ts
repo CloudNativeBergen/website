@@ -7,14 +7,14 @@ import {
 
 const HOST = 'abcstore123.public.blob.vercel-storage.com'
 const ORG = 'organization-cloud-native-days'
-const ok = `https://${HOST}/marketing-asset-${ORG}-1790000000000-logo-Xy12Ab.png`
+const ok = `https://${HOST}/marketing-asset/${ORG}/1790000000000-logo-Xy12Ab.png`
 
 describe('checkMarketingAssetBlobUrl', () => {
   it('accepts a URL on our store under our organization prefix', () => {
     expect(checkMarketingAssetBlobUrl(ok, ORG, HOST)).toEqual({
       ok: true,
       url: ok,
-      filename: `marketing-asset-${ORG}-1790000000000-logo-Xy12Ab.png`,
+      filename: `marketing-asset/${ORG}/1790000000000-logo-Xy12Ab.png`,
     })
   })
 
@@ -39,29 +39,53 @@ describe('checkMarketingAssetBlobUrl', () => {
     // must not reach one whose id extends ours.
     [
       'an organization whose id extends ours',
-      `https://${HOST}/marketing-asset-${ORG}-norway-1790000000000-a.png`,
+      `https://${HOST}/marketing-asset/${ORG}-norway/1790000000000-a.png`,
+    ],
+    // The gap the old `marketing-asset-<org>-` layout had: an org whose id is
+    // ours plus `-<13 digits>-…`. A Sanity id cannot hold `/`, so it ends ours.
+    [
+      'an organization whose id is ours plus a timestamp-shaped tail',
+      `https://${HOST}/marketing-asset/${ORG}-1790000000000-x/1790000000000-a.png`,
+    ],
+    [
+      'the old dash layout',
+      `https://${HOST}/marketing-asset-${ORG}-1790000000000-a.png`,
     ],
     ['a proposal blob', `https://${HOST}/proposal-abc-1790000000000-a.pdf`],
     [
       'a nested path',
-      `https://${HOST}/x/marketing-asset-${ORG}-1790000000000-a.png`,
+      `https://${HOST}/x/marketing-asset/${ORG}/1790000000000-a.png`,
+    ],
+    [
+      'a deeper path under our prefix',
+      `https://${HOST}/marketing-asset/${ORG}/x/1790000000000-a.png`,
     ],
     [
       'a path that climbs out',
-      `https://${HOST}/marketing-asset-${ORG}-1790000000000-a/../../x.png`,
+      `https://${HOST}/marketing-asset/${ORG}/1790000000000-a/../../x.png`,
     ],
     [
       'an encoded slash',
-      `https://${HOST}/marketing-asset-${ORG}-1790000000000-a%2Fb.png`,
+      `https://${HOST}/marketing-asset/${ORG}/1790000000000-a%2Fb.png`,
     ],
     ['a query string', `${ok}?download=1`],
     ['a fragment', `${ok}#x`],
     [
       'no timestamp after the prefix',
-      `https://${HOST}/marketing-asset-${ORG}-logo.png`,
+      `https://${HOST}/marketing-asset/${ORG}/logo.png`,
     ],
   ])('refuses %s', (_, url) => {
     expect(checkMarketingAssetBlobUrl(url, ORG, HOST)).toEqual({
+      ok: false,
+      reason: 'prefix',
+    })
+  })
+
+  it('refuses an organization id that is not a plain Sanity id', () => {
+    // Were `kkdemo.org/sub` accepted, it would reach into the `sub` folder of
+    // the organization `kkdemo.org`.
+    const theirs = `https://${HOST}/marketing-asset/kkdemo.org/sub/1790000000000-a.png`
+    expect(checkMarketingAssetBlobUrl(theirs, 'kkdemo.org/sub', HOST)).toEqual({
       ok: false,
       reason: 'prefix',
     })
@@ -88,7 +112,7 @@ describe('marketingAssetPathname', () => {
       1790000000000,
     )
     expect(pathname).toBe(
-      `marketing-asset-${ORG}-1790000000000-min-logo-final.png`,
+      `marketing-asset/${ORG}/1790000000000-min-logo-final.png`,
     )
     // Vercel Blob adds a random suffix before the extension.
     const url = `https://${HOST}/${pathname.replace('.png', '-aB3dE9.png')}`
@@ -97,10 +121,18 @@ describe('marketingAssetPathname', () => {
 })
 
 describe('blobStoreHost', () => {
-  it('reads the store id from BLOB_STORE_ID first', () => {
+  it('uses BLOB_STORE_ID when there is no read-write token', () => {
     expect(blobStoreHost({ BLOB_STORE_ID: 'store_AbC123' })).toBe(
       'abc123.public.blob.vercel-storage.com',
     )
+  })
+  it('prefers the read-write token, which is the store upload tokens are signed for', () => {
+    expect(
+      blobStoreHost({
+        BLOB_STORE_ID: 'store_Other9',
+        BLOB_READ_WRITE_TOKEN: 'vercel_blob_rw_AbC123_secretpart',
+      }),
+    ).toBe('abc123.public.blob.vercel-storage.com')
   })
   it('falls back to the read-write token', () => {
     expect(

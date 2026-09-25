@@ -22,6 +22,9 @@ export type MoveResult =
 
 class TooLarge extends Error {}
 
+/** How long the upload to Sanity may take; the route's `maxDuration` is 60 s. */
+export const SANITY_UPLOAD_DEADLINE_MS = 45_000
+
 function concat(chunks: Uint8Array[]): Uint8Array {
   const out = new Uint8Array(chunks.reduce((n, c) => n + c.length, 0))
   let offset = 0
@@ -165,7 +168,8 @@ async function transfer(url: string, filename: string): Promise<MoveResult> {
  * fails. Measured against the real `@sanity/client` (7.x) and a local server:
  * the promise API neither listens for a body stream's `error` (an unhandled
  * `error` event takes the process down) nor ends the request when one is
- * handled — it hangs with the request half-sent. Through the observable API,
+ * handled — it hangs with the request half-sent. `move.real-client.test.ts`
+ * holds that measurement in CI. Through the observable API,
  * unsubscribing aborts the request, and the server sees it incomplete.
  */
 function uploadImageStream(
@@ -173,25 +177,41 @@ function uploadImageStream(
   options: { filename: string; contentType: string },
 ): Promise<SanityImageAssetDocument> {
   return new Promise((resolve, reject) => {
+    // Settled once; every path clears the deadline.
+    const settle = (fn: () => void) => {
+      clearTimeout(deadline)
+      fn()
+    }
     const subscription = clientWrite.observable.assets
       .upload('image', body, options)
       .subscribe({
         next: (event) => {
-          if (event.type === 'response') resolve(event.body.document)
+          if (event.type === 'response')
+            settle(() => resolve(event.body.document))
         },
-        error: reject,
+        error: (error) => settle(() => reject(error)),
         complete: () =>
-          reject(new Error('Sanity upload ended without a response')),
+          settle(() =>
+            reject(new Error('Sanity upload ended without a response')),
+          ),
       })
     body.once('error', (error) => {
       subscription.unsubscribe()
-      reject(error)
+      settle(() => reject(error))
     })
+    // The client sets NO timeout of its own (`timeout: 0`). Give up well
+    // before the route's `maxDuration`, so the blob delete and the answer
+    // still run instead of the function being killed mid-request.
+    const deadline = setTimeout(() => {
+      subscription.unsubscribe()
+      body.destroy()
+      reject(new Error('Sanity upload timed out'))
+    }, SANITY_UPLOAD_DEADLINE_MS)
   })
 }
 
-/** `marketing-asset-<org>-<ts>-logo-Xy12.png` → `logo-Xy12.png`. */
+/** `marketing-asset/<org>/<ts>-logo-Xy12.png` → `logo-Xy12.png`. */
 function displayFilename(pathname: string): string {
-  const match = pathname.match(/-\d{13}-(.+)$/)
+  const match = pathname.match(/\/\d{13}-(.+)$/)
   return match?.[1] ?? pathname
 }

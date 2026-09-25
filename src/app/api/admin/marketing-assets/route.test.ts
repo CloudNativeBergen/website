@@ -25,7 +25,7 @@ vi.mock('@/lib/sanity/orphaned-asset', () => ({
 import { POST, maxDuration } from './route'
 
 const URL_OK =
-  'https://abc.public.blob.vercel-storage.com/marketing-asset-org-A-1790000000000-logo-X1.png'
+  'https://abc.public.blob.vercel-storage.com/marketing-asset/org-A/1790000000000-logo-X1.png'
 
 function request(body: unknown) {
   return new Request('http://localhost/api/admin/marketing-assets', {
