@@ -5,8 +5,23 @@
  * are the stories' job; this pins which scene the controls edit and what the
  * keys, fields and playback do to the timeline.
  */
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { act, render, screen, fireEvent, within } from '@testing-library/react'
+import {
+  describe,
+  it,
+  expect,
+  vi,
+  beforeEach,
+  afterEach,
+  onTestFinished,
+} from 'vitest'
+import {
+  act,
+  render,
+  screen,
+  fireEvent,
+  waitFor,
+  within,
+} from '@testing-library/react'
 import { MemeGenerator } from './MemeGenerator'
 
 beforeEach(() => {
@@ -282,5 +297,101 @@ describe('playing to the end', () => {
     openVideo()
     clock.advanceTo(2000)
     expect(valueOf(playhead())).toBe(0)
+  })
+})
+
+describe('keeping the playhead in view', () => {
+  it('follows a keyboard move, never playback', () => {
+    const scrollIntoView = vi.fn()
+    Element.prototype.scrollIntoView = scrollIntoView
+    // jsdom has no pointer capture.
+    HTMLElement.prototype.setPointerCapture = () => {}
+    onTestFinished(() => {
+      Reflect.deleteProperty(Element.prototype, 'scrollIntoView')
+      Reflect.deleteProperty(HTMLElement.prototype, 'setPointerCapture')
+    })
+    const clock = manualClock()
+    openVideo()
+
+    press(playhead(), 'ArrowRight')
+    expect(scrollIntoView).toHaveBeenCalledTimes(1)
+
+    // A pointer press focuses the playhead; playback must not then drag the
+    // page back to it on every frame.
+    fireEvent.pointerDown(playhead(), { button: 0, pointerId: 1 })
+    fireEvent.pointerUp(playhead(), { pointerId: 1 })
+    scrollIntoView.mockClear()
+    fireEvent.click(screen.getByRole('button', { name: 'Play' }))
+    clock.advanceTo(500)
+    clock.advanceTo(1000)
+    expect(valueOf(playhead())).toBeGreaterThan(0.5)
+    expect(scrollIntoView).not.toHaveBeenCalled()
+  })
+})
+
+describe('reduced motion switched on mid-playback', () => {
+  it('stops at the end even though Loop was on', () => {
+    let reduced = false
+    const listeners = new Set<() => void>()
+    vi.stubGlobal('matchMedia', (query: string) => ({
+      get matches() {
+        return query.includes('prefers-reduced-motion') && reduced
+      },
+      addEventListener: (_: string, listener: () => void) =>
+        listeners.add(listener),
+      removeEventListener: (_: string, listener: () => void) =>
+        listeners.delete(listener),
+    }))
+    const clock = manualClock()
+    openVideo()
+    fireEvent.click(screen.getByRole('button', { name: 'Loop' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Play' }))
+    clock.advanceTo(1000)
+
+    reduced = true
+    act(() => listeners.forEach((listener) => listener()))
+    clock.advanceTo(3500)
+    expect(valueOf(playhead())).toBe(3)
+    expect(screen.getByRole('button', { name: 'Play' })).toBeTruthy()
+  })
+})
+
+describe('background uploads in two scenes', () => {
+  it('never cancel each other', async () => {
+    // Decoding is held until the test lets each image through.
+    const decodes = new Map<string, () => void>()
+    // jsdom has no `decode`; this one resolves when the test says so.
+    Object.defineProperty(HTMLImageElement.prototype, 'decode', {
+      configurable: true,
+      value(this: HTMLImageElement) {
+        return new Promise<void>((resolve) => decodes.set(this.src, resolve))
+      },
+    })
+    onTestFinished(() => {
+      Reflect.deleteProperty(HTMLImageElement.prototype, 'decode')
+    })
+    const upload = async (name: string, body: string) => {
+      fireEvent.change(screen.getByLabelText(/Upload Background Image/), {
+        target: { files: [new File([body], name, { type: 'image/png' })] },
+      })
+      await waitFor(() => expect(decodes.size).toBeGreaterThan(0))
+    }
+
+    openVideo()
+    fireEvent.click(
+      screen.getAllByRole('button', { name: 'Advanced Options' })[0],
+    )
+    await upload('first.png', 'one')
+    const first = [...decodes.values()][0]
+    decodes.clear()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add scene' }))
+    await upload('second.png', 'two')
+    await act(async () => [...decodes.values()][0]())
+    await act(async () => first())
+
+    expect(await screen.findByText('Current: second.png')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Scene 1, 3.0 s' }))
+    expect(await screen.findByText('Current: first.png')).toBeTruthy()
   })
 })

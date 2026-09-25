@@ -125,7 +125,7 @@ export function frameAt(scenes: Scene[], time: number): Frame {
     return fade(scenes, index - 1, start, t)
   }
   // …or the first half of a fade into the next one.
-  const end = start + scenes[index].duration
+  const end = sceneStart(scenes, index + 1)
   if (
     scenes[index].transition === 'fade' &&
     index < scenes.length - 1 &&

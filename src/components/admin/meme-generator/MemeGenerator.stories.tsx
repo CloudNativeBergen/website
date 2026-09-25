@@ -1337,3 +1337,114 @@ export const VideoEdgeAbovePlayhead: Story = {
     expect(hit?.closest('[role="slider"]')).toBe(edge)
   },
 }
+
+/** The mean RGBA of the background corner, read straight off the preview. */
+function cornerRgba(root: HTMLElement): [number, number, number, number] {
+  const { x, y, width, height } = BACKGROUND_CORNER
+  const data = root
+    .querySelector('canvas')!
+    .getContext('2d')!
+    .getImageData(x, y, width, height).data
+  const sum = [0, 0, 0, 0]
+  for (let i = 0; i < data.length; i += 4) {
+    for (let c = 0; c < 4; c++) sum[c] += data[i + c]
+  }
+  const n = data.length / 4
+  return sum.map((v) => v / n) as [number, number, number, number]
+}
+
+/** Blue scene 1 fading into green scene 2, playhead at `at`. */
+async function blueFadingIntoGreen(canvasElement: HTMLElement, at: number) {
+  const canvas = within(canvasElement)
+  await userEvent.click(canvas.getByRole('button', { name: 'Video' }))
+  await userEvent.click(canvas.getByRole('button', { name: 'Cloud Blue' }))
+  await userEvent.click(canvas.getByRole('button', { name: 'Add scene' }))
+  await userEvent.click(canvas.getByRole('button', { name: 'Scene 1, 3.0 s' }))
+  await userEvent.selectOptions(canvas.getByLabelText('Into scene 2'), 'fade')
+  await seekTo(canvas, at)
+  return canvas
+}
+
+/**
+ * The frame playback paints at a time inside a fade is the frame a scrub to
+ * that time paints. Pixels and playhead are read together WHILE playing —
+ * they change in the same commit — and never after Pause, which repaints.
+ * Then a scrub to the recorded time must paint the same pixels.
+ */
+export const VideoPlaybackMatchesScrub: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = await blueFadingIntoGreen(canvasElement, 2.8)
+    const playhead = () =>
+      Number(
+        canvas
+          .getByRole('slider', { name: 'Playhead' })
+          .getAttribute('aria-valuenow'),
+      )
+    await userEvent.click(canvas.getByRole('button', { name: 'Play' }))
+    let t = 0
+    let played: number[] = []
+    await waitFor(() => {
+      t = playhead()
+      played = cornerRgba(canvasElement)
+      expect(t).toBeGreaterThan(2.9)
+    })
+    await userEvent.click(canvas.getByRole('button', { name: 'Pause' }))
+
+    // Read inside the window, or this proves nothing.
+    expect(t).toBeLessThan(3.2)
+    expect(played[2]).toBeLessThan(210) // not Cloud Blue alone…
+    expect(played[2]).toBeGreaterThan(135) // …nor Fresh Green alone
+
+    await seekTo(canvas, 0)
+    await seekTo(canvas, t)
+    await waitFor(() => {
+      const scrubbed = cornerRgba(canvasElement)
+      for (let c = 0; c < 4; c++) {
+        expect(Math.abs(scrubbed[c] - played[c])).toBeLessThanOrEqual(2)
+      }
+    })
+  },
+}
+
+/**
+ * A cross-fade into a scene whose background is a TRANSPARENT image: midway,
+ * the corner is the outgoing blue at half strength and the incoming nothing
+ * at half — half-transparent. Painting the incoming layer over an opaque
+ * outgoing one would leave it fully opaque blue until the window closed.
+ */
+export const VideoFadeIntoTransparent: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(canvas.getByRole('button', { name: 'Video' }))
+    await userEvent.click(canvas.getByRole('button', { name: 'Cloud Blue' }))
+    await userEvent.click(canvas.getByRole('button', { name: 'Add scene' }))
+
+    const clear = document.createElement('canvas')
+    clear.width = clear.height = 64
+    const blob = await new Promise<Blob>((resolve) =>
+      clear.toBlob((b) => resolve(b!), 'image/png'),
+    )
+    await userEvent.click(
+      canvas.getAllByRole('button', { name: 'Advanced Options' })[0],
+    )
+    await userEvent.upload(
+      canvas.getByLabelText(/Upload Background Image/),
+      new File([blob], 'clear.png', { type: 'image/png' }),
+    )
+    await canvas.findByText('Current: clear.png')
+
+    await userEvent.click(
+      canvas.getByRole('button', { name: 'Scene 1, 3.0 s' }),
+    )
+    await userEvent.selectOptions(canvas.getByLabelText('Into scene 2'), 'fade')
+
+    await seekTo(canvas, 3.4)
+    await waitFor(() => expect(cornerRgba(canvasElement)[3]).toBeLessThan(2))
+    await seekTo(canvas, 3)
+    await waitFor(() => {
+      const alpha = cornerRgba(canvasElement)[3]
+      expect(alpha).toBeGreaterThan(115)
+      expect(alpha).toBeLessThan(140)
+    })
+  },
+}

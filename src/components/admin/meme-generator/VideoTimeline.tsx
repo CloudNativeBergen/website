@@ -235,27 +235,29 @@ export function VideoTimeline({
   const transitionId = useId()
   const loopHintId = useId()
 
-  // A playhead moved by keyboard is kept in view: on a narrow screen it would
-  // otherwise walk out of the scrolling track with focus still on it.
+  // A playhead moved by KEYBOARD is kept in view: on a narrow screen it
+  // would otherwise walk out of the scrolling track with focus still on it.
+  // Only then — following it on every frame of playback would pull the page
+  // back to it while the author scrolls to the controls.
   const playhead = useRef<HTMLDivElement>(null)
+  const movedByKey = useRef(false)
   useEffect(() => {
-    if (document.activeElement === playhead.current) {
-      playhead.current?.scrollIntoView?.({
-        block: 'nearest',
-        inline: 'nearest',
-      })
-    }
+    if (!movedByKey.current) return
+    movedByKey.current = false
+    playhead.current?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' })
   }, [time])
 
   const movePlayhead = (event: React.KeyboardEvent) => {
     if (event.key === 'Home' || event.key === 'End') {
       event.preventDefault()
+      movedByKey.current = true
       onSeek(event.key === 'Home' ? 0 : total)
       return
     }
     const step = keyStep(event)
     if (step === null) return
     event.preventDefault()
+    movedByKey.current = true
     onSeek(time + step)
   }
 

@@ -329,8 +329,26 @@ export function MemeGenerator({
   const [backgroundRasters, setBackgroundRasters] = useState<
     ReadonlyMap<string, Raster>
   >(() => new Map())
-  const [backgroundPending, setBackgroundPending] = useState(false)
-  const backgroundUpload = useRef(0)
+  // Uploads are counted per scene: a newer upload, or a clear, supersedes
+  // only its own scene's, never another scene's still decoding.
+  const backgroundUploads = useRef(new Map<string, number>())
+  const [uploadingScenes, setUploadingScenes] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  )
+  const backgroundPending = uploadingScenes.size > 0
+  const settleUpload = (sceneKey: string) =>
+    setUploadingScenes((prev) => {
+      const next = new Set(prev)
+      next.delete(sceneKey)
+      return next
+    })
+
+  // The scenes as last committed. An upload finishes long after its handler's
+  // render; by then another scene may have taken up the same image.
+  const committedScenes = useRef(scenes)
+  useEffect(() => {
+    committedScenes.current = scenes
+  })
 
   // A decoded photo is large: once no scene but `leaving` shows it, it goes.
   const withoutUnused = (
@@ -339,7 +357,7 @@ export function MemeGenerator({
     leaving: string,
   ) => {
     const next = new Map(rasters)
-    const usedElsewhere = scenes.some(
+    const usedElsewhere = committedScenes.current.some(
       (scene) =>
         scene.key !== leaving && scene.design.background.image?.url === url,
     )
@@ -359,14 +377,16 @@ export function MemeGenerator({
     // the image it replaces there.
     const sceneKey = editingKey
     const replaced = background.image?.url
-    const upload = ++backgroundUpload.current
-    setBackgroundPending(true)
+    const upload = (backgroundUploads.current.get(sceneKey) ?? 0) + 1
+    backgroundUploads.current.set(sceneKey, upload)
+    const isLatest = () => backgroundUploads.current.get(sceneKey) === upload
+    setUploadingScenes((prev) => new Set(prev).add(sceneKey))
     try {
       const url = await readAsDataUrl(file)
       const image = new window.Image()
       image.src = url
       await image.decode()
-      if (upload !== backgroundUpload.current) return
+      if (!isLatest()) return
       setBackgroundRasters((prev) =>
         withoutUnused(prev, replaced, sceneKey).set(url, image),
       )
@@ -374,13 +394,16 @@ export function MemeGenerator({
     } catch {
       // An image the browser cannot decode leaves the background as it was.
     } finally {
-      if (upload === backgroundUpload.current) setBackgroundPending(false)
+      if (isLatest()) settleUpload(sceneKey)
     }
   }
 
   const clearBackgroundImage = () => {
-    backgroundUpload.current++
-    setBackgroundPending(false)
+    backgroundUploads.current.set(
+      editingKey,
+      (backgroundUploads.current.get(editingKey) ?? 0) + 1,
+    )
+    settleUpload(editingKey)
     const url = background.image?.url
     setBackgroundRasters((prev) => withoutUnused(prev, url, editingKey))
     setBackground({ image: null })
@@ -740,7 +763,9 @@ export function MemeGenerator({
       <div
         className={`min-w-0 space-y-4 lg:sticky lg:top-20 lg:self-start ${
           mode === 'video'
-            ? 'lg:max-h-[calc(100dvh-6rem)] lg:overflow-y-auto'
+            ? // A scroller clips on both axes: the padding, cancelled by the
+              // margin, leaves the preview's shadow room inside it.
+              'lg:-mx-4 lg:max-h-[calc(100dvh-6rem)] lg:overflow-y-auto lg:px-4 lg:pb-4'
             : ''
         }`}
       >
