@@ -266,7 +266,7 @@ export function MemeGenerator({
   // scene — a slider dragged, a line typed — are one undo step.
   const updateScene = (
     key: string,
-    field: string,
+    field: string | null,
     update: (prev: MemeDesign) => MemeDesign,
   ) =>
     changeScenes(
@@ -276,7 +276,7 @@ export function MemeGenerator({
             ? { ...scene, design: update(scene.design) }
             : scene,
         ),
-      `${key}:${field}`,
+      field === null ? undefined : `${key}:${field}`,
     )
   const setDesign = (field: string, update: (prev: MemeDesign) => MemeDesign) =>
     updateScene(editingKey, field, update)
@@ -298,10 +298,15 @@ export function MemeGenerator({
     patch: Partial<MemeDesign['background']>,
     key = editingKey,
   ) =>
-    updateScene(key, `background.${Object.keys(patch).join()}`, (prev) => ({
-      ...prev,
-      background: { ...prev.background, ...patch },
-    }))
+    // An image put in or taken out is always a step of its own.
+    updateScene(
+      key,
+      'image' in patch ? null : `background.${Object.keys(patch).join()}`,
+      (prev) => ({
+        ...prev,
+        background: { ...prev.background, ...patch },
+      }),
+    )
 
   // A position past the edge the logo's size allows is pulled back in.
   const setLogo = (patch: Partial<MemeDesign['logo']>) =>
