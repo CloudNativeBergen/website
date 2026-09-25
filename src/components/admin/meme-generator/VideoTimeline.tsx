@@ -710,13 +710,13 @@ export function VideoTimeline({
             label={`Move scene ${editingIndex + 1} earlier`}
             icon={ArrowLeftIcon}
             refused={editingIndex === 0}
-            onClick={() => onMoveScene(editingIndex, editingIndex - 1)}
+            onClick={() => moveScene(editingIndex, editingIndex - 1)}
           />
           <SceneAction
             label={`Move scene ${editingIndex + 1} later`}
             icon={ArrowRightIcon}
             refused={isLast}
-            onClick={() => onMoveScene(editingIndex, editingIndex + 1)}
+            onClick={() => moveScene(editingIndex, editingIndex + 1)}
           />
           <SceneAction
             label={`Duplicate scene ${editingIndex + 1}`}

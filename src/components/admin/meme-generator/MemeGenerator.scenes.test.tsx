@@ -250,6 +250,21 @@ describe('reordering by keyboard', () => {
     expect(sceneLabels()[1]).toBe('Scene 2, 2.0 s')
   })
 
+  it('keeps a scene moved by its button in view, like one moved by keys', () => {
+    const scrolled: Element[] = []
+    Element.prototype.scrollIntoView = function (this: Element) {
+      scrolled.push(this)
+    }
+    onTestFinished(() => {
+      Reflect.deleteProperty(Element.prototype, 'scrollIntoView')
+    })
+    scenesOf(2, 3)
+    fireEvent.click(button('Scene 1, 2.0 s'))
+    scrolled.length = 0
+    fireEvent.click(button('Move scene 1 later'))
+    expect(scrolled).toContain(button('Scene 2, 2.0 s'))
+  })
+
   it('keeps the playhead on the scene it was on', () => {
     scenesOf(2, 3)
     fireEvent.click(button('Scene 2, 3.0 s')) // playhead at 2
