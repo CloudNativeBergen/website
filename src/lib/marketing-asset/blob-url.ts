@@ -22,6 +22,9 @@ export function marketingAssetPrefix(orgId: string): string {
  * organization ids apart: `organization-a` is a string prefix of
  * `organization-a-b`, so a bare `startsWith` would let the first reach the
  * second's blobs. After our prefix, theirs continues with `b-`, not digits.
+ * KNOWN LIMIT: an organization whose id is OURS plus `-<13 digits>-…` would
+ * still match. No id has that shape (they are `organization-<slug>` or a
+ * domain), and the blob URL also carries Vercel's unguessable random suffix.
  */
 const AFTER_PREFIX = /^\d{13}-[A-Za-z0-9-]+(\.[A-Za-z0-9]+)?$/
 

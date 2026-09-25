@@ -20,6 +20,18 @@ const TEMPORARY_PREFIXES = ['proposal-', MARKETING_ASSET_BLOB_PREFIX]
  */
 const BLOB_RETENTION_HOURS = 24
 
+/** Every blob under `prefix`, following `list()`'s pages (1000 per page). */
+async function listAll(prefix: string) {
+  const all: Awaited<ReturnType<typeof list>>['blobs'] = []
+  let cursor: string | undefined
+  do {
+    const page = await list({ prefix, mode: 'expanded', cursor })
+    all.push(...page.blobs)
+    cursor = page.hasMore ? page.cursor : undefined
+  } while (cursor)
+  return all
+}
+
 export async function GET(request: NextRequest) {
   noStore()
   try {
@@ -43,13 +55,7 @@ export async function GET(request: NextRequest) {
       Date.now() - BLOB_RETENTION_HOURS * 60 * 60 * 1000,
     )
 
-    const blobs = (
-      await Promise.all(
-        TEMPORARY_PREFIXES.map(
-          async (prefix) => (await list({ prefix, mode: 'expanded' })).blobs,
-        ),
-      )
-    ).flat()
+    const blobs = (await Promise.all(TEMPORARY_PREFIXES.map(listAll))).flat()
 
     const orphanedBlobs = blobs.filter((blob) => {
       return blob.uploadedAt < retentionThreshold

@@ -5,12 +5,16 @@ import {
   isOrganizerForCurrentOrg,
   resolveCurrentOrgId,
 } from '@/lib/authz/organizer'
-import { isSoftOnSocial } from '@/lib/marketing-asset/image-type'
+import {
+  MARKETING_ASSET_SIZE_REFUSAL,
+  MARKETING_ASSET_TYPE_REFUSAL,
+  isSoftOnSocial,
+} from '@/lib/marketing-asset/image-type'
 import { moveBlobToSanity, type MoveRefusal } from '@/lib/marketing-asset/move'
 import { createMarketingAsset } from '@/lib/marketing-asset/sanity'
 import { deleteImageAssetIfOrphaned } from '@/lib/sanity/orphaned-asset'
 
-/** The streamed move of up to 20 MB gets a minute, set explicitly (§4.1). */
+/** The streamed move of one image gets a minute, set explicitly (§4.1). */
 export const maxDuration = 60
 
 const InputSchema = z.object({
@@ -22,8 +26,8 @@ const InputSchema = z.object({
 const REFUSALS: Record<MoveRefusal, { status: number; error: string }> = {
   host: { status: 400, error: 'That upload is not one of ours.' },
   prefix: { status: 400, error: 'That upload is not one of ours.' },
-  type: { status: 400, error: 'Only PNG, JPEG and WebP images can be added.' },
-  size: { status: 400, error: 'The image is larger than 20 MB.' },
+  type: { status: 400, error: MARKETING_ASSET_TYPE_REFUSAL },
+  size: { status: 400, error: MARKETING_ASSET_SIZE_REFUSAL },
   fetch: { status: 502, error: 'The upload could not be read. Try again.' },
   upload: { status: 502, error: 'The image could not be stored. Try again.' },
 }

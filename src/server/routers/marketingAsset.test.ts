@@ -26,7 +26,16 @@ vi.mock('@/lib/conference/sanity', () => ({
   getConferenceForCurrentDomain: h.getConference,
 }))
 vi.mock('@/lib/sanity/client', () => ({
-  clientWrite: { delete: h.del },
+  clientWrite: {
+    transaction: () => {
+      const ids: string[] = []
+      const tx = {
+        delete: (id: string) => (ids.push(id), tx),
+        commit: () => h.del(ids),
+      }
+      return tx
+    },
+  },
   clientReadUncached: { fetch: h.read },
 }))
 vi.mock('@/lib/sanity/orphaned-asset', () => ({
@@ -128,7 +137,8 @@ describe('marketingAsset.delete', () => {
   it('deletes our asset, then its image only through the orphan check', async () => {
     const result = await assets().delete({ id: 'asset-ours' })
     expect(result).toEqual({ deleted: true, imageDeleted: true })
-    expect(h.del).toHaveBeenCalledWith('asset-ours')
+    // Its Studio draft goes with it, in the same transaction.
+    expect(h.del).toHaveBeenCalledWith(['asset-ours', 'drafts.asset-ours'])
     expect(h.orphan).toHaveBeenCalledWith('image-logo-800x800-png')
     // The document goes first: while it exists it is itself a reference.
     expect(h.del.mock.invocationCallOrder[0]).toBeLessThan(

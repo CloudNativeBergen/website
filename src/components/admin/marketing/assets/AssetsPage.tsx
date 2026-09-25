@@ -60,13 +60,13 @@ function AssetCard({
         <p className="line-clamp-2 text-xs text-gray-500 dark:text-gray-400">
           {asset.alt}
         </p>
-        {(asset.width || asset.softOnSocial) && (
+        {(Boolean(asset.width && asset.height) || asset.softOnSocial) && (
           <p className="mt-auto flex flex-wrap items-center gap-x-2 gap-y-1 pt-1 text-xs text-gray-500 tabular-nums dark:text-gray-400">
-            {asset.width && asset.height && (
+            {asset.width && asset.height ? (
               <span>
                 {asset.width} × {asset.height}
               </span>
-            )}
+            ) : null}
             {asset.softOnSocial && (
               <span className="inline-flex items-start gap-1 rounded-md bg-amber-50 px-1.5 py-0.5 font-medium text-amber-800 dark:bg-amber-950/60 dark:text-amber-200">
                 <ExclamationTriangleIcon

@@ -8,6 +8,8 @@ const h = vi.hoisted(() => ({
   uploadedBytes: 0,
   uploadedType: '' as string | undefined,
   aborted: false,
+  cancelled: false,
+  pulls: 0,
 }))
 vi.mock('server-only', () => ({}))
 vi.mock('@vercel/blob', () => ({ del: h.del }))
@@ -61,7 +63,11 @@ const PNG_HEAD = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]
 function body(bytes: Uint8Array, chunk = 5) {
   let offset = 0
   return new ReadableStream<Uint8Array>({
+    cancel() {
+      h.cancelled = true
+    },
     pull(controller) {
+      h.pulls++
       if (offset >= bytes.length) return controller.close()
       controller.enqueue(bytes.slice(offset, offset + chunk))
       offset += chunk
@@ -82,6 +88,8 @@ const fetchMock = vi.fn()
 beforeEach(() => {
   vi.clearAllMocks()
   h.aborted = false
+  h.cancelled = false
+  h.pulls = 0
   vi.stubEnv('BLOB_STORE_ID', 'store_abcstore123')
   vi.stubGlobal('fetch', fetchMock)
   h.del.mockResolvedValue(undefined)
@@ -178,6 +186,9 @@ describe('the move checks the file itself', () => {
       ok: false,
       reason: 'size',
     })
+    // A stream pulls once on construction to fill its queue; nothing past that.
+    expect(h.pulls).toBeLessThanOrEqual(1)
+    expect(h.cancelled).toBe(true)
     expect(h.upload).not.toHaveBeenCalled()
     expect(h.del).toHaveBeenCalledWith(URL_OK)
   })
@@ -217,6 +228,47 @@ describe('the move checks the file itself', () => {
       ok: false,
       reason: 'upload',
     })
+    // Nobody will read the rest of the blob: it is let go, not left open.
+    expect(h.cancelled).toBe(true)
+    expect(h.del).toHaveBeenCalledWith(URL_OK)
+  })
+
+  it('answers a blob that fails while its type is read, and still deletes it', async () => {
+    fetchMock.mockResolvedValue(
+      new Response(
+        new ReadableStream({
+          pull(controller) {
+            controller.error(new Error('connection reset'))
+          },
+        }),
+      ),
+    )
+    expect(await moveBlobToSanity(URL_OK, ORG)).toEqual({
+      ok: false,
+      reason: 'fetch',
+    })
+    expect(h.upload).not.toHaveBeenCalled()
+    expect(h.del).toHaveBeenCalledWith(URL_OK)
+  })
+
+  it('answers a blob that fails mid-upload as a failed read, and aborts the upload', async () => {
+    let sent = false
+    fetchMock.mockResolvedValue(
+      new Response(
+        new ReadableStream({
+          pull(controller) {
+            if (sent) return controller.error(new Error('connection reset'))
+            sent = true
+            controller.enqueue(png(100))
+          },
+        }),
+      ),
+    )
+    expect(await moveBlobToSanity(URL_OK, ORG)).toEqual({
+      ok: false,
+      reason: 'fetch',
+    })
+    expect(h.aborted).toBe(true)
     expect(h.del).toHaveBeenCalledWith(URL_OK)
   })
 })

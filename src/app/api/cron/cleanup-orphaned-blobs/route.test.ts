@@ -60,6 +60,21 @@ describe('the orphaned blob sweeper', () => {
     expect(prefixes.sort()).toEqual(['marketing-asset-', 'proposal-'])
   })
 
+  it('follows list() pages, so a busy prefix is swept past its first page', async () => {
+    const old = blob('marketing-asset-org-A-1790000000000-late.png', 2 * DAY)
+    h.list.mockImplementation(
+      async ({ prefix, cursor }: { prefix: string; cursor?: string }) =>
+        prefix !== 'marketing-asset-'
+          ? { blobs: [], hasMore: false }
+          : cursor === 'page-2'
+            ? { blobs: [old], hasMore: false }
+            : { blobs: [STORE[1]], hasMore: true, cursor: 'page-2' },
+    )
+    await GET(request())
+    expect(h.cleanup).toHaveBeenCalledWith(old.url)
+    expect(h.cleanup).toHaveBeenCalledWith(STORE[1].url)
+  })
+
   it('still refuses without the cron secret', async () => {
     const unauthorized = new Request(
       'http://localhost/x',

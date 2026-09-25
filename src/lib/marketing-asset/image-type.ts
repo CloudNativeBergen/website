@@ -10,6 +10,14 @@ export type MarketingAssetImageType =
 /** The largest image the gallery takes. Checked by the token AND the move. */
 export const MARKETING_ASSET_MAX_IMAGE_BYTES = 20 * 1024 * 1024
 
+/** The cap as people read it, derived so the copy cannot drift from the check. */
+export const MARKETING_ASSET_MAX_IMAGE_LABEL = `${MARKETING_ASSET_MAX_IMAGE_BYTES / (1024 * 1024)} MB`
+
+/** The refusals the client and the server both show. */
+export const MARKETING_ASSET_TYPE_REFUSAL =
+  'Only PNG, JPEG and WebP images can be added.'
+export const MARKETING_ASSET_SIZE_REFUSAL = `The image is larger than ${MARKETING_ASSET_MAX_IMAGE_LABEL}.`
+
 /** How many leading bytes {@link sniffImageType} needs. */
 export const SNIFF_BYTES = 12
 

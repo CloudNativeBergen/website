@@ -11,6 +11,9 @@ import { AdminButton } from '@/components/admin/AdminButton'
 import {
   MARKETING_ASSET_IMAGE_TYPES,
   MARKETING_ASSET_MAX_IMAGE_BYTES,
+  MARKETING_ASSET_MAX_IMAGE_LABEL,
+  MARKETING_ASSET_SIZE_REFUSAL,
+  MARKETING_ASSET_TYPE_REFUSAL,
   SOFT_ON_SOCIAL_SHORT_SIDE,
   isSoftOnSocial,
 } from '@/lib/marketing-asset'
@@ -37,10 +40,10 @@ function titleFromFilename(name: string): string {
 /** The client's own check, for a quick answer. The server checks again. */
 function refusalFor(file: File): string | null {
   if (!(MARKETING_ASSET_IMAGE_TYPES as readonly string[]).includes(file.type)) {
-    return 'Only PNG, JPEG and WebP images can be added.'
+    return MARKETING_ASSET_TYPE_REFUSAL
   }
   if (file.size > MARKETING_ASSET_MAX_IMAGE_BYTES) {
-    return 'The image is larger than 20 MB.'
+    return MARKETING_ASSET_SIZE_REFUSAL
   }
   return null
 }
@@ -65,7 +68,9 @@ export function AssetUploadForm({
   uploader: AssetUploader
   onSaved: (saved: { title: string }) => void
 }) {
-  const ids = { file: useId(), title: useId(), alt: useId(), soft: useId() }
+  const ids = { file: useId(), title: useId(), alt: useId() }
+  // The latest pick wins: an earlier file's slower size read must not land.
+  const pickSeq = useRef(0)
   const fileInput = useRef<HTMLInputElement>(null)
   const [picked, setPicked] = useState<Picked | null>(null)
   const [title, setTitle] = useState('')
@@ -88,7 +93,9 @@ export function AssetUploadForm({
       setError(refusal)
       return
     }
+    const seq = ++pickSeq.current
     const dimensions = await readDimensions(file)
+    if (seq !== pickSeq.current) return
     setPicked({
       file,
       previewUrl: URL.createObjectURL(file),
@@ -99,6 +106,7 @@ export function AssetUploadForm({
   }
 
   function reset() {
+    pickSeq.current++
     setPicked(null)
     setTitle('')
     setAlt('')
@@ -162,7 +170,7 @@ export function AssetUploadForm({
                   Choose an image
                 </span>
                 <span className="mt-1 text-xs">
-                  PNG, JPEG or WebP, up to 20 MB
+                  PNG, JPEG or WebP, up to {MARKETING_ASSET_MAX_IMAGE_LABEL}
                 </span>
               </span>
             )}
@@ -192,7 +200,6 @@ export function AssetUploadForm({
         <div className="space-y-4">
           {soft && picked && (
             <p
-              id={ids.soft}
               role="status"
               className="flex gap-2 rounded-md bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-950/60 dark:text-amber-200"
             >

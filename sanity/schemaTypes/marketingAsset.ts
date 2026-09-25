@@ -30,6 +30,9 @@ export default defineType({
         ],
       },
       initialValue: 'organization',
+      // Only organization-wide assets exist until the edition mark (#1161)
+      // validates the edition against the organization on write.
+      readOnly: true,
       validation: (Rule) => Rule.required(),
     }),
     defineField({
@@ -59,7 +62,13 @@ export default defineType({
       name: 'image',
       title: 'Image',
       type: 'image',
-      validation: (Rule) => Rule.required(),
+      description: 'For an image or a GIF.',
+      validation: (Rule) =>
+        Rule.custom((value, { document }) =>
+          document?.kind !== 'video' && !value
+            ? 'An image or GIF asset needs its image'
+            : true,
+        ),
     }),
     defineField({
       name: 'title',

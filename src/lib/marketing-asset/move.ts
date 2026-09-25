@@ -91,11 +91,16 @@ async function transfer(url: string, filename: string): Promise<MoveResult> {
   // Peek at the first bytes to learn the real type before uploading anything.
   const head: Uint8Array[] = []
   let headBytes = 0
-  while (headBytes < SNIFF_BYTES) {
-    const { done, value } = await reader.read()
-    if (done) break
-    head.push(value)
-    headBytes += value.length
+  try {
+    while (headBytes < SNIFF_BYTES) {
+      const { done, value } = await reader.read()
+      if (done) break
+      head.push(value)
+      headBytes += value.length
+    }
+  } catch {
+    drop()
+    return { ok: false, reason: 'fetch' }
   }
   const type = sniffImageType(concat(head))
   if (!type) {
@@ -104,6 +109,7 @@ async function transfer(url: string, filename: string): Promise<MoveResult> {
   }
 
   let tooLarge = false
+  let readFailed = false
   async function* counted() {
     let total = 0
     const pass = (chunk: Uint8Array) => {
@@ -117,9 +123,15 @@ async function transfer(url: string, filename: string): Promise<MoveResult> {
     }
     for (const chunk of head) yield pass(chunk)
     while (true) {
-      const { done, value } = await reader.read()
-      if (done) return
-      yield pass(value)
+      let next: ReadableStreamReadResult<Uint8Array>
+      try {
+        next = await reader.read()
+      } catch (error) {
+        readFailed = true
+        throw error
+      }
+      if (next.done) return
+      yield pass(next.value)
     }
   }
 
@@ -139,7 +151,10 @@ async function transfer(url: string, filename: string): Promise<MoveResult> {
       },
     }
   } catch (error) {
+    // Whatever failed, stop reading the blob: nobody will consume the rest.
+    drop()
     if (tooLarge) return { ok: false, reason: 'size' }
+    if (readFailed) return { ok: false, reason: 'fetch' }
     console.error('Marketing asset: upload to Sanity failed', error)
     return { ok: false, reason: 'upload' }
   }

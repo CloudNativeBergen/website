@@ -83,7 +83,11 @@ export async function createMarketingAsset(
   return { _id: created._id }
 }
 
-/** Delete one asset document. The caller has already proven it is ours. */
+/**
+ * Delete one asset document and any Studio draft of it, together: a draft left
+ * behind would still reference the image and keep the file alive. The caller
+ * has already proven the published id is ours.
+ */
 export async function deleteMarketingAssetDocument(id: string): Promise<void> {
-  await clientWrite.delete(id)
+  await clientWrite.transaction().delete(id).delete(`drafts.${id}`).commit()
 }
