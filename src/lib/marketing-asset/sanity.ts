@@ -20,9 +20,10 @@ export async function listMarketingAssets(
   >(
     clientReadUncached,
     { orgId },
-    // Published documents only: the client reads `raw`, and a Studio draft
+    // Published documents only (`path("*")` is a root id with no dot): the
+    // client reads `raw`, and a Studio draft or a Content Release version
     // would otherwise show as a second, deletable copy.
-    `*[_type == "marketingAsset" && scope == "organization" && !(_id in path("drafts.**"))] | order(_createdAt desc){
+    `*[_type == "marketingAsset" && scope == "organization" && _id in path("*")] | order(_createdAt desc){
       _id,
       title,
       alt,

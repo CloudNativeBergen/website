@@ -23,6 +23,7 @@ vi.mock('@/lib/sanity/orphaned-asset', () => ({
 }))
 
 import { POST, maxDuration } from './route'
+import { SANITY_UPLOAD_DEADLINE_MS } from '@/lib/marketing-asset/image-type'
 
 const URL_OK =
   'https://abc.public.blob.vercel-storage.com/marketing-asset/org-A/1790000000000-logo-X1.png'
@@ -54,8 +55,12 @@ beforeEach(() => {
 })
 
 describe('the marketing asset move route', () => {
-  it('declares an explicit maxDuration for the streamed move', () => {
+  it('declares an explicit maxDuration the Sanity upload deadline fits inside', () => {
     expect(maxDuration).toBe(60)
+    // Room left after the upload gives up, for the blob delete and the answer.
+    expect(
+      maxDuration * 1000 - SANITY_UPLOAD_DEADLINE_MS,
+    ).toBeGreaterThanOrEqual(10_000)
   })
 
   it('refuses a non-organizer before the body is read', async () => {
@@ -101,19 +106,19 @@ describe('the marketing asset move route', () => {
   })
 
   it.each([
-    ['host', 400],
-    ['prefix', 400],
-    ['type', 400],
-    ['size', 400],
-    ['fetch', 502],
-    ['upload', 502],
+    ['host', 400, 'That upload is not one of ours.'],
+    ['prefix', 400, 'That upload is not one of ours.'],
+    ['type', 400, 'Only PNG, JPEG and WebP images can be added.'],
+    ['size', 400, 'The image is larger than 20 MB.'],
+    ['fetch', 502, 'The upload could not be read. Try again.'],
+    ['upload', 502, 'The image could not be stored. Try again.'],
   ] as const)(
     'a %s refusal from the move saves nothing',
-    async (reason, status) => {
+    async (reason, status, message) => {
       h.move.mockResolvedValue({ ok: false, reason })
       const response = await POST(request(VALID))
       expect(response.status).toBe(status)
-      expect((await response.json()).error).toEqual(expect.any(String))
+      expect((await response.json()).error).toBe(message)
       expect(h.create).not.toHaveBeenCalled()
     },
   )

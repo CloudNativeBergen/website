@@ -55,7 +55,18 @@ export async function GET(request: NextRequest) {
       Date.now() - BLOB_RETENTION_HOURS * 60 * 60 * 1000,
     )
 
-    const blobs = (await Promise.all(TEMPORARY_PREFIXES.map(listAll))).flat()
+    // One prefix failing to list must not stop the other being swept.
+    const listed = await Promise.allSettled(TEMPORARY_PREFIXES.map(listAll))
+    listed.forEach((result, i) => {
+      if (result.status === 'rejected')
+        console.error(
+          `Could not list blobs under ${TEMPORARY_PREFIXES[i]}`,
+          result.reason,
+        )
+    })
+    const blobs = listed.flatMap((result) =>
+      result.status === 'fulfilled' ? result.value : [],
+    )
 
     const orphanedBlobs = blobs.filter((blob) => {
       return blob.uploadedAt < retentionThreshold

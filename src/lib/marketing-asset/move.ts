@@ -6,6 +6,7 @@ import { clientWrite } from '@/lib/sanity/client'
 import { blobStoreHost, checkMarketingAssetBlobUrl } from './blob-url'
 import {
   MARKETING_ASSET_MAX_IMAGE_BYTES,
+  SANITY_UPLOAD_DEADLINE_MS,
   SNIFF_BYTES,
   sniffImageType,
 } from './image-type'
@@ -21,9 +22,6 @@ export type MoveResult =
   | { ok: false; reason: MoveRefusal }
 
 class TooLarge extends Error {}
-
-/** How long the upload to Sanity may take; the route's `maxDuration` is 60 s. */
-export const SANITY_UPLOAD_DEADLINE_MS = 45_000
 
 function concat(chunks: Uint8Array[]): Uint8Array {
   const out = new Uint8Array(chunks.reduce((n, c) => n + c.length, 0))

@@ -51,8 +51,11 @@ vi.mock('@/lib/sanity/client', () => ({
   },
 }))
 
-import { SANITY_UPLOAD_DEADLINE_MS, moveBlobToSanity } from './move'
-import { MARKETING_ASSET_MAX_IMAGE_BYTES } from './image-type'
+import { moveBlobToSanity } from './move'
+import {
+  MARKETING_ASSET_MAX_IMAGE_BYTES,
+  SANITY_UPLOAD_DEADLINE_MS,
+} from './image-type'
 
 const HOST = 'abcstore123.public.blob.vercel-storage.com'
 const ORG = 'org-A'

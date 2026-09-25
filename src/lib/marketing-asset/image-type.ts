@@ -18,6 +18,13 @@ export const MARKETING_ASSET_TYPE_REFUSAL =
   'Only PNG, JPEG and WebP images can be added.'
 export const MARKETING_ASSET_SIZE_REFUSAL = `The image is larger than ${MARKETING_ASSET_MAX_IMAGE_LABEL}.`
 
+/**
+ * How long the move's upload to Sanity may take before it gives up. Kept well
+ * inside the move route's 60 s `maxDuration`, so the blob delete and the
+ * answer still run.
+ */
+export const SANITY_UPLOAD_DEADLINE_MS = 45_000
+
 /** How many leading bytes {@link sniffImageType} needs. */
 export const SNIFF_BYTES = 12
 

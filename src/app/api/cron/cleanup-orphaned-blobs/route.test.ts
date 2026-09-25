@@ -75,6 +75,16 @@ describe('the orphaned blob sweeper', () => {
     expect(h.cleanup).toHaveBeenCalledWith(STORE[1].url)
   })
 
+  it('still sweeps proposal uploads when the marketing prefix cannot be listed', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    h.list.mockImplementation(async ({ prefix }: { prefix: string }) => {
+      if (prefix === 'marketing-asset/') throw new Error('blob list down')
+      return { blobs: [STORE[0]], hasMore: false }
+    })
+    await GET(request())
+    expect(h.cleanup.mock.calls).toEqual([[STORE[0].url]])
+  })
+
   it('still refuses without the cron secret', async () => {
     const unauthorized = new Request(
       'http://localhost/x',

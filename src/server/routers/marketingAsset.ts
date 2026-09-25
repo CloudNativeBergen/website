@@ -34,9 +34,10 @@ export const marketingAssetRouter = router({
   delete: adminProcedure
     .input(z.object({ id: z.string().min(1).max(200) }))
     .mutation(async ({ input }) => {
-      // The gallery lists published ids only; a draft id is never one, and is
-      // refused with the guard's own answer rather than deleted on its own.
-      if (input.id.startsWith('drafts.')) throw notFound()
+      // The gallery lists published (root, dot-free) ids only. A draft
+      // (`drafts.x`) or release version (`versions.r.x`) id is never one, and
+      // is refused with the guard's own answer rather than deleted on its own.
+      if (input.id.includes('.')) throw notFound()
       // Refuses a foreign, wrong-typed or missing id with ONE answer, before
       // the asset is read.
       const orgId = await requireDocumentInCurrentOrg(

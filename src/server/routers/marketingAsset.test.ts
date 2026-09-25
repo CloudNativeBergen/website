@@ -126,8 +126,9 @@ describe('marketingAsset.list', () => {
     const [query, params] = h.read.mock.calls[0]
     expect(query).toContain('organization._ref == $orgId')
     expect(query).toContain('_type == "marketingAsset"')
-    // A Studio draft is not a second gallery entry.
-    expect(query).toContain('!(_id in path("drafts.**"))')
+    // Published documents only: a Studio draft (`drafts.x`) or a Content
+    // Release version (`versions.r.x`) is not a second gallery entry.
+    expect(query).toContain('_id in path("*")')
     expect(params).toMatchObject({ orgId: 'org-A' })
   })
 
@@ -200,6 +201,16 @@ describe('marketingAsset.delete', () => {
       code: missing.code,
       message: missing.message,
     })
+    expect(h.del).not.toHaveBeenCalled()
+  })
+
+  it('refuses a Content Release version id the same way', async () => {
+    DOCS['versions.r1.asset-ours'] = { _type: 'marketingAsset', orgId: 'org-A' }
+    const version = await assets()
+      .delete({ id: 'versions.r1.asset-ours' })
+      .catch((e) => e)
+    delete DOCS['versions.r1.asset-ours']
+    expect(version.code).toBe('NOT_FOUND')
     expect(h.del).not.toHaveBeenCalled()
   })
 

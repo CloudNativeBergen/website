@@ -3,8 +3,14 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 const fetchMock = vi.fn()
 const deleteMock = vi.fn()
 
+const configMock = vi.fn()
 vi.mock('@/lib/sanity/client', () => ({
-  clientReadUncached: { fetch: (...args: unknown[]) => fetchMock(...args) },
+  clientReadUncached: {
+    withConfig: (config: unknown) => {
+      configMock(config)
+      return { fetch: (...args: unknown[]) => fetchMock(...args) }
+    },
+  },
   clientWrite: { delete: (...args: unknown[]) => deleteMock(...args) },
 }))
 
@@ -28,6 +34,7 @@ const cases = [
 
 beforeEach(() => {
   fetchMock.mockReset()
+  configMock.mockReset()
   deleteMock.mockReset().mockResolvedValue({})
 })
 
@@ -44,6 +51,10 @@ describe.each(cases)('$name', ({ fn, id }) => {
       // references and would read a confident 0 for an asset a draft still uses.
       { cache: 'no-store', perspective: 'raw' },
     )
+    // ...at an API version whose `raw` includes Content Release versions: an
+    // asset referenced only from a release must not read 0 (#1160, where an
+    // organizer can make a deduplicated upload of another tenant's image).
+    expect(configMock).toHaveBeenCalledWith({ apiVersion: '2025-02-19' })
   })
 
   it('keeps a referenced asset and reports the count', async () => {
