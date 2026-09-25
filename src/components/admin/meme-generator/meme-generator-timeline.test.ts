@@ -102,6 +102,35 @@ describe('setSceneDuration', () => {
     })
     expect(other).toBe(scenes[1])
   })
+
+  it('resizes from where a drag started, so dragging back gives the bars back', () => {
+    const bar = { entrance: 'none', exit: 'none' } as const
+    const origin: Scene = {
+      ...scene(5),
+      motion: {
+        drift: false,
+        elements: { logo: { ...bar, enter: 3.5, leave: 4.5 } },
+      },
+    }
+    const shorter = setSceneDuration([origin], 0, 4, origin)
+    expect(shorter[0].motion.elements.logo).toEqual({
+      ...bar,
+      enter: 3.5,
+      leave: 4,
+    })
+    const back = setSceneDuration(shorter, 0, 5, origin)
+    expect(back[0].motion.elements.logo).toEqual({
+      ...bar,
+      enter: 3.5,
+      leave: 4.5,
+    })
+    // Without the drag's start, the clamp would stick: 3.5–5.
+    expect(setSceneDuration(shorter, 0, 5)[0].motion.elements.logo).toEqual({
+      ...bar,
+      enter: 3.5,
+      leave: 5,
+    })
+  })
 })
 
 describe('the 60-second cap', () => {

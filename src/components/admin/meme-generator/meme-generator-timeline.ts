@@ -110,22 +110,29 @@ export function maxSceneDuration(scenes: Scene[], index: number): number {
 
 /**
  * A length for scene `index`, clamped to a second and to what the minute
- * leaves. Its elements' times come with it (see `resizeMotion`).
+ * leaves. Its elements' times come with it (see `resizeMotion`) — resized
+ * from `origin`, the scene as a drag found it, when one is given: a drag
+ * that shortens and then lengthens again gives back the bars it clamped.
  */
 export function setSceneDuration(
   scenes: Scene[],
   index: number,
   seconds: number,
+  origin?: Scene,
 ): Scene[] {
   const max = maxSceneDuration(scenes, index)
   return scenes.map((scene, i) => {
     if (i !== index) return scene
     const duration = Math.min(clampDuration(seconds), max)
     if (duration === scene.duration) return scene
+    const from = origin?.key === scene.key ? origin : scene
     return {
       ...scene,
       duration,
-      motion: resizeMotion(scene.motion, scene.duration, duration),
+      motion:
+        duration === from.duration
+          ? from.motion
+          : resizeMotion(from.motion, from.duration, duration),
     }
   })
 }

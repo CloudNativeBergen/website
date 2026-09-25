@@ -50,7 +50,7 @@ interface VideoTimelineProps {
   /** Off under reduced motion: the preview then never loops. */
   loopAllowed: boolean
   onSeek: (time: number) => void
-  onDurationChange: (index: number, seconds: number) => void
+  onDurationChange: (index: number, seconds: number, origin?: Scene) => void
   onTransitionChange: (index: number, transition: Transition) => void
   onElementChange: ElementChange
   onDriftChange: (index: number, drift: boolean) => void
@@ -84,9 +84,10 @@ function DurationEdge({
   index: number
   /** What the other scenes leave of the minute. */
   max: number
-  onDurationChange: (index: number, seconds: number) => void
+  onDurationChange: (index: number, seconds: number, origin?: Scene) => void
 }) {
-  const startDuration = useRef(scene.duration)
+  // The scene as the drag found it: every move resizes from here.
+  const startScene = useRef(scene)
   // A handle resized by keyboard is kept in view — End alone can carry it
   // from 180 px to 3600 px along a narrow, scrolling track.
   const edge = useRef<HTMLDivElement>(null)
@@ -105,9 +106,14 @@ function DurationEdge({
   }
   const drag = useDrag(
     () => {
-      startDuration.current = scene.duration
+      startScene.current = scene
     },
-    (delta) => onDurationChange(index, startDuration.current + delta),
+    (delta) =>
+      onDurationChange(
+        index,
+        startScene.current.duration + delta,
+        startScene.current,
+      ),
   )
   return (
     <div
@@ -164,7 +170,7 @@ function SceneItem({
   onSeek: (time: number) => void
   onMove: (from: number, to: number) => void
   onPlayheadKey: (event: React.KeyboardEvent) => void
-  onDurationChange: (index: number, seconds: number) => void
+  onDurationChange: (index: number, seconds: number, origin?: Scene) => void
 }) {
   const scene = scenes[index]
   const start = sceneStart(scenes, index)

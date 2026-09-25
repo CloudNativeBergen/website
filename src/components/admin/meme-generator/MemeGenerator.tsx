@@ -654,7 +654,10 @@ export function MemeGenerator({
       if (!image || !drift) return image
       let prescaled = driftRasters.current.get(url)
       if (!prescaled) {
-        prescaled = prescaleForDrift(image, document.createElement('canvas'))
+        // Where no copy can be made the photo itself drifts: slower, but
+        // never a blank background.
+        prescaled =
+          prescaleForDrift(image, document.createElement('canvas')) ?? image
         driftRasters.current.set(url, prescaled)
       }
       return prescaled
@@ -810,10 +813,10 @@ export function MemeGenerator({
 
   // The playhead keeps its place in the scene being edited, so a length
   // typed into the field never moves the controls to another scene.
-  const changeDuration = (index: number, seconds: number) => {
-    const next = setSceneDuration(scenes, index, seconds)
+  const changeDuration = (index: number, seconds: number, origin?: Scene) => {
+    const next = setSceneDuration(scenes, index, seconds, origin)
     changeScenes(
-      (prev) => setSceneDuration(prev, index, seconds),
+      (prev) => setSceneDuration(prev, index, seconds, origin),
       `${scenes[index].key}:duration`,
     )
     if (playing) return

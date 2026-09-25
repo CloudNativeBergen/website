@@ -7,6 +7,7 @@ import {
   PRESET_DURATION,
   clampMotion,
   moveEnd,
+  shiftBar,
   elementsOf,
   motionFor,
   type DrawnElement,
@@ -120,7 +121,10 @@ function BarEnd({
       // Above the playhead, as the scenes' own edges are: it sits on a
       // scene's start, where every bar that enters at 0 begins.
       className={`group absolute top-0 z-30 flex h-full w-2.5 cursor-col-resize touch-none justify-center focus:outline-none ${
-        end === 'enter' ? 'left-0 -translate-x-1/2' : 'right-0 translate-x-1/2'
+        // Inside the bar, never centred on its end: a scene's leave end and
+        // the next scene's enter end would otherwise share the boundary, and
+        // the later one would take every press there.
+        end === 'enter' ? 'left-0' : 'right-0'
       }`}
     >
       <span className="my-0.5 w-1 rounded-full bg-brand-cloud-blue/60 group-hover:bg-brand-cloud-blue group-focus-visible:bg-brand-cloud-blue group-focus-visible:ring-2 group-focus-visible:ring-brand-cloud-blue dark:bg-blue-400/60 dark:group-hover:bg-blue-400 dark:group-focus-visible:bg-blue-400" />
@@ -154,13 +158,7 @@ function ElementBar({
       start.current = motion
     },
     (delta) => {
-      const { enter, leave } = start.current
-      // Moved whole, never squeezed against the scene's ends.
-      const shift = Math.min(Math.max(delta, -enter), duration - leave)
-      const moved = clampMotion(
-        { ...motion, enter: enter + shift, leave: leave + shift },
-        duration,
-      )
+      const moved = shiftBar(start.current, delta, duration)
       if (moved.enter !== motion.enter || moved.leave !== motion.leave)
         onChange(moved, 'bar')
     },

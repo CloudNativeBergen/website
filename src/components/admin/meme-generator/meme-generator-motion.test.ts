@@ -12,6 +12,7 @@ import {
   resizeMotion,
   motionFor,
   moveEnd,
+  shiftBar,
   type ElementMotion,
 } from './meme-generator-motion'
 import { DEFAULT_DESIGN } from './meme-generator-draw'
@@ -194,6 +195,16 @@ describe('resizeMotion', () => {
     })
   })
 
+  it('keeps a bar collapsed at the end hidden when the scene grows', () => {
+    const collapsed = {
+      drift: false,
+      elements: { logo: motion({ enter: 3, leave: 3 }) },
+    }
+    expect(resizeMotion(collapsed, 3, 5).elements.logo).toEqual(
+      motion({ enter: 3, leave: 3 }),
+    )
+  })
+
   it('keeps the drift', () => {
     expect(resizeMotion({ ...scene, drift: true }, 3, 2).drift).toBe(true)
   })
@@ -239,5 +250,25 @@ describe('moveEnd', () => {
   it('never carries an end past the other', () => {
     expect(moveEnd(m, 'enter', 2.5, 3)).toEqual(motion({ enter: 2, leave: 2 }))
     expect(moveEnd(m, 'leave', 0.5, 3)).toEqual(motion({ enter: 1, leave: 1 }))
+  })
+})
+
+describe('shiftBar', () => {
+  it('moves both ends by one snapped shift, so the width never changes', () => {
+    // 0.3 + 0.35 is just under 0.65 in floating point; rounding each end on
+    // its own gave 0.4–0.6, a bar 0.1 s shorter.
+    expect(shiftBar(motion({ enter: 0, leave: 0.3 }), 0.35, 3)).toEqual(
+      motion({ enter: 0.4, leave: 0.7 }),
+    )
+    for (let px = 0; px <= 120; px++) {
+      const moved = shiftBar(motion({ enter: 0.2, leave: 1.3 }), px / 60, 3)
+      expect(Math.round((moved.leave - moved.enter) * 10)).toBe(11)
+    }
+  })
+
+  it('stops at either end of the scene rather than squeezing the bar', () => {
+    const bar = motion({ enter: 1, leave: 2 })
+    expect(shiftBar(bar, -5, 3)).toEqual(motion({ enter: 0, leave: 1 }))
+    expect(shiftBar(bar, 5, 3)).toEqual(motion({ enter: 2, leave: 3 }))
   })
 })

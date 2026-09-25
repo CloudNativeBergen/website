@@ -34,7 +34,7 @@ const drawDesign =
       animation?: Animation,
     ) => void
   >()
-const prescaleForDrift = vi.fn<(image: Raster) => Raster>()
+const prescaleForDrift = vi.fn<(image: Raster) => Raster | null>()
 vi.mock('./meme-generator-draw', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./meme-generator-draw')>()),
   drawDesign: (...args: Parameters<typeof drawDesign>) => drawDesign(...args),
@@ -127,9 +127,16 @@ describe('element bars', () => {
     enter('Scene 1 length (s)', '1.5')
     expect(valueOf('Scene 1 Logo enters')).toBe(1.5)
     expect(valueOf('Scene 1 Logo leaves')).toBe(1.5)
+    // Collapsed at the end, it stays hidden when the scene grows again.
     enter('Scene 1 length (s)', '4')
-    expect(valueOf('Scene 1 Logo leaves')).toBe(4)
     expect(valueOf('Scene 1 Logo enters')).toBe(1.5)
+    expect(valueOf('Scene 1 Logo leaves')).toBe(1.5)
+    // A bar still on screen at the end follows the end.
+    enter('Logo enters (s)', '1')
+    enter('Logo leaves (s)', '4')
+    enter('Scene 1 length (s)', '6')
+    expect(valueOf('Scene 1 Logo leaves')).toBe(6)
+    expect(valueOf('Scene 1 Logo enters')).toBe(1)
   })
 
   it('keep presets per scene, and undo puts them back', () => {
@@ -243,5 +250,33 @@ describe('what a paint is given', () => {
       valueOf('Scene 1 Logo enters'),
       valueOf('Scene 1 Logo leaves'),
     ]).toEqual([0, 3])
+  })
+
+  it('drifts the photo itself where no pre-scaled copy can be made', async () => {
+    Object.defineProperty(HTMLImageElement.prototype, 'decode', {
+      configurable: true,
+      value: () => Promise.resolve(),
+    })
+    onTestFinished(() => {
+      Reflect.deleteProperty(HTMLImageElement.prototype, 'decode')
+    })
+    prescaleForDrift.mockImplementation(() => null)
+    withContext()
+    openVideo()
+    fireEvent.click(
+      screen.getAllByRole('button', { name: 'Advanced Options' })[0],
+    )
+    fireEvent.change(screen.getByLabelText(/Upload Background Image/), {
+      target: { files: [new File(['x'], 'photo.png', { type: 'image/png' })] },
+    })
+    await screen.findByText('Current: photo.png')
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText(/Drift/))
+    })
+    await waitFor(() =>
+      expect(drawDesign.mock.lastCall![4]?.motion.drift).toBe(true),
+    )
+    const [, , assets] = drawDesign.mock.lastCall!
+    expect(assets.background).toBeInstanceOf(HTMLImageElement)
   })
 })

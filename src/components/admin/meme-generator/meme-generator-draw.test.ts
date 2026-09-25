@@ -424,6 +424,16 @@ describe('drawDesign at a time', () => {
 })
 
 describe('prescaleForDrift', () => {
+  it('makes no copy when the canvas has no 2D context', () => {
+    const canvas = { width: 0, height: 0, getContext: () => null }
+    expect(
+      prescaleForDrift(
+        image(6000, 4000),
+        canvas as unknown as HTMLCanvasElement,
+      ),
+    ).toBeNull()
+  })
+
   it('covers a square at the largest zoom with the photo, once', () => {
     const { ctx, calls } = recordingContext()
     const canvas = { width: 0, height: 0, getContext: () => ctx }

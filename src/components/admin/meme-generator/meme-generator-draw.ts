@@ -196,10 +196,12 @@ export const DRIFT_RASTER_SIZE = Math.ceil(CANVAS_SIZE * (1 + DRIFT_ZOOM))
 export function prescaleForDrift(
   image: Raster,
   canvas: HTMLCanvasElement,
-): HTMLCanvasElement {
+): HTMLCanvasElement | null {
   canvas.width = canvas.height = DRIFT_RASTER_SIZE
   const ctx = canvas.getContext('2d')
-  if (ctx) drawCover(ctx, image, DRIFT_RASTER_SIZE, 1)
+  // No context, no copy: a blank canvas would replace the photo.
+  if (!ctx) return null
+  drawCover(ctx, image, DRIFT_RASTER_SIZE, 1)
   return canvas
 }
 

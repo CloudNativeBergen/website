@@ -1802,3 +1802,31 @@ export const VideoDriftLargePhoto: Story = {
     await waitFor(() => expect(edge(isMagenta)).toBeGreaterThan(0.95))
   },
 }
+
+/**
+ * Where two scenes meet, the logo's bars meet too: scene 1's leave end and
+ * scene 2's enter end sit on the same boundary. Each must be what a press
+ * on it hits — they used to be centred on the boundary, one on top of the
+ * other, and the later one took every press.
+ */
+export const VideoBarEndsAtBoundary: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(canvas.getByRole('button', { name: 'Video' }))
+    await userEvent.click(canvas.getByRole('button', { name: 'Add scene' }))
+    const leaves = canvas.getByRole('slider', { name: 'Scene 1 Logo leaves' })
+    const enters = canvas.getByRole('slider', { name: 'Scene 2 Logo enters' })
+    const a = leaves.getBoundingClientRect()
+    const b = enters.getBoundingClientRect()
+    expect(a.right).toBeLessThanOrEqual(b.left)
+    const hit = (rect: DOMRect) =>
+      document
+        .elementFromPoint(
+          rect.left + rect.width / 2,
+          rect.top + rect.height / 2,
+        )
+        ?.closest('[role="slider"]')
+    expect(hit(a)).toBe(leaves)
+    expect(hit(b)).toBe(enters)
+  },
+}

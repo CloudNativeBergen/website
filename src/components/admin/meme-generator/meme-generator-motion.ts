@@ -175,6 +175,25 @@ export function moveEnd(
 }
 
 /**
+ * A whole bar moved `seconds` along its scene: the shift is snapped to a
+ * tenth ONCE and both ends move by it, in whole tenths, so the bar keeps its
+ * width — rounding each end on its own can squeeze or stretch it. Held
+ * inside the scene, never squeezed against either end.
+ */
+export function shiftBar(
+  motion: ElementMotion,
+  seconds: number,
+  duration: number,
+): ElementMotion {
+  const enter = Math.round(motion.enter * 10)
+  const width = Math.round(motion.leave * 10) - enter
+  const room = Math.round(duration * 10) - width
+  const shift = Number.isFinite(seconds) ? Math.round(seconds * 10) : 0
+  const moved = Math.min(Math.max(enter + shift, 0), Math.max(room, 0))
+  return { ...motion, enter: moved / 10, leave: (moved + width) / 10 }
+}
+
+/**
  * A scene's motion once its length goes from `from` to `to` seconds. Times
  * belong to the scene: shortening it clamps them in. An element that ran to
  * the end keeps running to the end, so lengthening a scene never makes one
@@ -190,7 +209,10 @@ export function resizeMotion(
     ElementId,
     ElementMotion,
   ][]) {
-    const leave = motion.leave >= from ? to : motion.leave
+    // Only a bar that is on screen when the scene ends runs on to the new
+    // end; one collapsed there (enter = leave) stays hidden.
+    const ranToEnd = motion.leave >= from && motion.enter < from
+    const leave = ranToEnd ? to : motion.leave
     elements[id] = clampMotion({ ...motion, leave }, to)
   }
   return { ...scene, elements }
