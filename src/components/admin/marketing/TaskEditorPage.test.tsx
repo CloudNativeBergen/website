@@ -430,6 +430,7 @@ function pendingData(): TaskEditorData {
     taggedLink: null,
     pages: [],
     organizers: [],
+    tagByHand: [],
     outreachBody: null,
   }
 }

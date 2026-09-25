@@ -12,6 +12,7 @@ import type {
   ResolvedMilestones,
 } from './milestones'
 import type { PagePickerOption, TaskSubjectRef } from './pages'
+import type { TagByHandEntry } from './tag-by-hand'
 
 /** The Channels a Task can be executed on in slice 1 (⊂ `SocialPlatform`). */
 export const MARKETING_CHANNELS = ['linkedin', 'bluesky'] as const
@@ -219,6 +220,12 @@ export interface StoredTaskEditorData {
   siblings: TaskView[]
   /** Publishing Kind: what the single-variant editor loads. */
   variant: SocialVariantEditorData | null
+  /**
+   * A LinkedIn publishing Task: the subject's people and company beside their
+   * LinkedIn page, to tag by hand (tagging spec §5.1). Opted-out speakers
+   * are left out on the server. Empty for every other Task.
+   */
+  tagByHand: TagByHandEntry[]
 }
 
 export interface TaskEditorData extends StoredTaskEditorData {

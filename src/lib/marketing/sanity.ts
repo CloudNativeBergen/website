@@ -33,6 +33,7 @@ import type {
 } from './types'
 import type { TaskSubjectRef } from './pages'
 import { expireShortLinkIndex } from './short-link-cache'
+import { tagByHandEntries, type RawTagByHandSubject } from './tag-by-hand'
 
 /**
  * Sanity persistence for the Marketing Plan. Seeding writes everything in ONE
@@ -456,6 +457,7 @@ interface RawTaskEditor extends RawTaskView {
   campaign: { _id: string; key: string | null; title: string | null } | null
   planOwnerId: string | null
   siblings: RawTaskView[] | null
+  tagByHand: RawTagByHandSubject | null
 }
 
 const SUBJECT_TYPES: Record<string, TaskSubjectRef['type']> = {
@@ -471,6 +473,13 @@ const SUBJECT_TYPES: Record<string, TaskSubjectRef['type']> = {
  * Campaign is followed only within the conference. The variant's editor
  * data is a separate by-id read (`getSocialVariantEditorData`) the caller
  * makes once this read has proven the variant is the Task's and ours.
+ *
+ * `tagByHand` (tagging spec §5.1) follows the subject reference, which the
+ * Studio lets point at ANY speaker, talk or sponsor. It is therefore gated
+ * on the subject's standing in this conference — a speaker on one of its
+ * talks, one of its talks, a sponsor signed with it — so another tenant's
+ * people never reach the page, and opted-out speakers are filtered here so
+ * their links never leave Sanity.
  */
 export async function getTaskEditorData(
   taskId: string,
@@ -488,6 +497,13 @@ export async function getTaskEditorData(
       "assetUrl": asset.asset->url,
       "assetId": asset.asset._ref,
       "subject": subject->{ _id, _type, "name": coalesce(name, title), "slug": slug.current },
+      "tagByHand": select(kind == "publishing" && channel == "linkedin" => subject->{
+        "people": select(
+          _type == "speaker" && socialTagOptOut != true && count(*[_type == "talk" && conference._ref == $conferenceId && ^._id in speakers[]._ref]) > 0 => [{ name, links }],
+          _type == "talk" && conference._ref == $conferenceId => speakers[@->socialTagOptOut != true]->{ name, links }
+        ),
+        "company": select(_type == "sponsor" && count(*[_type == "sponsorForConference" && conference._ref == $conferenceId && sponsor._ref == ^._id]) > 0 => { name, "url": linkedinUrl })
+      }),
       "campaign": select(campaign->conference._ref == conference._ref => campaign->{ _id, key, title }),
       "planOwnerId": plan->owner._ref,
       "siblings": *[_type == "marketingTask" && conference._ref == $conferenceId && campaign._ref == ^.campaign._ref && _id != ^._id && !(_id in path("drafts.**")) && !(_id in path("versions.**"))]{${TASK_VIEW_FIELDS}
@@ -533,6 +549,7 @@ export async function getTaskEditorData(
     planOwnerId: row.planOwnerId ?? null,
     siblings: toTaskViews(row.siblings),
     variant: null,
+    tagByHand: tagByHandEntries(row.tagByHand),
   }
 }
 

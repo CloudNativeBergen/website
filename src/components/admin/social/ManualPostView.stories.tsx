@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { expect, fn, userEvent, within } from 'storybook/test'
 import { ThemeProvider } from 'next-themes'
+import type { TagByHandEntry } from '@/lib/marketing/tag-by-hand'
 import type {
   SocialPostAttachment,
   SocialPostVariant,
@@ -113,6 +114,10 @@ type Story = StoryObj<typeof meta>
 export const AwaitingManual: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
+    // No subject to tag (no `tagByHand`): no list, and no tagging step.
+    await expect(canvas.queryByText(/^tag by hand$/i)).toBeNull()
+    await expect(canvas.getByText(/post it on linkedin/i)).toBeVisible()
+    await expect(canvas.queryByText(/tag the people below/i)).toBeNull()
     const text = canvas
       .getByRole('button', { name: /copy text/i })
       .closest('section')
@@ -483,5 +488,118 @@ export const RefusesForeignUrl: Story = {
     await expect(args.onMarkPosted).toHaveBeenCalledWith(
       'https://www.linkedin.com/posts/cloudnativebergen_activity-7238',
     )
+  },
+}
+
+const ADA: TagByHandEntry = {
+  name: 'Ada Lovelace',
+  url: 'https://www.linkedin.com/in/ada-lovelace',
+  kind: 'person',
+}
+
+const SEVERAL: TagByHandEntry[] = [
+  ADA,
+  {
+    name: 'Bartholomew Okonkwo-Fitzgerald',
+    url: 'https://www.linkedin.com/in/bartholomew-okonkwo-fitzgerald-a1b2c3d4',
+    kind: 'person',
+  },
+  {
+    name: 'Acme Cloud',
+    url: 'https://www.linkedin.com/company/acme-cloud',
+    kind: 'company',
+  },
+]
+
+/** The "Tag by hand" section, found by its heading. */
+function tagByHandSection(canvasElement: HTMLElement) {
+  const heading = within(canvasElement).getByRole('heading', {
+    name: /tag by hand/i,
+  })
+  return within(heading.closest('section')!)
+}
+
+/**
+ * A LinkedIn post about one speaker (tagging spec §5.1, #1155): LinkedIn
+ * cannot be tagged through text, so the view lists who to tag by hand,
+ * beside their profile, and says how — `@` and the name in the composer.
+ */
+export const TagByHandOne: Story = {
+  args: { tagByHand: [ADA] },
+  play: async ({ canvasElement }) => {
+    const section = tagByHandSection(canvasElement)
+    const link = section.getByRole('link', { name: /ada lovelace/i })
+    await expect(link).toHaveAttribute(
+      'href',
+      'https://www.linkedin.com/in/ada-lovelace',
+    )
+    await expect(link).toHaveAttribute('target', '_blank')
+    await expect(
+      section.getByText(/type @ and the name in linkedin.s composer/i),
+    ).toBeVisible()
+    // Tagging happens in the composer, so it is a step BEFORE posting.
+    const steps = within(canvasElement)
+      .getAllByRole('listitem')
+      .map((li) => li.textContent ?? '')
+    const tag = steps.findIndex((s) => /tag the people below/i.test(s))
+    const post = steps.findIndex((s) => /post it on linkedin/i.test(s))
+    await expect(tag).toBeGreaterThan(-1)
+    await expect(tag).toBe(post - 1)
+  },
+}
+
+/** A talk with two speakers and a sponsor's company page. */
+export const TagByHandSeveral: Story = {
+  args: { tagByHand: SEVERAL },
+  play: async ({ canvasElement }) => {
+    const section = tagByHandSection(canvasElement)
+    const links = section.getAllByRole('link')
+    await expect(links.map((l) => l.getAttribute('href'))).toEqual(
+      SEVERAL.map((e) => e.url),
+    )
+    await expect(section.getByText('Company page')).toBeVisible()
+    await expect(section.getAllByText('Profile')).toHaveLength(2)
+  },
+}
+
+export const TagByHandSeveralDark: Story = {
+  args: { tagByHand: SEVERAL },
+  // This file resolves dark through its OWN decorator's `parameters.theme`.
+  parameters: { theme: 'dark', backgrounds: { default: 'dark' } },
+}
+
+export const TagByHandSeveralMobile: Story = {
+  args: { tagByHand: SEVERAL },
+  parameters: { layout: 'fullscreen', viewport: { defaultViewport: 'phone' } },
+}
+
+/** An empty list (every subject opted out, or none has a link): no section. */
+export const TagByHandEmpty: Story = {
+  args: { tagByHand: [] },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(
+      canvas.getByRole('button', { name: /copy text/i }),
+    ).toBeVisible()
+    await expect(canvas.queryByText(/^tag by hand$/i)).toBeNull()
+  },
+}
+
+/**
+ * The list is LinkedIn's: handed entries for a Bluesky post, the view shows
+ * none (the Bluesky rule is a real tag in the copy, spec §4). The control
+ * is `TagByHandSeveral`, the same entries on LinkedIn.
+ */
+export const TagByHandIgnoredOffLinkedIn: Story = {
+  args: {
+    tagByHand: SEVERAL,
+    variant: { ...variant, platform: 'bluesky', link: null },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(
+      canvas.getByRole('button', { name: /copy text/i }),
+    ).toBeVisible()
+    await expect(canvas.queryByText(/^tag by hand$/i)).toBeNull()
   },
 }
