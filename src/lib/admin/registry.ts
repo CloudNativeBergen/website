@@ -434,6 +434,24 @@ const ADMIN_SUB_PAGES: Omit<AdminDestination, 'kind'>[] = [
     icon: PhotoIcon,
   },
   {
+    // The organization's marketing asset gallery (#1160), separate from the
+    // photo gallery above. Reached from the Marketing plan header; searchable.
+    id: 'marketing-assets',
+    title: 'Marketing Assets',
+    href: '/admin/marketing/assets',
+    group: 'Events & Content',
+    keywords: [
+      'assets',
+      'images',
+      'graphics',
+      'logo',
+      'brand',
+      'upload',
+      'alt text',
+    ],
+    icon: Squares2X2Icon,
+  },
+  {
     id: 'marketing-featured',
     title: 'Featured Content',
     href: '/admin/marketing/featured',

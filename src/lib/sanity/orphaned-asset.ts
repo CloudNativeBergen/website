@@ -18,14 +18,20 @@ export interface OrphanedAssetDeletion {
  * document of any type, in any tenant, references the asset — a gallery image,
  * a post or another speaker may share it — so the reference count is checked
  * first and a non-zero count keeps the asset and reports it. The count runs
- * under the `raw` perspective so it sees drafts: the API's default perspective
- * became `published` at v2025-02-19, which would read a confident 0 for an
- * asset only a draft still uses. Known gap: at the client's `apiVersion`
- * (2023-05-03) `raw` does NOT include Content Release `versions.**` documents,
- * so a release-only reference also reads 0; Sanity's server-side refusal to
- * delete a strongly referenced document is the only backstop there. A failed
- * count (`-1`) also keeps it: fail closed.
+ * under the `raw` perspective at API version {@link COUNT_API_VERSION}: `raw`
+ * sees drafts, and from that version on it also sees Content Release
+ * `versions.**` documents, which the clients' own `apiVersion` (2023-05-03)
+ * does not. That matters since #1160: an organizer can re-upload another
+ * tenant's image bytes, get the SAME deduplicated asset id back, and then ask
+ * for it to be deleted — a count blind to release-only references would read
+ * 0 and delete the other tenant's file. Not verified against a real release
+ * document (production has none); Sanity's refusal to delete a strongly
+ * referenced document stays the backstop. A failed count (`-1`) also keeps
+ * the asset: fail closed.
  */
+/** The first API version whose `raw` perspective includes release versions. */
+export const COUNT_API_VERSION = '2025-02-19'
+
 async function deleteAssetIfOrphaned(
   assetId: string | null,
 ): Promise<OrphanedAssetDeletion> {
@@ -33,14 +39,16 @@ async function deleteAssetIfOrphaned(
 
   let remainingReferences = -1
   try {
-    const result = await clientReadUncached.fetch<{ n: number }>(
-      // groq-global: an asset can be shared by documents in any tenant, so the
-      // safety check must see all of them. A bare zero `count()` is wrapped in
-      // an object because Sanity errors on a bare scalar count projection.
-      groq`{ "n": count(*[references($assetId)]) }`,
-      { assetId },
-      { cache: 'no-store', perspective: 'raw' },
-    )
+    const result = await clientReadUncached
+      .withConfig({ apiVersion: COUNT_API_VERSION })
+      .fetch<{ n: number }>(
+        // groq-global: an asset can be shared by documents in any tenant, so the
+        // safety check must see all of them. A bare zero `count()` is wrapped in
+        // an object because Sanity errors on a bare scalar count projection.
+        groq`{ "n": count(*[references($assetId)]) }`,
+        { assetId },
+        { cache: 'no-store', perspective: 'raw' },
+      )
     remainingReferences = result?.n ?? -1
   } catch {
     return { id: assetId, deleted: false, remainingReferences: -1 }

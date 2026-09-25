@@ -30,6 +30,7 @@ import { organizerInviteRouter } from './routers/organizerInvite'
 import { searchRouter } from './routers/search'
 import { socialRouter } from './routers/social'
 import { marketingRouter } from './routers/marketing'
+import { marketingAssetRouter } from './routers/marketingAsset'
 import { organizationRouter } from './routers/organization'
 
 export const appRouter = router({
@@ -64,6 +65,7 @@ export const appRouter = router({
   search: searchRouter,
   social: socialRouter,
   marketing: marketingRouter,
+  marketingAsset: marketingAssetRouter,
   organization: organizationRouter,
 })
 

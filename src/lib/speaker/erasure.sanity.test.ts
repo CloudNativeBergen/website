@@ -75,7 +75,13 @@ const transactionApi = {
 const transactionMock = vi.fn(() => transactionApi)
 
 vi.mock('@/lib/sanity/client', () => ({
-  clientReadUncached: { fetch: (...args: unknown[]) => fetchMock(...args) },
+  clientReadUncached: {
+    fetch: (...args: unknown[]) => fetchMock(...args),
+    // The orphan check counts at a newer API version (#1160); same reads.
+    withConfig: () => ({
+      fetch: (...args: unknown[]) => fetchMock(...args),
+    }),
+  },
   clientWrite: {
     transaction: () => transactionMock(),
     delete: (...args: unknown[]) => clientDeleteMock(...args),

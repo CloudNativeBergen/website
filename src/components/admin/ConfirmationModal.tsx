@@ -9,6 +9,8 @@ import { ModalShell } from '@/components/ModalShell'
 interface ConfirmationModalProps {
   isOpen: boolean
   onClose: () => void
+  /** Runs after the close transition; see ModalShell's `afterLeave`. */
+  afterLeave?: () => void
   onConfirm: () => void
   title: string
   message: string
@@ -25,6 +27,7 @@ interface ConfirmationModalProps {
 export function ConfirmationModal({
   isOpen,
   onClose,
+  afterLeave,
   onConfirm,
   title,
   message,
@@ -68,6 +71,7 @@ export function ConfirmationModal({
     <ModalShell
       isOpen={isOpen}
       onClose={onClose}
+      afterLeave={afterLeave}
       size="md"
       className="border border-brand-frosted-steel bg-brand-glacier-white dark:border-gray-700"
     >

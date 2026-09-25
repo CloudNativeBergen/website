@@ -9,6 +9,7 @@ import {
   PaintBrushIcon,
   PhotoIcon,
   PlusIcon,
+  Squares2X2Icon,
 } from '@heroicons/react/24/outline'
 import { AdminPageHeader } from '@/components/admin/AdminPageHeader'
 import { AdminButton } from '@/components/admin/AdminButton'
@@ -44,6 +45,13 @@ const GALLERY_ACTION = {
   href: '/admin/marketing/gallery',
   // The same glyph the admin registry gives the Gallery.
   icon: <PhotoIcon className="size-4" />,
+  variant: 'secondary' as const,
+}
+const ASSETS_ACTION = {
+  label: 'Marketing assets',
+  href: '/admin/marketing/assets',
+  // The same glyph the admin registry gives the asset gallery.
+  icon: <Squares2X2Icon className="size-4" />,
   variant: 'secondary' as const,
 }
 const REPORT_ACTION = {
@@ -146,6 +154,7 @@ export function MarketingPlanHome({
                 REPORT_ACTION,
                 STUDIO_ACTION,
                 GALLERY_ACTION,
+                ASSETS_ACTION,
                 POSTS_ACTION,
               ]
             : [
@@ -158,6 +167,7 @@ export function MarketingPlanHome({
                 REPORT_ACTION,
                 STUDIO_ACTION,
                 GALLERY_ACTION,
+                ASSETS_ACTION,
                 POSTS_ACTION,
               ]
         }
