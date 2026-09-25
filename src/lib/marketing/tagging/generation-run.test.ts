@@ -16,6 +16,7 @@ const store = vi.hoisted(() => ({
     socialTagOptOut: boolean | null
   }[],
   sourcesError: null as Error | null,
+  sourcesHang: false,
 }))
 
 vi.mock('../generation-sanity', () => ({
@@ -25,6 +26,7 @@ vi.mock('../generation-sanity', () => ({
   ),
   getSpeakerTagSources: vi.fn(async () => {
     if (store.sourcesError) throw store.sourcesError
+    if (store.sourcesHang) return new Promise<never>(() => {})
     return structuredClone(store.sources)
   }),
   commitGeneratedTasks: vi.fn(
@@ -51,7 +53,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Action, Status } from '@/lib/proposal/types'
 import { handleMarketingSpeakerConfirmed } from '@/lib/events/handlers/marketingTriggers'
 import type { ProposalStatusChangeEvent } from '@/lib/events/types'
-import { runGeneration } from '../generation'
+import { runGeneration, TAG_SOURCES_TIMEOUT_MS } from '../generation'
 import { speakerSubject } from '../expansion'
 import { getSpeakerTagSources } from '../generation-sanity'
 import { BUILTIN_TEMPLATE } from '../template'
@@ -67,6 +69,7 @@ const fetchMock = vi.fn<typeof fetch>()
 function reset({ tagSubject = true } = {}) {
   store.commits = []
   store.sourcesError = null
+  store.sourcesHang = false
   store.sources = [
     {
       _id: 'spk-alice',
@@ -222,6 +225,17 @@ describe('generation with a Bluesky tagSubject recipe', () => {
     expect((await confirm()).created).toBe(3)
     expect(variant('bluesky').body).toContain('🎙️ Alice Liddell (SRE)')
     expect(variant('bluesky').mentions).toBeUndefined()
+  })
+
+  it('a read of the speakers’ links that hangs is cut off: the Tasks land, untagged', async () => {
+    vi.useFakeTimers()
+    store.sourcesHang = true
+    const run = confirm()
+    await vi.advanceTimersByTimeAsync(TAG_SOURCES_TIMEOUT_MS)
+    expect((await run).created).toBe(3)
+    expect(variant('bluesky').body).toContain('🎙️ Alice Liddell (SRE)')
+    expect(variant('bluesky').mentions).toBeUndefined()
+    expect(resolveCalls()).toHaveLength(0)
   })
 
   it('without tagSubject nobody is looked up at all', async () => {

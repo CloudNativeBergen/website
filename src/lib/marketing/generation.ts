@@ -18,6 +18,7 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { conferenceBaseUrl } from '@/lib/conference/baseUrl'
 import { getCurrentDateTime, osloTodayDateString } from '@/lib/time'
+import { withTimeout } from '@/lib/social/with-timeout'
 import { ceilingWarningsFor } from './ceiling-check'
 import { shortCodeMinterFor } from './short-code-sanity'
 import {
@@ -339,6 +340,13 @@ function buildBatch(
   return records
 }
 
+/**
+ * How long generation waits for the speakers' links and opt-outs. A read that
+ * hangs leaves the batch untagged — plain names — rather than holding the
+ * Trigger or the expansion cron's whole invocation.
+ */
+export const TAG_SOURCES_TIMEOUT_MS = 5_000
+
 /** Bluesky handle lookups in flight at once: a big programme is not a burst. */
 const TAG_LOOKUP_CONCURRENCY = 5
 
@@ -347,8 +355,8 @@ const TAG_LOOKUP_CONCURRENCY = 5
  * and `cache` does not hold yet (tagging spec §4.4, Generation) — never the
  * whole programme up front. NEVER THROWS: generation runs inside Trigger
  * handlers, and a lookup that fails leaves those people untagged — their
- * plain names — rather than failing the Tasks. Each handle resolve is bounded
- * by the resolver's timeout; the one Sanity read is not.
+ * plain names — rather than failing the Tasks. The Sanity read and each
+ * handle resolve are bounded by their own timeouts.
  */
 async function lookUpTags(
   conferenceId: string,
@@ -366,9 +374,12 @@ async function lookUpTags(
   const ids = [...wanted]
   try {
     const own = ownBlueskyHandle(context.conference.socialLinks)
-    const sources = new Map(
-      (await getSpeakerTagSources(conferenceId, ids)).map((s) => [s._id, s]),
+    const rows = await withTimeout(
+      getSpeakerTagSources(conferenceId, ids),
+      TAG_SOURCES_TIMEOUT_MS,
+      `speaker tag sources timed out after ${TAG_SOURCES_TIMEOUT_MS} ms`,
     )
+    const sources = new Map(rows.map((s) => [s._id, s]))
     let next = 0
     const worker = async () => {
       while (next < ids.length) {

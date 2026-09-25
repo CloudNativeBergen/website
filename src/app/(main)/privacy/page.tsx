@@ -741,17 +741,15 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                         <p className="text-xs text-violet-800 dark:text-violet-200">
                           <strong>Status:</strong> Tagging is not live. No post
                           tags anyone yet. This preference is already checked
-                          when a post is written, and before the first tagged
-                          post goes out it will be checked again when a post is
-                          published. <strong>Legal Basis:</strong> Legitimate
-                          interest in promoting the conference and its
-                          programme. The accounts we tag are the links you gave
-                          us for your public speaker profile and for promotional
-                          material, and tagging is a use of those same links.
-                          Because it is a more visible use than displaying them,
-                          you can object to it on its own with the checkbox
-                          above, without changing anything else about your
-                          profile.
+                          when a post is written. <strong>Legal Basis:</strong>{' '}
+                          Legitimate interest in promoting the conference and
+                          its programme. The accounts we tag are the links you
+                          gave us for your public speaker profile and for
+                          promotional material, and tagging is a use of those
+                          same links. Because it is a more visible use than
+                          displaying them, you can object to it on its own with
+                          the checkbox above, without changing anything else
+                          about your profile.
                         </p>
                       </div>
                     </div>
