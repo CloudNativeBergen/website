@@ -22,9 +22,24 @@ import {
   waitFor,
   within,
 } from '@testing-library/react'
+import type { MemeAssets, MemeDesign } from './meme-generator-draw'
+
+// Records what each paint was given; the drawing itself is covered by
+// meme-generator-draw.test. Only reached where a test supplies a context.
+const drawDesign =
+  vi.fn<
+    (ctx: unknown, design: MemeDesign, assets: MemeAssets, time: number) => void
+  >()
+vi.mock('./meme-generator-draw', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./meme-generator-draw')>()),
+  drawDesign: (...args: [unknown, MemeDesign, MemeAssets, number]) =>
+    drawDesign(...args),
+}))
+
 import { MemeGenerator } from './MemeGenerator'
 
 beforeEach(() => {
+  drawDesign.mockReset()
   // jsdom has no 2D context; the draw is covered by meme-generator-draw.test.
   vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null)
 })
@@ -300,6 +315,59 @@ describe('playing to the end', () => {
   })
 })
 
+/** A stand-in for Element.scrollIntoView that records which element asked. */
+function recordScrolls() {
+  const scrolled: Element[] = []
+  Element.prototype.scrollIntoView = function (this: Element) {
+    scrolled.push(this)
+  }
+  onTestFinished(() => {
+    Reflect.deleteProperty(Element.prototype, 'scrollIntoView')
+  })
+  return scrolled
+}
+
+describe('keeping what the keyboard moved in view', () => {
+  it('scrolls a length handle resized by keyboard into view', () => {
+    const scrolled = recordScrolls()
+    openVideo()
+    press(lengthOf(1), 'End')
+    expect(valueOf(lengthOf(1))).toBe(60)
+    expect(scrolled).toContain(lengthOf(1))
+  })
+
+  it('does not scroll a handle whose key changed nothing', () => {
+    const scrolled = recordScrolls()
+    openVideo()
+    press(lengthOf(1), 'Home')
+    press(lengthOf(1), 'Home')
+    scrolled.length = 0
+    press(lengthOf(1), 'Home') // already at a second
+    press(lengthOf(1), 'ArrowLeft')
+    expect(scrolled).toEqual([])
+  })
+
+  it('scrolls to a newly added scene', () => {
+    const scrolled = recordScrolls()
+    openVideo()
+    fireEvent.click(screen.getByRole('button', { name: 'Add scene' }))
+    expect(scrolled).toContain(playhead())
+  })
+})
+
+describe('keyboard steps of the playhead', () => {
+  it('land on tenths, so eleven steps reach a 1.1 s boundary exactly', () => {
+    openVideo()
+    enter('Scene 1 length (s)', '1.1')
+    fireEvent.click(screen.getByRole('button', { name: 'Add scene' }))
+    press(playhead(), 'Home')
+    for (let i = 0; i < 11; i++) press(playhead(), 'ArrowRight')
+    // 0.1 added eleven times is 1.0999999999999999 — still scene 1.
+    expect(valueOf(playhead())).toBe(1.1)
+    expect(screen.getByLabelText('Scene 2 length (s)')).toBeTruthy()
+  })
+})
+
 describe('keeping the playhead in view', () => {
   it('follows a keyboard move, never playback', () => {
     const scrollIntoView = vi.fn()
@@ -409,5 +477,59 @@ describe('background uploads in two scenes', () => {
     expect(await screen.findByText('Current: second.png')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Scene 1, 3.0 s' }))
     expect(await screen.findByText('Current: first.png')).toBeTruthy()
+  })
+
+  it('keep an image one scene takes up in the same batch another drops', async () => {
+    const decodes = new Map<string, () => void>()
+    Object.defineProperty(HTMLImageElement.prototype, 'decode', {
+      configurable: true,
+      value(this: HTMLImageElement) {
+        return new Promise<void>((resolve) => decodes.set(this.src, resolve))
+      },
+    })
+    onTestFinished(() => {
+      Reflect.deleteProperty(HTMLImageElement.prototype, 'decode')
+    })
+    // A context, so paints reach the recorded drawDesign.
+    vi.mocked(HTMLCanvasElement.prototype.getContext).mockReturnValue(
+      {} as unknown as CanvasRenderingContext2D,
+    )
+    const start = async (body: string) => {
+      decodes.clear()
+      fireEvent.change(screen.getByLabelText(/Upload Background Image/), {
+        target: {
+          files: [new File([body], `${body}.png`, { type: 'image/png' })],
+        },
+      })
+      await waitFor(() => expect(decodes.size).toBe(1))
+      return [...decodes.values()][0]
+    }
+
+    openVideo()
+    fireEvent.click(
+      screen.getAllByRole('button', { name: 'Advanced Options' })[0],
+    )
+    const shared = await start('shared') // scene 1 shows it
+    await act(async () => shared())
+    await screen.findByText('Current: shared.png')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add scene' }))
+    const adopt = await start('shared') // scene 2 takes it up…
+    fireEvent.click(screen.getByRole('button', { name: 'Scene 1, 3.0 s' }))
+    const replace = await start('other') // …as scene 1 drops it
+    // Both land in ONE batch: scene 2's first, then scene 1's.
+    await act(async () => {
+      adopt()
+      replace()
+    })
+    await screen.findByText('Current: other.png')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Scene 2, 3.0 s' }))
+    await screen.findByText('Current: shared.png')
+    await waitFor(() => {
+      const [, design, assets] = drawDesign.mock.lastCall!
+      expect(design.background.image?.name).toBe('shared.png')
+      expect(assets.background).not.toBeNull()
+    })
   })
 })

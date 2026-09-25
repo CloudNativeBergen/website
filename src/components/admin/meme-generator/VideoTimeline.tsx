@@ -11,6 +11,7 @@ import { styles } from './meme-generator-config'
 import {
   MAX_SCENE_DURATION,
   MIN_SCENE_DURATION,
+  clampDuration,
   TRANSITION_WINDOW,
   sceneStart,
   totalDuration,
@@ -160,6 +161,22 @@ function DurationEdge({
   onDurationChange: (index: number, seconds: number) => void
 }) {
   const startDuration = useRef(scene.duration)
+  // A handle resized by keyboard is kept in view — End alone can carry it
+  // from 180 px to 3600 px along a narrow, scrolling track.
+  const edge = useRef<HTMLDivElement>(null)
+  const resizedByKey = useRef(false)
+  useEffect(() => {
+    if (!resizedByKey.current) return
+    resizedByKey.current = false
+    edge.current?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' })
+  }, [scene.duration])
+  const resizeByKey = (seconds: number) => {
+    // Only a key that changes the length asks: one pressed against a limit
+    // changes nothing, and the request would wait for an unrelated resize.
+    if (clampDuration(seconds) === scene.duration) return
+    resizedByKey.current = true
+    onDurationChange(index, seconds)
+  }
   const drag = useDrag(
     () => {
       startDuration.current = scene.duration
@@ -168,6 +185,7 @@ function DurationEdge({
   )
   return (
     <div
+      ref={edge}
       role="slider"
       tabIndex={0}
       aria-label={`Scene ${index + 1} length`}
@@ -181,8 +199,7 @@ function DurationEdge({
       onKeyDown={(event) => {
         if (event.key === 'Home' || event.key === 'End') {
           event.preventDefault()
-          onDurationChange(
-            index,
+          resizeByKey(
             event.key === 'Home' ? MIN_SCENE_DURATION : MAX_SCENE_DURATION,
           )
           return
@@ -190,7 +207,7 @@ function DurationEdge({
         const step = keyStep(event)
         if (step === null) return
         event.preventDefault()
-        onDurationChange(index, scene.duration + step)
+        resizeByKey(scene.duration + step)
       }}
       // Above the playhead, which sits exactly on a boundary after a scene is
       // picked or playback ends; there it would take every press meant for
@@ -241,6 +258,19 @@ export function VideoTimeline({
   // back to it while the author scrolls to the controls.
   const playhead = useRef<HTMLDivElement>(null)
   const movedByKey = useRef(false)
+  // A scene just added is where the playhead went; on a narrow track that
+  // is past the right edge, so it is brought into view.
+  const sceneCount = useRef(scenes.length)
+  useEffect(() => {
+    const added = scenes.length > sceneCount.current
+    sceneCount.current = scenes.length
+    if (added) {
+      playhead.current?.scrollIntoView?.({
+        block: 'nearest',
+        inline: 'nearest',
+      })
+    }
+  }, [scenes.length])
   useEffect(() => {
     if (!movedByKey.current) return
     movedByKey.current = false
@@ -253,7 +283,9 @@ export function VideoTimeline({
         ? 0
         : event.key === 'End'
           ? total
-          : time + (keyStep(event) ?? Number.NaN)
+          : // In tenths, as the scene boundaries are: 0.1 added eleven times
+            // is 1.0999999999999999, a hair short of a 1.1 s boundary.
+            Math.round((time + (keyStep(event) ?? Number.NaN)) * 10) / 10
     if (Number.isNaN(target)) return
     event.preventDefault()
     // Only a move that lands somewhere new asks to be kept in view: a key

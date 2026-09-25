@@ -326,9 +326,6 @@ export function MemeGenerator({
 
   // A background image enters its scene only once it has decoded, so the draw
   // that shows it is the one its arrival triggers.
-  const [backgroundRasters, setBackgroundRasters] = useState<
-    ReadonlyMap<string, Raster>
-  >(() => new Map())
   // Uploads are counted per scene: a newer upload, or a clear, supersedes
   // only its own scene's, never another scene's still decoding.
   const backgroundUploads = useRef(new Map<string, number>())
@@ -343,27 +340,21 @@ export function MemeGenerator({
       return next
     })
 
-  // The scenes as last committed. An upload finishes long after its handler's
-  // render; by then another scene may have taken up the same image.
-  const committedScenes = useRef(scenes)
+  // Decoded backgrounds, by URL. Pruned after each commit to exactly what the
+  // committed scenes show, never while updates are queued: two uploads that
+  // settle in one batch — one scene taking an image up as another drops it —
+  // would otherwise judge by scenes that are about to change. A ref, because
+  // an arrival always comes with the scene update that shows it, which is
+  // what repaints.
+  const backgroundRasters = useRef(new Map<string, Raster>())
   useEffect(() => {
-    committedScenes.current = scenes
-  })
-
-  // A decoded photo is large: once no scene but `leaving` shows it, it goes.
-  const withoutUnused = (
-    rasters: ReadonlyMap<string, Raster>,
-    url: string | undefined,
-    leaving: string,
-  ) => {
-    const next = new Map(rasters)
-    const usedElsewhere = committedScenes.current.some(
-      (scene) =>
-        scene.key !== leaving && scene.design.background.image?.url === url,
+    const shown = new Set(
+      scenes.flatMap((scene) => scene.design.background.image?.url ?? []),
     )
-    if (url && !usedElsewhere) next.delete(url)
-    return next
-  }
+    for (const url of backgroundRasters.current.keys()) {
+      if (!shown.has(url)) backgroundRasters.current.delete(url)
+    }
+  }, [scenes])
 
   const handleBackgroundImageUpload = async (
     e: React.ChangeEvent<HTMLInputElement>,
@@ -373,10 +364,8 @@ export function MemeGenerator({
     // still fires a change.
     e.target.value = ''
     if (!file || !file.type.startsWith('image/')) return
-    // The scene the upload was made for, even if the playhead moves on, and
-    // the image it replaces there.
+    // The scene the upload was made for, even if the playhead moves on.
     const sceneKey = editingKey
-    const replaced = background.image?.url
     const upload = (backgroundUploads.current.get(sceneKey) ?? 0) + 1
     backgroundUploads.current.set(sceneKey, upload)
     const isLatest = () => backgroundUploads.current.get(sceneKey) === upload
@@ -387,9 +376,7 @@ export function MemeGenerator({
       image.src = url
       await image.decode()
       if (!isLatest()) return
-      setBackgroundRasters((prev) =>
-        withoutUnused(prev, replaced, sceneKey).set(url, image),
-      )
+      backgroundRasters.current.set(url, image)
       setBackground({ image: { url, name: file.name } }, sceneKey)
     } catch {
       // An image the browser cannot decode leaves the background as it was.
@@ -404,8 +391,6 @@ export function MemeGenerator({
       (backgroundUploads.current.get(editingKey) ?? 0) + 1,
     )
     settleUpload(editingKey)
-    const url = background.image?.url
-    setBackgroundRasters((prev) => withoutUnused(prev, url, editingKey))
     setBackground({ image: null })
   }
 
@@ -582,12 +567,12 @@ export function MemeGenerator({
   const assetsFor = useCallback(
     (scene: MemeDesign) => ({
       background: scene.background.image
-        ? (backgroundRasters.get(scene.background.image.url) ?? null)
+        ? (backgroundRasters.current.get(scene.background.image.url) ?? null)
         : null,
       qr: scene.qr.url ? (qrRasters.get(qrStyleKey(scene.qr)) ?? null) : null,
       logo: canvasLogoFor(scene),
     }),
-    [backgroundRasters, qrRasters, canvasLogoFor],
+    [qrRasters, canvasLogoFor],
   )
 
   const capturePending =
