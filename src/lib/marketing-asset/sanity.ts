@@ -56,13 +56,13 @@ export async function readMarketingAssetImage(
 ): Promise<{ assetId: string | null; createdByUpload: boolean } | null> {
   const row = await scopedFetch<{
     assetId: string | null
-    imageCreatedByUpload: boolean | null
+    createdImageAssetId: string | null
   } | null>(
     clientReadUncached,
     { orgId },
     `*[_type == "marketingAsset" && _id == $id][0]{
       "assetId": image.asset._ref,
-      "imageCreatedByUpload": imageCreatedByUpload
+      "createdImageAssetId": createdImageAssetId
     }`,
     { id },
     { cache: 'no-store' },
@@ -70,7 +70,9 @@ export async function readMarketingAssetImage(
   if (!row) return null
   return {
     assetId: row.assetId,
-    createdByUpload: row.imageCreatedByUpload === true,
+    // The upload created THIS image: a later swap (Studio) to any other
+    // asset, possibly another tenant's, is never the gallery's to delete.
+    createdByUpload: !!row.assetId && row.createdImageAssetId === row.assetId,
   }
 }
 
@@ -79,8 +81,11 @@ export interface NewMarketingAsset {
   title: string
   alt: string
   imageAssetId: string
-  /** False when Sanity handed back an asset it already held. */
-  imageCreatedByUpload: boolean
+  /**
+   * The image asset this upload CREATED, or undefined when Sanity handed back
+   * one it already held (identical bytes, possibly another tenant's).
+   */
+  createdImageAssetId?: string
 }
 
 /** Create an organization-wide uploaded image. The organization is the caller's. */
@@ -99,7 +104,9 @@ export async function createMarketingAsset(
       _type: 'image',
       asset: { _type: 'reference', _ref: input.imageAssetId },
     },
-    imageCreatedByUpload: input.imageCreatedByUpload,
+    ...(input.createdImageAssetId
+      ? { createdImageAssetId: input.createdImageAssetId }
+      : {}),
   })
   return { _id: created._id }
 }

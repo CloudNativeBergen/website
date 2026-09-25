@@ -1,6 +1,6 @@
 import 'server-only'
 import { Readable } from 'node:stream'
-import { del } from '@vercel/blob'
+import { abortAfter, deleteBlobWithin } from './blob-delete'
 import { after } from 'next/server'
 import type { SanityImageAssetDocument } from '@sanity/client'
 import { clientWrite } from '@/lib/sanity/client'
@@ -87,9 +87,7 @@ export async function moveBlobToSanity(
   const blobUrl = check.url
   after(async () => {
     try {
-      await del(blobUrl, {
-        abortSignal: AbortSignal.timeout(BLOB_DELETE_DEADLINE_MS),
-      })
+      await deleteBlobWithin(blobUrl, BLOB_DELETE_DEADLINE_MS)
     } catch (error) {
       console.error('Marketing asset: temporary blob not deleted', error)
     }
@@ -103,13 +101,35 @@ async function transfer(
   startedAt: number,
 ): Promise<MoveResult> {
   const deadlineAt = startedAt + SANITY_UPLOAD_DEADLINE_MS
+  // One deadline for the fetch, the read and the upload. Aborting the fetch
+  // also errors the body mid-upload, which aborts the upload.
+  const fetchDeadline = abortAfter(SANITY_UPLOAD_DEADLINE_MS)
+  try {
+    return await transferWithin(
+      url,
+      filename,
+      startedAt,
+      deadlineAt,
+      fetchDeadline.signal,
+    )
+  } finally {
+    fetchDeadline.clear()
+  }
+}
+
+async function transferWithin(
+  url: string,
+  filename: string,
+  startedAt: number,
+  deadlineAt: number,
+  signal: AbortSignal,
+): Promise<MoveResult> {
   let response: Response
   try {
     response = await fetch(url, {
       redirect: 'error',
       cache: 'no-store',
-      // Aborting also errors the body mid-upload, which aborts the upload.
-      signal: AbortSignal.timeout(SANITY_UPLOAD_DEADLINE_MS),
+      signal,
     })
   } catch {
     return { ok: false, reason: 'fetch' }

@@ -82,10 +82,20 @@ export function AssetUploadForm({
   const [saving, setSaving] = useState(false)
   // Set by reset(); honoured once the picker is enabled again after a render.
   const refocus = useRef(false)
+  const form = useRef<HTMLFormElement>(null)
   useEffect(() => {
     if (!refocus.current || saving) return
     refocus.current = false
-    fileInput.current?.focus()
+    // Only when focus has nowhere better to be: on the form, or dropped to the
+    // page body because the focused button vanished or was disabled. A slow
+    // save must not pull the organizer back from wherever they went since.
+    const active = document.activeElement
+    if (
+      active === null ||
+      active === document.body ||
+      form.current?.contains(active)
+    )
+      fileInput.current?.focus()
   })
 
   useEffect(
@@ -170,6 +180,7 @@ export function AssetUploadForm({
 
   return (
     <form
+      ref={form}
       onSubmit={save}
       aria-label="Add an image"
       className="rounded-xl border border-gray-200 bg-white p-4 sm:p-5 dark:border-gray-700 dark:bg-gray-900"

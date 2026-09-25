@@ -76,7 +76,7 @@ export async function POST(request: Request) {
       title,
       alt,
       imageAssetId: moved.asset._id,
-      imageCreatedByUpload: moved.asset.created,
+      ...(moved.asset.created ? { createdImageAssetId: moved.asset._id } : {}),
     })
     return NextResponse.json({
       _id: created._id,

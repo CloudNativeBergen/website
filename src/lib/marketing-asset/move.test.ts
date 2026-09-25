@@ -346,10 +346,28 @@ describe('the move checks the file itself', () => {
     expect(options.abortSignal).toBeInstanceOf(AbortSignal)
   })
 
-  it('bounds the blob fetch by the same deadline', async () => {
-    fetchMock.mockResolvedValue(respond(png(100)))
-    await moveBlobToSanity(URL_OK, ORG)
-    expect(fetchMock.mock.calls[0][1].signal).toBeInstanceOf(AbortSignal)
+  it('aborts a blob fetch that outlives the move deadline', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
+    try {
+      let aborted = false
+      fetchMock.mockImplementation(
+        (_url: string, init: { signal: AbortSignal }) =>
+          new Promise((_, reject) =>
+            init.signal.addEventListener('abort', () => {
+              aborted = true
+              reject(init.signal.reason)
+            }),
+          ),
+      )
+      const moved = moveBlobToSanity(URL_OK, ORG)
+      await vi.advanceTimersByTimeAsync(SANITY_UPLOAD_DEADLINE_MS - 1)
+      expect(aborted).toBe(false)
+      await vi.advanceTimersByTimeAsync(1)
+      expect(aborted).toBe(true)
+      expect(await moved).toEqual({ ok: false, reason: 'fetch' })
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('answers promptly when the Sanity request fails synchronously', async () => {
@@ -376,7 +394,37 @@ describe('the move checks the file itself', () => {
       url: 'https://cdn.sanity.io/shared.png',
       metadata: { dimensions: { width: 800, height: 800 } },
     })
-    const result = await moveBlobToSanity(URL_OK, ORG)
-    expect(result.ok && result.asset.created).toBe(false)
+    expect(await moveBlobToSanity(URL_OK, ORG)).toMatchObject({
+      ok: true,
+      asset: { _id: 'image-shared-800x800-png', created: false },
+    })
+  })
+
+  it('counts an asset stamped a moment before the move started as created (server clocks differ)', async () => {
+    fetchMock.mockResolvedValue(respond(png(100)))
+    h.upload.mockResolvedValue({
+      _id: 'image-fresh-800x800-png',
+      _createdAt: new Date(Date.now() - 4_000).toISOString(),
+      url: 'https://cdn.sanity.io/fresh.png',
+      metadata: { dimensions: { width: 800, height: 800 } },
+    })
+    expect(await moveBlobToSanity(URL_OK, ORG)).toMatchObject({
+      ok: true,
+      asset: { created: true },
+    })
+  })
+
+  it('counts an asset stamped well before the move as NOT created', async () => {
+    fetchMock.mockResolvedValue(respond(png(100)))
+    h.upload.mockResolvedValue({
+      _id: 'image-older-800x800-png',
+      _createdAt: new Date(Date.now() - 60_000).toISOString(),
+      url: 'https://cdn.sanity.io/older.png',
+      metadata: { dimensions: { width: 800, height: 800 } },
+    })
+    expect(await moveBlobToSanity(URL_OK, ORG)).toMatchObject({
+      ok: true,
+      asset: { created: false },
+    })
   })
 })

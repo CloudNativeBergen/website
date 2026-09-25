@@ -58,12 +58,29 @@ const ASSETS: MarketingAssetRow[] = [
   },
 ]
 
-function handlers(assets: MarketingAssetRow[] = ASSETS) {
-  return [
-    http.get('/api/trpc/marketingAsset.list', () => json(assets)),
-    http.post('/api/trpc/marketingAsset.delete', () => json({ deleted: true })),
-  ]
+/**
+ * A gallery that really loses an asset when it is deleted. Each call has its
+ * own list, which `reset` refills, so a story re-run starts full again.
+ */
+function gallery(initial: MarketingAssetRow[] = ASSETS) {
+  let assets = [...initial]
+  return {
+    reset: () => {
+      assets = [...initial]
+    },
+    handlers: [
+      http.get('/api/trpc/marketingAsset.list', () => json(assets)),
+      http.post('/api/trpc/marketingAsset.delete', async ({ request }) => {
+        // The id is somewhere in tRPC's body, whatever its envelope.
+        const body = await request.text()
+        assets = assets.filter((asset) => !body.includes(`"${asset._id}"`))
+        return json({ deleted: true })
+      }),
+    ],
+  }
 }
+const handlers = (initial?: MarketingAssetRow[]) => gallery(initial).handlers
+const deletable = gallery()
 
 const saved: AssetUploader = async () => ({
   _id: 'asset-new',
@@ -248,6 +265,12 @@ export const DeleteAsset: Story = {
  * card, so keyboard focus lands on the gallery heading, not on the page body.
  */
 export const DeleteAssetConfirmed: Story = {
+  parameters: {
+    ...meta.parameters,
+    // Its own gallery: the deleted card must really leave the grid.
+    msw: { handlers: deletable.handlers },
+  },
+  beforeEach: () => deletable.reset(),
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
     await userEvent.click(
@@ -257,6 +280,10 @@ export const DeleteAssetConfirmed: Story = {
     )
     const body = within(document.body)
     await userEvent.click(await body.findByRole('button', { name: 'Delete' }))
+    // The card, and with it the button that opened the dialog, is gone.
+    await waitFor(() =>
+      expect(canvas.queryByText('Logo, dark background')).toBeNull(),
+    )
     await waitFor(
       () =>
         expect(document.activeElement).toBe(

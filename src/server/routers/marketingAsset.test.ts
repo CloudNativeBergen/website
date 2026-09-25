@@ -21,7 +21,7 @@ const h = vi.hoisted(() => ({
   read: vi.fn(),
   del: vi.fn(),
   orphan: vi.fn(),
-  createdByUpload: true as boolean | undefined,
+  createdImageAssetId: 'image-logo-800x800-png' as string | undefined,
 }))
 vi.mock('@/lib/conference/sanity', () => ({
   getConferenceForCurrentDomain: h.getConference,
@@ -88,7 +88,7 @@ const ROWS = [
 
 beforeEach(() => {
   vi.clearAllMocks()
-  h.createdByUpload = true
+  h.createdImageAssetId = 'image-logo-800x800-png'
   h.getConference.mockResolvedValue({
     conference: { _id: 'conf-A', organization: { _ref: 'org-A' } },
     error: null,
@@ -102,11 +102,11 @@ beforeEach(() => {
       }
       // The asset reads, which must be scoped to the caller's organization.
       if (params.orgId !== 'org-A') throw new Error('unscoped read')
-      if (query.includes('"imageCreatedByUpload"'))
+      if (query.includes('"createdImageAssetId"'))
         return params.id === 'asset-ours'
           ? {
               assetId: 'image-logo-800x800-png',
-              imageCreatedByUpload: h.createdByUpload,
+              createdImageAssetId: h.createdImageAssetId,
             }
           : null
       return ROWS
@@ -202,10 +202,13 @@ describe('marketingAsset.delete', () => {
   })
 
   it.each([
-    ['an image Sanity already held when it was uploaded', false],
-    ['an image of an entry made elsewhere (Studio, older data)', undefined],
+    ['an image Sanity already held when it was uploaded', undefined],
+    [
+      'an image swapped in later (Studio), not the one the upload created',
+      'image-created-then-replaced-1x1-png',
+    ],
   ])("never deletes %s: it may be another tenant's", async (_, created) => {
-    h.createdByUpload = created
+    h.createdImageAssetId = created
     expect(await assets().delete({ id: 'asset-ours' })).toEqual({
       deleted: true,
     })

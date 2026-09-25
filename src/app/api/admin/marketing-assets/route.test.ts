@@ -99,7 +99,7 @@ describe('the marketing asset move route', () => {
       title: 'Logo',
       alt: 'The Cloud Native Days logo',
       imageAssetId: 'image-a-800x600-png',
-      imageCreatedByUpload: true,
+      createdImageAssetId: 'image-a-800x600-png',
     })
     expect(await response.json()).toEqual({
       _id: 'asset-1',
@@ -124,6 +124,24 @@ describe('the marketing asset move route', () => {
       expect(h.create).not.toHaveBeenCalled()
     },
   )
+
+  it('records no created image when Sanity handed back one it already held', async () => {
+    h.move.mockResolvedValue({
+      ok: true,
+      asset: {
+        _id: 'image-shared-800x600-png',
+        url: 'https://cdn/x.png',
+        width: 800,
+        height: 600,
+        created: false,
+      },
+    })
+    await POST(request(VALID))
+    expect(h.create.mock.calls[0][0]).not.toHaveProperty('createdImageAssetId')
+    expect(h.create.mock.calls[0][0].imageAssetId).toBe(
+      'image-shared-800x600-png',
+    )
+  })
 
   it('keeps an image Sanity already held (another tenant may need it) when the entry cannot be written', async () => {
     h.move.mockResolvedValue({
