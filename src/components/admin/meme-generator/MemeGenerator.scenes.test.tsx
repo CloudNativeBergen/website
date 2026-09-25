@@ -109,7 +109,8 @@ describe('the 60-second cap', () => {
     fireEvent.pointerMove(edge, { clientX: 1200, pointerId: 1 })
     fireEvent.pointerUp(edge, { pointerId: 1 })
     expect(valueOf(lengthOf(2))).toBe(10)
-    expect(screen.getByText('0.0 / 60.0 s', { exact: false })).toBeTruthy()
+    // The playhead stayed at scene 2's start; the video is exactly a minute.
+    expect(screen.getByText('50.0 / 60.0 s')).toBeTruthy()
   })
 
   it('refuses a scene that would pass it, and says why', () => {
@@ -207,10 +208,7 @@ describe('reordering by keyboard', () => {
     scenesOf(2, 3)
     const scene = button('Scene 1, 2.0 s')
     expect(scene.getAttribute('aria-roledescription')).toBeNull()
-    const hint = document.getElementById(
-      scene.getAttribute('aria-describedby') ?? '',
-    )
-    expect(hint?.textContent).toBe(
+    expect(scene).toHaveAccessibleDescription(
       'Alt with the left or right arrow moves the scene.',
     )
   })
@@ -466,7 +464,7 @@ describe('undo and redo', () => {
   })
 
   it('keeps redo when an upload lands for a scene that undo took away', async () => {
-    let decoded = () => {}
+    let decoded: (() => void) | null = null
     Object.defineProperty(HTMLImageElement.prototype, 'decode', {
       configurable: true,
       value: () => new Promise<void>((resolve) => (decoded = resolve)),
@@ -482,9 +480,10 @@ describe('undo and redo', () => {
     fireEvent.change(screen.getByLabelText(/Upload Background Image/), {
       target: { files: [new File(['x'], 'late.png', { type: 'image/png' })] },
     })
-    await waitFor(() => expect(decoded).not.toBe(undefined))
+    // The image is decoding before the undo, or nothing lands after it.
+    await waitFor(() => expect(decoded).not.toBeNull())
     fireEvent.click(undoButton()) // scene 2 gone
-    await act(async () => decoded())
+    await act(async () => decoded!())
     expect(sceneLabels()).toHaveLength(1)
     fireEvent.click(redoButton())
     expect(sceneLabels()).toHaveLength(2)
@@ -571,7 +570,8 @@ describe('after a drag', () => {
     const later = button('Move scene 1 later')
     fireEvent.click(later)
     const atEnd = button('Move scene 2 later')
-    expect(atEnd).toHaveProperty('disabled', false)
+    atEnd.focus()
+    expect(document.activeElement).toBe(atEnd)
     expect(atEnd.getAttribute('aria-disabled')).toBe('true')
     fireEvent.click(atEnd)
     expect(sceneLabels()).toEqual(['Scene 1, 3.0 s', 'Scene 2, 2.0 s'])
