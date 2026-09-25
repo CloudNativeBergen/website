@@ -22,6 +22,8 @@ const h = vi.hoisted(() => ({
   del: vi.fn(),
   orphan: vi.fn(),
   createdImageAssetId: 'image-logo-800x800-png' as string | undefined,
+  releaseTwins: 0,
+  versionedConfig: undefined as unknown,
 }))
 vi.mock('@/lib/conference/sanity', () => ({
   getConferenceForCurrentDomain: h.getConference,
@@ -37,7 +39,14 @@ vi.mock('@/lib/sanity/client', () => ({
       return tx
     },
   },
-  clientReadUncached: { fetch: h.read },
+  clientReadUncached: {
+    fetch: h.read,
+    // The Content Release twin count reads at a version whose `raw` sees them.
+    withConfig: (config: unknown) => {
+      h.versionedConfig = config
+      return { fetch: h.read }
+    },
+  },
 }))
 vi.mock('@/lib/sanity/orphaned-asset', () => ({
   deleteImageAssetIfOrphaned: h.orphan,
@@ -89,6 +98,8 @@ const ROWS = [
 beforeEach(() => {
   vi.clearAllMocks()
   h.createdImageAssetId = 'image-logo-800x800-png'
+  h.releaseTwins = 0
+  h.versionedConfig = undefined
   h.getConference.mockResolvedValue({
     conference: { _id: 'conf-A', organization: { _ref: 'org-A' } },
     error: null,
@@ -102,6 +113,8 @@ beforeEach(() => {
       }
       // The asset reads, which must be scoped to the caller's organization.
       if (params.orgId !== 'org-A') throw new Error('unscoped read')
+      if (query.includes('path("versions.*." + $id)'))
+        return { n: params.id === 'asset-ours' ? h.releaseTwins : 0 }
       if (query.includes('"createdImageAssetId"'))
         return params.id === 'asset-ours'
           ? {
@@ -214,6 +227,21 @@ describe('marketingAsset.delete', () => {
     })
     expect(h.del).toHaveBeenCalled()
     expect(h.orphan).not.toHaveBeenCalled()
+  })
+
+  it('refuses to delete an asset staged in a Content Release, and touches nothing', async () => {
+    h.releaseTwins = 1
+    await expect(assets().delete({ id: 'asset-ours' })).rejects.toMatchObject({
+      code: 'PRECONDITION_FAILED',
+      message: expect.stringContaining('Content Release'),
+    })
+    expect(h.del).not.toHaveBeenCalled()
+    expect(h.orphan).not.toHaveBeenCalled()
+    // Counted where release versions are visible.
+    expect(h.versionedConfig).toEqual({
+      apiVersion: '2025-02-19',
+      perspective: 'raw',
+    })
   })
 
   it('refuses a draft id with the same answer, and deletes nothing', async () => {

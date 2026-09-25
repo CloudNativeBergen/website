@@ -8,6 +8,7 @@ import {
 import {
   deleteMarketingAssetDocument,
   listMarketingAssets,
+  countMarketingAssetReleaseTwins,
   readMarketingAssetImage,
 } from '@/lib/marketing-asset/sanity'
 import { deleteImageAssetIfOrphaned } from '@/lib/sanity/orphaned-asset'
@@ -44,6 +45,18 @@ export const marketingAssetRouter = router({
         input.id,
         'marketingAsset',
       )
+      // A Content Release in Studio holds its own copy of the asset. Deleting
+      // the live one would let publishing that release bring it back, and
+      // the copy would keep the image alive; deleting the copy from here
+      // would silently edit someone's staged release. Refused instead: the
+      // release is Studio's to change. Ownership is already proven, so this
+      // answer reveals nothing about another tenant.
+      if ((await countMarketingAssetReleaseTwins(orgId, input.id)) > 0)
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message:
+            'This asset is part of a Content Release in Studio. Remove it from the release first, then delete it here.',
+        })
       const image = await readMarketingAssetImage(orgId, input.id)
       // The documents first: while one exists, it is itself a reference to
       // the image, and the orphan check would always keep the file.

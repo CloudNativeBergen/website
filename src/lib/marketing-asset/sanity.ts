@@ -76,6 +76,29 @@ export async function readMarketingAssetImage(
   }
 }
 
+/**
+ * How many Content Release versions (`versions.<release>.<id>`) of one of this
+ * organization's assets exist. Counted at an API version whose `raw`
+ * perspective includes release versions; the clients' own (2023-05-03) does
+ * not see them at all.
+ */
+export async function countMarketingAssetReleaseTwins(
+  orgId: string,
+  id: string,
+): Promise<number> {
+  const result = await scopedFetch<{ n: number } | null>(
+    clientReadUncached.withConfig({
+      apiVersion: '2025-02-19',
+      perspective: 'raw',
+    }),
+    { orgId },
+    `{ "n": count(*[_type == "marketingAsset" && _id in path("versions.*." + $id)]) }`,
+    { id },
+    { cache: 'no-store' },
+  )
+  return result?.n ?? 0
+}
+
 export interface NewMarketingAsset {
   orgId: string
   title: string
