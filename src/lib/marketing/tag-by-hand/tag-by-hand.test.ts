@@ -37,12 +37,15 @@ describe('linkedinProfileUrl', () => {
     ).toBe('https://www.linkedin.com/in/ada-l')
   })
 
-  it('finds nothing without a profile link', () => {
-    expect(linkedinProfileUrl(undefined)).toBeNull()
-    expect(linkedinProfileUrl('https://www.linkedin.com/in/ada')).toBeNull()
+  it('skips links that are not strings', () => {
     expect(
       linkedinProfileUrl([42, null, 'https://www.linkedin.com/in/ada']),
     ).toBe('https://www.linkedin.com/in/ada')
+  })
+
+  it('finds nothing without a profile link', () => {
+    expect(linkedinProfileUrl(undefined)).toBeNull()
+    expect(linkedinProfileUrl('https://www.linkedin.com/in/ada')).toBeNull()
     expect(linkedinProfileUrl([])).toBeNull()
     expect(
       linkedinProfileUrl([
