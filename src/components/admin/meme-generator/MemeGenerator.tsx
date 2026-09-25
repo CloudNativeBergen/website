@@ -403,7 +403,12 @@ export function MemeGenerator({
   const [uploadingScenes, setUploadingScenes] = useState<ReadonlySet<string>>(
     () => new Set(),
   )
-  const backgroundPending = uploadingScenes.size > 0
+  // Only a scene that is shown can hold the preview: one deleted, or undone
+  // away, while its image decodes no longer waits for it — and holds it again
+  // if redo brings it back before the decode settles.
+  const backgroundPending = scenes.some((scene) =>
+    uploadingScenes.has(scene.key),
+  )
   const settleUpload = (sceneKey: string) =>
     setUploadingScenes((prev) => {
       const next = new Set(prev)

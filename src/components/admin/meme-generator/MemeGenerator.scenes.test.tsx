@@ -545,6 +545,53 @@ describe('playing again from the end, in whole frames', () => {
   })
 })
 
+describe('an upload still decoding for a scene that goes', () => {
+  const holdDecode = () => {
+    let decoded: (() => void) | null = null
+    Object.defineProperty(HTMLImageElement.prototype, 'decode', {
+      configurable: true,
+      value: () => new Promise<void>((resolve) => (decoded = resolve)),
+    })
+    onTestFinished(() => {
+      Reflect.deleteProperty(HTMLImageElement.prototype, 'decode')
+    })
+    return () => decoded
+  }
+  const pending = () =>
+    document.querySelector('canvas')!.parentElement!.dataset.capturePending
+  const uploadToScene2 = async (decoding: () => (() => void) | null) => {
+    openVideo()
+    fireEvent.click(button('Add scene'))
+    fireEvent.click(
+      screen.getAllByRole('button', { name: 'Advanced Options' })[0],
+    )
+    fireEvent.change(screen.getByLabelText(/Upload Background Image/), {
+      target: { files: [new File(['x'], 'slow.png', { type: 'image/png' })] },
+    })
+    await waitFor(() => expect(decoding()).not.toBeNull())
+    expect(pending()).toBe('true')
+  }
+
+  it('no longer holds the preview or a download once the scene is deleted', async () => {
+    const decoding = holdDecode()
+    await uploadToScene2(decoding)
+    fireEvent.click(button('Delete scene 2'))
+    expect(pending()).toBeUndefined()
+  })
+
+  it('no longer holds them once undo takes the scene away, and again on redo', async () => {
+    const decoding = holdDecode()
+    await uploadToScene2(decoding)
+    fireEvent.click(button('Undo'))
+    expect(pending()).toBeUndefined()
+    // Redo brings the scene back while its image is still decoding.
+    fireEvent.click(button('Redo'))
+    expect(pending()).toBe('true')
+    await act(async () => decoding()!())
+    expect(pending()).toBeUndefined()
+  })
+})
+
 describe('deleting during playback', () => {
   it('moves the controls to the scene that took the deleted one’s place, and keeps them there', () => {
     scenesOf(2, 3, 4, 5)
