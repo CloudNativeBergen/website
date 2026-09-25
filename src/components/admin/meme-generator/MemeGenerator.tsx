@@ -814,9 +814,13 @@ export function MemeGenerator({
       return
     // By the letter where the layout types one, else by the physical key:
     // on a Cyrillic or Greek layout, Ctrl+Z types "я" or "ζ".
+    // Never with Alt: Windows reports AltGr as Ctrl+Alt, and AltGr types.
+    if (event.altKey) return
     const letter = /^[a-z]$/i.test(event.key)
       ? event.key.toLowerCase()
-      : event.code.replace(/^Key/, '').toLowerCase()
+      : /^\p{L}$/u.test(event.key)
+        ? event.code.replace(/^Key/, '').toLowerCase()
+        : ''
     const isUndo = letter === 'z' && !event.shiftKey
     const isRedo =
       (letter === 'z' && event.shiftKey) || (letter === 'y' && event.ctrlKey)

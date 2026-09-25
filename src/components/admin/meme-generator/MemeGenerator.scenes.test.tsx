@@ -396,6 +396,21 @@ describe('undo and redo', () => {
     expect(valueOf(lengthOf(1))).toBe(3)
   })
 
+  it('leaves AltGr letters and punctuation on the Z key to be typed', () => {
+    openVideo()
+    enter('Scene 1 length (s)', '4')
+    // AltGr+Z types "ż" on Polish (Programmers): Windows reports Ctrl+Alt.
+    fireEvent.keyDown(document.body, {
+      key: 'ż',
+      code: 'KeyZ',
+      ctrlKey: true,
+      altKey: true,
+    })
+    // Ctrl+; on Dvorak, whose ";" sits where QWERTY has Z.
+    fireEvent.keyDown(document.body, { key: ';', code: 'KeyZ', ctrlKey: true })
+    expect(valueOf(lengthOf(1))).toBe(4)
+  })
+
   it('works in Image mode too', () => {
     render(<MemeGenerator />)
     fireEvent.change(headline(), { target: { value: 'Hei' } })
