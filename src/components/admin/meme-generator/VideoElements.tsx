@@ -252,13 +252,13 @@ export function ElementFields({
   const { duration } = scene
   const hasImage = scene.design.background.image !== null
   return (
-    <fieldset className="mt-4 border-t border-brand-frosted-steel pt-3 dark:border-gray-700">
+    <fieldset className="mt-4 min-w-0 border-t border-brand-frosted-steel pt-3 dark:border-gray-700">
       <legend className="sr-only">Scene {index + 1} animation</legend>
       <p aria-hidden="true" className="mb-2 text-xs font-semibold">
         Scene {index + 1} animation
       </p>
       <div className="overflow-x-auto">
-        <table className="w-full text-left text-xs">
+        <table className="text-left text-xs">
           <thead>
             <tr className="text-brand-slate-gray/80 dark:text-gray-400">
               <th scope="col" className="py-1 pr-3 font-medium">
@@ -305,7 +305,7 @@ export function ElementFields({
                       false,
                     )
                   }
-                  className={`${styles.input} w-28 py-1 text-xs`}
+                  className={`${styles.input} w-28 min-w-28 py-1 text-xs`}
                 >
                   {PRESETS.map((preset) => (
                     <option key={preset} value={preset}>
@@ -324,7 +324,7 @@ export function ElementFields({
                     {element.name}
                   </th>
                   <td className="py-1 pr-2">{presetSelect('entrance')}</td>
-                  <td className="py-1 pr-3">
+                  <td className="w-24 min-w-24 py-1 pr-3">
                     <SecondsField
                       hideLabel
                       label={`${element.name} enters (s)`}
@@ -337,7 +337,7 @@ export function ElementFields({
                     />
                   </td>
                   <td className="py-1 pr-2">{presetSelect('exit')}</td>
-                  <td className="py-1">
+                  <td className="w-24 min-w-24 py-1">
                     <SecondsField
                       hideLabel
                       label={`${element.name} leaves (s)`}
