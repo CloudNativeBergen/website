@@ -13,6 +13,7 @@ import {
 import type { SubjectList, TaskRecipe } from './template/types'
 import type { CampaignTrigger, MarketingChannel } from './types'
 import { postDocument, taskDocument, variantDocument } from './sanity'
+import type { TagSource } from './tagging/lookup'
 import { expireShortLinkIndex } from './short-link-cache'
 
 /**
@@ -406,11 +407,7 @@ export async function markPlanExpanded(
 }
 
 /** What a speaker's Bluesky tag is derived from (tagging spec §3.1, §3.2). */
-export interface SpeakerTagSource {
-  _id: string
-  links: string[] | null
-  socialTagOptOut: boolean | null
-}
+export type SpeakerTagSource = TagSource & { _id: string }
 
 /**
  * The profile links and tag opt-out of these speakers, read FRESH — never

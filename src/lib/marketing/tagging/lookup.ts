@@ -6,7 +6,8 @@
 
 import { deriveBlueskyHandle } from '@/lib/stream/config'
 import type { BlueskyTag } from './body'
-import { blueskyHandleFromLinks, normaliseHandle } from './handle'
+import { normaliseHandle } from '@/lib/social/provider/bluesky-syntax'
+import { blueskyHandleFromLinks } from './handle'
 import { resolveBlueskyHandle, type HandleResolution } from './resolve'
 
 export interface TagSource {

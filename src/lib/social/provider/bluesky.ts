@@ -9,7 +9,7 @@ import {
   type AppBskyFeedPost,
   type ComAtprotoRepoUploadBlob,
 } from '@atproto/api'
-import { isValidDid, normaliseHandle } from '@/lib/marketing/tagging/handle'
+import { isValidDid, normaliseHandle } from './bluesky-syntax'
 import type { BlueskyCredentials } from '@/lib/secrets/types'
 import { fetchImageBytes, ImageFetchError, type ImageBytes } from './bytes'
 import { withDeadline } from './deadline'

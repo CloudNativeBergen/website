@@ -57,7 +57,8 @@ const VARIANT_PROJECTION = groq`{
   publishResult,
   attempts[]{ _key, at, outcome, error, "by": by._ref },
   attemptCount,
-  updatedAt
+  updatedAt,
+  "mentions": mentions[status == "tagged" && defined(did)]{ handle, did }
 }`
 
 /**
@@ -110,6 +111,7 @@ interface RawVariant {
   attempts: (Partial<PublishAttempt> & { _key: string })[] | null
   attemptCount: number | null
   updatedAt: string | null
+  mentions: { handle: string; did: string }[] | null
 }
 
 function normalizeVariant(raw: RawVariant): SocialPostVariant {
@@ -146,6 +148,7 @@ function normalizeVariant(raw: RawVariant): SocialPostVariant {
       ...(a.by ? { by: a.by } : {}),
     })),
     attemptCount: raw.attemptCount ?? 0,
+    mentions: raw.mentions?.length ? raw.mentions : null,
   }
 }
 

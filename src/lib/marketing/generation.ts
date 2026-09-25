@@ -249,59 +249,73 @@ function pendingBeats(
   return pending
 }
 
+/** A pending beat of the next commit, with the slots dealt to it. */
+interface DatedBeat {
+  item: PendingBeat
+  dates: BeatDates
+}
+
 /**
- * Build the next commit's worth of records for ONE Campaign, or null when
- * nothing is pending anywhere. Dates are computed fresh from the context, so
- * a retry after a conflict deals slots from what actually landed.
+ * Choose the next commit's beats for ONE Campaign — at most
+ * `BEATS_PER_COMMIT`, each with its slots — or null when nothing pending can
+ * be placed anywhere. Dates are computed fresh from the context, so a retry
+ * after a conflict deals slots from what actually landed.
  *
  * `milestones` is null when the conference has lost a required date: cadence
  * beats then have nothing to anchor to and wait, but Trigger beats are dated
  * by their event and carry on.
  */
-function nextCommit(
+function nextBatch(
   context: GenerationContext,
   milestones: Record<Milestone, ResolvedMilestone> | null,
-  requests: GenerationRequest[],
+  pending: PendingBeat[],
   now: string,
-  blocked: ReadonlySet<string>,
-  published: ReadonlySet<string>,
-  /** The caller's batch mint for this conference (short-links spec §2.2). */
-  newShortCode: () => string,
-  /** Bluesky tags looked up for this run, by speaker id (`lookUpTags`). */
-  tags: ReadonlyMap<string, BlueskyTag | null>,
-): { campaign: GenerationCampaign; records: TaskRecords } | null {
-  const ownerId = context.plan.ownerId
-  if (!ownerId) return null
-  const pending = pendingBeats(context, requests, blocked, published)
-  if (pending.length === 0) return null
-
-  const campaign = pending[0].campaign
-  const values = conferenceValuesFor(context.conference)
-  const baseUrl = conferenceBaseUrl(context.conference)
-  const occupancy = planOccupancy(context)
-  const records = emptyRecords()
-  let beats = 0
-  for (const item of pending) {
-    if (item.campaign._id !== campaign._id) continue
-    if (beats >= BEATS_PER_COMMIT) break
-    let dates: BeatDates | null
-    if (beatCadence(item.recipes)) {
-      dates = milestones
-        ? subjectBeatDates({
-            recipes: item.recipes,
-            milestones,
-            occupancy,
-            now,
-          })
-        : null
-    } else {
-      dates = sponsorBeatDates(item.recipes, now)
-    }
-    if (!dates) {
+): { campaign: GenerationCampaign; beats: DatedBeat[] } | null {
+  const skipped = new Set<string>()
+  for (const first of pending) {
+    const campaign = first.campaign
+    if (skipped.has(campaign._id)) continue
+    const occupancy = planOccupancy(context)
+    const beats: DatedBeat[] = []
+    for (const item of pending) {
+      if (item.campaign._id !== campaign._id) continue
+      if (beats.length >= BEATS_PER_COMMIT) break
+      const dates = beatCadence(item.recipes)
+        ? milestones
+          ? subjectBeatDates({
+              recipes: item.recipes,
+              milestones,
+              occupancy,
+              now,
+            })
+          : null
+        : sponsorBeatDates(item.recipes, now)
       // No slot left in the window (or no Milestones to place one against):
       // record nothing, so nothing is marked done and a later run can try.
-      continue
+      if (dates) beats.push({ item, dates })
     }
+    if (beats.length > 0) return { campaign, beats }
+    // Every pending beat of this Campaign is out of slots; move on.
+    skipped.add(campaign._id)
+  }
+  return null
+}
+
+/** The records of a chosen batch. */
+function buildBatch(
+  context: GenerationContext,
+  ownerId: string,
+  batch: { campaign: GenerationCampaign; beats: DatedBeat[] },
+  /** The caller's batch mint for this conference (short-links spec §2.2). */
+  newShortCode: () => string,
+  /** Bluesky tags looked up for this batch, by speaker id (`lookUpTags`). */
+  tags: ReadonlyMap<string, BlueskyTag | null>,
+): TaskRecords {
+  const { campaign } = batch
+  const values = conferenceValuesFor(context.conference)
+  const baseUrl = conferenceBaseUrl(context.conference)
+  const records = emptyRecords()
+  for (const { item, dates } of batch.beats) {
     appendRecords(
       records,
       buildSubjectBeat({
@@ -321,39 +335,29 @@ function nextCommit(
         newShortCode,
       }),
     )
-    beats += 1
   }
-  if (records.tasks.length === 0) {
-    // Every pending beat of this Campaign is out of slots; move on.
-    return nextCommit(
-      context,
-      milestones,
-      requests,
-      now,
-      new Set([...blocked, campaign._id]),
-      published,
-      newShortCode,
-      tags,
-    )
-  }
-  return { campaign, records }
+  return records
 }
 
+/** Bluesky handle lookups in flight at once: a big programme is not a burst. */
+const TAG_LOOKUP_CONCURRENCY = 5
+
 /**
- * Look up the Bluesky tag of every person a pending tagging beat names and
- * `cache` does not hold yet (tagging spec §4.4, Generation). NEVER THROWS
- * and never waits past the resolver's timeout: generation runs inside Trigger
+ * Look up the Bluesky tag of every person a tagging beat of THIS batch names
+ * and `cache` does not hold yet (tagging spec §4.4, Generation) — never the
+ * whole programme up front. NEVER THROWS: generation runs inside Trigger
  * handlers, and a lookup that fails leaves those people untagged — their
- * plain names — rather than failing the Tasks.
+ * plain names — rather than failing the Tasks. Each handle resolve is bounded
+ * by the resolver's timeout; the one Sanity read is not.
  */
 async function lookUpTags(
   conferenceId: string,
   context: GenerationContext,
-  pending: PendingBeat[],
+  beats: readonly DatedBeat[],
   cache: Map<string, BlueskyTag | null>,
 ): Promise<void> {
   const wanted = new Set<string>()
-  for (const item of pending) {
+  for (const { item } of beats) {
     if (!item.recipes.some(tagsItsSubject)) continue
     for (const person of item.subject.people ?? [])
       if (!cache.has(person._id)) wanted.add(person._id)
@@ -365,13 +369,22 @@ async function lookUpTags(
     const sources = new Map(
       (await getSpeakerTagSources(conferenceId, ids)).map((s) => [s._id, s]),
     )
-    const found = await Promise.all(
-      ids.map((id) => blueskyTagFor(sources.get(id), own)),
+    let next = 0
+    const worker = async () => {
+      while (next < ids.length) {
+        const id = ids[next++]
+        cache.set(id, await blueskyTagFor(sources.get(id), own))
+      }
+    }
+    await Promise.all(
+      Array.from(
+        { length: Math.min(TAG_LOOKUP_CONCURRENCY, ids.length) },
+        worker,
+      ),
     )
-    ids.forEach((id, i) => cache.set(id, found[i]))
   } catch (error) {
     console.warn('marketing generation: Bluesky tag lookup failed', error)
-    for (const id of ids) cache.set(id, null)
+    for (const id of ids) if (!cache.has(id)) cache.set(id, null)
   }
 }
 
@@ -439,23 +452,24 @@ export async function runGeneration(
     // Re-read per iteration: the previous iteration committed codes of its
     // own, and a batch must check against them too.
     const newShortCode = await shortCodeMinterFor(conferenceId)
-    await lookUpTags(
-      conferenceId,
-      context,
-      pendingBeats(context, deduped, blocked, published),
-      tags,
-    )
-    const next = nextCommit(
+    const batch = nextBatch(
       context,
       milestones,
-      deduped,
+      pendingBeats(context, deduped, blocked, published),
       now,
-      blocked,
-      published,
-      newShortCode,
-      tags,
     )
-    if (!next) return result()
+    if (!batch) return result()
+    await lookUpTags(conferenceId, context, batch.beats, tags)
+    const next = {
+      campaign: batch.campaign,
+      records: buildBatch(
+        context,
+        context.plan.ownerId,
+        batch,
+        newShortCode,
+        tags,
+      ),
+    }
     const landed = await commitGeneratedTasks({
       conferenceId,
       campaignId: next.campaign._id,

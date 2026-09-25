@@ -21,8 +21,8 @@ export const BLUESKY_MAX_GRAPHEMES = 300
  * imported from the platform constraints: seeding (and so this module) is
  * imported by the admin stories, and those constraints pull in a domain list.
  */
+const segmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' })
 function graphemes(text: string): number {
-  const segmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' })
   return [...segmenter.segment(text)].length
 }
 
@@ -56,11 +56,14 @@ export interface MentionRecord {
   status: 'tagged' | 'unresolved'
 }
 
+/** The only kind of recipe `tagSubject` applies to (tagging spec §2). */
+export function isBlueskyPost(r: TaskRecipe): boolean {
+  return r.kind === 'publishing' && r.channel === 'bluesky'
+}
+
 /** A recipe whose generated body tags its subject (tagging spec §2, §4.1). */
 export function tagsItsSubject(r: TaskRecipe): boolean {
-  return (
-    r.kind === 'publishing' && r.channel === 'bluesky' && r.tagSubject === true
-  )
+  return isBlueskyPost(r) && r.tagSubject === true
 }
 
 /** "Alice", "Alice and Bob", "Alice, Bob and Carol" (spec §4.2). */

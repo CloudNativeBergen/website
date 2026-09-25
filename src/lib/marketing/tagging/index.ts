@@ -4,7 +4,7 @@
  * (and so `materialize.ts`) is imported by admin stories, and this barrel
  * pulls in the network resolver.
  */
-export { blueskyHandleFromLinks, isValidDid, normaliseHandle } from './handle'
+export { blueskyHandleFromLinks } from './handle'
 export {
   resolveBlueskyHandle,
   RESOLVE_TIMEOUT_MS,

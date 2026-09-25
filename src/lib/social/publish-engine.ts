@@ -885,6 +885,9 @@ function publishInputFor(
       text: variant.body,
       media,
       link: variant.link ?? undefined,
+      // The DIDs generation checked: the adapter posts these rather than
+      // resolving the handles a second time (tagging spec §4.4, Publish).
+      ...(variant.mentions?.length ? { mentions: variant.mentions } : {}),
     },
   }
 }

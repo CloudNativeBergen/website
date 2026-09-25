@@ -679,11 +679,8 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                           </h4>
                           <ul className="space-y-1 text-sm text-violet-700 dark:text-violet-300">
                             <li>
-                              •{' '}
-                              <strong>
-                                Tagging is not yet in general use.
-                              </strong>{' '}
-                              This describes what we are starting to do, so you
+                              • <strong>We are not tagging anyone yet.</strong>{' '}
+                              This describes what we are preparing to do, so you
                               can tell us now if you would rather we did not
                             </li>
                             <li>
@@ -692,7 +689,7 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                               their talk
                             </li>
                             <li>
-                              • Where it is switched on, such a post{' '}
+                              • Once it is switched on, such a post{' '}
                               <strong>may tag</strong> (@-mention) the social
                               accounts you listed on your speaker profile, so it
                               reaches your followers and you can reshare it
@@ -742,11 +739,11 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                       </div>
                       <div className="mt-3 rounded-lg bg-violet-100 p-2 dark:bg-violet-800/30">
                         <p className="text-xs text-violet-800 dark:text-violet-200">
-                          <strong>Status:</strong> Tagging is being rolled out.
-                          Our standard posts do not tag anyone yet; an organizer
-                          can switch it on for a Bluesky post about a speaker.
-                          This preference is checked whenever such a post is
-                          written. <strong>Legal Basis:</strong> Legitimate
+                          <strong>Status:</strong> Tagging is not live. No post
+                          tags anyone yet. This preference is already checked
+                          when a post is written, and before the first tagged
+                          post goes out it will be checked again when a post is
+                          published. <strong>Legal Basis:</strong> Legitimate
                           interest in promoting the conference and its
                           programme. The accounts we tag are the links you gave
                           us for your public speaker profile and for promotional

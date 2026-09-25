@@ -628,10 +628,10 @@ export function SpeakerDetailsForm({
                     gave us those links for your public profile and for
                     promotion, and a tag puts the post in your followers&rsquo;
                     feeds so you can reshare it.{' '}
-                    <strong>Tagging is not in general use yet.</strong> Tick
-                    this box and we never will: your name is written out in
-                    plain text instead, in every post not yet published. It
-                    changes nothing else about your profile.
+                    <strong>We are not tagging anyone yet.</strong> Tick this
+                    box and we never will: your name is written out in plain
+                    text instead, in every post not yet published. It changes
+                    nothing else about your profile.
                   </HelpText>
                   {socialTagLocked && (
                     <HelpText>

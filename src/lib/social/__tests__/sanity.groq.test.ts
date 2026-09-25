@@ -329,6 +329,42 @@ describe('findWork — the composed due/stale scan', () => {
     ])
   })
 
+  it('carries only the tagged mentions, with their DID, to the adapter (tagging §4.4)', async () => {
+    h.dataset = [
+      conference('c1'),
+      variant('v1', 'c1', {
+        mentions: [
+          {
+            _key: 'a',
+            handle: 'alice.dev',
+            did: 'did:plc:alice',
+            status: 'tagged',
+            name: 'Alice',
+          },
+          // A DID left on an entry that is no longer `tagged` is not posted.
+          {
+            _key: 'b',
+            handle: 'bob.dev',
+            did: 'did:plc:stale',
+            status: 'unresolved',
+            name: 'Bob',
+          },
+        ],
+      }),
+      variant('v2', 'c1'),
+    ]
+    const work = await sanitySocialVariantStore.findWork(
+      NOW,
+      STALE_BEFORE,
+      BOUNDS,
+    )
+    expect(work.due.map((v) => [v._id, v.mentions])).toEqual([
+      ['v1', [{ handle: 'alice.dev', did: 'did:plc:alice' }]],
+      ['v2', null],
+    ])
+    expect(h.queries).toHaveLength(1)
+  })
+
   it('returns due variants grouped per conference, capped, oldest first, with orgId', async () => {
     h.dataset = [
       conference('c1'),

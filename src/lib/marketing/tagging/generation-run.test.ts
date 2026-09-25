@@ -241,6 +241,59 @@ describe('generation with a Bluesky tagSubject recipe', () => {
   })
 })
 
+describe('how much generation asks Bluesky at once', () => {
+  const many = Array.from({ length: 25 }, (_, i) => `spk-${i}`)
+  const confirmMany = () =>
+    runGeneration(
+      'conf-A',
+      [
+        {
+          kind: 'trigger',
+          event: 'speakerConfirmed',
+          subjects: many.map((id) =>
+            speakerSubject({ _id: id, name: `Speaker ${id}` }, 'Pods'),
+          ),
+        },
+      ],
+      NOW,
+    )
+  beforeEach(() => {
+    store.sources = many.map((id) => ({
+      _id: id,
+      links: [`https://bsky.app/profile/${id}.dev`],
+      socialTagOptOut: null,
+    }))
+  })
+
+  it('looks up only the people of the batch it is about to commit, not the whole programme', async () => {
+    const askedBeforeCommit: number[] = []
+    const { commitGeneratedTasks } = await import('../generation-sanity')
+    const commit = vi.mocked(commitGeneratedTasks)
+    const real = commit.getMockImplementation()!
+    commit.mockImplementation(async (input) => {
+      askedBeforeCommit.push(resolveCalls().length)
+      return real(input)
+    })
+    await confirmMany()
+    // 20 beats per commit: the first commit knew only its own 20 speakers.
+    expect(askedBeforeCommit).toEqual([20, 25])
+  })
+
+  it('never has more than five handle lookups in flight', async () => {
+    let inFlight = 0
+    let peak = 0
+    fetchMock.mockImplementation(async () => {
+      peak = Math.max(peak, ++inFlight)
+      await new Promise((r) => setTimeout(r, 1))
+      inFlight -= 1
+      return Response.json({ did: DID }, { status: 200 })
+    })
+    await confirmMany()
+    expect(resolveCalls()).toHaveLength(25)
+    expect(peak).toBe(5)
+  })
+})
+
 describe('the speakerConfirmed Trigger handler', () => {
   const event = (): ProposalStatusChangeEvent =>
     ({

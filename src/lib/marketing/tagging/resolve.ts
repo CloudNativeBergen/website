@@ -12,7 +12,7 @@
 
 import { withTimeout } from '@/lib/social/with-timeout'
 import { BLUESKY_APPVIEW_HOST } from '@/lib/social/provider/bluesky-engagement'
-import { isValidDid } from './handle'
+import { isValidDid } from '@/lib/social/provider/bluesky-syntax'
 
 export type HandleResolution =
   | { kind: 'resolved'; did: string }

@@ -74,6 +74,19 @@ describe('editing an entry', () => {
         tagSubject: false,
       }).some((r) => 'tagSubject' in r),
     ).toBe(false)
+    // An entry whose OWN recipe defaults to tagging still gives way to the edits.
+    const taggingEntry = {
+      ...speakerCard,
+      recipes: speakerCard.recipes.map((r) =>
+        r.channel === 'bluesky' ? { ...r, tagSubject: true } : r,
+      ),
+    }
+    expect(
+      applyEdits(taggingEntry, {
+        ...editsOf(taggingEntry, taggingEntry.recipes),
+        tagSubject: false,
+      }).some((r) => 'tagSubject' in r),
+    ).toBe(false)
   })
   it('the strict edit schema carries tagSubject, and only as a boolean', () => {
     const edits = editsOf(speakerCard, speakerCard.recipes)

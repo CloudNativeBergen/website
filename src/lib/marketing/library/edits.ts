@@ -15,6 +15,7 @@ import {
   type MarketingChannel,
   type SubjectSource,
 } from '../types'
+import { isBlueskyPost, tagsItsSubject } from '../tagging/body'
 import type { LibraryEntry } from './entries'
 
 export interface RecipeEdits {
@@ -78,7 +79,7 @@ export function editsOf(
   const instructions = stored.find(
     (r) => r.beat === entry.id && r.instructions,
   )?.instructions
-  const tagSubject = posts.some((r) => r.channel === 'bluesky' && r.tagSubject)
+  const tagSubject = posts.some(tagsItsSubject)
   return {
     title: first?.title ?? entry.title,
     channels: Object.fromEntries(
@@ -110,20 +111,14 @@ export function applyEdits(
       return rate === undefined ? [] : [[channel, rate] as const]
     }),
   )
-  return entry.recipes
-    .filter((r) => r.kind !== 'publishing' || edits.channels[r.channel!])
-    .map((entryRecipe) => {
-      // The entry's own default gives way: the edits decide (absent is off).
-      const r: TaskRecipe = { ...entryRecipe }
-      delete r.tagSubject
-      if (
-        edits.tagSubject &&
-        r.kind === 'publishing' &&
-        r.channel === 'bluesky'
-      )
-        r.tagSubject = true
-      return {
+  return (
+    entry.recipes
+      .filter((r) => r.kind !== 'publishing' || edits.channels[r.channel!])
+      // The entry's own `tagSubject` gives way: the edits decide (absent is off).
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars -- destructured only to exclude it
+      .map(({ tagSubject: _entryDefault, ...r }) => ({
         ...r,
+        ...(edits.tagSubject && isBlueskyPost(r) ? { tagSubject: true } : {}),
         title: r.kind === 'publishing' ? edits.title : `Render: ${edits.title}`,
         ...(r.kind === 'publishing'
           ? { skeleton: edits.channels[r.channel!]!.skeleton }
@@ -139,8 +134,8 @@ export function applyEdits(
               },
             }
           : {}),
-      }
-    })
+      }))
+  )
 }
 
 /** Why these edits cannot be saved; empty when they can. */
