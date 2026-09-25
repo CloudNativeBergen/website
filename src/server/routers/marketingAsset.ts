@@ -8,7 +8,7 @@ import {
 import { resolveConferenceId } from '@/server/trpc'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { marketingAssetDetailsSchema } from '@/lib/marketing-asset/details'
-import { requireAssetDetailsInCurrentOrg } from '@/lib/marketing-asset/guard'
+import { resolveAssetDetailsForCurrentOrg } from '@/lib/marketing-asset/guard'
 import {
   deleteMarketingAssetDocument,
   listMarketingAssetFacets,
@@ -31,6 +31,13 @@ const notFound = () =>
   new TRPCError({
     code: 'NOT_FOUND',
     message: 'No marketingAsset with that id for this request',
+  })
+
+/** The asset has a staged copy in a Studio Content Release. */
+const inRelease = (action: 'edit' | 'delete') =>
+  new TRPCError({
+    code: 'PRECONDITION_FAILED',
+    message: `This asset is part of a Content Release in Studio. Remove it from the release first, then ${action} it here.`,
   })
 
 const assetId = z.string().min(1).max(200)
@@ -84,9 +91,19 @@ export const marketingAssetRouter = router({
       if (input.id.includes('.')) throw notFound()
       // The asset first: a foreign asset is refused before any subject or
       // edition is probed, so the answer says nothing about those either.
-      await requireDocumentInCurrentOrg(input.id, 'marketingAsset')
-      await requireAssetDetailsInCurrentOrg(input.details)
-      await updateMarketingAssetDetails(input.id, input.details)
+      const orgId = await requireDocumentInCurrentOrg(
+        input.id,
+        'marketingAsset',
+      )
+      // A staged Content Release copy would write its stale details back
+      // when published, silently undoing this edit. Refused, as for delete.
+      if ((await countMarketingAssetReleaseTwins(orgId, input.id)) > 0)
+        throw inRelease('edit')
+      const details = await resolveAssetDetailsForCurrentOrg(
+        input.details,
+        input.id,
+      )
+      await updateMarketingAssetDetails(input.id, details)
       return { updated: true }
     }),
 
@@ -110,11 +127,7 @@ export const marketingAssetRouter = router({
       // release is Studio's to change. Ownership is already proven, so this
       // answer reveals nothing about another tenant.
       if ((await countMarketingAssetReleaseTwins(orgId, input.id)) > 0)
-        throw new TRPCError({
-          code: 'PRECONDITION_FAILED',
-          message:
-            'This asset is part of a Content Release in Studio. Remove it from the release first, then delete it here.',
-        })
+        throw inRelease('delete')
       const image = await readMarketingAssetImage(orgId, input.id)
       // The documents first: while one exists, it is itself a reference to
       // the image, and the orphan check would always keep the file.

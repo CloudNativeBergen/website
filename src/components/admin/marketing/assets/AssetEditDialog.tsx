@@ -14,6 +14,7 @@ import {
   LABEL,
   detailsFromDraft,
   draftFromRow,
+  originalMark,
   draftIssue,
   type CurrentEdition,
   type DetailsDraft,
@@ -135,6 +136,7 @@ export function AssetEditDialog({
           draft={draft}
           onChange={setDraft}
           edition={edition}
+          original={asset ? originalMark(asset) : null}
           disabled={update.isPending}
         />
         {error && (

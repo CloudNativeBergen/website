@@ -16,6 +16,8 @@ export interface MarketingAssetSubject {
 
 export type MarketingAssetScope = 'organization' | 'edition'
 
+export type MarketingAssetEditionChoice = 'none' | 'current' | 'keep'
+
 /** One gallery entry as the page shows it. */
 export interface MarketingAssetRow {
   _id: string
@@ -64,9 +66,12 @@ export interface MarketingAssetFacets {
 export interface MarketingAssetDetails {
   title: string
   alt: string
-  scope: MarketingAssetScope
-  /** Required when `scope` is `edition`, and must be absent otherwise. */
-  conferenceId?: string
+  /**
+   * `none`: organization-wide. `current`: this edition, as the request host
+   * names it. `keep`: the edition the asset is already marked with. Never an
+   * id: the server resolves it.
+   */
+  edition: MarketingAssetEditionChoice
   subject?: { type: MarketingAssetSubjectType; id: string } | null
   tags: string[]
   credit?: string

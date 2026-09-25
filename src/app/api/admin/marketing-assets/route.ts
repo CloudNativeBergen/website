@@ -14,7 +14,8 @@ import { moveBlobToSanity, type MoveRefusal } from '@/lib/marketing-asset/move'
 import { abortAfter } from '@/lib/marketing-asset/blob-delete'
 import { createMarketingAsset } from '@/lib/marketing-asset/sanity'
 import { marketingAssetDetailsSchema } from '@/lib/marketing-asset/details'
-import { requireAssetDetailsInCurrentOrg } from '@/lib/marketing-asset/guard'
+import { resolveAssetDetailsForCurrentOrg } from '@/lib/marketing-asset/guard'
+import type { ResolvedMarketingAssetDetails } from '@/lib/marketing-asset/details'
 import { deleteImageAssetIfOrphaned } from '@/lib/sanity/orphaned-asset'
 
 /** The streamed move of one image gets a minute, set explicitly (§4.1). */
@@ -60,26 +61,28 @@ export async function POST(request: Request) {
   const parsedUrl = UrlSchema.safeParse(body)
   const parsed = marketingAssetDetailsSchema.safeParse(body)
   if (!parsedUrl.success || !parsed.success) {
-    const named = parsed.error?.issues.some(
+    // Title and alt text are what an organizer can fix in the form; any
+    // other failing field (subject, tags, edition) gets its own message.
+    const otherFieldFailed = parsed.error?.issues.some(
       (issue) => issue.path[0] !== 'title' && issue.path[0] !== 'alt',
     )
     return NextResponse.json(
       {
         error:
-          parsedUrl.success && named
-            ? 'Those details cannot be saved. Check the edition, subject and tags.'
+          parsedUrl.success && otherFieldFailed
+            ? 'Those details cannot be saved. Check the subject and tags.'
             : 'An image, a title and alt text are required.',
       },
       { status: 400 },
     )
   }
   const { url } = parsedUrl.data
-  const details = parsed.data
-
   // Before the move, so a refused edition or subject leaves no image behind.
-  // The guard's refusal never says whether a foreign id exists.
+  // A new asset has no edition to keep. The guard's refusal never says
+  // whether a foreign id exists.
+  let details: ResolvedMarketingAssetDetails
   try {
-    await requireAssetDetailsInCurrentOrg(details)
+    details = await resolveAssetDetailsForCurrentOrg(parsed.data)
   } catch {
     return NextResponse.json(
       {

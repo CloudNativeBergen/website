@@ -96,6 +96,9 @@ const DOCS: Record<
   // guard alone would let it through.
   'drafts.asset-ours': { _type: 'marketingAsset', orgId: 'org-A' },
   'asset-theirs': { _type: 'marketingAsset', orgId: 'org-B' },
+  'asset-2025': { _type: 'marketingAsset', orgId: 'org-A' },
+  // Ours, but Studio (which no guard reaches) marked it with B's edition.
+  'asset-studio-marked': { _type: 'marketingAsset', orgId: 'org-A' },
   'template-ours': { _type: 'planTemplate', orgId: 'org-A' },
   'conf-A': { _type: 'conference', orgId: 'org-A' },
   'conf-A-2025': { _type: 'conference', orgId: 'org-A' },
@@ -109,6 +112,12 @@ const DOCS: Record<
   'talk-theirs': { _type: 'talk', orgId: null, conferenceOrgId: 'org-B' },
   'sponsor-ours': { _type: 'sponsor', orgId: 'org-A' },
   'sponsor-theirs': { _type: 'sponsor', orgId: 'org-B' },
+}
+/** The edition mark each of our assets carries now. */
+const MARKS: Record<string, string | null> = {
+  'asset-ours': null,
+  'asset-2025': 'conf-A-2025',
+  'asset-studio-marked': 'conf-B',
 }
 /** The organizations each speaker has a talk at (participation). */
 const TALKS_AT: Record<string, string[]> = {
@@ -159,6 +168,9 @@ beforeEach(() => {
         return TALKS_AT[params.speakerId] ?? []
       // The asset reads, which must be scoped to the caller's organization.
       if (params.orgId !== 'org-A') throw new Error('unscoped read')
+      // The edition mark an asset carries, for `edition: "keep"`.
+      if (query.includes('][0]') && query.includes('"conferenceId"'))
+        return params.id in MARKS ? { conferenceId: MARKS[params.id] } : null
       if (query.includes('path("versions.*." + $id)'))
         return { n: params.id === 'asset-ours' ? h.releaseTwins : 0 }
       if (query.includes('"createdImageAssetId"'))
@@ -352,7 +364,7 @@ describe('marketingAsset.delete', () => {
 const DETAILS = {
   title: '  Speaker card  ',
   alt: 'Ada on stage',
-  scope: 'organization' as const,
+  edition: 'none' as 'none' | 'current' | 'keep',
   tags: ['Speaker Card', 'speaker card', ' keynote '],
 }
 
@@ -389,10 +401,27 @@ describe('marketingAsset.update', () => {
     expect(h.patches[0].unset).toEqual(['conference', 'subject', 'credit'])
   })
 
-  it('marks our asset with an edition of THIS organization', async () => {
+  it('marks with THIS edition, resolved from the host; an edition id from the client is ignored', async () => {
     await assets().update({
       id: 'asset-ours',
-      details: { ...DETAILS, scope: 'edition', conferenceId: 'conf-A-2025' },
+      details: {
+        ...DETAILS,
+        edition: 'current',
+        // Not part of the input: stripped, never written.
+        conferenceId: 'conf-B',
+      } as unknown as typeof DETAILS,
+    })
+    expect(h.patches[0].set).toMatchObject({
+      scope: 'edition',
+      conference: { _type: 'reference', _ref: 'conf-A' },
+    })
+    expect(JSON.stringify(h.patches)).not.toContain('conf-B')
+  })
+
+  it('keeps an older edition mark as it is', async () => {
+    await assets().update({
+      id: 'asset-2025',
+      details: { ...DETAILS, edition: 'keep' },
     })
     expect(h.patches[0].set).toMatchObject({
       scope: 'edition',
@@ -400,14 +429,44 @@ describe('marketingAsset.update', () => {
     })
   })
 
+  it('refuses to keep a mark of ANOTHER organization’s edition, and writes nothing', async () => {
+    const error = await assets()
+      .update({
+        id: 'asset-studio-marked',
+        details: { ...DETAILS, edition: 'keep' },
+      })
+      .catch((e) => e)
+    expect({ code: error.code, message: error.message }).toEqual({
+      code: 'NOT_FOUND',
+      message: 'No conference with that id for this request',
+    })
+    expect(h.patches).toEqual([])
+  })
+
+  it('refuses to keep a mark an organization-wide asset does not have', async () => {
+    await expect(
+      assets().update({
+        id: 'asset-ours',
+        details: { ...DETAILS, edition: 'keep' },
+      }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    expect(h.patches).toEqual([])
+  })
+
+  it('refuses to edit an asset staged in a Content Release, and writes nothing', async () => {
+    h.releaseTwins = 1
+    await expect(
+      assets().update({ id: 'asset-ours', details: DETAILS }),
+    ).rejects.toMatchObject({
+      code: 'PRECONDITION_FAILED',
+      message: expect.stringContaining('then edit it here'),
+    })
+    expect(h.patches).toEqual([])
+  })
+
   // Each refusal is paired with the same request naming OUR document, which
   // succeeds: nothing else in the path refuses it.
   it.each([
-    [
-      'an edition of another organization',
-      { scope: 'edition', conferenceId: 'conf-B' },
-      'conference',
-    ],
     [
       'a speaker with standing only in another organization',
       { subject: { type: 'speaker', id: 'sp-theirs' } },
@@ -440,7 +499,7 @@ describe('marketingAsset.update', () => {
   })
 
   it.each([
-    ['our edition', { scope: 'edition', conferenceId: 'conf-A' }],
+    ['this edition', { edition: 'current' }],
     [
       'a speaker who is a member here',
       { subject: { type: 'speaker', id: 'sp-member' } },
@@ -492,22 +551,20 @@ describe('marketingAsset.update', () => {
   })
 
   it.each([
-    ['an edition asset with no edition', { scope: 'edition' }],
-    ['an organization-wide asset with an edition', { conferenceId: 'conf-A' }],
+    ['an edition id in place of a choice', { edition: 'conf-A' }],
     ['a blank title', { title: '   ' }],
     ['blank alt text', { alt: '' }],
     // Never a draft: the shape refuses it before any document is read.
-    [
-      'a draft of our edition',
-      { scope: 'edition', conferenceId: 'drafts.conf-A' },
-    ],
     [
       'a draft subject',
       { subject: { type: 'sponsor', id: 'drafts.sponsor-ours' } },
     ],
   ] as const)('refuses %s as bad input', async (_, change) => {
     await expect(
-      assets().update({ id: 'asset-ours', details: { ...DETAILS, ...change } }),
+      assets().update({
+        id: 'asset-ours',
+        details: { ...DETAILS, ...change } as typeof DETAILS,
+      }),
     ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
     expect(h.patches).toEqual([])
   })

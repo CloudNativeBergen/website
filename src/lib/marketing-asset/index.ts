@@ -22,6 +22,7 @@ export {
 export { MARKETING_ASSET_SUBJECT_TYPES } from './types'
 export type {
   MarketingAssetDetails,
+  MarketingAssetEditionChoice,
   MarketingAssetFacets,
   MarketingAssetFilter,
   MarketingAssetRow,

@@ -7,7 +7,7 @@ import {
   normalizeTags,
   type MarketingAssetDetails,
   type MarketingAssetRow,
-  type MarketingAssetScope,
+  type MarketingAssetEditionChoice,
   type MarketingAssetSubject,
 } from '@/lib/marketing-asset'
 import { SubjectCombobox } from './SubjectCombobox'
@@ -24,12 +24,15 @@ export interface CurrentEdition {
   title: string
 }
 
+/** The edition an existing asset is marked with, as it was opened. */
+export interface OriginalMark {
+  conferenceId: string
+  title: string
+}
+
 /** The describing fields while they are being edited. */
 export interface DetailsDraft {
-  scope: MarketingAssetScope
-  conferenceId: string | null
-  /** The marked edition's title, for an older mark kept as it is. */
-  editionTitle: string | null
+  edition: MarketingAssetEditionChoice
   subject: MarketingAssetSubject | null
   /** As typed: comma-separated. */
   tags: string
@@ -37,23 +40,26 @@ export interface DetailsDraft {
 }
 
 export const EMPTY_DRAFT: DetailsDraft = {
-  scope: 'organization',
-  conferenceId: null,
-  editionTitle: null,
+  edition: 'none',
   subject: null,
   tags: '',
   credit: '',
 }
 
+/** An existing asset's details; its edition mark is kept unless changed. */
 export function draftFromRow(row: MarketingAssetRow): DetailsDraft {
   return {
-    scope: row.scope,
-    conferenceId: row.conferenceId,
-    editionTitle: row.edition,
+    edition: row.scope === 'edition' && row.conferenceId ? 'keep' : 'none',
     subject: row.subject,
     tags: row.tags.join(', '),
     credit: row.credit ?? '',
   }
+}
+
+export function originalMark(row: MarketingAssetRow): OriginalMark | null {
+  return row.scope === 'edition' && row.conferenceId
+    ? { conferenceId: row.conferenceId, title: row.edition ?? 'Its edition' }
+    : null
 }
 
 export function parseTags(typed: string): string[] {
@@ -65,12 +71,10 @@ export function detailsFromDraft(
   alt: string,
   draft: DetailsDraft,
 ): MarketingAssetDetails {
-  const edition = draft.scope === 'edition' && draft.conferenceId
   return {
     title: title.trim(),
     alt: alt.trim(),
-    scope: edition ? 'edition' : 'organization',
-    ...(edition ? { conferenceId: draft.conferenceId! } : {}),
+    edition: draft.edition,
     subject: draft.subject
       ? { type: draft.subject._type, id: draft.subject._id }
       : null,
@@ -97,31 +101,27 @@ export function AssetDetailsFields({
   draft,
   onChange,
   edition,
+  original = null,
   disabled = false,
 }: {
   draft: DetailsDraft
   onChange: (draft: DetailsDraft) => void
+  /** This edition; null while it loads. */
   edition: CurrentEdition | null
+  /**
+   * The mark an existing asset was opened with. Offered as it is, however the
+   * draft changes, so opening the dialog never re-marks an asset by itself
+   * and the organizer can always go back to it.
+   */
+  original?: OriginalMark | null
   disabled?: boolean
 }) {
   const id = useId()
   const set = (change: Partial<DetailsDraft>) =>
     onChange({ ...draft, ...change })
-  // An older edition's mark is offered as it is, so opening the dialog never
-  // moves an asset to this edition by itself.
-  const older =
-    draft.scope === 'edition' &&
-    draft.conferenceId &&
-    draft.conferenceId !== edition?._id
-      ? {
-          _id: draft.conferenceId,
-          title: draft.editionTitle ?? 'Another edition',
-        }
-      : null
-  const selected =
-    draft.scope === 'edition' ? draft.conferenceId : 'organization'
+  const originalIsCurrent = original?.conferenceId === edition?._id
   const radio = (
-    value: string,
+    value: MarketingAssetEditionChoice,
     label: string,
     hint: string,
     pick: () => void,
@@ -131,7 +131,7 @@ export function AssetDetailsFields({
         type="radio"
         name={`${id}-scope`}
         value={value}
-        checked={selected === value}
+        checked={draft.edition === value}
         onChange={pick}
         disabled={disabled}
         className="mt-0.5 size-4 text-brand-cloud-blue focus:ring-brand-cloud-blue"
@@ -153,29 +153,27 @@ export function AssetDetailsFields({
         <legend className={LABEL}>Belongs to</legend>
         <div className="mt-1 grid gap-2 sm:grid-cols-2">
           {radio(
-            'organization',
+            'none',
             'The whole organization',
             'Shown for every edition, like the logo.',
-            () => set({ scope: 'organization' }),
+            () => set({ edition: 'none' }),
           )}
-          {edition &&
+          {original &&
             radio(
-              edition._id,
+              'keep',
+              original.title,
+              originalIsCurrent
+                ? 'This edition only, like its speaker cards.'
+                : 'The edition it is marked with now.',
+              () => set({ edition: 'keep' }),
+            )}
+          {edition &&
+            !originalIsCurrent &&
+            radio(
+              'current',
               edition.title,
               'This edition only, like its speaker cards.',
-              () =>
-                set({
-                  scope: 'edition',
-                  conferenceId: edition._id,
-                  editionTitle: edition.title,
-                }),
-            )}
-          {older &&
-            radio(
-              older._id,
-              older.title,
-              'Another edition of this organization.',
-              () => set({ scope: 'edition', conferenceId: older._id }),
+              () => set({ edition: 'current' }),
             )}
         </div>
       </fieldset>

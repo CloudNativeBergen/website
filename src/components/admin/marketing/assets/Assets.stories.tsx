@@ -138,11 +138,7 @@ function applyFilter(
   )
 }
 
-const FACETS = {
-  edition: EDITION,
-  tags: ['brand', 'logo', 'speaker card', 'sponsors'],
-  subjects: [ACME, ADA],
-}
+const FACETS = { edition: EDITION, subjects: [ACME, ADA] }
 
 /**
  * A gallery that really loses an asset when it is deleted, and really changes
@@ -161,7 +157,17 @@ function gallery(initial: MarketingAssetRow[] = ASSETS, older = OLDER) {
         const filter = raw ? (JSON.parse(raw) as MarketingAssetFilter) : {}
         return json(applyFilter(assets, older, filter))
       }),
-      http.get('/api/trpc/marketingAsset.filters', () => json(FACETS)),
+      // The menus follow the assets, as the server's do.
+      http.get('/api/trpc/marketingAsset.filters', () => {
+        const all = [...assets, ...older]
+        return json({
+          edition: FACETS.edition,
+          tags: [...new Set(all.flatMap((a) => a.tags))].sort(),
+          subjects: FACETS.subjects.filter((subject) =>
+            all.some((a) => a.subject?._id === subject._id),
+          ),
+        })
+      }),
       http.get('/api/trpc/search.unified', () =>
         json({
           speakers: [{ _id: ADA._id, name: ADA.name }],
@@ -206,6 +212,7 @@ function gallery(initial: MarketingAssetRow[] = ASSETS, older = OLDER) {
 const handlers = (initial?: MarketingAssetRow[]) => gallery(initial).handlers
 const deletable = gallery()
 const editable = gallery()
+const untaggable = gallery()
 
 const saved: AssetUploader = async () => ({
   _id: 'asset-new',
@@ -339,7 +346,7 @@ export const UploadSoftImage: Story = {
       expect(context.args.uploader).toHaveBeenCalledWith(expect.any(File), {
         title: 'speaker card',
         alt: 'Speaker card for Ada Lovelace',
-        scope: 'organization',
+        edition: 'none',
         subject: null,
         tags: [],
       }),
@@ -565,5 +572,57 @@ export const EditAssetSaved: Story = {
     await userEvent.type(dialog.getByLabelText(/Tags/), 'venue, harbour')
     await userEvent.click(dialog.getByRole('button', { name: 'Save' }))
     await expect(await canvas.findByText('#harbour')).toBeInTheDocument()
+  },
+}
+
+/**
+ * Editing away the last use of the tag being filtered on drops that filter,
+ * rather than leaving an empty gallery filtered on a tag no longer offered.
+ */
+export const FilterDropsVanishedTag: Story = {
+  parameters: {
+    ...meta.parameters,
+    msw: { handlers: untaggable.handlers },
+  },
+  beforeEach: () => untaggable.reset(),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await canvas.findByText('Venue from the harbour')
+    await userEvent.selectOptions(canvas.getByLabelText('Tag'), 'sponsors')
+    await waitFor(() => expect(canvas.getAllByRole('listitem')).toHaveLength(1))
+    await userEvent.click(
+      canvas.getByRole('button', { name: 'Edit Sponsor thank-you: Acme' }),
+    )
+    const dialog = within(await within(document.body).findByRole('dialog'))
+    await userEvent.clear(dialog.getByLabelText(/Tags/))
+    await userEvent.click(dialog.getByRole('button', { name: 'Save' }))
+    await expect(
+      await canvas.findByText('Venue from the harbour'),
+    ).toBeInTheDocument()
+    await expect(canvas.getByLabelText('Tag')).toHaveValue('')
+  },
+}
+
+/**
+ * An older edition's mark stays on offer however the choice changes, so the
+ * organizer can always go back to it.
+ */
+export const EditOlderEditionAsset: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await canvas.findByText('Venue from the harbour')
+    await userEvent.click(canvas.getByLabelText('All editions'))
+    await userEvent.click(
+      await canvas.findByRole('button', {
+        name: 'Edit Speaker card: Ada Lovelace (2025)',
+      }),
+    )
+    const dialog = within(await within(document.body).findByRole('dialog'))
+    await expect(dialog.getByLabelText(/^CND 2025/)).toBeChecked()
+    await userEvent.click(dialog.getByLabelText(/^The whole organization/))
+    await expect(dialog.getByLabelText(/^CND 2025/)).not.toBeChecked()
+    await expect(dialog.getByLabelText(/^CND 2026/)).toBeInTheDocument()
+    await userEvent.click(dialog.getByLabelText(/^CND 2025/))
+    await expect(dialog.getByLabelText(/^CND 2025/)).toBeChecked()
   },
 }

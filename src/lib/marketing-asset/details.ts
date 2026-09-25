@@ -26,39 +26,44 @@ export function normalizeTags(tags: readonly string[]): string[] {
 
 /**
  * The details an organizer sets on an asset (spec §3), for the upload route
- * and `marketingAsset.update` alike. Only the SHAPE is checked here; that the
- * edition and the subject belong to this organization is the server's guard.
+ * and `marketingAsset.update` alike. Only the SHAPE is checked here.
+ *
+ * The edition is never a client-supplied id (AGENTS.md: never accept a
+ * conference id from the client): `current` is the request host's edition,
+ * `keep` the mark the asset already carries, both resolved on the server.
+ * `none` (the default, also for a client from before this field) is
+ * organization-wide.
  */
-export const marketingAssetDetailsSchema = z
-  .object({
-    title: z.string().trim().min(1).max(200),
-    alt: z.string().trim().min(1).max(1000),
-    scope: z.enum(['organization', 'edition']),
-    conferenceId: documentId.optional(),
-    subject: z
-      .object({ type: z.enum(MARKETING_ASSET_SUBJECT_TYPES), id: documentId })
-      .nullish(),
-    tags: z
-      .array(z.string().max(MARKETING_ASSET_MAX_TAG_LENGTH))
-      .max(MARKETING_ASSET_MAX_TAGS)
-      .default([])
-      .transform(normalizeTags),
-    credit: z
-      .string()
-      .trim()
-      .max(200)
-      .optional()
-      .transform((credit) => credit || undefined),
-  })
-  .refine(
-    (details) => (details.scope === 'edition') === !!details.conferenceId,
-    {
-      message:
-        'An edition asset needs its edition, and only an edition asset has one',
-      path: ['conferenceId'],
-    },
-  )
+export const marketingAssetDetailsSchema = z.object({
+  title: z.string().trim().min(1).max(200),
+  alt: z.string().trim().min(1).max(1000),
+  edition: z.enum(['none', 'current', 'keep']).default('none'),
+  subject: z
+    .object({ type: z.enum(MARKETING_ASSET_SUBJECT_TYPES), id: documentId })
+    .nullish(),
+  tags: z
+    .array(z.string().max(MARKETING_ASSET_MAX_TAG_LENGTH))
+    .max(MARKETING_ASSET_MAX_TAGS)
+    .default([])
+    .transform(normalizeTags),
+  credit: z
+    .string()
+    .trim()
+    .max(200)
+    .optional()
+    .transform((credit) => credit || undefined),
+})
 
 export type ParsedMarketingAssetDetails = z.output<
   typeof marketingAssetDetailsSchema
 >
+
+/** Details with the edition resolved on the server, ready to write. */
+export type ResolvedMarketingAssetDetails = Omit<
+  ParsedMarketingAssetDetails,
+  'edition'
+> &
+  (
+    | { scope: 'organization'; conferenceId?: undefined }
+    | { scope: 'edition'; conferenceId: string }
+  )

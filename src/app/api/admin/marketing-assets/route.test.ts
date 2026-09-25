@@ -28,7 +28,7 @@ vi.mock('@/lib/marketing-asset/sanity', () => ({
 // `src/server/routers/marketingAsset.test.ts`; here, that the route asks it
 // first and obeys its answer.
 vi.mock('@/lib/marketing-asset/guard', () => ({
-  requireAssetDetailsInCurrentOrg: h.guard,
+  resolveAssetDetailsForCurrentOrg: h.guard,
 }))
 vi.mock('@/lib/sanity/orphaned-asset', () => ({
   deleteImageAssetIfOrphaned: h.orphan,
@@ -50,9 +50,15 @@ const VALID = {
   url: URL_OK,
   title: 'Logo',
   alt: 'The Cloud Native Days logo',
-  scope: 'organization',
 }
 const PARSED = {
+  title: 'Logo',
+  alt: 'The Cloud Native Days logo',
+  edition: 'none',
+  tags: [],
+}
+/** What the guard resolves PARSED to. */
+const RESOLVED = {
   title: 'Logo',
   alt: 'The Cloud Native Days logo',
   scope: 'organization',
@@ -77,7 +83,12 @@ beforeEach(() => {
   })
   h.create.mockResolvedValue({ _id: 'asset-1' })
   h.orphan.mockResolvedValue({ deleted: true })
-  h.guard.mockResolvedValue(undefined)
+  h.guard.mockImplementation(
+    async ({ edition, ...rest }: { edition: string }) =>
+      edition === 'current'
+        ? { ...rest, scope: 'edition', conferenceId: 'conf-A' }
+        : { ...rest, scope: 'organization' },
+  )
 })
 
 describe('the marketing asset move route', () => {
@@ -107,9 +118,8 @@ describe('the marketing asset move route', () => {
   it.each([
     ['no alt text', { ...VALID, alt: '   ' }],
     ['no title', { ...VALID, title: '' }],
-    ['no url', { title: 'x', alt: 'y', scope: 'organization' }],
-    ['no scope', { url: URL_OK, title: 'x', alt: 'y' }],
-    ['an edition asset with no edition', { ...VALID, scope: 'edition' }],
+    ['no url', { title: 'x', alt: 'y' }],
+    ['an edition id in place of a choice', { ...VALID, edition: 'conf-B' }],
     [
       'too many tags',
       { ...VALID, tags: Array.from({ length: 21 }, (_, i) => `t${i}`) },
@@ -120,29 +130,41 @@ describe('the marketing asset move route', () => {
     expect(h.move).not.toHaveBeenCalled()
   })
 
-  it('checks the edition and subject BEFORE moving the image, and saves them', async () => {
+  it('resolves the edition and checks the subject BEFORE moving the image, and saves them', async () => {
     const body = {
       ...VALID,
-      scope: 'edition',
-      conferenceId: 'conf-A',
+      edition: 'current',
+      // Not an input field: the edition is resolved on the server.
+      conferenceId: 'conf-B',
       subject: { type: 'speaker', id: 'sp-ada' },
       tags: ['Speaker Card'],
       credit: 'Jane',
     }
     expect((await POST(request(body))).status).toBe(200)
-    const details = {
+    const parsed = {
       ...PARSED,
+      edition: 'current',
+      subject: { type: 'speaker', id: 'sp-ada' },
+      tags: ['speaker card'],
+      credit: 'Jane',
+    }
+    expect(h.guard).toHaveBeenCalledWith(parsed)
+    expect(h.guard.mock.invocationCallOrder[0]).toBeLessThan(
+      h.move.mock.invocationCallOrder[0],
+    )
+    expect(h.create.mock.calls[0][0].details).toEqual({
+      ...RESOLVED,
       scope: 'edition',
       conferenceId: 'conf-A',
       subject: { type: 'speaker', id: 'sp-ada' },
       tags: ['speaker card'],
       credit: 'Jane',
-    }
-    expect(h.guard).toHaveBeenCalledWith(details)
-    expect(h.guard.mock.invocationCallOrder[0]).toBeLessThan(
-      h.move.mock.invocationCallOrder[0],
-    )
-    expect(h.create.mock.calls[0][0].details).toEqual(details)
+    })
+  })
+
+  it('saves an upload from a client older than the edition field as organization-wide', async () => {
+    expect((await POST(request(VALID))).status).toBe(200)
+    expect(h.create.mock.calls[0][0].details).toEqual(RESOLVED)
   })
 
   it('refuses an edition or subject the guard refuses, and moves nothing', async () => {
@@ -171,7 +193,7 @@ describe('the marketing asset move route', () => {
     expect(h.create).toHaveBeenCalledWith(
       {
         orgId: 'org-A',
-        details: PARSED,
+        details: RESOLVED,
         imageAssetId: 'image-a-800x600-png',
         createdImageAssetId: 'image-a-800x600-png',
       },

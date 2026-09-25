@@ -282,8 +282,7 @@ describe('describing the image', () => {
     expect(uploader).toHaveBeenCalledWith(expect.any(File), {
       title: 'card',
       alt: 'Ada on stage',
-      scope: 'edition',
-      conferenceId: 'conf-2026',
+      edition: 'current',
       subject: null,
       tags: ['speaker card', 'keynote'],
       credit: 'Jane',
@@ -306,7 +305,7 @@ describe('describing the image', () => {
     expect((uploader.mock.calls[0] as unknown[])[1]).toEqual({
       title: 'logo',
       alt: 'The logo',
-      scope: 'organization',
+      edition: 'none',
       subject: null,
       tags: [],
     })

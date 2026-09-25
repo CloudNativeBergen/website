@@ -33,6 +33,7 @@ vi.mock('@/lib/sanity/client', () => ({
 import {
   listMarketingAssetFacets,
   listMarketingAssets,
+  readMarketingAssetMark,
 } from '@/lib/marketing-asset/sanity'
 
 const ref = (id: string) => ({ _type: 'reference', _ref: id })
@@ -306,5 +307,16 @@ describe('the filter menus', () => {
       { _id: 'sp-ada', _type: 'speaker', name: 'Ada Lovelace' },
       { _id: 'talk-1', _type: 'talk', name: 'Kubernetes at scale' },
     ])
+  })
+})
+
+describe('the mark an asset keeps', () => {
+  it('is its edition, for an asset of THIS organization only', async () => {
+    expect(await readMarketingAssetMark('org-a', 'card-2025')).toBe(
+      'conf-a-2025',
+    )
+    expect(await readMarketingAssetMark('org-a', 'logo')).toBeNull()
+    // B's asset pointing at our edition is not ours to keep a mark of.
+    expect(await readMarketingAssetMark('org-a', 'b-on-our-edition')).toBeNull()
   })
 })

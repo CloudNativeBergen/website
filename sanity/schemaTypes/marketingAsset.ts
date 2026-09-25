@@ -38,7 +38,10 @@ export default defineType({
       description: 'Only for an edition asset: the edition it is about.',
       type: 'reference',
       to: [{ type: 'conference' }],
-      hidden: ({ document }) => document?.scope !== 'edition',
+      // Still shown while it holds a value, so switching an edition asset to
+      // organization-wide leaves the reference visible to clear.
+      hidden: ({ document }) =>
+        document?.scope !== 'edition' && !document?.conference,
       validation: (Rule) =>
         Rule.custom((value, { document }) => {
           if (document?.scope === 'edition' && !value)

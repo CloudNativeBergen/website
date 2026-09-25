@@ -2,7 +2,7 @@ import 'server-only'
 import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
 import { scopedFetch } from '@/lib/sanity/scoped'
 import { isSoftOnSocial } from './image-type'
-import type { ParsedMarketingAssetDetails } from './details'
+import type { ResolvedMarketingAssetDetails } from './details'
 import type {
   MarketingAssetFacets,
   MarketingAssetFilter,
@@ -135,6 +135,26 @@ export async function listMarketingAssetFacets(
 }
 
 /**
+ * The edition one of this organization's assets is marked with now, or null
+ * when it is organization-wide (or not ours). Published documents only.
+ */
+export async function readMarketingAssetMark(
+  orgId: string,
+  id: string,
+): Promise<string | null> {
+  const row = await scopedFetch<{ conferenceId: string | null } | null>(
+    clientReadUncached,
+    { orgId },
+    `*[_type == "marketingAsset" && _id == $id][0]{
+      "conferenceId": select(scope == "edition" => conference._ref, null)
+    }`,
+    { id },
+    { cache: 'no-store' },
+  )
+  return row?.conferenceId ?? null
+}
+
+/**
  * The image one of this organization's assets holds, and whether this
  * gallery's upload CREATED that image. Sanity deduplicates identical bytes
  * across the whole dataset, so an upload can be handed another tenant's
@@ -191,8 +211,8 @@ export async function countMarketingAssetReleaseTwins(
 
 export interface NewMarketingAsset {
   orgId: string
-  /** Shape-checked, and proven this organization's by the caller. */
-  details: ParsedMarketingAssetDetails
+  /** Resolved, and proven this organization's, by the caller. */
+  details: ResolvedMarketingAssetDetails
   imageAssetId: string
   /**
    * The image asset this upload CREATED, or undefined when Sanity handed back
@@ -234,7 +254,7 @@ export async function createMarketingAsset(
  * away is removed rather than left empty. The subject is a WEAK reference, so
  * the person, talk or sponsor it names can still be merged or deleted.
  */
-export function detailsPatch(details: ParsedMarketingAssetDetails): {
+export function detailsPatch(details: ResolvedMarketingAssetDetails): {
   set: Record<string, unknown>
   unset: string[]
 } {
@@ -245,7 +265,7 @@ export function detailsPatch(details: ParsedMarketingAssetDetails): {
     tags: details.tags,
   }
   const unset: string[] = []
-  if (details.scope === 'edition' && details.conferenceId)
+  if (details.scope === 'edition')
     set.conference = { _type: 'reference', _ref: details.conferenceId }
   else unset.push('conference')
   if (details.subject)
@@ -263,7 +283,7 @@ export function detailsPatch(details: ParsedMarketingAssetDetails): {
 /** Rewrite an asset's details. The caller has proven the id and details ours. */
 export async function updateMarketingAssetDetails(
   id: string,
-  details: ParsedMarketingAssetDetails,
+  details: ResolvedMarketingAssetDetails,
 ): Promise<void> {
   const { set, unset } = detailsPatch(details)
   await clientWrite.patch(id).set(set).unset(unset).commit()

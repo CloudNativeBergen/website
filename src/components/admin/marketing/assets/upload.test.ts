@@ -21,7 +21,7 @@ afterEach(() => vi.unstubAllGlobals())
 const DETAILS = {
   title: 'x',
   alt: 'y',
-  scope: 'organization' as const,
+  edition: 'none' as const,
   tags: [] as string[],
 }
 
@@ -42,7 +42,7 @@ describe('blobAssetUploader', () => {
       url: 'https://s.public.blob.vercel-storage.com/marketing-asset/org-A/1-logo-x.png',
       title: 'Logo',
       alt: 'The logo',
-      scope: 'organization',
+      edition: 'none',
       tags: [],
     })
   })

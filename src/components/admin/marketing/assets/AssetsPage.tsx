@@ -191,6 +191,26 @@ export function AssetsPage({
     placeholderData: keepPreviousData,
   })
   const filters = api.marketingAsset.filters.useQuery()
+  // A subject or tag whose last asset was edited or deleted leaves the menu;
+  // its filter goes with it, rather than filtering on something unseen.
+  // Adjusted during render, when fresh menus arrive.
+  const [menusSeen, setMenusSeen] = useState(filters.data)
+  if (filters.data !== menusSeen) {
+    setMenusSeen(filters.data)
+    const facets = filters.data
+    if (facets) {
+      const staleSubject =
+        filter.subjectId &&
+        !facets.subjects.some((s) => s._id === filter.subjectId)
+      const staleTag = filter.tag && !facets.tags.includes(filter.tag)
+      if (staleSubject || staleTag)
+        setFilter({
+          ...filter,
+          ...(staleSubject ? { subjectId: undefined } : {}),
+          ...(staleTag ? { tag: undefined } : {}),
+        })
+    }
+  }
   const edition = filters.data?.edition ?? null
   const filtered = Boolean(
     filter.subjectId ||
