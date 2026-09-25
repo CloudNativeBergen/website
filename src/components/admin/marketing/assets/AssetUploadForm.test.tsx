@@ -141,4 +141,45 @@ describe('picking a file', () => {
     await act(async () => finish({ _id: 'x', softOnSocial: false }))
     expect(uploader).toHaveBeenCalledTimes(1)
   })
+
+  it('does not pull focus back from elsewhere when a slow save finishes', async () => {
+    const { pick, settle, uploader } = renderForm()
+    const elsewhere = document.createElement('button')
+    document.body.appendChild(elsewhere)
+    let finish: (value: {
+      _id: string
+      softOnSocial: boolean
+    }) => void = () => {}
+    uploader.mockImplementation(
+      () => new Promise((resolve) => (finish = resolve)),
+    )
+    await pick(png('logo.png'))
+    await settle('logo.png', 1200, 1200)
+    fireEvent.change(screen.getByLabelText('Alt text'), {
+      target: { value: 'The logo' },
+    })
+    await act(async () => {
+      fireEvent.submit(screen.getByRole('button', { name: 'Add to gallery' }))
+    })
+    elsewhere.focus()
+    await act(async () => finish({ _id: 'x', softOnSocial: false }))
+    expect(document.activeElement).toBe(elsewhere)
+    elsewhere.remove()
+  })
+
+  it('puts focus on the picker after a save when focus had nowhere to go', async () => {
+    const { pick, settle } = renderForm()
+    await pick(png('logo.png'))
+    await settle('logo.png', 1200, 1200)
+    fireEvent.change(screen.getByLabelText('Alt text'), {
+      target: { value: 'The logo' },
+    })
+    ;(document.activeElement as HTMLElement | null)?.blur()
+    await act(async () => {
+      fireEvent.submit(screen.getByRole('button', { name: 'Add to gallery' }))
+    })
+    expect(document.activeElement).toBe(
+      screen.getByLabelText('Choose an image'),
+    )
+  })
 })
