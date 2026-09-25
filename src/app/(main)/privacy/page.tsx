@@ -692,7 +692,7 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                               their talk
                             </li>
                             <li>
-                              • Once it is switched on, such a post{' '}
+                              • Where it is switched on, such a post{' '}
                               <strong>may tag</strong> (@-mention) the social
                               accounts you listed on your speaker profile, so it
                               reaches your followers and you can reshare it
