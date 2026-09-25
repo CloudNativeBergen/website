@@ -86,6 +86,8 @@ export function AssetUploadForm({
   )
 
   async function pick(file: File | undefined) {
+    // Every pick, refused or not, makes any earlier pending read stale.
+    const seq = ++pickSeq.current
     setError(null)
     if (!file) return
     const refusal = refusalFor(file)
@@ -93,7 +95,6 @@ export function AssetUploadForm({
       setError(refusal)
       return
     }
-    const seq = ++pickSeq.current
     const dimensions = await readDimensions(file)
     if (seq !== pickSeq.current) return
     setPicked({

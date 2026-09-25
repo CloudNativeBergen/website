@@ -97,8 +97,14 @@ beforeEach(() => {
       }
       // The asset reads, which must be scoped to the caller's organization.
       if (params.orgId !== 'org-A') throw new Error('unscoped read')
-      if (query.includes('"assetId": image.asset._ref') && params.id)
-        return { assetId: 'image-logo-800x800-png' }
+      if (query.includes('_id in [$id, $draftId]'))
+        return params.id === 'asset-ours'
+          ? [
+              'image-logo-800x800-png',
+              'image-logo-800x800-png',
+              'image-draft-1x1-png',
+            ]
+          : []
       return ROWS
     },
   )
@@ -117,6 +123,8 @@ describe('marketingAsset.list', () => {
     const [query, params] = h.read.mock.calls[0]
     expect(query).toContain('organization._ref == $orgId')
     expect(query).toContain('_type == "marketingAsset"')
+    // A Studio draft is not a second gallery entry.
+    expect(query).toContain('!(_id in path("drafts.**"))')
     expect(params).toMatchObject({ orgId: 'org-A' })
   })
 
@@ -139,7 +147,11 @@ describe('marketingAsset.delete', () => {
     expect(result).toEqual({ deleted: true, imageDeleted: true })
     // Its Studio draft goes with it, in the same transaction.
     expect(h.del).toHaveBeenCalledWith(['asset-ours', 'drafts.asset-ours'])
-    expect(h.orphan).toHaveBeenCalledWith('image-logo-800x800-png')
+    // The published image and the draft's own image, each once.
+    expect(h.orphan.mock.calls).toEqual([
+      ['image-logo-800x800-png'],
+      ['image-draft-1x1-png'],
+    ])
     // The document goes first: while it exists it is itself a reference.
     expect(h.del.mock.invocationCallOrder[0]).toBeLessThan(
       h.orphan.mock.invocationCallOrder[0],
@@ -172,6 +184,20 @@ describe('marketingAsset.delete', () => {
     })
     expect(h.del).not.toHaveBeenCalled()
     expect(h.orphan).not.toHaveBeenCalled()
+  })
+
+  it('refuses a draft id with the same answer, and deletes nothing', async () => {
+    const draft = await assets()
+      .delete({ id: 'drafts.asset-ours' })
+      .catch((e) => e)
+    const missing = await assets()
+      .delete({ id: 'asset-nope' })
+      .catch((e) => e)
+    expect({ code: draft.code, message: draft.message }).toEqual({
+      code: missing.code,
+      message: missing.message,
+    })
+    expect(h.del).not.toHaveBeenCalled()
   })
 
   it('refuses another type of our own organization', async () => {

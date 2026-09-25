@@ -20,7 +20,9 @@ export async function listMarketingAssets(
   >(
     clientReadUncached,
     { orgId },
-    `*[_type == "marketingAsset" && scope == "organization"] | order(_createdAt desc){
+    // Published documents only: the client reads `raw`, and a Studio draft
+    // would otherwise show as a second, deletable copy.
+    `*[_type == "marketingAsset" && scope == "organization" && !(_id in path("drafts.**"))] | order(_createdAt desc){
       _id,
       title,
       alt,
@@ -41,19 +43,23 @@ export async function listMarketingAssets(
   }))
 }
 
-/** The image asset id one of this organization's assets holds, or `null`. */
-export async function readMarketingAssetImageId(
+/**
+ * The image asset ids one of this organization's assets holds, published and
+ * Studio draft together: a draft may point at a different image, and both go
+ * through the orphan check when the asset is deleted.
+ */
+export async function readMarketingAssetImageIds(
   orgId: string,
   id: string,
-): Promise<string | null> {
-  const row = await scopedFetch<{ assetId: string | null } | null>(
+): Promise<string[]> {
+  const refs = await scopedFetch<(string | null)[] | null>(
     clientReadUncached,
     { orgId },
-    `*[_type == "marketingAsset" && _id == $id][0]{ "assetId": image.asset._ref }`,
-    { id },
+    `*[_type == "marketingAsset" && _id in [$id, $draftId]].image.asset._ref`,
+    { id, draftId: `drafts.${id}` },
     { cache: 'no-store' },
   )
-  return row?.assetId ?? null
+  return [...new Set((refs ?? []).filter((ref): ref is string => !!ref))]
 }
 
 export interface NewMarketingAsset {
