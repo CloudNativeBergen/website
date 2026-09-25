@@ -1830,3 +1830,47 @@ export const VideoBarEndsAtBoundary: Story = {
     expect(hit(b)).toBe(enters)
   },
 }
+
+/**
+ * A drag of a scene's length that shortens it and comes back gives the bars
+ * back: every move resizes from the scene as the drag found it, so the logo's
+ * 3.5–4.5 s bar, clamped to 3.5–4 on the way in, is 3.5–4.5 again at the end.
+ */
+export const VideoDurationDragGivesBarsBack: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(canvas.getByRole('button', { name: 'Video' }))
+    await setSeconds(canvas, 'Scene 1 length (s)', 5)
+    await setSeconds(canvas, 'Logo enters (s)', 3.5)
+    await setSeconds(canvas, 'Logo leaves (s)', 4.5)
+    const edge = canvas.getByRole('slider', { name: 'Scene 1 length' })
+    const leaves = () =>
+      canvas
+        .getByRole('slider', { name: 'Scene 1 Logo leaves' })
+        .getAttribute('aria-valuenow')
+    const { left, width, top, height } = edge.getBoundingClientRect()
+    const x = left + width / 2
+    const y = top + height / 2
+    // Pointer events on the handle itself, as the browser delivers them to
+    // an element holding pointer capture (userEvent's synthetic moves go to
+    // whatever is under the pointer instead). 60 px is a second.
+    const pointer = (type: string, clientX: number) =>
+      edge.dispatchEvent(
+        new PointerEvent(type, {
+          bubbles: true,
+          button: 0,
+          buttons: type === 'pointerup' ? 0 : 1,
+          pointerId: 1,
+          clientX,
+          clientY: y,
+        }),
+      )
+    pointer('pointerdown', x)
+    pointer('pointermove', x - 60)
+    await waitFor(() => expect(leaves()).toBe('4'))
+    pointer('pointermove', x)
+    pointer('pointerup', x)
+    await waitFor(() => expect(leaves()).toBe('4.5'))
+    await expect(edge).toHaveAttribute('aria-valuenow', '5')
+  },
+}
