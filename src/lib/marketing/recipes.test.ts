@@ -29,6 +29,10 @@ describe('stored Recipes', () => {
     }
   })
 
+  it('built-in Recipes do not tag yet: the last ticket of the chain turns them on (#1152)', () => {
+    expect(all.filter((r) => r.tagSubject !== undefined)).toEqual([])
+  })
+
   it('gives every Recipe of a Campaign a unique _key', () => {
     for (const campaign of BUILTIN_TEMPLATE.campaigns) {
       const keys = campaign.recipes.map((r) => recipeToStored(r)._key)

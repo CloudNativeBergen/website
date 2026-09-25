@@ -28,6 +28,11 @@ export interface RecipeEdits {
   /** Entries that carry an image only. */
   alt?: string
   instructions?: string
+  /**
+   * Generated Bluesky copy tags the subject (tagging spec §2). Applies to the
+   * Bluesky post only. Authoritative: absent is off.
+   */
+  tagSubject?: boolean
 }
 
 /** Bounds what one attach creates: a Task, a post and a variant per day. */
@@ -73,6 +78,7 @@ export function editsOf(
   const instructions = stored.find(
     (r) => r.beat === entry.id && r.instructions,
   )?.instructions
+  const tagSubject = posts.some((r) => r.channel === 'bluesky' && r.tagSubject)
   return {
     title: first?.title ?? entry.title,
     channels: Object.fromEntries(
@@ -89,6 +95,7 @@ export function editsOf(
     ...(cadence ? { window: { from: cadence.from, to: cadence.to } } : {}),
     ...(alt ? { alt } : {}),
     ...(instructions ? { instructions } : {}),
+    ...(tagSubject ? { tagSubject: true } : {}),
   }
 }
 
@@ -105,8 +112,17 @@ export function applyEdits(
   )
   return entry.recipes
     .filter((r) => r.kind !== 'publishing' || edits.channels[r.channel!])
+    .map((entryRecipe) => {
+      // The entry's own default gives way: the edits decide (absent is off).
+      const r = { ...entryRecipe }
+      delete r.tagSubject
+      return r
+    })
     .map((r) => ({
       ...r,
+      ...(edits.tagSubject && r.kind === 'publishing' && r.channel === 'bluesky'
+        ? { tagSubject: true }
+        : {}),
       title: r.kind === 'publishing' ? edits.title : `Render: ${edits.title}`,
       ...(r.kind === 'publishing'
         ? { skeleton: edits.channels[r.channel!]!.skeleton }

@@ -43,6 +43,7 @@ import {
 import {
   commitGeneratedTasks,
   getGenerationContext,
+  getSpeakerTagSources,
   publishedTaskKeys,
   type GenerationCampaign,
   type GenerationContext,
@@ -53,6 +54,8 @@ import {
   type ResolvedMilestone,
 } from './milestones'
 import { publishedIn } from './recipes'
+import type { BlueskyTag } from './tagging/body'
+import { blueskyTagFor, ownBlueskyHandle } from './tagging/lookup'
 import type { SubjectList, TaskRecipe } from './template/types'
 import type { TaskOrigin, TriggerEvent } from './types'
 
@@ -201,26 +204,16 @@ function sponsorBeatDates(recipes: TaskRecipe[], now: string): BeatDates {
 }
 
 /**
- * Build the next commit's worth of records for ONE Campaign, or null when
- * nothing is pending anywhere. Dates are computed fresh from the context, so
- * a retry after a conflict deals slots from what actually landed.
- *
- * `milestones` is null when the conference has lost a required date: cadence
- * beats then have nothing to anchor to and wait, but Trigger beats are dated
- * by their event and carry on.
+ * Every (Campaign, beat, subject) the requests still want something of, in
+ * Campaign order. One beat per (Campaign, beat, subject), however many
+ * requests or Triggers name it.
  */
-function nextCommit(
+function pendingBeats(
   context: GenerationContext,
-  milestones: Record<Milestone, ResolvedMilestone> | null,
   requests: GenerationRequest[],
-  now: string,
   blocked: ReadonlySet<string>,
   published: ReadonlySet<string>,
-  /** The caller's batch mint for this conference (short-links spec §2.2). */
-  newShortCode: () => string,
-): { campaign: GenerationCampaign; records: TaskRecords } | null {
-  const ownerId = context.plan.ownerId
-  if (!ownerId) return null
+): PendingBeat[] {
   const pending: PendingBeat[] = []
   const seen = new Set<string>()
   for (const campaign of context.campaigns) {
@@ -253,6 +246,33 @@ function nextCommit(
       }
     }
   }
+  return pending
+}
+
+/**
+ * Build the next commit's worth of records for ONE Campaign, or null when
+ * nothing is pending anywhere. Dates are computed fresh from the context, so
+ * a retry after a conflict deals slots from what actually landed.
+ *
+ * `milestones` is null when the conference has lost a required date: cadence
+ * beats then have nothing to anchor to and wait, but Trigger beats are dated
+ * by their event and carry on.
+ */
+function nextCommit(
+  context: GenerationContext,
+  milestones: Record<Milestone, ResolvedMilestone> | null,
+  requests: GenerationRequest[],
+  now: string,
+  blocked: ReadonlySet<string>,
+  published: ReadonlySet<string>,
+  /** The caller's batch mint for this conference (short-links spec §2.2). */
+  newShortCode: () => string,
+  /** Bluesky tags looked up for this run, by speaker id (`lookUpTags`). */
+  tags: ReadonlyMap<string, BlueskyTag | null>,
+): { campaign: GenerationCampaign; records: TaskRecords } | null {
+  const ownerId = context.plan.ownerId
+  if (!ownerId) return null
+  const pending = pendingBeats(context, requests, blocked, published)
   if (pending.length === 0) return null
 
   const campaign = pending[0].campaign
@@ -290,6 +310,7 @@ function nextCommit(
         dates,
         origin: item.origin,
         existingRenderIds: item.existingRenderIds,
+        tags,
         campaign: { _id: campaign._id, key: campaign.key },
         planId: context.plan._id,
         conference: { _id: context.conference._id, baseUrl },
@@ -312,9 +333,50 @@ function nextCommit(
       new Set([...blocked, campaign._id]),
       published,
       newShortCode,
+      tags,
     )
   }
   return { campaign, records }
+}
+
+/** A recipe whose generated body tags its subject (tagging spec §2, §4.1). */
+const tagsItsSubject = (r: TaskRecipe) =>
+  r.kind === 'publishing' && r.channel === 'bluesky' && r.tagSubject === true
+
+/**
+ * Look up the Bluesky tag of every person a pending tagging beat names and
+ * `cache` does not hold yet (tagging spec §4.4, Generation). NEVER THROWS
+ * and never waits past the resolver's timeout: generation runs inside Trigger
+ * handlers, and a lookup that fails leaves those people untagged — their
+ * plain names — rather than failing the Tasks.
+ */
+async function lookUpTags(
+  conferenceId: string,
+  context: GenerationContext,
+  pending: PendingBeat[],
+  cache: Map<string, BlueskyTag | null>,
+): Promise<void> {
+  const wanted = new Set<string>()
+  for (const item of pending) {
+    if (!item.recipes.some(tagsItsSubject)) continue
+    for (const person of item.subject.people ?? [])
+      if (!cache.has(person._id)) wanted.add(person._id)
+  }
+  if (wanted.size === 0) return
+  const ids = [...wanted]
+  try {
+    const own = ownBlueskyHandle(context.conference.socialLinks)
+    const sources = new Map(
+      (await getSpeakerTagSources(conferenceId, ids)).map((s) => [s._id, s]),
+    )
+    const found = await Promise.all(
+      ids.map((id) => blueskyTagFor(sources.get(id), own)),
+    )
+    ids.forEach((id, i) => cache.set(id, found[i]))
+  } catch (error) {
+    console.warn('marketing generation: Bluesky tag lookup failed', error)
+    for (const id of ids) cache.set(id, null)
+  }
 }
 
 /** The same subject named twice (two CRM rows, two Triggers) is one subject. */
@@ -349,6 +411,8 @@ export async function runGeneration(
   const deduped = dedupeSubjects(requests)
   const conflicts = new Map<string, number>()
   const blocked = new Set<string>()
+  // Looked up once per run: a retry after a lost race asks Bluesky nothing new.
+  const tags = new Map<string, BlueskyTag | null>()
   const result = async (
     skipped?: GenerationResult['skipped'],
   ): Promise<GenerationResult> => ({
@@ -379,6 +443,12 @@ export async function runGeneration(
     // Re-read per iteration: the previous iteration committed codes of its
     // own, and a batch must check against them too.
     const newShortCode = await shortCodeMinterFor(conferenceId)
+    await lookUpTags(
+      conferenceId,
+      context,
+      pendingBeats(context, deduped, blocked, published),
+      tags,
+    )
     const next = nextCommit(
       context,
       milestones,
@@ -387,6 +457,7 @@ export async function runGeneration(
       blocked,
       published,
       newShortCode,
+      tags,
     )
     if (!next) return result()
     const landed = await commitGeneratedTasks({

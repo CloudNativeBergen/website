@@ -1,8 +1,10 @@
 /**
  * "Don't tag me in social posts" — the speaker's opt-out from being
  * @-mentioned in marketing posts (#1148, `docs/MARKETING_TAGGING_SPEC.md`
- * §3.2). NOTHING READS IT YET, by design: it ships before the first tag so
- * there is never a version that tags people who cannot say no.
+ * §3.2). It shipped before the first tag so there is never a version that
+ * tags people who cannot say no. Generation reads it (#1150,
+ * `getSpeakerTagSources`); the save, approval and publish checks are #1151
+ * and #1152.
  *
  * This module holds the rule, as a pure function, so that both speaker paths
  * (`speaker.update`) and the organizer path (`speaker.admin.update`) get the

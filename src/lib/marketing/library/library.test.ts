@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { RecipeEditsSchema } from '@/server/schemas/marketing'
 import { BUILTIN_TEMPLATE } from '../template'
 import {
   LIBRARY,
@@ -52,6 +53,36 @@ describe('editing an entry', () => {
       expect(applyEdits(entry, editsOf(entry, entry.recipes))).toEqual(
         entry.recipes,
       )
+  })
+  it('tagSubject: the edit switches the Bluesky post only, and reads back from the stored Recipes', () => {
+    const edits = editsOf(speakerCard, speakerCard.recipes)
+    expect(edits).not.toHaveProperty('tagSubject')
+    const on = applyEdits(speakerCard, { ...edits, tagSubject: true })
+    expect(on.filter((r) => r.tagSubject).map((r) => r.key)).toEqual([
+      'speakerCard:bluesky',
+    ])
+    expect(editsOf(speakerCard, on).tagSubject).toBe(true)
+    // The edits are authoritative: absent is off, whatever was stored before.
+    const off = applyEdits(
+      speakerCard,
+      editsOf(speakerCard, speakerCard.recipes),
+    )
+    expect(off.some((r) => 'tagSubject' in r)).toBe(false)
+    expect(
+      applyEdits(speakerCard, {
+        ...editsOf(speakerCard, on),
+        tagSubject: false,
+      }).some((r) => 'tagSubject' in r),
+    ).toBe(false)
+  })
+  it('the strict edit schema carries tagSubject, and only as a boolean', () => {
+    const edits = editsOf(speakerCard, speakerCard.recipes)
+    expect(
+      RecipeEditsSchema.parse({ ...edits, tagSubject: true }).tagSubject,
+    ).toBe(true)
+    expect(
+      RecipeEditsSchema.safeParse({ ...edits, tagSubject: 'yes' }).success,
+    ).toBe(false)
   })
   it('applies the title, copy, alt, window and rates, and nothing else', () => {
     const edits = editsOf(speakerCard, speakerCard.recipes)

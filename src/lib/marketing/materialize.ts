@@ -18,6 +18,11 @@ import {
   resolvePlaceholders,
   type Placeholder,
 } from './placeholders'
+import {
+  tagBlueskyBody,
+  type MentionRecord,
+  type TagPerson,
+} from './tagging/body'
 import type { Anchor, TaskRecipe } from './template/types'
 import type {
   MarketingChannel,
@@ -185,6 +190,8 @@ export interface SeedVariant {
   shortCode: string
   scheduledAt: string
   status: VariantStatus
+  /** Tags the generated body carries, and handles that did not resolve (tagging spec §4.3). */
+  mentions?: MentionRecord[]
 }
 
 export interface TaskRecords {
@@ -237,6 +244,11 @@ export interface MaterializeInput {
   alt?: string
   /** Carried onto the Task, so the NEXT copy knows the copy is theirs. */
   copyEdited?: boolean
+  /**
+   * The people the subject's `{name}` names, with their Bluesky tags. Read
+   * only for the body of a Bluesky `tagSubject` recipe (tagging spec §4.1).
+   */
+  tagging?: readonly TagPerson[]
 }
 
 export function materializeTask(input: MaterializeInput): TaskRecords {
@@ -290,9 +302,26 @@ export function materializeTask(input: MaterializeInput): TaskRecords {
     campaignKey: input.campaign.key,
     taskKey: input.key,
   })
+  const bodyValues = { ...input.values, url: link }
+  // The ONE place a handle enters copy: the body of a Bluesky `tagSubject`
+  // recipe. The value map stays plain, so the LinkedIn sibling, the alt text
+  // above and the render never see a handle. A body handed in (a copied
+  // Task's) is the organizer's and is kept as it is.
+  const tagged =
+    input.body === undefined &&
+    r.tagSubject &&
+    channel === 'bluesky' &&
+    input.tagging?.length
+      ? tagBlueskyBody({
+          skeleton: r.skeleton ?? '',
+          values: bodyValues,
+          people: input.tagging,
+        })
+      : null
   const body =
     input.body ??
-    resolvePlaceholders(r.skeleton ?? '', { ...input.values, url: link })
+    tagged?.body ??
+    resolvePlaceholders(r.skeleton ?? '', bodyValues)
   const postId = input.newId('socialPost')
   const variantId = input.newId('socialPostVariant')
   task.postId = postId
@@ -320,6 +349,7 @@ export function materializeTask(input: MaterializeInput): TaskRecords {
         shortCode: input.newShortCode(),
         scheduledAt: input.at,
         status: 'draft',
+        ...(tagged?.mentions.length ? { mentions: tagged.mentions } : {}),
       },
     ],
   }

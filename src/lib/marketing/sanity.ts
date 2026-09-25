@@ -96,6 +96,21 @@ export function variantDocument(v: SeedVariant, conference: Ref, now: string) {
     attempts: [],
     attemptCount: 0,
     updatedAt: now,
+    // Tagging spec §4.3. The speaker ref is WEAK: a strong one would make the
+    // speaker undeletable and defeat GDPR erasure.
+    ...(v.mentions?.length
+      ? {
+          mentions: v.mentions.map((m) => ({
+            _key: m._key,
+            _type: 'socialPostMention' as const,
+            handle: m.handle,
+            ...(m.did ? { did: m.did } : {}),
+            speaker: weakRef(m.speakerId),
+            name: m.name,
+            status: m.status,
+          })),
+        }
+      : {}),
   }
 }
 

@@ -72,6 +72,8 @@ export type GenerationConference = Pick<
   | 'sponsorDeadlineDate'
   | 'recordingsLiveDate'
   | 'ticketTargets'
+  /** Our own Bluesky account is never tagged (tagging spec §4.1). */
+  | 'socialLinks'
 >
 
 export interface GenerationCampaign {
@@ -132,7 +134,7 @@ export async function getGenerationContext(
         _id, title, city, venueName, domains, startDate, endDate,
         cfpStartDate, cfpEndDate, cfpNotifyDate, programDate,
         earlyBirdEndDate, registrationCloseDate, speakersAnnouncedDate,
-        sponsorDeadlineDate, recordingsLiveDate, ticketTargets
+        sponsorDeadlineDate, recordingsLiveDate, ticketTargets, socialLinks
       },
       "campaigns": *[_type == "marketingCampaign" && conference._ref == $conferenceId && plan._ref == ^._id && !(_id in path("drafts.**")) && !(_id in path("versions.**"))]{
         _id, _rev, key, "triggers": triggers[]{ event, taskRecipeKey }, ${RECIPE_PROJECTION}, generatedKeys
@@ -182,6 +184,8 @@ function talkSubject(talk: RawTalk): GenerationSubject {
       ...(first?.name ? { name: first.name } : {}),
       ...(first?.title ? { company: first.title } : {}),
     },
+    // A talk's `{name}` is its first speaker today (tagging spec §4.2, #1153).
+    ...(first?.name ? { people: [{ _id: first._id, name: first.name }] } : {}),
   }
 }
 
@@ -399,4 +403,36 @@ export async function markPlanExpanded(
   } catch (error) {
     console.error(`Could not stamp ${planId} as expanded`, error)
   }
+}
+
+/** What a speaker's Bluesky tag is derived from (tagging spec §3.1, §3.2). */
+export interface SpeakerTagSource {
+  _id: string
+  links: string[] | null
+  socialTagOptOut: boolean | null
+}
+
+/**
+ * The profile links and tag opt-out of these speakers, read FRESH — never
+ * from an event payload — so an opt-out set a moment ago is honoured. Scoped
+ * through the conference's talks: a speaker is only read here when they have
+ * a talk at this conference.
+ */
+export async function getSpeakerTagSources(
+  conferenceId: string,
+  speakerIds: string[],
+): Promise<SpeakerTagSource[]> {
+  const rows = await scopedFetch<(SpeakerTagSource | null)[] | null>(
+    clientReadUncached,
+    { conferenceId },
+    `*[_type == "talk" && count(speakers[_ref in $ids]) > 0 && !(_id in path("drafts.**")) && !(_id in path("versions.**"))].speakers[]->{ _id, links, socialTagOptOut }`,
+    { ids: speakerIds },
+    { cache: 'no-store' },
+  )
+  const wanted = new Set(speakerIds)
+  const byId = new Map<string, SpeakerTagSource>()
+  for (const row of rows ?? []) {
+    if (row?._id && wanted.has(row._id)) byId.set(row._id, row)
+  }
+  return [...byId.values()]
 }

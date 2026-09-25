@@ -248,6 +248,11 @@ export default defineType({
                       type: 'boolean',
                     }),
                     defineField({
+                      name: 'tagSubject',
+                      title: 'Tag the subject',
+                      type: 'boolean',
+                    }),
+                    defineField({
                       name: 'alt',
                       title: 'Alt skeleton',
                       type: 'text',

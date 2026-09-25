@@ -248,6 +248,13 @@ export default defineType({
                 'The skeleton is one edition’s literal copy, saved into a Template without being rewritten.',
               type: 'boolean',
             }),
+            defineField({
+              name: 'tagSubject',
+              title: 'Tag the subject',
+              description:
+                'Generated Bluesky copy tags the speaker with their Bluesky handle instead of their name.',
+              type: 'boolean',
+            }),
             defineField({ name: 'alt', title: 'Alt skeleton', type: 'text' }),
             defineField({
               name: 'instructions',
