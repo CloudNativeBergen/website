@@ -2,7 +2,6 @@
 import { describe, it, expect } from 'vitest'
 import {
   FRAME,
-  addScene,
   clampDuration,
   clampTime,
   frameAt,
@@ -50,12 +49,7 @@ describe('newScene', () => {
   })
 })
 
-describe('addScene and setSceneDuration', () => {
-  it('appends a new scene at the end', () => {
-    const scenes = addScene([scene(2)], DEFAULT_DESIGN)
-    expect(scenes.map((s) => s.duration)).toEqual([2, 3])
-  })
-
+describe('setSceneDuration', () => {
   it('changes one scene, clamped, and leaves the others alone', () => {
     const scenes = [scene(2), scene(4)]
     expect(setSceneDuration(scenes, 1, 0.2).map((s) => s.duration)).toEqual([

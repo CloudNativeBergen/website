@@ -55,10 +55,6 @@ export function clampDuration(seconds: number): number {
   return Math.max(MIN_SCENE_DURATION, Math.round(seconds * 10) / 10)
 }
 
-export function addScene(scenes: Scene[], design: MemeDesign): Scene[] {
-  return [...scenes, newScene(design)]
-}
-
 export function setSceneDuration(
   scenes: Scene[],
   index: number,
