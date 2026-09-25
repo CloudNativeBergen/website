@@ -227,7 +227,7 @@ export function VideoTimeline({
   return (
     <section
       aria-label="Video timeline"
-      className={`${styles.panel} text-brand-slate-gray dark:text-gray-300`}
+      className={`${styles.panel} mt-4 text-brand-slate-gray dark:text-gray-300`}
     >
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <button

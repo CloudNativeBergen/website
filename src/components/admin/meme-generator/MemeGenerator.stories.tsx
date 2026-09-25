@@ -1138,3 +1138,125 @@ export const LeftTextFollowsHorizontalPosition: Story = {
     })
   },
 }
+
+// ── Video mode (#1174) ────────────────────────────────────────────────────
+
+const CLOUD_BLUE = '#1D4ED8'
+const FRESH_GREEN = '#10B981'
+
+/** Within a few levels of `hex` on every channel. */
+const near =
+  (hex: string, tolerance = 12): Pixel =>
+  (r, g, b) => {
+    const [er, eg, eb] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16))
+    return (
+      Math.abs(r - er) <= tolerance &&
+      Math.abs(g - eg) <= tolerance &&
+      Math.abs(b - eb) <= tolerance
+    )
+  }
+
+/** Half of each colour, the way a fade at its midpoint composites them. */
+const midway = (a: string, b: string) =>
+  '#' +
+  [1, 3, 5]
+    .map((i) =>
+      Math.round(
+        (parseInt(a.slice(i, i + 2), 16) + parseInt(b.slice(i, i + 2), 16)) / 2,
+      )
+        .toString(16)
+        .padStart(2, '0'),
+    )
+    .join('')
+
+/** A corner no text line, QR code or logo reaches: background only. */
+const BACKGROUND_CORNER: Box = { x: 24, y: 24, width: 120, height: 120 }
+
+async function seekTo(canvas: Canvas, seconds: number) {
+  const field = canvas.getByLabelText('Playhead (s)')
+  await userEvent.clear(field)
+  await userEvent.type(field, String(seconds))
+}
+
+/**
+ * Two scenes — Cloud Blue, then the default Fresh Green — faded into each
+ * other, with the playhead pinned on the boundary: the middle of the fade.
+ * Each scene is drawn to its own layer and the pair composited, so the
+ * background there is half of each; either scene alone fails this. Before and
+ * after the half-second window only one scene shows.
+ */
+export const VideoFadeMidway: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(canvas.getByRole('button', { name: 'Video' }))
+    await userEvent.click(canvas.getByRole('button', { name: 'Cloud Blue' }))
+    await userEvent.click(canvas.getByRole('button', { name: 'Add scene' }))
+    await userEvent.click(
+      canvas.getByRole('button', { name: 'Scene 1, 3.0 s' }),
+    )
+    await userEvent.selectOptions(canvas.getByLabelText('Into scene 2'), 'fade')
+
+    const corner = (pixel: Pixel) =>
+      share(
+        canvasElement.querySelector('canvas')!,
+        CANVAS_SIZE,
+        BACKGROUND_CORNER,
+        pixel,
+      )
+
+    await seekTo(canvas, 2.7)
+    await waitFor(() => expect(corner(near(CLOUD_BLUE))).toBeGreaterThan(0.95))
+    await seekTo(canvas, 3.4)
+    await waitFor(() => expect(corner(near(FRESH_GREEN))).toBeGreaterThan(0.95))
+
+    await seekTo(canvas, 3)
+    await waitFor(() =>
+      expect(corner(near(midway(CLOUD_BLUE, FRESH_GREEN)))).toBeGreaterThan(
+        0.95,
+      ),
+    )
+    expect(corner(near(CLOUD_BLUE, 40))).toBe(0)
+    expect(corner(near(FRESH_GREEN, 40))).toBe(0)
+  },
+}
+
+/**
+ * Keyboard only, with real key presses: switch to Video, add a scene, lengthen
+ * it, move the playhead, play and pause.
+ */
+export const VideoByKeyboard: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const activate = async (element: HTMLElement) => {
+      element.focus()
+      await userEvent.keyboard('{Enter}')
+    }
+    const valueOf = (name: string) =>
+      Number(canvas.getByRole('slider', { name }).getAttribute('aria-valuenow'))
+
+    await activate(canvas.getByRole('button', { name: 'Video' }))
+    await activate(canvas.getByRole('button', { name: 'Add scene' }))
+    expect(valueOf('Scene 2 length')).toBe(3)
+
+    canvas.getByRole('slider', { name: 'Scene 2 length' }).focus()
+    await userEvent.keyboard(
+      '{ArrowRight}{ArrowRight}{Shift>}{ArrowRight}{/Shift}',
+    )
+    expect(valueOf('Scene 2 length')).toBe(4.2)
+
+    canvas.getByRole('slider', { name: 'Playhead' }).focus()
+    await userEvent.keyboard('{End}')
+    expect(valueOf('Playhead')).toBe(7.2)
+    await userEvent.keyboard('{Home}{Shift>}{ArrowRight}{/Shift}')
+    expect(valueOf('Playhead')).toBe(1)
+
+    await activate(canvas.getByRole('button', { name: 'Play' }))
+    await waitFor(() => expect(valueOf('Playhead')).toBeGreaterThan(1.2))
+    // Focus stays on the same button, now labelled Pause.
+    await userEvent.keyboard('{Enter}')
+    await canvas.findByRole('button', { name: 'Play' })
+    const paused = valueOf('Playhead')
+    await new Promise((resolve) => setTimeout(resolve, 300))
+    expect(valueOf('Playhead')).toBe(paused)
+  },
+}
