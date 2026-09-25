@@ -8,8 +8,11 @@ import {
   ComboboxOption,
   ComboboxOptions,
 } from '@headlessui/react'
-import { CheckIcon, ChevronUpDownIcon } from '@heroicons/react/20/solid'
-import { XMarkIcon } from '@heroicons/react/24/outline'
+import {
+  CheckIcon,
+  ChevronUpDownIcon,
+  XMarkIcon,
+} from '@heroicons/react/24/outline'
 import type {
   MarketingAssetSubject,
   MarketingAssetSubjectType,

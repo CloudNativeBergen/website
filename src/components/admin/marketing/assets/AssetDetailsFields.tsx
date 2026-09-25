@@ -171,8 +171,11 @@ export function AssetDetailsFields({
                 }),
             )}
           {older &&
-            radio(older._id, older.title, 'An earlier edition.', () =>
-              set({ scope: 'edition', conferenceId: older._id }),
+            radio(
+              older._id,
+              older.title,
+              'Another edition of this organization.',
+              () => set({ scope: 'edition', conferenceId: older._id }),
             )}
         </div>
       </fieldset>

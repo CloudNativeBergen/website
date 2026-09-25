@@ -17,6 +17,9 @@ import type {
  * treats as fail-open.
  */
 
+/** An asset's subject: a talk by its title, a speaker or sponsor by name. */
+const SUBJECT_PROJECTION = `subject->{ _id, _type, "name": select(_type == "talk" => title, name) }`
+
 /** The projection every gallery row is read with. */
 const ROW_PROJECTION = `{
   _id,
@@ -26,7 +29,7 @@ const ROW_PROJECTION = `{
   scope,
   "conferenceId": select(scope == "edition" => conference._ref, null),
   "edition": select(scope == "edition" => conference->title, null),
-  "subject": subject->{ _id, _type, "name": select(_type == "talk" => title, name) },
+  "subject": ${SUBJECT_PROJECTION},
   "tags": coalesce(tags, []),
   "credit": coalesce(credit, null),
   "imageUrl": image.asset->url,
@@ -78,7 +81,7 @@ export async function listMarketingAssets(
     `*[_type == "marketingAsset" && _id in path("*")
       && (scope == "organization" || (scope == "edition" && ($allEditions || conference._ref == $conferenceId)))
       && ($subjectId == null || subject._ref == $subjectId)
-      && ($tag == null || $tag in tags)
+      && ($tag == null || count(coalesce(tags, [])[lower(@) == $tag]) > 0)
       && ($terms == null || ([title] + coalesce(tags, [])) match $terms)
     ] | order(_createdAt desc) ${ROW_PROJECTION}`,
     {
@@ -110,7 +113,7 @@ export async function listMarketingAssetFacets(
     { orgId },
     `*[_type == "marketingAsset" && _id in path("*")]{
       tags,
-      "subject": subject->{ _id, _type, "name": select(_type == "talk" => title, name) }
+      "subject": ${SUBJECT_PROJECTION}
     }`,
     {},
     { cache: 'no-store' },
@@ -118,7 +121,8 @@ export async function listMarketingAssetFacets(
   const tags = new Set<string>()
   const subjects = new Map<string, MarketingAssetSubject>()
   for (const row of rows ?? []) {
-    for (const tag of row.tags ?? []) if (tag) tags.add(tag)
+    // Lower-cased as the filter compares them: Studio can write any case.
+    for (const tag of row.tags ?? []) if (tag) tags.add(tag.toLowerCase())
     if (row.subject?._id && row.subject.name)
       subjects.set(row.subject._id, row.subject)
   }

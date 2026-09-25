@@ -219,6 +219,22 @@ describe('filters and search', () => {
       'logo',
       'card-2025',
     ])
+    // Studio can write any case; the filter still finds it.
+    h.dataset = [
+      ...DATASET,
+      asset('studio-tagged', 'org-a', {
+        tags: ['Brand'],
+        _createdAt: '2026-09-04T00:00:00Z',
+      }),
+    ]
+    expect(await list({ tag: 'brand' })).toEqual(['studio-tagged', 'logo'])
+    expect((await listMarketingAssetFacets('org-a')).tags).toEqual([
+      'brand',
+      'logo',
+      'speaker card',
+      'sponsors',
+    ])
+    h.dataset = DATASET
     // A tag is a whole tag, not a word in one.
     expect(await list({ tag: 'speaker' })).toEqual([])
   })
