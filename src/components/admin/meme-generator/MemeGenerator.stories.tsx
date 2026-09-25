@@ -1221,6 +1221,36 @@ export const VideoFadeMidway: Story = {
 }
 
 /**
+ * Playback paints: from a blue scene 1, playing on into the default green
+ * scene 2 changes the canvas without any scrubbing — the frames come from the
+ * same `drawFrame` as a scrub, driven by the clock.
+ */
+export const VideoPlaybackPaints: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(canvas.getByRole('button', { name: 'Video' }))
+    await userEvent.click(canvas.getByRole('button', { name: 'Cloud Blue' }))
+    await userEvent.click(canvas.getByRole('button', { name: 'Add scene' }))
+    await seekTo(canvas, 2.5)
+
+    const corner = (pixel: Pixel) =>
+      share(
+        canvasElement.querySelector('canvas')!,
+        CANVAS_SIZE,
+        BACKGROUND_CORNER,
+        pixel,
+      )
+    await waitFor(() => expect(corner(near(CLOUD_BLUE))).toBeGreaterThan(0.95))
+
+    await userEvent.click(canvas.getByRole('button', { name: 'Play' }))
+    await waitFor(
+      () => expect(corner(near(FRESH_GREEN))).toBeGreaterThan(0.95),
+      { timeout: 3000 },
+    )
+  },
+}
+
+/**
  * Keyboard only, with real key presses: switch to Video, add a scene, lengthen
  * it, move the playhead, play and pause.
  */

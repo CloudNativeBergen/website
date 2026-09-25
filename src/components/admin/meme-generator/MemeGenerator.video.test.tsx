@@ -109,6 +109,18 @@ describe('by keyboard alone', () => {
     expect(valueOf(lengthOf(1))).toBe(4.1)
     for (let i = 0; i < 5; i++) press(lengthOf(1), 'ArrowLeft', true)
     expect(valueOf(lengthOf(1))).toBe(1)
+    press(lengthOf(1), 'End')
+    expect(valueOf(lengthOf(1))).toBe(60)
+    press(lengthOf(1), 'Home')
+    expect(valueOf(lengthOf(1))).toBe(1)
+  })
+
+  it('takes a decimal comma, and caps a length at a minute', () => {
+    openVideo()
+    enter('Scene 1 length (s)', '4,5')
+    expect(valueOf(lengthOf(1))).toBe(4.5)
+    enter('Scene 1 length (s)', '1e308')
+    expect(valueOf(lengthOf(1))).toBe(60)
   })
 
   it('changes a scene’s length in its field', () => {
@@ -193,6 +205,22 @@ describe('the scene the controls edit', () => {
     expect(headline()).toHaveProperty('value', 'Second')
   })
 
+  it('drops a length typed for one scene when playback ends on another', () => {
+    const clock = manualClock()
+    twoScenes()
+    press(playhead(), 'Home')
+    fireEvent.click(screen.getByRole('button', { name: 'Play' }))
+    const field = screen.getByLabelText('Scene 1 length (s)')
+    fireEvent.change(field, { target: { value: '8' } })
+    clock.advanceTo(7000) // past the end: the panel moves to scene 2
+
+    fireEvent.keyDown(screen.getByLabelText('Scene 2 length (s)'), {
+      key: 'Enter',
+    })
+    expect(valueOf(lengthOf(1))).toBe(3)
+    expect(valueOf(lengthOf(2))).toBe(3)
+  })
+
   it('keeps its scene when its length is typed shorter than the playhead', () => {
     twoScenes()
     press(playhead(), 'Home')
@@ -238,7 +266,11 @@ describe('playing to the end', () => {
     const clock = manualClock()
     openVideo()
     const loop = screen.getByRole('button', { name: 'Loop' })
-    expect(loop).toHaveProperty('disabled', true)
+    // Still focusable, with the reason attached, and still does nothing.
+    expect(loop.getAttribute('aria-disabled')).toBe('true')
+    expect(loop.getAttribute('aria-describedby')).toBeTruthy()
+    fireEvent.click(loop)
+    expect(loop.getAttribute('aria-pressed')).toBe('false')
 
     fireEvent.click(screen.getByRole('button', { name: 'Play' }))
     clock.advanceTo(3500)

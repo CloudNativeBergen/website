@@ -1,6 +1,6 @@
 'use client'
 
-import { useId, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import {
   ArrowPathIcon,
   PauseIcon,
@@ -9,6 +9,7 @@ import {
 } from '@heroicons/react/24/solid'
 import { styles } from './meme-generator-config'
 import {
+  MAX_SCENE_DURATION,
   MIN_SCENE_DURATION,
   TRANSITION_WINDOW,
   sceneStart,
@@ -76,7 +77,10 @@ function useDrag(
   return {
     onPointerDown: (event: React.PointerEvent<HTMLElement>) => {
       if (event.button !== 0) return
+      // No text selection while dragging — but a slider still takes focus,
+      // so the arrow keys carry on where the pointer left off.
       event.preventDefault()
+      if (event.currentTarget.tabIndex >= 0) event.currentTarget.focus()
       event.currentTarget.setPointerCapture(event.pointerId)
       origin.current = event.clientX
       onStart(event)
@@ -95,8 +99,10 @@ function useDrag(
 }
 
 /**
- * A number field that commits on Enter or when it loses focus — never
- * mid-typing, where "12" would first commit "1".
+ * A seconds field that commits on Enter or when it loses focus — never
+ * mid-typing, where "12" would first commit "1". A text field, not a number
+ * one: a number input silently empties itself on "3,0", and a decimal comma
+ * is what half of Europe types.
  */
 function SecondsField({
   label,
@@ -114,7 +120,7 @@ function SecondsField({
   const id = useId()
   const [draft, setDraft] = useState<string | null>(null)
   const commit = () => {
-    const parsed = Number.parseFloat(draft ?? '')
+    const parsed = Number.parseFloat((draft ?? '').replace(',', '.'))
     if (draft !== null && Number.isFinite(parsed)) onCommit(parsed)
     setDraft(null)
   }
@@ -125,11 +131,13 @@ function SecondsField({
       </label>
       <input
         id={id}
-        type="number"
+        type="text"
         inputMode="decimal"
-        step={SMALL_STEP}
-        min={min}
-        max={max}
+        aria-description={
+          max === undefined
+            ? `At least ${min} seconds`
+            : `From ${min} to ${max.toFixed(1)} seconds`
+        }
         value={draft ?? value.toFixed(1)}
         onChange={(event) => setDraft(event.target.value)}
         onKeyDown={(event) => {
@@ -164,18 +172,30 @@ function DurationEdge({
       tabIndex={0}
       aria-label={`Scene ${index + 1} length`}
       aria-valuemin={MIN_SCENE_DURATION}
+      aria-valuemax={MAX_SCENE_DURATION}
       aria-valuenow={scene.duration}
       aria-valuetext={seconds(scene.duration)}
       aria-orientation="horizontal"
       title="Drag to change the scene's length"
       {...drag}
       onKeyDown={(event) => {
+        if (event.key === 'Home' || event.key === 'End') {
+          event.preventDefault()
+          onDurationChange(
+            index,
+            event.key === 'Home' ? MIN_SCENE_DURATION : MAX_SCENE_DURATION,
+          )
+          return
+        }
         const step = keyStep(event)
         if (step === null) return
         event.preventDefault()
         onDurationChange(index, scene.duration + step)
       }}
-      className="group absolute top-0 right-0 z-10 flex h-full w-3 translate-x-1/2 cursor-col-resize touch-none justify-center focus:outline-none"
+      // Above the playhead, which sits exactly on a boundary after a scene is
+      // picked or playback ends; there it would take every press meant for
+      // the edge.
+      className="group absolute top-0 right-0 z-30 flex h-full w-3 translate-x-1/2 cursor-col-resize touch-none justify-center focus:outline-none"
     >
       <span className="my-2 w-1 rounded-full bg-brand-slate-gray/40 group-hover:bg-brand-cloud-blue group-focus-visible:bg-brand-cloud-blue group-focus-visible:ring-2 group-focus-visible:ring-brand-cloud-blue dark:bg-gray-400/50 dark:group-hover:bg-blue-400 dark:group-focus-visible:bg-blue-400" />
     </div>
@@ -213,6 +233,19 @@ export function VideoTimeline({
     (_delta, event) => onSeek(timeAtPointer(event)),
   )
   const transitionId = useId()
+  const loopHintId = useId()
+
+  // A playhead moved by keyboard is kept in view: on a narrow screen it would
+  // otherwise walk out of the scrolling track with focus still on it.
+  const playhead = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (document.activeElement === playhead.current) {
+      playhead.current?.scrollIntoView?.({
+        block: 'nearest',
+        inline: 'nearest',
+      })
+    }
+  }, [time])
 
   const movePlayhead = (event: React.KeyboardEvent) => {
     if (event.key === 'Home' || event.key === 'End') {
@@ -247,20 +280,26 @@ export function VideoTimeline({
         <button
           type="button"
           aria-pressed={loop && loopAllowed}
-          disabled={!loopAllowed}
-          onClick={() => onLoopChange(!loop)}
+          // Not `disabled`: a disabled button cannot be focused, and then the
+          // reason it does nothing never reaches a keyboard or screen reader.
+          aria-disabled={!loopAllowed || undefined}
+          aria-describedby={loopAllowed ? undefined : loopHintId}
+          onClick={() => loopAllowed && onLoopChange(!loop)}
           title={
-            loopAllowed
-              ? 'Play the video again from the start'
-              : 'Looping is off because your system asks for reduced motion'
+            loopAllowed ? 'Play the video again from the start' : undefined
           }
-          className={`flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+          className={`flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm transition-colors aria-disabled:cursor-not-allowed aria-disabled:opacity-50 ${
             loop && loopAllowed ? styles.buttonActive : styles.buttonInactive
           }`}
         >
           <ArrowPathIcon className="size-4" aria-hidden="true" />
           Loop
         </button>
+        {!loopAllowed && (
+          <span id={loopHintId} className="sr-only">
+            Looping is off because your system asks for reduced motion.
+          </span>
+        )}
         <span className="text-sm tabular-nums">
           {time.toFixed(1)} / {seconds(total)}
         </span>
@@ -311,7 +350,17 @@ export function VideoTimeline({
                   <button
                     type="button"
                     onClick={() => onSeek(start)}
-                    onKeyDown={movePlayhead}
+                    onKeyDown={(event) => {
+                      // The arrows move the playhead; focus goes with it, so
+                      // the change is announced and the next key continues.
+                      if (
+                        keyStep(event) === null &&
+                        !/^(Home|End)$/.test(event.key)
+                      )
+                        return
+                      playhead.current?.focus()
+                      movePlayhead(event)
+                    }}
                     aria-current={active || undefined}
                     aria-label={`Scene ${index + 1}, ${seconds(scene.duration)}`}
                     className={`flex size-full flex-col items-start justify-center gap-0.5 overflow-hidden rounded-md border-2 px-2 text-left text-xs ${
@@ -357,6 +406,7 @@ export function VideoTimeline({
 
           {/* The playhead spans the ruler and the scenes. */}
           <div
+            ref={playhead}
             role="slider"
             tabIndex={0}
             aria-label="Playhead"
@@ -384,9 +434,14 @@ export function VideoTimeline({
           onCommit={onSeek}
         />
         <SecondsField
+          // A draft belongs to its scene: when playback ends and the panel
+          // moves to another scene, an uncommitted length is dropped rather
+          // than applied to the wrong one.
+          key={editing.key}
           label={`Scene ${editingIndex + 1} length (s)`}
           value={editing.duration}
           min={MIN_SCENE_DURATION}
+          max={MAX_SCENE_DURATION}
           onCommit={(value) => onDurationChange(editingIndex, value)}
         />
         {!isLast && (

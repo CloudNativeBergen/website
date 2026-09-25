@@ -29,6 +29,12 @@ describe('clampDuration', () => {
     expect(clampDuration(Number.NaN)).toBe(1)
   })
 
+  it('never goes over a minute', () => {
+    expect(clampDuration(61)).toBe(60)
+    expect(clampDuration(1e308)).toBe(60)
+    expect(clampDuration(Number.POSITIVE_INFINITY)).toBe(60)
+  })
+
   it('snaps to a tenth of a second', () => {
     expect(clampDuration(2.46)).toBe(2.5)
     expect(clampDuration(3.04)).toBe(3)
@@ -86,6 +92,15 @@ describe('the scenes laid end to end', () => {
     expect(sceneIndexAt(scenes, 2)).toBe(1)
     expect(sceneIndexAt(scenes, 4.99)).toBe(1)
     expect(sceneIndexAt(scenes, 5)).toBe(2)
+  })
+
+  it('puts boundaries where the tenths say, not where floating point drifts', () => {
+    const drifting = [scene(1.1), scene(2.2), scene(1)]
+    expect(sceneStart(drifting, 2)).toBe(3.3)
+    expect(totalDuration(drifting)).toBe(4.3)
+    // 99 frames at 30 fps is 3.3 s: the first frame of scene 3.
+    expect(sceneIndexAt(drifting, 99 / 30)).toBe(2)
+    expect(frameAt(drifting, 3.3)).toEqual({ kind: 'scene', index: 2, time: 0 })
   })
 
   it('gives the end, and past it, to the last scene', () => {

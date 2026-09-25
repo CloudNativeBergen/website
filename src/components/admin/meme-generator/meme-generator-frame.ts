@@ -32,10 +32,15 @@ export function drawFrame(
   const { outgoing, incoming } = layers()
   paint(outgoing, frame.from)
   paint(incoming, frame.to)
+  // A true cross-fade: each layer weighted by its share, and the two ADDED.
+  // Painting the incoming layer over an opaque outgoing one would look the
+  // same for opaque scenes, but a transparent incoming background would show
+  // the outgoing scene through it until the window closed, then snap.
   ctx.save()
   ctx.clearRect(0, 0, CANVAS_SIZE, CANVAS_SIZE)
-  ctx.globalAlpha = 1
+  ctx.globalAlpha = 1 - frame.progress
   ctx.drawImage(outgoing.canvas, 0, 0)
+  ctx.globalCompositeOperation = 'lighter'
   ctx.globalAlpha = frame.progress
   ctx.drawImage(incoming.canvas, 0, 0)
   ctx.restore()

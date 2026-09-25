@@ -13,6 +13,8 @@ export const FPS = 30
 export const FRAME = 1 / FPS
 export const NEW_SCENE_DURATION = 3
 export const MIN_SCENE_DURATION = 1
+/** A scene can be at most the whole video. */
+export const MAX_SCENE_DURATION = 60
 export const TRANSITION_WINDOW = 0.5
 
 export type Transition = 'cut' | 'fade'
@@ -49,11 +51,25 @@ export function newScene(design: MemeDesign): Scene {
   }
 }
 
-/** At least a second, in tenths — what the keyboard steps and fields show. */
+/**
+ * Between a second and a minute, in tenths — what the keyboard steps and the
+ * fields show.
+ */
 export function clampDuration(seconds: number): number {
-  if (!Number.isFinite(seconds)) return MIN_SCENE_DURATION
-  return Math.max(MIN_SCENE_DURATION, Math.round(seconds * 10) / 10)
+  if (Number.isNaN(seconds)) return MIN_SCENE_DURATION
+  const bounded = Math.min(
+    Math.max(seconds, MIN_SCENE_DURATION),
+    MAX_SCENE_DURATION,
+  )
+  return Math.round(bounded * 10) / 10
 }
+
+/**
+ * Durations are whole tenths, so sums are taken in tenths: 1.1 + 2.2 in
+ * floating point is 3.3000000000000003, which would put the boundary a hair
+ * after 3.3 and give that instant to the outgoing scene.
+ */
+const tenths = (seconds: number) => Math.round(seconds * 10)
 
 export function setSceneDuration(
   scenes: Scene[],
@@ -66,7 +82,7 @@ export function setSceneDuration(
 }
 
 export function totalDuration(scenes: Scene[]): number {
-  return scenes.reduce((sum, scene) => sum + scene.duration, 0)
+  return scenes.reduce((sum, scene) => sum + tenths(scene.duration), 0) / 10
 }
 
 export function sceneStart(scenes: Scene[], index: number): number {
@@ -85,8 +101,8 @@ export function clampTime(scenes: Scene[], time: number): number {
 export function sceneIndexAt(scenes: Scene[], time: number): number {
   let end = 0
   for (let index = 0; index < scenes.length - 1; index++) {
-    end += scenes[index].duration
-    if (time < end) return index
+    end += tenths(scenes[index].duration)
+    if (time < end / 10) return index
   }
   return Math.max(scenes.length - 1, 0)
 }

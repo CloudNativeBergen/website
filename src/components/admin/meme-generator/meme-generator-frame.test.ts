@@ -50,7 +50,7 @@ describe('drawFrame', () => {
     expect(getLayers).not.toHaveBeenCalled()
   })
 
-  it('paints each scene of a fade to its own layer, then the incoming over the outgoing', () => {
+  it('paints each scene of a fade to its own layer, then adds them, weighted', () => {
     const { log, main, layers, paint } = setup()
     const from = { index: 0, time: 1.9 }
     const to = { index: 1, time: 0 }
@@ -67,8 +67,9 @@ describe('drawFrame', () => {
       ['paint', 'incoming', to],
       ['main.save'],
       ['main.clearRect', 0, 0, CANVAS_SIZE, CANVAS_SIZE],
-      ['main.globalAlpha=', 1],
+      ['main.globalAlpha=', 0.75],
       ['main.drawImage', { name: 'outgoing' }, 0, 0],
+      ['main.globalCompositeOperation=', 'lighter'],
       ['main.globalAlpha=', 0.25],
       ['main.drawImage', { name: 'incoming' }, 0, 0],
       ['main.restore'],

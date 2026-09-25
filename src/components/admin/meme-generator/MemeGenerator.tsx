@@ -332,13 +332,33 @@ export function MemeGenerator({
   const [backgroundPending, setBackgroundPending] = useState(false)
   const backgroundUpload = useRef(0)
 
+  // A decoded photo is large: once no scene but `leaving` shows it, it goes.
+  const withoutUnused = (
+    rasters: ReadonlyMap<string, Raster>,
+    url: string | undefined,
+    leaving: string,
+  ) => {
+    const next = new Map(rasters)
+    const usedElsewhere = scenes.some(
+      (scene) =>
+        scene.key !== leaving && scene.design.background.image?.url === url,
+    )
+    if (url && !usedElsewhere) next.delete(url)
+    return next
+  }
+
   const handleBackgroundImageUpload = async (
     e: React.ChangeEvent<HTMLInputElement>,
   ) => {
     const file = e.target.files?.[0]
+    // Emptied at once, so picking the same file again — for another scene —
+    // still fires a change.
+    e.target.value = ''
     if (!file || !file.type.startsWith('image/')) return
-    // The scene the upload was made for, even if the playhead moves on.
+    // The scene the upload was made for, even if the playhead moves on, and
+    // the image it replaces there.
     const sceneKey = editingKey
+    const replaced = background.image?.url
     const upload = ++backgroundUpload.current
     setBackgroundPending(true)
     try {
@@ -347,7 +367,9 @@ export function MemeGenerator({
       image.src = url
       await image.decode()
       if (upload !== backgroundUpload.current) return
-      setBackgroundRasters((prev) => new Map(prev).set(url, image))
+      setBackgroundRasters((prev) =>
+        withoutUnused(prev, replaced, sceneKey).set(url, image),
+      )
       setBackground({ image: { url, name: file.name } }, sceneKey)
     } catch {
       // An image the browser cannot decode leaves the background as it was.
@@ -360,17 +382,7 @@ export function MemeGenerator({
     backgroundUpload.current++
     setBackgroundPending(false)
     const url = background.image?.url
-    const usedElsewhere = scenes.some(
-      (scene) =>
-        scene.key !== editingKey && scene.design.background.image?.url === url,
-    )
-    if (url && !usedElsewhere) {
-      setBackgroundRasters((prev) => {
-        const next = new Map(prev)
-        next.delete(url)
-        return next
-      })
-    }
+    setBackgroundRasters((prev) => withoutUnused(prev, url, editingKey))
     setBackground({ image: null })
   }
 
@@ -587,8 +599,11 @@ export function MemeGenerator({
   }
 
   const advance = useEffectEvent((now: number) => {
+    // A frame's timestamp can fall a moment before an anchor set by a seek
+    // in the same frame; time never runs backwards from where it was put.
     const next =
-      playbackAnchor.current.time + (now - playbackAnchor.current.at) / 1000
+      playbackAnchor.current.time +
+      Math.max(0, now - playbackAnchor.current.at) / 1000
     if (next < total) {
       setTime(next)
       return true
@@ -663,30 +678,14 @@ export function MemeGenerator({
       const scene = scenes[index].design
       drawDesign(ctx, scene, { ...assetsFor(scene), brand }, sceneTime)
     }
-    // The hidden download canvas is left alone during playback, which would
-    // otherwise draw every frame twice; it catches up on pause.
-    const canvases =
-      mode === 'video' && playing
-        ? [canvasRef.current]
-        : [canvasRef.current, exportCanvasRef.current]
-    for (const canvas of canvases) {
+    for (const canvas of [canvasRef.current, exportCanvasRef.current]) {
       const ctx = canvas?.getContext('2d')
       if (!ctx) continue
       if (mode === 'video')
         drawFrame(ctx, frameAt(scenes, time), paintScene, layers)
       else drawDesign(ctx, design, { ...assetsFor(design), brand }, 0)
     }
-  }, [
-    mode,
-    playing,
-    scenes,
-    design,
-    time,
-    assetsFor,
-    layers,
-    capturePending,
-    lateFaces,
-  ])
+  }, [mode, scenes, design, time, assetsFor, layers, capturePending, lateFaces])
 
   // The overlay carried the logo's accessible name; the canvas now does.
   const canvasLabel =
@@ -735,7 +734,16 @@ export function MemeGenerator({
 
   return (
     <div className="grid gap-4 lg:grid-cols-2">
-      <div className="min-w-0 space-y-4 lg:sticky lg:top-20 lg:self-start">
+      {/* In Video mode the preview and the timeline together can be taller
+          than a laptop screen; the sticky column then scrolls on its own so
+          the timeline is never stranded below the fold. */}
+      <div
+        className={`min-w-0 space-y-4 lg:sticky lg:top-20 lg:self-start ${
+          mode === 'video'
+            ? 'lg:max-h-[calc(100dvh-6rem)] lg:overflow-y-auto'
+            : ''
+        }`}
+      >
         <div
           role="group"
           aria-label="Output"
