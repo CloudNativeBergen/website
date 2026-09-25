@@ -14,4 +14,19 @@ export {
   SOFT_ON_SOCIAL_SHORT_SIDE,
   isSoftOnSocial,
 } from './image-type'
-export type { MarketingAssetRow } from './types'
+export {
+  MARKETING_ASSET_MAX_TAGS,
+  MARKETING_ASSET_MAX_TAG_LENGTH,
+  normalizeTags,
+} from './details'
+export { MARKETING_ASSET_SUBJECT_TYPES } from './types'
+export type {
+  MarketingAssetDetails,
+  MarketingAssetEditionChoice,
+  MarketingAssetFacets,
+  MarketingAssetFilter,
+  MarketingAssetRow,
+  MarketingAssetScope,
+  MarketingAssetSubject,
+  MarketingAssetSubjectType,
+} from './types'

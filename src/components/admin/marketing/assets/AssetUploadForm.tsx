@@ -18,11 +18,16 @@ import {
   isSoftOnSocial,
 } from '@/lib/marketing-asset'
 import type { AssetUploader } from './upload'
-
-const LABEL = 'block text-sm font-medium text-gray-900 dark:text-gray-100'
-const HINT = 'mt-1 text-xs text-gray-500 dark:text-gray-400'
-const INPUT =
-  'mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-xs focus:border-brand-cloud-blue focus:outline-none focus:ring-1 focus:ring-brand-cloud-blue dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100'
+import {
+  AssetDetailsFields,
+  EMPTY_DRAFT,
+  HINT,
+  INPUT,
+  LABEL,
+  detailsFromDraft,
+  draftIssue,
+  type CurrentEdition,
+} from './AssetDetailsFields'
 
 interface Picked {
   file: File
@@ -64,9 +69,12 @@ async function readDimensions(
 export function AssetUploadForm({
   uploader,
   onSaved,
+  edition = null,
 }: {
   uploader: AssetUploader
   onSaved: (saved: { title: string }) => void
+  /** This edition, for the edition mark; null while it loads. */
+  edition?: CurrentEdition | null
 }) {
   const ids = { file: useId(), title: useId(), alt: useId() }
   // The latest pick wins: an earlier file's slower size read must not land.
@@ -78,6 +86,7 @@ export function AssetUploadForm({
   const [picked, setPicked] = useState<Picked | null>(null)
   const [title, setTitle] = useState('')
   const [alt, setAlt] = useState('')
+  const [draft, setDraft] = useState(EMPTY_DRAFT)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   // Set by reset(); honoured once the picker is enabled again after a render.
@@ -151,6 +160,7 @@ export function AssetUploadForm({
     setPicked(null)
     setTitle('')
     setAlt('')
+    setDraft(EMPTY_DRAFT)
     if (fileInput.current) fileInput.current.value = ''
     // Clear and the submit button both disappear or disable here; keep
     // keyboard focus on the form, ready for the next image. After the render,
@@ -161,10 +171,15 @@ export function AssetUploadForm({
   async function save(event: React.FormEvent) {
     event.preventDefault()
     if (!picked || !title.trim() || !alt.trim()) return
+    const issue = draftIssue(draft)
+    if (issue) {
+      setError(issue)
+      return
+    }
     setSaving(true)
     setError(null)
     try {
-      await uploader(picked.file, { title: title.trim(), alt: alt.trim() })
+      await uploader(picked.file, detailsFromDraft(title, alt, draft))
       onSaved({ title: title.trim() })
       reset()
     } catch (caught) {
@@ -311,6 +326,12 @@ export function AssetUploadForm({
               uses it.
             </p>
           </div>
+          <AssetDetailsFields
+            draft={draft}
+            onChange={setDraft}
+            edition={edition}
+            disabled={saving}
+          />
           {error && (
             <p
               role="alert"

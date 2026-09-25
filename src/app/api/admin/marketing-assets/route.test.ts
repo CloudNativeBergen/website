@@ -8,6 +8,7 @@ const h = vi.hoisted(() => ({
   move: vi.fn(),
   create: vi.fn(),
   orphan: vi.fn(),
+  guard: vi.fn(),
   afterTasks: [] as (() => unknown)[],
 }))
 vi.mock('next/server', async (importOriginal) => ({
@@ -22,6 +23,12 @@ vi.mock('@/lib/authz/organizer', () => ({
 vi.mock('@/lib/marketing-asset/move', () => ({ moveBlobToSanity: h.move }))
 vi.mock('@/lib/marketing-asset/sanity', () => ({
   createMarketingAsset: h.create,
+}))
+// The guard itself is proven against the tenancy reads in
+// `src/server/routers/marketingAsset.test.ts`; here, that the route asks it
+// first and obeys its answer.
+vi.mock('@/lib/marketing-asset/guard', () => ({
+  resolveAssetDetailsForCurrentOrg: h.guard,
 }))
 vi.mock('@/lib/sanity/orphaned-asset', () => ({
   deleteImageAssetIfOrphaned: h.orphan,
@@ -39,7 +46,24 @@ function request(body: unknown) {
     body: JSON.stringify(body),
   })
 }
-const VALID = { url: URL_OK, title: 'Logo', alt: 'The Cloud Native Days logo' }
+const VALID = {
+  url: URL_OK,
+  title: 'Logo',
+  alt: 'The Cloud Native Days logo',
+}
+const PARSED = {
+  title: 'Logo',
+  alt: 'The Cloud Native Days logo',
+  edition: 'none',
+  tags: [],
+}
+/** What the guard resolves PARSED to. */
+const RESOLVED = {
+  title: 'Logo',
+  alt: 'The Cloud Native Days logo',
+  scope: 'organization',
+  tags: [],
+}
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -59,6 +83,12 @@ beforeEach(() => {
   })
   h.create.mockResolvedValue({ _id: 'asset-1' })
   h.orphan.mockResolvedValue({ deleted: true })
+  h.guard.mockImplementation(
+    async ({ edition, ...rest }: { edition: string }) =>
+      edition === 'current'
+        ? { ...rest, scope: 'edition', conferenceId: 'conf-A' }
+        : { ...rest, scope: 'organization' },
+  )
 })
 
 describe('the marketing asset move route', () => {
@@ -89,9 +119,69 @@ describe('the marketing asset move route', () => {
     ['no alt text', { ...VALID, alt: '   ' }],
     ['no title', { ...VALID, title: '' }],
     ['no url', { title: 'x', alt: 'y' }],
+    ['an edition id in place of a choice', { ...VALID, edition: 'conf-B' }],
+    [
+      'too many tags',
+      { ...VALID, tags: Array.from({ length: 21 }, (_, i) => `t${i}`) },
+    ],
   ])('refuses %s without moving anything', async (_, body) => {
     expect((await POST(request(body))).status).toBe(400)
+    expect(h.guard).not.toHaveBeenCalled()
     expect(h.move).not.toHaveBeenCalled()
+  })
+
+  it('resolves the edition and checks the subject BEFORE moving the image, and saves them', async () => {
+    const body = {
+      ...VALID,
+      edition: 'current',
+      // Not an input field: the edition is resolved on the server.
+      conferenceId: 'conf-B',
+      subject: { type: 'speaker', id: 'sp-ada' },
+      tags: ['Speaker Card'],
+      credit: 'Jane',
+    }
+    expect((await POST(request(body))).status).toBe(200)
+    const parsed = {
+      ...PARSED,
+      edition: 'current',
+      subject: { type: 'speaker', id: 'sp-ada' },
+      tags: ['speaker card'],
+      credit: 'Jane',
+    }
+    expect(h.guard).toHaveBeenCalledWith(parsed)
+    expect(h.guard.mock.invocationCallOrder[0]).toBeLessThan(
+      h.move.mock.invocationCallOrder[0],
+    )
+    expect(h.create.mock.calls[0][0].details).toEqual({
+      ...RESOLVED,
+      scope: 'edition',
+      conferenceId: 'conf-A',
+      subject: { type: 'speaker', id: 'sp-ada' },
+      tags: ['speaker card'],
+      credit: 'Jane',
+    })
+  })
+
+  it('saves an upload from a client older than the edition field as organization-wide', async () => {
+    expect((await POST(request(VALID))).status).toBe(200)
+    expect(h.create.mock.calls[0][0].details).toEqual(RESOLVED)
+  })
+
+  it('refuses an edition or subject the guard refuses, and moves nothing', async () => {
+    h.guard.mockRejectedValue(
+      Object.assign(new Error('No speaker with that id for this request'), {
+        code: 'NOT_FOUND',
+      }),
+    )
+    const response = await POST(
+      request({ ...VALID, subject: { type: 'speaker', id: 'sp-theirs' } }),
+    )
+    expect(response.status).toBe(400)
+    expect((await response.json()).error).toMatch(
+      /not one of this organization/,
+    )
+    expect(h.move).not.toHaveBeenCalled()
+    expect(h.create).not.toHaveBeenCalled()
   })
 
   it('moves for the SERVER-resolved organization, ignoring any the client sends', async () => {
@@ -103,8 +193,7 @@ describe('the marketing asset move route', () => {
     expect(h.create).toHaveBeenCalledWith(
       {
         orgId: 'org-A',
-        title: 'Logo',
-        alt: 'The Cloud Native Days logo',
+        details: RESOLVED,
         imageAssetId: 'image-a-800x600-png',
         createdImageAssetId: 'image-a-800x600-png',
       },

@@ -5,9 +5,15 @@ import {
   requireCurrentOrgId,
   requireDocumentInCurrentOrg,
 } from '@/server/tenancy'
+import { resolveConferenceId } from '@/server/trpc'
+import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import { marketingAssetDetailsSchema } from '@/lib/marketing-asset/details'
+import { resolveAssetDetailsForCurrentOrg } from '@/lib/marketing-asset/guard'
 import {
   deleteMarketingAssetDocument,
+  listMarketingAssetFacets,
   listMarketingAssets,
+  updateMarketingAssetDetails,
   countMarketingAssetReleaseTwins,
   readMarketingAssetImage,
 } from '@/lib/marketing-asset/sanity'
@@ -27,13 +33,82 @@ const notFound = () =>
     message: 'No marketingAsset with that id for this request',
   })
 
+/** The asset has a staged copy in a Studio Content Release. */
+const inRelease = (action: 'edit' | 'delete') =>
+  new TRPCError({
+    code: 'PRECONDITION_FAILED',
+    message: `This asset is part of a Content Release in Studio. Remove it from the release first, then ${action} it here.`,
+  })
+
+const assetId = z.string().min(1).max(200)
+
+const filterSchema = z
+  .object({
+    editions: z.enum(['current', 'all']).optional(),
+    subjectId: z.string().min(1).max(200).optional(),
+    tag: z.string().max(100).optional(),
+    search: z.string().max(200).optional(),
+  })
+  .optional()
+
 export const marketingAssetRouter = router({
-  list: adminProcedure.query(async () =>
-    listMarketingAssets(await requireCurrentOrgId()),
-  ),
+  /**
+   * The gallery. "This edition" is the request host's conference, and the
+   * organization the host's owner; neither is ever taken from the client.
+   */
+  list: adminProcedure.input(filterSchema).query(async ({ input }) => {
+    const [orgId, conferenceId] = await Promise.all([
+      requireCurrentOrgId(),
+      resolveConferenceId(),
+    ])
+    return listMarketingAssets(orgId, conferenceId, input ?? {})
+  }),
+
+  /** This edition (for the edition mark) and what the filter menus offer. */
+  filters: adminProcedure.query(async () => {
+    const orgId = await requireCurrentOrgId()
+    const [{ conference }, facets] = await Promise.all([
+      getConferenceForCurrentDomain(),
+      listMarketingAssetFacets(orgId),
+    ])
+    return {
+      edition: conference
+        ? { _id: conference._id, title: conference.title ?? 'This edition' }
+        : null,
+      ...facets,
+    }
+  }),
+
+  /**
+   * Change an asset's title, alt text, scope and edition mark, subject, tags
+   * and credit. Any organizer of the organization may, on any of its assets,
+   * including another edition's (spec §3).
+   */
+  update: adminProcedure
+    .input(z.object({ id: assetId, details: marketingAssetDetailsSchema }))
+    .mutation(async ({ input }) => {
+      // Published ids only, as for delete.
+      if (input.id.includes('.')) throw notFound()
+      // The asset first: a foreign asset is refused before any subject or
+      // edition is probed, so the answer says nothing about those either.
+      const orgId = await requireDocumentInCurrentOrg(
+        input.id,
+        'marketingAsset',
+      )
+      // A staged Content Release copy would write its stale details back
+      // when published, silently undoing this edit. Refused, as for delete.
+      if ((await countMarketingAssetReleaseTwins(orgId, input.id)) > 0)
+        throw inRelease('edit')
+      const details = await resolveAssetDetailsForCurrentOrg(
+        input.details,
+        input.id,
+      )
+      await updateMarketingAssetDetails(input.id, details)
+      return { updated: true }
+    }),
 
   delete: adminProcedure
-    .input(z.object({ id: z.string().min(1).max(200) }))
+    .input(z.object({ id: assetId }))
     .mutation(async ({ input }) => {
       // The gallery lists published (root, dot-free) ids only. A draft
       // (`drafts.x`) or release version (`versions.r.x`) id is never one, and
@@ -52,11 +127,7 @@ export const marketingAssetRouter = router({
       // release is Studio's to change. Ownership is already proven, so this
       // answer reveals nothing about another tenant.
       if ((await countMarketingAssetReleaseTwins(orgId, input.id)) > 0)
-        throw new TRPCError({
-          code: 'PRECONDITION_FAILED',
-          message:
-            'This asset is part of a Content Release in Studio. Remove it from the release first, then delete it here.',
-        })
+        throw inRelease('delete')
       const image = await readMarketingAssetImage(orgId, input.id)
       // The documents first: while one exists, it is itself a reference to
       // the image, and the orphan check would always keep the file.

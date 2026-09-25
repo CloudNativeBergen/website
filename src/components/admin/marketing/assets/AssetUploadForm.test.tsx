@@ -3,6 +3,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { AssetUploadForm } from './AssetUploadForm'
 
+// The subject picker's search; these tests never type into it.
+vi.mock('@/lib/trpc/client', () => ({
+  api: {
+    search: {
+      unified: { useQuery: () => ({ data: undefined, isFetching: false }) },
+    },
+  },
+}))
+
 /** `createImageBitmap` resolved by hand, so the test decides the order. */
 const reads = new Map<
   string,
@@ -29,9 +38,15 @@ afterEach(() => {
 const png = (name: string, size = 1000) =>
   new File([new Uint8Array(size)], name, { type: 'image/png' })
 
-function renderForm() {
+function renderForm(edition: { _id: string; title: string } | null = null) {
   const uploader = vi.fn(async () => ({ _id: 'x', softOnSocial: false }))
-  render(<AssetUploadForm uploader={uploader} onSaved={() => {}} />)
+  render(
+    <AssetUploadForm
+      uploader={uploader}
+      onSaved={() => {}}
+      edition={edition}
+    />,
+  )
   const input = screen.getByLabelText(/Choose an image|Replace the image/)
   const pick = (file: File) =>
     act(async () => {
@@ -237,5 +252,62 @@ describe('picking a file', () => {
     expect((uploader.mock.calls[0] as unknown as [File])[0].name).toBe(
       'new.png',
     )
+  })
+})
+
+describe('describing the image', () => {
+  it('sends the edition mark, tags and credit with the upload, and says why a subject matters', async () => {
+    const { pick, settle, uploader } = renderForm({
+      _id: 'conf-2026',
+      title: 'CND 2026',
+    })
+    expect(
+      screen.getByText(/cannot be found when a speaker asks to be erased/),
+    ).toBeTruthy()
+    await pick(png('card.png'))
+    await settle('card.png', 1200, 1200)
+    fireEvent.change(screen.getByLabelText('Alt text'), {
+      target: { value: 'Ada on stage' },
+    })
+    fireEvent.click(screen.getByLabelText(/CND 2026/))
+    fireEvent.change(screen.getByLabelText(/Tags/), {
+      target: { value: 'Speaker Card, keynote, speaker card' },
+    })
+    fireEvent.change(screen.getByLabelText(/Credit/), {
+      target: { value: ' Jane ' },
+    })
+    await act(async () => {
+      fireEvent.submit(screen.getByRole('button', { name: 'Add to gallery' }))
+    })
+    expect(uploader).toHaveBeenCalledWith(expect.any(File), {
+      title: 'card',
+      alt: 'Ada on stage',
+      edition: 'current',
+      subject: null,
+      tags: ['speaker card', 'keynote'],
+      credit: 'Jane',
+    })
+  })
+
+  it('is organization-wide unless an edition is chosen', async () => {
+    const { pick, settle, uploader } = renderForm({
+      _id: 'conf-2026',
+      title: 'CND 2026',
+    })
+    await pick(png('logo.png'))
+    await settle('logo.png', 1200, 1200)
+    fireEvent.change(screen.getByLabelText('Alt text'), {
+      target: { value: 'The logo' },
+    })
+    await act(async () => {
+      fireEvent.submit(screen.getByRole('button', { name: 'Add to gallery' }))
+    })
+    expect((uploader.mock.calls[0] as unknown[])[1]).toEqual({
+      title: 'logo',
+      alt: 'The logo',
+      edition: 'none',
+      subject: null,
+      tags: [],
+    })
   })
 })
