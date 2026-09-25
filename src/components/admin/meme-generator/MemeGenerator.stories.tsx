@@ -1830,7 +1830,13 @@ export const VideoBarEndsAtBoundary: Story = {
     expect(hit(b)).toBe(enters)
 
     // A 0.2 s bar is 12 px: its ends leave its middle to drag it whole by.
+    await userEvent.click(
+      canvas.getByRole('button', { name: 'Scene 1, 3.0 s' }),
+    )
     await setSeconds(canvas, 'Logo leaves (s)', 0.2)
+    await expect(leaves).toHaveAttribute('aria-valuenow', '0.2')
+    // The playhead, which sits over a scene's start once it is picked, away.
+    await seekTo(canvas, 2)
     const short = canvas.getByRole('slider', {
       name: 'Scene 1 Logo leaves',
     }).parentElement!
