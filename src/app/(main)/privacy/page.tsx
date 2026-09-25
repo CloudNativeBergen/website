@@ -626,6 +626,11 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                               (alt text), which goes into the posts that use it
                             </li>
                             <li>
+                              • Optionally, who an image is about (a speaker, a
+                              talk or a sponsor), free tags, and who made it (a
+                              credit, which may be a person&apos;s name)
+                            </li>
+                            <li>
                               • This gallery is private to our organizers and is
                               never shown on the website. Images from it appear
                               in the social media posts we publish

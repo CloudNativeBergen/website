@@ -3,7 +3,11 @@ import { expect, fn, userEvent, waitFor, within } from 'storybook/test'
 import { http, HttpResponse } from 'msw'
 import { NotificationProvider } from '@/components/admin/NotificationProvider'
 import { mockDateBeforeEach, withPortalTheme } from '@/lib/storybook'
-import type { MarketingAssetRow } from '@/lib/marketing-asset'
+import type {
+  MarketingAssetDetails,
+  MarketingAssetFilter,
+  MarketingAssetRow,
+} from '@/lib/marketing-asset'
 import { AssetsPage } from './AssetsPage'
 import type { AssetUploader } from './upload'
 
@@ -15,61 +19,181 @@ function card(label: string, fill: string, width: number, height: number) {
   return `data:image/svg+xml,${encodeURIComponent(svg)}#`
 }
 
+const EDITION = { _id: 'conf-2026', title: 'CND 2026' }
+const ADA = { _id: 'sp-ada', _type: 'speaker' as const, name: 'Ada Lovelace' }
+const ACME = { _id: 'sponsor-acme', _type: 'sponsor' as const, name: 'Acme' }
+
+const row = (
+  fields: Partial<MarketingAssetRow> &
+    Pick<MarketingAssetRow, '_id' | 'title' | 'alt' | 'imageUrl'>,
+): MarketingAssetRow => ({
+  kind: 'image',
+  scope: 'organization',
+  conferenceId: null,
+  edition: null,
+  subject: null,
+  tags: [],
+  credit: null,
+  assetId: `image-${fields._id}`,
+  width: 2000,
+  height: 2000,
+  createdAt: '2026-09-20T10:00:00Z',
+  softOnSocial: false,
+  ...fields,
+})
+
 const ASSETS: MarketingAssetRow[] = [
-  {
+  row({
     _id: 'asset-logo',
     title: 'Logo, dark background',
     alt: 'The Cloud Native Days Norway logo in white on navy',
-    kind: 'image',
-    scope: 'organization',
     imageUrl: card('LOGO', '#1e3a8a', 2000, 2000),
-    assetId: 'image-logo-2000x2000-png',
-    width: 2000,
-    height: 2000,
-    createdAt: '2026-09-20T10:00:00Z',
-    softOnSocial: false,
-  },
-  {
+    tags: ['brand', 'logo'],
+  }),
+  row({
+    _id: 'asset-ada',
+    title: 'Speaker card: Ada Lovelace',
+    alt: 'Ada Lovelace, speaking on distributed tracing',
+    imageUrl: card('ADA', '#be185d', 2000, 2000),
+    scope: 'edition',
+    conferenceId: EDITION._id,
+    edition: EDITION.title,
+    subject: ADA,
+    tags: ['speaker card'],
+    credit: 'Jane Designer, Studio Nord',
+    createdAt: '2026-09-19T10:00:00Z',
+  }),
+  row({
     _id: 'asset-venue',
     title: 'Venue from the harbour',
     alt: 'The conference venue seen from the harbour at dusk, lights on',
-    kind: 'image',
-    scope: 'organization',
     imageUrl: card('VENUE', '#0f766e', 2400, 1260),
-    assetId: 'image-venue-2400x1260-jpg',
     width: 2400,
     height: 1260,
     createdAt: '2026-09-18T10:00:00Z',
-    softOnSocial: false,
-  },
-  {
+  }),
+  row({
+    _id: 'asset-acme',
+    title: 'Sponsor thank-you: Acme',
+    alt: 'Thank you Acme, our platinum sponsor',
+    imageUrl: card('ACME', '#b45309', 2000, 2000),
+    scope: 'edition',
+    conferenceId: EDITION._id,
+    edition: EDITION.title,
+    subject: ACME,
+    tags: ['sponsors'],
+    createdAt: '2026-09-15T10:00:00Z',
+  }),
+  row({
     _id: 'asset-old-banner',
     title:
       'Old banner, low resolution, from the very first edition of the event',
     alt: 'A blue banner reading Cloud Native Days',
-    kind: 'image',
-    scope: 'organization',
     imageUrl: card('BANNER', '#7c3aed', 960, 540),
-    assetId: 'image-banner-960x540-png',
     width: 960,
     height: 540,
     createdAt: '2026-09-10T10:00:00Z',
     softOnSocial: true,
-  },
+  }),
 ]
 
+/** Last year's speaker card: only under "All editions". */
+const OLDER: MarketingAssetRow[] = [
+  row({
+    _id: 'asset-ada-2025',
+    title: 'Speaker card: Ada Lovelace (2025)',
+    alt: 'Ada Lovelace at last year’s edition',
+    imageUrl: card('ADA 25', '#475569', 2000, 2000),
+    scope: 'edition',
+    conferenceId: 'conf-2025',
+    edition: 'CND 2025',
+    subject: ADA,
+    tags: ['speaker card'],
+    createdAt: '2025-09-19T10:00:00Z',
+  }),
+]
+
+/** The server's filters, in the browser, over this story's assets. */
+function applyFilter(
+  assets: MarketingAssetRow[],
+  older: MarketingAssetRow[],
+  filter: MarketingAssetFilter | undefined,
+) {
+  const words = (filter?.search ?? '')
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(Boolean)
+  return [...assets, ...(filter?.editions === 'all' ? older : [])].filter(
+    (asset) =>
+      (!filter?.subjectId || asset.subject?._id === filter.subjectId) &&
+      (!filter?.tag || asset.tags.includes(filter.tag)) &&
+      words.every((word) =>
+        [asset.title, ...asset.tags].some((text) =>
+          text
+            .toLowerCase()
+            .split(/[^a-z0-9]+/)
+            .some((token) => token.startsWith(word)),
+        ),
+      ),
+  )
+}
+
+const FACETS = {
+  edition: EDITION,
+  tags: ['brand', 'logo', 'speaker card', 'sponsors'],
+  subjects: [ACME, ADA],
+}
+
 /**
- * A gallery that really loses an asset when it is deleted. Each call has its
- * own list, which `reset` refills, so a story re-run starts full again.
+ * A gallery that really loses an asset when it is deleted, and really changes
+ * one when it is edited. Each call has its own list, which `reset` refills, so
+ * a story re-run starts full again.
  */
-function gallery(initial: MarketingAssetRow[] = ASSETS) {
+function gallery(initial: MarketingAssetRow[] = ASSETS, older = OLDER) {
   let assets = [...initial]
   return {
     reset: () => {
       assets = [...initial]
     },
     handlers: [
-      http.get('/api/trpc/marketingAsset.list', () => json(assets)),
+      http.get('/api/trpc/marketingAsset.list', ({ request }) => {
+        const raw = new URL(request.url).searchParams.get('input')
+        const filter = raw ? (JSON.parse(raw) as MarketingAssetFilter) : {}
+        return json(applyFilter(assets, older, filter))
+      }),
+      http.get('/api/trpc/marketingAsset.filters', () => json(FACETS)),
+      http.get('/api/trpc/search.unified', () =>
+        json({
+          speakers: [{ _id: ADA._id, name: ADA.name }],
+          proposals: [
+            {
+              _id: 'talk-tracing',
+              title: 'Tracing at scale',
+              status: 'confirmed',
+              format: 'presentation_40',
+            },
+          ],
+          sponsors: [{ _id: ACME._id, name: ACME.name }],
+        }),
+      ),
+      http.post('/api/trpc/marketingAsset.update', async ({ request }) => {
+        const body = (await request.json()) as {
+          id: string
+          details: MarketingAssetDetails
+        }
+        assets = assets.map((asset) =>
+          asset._id === body.id
+            ? {
+                ...asset,
+                title: body.details.title,
+                alt: body.details.alt,
+                tags: body.details.tags,
+                credit: body.details.credit ?? null,
+              }
+            : asset,
+        )
+        return json({ updated: true })
+      }),
       http.post('/api/trpc/marketingAsset.delete', async ({ request }) => {
         // The id is somewhere in tRPC's body, whatever its envelope.
         const body = await request.text()
@@ -81,6 +205,7 @@ function gallery(initial: MarketingAssetRow[] = ASSETS) {
 }
 const handlers = (initial?: MarketingAssetRow[]) => gallery(initial).handlers
 const deletable = gallery()
+const editable = gallery()
 
 const saved: AssetUploader = async () => ({
   _id: 'asset-new',
@@ -132,6 +257,11 @@ export const Gallery: Story = {
       await canvas.findByText('Venue from the harbour'),
     ).toBeInTheDocument()
     await expect(canvas.getAllByText('May look soft on social')).toHaveLength(1)
+    // This edition's and the organization-wide assets, not last year's.
+    await expect(
+      canvas.getByText('Speaker card: Ada Lovelace'),
+    ).toBeInTheDocument()
+    await expect(canvas.queryByText(/\(2025\)/)).toBeNull()
   },
 }
 export const GalleryMobile: Story = {
@@ -209,6 +339,9 @@ export const UploadSoftImage: Story = {
       expect(context.args.uploader).toHaveBeenCalledWith(expect.any(File), {
         title: 'speaker card',
         alt: 'Speaker card for Ada Lovelace',
+        scope: 'organization',
+        subject: null,
+        tags: [],
       }),
     )
     // The form is ready for the next image, and focus is back on its picker.
@@ -313,4 +446,124 @@ export const ClearKeepsFocus: Story = {
 export const DeleteAssetDark: Story = {
   ...DeleteAsset,
   globals: { theme: 'dark' },
+}
+
+/** "All editions" brings back last year's card; the subject filter narrows. */
+export const FilterAllEditions: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await canvas.findByText('Venue from the harbour')
+    await userEvent.click(canvas.getByLabelText('All editions'))
+    await expect(
+      await canvas.findByText('Speaker card: Ada Lovelace (2025)'),
+    ).toBeInTheDocument()
+    await userEvent.selectOptions(
+      canvas.getByLabelText('Subject'),
+      'Ada Lovelace (Speaker)',
+    )
+    await waitFor(() =>
+      expect(canvas.queryByText('Venue from the harbour')).toBeNull(),
+    )
+    await expect(canvas.getAllByRole('listitem')).toHaveLength(2)
+  },
+}
+export const FilterAllEditionsMobile: Story = {
+  ...FilterAllEditions,
+  parameters: {
+    ...meta.parameters,
+    viewport: { defaultViewport: 'mobile1' },
+  },
+}
+export const FilterAllEditionsDark: Story = {
+  ...FilterAllEditions,
+  globals: { theme: 'dark' },
+}
+
+/** Search is over titles and tags: "sponsors" is only a tag. */
+export const SearchByTag: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await canvas.findByText('Venue from the harbour')
+    await userEvent.type(
+      canvas.getByLabelText('Search titles and tags'),
+      'sponsors',
+    )
+    await waitFor(() => expect(canvas.getAllByRole('listitem')).toHaveLength(1))
+    await expect(
+      canvas.getByText('Sponsor thank-you: Acme'),
+    ).toBeInTheDocument()
+  },
+}
+
+/** Nothing matches: the gallery says so, and offers to clear the filters. */
+export const NoMatch: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await canvas.findByText('Venue from the harbour')
+    await userEvent.type(
+      canvas.getByLabelText('Search titles and tags'),
+      'zebra',
+    )
+    await userEvent.click(
+      await canvas.findByRole('button', { name: 'Clear the filters' }),
+    )
+    await expect(
+      await canvas.findByText('Venue from the harbour'),
+    ).toBeInTheDocument()
+  },
+}
+
+/** The edit dialog, open on an edition asset with a subject and a credit. */
+export const EditAsset: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(
+      await canvas.findByRole('button', {
+        name: 'Edit Speaker card: Ada Lovelace',
+      }),
+    )
+    const dialog = within(await within(document.body).findByRole('dialog'))
+    await expect(dialog.getByLabelText(/^CND 2026/)).toBeChecked()
+    await expect(dialog.getByLabelText(/Subject/)).toHaveValue(
+      'Ada Lovelace (Speaker)',
+    )
+    await expect(dialog.getByLabelText(/Credit/)).toHaveValue(
+      'Jane Designer, Studio Nord',
+    )
+    await expect(
+      dialog.getByText(/cannot be found when a speaker asks to be erased/),
+    ).toBeInTheDocument()
+  },
+}
+export const EditAssetMobile: Story = {
+  ...EditAsset,
+  parameters: {
+    ...meta.parameters,
+    viewport: { defaultViewport: 'mobile1' },
+  },
+}
+export const EditAssetDark: Story = {
+  ...EditAsset,
+  globals: { theme: 'dark' },
+}
+
+/** Saving the dialog changes the card. */
+export const EditAssetSaved: Story = {
+  parameters: {
+    ...meta.parameters,
+    msw: { handlers: editable.handlers },
+  },
+  beforeEach: () => editable.reset(),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(
+      await canvas.findByRole('button', {
+        name: 'Edit Venue from the harbour',
+      }),
+    )
+    const dialog = within(await within(document.body).findByRole('dialog'))
+    await userEvent.type(dialog.getByLabelText(/Tags/), 'venue, harbour')
+    await userEvent.click(dialog.getByRole('button', { name: 'Save' }))
+    await expect(await canvas.findByText('#harbour')).toBeInTheDocument()
+  },
 }

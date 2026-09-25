@@ -30,9 +30,6 @@ export default defineType({
         ],
       },
       initialValue: 'organization',
-      // Only organization-wide assets exist until the edition mark (#1161)
-      // validates the edition against the organization on write.
-      readOnly: true,
       validation: (Rule) => Rule.required(),
     }),
     defineField({
@@ -95,6 +92,30 @@ export default defineType({
       description: 'Copied into a post with the asset, so it is written once.',
       type: 'string',
       validation: (Rule) => Rule.required(),
+    }),
+    defineField({
+      name: 'subject',
+      title: 'Subject',
+      description:
+        'Who the asset is about. An image with no subject cannot be found when a speaker asks to be erased.',
+      type: 'reference',
+      to: [{ type: 'speaker' }, { type: 'talk' }, { type: 'sponsor' }],
+      // Weak: the person, talk or sponsor can still be merged or deleted.
+      weak: true,
+    }),
+    defineField({
+      name: 'tags',
+      title: 'Tags',
+      description: 'Lower-case, so a filter matches them whole.',
+      type: 'array',
+      of: [{ type: 'string' }],
+      options: { layout: 'tags' },
+    }),
+    defineField({
+      name: 'credit',
+      title: 'Credit',
+      description: 'Who made it.',
+      type: 'string',
     }),
     defineField({
       name: 'source',

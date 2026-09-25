@@ -13,6 +13,8 @@ import {
 import { moveBlobToSanity, type MoveRefusal } from '@/lib/marketing-asset/move'
 import { abortAfter } from '@/lib/marketing-asset/blob-delete'
 import { createMarketingAsset } from '@/lib/marketing-asset/sanity'
+import { marketingAssetDetailsSchema } from '@/lib/marketing-asset/details'
+import { requireAssetDetailsInCurrentOrg } from '@/lib/marketing-asset/guard'
 import { deleteImageAssetIfOrphaned } from '@/lib/sanity/orphaned-asset'
 
 /** The streamed move of one image gets a minute, set explicitly (§4.1). */
@@ -21,11 +23,7 @@ export const maxDuration = 60
 /** Kept back from `maxDuration`, so there is always time left to answer. */
 const ANSWER_MARGIN_MS = 3_000
 
-const InputSchema = z.object({
-  url: z.string().min(1).max(2048),
-  title: z.string().trim().min(1).max(200),
-  alt: z.string().trim().min(1).max(1000),
-})
+const UrlSchema = z.object({ url: z.string().min(1).max(2048) })
 
 const REFUSALS: Record<MoveRefusal, { status: number; error: string }> = {
   host: { status: 400, error: 'That upload is not one of ours.' },
@@ -58,14 +56,39 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const parsed = InputSchema.safeParse(await request.json().catch(() => null))
-  if (!parsed.success) {
+  const body: unknown = await request.json().catch(() => null)
+  const parsedUrl = UrlSchema.safeParse(body)
+  const parsed = marketingAssetDetailsSchema.safeParse(body)
+  if (!parsedUrl.success || !parsed.success) {
+    const named = parsed.error?.issues.some(
+      (issue) => issue.path[0] !== 'title' && issue.path[0] !== 'alt',
+    )
     return NextResponse.json(
-      { error: 'An image, a title and alt text are required.' },
+      {
+        error:
+          parsedUrl.success && named
+            ? 'Those details cannot be saved. Check the edition, subject and tags.'
+            : 'An image, a title and alt text are required.',
+      },
       { status: 400 },
     )
   }
-  const { url, title, alt } = parsed.data
+  const { url } = parsedUrl.data
+  const details = parsed.data
+
+  // Before the move, so a refused edition or subject leaves no image behind.
+  // The guard's refusal never says whether a foreign id exists.
+  try {
+    await requireAssetDetailsInCurrentOrg(details)
+  } catch {
+    return NextResponse.json(
+      {
+        error:
+          'That edition or subject is not one of this organization’s. Choose another.',
+      },
+      { status: 400 },
+    )
+  }
 
   const moved = await moveBlobToSanity(url, orgId)
   if (!moved.ok) {
@@ -81,8 +104,7 @@ export async function POST(request: Request) {
     const created = await createMarketingAsset(
       {
         orgId,
-        title,
-        alt,
+        details,
         imageAssetId: moved.asset._id,
         ...(moved.asset.created
           ? { createdImageAssetId: moved.asset._id }

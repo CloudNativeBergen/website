@@ -5,9 +5,15 @@ import {
   requireCurrentOrgId,
   requireDocumentInCurrentOrg,
 } from '@/server/tenancy'
+import { resolveConferenceId } from '@/server/trpc'
+import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import { marketingAssetDetailsSchema } from '@/lib/marketing-asset/details'
+import { requireAssetDetailsInCurrentOrg } from '@/lib/marketing-asset/guard'
 import {
   deleteMarketingAssetDocument,
+  listMarketingAssetFacets,
   listMarketingAssets,
+  updateMarketingAssetDetails,
   countMarketingAssetReleaseTwins,
   readMarketingAssetImage,
 } from '@/lib/marketing-asset/sanity'
@@ -27,13 +33,65 @@ const notFound = () =>
     message: 'No marketingAsset with that id for this request',
   })
 
+const assetId = z.string().min(1).max(200)
+
+const filterSchema = z
+  .object({
+    editions: z.enum(['current', 'all']).optional(),
+    subjectId: z.string().min(1).max(200).optional(),
+    tag: z.string().max(100).optional(),
+    search: z.string().max(200).optional(),
+  })
+  .optional()
+
 export const marketingAssetRouter = router({
-  list: adminProcedure.query(async () =>
-    listMarketingAssets(await requireCurrentOrgId()),
-  ),
+  /**
+   * The gallery. "This edition" is the request host's conference, and the
+   * organization the host's owner; neither is ever taken from the client.
+   */
+  list: adminProcedure.input(filterSchema).query(async ({ input }) => {
+    const [orgId, conferenceId] = await Promise.all([
+      requireCurrentOrgId(),
+      resolveConferenceId(),
+    ])
+    return listMarketingAssets(orgId, conferenceId, input ?? {})
+  }),
+
+  /** This edition (for the edition mark) and what the filter menus offer. */
+  filters: adminProcedure.query(async () => {
+    const orgId = await requireCurrentOrgId()
+    const [{ conference }, facets] = await Promise.all([
+      getConferenceForCurrentDomain(),
+      listMarketingAssetFacets(orgId),
+    ])
+    return {
+      edition: conference
+        ? { _id: conference._id, title: conference.title ?? 'This edition' }
+        : null,
+      ...facets,
+    }
+  }),
+
+  /**
+   * Change an asset's title, alt text, scope and edition mark, subject, tags
+   * and credit. Any organizer of the organization may, on any of its assets,
+   * including another edition's (spec §3).
+   */
+  update: adminProcedure
+    .input(z.object({ id: assetId, details: marketingAssetDetailsSchema }))
+    .mutation(async ({ input }) => {
+      // Published ids only, as for delete.
+      if (input.id.includes('.')) throw notFound()
+      // The asset first: a foreign asset is refused before any subject or
+      // edition is probed, so the answer says nothing about those either.
+      await requireDocumentInCurrentOrg(input.id, 'marketingAsset')
+      await requireAssetDetailsInCurrentOrg(input.details)
+      await updateMarketingAssetDetails(input.id, input.details)
+      return { updated: true }
+    }),
 
   delete: adminProcedure
-    .input(z.object({ id: z.string().min(1).max(200) }))
+    .input(z.object({ id: assetId }))
     .mutation(async ({ input }) => {
       // The gallery lists published (root, dot-free) ids only. A draft
       // (`drafts.x`) or release version (`versions.r.x`) id is never one, and

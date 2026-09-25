@@ -24,12 +24,22 @@ const h = vi.hoisted(() => ({
   createdImageAssetId: 'image-logo-800x800-png' as string | undefined,
   releaseTwins: 0,
   versionedConfig: undefined as unknown,
+  patches: [] as { id: string; set: unknown; unset: string[] }[],
 }))
 vi.mock('@/lib/conference/sanity', () => ({
   getConferenceForCurrentDomain: h.getConference,
 }))
 vi.mock('@/lib/sanity/client', () => ({
   clientWrite: {
+    patch: (id: string) => {
+      const op = { id, set: {} as unknown, unset: [] as string[] }
+      const p = {
+        set: (fields: unknown) => ((op.set = fields), p),
+        unset: (paths: string[]) => (op.unset.push(...paths), p),
+        commit: async () => (h.patches.push(op), { _id: id }),
+      }
+      return p
+    },
     transaction: () => {
       const ids: string[] = []
       const tx = {
@@ -72,13 +82,38 @@ function assets(organizerOrgIds: string[] = ['org-A']) {
 }
 
 /** Documents the stubbed dataset holds, by id. */
-const DOCS: Record<string, { _type: string; orgId: string | null }> = {
+const DOCS: Record<
+  string,
+  {
+    _type: string
+    orgId: string | null
+    conferenceOrgId?: string
+    memberOrgIds?: string[]
+  }
+> = {
   'asset-ours': { _type: 'marketingAsset', orgId: 'org-A' },
   // A Studio draft of ours: same type, same organization, so the tenancy
   // guard alone would let it through.
   'drafts.asset-ours': { _type: 'marketingAsset', orgId: 'org-A' },
   'asset-theirs': { _type: 'marketingAsset', orgId: 'org-B' },
   'template-ours': { _type: 'planTemplate', orgId: 'org-A' },
+  'conf-A': { _type: 'conference', orgId: 'org-A' },
+  'conf-A-2025': { _type: 'conference', orgId: 'org-A' },
+  'conf-B': { _type: 'conference', orgId: 'org-B' },
+  'drafts.conf-A': { _type: 'conference', orgId: 'org-A' },
+  // Speakers are shared across tenants: standing is membership or a talk.
+  'sp-member': { _type: 'speaker', orgId: null, memberOrgIds: ['org-A'] },
+  'sp-talk-here': { _type: 'speaker', orgId: null, memberOrgIds: [] },
+  'sp-theirs': { _type: 'speaker', orgId: null, memberOrgIds: ['org-B'] },
+  'talk-ours': { _type: 'talk', orgId: null, conferenceOrgId: 'org-A' },
+  'talk-theirs': { _type: 'talk', orgId: null, conferenceOrgId: 'org-B' },
+  'sponsor-ours': { _type: 'sponsor', orgId: 'org-A' },
+  'sponsor-theirs': { _type: 'sponsor', orgId: 'org-B' },
+}
+/** The organizations each speaker has a talk at (participation). */
+const TALKS_AT: Record<string, string[]> = {
+  'sp-talk-here': ['org-A'],
+  'sp-theirs': ['org-B'],
 }
 const ROWS = [
   {
@@ -100,6 +135,7 @@ beforeEach(() => {
   h.createdImageAssetId = 'image-logo-800x800-png'
   h.releaseTwins = 0
   h.versionedConfig = undefined
+  h.patches = []
   h.getConference.mockResolvedValue({
     conference: { _id: 'conf-A', organization: { _ref: 'org-A' } },
     error: null,
@@ -109,8 +145,18 @@ beforeEach(() => {
       // The tenancy guard's by-id read.
       if (query.includes('"memberOrgIds"')) {
         const doc = DOCS[params.id]
-        return doc ? { _type: doc._type, orgId: doc.orgId } : null
+        return doc
+          ? {
+              _type: doc._type,
+              orgId: doc.orgId,
+              conferenceOrgId: doc.conferenceOrgId ?? null,
+              memberOrgIds: doc.memberOrgIds ?? [],
+            }
+          : null
       }
+      // The speaker guard's participation probe.
+      if (query.includes('references($speakerId)'))
+        return TALKS_AT[params.speakerId] ?? []
       // The asset reads, which must be scoped to the caller's organization.
       if (params.orgId !== 'org-A') throw new Error('unscoped read')
       if (query.includes('path("versions.*." + $id)'))
@@ -143,7 +189,24 @@ describe('marketingAsset.list', () => {
     // Published documents only: a Studio draft (`drafts.x`) or a Content
     // Release version (`versions.r.x`) is not a second gallery entry.
     expect(query).toContain('_id in path("*")')
-    expect(params).toMatchObject({ orgId: 'org-A' })
+    // This edition, resolved from the request host, never from the client.
+    expect(params).toMatchObject({ orgId: 'org-A', conferenceId: 'conf-A' })
+  })
+
+  it('passes the filters through to the read', async () => {
+    await assets().list({
+      editions: 'all',
+      subjectId: 'sp-member',
+      tag: 'Brand',
+      search: 'logo dark',
+    })
+    const [, params] = h.read.mock.calls[0]
+    expect(params).toMatchObject({
+      allEditions: true,
+      subjectId: 'sp-member',
+      tag: 'brand',
+      terms: ['logo*', 'dark*'],
+    })
   })
 
   it('flags nothing as soft when the short side is 1080 or more', async () => {
@@ -286,12 +349,184 @@ describe('marketingAsset.delete', () => {
   })
 })
 
+const DETAILS = {
+  title: '  Speaker card  ',
+  alt: 'Ada on stage',
+  scope: 'organization' as const,
+  tags: ['Speaker Card', 'speaker card', ' keynote '],
+}
+
+describe('marketingAsset.update', () => {
+  it('writes the details to our asset, tags trimmed, lower-cased and once each', async () => {
+    const result = await assets().update({
+      id: 'asset-ours',
+      details: {
+        ...DETAILS,
+        subject: { type: 'speaker', id: 'sp-member' },
+        credit: ' Jane Designer ',
+      },
+    })
+    expect(result).toEqual({ updated: true })
+    expect(h.patches).toEqual([
+      {
+        id: 'asset-ours',
+        set: {
+          title: 'Speaker card',
+          alt: 'Ada on stage',
+          scope: 'organization',
+          tags: ['speaker card', 'keynote'],
+          subject: { _type: 'reference', _ref: 'sp-member', _weak: true },
+          credit: 'Jane Designer',
+        },
+        // Organization-wide: no edition mark survives.
+        unset: ['conference'],
+      },
+    ])
+  })
+
+  it('clears the subject and the credit when they are taken away', async () => {
+    await assets().update({ id: 'asset-ours', details: DETAILS })
+    expect(h.patches[0].unset).toEqual(['conference', 'subject', 'credit'])
+  })
+
+  it('marks our asset with an edition of THIS organization', async () => {
+    await assets().update({
+      id: 'asset-ours',
+      details: { ...DETAILS, scope: 'edition', conferenceId: 'conf-A-2025' },
+    })
+    expect(h.patches[0].set).toMatchObject({
+      scope: 'edition',
+      conference: { _type: 'reference', _ref: 'conf-A-2025' },
+    })
+  })
+
+  // Each refusal is paired with the same request naming OUR document, which
+  // succeeds: nothing else in the path refuses it.
+  it.each([
+    [
+      'an edition of another organization',
+      { scope: 'edition', conferenceId: 'conf-B' },
+      'conference',
+    ],
+    [
+      'a speaker with standing only in another organization',
+      { subject: { type: 'speaker', id: 'sp-theirs' } },
+      'speaker',
+    ],
+    [
+      'a talk of another organization',
+      { subject: { type: 'talk', id: 'talk-theirs' } },
+      'talk',
+    ],
+    [
+      'a sponsor of another organization',
+      { subject: { type: 'sponsor', id: 'sponsor-theirs' } },
+      'sponsor',
+    ],
+    [
+      'our talk named as a sponsor',
+      { subject: { type: 'sponsor', id: 'talk-ours' } },
+      'sponsor',
+    ],
+  ] as const)('refuses %s, and writes nothing', async (_, change, type) => {
+    const error = await assets()
+      .update({ id: 'asset-ours', details: { ...DETAILS, ...change } })
+      .catch((e) => e)
+    expect({ code: error.code, message: error.message }).toEqual({
+      code: 'NOT_FOUND',
+      message: `No ${type} with that id for this request`,
+    })
+    expect(h.patches).toEqual([])
+  })
+
+  it.each([
+    ['our edition', { scope: 'edition', conferenceId: 'conf-A' }],
+    [
+      'a speaker who is a member here',
+      { subject: { type: 'speaker', id: 'sp-member' } },
+    ],
+    [
+      'a speaker with a talk here',
+      { subject: { type: 'speaker', id: 'sp-talk-here' } },
+    ],
+    ['our talk', { subject: { type: 'talk', id: 'talk-ours' } }],
+    ['our sponsor', { subject: { type: 'sponsor', id: 'sponsor-ours' } }],
+  ] as const)('accepts %s', async (_, change) => {
+    await assets().update({
+      id: 'asset-ours',
+      details: { ...DETAILS, ...change },
+    })
+    expect(h.patches).toHaveLength(1)
+  })
+
+  it('answers another organization’s asset as a missing one, before reading any subject', async () => {
+    const foreign = await assets()
+      .update({
+        id: 'asset-theirs',
+        details: { ...DETAILS, subject: { type: 'speaker', id: 'sp-theirs' } },
+      })
+      .catch((e) => e)
+    const missing = await assets()
+      .update({ id: 'asset-nope', details: DETAILS })
+      .catch((e) => e)
+    expect({ code: foreign.code, message: foreign.message }).toEqual({
+      code: 'NOT_FOUND',
+      message: missing.message,
+    })
+    expect(missing.message).toBe(
+      'No marketingAsset with that id for this request',
+    )
+    // The subject's standing was never probed for a foreign asset.
+    const probed = h.read.mock.calls.map(
+      ([, params]) => params?.id ?? params?.speakerId,
+    )
+    expect(probed).not.toContain('sp-theirs')
+    expect(h.patches).toEqual([])
+  })
+
+  it('refuses a draft id of our asset', async () => {
+    await expect(
+      assets().update({ id: 'drafts.asset-ours', details: DETAILS }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    expect(h.patches).toEqual([])
+  })
+
+  it.each([
+    ['an edition asset with no edition', { scope: 'edition' }],
+    ['an organization-wide asset with an edition', { conferenceId: 'conf-A' }],
+    ['a blank title', { title: '   ' }],
+    ['blank alt text', { alt: '' }],
+    // Never a draft: the shape refuses it before any document is read.
+    [
+      'a draft of our edition',
+      { scope: 'edition', conferenceId: 'drafts.conf-A' },
+    ],
+    [
+      'a draft subject',
+      { subject: { type: 'sponsor', id: 'drafts.sponsor-ours' } },
+    ],
+  ] as const)('refuses %s as bad input', async (_, change) => {
+    await expect(
+      assets().update({ id: 'asset-ours', details: { ...DETAILS, ...change } }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    expect(h.patches).toEqual([])
+  })
+
+  it('refuses a non-organizer before anything is read', async () => {
+    await expect(
+      assets(['org-B']).update({ id: 'asset-ours', details: DETAILS }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' })
+    expect(h.read).not.toHaveBeenCalled()
+    expect(h.patches).toEqual([])
+  })
+})
+
 /**
  * SURFACE TRIPWIRE, as in `tenancy.writes.test.ts`: a new mutation here must
  * decide whether it takes a client id and so needs the ownership guard.
  */
 describe('the marketingAsset mutation surface is pinned', () => {
-  it('has exactly one mutation, the guarded delete', () => {
+  it('has exactly the guarded delete and update', () => {
     const procedures = (
       marketingAssetRouter as unknown as {
         _def: { procedures: Record<string, { _def?: { type?: string } }> }
@@ -302,6 +537,6 @@ describe('the marketingAsset mutation surface is pinned', () => {
       .map(([path]) => path)
     // Creating an asset is the move route, `/api/admin/marketing-assets`,
     // which resolves the organization itself and takes no document id.
-    expect(mutations).toEqual(['delete'])
+    expect(mutations.sort()).toEqual(['delete', 'update'])
   })
 })

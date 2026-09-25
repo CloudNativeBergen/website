@@ -1,5 +1,8 @@
 import { upload } from '@vercel/blob/client'
-import { marketingAssetPathname } from '@/lib/marketing-asset'
+import {
+  marketingAssetPathname,
+  type MarketingAssetDetails,
+} from '@/lib/marketing-asset'
 
 const GENERIC_FAILURE = 'The image could not be added. Try again.'
 
@@ -20,15 +23,10 @@ function withTypeExtension(file: File): string {
   return ext ? `${base}.${ext}` : file.name
 }
 
-export interface AssetDetails {
-  title: string
-  alt: string
-}
-
 /** Uploads one image and adds it to the gallery, or throws a message to show. */
 export type AssetUploader = (
   file: File,
-  details: AssetDetails,
+  details: MarketingAssetDetails,
 ) => Promise<{ _id: string; softOnSocial: boolean }>
 
 /**
