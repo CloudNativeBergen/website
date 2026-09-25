@@ -6,6 +6,7 @@ import {
   MIN_BITRATE,
   PROBE_FAILED_MESSAGE,
   PROBE_TIMEOUT_MS,
+  RELEASE_MS,
   STALL_TIMEOUT_MS,
   exportVideo,
   type EncodeSession,
@@ -24,6 +25,8 @@ interface FakeOptions {
   supported?: boolean
   /** `open` never settles. */
   hangOpen?: boolean
+  /** How long a session's `cancel()` takes to close its encoder. */
+  cancelMs?: number
   /** `open` settles only when the test calls the function it is handed. */
   holdOpen?: (release: () => void) => void
   /**
@@ -101,7 +104,12 @@ function fakeBackend(options: FakeOptions = {}) {
           ])
         },
         cancel: async () => {
+          if (options.cancelMs)
+            await new Promise((resolve) =>
+              setTimeout(resolve, options.cancelMs),
+            )
           session.cancelled = true
+          log.push('session-closed')
         },
       }
     },
@@ -344,5 +352,22 @@ describe('exportVideo', () => {
     expect(sessions[0].frames).toHaveLength(90)
     expect(sessions[0].finished).toBe(false)
     expect(sessions[0].cancelled).toBe(true)
+  })
+
+  it('settles a failed export only once its encoder has closed', async () => {
+    vi.useFakeTimers()
+    const { backend, log } = fakeBackend({ failAt: 20, cancelMs: 300 })
+    const settled = run(backend).promise.catch(() => log.push('settled'))
+    await vi.advanceTimersByTimeAsync(300)
+    await settled
+    expect(log.slice(-2)).toEqual(['session-closed', 'settled'])
+  })
+
+  it('never waits long on an encoder whose close hangs', async () => {
+    vi.useFakeTimers()
+    const { backend } = fakeBackend({ failAt: 20, cancelMs: 60_000 })
+    const settled = run(backend).promise.catch((e: unknown) => e)
+    await vi.advanceTimersByTimeAsync(RELEASE_MS)
+    expect(await settled).toMatchObject({ reason: 'encoder' })
   })
 })

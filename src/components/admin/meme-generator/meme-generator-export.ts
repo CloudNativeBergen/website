@@ -28,6 +28,11 @@ export const PROBE_TIMEOUT_MS: Record<Encoding['latencyMode'], number> = {
 }
 /** How long an abandoned probe may take to let go of its encoder. */
 export const PROBE_RELEASE_MS = 1_000
+/**
+ * How long a failed or cancelled export waits for its encoder to close
+ * before it settles, so a retry does not find the old one still holding it.
+ */
+export const RELEASE_MS = 1_000
 /** No frame accepted for this long is an encoder that has stopped (proof §6). */
 export const STALL_TIMEOUT_MS = 15_000
 /** Frames between real tasks handed back to the browser. */
@@ -248,9 +253,13 @@ async function encodePass(
     if (signal.aborted) throw new ExportCancelled()
     return await guarded(session.finish(), signal, STALL_TIMEOUT_MS, stalled)
   } catch (error) {
-    // Whatever happened, the encoder is let go of — without waiting on one
+    // Whatever happened, the encoder is let go of before the export settles
+    // and Export can be pressed again — waiting at most RELEASE_MS on one
     // that has stopped answering.
-    void session.cancel().catch(() => {})
+    await Promise.race([
+      session.cancel().catch(() => {}),
+      new Promise((resolve) => setTimeout(resolve, RELEASE_MS)),
+    ])
     if (error instanceof ExportCancelled || error instanceof ExportFailed)
       throw error
     throw new ExportFailed('encoder', `The encoder failed: ${describe(error)}`)

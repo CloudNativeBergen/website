@@ -84,9 +84,12 @@ export const mediabunnyBackend: EncoderBackend = {
       if (signal.aborted) stop()
       else signal.addEventListener('abort', stop, { once: true })
     })
+    // Aborted while the output was starting: nothing is encoded, and the
+    // probe settles only once that output is closed.
+    if (signal.aborted) return aborted
     const encode = async () => {
       for (let frame = 0; frame < PROBE_FRAMES; frame++) {
-        if (signal.aborted) return false
+        if (signal.aborted) return aborted
         // A frame that differs from the last, as a real video's do.
         ctx.fillStyle = `hsl(${frame * 36} 70% 50%)`
         ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE)
