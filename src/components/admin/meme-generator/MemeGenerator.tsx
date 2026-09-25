@@ -673,8 +673,9 @@ export function MemeGenerator({
       setPlaying(false)
       return
     }
-    // Play from the start again once the end has been reached.
-    seek(time >= total ? 0 : time)
+    // Play from the start again once the end has been reached — or its last
+    // frame, where an edit at the end leaves the playhead.
+    seek(time >= total - FRAME ? 0 : time)
     setPlaybackEditingKey(editingKey)
     setPlaying(true)
   }
@@ -715,7 +716,13 @@ export function MemeGenerator({
   >(null)
   const refused = refusal?.for === history ? refusal : null
   const refuse = (action: SceneRefusal['action'], reason: string) =>
-    setRefusal({ action, reason, for: history })
+    setRefusal((prev) => ({
+      action,
+      reason,
+      for: history,
+      // Counted, so the same reason given again is a new announcement.
+      seq: (prev?.seq ?? 0) + 1,
+    }))
 
   // A scene list reordered, grown or shrunk as one step, and the playhead put
   // `at` a time in it — during playback the controls follow `editKey`, when
@@ -805,10 +812,14 @@ export function MemeGenerator({
       !(event.metaKey || event.ctrlKey)
     )
       return
-    const key = event.key.toLowerCase()
-    const isUndo = key === 'z' && !event.shiftKey
+    // By the letter where the layout types one, else by the physical key:
+    // on a Cyrillic or Greek layout, Ctrl+Z types "я" or "ζ".
+    const letter = /^[a-z]$/i.test(event.key)
+      ? event.key.toLowerCase()
+      : event.code.replace(/^Key/, '').toLowerCase()
+    const isUndo = letter === 'z' && !event.shiftKey
     const isRedo =
-      (key === 'z' && event.shiftKey) || (key === 'y' && event.ctrlKey)
+      (letter === 'z' && event.shiftKey) || (letter === 'y' && event.ctrlKey)
     if (!isUndo && !isRedo) return
     // Typing into a design's text is a step like any other, so the shortcut
     // is the editor's even in those fields. Not in a field that holds an

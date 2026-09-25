@@ -1501,11 +1501,12 @@ export const VideoSlideMidway: Story = {
 }
 
 /**
- * A zoom at its midpoint is a cross-fade of the two scenes, each drawn larger
- * than the canvas: the corner is half of each colour, and never shows an
- * edge — a layer drawn smaller would leave the corner dark.
+ * A zoom at its midpoint shows no edge: the very corner is half of each
+ * colour, where a layer drawn smaller than the canvas would leave it dark.
+ * Solid scenes look the same scaled or not, so the scaling itself is pinned
+ * by the frame unit test, not here.
  */
-export const VideoZoomMidway: Story = {
+export const VideoZoomShowsNoEdge: Story = {
   play: async ({ canvasElement }) => {
     await blueIntoGreen(canvasElement, 'zoom', 3)
     await waitFor(() =>
@@ -1522,9 +1523,9 @@ export const VideoZoomMidway: Story = {
 }
 
 /**
- * Scene management by keyboard alone, with real key presses in a real
- * browser: Alt+→ moves a scene and focus stays on it (a moved element loses
- * focus in a browser, which jsdom does not model), a copy is refused past the
+ * Scene management by keyboard alone, in a real browser with user-event's
+ * keyboard (synthetic events, not OS key presses): Alt+→ moves a scene and
+ * focus stays on it through React's commit, a copy is refused past the
  * minute with the reason, Delete takes a scene out, and Ctrl+Z / Ctrl+Shift+Z
  * walk the history.
  */
@@ -1553,8 +1554,18 @@ export const VideoScenesByKeyboard: Story = {
     expect(document.activeElement?.getAttribute('aria-label')).toBe(
       'Scene 2, 3.0 s',
     )
-    // The playhead stayed on the scene it was on; Enter picks the moved one.
-    await userEvent.keyboard('{Enter}')
+    // The playhead went with the scene it was on — the 57 s one, now first.
+    expect(
+      canvas
+        .getByRole('slider', { name: 'Playhead' })
+        .getAttribute('aria-valuenow'),
+    ).toBe('0')
+    await userEvent.keyboard('{Enter}') // picks the moved scene
+    expect(
+      canvas
+        .getByRole('slider', { name: 'Playhead' })
+        .getAttribute('aria-valuenow'),
+    ).toBe('57')
 
     await activate(canvas.getByRole('button', { name: 'Duplicate scene 2' }))
     expect(canvas.getByRole('status').textContent).toBe(

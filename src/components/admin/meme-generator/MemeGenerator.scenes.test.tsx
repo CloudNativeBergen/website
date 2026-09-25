@@ -128,6 +128,18 @@ describe('the 60-second cap', () => {
     )
   })
 
+  it('announces a refusal again when the same press is refused again', () => {
+    scenesOf(58)
+    fireEvent.click(button('Add scene'))
+    const first = status().firstElementChild
+    expect(first?.textContent).toContain('Shorten a scene first')
+    fireEvent.click(button('Add scene'))
+    // A new node, so the live region changes and is read out again.
+    const second = status().firstElementChild
+    expect(second?.textContent).toContain('Shorten a scene first')
+    expect(second).not.toBe(first)
+  })
+
   it('refuses a copy that would pass it, and says why', () => {
     scenesOf(30, 20)
     fireEvent.click(button('Duplicate scene 2'))
@@ -191,6 +203,18 @@ describe('scene actions', () => {
 })
 
 describe('reordering by keyboard', () => {
+  it('tells a screen reader how to move a scene', () => {
+    scenesOf(2, 3)
+    const scene = button('Scene 1, 2.0 s')
+    expect(scene.getAttribute('aria-roledescription')).toBeNull()
+    const hint = document.getElementById(
+      scene.getAttribute('aria-describedby') ?? '',
+    )
+    expect(hint?.textContent).toBe(
+      'Alt with the left or right arrow moves the scene.',
+    )
+  })
+
   it('moves a scene with Alt and an arrow, keeping it focused and edited', () => {
     scenesOf(2, 3, 4)
     const first = button('Scene 1, 2.0 s')
@@ -364,11 +388,20 @@ describe('undo and redo', () => {
     expect(valueOf(lengthOf(1))).toBe(3)
   })
 
+  it('works on a keyboard layout whose Z key types another letter', () => {
+    openVideo()
+    enter('Scene 1 length (s)', '4')
+    // Ctrl+Z on a Russian layout: the key is "я", the physical key is Z.
+    fireEvent.keyDown(document.body, { key: 'я', code: 'KeyZ', ctrlKey: true })
+    expect(valueOf(lengthOf(1))).toBe(3)
+  })
+
   it('works in Image mode too', () => {
     render(<MemeGenerator />)
     fireEvent.change(headline(), { target: { value: 'Hei' } })
+    expect(headline().value).toBe('Hei')
     fireEvent.keyDown(document.body, { key: 'z', ctrlKey: true })
-    expect(headline().value).not.toBe('Hei')
+    expect(headline().value).toBe('')
   })
 
   it('draws a background image again when its removal is undone', async () => {
@@ -450,6 +483,18 @@ describe('undo and redo', () => {
     expect(status().textContent).toBe('')
     fireEvent.click(redoButton())
     expect(status().textContent).toBe('')
+  })
+})
+
+describe('playing again from the end', () => {
+  it('starts from the top after an edit left the playhead a frame short of the end', () => {
+    scenesOf(3, 3)
+    fireEvent.keyDown(playhead(), { key: 'End' })
+    // Shortening the last scene keeps the playhead in it: its last frame.
+    fireEvent.keyDown(lengthOf(2), { key: 'Home' })
+    expect(valueOf(playhead())).toBeCloseTo(4 - 1 / 30)
+    fireEvent.click(button('Play'))
+    expect(valueOf(playhead())).toBe(0)
   })
 })
 

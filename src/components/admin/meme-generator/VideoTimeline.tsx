@@ -34,6 +34,8 @@ const LARGE_STEP = 1
 export interface SceneRefusal {
   action: 'add' | 'duplicate' | 'delete'
   reason: string
+  /** Bumped on every refusal, so a repeat of the same one is read out again. */
+  seq: number
 }
 
 interface VideoTimelineProps {
@@ -260,7 +262,9 @@ function SceneItem({
   onMove,
   onPlayheadKey,
   onDurationChange,
+  moveHintId,
 }: {
+  moveHintId: string
   scenes: Scene[]
   index: number
   active: boolean
@@ -337,7 +341,7 @@ function SceneItem({
         aria-current={active || undefined}
         aria-label={`Scene ${index + 1}, ${seconds(scene.duration)}`}
         aria-keyshortcuts="Alt+ArrowLeft Alt+ArrowRight"
-        aria-roledescription="movable scene"
+        aria-describedby={moveHintId}
         title="Drag, or Alt with an arrow key, to move the scene"
         className={`flex size-full cursor-grab touch-pan-x flex-col items-start justify-center gap-0.5 overflow-hidden rounded-md border-2 px-2 text-left text-xs select-none active:cursor-grabbing ${
           active
@@ -450,26 +454,23 @@ export function VideoTimeline({
   const describedBy = (action: SceneRefusal['action']) =>
     refusal?.action === action ? refusalId : undefined
 
-  // A scene moved keeps focus: React moves its element, and a moved element
-  // loses focus in the browser, so it is given back once the list has
-  // settled — a keyboard user presses Alt+→ again and it goes on moving.
-  const list = useRef<HTMLOListElement>(null)
-  const refocus = useRef<string | null>(null)
+  const moveHintId = useId()
+  // A scene moved keeps focus without help: React gives focus back to an
+  // element it moved during a commit. Only its place on the track is kept
+  // in view, as a move can carry it past the edge.
+  const moved = useRef<string | null>(null)
   const moveScene = (from: number, to: number) => {
     if (to < 0 || to >= scenes.length || to === from) return
-    if (list.current?.contains(document.activeElement))
-      refocus.current = scenes[from].key
+    moved.current = scenes[from].key
     onMoveScene(from, to)
   }
   useEffect(() => {
-    const key = refocus.current
+    const key = moved.current
     if (key === null) return
-    refocus.current = null
-    const button = list.current?.querySelector<HTMLElement>(
-      `[data-scene-key="${key}"]`,
-    )
-    button?.focus()
-    button?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' })
+    moved.current = null
+    document
+      .querySelector(`[data-scene-key="${key}"]`)
+      ?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' })
   }, [scenes])
 
   // A playhead moved by KEYBOARD is kept in view: on a narrow screen it
@@ -578,7 +579,11 @@ export function VideoTimeline({
         role="status"
         className="text-sm text-amber-700 dark:text-amber-400"
       >
-        {refusal && <span className="mb-3 block">{refusal.reason}</span>}
+        {refusal && (
+          <span key={refusal.seq} className="mb-3 block">
+            {refusal.reason}
+          </span>
+        )}
       </p>
 
       <div className="overflow-x-auto pb-2">
@@ -605,11 +610,7 @@ export function VideoTimeline({
             ))}
           </div>
 
-          <ol
-            ref={list}
-            className="relative mt-1 flex h-14"
-            aria-label="Scenes"
-          >
+          <ol className="relative mt-1 flex h-14" aria-label="Scenes">
             {scenes.map((scene, index) => (
               <SceneItem
                 key={scene.key}
@@ -625,9 +626,13 @@ export function VideoTimeline({
                   movePlayhead(event)
                 }}
                 onDurationChange={onDurationChange}
+                moveHintId={moveHintId}
               />
             ))}
           </ol>
+          <span id={moveHintId} hidden>
+            Alt with the left or right arrow moves the scene.
+          </span>
 
           {/* The playhead spans the ruler and the scenes. */}
           <div
