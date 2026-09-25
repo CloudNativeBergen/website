@@ -774,7 +774,7 @@ export function MemeGenerator({
     replaceScenes(
       removed.scenes,
       removed.time,
-      removed.scenes[sceneIndexAt(removed.scenes, removed.time)].key,
+      removed.scenes[Math.min(index, removed.scenes.length - 1)].key,
     )
   }
 
@@ -827,12 +827,13 @@ export function MemeGenerator({
     )
       return
     // By the letter where the layout types one, else by the physical key:
-    // on a Cyrillic or Greek layout, Ctrl+Z types "я" or "ζ".
+    // on a Cyrillic, Greek or InScript layout, Ctrl+Z types "я", "ζ" or the
+    // vowel sign "ॆ". Punctuation never counts (Dvorak's Z key types ";").
     // Never with Alt: Windows reports AltGr as Ctrl+Alt, and AltGr types.
     if (event.altKey) return
     const letter = /^[a-z]$/i.test(event.key)
       ? event.key.toLowerCase()
-      : /^\p{L}$/u.test(event.key)
+      : /^[\p{L}\p{M}]$/u.test(event.key)
         ? event.code.replace(/^Key/, '').toLowerCase()
         : ''
     const isUndo = letter === 'z' && !event.shiftKey

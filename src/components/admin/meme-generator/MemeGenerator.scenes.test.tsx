@@ -392,6 +392,11 @@ describe('undo and redo', () => {
     // Ctrl+Z on a Russian layout: the key is "я", the physical key is Z.
     fireEvent.keyDown(document.body, { key: 'я', code: 'KeyZ', ctrlKey: true })
     expect(valueOf(lengthOf(1))).toBe(3)
+    fireEvent.keyDown(document.body, { key: 'y', ctrlKey: true })
+    expect(valueOf(lengthOf(1))).toBe(4)
+    // Hindi InScript: the Z key types the vowel sign "ॆ", a mark, not a letter.
+    fireEvent.keyDown(document.body, { key: 'ॆ', code: 'KeyZ', ctrlKey: true })
+    expect(valueOf(lengthOf(1))).toBe(3)
   })
 
   it('leaves AltGr letters and punctuation on the Z key to be typed', () => {
@@ -535,6 +540,19 @@ describe('deleting during playback', () => {
     // The playhead moves on; the controls stay on that scene while playing.
     fireEvent.keyDown(playhead(), { key: 'End' })
     expect(screen.getByLabelText('Scene 2 length (s)')).toHaveValue('4.0')
+  })
+})
+
+describe('deleting during playback, the playhead elsewhere', () => {
+  it('moves the controls to the scene that took the deleted one’s place', () => {
+    scenesOf(2, 3, 4, 5)
+    fireEvent.click(button('Scene 1, 2.0 s'))
+    fireEvent.click(button('Play'))
+    fireEvent.keyDown(playhead(), { key: 'End' }) // controls stay on scene 1
+    expect(button('Delete scene 1')).toBeTruthy()
+    fireEvent.click(button('Delete scene 1'))
+    // The old 3 s scene is scene 1 now, and the controls are on it.
+    expect(screen.getByLabelText('Scene 1 length (s)')).toHaveValue('3.0')
   })
 })
 
