@@ -21,6 +21,9 @@ const h = vi.hoisted(() => ({
   read: vi.fn(),
   del: vi.fn(),
   orphan: vi.fn(),
+  orphanFile: vi.fn(),
+  /** What `asset-ours` is: the image, or an audio track. */
+  kind: 'image' as 'image' | 'audio',
   createdImageAssetId: 'image-logo-800x800-png' as string | undefined,
   releaseTwins: 0,
   versionedConfig: undefined as unknown,
@@ -60,6 +63,7 @@ vi.mock('@/lib/sanity/client', () => ({
 }))
 vi.mock('@/lib/sanity/orphaned-asset', () => ({
   deleteImageAssetIfOrphaned: h.orphan,
+  deleteFileAssetIfOrphaned: h.orphanFile,
 }))
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -194,6 +198,7 @@ const BACKGROUNDS: Record<
 beforeEach(() => {
   vi.clearAllMocks()
   h.createdImageAssetId = 'image-logo-800x800-png'
+  h.kind = 'image'
   h.releaseTwins = 0
   h.versionedConfig = undefined
   h.patches = []
@@ -228,19 +233,33 @@ beforeEach(() => {
         return BACKGROUNDS[params.id] ?? null
       if (query.includes('path("versions.*." + $id)'))
         return { n: params.id === 'asset-ours' ? h.releaseTwins : 0 }
-      if (query.includes('"createdImageAssetId"'))
-        return params.id === 'asset-ours'
-          ? {
-              assetId: 'image-logo-800x800-png',
-              createdImageAssetId: h.createdImageAssetId,
-            }
-          : null
+      if (query.includes('"createdAssetId"'))
+        return params.id !== 'asset-ours'
+          ? params.id in MARKS
+            ? { kind: 'image', assetId: null, createdAssetId: null }
+            : null
+          : h.kind === 'audio'
+            ? {
+                kind: 'audio',
+                assetId: 'file-theme-mp3',
+                createdAssetId: 'file-theme-mp3',
+              }
+            : {
+                kind: 'image',
+                assetId: 'image-logo-800x800-png',
+                createdAssetId: h.createdImageAssetId,
+              }
       return ROWS
     },
   )
   h.del.mockResolvedValue({})
   h.orphan.mockResolvedValue({
     id: 'image-logo-800x800-png',
+    deleted: true,
+    remainingReferences: 0,
+  })
+  h.orphanFile.mockResolvedValue({
+    id: 'file-theme-mp3',
     deleted: true,
     remainingReferences: 0,
   })
@@ -301,6 +320,19 @@ describe('marketingAsset.delete', () => {
     // The document goes first: while it exists it is itself a reference.
     expect(h.del.mock.invocationCallOrder[0]).toBeLessThan(
       h.orphan.mock.invocationCallOrder[0],
+    )
+  })
+
+  it('deletes an audio track, then its FILE only through the orphan check', async () => {
+    h.kind = 'audio'
+    expect(await assets().delete({ id: 'asset-ours' })).toEqual({
+      deleted: true,
+    })
+    expect(h.del).toHaveBeenCalledWith(['asset-ours', 'drafts.asset-ours'])
+    expect(h.orphanFile.mock.calls).toEqual([['file-theme-mp3']])
+    expect(h.orphan).not.toHaveBeenCalled()
+    expect(h.del.mock.invocationCallOrder[0]).toBeLessThan(
+      h.orphanFile.mock.invocationCallOrder[0],
     )
   })
 
@@ -595,6 +627,31 @@ describe('marketingAsset.update', () => {
       ([, params]) => params?.id ?? params?.speakerId,
     )
     expect(probed).not.toContain('sp-theirs')
+    expect(h.patches).toEqual([])
+  })
+
+  it('saves an audio track with no alt text, and keeps none it is sent', async () => {
+    h.kind = 'audio'
+    for (const alt of [undefined, 'A drum loop']) {
+      h.patches = []
+      await assets().update({
+        id: 'asset-ours',
+        details: { ...DETAILS, title: 'Theme', alt },
+      })
+      expect(h.patches).toHaveLength(1)
+      expect(h.patches[0].set).toMatchObject({ title: 'Theme' })
+      expect(h.patches[0].set).not.toHaveProperty('alt')
+      expect(h.patches[0].unset).toContain('alt')
+    }
+  })
+
+  it('refuses an image with its alt text taken away', async () => {
+    await expect(
+      assets().update({
+        id: 'asset-ours',
+        details: { ...DETAILS, alt: undefined },
+      }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
     expect(h.patches).toEqual([])
   })
 

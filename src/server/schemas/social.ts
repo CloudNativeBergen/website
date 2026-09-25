@@ -82,7 +82,10 @@ export const MarkSocialVariantPostedSchema = z.object({
     }),
 })
 
-/** A Sanity image asset id from OUR dataset (never a URL). */
+/**
+ * A Sanity image asset id from OUR dataset (never a URL). Never a file asset:
+ * this is what refuses a gallery audio track in a post (spec §6).
+ */
 const ImageAssetIdSchema = z
   .string()
   .regex(

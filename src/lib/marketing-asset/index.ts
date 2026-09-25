@@ -19,12 +19,27 @@ export {
   MARKETING_ASSET_MAX_TAG_LENGTH,
   normalizeTags,
 } from './details'
+export {
+  MARKETING_ASSET_AUDIO_LENGTH_REFUSAL,
+  MARKETING_ASSET_AUDIO_SIZE_REFUSAL,
+  MARKETING_ASSET_AUDIO_TYPE_REFUSAL,
+  MARKETING_ASSET_AUDIO_TYPES,
+  MARKETING_ASSET_MAX_AUDIO_BYTES,
+  MARKETING_ASSET_MAX_AUDIO_LABEL,
+  MARKETING_ASSET_MAX_AUDIO_SECONDS,
+  MARKETING_ASSET_RIGHTS_REFUSAL,
+  MARKETING_ASSET_RIGHTS_STATEMENT,
+  audioTypeForFile,
+  formatTrackLength,
+} from './audio-type'
 export { MARKETING_ASSET_SUBJECT_TYPES } from './types'
 export type {
   MarketingAssetDetails,
   MarketingAssetEditionChoice,
   MarketingAssetFacets,
   MarketingAssetFilter,
+  MarketingAssetKind,
+  MarketingAssetRights,
   MarketingAssetRow,
   MarketingAssetScope,
   MarketingAssetSubject,

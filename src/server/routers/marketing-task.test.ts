@@ -1250,6 +1250,21 @@ describe('task.attachAsset', () => {
     expect(state.tx.commit).toHaveBeenCalledTimes(1)
   })
 
+  it('refuses to finish a render Task with an audio track, leaving the Task and post unchanged (#1178)', async () => {
+    const trackId = 'file-3f7a1c9e0b2d4f6a8c1e3b5d7f9a1c3e5b7d9f1a-mp3'
+    const state = await placeholderHandoff('draft', 'Sponsor card: Acme.')
+    // Even bound as this Task's own pending upload.
+    state.saved.pendingStudioAsset = { asset: { _ref: trackId } }
+    const before = structuredClone(state.saved)
+    await expect(
+      marketing().task.attachAsset({ ...input, assetId: trackId }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    expect(state.saved).toEqual(before)
+    expect(state.post.attachments).toEqual([])
+    expect(state.variant.attachments).toEqual([])
+    expect(state.tx.commit).not.toHaveBeenCalled()
+  })
+
   it('refuses a foreign tenant before reading the render Task', async () => {
     await expect(
       marketing().task.attachAsset({ ...input, taskId: 'task-theirs' }),

@@ -35,6 +35,7 @@ import {
   listMarketingAssets,
   readMarketingAssetBackground,
   readMarketingAssetMark,
+  readMarketingAssetMedia,
 } from '@/lib/marketing-asset/sanity'
 
 const ref = (id: string) => ({ _type: 'reference', _ref: id })
@@ -367,5 +368,87 @@ describe('an asset as a studio background (#1180)', () => {
       width: null,
       height: null,
     })
+  })
+})
+
+describe('audio tracks (#1178)', () => {
+  const TRACKS = [
+    { _id: 'sp-org', _type: 'speaker', name: 'Olga Organizer' },
+    {
+      _id: 'file-theme-mp3',
+      _type: 'sanity.fileAsset',
+      url: 'https://cdn.sanity.io/files/p/d/theme.mp3',
+    },
+    asset('theme', 'org-a', {
+      kind: 'audio',
+      alt: undefined,
+      title: 'Conference theme',
+      tags: ['music'],
+      audio: { _type: 'file', asset: ref('file-theme-mp3') },
+      createdFileAssetId: 'file-theme-mp3',
+      durationSeconds: 83.4,
+      rightsConfirmation: {
+        confirmedBy: weak('sp-org'),
+        confirmedAt: '2026-09-26T08:00:00.000Z',
+      },
+      _createdAt: '2026-09-05T00:00:00Z',
+    }),
+    // B's track, matching the kind filter.
+    asset('b-theme', 'org-b', {
+      kind: 'audio',
+      title: 'Theme',
+      audio: { _type: 'file', asset: ref('file-theme-mp3') },
+    }),
+    // Written before `kind` existed: an image.
+    { ...asset('kindless', 'org-a'), kind: undefined },
+  ]
+  beforeEach(() => {
+    h.dataset = [...DATASET, ...TRACKS]
+  })
+
+  it('filters by kind, within this organization', async () => {
+    expect(await list({ kind: 'audio' })).toEqual(['theme'])
+    expect(await list({ kind: 'image' })).toEqual([
+      'logo',
+      'card-2026',
+      'talk-card',
+      'kindless',
+      'sponsor-banner',
+    ])
+    expect((await list()).length).toBe(6)
+  })
+
+  it('carries the track, its length and who confirmed the rights, and no alt text', async () => {
+    const [row] = await listMarketingAssets('org-a', 'conf-a-2026', {
+      kind: 'audio',
+    })
+    expect(row).toMatchObject({
+      kind: 'audio',
+      alt: null,
+      audioUrl: 'https://cdn.sanity.io/files/p/d/theme.mp3',
+      durationSeconds: 83.4,
+      rights: {
+        confirmedBy: 'Olga Organizer',
+        confirmedAt: '2026-09-26T08:00:00.000Z',
+      },
+      imageUrl: null,
+      softOnSocial: false,
+    })
+    const [image] = await listMarketingAssets('org-a', 'conf-a-2026', {
+      kind: 'image',
+    })
+    expect(image).toMatchObject({ audioUrl: null, rights: null })
+  })
+
+  it('reads a track’s FILE for delete, and an old kindless asset as an image', async () => {
+    expect(await readMarketingAssetMedia('org-a', 'theme')).toEqual({
+      kind: 'audio',
+      assetId: 'file-theme-mp3',
+      createdByUpload: true,
+    })
+    expect(await readMarketingAssetMedia('org-a', 'kindless')).toMatchObject({
+      kind: 'image',
+    })
+    expect(await readMarketingAssetMedia('org-a', 'b-theme')).toBeNull()
   })
 })

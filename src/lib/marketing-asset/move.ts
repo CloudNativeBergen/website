@@ -2,7 +2,10 @@ import 'server-only'
 import { Readable } from 'node:stream'
 import { abortAfter, deleteBlobWithin } from './blob-delete'
 import { after } from 'next/server'
-import type { SanityImageAssetDocument } from '@sanity/client'
+import type {
+  SanityAssetDocument,
+  SanityImageAssetDocument,
+} from '@sanity/client'
 import { clientWrite } from '@/lib/sanity/client'
 import { blobStoreHost, checkMarketingAssetBlobUrl } from './blob-url'
 import {
@@ -11,9 +14,16 @@ import {
   SNIFF_BYTES,
   sniffImageType,
 } from './image-type'
+import {
+  MARKETING_ASSET_MAX_AUDIO_BYTES,
+  MARKETING_ASSET_MAX_AUDIO_SECONDS,
+  sniffAudioType,
+  type MarketingAssetAudioType,
+} from './audio-type'
+import { measureAudio } from './audio-measure'
 
 export type MoveRefusal =
-  'host' | 'prefix' | 'fetch' | 'type' | 'size' | 'upload'
+  'host' | 'prefix' | 'fetch' | 'type' | 'size' | 'length' | 'upload'
 
 export type MoveResult =
   | {
@@ -29,6 +39,20 @@ export type MoveResult =
          * which may be another tenant's. Only a created asset is ever the
          * gallery's to delete.
          */
+        created: boolean
+      }
+    }
+  | { ok: false; reason: MoveRefusal }
+
+export type AudioMoveResult =
+  | {
+      ok: true
+      asset: {
+        _id: string
+        url: string
+        mimeType: MarketingAssetAudioType
+        durationSeconds: number
+        /** As for an image: false when Sanity handed back bytes it held. */
         created: boolean
       }
     }
@@ -81,9 +105,24 @@ export async function moveBlobToSanity(
   url: string,
   orgId: string,
 ): Promise<MoveResult> {
+  const check = claimBlob(url, orgId)
+  if (!check.ok) return check
+  return transfer(check.url, check.filename, Date.now())
+}
+
+/**
+ * Steps 1 and 4 of the move, for every kind: refuse a URL that is not ours
+ * without a request, and once it is, delete the blob after the response
+ * whatever else happens.
+ */
+function claimBlob(
+  url: string,
+  orgId: string,
+):
+  | { ok: true; url: string; filename: string }
+  | { ok: false; reason: MoveRefusal } {
   const check = checkMarketingAssetBlobUrl(url, orgId, blobStoreHost())
   if (!check.ok) return { ok: false, reason: check.reason }
-
   const blobUrl = check.url
   after(async () => {
     try {
@@ -92,7 +131,115 @@ export async function moveBlobToSanity(
       console.error('Marketing asset: temporary blob not deleted', error)
     }
   })
-  return transfer(blobUrl, check.filename, Date.now())
+  return check
+}
+
+/**
+ * Move one uploaded audio track from Vercel Blob into a Sanity FILE asset
+ * (docs/MARKETING_STUDIO_VIDEO_SPEC.md §6), under the same URL check, blob
+ * delete and deadline as an image. Unlike an image it is read WHOLE before
+ * anything is uploaded, because its length can only be measured from the
+ * complete file and a track over ten minutes must never reach Sanity; the
+ * read is counted and stops past 20 MB, so that is all it can ever hold.
+ * The format is sniffed from the bytes and the length measured from them;
+ * nothing the client said about the file is consulted.
+ */
+export async function moveAudioBlobToSanity(
+  url: string,
+  orgId: string,
+): Promise<AudioMoveResult> {
+  const check = claimBlob(url, orgId)
+  if (!check.ok) return check
+  const startedAt = Date.now()
+  const deadline = abortAfter(SANITY_UPLOAD_DEADLINE_MS)
+  try {
+    return await transferAudio(
+      check.url,
+      check.filename,
+      startedAt,
+      deadline.signal,
+    )
+  } finally {
+    deadline.clear()
+  }
+}
+
+async function transferAudio(
+  url: string,
+  filename: string,
+  startedAt: number,
+  signal: AbortSignal,
+): Promise<AudioMoveResult> {
+  let response: Response
+  try {
+    response = await fetch(url, {
+      redirect: 'error',
+      cache: 'no-store',
+      signal,
+    })
+  } catch {
+    return { ok: false, reason: 'fetch' }
+  }
+  if (!response.ok || !response.body) return { ok: false, reason: 'fetch' }
+  const reader = response.body.getReader()
+  const drop = () => void reader.cancel().catch(() => {})
+  if (
+    Number(response.headers.get('content-length')) >
+    MARKETING_ASSET_MAX_AUDIO_BYTES
+  ) {
+    drop()
+    return { ok: false, reason: 'size' }
+  }
+
+  const chunks: Uint8Array[] = []
+  let total = 0
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      total += value.length
+      if (total > MARKETING_ASSET_MAX_AUDIO_BYTES) {
+        drop()
+        return { ok: false, reason: 'size' }
+      }
+      chunks.push(value)
+    }
+  } catch {
+    drop()
+    return { ok: false, reason: 'fetch' }
+  }
+  const bytes = concat(chunks)
+  const type = sniffAudioType(bytes.subarray(0, SNIFF_BYTES))
+  if (!type) return { ok: false, reason: 'type' }
+  const measured = await measureAudio(bytes, type)
+  if (!measured) return { ok: false, reason: 'type' }
+  if (measured.durationSeconds > MARKETING_ASSET_MAX_AUDIO_SECONDS)
+    return { ok: false, reason: 'length' }
+
+  try {
+    const asset = await uploadAssetStream(
+      'file',
+      Readable.from([
+        Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength),
+      ]),
+      { filename: displayFilename(filename), contentType: type },
+      Math.max(0, startedAt + SANITY_UPLOAD_DEADLINE_MS - Date.now()),
+    )
+    return {
+      ok: true,
+      asset: {
+        _id: asset._id,
+        url: asset.url,
+        mimeType: type,
+        durationSeconds: measured.durationSeconds,
+        created:
+          Date.parse(asset._createdAt) >= startedAt - CREATED_CLOCK_SKEW_MS,
+      },
+    }
+  } catch (error) {
+    console.error('Marketing asset: track upload to Sanity failed', error)
+    return { ok: false, reason: 'upload' }
+  }
 }
 
 async function transfer(
@@ -196,7 +343,8 @@ async function transferWithin(
   }
 
   try {
-    const asset = await uploadImageStream(
+    const asset = await uploadAssetStream(
+      'image',
       Readable.from(counted()),
       { filename: displayFilename(filename), contentType: type },
       Math.max(0, deadlineAt - Date.now()),
@@ -224,7 +372,7 @@ async function transferWithin(
 }
 
 /**
- * Upload a Node stream as a Sanity image, ABORTING the request when the stream
+ * Upload a Node stream as a Sanity image or file asset, ABORTING the request when the stream
  * fails. Measured against the real `@sanity/client` (7.x) and a local server:
  * the promise API neither listens for a body stream's `error` (an unhandled
  * `error` event takes the process down) nor ends the request when one is
@@ -232,11 +380,24 @@ async function transferWithin(
  * holds that measurement in CI. Through the observable API,
  * unsubscribing aborts the request, and the server sees it incomplete.
  */
-function uploadImageStream(
+function uploadAssetStream(
+  kind: 'image',
   body: Readable,
   options: { filename: string; contentType: string },
   timeoutMs: number,
-): Promise<SanityImageAssetDocument> {
+): Promise<SanityImageAssetDocument>
+function uploadAssetStream(
+  kind: 'file',
+  body: Readable,
+  options: { filename: string; contentType: string },
+  timeoutMs: number,
+): Promise<SanityAssetDocument>
+function uploadAssetStream(
+  kind: 'image' | 'file',
+  body: Readable,
+  options: { filename: string; contentType: string },
+  timeoutMs: number,
+): Promise<SanityAssetDocument> {
   return new Promise((resolve, reject) => {
     // Declared before subscribing: the client can fail synchronously INSIDE
     // subscribe, and that error handler must be able to clear it.
@@ -251,7 +412,7 @@ function uploadImageStream(
       fn()
     }
     const subscription = clientWrite.observable.assets
-      .upload('image', body, options)
+      .upload(kind, body, options)
       .subscribe({
         next: (event) => {
           if (event.type === 'response')

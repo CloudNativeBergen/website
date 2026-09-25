@@ -5,6 +5,7 @@ import { isSoftOnSocial } from './image-type'
 import type { ResolvedMarketingAssetDetails } from './details'
 import type {
   MarketingAssetFacets,
+  MarketingAssetKind,
   MarketingAssetFilter,
   MarketingAssetRow,
   MarketingAssetSubject,
@@ -24,8 +25,8 @@ const SUBJECT_PROJECTION = `subject->{ _id, _type, "name": select(_type == "talk
 const ROW_PROJECTION = `{
   _id,
   title,
-  alt,
-  kind,
+  "alt": coalesce(alt, null),
+  "kind": coalesce(kind, "image"),
   scope,
   "conferenceId": select(scope == "edition" => conference._ref, null),
   "edition": select(scope == "edition" => conference->title, null),
@@ -36,7 +37,13 @@ const ROW_PROJECTION = `{
   "assetId": image.asset._ref,
   "width": image.asset->metadata.dimensions.width,
   "height": image.asset->metadata.dimensions.height,
-  "createdAt": _createdAt
+  "createdAt": _createdAt,
+  "audioUrl": audio.asset->url,
+  "durationSeconds": durationSeconds,
+  "rights": select(defined(rightsConfirmation.confirmedAt) => {
+    "confirmedBy": rightsConfirmation.confirmedBy->name,
+    "confirmedAt": rightsConfirmation.confirmedAt
+  }, null)
 }`
 
 /**
@@ -80,6 +87,7 @@ export async function listMarketingAssets(
     // would otherwise show as a second, deletable copy.
     `*[_type == "marketingAsset" && _id in path("*")
       && (scope == "organization" || (scope == "edition" && ($allEditions || conference._ref == $conferenceId)))
+      && ($kind == null || coalesce(kind, "image") == $kind)
       && ($subjectId == null || subject._ref == $subjectId)
       && ($tag == null || count(coalesce(tags, [])[lower(@) == $tag]) > 0)
       && ($terms == null || ([title] + coalesce(tags, [])) match $terms)
@@ -87,6 +95,7 @@ export async function listMarketingAssets(
     {
       conferenceId,
       allEditions: filter.editions === 'all',
+      kind: filter.kind ?? null,
       subjectId: filter.subjectId || null,
       tag: filter.tag?.trim().toLowerCase() || null,
       terms: searchTerms(filter.search),
@@ -155,34 +164,42 @@ export async function readMarketingAssetMark(
 }
 
 /**
- * The image one of this organization's assets holds, and whether this
- * gallery's upload CREATED that image. Sanity deduplicates identical bytes
- * across the whole dataset, so an upload can be handed another tenant's
- * existing asset; only one this gallery created is ever its to delete.
+ * The kind of one of this organization's assets, the image or audio file it
+ * holds, and whether this gallery's upload CREATED that file. Sanity
+ * deduplicates identical bytes across the whole dataset, so an upload can be
+ * handed another tenant's existing asset; only one this gallery created is
+ * ever its to delete.
  */
-export async function readMarketingAssetImage(
+export async function readMarketingAssetMedia(
   orgId: string,
   id: string,
-): Promise<{ assetId: string | null; createdByUpload: boolean } | null> {
+): Promise<{
+  kind: MarketingAssetKind
+  assetId: string | null
+  createdByUpload: boolean
+} | null> {
   const row = await scopedFetch<{
+    kind: MarketingAssetKind
     assetId: string | null
-    createdImageAssetId: string | null
+    createdAssetId: string | null
   } | null>(
     clientReadUncached,
     { orgId },
     `*[_type == "marketingAsset" && _id == $id][0]{
-      "assetId": image.asset._ref,
-      "createdImageAssetId": createdImageAssetId
+      "kind": coalesce(kind, "image"),
+      "assetId": select(kind == "audio" => audio.asset._ref, image.asset._ref),
+      "createdAssetId": select(kind == "audio" => createdFileAssetId, createdImageAssetId)
     }`,
     { id },
     { cache: 'no-store' },
   )
   if (!row) return null
   return {
+    kind: row.kind,
     assetId: row.assetId,
-    // The upload created THIS image: a later swap (Studio) to any other
+    // The upload created THIS file: a later swap (Studio) to any other
     // asset, possibly another tenant's, is never the gallery's to delete.
-    createdByUpload: !!row.assetId && row.createdImageAssetId === row.assetId,
+    createdByUpload: !!row.assetId && row.createdAssetId === row.assetId,
   }
 }
 
@@ -239,39 +256,78 @@ export async function countMarketingAssetReleaseTwins(
   return result?.n ?? 0
 }
 
-export interface NewMarketingAsset {
+export type NewMarketingAsset = {
   orgId: string
   /** Resolved, and proven this organization's, by the caller. */
   details: ResolvedMarketingAssetDetails
-  imageAssetId: string
-  /**
-   * The image asset this upload CREATED, or undefined when Sanity handed back
-   * one it already held (identical bytes, possibly another tenant's).
-   */
-  createdImageAssetId?: string
-}
+} & (
+  | {
+      kind?: 'image'
+      imageAssetId: string
+      /**
+       * The image asset this upload CREATED, or undefined when Sanity handed
+       * back one it already held (identical bytes, possibly another tenant's).
+       */
+      createdImageAssetId?: string
+    }
+  | {
+      kind: 'audio'
+      fileAssetId: string
+      /** As `createdImageAssetId`, for the track's file. */
+      createdFileAssetId?: string
+      durationSeconds: number
+      /** The organizer who confirmed, and the server's time of it. */
+      rights: { confirmedBy: string; confirmedAt: string }
+    }
+)
 
-/** Create an uploaded image. The organization is the caller's. */
+/** Create an uploaded image or track. The organization is the caller's. */
 export async function createMarketingAsset(
   input: NewMarketingAsset,
   options: { signal?: AbortSignal } = {},
 ): Promise<{ _id: string }> {
   // A new document has nothing to unset.
   const { set } = detailsPatch(input.details)
+  // An audio track has no alt text, whatever the details carried.
+  if (input.kind === 'audio') delete set.alt
+  const media: Record<string, unknown> =
+    input.kind === 'audio'
+      ? {
+          kind: 'audio',
+          audio: {
+            _type: 'file',
+            asset: { _type: 'reference', _ref: input.fileAssetId },
+          },
+          ...(input.createdFileAssetId
+            ? { createdFileAssetId: input.createdFileAssetId }
+            : {}),
+          durationSeconds: input.durationSeconds,
+          rightsConfirmation: {
+            confirmedBy: {
+              _type: 'reference',
+              _ref: input.rights.confirmedBy,
+              _weak: true,
+            },
+            confirmedAt: input.rights.confirmedAt,
+          },
+        }
+      : {
+          kind: 'image',
+          image: {
+            _type: 'image',
+            asset: { _type: 'reference', _ref: input.imageAssetId },
+          },
+          ...(input.createdImageAssetId
+            ? { createdImageAssetId: input.createdImageAssetId }
+            : {}),
+        }
   const created = await clientWrite.create(
     {
       _type: 'marketingAsset',
       organization: { _type: 'reference', _ref: input.orgId },
-      kind: 'image',
       source: 'upload',
       ...set,
-      image: {
-        _type: 'image',
-        asset: { _type: 'reference', _ref: input.imageAssetId },
-      },
-      ...(input.createdImageAssetId
-        ? { createdImageAssetId: input.createdImageAssetId }
-        : {}),
+      ...media,
     },
     { signal: options.signal },
   )
@@ -290,11 +346,13 @@ export function detailsPatch(details: ResolvedMarketingAssetDetails): {
 } {
   const set: Record<string, unknown> = {
     title: details.title,
-    alt: details.alt,
     scope: details.scope,
     tags: details.tags,
   }
   const unset: string[] = []
+  // Absent only for an audio track, which never has any.
+  if (details.alt) set.alt = details.alt
+  else unset.push('alt')
   if (details.scope === 'edition')
     set.conference = { _type: 'reference', _ref: details.conferenceId }
   else unset.push('conference')

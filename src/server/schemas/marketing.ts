@@ -176,6 +176,8 @@ export const CampaignIdSchema = z.object({ campaignId: LiveDocumentIdSchema })
 export const AttachTaskAssetSchema = z.object({
   taskId: LiveDocumentIdSchema,
   taskRev: z.string().min(1).max(200),
+  // An image asset only: a gallery audio track (a file asset) can never
+  // finish a render Task (docs/MARKETING_STUDIO_VIDEO_SPEC.md §6).
   assetId: z.string().regex(/^image-[A-Za-z0-9]+-\d+x\d+-[a-z0-9]+$/),
 })
 

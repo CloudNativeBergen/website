@@ -10,13 +10,27 @@ import {
   MARKETING_ASSET_TYPE_REFUSAL,
   isSoftOnSocial,
 } from '@/lib/marketing-asset/image-type'
-import { moveBlobToSanity, type MoveRefusal } from '@/lib/marketing-asset/move'
+import {
+  MARKETING_ASSET_AUDIO_LENGTH_REFUSAL,
+  MARKETING_ASSET_AUDIO_SIZE_REFUSAL,
+  MARKETING_ASSET_AUDIO_TYPE_REFUSAL,
+  MARKETING_ASSET_RIGHTS_REFUSAL,
+} from '@/lib/marketing-asset/audio-type'
+import {
+  moveAudioBlobToSanity,
+  moveBlobToSanity,
+  type MoveRefusal,
+} from '@/lib/marketing-asset/move'
 import { abortAfter } from '@/lib/marketing-asset/blob-delete'
 import { createMarketingAsset } from '@/lib/marketing-asset/sanity'
 import { marketingAssetDetailsSchema } from '@/lib/marketing-asset/details'
 import { resolveAssetDetailsForCurrentOrg } from '@/lib/marketing-asset/guard'
 import type { ResolvedMarketingAssetDetails } from '@/lib/marketing-asset/details'
-import { deleteImageAssetIfOrphaned } from '@/lib/sanity/orphaned-asset'
+import {
+  deleteFileAssetIfOrphaned,
+  deleteImageAssetIfOrphaned,
+} from '@/lib/sanity/orphaned-asset'
+import { getCurrentDateTime } from '@/lib/time'
 
 /** The streamed move of one image gets a minute, set explicitly (§4.1). */
 export const maxDuration = 60
@@ -24,26 +38,48 @@ export const maxDuration = 60
 /** Kept back from `maxDuration`, so there is always time left to answer. */
 const ANSWER_MARGIN_MS = 3_000
 
-const UrlSchema = z.object({ url: z.string().min(1).max(2048) })
+const UrlSchema = z.object({
+  url: z.string().min(1).max(2048),
+  // What the organizer says they uploaded, which picks the checks. The move
+  // then judges the file from its own bytes against that kind.
+  kind: z.enum(['image', 'audio']).default('image'),
+  // An audio track's one confirmation (spec §6). Only `true` confirms.
+  rightsConfirmed: z.unknown().optional(),
+})
 
-const REFUSALS: Record<MoveRefusal, { status: number; error: string }> = {
+type Refusals = Record<MoveRefusal, { status: number; error: string }>
+
+const REFUSALS: Refusals = {
   host: { status: 400, error: 'That upload is not one of ours.' },
   prefix: { status: 400, error: 'That upload is not one of ours.' },
   type: { status: 400, error: MARKETING_ASSET_TYPE_REFUSAL },
   size: { status: 400, error: MARKETING_ASSET_SIZE_REFUSAL },
+  // An image has no length; only the audio move refuses one.
+  length: { status: 400, error: MARKETING_ASSET_SIZE_REFUSAL },
   fetch: { status: 502, error: 'The upload could not be read. Try again.' },
   upload: { status: 502, error: 'The image could not be stored. Try again.' },
 }
 
+const AUDIO_REFUSALS: Refusals = {
+  ...REFUSALS,
+  type: { status: 400, error: MARKETING_ASSET_AUDIO_TYPE_REFUSAL },
+  size: { status: 400, error: MARKETING_ASSET_AUDIO_SIZE_REFUSAL },
+  length: { status: 400, error: MARKETING_ASSET_AUDIO_LENGTH_REFUSAL },
+  upload: { status: 502, error: 'The track could not be stored. Try again.' },
+}
+
 /**
- * Add an uploaded image to the organization's marketing asset gallery
- * (docs/MARKETING_ASSETS_SPEC.md §4.1): move the browser's temporary blob into
- * Sanity, then write the gallery entry. A route handler rather than tRPC so the
+ * Add an uploaded image or audio track to the organization's marketing asset
+ * gallery (docs/MARKETING_ASSETS_SPEC.md §4.1,
+ * docs/MARKETING_STUDIO_VIDEO_SPEC.md §6): move the browser's temporary blob
+ * into Sanity, then write the gallery entry. A route handler rather than tRPC so the
  * move has an explicit `maxDuration`.
  *
  * Organizer of the request host's organization only, refused before the body
  * is read. The organization is resolved here, never read from the body, and
- * the URL is checked by the move before anything is fetched.
+ * the URL is checked by the move before anything is fetched. A track needs
+ * the rights confirmation BEFORE anything moves; who confirmed is the
+ * session's organizer and when is this server's clock, never the body's.
  */
 export async function POST(request: Request) {
   // Everything after the move is bounded by what is left of `maxDuration`.
@@ -53,13 +89,19 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
   const orgId = await resolveCurrentOrgId()
-  if (!orgId) {
+  // The organizer a track's rights confirmation is recorded against.
+  const organizerId = session?.speaker?._id
+  if (!orgId || !organizerId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
   const body: unknown = await request.json().catch(() => null)
   const parsedUrl = UrlSchema.safeParse(body)
   const parsed = marketingAssetDetailsSchema.safeParse(body)
+  const audio = parsedUrl.success && parsedUrl.data.kind === 'audio'
+  const missing = audio
+    ? 'A track and a title are required.'
+    : 'An image, a title and alt text are required.'
   if (!parsedUrl.success || !parsed.success) {
     // Title and alt text are what an organizer can fix in the form; any
     // other failing field (subject, tags, edition) gets its own message.
@@ -71,12 +113,25 @@ export async function POST(request: Request) {
         error:
           parsedUrl.success && otherFieldFailed
             ? 'Those details cannot be saved. Check the subject and tags.'
-            : 'An image, a title and alt text are required.',
+            : missing,
       },
       { status: 400 },
     )
   }
+  if (!audio && !parsed.data.alt) {
+    return NextResponse.json({ error: missing }, { status: 400 })
+  }
+  if (audio && parsedUrl.data.rightsConfirmed !== true) {
+    return NextResponse.json(
+      { error: MARKETING_ASSET_RIGHTS_REFUSAL },
+      { status: 400 },
+    )
+  }
+  // Stamped when the confirmed request arrives, by this server.
+  const confirmedAt = getCurrentDateTime()
   const { url } = parsedUrl.data
+  // An audio track has no alt text: whatever was sent is not kept.
+  if (audio) delete parsed.data.alt
   // Before the move, so a refused edition or subject leaves no image behind.
   // A new asset has no edition to keep. The guard's refusal never says
   // whether a foreign id exists.
@@ -93,9 +148,11 @@ export async function POST(request: Request) {
     )
   }
 
-  const moved = await moveBlobToSanity(url, orgId)
+  const moved = audio
+    ? await moveAudioBlobToSanity(url, orgId)
+    : await moveBlobToSanity(url, orgId)
   if (!moved.ok) {
-    const refusal = REFUSALS[moved.reason]
+    const refusal = (audio ? AUDIO_REFUSALS : REFUSALS)[moved.reason]
     return NextResponse.json(
       { error: refusal.error },
       { status: refusal.status },
@@ -105,19 +162,33 @@ export async function POST(request: Request) {
   const writeDeadline = abortAfter(Math.max(0, answerBy - Date.now()))
   try {
     const created = await createMarketingAsset(
-      {
-        orgId,
-        details,
-        imageAssetId: moved.asset._id,
-        ...(moved.asset.created
-          ? { createdImageAssetId: moved.asset._id }
-          : {}),
-      },
+      'durationSeconds' in moved.asset
+        ? {
+            orgId,
+            details,
+            kind: 'audio',
+            fileAssetId: moved.asset._id,
+            ...(moved.asset.created
+              ? { createdFileAssetId: moved.asset._id }
+              : {}),
+            durationSeconds: moved.asset.durationSeconds,
+            // The organizer who made this request, proven one above.
+            rights: { confirmedBy: organizerId, confirmedAt },
+          }
+        : {
+            orgId,
+            details,
+            imageAssetId: moved.asset._id,
+            ...(moved.asset.created
+              ? { createdImageAssetId: moved.asset._id }
+              : {}),
+          },
       { signal: writeDeadline.signal },
     )
     return NextResponse.json({
       _id: created._id,
-      softOnSocial: isSoftOnSocial(moved.asset),
+      softOnSocial:
+        'width' in moved.asset ? isSoftOnSocial(moved.asset) : false,
     })
   } catch (error) {
     console.error('Marketing asset: gallery entry not written', error)
@@ -127,12 +198,19 @@ export async function POST(request: Request) {
     // not yet referenced: never ours to delete. A created one goes only if
     // still unreferenced, so an entry that did land after all keeps it.
     const assetId = moved.asset._id
+    const deleteIfOrphaned = audio
+      ? deleteFileAssetIfOrphaned
+      : deleteImageAssetIfOrphaned
     if (moved.asset.created)
       after(async () => {
-        await deleteImageAssetIfOrphaned(assetId)
+        await deleteIfOrphaned(assetId)
       })
     return NextResponse.json(
-      { error: 'The image could not be added. Try again.' },
+      {
+        error: audio
+          ? 'The track could not be added. Try again.'
+          : 'The image could not be added. Try again.',
+      },
       { status: 500 },
     )
   } finally {
