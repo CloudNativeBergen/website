@@ -1,0 +1,396 @@
+/**
+ * @vitest-environment node
+ *
+ * Speaker erasure removes their images everywhere we hold them (#1162,
+ * `docs/MARKETING_ASSETS_SPEC.md` §6) — asserted on the STORED DOCUMENTS.
+ *
+ * NOTHING IS MOCKED BETWEEN THE ERASURE AND THE DATASET. Reads run `groq-js`
+ * over an in-memory dataset; the transaction is a REAL `@sanity/client`
+ * transaction whose serialized mutations are applied by Sanity's own
+ * `@sanity/mutator`. Two things the mutator does not do are modelled here, and
+ * only these two: it ignores `ifRevisionID` (checked below, whole transaction
+ * refused), and it applies a `delete` to whatever document it is handed (each
+ * mutation is routed to its own id below). A document delete — and the direct
+ * asset delete — is refused while a STRONG reference to it remains, which is
+ * Sanity's rule and the reason the file delete must come after the unsets.
+ *
+ * `raw` perspective is implied: the dataset holds drafts and release versions
+ * and every read sees all of them. That is what the erasure's asset reads ask
+ * for; the older reads in `./erasure.ts` (API 2023-05-03) would not see a
+ * `versions.**` document in production, which no assertion here relies on.
+ */
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+type Doc = Record<string, unknown> & { _id: string; _type: string }
+
+const h = vi.hoisted(() => ({
+  dataset: [] as Array<Record<string, unknown> & { _id: string }>,
+  /** Asset ids whose direct delete fails, to leave a linked file behind. */
+  failFileDelete: new Set<string>(),
+  revCounter: 0,
+}))
+
+/** True when some other document holds a STRONG reference to `id`. */
+function stronglyReferenced(
+  dataset: Array<Record<string, unknown> & { _id: string }>,
+  id: string,
+): boolean {
+  const walk = (value: unknown): boolean => {
+    if (Array.isArray(value)) return value.some(walk)
+    if (typeof value !== 'object' || value === null) return false
+    const v = value as Record<string, unknown>
+    if (v._ref === id && v._weak !== true && v.weak !== true) return true
+    return Object.values(v).some(walk)
+  }
+  return dataset.some((doc) => doc._id !== id && walk(doc))
+}
+
+vi.mock('@/lib/sanity/client', async () => {
+  const { createClient } = await import('@sanity/client')
+  const { parse, evaluate } = await import('groq-js')
+  const { createRequire: req } = await import('node:module')
+  const { Mutation } = req(req(import.meta.url).resolve('sanity/package.json'))(
+    '@sanity/mutator',
+  ) as {
+    Mutation: new (o: { mutations: unknown[] }) => {
+      apply: (d: unknown) => Record<string, unknown> | null
+    }
+  }
+  const client = createClient({
+    projectId: 'test',
+    dataset: 'test',
+    apiVersion: '2025-02-19',
+    useCdn: false,
+  })
+
+  const fetch = async (query: string, params: Record<string, unknown> = {}) =>
+    (await evaluate(parse(query), { dataset: h.dataset, params })).get()
+  const reader = { fetch, withConfig: () => ({ fetch }) }
+
+  type Mut =
+    | { patch: { id: string; ifRevisionID?: string } }
+    | { delete: { id: string } }
+
+  return {
+    clientReadUncached: reader,
+    clientReadCached: reader,
+    clientWrite: {
+      fetch,
+      transaction: () => {
+        const tx = client.transaction()
+        tx.commit = (async () => {
+          const next = structuredClone(h.dataset)
+          const rev = `rev-${++h.revCounter}`
+          for (const m of tx.serialize() as Mut[]) {
+            if ('delete' in m) {
+              const i = next.findIndex((d) => d._id === m.delete.id)
+              if (i !== -1) next.splice(i, 1)
+              continue
+            }
+            const i = next.findIndex((d) => d._id === m.patch.id)
+            if (i === -1) throw new Error(`no such document: ${m.patch.id}`)
+            if (m.patch.ifRevisionID && next[i]._rev !== m.patch.ifRevisionID) {
+              throw new Error(`409: ${m.patch.id} revision mismatch`)
+            }
+            const patched = new Mutation({ mutations: [m] }).apply(next[i])
+            next[i] = { ...(patched as (typeof next)[number]), _rev: rev }
+          }
+          for (const m of tx.serialize() as Mut[]) {
+            if ('delete' in m && stronglyReferenced(next, m.delete.id)) {
+              throw new Error(`409: ${m.delete.id} is still referenced`)
+            }
+          }
+          h.dataset = next
+          return { transactionId: rev }
+        }) as typeof tx.commit
+        return tx
+      },
+      delete: async (id: string) => {
+        if (h.failFileDelete.has(id)) throw new Error('503: try again')
+        if (stronglyReferenced(h.dataset, id)) {
+          throw new Error(`409: ${id} is still referenced`)
+        }
+        h.dataset = h.dataset.filter((d) => d._id !== id)
+        return {}
+      },
+    },
+  }
+})
+
+import { eraseSpeakerInPlace, verifySpeakerErasure } from './erasure'
+
+const ADA = 'spkada0001'
+const BOB = 'spkbob0002'
+const TALK_ADA = 'talk-ada' // Ada and Bob give it together
+const TALK_BOB = 'talk-bob'
+
+const ADA_CARD = 'image-adacard-1200x630-png'
+const TALK_CARD = 'image-talkcard-1200x630-png'
+const ADA_CLIP = 'file-adaclip-mp4'
+const RENDER = 'image-render-1080x1080-png' // a Task render, no gallery entry
+const BOB_CARD = 'image-bobcard-1200x630-png'
+const PROFILE = 'image-profile-400x400-jpg'
+
+const LINKED = [ADA_CARD, TALK_CARD, ADA_CLIP, RENDER]
+
+const ref = (id: string, extra: Record<string, unknown> = {}) => ({
+  _type: 'reference',
+  _ref: id,
+  ...extra,
+})
+const weak = (id: string) => ref(id, { _weak: true })
+const image = (id: string) => ({ _type: 'image', asset: ref(id) })
+
+const doc = (id: string) => h.dataset.find((d) => d._id === id) as Doc
+const referencesTo = (id: string) =>
+  h.dataset.filter((d) => d._id !== id && JSON.stringify(d).includes(`"${id}"`))
+
+function galleryAsset(id: string, subject: string, file: string): Doc {
+  return {
+    _id: id,
+    _type: 'marketingAsset',
+    _rev: 'r0',
+    organization: ref('org-a'),
+    scope: 'organization',
+    kind: 'image',
+    title: `Card ${id}`,
+    alt: 'A speaker card',
+    subject: weak(subject),
+    image: image(file),
+  }
+}
+
+function seed() {
+  h.revCounter = 0
+  h.failFileDelete = new Set()
+  h.dataset = [
+    ...[ADA_CARD, TALK_CARD, RENDER, BOB_CARD, PROFILE].map((id) => ({
+      _id: id,
+      _type: 'sanity.imageAsset',
+    })),
+    { _id: ADA_CLIP, _type: 'sanity.fileAsset' },
+    {
+      _id: ADA,
+      _type: 'speaker',
+      _rev: 'r0',
+      name: 'Ada Lovelace',
+      email: 'ada@example.com',
+      slug: { _type: 'slug', current: 'ada' },
+      image: image(PROFILE),
+    },
+    {
+      _id: BOB,
+      _type: 'speaker',
+      _rev: 'r0',
+      name: 'Bob',
+      email: 'bob@example.com',
+      slug: { _type: 'slug', current: 'bob' },
+    },
+    { _id: TALK_ADA, _type: 'talk', speakers: [ref(ADA), ref(BOB)] },
+    { _id: TALK_BOB, _type: 'talk', speakers: [ref(BOB)] },
+
+    // About Ada: published, draft and release version of one gallery entry.
+    galleryAsset('asset-ada', ADA, ADA_CARD),
+    galleryAsset(`drafts.asset-ada`, ADA, ADA_CARD),
+    galleryAsset(`versions.rlaunch.asset-ada`, ADA, ADA_CARD),
+    // A video about Ada (the #1167 shape: the walk, not a field name, finds it).
+    {
+      ...galleryAsset('asset-clip', ADA, ADA_CARD),
+      image: undefined,
+      kind: 'video',
+      video: { _type: 'file', asset: ref(ADA_CLIP) },
+    },
+    // About a talk Ada gives.
+    galleryAsset('asset-talk', TALK_ADA, TALK_CARD),
+    // About Bob alone — must be untouched.
+    galleryAsset('asset-bob', BOB, BOB_CARD),
+
+    // A Task about Ada whose render was never saved to the gallery.
+    {
+      _id: 'task-ada',
+      _type: 'marketingTask',
+      _rev: 'r0',
+      title: 'Speaker card for Ada',
+      subject: weak(ADA),
+      asset: image(RENDER),
+      alt: 'Ada on stage',
+    },
+    {
+      _id: 'task-bob',
+      _type: 'marketingTask',
+      _rev: 'r0',
+      title: 'Speaker card for Bob',
+      subject: weak(TALK_BOB),
+      asset: image(BOB_CARD),
+    },
+
+    // A published post with Ada's card and Bob's card, and its variant.
+    {
+      _id: 'post-1',
+      _type: 'socialPost',
+      _rev: 'r0',
+      body: 'Meet our speakers',
+      attachments: [
+        { _key: 'att-ada', image: image(ADA_CARD), alt: 'Ada' },
+        { _key: 'att-bob', image: image(BOB_CARD), alt: 'Bob' },
+      ],
+    },
+    {
+      _id: 'versions.rlaunch.post-1',
+      _type: 'socialPost',
+      _rev: 'r0',
+      body: 'Meet our speakers (launch)',
+      attachments: [{ _key: 'att-ada', image: image(ADA_CARD), alt: 'Ada' }],
+    },
+    {
+      _id: 'var-1',
+      _type: 'socialPostVariant',
+      _rev: 'r0',
+      post: weak('post-1'),
+      platform: 'bluesky',
+      body: 'Meet our speakers',
+      status: 'published',
+      attachments: [
+        { _key: 'va-ada', source: 'att-ada' },
+        { _key: 'va-bob', source: 'att-bob' },
+      ],
+    },
+    // A post carrying the Task render.
+    {
+      _id: 'post-render',
+      _type: 'socialPost',
+      _rev: 'r0',
+      body: 'Ada is speaking',
+      attachments: [{ _key: 'att-r', image: image(RENDER), alt: 'Ada' }],
+    },
+  ].map((d) => JSON.parse(JSON.stringify(d)))
+}
+
+beforeEach(() => {
+  seed()
+  vi.spyOn(console, 'info').mockImplementation(() => {})
+})
+
+describe('speaker erasure removes their images everywhere (#1162)', () => {
+  it('deletes every linked file, and no document references one afterwards', async () => {
+    const result = await eraseSpeakerInPlace({ speakerId: ADA, actor: 'test' })
+    expect(result.err).toBeNull()
+
+    for (const file of LINKED) {
+      expect(doc(file), `${file} still stored`).toBeUndefined()
+      expect(
+        referencesTo(file).map((d) => d._id),
+        file,
+      ).toEqual([])
+    }
+    expect(result.linkedFiles).toEqual(
+      expect.arrayContaining(
+        LINKED.map((id) => ({ id, deleted: true, error: null })),
+      ),
+    )
+    expect(result.verification?.clean).toBe(true)
+  })
+
+  it('removes the gallery entries about the speaker and their talk, in every version', () => {
+    return eraseSpeakerInPlace({ speakerId: ADA, actor: 'test' }).then(() => {
+      for (const id of [
+        'asset-ada',
+        'drafts.asset-ada',
+        'versions.rlaunch.asset-ada',
+        'asset-clip',
+        'asset-talk',
+      ]) {
+        expect(doc(id), id).toBeUndefined()
+      }
+    })
+  })
+
+  it('leaves another speaker’s asset, Task and file untouched', async () => {
+    const before = structuredClone([doc('asset-bob'), doc('task-bob')])
+    await eraseSpeakerInPlace({ speakerId: ADA, actor: 'test' })
+    expect([doc('asset-bob'), doc('task-bob')]).toEqual(before)
+    expect(doc(BOB_CARD)).toBeDefined()
+  })
+
+  it('a published post keeps its text and the other image, and loses Ada’s — variant included', async () => {
+    await eraseSpeakerInPlace({ speakerId: ADA, actor: 'test' })
+    expect(doc('post-1')).toMatchObject({
+      body: 'Meet our speakers',
+      attachments: [{ _key: 'att-bob', image: image(BOB_CARD), alt: 'Bob' }],
+    })
+    expect(doc('versions.rlaunch.post-1')).toMatchObject({
+      body: 'Meet our speakers (launch)',
+      attachments: [],
+    })
+    expect(doc('var-1')).toMatchObject({
+      body: 'Meet our speakers',
+      status: 'published',
+      attachments: [{ _key: 'va-bob', source: 'att-bob' }],
+    })
+    expect(doc('post-render')).toMatchObject({
+      body: 'Ada is speaking',
+      attachments: [],
+    })
+  })
+
+  it('finds a Task render with no gallery entry through the Task’s subject, and keeps the Task', async () => {
+    await eraseSpeakerInPlace({ speakerId: ADA, actor: 'test' })
+    const task = doc('task-ada')
+    expect(task.asset).toBeUndefined()
+    expect(task).toMatchObject({
+      title: 'Speaker card for Ada',
+      subject: weak(ADA),
+    })
+    expect(doc(RENDER)).toBeUndefined()
+  })
+
+  it('is a fixed point: a second run plans nothing and changes nothing', async () => {
+    await eraseSpeakerInPlace({ speakerId: ADA, actor: 'test' })
+    const after = structuredClone(h.dataset)
+    const second = await eraseSpeakerInPlace({ speakerId: ADA, actor: 'test' })
+    expect(second.err).toBeNull()
+    expect(second.plan?.noop).toBe(true)
+    expect(second.linkedFiles).toEqual([])
+    expect(h.dataset).toEqual(after)
+    expect(second.verification?.clean).toBe(true)
+  })
+
+  it('verification FAILS when a linked file is left behind', async () => {
+    h.failFileDelete.add(RENDER)
+    const result = await eraseSpeakerInPlace({ speakerId: ADA, actor: 'test' })
+    expect(doc(RENDER)).toBeDefined()
+    expect(result.linkedFiles).toContainEqual({
+      id: RENDER,
+      deleted: false,
+      error: expect.stringContaining('503'),
+    })
+    expect(result.verification?.clean).toBe(false)
+    expect(result.verification?.residual.linkedFiles).toBe(1)
+    // A later standalone check is told the file ids the run reported.
+    expect(
+      (await verifySpeakerErasure(ADA, [], [RENDER]))?.residual.linkedFiles,
+    ).toBe(1)
+  })
+
+  it('verification FAILS while a gallery entry about the speaker remains', async () => {
+    await eraseSpeakerInPlace({ speakerId: ADA, actor: 'test' })
+    h.dataset.push(galleryAsset('asset-late', ADA, BOB_CARD))
+    const v = await verifySpeakerErasure(ADA)
+    expect(v?.clean).toBe(false)
+    expect(v?.residual.marketingAssets).toBe(1)
+    expect(v?.residual.linkedFileHolders).toBeGreaterThan(0)
+  })
+
+  it('REFUSES, writing nothing, when a file is held somewhere erasure cannot strip', async () => {
+    h.dataset.push({
+      _id: 'gallery-1',
+      _type: 'imageGallery',
+      image: image(ADA_CARD),
+      speakers: [],
+    })
+    const before = structuredClone(h.dataset)
+    const result = await eraseSpeakerInPlace({ speakerId: ADA, actor: 'test' })
+    expect(result.err?.message).toContain('imageGallery gallery-1')
+    expect(h.dataset).toEqual(before)
+  })
+})

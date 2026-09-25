@@ -168,6 +168,29 @@ Read the `Image asset:` line:
   npx sanity documents delete <assetId>
   ```
 
+### 3b. Confirm the marketing images were deleted (#1162)
+
+Every image of the person the marketing tools hold goes — not through the
+orphan check above, but **unconditionally**. The plan links: gallery assets
+(`marketingAsset`) whose subject is the speaker or a talk they give, and the
+render of any `marketingTask` whose subject is either. Every document holding
+one of those files — found by the file's own references, drafts and Content
+Release versions included — lets go of it in the transaction: gallery entries
+are deleted, posts and their variants lose the attachment (the post keeps its
+text), Tasks lose the render. Then the files are deleted.
+
+The dry run lists them under `Marketing files`. After the commit, read the
+`Marketing files:` line. Any file `NOT deleted` is linked to nobody any more, so
+**a re-run cannot rediscover it. Copy its id now**, fix the cause, delete it by
+hand (`npx sanity documents delete <id>`), and check with
+`pnpm erase-speaker <speakerId> --verify --files <id,id>`.
+
+**The hole.** An image with no subject — a group photo, a collage, a render
+saved from a Task that had no subject — is linked to nobody and is not found.
+`/privacy` tells people to tell us about such an image; when they do, delete it
+from the gallery by hand. Published posts on Bluesky or LinkedIn are outside
+our reach either way.
+
 ### 4. Invalidate caches
 
 `revalidateTag` needs a Next.js request scope, which the script has none of, so
@@ -220,7 +243,15 @@ verification method, the `erasedAt` timestamp and the `CLEAN` verification.
 
 ## Refusals, and what to do about them
 
-The plan refuses before writing anything. Both refusals are deliberate.
+The plan refuses before writing anything. Every refusal is deliberate.
+
+**"<type> <id> holds an image linked to the subject …; remove it by hand and
+re-run."** A marketing file linked to the person is also held by a document the
+erasure does not know how to strip — a photo-gallery frame or another speaker's
+profile image with the same bytes (Sanity stores identical bytes once), or a
+post attachment whose `_key` cannot be selected safely. The file cannot be
+deleted while that document holds it, so nothing has been written. Decide what
+that document should lose, change it by hand, then re-run.
 
 **"X is the only organizer of conference Y."** `conference.organizers[]` is
 `min(1)`, and an organization with no organizer cannot be administered by anyone
@@ -468,7 +499,8 @@ unmanageable), and the consent **proof** fields `granted` / `grantedAt` /
 Phase 2 decision; retaining is the conservative side of it.
 
 **Elsewhere:** the profile image **asset** is deleted from the CDN (not just its
-reference); the person is untagged from gallery images; their notifications,
+reference); every marketing image linked to them is removed from the gallery,
+posts, variants and Tasks and its file deleted (see step 3b); the person is untagged from gallery images; their notifications,
 conversation preferences, dashboard configs and reminder logs are deleted;
 co-speaker invitations **and organizer invitations** addressed to them, and
 sign-in tokens for their addresses, are deleted; `issuedSpeakerTickets` entries carrying their email are removed from

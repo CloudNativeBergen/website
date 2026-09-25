@@ -117,7 +117,7 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
     )
   }
 
-  const lastUpdated = 'September 25, 2026'
+  const lastUpdated = 'September 26, 2026'
   const legal = await resolveLegalConfig(conference)
   const contactEmail = legal.contactEmail
   // EMPTY when no legal entity could be resolved. `legal.controllerResolved`
@@ -622,6 +622,12 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                               Some may show speakers or attendees
                             </li>
                             <li>
+                              • Speaker photos are used in the promotional
+                              graphics we generate, such as speaker cards. Those
+                              graphics are kept with the posts and planning
+                              tasks that use them
+                            </li>
+                            <li>
                               • A title and a short description of each image
                               (alt text), which goes into the posts that use it
                             </li>
@@ -654,11 +660,21 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                             </li>
                             <li>
                               • Removing yourself from the photo gallery does
-                              not reach this gallery, so ask us directly
+                              not reach these images or the graphics made from
+                              your photo. Asking us to erase your data does:
+                              every image about you or a talk you give is
+                              deleted, including from our copies of posts (which
+                              keep their text) and planning tasks
                             </li>
                             <li>
-                              • Posts already published are not changed. Ask us
-                              and we will take one down where we can
+                              • An image not marked as being about anyone, such
+                              as a group photo, cannot be found that way. Tell
+                              us about it and we will remove it
+                            </li>
+                            <li>
+                              • Posts already published on social media are
+                              outside our reach. Ask us and we will take one
+                              down where we can
                             </li>
                           </ul>
                         </div>
