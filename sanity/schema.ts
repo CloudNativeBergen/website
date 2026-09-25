@@ -52,6 +52,7 @@ import marketingTask from './schemaTypes/marketingTask'
 import marketingSnapshot from './schemaTypes/marketingSnapshot'
 import marketingRateLimit from './schemaTypes/marketingRateLimit'
 import planTemplate from './schemaTypes/planTemplate'
+import marketingAsset from './schemaTypes/marketingAsset'
 import planTemplateName from './schemaTypes/planTemplateName'
 import staff from './schemaTypes/staff'
 import invitationLetter from './schemaTypes/invitationLetter'
@@ -123,6 +124,8 @@ export const schema: { types: SchemaTypeDefinition[] } = {
     marketingTask,
     marketingSnapshot,
     planTemplate,
+    // Marketing asset gallery (#1160)
+    marketingAsset,
 
     // Platform-internal identity artifacts (hidden from the Studio structure —
     // see STUDIO_HIDDEN_TYPES in sanity.config.ts). Registered only so their

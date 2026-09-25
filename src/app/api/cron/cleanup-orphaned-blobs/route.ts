@@ -2,6 +2,14 @@ import { NextRequest, NextResponse } from 'next/server'
 import { list } from '@vercel/blob'
 import { cleanupOrphanedBlob } from '@/lib/attachment/blob'
 import { unstable_noStore as noStore } from 'next/cache'
+import { MARKETING_ASSET_BLOB_PREFIX } from '@/lib/marketing-asset/blob-url'
+
+/**
+ * The temporary upload prefixes this sweeper owns: proposal attachments and
+ * marketing assets (docs/MARKETING_ASSETS_SPEC.md §4.1). Both are moved into
+ * Sanity and deleted; anything left past the retention window was abandoned.
+ */
+const TEMPORARY_PREFIXES = ['proposal-', MARKETING_ASSET_BLOB_PREFIX]
 
 /**
  * Blob retention period in hours before cleanup.
@@ -35,17 +43,20 @@ export async function GET(request: NextRequest) {
       Date.now() - BLOB_RETENTION_HOURS * 60 * 60 * 1000,
     )
 
-    const { blobs } = await list({
-      prefix: 'proposal-',
-      mode: 'expanded',
-    })
+    const blobs = (
+      await Promise.all(
+        TEMPORARY_PREFIXES.map(
+          async (prefix) => (await list({ prefix, mode: 'expanded' })).blobs,
+        ),
+      )
+    ).flat()
 
     const orphanedBlobs = blobs.filter((blob) => {
       return blob.uploadedAt < retentionThreshold
     })
 
     console.log(
-      `Found ${blobs.length} total blobs with proposal- prefix, ${orphanedBlobs.length} are older than ${BLOB_RETENTION_HOURS}h`,
+      `Found ${blobs.length} temporary upload blobs, ${orphanedBlobs.length} are older than ${BLOB_RETENTION_HOURS}h`,
     )
 
     if (orphanedBlobs.length === 0) {
