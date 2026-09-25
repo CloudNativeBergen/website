@@ -377,25 +377,18 @@ export function MemeGenerator({
   // A QR image depends on its style alone: the effect is keyed on the set of
   // styles — not on the designs, and not on a draw function — so editing
   // text, colours or positions never regenerates one.
-  const qrKeys = [
-    ...new Set(
-      scenes
-        .filter((scene) => scene.design.qr.url)
-        .map((scene) => qrStyleKey(scene.design.qr)),
-    ),
-  ]
+  const qrStyleByKey = new Map(
+    scenes
+      .filter((scene) => scene.design.qr.url)
+      .map((scene) => [
+        qrStyleKey(scene.design.qr),
+        pickQrStyle(scene.design.qr),
+      ]),
+  )
+  const qrKeys = [...qrStyleByKey.keys()]
   const qrKeySet = qrKeys.join('\n')
   const qrStyles = useMemo(
-    () => [
-      ...new Map(
-        scenes
-          .filter((scene) => scene.design.qr.url)
-          .map((scene) => [
-            qrStyleKey(scene.design.qr),
-            pickQrStyle(scene.design.qr),
-          ]),
-      ).values(),
-    ],
+    () => [...qrStyleByKey],
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: identity tracks the styles, not the QR positions
     [qrKeySet],
   )
@@ -408,13 +401,12 @@ export function MemeGenerator({
   >(() => new Map())
   useEffect(() => {
     const requests = qrRequests.current
-    const wanted = new Set(qrStyles.map((style) => qrStyleKey(style)))
+    const wanted = new Set(qrStyles.map(([key]) => key))
     for (const key of requests.keys())
       if (!wanted.has(key)) requests.delete(key)
     let cancelled = false
     Promise.all(
-      qrStyles.map(async (style) => {
-        const key = qrStyleKey(style)
+      qrStyles.map(async ([key, style]) => {
         let request = requests.get(key)
         if (!request) {
           // A failed image is settled too: nothing to draw, nothing to wait for.
@@ -576,11 +568,12 @@ export function MemeGenerator({
   const total = totalDuration(scenes)
   const playbackAnchor = useRef({ time: 0, at: 0 })
 
-  const seek = (to: number) => {
-    const next = clampTime(scenes, to)
+  // Playback carries on from wherever the playhead is put.
+  const moveTo = (next: number) => {
     playbackAnchor.current = { time: next, at: performance.now() }
     setTime(next)
   }
+  const seek = (to: number) => moveTo(clampTime(scenes, to))
 
   const togglePlayback = () => {
     if (playing) {
@@ -624,8 +617,7 @@ export function MemeGenerator({
   const addNewScene = () => {
     const scene = newScene(DEFAULT_DESIGN)
     setScenes((prev) => [...prev, scene])
-    playbackAnchor.current = { time: total, at: performance.now() }
-    setTime(total)
+    moveTo(total)
     setPlaybackEditingKey(scene.key)
   }
 
@@ -638,9 +630,7 @@ export function MemeGenerator({
     const offset = time - sceneStart(scenes, editingIndex)
     const start = sceneStart(next, editingIndex)
     const last = next[editingIndex].duration - FRAME
-    const held = start + Math.min(offset, last)
-    playbackAnchor.current = { time: held, at: performance.now() }
-    setTime(held)
+    moveTo(start + Math.min(offset, last))
   }
 
   const changeTransition = (index: number, transition: Transition) =>
@@ -654,7 +644,7 @@ export function MemeGenerator({
   }
 
   // Two offscreen canvases for transitions, made the first time one is drawn.
-  const layers = useMemo(() => offscreenLayers(), [])
+  const [layers] = useState(offscreenLayers)
 
   // Only a complete frame is painted: while any asset is still loading the
   // canvas keeps the last one, so no frame shows a fallback font, a stale QR
@@ -673,14 +663,30 @@ export function MemeGenerator({
       const scene = scenes[index].design
       drawDesign(ctx, scene, { ...assetsFor(scene), brand }, sceneTime)
     }
-    for (const canvas of [canvasRef.current, exportCanvasRef.current]) {
+    // The hidden download canvas is left alone during playback, which would
+    // otherwise draw every frame twice; it catches up on pause.
+    const canvases =
+      mode === 'video' && playing
+        ? [canvasRef.current]
+        : [canvasRef.current, exportCanvasRef.current]
+    for (const canvas of canvases) {
       const ctx = canvas?.getContext('2d')
       if (!ctx) continue
       if (mode === 'video')
         drawFrame(ctx, frameAt(scenes, time), paintScene, layers)
       else drawDesign(ctx, design, { ...assetsFor(design), brand }, 0)
     }
-  }, [mode, scenes, design, time, assetsFor, layers, capturePending, lateFaces])
+  }, [
+    mode,
+    playing,
+    scenes,
+    design,
+    time,
+    assetsFor,
+    layers,
+    capturePending,
+    lateFaces,
+  ])
 
   // The overlay carried the logo's accessible name; the canvas now does.
   const canvasLabel =

@@ -1175,7 +1175,7 @@ const BACKGROUND_CORNER: Box = { x: 24, y: 24, width: 120, height: 120 }
 async function seekTo(canvas: Canvas, seconds: number) {
   const field = canvas.getByLabelText('Playhead (s)')
   await userEvent.clear(field)
-  await userEvent.type(field, String(seconds))
+  await userEvent.type(field, `${seconds}{Enter}`)
 }
 
 /**
@@ -1258,5 +1258,31 @@ export const VideoByKeyboard: Story = {
     const paused = valueOf('Playhead')
     await new Promise((resolve) => setTimeout(resolve, 300))
     expect(valueOf('Playhead')).toBe(paused)
+  },
+}
+
+/**
+ * At phone width the timeline scrolls sideways inside its panel rather than
+ * widening the page. `defaultViewport` is load-bearing: the test runner reads
+ * it (see .storybook/test-runner.ts), and its default is 1280.
+ */
+export const VideoTimelineOnPhone: Story = {
+  parameters: { viewport: { defaultViewport: 'phone' } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(canvas.getByRole('button', { name: 'Video' }))
+    for (let i = 0; i < 3; i++) {
+      await userEvent.click(canvas.getByRole('button', { name: 'Add scene' }))
+    }
+    const timeline = canvas.getByRole('region', { name: 'Video timeline' })
+    const track = canvas.getByRole('list', { name: 'Scenes' }).parentElement!
+      .parentElement!
+    expect(track.scrollWidth).toBeGreaterThan(track.clientWidth)
+    expect(timeline.getBoundingClientRect().right).toBeLessThanOrEqual(
+      window.innerWidth,
+    )
+    expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(
+      window.innerWidth,
+    )
   },
 }

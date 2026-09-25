@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useId, useRef, useState } from 'react'
 import {
   ArrowPathIcon,
   PauseIcon,
@@ -18,7 +18,7 @@ import {
 } from './meme-generator-timeline'
 
 /** The timeline is drawn to scale; sixty seconds scroll sideways. */
-export const PX_PER_SECOND = 60
+const PX_PER_SECOND = 60
 
 const SMALL_STEP = 0.1
 const LARGE_STEP = 1
@@ -70,7 +70,7 @@ function keyStep(event: React.KeyboardEvent): number | null {
  */
 function useDrag(
   onStart: (event: React.PointerEvent) => void,
-  onMove: (deltaSeconds: number) => void,
+  onMove: (deltaSeconds: number, event: React.PointerEvent) => void,
 ) {
   const origin = useRef<number | null>(null)
   return {
@@ -83,7 +83,7 @@ function useDrag(
     },
     onPointerMove: (event: React.PointerEvent) => {
       if (origin.current === null) return
-      onMove((event.clientX - origin.current) / PX_PER_SECOND)
+      onMove((event.clientX - origin.current) / PX_PER_SECOND, event)
     },
     onPointerUp: () => {
       origin.current = null
@@ -95,25 +95,29 @@ function useDrag(
 }
 
 /**
- * A number field that commits every valid value as it is typed and shows
- * the committed value again once it loses focus.
+ * A number field that commits on Enter or when it loses focus — never
+ * mid-typing, where "12" would first commit "1".
  */
 function SecondsField({
-  id,
   label,
   value,
   min,
   max,
   onCommit,
 }: {
-  id: string
   label: string
   value: number
   min: number
   max?: number
   onCommit: (value: number) => void
 }) {
+  const id = useId()
   const [draft, setDraft] = useState<string | null>(null)
+  const commit = () => {
+    const parsed = Number.parseFloat(draft ?? '')
+    if (draft !== null && Number.isFinite(parsed)) onCommit(parsed)
+    setDraft(null)
+  }
   return (
     <div>
       <label htmlFor={id} className="mb-1 block text-xs font-medium">
@@ -127,12 +131,11 @@ function SecondsField({
         min={min}
         max={max}
         value={draft ?? value.toFixed(1)}
-        onChange={(event) => {
-          setDraft(event.target.value)
-          const parsed = Number.parseFloat(event.target.value)
-          if (Number.isFinite(parsed)) onCommit(parsed)
+        onChange={(event) => setDraft(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') commit()
         }}
-        onBlur={() => setDraft(null)}
+        onBlur={commit}
         className={`${styles.input} w-24 py-1 text-sm tabular-nums`}
       />
     </div>
@@ -199,18 +202,17 @@ export function VideoTimeline({
   const editing = scenes[editingIndex]
   const isLast = editingIndex === scenes.length - 1
 
-  const timeAtPointer = (clientX: number) => {
+  // Measured against the track on every move, so a drag that scrolls the
+  // timeline sideways keeps the playhead under the pointer.
+  const timeAtPointer = (event: React.PointerEvent) => {
     const left = track.current?.getBoundingClientRect().left ?? 0
-    return (clientX - left) / PX_PER_SECOND
+    return (event.clientX - left) / PX_PER_SECOND
   }
-  const scrubStart = useRef(0)
   const scrub = useDrag(
-    (event) => {
-      scrubStart.current = timeAtPointer(event.clientX)
-      onSeek(scrubStart.current)
-    },
-    (delta) => onSeek(scrubStart.current + delta),
+    (event) => onSeek(timeAtPointer(event)),
+    (_delta, event) => onSeek(timeAtPointer(event)),
   )
+  const transitionId = useId()
 
   const movePlayhead = (event: React.KeyboardEvent) => {
     if (event.key === 'Home' || event.key === 'End') {
@@ -259,7 +261,7 @@ export function VideoTimeline({
           <ArrowPathIcon className="size-4" aria-hidden="true" />
           Loop
         </button>
-        <span className="text-sm tabular-nums" aria-live="off">
+        <span className="text-sm tabular-nums">
           {time.toFixed(1)} / {seconds(total)}
         </span>
         <button
@@ -336,7 +338,7 @@ export function VideoTimeline({
                     <span
                       aria-hidden="true"
                       title="Fade"
-                      className="pointer-events-none absolute bottom-1 z-10 h-2 -translate-x-1/2 rounded-full bg-gradient-to-r from-brand-cloud-blue/10 via-brand-cloud-blue to-brand-cloud-blue/10 dark:via-blue-400"
+                      className="pointer-events-none absolute bottom-1 z-10 h-2 -translate-x-1/2 rounded-full bg-linear-to-r from-brand-cloud-blue/10 via-brand-cloud-blue to-brand-cloud-blue/10 dark:via-blue-400"
                       style={{
                         left: scene.duration * PX_PER_SECOND,
                         width: TRANSITION_WINDOW * PX_PER_SECOND,
@@ -375,7 +377,6 @@ export function VideoTimeline({
 
       <div className="mt-3 flex flex-wrap items-end gap-4">
         <SecondsField
-          id="video-playhead"
           label="Playhead (s)"
           value={time}
           min={0}
@@ -383,7 +384,6 @@ export function VideoTimeline({
           onCommit={onSeek}
         />
         <SecondsField
-          id="video-scene-length"
           label={`Scene ${editingIndex + 1} length (s)`}
           value={editing.duration}
           min={MIN_SCENE_DURATION}
@@ -392,13 +392,13 @@ export function VideoTimeline({
         {!isLast && (
           <div>
             <label
-              htmlFor="video-transition"
+              htmlFor={transitionId}
               className="mb-1 block text-xs font-medium"
             >
               Into scene {editingIndex + 2}
             </label>
             <select
-              id="video-transition"
+              id={transitionId}
               value={editing.transition}
               onChange={(event) =>
                 onTransitionChange(

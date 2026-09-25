@@ -28,6 +28,12 @@ const valueOf = (slider: HTMLElement) =>
 const headline = () => screen.getAllByPlaceholderText('Enter your text...')[0]
 const press = (element: HTMLElement, key: string, shiftKey = false) =>
   fireEvent.keyDown(element, { key, shiftKey })
+/** Type into a field and leave it, which is when it commits. */
+const enter = (label: string, value: string) => {
+  const field = screen.getByLabelText(label)
+  fireEvent.change(field, { target: { value } })
+  fireEvent.blur(field)
+}
 
 function openVideo() {
   render(<MemeGenerator />)
@@ -107,10 +113,22 @@ describe('by keyboard alone', () => {
 
   it('changes a scene’s length in its field', () => {
     openVideo()
-    fireEvent.change(screen.getByLabelText('Scene 1 length (s)'), {
-      target: { value: '4.5' },
-    })
+    enter('Scene 1 length (s)', '4.5')
     expect(valueOf(lengthOf(1))).toBe(4.5)
+  })
+
+  it('commits a field on Enter, and never mid-typing', () => {
+    openVideo()
+    press(playhead(), 'ArrowRight', true)
+    press(playhead(), 'ArrowRight', true) // 2 s
+    const field = screen.getByLabelText('Scene 1 length (s)')
+    // "12" passes through "1", which would pull the playhead back to 1 s.
+    fireEvent.change(field, { target: { value: '1' } })
+    fireEvent.change(field, { target: { value: '12' } })
+    expect(valueOf(lengthOf(1))).toBe(3)
+    fireEvent.keyDown(field, { key: 'Enter' })
+    expect(valueOf(lengthOf(1))).toBe(12)
+    expect(valueOf(playhead())).toBe(2)
   })
 
   it('moves the playhead with the arrow keys and its field, inside the video', () => {
@@ -125,13 +143,9 @@ describe('by keyboard alone', () => {
     press(playhead(), 'End')
     expect(valueOf(playhead())).toBe(3)
 
-    fireEvent.change(screen.getByLabelText('Playhead (s)'), {
-      target: { value: '1.5' },
-    })
+    enter('Playhead (s)', '1.5')
     expect(valueOf(playhead())).toBe(1.5)
-    fireEvent.change(screen.getByLabelText('Playhead (s)'), {
-      target: { value: '99' },
-    })
+    enter('Playhead (s)', '99')
     expect(valueOf(playhead())).toBe(3)
   })
 
@@ -188,9 +202,7 @@ describe('the scene the controls edit', () => {
     press(playhead(), 'ArrowLeft') // 2.9 s: the end of scene 1
     expect(headline()).toHaveProperty('value', 'First')
 
-    fireEvent.change(screen.getByLabelText('Scene 1 length (s)'), {
-      target: { value: '1' },
-    })
+    enter('Scene 1 length (s)', '1')
     expect(headline()).toHaveProperty('value', 'First')
     expect(valueOf(playhead())).toBeLessThan(1)
   })
