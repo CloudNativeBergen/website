@@ -692,7 +692,9 @@ describe('marketingAsset.background', () => {
       .background({ id: 'drafts.asset-ours' })
       .catch((e) => e)
     expect(draft.code).toBe('NOT_FOUND')
-    expect(draft.message).toBe('No marketingAsset with that id for this request')
+    expect(draft.message).toBe(
+      'No marketingAsset with that id for this request',
+    )
     expect(backgroundReads()).toEqual([])
   })
 
