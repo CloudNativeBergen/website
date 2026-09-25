@@ -18,6 +18,8 @@ import {
   AdjustmentsHorizontalIcon,
   ArrowsPointingOutIcon,
   QrCodeIcon,
+  ArrowUturnLeftIcon,
+  ArrowUturnRightIcon,
 } from '@heroicons/react/24/outline'
 import type { ConferenceLogos } from '../../common/DashboardLayout'
 import {
@@ -63,10 +65,15 @@ import {
 } from './meme-generator-draw'
 import { pickQrStyle, qrStyleKey, renderQrImage } from './meme-generator-qr'
 import {
+  FPS,
   FRAME,
+  addScene,
   clampTime,
+  duplicateScene,
   frameAt,
+  moveScene,
   newScene,
+  removeScene,
   sceneIndexAt,
   sceneStart,
   setSceneDuration,
@@ -75,11 +82,20 @@ import {
   type Transition,
 } from './meme-generator-timeline'
 import {
+  allStates,
+  canRedo,
+  canUndo,
+  record,
+  redo,
+  startHistory,
+  undo,
+} from './meme-generator-history'
+import {
   drawFrame,
   offscreenLayers,
   type PaintScene,
 } from './meme-generator-frame'
-import { VideoTimeline } from './VideoTimeline'
+import { VideoTimeline, type SceneRefusal } from './VideoTimeline'
 import { useMediaQuery } from '@/hooks/useMediaQuery'
 import { PLATFORM_NAME } from '@/lib/branding/platform'
 
@@ -205,6 +221,35 @@ const ToggleButton = ({
   </button>
 )
 
+const HistoryButton = ({
+  label,
+  icon: Icon,
+  enabled,
+  shortcuts,
+  hint,
+  onClick,
+}: {
+  label: string
+  icon: React.ElementType
+  enabled: boolean
+  shortcuts: string
+  hint: string
+  onClick: () => void
+}) => (
+  <button
+    type="button"
+    onClick={onClick}
+    // Not `disabled`: the button keeps focus after the last step.
+    aria-disabled={!enabled || undefined}
+    aria-keyshortcuts={shortcuts}
+    title={`${label} (${hint})`}
+    className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-sm transition-colors aria-disabled:cursor-not-allowed aria-disabled:opacity-40 ${styles.buttonInactive}`}
+  >
+    <Icon className="size-4" aria-hidden="true" />
+    {label}
+  </button>
+)
+
 export function MemeGenerator({
   conferenceLogos,
   wrapPreview,
@@ -217,9 +262,17 @@ export function MemeGenerator({
   // whichever scene the playhead is in, and switching to Video shows the
   // timeline over the same list.
   const [mode, setMode] = useState<'image' | 'video'>('image')
-  const [scenes, setScenes] = useState<Scene[]>(() => [
-    newScene(DEFAULT_DESIGN),
-  ])
+  // Every change to the scenes — timeline and design alike — is a step of
+  // this history, so undo and redo cover all of it (see
+  // meme-generator-history for how a drag or typing folds into one step).
+  const [history, setHistory] = useState(() =>
+    startHistory<Scene[]>([newScene(DEFAULT_DESIGN)]),
+  )
+  const scenes = history.present
+  const changeScenes = (update: (prev: Scene[]) => Scene[], group?: string) => {
+    const now = performance.now()
+    setHistory((prev) => record(prev, update(prev.present), { group, now }))
+  }
   const [time, setTime] = useState(0)
   const [playing, setPlaying] = useState(false)
   const [loop, setLoop] = useState(false)
@@ -239,14 +292,24 @@ export function MemeGenerator({
   const design = scenes[editingIndex].design
   const { background, textLines, logo, qr } = design
 
-  const updateScene = (key: string, update: (prev: MemeDesign) => MemeDesign) =>
-    setScenes((prev) =>
-      prev.map((scene) =>
-        scene.key === key ? { ...scene, design: update(scene.design) } : scene,
-      ),
+  // `field` names what changed, so consecutive edits of one field of one
+  // scene — a slider dragged, a line typed — are one undo step.
+  const updateScene = (
+    key: string,
+    field: string | null,
+    update: (prev: MemeDesign) => MemeDesign,
+  ) =>
+    changeScenes(
+      (prev) =>
+        prev.map((scene) =>
+          scene.key === key
+            ? { ...scene, design: update(scene.design) }
+            : scene,
+        ),
+      field === null ? undefined : `${key}:${field}`,
     )
-  const setDesign = (update: (prev: MemeDesign) => MemeDesign) =>
-    updateScene(editingKey, update)
+  const setDesign = (field: string, update: (prev: MemeDesign) => MemeDesign) =>
+    updateScene(editingKey, field, update)
 
   const [expandedSections, setExpandedSections] = useState<boolean[]>([
     true,
@@ -265,14 +328,19 @@ export function MemeGenerator({
     patch: Partial<MemeDesign['background']>,
     key = editingKey,
   ) =>
-    updateScene(key, (prev) => ({
-      ...prev,
-      background: { ...prev.background, ...patch },
-    }))
+    // An image put in or taken out is always a step of its own.
+    updateScene(
+      key,
+      'image' in patch ? null : `background.${Object.keys(patch).join()}`,
+      (prev) => ({
+        ...prev,
+        background: { ...prev.background, ...patch },
+      }),
+    )
 
   // A position past the edge the logo's size allows is pulled back in.
   const setLogo = (patch: Partial<MemeDesign['logo']>) =>
-    setDesign((prev) => {
+    setDesign(`logo.${Object.keys(patch).join()}`, (prev) => {
       const next = { ...prev.logo, ...patch }
       const max = CANVAS_SIZE - next.size
       return {
@@ -286,14 +354,17 @@ export function MemeGenerator({
     })
 
   const setQr = (patch: Partial<MemeDesign['qr']>) =>
-    setDesign((prev) => ({ ...prev, qr: { ...prev.qr, ...patch } }))
+    setDesign(`qr.${Object.keys(patch).join()}`, (prev) => ({
+      ...prev,
+      qr: { ...prev.qr, ...patch },
+    }))
 
   const updateTextLine = (
     index: number,
     property: keyof TextLine,
     value: string | number | boolean,
   ) => {
-    setDesign((prev) => {
+    setDesign(`text${index}.${property}`, (prev) => {
       const updated = [...prev.textLines]
       updated[index] = { ...updated[index], [property]: value }
       return { ...prev, textLines: updated }
@@ -332,7 +403,12 @@ export function MemeGenerator({
   const [uploadingScenes, setUploadingScenes] = useState<ReadonlySet<string>>(
     () => new Set(),
   )
-  const backgroundPending = uploadingScenes.size > 0
+  // Only a scene that is shown can hold the preview: one deleted, or undone
+  // away, while its image decodes no longer waits for it — and holds it again
+  // if redo brings it back before the decode settles.
+  const backgroundPending = scenes.some((scene) =>
+    uploadingScenes.has(scene.key),
+  )
   const settleUpload = (sceneKey: string) =>
     setUploadingScenes((prev) => {
       const next = new Set(prev)
@@ -341,20 +417,23 @@ export function MemeGenerator({
     })
 
   // Decoded backgrounds, by URL. Pruned after each commit to exactly what the
-  // committed scenes show, never while updates are queued: two uploads that
-  // settle in one batch — one scene taking an image up as another drops it —
-  // would otherwise judge by scenes that are about to change. A ref, because
-  // an arrival always comes with the scene update that shows it, which is
-  // what repaints.
+  // committed history can show — the present and every step undo or redo
+  // can return to, so an undone clear draws its image again — never while
+  // updates are queued: two uploads that settle in one batch — one scene
+  // taking an image up as another drops it — would otherwise judge by scenes
+  // that are about to change. A ref, because an arrival always comes with
+  // the scene update that shows it, which is what repaints.
   const backgroundRasters = useRef(new Map<string, Raster>())
   useEffect(() => {
-    const shown = new Set(
-      scenes.flatMap((scene) => scene.design.background.image?.url ?? []),
+    const kept = new Set(
+      allStates(history).flatMap((states) =>
+        states.flatMap((scene) => scene.design.background.image?.url ?? []),
+      ),
     )
     for (const url of backgroundRasters.current.keys()) {
-      if (!shown.has(url)) backgroundRasters.current.delete(url)
+      if (!kept.has(url)) backgroundRasters.current.delete(url)
     }
-  }, [scenes])
+  }, [history])
 
   const handleBackgroundImageUpload = async (
     e: React.ChangeEvent<HTMLInputElement>,
@@ -600,8 +679,11 @@ export function MemeGenerator({
       setPlaying(false)
       return
     }
-    // Play from the start again once the end has been reached.
-    seek(time >= total ? 0 : time)
+    // Play from the start again once the end has been reached — or its last
+    // frame, where an edit at the end leaves the playhead.
+    // Counted in whole frames: the playhead's sum and the total's can differ
+    // in the last bit, so "a frame short" is not a subtraction.
+    seek(Math.round(time * FPS) >= Math.round(total * FPS) - 1 ? 0 : time)
     setPlaybackEditingKey(editingKey)
     setPlaying(true)
   }
@@ -635,20 +717,85 @@ export function MemeGenerator({
     return () => cancelAnimationFrame(frame)
   }, [playing])
 
-  // A new scene goes at the end, and the playhead to its start, so the
-  // controls edit it — during playback too: it is what was just asked for.
-  const addNewScene = () => {
-    const scene = newScene(DEFAULT_DESIGN)
-    setScenes((prev) => [...prev, scene])
-    moveTo(total)
-    setPlaybackEditingKey(scene.key)
+  // Why the last scene change was refused, until the history moves on — a
+  // change, an undo or a redo clears it.
+  const [refusal, setRefusal] = useState<
+    (SceneRefusal & { for: typeof history }) | null
+  >(null)
+  const refused = refusal?.for === history ? refusal : null
+  const refuse = (action: SceneRefusal['action'], reason: string) =>
+    setRefusal((prev) => ({
+      action,
+      reason,
+      for: history,
+      // Counted, so the same reason given again is a new announcement.
+      seq: (prev?.seq ?? 0) + 1,
+    }))
+
+  // A scene list reordered, grown or shrunk as one step, and the playhead put
+  // `at` a time in it — during playback the controls follow `editKey`, when
+  // given. Every scene that was already there is taken from the latest state,
+  // not from this render's: a background upload that lands in between is
+  // kept, not overwritten.
+  const replaceScenes = (next: Scene[], at: number, editKey?: string) => {
+    changeScenes((prev) =>
+      next.map((scene) => prev.find((p) => p.key === scene.key) ?? scene),
+    )
+    moveTo(clampTime(next, at))
+    if (editKey) setPlaybackEditingKey(editKey)
+  }
+
+  // A new scene goes at the end, and a copy right after its original; the
+  // playhead goes to its start so the controls edit it — during playback
+  // too: it is what was just asked for. Either is refused, with the reason,
+  // when it would take the video past a minute.
+  const applySceneChange = (
+    action: 'add' | 'duplicate',
+    change: ReturnType<typeof addScene>,
+  ) => {
+    if (!change.ok) {
+      refuse(action, change.reason)
+      return
+    }
+    replaceScenes(
+      change.scenes,
+      sceneStart(change.scenes, change.index),
+      change.scenes[change.index].key,
+    )
+  }
+  const addNewScene = () =>
+    applySceneChange('add', addScene(scenes, DEFAULT_DESIGN))
+  const duplicate = (index: number) =>
+    applySceneChange('duplicate', duplicateScene(scenes, index))
+
+  const remove = (index: number) => {
+    const removed = removeScene(scenes, index, time)
+    if (!removed.ok) {
+      refuse('delete', removed.reason)
+      return
+    }
+    // During playback the controls move to the scene that took the deleted
+    // one's place, and stay on it.
+    replaceScenes(
+      removed.scenes,
+      removed.time,
+      removed.scenes[Math.min(index, removed.scenes.length - 1)].key,
+    )
+  }
+
+  const move = (from: number, to: number) => {
+    const moved = moveScene(scenes, from, to, time)
+    if (moved.scenes !== scenes) replaceScenes(moved.scenes, moved.time)
   }
 
   // The playhead keeps its place in the scene being edited, so a length
   // typed into the field never moves the controls to another scene.
   const changeDuration = (index: number, seconds: number) => {
     const next = setSceneDuration(scenes, index, seconds)
-    setScenes(next)
+    changeScenes(
+      (prev) => setSceneDuration(prev, index, seconds),
+      `${scenes[index].key}:duration`,
+    )
     if (playing) return
     const offset = time - sceneStart(scenes, editingIndex)
     const start = sceneStart(next, editingIndex)
@@ -656,10 +803,65 @@ export function MemeGenerator({
     moveTo(start + Math.min(offset, last))
   }
 
+  // A pick from a list is a step of its own, however quickly the next one
+  // follows.
   const changeTransition = (index: number, transition: Transition) =>
-    setScenes((prev) =>
+    changeScenes((prev) =>
       prev.map((scene, i) => (i === index ? { ...scene, transition } : scene)),
     )
+
+  // Undo and redo put the scenes back; the playhead stays where it is, kept
+  // inside the video, so the scene under it is what the controls edit.
+  const travel = (to: typeof undo) => {
+    const next = to(history)
+    if (next === history) return
+    setHistory((prev) => to(prev))
+    const at = clampTime(next.present, time)
+    moveTo(at)
+    // During playback the controls stay on their scene; if undo took it
+    // away, they settle on the scene under the playhead and stay there.
+    if (!next.present.some((scene) => scene.key === playbackEditingKey))
+      setPlaybackEditingKey(next.present[sceneIndexAt(next.present, at)].key)
+  }
+  const rootRef = useRef<HTMLDivElement>(null)
+  const onShortcut = useEffectEvent((event: KeyboardEvent) => {
+    if (
+      event.defaultPrevented ||
+      event.isComposing ||
+      !(event.metaKey || event.ctrlKey)
+    )
+      return
+    // By the letter where the layout types one, else by the physical key:
+    // on a Cyrillic, Greek or InScript layout, Ctrl+Z types "я", "ζ" or the
+    // vowel sign "ॆ". Punctuation never counts (Dvorak's Z key types ";").
+    // Never with Alt: Windows reports AltGr as Ctrl+Alt, and AltGr types.
+    if (event.altKey) return
+    const letter = /^[a-z]$/i.test(event.key)
+      ? event.key.toLowerCase()
+      : /^[\p{L}\p{M}]$/u.test(event.key)
+        ? event.code.replace(/^Key/, '').toLowerCase()
+        : ''
+    const isUndo = letter === 'z' && !event.shiftKey
+    const isRedo =
+      (letter === 'z' && event.shiftKey) || (letter === 'y' && event.ctrlKey)
+    if (!isUndo && !isRedo) return
+    // Typing into a design's text is a step like any other, so the shortcut
+    // is the editor's even in those fields. Not in a field that holds an
+    // uncommitted draft of its own (the timeline's seconds), and not for a
+    // key pressed elsewhere on the page.
+    const target = event.target
+    if (target instanceof Element) {
+      if (target.closest('[data-own-undo]')) return
+      if (target !== document.body && !rootRef.current?.contains(target)) return
+    }
+    event.preventDefault()
+    travel(isUndo ? undo : redo)
+  })
+  useEffect(() => {
+    const listener = (event: KeyboardEvent) => onShortcut(event)
+    document.addEventListener('keydown', listener)
+    return () => document.removeEventListener('keydown', listener)
+  }, [])
 
   const switchMode = (next: 'image' | 'video') => {
     setPlaying(false)
@@ -741,7 +943,7 @@ export function MemeGenerator({
   )
 
   return (
-    <div className="grid gap-4 lg:grid-cols-2">
+    <div ref={rootRef} className="grid gap-4 lg:grid-cols-2">
       {/* In Video mode the preview and the timeline together can be taller
           than a laptop screen; the sticky column then scrolls on its own so
           the timeline is never stranded below the fold. */}
@@ -754,26 +956,46 @@ export function MemeGenerator({
             : ''
         }`}
       >
-        <div
-          role="group"
-          aria-label="Output"
-          className="mx-auto flex w-fit rounded-lg border border-brand-frosted-steel p-0.5 dark:border-gray-600"
-        >
-          {(['image', 'video'] as const).map((option) => (
-            <button
-              key={option}
-              type="button"
-              aria-pressed={mode === option}
-              onClick={() => switchMode(option)}
-              className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${
-                mode === option
-                  ? 'bg-brand-cloud-blue text-white dark:bg-blue-600'
-                  : 'text-brand-slate-gray hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700'
-              }`}
-            >
-              {option === 'image' ? 'Image' : 'Video'}
-            </button>
-          ))}
+        <div className="flex flex-wrap items-center justify-center gap-3">
+          <div
+            role="group"
+            aria-label="Output"
+            className="flex w-fit rounded-lg border border-brand-frosted-steel p-0.5 dark:border-gray-600"
+          >
+            {(['image', 'video'] as const).map((option) => (
+              <button
+                key={option}
+                type="button"
+                aria-pressed={mode === option}
+                onClick={() => switchMode(option)}
+                className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${
+                  mode === option
+                    ? 'bg-brand-cloud-blue text-white dark:bg-blue-600'
+                    : 'text-brand-slate-gray hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700'
+                }`}
+              >
+                {option === 'image' ? 'Image' : 'Video'}
+              </button>
+            ))}
+          </div>
+          <div role="group" aria-label="History" className="flex gap-1">
+            <HistoryButton
+              label="Undo"
+              icon={ArrowUturnLeftIcon}
+              enabled={canUndo(history)}
+              shortcuts="Control+Z Meta+Z"
+              hint="⌘Z / Ctrl+Z"
+              onClick={() => travel(undo)}
+            />
+            <HistoryButton
+              label="Redo"
+              icon={ArrowUturnRightIcon}
+              enabled={canRedo(history)}
+              shortcuts="Control+Shift+Z Meta+Shift+Z Control+Y"
+              hint="⇧⌘Z / Ctrl+Y"
+              onClick={() => travel(redo)}
+            />
+          </div>
         </div>
         {wrapPreview ? wrapPreview(previewNode) : previewNode}
         {exportNode}
@@ -789,6 +1011,10 @@ export function MemeGenerator({
             onDurationChange={changeDuration}
             onTransitionChange={changeTransition}
             onAddScene={addNewScene}
+            onDuplicateScene={duplicate}
+            onDeleteScene={remove}
+            onMoveScene={move}
+            refusal={refused}
             onPlayToggle={togglePlayback}
             onLoopChange={setLoop}
           />

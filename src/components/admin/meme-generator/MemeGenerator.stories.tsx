@@ -1448,3 +1448,183 @@ export const VideoFadeIntoTransparent: Story = {
     })
   },
 }
+
+/** Blue scene 1 into green scene 2 by `transition`, playhead at `at`. */
+async function blueIntoGreen(
+  canvasElement: HTMLElement,
+  transition: 'slide' | 'zoom',
+  at: number,
+) {
+  const canvas = within(canvasElement)
+  await userEvent.click(canvas.getByRole('button', { name: 'Video' }))
+  await userEvent.click(canvas.getByRole('button', { name: 'Cloud Blue' }))
+  await userEvent.click(canvas.getByRole('button', { name: 'Add scene' }))
+  await userEvent.click(canvas.getByRole('button', { name: 'Scene 1, 3.0 s' }))
+  await userEvent.selectOptions(
+    canvas.getByLabelText('Into scene 2'),
+    transition,
+  )
+  await seekTo(canvas, at)
+  return canvas
+}
+
+/**
+ * A slide at its midpoint: the incoming green scene has pushed the blue one
+ * half out to the left, so the left edge is blue and the right edge green —
+ * a fade would make both edges the same mix. The same half-second window as
+ * a fade: a quarter-second either side of the boundary shows one scene.
+ */
+export const VideoSlideMidway: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = await blueIntoGreen(canvasElement, 'slide', 3)
+    const preview = () => canvasElement.querySelector('canvas')!
+    const right: Box = { ...BACKGROUND_CORNER, x: CANVAS_SIZE - 144 }
+    await waitFor(() => {
+      expect(
+        share(preview(), CANVAS_SIZE, BACKGROUND_CORNER, near(CLOUD_BLUE)),
+      ).toBeGreaterThan(0.95)
+      expect(
+        share(preview(), CANVAS_SIZE, right, near(FRESH_GREEN)),
+      ).toBeGreaterThan(0.95)
+    })
+    await seekTo(canvas, 2.7)
+    await waitFor(() =>
+      expect(share(preview(), CANVAS_SIZE, right, near(CLOUD_BLUE))).toBe(1),
+    )
+    await seekTo(canvas, 3.3)
+    await waitFor(() =>
+      expect(
+        share(preview(), CANVAS_SIZE, BACKGROUND_CORNER, near(FRESH_GREEN)),
+      ).toBe(1),
+    )
+  },
+}
+
+/**
+ * A zoom at its midpoint shows no edge: the very corner is half of each
+ * colour, where a layer drawn smaller than the canvas would leave it dark.
+ * Solid scenes look the same scaled or not, so the scaling itself is pinned
+ * by the frame unit test, not here.
+ */
+export const VideoZoomShowsNoEdge: Story = {
+  play: async ({ canvasElement }) => {
+    await blueIntoGreen(canvasElement, 'zoom', 3)
+    await waitFor(() =>
+      expect(
+        share(
+          canvasElement.querySelector('canvas')!,
+          CANVAS_SIZE,
+          { x: 0, y: 0, width: 40, height: 40 },
+          near(midway(CLOUD_BLUE, FRESH_GREEN)),
+        ),
+      ).toBeGreaterThan(0.95),
+    )
+  },
+}
+
+/**
+ * Scene management by keyboard alone, in a real browser with user-event's
+ * keyboard (synthetic events, not OS key presses): Alt+→ moves a scene and
+ * focus stays on it through React's commit, a copy is refused past the
+ * minute with the reason, Delete takes a scene out, and Ctrl+Z / Ctrl+Shift+Z
+ * walk the history.
+ */
+export const VideoScenesByKeyboard: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const activate = async (element: HTMLElement) => {
+      element.focus()
+      await userEvent.keyboard('{Enter}')
+    }
+    const labels = () =>
+      within(canvas.getByRole('list', { name: 'Scenes' }))
+        .getAllByRole('button')
+        .map((b) => b.getAttribute('aria-label'))
+
+    await activate(canvas.getByRole('button', { name: 'Video' }))
+    await activate(canvas.getByRole('button', { name: 'Add scene' }))
+    const length = canvas.getByRole('slider', { name: 'Scene 2 length' })
+    length.focus()
+    await userEvent.keyboard('{End}')
+    expect(length.getAttribute('aria-valuenow')).toBe('57')
+
+    canvas.getByRole('button', { name: 'Scene 1, 3.0 s' }).focus()
+    await userEvent.keyboard('{Alt>}{ArrowRight}{/Alt}')
+    expect(labels()).toEqual(['Scene 1, 57.0 s', 'Scene 2, 3.0 s'])
+    expect(document.activeElement?.getAttribute('aria-label')).toBe(
+      'Scene 2, 3.0 s',
+    )
+    // The playhead went with the scene it was on — the 57 s one, now first.
+    expect(
+      canvas
+        .getByRole('slider', { name: 'Playhead' })
+        .getAttribute('aria-valuenow'),
+    ).toBe('0')
+    await userEvent.keyboard('{Enter}') // picks the moved scene
+    expect(
+      canvas
+        .getByRole('slider', { name: 'Playhead' })
+        .getAttribute('aria-valuenow'),
+    ).toBe('57')
+
+    await activate(canvas.getByRole('button', { name: 'Duplicate scene 2' }))
+    expect(canvas.getByRole('status').textContent).toBe(
+      'A copy of scene 2 is 3.0 s and only 0.0 s of the 60 s is left. Shorten a scene first.',
+    )
+
+    await activate(canvas.getByRole('button', { name: 'Delete scene 2' }))
+    expect(labels()).toEqual(['Scene 1, 57.0 s'])
+
+    document.body.focus()
+    await userEvent.keyboard('{Control>}z{/Control}')
+    expect(labels()).toHaveLength(2)
+    await userEvent.keyboard('{Control>}z{/Control}')
+    expect(labels()).toEqual(['Scene 1, 3.0 s', 'Scene 2, 57.0 s'])
+    await userEvent.keyboard('{Control>}{Shift>}z{/Shift}{/Control}')
+    expect(labels()).toEqual(['Scene 1, 57.0 s', 'Scene 2, 3.0 s'])
+  },
+}
+
+/**
+ * Four scenes that fill most of the minute, one sliding into the next, and an
+ * add refused with the reason — for the eye: the scene actions, the refusal
+ * and the transition marks. Light and dark.
+ */
+async function nearTheCap(canvasElement: HTMLElement) {
+  const canvas = within(canvasElement)
+  await userEvent.click(canvas.getByRole('button', { name: 'Video' }))
+  await userEvent.click(canvas.getByRole('button', { name: 'Cloud Blue' }))
+  const lengthField = (n: number) =>
+    canvas.getByLabelText(`Scene ${n} length (s)`)
+  for (const [n, seconds] of [
+    [1, 20],
+    [2, 15],
+    [3, 12],
+    [4, 11],
+  ] as const) {
+    if (n > 1)
+      await userEvent.click(canvas.getByRole('button', { name: 'Add scene' }))
+    await userEvent.clear(lengthField(n))
+    await userEvent.type(lengthField(n), `${seconds}{Enter}`)
+  }
+  await userEvent.click(canvas.getByRole('button', { name: 'Scene 2, 15.0 s' }))
+  await userEvent.selectOptions(canvas.getByLabelText('Into scene 3'), 'slide')
+  await userEvent.click(canvas.getByRole('button', { name: 'Add scene' }))
+  await expect(canvas.getByRole('status')).toHaveTextContent(
+    'only 2.0 s of the 60 s is left',
+  )
+  // Back to the start, so a capture shows the first scenes and their marks;
+  // the reason stays, as the scenes have not changed.
+  canvas.getByRole('slider', { name: 'Playhead' }).focus()
+  await userEvent.keyboard('{Home}')
+  await expect(canvas.getByRole('status')).toHaveTextContent('Shorten a scene')
+}
+
+export const VideoAtTheCap: Story = {
+  play: async ({ canvasElement }) => nearTheCap(canvasElement),
+}
+
+export const VideoAtTheCapDark: Story = {
+  globals: { theme: 'dark' },
+  play: async ({ canvasElement }) => nearTheCap(canvasElement),
+}
