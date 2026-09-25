@@ -161,7 +161,8 @@ describe('exportVideo', () => {
       probe: { realtime: true },
     })
     const { promise } = run(backend)
-    await vi.advanceTimersByTimeAsync(PROBE_TIMEOUT_MS.quality)
+    // The timeout, and the moment the abandoned probe takes to let go.
+    await vi.advanceTimersByTimeAsync(PROBE_TIMEOUT_MS.quality + 10)
     const result = await promise
     expect(log).toEqual([
       'probe:quality',
