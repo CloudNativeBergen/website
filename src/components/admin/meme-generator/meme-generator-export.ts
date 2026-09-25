@@ -18,8 +18,16 @@ export const TARGET_BITRATE = 8_000_000
 /** LinkedIn's minimum for a whole file. Every export is at least this. */
 export const MIN_BITRATE = 192_000
 export const PROBE_FRAMES = 10
-/** Around the whole probe, frames and flush alike (proof §8.1). */
-export const PROBE_TIMEOUT_MS = 3_000
+/**
+ * Around the whole probe, frames and flush alike (proof §8.1). Longer for
+ * the fallback: Chrome's first realtime chunk took 3.1 s.
+ */
+export const PROBE_TIMEOUT_MS: Record<Encoding['latencyMode'], number> = {
+  quality: 3_000,
+  realtime: 5_000,
+}
+/** How long an abandoned probe may take to let go of its encoder. */
+export const PROBE_RELEASE_MS = 1_000
 /** No frame accepted for this long is an encoder that has stopped (proof §6). */
 export const STALL_TIMEOUT_MS = 15_000
 /** Frames between real tasks handed back to the browser. */
@@ -183,11 +191,12 @@ async function pickLatencyMode(
     const probe = new AbortController()
     const stop = () => probe.abort()
     signal.addEventListener('abort', stop)
+    const running = backend.probe(mode, probe.signal)
     try {
       const ok = await guarded(
-        backend.probe(mode, probe.signal),
+        running,
         signal,
-        PROBE_TIMEOUT_MS,
+        PROBE_TIMEOUT_MS[mode],
         () => new Error('probe timed out'),
       )
       if (ok) return mode
@@ -196,6 +205,12 @@ async function pickLatencyMode(
     } finally {
       probe.abort()
       signal.removeEventListener('abort', stop)
+      // The failed check closes its encoder before the next one opens
+      // (proof §8.1) — as long as closing does not itself hang.
+      await Promise.race([
+        running.catch(() => {}),
+        new Promise((resolve) => setTimeout(resolve, PROBE_RELEASE_MS)),
+      ])
     }
   }
   return null
@@ -229,6 +244,8 @@ async function encodePass(
         await yieldTask()
       }
     }
+    // Checked before finishing: a finish once started cannot be cancelled.
+    if (signal.aborted) throw new ExportCancelled()
     return await guarded(session.finish(), signal, STALL_TIMEOUT_MS, stalled)
   } catch (error) {
     // Whatever happened, the encoder is let go of — without waiting on one
@@ -276,7 +293,12 @@ export async function exportVideo({
   let bitrate = 0
   for (const [index, encoding] of passes.entries()) {
     if (signal.aborted) throw new ExportCancelled()
-    const session = await answer(backend.open(canvas, encoding))
+    const opening = backend.open(canvas, encoding)
+    const session = await answer(opening).catch((error: unknown) => {
+      // One that finishes opening after a cancel or a stall is closed then.
+      void opening.then((late) => late.cancel()).catch(() => {})
+      throw error
+    })
     onProgress({ phase: 'encoding', fraction: 0, pass: index + 1 })
     const blob = await encodePass(session, {
       frameCount,

@@ -72,19 +72,21 @@ export const mediabunnyBackend: EncoderBackend = {
       { latencyMode, keyFrames: 'default' },
       () => packets++,
     )
-    const cancel = () => void output.cancel().catch(() => {})
-    // Aborted while the output was starting: the listener would never fire.
-    if (signal.aborted) {
-      cancel()
-      return false
-    }
-    signal.addEventListener('abort', cancel)
-    try {
+    // An abort settles the probe only once the encoder is closed, so the
+    // next check never opens one while this one still holds it.
+    const aborted = new Promise<false>((resolve) => {
+      const stop = () => {
+        output
+          .cancel()
+          .catch(() => {})
+          .then(() => resolve(false))
+      }
+      if (signal.aborted) stop()
+      else signal.addEventListener('abort', stop, { once: true })
+    })
+    const encode = async () => {
       for (let frame = 0; frame < PROBE_FRAMES; frame++) {
-        if (signal.aborted) {
-          cancel()
-          return false
-        }
+        if (signal.aborted) return false
         // A frame that differs from the last, as a real video's do.
         ctx.fillStyle = `hsl(${frame * 36} 70% 50%)`
         ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE)
@@ -93,12 +95,14 @@ export const mediabunnyBackend: EncoderBackend = {
       // Flushed: Firefox sends its first chunk only once every frame is in.
       await output.finalize()
       return packets >= PROBE_FRAMES
-    } catch {
-      cancel()
-      return false
-    } finally {
-      signal.removeEventListener('abort', cancel)
     }
+    return Promise.race([
+      encode().catch(async () => {
+        await output.cancel().catch(() => {})
+        return false
+      }),
+      aborted,
+    ])
   },
 
   async open(canvas, encoding): Promise<EncodeSession> {

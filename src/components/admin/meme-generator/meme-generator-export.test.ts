@@ -24,8 +24,14 @@ interface FakeOptions {
   supported?: boolean
   /** `open` never settles. */
   hangOpen?: boolean
-  /** Which latency modes pass the probe; a mode missing here never settles. */
-  probe?: Partial<Record<Encoding['latencyMode'], boolean | 'hang'>>
+  /** `open` settles only when the test calls the function it is handed. */
+  holdOpen?: (release: () => void) => void
+  /**
+   * Which latency modes pass the probe; a mode missing here never settles,
+   * and lets go of its encoder `releaseMs` after it is aborted.
+   */
+  probe?: Partial<Record<Encoding['latencyMode'], boolean | 'hang' | number>>
+  releaseMs?: number
   /** Bytes per frame each key-frame setting produces. */
   bytesPerFrame?: Partial<Record<Encoding['keyFrames'], number>>
   /** The frame whose add throws, or never settles. */
@@ -44,6 +50,7 @@ function fakeBackend(options: FakeOptions = {}) {
     encoding: Encoding
     frames: number[]
     cancelled: boolean
+    finished: boolean
   }[] = []
   const backend: EncoderBackend = {
     supports: async () => supported,
@@ -54,15 +61,28 @@ function fakeBackend(options: FakeOptions = {}) {
         return new Promise((_, reject) =>
           signal.addEventListener('abort', () => {
             log.push(`probe-aborted:${latencyMode}`)
-            reject(new Error('aborted'))
+            setTimeout(() => {
+              log.push(`probe-released:${latencyMode}`)
+              reject(new Error('aborted'))
+            }, options.releaseMs ?? 0)
           }),
         )
+      // A number: passes after that many milliseconds.
+      if (typeof result === 'number')
+        return new Promise((resolve) => setTimeout(() => resolve(true), result))
       return Promise.resolve(result)
     },
     async open(_canvas, encoding): Promise<EncodeSession> {
       if (options.hangOpen) return new Promise(() => {})
-      const session = { encoding, frames: [] as number[], cancelled: false }
+      const session = {
+        encoding,
+        frames: [] as number[],
+        cancelled: false,
+        finished: false,
+      }
       sessions.push(session)
+      if (options.holdOpen)
+        await new Promise<void>((resolve) => options.holdOpen!(resolve))
       return {
         add: (timestamp) => {
           const n = Math.round(timestamp * 30)
@@ -72,12 +92,14 @@ function fakeBackend(options: FakeOptions = {}) {
           session.frames.push(n)
           return Promise.resolve()
         },
-        finish: async () =>
-          new Blob([
+        finish: async () => {
+          session.finished = true
+          return new Blob([
             new Uint8Array(
               session.frames.length * (bytesPerFrame[encoding.keyFrames] ?? 0),
             ),
-          ]),
+          ])
+        },
         cancel: async () => {
           session.cancelled = true
         },
@@ -139,11 +161,12 @@ describe('exportVideo', () => {
       probe: { realtime: true },
     })
     const { promise } = run(backend)
-    await vi.advanceTimersByTimeAsync(PROBE_TIMEOUT_MS)
+    await vi.advanceTimersByTimeAsync(PROBE_TIMEOUT_MS.quality)
     const result = await promise
     expect(log).toEqual([
       'probe:quality',
       'probe-aborted:quality',
+      'probe-released:quality',
       'probe:realtime',
     ])
     expect(result.encoding.latencyMode).toBe('realtime')
@@ -258,5 +281,67 @@ describe('exportVideo', () => {
     expect(encoding.at(-1)).toMatchObject({ fraction: 1 })
     const fractions = encoding.map((p) => p.fraction)
     expect([...fractions].sort((a, b) => a - b)).toEqual(fractions)
+  })
+
+  it('opens the realtime probe only once the abandoned one has let go', async () => {
+    vi.useFakeTimers()
+    const { backend, log } = fakeBackend({
+      probe: { realtime: true },
+      releaseMs: 200,
+    })
+    const { promise } = run(backend)
+    await vi.advanceTimersByTimeAsync(PROBE_TIMEOUT_MS.quality + 200)
+    await promise
+    expect(log).toEqual([
+      'probe:quality',
+      'probe-aborted:quality',
+      'probe-released:quality',
+      'probe:realtime',
+    ])
+  })
+
+  it('gives the realtime fallback the longer time it measurably needs', async () => {
+    vi.useFakeTimers()
+    // Chrome's first realtime chunk took 3.1 s in the proof.
+    const { backend } = fakeBackend({
+      probe: { quality: false, realtime: 4_000 },
+    })
+    const { promise } = run(backend)
+    await vi.advanceTimersByTimeAsync(4_000)
+    expect((await promise).encoding.latencyMode).toBe('realtime')
+  })
+
+  it('closes an encoder that finishes opening after the export was cancelled', async () => {
+    let release = () => {}
+    const { backend, sessions } = fakeBackend({
+      holdOpen: (r) => {
+        release = r
+      },
+    })
+    const controller = new AbortController()
+    const { promise } = run(backend, { signal: controller.signal })
+    await vi.waitFor(() => expect(sessions).toHaveLength(1))
+    controller.abort()
+    await expect(promise).rejects.toBeInstanceOf(ExportCancelled)
+    expect(sessions[0].cancelled).toBe(false)
+    release()
+    await vi.waitFor(() => expect(sessions[0].cancelled).toBe(true))
+  })
+
+  it('never starts finishing a file once cancel lands after the last frame', async () => {
+    const { backend, sessions } = fakeBackend()
+    const controller = new AbortController()
+    let yields = 0
+    const { promise } = run(backend, {
+      signal: controller.signal,
+      // The cancel arrives in the real task after frame 90 of 90.
+      yieldTask: async () => {
+        if (++yields === 90 / 5) controller.abort()
+      },
+    })
+    await expect(promise).rejects.toBeInstanceOf(ExportCancelled)
+    expect(sessions[0].frames).toHaveLength(90)
+    expect(sessions[0].finished).toBe(false)
+    expect(sessions[0].cancelled).toBe(true)
   })
 })
