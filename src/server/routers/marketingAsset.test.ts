@@ -190,6 +190,20 @@ describe('marketingAsset.delete', () => {
     expect(h.orphan).not.toHaveBeenCalled()
   })
 
+  it('logs an image the orphan check could not decide on, so it can be retried', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    h.orphan.mockResolvedValue({
+      id: 'image-logo-800x800-png',
+      deleted: false,
+      remainingReferences: -1,
+    })
+    expect(await assets().delete({ id: 'asset-ours' })).toEqual({
+      deleted: true,
+      imageDeleted: false,
+    })
+    expect(String(warn.mock.calls[0]?.[0])).toContain('image-logo-800x800-png')
+  })
+
   it('refuses a draft id with the same answer, and deletes nothing', async () => {
     const draft = await assets()
       .delete({ id: 'drafts.asset-ours' })

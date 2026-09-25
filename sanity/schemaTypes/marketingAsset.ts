@@ -55,7 +55,11 @@ export default defineType({
       name: 'kind',
       title: 'Kind',
       type: 'string',
-      options: { list: ['image', 'gif', 'video'] },
+      // GIF and video arrive with #1167; until their fields and UI exist, an
+      // asset is an image, so Studio cannot publish one with no media.
+      options: { list: ['image'] },
+      initialValue: 'image',
+      readOnly: true,
       validation: (Rule) => Rule.required(),
     }),
     defineField({

@@ -51,6 +51,13 @@ export const marketingAssetRouter = router({
       const images = await Promise.all(
         imageIds.map((imageId) => deleteImageAssetIfOrphaned(imageId)),
       )
+      // The check fails closed: an unreadable count keeps the file. Say which
+      // file, so it can be retried by hand; nothing else will find it.
+      for (const image of images)
+        if (image.remainingReferences === -1)
+          console.warn(
+            `Marketing asset ${input.id} deleted; its image ${image.id} was kept because its references could not be counted`,
+          )
       return {
         deleted: true,
         imageDeleted: images.length > 0 && images.every((i) => i.deleted),

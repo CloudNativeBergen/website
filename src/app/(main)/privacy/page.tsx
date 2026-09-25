@@ -38,6 +38,7 @@ import {
   NoSymbolIcon,
   UserIcon,
   VideoCameraIcon,
+  PhotoIcon,
   BookOpenIcon,
   CalendarIcon,
   CheckIcon,
@@ -116,7 +117,7 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
     )
   }
 
-  const lastUpdated = 'September 22, 2026'
+  const lastUpdated = 'September 25, 2026'
   const legal = await resolveLegalConfig(conference)
   const contactEmail = legal.contactEmail
   // EMPTY when no legal entity could be resolved. `legal.controllerResolved`
@@ -599,6 +600,68 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                           event documentation and community engagement. You can
                           untag yourself at any time through your speaker
                           profile or by contacting us.
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Marketing Images (organizer-only gallery) */}
+                    <div className="rounded-lg border border-amber-200 bg-amber-50 p-6 dark:border-amber-800 dark:bg-amber-900/20">
+                      <h3 className="mb-4 flex items-center text-lg font-semibold text-amber-800 dark:text-amber-200">
+                        <PhotoIcon className="mr-3 h-5 w-5" />
+                        Marketing Images
+                      </h3>
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div>
+                          <h4 className="mb-2 font-medium text-amber-800 dark:text-amber-200">
+                            What We Keep
+                          </h4>
+                          <ul className="space-y-1 text-sm text-amber-700 dark:text-amber-300">
+                            <li>
+                              • Images our organizers upload for promotional
+                              posts, such as logos, graphics and speaker cards.
+                              Some may show speakers or attendees
+                            </li>
+                            <li>
+                              • A title and a short description of each image
+                              (alt text), which goes into the posts that use it
+                            </li>
+                            <li>
+                              • This gallery is private to our organizers and is
+                              never shown on the website. Images from it appear
+                              in the social media posts we publish
+                            </li>
+                            <li>
+                              • An upload passes through temporary storage and
+                              is deleted from there once it is saved. An upload
+                              that is never finished is deleted within about a
+                              day
+                            </li>
+                          </ul>
+                        </div>
+                        <div>
+                          <h4 className="mb-2 font-medium text-amber-800 dark:text-amber-200">
+                            Your Control
+                          </h4>
+                          <ul className="space-y-1 text-sm text-amber-700 dark:text-amber-300">
+                            <li>
+                              • Ask us to remove an image of you and we will
+                              delete it from the gallery
+                            </li>
+                            <li>
+                              • Removing yourself from the photo gallery does
+                              not reach this gallery, so ask us directly
+                            </li>
+                            <li>
+                              • Posts already published are not changed. Ask us
+                              and we will take one down where we can
+                            </li>
+                          </ul>
+                        </div>
+                      </div>
+                      <div className="mt-3 rounded-lg bg-amber-100 p-2 dark:bg-amber-800/30">
+                        <p className="text-xs text-amber-800 dark:text-amber-200">
+                          <strong>Legal Basis:</strong> Legitimate interest in
+                          promoting the conference and its programme.
                         </p>
                       </div>
                     </div>
