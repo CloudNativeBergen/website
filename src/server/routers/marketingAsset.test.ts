@@ -64,6 +64,9 @@ function assets(organizerOrgIds: string[] = ['org-A']) {
 /** Documents the stubbed dataset holds, by id. */
 const DOCS: Record<string, { _type: string; orgId: string | null }> = {
   'asset-ours': { _type: 'marketingAsset', orgId: 'org-A' },
+  // A Studio draft of ours: same type, same organization, so the tenancy
+  // guard alone would let it through.
+  'drafts.asset-ours': { _type: 'marketingAsset', orgId: 'org-A' },
   'asset-theirs': { _type: 'marketingAsset', orgId: 'org-B' },
   'template-ours': { _type: 'planTemplate', orgId: 'org-A' },
 }
