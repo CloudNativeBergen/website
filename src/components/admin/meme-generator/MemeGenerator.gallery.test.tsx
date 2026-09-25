@@ -150,11 +150,9 @@ describe('an uploaded background', () => {
   })
 
   it('is kept in the gallery with a title and the alt text it requires', async () => {
-    const keep = vi.fn(
-      async (_file: File, _details: { title: string; alt: string }) => ({
-        _id: 'asset-kept',
-      }),
-    )
+    const keep = vi.fn<BackgroundGallery['keep']>(async () => ({
+      _id: 'asset-kept',
+    }))
     render(<MemeGenerator gallery={fakeGallery({ keep })} />)
     upload('stage-photo.png')
     await screen.findByText('Current: stage-photo.png')

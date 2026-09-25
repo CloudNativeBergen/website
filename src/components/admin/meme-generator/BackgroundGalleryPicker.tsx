@@ -90,7 +90,6 @@ export function BackgroundGalleryPicker({
                   <span className="flex aspect-square items-center justify-center bg-gray-100 dark:bg-gray-800">
                     {image.thumbnailUrl ? (
                       // A plain <img>: shown only, never drawn on the canvas.
-                      // eslint-disable-next-line @next/next/no-img-element
                       <img
                         src={image.thumbnailUrl}
                         alt={image.alt}
