@@ -2,7 +2,13 @@
 import { describe, it, expect } from 'vitest'
 import {
   FRAME,
+  MAX_VIDEO_DURATION,
+  addScene,
   clampDuration,
+  duplicateScene,
+  maxSceneDuration,
+  moveScene,
+  removeScene,
   clampTime,
   frameAt,
   newScene,
@@ -64,6 +70,130 @@ describe('setSceneDuration', () => {
     expect(setSceneDuration(scenes, 0, 5.55).map((s) => s.duration)).toEqual([
       5.6, 4,
     ])
+  })
+})
+
+describe('the 60-second cap', () => {
+  const lengths = (scenes: Scene[]) => scenes.map((s) => s.duration)
+
+  it('lets a scene grow only into what the others leave', () => {
+    const scenes = [scene(50), scene(5)]
+    expect(maxSceneDuration(scenes, 1)).toBe(10)
+    expect(lengths(setSceneDuration(scenes, 1, 20))).toEqual([50, 10])
+    expect(lengths(setSceneDuration(scenes, 0, 59))).toEqual([55, 5])
+  })
+
+  it('is worked out in tenths, so what is left is exact', () => {
+    // 29.4 + 29.5 in floating point is 58.900000000000006.
+    const scenes = [scene(29.4), scene(29.5), scene(1)]
+    expect(maxSceneDuration(scenes, 2)).toBe(1.1)
+    expect(lengths(setSceneDuration(scenes, 2, 9))).toEqual([29.4, 29.5, 1.1])
+  })
+
+  it('holds a lone scene to a minute', () => {
+    expect(maxSceneDuration([scene(3)], 0)).toBe(MAX_VIDEO_DURATION)
+  })
+
+  it('adds a three-second scene at the end while it fits', () => {
+    const scenes = [scene(57)]
+    const added = addScene(scenes, DEFAULT_DESIGN)
+    expect(added.ok).toBe(true)
+    if (!added.ok) return
+    expect(lengths(added.scenes)).toEqual([57, 3])
+    expect(added.index).toBe(1)
+  })
+
+  it('refuses a scene that would pass a minute, and says why', () => {
+    const scenes = [scene(29.4), scene(27.7)]
+    const added = addScene(scenes, DEFAULT_DESIGN)
+    expect(added).toEqual({
+      ok: false,
+      reason:
+        'A new scene is 3.0 s and only 2.9 s of the 60 s is left. Shorten a scene first.',
+    })
+  })
+
+  it('duplicates a scene right after itself, with a key of its own', () => {
+    const scenes = [scene(2, 'fade'), scene(4)]
+    const copied = duplicateScene(scenes, 0)
+    expect(copied.ok).toBe(true)
+    if (!copied.ok) return
+    expect(copied.index).toBe(1)
+    expect(lengths(copied.scenes)).toEqual([2, 2, 4])
+    expect(copied.scenes[1]).toMatchObject({
+      design: DEFAULT_DESIGN,
+      transition: 'fade',
+    })
+    expect(copied.scenes[1].key).not.toBe(scenes[0].key)
+  })
+
+  it('refuses a copy that would pass a minute, and says why', () => {
+    const scenes = [scene(50), scene(6)]
+    expect(duplicateScene(scenes, 1)).toEqual({
+      ok: false,
+      reason:
+        'A copy of scene 2 is 6.0 s and only 4.0 s of the 60 s is left. Shorten a scene first.',
+    })
+    expect(duplicateScene(scenes, 1 - 1).ok).toBe(false)
+  })
+})
+
+describe('removeScene', () => {
+  const named = (...lengths: number[]) =>
+    lengths.map((length, i) => ({ ...scene(length), key: `k${i}` }))
+  const keys = (scenes: Scene[]) => scenes.map((s) => s.key)
+
+  it('never removes the last scene', () => {
+    expect(removeScene(named(3), 0, 1)).toEqual({
+      ok: false,
+      reason: 'A video has at least one scene.',
+    })
+  })
+
+  it('puts the playhead at the start of the scene that takes the place of the one under it', () => {
+    const removed = removeScene(named(2, 3, 4), 1, 3.5)
+    expect(removed).toMatchObject({ ok: true, time: 2 })
+    if (removed.ok) expect(keys(removed.scenes)).toEqual(['k0', 'k2'])
+  })
+
+  it('goes back to the new last scene when the last one under the playhead goes', () => {
+    const removed = removeScene(named(2, 3, 4), 2, 8)
+    expect(removed).toMatchObject({ ok: true, time: 2 })
+  })
+
+  it('keeps the playhead on its scene, at the same point in it, when another goes', () => {
+    // Scene k2, 1.5 s in; with k0 gone it starts at 3.
+    expect(removeScene(named(2, 3, 4), 0, 6.5)).toMatchObject({
+      ok: true,
+      time: 4.5,
+    })
+    // A later scene going leaves the time alone.
+    expect(removeScene(named(2, 3, 4), 2, 1)).toMatchObject({ time: 1 })
+  })
+})
+
+describe('moveScene', () => {
+  const named = (...lengths: number[]) =>
+    lengths.map((length, i) => ({ ...scene(length), key: `k${i}` }))
+  const keys = (scenes: Scene[]) => scenes.map((s) => s.key)
+
+  it('moves a scene, and the playhead goes with the scene it was on', () => {
+    // The playhead is 0.5 s into k1, which now opens the video.
+    const moved = moveScene(named(2, 3, 4), 1, 0, 2.5)
+    expect(keys(moved.scenes)).toEqual(['k1', 'k0', 'k2'])
+    expect(moved.time).toBe(0.5)
+  })
+
+  it('keeps the playhead on an unmoved scene that shifted', () => {
+    const moved = moveScene(named(2, 3, 4), 2, 0, 1)
+    expect(keys(moved.scenes)).toEqual(['k2', 'k0', 'k1'])
+    expect(moved.time).toBe(5)
+  })
+
+  it('ignores a move past either end', () => {
+    const scenes = named(2, 3)
+    expect(moveScene(scenes, 0, -1, 1).scenes).toBe(scenes)
+    expect(moveScene(scenes, 1, 2, 1).scenes).toBe(scenes)
   })
 })
 
@@ -131,17 +261,44 @@ describe('frameAt', () => {
     const scenes = [scene(2, 'fade'), scene(3)]
     // Just before the window opens, and as it opens.
     expect(frameAt(scenes, 1.74).kind).toBe('scene')
-    expect(frameAt(scenes, 1.75)).toMatchObject({ kind: 'fade', progress: 0 })
-    expect(frameAt(scenes, 2)).toMatchObject({ kind: 'fade', progress: 0.5 })
+    expect(frameAt(scenes, 1.75)).toMatchObject({ kind: 'transition', progress: 0 })
+    expect(frameAt(scenes, 2)).toMatchObject({ kind: 'transition', progress: 0.5 })
     const late = frameAt(scenes, 2.2)
-    expect(late.kind).toBe('fade')
-    if (late.kind === 'fade') expect(late.progress).toBeCloseTo(0.9)
+    expect(late.kind).toBe('transition')
+    if (late.kind === 'transition') expect(late.progress).toBeCloseTo(0.9)
     // The window closes on the incoming scene.
     expect(frameAt(scenes, 2.25)).toEqual({
       kind: 'scene',
       index: 1,
       time: 0.25,
     })
+  })
+
+  it.each(['slide', 'zoom'] as const)(
+    'gives a %s the same half-second window as a fade',
+    (style) => {
+      const scenes = [scene(2, style), scene(3)]
+      expect(frameAt(scenes, 1.74).kind).toBe('scene')
+      expect(frameAt(scenes, 1.75)).toEqual({
+        kind: 'transition',
+        style,
+        from: { index: 0, time: 1.75 },
+        to: { index: 1, time: 0 },
+        progress: 0,
+      })
+      expect(frameAt(scenes, 2)).toMatchObject({ style, progress: 0.5 })
+      expect(frameAt(scenes, 2.25)).toEqual({
+        kind: 'scene',
+        index: 1,
+        time: 0.25,
+      })
+    },
+  )
+
+  it('names the style of the transition it is in', () => {
+    const scenes = [scene(2, 'fade'), scene(1, 'zoom'), scene(2)]
+    expect(frameAt(scenes, 2)).toMatchObject({ style: 'fade' })
+    expect(frameAt(scenes, 3)).toMatchObject({ style: 'zoom' })
   })
 
   it('holds the outgoing scene at its last frame, the incoming at its first', () => {
@@ -151,14 +308,14 @@ describe('frameAt', () => {
       to: { index: 1, time: 0 },
     })
     const early = frameAt(scenes, 1.8)
-    if (early.kind === 'fade') expect(early.from.time).toBeCloseTo(1.8)
+    if (early.kind === 'transition') expect(early.from.time).toBeCloseTo(1.8)
 
     const after = frameAt(scenes, 2.1)
     expect(after).toMatchObject({
       from: { index: 0, time: 2 - FRAME },
       to: { index: 1 },
     })
-    if (after.kind === 'fade') expect(after.to.time).toBeCloseTo(0.1)
+    if (after.kind === 'transition') expect(after.to.time).toBeCloseTo(0.1)
   })
 
   it('never fades out of the last scene', () => {
@@ -176,7 +333,7 @@ describe('frameAt', () => {
   it('keeps the windows of a one-second scene apart', () => {
     const scenes = [scene(2, 'fade'), scene(1, 'fade'), scene(2)]
     expect(frameAt(scenes, 2.2)).toMatchObject({
-      kind: 'fade',
+      kind: 'transition',
       from: { index: 0 },
       to: { index: 1 },
     })
@@ -186,7 +343,7 @@ describe('frameAt', () => {
       time: 0.5,
     })
     expect(frameAt(scenes, 2.8)).toMatchObject({
-      kind: 'fade',
+      kind: 'transition',
       from: { index: 1 },
       to: { index: 2 },
     })

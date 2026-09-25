@@ -57,7 +57,7 @@ describe('drawFrame', () => {
 
     drawFrame(
       main,
-      { kind: 'fade', from, to, progress: 0.25 },
+      { kind: 'transition', style: 'fade', from, to, progress: 0.25 },
       paint,
       () => layers,
     )
@@ -73,6 +73,91 @@ describe('drawFrame', () => {
       ['main.globalAlpha=', 0.25],
       ['main.drawImage', { name: 'incoming' }, 0, 0],
       ['main.restore'],
+    ])
+  })
+
+  it('slides the incoming scene in from the right, pushing the outgoing one out', () => {
+    const { log, main, layers, paint } = setup()
+    const from = { index: 0, time: 1.9 }
+    const to = { index: 1, time: 0 }
+
+    drawFrame(
+      main,
+      { kind: 'transition', style: 'slide', from, to, progress: 0.25 },
+      paint,
+      () => layers,
+    )
+
+    const quarter = CANVAS_SIZE / 4
+    expect(log).toEqual([
+      ['paint', 'outgoing', from],
+      ['paint', 'incoming', to],
+      ['main.save'],
+      ['main.clearRect', 0, 0, CANVAS_SIZE, CANVAS_SIZE],
+      ['main.drawImage', { name: 'outgoing' }, -quarter, 0],
+      ['main.drawImage', { name: 'incoming' }, CANVAS_SIZE - quarter, 0],
+      ['main.restore'],
+    ])
+  })
+
+  it('zooms through: the outgoing scene grows as it fades, the incoming settles from large', () => {
+    const { log, main, layers, paint } = setup()
+    const from = { index: 0, time: 1.9 }
+    const to = { index: 1, time: 0 }
+
+    drawFrame(
+      main,
+      { kind: 'transition', style: 'zoom', from, to, progress: 0.5 },
+      paint,
+      () => layers,
+    )
+
+    // Halfway, both are drawn at 1.1× about the centre: never under the
+    // canvas's size, so no edge of either shows.
+    const size = CANVAS_SIZE * 1.1
+    const offset = (CANVAS_SIZE - size) / 2
+    expect(log).toEqual([
+      ['paint', 'outgoing', from],
+      ['paint', 'incoming', to],
+      ['main.save'],
+      ['main.clearRect', 0, 0, CANVAS_SIZE, CANVAS_SIZE],
+      ['main.globalAlpha=', 0.5],
+      ['main.drawImage', { name: 'outgoing' }, offset, offset, size, size],
+      ['main.globalCompositeOperation=', 'lighter'],
+      ['main.globalAlpha=', 0.5],
+      ['main.drawImage', { name: 'incoming' }, offset, offset, size, size],
+      ['main.restore'],
+    ])
+  })
+
+  it('starts a zoom on the outgoing scene alone, full size, and ends on the incoming one', () => {
+    const at = (progress: number) => {
+      const { log, main, layers, paint } = setup()
+      drawFrame(
+        main,
+        {
+          kind: 'transition',
+          style: 'zoom',
+          from: { index: 0, time: 1 },
+          to: { index: 1, time: 0 },
+          progress,
+        },
+        paint,
+        () => layers,
+      )
+      return log.filter(([call]) => call === 'main.drawImage')
+    }
+    expect(at(0)[0]).toEqual([
+      'main.drawImage',
+      { name: 'outgoing' },
+      0,
+      0,
+    ])
+    expect(at(1)[1]).toEqual([
+      'main.drawImage',
+      { name: 'incoming' },
+      0,
+      0,
     ])
   })
 })
