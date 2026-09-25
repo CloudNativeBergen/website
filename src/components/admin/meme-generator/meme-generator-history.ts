@@ -115,6 +115,8 @@ export function redo<T>(history: History<T>): History<T> {
 
 /** Every state the history can return to, the present included. */
 export const allStates = <T>(history: History<T>): T[] => [
+  // The evicted step too: a burst that cancels itself puts it back.
+  ...(history.evicted ?? []),
   ...history.past,
   history.present,
   ...history.future,

@@ -2,6 +2,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   HISTORY_LIMIT,
+  allStates,
   canRedo,
   canUndo,
   record,
@@ -79,6 +80,17 @@ describe('undo and redo', () => {
     })
     expect(history.present).toBe(HISTORY_LIMIT + 1)
     expect(history.past).toEqual(full)
+  })
+
+  it('counts the step it may put back among the states it can return to', () => {
+    let history = startHistory(0)
+    for (let i = 1; i <= HISTORY_LIMIT + 1; i++)
+      history = record(history, i, { now: i * 10_000 })
+    const oldest = history.past[0]
+    history = record(history, 999, { group: 'text', now: 2_000_000 })
+    expect(history.past).not.toContain(oldest)
+    // What undo or redo may reach — and so what keeps its decoded images.
+    expect(allStates(history)).toContain(oldest)
   })
 
   it('keeps the last hundred steps', () => {
