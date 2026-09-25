@@ -1449,7 +1449,9 @@ export async function eraseSpeakerInPlace(
 
       for (const del of plan.documentDeletes) tx.delete(del.id)
 
-      await tx.commit()
+      // A run that only RETRIES a recorded file (#1162) has no document to
+      // write, and an empty transaction is not sent.
+      if (tx.serialize().length > 0) await tx.commit()
     }
 
     // --- phase 3: the files -------------------------------------------------

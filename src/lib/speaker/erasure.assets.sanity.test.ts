@@ -131,6 +131,9 @@ vi.mock('@/lib/sanity/client', async () => {
     tx.commit = (async () => {
       const next = structuredClone(h.dataset)
       const rev = `rev-${++h.revCounter}`
+      // Modelled, not verified: an empty transaction is treated as refused,
+      // so a run that has nothing to write must not send one.
+      if (tx.serialize().length === 0) throw new Error('400: empty transaction')
       for (const m of tx.serialize() as Mut[]) {
         const id = 'delete' in m ? m.delete.id : m.patch.id
         if (isVersion(id) && !knowsReleases(apiVersion)) {

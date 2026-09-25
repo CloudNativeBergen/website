@@ -70,6 +70,8 @@ const transactionApi = {
     return transactionApi
   },
   commit: commitMock,
+  // Only its length is read: the erasure skips an empty commit.
+  serialize: () => [...txOrder],
 }
 
 const transactionMock = vi.fn(() => transactionApi)
