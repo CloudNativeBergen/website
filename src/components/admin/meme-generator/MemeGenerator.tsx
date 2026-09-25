@@ -220,6 +220,34 @@ const ToggleButton = ({
   </button>
 )
 
+const HistoryButton = ({
+  label,
+  icon: Icon,
+  enabled,
+  shortcuts,
+  hint,
+  onClick,
+}: {
+  label: string
+  icon: React.ElementType
+  enabled: boolean
+  shortcuts: string
+  hint: string
+  onClick: () => void
+}) => (
+  <button
+    type="button"
+    onClick={onClick}
+    disabled={!enabled}
+    aria-keyshortcuts={shortcuts}
+    title={`${label} (${hint})`}
+    className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${styles.buttonInactive}`}
+  >
+    <Icon className="size-4" aria-hidden="true" />
+    {label}
+  </button>
+)
+
 export function MemeGenerator({
   conferenceLogos,
   wrapPreview,
@@ -679,18 +707,24 @@ export function MemeGenerator({
     return () => cancelAnimationFrame(frame)
   }, [playing])
 
-  // Why the last scene change was refused, while the scenes it was refused
-  // for are still the ones shown; any change clears it.
+  // Why the last scene change was refused, until the history moves on — a
+  // change, an undo or a redo clears it.
   const [refusal, setRefusal] = useState<{
     reason: string
-    for: Scene[]
+    for: typeof history
   } | null>(null)
-  const refused = refusal?.for === scenes ? refusal.reason : null
+  const refused = refusal?.for === history ? refusal.reason : null
+  const refuse = (reason: string) => setRefusal({ reason, for: history })
 
-  // A scene list changed as one step, and the playhead put `at` a time in
-  // it — during playback the controls follow `editKey`, when given.
+  // A scene list reordered, grown or shrunk as one step, and the playhead put
+  // `at` a time in it — during playback the controls follow `editKey`, when
+  // given. Every scene that was already there is taken from the latest state,
+  // not from this render's: a background upload that lands in between is
+  // kept, not overwritten.
   const replaceScenes = (next: Scene[], at: number, editKey?: string) => {
-    changeScenes(() => next)
+    changeScenes((prev) =>
+      next.map((scene) => prev.find((p) => p.key === scene.key) ?? scene),
+    )
     moveTo(clampTime(next, at))
     if (editKey) setPlaybackEditingKey(editKey)
   }
@@ -701,7 +735,7 @@ export function MemeGenerator({
   // when it would take the video past a minute.
   const applySceneChange = (change: ReturnType<typeof addScene>) => {
     if (!change.ok) {
-      setRefusal({ reason: change.reason, for: scenes })
+      refuse(change.reason)
       return
     }
     replaceScenes(
@@ -717,7 +751,7 @@ export function MemeGenerator({
   const remove = (index: number) => {
     const removed = removeScene(scenes, index, time)
     if (!removed.ok) {
-      setRefusal({ reason: removed.reason, for: scenes })
+      refuse(removed.reason)
       return
     }
     replaceScenes(removed.scenes, removed.time)
@@ -732,7 +766,10 @@ export function MemeGenerator({
   // typed into the field never moves the controls to another scene.
   const changeDuration = (index: number, seconds: number) => {
     const next = setSceneDuration(scenes, index, seconds)
-    changeScenes(() => next, `${scenes[index].key}:duration`)
+    changeScenes(
+      (prev) => setSceneDuration(prev, index, seconds),
+      `${scenes[index].key}:duration`,
+    )
     if (playing) return
     const offset = time - sceneStart(scenes, editingIndex)
     const start = sceneStart(next, editingIndex)
@@ -740,13 +777,11 @@ export function MemeGenerator({
     moveTo(start + Math.min(offset, last))
   }
 
+  // A pick from a list is a step of its own, however quickly the next one
+  // follows.
   const changeTransition = (index: number, transition: Transition) =>
-    changeScenes(
-      (prev) =>
-        prev.map((scene, i) =>
-          i === index ? { ...scene, transition } : scene,
-        ),
-      `${scenes[index].key}:transition`,
+    changeScenes((prev) =>
+      prev.map((scene, i) => (i === index ? { ...scene, transition } : scene)),
     )
 
   // Undo and redo put the scenes back; the playhead stays where it is, kept
@@ -754,12 +789,17 @@ export function MemeGenerator({
   const travel = (to: typeof undo) => {
     const next = to(history)
     if (next === history) return
-    setHistory(next)
+    setHistory((prev) => to(prev))
     moveTo(clampTime(next.present, time))
   }
   const rootRef = useRef<HTMLDivElement>(null)
   const onShortcut = useEffectEvent((event: KeyboardEvent) => {
-    if (event.defaultPrevented || !(event.metaKey || event.ctrlKey)) return
+    if (
+      event.defaultPrevented ||
+      event.isComposing ||
+      !(event.metaKey || event.ctrlKey)
+    )
+      return
     const key = event.key.toLowerCase()
     const isUndo = key === 'z' && !event.shiftKey
     const isRedo =
@@ -899,37 +939,22 @@ export function MemeGenerator({
             ))}
           </div>
           <div role="group" aria-label="History" className="flex gap-1">
-            {(
-              [
-                [
-                  'Undo',
-                  undo,
-                  canUndo(history),
-                  ArrowUturnLeftIcon,
-                  'Control+Z Meta+Z',
-                ],
-                [
-                  'Redo',
-                  redo,
-                  canRedo(history),
-                  ArrowUturnRightIcon,
-                  'Control+Shift+Z Meta+Shift+Z Control+Y',
-                ],
-              ] as const
-            ).map(([label, to, enabled, Icon, shortcuts]) => (
-              <button
-                key={label}
-                type="button"
-                onClick={() => travel(to)}
-                disabled={!enabled}
-                aria-keyshortcuts={shortcuts}
-                title={`${label} (${label === 'Undo' ? '⌘Z / Ctrl+Z' : '⇧⌘Z / Ctrl+Y'})`}
-                className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${styles.buttonInactive}`}
-              >
-                <Icon className="size-4" aria-hidden="true" />
-                {label}
-              </button>
-            ))}
+            <HistoryButton
+              label="Undo"
+              icon={ArrowUturnLeftIcon}
+              enabled={canUndo(history)}
+              shortcuts="Control+Z Meta+Z"
+              hint="⌘Z / Ctrl+Z"
+              onClick={() => travel(undo)}
+            />
+            <HistoryButton
+              label="Redo"
+              icon={ArrowUturnRightIcon}
+              enabled={canRedo(history)}
+              shortcuts="Control+Shift+Z Meta+Shift+Z Control+Y"
+              hint="⇧⌘Z / Ctrl+Y"
+              onClick={() => travel(redo)}
+            />
           </div>
         </div>
         {wrapPreview ? wrapPreview(previewNode) : previewNode}

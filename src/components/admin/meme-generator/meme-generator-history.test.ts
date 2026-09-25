@@ -48,6 +48,25 @@ describe('undo and redo', () => {
     expect(record(history, 'a', { now: 0 })).toBe(history)
   })
 
+  it('records nothing for a new value equal to the present', () => {
+    const history = record(
+      startHistory<{ a: number; b: string[]; c?: number }[]>([
+        { a: 1, b: ['x'] },
+      ]),
+      [{ a: 2, b: ['x'] }],
+      {
+        now: 0,
+      },
+    )
+    const undone = undo(history)
+    // Redo is still there after a change that changed nothing.
+    expect(record(undone, [{ a: 1, b: ['x'] }], { now: 1 })).toBe(undone)
+    expect(record(undone, [{ a: 1, b: ['y'] }], { now: 1 })).not.toBe(undone)
+    expect(record(undone, [{ a: 1, b: ['x'], c: 0 }], { now: 1 })).not.toBe(
+      undone,
+    )
+  })
+
   it('keeps the last hundred steps', () => {
     let history = startHistory(0)
     for (let i = 1; i <= HISTORY_LIMIT + 5; i++)

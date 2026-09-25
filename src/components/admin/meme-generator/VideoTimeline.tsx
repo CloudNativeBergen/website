@@ -287,8 +287,10 @@ function SceneItem({
       <button
         type="button"
         data-scene-key={scene.key}
-        onClick={() => {
-          if (swallowClick.current) {
+        onClick={(event) => {
+          // Only a pointer's click ends a drag; Enter or Space (detail 0)
+          // always picks the scene.
+          if (swallowClick.current && event.detail > 0) {
             swallowClick.current = false
             return
           }
@@ -332,7 +334,7 @@ function SceneItem({
         aria-keyshortcuts="Alt+ArrowLeft Alt+ArrowRight"
         aria-roledescription="movable scene"
         title="Drag, or Alt with an arrow key, to move the scene"
-        className={`flex size-full cursor-grab touch-none flex-col items-start justify-center gap-0.5 overflow-hidden rounded-md border-2 px-2 text-left text-xs select-none active:cursor-grabbing ${
+        className={`flex size-full cursor-grab touch-pan-x flex-col items-start justify-center gap-0.5 overflow-hidden rounded-md border-2 px-2 text-left text-xs select-none active:cursor-grabbing ${
           active
             ? 'border-brand-cloud-blue bg-brand-cloud-blue/10 dark:border-blue-400 dark:bg-blue-500/20'
             : 'border-brand-frosted-steel bg-gray-50 hover:border-brand-cloud-blue/50 dark:border-gray-600 dark:bg-gray-700/60'
@@ -373,7 +375,6 @@ function SceneAction({
   label,
   icon: Icon,
   text,
-  disabled,
   refused,
   describedBy,
   onClick,
@@ -382,7 +383,7 @@ function SceneAction({
   icon: React.ElementType
   /** Shown beside the icon; without it the button is the icon alone. */
   text?: string
-  disabled?: boolean
+  /** Dimmed, yet focusable: a press does nothing, or says why. */
   refused?: boolean
   describedBy?: string
   onClick: () => void
@@ -391,12 +392,11 @@ function SceneAction({
     <button
       type="button"
       onClick={onClick}
-      disabled={disabled}
       aria-disabled={refused || undefined}
       aria-label={label}
       aria-describedby={describedBy}
       title={label}
-      className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-40 aria-disabled:cursor-not-allowed aria-disabled:opacity-40 ${styles.buttonInactive}`}
+      className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-sm transition-colors aria-disabled:cursor-not-allowed aria-disabled:opacity-40 ${styles.buttonInactive}`}
     >
       <Icon className="size-4" aria-hidden="true" />
       {text}
@@ -563,13 +563,14 @@ export function VideoTimeline({
           Add scene
         </button>
       </div>
-      {/* Always in the page, so a refusal is announced when it appears. */}
+      {/* Always rendered — never display:none — so a screen reader already
+          knows the region and announces a refusal when it appears. */}
       <p
         id={refusalId}
         role="status"
-        className="mb-3 text-sm text-amber-700 empty:hidden dark:text-amber-400"
+        className="text-sm text-amber-700 dark:text-amber-400"
       >
-        {refusal}
+        {refusal && <span className="mb-3 block">{refusal}</span>}
       </p>
 
       <div className="overflow-x-auto pb-2">
@@ -695,13 +696,13 @@ export function VideoTimeline({
           <SceneAction
             label={`Move scene ${editingIndex + 1} earlier`}
             icon={ArrowLeftIcon}
-            disabled={editingIndex === 0}
+            refused={editingIndex === 0}
             onClick={() => onMoveScene(editingIndex, editingIndex - 1)}
           />
           <SceneAction
             label={`Move scene ${editingIndex + 1} later`}
             icon={ArrowRightIcon}
-            disabled={isLast}
+            refused={isLast}
             onClick={() => onMoveScene(editingIndex, editingIndex + 1)}
           />
           <SceneAction

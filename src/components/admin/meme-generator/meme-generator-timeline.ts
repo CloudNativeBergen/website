@@ -15,8 +15,6 @@ export const NEW_SCENE_DURATION = 3
 export const MIN_SCENE_DURATION = 1
 /** A video is at most a minute, all scenes together. */
 export const MAX_VIDEO_DURATION = 60
-/** A scene can be at most the whole video. */
-export const MAX_SCENE_DURATION = MAX_VIDEO_DURATION
 export const TRANSITION_WINDOW = 0.5
 
 /** A transition that draws both scenes, in its half-second window. */
@@ -76,7 +74,7 @@ export function clampDuration(seconds: number): number {
   if (Number.isNaN(seconds)) return MIN_SCENE_DURATION
   const bounded = Math.min(
     Math.max(seconds, MIN_SCENE_DURATION),
-    MAX_SCENE_DURATION,
+    MAX_VIDEO_DURATION,
   )
   return Math.round(bounded * 10) / 10
 }

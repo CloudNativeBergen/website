@@ -243,7 +243,7 @@ describe('reordering by keyboard', () => {
     // …3 s further is.
     fireEvent.pointerMove(first, { clientX: 180, pointerId: 1 })
     fireEvent.pointerUp(first, { pointerId: 1 })
-    fireEvent.click(first)
+    fireEvent.click(first, { detail: 1 })
     expect(sceneLabels()).toEqual(['Scene 1, 3.0 s', 'Scene 2, 2.0 s'])
     // The playhead stays on the scene it was on, now first; the click that
     // ends a drag is not a seek to the moved scene's start at 3 s.
@@ -314,7 +314,7 @@ describe('undo and redo', () => {
   it('keeps the playhead inside a video that undo shortened', () => {
     scenesOf(2, 3)
     fireEvent.keyDown(playhead(), { key: 'End' })
-    fireEvent.click(undoButton()) // scene 2 back to 3 s: no change here
+    // Scene 2 was typed as the 3 s it already was, which is no step.
     fireEvent.click(undoButton()) // scene 2 gone
     expect(valueOf(playhead())).toBe(2)
     expect(playhead().getAttribute('aria-valuemax')).toBe('2')
@@ -396,5 +396,82 @@ describe('undo and redo', () => {
       expect(design.background.image?.name).toBe('photo.png')
       expect(assets.background).not.toBeNull()
     })
+  })
+
+  it('makes no step of a change that changes nothing, so redo survives it', () => {
+    scenesOf(50, 10)
+    fireEvent.click(undoButton()) // scene 2 back to 3 s
+    expect(redoButton()).toHaveProperty('disabled', false)
+    // Typed as the 3 s it already is: no change.
+    enter('Scene 2 length (s)', '3')
+    expect(redoButton()).toHaveProperty('disabled', false)
+    fireEvent.click(redoButton())
+    expect(valueOf(lengthOf(2))).toBe(10)
+    // At the cap, a longer length clamps back to the same: still no step.
+    enter('Scene 2 length (s)', '99')
+    fireEvent.click(undoButton())
+    expect(valueOf(lengthOf(2))).toBe(3)
+  })
+
+  it('keeps redo when an upload lands for a scene that undo took away', async () => {
+    let decoded = () => {}
+    Object.defineProperty(HTMLImageElement.prototype, 'decode', {
+      configurable: true,
+      value: () => new Promise<void>((resolve) => (decoded = resolve)),
+    })
+    onTestFinished(() => {
+      Reflect.deleteProperty(HTMLImageElement.prototype, 'decode')
+    })
+    openVideo()
+    fireEvent.click(button('Add scene'))
+    fireEvent.click(
+      screen.getAllByRole('button', { name: 'Advanced Options' })[0],
+    )
+    fireEvent.change(screen.getByLabelText(/Upload Background Image/), {
+      target: { files: [new File(['x'], 'late.png', { type: 'image/png' })] },
+    })
+    await waitFor(() => expect(decoded).not.toBe(undefined))
+    fireEvent.click(undoButton()) // scene 2 gone
+    await act(async () => decoded())
+    expect(sceneLabels()).toHaveLength(1)
+    fireEvent.click(redoButton())
+    expect(sceneLabels()).toHaveLength(2)
+  })
+
+  it('drops a refusal once the history moves, and does not bring it back', () => {
+    scenesOf(58)
+    fireEvent.click(button('Add scene'))
+    expect(status().textContent).not.toBe('')
+    fireEvent.click(undoButton())
+    expect(status().textContent).toBe('')
+    fireEvent.click(redoButton())
+    expect(status().textContent).toBe('')
+  })
+})
+
+describe('after a drag', () => {
+  it('still picks the scene by keyboard', () => {
+    scenesOf(2, 3)
+    const first = button('Scene 1, 2.0 s')
+    first.setPointerCapture = () => {}
+    fireEvent.pointerDown(first, { button: 0, clientX: 0, pointerId: 1 })
+    fireEvent.pointerMove(first, { clientX: 20, pointerId: 1 })
+    // Not far enough to move it; and no click follows in this browser.
+    fireEvent.pointerUp(first, { pointerId: 1 })
+    // Enter is a click with detail 0.
+    fireEvent.click(button('Scene 1, 2.0 s'), { detail: 0 })
+    expect(valueOf(playhead())).toBe(0)
+  })
+
+  it('keeps a move button focusable at the end of the line', () => {
+    scenesOf(2, 3)
+    fireEvent.click(button('Scene 1, 2.0 s'))
+    const later = button('Move scene 1 later')
+    fireEvent.click(later)
+    const atEnd = button('Move scene 2 later')
+    expect(atEnd).toHaveProperty('disabled', false)
+    expect(atEnd.getAttribute('aria-disabled')).toBe('true')
+    fireEvent.click(atEnd)
+    expect(sceneLabels()).toEqual(['Scene 1, 3.0 s', 'Scene 2, 2.0 s'])
   })
 })

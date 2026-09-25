@@ -33,7 +33,9 @@ export function record<T>(
   next: T,
   { group, now }: { group?: string; now: number },
 ): History<T> {
-  if (Object.is(next, history.present)) return history
+  // A change that changes nothing — a swatch picked twice, a length clamped
+  // back to what it was — is no step, and leaves redo alone.
+  if (sameValue(next, history.present)) return history
   const folds =
     group !== undefined &&
     group === history.group &&
@@ -47,6 +49,24 @@ export function record<T>(
     group: group ?? null,
     at: now,
   }
+}
+
+/** Deep equality of plain data: the scenes are objects, arrays and primitives. */
+function sameValue(a: unknown, b: unknown): boolean {
+  if (Object.is(a, b)) return true
+  if (typeof a !== 'object' || typeof b !== 'object' || !a || !b) return false
+  if (Array.isArray(a) !== Array.isArray(b)) return false
+  const keysA = Object.keys(a)
+  const keysB = Object.keys(b)
+  if (keysA.length !== keysB.length) return false
+  return keysA.every(
+    (key) =>
+      Object.hasOwn(b, key) &&
+      sameValue(
+        (a as Record<string, unknown>)[key],
+        (b as Record<string, unknown>)[key],
+      ),
+  )
 }
 
 export const canUndo = (history: History<unknown>) => history.past.length > 0
