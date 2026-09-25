@@ -567,7 +567,7 @@ export function VideoTimeline({
       <p
         id={refusalId}
         role="status"
-        className="text-sm text-amber-700 empty:hidden dark:text-amber-400"
+        className="mb-3 text-sm text-amber-700 empty:hidden dark:text-amber-400"
       >
         {refusal}
       </p>

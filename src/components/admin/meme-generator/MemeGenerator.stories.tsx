@@ -1602,6 +1602,11 @@ async function nearTheCap(canvasElement: HTMLElement) {
   await expect(canvas.getByRole('status')).toHaveTextContent(
     'only 2.0 s of the 60 s is left',
   )
+  // Back to the start, so a capture shows the first scenes and their marks;
+  // the reason stays, as the scenes have not changed.
+  canvas.getByRole('slider', { name: 'Playhead' }).focus()
+  await userEvent.keyboard('{Home}')
+  await expect(canvas.getByRole('status')).toHaveTextContent('Shorten a scene')
 }
 
 export const VideoAtTheCap: Story = {
