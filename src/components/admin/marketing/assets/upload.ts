@@ -56,11 +56,18 @@ export function blobAssetUploader(orgId: string): AssetUploader {
       console.error('Marketing asset: upload to Blob failed', error)
       throw new Error(GENERIC_FAILURE)
     }
-    const response = await fetch('/api/admin/marketing-assets', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ url: blob.url, ...details }),
-    })
+    let response: Response
+    try {
+      response = await fetch('/api/admin/marketing-assets', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ url: blob.url, ...details }),
+      })
+    } catch (error) {
+      // "Failed to fetch" / "Load failed" is not for organizers either.
+      console.error('Marketing asset: move request failed', error)
+      throw new Error(GENERIC_FAILURE)
+    }
     const body = (await response.json().catch(() => null)) as {
       _id?: string
       softOnSocial?: boolean

@@ -56,6 +56,13 @@ describe('blobAssetUploader', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
+  it('never shows a network error from the move request either', async () => {
+    fetchMock.mockRejectedValue(new TypeError('Failed to fetch'))
+    await expect(
+      blobAssetUploader('org-A')(file, { title: 'x', alt: 'y' }),
+    ).rejects.toThrow('The image could not be added. Try again.')
+  })
+
   it('names the file by its real type when it has no extension', async () => {
     fetchMock.mockResolvedValue(
       Response.json({ _id: 'a', softOnSocial: false }),

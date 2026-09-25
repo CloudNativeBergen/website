@@ -58,10 +58,12 @@ describe('deleteBlobWithin', () => {
     await expect(
       deleteBlobWithin(
         'https://store123.public.blob.vercel-storage.com/marketing-asset/org-A/1790000000000-a.png',
-        1_500,
+        300,
       ),
     ).rejects.toBeTruthy()
-    expect(Date.now() - started).toBeLessThan(1_900)
+    // The first retry wait is 1–2 s: without the race nothing returns before
+    // ~1 s, so this bound separates the two with room for a slow runner.
+    expect(Date.now() - started).toBeLessThan(900)
     expect(hits).toBeGreaterThan(0)
   })
 })
