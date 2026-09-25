@@ -20,6 +20,9 @@ const TEMPORARY_PREFIXES = ['proposal-', MARKETING_ASSET_BLOB_PREFIX]
  */
 const BLOB_RETENTION_HOURS = 24
 
+/** How many blobs are deleted at the same time. */
+const DELETE_BATCH_SIZE = 25
+
 /** Every blob under `prefix`, following `list()`'s pages (1000 per page). */
 async function listAll(prefix: string) {
   const all: Awaited<ReturnType<typeof list>>['blobs'] = []
@@ -95,9 +98,17 @@ export async function GET(request: NextRequest) {
       })
     }
 
-    const results = await Promise.allSettled(
-      orphanedBlobs.map((blob) => cleanupOrphanedBlob(blob.url)),
-    )
+    // In batches: a backlog of thousands at once would hit Blob's rate limit
+    // and fail most of them.
+    const results: PromiseSettledResult<boolean>[] = []
+    for (let i = 0; i < orphanedBlobs.length; i += DELETE_BATCH_SIZE) {
+      const batch = orphanedBlobs.slice(i, i + DELETE_BATCH_SIZE)
+      results.push(
+        ...(await Promise.allSettled(
+          batch.map((blob) => cleanupOrphanedBlob(blob.url)),
+        )),
+      )
+    }
 
     const successCount = results.filter(
       (r) => r.status === 'fulfilled' && r.value === true,

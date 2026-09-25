@@ -103,6 +103,28 @@ describe('the orphaned blob sweeper', () => {
     expect(body.unlisted).toEqual(['marketing-asset/'])
   })
 
+  it('deletes a large backlog in bounded batches, not all at once', async () => {
+    const backlog = Array.from({ length: 120 }, (_, i) =>
+      blob(`marketing-asset/org-A/1790000000000-old-${i}.png`, 2 * DAY),
+    )
+    h.list.mockImplementation(async ({ prefix }: { prefix: string }) => ({
+      blobs: prefix === 'marketing-asset/' ? backlog : [],
+      hasMore: false,
+    }))
+    let inFlight = 0
+    let most = 0
+    h.cleanup.mockImplementation(async () => {
+      inFlight++
+      most = Math.max(most, inFlight)
+      await new Promise((resolve) => setTimeout(resolve, 1))
+      inFlight--
+      return true
+    })
+    const body = await (await GET(request())).json()
+    expect(body.cleaned).toBe(120)
+    expect(most).toBeLessThanOrEqual(25)
+  })
+
   it('still refuses without the cron secret', async () => {
     const unauthorized = new Request(
       'http://localhost/x',
