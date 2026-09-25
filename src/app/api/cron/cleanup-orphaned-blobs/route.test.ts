@@ -85,6 +85,24 @@ describe('the orphaned blob sweeper', () => {
     expect(h.cleanup.mock.calls).toEqual([[STORE[0].url]])
   })
 
+  it('fails loudly when no prefix can be listed, instead of reporting nothing to clean', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    h.list.mockRejectedValue(new Error('blob list down'))
+    const response = await GET(request())
+    expect(response.status).toBe(500)
+    expect(h.cleanup).not.toHaveBeenCalled()
+  })
+
+  it('names a prefix it could not list, while still sweeping the others', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    h.list.mockImplementation(async ({ prefix }: { prefix: string }) => {
+      if (prefix === 'marketing-asset/') throw new Error('blob list down')
+      return { blobs: [], hasMore: false }
+    })
+    const body = await (await GET(request())).json()
+    expect(body.unlisted).toEqual(['marketing-asset/'])
+  })
+
   it('still refuses without the cron secret', async () => {
     const unauthorized = new Request(
       'http://localhost/x',

@@ -64,6 +64,16 @@ export async function GET(request: NextRequest) {
           result.reason,
         )
     })
+    const unlisted = TEMPORARY_PREFIXES.filter(
+      (_, i) => listed[i].status === 'rejected',
+    )
+    // Nothing could be looked at: that is a failure, not "nothing to clean".
+    if (unlisted.length === TEMPORARY_PREFIXES.length) {
+      return NextResponse.json(
+        { error: 'Could not list temporary blobs', unlisted },
+        { status: 500 },
+      )
+    }
     const blobs = listed.flatMap((result) =>
       result.status === 'fulfilled' ? result.value : [],
     )
@@ -81,6 +91,7 @@ export async function GET(request: NextRequest) {
         success: true,
         message: 'No orphaned blobs found',
         cleaned: 0,
+        unlisted,
       })
     }
 
@@ -106,6 +117,7 @@ export async function GET(request: NextRequest) {
       cleaned: successCount,
       failed: failureCount,
       total: orphanedBlobs.length,
+      unlisted,
     })
   } catch (error) {
     console.error('Error in cleanup orphaned blobs cron job:', error)
