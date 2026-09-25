@@ -65,6 +65,7 @@ import {
 } from './meme-generator-draw'
 import { pickQrStyle, qrStyleKey, renderQrImage } from './meme-generator-qr'
 import {
+  FPS,
   FRAME,
   addScene,
   clampTime,
@@ -675,7 +676,9 @@ export function MemeGenerator({
     }
     // Play from the start again once the end has been reached — or its last
     // frame, where an edit at the end leaves the playhead.
-    seek(time >= total - FRAME ? 0 : time)
+    // Counted in whole frames: the playhead's sum and the total's can differ
+    // in the last bit, so "a frame short" is not a subtraction.
+    seek(Math.round(time * FPS) >= Math.round(total * FPS) - 1 ? 0 : time)
     setPlaybackEditingKey(editingKey)
     setPlaying(true)
   }
@@ -766,7 +769,13 @@ export function MemeGenerator({
       refuse('delete', removed.reason)
       return
     }
-    replaceScenes(removed.scenes, removed.time)
+    // During playback the controls move to the scene that took the deleted
+    // one's place, and stay on it.
+    replaceScenes(
+      removed.scenes,
+      removed.time,
+      removed.scenes[sceneIndexAt(removed.scenes, removed.time)].key,
+    )
   }
 
   const move = (from: number, to: number) => {
@@ -802,7 +811,12 @@ export function MemeGenerator({
     const next = to(history)
     if (next === history) return
     setHistory((prev) => to(prev))
-    moveTo(clampTime(next.present, time))
+    const at = clampTime(next.present, time)
+    moveTo(at)
+    // During playback the controls stay on their scene; if undo took it
+    // away, they settle on the scene under the playhead and stay there.
+    if (!next.present.some((scene) => scene.key === playbackEditingKey))
+      setPlaybackEditingKey(next.present[sceneIndexAt(next.present, at)].key)
   }
   const rootRef = useRef<HTMLDivElement>(null)
   const onShortcut = useEffectEvent((event: KeyboardEvent) => {

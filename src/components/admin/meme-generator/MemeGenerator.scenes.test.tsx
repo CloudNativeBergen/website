@@ -513,6 +513,44 @@ describe('playing again from the end', () => {
   })
 })
 
+describe('playing again from the end, in whole frames', () => {
+  it('starts from the top where floating point puts the playhead a hair under the last frame', () => {
+    // [1, 1.7]: the last frame is 2.6666666666666665 by the playhead's sum
+    // and 2.666666666666667 by the total's.
+    scenesOf(1, 3)
+    fireEvent.keyDown(playhead(), { key: 'End' })
+    enter('Scene 2 length (s)', '1.7')
+    expect(valueOf(playhead())).toBeCloseTo(2.7 - 1 / 30)
+    fireEvent.click(button('Play'))
+    expect(valueOf(playhead())).toBe(0)
+  })
+})
+
+describe('deleting during playback', () => {
+  it('moves the controls to the scene that took the deleted one’s place, and keeps them there', () => {
+    scenesOf(2, 3, 4, 5)
+    fireEvent.click(button('Scene 2, 3.0 s')) // playhead at 2
+    fireEvent.click(button('Play'))
+    fireEvent.click(button('Delete scene 2'))
+    expect(screen.getByLabelText('Scene 2 length (s)')).toHaveValue('4.0')
+    // The playhead moves on; the controls stay on that scene while playing.
+    fireEvent.keyDown(playhead(), { key: 'End' })
+    expect(screen.getByLabelText('Scene 2 length (s)')).toHaveValue('4.0')
+  })
+})
+
+describe('undoing during playback', () => {
+  it('keeps the controls on one scene when the one they were on is undone away', () => {
+    scenesOf(2, 3)
+    fireEvent.click(button('Play'))
+    fireEvent.click(button('Add scene')) // the controls go to scene 3
+    fireEvent.click(button('Undo')) // …which is gone again
+    expect(screen.getByLabelText('Scene 2 length (s)')).toBeTruthy()
+    fireEvent.keyDown(playhead(), { key: 'Home' })
+    expect(screen.getByLabelText('Scene 2 length (s)')).toBeTruthy()
+  })
+})
+
 describe('after a drag', () => {
   it('still picks the scene by keyboard', () => {
     scenesOf(2, 3)
