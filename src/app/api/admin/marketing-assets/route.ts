@@ -68,6 +68,22 @@ const AUDIO_REFUSALS: Refusals = {
   upload: { status: 502, error: 'The track could not be stored. Try again.' },
 }
 
+/** What differs between the two kinds once the move has been chosen. */
+const KINDS = {
+  image: {
+    missing: 'An image, a title and alt text are required.',
+    refusals: REFUSALS,
+    notAdded: 'The image could not be added. Try again.',
+    deleteIfOrphaned: deleteImageAssetIfOrphaned,
+  },
+  audio: {
+    missing: 'A track and a title are required.',
+    refusals: AUDIO_REFUSALS,
+    notAdded: 'The track could not be added. Try again.',
+    deleteIfOrphaned: deleteFileAssetIfOrphaned,
+  },
+} as const
+
 /**
  * Add an uploaded image or audio track to the organization's marketing asset
  * gallery (docs/MARKETING_ASSETS_SPEC.md §4.1,
@@ -99,9 +115,7 @@ export async function POST(request: Request) {
   const parsedUrl = UrlSchema.safeParse(body)
   const parsed = marketingAssetDetailsSchema.safeParse(body)
   const audio = parsedUrl.success && parsedUrl.data.kind === 'audio'
-  const missing = audio
-    ? 'A track and a title are required.'
-    : 'An image, a title and alt text are required.'
+  const kind = KINDS[audio ? 'audio' : 'image']
   if (!parsedUrl.success || !parsed.success) {
     // Title and alt text are what an organizer can fix in the form; any
     // other failing field (subject, tags, edition) gets its own message.
@@ -113,13 +127,13 @@ export async function POST(request: Request) {
         error:
           parsedUrl.success && otherFieldFailed
             ? 'Those details cannot be saved. Check the subject and tags.'
-            : missing,
+            : kind.missing,
       },
       { status: 400 },
     )
   }
   if (!audio && !parsed.data.alt) {
-    return NextResponse.json({ error: missing }, { status: 400 })
+    return NextResponse.json({ error: kind.missing }, { status: 400 })
   }
   if (audio && parsedUrl.data.rightsConfirmed !== true) {
     return NextResponse.json(
@@ -152,7 +166,7 @@ export async function POST(request: Request) {
     ? await moveAudioBlobToSanity(url, orgId)
     : await moveBlobToSanity(url, orgId)
   if (!moved.ok) {
-    const refusal = (audio ? AUDIO_REFUSALS : REFUSALS)[moved.reason]
+    const refusal = kind.refusals[moved.reason]
     return NextResponse.json(
       { error: refusal.error },
       { status: refusal.status },
@@ -198,21 +212,11 @@ export async function POST(request: Request) {
     // not yet referenced: never ours to delete. A created one goes only if
     // still unreferenced, so an entry that did land after all keeps it.
     const assetId = moved.asset._id
-    const deleteIfOrphaned = audio
-      ? deleteFileAssetIfOrphaned
-      : deleteImageAssetIfOrphaned
     if (moved.asset.created)
       after(async () => {
-        await deleteIfOrphaned(assetId)
+        await kind.deleteIfOrphaned(assetId)
       })
-    return NextResponse.json(
-      {
-        error: audio
-          ? 'The track could not be added. Try again.'
-          : 'The image could not be added. Try again.',
-      },
-      { status: 500 },
-    )
+    return NextResponse.json({ error: kind.notAdded }, { status: 500 })
   } finally {
     writeDeadline.clear()
   }
