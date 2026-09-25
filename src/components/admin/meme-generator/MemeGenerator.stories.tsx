@@ -16,6 +16,7 @@ import {
 import type { EncoderBackend } from './meme-generator-export'
 import type { BackgroundGallery } from './meme-generator-gallery'
 import { http, HttpResponse } from 'msw'
+import { ThemeProvider } from 'next-themes'
 
 const meta = {
   title: 'Systems/Marketing/Admin/MemeGenerator',
@@ -2188,6 +2189,19 @@ export const BackgroundFromGalleryDark: Story = {
 /** The picker, open, for the screenshot. */
 export const GalleryPickerOpen: Story = {
   args: { gallery: storyGallery },
+  // The dialog is portalled out of the global decorator's `dark` wrapper and
+  // takes its theme from next-themes, as in the app.
+  decorators: [
+    (Story, ctx) => (
+      <ThemeProvider
+        attribute="class"
+        forcedTheme={ctx.globals.theme === 'dark' ? 'dark' : 'light'}
+        enableSystem={false}
+      >
+        <Story />
+      </ThemeProvider>
+    ),
+  ],
   parameters: { msw: { handlers: [proxyImage] } },
   play: async ({ canvasElement }) => {
     await userEvent.click(

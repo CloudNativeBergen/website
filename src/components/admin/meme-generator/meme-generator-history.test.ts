@@ -5,6 +5,7 @@ import {
   allStates,
   canRedo,
   canUndo,
+  mapStates,
   record,
   redo,
   startHistory,
@@ -143,5 +144,18 @@ describe('a continuous change is one step', () => {
     expect(history.past).toEqual([0])
     expect(undo(history).present).toBe(0)
     expect(redo(undo(history)).present).toBe(5)
+  })
+})
+
+describe('rewriting every state', () => {
+  it('changes past, present and future alike, and makes no step', () => {
+    let history = record(startHistory('a'), 'b', { now: 0 })
+    history = record(history, 'c', { now: 5000 })
+    history = undo(history) // past [a], present b, future [c]
+    const upper = mapStates(history, (s) => s.toUpperCase())
+    expect(allStates(upper)).toEqual(['A', 'B', 'C'])
+    expect(canUndo(upper)).toBe(true)
+    expect(redo(upper).present).toBe('C')
+    expect(undo(upper).present).toBe('A')
   })
 })

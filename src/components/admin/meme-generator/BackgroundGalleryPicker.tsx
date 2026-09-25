@@ -87,8 +87,8 @@ export function BackgroundGalleryPicker({
                   }}
                   className="group block w-full overflow-hidden rounded-lg border border-gray-200 text-left hover:border-brand-cloud-blue focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue dark:border-gray-700 dark:hover:border-blue-400"
                 >
-                  <span className="block aspect-square bg-gray-100 dark:bg-gray-800">
-                    {image.thumbnailUrl && (
+                  <span className="flex aspect-square items-center justify-center bg-gray-100 dark:bg-gray-800">
+                    {image.thumbnailUrl ? (
                       // A plain <img>: shown only, never drawn on the canvas.
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
@@ -96,6 +96,11 @@ export function BackgroundGalleryPicker({
                         alt={image.alt}
                         loading="lazy"
                         className="size-full object-cover"
+                      />
+                    ) : (
+                      <PhotoIcon
+                        className="size-10 text-gray-400 dark:text-gray-500"
+                        aria-hidden="true"
                       />
                     )}
                   </span>
