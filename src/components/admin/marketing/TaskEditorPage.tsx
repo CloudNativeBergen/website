@@ -559,7 +559,7 @@ function PublishingSection({
   dirty: boolean
   setDirty: (dirty: boolean) => void
 } & Handlers) {
-  const { task, campaign, variant, pages, baseUrl } = data
+  const { task, campaign, variant, pages, baseUrl, tagByHand } = data
   const [targetPage, setTargetPage] = useState(task.targetPage ?? '')
   // A path the picker does not list is a custom one; the choice sticks
   // even while the typed path happens to equal a listed page.
@@ -672,6 +672,7 @@ function PublishingSection({
           postAttachments={variant.post.attachments}
           conferenceDomains={variant.conferenceDomains}
           platformZone={variant.platformZone ?? null}
+          tagByHand={tagByHand}
           saving={markPosted.isPending}
           error={manualError}
           onMarkPosted={(url) => {

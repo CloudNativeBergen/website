@@ -129,9 +129,11 @@ function variant(
 function fixture(
   task: Partial<TaskEditorTask> = {},
   v: SocialVariantEditorData | null = variant(),
+  tagByHand: TaskEditorData['tagByHand'] = [],
 ): TaskEditorData {
   const t = editorTask(task)
   return {
+    tagByHand,
     task: t,
     campaign: { _id: 'camp-cfp', key: 'cfp', title: 'CFP' },
     planOwnerId: 'sp-1',
@@ -352,6 +354,60 @@ export const ManualAwaitingPost: Story = {
         ),
       ),
     },
+  },
+}
+
+/**
+ * The same, for a Task about a speaker with a LinkedIn profile (#1155): the
+ * server's "Tag by hand" list reaches the copy-ready view.
+ */
+export const ManualAwaitingPostTagByHand: Story = {
+  parameters: {
+    msw: {
+      handlers: handlers(
+        fixture(
+          {
+            key: 'speakerCard:sp-9:linkedin',
+            channel: 'linkedin',
+            status: 'awaiting-manual',
+            approvedAt: '2026-09-14T09:12:00.000Z',
+            approvedByName: 'Bob Builder',
+            date: '2027-01-10T07:00:00.000Z',
+            subject: {
+              _id: 'sp-9',
+              type: 'speaker',
+              name: 'Ada Lovelace',
+              slug: 'ada-lovelace',
+            },
+          },
+          variant({
+            platform: 'linkedin',
+            status: 'awaiting-manual',
+            scheduledAt: '2027-01-10T07:00:00.000Z',
+            body: 'Meet Ada Lovelace, speaking at Cloud Native Bergen 2027.',
+            link: `${BASE_URL}/speaker/ada-lovelace?utm_source=linkedin&utm_medium=social&utm_campaign=cfp&utm_content=speakerCard%3Asp-9%3Alinkedin`,
+          }),
+          [
+            {
+              name: 'Ada Lovelace',
+              url: 'https://www.linkedin.com/in/ada-lovelace',
+              kind: 'person',
+            },
+          ],
+        ),
+      ),
+    },
+  },
+  play: async ({ canvas }) => {
+    const heading = await canvas.findByRole(
+      'heading',
+      { name: /tag by hand/i },
+      { timeout: 5000 },
+    )
+    const section = heading.closest('section')!
+    await expect(
+      within(section).getByRole('link', { name: /ada lovelace/i }),
+    ).toHaveAttribute('href', 'https://www.linkedin.com/in/ada-lovelace')
   },
 }
 

@@ -10,6 +10,7 @@ import {
   ClipboardDocumentIcon,
 } from '@heroicons/react/24/outline'
 import { AdminButton } from '@/components/admin/AdminButton'
+import type { TagByHandEntry } from '@/lib/marketing/tag-by-hand'
 import { richTextImageUrl } from '@/lib/homepage/richTextImage'
 import {
   countLength,
@@ -42,6 +43,12 @@ export interface ManualPostViewProps {
   conferenceDomains?: readonly string[]
   /** The platform zone as the server resolved it; see `PublishContext`. */
   platformZone?: string | null
+  /**
+   * Who the post is about, to tag by hand in the platform's composer
+   * (tagging spec §5.1). The server builds it for a LinkedIn Task only and
+   * has already left opted-out speakers out; empty or absent shows nothing.
+   */
+  tagByHand?: readonly TagByHandEntry[]
 }
 
 const defaultImageSrc = (asset: SocialPostAttachment) =>
@@ -63,6 +70,7 @@ export function ManualPostView({
   imageSrc = defaultImageSrc,
   conferenceDomains = [],
   platformZone = null,
+  tagByHand = [],
 }: ManualPostViewProps) {
   const platform = SOCIAL_PLATFORM_LABELS[variant.platform]
   const constraints = getPlatformConstraints(variant.platform)
@@ -250,6 +258,35 @@ export function ManualPostView({
           )}
         </p>
       </Section>
+
+      {tagByHand.length > 0 && (
+        <Section
+          title="Tag by hand"
+          hint={`Type @ and the name in ${platform}'s composer, then pick them from the list. Pasting @Name does not tag.`}
+        >
+          <ul className="divide-y divide-gray-100 dark:divide-gray-800">
+            {tagByHand.map((entry) => (
+              <li
+                key={entry.url}
+                className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 py-2 first:pt-0 last:pb-0"
+              >
+                <a
+                  href={entry.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex min-w-0 items-center gap-1 text-sm font-medium break-words text-gray-900 hover:text-brand-cloud-blue hover:underline dark:text-gray-100"
+                >
+                  {entry.name}
+                  <ArrowTopRightOnSquareIcon className="size-3.5 shrink-0 text-gray-400" />
+                </a>
+                <span className="text-xs text-gray-500 dark:text-gray-400">
+                  {entry.kind === 'company' ? 'Company page' : 'Profile'}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </Section>
+      )}
 
       {link && (
         <Section

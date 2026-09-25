@@ -236,6 +236,7 @@ function stored(
     planOwnerId: 'sp-1',
     siblings,
     variant: null,
+    tagByHand: [],
   }
 }
 

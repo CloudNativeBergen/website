@@ -33,6 +33,7 @@ import type {
 } from './types'
 import type { TaskSubjectRef } from './pages'
 import { expireShortLinkIndex } from './short-link-cache'
+import { tagByHandEntries, type RawTagByHandSubject } from './tag-by-hand'
 
 /**
  * Sanity persistence for the Marketing Plan. Seeding writes everything in ONE
@@ -456,6 +457,7 @@ interface RawTaskEditor extends RawTaskView {
   campaign: { _id: string; key: string | null; title: string | null } | null
   planOwnerId: string | null
   siblings: RawTaskView[] | null
+  tagByHand: RawTagByHandSubject | null
 }
 
 const SUBJECT_TYPES: Record<string, TaskSubjectRef['type']> = {
@@ -488,6 +490,13 @@ export async function getTaskEditorData(
       "assetUrl": asset.asset->url,
       "assetId": asset.asset._ref,
       "subject": subject->{ _id, _type, "name": coalesce(name, title), "slug": slug.current },
+      "tagByHand": select(kind == "publishing" && channel == "linkedin" => subject->{
+        "people": select(
+          _type == "speaker" && socialTagOptOut != true => [{ name, links }],
+          _type == "talk" => speakers[@->socialTagOptOut != true]->{ name, links }
+        ),
+        "company": select(_type == "sponsor" => { name, "url": linkedinUrl })
+      }),
       "campaign": select(campaign->conference._ref == conference._ref => campaign->{ _id, key, title }),
       "planOwnerId": plan->owner._ref,
       "siblings": *[_type == "marketingTask" && conference._ref == $conferenceId && campaign._ref == ^.campaign._ref && _id != ^._id && !(_id in path("drafts.**")) && !(_id in path("versions.**"))]{${TASK_VIEW_FIELDS}
@@ -533,6 +542,7 @@ export async function getTaskEditorData(
     planOwnerId: row.planOwnerId ?? null,
     siblings: toTaskViews(row.siblings),
     variant: null,
+    tagByHand: tagByHandEntries(row.tagByHand),
   }
 }
 

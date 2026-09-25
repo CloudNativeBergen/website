@@ -327,6 +327,125 @@ describe('getTaskEditorData', () => {
   })
 })
 
+describe('getTaskEditorData — the LinkedIn "Tag by hand" list (#1155)', () => {
+  const task = () => h.dataset.find((doc) => doc._id === 'task-li')!
+  const speaker = (id: string) => h.dataset.find((doc) => doc._id === id)!
+
+  beforeEach(() => {
+    Object.assign(speaker('sp-1'), {
+      links: [
+        'https://github.com/ada',
+        'https://www.linkedin.com/in/ada-l/?locale=en_US',
+      ],
+    })
+    Object.assign(speaker('sp-2'), {
+      links: ['https://linkedin.com/in/bob-b/'],
+    })
+    h.dataset.push(
+      {
+        _id: 'sp-3',
+        _type: 'speaker',
+        name: 'Cy',
+        links: ['https://bsky.app/profile/cy.dev'],
+      },
+      {
+        _id: 'talk-1',
+        _type: 'talk',
+        title: 'Kubernetes at scale',
+        speakers: [
+          { _key: 'a', ...r('sp-1') },
+          { _key: 'b', ...r('sp-2') },
+          { _key: 'c', ...r('sp-3') },
+        ],
+      },
+      {
+        _id: 'sponsor-1',
+        _type: 'sponsor',
+        name: 'Acme',
+        linkedinUrl: 'https://www.linkedin.com/company/acme/?viewAsMember=true',
+      },
+    )
+  })
+
+  it('lists a speaker subject beside their clean LinkedIn profile', async () => {
+    const data = await getTaskEditorData('task-li', CONF_A)
+    expect(data!.tagByHand).toEqual([
+      {
+        name: 'Ada',
+        url: 'https://www.linkedin.com/in/ada-l',
+        kind: 'person',
+      },
+    ])
+  })
+
+  it('leaves out an opted-out speaker', async () => {
+    speaker('sp-1').socialTagOptOut = true
+    expect((await getTaskEditorData('task-li', CONF_A))!.tagByHand).toEqual([])
+    // The control: the same speaker, only the stored opt-out differs.
+    speaker('sp-1').socialTagOptOut = false
+    expect(
+      (await getTaskEditorData('task-li', CONF_A))!.tagByHand.map(
+        (e) => e.name,
+      ),
+    ).toEqual(['Ada'])
+  })
+
+  it('lists every speaker of a talk with a profile, minus the opted-out', async () => {
+    task().subject = r('talk-1')
+    expect((await getTaskEditorData('task-li', CONF_A))!.tagByHand).toEqual([
+      { name: 'Ada', url: 'https://www.linkedin.com/in/ada-l', kind: 'person' },
+      { name: 'Bob', url: 'https://www.linkedin.com/in/bob-b', kind: 'person' },
+    ])
+    speaker('sp-2').socialTagOptOut = true
+    expect(
+      (await getTaskEditorData('task-li', CONF_A))!.tagByHand.map(
+        (e) => e.name,
+      ),
+    ).toEqual(['Ada'])
+  })
+
+  it('lists a sponsor subject beside its clean company page', async () => {
+    task().subject = r('sponsor-1')
+    expect((await getTaskEditorData('task-li', CONF_A))!.tagByHand).toEqual([
+      {
+        name: 'Acme',
+        url: 'https://www.linkedin.com/company/acme',
+        kind: 'company',
+      },
+    ])
+  })
+
+  it('lists nobody when the subject has no LinkedIn link', async () => {
+    task().subject = r('sp-3')
+    expect((await getTaskEditorData('task-li', CONF_A))!.tagByHand).toEqual([])
+    delete task().subject
+    expect((await getTaskEditorData('task-li', CONF_A))!.tagByHand).toEqual([])
+  })
+
+  it('lists nobody for a Task that does not post on LinkedIn', async () => {
+    Object.assign(task(), { channel: 'bluesky' })
+    expect((await getTaskEditorData('task-li', CONF_A))!.tagByHand).toEqual([])
+    // A Task that is not a post, even one carrying a stray LinkedIn channel.
+    Object.assign(task(), {
+      channel: 'linkedin',
+      kind: 'speakerOutreach',
+      status: 'open',
+    })
+    expect((await getTaskEditorData('task-li', CONF_A))!.tagByHand).toEqual([])
+  })
+
+  it('never sends the subject’s links or opt-out to the client', async () => {
+    speaker('sp-1').socialTagOptOut = true
+    const data = await getTaskEditorData('task-li', CONF_A)
+    expect(data!.task.subject).toEqual({
+      _id: 'sp-1',
+      type: 'speaker',
+      name: 'Ada',
+      slug: 'ada',
+    })
+  })
+})
+
 describe('getTaskLinkInputs', () => {
   it('returns what the tagged link is derived from', async () => {
     expect(await getTaskLinkInputs('task-li', CONF_A)).toEqual({
