@@ -84,6 +84,8 @@ vi.mock('@/lib/sanity/client', () => ({
   },
   clientWrite: {
     transaction: () => transactionMock(),
+    // The erasure transaction is sent at the release-aware API version (#1162).
+    withConfig: () => ({ transaction: () => transactionMock() }),
     delete: (...args: unknown[]) => clientDeleteMock(...args),
   },
 }))

@@ -4,20 +4,27 @@
  * Speaker erasure removes their images everywhere we hold them (#1162,
  * `docs/MARKETING_ASSETS_SPEC.md` §6) — asserted on the STORED DOCUMENTS.
  *
- * NOTHING IS MOCKED BETWEEN THE ERASURE AND THE DATASET. Reads run `groq-js`
- * over an in-memory dataset; the transaction is a REAL `@sanity/client`
- * transaction whose serialized mutations are applied by Sanity's own
- * `@sanity/mutator`. Two things the mutator does not do are modelled here, and
- * only these two: it ignores `ifRevisionID` (checked below, whole transaction
- * refused), and it applies a `delete` to whatever document it is handed (each
- * mutation is routed to its own id below). A document delete — and the direct
- * asset delete — is refused while a STRONG reference to it remains, which is
- * Sanity's rule and the reason the file delete must come after the unsets.
+ * Reads run `groq-js` over an in-memory dataset; the transaction is a REAL
+ * `@sanity/client` transaction whose serialized mutations are applied by
+ * Sanity's own `@sanity/mutator`. What the harness MODELS rather than runs,
+ * each one stated so it is not mistaken for evidence:
  *
- * `raw` perspective is implied: the dataset holds drafts and release versions
- * and every read sees all of them. That is what the erasure's asset reads ask
- * for; the older reads in `./erasure.ts` (API 2023-05-03) would not see a
- * `versions.**` document in production, which no assertion here relies on.
+ *  - VISIBILITY by API version and perspective. `versions.**` documents are
+ *    visible only to a `raw` read at 2025-02-19 or later (Sanity's documented
+ *    rule); at that version a read with no perspective sees published
+ *    documents only; below it, the default sees drafts but no versions. So a
+ *    read that drops `withConfig` or `perspective: 'raw'` stops seeing a
+ *    release copy, and a test fails.
+ *  - A MUTATION of a `versions.**` document is refused below API 2025-02-19.
+ *    That is an ASSUMPTION, not verified against Sanity (production holds no
+ *    release): it pins that the transaction is sent at the newer version,
+ *    which is the safe side if the assumption is wrong.
+ *  - `ifRevisionID`, which the mutator ignores: checked, whole transaction
+ *    refused. A `delete`, which the mutator applies to any document it is
+ *    handed: each mutation is routed to its own id.
+ *  - A document delete — and the direct asset delete — is refused while a
+ *    STRONG reference to it remains, Sanity's rule and the reason the file
+ *    delete must come after the unsets.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -63,9 +70,37 @@ vi.mock('@/lib/sanity/client', async () => {
     useCdn: false,
   })
 
-  const fetch = async (query: string, params: Record<string, unknown> = {}) =>
-    (await evaluate(parse(query), { dataset: h.dataset, params })).get()
-  const reader = { fetch, withConfig: () => ({ fetch }) }
+  const OLD = '2023-05-03' // the clients' own apiVersion
+  const knowsReleases = (apiVersion: string) => apiVersion >= '2025-02-19'
+  const isVersion = (id: string) => id.startsWith('versions.')
+
+  const visible = (apiVersion: string, perspective: unknown) =>
+    h.dataset.filter((d) => {
+      if (knowsReleases(apiVersion)) {
+        if (perspective === 'raw') return true
+        return !isVersion(d._id) && !d._id.startsWith('drafts.')
+      }
+      return !isVersion(d._id)
+    })
+  const fetchAt =
+    (apiVersion: string) =>
+    async (
+      query: string,
+      params: Record<string, unknown> = {},
+      opts: { perspective?: unknown } = {},
+    ) =>
+      (
+        await evaluate(parse(query), {
+          dataset: visible(apiVersion, opts.perspective),
+          params,
+        })
+      ).get()
+  const reader = {
+    fetch: fetchAt(OLD),
+    withConfig: (c: { apiVersion: string }) => ({
+      fetch: fetchAt(c.apiVersion),
+    }),
+  }
 
   type Mut =
     | { patch: { id: string; ifRevisionID?: string } }
@@ -75,36 +110,11 @@ vi.mock('@/lib/sanity/client', async () => {
     clientReadUncached: reader,
     clientReadCached: reader,
     clientWrite: {
-      fetch,
-      transaction: () => {
-        const tx = client.transaction()
-        tx.commit = (async () => {
-          const next = structuredClone(h.dataset)
-          const rev = `rev-${++h.revCounter}`
-          for (const m of tx.serialize() as Mut[]) {
-            if ('delete' in m) {
-              const i = next.findIndex((d) => d._id === m.delete.id)
-              if (i !== -1) next.splice(i, 1)
-              continue
-            }
-            const i = next.findIndex((d) => d._id === m.patch.id)
-            if (i === -1) throw new Error(`no such document: ${m.patch.id}`)
-            if (m.patch.ifRevisionID && next[i]._rev !== m.patch.ifRevisionID) {
-              throw new Error(`409: ${m.patch.id} revision mismatch`)
-            }
-            const patched = new Mutation({ mutations: [m] }).apply(next[i])
-            next[i] = { ...(patched as (typeof next)[number]), _rev: rev }
-          }
-          for (const m of tx.serialize() as Mut[]) {
-            if ('delete' in m && stronglyReferenced(next, m.delete.id)) {
-              throw new Error(`409: ${m.delete.id} is still referenced`)
-            }
-          }
-          h.dataset = next
-          return { transactionId: rev }
-        }) as typeof tx.commit
-        return tx
-      },
+      fetch: fetchAt(OLD),
+      withConfig: (c: { apiVersion: string }) => ({
+        transaction: () => transactionAt(c.apiVersion),
+      }),
+      transaction: () => transactionAt(OLD),
       delete: async (id: string) => {
         if (h.failFileDelete.has(id)) throw new Error('503: try again')
         if (stronglyReferenced(h.dataset, id)) {
@@ -114,6 +124,42 @@ vi.mock('@/lib/sanity/client', async () => {
         return {}
       },
     },
+  }
+
+  function transactionAt(apiVersion: string) {
+    const tx = client.transaction()
+    tx.commit = (async () => {
+      const next = structuredClone(h.dataset)
+      const rev = `rev-${++h.revCounter}`
+      for (const m of tx.serialize() as Mut[]) {
+        const id = 'delete' in m ? m.delete.id : m.patch.id
+        if (isVersion(id) && !knowsReleases(apiVersion)) {
+          throw new Error(`400: ${id} needs API 2025-02-19 (modelled)`)
+        }
+      }
+      for (const m of tx.serialize() as Mut[]) {
+        if ('delete' in m) {
+          const i = next.findIndex((d) => d._id === m.delete.id)
+          if (i !== -1) next.splice(i, 1)
+          continue
+        }
+        const i = next.findIndex((d) => d._id === m.patch.id)
+        if (i === -1) throw new Error(`no such document: ${m.patch.id}`)
+        if (m.patch.ifRevisionID && next[i]._rev !== m.patch.ifRevisionID) {
+          throw new Error(`409: ${m.patch.id} revision mismatch`)
+        }
+        const patched = new Mutation({ mutations: [m] }).apply(next[i])
+        next[i] = { ...(patched as (typeof next)[number]), _rev: rev }
+      }
+      for (const m of tx.serialize() as Mut[]) {
+        if ('delete' in m && stronglyReferenced(next, m.delete.id)) {
+          throw new Error(`409: ${m.delete.id} is still referenced`)
+        }
+      }
+      h.dataset = next
+      return { transactionId: rev }
+    }) as typeof tx.commit
+    return tx
   }
 })
 
@@ -142,8 +188,17 @@ const weak = (id: string) => ref(id, { _weak: true })
 const image = (id: string) => ({ _type: 'image', asset: ref(id) })
 
 const doc = (id: string) => h.dataset.find((d) => d._id === id) as Doc
-const referencesTo = (id: string) =>
-  h.dataset.filter((d) => d._id !== id && JSON.stringify(d).includes(`"${id}"`))
+/** Documents holding a reference (`_ref`) to `id` — what Sanity counts. */
+const referencesTo = (id: string) => {
+  const holds = (value: unknown): boolean =>
+    Array.isArray(value)
+      ? value.some(holds)
+      : typeof value === 'object' &&
+        value !== null &&
+        ((value as { _ref?: unknown })._ref === id ||
+          Object.values(value).some(holds))
+  return h.dataset.filter((d) => d._id !== id && holds(d))
+}
 
 function galleryAsset(id: string, subject: string, file: string): Doc {
   return {
@@ -370,6 +425,43 @@ describe('speaker erasure removes their images everywhere (#1162)', () => {
     expect(
       (await verifySpeakerErasure(ADA, [], [RENDER]))?.residual.linkedFiles,
     ).toBe(1)
+  })
+
+  it('records the files on the speaker, so a re-run retries one a failed delete left, and a bare verify sees it', async () => {
+    h.failFileDelete.add(RENDER)
+    await eraseSpeakerInPlace({ speakerId: ADA, actor: 'test' })
+    expect(doc(ADA).erasedFileIds).toEqual(expect.arrayContaining(LINKED))
+
+    // Nothing links the render any more; only the record on the speaker does.
+    const bare = await verifySpeakerErasure(ADA)
+    expect(bare?.clean).toBe(false)
+    expect(bare?.residual.linkedFiles).toBe(1)
+
+    h.failFileDelete.clear()
+    const retry = await eraseSpeakerInPlace({ speakerId: ADA, actor: 'test' })
+    expect(retry.plan?.noop).toBe(false)
+    expect(retry.linkedFiles).toEqual([
+      { id: RENDER, deleted: true, error: null },
+    ])
+    expect(doc(RENDER)).toBeUndefined()
+    expect(retry.verification?.clean).toBe(true)
+
+    // And then the fixed point.
+    const third = await eraseSpeakerInPlace({ speakerId: ADA, actor: 'test' })
+    expect(third.plan?.noop).toBe(true)
+  })
+
+  it('finds an asset about a talk that exists only in a release', async () => {
+    h.dataset.push(
+      {
+        _id: 'versions.rlaunch.talk-new',
+        _type: 'talk',
+        speakers: [ref(ADA)],
+      },
+      galleryAsset('asset-new-talk', 'talk-new', BOB_CARD),
+    )
+    await eraseSpeakerInPlace({ speakerId: ADA, actor: 'test' })
+    expect(doc('asset-new-talk')).toBeUndefined()
   })
 
   it('verification FAILS while a gallery entry about the speaker remains', async () => {

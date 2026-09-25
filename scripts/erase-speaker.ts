@@ -105,8 +105,8 @@ async function main(): Promise<number> {
   }
 
   if (has('verify')) {
-    // A marketing file whose delete failed is linked to nobody any more, so
-    // only the ids the committing run printed can find it.
+    // Recorded marketing files are counted from the speaker; --files adds
+    // ids by hand.
     const files = (arg('files') ?? '').split(',').filter(Boolean)
     printVerification(await verifySpeakerErasure(speakerId, [], files))
     return 0
@@ -158,8 +158,8 @@ async function main(): Promise<number> {
   console.log(
     `Marketing files: ${result.linkedFiles.length - kept.length} deleted` +
       (kept.length > 0
-        ? `, ${kept.length} NOT deleted — keep these ids and re-check with ` +
-          `--verify --files ${kept.map((f) => f.id).join(',')}`
+        ? `, ${kept.length} NOT deleted — recorded on the speaker; fix the ` +
+          'cause and re-run with --commit to retry (see the runbook, step 3b)'
         : ''),
   )
   for (const file of kept) console.log(`  ${file.id}  ${file.error}`)

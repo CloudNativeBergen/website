@@ -179,11 +179,12 @@ Release versions included — lets go of it in the transaction: gallery entries
 are deleted, posts and their variants lose the attachment (the post keeps its
 text), Tasks lose the render. Then the files are deleted.
 
-The dry run lists them under `Marketing files`. After the commit, read the
-`Marketing files:` line. Any file `NOT deleted` is linked to nobody any more, so
-**a re-run cannot rediscover it. Copy its id now**, fix the cause, delete it by
-hand (`npx sanity documents delete <id>`), and check with
-`pnpm erase-speaker <speakerId> --verify --files <id,id>`.
+The dry run lists them under `Marketing files`. The transaction records their
+ids on the erased speaker (`erasedFileIds` — asset ids, no personal data),
+because once their links are stripped nothing else leads to them. After the
+commit, read the `Marketing files:` line. Any file `NOT deleted` is still
+counted by `--verify` (from the record), and **a re-run retries it**: fix the
+cause and re-run step 2. `--files <id,id>` adds ids to a verification by hand.
 
 **The hole.** An image with no subject — a group photo, a collage, a render
 saved from a Task that had no subject — is linked to nobody and is not found.

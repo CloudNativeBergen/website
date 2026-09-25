@@ -28,6 +28,7 @@ function inputs(overrides: Partial<SpeakerAssetInputs> = {}) {
     subjectDocs: [],
     fileHolders: [],
     variants: [],
+    publishedPosts: [],
     ...overrides,
   } satisfies SpeakerAssetInputs
 }
@@ -209,6 +210,58 @@ describe('planSpeakerAssetErasure', () => {
       }),
     )
     expect(plan.patches.map((p) => p.id)).toEqual(['drafts.post-1', 'var-1'])
+  })
+
+  it('keeps a variant entry when the PUBLISHED post holds a different image under that key', () => {
+    // A draft reused the key `att-1` for the subject's image; the live
+    // variant still picks the published post's own `att-1`, a logo.
+    const plan = planSpeakerAssetErasure(
+      SPEAKER,
+      FILES,
+      inputs({
+        fileHolders: [
+          {
+            _id: 'drafts.post-1',
+            _type: 'socialPost',
+            attachments: [{ _key: 'att-1', image: image(IMG) }],
+          },
+        ],
+        publishedPosts: [
+          {
+            _id: 'post-1',
+            _type: 'socialPost',
+            attachments: [{ _key: 'att-1', image: image('image-logo-png') }],
+          },
+        ],
+        variants: [
+          {
+            _id: 'var-1',
+            _type: 'socialPostVariant',
+            post: ref('post-1'),
+            attachments: [{ _key: 'va-1', source: 'att-1' }],
+          },
+        ],
+      }),
+    )
+    expect(plan.patches.map((p) => p.id)).toEqual(['drafts.post-1'])
+  })
+
+  it('REFUSES a post or Task that holds the file where erasure does not look', () => {
+    const plan = planSpeakerAssetErasure(
+      SPEAKER,
+      FILES,
+      inputs({
+        fileHolders: [
+          { _id: 'post-1', _type: 'socialPost', attachments: [] },
+          { _id: 'task-1', _type: 'marketingTask' },
+        ],
+      }),
+    )
+    expect(plan.patches).toEqual([])
+    expect(plan.refusals).toEqual([
+      expect.stringContaining('socialPost post-1'),
+      expect.stringContaining('marketingTask task-1'),
+    ])
   })
 
   it('unsets a Task render and its pending upload, and nothing else on the Task', () => {

@@ -93,7 +93,12 @@ function inputs(overrides: Partial<ErasureInputs> = {}): ErasureInputs {
     mergeTrailDocs: [],
     slugConflictIds: [],
     assetFileIds: [],
-    assets: { subjectDocs: [], fileHolders: [], variants: [] },
+    assets: {
+      subjectDocs: [],
+      fileHolders: [],
+      variants: [],
+      publishedPosts: [],
+    },
     now: NOW,
     ...overrides,
   }
@@ -394,7 +399,12 @@ describe('idempotency — the whole patch is a fixed point', () => {
       mergeTrailDocs: [],
       slugConflictIds: [SPEAKER],
       assetFileIds: [],
-      assets: { subjectDocs: [], fileHolders: [], variants: [] },
+      assets: {
+        subjectDocs: [],
+        fileHolders: [],
+        variants: [],
+        publishedPosts: [],
+      },
       now: '2099-12-31T23:59:59.000Z',
     }
   }

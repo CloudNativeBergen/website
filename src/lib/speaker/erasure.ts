@@ -67,6 +67,7 @@ import {
 } from '@/lib/sanity/client'
 import { groq } from 'next-sanity'
 import {
+  COUNT_API_VERSION,
   deleteImageAssetIfOrphaned,
   type OrphanedAssetDeletion,
 } from '@/lib/sanity/orphaned-asset'
@@ -74,7 +75,6 @@ import { normalizeEmail } from './email'
 import {
   fetchSpeakerAssetInputs,
   planSpeakerAssetErasure,
-  speakerSubjectIds,
   type SpeakerAssetInputs,
 } from './erasure-assets'
 
@@ -280,6 +280,8 @@ export interface ErasureSpeakerDoc {
   slug?: { _type?: string; current?: string } | string
   erasedAt?: string
   image?: { asset?: SanityReference }
+  /** Marketing files an erasure deleted or tried to (#1162). */
+  erasedFileIds?: string[]
   [key: string]: unknown
 }
 
@@ -569,6 +571,25 @@ export function buildErasurePlan(inputs: ErasureInputs): ErasurePlan {
     (field) => !isAbsent(speaker, field),
   ) as string[]
 
+  // The marketing files this erasure deletes, RECORDED on the speaker in the
+  // same transaction that strips their last links. After it, nothing else
+  // leads to them: a file whose delete fails would be invisible to a re-run
+  // and to `--verify`. With the ids recorded, a re-run retries every one still
+  // stored and verification counts them. Asset ids, not personal data.
+  // Written only when the set grows, so a repeat writes nothing.
+  const recordedFileIds = Array.isArray(speaker.erasedFileIds)
+    ? speaker.erasedFileIds.filter((id) => typeof id === 'string')
+    : []
+  const assetPlan = planSpeakerAssetErasure(
+    speakerId,
+    inputs.assetFileIds,
+    inputs.assets,
+  )
+  const nextFileIds = [...new Set([...recordedFileIds, ...assetPlan.fileIds])]
+  if (nextFileIds.length > recordedFileIds.length) {
+    speakerSet.erasedFileIds = nextFileIds
+  }
+
   // `setIfMissing` so a repeat PRESERVES the original erasure timestamp — the
   // date the request was answered is itself a record.
   const speakerSetIfMissing: Record<string, unknown> = speaker.erasedAt
@@ -752,11 +773,6 @@ export function buildErasurePlan(inputs: ErasureInputs): ErasurePlan {
 
   // Their patches and deletes join the one transaction, so every holder has
   // let go of a file before the file itself is deleted after it.
-  const assetPlan = planSpeakerAssetErasure(
-    speakerId,
-    inputs.assetFileIds,
-    inputs.assets,
-  )
   documentPatches.push(...assetPlan.patches)
   documentDeletes.push(...assetPlan.deletes)
   refusals.push(...assetPlan.refusals)
@@ -1294,12 +1310,27 @@ async function fetchErasureInputs(
     ),
   ])
 
-  // After the reads above: a talk the subject gives is found among the
-  // documents referencing them.
-  const assets = await fetchSpeakerAssetInputs(
-    speakerSubjectIds(speakerId, referencingDocs ?? []),
-    priorFileIds,
-  )
+  // Files an earlier run recorded and that are STILL STORED: a delete that
+  // failed. Only those — a deleted one must not keep the plan from its fixed
+  // point.
+  const recorded = Array.isArray(speaker?.erasedFileIds)
+    ? speaker.erasedFileIds
+    : []
+  const survivingRecorded =
+    recorded.length === 0
+      ? []
+      : ((await clientRead.fetch<string[]>(
+          // groq-global: image and file assets are dataset-wide documents with
+          // no tenant; these are ids the erasure itself recorded.
+          groq`*[_id in $ids]._id`,
+          { ids: recorded },
+          { cache: 'no-store' },
+        )) ?? [])
+
+  const assets = await fetchSpeakerAssetInputs(speakerId, [
+    ...priorFileIds,
+    ...survivingRecorded,
+  ])
 
   return {
     speaker,
@@ -1360,7 +1391,14 @@ export async function eraseSpeakerInPlace(
 
     // --- phase 2: one transaction ------------------------------------------
     if (!plan.noop) {
-      const tx = clientWrite.transaction()
+      // At the API version whose mutations know Content Release documents:
+      // the plan may patch or delete a `versions.**` copy of a post, Task or
+      // gallery asset. NOT verified against a real release (production has
+      // none); a refusal from Sanity fails the whole transaction, writing
+      // nothing, and the operator is told.
+      const tx = clientWrite
+        .withConfig({ apiVersion: COUNT_API_VERSION })
+        .transaction()
 
       for (const patch of plan.documentPatches) {
         tx.patch(patch.id, (p) => {
@@ -1545,8 +1583,10 @@ async function revalidateErasureTags(
  * THE LINKED FILES HAVE THE SAME SHAPE OF PROBLEM. A file is linked to the
  * subject through a gallery entry or a Task render, and the erasure removes
  * exactly those links. A file whose delete failed is then linked to nobody, and
- * only its id can find it: {@link eraseSpeakerInPlace} passes the ids it
- * planned, and a later run passes the ones it reported (`--files`).
+ * only its id can find it. The erasure records the ids on the speaker
+ * (`erasedFileIds`), so this counts every recorded file still stored;
+ * {@link eraseSpeakerInPlace} also passes the ids it planned, and `--files`
+ * adds ids by hand.
  *
  * @param priorEmails The subject's match set as read before the erasure.
  * @param priorFileIds The marketing files the erasure linked to the subject.
