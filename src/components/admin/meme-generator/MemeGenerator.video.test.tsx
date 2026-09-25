@@ -344,6 +344,9 @@ describe('keeping what the keyboard moved in view', () => {
     scrolled.length = 0
     press(lengthOf(1), 'Home') // already at a second
     press(lengthOf(1), 'ArrowLeft')
+    // A later resize that is NOT by keyboard must not cash in a stale request.
+    enter('Scene 1 length (s)', '5')
+    expect(valueOf(lengthOf(1))).toBe(5)
     expect(scrolled).toEqual([])
   })
 
