@@ -1145,6 +1145,7 @@ export function MemeGenerator({
             prepare={prepareExport}
             waiting={capturePending}
             active={mode === 'video'}
+            revision={scenes}
           />
         </div>
       </div>

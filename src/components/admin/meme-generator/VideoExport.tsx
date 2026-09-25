@@ -21,7 +21,14 @@ import { FPS } from './meme-generator-timeline'
 type Status =
   | { kind: 'idle' }
   | { kind: 'running'; progress: ExportProgress }
-  | { kind: 'done'; url: string; bytes: number; seconds: number }
+  | {
+      kind: 'done'
+      url: string
+      bytes: number
+      seconds: number
+      /** The video it was made from; any other and the file is out of date. */
+      revision: unknown
+    }
   | { kind: 'failed'; message: string }
   | { kind: 'cancelled' }
 
@@ -39,8 +46,11 @@ function statusText(
   status: Status,
   supported: boolean | null,
   waiting: boolean,
+  stale: boolean,
 ): string {
   if (supported === false) return UNSUPPORTED_MESSAGE
+  if (stale)
+    return 'The video has changed since this export. Export again to include your changes.'
   switch (status.kind) {
     case 'running':
       return progressText(status.progress)
@@ -69,12 +79,19 @@ export function VideoExport({
   prepare,
   waiting,
   active,
+  revision,
 }: {
   encoder: EncoderBackend
   /** A snapshot of the video as it is when Export is pressed. */
   prepare: () => ExportJob
   /** True while an image or font the video draws is still loading. */
   waiting: boolean
+  /**
+   * Changes whenever the video does — never on a mode switch — so a file
+   * made before an edit is marked as such rather than offered as current.
+   * Undoing back to what was exported makes it current again.
+   */
+  revision: unknown
   /**
    * Whether the panel is on screen. Support is asked — and the encoder's
    * code fetched — only once it first is, so Image mode never loads it.
@@ -109,6 +126,7 @@ export function VideoExport({
   // Leaving mid-export stops it and frees the encoder.
   useEffect(() => () => controller.current?.abort(), [])
 
+  const stale = status.kind === 'done' && status.revision !== revision
   const running = status.kind === 'running'
   const blocked = supported === false || waiting || running
 
@@ -116,6 +134,7 @@ export function VideoExport({
     if (blocked) return
     const abort = new AbortController()
     controller.current = abort
+    const startedAt = revision
     setStatus({ kind: 'running', progress: { phase: 'checking' } })
     try {
       const job = prepare()
@@ -133,6 +152,7 @@ export function VideoExport({
         url: URL.createObjectURL(result.blob),
         bytes: result.blob.size,
         seconds: job.frameCount / FPS,
+        revision: startedAt,
       })
     } catch (error) {
       if (abort.signal.aborted && !(error instanceof ExportCancelled)) return
@@ -188,8 +208,8 @@ export function VideoExport({
             className="flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm font-medium text-brand-cloud-blue hover:bg-brand-cloud-blue/10 dark:border-gray-600 dark:text-blue-400"
           >
             <ArrowDownTrayIcon className="size-4" aria-hidden="true" />
-            Download video ({megabytes(status.bytes)},{' '}
-            {status.seconds.toFixed(1)} s)
+            {stale ? 'Download earlier export' : 'Download video'} (
+            {megabytes(status.bytes)}, {status.seconds.toFixed(1)} s)
           </a>
         )}
       </div>
@@ -220,7 +240,7 @@ export function VideoExport({
             : ''
         }`}
       >
-        {statusText(status, supported, waiting)}
+        {statusText(status, supported, waiting, stale)}
       </p>
     </section>
   )

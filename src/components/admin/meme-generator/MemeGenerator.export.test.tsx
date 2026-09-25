@@ -235,4 +235,36 @@ describe('Export MP4', () => {
       'Your video is ready. It is 2.0 s long, and LinkedIn takes videos of 3 s or more.',
     )
   })
+
+  it('marks a finished file out of date once the video changes, and current again on undo', async () => {
+    const { encoder } = fakeEncoder()
+    openVideo(encoder)
+    await waitFor(() =>
+      expect(exportButton()).not.toHaveAttribute('aria-disabled'),
+    )
+    fireEvent.click(exportButton())
+    await screen.findByRole(
+      'link',
+      { name: /Download video/ },
+      { timeout: 5000 },
+    )
+    // A mode switch is not a change.
+    fireEvent.click(screen.getByRole('button', { name: 'Image' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Video' }))
+    expect(status()).toHaveTextContent('Your video is ready.')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cloud Blue' }))
+    expect(status()).toHaveTextContent(
+      'The video has changed since this export. Export again to include your changes.',
+    )
+    expect(
+      screen.getByRole('link', { name: /Download earlier export/ }),
+    ).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
+    expect(status()).toHaveTextContent('Your video is ready.')
+    expect(
+      screen.getByRole('link', { name: /Download video/ }),
+    ).toBeInTheDocument()
+  })
 })
