@@ -157,6 +157,61 @@ describe('campaign.recipes.library', () => {
   })
 })
 
+describe('switching tagging on (tagging spec §7)', () => {
+  const tagging = {
+    ...editsOf(speakerCard, speakerCard.recipes),
+    tagSubject: true,
+  }
+  it.each([
+    [
+      'attach',
+      () =>
+        marketing().campaign.recipes.attach({
+          campaignId: 'camp-ours',
+          rev: 'rev-1',
+          entry: 'speakerCard',
+          edits: tagging,
+        }),
+    ],
+    [
+      'update',
+      () => {
+        h.readRecipes.mockResolvedValue(
+          campaign({ recipes: speakerCard.recipes }),
+        )
+        return marketing().campaign.recipes.update({
+          campaignId: 'camp-ours',
+          rev: 'rev-1',
+          entry: 'speakerCard',
+          edits: tagging,
+        })
+      },
+    ],
+  ])(
+    '%s refuses tagSubject before reading anything, and saves nothing',
+    async (_name, call) => {
+      await expect(call()).rejects.toMatchObject({
+        code: 'BAD_REQUEST',
+        message: expect.stringContaining('not switched on yet'),
+      })
+      expect(h.tenantRead).not.toHaveBeenCalled()
+      expect(h.saveRecipes).not.toHaveBeenCalled()
+    },
+  )
+  it('the same edits without tagSubject save', async () => {
+    await marketing().campaign.recipes.attach({
+      campaignId: 'camp-ours',
+      rev: 'rev-1',
+      entry: 'speakerCard',
+      edits: { ...tagging, tagSubject: false },
+    })
+    expect(h.saveRecipes).toHaveBeenCalledTimes(1)
+    expect(
+      saved().recipes.some((r: { tagSubject?: boolean }) => r.tagSubject),
+    ).toBe(false)
+  })
+})
+
 describe('campaign.recipes.attach', () => {
   it('puts the built-in Recipes and Trigger on a custom Campaign, creating no Task', async () => {
     await marketing().campaign.recipes.attach({
