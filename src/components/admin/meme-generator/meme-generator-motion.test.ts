@@ -6,12 +6,14 @@ import {
   clampMotion,
   driftScale,
   easeOutCubic,
+  elementsOf,
   elementStateAt,
   presetState,
   resizeMotion,
   motionFor,
   type ElementMotion,
 } from './meme-generator-motion'
+import { DEFAULT_DESIGN } from './meme-generator-draw'
 
 const motion = (patch: Partial<ElementMotion> = {}): ElementMotion => ({
   entrance: 'none',
@@ -201,5 +203,24 @@ describe('motionFor', () => {
     expect(motionFor({ drift: false, elements: {} }, 'qr', 4)).toEqual(
       motion({ leave: 4 }),
     )
+  })
+})
+
+describe('elementsOf', () => {
+  it('lists the lines with text, the QR code with a URL, and the logo', () => {
+    expect(elementsOf(DEFAULT_DESIGN)).toEqual([{ id: 'logo', name: 'Logo' }])
+    const [first, second, third] = DEFAULT_DESIGN.textLines
+    expect(
+      elementsOf({
+        ...DEFAULT_DESIGN,
+        textLines: [first, { ...second, text: 'Hi' }, { ...third, text: 'Yo' }],
+        qr: { ...DEFAULT_DESIGN.qr, url: 'https://example.com' },
+      }),
+    ).toEqual([
+      { id: 'text1', name: 'Text 2' },
+      { id: 'text2', name: 'Text 3' },
+      { id: 'qr', name: 'QR code' },
+      { id: 'logo', name: 'Logo' },
+    ])
   })
 })

@@ -1,3 +1,5 @@
+import type { MemeDesign } from './meme-generator-draw'
+
 /**
  * How the elements of a scene enter and leave, and how its background drifts
  * — as arithmetic. Everything is a preset with a time: there is nothing to
@@ -176,4 +178,26 @@ export function resizeMotion(
     elements[id] = clampMotion({ ...motion, leave }, to)
   }
   return { ...scene, elements }
+}
+
+/** An element a design draws, and what the timeline calls it. */
+export interface DrawnElement {
+  id: ElementId
+  name: string
+}
+
+/**
+ * The elements `design` draws, in timeline order: each text line that has
+ * text, the QR code once it has a URL, and the logo, which is always there.
+ */
+export function elementsOf(design: MemeDesign): DrawnElement[] {
+  return [
+    ...design.textLines.flatMap((line, index) =>
+      line.text
+        ? [{ id: `text${index}` as const, name: `Text ${index + 1}` }]
+        : [],
+    ),
+    ...(design.qr.url ? [{ id: 'qr' as const, name: 'QR code' }] : []),
+    { id: 'logo', name: 'Logo' },
+  ]
 }

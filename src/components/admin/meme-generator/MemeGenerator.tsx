@@ -60,9 +60,11 @@ import {
   DEFAULT_DESIGN,
   designIsLight,
   drawDesign,
+  prescaleForDrift,
   type MemeDesign,
   type Raster,
 } from './meme-generator-draw'
+import type { ElementId, ElementMotion } from './meme-generator-motion'
 import { pickQrStyle, qrStyleKey, renderQrImage } from './meme-generator-qr'
 import {
   FPS,
@@ -424,14 +426,17 @@ export function MemeGenerator({
   // that are about to change. A ref, because an arrival always comes with
   // the scene update that shows it, which is what repaints.
   const backgroundRasters = useRef(new Map<string, Raster>())
+  // The same backgrounds pre-scaled for drift, each made once, the first time
+  // a drifting scene draws it — never resampled from the photo per frame.
+  const driftRasters = useRef(new Map<string, Raster>())
   useEffect(() => {
     const kept = new Set(
       allStates(history).flatMap((states) =>
         states.flatMap((scene) => scene.design.background.image?.url ?? []),
       ),
     )
-    for (const url of backgroundRasters.current.keys()) {
-      if (!kept.has(url)) backgroundRasters.current.delete(url)
+    for (const cache of [backgroundRasters.current, driftRasters.current]) {
+      for (const url of cache.keys()) if (!kept.has(url)) cache.delete(url)
     }
   }, [history])
 
@@ -642,16 +647,30 @@ export function MemeGenerator({
     }
   }, [drawsWordmark, logoName])
 
+  const backgroundFor = useCallback(
+    (url: string, drift: boolean): Raster | null => {
+      const image = backgroundRasters.current.get(url) ?? null
+      if (!image || !drift) return image
+      let prescaled = driftRasters.current.get(url)
+      if (!prescaled) {
+        prescaled = prescaleForDrift(image, document.createElement('canvas'))
+        driftRasters.current.set(url, prescaled)
+      }
+      return prescaled
+    },
+    [],
+  )
+
   /** A design's decoded assets, from the caches above. */
   const assetsFor = useCallback(
-    (scene: MemeDesign) => ({
+    (scene: MemeDesign, drift = false) => ({
       background: scene.background.image
-        ? (backgroundRasters.current.get(scene.background.image.url) ?? null)
+        ? backgroundFor(scene.background.image.url, drift)
         : null,
       qr: scene.qr.url ? (qrRasters.get(qrStyleKey(scene.qr)) ?? null) : null,
       logo: canvasLogoFor(scene),
     }),
-    [qrRasters, canvasLogoFor],
+    [backgroundFor, qrRasters, canvasLogoFor],
   )
 
   const capturePending =
@@ -810,6 +829,42 @@ export function MemeGenerator({
       prev.map((scene, i) => (i === index ? { ...scene, transition } : scene)),
     )
 
+  // An element's bar: a drag of it, or typing in one of its fields, is one
+  // step; a preset picked from a list is a step of its own.
+  const changeElement = (
+    index: number,
+    id: ElementId,
+    motion: ElementMotion,
+    grouped: boolean,
+  ) => {
+    const key = scenes[index].key
+    changeScenes(
+      (prev) =>
+        prev.map((scene) =>
+          scene.key === key
+            ? {
+                ...scene,
+                motion: {
+                  ...scene.motion,
+                  elements: { ...scene.motion.elements, [id]: motion },
+                },
+              }
+            : scene,
+        ),
+      grouped ? `${key}:motion.${id}` : undefined,
+    )
+  }
+  const changeDrift = (index: number, drift: boolean) => {
+    const key = scenes[index].key
+    changeScenes((prev) =>
+      prev.map((scene) =>
+        scene.key === key
+          ? { ...scene, motion: { ...scene.motion, drift } }
+          : scene,
+      ),
+    )
+  }
+
   // Undo and redo put the scenes back; the playhead stays where it is, kept
   // inside the video, so the scene under it is what the controls edit.
   const travel = (to: typeof undo) => {
@@ -885,8 +940,14 @@ export function MemeGenerator({
       gradient: brandGradientColors(root),
     }
     const paintScene: PaintScene = (ctx, { index, time: sceneTime }) => {
-      const scene = scenes[index].design
-      drawDesign(ctx, scene, { ...assetsFor(scene), brand }, sceneTime)
+      const { design: scene, motion, duration } = scenes[index]
+      drawDesign(
+        ctx,
+        scene,
+        { ...assetsFor(scene, motion.drift), brand },
+        sceneTime,
+        { motion, duration },
+      )
     }
     for (const canvas of [canvasRef.current, exportCanvasRef.current]) {
       const ctx = canvas?.getContext('2d')
@@ -1010,6 +1071,8 @@ export function MemeGenerator({
             onSeek={seek}
             onDurationChange={changeDuration}
             onTransitionChange={changeTransition}
+            onElementChange={changeElement}
+            onDriftChange={changeDrift}
             onAddScene={addNewScene}
             onDuplicateScene={duplicate}
             onDeleteScene={remove}
