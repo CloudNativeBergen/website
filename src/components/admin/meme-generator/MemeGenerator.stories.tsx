@@ -1628,3 +1628,169 @@ export const VideoAtTheCapDark: Story = {
   globals: { theme: 'dark' },
   play: async ({ canvasElement }) => nearTheCap(canvasElement),
 }
+
+// ── Element entrances and exits, and drift (#1176) ─────────────────────────
+
+/** Where the default first line's headline sits: centred, 30 % down. */
+const HEADLINE_BOX: Box = { x: 340, y: 270, width: 400, height: 110 }
+
+async function typeHeadline(canvas: Canvas, text: string) {
+  await userEvent.type(
+    canvas.getAllByPlaceholderText('Enter your text...')[0],
+    text,
+  )
+}
+
+async function setSeconds(canvas: Canvas, label: string, value: number) {
+  const field = canvas.getByLabelText(label)
+  await userEvent.clear(field)
+  await userEvent.type(field, `${value}{Enter}`)
+}
+
+/**
+ * A line that leaves at 1 s is gone after it: with the playhead at 2 s its
+ * box is the background colour, every pixel of it. At 0.5 s the same box
+ * holds the line's white text — so the box is the right place to look.
+ */
+export const VideoLineAfterItsExit: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(canvas.getByRole('button', { name: 'Video' }))
+    await typeHeadline(canvas, 'GONE')
+    await userEvent.selectOptions(canvas.getByLabelText('Text 1 exit'), 'fade')
+    await setSeconds(canvas, 'Text 1 leaves (s)', 1)
+    await expect(
+      canvas.getByRole('slider', { name: 'Scene 1 Text 1 leaves' }),
+    ).toHaveAttribute('aria-valuenow', '1')
+
+    const box = (pixel: Pixel) =>
+      share(
+        canvasElement.querySelector('canvas')!,
+        CANVAS_SIZE,
+        HEADLINE_BOX,
+        pixel,
+      )
+    await seekTo(canvas, 0.5)
+    await waitFor(() => expect(box(isWhite)).toBeGreaterThan(0.05))
+    await seekTo(canvas, 2)
+    await waitFor(() => expect(box(near(FRESH_GREEN, 2))).toBe(1))
+  },
+}
+
+/**
+ * A pop scales the drawn line, never its font size: halfway into the pop the
+ * headline is drawn smaller, yet it wraps into the same two rows.
+ */
+export const VideoElementTimings: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(canvas.getByRole('button', { name: 'Video' }))
+    await typeHeadline(canvas, 'Call for papers')
+    await userEvent.type(
+      canvas.getAllByPlaceholderText('Enter your text...')[1],
+      'Closes Friday',
+    )
+    await userEvent.type(
+      canvas.getByPlaceholderText('https://example.com'),
+      'https://example.com',
+    )
+    await userEvent.selectOptions(
+      canvas.getByLabelText('Text 1 entrance'),
+      'pop',
+    )
+    await userEvent.selectOptions(
+      canvas.getByLabelText('Text 2 entrance'),
+      'slide-up',
+    )
+    await setSeconds(canvas, 'Text 2 enters (s)', 0.8)
+    await userEvent.selectOptions(
+      canvas.getByLabelText('QR code entrance'),
+      'fade',
+    )
+    await setSeconds(canvas, 'QR code enters (s)', 1.5)
+    await userEvent.selectOptions(canvas.getByLabelText('QR code exit'), 'fade')
+    await userEvent.selectOptions(canvas.getByLabelText('Logo exit'), 'pop')
+    await setSeconds(canvas, 'Logo leaves (s)', 2.5)
+    await userEvent.click(canvas.getByRole('button', { name: 'Add scene' }))
+    await typeHeadline(canvas, 'See you there')
+    await seekTo(canvas, 1)
+    await expect(
+      canvas.getByRole('slider', { name: 'Scene 1 QR code enters' }),
+    ).toHaveAttribute('aria-valuenow', '1.5')
+  },
+}
+
+export const VideoElementTimingsDark: Story = {
+  ...VideoElementTimings,
+  globals: { theme: 'dark' },
+}
+
+/** A photo with a blue band down its left edge and magenta elsewhere. */
+async function bandedPhoto(side: number): Promise<File> {
+  const source = document.createElement('canvas')
+  source.width = source.height = side
+  const ctx = source.getContext('2d')!
+  ctx.fillStyle = '#ff00ff'
+  ctx.fillRect(0, 0, side, side)
+  ctx.fillStyle = '#0000ff'
+  ctx.fillRect(0, 0, side * 0.05, side)
+  const blob = await new Promise<Blob>((resolve) =>
+    source.toBlob((b) => resolve(b!), 'image/png'),
+  )
+  return new File([blob], 'large.png', { type: 'image/png' })
+}
+
+const isPureBlue: Pixel = (r, g, b) => r < 30 && g < 30 && b > 225
+
+/**
+ * Drift on a 25-megapixel photo: the zoom is visible — the band down the
+ * left edge, on screen at the start, has zoomed off it by the end — and
+ * playback keeps a steady frame rate, as each frame draws the pre-scaled
+ * ~1200 px copy rather than resampling the photo.
+ */
+export const VideoDriftLargePhoto: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(canvas.getByRole('button', { name: 'Video' }))
+    await openBackgroundAdvanced(canvas)
+    await userEvent.upload(
+      canvas.getByLabelText(/Upload Background Image/),
+      await bandedPhoto(5000),
+    )
+    await canvas.findByText('Current: large.png')
+    await userEvent.click(canvas.getByLabelText(/Drift/))
+
+    const edge = (pixel: Pixel) =>
+      share(
+        canvasElement.querySelector('canvas')!,
+        CANVAS_SIZE,
+        { x: 8, y: 400, width: 30, height: 200 },
+        pixel,
+      )
+    await seekTo(canvas, 0)
+    await waitFor(() => expect(edge(isPureBlue)).toBeGreaterThan(0.95))
+    await seekTo(canvas, 2.9)
+    await waitFor(() => expect(edge(isMagenta)).toBeGreaterThan(0.95))
+
+    // Frame gaps across a second of playback from the start.
+    await seekTo(canvas, 0)
+    const gaps: number[] = []
+    let last = performance.now()
+    let sampling = true
+    const tick = (now: number) => {
+      gaps.push(now - last)
+      last = now
+      if (sampling) requestAnimationFrame(tick)
+    }
+    await userEvent.click(canvas.getByRole('button', { name: 'Play' }))
+    requestAnimationFrame(tick)
+    await new Promise((resolve) => setTimeout(resolve, 1000))
+    sampling = false
+    await userEvent.click(canvas.getByRole('button', { name: 'Pause' }))
+    gaps.sort((a, b) => a - b)
+    const p90 = gaps[Math.floor(gaps.length * 0.9)]
+    console.info('[drift] frames', gaps.length, 'p90 gap ms', p90.toFixed(1))
+    expect(gaps.length).toBeGreaterThan(20)
+    expect(p90).toBeLessThan(50)
+  },
+}
