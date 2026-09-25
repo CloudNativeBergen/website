@@ -98,6 +98,16 @@ describe('a continuous change is one step', () => {
     expect(history.past).toEqual([0, 1, 2, 3])
   })
 
+  it('drops a step that a burst took back to where it started', () => {
+    let history = record(startHistory('x'), '', { now: 0 })
+    history = undo(history)
+    // A character typed and deleted again within the second.
+    history = record(history, 'xa', { group: 'text', now: 100 })
+    history = record(history, 'x', { group: 'text', now: 300 })
+    expect(history.present).toBe('x')
+    expect(canUndo(history)).toBe(false)
+  })
+
   it('starts a new step after an undo, even in the same group', () => {
     let history = startHistory(0)
     history = record(history, 1, { group: 'a', now: 0 })

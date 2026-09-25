@@ -40,6 +40,18 @@ export function record<T>(
     group !== undefined &&
     group === history.group &&
     now - history.at < COALESCE_MS
+  // A burst that ends where it began — a character typed and deleted, a
+  // slider dragged back — leaves no step that undoes nothing.
+  const before = history.past[history.past.length - 1]
+  if (folds && history.past.length > 0 && sameValue(next, before)) {
+    return {
+      past: history.past.slice(0, -1),
+      present: before,
+      future: [],
+      group: null,
+      at: now,
+    }
+  }
   return {
     past: folds
       ? history.past
