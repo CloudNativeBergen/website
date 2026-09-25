@@ -464,6 +464,9 @@ export const FilterAllEditions: Story = {
     await expect(
       await canvas.findByText('Speaker card: Ada Lovelace (2025)'),
     ).toBeInTheDocument()
+    // The menus come from their own query (`marketingAsset.filters`), which
+    // can land after the list: wait for the option, never assume it.
+    await canvas.findByRole('option', { name: 'Ada Lovelace (Speaker)' })
     await userEvent.selectOptions(
       canvas.getByLabelText('Subject'),
       'Ada Lovelace (Speaker)',
@@ -588,6 +591,7 @@ export const FilterDropsVanishedTag: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
     await canvas.findByText('Venue from the harbour')
+    await canvas.findByRole('option', { name: 'sponsors' })
     await userEvent.selectOptions(canvas.getByLabelText('Tag'), 'sponsors')
     await waitFor(() => expect(canvas.getAllByRole('listitem')).toHaveLength(1))
     await userEvent.click(
@@ -619,6 +623,8 @@ export const EditOlderEditionAsset: Story = {
     )
     const dialog = within(await within(document.body).findByRole('dialog'))
     await expect(dialog.getByLabelText(/^CND 2025/)).toBeChecked()
+    // "This edition" is offered once `marketingAsset.filters` has named it.
+    await dialog.findByLabelText(/^CND 2026/)
     await userEvent.click(dialog.getByLabelText(/^The whole organization/))
     await expect(dialog.getByLabelText(/^CND 2025/)).not.toBeChecked()
     await expect(dialog.getByLabelText(/^CND 2026/)).toBeInTheDocument()
