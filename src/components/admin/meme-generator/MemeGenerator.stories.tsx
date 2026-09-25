@@ -1828,6 +1828,19 @@ export const VideoBarEndsAtBoundary: Story = {
         ?.closest('[role="slider"]')
     expect(hit(a)).toBe(leaves)
     expect(hit(b)).toBe(enters)
+
+    // A 0.2 s bar is 12 px: its ends leave its middle to drag it whole by.
+    await setSeconds(canvas, 'Logo leaves (s)', 0.2)
+    const short = canvas.getByRole('slider', {
+      name: 'Scene 1 Logo leaves',
+    }).parentElement!
+    const bar = short.getBoundingClientRect()
+    const middle = document.elementFromPoint(
+      bar.left + bar.width / 2,
+      bar.top + bar.height / 2,
+    )
+    expect(middle?.closest('[role="slider"]')).toBeNull()
+    expect(middle?.closest('[title^="Drag to move"]')).not.toBeNull()
   },
 }
 

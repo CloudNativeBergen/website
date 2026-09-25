@@ -279,4 +279,26 @@ describe('what a paint is given', () => {
     const [, , assets] = drawDesign.mock.lastCall!
     expect(assets.background).toBeInstanceOf(HTMLImageElement)
   })
+
+  it('gives back, by keyboard too, the bars a shortened length clamped', () => {
+    openVideo()
+    enter('Logo enters (s)', '2')
+    const length = slider('Scene 1 length')
+    fireEvent.focus(length)
+    press(length, 'Home')
+    expect(valueOf('Scene 1 Logo enters')).toBe(1)
+    press(length, 'End')
+    expect(valueOf('Scene 1 length')).toBe(60)
+    expect(valueOf('Scene 1 Logo enters')).toBe(2)
+    expect(valueOf('Scene 1 Logo leaves')).toBe(60)
+  })
+
+  it('adds no undo step for a field committed unchanged', () => {
+    openVideo()
+    enter('Logo leaves (s)', '3')
+    expect(screen.getByRole('button', { name: 'Undo' })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    )
+  })
 })

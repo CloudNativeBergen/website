@@ -92,6 +92,11 @@ function DurationEdge({
   // from 180 px to 3600 px along a narrow, scrolling track.
   const edge = useRef<HTMLDivElement>(null)
   const resizedByKey = useRef(false)
+  // The keyboard's equivalent of the drag's start: the scene as a run of
+  // key presses found it, so Home then End gives back the bars Home clamped.
+  // Whenever the length is back where that run started, the scene as it is
+  // now takes over — an undo, or an edit in between, is never overwritten.
+  const keyOrigin = useRef<Scene | null>(null)
   useEffect(() => {
     if (!resizedByKey.current) return
     resizedByKey.current = false
@@ -102,7 +107,9 @@ function DurationEdge({
     // changes nothing, and the request would wait for an unrelated resize.
     if (Math.min(clampDuration(seconds), max) === scene.duration) return
     resizedByKey.current = true
-    onDurationChange(index, seconds)
+    if (!keyOrigin.current || keyOrigin.current.duration === scene.duration)
+      keyOrigin.current = scene
+    onDurationChange(index, seconds, keyOrigin.current)
   }
   const drag = useDrag(
     () => {
@@ -128,6 +135,9 @@ function DurationEdge({
       aria-orientation="horizontal"
       title="Drag to change the scene's length"
       {...drag}
+      onBlur={() => {
+        keyOrigin.current = null
+      }}
       onKeyDown={(event) => {
         if (event.key === 'Home' || event.key === 'End') {
           event.preventDefault()

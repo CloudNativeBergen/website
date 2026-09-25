@@ -63,18 +63,30 @@ function rowsOf(scenes: Scene[]): DrawnElement[] {
   return order.flatMap((id) => drawn.get(id) ?? [])
 }
 
+const sameMotion = (a: ElementMotion, b: ElementMotion) =>
+  a.entrance === b.entrance &&
+  a.exit === b.exit &&
+  a.enter === b.enter &&
+  a.leave === b.leave
+
+/** A bar end's hit area, where the bar is wide enough for it. */
+const END_WIDTH_PX = 10
+
 /** One end of a bar: when the element enters, or when it has left. */
 function BarEnd({
   end,
   label,
   motion,
   duration,
+  barWidth,
   onChange,
 }: {
   end: 'enter' | 'leave'
   label: string
   motion: ElementMotion
   duration: number
+  /** The bar's width in pixels: a short bar's ends leave room for its body. */
+  barWidth: number
   onChange: (motion: ElementMotion) => void
 }) {
   const start = useRef(motion)
@@ -120,7 +132,10 @@ function BarEnd({
       }}
       // Above the playhead, as the scenes' own edges are: it sits on a
       // scene's start, where every bar that enters at 0 begins.
-      className={`group absolute top-0 z-30 flex h-full w-2.5 cursor-col-resize touch-none justify-center focus:outline-none ${
+      // At most a third of the bar each, so even a 0.1 s bar keeps a middle
+      // to drag it whole by.
+      style={{ width: Math.min(END_WIDTH_PX, barWidth / 3) }}
+      className={`group absolute top-0 z-30 flex h-full cursor-col-resize touch-none justify-center focus:outline-none ${
         // Inside the bar, never centred on its end: a scene's leave end and
         // the next scene's enter end would otherwise share the boundary, and
         // the later one would take every press there.
@@ -198,6 +213,7 @@ function ElementBar({
         label={`${name} enters`}
         motion={motion}
         duration={duration}
+        barWidth={width}
         onChange={(moved) => onChange(moved, 'enter')}
       />
       <BarEnd
@@ -205,6 +221,7 @@ function ElementBar({
         label={`${name} leaves`}
         motion={motion}
         duration={duration}
+        barWidth={width}
         onChange={(moved) => onChange(moved, 'leave')}
       />
     </div>
@@ -295,16 +312,15 @@ export function ElementFields({
           <tbody>
             {elements.map((element) => {
               const motion = motionFor(scene.motion, element.id, duration)
+              // A commit that changes nothing is no undo step.
               const change = (
                 patch: Partial<ElementMotion>,
                 control: TimingControl,
-              ) =>
-                onElementChange(
-                  index,
-                  element.id,
-                  clampMotion({ ...motion, ...patch }, duration),
-                  control,
-                )
+              ) => {
+                const next = clampMotion({ ...motion, ...patch }, duration)
+                if (sameMotion(next, motion)) return
+                onElementChange(index, element.id, next, control)
+              }
               const presetSelect = (which: 'entrance' | 'exit') => (
                 <select
                   aria-label={`${element.name} ${which}`}
