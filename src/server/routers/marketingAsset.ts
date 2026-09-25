@@ -118,7 +118,7 @@ export const marketingAssetRouter = router({
           message: 'An image needs its alt text.',
         })
       const details = await resolveAssetDetailsForCurrentOrg(
-        media.kind === 'audio' ? rest : { ...rest, alt },
+        { ...rest, alt: media.kind === 'audio' ? undefined : alt },
         input.id,
       )
       await updateMarketingAssetDetails(input.id, details)

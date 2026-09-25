@@ -26,6 +26,7 @@ const DETAILS = {
   alt: 'Sent anyway',
   scope: 'organization' as const,
   tags: ['music'],
+  credit: undefined,
 }
 
 beforeEach(() => {

@@ -1,15 +1,29 @@
 import { upload } from '@vercel/blob/client'
 import {
+  audioTypeForFile,
   marketingAssetPathname,
   type MarketingAssetDetails,
 } from '@/lib/marketing-asset'
 
 const GENERIC_FAILURE = 'The image could not be added. Try again.'
+const TRACK_FAILURE = 'The track could not be added. Try again.'
 
 const EXTENSIONS: Record<string, string> = {
   'image/png': 'png',
   'image/jpeg': 'jpg',
   'image/webp': 'webp',
+  'audio/mpeg': 'mp3',
+  'audio/mp4': 'm4a',
+  'audio/wav': 'wav',
+}
+
+/**
+ * The type the upload is sent as: a track's is one name per format (browsers
+ * say `audio/x-m4a`, `audio/x-wav` or nothing), which is what the upload token
+ * allows. The server sniffs the bytes either way.
+ */
+function uploadType(file: File): string {
+  return audioTypeForFile(file) ?? file.type
 }
 
 /**
@@ -19,14 +33,24 @@ const EXTENSIONS: Record<string, string> = {
  */
 function withTypeExtension(file: File): string {
   const base = file.name.replace(/\.[^./]*$/, '')
-  const ext = EXTENSIONS[file.type]
+  const ext = EXTENSIONS[uploadType(file)]
   return ext ? `${base}.${ext}` : file.name
 }
 
-/** Uploads one image and adds it to the gallery, or throws a message to show. */
+/** What an audio track adds to its upload: the organizer's confirmation. */
+export interface AudioUploadOptions {
+  kind: 'audio'
+  rightsConfirmed: boolean
+}
+
+/**
+ * Uploads one image (or, with `audio`, one track) and adds it to the gallery,
+ * or throws a message to show.
+ */
 export type AssetUploader = (
   file: File,
   details: MarketingAssetDetails,
+  audio?: AudioUploadOptions,
 ) => Promise<{ _id: string; softOnSocial: boolean }>
 
 /**
@@ -37,7 +61,7 @@ export type AssetUploader = (
  * any other prefix.
  */
 export function blobAssetUploader(orgId: string): AssetUploader {
-  return async (file, details) => {
+  return async (file, details, audio) => {
     let blob: { url: string }
     try {
       blob = await upload(
@@ -46,25 +70,25 @@ export function blobAssetUploader(orgId: string): AssetUploader {
         {
           access: 'public',
           handleUploadUrl: '/api/admin/marketing-assets/upload-token',
-          contentType: file.type,
+          contentType: uploadType(file),
         },
       )
     } catch (error) {
       // The library's text (token, network, Blob API) is not for organizers.
       console.error('Marketing asset: upload to Blob failed', error)
-      throw new Error(GENERIC_FAILURE)
+      throw new Error(audio ? TRACK_FAILURE : GENERIC_FAILURE)
     }
     let response: Response
     try {
       response = await fetch('/api/admin/marketing-assets', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ url: blob.url, ...details }),
+        body: JSON.stringify({ url: blob.url, ...details, ...audio }),
       })
     } catch (error) {
       // "Failed to fetch" / "Load failed" is not for organizers either.
       console.error('Marketing asset: move request failed', error)
-      throw new Error(GENERIC_FAILURE)
+      throw new Error(audio ? TRACK_FAILURE : GENERIC_FAILURE)
     }
     const body = (await response.json().catch(() => null)) as {
       _id?: string
@@ -72,7 +96,7 @@ export function blobAssetUploader(orgId: string): AssetUploader {
       error?: string
     } | null
     if (!response.ok || !body?._id) {
-      throw new Error(body?.error ?? GENERIC_FAILURE)
+      throw new Error(body?.error ?? (audio ? TRACK_FAILURE : GENERIC_FAILURE))
     }
     return { _id: body._id, softOnSocial: Boolean(body.softOnSocial) }
   }

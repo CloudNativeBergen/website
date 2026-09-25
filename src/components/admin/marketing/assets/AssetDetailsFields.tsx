@@ -73,7 +73,8 @@ export function detailsFromDraft(
 ): MarketingAssetDetails {
   return {
     title: title.trim(),
-    alt: alt.trim(),
+    // Empty only for an audio track, which has none.
+    alt: alt.trim() || undefined,
     edition: draft.edition,
     subject: draft.subject
       ? { type: draft.subject._type, id: draft.subject._id }

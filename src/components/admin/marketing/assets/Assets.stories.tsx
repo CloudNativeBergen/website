@@ -19,6 +19,36 @@ function card(label: string, fill: string, width: number, height: number) {
   return `data:image/svg+xml,${encodeURIComponent(svg)}#`
 }
 
+/** 8-bit mono PCM WAV of a quiet 220 Hz tone, built in the browser. */
+function wavBytes(seconds: number, rate = 8000): Uint8Array<ArrayBuffer> {
+  const samples = Math.round(seconds * rate)
+  const bytes = new Uint8Array(44 + samples)
+  const view = new DataView(bytes.buffer)
+  const text = (offset: number, value: string) =>
+    [...value].forEach((c, i) => view.setUint8(offset + i, c.charCodeAt(0)))
+  text(0, 'RIFF')
+  view.setUint32(4, 36 + samples, true)
+  text(8, 'WAVE')
+  text(12, 'fmt ')
+  view.setUint32(16, 16, true)
+  view.setUint16(20, 1, true)
+  view.setUint16(22, 1, true)
+  view.setUint32(24, rate, true)
+  view.setUint32(28, rate, true)
+  view.setUint16(32, 1, true)
+  view.setUint16(34, 8, true)
+  text(36, 'data')
+  view.setUint32(40, samples, true)
+  for (let i = 0; i < samples; i++)
+    bytes[44 + i] =
+      128 + Math.round(20 * Math.sin((2 * Math.PI * 220 * i) / rate))
+  return bytes
+}
+const wavFile = (name: string, seconds: number) =>
+  new File([wavBytes(seconds)], name, { type: 'audio/wav' })
+/** A short track the card can really play, without the CDN. */
+const TRACK_URL = `data:audio/wav;base64,${btoa(String.fromCharCode(...wavBytes(2)))}`
+
 const EDITION = { _id: 'conf-2026', title: 'CND 2026' }
 const ADA = { _id: 'sp-ada', _type: 'speaker' as const, name: 'Ada Lovelace' }
 const ACME = { _id: 'sponsor-acme', _type: 'sponsor' as const, name: 'Acme' }
@@ -39,6 +69,9 @@ const row = (
   height: 2000,
   createdAt: '2026-09-20T10:00:00Z',
   softOnSocial: false,
+  audioUrl: null,
+  durationSeconds: null,
+  rights: null,
   ...fields,
 })
 
@@ -62,6 +95,24 @@ const ASSETS: MarketingAssetRow[] = [
     tags: ['speaker card'],
     credit: 'Jane Designer, Studio Nord',
     createdAt: '2026-09-19T10:00:00Z',
+  }),
+  row({
+    _id: 'asset-theme',
+    kind: 'audio',
+    title: 'Conference theme, 90-second cut',
+    alt: null,
+    imageUrl: null,
+    assetId: null,
+    width: null,
+    height: null,
+    audioUrl: TRACK_URL,
+    durationSeconds: 92,
+    rights: {
+      confirmedBy: 'Olga Organizer',
+      confirmedAt: '2026-09-19T08:30:00Z',
+    },
+    tags: ['music'],
+    createdAt: '2026-09-18T12:00:00Z',
   }),
   row({
     _id: 'asset-venue',
@@ -125,6 +176,7 @@ function applyFilter(
     .filter(Boolean)
   return [...assets, ...(filter?.editions === 'all' ? older : [])].filter(
     (asset) =>
+      (!filter?.kind || asset.kind === filter.kind) &&
       (!filter?.subjectId || asset.subject?._id === filter.subjectId) &&
       (!filter?.tag || asset.tags.includes(filter.tag)) &&
       words.every((word) =>
@@ -192,7 +244,7 @@ function gallery(initial: MarketingAssetRow[] = ASSETS, older = OLDER) {
             ? {
                 ...asset,
                 title: body.details.title,
-                alt: body.details.alt,
+                alt: body.details.alt ?? null,
                 tags: body.details.tags,
                 credit: body.details.credit ?? null,
               }
@@ -269,6 +321,13 @@ export const Gallery: Story = {
       canvas.getByText('Speaker card: Ada Lovelace'),
     ).toBeInTheDocument()
     await expect(canvas.queryByText(/\(2025\)/)).toBeNull()
+    // A track plays in its card, and says who confirmed its rights.
+    await expect(
+      canvas.getByRole('button', {
+        name: 'Play Conference theme, 90-second cut',
+      }),
+    ).toBeInTheDocument()
+    await expect(canvas.getByText(/Olga Organizer/)).toBeInTheDocument()
   },
 }
 export const GalleryMobile: Story = {
@@ -352,10 +411,12 @@ export const UploadSoftImage: Story = {
       }),
     )
     // The form is ready for the next image, and focus is back on its picker.
-    await expect(await canvas.findByText('Choose an image')).toBeInTheDocument()
+    await expect(
+      await canvas.findByText('Choose an image or a track'),
+    ).toBeInTheDocument()
     await waitFor(() =>
       expect(document.activeElement).toBe(
-        canvas.getByLabelText('Choose an image'),
+        canvas.getByLabelText('Choose an image or a track'),
       ),
     )
   },
@@ -445,7 +506,7 @@ export const ClearKeepsFocus: Story = {
     )
     await userEvent.click(await canvas.findByRole('button', { name: 'Clear' }))
     await expect(document.activeElement).toBe(
-      canvas.getByLabelText('Choose an image'),
+      canvas.getByLabelText('Choose an image or a track'),
     )
   },
 }
@@ -630,5 +691,127 @@ export const EditOlderEditionAsset: Story = {
     await expect(dialog.getByLabelText(/^CND 2026/)).toBeInTheDocument()
     await userEvent.click(dialog.getByLabelText(/^CND 2025/))
     await expect(dialog.getByLabelText(/^CND 2025/)).toBeChecked()
+  },
+}
+
+/**
+ * A track picked (#1178): no alt text, and "Add to gallery" waits for the
+ * rights confirmation.
+ */
+export const TrackPicked: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await canvas.findByText('Venue from the harbour')
+    await userEvent.upload(
+      canvas.getByLabelText(/Choose an image/),
+      wavFile('conference-theme.wav', 3),
+    )
+    await expect(await canvas.findByText('0:03')).toBeInTheDocument()
+    await expect(canvas.getByLabelText('Title')).toHaveValue('conference theme')
+    await expect(canvas.queryByLabelText('Alt text')).toBeNull()
+    const add = canvas.getByRole('button', { name: 'Add to gallery' })
+    await expect(add).toBeDisabled()
+    await userEvent.click(
+      canvas.getByLabelText(
+        'I have the right to use this track in social posts.',
+      ),
+    )
+    await expect(add).toBeEnabled()
+  },
+}
+export const TrackPickedMobile: Story = {
+  ...TrackPicked,
+  parameters: {
+    ...meta.parameters,
+    viewport: { defaultViewport: 'mobile1' },
+  },
+}
+export const TrackPickedDark: Story = {
+  ...TrackPicked,
+  globals: { theme: 'dark' },
+}
+
+/** The confirmed track is sent with its kind and confirmation, no alt text. */
+export const UploadTrack: Story = {
+  play: async (context) => {
+    await TrackPicked.play!(context)
+    const canvas = within(context.canvasElement)
+    await userEvent.click(
+      canvas.getByRole('button', { name: 'Add to gallery' }),
+    )
+    await waitFor(() =>
+      expect(context.args.uploader).toHaveBeenCalledWith(
+        expect.any(File),
+        {
+          title: 'conference theme',
+          alt: undefined,
+          edition: 'none',
+          subject: null,
+          tags: [],
+        },
+        { kind: 'audio', rightsConfirmed: true },
+      ),
+    )
+    // The next pick asks for the confirmation again.
+    await expect(
+      await canvas.findByText('Choose an image or a track'),
+    ).toBeInTheDocument()
+  },
+}
+
+/** A track over ten minutes is refused in the form (the server checks too). */
+export const TrackTooLong: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await canvas.findByText('Venue from the harbour')
+    await userEvent.upload(
+      canvas.getByLabelText(/Choose an image/),
+      wavFile('full-album.wav', 11 * 60),
+    )
+    await expect(await canvas.findByRole('alert')).toHaveTextContent(
+      'The track is longer than 10 minutes.',
+    )
+    await expect(
+      canvas.getByRole('button', { name: 'Add to gallery' }),
+    ).toBeDisabled()
+  },
+}
+
+/** The kind filter shows the tracks alone. */
+export const FilterTracks: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await canvas.findByText('Venue from the harbour')
+    await userEvent.selectOptions(canvas.getByLabelText('Kind'), 'Audio tracks')
+    await waitFor(() => expect(canvas.getAllByRole('listitem')).toHaveLength(1))
+    await expect(
+      canvas.getByText('Conference theme, 90-second cut'),
+    ).toBeInTheDocument()
+  },
+}
+export const FilterTracksMobile: Story = {
+  ...FilterTracks,
+  parameters: {
+    ...meta.parameters,
+    viewport: { defaultViewport: 'mobile1' },
+  },
+}
+export const FilterTracksDark: Story = {
+  ...FilterTracks,
+  globals: { theme: 'dark' },
+}
+
+/** A track's edit dialog has no alt text to write. */
+export const EditTrack: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(
+      await canvas.findByRole('button', {
+        name: 'Edit Conference theme, 90-second cut',
+      }),
+    )
+    const dialog = within(await within(document.body).findByRole('dialog'))
+    await expect(dialog.queryByLabelText('Alt text')).toBeNull()
+    await expect(dialog.getByRole('button', { name: 'Save' })).toBeEnabled()
   },
 }

@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { keepPreviousData } from '@tanstack/react-query'
 import {
   ExclamationTriangleIcon,
+  MusicalNoteIcon,
   PencilSquareIcon,
   Squares2X2Icon,
   TrashIcon,
@@ -17,10 +18,12 @@ import type {
   MarketingAssetRow,
 } from '@/lib/marketing-asset'
 import { api } from '@/lib/trpc/client'
+import { formatDateSafe } from '@/lib/time'
 import { AssetEditDialog } from './AssetEditDialog'
 import { AssetFilters } from './AssetFilters'
 import { AssetUploadForm } from './AssetUploadForm'
 import { SUBJECT_LABEL } from './SubjectCombobox'
+import { TrackPlayer } from './TrackPlayer'
 import { blobAssetUploader, type AssetUploader } from './upload'
 
 /** A grid-sized rendition from the Sanity CDN. */
@@ -42,14 +45,30 @@ function AssetCard({
   return (
     <li className="flex flex-col overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900">
       <div className="relative aspect-square bg-gray-100 dark:bg-gray-800">
-        {asset.imageUrl && (
-          // A Sanity CDN rendition, sized by the URL.
-          <img
-            src={thumbnail(asset.imageUrl)}
-            alt={asset.alt}
-            loading="lazy"
-            className="size-full object-contain"
-          />
+        {asset.kind === 'audio' ? (
+          <div className="flex size-full flex-col items-center justify-center gap-3 p-3">
+            <MusicalNoteIcon
+              className="size-10 text-gray-400 sm:size-12 dark:text-gray-500"
+              aria-hidden
+            />
+            {asset.audioUrl && (
+              <TrackPlayer
+                src={asset.audioUrl}
+                title={asset.title}
+                durationSeconds={asset.durationSeconds}
+              />
+            )}
+          </div>
+        ) : (
+          asset.imageUrl && (
+            // A Sanity CDN rendition, sized by the URL.
+            <img
+              src={thumbnail(asset.imageUrl)}
+              alt={asset.alt ?? ''}
+              loading="lazy"
+              className="size-full object-contain"
+            />
+          )
         )}
       </div>
       <div className="flex flex-1 flex-col gap-1 p-3">
@@ -77,14 +96,20 @@ function AssetCard({
             <TrashIcon className="size-4" aria-hidden />
           </button>
         </div>
-        {/* The image's alt text, shown for checking. Hidden from screen
-            readers, which already read it as the image's alt. */}
-        <p
-          aria-hidden
-          className="line-clamp-2 text-xs text-gray-500 dark:text-gray-400"
-        >
-          {asset.alt}
-        </p>
+        {asset.kind === 'audio' ? (
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            Audio track · for studio videos
+          </p>
+        ) : (
+          // The image's alt text, shown for checking. Hidden from screen
+          // readers, which already read it as the image's alt.
+          <p
+            aria-hidden
+            className="line-clamp-2 text-xs text-gray-500 dark:text-gray-400"
+          >
+            {asset.alt}
+          </p>
+        )}
         <p className="flex flex-wrap items-center gap-1 pt-1 text-xs">
           <span
             className={
@@ -128,6 +153,15 @@ function AssetCard({
               </div>
             )}
           </dl>
+        )}
+        {asset.rights && (
+          <p className="text-xs text-gray-600 dark:text-gray-300">
+            <span className="text-gray-500 dark:text-gray-400">
+              Rights confirmed by
+            </span>{' '}
+            {asset.rights.confirmedBy ?? 'a former organizer'},{' '}
+            {formatDateSafe(asset.rights.confirmedAt)}
+          </p>
         )}
         {(Boolean(asset.width && asset.height) || asset.softOnSocial) && (
           <p className="mt-auto flex flex-wrap items-center gap-x-2 gap-y-1 pt-1 text-xs text-gray-500 tabular-nums dark:text-gray-400">
@@ -215,6 +249,7 @@ export function AssetsPage({
   const filtered = Boolean(
     filter.subjectId ||
     filter.tag ||
+    filter.kind ||
     filter.search ||
     filter.editions === 'all',
   )
@@ -254,7 +289,7 @@ export function AssetsPage({
       <AdminPageHeader
         icon={<Squares2X2Icon />}
         title="Marketing assets"
-        description="Images for social posts, kept once with their alt text. Only organizers see this gallery."
+        description="Images for social posts, kept once with their alt text, and music for studio videos. Only organizers see this gallery."
       />
 
       <AssetUploadForm
@@ -360,7 +395,11 @@ export function AssetsPage({
         onClose={() => (remove.isPending ? undefined : setConfirming(false))}
         onConfirm={() => deleting && remove.mutate({ id: deleting._id })}
         title={`Delete “${deleting?.title ?? ''}”?`}
-        message="It leaves the gallery. Posts that already use the image keep it."
+        message={
+          deleting?.kind === 'audio'
+            ? 'It leaves the gallery, and its file is deleted unless something else still uses it.'
+            : 'It leaves the gallery. Posts that already use the image keep it.'
+        }
         confirmButtonText="Delete"
         variant="danger"
         isLoading={remove.isPending}

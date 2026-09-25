@@ -404,8 +404,7 @@ describe('an audio track through the move route (#1178)', () => {
   })
 
   it('still requires alt text of an image', async () => {
-    const { alt: _, ...noAlt } = VALID
-    expect((await POST(request(noAlt))).status).toBe(400)
+    expect((await POST(request({ ...VALID, alt: undefined }))).status).toBe(400)
     expect(h.move).not.toHaveBeenCalled()
   })
 })
