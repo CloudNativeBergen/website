@@ -1,6 +1,14 @@
 'use client'
 
-import { useState, useRef, useEffect, useLayoutEffect, useMemo } from 'react'
+import {
+  useState,
+  useRef,
+  useEffect,
+  useEffectEvent,
+  useLayoutEffect,
+  useMemo,
+  useCallback,
+} from 'react'
 import {
   PhotoIcon,
   ArrowUpTrayIcon,
@@ -54,6 +62,25 @@ import {
   type Raster,
 } from './meme-generator-draw'
 import { pickQrStyle, qrStyleKey, renderQrImage } from './meme-generator-qr'
+import {
+  FRAME,
+  clampTime,
+  frameAt,
+  newScene,
+  sceneIndexAt,
+  sceneStart,
+  setSceneDuration,
+  totalDuration,
+  type Scene,
+  type Transition,
+} from './meme-generator-timeline'
+import {
+  drawFrame,
+  offscreenLayers,
+  type PaintScene,
+} from './meme-generator-frame'
+import { VideoTimeline } from './VideoTimeline'
+import { useMediaQuery } from '@/hooks/useMediaQuery'
 import { PLATFORM_NAME } from '@/lib/branding/platform'
 
 interface MemeGeneratorProps {
@@ -185,8 +212,41 @@ export function MemeGenerator({
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const exportCanvasRef = useRef<HTMLCanvasElement>(null)
 
-  const [design, setDesign] = useState<MemeDesign>(DEFAULT_DESIGN)
+  // ── Scenes and time ─────────────────────────────────────────────────────
+  // Image mode is a video of one scene that is never played: the image is
+  // whichever scene the playhead is in, and switching to Video shows the
+  // timeline over the same list.
+  const [mode, setMode] = useState<'image' | 'video'>('image')
+  const [scenes, setScenes] = useState<Scene[]>(() => [
+    newScene(DEFAULT_DESIGN),
+  ])
+  const [time, setTime] = useState(0)
+  const [playing, setPlaying] = useState(false)
+  const [loop, setLoop] = useState(false)
+  const reducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)')
+  const loopAllowed = !reducedMotion
+
+  // The scene the controls edit: the one under the playhead while paused.
+  // During playback the panel stays on the scene it was on — one that
+  // swapped under the cursor every few seconds would be unusable.
+  const [playbackEditingKey, setPlaybackEditingKey] = useState<string | null>(
+    null,
+  )
+  const pausedIndex = sceneIndexAt(scenes, time)
+  const frozenIndex = scenes.findIndex((s) => s.key === playbackEditingKey)
+  const editingIndex = playing && frozenIndex >= 0 ? frozenIndex : pausedIndex
+  const editingKey = scenes[editingIndex].key
+  const design = scenes[editingIndex].design
   const { background, textLines, logo, qr } = design
+
+  const updateScene = (key: string, update: (prev: MemeDesign) => MemeDesign) =>
+    setScenes((prev) =>
+      prev.map((scene) =>
+        scene.key === key ? { ...scene, design: update(scene.design) } : scene,
+      ),
+    )
+  const setDesign = (update: (prev: MemeDesign) => MemeDesign) =>
+    updateScene(editingKey, update)
 
   const [expandedSections, setExpandedSections] = useState<boolean[]>([
     true,
@@ -201,8 +261,11 @@ export function MemeGenerator({
   ])
   const [showQrAdvanced, setShowQrAdvanced] = useState(false)
 
-  const setBackground = (patch: Partial<MemeDesign['background']>) =>
-    setDesign((prev) => ({
+  const setBackground = (
+    patch: Partial<MemeDesign['background']>,
+    key = editingKey,
+  ) =>
+    updateScene(key, (prev) => ({
       ...prev,
       background: { ...prev.background, ...patch },
     }))
@@ -258,94 +321,165 @@ export function MemeGenerator({
   // canvas; `drawDesign` never waits. While any of it is still loading the
   // preview carries `data-capture-pending`, so Download waits for it.
 
-  // The background image enters the design only once it has decoded, so the
-  // draw that shows it is the one its arrival triggers.
-  const [backgroundRaster, setBackgroundRaster] = useState<Raster | null>(null)
-  const [backgroundPending, setBackgroundPending] = useState(false)
-  const backgroundUpload = useRef(0)
+  // Assets are kept for EVERY scene, keyed by what they depend on, so a
+  // transition or a scrub to another scene never waits for a decode.
+
+  // A background image enters its scene only once it has decoded, so the draw
+  // that shows it is the one its arrival triggers.
+  // Uploads are counted per scene: a newer upload, or a clear, supersedes
+  // only its own scene's, never another scene's still decoding.
+  const backgroundUploads = useRef(new Map<string, number>())
+  const [uploadingScenes, setUploadingScenes] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  )
+  const backgroundPending = uploadingScenes.size > 0
+  const settleUpload = (sceneKey: string) =>
+    setUploadingScenes((prev) => {
+      const next = new Set(prev)
+      next.delete(sceneKey)
+      return next
+    })
+
+  // Decoded backgrounds, by URL. Pruned after each commit to exactly what the
+  // committed scenes show, never while updates are queued: two uploads that
+  // settle in one batch — one scene taking an image up as another drops it —
+  // would otherwise judge by scenes that are about to change. A ref, because
+  // an arrival always comes with the scene update that shows it, which is
+  // what repaints.
+  const backgroundRasters = useRef(new Map<string, Raster>())
+  useEffect(() => {
+    const shown = new Set(
+      scenes.flatMap((scene) => scene.design.background.image?.url ?? []),
+    )
+    for (const url of backgroundRasters.current.keys()) {
+      if (!shown.has(url)) backgroundRasters.current.delete(url)
+    }
+  }, [scenes])
 
   const handleBackgroundImageUpload = async (
     e: React.ChangeEvent<HTMLInputElement>,
   ) => {
     const file = e.target.files?.[0]
+    // Emptied at once, so picking the same file again — for another scene —
+    // still fires a change.
+    e.target.value = ''
     if (!file || !file.type.startsWith('image/')) return
-    const upload = ++backgroundUpload.current
-    setBackgroundPending(true)
+    // The scene the upload was made for, even if the playhead moves on.
+    const sceneKey = editingKey
+    const upload = (backgroundUploads.current.get(sceneKey) ?? 0) + 1
+    backgroundUploads.current.set(sceneKey, upload)
+    const isLatest = () => backgroundUploads.current.get(sceneKey) === upload
+    setUploadingScenes((prev) => new Set(prev).add(sceneKey))
     try {
       const url = await readAsDataUrl(file)
       const image = new window.Image()
       image.src = url
       await image.decode()
-      if (upload !== backgroundUpload.current) return
-      setBackgroundRaster(image)
-      setBackground({ image: { url, name: file.name } })
+      if (!isLatest()) return
+      backgroundRasters.current.set(url, image)
+      setBackground({ image: { url, name: file.name } }, sceneKey)
     } catch {
       // An image the browser cannot decode leaves the background as it was.
     } finally {
-      if (upload === backgroundUpload.current) setBackgroundPending(false)
+      if (isLatest()) settleUpload(sceneKey)
     }
   }
 
   const clearBackgroundImage = () => {
-    backgroundUpload.current++
-    setBackgroundPending(false)
-    setBackgroundRaster(null)
+    backgroundUploads.current.set(
+      editingKey,
+      (backgroundUploads.current.get(editingKey) ?? 0) + 1,
+    )
+    settleUpload(editingKey)
     setBackground({ image: null })
   }
 
-  // The QR image depends on its style alone: the effect is keyed on it — not
-  // on the design, and not on a draw function — so editing text, colours or
-  // positions never regenerates it.
-  const qrKey = qrStyleKey(qr)
-  const qrStyle = useMemo(
-    () => pickQrStyle(qr),
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: identity tracks the style, not the QR's position
-    [qrKey],
+  // A QR image depends on its style alone: the effect is keyed on the set of
+  // styles — not on the designs, and not on a draw function — so editing
+  // text, colours or positions never regenerates one.
+  const qrStyleByKey = new Map(
+    scenes
+      .filter((scene) => scene.design.qr.url)
+      .map((scene) => [
+        qrStyleKey(scene.design.qr),
+        pickQrStyle(scene.design.qr),
+      ]),
   )
-  const [qrRaster, setQrRaster] = useState<{
-    key: string
-    image: CanvasImageSource | null
-  } | null>(null)
+  const qrKeys = [...qrStyleByKey.keys()]
+  const qrKeySet = qrKeys.join('\n')
+  const qrStyles = useMemo(
+    () => [...qrStyleByKey],
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: identity tracks the styles, not the QR positions
+    [qrKeySet],
+  )
+  // Each style's image, generated once while any scene uses it.
+  const qrRequests = useRef(
+    new Map<string, Promise<CanvasImageSource | null>>(),
+  )
+  const [qrRasters, setQrRasters] = useState<
+    ReadonlyMap<string, CanvasImageSource | null>
+  >(() => new Map())
   useEffect(() => {
-    if (!qrStyle.url) return
-    const key = qrStyleKey(qrStyle)
+    const requests = qrRequests.current
+    const wanted = new Set(qrStyles.map(([key]) => key))
+    for (const key of requests.keys())
+      if (!wanted.has(key)) requests.delete(key)
     let cancelled = false
-    renderQrImage(qrStyle).then(
-      (image) => !cancelled && setQrRaster({ key, image }),
-      // A failed image is settled too: nothing to draw, nothing to wait for.
-      () => !cancelled && setQrRaster({ key, image: null }),
-    )
+    Promise.all(
+      qrStyles.map(async ([key, style]) => {
+        let request = requests.get(key)
+        if (!request) {
+          // A failed image is settled too: nothing to draw, nothing to wait for.
+          request = renderQrImage(style).catch(() => null)
+          requests.set(key, request)
+        }
+        return [key, await request] as const
+      }),
+    ).then((entries) => {
+      if (!cancelled) setQrRasters(new Map(entries))
+    })
     return () => {
       cancelled = true
     }
-  }, [qrStyle])
-  const qrPending = Boolean(qr.url) && qrRaster?.key !== qrKey
+  }, [qrStyles])
+  const qrPending = qrKeys.some((key) => !qrRasters.has(key))
 
-  // The logo's variant and monochrome ink follow the DESIGN's background, not
-  // the admin's light/dark theme.
-  const lightBackground = designIsLight(design)
-  const uploadedLogoSvg = logoSvgFor(conferenceLogos, lightBackground)
+  // The logo's variant and monochrome ink follow each DESIGN's background,
+  // not the admin's light/dark theme.
   const logoName = conferenceLogos?.title?.trim() || PLATFORM_NAME
-  const uploadedLogoKey = uploadedLogoSvg
-    ? logoRasterKey(uploadedLogoSvg, logoTint(logo.variant, lightBackground))
-    : null
+  const uploadedLogoKeyFor = useCallback(
+    (scene: MemeDesign) => {
+      const light = designIsLight(scene)
+      const svg = logoSvgFor(conferenceLogos, light)
+      return svg
+        ? logoRasterKey(svg, logoTint(scene.logo.variant, light))
+        : null
+    },
+    [conferenceLogos],
+  )
 
-  // Every raster the design can switch to, decoded up front (see
+  // Every raster a design can switch to, decoded up front (see
   // logoRasterRequests). One that cannot be drawn falls back to the wordmark;
   // until the set has decoded, just after mount, there is no logo.
   const [logoRasters, setLogoRasters] = useState<
     ReadonlyMap<string, CanvasLogo | null>
   >(() => new Map())
 
-  const canvasLogo = useMemo<CanvasLogo | null>(() => {
-    const wordmark: CanvasLogo = { kind: 'wordmark', name: logoName }
-    if (!uploadedLogoKey) return wordmark
-    if (!logoRasters.has(uploadedLogoKey)) return null
-    return logoRasters.get(uploadedLogoKey) ?? wordmark
-  }, [uploadedLogoKey, logoRasters, logoName])
+  const canvasLogoFor = useCallback(
+    (scene: MemeDesign): CanvasLogo | null => {
+      const wordmark: CanvasLogo = { kind: 'wordmark', name: logoName }
+      const key = uploadedLogoKeyFor(scene)
+      if (!key) return wordmark
+      if (!logoRasters.has(key)) return null
+      return logoRasters.get(key) ?? wordmark
+    },
+    [uploadedLogoKeyFor, logoRasters, logoName],
+  )
 
-  const logoPending =
-    uploadedLogoKey !== null && !logoRasters.has(uploadedLogoKey)
+  const logoPending = scenes.some((scene) => {
+    const key = uploadedLogoKeyFor(scene.design)
+    return key !== null && !logoRasters.has(key)
+  })
 
   const logoBright = conferenceLogos?.logoBright
   const logoDark = conferenceLogos?.logoDark
@@ -368,16 +502,18 @@ export function MemeGenerator({
 
   // Fonts are assets too: text wraps by measuring, so a face that lands late
   // re-wraps the line. Canvas text never pulls a webfont in on its own (see
-  // meme-generator-fonts), so the faces are asked for explicitly. Keyed on
-  // the faces themselves rather than on `textLines`: colour, alignment and
-  // position edits rewrite that array without changing a single font.
-  const fontRequestKey = textLines
+  // meme-generator-fonts), so the faces of every scene are asked for
+  // explicitly. Keyed on the faces themselves rather than on the text lines:
+  // colour, alignment and position edits rewrite those without changing a
+  // single font.
+  const allTextLines = scenes.flatMap((scene) => scene.design.textLines)
+  const fontRequestKey = allTextLines
     .filter((line) => line.text)
     .map((line) => `${canvasFontShorthand(line)}|${memeLineText(line)}`)
     .join('\n')
 
   const fontRequests = useMemo(
-    () => fontRequestsForLines(textLines),
+    () => fontRequestsForLines(allTextLines),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: identity tracks the requested faces, not every field of every line
     [fontRequestKey],
   )
@@ -404,9 +540,11 @@ export function MemeGenerator({
   }, [fontRequests, fontRequestKey])
 
   // The wordmark is canvas text, so its webfont has to be asked for too —
-  // whenever it is what gets drawn, including as the fallback for an uploaded
+  // whenever any scene draws it, including as the fallback for an uploaded
   // logo that could not be rasterised.
-  const drawsWordmark = canvasLogo?.kind === 'wordmark'
+  const drawsWordmark = scenes.some(
+    (scene) => canvasLogoFor(scene.design)?.kind === 'wordmark',
+  )
   const [wordmarkReadyFor, setWordmarkReadyFor] = useState<string | null>(null)
   const wordmarkPending = drawsWordmark && wordmarkReadyFor !== logoName
   useEffect(() => {
@@ -425,13 +563,16 @@ export function MemeGenerator({
     }
   }, [drawsWordmark, logoName])
 
-  const assets = useMemo(
-    () => ({
-      background: backgroundRaster,
-      qr: qrRaster?.image ?? null,
-      logo: canvasLogo,
+  /** A design's decoded assets, from the caches above. */
+  const assetsFor = useCallback(
+    (scene: MemeDesign) => ({
+      background: scene.background.image
+        ? (backgroundRasters.current.get(scene.background.image.url) ?? null)
+        : null,
+      qr: scene.qr.url ? (qrRasters.get(qrStyleKey(scene.qr)) ?? null) : null,
+      logo: canvasLogoFor(scene),
     }),
-    [backgroundRaster, qrRaster, canvasLogo],
+    [qrRasters, canvasLogoFor],
   )
 
   const capturePending =
@@ -441,11 +582,99 @@ export function MemeGenerator({
     textFontsPending ||
     wordmarkPending
 
+  // ── Playback ────────────────────────────────────────────────────────────
+  // Time comes from the clock against where playback (re)started, so a slow
+  // frame is skipped rather than slowing the video down. Nothing autoplays.
+  const total = totalDuration(scenes)
+  const playbackAnchor = useRef({ time: 0, at: 0 })
+
+  // Playback carries on from wherever the playhead is put.
+  const moveTo = (next: number) => {
+    playbackAnchor.current = { time: next, at: performance.now() }
+    setTime(next)
+  }
+  const seek = (to: number) => moveTo(clampTime(scenes, to))
+
+  const togglePlayback = () => {
+    if (playing) {
+      setPlaying(false)
+      return
+    }
+    // Play from the start again once the end has been reached.
+    seek(time >= total ? 0 : time)
+    setPlaybackEditingKey(editingKey)
+    setPlaying(true)
+  }
+
+  const advance = useEffectEvent((now: number) => {
+    // A frame's timestamp can fall a moment before an anchor set by a seek
+    // in the same frame; time never runs backwards from where it was put.
+    const next =
+      playbackAnchor.current.time +
+      Math.max(0, now - playbackAnchor.current.at) / 1000
+    if (next < total) {
+      setTime(next)
+      return true
+    }
+    // Looping jumps back to the start; under reduced motion it never loops.
+    if (loop && loopAllowed) {
+      playbackAnchor.current = { time: 0, at: now }
+      setTime(0)
+      return true
+    }
+    setTime(total)
+    setPlaying(false)
+    return false
+  })
+
+  useEffect(() => {
+    if (!playing) return
+    let frame = requestAnimationFrame(function tick(now) {
+      if (advance(now)) frame = requestAnimationFrame(tick)
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [playing])
+
+  // A new scene goes at the end, and the playhead to its start, so the
+  // controls edit it — during playback too: it is what was just asked for.
+  const addNewScene = () => {
+    const scene = newScene(DEFAULT_DESIGN)
+    setScenes((prev) => [...prev, scene])
+    moveTo(total)
+    setPlaybackEditingKey(scene.key)
+  }
+
+  // The playhead keeps its place in the scene being edited, so a length
+  // typed into the field never moves the controls to another scene.
+  const changeDuration = (index: number, seconds: number) => {
+    const next = setSceneDuration(scenes, index, seconds)
+    setScenes(next)
+    if (playing) return
+    const offset = time - sceneStart(scenes, editingIndex)
+    const start = sceneStart(next, editingIndex)
+    const last = next[editingIndex].duration - FRAME
+    moveTo(start + Math.min(offset, last))
+  }
+
+  const changeTransition = (index: number, transition: Transition) =>
+    setScenes((prev) =>
+      prev.map((scene, i) => (i === index ? { ...scene, transition } : scene)),
+    )
+
+  const switchMode = (next: 'image' | 'video') => {
+    setPlaying(false)
+    setMode(next)
+  }
+
+  // Two offscreen canvases for transitions, made the first time one is drawn.
+  const [layers] = useState(offscreenLayers)
+
   // Only a complete frame is painted: while any asset is still loading the
   // canvas keeps the last one, so no frame shows a fallback font, a stale QR
   // or a missing logo. A layout effect, so the paint lands in the same commit
   // that clears `data-capture-pending` and a capture never sees one without
-  // the other.
+  // the other. Scrubbing and playback both paint through `drawFrame`: a time
+  // shows the same picture however it was reached.
   useLayoutEffect(() => {
     if (capturePending) return
     const root = document.documentElement
@@ -453,14 +682,24 @@ export function MemeGenerator({
       fontFamily: wordmarkFontFamily(root),
       gradient: brandGradientColors(root),
     }
+    const paintScene: PaintScene = (ctx, { index, time: sceneTime }) => {
+      const scene = scenes[index].design
+      drawDesign(ctx, scene, { ...assetsFor(scene), brand }, sceneTime)
+    }
     for (const canvas of [canvasRef.current, exportCanvasRef.current]) {
       const ctx = canvas?.getContext('2d')
-      if (ctx) drawDesign(ctx, design, { ...assets, brand }, 0)
+      if (!ctx) continue
+      if (mode === 'video')
+        drawFrame(ctx, frameAt(scenes, time), paintScene, layers)
+      else drawDesign(ctx, design, { ...assetsFor(design), brand }, 0)
     }
-  }, [design, assets, capturePending, lateFaces])
+  }, [mode, scenes, design, time, assetsFor, layers, capturePending, lateFaces])
 
   // The overlay carried the logo's accessible name; the canvas now does.
-  const canvasLabel = `Meme preview with the ${logoName} logo`
+  const canvasLabel =
+    mode === 'video'
+      ? `Video preview with the ${logoName} logo`
+      : `Meme preview with the ${logoName} logo`
 
   const previewNode = (
     <div
@@ -503,9 +742,57 @@ export function MemeGenerator({
 
   return (
     <div className="grid gap-4 lg:grid-cols-2">
-      <div className="space-y-4 lg:sticky lg:top-20 lg:self-start">
+      {/* In Video mode the preview and the timeline together can be taller
+          than a laptop screen; the sticky column then scrolls on its own so
+          the timeline is never stranded below the fold. */}
+      <div
+        className={`min-w-0 space-y-4 lg:sticky lg:top-20 lg:self-start ${
+          mode === 'video'
+            ? // A scroller clips on both axes: the padding, cancelled by the
+              // margin, leaves the preview's shadow room inside it.
+              'lg:-mx-4 lg:max-h-[calc(100dvh-6rem)] lg:overflow-y-auto lg:px-4 lg:pb-4'
+            : ''
+        }`}
+      >
+        <div
+          role="group"
+          aria-label="Output"
+          className="mx-auto flex w-fit rounded-lg border border-brand-frosted-steel p-0.5 dark:border-gray-600"
+        >
+          {(['image', 'video'] as const).map((option) => (
+            <button
+              key={option}
+              type="button"
+              aria-pressed={mode === option}
+              onClick={() => switchMode(option)}
+              className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${
+                mode === option
+                  ? 'bg-brand-cloud-blue text-white dark:bg-blue-600'
+                  : 'text-brand-slate-gray hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700'
+              }`}
+            >
+              {option === 'image' ? 'Image' : 'Video'}
+            </button>
+          ))}
+        </div>
         {wrapPreview ? wrapPreview(previewNode) : previewNode}
         {exportNode}
+        {mode === 'video' && (
+          <VideoTimeline
+            scenes={scenes}
+            time={time}
+            editingIndex={editingIndex}
+            playing={playing}
+            loop={loop}
+            loopAllowed={loopAllowed}
+            onSeek={seek}
+            onDurationChange={changeDuration}
+            onTransitionChange={changeTransition}
+            onAddScene={addNewScene}
+            onPlayToggle={togglePlayback}
+            onLoopChange={setLoop}
+          />
+        )}
       </div>
 
       <div className="space-y-3">
