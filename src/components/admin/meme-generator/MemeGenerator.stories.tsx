@@ -1674,12 +1674,19 @@ export const VideoLineAfterItsExit: Story = {
     await waitFor(() => expect(box(isWhite)).toBeGreaterThan(0.05))
     await seekTo(canvas, 2)
     await waitFor(() => expect(box(near(FRESH_GREEN, 2))).toBe(1))
+    // With no exit preset it goes at once — the same, from the moment it
+    // leaves.
+    await userEvent.selectOptions(canvas.getByLabelText('Text 1 exit'), 'none')
+    await seekTo(canvas, 0.9)
+    await waitFor(() => expect(box(isWhite)).toBeGreaterThan(0.05))
+    await seekTo(canvas, 1)
+    await waitFor(() => expect(box(near(FRESH_GREEN, 2))).toBe(1))
   },
 }
 
 /**
- * A pop scales the drawn line, never its font size: halfway into the pop the
- * headline is drawn smaller, yet it wraps into the same two rows.
+ * Every element animated, over two scenes, paused a second in: the fixture
+ * for looking at the bars and the fields, in light and dark.
  */
 export const VideoElementTimings: Story = {
   play: async ({ canvasElement }) => {
