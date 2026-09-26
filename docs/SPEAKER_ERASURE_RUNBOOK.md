@@ -171,17 +171,21 @@ Read the `Image asset:` line:
 ### 3b. Confirm the marketing images were deleted (#1162)
 
 Every image of the person the marketing tools hold goes — not through the
-orphan check above, but **unconditionally**. The plan links: gallery assets
-(`marketingAsset`) whose subject is the speaker or a talk they give, and the
-render of any `marketingTask` whose subject is either — and any image in a post
-tied to such a Task (through the publishing Task that needs it, its variant and
-post) that nothing outside that chain holds. That last route is what finds an
-old render a re-render replaced but a post kept; a shared logo in the same post
-is held elsewhere and stays. Every document holding
-one of those files — found by the file's own references, drafts and Content
-Release versions included — lets go of it in the transaction: gallery entries
-are deleted, posts and their variants lose the attachment (the post keeps its
-text), Tasks lose the render. Then the files are deleted.
+orphan check above, but **unconditionally**. The plan links:
+
+- gallery assets (`marketingAsset`) whose subject is the speaker or a talk they
+  give;
+- and, for any `marketingTask` whose subject is either, every render the Task
+  names: its `asset`, its `pendingStudioAsset`, and its `replacedRenders` — the
+  earlier renders a re-render replaced that could not be deleted yet, usually
+  because a post it was handed to still holds it. A replaced render is recorded
+  there in the same save that replaces it, so the record cannot be lost.
+
+Every document holding one of those files — found by the file's own
+references, drafts and Content Release versions included — lets go of it in the
+transaction: gallery entries are deleted, posts and their variants lose the
+attachment (the post keeps its text), Tasks lose the render and the
+`replacedRenders` entry. Then the files are deleted.
 
 The dry run lists them under `Marketing files`. The transaction records their
 ids on the erased speaker (`erasedFileIds` — asset ids, no personal data),
@@ -190,8 +194,10 @@ commit, read the `Marketing files:` line. Any file `NOT deleted` is still
 counted by `--verify` (from the record), and **a re-run retries it**: fix the
 cause and re-run step 2. `--files <id,id>` adds ids to a verification by hand.
 
-**The hole.** An image with no subject — a group photo, a collage, a render
-saved from a Task that had no subject — is linked to nobody and is not found.
+**The hole.** An image no subject and no Task names is linked to nobody and is
+not found: a group photo or collage with no subject, a render saved from a Task
+that had no subject, or an image **attached to a post by hand** — even a post
+about the speaker, since it may as easily be a sponsor's graphic.
 `/privacy` tells people to tell us about such an image; when they do, delete it
 from the gallery by hand. Published posts on Bluesky or LinkedIn are outside
 our reach either way.

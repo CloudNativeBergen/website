@@ -60,6 +60,7 @@ vi.mock('@/lib/sanity/orphaned-asset', () => ({
 // save offers it.
 vi.mock('@/lib/marketing/replaced-renders', () => ({
   retireReplacedRenders: h.deleteOrphan,
+  recordReplacedRender: vi.fn(),
 }))
 
 vi.mock('@/lib/marketing/render-sanity', () => ({
@@ -1039,7 +1040,9 @@ describe('task.attachAsset', () => {
         pendingAssetId: string | null
       } = { ...render(), assetId: OLD }
       h.getStudioTask.mockImplementation(async () => current)
-      h.updateTaskFields.mockImplementation(async () => {
+      h.updateTaskFields.mockImplementation(async (...args: unknown[]) => {
+        // Recorded in the save's own patch, before anything is retired.
+        expect(args[5]).toBe(OLD)
         expect(h.deleteOrphan).not.toHaveBeenCalled()
         current = { ...current, assetId, pendingAssetId: null }
         return true
@@ -1047,11 +1050,7 @@ describe('task.attachAsset', () => {
       expect(await marketing().task.attachAsset(input)).toMatchObject({
         success: true,
       })
-      expect(h.deleteOrphan).toHaveBeenCalledExactlyOnceWith(
-        'task-ours',
-        CONF_A,
-        OLD,
-      )
+      expect(h.deleteOrphan).toHaveBeenCalledExactlyOnceWith('task-ours', [OLD])
     })
     it('does not touch the render on an idempotent retry of the same image', async () => {
       h.getStudioTask.mockImplementation(async () => ({
@@ -1060,8 +1059,16 @@ describe('task.attachAsset', () => {
         pendingAssetId: null,
       }))
       await marketing().task.attachAsset(input)
-      // Only the retry of what earlier replacements recorded; nothing new.
-      expect(h.deleteOrphan.mock.calls).toEqual([['task-ours', CONF_A, null]])
+      // Nothing new is recorded or offered.
+      expect(h.updateTaskFields).not.toHaveBeenCalledWith(
+        expect.anything(),
+        expect.anything(),
+        expect.anything(),
+        expect.anything(),
+        expect.anything(),
+        expect.any(String),
+      )
+      expect(h.deleteOrphan.mock.calls).toEqual([['task-ours', []]])
     })
     it('keeps the old render when the save loses a race', async () => {
       h.getStudioTask.mockImplementation(async () => ({
@@ -1297,6 +1304,8 @@ describe('task.attachAsset', () => {
         handoffDoneFor: [],
       },
       ['pendingStudioAsset'],
+      undefined,
+      undefined,
     )
     const savedFields = Object.assign(
       {},

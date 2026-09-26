@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { recordReplacedRender } from './replaced-renders'
 import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
 import { groq } from 'next-sanity'
 import { scopedFetch } from '@/lib/sanity/scoped'
@@ -672,11 +673,16 @@ export async function updateTaskFields(
   fields: Record<string, unknown>,
   unset: string[] = [],
   campaign?: { id: string; rev?: string },
+  /** A render this save REPLACES, recorded in the same patch (#1162). */
+  replacedRender?: string,
 ): Promise<boolean> {
   const now = getCurrentDateTime()
   const tx = clientWrite.transaction().patch(taskId, (p) => {
     const set = p.ifRevisionId(rev).set({ ...fields, updatedAt: now })
-    return unset.length > 0 ? set.unset(unset) : set
+    const unsetDone = unset.length > 0 ? set.unset(unset) : set
+    return replacedRender
+      ? recordReplacedRender(unsetDone, replacedRender)
+      : unsetDone
   })
   // Prerequisite edits advance the Campaign revision in the same transaction.
   // Handoff pending is derived independently from current recipients.

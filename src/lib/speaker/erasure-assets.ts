@@ -233,6 +233,23 @@ export function planSpeakerAssetErasure(
     return true
   }
 
+  /**
+   * The `replacedRenders` entries of a Task that this erasure deletes. Plain
+   * asset ids, so `references()` never finds them: unset here, or a re-run
+   * would find them again and the plan would never reach its fixed point.
+   * An id that cannot be put in a selector is left; the record's only harm
+   * is a re-run retrying a delete that is already done.
+   */
+  const unrecord = (doc: Doc): string[] =>
+    (Array.isArray(doc.replacedRenders) ? doc.replacedRenders : [])
+      .filter(
+        (id): id is string =>
+          typeof id === 'string' && files.has(id) && SAFE_KEY.test(id),
+      )
+      .map((id) => `replacedRenders[@=="${id}"]`)
+  /** Tasks already given a patch, so each gets ONE (one revision guard). */
+  const patchedTasks = new Set<string>()
+
   const deleted = new Set<string>()
   const deleteAsset = (doc: Doc, reason: string) => {
     if (deleted.has(doc._id)) return
@@ -297,9 +314,10 @@ export function planSpeakerAssetErasure(
           id: doc._id,
           type: doc._type,
           rev: revOf(doc),
-          unset: [...unset],
+          unset: [...unset, ...unrecord(doc)],
           reason: 'Task render linked to the subject',
         })
+        patchedTasks.add(doc._id)
         break
       }
 
@@ -313,6 +331,19 @@ export function planSpeakerAssetErasure(
       default:
         refuse(doc, 'and erasure does not know how to remove it from there')
     }
+  }
+
+  for (const doc of inputs.subjectDocs) {
+    if (doc._type !== 'marketingTask' || patchedTasks.has(doc._id)) continue
+    const unset = unrecord(doc)
+    if (unset.length === 0) continue
+    patches.push({
+      id: doc._id,
+      type: doc._type,
+      rev: revOf(doc),
+      unset,
+      reason: 'replaced render of a Task about the subject, now deleted',
+    })
   }
 
   /** Published post id → attachment key → the file it holds there. */

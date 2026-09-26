@@ -3,7 +3,10 @@ import { TRPCError } from '@trpc/server'
 import { getAuthSession } from '@/lib/auth'
 import { isOrganizerForCurrentOrg } from '@/lib/authz/organizer'
 import { clientWrite } from '@/lib/sanity/client'
-import { retireReplacedRenders } from '@/lib/marketing/replaced-renders'
+import {
+  recordReplacedRender,
+  retireReplacedRenders,
+} from '@/lib/marketing/replaced-renders'
 import { requireDocumentInCurrentConference } from '@/server/tenancy'
 import { TaskIdSchema } from '@/server/schemas/marketing'
 import { getStudioTask } from '@/lib/marketing/render-sanity'
@@ -46,7 +49,16 @@ export async function POST(request: Request) {
       Buffer.from(await file.arrayBuffer()),
       { filename: file.name },
     )
-    const saved = await clientWrite
+    // The upload this one REPLACES is recorded in the binding's own patch
+    // (#1162) — not the saved render, and not when Sanity handed back the
+    // same bytes — so nothing between the two can lose it.
+    const replaced =
+      task.pendingAssetId &&
+      task.pendingAssetId !== asset._id &&
+      task.pendingAssetId !== task.assetId
+        ? task.pendingAssetId
+        : null
+    const binding = clientWrite
       .patch(taskId)
       .ifRevisionId(task._rev)
       .set({
@@ -55,19 +67,15 @@ export async function POST(request: Request) {
           asset: { _type: 'reference', _ref: asset._id },
         },
       })
-      .commit()
-    // The upload this one REPLACES goes now, through the shared orphan
-    // check; one that cannot go is recorded on the Task for a retry and for
-    // a speaker's erasure (#1162). Not the saved render, and not when Sanity
-    // handed back the same bytes. Never fails the upload.
-    const replaced = task.pendingAssetId
-    await retireReplacedRenders(
-      taskId,
-      conferenceId,
-      replaced && replaced !== asset._id && replaced !== task.assetId
-        ? replaced
-        : null,
-    )
+    const saved = await (
+      replaced ? recordReplacedRender(binding, replaced) : binding
+    ).commit()
+    // Then every recorded render goes, through the shared orphan check; one
+    // that cannot go stays recorded. Never fails the upload.
+    await retireReplacedRenders(taskId, [
+      ...(task.replacedRenders ?? []),
+      ...(replaced ? [replaced] : []),
+    ])
     return NextResponse.json({
       assetId: asset._id,
       url: asset.url,

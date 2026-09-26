@@ -1,131 +1,148 @@
 /**
  * @vitest-environment node
  *
- * Retiring a replaced render (#1162, review of PR #1218): a render the orphan
- * check cannot delete stays RECORDED on the Task, so a later replacement
- * retries it and a speaker's erasure can still find it. The read is executed
- * with groq-js; the orphan check and the write are recorded.
+ * A replaced render is RECORDED in the same patch as the save that replaces
+ * it, and removed from the record only once it is deleted (#1162, review of
+ * PR #1218). Asserted on the stored Task: every patch here is a REAL
+ * `@sanity/client` patch, serialized and applied by Sanity's own
+ * `@sanity/mutator`. The orphan check is the one thing stubbed — its own
+ * semantics are pinned by `orphaned-asset` tests.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { evaluate, parse } from 'groq-js'
 
 const h = vi.hoisted(() => ({
-  dataset: [] as Record<string, unknown>[],
+  task: {} as Record<string, unknown>,
   deletable: new Set<string>(),
   failing: new Set<string>(),
-  offered: [] as string[],
-  writes: [] as { id: string; set?: unknown; unset?: string[] }[],
   writeFails: false,
+  /** Runs just before an unset commit lands: a concurrent save. */
+  beforeUnset: null as null | (() => void),
 }))
 vi.mock('server-only', () => ({}))
-vi.mock('@/lib/sanity/client', () => ({
-  clientReadUncached: {
-    fetch: async (query: string, params: Record<string, unknown>) =>
-      (await evaluate(parse(query), { dataset: h.dataset, params })).get(),
-  },
-  clientWrite: {
-    patch: (id: string) => ({
-      set: (set: unknown) => ({
-        commit: async () => {
+vi.mock('@/lib/sanity/client', async () => {
+  const { createClient } = await import('@sanity/client')
+  const client = createClient({
+    projectId: 'test',
+    dataset: 'test',
+    apiVersion: '2025-02-19',
+    useCdn: false,
+  })
+  return {
+    clientWrite: {
+      patch: (id: string) => {
+        const patch = client.patch(id)
+        patch.commit = (async () => {
           if (h.writeFails) throw new Error('Sanity down')
-          h.writes.push({ id, set })
-        },
-      }),
-      unset: (unset: string[]) => ({
-        commit: async () => void h.writes.push({ id, unset }),
-      }),
-    }),
-  },
-}))
+          h.beforeUnset?.()
+          apply(patch.serialize())
+          return {}
+        }) as typeof patch.commit
+        return patch
+      },
+    },
+    /** For the tests: a real patch builder with no commit. */
+    testClient: client,
+  }
+})
 vi.mock('@/lib/sanity/orphaned-asset', () => ({
   deleteImageAssetIfOrphaned: async (id: string) => {
-    h.offered.push(id)
     if (h.failing.has(id)) throw new Error('Sanity down')
-    return {
-      id,
-      deleted: h.deletable.has(id),
-      remainingReferences: h.deletable.has(id) ? 0 : 1,
-    }
+    return { id, deleted: h.deletable.has(id), remainingReferences: 0 }
   },
 }))
 
-import { retireReplacedRenders } from './replaced-renders'
+import { createRequire } from 'node:module'
+import * as sanityClient from '@/lib/sanity/client'
+import { recordReplacedRender, retireReplacedRenders } from './replaced-renders'
 
-const task = (replacedRenders?: string[]) => ({
-  _id: 'task-1',
-  _type: 'marketingTask',
-  conference: { _ref: 'conf-a' },
-  ...(replacedRenders ? { replacedRenders } : {}),
-})
+const req = createRequire(import.meta.url)
+const { Mutation } = createRequire(req.resolve('sanity/package.json'))(
+  '@sanity/mutator',
+) as {
+  Mutation: new (o: { mutations: unknown[] }) => {
+    apply: (d: unknown) => Record<string, unknown> | null
+  }
+}
+function apply(patch: unknown) {
+  h.task = new Mutation({ mutations: [{ patch }] }).apply(
+    structuredClone(h.task),
+  )!
+}
+const { testClient } = sanityClient as unknown as {
+  testClient: import('@sanity/client').SanityClient
+}
+
+/** The Task save that replaces a render, as the router and route build it. */
+function save(replaced: string) {
+  apply(
+    recordReplacedRender(
+      testClient.patch('task-1').set({ asset: { asset: { _ref: 'new' } } }),
+      replaced,
+    ).serialize(),
+  )
+}
 
 beforeEach(() => {
-  h.dataset = [task()]
+  h.task = { _id: 'task-1', _type: 'marketingTask' }
   h.deletable = new Set()
   h.failing = new Set()
-  h.offered = []
-  h.writes = []
   h.writeFails = false
+  h.beforeUnset = null
+})
+
+describe('recordReplacedRender', () => {
+  it('records in the SAME patch as the save — two replacements keep both ids', () => {
+    save('image-x')
+    save('image-y')
+    expect(h.task.replacedRenders).toEqual(['image-x', 'image-y'])
+    expect(h.task.asset).toEqual({ asset: { _ref: 'new' } })
+  })
 })
 
 describe('retireReplacedRenders', () => {
-  it('deletes an unreferenced replaced render and records nothing', async () => {
-    h.deletable.add('image-old')
-    await retireReplacedRenders('task-1', 'conf-a', 'image-old')
-    expect(h.offered).toEqual(['image-old'])
-    expect(h.writes).toEqual([])
+  it('removes a deleted render from the record, and only that one', async () => {
+    save('image-x')
+    save('image-y')
+    h.deletable.add('image-x')
+    await retireReplacedRenders('task-1', ['image-x', 'image-y'])
+    expect(h.task.replacedRenders).toEqual(['image-y'])
   })
 
-  it('RECORDS a replaced render a post still holds, instead of forgetting it', async () => {
-    await retireReplacedRenders('task-1', 'conf-a', 'image-old')
-    expect(h.writes).toEqual([
-      { id: 'task-1', set: { replacedRenders: ['image-old'] } },
-    ])
+  it('keeps a replacement that lands while it runs — it removes by value, not by rewriting the list', async () => {
+    save('image-x')
+    h.deletable.add('image-x')
+    h.beforeUnset = () => {
+      h.beforeUnset = null
+      save('image-y')
+    }
+    await retireReplacedRenders('task-1', ['image-x'])
+    expect(h.task.replacedRenders).toEqual(['image-y'])
   })
 
-  it('retries what earlier replacements recorded, and drops what is gone', async () => {
-    h.dataset = [task(['image-a', 'image-b'])]
-    h.deletable.add('image-a')
-    await retireReplacedRenders('task-1', 'conf-a', 'image-c')
-    expect(h.offered).toEqual(['image-a', 'image-b', 'image-c'])
-    expect(h.writes).toEqual([
-      { id: 'task-1', set: { replacedRenders: ['image-b', 'image-c'] } },
-    ])
+  it('KEEPS the id when the delete fails or a post still holds the file', async () => {
+    save('image-held')
+    save('image-down')
+    h.failing.add('image-down')
+    await retireReplacedRenders('task-1', ['image-held', 'image-down'])
+    expect(h.task.replacedRenders).toEqual(['image-held', 'image-down'])
   })
 
-  it('unsets the list once every recorded render is gone', async () => {
-    h.dataset = [task(['image-a'])]
-    h.deletable.add('image-a')
-    await retireReplacedRenders('task-1', 'conf-a', null)
-    expect(h.writes).toEqual([{ id: 'task-1', unset: ['replacedRenders'] }])
-  })
-
-  it('writes nothing when nothing changed', async () => {
-    h.dataset = [task(['image-a'])]
-    await retireReplacedRenders('task-1', 'conf-a', null)
-    expect(h.offered).toEqual(['image-a'])
-    expect(h.writes).toEqual([])
-  })
-
-  it('never reads another conference’s Task', async () => {
-    h.dataset = [{ ...task(['image-theirs']), conference: { _ref: 'conf-b' } }]
-    await retireReplacedRenders('task-1', 'conf-a', null)
-    expect(h.offered).toEqual([])
-  })
-
-  it('keeps a render whose delete fails, so the next replacement retries it', async () => {
-    h.failing.add('image-old')
-    await retireReplacedRenders('task-1', 'conf-a', 'image-old')
-    expect(h.writes).toEqual([
-      { id: 'task-1', set: { replacedRenders: ['image-old'] } },
-    ])
-  })
-
-  it('never throws into the save it follows', async () => {
+  it('never throws, and the id stays recorded, when removing it fails', async () => {
+    save('image-x')
+    h.deletable.add('image-x')
     h.writeFails = true
-    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.spyOn(console, 'error').mockImplementation(() => {})
     await expect(
-      retireReplacedRenders('task-1', 'conf-a', 'image-old'),
+      retireReplacedRenders('task-1', ['image-x']),
     ).resolves.toBeUndefined()
-    expect(error).toHaveBeenCalled()
+    expect(h.task.replacedRenders).toEqual(['image-x'])
+  })
+
+  it('does not put an id it cannot select safely into a patch path', async () => {
+    const bad = 'image-x"]'
+    h.task.replacedRenders = [bad]
+    h.deletable.add(bad)
+    await retireReplacedRenders('task-1', [bad])
+    expect(h.task.replacedRenders).toEqual([bad])
   })
 })

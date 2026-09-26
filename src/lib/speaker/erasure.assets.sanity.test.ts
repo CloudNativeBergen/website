@@ -403,6 +403,15 @@ describe('speaker erasure removes their images everywhere (#1162)', () => {
   })
 
   it('is a fixed point: a second run plans nothing and changes nothing', async () => {
+    // A render task-ada replaced, recorded because post-render still held it.
+    const REPLACED = 'image-replaced-1080x1080-png'
+    h.dataset.push({ _id: REPLACED, _type: 'sanity.imageAsset' })
+    doc('task-ada').replacedRenders = [REPLACED]
+    ;(doc('post-render').attachments as unknown[]).push({
+      _key: 'att-old',
+      image: image(REPLACED),
+      alt: 'Ada',
+    })
     await eraseSpeakerInPlace({ speakerId: ADA, actor: 'test' })
     const after = structuredClone(h.dataset)
     const second = await eraseSpeakerInPlace({ speakerId: ADA, actor: 'test' })
@@ -511,12 +520,12 @@ describe('speaker erasure removes their images everywhere (#1162)', () => {
     expect(h.dataset).toEqual(before)
   })
 
-  it('finds a STALE render still in a post tied to a subject Task, and leaves a shared logo and a hand-attached image alone', async () => {
+  it('finds a STALE render a subject Task recorded as replaced, and leaves a shared logo and a hand-attached image alone', async () => {
     // task-ada rendered STALE, the handoff put it in post-stale, then a
     // re-render replaced task-ada.asset with RENDER. The handoff found the
-    // post occupied, so it still holds STALE, and `retireReplacedRenders`
-    // (whose orphan check kept it) recorded it on task-ada. The Task chain
-    // leads there: task-pub needs task-ada, and owns var-stale.
+    // post occupied, so it still holds STALE; the save that replaced it
+    // recorded it in task-ada.replacedRenders, and the orphan check kept it.
+    // That record is the ONLY thing leading from Ada to STALE.
     const STALE = 'image-stale-1080x1080-png'
     const LOGO = 'image-logo-400x400-png'
     const DIRECT = 'image-direct-1080x1080-png'
@@ -527,14 +536,6 @@ describe('speaker erasure removes their images everywhere (#1162)', () => {
       { _id: LOGO, _type: 'sanity.imageAsset' },
       { _id: DIRECT, _type: 'sanity.imageAsset' },
       {
-        _id: 'task-pub',
-        _type: 'marketingTask',
-        _rev: 'r0',
-        kind: 'publishing',
-        prerequisites: [weak('task-ada')],
-        variant: weak('var-stale'),
-      },
-      {
         _id: 'var-stale',
         _type: 'socialPostVariant',
         _rev: 'r0',
@@ -543,6 +544,15 @@ describe('speaker erasure removes their images everywhere (#1162)', () => {
           { _key: 'vs-1', source: 'att-stale' },
           { _key: 'vs-2', source: 'att-logo' },
         ],
+      },
+      // A DRAFT of the variant picks the stale render too; only a `raw`
+      // read of the variants sees it.
+      {
+        _id: 'drafts.var-stale',
+        _type: 'socialPostVariant',
+        _rev: 'r0',
+        post: weak('post-stale'),
+        attachments: [{ _key: 'vs-1', source: 'att-stale' }],
       },
       {
         _id: 'post-stale',
@@ -603,6 +613,9 @@ describe('speaker erasure removes their images everywhere (#1162)', () => {
     expect(doc('var-stale').attachments).toEqual([
       { _key: 'vs-2', source: 'att-logo' },
     ])
+    expect(doc('drafts.var-stale').attachments).toEqual([])
+    // The record goes with the file, so a re-run has nothing left to find.
+    expect(doc('task-ada').replacedRenders).toEqual([])
     expect(doc('var-direct').attachments).toEqual([
       { _key: 'vd-1', source: 'att-direct' },
     ])

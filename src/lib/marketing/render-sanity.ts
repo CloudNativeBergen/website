@@ -13,6 +13,8 @@ export interface StudioTask {
   assetId: string | null
   campaignId: string
   handoffDoneFor: string[] | null
+  /** Replaced renders not yet deleted (#1162); see `./replaced-renders`. */
+  replacedRenders: string[] | null
 }
 
 /** Called only after the request's by-id tenancy guard. */
@@ -24,7 +26,7 @@ export function getStudioTask(taskId: string, conferenceId: string) {
       "subjectName": coalesce(subject->name, subject->title),
       "pendingAssetId": pendingStudioAsset.asset._ref, "assetId": asset.asset._ref,
       "campaignId": campaign._ref,
-      handoffDoneFor}`,
+      handoffDoneFor, replacedRenders}`,
     { taskId },
     { cache: 'no-store' },
   )
