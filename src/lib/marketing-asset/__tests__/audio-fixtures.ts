@@ -10,7 +10,11 @@ import { join } from 'node:path'
  *     -c:a aac -b:a 16k -c:v libx264 -shortest with-video.mp4
  * and, for the refusals, the same tone as AAC in ADTS (`-f adts tone.aac`),
  * FLAC (`-ar 8000 -c:a flac tone.flac`), A-law WAV (`-c:a pcm_alaw
- * tone-alaw.wav`) and ALAC in M4A (`-c:a alac tone-alac.m4a`).
+ * tone-alaw.wav`) and ALAC in M4A (`-c:a alac tone-alac.m4a`); two AAC
+ * tracks of 2 s and 20 s (`-map 0 -map 1 -ar 8000 -b:a 8k two-tracks.m4a`);
+ * and WAVE_FORMAT_EXTENSIBLE PCM, which ffmpeg writes for 24-bit
+ * (`-ac 2 -c:a pcm_s24le tone-24bit-stereo.wav`) and for more than two
+ * channels (`pan=5.1… -c:a pcm_s16le tone-16bit-5.1.wav`), each 1 s at 8 kHz.
  */
 
 /** MPEG-1 Layer III, 32 kbit/s at 32 kHz, mono: 144-byte frames of 36 ms. */
@@ -88,3 +92,42 @@ export function m4aWithNoLength(): Buffer {
  */
 export const mp3UnderClaimed = (seconds: number) =>
   mp3OfSeconds(seconds, { xingFrames: 10 })
+export const twoTrackM4a = () => fixture('two-tracks.m4a')
+export const wav24BitStereo = () => fixture('tone-24bit-stereo.wav')
+export const wav16Bit51 = () => fixture('tone-16bit-5.1.wav')
+
+/** `count` free-format MPEG-1 Layer III frame headers (bitrate index 0). */
+export function freeFormatMp3(count: number): Buffer {
+  const frame = Buffer.alloc(144)
+  frame.set([0xff, 0xfb, 0x08, 0xc0])
+  return Buffer.concat(Array<Buffer>(count).fill(frame))
+}
+
+/**
+ * An ID3v2 tag whose payload is `seconds` of bytes that look like MP3
+ * frames (a tag can hold any bytes, an embedded picture say), then `body`.
+ */
+export function id3HidingFrames(seconds: number, body: Buffer): Buffer {
+  const payload = mp3OfSeconds(seconds)
+  const n = payload.length
+  const header = Buffer.from([
+    0x49,
+    0x44,
+    0x33,
+    3,
+    0,
+    0,
+    (n >> 21) & 0x7f,
+    (n >> 14) & 0x7f,
+    (n >> 7) & 0x7f,
+    n & 0x7f,
+  ])
+  return Buffer.concat([header, payload, body])
+}
+
+/** A PCM WAV whose header's byte rate (`nAvgBytesPerSec`) claims `rate`. */
+export function wavClaimingByteRate(seconds: number, rate: number): Buffer {
+  const wav = wavOfSeconds(seconds)
+  wav.writeUInt32LE(rate, 28)
+  return wav
+}

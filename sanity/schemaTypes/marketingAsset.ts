@@ -71,7 +71,9 @@ export default defineType({
       description: 'For an image or a GIF.',
       validation: (Rule) =>
         Rule.custom((value, { document }) =>
-          (document?.kind === 'image' || document?.kind === 'gif') && !value
+          // Every kind but a track (and, with #1167, a video) has an image;
+          // so does a document with no kind yet, which reads as an image.
+          document?.kind !== 'audio' && document?.kind !== 'video' && !value
             ? 'An image or GIF asset needs its image'
             : true,
         ),

@@ -104,6 +104,7 @@ export function AssetDetailsFields({
   edition,
   original = null,
   disabled = false,
+  kind = 'image',
 }: {
   draft: DetailsDraft
   onChange: (draft: DetailsDraft) => void
@@ -116,6 +117,8 @@ export function AssetDetailsFields({
    */
   original?: OriginalMark | null
   disabled?: boolean
+  /** What the fields describe, for their hints: an image or an audio track. */
+  kind?: 'image' | 'audio'
 }) {
   const id = useId()
   const set = (change: Partial<DetailsDraft>) =>
@@ -190,8 +193,9 @@ export function AssetDetailsFields({
           describedBy={`${id}-subject-hint`}
         />
         <p id={`${id}-subject-hint`} className={HINT}>
-          Who the image is about. An image with no subject cannot be found when
-          a speaker asks to be erased.
+          {kind === 'audio'
+            ? 'Who or what the track is for, such as a talk or a sponsor.'
+            : 'Who the image is about. An image with no subject cannot be found when a speaker asks to be erased.'}
         </p>
       </div>
       <div className="grid gap-4 sm:grid-cols-2">
@@ -204,7 +208,7 @@ export function AssetDetailsFields({
             value={draft.tags}
             readOnly={disabled}
             onChange={(event) => set({ tags: event.target.value })}
-            placeholder="brand, logo"
+            placeholder={kind === 'audio' ? 'music, intro' : 'brand, logo'}
             aria-describedby={`${id}-tags-hint`}
             className={INPUT}
           />

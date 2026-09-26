@@ -128,6 +128,13 @@ describe('the marketing asset move route', () => {
     expect(h.move).not.toHaveBeenCalled()
   })
 
+  it('refuses a session with no speaker id: there is no one to record', async () => {
+    // Organizer by the check, but nothing to stamp a rights confirmation with.
+    h.session.mockResolvedValue({ speaker: {} })
+    expect((await POST(request(VALID))).status).toBe(401)
+    expect(h.move).not.toHaveBeenCalled()
+  })
+
   it('refuses when the organization cannot be resolved', async () => {
     h.orgId.mockResolvedValue(null)
     expect((await POST(request(VALID))).status).toBe(401)

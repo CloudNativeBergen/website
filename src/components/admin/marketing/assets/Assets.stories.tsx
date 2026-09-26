@@ -709,6 +709,14 @@ export const TrackPicked: Story = {
     await expect(await canvas.findByText('0:03')).toBeInTheDocument()
     await expect(canvas.getByLabelText('Title')).toHaveValue('conference theme')
     await expect(canvas.queryByLabelText('Alt text')).toBeNull()
+    // The describing fields speak of a track, not an image.
+    await expect(
+      canvas.getByText(/Who or what the track is for/),
+    ).toBeInTheDocument()
+    await expect(canvas.getByLabelText(/Tags/)).toHaveAttribute(
+      'placeholder',
+      'music, intro',
+    )
     const add = canvas.getByRole('button', { name: 'Add to gallery' })
     await expect(add).toBeDisabled()
     await userEvent.click(

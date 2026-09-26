@@ -144,6 +144,7 @@ export function AssetEditDialog({
           edition={edition}
           original={asset ? originalMark(asset) : null}
           disabled={update.isPending}
+          kind={track ? 'audio' : 'image'}
         />
         {error && (
           <p

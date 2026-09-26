@@ -17,7 +17,6 @@ import {
 import {
   MARKETING_ASSET_MAX_AUDIO_BYTES,
   MARKETING_ASSET_MAX_AUDIO_SECONDS,
-  sniffAudioType,
   type MarketingAssetAudioType,
 } from './audio-type'
 import { measureAudio } from './audio-measure'
@@ -226,10 +225,10 @@ async function transferAudio(
     return { ok: false, reason: 'fetch' }
   }
   const bytes = concat(chunks)
-  const type = sniffAudioType(bytes.subarray(0, SNIFF_BYTES))
-  if (!type) return { ok: false, reason: 'type' }
-  const measured = await measureAudio(bytes, type)
+  // Format sniffed and length measured from the bytes, in one place.
+  const measured = await measureAudio(bytes)
   if ('refused' in measured) return { ok: false, reason: measured.refused }
+  const { type } = measured
   if (measured.durationSeconds > MARKETING_ASSET_MAX_AUDIO_SECONDS)
     return { ok: false, reason: 'length' }
 

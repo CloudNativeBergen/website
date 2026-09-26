@@ -282,6 +282,7 @@ describe('marketingAsset.list', () => {
   it('passes the filters through to the read', async () => {
     await assets().list({
       editions: 'all',
+      kind: 'audio',
       subjectId: 'sp-member',
       tag: 'Brand',
       search: 'logo dark',
@@ -289,6 +290,8 @@ describe('marketingAsset.list', () => {
     const [, params] = h.read.mock.calls[0]
     expect(params).toMatchObject({
       allEditions: true,
+      // Dropped by the input schema, the Audio filter would show everything.
+      kind: 'audio',
       subjectId: 'sp-member',
       tag: 'brand',
       terms: ['logo*', 'dark*'],

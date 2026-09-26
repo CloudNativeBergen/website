@@ -156,6 +156,54 @@ describe('the audio move', () => {
     expect(h.upload).not.toHaveBeenCalled()
   })
 
+  it('refuses by a content-length over 20 MB before reading a byte', async () => {
+    // A small, valid body: only the declared size can refuse it.
+    fetchMock.mockResolvedValue(
+      respond(mp3OfSeconds(1), {
+        'content-length': String(30 * 1024 * 1024),
+      }),
+    )
+    expect(await moveAudioBlobToSanity(URL_OK, ORG)).toEqual({
+      ok: false,
+      reason: 'size',
+    })
+    expect(h.upload).not.toHaveBeenCalled()
+  })
+
+  it('fetches the blob without following redirects', async () => {
+    fetchMock.mockResolvedValue(respond(mp3OfSeconds(1)))
+    await moveAudioBlobToSanity(URL_OK, ORG)
+    expect(fetchMock).toHaveBeenCalledWith(
+      URL_OK,
+      expect.objectContaining({ redirect: 'error', cache: 'no-store' }),
+    )
+  })
+
+  it('records a file Sanity already held (an old _createdAt) as not created', async () => {
+    h.upload.mockResolvedValue({
+      _id: 'file-shared-mp3',
+      _createdAt: '2020-01-01T00:00:00Z',
+      url: 'https://cdn.sanity.io/files/x.mp3',
+    })
+    fetchMock.mockResolvedValue(respond(mp3OfSeconds(1)))
+    const result = await moveAudioBlobToSanity(URL_OK, ORG)
+    expect(result.ok && result.asset.created).toBe(false)
+  })
+
+  it('gives up on a Sanity upload that never answers, inside the deadline', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    try {
+      h.upload.mockImplementation(() => new Promise(() => {}))
+      fetchMock.mockResolvedValue(respond(mp3OfSeconds(1)))
+      const moving = moveAudioBlobToSanity(URL_OK, ORG)
+      await vi.waitFor(() => expect(h.upload).toHaveBeenCalled())
+      await vi.advanceTimersByTimeAsync(45_001)
+      expect(await moving).toEqual({ ok: false, reason: 'upload' })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('takes a track of exactly ten minutes less a frame', async () => {
     fetchMock.mockResolvedValue(respond(mp3OfSeconds(599.9)))
     expect((await moveAudioBlobToSanity(URL_OK, ORG)).ok).toBe(true)

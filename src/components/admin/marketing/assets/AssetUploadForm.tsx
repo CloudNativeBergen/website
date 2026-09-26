@@ -442,6 +442,7 @@ export function AssetUploadForm({
             onChange={setDraft}
             edition={edition}
             disabled={saving}
+            kind={track ? 'audio' : 'image'}
           />
           {error && (
             <p

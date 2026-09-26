@@ -1,137 +1,129 @@
 import 'server-only'
 import { parseBuffer } from 'music-metadata'
-import type { MarketingAssetAudioType } from './audio-type'
-
-/**
- * What the parsed file must be for each sniffed type: the sniff reads a few
- * bytes, and an ID3 tag can sit in front of AAC or FLAC as easily as MP3. A
- * WAV must be PCM (A-law, μ-law and float WAVs are refused: their length
- * comes from a `fact` chunk the file can set to anything, and browsers decode
- * them unevenly). An M4A must be AAC, with no video.
- */
-const MATCHES: Record<
-  MarketingAssetAudioType,
-  (format: { container?: string; codec?: string }) => boolean
-> = {
-  'audio/mpeg': ({ container, codec }) =>
-    container === 'MPEG' && /Layer 3$/.test(codec ?? ''),
-  'audio/wav': ({ container, codec }) =>
-    container === 'WAVE' && codec === 'PCM',
-  'audio/mp4': ({ codec }) => (codec ?? '').startsWith('MPEG-4/AAC'),
-}
+import { sniffAudioType, type MarketingAssetAudioType } from './audio-type'
+import { SNIFF_BYTES } from './image-type'
+import { countMp3Seconds } from './mp3-frames'
 
 export type AudioMeasure =
-  | { durationSeconds: number }
+  | { type: MarketingAssetAudioType; durationSeconds: number }
   /**
-   * `type`: not a track of the sniffed format (an MP4 holding video, AAC or
-   * FLAC behind an ID3 tag, a non-PCM WAV). `unreadable`: the format matches
-   * but no length could be read from it. Both refuse: an unknown length is
-   * never let through the ten-minute cap.
+   * `type`: not an MP3, M4A or WAV we take — including an ID3 tag in front of
+   * AAC or FLAC, a non-PCM WAV, ALAC, video, or more than one audio track.
+   * `unreadable`: an M4A or WAV of the right kind with no length to read.
+   * Both refuse: an unknown length never passes the ten-minute cap.
    */
   | { refused: 'type' | 'unreadable' }
 
+type Measured = number | { refused: 'type' | 'unreadable' }
+
 /**
- * A track's length in seconds, measured from the file itself (spec §6).
+ * A track's format and length, from the file itself (spec §6). The rule is
+ * to measure what a decoder will actually play, never a field the uploader
+ * wrote:
  *
- * An MP3's length is counted from the MPEG frames actually present
- * ({@link countMp3Seconds}), never from a Xing, LAME or VBRI header: the
- * parser trusts those without scanning, so a 16 MB file that plays for an
- * hour could claim two seconds. A PCM WAV is measured by the larger of its
- * header's length and the bytes it holds, since a decoder reads on past a data
- * chunk that undersells itself.
+ *  - **MP3**: the MPEG Layer III frames actually present, counted here
+ *    ({@link countMp3Seconds}). No Xing, LAME or VBRI header is read.
+ *  - **WAV**: the data bytes actually present divided by the rate this code
+ *    derives from sample rate × channels × bits ({@link measureWav}). Neither
+ *    the data chunk's declared size nor the header's byte rate is trusted.
+ *  - **M4A**: parsed with `music-metadata`, the one format whose length needs
+ *    a real container parser. AAC only, no video, exactly one audio track.
+ *    Known hole: its length is the movie header's; a crafted file whose
+ *    header undersells its sample tables is bounded only by the 20 MB cap.
  *
- * Known hole: an M4A is measured by its movie header. A crafted file whose
- * header lies about its sample tables is not caught here; the file is still
- * bounded by the 20 MB cap.
+ * Every path is linear in the file's size and never waits on a fetch.
  */
-export async function measureAudio(
-  bytes: Uint8Array,
-  type: MarketingAssetAudioType,
-): Promise<AudioMeasure> {
+export async function measureAudio(bytes: Uint8Array): Promise<AudioMeasure> {
+  const type = sniffAudioType(bytes.subarray(0, SNIFF_BYTES))
+  if (!type) return { refused: 'type' }
+  const measured: Measured =
+    type === 'audio/wav'
+      ? measureWav(bytes)
+      : type === 'audio/mpeg'
+        ? countMp3Seconds(bytes) || { refused: 'type' }
+        : await measureM4a(bytes)
+  if (typeof measured !== 'number') return measured
+  return { type, durationSeconds: measured }
+}
+
+async function measureM4a(bytes: Uint8Array): Promise<Measured> {
   let format
   try {
     ;({ format } = await parseBuffer(
       bytes,
-      { mimeType: type, size: bytes.length },
-      { duration: true, skipCovers: true },
+      { mimeType: 'audio/mp4', size: bytes.length },
+      { skipCovers: true },
     ))
   } catch {
+    // A file the parser cannot read at all is not an M4A we take, and a
+    // throw here must not become the route's 500.
     return { refused: 'type' }
   }
-  if (!MATCHES[type](format)) return { refused: 'type' }
-  if (format.hasVideo || format.hasAudio === false) return { refused: 'type' }
-  let seconds = format.duration
-  if (type === 'audio/mpeg') seconds = countMp3Seconds(bytes)
-  if (type === 'audio/wav' && format.bitrate)
-    seconds = Math.max(seconds ?? 0, (bytes.length * 8) / format.bitrate)
-  if (!seconds || !Number.isFinite(seconds) || seconds <= 0)
-    return { refused: 'unreadable' }
-  return { durationSeconds: seconds }
+  const audioTracks = (format.trackInfo ?? []).filter(
+    (track) => track.type === 2,
+  )
+  if (
+    !(format.codec ?? '').startsWith('MPEG-4/AAC') ||
+    format.hasVideo ||
+    // A second track plays for as long as it runs, whatever the first says.
+    audioTracks.length > 1
+  )
+    return { refused: 'type' }
+  const seconds = format.duration
+  return seconds && Number.isFinite(seconds) && seconds > 0
+    ? seconds
+    : { refused: 'unreadable' }
 }
 
-const MPEG1_BITRATES = [
-  0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320,
+/** `KSDATAFORMAT_SUBTYPE_PCM`, as it sits in a WAVE_FORMAT_EXTENSIBLE header. */
+const PCM_SUBFORMAT = [
+  0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0x00, 0x80, 0x00, 0x00, 0xaa, 0x00,
+  0x38, 0x9b, 0x71,
 ]
-const MPEG2_BITRATES = [
-  0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160,
-]
-/** By version bits (0 = MPEG 2.5, 2 = MPEG 2, 3 = MPEG 1); 1 is reserved. */
-const SAMPLE_RATES: Record<number, number[]> = {
-  0: [11025, 12000, 8000],
-  2: [22050, 24000, 16000],
-  3: [44100, 48000, 32000],
-}
 
 /**
- * The seconds of MPEG Layer III audio in `bytes`, summed frame by frame over
- * every frame header actually present. Tags are skipped as bytes that are not
- * frames: an ID3v2 tag by its declared size, anything else by scanning to the
- * next frame sync. A free-format frame (bitrate index 0) has no length it can
- * be walked by, and is skipped the same way. Every frame found counts, so a
- * header that undersells the stream changes nothing, and a false sync inside
- * junk can only lengthen the count, which refuses rather than admits.
+ * A PCM WAV's length: every byte from the start of its data chunk to the end
+ * of the file, over sample rate × channels × bytes per sample. A decoder reads
+ * on past a data chunk that undersells itself, and the header's own byte rate
+ * (`nAvgBytesPerSec`) is whatever the file says, so neither is used. Bytes
+ * after the data (a trailing LIST chunk) count as audio, which can only
+ * lengthen the reading. Plain PCM (format 1) and WAVE_FORMAT_EXTENSIBLE with
+ * the PCM sub-format (what ffmpeg and DAWs write for 24-bit or more than two
+ * channels) are taken; A-law, μ-law, float and every other codec are refused.
  */
-export function countMp3Seconds(bytes: Uint8Array): number {
-  let offset = 0
-  if (bytes[0] === 0x49 && bytes[1] === 0x44 && bytes[2] === 0x33) {
-    const size =
-      ((bytes[6] & 0x7f) << 21) |
-      ((bytes[7] & 0x7f) << 14) |
-      ((bytes[8] & 0x7f) << 7) |
-      (bytes[9] & 0x7f)
-    offset = 10 + size + (bytes[5] & 0x10 ? 10 : 0)
-  }
-  let seconds = 0
-  while (offset + 4 <= bytes.length) {
-    const frame = readLayer3Frame(bytes, offset)
-    if (!frame) {
-      offset++
-      continue
+export function measureWav(bytes: Uint8Array): Measured {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+  let fmt: { channels: number; sampleRate: number; bits: number } | null = null
+  let offset = 12
+  // Each step moves past at least one 8-byte chunk header: linear.
+  while (offset + 8 <= bytes.length) {
+    const id = String.fromCharCode(...bytes.subarray(offset, offset + 4))
+    const size = view.getUint32(offset + 4, true)
+    const body = offset + 8
+    if (id === 'fmt ') {
+      if (size < 16 || body + 16 > bytes.length) return { refused: 'type' }
+      const tag = view.getUint16(body, true)
+      const extensiblePcm =
+        tag === 0xfffe &&
+        size >= 40 &&
+        body + 40 <= bytes.length &&
+        PCM_SUBFORMAT.every((b, i) => bytes[body + 24 + i] === b)
+      if (tag !== 1 && !extensiblePcm) return { refused: 'type' }
+      fmt = {
+        channels: view.getUint16(body + 2, true),
+        sampleRate: view.getUint32(body + 4, true),
+        bits: view.getUint16(body + 14, true),
+      }
+    } else if (id === 'data') {
+      if (!fmt) return { refused: 'type' }
+      const { channels, sampleRate, bits } = fmt
+      if (![8, 16, 24, 32].includes(bits) || channels < 1 || sampleRate < 1)
+        return { refused: 'type' }
+      const present = bytes.length - body
+      const seconds = present / (sampleRate * channels * (bits / 8))
+      return seconds > 0 ? seconds : { refused: 'unreadable' }
     }
-    seconds += frame.seconds
-    offset += frame.length
+    offset = body + size + (size % 2)
   }
-  return seconds
-}
-
-function readLayer3Frame(
-  bytes: Uint8Array,
-  offset: number,
-): { length: number; seconds: number } | null {
-  const [b0, b1, b2] = [bytes[offset], bytes[offset + 1], bytes[offset + 2]]
-  // Frame sync, and layer bits 01 (Layer III).
-  if (b0 !== 0xff || (b1 & 0xe0) !== 0xe0 || (b1 & 0x06) !== 0x02) return null
-  const version = (b1 >> 3) & 0x03
-  const rates = SAMPLE_RATES[version]
-  const bitrateIndex = b2 >> 4
-  const rateIndex = (b2 >> 2) & 0x03
-  if (!rates || bitrateIndex === 0 || bitrateIndex === 15 || rateIndex === 3)
-    return null
-  const mpeg1 = version === 3
-  const bitrate = (mpeg1 ? MPEG1_BITRATES : MPEG2_BITRATES)[bitrateIndex] * 1000
-  const sampleRate = rates[rateIndex]
-  const padding = (b2 >> 1) & 0x01
-  const samples = mpeg1 ? 1152 : 576
-  const length = Math.floor(((samples / 8) * bitrate) / sampleRate) + padding
-  return { length, seconds: samples / sampleRate }
+  return fmt ? { refused: 'unreadable' } : { refused: 'type' }
 }
