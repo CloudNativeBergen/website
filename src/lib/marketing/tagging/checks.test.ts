@@ -452,9 +452,13 @@ describe('approvalCheck (§4.4 Approval)', () => {
 
   it('passes a recorded tag that still resolves to its DID', () => {
     const mentions = [tagged(alice, DID_A)]
-    expect(approvalHandlesToResolve({ mentions, people: peopleMap })).toEqual([
-      'alice.dev',
-    ])
+    expect(
+      approvalHandlesToResolve({
+        body: '@alice.dev',
+        mentions,
+        people: peopleMap,
+      }),
+    ).toEqual(['alice.dev'])
     expect(
       approvalCheck({
         body: '@alice.dev',
@@ -480,7 +484,13 @@ describe('approvalCheck (§4.4 Approval)', () => {
   it('refuses a speaker who opted out since, without asking Bluesky', () => {
     const late = { ...alice, optedOut: true }
     const mentions = [tagged(alice, DID_A)]
-    expect(approvalHandlesToResolve({ mentions, people: [late] })).toEqual([])
+    expect(
+      approvalHandlesToResolve({
+        body: '@alice.dev',
+        mentions,
+        people: [late],
+      }),
+    ).toEqual([])
     const out = approvalCheck({
       body: '@alice.dev',
       mentions,
@@ -586,6 +596,18 @@ describe('approvalCheck (§4.4 Approval)', () => {
       expect.objectContaining({ code: 'plain-too-long', mentionKey: null }),
     ])
     expect(out.issues[0].message).toContain('481')
+  })
+
+  it('a record whose @handle left the body is neither asked about nor refused', () => {
+    const mentions = [tagged(alice, DID_A)]
+    const input = { body: 'Alice Anderson at 10', mentions, people: peopleMap }
+    expect(approvalHandlesToResolve(input)).toEqual([])
+    expect(
+      approvalCheck({
+        ...input,
+        resolutions: new Map([['alice.dev', resolved(DID_B)]]),
+      }),
+    ).toEqual({ issues: [], warnings: [] })
   })
 
   it('ignores unresolved notes', () => {

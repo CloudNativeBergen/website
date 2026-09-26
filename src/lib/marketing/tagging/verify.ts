@@ -88,7 +88,11 @@ export async function checkTagsOnSave(input: {
   })
   if (!input.scheduled || saved.issues.length > 0) return saved
   resolutions = await resolveHandles(
-    approvalHandlesToResolve({ mentions: saved.mentions, people }),
+    approvalHandlesToResolve({
+      body: input.body,
+      mentions: saved.mentions,
+      people,
+    }),
     resolutions,
   )
   const approval = approvalCheck({
@@ -122,7 +126,7 @@ export async function checkTagsForApproval(input: {
   // was never recorded is `unchecked`, and its save refuses it.
   const people = await getConferenceTaggablePeople(input.conferenceId)
   const resolutions = await resolveHandles(
-    approvalHandlesToResolve({ mentions, people }),
+    approvalHandlesToResolve({ body: input.body, mentions, people }),
   )
   return approvalCheck({ body: input.body, mentions, people, resolutions })
 }

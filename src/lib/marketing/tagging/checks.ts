@@ -455,17 +455,33 @@ function plainLengthIssue(
 }
 
 /**
+ * The recorded tags the body still carries. A record whose `@handle` is no
+ * longer in the text (the body edited in Studio, say) tags nobody: it is
+ * neither checked nor refused.
+ */
+function liveRecords(
+  body: string,
+  mentions: readonly MentionRecord[],
+): MentionRecord[] {
+  const inBody = new Set(mentionTokens(body).map((t) => t.handle))
+  return mentions.filter(
+    (m) => m.status === 'tagged' && inBody.has(normaliseHandle(m.handle)),
+  )
+}
+
+/**
  * The handles an approval must ask Bluesky about: each recorded tag of a
  * person who is still a speaker here and has not opted out since.
  */
 export function approvalHandlesToResolve(input: {
+  body: string
   mentions: readonly MentionRecord[]
   people: readonly TaggablePerson[]
 }): string[] {
   const byId = new Map(input.people.map((p) => [p.speakerId, p]))
   return [
     ...new Set(
-      input.mentions.flatMap((m) => {
+      liveRecords(input.body, input.mentions).flatMap((m) => {
         const p = byId.get(m.speakerId)
         return m.status === 'tagged' && p && !p.optedOut
           ? [normaliseHandle(m.handle)]
@@ -493,8 +509,8 @@ export function approvalCheck(input: {
   const issues: TagIssue[] = []
   const warnings: TagWarning[] = []
   const byId = new Map(input.people.map((p) => [p.speakerId, p]))
-  for (const m of input.mentions) {
-    if (m.status !== 'tagged') continue
+  const live = liveRecords(input.body, input.mentions)
+  for (const m of live) {
     const handle = normaliseHandle(m.handle)
     const p = byId.get(m.speakerId)
     if (!p) {
@@ -535,13 +551,9 @@ export function approvalCheck(input: {
   const flagged = new Set(issues.map((i) => i.mentionKey))
   // Both forms, again: a Task approved straight from generation was never
   // saved, and generation's fallback fits only the tagged form.
-  const tooLong = plainLengthIssue(input.body, input.mentions)
+  const tooLong = plainLengthIssue(input.body, live)
   if (tooLong) issues.push(tooLong)
-  const recordedHandles = new Set(
-    input.mentions
-      .filter((m) => m.status === 'tagged')
-      .map((m) => normaliseHandle(m.handle)),
-  )
+  const recordedHandles = new Set(live.map((m) => normaliseHandle(m.handle)))
   for (const { handle, matches } of matchedTags(input.body, input.people)) {
     const optedOut = matches.find((p) => p.optedOut)
     if (optedOut) {
