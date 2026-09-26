@@ -23,6 +23,8 @@ import type { MentionRecord } from '@/lib/marketing/tagging/body'
 import {
   tagName,
   untagHandle,
+  untagOwned,
+  type TagOwnership,
   type MentionIssue,
   type TagIssue,
   type TaggablePerson,
@@ -183,8 +185,8 @@ export function ConnectedVariantEditor({
       },
     )
   }
-  const untag = (person: TaggablePerson, handle: string) =>
-    editBody((body) => untagHandle(body, handle, person.name))
+  const untag = (person: TaggablePerson, tag: TagOwnership) =>
+    editBody((body) => untagOwned(body, tag, person.name))
   const fix = (issue: MentionIssue) => {
     if (!tagging) return
     const { handle, name } = issue

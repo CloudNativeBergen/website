@@ -5,6 +5,7 @@ import type { MentionRecord } from '@/lib/marketing/tagging/body'
 import {
   tagName,
   untagHandle,
+  untagOwned,
   type TagIssue,
   type TaggablePerson,
 } from '@/lib/marketing/tagging/checks'
@@ -103,7 +104,7 @@ function Harness({
         pending={pending}
         lookups={lookups}
         onTag={(p) => setBody((b) => tagName(b, p) ?? b)}
-        onUntag={(p, handle) => setBody((b) => untagHandle(b, handle, p.name))}
+        onUntag={(p, tag) => setBody((b) => untagOwned(b, tag, p.name))}
         onFix={(issue) => {
           setBody((b) => untagHandle(b, issue.handle, issue.name))
           setIssues((xs) => xs.filter((x) => x !== issue))
@@ -309,6 +310,35 @@ export const UnresolvedNoteClearsOnceTagged: Story = {
     )
     await expect(
       canvas.queryByText("Dan Ødegaard's Bluesky link does not resolve"),
+    ).toBeNull()
+  },
+}
+
+/**
+ * Two speakers share a team account. Tagging Bob swaps HIS name and marks
+ * only him tagged; Alice keeps her own Tag button.
+ */
+export const SharedTeamHandle: Story = {
+  args: {
+    initialBody: 'Bob Smith and Alice Anderson on platform teams.',
+    people: [
+      { ...bob, handle: 'team.dev' },
+      { ...alice, handle: 'team.dev' },
+    ],
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(canvas.getByRole('button', { name: 'Tag Bob Smith' }))
+    await expect(canvas.getByTestId('body')).toHaveTextContent(
+      '@team.dev and Alice Anderson on platform teams.',
+    )
+    await expect(
+      canvas.getByRole('button', { name: 'Tag Alice Anderson' }),
+    ).toBeEnabled()
+    await expect(
+      canvas.queryByRole('button', {
+        name: "Use Alice Anderson's name instead of the tag",
+      }),
     ).toBeNull()
   },
 }

@@ -184,6 +184,75 @@ export function untagHandle(
 }
 
 /**
+ * Which tag in the body is whose. `occurrence` null: every occurrence of the
+ * handle is this person's. A number: only that occurrence (0-based) — the
+ * handle is shared, and the others stand for someone else.
+ */
+export interface TagOwnership {
+  handle: string
+  occurrence: number | null
+}
+
+/**
+ * Per speaker, the tag in the body that stands for them (the editor's tag
+ * buttons, spec §2). A handle recorded for people keeps those people, in
+ * record order; a handle one person lists is theirs; a handle SEVERAL list
+ * (a team account) belongs, beyond the recorded ones, to those whose plain
+ * name is gone from the body — the ones the button swapped.
+ */
+export function tagOwners(
+  body: string,
+  people: readonly TaggablePerson[],
+  mentions: readonly Pick<MentionRecord, 'handle' | 'speakerId' | 'status'>[],
+): Map<string, TagOwnership> {
+  const known = byHandle(people)
+  const ids = new Set(people.map((p) => p.speakerId))
+  const counts = new Map<string, number>()
+  for (const t of mentionTokens(body))
+    counts.set(t.handle, (counts.get(t.handle) ?? 0) + 1)
+  const out = new Map<string, TagOwnership>()
+  for (const [handle, n] of counts) {
+    const owners: string[] = []
+    for (const m of mentions) {
+      if (
+        m.status === 'tagged' &&
+        normaliseHandle(m.handle) === handle &&
+        ids.has(m.speakerId) &&
+        !owners.includes(m.speakerId)
+      )
+        owners.push(m.speakerId)
+    }
+    const sharers = (known.get(handle) ?? []).filter(
+      (p) => !owners.includes(p.speakerId),
+    )
+    if (owners.length === 0 && sharers.length === 1) {
+      owners.push(sharers[0].speakerId)
+    } else {
+      for (const p of sharers)
+        if (nameIndex(body, p.name) < 0) owners.push(p.speakerId)
+    }
+    const shared = owners.length > 1
+    owners.slice(0, n).forEach((id, k) => {
+      if (!out.has(id)) out.set(id, { handle, occurrence: shared ? k : null })
+    })
+  }
+  return out
+}
+
+/** Hand a person's tag back to their name: all of it, or their occurrence. */
+export function untagOwned(
+  body: string,
+  own: TagOwnership,
+  name: string,
+): string {
+  if (own.occurrence === null) return untagHandle(body, own.handle, name)
+  const t = mentionTokens(body).filter((x) => x.handle === own.handle)[
+    own.occurrence
+  ]
+  return t ? `${body.slice(0, t.start)}${name}${body.slice(t.end)}` : body
+}
+
+/**
  * The body with every recorded tag replaced by its name (§4.4, both forms).
  * Person-bound per occurrence: when one (shared) handle is recorded for
  * several people, its k-th occurrence stands for the k-th of them — "@team

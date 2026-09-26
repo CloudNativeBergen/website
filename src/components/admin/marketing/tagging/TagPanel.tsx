@@ -11,6 +11,8 @@ import type { MentionRecord } from '@/lib/marketing/tagging/body'
 import {
   mentionTokens,
   nameIndex,
+  tagOwners,
+  type TagOwnership,
   type MentionIssue,
   type TagIssue,
   type TaggablePerson,
@@ -48,16 +50,12 @@ export function TagPanel({
   disabled?: boolean
   onTag: (person: TaggablePerson) => void
   /** `handle` is the tag in the body: the current one, or a recorded older one. */
-  onUntag: (person: TaggablePerson, handle: string) => void
+  onUntag: (person: TaggablePerson, tag: TagOwnership) => void
   onFix: (issue: MentionIssue) => void
 }) {
   const inBody = new Set(mentionTokens(body).map((t) => t.handle))
   // A note stands until the person is tagged after all, by any handle.
-  const taggedIds = new Set(
-    people
-      .filter((p) => p.handle && inBody.has(p.handle))
-      .map((p) => p.speakerId),
-  )
+  const taggedIds = new Set(tagOwners(body, people, mentions).keys())
   const notes = mentions.filter(
     (m) =>
       m.status === 'unresolved' &&
@@ -66,18 +64,9 @@ export function TagPanel({
   )
   if (people.length === 0 && notes.length === 0 && issues.length === 0)
     return null
-  /** The handle a person is tagged by in the body: current, or recorded. */
-  const taggedAs = (person: TaggablePerson): string | null => {
-    if (person.handle && inBody.has(person.handle)) return person.handle
-    return (
-      mentions.find(
-        (m) =>
-          m.status === 'tagged' &&
-          m.speakerId === person.speakerId &&
-          inBody.has(m.handle),
-      )?.handle ?? null
-    )
-  }
+  // Per speaker, not per handle: a team account two speakers share is
+  // tagged for the one whose name it replaced.
+  const owners = tagOwners(body, people, mentions)
 
   return (
     <section
@@ -141,12 +130,12 @@ export function TagPanel({
               key={person.speakerId}
               person={person}
               body={body}
-              taggedAs={taggedAs(person)}
+              taggedAs={owners.get(person.speakerId) ?? null}
               pending={pending === person.speakerId}
               lookup={lookups[person.speakerId]}
               disabled={disabled || pending !== null}
               onTag={() => onTag(person)}
-              onUntag={(handle) => onUntag(person, handle)}
+              onUntag={(tag) => onUntag(person, tag)}
             />
           ))}
         </ul>
@@ -167,12 +156,12 @@ function PersonRow({
 }: {
   person: TaggablePerson
   body: string
-  taggedAs: string | null
+  taggedAs: TagOwnership | null
   pending: boolean
   lookup: TagLookup | undefined
   disabled: boolean
   onTag: () => void
-  onUntag: (handle: string) => void
+  onUntag: (tag: TagOwnership) => void
 }) {
   const tagged = taggedAs !== null
   const nameInBody = nameIndex(body, person.name, person.handle) >= 0
@@ -200,9 +189,9 @@ function PersonRow({
         <p className="text-sm font-medium break-words text-gray-900 dark:text-gray-100">
           {person.name}
         </p>
-        {(taggedAs ?? person.handle) && (
+        {(taggedAs?.handle ?? person.handle) && (
           <p className="font-mono text-xs break-all text-gray-500 dark:text-gray-400">
-            @{taggedAs ?? person.handle}
+            @{taggedAs?.handle ?? person.handle}
           </p>
         )}
         {status && (

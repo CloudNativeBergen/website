@@ -17,6 +17,8 @@ import {
   saveMentions,
   tagName,
   untagHandle,
+  tagOwners,
+  untagOwned,
   type TaggablePerson,
 } from './checks'
 import type { MentionRecord } from './body'
@@ -141,6 +143,31 @@ describe('plainBody', () => {
         tagged(bob, DID_B),
       ]),
     ).toBe('Alice Anderson with @kubernetes.io and Bob')
+  })
+})
+
+describe('tagOwners (per-speaker tag state)', () => {
+  const team = { ...bob, handle: 'team.dev' }
+  const mate = { ...alice, handle: 'team.dev' }
+  it('a shared handle belongs to the speaker whose name it replaced', () => {
+    expect([
+      ...tagOwners('@team.dev and Alice Anderson', [team, mate], []),
+    ]).toEqual([['speaker-bob', { handle: 'team.dev', occurrence: null }]])
+  })
+  it('recorded people keep their occurrences, and untag hands back only theirs', () => {
+    const body = '@team.dev and @team.dev'
+    const owners = tagOwners(
+      body,
+      [team, mate],
+      [tagged(team, DID_B), tagged(mate, DID_B)],
+    )
+    expect(owners.get('speaker-alice')).toEqual({
+      handle: 'team.dev',
+      occurrence: 1,
+    })
+    expect(untagOwned(body, owners.get('speaker-alice')!, mate.name)).toBe(
+      '@team.dev and Alice Anderson',
+    )
   })
 })
 
