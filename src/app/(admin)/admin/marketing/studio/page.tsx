@@ -3,7 +3,10 @@ import { StudioSearchParamsSchema } from '@/server/schemas/studio'
 import { StudioCardGrid } from '@/components/admin/marketing/StudioCardGrid'
 import { StudioTaskProvider } from '@/components/admin/marketing/StudioTaskProvider'
 import { getAuthSession } from '@/lib/auth'
-import { isOrganizerForCurrentOrg } from '@/lib/authz/organizer'
+import {
+  isOrganizerForCurrentOrg,
+  resolveCurrentOrgId,
+} from '@/lib/authz/organizer'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import {
   conferenceBaseUrl,
@@ -166,7 +169,11 @@ export default async function MarketingPage({
     return <ErrorDisplay message="Error loading conference data" />
   }
 
-  const featuredPhotos = await getFeaturedGalleryImages(100, conference._id)
+  const [featuredPhotos, orgId] = await Promise.all([
+    getFeaturedGalleryImages(100, conference._id),
+    // Names the gallery's upload pathname; the server resolves it again.
+    resolveCurrentOrgId(),
+  ])
 
   const { proposals: allProposals, proposalsError } = await getProposals({
     conferenceId: conference._id,
@@ -346,6 +353,7 @@ export default async function MarketingPage({
           {/* Meme Generator Tab */}
           <div>
             <MemeGeneratorWithDownload
+              orgId={orgId ?? undefined}
               conferenceTitle={conference.title}
               conferenceLogos={{
                 logoBright: conference.logoBright,

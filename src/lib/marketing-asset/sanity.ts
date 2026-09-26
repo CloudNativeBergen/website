@@ -187,6 +187,36 @@ export async function readMarketingAssetImage(
 }
 
 /**
+ * The image one of this organization's assets holds, with its size, for a
+ * studio background. Null when it is not ours; `url` is null when it holds no
+ * image (an audio track). The caller has already proven the id ours.
+ */
+export async function readMarketingAssetBackground(
+  orgId: string,
+  id: string,
+): Promise<{
+  title: string
+  alt: string
+  url: string | null
+  width: number | null
+  height: number | null
+} | null> {
+  return scopedFetch(
+    clientReadUncached,
+    { orgId },
+    `*[_type == "marketingAsset" && _id == $id][0]{
+      title,
+      "alt": coalesce(alt, ""),
+      "url": image.asset->url,
+      "width": image.asset->metadata.dimensions.width,
+      "height": image.asset->metadata.dimensions.height
+    }`,
+    { id },
+    { cache: 'no-store' },
+  )
+}
+
+/**
  * How many Content Release versions (`versions.<release>.<id>`) of one of this
  * organization's assets exist. Counted at an API version whose `raw`
  * perspective includes release versions; the clients' own (2023-05-03) does

@@ -1,4 +1,4 @@
-import type { Meta, StoryObj } from '@storybook/nextjs-vite'
+import type { Decorator, Meta, StoryObj } from '@storybook/nextjs-vite'
 import { expect, userEvent, waitFor, within } from 'storybook/test'
 import { MemeGenerator } from './MemeGenerator'
 import { MemeGeneratorWithDownload } from './MemeGeneratorWithDownload'
@@ -14,6 +14,9 @@ import {
   type LogoPlacement,
 } from './meme-generator-logo'
 import type { EncoderBackend } from './meme-generator-export'
+import type { BackgroundGallery } from './meme-generator-gallery'
+import { http, HttpResponse } from 'msw'
+import { ThemeProvider } from 'next-themes'
 
 const meta = {
   title: 'Systems/Marketing/Admin/MemeGenerator',
@@ -2035,5 +2038,391 @@ export const VideoExportFailsMidway: Story = {
 
 export const VideoExportFailsMidwayDark: Story = {
   ...VideoExportFailsMidway,
+  globals: { theme: 'dark' },
+}
+
+// ── Gallery backgrounds (#1180) ───────────────────────────────────────────
+
+/**
+ * What the studio's gallery answers, the way the real one does: the picked
+ * image comes back as a SAME-ORIGIN proxy URL (the story's MSW handler plays
+ * `/api/proxy-image`), never the CDN's own.
+ */
+const GALLERY_PROXY_URL = `/api/proxy-image?url=${encodeURIComponent(
+  'https://cdn.sanity.io/images/p/d/hall-3000x2000.jpg?h=1188&fit=max&fm=webp&q=90',
+)}`
+
+const storyGallery: BackgroundGallery = {
+  images: async () => [
+    {
+      _id: 'asset-hall',
+      title: 'Keynote hall',
+      alt: 'The main hall, lit magenta',
+      thumbnailUrl: GALLERY_PROXY_URL,
+    },
+    {
+      _id: 'asset-crowd',
+      title: 'A crowd between talks, in the foyer by the coffee',
+      alt: 'People talking in the foyer',
+      thumbnailUrl: null,
+    },
+  ],
+  resolve: async (id) => ({
+    _id: id,
+    title: 'Keynote hall',
+    url: GALLERY_PROXY_URL,
+  }),
+  keep: async () => {
+    await new Promise((resolve) => setTimeout(resolve, 150))
+    return { _id: 'asset-kept' }
+  },
+}
+
+/** A 3:2 magenta photo, as the proxy would relay it. */
+const proxyImage = http.get('/api/proxy-image', async () => {
+  const source = document.createElement('canvas')
+  source.width = 1782
+  source.height = 1188
+  const ctx = source.getContext('2d')!
+  ctx.fillStyle = '#ff00ff'
+  ctx.fillRect(0, 0, source.width, source.height)
+  const blob = await new Promise<Blob>((resolve) =>
+    source.toBlob((b) => resolve(b!), 'image/png'),
+  )
+  return new HttpResponse(blob, { headers: { 'content-type': 'image/png' } })
+})
+
+/** What a frame read out of `canvas` looks like, or the error reading threw. */
+function readCanvas(canvas: HTMLCanvasElement) {
+  try {
+    const [r, g, b] = canvas.getContext('2d')!.getImageData(0, 0, 1, 1).data
+    return { ok: true as const, magenta: isMagenta(r, g, b) }
+  } catch (error) {
+    return { ok: false as const, error: String(error) }
+  }
+}
+
+/**
+ * An encoder that READS every frame it is handed, as a real one does: a
+ * tainted canvas throws there (a `VideoFrame` of one is a SecurityError).
+ */
+function readingEncoder(
+  frames: ReturnType<typeof readCanvas>[],
+): EncoderBackend {
+  return {
+    supports: async () => true,
+    probe: async () => true,
+    open: async (canvas) => ({
+      add: async () => {
+        frames.push(readCanvas(canvas))
+      },
+      finish: async () => new Blob([new Uint8Array(1_000_000)]),
+      cancel: async () => {},
+    }),
+  }
+}
+
+/**
+ * The picker is a `ModalShell`, portalled out of the global decorator's
+ * `dark` wrapper; it themes itself from next-themes' `theme`, as in the app.
+ * `defaultTheme` (not `forcedTheme`, which leaves `theme` alone) sets that,
+ * under a storage key nothing writes; and the attribute is one nothing
+ * styles, so no class lands on `<html>` to leak into later stories.
+ */
+const withNextTheme: Decorator = (Story, ctx) => {
+  const theme = ctx.globals.theme === 'dark' ? 'dark' : 'light'
+  return (
+    <ThemeProvider
+      key={theme}
+      attribute="data-story-theme"
+      defaultTheme={theme}
+      storageKey={`meme-generator-story-theme-${theme}`}
+      enableSystem={false}
+    >
+      <Story />
+    </ThemeProvider>
+  )
+}
+
+async function pickFromGallery(canvas: Canvas) {
+  await userEvent.click(
+    canvas.getByRole('button', { name: 'Choose from gallery' }),
+  )
+  // The picker is a dialog, portalled outside the story's root.
+  const dialog = await within(document.body).findByRole('dialog')
+  await userEvent.click(
+    await within(dialog).findByRole('button', { name: /Keynote hall/ }),
+  )
+}
+
+const exportedFrames: ReturnType<typeof readCanvas>[] = []
+
+/**
+ * A gallery image drawn as the background, previewed and EXPORTED: the
+ * canvas is read back — by the preview check and by every exported frame —
+ * without throwing, for an image at a same-origin URL such as the proxy's.
+ * MSW stands in for the proxy here; the real route is not exercised. The
+ * control below shows the same read DOES throw for a cross-origin image.
+ */
+export const BackgroundFromGallery: Story = {
+  args: { gallery: storyGallery, encoder: readingEncoder(exportedFrames) },
+  decorators: [withNextTheme],
+  parameters: { msw: { handlers: [proxyImage] } },
+  play: async ({ canvasElement }) => {
+    exportedFrames.length = 0
+    const canvas = within(canvasElement)
+    await pickFromGallery(canvas)
+    await expect(await canvas.findByText('Current: Keynote hall')).toBeVisible()
+    await expect(canvas.getByText('In the gallery.')).toBeVisible()
+    const preview = canvasElement.querySelector('canvas')!
+    await waitFor(() =>
+      expect(
+        share(
+          preview,
+          CANVAS_SIZE,
+          { x: 0, y: 0, width: 100, height: 100 },
+          isMagenta,
+        ),
+      ).toBeGreaterThan(0.99),
+    )
+    // Reading the preview does not throw: it is not tainted.
+    expect(readCanvas(preview)).toEqual({ ok: true, magenta: true })
+    expect(() => preview.toDataURL()).not.toThrow()
+
+    await userEvent.click(canvas.getByRole('button', { name: 'Video' }))
+    const panel = canvas.getByRole('region', { name: 'Export' })
+    await pressExport(panel)
+    await within(panel).findByRole(
+      'link',
+      { name: /Download video/ },
+      {
+        timeout: 30_000,
+      },
+    )
+    expect(exportedFrames.length).toBeGreaterThan(0)
+    expect(exportedFrames.every((frame) => frame.ok && frame.magenta)).toBe(
+      true,
+    )
+  },
+}
+
+export const BackgroundFromGalleryDark: Story = {
+  ...BackgroundFromGallery,
+  globals: { theme: 'dark' },
+}
+
+/**
+ * The negative control: the same pick, with the gallery answering a raw
+ * CROSS-ORIGIN URL — what drawing the CDN's own URL amounts to. The image
+ * loads and draws, and reading the canvas then throws. This is what the
+ * proxy exists to prevent, and it shows the read above can fail.
+ */
+export const CrossOriginBackgroundTaints: Story = {
+  args: {
+    gallery: {
+      ...storyGallery,
+      resolve: async (id) => {
+        // The same Storybook, under its other name: a different origin that
+        // sends no CORS header, so the image loads opaque.
+        const other =
+          location.hostname === 'localhost' ? '127.0.0.1' : 'localhost'
+        return {
+          _id: id,
+          title: 'Keynote hall',
+          url: `${location.protocol}//${other}:${location.port}/images/default-avatar.png`,
+        }
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await pickFromGallery(canvas)
+    await canvas.findByText('Current: Keynote hall')
+    const preview = canvasElement.querySelector('canvas')!
+    await waitFor(() =>
+      expect(readCanvas(preview)).toEqual({
+        ok: false,
+        error: expect.stringContaining('tainted'),
+      }),
+    )
+  },
+}
+
+/** The picker, open, for the screenshot. */
+export const GalleryPickerOpen: Story = {
+  args: { gallery: storyGallery },
+  decorators: [withNextTheme],
+  parameters: { msw: { handlers: [proxyImage] } },
+  play: async ({ canvasElement }) => {
+    await userEvent.click(
+      within(canvasElement).getByRole('button', {
+        name: 'Choose from gallery',
+      }),
+    )
+    const dialog = await within(document.body).findByRole('dialog')
+    const option = await within(dialog).findByRole('button', {
+      name: /Keynote hall/,
+    })
+    // The dialog fades in.
+    await waitFor(() => expect(option).toBeVisible())
+  },
+}
+
+export const GalleryPickerOpenDark: Story = {
+  ...GalleryPickerOpen,
+  globals: { theme: 'dark' },
+}
+
+async function openPicker(canvasElement: HTMLElement) {
+  await userEvent.click(
+    within(canvasElement).getByRole('button', { name: 'Choose from gallery' }),
+  )
+  return within(await within(document.body).findByRole('dialog'))
+}
+
+/** The gallery could not be listed: said so, and nothing to pick. */
+export const GalleryPickerFailed: Story = {
+  args: {
+    gallery: {
+      ...storyGallery,
+      images: async () => {
+        throw new Error('network')
+      },
+    },
+  },
+  decorators: [withNextTheme],
+  play: async ({ canvasElement }) => {
+    const dialog = await openPicker(canvasElement)
+    const alert = await dialog.findByRole('alert')
+    await waitFor(() => expect(alert).toBeVisible())
+    await expect(alert).toHaveTextContent(
+      'The gallery could not be loaded. Close this and try again.',
+    )
+    await expect(dialog.queryAllByRole('listitem')).toHaveLength(0)
+  },
+}
+
+export const GalleryPickerFailedDark: Story = {
+  ...GalleryPickerFailed,
+  globals: { theme: 'dark' },
+}
+
+/** An empty gallery says where images come from. */
+export const GalleryPickerEmpty: Story = {
+  args: { gallery: { ...storyGallery, images: async () => [] } },
+  decorators: [withNextTheme],
+  play: async ({ canvasElement }) => {
+    const dialog = await openPicker(canvasElement)
+    const empty = await dialog.findByText(
+      /There are no images in the gallery yet/,
+    )
+    await waitFor(() => expect(empty).toBeVisible())
+    await expect(dialog.queryAllByRole('listitem')).toHaveLength(0)
+  },
+}
+
+/**
+ * An uploaded background, kept: a title (from the filename) and the alt text
+ * the gallery requires, then it says it is in the gallery.
+ */
+export const KeepUploadInGallery: Story = {
+  args: { gallery: storyGallery },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const source = document.createElement('canvas')
+    source.width = source.height = 64
+    source.getContext('2d')!.fillRect(0, 0, 64, 64)
+    const blob = await new Promise<Blob>((resolve) =>
+      source.toBlob((b) => resolve(b!), 'image/png'),
+    )
+    await userEvent.upload(
+      canvas.getByLabelText(/Upload Background Image/),
+      new File([blob], 'stage-photo.png', { type: 'image/png' }),
+    )
+    await canvas.findByText('Current: stage-photo.png')
+    await userEvent.click(
+      canvas.getByRole('button', { name: 'Keep in gallery' }),
+    )
+    await expect(canvas.getByLabelText('Title')).toHaveValue('stage-photo')
+    // Focus goes into the form, back to Keep on Cancel, and to the result.
+    await expect(document.activeElement).toBe(canvas.getByLabelText('Title'))
+    await userEvent.click(canvas.getByRole('button', { name: 'Cancel' }))
+    await expect(document.activeElement).toBe(
+      canvas.getByRole('button', { name: 'Keep in gallery' }),
+    )
+    await userEvent.click(
+      canvas.getByRole('button', { name: 'Keep in gallery' }),
+    )
+    await expect(
+      canvas.getByRole('button', { name: 'Save to gallery' }),
+    ).toBeDisabled()
+    // The keyboard path: alt text typed, then Enter in the title field.
+    await userEvent.type(canvas.getByLabelText('Alt text'), 'An empty stage')
+    await userEvent.type(canvas.getByLabelText('Title'), '{Enter}')
+    const status = canvas.getByTestId('background-gallery-status')
+    await waitFor(() => expect(status).toHaveTextContent('In the gallery.'))
+    await waitFor(() => expect(document.activeElement).toBe(status))
+  },
+}
+
+/**
+ * The mouse path: Save goes disabled while saving, which can drop focus to
+ * the page. Focus still ends on the result, never left on <body>.
+ */
+export const KeepUploadInGalleryByMouse: Story = {
+  args: { gallery: storyGallery },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const source = document.createElement('canvas')
+    source.width = source.height = 64
+    source.getContext('2d')!.fillRect(0, 0, 64, 64)
+    const blob = await new Promise<Blob>((resolve) =>
+      source.toBlob((b) => resolve(b!), 'image/png'),
+    )
+    await userEvent.upload(
+      canvas.getByLabelText(/Upload Background Image/),
+      new File([blob], 'stage-photo.png', { type: 'image/png' }),
+    )
+    await canvas.findByText('Current: stage-photo.png')
+    await userEvent.click(
+      canvas.getByRole('button', { name: 'Keep in gallery' }),
+    )
+    await userEvent.type(canvas.getByLabelText('Alt text'), 'An empty stage')
+    await userEvent.click(
+      canvas.getByRole('button', { name: 'Save to gallery' }),
+    )
+    const status = canvas.getByTestId('background-gallery-status')
+    await waitFor(() => expect(status).toHaveTextContent('In the gallery.'))
+    await waitFor(() => expect(document.activeElement).toBe(status))
+  },
+}
+
+/** The keep form, open and filled, for the screenshot. */
+export const KeepFormOpen: Story = {
+  args: { gallery: storyGallery },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const source = document.createElement('canvas')
+    source.width = source.height = 64
+    source.getContext('2d')!.fillRect(0, 0, 64, 64)
+    const blob = await new Promise<Blob>((resolve) =>
+      source.toBlob((b) => resolve(b!), 'image/png'),
+    )
+    await userEvent.upload(
+      canvas.getByLabelText(/Upload Background Image/),
+      new File([blob], 'stage-photo.png', { type: 'image/png' }),
+    )
+    await canvas.findByText('Current: stage-photo.png')
+    await userEvent.click(
+      canvas.getByRole('button', { name: 'Keep in gallery' }),
+    )
+    await expect(
+      canvas.getByRole('button', { name: 'Save to gallery' }),
+    ).toBeDisabled()
+  },
+}
+
+export const KeepFormOpenDark: Story = {
+  ...KeepFormOpen,
   globals: { theme: 'dark' },
 }

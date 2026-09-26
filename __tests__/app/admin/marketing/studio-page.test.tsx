@@ -6,6 +6,7 @@ import type { ReactNode } from 'react'
 vi.mock('@/lib/auth', () => ({ getAuthSession: async () => ({}) }))
 vi.mock('@/lib/authz/organizer', () => ({
   isOrganizerForCurrentOrg: async () => true,
+  resolveCurrentOrgId: async () => 'org-1',
 }))
 vi.mock('@/lib/conference/sanity', () => ({
   getConferenceForCurrentDomain: async () => ({
@@ -67,7 +68,9 @@ vi.mock('@/components/CloudNativePattern', () => ({
   CloudNativePattern: () => null,
 }))
 vi.mock('@/components/admin/meme-generator', () => ({
-  MemeGeneratorWithDownload: () => null,
+  MemeGeneratorWithDownload: ({ orgId }: { orgId?: string }) => (
+    <div data-testid="meme-generator" data-org={orgId ?? 'none'} />
+  ),
 }))
 vi.mock('@/components/admin/PhotoGalleryWithDownload', () => ({
   PhotoGalleryWithDownload: () => null,
@@ -155,6 +158,15 @@ describe('Promo Studio search parameter boundary', () => {
     )
     expect(screen.getByTestId('tabs').getAttribute('data-tab')).toBe(
       'conference',
+    )
+  })
+})
+
+describe('Promo Studio meme generator', () => {
+  it('is given the organization, so backgrounds can come from its gallery', async () => {
+    render(await MarketingPage({ searchParams: Promise.resolve({}) }))
+    expect(screen.getByTestId('meme-generator').getAttribute('data-org')).toBe(
+      'org-1',
     )
   })
 })

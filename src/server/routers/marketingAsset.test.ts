@@ -97,6 +97,7 @@ const DOCS: Record<
   'drafts.asset-ours': { _type: 'marketingAsset', orgId: 'org-A' },
   'asset-theirs': { _type: 'marketingAsset', orgId: 'org-B' },
   'asset-2025': { _type: 'marketingAsset', orgId: 'org-A' },
+  'asset-panorama': { _type: 'marketingAsset', orgId: 'org-A' },
   // Ours, but Studio (which no guard reaches) marked it with B's edition.
   'asset-studio-marked': { _type: 'marketingAsset', orgId: 'org-A' },
   'template-ours': { _type: 'planTemplate', orgId: 'org-A' },
@@ -139,6 +140,57 @@ const ROWS = [
   },
 ]
 
+/** The image each of our assets holds, as the background read projects it. */
+const BACKGROUNDS: Record<
+  string,
+  {
+    title: string
+    alt: string
+    url: string | null
+    width: number | null
+    height: number | null
+  }
+> = {
+  'asset-ours': {
+    title: 'Keynote hall',
+    alt: 'The main hall from the stage',
+    url: 'https://cdn.sanity.io/images/p/d/hall-3000x2000.jpg',
+    width: 3000,
+    height: 2000,
+  },
+  'asset-2025': {
+    title: 'Portrait',
+    alt: 'A speaker at the lectern',
+    url: 'https://cdn.sanity.io/images/p/d/portrait-800x1200.png',
+    width: 800,
+    height: 1200,
+  },
+  // A panorama: capping only the short side would still ask for 11880 px.
+  'asset-panorama': {
+    title: 'Fjord',
+    alt: 'A fjord from end to end',
+    url: 'https://cdn.sanity.io/images/p/d/fjord-20000x2000.jpg',
+    width: 20000,
+    height: 2000,
+  },
+  // Another organization's, as a read that skipped the guard would find it.
+  'asset-theirs': {
+    title: 'Theirs',
+    alt: 'Not ours',
+    url: 'https://cdn.sanity.io/images/p/d/theirs-2000x2000.jpg',
+    width: 2000,
+    height: 2000,
+  },
+  // An asset with no image to draw (an audio track, #1178).
+  'asset-studio-marked': {
+    title: 'Track',
+    alt: '',
+    url: null,
+    width: null,
+    height: null,
+  },
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
   h.createdImageAssetId = 'image-logo-800x800-png'
@@ -171,6 +223,9 @@ beforeEach(() => {
       // The edition mark an asset carries, for `edition: "keep"`.
       if (query.includes('][0]') && query.includes('"conferenceId"'))
         return params.id in MARKS ? { conferenceId: MARKS[params.id] } : null
+      // A background: the image an asset holds, with its size.
+      if (query.includes('"url": image.asset->url'))
+        return BACKGROUNDS[params.id] ?? null
       if (query.includes('path("versions.*." + $id)'))
         return { n: params.id === 'asset-ours' ? h.releaseTwins : 0 }
       if (query.includes('"createdImageAssetId"'))
@@ -595,5 +650,88 @@ describe('the marketingAsset mutation surface is pinned', () => {
     // Creating an asset is the move route, `/api/admin/marketing-assets`,
     // which resolves the organization itself and takes no document id.
     expect(mutations.sort()).toEqual(['delete', 'update'])
+  })
+})
+
+describe('marketingAsset.background', () => {
+  /** The CDN URL the proxy is asked for, out of the same-origin URL. */
+  const proxied = (url: string) => {
+    const parsed = new URL(url, 'http://tenant.example')
+    expect(parsed.origin).toBe('http://tenant.example')
+    expect(parsed.pathname).toBe('/api/proxy-image')
+    return parsed.searchParams.get('url')
+  }
+  const backgroundReads = () =>
+    h.read.mock.calls.filter(([query]) =>
+      String(query).includes('"url": image.asset->url'),
+    )
+
+  it('answers our image through the same-origin proxy, at the size a drift needs', async () => {
+    const picked = await assets().background({ id: 'asset-ours' })
+    expect(picked).toMatchObject({
+      _id: 'asset-ours',
+      title: 'Keynote hall',
+      alt: 'The main hall from the stage',
+    })
+    // The centred square the canvas's cover draw shows anyway, at 1188 (1080
+    // plus the drift's 10%): the same pixels, and never more bytes.
+    expect(proxied(picked.url)).toBe(
+      'https://cdn.sanity.io/images/p/d/hall-3000x2000.jpg?w=1188&h=1188&fit=crop&crop=center&fm=webp&q=90',
+    )
+    const [, params] = backgroundReads()[0]
+    expect(params).toMatchObject({ orgId: 'org-A', id: 'asset-ours' })
+  })
+
+  it('never asks for a rendition larger than the original', async () => {
+    const picked = await assets().background({ id: 'asset-2025' })
+    expect(proxied(picked.url)).toBe(
+      'https://cdn.sanity.io/images/p/d/portrait-800x1200.png?w=800&h=800&fit=crop&crop=center&fm=webp&q=90',
+    )
+  })
+
+  it('never asks for more than the square the canvas shows, however long the image', async () => {
+    const picked = await assets().background({ id: 'asset-panorama' })
+    expect(proxied(picked.url)).toBe(
+      'https://cdn.sanity.io/images/p/d/fjord-20000x2000.jpg?w=1188&h=1188&fit=crop&crop=center&fm=webp&q=90',
+    )
+  })
+
+  it('refuses another organization’s asset exactly as a missing one, before reading it', async () => {
+    const foreign = await assets()
+      .background({ id: 'asset-theirs' })
+      .catch((e) => e)
+    const missing = await assets()
+      .background({ id: 'asset-nope' })
+      .catch((e) => e)
+    expect(foreign.code).toBe('NOT_FOUND')
+    expect({ code: foreign.code, message: foreign.message }).toEqual({
+      code: missing.code,
+      message: missing.message,
+    })
+    expect(backgroundReads()).toEqual([])
+  })
+
+  it('refuses a draft id with the same answer, before reading it', async () => {
+    const draft = await assets()
+      .background({ id: 'drafts.asset-ours' })
+      .catch((e) => e)
+    expect(draft.code).toBe('NOT_FOUND')
+    expect(draft.message).toBe(
+      'No marketingAsset with that id for this request',
+    )
+    expect(backgroundReads()).toEqual([])
+  })
+
+  it('refuses an asset with no image to draw', async () => {
+    await expect(
+      assets().background({ id: 'asset-studio-marked' }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+  })
+
+  it('refuses a non-organizer before anything is read', async () => {
+    await expect(
+      assets(['org-B']).background({ id: 'asset-ours' }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' })
+    expect(h.read).not.toHaveBeenCalled()
   })
 })

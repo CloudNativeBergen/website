@@ -16,7 +16,12 @@ import {
   updateMarketingAssetDetails,
   countMarketingAssetReleaseTwins,
   readMarketingAssetImage,
+  readMarketingAssetBackground,
 } from '@/lib/marketing-asset/sanity'
+import {
+  backgroundRenditionUrl,
+  proxiedImageUrl,
+} from '@/lib/marketing-asset/background'
 import { deleteImageAssetIfOrphaned } from '@/lib/sanity/orphaned-asset'
 
 /**
@@ -105,6 +110,32 @@ export const marketingAssetRouter = router({
       )
       await updateMarketingAssetDetails(input.id, details)
       return { updated: true }
+    }),
+
+  /**
+   * One of our images as a studio scene background (studio video spec §5):
+   * a same-origin proxy URL, so drawing it never taints the canvas. The id is
+   * the only thing the client names, and it is proven ours before it is read.
+   */
+  background: adminProcedure
+    .input(z.object({ id: assetId }))
+    .query(async ({ input }) => {
+      // Published ids only, as the gallery lists them.
+      if (input.id.includes('.')) throw notFound()
+      const orgId = await requireDocumentInCurrentOrg(
+        input.id,
+        'marketingAsset',
+      )
+      const asset = await readMarketingAssetBackground(orgId, input.id)
+      if (!asset?.url) throw notFound()
+      return {
+        _id: input.id,
+        title: asset.title,
+        alt: asset.alt,
+        url: proxiedImageUrl(
+          backgroundRenditionUrl(asset.url, asset.width, asset.height),
+        ),
+      }
     }),
 
   delete: adminProcedure

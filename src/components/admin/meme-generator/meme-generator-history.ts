@@ -121,3 +121,21 @@ export const allStates = <T>(history: History<T>): T[] => [
   history.present,
   ...history.future,
 ]
+
+/**
+ * Rewrite every state the history holds, making no step: for a fact about
+ * the world rather than an edit — an image now kept in the gallery is kept
+ * whichever step undo returns to.
+ */
+export function mapStates<T>(
+  history: History<T>,
+  change: (state: T) => T,
+): History<T> {
+  return {
+    ...history,
+    past: history.past.map(change),
+    present: change(history.present),
+    future: history.future.map(change),
+    ...(history.evicted ? { evicted: history.evicted.map(change) } : {}),
+  }
+}

@@ -90,6 +90,7 @@ vi.mock('@/lib/conference/sanity', () => ({
 vi.mock('@/lib/auth', () => ({ getAuthSession: vi.fn(async () => ({})) }))
 vi.mock('@/lib/authz/organizer', () => ({
   isOrganizerForCurrentOrg: vi.fn(async () => true),
+  resolveCurrentOrgId: vi.fn(async () => 'org-1'),
 }))
 vi.mock('@/lib/gallery/sanity', () => ({
   getFeaturedGalleryImages: vi.fn(async () => []),
