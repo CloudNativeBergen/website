@@ -112,4 +112,47 @@ describe('blobAssetUploader', () => {
       /^marketing-asset\/kkdemo\.org\/\d{13}-logo\.webp$/,
     )
   })
+
+  it('sends a studio save’s tab with it (#1164)', async () => {
+    fetchMock.mockResolvedValue(
+      Response.json({ _id: 'asset-3', softOnSocial: true }),
+    )
+    const capture = new File(
+      [new Uint8Array(10)],
+      'ada-speaker-spotlight.png',
+      {
+        type: 'image/png',
+      },
+    )
+    await blobAssetUploader('org-A')(
+      capture,
+      { ...DETAILS, subject: { type: 'speaker', id: 'ada' } },
+      { kind: 'image', studio: { tab: 'speakers' } },
+    )
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toMatchObject({
+      kind: 'image',
+      studio: { tab: 'speakers' },
+      subject: { type: 'speaker', id: 'ada' },
+    })
+  })
+
+  it('carries a capture over 4.5 MB straight to Blob, never through a multipart body', async () => {
+    fetchMock.mockResolvedValue(
+      Response.json({ _id: 'asset-4', softOnSocial: false }),
+    )
+    const big = new File([new Uint8Array(6 * 1024 * 1024)], 'promo.png', {
+      type: 'image/png',
+    })
+    await blobAssetUploader('org-A')(big, DETAILS, {
+      kind: 'image',
+      studio: { tab: 'conference' },
+    })
+    // The whole file goes to Blob; the server gets only a small JSON body.
+    expect(h.upload.mock.calls[0][1]).toBe(big)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(url).toBe('/api/admin/marketing-assets')
+    expect(typeof init.body).toBe('string')
+    expect(init.body.length).toBeLessThan(4096)
+  })
 })

@@ -6,11 +6,14 @@ export function StudioCardGrid({
   selectedId,
   label,
   className,
+  pinnedTitle = 'Card for your Task',
 }: {
   children: ReactElement[]
   selectedId?: string
   label: string
   className: string
+  /** What the pinned card is: a Task's, or one opened from the gallery. */
+  pinnedTitle?: string
 }) {
   const pinned = children.find((card) => card.key === selectedId)
   return (
@@ -18,11 +21,11 @@ export function StudioCardGrid({
       {selectedId &&
         (pinned ? (
           <section
-            aria-label="Card for your Task"
+            aria-label={pinnedTitle}
             className="rounded-xl border-2 border-brand-cloud-blue bg-blue-50 p-4 dark:border-blue-400 dark:bg-blue-950/30"
           >
             <h3 className="mb-4 font-semibold text-brand-cloud-blue dark:text-blue-300">
-              Card for your Task
+              {pinnedTitle}
             </h3>
             {pinned}
           </section>

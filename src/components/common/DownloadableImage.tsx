@@ -1,22 +1,38 @@
 'use client'
 
 import { useState, useRef } from 'react'
-import { ArrowDownTrayIcon } from '@heroicons/react/24/outline'
-import { captureImage, useImageAttachment } from './image-capture'
+import {
+  ArrowDownTrayIcon,
+  RectangleStackIcon,
+} from '@heroicons/react/24/outline'
+import {
+  captureImage,
+  useGallerySave,
+  useImageAttachment,
+  type StudioCard,
+} from './image-capture'
 
 interface DownloadableImageProps {
   filename?: string
+  /**
+   * The studio card this is, for "Save to gallery". Shown only inside the
+   * studio's gallery provider.
+   */
+  studio?: StudioCard
   children: React.ReactNode
 }
 
 export function DownloadableImage({
   filename = 'speaker-image',
+  studio,
   children,
 }: DownloadableImageProps) {
   const [isDownloading, setIsDownloading] = useState(false)
   const componentRef = useRef<HTMLDivElement>(null)
 
   const attachment = useImageAttachment()
+  const gallery = useGallerySave()
+  const busy = isDownloading || Boolean(attachment?.busy || gallery?.busy)
 
   const downloadAsImage = async () => {
     if (!componentRef.current) {
@@ -91,7 +107,7 @@ export function DownloadableImage({
       <div className="mt-4 flex flex-wrap justify-center gap-2">
         <button
           onClick={downloadAsImage}
-          disabled={isDownloading || attachment?.busy}
+          disabled={busy}
           className="font-inter inline-flex items-center space-x-2 rounded-lg bg-brand-cloud-blue px-4 py-2 text-sm font-semibold text-white transition-all hover:bg-brand-cloud-blue/90 hover:shadow-md disabled:opacity-50"
         >
           <ArrowDownTrayIcon className="h-4 w-4" />
@@ -105,10 +121,26 @@ export function DownloadableImage({
                 filename,
               )
             }
-            disabled={isDownloading || attachment.busy}
+            disabled={busy}
             className="inline-flex items-center rounded-lg border border-blue-600 px-4 py-2 text-sm font-semibold text-blue-700 disabled:opacity-50 dark:text-blue-300"
           >
             {attachment.busy ? 'Attaching…' : 'Attach to Task'}
+          </button>
+        )}
+        {gallery && studio && (
+          <button
+            onClick={() =>
+              gallery.save(
+                () => captureImage(componentRef.current!),
+                filename,
+                studio,
+              )
+            }
+            disabled={busy}
+            className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-800 transition-colors hover:bg-gray-50 disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700"
+          >
+            <RectangleStackIcon className="size-4" aria-hidden />
+            <span>Save to gallery</span>
           </button>
         )}
       </div>
