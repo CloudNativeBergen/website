@@ -766,6 +766,37 @@ describe('saving as a new project after a conflict', () => {
   })
 })
 
+describe("a copy of a project Studio pointed at another organization's edition", () => {
+  it('is refused by the conference guard, on save-as-new and on duplicate', async () => {
+    const created = await projects().create({
+      title: 'T',
+      scenes: [scene('s')],
+    })
+    const i = h.dataset.findIndex((d) => d._id === created._id)
+    h.dataset[i] = {
+      ...h.dataset[i],
+      scope: 'edition',
+      conference: ref('conf-B'),
+    }
+    h.mutations = []
+    const refused = {
+      code: 'NOT_FOUND',
+      message: expect.stringContaining('conference'),
+    }
+    await expect(
+      projects().create({
+        title: 'C',
+        scenes: [scene('s')],
+        copyFilesFrom: created._id,
+      }),
+    ).rejects.toMatchObject(refused)
+    await expect(
+      projects().duplicate({ id: created._id }),
+    ).rejects.toMatchObject(refused)
+    expect(h.mutations).toEqual([])
+  })
+})
+
 describe('a project with a Content Release copy', () => {
   it('is neither saved over nor deleted here', async () => {
     const created = await projects().create({ title: 'T', scenes: TWO_SCENES })

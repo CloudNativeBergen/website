@@ -141,11 +141,22 @@ export function projectSnapshot(title: string, scenes: Scene[]): string {
         ...scene.design,
         background: {
           color: scene.design.background.color,
-          image: scene.design.background.image?.url ?? null,
+          image: imageIdentity(scene.design.background.image?.url),
         },
       },
     })),
   })
+}
+
+/**
+ * An image as the snapshot compares it: its URL — but an upload's data URL
+ * by its length and ends, never megabytes of base64 on every comparison.
+ */
+function imageIdentity(url: string | undefined): string | null {
+  if (!url) return null
+  return url.startsWith('data:')
+    ? `data:${url.length}:${url.slice(0, 48)}:${url.slice(-64)}`
+    : url
 }
 
 /** JSON with every object's keys sorted: equal values, equal strings. */

@@ -401,6 +401,33 @@ describe('leaving with unsaved changes', () => {
     expect(blocked()).toBe(false)
   })
 
+  it('asks before an in-app link leaves, and stays when told to', async () => {
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    render(
+      <>
+        <a href="/admin/speakers">Speakers</a>
+        <MemeGenerator projects={fakeProjects()} />
+      </>,
+    )
+    toVideo()
+    const click = () => {
+      const event = new MouseEvent('click', {
+        bubbles: true,
+        cancelable: true,
+        button: 0,
+      })
+      screen.getByRole('link', { name: 'Speakers' }).dispatchEvent(event)
+      return event.defaultPrevented
+    }
+    expect(click()).toBe(false)
+    expect(confirm).not.toHaveBeenCalled()
+    typeTitle('Teaser')
+    expect(click()).toBe(true)
+    expect(confirm).toHaveBeenCalled()
+    confirm.mockReturnValue(true)
+    expect(click()).toBe(false)
+  })
+
   it('never asks for an image with no project', () => {
     render(<MemeGenerator projects={fakeProjects()} />)
     fireEvent.change(screen.getAllByPlaceholderText(/text/i)[0], {

@@ -176,6 +176,16 @@ describe('carryFiles', () => {
 })
 
 describe('projectSnapshot', () => {
+  it('tells two uploads apart without carrying their bytes', () => {
+    const list = scenes()
+    const big = `data:image/png;base64,${'A'.repeat(200_000)}`
+    list[0].design.background.image = { url: `${big}B`, name: 'a.png' }
+    const one = projectSnapshot('t', list)
+    expect(one.length).toBeLessThan(20_000)
+    list[0].design.background.image = { url: `${big}C`, name: 'a.png' }
+    expect(projectSnapshot('t', list)).not.toBe(one)
+  })
+
   it('changes with the title and with anything drawn', () => {
     const list = scenes()
     const base = projectSnapshot('Teaser', list)

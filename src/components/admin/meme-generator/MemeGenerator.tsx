@@ -702,7 +702,12 @@ export function MemeGenerator({
   const [savedSnapshot, setSavedSnapshot] = useState(() =>
     projectSnapshot(UNTITLED, history.present),
   )
-  const unsaved = projectSnapshot(projectTitle, scenes) !== savedSnapshot
+  // Memoized: playback re-renders every frame with the same scenes.
+  const currentSnapshot = useMemo(
+    () => projectSnapshot(projectTitle, scenes),
+    [projectTitle, scenes],
+  )
+  const unsaved = currentSnapshot !== savedSnapshot
   const [projectBusy, setProjectBusy] = useState<
     'saving' | 'opening' | 'duplicating' | null
   >(null)
@@ -726,8 +731,39 @@ export function MemeGenerator({
       event.preventDefault()
       event.returnValue = ''
     }
+    // An in-app link (the admin sidebar is Next.js `Link`) leaves without
+    // `beforeunload`; it asks too, before the router sees the click.
+    const onLinkClick = (event: MouseEvent) => {
+      if (
+        event.defaultPrevented ||
+        event.button !== 0 ||
+        event.metaKey ||
+        event.ctrlKey ||
+        event.shiftKey ||
+        event.altKey
+      )
+        return
+      const link = (event.target as Element | null)?.closest?.('a[href]')
+      if (!(link instanceof HTMLAnchorElement) || link.target === '_blank')
+        return
+      const to = new URL(link.href, window.location.href)
+      if (
+        to.origin !== window.location.origin ||
+        (to.pathname === window.location.pathname &&
+          to.search === window.location.search)
+      )
+        return
+      if (!window.confirm('Leave with unsaved changes to this video?')) {
+        event.preventDefault()
+        event.stopPropagation()
+      }
+    }
     window.addEventListener('beforeunload', onBeforeUnload)
-    return () => window.removeEventListener('beforeunload', onBeforeUnload)
+    document.addEventListener('click', onLinkClick, true)
+    return () => {
+      window.removeEventListener('beforeunload', onBeforeUnload)
+      document.removeEventListener('click', onLinkClick, true)
+    }
   }, [warnOnLeave])
 
   const discardOk = () =>
