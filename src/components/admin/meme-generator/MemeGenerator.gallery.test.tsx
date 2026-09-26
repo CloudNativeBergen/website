@@ -16,7 +16,7 @@ import {
   afterEach,
   onTestFinished,
 } from 'vitest'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { act, render, screen, fireEvent, waitFor } from '@testing-library/react'
 import type { MemeAssets, MemeDesign } from './meme-generator-draw'
 import type { BackgroundGallery } from './meme-generator-gallery'
 
@@ -120,6 +120,48 @@ describe('a gallery image as the background', () => {
       'That image could not be loaded',
     )
     expect(screen.queryByText(/^Current:/)).not.toBeInTheDocument()
+  })
+})
+
+describe('a slow gallery pick that fails', () => {
+  const slowFailingPick = () => {
+    let fail: (error: Error) => void = () => {}
+    const gallery = fakeGallery({
+      resolve: vi.fn(
+        () =>
+          new Promise<never>((_, reject) => {
+            fail = reject
+          }),
+      ),
+    })
+    return { gallery, fail: () => fail(new Error('gone')) }
+  }
+  const pickHall = async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Choose from gallery' }))
+    fireEvent.click(await screen.findByRole('button', { name: /Keynote hall/ }))
+  }
+
+  it('says nothing once a newer background has taken its place', async () => {
+    const { gallery, fail } = slowFailingPick()
+    render(<MemeGenerator gallery={gallery} />)
+    await pickHall()
+    await waitFor(() => expect(gallery.resolve).toHaveBeenCalled())
+    upload()
+    await screen.findByText('Current: photo.png')
+    await act(async () => fail())
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(screen.getByText('Current: photo.png')).toBeInTheDocument()
+  })
+
+  it('says nothing on the scene the editor has moved on to', async () => {
+    const { gallery, fail } = slowFailingPick()
+    render(<MemeGenerator gallery={gallery} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Video' }))
+    await pickHall()
+    await waitFor(() => expect(gallery.resolve).toHaveBeenCalled())
+    fireEvent.click(screen.getByRole('button', { name: 'Add scene' }))
+    await act(async () => fail())
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 })
 

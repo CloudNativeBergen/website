@@ -477,7 +477,16 @@ export function MemeGenerator({
     }
   }, [history])
 
-  const [backgroundError, setBackgroundError] = useState<string | null>(null)
+  // A failed pick, for the scene it was made for: shown only while that
+  // scene is the one being edited.
+  const [backgroundFailure, setBackgroundFailure] = useState<{
+    sceneKey: string
+    message: string
+  } | null>(null)
+  const backgroundError =
+    backgroundFailure?.sceneKey === editingKey
+      ? backgroundFailure.message
+      : null
   // The editing scene's upload, while it can still be kept — and only one
   // the gallery would take: any other image still works, locally.
   const uploaded = background.image
@@ -495,7 +504,9 @@ export function MemeGenerator({
   /**
    * Decode an image and make it the background of the scene it was asked
    * for, even if the playhead moves on meanwhile. Throws when it cannot be
-   * had or decoded, leaving the background as it was.
+   * had or decoded, leaving the background as it was — but only while it is
+   * still that scene's latest: one a newer image or a clear has superseded
+   * fails silently, never over what replaced it.
    */
   const loadBackground = async (
     load: () => Promise<{
@@ -508,7 +519,7 @@ export function MemeGenerator({
     backgroundUploads.current.set(sceneKey, upload)
     const isLatest = () => backgroundUploads.current.get(sceneKey) === upload
     setUploadingScenes((prev) => new Set(prev).add(sceneKey))
-    setBackgroundError(null)
+    setBackgroundFailure(null)
     try {
       const { image: next, file } = await load()
       const image = new window.Image()
@@ -520,6 +531,8 @@ export function MemeGenerator({
       backgroundRasters.current.set(next.url, image)
       if (file) uploadedFiles.current.set(next.url, file)
       setBackground({ image: next }, sceneKey)
+    } catch (error) {
+      if (isLatest()) throw error
     } finally {
       if (isLatest()) settleUpload(sceneKey)
     }
@@ -545,6 +558,7 @@ export function MemeGenerator({
 
   const pickGalleryBackground = async (id: string) => {
     if (!gallery) return
+    const sceneKey = editingKey
     try {
       await loadBackground(async () => {
         const picked = await gallery.resolve(id)
@@ -553,9 +567,11 @@ export function MemeGenerator({
         }
       })
     } catch {
-      setBackgroundError(
-        'That image could not be loaded. Try again, or choose another.',
-      )
+      setBackgroundFailure({
+        sceneKey,
+        message:
+          'That image could not be loaded. Try again, or choose another.',
+      })
     }
   }
 
@@ -589,7 +605,7 @@ export function MemeGenerator({
       (backgroundUploads.current.get(editingKey) ?? 0) + 1,
     )
     settleUpload(editingKey)
-    setBackgroundError(null)
+    setBackgroundFailure(null)
     setBackground({ image: null })
   }
 
