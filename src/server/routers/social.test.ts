@@ -83,6 +83,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { initTRPC } from '@trpc/server'
 import type { Context } from '@/server/trpc'
 import type { SocialPostVariant } from '@/lib/social/types'
+import type { PublishInput, ValidationIssue } from '@/lib/social/provider/types'
 import { socialRouter } from './social'
 
 const t = initTRPC.context<Context>().create()
@@ -1462,7 +1463,7 @@ describe('validation sees the link the tick posts (#1143)', () => {
   })
 
   it("scheduling a Task's variant validates its /go/<code> link with the long link as destination", async () => {
-    const validate = vi.fn((..._args: unknown[]): unknown[] => [])
+    const validate = vi.fn<(input: PublishInput) => ValidationIssue[]>(() => [])
     h.resolveAdapter.mockResolvedValue({ validate })
     h.getSocialPostVariant.mockResolvedValue(
       variant({ platform: 'bluesky', link: LONG, shortCode: 'abc234' }),
@@ -1475,14 +1476,14 @@ describe('validation sees the link the tick posts (#1143)', () => {
   })
 
   it('scheduling a standalone variant validates the link the organizer typed', async () => {
-    const validate = vi.fn((..._args: unknown[]): unknown[] => [])
+    const validate = vi.fn<(input: PublishInput) => ValidationIssue[]>(() => [])
     h.resolveAdapter.mockResolvedValue({ validate })
     const typed = 'https://example.org/x'
     h.getSocialPostVariant.mockResolvedValue(
       variant({ platform: 'bluesky', link: typed, shortCode: null }),
     )
     await social().scheduleVariant({ variantId: 'variant-ours' })
-    const input = validate.mock.calls[0][0] as Record<string, unknown>
+    const input = validate.mock.calls[0][0]
     expect(input.link).toBe(typed)
     expect(input).not.toHaveProperty('linkDestination')
   })

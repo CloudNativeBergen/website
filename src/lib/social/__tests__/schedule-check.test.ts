@@ -12,6 +12,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { scheduleIssues } from '../schedule-check'
 import { BufferPublishAdapter } from '../provider/buffer'
 import type { SocialPostVariant } from '../types'
+import type { PublishInput, ValidationIssue } from '../provider/types'
 
 // The ADAPTER branch: `scheduleIssues` delegates to `adapter.validate` when
 // the organization is connected, and falls back to the shared rules when it
@@ -155,7 +156,7 @@ describe('scheduleIssues — the link is the first comment (#1134)', () => {
 
 describe('scheduleIssues — validation sees what is posted (#1143)', () => {
   it("a Task variant's short link and its long destination reach the adapter's validate", async () => {
-    const validate = vi.fn((..._args: unknown[]): unknown[] => [])
+    const validate = vi.fn<(input: PublishInput) => ValidationIssue[]>(() => [])
     resolveAdapter.mockResolvedValueOnce({ validate } as never)
     await scheduleIssues(variant({ shortCode: 'abc234' }), [], {
       conferenceDomains: DOMAINS,
@@ -170,7 +171,7 @@ describe('scheduleIssues — validation sees what is posted (#1143)', () => {
   })
 
   it('a standalone variant (no code) is validated with its own link', async () => {
-    const validate = vi.fn((..._args: unknown[]): unknown[] => [])
+    const validate = vi.fn<(input: PublishInput) => ValidationIssue[]>(() => [])
     resolveAdapter.mockResolvedValueOnce({ validate } as never)
     await scheduleIssues(variant({ shortCode: null }), [], {
       conferenceDomains: DOMAINS,
