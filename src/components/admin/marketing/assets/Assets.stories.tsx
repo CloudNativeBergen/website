@@ -47,7 +47,9 @@ function wavBytes(seconds: number, rate = 8000): Uint8Array<ArrayBuffer> {
 const wavFile = (name: string, seconds: number) =>
   new File([wavBytes(seconds)], name, { type: 'audio/wav' })
 /** A short track the card can really play, without the CDN. */
-const TRACK_URL = `data:audio/wav;base64,${btoa(String.fromCharCode(...wavBytes(2)))}`
+const TRACK_URL = URL.createObjectURL(
+  new Blob([wavBytes(30)], { type: 'audio/wav' }),
+)
 
 const EDITION = { _id: 'conf-2026', title: 'CND 2026' }
 const ADA = { _id: 'sp-ada', _type: 'speaker' as const, name: 'Ada Lovelace' }
@@ -822,4 +824,38 @@ export const EditTrack: Story = {
     await expect(dialog.queryByLabelText('Alt text')).toBeNull()
     await expect(dialog.getByRole('button', { name: 'Save' })).toBeEnabled()
   },
+}
+
+/**
+ * A track PLAYING in its card at phone width: the time ("0:01 / 1:32") sits
+ * under the bar, so the bar keeps the card's width.
+ */
+export const TrackPlaying: Story = {
+  parameters: {
+    ...meta.parameters,
+    viewport: { defaultViewport: 'mobile1' },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await canvas.findByText('Venue from the harbour')
+    await userEvent.selectOptions(canvas.getByLabelText('Kind'), 'Audio tracks')
+    await userEvent.click(
+      await canvas.findByRole('button', {
+        name: 'Play Conference theme, 90-second cut',
+      }),
+    )
+    await canvas.findByRole('button', {
+      name: 'Pause Conference theme, 90-second cut',
+    })
+    await waitFor(
+      () => expect(canvas.getByText(/^0:0[1-9] \/ /)).toBeVisible(),
+      {
+        timeout: 5000,
+      },
+    )
+  },
+}
+export const TrackPlayingDark: Story = {
+  ...TrackPlaying,
+  globals: { theme: 'dark' },
 }

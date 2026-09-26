@@ -11,9 +11,30 @@ import {
   alawWav,
   behindId3,
   flacTone,
+  apeTag,
+  fmtClaiming,
+  m4aSampleCountMismatch,
+  m4aTruncated,
+  m4aTwoMoov,
+  m4aTwoSampleEntries,
+  m4aZeroTimescale,
+  id3v1Tag,
+  id3WithFooter,
+  mp3Mpeg2,
+  appleM4a,
+  faststartM4a,
+  fragmentedM4a,
   freeFormatMp3,
   id3HidingFrames,
+  lameCbr,
+  lameId3v1,
+  lameVbrXing,
+  mp3WithFakeHeaders,
+  pcmFmt,
+  splitFrames,
+  wavFromChunks,
   m4aTone,
+  m4aHeaderUnderClaimed,
   m4aWithNoLength,
   mp3OfSeconds,
   mp3UnderClaimed,
@@ -27,7 +48,7 @@ import {
 
 vi.mock('server-only', () => ({}))
 import { measureAudio } from './audio-measure'
-import { countMp3Seconds } from './mp3-frames'
+import { MAX_UNACCOUNTED_BYTES } from './mp3-frames'
 
 /** The measured seconds, or the refusal. */
 async function measure(bytes: Uint8Array) {
@@ -80,28 +101,34 @@ describe('measureAudio', () => {
     ).toEqual({ refused: 'type' })
   })
 
-  describe('MP3, counted frame by frame', () => {
+  describe('MP3: tags plus a chain of frames, every byte accounted for', () => {
+    it.each([
+      ['LAME CBR', lameCbr()],
+      ['LAME VBR with a Xing header', lameVbrXing()],
+      ['LAME with ID3v2 and ID3v1 tags', lameId3v1()],
+      ['LAME CBR with an APEv2 tag', Buffer.concat([lameCbr(), apeTag()])],
+    ])('takes real encoder output: %s', async (_, bytes) => {
+      expect(await measure(bytes)).toBeCloseTo(2, 0)
+    })
+
     it('reads an MP3 past ten minutes as past ten minutes', async () => {
       expect(await measure(mp3OfSeconds(660))).toBeGreaterThan(600)
     })
 
     it('counts past a LAME-style header (frames AND bytes) claiming ten frames', async () => {
-      // The real parser believes the header; this measurement does not.
-      const { parseBuffer } = await import('music-metadata')
-      const mp3 = mp3UnderClaimed(660)
-      const trusted = await parseBuffer(
-        mp3,
-        { mimeType: 'audio/mpeg' },
-        { duration: true },
-      )
-      expect(trusted.format.duration).toBeLessThan(1)
-      expect(await measure(mp3)).toBeGreaterThan(600)
+      expect(await measure(mp3UnderClaimed(660))).toBeGreaterThan(600)
     })
 
     it('reads an hour under 20 MB, headed as two seconds, as an hour', async () => {
       const hour = mp3UnderClaimed(65 * 60)
       expect(hour.length).toBeLessThan(20 * 1024 * 1024)
       expect(await measure(hour)).toBeGreaterThan(3600)
+    })
+
+    it('never jumps by a header whose successor does not follow: fake headers hide no frames', async () => {
+      // Round 2, finding 1: a header of the same stream claiming 1440 bytes
+      // before every twenty real frames.
+      expect(await measure(mp3WithFakeHeaders(11 * 60))).toBeGreaterThan(600)
     })
 
     it('skips an ID3 tag by its size, not counting frame-like bytes inside it', async () => {
@@ -111,66 +138,78 @@ describe('measureAudio', () => {
       )
     })
 
-    it('counts MPEG-2 frames and skips junk between frames', () => {
-      const junk = Buffer.alloc(500, 0x20)
+    it('takes a file of one frame: it ends the file', async () => {
+      expect(await measure(mp3OfSeconds(0.03))).toBeCloseTo(0.036, 3)
+    })
+
+    it('takes a few junk bytes, under the budget', async () => {
+      // The frame before the gap has no successor, so it too is unaccounted.
+      const junk = Buffer.alloc(MAX_UNACCOUNTED_BYTES - 144, 0x20)
       expect(
-        countMp3Seconds(
+        await measure(Buffer.concat([mp3OfSeconds(2), junk, mp3OfSeconds(2)])),
+      ).toBeCloseTo(4, 0)
+    })
+
+    it('refuses one byte over the unaccounted budget', async () => {
+      const junk = Buffer.alloc(MAX_UNACCOUNTED_BYTES - 143, 0x20)
+      expect(
+        await measureAudio(
           Buffer.concat([mp3OfSeconds(2), junk, mp3OfSeconds(2)]),
         ),
-      ).toBeCloseTo(4, 0)
-      // MPEG-2 Layer III, 32 kbit/s at 16 kHz: 144-byte frames of 36 ms.
-      const mpeg2 = Buffer.alloc(144)
-      mpeg2.set([0xff, 0xf3, 0x48, 0xc0])
+      ).toEqual({ refused: 'type' })
+    })
+
+    it('does not count the tags at either end against the budget', async () => {
+      // With the gap using all but 5 bytes of the budget, a tag counted as
+      // unaccounted bytes would refuse the file.
+      const gap = Buffer.alloc(MAX_UNACCOUNTED_BYTES - 144 - 5, 0x20)
+      const body = Buffer.concat([mp3OfSeconds(2), gap, mp3OfSeconds(2)])
+      for (const [label, bytes] of [
+        ['ID3v1', Buffer.concat([body, id3v1Tag()])],
+        ['APEv2 with a header', Buffer.concat([body, apeTag(5000)])],
+        ['APEv2 then ID3v1', Buffer.concat([body, apeTag(5000), id3v1Tag()])],
+        ['ID3v2 with a footer', Buffer.concat([id3WithFooter(64), body])],
+      ] as const)
+        expect(await measure(bytes), label).toBeCloseTo(4, 0)
+    })
+
+    it('holds to ONE stream: frames of another after a gap are unaccounted', async () => {
       expect(
-        countMp3Seconds(Buffer.concat(Array(100).fill(mpeg2))),
-      ).toBeCloseTo(3.6, 1)
+        await measureAudio(Buffer.concat([mp3OfSeconds(2), mp3Mpeg2(2)])),
+      ).toEqual({ refused: 'type' })
     })
 
-    it('counts frames split by junk bytes, not just the chained pair it anchors on', () => {
-      // A minute of frames each followed by one junk byte (a decoder resyncs
-      // and plays them), then two chained frames at the very end.
-      const frame = mp3OfSeconds(0.03)
-      const split = Buffer.concat(
-        Array<Buffer>(1700).fill(Buffer.concat([frame, Buffer.from([0])])),
-      )
-      expect(
-        countMp3Seconds(Buffer.concat([split, mp3OfSeconds(0.06)])),
-      ).toBeGreaterThan(60)
-    })
-
-    it('takes a file of one frame: it ends the file, so it anchors', () => {
-      expect(countMp3Seconds(mp3OfSeconds(0.03))).toBeCloseTo(0.036, 3)
-    })
-
-    it('counts free-format frames as frames, stepping past each header', () => {
-      // 1 s of a normal stream, then 100 free-format frames of 36 ms.
-      const counted = countMp3Seconds(
-        Buffer.concat([mp3OfSeconds(1), freeFormatMp3(100)]),
-      )
-      expect(counted).toBeGreaterThan(4.5)
-    })
-
-    it('walks 20 MB of sync-like junk after one frame in linear time', async () => {
+    it('refuses 20 MB of sync-like junk after one frame, in linear time', async () => {
       const bytes = Buffer.concat([
         mp3OfSeconds(0.03),
         Buffer.alloc(20 * 1024 * 1024 - 144, 0xff),
       ])
       const started = performance.now()
-      await measureAudio(bytes)
+      expect(await measureAudio(bytes)).toEqual({ refused: 'type' })
       expect(performance.now() - started).toBeLessThan(2_000)
     })
 
     it.each([
+      // Round 2, finding 2: two real frames, then half an hour of AAC.
+      [
+        'ID3, two real frames, then 30 minutes of AAC (ADTS)',
+        behindId3(
+          Buffer.concat([
+            mp3OfSeconds(0.06),
+            ...Array<Buffer>(700).fill(adtsTone()),
+          ]),
+        ),
+      ],
       ['AAC (ADTS) behind an ID3 tag', behindId3(adtsTone())],
       ['FLAC behind an ID3 tag', behindId3(flacTone())],
-      // No two frames in a row: a free-format stream cannot be anchored.
       ['frames of free format only', freeFormatMp3(100)],
-    ])('refuses %s: no Layer III frames', async (_, bytes) => {
+      ['frames split by junk bytes', splitFrames(1700)],
+    ])('refuses %s', async (_, bytes) => {
       expect(await measureAudio(bytes)).toEqual({ refused: 'type' })
     })
   })
 
-  describe('WAV, by the bytes present', () => {
+  describe('WAV: one fmt, then one data, by the bytes present', () => {
     it('measures by the bytes held, not a data chunk that undersells them', async () => {
       const wav = wavOfSeconds(30)
       wav.writeUInt32LE(8000, 40)
@@ -187,7 +226,46 @@ describe('measureAudio', () => {
     it.each([
       ['an A-law WAV', alawWav()],
       ['a WAV header and nothing else', Buffer.from('RIFF0000WAVEgarbage')],
-    ])('refuses %s as the wrong type', async (_, bytes) => {
+      // Round 2, finding 3: a second fmt re-describing the data after it.
+      [
+        'a second fmt chunk',
+        wavFromChunks([
+          ['fmt ', pcmFmt()],
+          ['fmt ', pcmFmt()],
+          ['data', Buffer.alloc(800, 0x80)],
+        ]),
+      ],
+      [
+        'a second data chunk',
+        wavFromChunks([
+          ['fmt ', pcmFmt()],
+          ['data', Buffer.alloc(800, 0x80)],
+          ['data', Buffer.alloc(800, 0x80)],
+        ]),
+      ],
+      [
+        'data before fmt',
+        wavFromChunks([
+          ['data', Buffer.alloc(800, 0x80)],
+          ['fmt ', pcmFmt()],
+        ]),
+      ],
+      // Followed by a chunk whose id would be read as 16 bits per sample.
+      [
+        'a fmt shorter than 16 bytes',
+        wavFromChunks([
+          ['fmt ', pcmFmt().subarray(0, 14)],
+          ['\x10\x00xx', Buffer.alloc(2)],
+          ['data', Buffer.alloc(800, 0x80)],
+        ]),
+      ],
+      // Its 16 bytes all there, but it claims 18: the file stops short.
+      ['a fmt claiming more than the file holds', fmtClaiming(18)],
+      [
+        'a WAV cut off inside its fmt',
+        wavFromChunks([['fmt ', pcmFmt()]]).subarray(0, 30),
+      ],
+    ])('refuses %s as the wrong type, without throwing', async (_, bytes) => {
       expect(await measureAudio(bytes)).toEqual({ refused: 'type' })
     })
 
@@ -216,17 +294,40 @@ describe('measureAudio', () => {
     })
   })
 
-  describe('M4A, through the parser', () => {
+  describe('M4A: one sound track, timed by its sample table', () => {
+    it.each([
+      ['ffmpeg', m4aTone()],
+      ['ffmpeg with faststart', faststartM4a()],
+      ['Apple afconvert', appleM4a()],
+    ])('takes real encoder output: %s', async (_, bytes) => {
+      expect(await measure(bytes)).toBeCloseTo(1, 0)
+    })
+
     it.each([
       ['an MP4 that holds video, though it sniffs as M4A', mp4WithVideo()],
       ['ALAC in an M4A', alacM4a()],
       ['two audio tracks, the second longer', twoTrackM4a()],
-      ['a file the parser throws on', Buffer.from('\0\0\0\x08ftyp')],
+      ['a fragmented MP4', fragmentedM4a()],
+      ['two movie boxes', m4aTwoMoov()],
+      [
+        'a sample table whose sizes count more samples',
+        m4aSampleCountMismatch(),
+      ],
+      ['a sample description with a second entry', m4aTwoSampleEntries()],
+      ['a file cut off inside its media data', m4aTruncated()],
+      // Would otherwise read as infinitely long, not as malformed.
+      ['a media timescale of 0', m4aZeroTimescale()],
+      [
+        'a file whose boxes run past its end',
+        Buffer.from('\0\0\0\x10ftypM4A \0\0'),
+      ],
+      // Round 2, finding 4: the header says a tenth of what the samples play.
+      ['a track header underselling its sample table', m4aHeaderUnderClaimed()],
     ])('refuses %s as the wrong type', async (_, bytes) => {
       expect(await measureAudio(bytes)).toEqual({ refused: 'type' })
     })
 
-    it('refuses an M4A with no readable length as unreadable', async () => {
+    it('refuses an M4A with an empty sample table as unreadable', async () => {
       expect(await measureAudio(m4aWithNoLength())).toEqual({
         refused: 'unreadable',
       })

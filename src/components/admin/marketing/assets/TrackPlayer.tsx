@@ -62,19 +62,23 @@ export function TrackPlayer({
           <PlayIcon className="ml-0.5 size-4" aria-hidden />
         )}
       </button>
-      <div
-        aria-hidden
-        className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-gray-300 dark:bg-gray-600"
-      >
+      {/* The time sits under the bar, not beside it, so the bar keeps the
+          card's whole width however long "1:23 / 9:59" grows. */}
+      <div className="min-w-0 flex-1">
         <div
-          className="h-full rounded-full bg-brand-cloud-blue dark:bg-blue-400"
-          style={{ width: `${progress * 100}%` }}
-        />
+          aria-hidden
+          className="h-1.5 overflow-hidden rounded-full bg-gray-300 dark:bg-gray-600"
+        >
+          <div
+            className="h-full rounded-full bg-brand-cloud-blue dark:bg-blue-400"
+            style={{ width: `${progress * 100}%` }}
+          />
+        </div>
+        <p className="mt-1 text-right text-xs text-gray-600 tabular-nums dark:text-gray-300">
+          {position > 0 ? `${formatTrackLength(position)} / ` : ''}
+          {length ? formatTrackLength(length) : '–:––'}
+        </p>
       </div>
-      <span className="shrink-0 text-xs text-gray-600 tabular-nums dark:text-gray-300">
-        {position > 0 ? `${formatTrackLength(position)} / ` : ''}
-        {length ? formatTrackLength(length) : '–:––'}
-      </span>
     </div>
   )
 }

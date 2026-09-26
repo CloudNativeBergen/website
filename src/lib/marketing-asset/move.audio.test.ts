@@ -2,8 +2,8 @@
  * @vitest-environment node
  *
  * The audio move (#1178): the same URL check and blob delete as an image, and
- * a track judged from its own bytes — format sniffed, length measured by the
- * real `music-metadata` on real MP3/WAV/M4A bytes. Only the Sanity client and
+ * a track judged from its own bytes — format sniffed, length measured by
+ * `measureAudio` on real MP3/WAV/M4A bytes. Only the Sanity client and
  * Vercel Blob are mocked (the image move's tests prove the stream plumbing
  * against them).
  */
@@ -190,15 +190,48 @@ describe('the audio move', () => {
     expect(result.ok && result.asset.created).toBe(false)
   })
 
-  it('gives up on a Sanity upload that never answers, inside the deadline', async () => {
+  /** The move's result if it has settled by now, else "pending". */
+  const settled = (moving: Promise<unknown>) =>
+    Promise.race([moving, new Promise((r) => setImmediate(() => r('pending')))])
+
+  it('gives up on a Sanity upload that never answers, at the 45 s deadline', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     try {
       h.upload.mockImplementation(() => new Promise(() => {}))
       fetchMock.mockResolvedValue(respond(mp3OfSeconds(1)))
       const moving = moveAudioBlobToSanity(URL_OK, ORG)
       await vi.waitFor(() => expect(h.upload).toHaveBeenCalled())
-      await vi.advanceTimersByTimeAsync(45_001)
-      expect(await moving).toEqual({ ok: false, reason: 'upload' })
+      await vi.advanceTimersByTimeAsync(44_000)
+      expect(await settled(moving)).toBe('pending')
+      await vi.advanceTimersByTimeAsync(1_001)
+      expect(await settled(moving)).toEqual({ ok: false, reason: 'upload' })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('gives up on a blob that never finishes arriving, at the 45 s deadline', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    try {
+      // The body stalls after its first bytes, and fails only when the
+      // move's own deadline aborts the fetch.
+      fetchMock.mockImplementation(async (_url, init: RequestInit) => {
+        const body = new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(new Uint8Array(mp3OfSeconds(0.1)))
+            init.signal?.addEventListener('abort', () =>
+              controller.error(new Error('aborted')),
+            )
+          },
+        })
+        return new Response(body)
+      })
+      const moving = moveAudioBlobToSanity(URL_OK, ORG)
+      await vi.advanceTimersByTimeAsync(44_000)
+      expect(await settled(moving)).toBe('pending')
+      await vi.advanceTimersByTimeAsync(1_001)
+      expect(await settled(moving)).toEqual({ ok: false, reason: 'fetch' })
+      expect(h.upload).not.toHaveBeenCalled()
     } finally {
       vi.useRealTimers()
     }

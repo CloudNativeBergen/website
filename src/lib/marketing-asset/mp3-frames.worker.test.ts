@@ -2,9 +2,10 @@
  * @vitest-environment node
  *
  * The frame walk must always advance. A free-format frame declares a length
- * of 0; were the walk to add it as-is, it would stand still forever, and a
- * synchronous loop cannot be timed out on the thread it blocks. So this runs
- * the real counter in a worker (loaded through tsx) and gives it a deadline.
+ * of 0 and chains to itself; were it taken as a frame, the walk would stand
+ * still forever, and a synchronous loop cannot be timed out on the thread it
+ * blocks. So this runs the real walk in a worker (loaded through tsx) and
+ * gives it a deadline.
  */
 import { Worker } from 'node:worker_threads'
 import { fileURLToPath } from 'node:url'
@@ -16,12 +17,12 @@ function countInWorker(bytes: Buffer, deadlineMs: number) {
     fileURLToPath(new URL('./__tests__/count-in-worker.ts', import.meta.url)),
     { workerData: bytes, execArgv: ['--import', 'tsx'] },
   )
-  return new Promise<number | 'timed out'>((resolve, reject) => {
+  return new Promise<number | null | 'timed out'>((resolve, reject) => {
     const timer = setTimeout(() => {
       void worker.terminate()
       resolve('timed out')
     }, deadlineMs)
-    worker.once('message', (seconds: number) => {
+    worker.once('message', (seconds: number | null) => {
       clearTimeout(timer)
       void worker.terminate()
       resolve(seconds)
@@ -33,9 +34,9 @@ function countInWorker(bytes: Buffer, deadlineMs: number) {
   })
 }
 
-it('walks past free-format frames inside a stream, and finishes', async () => {
+it('refuses free-format frames after a stream, and finishes', async () => {
   const bytes = Buffer.concat([mp3OfSeconds(1), freeFormatMp3(100)])
-  const seconds = await countInWorker(bytes, 10_000)
-  expect(seconds).not.toBe('timed out')
-  expect(seconds).toBeGreaterThan(4.5)
+  // Not "timed out": the walk advanced past every one, then gave up on the
+  // unaccounted bytes.
+  expect(await countInWorker(bytes, 10_000)).toBeNull()
 }, 20_000)

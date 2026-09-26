@@ -75,14 +75,22 @@ export const alacM4a = () => fixture('tone-alac.m4a')
 export const behindId3 = (body: Buffer) =>
   Buffer.concat([Buffer.from([0x49, 0x44, 0x33, 3, 0, 0, 0, 0, 0, 0]), body])
 
-/** The M4A tone with every duration field (mvhd, tkhd, mdhd) set to zero. */
+/** The M4A tone with its sample table emptied: `stts` and `stsz` count 0. */
 export function m4aWithNoLength(): Buffer {
   const bytes = Buffer.from(m4aTone())
-  const at = { mvhd: 20, mdhd: 20, tkhd: 24 }
-  for (const [box, offset] of Object.entries(at)) {
-    const i = bytes.indexOf(box)
-    if (i >= 0) bytes.writeUInt32BE(0, i + offset)
-  }
+  const stts = bytes.indexOf('stts')
+  bytes.writeUInt32BE(0, stts + 4 + 4)
+  const stsz = bytes.indexOf('stsz')
+  bytes.writeUInt32BE(0, stsz + 4 + 8)
+  return bytes
+}
+
+/** The M4A tone whose track header (mdhd) claims a tenth of its length. */
+export function m4aHeaderUnderClaimed(): Buffer {
+  const bytes = Buffer.from(m4aTone())
+  const mdhd = bytes.indexOf('mdhd') + 4
+  const duration = bytes.readUInt32BE(mdhd + 16)
+  bytes.writeUInt32BE(Math.floor(duration / 10), mdhd + 16)
   return bytes
 }
 
@@ -130,4 +138,172 @@ export function wavClaimingByteRate(seconds: number, rate: number): Buffer {
   const wav = wavOfSeconds(seconds)
   wav.writeUInt32LE(rate, 28)
   return wav
+}
+
+export const lameCbr = () => fixture('lame-cbr.mp3')
+export const lameVbrXing = () => fixture('lame-vbr-xing.mp3')
+export const lameId3v1 = () => fixture('lame-id3v1.mp3')
+export const fragmentedM4a = () => fixture('fragmented.m4a')
+
+/**
+ * An APEv2 tag (header and footer, one item), as taggers append one; `pad`
+ * bytes of item value make it as large as a tag holding cover art.
+ */
+export function apeTag(pad = 0): Buffer {
+  const value = Buffer.concat([Buffer.from('Theme'), Buffer.alloc(pad, 0x20)])
+  const item = Buffer.alloc(8 + 6 + value.length)
+  item.writeUInt32LE(value.length, 0)
+  item.write('Title\0', 8)
+  value.copy(item, 14)
+  const block = (isHeader: boolean) => {
+    const b = Buffer.alloc(32)
+    b.write('APETAGEX', 0)
+    b.writeUInt32LE(2000, 8)
+    b.writeUInt32LE(item.length + 32, 12)
+    b.writeUInt32LE(1, 16)
+    b.writeUInt32LE((0x80000000 | (isHeader ? 0x20000000 : 0)) >>> 0, 20)
+    return b
+  }
+  return Buffer.concat([block(true), item, block(false)])
+}
+
+/**
+ * MPEG-2.5 Layer III at 8 kHz, 8 kbit/s: 72-byte frames of 72 ms, the
+ * smallest a real stream has, so a fake header can hide many.
+ */
+export function mp3Tiny(frames: number): Buffer {
+  const frame = Buffer.alloc(72)
+  frame.set([0xff, 0xe3, 0x18, 0xc4])
+  return Buffer.concat(Array<Buffer>(frames).fill(frame))
+}
+
+/**
+ * Real 72 ms frames with, before every 20th, a header of the same stream
+ * claiming 160 kbit/s — a 1440-byte frame whose computed length lands in the
+ * middle of the next real frame. A walk that jumps by any header it meets
+ * skips twenty real frames each time.
+ */
+export function mp3WithFakeHeaders(seconds: number): Buffer {
+  const fake = Buffer.from([0xff, 0xe3, 0xe8, 0xc4])
+  const run = mp3Tiny(20)
+  const blocks = Math.ceil(seconds / (20 * 0.072))
+  return Buffer.concat(
+    Array.from({ length: blocks }, () => Buffer.concat([fake, run])),
+  )
+}
+
+/** A WAV built from chunks, for the malformed shapes. */
+export function wavFromChunks(chunks: [string, Buffer][]): Buffer {
+  const body = Buffer.concat(
+    chunks.map(([id, data]) => {
+      const head = Buffer.alloc(8)
+      head.write(id, 0)
+      head.writeUInt32LE(data.length, 4)
+      return Buffer.concat([head, data, Buffer.alloc(data.length % 2)])
+    }),
+  )
+  const riff = Buffer.alloc(12)
+  riff.write('RIFF', 0)
+  riff.writeUInt32LE(4 + body.length, 4)
+  riff.write('WAVE', 8)
+  return Buffer.concat([riff, body])
+}
+
+/** A PCM `fmt ` payload: mono, 8 kHz, 8-bit. */
+export const pcmFmt = () => wavOfSeconds(0).subarray(20, 36)
+
+/** `count` real 36 ms frames, each followed by one junk byte. */
+export function splitFrames(count: number): Buffer {
+  const frame = mp3OfSeconds(0.03)
+  return Buffer.concat(
+    Array<Buffer>(count).fill(Buffer.concat([frame, Buffer.from([0])])),
+  )
+}
+
+/** 1 s of AAC from Apple's own encoder (`afconvert -f m4af -d aac -b 16000`). */
+export const appleM4a = () => fixture('apple-afconvert.m4a')
+/** 1 s of AAC from ffmpeg with the movie box first (`-movflags +faststart`). */
+export const faststartM4a = () => fixture('faststart.m4a')
+
+/** An ID3v1 tag: 128 bytes at the very end. */
+export const id3v1Tag = () => {
+  const b = Buffer.alloc(128, 0x20)
+  b.write('TAG', 0)
+  return b
+}
+
+/** An ID3v2.4 tag with its footer flag set: `size` bytes, then a footer. */
+export function id3WithFooter(size: number): Buffer {
+  const header = Buffer.from([
+    0x49,
+    0x44,
+    0x33,
+    4,
+    0,
+    0x10,
+    (size >> 21) & 0x7f,
+    (size >> 14) & 0x7f,
+    (size >> 7) & 0x7f,
+    size & 0x7f,
+  ])
+  const footer = Buffer.from(header)
+  footer.write('3DI', 0)
+  return Buffer.concat([header, Buffer.alloc(size), footer])
+}
+
+/**
+ * MPEG-2 Layer III at 16 kHz, 32 kbit/s: 144-byte frames of 36 ms — the same
+ * frame size as {@link mp3OfSeconds}' MPEG-1 frames, another stream.
+ */
+export function mp3Mpeg2(seconds: number): Buffer {
+  const frame = Buffer.alloc(144)
+  frame.set([0xff, 0xf3, 0x48, 0xc0])
+  return Buffer.concat(Array<Buffer>(Math.ceil(seconds / 0.036)).fill(frame))
+}
+
+/** A box of `m4a` by type, whole: its size and type included. */
+function box(bytes: Buffer, type: string): Buffer {
+  const at = bytes.indexOf(type) - 4
+  return bytes.subarray(at, at + bytes.readUInt32BE(at))
+}
+
+/** The M4A tone with a second copy of its movie box appended. */
+export const m4aTwoMoov = () => {
+  const bytes = m4aTone()
+  return Buffer.concat([bytes, box(bytes, 'moov')])
+}
+
+/** The M4A tone whose sample sizes (`stsz`) count more samples than `stts`. */
+export function m4aSampleCountMismatch(): Buffer {
+  const bytes = Buffer.from(m4aTone())
+  const stsz = bytes.indexOf('stsz') + 4
+  bytes.writeUInt32BE(bytes.readUInt32BE(stsz + 8) + 1000, stsz + 8)
+  return bytes
+}
+
+/** The M4A tone whose sample description claims a second entry. */
+export function m4aTwoSampleEntries(): Buffer {
+  const bytes = Buffer.from(m4aTone())
+  bytes.writeUInt32BE(2, bytes.indexOf('stsd') + 4 + 4)
+  return bytes
+}
+
+/** The faststart M4A (movie box first) with its media data cut short. */
+export const m4aTruncated = () => {
+  const bytes = faststartM4a()
+  return bytes.subarray(0, bytes.length - 100)
+}
+
+/** A WAV of one complete 16-byte fmt whose chunk size claims `size`. */
+export function fmtClaiming(size: number): Buffer {
+  const bytes = wavFromChunks([['fmt ', pcmFmt()]])
+  bytes.writeUInt32LE(size, 16)
+  return bytes
+}
+
+/** The M4A tone with a media timescale of 0 (ticks per second). */
+export function m4aZeroTimescale(): Buffer {
+  const bytes = Buffer.from(m4aTone())
+  bytes.writeUInt32BE(0, bytes.indexOf('mdhd') + 4 + 12)
+  return bytes
 }
