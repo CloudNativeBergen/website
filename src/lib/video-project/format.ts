@@ -169,6 +169,12 @@ export const projectTitleSchema = z
   .min(1)
   .max(VIDEO_PROJECT_MAX_TITLE)
 
+/** Who confirmed the right to use a track, and when; null once erased or merged. */
+export interface ProjectRights {
+  confirmedBy: string | null
+  confirmedAt: string
+}
+
 export type ProjectSceneInput = z.output<typeof projectSceneInputSchema>
 export type ProjectTrackInput = z.output<typeof projectTrackInputSchema>
 
@@ -193,7 +199,7 @@ export interface OpenedTrack extends Omit<ProjectTrackInput, 'galleryAssetId'> {
   fileId: string
   galleryAssetId?: string
   title: string
-  rights: { confirmedBy: string | null; confirmedAt: string } | null
+  rights: ProjectRights | null
 }
 
 /** A project as the studio opens it. */

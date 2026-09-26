@@ -2,9 +2,11 @@ import { TRPCError } from '@trpc/server'
 import { z } from 'zod'
 import { adminProcedure, resolveConferenceId, router } from '@/server/trpc'
 import {
+  notFoundMessage,
   requireCurrentOrgId,
   requireDocumentInCurrentOrg,
 } from '@/server/tenancy'
+import { resolveProjectFiles } from '@/lib/video-project/resolve'
 import {
   PROJECT_CONFLICT_MESSAGE,
   copyTitle,
@@ -12,9 +14,7 @@ import {
   projectScenesSchema,
   projectTitleSchema,
   projectTrackInputSchema,
-  unkeptBackgroundRefusal,
   type ProjectSceneInput,
-  type ProjectTrackInput,
 } from '@/lib/video-project/format'
 import {
   ProjectFormatError,
@@ -23,20 +23,17 @@ import {
   storedScenes,
   storedTrack,
   type ResolvedFile,
-  type ResolvedTrack,
 } from '@/lib/video-project/document'
 import {
   countVideoProjectReleaseTwins,
   createVideoProject,
   deleteVideoProjectDocument,
   listVideoProjects,
-  readGalleryFiles,
   readVideoProject,
   readVideoProjectCreatedFiles,
   readVideoProjectDocument,
   readVideoProjectFiles,
   saveVideoProject,
-  type StoredFile,
 } from '@/lib/video-project/sanity'
 import {
   backgroundRenditionUrl,
@@ -58,10 +55,7 @@ import {
 
 /** The same refusal `requireDocumentInCurrentOrg` gives a missing id. */
 const notFound = () =>
-  new TRPCError({
-    code: 'NOT_FOUND',
-    message: 'No videoProject with that id for this request',
-  })
+  new TRPCError({ code: 'NOT_FOUND', message: notFoundMessage('videoProject') })
 
 const projectId = z
   .string()
@@ -113,113 +107,6 @@ async function releaseFiles(projectId: string, ids: string[]) {
       )
   }
 }
-
-/**
- * Every file a save names, resolved and proven this organization's: a file
- * the project ALREADY holds (by file id), or else a gallery asset of this
- * organization (by asset id). Anything else — a background uploaded and not
- * kept, another organization's asset, one since deleted — is refused, naming
- * the scenes, before anything is written.
- */
-async function resolveProjectFiles(
-  orgId: string,
-  scenes: ProjectSceneInput[],
-  track: ProjectTrackInput | null | undefined,
-  stored: { images: StoredFile[]; track: ResolvedTrackStored | null } | null,
-): Promise<{ images: (ResolvedFile | null)[]; track: ResolvedTrack | null }> {
-  const held = new Map((stored?.images ?? []).map((f) => [f.fileId, f]))
-  const fromStored = (f: StoredFile): ResolvedFile => ({
-    fileId: f.fileId,
-    ...(f.galleryAssetId ? { galleryAssetId: f.galleryAssetId } : {}),
-    createdByGallery: f.createdByGallery === true,
-    ...(f.subjectId ? { subjectId: f.subjectId } : {}),
-  })
-  const storedTrackFile =
-    track?.fileId && stored?.track?.fileId === track.fileId
-      ? stored.track
-      : null
-
-  const wanted = new Set<string>()
-  for (const scene of scenes) {
-    const image = scene.design.background.image
-    if (
-      image &&
-      !(image.fileId && held.has(image.fileId)) &&
-      image.galleryAssetId
-    )
-      wanted.add(image.galleryAssetId)
-  }
-  if (track && !storedTrackFile && track.galleryAssetId)
-    wanted.add(track.galleryAssetId)
-  const gallery = new Map(
-    (await readGalleryFiles(orgId, [...wanted])).map((row) => [row._id, row]),
-  )
-
-  const unkept: number[] = []
-  const images = scenes.map((scene, i): ResolvedFile | null => {
-    const image = scene.design.background.image
-    if (!image) return null
-    const kept = image.fileId ? held.get(image.fileId) : undefined
-    if (kept) return fromStored(kept)
-    const row = image.galleryAssetId ? gallery.get(image.galleryAssetId) : null
-    if (row?.kind === 'image' && row.fileId)
-      return {
-        fileId: row.fileId,
-        galleryAssetId: row._id,
-        createdByGallery: row.createdByUpload,
-        ...(row.subjectId ? { subjectId: row.subjectId } : {}),
-      }
-    unkept.push(i + 1)
-    return null
-  })
-  if (unkept.length > 0)
-    throw new TRPCError({
-      code: 'BAD_REQUEST',
-      message: unkeptBackgroundRefusal(unkept),
-    })
-
-  let resolvedTrack: ResolvedTrack | null = null
-  if (track) {
-    if (storedTrackFile) {
-      resolvedTrack = {
-        ...fromStored(storedTrackFile),
-        title: storedTrackFile.title ?? '',
-        rights: storedTrackFile.rights,
-      }
-    } else {
-      const row = track.galleryAssetId
-        ? gallery.get(track.galleryAssetId)
-        : null
-      if (row?.kind !== 'audio' || !row.fileId)
-        throw new TRPCError({
-          code: 'BAD_REQUEST',
-          message:
-            'The music track is not in the gallery, so the project cannot be saved. Choose a track from the gallery, then save.',
-        })
-      // Every gallery track carries one; a Studio-made one without it is
-      // not a track anyone confirmed the right to use.
-      if (!row.rights)
-        throw new TRPCError({
-          code: 'BAD_REQUEST',
-          message:
-            'That track has no rights confirmation. Upload it through the gallery, confirming you may use it, then save.',
-        })
-      resolvedTrack = {
-        fileId: row.fileId,
-        galleryAssetId: row._id,
-        createdByGallery: row.createdByUpload,
-        ...(row.subjectId ? { subjectId: row.subjectId } : {}),
-        title: row.title,
-        rights: row.rights,
-      }
-    }
-  }
-  return { images, track: resolvedTrack }
-}
-
-type ResolvedTrackStored = NonNullable<
-  NonNullable<Awaited<ReturnType<typeof readVideoProjectFiles>>>['track']
->
 
 /** Which file each scene now holds, for the editor to carry into later saves. */
 const sceneFiles = (
@@ -276,22 +163,16 @@ export const videoProjectRouter = router({
       }),
     )
     .mutation(async ({ input }) => {
-      // The source is proven ours before it is read. One since deleted — or
-      // never ours — lends nothing: the project is then created as any new
-      // one, so a conflict's recovery still saves what it can, and a
-      // background only the source held is refused as not kept.
-      let orgId: string
-      let source: Awaited<ReturnType<typeof readVideoProjectFiles>> = null
-      if (input.copyFilesFrom) {
-        try {
-          orgId = await guard(input.copyFilesFrom)
-          source = await readVideoProjectFiles(orgId, input.copyFilesFrom)
-        } catch (error) {
-          if (!(error instanceof TRPCError && error.code === 'NOT_FOUND'))
-            throw error
-          orgId = await requireCurrentOrgId()
-        }
-      } else orgId = await requireCurrentOrgId()
+      // The source is proven ours before anything of it is read: another
+      // organization's id, or none, is refused as open, save and duplicate
+      // refuse it.
+      const orgId = input.copyFilesFrom
+        ? await guard(input.copyFilesFrom)
+        : await requireCurrentOrgId()
+      const source = input.copyFilesFrom
+        ? await readVideoProjectFiles(orgId, input.copyFilesFrom)
+        : null
+      if (input.copyFilesFrom && !source) throw notFound()
       const files = await resolveProjectFiles(
         orgId,
         input.scenes,
@@ -317,13 +198,11 @@ export const videoProjectRouter = router({
               ? { scope: 'edition', conferenceId: await resolveConferenceId() }
               : { scope: 'organization' },
         scenes: storedScenes(input.scenes, files.images),
-        // No track sent: the source's, as it is stored (the editor has no
-        // music yet, #1179) — as Duplicate carries it.
+        // Only a track the editor sent: one it cannot show or remove
+        // (#1179) is never copied in behind its back.
         ...(input.track && files.track
           ? { track: storedTrack(input.track, files.track) }
-          : input.track === undefined && source?.storedTrack
-            ? { track: source.storedTrack }
-            : {}),
+          : {}),
       })
       return { ...created, scenes: sceneFiles(input.scenes, files.images) }
     }),

@@ -704,43 +704,50 @@ describe('saving as a new project after a conflict', () => {
     expect(copy.scenes).toEqual([{ key: 'a', fileId: HALL }])
   })
 
-  it('cannot borrow another organization’s files: its id lends nothing, and it is never read', async () => {
-    h.queries = []
-    await expect(
-      projects().create({
-        title: 'Copy',
-        scenes: [scene('a', { name: 'x', fileId: 'image-theirs-100x100-png' })],
-        copyFilesFrom: 'vp-theirs',
-      }),
-    ).rejects.toMatchObject({
-      code: 'BAD_REQUEST',
-      message: expect.stringContaining(
-        "Scene 1's background is not in the gallery",
-      ),
+  const refused = {
+    code: 'NOT_FOUND',
+    message: 'No videoProject with that id for this request',
+  }
+  for (const [what, id] of [
+    ['another organization’s', 'vp-theirs'],
+    ['a nonexistent', 'vp-missing'],
+  ]) {
+    it(`refuses ${what} project id as open and save do, before reading it`, async () => {
+      h.queries = []
+      await expect(
+        projects().create({
+          title: 'Copy',
+          scenes: [
+            scene('a', { name: 'x', fileId: 'image-theirs-100x100-png' }),
+          ],
+          copyFilesFrom: id,
+        }),
+      ).rejects.toMatchObject(refused)
+      // The guard's by-id read is the only query that ran.
+      expect(h.queries).toHaveLength(1)
+      expect(h.queries[0]).toContain('"memberOrgIds"')
+      expect(h.mutations).toEqual([])
     })
-    // The guard's read, then nothing of that project.
-    expect(h.queries[0]).toContain('"memberOrgIds"')
-    expect(h.queries.slice(1).some((q) => q.includes('videoProject'))).toBe(
-      false,
-    )
-    expect(h.mutations).toEqual([])
-  })
+  }
 
-  it('still saves when the source was deleted after the conflict', async () => {
+  it('refuses a source deleted after the conflict with the same answer', async () => {
     const created = await projects().create({
       title: 'T',
       scenes: [scene('s')],
     })
     await projects().delete({ id: created._id })
-    const copy = await projects().create({
-      title: 'Rescued',
-      scenes: [scene('s')],
-      copyFilesFrom: created._id,
-    })
-    expect(doc(copy._id)!.title).toBe('Rescued')
+    h.mutations = []
+    await expect(
+      projects().create({
+        title: 'Rescued',
+        scenes: [scene('s')],
+        copyFilesFrom: created._id,
+      }),
+    ).rejects.toMatchObject(refused)
+    expect(h.mutations).toEqual([])
   })
 
-  it('keeps the source’s edition and track', async () => {
+  it('keeps the source’s edition, and never copies in a track the editor did not send', async () => {
     const created = await projects().create({
       title: 'T',
       scenes: [scene('s')],
@@ -753,6 +760,7 @@ describe('saving as a new project after a conflict', () => {
         fadeOut: 0,
       },
     })
+    expect(doc(created._id)!.track).toBeDefined()
     const copy = await projects().create({
       title: 'Rescued',
       scenes: [scene('s')],
@@ -761,8 +769,8 @@ describe('saving as a new project after a conflict', () => {
     expect(doc(copy._id)).toMatchObject({
       scope: 'edition',
       conference: ref('conf-A'),
-      track: doc(created._id)!.track,
     })
+    expect(doc(copy._id)).not.toHaveProperty('track')
   })
 })
 

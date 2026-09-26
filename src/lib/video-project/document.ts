@@ -7,6 +7,7 @@ import {
   type OpenedProject,
   type OpenedScene,
   type OpenedTrack,
+  type ProjectRights,
   type ProjectSceneInput,
   type ProjectTrackInput,
 } from './format'
@@ -39,22 +40,29 @@ export interface ResolvedFile {
 
 export interface ResolvedTrack extends ResolvedFile {
   title: string
-  rights: { confirmedBy: string | null; confirmedAt: string } | null
+  rights: ProjectRights | null
 }
 
 type Stored = Record<string, unknown>
 
-function storedImage(name: string, file: ResolvedFile): Stored {
+/**
+ * What a background image and the track's file both carry: the file (strong),
+ * the gallery asset it came from (weak), whether the gallery created it, and
+ * the subject copied from the asset (weak).
+ */
+function fileFields(file: ResolvedFile): Stored {
   return {
-    _type: 'image',
     asset: ref(file.fileId),
-    name,
     ...(file.galleryAssetId
       ? { galleryAsset: weakRef(file.galleryAssetId) }
       : {}),
     ...(file.createdByGallery ? { createdByGallery: true } : {}),
     ...(file.subjectId ? { subject: weakRef(file.subjectId) } : {}),
   }
+}
+
+function storedImage(name: string, file: ResolvedFile): Stored {
+  return { _type: 'image', ...fileFields(file), name }
 }
 
 /**
@@ -107,15 +115,7 @@ export function storedTrack(
   file: ResolvedTrack,
 ): Stored {
   return {
-    file: {
-      _type: 'file',
-      asset: ref(file.fileId),
-      ...(file.galleryAssetId
-        ? { galleryAsset: weakRef(file.galleryAssetId) }
-        : {}),
-      ...(file.createdByGallery ? { createdByGallery: true } : {}),
-      ...(file.subjectId ? { subject: weakRef(file.subjectId) } : {}),
-    },
+    file: { _type: 'file', ...fileFields(file) },
     title: file.title,
     ...(file.rights
       ? {
@@ -199,7 +199,7 @@ export interface ProjectRow {
         fileId: string
         galleryAssetId: string | null
         title: string | null
-        rights: { confirmedBy: string | null; confirmedAt: string } | null
+        rights: ProjectRights | null
       })
     | null
 }

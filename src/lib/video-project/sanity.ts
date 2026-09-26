@@ -4,7 +4,7 @@ import { scopedFetch } from '@/lib/sanity/scoped'
 import { getCurrentDateTime } from '@/lib/time'
 import { OPEN_PROJECTION, VIDEO_PROJECT_FORMAT_VERSION } from './document'
 import type { ProjectRow } from './document'
-import type { VideoProjectRow } from './format'
+import type { ProjectRights, VideoProjectRow } from './format'
 
 /**
  * `videoProject` reads and writes (docs/MARKETING_STUDIO_VIDEO_SPEC.md §7).
@@ -58,6 +58,21 @@ export interface StoredFile {
   subjectId: string | null
 }
 
+/** What a save checks against, as {@link readVideoProjectFiles} reads it. */
+export type StoredProjectFiles = {
+  _rev: string
+  formatVersion: unknown
+  scope: 'organization' | 'edition' | null
+  conferenceId: string | null
+  images: StoredFile[]
+  track:
+    | (StoredFile & {
+        title: string | null
+        rights: ProjectRights | null
+      })
+    | null
+}
+
 /**
  * What a save checks against: the revision, and the files the project
  * already holds — the only files a client may name by file id.
@@ -65,21 +80,7 @@ export interface StoredFile {
 export async function readVideoProjectFiles(
   orgId: string,
   id: string,
-): Promise<{
-  _rev: string
-  formatVersion: unknown
-  scope: 'organization' | 'edition' | null
-  conferenceId: string | null
-  /** The stored track as it is, for "save as a new project" to carry over. */
-  storedTrack: Record<string, unknown> | null
-  images: StoredFile[]
-  track:
-    | (StoredFile & {
-        title: string | null
-        rights: { confirmedBy: string | null; confirmedAt: string } | null
-      })
-    | null
-} | null> {
+): Promise<StoredProjectFiles | null> {
   return scopedFetch(
     clientReadUncached,
     { orgId },
@@ -88,7 +89,6 @@ export async function readVideoProjectFiles(
       formatVersion,
       scope,
       "conferenceId": conference._ref,
-      "storedTrack": track,
       "images": coalesce(scenes[defined(background.image.asset._ref)]{
         "fileId": background.image.asset._ref,
         "galleryAssetId": background.image.galleryAsset._ref,
@@ -120,7 +120,7 @@ export interface GalleryFile {
   fileId: string | null
   createdByUpload: boolean
   subjectId: string | null
-  rights: { confirmedBy: string | null; confirmedAt: string } | null
+  rights: ProjectRights | null
 }
 
 /**
