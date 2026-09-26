@@ -197,18 +197,9 @@ const blueskyFetch = vi.fn(async (url: string | URL) => {
     )
   return new Response(JSON.stringify({ did: answer }), { status: 200 })
 })
+/** The conference's own Bluesky link, as the live by-id read finds it. */
 function ownAccount(link: string) {
-  h.getConference.mockResolvedValue({
-    conference: {
-      _id: CONF_A,
-      organization: { _ref: ORG_A },
-      title: 'CNB',
-      domains: ['cloudnativebergen.dev'],
-      socialLinks: [link],
-    },
-    domain: 'cloudnativebergen.dev',
-    error: null,
-  })
+  dataset.push({ _id: CONF_A, _type: 'conference', socialLinks: [link] })
 }
 const askedBluesky = () =>
   blueskyFetch.mock.calls.map(([url]) =>
@@ -640,6 +631,31 @@ describe('marketing.task.resolveTag', () => {
         speakerId: 'spk-alice',
       }),
     ).rejects.toMatchObject({ message: /own account/ })
+  })
+
+  it('the editor payload shows no Tag button for a speaker who links our account', async () => {
+    ownAccount('https://bsky.app/profile/alice.dev')
+    h.getTaskEditorData.mockResolvedValue({
+      ...stored(),
+      tagPeople: [
+        {
+          speakerId: 'spk-alice',
+          name: 'Alice Anderson',
+          handle: 'alice.dev',
+          optedOut: false,
+        },
+      ],
+    })
+    const data = await marketing().task.get({ taskId: 'task-ours' })
+    expect(data.tagPeople).toEqual([
+      {
+        speakerId: 'spk-alice',
+        name: 'Alice Anderson',
+        handle: null,
+        optedOut: false,
+        ownAccount: true,
+      },
+    ])
   })
 
   it('refuses someone the Task is not about', async () => {

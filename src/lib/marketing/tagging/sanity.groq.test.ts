@@ -186,6 +186,30 @@ describe('getTaskTagPeople', () => {
     expect(await getTaskTagPeople('task-speaker', 'conf-A')).toEqual([alice])
   })
 
+  it('a speaker Task whose only talk here is a draft: nobody', async () => {
+    dataset.push(
+      {
+        _id: 'drafts.talk-M',
+        _type: 'talk',
+        conference: ref('conf-A'),
+        speakers: [ref('spk-mallory')],
+      },
+      {
+        _id: 'versions.r1.talk-M',
+        _type: 'talk',
+        conference: ref('conf-A'),
+        speakers: [ref('spk-mallory')],
+      },
+    )
+    try {
+      expect(await getTaskTagPeople('task-foreign-speaker', 'conf-A')).toEqual(
+        [],
+      )
+    } finally {
+      dataset.splice(-2, 2)
+    }
+  })
+
   it('a LinkedIn Task: nobody', async () => {
     expect(await getTaskTagPeople('task-linkedin', 'conf-A')).toEqual([])
   })

@@ -828,6 +828,7 @@ function PublishingSection({
                   issues: tagIssues,
                   onIssuesChange: setTagIssues,
                   onPendingChange: setTagPending,
+                  busy: approve.isPending || retry.isPending,
                 }
               : undefined
           }

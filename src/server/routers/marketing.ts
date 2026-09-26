@@ -200,7 +200,7 @@ import type { VariantStatus } from '@/lib/social/types'
 import { getOrganizersByConference } from '@/lib/speaker/sanity'
 import { checkTagsForApproval } from '@/lib/marketing/tagging/verify'
 import { getTaskTagPeople } from '@/lib/marketing/tagging/sanity'
-import { currentOwnBlueskyAccount } from '@/lib/marketing/tagging/own-account'
+import { ownBlueskyAccount } from '@/lib/marketing/tagging/own-account'
 import { resolveBlueskyHandle } from '@/lib/marketing/tagging/resolve'
 import { tagIssuesError } from '@/server/errors'
 import {
@@ -1115,8 +1115,18 @@ export const marketingRouter = router({
             taggedLink = null
           }
         }
+        // A speaker who links our own account gets no Tag button (§4.1).
+        const own =
+          data.tagPeople.length > 0
+            ? await ownBlueskyAccount(conferenceId)
+            : null
         return {
           ...data,
+          tagPeople: data.tagPeople.map((p) =>
+            own && p.handle === own
+              ? { ...p, handle: null, ownAccount: true as const }
+              : p,
+          ),
           baseUrl,
           taggedLink,
           outreachBody: outreachBody(task, conference.title, taggedLink),
@@ -1498,7 +1508,7 @@ export const marketingRouter = router({
         }
         // Our own account is never tagged (spec §4.1): matched by handle
         // before Bluesky is asked, and by DID when the conference names it so.
-        const own = await currentOwnBlueskyAccount()
+        const own = await ownBlueskyAccount(conferenceId)
         const ownAccount = () =>
           new TRPCError({
             code: 'BAD_REQUEST',

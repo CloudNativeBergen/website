@@ -603,6 +603,13 @@ describe('getTaskEditorData — Bluesky tag people and mentions (#1151)', () => 
     })
   })
 
+  it('leaves out an opted-out speaker’s unresolved note, handle and all', async () => {
+    doc('sp-2').socialTagOptOut = true
+    const data = await getTaskEditorData('task-li', CONF_A)
+    expect(data!.tagMentions).toEqual([])
+    expect(JSON.stringify(data)).not.toContain('bob.dev')
+  })
+
   it('a LinkedIn Task gets neither', async () => {
     doc('task-li').channel = 'linkedin'
     const data = await getTaskEditorData('task-li', CONF_A)

@@ -54,6 +54,8 @@ export interface TaggablePerson {
   name: string
   handle: string | null
   optedOut: boolean
+  /** Browser payload only: their link is the conference's own account. */
+  ownAccount?: true
 }
 
 export type TagIssueCode =
@@ -276,49 +278,63 @@ function planTags(input: {
 }): TagPlan[] {
   const known = byHandle(input.people)
   const byId = new Map(input.people.map((p) => [p.speakerId, p]))
-  const recorded = new Map<string, MentionRecord>()
+  // Every recorded person per handle: a shared (team) account can stand for
+  // several speakers, and each keeps their own record and their own checks.
+  const recorded = new Map<string, MentionRecord[]>()
   for (const m of input.previous) {
+    if (m.status !== 'tagged') continue
     const h = normaliseHandle(m.handle)
-    if (m.status === 'tagged' && !recorded.has(h)) recorded.set(h, m)
+    recorded.set(h, [...(recorded.get(h) ?? []), m])
   }
   const keys = new Set<string>()
+  const keyFor = (speakerId: string, handle: string) => {
+    let key = storedKey(speakerId)
+    // One person's old and new handle both in the text: two keys.
+    if (keys.has(key)) key = storedKey(`${speakerId}/${handle}`)
+    keys.add(key)
+    return key
+  }
   const seen = new Set<string>()
   const plans: TagPlan[] = []
   for (const { handle } of mentionTokens(input.body)) {
     if (seen.has(handle)) continue
     seen.add(handle)
-    const matches = known.get(handle) ?? []
-    const optedOut = matches.find((p) => p.optedOut)
-    const rec = recorded.get(handle)
+    const optedOut = (known.get(handle) ?? []).find((p) => p.optedOut)
     if (optedOut) {
       plans.push({ kind: 'refuse', issue: optedOutIssue(optedOut, handle) })
       continue
     }
-    let person: TaggablePerson | undefined
-    let did: string | undefined
-    if (rec) {
-      person = byId.get(rec.speakerId)
-      if (!person) {
-        plans.push({ kind: 'refuse', issue: notASpeaker(rec, handle) })
-        continue
+    const recs = recorded.get(handle)
+    if (recs) {
+      for (const rec of recs) {
+        const person = byId.get(rec.speakerId)
+        if (!person) {
+          plans.push({ kind: 'refuse', issue: notASpeaker(rec, handle) })
+        } else if (person.optedOut) {
+          plans.push({
+            kind: 'refuse',
+            issue: { ...optedOutIssue(person, handle), mentionKey: rec._key },
+          })
+        } else {
+          plans.push({
+            kind: 'record',
+            handle,
+            person,
+            key: keyFor(person.speakerId, handle),
+            ...(rec.did ? { did: rec.did } : {}),
+          })
+        }
       }
-      if (person.optedOut) {
-        plans.push({
-          kind: 'refuse',
-          issue: { ...optedOutIssue(person, handle), mentionKey: rec._key },
-        })
-        continue
-      }
-      did = rec.did
-    } else {
-      person = matches[0]
-      if (!person) continue // a stranger's handle is just text
+      continue
     }
-    // One entry per handle; one person's old and new handle get two keys.
-    let key = storedKey(person.speakerId)
-    if (keys.has(key)) key = storedKey(`${person.speakerId}/${handle}`)
-    keys.add(key)
-    plans.push({ kind: 'record', handle, person, key, ...(did ? { did } : {}) })
+    const person = known.get(handle)?.[0]
+    if (!person) continue // a stranger's handle is just text
+    plans.push({
+      kind: 'record',
+      handle,
+      person,
+      key: keyFor(person.speakerId, handle),
+    })
   }
   return plans
 }

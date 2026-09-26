@@ -393,6 +393,32 @@ describe('saveMentions and a speaker who changed their link', () => {
     ).toEqual([DID_A])
   })
 
+  it('a shared account keeps every speaker it was recorded for', () => {
+    const team = { ...bob, handle: 'team.dev' }
+    const mate = { ...alice, handle: 'team.dev' }
+    const previous = [tagged(team, DID_B), tagged(mate, DID_B)]
+    const kept = saveMentions({
+      body: '@team.dev and @team.dev',
+      people: [team, mate],
+      previous,
+      resolutions: new Map(),
+    })
+    expect(kept.mentions.map((m) => m.speakerId)).toEqual([
+      'speaker-bob',
+      'speaker-alice',
+    ])
+    // The second one leaving the roster is refused, not silently dropped.
+    const left = saveMentions({
+      body: '@team.dev and @team.dev',
+      people: [team],
+      previous,
+      resolutions: new Map(),
+    })
+    expect(left.issues.map((i) => [i.code, i.mentionKey])).toEqual([
+      ['not-a-speaker', 'speaker-alice'],
+    ])
+  })
+
   it('refuses it when that speaker has opted out since', () => {
     const out = saveMentions({
       body: '@alice.dev',

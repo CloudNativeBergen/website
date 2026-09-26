@@ -46,7 +46,7 @@ import {
   checkTagsOnSave,
 } from '@/lib/marketing/tagging/verify'
 import { mentionDocuments } from '@/lib/marketing/tagging/records'
-import { currentOwnBlueskyAccount } from '@/lib/marketing/tagging/own-account'
+import { ownBlueskyAccount } from '@/lib/marketing/tagging/own-account'
 import { tagIssuesError } from '@/server/errors'
 import { ceilingWarningsFor } from '@/lib/marketing/ceiling-check'
 import { getTaskForVariant, getTaskLinkInputs } from '@/lib/marketing/sanity'
@@ -526,7 +526,7 @@ export const socialRouter = router({
               variantId: variant._id,
               body: input.body,
               scheduled: variant.status === 'scheduled',
-              ownAccount: await currentOwnBlueskyAccount(),
+              ownAccount: await ownBlueskyAccount(variant.conferenceId),
             })
           : null
       if (tags && tags.issues.length > 0) throw tagIssuesError(tags.issues)

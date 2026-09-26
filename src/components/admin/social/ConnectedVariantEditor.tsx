@@ -73,6 +73,8 @@ export interface VariantTagging {
   mentions: MentionRecord[]
   issues: TagIssue[]
   onIssuesChange: (issues: TagIssue[]) => void
+  /** The host is approving or scheduling: tag edits wait for it. */
+  busy?: boolean
   /** A tag lookup is in flight: the host holds Approve until it lands. */
   onPendingChange?: (pending: boolean) => void
 }
@@ -160,6 +162,7 @@ export function ConnectedVariantEditor({
     if (!tagging) return
     // Save and Approve wait for the answer, so neither can commit the body
     // this lookup is about to change.
+    setError(null)
     setPending(person.speakerId)
     resolveTag.mutate(
       { taskId: tagging.taskId, speakerId: person.speakerId },
@@ -265,7 +268,7 @@ export function ConnectedVariantEditor({
           issues={tagging.issues}
           pending={pendingTag}
           lookups={lookups}
-          disabled={update.isPending}
+          disabled={update.isPending || !!tagging.busy}
           onTag={tag}
           onUntag={untag}
           onFix={fix}

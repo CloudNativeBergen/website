@@ -52,9 +52,17 @@ export function TagPanel({
   onFix: (issue: MentionIssue) => void
 }) {
   const inBody = new Set(mentionTokens(body).map((t) => t.handle))
-  // A note stands until the person is tagged after all.
+  // A note stands until the person is tagged after all, by any handle.
+  const taggedIds = new Set(
+    people
+      .filter((p) => p.handle && inBody.has(p.handle))
+      .map((p) => p.speakerId),
+  )
   const notes = mentions.filter(
-    (m) => m.status === 'unresolved' && !inBody.has(m.handle),
+    (m) =>
+      m.status === 'unresolved' &&
+      !inBody.has(m.handle) &&
+      !taggedIds.has(m.speakerId),
   )
   if (people.length === 0 && notes.length === 0 && issues.length === 0)
     return null
@@ -171,6 +179,8 @@ function PersonRow({
   let status: { text: string; tone: 'muted' | 'warn' | 'error' } | null = null
   if (person.optedOut)
     status = { text: 'Asked not to be tagged', tone: 'muted' }
+  else if (person.ownAccount)
+    status = { text: "Links the conference's own account", tone: 'muted' }
   else if (!person.handle)
     status = { text: 'No Bluesky link on their profile', tone: 'muted' }
   else if (!tagged && lookup === 'not-found')
