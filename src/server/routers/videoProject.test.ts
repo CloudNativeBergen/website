@@ -146,6 +146,14 @@ import type { Context } from '@/server/trpc'
 import { videoProjectRouter } from './videoProject'
 import { marketingAssetRouter } from './marketingAsset'
 import type { ProjectSceneInput } from '@/lib/video-project/format'
+import {
+  listVideoProjects,
+  readGalleryFiles,
+  readVideoProject,
+  readVideoProjectCreatedFiles,
+  readVideoProjectDocument,
+  readVideoProjectFiles,
+} from '@/lib/video-project/sanity'
 
 const t = initTRPC.context<Context>().create()
 function context(): Context {
@@ -787,6 +795,43 @@ describe('a project in another format version', () => {
       code: 'PRECONDITION_FAILED',
       message: expect.stringContaining('cannot read'),
     })
+  })
+})
+
+describe('every project read is scoped to the organization on its own', () => {
+  // Behind the guard already; these prove the reads would not leak without it.
+  it('finds nothing of another organization by id', async () => {
+    h.dataset.push({
+      ...doc('vp-theirs')!,
+      _id: 'vp-theirs-full',
+      scenes: [
+        {
+          _key: 's',
+          background: {
+            color: '#000',
+            image: {
+              _type: 'image',
+              asset: ref('image-theirs-100x100-png'),
+              createdByGallery: true,
+            },
+          },
+        },
+      ],
+    })
+    expect(await readVideoProject('org-A', 'vp-theirs-full')).toBeNull()
+    expect(await readVideoProjectFiles('org-A', 'vp-theirs-full')).toBeNull()
+    expect(await readVideoProjectDocument('org-A', 'vp-theirs-full')).toBeNull()
+    expect(
+      await readVideoProjectCreatedFiles('org-A', 'vp-theirs-full'),
+    ).toEqual([])
+    expect(
+      await readGalleryFiles('org-A', ['asset-theirs', 'asset-hall']),
+    ).toEqual([expect.objectContaining({ _id: 'asset-hall' })])
+    expect(await listVideoProjects('org-A')).toEqual([])
+    // And the same reads do find it for its own organization.
+    expect(
+      await readVideoProjectCreatedFiles('org-B', 'vp-theirs-full'),
+    ).toEqual(['image-theirs-100x100-png'])
   })
 })
 
