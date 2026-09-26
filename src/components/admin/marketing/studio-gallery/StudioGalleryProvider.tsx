@@ -1,0 +1,124 @@
+'use client'
+
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { api } from '@/lib/trpc/client'
+import {
+  GallerySaveContext,
+  type GallerySave,
+  type StudioCard,
+} from '@/components/common/image-capture'
+import {
+  blobAssetUploader,
+  type AssetUploader,
+} from '@/components/admin/marketing/assets/upload'
+import { SaveToGalleryDialog, type CapturedCard } from './SaveToGalleryDialog'
+
+/**
+ * "Save to gallery" for every studio card (docs/MARKETING_ASSETS_SPEC.md
+ * §4.2), with or without a render Task open: it sits OUTSIDE the Task's
+ * attachment context, so the two never depend on each other.
+ *
+ * The card is captured when the organizer clicks, so the dialog shows exactly
+ * what will be saved while they write its alt text. The upload goes through
+ * the gallery's direct-to-Blob path, never the studio's multipart route, which
+ * Vercel cuts at about 4.5 MB. `orgId` only NAMES the upload's pathname; the
+ * server resolves the organization itself. `uploader` replaces the real path
+ * in tests and Storybook.
+ */
+export function StudioGalleryProvider({
+  orgId,
+  uploader,
+  children,
+}: {
+  orgId: string
+  uploader?: AssetUploader
+  children: React.ReactNode
+}) {
+  const upload = useMemo(
+    () => uploader ?? blobAssetUploader(orgId),
+    [uploader, orgId],
+  )
+  const utils = api.useUtils()
+  const [capturing, setCapturing] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [open, setOpen] = useState(false)
+  const [captured, setCaptured] = useState<CapturedCard | null>(null)
+  // Each capture is a fresh form: nothing typed for one card carries over.
+  const captures = useRef(0)
+  // The dialog's preview of the last capture, revoked when replaced.
+  const previewUrl = useRef<string | null>(null)
+  useEffect(
+    () => () => {
+      if (previewUrl.current) URL.revokeObjectURL(previewUrl.current)
+    },
+    [],
+  )
+  function replacePreview(blob: Blob | null): string | null {
+    if (previewUrl.current) URL.revokeObjectURL(previewUrl.current)
+    previewUrl.current = blob ? URL.createObjectURL(blob) : null
+    return previewUrl.current
+  }
+
+  const value = useMemo<GallerySave>(
+    () => ({
+      busy: capturing || saving,
+      async save(
+        capture: () => Promise<Blob>,
+        filename: string,
+        card: StudioCard,
+      ) {
+        setCapturing(true)
+        try {
+          const blob = await capture()
+          setCaptured({
+            id: ++captures.current,
+            blob,
+            previewUrl: replacePreview(blob),
+            filename,
+            card,
+            error: null,
+          })
+        } catch (error) {
+          console.error('Save to gallery: capture failed', error)
+          setCaptured({
+            id: ++captures.current,
+            blob: null,
+            previewUrl: replacePreview(null),
+            filename,
+            card,
+            error: 'The image could not be made. Close this and try again.',
+          })
+        } finally {
+          setCapturing(false)
+          setOpen(true)
+        }
+      },
+    }),
+    [capturing, saving],
+  )
+
+  // A capture can be several MB: let it go once the dialog has faded out.
+  function release() {
+    replacePreview(null)
+    setCaptured(null)
+  }
+
+  return (
+    <GallerySaveContext.Provider value={value}>
+      {children}
+      <SaveToGalleryDialog
+        isOpen={open}
+        captured={captured}
+        uploader={upload}
+        onSavingChange={setSaving}
+        onClose={() => setOpen(false)}
+        afterLeave={release}
+        onSaved={() => {
+          // The gallery and the studio's background picker show it next.
+          void utils.marketingAsset.list.invalidate()
+          void utils.marketingAsset.filters.invalidate()
+        }}
+      />
+    </GallerySaveContext.Provider>
+  )
+}

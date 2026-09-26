@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { STUDIO_TABS } from '@/lib/marketing-asset/studio'
 import { LiveDocumentIdSchema } from './social'
 
 // These select cards from the server's org-scoped data; they do not scope queries.
@@ -13,14 +14,5 @@ export const StudioSearchParamsSchema = z.object({
   // A saved studio video (#1181); opened through `videoProject.open`, which
   // proves it this organization's.
   project: StudioDocumentIdSchema,
-  tab: z
-    .enum([
-      'meme-generator',
-      'conference',
-      'photo-gallery',
-      'speakers',
-      'sponsors',
-    ])
-    .optional()
-    .catch(undefined),
+  tab: z.enum(STUDIO_TABS).optional().catch(undefined),
 })

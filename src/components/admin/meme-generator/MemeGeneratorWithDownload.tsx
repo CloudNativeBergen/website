@@ -6,8 +6,12 @@ import { useStudioProjects } from './useStudioProjects'
 import type { VideoProjects } from './meme-generator-project'
 import type { BackgroundGallery } from './meme-generator-gallery'
 import { DownloadableImage } from '../../common/DownloadableImage'
+import type { StudioCard } from '../../common/image-capture'
 import { PLATFORM_SLUG } from '@/lib/branding/platform'
 import type { ConferenceLogos } from '../../common/DashboardLayout'
+
+/** The free-form editor knows no subject: saving asks for title and alt. */
+const FREE_FORM: StudioCard = { tab: 'meme-generator', title: '' }
 
 interface MemeGeneratorWithDownloadProps {
   conferenceTitle?: string
@@ -74,7 +78,9 @@ function Generator({
       initialProjectId={projects ? projectId : undefined}
       onProjectChange={showProjectInUrl}
       wrapPreview={(node) => (
-        <DownloadableImage filename={filename}>{node}</DownloadableImage>
+        <DownloadableImage filename={filename} studio={FREE_FORM}>
+          {node}
+        </DownloadableImage>
       )}
     />
   )

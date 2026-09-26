@@ -3,6 +3,7 @@ import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
 import { scopedFetch } from '@/lib/sanity/scoped'
 import { isSoftOnSocial } from './image-type'
 import type { ResolvedMarketingAssetDetails } from './details'
+import type { StudioOriginInput } from './studio'
 import type {
   MarketingAssetFacets,
   MarketingAssetKind,
@@ -40,6 +41,11 @@ const ROW_PROJECTION = `{
   "createdAt": _createdAt,
   "audioUrl": audio.asset->url,
   "durationSeconds": durationSeconds,
+  "studio": select(source == "studio" && defined(studio.tab) => {
+    "tab": studio.tab,
+    "speakerId": select(studio.tab == "speakers" && subject->_type == "speaker" => subject._ref, null),
+    "sponsorId": select(studio.tab == "sponsors" && subject->_type == "sponsor" => subject._ref, null)
+  }, null),
   "rights": select(defined(rightsConfirmation.confirmedAt) => {
     "confirmedBy": rightsConfirmation.confirmedBy->name,
     "confirmedAt": rightsConfirmation.confirmedAt
@@ -269,6 +275,8 @@ export type NewMarketingAsset = {
        * back one it already held (identical bytes, possibly another tenant's).
        */
       createdImageAssetId?: string
+      /** Set when "Save to gallery" in the studio made it (spec §4.2). */
+      studio?: StudioOriginInput
     }
   | {
       kind: 'audio'
@@ -321,11 +329,15 @@ export async function createMarketingAsset(
             ? { createdImageAssetId: input.createdImageAssetId }
             : {}),
         }
+  const studio = input.kind === 'audio' ? undefined : input.studio
   const created = await clientWrite.create(
     {
       _type: 'marketingAsset',
       organization: { _type: 'reference', _ref: input.orgId },
-      source: 'upload',
+      source: studio ? 'studio' : 'upload',
+      // Only the tab: the speaker or sponsor it was opened on IS the subject,
+      // so an edit or an erasure of the subject can never leave a stale copy.
+      ...(studio ? { studio: { tab: studio.tab } } : {}),
       ...set,
       ...media,
     },

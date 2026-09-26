@@ -509,6 +509,47 @@ describe('speaker erasure removes their images everywhere (#1162)', () => {
     expect(doc('asset-new-talk')).toBeUndefined()
   })
 
+  describe('a card saved from the studio (#1164)', () => {
+    const STUDIO_CARD = 'image-studiocard-1024x1024-png'
+    /** As `createMarketingAsset` writes a studio save: the tab only. */
+    const studioSave = (id: string) => ({
+      ...galleryAsset(id, ADA, STUDIO_CARD),
+      source: 'studio',
+      studio: { tab: 'speakers' },
+    })
+
+    it('is deleted with its file, and the erasure verifies clean', async () => {
+      h.dataset.push(
+        { _id: STUDIO_CARD, _type: 'sanity.imageAsset' },
+        studioSave('asset-studio-ada'),
+      )
+      const result = await eraseSpeakerInPlace({
+        speakerId: ADA,
+        actor: 'test',
+      })
+      expect(result.err).toBeNull()
+      expect(doc('asset-studio-ada')).toBeUndefined()
+      expect(doc(STUDIO_CARD)).toBeUndefined()
+      expect(result.linkedFiles).toContainEqual({
+        id: STUDIO_CARD,
+        deleted: true,
+        error: null,
+      })
+      expect(result.verification?.clean).toBe(true)
+    })
+
+    it('fails verification while one remains', async () => {
+      await eraseSpeakerInPlace({ speakerId: ADA, actor: 'test' })
+      h.dataset.push(
+        { _id: STUDIO_CARD, _type: 'sanity.imageAsset' },
+        studioSave('asset-studio-late'),
+      )
+      const v = await verifySpeakerErasure(ADA)
+      expect(v?.residual.marketingAssets).toBe(1)
+      expect(v?.clean).toBe(false)
+    })
+  })
+
   it('verification FAILS on a leftover gallery entry about the speaker that holds no file', async () => {
     await eraseSpeakerInPlace({ speakerId: ADA, actor: 'test' })
     h.dataset.push({

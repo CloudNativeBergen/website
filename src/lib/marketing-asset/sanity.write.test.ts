@@ -83,4 +83,46 @@ describe('createMarketingAsset', () => {
     expect(h.created[0]).not.toHaveProperty('audio')
     expect(h.created[0]).not.toHaveProperty('rightsConfirmation')
   })
+
+  it('records a studio save’s tab, and no second copy of its subject (#1164)', async () => {
+    await createMarketingAsset({
+      orgId: 'org-a',
+      details: {
+        ...DETAILS,
+        alt: 'Speaker card',
+        subject: { type: 'speaker', id: 'sp-ada' },
+      },
+      imageAssetId: 'image-a-1x1-png',
+      studio: { tab: 'speakers' },
+    })
+    expect(h.created[0]).toMatchObject({
+      source: 'studio',
+      subject: { _ref: 'sp-ada', _weak: true },
+    })
+    // The subject alone names the speaker: an edit or an erasure of it can
+    // never leave a stale reference to the person behind.
+    expect(h.created[0].studio).toEqual({ tab: 'speakers' })
+  })
+
+  it('keeps an upload an upload, with no studio origin', async () => {
+    await createMarketingAsset({
+      orgId: 'org-a',
+      details: { ...DETAILS, alt: 'The logo' },
+      imageAssetId: 'image-a-1x1-png',
+      createdImageAssetId: 'image-a-1x1-png',
+    })
+    expect(h.created[0].source).toBe('upload')
+    expect(Object.keys(h.created[0]).sort()).toEqual([
+      '_type',
+      'alt',
+      'createdImageAssetId',
+      'image',
+      'kind',
+      'organization',
+      'scope',
+      'source',
+      'tags',
+      'title',
+    ])
+  })
 })
