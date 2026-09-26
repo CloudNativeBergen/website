@@ -1187,9 +1187,10 @@ export interface ErasureVerification {
      */
     marketingAssets: number
     /**
-     * Documents, any version, still holding a marketing file linked to the
-     * subject — counted by re-running the same planner, so it cannot drift from
-     * what the erasure does. A holder it would refuse counts too.
+     * OTHER documents, any version, still holding a marketing file linked to
+     * the subject — gallery entries about the subject are `marketingAssets`,
+     * not counted twice. Counted by re-running the same planner, so it cannot
+     * drift from what the erasure does. A holder it would refuse counts too.
      */
     linkedFileHolders: number
     /** Linked marketing files still stored. */
@@ -1711,17 +1712,22 @@ export async function verifySpeakerErasure(
     imageAsset = found?.n ?? 0
   }
 
-  const marketingAssets = inputs.assets.subjectDocs.filter(
-    (d) => d._type === 'marketingAsset',
-  ).length
+  const subjectAssetIds = new Set(
+    inputs.assets.subjectDocs
+      .filter((d) => d._type === 'marketingAsset')
+      .map((d) => d._id),
+  )
+  const marketingAssets = subjectAssetIds.size
   const assetPlan = planSpeakerAssetErasure(
     speakerId,
     inputs.assetFileIds,
     inputs.assets,
   )
+  // Disjoint from `marketingAssets`: a gallery entry about the subject is
+  // counted there once, not here again.
   const linkedFileHolders =
     assetPlan.patches.length +
-    assetPlan.deletes.length +
+    assetPlan.deletes.filter((d) => !subjectAssetIds.has(d.id)).length +
     assetPlan.refusals.length
 
   let linkedFiles = 0

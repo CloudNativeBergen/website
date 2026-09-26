@@ -173,7 +173,11 @@ Read the `Image asset:` line:
 Every image of the person the marketing tools hold goes — not through the
 orphan check above, but **unconditionally**. The plan links: gallery assets
 (`marketingAsset`) whose subject is the speaker or a talk they give, and the
-render of any `marketingTask` whose subject is either. Every document holding
+render of any `marketingTask` whose subject is either — and any image in a post
+tied to such a Task (through the publishing Task that needs it, its variant and
+post) that nothing outside that chain holds. That last route is what finds an
+old render a re-render replaced but a post kept; a shared logo in the same post
+is held elsewhere and stays. Every document holding
 one of those files — found by the file's own references, drafts and Content
 Release versions included — lets go of it in the transaction: gallery entries
 are deleted, posts and their variants lose the attachment (the post keeps its

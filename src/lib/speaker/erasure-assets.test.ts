@@ -8,6 +8,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import {
+  filesOnlyInTie,
   linkedFileIds,
   planSpeakerAssetErasure,
   speakerSubjectIds,
@@ -351,5 +352,70 @@ describe('planSpeakerAssetErasure', () => {
       deletes: [],
       refusals: [],
     })
+  })
+})
+
+describe('filesOnlyInTie', () => {
+  const tie = {
+    speakerId: SPEAKER,
+    subjectIds: [SPEAKER, TALK],
+    taskIds: ['task-render', 'task-pub'],
+    postIds: ['post-1'],
+  }
+  const post = {
+    _id: 'post-1',
+    _type: 'socialPost',
+    attachments: [
+      { _key: 'a', image: image('image-stale-png') },
+      { _key: 'b', image: image('image-logo-png') },
+    ],
+  }
+
+  it('links a file only the tie holds — draft and release copies of a tied post included', () => {
+    expect(
+      filesOnlyInTie(
+        [post],
+        [post, { ...post, _id: 'versions.r1.post-1' }],
+        tie,
+      ),
+    ).toEqual(['image-stale-png', 'image-logo-png'])
+  })
+
+  it('does not link a file an unrelated post, or a gallery entry about no one, also holds', () => {
+    const logoElsewhere = {
+      _id: 'post-2',
+      _type: 'socialPost',
+      attachments: [{ _key: 'x', image: image('image-logo-png') }],
+    }
+    // The named hole: a stale render ALSO saved with no subject is not found.
+    const noSubject = {
+      _id: 'asset-9',
+      _type: 'marketingAsset',
+      image: image('image-stale-png'),
+    }
+    expect(filesOnlyInTie([post], [post, logoElsewhere], tie)).toEqual([
+      'image-stale-png',
+    ])
+    expect(filesOnlyInTie([post], [post, noSubject], tie)).toEqual([
+      'image-logo-png',
+    ])
+  })
+
+  it('a gallery entry about the subject, or a tied Task, does not disqualify', () => {
+    const about = {
+      _id: 'asset-1',
+      _type: 'marketingAsset',
+      subject: ref(TALK),
+      image: image('image-stale-png'),
+    }
+    const task = {
+      _id: 'drafts.task-render',
+      _type: 'marketingTask',
+      pendingStudioAsset: image('image-logo-png'),
+    }
+    expect(filesOnlyInTie([post], [post, about, task], tie)).toEqual([
+      'image-stale-png',
+      'image-logo-png',
+    ])
   })
 })

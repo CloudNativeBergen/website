@@ -424,7 +424,9 @@ describe('speaker erasure removes their images everywhere (#1162)', () => {
     })
     expect(result.verification?.clean).toBe(false)
     expect(result.verification?.residual.linkedFiles).toBe(1)
-    // A later standalone check is told the file ids the run reported.
+    // A later standalone check handed the ids finds it even with no record
+    // on the speaker — `priorFileIds` alone, not `erasedFileIds`.
+    delete doc(ADA).erasedFileIds
     expect(
       (await verifySpeakerErasure(ADA, [], [RENDER]))?.residual.linkedFiles,
     ).toBe(1)
@@ -467,6 +469,21 @@ describe('speaker erasure removes their images everywhere (#1162)', () => {
     expect(doc('asset-new-talk')).toBeUndefined()
   })
 
+  it('verification FAILS on a leftover gallery entry about the speaker that holds no file', async () => {
+    await eraseSpeakerInPlace({ speakerId: ADA, actor: 'test' })
+    h.dataset.push({
+      ...galleryAsset('drafts.asset-empty', ADA, BOB_CARD),
+      image: undefined,
+    })
+    const v = await verifySpeakerErasure(ADA)
+    expect(v?.residual).toMatchObject({
+      marketingAssets: 1,
+      linkedFileHolders: 0,
+      linkedFiles: 0,
+    })
+    expect(v?.clean).toBe(false)
+  })
+
   it('verification FAILS while a gallery entry about the speaker remains', async () => {
     await eraseSpeakerInPlace({ speakerId: ADA, actor: 'test' })
     h.dataset.push(galleryAsset('asset-late', ADA, BOB_CARD))
@@ -474,6 +491,124 @@ describe('speaker erasure removes their images everywhere (#1162)', () => {
     expect(v?.clean).toBe(false)
     expect(v?.residual.marketingAssets).toBe(1)
     expect(v?.residual.linkedFileHolders).toBeGreaterThan(0)
+  })
+
+  it('finds a STALE render still in a post tied to a subject Task, and leaves a shared logo alone', async () => {
+    // task-ada rendered STALE, the handoff put it in post-stale, then a
+    // re-render replaced task-ada.asset with RENDER. The handoff found the
+    // post occupied, so it still holds STALE — and no link but the Task
+    // chain leads there: task-pub needs task-ada, and owns var-stale.
+    const STALE = 'image-stale-1080x1080-png'
+    const LOGO = 'image-logo-400x400-png'
+    const DIRECT = 'image-direct-1080x1080-png'
+    h.dataset.push(
+      { _id: STALE, _type: 'sanity.imageAsset' },
+      { _id: LOGO, _type: 'sanity.imageAsset' },
+      { _id: DIRECT, _type: 'sanity.imageAsset' },
+      {
+        _id: 'task-pub',
+        _type: 'marketingTask',
+        _rev: 'r0',
+        kind: 'publishing',
+        prerequisites: [weak('task-ada')],
+        variant: weak('var-stale'),
+      },
+      {
+        _id: 'var-stale',
+        _type: 'socialPostVariant',
+        _rev: 'r0',
+        post: weak('post-stale'),
+        attachments: [
+          { _key: 'vs-1', source: 'att-stale' },
+          { _key: 'vs-2', source: 'att-logo' },
+        ],
+      },
+      {
+        _id: 'post-stale',
+        _type: 'socialPost',
+        _rev: 'r0',
+        body: 'Ada, rendered',
+        attachments: [
+          { _key: 'att-stale', image: image(STALE), alt: 'Ada' },
+          { _key: 'att-logo', image: image(LOGO), alt: 'Logo' },
+        ],
+      },
+      // The logo is used by a post that has nothing to do with Ada.
+      {
+        _id: 'post-other',
+        _type: 'socialPost',
+        _rev: 'r0',
+        body: 'Tickets on sale',
+        attachments: [{ _key: 'att-logo', image: image(LOGO), alt: 'Logo' }],
+      },
+      // A publishing Task ABOUT Ada, its variant's post holding an image no
+      // gallery entry or render names.
+      {
+        _id: 'task-direct',
+        _type: 'marketingTask',
+        _rev: 'r0',
+        kind: 'publishing',
+        subject: weak(ADA),
+        variant: weak('var-direct'),
+      },
+      {
+        _id: 'var-direct',
+        _type: 'socialPostVariant',
+        _rev: 'r0',
+        post: weak('post-direct'),
+        attachments: [{ _key: 'vd-1', source: 'att-direct' }],
+      },
+      {
+        _id: 'drafts.post-direct',
+        _type: 'socialPost',
+        _rev: 'r0',
+        body: 'Ada speaks',
+        attachments: [{ _key: 'att-direct', image: image(DIRECT), alt: 'Ada' }],
+      },
+    )
+    const result = await eraseSpeakerInPlace({ speakerId: ADA, actor: 'test' })
+    expect(result.err).toBeNull()
+
+    for (const file of [STALE, DIRECT]) {
+      expect(doc(file), `${file} still stored`).toBeUndefined()
+      expect(
+        referencesTo(file).map((d) => d._id),
+        file,
+      ).toEqual([])
+    }
+    expect(doc('post-stale')).toMatchObject({
+      body: 'Ada, rendered',
+      attachments: [{ _key: 'att-logo', image: image(LOGO), alt: 'Logo' }],
+    })
+    expect(doc('var-stale').attachments).toEqual([
+      { _key: 'vs-2', source: 'att-logo' },
+    ])
+    expect(doc('var-direct').attachments).toEqual([])
+    expect(doc(LOGO)).toBeDefined()
+    expect(doc('post-other').attachments).toHaveLength(1)
+    expect(result.verification?.clean).toBe(true)
+  })
+
+  it('finds a release-only gallery asset and a draft-only Task, each with its own file', async () => {
+    const REL = 'image-releaseonly-1200x630-png'
+    const DRAFT = 'image-draftonly-1080x1080-png'
+    h.dataset.push(
+      { _id: REL, _type: 'sanity.imageAsset' },
+      { _id: DRAFT, _type: 'sanity.imageAsset' },
+      galleryAsset('versions.rlaunch.asset-rel', ADA, REL),
+      {
+        _id: 'drafts.task-draft',
+        _type: 'marketingTask',
+        _rev: 'r0',
+        subject: weak(ADA),
+        asset: image(DRAFT),
+      },
+    )
+    await eraseSpeakerInPlace({ speakerId: ADA, actor: 'test' })
+    expect(doc('versions.rlaunch.asset-rel')).toBeUndefined()
+    expect(doc('drafts.task-draft').asset).toBeUndefined()
+    expect(doc(REL)).toBeUndefined()
+    expect(doc(DRAFT)).toBeUndefined()
   })
 
   it('REFUSES, writing nothing, when a file is held somewhere erasure cannot strip', async () => {

@@ -10,6 +10,10 @@ const h = vi.hoisted(() => ({
   commit: vi.fn(),
   revision: vi.fn(),
   set: vi.fn(),
+  deleteOrphan: vi.fn(),
+}))
+vi.mock('@/lib/sanity/orphaned-asset', () => ({
+  deleteImageAssetIfOrphaned: h.deleteOrphan,
 }))
 vi.mock('@/lib/auth', () => ({
   getAuthSession: vi.fn(async () => ({ speaker: { _id: 'organizer' } })),
@@ -61,6 +65,59 @@ beforeEach(() => {
     return { commit: h.commit }
   })
   h.commit.mockResolvedValue({ _rev: 'r2' })
+  h.deleteOrphan.mockResolvedValue({
+    id: null,
+    deleted: false,
+    remainingReferences: 0,
+  })
+})
+
+describe('a replaced pending upload (#1162)', () => {
+  const OLD = 'image-oldpending-1200x630-png'
+  it('offers the upload it replaces to the orphan check, after the binding commits', async () => {
+    h.read.mockResolvedValue({
+      _id: 'render',
+      _rev: 'r1',
+      kind: 'studioRender',
+      pendingAssetId: OLD,
+      assetId: 'image-saved-png',
+    })
+    h.commit.mockImplementation(async () => {
+      expect(h.deleteOrphan).not.toHaveBeenCalled()
+      return { _rev: 'r2' }
+    })
+    expect((await POST(request())).status).toBe(200)
+    expect(h.deleteOrphan).toHaveBeenCalledExactlyOnceWith(OLD)
+  })
+  it('leaves it when the same bytes came back, or it is the saved render', async () => {
+    for (const pendingAssetId of [
+      'image-render-1200x630-png',
+      'image-saved-png',
+    ]) {
+      h.read.mockResolvedValue({
+        _id: 'render',
+        _rev: 'r1',
+        kind: 'studioRender',
+        pendingAssetId,
+        assetId: 'image-saved-png',
+      })
+      expect((await POST(request())).status).toBe(200)
+    }
+    expect(h.deleteOrphan).not.toHaveBeenCalled()
+  })
+  it('keeps it when the binding loses a race', async () => {
+    h.read.mockResolvedValue({
+      _id: 'render',
+      _rev: 'r1',
+      kind: 'studioRender',
+      pendingAssetId: OLD,
+    })
+    h.commit.mockRejectedValueOnce(
+      Object.assign(new Error('revision mismatch'), { statusCode: 409 }),
+    )
+    expect((await POST(request())).status).toBe(409)
+    expect(h.deleteOrphan).not.toHaveBeenCalled()
+  })
 })
 
 describe('studio upload provenance', () => {

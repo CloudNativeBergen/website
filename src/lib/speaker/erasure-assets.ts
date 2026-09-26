@@ -144,6 +144,73 @@ export function linkedFileIds(subjectDocs: Doc[]): string[] {
   return [...ids]
 }
 
+/** What ties a post to the subject: a subject Task, or one that needs it. */
+export interface SubjectTie {
+  speakerId: string
+  subjectIds: string[]
+  /** Published ids of the subject Tasks and the Tasks that need one. */
+  taskIds: string[]
+  /** Published ids of the posts those Tasks' variants belong to. */
+  postIds: string[]
+}
+
+/**
+ * The files in a TIED post that are the subject's to delete: those no document
+ * outside the tie holds.
+ *
+ * WHY THE TIE. A Task render reaches a post by handoff (`handoffStudioAttachment`),
+ * and a re-render replaces the Task's `asset` without touching a post that is
+ * already occupied. The post then holds the OLD render, and nothing but the
+ * Task chain — subject Task, the publishing Task that needs it, that Task's
+ * variant, its post — leads to it. A publishing Task about the subject leads
+ * to its post the same way.
+ *
+ * WHY ONLY-IN-THE-TIE. A post about the subject may also carry the
+ * conference logo, and Sanity stores identical bytes once: deleting every
+ * image in such a post would take the logo from every other post that uses
+ * it. A file some document outside the tie holds is not linked by this
+ * route. (So a stale render ALSO saved to the gallery with no subject is not
+ * found — the same hole as any image with no subject.)
+ */
+export function filesOnlyInTie(
+  tiedPosts: Doc[],
+  candidateHolders: Doc[],
+  tie: SubjectTie,
+): string[] {
+  const candidates = new Set(
+    tiedPosts.flatMap((post) =>
+      entries(post.attachments)
+        .map((a) => fileRefOf(a.image))
+        .filter((id): id is string => id !== null),
+    ),
+  )
+  const posts = new Set(tie.postIds)
+  const tasks = new Set(tie.taskIds)
+  const subjects = new Set(tie.subjectIds)
+  const inTie = (doc: Doc) => {
+    const id = getPublishedId(doc._id)
+    if (doc._type === 'socialPost') return posts.has(id)
+    if (doc._type === 'marketingTask') return tasks.has(id)
+    if (doc._type === 'marketingAsset')
+      return subjects.has(refOf(doc.subject) ?? '')
+    return doc._type === 'speaker' && doc._id === tie.speakerId
+  }
+  const refsIn = (value: unknown, out: Set<string>): Set<string> => {
+    if (Array.isArray(value)) value.forEach((v) => refsIn(v, out))
+    else if (typeof value === 'object' && value !== null) {
+      const ref = refOf(value)
+      if (ref) out.add(ref)
+      Object.values(value).forEach((v) => refsIn(v, out))
+    }
+    return out
+  }
+  for (const holder of candidateHolders) {
+    if (inTie(holder)) continue
+    for (const ref of refsIn(holder, new Set())) candidates.delete(ref)
+  }
+  return [...candidates]
+}
+
 /**
  * What every holder of a linked file loses. Pure; see the module comment.
  *
@@ -343,8 +410,18 @@ export async function fetchSpeakerAssetInputs(
     { subjectIds },
     opts,
   )
+  const tiedFileIds = await fetchTiedFileIds(
+    client,
+    speakerId,
+    subjectIds,
+    subjectDocs ?? [],
+  )
   const fileIds = [
-    ...new Set([...linkedFileIds(subjectDocs ?? []), ...extraFileIds]),
+    ...new Set([
+      ...linkedFileIds(subjectDocs ?? []),
+      ...tiedFileIds,
+      ...extraFileIds,
+    ]),
   ]
   const empty = { fileHolders: [], variants: [], publishedPosts: [] }
   if (fileIds.length === 0) {
@@ -403,4 +480,94 @@ export async function fetchSpeakerAssetInputs(
       publishedPosts: publishedPosts ?? [],
     },
   }
+}
+
+/** Published id and draft id of each: the reads a tied post or variant needs. */
+const withDrafts = (ids: string[]) => [
+  ...ids,
+  ...ids.map((id) => `drafts.${id}`),
+]
+
+/**
+ * The reads behind {@link filesOnlyInTie}: the Tasks tied to the subject,
+ * their variants, those variants' posts, and every holder of a file in them.
+ * A variant or post that exists ONLY in a Content Release is not followed —
+ * a Task names the published id, and the release copy of a post that the
+ * published one also holds is found by the file's references anyway.
+ */
+async function fetchTiedFileIds(
+  client: Pick<typeof clientReadUncached, 'fetch'>,
+  speakerId: string,
+  subjectIds: string[],
+  subjectDocs: Doc[],
+): Promise<string[]> {
+  const opts = { cache: 'no-store', perspective: 'raw' } as const
+  const subjectTaskIds = [
+    ...new Set(
+      subjectDocs
+        .filter((d) => d._type === 'marketingTask')
+        .map((d) => getPublishedId(d._id)),
+    ),
+  ]
+  if (subjectTaskIds.length === 0) return []
+
+  const tasks =
+    (await client.fetch<Doc[]>(
+      // groq-global: the subject Tasks and the Tasks that need one, in every
+      // tenant — the right is the person's (see `./erasure.ts`).
+      groq`*[_type == "marketingTask" && (subject._ref in $subjectIds || count(prerequisites[_ref in $subjectTaskIds]) > 0)]{ _id, _type, variant }`,
+      { subjectIds, subjectTaskIds },
+      opts,
+    )) ?? []
+  const variantIds = [
+    ...new Set(
+      tasks.map((t) => refOf(t.variant)).filter((id): id is string => !!id),
+    ),
+  ]
+  if (variantIds.length === 0) return []
+
+  const variants =
+    (await client.fetch<Doc[]>(
+      // groq-global: those Tasks' variants, by id.
+      groq`*[_type == "socialPostVariant" && _id in $ids]{ _id, _type, post }`,
+      { ids: withDrafts(variantIds) },
+      opts,
+    )) ?? []
+  const postIds = [
+    ...new Set(
+      variants.map((v) => refOf(v.post)).filter((id): id is string => !!id),
+    ),
+  ]
+  if (postIds.length === 0) return []
+
+  const tiedPosts =
+    (await client.fetch<Doc[]>(
+      // groq-global: those variants' posts, by id.
+      groq`*[_type == "socialPost" && _id in $ids]{ _id, _type, attachments }`,
+      { ids: withDrafts(postIds) },
+      opts,
+    )) ?? []
+  const tie: SubjectTie = {
+    speakerId,
+    subjectIds,
+    taskIds: [
+      ...new Set([
+        ...subjectTaskIds,
+        ...tasks.map((t) => getPublishedId(t._id)),
+      ]),
+    ],
+    postIds,
+  }
+  const candidates = filesOnlyInTie(tiedPosts, [], tie)
+  if (candidates.length === 0) return []
+
+  const holders =
+    (await client.fetch<Doc[]>(
+      // groq-global: every holder of those files, in any tenant — a file
+      // another tenant or an unrelated post holds is not the subject's.
+      groq`*[references($candidates)]`,
+      { candidates },
+      opts,
+    )) ?? []
+  return filesOnlyInTie(tiedPosts, holders, tie)
 }
