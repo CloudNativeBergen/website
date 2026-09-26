@@ -14,6 +14,19 @@ import {
   type VariantEditorValue,
 } from './variant-editor-model'
 import { useCeilingWarningToast } from '@/components/admin/marketing/useCeilingWarningToast'
+import {
+  TagPanel,
+  useTagWarningToast,
+  type TagLookup,
+} from '@/components/admin/marketing/tagging'
+import type { MentionRecord } from '@/lib/marketing/tagging/body'
+import {
+  tagName,
+  untagHandle,
+  type TagIssue,
+  type TaggablePerson,
+} from '@/lib/marketing/tagging/checks'
+import { clientTagIssues } from '@/lib/trpc/errors'
 
 /** The organizer image upload route; returns the asset id of our dataset. */
 const UPLOAD_ROUTE = '/api/admin/rich-text-image'
@@ -48,6 +61,20 @@ export interface VariantTaskContext {
 }
 
 /**
+ * A Bluesky post of a Marketing Task (tagging spec §2, §4.4): the people it
+ * is about, for the tag button, the recorded mentions, and the tag issues a
+ * refused save or approval carried. The issues live with the caller, since
+ * an approval refused in the header lands here too.
+ */
+export interface VariantTagging {
+  taskId: string
+  people: TaggablePerson[]
+  mentions: MentionRecord[]
+  issues: TagIssue[]
+  onIssuesChange: (issues: TagIssue[]) => void
+}
+
+/**
  * `VariantEditor` wired to the `social.*` procedures: loads from the data
  * the caller fetched, saves with compare-and-set on the revision the FORM
  * was built from, and feeds the attachment slot from an upload and the
@@ -60,12 +87,14 @@ export function ConnectedVariantEditor({
   onDirtyChange,
   shareCards,
   task,
+  tagging: taggingProp,
 }: {
   data: SocialVariantEditorData
   onSaved?: () => void
   onDirtyChange?: (dirty: boolean) => void
   shareCards?: ShareCardSource[]
   task?: VariantTaskContext
+  tagging?: VariantTagging
 }) {
   const utils = api.useUtils()
   const { showNotification } = useNotification()
@@ -110,7 +139,52 @@ export function ConnectedVariantEditor({
     setDirty(true)
   }
 
+  // Tags are a Bluesky thing only (tagging spec §1).
+  const tagging = data.variant.platform === 'bluesky' ? taggingProp : undefined
+  const [pendingTag, setPendingTag] = useState<string | null>(null)
+  const [lookups, setLookups] = useState<Record<string, TagLookup>>({})
+  const resolveTag = api.marketing.task.resolveTag.useMutation()
+  /** A tag-button or fix edit of the body: an organizer edit like any other. */
+  const editBody = (edit: (body: string) => string) => {
+    setValueState((current) => ({ ...current, body: edit(current.body) }))
+    setDirty(true)
+  }
+  const tag = (person: TaggablePerson) => {
+    if (!tagging) return
+    setPendingTag(person.speakerId)
+    resolveTag.mutate(
+      { taskId: tagging.taskId, speakerId: person.speakerId },
+      {
+        onSuccess: ({ handle, result }) => {
+          setLookups((current) => {
+            const next = { ...current }
+            if (result === 'resolved') delete next[person.speakerId]
+            else next[person.speakerId] = result
+            return next
+          })
+          if (result === 'resolved')
+            editBody((body) => tagName(body, { ...person, handle }) ?? body)
+        },
+        onError: (err) =>
+          setError(err.message || 'Could not check the handle.'),
+        onSettled: () => setPendingTag(null),
+      },
+    )
+  }
+  const untag = (person: TaggablePerson) => {
+    if (!person.handle) return
+    const handle = person.handle
+    editBody((body) => untagHandle(body, handle, person.name))
+  }
+  const fix = (issue: TagIssue) => {
+    if (!tagging || !issue.handle || !issue.name) return
+    const { handle, name } = issue
+    editBody((body) => untagHandle(body, handle, name))
+    tagging.onIssuesChange(tagging.issues.filter((i) => i !== issue))
+  }
+
   const warnCeilings = useCeilingWarningToast()
+  const warnTags = useTagWarningToast()
   const update = api.social.updateVariant.useMutation({
     onSuccess: (result) => {
       void utils.social.listVariants.invalidate()
@@ -121,10 +195,20 @@ export function ConnectedVariantEditor({
       }
       showNotification({ type: 'success', title: 'Variant saved' })
       warnCeilings(result)
+      warnTags(result)
+      tagging?.onIssuesChange([])
       setDirty(false)
       onSaved?.()
     },
-    onError: (err) => setError(err.message || 'Could not save.'),
+    onError: (err) => {
+      const issues = clientTagIssues(err)
+      if (tagging && issues.length > 0) {
+        tagging.onIssuesChange(issues)
+        setError('Not saved. Fix the tag problems above first.')
+        return
+      }
+      setError(err.message || 'Could not save.')
+    },
   })
   const addAttachment = api.social.addPostAttachment.useMutation()
 
@@ -166,83 +250,102 @@ export function ConnectedVariantEditor({
   })
 
   return (
-    <VariantEditor
-      platform={data.variant.platform}
-      constraints={getPlatformConstraints(data.variant.platform)}
-      conferenceDomains={data.conferenceDomains}
-      platformZone={data.platformZone ?? null}
-      postAttachments={data.post.attachments}
-      postDefaultScheduledAt={data.post.defaultScheduledAt}
-      value={shown}
-      onChange={setValue}
-      linkLocked={task !== undefined}
-      saving={update.isPending}
-      error={
-        error ??
-        (changedUnderneath
-          ? 'The variant changed while you were editing. Reload and retry.'
-          : null)
-      }
-      onSave={() => {
-        setError(null)
-        if (task && (!task.targetPage || !task.taggedLink)) {
-          setError('Pick a target page for the link first.')
-          return
+    <div className="space-y-4">
+      {tagging && (
+        <TagPanel
+          body={shown.body}
+          people={tagging.people}
+          mentions={tagging.mentions}
+          issues={tagging.issues}
+          pending={pendingTag}
+          lookups={lookups}
+          disabled={update.isPending}
+          onTag={tag}
+          onUntag={untag}
+          onFix={fix}
+        />
+      )}
+      <VariantEditor
+        platform={data.variant.platform}
+        constraints={getPlatformConstraints(data.variant.platform)}
+        conferenceDomains={data.conferenceDomains}
+        platformZone={data.platformZone ?? null}
+        postAttachments={data.post.attachments}
+        postDefaultScheduledAt={data.post.defaultScheduledAt}
+        value={shown}
+        onChange={setValue}
+        linkLocked={task !== undefined}
+        saving={update.isPending}
+        error={
+          error ??
+          (changedUnderneath
+            ? 'The variant changed while you were editing. Reload and retry.'
+            : null)
         }
-        const input = toUpdateInput({ _id: variantId, _rev: loadedRev }, shown)
-        if (!input) {
-          setError('Pick a date and time for the custom time.')
-          return
-        }
-        update.mutate(
-          task && task.targetPage
-            ? {
-                ...input,
-                task: {
-                  taskId: task.taskId,
-                  rev: task.rev,
-                  targetPage: task.targetPage,
-                },
-              }
-            : input,
-        )
-      }}
-      sources={{
-        onUpload: async (file, alt) => {
-          const assetId = await uploadImage(file)
-          await attachAsset({ assetId, alt })
-        },
-        gallery: {
-          images: galleryPicks,
-          isLoading: gallery.isLoading,
-          onOpen: () => setGalleryOpen(true),
-          onPick: async (image) => {
-            // Alt text is the platform's, not a placeholder of ours.
-            if (!image.alt.trim()) {
-              throw new Error(
-                'This gallery image has no alt text. Add one in the gallery first.',
-              )
-            }
-            await attachAsset({
-              assetId: image.assetId,
-              alt: image.alt,
-              hotspot: image.hotspot,
-              crop: image.crop,
-            })
+        onSave={() => {
+          setError(null)
+          if (task && (!task.targetPage || !task.taggedLink)) {
+            setError('Pick a target page for the link first.')
+            return
+          }
+          const input = toUpdateInput(
+            { _id: variantId, _rev: loadedRev },
+            shown,
+          )
+          if (!input) {
+            setError('Pick a date and time for the custom time.')
+            return
+          }
+          update.mutate(
+            task && task.targetPage
+              ? {
+                  ...input,
+                  task: {
+                    taskId: task.taskId,
+                    rev: task.rev,
+                    targetPage: task.targetPage,
+                  },
+                }
+              : input,
+          )
+        }}
+        sources={{
+          onUpload: async (file, alt) => {
+            const assetId = await uploadImage(file)
+            await attachAsset({ assetId, alt })
           },
-        },
-        shareCards,
-        onAttachShareCard: shareCards
-          ? async (card) => {
-              const { blob, alt } = await card.render()
-              const file = new File([blob], `${card.id}.png`, {
-                type: blob.type || 'image/png',
+          gallery: {
+            images: galleryPicks,
+            isLoading: gallery.isLoading,
+            onOpen: () => setGalleryOpen(true),
+            onPick: async (image) => {
+              // Alt text is the platform's, not a placeholder of ours.
+              if (!image.alt.trim()) {
+                throw new Error(
+                  'This gallery image has no alt text. Add one in the gallery first.',
+                )
+              }
+              await attachAsset({
+                assetId: image.assetId,
+                alt: image.alt,
+                hotspot: image.hotspot,
+                crop: image.crop,
               })
-              const assetId = await uploadImage(file)
-              await attachAsset({ assetId, alt })
-            }
-          : undefined,
-      }}
-    />
+            },
+          },
+          shareCards,
+          onAttachShareCard: shareCards
+            ? async (card) => {
+                const { blob, alt } = await card.render()
+                const file = new File([blob], `${card.id}.png`, {
+                  type: blob.type || 'image/png',
+                })
+                const assetId = await uploadImage(file)
+                await attachAsset({ assetId, alt })
+              }
+            : undefined,
+        }}
+      />
+    </div>
   )
 }

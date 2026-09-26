@@ -19,6 +19,9 @@ import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
 import { useNotification } from '@/components/admin/NotificationProvider'
 import { ModalShell } from '@/components/ModalShell'
 import { ConnectedVariantEditor } from '@/components/admin/social/ConnectedVariantEditor'
+import { useTagWarningToast } from './tagging'
+import type { TagIssue } from '@/lib/marketing/tagging/checks'
+import { clientTagIssues } from '@/lib/trpc/errors'
 import { ManualPostView } from '@/components/admin/social/ManualPostView'
 import { mayAlreadyBeLive } from '@/lib/social/state-machine'
 import { taggedUrl } from '@/lib/marketing/link'
@@ -559,7 +562,24 @@ function PublishingSection({
   dirty: boolean
   setDirty: (dirty: boolean) => void
 } & Handlers) {
-  const { task, campaign, variant, pages, baseUrl, tagByHand } = data
+  const {
+    task,
+    campaign,
+    variant,
+    pages,
+    baseUrl,
+    tagByHand,
+    tagPeople,
+    tagMentions,
+  } = data
+  // Tag issues from a refused save OR a refused approval (tagging spec
+  // §4.4): both land beside the tag buttons, each with its one-click fix.
+  const [tagIssues, setTagIssues] = useState<TagIssue[]>([])
+  const refusedForTags = (fallback: string) => (err: { message: string }) => {
+    const issues = clientTagIssues(err)
+    if (issues.length > 0) setTagIssues(issues)
+    else onFailed(fallback)(err)
+  }
   const [targetPage, setTargetPage] = useState(task.targetPage ?? '')
   // A path the picker does not list is a custom one; the choice sticks
   // even while the typed path happens to equal a listed page.
@@ -629,12 +649,15 @@ function PublishingSection({
   }, [editable, setDirty])
 
   const warnCeilings = useCeilingWarningToast()
+  const warnTags = useTagWarningToast()
   const approve = api.marketing.task.approve.useMutation({
     onSuccess: (result) => {
       onChanged()
       warnCeilings(result)
+      warnTags(result)
+      setTagIssues([])
     },
-    onError: onFailed('Could not approve'),
+    onError: refusedForTags('Could not approve'),
   })
   const unschedule = api.social.unscheduleVariant.useMutation({
     onSuccess: onChanged,
@@ -644,8 +667,10 @@ function PublishingSection({
     onSuccess: (result) => {
       onChanged()
       warnCeilings(result)
+      warnTags(result)
+      setTagIssues([])
     },
-    onError: onFailed('Could not retry'),
+    onError: refusedForTags('Could not retry'),
   })
   const markPosted = api.social.markPosted.useMutation({
     onSuccess: onChanged,
@@ -793,6 +818,17 @@ function PublishingSection({
             targetPage: derived.link ? targetPage : null,
             taggedLink: derived.link,
           }}
+          tagging={
+            task.channel === 'bluesky'
+              ? {
+                  taskId: task._id,
+                  people: tagPeople,
+                  mentions: tagMentions,
+                  issues: tagIssues,
+                  onIssuesChange: setTagIssues,
+                }
+              : undefined
+          }
         />
       </div>
     </Panel>
