@@ -591,3 +591,12 @@ export function wavTruncated(seconds: number): Buffer {
   const bytes = wavOfSeconds(seconds)
   return bytes.subarray(0, bytes.length - 1000)
 }
+
+/** {@link m4aSpreadOut} with the track header left honest: only `stts` lies. */
+export const m4aSpreadOutHonestHeader = () => {
+  const bytes = m4aSpreadOut()
+  const tone = m4aTone()
+  const mdhd = tone.indexOf('mdhd') + 4 + 16
+  tone.copy(bytes, mdhd, mdhd, mdhd + 4)
+  return bytes
+}

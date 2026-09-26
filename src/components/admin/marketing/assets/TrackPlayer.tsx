@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { PauseIcon, PlayIcon } from '@heroicons/react/24/solid'
 import { formatTrackLength } from '@/lib/marketing-asset'
 
@@ -27,13 +27,32 @@ export function TrackPlayer({
   const [length, setLength] = useState(durationSeconds)
   // The browser can refuse to play (a format it lacks, a playback policy).
   const [failed, setFailed] = useState(false)
+  // Which press of Play is the latest: an older one settling late says nothing.
+  const attempt = useRef(0)
+
+  // A detached <audio> keeps playing: stop it and let go of the file when the
+  // player goes (its card deleted or filtered out, the page left).
+  useEffect(() => {
+    const element = audio.current
+    return () => {
+      if (!element) return
+      element.pause()
+      element.removeAttribute('src')
+      element.load()
+    }
+  }, [])
 
   function toggle() {
     const element = audio.current
     if (!element) return
     if (element.paused) {
+      const current = ++attempt.current
       setFailed(false)
-      void element.play().catch(() => {
+      void element.play().catch((error: unknown) => {
+        // A pause while the track still loads rejects the play it cut short.
+        const aborted =
+          error instanceof DOMException && error.name === 'AbortError'
+        if (current !== attempt.current || aborted) return
         setPlaying(false)
         setFailed(true)
       })

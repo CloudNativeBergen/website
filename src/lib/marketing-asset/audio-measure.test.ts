@@ -45,6 +45,7 @@ import {
   m4aShortFrames,
   m4aMillisecondClock,
   m4aSpreadOut,
+  m4aSpreadOutHonestHeader,
   wavWithChunkAfterData,
   fmtClaiming,
   m4aSampleCountMismatch,
@@ -438,6 +439,10 @@ describe('measureAudio', () => {
       // Timestamps that spread the frames out: a player that honours them
       // plays longer than the frames alone, so the two must agree.
       ['frames timed ten times apart, header to match', m4aSpreadOut()],
+      [
+        'frames timed ten times apart, header honest',
+        m4aSpreadOutHonestHeader(),
+      ],
       // Round 3: clock ×10 with the header to match plays ten times longer.
       ['a media clock that is not the decoder’s rate', m4aTimescaleTimesTen()],
       ['HE-AAC', m4aHeAac()],
