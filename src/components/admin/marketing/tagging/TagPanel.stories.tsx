@@ -285,3 +285,30 @@ export const TaggedByAnOlderHandle: Story = {
     )
   },
 }
+
+/**
+ * Dan's note came from an old handle; tagging him by his current one clears
+ * it at once, not only after the next save.
+ */
+export const UnresolvedNoteClearsOnceTagged: Story = {
+  args: {
+    initialBody: 'Dan Ødegaard on eBPF.',
+    people: [{ ...dan, handle: 'dan.new.example' }],
+    mentions: [danUnresolved],
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(
+      canvas.getByText("Dan Ødegaard's Bluesky link does not resolve"),
+    ).toBeVisible()
+    await userEvent.click(
+      canvas.getByRole('button', { name: 'Tag Dan Ødegaard' }),
+    )
+    await expect(canvas.getByTestId('body')).toHaveTextContent(
+      '@dan.new.example on eBPF.',
+    )
+    await expect(
+      canvas.queryByText("Dan Ødegaard's Bluesky link does not resolve"),
+    ).toBeNull()
+  },
+}
