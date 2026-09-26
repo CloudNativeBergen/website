@@ -519,3 +519,75 @@ export function m4aDsiOneByte(): Buffer {
   bytes[at] = 1
   return bytes
 }
+
+/** The M4A tone with its media data box renamed away: tables, no samples. */
+export function m4aNoMediaData(): Buffer {
+  const bytes = Buffer.from(m4aTone())
+  bytes.write('free', bytes.indexOf('mdat'))
+  return bytes
+}
+
+/** Where the tone's AudioSpecificConfig starts, after the 0x05 tag. */
+function audioSpecificConfigAt(bytes: Buffer): number {
+  const esds = bytes.indexOf('esds')
+  let at = bytes.indexOf(0x05, esds + 8 + 5 + 13)
+  while (bytes[++at] & 0x80);
+  return at + 1
+}
+
+/**
+ * The M4A tone re-timed on `timescale` ticks per second: every `stts` delta
+ * and the header's duration converted, rounded as a muxer would.
+ */
+function m4aRetimed(bytes: Buffer, perFrame: number, timescale: number) {
+  const mdhd = bytes.indexOf('mdhd') + 4
+  const rate = bytes.readUInt32BE(mdhd + 12)
+  const stts = bytes.indexOf('stts') + 4
+  let frames = 0
+  for (let i = 0; i < bytes.readUInt32BE(stts + 4); i++) {
+    frames += bytes.readUInt32BE(stts + 8 + i * 8)
+    bytes.writeUInt32BE(
+      Math.round((perFrame * timescale) / rate),
+      stts + 12 + i * 8,
+    )
+  }
+  bytes.writeUInt32BE(timescale, mdhd + 12)
+  bytes.writeUInt32BE(
+    Math.round((frames * perFrame * timescale) / rate),
+    mdhd + 16,
+  )
+  return bytes
+}
+
+/**
+ * The M4A tone as AAC-LC's 960-sample frame mode: `frameLengthFlag` set in
+ * its decoder config, and its sample table timed at 960 per frame to match.
+ */
+export function m4aShortFrames(): Buffer {
+  const bytes = Buffer.from(m4aTone())
+  // Object type (5 bits), rate index (4), channels (4), then frameLengthFlag.
+  bytes[audioSpecificConfigAt(bytes) + 1] |= 0x04
+  const mdhd = bytes.indexOf('mdhd') + 4
+  return m4aRetimed(bytes, 960, bytes.readUInt32BE(mdhd + 12))
+}
+
+/** The M4A tone timed on a 1,000-tick media clock, not its 44.1 kHz rate. */
+export const m4aMillisecondClock = () =>
+  m4aRetimed(Buffer.from(m4aTone()), 1024, 1000)
+
+/**
+ * The M4A tone whose frames are timed ten times apart (`stts` deltas ×10,
+ * header to match): a player that honours timestamps plays ten times longer
+ * than the frames alone.
+ */
+export const m4aSpreadOut = () => {
+  const bytes = Buffer.from(m4aTone())
+  const mdhd = bytes.indexOf('mdhd') + 4
+  return m4aRetimed(bytes, 10240, bytes.readUInt32BE(mdhd + 12))
+}
+
+/** A WAV whose data chunk claims more bytes than follow it (not 0xFFFFFFFF). */
+export function wavTruncated(seconds: number): Buffer {
+  const bytes = wavOfSeconds(seconds)
+  return bytes.subarray(0, bytes.length - 1000)
+}

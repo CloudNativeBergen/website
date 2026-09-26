@@ -56,18 +56,26 @@ const BROWSER_TYPES: Record<string, MarketingAssetAudioType> = {
 }
 
 /**
+ * Types a browser gives a track it cannot name: nothing specific (an MP3 as
+ * `application/octet-stream`), or the container (an M4A as `video/mp4`).
+ */
+const GENERIC_TYPES = new Set(['application/octet-stream', 'video/mp4'])
+
+/**
  * What the browser's pick looks like: the type the upload is sent as, or null
  * when it is not a track. Browsers name M4A and WAV several ways, and some
- * give no type at all, so the extension is the fallback. A hint for the form
- * and the upload only — the server sniffs the bytes.
+ * give no type or only a generic one, so the extension is the fallback. A
+ * hint for the form and the upload only — the server sniffs the bytes.
  */
 export function audioTypeForFile(file: {
   name: string
   type: string
 }): MarketingAssetAudioType | null {
-  const byType = BROWSER_TYPES[file.type.toLowerCase()]
+  const type = file.type.toLowerCase()
+  const byType = BROWSER_TYPES[type]
   if (byType) return byType
-  if (file.type && !file.type.startsWith('audio/')) return null
+  if (type && !type.startsWith('audio/') && !GENERIC_TYPES.has(type))
+    return null
   const ext = file.name.slice(file.name.lastIndexOf('.') + 1).toLowerCase()
   return EXTENSION_TYPES[ext] ?? null
 }

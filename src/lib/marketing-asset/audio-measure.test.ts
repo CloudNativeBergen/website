@@ -40,6 +40,11 @@ import {
   wavF32Extensible51,
   wavF64,
   wavStreamed,
+  wavTruncated,
+  m4aNoMediaData,
+  m4aShortFrames,
+  m4aMillisecondClock,
+  m4aSpreadOut,
   wavWithChunkAfterData,
   fmtClaiming,
   m4aSampleCountMismatch,
@@ -299,6 +304,12 @@ describe('measureAudio', () => {
       expect(await measure(wavStreamed(2))).toBeCloseTo(2, 2)
     })
 
+    it('refuses a WAV cut off inside its data chunk (not a streamed one)', async () => {
+      expect(await measureAudio(wavTruncated(2))).toEqual({
+        refused: 'wav-format',
+      })
+    })
+
     it('never uses the header’s byte rate (nAvgBytesPerSec)', async () => {
       expect(
         await measure(wavClaimingByteRate(660, 0x7fffffff)),
@@ -424,6 +435,9 @@ describe('measureAudio', () => {
       ['a file cut off inside its media data', m4aTruncated()],
       // Would otherwise read as infinitely long, not as malformed.
       ['a media timescale of 0', m4aZeroTimescale()],
+      // Timestamps that spread the frames out: a player that honours them
+      // plays longer than the frames alone, so the two must agree.
+      ['frames timed ten times apart, header to match', m4aSpreadOut()],
       // Round 3: clock ×10 with the header to match plays ten times longer.
       ['a media clock that is not the decoder’s rate', m4aTimescaleTimesTen()],
       ['HE-AAC', m4aHeAac()],
@@ -451,6 +465,27 @@ describe('measureAudio', () => {
       expect(await measureAudio(bytes)).toEqual({ refused: 'type' })
     })
 
+    it('takes AAC-LC’s 960-sample frame mode at 960 samples a frame', async () => {
+      const at1024 = (await measure(m4aTone())) as number
+      expect(await measure(m4aShortFrames())).toBeCloseTo(
+        (at1024 * 960) / 1024,
+        3,
+      )
+    })
+
+    it('takes a media clock that is not the sample rate (1,000 ticks a second)', async () => {
+      expect(await measure(m4aMillisecondClock())).toBeCloseTo(
+        (await measure(m4aTone())) as number,
+        2,
+      )
+    })
+
+    it('refuses an M4A with no media data behind its sample table', async () => {
+      expect(await measureAudio(m4aNoMediaData())).toEqual({
+        refused: 'unreadable',
+      })
+    })
+
     it('refuses an M4A with an empty sample table as unreadable', async () => {
       expect(await measureAudio(m4aWithNoLength())).toEqual({
         refused: 'unreadable',
@@ -469,6 +504,12 @@ describe('audioTypeForFile', () => {
     [{ name: 'book.m4b', type: 'audio/x-m4b' }, 'audio/mp4'],
     [{ name: 'a.flac', type: 'audio/flac' }, null],
     [{ name: 'a.mp3', type: 'image/png' }, null],
+    // Generic or ambiguous types some browsers give a track: the extension
+    // decides, as for no type at all (the server sniffs the bytes anyway).
+    [{ name: 'a.mp3', type: 'application/octet-stream' }, 'audio/mpeg'],
+    [{ name: 'a.m4a', type: 'video/mp4' }, 'audio/mp4'],
+    [{ name: 'a.mp4', type: 'video/mp4' }, null],
+    [{ name: 'a.png', type: 'application/octet-stream' }, null],
   ])('%o → %s', (file, type) => {
     expect(audioTypeForFile(file)).toBe(type)
   })

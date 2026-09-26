@@ -28,9 +28,9 @@ type Measured = number | { refused: Refusal }
  *  - **MP3** ({@link measureMp3}): tags, then a chain of Layer III frames.
  *  - **WAV** ({@link measureWav}): one `fmt `, then one `data`; the length is
  *    the bytes present over sample rate × channels × bits ÷ 8.
- *  - **M4A** ({@link measureM4a}): one sound track; the length is the sum of
- *    its sample table (`stts`) over its timescale, cross-checked against the
- *    track header.
+ *  - **M4A** ({@link measureM4a}): one sound track; the length is its frame
+ *    count × frame length ÷ the decoder's rate, cross-checked against its
+ *    timestamps (`stts`) and track header, with the samples in the file.
  *
  * No third-party parser: every path is this module's own, linear in the
  * file's size, and any throw inside is a refusal, never the route's 500.
@@ -63,6 +63,9 @@ const SUBFORMAT_TAIL = [
   0x71,
 ]
 
+/** The data size a WAV written to a pipe carries: its length is unknown. */
+const STREAMED_SIZE = 0xffffffff
+
 /** Bits per sample a WAV of each format code may carry. */
 const WAV_BITS: Record<number, number[]> = {
   1: [8, 16, 24, 32], // PCM
@@ -84,8 +87,9 @@ const isChunkId = (bytes: Uint8Array, offset: number) =>
  * `id3 `) whole, and nothing left over. Only the `data` chunk is audio: its
  * bytes present over sample rate × channels × bytes per sample. The header's
  * byte rate (`nAvgBytesPerSec`) is never used. A data chunk that undersells
- * the samples after it does not tile, and is refused; one that oversells (a
- * streamed file's 0xFFFFFFFF) must be the last chunk, and counts to the end.
+ * the samples after it does not tile, and is refused; so is one cut off
+ * before its end. Only a streamed file's 0xFFFFFFFF may run past the end, as
+ * the last chunk, and it counts to the end.
  * PCM (format 1), IEEE float (3), and WAVE_FORMAT_EXTENSIBLE with either
  * sub-format are taken; A-law, μ-law, ADPCM and the rest are refused.
  */
@@ -134,7 +138,9 @@ export function measureWav(bytes: Uint8Array): Measured {
       if (!WAV_BITS[code]?.includes(fmt.bits)) return refused
     } else if (id === 'data') {
       if (!fmt || dataBytes !== null) return refused
-      // An oversized (streamed) data chunk runs to the end: nothing follows.
+      // Only a streamed file's 0xFFFFFFFF runs to the end (nothing follows);
+      // any other size past the end is a file cut off, which may not decode.
+      if (!whole && size !== STREAMED_SIZE) return refused
       dataBytes = Math.min(size, bytes.length - body)
     } else if (!whole) return refused
     offset = body + size + (size % 2)
@@ -188,8 +194,12 @@ const child = (bytes: Uint8Array, box: Box | undefined, type: string) =>
  */
 const HEADER_SLACK_SECONDS = 0.25
 
-/** PCM samples one AAC-LC frame (one `stts` sample) decodes to. */
+/**
+ * PCM samples one AAC-LC frame (one `stts` sample) decodes to: 1024, or 960
+ * when the config's `frameLengthFlag` is set.
+ */
 const AAC_FRAME = 1024
+const AAC_SHORT_FRAME = 960
 
 /** `samplingFrequencyIndex` → Hz (ISO 14496-3). */
 const AAC_RATES = [
@@ -199,13 +209,18 @@ const AAC_RATES = [
 
 /**
  * The AAC decoder config (AudioSpecificConfig) inside an `mp4a` entry's
- * `esds`: its audio object type and sample rate — what a decoder actually
- * plays at, whatever the entry's own rate field says. Null when absent.
+ * `esds`: its audio object type, sample rate and frame length — what a
+ * decoder actually plays, whatever the entry's own rate field says. Null
+ * when absent.
  */
 function aacConfig(
   bytes: Uint8Array,
   entry: Box,
-): { objectType: number; sampleRate: number | undefined } | null {
+): {
+  objectType: number
+  sampleRate: number | undefined
+  frameLength: number
+} | null {
   // An AudioSampleEntry's fixed fields are 28 bytes; its boxes follow.
   const esds = boxes(bytes, entry.start + 28, entry.end).find(
     (b) => b.type === 'esds',
@@ -240,8 +255,14 @@ function aacConfig(
   const objectType = bytes[info.start] >> 3
   const index = ((bytes[info.start] & 0x07) << 1) | (bytes[info.start + 1] >> 7)
   // An index past the table (13–15) gives no rate, which the caller's rate
-  // check then refuses.
-  return { objectType, sampleRate: AAC_RATES[index] }
+  // check then refuses. With a table index, the 4-bit channel configuration
+  // follows the rate, then AAC-LC's frameLengthFlag: bit 13 of the config.
+  const shortFrames = (bytes[info.start + 1] >> 2) & 1
+  return {
+    objectType,
+    sampleRate: AAC_RATES[index],
+    frameLength: shortFrames ? AAC_SHORT_FRAME : AAC_FRAME,
+  }
 }
 
 /**
@@ -250,12 +271,14 @@ function aacConfig(
  * one `moov`, a video track, anything but exactly ONE sound track (a chapter
  * or other text track beside it is fine), a sample description that is not
  * one `mp4a` entry, an AAC config that is not AAC-LC (HE-AAC is refused), a
- * media timescale that is not the rate the decoder config plays at, a sample
- * table whose count disagrees with the sample sizes, and a track header that
- * differs from the length by more than {@link HEADER_SLACK_SECONDS}. The
- * length is what the decoder produces: samples × 1024 ÷ the decoder's rate.
- * No `stts` delta is used, so none can undersell it. Known gap: an `elst`
- * edit list (which a player may use to trim priming) is not read.
+ * sample table whose count disagrees with the sample sizes, sample sizes the
+ * file's media data cannot hold (unreadable), and timestamps (`stts`) or a
+ * track header that differ from the length by more than
+ * {@link HEADER_SLACK_SECONDS} on the media clock, which may be any rate. The
+ * length is what the decoder produces: samples × frame length (1024, or 960
+ * with `frameLengthFlag`) ÷ the decoder's rate, so no timestamp can undersell
+ * it. Known gap: an `elst` edit list (which a player may use to trim
+ * priming) is not read.
  */
 export function measureM4a(bytes: Uint8Array): Measured {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
@@ -295,20 +318,48 @@ export function measureM4a(bytes: Uint8Array): Measured {
   const headerDuration = v1
     ? Number(view.getBigUint64(mdhd.start + 24))
     : view.getUint32(mdhd.start + 16)
-  // The clock the samples are timed by must be the rate they play at.
-  if (timescale !== aac?.sampleRate) return { refused: 'type' }
+  if (!aac?.sampleRate || !(timescale > 0)) return { refused: 'type' }
 
   // A count past the box's end reads past the file and throws: a refusal.
-  // Only the sample COUNTS are used: every AAC-LC sample decodes to one
-  // 1024-sample frame whatever its `stts` delta says.
   const entries = view.getUint32(stts.start + 4)
   let samples = 0
-  for (let i = 0; i < entries; i++)
-    samples += view.getUint32(stts.start + 8 + i * 8)
+  let ticks = 0
+  for (let i = 0; i < entries; i++) {
+    const count = view.getUint32(stts.start + 8 + i * 8)
+    samples += count
+    ticks += count * view.getUint32(stts.start + 12 + i * 8)
+  }
   if (view.getUint32(stsz.start + 8) !== samples) return { refused: 'type' }
-  const seconds = (samples * AAC_FRAME) / timescale
+  // The length is what the decoder produces: every AAC-LC sample decodes to
+  // one frame at the config's rate, whatever the media clock says.
+  const seconds = (samples * aac.frameLength) / aac.sampleRate
   if (!(seconds > 0)) return { refused: 'unreadable' }
-  if (Math.abs(seconds - headerDuration / timescale) > HEADER_SLACK_SECONDS)
+  // Every sample must be in the file: a table with no media behind it (no
+  // `mdat`, or one too short) is metadata, not a track.
+  if (sampleBytes(view, stsz, samples) > mediaBytes(top))
+    return { refused: 'unreadable' }
+  // The media clock may be any rate, but the timestamps on it (`stts`) and
+  // the track header must play what the frames do: timestamps that spread
+  // the frames out would play longer than they decode.
+  const clockSeconds = [ticks, headerDuration].map((t) => t / timescale)
+  if (clockSeconds.some((s) => Math.abs(s - seconds) > HEADER_SLACK_SECONDS))
     return { refused: 'type' }
   return seconds
 }
+
+/** The bytes the sample size table (`stsz`) says its samples take. */
+function sampleBytes(view: DataView, stsz: Box, samples: number): number {
+  const constant = view.getUint32(stsz.start + 4)
+  if (constant) return constant * samples
+  if (stsz.start + 12 + samples * 4 > stsz.end) throw new Error('bad stsz')
+  let total = 0
+  for (let i = 0; i < samples; i++)
+    total += view.getUint32(stsz.start + 12 + i * 4)
+  return total
+}
+
+/** The media data (`mdat` payload) the file actually holds. */
+const mediaBytes = (top: Box[]) =>
+  top
+    .filter((b) => b.type === 'mdat')
+    .reduce((total, b) => total + b.end - b.start, 0)
