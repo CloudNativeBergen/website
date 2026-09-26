@@ -219,6 +219,7 @@ function fixture(): Doc[] {
     },
     {
       _id: 'asset-hall',
+      _rev: 'rev-asset-hall',
       _type: 'marketingAsset',
       organization: ref('org-A'),
       scope: 'organization',
@@ -231,6 +232,7 @@ function fixture(): Doc[] {
     },
     {
       _id: 'asset-theme',
+      _rev: 'rev-asset-theme',
       _type: 'marketingAsset',
       organization: ref('org-A'),
       scope: 'organization',
@@ -245,6 +247,7 @@ function fixture(): Doc[] {
     },
     {
       _id: 'asset-theirs',
+      _rev: 'rev-asset-theirs',
       _type: 'marketingAsset',
       organization: ref('org-B'),
       scope: 'organization',
