@@ -495,7 +495,10 @@ export const ClickTest: Story = {
                 <code className="font-jetbrains rounded bg-gray-100 px-1.5 py-0.5 text-xs dark:bg-gray-700">
                   pnpm shoot &lt;story-id&gt;
                 </code>{' '}
-                and look at it, in light and dark, before calling UI work done.
+                and look at it before calling UI work done. It captures the
+                theme the story renders in, light by default: for dark, shoot a
+                story that sets the dark theme, or pick Dark from the Theme
+                toolbar in Storybook.
               </p>
             </div>
           </div>
