@@ -18,6 +18,8 @@ import type { BackgroundGallery } from './meme-generator-gallery'
 import { DEFAULT_DESIGN } from './meme-generator-draw'
 import { VideoProjectError, type VideoProjects } from './meme-generator-project'
 import type { OpenedProject, OpenedScene } from '@/lib/video-project'
+import { DownloadableImage } from '../../common/DownloadableImage'
+import { StudioGalleryProvider } from '../marketing/studio-gallery/StudioGalleryProvider'
 import { http, HttpResponse } from 'msw'
 import { ThemeProvider } from 'next-themes'
 
@@ -2621,5 +2623,48 @@ export const ProjectOnPhone: Story = {
     await expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(
       window.innerWidth,
     )
+  },
+}
+
+/**
+ * The studio as the page builds it since #1224: a project open (#1181) and
+ * the preview wrapped for Download and "Save to gallery" — both at once.
+ */
+export const ProjectWithSaveToGallery: Story = {
+  args: {
+    gallery: storyGallery,
+    projects: storyProjects(),
+    initialProjectId: 'vp-launch',
+    wrapPreview: (node) => (
+      <DownloadableImage
+        filename="meme"
+        studio={{ tab: 'meme-generator', title: '' }}
+      >
+        {node}
+      </DownloadableImage>
+    ),
+  },
+  decorators: [
+    (Story) => (
+      <StudioGalleryProvider
+        orgId="org-storybook"
+        uploader={async () => ({ _id: 'asset-new', softOnSocial: false })}
+      >
+        <Story />
+      </StudioGalleryProvider>
+    ),
+  ],
+  parameters: { msw: { handlers: [proxyImage] } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const project = within(
+      await canvas.findByRole('region', { name: 'Project' }),
+    )
+    await expect(
+      await project.findByDisplayValue('Launch teaser'),
+    ).toBeInTheDocument()
+    await expect(
+      canvas.getByRole('button', { name: 'Save to gallery' }),
+    ).toBeVisible()
   },
 }
