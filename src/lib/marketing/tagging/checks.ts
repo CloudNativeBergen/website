@@ -306,12 +306,22 @@ export function saveMentions(input: {
     const handle = normaliseHandle(m.handle)
     if (m.status !== 'tagged' || !inBody.has(handle) || known.has(handle))
       continue
-    if (tagged.some((t) => t.speakerId === m.speakerId)) continue
+    if (tagged.some((t) => t.handle === handle)) continue
     const person = byId.get(m.speakerId)
     if (!person) issues.push(notASpeaker(m, handle))
     else if (person.optedOut)
       issues.push({ ...optedOutIssue(person, handle), mentionKey: m._key })
-    else tagged.push({ ...m, handle, name: person.name })
+    else {
+      // Old and new handle of one person both in the text: one entry each,
+      // so the keys must differ.
+      const clash = tagged.some((t) => t._key === m._key)
+      tagged.push({
+        ...m,
+        _key: clash ? storedKey(`${m.speakerId}/${handle}`) : m._key,
+        handle,
+        name: person.name,
+      })
+    }
   }
   const taggedIds = new Set(tagged.map((m) => m.speakerId))
   // A note stands while the person is still named in plain text.

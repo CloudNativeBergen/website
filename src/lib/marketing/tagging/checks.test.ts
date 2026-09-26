@@ -344,6 +344,20 @@ describe('saveMentions and a speaker who changed their link', () => {
     expect(out.issues).toEqual([])
     expect(out.mentions).toEqual([tagged(alice, DID_A)])
   })
+  it('keeps the old handle’s record beside the new one, under its own key', () => {
+    const out = saveMentions({
+      body: '@alice.dev and @alice.example.com',
+      people: [moved],
+      previous: [tagged(alice, DID_A)],
+      resolutions: new Map([['alice.example.com', resolved(DID_B)]]),
+    })
+    expect(out.mentions.map((m) => [m.handle, m.did])).toEqual([
+      ['alice.example.com', DID_B],
+      ['alice.dev', DID_A],
+    ])
+    expect(new Set(out.mentions.map((m) => m._key)).size).toBe(2)
+  })
+
   it('refuses it when that speaker has opted out since', () => {
     const out = saveMentions({
       body: '@alice.dev',

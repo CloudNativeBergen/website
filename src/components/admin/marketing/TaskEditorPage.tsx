@@ -575,6 +575,7 @@ function PublishingSection({
   // Tag issues from a refused save OR a refused approval (tagging spec
   // §4.4): both land beside the tag buttons, each with its one-click fix.
   const [tagIssues, setTagIssues] = useState<TagIssue[]>([])
+  const [tagPending, setTagPending] = useState(false)
   const refusedForTags = (fallback: string) => (err: { message: string }) => {
     const issues = clientTagIssues(err)
     if (issues.length > 0) setTagIssues(issues)
@@ -751,7 +752,7 @@ function PublishingSection({
       aside={
         <ApproveControls
           status={v.status}
-          dirty={dirty}
+          dirty={dirty || tagPending}
           busy={approve.isPending || unschedule.isPending || retry.isPending}
           scheduledAt={v.scheduledAt}
           onApprove={() => approve.mutate({ taskId: task._id })}
@@ -826,6 +827,7 @@ function PublishingSection({
                   mentions: tagMentions,
                   issues: tagIssues,
                   onIssuesChange: setTagIssues,
+                  onPendingChange: setTagPending,
                 }
               : undefined
           }
