@@ -1,6 +1,6 @@
 'use client'
 
-import { useId, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { ArchiveBoxArrowDownIcon } from '@heroicons/react/24/outline'
 import { AdminButton } from '@/components/admin/AdminButton'
 import { styles } from './meme-generator-config'
@@ -30,6 +30,21 @@ export function KeepInGallery({
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const ready = Boolean(title.trim() && alt.trim()) && !saving
+  // Where focus goes once the form has opened or closed, so it never drops
+  // to the page: into the title, or back to the button that opened it.
+  const titleInput = useRef<HTMLInputElement>(null)
+  const keepButton = useRef<HTMLButtonElement>(null)
+  const focusNext = useRef<'title' | 'keep' | null>(null)
+  useEffect(() => {
+    const target = focusNext.current
+    focusNext.current = null
+    if (target === 'title') titleInput.current?.focus()
+    else if (target === 'keep') keepButton.current?.focus()
+  }, [open])
+  const show = (next: boolean) => {
+    focusNext.current = next ? 'title' : 'keep'
+    setOpen(next)
+  }
 
   async function save(event: React.FormEvent) {
     event.preventDefault()
@@ -51,7 +66,11 @@ export function KeepInGallery({
 
   if (!open)
     return (
-      <AdminButton variant="secondary" onClick={() => setOpen(true)}>
+      <AdminButton
+        ref={keepButton}
+        variant="secondary"
+        onClick={() => show(true)}
+      >
         <ArchiveBoxArrowDownIcon className="size-4" aria-hidden="true" />
         Keep in gallery
       </AdminButton>
@@ -68,6 +87,7 @@ export function KeepInGallery({
           Title
         </label>
         <input
+          ref={titleInput}
           id={ids.title}
           required
           maxLength={200}
@@ -110,7 +130,7 @@ export function KeepInGallery({
       <div className="flex flex-wrap justify-end gap-2">
         <AdminButton
           variant="secondary"
-          onClick={() => setOpen(false)}
+          onClick={() => show(false)}
           disabled={saving}
         >
           Cancel

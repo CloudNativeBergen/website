@@ -274,3 +274,48 @@ describe('an uploaded background', () => {
     expect(lastDrawn().image?.galleryAssetId).toBeUndefined()
   })
 })
+
+describe('keeping, by keyboard', () => {
+  it('moves focus into the form, back on Cancel, and to the announced result on save', async () => {
+    render(<MemeGenerator gallery={fakeGallery()} />)
+    upload('stage-photo.png')
+    await screen.findByText('Current: stage-photo.png')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Keep in gallery' }))
+    expect(document.activeElement).toBe(screen.getByLabelText('Title'))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(document.activeElement).toBe(
+      screen.getByRole('button', { name: 'Keep in gallery' }),
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Keep in gallery' }))
+    fireEvent.change(screen.getByLabelText('Alt text'), {
+      target: { value: 'An empty stage' },
+    })
+    // Enter in a field submits the form.
+    fireEvent.submit(
+      screen.getByRole('form', { name: 'Keep the background in the gallery' }),
+    )
+    const status = screen.getByTestId('background-gallery-status')
+    await waitFor(() => expect(status).toHaveTextContent('In the gallery.'))
+    expect(document.activeElement).toBe(status)
+  })
+
+  it('announces the result in a region that was there before it', async () => {
+    render(<MemeGenerator gallery={fakeGallery()} />)
+    upload('stage-photo.png')
+    await screen.findByText('Current: stage-photo.png')
+    const region = screen.getByTestId('background-gallery-status')
+    expect(region).toHaveAttribute('role', 'status')
+    expect(region).toHaveTextContent('')
+    fireEvent.click(screen.getByRole('button', { name: 'Keep in gallery' }))
+    fireEvent.change(screen.getByLabelText('Alt text'), {
+      target: { value: 'An empty stage' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Save to gallery' }))
+    await waitFor(() => expect(region).toHaveTextContent('In the gallery.'))
+    // The same element: a live region announces changes, not arrivals.
+    expect(screen.getByTestId('background-gallery-status')).toBe(region)
+  })
+})

@@ -9,6 +9,8 @@ interface AdminButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement>
   variant?: AdminButtonVariant
   color?: AdminButtonColor
   size?: AdminButtonSize
+  /** React 19 passes `ref` as a prop; it reaches the `<button>` with the rest. */
+  ref?: React.Ref<HTMLButtonElement>
 }
 
 const colorStyles: Record<AdminButtonColor, string> = {

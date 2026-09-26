@@ -575,6 +575,15 @@ export function MemeGenerator({
     }
   }
 
+  // After a keep the form is gone; focus moves to the status that says so.
+  const galleryStatus = useRef<HTMLParagraphElement>(null)
+  const focusGalleryStatus = useRef(false)
+  useEffect(() => {
+    if (!focusGalleryStatus.current) return
+    focusGalleryStatus.current = false
+    galleryStatus.current?.focus()
+  })
+
   /**
    * An upload now in the gallery is kept in every state undo and redo can
    * reach, with no step of its own: it is kept whichever one is shown.
@@ -1335,22 +1344,32 @@ export function MemeGenerator({
                     Clear
                   </button>
                 </div>
-                {background.image.galleryAssetId ? (
-                  <p className="text-sm text-brand-slate-gray dark:text-gray-400">
-                    In the gallery.
+                <div>
+                  {/* Always there while an image is, so "In the gallery."
+                      is announced when a keep lands, and focus has
+                      somewhere to go once the form has gone. */}
+                  <p
+                    ref={galleryStatus}
+                    role="status"
+                    tabIndex={-1}
+                    data-testid="background-gallery-status"
+                    className="text-sm text-brand-slate-gray focus:outline-none dark:text-gray-400"
+                  >
+                    {background.image.galleryAssetId ? 'In the gallery.' : ''}
                   </p>
-                ) : (
-                  gallery &&
-                  keptFile && (
+                  {!background.image.galleryAssetId && gallery && keptFile && (
                     <KeepInGallery
                       // A fresh form for each upload.
                       key={background.image.url}
                       file={keptFile}
                       keep={gallery.keep}
-                      onKept={(id) => markKept(background.image!.url, id)}
+                      onKept={(id) => {
+                        focusGalleryStatus.current = true
+                        markKept(background.image!.url, id)
+                      }}
                     />
-                  )
-                )}
+                  )}
+                </div>
               </div>
             )}
 
