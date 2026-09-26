@@ -342,6 +342,21 @@ describe('approvalCheck (§4.4 Approval)', () => {
     expect(out.issues.map((i) => i.code)).toEqual(['opted-out'])
   })
 
+  it('refuses a recorded tag of an opted-out speaker whose link has since changed', () => {
+    // The body still carries the OLD handle; the roster only knows the new
+    // one, so only the recorded mention can catch it.
+    const moved = { ...alice, handle: 'alice.example.com', optedOut: true }
+    const out = approvalCheck({
+      body: '@alice.dev',
+      mentions: [tagged(alice, DID_A)],
+      people: [moved],
+      resolutions: new Map([['alice.dev', resolved(DID_A)]]),
+    })
+    expect(out.issues.map((i) => [i.code, i.mentionKey])).toEqual([
+      ['opted-out', 'speaker-alice'],
+    ])
+  })
+
   it('refuses a mention of someone no longer a speaker here', () => {
     const out = approvalCheck({
       body: '@alice.dev',
