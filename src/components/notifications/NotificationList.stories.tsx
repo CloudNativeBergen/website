@@ -100,7 +100,7 @@ const meta = {
   title: 'Components/Notifications/NotificationList',
   component: NotificationList,
   // AGENTS.md deterministic-dates rule: pin Date so the relative-time labels
-  // ("4m ago") are absolutely fixed for Chromatic.
+  // ("4m ago") are absolutely fixed for visual snapshots.
   beforeEach: mockDateBeforeEach(new Date('2026-07-18T12:00:00Z')),
   parameters: { layout: 'padded' },
   args: {

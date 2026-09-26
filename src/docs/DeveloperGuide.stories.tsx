@@ -488,12 +488,14 @@ export const ClickTest: Story = {
             </div>
             <div className="rounded-lg border border-gray-200 p-5 dark:border-gray-700">
               <h3 className="font-space-grotesk mb-2 font-semibold text-brand-slate-gray dark:text-white">
-                Visual regression
+                Visual inspection
               </h3>
               <p className="font-inter text-sm leading-relaxed text-gray-600 dark:text-gray-400">
-                Chromatic runs on every PR, comparing visual snapshots against
-                the main branch. Changes to main are auto-accepted as the new
-                baseline.
+                CI does not compare screenshots. Capture a story with{' '}
+                <code className="font-jetbrains rounded bg-gray-100 px-1.5 py-0.5 text-xs dark:bg-gray-700">
+                  pnpm shoot &lt;story-id&gt;
+                </code>{' '}
+                and look at it, in light and dark, before calling UI work done.
               </p>
             </div>
           </div>

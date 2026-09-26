@@ -19,7 +19,7 @@ import {
  * THE HOMEPAGE IN EVERY LIFECYCLE STATE.
  *
  * One story per state, each rendering the WHOLE page — deliberately not one
- * story per state per section, which would multiply the Chromatic snapshot count
+ * story per state per section, which would multiply the snapshot count
  * without telling you anything the whole-page view does not.
  *
  * The clock is pinned so the date-derived stages (and the countdown) are stable
