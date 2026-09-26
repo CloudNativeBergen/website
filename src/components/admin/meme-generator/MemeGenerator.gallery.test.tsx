@@ -385,3 +385,59 @@ describe('clearing the background', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 })
+
+describe('a keep that lands after focus moved on in the same scene', () => {
+  it('leaves focus where the organizer put it', async () => {
+    let land: (kept: { _id: string }) => void = () => {}
+    const keep = vi.fn<BackgroundGallery['keep']>(
+      () => new Promise((resolve) => (land = resolve)),
+    )
+    render(<MemeGenerator gallery={fakeGallery({ keep })} />)
+    upload('one.png')
+    await screen.findByText('Current: one.png')
+    fireEvent.click(screen.getByRole('button', { name: 'Keep in gallery' }))
+    fireEvent.change(screen.getByLabelText('Alt text'), {
+      target: { value: 'Scene one' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Save to gallery' }))
+    await waitFor(() => expect(keep).toHaveBeenCalled())
+    // The form is still shown, saving; the organizer goes on typing.
+    const headline = screen.getAllByPlaceholderText('Enter your text...')[0]
+    headline.focus()
+
+    await act(async () => land({ _id: 'asset-one' }))
+    await screen.findByText('In the gallery.')
+    expect(document.activeElement).toBe(headline)
+  })
+})
+
+describe('the same file uploaded again', () => {
+  it('is still the kept one: no second Keep, and the first keep stands', async () => {
+    const keep = vi.fn<BackgroundGallery['keep']>(async () => ({
+      _id: 'asset-kept',
+    }))
+    render(<MemeGenerator gallery={fakeGallery({ keep })} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Video' }))
+    upload('stage.png')
+    await screen.findByText('Current: stage.png')
+    fireEvent.click(screen.getByRole('button', { name: 'Keep in gallery' }))
+    fireEvent.change(screen.getByLabelText('Alt text'), {
+      target: { value: 'A stage' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Save to gallery' }))
+    await screen.findByText('In the gallery.')
+
+    // The same bytes on another scene: the same data URL.
+    fireEvent.click(screen.getByRole('button', { name: 'Add scene' }))
+    upload('stage.png')
+    await screen.findByText('Current: stage.png')
+    await waitFor(() =>
+      expect(lastDrawn().image?.galleryAssetId).toBe('asset-kept'),
+    )
+    expect(screen.getByText('In the gallery.')).toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Keep in gallery' }),
+    ).not.toBeInTheDocument()
+    expect(keep).toHaveBeenCalledTimes(1)
+  })
+})

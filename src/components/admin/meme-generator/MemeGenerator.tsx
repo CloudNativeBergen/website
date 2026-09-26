@@ -462,6 +462,9 @@ export function MemeGenerator({
   // The file behind each uploaded background, by its data URL, so it can
   // still be kept in the gallery. Only this session's uploads have one.
   const uploadedFiles = useRef(new Map<string, File>())
+  // The gallery asset each kept upload became, by its data URL: the same
+  // bytes uploaded again are the same data URL, and already kept.
+  const keptAssets = useRef(new Map<string, string>())
   useEffect(() => {
     const kept = new Set(
       allStates(history).flatMap((states) =>
@@ -472,6 +475,7 @@ export function MemeGenerator({
       backgroundRasters.current,
       driftRasters.current,
       uploadedFiles.current,
+      keptAssets.current,
     ]) {
       for (const url of cache.keys()) if (!kept.has(url)) cache.delete(url)
     }
@@ -549,7 +553,15 @@ export function MemeGenerator({
     try {
       await loadBackground(async () => {
         const url = await readAsDataUrl(file)
-        return { image: { url, name: file.name }, file }
+        const galleryAssetId = keptAssets.current.get(url)
+        return {
+          image: {
+            url,
+            name: file.name,
+            ...(galleryAssetId ? { galleryAssetId } : {}),
+          },
+          file,
+        }
       })
     } catch {
       // An image the browser cannot decode leaves the background as it was.
@@ -589,7 +601,8 @@ export function MemeGenerator({
    * An upload now in the gallery is kept in every state undo and redo can
    * reach, with no step of its own: it is kept whichever one is shown.
    */
-  const markKept = (url: string, galleryAssetId: string) =>
+  const markKept = (url: string, galleryAssetId: string) => {
+    keptAssets.current.set(url, galleryAssetId)
     setHistory((prev) =>
       mapStates(prev, (states) =>
         states.map((scene) =>
@@ -608,6 +621,7 @@ export function MemeGenerator({
         ),
       ),
     )
+  }
 
   const clearBackgroundImage = () => {
     backgroundUploads.current.set(
