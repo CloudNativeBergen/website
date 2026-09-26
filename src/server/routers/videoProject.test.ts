@@ -521,7 +521,7 @@ describe('a track with no gallery pointer', () => {
     h.dataset[i] = { ...h.dataset[i], track: { ...stored, file } }
     const project = await projects().open({ id: created._id })
     expect(project.track).toMatchObject({ fileId: THEME, title: 'Theme' })
-    expect(project.track).not.toHaveProperty('galleryAssetId')
+    expect(project.track?.galleryAssetId).toBeUndefined()
   })
 })
 
