@@ -1488,6 +1488,52 @@ describe('validation sees the link the tick posts (#1143)', () => {
     expect(input).not.toHaveProperty('linkDestination')
   })
 
+  it("refuses to schedule or save a Task's variant when the conference does not resolve, rather than validating the long link", async () => {
+    const validate = vi.fn<(input: PublishInput) => ValidationIssue[]>(() => [])
+    h.resolveAdapter.mockResolvedValue({ validate })
+    // ONLY the short-link origin read fails (picked out by its caller on the
+    // stack): every other read of the conference — the admin guard, the
+    // tenancy guard — still resolves, so the refusal asserted below can come
+    // from no other guard.
+    const resolved = await h.getConference()
+    h.getConference.mockImplementation(async () =>
+      new Error().stack?.includes('currentShortLinkOrigin')
+        ? {
+            conference: null,
+            domain: 'cloudnativebergen.no',
+            error: new Error('Sanity down'),
+          }
+        : resolved,
+    )
+    h.getSocialPostVariant.mockResolvedValue(
+      variant({ platform: 'bluesky', link: LONG, shortCode: 'abc234' }),
+    )
+    await expect(
+      social().scheduleVariant({ variantId: 'variant-ours' }),
+    ).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+      message: 'Could not resolve the conference to build the short link',
+    })
+    expect(validate).not.toHaveBeenCalled()
+    expect(h.transition).not.toHaveBeenCalled()
+
+    marketing.getTaskForVariant.mockResolvedValue('task-ours')
+    await expect(
+      social().updateVariant({
+        variantId: 'variant-ours',
+        rev: 'rev-7',
+        body: 'Tickets are live',
+        link: null,
+        attachments: [],
+        timing: { mode: 'default' },
+      }),
+    ).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+      message: 'Could not resolve the conference to build the short link',
+    })
+    expect(h.updateSocialVariantContent).not.toHaveBeenCalled()
+  })
+
   it("saving a Task's variant from the posts table validates its /go/<code> link", async () => {
     marketing.getTaskForVariant.mockResolvedValue('task-ours')
     h.getSocialPostVariant.mockResolvedValue(

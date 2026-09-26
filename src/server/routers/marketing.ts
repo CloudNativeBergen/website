@@ -190,7 +190,7 @@ import {
   getSocialVariantEditorData,
 } from '@/lib/social/sanity'
 import { scheduleIssues } from '@/lib/social/schedule-check'
-import { shortLinkOriginOf } from '@/lib/social/publish-link'
+import { variantShortLinkOrigin } from '@/lib/social/publish-link'
 import {
   canOrganizerTransition,
   mayAlreadyBeLive,
@@ -1389,7 +1389,10 @@ export const marketingRouter = router({
             post.attachments,
             {
               taskOwned: true,
-              shortLinkOrigin: shortLinkOriginOf(conference),
+              shortLinkOrigin: variantShortLinkOrigin(
+                approveCode.code,
+                conference,
+              ),
               // LIVE, by the variant's conference (already tenancy-guarded),
               // not `conference.domains` from the cached loader — approve is
               // the enforcement point Task-owned drafts actually go through,

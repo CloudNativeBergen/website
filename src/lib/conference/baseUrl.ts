@@ -73,8 +73,11 @@ function deriveOrigin(entry: string): string | null {
   }
 }
 
-/** First `domains[]` entry that derives a usable outbound origin. */
-function findOutboundOrigin(
+/**
+ * First `domains[]` entry that derives a usable outbound origin, or `null` —
+ * never the platform fallback {@link conferenceBaseUrl} degrades to.
+ */
+export function findOutboundOrigin(
   conference: { domains?: readonly string[] | null } | null | undefined,
 ): string | null {
   for (const d of conference?.domains ?? []) {

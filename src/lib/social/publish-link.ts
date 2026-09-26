@@ -1,7 +1,4 @@
-import {
-  conferenceBaseUrl,
-  hasConferenceDomain,
-} from '@/lib/conference/baseUrl'
+import { findOutboundOrigin } from '@/lib/conference/baseUrl'
 import { normalizeShortCode, shortLinkUrl } from '@/lib/marketing/short-code'
 import type { PublishInput } from './provider/types'
 
@@ -34,17 +31,17 @@ export function publishLinkFields(
 }
 
 /**
- * The origin a conference's short links are built on: its own outbound origin
- * (`conferenceBaseUrl()`, the derivation its tagged links are minted with), or
- * `null` when it has no usable domain. `conferenceBaseUrl` would then fall
- * back to the PLATFORM host, where `/go/` resolves no conference and 404s — a
- * dead posted link — so the long link is posted instead.
+ * The origin a variant's short link is built on — THE gate every store and
+ * router shares, so they cannot drift. `null` for a variant without a code
+ * (it posts its own link), and `null` for a conference with no usable domain:
+ * `conferenceBaseUrl` would fall back to the PLATFORM host, where `/go/`
+ * resolves no conference and 404s — a dead posted link — so the long link is
+ * posted instead. Otherwise the conference's own outbound origin, the
+ * derivation its tagged links are minted with.
  */
-export function shortLinkOriginOf(
-  conference:
-    | { title?: string | null; domains?: readonly string[] | null }
-    | null
-    | undefined,
+export function variantShortLinkOrigin(
+  shortCode: string | null | undefined,
+  conference: { domains?: readonly string[] | null } | null | undefined,
 ): string | null {
-  return hasConferenceDomain(conference) ? conferenceBaseUrl(conference) : null
+  return normalizeShortCode(shortCode) ? findOutboundOrigin(conference) : null
 }

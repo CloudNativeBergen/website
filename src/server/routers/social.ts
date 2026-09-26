@@ -37,12 +37,16 @@ import {
 } from '@/lib/social/provider/constraints'
 import { offAspectOverrides, resolvePublishMedia } from '@/lib/social/media'
 import { placeholderIssues, scheduleIssues } from '@/lib/social/schedule-check'
-import { publishLinkFields, shortLinkOriginOf } from '@/lib/social/publish-link'
+import {
+  publishLinkFields,
+  variantShortLinkOrigin,
+} from '@/lib/social/publish-link'
 import { ceilingWarningsFor } from '@/lib/marketing/ceiling-check'
 import { getTaskForVariant, getTaskLinkInputs } from '@/lib/marketing/sanity'
 import { taggedUrl } from '@/lib/marketing/link'
 import { conferenceBaseUrl } from '@/lib/conference/baseUrl'
 import { shortCodeForMutation } from '@/lib/marketing/short-code-sanity'
+import { normalizeShortCode } from '@/lib/marketing/short-code'
 import {
   expireShortLink,
   expireShortLinkIndex,
@@ -164,17 +168,25 @@ async function applyOrConflict(
 }
 
 /**
- * The origin a coded variant's `/go/<code>` link is built on (short-links spec
- * §2.3), so a validation sees the link the publish tick will post. `null` for
- * a variant with no code — a standalone post posts its own link — without
- * reading the conference at all.
+ * The origin the request conference builds a variant's `/go/<code>` link on
+ * (short-links spec §2.3), so a validation sees the link the publish tick
+ * will post. A variant with no code never reads the conference. A conference
+ * that does not resolve REFUSES the mutation, as `requireConference` does in
+ * the marketing router — never a silent fall back to the long link.
  */
-async function shortLinkOriginFor(
+async function currentShortLinkOrigin(
   shortCode: string | null | undefined,
 ): Promise<string | null> {
-  if (!shortCode) return null
-  const { conference } = await getConferenceForCurrentDomain()
-  return shortLinkOriginOf(conference)
+  // Skips the read only; the gate itself is `variantShortLinkOrigin`'s.
+  if (!normalizeShortCode(shortCode)) return null
+  const { conference, error } = await getConferenceForCurrentDomain()
+  if (error || !conference?._id) {
+    throw new TRPCError({
+      code: 'NOT_FOUND',
+      message: 'Could not resolve the conference to build the short link',
+    })
+  }
+  return variantShortLinkOrigin(shortCode, conference)
 }
 
 /**
@@ -346,7 +358,7 @@ export const socialRouter = router({
       )
       const issues = await scheduleIssues(variant, post.attachments, {
         conferenceDomains: await currentConferenceDomains(variant.platform),
-        shortLinkOrigin: await shortLinkOriginFor(variant.shortCode),
+        shortLinkOrigin: await currentShortLinkOrigin(variant.shortCode),
         taskOwned: !!(await getTaskForVariant(
           variant._id,
           variant.conferenceId,
@@ -444,7 +456,7 @@ export const socialRouter = router({
         content,
         input.attachments,
         post.attachments,
-        await shortLinkOriginFor(content.shortCode),
+        await currentShortLinkOrigin(content.shortCode),
       )
       const constraints = getPlatformConstraints(variant.platform)
       const issues = constraints

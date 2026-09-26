@@ -1,5 +1,5 @@
-import { describe, expect, it, vi } from 'vitest'
-import { publishLinkFields, shortLinkOriginOf } from '../publish-link'
+import { describe, expect, it } from 'vitest'
+import { publishLinkFields, variantShortLinkOrigin } from '../publish-link'
 import { shortLinkUrl } from '@/lib/marketing/short-code'
 
 const LONG =
@@ -56,24 +56,28 @@ describe('publishLinkFields — values that would post a dead link', () => {
   })
 })
 
-describe('shortLinkOriginOf', () => {
-  it("is the conference's own primary origin", () => {
+describe('variantShortLinkOrigin', () => {
+  it("is the conference's own primary origin for a variant with a code", () => {
     expect(
-      shortLinkOriginOf({
+      variantShortLinkOrigin('abc234', {
         domains: ['*.preview.dev', 'cndn.no', 'www.cndn.no'],
       }),
     ).toBe('https://cndn.no')
   })
 
+  it('is null without a code: a standalone post posts its own link', () => {
+    expect(variantShortLinkOrigin(null, { domains: ['cndn.no'] })).toBeNull()
+    expect(
+      variantShortLinkOrigin('not a code', { domains: ['cndn.no'] }),
+    ).toBeNull()
+  })
+
   it('is null — never the platform host, where /go/ resolves no conference — without a usable domain', () => {
-    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
-    try {
-      expect(shortLinkOriginOf({ domains: [] })).toBeNull()
-      expect(shortLinkOriginOf({ domains: ['*.wild.dev'] })).toBeNull()
-      expect(shortLinkOriginOf(null)).toBeNull()
-    } finally {
-      error.mockRestore()
-    }
+    expect(variantShortLinkOrigin('abc234', { domains: [] })).toBeNull()
+    expect(
+      variantShortLinkOrigin('abc234', { domains: ['*.wild.dev'] }),
+    ).toBeNull()
+    expect(variantShortLinkOrigin('abc234', null)).toBeNull()
   })
 })
 

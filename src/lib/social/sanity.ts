@@ -5,7 +5,7 @@ import { outcomeMayBeLive } from './state-machine'
 import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
 import { scopedFetch } from '@/lib/sanity/scoped'
 import { verifiedDomains } from '@/lib/domain-verification/routing'
-import { shortLinkOriginOf } from './publish-link'
+import { variantShortLinkOrigin } from './publish-link'
 import { withTimeout } from './with-timeout'
 import { platformDomainSuffix } from '@/lib/domain-verification/platform'
 import { getCurrentDateTime } from '@/lib/time'
@@ -391,9 +391,9 @@ export const sanitySocialVariantStore: SocialVariantStore = {
           // From the RAW list — the derivation the tagged `link` was minted
           // with at save and approve — never the verified one, and only for a
           // variant with a code (short-links spec §2.3).
-          shortLinkOrigin: raw.shortCode
-            ? shortLinkOriginOf({ domains: raw_domains })
-            : null,
+          shortLinkOrigin: variantShortLinkOrigin(raw.shortCode, {
+            domains: raw_domains,
+          }),
           marketingTaskId: raw.marketingTaskId,
           postCreatedBy:
             typeof raw.postCreatedBy === 'string' &&
