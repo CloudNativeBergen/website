@@ -10,7 +10,7 @@ import {
 import { NotificationProvider } from '@/components/admin/NotificationProvider'
 import type { SponsorForConferenceExpanded } from '@/lib/sponsor-crm/types'
 
-// Fixed date so relative timestamps (e.g. "5 days ago") are deterministic in Chromatic
+// Fixed date so relative timestamps (e.g. "5 days ago") are deterministic in visual snapshots
 const FIXED_NOW = new Date('2026-02-15T12:00:00Z')
 
 const mockTiers = [

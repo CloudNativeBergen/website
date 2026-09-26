@@ -3,7 +3,7 @@ import { SponsorCard } from './SponsorCard'
 import { mockSponsors, mockSponsor } from '@/__mocks__/sponsor-data'
 import { DndContext } from '@dnd-kit/core'
 
-// Fixed date so day-count badges (e.g. "Pending (14d)") are deterministic in Chromatic
+// Fixed date so day-count badges (e.g. "Pending (14d)") are deterministic in visual snapshots
 const FIXED_NOW = new Date('2026-02-15T12:00:00Z')
 
 const meta: Meta<typeof SponsorCard> = {

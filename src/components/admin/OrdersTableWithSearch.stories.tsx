@@ -90,7 +90,7 @@ const meta = {
   beforeEach: () => {
     // Pin the clock (house pattern — see Countdown.stories): the table derives
     // payment status from `new Date()`, so an unpinned clock makes an overdue
-    // row flip to on-time as the fixture ages and drifts Chromatic snapshots.
+    // row flip to on-time as the fixture ages and drifts visual snapshots.
     const OriginalDate = globalThis.Date
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const MockDate: any = function (...args: any[]) {

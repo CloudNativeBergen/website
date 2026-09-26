@@ -15,7 +15,7 @@ import {
  * lifecycle model reads (dates, registration, content), so the stories compare
  * states rather than unrelated copy. The clock is pinned to {@link FIXED_NOW} by
  * the story `beforeEach`, which is what makes the date-derived stages
- * deterministic in Chromatic.
+ * deterministic in visual snapshots.
  */
 
 export const FIXED_NOW_ISO = '2026-03-01T12:00:00Z'

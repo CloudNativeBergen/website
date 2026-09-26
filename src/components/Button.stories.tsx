@@ -222,7 +222,7 @@ export const HoverState: Story = {
     const canvas = within(canvasElement)
     const button = canvas.getByRole('button', { name: /hover over me/i })
 
-    // Test hover interaction (visual change verified by Chromatic)
+    // Test hover interaction (the visual change is checked by eye in a `pnpm shoot` capture)
     await userEvent.hover(button)
     await expect(button).toBeVisible()
 

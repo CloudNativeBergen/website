@@ -7,7 +7,7 @@ const meta = {
   beforeEach: () => {
     // Pin the clock (house pattern — see PaymentDetailsModal.stories): the
     // Countdown reads Date.now() every tick, so an unpinned clock would
-    // drift Chromatic snapshots.
+    // drift visual snapshots.
     const OriginalDate = globalThis.Date
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const MockDate: any = function (...args: any[]) {
