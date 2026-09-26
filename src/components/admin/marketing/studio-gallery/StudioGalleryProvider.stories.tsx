@@ -148,8 +148,9 @@ export const FreeFormDialog: Story = {
 
 /** Saved: a link to the gallery, and the soft-on-social warning. */
 export const Saved: Story = {
-  play: async ({ canvasElement, args }) => {
-    await SpeakerCardDialog.play!({ canvasElement } as never)
+  play: async (context) => {
+    const { canvasElement, args } = context
+    await SpeakerCardDialog.play!(context)
     const body = within(canvasElement.ownerDocument.body)
     await userEvent.click(body.getByRole('button', { name: 'Save' }))
     await expect(
