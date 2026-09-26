@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { expect, userEvent, waitFor, within } from 'storybook/test'
-import { http, HttpResponse } from 'msw'
+import { delay, http, HttpResponse } from 'msw'
 import { ThemeProvider } from 'next-themes'
 import { mockDateBeforeEach } from '@/lib/storybook'
 import type {
@@ -930,5 +930,58 @@ export const TagApprovalRefusedAndFixedMobileDark: Story = {
     ...TagApprovalRefusedAndFixed.parameters,
     theme: 'dark',
     viewport: { defaultViewport: 'mobile1' },
+  },
+}
+
+/**
+ * A tag lookup in flight on an approved post: it is about to edit the body,
+ * so Move and "Pull back to draft" wait for it — neither may race the
+ * revision the lookup's edit will be saved against.
+ */
+export const TagLookupHoldsHeaderActions: Story = {
+  parameters: {
+    msw: {
+      handlers: [
+        http.post('/api/trpc/marketing.task.resolveTag', async () => {
+          await delay('infinite')
+          return HttpResponse.json({})
+        }),
+        ...handlers(
+          fixture(
+            {
+              ...taggingFixture.task,
+              status: 'scheduled',
+              approvedAt: '2026-09-14T09:12:00.000Z',
+              approvedByName: 'Bob Builder',
+            },
+            variant({ body: TAG_BODY, status: 'scheduled' }),
+            [],
+            {
+              tagPeople: taggingFixture.tagPeople,
+              tagMentions: [],
+            },
+          ),
+        ),
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const pullBack = await canvas.findByRole('button', {
+      name: 'Pull back to draft',
+    })
+    // Move is enabled by a date change; its date field is what the gate
+    // disables, and it disables Move with it.
+    const date = canvas.getByLabelText('Scheduled for')
+    await expect(pullBack).toBeEnabled()
+    await expect(date).toBeEnabled()
+    await userEvent.click(
+      canvas.getByRole('button', { name: 'Tag Alice Anderson' }),
+    )
+    await waitFor(() => expect(pullBack).toBeDisabled())
+    await expect(date).toBeDisabled()
+    await expect(
+      canvas.getByText('Save the post first; moving it re-times the post.'),
+    ).toBeVisible()
   },
 }

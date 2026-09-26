@@ -130,6 +130,9 @@ function LoadedTaskEditor({
   // Unsaved edits in the post form: the header's Move and the approve /
   // retry actions wait for them to be saved.
   const [postDirty, setPostDirty] = useState(false)
+  // A tag lookup in flight: it is about to edit the post, so the header's
+  // Move waits for it like it waits for unsaved edits.
+  const [tagLookup, setTagLookup] = useState(false)
   const pendingRenderTasks = data.siblings.filter(
     (sibling) =>
       sibling.handoffPending && task.prerequisiteIds.includes(sibling._id),
@@ -197,7 +200,7 @@ function LoadedTaskEditor({
 
       <TaskMeta
         data={data}
-        postDirty={postDirty}
+        postDirty={postDirty || tagLookup}
         refreshing={refreshing}
         onChanged={refresh}
         onFailed={failed}
@@ -259,6 +262,7 @@ function LoadedTaskEditor({
           data={data}
           dirty={postDirty}
           setDirty={setPostDirty}
+          onTagPendingChange={setTagLookup}
           onChanged={refresh}
           onFailed={failed}
         />
@@ -555,12 +559,14 @@ function PublishingSection({
   data,
   dirty,
   setDirty,
+  onTagPendingChange,
   onChanged,
   onFailed,
 }: {
   data: TaskEditorData
   dirty: boolean
   setDirty: (dirty: boolean) => void
+  onTagPendingChange?: (pending: boolean) => void
 } & Handlers) {
   const {
     task,
@@ -753,7 +759,12 @@ function PublishingSection({
         <ApproveControls
           status={v.status}
           dirty={dirty || tagPending}
-          busy={approve.isPending || unschedule.isPending || retry.isPending}
+          busy={
+            approve.isPending ||
+            unschedule.isPending ||
+            retry.isPending ||
+            tagPending
+          }
           scheduledAt={v.scheduledAt}
           onApprove={() => approve.mutate({ taskId: task._id })}
           onUnschedule={() => unschedule.mutate({ variantId: v._id })}
@@ -827,7 +838,10 @@ function PublishingSection({
                   mentions: tagMentions,
                   issues: tagIssues,
                   onIssuesChange: setTagIssues,
-                  onPendingChange: setTagPending,
+                  onPendingChange: (pending) => {
+                    setTagPending(pending)
+                    onTagPendingChange?.(pending)
+                  },
                   busy: approve.isPending || retry.isPending,
                 }
               : undefined
