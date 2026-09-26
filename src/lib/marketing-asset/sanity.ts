@@ -3,7 +3,7 @@ import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
 import { scopedFetch } from '@/lib/sanity/scoped'
 import { isSoftOnSocial } from './image-type'
 import type { ResolvedMarketingAssetDetails } from './details'
-import { studioTarget, type StudioOriginInput } from './studio'
+import type { StudioOriginInput } from './studio'
 import type {
   MarketingAssetFacets,
   MarketingAssetKind,
@@ -43,8 +43,8 @@ const ROW_PROJECTION = `{
   "durationSeconds": durationSeconds,
   "studio": select(source == "studio" && defined(studio.tab) => {
     "tab": studio.tab,
-    "speakerId": coalesce(studio.speaker._ref, null),
-    "sponsorId": coalesce(studio.sponsor._ref, null)
+    "speakerId": select(studio.tab == "speakers" && subject->_type == "speaker" => subject._ref, null),
+    "sponsorId": select(studio.tab == "sponsors" && subject->_type == "sponsor" => subject._ref, null)
   }, null),
   "rights": select(defined(rightsConfirmation.confirmedAt) => {
     "confirmedBy": rightsConfirmation.confirmedBy->name,
@@ -335,38 +335,15 @@ export async function createMarketingAsset(
       _type: 'marketingAsset',
       organization: { _type: 'reference', _ref: input.orgId },
       source: studio ? 'studio' : 'upload',
-      ...(studio ? { studio: studioOrigin(studio, input.details) } : {}),
+      // Only the tab: the speaker or sponsor it was opened on IS the subject,
+      // so an edit or an erasure of the subject can never leave a stale copy.
+      ...(studio ? { studio: { tab: studio.tab } } : {}),
       ...set,
       ...media,
     },
     { signal: options.signal },
   )
   return { _id: created._id }
-}
-
-/**
- * A studio save's origin as stored: the tab, and the speaker or sponsor it was
- * opened on — taken from the subject the caller has already proven this
- * organization's, never from a second id. Weak, like the subject, so the
- * person or sponsor can still be merged or deleted.
- */
-function studioOrigin(
-  studio: StudioOriginInput,
-  details: ResolvedMarketingAssetDetails,
-): Record<string, unknown> {
-  const target = studioTarget(studio.tab, details.subject)
-  return {
-    tab: studio.tab,
-    ...(target
-      ? {
-          [target.type]: {
-            _type: 'reference',
-            _ref: target.id,
-            _weak: true,
-          },
-        }
-      : {}),
-  }
 }
 
 /**

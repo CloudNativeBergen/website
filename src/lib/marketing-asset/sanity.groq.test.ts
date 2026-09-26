@@ -456,35 +456,87 @@ describe('audio tracks (#1178)', () => {
 describe('a studio save’s origin (#1164)', () => {
   beforeEach(() => {
     h.dataset = [
+      { _id: 'sp-ada', _type: 'speaker', name: 'Ada' },
+      { _id: 'sp-bob', _type: 'speaker', name: 'Bob' },
+      {
+        _id: 'acme',
+        _type: 'sponsor',
+        name: 'Acme',
+        organization: ref('org-a'),
+      },
+      {
+        _id: 'talk-1',
+        _type: 'talk',
+        title: 'T',
+        conference: ref('conf-a-2026'),
+      },
       asset('card', 'org-a', {
         source: 'studio',
-        studio: { tab: 'speakers', speaker: weak('sp-ada') },
+        studio: { tab: 'speakers' },
         subject: weak('sp-ada'),
+      }),
+      // Re-pointed in the gallery: Open in studio follows the subject.
+      asset('edited', 'org-a', {
+        source: 'studio',
+        studio: { tab: 'speakers' },
+        subject: weak('sp-bob'),
+      }),
+      asset('cleared', 'org-a', {
+        source: 'studio',
+        studio: { tab: 'speakers' },
+      }),
+      asset('talk-subject', 'org-a', {
+        source: 'studio',
+        studio: { tab: 'speakers' },
+        subject: weak('talk-1'),
+      }),
+      asset('gone', 'org-a', {
+        source: 'studio',
+        studio: { tab: 'speakers' },
+        subject: weak('sp-erased-and-deleted'),
       }),
       asset('thanks', 'org-a', {
         source: 'studio',
-        studio: { tab: 'sponsors', sponsor: weak('acme') },
+        studio: { tab: 'sponsors' },
+        subject: weak('acme'),
+      }),
+      asset('wrong-tab', 'org-a', {
+        source: 'studio',
+        studio: { tab: 'sponsors' },
+        subject: weak('sp-ada'),
       }),
       asset('meme', 'org-a', {
         source: 'studio',
         studio: { tab: 'meme-generator' },
+        subject: weak('sp-ada'),
       }),
-      asset('upload', 'org-a', { source: 'upload' }),
+      asset('upload', 'org-a', { source: 'upload', subject: weak('sp-ada') }),
       // An upload carrying a stray studio object is still an upload.
       asset('odd', 'org-a', {
         source: 'upload',
-        studio: { tab: 'speakers', speaker: weak('sp-ada') },
+        studio: { tab: 'speakers' },
+        subject: weak('sp-ada'),
       }),
       asset('old', 'org-a'),
     ]
   })
 
-  it('carries the tab and the speaker or sponsor, and nothing for an upload', async () => {
+  it('carries the tab, and the subject when it is that tab’s kind', async () => {
     const rows = await listMarketingAssets('org-a', 'conf-a-2026', {})
     const studio = Object.fromEntries(rows.map((row) => [row._id, row.studio]))
+    const speakers = (speakerId: string | null) => ({
+      tab: 'speakers',
+      speakerId,
+      sponsorId: null,
+    })
     expect(studio).toEqual({
-      card: { tab: 'speakers', speakerId: 'sp-ada', sponsorId: null },
+      card: speakers('sp-ada'),
+      edited: speakers('sp-bob'),
+      cleared: speakers(null),
+      'talk-subject': speakers(null),
+      gone: speakers(null),
       thanks: { tab: 'sponsors', speakerId: null, sponsorId: 'acme' },
+      'wrong-tab': { tab: 'sponsors', speakerId: null, sponsorId: null },
       meme: { tab: 'meme-generator', speakerId: null, sponsorId: null },
       upload: null,
       odd: null,

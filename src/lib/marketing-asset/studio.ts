@@ -1,5 +1,4 @@
 import { z } from 'zod'
-import type { MarketingAssetSubjectType } from './types'
 
 /**
  * The studio's tabs (docs/MARKETING_ASSETS_SPEC.md §4.2), in the order the
@@ -21,34 +20,16 @@ export type StudioOriginInput = z.output<typeof studioOriginSchema>
 
 /**
  * Where a studio-made asset came from, as the gallery reads it: the tab, and
- * the speaker or sponsor the studio was opened on. The studio cannot address a
- * talk or a card variant, so that is as close as "Open in studio" lands.
+ * the speaker or sponsor the studio was opened on. Only the tab is stored; the
+ * speaker or sponsor is the asset's SUBJECT when it matches the tab, so an
+ * edited or erased subject never leaves a stale copy behind. The studio cannot
+ * address a talk or a card variant, so that is as close as "Open in studio"
+ * lands.
  */
 export interface MarketingAssetStudioOrigin {
   tab: StudioTab
   speakerId: string | null
   sponsorId: string | null
-}
-
-/** The one tab that can be opened on each kind of subject. */
-const TAB_SUBJECT: Partial<Record<StudioTab, MarketingAssetSubjectType>> = {
-  speakers: 'speaker',
-  sponsors: 'sponsor',
-}
-
-/**
- * The speaker or sponsor a studio save was opened on, taken from the asset's
- * subject — which the server has already proven this organization's — and
- * never from a second client-sent id. Only a speaker card's speaker and a
- * sponsor card's sponsor count; any other pairing opens the tab alone.
- */
-export function studioTarget(
-  tab: StudioTab,
-  subject: { type: MarketingAssetSubjectType; id: string } | null | undefined,
-): { type: 'speaker' | 'sponsor'; id: string } | null {
-  const type = TAB_SUBJECT[tab]
-  if (!type || !subject || subject.type !== type) return null
-  return { type: type as 'speaker' | 'sponsor', id: subject.id }
 }
 
 /** The studio page, on the tab and the speaker or sponsor an asset names. */

@@ -1,35 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { StudioSearchParamsSchema } from '@/server/schemas/studio'
-import {
-  STUDIO_TABS,
-  openInStudioHref,
-  studioOriginSchema,
-  studioTarget,
-} from './studio'
-
-describe('studioTarget', () => {
-  it('is a speaker card’s speaker and a sponsor card’s sponsor', () => {
-    expect(studioTarget('speakers', { type: 'speaker', id: 'ada' })).toEqual({
-      type: 'speaker',
-      id: 'ada',
-    })
-    expect(studioTarget('sponsors', { type: 'sponsor', id: 'acme' })).toEqual({
-      type: 'sponsor',
-      id: 'acme',
-    })
-  })
-
-  it.each([
-    ['speakers', { type: 'sponsor', id: 'acme' }],
-    ['speakers', { type: 'talk', id: 'talk-1' }],
-    ['sponsors', { type: 'speaker', id: 'ada' }],
-    ['meme-generator', { type: 'speaker', id: 'ada' }],
-    ['conference', { type: 'sponsor', id: 'acme' }],
-    ['speakers', null],
-  ] as const)('is nothing for the %s tab with %o', (tab, subject) => {
-    expect(studioTarget(tab, subject)).toBeNull()
-  })
-})
+import { STUDIO_TABS, openInStudioHref, studioOriginSchema } from './studio'
 
 describe('openInStudioHref', () => {
   it('opens the tab on its speaker or sponsor', () => {
