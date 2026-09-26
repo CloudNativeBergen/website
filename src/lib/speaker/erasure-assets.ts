@@ -48,6 +48,7 @@ interface Entry {
   _key?: unknown
   image?: unknown
   source?: unknown
+  background?: unknown
 }
 
 /** What {@link planSpeakerAssetErasure} needs. Reads live in {@link fetchSpeakerAssetInputs}. */
@@ -107,6 +108,14 @@ function refOf(value: unknown): string | null {
 function fileRefOf(value: unknown): string | null {
   if (typeof value !== 'object' || value === null) return null
   return refOf((value as { asset?: unknown }).asset)
+}
+
+/** A video project scene's background image, `{ background: { image } }`. */
+function backgroundImageOf(scene: Entry): unknown {
+  const background = (scene as { background?: unknown }).background
+  return typeof background === 'object' && background !== null
+    ? (background as { image?: unknown }).image
+    : undefined
 }
 
 function entries(value: unknown): Entry[] {
@@ -181,6 +190,8 @@ export function linkedFileIds(subjectDocs: Doc[]): string[] {
  *    under that key is a different image: a draft reusing the key for the
  *    subject's image must not cost the live variant its own;
  *  - a TASK loses its render (and a pending upload of it), nothing else;
+ *  - a VIDEO PROJECT loses the background of each scene that shows the file
+ *    (by scene key; the scene falls back to its colour) and a linked track;
  *  - the SUBJECT speaker needs nothing: its `image` is unset with the rest;
  *  - anything else — another type, or a post or Task holding the file where
  *    this branch does not look — is REFUSED, so the file delete is never
@@ -318,6 +329,47 @@ export function planSpeakerAssetErasure(
           reason: 'Task render linked to the subject',
         })
         patchedTasks.add(doc._id)
+        break
+      }
+
+      case 'videoProject': {
+        // A studio video (#1181): each scene whose background is the file
+        // loses the image — a nested removal by scene key — and falls back
+        // to its colour; a linked track goes too. Everything else stays.
+        const keys = entries(doc.scenes)
+          .filter((scene) => isLinked(backgroundImageOf(scene)))
+          .map((scene) => scene._key)
+        const track = isLinked(
+          (doc.track as { file?: unknown } | undefined)?.file,
+        )
+        const stripped = new Set(keys)
+        if (
+          (keys.length === 0 && !track) ||
+          stillHolds(doc, (copy) => {
+            for (const scene of entries(copy.scenes))
+              if (stripped.has(scene._key))
+                delete (scene.background as { image?: unknown }).image
+            if (track) delete copy.track
+          })
+        ) {
+          refuse(doc, 'outside its scene backgrounds and track')
+          break
+        }
+        if (!keys.every((k) => typeof k === 'string' && SAFE_KEY.test(k))) {
+          refuse(doc, 'in a scene whose _key cannot be safely selected')
+          break
+        }
+        patches.push({
+          id: doc._id,
+          type: doc._type,
+          rev: revOf(doc),
+          unset: [
+            ...keys.map((k) => `scenes[_key=="${String(k)}"].background.image`),
+            ...(track ? ['track'] : []),
+          ],
+          reason:
+            'video project scene background linked to the subject (the scene keeps its colour)',
+        })
         break
       }
 
