@@ -24,8 +24,11 @@
  * failure this whole operation is built to avoid.
  *
  * KNOWN HOLE. An image with NO SUBJECT — a group photo, a collage, a render
- * saved from a Task with no subject — is linked to nobody and is not found.
- * Nothing can find it: the image itself is the only record of who is in it.
+ * saved from a Task with no subject, or an image an organizer attached by
+ * hand to a post about the speaker — is linked to nobody and is not found.
+ * Nothing can find it: the image itself is the only record of who is in it,
+ * and deleting every image of a post about the speaker would take sponsor
+ * graphics and co-speakers' photos with it.
  * The upload form says so beside the subject field, and `/privacy` says so.
  *
  * Pure planner plus one read function, split from `./erasure.ts` so the plan
@@ -75,6 +78,22 @@ export interface SpeakerAssetPlan {
 /** The Task fields that hold a render. */
 const TASK_RENDER_FIELDS = ['asset', 'pendingStudioAsset'] as const
 
+/**
+ * Every render a Task names: its render, its pending upload, and the renders
+ * it replaced that could not be deleted yet (`replacedRenders`, plain asset
+ * ids written by `retireReplacedRenders`) — a post may still hold one of
+ * those, and nothing else records that it came from this Task.
+ */
+function taskRenderIds(doc: Doc): string[] {
+  const ids = TASK_RENDER_FIELDS.map((f) => fileRefOf(doc[f])).filter(
+    (id): id is string => id !== null,
+  )
+  if (Array.isArray(doc.replacedRenders))
+    for (const id of doc.replacedRenders)
+      if (typeof id === 'string') ids.push(id)
+  return ids
+}
+
 /** Sanity `_key`s are safe to interpolate only if they look like this. */
 const SAFE_KEY = /^[A-Za-z0-9._-]+$/
 
@@ -94,6 +113,17 @@ function entries(value: unknown): Entry[] {
   return Array.isArray(value)
     ? value.filter((e): e is Entry => typeof e === 'object' && e !== null)
     : []
+}
+
+/** Every `_ref` anywhere inside `value`. */
+function refsIn(value: unknown, out = new Set<string>()): Set<string> {
+  if (Array.isArray(value)) value.forEach((v) => refsIn(v, out))
+  else if (typeof value === 'object' && value !== null) {
+    const ref = refOf(value)
+    if (ref) out.add(ref)
+    Object.values(value).forEach((v) => refsIn(v, out))
+  }
+  return out
 }
 
 function revOf(doc: Doc): string | undefined {
@@ -120,8 +150,8 @@ export function speakerSubjectIds(speakerId: string, talks: Doc[]): string[] {
 /**
  * Every file the subject documents hold. A gallery asset is walked whole for
  * `{ asset: { _ref } }` rather than read from a named field, so a video and
- * its poster (#1167) are linked the day they exist. A Task holds its render in
- * {@link TASK_RENDER_FIELDS} and nothing else of the speaker's.
+ * its poster (#1167) are linked the day they exist. A Task holds its renders
+ * ({@link taskRenderIds}) and nothing else of the speaker's.
  */
 export function linkedFileIds(subjectDocs: Doc[]): string[] {
   const ids = new Set<string>()
@@ -134,81 +164,10 @@ export function linkedFileIds(subjectDocs: Doc[]): string[] {
   }
   for (const doc of subjectDocs) {
     if (doc._type === 'marketingAsset') walk(doc)
-    if (doc._type === 'marketingTask') {
-      for (const field of TASK_RENDER_FIELDS) {
-        const file = fileRefOf(doc[field])
-        if (file) ids.add(file)
-      }
-    }
+    if (doc._type === 'marketingTask')
+      taskRenderIds(doc).forEach((id) => ids.add(id))
   }
   return [...ids]
-}
-
-/** What ties a post to the subject: a subject Task, or one that needs it. */
-export interface SubjectTie {
-  speakerId: string
-  subjectIds: string[]
-  /** Published ids of the subject Tasks and the Tasks that need one. */
-  taskIds: string[]
-  /** Published ids of the posts those Tasks' variants belong to. */
-  postIds: string[]
-}
-
-/**
- * The files in a TIED post that are the subject's to delete: those no document
- * outside the tie holds.
- *
- * WHY THE TIE. A Task render reaches a post by handoff (`handoffStudioAttachment`),
- * and a re-render replaces the Task's `asset` without touching a post that is
- * already occupied. The post then holds the OLD render, and nothing but the
- * Task chain — subject Task, the publishing Task that needs it, that Task's
- * variant, its post — leads to it. A publishing Task about the subject leads
- * to its post the same way.
- *
- * WHY ONLY-IN-THE-TIE. A post about the subject may also carry the
- * conference logo, and Sanity stores identical bytes once: deleting every
- * image in such a post would take the logo from every other post that uses
- * it. A file some document outside the tie holds is not linked by this
- * route. (So a stale render ALSO saved to the gallery with no subject is not
- * found — the same hole as any image with no subject.)
- */
-export function filesOnlyInTie(
-  tiedPosts: Doc[],
-  candidateHolders: Doc[],
-  tie: SubjectTie,
-): string[] {
-  const candidates = new Set(
-    tiedPosts.flatMap((post) =>
-      entries(post.attachments)
-        .map((a) => fileRefOf(a.image))
-        .filter((id): id is string => id !== null),
-    ),
-  )
-  const posts = new Set(tie.postIds)
-  const tasks = new Set(tie.taskIds)
-  const subjects = new Set(tie.subjectIds)
-  const inTie = (doc: Doc) => {
-    const id = getPublishedId(doc._id)
-    if (doc._type === 'socialPost') return posts.has(id)
-    if (doc._type === 'marketingTask') return tasks.has(id)
-    if (doc._type === 'marketingAsset')
-      return subjects.has(refOf(doc.subject) ?? '')
-    return doc._type === 'speaker' && doc._id === tie.speakerId
-  }
-  const refsIn = (value: unknown, out: Set<string>): Set<string> => {
-    if (Array.isArray(value)) value.forEach((v) => refsIn(v, out))
-    else if (typeof value === 'object' && value !== null) {
-      const ref = refOf(value)
-      if (ref) out.add(ref)
-      Object.values(value).forEach((v) => refsIn(v, out))
-    }
-    return out
-  }
-  for (const holder of candidateHolders) {
-    if (inTie(holder)) continue
-    for (const ref of refsIn(holder, new Set())) candidates.delete(ref)
-  }
-  return [...candidates]
 }
 
 /**
@@ -239,6 +198,18 @@ export function planSpeakerAssetErasure(
   const refusals: string[] = []
   /** Published post id → the attachment keys its versions lose. */
   const strippedKeys = new Map<string, Set<string>>()
+
+  /**
+   * Whether `doc` would still reference a linked file once `without` is gone:
+   * a post or Task holding the file somewhere this branch does not strip (an
+   * Open Graph image, a nested block). Such a holder is refused BEFORE
+   * anything is written, or the file delete would fail after the commit.
+   */
+  const stillHolds = (doc: Doc, without: (copy: Doc) => void) => {
+    const copy = structuredClone(doc)
+    without(copy)
+    return [...refsIn(copy)].some((ref) => files.has(ref))
+  }
 
   const refuse = (doc: Doc, why: string) =>
     refusals.push(
@@ -288,7 +259,15 @@ export function planSpeakerAssetErasure(
         const keys = entries(doc.attachments)
           .filter((a) => isLinked(a.image))
           .map((a) => a._key)
-        if (keys.length === 0) {
+        const stripped = new Set(keys)
+        if (
+          keys.length === 0 ||
+          stillHolds(doc, (copy) => {
+            copy.attachments = entries(copy.attachments).filter(
+              (a) => !stripped.has(a._key),
+            )
+          })
+        ) {
           refuse(doc, 'outside its attachments')
           break
         }
@@ -307,7 +286,10 @@ export function planSpeakerAssetErasure(
 
       case 'marketingTask': {
         const unset = TASK_RENDER_FIELDS.filter((f) => isLinked(doc[f]))
-        if (unset.length === 0) {
+        if (
+          unset.length === 0 ||
+          stillHolds(doc, (copy) => unset.forEach((f) => delete copy[f]))
+        ) {
           refuse(doc, 'outside its render')
           break
         }
@@ -410,18 +392,8 @@ export async function fetchSpeakerAssetInputs(
     { subjectIds },
     opts,
   )
-  const tiedFileIds = await fetchTiedFileIds(
-    client,
-    speakerId,
-    subjectIds,
-    subjectDocs ?? [],
-  )
   const fileIds = [
-    ...new Set([
-      ...linkedFileIds(subjectDocs ?? []),
-      ...tiedFileIds,
-      ...extraFileIds,
-    ]),
+    ...new Set([...linkedFileIds(subjectDocs ?? []), ...extraFileIds]),
   ]
   const empty = { fileHolders: [], variants: [], publishedPosts: [] }
   if (fileIds.length === 0) {
@@ -432,7 +404,9 @@ export async function fetchSpeakerAssetInputs(
     // groq-global: a file is dataset-wide and Sanity deduplicates identical
     // bytes, so a holder may be in any tenant — and the file cannot be deleted
     // while any of them still references it.
-    groq`*[references($fileIds)]{ _id, _type, _rev, attachments, asset, pendingStudioAsset }`,
+    // WHOLE documents: the planner refuses a holder that would still
+    // reference a file after the fields it strips, which a projection hides.
+    groq`*[references($fileIds)]`,
     { fileIds },
     opts,
   )
@@ -480,94 +454,4 @@ export async function fetchSpeakerAssetInputs(
       publishedPosts: publishedPosts ?? [],
     },
   }
-}
-
-/** Published id and draft id of each: the reads a tied post or variant needs. */
-const withDrafts = (ids: string[]) => [
-  ...ids,
-  ...ids.map((id) => `drafts.${id}`),
-]
-
-/**
- * The reads behind {@link filesOnlyInTie}: the Tasks tied to the subject,
- * their variants, those variants' posts, and every holder of a file in them.
- * A variant or post that exists ONLY in a Content Release is not followed —
- * a Task names the published id, and the release copy of a post that the
- * published one also holds is found by the file's references anyway.
- */
-async function fetchTiedFileIds(
-  client: Pick<typeof clientReadUncached, 'fetch'>,
-  speakerId: string,
-  subjectIds: string[],
-  subjectDocs: Doc[],
-): Promise<string[]> {
-  const opts = { cache: 'no-store', perspective: 'raw' } as const
-  const subjectTaskIds = [
-    ...new Set(
-      subjectDocs
-        .filter((d) => d._type === 'marketingTask')
-        .map((d) => getPublishedId(d._id)),
-    ),
-  ]
-  if (subjectTaskIds.length === 0) return []
-
-  const tasks =
-    (await client.fetch<Doc[]>(
-      // groq-global: the subject Tasks and the Tasks that need one, in every
-      // tenant — the right is the person's (see `./erasure.ts`).
-      groq`*[_type == "marketingTask" && (subject._ref in $subjectIds || count(prerequisites[_ref in $subjectTaskIds]) > 0)]{ _id, _type, variant }`,
-      { subjectIds, subjectTaskIds },
-      opts,
-    )) ?? []
-  const variantIds = [
-    ...new Set(
-      tasks.map((t) => refOf(t.variant)).filter((id): id is string => !!id),
-    ),
-  ]
-  if (variantIds.length === 0) return []
-
-  const variants =
-    (await client.fetch<Doc[]>(
-      // groq-global: those Tasks' variants, by id.
-      groq`*[_type == "socialPostVariant" && _id in $ids]{ _id, _type, post }`,
-      { ids: withDrafts(variantIds) },
-      opts,
-    )) ?? []
-  const postIds = [
-    ...new Set(
-      variants.map((v) => refOf(v.post)).filter((id): id is string => !!id),
-    ),
-  ]
-  if (postIds.length === 0) return []
-
-  const tiedPosts =
-    (await client.fetch<Doc[]>(
-      // groq-global: those variants' posts, by id.
-      groq`*[_type == "socialPost" && _id in $ids]{ _id, _type, attachments }`,
-      { ids: withDrafts(postIds) },
-      opts,
-    )) ?? []
-  const tie: SubjectTie = {
-    speakerId,
-    subjectIds,
-    taskIds: [
-      ...new Set([
-        ...subjectTaskIds,
-        ...tasks.map((t) => getPublishedId(t._id)),
-      ]),
-    ],
-    postIds,
-  }
-  const candidates = filesOnlyInTie(tiedPosts, [], tie)
-  if (candidates.length === 0) return []
-
-  const holders =
-    (await client.fetch<Doc[]>(
-      // groq-global: every holder of those files, in any tenant — a file
-      // another tenant or an unrelated post holds is not the subject's.
-      groq`*[references($candidates)]`,
-      { candidates },
-      opts,
-    )) ?? []
-  return filesOnlyInTie(tiedPosts, holders, tie)
 }

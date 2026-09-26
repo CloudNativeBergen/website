@@ -43,7 +43,7 @@ import {
   renderHandoffRecipients,
 } from '@/lib/marketing/render-handoff'
 import { handoffStudioAttachment } from '@/lib/social/sanity'
-import { deleteImageAssetIfOrphaned } from '@/lib/sanity/orphaned-asset'
+import { retireReplacedRenders } from '@/lib/marketing/replaced-renders'
 import { createHash, randomUUID } from 'node:crypto'
 import { TRPCError } from '@trpc/server'
 import { needsOwnDomains } from '@/lib/social/provider/constraints'
@@ -1476,12 +1476,15 @@ export const marketingRouter = router({
           task.assetId !== input.assetId ? ['pendingStudioAsset'] : [],
         )
         if (!saved) throw conflict()
-        // The render this one REPLACES is linked to nothing a speaker's
-        // erasure can find (#1162), so it goes now — through the shared
-        // orphan check, so a post it was handed to keeps it. Never fails
-        // the save.
-        if (task.assetId && task.assetId !== input.assetId)
-          await deleteImageAssetIfOrphaned(task.assetId)
+        // The render this one REPLACES goes now, through the shared orphan
+        // check, so a post it was handed to keeps it; one that cannot go is
+        // recorded on the Task for a retry and for a speaker's erasure
+        // (#1162). Never fails the save.
+        await retireReplacedRenders(
+          input.taskId,
+          conferenceId,
+          task.assetId && task.assetId !== input.assetId ? task.assetId : null,
+        )
         const handoffFailures: string[] = []
         const handoffIssues: string[] = []
         try {

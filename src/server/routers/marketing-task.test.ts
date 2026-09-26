@@ -53,8 +53,13 @@ const h = vi.hoisted(() => ({
 
 vi.mock('@/lib/sanity/orphaned-asset', () => ({
   COUNT_API_VERSION: '2025-02-19',
-  deleteImageAssetIfOrphaned: h.deleteOrphan,
+  deleteImageAssetIfOrphaned: vi.fn(),
   deleteFileAssetIfOrphaned: vi.fn(),
+}))
+// Proven in `src/lib/marketing/replaced-renders.test.ts`; here, what the
+// save offers it.
+vi.mock('@/lib/marketing/replaced-renders', () => ({
+  retireReplacedRenders: h.deleteOrphan,
 }))
 
 vi.mock('@/lib/marketing/render-sanity', () => ({
@@ -1042,7 +1047,11 @@ describe('task.attachAsset', () => {
       expect(await marketing().task.attachAsset(input)).toMatchObject({
         success: true,
       })
-      expect(h.deleteOrphan).toHaveBeenCalledExactlyOnceWith(OLD)
+      expect(h.deleteOrphan).toHaveBeenCalledExactlyOnceWith(
+        'task-ours',
+        CONF_A,
+        OLD,
+      )
     })
     it('does not touch the render on an idempotent retry of the same image', async () => {
       h.getStudioTask.mockImplementation(async () => ({
@@ -1051,7 +1060,8 @@ describe('task.attachAsset', () => {
         pendingAssetId: null,
       }))
       await marketing().task.attachAsset(input)
-      expect(h.deleteOrphan).not.toHaveBeenCalled()
+      // Only the retry of what earlier replacements recorded; nothing new.
+      expect(h.deleteOrphan.mock.calls).toEqual([['task-ours', CONF_A, null]])
     })
     it('keeps the old render when the save loses a race', async () => {
       h.getStudioTask.mockImplementation(async () => ({

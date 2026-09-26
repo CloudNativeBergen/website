@@ -8,7 +8,6 @@
  */
 import { describe, expect, it } from 'vitest'
 import {
-  filesOnlyInTie,
   linkedFileIds,
   planSpeakerAssetErasure,
   speakerSubjectIds,
@@ -265,6 +264,60 @@ describe('planSpeakerAssetErasure', () => {
     ])
   })
 
+  it('REFUSES a post or Task that ALSO holds the file outside what it would lose, before anything is written', () => {
+    // The review of PR #1218: stripping the attachment would leave an Open
+    // Graph image (or a nested block) referencing the file, and its delete
+    // would fail after the commit.
+    const plan = planSpeakerAssetErasure(
+      SPEAKER,
+      FILES,
+      inputs({
+        fileHolders: [
+          {
+            _id: 'post-1',
+            _type: 'socialPost',
+            attachments: [{ _key: 'a', image: image(IMG) }],
+            openGraphImage: image(IMG),
+          },
+          {
+            _id: 'task-1',
+            _type: 'marketingTask',
+            asset: image(RENDER),
+            notes: [{ _type: 'block', markDefs: [{ asset: ref(RENDER) }] }],
+          },
+        ],
+      }),
+    )
+    expect(plan.patches).toEqual([])
+    expect(plan.refusals).toEqual([
+      expect.stringContaining('socialPost post-1'),
+      expect.stringContaining('marketingTask task-1'),
+    ])
+  })
+
+  it('does not refuse a post whose OTHER attachments hold unrelated images', () => {
+    const plan = planSpeakerAssetErasure(
+      SPEAKER,
+      FILES,
+      inputs({
+        fileHolders: [
+          {
+            _id: 'post-1',
+            _type: 'socialPost',
+            attachments: [
+              { _key: 'a', image: image(IMG) },
+              { _key: 'b', image: image('image-logo-png') },
+            ],
+          },
+        ],
+      }),
+    )
+    expect(plan.refusals).toEqual([])
+    expect(plan.patches).toMatchObject([
+      { id: 'post-1', unset: ['attachments[_key=="a"]'] },
+    ])
+  })
+
   it('unsets a Task render and its pending upload, and nothing else on the Task', () => {
     const plan = planSpeakerAssetErasure(
       SPEAKER,
@@ -355,67 +408,17 @@ describe('planSpeakerAssetErasure', () => {
   })
 })
 
-describe('filesOnlyInTie', () => {
-  const tie = {
-    speakerId: SPEAKER,
-    subjectIds: [SPEAKER, TALK],
-    taskIds: ['task-render', 'task-pub'],
-    postIds: ['post-1'],
-  }
-  const post = {
-    _id: 'post-1',
-    _type: 'socialPost',
-    attachments: [
-      { _key: 'a', image: image('image-stale-png') },
-      { _key: 'b', image: image('image-logo-png') },
-    ],
-  }
-
-  it('links a file only the tie holds — draft and release copies of a tied post included', () => {
+describe('linkedFileIds and replaced renders', () => {
+  it('links the renders a subject Task recorded as replaced', () => {
     expect(
-      filesOnlyInTie(
-        [post],
-        [post, { ...post, _id: 'versions.r1.post-1' }],
-        tie,
-      ),
-    ).toEqual(['image-stale-png', 'image-logo-png'])
-  })
-
-  it('does not link a file an unrelated post, or a gallery entry about no one, also holds', () => {
-    const logoElsewhere = {
-      _id: 'post-2',
-      _type: 'socialPost',
-      attachments: [{ _key: 'x', image: image('image-logo-png') }],
-    }
-    // The named hole: a stale render ALSO saved with no subject is not found.
-    const noSubject = {
-      _id: 'asset-9',
-      _type: 'marketingAsset',
-      image: image('image-stale-png'),
-    }
-    expect(filesOnlyInTie([post], [post, logoElsewhere], tie)).toEqual([
-      'image-stale-png',
-    ])
-    expect(filesOnlyInTie([post], [post, noSubject], tie)).toEqual([
-      'image-logo-png',
-    ])
-  })
-
-  it('a gallery entry about the subject, or a tied Task, does not disqualify', () => {
-    const about = {
-      _id: 'asset-1',
-      _type: 'marketingAsset',
-      subject: ref(TALK),
-      image: image('image-stale-png'),
-    }
-    const task = {
-      _id: 'drafts.task-render',
-      _type: 'marketingTask',
-      pendingStudioAsset: image('image-logo-png'),
-    }
-    expect(filesOnlyInTie([post], [post, about, task], tie)).toEqual([
-      'image-stale-png',
-      'image-logo-png',
-    ])
+      linkedFileIds([
+        {
+          _id: 'task-1',
+          _type: 'marketingTask',
+          asset: image(RENDER),
+          replacedRenders: ['image-old-png', 42],
+        },
+      ]),
+    ).toEqual([RENDER, 'image-old-png'])
   })
 })

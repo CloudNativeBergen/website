@@ -3,7 +3,7 @@ import { TRPCError } from '@trpc/server'
 import { getAuthSession } from '@/lib/auth'
 import { isOrganizerForCurrentOrg } from '@/lib/authz/organizer'
 import { clientWrite } from '@/lib/sanity/client'
-import { deleteImageAssetIfOrphaned } from '@/lib/sanity/orphaned-asset'
+import { retireReplacedRenders } from '@/lib/marketing/replaced-renders'
 import { requireDocumentInCurrentConference } from '@/server/tenancy'
 import { TaskIdSchema } from '@/server/schemas/marketing'
 import { getStudioTask } from '@/lib/marketing/render-sanity'
@@ -56,13 +56,18 @@ export async function POST(request: Request) {
         },
       })
       .commit()
-    // The upload this one REPLACES is linked to nothing a speaker's erasure
-    // can find (#1162), so it goes now — through the shared orphan check, so
-    // only if nothing references it. Not the saved render, and not when
-    // Sanity handed back the same bytes. Never fails the upload.
+    // The upload this one REPLACES goes now, through the shared orphan
+    // check; one that cannot go is recorded on the Task for a retry and for
+    // a speaker's erasure (#1162). Not the saved render, and not when Sanity
+    // handed back the same bytes. Never fails the upload.
     const replaced = task.pendingAssetId
-    if (replaced && replaced !== asset._id && replaced !== task.assetId)
-      await deleteImageAssetIfOrphaned(replaced)
+    await retireReplacedRenders(
+      taskId,
+      conferenceId,
+      replaced && replaced !== asset._id && replaced !== task.assetId
+        ? replaced
+        : null,
+    )
     return NextResponse.json({
       assetId: asset._id,
       url: asset.url,

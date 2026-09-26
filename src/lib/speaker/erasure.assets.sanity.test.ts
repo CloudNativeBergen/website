@@ -493,14 +493,35 @@ describe('speaker erasure removes their images everywhere (#1162)', () => {
     expect(v?.residual.linkedFileHolders).toBeGreaterThan(0)
   })
 
-  it('finds a STALE render still in a post tied to a subject Task, and leaves a shared logo alone', async () => {
+  it('REFUSES, writing nothing, when a post holds the file outside the attachment it would lose', async () => {
+    // The review of PR #1218: stripping the attachment would leave the Open
+    // Graph image referencing the file, and its delete would fail after the
+    // commit.
+    h.dataset.push({
+      _id: 'post-og',
+      _type: 'socialPost',
+      _rev: 'r0',
+      body: 'Ada, with a preview',
+      attachments: [{ _key: 'att-1', image: image(ADA_CARD), alt: 'Ada' }],
+      openGraphImage: image(ADA_CARD),
+    })
+    const before = structuredClone(h.dataset)
+    const result = await eraseSpeakerInPlace({ speakerId: ADA, actor: 'test' })
+    expect(result.err?.message).toContain('socialPost post-og')
+    expect(h.dataset).toEqual(before)
+  })
+
+  it('finds a STALE render still in a post tied to a subject Task, and leaves a shared logo and a hand-attached image alone', async () => {
     // task-ada rendered STALE, the handoff put it in post-stale, then a
     // re-render replaced task-ada.asset with RENDER. The handoff found the
-    // post occupied, so it still holds STALE — and no link but the Task
-    // chain leads there: task-pub needs task-ada, and owns var-stale.
+    // post occupied, so it still holds STALE, and `retireReplacedRenders`
+    // (whose orphan check kept it) recorded it on task-ada. The Task chain
+    // leads there: task-pub needs task-ada, and owns var-stale.
     const STALE = 'image-stale-1080x1080-png'
     const LOGO = 'image-logo-400x400-png'
     const DIRECT = 'image-direct-1080x1080-png'
+    const taskAda = h.dataset.find((d) => d._id === 'task-ada')!
+    taskAda.replacedRenders = [STALE]
     h.dataset.push(
       { _id: STALE, _type: 'sanity.imageAsset' },
       { _id: LOGO, _type: 'sanity.imageAsset' },
@@ -542,7 +563,9 @@ describe('speaker erasure removes their images everywhere (#1162)', () => {
         attachments: [{ _key: 'att-logo', image: image(LOGO), alt: 'Logo' }],
       },
       // A publishing Task ABOUT Ada, its variant's post holding an image no
-      // gallery entry or render names.
+      // gallery entry or render names — attached by hand, so it may be a
+      // sponsor graphic as easily as Ada: not erasure's to delete (the
+      // review of PR #1218). The same named hole as an image with no subject.
       {
         _id: 'task-direct',
         _type: 'marketingTask',
@@ -569,13 +592,10 @@ describe('speaker erasure removes their images everywhere (#1162)', () => {
     const result = await eraseSpeakerInPlace({ speakerId: ADA, actor: 'test' })
     expect(result.err).toBeNull()
 
-    for (const file of [STALE, DIRECT]) {
-      expect(doc(file), `${file} still stored`).toBeUndefined()
-      expect(
-        referencesTo(file).map((d) => d._id),
-        file,
-      ).toEqual([])
-    }
+    expect(doc(STALE), 'the stale render still stored').toBeUndefined()
+    expect(referencesTo(STALE).map((d) => d._id)).toEqual([])
+    expect(doc(DIRECT)).toBeDefined()
+    expect(doc('drafts.post-direct').attachments).toHaveLength(1)
     expect(doc('post-stale')).toMatchObject({
       body: 'Ada, rendered',
       attachments: [{ _key: 'att-logo', image: image(LOGO), alt: 'Logo' }],
@@ -583,7 +603,9 @@ describe('speaker erasure removes their images everywhere (#1162)', () => {
     expect(doc('var-stale').attachments).toEqual([
       { _key: 'vs-2', source: 'att-logo' },
     ])
-    expect(doc('var-direct').attachments).toEqual([])
+    expect(doc('var-direct').attachments).toEqual([
+      { _key: 'vd-1', source: 'att-direct' },
+    ])
     expect(doc(LOGO)).toBeDefined()
     expect(doc('post-other').attachments).toHaveLength(1)
     expect(result.verification?.clean).toBe(true)
