@@ -2690,9 +2690,12 @@ export const ProjectDeleteConfirm: Story = {
       project.getByRole('button', { name: 'Delete project' }),
     )
     const dialog = within(await within(document.body).findByRole('dialog'))
-    await expect(
-      dialog.getByText(/The saved project is gone for everyone/),
-    ).toBeVisible()
+    // The dialog fades in.
+    await waitFor(() =>
+      expect(
+        dialog.getByText(/The saved project is gone for everyone/),
+      ).toBeVisible(),
+    )
   },
 }
 
