@@ -47,6 +47,12 @@ export interface VariantTransition {
   usesCustomTime?: boolean
   attemptCount?: number
   publishResult?: PublishResult
+  /**
+   * A `/go/<code>` code backfilled onto a Task variant that predates the
+   * field (short-links spec §2.2), written with the transition it rides on.
+   * Omitted = untouched; never cleared.
+   */
+  shortCode?: string
   /** Appended to `attempts[]` (the audit trail). */
   attempt?: Omit<PublishAttempt, '_key'> & { _key?: string }
 }

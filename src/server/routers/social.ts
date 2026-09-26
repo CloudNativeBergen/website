@@ -356,13 +356,24 @@ export const socialRouter = router({
         variant.postId,
         variant.conferenceId,
       )
-      const issues = await scheduleIssues(variant, post.attachments, {
+      const taskOwned = !!(await getTaskForVariant(
+        variant._id,
+        variant.conferenceId,
+      ))
+      // §2.2: a Task variant that predates the field gets its code in the
+      // first MUTATION that needs its link — scheduling queues it to be
+      // posted, so it is one. Minted before validating, so validation sees the
+      // `/go/<code>` link the tick will post, and written by the same
+      // compare-and-set as the transition below. A standalone post never gets
+      // a code (§1).
+      const code = taskOwned
+        ? await shortCodeForMutation(variant.conferenceId, variant.shortCode)
+        : null
+      const coded = code ? { ...variant, shortCode: code.code } : variant
+      const issues = await scheduleIssues(coded, post.attachments, {
         conferenceDomains: await currentConferenceDomains(variant.platform),
-        shortLinkOrigin: await currentShortLinkOrigin(variant.shortCode),
-        taskOwned: !!(await getTaskForVariant(
-          variant._id,
-          variant.conferenceId,
-        )),
+        shortLinkOrigin: await currentShortLinkOrigin(coded.shortCode),
+        taskOwned,
       })
       if (issues.length > 0) throw issuesToError(issues)
 
@@ -373,7 +384,11 @@ export const socialRouter = router({
         scheduledAt,
         attemptCount: 0,
         usesCustomTime,
+        ...(code?.minted ? { shortCode: code.code } : {}),
       })
+      // A new code changes the conference's membership set (§2.4), after the
+      // write has committed.
+      if (code?.minted) expireShortLinkIndex(variant.conferenceId)
       return {
         ...result,
         ceilingWarnings: await ceilingWarningsFor(variant.conferenceId, {
