@@ -2273,6 +2273,54 @@ export const GalleryPickerOpenDark: Story = {
   globals: { theme: 'dark' },
 }
 
+async function openPicker(canvasElement: HTMLElement) {
+  await userEvent.click(
+    within(canvasElement).getByRole('button', { name: 'Choose from gallery' }),
+  )
+  return within(await within(document.body).findByRole('dialog'))
+}
+
+/** The gallery could not be listed: said so, and nothing to pick. */
+export const GalleryPickerFailed: Story = {
+  args: {
+    gallery: {
+      ...storyGallery,
+      images: async () => {
+        throw new Error('network')
+      },
+    },
+  },
+  decorators: [withNextTheme],
+  play: async ({ canvasElement }) => {
+    const dialog = await openPicker(canvasElement)
+    const alert = await dialog.findByRole('alert')
+    await waitFor(() => expect(alert).toBeVisible())
+    await expect(alert).toHaveTextContent(
+      'The gallery could not be loaded. Close this and try again.',
+    )
+    await expect(dialog.queryAllByRole('listitem')).toHaveLength(0)
+  },
+}
+
+export const GalleryPickerFailedDark: Story = {
+  ...GalleryPickerFailed,
+  globals: { theme: 'dark' },
+}
+
+/** An empty gallery says where images come from. */
+export const GalleryPickerEmpty: Story = {
+  args: { gallery: { ...storyGallery, images: async () => [] } },
+  decorators: [withNextTheme],
+  play: async ({ canvasElement }) => {
+    const dialog = await openPicker(canvasElement)
+    const empty = await dialog.findByText(
+      /There are no images in the gallery yet/,
+    )
+    await waitFor(() => expect(empty).toBeVisible())
+    await expect(dialog.queryAllByRole('listitem')).toHaveLength(0)
+  },
+}
+
 /**
  * An uploaded background, kept: a title (from the filename) and the alt text
  * the gallery requires, then it says it is in the gallery.
@@ -2296,11 +2344,24 @@ export const KeepUploadInGallery: Story = {
       canvas.getByRole('button', { name: 'Keep in gallery' }),
     )
     await expect(canvas.getByLabelText('Title')).toHaveValue('stage-photo')
-    const save = canvas.getByRole('button', { name: 'Save to gallery' })
-    await expect(save).toBeDisabled()
+    // Focus goes into the form, back to Keep on Cancel, and to the result.
+    await expect(document.activeElement).toBe(canvas.getByLabelText('Title'))
+    await userEvent.click(canvas.getByRole('button', { name: 'Cancel' }))
+    await expect(document.activeElement).toBe(
+      canvas.getByRole('button', { name: 'Keep in gallery' }),
+    )
+    await userEvent.click(
+      canvas.getByRole('button', { name: 'Keep in gallery' }),
+    )
+    await expect(
+      canvas.getByRole('button', { name: 'Save to gallery' }),
+    ).toBeDisabled()
+    // The keyboard path: alt text typed, then Enter in the title field.
     await userEvent.type(canvas.getByLabelText('Alt text'), 'An empty stage')
-    await userEvent.click(save)
-    await expect(await canvas.findByText('In the gallery.')).toBeVisible()
+    await userEvent.type(canvas.getByLabelText('Title'), '{Enter}')
+    const status = canvas.getByTestId('background-gallery-status')
+    await waitFor(() => expect(status).toHaveTextContent('In the gallery.'))
+    await waitFor(() => expect(document.activeElement).toBe(status))
   },
 }
 

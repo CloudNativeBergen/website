@@ -148,6 +148,28 @@ describe('a continuous change is one step', () => {
 })
 
 describe('rewriting every state', () => {
+  it('rewrites the step evicted for the limit too, which a cancelled burst puts back', () => {
+    // A full history, then one more step: the oldest is evicted, and held
+    // in case the new step is a burst that ends where it began.
+    let history = startHistory(0)
+    for (let n = 1; n <= HISTORY_LIMIT + 1; n++)
+      history = record(history, n, { now: n * 5000 })
+    history = record(history, HISTORY_LIMIT + 2, {
+      group: 'drag',
+      now: 1_000_000,
+    })
+    expect(history.evicted).toEqual([1])
+    const kept = mapStates(history, (n) => -n)
+    // The burst goes back to where it began, bringing the evicted step
+    // back as the oldest — rewritten, never the stale original.
+    const back = record(kept, -(HISTORY_LIMIT + 1), {
+      group: 'drag',
+      now: 1_000_100,
+    })
+    expect(back.past[0]).toBe(-1)
+    expect(allStates(back).every((n) => n <= 0)).toBe(true)
+  })
+
   it('changes past, present and future alike, and makes no step', () => {
     let history = record(startHistory('a'), 'b', { now: 0 })
     history = record(history, 'c', { now: 5000 })
