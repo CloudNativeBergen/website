@@ -33,6 +33,7 @@ vi.mock('@/lib/sanity/client', () => ({
 import {
   listMarketingAssetFacets,
   listMarketingAssets,
+  readMarketingAssetBackground,
   readMarketingAssetMark,
 } from '@/lib/marketing-asset/sanity'
 
@@ -318,5 +319,53 @@ describe('the mark an asset keeps', () => {
     expect(await readMarketingAssetMark('org-a', 'logo')).toBeNull()
     // B's asset pointing at our edition is not ours to keep a mark of.
     expect(await readMarketingAssetMark('org-a', 'b-on-our-edition')).toBeNull()
+  })
+})
+
+describe('an asset as a studio background (#1180)', () => {
+  const imageAsset = {
+    _id: 'image-hall-3000x2000-jpg',
+    _type: 'sanity.imageAsset',
+    url: 'https://cdn.sanity.io/images/p/d/hall-3000x2000.jpg',
+    metadata: { dimensions: { width: 3000, height: 2000, aspectRatio: 1.5 } },
+  }
+  const withImage = (id: string, org: string) =>
+    asset(id, org, {
+      title: 'Keynote hall',
+      image: { _type: 'image', asset: ref(imageAsset._id) },
+    })
+  beforeEach(() => {
+    h.dataset = [
+      ...DATASET,
+      imageAsset,
+      withImage('hall', 'org-a'),
+      withImage('b-hall', 'org-b'),
+      // An asset holding no image (an audio track, #1178).
+      asset('track', 'org-a', { kind: 'audio', alt: undefined }),
+    ]
+  })
+
+  it('reads the image’s URL and size through the reference', async () => {
+    expect(await readMarketingAssetBackground('org-a', 'hall')).toEqual({
+      title: 'Keynote hall',
+      alt: 'alt of hall',
+      url: 'https://cdn.sanity.io/images/p/d/hall-3000x2000.jpg',
+      width: 3000,
+      height: 2000,
+    })
+  })
+
+  it('is nothing for another organization’s asset', async () => {
+    expect(await readMarketingAssetBackground('org-a', 'b-hall')).toBeNull()
+  })
+
+  it('has no URL for an asset with no image, and empty alt text, not null', async () => {
+    expect(await readMarketingAssetBackground('org-a', 'track')).toEqual({
+      title: 'track',
+      alt: '',
+      url: null,
+      width: null,
+      height: null,
+    })
   })
 })
