@@ -19,6 +19,7 @@ import {
   type TaggablePerson,
 } from './checks'
 import { resolveBlueskyHandle, type HandleResolution } from './resolve'
+import { ownBlueskyAccount } from './own-account'
 import { getConferenceTaggablePeople, getVariantMentionRecords } from './sanity'
 
 /**
@@ -64,27 +65,28 @@ export async function checkTagsOnSave(input: {
   variantId: string
   body: string
   scheduled: boolean
-  /** `ownBlueskyHandle(conference.socialLinks)`: never tagged (spec §4.1). */
-  ownAccount: string | null
 }): Promise<TagCheck & { mentions: MentionRecord[] }> {
   const previous = await getVariantMentionRecords(
     input.variantId,
     input.conferenceId,
   )
   // No `@` token, no tag: nothing to match, so no read of the roster.
-  const people: TaggablePerson[] =
-    mentionTokens(input.body).length > 0
-      ? await getConferenceTaggablePeople(input.conferenceId)
-      : []
+  const hasTokens = mentionTokens(input.body).length > 0
+  const [people, ownAccount]: [TaggablePerson[], string | null] = hasTokens
+    ? await Promise.all([
+        getConferenceTaggablePeople(input.conferenceId),
+        ownBlueskyAccount(input.conferenceId),
+      ])
+    : [[], null]
   let resolutions = await resolveHandles(
-    handlesToResolve({ body: input.body, people, previous }),
+    handlesToResolve({ body: input.body, people, previous, ownAccount }),
   )
   const saved = saveMentions({
     body: input.body,
     people,
     previous,
     resolutions,
-    ownAccount: input.ownAccount,
+    ownAccount,
   })
   if (!input.scheduled || saved.issues.length > 0) return saved
   resolutions = await resolveHandles(
@@ -100,6 +102,7 @@ export async function checkTagsOnSave(input: {
     mentions: saved.mentions,
     people,
     resolutions,
+    ownAccount,
   })
   return { mentions: saved.mentions, ...merged(saved, approval) }
 }
@@ -122,11 +125,18 @@ export async function checkTagsForApproval(input: {
     !mentions.some((m) => m.status === 'tagged')
   )
     return { issues: [], warnings: [] }
-  // The own account is not blanked here: a speaker handle that is ours and
-  // was never recorded is `unchecked`, and its save refuses it.
-  const people = await getConferenceTaggablePeople(input.conferenceId)
+  const [people, ownAccount] = await Promise.all([
+    getConferenceTaggablePeople(input.conferenceId),
+    ownBlueskyAccount(input.conferenceId),
+  ])
   const resolutions = await resolveHandles(
     approvalHandlesToResolve({ body: input.body, mentions, people }),
   )
-  return approvalCheck({ body: input.body, mentions, people, resolutions })
+  return approvalCheck({
+    body: input.body,
+    mentions,
+    people,
+    resolutions,
+    ownAccount,
+  })
 }

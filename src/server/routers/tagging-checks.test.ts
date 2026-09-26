@@ -430,10 +430,31 @@ describe('social.updateVariant on a Bluesky body', () => {
   it('refuses a speaker handle that is our own account (spec §4.1)', async () => {
     seed([])
     ownAccount('https://bsky.app/profile/alice.dev')
+    // Refused by handle before the roster match, so never looked up.
     expect(await refusal(save('Catch @alice.dev at 10'))).toEqual([
-      ['own-account', 'spk-alice'],
+      ['own-account', 'own_002falice_002edev'],
     ])
     expect(h.updateSocialVariantContent).not.toHaveBeenCalled()
+  })
+
+  it('refuses our own handle typed by anyone, not only as a speaker’s', async () => {
+    seed([])
+    ownAccount('https://bsky.app/profile/cloudnativebergen.dev')
+    expect(await refusal(save('Follow @CloudNativeBergen.dev'))).toEqual([
+      ['own-account', 'own_002fcloudnativebergen_002edev'],
+    ])
+    expect(askedBluesky()).toEqual([])
+    expect(h.updateSocialVariantContent).not.toHaveBeenCalled()
+  })
+
+  it('scheduling refuses our own handle in a body no save checked', async () => {
+    seed([])
+    ownAccount('https://bsky.app/profile/cloudnativebergen.dev')
+    serveVariant(variantData({ body: 'Follow @cloudnativebergen.dev' }))
+    expect(
+      await refusal(social().scheduleVariant({ variantId: 'variant-ours' })),
+    ).toEqual([['own-account', 'own_002fcloudnativebergen_002edev']])
+    expect(h.transition).not.toHaveBeenCalled()
   })
 
   it('refuses a speaker handle that resolves to our account named by DID', async () => {

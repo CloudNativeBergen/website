@@ -209,6 +209,20 @@ function optedOutIssue(p: TaggablePerson, handle: string): MentionIssue {
   }
 }
 
+/**
+ * The conference's own account in the text. The fix drops the `@`: without
+ * it the handle is plain text and tags nobody.
+ */
+function ownAccountIssue(handle: string, name = handle): MentionIssue {
+  return {
+    code: 'own-account',
+    mentionKey: storedKey(`own/${handle}`),
+    handle,
+    name,
+    message: `@${handle} is the conference's own Bluesky account, which is never tagged. Use it without the @.`,
+  }
+}
+
 function notASpeaker(m: MentionRecord, handle: string): MentionIssue {
   return {
     code: 'not-a-speaker',
@@ -278,6 +292,7 @@ function planTags(input: {
   body: string
   people: readonly TaggablePerson[]
   previous: readonly MentionRecord[]
+  ownAccount?: string | null
 }): TagPlan[] {
   const known = byHandle(input.people)
   const byId = new Map(input.people.map((p) => [p.speakerId, p]))
@@ -302,6 +317,12 @@ function planTags(input: {
   for (const { handle } of mentionTokens(input.body)) {
     if (seen.has(handle)) continue
     seen.add(handle)
+    // Our own account, whoever typed it (§4.1): checked before a stranger's
+    // handle is let through as text, since the publisher tags any handle.
+    if (input.ownAccount && handle === input.ownAccount) {
+      plans.push({ kind: 'refuse', issue: ownAccountIssue(handle) })
+      continue
+    }
     const optedOut = (known.get(handle) ?? []).find((p) => p.optedOut)
     if (optedOut) {
       plans.push({ kind: 'refuse', issue: optedOutIssue(optedOut, handle) })
@@ -351,6 +372,7 @@ export function handlesToResolve(input: {
   body: string
   people: readonly TaggablePerson[]
   previous: readonly MentionRecord[]
+  ownAccount?: string | null
 }): string[] {
   return planTags(input).flatMap((p) =>
     p.kind === 'record' && !p.did ? [p.handle] : [],
@@ -393,15 +415,9 @@ export function saveMentions(input: {
       if (r?.kind === 'resolved') did = r.did
       else warnings.push(unverified(key, handle))
     }
-    const own = input.ownAccount
-    if (own && (handle === own || did === own)) {
-      issues.push({
-        code: 'own-account',
-        mentionKey: key,
-        handle,
-        name: person.name,
-        message: `@${handle} is the conference's own Bluesky account, which is never tagged. Use the plain name.`,
-      })
+    // Our own account named by DID: only the resolution tells.
+    if (input.ownAccount && did === input.ownAccount) {
+      issues.push({ ...ownAccountIssue(handle, person.name), mentionKey: key })
       continue
     }
     tagged.push({
@@ -505,6 +521,8 @@ export function approvalCheck(input: {
   mentions: readonly MentionRecord[]
   people: readonly TaggablePerson[]
   resolutions: ReadonlyMap<string, HandleResolution>
+  /** The conference's own account (a handle or DID): never tagged (§4.1). */
+  ownAccount?: string | null
 }): TagCheck {
   const issues: TagIssue[] = []
   const warnings: TagWarning[] = []
@@ -554,6 +572,9 @@ export function approvalCheck(input: {
   const tooLong = plainLengthIssue(input.body, live)
   if (tooLong) issues.push(tooLong)
   const recordedHandles = new Set(live.map((m) => normaliseHandle(m.handle)))
+  const own = input.ownAccount
+  if (own && mentionTokens(input.body).some((t) => t.handle === own))
+    issues.push(ownAccountIssue(own))
   for (const { handle, matches } of matchedTags(input.body, input.people)) {
     const optedOut = matches.find((p) => p.optedOut)
     if (optedOut) {
