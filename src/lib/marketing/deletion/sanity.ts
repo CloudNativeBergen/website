@@ -8,6 +8,7 @@ import { deletionPreview } from './preview'
 import { mediaDeletionBlockers } from '@/lib/social/media-deletion'
 import type { DeletionTask, DeletionTree } from './types'
 import { expireShortLinkIndex, expireShortLinks } from '../short-link-cache'
+import { deleteOrphanedRenders, readTaskRenderIds } from '../replaced-renders'
 
 /** One consistent preview read, repeated immediately before destruction. */
 export async function readDeletionTree(
@@ -688,6 +689,14 @@ export async function deletePlanTree(input: {
   // is not a revision conflict, so a network error on a later chunk would
   // otherwise skip the invalidation entirely and leave documents the earlier
   // chunks already destroyed resolving for a day.
+  //
+  // The Tasks' renders are read now, while the Tasks exist: once they are
+  // gone nothing records those files, so a speaker's erasure could not find
+  // them (#1162). They are cleaned up in `finally` for the same reason the
+  // short links are — an earlier chunk's Tasks are gone even if a later one
+  // fails. A render of a Task that SURVIVED is still referenced by it, and
+  // the orphan check keeps it.
+  const renders = await readTaskRenderIds(tree.tasks.map((task) => task._id))
   try {
     for (const operations of chunks) {
       const tx = clientWrite.transaction()
@@ -700,5 +709,6 @@ export async function deletePlanTree(input: {
     // Every code the delete destroyed leaves the conference's membership set,
     // whether the chunk loop finished, refused or threw (§2.4).
     expireShortLinkIndex(input.conferenceId)
+    await deleteOrphanedRenders(renders)
   }
 }

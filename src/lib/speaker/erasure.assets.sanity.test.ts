@@ -422,6 +422,37 @@ describe('speaker erasure removes their images everywhere (#1162)', () => {
     expect(second.verification?.clean).toBe(true)
   })
 
+  it('is a fixed point when a subject Task holds a replaced render and no render of its own', async () => {
+    // task-old has no asset or pending upload: only the record of a render
+    // it replaced, which post-old still holds. Nothing references the Task
+    // from the file, so only its `replacedRenders` leads there.
+    const OLD = 'image-oldrecord-1080x1080-png'
+    h.dataset.push(
+      { _id: OLD, _type: 'sanity.imageAsset' },
+      {
+        _id: 'task-old',
+        _type: 'marketingTask',
+        _rev: 'r0',
+        subject: weak(ADA),
+        replacedRenders: [OLD],
+      },
+      {
+        _id: 'post-old',
+        _type: 'socialPost',
+        _rev: 'r0',
+        body: 'Ada, last year',
+        attachments: [{ _key: 'att-o', image: image(OLD), alt: 'Ada' }],
+      },
+    )
+    await eraseSpeakerInPlace({ speakerId: ADA, actor: 'test' })
+    expect(doc(OLD)).toBeUndefined()
+    expect(doc('task-old').replacedRenders).toEqual([])
+    const after = structuredClone(h.dataset)
+    const second = await eraseSpeakerInPlace({ speakerId: ADA, actor: 'test' })
+    expect(second.plan?.noop).toBe(true)
+    expect(h.dataset).toEqual(after)
+  })
+
   it('verification FAILS when a linked file is left behind', async () => {
     h.failFileDelete.add(RENDER)
     const result = await eraseSpeakerInPlace({ speakerId: ADA, actor: 'test' })
