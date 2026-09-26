@@ -181,7 +181,6 @@ describe('projectSnapshot', () => {
     const base = projectSnapshot('t', list)
     list[0].design.background.image = {
       ...list[0].design.background.image!,
-      name: 'Same photo, other entry',
       galleryAssetId: 'asset-other',
     }
     expect(projectSnapshot('t', list)).not.toBe(base)
