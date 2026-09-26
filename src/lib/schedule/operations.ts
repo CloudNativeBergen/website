@@ -729,11 +729,11 @@ export function duplicateService(
 }
 
 /**
- * Proposals not scheduled fully across ANY day. Computes aggregate scheduled
- * minutes per talk _id. If a talk is scheduled for less than its total duration,
- * it remains in this list with a `remainingMinutes` property for the UI.
+ * Evaluates the schedule coverage of every proposal. Computes aggregate scheduled
+ * minutes per talk _id, and annotates each proposal with its current assignment
+ * status (`unassigned`, `partial`, or `scheduled`) and its `remainingMinutes`.
  */
-export function computeUnassigned(
+export function computeProposalStatuses(
   proposals: ProposalExisting[],
   schedules: ConferenceSchedule[],
 ): SchedulableProposal[] {
@@ -751,15 +751,22 @@ export function computeUnassigned(
     }
   }
 
-  return proposals
-    .map((proposal) => {
-      const scheduled = scheduledMinutes.get(proposal._id) || 0
-      const total = getProposalDurationMinutes(proposal)
-      const remainingMinutes = Math.max(0, total - scheduled)
-      const isPartiallyScheduled = scheduled > 0
-      return { ...proposal, remainingMinutes, isPartiallyScheduled }
-    })
-    .filter((proposal) => proposal.remainingMinutes > 0)
+  return proposals.map((proposal) => {
+    const scheduled = scheduledMinutes.get(proposal._id) || 0
+    const total = getProposalDurationMinutes(proposal)
+    const remainingMinutes = Math.max(0, total - scheduled)
+    const isPartiallyScheduled = scheduled > 0 && remainingMinutes > 0
+    return { ...proposal, remainingMinutes, isPartiallyScheduled }
+  })
+}
+
+export function computeUnassigned(
+  proposals: ProposalExisting[],
+  schedules: ConferenceSchedule[],
+): SchedulableProposal[] {
+  return computeProposalStatuses(proposals, schedules).filter(
+    (proposal) => (proposal.remainingMinutes ?? 0) > 0,
+  )
 }
 
 /**

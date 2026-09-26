@@ -139,6 +139,7 @@ interface ActionMenuItemProps {
   children: ReactNode
   variant?: 'default' | 'danger'
   disabled?: boolean
+  title?: string
   href?: string
   download?: boolean | string
 }
@@ -149,6 +150,7 @@ export function ActionMenuItem({
   children,
   variant = 'default',
   disabled = false,
+  title,
   href,
   download,
 }: ActionMenuItemProps) {
@@ -171,6 +173,7 @@ export function ActionMenuItem({
           onClick={onClick}
           className={`${baseClasses} ${variantClasses}`}
           role="menuitem"
+          title={title}
           {...extraProps}
         >
           {Icon && <Icon className="h-4 w-4" />}

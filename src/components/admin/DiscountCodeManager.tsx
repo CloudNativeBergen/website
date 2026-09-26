@@ -532,6 +532,14 @@ export function DiscountCodeManager({
     return byCode
   }, [sponsors, getSponsorDiscounts])
 
+  const customDiscounts = useMemo(
+    () =>
+      existingDiscounts.filter(
+        (d) => !d.triggerValue || !sponsorForCode.has(d.triggerValue),
+      ),
+    [existingDiscounts, sponsorForCode],
+  )
+
   const getDiscountStatus = (discount: EventDiscountWithUsage) => {
     const now = new Date()
     const startsAt = discount.startsAt ? new Date(discount.startsAt) : null
@@ -1256,7 +1264,7 @@ export function DiscountCodeManager({
               />
             )}
             <DataTable<EventDiscountWithUsage>
-              data={existingDiscounts}
+              data={customDiscounts}
               columns={customDiscountColumns}
               keyExtractor={(discount, index) =>
                 discount.triggerValue || String(index)

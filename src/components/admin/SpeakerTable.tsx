@@ -445,6 +445,14 @@ export function SpeakerTable({
             ticketStatuses?.[speaker._id]?.state === 'redeemed' ||
             ticketStatuses?.[speaker._id]?.state === 'unknown'
           }
+          title={
+            ticketActionsUnavailableReason ||
+            (ticketStatuses?.[speaker._id]?.state === 'redeemed'
+              ? 'Speaker has already claimed their ticket'
+              : ticketStatuses?.[speaker._id]?.state === 'unknown'
+                ? 'Ticket provider is currently unavailable'
+                : undefined)
+          }
         >
           Send Ticket Invitation
         </ActionMenuItem>

@@ -148,7 +148,7 @@ describe('classifyTicket', () => {
       admitsSource: 'unknown',
       comp: true,
       grantedBy: 'speaker',
-      grantsWorkshop: false,
+      grantsWorkshop: true,
     })
   })
 
