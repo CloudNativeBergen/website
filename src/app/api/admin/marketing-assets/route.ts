@@ -100,7 +100,8 @@ const KINDS = {
  * Add an uploaded image or audio track to the organization's marketing asset
  * gallery (docs/MARKETING_ASSETS_SPEC.md §4.1,
  * docs/MARKETING_STUDIO_VIDEO_SPEC.md §6): move the browser's temporary blob
- * into Sanity, then write the gallery entry. A route handler rather than tRPC so the
+ * into Sanity, then write the gallery entry — also for "Save to gallery" in the
+ * studio (spec §4.2), which names its tab. A route handler rather than tRPC so the
  * move has an explicit `maxDuration`.
  *
  * Organizer of the request host's organization only, refused before the body
@@ -155,8 +156,8 @@ export async function POST(request: Request) {
       { status: 400 },
     )
   }
-  // A track is never a studio render, whatever the body says.
-  const studio = audio ? undefined : parsedStudio.data.studio
+  // Only the image write takes it: a track is never a studio render.
+  const { studio } = parsedStudio.data
   if (!audio && !parsed.data.alt) {
     discard()
     return NextResponse.json({ error: kind.missing }, { status: 400 })
