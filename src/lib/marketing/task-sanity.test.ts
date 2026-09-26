@@ -507,6 +507,80 @@ describe('getTaskEditorData — the LinkedIn "Tag by hand" list (#1155)', () => 
   })
 })
 
+describe('getTaskEditorData — Bluesky tag people and mentions (#1151)', () => {
+  const doc = (id: string) => h.dataset.find((d) => d._id === id)!
+
+  beforeEach(() => {
+    Object.assign(doc('task-li'), { channel: 'bluesky', subject: r('talk-bs') })
+    Object.assign(doc('variant-li'), {
+      platform: 'bluesky',
+      mentions: [
+        {
+          _key: 'sp-2',
+          _type: 'socialPostMention',
+          handle: 'bob.dev',
+          speaker: { ...r('sp-2'), _weak: true },
+          name: 'Bob',
+          status: 'unresolved',
+        },
+      ],
+    })
+    Object.assign(doc('sp-1'), {
+      links: ['https://bsky.app/profile/ada.dev'],
+      socialTagOptOut: true,
+    })
+    Object.assign(doc('sp-2'), { links: ['https://bsky.app/profile/bob.dev'] })
+    h.dataset.push({
+      _id: 'talk-bs',
+      _type: 'talk',
+      conference: r(CONF_A),
+      title: 'Edge',
+      speakers: [
+        { _key: 'a', ...r('sp-2') },
+        { _key: 'b', ...r('sp-1') },
+      ],
+    })
+  })
+
+  it('lists the talk’s speakers; an opted-out one without a handle', async () => {
+    const data = await getTaskEditorData('task-li', CONF_A)
+    expect(data!.tagPeople).toEqual([
+      {
+        speakerId: 'sp-2',
+        name: expect.any(String),
+        handle: 'bob.dev',
+        optedOut: false,
+      },
+      {
+        speakerId: 'sp-1',
+        name: expect.any(String),
+        handle: null,
+        optedOut: true,
+      },
+    ])
+    expect(JSON.stringify(data)).not.toContain('ada.dev')
+  })
+
+  it('reads the variant’s recorded mentions for the unresolved note', async () => {
+    expect((await getTaskEditorData('task-li', CONF_A))!.tagMentions).toEqual([
+      {
+        _key: 'sp-2',
+        handle: 'bob.dev',
+        speakerId: 'sp-2',
+        name: 'Bob',
+        status: 'unresolved',
+      },
+    ])
+  })
+
+  it('a LinkedIn Task gets neither', async () => {
+    doc('task-li').channel = 'linkedin'
+    const data = await getTaskEditorData('task-li', CONF_A)
+    expect(data!.tagPeople).toEqual([])
+    expect(data!.tagMentions).toEqual([])
+  })
+})
+
 describe('getTaskLinkInputs', () => {
   it('returns what the tagged link is derived from', async () => {
     expect(await getTaskLinkInputs('task-li', CONF_A)).toEqual({

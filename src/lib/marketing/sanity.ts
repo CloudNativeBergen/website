@@ -40,7 +40,6 @@ import type { TaskSubjectRef } from './pages'
 import { expireShortLinkIndex } from './short-link-cache'
 import { tagByHandEntries, type RawTagByHandSubject } from './tag-by-hand'
 import {
-  MENTION_RECORD_PROJECTION,
   mentionDocuments,
   mentionRecordsFrom,
   type RawMentionRecord,
@@ -526,7 +525,7 @@ export async function getTaskEditorData(
         "company": select(_type == "sponsor" && count(*[_type == "sponsorForConference" && conference._ref == $conferenceId && sponsor._ref == ^._id]) > 0 => { name, "url": linkedinUrl })
       }),
       "tagPeople": ${TAG_PEOPLE_PROJECTION},
-      "tagMentions": select(kind == "publishing" && channel == "bluesky" && variant->conference._ref == conference._ref => variant->mentions[]${MENTION_RECORD_PROJECTION}),
+      "tagMentions": select(kind == "publishing" && channel == "bluesky" && variant->conference._ref == conference._ref => variant->mentions[]{ _key, handle, did, "speakerId": speaker._ref, name, status }),
       "campaign": select(campaign->conference._ref == conference._ref => campaign->{ _id, key, title }),
       "planOwnerId": plan->owner._ref,
       "siblings": *[_type == "marketingTask" && conference._ref == $conferenceId && campaign._ref == ^.campaign._ref && _id != ^._id && !(_id in path("drafts.**")) && !(_id in path("versions.**"))]{${TASK_VIEW_FIELDS}
