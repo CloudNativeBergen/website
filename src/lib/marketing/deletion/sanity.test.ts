@@ -14,6 +14,8 @@ const h = vi.hoisted(() => ({
   /** Mutations per committed transaction, so the batch ceiling can be asserted. */
   batchSizes: [] as number[],
   beforeCommit: null as ((n: number) => void) | null,
+  /** Makes the orphan check's reference count fail. */
+  failCount: false,
 }))
 
 vi.mock('@/lib/sanity/client', () => {
@@ -23,7 +25,12 @@ vi.mock('@/lib/sanity/client', () => {
     clientReadUncached: {
       fetch: fetchDataset,
       // The shared orphan check counts at a newer API version; same dataset.
-      withConfig: () => ({ fetch: fetchDataset }),
+      withConfig: () => ({
+        fetch: async (query: string, params: Record<string, unknown>) => {
+          if (h.failCount) throw new Error('Sanity down')
+          return fetchDataset(query, params)
+        },
+      }),
     },
     clientWrite: {
       // A direct ASSET delete (the orphan check's): refused, as Sanity refuses
@@ -206,6 +213,7 @@ beforeEach(() => {
   h.batchSizes.length = 0
   h.failCommit = 0
   h.beforeCommit = null
+  h.failCount = false
   h.dataset = [
     doc('plan', 'marketingPlan'),
     doc('camp', 'marketingCampaign', { key: 'cfp', plan: ref('plan') }),
@@ -1597,6 +1605,27 @@ describe('a deleted Task takes its renders with it (#1162 follow-up to #1218)', 
     ).toBe(false)
     for (const k of ['saved', 'pending', 'orphan', 'held', 'weak', 'draft'])
       expect(stored(`image-task-r-${k}`), k).toBe(true)
+  })
+
+  it('a cleanup that fails keeps the file and says which, since nothing will retry it', async () => {
+    seedRenders('task-r')
+    h.failCount = true
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
+    expect(
+      await deleteTask({
+        taskId: 'task-r',
+        taskRev: 'rev-task-r',
+        conferenceId: 'conf-A',
+        variant: null,
+        dependantIds: [],
+      }),
+    ).toBe(true)
+    expect(stored('image-task-r-saved')).toBe(true)
+    const lines = logged.mock.calls.map((call) => String(call[0]))
+    expect(lines).toContainEqual(
+      expect.stringContaining('Render image-task-r-saved of a deleted Task'),
+    )
+    logged.mockRestore()
   })
 
   it('deletePlanTree: the same for every Task in a Campaign or plan delete', async () => {

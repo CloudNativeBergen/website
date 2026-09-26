@@ -198,13 +198,20 @@ cause and re-run step 2. `--files <id,id>` adds ids to a verification by hand.
 not found: a group photo or collage with no subject, a render saved from a Task
 that had no subject, an image **attached to a post by hand** — even a post
 about the speaker, since it may as easily be a sponsor's graphic — or a render
-a post still holds after its **Task was deleted**. Deleting a Task deletes
-every render it names through the orphan check, so only a render some post
-still holds survives it, and with the Task gone nothing links that file to the
-speaker.
-`/privacy` tells people to tell us about such an image; when they do, delete it
-from the gallery by hand. Published posts on Bluesky or LinkedIn are outside
-our reach either way.
+that outlived its **Task's deletion**. Deleting a Task sends every render it
+names through the orphan check, and with the Task gone nothing links a
+surviving file to the speaker. One survives when:
+
+- **any** other document still references it — a post is the usual holder,
+  but any document counts, a weak reference included;
+- its reference count or delete **failed** — logged at error level as
+  `Render <id> of a deleted Task could not be cleaned up`, with no retry
+  record, so search the logs and delete it by hand;
+- it was written to the Task **while** a Campaign or plan delete was running
+  (the renders are read before the first chunk).
+  `/privacy` tells people to tell us about such an image; when they do, delete it
+  from the gallery by hand. Published posts on Bluesky or LinkedIn are outside
+  our reach either way.
 
 ### 4. Invalidate caches
 
