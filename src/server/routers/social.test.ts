@@ -1225,6 +1225,19 @@ describe('social.addPostAttachment', () => {
     expect(h.addSocialPostAttachment).not.toHaveBeenCalled()
   })
 
+  it('refuses an audio track from the gallery: its FILE is not an image (#1178)', async () => {
+    // A well-formed Sanity file asset id, as an audio marketing asset holds:
+    // our post, alt text, no crop — only the asset kind is wrong.
+    await expect(
+      social().addPostAttachment({
+        postId: 'post-ours',
+        assetId: 'file-3f7a1c9e0b2d4f6a8c1e3b5d7f9a1c3e5b7d9f1a-mp3',
+        alt: 'x',
+      }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    expect(h.addSocialPostAttachment).not.toHaveBeenCalled()
+  })
+
   it("refuses another conference's post before writing", async () => {
     await expect(
       social().addPostAttachment({

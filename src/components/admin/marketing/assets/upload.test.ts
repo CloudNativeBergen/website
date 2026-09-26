@@ -47,6 +47,32 @@ describe('blobAssetUploader', () => {
     })
   })
 
+  it('sends a track under its one type name, with its kind and confirmation', async () => {
+    fetchMock.mockResolvedValue(
+      Response.json({ _id: 'asset-2', softOnSocial: false }),
+    )
+    // Firefox names a WAV `audio/x-wav`; the token allows `audio/wav`.
+    const track = new File([new Uint8Array(10)], 'Theme.WAV', {
+      type: 'audio/x-wav',
+    })
+    await blobAssetUploader('org-A')(
+      track,
+      { title: 'Theme', edition: 'none', tags: [] },
+      { kind: 'audio', rightsConfirmed: true },
+    )
+    expect(h.upload.mock.calls[0][0]).toMatch(
+      /^marketing-asset\/org-A\/\d{13}-theme\.wav$/,
+    )
+    expect(h.upload.mock.calls[0][2]).toMatchObject({
+      contentType: 'audio/wav',
+    })
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toMatchObject({
+      kind: 'audio',
+      rightsConfirmed: true,
+      title: 'Theme',
+    })
+  })
+
   it('shows the server’s own refusal as it is', async () => {
     fetchMock.mockResolvedValue(
       Response.json(

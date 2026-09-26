@@ -21,8 +21,9 @@ import {
 } from './AssetDetailsFields'
 
 /**
- * Change everything that describes an asset (spec §3): title, alt text, the
- * edition mark, subject, tags and credit. The image itself stays.
+ * Change everything that describes an asset (spec §3): title, alt text (an
+ * image's only), the edition mark, subject, tags and credit. The file itself
+ * stays, and so does a track's rights confirmation.
  */
 export function AssetEditDialog({
   asset,
@@ -63,15 +64,20 @@ export function AssetEditDialog({
     if (openKey && asset) {
       const next = draftFromRow(asset)
       setTitle(asset.title)
-      setAlt(asset.alt)
+      setAlt(asset.alt ?? '')
       setDraft(next)
       setError(null)
-      setInitial(JSON.stringify([asset.title, asset.alt, next]))
+      // The same normalised alt as the field holds: a track's null alt must
+      // not make the untouched dialog read as dirty.
+      setInitial(JSON.stringify([asset.title, asset.alt ?? '', next]))
     }
   }
 
   const dirty = JSON.stringify([title, alt, draft]) !== initial
-  const ready = Boolean(title.trim() && alt.trim()) && !update.isPending
+  // An audio track has no alt text to require.
+  const track = asset?.kind === 'audio'
+  const ready =
+    Boolean(title.trim() && (track || alt.trim())) && !update.isPending
 
   function save(event: React.FormEvent) {
     event.preventDefault()
@@ -84,7 +90,7 @@ export function AssetEditDialog({
     setError(null)
     update.mutate({
       id: asset._id,
-      details: detailsFromDraft(title, alt, draft),
+      details: detailsFromDraft(title, track ? '' : alt, draft),
     })
   }
 
@@ -113,31 +119,34 @@ export function AssetEditDialog({
             className={INPUT}
           />
         </div>
-        <div>
-          <label htmlFor={ids.alt} className={LABEL}>
-            Alt text
-          </label>
-          <textarea
-            id={ids.alt}
-            required
-            rows={2}
-            maxLength={1000}
-            readOnly={update.isPending}
-            value={alt}
-            onChange={(event) => setAlt(event.target.value)}
-            className={INPUT}
-            aria-describedby={`${ids.alt}-hint`}
-          />
-          <p id={`${ids.alt}-hint`} className={HINT}>
-            Required. It goes into every post that uses the image.
-          </p>
-        </div>
+        {!track && (
+          <div>
+            <label htmlFor={ids.alt} className={LABEL}>
+              Alt text
+            </label>
+            <textarea
+              id={ids.alt}
+              required
+              rows={2}
+              maxLength={1000}
+              readOnly={update.isPending}
+              value={alt}
+              onChange={(event) => setAlt(event.target.value)}
+              className={INPUT}
+              aria-describedby={`${ids.alt}-hint`}
+            />
+            <p id={`${ids.alt}-hint`} className={HINT}>
+              Required. It goes into every post that uses the image.
+            </p>
+          </div>
+        )}
         <AssetDetailsFields
           draft={draft}
           onChange={setDraft}
           edition={edition}
           original={asset ? originalMark(asset) : null}
           disabled={update.isPending}
+          kind={track ? 'audio' : 'image'}
         />
         {error && (
           <p

@@ -30,8 +30,9 @@ vi.mock('@/lib/sanity/client', () => ({
   },
 }))
 
-import { moveBlobToSanity } from './move'
+import { moveAudioBlobToSanity, moveBlobToSanity } from './move'
 import { MARKETING_ASSET_MAX_IMAGE_BYTES } from './image-type'
+import { mp3OfSeconds } from './__tests__/audio-fixtures'
 
 interface Seen {
   bytes: number
@@ -41,6 +42,8 @@ interface Seen {
   contentType?: string
 }
 let seen: Seen[] = []
+/** The request path of each upload: `/…/assets/images/…` or `/…/files/…`. */
+let paths: string[] = []
 let server: http.Server
 
 beforeAll(async () => {
@@ -52,6 +55,7 @@ beforeAll(async () => {
       contentType: req.headers['content-type'],
     }
     seen.push(record)
+    paths.push(req.url ?? '')
     req.on('data', (chunk: Buffer) => (record.bytes += chunk.length))
     req.on('close', () => {
       if (!req.complete) record.aborted = true
@@ -110,11 +114,37 @@ function blobBody(total: number) {
 
 beforeEach(() => {
   seen = []
+  paths = []
   vi.stubEnv('BLOB_READ_WRITE_TOKEN', 'vercel_blob_rw_abcstore123_secret')
 })
 afterEach(() => {
   vi.unstubAllEnvs()
   vi.unstubAllGlobals()
+})
+
+describe('the audio move through the real Sanity client (#1178)', () => {
+  it('uploads the whole track to the FILE asset endpoint with the sniffed type', async () => {
+    const track = mp3OfSeconds(5)
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(new Uint8Array(track))),
+    )
+    const result = await moveAudioBlobToSanity(
+      URL_OK.replace('logo-X1.png', 'theme-X1.mp3'),
+      'org-A',
+    )
+    expect(result.ok).toBe(true)
+    expect(seen).toEqual([
+      {
+        bytes: track.length,
+        complete: true,
+        aborted: false,
+        contentType: 'audio/mpeg',
+      },
+    ])
+    expect(paths[0]).toMatch(/\/assets\/files\/test\?/)
+    expect(paths[0]).toContain('filename=theme-X1.mp3')
+  })
 })
 
 describe('the move through the real Sanity client', () => {

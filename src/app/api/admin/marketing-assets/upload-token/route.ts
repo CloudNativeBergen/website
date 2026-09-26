@@ -10,6 +10,10 @@ import {
   MARKETING_ASSET_IMAGE_TYPES,
   MARKETING_ASSET_MAX_IMAGE_BYTES,
 } from '@/lib/marketing-asset/image-type'
+import {
+  MARKETING_ASSET_AUDIO_TYPES,
+  MARKETING_ASSET_MAX_AUDIO_BYTES,
+} from '@/lib/marketing-asset/audio-type'
 
 /** A token lives long enough for one upload to start, and no longer. */
 const TOKEN_LIFETIME_MS = 10 * 60 * 1000
@@ -21,7 +25,8 @@ const TOKEN_LIFETIME_MS = 10 * 60 * 1000
  *
  * Organizer of the request host's organization only, checked before the body
  * is read. The token is bound to a pathname under THIS organization's
- * `marketing-asset/<orgId>/` folder, to PNG/JPEG/WebP and to the size cap. The
+ * `marketing-asset/<orgId>/` folder, to PNG/JPEG/WebP or MP3/M4A/WAV and to
+ * the larger of the two size caps (one token serves either kind). The
  * move re-checks all of it from the file itself: this is the first gate, not
  * the only one. No upload-completed callback is registered — the browser hands
  * the URL to the move, and an abandoned upload is the orphan sweeper's.
@@ -49,8 +54,14 @@ export async function POST(request: Request) {
           throw new Error('Invalid pathname for a marketing asset')
         }
         return {
-          allowedContentTypes: [...MARKETING_ASSET_IMAGE_TYPES],
-          maximumSizeInBytes: MARKETING_ASSET_MAX_IMAGE_BYTES,
+          allowedContentTypes: [
+            ...MARKETING_ASSET_IMAGE_TYPES,
+            ...MARKETING_ASSET_AUDIO_TYPES,
+          ],
+          maximumSizeInBytes: Math.max(
+            MARKETING_ASSET_MAX_IMAGE_BYTES,
+            MARKETING_ASSET_MAX_AUDIO_BYTES,
+          ),
           addRandomSuffix: true,
           validUntil: Date.now() + TOKEN_LIFETIME_MS,
         }

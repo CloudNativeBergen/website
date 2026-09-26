@@ -28,6 +28,10 @@ export function normalizeTags(tags: readonly string[]): string[] {
  * The details an organizer sets on an asset (spec §3), for the upload route
  * and `marketingAsset.update` alike. Only the SHAPE is checked here.
  *
+ * Alt text is optional in the shape because an audio track has none; an
+ * image's is required by the upload route and by `update`, which know the
+ * kind.
+ *
  * The edition is never a client-supplied id (AGENTS.md: never accept a
  * conference id from the client): `current` is the request host's edition,
  * `keep` the mark the asset already carries, both resolved on the server.
@@ -36,7 +40,12 @@ export function normalizeTags(tags: readonly string[]): string[] {
  */
 export const marketingAssetDetailsSchema = z.object({
   title: z.string().trim().min(1).max(200),
-  alt: z.string().trim().min(1).max(1000),
+  alt: z
+    .string()
+    .trim()
+    .max(1000)
+    .optional()
+    .transform((alt) => alt || undefined),
   edition: z.enum(['none', 'current', 'keep']).default('none'),
   subject: z
     .object({ type: z.enum(MARKETING_ASSET_SUBJECT_TYPES), id: documentId })

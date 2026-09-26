@@ -5,19 +5,30 @@ import clsx from 'clsx'
 import {
   ArrowUpTrayIcon,
   ExclamationTriangleIcon,
+  MusicalNoteIcon,
   PhotoIcon,
 } from '@heroicons/react/24/outline'
 import { AdminButton } from '@/components/admin/AdminButton'
 import {
+  MARKETING_ASSET_AUDIO_LENGTH_REFUSAL,
+  MARKETING_ASSET_AUDIO_SIZE_REFUSAL,
+  MARKETING_ASSET_AUDIO_TYPES,
   MARKETING_ASSET_IMAGE_TYPES,
+  MARKETING_ASSET_MAX_AUDIO_BYTES,
+  MARKETING_ASSET_MAX_AUDIO_LABEL,
+  MARKETING_ASSET_MAX_AUDIO_SECONDS,
   MARKETING_ASSET_MAX_IMAGE_BYTES,
   MARKETING_ASSET_MAX_IMAGE_LABEL,
+  MARKETING_ASSET_RIGHTS_STATEMENT,
   MARKETING_ASSET_SIZE_REFUSAL,
-  MARKETING_ASSET_TYPE_REFUSAL,
   SOFT_ON_SOCIAL_SHORT_SIDE,
+  audioTypeForFile,
+  formatTrackLength,
   isSoftOnSocial,
 } from '@/lib/marketing-asset'
 import type { AssetUploader } from './upload'
+import { readTrackLength } from './track-length'
+import { TrackPlayer } from './TrackPlayer'
 import {
   AssetDetailsFields,
   EMPTY_DRAFT,
@@ -31,10 +42,26 @@ import {
 
 interface Picked {
   file: File
+  kind: 'image' | 'audio'
   previewUrl: string
   width: number | null
   height: number | null
+  /** A track's length as the browser read it; null for an image or unknown. */
+  durationSeconds: number | null
 }
+
+/** What the picker offers: the image types, and tracks by type and extension. */
+const ACCEPT = [
+  ...MARKETING_ASSET_IMAGE_TYPES,
+  ...MARKETING_ASSET_AUDIO_TYPES,
+  '.mp3',
+  '.m4a',
+  '.m4b',
+  '.wav',
+].join(',')
+
+const TYPE_REFUSAL =
+  'Only PNG, JPEG and WebP images, or MP3, M4A and WAV tracks, can be added.'
 
 /** `min-logo_final.png` → `min logo final`: a starting title, not a rule. */
 function titleFromFilename(name: string): string {
@@ -44,8 +71,13 @@ function titleFromFilename(name: string): string {
 
 /** The client's own check, for a quick answer. The server checks again. */
 function refusalFor(file: File): string | null {
+  if (audioTypeForFile(file)) {
+    return file.size > MARKETING_ASSET_MAX_AUDIO_BYTES
+      ? MARKETING_ASSET_AUDIO_SIZE_REFUSAL
+      : null
+  }
   if (!(MARKETING_ASSET_IMAGE_TYPES as readonly string[]).includes(file.type)) {
-    return MARKETING_ASSET_TYPE_REFUSAL
+    return TYPE_REFUSAL
   }
   if (file.size > MARKETING_ASSET_MAX_IMAGE_BYTES) {
     return MARKETING_ASSET_SIZE_REFUSAL
@@ -76,7 +108,7 @@ export function AssetUploadForm({
   /** This edition, for the edition mark; null while it loads. */
   edition?: CurrentEdition | null
 }) {
-  const ids = { file: useId(), title: useId(), alt: useId() }
+  const ids = { file: useId(), title: useId(), alt: useId(), rights: useId() }
   // The latest pick wins: an earlier file's slower size read must not land.
   const pickSeq = useRef(0)
   // The title this form last filled in from a filename. A later pick may
@@ -86,6 +118,8 @@ export function AssetUploadForm({
   const [picked, setPicked] = useState<Picked | null>(null)
   const [title, setTitle] = useState('')
   const [alt, setAlt] = useState('')
+  // A track's rights confirmation: asked again for every track picked.
+  const [rights, setRights] = useState(false)
   const [draft, setDraft] = useState(EMPTY_DRAFT)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -135,16 +169,30 @@ export function AssetUploadForm({
       setError(refusal)
       return
     }
-    // The earlier image is replaced from this moment, not when the new one's
+    // The earlier file is replaced from this moment, not when the new one's
     // size has been read: until then there is nothing to save.
     setPicked(null)
-    const dimensions = await readDimensions(file)
+    setRights(false)
+    const audio = Boolean(audioTypeForFile(file))
+    const [dimensions, durationSeconds] = audio
+      ? [null, await readTrackLength(file)]
+      : [await readDimensions(file), null]
     if (seq !== pickSeq.current) return
+    if (
+      durationSeconds !== null &&
+      durationSeconds > MARKETING_ASSET_MAX_AUDIO_SECONDS
+    ) {
+      if (fileInput.current) fileInput.current.value = ''
+      setError(MARKETING_ASSET_AUDIO_LENGTH_REFUSAL)
+      return
+    }
     setPicked({
       file,
+      kind: audio ? 'audio' : 'image',
       previewUrl: URL.createObjectURL(file),
       width: dimensions?.width ?? null,
       height: dimensions?.height ?? null,
+      durationSeconds,
     })
     const suggested = titleFromFilename(file.name)
     const previous = autoTitle.current
@@ -160,6 +208,7 @@ export function AssetUploadForm({
     setPicked(null)
     setTitle('')
     setAlt('')
+    setRights(false)
     setDraft(EMPTY_DRAFT)
     if (fileInput.current) fileInput.current.value = ''
     // Clear and the submit button both disappear or disable here; keep
@@ -170,7 +219,7 @@ export function AssetUploadForm({
 
   async function save(event: React.FormEvent) {
     event.preventDefault()
-    if (!picked || !title.trim() || !alt.trim()) return
+    if (!ready || !picked) return
     const issue = draftIssue(draft)
     if (issue) {
       setError(issue)
@@ -179,34 +228,41 @@ export function AssetUploadForm({
     setSaving(true)
     setError(null)
     try {
-      await uploader(picked.file, detailsFromDraft(title, alt, draft))
+      if (track)
+        await uploader(picked.file, detailsFromDraft(title, '', draft), {
+          kind: 'audio',
+          rightsConfirmed: rights,
+        })
+      else await uploader(picked.file, detailsFromDraft(title, alt, draft))
       onSaved({ title: title.trim() })
       reset()
     } catch (caught) {
       setError(
         caught instanceof Error
           ? caught.message
-          : 'The image could not be added. Try again.',
+          : `The ${track ? 'track' : 'image'} could not be added. Try again.`,
       )
     } finally {
       setSaving(false)
     }
   }
 
-  const soft = picked ? isSoftOnSocial(picked) : false
-  const ready = Boolean(picked && title.trim() && alt.trim()) && !saving
+  const track = picked?.kind === 'audio'
+  const soft = picked && !track ? isSoftOnSocial(picked) : false
+  const ready =
+    Boolean(picked && title.trim() && (track ? rights : alt.trim())) && !saving
 
   return (
     <form
       ref={form}
       onSubmit={save}
-      aria-label="Add an image"
+      aria-label="Add to the gallery"
       className="rounded-xl border border-gray-200 bg-white p-4 sm:p-5 dark:border-gray-700 dark:bg-gray-900"
     >
       <h2 className="text-base font-semibold text-gray-900 dark:text-white">
-        Add an image
+        Add to the gallery
       </h2>
-      <div className="mt-4 grid gap-5 md:grid-cols-[minmax(0,15rem)_minmax(0,1fr)]">
+      <div className="mt-4 grid grid-cols-1 gap-5 md:grid-cols-[minmax(0,15rem)_minmax(0,1fr)]">
         <div>
           <label
             htmlFor={ids.file}
@@ -229,21 +285,29 @@ export function AssetUploadForm({
                 : 'border-gray-300 py-6 hover:border-brand-cloud-blue md:aspect-square dark:border-gray-600 dark:hover:border-blue-400',
             )}
           >
-            {picked ? (
+            {picked?.kind === 'image' ? (
               // A local object URL: next/image cannot optimize it.
               <img
                 src={picked.previewUrl}
                 alt=""
                 className="size-full object-contain"
               />
+            ) : picked ? (
+              <MusicalNoteIcon
+                className="size-12 text-gray-400 dark:text-gray-500"
+                aria-hidden
+              />
             ) : (
               <span className="flex flex-col items-center px-4 text-gray-500 dark:text-gray-400">
                 <ArrowUpTrayIcon className="size-8" aria-hidden />
                 <span className="mt-2 text-sm font-medium text-brand-cloud-blue dark:text-blue-300">
-                  Choose an image
+                  Choose an image or a track
                 </span>
                 <span className="mt-1 text-xs">
                   PNG, JPEG or WebP, up to {MARKETING_ASSET_MAX_IMAGE_LABEL}
+                </span>
+                <span className="mt-0.5 text-xs">
+                  MP3, M4A or WAV, up to {MARKETING_ASSET_MAX_AUDIO_LABEL}
                 </span>
               </span>
             )}
@@ -251,8 +315,12 @@ export function AssetUploadForm({
               ref={fileInput}
               id={ids.file}
               type="file"
-              aria-label={picked ? 'Replace the image' : 'Choose an image'}
-              accept={MARKETING_ASSET_IMAGE_TYPES.join(',')}
+              aria-label={
+                picked
+                  ? `Replace the ${track ? 'track' : 'image'}`
+                  : 'Choose an image or a track'
+              }
+              accept={ACCEPT}
               className="sr-only"
               disabled={saving}
               onChange={(event) => void pick(event.target.files?.[0])}
@@ -260,14 +328,33 @@ export function AssetUploadForm({
           </label>
           {picked && (
             <p className="mt-2 flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
-              <PhotoIcon className="size-4 shrink-0" aria-hidden />
+              {track ? (
+                <MusicalNoteIcon className="size-4 shrink-0" aria-hidden />
+              ) : (
+                <PhotoIcon className="size-4 shrink-0" aria-hidden />
+              )}
               <span className="truncate">{picked.file.name}</span>
               {picked.width && picked.height ? (
                 <span className="shrink-0 tabular-nums">
                   · {picked.width} × {picked.height}
                 </span>
               ) : null}
+              {picked.durationSeconds ? (
+                <span className="shrink-0 tabular-nums">
+                  · {formatTrackLength(picked.durationSeconds)}
+                </span>
+              ) : null}
             </p>
+          )}
+          {picked && track && (
+            <div className="mt-2">
+              <TrackPlayer
+                key={picked.previewUrl}
+                src={picked.previewUrl}
+                title={title.trim() || picked.file.name}
+                durationSeconds={picked.durationSeconds}
+              />
+            </div>
           )}
         </div>
 
@@ -306,31 +393,57 @@ export function AssetUploadForm({
               className={INPUT}
             />
           </div>
-          <div>
-            <label htmlFor={ids.alt} className={LABEL}>
-              Alt text
-            </label>
-            <textarea
-              id={ids.alt}
-              required
-              rows={3}
-              maxLength={1000}
-              readOnly={saving}
-              value={alt}
-              onChange={(event) => setAlt(event.target.value)}
-              className={INPUT}
-              aria-describedby={`${ids.alt}-hint`}
-            />
-            <p id={`${ids.alt}-hint`} className={HINT}>
-              Required. Say what the image shows; it goes into every post that
-              uses it.
-            </p>
-          </div>
+          {track ? (
+            <div className="rounded-md border border-gray-200 p-3 dark:border-gray-700">
+              <div className="flex gap-2.5">
+                <input
+                  id={ids.rights}
+                  type="checkbox"
+                  required
+                  checked={rights}
+                  disabled={saving}
+                  onChange={(event) => setRights(event.target.checked)}
+                  aria-describedby={`${ids.rights}-hint`}
+                  className="mt-0.5 size-4 shrink-0 rounded border-gray-300 text-brand-cloud-blue focus:ring-brand-cloud-blue dark:border-gray-600 dark:bg-gray-800"
+                />
+                <label htmlFor={ids.rights} className={LABEL}>
+                  {MARKETING_ASSET_RIGHTS_STATEMENT}
+                </label>
+              </div>
+              <p id={`${ids.rights}-hint`} className={clsx(HINT, 'ml-6.5')}>
+                Required. Your name and the time are saved with the track. A
+                track is for studio videos and never goes into a post on its
+                own.
+              </p>
+            </div>
+          ) : (
+            <div>
+              <label htmlFor={ids.alt} className={LABEL}>
+                Alt text
+              </label>
+              <textarea
+                id={ids.alt}
+                required
+                rows={3}
+                maxLength={1000}
+                readOnly={saving}
+                value={alt}
+                onChange={(event) => setAlt(event.target.value)}
+                className={INPUT}
+                aria-describedby={`${ids.alt}-hint`}
+              />
+              <p id={`${ids.alt}-hint`} className={HINT}>
+                Required. Say what the image shows; it goes into every post that
+                uses it.
+              </p>
+            </div>
+          )}
           <AssetDetailsFields
             draft={draft}
             onChange={setDraft}
             edition={edition}
             disabled={saving}
+            kind={track ? 'audio' : 'image'}
           />
           {error && (
             <p

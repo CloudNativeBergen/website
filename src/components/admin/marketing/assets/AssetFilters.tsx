@@ -13,8 +13,8 @@ const SELECT =
   'block min-h-[40px] w-full rounded-md border border-gray-300 bg-white py-2 pr-8 pl-3 text-sm text-gray-900 shadow-xs focus:border-brand-cloud-blue focus:ring-1 focus:ring-brand-cloud-blue focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100'
 
 /**
- * The gallery's filters (spec §3): this edition or all editions, subject, tag,
- * and a search over title and tags. Filtering itself happens on the server.
+ * The gallery's filters (spec §3): this edition or all editions, kind,
+ * subject, tag, and a search over title and tags. Filtering itself happens on the server.
  */
 export function AssetFilters({
   filter,
@@ -57,7 +57,7 @@ export function AssetFilters({
     <div
       role="search"
       aria-label="Filter the gallery"
-      className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.2fr)]"
+      className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,0.8fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.2fr)]"
     >
       <fieldset className="min-w-0">
         <legend className="sr-only">Editions</legend>
@@ -66,6 +66,29 @@ export function AssetFilters({
           {segment('all', 'All editions')}
         </div>
       </fieldset>
+      <div className="min-w-0">
+        <label htmlFor={`${id}-kind`} className="sr-only">
+          Kind
+        </label>
+        <select
+          id={`${id}-kind`}
+          value={filter.kind ?? ''}
+          onChange={(event) =>
+            onFilterChange({
+              ...filter,
+              kind:
+                event.target.value === 'image' || event.target.value === 'audio'
+                  ? event.target.value
+                  : undefined,
+            })
+          }
+          className={SELECT}
+        >
+          <option value="">Any kind</option>
+          <option value="image">Images</option>
+          <option value="audio">Audio tracks</option>
+        </select>
+      </div>
       <div className="min-w-0">
         <label htmlFor={`${id}-subject`} className="sr-only">
           Subject
@@ -109,7 +132,7 @@ export function AssetFilters({
           ))}
         </select>
       </div>
-      <div className="relative min-w-0">
+      <div className="relative min-w-0 sm:col-span-2 lg:col-span-1">
         <label htmlFor={`${id}-search`} className="sr-only">
           Search titles and tags
         </label>

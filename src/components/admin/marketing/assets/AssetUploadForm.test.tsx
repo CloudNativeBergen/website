@@ -3,6 +3,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { AssetUploadForm } from './AssetUploadForm'
 
+const trackLength = vi.hoisted(() => ({ seconds: 92 as number | null }))
+// jsdom plays no media; the browser's reading of a track's length is stubbed.
+vi.mock('./track-length', () => ({
+  readTrackLength: async () => trackLength.seconds,
+}))
+
 // The subject picker's search; these tests never type into it.
 vi.mock('@/lib/trpc/client', () => ({
   api: {
@@ -80,7 +86,7 @@ describe('picking a file', () => {
     })
     await pick(new File(['GIF89a'], 'anim.gif', { type: 'image/gif' }))
     expect(screen.getByRole('alert').textContent).toBe(
-      'Only PNG, JPEG and WebP images can be added.',
+      'Only PNG, JPEG and WebP images, or MP3, M4A and WAV tracks, can be added.',
     )
     expect(screen.queryByText('logo.png')).toBeNull()
     const add = screen.getByRole('button', { name: 'Add to gallery' })
@@ -179,7 +185,7 @@ describe('picking a file', () => {
     elsewhere.focus()
     await act(async () => finish({ _id: 'x', softOnSocial: false }))
     // The save finished and the form reset: the effect had its chance.
-    expect(screen.getByLabelText('Choose an image')).toBeTruthy()
+    expect(screen.getByLabelText('Choose an image or a track')).toBeTruthy()
     expect(document.activeElement).toBe(elsewhere)
     elsewhere.remove()
   })
@@ -196,7 +202,7 @@ describe('picking a file', () => {
       fireEvent.submit(screen.getByRole('button', { name: 'Add to gallery' }))
     })
     expect(document.activeElement).toBe(
-      screen.getByLabelText('Choose an image'),
+      screen.getByLabelText('Choose an image or a track'),
     )
   })
 
@@ -309,5 +315,98 @@ describe('describing the image', () => {
       subject: null,
       tags: [],
     })
+  })
+})
+
+describe('picking an audio track (#1178)', () => {
+  const mp3 = (name: string, size = 1000) =>
+    new File([new Uint8Array(size)], name, { type: 'audio/mpeg' })
+
+  beforeEach(() => {
+    trackLength.seconds = 92
+  })
+
+  it('asks for the rights confirmation, not alt text, and sends it with the track', async () => {
+    const { uploader, pick } = renderForm()
+    await pick(mp3('conference-theme.mp3'))
+    expect(screen.queryByLabelText('Alt text')).toBeNull()
+    expect(screen.getByText('· 1:32')).toBeTruthy()
+    const add = screen.getByRole('button', { name: 'Add to gallery' })
+    expect((add as HTMLButtonElement).disabled).toBe(true)
+    // Submitting without the confirmation sends nothing.
+    await act(async () => {
+      fireEvent.submit(add.closest('form')!)
+    })
+    expect(uploader).not.toHaveBeenCalled()
+    await act(async () => {
+      fireEvent.click(
+        screen.getByLabelText(
+          'I have the right to use this track in social posts.',
+        ),
+      )
+    })
+    expect((add as HTMLButtonElement).disabled).toBe(false)
+    await act(async () => {
+      fireEvent.click(add)
+    })
+    expect(uploader).toHaveBeenCalledWith(
+      expect.any(File),
+      expect.objectContaining({ title: 'conference theme', alt: undefined }),
+      { kind: 'audio', rightsConfirmed: true },
+    )
+  })
+
+  it('asks again for the next track: a confirmation is per track', async () => {
+    const { pick } = renderForm()
+    await pick(mp3('a.mp3'))
+    const box = () =>
+      screen.getByLabelText(
+        'I have the right to use this track in social posts.',
+      ) as HTMLInputElement
+    await act(async () => {
+      fireEvent.click(box())
+    })
+    expect(box().checked).toBe(true)
+    await pick(mp3('b.mp3'))
+    expect(box().checked).toBe(false)
+  })
+
+  it('refuses a track the browser reads as over ten minutes', async () => {
+    trackLength.seconds = 601
+    const { pick } = renderForm()
+    await pick(mp3('album.mp3'))
+    expect(screen.getByRole('alert').textContent).toBe(
+      'The track is longer than 10 minutes.',
+    )
+    expect(
+      (
+        screen.getByRole('button', {
+          name: 'Add to gallery',
+        }) as HTMLButtonElement
+      ).disabled,
+    ).toBe(true)
+  })
+
+  it('leaves a track whose length the browser cannot read to the server', async () => {
+    trackLength.seconds = null
+    const { pick } = renderForm()
+    await pick(mp3('odd.mp3'))
+    // No refusal. (The player keeps an empty alert mounted for its own use.)
+    expect(
+      screen.queryAllByRole('alert').map((alert) => alert.textContent),
+    ).toEqual([''])
+    expect(
+      screen.getByLabelText(
+        'I have the right to use this track in social posts.',
+      ),
+    ).toBeTruthy()
+  })
+
+  it('refuses a track over 20 MB before reading it', async () => {
+    const { pick } = renderForm()
+    await pick(mp3('huge.mp3', 20 * 1024 * 1024 + 1))
+    expect(screen.getByRole('alert').textContent).toBe(
+      'The track is larger than 20 MB.',
+    )
   })
 })

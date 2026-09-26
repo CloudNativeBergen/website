@@ -15,14 +15,17 @@ import {
   listMarketingAssets,
   updateMarketingAssetDetails,
   countMarketingAssetReleaseTwins,
-  readMarketingAssetImage,
+  readMarketingAssetMedia,
   readMarketingAssetBackground,
 } from '@/lib/marketing-asset/sanity'
 import {
   backgroundRenditionUrl,
   proxiedImageUrl,
 } from '@/lib/marketing-asset/background'
-import { deleteImageAssetIfOrphaned } from '@/lib/sanity/orphaned-asset'
+import {
+  deleteFileAssetIfOrphaned,
+  deleteImageAssetIfOrphaned,
+} from '@/lib/sanity/orphaned-asset'
 
 /**
  * The organization's marketing asset gallery (spec §3). Organizer-only through
@@ -50,6 +53,7 @@ const assetId = z.string().min(1).max(200)
 const filterSchema = z
   .object({
     editions: z.enum(['current', 'all']).optional(),
+    kind: z.enum(['image', 'audio']).optional(),
     subjectId: z.string().min(1).max(200).optional(),
     tag: z.string().max(100).optional(),
     search: z.string().max(200).optional(),
@@ -104,8 +108,17 @@ export const marketingAssetRouter = router({
       // when published, silently undoing this edit. Refused, as for delete.
       if ((await countMarketingAssetReleaseTwins(orgId, input.id)) > 0)
         throw inRelease('edit')
+      // An image keeps its required alt text; an audio track never has any.
+      const media = await readMarketingAssetMedia(orgId, input.id)
+      if (!media) throw notFound()
+      const { alt, ...rest } = input.details
+      if (media.kind === 'image' && !alt)
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'An image needs its alt text.',
+        })
       const details = await resolveAssetDetailsForCurrentOrg(
-        input.details,
+        { ...rest, alt: media.kind === 'audio' ? undefined : alt },
         input.id,
       )
       await updateMarketingAssetDetails(input.id, details)
@@ -159,21 +172,25 @@ export const marketingAssetRouter = router({
       // answer reveals nothing about another tenant.
       if ((await countMarketingAssetReleaseTwins(orgId, input.id)) > 0)
         throw inRelease('delete')
-      const image = await readMarketingAssetImage(orgId, input.id)
+      const media = await readMarketingAssetMedia(orgId, input.id)
       // The documents first: while one exists, it is itself a reference to
-      // the image, and the orphan check would always keep the file.
+      // the file, and the orphan check would always keep it.
       await deleteMarketingAssetDocument(input.id)
-      // Only an image this gallery's upload created is its to delete: Sanity
-      // deduplicates identical bytes across tenants, so any other may be
-      // another tenant's, possibly still unreferenced. A Studio draft's own
-      // image is left alone for the same reason.
-      if (image?.createdByUpload && image.assetId) {
-        const result = await deleteImageAssetIfOrphaned(image.assetId)
+      // Only an image or track this gallery's upload created is its to
+      // delete: Sanity deduplicates identical bytes across tenants, so any
+      // other may be another tenant's, possibly still unreferenced. A Studio
+      // draft's own file is left alone for the same reason.
+      if (media?.createdByUpload && media.assetId) {
+        const result = await (
+          media.kind === 'audio'
+            ? deleteFileAssetIfOrphaned
+            : deleteImageAssetIfOrphaned
+        )(media.assetId)
         // The check fails closed: an unreadable count keeps the file. Say
         // which, so it can be retried by hand; nothing else will find it.
         if (result.remainingReferences === -1)
           console.warn(
-            `Marketing asset ${input.id} deleted; its image ${result.id} was kept because its references could not be counted`,
+            `Marketing asset ${input.id} deleted; its file ${result.id} was kept because its references could not be counted`,
           )
       }
       // Whether the image went is NOT answered: it would tell the caller

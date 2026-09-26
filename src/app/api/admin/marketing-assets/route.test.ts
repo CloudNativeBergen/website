@@ -6,6 +6,9 @@ const h = vi.hoisted(() => ({
   organizer: vi.fn(),
   orgId: vi.fn(),
   move: vi.fn(),
+  moveAudio: vi.fn(),
+  discard: vi.fn(),
+  orphanFile: vi.fn(),
   create: vi.fn(),
   orphan: vi.fn(),
   guard: vi.fn(),
@@ -20,7 +23,11 @@ vi.mock('@/lib/authz/organizer', () => ({
   isOrganizerForCurrentOrg: h.organizer,
   resolveCurrentOrgId: h.orgId,
 }))
-vi.mock('@/lib/marketing-asset/move', () => ({ moveBlobToSanity: h.move }))
+vi.mock('@/lib/marketing-asset/move', () => ({
+  moveBlobToSanity: h.move,
+  moveAudioBlobToSanity: h.moveAudio,
+  discardBlob: h.discard,
+}))
 vi.mock('@/lib/marketing-asset/sanity', () => ({
   createMarketingAsset: h.create,
 }))
@@ -32,6 +39,7 @@ vi.mock('@/lib/marketing-asset/guard', () => ({
 }))
 vi.mock('@/lib/sanity/orphaned-asset', () => ({
   deleteImageAssetIfOrphaned: h.orphan,
+  deleteFileAssetIfOrphaned: h.orphanFile,
 }))
 
 import { POST, maxDuration } from './route'
@@ -81,6 +89,17 @@ beforeEach(() => {
       created: true,
     },
   })
+  h.moveAudio.mockResolvedValue({
+    ok: true,
+    asset: {
+      _id: 'file-theme-mp3',
+      url: 'https://cdn/theme.mp3',
+      mimeType: 'audio/mpeg',
+      durationSeconds: 83.4,
+      created: true,
+    },
+  })
+  h.orphanFile.mockResolvedValue({ deleted: true })
   h.create.mockResolvedValue({ _id: 'asset-1' })
   h.orphan.mockResolvedValue({ deleted: true })
   h.guard.mockImplementation(
@@ -106,6 +125,13 @@ describe('the marketing asset move route', () => {
     const json = vi.spyOn(req, 'json')
     expect((await POST(req)).status).toBe(401)
     expect(json).not.toHaveBeenCalled()
+    expect(h.move).not.toHaveBeenCalled()
+  })
+
+  it('refuses a session with no speaker id: there is no one to record', async () => {
+    // Organizer by the check, but nothing to stamp a rights confirmation with.
+    h.session.mockResolvedValue({ speaker: {} })
+    expect((await POST(request(VALID))).status).toBe(401)
     expect(h.move).not.toHaveBeenCalled()
   })
 
@@ -298,5 +324,119 @@ describe('the marketing asset move route', () => {
     expect(h.afterTasks).toHaveLength(1)
     void h.afterTasks[0]()
     expect(h.orphan).toHaveBeenCalledWith('image-a-800x600-png')
+  })
+})
+
+describe('an audio track through the move route (#1178)', () => {
+  const TRACK_URL = URL_OK.replace('logo-X1.png', 'theme-X1.mp3')
+  const TRACK = {
+    url: TRACK_URL,
+    kind: 'audio',
+    title: 'Conference theme',
+    rightsConfirmed: true,
+  }
+
+  it.each([
+    ['no confirmation', { rightsConfirmed: undefined }],
+    ['a refused confirmation', { rightsConfirmed: false }],
+    [
+      'a confirmation that is not the boolean true',
+      { rightsConfirmed: 'true' },
+    ],
+  ])('refuses %s before anything is checked or moved', async (_, change) => {
+    const response = await POST(request({ ...TRACK, ...change }))
+    expect(response.status).toBe(400)
+    expect((await response.json()).error).toBe(
+      'Confirm that you have the right to use this track in social posts.',
+    )
+    expect(h.guard).not.toHaveBeenCalled()
+    expect(h.moveAudio).not.toHaveBeenCalled()
+    expect(h.move).not.toHaveBeenCalled()
+    expect(h.create).not.toHaveBeenCalled()
+    // The refused upload is deleted, not left for the sweeper.
+    expect(h.discard).toHaveBeenCalledWith(TRACK_URL, 'org-A')
+  })
+
+  it('records the SESSION organizer and the SERVER time, whatever the body claims, and keeps no alt text', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-09-26T08:00:00.000Z'))
+    try {
+      const response = await POST(
+        request({
+          ...TRACK,
+          alt: 'Should not be kept',
+          confirmedBy: 'sp-someone-else',
+          confirmedAt: '2020-01-01T00:00:00.000Z',
+          rightsConfirmation: { confirmedBy: 'sp-x', confirmedAt: '2020' },
+        }),
+      )
+      expect(response.status).toBe(200)
+    } finally {
+      vi.useRealTimers()
+    }
+    expect(h.moveAudio).toHaveBeenCalledWith(TRACK_URL, 'org-A')
+    expect(h.move).not.toHaveBeenCalled()
+    expect(h.create).toHaveBeenCalledWith(
+      {
+        orgId: 'org-A',
+        details: { ...RESOLVED, title: 'Conference theme', alt: undefined },
+        kind: 'audio',
+        fileAssetId: 'file-theme-mp3',
+        createdFileAssetId: 'file-theme-mp3',
+        durationSeconds: 83.4,
+        rights: {
+          confirmedBy: 'sp-1',
+          confirmedAt: '2026-09-26T08:00:00.000Z',
+        },
+      },
+      { signal: expect.any(AbortSignal) },
+    )
+    expect(h.guard.mock.calls[0][0]).not.toHaveProperty('alt')
+  })
+
+  it.each([
+    ['type', 'Only MP3, M4A and WAV tracks can be added.'],
+    ['size', 'The track is larger than 20 MB.'],
+    ['length', 'The track is longer than 10 minutes.'],
+    [
+      'unreadable',
+      'The track’s length could not be read. Export it again as MP3, M4A or WAV and retry.',
+    ],
+    [
+      'wav-format',
+      'This WAV cannot be used. Export it again as PCM or 32-bit float WAV and retry.',
+    ],
+  ] as const)('a %s refusal saves nothing', async (reason, message) => {
+    h.moveAudio.mockResolvedValue({ ok: false, reason })
+    const response = await POST(request(TRACK))
+    expect(response.status).toBe(400)
+    expect((await response.json()).error).toBe(message)
+    expect(h.create).not.toHaveBeenCalled()
+  })
+
+  it('removes the fresh FILE when the gallery entry cannot be written', async () => {
+    h.create.mockRejectedValue(new Error('sanity down'))
+    expect((await POST(request(TRACK))).status).toBe(500)
+    for (const task of h.afterTasks) await task()
+    expect(h.orphanFile).toHaveBeenCalledWith('file-theme-mp3')
+    expect(h.orphan).not.toHaveBeenCalled()
+  })
+
+  it('still requires alt text of an image, and discards the upload', async () => {
+    expect((await POST(request({ ...VALID, alt: undefined }))).status).toBe(400)
+    expect(h.move).not.toHaveBeenCalled()
+    expect(h.discard).toHaveBeenCalledWith(URL_OK, 'org-A')
+  })
+
+  it('discards the upload when the guard refuses its subject', async () => {
+    h.guard.mockRejectedValue(new Error('NOT_FOUND'))
+    expect((await POST(request(TRACK))).status).toBe(400)
+    expect(h.discard).toHaveBeenCalledWith(TRACK_URL, 'org-A')
+    expect(h.moveAudio).not.toHaveBeenCalled()
+  })
+
+  it('never discards on a successful move: the move owns that blob', async () => {
+    expect((await POST(request(TRACK))).status).toBe(200)
+    expect(h.discard).not.toHaveBeenCalled()
   })
 })

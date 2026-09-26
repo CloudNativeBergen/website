@@ -647,6 +647,13 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                               that is never finished is deleted within about two
                               days
                             </li>
+                            <li>
+                              • The same gallery keeps music tracks for our
+                              promotional videos. When an organizer adds one,
+                              they confirm they have the right to use it in
+                              social posts, and we store which organizer
+                              confirmed it and when
+                            </li>
                           </ul>
                         </div>
                         <div>

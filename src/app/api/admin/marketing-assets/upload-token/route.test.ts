@@ -73,7 +73,14 @@ describe('the marketing asset upload token', () => {
     const signed = signedPayload(clientToken)
     expect(signed).toMatchObject({
       pathname: OURS,
-      allowedContentTypes: ['image/png', 'image/jpeg', 'image/webp'],
+      allowedContentTypes: [
+        'image/png',
+        'image/jpeg',
+        'image/webp',
+        'audio/mpeg',
+        'audio/mp4',
+        'audio/wav',
+      ],
       maximumSizeInBytes: 20 * 1024 * 1024,
       addRandomSuffix: true,
     })
