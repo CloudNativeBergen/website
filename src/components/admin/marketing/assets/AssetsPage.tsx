@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { keepPreviousData } from '@tanstack/react-query'
 import {
+  ArrowTopRightOnSquareIcon,
   ExclamationTriangleIcon,
   MusicalNoteIcon,
   PencilSquareIcon,
@@ -13,9 +14,11 @@ import {
 import { AdminPageHeader } from '@/components/admin/AdminPageHeader'
 import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
 import { useNotification } from '@/components/admin/NotificationProvider'
-import type {
-  MarketingAssetFilter,
-  MarketingAssetRow,
+import {
+  openInStudioHref,
+  opensTheCard,
+  type MarketingAssetFilter,
+  type MarketingAssetRow,
 } from '@/lib/marketing-asset'
 import { api } from '@/lib/trpc/client'
 import { formatDateSafe } from '@/lib/time'
@@ -153,6 +156,22 @@ function AssetCard({
               </div>
             )}
           </dl>
+        )}
+        {asset.studio && (
+          // Back to the tab and the speaker or sponsor that made it (§4.2).
+          // The studio cannot address a talk or a card variant.
+          <Link
+            href={openInStudioHref(asset.studio)}
+            aria-label={
+              opensTheCard(asset.studio)
+                ? `Open ${asset.title} in the studio`
+                : `Open the studio tab ${asset.title} was made on`
+            }
+            className="inline-flex items-center gap-1 self-start text-xs font-medium text-brand-cloud-blue hover:underline focus-visible:outline-2 focus-visible:outline-brand-cloud-blue dark:text-blue-300"
+          >
+            <ArrowTopRightOnSquareIcon className="size-3.5" aria-hidden />
+            {opensTheCard(asset.studio) ? 'Open in studio' : 'Open studio tab'}
+          </Link>
         )}
         {asset.rights && (
           <p className="text-xs text-gray-600 dark:text-gray-300">

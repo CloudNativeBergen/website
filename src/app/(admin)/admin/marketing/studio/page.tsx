@@ -2,6 +2,7 @@ import React from 'react'
 import { StudioSearchParamsSchema } from '@/server/schemas/studio'
 import { StudioCardGrid } from '@/components/admin/marketing/StudioCardGrid'
 import { StudioTaskProvider } from '@/components/admin/marketing/StudioTaskProvider'
+import { StudioGalleryProvider } from '@/components/admin/marketing/studio-gallery'
 import { getAuthSession } from '@/lib/auth'
 import {
   isOrganizerForCurrentOrg,
@@ -18,6 +19,7 @@ import { Status } from '@/lib/proposal/types'
 import { SpeakerShare } from '@/components/SpeakerShare'
 import { SponsorThankYou } from '@/components/SponsorThankYou'
 import { DownloadableImage } from '@/components/common/DownloadableImage'
+import type { StudioCard } from '@/components/common/image-capture'
 import { AdminPageHeader } from '@/components/admin'
 import { MarketingTabs } from '@/components/admin/MarketingTabs'
 import { MemeGeneratorWithDownload } from '@/components/admin/meme-generator'
@@ -120,6 +122,60 @@ const getFirstParagraph = (text?: string): string => {
   return paragraphs[0]?.trim() || ''
 }
 
+/**
+ * "Save to gallery" on a speaker card (spec §4.2): about that speaker, with
+ * words an organizer can keep or change.
+ */
+function speakerCard(
+  speaker: { _id: string; name: string },
+  talks: { title?: string }[],
+  eventName: string,
+): StudioCard {
+  const talk = talks.find((t) => t.title)?.title
+  return {
+    tab: 'speakers',
+    title: `${speaker.name} – speaker card`,
+    alt: `Speaker card for ${speaker.name}${talk ? `, speaking on “${talk}”` : ''} at ${eventName}.`,
+    subject: { type: 'speaker', id: speaker._id, name: speaker.name },
+  }
+}
+
+/** "Save to gallery" on a sponsor's thank-you card: about that sponsor. */
+function sponsorCard(
+  sponsor: SponsorData,
+  tier: SponsorTierData,
+  eventName: string,
+): StudioCard {
+  return {
+    tab: 'sponsors',
+    title: `${sponsor.name} – thank-you card`,
+    alt: `Thank-you card for ${sponsor.name}, ${tier.title} sponsor of ${eventName}.`,
+    subject: { type: 'sponsor', id: sponsor._id, name: sponsor.name },
+  }
+}
+
+/**
+ * "Save to gallery" wraps the Task's attachment context, so it is present with
+ * or without a render Task open (spec §4.2).
+ */
+function StudioProviders({
+  orgId,
+  taskId,
+  children,
+}: {
+  orgId: string
+  taskId?: string
+  children: React.ReactNode
+}) {
+  return (
+    <StudioGalleryProvider orgId={orgId}>
+      <StudioTaskProvider key={taskId} taskId={taskId}>
+        {children}
+      </StudioTaskProvider>
+    </StudioGalleryProvider>
+  )
+}
+
 const ErrorDisplay = ({ message }: { message: string }) => (
   <div className="flex h-full items-center justify-center">
     <div className="text-center">
@@ -169,11 +225,20 @@ export default async function MarketingPage({
     return <ErrorDisplay message="Error loading conference data" />
   }
 
-  const [featuredPhotos, orgId] = await Promise.all([
+  const [featuredPhotos, currentOrgId] = await Promise.all([
     getFeaturedGalleryImages(100, conference._id),
     // Names the gallery's upload pathname; the server resolves it again.
     resolveCurrentOrgId(),
   ])
+
+  // The gate above proved an organizer of this host's organization; one that
+  // cannot be resolved now has nothing to name the gallery upload with.
+  if (!currentOrgId) {
+    return <ErrorDisplay message="Error loading the organization" />
+  }
+  const orgId = currentOrgId
+  // A card preselected without a Task was opened from the gallery.
+  const pinnedTitle = selection.task ? 'Card for your Task' : 'Selected card'
 
   const { proposals: allProposals, proposalsError } = await getProposals({
     conferenceId: conference._id,
@@ -304,7 +369,7 @@ export default async function MarketingPage({
         ]}
       />
 
-      <StudioTaskProvider key={selection.task} taskId={selection.task}>
+      <StudioProviders orgId={orgId} taskId={selection.task}>
         <MarketingTabs
           tabs={[
             {
@@ -353,7 +418,7 @@ export default async function MarketingPage({
           {/* Meme Generator Tab */}
           <div>
             <MemeGeneratorWithDownload
-              orgId={orgId ?? undefined}
+              orgId={orgId}
               conferenceTitle={conference.title}
               conferenceLogos={{
                 logoBright: conference.logoBright,
@@ -369,6 +434,10 @@ export default async function MarketingPage({
           <div>
             <DownloadableImage
               filename={`${conference.title?.replace(/\s+/g, '-').toLowerCase() || PLATFORM_SLUG}-conference-promo`}
+              studio={{
+                tab: 'conference',
+                title: `${conference.title} promo`,
+              }}
             >
               <div
                 className="relative overflow-hidden rounded-xl bg-brand-gradient p-6 text-center md:p-8"
@@ -499,6 +568,7 @@ export default async function MarketingPage({
             ) : (
               <StudioCardGrid
                 selectedId={selection.speaker}
+                pinnedTitle={pinnedTitle}
                 label="speakers"
                 className="grid grid-cols-2 gap-6 sm:grid-cols-3 md:grid-cols-4"
               >
@@ -506,6 +576,7 @@ export default async function MarketingPage({
                   <div key={speaker._id} className="flex flex-col items-center">
                     <DownloadableImage
                       filename={`${getSpeakerFilename(speaker)}-speaker-spotlight`}
+                      studio={speakerCard(speaker, talks, conference.title)}
                     >
                       <div
                         className="h-64 w-64"
@@ -546,6 +617,7 @@ export default async function MarketingPage({
             ) : (
               <StudioCardGrid
                 selectedId={selection.sponsor}
+                pinnedTitle={pinnedTitle}
                 label="sponsors"
                 className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3"
               >
@@ -569,6 +641,7 @@ export default async function MarketingPage({
                     >
                       <DownloadableImage
                         filename={`${sponsor.name.replace(/\s+/g, '-').toLowerCase()}-${tier.title.replace(/\s+/g, '-').toLowerCase()}-thank-you`}
+                        studio={sponsorCard(sponsor, tier, conference.title)}
                       >
                         <div
                           className="w-full"
@@ -597,7 +670,7 @@ export default async function MarketingPage({
             )}
           </div>
         </MarketingTabs>
-      </StudioTaskProvider>
+      </StudioProviders>
     </div>
   )
 }

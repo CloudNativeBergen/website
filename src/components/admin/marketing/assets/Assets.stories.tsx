@@ -74,6 +74,7 @@ const row = (
   audioUrl: null,
   durationSeconds: null,
   rights: null,
+  studio: null,
   ...fields,
 })
 
@@ -97,6 +98,7 @@ const ASSETS: MarketingAssetRow[] = [
     tags: ['speaker card'],
     credit: 'Jane Designer, Studio Nord',
     createdAt: '2026-09-19T10:00:00Z',
+    studio: { tab: 'speakers', speakerId: ADA._id, sponsorId: null },
   }),
   row({
     _id: 'asset-theme',
@@ -136,6 +138,7 @@ const ASSETS: MarketingAssetRow[] = [
     subject: ACME,
     tags: ['sponsors'],
     createdAt: '2026-09-15T10:00:00Z',
+    studio: { tab: 'sponsors', speakerId: null, sponsorId: ACME._id },
   }),
   row({
     _id: 'asset-old-banner',
@@ -147,6 +150,8 @@ const ASSETS: MarketingAssetRow[] = [
     height: 540,
     createdAt: '2026-09-10T10:00:00Z',
     softOnSocial: true,
+    // Made in the free-form editor, which reopens empty.
+    studio: { tab: 'meme-generator', speakerId: null, sponsorId: null },
   }),
 ]
 
@@ -330,6 +335,36 @@ export const Gallery: Story = {
       }),
     ).toBeInTheDocument()
     await expect(canvas.getByText(/Olga Organizer/)).toBeInTheDocument()
+    // A studio save opens its tab on its speaker or sponsor (#1164); an
+    // upload has no way back to the studio.
+    await expect(
+      canvas.getByRole('link', {
+        name: 'Open Speaker card: Ada Lovelace in the studio',
+      }),
+    ).toHaveAttribute(
+      'href',
+      '/admin/marketing/studio?tab=speakers&speaker=sp-ada',
+    )
+    await expect(
+      canvas.getByRole('link', {
+        name: 'Open Sponsor thank-you: Acme in the studio',
+      }),
+    ).toHaveAttribute(
+      'href',
+      '/admin/marketing/studio?tab=sponsors&sponsor=sponsor-acme',
+    )
+    await expect(
+      canvas.getAllByRole('link', { name: /in the studio/ }),
+    ).toHaveLength(2)
+    // The free-form editor reopens empty, and its link says so.
+    const tab = canvas.getByRole('link', {
+      name: /^Open the studio tab Old banner/,
+    })
+    await expect(tab).toHaveTextContent('Open studio tab')
+    await expect(tab).toHaveAttribute(
+      'href',
+      '/admin/marketing/studio?tab=meme-generator',
+    )
   },
 }
 export const GalleryMobile: Story = {

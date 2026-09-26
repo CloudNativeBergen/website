@@ -3,10 +3,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, render, screen, within } from '@testing-library/react'
 import type { ReactNode } from 'react'
 
+const orgIdMock = vi.hoisted(() => ({ value: 'org-1' as string | null }))
 vi.mock('@/lib/auth', () => ({ getAuthSession: async () => ({}) }))
 vi.mock('@/lib/authz/organizer', () => ({
   isOrganizerForCurrentOrg: async () => true,
-  resolveCurrentOrgId: async () => 'org-1',
+  resolveCurrentOrgId: async () => orgIdMock.value,
 }))
 vi.mock('@/lib/conference/sanity', () => ({
   getConferenceForCurrentDomain: async () => ({
@@ -75,9 +76,21 @@ vi.mock('@/components/admin/meme-generator', () => ({
 vi.mock('@/components/admin/PhotoGalleryWithDownload', () => ({
   PhotoGalleryWithDownload: () => null,
 }))
-vi.mock('@/components/common/DownloadableImage', () => ({
-  DownloadableImage: ({ children }: { children: ReactNode }) => (
-    <div>{children}</div>
+vi.mock(
+  '@/components/common/DownloadableImage',
+  () => import('../../../mocks/downloadable-image'),
+)
+vi.mock('@/components/admin/marketing/studio-gallery', () => ({
+  StudioGalleryProvider: ({
+    orgId,
+    children,
+  }: {
+    orgId: string
+    children: ReactNode
+  }) => (
+    <div data-testid="gallery-context" data-org={orgId}>
+      {children}
+    </div>
   ),
 }))
 vi.mock('@/components/SpeakerShare', () => ({
@@ -92,6 +105,7 @@ vi.mock('@/components/SponsorThankYou', () => ({
 }))
 
 import MarketingPage from '@/app/(admin)/admin/marketing/studio/page'
+import { openInStudioHref } from '@/lib/marketing-asset'
 
 afterEach(cleanup)
 
@@ -168,5 +182,98 @@ describe('Promo Studio meme generator', () => {
     expect(screen.getByTestId('meme-generator').getAttribute('data-org')).toBe(
       'org-1',
     )
+  })
+})
+
+describe('Promo Studio Save to gallery (#1164)', () => {
+  const studioOf = (card: HTMLElement) =>
+    JSON.parse(card.getAttribute('data-studio') ?? 'null')
+
+  it('offers the gallery with and without a Task, outside the Task context', async () => {
+    for (const task of [undefined, 'render-1']) {
+      render(
+        await MarketingPage({
+          searchParams: Promise.resolve(task ? { task } : {}),
+        }),
+      )
+      const gallery = screen.getByTestId('gallery-context')
+      expect(gallery.getAttribute('data-org')).toBe('org-1')
+      expect(gallery.contains(screen.getByTestId('task-context'))).toBe(true)
+      cleanup()
+    }
+  })
+
+  it('gives every card its tab, and a speaker or sponsor card its subject and alt', async () => {
+    render(await MarketingPage({ searchParams: Promise.resolve({}) }))
+    const cards = screen.getAllByTestId('card').map(studioOf)
+    expect(cards.map((card) => card.tab)).toEqual([
+      'conference',
+      'speakers',
+      'speakers',
+      'sponsors',
+      'sponsors',
+    ])
+    expect(cards[0].subject).toBeUndefined()
+    expect(cards[1]).toEqual({
+      tab: 'speakers',
+      title: 'Ada – speaker card',
+      alt: "Speaker card for Ada, speaking on “Ada's talk” at Test Conference.",
+      subject: { type: 'speaker', id: 'ada', name: 'Ada' },
+    })
+    expect(cards[3]).toEqual({
+      tab: 'sponsors',
+      title: 'Acme – thank-you card',
+      alt: 'Thank-you card for Acme, Gold sponsor of Test Conference.',
+      subject: { type: 'sponsor', id: 'acme', name: 'Acme' },
+    })
+  })
+
+  it.each([
+    [{ tab: 'speakers', speakerId: 'grace', sponsorId: null }, 'Grace', 'Ada'],
+    [{ tab: 'sponsors', speakerId: null, sponsorId: 'other' }, 'Other', 'Acme'],
+  ] as const)(
+    'Open in studio lands on the tab and the card of %o',
+    async (origin, selected, other) => {
+      const query = Object.fromEntries(
+        new URL(openInStudioHref(origin), 'https://x').searchParams,
+      )
+      render(await MarketingPage({ searchParams: Promise.resolve(query) }))
+      expect(screen.getByTestId('tabs').getAttribute('data-tab')).toBe(
+        origin.tab,
+      )
+      const pinned = screen.getByRole('region', { name: 'Selected card' })
+      expect(within(pinned).getByText(selected).textContent).toBe(selected)
+      expect(within(pinned).queryByText(other)).toBeNull()
+      expect(screen.getByTestId('task-context').getAttribute('data-task')).toBe(
+        'none',
+      )
+    },
+  )
+
+  it.each(['meme-generator', 'conference', 'photo-gallery'] as const)(
+    'Open in studio lands on the %s tab',
+    async (tab) => {
+      const query = Object.fromEntries(
+        new URL(
+          openInStudioHref({ tab, speakerId: null, sponsorId: null }),
+          'https://x',
+        ).searchParams,
+      )
+      render(await MarketingPage({ searchParams: Promise.resolve(query) }))
+      expect(screen.getByTestId('tabs').getAttribute('data-tab')).toBe(tab)
+    },
+  )
+})
+
+describe('Promo Studio without a resolvable organization', () => {
+  afterEach(() => {
+    orgIdMock.value = 'org-1'
+  })
+
+  it('refuses to render rather than naming uploads with an empty id', async () => {
+    orgIdMock.value = null
+    render(await MarketingPage({ searchParams: Promise.resolve({}) }))
+    expect(screen.getByText('Error loading the organization')).toBeTruthy()
+    expect(screen.queryByTestId('gallery-context')).toBeNull()
   })
 })

@@ -3,6 +3,7 @@ import {
   audioTypeForFile,
   marketingAssetPathname,
   type MarketingAssetDetails,
+  type StudioTab,
 } from '@/lib/marketing-asset'
 
 const GENERIC_FAILURE = 'The image could not be added. Try again.'
@@ -43,6 +44,12 @@ export interface AudioUploadOptions {
   rightsConfirmed: boolean
 }
 
+/** What "Save to gallery" in the studio adds: the tab it saved from (§4.2). */
+export interface StudioUploadOptions {
+  kind: 'image'
+  studio: { tab: StudioTab }
+}
+
 /**
  * Uploads one image (or, with `audio`, one track) and adds it to the gallery,
  * or throws a message to show.
@@ -50,7 +57,7 @@ export interface AudioUploadOptions {
 export type AssetUploader = (
   file: File,
   details: MarketingAssetDetails,
-  audio?: AudioUploadOptions,
+  options?: AudioUploadOptions | StudioUploadOptions,
 ) => Promise<{ _id: string; softOnSocial: boolean }>
 
 /**
@@ -61,7 +68,8 @@ export type AssetUploader = (
  * any other prefix.
  */
 export function blobAssetUploader(orgId: string): AssetUploader {
-  return async (file, details, audio) => {
+  return async (file, details, options) => {
+    const audio = options?.kind === 'audio'
     let blob: { url: string }
     try {
       blob = await upload(
@@ -83,7 +91,7 @@ export function blobAssetUploader(orgId: string): AssetUploader {
       response = await fetch('/api/admin/marketing-assets', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ url: blob.url, ...details, ...audio }),
+        body: JSON.stringify({ url: blob.url, ...details, ...options }),
       })
     } catch (error) {
       // "Failed to fetch" / "Load failed" is not for organizers either.

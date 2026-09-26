@@ -28,7 +28,15 @@ export function PhotoGalleryWithDownload({
       conferenceTitle={conferenceTitle}
       conferenceLogos={conferenceLogos}
       wrapPreview={(node) => (
-        <DownloadableImage filename={filename}>{node}</DownloadableImage>
+        <DownloadableImage
+          filename={filename}
+          studio={{
+            tab: 'photo-gallery',
+            title: `${conferenceTitle} photo collage`,
+          }}
+        >
+          {node}
+        </DownloadableImage>
       )}
     />
   )

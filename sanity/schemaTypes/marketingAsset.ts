@@ -1,4 +1,5 @@
 import { defineField, defineType } from 'sanity'
+import { STUDIO_TABS } from '@/lib/marketing-asset/studio'
 
 /**
  * An organization's marketing asset (docs/MARKETING_ASSETS_SPEC.md §3): a
@@ -196,6 +197,23 @@ export default defineType({
       type: 'string',
       options: { list: ['upload', 'studio'] },
       readOnly: true,
+    }),
+    defineField({
+      name: 'studio',
+      title: 'Made in the studio',
+      description:
+        'The studio tab it was made on. "Open in studio" reopens it on the subject, when that is a speaker or sponsor.',
+      type: 'object',
+      readOnly: true,
+      hidden: ({ document }) => document?.source !== 'studio',
+      fields: [
+        defineField({
+          name: 'tab',
+          title: 'Tab',
+          type: 'string',
+          options: { list: [...STUDIO_TABS] },
+        }),
+      ],
     }),
   ],
   preview: {

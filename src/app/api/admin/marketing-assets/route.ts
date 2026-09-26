@@ -27,6 +27,7 @@ import {
 import { abortAfter } from '@/lib/marketing-asset/blob-delete'
 import { createMarketingAsset } from '@/lib/marketing-asset/sanity'
 import { marketingAssetDetailsSchema } from '@/lib/marketing-asset/details'
+import { studioOriginSchema } from '@/lib/marketing-asset/studio'
 import { resolveAssetDetailsForCurrentOrg } from '@/lib/marketing-asset/guard'
 import type { ResolvedMarketingAssetDetails } from '@/lib/marketing-asset/details'
 import {
@@ -49,6 +50,10 @@ const UrlSchema = z.object({
   // An audio track's one confirmation (spec §6). Only `true` confirms.
   rightsConfirmed: z.unknown().optional(),
 })
+
+// "Save to gallery" in the studio (spec §4.2) names the tab it saved from. The
+// speaker or sponsor it was opened on is the subject, checked by the guard.
+const StudioSchema = z.object({ studio: studioOriginSchema.optional() })
 
 type Refusals = Record<MoveRefusal, { status: number; error: string }>
 
@@ -95,7 +100,8 @@ const KINDS = {
  * Add an uploaded image or audio track to the organization's marketing asset
  * gallery (docs/MARKETING_ASSETS_SPEC.md §4.1,
  * docs/MARKETING_STUDIO_VIDEO_SPEC.md §6): move the browser's temporary blob
- * into Sanity, then write the gallery entry. A route handler rather than tRPC so the
+ * into Sanity, then write the gallery entry — also for "Save to gallery" in the
+ * studio (spec §4.2), which names its tab. A route handler rather than tRPC so the
  * move has an explicit `maxDuration`.
  *
  * Organizer of the request host's organization only, refused before the body
@@ -142,6 +148,16 @@ export async function POST(request: Request) {
   // From here a refusal before the move leaves an upload nobody will move:
   // delete it (after the answer) rather than leave it to the sweeper.
   const discard = () => discardBlob(parsedUrl.data.url, orgId)
+  const parsedStudio = StudioSchema.safeParse(body)
+  if (!parsedStudio.success) {
+    discard()
+    return NextResponse.json(
+      { error: 'Those details cannot be saved. Check the studio tab.' },
+      { status: 400 },
+    )
+  }
+  // Only the image write takes it: a track is never a studio render.
+  const { studio } = parsedStudio.data
   if (!audio && !parsed.data.alt) {
     discard()
     return NextResponse.json({ error: kind.missing }, { status: 400 })
@@ -209,6 +225,7 @@ export async function POST(request: Request) {
             ...(moved.asset.created
               ? { createdImageAssetId: moved.asset._id }
               : {}),
+            ...(studio ? { studio } : {}),
           },
       { signal: writeDeadline.signal },
     )
