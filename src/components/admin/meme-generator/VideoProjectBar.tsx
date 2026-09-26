@@ -117,7 +117,7 @@ export function VideoProjectBar({
           className="inline-flex items-center gap-1.5"
         >
           <DocumentDuplicateIcon aria-hidden="true" className="size-4" />
-          Duplicate
+          Duplicate project
         </AdminButton>
       </div>
 
