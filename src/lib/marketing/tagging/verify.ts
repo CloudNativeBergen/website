@@ -17,6 +17,7 @@ import {
   saveMentions,
   type TagCheck,
   type TaggablePerson,
+  withoutOwnAccount,
 } from './checks'
 import { resolveBlueskyHandle, type HandleResolution } from './resolve'
 import { getConferenceTaggablePeople, getVariantMentionRecords } from './sanity'
@@ -62,6 +63,8 @@ export async function checkTagsOnSave(input: {
   variantId: string
   body: string
   scheduled: boolean
+  /** `ownBlueskyHandle(conference.socialLinks)`: never tagged (spec §4.1). */
+  ownAccount: string | null
   resolve?: Resolve
 }): Promise<TagCheck & { mentions: MentionRecord[] }> {
   const previous = await getVariantMentionRecords(
@@ -71,18 +74,28 @@ export async function checkTagsOnSave(input: {
   // No `@` token, no tag: nothing to match, so no read of the roster.
   const people: TaggablePerson[] =
     mentionTokens(input.body).length > 0
-      ? await getConferenceTaggablePeople(input.conferenceId)
+      ? withoutOwnAccount(
+          await getConferenceTaggablePeople(input.conferenceId),
+          input.ownAccount,
+        )
       : []
   let resolutions = await resolveHandles(
     handlesToResolve({ body: input.body, people, previous }),
     input.resolve,
   )
-  const saved = saveMentions({
+  const rebuilt = saveMentions({
     body: input.body,
     people,
     previous,
     resolutions,
   })
+  // Our own account named by DID: a handle that turns out to be it is text.
+  const saved = {
+    ...rebuilt,
+    mentions: rebuilt.mentions.filter(
+      (m) => !(input.ownAccount && m.did === input.ownAccount),
+    ),
+  }
   if (!input.scheduled || saved.issues.length > 0) return saved
   resolutions = await resolveHandles(
     approvalHandlesToResolve({ mentions: saved.mentions, people }),
@@ -106,6 +119,8 @@ export async function checkTagsForApproval(input: {
   conferenceId: string
   variantId: string
   body: string
+  /** `ownBlueskyHandle(conference.socialLinks)`: never tagged (spec §4.1). */
+  ownAccount: string | null
   resolve?: Resolve
 }): Promise<TagCheck> {
   const mentions = await getVariantMentionRecords(
@@ -117,7 +132,10 @@ export async function checkTagsForApproval(input: {
     !mentions.some((m) => m.status === 'tagged')
   )
     return { issues: [], warnings: [] }
-  const people = await getConferenceTaggablePeople(input.conferenceId)
+  const people = withoutOwnAccount(
+    await getConferenceTaggablePeople(input.conferenceId),
+    input.ownAccount,
+  )
   const resolutions = await resolveHandles(
     approvalHandlesToResolve({ mentions, people }),
     input.resolve,

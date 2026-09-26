@@ -46,6 +46,7 @@ import {
   checkTagsOnSave,
 } from '@/lib/marketing/tagging/verify'
 import { mentionDocuments } from '@/lib/marketing/tagging/records'
+import { ownBlueskyHandle } from '@/lib/marketing/tagging/lookup'
 import { tagIssuesError } from '@/server/errors'
 import { ceilingWarningsFor } from '@/lib/marketing/ceiling-check'
 import { getTaskForVariant, getTaskLinkInputs } from '@/lib/marketing/sanity'
@@ -90,6 +91,12 @@ async function currentConferenceDomains(
   // id: see `getConferenceDomainsForRule`.
   if (!needsOwnDomains(platform)) return []
   return getConferenceDomainsForRule(await resolveConferenceId())
+}
+
+/** The conference's own Bluesky account, never tagged (tagging spec §4.1). */
+async function ownBlueskyAccount(): Promise<string | null> {
+  const { conference } = await getConferenceForCurrentDomain()
+  return ownBlueskyHandle(conference?.socialLinks)
 }
 
 function issuesToError(issues: ValidationIssue[]): TRPCError {
@@ -389,6 +396,7 @@ export const socialRouter = router({
               conferenceId: variant.conferenceId,
               variantId: variant._id,
               body: variant.body,
+              ownAccount: await ownBlueskyAccount(),
             })
           : null
       if (tags && tags.issues.length > 0) throw tagIssuesError(tags.issues)
@@ -525,6 +533,7 @@ export const socialRouter = router({
               variantId: variant._id,
               body: input.body,
               scheduled: variant.status === 'scheduled',
+              ownAccount: await ownBlueskyAccount(),
             })
           : null
       if (tags && tags.issues.length > 0) throw tagIssuesError(tags.issues)

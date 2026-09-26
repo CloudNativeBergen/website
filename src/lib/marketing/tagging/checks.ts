@@ -56,6 +56,21 @@ export interface TaggablePerson {
   optedOut: boolean
 }
 
+/**
+ * The conference's own account is never tagged (spec §4.1): a speaker who
+ * lists it has no handle to tag. `own` is `ownBlueskyHandle(socialLinks)`,
+ * a handle or a DID; the DID form is caught on the resolved DID instead.
+ */
+export function withoutOwnAccount(
+  people: readonly TaggablePerson[],
+  own: string | null,
+): TaggablePerson[] {
+  if (!own) return [...people]
+  return people.map((p) =>
+    p.handle && normaliseHandle(p.handle) === own ? { ...p, handle: null } : p,
+  )
+}
+
 export type TagIssueCode =
   | 'opted-out'
   | 'not-a-speaker'
@@ -220,44 +235,99 @@ function matchedTags(
 }
 
 /**
- * The handles a save must ask Bluesky about: tags of speakers who have not
- * opted out (an opted-out speaker's handle is refused, never looked up) and
- * that carry no DID already checked for the same person and handle.
+ * What a save decides for one `@handle` in the body, before Bluesky is asked.
+ * A handle already RECORDED is judged by the person it was recorded for (so
+ * a speaker who changed their link, or a handle another speaker now lists,
+ * cannot rebind or drop it); any other handle by the roster's current
+ * handles. An opted-out speaker listing the handle refuses it either way.
+ */
+type TagPlan =
+  | { kind: 'refuse'; issue: TagIssue }
+  | {
+      kind: 'record'
+      handle: string
+      person: TaggablePerson
+      key: string
+      did?: string
+    }
+
+function planTags(input: {
+  body: string
+  people: readonly TaggablePerson[]
+  previous: readonly MentionRecord[]
+}): TagPlan[] {
+  const known = byHandle(input.people)
+  const byId = new Map(input.people.map((p) => [p.speakerId, p]))
+  const recorded = new Map<string, MentionRecord>()
+  for (const m of input.previous) {
+    const h = normaliseHandle(m.handle)
+    if (m.status === 'tagged' && !recorded.has(h)) recorded.set(h, m)
+  }
+  const keys = new Set<string>()
+  const seen = new Set<string>()
+  const plans: TagPlan[] = []
+  for (const { handle } of mentionTokens(input.body)) {
+    if (seen.has(handle)) continue
+    seen.add(handle)
+    const matches = known.get(handle) ?? []
+    const optedOut = matches.find((p) => p.optedOut)
+    const rec = recorded.get(handle)
+    if (optedOut) {
+      plans.push({ kind: 'refuse', issue: optedOutIssue(optedOut, handle) })
+      continue
+    }
+    let person: TaggablePerson | undefined
+    let did: string | undefined
+    if (rec) {
+      person = byId.get(rec.speakerId)
+      if (!person) {
+        plans.push({ kind: 'refuse', issue: notASpeaker(rec, handle) })
+        continue
+      }
+      if (person.optedOut) {
+        plans.push({
+          kind: 'refuse',
+          issue: { ...optedOutIssue(person, handle), mentionKey: rec._key },
+        })
+        continue
+      }
+      did = rec.did
+    } else {
+      person = matches[0]
+      if (!person) continue // a stranger's handle is just text
+    }
+    // One entry per handle; one person's old and new handle get two keys.
+    let key = storedKey(person.speakerId)
+    if (keys.has(key)) key = storedKey(`${person.speakerId}/${handle}`)
+    keys.add(key)
+    plans.push({ kind: 'record', handle, person, key, ...(did ? { did } : {}) })
+  }
+  return plans
+}
+
+/**
+ * The handles a save must ask Bluesky about: tags it will record that carry
+ * no DID already checked for that person and handle. A refused handle (an
+ * opted-out speaker's) is never looked up.
  */
 export function handlesToResolve(input: {
   body: string
   people: readonly TaggablePerson[]
   previous: readonly MentionRecord[]
 }): string[] {
-  return matchedTags(input.body, input.people).flatMap(
-    ({ handle, matches }) => {
-      if (matches.some((p) => p.optedOut)) return []
-      return priorDid(input.previous, matches[0], handle) ? [] : [handle]
-    },
+  return planTags(input).flatMap((p) =>
+    p.kind === 'record' && !p.did ? [p.handle] : [],
   )
-}
-
-function priorDid(
-  previous: readonly MentionRecord[],
-  person: TaggablePerson,
-  handle: string,
-): string | undefined {
-  return previous.find(
-    (m) =>
-      m.status === 'tagged' &&
-      m.speakerId === person.speakerId &&
-      normaliseHandle(m.handle) === handle &&
-      m.did,
-  )?.did
 }
 
 /**
  * `mentions[]` rebuilt from the body on a save (§4.3), and the save check
- * (§4.4): every `@handle` that is a speaker's handle is recorded — typed by
- * hand or generated alike — and a stranger's handle is just text. Refused:
- * an opted-out speaker's handle, a handle Bluesky definitely does not know,
- * and a body that fits only in its tagged form. An `unresolved` note from
- * generation stays until that person is tagged.
+ * (§4.4): every `@handle` that is a speaker's handle, or already recorded,
+ * is recorded — typed by hand or generated alike — and a stranger's handle
+ * is just text. Refused: an opted-out speaker's handle, a recorded tag of
+ * someone no longer a speaker here, a handle Bluesky definitely does not
+ * know, and a body that fits only in its tagged form. An `unresolved` note
+ * from generation stays while the person is named in plain text.
  */
 export function saveMentions(input: {
   body: string
@@ -268,15 +338,13 @@ export function saveMentions(input: {
   const issues: TagIssue[] = []
   const warnings: TagWarning[] = []
   const tagged: MentionRecord[] = []
-  for (const { handle, matches } of matchedTags(input.body, input.people)) {
-    const optedOut = matches.find((p) => p.optedOut)
-    if (optedOut) {
-      issues.push(optedOutIssue(optedOut, handle))
+  for (const plan of planTags(input)) {
+    if (plan.kind === 'refuse') {
+      issues.push(plan.issue)
       continue
     }
-    const person = matches[0]
-    const key = storedKey(person.speakerId)
-    let did = priorDid(input.previous, person, handle)
+    const { handle, person, key } = plan
+    let did = plan.did
     if (!did) {
       const r = input.resolutions.get(handle)
       if (r?.kind === 'not-found') {
@@ -294,34 +362,6 @@ export function saveMentions(input: {
       name: person.name,
       status: 'tagged',
     })
-  }
-  // A recorded tag whose handle is still in the body but no longer matches
-  // anyone's CURRENT handle (the speaker changed their link, or left the
-  // roster): never dropped — that would leave a tag no later check knows
-  // about. It is judged by the PERSON it was recorded for.
-  const inBody = new Set(mentionTokens(input.body).map((t) => t.handle))
-  const known = byHandle(input.people)
-  const byId = new Map(input.people.map((p) => [p.speakerId, p]))
-  for (const m of input.previous) {
-    const handle = normaliseHandle(m.handle)
-    if (m.status !== 'tagged' || !inBody.has(handle) || known.has(handle))
-      continue
-    if (tagged.some((t) => t.handle === handle)) continue
-    const person = byId.get(m.speakerId)
-    if (!person) issues.push(notASpeaker(m, handle))
-    else if (person.optedOut)
-      issues.push({ ...optedOutIssue(person, handle), mentionKey: m._key })
-    else {
-      // Old and new handle of one person both in the text: one entry each,
-      // so the keys must differ.
-      const clash = tagged.some((t) => t._key === m._key)
-      tagged.push({
-        ...m,
-        _key: clash ? storedKey(`${m.speakerId}/${handle}`) : m._key,
-        handle,
-        name: person.name,
-      })
-    }
   }
   const taggedIds = new Set(tagged.map((m) => m.speakerId))
   // A note stands while the person is still named in plain text.

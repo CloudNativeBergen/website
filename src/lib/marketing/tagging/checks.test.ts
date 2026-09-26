@@ -352,10 +352,38 @@ describe('saveMentions and a speaker who changed their link', () => {
       resolutions: new Map([['alice.example.com', resolved(DID_B)]]),
     })
     expect(out.mentions.map((m) => [m.handle, m.did])).toEqual([
-      ['alice.example.com', DID_B],
       ['alice.dev', DID_A],
+      ['alice.example.com', DID_B],
     ])
     expect(new Set(out.mentions.map((m) => m._key)).size).toBe(2)
+  })
+
+  it('a handle another speaker now lists stays bound to its recorded person', () => {
+    const taker = { ...bob, handle: 'alice.dev' }
+    const out = saveMentions({
+      body: '@alice.dev',
+      people: [{ ...moved, optedOut: true }, taker],
+      previous: [tagged(alice, DID_A)],
+      resolutions: new Map(),
+    })
+    expect(out.issues.map((i) => [i.code, i.mentionKey])).toEqual([
+      ['opted-out', 'speaker-alice'],
+    ])
+  })
+
+  it('a retained handle saved without a DID is resolved on the next save', () => {
+    const input = {
+      body: '@alice.dev',
+      people: [moved],
+      previous: [tagged(alice)],
+    }
+    expect(handlesToResolve(input)).toEqual(['alice.dev'])
+    expect(
+      saveMentions({
+        ...input,
+        resolutions: new Map([['alice.dev', resolved(DID_A)]]),
+      }).mentions.map((m) => m.did),
+    ).toEqual([DID_A])
   })
 
   it('refuses it when that speaker has opted out since', () => {

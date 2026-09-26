@@ -197,6 +197,19 @@ const blueskyFetch = vi.fn(async (url: string | URL) => {
     )
   return new Response(JSON.stringify({ did: answer }), { status: 200 })
 })
+function ownAccount(link: string) {
+  h.getConference.mockResolvedValue({
+    conference: {
+      _id: CONF_A,
+      organization: { _ref: ORG_A },
+      title: 'CNB',
+      domains: ['cloudnativebergen.dev'],
+      socialLinks: [link],
+    },
+    domain: 'cloudnativebergen.dev',
+    error: null,
+  })
+}
 const askedBluesky = () =>
   blueskyFetch.mock.calls.map(([url]) =>
     new URL(String(url)).searchParams.get('handle'),
@@ -419,6 +432,21 @@ describe('social.updateVariant on a Bluesky body', () => {
     expect(tagReads().some((q) => q.includes('"talk"'))).toBe(false)
   })
 
+  it('our own account is never recorded as a tag (spec §4.1)', async () => {
+    seed([])
+    ownAccount('https://bsky.app/profile/alice.dev')
+    await save('Catch @alice.dev at 10')
+    expect(askedBluesky()).toEqual([])
+    expect(h.updateSocialVariantContent.mock.calls[0][1].mentions).toEqual([])
+  })
+
+  it('nor when our account is named by DID', async () => {
+    seed([])
+    ownAccount(`https://bsky.app/profile/${DID_ALICE}`)
+    await save('Catch @alice.dev at 10')
+    expect(h.updateSocialVariantContent.mock.calls[0][1].mentions).toEqual([])
+  })
+
   it('a LinkedIn body is never matched, read or rewritten', async () => {
     serveVariant(variantData({ platform: 'linkedin', body: 'x' }))
     await save('With @olga.dev')
@@ -558,6 +586,17 @@ describe('marketing.task.resolveTag', () => {
         speakerId: 'spk-olga',
       }),
     ).rejects.toMatchObject({ message: /asked not to be tagged/ })
+    expect(askedBluesky()).toEqual([])
+  })
+
+  it('refuses a speaker whose link is our own account', async () => {
+    ownAccount('https://bsky.app/profile/alice.dev')
+    await expect(
+      marketing().task.resolveTag({
+        taskId: 'task-ours',
+        speakerId: 'spk-alice',
+      }),
+    ).rejects.toMatchObject({ message: /no Bluesky link/ })
     expect(askedBluesky()).toEqual([])
   })
 

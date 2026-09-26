@@ -200,6 +200,8 @@ import type { VariantStatus } from '@/lib/social/types'
 import { getOrganizersByConference } from '@/lib/speaker/sanity'
 import { checkTagsForApproval } from '@/lib/marketing/tagging/verify'
 import { getTaskTagPeople } from '@/lib/marketing/tagging/sanity'
+import { ownBlueskyHandle } from '@/lib/marketing/tagging/lookup'
+import { withoutOwnAccount } from '@/lib/marketing/tagging/checks'
 import { resolveBlueskyHandle } from '@/lib/marketing/tagging/resolve'
 import { tagIssuesError } from '@/server/errors'
 import {
@@ -1421,6 +1423,7 @@ export const marketingRouter = router({
               conferenceId: v.conferenceId,
               variantId: v._id,
               body: v.body,
+              ownAccount: ownBlueskyHandle(conference.socialLinks),
             })
             if (tags.issues.length > 0) throw tagIssuesError(tags.issues)
             tagWarnings = tags.warnings.map((w) => w.message)
@@ -1474,9 +1477,11 @@ export const marketingRouter = router({
           input.taskId,
           'marketingTask',
         )
-        const person = (
-          await getTaskTagPeople(input.taskId, conferenceId)
-        ).find((p) => p.speakerId === input.speakerId)
+        const people = withoutOwnAccount(
+          await getTaskTagPeople(input.taskId, conferenceId),
+          ownBlueskyHandle((await requireConference()).socialLinks),
+        )
+        const person = people.find((p) => p.speakerId === input.speakerId)
         if (!person) {
           throw new TRPCError({
             code: 'BAD_REQUEST',
