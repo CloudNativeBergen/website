@@ -274,7 +274,7 @@ function stored(): StoredTaskEditorData {
   }
 }
 
-function useVariant(v: SocialVariantEditorData) {
+function serveVariant(v: SocialVariantEditorData) {
   h.getSocialVariantEditorData.mockResolvedValue(v)
   h.getSocialPostVariant.mockResolvedValue(v.variant)
 }
@@ -313,7 +313,7 @@ beforeEach(() => {
     },
   )
   h.getTaskEditorData.mockResolvedValue(stored())
-  useVariant(variantData())
+  serveVariant(variantData())
   h.getSocialPostDefaultTime.mockResolvedValue('2027-01-10T07:00:00.000Z')
   h.getSocialPostEditorInputs.mockResolvedValue({
     attachments: [],
@@ -420,7 +420,7 @@ describe('social.updateVariant on a Bluesky body', () => {
   })
 
   it('a LinkedIn body is never matched, read or rewritten', async () => {
-    useVariant(variantData({ platform: 'linkedin', body: 'x' }))
+    serveVariant(variantData({ platform: 'linkedin', body: 'x' }))
     await save('With @olga.dev')
     expect(tagReads()).toEqual([])
     expect(h.updateSocialVariantContent.mock.calls[0][1]).not.toHaveProperty(
@@ -466,7 +466,7 @@ const PATHS: {
   },
   {
     name: 'saving a scheduled variant',
-    prepare: () => useVariant(variantData({ status: 'scheduled' })),
+    prepare: () => serveVariant(variantData({ status: 'scheduled' })),
     run: () => save('Catch @alice.dev at 10'),
     wrote: () => h.updateSocialVariantContent.mock.calls.length > 0,
   },
@@ -521,7 +521,7 @@ describe('approval check scope', () => {
   })
 
   it('a LinkedIn variant is approved without a tag read', async () => {
-    useVariant(variantData({ platform: 'linkedin', body: 'plain' }))
+    serveVariant(variantData({ platform: 'linkedin', body: 'plain' }))
     await social().scheduleVariant({ variantId: 'variant-ours' })
     expect(tagReads()).toEqual([])
   })

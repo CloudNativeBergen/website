@@ -86,8 +86,6 @@ export interface TagCheck {
   warnings: TagWarning[]
 }
 
-const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-
 /**
  * The tag button, name → handle: the FIRST occurrence of the person's name
  * becomes `@handle`. Null when the name is not in the body (the organizer
