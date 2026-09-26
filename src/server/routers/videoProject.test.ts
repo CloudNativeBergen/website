@@ -499,6 +499,7 @@ describe('a save over a newer save', () => {
       title: 'Theirs',
       scenes: [scene('x')],
     })
+    h.mutations = []
 
     await expect(
       projects().save({
@@ -512,6 +513,8 @@ describe('a save over a newer save', () => {
       message: expect.stringContaining('Someone saved'),
     })
     expect(doc(created._id)!.title).toBe('Theirs')
+    // Refused on the revision it read, before any write was attempted.
+    expect(h.mutations).toEqual([])
   })
 
   it('is refused when the other save lands between the read and the write', async () => {

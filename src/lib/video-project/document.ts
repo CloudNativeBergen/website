@@ -129,16 +129,15 @@ export function storedTrack(
 
 /**
  * A copy of a stored project's contents for Duplicate: every array member
- * gets a fresh `_key`, and nothing is shared with the source — a deep copy,
- * so editing one never changes the other. The file references are copied
+ * gets a fresh `_key`. It is written as a document of its own, so editing
+ * one never changes the other. The file references are copied
  * as they are: the copy holds the same files, which is what keeps them.
  */
 export function duplicateContents(source: Stored): {
   scenes: Stored[]
   track?: Stored
 } {
-  const copy = structuredClone(source)
-  const scenes = (Array.isArray(copy.scenes) ? copy.scenes : []).map(
+  const scenes = (Array.isArray(source.scenes) ? source.scenes : []).map(
     (scene: Stored) => ({
       ...scene,
       _key: generateKey('scene'),
@@ -148,8 +147,8 @@ export function duplicateContents(source: Stored): {
   )
   return {
     scenes,
-    ...(copy.track && typeof copy.track === 'object'
-      ? { track: copy.track as Stored }
+    ...(source.track && typeof source.track === 'object'
+      ? { track: source.track as Stored }
       : {}),
   }
 }
