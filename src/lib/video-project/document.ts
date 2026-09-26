@@ -221,7 +221,7 @@ export const OPEN_PROJECTION = `{
   title,
   formatVersion,
   scope,
-  "edition": select(scope == "edition" => conference->title, null),
+  "edition": select(scope == "edition" && conference->organization._ref == organization._ref => coalesce(conference->title, "Untitled edition"), null),
   "scenes": scenes[]{
     "key": _key,
     duration,
@@ -275,6 +275,9 @@ export function openedProject(
       'This project is stored in a shape the studio cannot read, so it cannot be opened.',
     )
   const scenes = (row.scenes ?? []).map((scene): OpenedScene => {
+    // An API write can store anything; a member that is not an object is
+    // an unreadable shape, not a crash.
+    if (!scene || typeof scene !== 'object') throw unreadable()
     const stored = scene.background?.image ?? null
     const parsed = projectSceneInputSchema.safeParse({
       key: scene.key,
@@ -324,6 +327,8 @@ export function openedProject(
   if (scenes.length === 0) throw unreadable()
   if (row.scope !== 'organization' && row.scope !== 'edition')
     throw unreadable()
+  // An edition project names its edition, and one of its own organization's.
+  if (row.scope === 'edition' && !row.edition) throw unreadable()
   let track: OpenedTrack | null = null
   if (row.track) {
     // A track whose weak gallery pointer is gone projects it as null.

@@ -32,6 +32,8 @@ const h = vi.hoisted(() => ({
   mutations: [] as unknown[],
   /** Runs between a save's read and its commit: someone else saving. */
   beforeCommit: null as null | (() => void),
+  /** Runs before a transaction commits. */
+  beforeTransaction: null as null | (() => void),
   host: { conferenceId: 'conf-A', orgId: 'org-A' },
 }))
 
@@ -79,8 +81,10 @@ vi.mock('@/lib/sanity/client', async () => {
       },
       transaction: () => {
         const tx = real.transaction()
-        tx.commit = (async () =>
-          commit(tx.serialize())) as unknown as typeof tx.commit
+        tx.commit = (async () => {
+          h.beforeTransaction?.()
+          return commit(tx.serialize())
+        }) as unknown as typeof tx.commit
         return tx
       },
       delete: async (id: string) => commit([{ delete: { id } }]),
@@ -328,6 +332,7 @@ beforeEach(() => {
   h.mutations = []
   h.revs = 0
   h.beforeCommit = null
+  h.beforeTransaction = null
 })
 
 /** The opened scene the editor gets back for an input scene. */
@@ -1152,6 +1157,130 @@ describe('a file whose orphan delete fails', () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => {})
     await projects().delete({ id: created._id })
     expect(error).toHaveBeenCalledWith(expect.stringContaining(HALL))
+  })
+})
+
+describe('a stored shape the studio refuses to guess at', () => {
+  const tamper = async (patch: Record<string, unknown>) => {
+    const created = await projects().create({
+      title: 'T',
+      scenes: [scene('s')],
+    })
+    const i = h.dataset.findIndex((d) => d._id === created._id)
+    h.dataset[i] = { ...h.dataset[i], ...patch }
+    return created._id
+  }
+  const unreadable = {
+    code: 'PRECONDITION_FAILED',
+    message: expect.stringContaining('cannot read'),
+  }
+
+  it('an edition project with no edition', async () => {
+    const id = await tamper({ scope: 'edition' })
+    await expect(projects().open({ id })).rejects.toMatchObject(unreadable)
+  })
+
+  it('an edition project pointed at another organization’s edition, never showing its title', async () => {
+    const id = await tamper({ scope: 'edition', conference: ref('conf-B') })
+    await expect(projects().open({ id })).rejects.toMatchObject(unreadable)
+    const row = (await projects().list()).find((r) => r._id === id)
+    expect(row?.edition).toBeNull()
+  })
+
+  it('a scene that is not an object', async () => {
+    const id = await tamper({ scenes: [null] })
+    await expect(projects().open({ id })).rejects.toMatchObject(unreadable)
+  })
+})
+
+describe('two scenes whose gallery entries share one deduplicated file', () => {
+  it('keep their own entry and subject across a save by file id', async () => {
+    h.dataset.push({
+      _id: 'asset-hall-2',
+      _type: 'marketingAsset',
+      organization: ref('org-A'),
+      scope: 'organization',
+      kind: 'image',
+      title: 'Hall again',
+      alt: 'Same bytes',
+      image: { _type: 'image', asset: ref(HALL) },
+      subject: { ...ref('sp-bob'), _weak: true },
+    })
+    const created = await projects().create({
+      title: 'T',
+      scenes: [
+        scene('a', { name: 'one', galleryAssetId: 'asset-hall' }),
+        scene('b', { name: 'two', galleryAssetId: 'asset-hall-2' }),
+      ],
+    })
+    const opened = await projects().open({ id: created._id })
+    await projects().save({
+      id: created._id,
+      rev: opened._rev,
+      title: 'Again',
+      scenes: opened.scenes.map((sc) => ({
+        ...sc,
+        design: {
+          ...sc.design,
+          background: {
+            ...sc.design.background,
+            image: sc.design.background.image && {
+              name: sc.design.background.image.name,
+              fileId: sc.design.background.image.fileId,
+              galleryAssetId: sc.design.background.image.galleryAssetId,
+            },
+          },
+        },
+      })),
+    })
+    const images = (
+      doc(created._id)!.scenes as {
+        background: { image: Record<string, unknown> }
+      }[]
+    ).map((sc) => sc.background.image)
+    expect(images[0]).toMatchObject({
+      galleryAsset: { ...ref('asset-hall'), _weak: true },
+      subject: { ...ref('sp-ada'), _weak: true },
+    })
+    expect(images[1]).toMatchObject({
+      galleryAsset: { ...ref('asset-hall-2'), _weak: true },
+      subject: { ...ref('sp-bob'), _weak: true },
+    })
+  })
+})
+
+describe('a gallery asset deleted while a project using it moves on', () => {
+  it('fails the delete as a conflict and leaves the asset, never writing a stale subject', async () => {
+    const created = await projects().create({ title: 'T', scenes: TWO_SCENES })
+    const i = h.dataset.findIndex((d) => d._id === 'asset-hall')
+    h.dataset[i] = {
+      ...h.dataset[i],
+      subject: { ...ref('sp-bob'), _weak: true },
+    }
+    // A save lands between the snapshot's read and its write.
+    const j = h.dataset.findIndex((d) => d._id === created._id)
+    const hook = () => {
+      h.dataset[j] = { ...h.dataset[j], _rev: 'rev-moved-on' }
+    }
+    h.beforeTransaction = hook
+    await expect(assets().delete({ id: 'asset-hall' })).rejects.toMatchObject({
+      code: 'CONFLICT',
+    })
+    h.beforeTransaction = null
+    expect(doc('asset-hall')).toBeDefined()
+  })
+
+  it('is refused while a project in a Content Release uses it', async () => {
+    const created = await projects().create({ title: 'T', scenes: TWO_SCENES })
+    h.dataset.push({
+      ...doc(created._id)!,
+      _id: `versions.rlaunch.${created._id}`,
+    })
+    await expect(assets().delete({ id: 'asset-hall' })).rejects.toMatchObject({
+      code: 'PRECONDITION_FAILED',
+      message: expect.stringContaining('Content Release'),
+    })
+    expect(doc('asset-hall')).toBeDefined()
   })
 })
 

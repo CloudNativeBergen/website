@@ -709,13 +709,15 @@ export function MemeGenerator({
   )
   const unsaved = currentSnapshot !== savedSnapshot
   const [projectBusy, setProjectBusy] = useState<
-    'saving' | 'opening' | 'duplicating' | null
+    'saving' | 'opening' | 'duplicating' | 'deleting' | null
   >(null)
   const [projectMessage, setProjectMessage] = useState<ProjectMessage | null>(
     null,
   )
   const [projectRows, setProjectRows] = useState<VideoProjectRow[] | null>(null)
   const [editionOnly, setEditionOnly] = useState(false)
+  // A save refused as a conflict: the server holds a newer revision.
+  const [conflicted, setConflicted] = useState(false)
 
   const refreshProjects = useCallback(() => {
     if (!projects) return
@@ -724,7 +726,17 @@ export function MemeGenerator({
   useEffect(() => refreshProjects(), [refreshProjects])
 
   // Leaving with unsaved changes asks first — for a video, or an open project.
-  const warnOnLeave = !!projects && unsaved && (mode === 'video' || !!project)
+  // A video is still held while its still is previewed in Image mode: more
+  // than one scene, or any scene motion, is video work to protect. A plain
+  // one-scene image never asks.
+  const holdsVideo =
+    scenes.length > 1 ||
+    scenes.some(
+      (scene) =>
+        scene.motion.drift || Object.keys(scene.motion.elements).length > 0,
+    )
+  const warnOnLeave =
+    !!projects && unsaved && (mode === 'video' || !!project || holdsVideo)
   useEffect(() => {
     if (!warnOnLeave) return
     const onBeforeUnload = (event: BeforeUnloadEvent) => {
@@ -796,6 +808,7 @@ export function MemeGenerator({
     setProjectTitle(title)
     setSavedSnapshot(projectSnapshot(title, next))
     setBackgroundFailure(null)
+    setConflicted(false)
   }
 
   const openProject = async (id: string, confirmed = false) => {
@@ -925,12 +938,14 @@ export function MemeGenerator({
       )
       const id = over?.id ?? result._id!
       setProject({ id, rev: result._rev })
+      setConflicted(false)
       setProjectTitle(title)
       setSavedSnapshot(snapshot)
       if (!over) onProjectChange?.(id)
       refreshProjects()
     } catch (error) {
       if (error instanceof VideoProjectError && error.conflict) {
+        setConflicted(true)
         setProjectMessage({
           tone: 'error',
           text: PROJECT_CONFLICT_MESSAGE,
@@ -945,6 +960,37 @@ export function MemeGenerator({
               : 'The project could not be saved. Try again.',
         })
       }
+    } finally {
+      setProjectBusy(null)
+    }
+  }
+
+  /** Delete the open project, after asking; the editor keeps the video. */
+  const deleteProject = async () => {
+    if (!projects || !project) return
+    if (
+      !window.confirm(
+        `Delete the project “${projectTitle.trim() || UNTITLED}”? The video stays in the editor until you leave, but the saved project is gone for everyone.`,
+      )
+    )
+      return
+    setProjectBusy('deleting')
+    setProjectMessage(null)
+    try {
+      await projects.delete(project.id)
+      setProject(null)
+      setConflicted(false)
+      onProjectChange?.(null)
+      refreshProjects()
+      setProjectMessage({ tone: 'info', text: 'Project deleted.' })
+    } catch (error) {
+      setProjectMessage({
+        tone: 'error',
+        text:
+          error instanceof VideoProjectError
+            ? error.message
+            : 'The project could not be deleted. Try again.',
+      })
     } finally {
       setProjectBusy(null)
     }
@@ -1652,13 +1698,18 @@ export function MemeGenerator({
             title={projectTitle}
             onTitleChange={setProjectTitle}
             status={
-              !unsaved
-                ? project
-                  ? 'saved'
-                  : 'new'
-                : project
-                  ? 'unsaved'
-                  : 'new'
+              // After a conflict the server holds a newer revision: never
+              // "saved", even once local edits are undone, until reopened
+              // or saved as new.
+              conflicted
+                ? 'unsaved'
+                : !unsaved
+                  ? project
+                    ? 'saved'
+                    : 'new'
+                  : project
+                    ? 'unsaved'
+                    : 'new'
             }
             busy={projectBusy}
             isSaved={!!project}
@@ -1669,6 +1720,7 @@ export function MemeGenerator({
             onNew={newVideo}
             onSave={() => void saveProject()}
             onDuplicate={() => void duplicateProject()}
+            onDelete={() => void deleteProject()}
             onSaveAsNew={() => void saveProject(true)}
             message={projectMessage}
           />

@@ -31,6 +31,8 @@ export function useStudioProjects(): VideoProjects {
   const createAsync = create.mutateAsync
   const saveAsync = save.mutateAsync
   const duplicateAsync = duplicate.mutateAsync
+  const remove = api.videoProject.delete.useMutation()
+  const removeAsync = remove.mutateAsync
   return useMemo(
     () => ({
       list: () =>
@@ -43,7 +45,10 @@ export function useStudioProjects(): VideoProjects {
       create: (input) => refusals(() => createAsync(input)),
       save: (input) => refusals(() => saveAsync(input)),
       duplicate: (id) => refusals(() => duplicateAsync({ id })),
+      delete: async (id) => {
+        await refusals(() => removeAsync({ id }))
+      },
     }),
-    [utils, createAsync, saveAsync, duplicateAsync],
+    [utils, createAsync, saveAsync, duplicateAsync, removeAsync],
   )
 }

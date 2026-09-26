@@ -7,6 +7,7 @@ import {
   ExclamationTriangleIcon,
   FolderOpenIcon,
   PlusIcon,
+  TrashIcon,
 } from '@heroicons/react/24/outline'
 import { AdminButton } from '@/components/admin/AdminButton'
 import {
@@ -42,6 +43,7 @@ export function VideoProjectBar({
   onNew,
   onSave,
   onDuplicate,
+  onDelete,
   onSaveAsNew,
   message,
 }: {
@@ -49,7 +51,7 @@ export function VideoProjectBar({
   onTitleChange: (title: string) => void
   status: ProjectStatus
   /** A call in flight: every control waits for it. */
-  busy: 'saving' | 'opening' | 'duplicating' | null
+  busy: 'saving' | 'opening' | 'duplicating' | 'deleting' | null
   /** Stored at least once: it can be duplicated and has an edition fixed. */
   isSaved: boolean
   editionOnly: boolean
@@ -60,6 +62,7 @@ export function VideoProjectBar({
   onNew: () => void
   onSave: () => void
   onDuplicate: () => void
+  onDelete: () => void
   onSaveAsNew: () => void
   message: ProjectMessage | null
 }) {
@@ -71,11 +74,13 @@ export function VideoProjectBar({
         ? 'Opening…'
         : busy === 'duplicating'
           ? 'Duplicating…'
-          : status === 'saved'
-            ? 'All changes saved'
-            : status === 'unsaved'
-              ? 'Unsaved changes'
-              : 'Not saved yet'
+          : busy === 'deleting'
+            ? 'Deleting…'
+            : status === 'saved'
+              ? 'All changes saved'
+              : status === 'unsaved'
+                ? 'Unsaved changes'
+                : 'Not saved yet'
 
   return (
     <section
@@ -201,6 +206,19 @@ export function VideoProjectBar({
           <PlusIcon aria-hidden="true" className="size-4" />
           New video
         </AdminButton>
+        {isSaved && (
+          <AdminButton
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={onDelete}
+            disabled={busy !== null}
+            className="inline-flex items-center gap-1 text-red-700 dark:text-red-400"
+          >
+            <TrashIcon aria-hidden="true" className="size-4" />
+            Delete project
+          </AdminButton>
+        )}
       </div>
 
       {/* Mounted empty, so a message is announced when it arrives. */}

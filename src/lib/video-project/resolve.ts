@@ -46,7 +46,18 @@ export async function resolveProjectFiles(
   track: ProjectTrackInput | null | undefined,
   stored: Pick<StoredProjectFiles, 'images' | 'track'> | null,
 ): Promise<{ images: (ResolvedFile | null)[]; track: ResolvedTrack | null }> {
-  const held = new Map((stored?.images ?? []).map((f) => [f.fileId, f]))
+  // Keyed by file AND gallery entry: two entries can share one deduplicated
+  // file, and each scene keeps the entry (and subject) it was saved with.
+  const heldKey = (fileId: string, galleryAssetId?: string | null) =>
+    `${fileId}\u0000${galleryAssetId ?? ''}`
+  const heldExact = new Map(
+    (stored?.images ?? []).map((f) => [heldKey(f.fileId, f.galleryAssetId), f]),
+  )
+  const heldAny = new Map((stored?.images ?? []).map((f) => [f.fileId, f]))
+  const heldFor = (fileId?: string, galleryAssetId?: string) =>
+    fileId
+      ? (heldExact.get(heldKey(fileId, galleryAssetId)) ?? heldAny.get(fileId))
+      : undefined
   const heldTrack =
     track?.fileId && stored?.track?.fileId === track.fileId
       ? stored.track
@@ -55,7 +66,7 @@ export async function resolveProjectFiles(
   const wanted = new Set<string>()
   for (const scene of scenes) {
     const image = scene.design.background.image
-    if (image?.galleryAssetId && !(image.fileId && held.has(image.fileId)))
+    if (image?.galleryAssetId && !heldFor(image.fileId, image.galleryAssetId))
       wanted.add(image.galleryAssetId)
   }
   if (track?.galleryAssetId && !heldTrack) wanted.add(track.galleryAssetId)
@@ -73,7 +84,7 @@ export async function resolveProjectFiles(
   const images = scenes.map((scene, i): ResolvedFile | null => {
     const image = scene.design.background.image
     if (!image) return null
-    const kept = image.fileId ? held.get(image.fileId) : undefined
+    const kept = heldFor(image.fileId, image.galleryAssetId)
     if (kept) return fromStored(kept)
     const row = galleryFile(image.galleryAssetId, 'image')
     if (row) return fromGallery(row)

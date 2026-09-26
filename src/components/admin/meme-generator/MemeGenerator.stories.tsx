@@ -2504,6 +2504,7 @@ function storyProjects(overrides: Partial<VideoProjects> = {}): VideoProjects {
       scenes: input.scenes.map((s) => ({ key: s.key, fileId: null })),
     }),
     duplicate: async () => ({ _id: 'vp-copy' }),
+    delete: async () => {},
     ...overrides,
   }
 }

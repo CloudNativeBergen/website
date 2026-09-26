@@ -27,7 +27,7 @@ export async function listVideoProjects(
       _id,
       "title": coalesce(title, ""),
       "scope": coalesce(scope, "organization"),
-      "edition": select(scope == "edition" => conference->title, null),
+      "edition": select(scope == "edition" && conference->organization._ref == organization._ref => conference->title, null),
       "updatedAt": coalesce(updatedAt, _updatedAt),
       "scenes": count(scenes)
     }`,

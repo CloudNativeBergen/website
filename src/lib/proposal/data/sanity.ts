@@ -482,13 +482,10 @@ const CASCADE_DELETE_TYPES = ['coSpeakerInvitation', 'review']
  *   separately below, since they'd otherwise 404 on their deep link.)
  * - `conversation` — the proposal thread; CASCADE-deleted below along with its
  *   messages.
- * - `videoProject` — a saved studio video (#1181) names a talk only as the
- *   WEAK `subject` it copied from a gallery image, for erasure; nothing
- *   dereferences it to render, so it dangles harmlessly.
- * All are excluded from the blocking check so a proposal with an active message
+ * Both are excluded from the blocking check so a proposal with an active message
  * thread and notifications stays deletable.
  */
-const NON_BLOCKING_TYPES = ['notification', 'conversation', 'videoProject']
+const NON_BLOCKING_TYPES = ['notification', 'conversation']
 
 /** Deletes per transaction when cascading a proposal's thread — keeps each
  * commit well under Sanity's mutation-per-transaction ceiling. */
@@ -522,6 +519,10 @@ const BLOCKING_TYPE_DESCRIPTIONS: Record<string, string> = {
   schedule: 'a published schedule',
   conference: 'a conference (featured talks)',
   workshopSignup: 'workshop signups',
+  // A saved video's image names the talk as its subject (#1181): the record a
+  // speaker's erasure follows once the gallery asset is gone. Blocking, as a
+  // gallery asset about the talk is, so that record is never orphaned.
+  videoProject: 'a saved studio video (its image is about this talk)',
 }
 
 /**

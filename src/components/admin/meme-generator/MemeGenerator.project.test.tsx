@@ -104,6 +104,7 @@ function fakeProjects(overrides: Partial<VideoProjects> = {}) {
       })),
     })),
     duplicate: vi.fn(async () => ({ _id: 'vp-copy' })),
+    delete: vi.fn(async () => {}),
     ...overrides,
   } satisfies VideoProjects
 }
@@ -450,6 +451,14 @@ describe('leaving with unsaved changes', () => {
     expect(confirm).not.toHaveBeenCalled()
   })
 
+  it('still asks while a multi-scene video is previewed in Image mode', () => {
+    render(<MemeGenerator projects={fakeProjects()} />)
+    toVideo()
+    fireEvent.click(screen.getByRole('button', { name: 'Add scene' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Image' }))
+    expect(blocked()).toBe(true)
+  })
+
   it('never asks for an image with no project', () => {
     render(<MemeGenerator projects={fakeProjects()} />)
     fireEvent.change(screen.getAllByPlaceholderText(/text/i)[0], {
@@ -566,6 +575,61 @@ describe('while a call is in flight', () => {
     })
     title.dispatchEvent(event)
     expect(event.defaultPrevented).toBe(false)
+  })
+})
+
+describe('deleting a project', () => {
+  it('asks, deletes the open project, and leaves the video in the editor as unsaved', async () => {
+    const projects = fakeProjects()
+    const onProjectChange = vi.fn()
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    render(
+      <MemeGenerator
+        projects={projects}
+        initialProjectId="vp-1"
+        onProjectChange={onProjectChange}
+      />,
+    )
+    await screen.findByDisplayValue('Launch teaser')
+    fireEvent.click(
+      within(project()).getByRole('button', { name: 'Delete project' }),
+    )
+    expect(confirm).toHaveBeenCalled()
+    await waitFor(() => expect(projects.delete).toHaveBeenCalledWith('vp-1'))
+    await waitFor(() => expect(onProjectChange).toHaveBeenLastCalledWith(null))
+    expect(within(project()).getByText('Not saved yet')).toBeInTheDocument()
+    expect(screen.getByDisplayValue('Launch teaser')).toBeInTheDocument()
+  })
+
+  it('does nothing when the organizer says no', async () => {
+    const projects = fakeProjects()
+    vi.spyOn(window, 'confirm').mockReturnValue(false)
+    render(<MemeGenerator projects={projects} initialProjectId="vp-1" />)
+    await screen.findByDisplayValue('Launch teaser')
+    fireEvent.click(
+      within(project()).getByRole('button', { name: 'Delete project' }),
+    )
+    expect(projects.delete).not.toHaveBeenCalled()
+  })
+})
+
+describe('after a conflict', () => {
+  it('stays unsaved even once the local edit is undone, and offers no Duplicate of the newer save', async () => {
+    const projects = fakeProjects({
+      save: vi.fn(async () => {
+        throw new VideoProjectError('conflict', true)
+      }),
+    })
+    render(<MemeGenerator projects={projects} initialProjectId="vp-1" />)
+    await screen.findByDisplayValue('Launch teaser')
+    typeTitle('Mine')
+    save()
+    await within(project()).findByRole('alert')
+    typeTitle('Launch teaser')
+    expect(within(project()).getByText('Unsaved changes')).toBeInTheDocument()
+    expect(
+      within(project()).getByRole('button', { name: /Duplicate project/ }),
+    ).toBeDisabled()
   })
 })
 

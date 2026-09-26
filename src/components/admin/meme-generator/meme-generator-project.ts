@@ -35,6 +35,7 @@ export interface VideoProjects {
     scenes: ProjectSceneInput[]
   }) => Promise<{ _rev: string; scenes: SceneFile[] }>
   duplicate: (id: string) => Promise<{ _id: string }>
+  delete: (id: string) => Promise<void>
 }
 
 /** Which stored file a scene's background became. */

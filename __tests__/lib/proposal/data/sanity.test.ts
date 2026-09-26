@@ -127,16 +127,12 @@ describe('deleteProposal', () => {
     expect(mockTxCommit).toHaveBeenCalledTimes(1)
   })
 
-  it('is not blocked by a saved video naming the talk as its weak subject (#1181)', async () => {
-    mockFetch
-      .mockResolvedValueOnce([{ _id: 'vp-1', _type: 'videoProject' }])
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([])
+  it('is blocked by a saved video naming the talk as its subject (#1181)', async () => {
+    mockFetch.mockResolvedValueOnce([{ _id: 'vp-1', _type: 'videoProject' }])
     const { err } = await deleteProposal('proposal-1')
-    expect(err).toBeNull()
-    expect(mockTxDelete.mock.calls.map((call) => call[0])).toEqual([
-      'proposal-1',
-    ])
+    expect(err?.message).toContain('a saved studio video')
+    expect(mockTxDelete).not.toHaveBeenCalled()
+    mockFetch.mockReset()
   })
 
   it('cascade-deletes the proposal thread — messages, conversation, and message notifications — keeping other notifications', async () => {
