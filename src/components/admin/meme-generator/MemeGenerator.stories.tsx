@@ -19,6 +19,7 @@ import { DEFAULT_DESIGN } from './meme-generator-draw'
 import { VideoProjectError, type VideoProjects } from './meme-generator-project'
 import type { OpenedProject, OpenedScene } from '@/lib/video-project'
 import { DownloadableImage } from '../../common/DownloadableImage'
+import { withPortalTheme } from '@/lib/storybook'
 import { StudioGalleryProvider } from '../marketing/studio-gallery/StudioGalleryProvider'
 import { http, HttpResponse } from 'msw'
 import { ThemeProvider } from 'next-themes'
@@ -2697,5 +2698,7 @@ export const ProjectDeleteConfirm: Story = {
 
 export const ProjectDeleteConfirmDark: Story = {
   ...ProjectDeleteConfirm,
+  // The dialog portals to <body>, outside the themed story root.
+  decorators: [withPortalTheme],
   globals: { theme: 'dark' },
 }
