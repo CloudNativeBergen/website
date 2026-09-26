@@ -326,7 +326,11 @@ export function openedProject(
     throw unreadable()
   let track: OpenedTrack | null = null
   if (row.track) {
-    const parsed = projectTrackInputSchema.safeParse(row.track)
+    // A track whose weak gallery pointer is gone projects it as null.
+    const parsed = projectTrackInputSchema.safeParse({
+      ...row.track,
+      galleryAssetId: row.track.galleryAssetId ?? undefined,
+    })
     if (!parsed.success) throw unreadable()
     track = {
       ...parsed.data,

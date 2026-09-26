@@ -500,6 +500,31 @@ describe('save, leave, reopen', () => {
   })
 })
 
+describe('a track with no gallery pointer', () => {
+  it('still opens, holding its file', async () => {
+    const track = {
+      galleryAssetId: 'asset-theme',
+      start: 0,
+      volume: 1,
+      fadeIn: 0,
+      fadeOut: 0,
+    }
+    const created = await projects().create({
+      title: 'T',
+      scenes: [scene('s')],
+      track,
+    })
+    const i = h.dataset.findIndex((d) => d._id === created._id)
+    const stored = h.dataset[i].track as { file: Record<string, unknown> }
+    const { galleryAsset: _gone, ...file } = stored.file
+    void _gone
+    h.dataset[i] = { ...h.dataset[i], track: { ...stored, file } }
+    const project = await projects().open({ id: created._id })
+    expect(project.track).toMatchObject({ fileId: THEME, title: 'Theme' })
+    expect(project.track).not.toHaveProperty('galleryAssetId')
+  })
+})
+
 describe('a save over a newer save', () => {
   it('is refused as a conflict, and the newer save stands', async () => {
     const created = await projects().create({
