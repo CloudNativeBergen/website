@@ -513,6 +513,12 @@ describe('findWork — the composed due/stale scan', () => {
         }),
         variant('bs-coded', 'c1', { platform: 'bluesky', shortCode: 'abc235' }),
         variant('standalone', 'c1', { platform: 'bluesky' }),
+        // No usable domain: never the platform host, where /go/ 404s.
+        { ...conference('c2'), domains: [] },
+        variant('no-domain', 'c2', {
+          platform: 'bluesky',
+          shortCode: 'abc236',
+        }),
       ]
       const work = await sanitySocialVariantStore.findWork(
         NOW,
@@ -524,6 +530,8 @@ describe('findWork — the composed due/stale scan', () => {
       expect(origin('li-coded')).toBe('https://primary.example.no')
       expect(origin('bs-coded')).toBe('https://primary.example.no')
       expect(origin('standalone')).toBeNull()
+      expect(work.due.map((v) => v._id)).toContain('no-domain')
+      expect(origin('no-domain')).toBeNull()
       expect(work.due.find((v) => v._id === 'li-coded')?.shortCode).toBe(
         'abc234',
       )

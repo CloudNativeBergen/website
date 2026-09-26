@@ -1,4 +1,8 @@
-import { shortLinkUrl } from '@/lib/marketing/short-code'
+import {
+  conferenceBaseUrl,
+  hasConferenceDomain,
+} from '@/lib/conference/baseUrl'
+import { normalizeShortCode, shortLinkUrl } from '@/lib/marketing/short-code'
 import type { PublishInput } from './provider/types'
 
 /**
@@ -19,9 +23,28 @@ export function publishLinkFields(
   shortLinkOrigin: string | null,
 ): Pick<PublishInput, 'link' | 'linkDestination'> {
   if (!variant.link) return {}
-  if (!variant.shortCode || !shortLinkOrigin) return { link: variant.link }
+  // A stored value that is not a code (a dataset hand-edit) would post a
+  // `/go/` link the route 404s; the long link still reaches the page.
+  const code = normalizeShortCode(variant.shortCode)
+  if (!code || !shortLinkOrigin) return { link: variant.link }
   return {
-    link: shortLinkUrl(shortLinkOrigin, variant.shortCode),
+    link: shortLinkUrl(shortLinkOrigin, code),
     linkDestination: variant.link,
   }
+}
+
+/**
+ * The origin a conference's short links are built on: its own outbound origin
+ * (`conferenceBaseUrl()`, the derivation its tagged links are minted with), or
+ * `null` when it has no usable domain. `conferenceBaseUrl` would then fall
+ * back to the PLATFORM host, where `/go/` resolves no conference and 404s — a
+ * dead posted link — so the long link is posted instead.
+ */
+export function shortLinkOriginOf(
+  conference:
+    | { title?: string | null; domains?: readonly string[] | null }
+    | null
+    | undefined,
+): string | null {
+  return hasConferenceDomain(conference) ? conferenceBaseUrl(conference) : null
 }

@@ -1,4 +1,4 @@
-import { conferenceBaseUrl } from '@/lib/conference/baseUrl'
+import { shortLinkOriginOf } from '../publish-link'
 import type {
   PublishableVariant,
   SocialVariantStore,
@@ -75,7 +75,7 @@ export class MemoryVariantStore implements SocialVariantStore {
           // As the Sanity read derives it: from the RAW domains, only for a
           // variant that carries a code.
           shortLinkOrigin: v.shortCode
-            ? conferenceBaseUrl({ domains: this.domains[v.conferenceId] })
+            ? shortLinkOriginOf({ domains: this.domains[v.conferenceId] })
             : null,
           postCreatedBy: this.creators[v.postId] ?? null,
           marketingTaskId: null,

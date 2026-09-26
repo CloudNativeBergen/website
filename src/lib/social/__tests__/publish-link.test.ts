@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest'
-import { publishLinkFields } from '../publish-link'
+import { describe, expect, it, vi } from 'vitest'
+import { publishLinkFields, shortLinkOriginOf } from '../publish-link'
 import { shortLinkUrl } from '@/lib/marketing/short-code'
 
 const LONG =
@@ -41,6 +41,39 @@ describe('publishLinkFields (short-links spec §2.3)', () => {
         'https://cloudnativedays.no',
       ),
     ).toEqual({})
+  })
+})
+
+describe('publishLinkFields — values that would post a dead link', () => {
+  it('a stored value that is not a code posts the long link; a capitalised code is posted lowercased', () => {
+    const origin = 'https://cloudnativedays.no'
+    expect(
+      publishLinkFields({ link: LONG, shortCode: 'not a code' }, origin),
+    ).toEqual({ link: LONG })
+    expect(
+      publishLinkFields({ link: LONG, shortCode: 'ABC234' }, origin),
+    ).toEqual({ link: `${origin}/go/abc234`, linkDestination: LONG })
+  })
+})
+
+describe('shortLinkOriginOf', () => {
+  it("is the conference's own primary origin", () => {
+    expect(
+      shortLinkOriginOf({
+        domains: ['*.preview.dev', 'cndn.no', 'www.cndn.no'],
+      }),
+    ).toBe('https://cndn.no')
+  })
+
+  it('is null — never the platform host, where /go/ resolves no conference — without a usable domain', () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      expect(shortLinkOriginOf({ domains: [] })).toBeNull()
+      expect(shortLinkOriginOf({ domains: ['*.wild.dev'] })).toBeNull()
+      expect(shortLinkOriginOf(null)).toBeNull()
+    } finally {
+      error.mockRestore()
+    }
   })
 })
 

@@ -37,7 +37,7 @@ import {
 } from '@/lib/social/provider/constraints'
 import { offAspectOverrides, resolvePublishMedia } from '@/lib/social/media'
 import { placeholderIssues, scheduleIssues } from '@/lib/social/schedule-check'
-import { publishLinkFields } from '@/lib/social/publish-link'
+import { publishLinkFields, shortLinkOriginOf } from '@/lib/social/publish-link'
 import { ceilingWarningsFor } from '@/lib/marketing/ceiling-check'
 import { getTaskForVariant, getTaskLinkInputs } from '@/lib/marketing/sanity'
 import { taggedUrl } from '@/lib/marketing/link'
@@ -174,7 +174,7 @@ async function shortLinkOriginFor(
 ): Promise<string | null> {
   if (!shortCode) return null
   const { conference } = await getConferenceForCurrentDomain()
-  return conference ? conferenceBaseUrl(conference) : null
+  return shortLinkOriginOf(conference)
 }
 
 /**

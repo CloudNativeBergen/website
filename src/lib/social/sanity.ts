@@ -5,7 +5,7 @@ import { outcomeMayBeLive } from './state-machine'
 import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
 import { scopedFetch } from '@/lib/sanity/scoped'
 import { verifiedDomains } from '@/lib/domain-verification/routing'
-import { conferenceBaseUrl } from '@/lib/conference/baseUrl'
+import { shortLinkOriginOf } from './publish-link'
 import { withTimeout } from './with-timeout'
 import { platformDomainSuffix } from '@/lib/domain-verification/platform'
 import { getCurrentDateTime } from '@/lib/time'
@@ -392,7 +392,7 @@ export const sanitySocialVariantStore: SocialVariantStore = {
           // with at save and approve — never the verified one, and only for a
           // variant with a code (short-links spec §2.3).
           shortLinkOrigin: raw.shortCode
-            ? conferenceBaseUrl({ domains: raw_domains })
+            ? shortLinkOriginOf({ domains: raw_domains })
             : null,
           marketingTaskId: raw.marketingTaskId,
           postCreatedBy:
