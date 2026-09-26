@@ -84,7 +84,19 @@ export interface PublishMention {
 export interface PublishInput {
   text: string
   media: PublishMedia[]
+  /**
+   * The link to POST: the Bluesky card's `uri`, the LinkedIn first comment.
+   * For a marketing Task's variant this is its `/go/<code>` short link
+   * (short-links spec §2.3); for a standalone post, the link the organizer
+   * typed.
+   */
   link?: string
+  /**
+   * The page the posted link lands on, when that is not `link` itself — the
+   * variant's long tagged URL behind a short link. A link card is scraped
+   * from HERE: the scraper never follows `/go/`. Absent = `link`.
+   */
+  linkDestination?: string
   /**
    * Recorded mentions. A handle in the text that is not among them is still
    * detected and resolved by the platform adapter as before; one of them

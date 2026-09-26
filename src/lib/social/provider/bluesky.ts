@@ -296,7 +296,13 @@ export class BlueskyPublishAdapter implements SocialPublishAdapter {
     // with the tagged link as its uri); `validate` has already refused a
     // second image next to a link, so nothing is dropped here.
     const embed = input.link
-      ? await this.externalEmbed(agent, input.link, input.media[0], fetchImpl)
+      ? await this.externalEmbed(
+          agent,
+          input.link,
+          input.linkDestination ?? input.link,
+          input.media[0],
+          fetchImpl,
+        )
       : input.media.length > 0
         ? await this.imagesEmbed(agent, input, fetchImpl)
         : undefined
@@ -331,11 +337,15 @@ export class BlueskyPublishAdapter implements SocialPublishAdapter {
   /**
    * The card: title and description from our page; the thumbnail is the
    * variant's own image when it has one (see `thumbnailOf`), else the
-   * page's `og:image`, else none. The card's `uri` is always the link.
+   * page's `og:image`, else none. The card's `uri` is always the POSTED
+   * link; the page is read from `destination` — the long tagged URL behind a
+   * `/go/<code>` short link (short-links spec §2.3), which the scraper does
+   * not follow.
    */
   private async externalEmbed(
     agent: Agent,
     link: string,
+    destination: string,
     image: PublishMedia | undefined,
     fetchImpl: typeof fetch,
   ): Promise<ExternalEmbed> {
@@ -343,7 +353,9 @@ export class BlueskyPublishAdapter implements SocialPublishAdapter {
     if (image) {
       thumb = await this.thumbnailOf(image, fetchImpl)
     }
-    const card = await this.linkCard(link, fetchImpl, { thumb: thumb === null })
+    const card = await this.linkCard(destination, fetchImpl, {
+      thumb: thumb === null,
+    })
     thumb ??= card?.thumb ?? null
     const external: AppBskyEmbedExternal.External = {
       uri: link,

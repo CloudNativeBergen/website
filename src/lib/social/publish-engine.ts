@@ -21,6 +21,7 @@ import {
   getPlatformConstraints,
 } from './provider/constraints'
 import type { PublishableVariant, SocialVariantStore } from './store'
+import { publishLinkFields } from './publish-link'
 import type { ConfirmCheck } from './provider/types'
 import type { PublishAttempt, SocialPostVariant } from './types'
 
@@ -884,7 +885,10 @@ function publishInputFor(
     input: {
       text: variant.body,
       media,
-      link: variant.link ?? undefined,
+      // A Task's variant posts its `/go/<code>` short link and keeps the long
+      // tagged link as the page its card is scraped from (short-links spec
+      // §2.3); a standalone post posts its own link unchanged.
+      ...publishLinkFields(variant, variant.shortLinkOrigin),
       // The DIDs generation checked: the adapter posts these rather than
       // resolving the handles a second time (tagging spec §4.4, Publish).
       ...(variant.mentions?.length ? { mentions: variant.mentions } : {}),

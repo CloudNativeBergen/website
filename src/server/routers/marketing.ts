@@ -190,6 +190,7 @@ import {
   getSocialVariantEditorData,
 } from '@/lib/social/sanity'
 import { scheduleIssues } from '@/lib/social/schedule-check'
+import { variantShortLinkOrigin } from '@/lib/social/publish-link'
 import {
   canOrganizerTransition,
   mayAlreadyBeLive,
@@ -1373,12 +1374,25 @@ export const marketingRouter = router({
                   : 'The target page is not valid',
             })
           }
+          // Minted BEFORE validation (nothing is written until the approval
+          // lands): §2.2 — a variant that predates the field gets its code in
+          // the first MUTATION that needs its link, this is one of them — and
+          // validation must see the `/go/<code>` link the tick will post
+          // (§2.3).
+          const approveCode = await shortCodeForMutation(
+            conferenceId,
+            v.shortCode,
+          )
           const post = await getSocialPostEditorInputs(v.postId, v.conferenceId)
           const issues = await scheduleIssues(
-            { ...v, link },
+            { ...v, link, shortCode: approveCode.code },
             post.attachments,
             {
               taskOwned: true,
+              shortLinkOrigin: variantShortLinkOrigin(
+                approveCode.code,
+                conference,
+              ),
               // LIVE, by the variant's conference (already tenancy-guarded),
               // not `conference.domains` from the cached loader — approve is
               // the enforcement point Task-owned drafts actually go through,
@@ -1394,18 +1408,12 @@ export const marketingRouter = router({
               message: issues.map((i) => `${i.field}: ${i.message}`).join('; '),
             })
           }
-          const approveCode = await shortCodeForMutation(
-            conferenceId,
-            v.shortCode,
-          )
           approveMinted = approveCode.minted
           variantStep = {
             id: v._id,
             rev: v._rev,
             scheduledAt,
             link,
-            // §2.2: a variant that predates the field gets its code in the
-            // first MUTATION that needs its link — this is one of them.
             shortCode: approveCode.code,
           }
         }

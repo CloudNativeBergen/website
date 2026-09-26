@@ -80,6 +80,20 @@ describe('BufferPublishAdapter — constraints and validate', () => {
 })
 
 describe('BufferPublishAdapter — publishing with the link as the first comment', () => {
+  it("a Task's short link is the first comment, alone — its long destination goes nowhere (#1143)", async () => {
+    const short = 'https://cloudnativedays.no/go/abc234'
+    const { calls } = await publishWith(
+      {},
+      { ...LINK_ONLY, link: short, linkDestination: LINK },
+    )
+    const [create] = callsNamed(calls, 'CreatePost')
+    expect(create.variables.input).toMatchObject({
+      text: LINK_ONLY.text,
+      metadata: { linkedin: { firstComment: short } },
+    })
+    expect(JSON.stringify(calls)).not.toContain('utm_')
+  })
+
   it('a link and no images: checks the pinned channel, then shares now with the link as the first comment', async () => {
     const { calls, outcome } = await publishWith({})
 

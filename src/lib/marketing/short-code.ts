@@ -124,3 +124,12 @@ export function sequentialShortCodes(): () => string {
     return code
   }
 }
+
+/**
+ * The short URL a reader sees (§2.3): `<origin>/go/<code>`. `origin` is the
+ * conference's outbound origin (`conferenceBaseUrl()`), with no trailing
+ * slash — the same origin the variant's tagged `link` was minted on.
+ */
+export function shortLinkUrl(origin: string, code: string): string {
+  return `${origin.replace(/\/+$/, '')}/go/${code}`
+}

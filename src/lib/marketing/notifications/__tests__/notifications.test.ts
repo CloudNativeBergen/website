@@ -60,6 +60,7 @@ const publishable = (
   marketingTaskId: null,
   postAttachments: [],
   conferenceDomains: [],
+  shortLinkOrigin: null,
 })
 const event = () => ({
   variant: makeVariant(),

@@ -37,11 +37,16 @@ import {
 } from '@/lib/social/provider/constraints'
 import { offAspectOverrides, resolvePublishMedia } from '@/lib/social/media'
 import { placeholderIssues, scheduleIssues } from '@/lib/social/schedule-check'
+import {
+  publishLinkFields,
+  variantShortLinkOrigin,
+} from '@/lib/social/publish-link'
 import { ceilingWarningsFor } from '@/lib/marketing/ceiling-check'
 import { getTaskForVariant, getTaskLinkInputs } from '@/lib/marketing/sanity'
 import { taggedUrl } from '@/lib/marketing/link'
 import { conferenceBaseUrl } from '@/lib/conference/baseUrl'
 import { shortCodeForMutation } from '@/lib/marketing/short-code-sanity'
+import { normalizeShortCode } from '@/lib/marketing/short-code'
 import {
   expireShortLink,
   expireShortLinkIndex,
@@ -93,9 +98,10 @@ function issuesToError(issues: ValidationIssue[]): TRPCError {
  * carries an attachment the post no longer has.
  */
 function publishInputFor(
-  variant: Pick<SocialPostVariant, 'platform' | 'body' | 'link'>,
+  variant: Pick<SocialPostVariant, 'platform' | 'body' | 'link' | 'shortCode'>,
   attachments: SocialVariantAttachment[],
   postAttachments: SocialPostAttachment[],
+  shortLinkOrigin: string | null,
 ): PublishInput {
   const constraints = getPlatformConstraints(variant.platform)
   const media = resolvePublishMedia(attachments, postAttachments, constraints)
@@ -105,7 +111,11 @@ function publishInputFor(
       message: 'An attachment is no longer on the post. Reload and retry.',
     })
   }
-  return { text: variant.body, media, link: variant.link ?? undefined }
+  return {
+    text: variant.body,
+    media,
+    ...publishLinkFields(variant, shortLinkOrigin),
+  }
 }
 
 /**
@@ -155,6 +165,28 @@ async function applyOrConflict(
     })
   }
   return { success: true as const, status: transition.status }
+}
+
+/**
+ * The origin the request conference builds a variant's `/go/<code>` link on
+ * (short-links spec §2.3), so a validation sees the link the publish tick
+ * will post. A variant with no code never reads the conference. A conference
+ * that does not resolve REFUSES the mutation, as `requireConference` does in
+ * the marketing router — never a silent fall back to the long link.
+ */
+async function currentShortLinkOrigin(
+  shortCode: string | null | undefined,
+): Promise<string | null> {
+  // Skips the read only; the gate itself is `variantShortLinkOrigin`'s.
+  if (!normalizeShortCode(shortCode)) return null
+  const { conference, error } = await getConferenceForCurrentDomain()
+  if (error || !conference?._id) {
+    throw new TRPCError({
+      code: 'NOT_FOUND',
+      message: 'Could not resolve the conference to build the short link',
+    })
+  }
+  return variantShortLinkOrigin(shortCode, conference)
 }
 
 /**
@@ -324,12 +356,24 @@ export const socialRouter = router({
         variant.postId,
         variant.conferenceId,
       )
-      const issues = await scheduleIssues(variant, post.attachments, {
+      const taskOwned = !!(await getTaskForVariant(
+        variant._id,
+        variant.conferenceId,
+      ))
+      // §2.2: a Task variant that predates the field gets its code in the
+      // first MUTATION that needs its link — scheduling queues it to be
+      // posted, so it is one. Minted before validating, so validation sees the
+      // `/go/<code>` link the tick will post, and written by the same
+      // compare-and-set as the transition below. A standalone post never gets
+      // a code (§1).
+      const code = taskOwned
+        ? await shortCodeForMutation(variant.conferenceId, variant.shortCode)
+        : null
+      const coded = code ? { ...variant, shortCode: code.code } : variant
+      const issues = await scheduleIssues(coded, post.attachments, {
         conferenceDomains: await currentConferenceDomains(variant.platform),
-        taskOwned: !!(await getTaskForVariant(
-          variant._id,
-          variant.conferenceId,
-        )),
+        shortLinkOrigin: await currentShortLinkOrigin(coded.shortCode),
+        taskOwned,
       })
       if (issues.length > 0) throw issuesToError(issues)
 
@@ -340,7 +384,11 @@ export const socialRouter = router({
         scheduledAt,
         attemptCount: 0,
         usesCustomTime,
+        ...(code?.minted ? { shortCode: code.code } : {}),
       })
+      // A new code changes the conference's membership set (§2.4), after the
+      // write has committed.
+      if (code?.minted) expireShortLinkIndex(variant.conferenceId)
       return {
         ...result,
         ceilingWarnings: await ceilingWarningsFor(variant.conferenceId, {
@@ -413,11 +461,17 @@ export const socialRouter = router({
       const shortCode = taskOwned
         ? await shortCodeForMutation(variant.conferenceId, variant.shortCode)
         : undefined
-      const content = { ...variant, body: input.body, link }
+      const content = {
+        ...variant,
+        body: input.body,
+        link,
+        shortCode: shortCode?.code ?? null,
+      }
       const publishInput = publishInputFor(
         content,
         input.attachments,
         post.attachments,
+        await currentShortLinkOrigin(content.shortCode),
       )
       const constraints = getPlatformConstraints(variant.platform)
       const issues = constraints

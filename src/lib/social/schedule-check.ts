@@ -5,7 +5,8 @@ import {
   validatePublishInput,
 } from './provider/constraints'
 import { unresolvedPlaceholders } from '@/lib/marketing/placeholders'
-import type { ValidationIssue } from './provider/types'
+import type { PublishInput, ValidationIssue } from './provider/types'
+import { publishLinkFields } from './publish-link'
 import type { SocialPostAttachment, SocialPostVariant } from './types'
 
 /**
@@ -58,6 +59,12 @@ export async function scheduleIssues(
      * caller that forgot would look green while enforcing nothing.
      */
     conferenceDomains: readonly string[]
+    /**
+     * The origin a coded variant's `/go/<code>` link is built on (short-links
+     * spec §2.3), or `null`. REQUIRED, so validation is handed the same link
+     * fields the publish tick posts.
+     */
+    shortLinkOrigin: string | null
   },
 ): Promise<ValidationIssue[]> {
   const constraints = getPlatformConstraints(variant.platform)
@@ -74,10 +81,10 @@ export async function scheduleIssues(
       },
     ]
   }
-  const input = {
+  const input: PublishInput = {
     text: variant.body,
     media,
-    link: variant.link ?? undefined,
+    ...publishLinkFields(variant, options.shortLinkOrigin),
   }
   if (options.taskOwned) {
     const placeholders = placeholderIssues(input)

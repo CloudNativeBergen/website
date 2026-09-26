@@ -1677,3 +1677,66 @@ describe('LinkedIn through Buffer, end to end (#1129)', () => {
     })
   })
 })
+
+describe('runPublishTick — short links (#1143, short-links spec §2.3)', () => {
+  const LONG =
+    'https://cloudnativedays.no/program?utm_source=bluesky&utm_medium=social&utm_campaign=cfp&utm_content=speakerCard%3Asp-1%3Abluesky'
+  const published: PublishOutcome = {
+    ok: true,
+    externalId: 'at://did/post/1',
+    url: 'https://bsky.app/profile/x/post/1',
+  }
+
+  it("a Task's variant posts /go/<code> on the conference's primary domain and scrapes its long link", async () => {
+    const store = new MemoryVariantStore(
+      [makeVariant({ link: LONG, shortCode: 'abc234' })],
+      {},
+      { 'conf-1': ['cloudnativedays.no', 'www.cloudnativedays.no'] },
+    )
+    const adapter = fakeAdapter(published)
+
+    await runPublishTick({
+      store,
+      resolveAdapter: async () => adapter,
+      now: NOW,
+    })
+
+    const expected = {
+      text: 'Hello from the conference',
+      media: [],
+      link: 'https://cloudnativedays.no/go/abc234',
+      linkDestination: LONG,
+    }
+    expect(adapter.publish).toHaveBeenCalledWith(expected)
+    // Validation sees what is posted.
+    expect(adapter.validate.mock.calls[0][0]).toEqual(expected)
+    // The stored link is still the LONG tagged URL after publishing.
+    const doc = store.get('variant-1')
+    expect(doc.status).toBe('published')
+    expect(doc.link).toBe(LONG)
+    expect(doc.shortCode).toBe('abc234')
+  })
+
+  it('a standalone post (no code) posts the link the organizer typed, with no destination', async () => {
+    const typed = 'https://example.org/anything?ref=x'
+    const store = new MemoryVariantStore(
+      [makeVariant({ link: typed, shortCode: null })],
+      {},
+      { 'conf-1': ['cloudnativedays.no'] },
+    )
+    const adapter = fakeAdapter(published)
+
+    await runPublishTick({
+      store,
+      resolveAdapter: async () => adapter,
+      now: NOW,
+    })
+
+    expect(adapter.publish).toHaveBeenCalledWith({
+      text: 'Hello from the conference',
+      media: [],
+      link: typed,
+    })
+    expect(store.get('variant-1').link).toBe(typed)
+  })
+})

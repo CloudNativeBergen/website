@@ -66,6 +66,14 @@ vi.mock('@/lib/social/sanity', () => ({
   updateSocialVariantContent: h.updateSocialVariantContent,
   addSocialPostAttachment: h.addSocialPostAttachment,
 }))
+// A PASSTHROUGH spy: the real rules run, and a test can read what they saw.
+const constraints = vi.hoisted(() => ({ validate: vi.fn() }))
+vi.mock('@/lib/social/provider/constraints', async (importOriginal) => {
+  const real =
+    await importOriginal<typeof import('@/lib/social/provider/constraints')>()
+  constraints.validate.mockImplementation(real.validatePublishInput)
+  return { ...real, validatePublishInput: constraints.validate }
+})
 vi.mock('@/lib/social/provider', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/social/provider')>()),
   resolveSocialPublishAdapter: h.resolveAdapter,
@@ -75,7 +83,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { initTRPC } from '@trpc/server'
 import type { Context } from '@/server/trpc'
 import type { SocialPostVariant } from '@/lib/social/types'
+import type { PublishInput, ValidationIssue } from '@/lib/social/provider/types'
 import { socialRouter } from './social'
+import { revalidateTag } from 'next/cache'
+import { normalizeShortCode } from '@/lib/marketing/short-code'
+import { shortLinkIndexTag } from '@/lib/cache/tags'
 
 const t = initTRPC.context<Context>().create()
 const ORG_A = 'org-A'
@@ -1434,5 +1446,160 @@ describe('LinkedIn: the link is the first comment', () => {
     await expect(
       save('Tickets are live — link in the first comment.', OURS),
     ).resolves.toMatchObject({ success: true })
+  })
+})
+
+describe('validation sees the link the tick posts (#1143)', () => {
+  const LONG =
+    'https://cloudnativebergen.no/tickets?utm_source=bluesky&utm_medium=social&utm_campaign=cfp&utm_content=ticketsOpen%3Abluesky'
+  const SHORT = 'https://cloudnativebergen.no/go/abc234'
+  beforeEach(() => {
+    h.getConference.mockResolvedValue({
+      conference: {
+        _id: CONF_A,
+        organization: { _ref: ORG_A },
+        domains: ['cloudnativebergen.no'],
+      },
+      domain: 'cloudnativebergen.no',
+      error: null,
+    })
+  })
+
+  it("scheduling a Task's variant validates its /go/<code> link with the long link as destination", async () => {
+    const validate = vi.fn<(input: PublishInput) => ValidationIssue[]>(() => [])
+    h.resolveAdapter.mockResolvedValue({ validate })
+    h.getSocialPostVariant.mockResolvedValue(
+      variant({ platform: 'bluesky', link: LONG, shortCode: 'abc234' }),
+    )
+    await social().scheduleVariant({ variantId: 'variant-ours' })
+    expect(validate.mock.calls[0][0]).toMatchObject({
+      link: SHORT,
+      linkDestination: LONG,
+    })
+  })
+
+  it('scheduling a Task variant that predates the field BACKFILLS its code, validates /go/<code> and persists the code (§2.2)', async () => {
+    const validate = vi.fn<(input: PublishInput) => ValidationIssue[]>(() => [])
+    h.resolveAdapter.mockResolvedValue({ validate })
+    marketing.getTaskForVariant.mockResolvedValue('task-ours')
+    h.getSocialPostVariant.mockResolvedValue(
+      variant({ platform: 'bluesky', link: LONG, shortCode: null }),
+    )
+    // The conference already holds `abc234`: the mint must draw another.
+    const tenancy = h.tenantRead.getMockImplementation()!
+    h.tenantRead.mockImplementation(async (query: string, params) =>
+      query.includes('defined(shortCode)')
+        ? ['abc234']
+        : tenancy(query, params),
+    )
+
+    await social().scheduleVariant({ variantId: 'variant-ours' })
+
+    const written = h.transition.mock.calls[0][1].shortCode as string
+    expect(normalizeShortCode(written)).toBe(written)
+    expect(written).not.toBe('abc234')
+    expect(h.transition.mock.calls[0][1]).toMatchObject({
+      status: 'scheduled',
+    })
+    expect(h.transition.mock.calls[0][2]).toEqual({ ifRevision: 'rev-7' })
+    expect(validate.mock.calls[0][0]).toMatchObject({
+      link: `https://cloudnativebergen.no/go/${written}`,
+      linkDestination: LONG,
+    })
+    expect(revalidateTag).toHaveBeenCalledWith(shortLinkIndexTag(CONF_A), {
+      expire: 0,
+    })
+  })
+
+  it('scheduling a Task variant that already has a code writes no code and keeps the index', async () => {
+    h.resolveAdapter.mockResolvedValue({ validate: () => [] })
+    marketing.getTaskForVariant.mockResolvedValue('task-ours')
+    h.getSocialPostVariant.mockResolvedValue(
+      variant({ platform: 'bluesky', link: LONG, shortCode: 'abc234' }),
+    )
+    await social().scheduleVariant({ variantId: 'variant-ours' })
+    expect(h.transition.mock.calls[0][1]).not.toHaveProperty('shortCode')
+    expect(revalidateTag).not.toHaveBeenCalled()
+  })
+
+  it('scheduling a standalone variant validates the link the organizer typed', async () => {
+    const validate = vi.fn<(input: PublishInput) => ValidationIssue[]>(() => [])
+    h.resolveAdapter.mockResolvedValue({ validate })
+    const typed = 'https://example.org/x'
+    h.getSocialPostVariant.mockResolvedValue(
+      variant({ platform: 'bluesky', link: typed, shortCode: null }),
+    )
+    await social().scheduleVariant({ variantId: 'variant-ours' })
+    const input = validate.mock.calls[0][0]
+    expect(input.link).toBe(typed)
+    expect(input).not.toHaveProperty('linkDestination')
+    expect(h.transition.mock.calls[0][1]).not.toHaveProperty('shortCode')
+  })
+
+  it("refuses to schedule or save a Task's variant when the conference does not resolve, rather than validating the long link", async () => {
+    const validate = vi.fn<(input: PublishInput) => ValidationIssue[]>(() => [])
+    h.resolveAdapter.mockResolvedValue({ validate })
+    // ONLY the short-link origin read fails (picked out by its caller on the
+    // stack): every other read of the conference — the admin guard, the
+    // tenancy guard — still resolves, so the refusal asserted below can come
+    // from no other guard.
+    const resolved = await h.getConference()
+    h.getConference.mockImplementation(async () =>
+      new Error().stack?.includes('currentShortLinkOrigin')
+        ? {
+            conference: null,
+            domain: 'cloudnativebergen.no',
+            error: new Error('Sanity down'),
+          }
+        : resolved,
+    )
+    h.getSocialPostVariant.mockResolvedValue(
+      variant({ platform: 'bluesky', link: LONG, shortCode: 'abc234' }),
+    )
+    await expect(
+      social().scheduleVariant({ variantId: 'variant-ours' }),
+    ).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+      message: 'Could not resolve the conference to build the short link',
+    })
+    expect(validate).not.toHaveBeenCalled()
+    expect(h.transition).not.toHaveBeenCalled()
+
+    marketing.getTaskForVariant.mockResolvedValue('task-ours')
+    await expect(
+      social().updateVariant({
+        variantId: 'variant-ours',
+        rev: 'rev-7',
+        body: 'Tickets are live',
+        link: null,
+        attachments: [],
+        timing: { mode: 'default' },
+      }),
+    ).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+      message: 'Could not resolve the conference to build the short link',
+    })
+    expect(h.updateSocialVariantContent).not.toHaveBeenCalled()
+  })
+
+  it("saving a Task's variant from the posts table validates its /go/<code> link", async () => {
+    marketing.getTaskForVariant.mockResolvedValue('task-ours')
+    h.getSocialPostVariant.mockResolvedValue(
+      variant({ platform: 'bluesky', link: LONG, shortCode: 'abc234' }),
+    )
+    await social().updateVariant({
+      variantId: 'variant-ours',
+      rev: 'rev-7',
+      body: 'Tickets are live',
+      link: 'https://ignored.example/typed',
+      attachments: [],
+      timing: { mode: 'default' },
+    })
+    expect(constraints.validate.mock.calls[0][1]).toMatchObject({
+      link: SHORT,
+      linkDestination: LONG,
+    })
+    // The stored link is still the LONG tagged URL.
+    expect(h.updateSocialVariantContent.mock.calls[0][1].link).toBe(LONG)
   })
 })

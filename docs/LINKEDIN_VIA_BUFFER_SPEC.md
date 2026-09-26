@@ -60,7 +60,11 @@ path, and a spike before any tag goes through Buffer.
 An organizer's call, for reach: on LinkedIn the link is **always** the first comment
 (`metadata.linkedin.firstComment`), and the comment is the UTM-tagged URL alone. Never in the body,
 never a link attachment. This holds for the manual path too (§5), so it is a change to LinkedIn as a
-Channel, not to the Buffer adapter, and it ships as its own slice:
+Channel, not to the Buffer adapter, and it ships as its own slice.
+
+**Amended by [`MARKETING_SHORT_LINKS_SPEC.md`](./MARKETING_SHORT_LINKS_SPEC.md) §2.3 (#1143):** for a
+marketing Task's post the first comment is its `/go/<code>` short link alone, which redirects to the
+UTM-tagged URL; a standalone post's comment is still the link the organizer typed.
 
 - `PlatformConstraints.linkInBody` (a boolean Bluesky also uses) becomes
   `linkPlacement: 'body' | 'card' | 'comment'`; LinkedIn is `comment`, Bluesky `card`. Its consumers

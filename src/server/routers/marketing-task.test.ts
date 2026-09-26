@@ -405,6 +405,21 @@ describe('marketing.task.approve', () => {
     expect(h.approveTask.mock.calls[0][0].variant.link).toBe(derived)
   })
 
+  it('validates with the code it WRITES — a backfilled one included — on the conference origin (#1143)', async () => {
+    // A variant that predates the field: approve mints its code, and the
+    // validation must already see the `/go/<code>` link the tick will post.
+    h.getSocialVariantEditorData.mockResolvedValue(
+      variantData({ shortCode: null }),
+    )
+    await marketing().task.approve({ taskId: 'task-ours' })
+    const written = h.approveTask.mock.calls[0][0].variant.shortCode
+    expect(normalizeShortCode(written)).toBe(written)
+    expect(h.scheduleIssues.mock.calls[0][0].shortCode).toBe(written)
+    expect(h.scheduleIssues.mock.calls[0][2].shortLinkOrigin).toBe(
+      'https://cloudnativebergen.dev',
+    )
+  })
+
   it('does not read the own domains for a card platform: a Bluesky approval cannot fail on that read', async () => {
     h.getConferenceDomains.mockRejectedValue(new Error('verification down'))
     h.getSocialVariantEditorData.mockResolvedValue(
@@ -415,6 +430,7 @@ describe('marketing.task.approve', () => {
     expect(h.scheduleIssues.mock.calls[0][2]).toEqual({
       taskOwned: true,
       conferenceDomains: [],
+      shortLinkOrigin: 'https://cloudnativebergen.dev',
     })
   })
 
@@ -429,6 +445,7 @@ describe('marketing.task.approve', () => {
     expect(h.scheduleIssues.mock.calls[0][2]).toEqual({
       taskOwned: true,
       conferenceDomains: ['live.cloudnativebergen.no'],
+      shortLinkOrigin: 'https://cloudnativebergen.dev',
     })
   })
 
