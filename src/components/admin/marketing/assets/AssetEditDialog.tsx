@@ -67,7 +67,9 @@ export function AssetEditDialog({
       setAlt(asset.alt ?? '')
       setDraft(next)
       setError(null)
-      setInitial(JSON.stringify([asset.title, asset.alt, next]))
+      // The same normalised alt as the field holds: a track's null alt must
+      // not make the untouched dialog read as dirty.
+      setInitial(JSON.stringify([asset.title, asset.alt ?? '', next]))
     }
   }
 

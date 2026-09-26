@@ -101,14 +101,14 @@ const ASSETS: MarketingAssetRow[] = [
   row({
     _id: 'asset-theme',
     kind: 'audio',
-    title: 'Conference theme, 90-second cut',
+    title: 'Conference theme, 30-second cut',
     alt: null,
     imageUrl: null,
     assetId: null,
     width: null,
     height: null,
     audioUrl: TRACK_URL,
-    durationSeconds: 92,
+    durationSeconds: 30,
     rights: {
       confirmedBy: 'Olga Organizer',
       confirmedAt: '2026-09-19T08:30:00Z',
@@ -326,7 +326,7 @@ export const Gallery: Story = {
     // A track plays in its card, and says who confirmed its rights.
     await expect(
       canvas.getByRole('button', {
-        name: 'Play Conference theme, 90-second cut',
+        name: 'Play Conference theme, 30-second cut',
       }),
     ).toBeInTheDocument()
     await expect(canvas.getByText(/Olga Organizer/)).toBeInTheDocument()
@@ -795,7 +795,7 @@ export const FilterTracks: Story = {
     await userEvent.selectOptions(canvas.getByLabelText('Kind'), 'Audio tracks')
     await waitFor(() => expect(canvas.getAllByRole('listitem')).toHaveLength(1))
     await expect(
-      canvas.getByText('Conference theme, 90-second cut'),
+      canvas.getByText('Conference theme, 30-second cut'),
     ).toBeInTheDocument()
   },
 }
@@ -817,17 +817,26 @@ export const EditTrack: Story = {
     const canvas = within(canvasElement)
     await userEvent.click(
       await canvas.findByRole('button', {
-        name: 'Edit Conference theme, 90-second cut',
+        name: 'Edit Conference theme, 30-second cut',
       }),
     )
     const dialog = within(await within(document.body).findByRole('dialog'))
     await expect(dialog.queryByLabelText('Alt text')).toBeNull()
     await expect(dialog.getByRole('button', { name: 'Save' })).toBeEnabled()
+    // Untouched, Escape closes it without asking to discard changes: a
+    // track's null alt text does not read as an edit.
+    await userEvent.keyboard('{Escape}')
+    await waitFor(() =>
+      expect(within(document.body).queryByRole('dialog')).toBeNull(),
+    )
+    await expect(
+      within(document.body).queryByText(/Discard/i),
+    ).not.toBeInTheDocument()
   },
 }
 
 /**
- * A track PLAYING in its card at phone width: the time ("0:01 / 1:32") sits
+ * A track PLAYING in its card at phone width: the time ("0:02 / 0:30") sits
  * under the bar, so the bar keeps the card's width.
  */
 export const TrackPlaying: Story = {
@@ -841,11 +850,11 @@ export const TrackPlaying: Story = {
     await userEvent.selectOptions(canvas.getByLabelText('Kind'), 'Audio tracks')
     await userEvent.click(
       await canvas.findByRole('button', {
-        name: 'Play Conference theme, 90-second cut',
+        name: 'Play Conference theme, 30-second cut',
       }),
     )
     await canvas.findByRole('button', {
-      name: 'Pause Conference theme, 90-second cut',
+      name: 'Pause Conference theme, 30-second cut',
     })
     await waitFor(
       () => expect(canvas.getByText(/^0:0[1-9] \/ /)).toBeVisible(),

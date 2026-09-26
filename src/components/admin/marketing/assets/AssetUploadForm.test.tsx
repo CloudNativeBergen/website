@@ -391,7 +391,10 @@ describe('picking an audio track (#1178)', () => {
     trackLength.seconds = null
     const { pick } = renderForm()
     await pick(mp3('odd.mp3'))
-    expect(screen.queryByRole('alert')).toBeNull()
+    // No refusal. (The player keeps an empty alert mounted for its own use.)
+    expect(
+      screen.queryAllByRole('alert').map((alert) => alert.textContent),
+    ).toEqual([''])
     expect(
       screen.getByLabelText(
         'I have the right to use this track in social posts.',

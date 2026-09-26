@@ -25,12 +25,19 @@ export function TrackPlayer({
   const [playing, setPlaying] = useState(false)
   const [position, setPosition] = useState(0)
   const [length, setLength] = useState(durationSeconds)
+  // The browser can refuse to play (a format it lacks, a playback policy).
+  const [failed, setFailed] = useState(false)
 
   function toggle() {
     const element = audio.current
     if (!element) return
-    if (element.paused) void element.play().catch(() => setPlaying(false))
-    else element.pause()
+    if (element.paused) {
+      setFailed(false)
+      void element.play().catch(() => {
+        setPlaying(false)
+        setFailed(true)
+      })
+    } else element.pause()
   }
 
   const progress = length ? Math.min(1, position / length) : 0
@@ -77,6 +84,13 @@ export function TrackPlayer({
         <p className="mt-1 text-right text-xs text-gray-600 tabular-nums dark:text-gray-300">
           {position > 0 ? `${formatTrackLength(position)} / ` : ''}
           {length ? formatTrackLength(length) : '–:––'}
+        </p>
+        {/* Mounted always, so the failure is announced when it appears. */}
+        <p
+          role="alert"
+          className="text-xs text-red-700 empty:hidden dark:text-red-300"
+        >
+          {failed ? 'This browser can’t play the track.' : ''}
         </p>
       </div>
     </div>
