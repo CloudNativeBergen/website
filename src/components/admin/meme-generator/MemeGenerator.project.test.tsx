@@ -252,14 +252,32 @@ describe('opening a project', () => {
   })
 
   it('keeps the backgrounds it decoded when the video changes while it opens', async () => {
+    const OTHER = '/api/proxy-image?url=other'
+    const second = openedScene('s-2', 'World')
+    second.design.background.image = {
+      ...second.design.background.image!,
+      url: OTHER,
+    }
+    const projects = fakeProjects({
+      open: vi.fn(async () => ({
+        ...PROJECT,
+        scenes: [PROJECT.scenes[0], second],
+      })),
+    })
+    // The first image decodes at once, the second only when released.
     let release: () => void = () => {}
-    const gate = new Promise<void>((resolve) => (release = resolve))
+    const late = new Promise<void>((resolve) => (release = resolve))
     Object.defineProperty(HTMLImageElement.prototype, 'decode', {
       configurable: true,
-      value: () => gate,
+      value(this: HTMLImageElement) {
+        return this.src.endsWith('other') ? late : Promise.resolve()
+      },
     })
-    render(<MemeGenerator projects={fakeProjects()} initialProjectId="vp-1" />)
-    // An edit lands while the project's images decode: the history moves on.
+    render(<MemeGenerator projects={projects} initialProjectId="vp-1" />)
+    await waitFor(() => expect(projects.open).toHaveBeenCalled())
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    // An edit lands after the first decoded, before the second: the history
+    // moves on, and the prune runs.
     fireEvent.change(screen.getAllByPlaceholderText('Enter your text...')[0], {
       target: { value: 'typed meanwhile' },
     })
