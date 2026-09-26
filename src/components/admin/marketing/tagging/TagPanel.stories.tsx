@@ -103,9 +103,7 @@ function Harness({
         pending={pending}
         lookups={lookups}
         onTag={(p) => setBody((b) => tagName(b, p) ?? b)}
-        onUntag={(p) =>
-          p.handle && setBody((b) => untagHandle(b, p.handle!, p.name))
-        }
+        onUntag={(p, handle) => setBody((b) => untagHandle(b, handle, p.name))}
         onFix={(issue) => {
           if (!issue.handle || !issue.name) return
           setBody((b) => untagHandle(b, issue.handle!, issue.name!))
@@ -255,4 +253,36 @@ export const IssueWithFixDark: Story = {
 export const IssueWithFixMobile: Story = {
   args: IssueWithFix.args,
   parameters: { viewport: { defaultViewport: 'mobile1' } },
+}
+
+/**
+ * Alice changed her Bluesky link after the post was tagged: the body still
+ * carries her recorded old handle, and "Use name" swaps THAT one back.
+ */
+export const TaggedByAnOlderHandle: Story = {
+  args: {
+    initialBody: 'Catch @alice.dev at 10.',
+    people: [{ ...alice, handle: 'alice.example.com' }],
+    mentions: [
+      {
+        _key: 'spk-alice',
+        handle: 'alice.dev',
+        did: 'did:plc:alice',
+        speakerId: 'spk-alice',
+        name: 'Alice Anderson',
+        status: 'tagged',
+      },
+    ],
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(
+      canvas.getByRole('button', {
+        name: "Use Alice Anderson's name instead of the tag",
+      }),
+    )
+    await expect(canvas.getByTestId('body')).toHaveTextContent(
+      'Catch Alice Anderson at 10.',
+    )
+  },
 }

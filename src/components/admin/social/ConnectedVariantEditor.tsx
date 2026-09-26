@@ -179,11 +179,8 @@ export function ConnectedVariantEditor({
       },
     )
   }
-  const untag = (person: TaggablePerson) => {
-    if (!person.handle) return
-    const handle = person.handle
+  const untag = (person: TaggablePerson, handle: string) =>
     editBody((body) => untagHandle(body, handle, person.name))
-  }
   const fix = (issue: TagIssue) => {
     if (!tagging || !issue.handle || !issue.name) return
     const { handle, name } = issue

@@ -46,7 +46,8 @@ export function TagPanel({
   lookups: Readonly<Record<string, TagLookup>>
   disabled?: boolean
   onTag: (person: TaggablePerson) => void
-  onUntag: (person: TaggablePerson) => void
+  /** `handle` is the tag in the body: the current one, or a recorded older one. */
+  onUntag: (person: TaggablePerson, handle: string) => void
   onFix: (issue: TagIssue) => void
 }) {
   const inBody = new Set(mentionTokens(body).map((t) => t.handle))
@@ -56,6 +57,18 @@ export function TagPanel({
   )
   if (people.length === 0 && notes.length === 0 && issues.length === 0)
     return null
+  /** The handle a person is tagged by in the body: current, or recorded. */
+  const taggedAs = (person: TaggablePerson): string | null => {
+    if (person.handle && inBody.has(person.handle)) return person.handle
+    return (
+      mentions.find(
+        (m) =>
+          m.status === 'tagged' &&
+          m.speakerId === person.speakerId &&
+          inBody.has(m.handle),
+      )?.handle ?? null
+    )
+  }
 
   return (
     <section
@@ -119,12 +132,12 @@ export function TagPanel({
               key={person.speakerId}
               person={person}
               body={body}
-              tagged={!!person.handle && inBody.has(person.handle)}
+              taggedAs={taggedAs(person)}
               pending={pending === person.speakerId}
               lookup={lookups[person.speakerId]}
               disabled={disabled || pending !== null}
               onTag={() => onTag(person)}
-              onUntag={() => onUntag(person)}
+              onUntag={(handle) => onUntag(person, handle)}
             />
           ))}
         </ul>
@@ -136,7 +149,7 @@ export function TagPanel({
 function PersonRow({
   person,
   body,
-  tagged,
+  taggedAs,
   pending,
   lookup,
   disabled,
@@ -145,13 +158,14 @@ function PersonRow({
 }: {
   person: TaggablePerson
   body: string
-  tagged: boolean
+  taggedAs: string | null
   pending: boolean
   lookup: TagLookup | undefined
   disabled: boolean
   onTag: () => void
-  onUntag: () => void
+  onUntag: (handle: string) => void
 }) {
+  const tagged = taggedAs !== null
   const nameInBody = nameIndex(body, person.name) >= 0
   let status: { text: string; tone: 'muted' | 'warn' | 'error' } | null = null
   if (person.optedOut)
@@ -168,16 +182,16 @@ function PersonRow({
   else if (!tagged && !nameInBody)
     status = { text: 'Their name is not in the post', tone: 'muted' }
 
-  const canAct = !person.optedOut && !!person.handle
+  const canAct = tagged || (!person.optedOut && !!person.handle)
   return (
     <li className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 py-2 first:pt-0 last:pb-0">
       <div className="min-w-0">
         <p className="text-sm font-medium break-words text-gray-900 dark:text-gray-100">
           {person.name}
         </p>
-        {person.handle && (
+        {(taggedAs ?? person.handle) && (
           <p className="font-mono text-xs break-all text-gray-500 dark:text-gray-400">
-            @{person.handle}
+            @{taggedAs ?? person.handle}
           </p>
         )}
         {status && (
@@ -200,7 +214,7 @@ function PersonRow({
             variant="secondary"
             size="xs"
             disabled={disabled}
-            onClick={onUntag}
+            onClick={() => taggedAs && onUntag(taggedAs)}
             aria-label={`Use ${person.name}'s name instead of the tag`}
           >
             Use name

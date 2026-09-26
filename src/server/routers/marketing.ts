@@ -1477,9 +1477,10 @@ export const marketingRouter = router({
           input.taskId,
           'marketingTask',
         )
+        const own = ownBlueskyHandle((await requireConference()).socialLinks)
         const people = withoutOwnAccount(
           await getTaskTagPeople(input.taskId, conferenceId),
-          ownBlueskyHandle((await requireConference()).socialLinks),
+          own,
         )
         const person = people.find((p) => p.speakerId === input.speakerId)
         if (!person) {
@@ -1501,6 +1502,13 @@ export const marketingRouter = router({
           })
         }
         const resolution = await resolveBlueskyHandle(person.handle)
+        // Our own account, when the conference names it by DID (spec §4.1).
+        if (resolution.kind === 'resolved' && resolution.did === own) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: `${person.name}'s Bluesky link is the conference's own account, which is never tagged.`,
+          })
+        }
         return { handle: person.handle, result: resolution.kind }
       }),
 

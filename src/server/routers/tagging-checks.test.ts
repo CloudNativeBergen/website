@@ -600,6 +600,16 @@ describe('marketing.task.resolveTag', () => {
     expect(askedBluesky()).toEqual([])
   })
 
+  it('refuses when the handle resolves to our own account named by DID', async () => {
+    ownAccount(`https://bsky.app/profile/${DID_ALICE}`)
+    await expect(
+      marketing().task.resolveTag({
+        taskId: 'task-ours',
+        speakerId: 'spk-alice',
+      }),
+    ).rejects.toMatchObject({ message: /own account/ })
+  })
+
   it('refuses someone the Task is not about', async () => {
     await expect(
       marketing().task.resolveTag({
