@@ -628,7 +628,7 @@ describe('marketing.task.resolveTag', () => {
         taskId: 'task-ours',
         speakerId: 'spk-alice',
       }),
-    ).rejects.toMatchObject({ message: /no Bluesky link/ })
+    ).rejects.toMatchObject({ message: /conference's own account/ })
     expect(askedBluesky()).toEqual([])
   })
 

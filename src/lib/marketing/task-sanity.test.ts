@@ -6,6 +6,7 @@
  * followed only within the conference), and every write captured mutation
  * by mutation with its compare-and-set guard.
  */
+import { getVariantMentionRecords } from './tagging/sanity'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { evaluate, parse } from 'groq-js'
 
@@ -571,6 +572,35 @@ describe('getTaskEditorData — Bluesky tag people and mentions (#1151)', () => 
         status: 'unresolved',
       },
     ])
+  })
+
+  it('reads mentions exactly as MENTION_RECORD_PROJECTION does', async () => {
+    // Every field set, so a field dropped from either projection shows.
+    Object.assign(doc('variant-li'), {
+      mentions: [
+        {
+          _key: 'sp-2',
+          _type: 'socialPostMention',
+          handle: 'bob.dev',
+          did: 'did:plc:bob',
+          speaker: { ...r('sp-2'), _weak: true },
+          name: 'Bob',
+          status: 'tagged',
+        },
+      ],
+    })
+    const viaTask = (await getTaskEditorData('task-li', CONF_A))!.tagMentions
+    expect(viaTask).toEqual(
+      await getVariantMentionRecords('variant-li', CONF_A),
+    )
+    expect(viaTask[0]).toEqual({
+      _key: 'sp-2',
+      handle: 'bob.dev',
+      did: 'did:plc:bob',
+      speakerId: 'sp-2',
+      name: 'Bob',
+      status: 'tagged',
+    })
   })
 
   it('a LinkedIn Task gets neither', async () => {

@@ -525,6 +525,9 @@ export async function getTaskEditorData(
         "company": select(_type == "sponsor" && count(*[_type == "sponsorForConference" && conference._ref == $conferenceId && sponsor._ref == ^._id]) > 0 => { name, "url": linkedinUrl })
       }),
       "tagPeople": ${TAG_PEOPLE_PROJECTION},
+      // MENTION_RECORD_PROJECTION (./tagging/records) written out: the tenancy
+      // rule cannot parse an interpolated projection here. task-sanity.test
+      // asserts both read the same records.
       "tagMentions": select(kind == "publishing" && channel == "bluesky" && variant->conference._ref == conference._ref => variant->mentions[]{ _key, handle, did, "speakerId": speaker._ref, name, status }),
       "campaign": select(campaign->conference._ref == conference._ref => campaign->{ _id, key, title }),
       "planOwnerId": plan->owner._ref,

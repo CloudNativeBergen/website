@@ -56,21 +56,6 @@ export interface TaggablePerson {
   optedOut: boolean
 }
 
-/**
- * The conference's own account is never tagged (spec §4.1): a speaker who
- * lists it has no handle to tag. `own` is `ownBlueskyHandle(socialLinks)`,
- * a handle or a DID; the DID form is caught on the resolved DID instead.
- */
-export function withoutOwnAccount(
-  people: readonly TaggablePerson[],
-  own: string | null,
-): TaggablePerson[] {
-  if (!own) return [...people]
-  return people.map((p) =>
-    p.handle && normaliseHandle(p.handle) === own ? { ...p, handle: null } : p,
-  )
-}
-
 export type TagIssueCode =
   | 'opted-out'
   | 'not-a-speaker'
@@ -229,7 +214,11 @@ function notASpeaker(m: MentionRecord, handle: string): MentionIssue {
   }
 }
 
-function notFoundIssue(key: string, handle: string, name: string): MentionIssue {
+function notFoundIssue(
+  key: string,
+  handle: string,
+  name: string,
+): MentionIssue {
   return {
     code: 'not-found',
     mentionKey: key,

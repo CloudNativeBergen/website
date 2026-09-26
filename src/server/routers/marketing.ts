@@ -200,8 +200,7 @@ import type { VariantStatus } from '@/lib/social/types'
 import { getOrganizersByConference } from '@/lib/speaker/sanity'
 import { checkTagsForApproval } from '@/lib/marketing/tagging/verify'
 import { getTaskTagPeople } from '@/lib/marketing/tagging/sanity'
-import { ownBlueskyHandle } from '@/lib/marketing/tagging/lookup'
-import { withoutOwnAccount } from '@/lib/marketing/tagging/checks'
+import { currentOwnBlueskyAccount } from '@/lib/marketing/tagging/own-account'
 import { resolveBlueskyHandle } from '@/lib/marketing/tagging/resolve'
 import { tagIssuesError } from '@/server/errors'
 import {
@@ -1476,12 +1475,9 @@ export const marketingRouter = router({
           input.taskId,
           'marketingTask',
         )
-        const own = ownBlueskyHandle((await requireConference()).socialLinks)
-        const people = withoutOwnAccount(
-          await getTaskTagPeople(input.taskId, conferenceId),
-          own,
-        )
-        const person = people.find((p) => p.speakerId === input.speakerId)
+        const person = (
+          await getTaskTagPeople(input.taskId, conferenceId)
+        ).find((p) => p.speakerId === input.speakerId)
         if (!person) {
           throw new TRPCError({
             code: 'BAD_REQUEST',
@@ -1500,14 +1496,18 @@ export const marketingRouter = router({
             message: `${person.name} has no Bluesky link on their profile.`,
           })
         }
-        const resolution = await resolveBlueskyHandle(person.handle)
-        // Our own account, when the conference names it by DID (spec §4.1).
-        if (resolution.kind === 'resolved' && resolution.did === own) {
-          throw new TRPCError({
+        // Our own account is never tagged (spec §4.1): matched by handle
+        // before Bluesky is asked, and by DID when the conference names it so.
+        const own = await currentOwnBlueskyAccount()
+        const ownAccount = () =>
+          new TRPCError({
             code: 'BAD_REQUEST',
             message: `${person.name}'s Bluesky link is the conference's own account, which is never tagged.`,
           })
-        }
+        if (person.handle === own) throw ownAccount()
+        const resolution = await resolveBlueskyHandle(person.handle)
+        if (resolution.kind === 'resolved' && resolution.did === own)
+          throw ownAccount()
         return { handle: person.handle, result: resolution.kind }
       }),
 
