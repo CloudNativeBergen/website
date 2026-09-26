@@ -44,6 +44,8 @@ export function SaveToGalleryDialog({
   uploader,
   onSavingChange,
   onClose,
+  afterLeave,
+  onSaved,
 }: {
   isOpen: boolean
   /** Kept while the dialog fades out, so its fields do not blank. */
@@ -51,6 +53,9 @@ export function SaveToGalleryDialog({
   uploader: AssetUploader
   onSavingChange: (saving: boolean) => void
   onClose: () => void
+  /** After the fade-out, when the capture can be let go. */
+  afterLeave: () => void
+  onSaved: () => void
 }) {
   const [saving, setSaving] = useState(false)
   const [dirty, setDirty] = useState(false)
@@ -58,6 +63,7 @@ export function SaveToGalleryDialog({
     <ModalShell
       isOpen={isOpen}
       onClose={() => (saving ? undefined : onClose())}
+      afterLeave={afterLeave}
       size="lg"
       title="Save to gallery"
       icon={<RectangleStackIcon />}
@@ -75,6 +81,7 @@ export function SaveToGalleryDialog({
           }}
           onDirtyChange={setDirty}
           onClose={onClose}
+          onSaved={onSaved}
         />
       )}
     </ModalShell>
@@ -87,12 +94,14 @@ function SaveForm({
   onSavingChange,
   onDirtyChange,
   onClose,
+  onSaved,
 }: {
   captured: CapturedCard
   uploader: AssetUploader
   onSavingChange: (saving: boolean) => void
   onDirtyChange: (dirty: boolean) => void
   onClose: () => void
+  onSaved: () => void
 }) {
   const { card, blob, filename, previewUrl: preview } = captured
   const ids = { title: useId(), alt: useId() }
@@ -130,6 +139,7 @@ function SaveForm({
         { kind: 'image', studio: { tab: card.tab } },
       )
       setSaved({ softOnSocial: result.softOnSocial })
+      onSaved()
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : GENERIC_FAILURE)
     } finally {

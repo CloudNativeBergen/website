@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { api } from '@/lib/trpc/client'
 import {
   GallerySaveContext,
   type GallerySave,
@@ -37,6 +38,7 @@ export function StudioGalleryProvider({
     () => uploader ?? blobAssetUploader(orgId),
     [uploader, orgId],
   )
+  const utils = api.useUtils()
   const [capturing, setCapturing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [open, setOpen] = useState(false)
@@ -95,16 +97,10 @@ export function StudioGalleryProvider({
     [capturing, saving],
   )
 
-  // A capture can be several MB: let it go once the dialog has faded out,
-  // unless another capture has replaced it by then.
-  function close() {
-    setOpen(false)
-    const closing = captures.current
-    setTimeout(() => {
-      if (captures.current !== closing) return
-      replacePreview(null)
-      setCaptured(null)
-    }, 500)
+  // A capture can be several MB: let it go once the dialog has faded out.
+  function release() {
+    replacePreview(null)
+    setCaptured(null)
   }
 
   return (
@@ -115,7 +111,13 @@ export function StudioGalleryProvider({
         captured={captured}
         uploader={upload}
         onSavingChange={setSaving}
-        onClose={close}
+        onClose={() => setOpen(false)}
+        afterLeave={release}
+        onSaved={() => {
+          // The gallery and the studio's background picker show it next.
+          void utils.marketingAsset.list.invalidate()
+          void utils.marketingAsset.filters.invalidate()
+        }}
       />
     </GallerySaveContext.Provider>
   )

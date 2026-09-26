@@ -26,12 +26,21 @@ const mocks = vi.hoisted(() => ({
   mutate: vi.fn(),
   refetch: vi.fn(),
   blobUpload: vi.fn(),
+  invalidateList: vi.fn(),
+  invalidateFilters: vi.fn(),
+  revoke: vi.fn(),
   pixels: 'rendered card pixels' as BlobPart,
 }))
 vi.mock('html2canvas-pro', () => ({ default: mocks.rasterize }))
 vi.mock('@vercel/blob/client', () => ({ upload: mocks.blobUpload }))
 vi.mock('@/lib/trpc/client', () => ({
   api: {
+    useUtils: () => ({
+      marketingAsset: {
+        list: { invalidate: mocks.invalidateList },
+        filters: { invalidate: mocks.invalidateFilters },
+      },
+    }),
     marketing: {
       task: {
         get: {
@@ -80,7 +89,7 @@ beforeEach(() => {
   mocks.refetch.mockResolvedValue({ data: { task: { _rev: 'rev' } } })
   vi.stubGlobal('fetch', mocks.fetch)
   vi.stubGlobal('URL', Object.assign(URL, { createObjectURL: () => 'blob:x' }))
-  URL.revokeObjectURL = () => {}
+  URL.revokeObjectURL = mocks.revoke
 })
 afterEach(() => {
   cleanup()
@@ -161,6 +170,28 @@ describe('Save to gallery on a studio card', () => {
     expect(mocks.fetch).not.toHaveBeenCalled()
     expect(screen.getByRole('status').textContent).toContain('in the gallery')
     expect(screen.getByText(/may look soft on social/)).toBeTruthy()
+    // The gallery and the background picker show it next time.
+    expect(mocks.invalidateList).toHaveBeenCalledTimes(1)
+    expect(mocks.invalidateFilters).toHaveBeenCalledTimes(1)
+  })
+
+  it('lets a closed capture go once the dialog has faded out', async () => {
+    renderStudio(<Card card={SPEAKER_CARD} id="closed" />)
+    sized('closed')
+    const form = await openDialog(
+      screen.getByRole('button', { name: 'Save to gallery' }),
+    )
+    expect(form.querySelector('img')?.getAttribute('src')).toBe('blob:x')
+    expect(mocks.revoke).not.toHaveBeenCalled()
+    fireEvent.click(within(form).getByRole('button', { name: 'Cancel' }))
+    await waitFor(() => expect(mocks.revoke).toHaveBeenCalledWith('blob:x'))
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('form', { name: 'Save to gallery' }),
+      ).toBeNull(),
+    )
+    expect(mocks.uploader).not.toHaveBeenCalled()
+    expect(mocks.invalidateList).not.toHaveBeenCalled()
   })
 
   it('asks the free-form editor for a title and alt text, and saves it with no subject', async () => {
