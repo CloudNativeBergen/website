@@ -550,22 +550,38 @@ export function MemeGenerator({
     // still fires a change.
     e.target.value = ''
     if (!file || !file.type.startsWith('image/')) return
+    let url: string | undefined
     try {
       await loadBackground(async () => {
-        const url = await readAsDataUrl(file)
-        const galleryAssetId = keptAssets.current.get(url)
-        return {
-          image: {
-            url,
-            name: file.name,
-            ...(galleryAssetId ? { galleryAssetId } : {}),
-          },
-          file,
-        }
+        url = await readAsDataUrl(file)
+        return { image: { url, name: file.name }, file }
       })
     } catch {
       // An image the browser cannot decode leaves the background as it was.
+      return
     }
+    if (url) void confirmKept(url)
+  }
+
+  /**
+   * The same bytes uploaded again are the same data URL, and may already be
+   * kept. Asked only once the upload is shown, so a keep that landed while it
+   * decoded is seen, and its empty status region is already mounted to
+   * announce "In the gallery." when this marks it. The gallery confirms the
+   * asset still exists: one deleted since (on the Assets page, in another
+   * tab) is forgotten, and Keep stays offered.
+   */
+  const confirmKept = async (url: string) => {
+    const galleryAssetId = keptAssets.current.get(url)
+    if (!galleryAssetId || !gallery) return
+    try {
+      await gallery.resolve(galleryAssetId)
+    } catch {
+      if (keptAssets.current.get(url) === galleryAssetId)
+        keptAssets.current.delete(url)
+      return
+    }
+    markKept(url, galleryAssetId)
   }
 
   const pickGalleryBackground = async (id: string) => {

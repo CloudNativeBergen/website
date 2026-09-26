@@ -441,3 +441,96 @@ describe('the same file uploaded again', () => {
     expect(keep).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('the same file uploaded again, checked with the gallery', () => {
+  /** Keep `stage.png` on scene one, then open scene two. */
+  async function keptOnSceneOne(gallery: BackgroundGallery) {
+    render(<MemeGenerator gallery={gallery} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Video' }))
+    upload('stage.png')
+    await screen.findByText('Current: stage.png')
+    fireEvent.click(screen.getByRole('button', { name: 'Keep in gallery' }))
+    fireEvent.change(screen.getByLabelText('Alt text'), {
+      target: { value: 'A stage' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Save to gallery' }))
+  }
+
+  it('announces "In the gallery." as a change, not as content it arrived with', async () => {
+    let confirm: () => void = () => {}
+    const resolve = vi.fn<BackgroundGallery['resolve']>(async (id) => ({
+      _id: id,
+      title: 'Stage',
+      url: HALL_URL,
+    }))
+    await keptOnSceneOne(fakeGallery({ resolve }))
+    await screen.findByText('In the gallery.')
+    resolve.mockImplementationOnce(
+      (id) =>
+        new Promise((resolve) => {
+          confirm = () => resolve({ _id: id, title: 'Stage', url: HALL_URL })
+        }),
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Add scene' }))
+    upload('stage.png')
+    await screen.findByText('Current: stage.png')
+    // Mounted empty while the gallery confirms the asset still exists...
+    const status = screen.getByTestId('background-gallery-status')
+    expect(status.textContent).toBe('')
+    await act(async () => confirm())
+    // ...so a screen reader hears the SAME live region change.
+    expect(screen.getByTestId('background-gallery-status')).toBe(status)
+    expect(status.textContent).toBe('In the gallery.')
+    expect(resolve).toHaveBeenCalledWith('asset-kept')
+  })
+
+  it('stays kept when the first keep lands while the second copy decodes', async () => {
+    let land: (kept: { _id: string }) => void = () => {}
+    const keep = vi.fn<BackgroundGallery['keep']>(
+      () => new Promise((resolve) => (land = resolve)),
+    )
+    await keptOnSceneOne(fakeGallery({ keep }))
+    await waitFor(() => expect(keep).toHaveBeenCalled())
+    // Scene two's copy is still decoding when scene one's keep lands.
+    let decoded: (() => void) | undefined
+    Object.defineProperty(HTMLImageElement.prototype, 'decode', {
+      configurable: true,
+      value: () => new Promise<void>((resolve) => (decoded = resolve)),
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Add scene' }))
+    upload('stage.png')
+    // The file is read first; land the keep once the decode has begun.
+    await waitFor(() => expect(decoded).toBeDefined())
+    await act(async () => land({ _id: 'asset-kept' }))
+    await act(async () => decoded!())
+    await screen.findByText('Current: stage.png')
+    await waitFor(() =>
+      expect(lastDrawn().image?.galleryAssetId).toBe('asset-kept'),
+    )
+    expect(
+      screen.queryByRole('button', { name: 'Keep in gallery' }),
+    ).not.toBeInTheDocument()
+    expect(keep).toHaveBeenCalledTimes(1)
+  })
+
+  it('offers Keep again when the kept asset has since been deleted', async () => {
+    const resolve = vi.fn<BackgroundGallery['resolve']>(async (id) => ({
+      _id: id,
+      title: 'Stage',
+      url: HALL_URL,
+    }))
+    await keptOnSceneOne(fakeGallery({ resolve }))
+    await screen.findByText('In the gallery.')
+    // Deleted on the Assets page, in another tab: the gallery no longer has it.
+    resolve.mockRejectedValueOnce(new Error('NOT_FOUND'))
+    fireEvent.click(screen.getByRole('button', { name: 'Add scene' }))
+    upload('stage.png')
+    await screen.findByText('Current: stage.png')
+    await waitFor(() => expect(resolve).toHaveBeenCalled())
+    expect(
+      await screen.findByRole('button', { name: 'Keep in gallery' }),
+    ).toBeInTheDocument()
+    expect(screen.getByTestId('background-gallery-status').textContent).toBe('')
+    expect(lastDrawn().image?.galleryAssetId).toBeUndefined()
+  })
+})
