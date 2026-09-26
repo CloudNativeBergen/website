@@ -1270,6 +1270,24 @@ describe('a gallery asset deleted while a project using it moves on', () => {
     expect(doc('asset-hall')).toBeDefined()
   })
 
+  it('fails the delete as a conflict when the asset itself changes after the snapshot', async () => {
+    await projects().create({ title: 'T', scenes: TWO_SCENES })
+    // Subject unchanged, so the snapshot writes nothing; the asset moves on
+    // just before its own delete commits.
+    h.beforeTransaction = () => {
+      const i = h.dataset.findIndex((d) => d._id === 'asset-hall')
+      h.dataset[i] = {
+        ...h.dataset[i],
+        _rev: 'rev-edited',
+        subject: ref('sp-bob'),
+      }
+    }
+    await expect(assets().delete({ id: 'asset-hall' })).rejects.toMatchObject({
+      code: 'CONFLICT',
+    })
+    expect(doc('asset-hall')).toBeDefined()
+  })
+
   it('is refused while a project in a Content Release uses it', async () => {
     const created = await projects().create({ title: 'T', scenes: TWO_SCENES })
     h.dataset.push({
