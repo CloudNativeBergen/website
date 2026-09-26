@@ -144,6 +144,19 @@ describe('plainBody', () => {
   })
 })
 
+describe('plainBody with a shared handle', () => {
+  it('names each occurrence after the person it was recorded for', () => {
+    const team = { ...bob, handle: 'team.dev' }
+    const mate = { ...alice, handle: 'team.dev' }
+    expect(
+      plainBody('@team.dev and @team.dev', [
+        tagged(team, DID_B),
+        tagged(mate, DID_B),
+      ]),
+    ).toBe('Bob and Alice Anderson')
+  })
+})
+
 describe('saveMentions (§4.3 rebuilt on every save, §4.4 Save)', () => {
   it('records a typed handle of a speaker, reusing a checked DID', () => {
     const previous = [tagged(alice, DID_A)]

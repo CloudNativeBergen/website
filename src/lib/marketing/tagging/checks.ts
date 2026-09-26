@@ -183,14 +183,35 @@ export function untagHandle(
   return out
 }
 
-/** The body with every recorded tag replaced by its name (§4.4, both forms). */
+/**
+ * The body with every recorded tag replaced by its name (§4.4, both forms).
+ * Person-bound per occurrence: when one (shared) handle is recorded for
+ * several people, its k-th occurrence stands for the k-th of them — "@team
+ * and @team" is "Bob and Alice", not "Bob and Bob". Extra occurrences take
+ * the last one's name.
+ */
 export function plainBody(
   body: string,
   mentions: readonly Pick<MentionRecord, 'handle' | 'name' | 'status'>[],
 ): string {
-  return mentions
-    .filter((m) => m.status === 'tagged')
-    .reduce((text, m) => untagHandle(text, m.handle, m.name), body)
+  const names = new Map<string, string[]>()
+  for (const m of mentions) {
+    if (m.status !== 'tagged') continue
+    const h = normaliseHandle(m.handle)
+    names.set(h, [...(names.get(h) ?? []), m.name])
+  }
+  const seen = new Map<string, number>()
+  const swaps = mentionTokens(body).flatMap((t) => {
+    const list = names.get(t.handle)
+    if (!list) return []
+    const k = seen.get(t.handle) ?? 0
+    seen.set(t.handle, k + 1)
+    return [{ ...t, name: list[Math.min(k, list.length - 1)] }]
+  })
+  let out = body
+  for (const t of swaps.reverse())
+    out = `${out.slice(0, t.start)}${t.name}${out.slice(t.end)}`
+  return out
 }
 
 function byHandle(
