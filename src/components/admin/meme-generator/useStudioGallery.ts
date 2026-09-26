@@ -35,7 +35,10 @@ export function useStudioGallery(orgId: string): BackgroundGallery {
             : [],
         )
       },
-      resolve: (id) => utils.marketingAsset.background.fetch({ id }),
+      // Never from cache: a re-upload asks this whether an asset still
+      // exists, and a cached answer can predate its deletion.
+      resolve: (id) =>
+        utils.marketingAsset.background.fetch({ id }, { staleTime: 0 }),
       keep: async (file, { title, alt }) => {
         // Organization-wide, with nothing else said about it: the Assets
         // page is where it gets a subject, tags or an edition.

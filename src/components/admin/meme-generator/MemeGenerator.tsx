@@ -462,6 +462,9 @@ export function MemeGenerator({
   // The file behind each uploaded background, by its data URL, so it can
   // still be kept in the gallery. Only this session's uploads have one.
   const uploadedFiles = useRef(new Map<string, File>())
+  // The gallery asset each kept upload became, by its data URL: the same
+  // bytes uploaded again are the same data URL, and already kept.
+  const keptAssets = useRef(new Map<string, string>())
   useEffect(() => {
     const kept = new Set(
       allStates(history).flatMap((states) =>
@@ -472,6 +475,7 @@ export function MemeGenerator({
       backgroundRasters.current,
       driftRasters.current,
       uploadedFiles.current,
+      keptAssets.current,
     ]) {
       for (const url of cache.keys()) if (!kept.has(url)) cache.delete(url)
     }
@@ -546,14 +550,46 @@ export function MemeGenerator({
     // still fires a change.
     e.target.value = ''
     if (!file || !file.type.startsWith('image/')) return
+    let url: string | undefined
     try {
       await loadBackground(async () => {
-        const url = await readAsDataUrl(file)
+        url = await readAsDataUrl(file)
         return { image: { url, name: file.name }, file }
       })
     } catch {
       // An image the browser cannot decode leaves the background as it was.
+      return
     }
+    if (url) void confirmKept(url)
+  }
+
+  /**
+   * The same bytes uploaded again are the same data URL, and may already be
+   * kept. Asked only once the upload is shown, so a keep that landed while it
+   * decoded is seen, and its empty status region is already mounted to
+   * announce "In the gallery." when this marks it. The gallery confirms the
+   * asset still exists: one deleted since (on the Assets page, in another
+   * tab) is forgotten, and Keep stays offered.
+   */
+  const confirmKept = async (url: string) => {
+    const galleryAssetId = keptAssets.current.get(url)
+    if (!galleryAssetId || !gallery) return
+    try {
+      await gallery.resolve(galleryAssetId)
+    } catch {
+      if (keptAssets.current.get(url) === galleryAssetId)
+        keptAssets.current.delete(url)
+      return
+    }
+    // Marking it kept takes its Keep form away. If the organizer was in that
+    // form, focus goes to the status that says why, as after a keep of
+    // their own; in any other upload's form, it stays put.
+    const area = galleryStatus.current?.parentElement
+    focusGalleryStatus.current =
+      shownUpload.current === url &&
+      !!area?.contains(document.activeElement) &&
+      document.activeElement !== galleryStatus.current
+    markKept(url, galleryAssetId)
   }
 
   const pickGalleryBackground = async (id: string) => {
@@ -578,8 +614,12 @@ export function MemeGenerator({
   // After a keep the form is gone; focus moves to the status that says so.
   const galleryStatus = useRef<HTMLParagraphElement>(null)
   const focusGalleryStatus = useRef(false)
+  // The upload the gallery status and Keep form are about, for a confirm
+  // that lands after the render that showed them.
+  const shownUpload = useRef<string | undefined>(undefined)
   // In the commit that shows the result, never a frame after it.
   useLayoutEffect(() => {
+    shownUpload.current = background.image?.url
     if (!focusGalleryStatus.current) return
     focusGalleryStatus.current = false
     galleryStatus.current?.focus()
@@ -589,7 +629,8 @@ export function MemeGenerator({
    * An upload now in the gallery is kept in every state undo and redo can
    * reach, with no step of its own: it is kept whichever one is shown.
    */
-  const markKept = (url: string, galleryAssetId: string) =>
+  const markKept = (url: string, galleryAssetId: string) => {
+    keptAssets.current.set(url, galleryAssetId)
     setHistory((prev) =>
       mapStates(prev, (states) =>
         states.map((scene) =>
@@ -608,6 +649,7 @@ export function MemeGenerator({
         ),
       ),
     )
+  }
 
   const clearBackgroundImage = () => {
     backgroundUploads.current.set(

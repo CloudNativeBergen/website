@@ -80,10 +80,13 @@ describe('useStudioGallery', () => {
     })
   })
 
-  it('resolves a pick through the server, by id alone', async () => {
+  it('resolves a pick through the server, by id alone, never from cache', async () => {
     h.background.mockResolvedValue({ _id: 'photo', title: 'T', url: '/x' })
     const { result } = renderHook(() => useStudioGallery('org-A'))
     await result.current.resolve('photo')
-    expect(h.background).toHaveBeenCalledWith({ id: 'photo' })
+    // `fetch` honours the provider's 60 s staleTime, and would answer a
+    // re-upload's "does this asset still exist?" from an answer given before
+    // it was deleted. staleTime 0 asks the server every time.
+    expect(h.background).toHaveBeenCalledWith({ id: 'photo' }, { staleTime: 0 })
   })
 })

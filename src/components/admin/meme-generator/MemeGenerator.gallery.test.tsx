@@ -385,3 +385,237 @@ describe('clearing the background', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 })
+
+describe('a keep that lands after focus moved on in the same scene', () => {
+  it('leaves focus where the organizer put it', async () => {
+    let land: (kept: { _id: string }) => void = () => {}
+    const keep = vi.fn<BackgroundGallery['keep']>(
+      () => new Promise((resolve) => (land = resolve)),
+    )
+    render(<MemeGenerator gallery={fakeGallery({ keep })} />)
+    upload('one.png')
+    await screen.findByText('Current: one.png')
+    fireEvent.click(screen.getByRole('button', { name: 'Keep in gallery' }))
+    fireEvent.change(screen.getByLabelText('Alt text'), {
+      target: { value: 'Scene one' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Save to gallery' }))
+    await waitFor(() => expect(keep).toHaveBeenCalled())
+    // The form is still shown, saving; the organizer goes on typing.
+    const headline = screen.getAllByPlaceholderText('Enter your text...')[0]
+    headline.focus()
+
+    await act(async () => land({ _id: 'asset-one' }))
+    await screen.findByText('In the gallery.')
+    expect(document.activeElement).toBe(headline)
+  })
+})
+
+describe('the same file uploaded again', () => {
+  it('is still the kept one: no second Keep, and the first keep stands', async () => {
+    const keep = vi.fn<BackgroundGallery['keep']>(async () => ({
+      _id: 'asset-kept',
+    }))
+    render(<MemeGenerator gallery={fakeGallery({ keep })} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Video' }))
+    upload('stage.png')
+    await screen.findByText('Current: stage.png')
+    fireEvent.click(screen.getByRole('button', { name: 'Keep in gallery' }))
+    fireEvent.change(screen.getByLabelText('Alt text'), {
+      target: { value: 'A stage' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Save to gallery' }))
+    await screen.findByText('In the gallery.')
+
+    // The same bytes on another scene: the same data URL.
+    fireEvent.click(screen.getByRole('button', { name: 'Add scene' }))
+    upload('stage.png')
+    await screen.findByText('Current: stage.png')
+    await waitFor(() =>
+      expect(lastDrawn().image?.galleryAssetId).toBe('asset-kept'),
+    )
+    expect(screen.getByText('In the gallery.')).toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Keep in gallery' }),
+    ).not.toBeInTheDocument()
+    expect(keep).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('the same file uploaded again, checked with the gallery', () => {
+  /** Keep `stage.png` on scene one, then open scene two. */
+  async function keptOnSceneOne(gallery: BackgroundGallery) {
+    render(<MemeGenerator gallery={gallery} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Video' }))
+    upload('stage.png')
+    await screen.findByText('Current: stage.png')
+    fireEvent.click(screen.getByRole('button', { name: 'Keep in gallery' }))
+    fireEvent.change(screen.getByLabelText('Alt text'), {
+      target: { value: 'A stage' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Save to gallery' }))
+  }
+
+  it('announces "In the gallery." as a change, not as content it arrived with', async () => {
+    let confirm: () => void = () => {}
+    const resolve = vi.fn<BackgroundGallery['resolve']>(async (id) => ({
+      _id: id,
+      title: 'Stage',
+      url: HALL_URL,
+    }))
+    await keptOnSceneOne(fakeGallery({ resolve }))
+    await screen.findByText('In the gallery.')
+    resolve.mockImplementationOnce(
+      (id) =>
+        new Promise((resolve) => {
+          confirm = () => resolve({ _id: id, title: 'Stage', url: HALL_URL })
+        }),
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Add scene' }))
+    upload('stage.png')
+    await screen.findByText('Current: stage.png')
+    // Mounted empty while the gallery confirms the asset still exists...
+    const status = screen.getByTestId('background-gallery-status')
+    expect(status.textContent).toBe('')
+    await act(async () => confirm())
+    // ...so a screen reader hears the SAME live region change.
+    expect(screen.getByTestId('background-gallery-status')).toBe(status)
+    expect(status.textContent).toBe('In the gallery.')
+    expect(resolve).toHaveBeenCalledWith('asset-kept')
+  })
+
+  it('stays kept when the first keep lands while the second copy decodes', async () => {
+    let land: (kept: { _id: string }) => void = () => {}
+    const keep = vi.fn<BackgroundGallery['keep']>(
+      () => new Promise((resolve) => (land = resolve)),
+    )
+    await keptOnSceneOne(fakeGallery({ keep }))
+    await waitFor(() => expect(keep).toHaveBeenCalled())
+    // Scene two's copy is still decoding when scene one's keep lands.
+    let decoded: (() => void) | undefined
+    Object.defineProperty(HTMLImageElement.prototype, 'decode', {
+      configurable: true,
+      value: () => new Promise<void>((resolve) => (decoded = resolve)),
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Add scene' }))
+    upload('stage.png')
+    // The file is read first; land the keep once the decode has begun.
+    await waitFor(() => expect(decoded).toBeDefined())
+    await act(async () => land({ _id: 'asset-kept' }))
+    await act(async () => decoded!())
+    await screen.findByText('Current: stage.png')
+    await waitFor(() =>
+      expect(lastDrawn().image?.galleryAssetId).toBe('asset-kept'),
+    )
+    expect(
+      screen.queryByRole('button', { name: 'Keep in gallery' }),
+    ).not.toBeInTheDocument()
+    expect(keep).toHaveBeenCalledTimes(1)
+  })
+
+  it('offers Keep again when the kept asset has since been deleted', async () => {
+    const resolve = vi.fn<BackgroundGallery['resolve']>(async (id) => ({
+      _id: id,
+      title: 'Stage',
+      url: HALL_URL,
+    }))
+    await keptOnSceneOne(fakeGallery({ resolve }))
+    await screen.findByText('In the gallery.')
+    // Deleted on the Assets page, in another tab: the gallery no longer has it.
+    resolve.mockRejectedValueOnce(new Error('NOT_FOUND'))
+    fireEvent.click(screen.getByRole('button', { name: 'Add scene' }))
+    upload('stage.png')
+    await screen.findByText('Current: stage.png')
+    await waitFor(() => expect(resolve).toHaveBeenCalled())
+    expect(
+      await screen.findByRole('button', { name: 'Keep in gallery' }),
+    ).toBeInTheDocument()
+    expect(screen.getByTestId('background-gallery-status').textContent).toBe('')
+    expect(lastDrawn().image?.galleryAssetId).toBeUndefined()
+  })
+})
+
+describe('a re-upload confirmed while its Keep form is open', () => {
+  it('moves focus to "In the gallery." rather than dropping it', async () => {
+    let confirm: () => void = () => {}
+    const resolve = vi.fn<BackgroundGallery['resolve']>(async (id) => ({
+      _id: id,
+      title: 'Stage',
+      url: HALL_URL,
+    }))
+    render(<MemeGenerator gallery={fakeGallery({ resolve })} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Video' }))
+    upload('stage.png')
+    await screen.findByText('Current: stage.png')
+    fireEvent.click(screen.getByRole('button', { name: 'Keep in gallery' }))
+    fireEvent.change(screen.getByLabelText('Alt text'), {
+      target: { value: 'A stage' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Save to gallery' }))
+    await screen.findByText('In the gallery.')
+
+    resolve.mockImplementationOnce(
+      (id) =>
+        new Promise((done) => {
+          confirm = () => done({ _id: id, title: 'Stage', url: HALL_URL })
+        }),
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Add scene' }))
+    upload('stage.png')
+    await screen.findByText('Current: stage.png')
+    // The organizer opens Keep before the gallery has answered.
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Keep in gallery' }),
+    )
+    expect(screen.getByLabelText('Title')).toBe(document.activeElement)
+
+    await act(async () => confirm())
+    expect(document.activeElement).toBe(
+      screen.getByTestId('background-gallery-status'),
+    )
+  })
+
+  it('leaves focus alone when the confirm is for an upload no longer shown', async () => {
+    let confirm: () => void = () => {}
+    const resolve = vi.fn<BackgroundGallery['resolve']>(async (id) => ({
+      _id: id,
+      title: 'Stage',
+      url: HALL_URL,
+    }))
+    render(<MemeGenerator gallery={fakeGallery({ resolve })} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Video' }))
+    upload('stage.png')
+    await screen.findByText('Current: stage.png')
+    fireEvent.click(screen.getByRole('button', { name: 'Keep in gallery' }))
+    fireEvent.change(screen.getByLabelText('Alt text'), {
+      target: { value: 'A stage' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Save to gallery' }))
+    await screen.findByText('In the gallery.')
+
+    resolve.mockImplementationOnce(
+      (id) =>
+        new Promise((done) => {
+          confirm = () => done({ _id: id, title: 'Stage', url: HALL_URL })
+        }),
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Add scene' }))
+    upload('stage.png')
+    await screen.findByText('Current: stage.png')
+    // Before the gallery answers, a third scene with other bytes, whose own
+    // Keep form the organizer is filling in.
+    fireEvent.click(screen.getByRole('button', { name: 'Add scene' }))
+    fireEvent.change(screen.getByLabelText(/Upload Background Image/), {
+      target: {
+        files: [new File(['other'], 'crowd.png', { type: 'image/png' })],
+      },
+    })
+    await screen.findByText('Current: crowd.png')
+    fireEvent.click(screen.getByRole('button', { name: 'Keep in gallery' }))
+    const title = screen.getByLabelText('Title')
+    expect(document.activeElement).toBe(title)
+
+    await act(async () => confirm())
+    expect(document.activeElement).toBe(title)
+  })
+})
