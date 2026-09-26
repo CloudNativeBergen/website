@@ -15,6 +15,9 @@ import {
 } from './meme-generator-logo'
 import type { EncoderBackend } from './meme-generator-export'
 import type { BackgroundGallery } from './meme-generator-gallery'
+import { DEFAULT_DESIGN } from './meme-generator-draw'
+import { VideoProjectError, type VideoProjects } from './meme-generator-project'
+import type { OpenedProject, OpenedScene } from '@/lib/video-project'
 import { http, HttpResponse } from 'msw'
 import { ThemeProvider } from 'next-themes'
 
@@ -2425,4 +2428,198 @@ export const KeepFormOpen: Story = {
 export const KeepFormOpenDark: Story = {
   ...KeepFormOpen,
   globals: { theme: 'dark' },
+}
+
+// ── Saved projects (#1181) ──────────────────────────────────────────────────
+
+function storyScene(key: string, text: string, image: boolean): OpenedScene {
+  return {
+    key,
+    duration: 3,
+    transition: 'fade',
+    motion: { drift: false, elements: [] },
+    design: {
+      ...structuredClone(DEFAULT_DESIGN),
+      textLines: DEFAULT_DESIGN.textLines.map((line, i) =>
+        i === 0 ? { ...line, text } : { ...line },
+      ),
+      background: {
+        color: '#4F46E5',
+        image: image
+          ? {
+              name: 'Keynote hall',
+              fileId: 'image-hall-1782x1188-png',
+              galleryAssetId: 'asset-hall',
+              url: GALLERY_PROXY_URL,
+            }
+          : null,
+      },
+    },
+  }
+}
+
+const STORY_PROJECT: OpenedProject = {
+  _id: 'vp-launch',
+  _rev: 'rev-1',
+  title: 'Launch teaser',
+  scope: 'edition',
+  edition: 'Cloud Native Days Norway 2026',
+  scenes: [
+    storyScene('s-1', 'Tickets on sale', true),
+    storyScene('s-2', 'See you in Bergen', false),
+  ],
+  track: null,
+}
+
+function storyProjects(overrides: Partial<VideoProjects> = {}): VideoProjects {
+  return {
+    list: async () => [
+      {
+        _id: 'vp-launch',
+        title: 'Launch teaser',
+        scope: 'edition',
+        edition: 'Cloud Native Days Norway 2026',
+        updatedAt: '2026-09-25T10:00:00Z',
+        scenes: 2,
+      },
+      {
+        _id: 'vp-cfp',
+        title: 'Call for papers closes',
+        scope: 'organization',
+        edition: null,
+        updatedAt: '2026-09-20T10:00:00Z',
+        scenes: 4,
+      },
+    ],
+    open: async () => STORY_PROJECT,
+    create: async (input) => ({
+      _id: 'vp-new',
+      _rev: 'rev-2',
+      scenes: input.scenes.map((s) => ({ key: s.key, fileId: null })),
+    }),
+    save: async (input) => ({
+      _rev: 'rev-2',
+      scenes: input.scenes.map((s) => ({ key: s.key, fileId: null })),
+    }),
+    duplicate: async () => ({ _id: 'vp-copy' }),
+    ...overrides,
+  }
+}
+
+/**
+ * A saved project, opened from the URL: Video mode, its title, saved, and its
+ * gallery background drawn — the magenta photo fills the canvas where the
+ * design has no text.
+ */
+export const ProjectOpened: Story = {
+  args: {
+    gallery: storyGallery,
+    projects: storyProjects(),
+    initialProjectId: 'vp-launch',
+  },
+  parameters: { msw: { handlers: [proxyImage] } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const project = within(
+      await canvas.findByRole('region', { name: 'Project' }),
+    )
+    await expect(
+      await project.findByDisplayValue('Launch teaser'),
+    ).toBeInTheDocument()
+    await expect(project.getByText('All changes saved')).toBeInTheDocument()
+    const preview = canvas.getByRole('img', { name: /Video preview/ })
+    await waitFor(
+      () => {
+        const corner = { x: 20, y: 20, width: 120, height: 120 }
+        expect(
+          share(
+            preview as HTMLCanvasElement,
+            CANVAS_SIZE,
+            corner,
+            (r, g, b) => r > 200 && g < 60 && b > 200,
+          ),
+        ).toBeGreaterThan(0.9)
+      },
+      { timeout: 10_000 },
+    )
+  },
+}
+
+export const ProjectOpenedDark: Story = {
+  ...ProjectOpened,
+  globals: { theme: 'dark' },
+}
+
+/** A save over someone else's newer save: refused, with a way out. */
+export const ProjectSaveConflict: Story = {
+  args: {
+    gallery: storyGallery,
+    projects: storyProjects({
+      save: async () => {
+        throw new VideoProjectError('conflict', true)
+      },
+    }),
+    initialProjectId: 'vp-launch',
+  },
+  parameters: { msw: { handlers: [proxyImage] } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const project = within(
+      await canvas.findByRole('region', { name: 'Project' }),
+    )
+    const title = await project.findByDisplayValue('Launch teaser')
+    await userEvent.type(title, ' v2')
+    await expect(project.getByText('Unsaved changes')).toBeInTheDocument()
+    await userEvent.click(project.getByRole('button', { name: 'Save' }))
+    const alert = await project.findByText(/Someone saved this project/)
+    await expect(alert).toBeVisible()
+    await expect(
+      project.getByRole('button', { name: 'Save as a new project' }),
+    ).toBeVisible()
+  },
+}
+
+export const ProjectSaveConflictDark: Story = {
+  ...ProjectSaveConflict,
+  globals: { theme: 'dark' },
+}
+
+/** An upload that was never kept cannot be saved; the refusal names the scene. */
+export const ProjectUnkeptBackground: Story = {
+  args: { gallery: storyGallery, projects: storyProjects() },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(canvas.getByRole('button', { name: 'Video' }))
+    const source = document.createElement('canvas')
+    source.width = source.height = 64
+    source.getContext('2d')!.fillRect(0, 0, 64, 64)
+    const blob = await new Promise<Blob>((resolve) =>
+      source.toBlob((b) => resolve(b!), 'image/png'),
+    )
+    await userEvent.upload(
+      canvas.getByLabelText(/Upload Background Image/),
+      new File([blob], 'stage-photo.png', { type: 'image/png' }),
+    )
+    await canvas.findByText('Current: stage-photo.png')
+    const project = within(canvas.getByRole('region', { name: 'Project' }))
+    await userEvent.click(project.getByRole('button', { name: 'Save' }))
+    await expect(
+      await project.findByText(/Scene 1's background is not in the gallery/),
+    ).toBeVisible()
+  },
+}
+
+/** On a phone the editor is not the target, but the project bar must not break the page. */
+export const ProjectOnPhone: Story = {
+  ...ProjectOpened,
+  parameters: {
+    ...ProjectOpened.parameters,
+    viewport: { defaultViewport: 'phone' },
+  },
+  play: async (context) => {
+    await ProjectOpened.play!(context)
+    await expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(
+      window.innerWidth,
+    )
+  },
 }
