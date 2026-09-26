@@ -1354,6 +1354,8 @@ export function MemeGenerator({
     // is the editor's even in those fields. Not in a field that holds an
     // uncommitted draft of its own (the timeline's seconds), and not for a
     // key pressed elsewhere on the page.
+    // Kept mounted but hidden behind another studio tab (#1181): not ours.
+    if (rootRef.current?.closest('[hidden]')) return
     const target = event.target
     if (target instanceof Element) {
       if (target.closest('[data-own-undo]')) return

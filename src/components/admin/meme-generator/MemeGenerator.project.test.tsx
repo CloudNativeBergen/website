@@ -410,6 +410,24 @@ describe('leaving with unsaved changes', () => {
   })
 })
 
+describe('behind another studio tab', () => {
+  it('ignores the undo shortcut while hidden', () => {
+    const { container } = render(
+      <div hidden>
+        <MemeGenerator projects={fakeProjects()} />
+      </div>,
+    )
+    fireEvent.change(
+      within(container).getAllByPlaceholderText('Enter your text...')[0],
+      { target: { value: 'kept' } },
+    )
+    fireEvent.keyDown(document.body, { key: 'z', ctrlKey: true })
+    expect(
+      within(container).getAllByPlaceholderText('Enter your text...')[0],
+    ).toHaveValue('kept')
+  })
+})
+
 describe('without a project store', () => {
   it('shows no project controls', () => {
     const gallery: BackgroundGallery | undefined = undefined
