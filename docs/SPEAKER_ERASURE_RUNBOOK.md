@@ -185,7 +185,10 @@ Every document holding one of those files — found by the file's own
 references, drafts and Content Release versions included — lets go of it in the
 transaction: gallery entries are deleted, posts and their variants lose the
 attachment (the post keeps its text), Tasks lose the render and the
-`replacedRenders` entry. Then the files are deleted.
+`replacedRenders` entry, and saved studio videos (`videoProject`, #1181) lose
+the background of each scene that shows it — a nested removal by scene key, the
+scene falls back to its colour — and a linked music track. Then the files are
+deleted. `--verify` counts a project still holding one as `videoProjects`.
 
 The dry run lists them under `Marketing files`. The transaction records their
 ids on the erased speaker (`erasedFileIds` — asset ids, no personal data),
@@ -195,7 +198,8 @@ counted by `--verify` (from the record), and **a re-run retries it**: fix the
 cause and re-run step 2. `--files <id,id>` adds ids to a verification by hand.
 
 **The hole.** An image no subject and no Task names is linked to nobody and is
-not found: a group photo or collage with no subject, a render saved from a Task
+not found — including a scene background whose gallery asset was deleted before
+the erasure (the project keeps the file, but no subject leads to it): a group photo or collage with no subject, a render saved from a Task
 that had no subject, an image **attached to a post by hand** — even a post
 about the speaker, since it may as easily be a sponsor's graphic — or a render
 that outlived its **Task's deletion**. Deleting a Task sends every render it
