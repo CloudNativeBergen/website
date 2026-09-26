@@ -181,6 +181,7 @@ function fixture(): Doc[] {
   return [
     { _id: 'org-A', _type: 'organization' },
     { _id: 'org-B', _type: 'organization' },
+    { _id: 'sp-ada', _type: 'speaker', name: 'Ada' },
     {
       _id: 'conf-A',
       _type: 'conference',
@@ -220,6 +221,7 @@ function fixture(): Doc[] {
       alt: 'The main hall',
       image: { _type: 'image', asset: ref(HALL) },
       createdImageAssetId: HALL,
+      subject: { ...ref('sp-ada'), _weak: true },
     },
     {
       _id: 'asset-theme',
@@ -394,6 +396,8 @@ describe('save, leave, reopen', () => {
         name: 'Keynote hall',
         galleryAsset: { ...ref('asset-hall'), _weak: true },
         createdByGallery: true,
+        // Copied from the asset, so erasure finds the file after it is gone.
+        subject: { ...ref('sp-ada'), _weak: true },
       },
     })
     // Every array member keyed, and never bytes.
@@ -644,6 +648,103 @@ describe('the gallery asset behind a background', () => {
     await projects().delete({ id: created._id })
     expect(doc(HALL)).toBeDefined()
     expect(doc('asset-hall')).toBeDefined()
+  })
+})
+
+describe('a file the project lets go of', () => {
+  const withoutBackground = (id: string, rev: string) =>
+    projects().save({ id, rev, title: 'Plain', scenes: [scene('only')] })
+
+  it('is orphan-checked after the save: deleted once nothing holds it', async () => {
+    const created = await projects().create({ title: 'T', scenes: TWO_SCENES })
+    await assets().delete({ id: 'asset-hall' })
+    expect(doc(HALL)).toBeDefined()
+    const { _rev } = await projects().open({ id: created._id })
+    await withoutBackground(created._id, _rev)
+    expect(doc(HALL)).toBeUndefined()
+  })
+
+  it('is kept while the gallery still holds it', async () => {
+    const created = await projects().create({ title: 'T', scenes: TWO_SCENES })
+    await withoutBackground(created._id, created._rev)
+    expect(doc(HALL)).toBeDefined()
+  })
+
+  it('keeps its subject when saved again from the file alone', async () => {
+    const created = await projects().create({ title: 'T', scenes: TWO_SCENES })
+    await assets().delete({ id: 'asset-hall' })
+    await projects().save({
+      id: created._id,
+      rev: created._rev,
+      title: 'Again',
+      scenes: [scene('a', { name: 'hall', fileId: HALL })],
+    })
+    const image = (
+      doc(created._id)!.scenes as { background: { image: unknown } }[]
+    )[0].background.image
+    expect(image).toMatchObject({ subject: { ...ref('sp-ada'), _weak: true } })
+  })
+})
+
+describe('saving as a new project after a conflict', () => {
+  it('may hold the files the open project holds, with no gallery asset', async () => {
+    const created = await projects().create({ title: 'T', scenes: TWO_SCENES })
+    await assets().delete({ id: 'asset-hall' })
+    const held = [scene('a', { name: 'hall', fileId: HALL })]
+    await expect(
+      projects().create({ title: 'Copy', scenes: held }),
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+    })
+    const copy = await projects().create({
+      title: 'Copy',
+      scenes: held,
+      copyFilesFrom: created._id,
+    })
+    expect(copy.scenes).toEqual([{ key: 'a', fileId: HALL }])
+  })
+
+  it("cannot borrow another organization's files, with the guard's answer", async () => {
+    h.queries = []
+    await expect(
+      projects().create({
+        title: 'Copy',
+        scenes: [scene('a', { name: 'x', fileId: 'image-theirs-100x100-png' })],
+        copyFilesFrom: 'vp-theirs',
+      }),
+    ).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+      message: 'No videoProject with that id for this request',
+    })
+    expect(h.queries).toHaveLength(1)
+    expect(h.mutations).toEqual([])
+  })
+})
+
+describe('a project with a Content Release copy', () => {
+  it('is neither saved over nor deleted here', async () => {
+    const created = await projects().create({ title: 'T', scenes: TWO_SCENES })
+    h.dataset.push({
+      ...doc(created._id)!,
+      _id: `versions.rlaunch.${created._id}`,
+    })
+    h.mutations = []
+    const inRelease = {
+      code: 'PRECONDITION_FAILED',
+      message: expect.stringContaining('Content Release'),
+    }
+    await expect(
+      projects().save({
+        id: created._id,
+        rev: created._rev,
+        title: 'X',
+        scenes: [scene('s')],
+      }),
+    ).rejects.toMatchObject(inRelease)
+    await expect(projects().delete({ id: created._id })).rejects.toMatchObject(
+      inRelease,
+    )
+    expect(h.mutations).toEqual([])
   })
 })
 

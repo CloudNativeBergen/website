@@ -217,12 +217,14 @@ describe('saving a video', () => {
     )
     expect(within(project()).getByText('Unsaved changes')).toBeInTheDocument()
 
+    // An edit after the conflict is part of what is saved as new.
+    typeTitle('Mine, edited')
     fireEvent.click(
-      within(alert).getByRole('button', { name: 'Save as a new project' }),
+      within(project()).getByRole('button', { name: 'Save as a new project' }),
     )
     await within(project()).findByText('All changes saved')
     expect(projects.create).toHaveBeenCalledWith(
-      expect.objectContaining({ title: 'Mine' }),
+      expect.objectContaining({ title: 'Mine, edited', copyFilesFrom: 'vp-1' }),
     )
   })
 })
@@ -249,6 +251,27 @@ describe('opening a project', () => {
     expect(screen.getAllByRole('listitem').length).toBeGreaterThan(0)
   })
 
+  it('keeps the backgrounds it decoded when the video changes while it opens', async () => {
+    let release: () => void = () => {}
+    const gate = new Promise<void>((resolve) => (release = resolve))
+    Object.defineProperty(HTMLImageElement.prototype, 'decode', {
+      configurable: true,
+      value: () => gate,
+    })
+    render(<MemeGenerator projects={fakeProjects()} initialProjectId="vp-1" />)
+    // An edit lands while the project's images decode: the history moves on.
+    fireEvent.change(screen.getAllByPlaceholderText('Enter your text...')[0], {
+      target: { value: 'typed meanwhile' },
+    })
+    release()
+    await screen.findByDisplayValue('Launch teaser')
+    await waitFor(() => {
+      const [, design, assets] = drawDesign.mock.lastCall!
+      expect(design.background.image?.url).toBe(HALL_URL)
+      expect(assets.background).not.toBeNull()
+    })
+  })
+
   it('says plainly when a project cannot be opened', async () => {
     const projects = fakeProjects({
       open: vi.fn(async () => {
@@ -258,7 +281,6 @@ describe('opening a project', () => {
       }),
     })
     render(<MemeGenerator projects={projects} initialProjectId="vp-9" />)
-    toVideo()
     expect(await within(project()).findByRole('alert')).toHaveTextContent(
       'saved by a newer version of the studio',
     )

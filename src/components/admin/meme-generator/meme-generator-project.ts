@@ -25,6 +25,8 @@ export interface VideoProjects {
     edition: 'none' | 'current'
     scenes: ProjectSceneInput[]
     track?: ProjectTrackInput | null
+    /** A project whose files the new one may hold as that one does. */
+    copyFilesFrom?: string
   }) => Promise<{ _id: string; _rev: string; scenes: SceneFile[] }>
   save: (input: {
     id: string

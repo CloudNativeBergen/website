@@ -30,6 +30,11 @@ export interface ResolvedFile {
   galleryAssetId?: string
   /** The gallery's upload created it: a project delete may then orphan-check it. */
   createdByGallery: boolean
+  /**
+   * Who the gallery asset says the file shows, copied with the reference so
+   * a speaker's erasure still finds the file once the asset is gone.
+   */
+  subjectId?: string
 }
 
 export interface ResolvedTrack extends ResolvedFile {
@@ -48,6 +53,7 @@ function storedImage(name: string, file: ResolvedFile): Stored {
       ? { galleryAsset: weakRef(file.galleryAssetId) }
       : {}),
     ...(file.createdByGallery ? { createdByGallery: true } : {}),
+    ...(file.subjectId ? { subject: weakRef(file.subjectId) } : {}),
   }
 }
 
@@ -108,6 +114,7 @@ export function storedTrack(
         ? { galleryAsset: weakRef(file.galleryAssetId) }
         : {}),
       ...(file.createdByGallery ? { createdByGallery: true } : {}),
+      ...(file.subjectId ? { subject: weakRef(file.subjectId) } : {}),
     },
     title: file.title,
     ...(file.rights

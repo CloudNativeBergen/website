@@ -11,7 +11,8 @@
  *  1. finds what is ABOUT the speaker ({@link speakerSubjectIds}): gallery
  *     assets and Tasks whose subject is the speaker or a talk they give;
  *  2. collects every file those hold ({@link linkedFileIds}) — a gallery asset's
- *     image or video, a Task's render;
+ *     image or video, a Task's render — and every file a saved video holds
+ *     under a subject it copied from the gallery ({@link projectSubjectFileIds});
  *  3. finds every document holding one of those files by the FILE's references,
  *     drafts and release versions included, and plans what each loses
  *     ({@link planSpeakerAssetErasure});
@@ -175,6 +176,32 @@ export function linkedFileIds(subjectDocs: Doc[]): string[] {
     if (doc._type === 'marketingAsset') walk(doc)
     if (doc._type === 'marketingTask')
       taskRenderIds(doc).forEach((id) => ids.add(id))
+  }
+  return [...ids]
+}
+
+/**
+ * The files a saved video holds whose stored subject (copied from the gallery
+ * asset at save time, #1181) is linked to the speaker: a scene background or
+ * the track. How a file is found once its gallery asset is gone.
+ */
+export function projectSubjectFileIds(
+  projects: Doc[],
+  subjectIds: string[],
+): string[] {
+  const subjects = new Set(subjectIds)
+  const about = (file: unknown) =>
+    subjects.has(refOf((file as { subject?: unknown } | null)?.subject) ?? '')
+      ? fileRefOf(file)
+      : null
+  const ids = new Set<string>()
+  for (const doc of projects) {
+    for (const scene of entries(doc.scenes)) {
+      const id = about(backgroundImageOf(scene))
+      if (id) ids.add(id)
+    }
+    const track = about((doc.track as { file?: unknown } | undefined)?.file)
+    if (track) ids.add(track)
   }
   return [...ids]
 }
@@ -475,8 +502,20 @@ export async function fetchSpeakerAssetInputs(
     { subjectIds },
     opts,
   )
+  const projects = await client.fetch<Doc[]>(
+    // groq-global: a saved video (#1181) keeps a gallery image's subject with
+    // the file, so the file is found even after its gallery asset is deleted
+    // — in every tenant, because the right is the person's.
+    groq`*[_type == "videoProject" && (count(scenes[background.image.subject._ref in $subjectIds]) > 0 || track.file.subject._ref in $subjectIds)]{ _id, _type, scenes, track }`,
+    { subjectIds },
+    opts,
+  )
   const fileIds = [
-    ...new Set([...linkedFileIds(subjectDocs ?? []), ...extraFileIds]),
+    ...new Set([
+      ...linkedFileIds(subjectDocs ?? []),
+      ...projectSubjectFileIds(projects ?? [], subjectIds),
+      ...extraFileIds,
+    ]),
   ]
   const empty = { fileHolders: [], variants: [], publishedPosts: [] }
   if (fileIds.length === 0) {

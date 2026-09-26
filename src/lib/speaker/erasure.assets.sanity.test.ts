@@ -754,6 +754,40 @@ describe('speaker erasure removes their images everywhere (#1162)', () => {
       expect(result.verification?.residual.videoProjects).toBe(0)
     })
 
+    it('finds a background by the subject it copied, after its gallery asset was deleted', async () => {
+      const GONE = 'image-assetgone-1080x1080-png'
+      h.dataset.push(
+        { _id: GONE, _type: 'sanity.imageAsset' },
+        project('vp-gone', [
+          {
+            ...sceneWith('s-gone', '#010203'),
+            background: {
+              color: '#010203',
+              image: { ...image(GONE), name: 'card', subject: weak(ADA) },
+            },
+          },
+          {
+            ...sceneWith('s-talk', '#040506'),
+            background: {
+              color: '#040506',
+              image: { ...image(BOB_CARD), name: 'b', subject: weak(TALK_BOB) },
+            },
+          },
+        ]),
+      )
+      const result = await eraseSpeakerInPlace({
+        speakerId: ADA,
+        actor: 'test',
+      })
+      expect(result.err).toBeNull()
+      const scenes = doc('vp-gone').scenes as { background: unknown }[]
+      expect(scenes[0].background).toEqual({ color: '#010203' })
+      // Bob's talk, not Ada's: untouched.
+      expect(scenes[1].background).toMatchObject({ image: image(BOB_CARD) })
+      expect(doc(GONE)).toBeUndefined()
+      expect(result.verification?.clean).toBe(true)
+    })
+
     it('loses a track linked to the speaker', async () => {
       h.dataset.push(
         project('vp-track', [sceneWith('s', '#000000')], {

@@ -14,6 +14,18 @@ import { defineArrayMember, defineField, defineType } from 'sanity'
  * studio (`src/lib/video-project`); `formatVersion` says which shape it is.
  */
 
+/** Copied from the gallery asset, so a speaker's erasure finds the file after it. */
+const weakSubject = defineField({
+  name: 'subject',
+  title: 'Subject',
+  description:
+    'Who the gallery asset said this shows, kept so an erasure request still finds the file.',
+  type: 'reference',
+  to: [{ type: 'speaker' }, { type: 'talk' }, { type: 'sponsor' }],
+  weak: true,
+  readOnly: true,
+})
+
 const weakGalleryAsset = defineField({
   name: 'galleryAsset',
   title: 'Gallery asset',
@@ -121,6 +133,7 @@ export default defineType({
                   fields: [
                     defineField({ name: 'name', type: 'string' }),
                     weakGalleryAsset,
+                    weakSubject,
                     defineField({
                       name: 'createdByGallery',
                       description:
@@ -195,6 +208,7 @@ export default defineType({
           type: 'file',
           fields: [
             weakGalleryAsset,
+            weakSubject,
             defineField({
               name: 'createdByGallery',
               type: 'boolean',

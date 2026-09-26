@@ -736,6 +736,17 @@ export function MemeGenerator({
 
   /** Put scenes in the editor as a fresh start: no undo back past them. */
   const replaceVideo = (next: Scene[], title: string) => {
+    // An upload or pick still decoding belongs to the video being left: it
+    // must never land in this one, even under the same scene key.
+    for (const key of new Set([
+      ...backgroundUploads.current.keys(),
+      ...next.map((scene) => scene.key),
+    ]))
+      backgroundUploads.current.set(
+        key,
+        (backgroundUploads.current.get(key) ?? 0) + 1,
+      )
+    setUploadingScenes(new Set())
     setPlaying(false)
     setHistory(startHistory(next))
     setMode('video')
@@ -748,6 +759,8 @@ export function MemeGenerator({
 
   const openProject = async (id: string, confirmed = false) => {
     if (!projects || (!confirmed && !discardOk())) return
+    // Video mode first, so a refusal is shown where the project bar is.
+    setMode('video')
     setProjectBusy('opening')
     setProjectMessage(null)
     try {
@@ -761,6 +774,9 @@ export function MemeGenerator({
           next.flatMap((scene) => scene.design.background.image?.url ?? []),
         ),
       ]
+      // Into the cache only with the update that shows them: a history change
+      // while they decode would otherwise prune them as unused.
+      const decoded = new Map<string, Raster>()
       const failed = (
         await Promise.all(
           urls.map(async (url) => {
@@ -768,7 +784,7 @@ export function MemeGenerator({
               const image = new window.Image()
               image.src = url
               await image.decode()
-              backgroundRasters.current.set(url, image)
+              decoded.set(url, image)
               return false
             } catch {
               return true
@@ -776,7 +792,10 @@ export function MemeGenerator({
           }),
         )
       ).filter(Boolean).length
+      for (const [url, image] of decoded)
+        backgroundRasters.current.set(url, image)
       replaceVideo(next, opened.title)
+      setEditionOnly(false)
       setProject({ id: opened._id, rev: opened._rev })
       onProjectChange?.(opened._id)
       if (failed > 0)
@@ -849,6 +868,9 @@ export function MemeGenerator({
             title,
             edition: editionOnly ? 'current' : 'none',
             scenes: mapped.scenes,
+            // Saved as a new project after a conflict: backgrounds the open
+            // project already holds are kept, even with no gallery asset.
+            ...(project ? { copyFilesFrom: project.id } : {}),
           })
       // Each background now names the file the project holds, so a later
       // save keeps it even once its gallery asset is gone.
@@ -871,10 +893,7 @@ export function MemeGenerator({
         setProjectMessage({
           tone: 'error',
           text: PROJECT_CONFLICT_MESSAGE,
-          action: {
-            label: 'Save as a new project',
-            onClick: () => void saveProject(true),
-          },
+          action: 'save-as-new',
         })
       } else {
         setProjectMessage({
@@ -1570,7 +1589,7 @@ export function MemeGenerator({
       </div>
 
       <div className="space-y-3">
-        {projects && mode === 'video' && (
+        {projects && (mode === 'video' || project) && (
           <VideoProjectBar
             title={projectTitle}
             onTitleChange={setProjectTitle}
@@ -1592,6 +1611,7 @@ export function MemeGenerator({
             onNew={newVideo}
             onSave={() => void saveProject()}
             onDuplicate={() => void duplicateProject()}
+            onSaveAsNew={() => void saveProject(true)}
             message={projectMessage}
           />
         )}

@@ -55,6 +55,7 @@ export interface StoredFile {
   fileId: string
   galleryAssetId: string | null
   createdByGallery: boolean | null
+  subjectId: string | null
 }
 
 /**
@@ -84,12 +85,14 @@ export async function readVideoProjectFiles(
       "images": coalesce(scenes[defined(background.image.asset._ref)]{
         "fileId": background.image.asset._ref,
         "galleryAssetId": background.image.galleryAsset._ref,
-        "createdByGallery": background.image.createdByGallery
+        "createdByGallery": background.image.createdByGallery,
+        "subjectId": background.image.subject._ref
       }, []),
       "track": select(defined(track.file.asset._ref) => {
         "fileId": track.file.asset._ref,
         "galleryAssetId": track.file.galleryAsset._ref,
         "createdByGallery": track.file.createdByGallery,
+        "subjectId": track.file.subject._ref,
         "title": track.title,
         "rights": select(defined(track.rightsConfirmation.confirmedAt) => {
           "confirmedBy": track.rightsConfirmation.confirmedBy._ref,
@@ -109,6 +112,7 @@ export interface GalleryFile {
   title: string
   fileId: string | null
   createdByUpload: boolean
+  subjectId: string | null
   rights: { confirmedBy: string | null; confirmedAt: string } | null
 }
 
@@ -129,6 +133,7 @@ export async function readGalleryFiles(
       _id,
       "kind": coalesce(kind, "image"),
       "title": coalesce(title, ""),
+      "subjectId": subject._ref,
       "fileId": select(kind == "audio" => audio.asset._ref, image.asset._ref),
       "createdByUpload": select(kind == "audio" => createdFileAssetId, createdImageAssetId) == select(kind == "audio" => audio.asset._ref, image.asset._ref),
       "rights": select(defined(rightsConfirmation.confirmedAt) => {
@@ -247,6 +252,28 @@ export async function readVideoProjectCreatedFiles(
       (row?.ids ?? []).filter((x): x is string => typeof x === 'string'),
     ),
   ]
+}
+
+/**
+ * How many Content Release versions (`versions.<release>.<id>`) of one of this
+ * organization's projects exist, counted at an API version whose `raw`
+ * perspective sees them (as for gallery assets).
+ */
+export async function countVideoProjectReleaseTwins(
+  orgId: string,
+  id: string,
+): Promise<number> {
+  const result = await scopedFetch<{ n: number } | null>(
+    clientReadUncached.withConfig({
+      apiVersion: '2025-02-19',
+      perspective: 'raw',
+    }),
+    { orgId },
+    `{ "n": count(*[_type == "videoProject" && _id in path("versions.*." + $id)]) }`,
+    { id },
+    opts,
+  )
+  return result?.n ?? 0
 }
 
 /** Delete a project and any Studio draft of it, together. */

@@ -17,6 +17,12 @@ interface Tab {
   icon: IconType
   count: number
   description: string
+  /**
+   * Stays mounted, hidden, while another tab is shown — for a panel holding
+   * unsaved work (the meme generator's video, #1181), which unmounting would
+   * silently discard.
+   */
+  keepMounted?: boolean
 }
 
 interface MarketingTabsProps {
@@ -120,7 +126,15 @@ export function MarketingTabs({
       </div>
 
       <div className="mt-6">
-        {activeTabIndex >= 0 && children[activeTabIndex]}
+        {tabs.map((tab, index) =>
+          index === activeTabIndex ? (
+            <div key={tab.id}>{children[index]}</div>
+          ) : tab.keepMounted ? (
+            <div key={tab.id} hidden>
+              {children[index]}
+            </div>
+          ) : null,
+        )}
       </div>
     </div>
   )

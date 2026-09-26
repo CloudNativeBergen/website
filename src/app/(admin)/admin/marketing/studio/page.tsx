@@ -314,6 +314,8 @@ export default async function MarketingPage({
               name: 'Meme Generator',
               icon: 'sparkles',
               count: 1,
+              // Its video may hold unsaved work (#1181).
+              keepMounted: true,
               description:
                 'Create custom memes with your own text and images, perfect for social media engagement and community building.',
             },

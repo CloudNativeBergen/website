@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { useState } from 'react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { MarketingTabs } from './MarketingTabs'
@@ -37,5 +38,38 @@ describe('MarketingTabs navigation', () => {
         .getAttribute('aria-selected'),
     ).toBe('true')
     expect(screen.getAllByRole('tab')).toHaveLength(5)
+  })
+})
+
+describe('a tab that keeps its panel mounted (#1181)', () => {
+  it('keeps its state while another tab is shown; other tabs unmount', () => {
+    function Counter({ id }: { id: string }) {
+      const [n, setN] = useState(0)
+      return (
+        <button type="button" onClick={() => setN(n + 1)}>
+          {id} {n}
+        </button>
+      )
+    }
+    const kept = tabs.map((t) => ({ ...t, keepMounted: t.id === 'meme' }))
+    render(
+      <MarketingTabs tabs={kept} defaultTab="meme">
+        {kept.map(({ id }) => (
+          <Counter key={id} id={id} />
+        ))}
+      </MarketingTabs>,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'meme 0' }))
+    fireEvent.click(screen.getByRole('tab', { name: /conference/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'conference 0' }))
+    // Hidden, not gone: the click's state survives.
+    expect(
+      screen.getByRole('button', { name: 'meme 1', hidden: true }),
+    ).not.toBeVisible()
+    fireEvent.click(screen.getByRole('tab', { name: /meme/ }))
+    expect(screen.getByRole('button', { name: 'meme 1' })).toBeVisible()
+    // A tab without the flag starts over.
+    fireEvent.click(screen.getByRole('tab', { name: /conference/ }))
+    expect(screen.getByRole('button', { name: 'conference 0' })).toBeVisible()
   })
 })

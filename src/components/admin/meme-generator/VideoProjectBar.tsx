@@ -20,7 +20,8 @@ export type ProjectStatus = 'new' | 'saved' | 'unsaved'
 export interface ProjectMessage {
   tone: 'error' | 'info'
   text: string
-  action?: { label: string; onClick: () => void }
+  /** Offered with a conflict; run against the editor's CURRENT video. */
+  action?: 'save-as-new'
 }
 
 /**
@@ -41,6 +42,7 @@ export function VideoProjectBar({
   onNew,
   onSave,
   onDuplicate,
+  onSaveAsNew,
   message,
 }: {
   title: string
@@ -58,6 +60,7 @@ export function VideoProjectBar({
   onNew: () => void
   onSave: () => void
   onDuplicate: () => void
+  onSaveAsNew: () => void
   message: ProjectMessage | null
 }) {
   const ids = { title: useId(), open: useId(), edition: useId() }
@@ -91,6 +94,9 @@ export function VideoProjectBar({
             value={title}
             maxLength={VIDEO_PROJECT_MAX_TITLE}
             onChange={(e) => onTitleChange(e.target.value)}
+            // A save in flight stores the title it sent; an edit made
+            // meanwhile would be shown as saved when it was not.
+            readOnly={busy !== null}
             className={styles.input}
           />
         </div>
@@ -203,14 +209,14 @@ export function VideoProjectBar({
             />
             <div className="space-y-2">
               <p>{message.text}</p>
-              {message.action && (
+              {message.action === 'save-as-new' && (
                 <AdminButton
                   type="button"
                   variant="secondary"
                   size="xs"
-                  onClick={message.action.onClick}
+                  onClick={onSaveAsNew}
                 >
-                  {message.action.label}
+                  Save as a new project
                 </AdminButton>
               )}
             </div>

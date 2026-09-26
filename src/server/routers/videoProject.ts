@@ -26,6 +26,7 @@ import {
   type ResolvedTrack,
 } from '@/lib/video-project/document'
 import {
+  countVideoProjectReleaseTwins,
   createVideoProject,
   deleteVideoProjectDocument,
   listVideoProjects,
@@ -78,6 +79,42 @@ const refuseFormat = (message: string) =>
   new TRPCError({ code: 'PRECONDITION_FAILED', message })
 
 /**
+ * A Content Release in Studio holds its own copy of the project: publishing
+ * it would silently undo this save, or bring a deleted project back. The
+ * release is Studio's to change; refused, as for gallery assets.
+ */
+async function refuseIfInRelease(
+  orgId: string,
+  id: string,
+  action: 'save' | 'delete',
+) {
+  if ((await countVideoProjectReleaseTwins(orgId, id)) > 0)
+    throw new TRPCError({
+      code: 'PRECONDITION_FAILED',
+      message: `This project is part of a Content Release in Studio. Remove it from the release first, then ${action} it here.`,
+    })
+}
+
+/**
+ * Files a gallery upload created that a project no longer holds go through
+ * the orphan check: deleted only once nothing references them. Never throws —
+ * the write is already done.
+ */
+async function releaseFiles(projectId: string, ids: string[]) {
+  for (const id of new Set(ids)) {
+    const result = await (
+      id.startsWith('file-')
+        ? deleteFileAssetIfOrphaned
+        : deleteImageAssetIfOrphaned
+    )(id).catch(() => null)
+    if (!result || result.remainingReferences === -1)
+      console.warn(
+        `Video project ${projectId} let go of file ${id}; it was kept because its references could not be counted`,
+      )
+  }
+}
+
+/**
  * Every file a save names, resolved and proven this organization's: a file
  * the project ALREADY holds (by file id), or else a gallery asset of this
  * organization (by asset id). Anything else — a background uploaded and not
@@ -95,6 +132,7 @@ async function resolveProjectFiles(
     fileId: f.fileId,
     ...(f.galleryAssetId ? { galleryAssetId: f.galleryAssetId } : {}),
     createdByGallery: f.createdByGallery === true,
+    ...(f.subjectId ? { subjectId: f.subjectId } : {}),
   })
   const storedTrackFile =
     track?.fileId && stored?.track?.fileId === track.fileId
@@ -129,6 +167,7 @@ async function resolveProjectFiles(
         fileId: row.fileId,
         galleryAssetId: row._id,
         createdByGallery: row.createdByUpload,
+        ...(row.subjectId ? { subjectId: row.subjectId } : {}),
       }
     unkept.push(i + 1)
     return null
@@ -169,6 +208,7 @@ async function resolveProjectFiles(
         fileId: row.fileId,
         galleryAssetId: row._id,
         createdByGallery: row.createdByUpload,
+        ...(row.subjectId ? { subjectId: row.subjectId } : {}),
         title: row.title,
         rights: row.rights,
       }
@@ -227,15 +267,27 @@ export const videoProjectRouter = router({
       z.object({
         ...contentsSchema,
         edition: z.enum(['none', 'current']).default('none'),
+        /**
+         * Saving as a new project (after a conflict): the new one may hold
+         * the files this project of ours already holds, as a save over it
+         * could — proven ours by the guard before it is read.
+         */
+        copyFilesFrom: projectId.optional(),
       }),
     )
     .mutation(async ({ input }) => {
-      const orgId = await requireCurrentOrgId()
+      const orgId = input.copyFilesFrom
+        ? await guard(input.copyFilesFrom)
+        : await requireCurrentOrgId()
+      const source = input.copyFilesFrom
+        ? await readVideoProjectFiles(orgId, input.copyFilesFrom)
+        : null
+      if (input.copyFilesFrom && !source) throw notFound()
       const files = await resolveProjectFiles(
         orgId,
         input.scenes,
         input.track,
-        null,
+        source,
       )
       const created = await createVideoProject({
         orgId,
@@ -277,6 +329,7 @@ export const videoProjectRouter = router({
           code: 'CONFLICT',
           message: PROJECT_CONFLICT_MESSAGE,
         })
+      await refuseIfInRelease(orgId, input.id, 'save')
       const files = await resolveProjectFiles(
         orgId,
         input.scenes,
@@ -300,6 +353,21 @@ export const videoProjectRouter = router({
           code: 'CONFLICT',
           message: PROJECT_CONFLICT_MESSAGE,
         })
+      // A gallery-made file this save let go of may now be held by nothing.
+      const kept = new Set([
+        ...files.images.flatMap((f) => (f ? [f.fileId] : [])),
+        ...(files.track ? [files.track.fileId] : []),
+      ])
+      await releaseFiles(input.id, [
+        ...stored.images
+          .filter((f) => f.createdByGallery && !kept.has(f.fileId))
+          .map((f) => f.fileId),
+        ...(input.track !== undefined &&
+        stored.track?.createdByGallery &&
+        !kept.has(stored.track.fileId)
+          ? [stored.track.fileId]
+          : []),
+      ])
       return { _rev: rev, scenes: sceneFiles(input.scenes, files.images) }
     }),
 
@@ -345,19 +413,10 @@ export const videoProjectRouter = router({
     .input(z.object({ id: projectId }))
     .mutation(async ({ input }) => {
       const orgId = await guard(input.id)
+      await refuseIfInRelease(orgId, input.id, 'delete')
       const files = await readVideoProjectCreatedFiles(orgId, input.id)
       await deleteVideoProjectDocument(input.id)
-      for (const id of files) {
-        const result = await (
-          id.startsWith('file-')
-            ? deleteFileAssetIfOrphaned
-            : deleteImageAssetIfOrphaned
-        )(id).catch(() => null)
-        if (!result || result.remainingReferences === -1)
-          console.warn(
-            `Video project ${input.id} deleted; its file ${id} was kept because its references could not be counted`,
-          )
-      }
+      await releaseFiles(input.id, files)
       return { deleted: true }
     }),
 })
