@@ -18,9 +18,10 @@ interface Tab {
   count: number
   description: string
   /**
-   * Stays mounted, hidden, while another tab is shown — for a panel holding
-   * unsaved work (the meme generator's video, #1181), which unmounting would
-   * silently discard.
+   * Once first shown, stays mounted, hidden, while another tab is shown —
+   * for a panel holding unsaved work (the meme generator's video, #1181),
+   * which unmounting would silently discard. Never mounted before it is
+   * first shown, so its queries run only for someone who opens it.
    */
   keepMounted?: boolean
 }
@@ -52,6 +53,11 @@ export function MarketingTabs({
     setSelection({ defaultTab, activeTab: defaultTab || tabs[0]?.id || '' })
   }
   const activeTab = selection.activeTab
+  // Kept tabs that have been shown: mounted from then on.
+  const [visited, setVisited] = useState<ReadonlySet<string>>(
+    () => new Set([activeTab]),
+  )
+  if (!visited.has(activeTab)) setVisited(new Set([...visited, activeTab]))
   const setActiveTab = (activeTab: string) =>
     setSelection({ defaultTab, activeTab })
   const activeTabIndex = tabs.findIndex((tab) => tab.id === activeTab)
@@ -129,7 +135,7 @@ export function MarketingTabs({
         {tabs.map((tab, index) =>
           index === activeTabIndex ? (
             <div key={tab.id}>{children[index]}</div>
-          ) : tab.keepMounted ? (
+          ) : tab.keepMounted && visited.has(tab.id) ? (
             <div key={tab.id} hidden>
               {children[index]}
             </div>

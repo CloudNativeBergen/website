@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { MarketingTabs } from './MarketingTabs'
@@ -42,6 +42,32 @@ describe('MarketingTabs navigation', () => {
 })
 
 describe('a tab that keeps its panel mounted (#1181)', () => {
+  it('is not mounted until it is first shown', () => {
+    const mounted: string[] = []
+    function Probe({ id }: { id: string }) {
+      useEffect(() => {
+        mounted.push(id)
+      }, [id])
+      return <p>{id} panel</p>
+    }
+    const kept = tabs.map((t) => ({ ...t, keepMounted: t.id === 'meme' }))
+    render(
+      <MarketingTabs tabs={kept} defaultTab="speakers">
+        {kept.map(({ id }) => (
+          <Probe key={id} id={id} />
+        ))}
+      </MarketingTabs>,
+    )
+    expect(mounted).toEqual(['speakers'])
+    fireEvent.click(screen.getByRole('tab', { name: /conference/ }))
+    expect(mounted).toEqual(['speakers', 'conference'])
+    fireEvent.click(screen.getByRole('tab', { name: /meme/ }))
+    fireEvent.click(screen.getByRole('tab', { name: /conference/ }))
+    // Mounted once, on its first visit, and kept since.
+    expect(mounted.filter((id) => id === 'meme')).toEqual(['meme'])
+    expect(screen.getByText('meme panel', { selector: 'p' })).not.toBeVisible()
+  })
+
   it('keeps its state while another tab is shown; other tabs unmount', () => {
     function Counter({ id }: { id: string }) {
       const [n, setN] = useState(0)
