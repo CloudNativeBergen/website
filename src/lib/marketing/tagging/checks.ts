@@ -483,10 +483,31 @@ export function approvalCheck(input: {
     }
   }
   const flagged = new Set(issues.map((i) => i.mentionKey))
+  const recordedHandles = new Set(
+    input.mentions
+      .filter((m) => m.status === 'tagged')
+      .map((m) => normaliseHandle(m.handle)),
+  )
   for (const { handle, matches } of matchedTags(input.body, input.people)) {
     const optedOut = matches.find((p) => p.optedOut)
-    if (optedOut && !flagged.has(storedKey(optedOut.speakerId)))
-      issues.push(optedOutIssue(optedOut, handle))
+    if (optedOut) {
+      if (!flagged.has(storedKey(optedOut.speakerId)))
+        issues.push(optedOutIssue(optedOut, handle))
+      continue
+    }
+    // A speaker's handle no save recorded (a post created and scheduled
+    // without passing through the editor's save): never checked, so never
+    // queued. A save records and checks it.
+    if (!recordedHandles.has(handle)) {
+      const p = matches[0]
+      issues.push({
+        code: 'unchecked',
+        mentionKey: storedKey(p.speakerId),
+        handle,
+        name: p.name,
+        message: `@${handle} tags ${p.name} but was never checked. Save the post to check it, or use the plain name.`,
+      })
+    }
   }
   return { issues, warnings }
 }

@@ -521,6 +521,18 @@ describe('approvalCheck (§4.4 Approval)', () => {
     ])
   })
 
+  it('refuses a speaker handle in the body that no save recorded', () => {
+    const out = approvalCheck({
+      body: 'with @bob.bsky.social',
+      mentions: [],
+      people: peopleMap,
+      resolutions: new Map(),
+    })
+    expect(out.issues.map((i) => [i.code, i.mentionKey])).toEqual([
+      ['unchecked', 'speaker-bob'],
+    ])
+  })
+
   it('ignores unresolved notes', () => {
     const out = approvalCheck({
       body: 'Bob',

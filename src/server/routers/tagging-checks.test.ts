@@ -548,6 +548,14 @@ describe('approval check scope', () => {
     expect(askedBluesky()).toEqual([])
   })
 
+  it('refuses to schedule a speaker handle no save ever recorded', async () => {
+    seed([])
+    await expect(
+      refusal(social().scheduleVariant({ variantId: 'variant-ours' })),
+    ).resolves.toEqual([['unchecked', 'spk-alice']])
+    expect(h.transition).not.toHaveBeenCalled()
+  })
+
   it('a LinkedIn variant is approved without a tag read', async () => {
     serveVariant(variantData({ platform: 'linkedin', body: 'plain' }))
     await social().scheduleVariant({ variantId: 'variant-ours' })
