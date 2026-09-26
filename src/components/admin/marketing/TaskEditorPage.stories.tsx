@@ -801,3 +801,117 @@ export const OutreachDestinationEdit: Story = {
     ).toBeDisabled()
   },
 }
+
+// ---------------------------------------------------------------------------
+// Bluesky tags (#1151, tagging spec §2, §4.4)
+// ---------------------------------------------------------------------------
+
+const TAG_BODY =
+  '🎙️ @olga.dev and Alice Anderson on running Kubernetes at the edge. Catch them at Cloud Native Bergen 2027!'
+
+const taggingFixture = fixture(
+  {
+    title: 'Talk teaser',
+    key: 'talk-edge:bluesky',
+    subject: {
+      _id: 'talk-edge',
+      type: 'talk',
+      name: 'Kubernetes at the edge',
+      slug: 'kubernetes-at-the-edge',
+    },
+  },
+  variant({ body: TAG_BODY }),
+  [],
+  {
+    tagPeople: [
+      {
+        speakerId: 'spk-alice',
+        name: 'Alice Anderson',
+        handle: 'alice.dev',
+        optedOut: false,
+      },
+      {
+        speakerId: 'spk-olga',
+        name: 'Olga Nordmann',
+        handle: null,
+        optedOut: true,
+      },
+    ],
+    tagMentions: [],
+  },
+)
+
+/**
+ * Approval refused because a speaker opted out since the tag was written:
+ * the issue lands beside the tag buttons, and "Use the plain name" rewrites
+ * the post in the form and clears it.
+ */
+export const TagApprovalRefusedAndFixed: Story = {
+  parameters: {
+    msw: {
+      handlers: [
+        http.post('/api/trpc/marketing.task.approve', () =>
+          HttpResponse.json(
+            {
+              error: {
+                message: 'Olga Nordmann has asked not to be tagged.',
+                code: -32600,
+                data: {
+                  code: 'BAD_REQUEST',
+                  httpStatus: 400,
+                  tagIssues: [
+                    {
+                      code: 'opted-out',
+                      mentionKey: 'spk-olga',
+                      handle: 'olga.dev',
+                      name: 'Olga Nordmann',
+                      message:
+                        'Olga Nordmann has asked not to be tagged in social posts. Use the plain name instead of @olga.dev.',
+                    },
+                  ],
+                },
+              },
+            },
+            { status: 400 },
+          ),
+        ),
+        http.post('/api/trpc/marketing.task.resolveTag', () =>
+          HttpResponse.json({
+            result: { data: { handle: 'alice.dev', result: 'resolved' } },
+          }),
+        ),
+        ...handlers(taggingFixture),
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(
+      await canvas.findByRole('button', { name: /Approve/ }),
+    )
+    const alert = await canvas.findByText(/asked not to be tagged in social/)
+    await expect(alert).toBeVisible()
+    await userEvent.click(
+      canvas.getByRole('button', { name: 'Use the plain name' }),
+    )
+    const body = canvas.getByLabelText<HTMLTextAreaElement>('Body')
+    await expect(body.value).toContain('🎙️ Olga Nordmann and Alice Anderson')
+    await expect(
+      canvas.queryByText(/asked not to be tagged in social/),
+    ).toBeNull()
+    // The tag button on the same form: Alice's name becomes her handle.
+    await userEvent.click(
+      canvas.getByRole('button', { name: 'Tag Alice Anderson' }),
+    )
+    await expect(body.value).toContain('Olga Nordmann and @alice.dev on')
+  },
+}
+export const TagApprovalRefusedAndFixedMobileDark: Story = {
+  ...TagApprovalRefusedAndFixed,
+  play: undefined,
+  parameters: {
+    ...TagApprovalRefusedAndFixed.parameters,
+    theme: 'dark',
+    viewport: { defaultViewport: 'mobile1' },
+  },
+}
