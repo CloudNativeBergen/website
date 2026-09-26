@@ -59,9 +59,15 @@ export interface MemeDesign {
     color: string
     /**
      * The image: an upload as a data URL, or a gallery image as a same-origin
-     * URL; its name for the UI; and, once it is in the gallery, which asset.
+     * URL; its name for the UI; once it is in the gallery, which asset; and,
+     * once a saved project holds it, which file (#1181).
      */
-    image: { url: string; name: string; galleryAssetId?: string } | null
+    image: {
+      url: string
+      name: string
+      galleryAssetId?: string
+      fileId?: string
+    } | null
   }
   textLines: TextLine[]
   logo: {

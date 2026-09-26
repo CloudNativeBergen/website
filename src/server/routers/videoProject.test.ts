@@ -79,7 +79,8 @@ vi.mock('@/lib/sanity/client', async () => {
       },
       transaction: () => {
         const tx = real.transaction()
-        tx.commit = (async () => commit(tx.serialize())) as typeof tx.commit
+        tx.commit = (async () =>
+          commit(tx.serialize())) as unknown as typeof tx.commit
         return tx
       },
       delete: async (id: string) => commit([{ delete: { id } }]),
@@ -98,7 +99,7 @@ vi.mock('@/lib/sanity/client', async () => {
     const out: Doc[] = []
     for (const m of mutations as Record<string, Record<string, unknown>>[]) {
       if (m.create) {
-        const doc = { ...m.create, _rev: `rev-${++h.revs}` } as Doc
+        const doc = { ...m.create, _rev: `rev-${++h.revs}` } as unknown as Doc
         h.dataset.push(doc)
         out.push(doc)
       } else if (m.patch) {
