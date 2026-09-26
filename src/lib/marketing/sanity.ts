@@ -1,5 +1,9 @@
 import { randomUUID } from 'node:crypto'
-import { recordReplacedRender } from './replaced-renders'
+import {
+  deleteOrphanedRenders,
+  readTaskRenderIds,
+  recordReplacedRender,
+} from './replaced-renders'
 import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
 import { groq } from 'next-sanity'
 import { scopedFetch } from '@/lib/sanity/scoped'
@@ -810,6 +814,8 @@ export interface DeleteTaskInput {
  */
 export async function deleteTask(input: DeleteTaskInput): Promise<boolean> {
   const now = getCurrentDateTime()
+  // Read first: once the Task is gone nothing records its renders (#1162).
+  const renders = await readTaskRenderIds([input.taskId])
   const tx = clientWrite.transaction()
   for (const id of input.dependantIds) {
     // The id is interpolated into a JSONMatch path. It passed the tenancy
@@ -851,7 +857,9 @@ export async function deleteTask(input: DeleteTaskInput): Promise<boolean> {
   )
   tx.delete(input.taskId)
   tx.delete(`drafts.${input.taskId}`)
-  return commitOrConflict(tx)
+  const deleted = await commitOrConflict(tx)
+  if (deleted) await deleteOrphanedRenders(renders)
+  return deleted
 }
 
 /**

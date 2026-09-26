@@ -668,9 +668,10 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                             </li>
                             <li>
                               • An image not marked as being about anyone, such
-                              as a group photo or a picture attached by hand to
-                              a post, cannot be found that way. Tell us about it
-                              and we will remove it
+                              as a group photo, a picture attached by hand to a
+                              post, or a graphic still in a post after its
+                              planning task was deleted, cannot be found that
+                              way. Tell us about it and we will remove it
                             </li>
                             <li>
                               • Posts already published on social media are

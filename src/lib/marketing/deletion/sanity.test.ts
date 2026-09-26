@@ -16,123 +16,142 @@ const h = vi.hoisted(() => ({
   beforeCommit: null as ((n: number) => void) | null,
 }))
 
-vi.mock('@/lib/sanity/client', () => ({
-  clientReadUncached: {
-    fetch: async (query: string, params: Record<string, unknown>) =>
-      (await evaluate(parse(query), { dataset: h.dataset, params })).get(),
-  },
-  clientWrite: {
-    transaction: () => {
-      const operations: ((dataset: Record<string, unknown>[]) => void)[] = []
-      const tx = {
-        create: (document: Record<string, unknown>) => {
-          operations.push((dataset) => {
-            if (dataset.some((row) => row._id === document._id)) {
-              throw Object.assign(
-                new Error(`document ${document._id} already exists`),
-                { statusCode: 409 },
-              )
-            }
-            dataset.push({
-              ...structuredClone(document),
-              _rev: `rev-${document._id}`,
+vi.mock('@/lib/sanity/client', () => {
+  const fetchDataset = async (query: string, params: Record<string, unknown>) =>
+    (await evaluate(parse(query), { dataset: h.dataset, params })).get()
+  return {
+    clientReadUncached: {
+      fetch: fetchDataset,
+      // The shared orphan check counts at a newer API version; same dataset.
+      withConfig: () => ({ fetch: fetchDataset }),
+    },
+    clientWrite: {
+      // A direct ASSET delete (the orphan check's): refused, as Sanity refuses
+      // it, while a strong reference to the asset remains.
+      delete: async (id: string) => {
+        const held = JSON.stringify(
+          h.dataset.filter((row) => row._id !== id),
+        ).includes(`"_ref":"${id}"`)
+        if (held) throw new Error(`409: ${id} is still referenced`)
+        h.dataset = h.dataset.filter((row) => row._id !== id)
+        return {}
+      },
+      transaction: () => {
+        const operations: ((dataset: Record<string, unknown>[]) => void)[] = []
+        const tx = {
+          create: (document: Record<string, unknown>) => {
+            operations.push((dataset) => {
+              if (dataset.some((row) => row._id === document._id)) {
+                throw Object.assign(
+                  new Error(`document ${document._id} already exists`),
+                  { statusCode: 409 },
+                )
+              }
+              dataset.push({
+                ...structuredClone(document),
+                _rev: `rev-${document._id}`,
+              })
             })
-          })
-          return tx
-        },
-        patch: (id: string, configure: (p: unknown) => unknown) => {
-          let revision: string | undefined
-          let fields: Record<string, unknown> = {}
-          let paths: string[] = []
-          const p = {
-            ifRevisionId: (rev: string) => {
-              revision = rev
-              return p
-            },
-            set: (value: Record<string, unknown>) => {
-              fields = value
-              return p
-            },
-            unset: (value: string[]) => {
-              paths = value
-              return p
-            },
-          }
-          configure(p)
-          operations.push((dataset) => {
-            const document = dataset.find((row) => row._id === id)
-            if (!document || (revision && document._rev !== revision))
+            return tx
+          },
+          patch: (id: string, configure: (p: unknown) => unknown) => {
+            let revision: string | undefined
+            let fields: Record<string, unknown> = {}
+            let paths: string[] = []
+            const p = {
+              ifRevisionId: (rev: string) => {
+                revision = rev
+                return p
+              },
+              set: (value: Record<string, unknown>) => {
+                fields = value
+                return p
+              },
+              unset: (value: string[]) => {
+                paths = value
+                return p
+              },
+            }
+            configure(p)
+            operations.push((dataset) => {
+              const document = dataset.find((row) => row._id === id)
+              if (!document || (revision && document._rev !== revision))
+                throw Object.assign(new Error('revision mismatch'), {
+                  statusCode: 409,
+                })
+              Object.assign(document, fields)
+              for (const path of paths) {
+                const ref = path.match(
+                  /prerequisites\[_ref == "([^"]+)"\]/,
+                )?.[1]
+                if (ref) {
+                  document.prerequisites = (
+                    (document.prerequisites ?? []) as { _ref: string }[]
+                  ).filter((item) => item._ref !== ref)
+                  continue
+                }
+                // A bare field name removes the whole field, as Sanity's unset
+                // does. Without this the fake silently ignored the delete's own
+                // prerequisite-clearing pass, so a test of it proved nothing.
+                if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(path)) delete document[path]
+              }
+              document._rev = `${document._rev}-changed`
+            })
+            return tx
+          },
+          delete: (id: string) => {
+            operations.push((dataset) => {
+              const index = dataset.findIndex((row) => row._id === id)
+              if (index >= 0) dataset.splice(index, 1)
+            })
+            return tx
+          },
+          commit: async () => {
+            h.batchSizes.push(operations.length)
+            h.commits++
+            h.beforeCommit?.(h.commits)
+            if (h.commits === h.failCommit)
               throw Object.assign(new Error('revision mismatch'), {
                 statusCode: 409,
               })
-            Object.assign(document, fields)
-            for (const path of paths) {
-              const ref = path.match(/prerequisites\[_ref == "([^"]+)"\]/)?.[1]
-              if (ref) {
-                document.prerequisites = (
-                  (document.prerequisites ?? []) as { _ref: string }[]
-                ).filter((item) => item._ref !== ref)
-                continue
+            // Sanity transactions roll back the ENTIRE batch on a stale guard.
+            const next = structuredClone(h.dataset)
+            operations.forEach((operation) => operation(next))
+            // Stored reference strength, not the Studio schema, blocks deletion.
+            const deleted = new Set(
+              h.dataset
+                .filter(
+                  (row) => !next.some((remaining) => remaining._id === row._id),
+                )
+                .map((row) => row._id),
+            )
+            const assertReferences = (value: unknown): void => {
+              if (!value || typeof value !== 'object') return
+              if (Array.isArray(value)) {
+                value.forEach(assertReferences)
+                return
               }
-              // A bare field name removes the whole field, as Sanity's unset
-              // does. Without this the fake silently ignored the delete's own
-              // prerequisite-clearing pass, so a test of it proved nothing.
-              if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(path)) delete document[path]
+              const object = value as Record<string, unknown>
+              if (
+                object._type === 'reference' &&
+                object._weak !== true &&
+                deleted.has(object._ref)
+              ) {
+                throw new Error(
+                  `strong reference still points at ${object._ref}`,
+                )
+              }
+              Object.values(object).forEach(assertReferences)
             }
-            document._rev = `${document._rev}-changed`
-          })
-          return tx
-        },
-        delete: (id: string) => {
-          operations.push((dataset) => {
-            const index = dataset.findIndex((row) => row._id === id)
-            if (index >= 0) dataset.splice(index, 1)
-          })
-          return tx
-        },
-        commit: async () => {
-          h.batchSizes.push(operations.length)
-          h.commits++
-          h.beforeCommit?.(h.commits)
-          if (h.commits === h.failCommit)
-            throw Object.assign(new Error('revision mismatch'), {
-              statusCode: 409,
-            })
-          // Sanity transactions roll back the ENTIRE batch on a stale guard.
-          const next = structuredClone(h.dataset)
-          operations.forEach((operation) => operation(next))
-          // Stored reference strength, not the Studio schema, blocks deletion.
-          const deleted = new Set(
-            h.dataset
-              .filter(
-                (row) => !next.some((remaining) => remaining._id === row._id),
-              )
-              .map((row) => row._id),
-          )
-          const assertReferences = (value: unknown): void => {
-            if (!value || typeof value !== 'object') return
-            if (Array.isArray(value)) {
-              value.forEach(assertReferences)
-              return
-            }
-            const object = value as Record<string, unknown>
-            if (
-              object._type === 'reference' &&
-              object._weak !== true &&
-              deleted.has(object._ref)
-            ) {
-              throw new Error(`strong reference still points at ${object._ref}`)
-            }
-            Object.values(object).forEach(assertReferences)
-          }
-          next.forEach(assertReferences)
-          h.dataset = next
-        },
-      }
-      return tx
+            next.forEach(assertReferences)
+            h.dataset = next
+          },
+        }
+        return tx
+      },
     },
-  },
-}))
+  }
+})
 
 import {
   deletionPreview,
@@ -141,7 +160,7 @@ import {
   MAY_BE_LIVE_REFUSAL,
 } from '.'
 import { snapshotDocument } from '../snapshots/engine'
-import { commitSeedPlan, getPlanView } from '../sanity'
+import { commitSeedPlan, deleteTask, getPlanView } from '../sanity'
 import { expandTemplate } from '../seed'
 import { BUILTIN_TEMPLATE } from '../template'
 import { buildReport, reportRange } from '../report/model'
@@ -1489,5 +1508,90 @@ describe('delete and seed again', () => {
       value: 1,
       primaryOutcome: 'cfpSubmissions',
     })
+  })
+})
+
+describe('a deleted Task takes its renders with it (#1162 follow-up to #1218)', () => {
+  // Every render a Task names — its render, its pending upload, the renders
+  // it replaced — goes through the SHARED orphan check (run for real here,
+  // over the dataset) once the Task is deleted, so nothing is left stored
+  // that no Task, and therefore no speaker erasure, can find any more. One a
+  // surviving post still holds is kept: the post is someone's record.
+  const asset = (id: string) => ({ _id: id, _type: 'sanity.imageAsset' })
+  const image = (id: string) => ({ _type: 'image', asset: ref(id) })
+  function renderTask(id: string, extra: Record<string, unknown> = {}) {
+    return doc(id, 'marketingTask', {
+      plan: ref('plan'),
+      campaign: ref('camp'),
+      kind: 'studioRender',
+      asset: image(`image-${id}-saved`),
+      pendingStudioAsset: image(`image-${id}-pending`),
+      replacedRenders: [`image-${id}-orphan`, `image-${id}-held`],
+      ...extra,
+    })
+  }
+  function seedRenders(id: string) {
+    h.dataset.push(
+      renderTask(id),
+      doc(`drafts.${id}`, 'marketingTask', {
+        pendingStudioAsset: image(`image-${id}-draft`),
+      }),
+      ...['saved', 'pending', 'orphan', 'held', 'draft'].map((k) =>
+        asset(`image-${id}-${k}`),
+      ),
+      // A post outside the delete still holds one replaced render.
+      doc(`post-keeps-${id}`, 'socialPost', {
+        attachments: [{ _key: 'a', image: image(`image-${id}-held`) }],
+      }),
+    )
+  }
+  const stored = (id: string) => h.dataset.some((row) => row._id === id)
+
+  it('deleteTask: every render the Task and its draft name is deleted unless a post holds it', async () => {
+    seedRenders('task-r')
+    expect(
+      await deleteTask({
+        taskId: 'task-r',
+        taskRev: 'rev-task-r',
+        conferenceId: 'conf-A',
+        variant: null,
+        dependantIds: [],
+      }),
+    ).toBe(true)
+    expect(stored('task-r')).toBe(false)
+    for (const k of ['saved', 'pending', 'orphan', 'draft'])
+      expect(stored(`image-task-r-${k}`), k).toBe(false)
+    expect(stored('image-task-r-held')).toBe(true)
+  })
+
+  it('deleteTask: a delete that loses its race deletes no render', async () => {
+    seedRenders('task-r')
+    expect(
+      await deleteTask({
+        taskId: 'task-r',
+        taskRev: 'stale',
+        conferenceId: 'conf-A',
+        variant: null,
+        dependantIds: [],
+      }),
+    ).toBe(false)
+    for (const k of ['saved', 'pending', 'orphan', 'held', 'draft'])
+      expect(stored(`image-task-r-${k}`), k).toBe(true)
+  })
+
+  it('deletePlanTree: the same for every Task in a Campaign or plan delete', async () => {
+    seedRenders('task-p')
+    const tree = await readDeletionTree('conf-A')
+    expect(
+      await deletePlanTree({
+        conferenceId: 'conf-A',
+        tree: tree!,
+        deletePlan: true,
+      }),
+    ).toBe(true)
+    expect(stored('task-p')).toBe(false)
+    for (const k of ['saved', 'pending', 'orphan', 'draft'])
+      expect(stored(`image-task-p-${k}`), k).toBe(false)
+    expect(stored('image-task-p-held')).toBe(true)
   })
 })

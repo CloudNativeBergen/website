@@ -1,6 +1,7 @@
 import 'server-only'
 import type { Patch } from '@sanity/client'
-import { clientWrite } from '@/lib/sanity/client'
+import { groq } from 'next-sanity'
+import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
 import { deleteImageAssetIfOrphaned } from '@/lib/sanity/orphaned-asset'
 
 /**
@@ -62,5 +63,51 @@ export async function retireReplacedRenders(
     } catch (error) {
       console.error(`Could not unrecord render ${id} on Task ${taskId}`, error)
     }
+  }
+}
+
+/**
+ * Every render the Tasks name — `asset`, `pendingStudioAsset` and
+ * `replacedRenders` — on each Task and its draft twin. Read BEFORE a Task is
+ * deleted: afterwards nothing records these files, so a speaker's erasure
+ * could not find them and `--verify` would report clean over them (#1162).
+ */
+export async function readTaskRenderIds(taskIds: string[]): Promise<string[]> {
+  if (taskIds.length === 0) return []
+  const ids = [...taskIds, ...taskIds.map((id) => `drafts.${id}`)]
+  const rows =
+    (await clientReadUncached.fetch<
+      Array<{ ids: Array<string | null> | null }>
+    >(
+      // groq-global-scoped: by-id read over Task ids the caller's tenancy guard (or its conference-scoped tree read) admitted, and their draft twins, which share it by construction.
+      groq`*[_type == "marketingTask" && _id in $ids]{ "ids": [asset.asset._ref, pendingStudioAsset.asset._ref] + coalesce(replacedRenders, []) }`,
+      { ids },
+      { cache: 'no-store' },
+    )) ?? []
+  return [
+    ...new Set(
+      rows.flatMap((row) =>
+        (row.ids ?? []).filter((id): id is string => typeof id === 'string'),
+      ),
+    ),
+  ]
+}
+
+/**
+ * After a Task delete: each of its renders goes through the shared orphan
+ * check, so it is deleted only if nothing references it. Never throws — the
+ * Task is already gone, and a cleanup failure must not report the delete
+ * failed.
+ *
+ * KNOWN HOLE. A render a surviving POST still holds is kept: the post is a
+ * record of its own. With its Task gone, nothing links that file to a speaker
+ * any more, so an erasure does not find it — the same hole as an image
+ * attached to a post by hand, named in `/privacy` and the erasure runbook.
+ */
+export async function deleteOrphanedRenders(ids: string[]): Promise<void> {
+  for (const id of new Set(ids)) {
+    await deleteImageAssetIfOrphaned(id).catch((error: unknown) =>
+      console.error(`Could not clean up render ${id} of a deleted Task`, error),
+    )
   }
 }

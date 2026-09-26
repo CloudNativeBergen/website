@@ -196,8 +196,12 @@ cause and re-run step 2. `--files <id,id>` adds ids to a verification by hand.
 
 **The hole.** An image no subject and no Task names is linked to nobody and is
 not found: a group photo or collage with no subject, a render saved from a Task
-that had no subject, or an image **attached to a post by hand** — even a post
-about the speaker, since it may as easily be a sponsor's graphic.
+that had no subject, an image **attached to a post by hand** — even a post
+about the speaker, since it may as easily be a sponsor's graphic — or a render
+a post still holds after its **Task was deleted**. Deleting a Task deletes
+every render it names through the orphan check, so only a render some post
+still holds survives it, and with the Task gone nothing links that file to the
+speaker.
 `/privacy` tells people to tell us about such an image; when they do, delete it
 from the gallery by hand. Published posts on Bluesky or LinkedIn are outside
 our reach either way.
