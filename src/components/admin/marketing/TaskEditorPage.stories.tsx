@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
-import { expect, userEvent, within } from 'storybook/test'
+import { expect, userEvent, waitFor, within } from 'storybook/test'
 import { http, HttpResponse } from 'msw'
 import { ThemeProvider } from 'next-themes'
 import { mockDateBeforeEach } from '@/lib/storybook'
@@ -903,7 +903,10 @@ export const TagApprovalRefusedAndFixed: Story = {
     await userEvent.click(
       canvas.getByRole('button', { name: 'Tag Alice Anderson' }),
     )
-    await expect(body.value).toContain('Olga Nordmann and @alice.dev on')
+    // The swap waits for Bluesky's answer (the lookup is a request).
+    await waitFor(() =>
+      expect(body.value).toContain('Olga Nordmann and @alice.dev on'),
+    )
   },
 }
 export const TagApprovalRefusedAndFixedMobileDark: Story = {
