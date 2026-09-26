@@ -27,7 +27,8 @@ export function useStudioGallery(orgId: string): BackgroundGallery {
                 {
                   _id: row._id,
                   title: row.title,
-                  alt: row.alt,
+                  // Only a track has no alt text (#1178); an image always does.
+                  alt: row.alt ?? '',
                   thumbnailUrl: thumbnail(row.imageUrl),
                 },
               ]
