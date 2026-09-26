@@ -646,6 +646,24 @@ export default defineType({
         )
       },
     }),
+    // Written by the erasure only (#1162), for the same readers as erasedAt.
+    defineField({
+      name: 'erasedFileIds',
+      title: 'Erased Marketing Files',
+      type: 'array',
+      of: [{ type: 'string' }],
+      readOnly: true,
+      description:
+        'Marketing image and video files the erasure deleted. A re-run retries any still stored. See docs/SPEAKER_ERASURE_RUNBOOK.md.',
+      hidden: ({ currentUser }) => {
+        return !(
+          currentUser != null &&
+          currentUser.roles.find(
+            ({ name }) => name === 'administrator' || name === 'editor',
+          )
+        )
+      },
+    }),
   ],
   preview: {
     select: {

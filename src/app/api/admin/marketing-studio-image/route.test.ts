@@ -10,6 +10,18 @@ const h = vi.hoisted(() => ({
   commit: vi.fn(),
   revision: vi.fn(),
   set: vi.fn(),
+  deleteOrphan: vi.fn(),
+  recorded: [] as string[],
+}))
+// Recording and retiring are proven on real patches in
+// `src/lib/marketing/replaced-renders.test.ts`; here, what the route records
+// in its binding patch and what it offers for retiring afterwards.
+vi.mock('@/lib/marketing/replaced-renders', () => ({
+  retireReplacedRenders: h.deleteOrphan,
+  recordReplacedRender: (patch: unknown, id: string) => {
+    h.recorded.push(id)
+    return patch
+  },
 }))
 vi.mock('@/lib/auth', () => ({
   getAuthSession: vi.fn(async () => ({ speaker: { _id: 'organizer' } })),
@@ -61,6 +73,81 @@ beforeEach(() => {
     return { commit: h.commit }
   })
   h.commit.mockResolvedValue({ _rev: 'r2' })
+  h.recorded = []
+  h.deleteOrphan.mockResolvedValue({
+    id: null,
+    deleted: false,
+    remainingReferences: 0,
+  })
+})
+
+describe('a replaced pending upload (#1162)', () => {
+  const OLD = 'image-oldpending-1200x630-png'
+  it('offers the upload it replaces to the orphan check, after the binding commits', async () => {
+    h.read.mockResolvedValue({
+      _id: 'render',
+      _rev: 'r1',
+      kind: 'studioRender',
+      pendingAssetId: OLD,
+      assetId: 'image-saved-png',
+    })
+    h.commit.mockImplementation(async () => {
+      // Recorded in the binding patch itself, before anything is retired.
+      expect(h.recorded).toEqual([OLD])
+      expect(h.deleteOrphan).not.toHaveBeenCalled()
+      return { _rev: 'r2' }
+    })
+    expect((await POST(request())).status).toBe(200)
+    expect(h.deleteOrphan).toHaveBeenCalledExactlyOnceWith('render', [OLD])
+  })
+  it('retries what earlier replacements recorded', async () => {
+    h.read.mockResolvedValue({
+      _id: 'render',
+      _rev: 'r1',
+      kind: 'studioRender',
+      pendingAssetId: OLD,
+      replacedRenders: ['image-earlier-png'],
+    })
+    expect((await POST(request())).status).toBe(200)
+    expect(h.deleteOrphan).toHaveBeenCalledExactlyOnceWith('render', [
+      'image-earlier-png',
+      OLD,
+    ])
+  })
+  it('leaves it when the same bytes came back, or it is the saved render', async () => {
+    for (const pendingAssetId of [
+      'image-render-1200x630-png',
+      'image-saved-png',
+    ]) {
+      h.read.mockResolvedValue({
+        _id: 'render',
+        _rev: 'r1',
+        kind: 'studioRender',
+        pendingAssetId,
+        assetId: 'image-saved-png',
+      })
+      expect((await POST(request())).status).toBe(200)
+    }
+    // Nothing new is recorded or offered.
+    expect(h.recorded).toEqual([])
+    expect(h.deleteOrphan.mock.calls).toEqual([
+      ['render', []],
+      ['render', []],
+    ])
+  })
+  it('keeps it when the binding loses a race', async () => {
+    h.read.mockResolvedValue({
+      _id: 'render',
+      _rev: 'r1',
+      kind: 'studioRender',
+      pendingAssetId: OLD,
+    })
+    h.commit.mockRejectedValueOnce(
+      Object.assign(new Error('revision mismatch'), { statusCode: 409 }),
+    )
+    expect((await POST(request())).status).toBe(409)
+    expect(h.deleteOrphan).not.toHaveBeenCalled()
+  })
 })
 
 describe('studio upload provenance', () => {

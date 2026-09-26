@@ -70,6 +70,8 @@ const transactionApi = {
     return transactionApi
   },
   commit: commitMock,
+  // Only its length is read: the erasure skips an empty commit.
+  serialize: () => [...txOrder],
 }
 
 const transactionMock = vi.fn(() => transactionApi)
@@ -84,6 +86,8 @@ vi.mock('@/lib/sanity/client', () => ({
   },
   clientWrite: {
     transaction: () => transactionMock(),
+    // The erasure transaction is sent at the release-aware API version (#1162).
+    withConfig: () => ({ transaction: () => transactionMock() }),
     delete: (...args: unknown[]) => clientDeleteMock(...args),
   },
 }))

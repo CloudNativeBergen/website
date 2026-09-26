@@ -44,6 +44,12 @@
  * unset must commit first. Idempotency is what covers the gap — a failed run is
  * re-run, not repaired.
  *
+ * MARKETING IMAGES (#1162). Every image of the speaker the marketing tools hold
+ * — gallery assets about them or a talk they give, Task renders about either —
+ * is removed from every post, variant and Task holding it and then DELETED,
+ * unconditionally. See `./erasure-assets.ts`, which also names the hole: an
+ * image with no subject is linked to nobody and is not found.
+ *
  * WHAT PHASE 1 DOES NOT ERASE — see `docs/SPEAKER_ERASURE_RUNBOOK.md`, which the
  * operator answers the data subject from. Badges, paid travel records and their
  * receipts, all free text (abstracts, outlines, review comments, message
@@ -61,10 +67,16 @@ import {
 } from '@/lib/sanity/client'
 import { groq } from 'next-sanity'
 import {
+  COUNT_API_VERSION,
   deleteImageAssetIfOrphaned,
   type OrphanedAssetDeletion,
 } from '@/lib/sanity/orphaned-asset'
 import { normalizeEmail } from './email'
+import {
+  fetchSpeakerAssetInputs,
+  planSpeakerAssetErasure,
+  type SpeakerAssetInputs,
+} from './erasure-assets'
 
 // ---------------------------------------------------------------------------
 // Field policy
@@ -268,6 +280,8 @@ export interface ErasureSpeakerDoc {
   slug?: { _type?: string; current?: string } | string
   erasedAt?: string
   image?: { asset?: SanityReference }
+  /** Marketing files an erasure deleted or tried to (#1162). */
+  erasedFileIds?: string[]
   [key: string]: unknown
 }
 
@@ -322,6 +336,14 @@ export interface ErasureInputs {
   mergeTrailDocs: MergeTrailDoc[]
   /** Ids of OTHER documents already holding the target slug. */
   slugConflictIds: string[]
+  /**
+   * Image and file asset ids linked to the subject through the marketing
+   * tools — see `./erasure-assets.ts`. Deleted UNCONDITIONALLY after the
+   * transaction, not through the orphan check.
+   */
+  assetFileIds: string[]
+  /** The documents about the subject and the holders of those files. */
+  assets: SpeakerAssetInputs
   /** Erasure timestamp, injected so tests are deterministic. */
   now: string
 }
@@ -377,6 +399,13 @@ export interface ErasurePlan {
   documentDeletes: ErasureDocumentDelete[]
   /** Asset id to delete AFTER the transaction, or null. */
   imageAssetId: string | null
+  /**
+   * Marketing image and video files to delete AFTER the transaction,
+   * UNCONDITIONALLY (#1162): an erasure means the image goes everywhere we hold
+   * it, so the orphan check — which keeps a file anything still references —
+   * is the wrong rule here.
+   */
+  linkedFileIds: string[]
   retainedBanking: RetainedBankingRecord[]
   /** Conference ids whose caches must be revalidated. */
   affectedConferenceIds: string[]
@@ -541,6 +570,25 @@ export function buildErasurePlan(inputs: ErasureInputs): ErasurePlan {
   const speakerUnset = ERASURE_UNSET_FIELDS.filter(
     (field) => !isAbsent(speaker, field),
   ) as string[]
+
+  // The marketing files this erasure deletes, RECORDED on the speaker in the
+  // same transaction that strips their last links. After it, nothing else
+  // leads to them: a file whose delete fails would be invisible to a re-run
+  // and to `--verify`. With the ids recorded, a re-run retries every one still
+  // stored and verification counts them. Asset ids, not personal data.
+  // Written only when the set grows, so a repeat writes nothing.
+  const recordedFileIds = Array.isArray(speaker.erasedFileIds)
+    ? speaker.erasedFileIds.filter((id) => typeof id === 'string')
+    : []
+  const assetPlan = planSpeakerAssetErasure(
+    speakerId,
+    inputs.assetFileIds,
+    inputs.assets,
+  )
+  const nextFileIds = [...new Set([...recordedFileIds, ...assetPlan.fileIds])]
+  if (nextFileIds.length > recordedFileIds.length) {
+    speakerSet.erasedFileIds = nextFileIds
+  }
 
   // `setIfMissing` so a repeat PRESERVES the original erasure timestamp — the
   // date the request was answered is itself a record.
@@ -721,6 +769,14 @@ export function buildErasurePlan(inputs: ErasureInputs): ErasurePlan {
     })
   }
 
+  // --- marketing images of the subject (#1162) ----------------------------
+
+  // Their patches and deletes join the one transaction, so every holder has
+  // let go of a file before the file itself is deleted after it.
+  documentPatches.push(...assetPlan.patches)
+  documentDeletes.push(...assetPlan.deletes)
+  refusals.push(...assetPlan.refusals)
+
   // --- the merge trail on OTHER speakers ----------------------------------
 
   // The subject's own trail is unset with the rest of the speaker patch; this
@@ -739,7 +795,8 @@ export function buildErasurePlan(inputs: ErasureInputs): ErasurePlan {
     speakerUnset.length === 0 &&
     documentPatches.length === 0 &&
     documentDeletes.length === 0 &&
-    imageAssetId === null
+    imageAssetId === null &&
+    assetPlan.fileIds.length === 0
 
   return {
     speakerId,
@@ -753,6 +810,7 @@ export function buildErasurePlan(inputs: ErasureInputs): ErasurePlan {
     documentPatches,
     documentDeletes,
     imageAssetId,
+    linkedFileIds: assetPlan.fileIds,
     retainedBanking,
     affectedConferenceIds: [...affectedConferenceIds],
     refusals,
@@ -1071,9 +1129,22 @@ export interface EraseSpeakerResult {
   committed: boolean
   /** Image asset outcome: deleted, kept (still referenced), or absent. */
   imageAsset: OrphanedAssetDeletion
+  /**
+   * Each marketing file linked to the subject, and whether its delete
+   * succeeded. A failed one is NOT found by a re-run — nothing links it any
+   * more — so its id is the operator's to keep and pass to `--verify`.
+   */
+  linkedFiles: LinkedFileDeletion[]
   cache: { tags: string[]; revalidated: boolean; error: string | null }
   verification: ErasureVerification | null
   err: Error | null
+}
+
+/** What happened to one marketing file linked to the subject. */
+export interface LinkedFileDeletion {
+  id: string
+  deleted: boolean
+  error: string | null
 }
 
 /** The post-erasure verification query's answer. */
@@ -1110,6 +1181,20 @@ export interface ErasureVerification {
     unpaidBankingDetails: number
     ticketEntries: number
     imageAsset: number
+    /**
+     * `marketingAsset` documents, any version, whose subject is the speaker or
+     * a talk they give (#1162).
+     */
+    marketingAssets: number
+    /**
+     * OTHER documents, any version, still holding a marketing file linked to
+     * the subject — gallery entries about the subject are `marketingAssets`,
+     * not counted twice. Counted by re-running the same planner, so it cannot
+     * drift from what the erasure does. A holder it would refuse counts too.
+     */
+    linkedFileHolders: number
+    /** Linked marketing files still stored. */
+    linkedFiles: number
   }
 }
 
@@ -1125,6 +1210,7 @@ async function fetchErasureInputs(
   speakerId: string,
   now: string,
   priorEmails: string[] = [],
+  priorFileIds: string[] = [],
 ): Promise<ErasureInputs> {
   const speaker = await clientRead.fetch<ErasureSpeakerDoc | null>(
     // groq-global: erasure is a GLOBAL operation on a cross-org person
@@ -1225,6 +1311,28 @@ async function fetchErasureInputs(
     ),
   ])
 
+  // Files an earlier run recorded and that are STILL STORED: a delete that
+  // failed. Only those — a deleted one must not keep the plan from its fixed
+  // point.
+  const recorded = Array.isArray(speaker?.erasedFileIds)
+    ? speaker.erasedFileIds
+    : []
+  const survivingRecorded =
+    recorded.length === 0
+      ? []
+      : ((await clientRead.fetch<string[]>(
+          // groq-global: image and file assets are dataset-wide documents with
+          // no tenant; these are ids the erasure itself recorded.
+          groq`*[_id in $ids]._id`,
+          { ids: recorded },
+          { cache: 'no-store' },
+        )) ?? [])
+
+  const assets = await fetchSpeakerAssetInputs(speakerId, [
+    ...priorFileIds,
+    ...survivingRecorded,
+  ])
+
   return {
     speaker,
     referencingDocs: referencingDocs ?? [],
@@ -1232,6 +1340,8 @@ async function fetchErasureInputs(
     emailKeyedDocs: emailKeyedDocs ?? [],
     mergeTrailDocs: mergeTrailDocs ?? [],
     slugConflictIds: (slugConflicts ?? []).map((d) => d._id),
+    assetFileIds: assets.fileIds,
+    assets: assets.inputs,
     now,
   }
 }
@@ -1245,8 +1355,9 @@ async function fetchErasureInputs(
  *   2. ONE revision-guarded transaction for every document mutation. The
  *      email-keyed sweeps must share it with the speaker patch, because that
  *      patch destroys the very match-set they select on.
- *   3. DELETE the image asset — only now, because Sanity refuses to delete an
- *      asset with a live reference, and only if nothing else still points at it.
+ *   3. DELETE the files — only now, because Sanity refuses to delete an asset
+ *      with a live reference. The marketing files linked to the subject go
+ *      unconditionally; the profile image only if nothing else points at it.
  *   4. Cache revalidation.
  *   5. The post-erasure verification query.
  *
@@ -1260,6 +1371,7 @@ export async function eraseSpeakerInPlace(
     plan: null,
     committed: false,
     imageAsset: { id: null, deleted: false, remainingReferences: 0 },
+    linkedFiles: [],
     cache: { tags: [], revalidated: false, error: null },
     verification: null,
     err: null,
@@ -1280,7 +1392,14 @@ export async function eraseSpeakerInPlace(
 
     // --- phase 2: one transaction ------------------------------------------
     if (!plan.noop) {
-      const tx = clientWrite.transaction()
+      // At the API version whose mutations know Content Release documents:
+      // the plan may patch or delete a `versions.**` copy of a post, Task or
+      // gallery asset. NOT verified against a real release (production has
+      // none); a refusal from Sanity fails the whole transaction, writing
+      // nothing, and the operator is told.
+      const tx = clientWrite
+        .withConfig({ apiVersion: COUNT_API_VERSION })
+        .transaction()
 
       for (const patch of plan.documentPatches) {
         tx.patch(patch.id, (p) => {
@@ -1331,10 +1450,16 @@ export async function eraseSpeakerInPlace(
 
       for (const del of plan.documentDeletes) tx.delete(del.id)
 
-      await tx.commit()
+      // A run that only RETRIES a recorded file (#1162) has no document to
+      // write, and an empty transaction is not sent.
+      if (tx.serialize().length > 0) await tx.commit()
     }
 
-    // --- phase 3: the image asset ------------------------------------------
+    // --- phase 3: the files -------------------------------------------------
+    // Every holder let go of the linked files in the transaction above, so
+    // each delete now succeeds unless something new took hold of one since.
+    const linkedFiles = await deleteLinkedFiles(plan.linkedFileIds)
+
     // Unsetting `speaker.image` leaves the photograph publicly fetchable on
     // the CDN; the asset itself goes too, unless something else still uses it.
     const imageAsset = await deleteImageAssetIfOrphaned(plan.imageAssetId)
@@ -1347,9 +1472,12 @@ export async function eraseSpeakerInPlace(
     // it on the document, and without it every email-keyed count — the merge
     // trail included — would select on the anonymised placeholder and report 0
     // over live data. This is the one moment those addresses still exist.
+    // The linked file ids likewise: once their holders are stripped nothing
+    // links them, so a file left behind is visible only by its id.
     const verification = await verifySpeakerErasure(
       plan.speakerId,
       inputs.speaker ? speakerEmailMatchSet(inputs.speaker) : [],
+      plan.linkedFileIds,
     )
 
     console.info('[speaker-erasure] anonymised speaker in place', {
@@ -1360,6 +1488,8 @@ export async function eraseSpeakerInPlace(
       deleted: plan.documentDeletes.length,
       retainedBanking: plan.retainedBanking.length,
       imageAssetDeleted: imageAsset.deleted,
+      linkedFilesDeleted: linkedFiles.filter((f) => f.deleted).length,
+      linkedFilesKept: linkedFiles.filter((f) => !f.deleted).length,
       verificationClean: verification?.clean ?? null,
     })
 
@@ -1367,6 +1497,7 @@ export async function eraseSpeakerInPlace(
       plan,
       committed: !plan.noop,
       imageAsset,
+      linkedFiles,
       cache,
       verification,
       err: null,
@@ -1377,6 +1508,23 @@ export async function eraseSpeakerInPlace(
     }
     return { ...empty, err: error as Error }
   }
+}
+
+/**
+ * Delete each linked file outright. One at a time and never throwing, so one
+ * failure does not hide the rest, and every outcome is reported.
+ */
+async function deleteLinkedFiles(ids: string[]): Promise<LinkedFileDeletion[]> {
+  const out: LinkedFileDeletion[] = []
+  for (const id of ids) {
+    try {
+      await clientWrite.delete(id)
+      out.push({ id, deleted: true, error: null })
+    } catch (error) {
+      out.push({ id, deleted: false, error: (error as Error).message })
+    }
+  }
+  return out
 }
 
 async function revalidateErasureTags(
@@ -1435,11 +1583,21 @@ async function revalidateErasureTags(
  * cannot annotate (a comment cannot reach inside a template literal, so only
  * the first root in a literal can carry `groq-global:`).
  *
+ * THE LINKED FILES HAVE THE SAME SHAPE OF PROBLEM. A file is linked to the
+ * subject through a gallery entry or a Task render, and the erasure removes
+ * exactly those links. A file whose delete failed is then linked to nobody, and
+ * only its id can find it. The erasure records the ids on the speaker
+ * (`erasedFileIds`), so this counts every recorded file still stored;
+ * {@link eraseSpeakerInPlace} also passes the ids it planned, and `--files`
+ * adds ids by hand.
+ *
  * @param priorEmails The subject's match set as read before the erasure.
+ * @param priorFileIds The marketing files the erasure linked to the subject.
  */
 export async function verifySpeakerErasure(
   speakerId: string,
   priorEmails: string[] = [],
+  priorFileIds: string[] = [],
 ): Promise<ErasureVerification | null> {
   const targetSlug = erasedSlug(speakerId)
   const targetEmail = erasedEmail(speakerId)
@@ -1448,6 +1606,7 @@ export async function verifySpeakerErasure(
     speakerId,
     new Date().toISOString(),
     priorEmails,
+    priorFileIds,
   )
   const doc = inputs.speaker
   if (!doc) return null
@@ -1553,6 +1712,37 @@ export async function verifySpeakerErasure(
     imageAsset = found?.n ?? 0
   }
 
+  const subjectAssetIds = new Set(
+    inputs.assets.subjectDocs
+      .filter((d) => d._type === 'marketingAsset')
+      .map((d) => d._id),
+  )
+  const marketingAssets = subjectAssetIds.size
+  const assetPlan = planSpeakerAssetErasure(
+    speakerId,
+    inputs.assetFileIds,
+    inputs.assets,
+  )
+  // Disjoint from `marketingAssets`: a gallery entry about the subject is
+  // counted there once, not here again.
+  const linkedFileHolders =
+    assetPlan.patches.length +
+    assetPlan.deletes.filter((d) => !subjectAssetIds.has(d.id)).length +
+    assetPlan.refusals.length
+
+  let linkedFiles = 0
+  if (inputs.assetFileIds.length > 0) {
+    const found = await clientRead.fetch<{ n: number }>(
+      // groq-global: image and file assets are dataset-wide documents with no
+      // tenant. Counting them is how the runbook proves a speaker's marketing
+      // images are gone from the CDN and not merely unreferenced.
+      groq`{ "n": count(*[_id in $fileIds]) }`,
+      { fileIds: inputs.assetFileIds },
+      { cache: 'no-store' },
+    )
+    linkedFiles = found?.n ?? 0
+  }
+
   const speakerFields = ERASURE_UNSET_FIELDS.filter(
     (field) => !isAbsent(doc, field),
   ) as string[]
@@ -1579,6 +1769,9 @@ export async function verifySpeakerErasure(
     unpaidBankingDetails,
     ticketEntries,
     imageAsset,
+    marketingAssets,
+    linkedFileHolders,
+    linkedFiles,
   }
 
   const clean =
@@ -1598,7 +1791,10 @@ export async function verifySpeakerErasure(
     curationEntries === 0 &&
     unpaidBankingDetails === 0 &&
     ticketEntries === 0 &&
-    imageAsset === 0
+    imageAsset === 0 &&
+    marketingAssets === 0 &&
+    linkedFileHolders === 0 &&
+    linkedFiles === 0
 
   return { clean, residual }
 }

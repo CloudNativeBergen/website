@@ -218,6 +218,16 @@ export default defineType({
       readOnly: true,
     }),
     defineField({
+      name: 'replacedRenders',
+      title: 'Replaced renders',
+      description:
+        'Image asset ids of renders this Task replaced that could not be deleted yet (a post still holds them, or the delete failed). The next replacement retries them, and a speaker erasure finds them through this Task.',
+      type: 'array',
+      of: [{ type: 'string' }],
+      hidden: true,
+      readOnly: true,
+    }),
+    defineField({
       name: 'handoffDoneFor',
       title: 'Studio handoff receipts',
       description:

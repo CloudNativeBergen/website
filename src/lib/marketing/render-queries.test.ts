@@ -36,6 +36,7 @@ beforeEach(() => {
       pendingStudioAsset: { _type: 'image', asset: ref('image-upload') },
       asset: { _type: 'image', asset: ref('image-saved') },
       subject: ref('speaker'),
+      replacedRenders: ['image-replaced'],
     },
     { ...task('foreign', 'theirs'), title: 'Foreign title' },
     task('dependent', 'ours'),
@@ -65,6 +66,7 @@ describe('studio queries executed against a fixture dataset', () => {
       assetId: 'image-saved',
       campaignId: 'campaign',
       handoffDoneFor: null,
+      replacedRenders: ['image-replaced'],
     })
   })
 

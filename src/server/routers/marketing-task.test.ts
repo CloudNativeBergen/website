@@ -48,6 +48,19 @@ const h = vi.hoisted(() => ({
   updateSocialVariantContent: vi.fn(),
   scheduleIssues: vi.fn(),
   getOrganizersByConference: vi.fn(),
+  deleteOrphan: vi.fn(),
+}))
+
+vi.mock('@/lib/sanity/orphaned-asset', () => ({
+  COUNT_API_VERSION: '2025-02-19',
+  deleteImageAssetIfOrphaned: vi.fn(),
+  deleteFileAssetIfOrphaned: vi.fn(),
+}))
+// Proven in `src/lib/marketing/replaced-renders.test.ts`; here, what the
+// save offers it.
+vi.mock('@/lib/marketing/replaced-renders', () => ({
+  retireReplacedRenders: h.deleteOrphan,
+  recordReplacedRender: vi.fn(),
 }))
 
 vi.mock('@/lib/marketing/render-sanity', () => ({
@@ -1008,6 +1021,64 @@ describe('task.attachAsset', () => {
       return true
     })
     h.handoffStudioAttachment.mockResolvedValue('attached')
+    h.deleteOrphan.mockReset()
+    h.deleteOrphan.mockResolvedValue({
+      id: null,
+      deleted: false,
+      remainingReferences: 0,
+    })
+  })
+
+  describe('a replaced render (#1162)', () => {
+    const OLD = 'image-old-1080x1080-png'
+    it('offers the render it replaces to the orphan check, after the save', async () => {
+      let current: Omit<
+        ReturnType<typeof render>,
+        'assetId' | 'pendingAssetId'
+      > & {
+        assetId: string | null
+        pendingAssetId: string | null
+      } = { ...render(), assetId: OLD }
+      h.getStudioTask.mockImplementation(async () => current)
+      h.updateTaskFields.mockImplementation(async (...args: unknown[]) => {
+        // Recorded in the save's own patch, before anything is retired.
+        expect(args[5]).toBe(OLD)
+        expect(h.deleteOrphan).not.toHaveBeenCalled()
+        current = { ...current, assetId, pendingAssetId: null }
+        return true
+      })
+      expect(await marketing().task.attachAsset(input)).toMatchObject({
+        success: true,
+      })
+      expect(h.deleteOrphan).toHaveBeenCalledExactlyOnceWith('task-ours', [OLD])
+    })
+    it('does not touch the render on an idempotent retry of the same image', async () => {
+      h.getStudioTask.mockImplementation(async () => ({
+        ...render(),
+        assetId,
+        pendingAssetId: null,
+      }))
+      await marketing().task.attachAsset(input)
+      // Nothing new is recorded or offered.
+      expect(h.updateTaskFields).not.toHaveBeenCalledWith(
+        expect.anything(),
+        expect.anything(),
+        expect.anything(),
+        expect.anything(),
+        expect.anything(),
+        expect.any(String),
+      )
+      expect(h.deleteOrphan.mock.calls).toEqual([['task-ours', []]])
+    })
+    it('keeps the old render when the save loses a race', async () => {
+      h.getStudioTask.mockImplementation(async () => ({
+        ...render(),
+        assetId: OLD,
+      }))
+      h.updateTaskFields.mockResolvedValue(false)
+      await expect(marketing().task.attachAsset(input)).rejects.toThrow()
+      expect(h.deleteOrphan).not.toHaveBeenCalled()
+    })
   })
 
   async function placeholderHandoff(status: string, alt: string) {
@@ -1233,6 +1304,8 @@ describe('task.attachAsset', () => {
         handoffDoneFor: [],
       },
       ['pendingStudioAsset'],
+      undefined,
+      undefined,
     )
     const savedFields = Object.assign(
       {},

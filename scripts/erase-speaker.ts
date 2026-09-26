@@ -4,6 +4,7 @@
  *   pnpm erase-speaker <speakerId> --actor "<who>"          # DRY RUN (default)
  *   pnpm erase-speaker <speakerId> --actor "<who>" --commit # writes
  *   pnpm erase-speaker <speakerId> --verify                 # verification only
+ *   pnpm erase-speaker <speakerId> --verify --files <id,id> # + files a run kept
  *
  * DRY RUN IS THE DEFAULT AND `--commit` IS DELIBERATELY VERBOSE. This is the
  * one operation in the repo that cannot be undone by re-running it.
@@ -42,6 +43,10 @@ function printPlan(plan: ErasurePlan): void {
       (plan.speakerSetIfMissing.erasedAt ? ', erasedAt written' : ''),
   )
   console.log(`Image asset:    ${plan.imageAssetId ?? '(none)'}`)
+  console.log(
+    `Marketing files (deleted unconditionally, ${plan.linkedFileIds.length}):`,
+  )
+  for (const id of plan.linkedFileIds) console.log(`  ${id}`)
 
   console.log(`\nDependent patches (${plan.documentPatches.length}):`)
   for (const patch of plan.documentPatches) {
@@ -93,14 +98,17 @@ async function main(): Promise<number> {
   if (!speakerId || speakerId.startsWith('--')) {
     console.error(
       'Usage: pnpm erase-speaker <speakerId> --actor "<who>" [--commit]\n' +
-        '       pnpm erase-speaker <speakerId> --verify\n\n' +
+        '       pnpm erase-speaker <speakerId> --verify [--files <id,id>]\n\n' +
         'Read docs/SPEAKER_ERASURE_RUNBOOK.md first.',
     )
     return 1
   }
 
   if (has('verify')) {
-    printVerification(await verifySpeakerErasure(speakerId))
+    // Recorded marketing files are counted from the speaker; --files adds
+    // ids by hand.
+    const files = (arg('files') ?? '').split(',').filter(Boolean)
+    printVerification(await verifySpeakerErasure(speakerId, [], files))
     return 0
   }
 
@@ -146,6 +154,15 @@ async function main(): Promise<number> {
             'see the runbook step on orphaned assets'
     }`,
   )
+  const kept = result.linkedFiles.filter((f) => !f.deleted)
+  console.log(
+    `Marketing files: ${result.linkedFiles.length - kept.length} deleted` +
+      (kept.length > 0
+        ? `, ${kept.length} NOT deleted — recorded on the speaker; fix the ` +
+          'cause and re-run with --commit to retry (see the runbook, step 3b)'
+        : ''),
+  )
+  for (const file of kept) console.log(`  ${file.id}  ${file.error}`)
   console.log(`\nCache tags to invalidate (see the runbook):`)
   for (const tag of result.cache.tags) console.log(`  ${tag}`)
 

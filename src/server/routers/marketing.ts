@@ -43,6 +43,7 @@ import {
   renderHandoffRecipients,
 } from '@/lib/marketing/render-handoff'
 import { handoffStudioAttachment } from '@/lib/social/sanity'
+import { retireReplacedRenders } from '@/lib/marketing/replaced-renders'
 import { createHash, randomUUID } from 'node:crypto'
 import { TRPCError } from '@trpc/server'
 import { needsOwnDomains } from '@/lib/social/provider/constraints'
@@ -1462,6 +1463,10 @@ export const marketingRouter = router({
         const handoffDoneFor = new Set(
           task.assetId === input.assetId ? (task.handoffDoneFor ?? []) : [],
         )
+        // The render this one REPLACES is recorded in the save's own patch
+        // (#1162), so nothing between the save and its cleanup can lose it.
+        const replaced =
+          task.assetId && task.assetId !== input.assetId ? task.assetId : null
         const saved = await updateTaskFields(
           task._id,
           task._rev,
@@ -1473,8 +1478,17 @@ export const marketingRouter = router({
             handoffDoneFor: [...handoffDoneFor],
           },
           task.assetId !== input.assetId ? ['pendingStudioAsset'] : [],
+          undefined,
+          replaced ?? undefined,
         )
         if (!saved) throw conflict()
+        // Then every recorded render goes, through the shared orphan check,
+        // so a post it was handed to keeps it — and keeps it recorded, for a
+        // retry and for a speaker's erasure. Never fails the save.
+        await retireReplacedRenders(input.taskId, [
+          ...(task.replacedRenders ?? []),
+          ...(replaced ? [replaced] : []),
+        ])
         const handoffFailures: string[] = []
         const handoffIssues: string[] = []
         try {
