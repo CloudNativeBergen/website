@@ -495,7 +495,15 @@ export const ClickTest: Story = {
                 <code className="font-jetbrains rounded bg-gray-100 px-1.5 py-0.5 text-xs dark:bg-gray-700">
                   pnpm shoot &lt;story-id&gt;
                 </code>{' '}
-                and look at it, in light and dark, before calling UI work done.
+                and look at it before calling UI work done. It opens the story
+                fresh, so it captures the theme the story itself sets, light by
+                default; the toolbar&apos;s Dark never reaches it. For dark,
+                shoot a story that sets dark the way its file reads the theme:
+                some files&apos; decorators read{' '}
+                <code className="font-jetbrains rounded bg-gray-100 px-1.5 py-0.5 text-xs dark:bg-gray-700">
+                  parameters.theme
+                </code>
+                , the rest the global theme. Check the capture really is dark.
               </p>
             </div>
           </div>
