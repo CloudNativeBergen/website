@@ -94,6 +94,14 @@ describe('tag button text edits', () => {
     )
   })
 
+  it('tagName swaps the name only where it stands as a whole word', () => {
+    const ann = { name: 'Ann', handle: 'ann.dev' }
+    expect(tagName('Annika, https://x.dev/Ann, “Ann” and Ann.', ann)).toBe(
+      'Annika, https://x.dev/Ann, “Ann” and @ann.dev.',
+    )
+    expect(tagName('Annika only', ann)).toBeNull()
+  })
+
   it('tagName returns null when the name is not in the body', () => {
     expect(tagName('Someone talks.', alice)).toBeNull()
   })
@@ -251,6 +259,15 @@ describe('saveMentions (§4.3 rebuilt on every save, §4.4 Save)', () => {
       resolutions: new Map(),
     })
     expect(out.mentions).toEqual([unresolved])
+    // Once the name is gone from the post, so is the note.
+    expect(
+      saveMentions({
+        body: 'Alice Anderson only',
+        people,
+        previous: [unresolved],
+        resolutions: new Map(),
+      }).mentions,
+    ).toEqual([])
   })
 
   it('a now-tagged person’s unresolved note is dropped (one entry per person)', () => {
@@ -296,6 +313,22 @@ describe('saveMentions (§4.3 rebuilt on every save, §4.4 Save)', () => {
       resolutions: new Map(),
     })
     expect(out.issues).toEqual([])
+  })
+})
+
+describe('saveMentions keeps a departed speaker’s tag in view', () => {
+  it('refuses, rather than drops, a recorded tag of someone no longer on the roster', () => {
+    const body = '@alice.dev'
+    const previous = [tagged(alice, DID_A)]
+    const out = saveMentions({
+      body,
+      people: [bob],
+      previous,
+      resolutions: new Map(),
+    })
+    expect(out.issues.map((i) => [i.code, i.mentionKey])).toEqual([
+      ['not-a-speaker', 'speaker-alice'],
+    ])
   })
 })
 
@@ -399,6 +432,18 @@ describe('approvalCheck (§4.4 Approval)', () => {
     })
     expect(out.issues.map((i) => [i.code, i.mentionKey])).toEqual([
       ['opted-out', 'speaker-olga'],
+    ])
+  })
+
+  it('refuses a tag saved without a DID once Bluesky can be asked again', () => {
+    const out = approvalCheck({
+      body: '@alice.dev',
+      mentions: [tagged(alice)],
+      people: peopleMap,
+      resolutions: new Map([['alice.dev', resolved(DID_A)]]),
+    })
+    expect(out.issues.map((i) => [i.code, i.mentionKey])).toEqual([
+      ['unchecked', 'speaker-alice'],
     ])
   })
 

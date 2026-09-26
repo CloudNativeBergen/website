@@ -57,7 +57,12 @@ export interface TaggablePerson {
 }
 
 export type TagIssueCode =
-  'opted-out' | 'not-a-speaker' | 'not-found' | 'did-changed' | 'plain-too-long'
+  | 'opted-out'
+  | 'not-a-speaker'
+  | 'not-found'
+  | 'did-changed'
+  | 'unchecked'
+  | 'plain-too-long'
 
 /**
  * Why a save or an approval is refused, structured so the editor can offer
@@ -95,10 +100,29 @@ export function tagName(
   body: string,
   person: { name: string; handle: string | null },
 ): string | null {
-  if (!person.handle || !person.name) return null
-  const at = body.indexOf(person.name)
+  if (!person.handle) return null
+  const at = nameIndex(body, person.name)
   if (at < 0) return null
   return `${body.slice(0, at)}@${person.handle}${body.slice(at + person.name.length)}`
+}
+
+/**
+ * Where the name stands as a whole word the adapter would detect a tag at,
+ * or -1: not inside a longer word, a handle or a URL ("Ann" is not in
+ * "Annika" or "x.dev/Ann"), and not after a quote or a dash, where
+ * `@handle` would stay plain text.
+ */
+export function nameIndex(body: string, name: string): number {
+  if (!name) return -1
+  for (let at = body.indexOf(name); at >= 0; at = body.indexOf(name, at + 1)) {
+    const before = body[at - 1]
+    const after = body[at + name.length]
+    // Only where a tag would be detected: after a space, a "(" or at the start.
+    const startsTag = before === undefined || /[\s(]/.test(before)
+    const endsWord = after === undefined || !/[\p{L}\p{N}_]/u.test(after)
+    if (startsTag && endsWord) return at
+  }
+  return -1
 }
 
 /**
@@ -148,6 +172,16 @@ function optedOutIssue(p: TaggablePerson, handle: string): TagIssue {
     handle,
     name: p.name,
     message: `${p.name} has asked not to be tagged in social posts. Use the plain name instead of @${handle}.`,
+  }
+}
+
+function notASpeaker(m: MentionRecord, handle: string): TagIssue {
+  return {
+    code: 'not-a-speaker',
+    mentionKey: m._key,
+    handle,
+    name: m.name,
+    message: `${m.name} is no longer a speaker at this conference. Use the plain name instead of @${handle}.`,
   }
 }
 
@@ -261,9 +295,25 @@ export function saveMentions(input: {
       status: 'tagged',
     })
   }
+  // A recorded tag whose person has left the roster (talk withdrawn, speaker
+  // removed) and whose handle is still in the body: refused, never dropped —
+  // dropping it would leave a tag no later check knows about.
+  const inBody = new Set(mentionTokens(input.body).map((t) => t.handle))
+  const known = byHandle(input.people)
+  for (const m of input.previous) {
+    const handle = normaliseHandle(m.handle)
+    if (m.status !== 'tagged' || !inBody.has(handle) || known.has(handle))
+      continue
+    if (input.people.some((p) => p.speakerId === m.speakerId)) continue
+    issues.push(notASpeaker(m, handle))
+  }
   const taggedIds = new Set(tagged.map((m) => m.speakerId))
+  // A note stands while the person is still named in plain text.
   const notes = input.previous.filter(
-    (m) => m.status === 'unresolved' && !taggedIds.has(m.speakerId),
+    (m) =>
+      m.status === 'unresolved' &&
+      !taggedIds.has(m.speakerId) &&
+      nameIndex(input.body, m.name) >= 0,
   )
   if (tagged.length > 0) {
     const plain = countGraphemes(plainBody(input.body, tagged))
@@ -324,13 +374,7 @@ export function approvalCheck(input: {
     const handle = normaliseHandle(m.handle)
     const p = byId.get(m.speakerId)
     if (!p) {
-      issues.push({
-        code: 'not-a-speaker',
-        mentionKey: m._key,
-        handle,
-        name: m.name,
-        message: `${m.name} is no longer a speaker at this conference. Use the plain name instead of @${handle}.`,
-      })
+      issues.push(notASpeaker(m, handle))
       continue
     }
     if (p.optedOut) {
@@ -341,7 +385,17 @@ export function approvalCheck(input: {
     if (r?.kind === 'not-found') {
       issues.push(notFoundIssue(m._key, handle, m.name))
     } else if (r?.kind === 'resolved') {
-      if (m.did && r.did !== m.did) {
+      if (!m.did) {
+        // Saved while Bluesky was unreachable: no DID was ever checked, and
+        // the one that goes out must be one that was. A save records it.
+        issues.push({
+          code: 'unchecked',
+          mentionKey: m._key,
+          handle,
+          name: m.name,
+          message: `@${handle} was saved while Bluesky could not be reached, so it was never checked. Save the post again to check it, or use the plain name.`,
+        })
+      } else if (r.did !== m.did) {
         issues.push({
           code: 'did-changed',
           mentionKey: m._key,

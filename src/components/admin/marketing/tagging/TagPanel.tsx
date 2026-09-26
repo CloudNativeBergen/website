@@ -10,6 +10,7 @@ import { AdminButton } from '@/components/admin/AdminButton'
 import type { MentionRecord } from '@/lib/marketing/tagging/body'
 import {
   mentionTokens,
+  nameIndex,
   type TagIssue,
   type TaggablePerson,
 } from '@/lib/marketing/tagging/checks'
@@ -151,7 +152,7 @@ function PersonRow({
   onTag: () => void
   onUntag: () => void
 }) {
-  const nameInBody = person.name !== '' && body.includes(person.name)
+  const nameInBody = nameIndex(body, person.name) >= 0
   let status: { text: string; tone: 'muted' | 'warn' | 'error' } | null = null
   if (person.optedOut)
     status = { text: 'Asked not to be tagged', tone: 'muted' }
