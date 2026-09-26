@@ -334,3 +334,54 @@ describe('keeping, by keyboard', () => {
     expect(screen.getByTestId('background-gallery-status')).toBe(region)
   })
 })
+
+describe('a keep that lands after the editor has moved on', () => {
+  it('leaves focus where the organizer put it', async () => {
+    let land: (kept: { _id: string }) => void = () => {}
+    const keep = vi.fn<BackgroundGallery['keep']>(
+      () => new Promise((resolve) => (land = resolve)),
+    )
+    render(<MemeGenerator gallery={fakeGallery({ keep })} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Video' }))
+    upload('one.png')
+    await screen.findByText('Current: one.png')
+    fireEvent.click(screen.getByRole('button', { name: 'Keep in gallery' }))
+    fireEvent.change(screen.getByLabelText('Alt text'), {
+      target: { value: 'Scene one' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Save to gallery' }))
+    await waitFor(() => expect(keep).toHaveBeenCalled())
+
+    // On to scene 2, with a background of its own, and into its headline.
+    fireEvent.click(screen.getByRole('button', { name: 'Add scene' }))
+    upload('two.png')
+    await screen.findByText('Current: two.png')
+    const headline = screen.getAllByPlaceholderText('Enter your text...')[0]
+    headline.focus()
+
+    await act(async () => land({ _id: 'asset-one' }))
+    expect(document.activeElement).toBe(headline)
+  })
+})
+
+describe('clearing the background', () => {
+  it('takes a failed pick’s message away with it', async () => {
+    const gallery = fakeGallery({
+      resolve: vi.fn(async () => {
+        throw new Error('gone')
+      }),
+    })
+    render(<MemeGenerator gallery={gallery} />)
+    upload()
+    await screen.findByText('Current: photo.png')
+    fireEvent.click(screen.getByRole('button', { name: 'Choose from gallery' }))
+    fireEvent.click(await screen.findByRole('button', { name: /Keynote hall/ }))
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'That image could not be loaded',
+    )
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Clear background image' }),
+    )
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+})

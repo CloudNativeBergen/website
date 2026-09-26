@@ -2365,6 +2365,38 @@ export const KeepUploadInGallery: Story = {
   },
 }
 
+/**
+ * The mouse path: Save goes disabled while saving, which can drop focus to
+ * the page. Focus still ends on the result, never left on <body>.
+ */
+export const KeepUploadInGalleryByMouse: Story = {
+  args: { gallery: storyGallery },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const source = document.createElement('canvas')
+    source.width = source.height = 64
+    source.getContext('2d')!.fillRect(0, 0, 64, 64)
+    const blob = await new Promise<Blob>((resolve) =>
+      source.toBlob((b) => resolve(b!), 'image/png'),
+    )
+    await userEvent.upload(
+      canvas.getByLabelText(/Upload Background Image/),
+      new File([blob], 'stage-photo.png', { type: 'image/png' }),
+    )
+    await canvas.findByText('Current: stage-photo.png')
+    await userEvent.click(
+      canvas.getByRole('button', { name: 'Keep in gallery' }),
+    )
+    await userEvent.type(canvas.getByLabelText('Alt text'), 'An empty stage')
+    await userEvent.click(
+      canvas.getByRole('button', { name: 'Save to gallery' }),
+    )
+    const status = canvas.getByTestId('background-gallery-status')
+    await waitFor(() => expect(status).toHaveTextContent('In the gallery.'))
+    await waitFor(() => expect(document.activeElement).toBe(status))
+  },
+}
+
 /** The keep form, open and filled, for the screenshot. */
 export const KeepFormOpen: Story = {
   args: { gallery: storyGallery },

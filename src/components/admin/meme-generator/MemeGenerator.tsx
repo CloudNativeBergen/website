@@ -1364,8 +1364,8 @@ export function MemeGenerator({
                       key={background.image.url}
                       file={keptFile}
                       keep={gallery.keep}
-                      onKept={(id) => {
-                        focusGalleryStatus.current = true
+                      onKept={(id, hadFocus) => {
+                        focusGalleryStatus.current = hadFocus
                         markKept(background.image!.url, id)
                       }}
                     />

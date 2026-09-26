@@ -21,7 +21,11 @@ export function KeepInGallery({
 }: {
   file: File
   keep: BackgroundGallery['keep']
-  onKept: (galleryAssetId: string) => void
+  /**
+   * `hadFocus`: whether focus was still this form's when the save landed
+   * (see `focusStillHere`). Only then is it the editor's to move.
+   */
+  onKept: (galleryAssetId: string, hadFocus: boolean) => void
 }) {
   const ids = { title: useId(), alt: useId() }
   const [open, setOpen] = useState(false)
@@ -35,6 +39,7 @@ export function KeepInGallery({
   const titleInput = useRef<HTMLInputElement>(null)
   const keepButton = useRef<HTMLButtonElement>(null)
   const focusNext = useRef<'title' | 'keep' | null>(null)
+  const form = useRef<HTMLFormElement>(null)
   useLayoutEffect(() => {
     const target = focusNext.current
     focusNext.current = null
@@ -46,6 +51,18 @@ export function KeepInGallery({
     setOpen(next)
   }
 
+  /**
+   * Focus is still the form's: inside it, or dropped to the page when the
+   * Save button it was on went disabled — while the form is still shown.
+   * Anywhere else, the organizer has moved on and keeps their place.
+   */
+  function focusStillHere() {
+    const shown = form.current
+    if (!shown?.isConnected) return false
+    const active = document.activeElement
+    return !active || active === document.body || shown.contains(active)
+  }
+
   async function save(event: React.FormEvent) {
     event.preventDefault()
     if (!ready) return
@@ -53,7 +70,7 @@ export function KeepInGallery({
     setError(null)
     try {
       const kept = await keep(file, { title: title.trim(), alt: alt.trim() })
-      onKept(kept._id)
+      onKept(kept._id, focusStillHere())
     } catch (caught) {
       setError(
         caught instanceof Error
@@ -78,6 +95,7 @@ export function KeepInGallery({
 
   return (
     <form
+      ref={form}
       onSubmit={save}
       aria-label="Keep the background in the gallery"
       className="w-full space-y-3 rounded-md border border-brand-frosted-steel p-3 dark:border-gray-600"
