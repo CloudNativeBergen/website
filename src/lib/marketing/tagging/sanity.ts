@@ -16,6 +16,9 @@ import {
   type RawMentionRecord,
 } from './records'
 
+/** What the checks read off a speaker: `RawTaggablePerson`. */
+const PERSON_FIELDS = '{ _id, name, links, socialTagOptOut }'
+
 export interface RawTaggablePerson {
   _id: string | null
   name: string | null
@@ -62,7 +65,7 @@ export async function getConferenceTaggablePeople(
   const rows = await scopedFetch<(RawTaggablePerson | null)[] | null>(
     clientReadUncached,
     { conferenceId },
-    `*[_type == "talk" && !(_id in path("drafts.**")) && !(_id in path("versions.**"))].speakers[]->{ _id, name, links, socialTagOptOut }`,
+    `*[_type == "talk" && !(_id in path("drafts.**")) && !(_id in path("versions.**"))].speakers[]->${PERSON_FIELDS}`,
     {},
     { cache: 'no-store' },
   )
@@ -94,8 +97,8 @@ export async function getVariantMentionRecords(
  */
 export const TAG_PEOPLE_PROJECTION = `select(kind == "publishing" && channel == "bluesky" => subject->{
   "people": select(
-    _type == "speaker" && count(*[_type == "talk" && conference._ref == $conferenceId && ^._id in speakers[]._ref]) > 0 => [{ _id, name, links, socialTagOptOut }],
-    _type == "talk" && conference._ref == $conferenceId => speakers[]->{ _id, name, links, socialTagOptOut }
+    _type == "speaker" && count(*[_type == "talk" && conference._ref == $conferenceId && ^._id in speakers[]._ref]) > 0 => [${PERSON_FIELDS}],
+    _type == "talk" && conference._ref == $conferenceId => speakers[]->${PERSON_FIELDS}
   )
 })`
 

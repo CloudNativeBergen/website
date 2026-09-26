@@ -908,7 +908,21 @@ export const TagApprovalRefusedAndFixed: Story = {
 }
 export const TagApprovalRefusedAndFixedMobileDark: Story = {
   ...TagApprovalRefusedAndFixed,
-  play: undefined,
+  // The refused state on a phone: the issue stacks its fix under the text
+  // (TagPanel's narrow branch) instead of beside it.
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(
+      await canvas.findByRole('button', { name: /Approve/ }),
+    )
+    const issue = (
+      await canvas.findByText(/asked not to be tagged in social/)
+    ).closest('li')!
+    await expect(getComputedStyle(issue).flexDirection).toBe('column')
+    await expect(
+      within(issue).getByRole('button', { name: 'Use the plain name' }),
+    ).toBeVisible()
+  },
   parameters: {
     ...TagApprovalRefusedAndFixed.parameters,
     theme: 'dark',

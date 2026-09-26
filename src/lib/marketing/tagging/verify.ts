@@ -21,19 +21,21 @@ import {
 import { resolveBlueskyHandle, type HandleResolution } from './resolve'
 import { getConferenceTaggablePeople, getVariantMentionRecords } from './sanity'
 
-type Resolve = (handle: string) => Promise<HandleResolution>
-
-/** Each handle asked once, all at once. `resolveBlueskyHandle` never throws. */
-export async function resolveHandles(
+/**
+ * Each handle asked once, all at once; `known` answers are not asked again
+ * (a scheduled save's approval check reuses the save's lookups).
+ */
+async function resolveHandles(
   handles: readonly string[],
-  resolve: Resolve = resolveBlueskyHandle,
   known: ReadonlyMap<string, HandleResolution> = new Map(),
 ): Promise<Map<string, HandleResolution>> {
   const out = new Map(known)
   const wanted = [...new Set(handles)].filter((h) => !out.has(h))
   const answers = await Promise.all(
     wanted.map((h) =>
-      resolve(h).catch((): HandleResolution => ({ kind: 'unreachable' })),
+      resolveBlueskyHandle(h).catch((): HandleResolution => ({
+        kind: 'unreachable',
+      })),
     ),
   )
   wanted.forEach((h, i) => out.set(h, answers[i]))
@@ -64,7 +66,6 @@ export async function checkTagsOnSave(input: {
   scheduled: boolean
   /** `ownBlueskyHandle(conference.socialLinks)`: never tagged (spec §4.1). */
   ownAccount: string | null
-  resolve?: Resolve
 }): Promise<TagCheck & { mentions: MentionRecord[] }> {
   const previous = await getVariantMentionRecords(
     input.variantId,
@@ -77,7 +78,6 @@ export async function checkTagsOnSave(input: {
       : []
   let resolutions = await resolveHandles(
     handlesToResolve({ body: input.body, people, previous }),
-    input.resolve,
   )
   const saved = saveMentions({
     body: input.body,
@@ -89,7 +89,6 @@ export async function checkTagsOnSave(input: {
   if (!input.scheduled || saved.issues.length > 0) return saved
   resolutions = await resolveHandles(
     approvalHandlesToResolve({ mentions: saved.mentions, people }),
-    input.resolve,
     resolutions,
   )
   const approval = approvalCheck({
@@ -109,7 +108,6 @@ export async function checkTagsForApproval(input: {
   conferenceId: string
   variantId: string
   body: string
-  resolve?: Resolve
 }): Promise<TagCheck> {
   const mentions = await getVariantMentionRecords(
     input.variantId,
@@ -125,7 +123,6 @@ export async function checkTagsForApproval(input: {
   const people = await getConferenceTaggablePeople(input.conferenceId)
   const resolutions = await resolveHandles(
     approvalHandlesToResolve({ mentions, people }),
-    input.resolve,
   )
   return approvalCheck({ body: input.body, mentions, people, resolutions })
 }
