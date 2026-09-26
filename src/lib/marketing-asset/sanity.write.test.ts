@@ -83,4 +83,64 @@ describe('createMarketingAsset', () => {
     expect(h.created[0]).not.toHaveProperty('audio')
     expect(h.created[0]).not.toHaveProperty('rightsConfirmation')
   })
+
+  it('records a studio save’s tab and the speaker it was opened on, as a weak reference (#1164)', async () => {
+    await createMarketingAsset({
+      orgId: 'org-a',
+      details: {
+        ...DETAILS,
+        alt: 'Speaker card',
+        subject: { type: 'speaker', id: 'sp-ada' },
+      },
+      imageAssetId: 'image-a-1x1-png',
+      studio: { tab: 'speakers' },
+    })
+    expect(h.created[0]).toMatchObject({
+      source: 'studio',
+      subject: { _ref: 'sp-ada', _weak: true },
+      studio: {
+        tab: 'speakers',
+        speaker: { _type: 'reference', _ref: 'sp-ada', _weak: true },
+      },
+    })
+    expect(h.created[0].studio).not.toHaveProperty('sponsor')
+  })
+
+  it('records a sponsor card’s sponsor, and a subjectless tab alone', async () => {
+    await createMarketingAsset({
+      orgId: 'org-a',
+      details: {
+        ...DETAILS,
+        alt: 'Thanks',
+        subject: { type: 'sponsor', id: 'acme' },
+      },
+      imageAssetId: 'image-a-1x1-png',
+      studio: { tab: 'sponsors' },
+    })
+    await createMarketingAsset({
+      orgId: 'org-a',
+      details: { ...DETAILS, alt: 'A meme' },
+      imageAssetId: 'image-b-1x1-png',
+      studio: { tab: 'meme-generator' },
+    })
+    expect(h.created[0].studio).toEqual({
+      tab: 'sponsors',
+      sponsor: { _type: 'reference', _ref: 'acme', _weak: true },
+    })
+    expect(h.created[1]).toMatchObject({
+      source: 'studio',
+      studio: { tab: 'meme-generator' },
+    })
+    expect(h.created[1].studio).toEqual({ tab: 'meme-generator' })
+  })
+
+  it('keeps an upload an upload, with no studio origin', async () => {
+    await createMarketingAsset({
+      orgId: 'org-a',
+      details: { ...DETAILS, alt: 'The logo' },
+      imageAssetId: 'image-a-1x1-png',
+    })
+    expect(h.created[0].source).toBe('upload')
+    expect(h.created[0]).not.toHaveProperty('studio')
+  })
 })

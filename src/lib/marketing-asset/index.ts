@@ -34,6 +34,8 @@ export {
   formatTrackLength,
 } from './audio-type'
 export { MARKETING_ASSET_SUBJECT_TYPES } from './types'
+export { STUDIO_TABS, openInStudioHref, studioTarget } from './studio'
+export type { MarketingAssetStudioOrigin, StudioTab } from './studio'
 export type {
   MarketingAssetDetails,
   MarketingAssetEditionChoice,

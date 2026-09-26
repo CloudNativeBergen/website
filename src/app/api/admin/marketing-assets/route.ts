@@ -27,6 +27,7 @@ import {
 import { abortAfter } from '@/lib/marketing-asset/blob-delete'
 import { createMarketingAsset } from '@/lib/marketing-asset/sanity'
 import { marketingAssetDetailsSchema } from '@/lib/marketing-asset/details'
+import { studioOriginSchema } from '@/lib/marketing-asset/studio'
 import { resolveAssetDetailsForCurrentOrg } from '@/lib/marketing-asset/guard'
 import type { ResolvedMarketingAssetDetails } from '@/lib/marketing-asset/details'
 import {
@@ -49,6 +50,10 @@ const UrlSchema = z.object({
   // An audio track's one confirmation (spec §6). Only `true` confirms.
   rightsConfirmed: z.unknown().optional(),
 })
+
+// "Save to gallery" in the studio (spec §4.2) names the tab it saved from. The
+// speaker or sponsor it was opened on is the subject, checked by the guard.
+const StudioSchema = z.object({ studio: studioOriginSchema.optional() })
 
 type Refusals = Record<MoveRefusal, { status: number; error: string }>
 
@@ -142,6 +147,16 @@ export async function POST(request: Request) {
   // From here a refusal before the move leaves an upload nobody will move:
   // delete it (after the answer) rather than leave it to the sweeper.
   const discard = () => discardBlob(parsedUrl.data.url, orgId)
+  const parsedStudio = StudioSchema.safeParse(body)
+  if (!parsedStudio.success) {
+    discard()
+    return NextResponse.json(
+      { error: 'Those details cannot be saved. Check the studio tab.' },
+      { status: 400 },
+    )
+  }
+  // A track is never a studio render, whatever the body says.
+  const studio = audio ? undefined : parsedStudio.data.studio
   if (!audio && !parsed.data.alt) {
     discard()
     return NextResponse.json({ error: kind.missing }, { status: 400 })
@@ -209,6 +224,7 @@ export async function POST(request: Request) {
             ...(moved.asset.created
               ? { createdImageAssetId: moved.asset._id }
               : {}),
+            ...(studio ? { studio } : {}),
           },
       { signal: writeDeadline.signal },
     )

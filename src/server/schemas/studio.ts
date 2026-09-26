@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { STUDIO_TABS } from '@/lib/marketing-asset/studio'
 import { LiveDocumentIdSchema } from './social'
 
 // These select cards from the server's org-scoped data; they do not scope queries.
@@ -10,14 +11,5 @@ export const StudioSearchParamsSchema = z.object({
   task: StudioDocumentIdSchema,
   speaker: StudioDocumentIdSchema,
   sponsor: StudioDocumentIdSchema,
-  tab: z
-    .enum([
-      'meme-generator',
-      'conference',
-      'photo-gallery',
-      'speakers',
-      'sponsors',
-    ])
-    .optional()
-    .catch(undefined),
+  tab: z.enum(STUDIO_TABS).optional().catch(undefined),
 })

@@ -74,6 +74,7 @@ const row = (
   audioUrl: null,
   durationSeconds: null,
   rights: null,
+  studio: null,
   ...fields,
 })
 

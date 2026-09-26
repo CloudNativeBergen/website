@@ -1,3 +1,5 @@
+import type { MarketingAssetStudioOrigin } from './studio'
+
 /** What an asset can be about (spec §3): a speaker, a talk or a sponsor. */
 export const MARKETING_ASSET_SUBJECT_TYPES = [
   'speaker',
@@ -54,6 +56,8 @@ export interface MarketingAssetRow {
   audioUrl: string | null
   durationSeconds: number | null
   rights: MarketingAssetRights | null
+  /** Which studio tab and subject made it; null for anything uploaded. */
+  studio: MarketingAssetStudioOrigin | null
 }
 
 /** Which assets the gallery shows. Every field narrows; none widens. */

@@ -440,3 +440,48 @@ describe('an audio track through the move route (#1178)', () => {
     expect(h.discard).not.toHaveBeenCalled()
   })
 })
+
+describe('a studio save through the move route (#1164)', () => {
+  it('records which tab made it, with the subject the guard proved', async () => {
+    const body = {
+      ...VALID,
+      edition: 'current',
+      subject: { type: 'speaker', id: 'sp-ada' },
+      studio: { tab: 'speakers', speaker: 'sp-someone-else' },
+    }
+    expect((await POST(request(body))).status).toBe(200)
+    const input = h.create.mock.calls[0][0]
+    // Only the tab: the speaker is the subject, never a second client id.
+    expect(input.studio).toEqual({ tab: 'speakers' })
+    expect(input.details.subject).toEqual({ type: 'speaker', id: 'sp-ada' })
+    expect(h.guard).toHaveBeenCalledTimes(1)
+  })
+
+  it('is an upload when no studio is named', async () => {
+    expect((await POST(request(VALID))).status).toBe(200)
+    expect(h.create.mock.calls[0][0]).not.toHaveProperty('studio')
+  })
+
+  it.each([
+    ['an unknown tab', { tab: 'video' }],
+    ['no tab', {}],
+    ['not an object', 'speakers'],
+  ])('refuses %s, and discards the upload', async (_, studio) => {
+    expect((await POST(request({ ...VALID, studio }))).status).toBe(400)
+    expect(h.move).not.toHaveBeenCalled()
+    expect(h.create).not.toHaveBeenCalled()
+    expect(h.discard).toHaveBeenCalledWith(URL_OK, 'org-A')
+  })
+
+  it('never marks an audio track as a studio save', async () => {
+    const body = {
+      url: 'https://abc.public.blob.vercel-storage.com/marketing-asset/org-A/1790000000000-theme-X1.mp3',
+      title: 'Theme',
+      kind: 'audio',
+      rightsConfirmed: true,
+      studio: { tab: 'meme-generator' },
+    }
+    expect((await POST(request(body))).status).toBe(200)
+    expect(h.create.mock.calls[0][0]).not.toHaveProperty('studio')
+  })
+})

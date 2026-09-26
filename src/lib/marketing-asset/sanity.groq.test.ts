@@ -452,3 +452,43 @@ describe('audio tracks (#1178)', () => {
     expect(await readMarketingAssetMedia('org-a', 'b-theme')).toBeNull()
   })
 })
+
+describe('a studio save’s origin (#1164)', () => {
+  beforeEach(() => {
+    h.dataset = [
+      asset('card', 'org-a', {
+        source: 'studio',
+        studio: { tab: 'speakers', speaker: weak('sp-ada') },
+        subject: weak('sp-ada'),
+      }),
+      asset('thanks', 'org-a', {
+        source: 'studio',
+        studio: { tab: 'sponsors', sponsor: weak('acme') },
+      }),
+      asset('meme', 'org-a', {
+        source: 'studio',
+        studio: { tab: 'meme-generator' },
+      }),
+      asset('upload', 'org-a', { source: 'upload' }),
+      // An upload carrying a stray studio object is still an upload.
+      asset('odd', 'org-a', {
+        source: 'upload',
+        studio: { tab: 'speakers', speaker: weak('sp-ada') },
+      }),
+      asset('old', 'org-a'),
+    ]
+  })
+
+  it('carries the tab and the speaker or sponsor, and nothing for an upload', async () => {
+    const rows = await listMarketingAssets('org-a', 'conf-a-2026', {})
+    const studio = Object.fromEntries(rows.map((row) => [row._id, row.studio]))
+    expect(studio).toEqual({
+      card: { tab: 'speakers', speakerId: 'sp-ada', sponsorId: null },
+      thanks: { tab: 'sponsors', speakerId: null, sponsorId: 'acme' },
+      meme: { tab: 'meme-generator', speakerId: null, sponsorId: null },
+      upload: null,
+      odd: null,
+      old: null,
+    })
+  })
+})

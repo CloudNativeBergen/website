@@ -3,6 +3,7 @@ import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
 import { scopedFetch } from '@/lib/sanity/scoped'
 import { isSoftOnSocial } from './image-type'
 import type { ResolvedMarketingAssetDetails } from './details'
+import { studioTarget, type StudioOriginInput } from './studio'
 import type {
   MarketingAssetFacets,
   MarketingAssetKind,
@@ -40,6 +41,11 @@ const ROW_PROJECTION = `{
   "createdAt": _createdAt,
   "audioUrl": audio.asset->url,
   "durationSeconds": durationSeconds,
+  "studio": select(source == "studio" && defined(studio.tab) => {
+    "tab": studio.tab,
+    "speakerId": coalesce(studio.speaker._ref, null),
+    "sponsorId": coalesce(studio.sponsor._ref, null)
+  }, null),
   "rights": select(defined(rightsConfirmation.confirmedAt) => {
     "confirmedBy": rightsConfirmation.confirmedBy->name,
     "confirmedAt": rightsConfirmation.confirmedAt
@@ -269,6 +275,8 @@ export type NewMarketingAsset = {
        * back one it already held (identical bytes, possibly another tenant's).
        */
       createdImageAssetId?: string
+      /** Set when "Save to gallery" in the studio made it (spec §4.2). */
+      studio?: StudioOriginInput
     }
   | {
       kind: 'audio'
@@ -321,17 +329,44 @@ export async function createMarketingAsset(
             ? { createdImageAssetId: input.createdImageAssetId }
             : {}),
         }
+  const studio = input.kind === 'audio' ? undefined : input.studio
   const created = await clientWrite.create(
     {
       _type: 'marketingAsset',
       organization: { _type: 'reference', _ref: input.orgId },
-      source: 'upload',
+      source: studio ? 'studio' : 'upload',
+      ...(studio ? { studio: studioOrigin(studio, input.details) } : {}),
       ...set,
       ...media,
     },
     { signal: options.signal },
   )
   return { _id: created._id }
+}
+
+/**
+ * A studio save's origin as stored: the tab, and the speaker or sponsor it was
+ * opened on — taken from the subject the caller has already proven this
+ * organization's, never from a second id. Weak, like the subject, so the
+ * person or sponsor can still be merged or deleted.
+ */
+function studioOrigin(
+  studio: StudioOriginInput,
+  details: ResolvedMarketingAssetDetails,
+): Record<string, unknown> {
+  const target = studioTarget(studio.tab, details.subject)
+  return {
+    tab: studio.tab,
+    ...(target
+      ? {
+          [target.type]: {
+            _type: 'reference',
+            _ref: target.id,
+            _weak: true,
+          },
+        }
+      : {}),
+  }
 }
 
 /**
