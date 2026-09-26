@@ -166,7 +166,7 @@ function PersonRow({
   onUntag: (handle: string) => void
 }) {
   const tagged = taggedAs !== null
-  const nameInBody = nameIndex(body, person.name) >= 0
+  const nameInBody = nameIndex(body, person.name, person.handle) >= 0
   let status: { text: string; tone: 'muted' | 'warn' | 'error' } | null = null
   if (person.optedOut)
     status = { text: 'Asked not to be tagged', tone: 'muted' }

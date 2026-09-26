@@ -116,10 +116,13 @@ export function tagName(
   person: { name: string; handle: string | null },
 ): string | null {
   if (!person.handle) return null
-  const at = nameIndex(body, person.name)
+  const at = nameIndex(body, person.name, person.handle)
   if (at < 0) return null
-  return `${body.slice(0, at)}@${person.handle}${body.slice(at + person.name.length)}`
+  return swapAt(body, at, person.name, person.handle)
 }
+
+const swapAt = (body: string, at: number, name: string, handle: string) =>
+  `${body.slice(0, at)}@${handle}${body.slice(at + name.length)}`
 
 /**
  * Where the name stands as a whole word the adapter would detect a tag at,
@@ -127,7 +130,11 @@ export function tagName(
  * "Annika" or "x.dev/Ann"), and not after a quote or a dash, where
  * `@handle` would stay plain text.
  */
-export function nameIndex(body: string, name: string): number {
+export function nameIndex(
+  body: string,
+  name: string,
+  handle: string | null = null,
+): number {
   if (!name) return -1
   for (let at = body.indexOf(name); at >= 0; at = body.indexOf(name, at + 1)) {
     const before = body[at - 1]
@@ -135,7 +142,18 @@ export function nameIndex(body: string, name: string): number {
     // Only where a tag would be detected: after a space, a "(" or at the start.
     const startsTag = before === undefined || /[\s(]/.test(before)
     const endsWord = after === undefined || !/[\p{L}\p{N}_]/u.test(after)
-    if (startsTag && endsWord) return at
+    if (!startsTag || !endsWord) continue
+    // With the handle known: only where the swap reads back as exactly that
+    // tag ("Alice-led" would become "@alice.dev-led", another handle).
+    if (handle) {
+      const wanted = normaliseHandle(handle)
+      const swapped = swapAt(body, at, name, handle)
+      const ok = mentionTokens(swapped).some(
+        (t) => t.start === at && t.handle === wanted,
+      )
+      if (!ok) continue
+    }
+    return at
   }
   return -1
 }

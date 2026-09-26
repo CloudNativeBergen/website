@@ -102,6 +102,13 @@ describe('tag button text edits', () => {
     expect(tagName('Annika only', ann)).toBeNull()
   })
 
+  it('tagName never glues the handle to a following word', () => {
+    expect(tagName('An Alice Anderson-led workshop.', alice)).toBeNull()
+    expect(
+      tagName('An Alice Anderson-led workshop, with Alice Anderson.', alice),
+    ).toBe('An Alice Anderson-led workshop, with @alice.dev.')
+  })
+
   it('tagName returns null when the name is not in the body', () => {
     expect(tagName('Someone talks.', alice)).toBeNull()
   })
