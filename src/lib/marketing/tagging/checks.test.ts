@@ -312,6 +312,21 @@ describe('saveMentions (§4.3 rebuilt on every save, §4.4 Save)', () => {
     expect(out.issues[0].message).toContain('481')
   })
 
+  it('refuses a plain form over the 3,000-byte cap, though under 300 characters', () => {
+    const family = '👨‍👩‍👧‍👦' // one grapheme, 25 bytes
+    const wide = { ...alice, name: family.repeat(120) }
+    const out = saveMentions({
+      body: '@alice.dev x',
+      people: [wide],
+      previous: [tagged(wide, DID_A)],
+      resolutions: new Map(),
+    })
+    expect(out.issues).toEqual([
+      expect.objectContaining({ code: 'plain-too-long', mentionKey: null }),
+    ])
+    expect(out.issues[0].message).toContain('3002 bytes')
+  })
+
   it('a body that fits both ways saves', () => {
     const out = saveMentions({
       body: `${'x'.repeat(270)} @alice.dev`,

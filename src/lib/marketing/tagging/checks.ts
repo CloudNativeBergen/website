@@ -16,6 +16,9 @@ import {
 } from './body'
 import type { HandleResolution } from './resolve'
 
+/** Bluesky's byte cap on a post's text (`PLATFORM_CONSTRAINTS.bluesky.maxBytes`). */
+export const BLUESKY_MAX_BYTES = 3000
+
 /**
  * `@atproto/api`'s `MENTION_REGEX` (what the adapter's facet detection runs),
  * WITHOUT its TLD filter: a superset, so every handle the adapter could turn
@@ -432,14 +435,22 @@ function plainLengthIssue(
   mentions: readonly MentionRecord[],
 ): TagIssue | null {
   if (!mentions.some((m) => m.status === 'tagged')) return null
-  const plain = countGraphemes(plainBody(body, mentions))
-  if (plain <= BLUESKY_MAX_GRAPHEMES) return null
+  const text = plainBody(body, mentions)
+  const plain = countGraphemes(text)
+  const bytes = new TextEncoder().encode(text).length
+  const over =
+    plain > BLUESKY_MAX_GRAPHEMES
+      ? `${plain} characters; Bluesky allows ${BLUESKY_MAX_GRAPHEMES}`
+      : bytes > BLUESKY_MAX_BYTES
+        ? `${bytes} bytes; Bluesky allows ${BLUESKY_MAX_BYTES}`
+        : null
+  if (!over) return null
   return {
     code: 'plain-too-long',
     mentionKey: null,
     handle: null,
     name: null,
-    message: `With every tag replaced by its name the post is ${plain} characters; Bluesky allows ${BLUESKY_MAX_GRAPHEMES}. A tag may be swapped for the name at publish, so shorten the post until it fits both ways.`,
+    message: `With every tag replaced by its name the post is ${over}. A tag may be swapped for the name at publish, so shorten the post until it fits both ways.`,
   }
 }
 
