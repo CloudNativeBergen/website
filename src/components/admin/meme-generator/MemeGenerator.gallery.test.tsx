@@ -293,12 +293,27 @@ describe('keeping, by keyboard', () => {
     fireEvent.change(screen.getByLabelText('Alt text'), {
       target: { value: 'An empty stage' },
     })
+    // Where focus is the moment the result lands — not a frame later, when a
+    // slow machine may already be reading the page.
+    const region = screen.getByTestId('background-gallery-status')
+    let focusedOnArrival: Element | null = null
+    const observer = new MutationObserver(() => {
+      if (region.textContent === 'In the gallery.' && !focusedOnArrival)
+        focusedOnArrival = document.activeElement
+    })
+    observer.observe(region, {
+      childList: true,
+      characterData: true,
+      subtree: true,
+    })
     // Enter in a field submits the form.
     fireEvent.submit(
       screen.getByRole('form', { name: 'Keep the background in the gallery' }),
     )
     const status = screen.getByTestId('background-gallery-status')
     await waitFor(() => expect(status).toHaveTextContent('In the gallery.'))
+    observer.disconnect()
+    expect(focusedOnArrival).toBe(status)
     expect(document.activeElement).toBe(status)
   })
 

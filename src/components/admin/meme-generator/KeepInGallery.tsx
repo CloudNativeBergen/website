@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useId, useRef, useState } from 'react'
+import { useId, useLayoutEffect, useRef, useState } from 'react'
 import { ArchiveBoxArrowDownIcon } from '@heroicons/react/24/outline'
 import { AdminButton } from '@/components/admin/AdminButton'
 import { styles } from './meme-generator-config'
@@ -35,7 +35,7 @@ export function KeepInGallery({
   const titleInput = useRef<HTMLInputElement>(null)
   const keepButton = useRef<HTMLButtonElement>(null)
   const focusNext = useRef<'title' | 'keep' | null>(null)
-  useEffect(() => {
+  useLayoutEffect(() => {
     const target = focusNext.current
     focusNext.current = null
     if (target === 'title') titleInput.current?.focus()

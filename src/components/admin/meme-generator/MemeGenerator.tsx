@@ -578,7 +578,8 @@ export function MemeGenerator({
   // After a keep the form is gone; focus moves to the status that says so.
   const galleryStatus = useRef<HTMLParagraphElement>(null)
   const focusGalleryStatus = useRef(false)
-  useEffect(() => {
+  // In the commit that shows the result, never a frame after it.
+  useLayoutEffect(() => {
     if (!focusGalleryStatus.current) return
     focusGalleryStatus.current = false
     galleryStatus.current?.focus()
