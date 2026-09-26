@@ -26,6 +26,8 @@ export const MARKETING_ASSET_AUDIO_SIZE_REFUSAL = `The track is larger than ${MA
 export const MARKETING_ASSET_AUDIO_LENGTH_REFUSAL = `The track is longer than ${MARKETING_ASSET_MAX_AUDIO_SECONDS / 60} minutes.`
 export const MARKETING_ASSET_AUDIO_UNREADABLE_REFUSAL =
   'The track’s length could not be read. Export it again as MP3, M4A or WAV and retry.'
+export const MARKETING_ASSET_WAV_FORMAT_REFUSAL =
+  'This WAV cannot be used. Export it again as PCM or 32-bit float WAV and retry.'
 export const MARKETING_ASSET_RIGHTS_REFUSAL =
   'Confirm that you have the right to use this track in social posts.'
 
@@ -36,6 +38,7 @@ export const MARKETING_ASSET_RIGHTS_STATEMENT =
 const EXTENSION_TYPES: Record<string, MarketingAssetAudioType> = {
   mp3: 'audio/mpeg',
   m4a: 'audio/mp4',
+  m4b: 'audio/mp4',
   wav: 'audio/wav',
 }
 
@@ -45,6 +48,7 @@ const BROWSER_TYPES: Record<string, MarketingAssetAudioType> = {
   'audio/mp4': 'audio/mp4',
   'audio/x-m4a': 'audio/mp4',
   'audio/m4a': 'audio/mp4',
+  'audio/x-m4b': 'audio/mp4',
   'audio/wav': 'audio/wav',
   'audio/x-wav': 'audio/wav',
   'audio/wave': 'audio/wav',

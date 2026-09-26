@@ -16,6 +16,7 @@ import {
   MARKETING_ASSET_AUDIO_TYPE_REFUSAL,
   MARKETING_ASSET_AUDIO_UNREADABLE_REFUSAL,
   MARKETING_ASSET_RIGHTS_REFUSAL,
+  MARKETING_ASSET_WAV_FORMAT_REFUSAL,
 } from '@/lib/marketing-asset/audio-type'
 import {
   discardBlob,
@@ -59,6 +60,7 @@ const REFUSALS: Refusals = {
   // An image has no length; only the audio move refuses these.
   length: { status: 400, error: MARKETING_ASSET_SIZE_REFUSAL },
   unreadable: { status: 400, error: MARKETING_ASSET_TYPE_REFUSAL },
+  'wav-format': { status: 400, error: MARKETING_ASSET_TYPE_REFUSAL },
   fetch: { status: 502, error: 'The upload could not be read. Try again.' },
   upload: { status: 502, error: 'The image could not be stored. Try again.' },
 }
@@ -69,6 +71,7 @@ const AUDIO_REFUSALS: Refusals = {
   size: { status: 400, error: MARKETING_ASSET_AUDIO_SIZE_REFUSAL },
   length: { status: 400, error: MARKETING_ASSET_AUDIO_LENGTH_REFUSAL },
   unreadable: { status: 400, error: MARKETING_ASSET_AUDIO_UNREADABLE_REFUSAL },
+  'wav-format': { status: 400, error: MARKETING_ASSET_WAV_FORMAT_REFUSAL },
   upload: { status: 502, error: 'The track could not be stored. Try again.' },
 }
 

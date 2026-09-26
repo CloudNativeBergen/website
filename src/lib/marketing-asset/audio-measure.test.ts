@@ -11,7 +11,26 @@ import {
   alawWav,
   behindId3,
   flacTone,
+  apeFooterClaiming,
   apeTag,
+  floatWavWithBits,
+  id3NotSyncsafe,
+  lame44k128kCbr,
+  layer2Mp2,
+  eightBitSyncFrames,
+  layer2At32k,
+  m4aNoEsds,
+  m4aTenthDeltas,
+  wavWithTruncatedChunk,
+  m4aHeAac,
+  m4aTimescaleTimesTen,
+  m4aWithChapters,
+  undersoldWav,
+  wavF32,
+  wavF32Extensible51,
+  wavF64,
+  wavStreamed,
+  wavWithChunkAfterData,
   fmtClaiming,
   m4aSampleCountMismatch,
   m4aTruncated,
@@ -159,18 +178,53 @@ describe('measureAudio', () => {
       ).toEqual({ refused: 'type' })
     })
 
-    it('does not count the tags at either end against the budget', async () => {
+    it('does not count an ID3v2 (with footer) or ID3v1 tag against the budget', async () => {
       // With the gap using all but 5 bytes of the budget, a tag counted as
       // unaccounted bytes would refuse the file.
       const gap = Buffer.alloc(MAX_UNACCOUNTED_BYTES - 144 - 5, 0x20)
       const body = Buffer.concat([mp3OfSeconds(2), gap, mp3OfSeconds(2)])
       for (const [label, bytes] of [
         ['ID3v1', Buffer.concat([body, id3v1Tag()])],
-        ['APEv2 with a header', Buffer.concat([body, apeTag(5000)])],
-        ['APEv2 then ID3v1', Buffer.concat([body, apeTag(5000), id3v1Tag()])],
         ['ID3v2 with a footer', Buffer.concat([id3WithFooter(64), body])],
       ] as const)
         expect(await measure(bytes), label).toBeCloseTo(4, 0)
+    })
+
+    it('takes a small APEv2 tag as unaccounted bytes', async () => {
+      expect(await measure(Buffer.concat([lameCbr(), apeTag()]))).toBeCloseTo(
+        2,
+        0,
+      )
+    })
+
+    it('never lets an APEv2 footer’s size hide frames', async () => {
+      // Round 3: a footer claiming the whole file as its tag.
+      const frames = mp3OfSeconds(660)
+      const bytes = Buffer.concat([frames, apeFooterClaiming(frames.length)])
+      expect(await measure(bytes)).toBeGreaterThan(600)
+    })
+
+    it('refuses an ID3v2 tag whose size is not syncsafe', async () => {
+      // Round 3: bit 7 set in a size byte, which masking would shrink.
+      // Read unmasked, the size would swallow the first 16 KB of frames.
+      expect(await measureAudio(id3NotSyncsafe(mp3OfSeconds(10)))).toEqual({
+        refused: 'type',
+      })
+    })
+
+    it('takes real LAME 44.1 kHz 128 kbit/s CBR, with its padded frames', async () => {
+      expect(await measure(lame44k128kCbr())).toBeCloseTo(2, 0)
+    })
+
+    it.each([
+      ['MPEG Layer II (MP2)', layer2Mp2()],
+      // At 32 kbit/s a Layer II frame is the same size as a Layer III one,
+      // so only the layer bits tell them apart.
+      // Behind an ID3 tag, so the sniff's own first-frame check is passed.
+      ['MPEG Layer II at 32 kbit/s', behindId3(layer2At32k())],
+      ['frames with only an 8-bit sync', behindId3(eightBitSyncFrames())],
+    ])('refuses %s', async (_, bytes) => {
+      expect(await measureAudio(bytes)).toEqual({ refused: 'type' })
     })
 
     it('holds to ONE stream: frames of another after a gap are unaccounted', async () => {
@@ -209,12 +263,26 @@ describe('measureAudio', () => {
     })
   })
 
-  describe('WAV: one fmt, then one data, by the bytes present', () => {
-    it('measures by the bytes held, not a data chunk that undersells them', async () => {
-      const wav = wavOfSeconds(30)
-      wav.writeUInt32LE(8000, 40)
-      wav.writeUInt32LE(36 + 8000, 4)
-      expect(await measure(wav)).toBeGreaterThan(29)
+  describe('WAV: chunks that tile the file, and only data is audio', () => {
+    it.each([
+      ['32-bit float', wavF32(), 1],
+      ['64-bit float', wavF64(), 1],
+      ['5.1 float (EXTENSIBLE)', wavF32Extensible51(), 0.25],
+    ])('takes a real ffmpeg %s WAV', async (_, bytes, seconds) => {
+      expect(await measureAudio(bytes)).toMatchObject({ type: 'audio/wav' })
+      expect(await measure(bytes)).toBeCloseTo(seconds, 2)
+    })
+
+    it('never counts a chunk after the data as audio', async () => {
+      // Round 3: a megabyte of `id3 ` after one second of samples.
+      expect(await measure(wavWithChunkAfterData(1, 1024 * 1024))).toBeCloseTo(
+        1,
+        2,
+      )
+    })
+
+    it('counts a streamed WAV (data size 0xFFFFFFFF) to the end of the file', async () => {
+      expect(await measure(wavStreamed(2))).toBeCloseTo(2, 2)
     })
 
     it('never uses the header’s byte rate (nAvgBytesPerSec)', async () => {
@@ -226,7 +294,21 @@ describe('measureAudio', () => {
     it.each([
       ['an A-law WAV', alawWav()],
       ['a WAV header and nothing else', Buffer.from('RIFF0000WAVEgarbage')],
-      // Round 2, finding 3: a second fmt re-describing the data after it.
+      // The data chunk claims one second; thirty seconds of samples follow
+      // and do not tile as chunks.
+      ['a data chunk that undersells the samples after it', undersoldWav()],
+      [
+        'bytes after the last chunk',
+        Buffer.concat([wavOfSeconds(1), Buffer.from([0x01])]),
+      ],
+      [
+        'a chunk id that is not text',
+        wavFromChunks([
+          ['fmt ', pcmFmt()],
+          ['\x01\x02\x03\x04', Buffer.alloc(4)],
+          ['data', Buffer.alloc(800, 0x80)],
+        ]),
+      ],
       [
         'a second fmt chunk',
         wavFromChunks([
@@ -250,7 +332,6 @@ describe('measureAudio', () => {
           ['fmt ', pcmFmt()],
         ]),
       ],
-      // Followed by a chunk whose id would be read as 16 bits per sample.
       [
         'a fmt shorter than 16 bytes',
         wavFromChunks([
@@ -259,26 +340,33 @@ describe('measureAudio', () => {
           ['data', Buffer.alloc(800, 0x80)],
         ]),
       ],
-      // Its 16 bytes all there, but it claims 18: the file stops short.
       ['a fmt claiming more than the file holds', fmtClaiming(18)],
       [
         'a WAV cut off inside its fmt',
         wavFromChunks([['fmt ', pcmFmt()]]).subarray(0, 30),
       ],
-    ])('refuses %s as the wrong type, without throwing', async (_, bytes) => {
-      expect(await measureAudio(bytes)).toEqual({ refused: 'type' })
+      ['16-bit float', floatWavWithBits(16)],
+      [
+        'a chunk after the data cut off by the end of the file',
+        wavWithTruncatedChunk(),
+      ],
+    ])('refuses %s with the WAV message', async (_, bytes) => {
+      expect(await measureAudio(bytes)).toEqual({ refused: 'wav-format' })
     })
 
     it.each([
       ['12 bits per sample', 34, 12],
       ['no channels', 22, 0],
       ['a sample rate of 0', 24, 0],
-    ])('refuses a PCM WAV with %s as the wrong type', async (_, at, value) => {
-      const wav = wavOfSeconds(1)
-      if (at === 24) wav.writeUInt32LE(value, at)
-      else wav.writeUInt16LE(value, at)
-      expect(await measureAudio(wav)).toEqual({ refused: 'type' })
-    })
+    ])(
+      'refuses a PCM WAV with %s with the WAV message',
+      async (_, at, value) => {
+        const wav = wavOfSeconds(1)
+        if (at === 24) wav.writeUInt32LE(value, at)
+        else wav.writeUInt16LE(value, at)
+        expect(await measureAudio(wav)).toEqual({ refused: 'wav-format' })
+      },
+    )
 
     it('refuses a WAV with a format and no data as unreadable', async () => {
       expect(await measureAudio(wavOfSeconds(1).subarray(0, 36))).toEqual({
@@ -286,11 +374,14 @@ describe('measureAudio', () => {
       })
     })
 
-    it('refuses an EXTENSIBLE WAV whose sub-format is not PCM', async () => {
+    it.each([
+      ['ADPCM (code 2)', 2, 0],
+      ['a code-1 GUID with a wrong tail', 1, 9],
+    ])('refuses an EXTENSIBLE WAV with %s', async (_, code, spoil) => {
       const wav = Buffer.from(wav24BitStereo())
-      // The GUID's first byte: 3 is IEEE float.
-      wav.writeUInt8(3, 20 + 24)
-      expect(await measureAudio(wav)).toEqual({ refused: 'type' })
+      wav.writeUInt8(code, 20 + 24)
+      if (spoil) wav.writeUInt8(0xee, 20 + 24 + spoil)
+      expect(await measureAudio(wav)).toEqual({ refused: 'wav-format' })
     })
   })
 
@@ -299,6 +390,7 @@ describe('measureAudio', () => {
       ['ffmpeg', m4aTone()],
       ['ffmpeg with faststart', faststartM4a()],
       ['Apple afconvert', appleM4a()],
+      ['ffmpeg with chapters (a text track)', m4aWithChapters()],
     ])('takes real encoder output: %s', async (_, bytes) => {
       expect(await measure(bytes)).toBeCloseTo(1, 0)
     })
@@ -317,6 +409,14 @@ describe('measureAudio', () => {
       ['a file cut off inside its media data', m4aTruncated()],
       // Would otherwise read as infinitely long, not as malformed.
       ['a media timescale of 0', m4aZeroTimescale()],
+      // Round 3: clock ×10 with the header to match plays ten times longer.
+      ['a media clock that is not the decoder’s rate', m4aTimescaleTimesTen()],
+      ['HE-AAC', m4aHeAac()],
+      [
+        'stts deltas and header a tenth of what the frames play',
+        m4aTenthDeltas(),
+      ],
+      ['no AAC decoder config (esds)', m4aNoEsds()],
       [
         'a file whose boxes run past its end',
         Buffer.from('\0\0\0\x10ftypM4A \0\0'),
@@ -341,6 +441,8 @@ describe('audioTypeForFile', () => {
     [{ name: 'a.m4a', type: 'audio/x-m4a' }, 'audio/mp4'],
     [{ name: 'a.wav', type: 'audio/x-wav' }, 'audio/wav'],
     [{ name: 'a.wav', type: '' }, 'audio/wav'],
+    [{ name: 'book.m4b', type: '' }, 'audio/mp4'],
+    [{ name: 'book.m4b', type: 'audio/x-m4b' }, 'audio/mp4'],
     [{ name: 'a.flac', type: 'audio/flac' }, null],
     [{ name: 'a.mp3', type: 'image/png' }, null],
   ])('%o → %s', (file, type) => {

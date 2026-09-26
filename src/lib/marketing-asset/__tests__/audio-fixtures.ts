@@ -307,3 +307,123 @@ export function m4aZeroTimescale(): Buffer {
   bytes.writeUInt32BE(0, bytes.indexOf('mdhd') + 4 + 12)
   return bytes
 }
+
+export const lame44k128kCbr = () => fixture('lame-44k-128k-cbr.mp3')
+export const layer2Mp2 = () => fixture('layer2.mp2')
+export const m4aWithChapters = () => fixture('with-chapters.m4a')
+export const wavF32 = () => fixture('tone-f32.wav')
+export const wavF64 = () => fixture('tone-f64.wav')
+export const wavF32Extensible51 = () => fixture('tone-f32-5.1.wav')
+
+/** An ID3v2.3 tag of `size` bytes whose size field has bit 7 set somewhere. */
+export function id3NotSyncsafe(body: Buffer): Buffer {
+  const header = Buffer.from([0x49, 0x44, 0x33, 3, 0, 0, 0, 0, 0x80, 0x00])
+  return Buffer.concat([header, body])
+}
+
+/** An APEv2 footer whose size claims `size` bytes of tag before it. */
+export function apeFooterClaiming(size: number): Buffer {
+  const b = Buffer.alloc(32)
+  b.write('APETAGEX', 0)
+  b.writeUInt32LE(2000, 8)
+  b.writeUInt32LE(size, 12)
+  return b
+}
+
+/**
+ * The M4A tone with its media clock ×10 and nothing else changed: header,
+ * sample table and deltas agree with each other, and a reading by timescale
+ * makes it a tenth as long as it plays (the round-3 repro: 180 s for 1800).
+ */
+export function m4aTimescaleTimesTen(): Buffer {
+  const bytes = Buffer.from(m4aTone())
+  const mdhd = bytes.indexOf('mdhd') + 4
+  bytes.writeUInt32BE(bytes.readUInt32BE(mdhd + 12) * 10, mdhd + 12)
+  return bytes
+}
+
+/** The M4A tone whose AAC config says HE-AAC (audio object type 5). */
+export function m4aHeAac(): Buffer {
+  const bytes = Buffer.from(m4aTone())
+  // AudioSpecificConfig follows the DecoderSpecificInfo tag 0x05 in esds.
+  const esds = bytes.indexOf('esds')
+  let at = bytes.indexOf(0x05, esds + 8 + 5 + 13)
+  while (bytes[++at] & 0x80);
+  at++
+  bytes[at] = (5 << 3) | (bytes[at] & 0x07)
+  return bytes
+}
+
+/**
+ * The M4A tone with every `stts` delta and the header duration ÷10: timed as
+ * a tenth of what its 1024-sample frames play.
+ */
+export function m4aTenthDeltas(): Buffer {
+  const bytes = Buffer.from(m4aTone())
+  const stts = bytes.indexOf('stts') + 4
+  const entries = bytes.readUInt32BE(stts + 4)
+  for (let i = 0; i < entries; i++) {
+    const at = stts + 12 + i * 8
+    bytes.writeUInt32BE(Math.floor(bytes.readUInt32BE(at) / 10), at)
+  }
+  const mdhd = bytes.indexOf('mdhd') + 4
+  bytes.writeUInt32BE(Math.floor(bytes.readUInt32BE(mdhd + 16) / 10), mdhd + 16)
+  return bytes
+}
+
+/** The M4A tone with its `esds` renamed away: no AAC decoder config. */
+export function m4aNoEsds(): Buffer {
+  const bytes = Buffer.from(m4aTone())
+  bytes.write('free', bytes.indexOf('esds'))
+  return bytes
+}
+
+/**
+ * 1 MB of 144-byte "frames" whose header has the Layer III and MPEG-1 bits
+ * but only an 8-bit sync (`FF 1B`): not MPEG audio at all.
+ */
+export function eightBitSyncFrames(): Buffer {
+  const frame = Buffer.alloc(144)
+  frame.set([0xff, 0x1b, 0x18, 0xc0])
+  return Buffer.concat(Array<Buffer>(7282).fill(frame))
+}
+
+/** A PCM WAV followed by a LIST chunk claiming more than the file holds. */
+export function wavWithTruncatedChunk(): Buffer {
+  const head = Buffer.alloc(8)
+  head.write('LIST', 0)
+  head.writeUInt32LE(1000, 4)
+  return Buffer.concat([wavOfSeconds(1), head, Buffer.alloc(10)])
+}
+
+/** A PCM WAV of `seconds` with a chunk of `extra` bytes after its data. */
+export function wavWithChunkAfterData(seconds: number, extra: number): Buffer {
+  return wavFromChunks([
+    ['fmt ', pcmFmt()],
+    ['data', Buffer.alloc(Math.round(seconds * 8000), 0x80)],
+    ['id3 ', Buffer.alloc(extra, 0x41)],
+  ])
+}
+
+/** A PCM WAV whose data size is 0xFFFFFFFF, as a streamed file writes. */
+export function wavStreamed(seconds: number): Buffer {
+  const wav = wavOfSeconds(seconds)
+  wav.writeUInt32LE(0xffffffff, 40)
+  return wav
+}
+
+/** A PCM WAV whose data chunk claims one second over thirty of samples. */
+export function undersoldWav(): Buffer {
+  const wav = wavOfSeconds(30)
+  wav.writeUInt32LE(8000, 40)
+  wav.writeUInt32LE(36 + 8000, 4)
+  return wav
+}
+
+/** The 32-bit float WAV relabelled as `bits` bits per sample. */
+export function floatWavWithBits(bits: number): Buffer {
+  const wav = Buffer.from(wavF32())
+  wav.writeUInt16LE(bits, 34)
+  return wav
+}
+export const layer2At32k = () => fixture('layer2-32k.mp2')

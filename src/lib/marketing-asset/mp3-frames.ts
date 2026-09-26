@@ -11,10 +11,10 @@
  *     next at exactly its computed length — the way a decoder walks — the
  *     last ending at the trailer, all of ONE stream (the version and sample
  *     rate of the first; a frame of another is unaccounted)
- *   + [APEv2 tag] + [ID3v1 tag]
+ *   + [ID3v1 tag]
  *
  * with at most {@link MAX_UNACCOUNTED_BYTES} not accounted for (a partial last
- * frame, a Lyrics3 tag, encoder padding). A header whose successor does not
+ * frame, an APEv2 or Lyrics3 tag, encoder padding). A header whose successor does not
  * follow is not a frame. The length is the chain's frames × samples per frame
  * ÷ sample rate; no Xing, LAME or VBRI header is read.
  */
@@ -44,32 +44,31 @@ interface Frame {
   stream: number
 }
 
-/** The bytes the tags at either end hold: `[start, end)` is the audio. */
-function audioBounds(bytes: Uint8Array): { start: number; end: number } {
+/**
+ * The bytes the tags at either end hold: `[start, end)` is the audio, or null
+ * when the leading ID3v2 tag's size is not syncsafe (a byte with bit 7 set),
+ * which a real tagger never writes and would otherwise let the tag swallow
+ * frames. Only an ID3v1 tag (always 128 bytes) is recognised at the end: an
+ * APEv2 or Lyrics3 tag is just bytes, counted against the budget, so no size
+ * the uploader wrote can hide audio.
+ */
+function audioBounds(bytes: Uint8Array): { start: number; end: number } | null {
   let start = 0
   if (bytes[0] === 0x49 && bytes[1] === 0x44 && bytes[2] === 0x33) {
+    if ([6, 7, 8, 9].some((i) => bytes[i] & 0x80)) return null
     const size =
-      ((bytes[6] & 0x7f) << 21) |
-      ((bytes[7] & 0x7f) << 14) |
-      ((bytes[8] & 0x7f) << 7) |
-      (bytes[9] & 0x7f)
+      (bytes[6] << 21) | (bytes[7] << 14) | (bytes[8] << 7) | bytes[9]
     start = 10 + size + (bytes[5] & 0x10 ? 10 : 0)
   }
   let end = bytes.length
-  const at = (offset: number, text: string) =>
-    offset >= 0 &&
-    [...text].every((c, i) => bytes[offset + i] === c.charCodeAt(0))
-  if (at(end - 128, 'TAG')) end -= 128
-  if (at(end - 32, 'APETAGEX')) {
-    const footer = end - 32
-    const size =
-      bytes[footer + 12] |
-      (bytes[footer + 13] << 8) |
-      (bytes[footer + 14] << 16) |
-      (bytes[footer + 15] << 24)
-    const hasHeader = (bytes[footer + 23] & 0x80) !== 0
-    end = Math.max(start, end - size - (hasHeader ? 32 : 0))
-  }
+  const tag = end - 128
+  if (
+    tag >= start &&
+    bytes[tag] === 0x54 &&
+    bytes[tag + 1] === 0x41 &&
+    bytes[tag + 2] === 0x47
+  )
+    end = tag
   return { start: Math.min(start, end), end }
 }
 
@@ -78,7 +77,9 @@ function audioBounds(bytes: Uint8Array): { start: number; end: number } {
  * such frames with every byte accounted for.
  */
 export function measureMp3(bytes: Uint8Array): number | null {
-  const { start, end } = audioBounds(bytes)
+  const bounds = audioBounds(bytes)
+  if (!bounds) return null
+  const { start, end } = bounds
   let unaccounted = 0
   let seconds = 0
   let frames = 0

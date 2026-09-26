@@ -56,6 +56,7 @@ const ACCEPT = [
   ...MARKETING_ASSET_AUDIO_TYPES,
   '.mp3',
   '.m4a',
+  '.m4b',
   '.wav',
 ].join(',')
 

@@ -29,6 +29,7 @@ export type MoveRefusal =
   | 'size'
   | 'length'
   | 'unreadable'
+  | 'wav-format'
   | 'upload'
 
 export type MoveResult =

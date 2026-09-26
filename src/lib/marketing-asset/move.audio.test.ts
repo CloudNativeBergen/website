@@ -179,6 +179,17 @@ describe('the audio move', () => {
     )
   })
 
+  it('refuses a malformed WAV with its own reason, so the organizer is told how to export it', async () => {
+    fetchMock.mockResolvedValue(
+      respond(new TextEncoder().encode('RIFF0000WAVEgarbage')),
+    )
+    expect(await moveAudioBlobToSanity(URL_OK, ORG)).toEqual({
+      ok: false,
+      reason: 'wav-format',
+    })
+    expect(h.upload).not.toHaveBeenCalled()
+  })
+
   it('records a file Sanity already held (an old _createdAt) as not created', async () => {
     h.upload.mockResolvedValue({
       _id: 'file-shared-mp3',
@@ -259,7 +270,6 @@ describe('the audio move', () => {
       Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
     ],
     ['an MP4 with a video track', mp4WithVideo()],
-    ['a WAV with no length', new TextEncoder().encode('RIFF0000WAVEgarbage')],
   ])('refuses %s as the wrong type', async (_, bytes) => {
     fetchMock.mockResolvedValue(
       respond(bytes, { 'content-type': 'audio/mpeg' }),

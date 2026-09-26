@@ -402,6 +402,10 @@ describe('an audio track through the move route (#1178)', () => {
       'unreadable',
       'The track’s length could not be read. Export it again as MP3, M4A or WAV and retry.',
     ],
+    [
+      'wav-format',
+      'This WAV cannot be used. Export it again as PCM or 32-bit float WAV and retry.',
+    ],
   ] as const)('a %s refusal saves nothing', async (reason, message) => {
     h.moveAudio.mockResolvedValue({ ok: false, reason })
     const response = await POST(request(TRACK))
