@@ -309,22 +309,36 @@ export async function deleteVideoProjectDocument(id: string): Promise<void> {
  * it: from then on that copy is the only record of who the file shows, so a
  * subject corrected in the gallery since the project was saved must not be
  * lost to a stale one. No subject now removes the copy.
+ *
+ * Race-safe: each project is patched compare-and-set on the revision read
+ * here (a save in between fails the patch, and the delete with it), and the
+ * asset's revision is returned for the delete to be compare-and-set on too —
+ * a subject changed meanwhile fails the delete rather than leaving projects
+ * with the old one. A holder in a Content Release is refused: the release
+ * is Studio's, and this client cannot write it.
  */
 export async function snapshotGallerySubjectIntoProjects(
   orgId: string,
   assetId: string,
-): Promise<void> {
-  const raw = clientReadUncached.withConfig({ perspective: 'raw' })
-  const asset = await scopedFetch<{ subjectId: string | null } | null>(
+): Promise<{ assetRev: string | null; releaseHolders: number }> {
+  const raw = clientReadUncached.withConfig({
+    apiVersion: '2025-02-19',
+    perspective: 'raw',
+  })
+  const asset = await scopedFetch<{
+    subjectId: string | null
+    _rev: string
+  } | null>(
     raw,
     { orgId },
-    `*[_type == "marketingAsset" && _id == $assetId][0]{ "subjectId": subject._ref }`,
+    `*[_type == "marketingAsset" && _id == $assetId][0]{ _rev, "subjectId": subject._ref }`,
     { assetId },
     opts,
   )
   const holders = await scopedFetch<
     | {
         _id: string
+        _rev: string
         scenes: { key: string | null; subjectId: string | null }[] | null
         track: { subjectId: string | null } | null
       }[]
@@ -334,13 +348,20 @@ export async function snapshotGallerySubjectIntoProjects(
     { orgId },
     `*[_type == "videoProject" && (count(scenes[background.image.galleryAsset._ref == $assetId]) > 0 || track.file.galleryAsset._ref == $assetId)]{
       _id,
+      _rev,
       "scenes": scenes[background.image.galleryAsset._ref == $assetId]{ "key": _key, "subjectId": background.image.subject._ref },
       "track": select(track.file.galleryAsset._ref == $assetId => { "subjectId": track.file.subject._ref }, null)
     }`,
     { assetId },
     opts,
   )
+  const releaseHolders = (holders ?? []).filter((h) =>
+    h._id.startsWith('versions.'),
+  ).length
+  if (releaseHolders > 0) return { assetRev: null, releaseHolders }
   const subjectId = asset?.subjectId ?? null
+  const tx = clientWrite.transaction()
+  let writes = 0
   for (const holder of holders ?? []) {
     // Only where the copy differs: an unchanged one is left alone, so the
     // project's revision — and an open editor's next save — is untouched.
@@ -361,18 +382,23 @@ export async function snapshotGallerySubjectIntoProjects(
         : []),
     ]
     if (paths.length === 0) continue
-    const patch = clientWrite.patch(holder._id)
-    await (
+    writes++
+    tx.patch(holder._id, (p) =>
       subjectId
-        ? patch.set(
-            Object.fromEntries(
-              paths.map((path) => [
-                path,
-                { _type: 'reference', _ref: subjectId, _weak: true },
-              ]),
-            ),
-          )
-        : patch.unset(paths)
-    ).commit()
+        ? p
+            .ifRevisionId(holder._rev)
+            .set(
+              Object.fromEntries(
+                paths.map((path) => [
+                  path,
+                  { _type: 'reference', _ref: subjectId, _weak: true },
+                ]),
+              ),
+            )
+        : p.ifRevisionId(holder._rev).unset(paths),
+    )
   }
+  // One transaction: every copy is written, or none is.
+  if (writes > 0) await tx.commit()
+  return { assetRev: asset?._rev ?? null, releaseHolders: 0 }
 }

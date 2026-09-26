@@ -42,6 +42,14 @@ const notFound = () =>
     message: 'No marketingAsset with that id for this request',
   })
 
+/** Sanity refused a compare-and-set write: the document moved on. */
+function isRevisionConflict(error: unknown): boolean {
+  const statusCode = (error as { statusCode?: number } | null)?.statusCode
+  if (statusCode === 409) return true
+  const message = error instanceof Error ? error.message.toLowerCase() : ''
+  return message.includes('revision') && message.includes('mismatch')
+}
+
 /** The asset has a staged copy in a Studio Content Release. */
 const inRelease = (action: 'edit' | 'delete') =>
   new TRPCError({
@@ -176,10 +184,40 @@ export const marketingAssetRouter = router({
       const media = await readMarketingAssetMedia(orgId, input.id)
       // A saved video holding this file keeps it past the asset, and with it
       // the asset's subject as it is NOW — the record erasure follows (#1181).
-      await snapshotGallerySubjectIntoProjects(orgId, input.id)
+      // Compare-and-set throughout: a project saved, or the asset's subject
+      // changed, while this runs fails the delete — try again — rather than
+      // leaving a project with a stale subject.
+      const changed = () =>
+        new TRPCError({
+          code: 'CONFLICT',
+          message:
+            'This asset or a video using it changed while it was being deleted. Try again.',
+        })
+      let assetRev: string | null
+      try {
+        const snapshot = await snapshotGallerySubjectIntoProjects(
+          orgId,
+          input.id,
+        )
+        if (snapshot.releaseHolders > 0)
+          throw new TRPCError({
+            code: 'PRECONDITION_FAILED',
+            message:
+              'A video in a Content Release in Studio uses this asset. Remove it from the release first, then delete the asset here.',
+          })
+        assetRev = snapshot.assetRev
+      } catch (error) {
+        if (isRevisionConflict(error)) throw changed()
+        throw error
+      }
       // The documents first: while one exists, it is itself a reference to
       // the file, and the orphan check would always keep it.
-      await deleteMarketingAssetDocument(input.id)
+      try {
+        await deleteMarketingAssetDocument(input.id, assetRev ?? undefined)
+      } catch (error) {
+        if (isRevisionConflict(error)) throw changed()
+        throw error
+      }
       // Only an image or track this gallery's upload created is its to
       // delete: Sanity deduplicates identical bytes across tenants, so any
       // other may be another tenant's, possibly still unreferenced. A Studio

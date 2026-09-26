@@ -184,30 +184,35 @@ export function linkedFileIds(subjectDocs: Doc[]): string[] {
   return [...ids]
 }
 
+/** A saved video's file with the subject it copied, as erasure reads it. */
+export interface ProjectFileSubject {
+  fileId: string | null
+  subjectId: string | null
+  /** Its gallery asset still exists: then the gallery's subject decides. */
+  live: boolean | null
+}
+
 /**
  * The files a saved video holds whose stored subject (copied from the gallery
- * asset at save time, #1181) is linked to the speaker: a scene background or
- * the track. How a file is found once its gallery asset is gone.
+ * asset, #1181) is linked to the speaker — but only where that gallery asset
+ * is GONE. While it exists its own, possibly corrected, subject decides
+ * (through {@link linkedFileIds}), never the project's older copy.
  */
 export function projectSubjectFileIds(
-  projects: Doc[],
+  files: ProjectFileSubject[],
   subjectIds: string[],
 ): string[] {
   const subjects = new Set(subjectIds)
-  const about = (file: unknown) =>
-    subjects.has(refOf((file as { subject?: unknown } | null)?.subject) ?? '')
-      ? fileRefOf(file)
-      : null
-  const ids = new Set<string>()
-  for (const doc of projects) {
-    for (const scene of entries(doc.scenes)) {
-      const id = about(backgroundImageOf(scene))
-      if (id) ids.add(id)
-    }
-    const track = about((doc.track as { file?: unknown } | undefined)?.file)
-    if (track) ids.add(track)
-  }
-  return [...ids]
+  return [
+    ...new Set(
+      files
+        .filter(
+          (f) =>
+            !f.live && f.fileId && f.subjectId && subjects.has(f.subjectId),
+        )
+        .map((f) => f.fileId as string),
+    ),
+  ]
 }
 
 /**
@@ -512,18 +517,51 @@ export async function fetchSpeakerAssetInputs(
     { subjectIds },
     opts,
   )
-  const projects = await client.fetch<Doc[]>(
-    // groq-global: a saved video (#1181) keeps a gallery image's subject with
-    // the file, so the file is found even after its gallery asset is deleted
-    // — in every tenant, because the right is the person's.
-    groq`*[_type == "videoProject" && (count(scenes[background.image.subject._ref in $subjectIds]) > 0 || track.file.subject._ref in $subjectIds)]{ _id, _type, scenes, track }`,
-    { subjectIds },
-    opts,
+  type Held = {
+    fileId: string | null
+    subjectId: string | null
+    assetId: string | null
+  }
+  const [sceneFiles, trackFiles] = await Promise.all([
+    client.fetch<Held[]>(
+      // groq-global: a saved video (#1181) keeps a gallery image's subject
+      // with the file, so the file is found after its gallery asset is
+      // deleted — in every tenant, because the right is the person's.
+      groq`*[_type == "videoProject" && count(scenes[background.image.subject._ref in $subjectIds]) > 0].scenes[background.image.subject._ref in $subjectIds]{ "fileId": background.image.asset._ref, "subjectId": background.image.subject._ref, "assetId": background.image.galleryAsset._ref }`,
+      { subjectIds },
+      opts,
+    ),
+    client.fetch<Held[]>(
+      // groq-global: the same, for a saved video's music track.
+      groq`*[_type == "videoProject" && track.file.subject._ref in $subjectIds]{ "fileId": track.file.asset._ref, "subjectId": track.file.subject._ref, "assetId": track.file.galleryAsset._ref }`,
+      { subjectIds },
+      opts,
+    ),
+  ])
+  const held = [...(sceneFiles ?? []), ...(trackFiles ?? [])]
+  const assetIds = [
+    ...new Set(held.flatMap((f) => (f.assetId ? [f.assetId] : []))),
+  ]
+  const liveAssets = new Set(
+    assetIds.length > 0
+      ? ((await client.fetch<string[]>(
+          // groq-global: which of those gallery assets still exist, by id —
+          // an asset's own subject decides while it does.
+          groq`*[_id in $assetIds]._id`,
+          { assetIds },
+          opts,
+        )) ?? [])
+      : [],
   )
+  const projectFiles: ProjectFileSubject[] = held.map((f) => ({
+    fileId: f.fileId,
+    subjectId: f.subjectId,
+    live: !!f.assetId && liveAssets.has(f.assetId),
+  }))
   const fileIds = [
     ...new Set([
       ...linkedFileIds(subjectDocs ?? []),
-      ...projectSubjectFileIds(projects ?? [], subjectIds),
+      ...projectSubjectFileIds(projectFiles ?? [], subjectIds),
       ...extraFileIds,
     ]),
   ]

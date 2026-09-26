@@ -829,6 +829,36 @@ describe('speaker erasure removes their images everywhere (#1162)', () => {
       expect(result.verification?.clean).toBe(true)
     })
 
+    it('ignores a stale copied subject while the gallery asset still exists', async () => {
+      // Saved while asset-bob was (wrongly) about Ada; since corrected to Bob.
+      h.dataset.push(
+        project('vp-stale', [
+          {
+            ...sceneWith('s-stale', '#0a0b0c'),
+            background: {
+              color: '#0a0b0c',
+              image: {
+                ...image(BOB_CARD),
+                name: 'b',
+                galleryAsset: weak('asset-bob'),
+                subject: weak(ADA),
+              },
+            },
+          },
+        ]),
+      )
+      const result = await eraseSpeakerInPlace({
+        speakerId: ADA,
+        actor: 'test',
+      })
+      expect(result.err).toBeNull()
+      expect(doc('asset-bob')).toBeDefined()
+      expect(doc(BOB_CARD)).toBeDefined()
+      expect(
+        (doc('vp-stale').scenes as { background: object }[])[0].background,
+      ).toHaveProperty('image')
+    })
+
     it('loses a track linked to the speaker', async () => {
       h.dataset.push(
         project('vp-track', [sceneWith('s', '#000000')], {
