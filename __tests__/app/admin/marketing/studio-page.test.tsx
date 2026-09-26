@@ -3,10 +3,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, render, screen, within } from '@testing-library/react'
 import type { ReactNode } from 'react'
 
+const orgIdMock = vi.hoisted(() => ({ value: 'org-1' as string | null }))
 vi.mock('@/lib/auth', () => ({ getAuthSession: async () => ({}) }))
 vi.mock('@/lib/authz/organizer', () => ({
   isOrganizerForCurrentOrg: async () => true,
-  resolveCurrentOrgId: async () => 'org-1',
+  resolveCurrentOrgId: async () => orgIdMock.value,
 }))
 vi.mock('@/lib/conference/sanity', () => ({
   getConferenceForCurrentDomain: async () => ({
@@ -75,19 +76,10 @@ vi.mock('@/components/admin/meme-generator', () => ({
 vi.mock('@/components/admin/PhotoGalleryWithDownload', () => ({
   PhotoGalleryWithDownload: () => null,
 }))
-vi.mock('@/components/common/DownloadableImage', () => ({
-  DownloadableImage: ({
-    children,
-    studio,
-  }: {
-    children: ReactNode
-    studio?: unknown
-  }) => (
-    <div data-testid="card" data-studio={JSON.stringify(studio ?? null)}>
-      {children}
-    </div>
-  ),
-}))
+vi.mock(
+  '@/components/common/DownloadableImage',
+  () => import('../../../mocks/downloadable-image'),
+)
 vi.mock('@/components/admin/marketing/studio-gallery', () => ({
   StudioGalleryProvider: ({
     orgId,
@@ -271,4 +263,17 @@ describe('Promo Studio Save to gallery (#1164)', () => {
       expect(screen.getByTestId('tabs').getAttribute('data-tab')).toBe(tab)
     },
   )
+})
+
+describe('Promo Studio without a resolvable organization', () => {
+  afterEach(() => {
+    orgIdMock.value = 'org-1'
+  })
+
+  it('refuses to render rather than naming uploads with an empty id', async () => {
+    orgIdMock.value = null
+    render(await MarketingPage({ searchParams: Promise.resolve({}) }))
+    expect(screen.getByText('Error loading the organization')).toBeTruthy()
+    expect(screen.queryByTestId('gallery-context')).toBeNull()
+  })
 })

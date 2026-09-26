@@ -231,9 +231,12 @@ export default async function MarketingPage({
     resolveCurrentOrgId(),
   ])
 
-  // The (admin) gate above proved an organizer of an organization, so there
-  // is one; an empty id only names nothing and the server refuses it.
-  const orgId = currentOrgId ?? ''
+  // The gate above proved an organizer of this host's organization; one that
+  // cannot be resolved now has nothing to name the gallery upload with.
+  if (!currentOrgId) {
+    return <ErrorDisplay message="Error loading the organization" />
+  }
+  const orgId = currentOrgId
   // A card preselected without a Task was opened from the gallery.
   const pinnedTitle = selection.task ? 'Card for your Task' : 'Selected card'
 
@@ -415,7 +418,7 @@ export default async function MarketingPage({
           {/* Meme Generator Tab */}
           <div>
             <MemeGeneratorWithDownload
-              orgId={currentOrgId ?? undefined}
+              orgId={orgId}
               conferenceTitle={conference.title}
               conferenceLogos={{
                 logoBright: conference.logoBright,

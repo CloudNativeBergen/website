@@ -1,8 +1,12 @@
 // @vitest-environment jsdom
 /**
  * "Save to gallery" on a studio card (#1164, docs/MARKETING_ASSETS_SPEC.md
- * §4.2), through the REAL DownloadableImage and capture path (html2canvas is
- * the only raster boundary mocked), with and without a render Task open.
+ * §4.2), through the REAL DownloadableImage, captureImage and dialog, with and
+ * without a render Task open. Mocked at the boundaries: html2canvas (the
+ * raster), the gallery uploader (injected; the last test runs the real
+ * `blobAssetUploader` with `@vercel/blob/client` and `fetch` mocked), `fetch`
+ * for the Task's own route, `URL.createObjectURL`/`revokeObjectURL`, and the
+ * tRPC hooks. Blob and the server are never exercised here.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {

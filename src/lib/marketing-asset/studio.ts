@@ -32,6 +32,20 @@ export interface MarketingAssetStudioOrigin {
   sponsorId: string | null
 }
 
+/**
+ * Whether "Open in studio" lands on the card itself: a speaker or sponsor
+ * card on its subject, or the conference promo, which the studio renders
+ * from the edition alone. The free-form editor and the photo collage open
+ * empty, so their link says it opens the tab.
+ */
+export function opensTheCard(origin: MarketingAssetStudioOrigin): boolean {
+  return (
+    origin.tab === 'conference' ||
+    (origin.tab === 'speakers' && Boolean(origin.speakerId)) ||
+    (origin.tab === 'sponsors' && Boolean(origin.sponsorId))
+  )
+}
+
 /** The studio page, on the tab and the speaker or sponsor an asset names. */
 export function openInStudioHref(origin: MarketingAssetStudioOrigin): string {
   const params = new URLSearchParams({ tab: origin.tab })

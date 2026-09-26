@@ -16,6 +16,7 @@ import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
 import { useNotification } from '@/components/admin/NotificationProvider'
 import {
   openInStudioHref,
+  opensTheCard,
   type MarketingAssetFilter,
   type MarketingAssetRow,
 } from '@/lib/marketing-asset'
@@ -161,11 +162,15 @@ function AssetCard({
           // The studio cannot address a talk or a card variant.
           <Link
             href={openInStudioHref(asset.studio)}
-            aria-label={`Open ${asset.title} in the studio`}
+            aria-label={
+              opensTheCard(asset.studio)
+                ? `Open ${asset.title} in the studio`
+                : `Open the studio tab ${asset.title} was made on`
+            }
             className="inline-flex items-center gap-1 self-start text-xs font-medium text-brand-cloud-blue hover:underline focus-visible:outline-2 focus-visible:outline-brand-cloud-blue dark:text-blue-300"
           >
             <ArrowTopRightOnSquareIcon className="size-3.5" aria-hidden />
-            Open in studio
+            {opensTheCard(asset.studio) ? 'Open in studio' : 'Open studio tab'}
           </Link>
         )}
         {asset.rights && (

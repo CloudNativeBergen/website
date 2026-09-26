@@ -459,7 +459,13 @@ describe('a studio save through the move route (#1164)', () => {
 
   it('is an upload when no studio is named', async () => {
     expect((await POST(request(VALID))).status).toBe(200)
-    expect(h.create.mock.calls[0][0]).not.toHaveProperty('studio')
+    // The whole write input, so a stray `studio` key would show as a diff.
+    expect(h.create.mock.calls[0][0]).toEqual({
+      orgId: 'org-A',
+      details: RESOLVED,
+      imageAssetId: 'image-a-800x600-png',
+      createdImageAssetId: 'image-a-800x600-png',
+    })
   })
 
   it.each([
@@ -467,7 +473,12 @@ describe('a studio save through the move route (#1164)', () => {
     ['no tab', {}],
     ['not an object', 'speakers'],
   ])('refuses %s, and discards the upload', async (_, studio) => {
-    expect((await POST(request({ ...VALID, studio }))).status).toBe(400)
+    const response = await POST(request({ ...VALID, studio }))
+    expect(response.status).toBe(400)
+    // Its own refusal, not the alt-text or details one that shares the 400.
+    expect(await response.json()).toEqual({
+      error: 'Those details cannot be saved. Check the studio tab.',
+    })
     expect(h.move).not.toHaveBeenCalled()
     expect(h.create).not.toHaveBeenCalled()
     expect(h.discard).toHaveBeenCalledWith(URL_OK, 'org-A')
@@ -482,6 +493,16 @@ describe('a studio save through the move route (#1164)', () => {
       studio: { tab: 'meme-generator' },
     }
     expect((await POST(request(body))).status).toBe(200)
-    expect(h.create.mock.calls[0][0]).not.toHaveProperty('studio')
+    const input = h.create.mock.calls[0][0]
+    expect(input.kind).toBe('audio')
+    expect(Object.keys(input).sort()).toEqual([
+      'createdFileAssetId',
+      'details',
+      'durationSeconds',
+      'fileAssetId',
+      'kind',
+      'orgId',
+      'rights',
+    ])
   })
 })

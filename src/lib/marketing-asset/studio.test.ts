@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { StudioSearchParamsSchema } from '@/server/schemas/studio'
-import { STUDIO_TABS, openInStudioHref, studioOriginSchema } from './studio'
+import {
+  STUDIO_TABS,
+  openInStudioHref,
+  opensTheCard,
+  studioOriginSchema,
+} from './studio'
 
 describe('openInStudioHref', () => {
   it('opens the tab on its speaker or sponsor', () => {
@@ -42,5 +47,22 @@ describe('studioOriginSchema', () => {
     expect(studioOriginSchema.parse({ tab: 'speakers', speaker: 'x' })).toEqual(
       { tab: 'speakers' },
     )
+  })
+})
+
+describe('opensTheCard', () => {
+  it('is true only where the link lands on the card itself', () => {
+    const at = (
+      tab: (typeof STUDIO_TABS)[number],
+      speakerId: string | null = null,
+      sponsorId: string | null = null,
+    ) => opensTheCard({ tab, speakerId, sponsorId })
+    expect(at('speakers', 'ada')).toBe(true)
+    expect(at('sponsors', null, 'acme')).toBe(true)
+    expect(at('conference')).toBe(true)
+    expect(at('speakers')).toBe(false)
+    expect(at('sponsors')).toBe(false)
+    expect(at('meme-generator', 'ada', 'acme')).toBe(false)
+    expect(at('photo-gallery')).toBe(false)
   })
 })

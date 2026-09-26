@@ -51,7 +51,7 @@ A new document type, `marketingAsset`.
 | `tags`         | Free strings                                                                                                  |
 | `credit`       | Optional: who made it                                                                                         |
 | `source`       | `upload` or `studio`                                                                                          |
-| `studio`       | For studio renders: the studio tab, and the speaker or sponsor it was opened on (§4.2)                        |
+| `studio`       | For studio renders: the studio tab only; the speaker or sponsor it was opened on is the `subject` (§4.2)      |
 | `task`         | For a Task's render: weak reference to the `studioRender` Task, which is what makes "replace" possible (§4.3) |
 
 **Who may do what.** Any organizer of the organization may add, edit and delete any asset,
@@ -123,8 +123,11 @@ the studio's existing multipart route: that route is under the same ~4.5 MB cut,
 cards slip under and §7's full-resolution ones will not. The studio already routes captures
 through one context that a `studioRender` Task fills with "attach to Task"; without a Task it is
 empty today. It gains a gallery action that is always present. Saving asks for a title and alt text
-(prefilled where the card knows its subject) and records the tab and the speaker or sponsor the
-studio was opened on.
+(prefilled where the card knows its subject) and records the tab. The speaker or sponsor the studio
+was opened on is recorded as the asset's `subject`, not a second time under `studio`: a separate
+copy would outlive an organizer re-pointing the subject, and speaker erasure (§6), which finds
+assets by subject, would then leave a reference to the erased person behind and still verify
+clean. "Open in studio" therefore follows the current subject when it is that tab's kind.
 
 **"Open in studio"** on such an asset reopens that tab on that subject. The studio addresses a tab,
 a speaker and a sponsor today — not a talk and not a particular card variant — so that is as close

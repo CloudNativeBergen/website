@@ -7,19 +7,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, render, screen } from '@testing-library/react'
 import type { ReactNode } from 'react'
 
-vi.mock('@/components/common/DownloadableImage', () => ({
-  DownloadableImage: ({
-    children,
-    studio,
-  }: {
-    children: ReactNode
-    studio?: unknown
-  }) => (
-    <div data-testid="card" data-studio={JSON.stringify(studio ?? null)}>
-      {children}
-    </div>
-  ),
-}))
+vi.mock(
+  '@/components/common/DownloadableImage',
+  () => import('../../../__tests__/mocks/downloadable-image'),
+)
 vi.mock('./meme-generator/MemeGenerator', () => ({
   MemeGenerator: ({
     wrapPreview,

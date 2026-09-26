@@ -150,6 +150,8 @@ const ASSETS: MarketingAssetRow[] = [
     height: 540,
     createdAt: '2026-09-10T10:00:00Z',
     softOnSocial: true,
+    // Made in the free-form editor, which reopens empty.
+    studio: { tab: 'meme-generator', speakerId: null, sponsorId: null },
   }),
 ]
 
@@ -354,6 +356,15 @@ export const Gallery: Story = {
     await expect(
       canvas.getAllByRole('link', { name: /in the studio/ }),
     ).toHaveLength(2)
+    // The free-form editor reopens empty, and its link says so.
+    const tab = canvas.getByRole('link', {
+      name: /^Open the studio tab Old banner/,
+    })
+    await expect(tab).toHaveTextContent('Open studio tab')
+    await expect(tab).toHaveAttribute(
+      'href',
+      '/admin/marketing/studio?tab=meme-generator',
+    )
   },
 }
 export const GalleryMobile: Story = {

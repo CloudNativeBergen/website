@@ -109,8 +109,20 @@ describe('createMarketingAsset', () => {
       orgId: 'org-a',
       details: { ...DETAILS, alt: 'The logo' },
       imageAssetId: 'image-a-1x1-png',
+      createdImageAssetId: 'image-a-1x1-png',
     })
     expect(h.created[0].source).toBe('upload')
-    expect(h.created[0]).not.toHaveProperty('studio')
+    expect(Object.keys(h.created[0]).sort()).toEqual([
+      '_type',
+      'alt',
+      'createdImageAssetId',
+      'image',
+      'kind',
+      'organization',
+      'scope',
+      'source',
+      'tags',
+      'title',
+    ])
   })
 })

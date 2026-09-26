@@ -117,10 +117,20 @@ export const SpeakerCardDialogDark: Story = {
   globals: { theme: 'dark' },
 }
 export const SpeakerCardDialogMobile: Story = {
-  ...SpeakerCardDialog,
   parameters: {
     ...meta.parameters,
     viewport: { defaultViewport: 'mobile1' },
+  },
+  play: async (context) => {
+    await SpeakerCardDialog.play!(context)
+    // Below `sm` the dialog is a bottom sheet spanning the whole width.
+    const body = within(context.canvasElement.ownerDocument.body)
+    const panel = body
+      .getByRole('form', { name: 'Save to gallery' })
+      .closest('[id^="headlessui-dialog-panel"]') as HTMLElement
+    const width =
+      context.canvasElement.ownerDocument.documentElement.clientWidth
+    await expect(Math.round(panel.getBoundingClientRect().width)).toBe(width)
   },
 }
 
@@ -193,5 +203,20 @@ export const WithTaskMobile: Story = {
   parameters: {
     ...meta.parameters,
     viewport: { defaultViewport: 'mobile1' },
+  },
+  play: async (context) => {
+    await WithTask.play!(context)
+    // Three buttons do not fit one row on a phone: they wrap, none clipped.
+    const canvas = within(context.canvasElement)
+    const top = (name: string) =>
+      canvas.getByRole('button', { name }).getBoundingClientRect().top
+    await expect(top('Save to gallery')).toBeGreaterThan(top('Download as PNG'))
+    const width =
+      context.canvasElement.ownerDocument.documentElement.clientWidth
+    for (const button of canvas.getAllByRole('button')) {
+      await expect(button.getBoundingClientRect().right).toBeLessThanOrEqual(
+        width,
+      )
+    }
   },
 }
