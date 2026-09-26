@@ -388,6 +388,7 @@ describe('social.scheduleVariant', () => {
       success: true,
       status: 'scheduled',
       ceilingWarnings: [],
+      tagWarnings: [],
     })
     expect(h.transition).toHaveBeenCalledWith(
       'variant-ours',
@@ -923,7 +924,11 @@ describe('social.updateVariant', () => {
       ...content,
       timing: { mode: 'custom', scheduledAt: '2026-10-05T14:00:00+02:00' },
     })
-    expect(result).toEqual({ success: true, ceilingWarnings: [] })
+    expect(result).toEqual({
+      success: true,
+      ceilingWarnings: [],
+      tagWarnings: [],
+    })
     expect(h.updateSocialVariantContent).toHaveBeenCalledWith(
       'variant-ours',
       {
