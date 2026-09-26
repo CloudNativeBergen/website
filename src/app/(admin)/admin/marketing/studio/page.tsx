@@ -141,13 +141,15 @@ export default async function MarketingPage({
   const selection = StudioSearchParamsSchema.parse(await searchParams)
   const defaultTab =
     selection.tab ||
-    (selection.speaker
-      ? 'speakers'
-      : selection.sponsor
-        ? 'sponsors'
-        : selection.task
-          ? 'conference'
-          : 'meme-generator')
+    (selection.project
+      ? 'meme-generator'
+      : selection.speaker
+        ? 'speakers'
+        : selection.sponsor
+          ? 'sponsors'
+          : selection.task
+            ? 'conference'
+            : 'meme-generator')
   const session = await getAuthSession()
 
   // ORG-SCOPED admin gate (CaaS T1-2, #614), matching the (admin) layout.
@@ -354,6 +356,7 @@ export default async function MarketingPage({
           <div>
             <MemeGeneratorWithDownload
               orgId={orgId ?? undefined}
+              projectId={selection.project}
               conferenceTitle={conference.title}
               conferenceLogos={{
                 logoBright: conference.logoBright,

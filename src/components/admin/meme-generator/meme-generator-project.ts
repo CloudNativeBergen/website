@@ -182,3 +182,16 @@ export function carryFiles(
     }
   })
 }
+
+/**
+ * A refused project call, as the editor shows it: the server's words, and
+ * whether it was a save over someone else's newer one.
+ */
+export class VideoProjectError extends Error {
+  constructor(
+    message: string,
+    readonly conflict = false,
+  ) {
+    super(message)
+  }
+}

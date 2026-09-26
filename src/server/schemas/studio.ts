@@ -10,6 +10,9 @@ export const StudioSearchParamsSchema = z.object({
   task: StudioDocumentIdSchema,
   speaker: StudioDocumentIdSchema,
   sponsor: StudioDocumentIdSchema,
+  // A saved studio video (#1181); opened through `videoProject.open`, which
+  // proves it this organization's.
+  project: StudioDocumentIdSchema,
   tab: z
     .enum([
       'meme-generator',

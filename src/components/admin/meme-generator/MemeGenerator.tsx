@@ -106,6 +106,21 @@ import { mediabunnyBackend } from './meme-generator-mediabunny'
 import type { BackgroundGallery } from './meme-generator-gallery'
 import { BackgroundGalleryPicker } from './BackgroundGalleryPicker'
 import { KeepInGallery } from './KeepInGallery'
+import { VideoProjectBar, type ProjectMessage } from './VideoProjectBar'
+import {
+  VideoProjectError,
+  carryFiles,
+  fromProjectScenes,
+  projectSnapshot,
+  toProjectScenes,
+  type SceneFile,
+  type VideoProjects,
+} from './meme-generator-project'
+import {
+  PROJECT_CONFLICT_MESSAGE,
+  unkeptBackgroundRefusal,
+  type VideoProjectRow,
+} from '@/lib/video-project'
 import { useMediaQuery } from '@/hooks/useMediaQuery'
 import {
   MARKETING_ASSET_IMAGE_TYPES,
@@ -123,7 +138,18 @@ interface MemeGeneratorProps {
    * uploaded one. Without it, backgrounds are local files only.
    */
   gallery?: BackgroundGallery
+  /**
+   * The organization's saved videos (#1181), for Save, Duplicate and opening
+   * one. Without it, a video is never saved.
+   */
+  projects?: VideoProjects
+  /** A project to open on arrival, from the studio's URL. */
+  initialProjectId?: string
+  /** The project now open, or null for a new video — for the URL. */
+  onProjectChange?: (id: string | null) => void
 }
+
+const UNTITLED = 'Untitled video'
 
 interface ColorButtonProps {
   color: { name: string; value: string }
@@ -285,6 +311,9 @@ export function MemeGenerator({
   wrapPreview,
   encoder = mediabunnyBackend,
   gallery,
+  projects,
+  initialProjectId,
+  onProjectChange,
 }: MemeGeneratorProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const exportCanvasRef = useRef<HTMLCanvasElement>(null)
@@ -659,6 +688,228 @@ export function MemeGenerator({
     settleUpload(editingKey)
     setBackgroundFailure(null)
     setBackground({ image: null })
+  }
+
+  // ── The saved project (#1181) ───────────────────────────────────────────
+  // The project open in the editor, and the revision it was loaded or last
+  // saved at: every save is compare-and-set on it.
+  const [project, setProject] = useState<{ id: string; rev: string } | null>(
+    null,
+  )
+  const [projectTitle, setProjectTitle] = useState(UNTITLED)
+  // What the last save stored (or the editor started from), to tell whether
+  // anything a save would store has changed since.
+  const [savedSnapshot, setSavedSnapshot] = useState(() =>
+    projectSnapshot(UNTITLED, history.present),
+  )
+  const unsaved = projectSnapshot(projectTitle, scenes) !== savedSnapshot
+  const [projectBusy, setProjectBusy] = useState<
+    'saving' | 'opening' | 'duplicating' | null
+  >(null)
+  const [projectMessage, setProjectMessage] = useState<ProjectMessage | null>(
+    null,
+  )
+  const [projectRows, setProjectRows] = useState<VideoProjectRow[] | null>(null)
+  const [editionOnly, setEditionOnly] = useState(false)
+
+  const refreshProjects = useCallback(() => {
+    if (!projects) return
+    projects.list().then(setProjectRows, () => setProjectRows([]))
+  }, [projects])
+  useEffect(() => refreshProjects(), [refreshProjects])
+
+  // Leaving with unsaved changes asks first — for a video, or an open project.
+  const warnOnLeave = !!projects && unsaved && (mode === 'video' || !!project)
+  useEffect(() => {
+    if (!warnOnLeave) return
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault()
+      event.returnValue = ''
+    }
+    window.addEventListener('beforeunload', onBeforeUnload)
+    return () => window.removeEventListener('beforeunload', onBeforeUnload)
+  }, [warnOnLeave])
+
+  const discardOk = () =>
+    !warnOnLeave ||
+    window.confirm('Discard your unsaved changes to this video?')
+
+  /** Put scenes in the editor as a fresh start: no undo back past them. */
+  const replaceVideo = (next: Scene[], title: string) => {
+    setPlaying(false)
+    setHistory(startHistory(next))
+    setMode('video')
+    setPlaybackEditingKey(null)
+    moveTo(0)
+    setProjectTitle(title)
+    setSavedSnapshot(projectSnapshot(title, next))
+    setBackgroundFailure(null)
+  }
+
+  const openProject = async (id: string, confirmed = false) => {
+    if (!projects || (!confirmed && !discardOk())) return
+    setProjectBusy('opening')
+    setProjectMessage(null)
+    try {
+      const opened = await projects.open(id)
+      const next = fromProjectScenes(opened.scenes)
+      // Decoded before the scenes are shown, as a picked background is. One
+      // that fails to decode stays in the project — a save keeps it — and is
+      // simply not drawn.
+      const urls = [
+        ...new Set(
+          next.flatMap((scene) => scene.design.background.image?.url ?? []),
+        ),
+      ]
+      const failed = (
+        await Promise.all(
+          urls.map(async (url) => {
+            try {
+              const image = new window.Image()
+              image.src = url
+              await image.decode()
+              backgroundRasters.current.set(url, image)
+              return false
+            } catch {
+              return true
+            }
+          }),
+        )
+      ).filter(Boolean).length
+      replaceVideo(next, opened.title)
+      setProject({ id: opened._id, rev: opened._rev })
+      onProjectChange?.(opened._id)
+      if (failed > 0)
+        setProjectMessage({
+          tone: 'error',
+          text: `${failed === 1 ? 'A background' : `${failed} backgrounds`} could not be loaded and ${failed === 1 ? 'is' : 'are'} not shown. ${failed === 1 ? 'It stays' : 'They stay'} in the project; reopen it to try again.`,
+        })
+    } catch (error) {
+      setProjectMessage({
+        tone: 'error',
+        text:
+          error instanceof VideoProjectError
+            ? error.message
+            : 'The project could not be opened. Try again.',
+      })
+    } finally {
+      setProjectBusy(null)
+    }
+  }
+
+  // The project the studio's URL names, once, on arrival.
+  const openedInitial = useRef(false)
+  const openInitial = useEffectEvent((id: string) => void openProject(id, true))
+  useEffect(() => {
+    if (!initialProjectId || openedInitial.current) return
+    openedInitial.current = true
+    openInitial(initialProjectId)
+  }, [initialProjectId])
+
+  const newVideo = () => {
+    if (!discardOk()) return
+    replaceVideo([newScene(DEFAULT_DESIGN)], UNTITLED)
+    setProject(null)
+    setProjectMessage(null)
+    onProjectChange?.(null)
+  }
+
+  /**
+   * Save the video: over the open project (compare-and-set on its
+   * revision), or as a new one. A background that is not in the gallery is
+   * refused here, naming the scenes, before anything is sent.
+   */
+  const saveProject = async (asNew = false) => {
+    if (!projects) return
+    const mapped = toProjectScenes(scenes)
+    if ('unkept' in mapped) {
+      setProjectMessage({
+        tone: 'error',
+        text: unkeptBackgroundRefusal(mapped.unkept),
+      })
+      return
+    }
+    const title = projectTitle.trim() || UNTITLED
+    const snapshot = projectSnapshot(title, scenes)
+    const drawnBy = new Map(
+      scenes.map((scene) => [scene.key, scene.design.background.image?.url]),
+    )
+    setProjectBusy('saving')
+    setProjectMessage(null)
+    try {
+      const over = asNew ? null : project
+      const result: { _id?: string; _rev: string; scenes: SceneFile[] } = over
+        ? await projects.save({
+            id: over.id,
+            rev: over.rev,
+            title,
+            scenes: mapped.scenes,
+          })
+        : await projects.create({
+            title,
+            edition: editionOnly ? 'current' : 'none',
+            scenes: mapped.scenes,
+          })
+      // Each background now names the file the project holds, so a later
+      // save keeps it even once its gallery asset is gone.
+      const files = new Map<string, string>()
+      for (const { key, fileId } of result.scenes) {
+        const url = drawnBy.get(key)
+        if (url && fileId) files.set(url, fileId)
+      }
+      setHistory((prev) =>
+        mapStates(prev, (states) => carryFiles(states, files)),
+      )
+      const id = over?.id ?? result._id!
+      setProject({ id, rev: result._rev })
+      setProjectTitle(title)
+      setSavedSnapshot(snapshot)
+      if (!over) onProjectChange?.(id)
+      refreshProjects()
+    } catch (error) {
+      if (error instanceof VideoProjectError && error.conflict) {
+        setProjectMessage({
+          tone: 'error',
+          text: PROJECT_CONFLICT_MESSAGE,
+          action: {
+            label: 'Save as a new project',
+            onClick: () => void saveProject(true),
+          },
+        })
+      } else {
+        setProjectMessage({
+          tone: 'error',
+          text:
+            error instanceof VideoProjectError
+              ? error.message
+              : 'The project could not be saved. Try again.',
+        })
+      }
+    } finally {
+      setProjectBusy(null)
+    }
+  }
+
+  const duplicateProject = async () => {
+    if (!projects || !project) return
+    setProjectBusy('duplicating')
+    setProjectMessage(null)
+    let copy: string
+    try {
+      copy = (await projects.duplicate(project.id))._id
+    } catch (error) {
+      setProjectMessage({
+        tone: 'error',
+        text:
+          error instanceof VideoProjectError
+            ? error.message
+            : 'The project could not be duplicated. Try again.',
+      })
+      setProjectBusy(null)
+      return
+    }
+    refreshProjects()
+    await openProject(copy, true)
   }
 
   // A QR image depends on its style alone: the effect is keyed on the set of
@@ -1319,6 +1570,31 @@ export function MemeGenerator({
       </div>
 
       <div className="space-y-3">
+        {projects && mode === 'video' && (
+          <VideoProjectBar
+            title={projectTitle}
+            onTitleChange={setProjectTitle}
+            status={
+              !unsaved
+                ? project
+                  ? 'saved'
+                  : 'new'
+                : project
+                  ? 'unsaved'
+                  : 'new'
+            }
+            busy={projectBusy}
+            isSaved={!!project}
+            editionOnly={editionOnly}
+            onEditionOnlyChange={setEditionOnly}
+            rows={projectRows}
+            onOpen={(id) => void openProject(id)}
+            onNew={newVideo}
+            onSave={() => void saveProject()}
+            onDuplicate={() => void duplicateProject()}
+            message={projectMessage}
+          />
+        )}
         <div className={styles.panel}>
           <div className="mb-4 flex items-center gap-2">
             <PhotoIcon className="h-5 w-5 text-brand-slate-gray dark:text-gray-300" />
