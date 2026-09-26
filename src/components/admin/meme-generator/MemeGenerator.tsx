@@ -581,6 +581,14 @@ export function MemeGenerator({
         keptAssets.current.delete(url)
       return
     }
+    // Marking it kept takes its Keep form away. If the organizer was in that
+    // form, focus goes to the status that says why, as after a keep of
+    // their own; in any other upload's form, it stays put.
+    const area = galleryStatus.current?.parentElement
+    focusGalleryStatus.current =
+      shownUpload.current === url &&
+      !!area?.contains(document.activeElement) &&
+      document.activeElement !== galleryStatus.current
     markKept(url, galleryAssetId)
   }
 
@@ -606,8 +614,12 @@ export function MemeGenerator({
   // After a keep the form is gone; focus moves to the status that says so.
   const galleryStatus = useRef<HTMLParagraphElement>(null)
   const focusGalleryStatus = useRef(false)
+  // The upload the gallery status and Keep form are about, for a confirm
+  // that lands after the render that showed them.
+  const shownUpload = useRef<string | undefined>(undefined)
   // In the commit that shows the result, never a frame after it.
   useLayoutEffect(() => {
+    shownUpload.current = background.image?.url
     if (!focusGalleryStatus.current) return
     focusGalleryStatus.current = false
     galleryStatus.current?.focus()
