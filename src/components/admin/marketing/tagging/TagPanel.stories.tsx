@@ -105,8 +105,7 @@ function Harness({
         onTag={(p) => setBody((b) => tagName(b, p) ?? b)}
         onUntag={(p, handle) => setBody((b) => untagHandle(b, handle, p.name))}
         onFix={(issue) => {
-          if (!issue.handle || !issue.name) return
-          setBody((b) => untagHandle(b, issue.handle!, issue.name!))
+          setBody((b) => untagHandle(b, issue.handle, issue.name))
           setIssues((xs) => xs.filter((x) => x !== issue))
         }}
       />

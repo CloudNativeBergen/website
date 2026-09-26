@@ -23,6 +23,7 @@ import type { MentionRecord } from '@/lib/marketing/tagging/body'
 import {
   tagName,
   untagHandle,
+  type MentionIssue,
   type TagIssue,
   type TaggablePerson,
 } from '@/lib/marketing/tagging/checks'
@@ -181,8 +182,8 @@ export function ConnectedVariantEditor({
   }
   const untag = (person: TaggablePerson, handle: string) =>
     editBody((body) => untagHandle(body, handle, person.name))
-  const fix = (issue: TagIssue) => {
-    if (!tagging || !issue.handle || !issue.name) return
+  const fix = (issue: MentionIssue) => {
+    if (!tagging) return
     const { handle, name } = issue
     editBody((body) => untagHandle(body, handle, name))
     tagging.onIssuesChange(tagging.issues.filter((i) => i !== issue))

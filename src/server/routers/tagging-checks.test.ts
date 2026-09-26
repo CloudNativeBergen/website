@@ -288,6 +288,7 @@ function stored(): StoredTaskEditorData {
 }
 
 function serveVariant(v: SocialVariantEditorData) {
+  lastServed = v
   h.getSocialVariantEditorData.mockResolvedValue(v)
   h.getSocialPostVariant.mockResolvedValue(v.variant)
 }
@@ -356,6 +357,9 @@ async function refusal(p: Promise<unknown>): Promise<[string, unknown][]> {
   expect(cause).toBeInstanceOf(TagIssuesError)
   return (cause as TagIssuesError).tagIssues.map((i) => [i.code, i.mentionKey])
 }
+
+/** What the mocked store serves right now. */
+let lastServed: SocialVariantEditorData
 
 const save = (body: string) =>
   social().updateVariant({
@@ -498,7 +502,8 @@ const PATHS: {
   {
     name: 'saving a scheduled variant',
     prepare: () => serveVariant(variantData({ status: 'scheduled' })),
-    run: () => save('Catch @alice.dev at 10'),
+    // The stored body, saved unchanged: what the check sees on every path.
+    run: () => save(lastServed.variant.body),
     wrote: () => h.updateSocialVariantContent.mock.calls.length > 0,
   },
 ]
@@ -529,6 +534,22 @@ describe.each(PATHS)('approval check: $name', ({ run, wrote, prepare }) => {
   it('refuses a handle Bluesky no longer knows', async () => {
     bluesky['alice.dev'] = 'not-found'
     expect(await refusal(run())).toEqual([['not-found', 'spk-alice']])
+    expect(wrote()).toBe(false)
+  })
+
+  it('refuses a body that fits only in its tagged form (both forms, §4.4)', async () => {
+    // Straight from generation: never saved, the tagged form fits, the
+    // plain one does not.
+    const long = 'A'.repeat(200)
+    seed([{ ...ALICE_TAG, name: long }])
+    dataset[0] = { ...dataset[0], name: long }
+    serveVariant(
+      variantData({
+        body: `${'x'.repeat(280)} @alice.dev`,
+        status: lastServed.variant.status,
+      }),
+    )
+    expect(await refusal(run())).toEqual([['plain-too-long', null]])
     expect(wrote()).toBe(false)
   })
 

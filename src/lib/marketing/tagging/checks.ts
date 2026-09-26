@@ -82,15 +82,25 @@ export type TagIssueCode =
 
 /**
  * Why a save or an approval is refused, structured so the editor can offer
- * the one-click fix ("use the plain name"): the fix swaps `@handle` for
- * `name`. `mentionKey`, `handle` and `name` are null only for
- * `plain-too-long`, which is about the whole body.
+ * the one-click fix ("use the plain name") on each `MentionIssue`.
  */
-export interface TagIssue {
-  code: TagIssueCode
-  mentionKey: string | null
-  handle: string | null
-  name: string | null
+export type TagIssue = MentionIssue | PlainTooLongIssue
+
+/** An issue about one tag: the one-click fix swaps `@handle` for `name`. */
+export interface MentionIssue {
+  code: Exclude<TagIssueCode, 'plain-too-long'>
+  mentionKey: string
+  handle: string
+  name: string
+  message: string
+}
+
+/** About the whole body: no one tag to fix. */
+export interface PlainTooLongIssue {
+  code: 'plain-too-long'
+  mentionKey: null
+  handle: null
+  name: null
   message: string
 }
 
@@ -199,7 +209,7 @@ function byHandle(
   return map
 }
 
-function optedOutIssue(p: TaggablePerson, handle: string): TagIssue {
+function optedOutIssue(p: TaggablePerson, handle: string): MentionIssue {
   return {
     code: 'opted-out',
     mentionKey: storedKey(p.speakerId),
@@ -209,7 +219,7 @@ function optedOutIssue(p: TaggablePerson, handle: string): TagIssue {
   }
 }
 
-function notASpeaker(m: MentionRecord, handle: string): TagIssue {
+function notASpeaker(m: MentionRecord, handle: string): MentionIssue {
   return {
     code: 'not-a-speaker',
     mentionKey: m._key,
@@ -219,7 +229,7 @@ function notASpeaker(m: MentionRecord, handle: string): TagIssue {
   }
 }
 
-function notFoundIssue(key: string, handle: string, name: string): TagIssue {
+function notFoundIssue(key: string, handle: string, name: string): MentionIssue {
   return {
     code: 'not-found',
     mentionKey: key,
@@ -403,19 +413,29 @@ export function saveMentions(input: {
       !taggedIds.has(m.speakerId) &&
       nameIndex(input.body, m.name) >= 0,
   )
-  if (tagged.length > 0) {
-    const plain = countGraphemes(plainBody(input.body, tagged))
-    if (plain > BLUESKY_MAX_GRAPHEMES) {
-      issues.push({
-        code: 'plain-too-long',
-        mentionKey: null,
-        handle: null,
-        name: null,
-        message: `With every tag replaced by its name the post is ${plain} characters; Bluesky allows ${BLUESKY_MAX_GRAPHEMES}. A tag may be swapped for the name at publish, so shorten the post until it fits both ways.`,
-      })
-    }
-  }
+  const tooLong = plainLengthIssue(input.body, tagged)
+  if (tooLong) issues.push(tooLong)
   return { mentions: [...tagged, ...notes], issues, warnings }
+}
+
+/**
+ * §4.4 "both forms must fit": the body with every tag replaced by its name.
+ * A publish-time swap must never push a post past the limit.
+ */
+function plainLengthIssue(
+  body: string,
+  mentions: readonly MentionRecord[],
+): TagIssue | null {
+  if (!mentions.some((m) => m.status === 'tagged')) return null
+  const plain = countGraphemes(plainBody(body, mentions))
+  if (plain <= BLUESKY_MAX_GRAPHEMES) return null
+  return {
+    code: 'plain-too-long',
+    mentionKey: null,
+    handle: null,
+    name: null,
+    message: `With every tag replaced by its name the post is ${plain} characters; Bluesky allows ${BLUESKY_MAX_GRAPHEMES}. A tag may be swapped for the name at publish, so shorten the post until it fits both ways.`,
+  }
 }
 
 /**
@@ -497,6 +517,10 @@ export function approvalCheck(input: {
     }
   }
   const flagged = new Set(issues.map((i) => i.mentionKey))
+  // Both forms, again: a Task approved straight from generation was never
+  // saved, and generation's fallback fits only the tagged form.
+  const tooLong = plainLengthIssue(input.body, input.mentions)
+  if (tooLong) issues.push(tooLong)
   const recordedHandles = new Set(
     input.mentions
       .filter((m) => m.status === 'tagged')

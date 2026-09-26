@@ -533,6 +533,20 @@ describe('approvalCheck (§4.4 Approval)', () => {
     ])
   })
 
+  it('refuses a body that fits only in its tagged form, as save does', () => {
+    const long = { ...alice, name: 'A'.repeat(200) }
+    const out = approvalCheck({
+      body: `${'x'.repeat(280)} @alice.dev`,
+      mentions: [tagged(long, DID_A)],
+      people: [long],
+      resolutions: new Map([['alice.dev', resolved(DID_A)]]),
+    })
+    expect(out.issues).toEqual([
+      expect.objectContaining({ code: 'plain-too-long', mentionKey: null }),
+    ])
+    expect(out.issues[0].message).toContain('481')
+  })
+
   it('ignores unresolved notes', () => {
     const out = approvalCheck({
       body: 'Bob',

@@ -11,6 +11,7 @@ import type { MentionRecord } from '@/lib/marketing/tagging/body'
 import {
   mentionTokens,
   nameIndex,
+  type MentionIssue,
   type TagIssue,
   type TaggablePerson,
 } from '@/lib/marketing/tagging/checks'
@@ -48,7 +49,7 @@ export function TagPanel({
   onTag: (person: TaggablePerson) => void
   /** `handle` is the tag in the body: the current one, or a recorded older one. */
   onUntag: (person: TaggablePerson, handle: string) => void
-  onFix: (issue: TagIssue) => void
+  onFix: (issue: MentionIssue) => void
 }) {
   const inBody = new Set(mentionTokens(body).map((t) => t.handle))
   // A note stands until the person is tagged after all.
@@ -93,7 +94,7 @@ export function TagPanel({
               className="flex flex-col gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 sm:flex-row sm:items-center sm:justify-between dark:border-red-900 dark:bg-red-900/20 dark:text-red-200"
             >
               <span className="min-w-0 break-words">{issue.message}</span>
-              {issue.handle && issue.name && (
+              {issue.code !== 'plain-too-long' && (
                 <AdminButton
                   variant="secondary"
                   size="xs"
