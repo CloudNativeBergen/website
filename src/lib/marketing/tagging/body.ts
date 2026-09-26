@@ -94,7 +94,10 @@ export function tagBlueskyBody(input: {
 
   const candidates = people.filter((p) => p.tag?.status === 'tagged')
   let body = render(new Set(candidates))
-  while (candidates.length > 0 && countGraphemes(body) > BLUESKY_MAX_GRAPHEMES) {
+  while (
+    candidates.length > 0 &&
+    countGraphemes(body) > BLUESKY_MAX_GRAPHEMES
+  ) {
     candidates.pop()
     body = render(new Set(candidates))
   }

@@ -58,7 +58,8 @@ describe('formatTRPCError', () => {
     expect(error.message).toBe('Olga has asked not to be tagged.')
     expect(result.data.tagIssues).toEqual([issue])
     // What the client reads off the serialized error.
-    expect(clientTagIssues({ data: JSON.parse(JSON.stringify(result.data)) }))
-      .toEqual([issue])
+    expect(
+      clientTagIssues({ data: JSON.parse(JSON.stringify(result.data)) }),
+    ).toEqual([issue])
   })
 })

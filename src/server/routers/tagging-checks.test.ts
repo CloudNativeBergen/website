@@ -341,10 +341,7 @@ async function refusal(p: Promise<unknown>): Promise<[string, unknown][]> {
   expect(error).toMatchObject({ code: 'BAD_REQUEST' })
   const cause = (error as { cause?: unknown }).cause
   expect(cause).toBeInstanceOf(TagIssuesError)
-  return (cause as TagIssuesError).tagIssues.map((i) => [
-    i.code,
-    i.mentionKey,
-  ])
+  return (cause as TagIssuesError).tagIssues.map((i) => [i.code, i.mentionKey])
 }
 
 const save = (body: string) =>

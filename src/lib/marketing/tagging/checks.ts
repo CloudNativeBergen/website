@@ -57,11 +57,7 @@ export interface TaggablePerson {
 }
 
 export type TagIssueCode =
-  | 'opted-out'
-  | 'not-a-speaker'
-  | 'not-found'
-  | 'did-changed'
-  | 'plain-too-long'
+  'opted-out' | 'not-a-speaker' | 'not-found' | 'did-changed' | 'plain-too-long'
 
 /**
  * Why a save or an approval is refused, structured so the editor can offer

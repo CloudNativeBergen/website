@@ -1474,9 +1474,9 @@ export const marketingRouter = router({
           input.taskId,
           'marketingTask',
         )
-        const person = (await getTaskTagPeople(input.taskId, conferenceId)).find(
-          (p) => p.speakerId === input.speakerId,
-        )
+        const person = (
+          await getTaskTagPeople(input.taskId, conferenceId)
+        ).find((p) => p.speakerId === input.speakerId)
         if (!person) {
           throw new TRPCError({
             code: 'BAD_REQUEST',

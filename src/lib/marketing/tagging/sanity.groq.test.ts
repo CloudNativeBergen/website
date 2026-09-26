@@ -179,10 +179,7 @@ describe('getVariantMentionRecords', () => {
 
 describe('getTaskTagPeople', () => {
   it('a talk Task: the talk’s speakers in its order', async () => {
-    expect(await getTaskTagPeople('task-talk', 'conf-A')).toEqual([
-      olga,
-      alice,
-    ])
+    expect(await getTaskTagPeople('task-talk', 'conf-A')).toEqual([olga, alice])
   })
 
   it('a speaker Task: that speaker', async () => {
@@ -195,9 +192,7 @@ describe('getTaskTagPeople', () => {
 
   it('a subject of another conference: nobody', async () => {
     expect(await getTaskTagPeople('task-foreign-talk', 'conf-A')).toEqual([])
-    expect(await getTaskTagPeople('task-foreign-speaker', 'conf-A')).toEqual(
-      [],
-    )
+    expect(await getTaskTagPeople('task-foreign-speaker', 'conf-A')).toEqual([])
   })
 
   it('a Task of another conference: nobody', async () => {

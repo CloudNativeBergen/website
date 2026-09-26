@@ -19,10 +19,7 @@ import {
   type TaggablePerson,
 } from './checks'
 import { resolveBlueskyHandle, type HandleResolution } from './resolve'
-import {
-  getConferenceTaggablePeople,
-  getVariantMentionRecords,
-} from './sanity'
+import { getConferenceTaggablePeople, getVariantMentionRecords } from './sanity'
 
 type Resolve = (handle: string) => Promise<HandleResolution>
 
