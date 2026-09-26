@@ -375,7 +375,8 @@ export function saveMentions(input: {
       if (r?.kind === 'resolved') did = r.did
       else warnings.push(unverified(key, handle))
     }
-    if (did && input.ownAccount && did === input.ownAccount) {
+    const own = input.ownAccount
+    if (own && (handle === own || did === own)) {
       issues.push({
         code: 'own-account',
         mentionKey: key,

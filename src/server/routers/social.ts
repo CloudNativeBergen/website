@@ -396,7 +396,6 @@ export const socialRouter = router({
               conferenceId: variant.conferenceId,
               variantId: variant._id,
               body: variant.body,
-              ownAccount: await ownBlueskyAccount(),
             })
           : null
       if (tags && tags.issues.length > 0) throw tagIssuesError(tags.issues)

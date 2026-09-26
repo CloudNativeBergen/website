@@ -432,12 +432,13 @@ describe('social.updateVariant on a Bluesky body', () => {
     expect(tagReads().some((q) => q.includes('"talk"'))).toBe(false)
   })
 
-  it('our own account is never recorded as a tag (spec §4.1)', async () => {
+  it('refuses a speaker handle that is our own account (spec §4.1)', async () => {
     seed([])
     ownAccount('https://bsky.app/profile/alice.dev')
-    await save('Catch @alice.dev at 10')
-    expect(askedBluesky()).toEqual([])
-    expect(h.updateSocialVariantContent.mock.calls[0][1].mentions).toEqual([])
+    expect(await refusal(save('Catch @alice.dev at 10'))).toEqual([
+      ['own-account', 'spk-alice'],
+    ])
+    expect(h.updateSocialVariantContent).not.toHaveBeenCalled()
   })
 
   it('refuses a speaker handle that resolves to our account named by DID', async () => {

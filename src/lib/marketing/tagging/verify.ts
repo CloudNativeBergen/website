@@ -17,7 +17,6 @@ import {
   saveMentions,
   type TagCheck,
   type TaggablePerson,
-  withoutOwnAccount,
 } from './checks'
 import { resolveBlueskyHandle, type HandleResolution } from './resolve'
 import { getConferenceTaggablePeople, getVariantMentionRecords } from './sanity'
@@ -74,10 +73,7 @@ export async function checkTagsOnSave(input: {
   // No `@` token, no tag: nothing to match, so no read of the roster.
   const people: TaggablePerson[] =
     mentionTokens(input.body).length > 0
-      ? withoutOwnAccount(
-          await getConferenceTaggablePeople(input.conferenceId),
-          input.ownAccount,
-        )
+      ? await getConferenceTaggablePeople(input.conferenceId)
       : []
   let resolutions = await resolveHandles(
     handlesToResolve({ body: input.body, people, previous }),
@@ -113,8 +109,6 @@ export async function checkTagsForApproval(input: {
   conferenceId: string
   variantId: string
   body: string
-  /** `ownBlueskyHandle(conference.socialLinks)`: never tagged (spec §4.1). */
-  ownAccount: string | null
   resolve?: Resolve
 }): Promise<TagCheck> {
   const mentions = await getVariantMentionRecords(
@@ -126,10 +120,9 @@ export async function checkTagsForApproval(input: {
     !mentions.some((m) => m.status === 'tagged')
   )
     return { issues: [], warnings: [] }
-  const people = withoutOwnAccount(
-    await getConferenceTaggablePeople(input.conferenceId),
-    input.ownAccount,
-  )
+  // The own account is not blanked here: a speaker handle that is ours and
+  // was never recorded is `unchecked`, and its save refuses it.
+  const people = await getConferenceTaggablePeople(input.conferenceId)
   const resolutions = await resolveHandles(
     approvalHandlesToResolve({ mentions, people }),
     input.resolve,

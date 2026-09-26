@@ -1423,7 +1423,6 @@ export const marketingRouter = router({
               conferenceId: v.conferenceId,
               variantId: v._id,
               body: v.body,
-              ownAccount: ownBlueskyHandle(conference.socialLinks),
             })
             if (tags.issues.length > 0) throw tagIssuesError(tags.issues)
             tagWarnings = tags.warnings.map((w) => w.message)
