@@ -77,6 +77,7 @@ export type TagIssueCode =
   | 'not-found'
   | 'did-changed'
   | 'unchecked'
+  | 'own-account'
   | 'plain-too-long'
 
 /**
@@ -352,6 +353,8 @@ export function saveMentions(input: {
   people: readonly TaggablePerson[]
   previous: readonly MentionRecord[]
   resolutions: ReadonlyMap<string, HandleResolution>
+  /** The conference's own account (a handle or DID): never tagged (§4.1). */
+  ownAccount?: string | null
 }): TagCheck & { mentions: MentionRecord[] } {
   const issues: TagIssue[] = []
   const warnings: TagWarning[] = []
@@ -371,6 +374,16 @@ export function saveMentions(input: {
       }
       if (r?.kind === 'resolved') did = r.did
       else warnings.push(unverified(key, handle))
+    }
+    if (did && input.ownAccount && did === input.ownAccount) {
+      issues.push({
+        code: 'own-account',
+        mentionKey: key,
+        handle,
+        name: person.name,
+        message: `@${handle} is the conference's own Bluesky account, which is never tagged. Use the plain name.`,
+      })
+      continue
     }
     tagged.push({
       _key: key,

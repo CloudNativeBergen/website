@@ -83,19 +83,13 @@ export async function checkTagsOnSave(input: {
     handlesToResolve({ body: input.body, people, previous }),
     input.resolve,
   )
-  const rebuilt = saveMentions({
+  const saved = saveMentions({
     body: input.body,
     people,
     previous,
     resolutions,
+    ownAccount: input.ownAccount,
   })
-  // Our own account named by DID: a handle that turns out to be it is text.
-  const saved = {
-    ...rebuilt,
-    mentions: rebuilt.mentions.filter(
-      (m) => !(input.ownAccount && m.did === input.ownAccount),
-    ),
-  }
   if (!input.scheduled || saved.issues.length > 0) return saved
   resolutions = await resolveHandles(
     approvalHandlesToResolve({ mentions: saved.mentions, people }),

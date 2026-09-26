@@ -440,11 +440,13 @@ describe('social.updateVariant on a Bluesky body', () => {
     expect(h.updateSocialVariantContent.mock.calls[0][1].mentions).toEqual([])
   })
 
-  it('nor when our account is named by DID', async () => {
+  it('refuses a speaker handle that resolves to our account named by DID', async () => {
     seed([])
     ownAccount(`https://bsky.app/profile/${DID_ALICE}`)
-    await save('Catch @alice.dev at 10')
-    expect(h.updateSocialVariantContent.mock.calls[0][1].mentions).toEqual([])
+    expect(await refusal(save('Catch @alice.dev at 10'))).toEqual([
+      ['own-account', 'spk-alice'],
+    ])
+    expect(h.updateSocialVariantContent).not.toHaveBeenCalled()
   })
 
   it('a LinkedIn body is never matched, read or rewritten', async () => {
