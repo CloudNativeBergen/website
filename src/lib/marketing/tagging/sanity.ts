@@ -7,7 +7,7 @@
 
 import { clientReadUncached } from '@/lib/sanity/client'
 import { scopedFetch } from '@/lib/sanity/scoped'
-import { blueskyHandleFromLinks } from './handle'
+import { blueskyHandlesFromLinks } from './handle'
 import type { TaggablePerson } from './checks'
 import type { MentionRecord } from './body'
 import {
@@ -43,12 +43,15 @@ export function taggablePeopleFrom(
     const links = Array.isArray(row.links)
       ? row.links.filter((l): l is string => typeof l === 'string')
       : null
+    // An opted-out speaker's links never reach the browser (spec §3.2).
+    const handles =
+      optedOut && options.forClient ? [] : blueskyHandlesFromLinks(links)
     return [
       {
         speakerId: row._id,
         name: row.name ?? '',
-        handle:
-          optedOut && options.forClient ? null : blueskyHandleFromLinks(links),
+        handle: handles[0] ?? null,
+        ...(options.forClient ? {} : { handles }),
         optedOut,
       },
     ]

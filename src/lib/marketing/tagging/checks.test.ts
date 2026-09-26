@@ -213,6 +213,34 @@ describe('saveMentions (§4.3 rebuilt on every save, §4.4 Save)', () => {
     ])
   })
 
+  it('refuses an opted-out speaker’s SECOND Bluesky account too', () => {
+    const two = { ...olga, handles: ['olga.dev', 'olga.bsky.social'] }
+    const body = 'With @olga.bsky.social'
+    expect(handlesToResolve({ body, people: [two], previous: [] })).toEqual([])
+    const out = saveMentions({
+      body,
+      people: [two],
+      previous: [],
+      resolutions: new Map(),
+    })
+    expect(out.issues.map((i) => [i.code, i.mentionKey])).toEqual([
+      ['opted-out', 'speaker-olga'],
+    ])
+  })
+
+  it('records a speaker by their second account, as that handle', () => {
+    const two = { ...bob, handles: ['bob.bsky.social', 'bob.dev'] }
+    const out = saveMentions({
+      body: 'Hi @bob.dev',
+      people: [two],
+      previous: [],
+      resolutions: new Map([['bob.dev', resolved(DID_B)]]),
+    })
+    expect(out.mentions.map((m) => [m.speakerId, m.handle, m.did])).toEqual([
+      ['speaker-bob', 'bob.dev', DID_B],
+    ])
+  })
+
   it('refuses when ANY speaker sharing the handle opted out', () => {
     const twin = { ...olga, speakerId: 'speaker-twin', optedOut: false }
     const out = saveMentions({

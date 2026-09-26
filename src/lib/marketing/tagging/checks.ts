@@ -56,6 +56,12 @@ export interface TaggablePerson {
   speakerId: string
   name: string
   handle: string | null
+  /**
+   * Every Bluesky handle their links name (`handle` is the first). What a
+   * body's `@handle` is matched against, so an opt-out covers them all.
+   * Absent: just `handle`.
+   */
+  handles?: string[]
   optedOut: boolean
   /** Browser payload only: their link is the conference's own account. */
   ownAccount?: true
@@ -192,9 +198,9 @@ function byHandle(
 ): Map<string, TaggablePerson[]> {
   const map = new Map<string, TaggablePerson[]>()
   for (const p of people) {
-    if (!p.handle) continue
-    const h = normaliseHandle(p.handle)
-    map.set(h, [...(map.get(h) ?? []), p])
+    const all = p.handles ?? (p.handle ? [p.handle] : [])
+    for (const h of new Set(all.map(normaliseHandle)))
+      map.set(h, [...(map.get(h) ?? []), p])
   }
   return map
 }

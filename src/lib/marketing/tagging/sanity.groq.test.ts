@@ -32,7 +32,11 @@ const dataset = [
     _id: 'spk-olga',
     _type: 'speaker',
     name: 'Olga',
-    links: ['https://bsky.app/profile/olga.dev'],
+    // Two Bluesky accounts: the opt-out must cover both.
+    links: [
+      'https://bsky.app/profile/olga.dev',
+      'https://bsky.app/profile/olga.bsky.social',
+    ],
     socialTagOptOut: true,
   },
   {
@@ -138,12 +142,14 @@ const alice = {
   speakerId: 'spk-alice',
   name: 'Alice',
   handle: 'alice.dev',
+  handles: ['alice.dev'],
   optedOut: false,
 }
 const olga = {
   speakerId: 'spk-olga',
   name: 'Olga',
   handle: 'olga.dev',
+  handles: ['olga.dev', 'olga.bsky.social'],
   optedOut: true,
 }
 
@@ -259,6 +265,8 @@ describe('taggablePeopleFrom', () => {
         ],
         { forClient: true },
       ),
-    ).toEqual([{ ...olga, handle: null }])
+    ).toEqual([
+      { speakerId: 'spk-olga', name: 'Olga', handle: null, optedOut: true },
+    ])
   })
 })
