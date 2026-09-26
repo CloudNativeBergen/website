@@ -103,7 +103,11 @@ async function refuseIfInRelease(
  * the orphan check: deleted only once nothing references them. Never throws —
  * the write is already done.
  */
-async function releaseFiles(projectId: string, ids: string[]) {
+async function releaseFiles(
+  projectId: string,
+  ids: string[],
+): Promise<string[]> {
+  const deleted: string[] = []
   for (const id of new Set(ids)) {
     const result = await (
       id.startsWith('file-')
@@ -116,7 +120,10 @@ async function releaseFiles(projectId: string, ids: string[]) {
       console.error(
         `Video project ${projectId} let go of file ${id}, which could not be cleaned up; delete it by hand if nothing references it`,
       )
+    if (result?.deleted) deleted.push(id)
   }
+  // The files that are gone: the editor drops them from its undo history.
+  return deleted
 }
 
 /** Which file each scene now holds, for the editor to carry into later saves. */
@@ -275,7 +282,7 @@ export const videoProjectRouter = router({
         ...files.images.flatMap((f) => (f ? [f.fileId] : [])),
         ...(files.track ? [files.track.fileId] : []),
       ])
-      await releaseFiles(input.id, [
+      const released = await releaseFiles(input.id, [
         ...stored.images
           .filter((f) => f.createdByGallery && !kept.has(f.fileId))
           .map((f) => f.fileId),
@@ -285,7 +292,11 @@ export const videoProjectRouter = router({
           ? [stored.track.fileId]
           : []),
       ])
-      return { _rev: rev, scenes: sceneFiles(input.scenes, files.images) }
+      return {
+        _rev: rev,
+        scenes: sceneFiles(input.scenes, files.images),
+        released,
+      }
     }),
 
   /**

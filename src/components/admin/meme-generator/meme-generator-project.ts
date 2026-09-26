@@ -33,7 +33,12 @@ export interface VideoProjects {
     rev: string
     title: string
     scenes: ProjectSceneInput[]
-  }) => Promise<{ _rev: string; scenes: SceneFile[] }>
+  }) => Promise<{
+    _rev: string
+    scenes: SceneFile[]
+    /** Files this save let go of that are now deleted: never drawn again. */
+    released: string[]
+  }>
   duplicate: (id: string) => Promise<{ _id: string }>
   delete: (id: string) => Promise<void>
 }
@@ -216,4 +221,27 @@ export class VideoProjectError extends Error {
   ) {
     super(message)
   }
+}
+
+/**
+ * The scenes without any background whose file a save deleted: an undo must
+ * never bring back an image the next save would refuse. Such a scene falls
+ * back to its colour, as after an erasure.
+ */
+export function dropReleasedFiles(
+  states: Scene[],
+  released: ReadonlySet<string>,
+): Scene[] {
+  if (released.size === 0) return states
+  return states.map((scene) => {
+    const fileId = scene.design.background.image?.fileId
+    if (!fileId || !released.has(fileId)) return scene
+    return {
+      ...scene,
+      design: {
+        ...scene.design,
+        background: { ...scene.design.background, image: null },
+      },
+    }
+  })
 }

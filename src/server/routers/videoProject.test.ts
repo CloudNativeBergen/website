@@ -723,14 +723,17 @@ describe('a file the project lets go of', () => {
     await assets().delete({ id: 'asset-hall' })
     expect(doc(HALL)).toBeDefined()
     const { _rev } = await projects().open({ id: created._id })
-    await withoutBackground(created._id, _rev)
+    const saved = await withoutBackground(created._id, _rev)
     expect(doc(HALL)).toBeUndefined()
+    // Named, so the editor drops it from its undo history.
+    expect(saved.released).toEqual([HALL])
   })
 
   it('is kept while the gallery still holds it', async () => {
     const created = await projects().create({ title: 'T', scenes: TWO_SCENES })
-    await withoutBackground(created._id, created._rev)
+    const saved = await withoutBackground(created._id, created._rev)
     expect(doc(HALL)).toBeDefined()
+    expect(saved.released).toEqual([])
   })
 
   it('keeps its subject when saved again from the file alone', async () => {

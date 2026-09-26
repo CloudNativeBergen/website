@@ -102,6 +102,7 @@ function fakeProjects(overrides: Partial<VideoProjects> = {}) {
         key: s.key,
         fileId: s.design.background.image ? 'image-hall' : null,
       })),
+      released: [],
     })),
     duplicate: vi.fn(async () => ({ _id: 'vp-copy' })),
     delete: vi.fn(async () => {}),
@@ -579,10 +580,9 @@ describe('while a call is in flight', () => {
 })
 
 describe('deleting a project', () => {
-  it('asks, deletes the open project, and leaves the video in the editor as unsaved', async () => {
+  it('asks in a dialog, deletes the open project, and leaves the video in the editor as unsaved', async () => {
     const projects = fakeProjects()
     const onProjectChange = vi.fn()
-    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
     render(
       <MemeGenerator
         projects={projects}
@@ -594,22 +594,56 @@ describe('deleting a project', () => {
     fireEvent.click(
       within(project()).getByRole('button', { name: 'Delete project' }),
     )
-    expect(confirm).toHaveBeenCalled()
+    const dialog = await screen.findByRole('dialog')
+    expect(projects.delete).not.toHaveBeenCalled()
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: 'Delete project' }),
+    )
     await waitFor(() => expect(projects.delete).toHaveBeenCalledWith('vp-1'))
     await waitFor(() => expect(onProjectChange).toHaveBeenLastCalledWith(null))
-    expect(within(project()).getByText('Not saved yet')).toBeInTheDocument()
+    await within(project()).findByText('Not saved yet')
     expect(screen.getByDisplayValue('Launch teaser')).toBeInTheDocument()
   })
 
-  it('does nothing when the organizer says no', async () => {
+  it('does nothing when the dialog is cancelled', async () => {
     const projects = fakeProjects()
-    vi.spyOn(window, 'confirm').mockReturnValue(false)
     render(<MemeGenerator projects={projects} initialProjectId="vp-1" />)
     await screen.findByDisplayValue('Launch teaser')
     fireEvent.click(
       within(project()).getByRole('button', { name: 'Delete project' }),
     )
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.click(within(dialog).getByRole('button', { name: /Cancel/ }))
     expect(projects.delete).not.toHaveBeenCalled()
+  })
+})
+
+describe('undo after a save deleted a background', () => {
+  it('never brings the deleted image back: that scene undoes to its colour', async () => {
+    const projects = fakeProjects({
+      save: vi.fn(async (input: Parameters<VideoProjects['save']>[0]) => ({
+        _rev: 'rev-9',
+        scenes: input.scenes.map((sc) => ({ key: sc.key, fileId: null })),
+        released: ['image-hall'],
+      })),
+    })
+    render(<MemeGenerator projects={projects} initialProjectId="vp-1" />)
+    await within(
+      await screen.findByRole('region', { name: 'Project' }),
+    ).findByText('All changes saved')
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Clear background image' }),
+    )
+    await waitFor(() =>
+      expect(drawDesign.mock.lastCall![1].background.image).toBeNull(),
+    )
+    save()
+    await within(project()).findByText('All changes saved')
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
+    await waitFor(() =>
+      expect(screen.queryByText('Current: Keynote hall')).toBeNull(),
+    )
+    expect(drawDesign.mock.lastCall![1].background.image).toBeNull()
   })
 })
 

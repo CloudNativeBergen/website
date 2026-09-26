@@ -106,10 +106,12 @@ import { mediabunnyBackend } from './meme-generator-mediabunny'
 import type { BackgroundGallery } from './meme-generator-gallery'
 import { BackgroundGalleryPicker } from './BackgroundGalleryPicker'
 import { KeepInGallery } from './KeepInGallery'
+import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
 import { VideoProjectBar, type ProjectMessage } from './VideoProjectBar'
 import {
   VideoProjectError,
   carryFiles,
+  dropReleasedFiles,
   fromProjectScenes,
   projectSnapshot,
   toProjectScenes,
@@ -911,7 +913,12 @@ export function MemeGenerator({
     setProjectMessage(null)
     try {
       const over = asNew ? null : project
-      const result: { _id?: string; _rev: string; scenes: SceneFile[] } = over
+      const result: {
+        _id?: string
+        _rev: string
+        scenes: SceneFile[]
+        released?: string[]
+      } = over
         ? await projects.save({
             id: over.id,
             rev: over.rev,
@@ -933,8 +940,11 @@ export function MemeGenerator({
         const url = drawnBy.get(key)
         if (url && fileId) files.set(url, fileId)
       }
+      const released = new Set(result.released ?? [])
       setHistory((prev) =>
-        mapStates(prev, (states) => carryFiles(states, files)),
+        mapStates(prev, (states) =>
+          dropReleasedFiles(carryFiles(states, files), released),
+        ),
       )
       const id = over?.id ?? result._id!
       setProject({ id, rev: result._rev })
@@ -965,15 +975,12 @@ export function MemeGenerator({
     }
   }
 
-  /** Delete the open project, after asking; the editor keeps the video. */
+  // The project delete, awaiting its confirmation.
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
+
+  /** Delete the open project, once confirmed; the editor keeps the video. */
   const deleteProject = async () => {
     if (!projects || !project) return
-    if (
-      !window.confirm(
-        `Delete the project “${projectTitle.trim() || UNTITLED}”? The video stays in the editor until you leave, but the saved project is gone for everyone.`,
-      )
-    )
-      return
     setProjectBusy('deleting')
     setProjectMessage(null)
     try {
@@ -993,6 +1000,7 @@ export function MemeGenerator({
       })
     } finally {
       setProjectBusy(null)
+      setConfirmingDelete(false)
     }
   }
 
@@ -1720,9 +1728,21 @@ export function MemeGenerator({
             onNew={newVideo}
             onSave={() => void saveProject()}
             onDuplicate={() => void duplicateProject()}
-            onDelete={() => void deleteProject()}
+            onDelete={() => setConfirmingDelete(true)}
             onSaveAsNew={() => void saveProject(true)}
             message={projectMessage}
+          />
+        )}
+        {projects && (
+          <ConfirmationModal
+            isOpen={confirmingDelete}
+            onClose={() => setConfirmingDelete(false)}
+            onConfirm={() => void deleteProject()}
+            isLoading={projectBusy === 'deleting'}
+            title="Delete project"
+            message={`Delete “${projectTitle.trim() || UNTITLED}”? The saved project is gone for everyone. The video stays in this editor until you leave it.`}
+            confirmButtonText="Delete project"
+            variant="danger"
           />
         )}
         <div className={styles.panel}>
