@@ -744,7 +744,12 @@ export function MemeGenerator({
       )
         return
       const link = (event.target as Element | null)?.closest?.('a[href]')
-      if (!(link instanceof HTMLAnchorElement) || link.target === '_blank')
+      if (
+        !(link instanceof HTMLAnchorElement) ||
+        link.target === '_blank' ||
+        link.hasAttribute('download') ||
+        link.protocol === 'blob:'
+      )
         return
       const to = new URL(link.href, window.location.href)
       if (
@@ -1540,7 +1545,16 @@ export function MemeGenerator({
   )
 
   return (
-    <div ref={rootRef} className="grid gap-4 lg:grid-cols-2">
+    <div
+      ref={rootRef}
+      className="grid gap-4 lg:grid-cols-2"
+      // While a project opens, nothing can be edited: the video it opens
+      // replaces the editor's, and an edit made meanwhile would be lost.
+      inert={projectBusy === 'opening' || projectBusy === 'duplicating'}
+      aria-busy={
+        projectBusy === 'opening' || projectBusy === 'duplicating' || undefined
+      }
+    >
       {/* In Video mode the preview and the timeline together can be taller
           than a laptop screen; the sticky column then scrolls on its own so
           the timeline is never stranded below the fold. */}

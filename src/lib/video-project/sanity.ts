@@ -4,6 +4,7 @@ import { scopedFetch } from '@/lib/sanity/scoped'
 import { getCurrentDateTime } from '@/lib/time'
 import { OPEN_PROJECTION, VIDEO_PROJECT_FORMAT_VERSION } from './document'
 import type { ProjectRow } from './document'
+import { PROJECT_KEY } from './format'
 import type { ProjectRights, VideoProjectRow } from './format'
 
 /**
@@ -244,11 +245,13 @@ export async function readVideoProjectCreatedFiles(
   orgId: string,
   id: string,
 ): Promise<string[]> {
-  const row = await scopedFetch<{ ids: (string | null)[] | null } | null>(
-    clientReadUncached,
+  // The Studio draft too: it is deleted with the project, and may hold an
+  // older file the published document no longer does.
+  const rows = await scopedFetch<{ ids: (string | null)[] | null }[] | null>(
+    clientReadUncached.withConfig({ perspective: 'raw' }),
     { orgId },
-    `*[_type == "videoProject" && _id == $id][0]{
-      "ids": scenes[background.image.createdByGallery == true].background.image.asset._ref
+    `*[_type == "videoProject" && _id in [$id, "drafts." + $id]]{
+      "ids": coalesce(scenes[background.image.createdByGallery == true].background.image.asset._ref, [])
         + select(track.file.createdByGallery == true => [track.file.asset._ref], [])
     }`,
     { id },
@@ -256,7 +259,9 @@ export async function readVideoProjectCreatedFiles(
   )
   return [
     ...new Set(
-      (row?.ids ?? []).filter((x): x is string => typeof x === 'string'),
+      (rows ?? [])
+        .flatMap((row) => row.ids ?? [])
+        .filter((x): x is string => typeof x === 'string'),
     ),
   ]
 }
@@ -269,8 +274,8 @@ export async function readVideoProjectCreatedFiles(
 export async function countVideoProjectReleaseTwins(
   orgId: string,
   id: string,
-): Promise<number> {
-  const result = await scopedFetch<{ n: number } | null>(
+): Promise<{ releases: number; draft: boolean }> {
+  const releases = await scopedFetch<{ n: number } | null>(
     clientReadUncached.withConfig({
       apiVersion: '2025-02-19',
       perspective: 'raw',
@@ -280,10 +285,94 @@ export async function countVideoProjectReleaseTwins(
     { id },
     opts,
   )
-  return result?.n ?? 0
+  const drafts = await scopedFetch<{ n: number } | null>(
+    clientReadUncached.withConfig({
+      apiVersion: '2025-02-19',
+      perspective: 'raw',
+    }),
+    { orgId },
+    `{ "n": count(*[_type == "videoProject" && _id == "drafts." + $id]) }`,
+    { id },
+    opts,
+  )
+  return { releases: releases?.n ?? 0, draft: (drafts?.n ?? 0) > 0 }
 }
 
 /** Delete a project and any Studio draft of it, together. */
 export async function deleteVideoProjectDocument(id: string): Promise<void> {
   await clientWrite.transaction().delete(id).delete(`drafts.${id}`).commit()
+}
+
+/**
+ * Before a gallery asset is deleted, write its CURRENT subject into every
+ * project (and Studio draft) of the organization holding its file through
+ * it: from then on that copy is the only record of who the file shows, so a
+ * subject corrected in the gallery since the project was saved must not be
+ * lost to a stale one. No subject now removes the copy.
+ */
+export async function snapshotGallerySubjectIntoProjects(
+  orgId: string,
+  assetId: string,
+): Promise<void> {
+  const raw = clientReadUncached.withConfig({ perspective: 'raw' })
+  const asset = await scopedFetch<{ subjectId: string | null } | null>(
+    raw,
+    { orgId },
+    `*[_type == "marketingAsset" && _id == $assetId][0]{ "subjectId": subject._ref }`,
+    { assetId },
+    opts,
+  )
+  const holders = await scopedFetch<
+    | {
+        _id: string
+        scenes: { key: string | null; subjectId: string | null }[] | null
+        track: { subjectId: string | null } | null
+      }[]
+    | null
+  >(
+    raw,
+    { orgId },
+    `*[_type == "videoProject" && (count(scenes[background.image.galleryAsset._ref == $assetId]) > 0 || track.file.galleryAsset._ref == $assetId)]{
+      _id,
+      "scenes": scenes[background.image.galleryAsset._ref == $assetId]{ "key": _key, "subjectId": background.image.subject._ref },
+      "track": select(track.file.galleryAsset._ref == $assetId => { "subjectId": track.file.subject._ref }, null)
+    }`,
+    { assetId },
+    opts,
+  )
+  const subjectId = asset?.subjectId ?? null
+  for (const holder of holders ?? []) {
+    // Only where the copy differs: an unchanged one is left alone, so the
+    // project's revision — and an open editor's next save — is untouched.
+    const stale = (stored: string | null) => (stored ?? null) !== subjectId
+    const paths = [
+      ...(holder.scenes ?? [])
+        .filter(
+          (scene): scene is { key: string; subjectId: string | null } =>
+            typeof scene.key === 'string' &&
+            PROJECT_KEY.test(scene.key) &&
+            stale(scene.subjectId),
+        )
+        .map(
+          (scene) => `scenes[_key=="${scene.key}"].background.image.subject`,
+        ),
+      ...(holder.track && stale(holder.track.subjectId)
+        ? ['track.file.subject']
+        : []),
+    ]
+    if (paths.length === 0) continue
+    const patch = clientWrite.patch(holder._id)
+    await (
+      subjectId
+        ? patch.set(
+            Object.fromEntries(
+              paths.map((path) => [
+                path,
+                { _type: 'reference', _ref: subjectId, _weak: true },
+              ]),
+            ),
+          )
+        : patch.unset(paths)
+    ).commit()
+  }
 }

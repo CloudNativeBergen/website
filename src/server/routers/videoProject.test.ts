@@ -118,6 +118,8 @@ vi.mock('@/lib/sanity/client', async () => {
         out.push(next)
       } else if (m.delete) {
         const id = m.delete.id as string
+        if (h.dataset.find((d) => d._id === id)?._failDelete)
+          throw Object.assign(new Error('503'), { statusCode: 503 })
         const holders = h.dataset.filter(
           (d) => d._id !== id && strongRefs(d).has(id),
         )
@@ -640,6 +642,34 @@ describe('the gallery asset behind a background', () => {
     expect(doc(HALL)).toBeUndefined()
   })
 
+  it('takes the asset’s subject as it is when the asset is deleted, not as it was saved', async () => {
+    const created = await projects().create({ title: 'T', scenes: TWO_SCENES })
+    // Corrected in the gallery after the save.
+    const i = h.dataset.findIndex((d) => d._id === 'asset-hall')
+    h.dataset[i] = {
+      ...h.dataset[i],
+      subject: { ...ref('sp-bob'), _weak: true },
+    }
+    await assets().delete({ id: 'asset-hall' })
+    const image = (
+      doc(created._id)!.scenes as { background: { image: unknown } }[]
+    )[0].background.image
+    expect(image).toMatchObject({ subject: { ...ref('sp-bob'), _weak: true } })
+  })
+
+  it('removes the copied subject when the asset no longer names one', async () => {
+    const created = await projects().create({ title: 'T', scenes: TWO_SCENES })
+    const i = h.dataset.findIndex((d) => d._id === 'asset-hall')
+    const rest = { ...h.dataset[i] }
+    delete rest.subject
+    h.dataset[i] = rest
+    await assets().delete({ id: 'asset-hall' })
+    const image = (
+      doc(created._id)!.scenes as { background: { image: object } }[]
+    )[0].background.image
+    expect(image).not.toHaveProperty('subject')
+  })
+
   it('stays while the gallery still holds it when the project is deleted', async () => {
     const created = await projects().create({
       title: 'Teaser',
@@ -966,6 +996,21 @@ describe('a project in another format version', () => {
     expect(h.mutations).toEqual([])
   })
 
+  it('is refused as the source of a save as a new project', async () => {
+    store(2)
+    await expect(
+      projects().create({
+        title: 'C',
+        scenes: [scene('s')],
+        copyFilesFrom: 'vp-future',
+      }),
+    ).rejects.toMatchObject({
+      code: 'PRECONDITION_FAILED',
+      message: expect.stringContaining('newer version'),
+    })
+    expect(h.mutations).toEqual([])
+  })
+
   it('refuses a project with no version rather than guessing', async () => {
     store(undefined)
     await expect(projects().open({ id: 'vp-future' })).rejects.toMatchObject({
@@ -1018,6 +1063,70 @@ describe('every project read is scoped to the organization on its own', () => {
     expect(
       await readVideoProjectCreatedFiles('org-B', 'vp-theirs-full'),
     ).toEqual(['image-theirs-100x100-png'])
+  })
+})
+
+describe('a stored scope the studio does not know', () => {
+  it('is refused on open rather than read as organization-wide', async () => {
+    const created = await projects().create({
+      title: 'T',
+      scenes: [scene('s')],
+    })
+    const i = h.dataset.findIndex((d) => d._id === created._id)
+    h.dataset[i] = { ...h.dataset[i], scope: 'galaxy' }
+    await expect(projects().open({ id: created._id })).rejects.toMatchObject({
+      code: 'PRECONDITION_FAILED',
+      message: expect.stringContaining('cannot read'),
+    })
+  })
+})
+
+describe('a project with an open Studio draft', () => {
+  it('is not saved over; deleting it takes the draft and the files only the draft held', async () => {
+    const created = await projects().create({
+      title: 'T',
+      scenes: [scene('s')],
+    })
+    // The draft holds an older gallery-made file the published one does not;
+    // then the gallery asset and the project that first used it are gone.
+    const older = await projects().create({ title: 'O', scenes: TWO_SCENES })
+    h.dataset.push({
+      ...doc(created._id)!,
+      _id: `drafts.${created._id}`,
+      scenes: doc(older._id)!.scenes,
+    })
+    await projects().delete({ id: older._id })
+    await assets().delete({ id: 'asset-hall' })
+    expect(doc(HALL)).toBeDefined()
+    h.mutations = []
+    await expect(
+      projects().save({
+        id: created._id,
+        rev: created._rev,
+        title: 'X',
+        scenes: [scene('s')],
+      }),
+    ).rejects.toMatchObject({
+      code: 'PRECONDITION_FAILED',
+      message: expect.stringContaining('unpublished draft'),
+    })
+    expect(h.mutations).toEqual([])
+    await projects().delete({ id: created._id })
+    expect(doc(`drafts.${created._id}`)).toBeUndefined()
+    expect(doc(HALL)).toBeUndefined()
+  })
+})
+
+describe('a file whose orphan delete fails', () => {
+  it('is reported for deleting by hand', async () => {
+    const created = await projects().create({ title: 'T', scenes: TWO_SCENES })
+    await assets().delete({ id: 'asset-hall' })
+    // Something transient refuses the file's own delete.
+    const i = h.dataset.findIndex((d) => d._id === HALL)
+    h.dataset[i] = { ...h.dataset[i], _failDelete: true }
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    await projects().delete({ id: created._id })
+    expect(error).toHaveBeenCalledWith(expect.stringContaining(HALL))
   })
 })
 

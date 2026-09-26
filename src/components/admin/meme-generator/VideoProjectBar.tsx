@@ -97,6 +97,9 @@ export function VideoProjectBar({
             // A save in flight stores the title it sent; an edit made
             // meanwhile would be shown as saved when it was not.
             readOnly={busy !== null}
+            // The title is not a step of the video's history: the field's
+            // own undo, not the editor's.
+            data-own-undo
             className={styles.input}
           />
         </div>
@@ -149,6 +152,7 @@ export function VideoProjectBar({
               id={ids.edition}
               type="checkbox"
               checked={editionOnly}
+              disabled={busy !== null}
               onChange={(e) => onEditionOnlyChange(e.target.checked)}
               className="size-4 rounded border-gray-300 text-brand-cloud-blue focus:ring-brand-cloud-blue dark:border-gray-600 dark:bg-gray-700"
             />

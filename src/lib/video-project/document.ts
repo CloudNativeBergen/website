@@ -322,6 +322,8 @@ export function openedProject(
     }
   })
   if (scenes.length === 0) throw unreadable()
+  if (row.scope !== 'organization' && row.scope !== 'edition')
+    throw unreadable()
   let track: OpenedTrack | null = null
   if (row.track) {
     const parsed = projectTrackInputSchema.safeParse(row.track)
@@ -340,7 +342,7 @@ export function openedProject(
     _id: row._id,
     _rev: row._rev,
     title: row.title ?? '',
-    scope: row.scope === 'edition' ? 'edition' : 'organization',
+    scope: row.scope,
     edition: row.edition,
     scenes,
     track,

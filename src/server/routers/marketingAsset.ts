@@ -26,6 +26,7 @@ import {
   deleteFileAssetIfOrphaned,
   deleteImageAssetIfOrphaned,
 } from '@/lib/sanity/orphaned-asset'
+import { snapshotGallerySubjectIntoProjects } from '@/lib/video-project/sanity'
 
 /**
  * The organization's marketing asset gallery (spec §3). Organizer-only through
@@ -173,6 +174,9 @@ export const marketingAssetRouter = router({
       if ((await countMarketingAssetReleaseTwins(orgId, input.id)) > 0)
         throw inRelease('delete')
       const media = await readMarketingAssetMedia(orgId, input.id)
+      // A saved video holding this file keeps it past the asset, and with it
+      // the asset's subject as it is NOW — the record erasure follows (#1181).
+      await snapshotGallerySubjectIntoProjects(orgId, input.id)
       // The documents first: while one exists, it is itself a reference to
       // the file, and the orphan check would always keep it.
       await deleteMarketingAssetDocument(input.id)

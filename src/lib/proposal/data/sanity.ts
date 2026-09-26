@@ -482,10 +482,13 @@ const CASCADE_DELETE_TYPES = ['coSpeakerInvitation', 'review']
  *   separately below, since they'd otherwise 404 on their deep link.)
  * - `conversation` — the proposal thread; CASCADE-deleted below along with its
  *   messages.
- * Both are excluded from the blocking check so a proposal with an active message
+ * - `videoProject` — a saved studio video (#1181) names a talk only as the
+ *   WEAK `subject` it copied from a gallery image, for erasure; nothing
+ *   dereferences it to render, so it dangles harmlessly.
+ * All are excluded from the blocking check so a proposal with an active message
  * thread and notifications stays deletable.
  */
-const NON_BLOCKING_TYPES = ['notification', 'conversation']
+const NON_BLOCKING_TYPES = ['notification', 'conversation', 'videoProject']
 
 /** Deletes per transaction when cascading a proposal's thread — keeps each
  * commit well under Sanity's mutation-per-transaction ceiling. */

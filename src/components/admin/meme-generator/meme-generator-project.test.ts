@@ -176,6 +176,17 @@ describe('carryFiles', () => {
 })
 
 describe('projectSnapshot', () => {
+  it('changes when another gallery entry of the same file is picked', () => {
+    const list = scenes()
+    const base = projectSnapshot('t', list)
+    list[0].design.background.image = {
+      ...list[0].design.background.image!,
+      name: 'Same photo, other entry',
+      galleryAssetId: 'asset-other',
+    }
+    expect(projectSnapshot('t', list)).not.toBe(base)
+  })
+
   it('tells two uploads apart without carrying their bytes', () => {
     const list = scenes()
     const big = `data:image/png;base64,${'A'.repeat(200_000)}`

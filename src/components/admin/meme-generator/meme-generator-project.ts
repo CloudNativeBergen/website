@@ -129,8 +129,9 @@ export function fromProjectScenes(scenes: OpenedScene[]): Scene[] {
 
 /**
  * What a save would store, as a string to compare: equal when nothing a save
- * would change has changed. An image is its URL — what is drawn — so the
- * file id a save carries back, or a keep in the gallery, is no change.
+ * would change has changed. An image is what is drawn, its name and its
+ * gallery asset — two gallery entries can share one deduplicated file — but
+ * not the file id a save carries back.
  */
 export function projectSnapshot(title: string, scenes: Scene[]): string {
   return stableJson({
@@ -141,7 +142,14 @@ export function projectSnapshot(title: string, scenes: Scene[]): string {
         ...scene.design,
         background: {
           color: scene.design.background.color,
-          image: imageIdentity(scene.design.background.image?.url),
+          image: scene.design.background.image
+            ? {
+                url: imageIdentity(scene.design.background.image.url),
+                name: scene.design.background.image.name,
+                galleryAssetId:
+                  scene.design.background.image.galleryAssetId ?? null,
+              }
+            : null,
         },
       },
     })),

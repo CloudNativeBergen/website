@@ -398,7 +398,8 @@ describe('leaving with unsaved changes', () => {
     expect(blocked()).toBe(true)
     save()
     await within(project()).findByText('All changes saved')
-    expect(blocked()).toBe(false)
+    // The listener goes in the effect after that commit.
+    await waitFor(() => expect(blocked()).toBe(false))
   })
 
   it('asks before an in-app link leaves, and stays when told to', async () => {
@@ -426,6 +427,27 @@ describe('leaving with unsaved changes', () => {
     expect(confirm).toHaveBeenCalled()
     confirm.mockReturnValue(true)
     expect(click()).toBe(false)
+  })
+
+  it('never asks for a download link, or a blob link', () => {
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    render(
+      <>
+        <a href="/files/clip.mp4" download="clip.mp4">
+          Download video
+        </a>
+        <MemeGenerator projects={fakeProjects()} />
+      </>,
+    )
+    toVideo()
+    typeTitle('Teaser')
+    const event = new MouseEvent('click', {
+      bubbles: true,
+      cancelable: true,
+      button: 0,
+    })
+    screen.getByRole('link', { name: 'Download video' }).dispatchEvent(event)
+    expect(confirm).not.toHaveBeenCalled()
   })
 
   it('never asks for an image with no project', () => {
@@ -475,6 +497,75 @@ describe('playback behind another studio tab', () => {
         screen.getByRole('button', { name: 'Play', hidden: true }),
       ).toBeInTheDocument(),
     )
+  })
+})
+
+describe('while a call is in flight', () => {
+  it('locks the title and the edition choice until a save settles', async () => {
+    let finish: () => void = () => {}
+    const projects = fakeProjects({
+      create: vi.fn(
+        (input: Parameters<VideoProjects['create']>[0]) =>
+          new Promise<Awaited<ReturnType<VideoProjects['create']>>>(
+            (resolve) => {
+              finish = () =>
+                resolve({
+                  _id: 'vp-new',
+                  _rev: 'rev-2',
+                  scenes: input.scenes.map((sc) => ({
+                    key: sc.key,
+                    fileId: null,
+                  })),
+                })
+            },
+          ),
+      ),
+    })
+    render(<MemeGenerator projects={projects} />)
+    toVideo()
+    save()
+    expect(within(project()).getByLabelText('Project title')).toHaveAttribute(
+      'readonly',
+    )
+    expect(
+      within(project()).getByLabelText('For this edition only'),
+    ).toBeDisabled()
+    finish()
+    await within(project()).findByText('All changes saved')
+  })
+
+  it('makes the editor inert while a project opens, so no edit is lost to it', async () => {
+    let finish: () => void = () => {}
+    const projects = fakeProjects({
+      open: vi.fn(
+        () =>
+          new Promise<OpenedProject>(
+            (resolve) => (finish = () => resolve(PROJECT)),
+          ),
+      ),
+    })
+    const { container } = render(
+      <MemeGenerator projects={projects} initialProjectId="vp-1" />,
+    )
+    await waitFor(() => expect(projects.open).toHaveBeenCalled())
+    expect(container.firstElementChild).toHaveAttribute('inert')
+    finish()
+    await screen.findByDisplayValue('Launch teaser')
+    expect(container.firstElementChild).not.toHaveAttribute('inert')
+  })
+
+  it('leaves Ctrl+Z in the title to the field', async () => {
+    render(<MemeGenerator projects={fakeProjects()} />)
+    toVideo()
+    const title = within(project()).getByLabelText('Project title')
+    const event = new KeyboardEvent('keydown', {
+      key: 'z',
+      ctrlKey: true,
+      bubbles: true,
+      cancelable: true,
+    })
+    title.dispatchEvent(event)
+    expect(event.defaultPrevented).toBe(false)
   })
 })
 

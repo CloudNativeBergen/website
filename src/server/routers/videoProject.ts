@@ -82,10 +82,19 @@ async function refuseIfInRelease(
   id: string,
   action: 'save' | 'delete',
 ) {
-  if ((await countVideoProjectReleaseTwins(orgId, id)) > 0)
+  const twins = await countVideoProjectReleaseTwins(orgId, id)
+  if (twins.releases > 0)
     throw new TRPCError({
       code: 'PRECONDITION_FAILED',
       message: `This project is part of a Content Release in Studio. Remove it from the release first, then ${action} it here.`,
+    })
+  // An open Studio draft, published later, would silently overwrite this
+  // save. A delete takes the draft with it, so only a save is refused.
+  if (action === 'save' && twins.draft)
+    throw new TRPCError({
+      code: 'PRECONDITION_FAILED',
+      message:
+        'This project has an unpublished draft in Studio. Publish or discard it there first, then save here.',
     })
 }
 
@@ -101,9 +110,11 @@ async function releaseFiles(projectId: string, ids: string[]) {
         ? deleteFileAssetIfOrphaned
         : deleteImageAssetIfOrphaned
     )(id).catch(() => null)
-    if (!result || result.remainingReferences === -1)
-      console.warn(
-        `Video project ${projectId} let go of file ${id}; it was kept because its references could not be counted`,
+    // A failed count (-1) or a failed delete of an unreferenced file (0, not
+    // deleted): either way nothing else will retry it.
+    if (!result || (!result.deleted && result.remainingReferences <= 0))
+      console.error(
+        `Video project ${projectId} let go of file ${id}, which could not be cleaned up; delete it by hand if nothing references it`,
       )
   }
 }
@@ -173,6 +184,9 @@ export const videoProjectRouter = router({
         ? await readVideoProjectFiles(orgId, input.copyFilesFrom)
         : null
       if (input.copyFilesFrom && !source) throw notFound()
+      // A source another version wrote is never read as this one.
+      const sourceRefusal = source && projectFormatRefusal(source.formatVersion)
+      if (sourceRefusal) throw refuseFormat(sourceRefusal)
       const files = await resolveProjectFiles(
         orgId,
         input.scenes,
