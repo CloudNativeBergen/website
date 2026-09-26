@@ -290,6 +290,34 @@ describe('opening a project', () => {
     })
   })
 
+  it('never lets an upload still decoding land in the project opened after it', async () => {
+    const projects = fakeProjects()
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    render(<MemeGenerator projects={projects} initialProjectId="vp-1" />)
+    await screen.findByDisplayValue('Launch teaser')
+    let release: () => void = () => {}
+    const late = new Promise<void>((resolve) => (release = resolve))
+    Object.defineProperty(HTMLImageElement.prototype, 'decode', {
+      configurable: true,
+      value(this: HTMLImageElement) {
+        return this.src.startsWith('data:') ? late : Promise.resolve()
+      },
+    })
+    fireEvent.change(screen.getByLabelText(/Upload Background Image/), {
+      target: { files: [new File(['x'], 'photo.png', { type: 'image/png' })] },
+    })
+    // Reopened — same scene keys — while the upload decodes.
+    fireEvent.change(within(project()).getByLabelText('Open a saved project'), {
+      target: { value: 'vp-1' },
+    })
+    await waitFor(() => expect(projects.open).toHaveBeenCalledTimes(2))
+    await within(project()).findByText('All changes saved')
+    release()
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(within(project()).getByText('All changes saved')).toBeInTheDocument()
+    expect(screen.queryByText('Current: photo.png')).toBeNull()
+  })
+
   it('says plainly when a project cannot be opened', async () => {
     const projects = fakeProjects({
       open: vi.fn(async () => {
