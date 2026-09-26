@@ -427,3 +427,95 @@ export function floatWavWithBits(bits: number): Buffer {
   return wav
 }
 export const layer2At32k = () => fixture('layer2-32k.mp2')
+
+/** Real ffmpeg u8 mono WAVs of 44 101 samples: an odd data chunk, padded. */
+export const wavOddWithList = () => fixture('u8-odd.wav')
+export const wavOddBitexact = () => fixture('u8-odd-bitexact.wav')
+
+/**
+ * The AAC tone with its sample entry renamed `alac`, its `esds` kept: an ALAC
+ * entry a config reader would take for AAC (ALAC frames hold 4096 samples,
+ * so a 1024-per-frame length would be a quarter of what plays).
+ */
+export function alacEntryWithEsds(): Buffer {
+  const bytes = Buffer.from(m4aTone())
+  bytes.write('alac', bytes.indexOf('mp4a'))
+  return bytes
+}
+
+/** Where the tone's esds descriptors start (after its version and flags). */
+const esdsBody = (bytes: Buffer) => bytes.indexOf('esds') + 8
+
+/** The tone with its ES descriptor's tag changed from 0x03. */
+export function m4aEsTagWrong(): Buffer {
+  const bytes = Buffer.from(m4aTone())
+  bytes[esdsBody(bytes)] = 0x13
+  return bytes
+}
+
+/** The tone with its DecoderConfig's object type 0x6B (MP3), not AAC (0x40). */
+export function m4aConfigNotAac(): Buffer {
+  const bytes = Buffer.from(m4aTone())
+  const config = bytes.indexOf(0x04, esdsBody(bytes) + 5)
+  let at = config + 1
+  while (bytes[at++] & 0x80);
+  bytes[at] = 0x6b
+  return bytes
+}
+
+/** The tone with its ES descriptor claiming more bytes than the esds holds. */
+export function m4aEsSizeOverrun(): Buffer {
+  const bytes = Buffer.from(m4aTone())
+  // ffmpeg writes the size in 4 bytes (0x80 0x80 0x80 n): make n 127, past
+  // the end of the esds.
+  let at = esdsBody(bytes) + 1
+  while (bytes[at] & 0x80) at++
+  bytes[at] = 0x7f
+  return bytes
+}
+
+/** The 24-bit EXTENSIBLE WAV with the GUID's second byte set (code 0x0101). */
+export function wavGuidHighByte(): Buffer {
+  const wav = Buffer.from(wav24BitStereo())
+  wav.writeUInt8(1, 20 + 24 + 1)
+  return wav
+}
+
+/** The tone with its DecoderConfig descriptor's tag changed from 0x04. */
+export function m4aConfigTagWrong(): Buffer {
+  const bytes = Buffer.from(m4aTone())
+  bytes[bytes.indexOf(0x04, esdsBody(bytes) + 5)] = 0x14
+  return bytes
+}
+
+/** The tone with its DecoderSpecificInfo descriptor's tag changed from 0x05. */
+export function m4aDsiTagWrong(): Buffer {
+  const bytes = Buffer.from(m4aTone())
+  const config = bytes.indexOf(0x04, esdsBody(bytes) + 5)
+  bytes[bytes.indexOf(0x05, config + 5 + 13)] = 0x15
+  return bytes
+}
+
+/** The tone with its AAC sampling-frequency index set to 15 (none). */
+export function m4aRateIndexInvalid(): Buffer {
+  const bytes = Buffer.from(m4aTone())
+  const config = bytes.indexOf(0x04, esdsBody(bytes) + 5)
+  let at = bytes.indexOf(0x05, config + 5 + 13) + 1
+  while (bytes[at++] & 0x80);
+  bytes[at] |= 0x07
+  bytes[at + 1] |= 0x80
+  return bytes
+}
+
+/**
+ * The tone with its DecoderSpecificInfo claiming ONE byte: the rate index's
+ * last bit then lies outside it (read from what follows).
+ */
+export function m4aDsiOneByte(): Buffer {
+  const bytes = Buffer.from(m4aTone())
+  const config = bytes.indexOf(0x04, esdsBody(bytes) + 5)
+  let at = bytes.indexOf(0x05, config + 5 + 13) + 1
+  while (bytes[at] & 0x80) at++
+  bytes[at] = 1
+  return bytes
+}

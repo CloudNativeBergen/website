@@ -108,12 +108,17 @@ export function measureWav(bytes: Uint8Array): Measured {
     const body = offset + 8
     const whole = body + size <= bytes.length
     if (id === 'fmt ') {
-      if (fmt || size < 16 || !whole) return refused
+      // No separate minimum size: a fmt shorter than its 16 fixed bytes has
+      // them read from the next chunk's id, which is printable text and never
+      // a valid bit depth — or from past the end, which throws. Refused both
+      // ways.
+      if (fmt || !whole) return refused
       let code = view.getUint16(body, true)
       if (code === 0xfffe) {
         const guid = body + 24
+        // A fmt too short for the GUID has it read from the next chunk's
+        // id (printable, never this tail's zeros) or past the end: refused.
         if (
-          size < 40 ||
           bytes[guid + 1] !== 0 ||
           !SUBFORMAT_TAIL.every((b, i) => bytes[guid + 2 + i] === b)
         )
@@ -200,7 +205,7 @@ const AAC_RATES = [
 function aacConfig(
   bytes: Uint8Array,
   entry: Box,
-): { objectType: number; sampleRate: number } | null {
+): { objectType: number; sampleRate: number | undefined } | null {
   // An AudioSampleEntry's fixed fields are 28 bytes; its boxes follow.
   const esds = boxes(bytes, entry.start + 28, entry.end).find(
     (b) => b.type === 'esds',
@@ -234,8 +239,9 @@ function aacConfig(
   if (info.tag !== 0x05 || info.end - info.start < 2) return null
   const objectType = bytes[info.start] >> 3
   const index = ((bytes[info.start] & 0x07) << 1) | (bytes[info.start + 1] >> 7)
-  const sampleRate = AAC_RATES[index]
-  return sampleRate ? { objectType, sampleRate } : null
+  // An index past the table (13–15) gives no rate, which the caller's rate
+  // check then refuses.
+  return { objectType, sampleRate: AAC_RATES[index] }
 }
 
 /**
@@ -279,9 +285,10 @@ export function measureM4a(bytes: Uint8Array): Measured {
   if (view.getUint32(stsd.start + 4) !== 1) return { refused: 'type' }
   const [entry] = boxes(bytes, stsd.start + 8, stsd.end)
   if (entry?.type !== 'mp4a') return { refused: 'type' }
-  // AAC-LC, with a decoder config (HE-AAC and a missing config refused).
+  // AAC-LC only: HE-AAC (5) and the rest are refused. A missing decoder
+  // config is refused by the rate check below, which it cannot pass.
   const aac = aacConfig(bytes, entry)
-  if (aac?.objectType !== 2) return { refused: 'type' }
+  if (aac && aac.objectType !== 2) return { refused: 'type' }
 
   const v1 = bytes[mdhd.start] === 1
   const timescale = view.getUint32(mdhd.start + (v1 ? 20 : 12))
@@ -289,7 +296,7 @@ export function measureM4a(bytes: Uint8Array): Measured {
     ? Number(view.getBigUint64(mdhd.start + 24))
     : view.getUint32(mdhd.start + 16)
   // The clock the samples are timed by must be the rate they play at.
-  if (timescale !== aac.sampleRate) return { refused: 'type' }
+  if (timescale !== aac?.sampleRate) return { refused: 'type' }
 
   // A count past the box's end reads past the file and throws: a refusal.
   // Only the sample COUNTS are used: every AAC-LC sample decodes to one

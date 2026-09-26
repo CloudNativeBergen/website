@@ -11,7 +11,17 @@ import {
   alawWav,
   behindId3,
   flacTone,
+  alacEntryWithEsds,
   apeFooterClaiming,
+  m4aConfigNotAac,
+  m4aConfigTagWrong,
+  m4aDsiOneByte,
+  m4aDsiTagWrong,
+  m4aRateIndexInvalid,
+  m4aEsSizeOverrun,
+  m4aEsTagWrong,
+  wavOddBitexact,
+  wavOddWithList,
   apeTag,
   floatWavWithBits,
   id3NotSyncsafe,
@@ -268,6 +278,10 @@ describe('measureAudio', () => {
       ['32-bit float', wavF32(), 1],
       ['64-bit float', wavF64(), 1],
       ['5.1 float (EXTENSIBLE)', wavF32Extensible51(), 0.25],
+      // An odd data chunk, then its pad byte: a walk that forgets the pad
+      // finds a 1-byte chunk and refuses the file.
+      ['u8 mono, odd data, with LIST', wavOddWithList(), 1],
+      ['u8 mono, odd data, bitexact', wavOddBitexact(), 1],
     ])('takes a real ffmpeg %s WAV', async (_, bytes, seconds) => {
       expect(await measureAudio(bytes)).toMatchObject({ type: 'audio/wav' })
       expect(await measure(bytes)).toBeCloseTo(seconds, 2)
@@ -377,6 +391,7 @@ describe('measureAudio', () => {
     it.each([
       ['ADPCM (code 2)', 2, 0],
       ['a code-1 GUID with a wrong tail', 1, 9],
+      ['a GUID whose second byte is set (code 0x0101)', 1, 1],
     ])('refuses an EXTENSIBLE WAV with %s', async (_, code, spoil) => {
       const wav = Buffer.from(wav24BitStereo())
       wav.writeUInt8(code, 20 + 24)
@@ -416,7 +431,16 @@ describe('measureAudio', () => {
         'stts deltas and header a tenth of what the frames play',
         m4aTenthDeltas(),
       ],
+      // Refused by the rate check: without a config there is no rate to match.
       ['no AAC decoder config (esds)', m4aNoEsds()],
+      ['an ALAC entry carrying an esds', alacEntryWithEsds()],
+      ['an ES descriptor with the wrong tag', m4aEsTagWrong()],
+      ['a decoder config that is not AAC (0x6B)', m4aConfigNotAac()],
+      ['an ES descriptor claiming past the esds', m4aEsSizeOverrun()],
+      ['a decoder config descriptor with the wrong tag', m4aConfigTagWrong()],
+      ['a decoder-specific info with the wrong tag', m4aDsiTagWrong()],
+      ['an AAC rate index past the table', m4aRateIndexInvalid()],
+      ['a decoder-specific info of one byte', m4aDsiOneByte()],
       [
         'a file whose boxes run past its end',
         Buffer.from('\0\0\0\x10ftypM4A \0\0'),
