@@ -704,7 +704,7 @@ describe('saving as a new project after a conflict', () => {
     expect(copy.scenes).toEqual([{ key: 'a', fileId: HALL }])
   })
 
-  it("cannot borrow another organization's files, with the guard's answer", async () => {
+  it('cannot borrow another organization’s files: its id lends nothing, and it is never read', async () => {
     h.queries = []
     await expect(
       projects().create({
@@ -713,11 +713,56 @@ describe('saving as a new project after a conflict', () => {
         copyFilesFrom: 'vp-theirs',
       }),
     ).rejects.toMatchObject({
-      code: 'NOT_FOUND',
-      message: 'No videoProject with that id for this request',
+      code: 'BAD_REQUEST',
+      message: expect.stringContaining(
+        "Scene 1's background is not in the gallery",
+      ),
     })
-    expect(h.queries).toHaveLength(1)
+    // The guard's read, then nothing of that project.
+    expect(h.queries[0]).toContain('"memberOrgIds"')
+    expect(h.queries.slice(1).some((q) => q.includes('videoProject'))).toBe(
+      false,
+    )
     expect(h.mutations).toEqual([])
+  })
+
+  it('still saves when the source was deleted after the conflict', async () => {
+    const created = await projects().create({
+      title: 'T',
+      scenes: [scene('s')],
+    })
+    await projects().delete({ id: created._id })
+    const copy = await projects().create({
+      title: 'Rescued',
+      scenes: [scene('s')],
+      copyFilesFrom: created._id,
+    })
+    expect(doc(copy._id)!.title).toBe('Rescued')
+  })
+
+  it('keeps the source’s edition and track', async () => {
+    const created = await projects().create({
+      title: 'T',
+      scenes: [scene('s')],
+      edition: 'current',
+      track: {
+        galleryAssetId: 'asset-theme',
+        start: 1,
+        volume: 0.5,
+        fadeIn: 0,
+        fadeOut: 0,
+      },
+    })
+    const copy = await projects().create({
+      title: 'Rescued',
+      scenes: [scene('s')],
+      copyFilesFrom: created._id,
+    })
+    expect(doc(copy._id)).toMatchObject({
+      scope: 'edition',
+      conference: ref('conf-A'),
+      track: doc(created._id)!.track,
+    })
   })
 })
 

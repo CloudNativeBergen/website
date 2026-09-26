@@ -68,6 +68,10 @@ export async function readVideoProjectFiles(
 ): Promise<{
   _rev: string
   formatVersion: unknown
+  scope: 'organization' | 'edition' | null
+  conferenceId: string | null
+  /** The stored track as it is, for "save as a new project" to carry over. */
+  storedTrack: Record<string, unknown> | null
   images: StoredFile[]
   track:
     | (StoredFile & {
@@ -82,6 +86,9 @@ export async function readVideoProjectFiles(
     `*[_type == "videoProject" && _id == $id][0]{
       _rev,
       formatVersion,
+      scope,
+      "conferenceId": conference._ref,
+      "storedTrack": track,
       "images": coalesce(scenes[defined(background.image.asset._ref)]{
         "fileId": background.image.asset._ref,
         "galleryAssetId": background.image.galleryAsset._ref,

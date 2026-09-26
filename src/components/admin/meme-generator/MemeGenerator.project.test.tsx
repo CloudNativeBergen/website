@@ -428,6 +428,29 @@ describe('behind another studio tab', () => {
   })
 })
 
+describe('playback behind another studio tab', () => {
+  it('stops when the editor is hidden', async () => {
+    const view = render(
+      <div>
+        <MemeGenerator projects={fakeProjects()} />
+      </div>,
+    )
+    toVideo()
+    fireEvent.click(screen.getByRole('button', { name: 'Play' }))
+    expect(screen.getByRole('button', { name: 'Pause' })).toBeInTheDocument()
+    view.rerender(
+      <div hidden>
+        <MemeGenerator projects={fakeProjects()} />
+      </div>,
+    )
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: 'Play', hidden: true }),
+      ).toBeInTheDocument(),
+    )
+  })
+})
+
 describe('without a project store', () => {
   it('shows no project controls', () => {
     const gallery: BackgroundGallery | undefined = undefined

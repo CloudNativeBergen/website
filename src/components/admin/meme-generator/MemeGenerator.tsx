@@ -1164,6 +1164,12 @@ export function MemeGenerator({
   }
 
   const advance = useEffectEvent((now: number) => {
+    // Hidden behind another studio tab (#1181): playback stops where it is,
+    // rather than repainting unseen every frame.
+    if (rootRef.current?.closest('[hidden]')) {
+      setPlaying(false)
+      return false
+    }
     // A frame's timestamp can fall a moment before an anchor set by a seek
     // in the same frame; time never runs backwards from where it was put.
     const next =

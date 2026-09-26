@@ -276,30 +276,54 @@ export const videoProjectRouter = router({
       }),
     )
     .mutation(async ({ input }) => {
-      const orgId = input.copyFilesFrom
-        ? await guard(input.copyFilesFrom)
-        : await requireCurrentOrgId()
-      const source = input.copyFilesFrom
-        ? await readVideoProjectFiles(orgId, input.copyFilesFrom)
-        : null
-      if (input.copyFilesFrom && !source) throw notFound()
+      // The source is proven ours before it is read. One since deleted — or
+      // never ours — lends nothing: the project is then created as any new
+      // one, so a conflict's recovery still saves what it can, and a
+      // background only the source held is refused as not kept.
+      let orgId: string
+      let source: Awaited<ReturnType<typeof readVideoProjectFiles>> = null
+      if (input.copyFilesFrom) {
+        try {
+          orgId = await guard(input.copyFilesFrom)
+          source = await readVideoProjectFiles(orgId, input.copyFilesFrom)
+        } catch (error) {
+          if (!(error instanceof TRPCError && error.code === 'NOT_FOUND'))
+            throw error
+          orgId = await requireCurrentOrgId()
+        }
+      } else orgId = await requireCurrentOrgId()
       const files = await resolveProjectFiles(
         orgId,
         input.scenes,
         input.track,
         source,
       )
+      // A copy keeps its source's edition, re-checked as ours: Studio could
+      // have pointed it anywhere.
+      const sourceEdition =
+        source?.scope === 'edition' && source.conferenceId
+          ? source.conferenceId
+          : null
+      if (sourceEdition)
+        await requireDocumentInCurrentOrg(sourceEdition, 'conference')
       const created = await createVideoProject({
         orgId,
         title: input.title,
-        mark:
-          input.edition === 'current'
-            ? { scope: 'edition', conferenceId: await resolveConferenceId() }
-            : { scope: 'organization' },
+        mark: sourceEdition
+          ? { scope: 'edition', conferenceId: sourceEdition }
+          : source
+            ? { scope: 'organization' }
+            : input.edition === 'current'
+              ? { scope: 'edition', conferenceId: await resolveConferenceId() }
+              : { scope: 'organization' },
         scenes: storedScenes(input.scenes, files.images),
+        // No track sent: the source's, as it is stored (the editor has no
+        // music yet, #1179) — as Duplicate carries it.
         ...(input.track && files.track
           ? { track: storedTrack(input.track, files.track) }
-          : {}),
+          : input.track === undefined && source?.storedTrack
+            ? { track: source.storedTrack }
+            : {}),
       })
       return { ...created, scenes: sceneFiles(input.scenes, files.images) }
     }),
