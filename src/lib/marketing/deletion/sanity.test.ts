@@ -29,9 +29,16 @@ vi.mock('@/lib/sanity/client', () => {
       // A direct ASSET delete (the orphan check's): refused, as Sanity refuses
       // it, while a strong reference to the asset remains.
       delete: async (id: string) => {
-        const held = JSON.stringify(
-          h.dataset.filter((row) => row._id !== id),
-        ).includes(`"_ref":"${id}"`)
+        // Only a STRONG reference blocks it; a weak one does not, in Sanity.
+        const strong = (value: unknown): boolean =>
+          Array.isArray(value)
+            ? value.some(strong)
+            : typeof value === 'object' &&
+              value !== null &&
+              (((value as { _ref?: unknown })._ref === id &&
+                (value as { _weak?: unknown })._weak !== true) ||
+                Object.values(value).some(strong))
+        const held = h.dataset.some((row) => row._id !== id && strong(row))
         if (held) throw new Error(`409: ${id} is still referenced`)
         h.dataset = h.dataset.filter((row) => row._id !== id)
         return {}
@@ -1526,7 +1533,11 @@ describe('a deleted Task takes its renders with it (#1162 follow-up to #1218)', 
       kind: 'studioRender',
       asset: image(`image-${id}-saved`),
       pendingStudioAsset: image(`image-${id}-pending`),
-      replacedRenders: [`image-${id}-orphan`, `image-${id}-held`],
+      replacedRenders: [
+        `image-${id}-orphan`,
+        `image-${id}-held`,
+        `image-${id}-weak`,
+      ],
       ...extra,
     })
   }
@@ -1536,9 +1547,17 @@ describe('a deleted Task takes its renders with it (#1162 follow-up to #1218)', 
       doc(`drafts.${id}`, 'marketingTask', {
         pendingStudioAsset: image(`image-${id}-draft`),
       }),
-      ...['saved', 'pending', 'orphan', 'held', 'draft'].map((k) =>
+      ...['saved', 'pending', 'orphan', 'held', 'weak', 'draft'].map((k) =>
         asset(`image-${id}-${k}`),
       ),
+      // One held only WEAKLY: Sanity would delete it, the orphan check keeps
+      // it — which is why the cleanup goes through the check, not a delete.
+      doc(`note-${id}`, 'marketingSnapshot', {
+        image: {
+          _type: 'image',
+          asset: { ...ref(`image-${id}-weak`), _weak: true },
+        },
+      }),
       // A post outside the delete still holds one replaced render.
       doc(`post-keeps-${id}`, 'socialPost', {
         attachments: [{ _key: 'a', image: image(`image-${id}-held`) }],
@@ -1562,6 +1581,7 @@ describe('a deleted Task takes its renders with it (#1162 follow-up to #1218)', 
     for (const k of ['saved', 'pending', 'orphan', 'draft'])
       expect(stored(`image-task-r-${k}`), k).toBe(false)
     expect(stored('image-task-r-held')).toBe(true)
+    expect(stored('image-task-r-weak')).toBe(true)
   })
 
   it('deleteTask: a delete that loses its race deletes no render', async () => {
@@ -1575,7 +1595,7 @@ describe('a deleted Task takes its renders with it (#1162 follow-up to #1218)', 
         dependantIds: [],
       }),
     ).toBe(false)
-    for (const k of ['saved', 'pending', 'orphan', 'held', 'draft'])
+    for (const k of ['saved', 'pending', 'orphan', 'held', 'weak', 'draft'])
       expect(stored(`image-task-r-${k}`), k).toBe(true)
   })
 
@@ -1593,5 +1613,6 @@ describe('a deleted Task takes its renders with it (#1162 follow-up to #1218)', 
     for (const k of ['saved', 'pending', 'orphan', 'draft'])
       expect(stored(`image-task-p-${k}`), k).toBe(false)
     expect(stored('image-task-p-held')).toBe(true)
+    expect(stored('image-task-p-weak')).toBe(true)
   })
 })
