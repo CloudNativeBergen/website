@@ -2670,3 +2670,32 @@ export const ProjectWithSaveToGallery: Story = {
     ).toBeVisible()
   },
 }
+
+/** Deleting the open project asks first, in the app's confirmation dialog. */
+export const ProjectDeleteConfirm: Story = {
+  args: {
+    gallery: storyGallery,
+    projects: storyProjects(),
+    initialProjectId: 'vp-launch',
+  },
+  parameters: { msw: { handlers: [proxyImage] } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const project = within(
+      await canvas.findByRole('region', { name: 'Project' }),
+    )
+    await project.findByText('All changes saved')
+    await userEvent.click(
+      project.getByRole('button', { name: 'Delete project' }),
+    )
+    const dialog = within(await within(document.body).findByRole('dialog'))
+    await expect(
+      dialog.getByText(/The saved project is gone for everyone/),
+    ).toBeVisible()
+  },
+}
+
+export const ProjectDeleteConfirmDark: Story = {
+  ...ProjectDeleteConfirm,
+  globals: { theme: 'dark' },
+}

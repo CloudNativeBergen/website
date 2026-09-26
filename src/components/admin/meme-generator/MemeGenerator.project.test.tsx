@@ -621,11 +621,15 @@ describe('deleting a project', () => {
 describe('undo after a save deleted a background', () => {
   it('never brings the deleted image back: that scene undoes to its colour', async () => {
     const projects = fakeProjects({
+      // As the server does: the file is released only once no scene holds it.
       save: vi.fn(async (input: Parameters<VideoProjects['save']>[0]) => ({
         _rev: 'rev-9',
         scenes: input.scenes.map((sc) => ({ key: sc.key, fileId: null })),
-        released: ['image-hall'],
+        released: input.scenes.some((sc) => sc.design.background.image)
+          ? []
+          : ['image-hall'],
       })),
+      open: vi.fn(async () => ({ ...PROJECT, scenes: [PROJECT.scenes[0]] })),
     })
     render(<MemeGenerator projects={projects} initialProjectId="vp-1" />)
     await within(

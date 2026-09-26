@@ -69,6 +69,15 @@ export default defineType({
       to: [{ type: 'conference' }],
       hidden: ({ document }) =>
         document?.scope !== 'edition' && !document?.conference,
+      // The studio refuses to open an edition project without one.
+      validation: (Rule) =>
+        Rule.custom((value, { document }) => {
+          if (document?.scope === 'edition' && !value)
+            return 'An edition project needs its edition'
+          if (document?.scope !== 'edition' && value)
+            return 'Only an edition project has an edition'
+          return true
+        }),
     }),
     defineField({
       name: 'title',
