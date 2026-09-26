@@ -1,3 +1,4 @@
+import { conferenceBaseUrl } from '@/lib/conference/baseUrl'
 import type {
   PublishableVariant,
   SocialVariantStore,
@@ -71,6 +72,11 @@ export class MemoryVariantStore implements SocialVariantStore {
           ...v,
           postAttachments: this.posts[v.postId] ?? [],
           conferenceDomains: this.domains[v.conferenceId] ?? [],
+          // As the Sanity read derives it: from the RAW domains, only for a
+          // variant that carries a code.
+          shortLinkOrigin: v.shortCode
+            ? conferenceBaseUrl({ domains: this.domains[v.conferenceId] })
+            : null,
           postCreatedBy: this.creators[v.postId] ?? null,
           marketingTaskId: null,
         })
@@ -128,7 +134,6 @@ export class MemoryVariantStore implements SocialVariantStore {
     const written = this.write(variant._id, {
       status: 'publishing',
       claimedAt: now.toISOString(),
-      shortCode: null,
     })
     // Like the Sanity store: the caller's slice, with the fresh claim on it.
     return { ...variant, ...written }

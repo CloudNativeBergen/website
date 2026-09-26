@@ -494,6 +494,46 @@ describe('findWork — the composed due/stale scan', () => {
     }
   })
 
+  it('a variant with a code carries the short-link origin of the RAW primary domain; one without carries none (#1143)', async () => {
+    // Verification drops the primary: the origin must still be the one the
+    // tagged `link` was minted on (`conferenceBaseUrl` over the raw list),
+    // not the verified list the first-comment rule reads.
+    verification.verifiedDomains.mockImplementation(async (claimed) =>
+      claimed.filter((d) => d !== 'primary.example.no'),
+    )
+    try {
+      h.dataset = [
+        {
+          ...conference('c1'),
+          domains: ['primary.example.no', 'alias.example.no'],
+        },
+        variant('li-coded', 'c1', {
+          platform: 'linkedin',
+          shortCode: 'abc234',
+        }),
+        variant('bs-coded', 'c1', { platform: 'bluesky', shortCode: 'abc235' }),
+        variant('standalone', 'c1', { platform: 'bluesky' }),
+      ]
+      const work = await sanitySocialVariantStore.findWork(
+        NOW,
+        STALE_BEFORE,
+        BOUNDS,
+      )
+      const origin = (id: string) =>
+        work.due.find((v) => v._id === id)?.shortLinkOrigin
+      expect(origin('li-coded')).toBe('https://primary.example.no')
+      expect(origin('bs-coded')).toBe('https://primary.example.no')
+      expect(origin('standalone')).toBeNull()
+      expect(work.due.find((v) => v._id === 'li-coded')?.shortCode).toBe(
+        'abc234',
+      )
+    } finally {
+      verification.verifiedDomains.mockImplementation(async (claimed) => [
+        ...claimed,
+      ])
+    }
+  })
+
   it('deferred first-comment variants cannot fill the window and starve a card platform in the same conference', async () => {
     // Twelve overdue LinkedIn variants whose verification keeps failing, and
     // one later Bluesky variant. With ONE per-conference window of ten, the

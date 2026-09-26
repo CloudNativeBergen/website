@@ -19,6 +19,7 @@ const publishable = (
   ...makeVariant({ platform: 'linkedin' }),
   postAttachments: [],
   conferenceDomains: [],
+  shortLinkOrigin: null,
   postCreatedBy: 'sp-owner',
   marketingTaskId: null,
   ...overrides,

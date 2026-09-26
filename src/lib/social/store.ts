@@ -19,6 +19,13 @@ export interface PublishableVariant extends SocialPostVariant {
   /** The conference's `domains[]`: the hosts a link card may be built for. */
   conferenceDomains: string[]
   /**
+   * The origin this variant's `/go/<code>` short link is built on — the
+   * conference's outbound origin (`conferenceBaseUrl()` over the RAW
+   * `domains[]`, the same derivation its tagged `link` was minted with).
+   * `null` for a variant with no code, which posts its `link` unchanged.
+   */
+  shortLinkOrigin: string | null
+  /**
    * The organizer who created the post — the assignee a manual variant is
    * handed to (#1006) until the Task layer (#992) carries its own. `null`
    * when the post is gone, cross-tenant, or its creator was erased.

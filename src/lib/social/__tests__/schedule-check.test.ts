@@ -58,7 +58,7 @@ describe('scheduleIssues — the link is the first comment (#1134)', () => {
     const issues = await scheduleIssues(
       variant({ body: `Tickets are live → ${OURS}` }),
       [],
-      { conferenceDomains: DOMAINS },
+      { conferenceDomains: DOMAINS, shortLinkOrigin: null },
     )
     expect(issues).toEqual([
       { field: 'body', message: expect.stringContaining('first comment') },
@@ -73,7 +73,7 @@ describe('scheduleIssues — the link is the first comment (#1134)', () => {
       // materialize. They differ, and the rule still fires.
       variant({ body: `Submit → ${stale}`, link: OURS }),
       [],
-      { conferenceDomains: DOMAINS },
+      { conferenceDomains: DOMAINS, shortLinkOrigin: null },
     )
     expect(issues.map((i) => i.field)).toEqual(['body'])
     expect(issues[0].message).toContain(stale)
@@ -84,7 +84,7 @@ describe('scheduleIssues — the link is the first comment (#1134)', () => {
       await scheduleIssues(
         variant({ body: 'Tickets are live — link in the first comment.' }),
         [],
-        { conferenceDomains: DOMAINS },
+        { conferenceDomains: DOMAINS, shortLinkOrigin: null },
       ),
     ).toEqual([])
   })
@@ -94,7 +94,7 @@ describe('scheduleIssues — the link is the first comment (#1134)', () => {
       await scheduleIssues(
         variant({ body: 'The map: https://landscape.cncf.io' }),
         [],
-        { conferenceDomains: DOMAINS },
+        { conferenceDomains: DOMAINS, shortLinkOrigin: null },
       ),
     ).toEqual([])
   })
@@ -111,7 +111,7 @@ describe('scheduleIssues — the link is the first comment (#1134)', () => {
     const issues = await scheduleIssues(
       variant({ body: `Tickets are live → ${OURS}` }),
       [],
-      { conferenceDomains: DOMAINS },
+      { conferenceDomains: DOMAINS, shortLinkOrigin: null },
     )
     // A VALUE on both halves: the adapter ran, and it ran WITH the domains.
     expect(validate).toHaveBeenCalledTimes(1)
@@ -136,6 +136,7 @@ describe('scheduleIssues — the link is the first comment (#1134)', () => {
       '#CloudNativeBergen2027'
     const issues = await scheduleIssues(variant({ body: legacy }), [], {
       conferenceDomains: DOMAINS,
+      shortLinkOrigin: null,
     })
     expect(issues.map((i) => i.field)).toEqual(['body'])
     expect(issues[0].message).toContain('first comment')
@@ -146,8 +147,39 @@ describe('scheduleIssues — the link is the first comment (#1134)', () => {
       await scheduleIssues(
         variant({ platform: 'bluesky', body: `Tickets → ${OURS}` }),
         [],
-        { conferenceDomains: DOMAINS },
+        { conferenceDomains: DOMAINS, shortLinkOrigin: null },
       ),
     ).toEqual([])
+  })
+})
+
+describe('scheduleIssues — validation sees what is posted (#1143)', () => {
+  it("a Task variant's short link and its long destination reach the adapter's validate", async () => {
+    const validate = vi.fn((..._args: unknown[]): unknown[] => [])
+    resolveAdapter.mockResolvedValueOnce({ validate } as never)
+    await scheduleIssues(variant({ shortCode: 'abc234' }), [], {
+      conferenceDomains: DOMAINS,
+      shortLinkOrigin: 'https://cloudnativebergen.no',
+    })
+    expect(validate.mock.calls[0][0]).toEqual({
+      text: 'Tickets are live',
+      media: [],
+      link: 'https://cloudnativebergen.no/go/abc234',
+      linkDestination: OURS,
+    })
+  })
+
+  it('a standalone variant (no code) is validated with its own link', async () => {
+    const validate = vi.fn((..._args: unknown[]): unknown[] => [])
+    resolveAdapter.mockResolvedValueOnce({ validate } as never)
+    await scheduleIssues(variant({ shortCode: null }), [], {
+      conferenceDomains: DOMAINS,
+      shortLinkOrigin: null,
+    })
+    expect(validate.mock.calls[0][0]).toEqual({
+      text: 'Tickets are live',
+      media: [],
+      link: OURS,
+    })
   })
 })

@@ -390,6 +390,45 @@ describe('BlueskyPublishAdapter — embeds', () => {
     })
   })
 
+  it('a short link is the card uri while title, description and image are scraped from the destination (#1143)', async () => {
+    const recorded = pds()
+    hosts()
+    const shortHits: string[] = []
+    server.use(
+      http.get('https://cloudnativedays.no/go/:code', ({ request }) => {
+        shortHits.push(request.url)
+        return HttpResponse.html(
+          '<html><head><title>WRONG</title></head></html>',
+        )
+      }),
+    )
+
+    const outcome = await adapter().publish({
+      text: 'Early bird is on.',
+      media: [],
+      link: 'https://cloudnativedays.no/go/abc234',
+      linkDestination: PAGE_URL,
+    })
+
+    expect(outcome).toMatchObject({ ok: true })
+    const [create] = callsTo(recorded, 'com.atproto.repo.createRecord')
+    expect(
+      (create.body as { record: Record<string, unknown> }).record,
+    ).toMatchObject({
+      embed: {
+        $type: 'app.bsky.embed.external',
+        external: {
+          uri: 'https://cloudnativedays.no/go/abc234',
+          title: 'Tickets & prices — Cloud Native Days',
+          description: 'Early bird until 1 October.',
+          thumb: { mimeType: 'image/png', size: 128 },
+        },
+      },
+    })
+    // The scraper never follows `/go/`.
+    expect(shortHits).toEqual([])
+  })
+
   it('still ships a bare card (hostname title, no thumb) when the page cannot be read', async () => {
     const recorded = pds()
     server.use(http.get(PAGE_URL.split('?')[0], () => HttpResponse.error()))

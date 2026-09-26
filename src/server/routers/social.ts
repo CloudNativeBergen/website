@@ -37,6 +37,7 @@ import {
 } from '@/lib/social/provider/constraints'
 import { offAspectOverrides, resolvePublishMedia } from '@/lib/social/media'
 import { placeholderIssues, scheduleIssues } from '@/lib/social/schedule-check'
+import { publishLinkFields } from '@/lib/social/publish-link'
 import { ceilingWarningsFor } from '@/lib/marketing/ceiling-check'
 import { getTaskForVariant, getTaskLinkInputs } from '@/lib/marketing/sanity'
 import { taggedUrl } from '@/lib/marketing/link'
@@ -93,9 +94,10 @@ function issuesToError(issues: ValidationIssue[]): TRPCError {
  * carries an attachment the post no longer has.
  */
 function publishInputFor(
-  variant: Pick<SocialPostVariant, 'platform' | 'body' | 'link'>,
+  variant: Pick<SocialPostVariant, 'platform' | 'body' | 'link' | 'shortCode'>,
   attachments: SocialVariantAttachment[],
   postAttachments: SocialPostAttachment[],
+  shortLinkOrigin: string | null,
 ): PublishInput {
   const constraints = getPlatformConstraints(variant.platform)
   const media = resolvePublishMedia(attachments, postAttachments, constraints)
@@ -105,7 +107,11 @@ function publishInputFor(
       message: 'An attachment is no longer on the post. Reload and retry.',
     })
   }
-  return { text: variant.body, media, link: variant.link ?? undefined }
+  return {
+    text: variant.body,
+    media,
+    ...publishLinkFields(variant, shortLinkOrigin),
+  }
 }
 
 /**
@@ -155,6 +161,20 @@ async function applyOrConflict(
     })
   }
   return { success: true as const, status: transition.status }
+}
+
+/**
+ * The origin a coded variant's `/go/<code>` link is built on (short-links spec
+ * §2.3), so a validation sees the link the publish tick will post. `null` for
+ * a variant with no code — a standalone post posts its own link — without
+ * reading the conference at all.
+ */
+async function shortLinkOriginFor(
+  shortCode: string | null | undefined,
+): Promise<string | null> {
+  if (!shortCode) return null
+  const { conference } = await getConferenceForCurrentDomain()
+  return conference ? conferenceBaseUrl(conference) : null
 }
 
 /**
@@ -326,6 +346,7 @@ export const socialRouter = router({
       )
       const issues = await scheduleIssues(variant, post.attachments, {
         conferenceDomains: await currentConferenceDomains(variant.platform),
+        shortLinkOrigin: await shortLinkOriginFor(variant.shortCode),
         taskOwned: !!(await getTaskForVariant(
           variant._id,
           variant.conferenceId,
@@ -413,11 +434,17 @@ export const socialRouter = router({
       const shortCode = taskOwned
         ? await shortCodeForMutation(variant.conferenceId, variant.shortCode)
         : undefined
-      const content = { ...variant, body: input.body, link }
+      const content = {
+        ...variant,
+        body: input.body,
+        link,
+        shortCode: shortCode?.code ?? null,
+      }
       const publishInput = publishInputFor(
         content,
         input.attachments,
         post.attachments,
+        await shortLinkOriginFor(content.shortCode),
       )
       const constraints = getPlatformConstraints(variant.platform)
       const issues = constraints
