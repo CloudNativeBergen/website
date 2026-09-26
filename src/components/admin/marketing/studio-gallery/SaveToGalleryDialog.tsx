@@ -233,8 +233,8 @@ function SaveForm({
           </>
         ) : (
           <span className="text-gray-500 dark:text-gray-400">
-            No subject. An image about a speaker cannot be found when they ask
-            to be erased unless you set one in the gallery.
+            No subject. If this shows a speaker, set one in the gallery so it is
+            found when they ask to be erased.
           </span>
         )}
       </p>

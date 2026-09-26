@@ -95,6 +95,18 @@ export function StudioGalleryProvider({
     [capturing, saving],
   )
 
+  // A capture can be several MB: let it go once the dialog has faded out,
+  // unless another capture has replaced it by then.
+  function close() {
+    setOpen(false)
+    const closing = captures.current
+    setTimeout(() => {
+      if (captures.current !== closing) return
+      replacePreview(null)
+      setCaptured(null)
+    }, 500)
+  }
+
   return (
     <GallerySaveContext.Provider value={value}>
       {children}
@@ -103,7 +115,7 @@ export function StudioGalleryProvider({
         captured={captured}
         uploader={upload}
         onSavingChange={setSaving}
-        onClose={() => setOpen(false)}
+        onClose={close}
       />
     </GallerySaveContext.Provider>
   )
