@@ -210,6 +210,27 @@ describe('getTaskTagPeople', () => {
     }
   })
 
+  it('a talk subject that is a draft or a release version: nobody', async () => {
+    for (const id of ['drafts.talk-A', 'versions.r1.talk-A']) {
+      dataset.push(
+        { ...dataset.find((d) => d._id === 'talk-A')!, _id: id },
+        {
+          _id: `task-${id}`,
+          _type: 'marketingTask',
+          conference: ref('conf-A'),
+          kind: 'publishing',
+          channel: 'bluesky',
+          subject: ref(id),
+        },
+      )
+      try {
+        expect(await getTaskTagPeople(`task-${id}`, 'conf-A')).toEqual([])
+      } finally {
+        dataset.splice(-2, 2)
+      }
+    }
+  })
+
   it('a LinkedIn Task: nobody', async () => {
     expect(await getTaskTagPeople('task-linkedin', 'conf-A')).toEqual([])
   })

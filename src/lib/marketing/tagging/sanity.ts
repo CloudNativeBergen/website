@@ -98,7 +98,7 @@ export async function getVariantMentionRecords(
 export const TAG_PEOPLE_PROJECTION = `select(kind == "publishing" && channel == "bluesky" => subject->{
   "people": select(
     _type == "speaker" && count(*[_type == "talk" && conference._ref == $conferenceId && ^._id in speakers[]._ref && !(_id in path("drafts.**")) && !(_id in path("versions.**"))]) > 0 => [${PERSON_FIELDS}],
-    _type == "talk" && conference._ref == $conferenceId => speakers[]->${PERSON_FIELDS}
+    _type == "talk" && conference._ref == $conferenceId && !(_id in path("drafts.**")) && !(_id in path("versions.**")) => speakers[]->${PERSON_FIELDS}
   )
 })`
 
