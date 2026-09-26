@@ -431,6 +431,8 @@ function pendingData(): TaskEditorData {
     pages: [],
     organizers: [],
     tagByHand: [],
+    tagPeople: [],
+    tagMentions: [],
     outreachBody: null,
   }
 }

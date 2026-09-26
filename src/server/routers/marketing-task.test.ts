@@ -250,6 +250,8 @@ function stored(
     siblings,
     variant: null,
     tagByHand: [],
+    tagPeople: [],
+    tagMentions: [],
   }
 }
 

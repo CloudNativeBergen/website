@@ -39,6 +39,17 @@ import type {
 import type { TaskSubjectRef } from './pages'
 import { expireShortLinkIndex } from './short-link-cache'
 import { tagByHandEntries, type RawTagByHandSubject } from './tag-by-hand'
+import {
+  MENTION_RECORD_PROJECTION,
+  mentionDocuments,
+  mentionRecordsFrom,
+  type RawMentionRecord,
+} from './tagging/records'
+import {
+  TAG_PEOPLE_PROJECTION,
+  taggablePeopleFrom,
+  type RawTagPeople,
+} from './tagging/sanity'
 
 /**
  * Sanity persistence for the Marketing Plan. Seeding writes everything in ONE
@@ -104,19 +115,7 @@ export function variantDocument(v: SeedVariant, conference: Ref, now: string) {
     updatedAt: now,
     // Tagging spec §4.3. The speaker ref is WEAK: a strong one would make the
     // speaker undeletable and defeat GDPR erasure.
-    ...(v.mentions?.length
-      ? {
-          mentions: v.mentions.map((m) => ({
-            _key: m._key,
-            _type: 'socialPostMention' as const,
-            handle: m.handle,
-            ...(m.did ? { did: m.did } : {}),
-            speaker: weakRef(m.speakerId),
-            name: m.name,
-            status: m.status,
-          })),
-        }
-      : {}),
+    ...(v.mentions?.length ? { mentions: mentionDocuments(v.mentions) } : {}),
   }
 }
 
@@ -478,6 +477,8 @@ interface RawTaskEditor extends RawTaskView {
   planOwnerId: string | null
   siblings: RawTaskView[] | null
   tagByHand: RawTagByHandSubject | null
+  tagPeople: RawTagPeople | null
+  tagMentions: (RawMentionRecord | null)[] | null
 }
 
 const SUBJECT_TYPES: Record<string, TaskSubjectRef['type']> = {
@@ -524,6 +525,8 @@ export async function getTaskEditorData(
         ),
         "company": select(_type == "sponsor" && count(*[_type == "sponsorForConference" && conference._ref == $conferenceId && sponsor._ref == ^._id]) > 0 => { name, "url": linkedinUrl })
       }),
+      "tagPeople": ${TAG_PEOPLE_PROJECTION},
+      "tagMentions": select(kind == "publishing" && channel == "bluesky" && variant->conference._ref == conference._ref => variant->mentions[]${MENTION_RECORD_PROJECTION}),
       "campaign": select(campaign->conference._ref == conference._ref => campaign->{ _id, key, title }),
       "planOwnerId": plan->owner._ref,
       "siblings": *[_type == "marketingTask" && conference._ref == $conferenceId && campaign._ref == ^.campaign._ref && _id != ^._id && !(_id in path("drafts.**")) && !(_id in path("versions.**"))]{${TASK_VIEW_FIELDS}
@@ -570,6 +573,8 @@ export async function getTaskEditorData(
     siblings: toTaskViews(row.siblings),
     variant: null,
     tagByHand: tagByHandEntries(row.tagByHand),
+    tagPeople: taggablePeopleFrom(row.tagPeople?.people, { forClient: true }),
+    tagMentions: mentionRecordsFrom(row.tagMentions),
   }
 }
 

@@ -13,6 +13,8 @@ import type {
 } from './milestones'
 import type { PagePickerOption, TaskSubjectRef } from './pages'
 import type { TagByHandEntry } from './tag-by-hand'
+import type { TaggablePerson } from './tagging/checks'
+import type { MentionRecord } from './tagging/body'
 
 /** The Channels a Task can be executed on in slice 1 (⊂ `SocialPlatform`). */
 export const MARKETING_CHANNELS = ['linkedin', 'bluesky'] as const
@@ -226,6 +228,14 @@ export interface StoredTaskEditorData {
    * are left out on the server. Empty for every other Task.
    */
   tagByHand: TagByHandEntry[]
+  /**
+   * A Bluesky publishing Task: the subject's people, for the tag button
+   * (tagging spec §2). An opted-out speaker is listed without a handle.
+   * Empty for every other Task.
+   */
+  tagPeople: TaggablePerson[]
+  /** The variant's recorded mentions (§4.3); the unresolved notes come from them. */
+  tagMentions: MentionRecord[]
 }
 
 export interface TaskEditorData extends StoredTaskEditorData {

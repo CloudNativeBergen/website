@@ -130,10 +130,15 @@ function fixture(
   task: Partial<TaskEditorTask> = {},
   v: SocialVariantEditorData | null = variant(),
   tagByHand: TaskEditorData['tagByHand'] = [],
+  tagging: Pick<TaskEditorData, 'tagPeople' | 'tagMentions'> = {
+    tagPeople: [],
+    tagMentions: [],
+  },
 ): TaskEditorData {
   const t = editorTask(task)
   return {
     tagByHand,
+    ...tagging,
     task: t,
     campaign: { _id: 'camp-cfp', key: 'cfp', title: 'CFP' },
     planOwnerId: 'sp-1',

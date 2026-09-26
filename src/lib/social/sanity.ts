@@ -23,6 +23,7 @@ import type {
   PublishAttempt,
   SocialPlatform,
   SocialPostAttachment,
+  SocialPostMentionDocument,
   SocialPostVariant,
   SocialPostVariantListItem,
   SocialVariantAttachment,
@@ -913,6 +914,12 @@ export interface SocialVariantContent {
   /** ISO datetime or null (no time yet). */
   scheduledAt: string | null
   usesCustomTime: boolean
+  /**
+   * The Bluesky tags rebuilt from `body` (tagging spec §4.3), in document
+   * form. Absent leaves `mentions[]` as it is (every other platform); an
+   * empty list removes it.
+   */
+  mentions?: SocialPostMentionDocument[]
 }
 
 /**
@@ -953,8 +960,8 @@ export async function updateSocialVariantContent(
   },
 ): Promise<boolean> {
   const now = getCurrentDateTime()
-  const tx = clientWrite.transaction().patch(variantId, (p) =>
-    p.ifRevisionId(options.ifRevision).set({
+  const tx = clientWrite.transaction().patch(variantId, (p) => {
+    const patch = p.ifRevisionId(options.ifRevision).set({
       body: content.body,
       link: content.link,
       attachments: content.attachments.map((a) => ({
@@ -967,9 +974,11 @@ export async function updateSocialVariantContent(
       ...(options.shortCode ? { shortCode: options.shortCode } : {}),
       scheduledAt: content.scheduledAt,
       usesCustomTime: content.usesCustomTime,
+      ...(content.mentions?.length ? { mentions: content.mentions } : {}),
       updatedAt: now,
-    }),
-  )
+    })
+    return content.mentions?.length === 0 ? patch.unset(['mentions']) : patch
+  })
   if (options.followsPost) {
     const { id, rev } = options.followsPost
     tx.patch(id, (p) => p.ifRevisionId(rev).set({ updatedAt: now }))
