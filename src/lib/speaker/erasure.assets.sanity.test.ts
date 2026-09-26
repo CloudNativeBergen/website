@@ -814,6 +814,22 @@ describe('speaker erasure removes their images everywhere (#1162)', () => {
       expect(v?.clean).toBe(false)
     })
 
+    it('counts a refused project by its type, whatever the refusal says', async () => {
+      await eraseSpeakerInPlace({ speakerId: ADA, actor: 'test' })
+      // One refused holder of each kind: a project, and a photo gallery entry.
+      h.dataset.push(project('vp-odd2', [], { poster: image(ADA_CARD) }), {
+        _id: 'gallery-x',
+        _type: 'imageGallery',
+        image: image(ADA_CARD),
+        speakers: [],
+      })
+      const v = await verifySpeakerErasure(ADA, [], [ADA_CARD])
+      expect(v?.residual).toMatchObject({
+        videoProjects: 1,
+        linkedFileHolders: 1,
+      })
+    })
+
     it('verification FAILS on a project erasure would refuse', async () => {
       await eraseSpeakerInPlace({ speakerId: ADA, actor: 'test' })
       h.dataset.push(project('vp-odd', [], { poster: image(ADA_CARD) }))

@@ -1729,11 +1729,11 @@ export async function verifySpeakerErasure(
     inputs.assetFileIds,
     inputs.assets,
   )
-  // A video project still holding a linked file is its own counter (#1181);
-  // a refusal names its document as `videoProject <id>`.
+  // A video project still holding a linked file is its own counter (#1181),
+  // read from the refused documents' types, never the refusal's wording.
   const isProject = (type: string) => type === 'videoProject'
-  const projectRefusals = assetPlan.refusals.filter((r) =>
-    r.startsWith('videoProject '),
+  const projectRefusals = assetPlan.refused.filter((r) =>
+    isProject(r.type),
   ).length
   const videoProjects =
     assetPlan.patches.filter((p) => isProject(p.type)).length + projectRefusals

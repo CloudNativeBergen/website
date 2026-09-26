@@ -49,7 +49,6 @@ interface Entry {
   _key?: unknown
   image?: unknown
   source?: unknown
-  background?: unknown
 }
 
 /** What {@link planSpeakerAssetErasure} needs. Reads live in {@link fetchSpeakerAssetInputs}. */
@@ -75,6 +74,11 @@ export interface SpeakerAssetPlan {
   patches: ErasureDocumentPatch[]
   deletes: ErasureDocumentDelete[]
   refusals: string[]
+  /**
+   * The document behind each refusal, in the same order — what a counter
+   * reads, never the refusal's wording.
+   */
+  refused: { id: string; type: string }[]
 }
 
 /** The Task fields that hold a render. */
@@ -249,11 +253,14 @@ export function planSpeakerAssetErasure(
     return [...refsIn(copy)].some((ref) => files.has(ref))
   }
 
-  const refuse = (doc: Doc, why: string) =>
+  const refused: SpeakerAssetPlan['refused'] = []
+  const refuse = (doc: Doc, why: string) => {
+    refused.push({ id: doc._id, type: doc._type })
     refusals.push(
       `${doc._type} ${doc._id} holds an image linked to the subject ${why}; ` +
         'remove it by hand and re-run',
     )
+  }
 
   /** Unset the entries with these keys, or refuse the document. */
   const unsetEntries = (doc: Doc, keys: unknown[], reason: string) => {
@@ -375,7 +382,10 @@ export function planSpeakerAssetErasure(
           stillHolds(doc, (copy) => {
             for (const scene of entries(copy.scenes))
               if (stripped.has(scene._key))
-                delete (scene.background as { image?: unknown }).image
+                delete (
+                  (scene as { background?: { image?: unknown } }).background ??
+                  {}
+                ).image
             if (track) delete copy.track
           })
         ) {
@@ -459,7 +469,7 @@ export function planSpeakerAssetErasure(
     )
   }
 
-  return { fileIds: [...files], patches, deletes, refusals }
+  return { fileIds: [...files], patches, deletes, refusals, refused }
 }
 
 /**

@@ -404,6 +404,7 @@ describe('planSpeakerAssetErasure', () => {
       patches: [],
       deletes: [],
       refusals: [],
+      refused: [],
     })
   })
 })
