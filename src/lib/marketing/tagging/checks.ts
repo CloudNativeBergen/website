@@ -295,17 +295,23 @@ export function saveMentions(input: {
       status: 'tagged',
     })
   }
-  // A recorded tag whose person has left the roster (talk withdrawn, speaker
-  // removed) and whose handle is still in the body: refused, never dropped —
-  // dropping it would leave a tag no later check knows about.
+  // A recorded tag whose handle is still in the body but no longer matches
+  // anyone's CURRENT handle (the speaker changed their link, or left the
+  // roster): never dropped — that would leave a tag no later check knows
+  // about. It is judged by the PERSON it was recorded for.
   const inBody = new Set(mentionTokens(input.body).map((t) => t.handle))
   const known = byHandle(input.people)
+  const byId = new Map(input.people.map((p) => [p.speakerId, p]))
   for (const m of input.previous) {
     const handle = normaliseHandle(m.handle)
     if (m.status !== 'tagged' || !inBody.has(handle) || known.has(handle))
       continue
-    if (input.people.some((p) => p.speakerId === m.speakerId)) continue
-    issues.push(notASpeaker(m, handle))
+    if (tagged.some((t) => t.speakerId === m.speakerId)) continue
+    const person = byId.get(m.speakerId)
+    if (!person) issues.push(notASpeaker(m, handle))
+    else if (person.optedOut)
+      issues.push({ ...optedOutIssue(person, handle), mentionKey: m._key })
+    else tagged.push({ ...m, handle, name: person.name })
   }
   const taggedIds = new Set(tagged.map((m) => m.speakerId))
   // A note stands while the person is still named in plain text.

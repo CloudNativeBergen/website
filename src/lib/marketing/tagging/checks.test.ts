@@ -332,6 +332,31 @@ describe('saveMentions keeps a departed speaker’s tag in view', () => {
   })
 })
 
+describe('saveMentions and a speaker who changed their link', () => {
+  const moved = { ...alice, handle: 'alice.example.com' }
+  it('keeps the recorded tag of the old handle, DID and all', () => {
+    const out = saveMentions({
+      body: '@alice.dev',
+      people: [moved],
+      previous: [tagged(alice, DID_A)],
+      resolutions: new Map(),
+    })
+    expect(out.issues).toEqual([])
+    expect(out.mentions).toEqual([tagged(alice, DID_A)])
+  })
+  it('refuses it when that speaker has opted out since', () => {
+    const out = saveMentions({
+      body: '@alice.dev',
+      people: [{ ...moved, optedOut: true }],
+      previous: [tagged(alice, DID_A)],
+      resolutions: new Map(),
+    })
+    expect(out.issues.map((i) => [i.code, i.mentionKey])).toEqual([
+      ['opted-out', 'speaker-alice'],
+    ])
+  })
+})
+
 describe('approvalCheck (§4.4 Approval)', () => {
   const peopleMap = people
 

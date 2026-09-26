@@ -151,6 +151,10 @@ export function ConnectedVariantEditor({
   }
   const tag = (person: TaggablePerson) => {
     if (!tagging) return
+    // Pending counts as unsaved: Save and Approve wait for the answer, so
+    // neither can commit the body this lookup is about to change.
+    const wasDirty = dirty
+    setDirty(true)
     setPendingTag(person.speakerId)
     resolveTag.mutate(
       { taskId: tagging.taskId, speakerId: person.speakerId },
@@ -164,9 +168,12 @@ export function ConnectedVariantEditor({
           })
           if (result === 'resolved')
             editBody((body) => tagName(body, { ...person, handle }) ?? body)
+          else setDirty(wasDirty)
         },
-        onError: (err) =>
-          setError(err.message || 'Could not check the handle.'),
+        onError: (err) => {
+          setDirty(wasDirty)
+          setError(err.message || 'Could not check the handle.')
+        },
         onSettled: () => setPendingTag(null),
       },
     )
@@ -275,7 +282,7 @@ export function ConnectedVariantEditor({
         value={shown}
         onChange={setValue}
         linkLocked={task !== undefined}
-        saving={update.isPending}
+        saving={update.isPending || pendingTag !== null}
         error={
           error ??
           (changedUnderneath

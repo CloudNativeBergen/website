@@ -1,5 +1,6 @@
 'use client'
 
+import { useTagWarningToast } from '@/components/admin/marketing/tagging'
 import { useState } from 'react'
 import Link from 'next/link'
 import clsx from 'clsx'
@@ -176,11 +177,13 @@ export function SocialPostsManager({
     onError: (err) => setError(err.message || 'Failed to create the post.'),
   })
   const warnCeilings = useCeilingWarningToast()
+  const warnTags = useTagWarningToast()
   const schedule = api.social.scheduleVariant.useMutation({
     onSuccess: (result) => {
       invalidate()
       setScheduleTarget(null)
       warnCeilings(result)
+      warnTags(result)
     },
     onError: (err) => setScheduleError(err.message || 'Could not schedule.'),
   })
