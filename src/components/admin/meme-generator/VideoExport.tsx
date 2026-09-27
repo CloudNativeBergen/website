@@ -16,6 +16,7 @@ import {
   type EncoderBackend,
   type ExportJob,
   type ExportedAudio,
+  type SilentReason,
   type ExportProgress,
 } from './meme-generator-export'
 import { FPS } from './meme-generator-timeline'
@@ -80,8 +81,12 @@ const SOUND: Record<Music, string> = {
 }
 
 /** A file made without the track it should have, and why. */
-const MUSIC_LEFT_OUT =
-  'This browser could not encode the music, so the video is silent. Chrome, Edge or Safari on a computer can add it.'
+const MUSIC_LEFT_OUT: Record<SilentReason, string> = {
+  'no-encoder':
+    'The music encoder could not be loaded, so the video was made silent. Check your connection and export again.',
+  unmeasured:
+    'The music could not be lined up with the picture on this browser’s encoder, so the video was made silent. Export again; if it keeps happening, try another browser.',
+}
 
 export type Music = 'none' | 'track' | 'failed'
 
@@ -110,7 +115,9 @@ function statusText(
     case 'done':
       return [
         'Your video is ready.',
-        ...(file?.audio === 'unavailable' ? [MUSIC_LEFT_OUT] : []),
+        ...(file && (file.audio === 'no-encoder' || file.audio === 'unmeasured')
+          ? [MUSIC_LEFT_OUT[file.audio]]
+          : []),
         ...(file ? linkedInWarnings(file) : []),
       ].join(' ')
     case 'idle':

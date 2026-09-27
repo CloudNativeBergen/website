@@ -48,7 +48,8 @@ interface FakeOptions {
    * What getting an AAC encoder ready answers: its measured priming, none
    * (no encoder could be had), or a rejection.
    */
-  audio?: { priming: number } | null | 'throws'
+  audio?:
+    { priming: number } | { silent: 'no-encoder' | 'unmeasured' } | 'throws'
 }
 
 function fakeBackend(options: FakeOptions = {}) {
@@ -496,13 +497,25 @@ describe('exportVideo with a music track', () => {
     expect(sessions[1].audio!.channels[0][0]).toBe(1025)
   })
 
+  it('exports silent, and says why, when the priming cannot be measured', async () => {
+    const { backend, sessions } = fakeBackend({
+      audio: { silent: 'unmeasured' },
+    })
+    const result = await run(backend, withTrack()).promise
+    expect(sessions[0].audio).toBeNull()
+    expect(result.audio).toBe('unmeasured')
+  })
+
   it('exports silent, and says so, when no AAC encoder can be had', async () => {
-    for (const audio of [null, 'throws'] as const) {
+    for (const audio of [
+      { silent: 'no-encoder' as const },
+      'throws' as const,
+    ]) {
       const { backend, sessions } = fakeBackend({ audio })
       const result = await run(backend, withTrack()).promise
       expect(sessions[0].audio).toBeNull()
       expect(sessions[0].frames).toHaveLength(90)
-      expect(result.audio).toBe('unavailable')
+      expect(result.audio).toBe('no-encoder')
     }
   })
 

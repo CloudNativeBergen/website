@@ -445,4 +445,38 @@ describe('a video’s music', () => {
     // Fetched once: undo and redo bring back the samples already decoded.
     expect(gallery.loadTrack).toHaveBeenCalledTimes(1)
   })
+
+  it('says why an export came out silent: an unmeasurable encoder, not the browser', async () => {
+    const gallery = fakeGallery()
+    const exporting: EncoderBackend = {
+      supports: async () => true,
+      probe: async () => true,
+      prepareAudio: async () => ({ silent: 'unmeasured' }),
+      open: async () => ({
+        add: async () => {},
+        finish: async () => new Blob([new Uint8Array(1_000_000)]),
+        cancel: async () => {},
+      }),
+    }
+    render(<MemeGenerator gallery={gallery} encoder={exporting} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Video' }))
+    await within(music()).findByRole('option', { name: 'Theme (0:20)' })
+    fireEvent.change(within(music()).getByLabelText('Music'), {
+      target: { value: 'asset-theme' },
+    })
+    await within(music()).findByText(/Plays from/)
+    const panel = screen.getByRole('region', { name: 'Export' })
+    const button = within(panel).getByRole('button', { name: 'Export MP4' })
+    await waitFor(() => expect(button).not.toHaveAttribute('aria-disabled'))
+    fireEvent.click(button)
+    const status = within(panel).getByRole('status')
+    await waitFor(
+      () =>
+        expect(status).toHaveTextContent(
+          'The music could not be lined up with the picture on this browser’s encoder, so the video was made silent.',
+        ),
+      { timeout: 5000 },
+    )
+    expect(status).not.toHaveTextContent('Chrome')
+  })
 })

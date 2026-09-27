@@ -235,7 +235,7 @@ export const mediabunnyBackend: EncoderBackend = {
   },
 
   async prepareAudio() {
-    if (typeof AudioBuffer === 'undefined') return null
+    if (typeof AudioBuffer === 'undefined') return { silent: 'no-encoder' }
     const mediabunny = await loadMediabunny()
     const aac = {
       ...AAC,
@@ -246,13 +246,16 @@ export const mediabunnyBackend: EncoderBackend = {
       try {
         await registerAddOn()
       } catch {
-        return null
+        return { silent: 'no-encoder' }
       }
-      if (!(await mediabunny.canEncodeAudio('aac', aac))) return null
+      if (!(await mediabunny.canEncodeAudio('aac', aac)))
+        return { silent: 'no-encoder' }
     }
     const priming = await measurePriming(mediabunny).catch(() => null)
     // Unmeasurable is an encoder that cannot be trusted with the track.
-    return priming === null || priming < 0 ? null : { priming }
+    return priming === null || priming < 0
+      ? { silent: 'unmeasured' }
+      : { priming }
   },
 
   async open(canvas, encoding, audio): Promise<EncodeSession> {

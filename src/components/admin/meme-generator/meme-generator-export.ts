@@ -79,8 +79,15 @@ export interface ExportAudio {
   channels: readonly [Float32Array, Float32Array]
 }
 
-/** Whether the file has the track: `unavailable` is a track left out. */
-export type ExportedAudio = 'included' | 'unavailable' | 'none'
+/**
+ * Why a video with a track was made silent: no AAC encoder could be had, or
+ * one was, but its priming could not be measured — so its sound could not
+ * be put in step with the picture.
+ */
+export type SilentReason = 'no-encoder' | 'unmeasured'
+
+/** Whether the file has the track, or why it was left out. */
+export type ExportedAudio = 'included' | SilentReason | 'none'
 
 export interface EncoderBackend {
   /**
@@ -101,10 +108,10 @@ export interface EncoderBackend {
   /**
    * Get an AAC encoder ready — the browser's own, or the add-on where there
    * is none (proof §8) — and measure how many samples of priming it puts
-   * ahead of the sound (proof §4). Null when there is no AAC encoder to be
-   * had; the video is then made silent, and the organizer told.
+   * ahead of the sound (proof §4). Where either cannot be done, the reason:
+   * the video is then made silent, and the organizer told why.
    */
-  prepareAudio(): Promise<{ priming: number } | null>
+  prepareAudio(): Promise<{ priming: number } | { silent: SilentReason }>
   /** `audio` is encoded beside the video when given, as it is handed in. */
   open(
     canvas: HTMLCanvasElement,
@@ -344,15 +351,15 @@ export async function exportVideo({
   let exported: ExportedAudio = 'none'
   if (audio) {
     const plan = await answer(backend.prepareAudio()).catch(
-      (error: unknown) => {
+      (error: unknown): { silent: SilentReason } => {
         if (error instanceof ExportCancelled) throw error
-        return null
+        return { silent: 'no-encoder' }
       },
     )
-    sound = plan
-      ? { channels: shiftForPriming(audio.channels, plan.priming) }
-      : null
-    exported = plan ? 'included' : 'unavailable'
+    if ('priming' in plan) {
+      sound = { channels: shiftForPriming(audio.channels, plan.priming) }
+      exported = 'included'
+    } else exported = plan.silent
   }
 
   const passes: Encoding[] = [
