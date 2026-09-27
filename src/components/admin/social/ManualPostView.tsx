@@ -11,6 +11,7 @@ import {
 } from '@heroicons/react/24/outline'
 import { AdminButton } from '@/components/admin/AdminButton'
 import type { TagByHandEntry } from '@/lib/marketing/tag-by-hand'
+import type { ManualBody } from '@/lib/social/types'
 import { joinNames } from '@/lib/marketing/tagging/body'
 import { richTextImageUrl } from '@/lib/homepage/richTextImage'
 import {
@@ -56,7 +57,7 @@ export interface ManualPostViewProps {
    * their plain name. Shown and copied in place of `variant.body` until the
    * post is recorded; absent or null: the stored body.
    */
-  manualBody?: { body: string; untagged: readonly string[] } | null
+  manualBody?: ManualBody | null
 }
 
 const defaultImageSrc = (asset: SocialPostAttachment) =>
@@ -240,13 +241,21 @@ export function ManualPostView({
         </p>
       )}
 
-      {checked && checked.untagged.length > 0 && (
+      {checked && (checked.untagged.length > 0 || checked.removed > 0) && (
         <p className="rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900 dark:border-sky-900 dark:bg-sky-900/20 dark:text-sky-200">
-          {joinNames(checked.untagged)}{' '}
-          {checked.untagged.length > 1 ? 'are' : 'is'} named in plain text
-          below, not tagged. The tag no longer passes the check this post was
-          approved with &mdash; most often because the speaker has asked not to
-          be tagged since.
+          {checked.untagged.length > 0 && (
+            <>
+              {joinNames(checked.untagged)}{' '}
+              {checked.untagged.length > 1 ? 'are' : 'is'} named in plain text
+              below, not tagged. The tag no longer passes the check this post
+              was approved with &mdash; most often because the speaker has asked
+              not to be tagged since.{' '}
+            </>
+          )}
+          {checked.removed > 0 &&
+            (checked.removed === 1
+              ? 'A tag of someone who is no longer a speaker here is replaced with “a speaker”.'
+              : `${checked.removed} tags of people who are no longer speakers here are replaced with “a speaker”.`)}
         </p>
       )}
 

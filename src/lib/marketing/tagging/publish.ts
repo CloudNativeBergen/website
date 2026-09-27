@@ -13,18 +13,36 @@ import type { PublishMention } from '@/lib/social/provider/types'
 import type { RecordedTag } from '@/lib/social/types'
 import { mentionTokens } from './checks'
 
-export interface WithheldTag {
-  speakerId: string
-  name: string
-  handle: string
-  /** Opted out since approval, or deleted/erased since (nobody to tag). */
-  reason: 'opted-out' | 'gone'
+/**
+ * What stands in for a speaker who is GONE — deleted, or erased (#1162). Not
+ * their name: erasure never touches the variant, so the name stored on the
+ * record is an erased person's real name, and it must never be posted or
+ * repeated in a notification (GDPR). A neutral word keeps the sentence
+ * readable ("a speaker and @bob.dev are speaking").
+ */
+export const GONE_SPEAKER_TEXT = 'a speaker'
+
+/**
+ * A tag that did not go out. An opted-out speaker is still a speaker: their
+ * name is what was posted, and the organizers are told it. A gone speaker
+ * carries nothing of the person.
+ */
+export type WithheldTag =
+  | { reason: 'opted-out'; speakerId: string; name: string; handle: string }
+  | { reason: 'gone'; speakerId: string }
+
+export interface WithheldTags {
+  /** The text to post. */
+  body: string
+  /** The recorded DIDs to post: only for handles still in `body`. */
+  mentions: PublishMention[]
+  withheld: WithheldTag[]
 }
 
 export function withholdOptedOutTags(input: {
   body: string
   recorded: readonly RecordedTag[]
-}): { body: string; mentions: PublishMention[]; withheld: WithheldTag[] } {
+}): WithheldTags {
   // Per handle, the records in occurrence order (as `plainBody` binds them):
   // the k-th occurrence is the k-th record, extra ones the last record's.
   const byHandle = new Map<string, RecordedTag[]>()
@@ -41,13 +59,18 @@ export function withholdOptedOutTags(input: {
     seen.set(t.handle, k + 1)
     const r = list[Math.min(k, list.length - 1)]
     if (!r.speakerId || !(r.optedOut || r.gone)) return []
-    withheld.set(r.speakerId, {
-      speakerId: r.speakerId,
-      name: r.name,
-      handle: t.handle,
-      reason: r.gone ? 'gone' : 'opted-out',
-    })
-    return [{ ...t, name: r.name }]
+    withheld.set(
+      r.speakerId,
+      r.gone
+        ? { reason: 'gone', speakerId: r.speakerId }
+        : {
+            reason: 'opted-out',
+            speakerId: r.speakerId,
+            name: r.name,
+            handle: t.handle,
+          },
+    )
+    return [{ ...t, name: r.gone ? GONE_SPEAKER_TEXT : r.name }]
   })
   let body = input.body
   for (const t of swaps.reverse())

@@ -225,6 +225,15 @@ export interface SocialPostMentionDocument {
   status: 'tagged' | 'unresolved'
 }
 
+/** A body checked for posting by hand (tagging spec §4.4). */
+export interface ManualBody {
+  body: string
+  /** Named in plain text instead of tagged (opted out, handle changed…). */
+  untagged: string[]
+  /** Tags of people no longer speakers here, replaced by a neutral word. */
+  removed: number
+}
+
 /** What the single-variant editor loads: the variant and its post's inputs. */
 export interface SocialVariantEditorData {
   variant: SocialPostVariant
@@ -250,7 +259,7 @@ export interface SocialVariantEditorData {
    * §4.4) — a tag of a speaker who opted out since approval as their plain
    * name — and whose tags were dropped. Absent or null: post the stored body.
    */
-  manualBody?: { body: string; untagged: string[] } | null
+  manualBody?: ManualBody | null
 }
 
 /** The list-view row for the admin variant table. */

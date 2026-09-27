@@ -95,15 +95,19 @@ describe('withholdOptedOutTags', () => {
     expect(out.body).toBe('@kubernetes.io and Alice Smith')
   })
 
-  it('a speaker who is gone (deleted or erased) is not tagged either', () => {
+  it('a speaker who is gone (deleted or erased): neither the tag NOR the stored name — a neutral word', () => {
+    // Erasure never touches the variant, so `name` on the record is the
+    // erased person's real name: it must not be posted (GDPR).
     const out = withholdOptedOutTags({
-      body: 'Hi @alice.dev',
-      recorded: [{ ...alice, gone: true }],
+      body: '🎙️ @alice.dev and @bob.dev at the conf',
+      recorded: [{ ...alice, gone: true }, bob],
     })
-    expect(out.body).toBe('Hi Alice Smith')
-    expect(out.mentions).toEqual([])
+    expect(out.body).toBe('🎙️ a speaker and @bob.dev at the conf')
+    expect(out.body).not.toContain('Alice')
+    expect(out.mentions).toEqual([{ handle: 'bob.dev', did: 'did:plc:bob' }])
+    // Nothing of the person travels on to the notification either.
     expect(out.withheld).toEqual([
-      expect.objectContaining({ speakerId: 'speaker-alice', reason: 'gone' }),
+      { speakerId: 'speaker-alice', reason: 'gone' },
     ])
   })
 

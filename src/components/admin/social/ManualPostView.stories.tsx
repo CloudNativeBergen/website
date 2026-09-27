@@ -623,6 +623,7 @@ export const BlueskyLateOptOut: Story = {
     manualBody: {
       body: '🎙️ Alice Smith and @bob.dev are speaking at Cloud Native Bergen 2027.',
       untagged: ['Alice Smith'],
+      removed: 0,
     },
   },
   play: async ({ canvasElement }) => {
@@ -647,6 +648,32 @@ export const BlueskyLateOptOutDark: Story = {
 export const BlueskyLateOptOutMobile: Story = {
   ...BlueskyLateOptOut,
   parameters: { layout: 'fullscreen', viewport: { defaultViewport: 'phone' } },
+}
+
+/**
+ * A speaker erased since approval: neither the tag nor the recorded name
+ * (the erased person's real name) is shown — a neutral word stands in.
+ */
+export const BlueskyErasedSpeaker: Story = {
+  args: {
+    ...BlueskyLateOptOut.args,
+    manualBody: {
+      body: '🎙️ a speaker and @bob.dev are speaking at Cloud Native Bergen 2027.',
+      untagged: [],
+      removed: 1,
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const text = canvas
+      .getByRole('button', { name: /copy text/i })
+      .closest('section')
+    await expect(text).toHaveTextContent('🎙️ a speaker and @bob.dev')
+    await expect(canvasElement).not.toHaveTextContent('Alice')
+    await expect(
+      canvas.getByText(/no longer a speaker here/),
+    ).toBeInTheDocument()
+  },
 }
 
 /** Once posted, the record is shown as it is: no check, no notice. */

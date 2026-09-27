@@ -8,7 +8,8 @@
  * fetch), and calls these only for a Bluesky variant.
  */
 
-import type { SocialVariantEditorData } from '@/lib/social/types'
+import type { ManualBody, SocialVariantEditorData } from '@/lib/social/types'
+import { GONE_SPEAKER_TEXT } from './publish'
 import type { MentionRecord } from './body'
 import {
   approvalCheck,
@@ -178,18 +179,29 @@ export async function manualPostBody(input: {
   conferenceId: string
   variantId: string
   body: string
-}): Promise<{ body: string; untagged: string[] } | null> {
+}): Promise<ManualBody | null> {
   const { check, people, mentions } = await approvalWithInputs(input)
   let body = input.body
   const untagged: string[] = []
+  let removed = 0
   for (const issue of check.issues) {
     if (issue.code === 'plain-too-long') continue
-    const fixed = fixTagIssue(body, issue, people, mentions)
+    // Someone no longer a speaker here — erased, deleted or taken off the
+    // programme. The name on the record may be an erased person's real name,
+    // so it is never shown or copied: a neutral word stands in (GDPR).
+    const gone = issue.code === 'not-a-speaker'
+    const fixed = fixTagIssue(
+      body,
+      gone ? { ...issue, name: GONE_SPEAKER_TEXT } : issue,
+      people,
+      mentions,
+    )
     if (fixed === body) continue
     body = fixed
-    if (!untagged.includes(issue.name)) untagged.push(issue.name)
+    if (gone) removed++
+    else if (!untagged.includes(issue.name)) untagged.push(issue.name)
   }
-  return body === input.body ? null : { body, untagged }
+  return body === input.body ? null : { body, untagged, removed }
 }
 
 /**

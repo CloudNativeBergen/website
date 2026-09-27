@@ -325,14 +325,14 @@ describe('a tag withheld at publish (tagging spec §4.4, Publish)', () => {
     )
   })
 
-  it('never notifies the actor: an organizer who opted out is not told about their own opt-out', async () => {
+  it('the cron is the actor, so EVERY organizer hears it — one who opted out too', async () => {
     h.organizers.mockResolvedValue(['org-a', 'alice'])
     await notifyMarketingTagsWithheld(withheldEvent())
     expect(
       (h.createNotifications.mock.calls[0][0] as { recipientId: string }[]).map(
         (n) => n.recipientId,
       ),
-    ).toEqual(['org-a'])
+    ).toEqual(['org-a', 'alice'])
   })
 
   it('says why: an opt-out and a speaker who is gone read differently', async () => {
@@ -346,20 +346,28 @@ describe('a tag withheld at publish (tagging spec §4.4, Publish)', () => {
           handle: 'alice.dev',
           reason: 'opted-out',
         },
-        {
-          speakerId: 'bob',
-          name: 'Bob Jones',
-          handle: 'bob.dev',
-          reason: 'gone',
-        },
+        { speakerId: 'bob', reason: 'gone' },
       ],
     })
-    expect(h.createNotifications.mock.calls[0][0]).toMatchObject([
-      {
-        message:
-          'Alice Smith asked not to be tagged after the post was approved, so it went out with their name instead of @alice.dev. Bob Jones is no longer a speaker here, so it went out with their name instead of @bob.dev.',
-      },
-    ])
+    const [n] = h.createNotifications.mock.calls[0][0] as { message: string }[]
+    expect(n.message).toBe(
+      'Alice Smith asked not to be tagged after the post was approved, so it went out with their name instead of @alice.dev. A tag of someone who is no longer a speaker here was replaced with “a speaker”.',
+    )
+  })
+
+  it('a gone speaker alone: the notification names nobody (GDPR)', async () => {
+    h.organizers.mockResolvedValue(['org-a'])
+    await notifyMarketingTagsWithheld({
+      ...withheldEvent(),
+      withheld: [
+        { speakerId: 'bob', reason: 'gone' },
+        { speakerId: 'carol', reason: 'gone' },
+      ],
+    })
+    const [n] = h.createNotifications.mock.calls[0][0] as { message: string }[]
+    expect(n.message).toBe(
+      '2 tags of people who are no longer speakers here were replaced with “a speaker”.',
+    )
   })
 
   it('a standalone post links to the post itself', async () => {

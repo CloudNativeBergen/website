@@ -91,6 +91,7 @@ describe('manualPostBody', () => {
     expect(await manualPostBody(input)).toEqual({
       body: '🎙️ Alice Smith and @bob.dev are speaking at the conf.',
       untagged: ['Alice Smith'],
+      removed: 0,
     })
     // Her handle is never looked up.
     expect(h.resolve).not.toHaveBeenCalledWith('alice.dev')
@@ -111,7 +112,24 @@ describe('manualPostBody', () => {
     expect(await manualPostBody(input)).toEqual({
       body: '🎙️ @alice.dev and Bob Jones are speaking at the conf.',
       untagged: ['Bob Jones'],
+      removed: 0,
     })
+  })
+
+  it('an erased speaker: neither the tag NOR the recorded name — a neutral word, and no name in the note (GDPR)', async () => {
+    seed(false)
+    h.dataset = h.dataset.map((d) =>
+      d._id === 'alice'
+        ? { _id: 'alice', _type: 'speaker', name: '', erasedAt: '2026-09-01' }
+        : d,
+    )
+    const out = await manualPostBody(input)
+    expect(out).toEqual({
+      body: '🎙️ a speaker and @bob.dev are speaking at the conf.',
+      untagged: [],
+      removed: 1,
+    })
+    expect(JSON.stringify(out)).not.toContain('Alice')
   })
 
   it('Bluesky unreachable is a warning, not a refusal: the tags stay', async () => {
@@ -146,6 +164,7 @@ describe('withManualBody — which editor reads run the check', () => {
       expect(out.manualBody).toEqual({
         body: '🎙️ Alice Smith and @bob.dev are speaking at the conf.',
         untagged: ['Alice Smith'],
+        removed: 0,
       })
     },
   )
