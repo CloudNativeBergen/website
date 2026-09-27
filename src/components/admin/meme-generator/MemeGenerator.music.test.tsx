@@ -634,4 +634,35 @@ describe('a video’s music', () => {
     ).toBeInTheDocument()
     await waitFor(() => expect(status).toHaveTextContent(/Plays from 0:04/))
   })
+
+  it('counts re-picking a gallery entry as a change from the file the project holds', async () => {
+    const gallery = fakeGallery()
+    const projects = fakeProjects()
+    projects.open.mockResolvedValue({
+      ...PROJECT,
+      track: {
+        ...PROJECT.track!,
+        galleryAssetId: 'asset-theme',
+        start: 0,
+        volume: 0.8,
+        fadeIn: 1,
+        fadeOut: 2,
+      },
+    })
+    render(
+      <MemeGenerator
+        gallery={gallery}
+        projects={projects}
+        encoder={encoder}
+        initialProjectId="vp-1"
+      />,
+    )
+    await screen.findByDisplayValue('Launch teaser')
+    await within(music()).findByRole('option', { name: 'Theme (0:20)' })
+    const select = within(music()).getByLabelText('Music')
+    fireEvent.change(select, { target: { value: '' } })
+    fireEvent.change(select, { target: { value: 'asset-theme' } })
+    // The same settings, but the entry's file may have been replaced since.
+    expect(within(project()).getByText('Unsaved changes')).toBeInTheDocument()
+  })
 })

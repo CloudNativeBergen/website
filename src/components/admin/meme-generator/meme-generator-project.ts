@@ -164,11 +164,15 @@ export function projectSnapshot(
 ): string {
   return stableJson({
     title: title.trim(),
-    // The track by what is heard: the file (or the gallery entry naming
-    // it) and the settings — not its title, which a save does not store.
+    // The track by what is heard: the file a project holds, or — for one
+    // picked afresh — the gallery entry, whose file a save resolves then
+    // (it may since have been replaced); and the settings. Not its title,
+    // which a save does not store.
     track: track
       ? {
-          file: track.galleryAssetId ?? track.fileId ?? null,
+          file: track.fileId
+            ? `file:${track.fileId}`
+            : `gallery:${track.galleryAssetId ?? ''}`,
           start: track.start,
           volume: track.volume,
           fadeIn: track.fadeIn,

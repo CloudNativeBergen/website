@@ -260,8 +260,9 @@ describe('a saved track reopens as the track it was (#1179)', () => {
     const reopened = await reopenTrack(picked)
     expect(reopened).toEqual({ ...picked, fileId: THEME })
     const list = [newScene(design())]
+    // As the editor holds it once the save carried the file back.
     expect(projectSnapshot('t', list, reopened)).toBe(
-      projectSnapshot('t', list, picked),
+      projectSnapshot('t', list, { ...picked, fileId: THEME }),
     )
   })
 
@@ -275,6 +276,14 @@ describe('a saved track reopens as the track it was (#1179)', () => {
       fadeIn: 1,
       fadeOut: 2.5,
     })
+  })
+
+  it('tells a held file from the same gallery entry picked afresh, whose file may since have been replaced', () => {
+    const list = [newScene(design())]
+    const held = { ...picked, fileId: 'file-old' }
+    expect(projectSnapshot('t', list, picked)).not.toBe(
+      projectSnapshot('t', list, held),
+    )
   })
 
   it('changes the snapshot with what is heard, never with the title', () => {

@@ -1114,7 +1114,16 @@ export function MemeGenerator({
       setProject({ id, rev: result._rev })
       setConflicted(false)
       setProjectTitle(title)
-      setSavedSnapshot(snapshot)
+      // What was stored, with the file the track became: that is what the
+      // editor holds from here on.
+      setSavedSnapshot(
+        trackFileId && savedTrack && !savedTrack.fileId
+          ? projectSnapshot(title, scenes, {
+              ...savedTrack,
+              fileId: trackFileId,
+            })
+          : snapshot,
+      )
       if (!over) onProjectChange?.(id)
       refreshProjects()
     } catch (error) {
