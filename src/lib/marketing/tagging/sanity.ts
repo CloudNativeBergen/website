@@ -17,13 +17,15 @@ import {
 } from './records'
 
 /** What the checks read off a speaker: `RawTaggablePerson`. */
-const PERSON_FIELDS = '{ _id, name, links, socialTagOptOut }'
+const PERSON_FIELDS = '{ _id, name, links, socialTagOptOut, erasedAt }'
 
 export interface RawTaggablePerson {
   _id: string | null
   name: string | null
   links: unknown
   socialTagOptOut: boolean | null
+  /** Set by the GDPR erasure (#1162): the person is gone, never tagged. */
+  erasedAt?: string | null
 }
 
 /**
@@ -38,6 +40,10 @@ export function taggablePeopleFrom(
   const seen = new Set<string>()
   return (rows ?? []).flatMap((row): TaggablePerson[] => {
     if (!row?._id || seen.has(row._id)) return []
+    // An erased speaker keeps the document and the talk refs but is nobody
+    // to tag: off the roster, so a tag still recorded for them is refused
+    // as not a speaker here, and the button does not list them.
+    if (row.erasedAt) return []
     seen.add(row._id)
     const optedOut = row.socialTagOptOut === true
     const links = Array.isArray(row.links)

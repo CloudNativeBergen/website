@@ -392,6 +392,22 @@ describe('social.updateVariant on a Bluesky body', () => {
     ])
   })
 
+  it('refuses a tag still recorded for an ERASED speaker (#1162), without asking Bluesky', async () => {
+    // What the erasure leaves: the document with erasedAt, links and the
+    // opt-out cleared, the talk ref kept.
+    dataset[0] = {
+      _id: 'spk-alice',
+      _type: 'speaker',
+      name: 'Erased speaker',
+      erasedAt: '2026-09-20T10:00:00.000Z',
+    }
+    expect(await refusal(save('Still @alice.dev'))).toEqual([
+      ['not-a-speaker', 'spk-alice'],
+    ])
+    expect(askedBluesky()).toEqual([])
+    expect(h.updateSocialVariantContent).not.toHaveBeenCalled()
+  })
+
   it('refuses an opted-out speaker typed by hand, and never asks Bluesky', async () => {
     expect(await refusal(save('With @olga.dev'))).toEqual([
       ['opted-out', 'spk-olga'],
@@ -539,6 +555,18 @@ describe.each(PATHS)('approval check: $name', ({ run, wrote, prepare }) => {
   it('refuses when the speaker opted out since, without asking Bluesky', async () => {
     dataset[0] = { ...dataset[0], socialTagOptOut: true }
     expect(await refusal(run())).toEqual([['opted-out', 'spk-alice']])
+    expect(askedBluesky()).toEqual([])
+    expect(wrote()).toBe(false)
+  })
+
+  it('refuses when the speaker has been erased since (#1162)', async () => {
+    dataset[0] = {
+      _id: 'spk-alice',
+      _type: 'speaker',
+      name: 'Erased speaker',
+      erasedAt: '2026-09-20T10:00:00.000Z',
+    }
+    expect(await refusal(run())).toEqual([['not-a-speaker', 'spk-alice']])
     expect(askedBluesky()).toEqual([])
     expect(wrote()).toBe(false)
   })
