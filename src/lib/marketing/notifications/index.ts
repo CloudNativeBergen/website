@@ -1,1 +1,5 @@
-export { notifyMarketingFailure, notifyMarketingAwaitingManual } from './sanity'
+export {
+  notifyMarketingFailure,
+  notifyMarketingAwaitingManual,
+  notifyMarketingTagsWithheld,
+} from './sanity'

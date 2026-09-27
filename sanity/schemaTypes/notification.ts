@@ -74,6 +74,11 @@ export default defineType({
           { title: 'Marketing Task Due', value: 'marketing_task_due' },
           { title: 'Marketing Task Overdue', value: 'marketing_task_overdue' },
           { title: 'Marketing Task Failed', value: 'marketing_task_failed' },
+          // A late opt-out's tag swapped for the plain name at publish (#1152).
+          {
+            title: 'Marketing Task Posted Without a Tag',
+            value: 'marketing_task_tag_withheld',
+          },
           { title: 'System', value: 'system' },
         ],
         layout: 'dropdown',

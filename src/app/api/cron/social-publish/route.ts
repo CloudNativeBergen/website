@@ -6,6 +6,7 @@ import { resolveSocialPublishAdapter } from '@/lib/social/provider'
 import {
   notifyMarketingAwaitingManual,
   notifyMarketingFailure,
+  notifyMarketingTagsWithheld,
 } from '@/lib/marketing/notifications'
 
 /**
@@ -49,6 +50,7 @@ export async function GET(request: NextRequest) {
       resolveAdapter: resolveSocialPublishAdapter,
       onAwaitingManual: notifyMarketingAwaitingManual,
       onFailed: notifyMarketingFailure,
+      onTagsWithheld: notifyMarketingTagsWithheld,
       // A few seconds before Vercel kills the function: the engine stops
       // claiming when a publish could no longer finish in time.
       deadline: new Date(startedAt + (maxDuration - 5) * 1000),

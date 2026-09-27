@@ -1,5 +1,8 @@
 import type { NotificationInput } from '@/lib/notification/types'
-import type { VariantFailureEvent } from '@/lib/social/publish-engine'
+import type {
+  TagsWithheldEvent,
+  VariantFailureEvent,
+} from '@/lib/social/publish-engine'
 import { manualPostPath } from '@/lib/social/notify'
 
 export interface FailureTask {
@@ -60,4 +63,39 @@ export function standalonePublishFailureNotification(
       tag: `social-failure.${variant._id}.${attempt._key}`,
     },
   ]
+}
+
+/**
+ * A post that went out with a late opt-out's tag swapped for the plain name
+ * (tagging spec §4.4, Publish): ONE notification per organizer, linking to
+ * the Task (or, for a standalone post, the post). The actor is the speaker
+ * who opted out — an organizer who opted out is never told about their own
+ * choice. The cron made the swap; there is no other human actor.
+ */
+export function tagsWithheldNotifications(
+  organizerIds: readonly string[],
+  { variant, withheld }: TagsWithheldEvent,
+): NotificationInput[] {
+  const actors = new Set(withheld.map((w) => w.speakerId))
+  const recipients = [...new Set(organizerIds)].filter((id) => !actors.has(id))
+  const who = withheld.map((w) => w.name)
+  const names =
+    who.length <= 1
+      ? (who[0] ?? '')
+      : `${who.slice(0, -1).join(', ')} and ${who[who.length - 1]}`
+  const handles = withheld.map((w) => `@${w.handle}`).join(', ')
+  const message = `${names} asked not to be tagged after the post was approved, so it went out with ${withheld.length > 1 ? 'their names' : 'their name'} instead of ${handles}.`
+  const link = variant.marketingTaskId
+    ? `/admin/marketing/tasks/${encodeURIComponent(variant.marketingTaskId)}`
+    : manualPostPath(variant._id)
+  return recipients.map((recipientId) => ({
+    recipientId,
+    conferenceId: variant.conferenceId,
+    notificationType: 'marketing_task_tag_withheld' as const,
+    title: 'Posted without a tag',
+    message,
+    link,
+    // One post is published once: its identity is the variant.
+    tag: `marketing-tag-withheld.${variant._id}`,
+  }))
 }

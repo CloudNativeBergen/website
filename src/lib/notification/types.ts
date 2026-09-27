@@ -42,6 +42,10 @@ export type NotificationType =
   | 'marketing_task_due'
   | 'marketing_task_overdue'
   | 'marketing_task_failed'
+  // A post went out with a late opt-out's tag swapped for the speaker's plain
+  // name (tagging spec §4.4, Publish). Emitted by the social publish cron to
+  // every organizer; links to the Task. Rendered generically by the hub.
+  | 'marketing_task_tag_withheld'
   | 'system'
 
 /**
