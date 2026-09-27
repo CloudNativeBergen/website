@@ -200,6 +200,17 @@ describe('withManualBody — which editor reads run the check', () => {
     },
   )
 
+  it('a check that changes nothing still says it ran: the stored body, checked (round 5, T2)', async () => {
+    // The view announces "ready to copy" from a checked body; without one it
+    // cannot tell "passed as written" from "never checked".
+    seed(false)
+    const out = await withManualBody(
+      data('bluesky', 'awaiting-manual'),
+      'conf-A',
+    )
+    expect(out.manualBody).toEqual({ body: BODY, untagged: [], removed: 0 })
+  })
+
   it.each([
     ['bluesky', 'scheduled'],
     ['bluesky', 'published'],

@@ -239,7 +239,13 @@ export async function withManualBody<T extends SocialVariantEditorData>(
       variantId: v._id,
       body: v.body,
     })
-    return manualBody ? { ...data, manualBody } : data
+    // Always a checked body, even when nothing changed: the view announces
+    // completion from it, and "passed as written" must not read as "never
+    // checked" (round 5, T2).
+    return {
+      ...data,
+      manualBody: manualBody ?? { body: v.body, untagged: [], removed: 0 },
+    }
   } catch (error) {
     // FAIL CLOSED (review T1): the stored body may tag a speaker who opted
     // out since approval, so it must not be offered as checked.
