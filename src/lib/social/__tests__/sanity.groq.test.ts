@@ -481,25 +481,39 @@ describe('findWork — the composed due/stale scan', () => {
     expect(h.queries).toHaveLength(1)
   })
 
-  it('tagStates: re-reads the speakers right before a tagged publish — opted out, erased and deleted all withhold (review T6)', async () => {
+  it('tagStates: re-reads the speakers right before a tagged publish — opted out, erased, deleted and off this programme all withhold (review T6, round 3 T3)', async () => {
+    const talk = (id: string, conf: string, speakers: string[]) => ({
+      _id: id,
+      _type: 'talk',
+      conference: { _ref: conf },
+      speakers: speakers.map((s) => ({ _type: 'reference', _ref: s })),
+    })
     h.dataset = [
       { _id: 'alice', _type: 'speaker', name: 'Alice', socialTagOptOut: true },
       { _id: 'bob', _type: 'speaker', name: 'Bob' },
       { _id: 'erased', _type: 'speaker', name: '', erasedAt: '2026-09-01' },
       // A Studio draft of a deleted speaker is not the speaker.
       { _id: 'drafts.gone', _type: 'speaker', name: 'Gone' },
+      // Taken off this programme: only a talk at ANOTHER conference, and a
+      // draft talk here, remain.
+      { _id: 'carol', _type: 'speaker', name: 'Carol' },
+      talk('t1', 'c1', ['alice', 'bob', 'erased']),
+      talk('t2', 'c2', ['carol']),
+      talk('drafts.t3', 'c1', ['carol']),
     ]
-    const states = await sanitySocialVariantStore.tagStates([
+    const states = await sanitySocialVariantStore.tagStates('c1', [
       'alice',
       'bob',
       'erased',
       'gone',
+      'carol',
     ])
     expect(Object.fromEntries(states)).toEqual({
       alice: { optedOut: true, gone: false },
       bob: { optedOut: false, gone: false },
       erased: { optedOut: false, gone: true },
       gone: { optedOut: false, gone: true },
+      carol: { optedOut: false, gone: true },
     })
     expect(h.queries).toHaveLength(1)
   })

@@ -39,8 +39,8 @@ export class MemoryVariantStore implements SocialVariantStore {
    * recorded tag says.
    */
   readonly speakers: Record<string, { optedOut?: boolean; gone?: boolean }> = {}
-  /** Each re-read's speaker ids, in order. */
-  readonly recheckCalls: string[][] = []
+  /** Each re-read's conference and speaker ids, in order. */
+  readonly recheckCalls: [string, string[]][] = []
   /** Makes the re-read throw. */
   recheckError: Error | null = null
   /** Every write's patch, in order: claims and transitions alike. */
@@ -142,8 +142,8 @@ export class MemoryVariantStore implements SocialVariantStore {
     return { due, stale, submitted }
   }
 
-  async tagStates(speakerIds: readonly string[]) {
-    this.recheckCalls.push([...speakerIds])
+  async tagStates(conferenceId: string, speakerIds: readonly string[]) {
+    this.recheckCalls.push([conferenceId, [...speakerIds]])
     if (this.recheckError) throw this.recheckError
     const latest = (id: string) =>
       Object.values(this.tags)

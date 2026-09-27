@@ -457,14 +457,21 @@ export const sanitySocialVariantStore: SocialVariantStore = {
     }
   },
 
-  async tagStates(speakerIds) {
+  async tagStates(conferenceId, speakerIds) {
     // groq-global-scoped: by-id read of the speakers a due variant's recorded
     // mentions reference; the variant was read tenant-by-tenant in findWork.
     // Only the opt-out and erasure are projected — nothing leaves the server.
-    const query = groq`*[_type == "speaker" && _id in $ids && !(_id in path("drafts.**")) && !(_id in path("versions.**"))]{ _id, "optedOut": socialTagOptOut == true, "erased": defined(erasedAt) }`
+    // `onProgramme`: a talk at THIS conference, any status — the roster the
+    // manual path's approval check reads (`getConferenceTaggablePeople`).
+    const query = groq`*[_type == "speaker" && _id in $ids && !(_id in path("drafts.**")) && !(_id in path("versions.**"))]{ _id, "optedOut": socialTagOptOut == true, "erased": defined(erasedAt), "onProgramme": count(*[_type == "talk" && conference._ref == $conferenceId && ^._id in speakers[]._ref && !(_id in path("drafts.**")) && !(_id in path("versions.**"))]) > 0 }`
     const rows = await clientWrite.fetch<
-      { _id: string; optedOut: boolean | null; erased: boolean | null }[]
-    >(query, { ids: [...speakerIds] })
+      {
+        _id: string
+        optedOut: boolean | null
+        erased: boolean | null
+        onProgramme: boolean | null
+      }[]
+    >(query, { ids: [...speakerIds], conferenceId })
     const byId = new Map((rows ?? []).map((r) => [r._id, r]))
     return new Map(
       speakerIds.map((id) => {
@@ -473,7 +480,10 @@ export const sanitySocialVariantStore: SocialVariantStore = {
         return [
           id,
           row
-            ? { optedOut: row.optedOut === true, gone: row.erased === true }
+            ? {
+                optedOut: row.optedOut === true,
+                gone: row.erased === true || row.onProgramme !== true,
+              }
             : { optedOut: false, gone: true },
         ] as const
       }),

@@ -117,9 +117,11 @@ export interface SocialVariantStore {
    * T6): read right before a tagged variant's external publish, so an
    * opt-out that landed after `findWork` is still honoured. Only for a
    * variant that carries recorded speaker tags — an idle tick never pays it.
-   * A speaker who no longer exists is `gone`.
+   * A speaker who no longer exists, was erased, or no longer has a talk at
+   * this conference (the manual path's roster, round 3 T3) is `gone`.
    */
   tagStates(
+    conferenceId: string,
     speakerIds: readonly string[],
   ): Promise<ReadonlyMap<string, { optedOut: boolean; gone: boolean }>>
   /**

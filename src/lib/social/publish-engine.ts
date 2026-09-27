@@ -735,7 +735,7 @@ async function dispatch(
   if (recorded && speakerIds.length > 0) {
     try {
       const current = await withTimeout(
-        store.tagStates(speakerIds),
+        store.tagStates(claimed.conferenceId, speakerIds),
         TAG_RECHECK_TIMEOUT_MS,
         `Tag re-check took longer than ${TAG_RECHECK_TIMEOUT_MS} ms`,
       )

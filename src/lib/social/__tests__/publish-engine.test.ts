@@ -335,7 +335,9 @@ describe('runPublishTick — due scan and dispatch', () => {
           mentions: [{ handle: 'bob.dev', did: 'did:plc:bob' }],
         }),
       )
-      expect(store.recheckCalls).toEqual([['speaker-alice', 'speaker-bob']])
+      expect(store.recheckCalls).toEqual([
+        ['conf-1', ['speaker-alice', 'speaker-bob']],
+      ])
     })
 
     it('an opt-out WITHDRAWN after the tick read is honoured too: the fresh state replaces the snapshot (round 3, T2)', async () => {
