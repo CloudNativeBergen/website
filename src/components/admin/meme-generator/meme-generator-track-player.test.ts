@@ -406,4 +406,22 @@ describe('the track player', () => {
     ctx.currentTime = 0.7
     expect(player.time()).toBeCloseTo(0.1, 10)
   })
+
+  it('finishes the pass being heard when looping is turned off after the next one began rendering', () => {
+    const { ctx, sources } = fakeContext(0.1)
+    const player = createTrackPlayer(() => ctx)
+    player.load(mix(10))
+    player.setLoop(true)
+    player.play(9.5)
+    // The next pass began rendering at 0.5; the speakers are 0.05 s short of it.
+    ctx.currentTime = 0.55
+    player.setLoop(false)
+    expect(player.time()).toBeCloseTo(9.95, 10)
+    // The pass not yet heard is stopped; the one heard plays out.
+    expect(sources[1]).toMatchObject({ startedAt: 0.5, stopped: true })
+    expect(sources[0].stopped).toBe(false)
+    ctx.currentTime = 0.65
+    // Past the end: the editor ends playback there.
+    expect(player.time()).toBeCloseTo(10.05, 10)
+  })
 })

@@ -230,20 +230,15 @@ export function createTrackPlayer(
     setLoop(on) {
       if (on === loop) return
       if (!on && ctx && anchor) {
-        // The pass being rendered plays out; the clock stops wrapping, so
-        // the playhead runs past the end and the editor ends playback.
-        const now = ctx.currentTime
-        const rendered = positionAt(now) ?? 0
-        const current = sources.filter((entry) => entry.at <= now).at(-1)
-        stopSources((entry) => entry.at <= now)
-        if (current) {
-          anchor = {
-            offset: rendered,
-            startedAt: now,
-            fresh: false,
-          }
-          scheduledUntil = now + length() - rendered
-        }
+        // The pass being HEARD plays out — not the one being rendered,
+        // which may already be the next: that one is stopped. The clock
+        // stops wrapping from where the speakers are, so the playhead runs
+        // past the end and the editor ends playback there.
+        const heardAt = ctx.currentTime - (ctx.outputLatency ?? 0)
+        const heard = positionAt(heardAt) ?? 0
+        stopSources((entry) => entry.at <= heardAt)
+        anchor = { offset: heard, startedAt: heardAt, fresh: false }
+        scheduledUntil = heardAt + length() - heard
       }
       loop = on
       queueAhead()
