@@ -283,7 +283,7 @@ describe('attaching a render also saves it to the gallery (#1165)', () => {
         task: { ...ref('task-r'), _weak: true },
       }),
     ])
-    expect(task()).not.toHaveProperty('gallerySavePending')
+    expect(task()).not.toHaveProperty('galleryPending')
     const entry = structuredClone(gallery())
     expect(await attach(FIRST)).toEqual({
       success: true,
@@ -350,7 +350,7 @@ describe('attaching a render also saves it to the gallery (#1165)', () => {
     expect(task()).toMatchObject({
       asset: image(FIRST),
       handoffDoneFor: ['variant-1'],
-      gallerySavePending: true,
+      galleryPending: true,
     })
     expect(h.handedOff).toEqual(['variant-1'])
     expect(gallery()).toEqual([])
@@ -371,7 +371,7 @@ describe('attaching a render also saves it to the gallery (#1165)', () => {
     expect(gallery()).toEqual([
       expect.objectContaining({ image: image(FIRST) }),
     ])
-    expect(task()).not.toHaveProperty('gallerySavePending')
+    expect(task()).not.toHaveProperty('galleryPending')
     expect(
       (await marketing().task.get({ taskId: 'task-r' })).task,
     ).toMatchObject({ galleryPending: false })

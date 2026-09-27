@@ -69,7 +69,7 @@ describe('studio queries executed against a fixture dataset', () => {
       campaignId: 'campaign',
       handoffDoneFor: null,
       replacedRenders: ['image-replaced'],
-      gallerySavePending: null,
+      galleryPending: null,
     })
   })
 

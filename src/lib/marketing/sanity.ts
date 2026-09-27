@@ -517,7 +517,7 @@ export async function getTaskEditorData(
       "verbatimCopy": verbatimCopy == true && copyEdited != true,
       "assetUrl": asset.asset->url,
       "assetId": asset.asset._ref,
-      "galleryPending": kind == "studioRender" && defined(asset.asset) && gallerySavePending == true,
+      "galleryPending": kind == "studioRender" && defined(asset.asset) && galleryPending == true,
       "subject": subject->{ _id, _type, "name": coalesce(name, title), "slug": slug.current },
       "tagByHand": select(kind == "publishing" && channel == "linkedin" => subject->{
         "people": select(

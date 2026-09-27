@@ -1203,6 +1203,36 @@ function SkippedNote({ task }: { task: TaskEditorTask }) {
   )
 }
 
+/** A render step that has not landed yet, with the retry that completes it. */
+function RetryAlert({
+  children,
+  error,
+  busy,
+  label,
+  busyLabel,
+  onRetry,
+}: {
+  children: React.ReactNode
+  error: string | null
+  busy: boolean
+  label: string
+  busyLabel: string
+  onRetry: () => void
+}) {
+  return (
+    <div
+      role="alert"
+      className="mb-4 space-y-3 rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-100"
+    >
+      {children}
+      {error && <p>{error}</p>}
+      <AdminButton onClick={onRetry} disabled={busy} size="md">
+        {busy ? busyLabel : label}
+      </AdminButton>
+    </div>
+  )
+}
+
 function StudioSection({
   data,
   onChanged,
@@ -1213,7 +1243,8 @@ function StudioSection({
   const attach = api.marketing.task.attachAsset.useMutation()
   const [retrying, setRetrying] = useState(false)
   const [handoffError, setHandoffError] = useState<string | null>(null)
-  const [handoffComplete, setHandoffComplete] = useState(false)
+  /** What the last successful retry completed, in words. */
+  const [completed, setCompleted] = useState<string | null>(null)
   const recipients = siblings.filter(
     (sibling) =>
       sibling.kind === 'publishing' &&
@@ -1222,7 +1253,10 @@ function StudioSection({
   const retryHandoff = async () => {
     setRetrying(true)
     setHandoffError(null)
-    setHandoffComplete(false)
+    setCompleted(null)
+    // What this retry is completing, as the page showed it pending.
+    const handoff = task.handoffPending === true
+    const gallery = task.galleryPending === true
     try {
       const current = await utils.marketing.task.get.fetch(
         { taskId: task._id },
@@ -1250,7 +1284,13 @@ function StudioSection({
           'The image could not be saved to the asset gallery. Try again in a moment.',
         )
       } else {
-        setHandoffComplete(true)
+        setCompleted(
+          gallery && handoff
+            ? 'Image handoff completed, and the render is saved to the asset gallery.'
+            : gallery
+              ? 'The render is saved to the asset gallery.'
+              : 'Image handoff completed.',
+        )
       }
       onChanged()
     } catch (error) {
@@ -1290,9 +1330,12 @@ function StudioSection({
       }
     >
       {task.handoffPending && (
-        <div
-          role="alert"
-          className="mb-4 space-y-3 rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-100"
+        <RetryAlert
+          error={handoffError}
+          busy={retrying}
+          label="Retry handoff"
+          busyLabel="Retrying handoff…"
+          onRetry={() => void retryHandoff()}
         >
           <p className="font-medium">
             The render is done and saved. The image has not reached all
@@ -1319,41 +1362,28 @@ function StudioSection({
           {task.galleryPending && (
             <p>It has not been saved to the asset gallery yet either.</p>
           )}
-          {handoffError && <p>{handoffError}</p>}
-          <AdminButton
-            onClick={() => void retryHandoff()}
-            disabled={retrying}
-            size="md"
-          >
-            {retrying ? 'Retrying handoff…' : 'Retry handoff'}
-          </AdminButton>
-        </div>
+        </RetryAlert>
       )}
       {task.galleryPending && !task.handoffPending && (
-        <div
-          role="alert"
-          className="mb-4 space-y-3 rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-100"
+        <RetryAlert
+          error={handoffError}
+          busy={retrying}
+          label="Save to the gallery"
+          busyLabel="Saving to the gallery…"
+          onRetry={() => void retryHandoff()}
         >
           <p className="font-medium">
             The render is saved and attached to this Task, but it has not been
             saved to the asset gallery yet.
           </p>
-          {handoffError && <p>{handoffError}</p>}
-          <AdminButton
-            onClick={() => void retryHandoff()}
-            disabled={retrying}
-            size="md"
-          >
-            {retrying ? 'Saving to the gallery…' : 'Save to the gallery'}
-          </AdminButton>
-        </div>
+        </RetryAlert>
       )}
-      {handoffComplete && !task.handoffPending && (
+      {completed && !task.handoffPending && !task.galleryPending && (
         <p
           role="status"
           className="mb-4 text-sm text-green-700 dark:text-green-300"
         >
-          Image handoff completed.
+          {completed}
         </p>
       )}
       {task.assetUrl ? (

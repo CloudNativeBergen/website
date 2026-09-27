@@ -1158,7 +1158,7 @@ describe('task.attachAsset', () => {
       logged.mockRestore()
       expect(h.handoffStudioAttachment).toHaveBeenCalledOnce()
       const [save, receipts] = h.updateTaskFields.mock.calls
-      expect(save[2]).toMatchObject({ gallerySavePending: true })
+      expect(save[2]).toMatchObject({ galleryPending: true })
       // The receipts land; the gallery mark is NOT cleared.
       expect(receipts[2].handoffDoneFor).toEqual(['eligible-v'])
       expect(receipts[3]).toEqual([])
@@ -1407,7 +1407,7 @@ describe('task.attachAsset', () => {
         asset: { _type: 'image', asset: { _type: 'reference', _ref: assetId } },
         handoffDoneFor: [],
         // A new render is marked until its gallery save lands (#1165).
-        gallerySavePending: true,
+        galleryPending: true,
       },
       ['pendingStudioAsset'],
       undefined,
@@ -1846,7 +1846,7 @@ describe('task.attachAsset', () => {
       ...render(),
       assetId,
       pendingAssetId: null,
-      gallerySavePending: false,
+      galleryPending: false,
     }))
     h.saveToGallery.mockResolvedValue('unchanged')
     await marketing().task.attachAsset(input)
@@ -1858,7 +1858,7 @@ describe('task.attachAsset', () => {
     const result = await marketing().task.attachAsset(input)
     expect(result).toEqual({ success: true, handoffFailures: [] })
     for (const call of h.updateTaskFields.mock.calls)
-      expect(call[3] ?? []).not.toContain('gallerySavePending')
+      expect(call[3] ?? []).not.toContain('galleryPending')
   })
   it('retains the render after a handoff throws and retries the same saved asset', async () => {
     h.getRenderSiblings.mockResolvedValue([
@@ -1876,7 +1876,7 @@ describe('task.attachAsset', () => {
     })
     // The save, then (with nothing handed off) only the gallery mark's clear.
     expect(h.updateTaskFields).toHaveBeenCalledTimes(2)
-    expect(h.updateTaskFields.mock.calls[1][3]).toEqual(['gallerySavePending'])
+    expect(h.updateTaskFields.mock.calls[1][3]).toEqual(['galleryPending'])
     h.getStudioTask.mockResolvedValue({
       ...render(),
       _rev: 'saved-rev',

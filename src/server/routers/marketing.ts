@@ -544,7 +544,7 @@ async function loadTask(taskId: string): Promise<{
  * Save a render Task's image to the gallery (spec §4.3, #1165). `saved` once
  * the entry holds this image; `superseded` when the Task holds a newer render
  * (whose own attach owns the entry). NEVER throws: the attach is already
- * saved, and a failure leaves the Task's `gallerySavePending` for a retry.
+ * saved, and a failure leaves the Task's `galleryPending` for a retry.
  */
 async function trySaveRenderToGallery(
   task: StudioTask,
@@ -1602,7 +1602,7 @@ export const marketingRouter = router({
             // the save, so a gallery save that fails leaves a durable mark
             // the Task editor offers a retry for; cleared with the receipts.
             ...(task.assetId !== input.assetId
-              ? { gallerySavePending: true }
+              ? { galleryPending: true }
               : {}),
           },
           task.assetId !== input.assetId ? ['pendingStudioAsset'] : [],
@@ -1621,7 +1621,7 @@ export const marketingRouter = router({
         // Only a mark this save set, or one already there, needs clearing.
         const clearGalleryMark =
           gallery === 'saved' &&
-          (task.assetId !== input.assetId || task.gallerySavePending === true)
+          (task.assetId !== input.assetId || task.galleryPending === true)
         // Then every recorded render goes, through the shared orphan check,
         // so a post it was handed to keeps it — and keeps it recorded, for a
         // retry and for a speaker's erasure. Never fails the save.
@@ -1704,8 +1704,8 @@ export const marketingRouter = router({
                     ]),
                   ],
                 },
-                clearGalleryMark && current.gallerySavePending
-                  ? ['gallerySavePending']
+                clearGalleryMark && current.galleryPending
+                  ? ['galleryPending']
                   : [],
               ))
             )

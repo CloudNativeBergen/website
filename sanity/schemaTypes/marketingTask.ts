@@ -228,7 +228,7 @@ export default defineType({
       readOnly: true,
     }),
     defineField({
-      name: 'gallerySavePending',
+      name: 'galleryPending',
       title: 'Gallery save pending',
       description:
         'Set with a new render until it is saved to the marketing asset gallery. Retrying the handoff completes the save.',

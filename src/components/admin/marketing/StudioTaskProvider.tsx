@@ -47,9 +47,10 @@ function ConnectedStudioTask({
     const result = await mutation.mutateAsync(input)
     const handoffIncomplete = result.handoffFailures.length > 0
     const galleryFailed = result.galleryFailed === true
-    setFailed(handoffIncomplete || galleryFailed)
+    const incomplete = handoffIncomplete || galleryFailed
+    setFailed(incomplete)
     setMessage(
-      handoffIncomplete || galleryFailed
+      incomplete
         ? [
             'The render is done and saved.',
             ...(handoffIncomplete
@@ -65,7 +66,7 @@ function ConnectedStudioTask({
           ].join(' ')
         : 'Image attached and saved to the asset gallery. This Task is complete.',
     )
-    setPending(handoffIncomplete || galleryFailed ? input : null)
+    setPending(incomplete ? input : null)
     await query.refetch()
   }
 

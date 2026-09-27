@@ -486,6 +486,28 @@ describe('Task editor handoff recovery', () => {
     expect(mocks.invalidate).toHaveBeenCalledWith({ taskId: 'render-1' })
   })
 
+  it('a gallery-only retry says the render reached the gallery, not a handoff (#1165)', async () => {
+    mocks.data = {
+      ...pendingData(),
+      task: {
+        ...pendingData().task,
+        handoffPending: false,
+        galleryPending: true,
+      },
+    }
+    const page = render(<TaskEditorPage taskId="render-1" />)
+    fireEvent.click(screen.getByRole('button', { name: 'Save to the gallery' }))
+    await waitFor(() => expect(mocks.invalidate).toHaveBeenCalled())
+    mocks.data = {
+      ...mocks.data,
+      task: { ...mocks.data.task, galleryPending: false },
+    }
+    page.rerender(<TaskEditorPage taskId="render-1" />)
+    expect((await screen.findByRole('status')).textContent).toBe(
+      'The render is saved to the asset gallery.',
+    )
+  })
+
   it('bypasses a fresh cached revision when retrying the saved handoff', async () => {
     const client = new QueryClient({
       defaultOptions: { queries: { staleTime: 60_000, retry: false } },
