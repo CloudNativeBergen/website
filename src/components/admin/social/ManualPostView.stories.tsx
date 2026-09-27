@@ -711,6 +711,22 @@ export const BlueskyCheckUnavailableDark: Story = {
   parameters: { theme: 'dark', backgrounds: { default: 'dark' } },
 }
 
+/**
+ * This opening's tag check is still running (review T4): the cached answer
+ * may predate an opt-out, so there is nothing to copy yet.
+ */
+export const BlueskyCheckPending: Story = {
+  args: { ...BlueskyLateOptOut.args, manualBody: { checking: true } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(canvas.getByRole('status')).toHaveTextContent(/checking/i)
+    await expect(
+      canvas.queryByRole('button', { name: /copy text/i }),
+    ).not.toBeInTheDocument()
+    await expect(canvasElement).not.toHaveTextContent('@alice.dev')
+  },
+}
+
 /** Once posted, the record is shown as it is: no check, no notice. */
 export const BlueskyLateOptOutPosted: Story = {
   args: {
