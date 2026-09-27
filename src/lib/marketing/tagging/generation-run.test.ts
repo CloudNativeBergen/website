@@ -144,6 +144,36 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
+describe('the SHIPPED built-in speaker card, end to end (#1152)', () => {
+  it('tags through real handle resolution — the flag comes from the template, not the test', async () => {
+    const shipped = BUILTIN_TEMPLATE.campaigns
+      .find((c) => c.key === 'speakers')!
+      .recipes.find((r) => r.key === 'speakerCard:bluesky')!
+    expect(shipped.tagSubject).toBe(true)
+    // `reset()` passes the shipped recipes through untouched.
+    expect(
+      store.context!.campaigns[0].recipes.find(
+        (r) => r.key === 'speakerCard:bluesky',
+      ),
+    ).toEqual(shipped)
+
+    await confirm()
+
+    // resolveBlueskyHandle ran for real; only `fetch` is faked.
+    expect(resolveCalls().map(([url]) => String(url))).toEqual([
+      `${RESOLVE}?handle=alice.dev`,
+    ])
+    expect(variant('bluesky').body).toContain('@alice.dev (SRE) is speaking')
+    expect(variant('bluesky').mentions).toEqual([
+      expect.objectContaining({
+        handle: 'alice.dev',
+        did: DID,
+        status: 'tagged',
+      }),
+    ])
+  })
+})
+
 describe('generation with a Bluesky tagSubject recipe', () => {
   it('a resolvable handle: the Bluesky body tags, LinkedIn and alt keep the name, the DID is recorded', async () => {
     expect((await confirm()).created).toBe(3)

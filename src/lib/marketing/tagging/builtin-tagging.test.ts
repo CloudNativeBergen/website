@@ -92,11 +92,21 @@ describe('the built-in recipes tag their subject', () => {
     },
   )
 
-  // Sponsor handles arrive with #1154: the flag is on, and a sponsor
-  // subject has nobody to tag yet, so the copy is its plain name.
-  it('sponsorCard: switched on, and plain until sponsors have handles (#1154)', () => {
-    const records = build('sponsorAcquisition', 'sponsorCard', 'sponsor', [])
-    expect(body(records, 'bluesky').body).toContain('Alice Liddell')
-    expect(body(records, 'bluesky').mentions ?? []).toEqual([])
+  // Sponsors cannot be tagged until #1154 gives the sponsor company a
+  // Bluesky handle: a sponsor subject has no people to look up, so the body
+  // is the same with the flag on or off. What this ticket owns is the flag.
+  it('sponsorCard: the Bluesky sibling ships with tagSubject on, LinkedIn without (#1154 adds the handles)', () => {
+    const recipes = beatRecipes(
+      BUILTIN_TEMPLATE.campaigns.find((c) => c.key === 'sponsorAcquisition')!,
+      'sponsorCard',
+    )
+    expect(
+      recipes
+        .filter((r) => r.kind === 'publishing')
+        .map((r) => [r.channel, r.tagSubject]),
+    ).toEqual([
+      ['linkedin', undefined],
+      ['bluesky', true],
+    ])
   })
 })
