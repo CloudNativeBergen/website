@@ -173,6 +173,12 @@ const isGuardEntry = (state: unknown) =>
 /** Matches no project: after a delete, whatever the editor holds is unsaved. */
 const DELETED_SNAPSHOT = '(deleted)'
 
+/** What undo and redo cover: the scenes and the video's music. */
+interface VideoState {
+  scenes: Scene[]
+  track: VideoTrack | null
+}
+
 interface ColorButtonProps {
   color: { name: string; value: string }
   onClick: () => void
@@ -348,14 +354,49 @@ export function MemeGenerator({
   // Every change to the scenes — timeline and design alike — is a step of
   // this history, so undo and redo cover all of it (see
   // meme-generator-history for how a drag or typing folds into one step).
+  // The video's music is part of it too (spec §3, §7).
   const [history, setHistory] = useState(() =>
-    startHistory<Scene[]>([newScene(DEFAULT_DESIGN)]),
+    startHistory<VideoState>({
+      scenes: [newScene(DEFAULT_DESIGN)],
+      track: null,
+    }),
   )
-  const scenes = history.present
+  const scenes = history.present.scenes
+  const track = history.present.track
   const changeScenes = (update: (prev: Scene[]) => Scene[], group?: string) => {
     const now = performance.now()
-    setHistory((prev) => record(prev, update(prev.present), { group, now }))
+    setHistory((prev) =>
+      record(
+        prev,
+        { ...prev.present, scenes: update(prev.present.scenes) },
+        { group, now },
+      ),
+    )
   }
+  /** A change to the track: a step of the same history, as a scene's is. */
+  const changeTrack = (
+    update: (prev: VideoTrack | null) => VideoTrack | null,
+    group?: string,
+  ) => {
+    const now = performance.now()
+    setHistory((prev) =>
+      record(
+        prev,
+        { ...prev.present, track: update(prev.present.track) },
+        { group, now },
+      ),
+    )
+  }
+  /** Rewrite the scenes in every state undo can reach, making no step. */
+  const mapScenes = (change: (states: Scene[]) => Scene[]) =>
+    setHistory((prev) =>
+      mapStates(prev, (state) => ({ ...state, scenes: change(state.scenes) })),
+    )
+  /** Rewrite the track in every state undo can reach, making no step. */
+  const mapTrack = (change: (track: VideoTrack | null) => VideoTrack | null) =>
+    setHistory((prev) =>
+      mapStates(prev, (state) => ({ ...state, track: change(state.track) })),
+    )
   const [time, setTime] = useState(0)
   const [playing, setPlaying] = useState(false)
   const [loop, setLoop] = useState(false)
@@ -518,7 +559,7 @@ export function MemeGenerator({
   const keptAssets = useRef(new Map<string, string>())
   useEffect(() => {
     const kept = new Set(
-      allStates(history).flatMap((states) =>
+      allStates(history).flatMap(({ scenes: states }) =>
         states.flatMap((scene) => scene.design.background.image?.url ?? []),
       ),
     )
@@ -682,22 +723,20 @@ export function MemeGenerator({
    */
   const markKept = (url: string, galleryAssetId: string) => {
     keptAssets.current.set(url, galleryAssetId)
-    setHistory((prev) =>
-      mapStates(prev, (states) =>
-        states.map((scene) =>
-          scene.design.background.image?.url === url
-            ? {
-                ...scene,
-                design: {
-                  ...scene.design,
-                  background: {
-                    ...scene.design.background,
-                    image: { ...scene.design.background.image, galleryAssetId },
-                  },
+    mapScenes((states) =>
+      states.map((scene) =>
+        scene.design.background.image?.url === url
+          ? {
+              ...scene,
+              design: {
+                ...scene.design,
+                background: {
+                  ...scene.design.background,
+                  image: { ...scene.design.background.image, galleryAssetId },
                 },
-              }
-            : scene,
-        ),
+              },
+            }
+          : scene,
       ),
     )
   }
@@ -715,7 +754,6 @@ export function MemeGenerator({
   // ── Music (#1179) ───────────────────────────────────────────────────────
   // One track per video, from the gallery's audio. It is the video's, not a
   // scene's, so undo and redo leave it alone.
-  const [track, setTrack] = useState<VideoTrack | null>(null)
   // The track's samples at MIX_RATE, by the file they are: fetched and
   // decoded once, whatever the settings.
   const [decoded, setDecoded] = useState<{
@@ -746,7 +784,7 @@ export function MemeGenerator({
   // What the last save stored (or the editor started from), to tell whether
   // anything a save would store has changed since.
   const [savedSnapshot, setSavedSnapshot] = useState(() =>
-    projectSnapshot(UNTITLED, history.present),
+    projectSnapshot(UNTITLED, history.present.scenes),
   )
   // Memoized: playback re-renders every frame with the same scenes.
   const currentSnapshot = useMemo(
@@ -911,12 +949,11 @@ export function MemeGenerator({
       )
     setUploadingScenes(new Set())
     setPlaying(false)
-    setHistory(startHistory(next))
+    setHistory(startHistory<VideoState>({ scenes: next, track: nextTrack }))
     setMode('video')
     setPlaybackEditingKey(null)
     moveTo(0)
     setProjectTitle(title)
-    setTrack(nextTrack)
     setTrackFailed(null)
     setSavedSnapshot(projectSnapshot(title, next, nextTrack))
     setBackgroundFailure(null)
@@ -1055,10 +1092,8 @@ export function MemeGenerator({
         if (url && fileId) files.set(url, fileId)
       }
       const released = new Set(result.released ?? [])
-      setHistory((prev) =>
-        mapStates(prev, (states) =>
-          dropReleasedFiles(carryFiles(states, files), released),
-        ),
+      mapScenes((states) =>
+        dropReleasedFiles(carryFiles(states, files), released),
       )
       // The track now names the file the project holds, so a later save
       // keeps it even once its gallery entry is gone.
@@ -1067,7 +1102,8 @@ export function MemeGenerator({
         // The file the save stored is the one just picked and decoded.
         rekeyDecoded(savedTrack.galleryAssetId ?? null, trackFileId)
       if (trackFileId && savedTrack)
-        setTrack((current) =>
+        // In every state that names the same file, so undo keeps it.
+        mapTrack((current) =>
           current &&
           current.galleryAssetId === savedTrack.galleryAssetId &&
           (current.fileId ?? null) === (savedTrack.fileId ?? null)
@@ -1124,7 +1160,7 @@ export function MemeGenerator({
           scene.design.background.image === null &&
           scenes[i].design.background.image !== null,
       ).length
-      setHistory((prev) => mapStates(prev, drop))
+      mapScenes(drop)
       // The track: a gallery track is picked again from the gallery on the
       // next save; one only the deleted project held cannot be saved again,
       // so it goes — never left looking ready for a save that must refuse it.
@@ -1135,11 +1171,21 @@ export function MemeGenerator({
         (gone.has(track.fileId) ||
           unsaveable.some((u) => u.fileId === track.fileId))
       const trackGone = !!track && (!track.galleryAssetId || heldOnly)
-      if (trackGone) setTrack(null)
-      else if (track?.fileId) {
+      const unusable = (held: VideoTrack) =>
+        !!held.fileId &&
+        (gone.has(held.fileId) ||
+          unsaveable.some((u) => u.fileId === held.fileId))
+      if (track?.fileId && !trackGone)
         rekeyDecoded(track.fileId, track.galleryAssetId ?? null)
-        setTrack({ ...track, fileId: undefined })
-      }
+      // In every state undo can reach: none may bring back a track the
+      // next save would refuse.
+      mapTrack((held) =>
+        !held?.fileId
+          ? held
+          : !held.galleryAssetId || unusable(held)
+            ? null
+            : { ...held, fileId: undefined },
+      )
       // The editor now holds the ONLY copy: unsaved, so leaving asks.
       setSavedSnapshot(DELETED_SNAPSHOT)
       setProject(null)
@@ -1671,12 +1717,13 @@ export function MemeGenerator({
     const next = to(history)
     if (next === history) return
     setHistory((prev) => to(prev))
-    const at = clampTime(next.present, time)
+    const nextScenes = next.present.scenes
+    const at = clampTime(nextScenes, time)
     moveTo(at)
     // During playback the controls stay on their scene; if undo took it
     // away, they settle on the scene under the playhead and stay there.
-    if (!next.present.some((scene) => scene.key === playbackEditingKey))
-      setPlaybackEditingKey(next.present[sceneIndexAt(next.present, at)].key)
+    if (!nextScenes.some((scene) => scene.key === playbackEditingKey))
+      setPlaybackEditingKey(nextScenes[sceneIndexAt(nextScenes, at)].key)
   }
   const rootRef = useRef<HTMLDivElement>(null)
   const onShortcut = useEffectEvent((event: KeyboardEvent) => {
@@ -1956,7 +2003,7 @@ export function MemeGenerator({
             videoSeconds={total}
             onPick={(row) => {
               setTrackFailed(null)
-              setTrack((current) =>
+              changeTrack((current) =>
                 row
                   ? {
                       ...NEW_TRACK_SETTINGS,
@@ -1972,8 +2019,12 @@ export function MemeGenerator({
                   : null,
               )
             }}
-            onChange={(settings) =>
-              setTrack((current) => current && { ...current, ...settings })
+            // A slider dragged or a field typed is one step per field.
+            onChange={(settings, field) =>
+              changeTrack(
+                (current) => current && { ...current, ...settings },
+                `track.${field}`,
+              )
             }
             onRetry={() => {
               setTrackFailed(null)

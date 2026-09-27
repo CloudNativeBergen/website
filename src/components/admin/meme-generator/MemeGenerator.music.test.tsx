@@ -406,4 +406,43 @@ describe('a video’s music', () => {
       'No music',
     )
   })
+
+  it('puts the track under undo and redo, a volume drag as one step', async () => {
+    const gallery = fakeGallery()
+    render(<MemeGenerator gallery={gallery} encoder={encoder} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Video' }))
+    await within(music()).findByRole('option', { name: 'Theme (0:20)' })
+    fireEvent.change(within(music()).getByLabelText('Music'), {
+      target: { value: 'asset-theme' },
+    })
+    await within(music()).findByText(/Plays from/)
+    const volume = () => within(music()).getByLabelText(/Volume/)
+    // A drag: many values within a second.
+    for (const value of ['70', '60', '50', '40'])
+      fireEvent.change(volume(), { target: { value } })
+    fireEvent.change(within(music()).getByLabelText('Fade in'), {
+      target: { value: '0' },
+    })
+    fireEvent.blur(within(music()).getByLabelText('Fade in'))
+    expect(within(music()).getByLabelText('Fade in')).toHaveValue('0.0')
+
+    const undo = () =>
+      fireEvent.click(screen.getByRole('button', { name: /^Undo/ }))
+    const redo = () =>
+      fireEvent.click(screen.getByRole('button', { name: /^Redo/ }))
+    undo()
+    expect(within(music()).getByLabelText('Fade in')).toHaveValue('1.0')
+    expect(volume()).toHaveValue('40')
+    undo()
+    expect(volume()).toHaveValue('80')
+    undo()
+    expect(within(music()).getByLabelText('Music')).toHaveDisplayValue(
+      'No music',
+    )
+    redo()
+    redo()
+    expect(volume()).toHaveValue('40')
+    // Fetched once: undo and redo bring back the samples already decoded.
+    expect(gallery.loadTrack).toHaveBeenCalledTimes(1)
+  })
 })
