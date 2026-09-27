@@ -69,6 +69,7 @@ import type { Conference } from '@/lib/conference/types'
 import {
   requireCurrentOrgId,
   requireDocumentInCurrentConference,
+  requireSpeakerInCurrentOrg,
 } from '@/server/tenancy'
 import { saveTaskRenderToGallery } from '@/lib/marketing-asset/task-render'
 import {
@@ -559,12 +560,34 @@ async function trySaveRenderToGallery(
       imageAssetId,
       title: task.title,
       alt: renderAlt(task),
-      subject: task.subject,
+      subject: await subjectOfThisOrganization(task.subject),
     })
     return outcome === 'superseded' ? 'superseded' : 'saved'
   } catch (error) {
     console.error('Saving the render to the gallery failed', task._id, error)
     return 'failed'
+  }
+}
+
+/**
+ * The Task's subject, re-checked with the gallery's own write guards (spec
+ * §3): a speaker must have standing in this organization, a talk or sponsor
+ * must belong to it. A Task's subject can be set in Studio past the Task
+ * editor's checks, and the gallery entry outlives the Task, so a subject that
+ * fails is LEFT OUT rather than stored. Any other error fails the save, for
+ * a retry.
+ */
+async function subjectOfThisOrganization(
+  subject: StudioTask['subject'],
+): Promise<StudioTask['subject']> {
+  if (!subject) return null
+  try {
+    if (subject.type === 'speaker') await requireSpeakerInCurrentOrg(subject.id)
+    else await requireDocumentInCurrentOrg(subject.id, subject.type)
+    return subject
+  } catch (error) {
+    if (error instanceof TRPCError && error.code === 'NOT_FOUND') return null
+    throw error
   }
 }
 

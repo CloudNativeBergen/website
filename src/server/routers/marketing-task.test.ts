@@ -1118,6 +1118,20 @@ describe('task.attachAsset', () => {
         ...render(),
         subject: { id: 'sp-ada', type: 'speaker' },
       }))
+      // Ada is a member of this organization, so she passes the subject
+      // guard (proven on a dataset in marketing-task.gallery.test.ts).
+      const tenantRead = h.tenantRead.getMockImplementation()!
+      h.tenantRead.mockImplementation(async (query, params) =>
+        params?.id === 'sp-ada'
+          ? {
+              _type: 'speaker',
+              orgId: null,
+              conferenceId: null,
+              conferenceOrgId: null,
+              memberOrgIds: [ORG_A],
+            }
+          : tenantRead(query, params),
+      )
       await marketing().task.attachAsset(input)
       expect(h.saveToGallery).toHaveBeenCalledExactlyOnceWith({
         orgId: ORG_A,

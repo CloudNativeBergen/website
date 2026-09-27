@@ -211,6 +211,22 @@ function fixture(): Doc[] {
       title: 'CNB 2027',
     },
     { _id: 'sp-ada', _type: 'speaker', name: 'Ada' },
+    // Ada has standing here: a talk at this edition.
+    {
+      _id: 'talk-ada',
+      _type: 'talk',
+      conference: ref('conf-A'),
+      title: 'Ada on queues',
+      speakers: [{ _key: 'a', ...ref('sp-ada') }],
+    },
+    // Speakers are shared across tenants; this one has none here.
+    { _id: 'sp-foreign', _type: 'speaker', name: 'Someone else' },
+    {
+      _id: 'sponsor-foreign',
+      _type: 'sponsor',
+      name: 'Not ours',
+      organization: ref('org-B'),
+    },
     { _id: FIRST, _type: 'sanity.imageAsset' },
     { _id: SECOND, _type: 'sanity.imageAsset' },
     {
@@ -296,6 +312,19 @@ describe('attaching a render also saves it to the gallery (#1165)', () => {
     })
     expect(gallery()).toEqual(entry)
   })
+
+  it.each([
+    ['a speaker with no standing here', 'sp-foreign'],
+    ["another organization's sponsor", 'sponsor-foreign'],
+  ])(
+    'leaves out a Task subject that is %s (set in Studio, say)',
+    async (_what, id) => {
+      Object.assign(task(), { subject: { ...ref(id), _weak: true } })
+      await attach(FIRST)
+      expect(gallery()).toHaveLength(1)
+      expect(gallery()[0]).not.toHaveProperty('subject')
+    },
+  )
 
   it('a re-render swaps the image and keeps what an organizer edited', async () => {
     await attach(FIRST)
