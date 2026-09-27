@@ -185,6 +185,21 @@ describe('a shared team handle, end to end: tag, save, read back', () => {
     })
   })
 
+  it('…and removing the FIRST occurrence keeps the second person, not the first', () => {
+    const both = tagName(tagName(start, mate)!, team)!
+    const saved = save(both, save(tagName(start, mate)!).mentions)
+    // Studio: Bob's tag back to his name. Then Bob leaves the roster.
+    const edited = 'Bob and @team.dev on platform teams.'
+    expect(
+      approvalCheck({
+        body: edited,
+        mentions: saved.mentions,
+        people: [mate],
+        resolutions,
+      }),
+    ).toEqual({ issues: [], warnings: [] })
+  })
+
   it('tagging both records both, one per occurrence, and the plain form names each', () => {
     const one = tagName(start, mate)!
     const first = save(one)
