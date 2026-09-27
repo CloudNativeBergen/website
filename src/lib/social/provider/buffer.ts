@@ -39,7 +39,7 @@ import type {
 export const BUFFER_ENDPOINT = 'https://api.buffer.com'
 /**
  * Wall-clock budget for ONE publish: the channel check plus the create,
- * which took 10.9 s in the spike. `PUBLISH_RESERVE_MS` (40 s) is built on
+ * which took 10.9 s in the spike. `PUBLISH_RESERVE_MS` (43 s) is built on
  * a 30 s adapter budget.
  */
 export const BUFFER_PUBLISH_BUDGET_MS = 30_000

@@ -143,19 +143,20 @@ export interface PublishTickSummary {
 export const ADAPTER_RESOLUTION_TIMEOUT_MS = 5_000
 /**
  * Time one dispatch may need from claim to settle: adapter resolution
- * (≤ {@link ADAPTER_RESOLUTION_TIMEOUT_MS}) + the adapter's publish budget
+ * (≤ {@link ADAPTER_RESOLUTION_TIMEOUT_MS}) + a tagged variant's speaker
+ * re-read (≤ {@link TAG_RECHECK_TIMEOUT_MS}) + the adapter's publish budget
  * (Bluesky: 30 s) + a margin for the settle write. The cron route's
  * `maxDuration` minus its own margin must exceed it, or nothing is ever
  * claimed.
  */
-export const PUBLISH_RESERVE_MS = 40_000
+export const PUBLISH_RESERVE_MS = 43_000
 /**
  * Re-checked AFTER the claim and adapter resolution, right before the
  * platform is contacted: the claim write itself is unbounded I/O, and a
  * slow one must release the claim rather than start a publish the function
- * cannot see through. Adapter budget + settle margin.
+ * cannot see through. Speaker re-read + adapter budget + settle margin.
  */
-export const PUBLISH_START_RESERVE_MS = 35_000
+export const PUBLISH_START_RESERVE_MS = 38_000
 /**
  * The pre-publish re-read of a tagged variant's speakers (review T6). Short:
  * it runs inside the publish reserve, and a stall is a safe transient.
