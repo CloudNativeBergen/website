@@ -371,6 +371,39 @@ describe('tagBlueskyBody', () => {
     expect(mentions).toEqual([])
   })
 
+  it('a PARTIAL swap must fit too: the longest mix of tags and names is what is bounded', () => {
+    // At publish only an opted-out speaker's tag goes back to the name
+    // (§4.4), so any subset of tags may be swapped. Alice's name is 20 longer
+    // than her tag, Bob's tag 20 longer than his name: all-tagged and
+    // all-plain are both 300, but Alice swapped alone would be 320.
+    const al = {
+      speakerId: 'al',
+      name: `Alice ${'L'.repeat(21)}`, // 27
+      tag: { status: 'tagged' as const, handle: 'al.dev', did: DID_A }, // "@al.dev" = 7
+    }
+    const bo = {
+      speakerId: 'bo',
+      name: 'Bob', // 3
+      tag: {
+        status: 'tagged' as const,
+        handle: `${'b'.repeat(10)}.bsky.social`, // "@…" = 23
+        did: DID_B,
+      },
+    }
+    const filler = 'x'.repeat(264)
+    const plainForm = `${al.name} and Bob ${filler}`
+    const allTagged = `@al.dev and @${bo.tag.handle} ${filler}`
+    expect([graphemes(plainForm), graphemes(allTagged)]).toEqual([300, 300])
+    const { body, mentions } = tagBlueskyBody({
+      skeleton: `{name} ${filler}`,
+      values: {},
+      people: [al, bo],
+    })
+    // Bob (the LAST) falls back first; Alice's tag then fits every way.
+    expect(body).toBe(`@al.dev and Bob ${filler}`)
+    expect(mentions.map((m) => m.speakerId)).toEqual(['al'])
+  })
+
   it('when even the plain names do not fit, nobody is tagged', () => {
     const { body, mentions } = tagBlueskyBody({
       skeleton: `{name} ${'x'.repeat(300)}`,

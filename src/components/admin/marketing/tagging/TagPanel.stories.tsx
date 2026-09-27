@@ -73,7 +73,7 @@ const tooLong: TagIssue = {
   handle: null,
   name: null,
   message:
-    'With every tag replaced by its name the post is 312 characters; Bluesky allows 300. A tag may be swapped for the name at publish, so shorten the post until it fits both ways.',
+    'A tag may be swapped back for the name at publish, and then the post can reach 312 characters; Bluesky allows 300. Shorten it until it fits with or without each tag.',
 }
 
 /** The panel with the body it edits, as the editor wires it. */

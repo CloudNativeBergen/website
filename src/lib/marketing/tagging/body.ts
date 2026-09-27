@@ -101,34 +101,36 @@ export function tagBlueskyBody(input: {
   )
     return { body: plain, mentions: [] }
 
-  const render = (tagged: ReadonlySet<TagPerson>) => {
-    const named = people.map((p) => ({
-      name: tagged.has(p) && p.tag ? `@${p.tag.handle}` : p.name,
-      title: p.title,
-    }))
+  const handleOf = (p: TagPerson) => (p.tag ? `@${p.tag.handle}` : p.name)
+  const render = (label: (p: TagPerson) => string) => {
+    const named = people.map((p) => ({ name: label(p), title: p.title }))
     return resolvePlaceholders(skeleton, {
       ...values,
       name: joinNames(named.map((p) => p.name)),
       speakers: speakersList(named),
     })
   }
+  const withTags = (tagged: ReadonlySet<TagPerson>) =>
+    render((p) => (tagged.has(p) ? handleOf(p) : p.name))
+  // Every form must fit (§4.4), not just all-tagged and all-plain: at
+  // publish only an opted-out speaker's tag goes back to the name, so ANY
+  // subset may be swapped. The longest is each tag in its longer form.
+  const longest = (tagged: ReadonlySet<TagPerson>) =>
+    render((p) =>
+      tagged.has(p) && countGraphemes(handleOf(p)) > countGraphemes(p.name)
+        ? handleOf(p)
+        : p.name,
+    )
 
-  // BOTH forms must fit (§4.4): a tag may be swapped back for the name at
-  // publish, so a body that fits only because a handle is shorter than the
-  // name it stands for would fail then. The plain form is the same whichever
-  // tags stay, so when it is over, no tag can stay.
-  const plainFits = countGraphemes(render(new Set())) <= BLUESKY_MAX_GRAPHEMES
-  const candidates = plainFits
-    ? people.filter((p) => p.tag?.status === 'tagged')
-    : []
-  let body = render(new Set(candidates))
+  // Names fall back from the LAST speaker until every form fits; when even
+  // the plain form is over, nobody is tagged.
+  const candidates = people.filter((p) => p.tag?.status === 'tagged')
   while (
     candidates.length > 0 &&
-    countGraphemes(body) > BLUESKY_MAX_GRAPHEMES
-  ) {
+    countGraphemes(longest(new Set(candidates))) > BLUESKY_MAX_GRAPHEMES
+  )
     candidates.pop()
-    body = render(new Set(candidates))
-  }
+  const body = withTags(new Set(candidates))
 
   const tagged = new Set(candidates)
   const mentions = people.flatMap((p): MentionRecord[] => {

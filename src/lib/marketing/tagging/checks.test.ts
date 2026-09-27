@@ -436,6 +436,48 @@ describe('saveMentions (§4.3 rebuilt on every save, §4.4 Save)', () => {
     expect(out.issues[0].message).toContain('481')
   })
 
+  it('refuses a body where a PARTIAL swap would not fit, though all-tagged and all-plain both do', () => {
+    // Only an opted-out speaker's tag is swapped at publish (§4.4), so the
+    // bound is the longest mix: here, Alice swapped and Bob not.
+    const al: TaggablePerson = {
+      speakerId: 'al',
+      name: `Alice ${'L'.repeat(21)}`, // 27 vs "@al.dev" 7
+      handle: 'al.dev',
+      optedOut: false,
+    }
+    const bo: TaggablePerson = {
+      speakerId: 'bo',
+      name: 'Bob', // 3 vs "@bbbbbbbbbb.bsky.social" 23
+      handle: `${'b'.repeat(10)}.bsky.social`,
+      optedOut: false,
+    }
+    const body = `@al.dev and @${bo.handle} ${'x'.repeat(264)}`
+    const previous = [tagged(al, DID_A), tagged(bo, DID_B)]
+    expect([...body].length).toBe(300)
+    expect([...plainBody(body, previous)].length).toBe(300)
+    const out = saveMentions({
+      body,
+      people: [al, bo],
+      previous,
+      resolutions: new Map(),
+    })
+    expect(out.issues).toEqual([
+      expect.objectContaining({ code: 'plain-too-long', mentionKey: null }),
+    ])
+    expect(out.issues[0].message).toContain('320 characters')
+    const approval = approvalCheck({
+      body,
+      mentions: previous,
+      people: [al, bo],
+      resolutions: new Map([
+        ['al.dev', resolved(DID_A)],
+        [bo.handle!, resolved(DID_B)],
+      ]),
+    })
+    expect(approval.issues.map((i) => i.code)).toEqual(['plain-too-long'])
+    expect(approval.issues[0].message).toContain('320 characters')
+  })
+
   it('refuses a plain form over the 3,000-byte cap, though under 300 characters', () => {
     const family = '👨‍👩‍👧‍👦' // one grapheme, 25 bytes
     const wide = { ...alice, name: family.repeat(120) }
