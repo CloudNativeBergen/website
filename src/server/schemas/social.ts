@@ -69,8 +69,9 @@ export const SocialVariantIdSchema = z.object({
 })
 
 /**
- * The editor read. `opening` only keys the client's cache per opening of a
- * manual view (review T4); the server ignores it.
+ * The editor read. `opening` marks a manual view's read: it keys the
+ * client's cache per opening (review T4), and only such a read runs the
+ * manual tag check (round 4, T3).
  */
 export const SocialVariantEditorReadSchema = SocialVariantIdSchema.extend({
   opening: z.string().max(100).optional(),

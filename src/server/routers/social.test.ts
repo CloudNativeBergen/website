@@ -910,6 +910,7 @@ describe('social.getVariantEditor', () => {
     }))
     const result = await social().getVariantEditor({
       variantId: 'variant-ours',
+      opening: 'opening-1',
     })
     expect(result.manualBody).toEqual(manualBody)
     // Checked against the conference the guard resolved.
@@ -917,6 +918,14 @@ describe('social.getVariantEditor', () => {
       expect.objectContaining({ post: expect.anything() }),
       CONF_A,
     )
+  })
+
+  it('the ordinary editor read (no `opening`) runs no tag check: only a manual view pays for it (round 4, T3)', async () => {
+    const result = await social().getVariantEditor({
+      variantId: 'variant-ours',
+    })
+    expect(result.variant._id).toBe('variant-ours')
+    expect(verify.withManualBody).not.toHaveBeenCalled()
   })
 
   it("refuses another conference's variant before reading it", async () => {

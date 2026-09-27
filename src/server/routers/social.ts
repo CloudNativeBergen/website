@@ -429,8 +429,11 @@ export const socialRouter = router({
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Variant not found' })
       }
       // Posted by hand: the approval check runs as the view opens (tagging
-      // spec §4.4), so a late opt-out is honoured there too.
-      return withManualBody(data, conferenceId)
+      // spec §4.4), so a late opt-out is honoured there too. ONLY for a manual
+      // view's read, which sends `opening` (`useFreshManualCheck`): the
+      // ordinary editor — say, editing a failed post — never shows the checked
+      // body and must not pay for the reads and lookups (round 4, T3).
+      return input.opening ? withManualBody(data, conferenceId) : data
     }),
 
   /**
