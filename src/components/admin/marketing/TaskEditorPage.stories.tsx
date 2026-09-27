@@ -9,6 +9,12 @@ import type {
   TaskView,
 } from '@/lib/marketing/types'
 import { pagePickerOptions } from '@/lib/marketing/pages'
+import {
+  beatRecipes,
+  buildSubjectBeat,
+  talkSubject,
+} from '@/lib/marketing/expansion'
+import { BUILTIN_TEMPLATE } from '@/lib/marketing/template'
 import type { SocialVariantEditorData } from '@/lib/social/types'
 import { NotificationProvider } from '../NotificationProvider'
 import { TaskEditorPage } from './TaskEditorPage'
@@ -1076,5 +1082,127 @@ export const UnscheduleHoldsTagButtons: Story = {
       canvas.getByRole('button', { name: 'Pull back to draft' }),
     )
     await waitFor(() => expect(tag).toBeDisabled())
+  },
+}
+
+// ---------------------------------------------------------------------------
+// Generated copy for a two-speaker talk (#1153, tagging spec §4.2)
+// ---------------------------------------------------------------------------
+
+/**
+ * The Bluesky video post exactly as generation writes it: a real
+ * `buildSubjectBeat` run on the built-in videoDrip recipes, so `{speakers}`
+ * is each speaker's handle (or name) with their title, in the talk's order.
+ */
+const twoSpeakerBeat = (() => {
+  const campaign = BUILTIN_TEMPLATE.campaigns.find((c) =>
+    c.recipes.some((r) => r.beat === 'videoDrip'),
+  )!
+  const recipes = beatRecipes(campaign, 'videoDrip')
+    .filter((r) => r.channel === 'bluesky')
+    .map((r) => ({ ...r, tagSubject: true }))
+  let n = 0
+  const beat = buildSubjectBeat({
+    recipes,
+    subject: talkSubject({
+      _id: 'talk-edge',
+      title: 'Kubernetes at the edge',
+      speakers: [
+        { _id: 'spk-alice', name: 'Alice Anderson', title: 'SRE, Acme' },
+        { _id: 'spk-bob', name: 'Bob Berg', title: 'CTO, Initech' },
+      ],
+    }),
+    tags: new Map([
+      [
+        'spk-alice',
+        { status: 'tagged', handle: 'alice.dev', did: 'did:plc:alice' },
+      ],
+      [
+        'spk-bob',
+        {
+          status: 'tagged',
+          handle: 'bob.bsky.social',
+          did: 'did:plc:bob',
+        },
+      ],
+    ]),
+    dates: new Map(
+      recipes.map((r) => [
+        r.key,
+        { at: '2027-06-08T16:00:00.000Z', anchor: null, provisional: false },
+      ]),
+    ),
+    campaign: { _id: 'camp-cfp', key: 'postEvent' },
+    planId: 'plan-1',
+    conference: { _id: 'conf-1', baseUrl: BASE_URL },
+    values: { event: 'Cloud Native Bergen 2027' },
+    assigneeId: 'sp-1',
+    origin: 'expansion',
+    taskId: (key) => `task:${key}`,
+    newShortCode: () => `code${++n}`,
+    newId: (type) => `${type}.${++n}`,
+  })
+  const v = beat.variants.find((x) => x.platform === 'bluesky')!
+  return { body: v.body, mentions: v.mentions ?? [] }
+})()
+
+const twoSpeakerFixture = fixture(
+  {
+    title: 'Recording: Kubernetes at the edge',
+    key: 'videoDrip:bluesky',
+    subject: {
+      _id: 'talk-edge',
+      type: 'talk',
+      name: 'Kubernetes at the edge',
+      slug: 'kubernetes-at-the-edge',
+    },
+  },
+  variant({ body: twoSpeakerBeat.body }),
+  [],
+  {
+    tagPeople: [
+      {
+        speakerId: 'spk-alice',
+        name: 'Alice Anderson',
+        handle: 'alice.dev',
+        optedOut: false,
+      },
+      {
+        speakerId: 'spk-bob',
+        name: 'Bob Berg',
+        handle: 'bob.bsky.social',
+        optedOut: false,
+      },
+    ],
+    tagMentions: twoSpeakerBeat.mentions,
+  },
+)
+
+/** Generated copy naming and tagging both of a talk's speakers. */
+export const TwoSpeakerGeneratedCopy: Story = {
+  parameters: { msw: { handlers: handlers(twoSpeakerFixture) } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const body = await canvas.findByLabelText<HTMLTextAreaElement>('Body')
+    await expect(body.value).toContain(
+      '@alice.dev (SRE, Acme) and @bob.bsky.social (CTO, Initech)',
+    )
+  },
+}
+
+export const TwoSpeakerGeneratedCopyDark: Story = {
+  ...TwoSpeakerGeneratedCopy,
+  parameters: {
+    ...TwoSpeakerGeneratedCopy.parameters,
+    theme: 'dark',
+    backgrounds: { default: 'dark' },
+  },
+}
+
+export const TwoSpeakerGeneratedCopyMobile: Story = {
+  ...TwoSpeakerGeneratedCopy,
+  parameters: {
+    ...TwoSpeakerGeneratedCopy.parameters,
+    viewport: { defaultViewport: 'mobile1' },
   },
 }
