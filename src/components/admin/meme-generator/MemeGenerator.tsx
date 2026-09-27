@@ -1522,6 +1522,11 @@ export function MemeGenerator({
   useEffect(() => {
     if (!playing) player.pause()
   }, [player, playing])
+  // The sound loops by itself, gaplessly; the picture follows its clock.
+  useEffect(
+    () => player.setLoop(loop && loopAllowed),
+    [player, loop, loopAllowed],
+  )
 
   // Playback carries on from wherever the playhead is put. With a track the
   // sound follows it — silently, until a scrub settles.

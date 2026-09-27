@@ -38,6 +38,12 @@ export interface TrackPlayer {
   pause(): void
   /** Move the playhead: silent while paused; a scrub while playing. */
   seek(to: number): void
+  /**
+   * Loop the sound, gaplessly: the next pass is queued to start on the very
+   * sample the current one ends — never started once the end is heard, which
+   * would leave a gap as long as the output latency on every loop.
+   */
+  setLoop(on: boolean): void
   /** The playhead while playing with a mix; null when it is not the clock. */
   time(): number | null
   dispose(): void
@@ -50,6 +56,12 @@ export function createTrackPlayer(
   let channels: readonly Float32Array[] | null = null
   let buffer: unknown = null
   let source: ReturnType<PlayerContext['createBufferSource']> | null = null
+  let loop = false
+  /** The next pass, queued at audio time `at` while looping. */
+  let queued: {
+    node: ReturnType<PlayerContext['createBufferSource']>
+    at: number
+  } | null = null
   /** Playing: the playhead `offset` at audio time `startedAt`. */
   let clock: { offset: number; startedAt: number } | null = null
   /** A scrub in progress: where it is, and the timer that settles it. */
@@ -69,13 +81,37 @@ export function createTrackPlayer(
     return buffer
   }
 
+  const unqueue = () => {
+    if (!queued) return
+    queued.node.stop()
+    queued.node.disconnect()
+    queued = null
+  }
+
   const silence = () => {
     if (scrub) clearTimeout(scrub.timer)
     scrub = null
+    unqueue()
     if (!source) return
     source.stop()
     source.disconnect()
     source = null
+  }
+
+  /** A source of the mix, started at audio time `when` from `offset`. */
+  const sourceAt = (context: PlayerContext, when: number, offset: number) => {
+    const node = context.createBufferSource()
+    node.buffer = bufferFor(context)
+    node.connect(context.destination as never)
+    node.start(when, offset)
+    return node
+  }
+
+  /** Queue the pass after the playing one, where it ends. */
+  const queueNext = () => {
+    if (!loop || queued || !clock || !ctx || !channels) return
+    const at = clock.startedAt + channels[0].length / MIX_RATE - clock.offset
+    queued = { node: sourceAt(ctx, at, 0), at }
   }
 
   const start = (from: number) => {
@@ -99,18 +135,25 @@ export function createTrackPlayer(
       clock = null
     })
     if (!channels) return
-    const node = ctx.createBufferSource()
-    node.buffer = bufferFor(ctx)
-    node.connect(ctx.destination as never)
-    node.start(0, from)
-    source = node
+    source = sourceAt(ctx, 0, from)
     clock = { offset: from, startedAt: ctx.currentTime }
+    queueNext()
   }
 
   const time = () => {
     if (scrub) return scrub.at
     if (!clock || !ctx) return null
-    const heard = ctx.currentTime - clock.startedAt - (ctx.outputLatency ?? 0)
+    const latency = ctx.outputLatency ?? 0
+    // The queued pass is being heard: it is the clock now, and the one
+    // after it is queued.
+    if (queued && ctx.currentTime - latency >= queued.at) {
+      source?.disconnect()
+      source = queued.node
+      clock = { offset: 0, startedAt: queued.at }
+      queued = null
+      queueNext()
+    }
+    const heard = ctx.currentTime - clock.startedAt - latency
     return clock.offset + Math.max(0, heard)
   }
 
@@ -139,6 +182,11 @@ export function createTrackPlayer(
         at: to,
         timer: setTimeout(() => start(to), SCRUB_SETTLE_MS),
       }
+    },
+    setLoop(on) {
+      loop = on
+      if (on) queueNext()
+      else unqueue()
     },
     time,
     dispose() {

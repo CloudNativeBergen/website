@@ -32,7 +32,8 @@ function fakeContext(outputLatency = 0) {
         connect: () => {},
         disconnect: () => {},
         start(when: number, offset: number) {
-          record.startedAt = ctx.currentTime + when
+          // As Web Audio has it: a time already past (0 included) is now.
+          record.startedAt = Math.max(when, ctx.currentTime)
           record.offset = offset
           record.samples = (node.buffer as { length: number }).length
           sources.push(record)
@@ -275,5 +276,51 @@ describe('the track player', () => {
     await Promise.resolve()
     expect(player.time()).toBe(3)
     expect(sources[1].stopped).toBe(false)
+  })
+
+  it('loops without a gap: the next pass is scheduled to start exactly where this one ends', () => {
+    const { ctx, sources } = fakeContext(0.1)
+    const player = createTrackPlayer(() => ctx)
+    player.load(mix(10))
+    player.setLoop(true)
+    ctx.currentTime = 5
+    player.play(8)
+    // The pass from 8 s ends 2 s of audio time later; the next is already
+    // queued for that very moment, not started once it has been heard.
+    expect(sources).toMatchObject([
+      { startedAt: 5, offset: 8 },
+      { startedAt: 7, offset: 0 },
+    ])
+    ctx.currentTime = 7.05
+    // Heard: 2.05 − 0.1 of the first pass.
+    expect(player.time()).toBeCloseTo(9.95, 10)
+    ctx.currentTime = 7.2
+    // Heard: 0.1 s into the second pass — and the third is queued.
+    expect(player.time()).toBeCloseTo(0.1, 10)
+    expect(sources[2]).toMatchObject({ startedAt: 17, offset: 0 })
+  })
+
+  it('lets a pass run out once looping is turned off, cancelling the one queued', () => {
+    const { ctx, sources } = fakeContext()
+    const player = createTrackPlayer(() => ctx)
+    player.load(mix(10))
+    player.setLoop(true)
+    player.play(8)
+    player.setLoop(false)
+    expect(sources[1].stopped).toBe(true)
+    expect(sources[0].stopped).toBe(false)
+    ctx.currentTime = 2.5
+    // Past the end: the editor ends playback there.
+    expect(player.time()).toBeCloseTo(10.5, 10)
+  })
+
+  it('queues the next pass when looping is turned on mid-pass', () => {
+    const { ctx, sources } = fakeContext()
+    const player = createTrackPlayer(() => ctx)
+    player.load(mix(10))
+    player.play(4)
+    ctx.currentTime = 1
+    player.setLoop(true)
+    expect(sources[1]).toMatchObject({ startedAt: 6, offset: 0 })
   })
 })
