@@ -13,6 +13,7 @@ import {
   type EncodeSession,
   type EncoderBackend,
   type Encoding,
+  type ExportAudio,
   type ExportProgress,
 } from './meme-generator-export'
 
@@ -43,6 +44,11 @@ interface FakeOptions {
   /** Only in this pass (1, 2…) does `failAt` throw; in every pass if unset. */
   failPass?: number
   hangAt?: number
+  /**
+   * What getting an AAC encoder ready answers: its measured priming, none
+   * (no encoder could be had), or a rejection.
+   */
+  audio?: { priming: number } | null | 'throws'
 }
 
 function fakeBackend(options: FakeOptions = {}) {
@@ -54,6 +60,7 @@ function fakeBackend(options: FakeOptions = {}) {
   const log: string[] = []
   const sessions: {
     encoding: Encoding
+    audio: ExportAudio | null
     frames: number[]
     cancelled: boolean
     finished: boolean
@@ -78,10 +85,16 @@ function fakeBackend(options: FakeOptions = {}) {
         return new Promise((resolve) => setTimeout(() => resolve(true), result))
       return Promise.resolve(result)
     },
-    async open(_canvas, encoding): Promise<EncodeSession> {
+    async prepareAudio() {
+      log.push('prepare-audio')
+      if (options.audio === 'throws') throw new Error('add-on failed to load')
+      return options.audio === undefined ? { priming: 0 } : options.audio
+    },
+    async open(_canvas, encoding, audio): Promise<EncodeSession> {
       if (options.hangOpen) return new Promise(() => {})
       const session = {
         encoding,
+        audio,
         frames: [] as number[],
         cancelled: false,
         finished: false,
@@ -441,5 +454,63 @@ describe('exportVideo', () => {
     }).promise
     expect(sessions).toHaveLength(1)
     expect(result.blob.size).toBe(48_000)
+  })
+})
+
+describe('exportVideo with a music track', () => {
+  /** 3 s of stereo at 48 kHz where sample i holds i + 1, on both channels. */
+  const track = (): ExportAudio => {
+    const samples = new Float32Array(3 * 48_000).map((_, i) => i + 1)
+    return { channels: [samples, samples.slice()] }
+  }
+  const withTrack = (audio = track()) => ({
+    job: {
+      canvas,
+      frameCount: 90,
+      paint: () => {},
+      audio,
+    },
+  })
+
+  it('hands the encoder the mix with the measured priming dropped from its head', async () => {
+    const { backend, sessions } = fakeBackend({ audio: { priming: 2112 } })
+    const result = await run(backend, withTrack()).promise
+    const [left, right] = sessions[0].audio!.channels
+    // Sample 2112 of the mix is what now comes first, so after the
+    // encoder's 2112 samples of priming it plays at 0, in step.
+    expect(left[0]).toBe(2113)
+    expect(right[0]).toBe(2113)
+    expect(left).toHaveLength(3 * 48_000)
+    expect(left[3 * 48_000 - 2112 - 1]).toBe(3 * 48_000)
+    expect(left[3 * 48_000 - 1]).toBe(0)
+    expect(result.audio).toBe('included')
+  })
+
+  it('gives every pass the same sound', async () => {
+    const { backend, sessions } = fakeBackend({
+      audio: { priming: 1024 },
+      bytesPerFrame: { default: 100, 'every-frame': 10_000 },
+    })
+    await run(backend, withTrack()).promise
+    expect(sessions).toHaveLength(2)
+    expect(sessions[1].audio!.channels[0][0]).toBe(1025)
+  })
+
+  it('exports silent, and says so, when no AAC encoder can be had', async () => {
+    for (const audio of [null, 'throws'] as const) {
+      const { backend, sessions } = fakeBackend({ audio })
+      const result = await run(backend, withTrack()).promise
+      expect(sessions[0].audio).toBeNull()
+      expect(sessions[0].frames).toHaveLength(90)
+      expect(result.audio).toBe('unavailable')
+    }
+  })
+
+  it('makes a silent video, and asks for no encoder, without a track', async () => {
+    const { backend, sessions, log } = fakeBackend()
+    const result = await run(backend).promise
+    expect(sessions[0].audio).toBeNull()
+    expect(log).not.toContain('prepare-audio')
+    expect(result.audio).toBe('none')
   })
 })

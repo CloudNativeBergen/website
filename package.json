@@ -54,6 +54,7 @@
     "@headlessui/react": "^2.2.10",
     "@headlessui/tailwindcss": "^0.2.2",
     "@heroicons/react": "^2.2.0",
+    "@mediabunny/aac-encoder": "1.59.0",
     "@next/eslint-plugin-next": "^16.3.4",
     "@portabletext/editor": "^7.12.3",
     "@portabletext/markdown": "^2.0.0",

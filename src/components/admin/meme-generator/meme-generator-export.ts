@@ -1,3 +1,4 @@
+import { shiftForPriming } from './meme-generator-music'
 import { FPS, FRAME } from './meme-generator-timeline'
 
 /**
@@ -70,6 +71,17 @@ export interface EncodeSession {
   cancel(): Promise<void>
 }
 
+/**
+ * A video's sound as the encoder takes it: stereo at MIX_RATE, exactly the
+ * video's length (`mixTrack`).
+ */
+export interface ExportAudio {
+  channels: readonly [Float32Array, Float32Array]
+}
+
+/** Whether the file has the track: `unavailable` is a track left out. */
+export type ExportedAudio = 'included' | 'unavailable' | 'none'
+
 export interface EncoderBackend {
   /**
    * Whether the encoder takes H.264 at 1080×1080 and 30 fps — asked about
@@ -86,7 +98,19 @@ export interface EncoderBackend {
     latencyMode: Encoding['latencyMode'],
     signal: AbortSignal,
   ): Promise<boolean>
-  open(canvas: HTMLCanvasElement, encoding: Encoding): Promise<EncodeSession>
+  /**
+   * Get an AAC encoder ready — the browser's own, or the add-on where there
+   * is none (proof §8) — and measure how many samples of priming it puts
+   * ahead of the sound (proof §4). Null when there is no AAC encoder to be
+   * had; the video is then made silent, and the organizer told.
+   */
+  prepareAudio(): Promise<{ priming: number } | null>
+  /** `audio` is encoded beside the video when given, as it is handed in. */
+  open(
+    canvas: HTMLCanvasElement,
+    encoding: Encoding,
+    audio: ExportAudio | null,
+  ): Promise<EncodeSession>
 }
 
 /** What one export draws: a canvas, and a way to paint frame n onto it. */
@@ -94,6 +118,8 @@ export interface ExportJob {
   canvas: HTMLCanvasElement
   frameCount: number
   paint: (frame: number) => void
+  /** The music track, mixed; none for a silent video. */
+  audio?: ExportAudio
 }
 
 export type ExportProgress =
@@ -111,6 +137,7 @@ export interface ExportResult {
   /** The whole file's bitrate: bytes × 8 ÷ duration. */
   bitrate: number
   encoding: Encoding
+  audio: ExportedAudio
 }
 
 export class ExportCancelled extends Error {
@@ -289,7 +316,7 @@ async function encodePass(
  */
 export async function exportVideo({
   backend,
-  job: { canvas, frameCount, paint },
+  job: { canvas, frameCount, paint, audio },
   onProgress,
   signal,
   yieldTask = yieldToEventLoop,
@@ -309,6 +336,25 @@ export async function exportVideo({
   const latencyMode = await pickLatencyMode(backend, signal)
   if (!latencyMode) throw new ExportFailed('probe', PROBE_FAILED_MESSAGE)
 
+  // The track goes in with the encoder's priming dropped from its head, so
+  // it plays in step with the picture — measured on THIS encoder, as it
+  // differs by encoder (proof §4). No encoder to be had: a silent video,
+  // said so, rather than none at all.
+  let sound: ExportAudio | null = null
+  let exported: ExportedAudio = 'none'
+  if (audio) {
+    const plan = await answer(backend.prepareAudio()).catch(
+      (error: unknown) => {
+        if (error instanceof ExportCancelled) throw error
+        return null
+      },
+    )
+    sound = plan
+      ? { channels: shiftForPriming(audio.channels, plan.priming) }
+      : null
+    exported = plan ? 'included' : 'unavailable'
+  }
+
   const passes: Encoding[] = [
     { latencyMode, keyFrames: 'default' },
     { latencyMode, keyFrames: 'every-frame' },
@@ -321,7 +367,7 @@ export async function exportVideo({
     if (signal.aborted) throw new ExportCancelled()
     let blob: Blob
     try {
-      const opening = backend.open(canvas, encoding)
+      const opening = backend.open(canvas, encoding, sound)
       const session = await answer(opening).catch((error: unknown) => {
         // One that finishes opening after a cancel or a stall is closed then.
         void opening.then((late) => late.cancel()).catch(() => {})
@@ -351,8 +397,9 @@ export async function exportVideo({
       bitrate >= MIN_BITRATE &&
       (!sizeMatters || blob.size >= LINKEDIN_MIN_BYTES)
     )
-      return { blob, bitrate, encoding }
-    if (bitrate >= MIN_BITRATE) last = { blob, bitrate, encoding }
+      return { blob, bitrate, encoding, audio: exported }
+    if (bitrate >= MIN_BITRATE)
+      last = { blob, bitrate, encoding, audio: exported }
   }
   // …but only the bitrate floor refuses a file: one still under the size,
   // after every pass, is made, and the panel says it is not for LinkedIn.

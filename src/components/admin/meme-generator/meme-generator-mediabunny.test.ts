@@ -58,6 +58,8 @@ vi.mock('mediabunny', () => {
     Output,
     CanvasSource,
     BufferTarget: class {},
+    AudioBufferSource: class {},
+    Quality: class {},
     Mp4OutputFormat: class {},
     canEncodeVideo: async () => {
       if (canEncodeFails)
