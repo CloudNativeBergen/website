@@ -75,6 +75,7 @@ import {
   frameAt,
   moveScene,
   newScene,
+  NEW_SCENE_DURATION,
   removeScene,
   sceneIndexAt,
   sceneStart,
@@ -152,6 +153,11 @@ interface MemeGeneratorProps {
 }
 
 const UNTITLED = 'Untitled video'
+/** Marks the same-URL history entry that guards Back with unsaved work. */
+const LEAVE_GUARD = '__studioLeaveGuard'
+const isGuardEntry = (state: unknown) =>
+  !!state && typeof state === 'object' && LEAVE_GUARD in state
+
 /** Matches no project: after a delete, whatever the editor holds is unsaved. */
 const DELETED_SNAPSHOT = '(deleted)'
 
@@ -723,9 +729,16 @@ export function MemeGenerator({
   // A save refused as a conflict: the server holds a newer revision.
   const [conflicted, setConflicted] = useState(false)
 
+  // Latest wins: an older list still in flight never overwrites a newer
+  // one — a refresh after a create or delete must not be undone by it.
+  const listGeneration = useRef(0)
   const refreshProjects = useCallback(() => {
     if (!projects) return
-    projects.list().then(setProjectRows, () => setProjectRows([]))
+    const generation = ++listGeneration.current
+    const settle = (rows: VideoProjectRow[]) => {
+      if (generation === listGeneration.current) setProjectRows(rows)
+    }
+    projects.list().then(settle, () => settle([]))
   }, [projects])
   useEffect(() => refreshProjects(), [refreshProjects])
 
@@ -737,7 +750,10 @@ export function MemeGenerator({
     scenes.length > 1 ||
     scenes.some(
       (scene) =>
-        scene.motion.drift || Object.keys(scene.motion.elements).length > 0,
+        scene.duration !== NEW_SCENE_DURATION ||
+        scene.transition !== 'cut' ||
+        scene.motion.drift ||
+        Object.keys(scene.motion.elements).length > 0,
     )
   const warnOnLeave =
     !!projects && unsaved && (mode === 'video' || !!project || holdsVideo)
@@ -779,12 +795,51 @@ export function MemeGenerator({
         event.stopPropagation()
       }
     }
+    // Browser Back/Forward: this Next version has no navigation guard, but
+    // its router copies its own state into an entry pushed from outside and
+    // treats a pop between two entries of one URL as no navigation at all.
+    // So a same-URL guard entry sits on top; Back pops to the entry below —
+    // still this page — and asks. Stay: the guard goes back on. Leave: go
+    // back once more, for real. (Forward entries are dropped by the push.)
+    if (!isGuardEntry(window.history.state)) {
+      window.history.pushState(
+        { [LEAVE_GUARD]: true },
+        '',
+        window.location.href,
+      )
+      guardPushed.current = true
+    }
+    const onPopState = () => {
+      if (leaving.current || isGuardEntry(window.history.state)) return
+      if (window.confirm('Leave with unsaved changes to this video?')) {
+        leaving.current = true
+        window.history.back()
+      } else {
+        window.history.pushState(
+          { [LEAVE_GUARD]: true },
+          '',
+          window.location.href,
+        )
+      }
+    }
     window.addEventListener('beforeunload', onBeforeUnload)
     document.addEventListener('click', onLinkClick, true)
+    window.addEventListener('popstate', onPopState)
     return () => {
       window.removeEventListener('beforeunload', onBeforeUnload)
       document.removeEventListener('click', onLinkClick, true)
+      window.removeEventListener('popstate', onPopState)
     }
+  }, [warnOnLeave])
+  // Nothing unsaved any more: take the guard entry back off, so the next Back
+  // leaves at once. Only while mounted — never from an unmount, which may be
+  // the very navigation that is leaving.
+  const leaving = useRef(false)
+  const guardPushed = useRef(false)
+  useEffect(() => {
+    if (warnOnLeave || !guardPushed.current) return
+    guardPushed.current = false
+    if (isGuardEntry(window.history.state)) window.history.back()
   }, [warnOnLeave])
 
   const discardOk = () =>
@@ -986,10 +1041,15 @@ export function MemeGenerator({
     setProjectBusy('deleting')
     setProjectMessage(null)
     try {
-      const { released } = await projects.delete(project.id)
-      // Files the delete's orphan check removed are never drawn or saved
-      // again — in any state undo can reach, as after a save.
-      const gone = new Set(released)
+      const { released, unsaveable } = await projects.delete(project.id)
+      // Files the delete's orphan check removed, and files only the deleted
+      // project authorized (their gallery entry is gone): neither can be
+      // saved again, so neither is kept — in any state undo can reach.
+      const gone = new Set([...released, ...unsaveable])
+      const cleared = scenes.filter((scene) => {
+        const fileId = scene.design.background.image?.fileId
+        return !!fileId && gone.has(fileId)
+      }).length
       setHistory((prev) =>
         mapStates(prev, (states) => dropReleasedFiles(states, gone)),
       )
@@ -999,7 +1059,13 @@ export function MemeGenerator({
       setConflicted(false)
       onProjectChange?.(null)
       refreshProjects()
-      setProjectMessage({ tone: 'info', text: 'Project deleted.' })
+      setProjectMessage({
+        tone: 'info',
+        text:
+          cleared > 0
+            ? `Project deleted. ${cleared === 1 ? 'One background was' : `${cleared} backgrounds were`} only in that project and ${cleared === 1 ? 'is' : 'are'} gone; ${cleared === 1 ? 'its scene shows' : 'those scenes show'} their colour.`
+            : 'Project deleted.',
+      })
     } catch (error) {
       setProjectMessage({
         tone: 'error',

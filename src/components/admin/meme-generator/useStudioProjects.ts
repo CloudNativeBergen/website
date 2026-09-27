@@ -35,10 +35,13 @@ export function useStudioProjects(): VideoProjects {
   const removeAsync = remove.mutateAsync
   return useMemo(
     () => ({
+      // A fresh read every time: an older request still in flight is
+      // cancelled, never reused for a refresh after a create or delete.
       list: () =>
-        refusals(() =>
-          utils.videoProject.list.fetch(undefined, { staleTime: 0 }),
-        ),
+        refusals(async () => {
+          await utils.videoProject.list.cancel()
+          return utils.videoProject.list.fetch(undefined, { staleTime: 0 })
+        }),
       // Never from cache: a stale revision would make the next save conflict.
       open: (id) =>
         refusals(() => utils.videoProject.open.fetch({ id }, { staleTime: 0 })),
@@ -46,8 +49,10 @@ export function useStudioProjects(): VideoProjects {
       save: (input) => refusals(() => saveAsync(input)),
       duplicate: (id) => refusals(() => duplicateAsync({ id })),
       delete: async (id) => {
-        const { released } = await refusals(() => removeAsync({ id }))
-        return { released }
+        const { released, unsaveable } = await refusals(() =>
+          removeAsync({ id }),
+        )
+        return { released, unsaveable }
       },
     }),
     [utils, createAsync, saveAsync, duplicateAsync, removeAsync],

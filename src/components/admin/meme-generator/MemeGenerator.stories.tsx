@@ -2506,7 +2506,7 @@ function storyProjects(overrides: Partial<VideoProjects> = {}): VideoProjects {
       released: [],
     }),
     duplicate: async () => ({ _id: 'vp-copy' }),
-    delete: async () => ({ released: [] }),
+    delete: async () => ({ released: [], unsaveable: [] }),
     ...overrides,
   }
 }

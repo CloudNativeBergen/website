@@ -1356,7 +1356,11 @@ describe('deleting a project', () => {
     const created = await projects().create({ title: 'T', scenes: TWO_SCENES })
     await assets().delete({ id: 'asset-hall' })
     const result = await projects().delete({ id: created._id })
-    expect(result).toEqual({ deleted: true, released: [HALL] })
+    expect(result).toEqual({
+      deleted: true,
+      released: [HALL],
+      unsaveable: [HALL],
+    })
   })
 })
 
@@ -1371,6 +1375,82 @@ describe('a refusal that is not a revision conflict', () => {
         (e: { code: string }) => e,
       )
     expect(error?.code).not.toBe('CONFLICT')
+  })
+})
+
+describe('deleting a project whose background outlives it', () => {
+  it('names a file only the project authorized, though something else keeps it', async () => {
+    const created = await projects().create({ title: 'T', scenes: TWO_SCENES })
+    await assets().delete({ id: 'asset-hall' })
+    // Another document holds the file, so the orphan check keeps it.
+    h.dataset.push({
+      _id: 'post-x',
+      _type: 'socialPost',
+      image: { asset: ref(HALL) },
+    })
+    const result = await projects().delete({ id: created._id })
+    expect(result).toEqual({ deleted: true, released: [], unsaveable: [HALL] })
+    expect(doc(HALL)).toBeDefined()
+  })
+})
+
+describe('duplicating a current-format project with a shape open refuses', () => {
+  it('is refused, and no copy is written', async () => {
+    const created = await projects().create({
+      title: 'T',
+      scenes: [scene('s')],
+    })
+    const i = h.dataset.findIndex((d) => d._id === created._id)
+    const stored = h.dataset[i].scenes as Record<string, unknown>[]
+    h.dataset[i] = {
+      ...h.dataset[i],
+      scenes: [{ ...stored[0], duration: 'three' }],
+    }
+    h.mutations = []
+    await expect(
+      projects().duplicate({ id: created._id }),
+    ).rejects.toMatchObject({
+      code: 'PRECONDITION_FAILED',
+      message: expect.stringContaining('cannot read'),
+    })
+    expect(h.mutations).toEqual([])
+  })
+})
+
+describe('a track switched to another entry of the same deduplicated file', () => {
+  it('is stored as the entry it names now, with that entry’s title and rights', async () => {
+    h.dataset.push({
+      _id: 'asset-theme-2',
+      _rev: 'rev-t2',
+      _type: 'marketingAsset',
+      organization: ref('org-A'),
+      scope: 'organization',
+      kind: 'audio',
+      title: 'Theme (other entry)',
+      audio: { _type: 'file', asset: ref(THEME) },
+      rightsConfirmation: {
+        confirmedBy: { ...ref('sp-2'), _weak: true },
+        confirmedAt: '2026-09-21T10:00:00Z',
+      },
+    })
+    const settings = { start: 0, volume: 1, fadeIn: 0, fadeOut: 0 }
+    const created = await projects().create({
+      title: 'T',
+      scenes: [scene('s')],
+      track: { galleryAssetId: 'asset-theme', ...settings },
+    })
+    await projects().save({
+      id: created._id,
+      rev: created._rev,
+      title: 'T',
+      scenes: [scene('s')],
+      track: { galleryAssetId: 'asset-theme-2', fileId: THEME, ...settings },
+    })
+    expect(doc(created._id)!.track).toMatchObject({
+      file: { galleryAsset: { ...ref('asset-theme-2'), _weak: true } },
+      title: 'Theme (other entry)',
+      rightsConfirmation: { confirmedAt: '2026-09-21T10:00:00Z' },
+    })
   })
 })
 

@@ -33,6 +33,7 @@ import {
   readVideoProjectCreatedFiles,
   readVideoProjectDocument,
   readVideoProjectFiles,
+  readVideoProjectOrphanedFiles,
   saveVideoProject,
 } from '@/lib/video-project/sanity'
 import {
@@ -318,6 +319,24 @@ export const videoProjectRouter = router({
       // Studio, which no guard reaches, could have pointed it anywhere.
       if (typeof conferenceId === 'string')
         await requireDocumentInCurrentOrg(conferenceId, 'conference')
+      // The same stored-shape check as open: a copy of a project open would
+      // refuse is never written.
+      const row = await readVideoProject(orgId, input.id)
+      if (!row) throw notFound()
+      // The revision validated is the revision copied.
+      if (row._rev !== source._rev)
+        throw new TRPCError({
+          code: 'CONFLICT',
+          message:
+            'The project changed while it was being duplicated. Try again.',
+        })
+      try {
+        openedProject(row, (url) => url)
+      } catch (error) {
+        if (error instanceof ProjectFormatError)
+          throw refuseFormat(error.message)
+        throw error
+      }
       const { scenes, track } = duplicateContents(source)
       const created = await createVideoProject({
         orgId,
@@ -342,10 +361,15 @@ export const videoProjectRouter = router({
     .mutation(async ({ input }) => {
       const orgId = await guard(input.id)
       await refuseIfInRelease(orgId, input.id, 'delete')
-      const files = await readVideoProjectCreatedFiles(orgId, input.id)
+      const [files, unsaveable] = await Promise.all([
+        readVideoProjectCreatedFiles(orgId, input.id),
+        readVideoProjectOrphanedFiles(orgId, input.id),
+      ])
       await deleteVideoProjectDocument(input.id)
       // Named, so the editor still showing the video drops them too.
       const released = await releaseFiles(input.id, files)
-      return { deleted: true, released }
+      // `unsaveable`: files only this project authorized — the editor still
+      // showing the video can no longer save them, deleted or not.
+      return { deleted: true, released, unsaveable }
     }),
 })

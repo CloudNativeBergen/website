@@ -26,7 +26,11 @@ import {
 import type { MemeAssets, MemeDesign } from './meme-generator-draw'
 import type { BackgroundGallery } from './meme-generator-gallery'
 import { VideoProjectError, type VideoProjects } from './meme-generator-project'
-import type { OpenedProject, OpenedScene } from '@/lib/video-project'
+import type {
+  OpenedProject,
+  OpenedScene,
+  VideoProjectRow,
+} from '@/lib/video-project'
 
 const drawDesign =
   vi.fn<
@@ -105,12 +109,17 @@ function fakeProjects(overrides: Partial<VideoProjects> = {}) {
       released: [],
     })),
     duplicate: vi.fn(async () => ({ _id: 'vp-copy' })),
-    delete: vi.fn(async () => ({ released: [] as string[] })),
+    delete: vi.fn(async () => ({
+      released: [] as string[],
+      unsaveable: [] as string[],
+    })),
     ...overrides,
   } satisfies VideoProjects
 }
 
 beforeEach(() => {
+  // jsdom keeps one history across tests: start each on a plain entry.
+  window.history.replaceState(null, '', window.location.href)
   drawDesign.mockReset()
   vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(
     {} as unknown as CanvasRenderingContext2D,
@@ -460,6 +469,56 @@ describe('leaving with unsaved changes', () => {
     expect(blocked()).toBe(true)
   })
 
+  it('still asks for a single scene whose length was changed, previewed as an image', async () => {
+    render(<MemeGenerator projects={fakeProjects()} />)
+    toVideo()
+    const length = screen.getByRole('textbox', { name: 'Scene 1 length (s)' })
+    fireEvent.change(length, { target: { value: '5' } })
+    fireEvent.keyDown(length, { key: 'Enter' })
+    fireEvent.blur(length)
+    fireEvent.click(screen.getByRole('button', { name: 'Image' }))
+    await waitFor(() => expect(blocked()).toBe(true))
+  })
+
+  it('guards browser Back: stays when told to, and lets go once saved', async () => {
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    const projects = fakeProjects()
+    render(<MemeGenerator projects={projects} />)
+    toVideo()
+    const depth = window.history.length
+    typeTitle('Teaser')
+    // A guard entry of the same URL sits on top.
+    await waitFor(() => expect(window.history.length).toBe(depth + 1))
+    expect(window.history.state).toMatchObject({ __studioLeaveGuard: true })
+    window.history.back()
+    await waitFor(() => expect(confirm).toHaveBeenCalledTimes(1))
+    // Stayed: the guard is back on top.
+    await waitFor(() =>
+      expect(window.history.state).toMatchObject({ __studioLeaveGuard: true }),
+    )
+    // Saved: the guard comes off, so the next Back leaves at once.
+    save()
+    await within(project()).findByText('All changes saved')
+    await waitFor(() =>
+      expect(window.history.state?.__studioLeaveGuard).toBeUndefined(),
+    )
+    expect(confirm).toHaveBeenCalledTimes(1)
+  })
+
+  it('leaves on browser Back when the organizer confirms', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const back = vi.spyOn(window.history, 'back')
+    render(<MemeGenerator projects={fakeProjects()} />)
+    toVideo()
+    typeTitle('Teaser')
+    await waitFor(() =>
+      expect(window.history.state).toMatchObject({ __studioLeaveGuard: true }),
+    )
+    window.history.back()
+    // Ours goes back once more, past the page.
+    await waitFor(() => expect(back).toHaveBeenCalledTimes(2))
+  })
+
   it('never asks for an image with no project', () => {
     render(<MemeGenerator projects={fakeProjects()} />)
     fireEvent.change(screen.getAllByPlaceholderText(/text/i)[0], {
@@ -608,7 +667,10 @@ describe('deleting a project', () => {
   it('leaves the multi-scene video as the only, unsaved copy: leaving asks, and it saves again', async () => {
     const projects = fakeProjects({
       // The delete's orphan check took the background file.
-      delete: vi.fn(async () => ({ released: ['image-hall'] })),
+      delete: vi.fn(async () => ({
+        released: ['image-hall'],
+        unsaveable: ['image-hall'],
+      })),
     })
     render(<MemeGenerator projects={projects} initialProjectId="vp-1" />)
     await within(
@@ -659,6 +721,41 @@ describe('deleting a project', () => {
       window.dispatchEvent(event)
       expect(event.defaultPrevented).toBe(true)
     })
+  })
+
+  it('clears a background only the deleted project authorized, says so, and saves again', async () => {
+    const projects = fakeProjects({
+      // The file survives (something else holds it), but its gallery entry
+      // is gone: nothing can authorize saving it again.
+      delete: vi.fn(async () => ({
+        released: [] as string[],
+        unsaveable: ['image-hall'],
+      })),
+    })
+    render(<MemeGenerator projects={projects} initialProjectId="vp-1" />)
+    await within(
+      await screen.findByRole('region', { name: 'Project' }),
+    ).findByText('All changes saved')
+    fireEvent.click(
+      within(project()).getByRole('button', { name: 'Delete project' }),
+    )
+    fireEvent.click(
+      within(await screen.findByRole('dialog')).getByRole('button', {
+        name: 'Delete project',
+      }),
+    )
+    // Shown, and announced.
+    expect(
+      await within(project()).findAllByText(
+        /2 backgrounds were only in that project/,
+      ),
+    ).not.toHaveLength(0)
+    save()
+    await within(project()).findByText('All changes saved')
+    const sent = vi.mocked(projects.create).mock.calls[0][0]
+    expect(sent.scenes.every((sc) => sc.design.background.image === null)).toBe(
+      true,
+    )
   })
 
   it('does nothing when the dialog is cancelled', async () => {
@@ -724,6 +821,39 @@ describe('after a conflict', () => {
     expect(
       within(project()).getByRole('button', { name: /Duplicate project/ }),
     ).toBeDisabled()
+  })
+})
+
+describe('the saved-project list', () => {
+  it('is latest-wins: an older list still in flight never replaces the refresh after a save', async () => {
+    let settleOld: (rows: VideoProjectRow[]) => void = () => {}
+    const fresh: VideoProjectRow[] = [
+      {
+        _id: 'vp-new',
+        title: 'Brand new',
+        scope: 'organization',
+        edition: null,
+        updatedAt: '2026-09-27T10:00:00Z',
+        scenes: 1,
+      },
+    ]
+    const list = vi
+      .fn<VideoProjects['list']>()
+      .mockImplementationOnce(
+        () => new Promise((resolve) => (settleOld = resolve)),
+      )
+      .mockResolvedValue(fresh)
+    render(<MemeGenerator projects={fakeProjects({ list })} />)
+    toVideo()
+    save()
+    await within(project()).findByText('All changes saved')
+    await within(project()).findByRole('option', { name: 'Brand new' })
+    // The mount-time list lands last, with no new project in it.
+    settleOld([])
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(
+      within(project()).getByRole('option', { name: 'Brand new' }),
+    ).toBeInTheDocument()
   })
 })
 

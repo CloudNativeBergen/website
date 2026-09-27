@@ -298,6 +298,32 @@ export async function countVideoProjectReleaseTwins(
   return { releases: releases?.n ?? 0, draft: (drafts?.n ?? 0) > 0 }
 }
 
+/**
+ * The files the project holds only through itself: its gallery entry is gone
+ * (or it never had one). Once the project is deleted nothing authorizes a
+ * save to hold them again, so the editor clears them.
+ */
+export async function readVideoProjectOrphanedFiles(
+  orgId: string,
+  id: string,
+): Promise<string[]> {
+  const row = await scopedFetch<{ ids: (string | null)[] | null } | null>(
+    clientReadUncached,
+    { orgId },
+    `*[_type == "videoProject" && _id == $id][0]{
+      "ids": coalesce(scenes[defined(background.image.asset._ref) && !defined(background.image.galleryAsset->_id)].background.image.asset._ref, [])
+        + select(defined(track.file.asset._ref) && !defined(track.file.galleryAsset->_id) => [track.file.asset._ref], [])
+    }`,
+    { id },
+    opts,
+  )
+  return [
+    ...new Set(
+      (row?.ids ?? []).filter((x): x is string => typeof x === 'string'),
+    ),
+  ]
+}
+
 /** Delete a project and any Studio draft of it, together. */
 export async function deleteVideoProjectDocument(id: string): Promise<void> {
   await clientWrite.transaction().delete(id).delete(`drafts.${id}`).commit()

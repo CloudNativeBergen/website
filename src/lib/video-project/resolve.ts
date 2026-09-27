@@ -58,9 +58,16 @@ export async function resolveProjectFiles(
   const heldAny = new Map((stored?.images ?? []).map((f) => [f.fileId, f]))
   const heldExactly = (fileId?: string, galleryAssetId?: string) =>
     fileId ? heldExact.get(heldKey(fileId, galleryAssetId)) : undefined
-  const heldTrack =
+  // As for images: the entry the track names decides; the file alone only
+  // when no entry is named, or it no longer resolves.
+  const trackHeld =
     track?.fileId && stored?.track?.fileId === track.fileId
       ? stored.track
+      : null
+  const heldTrackExactly =
+    trackHeld &&
+    (trackHeld.galleryAssetId ?? undefined) === track?.galleryAssetId
+      ? trackHeld
       : null
 
   const wanted = new Set<string>()
@@ -72,7 +79,8 @@ export async function resolveProjectFiles(
     )
       wanted.add(image.galleryAssetId)
   }
-  if (track?.galleryAssetId && !heldTrack) wanted.add(track.galleryAssetId)
+  if (track?.galleryAssetId && !heldTrackExactly)
+    wanted.add(track.galleryAssetId)
   const gallery = new Map(
     (await readGalleryFiles(orgId, [...wanted])).map((row) => [row._id, row]),
   )
@@ -100,6 +108,10 @@ export async function resolveProjectFiles(
   if (unkept.length > 0) throw refuse(unkeptBackgroundRefusal(unkept))
 
   if (!track) return { images, track: null }
+  const row = heldTrackExactly
+    ? null
+    : galleryFile(track.galleryAssetId, 'audio')
+  const heldTrack = heldTrackExactly ?? (row ? null : trackHeld)
   if (heldTrack)
     return {
       images,
@@ -109,7 +121,6 @@ export async function resolveProjectFiles(
         rights: heldTrack.rights,
       },
     }
-  const row = galleryFile(track.galleryAssetId, 'audio')
   if (!row)
     throw refuse(
       'The music track is not in the gallery, so the project cannot be saved. Choose a track from the gallery, then save.',
