@@ -230,7 +230,7 @@ export function carryFiles(
   states: Scene[],
   files: Map<string, string>,
 ): Scene[] {
-  return states.map((scene) => {
+  const carried = states.map((scene) => {
     const image = scene.design.background.image
     const fileId = image ? files.get(image.url) : undefined
     if (!image || !fileId || image.fileId === fileId) return scene
@@ -245,6 +245,9 @@ export function carryFiles(
       },
     }
   })
+  // Nothing new to carry: the same list, so a save that changes nothing
+  // drawn never makes a finished export look out of date.
+  return carried.every((scene, i) => scene === states[i]) ? states : carried
 }
 
 /**

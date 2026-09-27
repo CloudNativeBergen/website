@@ -2097,12 +2097,12 @@ export function MemeGenerator({
                   : 'none'
             }
             // The scenes, the late-arriving font faces that repaint them, and
-            // the music — its settings by value, so an undo back to them
-            // makes the export current again.
+            // the music: the samples themselves (a new file is new samples)
+            // and its settings by value, so an undo back to them makes the
+            // export current again — never the id a save files it under.
             revision={[
               scenes,
               lateFaces,
-              trackKey,
               start,
               volume,
               fadeIn,
