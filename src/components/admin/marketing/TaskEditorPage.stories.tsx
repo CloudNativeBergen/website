@@ -1201,6 +1201,16 @@ export const TwoSpeakerGeneratedCopyDark: Story = {
 
 export const TwoSpeakerGeneratedCopyMobile: Story = {
   ...TwoSpeakerGeneratedCopy,
+  // `globals` sizes it in the Storybook UI (Storybook 10 ignores the
+  // parameter there); the test-runner's preVisit reads the parameter.
+  globals: { viewport: { value: 'mobile1', isRotated: false } },
+  play: async (ctx) => {
+    // The mobile branch is only exercised if the page really is narrow.
+    await expect(
+      ctx.canvasElement.ownerDocument.documentElement.clientWidth,
+    ).toBeLessThan(500)
+    await TwoSpeakerGeneratedCopy.play!(ctx)
+  },
   parameters: {
     ...TwoSpeakerGeneratedCopy.parameters,
     viewport: { defaultViewport: 'mobile1' },
