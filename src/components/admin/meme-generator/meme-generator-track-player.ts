@@ -139,8 +139,10 @@ export function createTrackPlayer(
     node.buffer = bufferFor(context)
     node.connect(output as never)
     node.start(when, offset)
-    sources.push({ node, at: when })
-    scheduledUntil = when + length() - offset
+    // When it really starts: a time already past (0 included) is now.
+    const at = Math.max(when, context.currentTime)
+    sources.push({ node, at })
+    scheduledUntil = at + length() - offset
   }
 
   /**
@@ -150,9 +152,17 @@ export function createTrackPlayer(
    */
   const queueAhead = () => {
     if (!loop || !ctx || !channels || !anchor || length() <= 0) return
+    const now = ctx.currentTime
+    // Every scheduled pass has ended — the page stopped asking (a hidden
+    // tab) while the audio clock ran on: the pass under way now starts at
+    // its phase. Scheduling each missed pass would start them all at once.
+    if (scheduledUntil < now) {
+      const missed = Math.floor((now - scheduledUntil) / length())
+      const passStart = scheduledUntil + missed * length()
+      schedule(ctx, now, now - passStart)
+    }
     // One pass ahead of the one being rendered is enough.
-    while (scheduledUntil - length() <= ctx.currentTime)
-      schedule(ctx, scheduledUntil, 0)
+    while (scheduledUntil - length() <= now) schedule(ctx, scheduledUntil, 0)
     // Passes already over are let go of.
     const current = ctx.currentTime
     sources = sources.filter(

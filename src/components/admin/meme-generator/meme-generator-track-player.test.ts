@@ -424,4 +424,23 @@ describe('the track player', () => {
     // Past the end: the editor ends playback there.
     expect(player.time()).toBeCloseTo(10.05, 10)
   })
+
+  it('picks a loop up at its current phase after the page stopped asking, never starting the missed passes together', () => {
+    const { ctx, sources } = fakeContext()
+    const player = createTrackPlayer(() => ctx)
+    player.load(mix(10))
+    player.setLoop(true)
+    player.play(0)
+    expect(sources).toHaveLength(2)
+    // A background tab: no one asks for 35 s of audio time.
+    ctx.currentTime = 35
+    expect(player.time()).toBeCloseTo(5, 10)
+    const added = sources.slice(2)
+    // The pass under way now, from its phase, and the next — nothing for
+    // the passes at 20 s and 30 s, which would all start at once.
+    expect(added).toMatchObject([
+      { startedAt: 35, offset: 5 },
+      { startedAt: 40, offset: 0 },
+    ])
+  })
 })
