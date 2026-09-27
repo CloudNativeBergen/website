@@ -930,6 +930,11 @@ async function settle(
             claimedAt: null,
             submission: null,
             attemptCount,
+            // AMBIGUOUS: the post may be live with the swapped text. Keep that
+            // text as the record, so a later "mark as posted" never records
+            // a tag that was not sent (round 3, T6). Harmless if it was not
+            // sent: a retry swaps the same way.
+            ...(!outcome.ok && outcome.kind === 'ambiguous' ? sentBody : {}),
             attempt,
           },
           { ifRevision: claimed._rev },

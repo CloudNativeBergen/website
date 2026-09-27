@@ -393,6 +393,31 @@ describe('runPublishTick — due scan and dispatch', () => {
       expect(store.recheckCalls).toEqual([])
     })
 
+    it('an AMBIGUOUS outcome keeps the swapped text: the post may be live, and a later "mark as posted" must not record the tag (round 3, T6)', async () => {
+      const store = new MemoryVariantStore([tagged()])
+      store.tags['variant-1'] = tags(true)
+      const adapter = fakeAdapter({
+        ok: false,
+        kind: 'ambiguous',
+        message: 'timed out after send',
+      })
+      const onTagsWithheld = vi.fn(async () => {})
+
+      await runPublishTick({
+        store,
+        resolveAdapter: async () => adapter,
+        now: NOW,
+        onTagsWithheld,
+      })
+
+      expect(store.get('variant-1')).toMatchObject({
+        status: 'failed',
+        body: 'Alice Smith and @bob.dev at the conf',
+      })
+      // Not known to be live: the failure notification speaks, not this one.
+      expect(onTagsWithheld).not.toHaveBeenCalled()
+    })
+
     it('KNOWN HOLE (spec §4.4): a settle that loses its revision race loses the body rewrite — the stored body still shows the tag that was not posted', async () => {
       const store = new MemoryVariantStore([tagged()])
       store.tags['variant-1'] = tags(true)
