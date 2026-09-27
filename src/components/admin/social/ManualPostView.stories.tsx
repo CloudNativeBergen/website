@@ -603,3 +603,68 @@ export const TagByHandIgnoredOffLinkedIn: Story = {
     await expect(canvas.queryByText(/^tag by hand$/i)).toBeNull()
   },
 }
+
+/**
+ * A Bluesky post handed over to be posted by hand, whose speaker opted out
+ * of tags AFTER it was approved (tagging spec §4.4). The server ran the
+ * approval check as the view opened; the text to copy names her plainly,
+ * and the view says why it differs from what was approved.
+ */
+const LATE_OPT_OUT_BODY =
+  '🎙️ @alice.dev and @bob.dev are speaking at Cloud Native Bergen 2027.'
+export const BlueskyLateOptOut: Story = {
+  args: {
+    variant: {
+      ...variant,
+      platform: 'bluesky',
+      body: LATE_OPT_OUT_BODY,
+      attachments: [],
+    },
+    manualBody: {
+      body: '🎙️ Alice Smith and @bob.dev are speaking at Cloud Native Bergen 2027.',
+      untagged: ['Alice Smith'],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const text = canvas
+      .getByRole('button', { name: /copy text/i })
+      .closest('section')
+    await expect(text).toHaveTextContent('🎙️ Alice Smith and @bob.dev')
+    await expect(text).not.toHaveTextContent('@alice.dev')
+    await expect(
+      canvas.getByText(/Alice Smith is named in plain text/),
+    ).toBeInTheDocument()
+  },
+}
+
+export const BlueskyLateOptOutDark: Story = {
+  ...BlueskyLateOptOut,
+  // This file resolves dark through its OWN decorator's `parameters.theme`.
+  parameters: { theme: 'dark', backgrounds: { default: 'dark' } },
+}
+
+export const BlueskyLateOptOutMobile: Story = {
+  ...BlueskyLateOptOut,
+  parameters: { layout: 'fullscreen', viewport: { defaultViewport: 'phone' } },
+}
+
+/** Once posted, the record is shown as it is: no check, no notice. */
+export const BlueskyLateOptOutPosted: Story = {
+  args: {
+    ...BlueskyLateOptOut.args,
+    variant: {
+      ...variant,
+      platform: 'bluesky',
+      body: LATE_OPT_OUT_BODY,
+      attachments: [],
+      status: 'published',
+      publishResult: { url: 'https://bsky.app/profile/x/post/1' },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    await expect(
+      within(canvasElement).queryByText(/named in plain text/),
+    ).not.toBeInTheDocument()
+  },
+}

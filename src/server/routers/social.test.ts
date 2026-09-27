@@ -21,6 +21,13 @@ const marketing = vi.hoisted(() => ({
   getTaskLinkInputs: vi.fn(async () => null),
 }))
 vi.mock('@/lib/marketing/sanity', () => marketing)
+const verify = vi.hoisted(() => ({
+  withManualBody: vi.fn(async <T>(data: T) => data),
+}))
+vi.mock('@/lib/marketing/tagging/verify', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/marketing/tagging/verify')>()),
+  withManualBody: verify.withManualBody,
+}))
 vi.mock('next/cache', () => ({
   revalidateTag: vi.fn(),
   cacheLife: vi.fn(),
@@ -893,6 +900,23 @@ describe('social.getVariantEditor', () => {
     expect(result.variant._id).toBe('variant-ours')
     expect(result.post.attachments).toEqual([POST_IMAGE])
     expect(h.getSocialVariantEditorData).toHaveBeenCalledWith('variant-ours')
+  })
+
+  it('returns the body that passes the approval check, for a variant posted by hand (tagging §4.4)', async () => {
+    const manualBody = { body: 'Alice Smith speaks', untagged: ['Alice Smith'] }
+    verify.withManualBody.mockImplementationOnce(async (data: unknown) => ({
+      ...(data as object),
+      manualBody,
+    }))
+    const result = await social().getVariantEditor({
+      variantId: 'variant-ours',
+    })
+    expect(result.manualBody).toEqual(manualBody)
+    // Checked against the conference the guard resolved.
+    expect(verify.withManualBody).toHaveBeenCalledWith(
+      expect.objectContaining({ post: expect.anything() }),
+      CONF_A,
+    )
   })
 
   it("refuses another conference's variant before reading it", async () => {

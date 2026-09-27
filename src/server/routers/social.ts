@@ -44,6 +44,7 @@ import {
 import {
   checkTagsForApproval,
   checkTagsOnSave,
+  withManualBody,
 } from '@/lib/marketing/tagging/verify'
 import { mentionDocuments } from '@/lib/marketing/tagging/records'
 import { tagIssuesError } from '@/server/errors'
@@ -418,7 +419,7 @@ export const socialRouter = router({
   getVariantEditor: adminProcedure
     .input(SocialVariantIdSchema)
     .query(async ({ input }) => {
-      await requireDocumentInCurrentConference(
+      const conferenceId = await requireDocumentInCurrentConference(
         input.variantId,
         'socialPostVariant',
       )
@@ -426,7 +427,9 @@ export const socialRouter = router({
       if (!data) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Variant not found' })
       }
-      return data
+      // Posted by hand: the approval check runs as the view opens (tagging
+      // spec §4.4), so a late opt-out is honoured there too.
+      return withManualBody(data, conferenceId)
     }),
 
   /**

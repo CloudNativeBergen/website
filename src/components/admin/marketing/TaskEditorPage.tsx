@@ -705,6 +705,7 @@ function PublishingSection({
           conferenceDomains={variant.conferenceDomains}
           platformZone={variant.platformZone ?? null}
           tagByHand={tagByHand}
+          manualBody={variant.manualBody ?? null}
           saving={markPosted.isPending}
           error={manualError}
           onMarkPosted={(url) => {

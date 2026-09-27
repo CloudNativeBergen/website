@@ -108,6 +108,13 @@ vi.mock('@/lib/social/schedule-check', async (importOriginal) => ({
 vi.mock('@/lib/speaker/sanity', () => ({
   getOrganizersByConference: h.getOrganizersByConference,
 }))
+const verify = vi.hoisted(() => ({
+  withManualBody: vi.fn(async (data: unknown) => data),
+}))
+vi.mock('@/lib/marketing/tagging/verify', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/marketing/tagging/verify')>()),
+  withManualBody: verify.withManualBody,
+}))
 
 import { MAY_BE_LIVE_REFUSAL } from '@/lib/marketing/deletion'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
@@ -325,6 +332,20 @@ describe('marketing.task.get', () => {
     )
     expect(data.pages.map((p) => p.path)).toContain('/tickets')
     expect(data.organizers).toEqual([{ _id: 'sp-1', name: 'Ada' }])
+  })
+
+  it("carries the variant's manual body, checked against the Task's conference (tagging §4.4)", async () => {
+    const manualBody = { body: 'Alice Smith speaks', untagged: ['Alice Smith'] }
+    verify.withManualBody.mockImplementationOnce(async (data: unknown) => ({
+      ...(data as object),
+      manualBody,
+    }))
+    const data = await marketing().task.get({ taskId: 'task-ours' })
+    expect(data.variant?.manualBody).toEqual(manualBody)
+    expect(verify.withManualBody).toHaveBeenCalledWith(
+      expect.objectContaining({ variant: expect.anything() }),
+      CONF_A,
+    )
   })
 
   it('refuses a Task of another conference BEFORE reading it', async () => {

@@ -11,6 +11,7 @@ import {
 } from '@heroicons/react/24/outline'
 import { AdminButton } from '@/components/admin/AdminButton'
 import type { TagByHandEntry } from '@/lib/marketing/tag-by-hand'
+import { joinNames } from '@/lib/marketing/tagging/body'
 import { richTextImageUrl } from '@/lib/homepage/richTextImage'
 import {
   countLength,
@@ -49,6 +50,13 @@ export interface ManualPostViewProps {
    * has already left opted-out speakers out; empty or absent shows nothing.
    */
   tagByHand?: readonly TagByHandEntry[]
+  /**
+   * A Bluesky body that passes the approval check as the view opened
+   * (tagging spec §4.4): a tag of a speaker who opted out since approval is
+   * their plain name. Shown and copied in place of `variant.body` until the
+   * post is recorded; absent or null: the stored body.
+   */
+  manualBody?: { body: string; untagged: readonly string[] } | null
 }
 
 const defaultImageSrc = (asset: SocialPostAttachment) =>
@@ -71,6 +79,7 @@ export function ManualPostView({
   conferenceDomains = [],
   platformZone = null,
   tagByHand: tagByHandProp = [],
+  manualBody = null,
 }: ManualPostViewProps) {
   // A LinkedIn list, whoever passes it: on any other platform the hint
   // (type @ in the composer) would be wrong, so it is never shown there.
@@ -104,6 +113,9 @@ export function ManualPostView({
   const missingImages = variant.attachments.filter(
     (a) => !byKey.has(a.source),
   ).length
+  // What to post by hand: once the post is recorded, the record as it is.
+  const checked = variant.status !== 'published' ? manualBody : null
+  const body = checked?.body ?? variant.body
   const link = variant.link?.trim() || null
   // Where the link goes by hand (spec §3.1, #1134).
   //
@@ -122,7 +134,7 @@ export function ManualPostView({
   const linkAsComment = link !== null && placement === 'comment'
   const linkInBody =
     link !== null && placement !== null && placement !== 'comment'
-  const linkAppended = linkInBody && !variant.body.includes(link)
+  const linkAppended = linkInBody && !body.includes(link)
   /**
    * A body that reached this view carrying a link to our own site, on a
    * platform where the link is the first comment (spec §3.1, #1134). Save,
@@ -135,9 +147,9 @@ export function ManualPostView({
    */
   const strayInBody =
     placement === 'comment' && variant.status !== 'published'
-      ? ownDomainUrlsIn(variant.body, conferenceDomains, platformZone)
+      ? ownDomainUrlsIn(body, conferenceDomains, platformZone)
       : []
-  const copyText = linkAppended ? `${variant.body}\n\n${link}` : variant.body
+  const copyText = linkAppended ? `${body}\n\n${link}` : body
   const copyLength = constraints
     ? countLength(copyText, constraints.counting)
     : null
@@ -228,6 +240,16 @@ export function ManualPostView({
         </p>
       )}
 
+      {checked && checked.untagged.length > 0 && (
+        <p className="rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900 dark:border-sky-900 dark:bg-sky-900/20 dark:text-sky-200">
+          {joinNames(checked.untagged)}{' '}
+          {checked.untagged.length > 1 ? 'are' : 'is'} named in plain text
+          below, not tagged. The tag no longer passes the check this post was
+          approved with &mdash; most often because the speaker has asked not to
+          be tagged since.
+        </p>
+      )}
+
       {missingImages > 0 && (
         <p
           role="alert"
@@ -253,7 +275,7 @@ export function ManualPostView({
         action={<CopyButton value={copyText} label="Copy text" />}
       >
         <p className="text-sm break-words whitespace-pre-wrap text-gray-900 dark:text-gray-100">
-          {variant.body}
+          {body}
           {linkAppended && (
             <>
               {'\n\n'}

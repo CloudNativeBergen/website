@@ -8,10 +8,12 @@
  * fetch), and calls these only for a Bluesky variant.
  */
 
+import type { SocialVariantEditorData } from '@/lib/social/types'
 import type { MentionRecord } from './body'
 import {
   approvalCheck,
   approvalHandlesToResolve,
+  fixTagIssue,
   handlesToResolve,
   mentionTokens,
   saveMentions,
@@ -111,15 +113,16 @@ export async function checkTagsOnSave(input: {
   return { mentions: saved.mentions, ...merged(saved, approval) }
 }
 
-/**
- * Approving the Task or scheduling the variant: the approval check (§4.4)
- * on what is stored.
- */
-export async function checkTagsForApproval(input: {
+/** The approval check with the inputs it decided from. */
+async function approvalWithInputs(input: {
   conferenceId: string
   variantId: string
   body: string
-}): Promise<TagCheck> {
+}): Promise<{
+  check: TagCheck
+  people: TaggablePerson[]
+  mentions: MentionRecord[]
+}> {
   const mentions = await getVariantMentionRecords(
     input.variantId,
     input.conferenceId,
@@ -128,7 +131,7 @@ export async function checkTagsForApproval(input: {
     mentionTokens(input.body).length === 0 &&
     !mentions.some((m) => m.status === 'tagged')
   )
-    return { issues: [], warnings: [] }
+    return { check: { issues: [], warnings: [] }, people: [], mentions }
   const [people, ownAccount] = await Promise.all([
     getConferenceTaggablePeople(input.conferenceId),
     ownBlueskyAccount(input.conferenceId),
@@ -141,11 +144,78 @@ export async function checkTagsForApproval(input: {
       ownAccount,
     }),
   )
-  return approvalCheck({
+  const check = approvalCheck({
     body: input.body,
     mentions,
     people,
     resolutions,
     ownAccount,
   })
+  return { check, people, mentions }
+}
+
+/**
+ * Approving the Task or scheduling the variant: the approval check (§4.4)
+ * on what is stored.
+ */
+export async function checkTagsForApproval(input: {
+  conferenceId: string
+  variantId: string
+  body: string
+}): Promise<TagCheck> {
+  return (await approvalWithInputs(input)).check
+}
+
+/**
+ * The manual post view (§4.4, Publish): a Bluesky variant handed to an
+ * organizer to post by hand never reaches the engine's check, perhaps for
+ * days. The view runs the approval check when it opens and shows the body
+ * that passes it — each refused tag replaced by the one-click fix (the plain
+ * name). Null: the stored body passes as it is. A body that fails for its
+ * length alone has no tag to fix and is shown as stored.
+ */
+export async function manualPostBody(input: {
+  conferenceId: string
+  variantId: string
+  body: string
+}): Promise<{ body: string; untagged: string[] } | null> {
+  const { check, people, mentions } = await approvalWithInputs(input)
+  let body = input.body
+  const untagged: string[] = []
+  for (const issue of check.issues) {
+    if (issue.code === 'plain-too-long') continue
+    const fixed = fixTagIssue(body, issue, people, mentions)
+    if (fixed === body) continue
+    body = fixed
+    if (!untagged.includes(issue.name)) untagged.push(issue.name)
+  }
+  return body === input.body ? null : { body, untagged }
+}
+
+/**
+ * The editor read with `manualBody` for a Bluesky variant an organizer posts
+ * by hand. A failed check (Sanity, Bluesky) shows the stored body rather than
+ * failing the view: the approval check already passed it once.
+ */
+export async function withManualBody<T extends SocialVariantEditorData>(
+  data: T,
+  conferenceId: string,
+): Promise<T> {
+  const v = data.variant
+  if (
+    v.platform !== 'bluesky' ||
+    (v.status !== 'awaiting-manual' && v.status !== 'failed')
+  )
+    return data
+  try {
+    const manualBody = await manualPostBody({
+      conferenceId,
+      variantId: v._id,
+      body: v.body,
+    })
+    return manualBody ? { ...data, manualBody } : data
+  } catch (error) {
+    console.error(`[tagging] manual view check failed for ${v._id}:`, error)
+    return data
+  }
 }

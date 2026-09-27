@@ -238,6 +238,13 @@ export interface SocialVariantEditorData {
    * `PublishContext.platformZone`). Optional for fixtures; the read sets it.
    */
   platformZone?: string | null
+  /**
+   * A Bluesky post to be posted BY HAND (`awaiting-manual`, `failed`): the
+   * body that passes the approval check as the view opens (tagging spec
+   * §4.4) — a tag of a speaker who opted out since approval as their plain
+   * name — and whose tags were dropped. Absent or null: post the stored body.
+   */
+  manualBody?: { body: string; untagged: string[] } | null
 }
 
 /** The list-view row for the admin variant table. */
