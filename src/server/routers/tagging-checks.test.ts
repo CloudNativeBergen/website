@@ -437,6 +437,33 @@ describe('social.updateVariant on a Bluesky body', () => {
     expect(h.updateSocialVariantContent).not.toHaveBeenCalled()
   })
 
+  it('keeps generation’s unresolved note through a save, and drops it once the speaker left', async () => {
+    const note = {
+      _key: 'spk-alice',
+      _type: 'socialPostMention',
+      handle: 'alice.dev',
+      speaker: { ...ref('spk-alice'), _weak: true },
+      name: 'Alice Anderson',
+      status: 'unresolved',
+    }
+    seed([note])
+    await save('Alice Anderson at 10')
+    expect(
+      h.updateSocialVariantContent.mock.calls[0][1].mentions.map(
+        (m: { status: string }) => m.status,
+      ),
+    ).toEqual(['unresolved'])
+    // Alice's talk is gone from this conference: her note goes with her.
+    seed([note])
+    dataset.splice(
+      dataset.findIndex((d) => d._id === 'talk-A'),
+      1,
+    )
+    h.updateSocialVariantContent.mockClear()
+    await save('Alice Anderson at 10')
+    expect(h.updateSocialVariantContent.mock.calls[0][1].mentions).toEqual([])
+  })
+
   it('reads no roster when the body has no tag at all', async () => {
     seed([])
     await save('No tags here')

@@ -70,14 +70,17 @@ export async function checkTagsOnSave(input: {
     input.variantId,
     input.conferenceId,
   )
-  // No `@` token, no tag: nothing to match, so no read of the roster.
+  // No `@` token, no tag: nothing to match, so no read of the roster —
+  // unless a note from generation must be checked against it.
   const hasTokens = mentionTokens(input.body).length > 0
-  const [people, ownAccount]: [TaggablePerson[], string | null] = hasTokens
-    ? await Promise.all([
-        getConferenceTaggablePeople(input.conferenceId),
-        ownBlueskyAccount(input.conferenceId),
-      ])
-    : [[], null]
+  const hasNotes = previous.some((m) => m.status === 'unresolved')
+  const [people, ownAccount]: [TaggablePerson[], string | null] =
+    await Promise.all([
+      hasTokens || hasNotes
+        ? getConferenceTaggablePeople(input.conferenceId)
+        : [],
+      hasTokens ? ownBlueskyAccount(input.conferenceId) : null,
+    ])
   let resolutions = await resolveHandles(
     handlesToResolve({ body: input.body, people, previous, ownAccount }),
   )

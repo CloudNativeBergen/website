@@ -203,7 +203,10 @@ export interface TagOwnership {
 export function tagOwners(
   body: string,
   people: readonly TaggablePerson[],
-  mentions: readonly Pick<MentionRecord, 'handle' | 'speakerId' | 'status'>[],
+  mentions: readonly Pick<
+    MentionRecord,
+    'handle' | 'speakerId' | 'status' | 'name'
+  >[],
 ): Map<string, TagOwnership> {
   const ids = new Set(people.map((p) => p.speakerId))
   const out = new Map<string, TagOwnership>()
@@ -235,7 +238,10 @@ export function tagOwners(
 function bindTags(
   body: string,
   people: readonly TaggablePerson[],
-  mentions: readonly Pick<MentionRecord, 'handle' | 'speakerId' | 'status'>[],
+  mentions: readonly Pick<
+    MentionRecord,
+    'handle' | 'speakerId' | 'status' | 'name'
+  >[],
 ): Map<string, string[]> {
   const known = byHandle(people)
   const counts = new Map<string, number>()
@@ -247,9 +253,14 @@ function bindTags(
     const add = (id: string) => {
       if (owners.length < n && !owners.includes(id)) owners.push(id)
     }
-    for (const m of mentions)
-      if (m.status === 'tagged' && normaliseHandle(m.handle) === handle)
-        add(m.speakerId)
+    // Recorded people first — those whose plain name is gone from the body
+    // before those still named, so an occurrence removed in Studio drops the
+    // person whose name took its place.
+    const recorded = mentions.filter(
+      (m) => m.status === 'tagged' && normaliseHandle(m.handle) === handle,
+    )
+    for (const m of recorded) if (nameIndex(body, m.name) < 0) add(m.speakerId)
+    for (const m of recorded) add(m.speakerId)
     const sharers = known.get(handle) ?? []
     if (owners.length === 0 && sharers.length === 1) add(sharers[0].speakerId)
     for (const p of sharers) if (nameIndex(body, p.name) < 0) add(p.speakerId)
@@ -551,10 +562,13 @@ export function saveMentions(input: {
   }
   const taggedIds = new Set(tagged.map((m) => m.speakerId))
   // A note stands while the person is still named in plain text.
+  const onRoster = new Set(input.people.map((p) => p.speakerId))
   const notes = input.previous.filter(
     (m) =>
       m.status === 'unresolved' &&
       !taggedIds.has(m.speakerId) &&
+      // A departed or erased speaker's note goes with them.
+      onRoster.has(m.speakerId) &&
       nameIndex(input.body, m.name) >= 0,
   )
   const tooLong = plainLengthIssue(input.body, tagged)
@@ -598,10 +612,15 @@ function plainLengthIssue(
 function liveRecords(
   body: string,
   mentions: readonly MentionRecord[],
+  people: readonly TaggablePerson[],
 ): MentionRecord[] {
-  const inBody = new Set(mentionTokens(body).map((t) => t.handle))
+  // Per occurrence, not per handle: two records for a shared handle with
+  // one occurrence left are one live tag (`bindTags` says whose).
+  const bound = bindTags(body, people, mentions)
   return mentions.filter(
-    (m) => m.status === 'tagged' && inBody.has(normaliseHandle(m.handle)),
+    (m) =>
+      m.status === 'tagged' &&
+      (bound.get(normaliseHandle(m.handle)) ?? []).includes(m.speakerId),
   )
 }
 
@@ -617,7 +636,7 @@ export function approvalHandlesToResolve(input: {
   const byId = new Map(input.people.map((p) => [p.speakerId, p]))
   return [
     ...new Set(
-      liveRecords(input.body, input.mentions).flatMap((m) => {
+      liveRecords(input.body, input.mentions, input.people).flatMap((m) => {
         const p = byId.get(m.speakerId)
         return m.status === 'tagged' && p && !p.optedOut
           ? [normaliseHandle(m.handle)]
@@ -647,7 +666,7 @@ export function approvalCheck(input: {
   const issues: TagIssue[] = []
   const warnings: TagWarning[] = []
   const byId = new Map(input.people.map((p) => [p.speakerId, p]))
-  const live = liveRecords(input.body, input.mentions)
+  const live = liveRecords(input.body, input.mentions, input.people)
   for (const m of live) {
     const handle = normaliseHandle(m.handle)
     const p = byId.get(m.speakerId)

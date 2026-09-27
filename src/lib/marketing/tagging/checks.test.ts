@@ -168,6 +168,23 @@ describe('a shared team handle, end to end: tag, save, read back', () => {
     expect(plainBody(body, saved.mentions)).toBe(start)
   })
 
+  it('an occurrence removed in Studio takes its person out of the approval check', () => {
+    const both = tagName(tagName(start, mate)!, team)!
+    const saved = save(both, save(tagName(start, mate)!).mentions)
+    expect(saved.mentions.map((m) => m.speakerId)).toEqual([
+      'speaker-bob',
+      'speaker-alice',
+    ])
+    // Studio: Alice's tag back to her name. Then Alice leaves the roster.
+    const edited = '@team.dev and Alice Anderson on platform teams.'
+    const input = { body: edited, mentions: saved.mentions, people: [team] }
+    expect(approvalHandlesToResolve(input)).toEqual(['team.dev'])
+    expect(approvalCheck({ ...input, resolutions })).toEqual({
+      issues: [],
+      warnings: [],
+    })
+  })
+
   it('tagging both records both, one per occurrence, and the plain form names each', () => {
     const one = tagName(start, mate)!
     const first = save(one)
