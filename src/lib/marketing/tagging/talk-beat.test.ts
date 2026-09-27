@@ -19,9 +19,10 @@ import { BUILTIN_TEMPLATE } from '../template'
 
 const DID_A = 'did:plc:aaaaaaaaaaaaaaaaaaaaaaaa'
 const DID_C = 'did:plc:cccccccccccccccccccccccc'
-const postEvent = BUILTIN_TEMPLATE.campaigns.find((c) =>
-  c.recipes.some((r) => r.beat === 'videoDrip'),
-)!
+const campaignOf = (beat: string) =>
+  BUILTIN_TEMPLATE.campaigns.find((c) =>
+    c.recipes.some((r) => r.beat === beat),
+  )!
 
 const alice = { _id: 'spk-alice', name: 'Alice Liddell', title: 'SRE, Acme' }
 const bob = { _id: 'spk-bob', name: 'Bob Smith', title: 'CTO, Initech' }
@@ -32,8 +33,9 @@ type Speaker = { _id: string; name: string | null; title: string | null }
 function build(
   speakers: (Speaker | null)[],
   tags: Record<string, BlueskyTag | null> = {},
+  beat: 'videoDrip' | 'talkTeaser' = 'videoDrip',
 ) {
-  const rs = beatRecipes(postEvent, 'videoDrip').map((r) => ({
+  const rs = beatRecipes(campaignOf(beat), beat).map((r) => ({
     ...r,
     ...(r.channel === 'bluesky' ? { tagSubject: true } : {}),
     // No built-in talk beat has alt text; one that did would read the plain map.
@@ -134,6 +136,32 @@ describe('a talk beat names every speaker', () => {
     expect(on(beat, 'linkedin').body).not.toContain('@')
     expect(on(beat, 'linkedin').mentions).toBeUndefined()
     for (const task of beat.tasks) expect(task.alt ?? '').not.toContain('@')
+  })
+
+  it('the talk teaser names two and three speakers, tagged and mixed', () => {
+    const line = (beat: ReturnType<typeof build>) =>
+      on(beat, 'bluesky').body.split('\n\n')[1]
+    expect(line(build([alice, bob], {}, 'talkTeaser'))).toBe(
+      'The answer — and the graphs: "Pods at scale" by Alice Liddell and Bob Smith at CNB 2027.',
+    )
+    const tags = {
+      'spk-alice': tagged('alice.dev', DID_A),
+      'spk-carol': tagged('carol.example.com', DID_C),
+    }
+    expect(line(build([alice, bob], tags, 'talkTeaser'))).toBe(
+      'The answer — and the graphs: "Pods at scale" by @alice.dev and Bob Smith at CNB 2027.',
+    )
+    const three = build([alice, bob, carol], tags, 'talkTeaser')
+    expect(line(three)).toBe(
+      'The answer — and the graphs: "Pods at scale" by @alice.dev, Bob Smith and @carol.example.com at CNB 2027.',
+    )
+    expect(on(three, 'bluesky').mentions?.map((m) => m.speakerId)).toEqual([
+      'spk-alice',
+      'spk-carol',
+    ])
+    expect(on(three, 'linkedin').body.split('\n\n')[1]).toBe(
+      'Answered at CNB 2027 by Alice Liddell (SRE, Acme), Bob Smith (CTO, Initech) and Carol Danvers.',
+    )
   })
 
   it('{company} on a talk stays the first speaker’s', () => {
