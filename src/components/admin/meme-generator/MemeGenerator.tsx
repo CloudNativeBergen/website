@@ -1192,15 +1192,18 @@ export function MemeGenerator({
       // so it goes — never left looking ready for a save that must refuse it.
       // Whether the gallery entry survives is the delete's answer, not the
       // editor's cached id.
-      const heldOnly =
-        !!track?.fileId &&
-        (gone.has(track.fileId) ||
-          unsaveable.some((u) => u.fileId === track.fileId))
-      const trackGone = !!track && (!track.galleryAssetId || heldOnly)
+      // A released file is gone for everyone; an unsaveable one only for
+      // the entry it was held under — the same deduplicated file under
+      // another, live gallery entry is still saveable, as for backgrounds.
       const unusable = (held: VideoTrack) =>
         !!held.fileId &&
         (gone.has(held.fileId) ||
-          unsaveable.some((u) => u.fileId === held.fileId))
+          unsaveable.some(
+            (u) =>
+              u.fileId === held.fileId &&
+              (u.galleryAssetId ?? null) === (held.galleryAssetId ?? null),
+          ))
+      const trackGone = !!track && (!track.galleryAssetId || unusable(track))
       if (track?.fileId && !trackGone)
         rekeyDecoded(track.fileId, track.galleryAssetId ?? null)
       // In every state undo can reach: none may bring back a track the

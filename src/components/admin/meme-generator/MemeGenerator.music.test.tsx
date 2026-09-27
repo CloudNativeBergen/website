@@ -985,4 +985,59 @@ describe('a video’s music', () => {
       'The music track could not be loaded, so the video is silent.',
     )
   })
+
+  it('keeps an earlier track under a live gallery entry when a delete reports another entry of the same file unsaveable', async () => {
+    const gallery = fakeGallery()
+    gallery.tracks.mockResolvedValue([
+      { _id: 'asset-theme', title: 'Theme', durationSeconds: 20 },
+      { _id: 'asset-copy', title: 'Theme copy', durationSeconds: 20 },
+    ])
+    const projects = fakeProjects()
+    projects.open.mockResolvedValue({
+      ...PROJECT,
+      track: {
+        ...PROJECT.track!,
+        galleryAssetId: 'asset-theme',
+        fileId: 'file-shared',
+      },
+    })
+    // Sanity deduplicated both entries' bytes into one file.
+    projects.save.mockImplementation(async (input) => ({
+      _rev: 'rev-3',
+      scenes: input.scenes.map((s) => ({ key: s.key, fileId: null })),
+      trackFileId: input.track ? 'file-shared' : null,
+      released: [],
+    }))
+    // The copy's entry has since been deleted from the gallery.
+    projects.delete.mockResolvedValue({
+      released: [],
+      unsaveable: [{ fileId: 'file-shared', galleryAssetId: 'asset-copy' }],
+    })
+    render(
+      <MemeGenerator
+        gallery={gallery}
+        projects={projects}
+        encoder={encoder}
+        initialProjectId="vp-1"
+      />,
+    )
+    await screen.findByDisplayValue('Launch teaser')
+    await within(music()).findByRole('option', { name: 'Theme copy (0:20)' })
+    fireEvent.change(within(music()).getByLabelText('Music'), {
+      target: { value: 'asset-copy' },
+    })
+    save()
+    await within(project()).findByText('All changes saved')
+    fireEvent.click(within(project()).getByRole('button', { name: /Delete/ }))
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.click(within(dialog).getByRole('button', { name: /Delete/ }))
+    await within(project()).findAllByText(
+      /Its music track was only in that project/,
+    )
+    fireEvent.click(screen.getByRole('button', { name: /^Undo/ }))
+    // The earlier track, Theme, is still saveable through its live entry.
+    expect(within(music()).getByLabelText('Music')).toHaveDisplayValue(
+      /^Theme \(0:20\)$/,
+    )
+  })
 })
