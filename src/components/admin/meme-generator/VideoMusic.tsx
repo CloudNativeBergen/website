@@ -133,7 +133,7 @@ export function VideoMusic({
       </div>
 
       {track && (
-        <div className="mt-3 flex flex-wrap items-end gap-x-4 gap-y-3">
+        <div className="mt-3 grid grid-cols-2 items-start gap-x-4 gap-y-3 sm:grid-cols-4">
           <SecondsField
             label="Start in track"
             value={track.start}
@@ -148,7 +148,7 @@ export function VideoMusic({
               )
             }
           />
-          <div className="w-40">
+          <div>
             <label
               htmlFor={volumeId}
               className="mb-1 block text-xs font-medium"
@@ -158,18 +158,24 @@ export function VideoMusic({
                 {Math.round(track.volume * 100)} %
               </span>
             </label>
-            <input
-              id={volumeId}
-              type="range"
-              min={0}
-              max={100}
-              step={1}
-              value={Math.round(track.volume * 100)}
-              onChange={(event) =>
-                onChange({ volume: Number(event.target.value) / 100 }, 'volume')
-              }
-              className="h-8 w-full accent-brand-cloud-blue dark:accent-blue-500"
-            />
+            {/* As tall as the fields beside it, so all four line up. */}
+            <div className="flex h-[38px] items-center">
+              <input
+                id={volumeId}
+                type="range"
+                min={0}
+                max={100}
+                step={1}
+                value={Math.round(track.volume * 100)}
+                onChange={(event) =>
+                  onChange(
+                    { volume: Number(event.target.value) / 100 },
+                    'volume',
+                  )
+                }
+                className="w-full accent-brand-cloud-blue dark:accent-blue-500"
+              />
+            </div>
           </div>
           <SecondsField
             label="Fade in"
@@ -219,6 +225,21 @@ export function VideoMusic({
                   ? 'No tracks yet. Upload one on the Assets page.'
                   : ''}
       </p>
+      {track && load?.state === 'ready' && (
+        <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+          Exported as AAC audio. Browsers without an AAC encoder of their own
+          use an open-source one; see the{' '}
+          <a
+            href="/licences"
+            target="_blank"
+            rel="noopener"
+            className="underline hover:text-brand-cloud-blue dark:hover:text-blue-400"
+          >
+            licences
+          </a>
+          .
+        </p>
+      )}
       {load?.state === 'failed' && (
         <button
           type="button"

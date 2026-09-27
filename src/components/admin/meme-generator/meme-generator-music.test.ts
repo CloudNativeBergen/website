@@ -144,10 +144,10 @@ describe('mixTrack', () => {
 })
 
 describe('shiftForPriming', () => {
-  it('drops the priming from the head and pads the tail, keeping the length', () => {
+  it('drops the priming from the head, which the encoder then fills', () => {
     const ramp = new Float32Array(10).map((_, i) => i + 1)
     const [shifted] = shiftForPriming([ramp], 3)
-    expect([...shifted]).toEqual([4, 5, 6, 7, 8, 9, 10, 0, 0, 0])
+    expect([...shifted]).toEqual([4, 5, 6, 7, 8, 9, 10])
   })
 
   it('leaves a track alone when there is no priming', () => {

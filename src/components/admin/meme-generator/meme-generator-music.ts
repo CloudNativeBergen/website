@@ -77,20 +77,19 @@ export function mixTrack(
 /**
  * The mix as it is handed to an encoder that delays its output by `priming`
  * samples (docs/MARKETING_STUDIO_VIDEO_PROOF.md §4): the first `priming`
- * samples dropped, so the rest land in step with the picture, and silence
- * padded at the end to keep the length. The dropped head is under the
- * fade-in when there is one.
+ * samples dropped, so the rest land in step with the picture. The encoder's
+ * priming takes their place, so the file's sound is still the video's length
+ * (to its last whole AAC frame). The dropped head is under the fade-in when
+ * there is one.
  */
 export function shiftForPriming<T extends readonly Float32Array[]>(
   channels: T,
   priming: number,
 ): T {
   if (priming <= 0) return channels
-  return channels.map((samples) => {
-    const shifted = new Float32Array(samples.length)
-    shifted.set(samples.subarray(Math.min(priming, samples.length)))
-    return shifted
-  }) as unknown as T
+  return channels.map((samples) =>
+    samples.slice(Math.min(priming, samples.length)),
+  ) as unknown as T
 }
 
 /** The first sample louder than `threshold`, either way; null if none. */

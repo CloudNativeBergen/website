@@ -480,9 +480,9 @@ describe('exportVideo with a music track', () => {
     // encoder's 2112 samples of priming it plays at 0, in step.
     expect(left[0]).toBe(2113)
     expect(right[0]).toBe(2113)
-    expect(left).toHaveLength(3 * 48_000)
+    // …and the encoder's priming makes up the length again.
+    expect(left).toHaveLength(3 * 48_000 - 2112)
     expect(left[3 * 48_000 - 2112 - 1]).toBe(3 * 48_000)
-    expect(left[3 * 48_000 - 1]).toBe(0)
     expect(result.audio).toBe('included')
   })
 
