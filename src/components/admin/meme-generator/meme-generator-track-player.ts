@@ -60,33 +60,34 @@ export interface TrackPlayer {
 export function createTrackPlayer(
   openContext: () => PlayerContext = () => new AudioContext(),
 ): TrackPlayer {
+  type Source = ReturnType<PlayerContext['createBufferSource']>
   let ctx: PlayerContext | null = null
   let channels: readonly Float32Array[] | null = null
   let buffer: unknown = null
-  let source: ReturnType<PlayerContext['createBufferSource']> | null = null
   let loop = false
   let volume = 1
   /** Every source plays through this, which carries the volume. */
   let output: ReturnType<PlayerContext['createGain']> | null = null
-  /** The next pass, queued at audio time `at` while looping. */
-  let queued: {
-    node: ReturnType<PlayerContext['createBufferSource']>
-    at: number
-  } | null = null
   /**
-   * Playing: the playhead `offset` at audio time `startedAt`. A fresh start
-   * is heard only after the output latency, so the playhead waits at
-   * `offset` until then; a `continuous` one carries on sound already heard.
+   * THE clock, one mapping for every path: at audio (render) time
+   * `startedAt` the sound was at `offset` into the mix, and it runs on from
+   * there — wrapped at the mix's end while looping. The playhead is that
+   * mapping read `outputLatency` late: what is being heard. A `fresh` start
+   * holds the playhead at `offset` until its first sample is heard; a
+   * handover (a new mix mid-play) continues sound already heard, so it
+   * reads straight back across its start.
    */
-  let clock: {
-    offset: number
-    startedAt: number
-    continuous?: boolean
-  } | null = null
+  let anchor: { offset: number; startedAt: number; fresh: boolean } | null =
+    null
+  /** Sources scheduled, in order, and the audio time the last one ends. */
+  let sources: { node: Source; at: number }[] = []
+  let scheduledUntil = 0
   /** A scrub in progress: where it is, and the timer that settles it. */
   let scrub: { at: number; timer: ReturnType<typeof setTimeout> } | null = null
   /** Counts plays, so a late refusal only undoes the play it belongs to. */
   let starts = 0
+
+  const length = () => (channels ? channels[0].length / MIX_RATE : 0)
 
   const bufferFor = (context: PlayerContext) => {
     if (buffer || !channels) return buffer
@@ -100,25 +101,35 @@ export function createTrackPlayer(
     return buffer
   }
 
-  const unqueue = () => {
-    if (!queued) return
-    queued.node.stop()
-    queued.node.disconnect()
-    queued = null
+  /** Where the sound is at audio time `t`, by the one mapping. */
+  const positionAt = (t: number) => {
+    if (!anchor) return null
+    const elapsed = t - anchor.startedAt
+    const raw = anchor.offset + (anchor.fresh ? Math.max(0, elapsed) : elapsed)
+    const pass = length()
+    if (!loop || pass <= 0) return raw
+    return ((raw % pass) + pass) % pass
   }
 
-  const silence = () => {
+  const stopSources = (keep: (entry: { at: number }) => boolean) => {
+    sources = sources.filter((entry) => {
+      if (keep(entry)) return true
+      entry.node.stop()
+      entry.node.disconnect()
+      return false
+    })
+  }
+
+  /** Everything stops: sources, the scrub, the clock. */
+  const halt = () => {
     if (scrub) clearTimeout(scrub.timer)
     scrub = null
-    unqueue()
-    if (!source) return
-    source.stop()
-    source.disconnect()
-    source = null
+    stopSources(() => false)
+    anchor = null
   }
 
   /** A source of the mix, started at audio time `when` from `offset`. */
-  const sourceAt = (context: PlayerContext, when: number, offset: number) => {
+  const schedule = (context: PlayerContext, when: number, offset: number) => {
     if (!output) {
       output = context.createGain()
       output.gain.value = volume
@@ -128,19 +139,33 @@ export function createTrackPlayer(
     node.buffer = bufferFor(context)
     node.connect(output as never)
     node.start(when, offset)
-    return node
+    sources.push({ node, at: when })
+    scheduledUntil = when + length() - offset
   }
 
-  /** Queue the pass after the playing one, where it ends. */
-  const queueNext = () => {
-    if (!loop || queued || !clock || !ctx || !channels) return
-    const at = clock.startedAt + channels[0].length / MIX_RATE - clock.offset
-    queued = { node: sourceAt(ctx, at, 0), at }
+  /**
+   * While looping, the next pass is always queued ahead — to start on the
+   * very sample the one before it ends, never once that end is heard, which
+   * would leave a gap as long as the output latency on every loop.
+   */
+  const queueAhead = () => {
+    if (!loop || !ctx || !channels || !anchor || length() <= 0) return
+    // One pass ahead of the one being rendered is enough.
+    while (scheduledUntil - length() <= ctx.currentTime)
+      schedule(ctx, scheduledUntil, 0)
+    // Passes already over are let go of.
+    const current = ctx.currentTime
+    sources = sources.filter(
+      (entry, i) => i >= sources.length - 2 || entry.at > current,
+    )
   }
 
-  const start = (from: number, continuous = false) => {
-    silence()
-    clock = null
+  /**
+   * Sound from `from` at once. A `handover` carries on sound already
+   * heard (a new mix mid-play); otherwise it is a fresh start.
+   */
+  const start = (from: number, handover = false) => {
+    halt()
     // Opened and resumed inside the click even with no mix yet, so a track
     // that finishes loading mid-play can still be heard.
     try {
@@ -154,63 +179,45 @@ export function createTrackPlayer(
     // a later play has started since.
     const attempt = ++starts
     ctx.resume().catch(() => {
-      if (attempt !== starts) return
-      silence()
-      clock = null
+      if (attempt === starts) halt()
     })
     if (!channels) return
-    source = sourceAt(ctx, 0, from)
-    clock = { offset: from, startedAt: ctx.currentTime, continuous }
-    queueNext()
+    anchor = { offset: from, startedAt: ctx.currentTime, fresh: !handover }
+    schedule(ctx, 0, from)
+    // `when` 0 is now: the pass ends from `now`, not from 0.
+    scheduledUntil = ctx.currentTime + length() - from
+    queueAhead()
   }
 
   const time = () => {
     if (scrub) return scrub.at
-    if (!clock || !ctx) return null
-    const latency = ctx.outputLatency ?? 0
-    // The queued pass is being heard: it is the clock now, and the one
-    // after it is queued.
-    if (queued && ctx.currentTime - latency >= queued.at) {
-      source?.disconnect()
-      source = queued.node
-      clock = { offset: 0, startedAt: queued.at }
-      queued = null
-      queueNext()
-    }
-    const heard = ctx.currentTime - clock.startedAt - latency
-    return clock.offset + (clock.continuous ? heard : Math.max(0, heard))
+    if (!anchor || !ctx) return null
+    queueAhead()
+    return positionAt(ctx.currentTime - (ctx.outputLatency ?? 0))
   }
 
   return {
     load(next) {
       const at = time()
+      // Where the sound has got to — the output latency ahead of what is
+      // heard, wrapped into the pass it is in — read before the mix changes.
+      const sent = !scrub && ctx && anchor ? positionAt(ctx.currentTime) : null
       channels = next
       buffer = null
       if (at === null) return
       // Mid-scrub, the settling scrub starts the new mix: never before.
       if (next && scrub) return
-      // Mid-play, the new mix takes over where the sound has got to — the
-      // output latency ahead of what is heard — so the speakers play on
-      // from the old one's last samples without repeating any, and the
-      // picture carries on from what is heard.
-      if (next) {
-        const sent =
-          clock && ctx ? clock.offset + (ctx.currentTime - clock.startedAt) : at
-        start(sent, !!clock)
-      } else {
-        silence()
-        clock = null
-      }
+      // Mid-play, the new mix takes over where the sound has got to, so the
+      // speakers play on from the old one's last samples without repeating
+      // any, and the picture carries on from what is heard.
+      if (next) start(sent ?? at, sent !== null)
+      else halt()
     },
     play: (from) => start(from),
-    pause() {
-      silence()
-      clock = null
-    },
+    pause: halt,
     seek(to) {
-      if (!clock && !scrub) return
-      silence()
-      clock = null
+      if (!anchor && !scrub) return
+      halt()
       scrub = {
         at: to,
         timer: setTimeout(() => start(to), SCRUB_SETTLE_MS),
@@ -221,15 +228,30 @@ export function createTrackPlayer(
       if (output) output.gain.value = next
     },
     setLoop(on) {
+      if (on === loop) return
+      if (!on && ctx && anchor) {
+        // The pass being rendered plays out; the clock stops wrapping, so
+        // the playhead runs past the end and the editor ends playback.
+        const now = ctx.currentTime
+        const rendered = positionAt(now) ?? 0
+        const current = sources.filter((entry) => entry.at <= now).at(-1)
+        stopSources((entry) => entry.at <= now)
+        if (current) {
+          anchor = {
+            offset: rendered,
+            startedAt: now,
+            fresh: false,
+          }
+          scheduledUntil = now + length() - rendered
+        }
+      }
       loop = on
-      if (on) queueNext()
-      else unqueue()
+      queueAhead()
     },
     time,
     scrubbing: () => scrub !== null,
     dispose() {
-      silence()
-      clock = null
+      halt()
       ctx?.close().catch(() => {})
       ctx = null
       output = null

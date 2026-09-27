@@ -382,4 +382,28 @@ describe('the track player', () => {
     ctx.currentTime = 2.3
     expect(player.time()).toBeCloseTo(2.2, 10)
   })
+
+  it('keeps the phase when a new mix arrives after the next loop pass has begun, before it is heard', () => {
+    const { ctx, sources } = fakeContext(0.1)
+    const player = createTrackPlayer(() => ctx)
+    player.load(mix(10))
+    player.setLoop(true)
+    player.play(9.5)
+    // The next pass began at 0.5 s of audio time; 0.05 s of it is sent,
+    // but the speakers are still 0.05 s before its start.
+    ctx.currentTime = 0.55
+    expect(player.time()).toBeCloseTo(9.95, 10)
+    const before = sources.length
+    player.load(mix(10))
+    const replaced = sources.slice(before)
+    // Carries on 0.05 s into the new pass, not at its end…
+    expect(replaced[0].startedAt).toBeCloseTo(0.55, 10)
+    expect(replaced[0].offset).toBeCloseTo(0.05, 10)
+    // …and the pass after it is queued where this one ends.
+    expect(replaced[1].startedAt).toBeCloseTo(10.5, 10)
+    expect(replaced[1].offset).toBe(0)
+    expect(player.time()).toBeCloseTo(9.95, 10)
+    ctx.currentTime = 0.7
+    expect(player.time()).toBeCloseTo(0.1, 10)
+  })
 })
