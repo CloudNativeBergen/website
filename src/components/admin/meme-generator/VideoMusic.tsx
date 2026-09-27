@@ -72,6 +72,8 @@ export function VideoMusic({
   const volumeId = useId()
   const statusId = useId()
 
+  // Counted, so "List tracks again" asks afresh.
+  const [listAttempt, setListAttempt] = useState(0)
   useEffect(() => {
     let current = true
     tracks().then(
@@ -81,7 +83,7 @@ export function VideoMusic({
     return () => {
       current = false
     }
-  }, [tracks])
+  }, [tracks, listAttempt])
 
   const rows = listing.state === 'ready' ? listing.tracks : []
   // A project's track whose gallery entry is gone is still the video's.
@@ -217,10 +219,12 @@ export function VideoMusic({
           ? 'The track could not be loaded, so it is not heard or exported.'
           : load?.state === 'loading'
             ? 'Loading the track…'
-            : track && trackSeconds !== null
-              ? summary(track, trackSeconds, videoSeconds)
-              : listing.state === 'failed'
-                ? 'The gallery’s tracks could not be listed.'
+            : // Before the summary: with a project's track playing, the
+              // picker would otherwise just look empty.
+              listing.state === 'failed'
+              ? 'The gallery’s tracks could not be listed.'
+              : track && trackSeconds !== null
+                ? summary(track, trackSeconds, videoSeconds)
                 : listing.state === 'ready' && rows.length === 0 && !track
                   ? 'No tracks yet. Upload one on the Assets page.'
                   : ''}
@@ -243,6 +247,19 @@ export function VideoMusic({
           </a>
           .
         </p>
+      )}
+      {listing.state === 'failed' && (
+        <button
+          type="button"
+          onClick={() => {
+            setListing({ state: 'loading' })
+            setListAttempt((n) => n + 1)
+          }}
+          className={`mt-2 flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm ${styles.buttonInactive}`}
+        >
+          <ArrowPathIcon className="size-4" aria-hidden="true" />
+          List tracks again
+        </button>
       )}
       {load?.state === 'failed' && (
         <button

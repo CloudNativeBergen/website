@@ -607,4 +607,31 @@ describe('a video’s music', () => {
       })
     expect(playerCalls).toEqual(['volume:0.7', 'volume:0.55', 'volume:0.4'])
   })
+
+  it('says when the gallery’s tracks could not be listed, even with a track playing, and lists them again on request', async () => {
+    const gallery = fakeGallery()
+    gallery.tracks.mockRejectedValueOnce(new Error('offline'))
+    render(
+      <MemeGenerator
+        gallery={gallery}
+        projects={fakeProjects()}
+        encoder={encoder}
+        initialProjectId="vp-1"
+      />,
+    )
+    await screen.findByDisplayValue('Launch teaser')
+    const status = within(music()).getByRole('status')
+    await waitFor(() =>
+      expect(status).toHaveTextContent(
+        'The gallery’s tracks could not be listed.',
+      ),
+    )
+    fireEvent.click(
+      within(music()).getByRole('button', { name: 'List tracks again' }),
+    )
+    expect(
+      await within(music()).findByRole('option', { name: 'Theme (0:20)' }),
+    ).toBeInTheDocument()
+    await waitFor(() => expect(status).toHaveTextContent(/Plays from 0:04/))
+  })
 })
