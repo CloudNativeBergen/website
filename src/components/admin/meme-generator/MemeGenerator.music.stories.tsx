@@ -301,9 +301,11 @@ export const MusicPrimingMeasured: Story = {
   },
 }
 
-/** A 1 s, 48 kHz, 16-bit 5.1 WAV with a 0.5-amplitude tone in the centre only. */
-function centreOnlySurround(): ArrayBuffer {
-  const channels = 6
+/**
+ * A 1 s, 48 kHz, 16-bit WAV of `channels` channels (5.1 by default) with a
+ * 0.5-amplitude tone in the centre (the third channel) only.
+ */
+function centreOnlySurround(channels = 6): ArrayBuffer {
   const frames = MIX_RATE
   const bytes = new ArrayBuffer(44 + frames * channels * 2)
   const view = new DataView(bytes)
@@ -326,7 +328,7 @@ function centreOnlySurround(): ArrayBuffer {
     const tone = Math.round(
       0.5 * Math.sin((2 * Math.PI * 440 * i) / MIX_RATE) * 32767,
     )
-    // L R C LFE Ls Rs: only C carries sound.
+    // L R C …: only C carries sound.
     view.setInt16(44 + (i * channels + 2) * 2, tone, true)
   }
   return bytes
@@ -413,5 +415,26 @@ export const MusicTrackMobile: Story = {
     // Two rows of two: Fade in sits below Start in track.
     expect(top('Fade in')).toBeGreaterThan(top('Start in track'))
     expect(music.scrollWidth).toBeLessThanOrEqual(music.clientWidth)
+  },
+}
+
+/**
+ * A 3-channel (L R C) track: a layout Web Audio's speaker rules do not
+ * cover, folded down by our own — the centre at √½ into each side.
+ */
+export const MusicThreeChannelDownmix: Story = {
+  args: { gallery: musicGallery },
+  play: async () => {
+    const { decodeTrack } = await import('./meme-generator-track-player')
+    const channels = await decodeTrack(centreOnlySurround(3))
+    const level = (samples: Float32Array) =>
+      Math.sqrt(samples.reduce((sum, x) => sum + x * x, 0) / samples.length)
+    console.info(
+      '[three-channel]',
+      channels.length,
+      channels.map((c) => level(c).toFixed(4)).join(' '),
+    )
+    expect(channels).toHaveLength(2)
+    for (const side of channels) expect(level(side)).toBeCloseTo(0.25, 2)
   },
 }

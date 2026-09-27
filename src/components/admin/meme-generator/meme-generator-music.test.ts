@@ -2,6 +2,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   MIX_RATE,
+  downmixToStereo,
   findClick,
   mixTrack,
   shiftForPriming,
@@ -203,5 +204,59 @@ describe('trackSource', () => {
   })
   it('has no source for a file with no project to hold it', () => {
     expect(trackSource({ ...base, fileId: 'f' }, null)).toBeNull()
+  })
+})
+
+describe('downmixToStereo', () => {
+  const H = Math.SQRT1_2
+  /** One sample per channel, each channel's value its own. */
+  const frame = (...values: number[]) =>
+    values.map((v) => new Float32Array([v]))
+  const mixOf = (...values: number[]) =>
+    downmixToStereo(frame(...values)).map((c) => c[0])
+
+  it('leaves mono and stereo alone', () => {
+    expect(downmixToStereo(frame(1))).toHaveLength(1)
+    expect(mixOf(1, 2)).toEqual([1, 2])
+  })
+
+  it('folds 3 channels (L R C) with the centre at √½ into each side', () => {
+    const [l, r] = mixOf(0, 0, 1)
+    expect(l).toBeCloseTo(H, 6)
+    expect(r).toBeCloseTo(H, 6)
+    expect(mixOf(1, 0, 0)).toEqual([1, 0])
+  })
+
+  it('folds quad (L R SL SR) as Web Audio does: half of each pair', () => {
+    expect(mixOf(1, 0, 1, 0)).toEqual([1, 0])
+    expect(mixOf(0, 0, 0, 1)).toEqual([0, 0.5])
+  })
+
+  it('folds 5.0 (L R C SL SR): centre and surrounds at √½', () => {
+    const [l, r] = mixOf(0, 0, 0, 1, 0)
+    expect(l).toBeCloseTo(H, 6)
+    expect(r).toBe(0)
+    const [cl, cr] = mixOf(0, 0, 1, 0, 0)
+    expect(cl).toBeCloseTo(H, 6)
+    expect(cr).toBeCloseTo(H, 6)
+  })
+
+  it('folds 5.1 (L R C LFE SL SR) as Web Audio does, leaving out the LFE', () => {
+    expect(mixOf(0, 0, 0, 1, 0, 0)).toEqual([0, 0])
+    const [l, r] = mixOf(0, 0, 0, 0, 0, 1)
+    expect(l).toBe(0)
+    expect(r).toBeCloseTo(H, 6)
+  })
+
+  it('folds 7.1 (L R C LFE BL BR SL SR): back and side surrounds at √½', () => {
+    const [l, r] = mixOf(0, 0, 0, 0, 1, 0, 1, 0)
+    expect(l).toBeCloseTo(2 * H, 6)
+    expect(r).toBe(0)
+  })
+
+  it('mixes a layout it does not know evenly into both sides, never dropping a channel', () => {
+    const [l, r] = mixOf(0, 0, 0, 0, 0, 0, 0, 0, 0, 1)
+    expect(l).toBeCloseTo(0.1, 6)
+    expect(r).toBeCloseTo(0.1, 6)
   })
 })

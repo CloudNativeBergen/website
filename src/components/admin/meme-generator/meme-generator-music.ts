@@ -142,3 +142,80 @@ export function trackSource(
   if (track.galleryAssetId) return { asset: track.galleryAssetId }
   return null
 }
+
+/**
+ * How each channel of a layout goes into [left, right], by channel count
+ * in WAV's default order. 4 and 6 are Web Audio's own speaker rules; 3, 5
+ * and 8 follow them (the centre and each surround at √½ into its side, the
+ * LFE left out). No other layout is guessed at.
+ */
+const H = Math.SQRT1_2
+const LAYOUTS: Record<number, readonly (readonly [number, number])[]> = {
+  // L R C
+  3: [
+    [1, 0],
+    [0, 1],
+    [H, H],
+  ],
+  // L R SL SR
+  4: [
+    [0.5, 0],
+    [0, 0.5],
+    [0.5, 0],
+    [0, 0.5],
+  ],
+  // L R C SL SR
+  5: [
+    [1, 0],
+    [0, 1],
+    [H, H],
+    [H, 0],
+    [0, H],
+  ],
+  // L R C LFE SL SR
+  6: [
+    [1, 0],
+    [0, 1],
+    [H, H],
+    [0, 0],
+    [H, 0],
+    [0, H],
+  ],
+  // L R C LFE BL BR SL SR
+  8: [
+    [1, 0],
+    [0, 1],
+    [H, H],
+    [0, 0],
+    [H, 0],
+    [0, H],
+    [H, 0],
+    [0, H],
+  ],
+}
+
+/**
+ * A decoded track as stereo. Mono and stereo are left alone; the surround
+ * layouts above are folded down; any other is mixed evenly into both sides,
+ * so no channel's content is ever simply dropped.
+ */
+export function downmixToStereo(
+  channels: readonly Float32Array[],
+): Float32Array[] {
+  if (channels.length <= 2) return [...channels]
+  const length = channels[0].length
+  const gains =
+    LAYOUTS[channels.length] ??
+    channels.map(() => [1 / channels.length, 1 / channels.length] as const)
+  const left = new Float32Array(length)
+  const right = new Float32Array(length)
+  channels.forEach((samples, c) => {
+    const [toLeft, toRight] = gains[c]
+    if (toLeft === 0 && toRight === 0) return
+    for (let i = 0; i < length; i++) {
+      left[i] += samples[i] * toLeft
+      right[i] += samples[i] * toRight
+    }
+  })
+  return [left, right]
+}
