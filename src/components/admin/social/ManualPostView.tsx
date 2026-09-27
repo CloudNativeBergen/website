@@ -11,7 +11,7 @@ import {
 } from '@heroicons/react/24/outline'
 import { AdminButton } from '@/components/admin/AdminButton'
 import type { TagByHandEntry } from '@/lib/marketing/tag-by-hand'
-import type { ManualBody } from '@/lib/social/types'
+import type { ManualBody, ManualCheckUnavailable } from '@/lib/social/types'
 import { joinNames } from '@/lib/marketing/tagging/body'
 import { richTextImageUrl } from '@/lib/homepage/richTextImage'
 import {
@@ -57,7 +57,7 @@ export interface ManualPostViewProps {
    * their plain name. Shown and copied in place of `variant.body` until the
    * post is recorded; absent or null: the stored body.
    */
-  manualBody?: ManualBody | null
+  manualBody?: ManualBody | ManualCheckUnavailable | null
 }
 
 const defaultImageSrc = (asset: SocialPostAttachment) =>
@@ -115,7 +115,12 @@ export function ManualPostView({
     (a) => !byKey.has(a.source),
   ).length
   // What to post by hand: once the post is recorded, the record as it is.
-  const checked = variant.status !== 'published' ? manualBody : null
+  const pending = variant.status !== 'published' ? manualBody : null
+  // FAIL CLOSED (review T1): the check could not run, so the stored body may
+  // still tag a speaker who opted out. Nothing is offered to copy.
+  const unchecked = pending !== null && 'unavailable' in pending
+  const checked =
+    pending !== null && !('unavailable' in pending) ? pending : null
   const body = checked?.body ?? variant.body
   const link = variant.link?.trim() || null
   // Where the link goes by hand (spec §3.1, #1134).
@@ -271,28 +276,41 @@ export function ManualPostView({
         </p>
       )}
 
-      <Section
-        title="Text"
-        hint={[
-          constraints ? `${copyLength} / ${constraints.maxLength}` : null,
-          linkAppended ? 'The link is added at the end.' : null,
-          overLimit ? 'Shorten the text before posting.' : null,
-        ]
-          .filter(Boolean)
-          .join(' · ')}
-        hintTone={overLimit ? 'error' : 'muted'}
-        action={<CopyButton value={copyText} label="Copy text" />}
-      >
-        <p className="text-sm break-words whitespace-pre-wrap text-gray-900 dark:text-gray-100">
-          {body}
-          {linkAppended && (
-            <>
-              {'\n\n'}
-              <span className="text-brand-cloud-blue">{link}</span>
-            </>
-          )}
+      {unchecked && (
+        <p
+          role="alert"
+          className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-900/20 dark:text-red-300"
+        >
+          We could not check this post&apos;s tags just now, so its text is not
+          shown: a speaker may have asked not to be tagged since it was
+          approved. Close this and open it again before posting.
         </p>
-      </Section>
+      )}
+
+      {!unchecked && (
+        <Section
+          title="Text"
+          hint={[
+            constraints ? `${copyLength} / ${constraints.maxLength}` : null,
+            linkAppended ? 'The link is added at the end.' : null,
+            overLimit ? 'Shorten the text before posting.' : null,
+          ]
+            .filter(Boolean)
+            .join(' · ')}
+          hintTone={overLimit ? 'error' : 'muted'}
+          action={<CopyButton value={copyText} label="Copy text" />}
+        >
+          <p className="text-sm break-words whitespace-pre-wrap text-gray-900 dark:text-gray-100">
+            {body}
+            {linkAppended && (
+              <>
+                {'\n\n'}
+                <span className="text-brand-cloud-blue">{link}</span>
+              </>
+            )}
+          </p>
+        </Section>
+      )}
 
       {tagByHand.length > 0 && (
         <Section title="Tag by hand">

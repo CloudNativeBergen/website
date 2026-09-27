@@ -180,7 +180,7 @@ describe('withManualBody — which editor reads run the check', () => {
     expect(h.resolve).not.toHaveBeenCalled()
   })
 
-  it('a check that throws shows the stored body instead of failing the view', async () => {
+  it('a check that throws FAILS CLOSED: the view is told the check is unavailable (review T1)', async () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => {})
     seed(true)
     h.readError = true
@@ -188,7 +188,9 @@ describe('withManualBody — which editor reads run the check', () => {
       data('bluesky', 'awaiting-manual'),
       'conf-A',
     )
-    expect(out).not.toHaveProperty('manualBody')
+    // The stored body still tags a speaker who may have opted out: it must
+    // not be offered for copying as if it had passed.
+    expect(out.manualBody).toEqual({ unavailable: true })
     expect(error).toHaveBeenCalled()
     error.mockRestore()
   })

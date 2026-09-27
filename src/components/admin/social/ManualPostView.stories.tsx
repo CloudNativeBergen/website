@@ -683,6 +683,34 @@ export const BlueskyErasedSpeakerDark: Story = {
   parameters: { theme: 'dark', backgrounds: { default: 'dark' } },
 }
 
+/**
+ * The check could not run as the view opened (review T1): FAIL CLOSED. The
+ * stored body may tag a speaker who opted out since approval, so there is
+ * no text to copy — only the way to try again.
+ */
+export const BlueskyCheckUnavailable: Story = {
+  args: {
+    ...BlueskyLateOptOut.args,
+    manualBody: { unavailable: true },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(
+      canvas.queryByRole('button', { name: /copy text/i }),
+    ).not.toBeInTheDocument()
+    await expect(canvasElement).not.toHaveTextContent('@alice.dev')
+    await expect(canvas.getByRole('alert')).toHaveTextContent(
+      /could not check/i,
+    )
+  },
+}
+
+export const BlueskyCheckUnavailableDark: Story = {
+  ...BlueskyCheckUnavailable,
+  // This file resolves dark through its OWN decorator's `parameters.theme`.
+  parameters: { theme: 'dark', backgrounds: { default: 'dark' } },
+}
+
 /** Once posted, the record is shown as it is: no check, no notice. */
 export const BlueskyLateOptOutPosted: Story = {
   args: {

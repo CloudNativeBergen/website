@@ -206,8 +206,8 @@ export async function manualPostBody(input: {
 
 /**
  * The editor read with `manualBody` for a Bluesky variant an organizer posts
- * by hand. A failed check (Sanity, Bluesky) shows the stored body rather than
- * failing the view: the approval check already passed it once.
+ * by hand. Bluesky being unreachable is a warning inside the check and keeps
+ * the tags; a check that cannot run at all is `{ unavailable: true }`.
  */
 export async function withManualBody<T extends SocialVariantEditorData>(
   data: T,
@@ -227,7 +227,9 @@ export async function withManualBody<T extends SocialVariantEditorData>(
     })
     return manualBody ? { ...data, manualBody } : data
   } catch (error) {
+    // FAIL CLOSED (review T1): the stored body may tag a speaker who opted
+    // out since approval, so it must not be offered as checked.
     console.error(`[tagging] manual view check failed for ${v._id}:`, error)
-    return data
+    return { ...data, manualBody: { unavailable: true } }
   }
 }

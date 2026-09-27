@@ -234,6 +234,15 @@ export interface ManualBody {
   removed: number
 }
 
+/**
+ * The check could not run (Sanity or the roster read failed). FAIL CLOSED:
+ * the stored body may tag a speaker who has opted out, so the view offers
+ * nothing to copy until a reopen checks it.
+ */
+export interface ManualCheckUnavailable {
+  unavailable: true
+}
+
 /** What the single-variant editor loads: the variant and its post's inputs. */
 export interface SocialVariantEditorData {
   variant: SocialPostVariant
@@ -259,7 +268,7 @@ export interface SocialVariantEditorData {
    * §4.4) — a tag of a speaker who opted out since approval as their plain
    * name — and whose tags were dropped. Absent or null: post the stored body.
    */
-  manualBody?: ManualBody | null
+  manualBody?: ManualBody | ManualCheckUnavailable | null
 }
 
 /** The list-view row for the admin variant table. */
