@@ -245,10 +245,19 @@ export function createTrackPlayer(
         // stops wrapping from where the speakers are, so the playhead runs
         // past the end and the editor ends playback there.
         const heardAt = ctx.currentTime - (ctx.outputLatency ?? 0)
-        const heard = positionAt(heardAt) ?? 0
-        stopSources((entry) => entry.at <= heardAt)
-        anchor = { offset: heard, startedAt: heardAt, fresh: false }
-        scheduledUntil = heardAt + length() - heard
+        // The source being heard — or, before anything is, the first.
+        const playing = Math.max(
+          0,
+          sources.findLastIndex((entry) => entry.at <= heardAt),
+        )
+        const keep = sources[playing]
+        stopSources((entry) => entry === keep)
+        // Nothing heard yet: the fresh start's clock stands as it is.
+        if (heardAt >= anchor.startedAt || !anchor.fresh) {
+          const heard = positionAt(heardAt) ?? 0
+          anchor = { offset: heard, startedAt: heardAt, fresh: false }
+          scheduledUntil = heardAt + length() - heard
+        }
       }
       loop = on
       queueAhead()

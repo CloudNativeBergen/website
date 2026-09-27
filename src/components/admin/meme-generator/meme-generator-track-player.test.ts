@@ -443,4 +443,21 @@ describe('the track player', () => {
       { startedAt: 40, offset: 0 },
     ])
   })
+
+  it('keeps the first sound when looping is turned off before it has been heard', () => {
+    const { ctx, sources } = fakeContext(0.1)
+    const player = createTrackPlayer(() => ctx)
+    player.load(mix(10))
+    player.setLoop(true)
+    player.play(2)
+    // Nothing heard yet: the first sample reaches the speakers at 0.1 s.
+    ctx.currentTime = 0.05
+    player.setLoop(false)
+    // The source just started plays on; only the queued pass is stopped.
+    expect(sources[0].stopped).toBe(false)
+    expect(sources[1].stopped).toBe(true)
+    expect(player.time()).toBe(2)
+    ctx.currentTime = 0.6
+    expect(player.time()).toBeCloseTo(2.5, 10)
+  })
 })
