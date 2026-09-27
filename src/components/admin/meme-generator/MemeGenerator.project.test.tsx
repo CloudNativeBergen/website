@@ -640,6 +640,27 @@ describe('deleting a project', () => {
     )
   })
 
+  it('asks before leaving even when the delete took no file', async () => {
+    render(<MemeGenerator projects={fakeProjects()} initialProjectId="vp-1" />)
+    await within(
+      await screen.findByRole('region', { name: 'Project' }),
+    ).findByText('All changes saved')
+    fireEvent.click(
+      within(project()).getByRole('button', { name: 'Delete project' }),
+    )
+    fireEvent.click(
+      within(await screen.findByRole('dialog')).getByRole('button', {
+        name: 'Delete project',
+      }),
+    )
+    await within(project()).findByText('Not saved yet')
+    await waitFor(() => {
+      const event = new Event('beforeunload', { cancelable: true })
+      window.dispatchEvent(event)
+      expect(event.defaultPrevented).toBe(true)
+    })
+  })
+
   it('does nothing when the dialog is cancelled', async () => {
     const projects = fakeProjects()
     render(<MemeGenerator projects={projects} initialProjectId="vp-1" />)
