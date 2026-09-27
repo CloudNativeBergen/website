@@ -724,7 +724,17 @@ export function MemeGenerator({
   } | null>(null)
   const [trackFailed, setTrackFailed] = useState<string | null>(null)
   const [trackRetry, setTrackRetry] = useState(0)
-  const trackKey = track ? (track.galleryAssetId ?? track.fileId ?? null) : null
+  // Keyed by the file a project holds, once it holds one: two projects can
+  // name one gallery entry and hold different files, if the entry's file
+  // was replaced between their saves.
+  const trackKey = track ? (track.fileId ?? track.galleryAssetId ?? null) : null
+  /** The same samples under the key the track is known by now. */
+  const rekeyDecoded = (from: string | null, to: string | null) =>
+    setDecoded((current) =>
+      current && from && to && current.key === from
+        ? { ...current, key: to }
+        : current,
+    )
 
   // ── The saved project (#1181) ───────────────────────────────────────────
   // The project open in the editor, and the revision it was loaded or last
@@ -1053,6 +1063,13 @@ export function MemeGenerator({
       // The track now names the file the project holds, so a later save
       // keeps it even once its gallery entry is gone.
       const trackFileId = result.trackFileId
+      if (
+        trackFileId &&
+        savedTrack &&
+        !savedTrack.fileId
+      )
+        // The file the save stored is the one just picked and decoded.
+        rekeyDecoded(savedTrack.galleryAssetId ?? null, trackFileId)
       if (trackFileId && savedTrack)
         setTrack((current) =>
           current &&
@@ -1115,9 +1132,18 @@ export function MemeGenerator({
       // The track: a gallery track is picked again from the gallery on the
       // next save; one only the deleted project held cannot be saved again,
       // so it goes — never left looking ready for a save that must refuse it.
-      const trackGone = !!track && !track.galleryAssetId
-      if (track?.galleryAssetId) setTrack({ ...track, fileId: undefined })
-      else if (trackGone) setTrack(null)
+      // Whether the gallery entry survives is the delete's answer, not the
+      // editor's cached id.
+      const heldOnly =
+        !!track?.fileId &&
+        (gone.has(track.fileId) ||
+          unsaveable.some((u) => u.fileId === track.fileId))
+      const trackGone = !!track && (!track.galleryAssetId || heldOnly)
+      if (trackGone) setTrack(null)
+      else if (track?.fileId) {
+        rekeyDecoded(track.fileId, track.galleryAssetId ?? null)
+        setTrack({ ...track, fileId: undefined })
+      }
       // The editor now holds the ONLY copy: unsaved, so leaving asks.
       setSavedSnapshot(DELETED_SNAPSHOT)
       setProject(null)

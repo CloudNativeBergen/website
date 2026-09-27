@@ -18,7 +18,7 @@ import {
 import type { BackgroundGallery } from './meme-generator-gallery'
 import type { VideoProjects } from './meme-generator-project'
 import type { EncoderBackend } from './meme-generator-export'
-import type { OpenedProject } from '@/lib/video-project'
+import type { OpenedProject, VideoProjectRow } from '@/lib/video-project'
 import { DEFAULT_DESIGN } from './meme-generator-draw'
 
 vi.mock('./meme-generator-draw', async (importOriginal) => ({
@@ -68,8 +68,8 @@ const PROJECT: OpenedProject = {
 
 function fakeProjects() {
   return {
-    list: vi.fn(async () => []),
-    open: vi.fn(async () => PROJECT),
+    list: vi.fn(async (): Promise<VideoProjectRow[]> => []),
+    open: vi.fn(async (id: string) => ({ ...PROJECT, _id: id })),
     create: vi.fn(async (input: Parameters<VideoProjects['create']>[0]) => ({
       _id: 'vp-new',
       _rev: 'rev-2',
@@ -83,7 +83,10 @@ function fakeProjects() {
       released: [],
     })),
     duplicate: vi.fn(async () => ({ _id: 'vp-copy' })),
-    delete: vi.fn(async () => ({ released: [], unsaveable: [] })),
+    delete: vi.fn(async () => ({
+      released: [] as string[],
+      unsaveable: [] as { fileId: string; galleryAssetId: string | null }[],
+    })),
   } satisfies VideoProjects
 }
 
@@ -169,6 +172,8 @@ describe('a video’s music', () => {
     expect(within(project()).getByText('Unsaved changes')).toBeInTheDocument()
     save()
     await within(project()).findByText('All changes saved')
+    // The samples already decoded are the file the project now holds.
+    expect(gallery.loadTrack).toHaveBeenCalledTimes(1)
     expect(projects.save).toHaveBeenLastCalledWith(
       expect.objectContaining({
         id: 'vp-new',
@@ -312,6 +317,84 @@ describe('a video’s music', () => {
           fadeOut: 1.5,
         },
       }),
+    )
+  })
+
+  it('fetches each project’s own file when two name one gallery entry whose file was replaced', async () => {
+    const gallery = fakeGallery()
+    const projects = fakeProjects()
+    const holding = (id: string, fileId: string): OpenedProject => ({
+      ...PROJECT,
+      _id: id,
+      title: id,
+      track: { ...PROJECT.track!, fileId, galleryAssetId: 'asset-theme' },
+    })
+    projects.open.mockImplementation(async (id: string) =>
+      id === 'vp-1' ? holding('vp-1', 'file-old') : holding('vp-2', 'file-new'),
+    )
+    projects.list.mockResolvedValue(
+      ['vp-1', 'vp-2'].map((id) => ({
+        _id: id,
+        title: id,
+        scope: 'organization' as const,
+        edition: null,
+        updatedAt: '2026-09-26T10:00:00Z',
+        scenes: 1,
+      })),
+    )
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    render(
+      <MemeGenerator
+        gallery={gallery}
+        projects={projects}
+        encoder={encoder}
+        initialProjectId="vp-1"
+      />,
+    )
+    await screen.findByDisplayValue('vp-1')
+    await waitFor(() =>
+      expect(gallery.loadTrack).toHaveBeenLastCalledWith({ project: 'vp-1' }),
+    )
+    await within(project()).findByRole('option', { name: /vp-2/ })
+    fireEvent.change(within(project()).getByLabelText('Open a saved project'), {
+      target: { value: 'vp-2' },
+    })
+    await screen.findByDisplayValue('vp-2')
+    await waitFor(() =>
+      expect(gallery.loadTrack).toHaveBeenLastCalledWith({ project: 'vp-2' }),
+    )
+    confirm.mockRestore()
+  })
+
+  it('drops a gallery track the delete reports as held by the project alone', async () => {
+    const gallery = fakeGallery()
+    const projects = fakeProjects()
+    projects.open.mockResolvedValue({
+      ...PROJECT,
+      track: { ...PROJECT.track!, galleryAssetId: 'asset-theme' },
+    })
+    // Its gallery entry was deleted after the project was opened.
+    projects.delete.mockResolvedValue({
+      released: [],
+      unsaveable: [{ fileId: 'file-theme', galleryAssetId: 'asset-theme' }],
+    })
+    render(
+      <MemeGenerator
+        gallery={gallery}
+        projects={projects}
+        encoder={encoder}
+        initialProjectId="vp-1"
+      />,
+    )
+    await screen.findByDisplayValue('Launch teaser')
+    fireEvent.click(within(project()).getByRole('button', { name: /Delete/ }))
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.click(within(dialog).getByRole('button', { name: /Delete/ }))
+    await within(project()).findAllByText(
+      /Its music track was only in that project/,
+    )
+    expect(within(music()).getByLabelText('Music')).toHaveDisplayValue(
+      'No music',
     )
   })
 })
