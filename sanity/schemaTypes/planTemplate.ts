@@ -251,7 +251,7 @@ export default defineType({
                       name: 'tagSubject',
                       title: 'Tag the subject',
                       description:
-                        'Generated Bluesky copy tags the speaker with their Bluesky handle instead of their name. A speaker who has opted out is never tagged, even after the post is written.',
+                        'Generated Bluesky copy tags the speaker with their Bluesky handle instead of their name. A speaker who has opted out is not tagged: an automatically published post is checked as it goes out, a post published by hand only when it is opened to be posted.',
                       type: 'boolean',
                     }),
                     defineField({
