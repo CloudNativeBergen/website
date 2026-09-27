@@ -102,7 +102,25 @@ async function measureOn(
     source: new BufferSource(target.buffer),
     formats: ALL_FORMATS,
   })
-  try {
+  // Stopped while decoding the click back — a decode can stall between
+  // buffers, where no check of the signal would ever run — the input and
+  // its decoder are let go of at once.
+  let disposed = false
+  const dispose = () => {
+    if (disposed) return
+    disposed = true
+    input.dispose()
+  }
+  let onAbort = () => {}
+  const aborted = new Promise<null>((resolve) => {
+    onAbort = () => {
+      dispose()
+      resolve(null)
+    }
+    if (signal.aborted) onAbort()
+    else signal.addEventListener('abort', onAbort, { once: true })
+  })
+  const decode = async () => {
     const track = await input.getPrimaryAudioTrack()
     if (!track) return null
     for await (const { buffer, timestamp } of new AudioBufferSink(
@@ -113,8 +131,15 @@ async function measureOn(
       if (at !== null) return Math.round(timestamp * MIX_RATE) + at - CLICK_AT
     }
     return null
+  }
+  try {
+    const decoding = decode()
+    // One that fails once disposed, after the abort won the race, is no one's.
+    decoding.catch(() => {})
+    return await Promise.race([decoding, aborted])
   } finally {
-    input.dispose()
+    signal.removeEventListener('abort', onAbort)
+    dispose()
   }
 }
 

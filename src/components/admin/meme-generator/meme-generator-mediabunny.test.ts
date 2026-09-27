@@ -17,6 +17,8 @@ let addWaitsForCancel = false
 let rejectAdd = () => {}
 let rejectAudio = () => {}
 let audioAddFails = false
+/** Set by a test: the test encode finishes, and its decode never yields. */
+let audioAddSucceeds = false
 
 vi.mock('mediabunny', () => {
   class Output {
@@ -61,12 +63,15 @@ vi.mock('mediabunny', () => {
   return {
     Output,
     CanvasSource,
-    BufferTarget: class {},
+    BufferTarget: class {
+      buffer = audioAddSucceeds ? new ArrayBuffer(8) : null
+    },
     AudioBufferSource: class {
       add() {
         log.push('audio-add')
         if (audioAddFails)
           return Promise.reject(new Error('EncodingError: audio'))
+        if (audioAddSucceeds) return Promise.resolve()
         // The track's encode, still running: it settles only if cancelled.
         return new Promise<void>((_, reject) => {
           rejectAudio = () => reject(new Error('The output was canceled.'))
@@ -78,9 +83,24 @@ vi.mock('mediabunny', () => {
     Mp4OutputFormat: class {},
     canEncodeAudio: async () => true,
     ALL_FORMATS: [],
-    AudioBufferSink: class {},
+    AudioBufferSink: class {
+      buffers() {
+        log.push('decode')
+        return {
+          [Symbol.asyncIterator]: () => ({
+            // A decode that never delivers a buffer.
+            next: () => new Promise<never>(() => {}),
+          }),
+        }
+      }
+    },
     BufferSource: class {},
-    Input: class {},
+    Input: class {
+      getPrimaryAudioTrack = async () => ({})
+      dispose() {
+        log.push('input-disposed')
+      }
+    },
     canEncodeVideo: async () => {
       if (canEncodeFails)
         throw new Error('Failed to fetch dynamically imported module')
@@ -260,6 +280,28 @@ describe('mediabunnyBackend.prepareAudio, stopped', () => {
     await vi.waitFor(() => expect(log).toContain('cancel'))
     releaseCancel()
     expect(await preparing).toEqual({ silent: 'unmeasured' })
+    vi.unstubAllGlobals()
+  })
+})
+
+describe('mediabunnyBackend.prepareAudio, stopped while decoding', () => {
+  it('lets go of the decoder when stopped while it decodes the test encode back', async () => {
+    vi.stubGlobal(
+      'AudioBuffer',
+      class {
+        copyToChannel() {}
+      },
+    )
+    audioAddSucceeds = true
+    const stop = new AbortController()
+    const preparing = mediabunnyBackend.prepareAudio(stop.signal)
+    await vi.waitFor(() => expect(log).toContain('start'))
+    releaseStart()
+    await vi.waitFor(() => expect(log).toContain('decode'))
+    stop.abort()
+    await vi.waitFor(() => expect(log).toContain('input-disposed'))
+    expect(await preparing).toEqual({ silent: 'unmeasured' })
+    audioAddSucceeds = false
     vi.unstubAllGlobals()
   })
 })
