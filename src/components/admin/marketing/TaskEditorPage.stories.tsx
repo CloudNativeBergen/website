@@ -369,6 +369,60 @@ export const ManualAwaitingPost: Story = {
 }
 
 /**
+ * Bluesky, posted by hand, after a speaker opted out since approval: the page
+ * asks for its OWN tag check as it opens (review T4, round 3) and copies the
+ * body that passes it — the plain name, not the tag.
+ */
+const blueskyManual = variant({
+  platform: 'bluesky',
+  status: 'awaiting-manual',
+  scheduledAt: '2027-01-10T07:00:00.000Z',
+  body: '🎙️ @alice.dev is speaking at Cloud Native Bergen 2027.',
+})
+export const ManualAwaitingPostBlueskyLateOptOut: Story = {
+  parameters: {
+    msw: {
+      handlers: [
+        http.get('/api/trpc/social.getVariantEditor', () =>
+          HttpResponse.json({
+            result: {
+              data: {
+                ...blueskyManual,
+                manualBody: {
+                  body: '🎙️ Alice Liddell is speaking at Cloud Native Bergen 2027.',
+                  untagged: ['Alice Liddell'],
+                  removed: 0,
+                },
+              },
+            },
+          }),
+        ),
+        ...handlers(
+          fixture(
+            {
+              key: 'speakerCard:bluesky',
+              channel: 'bluesky',
+              status: 'awaiting-manual',
+              approvedAt: '2026-09-14T09:12:00.000Z',
+              approvedByName: 'Bob Builder',
+              date: '2027-01-10T07:00:00.000Z',
+            },
+            blueskyManual,
+          ),
+        ),
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(
+      await canvas.findByText(/Alice Liddell is speaking/),
+    ).toBeInTheDocument()
+    await expect(canvasElement).not.toHaveTextContent('@alice.dev is speaking')
+  },
+}
+
+/**
  * The same, for a Task about a speaker with a LinkedIn profile (#1155): the
  * server's "Tag by hand" list reaches the copy-ready view.
  */
