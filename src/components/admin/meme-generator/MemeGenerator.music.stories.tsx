@@ -357,3 +357,34 @@ export const MusicListingFailsDark: Story = {
   ...MusicListingFails,
   globals: { theme: 'dark' },
 }
+
+/**
+ * The panel on a phone: the editor is built for a computer, so this is only
+ * "does not break" — the four controls fall into two rows of two, and
+ * nothing in the panel is wider than the screen.
+ */
+export const MusicTrackMobile: Story = {
+  ...MusicTrack,
+  // `globals` sizes it in the Storybook UI (Storybook 10 ignores the
+  // parameter there); the test-runner's preVisit reads the parameter.
+  globals: { viewport: { value: 'mobile1', isRotated: false } },
+  parameters: {
+    ...MusicTrack.parameters,
+    viewport: { defaultViewport: 'mobile1' },
+  },
+  play: async (ctx) => {
+    // The mobile branch is only exercised if the page really is narrow.
+    await expect(
+      ctx.canvasElement.ownerDocument.documentElement.clientWidth,
+    ).toBeLessThan(500)
+    await MusicTrack.play!(ctx)
+    const music = within(ctx.canvasElement).getByRole('region', {
+      name: 'Music',
+    })
+    const top = (label: string) =>
+      within(music).getByLabelText(label).getBoundingClientRect().top
+    // Two rows of two: Fade in sits below Start in track.
+    expect(top('Fade in')).toBeGreaterThan(top('Start in track'))
+    expect(music.scrollWidth).toBeLessThanOrEqual(music.clientWidth)
+  },
+}
