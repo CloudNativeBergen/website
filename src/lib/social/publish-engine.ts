@@ -741,13 +741,9 @@ async function dispatch(
       )
       recorded = recorded.map((t) => {
         const state = t.speakerId ? current.get(t.speakerId) : undefined
-        return state
-          ? {
-              ...t,
-              optedOut: t.optedOut || state.optedOut,
-              gone: t.gone || state.gone,
-            }
-          : t
+        // The fresh state REPLACES the snapshot: an opt-out withdrawn since
+        // the tick's read is honoured as surely as one made (round 3, T2).
+        return state ? { ...t, optedOut: state.optedOut, gone: state.gone } : t
       })
     } catch (error) {
       await settle(

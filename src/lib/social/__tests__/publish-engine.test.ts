@@ -338,6 +338,31 @@ describe('runPublishTick — due scan and dispatch', () => {
       expect(store.recheckCalls).toEqual([['speaker-alice', 'speaker-bob']])
     })
 
+    it('an opt-out WITHDRAWN after the tick read is honoured too: the fresh state replaces the snapshot (round 3, T2)', async () => {
+      const store = new MemoryVariantStore([tagged()])
+      store.tags['variant-1'] = tags(true)
+      store.beforeClaim = () => {
+        store.speakers['speaker-alice'] = { optedOut: false }
+      }
+      const adapter = fakeAdapter({ ok: true, externalId: 'x', url: 'y' })
+      const onTagsWithheld = vi.fn(async () => {})
+
+      await runPublishTick({
+        store,
+        resolveAdapter: async () => adapter,
+        now: NOW,
+        onTagsWithheld,
+      })
+
+      expect(adapter.publish).toHaveBeenCalledWith(
+        expect.objectContaining({
+          text: '@alice.dev and @bob.dev at the conf',
+        }),
+      )
+      // Nobody is told she "asked not to be tagged": she no longer does.
+      expect(onTagsWithheld).not.toHaveBeenCalled()
+    })
+
     it('a re-read that fails posts nothing: the variant is re-queued as a safe transient', async () => {
       const store = new MemoryVariantStore([tagged()])
       store.tags['variant-1'] = tags(false)
