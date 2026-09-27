@@ -1063,4 +1063,39 @@ describe('a video’s music', () => {
       expect(playerCalls.filter((call) => call === 'load')).toHaveLength(1),
     )
   })
+
+  it('lets go of the track’s samples when a new video replaces this one', async () => {
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    render(
+      <MemeGenerator
+        gallery={fakeGallery()}
+        projects={fakeProjects()}
+        encoder={encoder}
+      />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Video' }))
+    await within(music()).findByRole('option', { name: 'Theme (0:20)' })
+    fireEvent.change(within(music()).getByLabelText('Music'), {
+      target: { value: 'asset-theme' },
+    })
+    await within(music()).findByText(/Plays from/)
+    const decoded = decodedRefs[decodedRefs.length - 1]
+    fireEvent.click(
+      within(project()).getByRole('button', { name: /New video/ }),
+    )
+    expect(within(music()).getByLabelText('Music')).toHaveDisplayValue(
+      'No music',
+    )
+    // Two more commits, so no alternate fiber still holds the old props.
+    fireEvent.change(within(project()).getByLabelText('Project title'), {
+      target: { value: 'A' },
+    })
+    fireEvent.change(within(project()).getByLabelText('Project title'), {
+      target: { value: 'B' },
+    })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    collectGarbage()
+    expect(decoded.deref()).toBeUndefined()
+    confirm.mockRestore()
+  })
 })

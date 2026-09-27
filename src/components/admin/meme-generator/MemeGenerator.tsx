@@ -958,6 +958,12 @@ export function MemeGenerator({
     moveTo(0)
     setProjectTitle(title)
     setTrackFailed(null)
+    // A fresh start has no undo back to the old track: its samples go now,
+    // unless the new video's track is the very same file.
+    const nextKey = nextTrack?.fileId ?? nextTrack?.galleryAssetId ?? null
+    setDecoded((current) =>
+      current && current.key === nextKey ? current : null,
+    )
     setSavedSnapshot(projectSnapshot(title, next, nextTrack))
     setBackgroundFailure(null)
     setConflicted(false)
