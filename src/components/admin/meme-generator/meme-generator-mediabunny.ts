@@ -197,10 +197,18 @@ async function openOutput(
   // is written in memory, so nothing waits on the tracks interleaving. Not
   // awaited here: the session exists — and can be cancelled — while it
   // encodes, and its first frame waits for it, under the stall guard.
-  const audioAdded =
-    sound && audio
-      ? sound.add(toAudioBuffer(audio.channels)).then(() => sound.close())
-      : null
+  let audioAdded: Promise<void> | null = null
+  try {
+    audioAdded =
+      sound && audio
+        ? sound.add(toAudioBuffer(audio.channels)).then(() => sound.close())
+        : null
+  } catch (error) {
+    // The encoders are open now: one that throws setting up the track —
+    // the copy runs out of memory, say — lets them go before failing.
+    await output.cancel().catch(() => {})
+    throw error
+  }
   // A cancel before the first frame rejects it with no one waiting.
   audioAdded?.catch(() => {})
   return { output, source, target, audioAdded }

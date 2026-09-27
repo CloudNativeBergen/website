@@ -305,3 +305,32 @@ describe('mediabunnyBackend.prepareAudio, stopped while decoding', () => {
     vi.unstubAllGlobals()
   })
 })
+
+describe('mediabunnyBackend.open, when the track cannot be set up', () => {
+  it('cancels the started output before failing', async () => {
+    vi.stubGlobal(
+      'AudioBuffer',
+      class {
+        constructor() {
+          throw new RangeError('Array buffer allocation failed')
+        }
+      },
+    )
+    const samples = new Float32Array(48_000)
+    const opening = mediabunnyBackend.open(
+      document.createElement('canvas'),
+      { latencyMode: 'quality', keyFrames: 'default' },
+      { channels: [samples, samples] },
+    )
+    const settled = opening.then(
+      () => 'opened',
+      (error: Error) => error.message,
+    )
+    await vi.waitFor(() => expect(log).toContain('start'))
+    releaseStart()
+    await vi.waitFor(() => expect(log).toContain('cancel'))
+    releaseCancel()
+    expect(await settled).toBe('Array buffer allocation failed')
+    vi.unstubAllGlobals()
+  })
+})
