@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ClipboardDocumentListIcon } from '@heroicons/react/24/outline'
 import { ModalShell } from '@/components/ModalShell'
 import { useNotification } from '@/components/admin/NotificationProvider'
@@ -31,7 +31,32 @@ export function ManualPostDialog({
     { enabled: isOpen, refetchOnWindowFocus: false },
   )
   const [error, setError] = useState<string | null>(null)
-  const data = editor.data
+  // Every opening runs the tag check afresh (tagging spec §4.4, review T4).
+  // The dialog stays mounted while closed and queries stay fresh for 60 s,
+  // so a reopen would show the body checked for an EARLIER opening — before
+  // a speaker opted out. Each opening notes how old the cached answer is,
+  // asks again, and shows (and offers to copy) only an answer newer than
+  // that. Set during render, the React way to follow a prop change, so no
+  // frame shows the cached answer.
+  const [opening, setOpening] = useState({
+    variantId: null as string | null,
+    staleAt: 0,
+  })
+  if (opening.variantId !== variantId) {
+    setOpening({ variantId, staleAt: editor.dataUpdatedAt })
+  }
+  const { refetch } = editor
+  const hadCached = editor.dataUpdatedAt > 0
+  useEffect(() => {
+    // A first opening fetches on its own; a reopen must ask again.
+    if (variantId && hadCached) void refetch()
+    // Only on opening: `hadCached` is read as it was then.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [variantId, refetch])
+  const data =
+    opening.variantId === variantId && editor.dataUpdatedAt > opening.staleAt
+      ? editor.data
+      : undefined
   const loaded = data && data.variant._id === variantId ? data : null
 
   const markPosted = api.social.markPosted.useMutation({
