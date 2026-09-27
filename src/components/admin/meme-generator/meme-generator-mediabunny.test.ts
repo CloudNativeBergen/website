@@ -229,13 +229,37 @@ describe('mediabunnyBackend.prepareAudio', () => {
       },
     )
     audioAddFails = true
-    const preparing = mediabunnyBackend.prepareAudio()
+    const preparing = mediabunnyBackend.prepareAudio(
+      new AbortController().signal,
+    )
     await vi.waitFor(() => expect(log).toContain('start'))
     releaseStart()
     await vi.waitFor(() => expect(log).toContain('cancel'))
     releaseCancel()
     expect(await preparing).toEqual({ silent: 'unmeasured' })
     audioAddFails = false
+    vi.unstubAllGlobals()
+  })
+})
+
+describe('mediabunnyBackend.prepareAudio, stopped', () => {
+  it('cancels the measuring output when told to stop while it runs', async () => {
+    vi.stubGlobal(
+      'AudioBuffer',
+      class {
+        copyToChannel() {}
+      },
+    )
+    const stop = new AbortController()
+    const preparing = mediabunnyBackend.prepareAudio(stop.signal)
+    await vi.waitFor(() => expect(log).toContain('start'))
+    releaseStart()
+    // The test encode is running (it never finishes by itself here).
+    await vi.waitFor(() => expect(log).toContain('audio-add'))
+    stop.abort()
+    await vi.waitFor(() => expect(log).toContain('cancel'))
+    releaseCancel()
+    expect(await preparing).toEqual({ silent: 'unmeasured' })
     vi.unstubAllGlobals()
   })
 })

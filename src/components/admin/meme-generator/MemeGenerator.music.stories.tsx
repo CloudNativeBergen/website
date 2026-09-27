@@ -264,7 +264,9 @@ export const MusicPrimingMeasured: Story = {
   args: { gallery: musicGallery },
   play: async ({ canvasElement }) => {
     const { mediabunnyBackend } = await import('./meme-generator-mediabunny')
-    const result = await mediabunnyBackend.prepareAudio()
+    const result = await mediabunnyBackend.prepareAudio(
+      new AbortController().signal,
+    )
     console.info('[music priming]', JSON.stringify(result))
     canvasElement.dataset.priming = JSON.stringify(result)
     expect(result).toHaveProperty('priming')

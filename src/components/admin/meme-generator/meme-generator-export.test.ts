@@ -49,7 +49,10 @@ interface FakeOptions {
    * (no encoder could be had), or a rejection.
    */
   audio?:
-    { priming: number } | { silent: 'no-encoder' | 'unmeasured' } | 'throws'
+    | { priming: number }
+    | { silent: 'no-encoder' | 'unmeasured' }
+    | 'throws'
+    | 'hangs'
 }
 
 function fakeBackend(options: FakeOptions = {}) {
@@ -62,6 +65,8 @@ function fakeBackend(options: FakeOptions = {}) {
   const sessions: {
     encoding: Encoding
     audio: ExportAudio | null
+    /** What had happened when this session was opened. */
+    logAtOpen: string[]
     frames: number[]
     cancelled: boolean
     finished: boolean
@@ -86,9 +91,16 @@ function fakeBackend(options: FakeOptions = {}) {
         return new Promise((resolve) => setTimeout(() => resolve(true), result))
       return Promise.resolve(result)
     },
-    async prepareAudio() {
+    async prepareAudio(signal) {
       log.push('prepare-audio')
       if (options.audio === 'throws') throw new Error('add-on failed to load')
+      if (options.audio === 'hangs')
+        return new Promise((_, reject) =>
+          signal.addEventListener('abort', () => {
+            log.push('prepare-audio-aborted')
+            reject(new Error('aborted'))
+          }),
+        )
       return options.audio === undefined ? { priming: 0 } : options.audio
     },
     async open(_canvas, encoding, audio): Promise<EncodeSession> {
@@ -96,6 +108,7 @@ function fakeBackend(options: FakeOptions = {}) {
       const session = {
         encoding,
         audio,
+        logAtOpen: [...log],
         frames: [] as number[],
         cancelled: false,
         finished: false,
@@ -525,5 +538,31 @@ describe('exportVideo with a music track', () => {
     expect(sessions[0].audio).toBeNull()
     expect(log).not.toContain('prepare-audio')
     expect(result.audio).toBe('none')
+  })
+
+  it('stops getting the AAC encoder ready when the export is cancelled', async () => {
+    const { backend, log } = fakeBackend({ audio: 'hangs' })
+    const controller = new AbortController()
+    const { promise } = run(backend, {
+      ...withTrack(),
+      signal: controller.signal,
+    })
+    await vi.waitFor(() => expect(log).toContain('prepare-audio'))
+    controller.abort()
+    await expect(promise).rejects.toBeInstanceOf(ExportCancelled)
+    expect(log).toContain('prepare-audio-aborted')
+  })
+
+  it('stops getting the AAC encoder ready when it stalls, before the silent video starts', async () => {
+    vi.useFakeTimers()
+    const { backend, log, sessions } = fakeBackend({ audio: 'hangs' })
+    const { promise } = run(backend, withTrack())
+    await vi.advanceTimersByTimeAsync(STALL_TIMEOUT_MS + 1)
+    await vi.runAllTimersAsync()
+    const result = await promise
+    expect(log).toContain('prepare-audio-aborted')
+    expect(sessions[0].logAtOpen).toContain('prepare-audio-aborted')
+    expect(sessions[0].audio).toBeNull()
+    expect(result.audio).toBe('unmeasured')
   })
 })

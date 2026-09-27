@@ -52,18 +52,12 @@ const CLICK_AT = 4_800
  * AAC on macOS measured 2112, the add-on 1024 — a number per encoder, so it
  * is measured rather than assumed.
  */
-async function measurePriming(mediabunny: Mediabunny): Promise<number | null> {
-  const {
-    ALL_FORMATS,
-    AudioBufferSink,
-    AudioBufferSource,
-    BufferSource,
-    BufferTarget,
-    Input,
-    Mp4OutputFormat,
-    Output,
-    Quality,
-  } = mediabunny
+async function measurePriming(
+  mediabunny: Mediabunny,
+  signal: AbortSignal,
+): Promise<number | null> {
+  const { AudioBufferSource, BufferTarget, Mp4OutputFormat, Output, Quality } =
+    mediabunny
   const target = new BufferTarget()
   const output = new Output({ format: new Mp4OutputFormat(), target })
   const source = new AudioBufferSource({
@@ -71,6 +65,26 @@ async function measurePriming(mediabunny: Mediabunny): Promise<number | null> {
     quality: new Quality({ bitrate: AUDIO_BITRATE }),
   })
   output.addAudioTrack(source)
+  // Stopped from outside — a cancelled or stalled export — the output is
+  // cancelled, which also rejects whatever step is waiting on it.
+  const stop = () => void output.cancel().catch(() => {})
+  signal.addEventListener('abort', stop, { once: true })
+  if (signal.aborted) stop()
+  try {
+    return await measureOn(mediabunny, output, source, target, signal)
+  } finally {
+    signal.removeEventListener('abort', stop)
+  }
+}
+
+/** The measurement itself, on an output set up by {@link measurePriming}. */
+async function measureOn(
+  { ALL_FORMATS, AudioBufferSink, BufferSource, Input }: Mediabunny,
+  output: InstanceType<Mediabunny['Output']>,
+  source: InstanceType<Mediabunny['AudioBufferSource']>,
+  target: InstanceType<Mediabunny['BufferTarget']>,
+  signal: AbortSignal,
+): Promise<number | null> {
   await output.start()
   try {
     const click = new Float32Array(MIX_RATE / 2)
@@ -94,6 +108,7 @@ async function measurePriming(mediabunny: Mediabunny): Promise<number | null> {
     for await (const { buffer, timestamp } of new AudioBufferSink(
       track,
     ).buffers()) {
+      if (signal.aborted) return null
       const at = findClick(buffer.getChannelData(0), 0.45)
       if (at !== null) return Math.round(timestamp * MIX_RATE) + at - CLICK_AT
     }
@@ -240,7 +255,7 @@ export const mediabunnyBackend: EncoderBackend = {
     ])
   },
 
-  async prepareAudio() {
+  async prepareAudio(signal) {
     if (typeof AudioBuffer === 'undefined') return { silent: 'no-encoder' }
     const mediabunny = await loadMediabunny()
     const aac = {
@@ -257,7 +272,8 @@ export const mediabunnyBackend: EncoderBackend = {
       if (!(await mediabunny.canEncodeAudio('aac', aac)))
         return { silent: 'no-encoder' }
     }
-    const priming = await measurePriming(mediabunny).catch(() => null)
+    if (signal.aborted) return { silent: 'unmeasured' }
+    const priming = await measurePriming(mediabunny, signal).catch(() => null)
     // Unmeasurable is an encoder that cannot be trusted with the track.
     return priming === null || priming < 0
       ? { silent: 'unmeasured' }

@@ -109,9 +109,12 @@ export interface EncoderBackend {
    * Get an AAC encoder ready — the browser's own, or the add-on where there
    * is none (proof §8) — and measure how many samples of priming it puts
    * ahead of the sound (proof §4). Where either cannot be done, the reason:
-   * the video is then made silent, and the organizer told why.
+   * the video is then made silent, and the organizer told why. Stops, and
+   * lets go of any encoder it opened, when `signal` aborts.
    */
-  prepareAudio(): Promise<{ priming: number } | { silent: SilentReason }>
+  prepareAudio(
+    signal: AbortSignal,
+  ): Promise<{ priming: number } | { silent: SilentReason }>
   /** `audio` is encoded beside the video when given, as it is handed in. */
   open(
     canvas: HTMLCanvasElement,
@@ -350,12 +353,28 @@ export async function exportVideo({
   let sound: ExportAudio | null = null
   let exported: ExportedAudio = 'none'
   if (audio) {
-    const plan = await answer(backend.prepareAudio()).catch(
-      (error: unknown): { silent: SilentReason } => {
+    // A cancel or a stall stops the measurement too, and the export waits
+    // (at most RELEASE_MS) for its encoder to close before going on.
+    const preparing = new AbortController()
+    const running = backend.prepareAudio(preparing.signal)
+    const plan = await answer(running)
+      .catch((error: unknown): { silent: SilentReason } => {
         if (error instanceof ExportCancelled) throw error
-        return { silent: 'no-encoder' }
-      },
-    )
+        // An encoder that stopped answering was had, but not measured.
+        return {
+          silent:
+            error instanceof ExportFailed && error.reason === 'stalled'
+              ? 'unmeasured'
+              : 'no-encoder',
+        }
+      })
+      .finally(async () => {
+        preparing.abort()
+        await Promise.race([
+          running.catch(() => {}),
+          new Promise((resolve) => setTimeout(resolve, RELEASE_MS)),
+        ])
+      })
     if ('priming' in plan) {
       sound = { channels: shiftForPriming(audio.channels, plan.priming) }
       exported = 'included'
