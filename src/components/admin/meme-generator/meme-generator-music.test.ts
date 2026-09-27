@@ -177,10 +177,16 @@ describe('findClick', () => {
 
 describe('trackSource', () => {
   const base = { title: 'Theme', ...settings }
-  it('fetches a gallery track by its gallery entry', () => {
+  it('fetches a just-picked gallery track by its gallery entry', () => {
+    expect(trackSource({ ...base, galleryAssetId: 'a' }, 'p')).toEqual({
+      asset: 'a',
+    })
+  })
+  it('fetches a track a project holds through the project, even with a gallery entry named', () => {
+    // The entry may be deleted since; the project's file never is.
     expect(
       trackSource({ ...base, galleryAssetId: 'a', fileId: 'f' }, 'p'),
-    ).toEqual({ asset: 'a' })
+    ).toEqual({ project: 'p' })
   })
   it('fetches a track whose gallery entry is gone through its project', () => {
     expect(trackSource({ ...base, fileId: 'f' }, 'p')).toEqual({

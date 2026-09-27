@@ -120,14 +120,15 @@ export const NEW_TRACK_SETTINGS: TrackSettings = {
 }
 
 /**
- * Where the editor fetches a track's file: the gallery track while it
- * exists, else the saved project that holds it; null for neither.
+ * Where the editor fetches a track's file: the saved project that holds it,
+ * once it does — which it keeps even when its gallery entry is deleted —
+ * else the gallery track just picked; null for neither.
  */
 export function trackSource(
   track: VideoTrack,
   projectId: string | null,
 ): { asset: string } | { project: string } | null {
-  if (track.galleryAssetId) return { asset: track.galleryAssetId }
   if (track.fileId && projectId) return { project: projectId }
+  if (track.galleryAssetId) return { asset: track.galleryAssetId }
   return null
 }

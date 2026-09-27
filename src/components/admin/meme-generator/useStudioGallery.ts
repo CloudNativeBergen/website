@@ -54,8 +54,11 @@ export function useStudioGallery(orgId: string): BackgroundGallery {
         )
       },
       loadTrack: async (source) => {
+        // Bounded, so a fetch that never settles fails — with Try again —
+        // rather than leaving Export waiting for the music for ever.
         const response = await fetch(
           `/api/admin/studio-track?${new URLSearchParams(source)}`,
+          { signal: AbortSignal.timeout(120_000) },
         )
         if (!response.ok) throw new Error('The track could not be loaded.')
         return response.arrayBuffer()

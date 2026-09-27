@@ -250,4 +250,68 @@ describe('a video’s music', () => {
       expect.objectContaining({ track: null }),
     )
   })
+
+  it('drops a track only the deleted project held, and says so', async () => {
+    const gallery = fakeGallery()
+    const projects = fakeProjects()
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    render(
+      <MemeGenerator
+        gallery={gallery}
+        projects={projects}
+        encoder={encoder}
+        initialProjectId="vp-1"
+      />,
+    )
+    await screen.findByDisplayValue('Launch teaser')
+    fireEvent.click(within(project()).getByRole('button', { name: /Delete/ }))
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.click(within(dialog).getByRole('button', { name: /Delete/ }))
+    expect(
+      (
+        await within(project()).findAllByText(
+          /Its music track was only in that project/,
+        )
+      )[0],
+    ).toBeInTheDocument()
+    expect(within(music()).getByLabelText('Music')).toHaveDisplayValue(
+      'No music',
+    )
+    confirm.mockRestore()
+  })
+
+  it('keeps a gallery track through a project delete, and saves it anew by its gallery entry', async () => {
+    const gallery = fakeGallery()
+    const projects = fakeProjects()
+    projects.open.mockResolvedValue({
+      ...PROJECT,
+      track: { ...PROJECT.track!, galleryAssetId: 'asset-theme' },
+    })
+    render(
+      <MemeGenerator
+        gallery={gallery}
+        projects={projects}
+        encoder={encoder}
+        initialProjectId="vp-1"
+      />,
+    )
+    await screen.findByDisplayValue('Launch teaser')
+    fireEvent.click(within(project()).getByRole('button', { name: /Delete/ }))
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.click(within(dialog).getByRole('button', { name: /Delete/ }))
+    await within(project()).findAllByText('Project deleted.')
+    save()
+    await waitFor(() => expect(projects.create).toHaveBeenCalled())
+    expect(projects.create).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        track: {
+          galleryAssetId: 'asset-theme',
+          start: 4,
+          volume: 0.5,
+          fadeIn: 0.5,
+          fadeOut: 1.5,
+        },
+      }),
+    )
+  })
 })

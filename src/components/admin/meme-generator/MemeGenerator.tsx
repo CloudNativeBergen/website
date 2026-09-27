@@ -1112,18 +1112,27 @@ export function MemeGenerator({
           scenes[i].design.background.image !== null,
       ).length
       setHistory((prev) => mapStates(prev, drop))
+      // The track: a gallery track is picked again from the gallery on the
+      // next save; one only the deleted project held cannot be saved again,
+      // so it goes — never left looking ready for a save that must refuse it.
+      const trackGone = !!track && !track.galleryAssetId
+      if (track?.galleryAssetId) setTrack({ ...track, fileId: undefined })
+      else if (trackGone) setTrack(null)
       // The editor now holds the ONLY copy: unsaved, so leaving asks.
       setSavedSnapshot(DELETED_SNAPSHOT)
       setProject(null)
       setConflicted(false)
       onProjectChange?.(null)
       refreshProjects()
+      const deleted =
+        cleared > 0
+          ? `Project deleted. ${cleared === 1 ? 'One background was' : `${cleared} backgrounds were`} only in that project and ${cleared === 1 ? 'is' : 'are'} gone; ${cleared === 1 ? 'its scene shows its colour' : 'those scenes show their colour'}.`
+          : 'Project deleted.'
       setProjectMessage({
         tone: 'info',
-        text:
-          cleared > 0
-            ? `Project deleted. ${cleared === 1 ? 'One background was' : `${cleared} backgrounds were`} only in that project and ${cleared === 1 ? 'is' : 'are'} gone; ${cleared === 1 ? 'its scene shows its colour' : 'those scenes show their colour'}.`
-            : 'Project deleted.',
+        text: trackGone
+          ? `${deleted} Its music track was only in that project, so the video has no music now.`
+          : deleted,
       })
     } catch (error) {
       setProjectMessage({
@@ -1404,17 +1413,40 @@ export function MemeGenerator({
       : trackFailed === trackKey || !source || !loadTrack
         ? { state: 'failed' }
         : { state: 'loading' }
+  // How the track is mixed, by value: a save that only records the file it
+  // became changes the track object, never what is heard.
+  const { start, volume, fadeIn, fadeOut } = track ?? {}
+  const trackSettings = useMemo(
+    () =>
+      start === undefined ||
+      volume === undefined ||
+      fadeIn === undefined ||
+      fadeOut === undefined
+        ? null
+        : { start, volume, fadeIn, fadeOut },
+    [start, volume, fadeIn, fadeOut],
+  )
   // What is heard: the same mix the export encodes.
   const mix = useMemo(
     () =>
-      trackChannels && track ? mixTrack(trackChannels, track, total) : null,
-    [trackChannels, track, total],
+      trackChannels && trackSettings
+        ? mixTrack(trackChannels, trackSettings, total)
+        : null,
+    [trackChannels, trackSettings, total],
   )
 
   // The preview's sound, and its clock while it plays.
   const [player] = useState(() => createTrackPlayer())
   useEffect(() => () => player.dispose(), [player])
-  useEffect(() => player.load(mix), [player, mix])
+  // A track that finishes loading while the video plays joins in where the
+  // playhead is.
+  const joinPlayback = useEffectEvent(() => {
+    if (playing && player.time() === null) player.play(time)
+  })
+  useEffect(() => {
+    player.load(mix)
+    if (mix) joinPlayback()
+  }, [player, mix])
   useEffect(() => {
     if (!playing) player.pause()
   }, [player, playing])
@@ -1740,10 +1772,14 @@ export function MemeGenerator({
       canvas,
       frameCount,
       // Mixed for exactly the frames exported.
-      ...(trackChannels && track
+      ...(trackChannels && trackSettings
         ? {
             audio: {
-              channels: mixTrack(trackChannels, track, frameCount / FPS),
+              channels: mixTrack(
+                trackChannels,
+                trackSettings,
+                frameCount / FPS,
+              ),
             },
           }
         : {}),
@@ -1940,7 +1976,13 @@ export function MemeGenerator({
             }
             // The scenes, the late-arriving font faces that repaint them, and
             // the music.
-            revision={[scenes, lateFaces, track, trackChannels]}
+            revision={[
+              scenes,
+              lateFaces,
+              trackKey,
+              trackSettings,
+              trackChannels,
+            ]}
           />
         </div>
       </div>

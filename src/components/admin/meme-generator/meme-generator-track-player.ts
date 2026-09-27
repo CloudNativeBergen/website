@@ -79,9 +79,16 @@ export function createTrackPlayer(
   const start = (from: number) => {
     silence()
     clock = null
-    if (!channels) return
-    ctx ??= openContext()
+    // Opened and resumed inside the click even with no mix yet, so a track
+    // that finishes loading mid-play can still be heard.
+    try {
+      ctx ??= openContext()
+    } catch {
+      // No Web Audio here: the preview plays silent, on its own clock.
+      return
+    }
     void ctx.resume()
+    if (!channels) return
     const node = ctx.createBufferSource()
     node.buffer = bufferFor(ctx)
     node.connect(ctx.destination as never)

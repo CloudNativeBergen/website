@@ -193,4 +193,26 @@ describe('the track player', () => {
     player.dispose()
     expect(ctx.closed).toBe(true)
   })
+
+  it('opens its context inside a click even before the mix has loaded, so the track can join in later', () => {
+    const { ctx, sources } = fakeContext()
+    const open = vi.fn(() => ctx)
+    const player = createTrackPlayer(open)
+    player.play(1)
+    expect(open).toHaveBeenCalledTimes(1)
+    expect(ctx.resumed).toBe(1)
+    expect(sources).toEqual([])
+    player.load(mix(10))
+    player.play(2.5)
+    expect(sources[0]).toMatchObject({ offset: 2.5 })
+  })
+
+  it('plays silent, without throwing, where there is no Web Audio', () => {
+    const player = createTrackPlayer(() => {
+      throw new ReferenceError('AudioContext is not defined')
+    })
+    player.load(mix(10))
+    expect(() => player.play(0)).not.toThrow()
+    expect(player.time()).toBeNull()
+  })
 })

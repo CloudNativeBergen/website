@@ -221,7 +221,7 @@ describe('a saved track reopens as the track it was (#1179)', () => {
     fadeOut: 2.5,
   }
 
-  async function reopenTrack(track: VideoTrack) {
+  async function reopenTrack(track: VideoTrack, galleryEntryExists = true) {
     const input = toProjectTrack(track)!
     const stored = storedTrack(input, {
       fileId: THEME,
@@ -231,6 +231,9 @@ describe('a saved track reopens as the track it was (#1179)', () => {
       rights: { confirmedBy: 'sp-1', confirmedAt: '2026-09-20T10:00:00Z' },
     })
     const dataset = [
+      ...(galleryEntryExists
+        ? [{ _id: 'asset-theme', _type: 'marketingAsset', kind: 'audio' }]
+        : []),
       {
         _id: 'vp-1',
         _rev: 'rev-1',
@@ -260,6 +263,18 @@ describe('a saved track reopens as the track it was (#1179)', () => {
     expect(projectSnapshot('t', list, reopened)).toBe(
       projectSnapshot('t', list, picked),
     )
+  })
+
+  it('names no gallery entry once that entry is deleted, though the weak reference stays', async () => {
+    const reopened = await reopenTrack(picked, false)
+    expect(reopened).toEqual({
+      title: 'Theme',
+      fileId: THEME,
+      start: 12.5,
+      volume: 0.8,
+      fadeIn: 1,
+      fadeOut: 2.5,
+    })
   })
 
   it('changes the snapshot with what is heard, never with the title', () => {
