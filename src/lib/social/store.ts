@@ -1,5 +1,6 @@
 import type {
   PublishAttempt,
+  RecordedTag,
   PublishResult,
   SocialPostAttachment,
   SocialPostVariant,
@@ -33,6 +34,12 @@ export interface PublishableVariant extends SocialPostVariant {
   postCreatedBy: string | null
   /** Live same-conference Task captured before claiming; null proves standalone. */
   marketingTaskId: string | null
+  /**
+   * Every recorded `tagged` mention with its speaker's opt-out (tagging spec
+   * §4.4, Publish), joined in the SAME work read. Absent: the store read no
+   * records, and `mentions` is posted as it is.
+   */
+  recordedTags?: RecordedTag[]
 }
 
 /** One state-machine step applied to a variant document. */
@@ -53,6 +60,13 @@ export interface VariantTransition {
    * Omitted = untouched; never cleared.
    */
   shortCode?: string
+  /**
+   * The text actually posted, when it differs from the approved body (a late
+   * opt-out's tag swapped for the name, tagging spec §4.4). Written by the
+   * same compare-and-set that marks the variant published, so the record
+   * never lies about what went out. Omitted = untouched.
+   */
+  body?: string
   /** Appended to `attempts[]` (the audit trail). */
   attempt?: Omit<PublishAttempt, '_key'> & { _key?: string }
 }

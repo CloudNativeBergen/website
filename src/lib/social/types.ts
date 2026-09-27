@@ -189,6 +189,21 @@ export interface SocialPostVariant {
 }
 
 /**
+ * A recorded `tagged` mention as the publish tick reads it (tagging spec §4.4,
+ * Publish): whose tag it is and whether they have opted out SINCE it was
+ * approved. Read in the tick's one work query through the weak speaker
+ * reference, never fetched separately. Server-only: never sent to a browser.
+ */
+export interface RecordedTag {
+  handle: string
+  /** Absent when saved while Bluesky was unreachable. */
+  did?: string
+  name: string
+  speakerId: string
+  optedOut: boolean
+}
+
+/**
  * A recorded Bluesky mention as stored on the variant (tagging spec §4.3).
  * The speaker reference is WEAK, so GDPR erasure can delete the speaker.
  * Marketing builds these (`mentionDocuments`); the social layer only stores

@@ -5,7 +5,11 @@ import type {
   TickWorkBounds,
   VariantTransition,
 } from '../store'
-import type { SocialPostAttachment, SocialPostVariant } from '../types'
+import type {
+  RecordedTag,
+  SocialPostAttachment,
+  SocialPostVariant,
+} from '../types'
 
 /**
  * In-memory `SocialVariantStore` with real compare-and-set semantics: every
@@ -24,6 +28,13 @@ export class MemoryVariantStore implements SocialVariantStore {
   readonly domains: Record<string, string[]>
   /** The posts' creators by post id, as the Sanity read joins them. */
   readonly creators: Record<string, string>
+  /**
+   * Recorded tags with their speakers' opt-out, by variant id, as the Sanity
+   * due read joins them through the weak speaker reference (tagging §4.4).
+   */
+  readonly tags: Record<string, RecordedTag[]> = {}
+  /** Every write's patch, in order: claims and transitions alike. */
+  readonly writes: Partial<SocialPostVariant>[] = []
 
   constructor(
     variants: SocialPostVariant[] = [],
@@ -45,6 +56,7 @@ export class MemoryVariantStore implements SocialVariantStore {
 
   private write(id: string, patch: Partial<SocialPostVariant>) {
     const current = this.get(id)
+    this.writes.push(patch)
     this.docs.set(id, {
       ...current,
       ...patch,
@@ -79,6 +91,7 @@ export class MemoryVariantStore implements SocialVariantStore {
           }),
           postCreatedBy: this.creators[v.postId] ?? null,
           marketingTaskId: null,
+          ...(this.tags[v._id] ? { recordedTags: this.tags[v._id] } : {}),
         })
       }
       byConference.set(v.conferenceId, bucket)

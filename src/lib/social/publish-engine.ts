@@ -24,6 +24,10 @@ import type { PublishableVariant, SocialVariantStore } from './store'
 import { publishLinkFields } from './publish-link'
 import type { ConfirmCheck } from './provider/types'
 import type { PublishAttempt, SocialPostVariant } from './types'
+import {
+  withholdOptedOutTags,
+  type WithheldTag,
+} from '@/lib/marketing/tagging/publish'
 
 /**
  * Which adapter publishes a variant, or `null` when the variant is MANUAL —
@@ -37,6 +41,15 @@ export type AdapterResolver = (
 export interface VariantFailureEvent {
   variant: SocialPostVariant
   attempt: PublishAttempt
+}
+
+/**
+ * A post that went out with a late opt-out's tag swapped for the plain name
+ * (tagging spec §4.4, Publish). `variant.body` is the text as APPROVED.
+ */
+export interface TagsWithheldEvent {
+  variant: PublishableVariant
+  withheld: WithheldTag[]
 }
 
 export interface PublishTickOptions {
@@ -83,6 +96,12 @@ export interface PublishTickOptions {
    * touches the variants.
    */
   onAwaitingManual?: (variants: PublishableVariant[]) => Promise<unknown>
+  /**
+   * Runs after the transition that records a swapped post LANDED — never on a
+   * lost race. A throw is logged in `errors` and never touches the variant:
+   * the post is out, and a notification must not undo it.
+   */
+  onTagsWithheld?: (event: TagsWithheldEvent) => Promise<unknown>
 }
 
 export interface PublishTickSummary {
@@ -304,6 +323,7 @@ export async function runPublishTick(
         options.deadline,
         options.onFailed,
         clock,
+        options.onTagsWithheld,
       )
       if (handedOver) awaitingManual.push(handedOver)
     } catch (error) {
@@ -591,6 +611,7 @@ async function dispatch(
   deadline?: Date,
   onFailed?: PublishTickOptions['onFailed'],
   clock: () => Date = () => now,
+  onTagsWithheld?: PublishTickOptions['onTagsWithheld'],
 ): Promise<PublishableVariant | null> {
   const claimed = await store.claim(variant, now)
   if (!claimed) {
@@ -680,7 +701,16 @@ async function dispatch(
     return null
   }
 
-  const input = publishInputFor(claimed, adapter)
+  // A speaker who opted out after approval (tagging spec §4.4, Publish): their
+  // recorded tag goes out as their plain name, and the post still goes out.
+  const tags = claimed.recordedTags
+    ? withholdOptedOutTags({
+        body: claimed.body,
+        recorded: claimed.recordedTags,
+      })
+    : null
+  const swapped = tags && tags.withheld.length > 0 ? tags : null
+  const input = publishInputFor(claimed, adapter, tags)
   const outcome = input.ok
     ? await attemptPublish(adapter, input.input, {
         conferenceDomains: claimed.conferenceDomains,
@@ -689,7 +719,17 @@ async function dispatch(
   // AFTER the publish, not the tick's start: this is when the vendor answered,
   // and `submittedAt` is what the confirm cadence and the 15-minute timeout
   // are measured from.
-  await settle(claimed, outcome, store, clock(), summary, onFailed)
+  await settle(claimed, outcome, store, clock(), summary, onFailed, {
+    sent: swapped?.body,
+    onSent: swapped
+      ? () =>
+          notifyTagsWithheld(
+            onTagsWithheld,
+            { variant: claimed, withheld: swapped.withheld },
+            summary,
+          )
+      : undefined,
+  })
   return null
 }
 
@@ -706,7 +746,15 @@ async function settle(
   now: Date,
   summary: PublishTickSummary,
   onFailed?: PublishTickOptions['onFailed'],
+  /**
+   * `sent`: the text posted when it is not the stored body — written by the
+   * SAME compare-and-set that records the post went out (tagging spec §4.4),
+   * so a lost race loses it too: the known hole. `onSent` runs only after
+   * that write landed.
+   */
+  posted: { sent?: string; onSent?: () => Promise<void> } = {},
 ) {
+  const sentBody = posted.sent !== undefined ? { body: posted.sent } : {}
   const attempt: PublishAttempt = {
     _key: randomUUID(),
     at: now.toISOString(),
@@ -731,6 +779,7 @@ async function settle(
             claimedAt: null,
             attemptCount,
             submission: decision.submission,
+            ...sentBody,
             attempt: { ...attempt, outcome: 'submitted' },
           },
           { ifRevision: claimed._rev },
@@ -751,6 +800,7 @@ async function settle(
       }
       if (landed) {
         summary.submitted++
+        await posted.onSent?.()
       } else {
         // The stale sweep won the race after the vendor accepted the post.
         // The document stays FAILED (never re-posted). The receipt is LOGGED
@@ -774,12 +824,14 @@ async function settle(
             attemptCount,
             submission: null,
             publishResult: decision.publishResult,
+            ...sentBody,
             attempt,
           },
           { ifRevision: claimed._rev },
         )
       ) {
         summary.published++
+        await posted.onSent?.()
       } else {
         // The stale sweep won the race after the platform accepted the post.
         // The verdict on the document stays FAILED (never re-posted); the
@@ -837,6 +889,21 @@ async function settle(
   }
 }
 
+async function notifyTagsWithheld(
+  hook: PublishTickOptions['onTagsWithheld'],
+  event: TagsWithheldEvent,
+  summary: PublishTickSummary,
+) {
+  if (!hook) return
+  try {
+    await hook(event)
+  } catch (error) {
+    summary.errors.push(
+      `tag-withheld notification (${event.variant._id}): ${error instanceof Error ? error.message : String(error)}`,
+    )
+  }
+}
+
 async function notifyFailure(
   hook: PublishTickOptions['onFailed'],
   event: VariantFailureEvent,
@@ -862,6 +929,7 @@ async function notifyFailure(
 function publishInputFor(
   variant: PublishableVariant,
   adapter: SocialPublishAdapter,
+  tags: ReturnType<typeof withholdOptedOutTags> | null = null,
 ): { ok: true; input: PublishInput } | { ok: false; outcome: PublishOutcome } {
   const media = resolvePublishMedia(
     variant.attachments,
@@ -883,7 +951,7 @@ function publishInputFor(
   return {
     ok: true,
     input: {
-      text: variant.body,
+      text: tags?.body ?? variant.body,
       media,
       // A Task's variant posts its `/go/<code>` short link and keeps the long
       // tagged link as the page its card is scraped from (short-links spec
@@ -891,7 +959,15 @@ function publishInputFor(
       ...publishLinkFields(variant, variant.shortLinkOrigin),
       // The DIDs generation checked: the adapter posts these rather than
       // resolving the handles a second time (tagging spec §4.4, Publish).
-      ...(variant.mentions?.length ? { mentions: variant.mentions } : {}),
+      // With the opt-outs read (`recordedTags`), a withheld tag's DID is not
+      // posted: its handle is no longer in the text.
+      ...(tags
+        ? tags.mentions.length
+          ? { mentions: tags.mentions }
+          : {}
+        : variant.mentions?.length
+          ? { mentions: variant.mentions }
+          : {}),
     },
   }
 }
