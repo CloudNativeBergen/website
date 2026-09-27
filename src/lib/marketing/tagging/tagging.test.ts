@@ -353,10 +353,12 @@ describe('tagBlueskyBody', () => {
     expect(mentions.map((m) => m.speakerId)).toEqual(['a', 'b'])
   })
 
-  it('bounds the neutral word too: a speaker gone by publish goes out as "a speaker" (#1152)', () => {
-    // "@a.io" is 5 and "Al" 2, but a speaker deleted or erased before publish
-    // is swapped for GONE_SPEAKER_TEXT (9): generation must not write a tag
-    // that the approval check would then refuse as too long.
+  it('keeps the tag AND its record when only the neutral word would overflow; the approval check refuses instead (final round, T3)', () => {
+    // "@a.io" is 5 and "Al" 2; a speaker gone by publish goes out as
+    // GONE_SPEAKER_TEXT (9). Dropping the tag here would drop the RECORD, and
+    // with it the only way a later erasure can neutralise "Al" at publish.
+    // So generation keeps both, and the approval check (which bounds the
+    // neutral word) refuses the body until it is shortened.
     const al = {
       speakerId: 'al',
       name: 'Al',
@@ -369,8 +371,19 @@ describe('tagBlueskyBody', () => {
       values: {},
       people: [al],
     })
-    expect(body).toBe(`Al ${filler}`)
-    expect(mentions).toEqual([])
+    expect(body).toBe(`@a.io ${filler}`)
+    expect(mentions).toEqual([
+      expect.objectContaining({ speakerId: 'al', status: 'tagged' }),
+    ])
+    const refused = saveMentions({
+      body,
+      people: [
+        { speakerId: 'al', name: 'Al', handle: 'a.io', optedOut: false },
+      ],
+      previous: mentions,
+      resolutions: new Map(),
+    })
+    expect(refused.issues.map((i) => i.code)).toEqual(['plain-too-long'])
   })
 
   it('a short handle that fits while the plain name would not is NOT a tag: the body must fit both ways', () => {

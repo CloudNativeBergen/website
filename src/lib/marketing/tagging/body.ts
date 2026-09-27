@@ -150,12 +150,13 @@ export function tagBlueskyBody(input: {
   // Every form must fit (§4.4), not just all-tagged and all-plain: at
   // publish only an opted-out speaker's tag goes back to the name, so ANY
   // subset may be swapped. Per bound, the longest form takes each tag in
-  // its longest form in that bound's unit: the handle, the name (an
-  // opt-out), or the neutral word for a speaker gone since (#1152).
+  // its longer form in that bound's unit: the handle or the name (an
+  // opt-out). NOT the neutral word for a speaker gone by publish: dropping a
+  // tag for it would drop its RECORD, the only thing through which a later
+  // erasure can neutralise the name. The save and approval checks bound it
+  // instead and refuse the body until it is shortened (final round, T3).
   const worst = (p: TagPerson, b: LengthBound) =>
-    [handleOf(p), p.name, GONE_SPEAKER_TEXT].reduce((x, y) =>
-      b.length(y) > b.length(x) ? y : x,
-    )
+    [handleOf(p), p.name].reduce((x, y) => (b.length(y) > b.length(x) ? y : x))
   const tagIsLonger = (p: TagPerson, b: LengthBound) =>
     b.length(worst(p, b)) > b.length(p.name)
   const overBounds = (tagged: ReadonlySet<TagPerson>) =>
