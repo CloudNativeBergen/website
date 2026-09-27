@@ -727,6 +727,31 @@ export const BlueskyCheckPending: Story = {
   },
 }
 
+/**
+ * The checked body can come back longer than what was approved (a speaker's
+ * current name, round 2 T5). Under 300 characters but over Bluesky's
+ * 3,000-byte cap, it must still say "shorten" — Bluesky would refuse it.
+ */
+const FAMILY = '👨‍👩‍👧‍👦' // one grapheme, 25 bytes
+export const BlueskyOverByteCap: Story = {
+  args: {
+    ...BlueskyLateOptOut.args,
+    manualBody: {
+      body: `${FAMILY.repeat(121)} Alice Smith`,
+      untagged: ['Alice Smith'],
+      removed: 0,
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const text = canvas
+      .getByRole('button', { name: /copy text/i })
+      .closest('section')
+    await expect(text).toHaveTextContent('Shorten the text before posting.')
+    await expect(text).toHaveTextContent(/bytes/)
+  },
+}
+
 /** Once posted, the record is shown as it is: no check, no notice. */
 export const BlueskyLateOptOutPosted: Story = {
   args: {

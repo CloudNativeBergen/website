@@ -166,10 +166,17 @@ export function ManualPostView({
     : null
   // The body validated on its own; the appended link can push the copied
   // text over the platform's cap, which the organizer must hear here.
+  // Bluesky also caps BYTES (3,000): a body of complex emoji fits 300
+  // characters and is still refused. The checked body can come back longer
+  // than the approved one (a speaker's current name, review round 2 T5).
+  const copyBytes = new TextEncoder().encode(copyText).length
+  const overBytes =
+    constraints?.maxBytes != null && copyBytes > constraints.maxBytes
   const overLimit =
-    constraints !== null &&
-    copyLength !== null &&
-    copyLength > constraints.maxLength
+    (constraints !== null &&
+      copyLength !== null &&
+      copyLength > constraints.maxLength) ||
+    overBytes
   const done = variant.status === 'published'
   // `failed` joins `awaiting-manual` (#1128, spec §5): with an asynchronous
   // publisher a variant never reaches `awaiting-manual`, so recording a post
@@ -306,6 +313,7 @@ export function ManualPostView({
           title="Text"
           hint={[
             constraints ? `${copyLength} / ${constraints.maxLength}` : null,
+            overBytes ? `${copyBytes} / ${constraints!.maxBytes} bytes` : null,
             linkAppended ? 'The link is added at the end.' : null,
             overLimit ? 'Shorten the text before posting.' : null,
           ]
