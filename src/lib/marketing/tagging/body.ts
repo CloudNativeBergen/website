@@ -2,13 +2,15 @@
  * A tagging Bluesky body (spec §4.1, §4.3). Pure.
  *
  * The value map a beat is built from serves BOTH Channels and the alt text,
- * so `{name}` stays a plain name in it. This is the one place a handle goes
- * in: when the body of a Bluesky `tagSubject` recipe is resolved, `{name}` is
- * the subject's people with each tag in place of the name — and a handle
- * costs its full length, so over the limit names fall back to plain text from
- * the last one until the body fits.
+ * so `{name}` and `{speakers}` stay plain names in it. This is the one place
+ * a handle goes in: when the body of a Bluesky `tagSubject` recipe is
+ * resolved, `{name}` and `{speakers}` are the subject's people with each tag
+ * in place of the name — and a handle costs its full length, so over either
+ * limit (300 characters, 3,000 bytes) a tag longer than its name in that
+ * unit falls back to plain text, from the last one, until every form fits.
  */
 
+import { normaliseHandle } from '@/lib/social/provider/bluesky-syntax'
 import { resolvePlaceholders, type Placeholder } from '../placeholders'
 import { storedKey } from '../recipes'
 import type { TaskRecipe } from '../template/types'
@@ -26,6 +28,21 @@ export function countGraphemes(text: string): number {
   return [...segmenter.segment(text)].length
 }
 
+/** Bluesky's byte cap on a post's text (`PLATFORM_CONSTRAINTS.bluesky.maxBytes`). */
+export const BLUESKY_MAX_BYTES = 3000
+const utf8 = new TextEncoder()
+const countBytes = (text: string) => utf8.encode(text).length
+
+/** One limit a generated body must fit in every form, in its own unit. */
+interface LengthBound {
+  length: (text: string) => number
+  max: number
+}
+const LENGTH_BOUNDS: readonly LengthBound[] = [
+  { length: countGraphemes, max: BLUESKY_MAX_GRAPHEMES },
+  { length: countBytes, max: BLUESKY_MAX_BYTES },
+]
+
 /** What generation found for one person's Bluesky account. */
 export type BlueskyTag =
   | { status: 'tagged'; handle: string; did: string }
@@ -42,8 +59,9 @@ export interface NamedPerson {
 }
 
 /**
- * One person a subject's `{name}` names, in order. `tag` is null when there is
- * nothing to tag: no Bluesky link, opted out (#1148), or our own account.
+ * One person a subject's `{name}` and `{speakers}` name, in order. `tag` is
+ * null when there is nothing to tag: no Bluesky link, opted out (#1148), or
+ * our own account.
  */
 export interface TagPerson extends NamedPerson {
   speakerId: string
@@ -121,22 +139,48 @@ export function tagBlueskyBody(input: {
     render((p) => (tagged.has(p) ? handleOf(p) : p.name))
   // Every form must fit (§4.4), not just all-tagged and all-plain: at
   // publish only an opted-out speaker's tag goes back to the name, so ANY
-  // subset may be swapped. The longest is each tag in its longer form.
-  const longest = (tagged: ReadonlySet<TagPerson>) =>
-    render((p) =>
-      tagged.has(p) && countGraphemes(handleOf(p)) > countGraphemes(p.name)
-        ? handleOf(p)
-        : p.name,
+  // subset may be swapped. Per bound, the longest form takes each tag in
+  // its longer form — max(handle, name) in that bound's unit.
+  const tagIsLonger = (p: TagPerson, b: LengthBound) =>
+    b.length(handleOf(p)) > b.length(p.name)
+  const overBounds = (tagged: ReadonlySet<TagPerson>) =>
+    LENGTH_BOUNDS.filter(
+      (b) =>
+        b.length(
+          render((p) =>
+            tagged.has(p) && tagIsLonger(p, b) ? handleOf(p) : p.name,
+          ),
+        ) > b.max,
     )
 
-  // Names fall back from the LAST speaker until every form fits; when even
-  // the plain form is over, nobody is tagged.
-  const candidates = people.filter((p) => p.tag?.status === 'tagged')
-  while (
-    candidates.length > 0 &&
-    countGraphemes(longest(new Set(candidates))) > BLUESKY_MAX_GRAPHEMES
-  )
-    candidates.pop()
+  // Walking back from the LAST speaker, drop only a tag that is longer than
+  // its name in a bound that is over: any other drop cannot shorten the
+  // worst case, and would cost that speaker their tag for nothing. When no
+  // such tag is left and a bound is still over, the plain form itself is
+  // over, and nobody is tagged.
+  // A skeleton that names the people more than once emits each tag more
+  // than once. A handle two of them share (a team account) would then carry
+  // more occurrences than records, and no swap or check could tell whose
+  // each one is: those people keep their plain names.
+  const namings = skeleton.match(/\{(?:name|speakers)\}/g)?.length ?? 0
+  const taggable = people.filter((p) => p.tag?.status === 'tagged')
+  const sharers = (p: TagPerson) =>
+    taggable.filter(
+      (q) => normaliseHandle(q.tag!.handle) === normaliseHandle(p.tag!.handle),
+    ).length
+  const candidates = taggable.filter((p) => namings < 2 || sharers(p) === 1)
+  for (;;) {
+    const over = overBounds(new Set(candidates))
+    if (over.length === 0) break
+    const i = candidates.findLastIndex((p) =>
+      over.some((b) => tagIsLonger(p, b)),
+    )
+    if (i < 0) {
+      candidates.length = 0
+      break
+    }
+    candidates.splice(i, 1)
+  }
   const body = withTags(new Set(candidates))
 
   const tagged = new Set(candidates)

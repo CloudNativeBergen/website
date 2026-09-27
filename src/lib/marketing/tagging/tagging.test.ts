@@ -14,6 +14,7 @@ import {
   speakersList,
   tagBlueskyBody,
 } from '.'
+import { plainBody, saveMentions } from './checks'
 
 describe("naming a talk's speakers (spec §4.2)", () => {
   it('{name}: one, two and three names read naturally', () => {
@@ -402,6 +403,121 @@ describe('tagBlueskyBody', () => {
     // Bob (the LAST) falls back first; Alice's tag then fits every way.
     expect(body).toBe(`@al.dev and Bob ${filler}`)
     expect(mentions.map((m) => m.speakerId)).toEqual(['al'])
+  })
+
+  it('over the limit, a tag no longer than its name is kept: dropping it cannot shorten the worst case', () => {
+    // Al's tag is 37 graphemes longer than his name; Bartholomew's is 23
+    // SHORTER. Only Al's drop can shorten the longest form, so Bartholomew,
+    // the LAST speaker, keeps his tag.
+    const al = {
+      speakerId: 'al',
+      name: 'Al',
+      tag: {
+        status: 'tagged' as const,
+        handle: 'al-with-a-very-long-handle.bsky.social',
+        did: DID_A,
+      },
+    }
+    const bart = {
+      speakerId: 'bart',
+      name: 'Bartholomew Montgomery-Smithson',
+      tag: { status: 'tagged' as const, handle: 'bms.dev', did: DID_B },
+    }
+    const hook = 'h'.repeat(241)
+    expect(graphemes(`${hook} Al and ${bart.name}`)).toBe(280)
+    const { body, mentions } = tagBlueskyBody({
+      skeleton: '{hook} {name}',
+      values: { hook },
+      people: [al, bart],
+    })
+    expect(body).toBe(`${hook} Al and @bms.dev`)
+    expect(graphemes(body)).toBe(257)
+    expect(mentions.map((m) => [m.speakerId, m.status])).toEqual([
+      ['bart', 'tagged'],
+    ])
+  })
+
+  it('over the 3,000-byte cap, a tag longer than its name in BYTES falls back, so the save check accepts it', () => {
+    // Every form is under 300 characters. Bytes: all-plain is 2,983; Ann's
+    // name (100 bytes) with Bo's 53-byte tag is 3,034. Only Bo's drop helps.
+    const family = '👨‍👩‍👧‍👦' // one grapheme, 25 bytes
+    const ann = {
+      speakerId: 'ann',
+      name: family.repeat(4),
+      tag: { status: 'tagged' as const, handle: 'a.dev', did: DID_A },
+    }
+    const bo = {
+      speakerId: 'bo',
+      name: 'Bo',
+      tag: {
+        status: 'tagged' as const,
+        handle: `${'b'.repeat(40)}.bsky.social`,
+        did: DID_B,
+      },
+    }
+    const hook = family.repeat(115)
+    const { body, mentions } = tagBlueskyBody({
+      skeleton: '{hook} {name}',
+      values: { hook },
+      people: [ann, bo],
+    })
+    expect(body).toBe(`${hook} @a.dev and Bo`)
+    expect(mentions.map((m) => [m.speakerId, m.status])).toEqual([
+      ['ann', 'tagged'],
+    ])
+    const saved = saveMentions({
+      body,
+      people: [ann, bo].map((p) => ({
+        speakerId: p.speakerId,
+        name: p.name,
+        handle: p.tag.handle,
+        optedOut: false,
+      })),
+      previous: mentions,
+      resolutions: new Map(),
+    })
+    expect(saved.issues).toEqual([])
+  })
+
+  it('a skeleton naming people twice does not tag a SHARED handle: its occurrences could not be told apart', () => {
+    // "{name}: {speakers}" emits each tag twice. Ann and Bob share a team
+    // account, so four "@team.dev" would carry two records, and no swap
+    // could say whose each one is. Carol's own handle is still tagged.
+    const team = { status: 'tagged' as const, handle: 'team.dev', did: DID_A }
+    const ann = { speakerId: 'ann', name: 'Ann', jobTitle: 'SRE', tag: team }
+    const bob = { speakerId: 'bob', name: 'Bob', jobTitle: 'CTO', tag: team }
+    const carol = {
+      speakerId: 'carol',
+      name: 'Carol',
+      tag: { status: 'tagged' as const, handle: 'carol.dev', did: DID_B },
+    }
+    const { body, mentions } = tagBlueskyBody({
+      skeleton: '{name}: {speakers}',
+      values: {},
+      people: [ann, bob, carol],
+    })
+    expect(body).toBe(
+      'Ann, Bob and @carol.dev: Ann (SRE), Bob (CTO) and @carol.dev',
+    )
+    expect(mentions.map((m) => m.speakerId)).toEqual(['carol'])
+    expect(plainBody(body, mentions)).toBe(
+      'Ann, Bob and Carol: Ann (SRE), Bob (CTO) and Carol',
+    )
+  })
+
+  it('a skeleton naming people ONCE still tags a shared handle, one record per occurrence', () => {
+    const team = { status: 'tagged' as const, handle: 'team.dev', did: DID_A }
+    const { body, mentions } = tagBlueskyBody({
+      skeleton: '{name} on stage',
+      values: {},
+      people: [
+        { speakerId: 'ann', name: 'Ann', tag: team },
+        { speakerId: 'bob', name: 'Bob', tag: team },
+      ],
+    })
+    expect(body).toBe('@team.dev and @team.dev on stage')
+    expect(mentions.map((m) => m.speakerId)).toEqual(['ann', 'bob'])
+    expect(plainBody(body, mentions)).toBe('Ann and Bob on stage')
   })
 
   it('when even the plain names do not fit, nobody is tagged', () => {

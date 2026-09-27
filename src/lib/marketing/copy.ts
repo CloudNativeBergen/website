@@ -49,6 +49,7 @@ import {
   type SeedPlan,
 } from './seed'
 import type { Anchor, TaskRecipe } from './template/types'
+import { withCurrentSkeletons } from './template/legacy-skeletons'
 import type { MarketingChannel, TaskKind, TaskOrigin } from './types'
 
 /** Origins that belong to the edition they were made in (§3.1). */
@@ -305,7 +306,9 @@ export function copyPlan(input: CopyInput): SeedPlan {
       outcomeTargetPage: c.outcomeTargetPage,
       target: c.target,
       triggers: c.triggers.map((t) => ({ ...t })),
-      recipes: structuredClone(c.recipes),
+      // A saved Template or an earlier plan may still hold a replaced
+      // built-in text (#1153); an unedited one is brought current.
+      recipes: withCurrentSkeletons(c.recipes),
       generatedKeys: [],
       optional: c.optional,
     }

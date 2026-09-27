@@ -246,7 +246,8 @@ export interface MaterializeInput {
   /** Carried onto the Task, so the NEXT copy knows the copy is theirs. */
   copyEdited?: boolean
   /**
-   * The people the subject's `{name}` names, with their Bluesky tags. Read
+   * The people the subject's `{name}` and `{speakers}` name, with their
+   * Bluesky tags. Read
    * only for the body of a Bluesky `tagSubject` recipe (tagging spec §4.1).
    */
   tagging?: readonly TagPerson[]

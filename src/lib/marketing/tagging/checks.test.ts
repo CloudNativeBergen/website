@@ -493,6 +493,60 @@ describe('saveMentions (§4.3 rebuilt on every save, §4.4 Save)', () => {
     expect(out.issues[0].message).toContain('3002 bytes')
   })
 
+  it('swaps by BYTES for the byte bound: a name shorter than its tag in characters but longer in bytes', () => {
+    // 3 graphemes but 75 bytes, against "@abcdefghij.dev" at 15 of each: a
+    // swap chosen by characters would keep the tag and miss the 3,026 bytes.
+    const family = '👨‍👩‍👧‍👦' // one grapheme, 25 bytes
+    const fam: TaggablePerson = {
+      speakerId: 'fam',
+      name: family.repeat(3),
+      handle: 'abcdefghij.dev',
+      optedOut: false,
+    }
+    const out = saveMentions({
+      body: `@abcdefghij.dev ${family.repeat(118)}`,
+      people: [fam],
+      previous: [tagged(fam, DID_A)],
+      resolutions: new Map(),
+    })
+    expect(out.issues).toEqual([
+      expect.objectContaining({ code: 'plain-too-long', mentionKey: null }),
+    ])
+    expect(out.issues[0].message).toContain('3026 bytes; Bluesky allows 3000')
+  })
+
+  it('bounds bytes by the longest MIX too: a name longer in bytes than its tag, another shorter', () => {
+    // Wen's name is 994 bytes over her tag; Bob's tag 59 bytes over his name.
+    // All-plain is 2,942 bytes and fits; Wen swapped with Bob tagged is 3,001.
+    const family = '👨‍👩‍👧‍👦' // one grapheme, 25 bytes
+    const utf8 = (t: string) => new TextEncoder().encode(t).length
+    const wen: TaggablePerson = {
+      speakerId: 'wen',
+      name: family.repeat(40), // 1,000 bytes vs "@w.dev" 6
+      handle: 'w.dev',
+      optedOut: false,
+    }
+    const bo: TaggablePerson = {
+      speakerId: 'bo',
+      name: 'Bob', // 3 bytes vs "@" + 61 = 62
+      handle: `${'b'.repeat(49)}.bsky.social`,
+      optedOut: false,
+    }
+    const body = `@w.dev and @${bo.handle} ${family.repeat(77)}${'x'.repeat(8)}`
+    const previous = [tagged(wen, DID_A), tagged(bo, DID_B)]
+    expect(utf8(plainBody(body, previous))).toBe(2942)
+    const out = saveMentions({
+      body,
+      people: [wen, bo],
+      previous,
+      resolutions: new Map(),
+    })
+    expect(out.issues).toEqual([
+      expect.objectContaining({ code: 'plain-too-long', mentionKey: null }),
+    ])
+    expect(out.issues[0].message).toContain('3001 bytes; Bluesky allows 3000')
+  })
+
   it('a body that fits both ways saves', () => {
     const out = saveMentions({
       body: `${'x'.repeat(270)} @alice.dev`,

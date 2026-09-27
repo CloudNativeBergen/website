@@ -79,8 +79,8 @@ export interface TaskRecipe {
   verbatim?: boolean
   /**
    * Generated copy tags the subject (tagging spec §2): the BODY of a Bluesky
-   * publishing recipe resolves `{name}` with Bluesky handles. Meaningless on
-   * any other Channel. Absent is off.
+   * publishing recipe resolves `{name}` and `{speakers}` with Bluesky handles.
+   * Meaningless on any other Channel. Absent is off.
    */
   tagSubject?: boolean
   /** Body for checklist / eventPageUpdate recipes. */

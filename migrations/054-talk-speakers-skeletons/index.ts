@@ -1,5 +1,5 @@
 import { at, defineMigration, patch, set } from 'sanity/migrate'
-import { isLive, rewritesFor } from './rewrites'
+import { rewritesFor } from './rewrites'
 
 /**
  * Talk posts name all of a talk's speakers (#1153): the built-in talk
@@ -15,7 +15,8 @@ export default defineMigration({
   documentTypes: ['marketingCampaign'],
   async *migrate(documents) {
     for await (const campaign of documents()) {
-      if (!isLive(campaign._id)) continue
+      // Drafts and Content Release copies too: publishing one later would
+      // replace the live Campaign and bring the old text back.
       const rewrites = rewritesFor(campaign)
       if (rewrites.length === 0) continue
       yield patch(
