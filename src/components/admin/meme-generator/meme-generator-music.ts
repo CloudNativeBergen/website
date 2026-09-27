@@ -82,7 +82,7 @@ export function mixTrack(
  * samples dropped, so the rest land in step with the picture. The encoder's
  * priming takes their place, so the file's sound is still the video's length
  * (to its last whole AAC frame). The dropped head is under the fade-in when
- * there is one.
+ * there is one. A view, not a copy: the encoder's AudioBuffer copies it.
  */
 export function shiftForPriming<T extends readonly Float32Array[]>(
   channels: T,
@@ -90,7 +90,7 @@ export function shiftForPriming<T extends readonly Float32Array[]>(
 ): T {
   if (priming <= 0) return channels
   return channels.map((samples) =>
-    samples.slice(Math.min(priming, samples.length)),
+    samples.subarray(Math.min(priming, samples.length)),
   ) as unknown as T
 }
 

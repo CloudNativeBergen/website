@@ -150,6 +150,13 @@ describe('shiftForPriming', () => {
     expect([...shifted]).toEqual([4, 5, 6, 7, 8, 9, 10])
   })
 
+  it('drops the head as a view, never a copy of a minute of samples', () => {
+    const ramp = new Float32Array(10).map((_, i) => i + 1)
+    const [shifted] = shiftForPriming([ramp], 3)
+    expect(shifted.buffer).toBe(ramp.buffer)
+    expect(shifted.byteOffset).toBe(3 * Float32Array.BYTES_PER_ELEMENT)
+  })
+
   it('leaves a track alone when there is no priming', () => {
     const ramp = new Float32Array(4).map((_, i) => i + 1)
     expect([...shiftForPriming([ramp], 0)[0]]).toEqual([1, 2, 3, 4])
