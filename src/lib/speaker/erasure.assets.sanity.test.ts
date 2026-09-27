@@ -560,6 +560,7 @@ describe('speaker erasure removes their images everywhere (#1162)', () => {
     expect(v?.residual).toMatchObject({
       marketingAssets: 1,
       linkedFileHolders: 0,
+      videoProjects: 0,
       linkedFiles: 0,
     })
     expect(v?.clean).toBe(false)
@@ -716,6 +717,226 @@ describe('speaker erasure removes their images everywhere (#1162)', () => {
     expect(doc('drafts.task-draft').asset).toBeUndefined()
     expect(doc(REL)).toBeUndefined()
     expect(doc(DRAFT)).toBeUndefined()
+  })
+
+  describe('a saved studio video (#1181)', () => {
+    const project = (id: string, scenes: unknown[], extra = {}) => ({
+      _id: id,
+      _type: 'videoProject',
+      _rev: 'r0',
+      organization: ref('org-a'),
+      scope: 'organization',
+      title: 'Teaser',
+      formatVersion: 1,
+      scenes,
+      ...extra,
+    })
+    const sceneWith = (key: string, color: string, file?: string) => ({
+      _key: key,
+      _type: 'videoProjectScene',
+      duration: 3,
+      background: {
+        color,
+        ...(file
+          ? {
+              image: {
+                ...image(file),
+                name: 'card',
+                galleryAsset: weak('asset-ada'),
+              },
+            }
+          : {}),
+      },
+      textLines: [{ _key: `${key}-l`, text: 'Hello' }],
+    })
+
+    it('loses the speaker’s backgrounds by scene key, each scene keeping its colour', async () => {
+      h.dataset.push(
+        project('vp-1', [
+          sceneWith('s-ada', '#112233', ADA_CARD),
+          sceneWith('s-bob', '#445566', BOB_CARD),
+          sceneWith('s-plain', '#778899'),
+          sceneWith('s-talk', '#aabbcc', TALK_CARD),
+        ]),
+        project('drafts.vp-1', [sceneWith('s-ada', '#112233', ADA_CARD)]),
+      )
+      const result = await eraseSpeakerInPlace({
+        speakerId: ADA,
+        actor: 'test',
+      })
+      expect(result.err).toBeNull()
+
+      const scenes = doc('vp-1').scenes as Record<string, unknown>[]
+      expect(scenes.map((s) => s.background)).toEqual([
+        { color: '#112233' },
+        {
+          color: '#445566',
+          image: {
+            ...image(BOB_CARD),
+            name: 'card',
+            galleryAsset: weak('asset-ada'),
+          },
+        },
+        { color: '#778899' },
+        { color: '#aabbcc' },
+      ])
+      // The rest of each scene is untouched.
+      expect(scenes[0].textLines).toEqual([{ _key: 's-ada-l', text: 'Hello' }])
+      expect(
+        (doc('drafts.vp-1').scenes as { background: unknown }[])[0].background,
+      ).toEqual({
+        color: '#112233',
+      })
+      for (const file of [ADA_CARD, TALK_CARD])
+        expect(referencesTo(file).map((d) => d._id)).toEqual([])
+      expect(doc(ADA_CARD)).toBeUndefined()
+      expect(doc(BOB_CARD)).toBeDefined()
+      expect(result.verification?.clean).toBe(true)
+      expect(result.verification?.residual.videoProjects).toBe(0)
+    })
+
+    it('finds a background by the subject it copied, after its gallery asset was deleted', async () => {
+      const GONE = 'image-assetgone-1080x1080-png'
+      h.dataset.push(
+        { _id: GONE, _type: 'sanity.imageAsset' },
+        project('vp-gone', [
+          {
+            ...sceneWith('s-gone', '#010203'),
+            background: {
+              color: '#010203',
+              image: { ...image(GONE), name: 'card', subject: weak(ADA) },
+            },
+          },
+          {
+            ...sceneWith('s-talk', '#040506'),
+            background: {
+              color: '#040506',
+              image: { ...image(BOB_CARD), name: 'b', subject: weak(TALK_BOB) },
+            },
+          },
+        ]),
+      )
+      const result = await eraseSpeakerInPlace({
+        speakerId: ADA,
+        actor: 'test',
+      })
+      expect(result.err).toBeNull()
+      const scenes = doc('vp-gone').scenes as { background: unknown }[]
+      expect(scenes[0].background).toEqual({ color: '#010203' })
+      // Bob's talk, not Ada's: untouched.
+      expect(scenes[1].background).toMatchObject({ image: image(BOB_CARD) })
+      expect(doc(GONE)).toBeUndefined()
+      expect(result.verification?.clean).toBe(true)
+    })
+
+    it('ignores a stale copied subject while the gallery asset still exists', async () => {
+      // Saved while asset-bob was (wrongly) about Ada; since corrected to Bob.
+      h.dataset.push(
+        project('vp-stale', [
+          {
+            ...sceneWith('s-stale', '#0a0b0c'),
+            background: {
+              color: '#0a0b0c',
+              image: {
+                ...image(BOB_CARD),
+                name: 'b',
+                galleryAsset: weak('asset-bob'),
+                subject: weak(ADA),
+              },
+            },
+          },
+        ]),
+      )
+      const result = await eraseSpeakerInPlace({
+        speakerId: ADA,
+        actor: 'test',
+      })
+      expect(result.err).toBeNull()
+      expect(doc('asset-bob')).toBeDefined()
+      expect(doc(BOB_CARD)).toBeDefined()
+      expect(
+        (doc('vp-stale').scenes as { background: object }[])[0].background,
+      ).toHaveProperty('image')
+    })
+
+    it('treats a gallery asset that survives only as a Studio draft as live', async () => {
+      h.dataset.push(
+        { ...doc('asset-bob'), _id: 'drafts.asset-bob-only' },
+        project('vp-draft-live', [
+          {
+            ...sceneWith('s-dl', '#0d0e0f'),
+            background: {
+              color: '#0d0e0f',
+              image: {
+                ...image(BOB_CARD),
+                name: 'b',
+                galleryAsset: weak('asset-bob-only'),
+                subject: weak(ADA),
+              },
+            },
+          },
+        ]),
+      )
+      await eraseSpeakerInPlace({ speakerId: ADA, actor: 'test' })
+      // The draft's own subject (Bob) decides, not the project's stale copy.
+      expect(doc(BOB_CARD)).toBeDefined()
+      expect(
+        (doc('vp-draft-live').scenes as { background: object }[])[0].background,
+      ).toHaveProperty('image')
+    })
+
+    it('loses a track linked to the speaker', async () => {
+      h.dataset.push(
+        project('vp-track', [sceneWith('s', '#000000')], {
+          track: { file: { _type: 'file', asset: ref(ADA_CLIP) }, title: 'x' },
+        }),
+      )
+      const result = await eraseSpeakerInPlace({
+        speakerId: ADA,
+        actor: 'test',
+      })
+      expect(result.err).toBeNull()
+      expect(doc('vp-track').track).toBeUndefined()
+      expect(doc('vp-track').scenes).toHaveLength(1)
+    })
+
+    it('verification FAILS while a project still holds the image', async () => {
+      await eraseSpeakerInPlace({ speakerId: ADA, actor: 'test' })
+      h.dataset.push(project('vp-late', [sceneWith('s', '#000000', ADA_CARD)]))
+      const v = await verifySpeakerErasure(ADA, [], [ADA_CARD])
+      expect(v?.residual).toMatchObject({
+        videoProjects: 1,
+        linkedFileHolders: 0,
+      })
+      expect(v?.clean).toBe(false)
+    })
+
+    it('counts a refused project by its type, whatever the refusal says', async () => {
+      await eraseSpeakerInPlace({ speakerId: ADA, actor: 'test' })
+      // One refused holder of each kind: a project, and a photo gallery entry.
+      h.dataset.push(project('vp-odd2', [], { poster: image(ADA_CARD) }), {
+        _id: 'gallery-x',
+        _type: 'imageGallery',
+        image: image(ADA_CARD),
+        speakers: [],
+      })
+      const v = await verifySpeakerErasure(ADA, [], [ADA_CARD])
+      expect(v?.residual).toMatchObject({
+        videoProjects: 1,
+        linkedFileHolders: 1,
+      })
+    })
+
+    it('verification FAILS on a project erasure would refuse', async () => {
+      await eraseSpeakerInPlace({ speakerId: ADA, actor: 'test' })
+      h.dataset.push(project('vp-odd', [], { poster: image(ADA_CARD) }))
+      const v = await verifySpeakerErasure(ADA, [], [ADA_CARD])
+      expect(v?.residual).toMatchObject({
+        videoProjects: 1,
+        linkedFileHolders: 0,
+      })
+      expect(v?.clean).toBe(false)
+    })
   })
 
   it('REFUSES, writing nothing, when a file is held somewhere erasure cannot strip', async () => {

@@ -31,6 +31,7 @@ import { searchRouter } from './routers/search'
 import { socialRouter } from './routers/social'
 import { marketingRouter } from './routers/marketing'
 import { marketingAssetRouter } from './routers/marketingAsset'
+import { videoProjectRouter } from './routers/videoProject'
 import { organizationRouter } from './routers/organization'
 
 export const appRouter = router({
@@ -66,6 +67,7 @@ export const appRouter = router({
   social: socialRouter,
   marketing: marketingRouter,
   marketingAsset: marketingAssetRouter,
+  videoProject: videoProjectRouter,
   organization: organizationRouter,
 })
 

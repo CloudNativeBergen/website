@@ -69,8 +69,18 @@ vi.mock('@/components/CloudNativePattern', () => ({
   CloudNativePattern: () => null,
 }))
 vi.mock('@/components/admin/meme-generator', () => ({
-  MemeGeneratorWithDownload: ({ orgId }: { orgId?: string }) => (
-    <div data-testid="meme-generator" data-org={orgId ?? 'none'} />
+  MemeGeneratorWithDownload: ({
+    orgId,
+    projectId,
+  }: {
+    orgId?: string
+    projectId?: string
+  }) => (
+    <div
+      data-testid="meme-generator"
+      data-org={orgId ?? 'none'}
+      data-project={projectId ?? 'none'}
+    />
   ),
 }))
 vi.mock('@/components/admin/PhotoGalleryWithDownload', () => ({
@@ -182,6 +192,29 @@ describe('Promo Studio meme generator', () => {
     expect(screen.getByTestId('meme-generator').getAttribute('data-org')).toBe(
       'org-1',
     )
+  })
+  it('opens the saved video the URL names, on the meme generator tab (#1181)', async () => {
+    render(
+      await MarketingPage({
+        searchParams: Promise.resolve({ project: 'vp-1', speaker: 'sp-1' }),
+      }),
+    )
+    const generator = screen.getByTestId('meme-generator')
+    expect(generator.getAttribute('data-project')).toBe('vp-1')
+    expect(screen.getByTestId('tabs').getAttribute('data-tab')).toBe(
+      'meme-generator',
+    )
+  })
+
+  it('drops a project id that is not a published document id', async () => {
+    render(
+      await MarketingPage({
+        searchParams: Promise.resolve({ project: 'drafts.vp-1' }),
+      }),
+    )
+    expect(
+      screen.getByTestId('meme-generator').getAttribute('data-project'),
+    ).toBe('none')
   })
 })
 

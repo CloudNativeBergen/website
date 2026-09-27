@@ -1,0 +1,375 @@
+import { TRPCError } from '@trpc/server'
+import { z } from 'zod'
+import { adminProcedure, resolveConferenceId, router } from '@/server/trpc'
+import {
+  notFoundMessage,
+  requireCurrentOrgId,
+  requireDocumentInCurrentOrg,
+} from '@/server/tenancy'
+import { resolveProjectFiles } from '@/lib/video-project/resolve'
+import {
+  PROJECT_CONFLICT_MESSAGE,
+  copyTitle,
+  projectFormatRefusal,
+  projectScenesSchema,
+  projectTitleSchema,
+  projectTrackInputSchema,
+  type ProjectSceneInput,
+} from '@/lib/video-project/format'
+import {
+  ProjectFormatError,
+  duplicateContents,
+  openedProject,
+  storedScenes,
+  storedTrack,
+  type ResolvedFile,
+} from '@/lib/video-project/document'
+import {
+  countVideoProjectReleaseTwins,
+  createVideoProject,
+  deleteVideoProjectDocument,
+  listVideoProjects,
+  readVideoProject,
+  readVideoProjectCreatedFiles,
+  readVideoProjectDocument,
+  readVideoProjectFiles,
+  readVideoProjectOrphanedFiles,
+  saveVideoProject,
+} from '@/lib/video-project/sanity'
+import {
+  backgroundRenditionUrl,
+  proxiedImageUrl,
+} from '@/lib/marketing-asset/background'
+import {
+  deleteFileAssetIfOrphaned,
+  deleteImageAssetIfOrphaned,
+} from '@/lib/sanity/orphaned-asset'
+
+/**
+ * Saved studio videos (docs/MARKETING_STUDIO_VIDEO_SPEC.md §7). Organizer-only
+ * through `adminProcedure`; the organization is always the request host's.
+ * Every procedure that takes a project id proves it this organization's with
+ * the tenancy guard BEFORE anything of the project is read, so another
+ * organization's id and a nonexistent one get the same answer, and nothing is
+ * fetched for either.
+ */
+
+/** The same refusal `requireDocumentInCurrentOrg` gives a missing id. */
+const notFound = () =>
+  new TRPCError({ code: 'NOT_FOUND', message: notFoundMessage('videoProject') })
+
+const projectId = z
+  .string()
+  .min(1)
+  .max(200)
+  // Published ids only: a Studio draft or release copy is never a project.
+  .refine((id) => !id.includes('.'), 'Not a published document id')
+
+/** Prove the id this organization's project, before anything is read. */
+async function guard(id: string): Promise<string> {
+  return requireDocumentInCurrentOrg(id, 'videoProject')
+}
+
+const refuseFormat = (message: string) =>
+  new TRPCError({ code: 'PRECONDITION_FAILED', message })
+
+/**
+ * A Content Release in Studio holds its own copy of the project: publishing
+ * it would silently undo this save, or bring a deleted project back. The
+ * release is Studio's to change; refused, as for gallery assets.
+ */
+async function refuseIfInRelease(
+  orgId: string,
+  id: string,
+  action: 'save' | 'delete',
+) {
+  const twins = await countVideoProjectReleaseTwins(orgId, id)
+  if (twins.releases > 0)
+    throw new TRPCError({
+      code: 'PRECONDITION_FAILED',
+      message: `This project is part of a Content Release in Studio. Remove it from the release first, then ${action} it here.`,
+    })
+  // An open Studio draft, published later, would silently overwrite this
+  // save. A delete takes the draft with it, so only a save is refused.
+  if (action === 'save' && twins.draft)
+    throw new TRPCError({
+      code: 'PRECONDITION_FAILED',
+      message:
+        'This project has an unpublished draft in Studio. Publish or discard it there first, then save here.',
+    })
+}
+
+/**
+ * Files a gallery upload created that a project no longer holds go through
+ * the orphan check: deleted only once nothing references them. Never throws —
+ * the write is already done.
+ */
+async function releaseFiles(
+  projectId: string,
+  ids: string[],
+): Promise<string[]> {
+  const deleted: string[] = []
+  for (const id of new Set(ids)) {
+    const result = await (
+      id.startsWith('file-')
+        ? deleteFileAssetIfOrphaned
+        : deleteImageAssetIfOrphaned
+    )(id).catch(() => null)
+    // A failed count (-1) or a failed delete of an unreferenced file (0, not
+    // deleted): either way nothing else will retry it.
+    if (!result || (!result.deleted && result.remainingReferences <= 0))
+      console.error(
+        `Video project ${projectId} let go of file ${id}, which could not be cleaned up; delete it by hand if nothing references it`,
+      )
+    if (result?.deleted) deleted.push(id)
+  }
+  // The files that are gone: the editor drops them from its undo history.
+  return deleted
+}
+
+/** Which file each scene now holds, for the editor to carry into later saves. */
+const sceneFiles = (
+  scenes: ProjectSceneInput[],
+  images: (ResolvedFile | null)[],
+) => scenes.map((s, i) => ({ key: s.key, fileId: images[i]?.fileId ?? null }))
+
+const contentsSchema = {
+  title: projectTitleSchema,
+  scenes: projectScenesSchema,
+  /** Undefined leaves a stored track alone; null removes it. */
+  track: projectTrackInputSchema.nullish(),
+}
+
+export const videoProjectRouter = router({
+  /** The organization's projects. */
+  list: adminProcedure.query(async () => {
+    return listVideoProjects(await requireCurrentOrgId())
+  }),
+
+  /** One project, as the studio opens it — or why it cannot be. */
+  open: adminProcedure
+    .input(z.object({ id: projectId }))
+    .query(async ({ input }) => {
+      const orgId = await guard(input.id)
+      const row = await readVideoProject(orgId, input.id)
+      if (!row) throw notFound()
+      try {
+        return openedProject(row, (url, width, height) =>
+          proxiedImageUrl(backgroundRenditionUrl(url, width, height)),
+        )
+      } catch (error) {
+        if (error instanceof ProjectFormatError)
+          throw refuseFormat(error.message)
+        throw error
+      }
+    }),
+
+  /**
+   * A new project in this organization: organization-wide, or for the
+   * request host's edition — never an edition the client names.
+   */
+  create: adminProcedure
+    .input(
+      z.object({
+        ...contentsSchema,
+        edition: z.enum(['none', 'current']).default('none'),
+        /**
+         * Saving as a new project (after a conflict): the new one may hold
+         * the files this project of ours already holds, as a save over it
+         * could — proven ours by the guard before it is read.
+         */
+        copyFilesFrom: projectId.optional(),
+      }),
+    )
+    .mutation(async ({ input }) => {
+      // The source is proven ours before anything of it is read: another
+      // organization's id, or none, is refused as open, save and duplicate
+      // refuse it.
+      const orgId = input.copyFilesFrom
+        ? await guard(input.copyFilesFrom)
+        : await requireCurrentOrgId()
+      const source = input.copyFilesFrom
+        ? await readVideoProjectFiles(orgId, input.copyFilesFrom)
+        : null
+      if (input.copyFilesFrom && !source) throw notFound()
+      // A source another version wrote is never read as this one.
+      const sourceRefusal = source && projectFormatRefusal(source.formatVersion)
+      if (sourceRefusal) throw refuseFormat(sourceRefusal)
+      const files = await resolveProjectFiles(
+        orgId,
+        input.scenes,
+        input.track,
+        source,
+      )
+      // A copy keeps its source's edition, re-checked as ours: Studio could
+      // have pointed it anywhere.
+      const sourceEdition =
+        source?.scope === 'edition' && source.conferenceId
+          ? source.conferenceId
+          : null
+      if (sourceEdition)
+        await requireDocumentInCurrentOrg(sourceEdition, 'conference')
+      const created = await createVideoProject({
+        orgId,
+        title: input.title,
+        mark: sourceEdition
+          ? { scope: 'edition', conferenceId: sourceEdition }
+          : source
+            ? { scope: 'organization' }
+            : input.edition === 'current'
+              ? { scope: 'edition', conferenceId: await resolveConferenceId() }
+              : { scope: 'organization' },
+        scenes: storedScenes(input.scenes, files.images),
+        // Only a track the editor sent: one it cannot show or remove
+        // (#1179) is never copied in behind its back.
+        ...(input.track && files.track
+          ? { track: storedTrack(input.track, files.track) }
+          : {}),
+      })
+      return { ...created, scenes: sceneFiles(input.scenes, files.images) }
+    }),
+
+  /**
+   * Save over a project, compare-and-set on the revision the editor loaded:
+   * a save over someone else's newer one is refused as a conflict. The new
+   * revision comes back for the next save.
+   */
+  save: adminProcedure
+    .input(
+      z.object({
+        id: projectId,
+        rev: z.string().min(1).max(100),
+        ...contentsSchema,
+      }),
+    )
+    .mutation(async ({ input }) => {
+      const orgId = await guard(input.id)
+      const stored = await readVideoProjectFiles(orgId, input.id)
+      if (!stored) throw notFound()
+      // A project another version wrote is never overwritten in this one.
+      const refusal = projectFormatRefusal(stored.formatVersion)
+      if (refusal) throw refuseFormat(refusal)
+      if (stored._rev !== input.rev)
+        throw new TRPCError({
+          code: 'CONFLICT',
+          message: PROJECT_CONFLICT_MESSAGE,
+        })
+      await refuseIfInRelease(orgId, input.id, 'save')
+      const files = await resolveProjectFiles(
+        orgId,
+        input.scenes,
+        input.track,
+        stored,
+      )
+      const rev = await saveVideoProject(input.id, input.rev, {
+        title: input.title,
+        scenes: storedScenes(input.scenes, files.images),
+        ...(input.track === undefined
+          ? {}
+          : {
+              track:
+                input.track && files.track
+                  ? storedTrack(input.track, files.track)
+                  : null,
+            }),
+      })
+      if (!rev)
+        throw new TRPCError({
+          code: 'CONFLICT',
+          message: PROJECT_CONFLICT_MESSAGE,
+        })
+      // A gallery-made file this save let go of may now be held by nothing.
+      const kept = new Set([
+        ...files.images.flatMap((f) => (f ? [f.fileId] : [])),
+        ...(files.track ? [files.track.fileId] : []),
+      ])
+      const released = await releaseFiles(input.id, [
+        ...stored.images
+          .filter((f) => f.createdByGallery && !kept.has(f.fileId))
+          .map((f) => f.fileId),
+        ...(input.track !== undefined &&
+        stored.track?.createdByGallery &&
+        !kept.has(stored.track.fileId)
+          ? [stored.track.fileId]
+          : []),
+      ])
+      return {
+        _rev: rev,
+        scenes: sceneFiles(input.scenes, files.images),
+        released,
+      }
+    }),
+
+  /**
+   * A new project from another's contents: fresh keys, "Copy of" in the
+   * title, the same scope, and nothing shared with the source.
+   */
+  duplicate: adminProcedure
+    .input(z.object({ id: projectId }))
+    .mutation(async ({ input }) => {
+      const orgId = await guard(input.id)
+      const source = await readVideoProjectDocument(orgId, input.id)
+      if (!source) throw notFound()
+      const refusal = projectFormatRefusal(source.formatVersion)
+      if (refusal) throw refuseFormat(refusal)
+      const conferenceId =
+        source.scope === 'edition'
+          ? (source.conference as { _ref?: unknown } | undefined)?._ref
+          : undefined
+      // Studio, which no guard reaches, could have pointed it anywhere.
+      if (typeof conferenceId === 'string')
+        await requireDocumentInCurrentOrg(conferenceId, 'conference')
+      // The same stored-shape check as open: a copy of a project open would
+      // refuse is never written.
+      const row = await readVideoProject(orgId, input.id)
+      if (!row) throw notFound()
+      // The revision validated is the revision copied.
+      if (row._rev !== source._rev)
+        throw new TRPCError({
+          code: 'CONFLICT',
+          message:
+            'The project changed while it was being duplicated. Try again.',
+        })
+      try {
+        openedProject(row, (url) => url)
+      } catch (error) {
+        if (error instanceof ProjectFormatError)
+          throw refuseFormat(error.message)
+        throw error
+      }
+      const { scenes, track } = duplicateContents(source)
+      const created = await createVideoProject({
+        orgId,
+        title: copyTitle(typeof source.title === 'string' ? source.title : ''),
+        mark:
+          typeof conferenceId === 'string'
+            ? { scope: 'edition', conferenceId }
+            : { scope: 'organization' },
+        scenes,
+        ...(track ? { track } : {}),
+      })
+      return { _id: created._id }
+    }),
+
+  /**
+   * Delete a project. A file the gallery's upload created, and that the
+   * gallery asset no longer holds, goes through the orphan check: kept while
+   * anything references it.
+   */
+  delete: adminProcedure
+    .input(z.object({ id: projectId }))
+    .mutation(async ({ input }) => {
+      const orgId = await guard(input.id)
+      await refuseIfInRelease(orgId, input.id, 'delete')
+      const [files, unsaveable] = await Promise.all([
+        readVideoProjectCreatedFiles(orgId, input.id),
+        readVideoProjectOrphanedFiles(orgId, input.id),
+      ])
+      await deleteVideoProjectDocument(input.id)
+      // Named, so the editor still showing the video drops them too.
+      const released = await releaseFiles(input.id, files)
+      // `unsaveable`: files only this project authorized — the editor still
+      // showing the video can no longer save them, deleted or not.
+      return { deleted: true, released, unsaveable }
+    }),
+})

@@ -394,6 +394,14 @@ export async function updateMarketingAssetDetails(
  * behind would still reference the image and keep the file alive. The caller
  * has already proven the published id is ours.
  */
-export async function deleteMarketingAssetDocument(id: string): Promise<void> {
-  await clientWrite.transaction().delete(id).delete(`drafts.${id}`).commit()
+export async function deleteMarketingAssetDocument(
+  id: string,
+  /** Delete only while the asset is still at this revision. */
+  ifRev?: string,
+): Promise<void> {
+  const tx = clientWrite.transaction()
+  // A delete takes no revision guard of its own; a no-op patch on the same
+  // document in the same transaction does, and fails it all.
+  if (ifRev) tx.patch(id, (p) => p.ifRevisionId(ifRev).unset(['_deleteGuard']))
+  await tx.delete(id).delete(`drafts.${id}`).commit()
 }

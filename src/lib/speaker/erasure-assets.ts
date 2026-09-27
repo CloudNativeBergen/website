@@ -11,7 +11,8 @@
  *  1. finds what is ABOUT the speaker ({@link speakerSubjectIds}): gallery
  *     assets and Tasks whose subject is the speaker or a talk they give;
  *  2. collects every file those hold ({@link linkedFileIds}) — a gallery asset's
- *     image or video, a Task's render;
+ *     image or video, a Task's render — and every file a saved video holds
+ *     under a subject it copied from the gallery ({@link projectSubjectFileIds});
  *  3. finds every document holding one of those files by the FILE's references,
  *     drafts and release versions included, and plans what each loses
  *     ({@link planSpeakerAssetErasure});
@@ -73,6 +74,11 @@ export interface SpeakerAssetPlan {
   patches: ErasureDocumentPatch[]
   deletes: ErasureDocumentDelete[]
   refusals: string[]
+  /**
+   * The document behind each refusal, in the same order — what a counter
+   * reads, never the refusal's wording.
+   */
+  refused: { id: string; type: string }[]
 }
 
 /** The Task fields that hold a render. */
@@ -107,6 +113,14 @@ function refOf(value: unknown): string | null {
 function fileRefOf(value: unknown): string | null {
   if (typeof value !== 'object' || value === null) return null
   return refOf((value as { asset?: unknown }).asset)
+}
+
+/** A video project scene's background image, `{ background: { image } }`. */
+function backgroundImageOf(scene: Entry): unknown {
+  const background = (scene as { background?: unknown }).background
+  return typeof background === 'object' && background !== null
+    ? (background as { image?: unknown }).image
+    : undefined
 }
 
 function entries(value: unknown): Entry[] {
@@ -170,6 +184,37 @@ export function linkedFileIds(subjectDocs: Doc[]): string[] {
   return [...ids]
 }
 
+/** A saved video's file with the subject it copied, as erasure reads it. */
+export interface ProjectFileSubject {
+  fileId: string | null
+  subjectId: string | null
+  /** Its gallery asset still exists: then the gallery's subject decides. */
+  live: boolean | null
+}
+
+/**
+ * The files a saved video holds whose stored subject (copied from the gallery
+ * asset, #1181) is linked to the speaker — but only where that gallery asset
+ * is GONE. While it exists its own, possibly corrected, subject decides
+ * (through {@link linkedFileIds}), never the project's older copy.
+ */
+export function projectSubjectFileIds(
+  files: ProjectFileSubject[],
+  subjectIds: string[],
+): string[] {
+  const subjects = new Set(subjectIds)
+  return [
+    ...new Set(
+      files
+        .filter(
+          (f) =>
+            !f.live && f.fileId && f.subjectId && subjects.has(f.subjectId),
+        )
+        .map((f) => f.fileId as string),
+    ),
+  ]
+}
+
 /**
  * What every holder of a linked file loses. Pure; see the module comment.
  *
@@ -181,6 +226,8 @@ export function linkedFileIds(subjectDocs: Doc[]): string[] {
  *    under that key is a different image: a draft reusing the key for the
  *    subject's image must not cost the live variant its own;
  *  - a TASK loses its render (and a pending upload of it), nothing else;
+ *  - a VIDEO PROJECT loses the background of each scene that shows the file
+ *    (by scene key; the scene falls back to its colour) and a linked track;
  *  - the SUBJECT speaker needs nothing: its `image` is unset with the rest;
  *  - anything else — another type, or a post or Task holding the file where
  *    this branch does not look — is REFUSED, so the file delete is never
@@ -211,11 +258,14 @@ export function planSpeakerAssetErasure(
     return [...refsIn(copy)].some((ref) => files.has(ref))
   }
 
-  const refuse = (doc: Doc, why: string) =>
+  const refused: SpeakerAssetPlan['refused'] = []
+  const refuse = (doc: Doc, why: string) => {
+    refused.push({ id: doc._id, type: doc._type })
     refusals.push(
       `${doc._type} ${doc._id} holds an image linked to the subject ${why}; ` +
         'remove it by hand and re-run',
     )
+  }
 
   /** Unset the entries with these keys, or refuse the document. */
   const unsetEntries = (doc: Doc, keys: unknown[], reason: string) => {
@@ -321,6 +371,50 @@ export function planSpeakerAssetErasure(
         break
       }
 
+      case 'videoProject': {
+        // A studio video (#1181): each scene whose background is the file
+        // loses the image — a nested removal by scene key — and falls back
+        // to its colour; a linked track goes too. Everything else stays.
+        const keys = entries(doc.scenes)
+          .filter((scene) => isLinked(backgroundImageOf(scene)))
+          .map((scene) => scene._key)
+        const track = isLinked(
+          (doc.track as { file?: unknown } | undefined)?.file,
+        )
+        const stripped = new Set(keys)
+        if (
+          (keys.length === 0 && !track) ||
+          stillHolds(doc, (copy) => {
+            for (const scene of entries(copy.scenes))
+              if (stripped.has(scene._key))
+                delete (
+                  (scene as { background?: { image?: unknown } }).background ??
+                  {}
+                ).image
+            if (track) delete copy.track
+          })
+        ) {
+          refuse(doc, 'outside its scene backgrounds and track')
+          break
+        }
+        if (!keys.every((k) => typeof k === 'string' && SAFE_KEY.test(k))) {
+          refuse(doc, 'in a scene whose _key cannot be safely selected')
+          break
+        }
+        patches.push({
+          id: doc._id,
+          type: doc._type,
+          rev: revOf(doc),
+          unset: [
+            ...keys.map((k) => `scenes[_key=="${String(k)}"].background.image`),
+            ...(track ? ['track'] : []),
+          ],
+          reason:
+            'video project scene background linked to the subject (the scene keeps its colour)',
+        })
+        break
+      }
+
       case 'speaker':
         // The subject's own `image` is in ERASURE_UNSET_FIELDS. Any other
         // speaker — a draft of the subject included — is not ours to strip.
@@ -380,7 +474,7 @@ export function planSpeakerAssetErasure(
     )
   }
 
-  return { fileIds: [...files], patches, deletes, refusals }
+  return { fileIds: [...files], patches, deletes, refusals, refused }
 }
 
 /**
@@ -423,8 +517,57 @@ export async function fetchSpeakerAssetInputs(
     { subjectIds },
     opts,
   )
+  type Held = {
+    fileId: string | null
+    subjectId: string | null
+    assetId: string | null
+  }
+  const [sceneFiles, trackFiles] = await Promise.all([
+    client.fetch<Held[]>(
+      // groq-global: a saved video (#1181) keeps a gallery image's subject
+      // with the file, so the file is found after its gallery asset is
+      // deleted — in every tenant, because the right is the person's.
+      groq`*[_type == "videoProject" && count(scenes[background.image.subject._ref in $subjectIds]) > 0].scenes[background.image.subject._ref in $subjectIds]{ "fileId": background.image.asset._ref, "subjectId": background.image.subject._ref, "assetId": background.image.galleryAsset._ref }`,
+      { subjectIds },
+      opts,
+    ),
+    client.fetch<Held[]>(
+      // groq-global: the same, for a saved video's music track.
+      groq`*[_type == "videoProject" && track.file.subject._ref in $subjectIds]{ "fileId": track.file.asset._ref, "subjectId": track.file.subject._ref, "assetId": track.file.galleryAsset._ref }`,
+      { subjectIds },
+      opts,
+    ),
+  ])
+  const held = [...(sceneFiles ?? []), ...(trackFiles ?? [])]
+  const assetIds = [
+    ...new Set(held.flatMap((f) => (f.assetId ? [f.assetId] : []))),
+  ]
+  // Live in ANY version — published, a Studio draft or a Content Release
+  // copy: while one exists, the gallery's own subject decides.
+  const liveAssets = new Set(
+    assetIds.length > 0
+      ? (
+          (await client.fetch<string[]>(
+            // groq-global: which of those gallery assets still exist, by id,
+            // in any version — an asset's own subject decides while it does.
+            groq`*[_type == "marketingAsset" && (_id in $assetIds || _id in $draftIds || (_id in path("versions.**") && string::split(_id, ".")[2] in $assetIds))]._id`,
+            { assetIds, draftIds: assetIds.map((id) => `drafts.${id}`) },
+            opts,
+          )) ?? []
+        ).map((id) => id.split('.').pop() as string)
+      : [],
+  )
+  const projectFiles: ProjectFileSubject[] = held.map((f) => ({
+    fileId: f.fileId,
+    subjectId: f.subjectId,
+    live: !!f.assetId && liveAssets.has(f.assetId),
+  }))
   const fileIds = [
-    ...new Set([...linkedFileIds(subjectDocs ?? []), ...extraFileIds]),
+    ...new Set([
+      ...linkedFileIds(subjectDocs ?? []),
+      ...projectSubjectFileIds(projectFiles ?? [], subjectIds),
+      ...extraFileIds,
+    ]),
   ]
   const empty = { fileHolders: [], variants: [], publishedPosts: [] }
   if (fileIds.length === 0) {

@@ -127,6 +127,23 @@ describe('deleteProposal', () => {
     expect(mockTxCommit).toHaveBeenCalledTimes(1)
   })
 
+  it('is blocked by a saved video naming the talk as its subject, named by title (#1181)', async () => {
+    mockFetch
+      .mockResolvedValueOnce([{ _id: 'vp-1', _type: 'videoProject' }])
+      // the talk's organization
+      .mockResolvedValueOnce('org-A')
+      // that organization's blocking project titles
+      .mockResolvedValueOnce(['Launch teaser'])
+    const { err } = await deleteProposal('proposal-1')
+    expect(err?.message).toContain('saved studio video “Launch teaser”')
+    expect(mockTxDelete).not.toHaveBeenCalled()
+    // The title read is scoped to the talk's organization.
+    const titleCall = mockFetch.mock.calls[2]
+    expect(titleCall[0]).toContain('organization._ref == $orgId')
+    expect(titleCall[1]).toMatchObject({ orgId: 'org-A', ids: ['vp-1'] })
+    mockFetch.mockReset()
+  })
+
   it('cascade-deletes the proposal thread — messages, conversation, and message notifications — keeping other notifications', async () => {
     mockFetch
       // referencing docs: a conversation (weak), a message notification (weak),

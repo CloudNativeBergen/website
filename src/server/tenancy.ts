@@ -132,15 +132,22 @@ export async function requireCurrentOrgId(): Promise<string> {
   return orgId
 }
 
+/**
+ * The words of a guard's refusal. Deliberately says "for this request" rather
+ * than naming a dimension: it serves org-scoped AND conference-scoped guards,
+ * and a conference-scoped refusal that blames the organization sends whoever
+ * reads the log looking at the wrong boundary. Exported so a caller refusing
+ * a missing id after the guard gives the identical answer.
+ */
+export function notFoundMessage(expectedType: string): string {
+  return `No ${expectedType} with that id for this request`
+}
+
 /** A refusal that never confirms whether the foreign id exists. */
 function notFound(expectedType: string): TRPCError {
   return new TRPCError({
     code: 'NOT_FOUND',
-    // Deliberately says "for this request" rather than naming a dimension:
-    // this helper serves org-scoped AND conference-scoped guards, and a
-    // conference-scoped refusal that blames the organization sends whoever
-    // reads the log looking at the wrong boundary.
-    message: `No ${expectedType} with that id for this request`,
+    message: notFoundMessage(expectedType),
   })
 }
 

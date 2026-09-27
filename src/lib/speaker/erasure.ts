@@ -1193,6 +1193,12 @@ export interface ErasureVerification {
      * drift from what the erasure does. A holder it would refuse counts too.
      */
     linkedFileHolders: number
+    /**
+     * `videoProject` documents, any version, whose scenes or track still hold
+     * a linked file (#1181) — not counted in `linkedFileHolders` too. Counted
+     * by the same planner re-run; one it would refuse counts too.
+     */
+    videoProjects: number
     /** Linked marketing files still stored. */
     linkedFiles: number
   }
@@ -1723,12 +1729,21 @@ export async function verifySpeakerErasure(
     inputs.assetFileIds,
     inputs.assets,
   )
+  // A video project still holding a linked file is its own counter (#1181),
+  // read from the refused documents' types, never the refusal's wording.
+  const isProject = (type: string) => type === 'videoProject'
+  const projectRefusals = assetPlan.refused.filter((r) =>
+    isProject(r.type),
+  ).length
+  const videoProjects =
+    assetPlan.patches.filter((p) => isProject(p.type)).length + projectRefusals
   // Disjoint from `marketingAssets`: a gallery entry about the subject is
-  // counted there once, not here again.
+  // counted there once, not here again — and from `videoProjects`.
   const linkedFileHolders =
-    assetPlan.patches.length +
+    assetPlan.patches.filter((p) => !isProject(p.type)).length +
     assetPlan.deletes.filter((d) => !subjectAssetIds.has(d.id)).length +
-    assetPlan.refusals.length
+    assetPlan.refusals.length -
+    projectRefusals
 
   let linkedFiles = 0
   if (inputs.assetFileIds.length > 0) {
@@ -1771,6 +1786,7 @@ export async function verifySpeakerErasure(
     imageAsset,
     marketingAssets,
     linkedFileHolders,
+    videoProjects,
     linkedFiles,
   }
 
@@ -1794,6 +1810,7 @@ export async function verifySpeakerErasure(
     imageAsset === 0 &&
     marketingAssets === 0 &&
     linkedFileHolders === 0 &&
+    videoProjects === 0 &&
     linkedFiles === 0
 
   return { clean, residual }

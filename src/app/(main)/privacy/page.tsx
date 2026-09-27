@@ -654,6 +654,14 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                               social posts, and we store which organizer
                               confirmed it and when
                             </li>
+                            <li>
+                              • Organizers can save promotional videos as
+                              projects to reopen later. A project holds the
+                              video&apos;s text and settings and points at the
+                              gallery images and track it uses; for a track it
+                              keeps a copy of who confirmed the right to use it,
+                              and when
+                            </li>
                           </ul>
                         </div>
                         <div>
@@ -671,7 +679,8 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                               your photo. Asking us to erase your data does:
                               every image about you or a talk you give is
                               deleted, including from our copies of posts (which
-                              keep their text) and planning tasks
+                              keep their text), planning tasks and saved video
+                              projects (where the scene keeps its colour)
                             </li>
                             <li>
                               • An image not marked as being about anyone, such

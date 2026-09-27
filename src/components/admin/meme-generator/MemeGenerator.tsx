@@ -75,6 +75,7 @@ import {
   frameAt,
   moveScene,
   newScene,
+  NEW_SCENE_DURATION,
   removeScene,
   sceneIndexAt,
   sceneStart,
@@ -106,6 +107,24 @@ import { mediabunnyBackend } from './meme-generator-mediabunny'
 import type { BackgroundGallery } from './meme-generator-gallery'
 import { BackgroundGalleryPicker } from './BackgroundGalleryPicker'
 import { KeepInGallery } from './KeepInGallery'
+import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
+import { VideoProjectBar, type ProjectMessage } from './VideoProjectBar'
+import {
+  VideoProjectError,
+  carryFiles,
+  dropReleasedFiles,
+  dropUnsaveable,
+  fromProjectScenes,
+  projectSnapshot,
+  toProjectScenes,
+  type SceneFile,
+  type VideoProjects,
+} from './meme-generator-project'
+import {
+  PROJECT_CONFLICT_MESSAGE,
+  unkeptBackgroundRefusal,
+  type VideoProjectRow,
+} from '@/lib/video-project'
 import { useMediaQuery } from '@/hooks/useMediaQuery'
 import {
   MARKETING_ASSET_IMAGE_TYPES,
@@ -123,7 +142,25 @@ interface MemeGeneratorProps {
    * uploaded one. Without it, backgrounds are local files only.
    */
   gallery?: BackgroundGallery
+  /**
+   * The organization's saved videos (#1181), for Save, Duplicate and opening
+   * one. Without it, a video is never saved.
+   */
+  projects?: VideoProjects
+  /** A project to open on arrival, from the studio's URL. */
+  initialProjectId?: string
+  /** The project now open, or null for a new video — for the URL. */
+  onProjectChange?: (id: string | null) => void
 }
+
+const UNTITLED = 'Untitled video'
+/** Marks the same-URL history entry that guards Back with unsaved work. */
+const LEAVE_GUARD = '__studioLeaveGuard'
+const isGuardEntry = (state: unknown) =>
+  !!state && typeof state === 'object' && LEAVE_GUARD in state
+
+/** Matches no project: after a delete, whatever the editor holds is unsaved. */
+const DELETED_SNAPSHOT = '(deleted)'
 
 interface ColorButtonProps {
   color: { name: string; value: string }
@@ -285,6 +322,9 @@ export function MemeGenerator({
   wrapPreview,
   encoder = mediabunnyBackend,
   gallery,
+  projects,
+  initialProjectId,
+  onProjectChange,
 }: MemeGeneratorProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const exportCanvasRef = useRef<HTMLCanvasElement>(null)
@@ -661,6 +701,419 @@ export function MemeGenerator({
     setBackground({ image: null })
   }
 
+  // ── The saved project (#1181) ───────────────────────────────────────────
+  // The project open in the editor, and the revision it was loaded or last
+  // saved at: every save is compare-and-set on it.
+  const [project, setProject] = useState<{ id: string; rev: string } | null>(
+    null,
+  )
+  const [projectTitle, setProjectTitle] = useState(UNTITLED)
+  // What the last save stored (or the editor started from), to tell whether
+  // anything a save would store has changed since.
+  const [savedSnapshot, setSavedSnapshot] = useState(() =>
+    projectSnapshot(UNTITLED, history.present),
+  )
+  // Memoized: playback re-renders every frame with the same scenes.
+  const currentSnapshot = useMemo(
+    () => projectSnapshot(projectTitle, scenes),
+    [projectTitle, scenes],
+  )
+  const unsaved = currentSnapshot !== savedSnapshot
+  const [projectBusy, setProjectBusy] = useState<
+    'saving' | 'opening' | 'duplicating' | 'deleting' | null
+  >(null)
+  const [projectMessage, setProjectMessage] = useState<ProjectMessage | null>(
+    null,
+  )
+  const [projectRows, setProjectRows] = useState<VideoProjectRow[] | null>(null)
+  const [editionOnly, setEditionOnly] = useState(false)
+  // A save refused as a conflict: the server holds a newer revision.
+  const [conflicted, setConflicted] = useState(false)
+
+  // Latest wins: an older list still in flight never overwrites a newer
+  // one — a refresh after a create or delete must not be undone by it.
+  const listGeneration = useRef(0)
+  const refreshProjects = useCallback(() => {
+    if (!projects) return
+    const generation = ++listGeneration.current
+    const settle = (rows: VideoProjectRow[]) => {
+      if (generation === listGeneration.current) setProjectRows(rows)
+    }
+    projects.list().then(settle, () => settle([]))
+  }, [projects])
+  useEffect(() => refreshProjects(), [refreshProjects])
+
+  // Leaving with unsaved changes asks first — for a video, or an open project.
+  // A video is still held while its still is previewed in Image mode: more
+  // than one scene, or any scene motion, is video work to protect. A plain
+  // one-scene image never asks.
+  const holdsVideo =
+    scenes.length > 1 ||
+    scenes.some(
+      (scene) =>
+        scene.duration !== NEW_SCENE_DURATION ||
+        scene.transition !== 'cut' ||
+        scene.motion.drift ||
+        Object.keys(scene.motion.elements).length > 0,
+    )
+  const warnOnLeave =
+    !!projects && unsaved && (mode === 'video' || !!project || holdsVideo)
+  useEffect(() => {
+    if (!warnOnLeave) return
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault()
+      event.returnValue = ''
+    }
+    // An in-app link (the admin sidebar is Next.js `Link`) leaves without
+    // `beforeunload`; it asks too, before the router sees the click.
+    const onLinkClick = (event: MouseEvent) => {
+      if (
+        event.defaultPrevented ||
+        event.button !== 0 ||
+        event.metaKey ||
+        event.ctrlKey ||
+        event.shiftKey ||
+        event.altKey
+      )
+        return
+      const link = (event.target as Element | null)?.closest?.('a[href]')
+      if (
+        !(link instanceof HTMLAnchorElement) ||
+        link.target === '_blank' ||
+        link.hasAttribute('download') ||
+        link.protocol === 'blob:'
+      )
+        return
+      const to = new URL(link.href, window.location.href)
+      if (
+        to.origin !== window.location.origin ||
+        (to.pathname === window.location.pathname &&
+          to.search === window.location.search)
+      )
+        return
+      if (!window.confirm('Leave with unsaved changes to this video?')) {
+        event.preventDefault()
+        event.stopPropagation()
+      }
+    }
+    // Browser Back/Forward: this Next version has no navigation guard, but
+    // its router copies its own state into an entry pushed from outside and
+    // treats a pop between two entries of one URL as no navigation at all.
+    // So a same-URL guard entry sits on top; Back pops to the entry below —
+    // still this page — and asks. Stay: the guard goes back on. Leave: go
+    // back once more, for real. (Forward entries are dropped by the push.)
+    if (!isGuardEntry(window.history.state)) {
+      window.history.pushState(
+        { [LEAVE_GUARD]: true },
+        '',
+        window.location.href,
+      )
+      guardPushed.current = true
+    }
+    const onPopState = () => {
+      if (leaving.current || isGuardEntry(window.history.state)) return
+      if (window.confirm('Leave with unsaved changes to this video?')) {
+        leaving.current = true
+        window.history.back()
+      } else {
+        window.history.pushState(
+          { [LEAVE_GUARD]: true },
+          '',
+          window.location.href,
+        )
+      }
+    }
+    window.addEventListener('beforeunload', onBeforeUnload)
+    document.addEventListener('click', onLinkClick, true)
+    window.addEventListener('popstate', onPopState)
+    return () => {
+      window.removeEventListener('beforeunload', onBeforeUnload)
+      document.removeEventListener('click', onLinkClick, true)
+      window.removeEventListener('popstate', onPopState)
+    }
+  }, [warnOnLeave])
+  // Nothing unsaved any more: take the guard entry back off, so the next Back
+  // leaves at once. Only while mounted — never from an unmount, which may be
+  // the very navigation that is leaving.
+  const leaving = useRef(false)
+  const guardPushed = useRef(false)
+  useEffect(() => {
+    if (warnOnLeave || !guardPushed.current) return
+    guardPushed.current = false
+    if (!isGuardEntry(window.history.state)) return
+    // The guard entry may carry a URL set since it was pushed — a new
+    // project's `?project=<id>`. The entry below it gets the same URL, so a
+    // reload still opens the saved project.
+    const url = window.location.href
+    window.addEventListener(
+      'popstate',
+      () => window.history.replaceState(window.history.state, '', url),
+      { once: true },
+    )
+    window.history.back()
+  }, [warnOnLeave])
+
+  const discardOk = () =>
+    !warnOnLeave ||
+    window.confirm('Discard your unsaved changes to this video?')
+
+  /** Put scenes in the editor as a fresh start: no undo back past them. */
+  const replaceVideo = (next: Scene[], title: string) => {
+    // An upload or pick still decoding belongs to the video being left: it
+    // must never land in this one, even under the same scene key.
+    for (const key of new Set([
+      ...backgroundUploads.current.keys(),
+      ...next.map((scene) => scene.key),
+    ]))
+      backgroundUploads.current.set(
+        key,
+        (backgroundUploads.current.get(key) ?? 0) + 1,
+      )
+    setUploadingScenes(new Set())
+    setPlaying(false)
+    setHistory(startHistory(next))
+    setMode('video')
+    setPlaybackEditingKey(null)
+    moveTo(0)
+    setProjectTitle(title)
+    setSavedSnapshot(projectSnapshot(title, next))
+    setBackgroundFailure(null)
+    setConflicted(false)
+  }
+
+  const openProject = async (id: string, confirmed = false) => {
+    if (!projects || (!confirmed && !discardOk())) return
+    // Video mode first, so a refusal is shown where the project bar is.
+    setMode('video')
+    setProjectBusy('opening')
+    setProjectMessage(null)
+    try {
+      const opened = await projects.open(id)
+      const next = fromProjectScenes(opened.scenes)
+      // Decoded before the scenes are shown, as a picked background is. One
+      // that fails to decode stays in the project — a save keeps it — and is
+      // simply not drawn.
+      const urls = [
+        ...new Set(
+          next.flatMap((scene) => scene.design.background.image?.url ?? []),
+        ),
+      ]
+      // Into the cache only with the update that shows them: a history change
+      // while they decode would otherwise prune them as unused.
+      const decoded = new Map<string, Raster>()
+      const failed = (
+        await Promise.all(
+          urls.map(async (url) => {
+            try {
+              const image = new window.Image()
+              image.src = url
+              await image.decode()
+              decoded.set(url, image)
+              return false
+            } catch {
+              return true
+            }
+          }),
+        )
+      ).filter(Boolean).length
+      for (const [url, image] of decoded)
+        backgroundRasters.current.set(url, image)
+      replaceVideo(next, opened.title)
+      setEditionOnly(false)
+      setProject({ id: opened._id, rev: opened._rev })
+      onProjectChange?.(opened._id)
+      if (failed > 0)
+        setProjectMessage({
+          tone: 'error',
+          text: `${failed === 1 ? 'A background' : `${failed} backgrounds`} could not be loaded and ${failed === 1 ? 'is' : 'are'} not shown. ${failed === 1 ? 'It stays' : 'They stay'} in the project; reopen it to try again.`,
+        })
+    } catch (error) {
+      setProjectMessage({
+        tone: 'error',
+        text:
+          error instanceof VideoProjectError
+            ? error.message
+            : 'The project could not be opened. Try again.',
+      })
+    } finally {
+      setProjectBusy(null)
+    }
+  }
+
+  // The project the studio's URL names, once, on arrival.
+  const openedInitial = useRef(false)
+  const openInitial = useEffectEvent((id: string) => void openProject(id, true))
+  useEffect(() => {
+    if (!initialProjectId || openedInitial.current) return
+    openedInitial.current = true
+    openInitial(initialProjectId)
+  }, [initialProjectId])
+
+  const newVideo = () => {
+    if (!discardOk()) return
+    replaceVideo([newScene(DEFAULT_DESIGN)], UNTITLED)
+    setProject(null)
+    setProjectMessage(null)
+    onProjectChange?.(null)
+  }
+
+  /**
+   * Save the video: over the open project (compare-and-set on its
+   * revision), or as a new one. A background that is not in the gallery is
+   * refused here, naming the scenes, before anything is sent.
+   */
+  const saveProject = async (asNew = false) => {
+    if (!projects) return
+    const mapped = toProjectScenes(scenes)
+    if ('unkept' in mapped) {
+      setProjectMessage({
+        tone: 'error',
+        text: unkeptBackgroundRefusal(mapped.unkept),
+      })
+      return
+    }
+    const title = projectTitle.trim() || UNTITLED
+    const snapshot = projectSnapshot(title, scenes)
+    const drawnBy = new Map(
+      scenes.map((scene) => [scene.key, scene.design.background.image?.url]),
+    )
+    setProjectBusy('saving')
+    setProjectMessage(null)
+    try {
+      const over = asNew ? null : project
+      const result: {
+        _id?: string
+        _rev: string
+        scenes: SceneFile[]
+        released?: string[]
+      } = over
+        ? await projects.save({
+            id: over.id,
+            rev: over.rev,
+            title,
+            scenes: mapped.scenes,
+          })
+        : await projects.create({
+            title,
+            edition: editionOnly ? 'current' : 'none',
+            scenes: mapped.scenes,
+            // Saved as a new project after a conflict: backgrounds the open
+            // project already holds are kept, even with no gallery asset.
+            ...(project ? { copyFilesFrom: project.id } : {}),
+          })
+      // Each background now names the file the project holds, so a later
+      // save keeps it even once its gallery asset is gone.
+      const files = new Map<string, string>()
+      for (const { key, fileId } of result.scenes) {
+        const url = drawnBy.get(key)
+        if (url && fileId) files.set(url, fileId)
+      }
+      const released = new Set(result.released ?? [])
+      setHistory((prev) =>
+        mapStates(prev, (states) =>
+          dropReleasedFiles(carryFiles(states, files), released),
+        ),
+      )
+      const id = over?.id ?? result._id!
+      setProject({ id, rev: result._rev })
+      setConflicted(false)
+      setProjectTitle(title)
+      setSavedSnapshot(snapshot)
+      if (!over) onProjectChange?.(id)
+      refreshProjects()
+    } catch (error) {
+      if (error instanceof VideoProjectError && error.conflict) {
+        setConflicted(true)
+        setProjectMessage({
+          tone: 'error',
+          text: PROJECT_CONFLICT_MESSAGE,
+          action: 'save-as-new',
+        })
+      } else {
+        setProjectMessage({
+          tone: 'error',
+          text:
+            error instanceof VideoProjectError
+              ? error.message
+              : 'The project could not be saved. Try again.',
+        })
+      }
+    } finally {
+      setProjectBusy(null)
+    }
+  }
+
+  // The project delete, awaiting its confirmation.
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
+
+  /** Delete the open project, once confirmed; the editor keeps the video. */
+  const deleteProject = async () => {
+    if (!projects || !project) return
+    setProjectBusy('deleting')
+    setProjectMessage(null)
+    try {
+      const { released, unsaveable } = await projects.delete(project.id)
+      // Files the delete's orphan check removed, and files only the deleted
+      // project authorized (their gallery entry is gone): neither can be
+      // saved again, so neither is kept — in any state undo can reach.
+      const gone = new Set(released)
+      const drop = (states: Scene[]) =>
+        dropUnsaveable(dropReleasedFiles(states, gone), unsaveable)
+      const cleared = drop(scenes).filter(
+        (scene, i) =>
+          scene.design.background.image === null &&
+          scenes[i].design.background.image !== null,
+      ).length
+      setHistory((prev) => mapStates(prev, drop))
+      // The editor now holds the ONLY copy: unsaved, so leaving asks.
+      setSavedSnapshot(DELETED_SNAPSHOT)
+      setProject(null)
+      setConflicted(false)
+      onProjectChange?.(null)
+      refreshProjects()
+      setProjectMessage({
+        tone: 'info',
+        text:
+          cleared > 0
+            ? `Project deleted. ${cleared === 1 ? 'One background was' : `${cleared} backgrounds were`} only in that project and ${cleared === 1 ? 'is' : 'are'} gone; ${cleared === 1 ? 'its scene shows its colour' : 'those scenes show their colour'}.`
+            : 'Project deleted.',
+      })
+    } catch (error) {
+      setProjectMessage({
+        tone: 'error',
+        text:
+          error instanceof VideoProjectError
+            ? error.message
+            : 'The project could not be deleted. Try again.',
+      })
+    } finally {
+      setProjectBusy(null)
+      setConfirmingDelete(false)
+    }
+  }
+
+  const duplicateProject = async () => {
+    if (!projects || !project) return
+    setProjectBusy('duplicating')
+    setProjectMessage(null)
+    let copy: string
+    try {
+      copy = (await projects.duplicate(project.id))._id
+    } catch (error) {
+      setProjectMessage({
+        tone: 'error',
+        text:
+          error instanceof VideoProjectError
+            ? error.message
+            : 'The project could not be duplicated. Try again.',
+      })
+      setProjectBusy(null)
+      return
+    }
+    refreshProjects()
+    await openProject(copy, true)
+  }
+
   // A QR image depends on its style alone: the effect is keyed on the set of
   // styles — not on the designs, and not on a draw function — so editing
   // text, colours or positions never regenerates one.
@@ -894,6 +1347,12 @@ export function MemeGenerator({
   }
 
   const advance = useEffectEvent((now: number) => {
+    // Hidden behind another studio tab (#1181): playback stops where it is,
+    // rather than repainting unseen every frame.
+    if (rootRef.current?.closest('[hidden]')) {
+      setPlaying(false)
+      return false
+    }
     // A frame's timestamp can fall a moment before an anchor set by a seek
     // in the same frame; time never runs backwards from where it was put.
     const next =
@@ -1084,6 +1543,8 @@ export function MemeGenerator({
     // is the editor's even in those fields. Not in a field that holds an
     // uncommitted draft of its own (the timeline's seconds), and not for a
     // key pressed elsewhere on the page.
+    // Kept mounted but hidden behind another studio tab (#1181): not ours.
+    if (rootRef.current?.closest('[hidden]')) return
     const target = event.target
     if (target instanceof Element) {
       if (target.closest('[data-own-undo]')) return
@@ -1226,7 +1687,16 @@ export function MemeGenerator({
   )
 
   return (
-    <div ref={rootRef} className="grid gap-4 lg:grid-cols-2">
+    <div
+      ref={rootRef}
+      className="grid gap-4 lg:grid-cols-2"
+      // While a project opens, nothing can be edited: the video it opens
+      // replaces the editor's, and an edit made meanwhile would be lost.
+      inert={projectBusy === 'opening' || projectBusy === 'duplicating'}
+      aria-busy={
+        projectBusy === 'opening' || projectBusy === 'duplicating' || undefined
+      }
+    >
       {/* In Video mode the preview and the timeline together can be taller
           than a laptop screen; the sticky column then scrolls on its own so
           the timeline is never stranded below the fold. */}
@@ -1319,6 +1789,50 @@ export function MemeGenerator({
       </div>
 
       <div className="space-y-3">
+        {projects && (mode === 'video' || project) && (
+          <VideoProjectBar
+            title={projectTitle}
+            onTitleChange={setProjectTitle}
+            status={
+              // After a conflict the server holds a newer revision: never
+              // "saved", even once local edits are undone, until reopened
+              // or saved as new.
+              conflicted
+                ? 'unsaved'
+                : !unsaved
+                  ? project
+                    ? 'saved'
+                    : 'new'
+                  : project
+                    ? 'unsaved'
+                    : 'new'
+            }
+            busy={projectBusy}
+            isSaved={!!project}
+            editionOnly={editionOnly}
+            onEditionOnlyChange={setEditionOnly}
+            rows={projectRows}
+            onOpen={(id) => void openProject(id)}
+            onNew={newVideo}
+            onSave={() => void saveProject()}
+            onDuplicate={() => void duplicateProject()}
+            onDelete={() => setConfirmingDelete(true)}
+            onSaveAsNew={() => void saveProject(true)}
+            message={projectMessage}
+          />
+        )}
+        {projects && (
+          <ConfirmationModal
+            isOpen={confirmingDelete}
+            onClose={() => setConfirmingDelete(false)}
+            onConfirm={() => void deleteProject()}
+            isLoading={projectBusy === 'deleting'}
+            title="Delete project"
+            message={`Delete “${projectTitle.trim() || UNTITLED}”? The saved project is gone for everyone. The video stays in this editor until you leave it.`}
+            confirmButtonText="Delete project"
+            variant="danger"
+          />
+        )}
         <div className={styles.panel}>
           <div className="mb-4 flex items-center gap-2">
             <PhotoIcon className="h-5 w-5 text-brand-slate-gray dark:text-gray-300" />
