@@ -27,6 +27,7 @@ import type { PublishAttempt, SocialPostVariant } from './types'
 import {
   withholdOptedOutTags,
   type WithheldTag,
+  type WithheldTags,
 } from '@/lib/marketing/tagging/publish'
 
 /**
@@ -314,17 +315,16 @@ export async function runPublishTick(
       break
     }
     try {
-      const handedOver = await dispatch(
-        variant,
+      const handedOver = await dispatch(variant, {
         store,
-        boundedResolver,
+        resolveAdapter: boundedResolver,
         now,
         summary,
-        options.deadline,
-        options.onFailed,
+        deadline: options.deadline,
+        onFailed: options.onFailed,
         clock,
-        options.onTagsWithheld,
-      )
+        onTagsWithheld: options.onTagsWithheld,
+      })
       if (handedOver) awaitingManual.push(handedOver)
     } catch (error) {
       summary.errors.push(
@@ -602,16 +602,29 @@ async function settleConfirm(
  * Claim and dispatch one due variant. Returns the variant when this tick
  * handed it to an organizer (`awaiting-manual` landed), else `null`.
  */
+interface DispatchContext {
+  store: SocialVariantStore
+  resolveAdapter: AdapterResolver
+  now: Date
+  summary: PublishTickSummary
+  deadline?: Date
+  onFailed?: PublishTickOptions['onFailed']
+  clock: () => Date
+  onTagsWithheld?: PublishTickOptions['onTagsWithheld']
+}
+
 async function dispatch(
   variant: PublishableVariant,
-  store: SocialVariantStore,
-  resolveAdapter: AdapterResolver,
-  now: Date,
-  summary: PublishTickSummary,
-  deadline?: Date,
-  onFailed?: PublishTickOptions['onFailed'],
-  clock: () => Date = () => now,
-  onTagsWithheld?: PublishTickOptions['onTagsWithheld'],
+  {
+    store,
+    resolveAdapter,
+    now,
+    summary,
+    deadline,
+    onFailed,
+    clock,
+    onTagsWithheld,
+  }: DispatchContext,
 ): Promise<PublishableVariant | null> {
   const claimed = await store.claim(variant, now)
   if (!claimed) {
@@ -929,7 +942,7 @@ async function notifyFailure(
 function publishInputFor(
   variant: PublishableVariant,
   adapter: SocialPublishAdapter,
-  tags: ReturnType<typeof withholdOptedOutTags> | null = null,
+  tags: WithheldTags | null = null,
 ): { ok: true; input: PublishInput } | { ok: false; outcome: PublishOutcome } {
   const media = resolvePublishMedia(
     variant.attachments,
@@ -948,6 +961,9 @@ function publishInputFor(
         : `media: the post no longer has attachment ${missing.join(', ')}; edit the post and schedule again.`
     return { ok: false, outcome: { ok: false, kind: 'rejected', message } }
   }
+  // With the opt-outs read (`recordedTags`), only the DIDs `withholdOptedOutTags`
+  // kept; a store that read none posts the variant's recorded DIDs as they are.
+  const mentions = tags ? tags.mentions : (variant.mentions ?? [])
   return {
     ok: true,
     input: {
@@ -959,15 +975,7 @@ function publishInputFor(
       ...publishLinkFields(variant, variant.shortLinkOrigin),
       // The DIDs generation checked: the adapter posts these rather than
       // resolving the handles a second time (tagging spec §4.4, Publish).
-      // With the opt-outs read (`recordedTags`), a withheld tag's DID is not
-      // posted: its handle is no longer in the text.
-      ...(tags
-        ? tags.mentions.length
-          ? { mentions: tags.mentions }
-          : {}
-        : variant.mentions?.length
-          ? { mentions: variant.mentions }
-          : {}),
+      ...(mentions.length ? { mentions } : {}),
     },
   }
 }
