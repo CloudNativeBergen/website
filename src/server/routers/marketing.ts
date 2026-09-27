@@ -1608,6 +1608,7 @@ export const marketingRouter = router({
         const handoffDoneFor = new Set(
           task.assetId === input.assetId ? (task.handoffDoneFor ?? []) : [],
         )
+        const receiptsBefore = handoffDoneFor.size
         // The render this one REPLACES is recorded in the save's own patch
         // (#1162), so nothing between the save and its cleanup can lose it.
         const replaced =
@@ -1640,6 +1641,7 @@ export const marketingRouter = router({
           conferenceId,
         )
         // Only a mark this save set, or one already there, needs clearing.
+        let galleryMarkFailed = false
         const clearGalleryMark =
           gallery === 'saved' &&
           (task.assetId !== input.assetId || task.galleryPending === true)
@@ -1704,12 +1706,19 @@ export const marketingRouter = router({
           handoffFailures.length === 0 ||
           clearGalleryMark
         ) {
+          // When the gallery mark is all this write has to record, its
+          // failure is the gallery's to report: no publishing Task is waiting.
+          const failed = () => {
+            if (clearGalleryMark && handoffDoneFor.size === receiptsBefore)
+              galleryMarkFailed = true
+            else handoffFailures.push(task._id)
+          }
           try {
             // Never associate an older image's receipts with a newer render.
             const current = await getStudioTask(task._id, conferenceId)
-            if (
-              !current ||
-              current.assetId !== input.assetId ||
+            if (!current || current.assetId !== input.assetId)
+              handoffFailures.push(task._id)
+            else if (
               !(await updateTaskFields(
                 current._id,
                 current._rev,
@@ -1730,16 +1739,18 @@ export const marketingRouter = router({
                   : [],
               ))
             )
-              handoffFailures.push(task._id)
+              failed()
           } catch (error) {
             console.error('Studio handoff receipt save failed', task._id, error)
-            handoffFailures.push(task._id)
+            failed()
           }
         }
         return {
           success: true as const,
           handoffFailures,
-          ...(gallery === 'failed' ? { galleryFailed: true as const } : {}),
+          ...(gallery === 'failed' || galleryMarkFailed
+            ? { galleryFailed: true as const }
+            : {}),
           ...(handoffIssues.length > 0
             ? { handoffIssues: [...new Set(handoffIssues)] }
             : {}),

@@ -1177,6 +1177,26 @@ describe('task.attachAsset', () => {
       expect(receipts[2].handoffDoneFor).toEqual(['eligible-v'])
       expect(receipts[3]).toEqual([])
     })
+    it('a failed clear of the gallery mark, with no receipts to record, is a gallery failure, not a handoff one', async () => {
+      // No publishing recipients: the final write is only the mark's clear.
+      h.updateTaskFields
+        .mockImplementationOnce(async () => true)
+        .mockImplementationOnce(async () => false)
+      h.getStudioTask
+        .mockResolvedValueOnce(render())
+        .mockResolvedValueOnce({
+          ...render(),
+          _rev: 'saved-rev',
+          assetId,
+          pendingAssetId: null,
+          galleryPending: true,
+        })
+      await expect(marketing().task.attachAsset(input)).resolves.toEqual({
+        success: true,
+        handoffFailures: [],
+        galleryFailed: true,
+      })
+    })
     it('is never reached when the save loses its race', async () => {
       h.updateTaskFields.mockResolvedValue(false)
       await expect(marketing().task.attachAsset(input)).rejects.toThrow()
@@ -1832,6 +1852,15 @@ describe('task.attachAsset', () => {
   })
 
   it('keeps the asset saved when writing handoff receipts throws', async () => {
+    // A receipt to record, so the failed write is the handoff's to report.
+    h.getRenderSiblings.mockResolvedValue([
+      {
+        _id: 'eligible',
+        kind: 'publishing',
+        prerequisiteIds: ['task-ours'],
+        variantId: 'eligible-v',
+      },
+    ])
     const saved = { ...render() }
     h.getStudioTask.mockImplementation(async () => ({ ...saved }))
     h.updateTaskFields
@@ -1844,6 +1873,7 @@ describe('task.attachAsset', () => {
     expect(saved.assetId).toBe(assetId)
     expect(saved.handoffDoneFor).toEqual([])
     expect(result.handoffFailures).toEqual(['task-ours'])
+    expect(result).not.toHaveProperty('galleryFailed')
   })
 
   it('a failed handoff retry with no gallery mark to clear writes no receipts', async () => {
@@ -1925,6 +1955,15 @@ describe('task.attachAsset', () => {
     },
   )
   it('retains recovery when the receipt compare-and-set conflicts', async () => {
+    // A receipt to record, so the failed write is the handoff's to report.
+    h.getRenderSiblings.mockResolvedValue([
+      {
+        _id: 'eligible',
+        kind: 'publishing',
+        prerequisiteIds: ['task-ours'],
+        variantId: 'eligible-v',
+      },
+    ])
     h.getStudioTask.mockResolvedValueOnce(render()).mockResolvedValueOnce({
       ...render(),
       _rev: 'saved-rev',
@@ -1940,7 +1979,7 @@ describe('task.attachAsset', () => {
       'saved-rev',
       {
         asset: { _type: 'image', asset: { _type: 'reference', _ref: assetId } },
-        handoffDoneFor: [],
+        handoffDoneFor: ['eligible-v'],
       },
       [],
     )
