@@ -7,7 +7,7 @@ import { useNotification } from '@/components/admin/NotificationProvider'
 import { SOCIAL_PLATFORM_LABELS } from '@/lib/social/types'
 import { api } from '@/lib/trpc/client'
 import { ManualPostView } from './ManualPostView'
-import { useFreshManualCheck } from './useFreshManualCheck'
+import { manualBodyFor, useFreshManualCheck } from './useFreshManualCheck'
 
 /**
  * The copy-ready view wired to `social.*` (#1006): loads the variant with
@@ -93,10 +93,9 @@ export function ManualPostDialog({
           postAttachments={loaded.post.attachments}
           conferenceDomains={loaded.conferenceDomains}
           platformZone={loaded.platformZone ?? null}
-          manualBody={
-            // A retry (round 4, T2) shows "Checking…" until it answers.
-            editor.isFetching ? { checking: true } : (loaded.manualBody ?? null)
-          }
+          // FAIL CLOSED (final round, T2): checked text only (the helper
+          // shared with the Task page); a retry shows "Checking…".
+          manualBody={manualBodyFor(editor).manualBody}
           onRetryCheck={() => void editor.refetch()}
           saving={
             markPosted.isPending &&

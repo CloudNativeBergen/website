@@ -677,19 +677,15 @@ describe('Task editor manual post view — a fresh check on every opening (revie
       variant: { variant, ...editorRead, conferenceDomains: [] },
     }
   }
+  // As the server answers since round 5: always a checked body — the stored
+  // one when nothing changed (null here), or the rewritten one.
   const check = (manualBody: string | null) => ({
     variant,
     ...editorRead,
     conferenceDomains: [],
-    ...(manualBody
-      ? {
-          manualBody: {
-            body: manualBody,
-            untagged: ['Alice Smith'],
-            removed: 0,
-          },
-        }
-      : {}),
+    manualBody: manualBody
+      ? { body: manualBody, untagged: ['Alice Smith'], removed: 0 }
+      : { body: TAGGED, untagged: [], removed: 0 },
   })
 
   function setup() {
@@ -771,5 +767,32 @@ describe('Task editor manual post view — a fresh check on every opening (revie
     fireEvent.click(await screen.findByRole('button', { name: /check again/i }))
     expect(await screen.findByText(PLAIN)).toBeTruthy()
     expect(mocks.fetchEditor).toHaveBeenCalledTimes(2)
+  })
+
+  it('the fresh check says the post went out meanwhile: no copy, no post steps, and the Task is re-read (final round, T2)', async () => {
+    const page = setup()
+    mocks.fetchEditor.mockResolvedValueOnce({
+      ...check(null),
+      variant: {
+        ...variant,
+        status: 'published',
+        publishResult: { url: 'https://bsky.app/profile/x/post/1' },
+      },
+    })
+    render(page())
+    await waitFor(() => expect(mocks.invalidate).toHaveBeenCalled())
+    // The stale awaiting-manual view must not offer the text to post again.
+    expect(screen.queryByRole('button', { name: /copy text/i })).toBeNull()
+    expect(screen.queryByText(TAGGED)).toBeNull()
+  })
+
+  it('a manual Bluesky answer without a checked body fails closed (final round, T2 sibling)', async () => {
+    const page = setup()
+    const { manualBody: _dropped, ...unchecked } = check(null)
+    void _dropped
+    mocks.fetchEditor.mockResolvedValueOnce(unchecked)
+    render(page())
+    expect(await screen.findByText(/could not check this post/i)).toBeTruthy()
+    expect(screen.queryByText(TAGGED)).toBeNull()
   })
 })

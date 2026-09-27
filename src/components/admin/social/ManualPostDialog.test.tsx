@@ -80,11 +80,10 @@ const editor = (manualBody: string | null): SocialVariantEditorData => ({
   },
   post: { attachments: [], defaultScheduledAt: null },
   conferenceDomains: [],
-  ...(manualBody
-    ? {
-        manualBody: { body: manualBody, untagged: ['Alice Smith'], removed: 0 },
-      }
-    : {}),
+  // As the server answers since round 5: always a checked body.
+  manualBody: manualBody
+    ? { body: manualBody, untagged: ['Alice Smith'], removed: 0 }
+    : { body: TAGGED, untagged: [], removed: 0 },
 })
 
 afterEach(cleanup)
@@ -155,6 +154,22 @@ describe('ManualPostDialog — a fresh check on every opening (review T4)', () =
 
     await act(async () => second(editor(PLAIN)))
     expect(await screen.findByText(PLAIN)).toBeTruthy()
+    expect(screen.queryByText(TAGGED)).toBeNull()
+  })
+
+  it('a manual Bluesky answer without a checked body offers nothing to copy (final round, T2 sibling)', async () => {
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+    const { manualBody: _dropped, ...unchecked } = editor(null)
+    void _dropped
+    h.fetchEditor.mockResolvedValueOnce(unchecked)
+    render(
+      <QueryClientProvider client={client}>
+        <ManualPostDialog variantId="v-1" onClose={() => {}} />
+      </QueryClientProvider>,
+    )
+    expect(await screen.findByText(/could not check this post/i)).toBeTruthy()
     expect(screen.queryByText(TAGGED)).toBeNull()
   })
 })

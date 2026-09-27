@@ -22,11 +22,11 @@ import { ConnectedVariantEditor } from '@/components/admin/social/ConnectedVaria
 import { useTagWarningToast } from './tagging'
 import type { TagIssue } from '@/lib/marketing/tagging/checks'
 import { clientTagIssues } from '@/lib/trpc/errors'
+import { ManualPostView } from '@/components/admin/social/ManualPostView'
 import {
-  ManualPostView,
-  type ManualPostViewProps,
-} from '@/components/admin/social/ManualPostView'
-import { useFreshManualCheck } from '@/components/admin/social/useFreshManualCheck'
+  manualBodyFor,
+  useFreshManualCheck,
+} from '@/components/admin/social/useFreshManualCheck'
 import { mayAlreadyBeLive } from '@/lib/social/state-machine'
 import { taggedUrl } from '@/lib/marketing/link'
 import { sitePathIssue, type PagePickerOption } from '@/lib/marketing/pages'
@@ -696,16 +696,18 @@ function PublishingSection({
     variant?.variant.status === 'awaiting-manual' &&
     variant.variant.platform === 'bluesky'
   const check = useFreshManualCheck(byHand ? variant.variant._id : null)
-  // A retry (round 4, T2) shows "Checking…" again until it answers.
-  const manualBody: ManualPostViewProps['manualBody'] = !byHand
-    ? null
-    : check.isFetching
-      ? { checking: true }
-      : check.data
-        ? (check.data.manualBody ?? null)
-        : check.error
-          ? { unavailable: true }
-          : { checking: true }
+  // FAIL CLOSED (final round, T2): the text is offered only when the fresh
+  // answer is still this manual post with a checked body. When the post has
+  // moved on since the Task was read (a colleague marked it posted), nothing
+  // is offered and the Task is read again.
+  const fresh = byHand ? manualBodyFor(check, 'awaiting-manual') : null
+  const manualBody = fresh ? fresh.manualBody : null
+  const moved = fresh?.moved === true
+  useEffect(() => {
+    if (moved) onChanged()
+    // Once per detected move; `onChanged` re-reads the Task.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [moved])
 
   if (!variant) {
     return (
