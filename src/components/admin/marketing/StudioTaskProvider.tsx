@@ -48,12 +48,11 @@ function ConnectedStudioTask({
     const result = await mutation.mutateAsync(input)
     const handoffIncomplete = result.handoffFailures.length > 0
     const galleryFailed = result.galleryFailed === true
-    // The attach saved it to the gallery: its lists show it now, not after
-    // their cache goes stale (as the studio's own "Save to gallery" does).
-    if (!galleryFailed) {
-      void utils.marketingAsset.list.invalidate()
-      void utils.marketingAsset.filters.invalidate()
-    }
+    // The gallery's lists are refreshed on EVERY answer, as the studio's
+    // own "Save to gallery" does: even a reported failure may have changed
+    // the gallery (the entry landed, a later step failed).
+    void utils.marketingAsset.list.invalidate()
+    void utils.marketingAsset.filters.invalidate()
     const incomplete = handoffIncomplete || galleryFailed
     setFailed(incomplete)
     setMessage(

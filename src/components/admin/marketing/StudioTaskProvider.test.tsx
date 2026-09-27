@@ -275,6 +275,10 @@ describe('Studio Task attachment', () => {
     expect((await screen.findByRole('alert')).textContent).toBe(
       'The render is done and saved. It has not been saved to the asset gallery yet. Retry here or from the Task editor.',
     )
+    // A failed save may still have changed the gallery (the entry landed,
+    // a later step failed): its lists are refreshed on every answer.
+    expect(mocks.galleryList).toHaveBeenCalled()
+    expect(mocks.galleryFilters).toHaveBeenCalled()
     const retry = screen.getByRole('button', {
       name: 'Retry attachment / handoff',
     })

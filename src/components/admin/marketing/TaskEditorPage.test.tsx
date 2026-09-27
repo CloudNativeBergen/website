@@ -516,6 +516,26 @@ describe('Task editor handoff recovery', () => {
     expect(mocks.galleryFilters).toHaveBeenCalled()
   })
 
+  it('refreshes the gallery lists after a retry that reports a gallery failure too', async () => {
+    mocks.data = {
+      ...pendingData(),
+      task: {
+        ...pendingData().task,
+        handoffPending: false,
+        galleryPending: true,
+      },
+    }
+    mocks.attach.mockResolvedValue({
+      success: true,
+      handoffFailures: [],
+      galleryFailed: true,
+    })
+    render(<TaskEditorPage taskId="render-1" />)
+    fireEvent.click(screen.getByRole('button', { name: 'Save to the gallery' }))
+    await waitFor(() => expect(mocks.galleryList).toHaveBeenCalled())
+    expect(mocks.galleryFilters).toHaveBeenCalled()
+  })
+
   it('bypasses a fresh cached revision when retrying the saved handoff', async () => {
     const client = new QueryClient({
       defaultOptions: { queries: { staleTime: 60_000, retry: false } },
