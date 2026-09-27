@@ -236,4 +236,44 @@ describe('the track player', () => {
     process.off('unhandledRejection', unhandled)
     expect(unhandled).not.toHaveBeenCalled()
   })
+
+  it('stops being the clock when the context refuses to resume, so the preview plays on silent', async () => {
+    const { ctx, sources } = fakeContext()
+    const refusing = {
+      ...ctx,
+      createBufferSource: ctx.createBufferSource,
+      createBuffer: ctx.createBuffer,
+      resume: () => Promise.reject(new Error('not allowed')),
+    }
+    const player = createTrackPlayer(() => refusing)
+    player.load(mix(10))
+    player.play(2)
+    expect(player.time()).toBe(2)
+    await Promise.resolve()
+    await Promise.resolve()
+    // A suspended context's clock never moves: it must not hold the picture.
+    expect(player.time()).toBeNull()
+    expect(sources[0].stopped).toBe(true)
+  })
+
+  it('never lets an earlier refused resume undo a later play', async () => {
+    const { ctx, sources } = fakeContext()
+    let refuse = true
+    const flaky = {
+      ...ctx,
+      createBufferSource: ctx.createBufferSource,
+      createBuffer: ctx.createBuffer,
+      resume: () =>
+        refuse ? Promise.reject(new Error('not yet')) : Promise.resolve(),
+    }
+    const player = createTrackPlayer(() => flaky)
+    player.load(mix(10))
+    player.play(0)
+    refuse = false
+    player.play(3)
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(player.time()).toBe(3)
+    expect(sources[1].stopped).toBe(false)
+  })
 })

@@ -54,6 +54,8 @@ export function createTrackPlayer(
   let clock: { offset: number; startedAt: number } | null = null
   /** A scrub in progress: where it is, and the timer that settles it. */
   let scrub: { at: number; timer: ReturnType<typeof setTimeout> } | null = null
+  /** Counts plays, so a late refusal only undoes the play it belongs to. */
+  let starts = 0
 
   const bufferFor = (context: PlayerContext) => {
     if (buffer || !channels) return buffer
@@ -87,7 +89,15 @@ export function createTrackPlayer(
       // No Web Audio here: the preview plays silent, on its own clock.
       return
     }
-    ctx.resume().catch(() => {})
+    // A context that will not run has a clock that never moves: the sound
+    // is dropped and the preview plays on silent, on its own clock — unless
+    // a later play has started since.
+    const attempt = ++starts
+    ctx.resume().catch(() => {
+      if (attempt !== starts) return
+      silence()
+      clock = null
+    })
     if (!channels) return
     const node = ctx.createBufferSource()
     node.buffer = bufferFor(ctx)
