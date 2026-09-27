@@ -9,7 +9,7 @@ A talk subject now names ALL of its speakers. A plan seeded earlier keeps its st
 
 ## What it writes
 
-It only touches live `marketingCampaign` documents. Drafts and Content Release copies are skipped.
+It touches `marketingCampaign` documents: live ones, and drafts and Content Release copies too. Publishing a draft or a Release later replaces the live Campaign, so a copy left on the old text would bring it back. Each patch is compare-and-set on that document's own revision.
 
 For each stored Recipe, it rewrites `recipes[_key].skeleton` to the `2026.3` text only when all three hold:
 
@@ -43,7 +43,7 @@ mise run sanity -- dataset export production backup-pre-054.tar.gz
 mise run migrate -- 054-talk-speakers-skeletons --no-dry-run
 ```
 
-Every patch is compare-and-set on the Campaign revision. A conflict fails the run's transaction and stops it. The migration is idempotent, because a rewritten skeleton no longer matches, so re-run it until a clean run prints no patches.
+Every patch is compare-and-set on the document's revision. A conflict fails the run's transaction and stops it. The migration is idempotent, because a rewritten skeleton no longer matches, so re-run it until a clean run prints no patches.
 
 ## Has this run yet?
 
@@ -53,7 +53,7 @@ Every patch is compare-and-set on the Campaign revision. A conflict fails the ru
 mise run sanity -- documents query '{"pending": count(*[_type == "marketingCampaign" && !(_id in path("drafts.**")) && !(_id in path("versions.**")) && count(recipes[subjectSource == "talk" && key in ["talkTeaser:linkedin", "videoDrip:linkedin", "videoDrip:bluesky"] && skeleton match "*({company})*"]) > 0])}'
 ```
 
-The query is a rough proxy: it also counts edited skeletons that still say `({company})`, and it cannot see the `talkTeaser:bluesky` line. The dry run is exact.
+The query is a rough proxy. It counts only live Campaigns, it also counts edited skeletons that still say `({company})`, and it cannot see the `talkTeaser:bluesky` line. The dry run is exact, and it includes drafts and Release copies.
 
 ## Status
 

@@ -144,17 +144,38 @@ describe('migration 054', () => {
     expect(await run([odd])).toEqual([])
   })
 
-  it('a re-run is a no-op, and drafts, Release copies and other documents are skipped', async () => {
+  it('a re-run is a no-op, and a Campaign with nothing to rewrite is skipped', async () => {
     const once = apply([unedited], await run([unedited]))
     expect(await run(once)).toEqual([])
     expect(
       await run([
-        { ...unedited, _id: 'drafts.camp-1' },
-        { ...unedited, _id: 'versions.r1.camp-1' },
         campaign('camp-empty', []),
         { _id: 'camp-none', _rev: 'r', _type: 'marketingCampaign' },
       ]),
     ).toEqual([])
+  })
+
+  it('rewrites a draft and a Content Release copy too, each compare-and-set on its own revision', async () => {
+    // Publishing either later replaces the live Campaign: left on the old
+    // text, it would bring back "Alice and Bob (Alice's title)".
+    const draft = { ...unedited, _id: 'drafts.camp-1', _rev: 'rev-draft' }
+    const version = {
+      ...unedited,
+      _id: 'versions.r1.camp-1',
+      _rev: 'rev-version',
+    }
+    const out = await run([draft, version])
+    expect(out.map((p) => [p.id, p.options])).toEqual([
+      ['drafts.camp-1', { ifRevision: 'rev-draft' }],
+      ['versions.r1.camp-1', { ifRevision: 'rev-version' }],
+    ])
+    for (const d of apply([draft, version], out))
+      expect(skeletons(d).slice(0, 4)).toEqual([
+        ['talkTeaser:linkedin', NEW.teaserLinkedin],
+        ['talkTeaser:bluesky', NEW.teaserBluesky],
+        ['videoDrip:linkedin', NEW.videoLinkedin],
+        ['videoDrip:bluesky', NEW.videoBluesky],
+      ])
   })
 
   it('rewrites the 2026.1 LinkedIn texts (a plan backfilled by 053) and keeps their link wording', async () => {

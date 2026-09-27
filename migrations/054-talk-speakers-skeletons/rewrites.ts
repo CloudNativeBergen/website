@@ -14,9 +14,6 @@ export const REWRITES = LEGACY_SKELETONS
 
 type Doc = Record<string, unknown>
 
-export const isLive = (id: string) =>
-  !id.startsWith('drafts.') && !id.startsWith('versions.')
-
 /**
  * The new skeleton per recipe `_key` of one Campaign: only a talk Recipe
  * whose key and skeleton are EXACTLY a built-in `from` — an edited skeleton
