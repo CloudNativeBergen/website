@@ -1182,15 +1182,13 @@ describe('task.attachAsset', () => {
       h.updateTaskFields
         .mockImplementationOnce(async () => true)
         .mockImplementationOnce(async () => false)
-      h.getStudioTask
-        .mockResolvedValueOnce(render())
-        .mockResolvedValueOnce({
-          ...render(),
-          _rev: 'saved-rev',
-          assetId,
-          pendingAssetId: null,
-          galleryPending: true,
-        })
+      h.getStudioTask.mockResolvedValueOnce(render()).mockResolvedValueOnce({
+        ...render(),
+        _rev: 'saved-rev',
+        assetId,
+        pendingAssetId: null,
+        galleryPending: true,
+      })
       await expect(marketing().task.attachAsset(input)).resolves.toEqual({
         success: true,
         handoffFailures: [],
