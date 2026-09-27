@@ -951,4 +951,38 @@ describe('a video’s music', () => {
     fireEvent.change(select, { target: { value: 'asset-theme' } })
     await waitFor(() => expect(gallery.loadTrack).toHaveBeenCalledTimes(2))
   })
+
+  it('keeps saying the video is silent once it is exported without a track that failed to load', async () => {
+    const gallery = fakeGallery()
+    gallery.loadTrack.mockRejectedValue(new Error('404'))
+    const exporting: EncoderBackend = {
+      supports: async () => true,
+      probe: async () => true,
+      prepareAudio: async () => ({ priming: 0 }),
+      open: async () => ({
+        add: async () => {},
+        finish: async () => new Blob([new Uint8Array(1_000_000)]),
+        cancel: async () => {},
+      }),
+    }
+    render(<MemeGenerator gallery={gallery} encoder={exporting} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Video' }))
+    await within(music()).findByRole('option', { name: 'Theme (0:20)' })
+    fireEvent.change(within(music()).getByLabelText('Music'), {
+      target: { value: 'asset-theme' },
+    })
+    await within(music()).findByText(/could not be loaded/)
+    const panel = screen.getByRole('region', { name: 'Export' })
+    const button = within(panel).getByRole('button', { name: 'Export MP4' })
+    await waitFor(() => expect(button).not.toHaveAttribute('aria-disabled'))
+    fireEvent.click(button)
+    const status = within(panel).getByRole('status')
+    await waitFor(
+      () => expect(status).toHaveTextContent('Your video is ready.'),
+      { timeout: 5000 },
+    )
+    expect(status).toHaveTextContent(
+      'The music track could not be loaded, so the video is silent.',
+    )
+  })
 })

@@ -35,6 +35,8 @@ interface ExportedFile {
   seconds: number
   /** Whether the file has the track. */
   audio: ExportedAudio
+  /** The track failed to load when this was made: it is silent for that. */
+  trackFailed: boolean
   /** The video it was made from; any other and the file is out of date. */
   revision: readonly unknown[]
 }
@@ -90,6 +92,10 @@ const MUSIC_LEFT_OUT: Record<SilentReason, string> = {
 
 export type Music = 'none' | 'track' | 'failed'
 
+/** A file made while its track could not be loaded. */
+const TRACK_LEFT_OUT =
+  'The music track could not be loaded, so the video is silent.'
+
 function statusText(
   status: Status,
   supported: boolean | 'error' | null,
@@ -118,6 +124,7 @@ function statusText(
         ...(file && (file.audio === 'no-encoder' || file.audio === 'unmeasured')
           ? [MUSIC_LEFT_OUT[file.audio]]
           : []),
+        ...(file?.trackFailed ? [TRACK_LEFT_OUT] : []),
         ...(file ? linkedInWarnings(file) : []),
       ].join(' ')
     case 'idle':
@@ -205,6 +212,7 @@ export function VideoExport({
     const abort = new AbortController()
     controller.current = abort
     const startedAt = revision
+    const musicAtStart = music
     setStatus({ kind: 'running', progress: { phase: 'checking' } })
     try {
       const job = prepare()
@@ -222,6 +230,7 @@ export function VideoExport({
         bytes: result.blob.size,
         seconds: job.frameCount / FPS,
         audio: result.audio,
+        trackFailed: musicAtStart === 'failed',
         revision: startedAt,
       })
       setStatus({ kind: 'done' })
