@@ -95,6 +95,18 @@ describe('withholdOptedOutTags', () => {
     expect(out.body).toBe('@kubernetes.io and Alice Smith')
   })
 
+  it('a name that itself contains the handle does not bring the tag back (review T2)', () => {
+    // Only the ORIGINAL occurrences left unswapped may carry a DID: the
+    // inserted name's "@alice.dev" is text, and the adapter posts
+    // unrecorded handles as text.
+    const out = withholdOptedOutTags({
+      body: 'Hi @alice.dev and @bob.dev',
+      recorded: [{ ...alice, name: 'Alice (@alice.dev)', optedOut: true }, bob],
+    })
+    expect(out.body).toBe('Hi Alice (@alice.dev) and @bob.dev')
+    expect(out.mentions).toEqual([{ handle: 'bob.dev', did: 'did:plc:bob' }])
+  })
+
   it('a speaker who is gone (deleted or erased): neither the tag NOR the stored name — a neutral word', () => {
     // Erasure never touches the variant, so `name` on the record is the
     // erased person's real name: it must not be posted (GDPR).

@@ -66,12 +66,20 @@ export function withholdOptedOutTags(input: {
     )
     return [{ ...t, name: r.gone ? GONE_SPEAKER_TEXT : r.name }]
   })
+  const swappedAt = new Set(swaps.map((t) => t.start))
   let body = input.body
-  for (const t of swaps.reverse())
+  for (const t of [...swaps].reverse())
     body = `${body.slice(0, t.start)}${t.name}${body.slice(t.end)}`
 
-  // The DIDs the adapter posts: only for handles still in the text, once each.
-  const left = new Set(mentionTokens(body).map((t) => t.handle))
+  // The DIDs the adapter posts: only for ORIGINAL occurrences left unswapped,
+  // once each. Not re-detected from the new text: a name that itself holds
+  // the handle ("Alice (@alice.dev)") must not bring the tag back — the
+  // adapter posts an unrecorded handle as text.
+  const left = new Set(
+    mentionTokens(input.body)
+      .filter((t) => !swappedAt.has(t.start))
+      .map((t) => t.handle),
+  )
   const mentions = new Map<string, PublishMention>()
   for (const r of input.recorded) {
     const h = normaliseHandle(r.handle)
