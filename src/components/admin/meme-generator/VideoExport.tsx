@@ -96,6 +96,20 @@ export type Music = 'none' | 'track' | 'failed'
 const TRACK_LEFT_OUT =
   'The music track could not be loaded, so the video is silent.'
 
+/**
+ * What a file on offer is missing — said wherever it can still be
+ * downloaded, never only when it is fresh.
+ */
+function silenceNotes(file: ExportedFile | null): string[] {
+  if (!file) return []
+  return [
+    ...(file.audio === 'no-encoder' || file.audio === 'unmeasured'
+      ? [MUSIC_LEFT_OUT[file.audio]]
+      : []),
+    ...(file.trackFailed ? [TRACK_LEFT_OUT] : []),
+  ]
+}
+
 function statusText(
   status: Status,
   supported: boolean | 'error' | null,
@@ -106,7 +120,11 @@ function statusText(
 ): string {
   if (supported === false) return UNSUPPORTED_MESSAGE
   if (supported === 'error') return LOAD_FAILED_MESSAGE
-  const kept = file ? ' Your earlier export is still available.' : ''
+  const kept = file
+    ? [' Your earlier export is still available.', ...silenceNotes(file)].join(
+        ' ',
+      )
+    : ''
   switch (status.kind) {
     case 'running':
       return phaseText(status.progress)
@@ -116,15 +134,15 @@ function statusText(
       return `Export cancelled.${kept}`
   }
   if (stale)
-    return 'The video has changed since this export. Export again to include your changes.'
+    return [
+      'The video has changed since this export. Export again to include your changes.',
+      ...silenceNotes(file),
+    ].join(' ')
   switch (status.kind) {
     case 'done':
       return [
         'Your video is ready.',
-        ...(file && (file.audio === 'no-encoder' || file.audio === 'unmeasured')
-          ? [MUSIC_LEFT_OUT[file.audio]]
-          : []),
-        ...(file?.trackFailed ? [TRACK_LEFT_OUT] : []),
+        ...silenceNotes(file),
         ...(file ? linkedInWarnings(file) : []),
       ].join(' ')
     case 'idle':

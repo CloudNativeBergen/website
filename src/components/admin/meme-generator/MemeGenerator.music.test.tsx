@@ -1137,4 +1137,62 @@ describe('a video’s music', () => {
     fireEvent.click(screen.getByRole('button', { name: /^Undo/ }))
     expect(playerCalls.some((call) => call.startsWith('seek:'))).toBe(true)
   })
+
+  it('keeps saying the earlier file is silent when a retry fails, or the video changes', async () => {
+    const gallery = fakeGallery()
+    gallery.loadTrack.mockRejectedValue(new Error('404'))
+    let opened = 0
+    const exporting: EncoderBackend = {
+      supports: async () => true,
+      probe: async () => true,
+      prepareAudio: async () => ({ priming: 0 }),
+      open: async () => {
+        // The second export fails.
+        if (++opened > 1) throw new Error('EncodingError: boom')
+        return {
+          add: async () => {},
+          finish: async () => new Blob([new Uint8Array(1_000_000)]),
+          cancel: async () => {},
+        }
+      },
+    }
+    render(<MemeGenerator gallery={gallery} encoder={exporting} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Video' }))
+    await within(music()).findByRole('option', { name: 'Theme (0:20)' })
+    fireEvent.change(within(music()).getByLabelText('Music'), {
+      target: { value: 'asset-theme' },
+    })
+    await within(music()).findByText(/could not be loaded/)
+    const panel = screen.getByRole('region', { name: 'Export' })
+    const button = within(panel).getByRole('button', { name: 'Export MP4' })
+    const status = within(panel).getByRole('status')
+    const silent =
+      'The music track could not be loaded, so the video is silent.'
+    await waitFor(() => expect(button).not.toHaveAttribute('aria-disabled'))
+    fireEvent.click(button)
+    await waitFor(
+      () => expect(status).toHaveTextContent('Your video is ready.'),
+      {
+        timeout: 5000,
+      },
+    )
+    // An edit since: the earlier file is out of date, and still silent.
+    fireEvent.change(within(music()).getByLabelText(/Volume/), {
+      target: { value: '30' },
+    })
+    await waitFor(() =>
+      expect(status).toHaveTextContent(
+        'The video has changed since this export.',
+      ),
+    )
+    expect(status).toHaveTextContent(silent)
+    // A retry fails: the earlier file is still offered, and still silent.
+    fireEvent.click(button)
+    await waitFor(
+      () => expect(status).toHaveTextContent('The export failed.'),
+      { timeout: 5000 },
+    )
+    expect(status).toHaveTextContent('Your earlier export is still available.')
+    expect(status).toHaveTextContent(silent)
+  })
 })
