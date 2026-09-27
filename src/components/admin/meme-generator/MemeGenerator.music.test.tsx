@@ -54,7 +54,7 @@ vi.mock('./meme-generator-track-player', async (importOriginal) => ({
       load: (mix: unknown) => calls.push(mix ? 'load' : 'load:none'),
       play: () => calls.push('play'),
       pause: () => {},
-      seek: () => {},
+      seek: (to: number) => calls.push(`seek:${to}`),
       setLoop: () => {},
       setVolume: (volume: number) => calls.push(`volume:${volume}`),
       time: () => playerState.time,
@@ -1097,5 +1097,44 @@ describe('a video’s music', () => {
     collectGarbage()
     expect(decoded.deref()).toBeUndefined()
     confirm.mockRestore()
+  })
+
+  it('keeps the music playing through an undo that leaves the playhead where it is', async () => {
+    const gallery = fakeGallery()
+    render(<MemeGenerator gallery={gallery} encoder={encoder} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Video' }))
+    await within(music()).findByRole('option', { name: 'Theme (0:20)' })
+    fireEvent.change(within(music()).getByLabelText('Music'), {
+      target: { value: 'asset-theme' },
+    })
+    await within(music()).findByText(/Plays from/)
+    fireEvent.click(screen.getByRole('button', { name: 'Play' }))
+    fireEvent.change(within(music()).getByLabelText(/Volume/), {
+      target: { value: '30' },
+    })
+    playerCalls.length = 0
+    fireEvent.click(screen.getByRole('button', { name: /^Undo/ }))
+    fireEvent.click(screen.getByRole('button', { name: /^Redo/ }))
+    // A seek is a scrub: silence, then the sound again. None was asked for.
+    expect(playerCalls.filter((call) => call.startsWith('seek'))).toEqual([])
+    fireEvent.click(screen.getByRole('button', { name: 'Pause' }))
+  })
+
+  it('still moves the sound when an undo takes the playhead with it', async () => {
+    render(<MemeGenerator gallery={fakeGallery()} encoder={encoder} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Video' }))
+    await within(music()).findByRole('option', { name: 'Theme (0:20)' })
+    fireEvent.change(within(music()).getByLabelText('Music'), {
+      target: { value: 'asset-theme' },
+    })
+    await within(music()).findByText(/Plays from/)
+    fireEvent.click(screen.getByRole('button', { name: 'Add scene' }))
+    const playhead = screen.getByLabelText('Playhead (s)')
+    fireEvent.change(playhead, { target: { value: '5' } })
+    fireEvent.keyDown(playhead, { key: 'Enter' })
+    playerCalls.length = 0
+    // Undoing the added scene clamps the playhead into the 3 s left.
+    fireEvent.click(screen.getByRole('button', { name: /^Undo/ }))
+    expect(playerCalls.some((call) => call.startsWith('seek:'))).toBe(true)
   })
 })

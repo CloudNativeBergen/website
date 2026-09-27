@@ -1612,7 +1612,10 @@ export function MemeGenerator({
   const moveTo = (next: number) => {
     playbackAnchor.current = { time: next, at: performance.now() }
     setTime(next)
-    player.seek(next)
+    // Only a playhead that really moves moves the sound: a seek is a scrub,
+    // silent until it settles, and an undo of a colour or a volume, or a
+    // scene change that leaves the playhead where it is, is none.
+    if (next !== time) player.seek(next)
   }
   const seek = (to: number) => moveTo(clampTime(scenes, to))
 
