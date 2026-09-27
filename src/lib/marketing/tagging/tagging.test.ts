@@ -7,7 +7,41 @@
  */
 
 import { describe, expect, it, vi } from 'vitest'
-import { blueskyHandleFromLinks, resolveBlueskyHandle, tagBlueskyBody } from '.'
+import {
+  blueskyHandleFromLinks,
+  joinNames,
+  resolveBlueskyHandle,
+  speakersList,
+  tagBlueskyBody,
+} from '.'
+
+describe("naming a talk's speakers (spec §4.2)", () => {
+  it('{name}: one, two and three names read naturally', () => {
+    expect(joinNames(['Alice'])).toBe('Alice')
+    expect(joinNames(['Alice', 'Bob'])).toBe('Alice and Bob')
+    expect(joinNames(['Alice', 'Bob', 'Carol'])).toBe('Alice, Bob and Carol')
+    expect(joinNames([])).toBe('')
+  })
+
+  it('{speakers}: each with their title, a speaker without one is just the name', () => {
+    expect(speakersList([{ name: 'Alice', title: 'SRE, Acme' }])).toBe(
+      'Alice (SRE, Acme)',
+    )
+    expect(
+      speakersList([
+        { name: 'Alice', title: 'SRE, Acme' },
+        { name: 'Bob', title: 'CTO, Initech' },
+      ]),
+    ).toBe('Alice (SRE, Acme) and Bob (CTO, Initech)')
+    expect(
+      speakersList([
+        { name: 'Alice', title: 'SRE, Acme' },
+        { name: 'Bob', title: null },
+        { name: 'Carol', title: '  ' },
+      ]),
+    ).toBe('Alice (SRE, Acme), Bob and Carol')
+  })
+})
 
 describe('blueskyHandleFromLinks', () => {
   it('takes the first bsky.app profile link, custom-domain handles included', () => {
@@ -218,6 +252,57 @@ describe('tagBlueskyBody', () => {
     expect(mentions.map((m) => m.speakerId)).toEqual(['spk-alice'])
   })
 
+  it('{speakers} tags each speaker it can, beside their title; mentions[] names the SPEAKER', () => {
+    const carol = {
+      speakerId: 'spk-carol',
+      name: 'Carol Danvers',
+      title: 'Staff Engineer',
+      tag: { status: 'unresolved' as const, handle: 'carol.gone' },
+    }
+    const { body, mentions } = tagBlueskyBody({
+      skeleton: '{speakers} on stage at {event}',
+      values: {
+        event: 'CNB 2027',
+        speakers: 'plain value the body must not use',
+      },
+      people: [
+        { ...alice, title: 'SRE, Acme' },
+        { ...bob, title: 'CTO, Initech', tag: null },
+        carol,
+      ],
+    })
+    expect(body).toBe(
+      '@alice.dev (SRE, Acme), Bob Smith (CTO, Initech) and Carol Danvers (Staff Engineer) on stage at CNB 2027',
+    )
+    expect(mentions).toEqual([
+      {
+        _key: expect.any(String),
+        handle: 'alice.dev',
+        did: DID_A,
+        speakerId: 'spk-alice',
+        name: 'Alice Liddell',
+        status: 'tagged',
+      },
+      {
+        _key: expect.any(String),
+        handle: 'carol.gone',
+        speakerId: 'spk-carol',
+        name: 'Carol Danvers',
+        status: 'unresolved',
+      },
+    ])
+  })
+
+  it('a skeleton with {speakers} but no {name} still tags', () => {
+    const { body, mentions } = tagBlueskyBody({
+      skeleton: '{speakers}',
+      values: {},
+      people: [alice, bob],
+    })
+    expect(body).toBe('@alice.dev and @bob.example.com')
+    expect(mentions.map((m) => m.speakerId)).toEqual(['spk-alice', 'spk-bob'])
+  })
+
   it('over 300 graphemes, names fall back to plain from the LAST one, until it fits', () => {
     // Handles are longer than names here, so tagging costs length.
     const long = (id: string, name: string, handle: string, did: string) => ({
@@ -239,6 +324,51 @@ describe('tagBlueskyBody', () => {
     expect(mentions.map((m) => [m.speakerId, m.status])).toEqual([
       ['a', 'tagged'],
     ])
+  })
+
+  it('three speakers over the limit: only the LAST falls back when that is enough', () => {
+    const person = (id: string, name: string, handle: string) => ({
+      speakerId: id,
+      name,
+      title: 'SRE',
+      tag: { status: 'tagged' as const, handle, did: `did:plc:${id}` },
+    })
+    const a = person('a', 'Ann', `${'a'.repeat(30)}.example.com`)
+    const b = person('b', 'Ben', `${'b'.repeat(30)}.example.com`)
+    const c = person('c', 'Cat', `${'c'.repeat(30)}.example.com`)
+    // All three tagged: 3×(43-3)=+120 over the plain form; dropping ONE fits.
+    const filler = 'x'.repeat(
+      300 - 'Ann (SRE), Ben (SRE) and Cat (SRE) '.length - 90,
+    )
+    const { body, mentions } = tagBlueskyBody({
+      skeleton: `{speakers} ${filler}`,
+      values: {},
+      people: [a, b, c],
+    })
+    expect(body).toBe(
+      `@${a.tag.handle} (SRE), @${b.tag.handle} (SRE) and Cat (SRE) ${filler}`,
+    )
+    expect(graphemes(body)).toBeLessThanOrEqual(300)
+    expect(mentions.map((m) => m.speakerId)).toEqual(['a', 'b'])
+  })
+
+  it('a short handle that fits while the plain name would not is NOT a tag: the body must fit both ways', () => {
+    // A publish-time swap (late opt-out) puts the name back; a body that only
+    // fits tagged would then fail instead of posting (spec §4.4).
+    const long = {
+      speakerId: 'spk-long',
+      name: 'Alexandra Montgomery-Featherstonehaugh',
+      tag: { status: 'tagged' as const, handle: 'al.dev', did: DID_A },
+    }
+    const filler = 'x'.repeat(280)
+    const { body, mentions } = tagBlueskyBody({
+      skeleton: `{name} ${filler}`,
+      values: {},
+      people: [long],
+    })
+    expect(graphemes(`@al.dev ${filler}`)).toBeLessThanOrEqual(300)
+    expect(body).toBe(`${long.name} ${filler}`)
+    expect(mentions).toEqual([])
   })
 
   it('when even the plain names do not fit, nobody is tagged', () => {

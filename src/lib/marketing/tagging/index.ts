@@ -13,6 +13,7 @@ export {
 export {
   BLUESKY_MAX_GRAPHEMES,
   joinNames,
+  speakersList,
   tagBlueskyBody,
   tagsItsSubject,
   type BlueskyTag,

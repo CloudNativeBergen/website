@@ -39,6 +39,8 @@ export type BlueskyTag =
 export interface TagPerson {
   speakerId: string
   name: string
+  /** What `{company}` holds for them — their job title — for `{speakers}`. */
+  title?: string | null
   tag: BlueskyTag | null
 }
 
@@ -72,6 +74,20 @@ export function joinNames(names: readonly string[]): string {
   return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`
 }
 
+/**
+ * `{speakers}` (spec §4.2): each name with what `{company}` holds for a
+ * speaker — their job title — "Alice (SRE, Acme) and Bob (CTO, Initech)".
+ */
+export function speakersList(
+  people: readonly { name: string; title?: string | null }[],
+): string {
+  return joinNames(
+    people.map((p) =>
+      p.title?.trim() ? `${p.name} (${p.title.trim()})` : p.name,
+    ),
+  )
+}
+
 export function tagBlueskyBody(input: {
   skeleton: string
   values: Partial<Record<Placeholder, string>>
@@ -79,20 +95,32 @@ export function tagBlueskyBody(input: {
 }): { body: string; mentions: MentionRecord[] } {
   const { skeleton, values, people } = input
   const plain = resolvePlaceholders(skeleton, values)
-  if (people.length === 0 || !skeleton.includes('{name}'))
+  if (
+    people.length === 0 ||
+    !(skeleton.includes('{name}') || skeleton.includes('{speakers}'))
+  )
     return { body: plain, mentions: [] }
 
-  const render = (tagged: ReadonlySet<TagPerson>) =>
-    resolvePlaceholders(skeleton, {
+  const render = (tagged: ReadonlySet<TagPerson>) => {
+    const named = people.map((p) => ({
+      name: tagged.has(p) && p.tag ? `@${p.tag.handle}` : p.name,
+      title: p.title,
+    }))
+    return resolvePlaceholders(skeleton, {
       ...values,
-      name: joinNames(
-        people.map((p) =>
-          tagged.has(p) && p.tag ? `@${p.tag.handle}` : p.name,
-        ),
-      ),
+      name: joinNames(named.map((p) => p.name)),
+      speakers: speakersList(named),
     })
+  }
 
-  const candidates = people.filter((p) => p.tag?.status === 'tagged')
+  // BOTH forms must fit (§4.4): a tag may be swapped back for the name at
+  // publish, so a body that fits only because a handle is shorter than the
+  // name it stands for would fail then. The plain form is the same whichever
+  // tags stay, so when it is over, no tag can stay.
+  const plainFits = countGraphemes(render(new Set())) <= BLUESKY_MAX_GRAPHEMES
+  const candidates = plainFits
+    ? people.filter((p) => p.tag?.status === 'tagged')
+    : []
   let body = render(new Set(candidates))
   while (
     candidates.length > 0 &&
