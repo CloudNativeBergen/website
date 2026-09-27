@@ -95,6 +95,21 @@ describe('withholdOptedOutTags', () => {
     expect(out.body).toBe('@kubernetes.io and Alice Smith')
   })
 
+  it('a withheld name holding a shared handle that stays tagged is inserted as text (round 3, T1)', () => {
+    // Bob keeps @team.dev; the adapter puts that DID on EVERY "@team.dev" it
+    // detects, so Alice's inserted name must not carry one.
+    const team = { handle: 'team.dev', did: 'did:plc:team' }
+    const out = withholdOptedOutTags({
+      body: '@team.dev and @team.dev',
+      recorded: [
+        { ...alice, ...team, name: 'Alice (@team.dev)', optedOut: true },
+        { ...bob, ...team },
+      ],
+    })
+    expect(out.body).toBe('Alice (team.dev) and @team.dev')
+    expect(out.mentions).toEqual([team])
+  })
+
   it('a shared handle recorded with two DIDs posts the DID of the occurrence that stays — never the opted-out one (review round 2, T1)', () => {
     const out = withholdOptedOutTags({
       body: '@team.dev and @team.dev',
@@ -142,7 +157,7 @@ describe('withholdOptedOutTags', () => {
       body: 'Hi @alice.dev and @bob.dev',
       recorded: [{ ...alice, name: 'Alice (@alice.dev)', optedOut: true }, bob],
     })
-    expect(out.body).toBe('Hi Alice (@alice.dev) and @bob.dev')
+    expect(out.body).toBe('Hi Alice (alice.dev) and @bob.dev')
     expect(out.mentions).toEqual([{ handle: 'bob.dev', did: 'did:plc:bob' }])
   })
 

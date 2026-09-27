@@ -11,7 +11,7 @@
 import { normaliseHandle } from '@/lib/social/provider/bluesky-syntax'
 import type { PublishMention } from '@/lib/social/provider/types'
 import type { RecordedTag } from '@/lib/social/types'
-import { mentionTokens, occurrenceOwners } from './checks'
+import { mentionTokens, occurrenceOwners, replacementText } from './checks'
 import { GONE_SPEAKER_TEXT } from './body'
 
 export { GONE_SPEAKER_TEXT }
@@ -80,7 +80,7 @@ export function withholdOptedOutTags(input: {
             handle: t.handle,
           },
     )
-    return [{ ...t, name: r.gone ? GONE_SPEAKER_TEXT : r.name }]
+    return [{ ...t, name: replacementText(r) }]
   })
   let body = input.body
   for (const t of [...swaps].reverse())

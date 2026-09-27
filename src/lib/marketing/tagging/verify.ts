@@ -9,13 +9,12 @@
  */
 
 import type { ManualBody, SocialVariantEditorData } from '@/lib/social/types'
-import { GONE_SPEAKER_TEXT } from './publish'
 import type { MentionRecord } from './body'
 import {
   approvalCheck,
   approvalHandlesToResolve,
   fixTagIssue,
-  withoutTags,
+  replacementText,
   handlesToResolve,
   mentionTokens,
   saveMentions,
@@ -194,7 +193,7 @@ export async function manualPostBody(input: {
     const fixed = fixTagIssue(
       body,
       // A name that holds a handle keeps it as text, not a tag (round 2, T3).
-      { ...issue, name: gone ? GONE_SPEAKER_TEXT : withoutTags(issue.name) },
+      { ...issue, name: replacementText({ name: issue.name, gone }) },
       people,
       mentions,
     )

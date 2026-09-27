@@ -298,6 +298,16 @@ export function withoutTags(text: string): string {
 }
 
 /**
+ * THE text that stands in for a withheld tag — at publish and in the manual
+ * view alike, so the two can never drift: a speaker who is gone gets the
+ * neutral word (never the stored name, GDPR); anyone else their name, with
+ * any handle inside it kept as text, not a tag (review rounds 2–3).
+ */
+export function replacementText(p: { name: string; gone?: boolean }): string {
+  return p.gone ? GONE_SPEAKER_TEXT : withoutTags(p.name)
+}
+
+/**
  * {@link bindTags} over the recorded mentions alone — what the publish tick
  * has, with no roster to hand (tagging spec §4.4, Publish). Per handle, the
  * record ids that own its occurrences, in occurrence order.
