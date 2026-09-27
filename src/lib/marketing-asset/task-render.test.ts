@@ -20,6 +20,8 @@ const h = vi.hoisted(() => ({
   failWrites: false,
   /** Runs once, just before a create lands: a concurrent attach. */
   beforeCreate: null as null | (() => void),
+  /** Runs once, right after the Task is read: a newer attach landing. */
+  afterTaskRead: null as null | (() => void),
 }))
 
 vi.mock('server-only', () => ({}))
@@ -44,6 +46,7 @@ vi.mock('@/lib/sanity/client', async () => {
     if (m.createIfNotExists) {
       const race = h.beforeCreate
       h.beforeCreate = null
+      h.afterTaskRead = null
       race?.()
       const id = m.createIfNotExists._id as string
       const existing = h.dataset.find((d) => d._id === id)
@@ -68,8 +71,17 @@ vi.mock('@/lib/sanity/client', async () => {
   }
   return {
     clientReadUncached: {
-      fetch: async (query: string, params: Record<string, unknown> = {}) =>
-        (await evaluate(parse(query), { dataset: h.dataset, params })).get(),
+      fetch: async (query: string, params: Record<string, unknown> = {}) => {
+        const value = (
+          await evaluate(parse(query), { dataset: h.dataset, params })
+        ).get()
+        if (query.includes('"marketingTask"') && h.afterTaskRead) {
+          const race = h.afterTaskRead
+          h.afterTaskRead = null
+          race()
+        }
+        return value
+      },
     },
     clientWrite: {
       createIfNotExists: async (doc: Doc) =>
@@ -120,6 +132,8 @@ function holds(imageAssetId: string) {
     _type: 'image',
     asset: { _type: 'reference', _ref: imageAssetId },
   }
+  // A save of the Task is a new revision of it.
+  task._rev = `rev-task-${++h.revs}`
 }
 const entry = (imageAssetId: string) => (
   holds(imageAssetId),
@@ -318,6 +332,32 @@ describe('saveTaskRenderToGallery', () => {
       image: { asset: { _ref: 'image-b' } },
       title: 'Draft title',
       alt: 'Draft alt',
+    })
+  })
+
+  it('never puts an older render back when a newer attach lands between its reads', async () => {
+    await saveTaskRenderToGallery(entry('image-a'))
+    // Attach B: saved to the Task (image-b) and to the entry, right after
+    // this attach — still re-saving image-a — read the Task.
+    holds('image-a')
+    h.afterTaskRead = () => {
+      holds('image-b')
+      const stored = gallery()[0]
+      stored.image = {
+        _type: 'image',
+        asset: { _type: 'reference', _ref: 'image-b' },
+      }
+      stored._rev = 'rev-b'
+    }
+    const stale = { ...entry('image-a') }
+    // Make the entry differ so this attach believes it must write.
+    gallery()[0].image = {
+      _type: 'image',
+      asset: { _type: 'reference', _ref: 'image-old' },
+    }
+    expect(await saveTaskRenderToGallery(stale)).toBe('superseded')
+    expect(gallery()[0]).toMatchObject({
+      image: { asset: { _ref: 'image-b' } },
     })
   })
 })

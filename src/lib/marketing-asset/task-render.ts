@@ -55,11 +55,11 @@ export function taskRenderAssetDocumentId(taskId: string): string {
 
 /** What the entry and its Task hold now. */
 async function readState(entry: TaskRenderGalleryEntry) {
-  const [taskAssetId, existing] = await Promise.all([
-    scopedFetch<string | null>(
+  const [task, existing] = await Promise.all([
+    scopedFetch<{ _rev: string; assetId: string | null } | null>(
       clientReadUncached,
       { conferenceId: entry.conferenceId },
-      `*[_type == "marketingTask" && _id == $taskId][0].asset.asset._ref`,
+      `*[_type == "marketingTask" && _id == $taskId][0]{ _rev, "assetId": asset.asset._ref }`,
       { taskId: entry.taskId },
       { cache: 'no-store' },
     ),
@@ -77,7 +77,7 @@ async function readState(entry: TaskRenderGalleryEntry) {
       { cache: 'no-store' },
     ),
   ])
-  return { taskAssetId, existing }
+  return { task, existing }
 }
 
 /** Whether a Studio draft of the entry exists, so its image moves too. */
@@ -92,19 +92,37 @@ async function hasDraft(orgId: string, id: string): Promise<boolean> {
   return (n?.n ?? 0) > 0
 }
 
+/** Sanity refused a revision guard: something moved since the read. */
+function isRevisionConflict(error: unknown): boolean {
+  return (
+    error instanceof Error && error.message.toLowerCase().includes('revision')
+  )
+}
+
 /**
  * `superseded`: the Task holds another render now, so nothing is written —
  * a slower attach must never put an older render back.
+ *
+ * EVERY write is in one transaction with a revision guard on the TASK as it
+ * was read holding this render (a no-op patch, as the gallery delete guards
+ * its own document), so the write lands only while the Task still holds this
+ * render. Two separate reads cannot promise that on their own: a newer
+ * attach can move the Task and the entry between them. A guard that fails is
+ * read again, and a newer render then answers `superseded`.
  */
 export async function saveTaskRenderToGallery(
   entry: TaskRenderGalleryEntry,
 ): Promise<'created' | 'replaced' | 'unchanged' | 'superseded'> {
   let created = false
-  // Twice at most: a create that lost a race to another attach is a no-op,
-  // so what it left is read back and, if need be, replaced.
-  for (let attempt = 0; attempt < 2; attempt++) {
-    const { taskAssetId, existing } = await readState(entry)
-    if (taskAssetId !== entry.imageAssetId) return 'superseded'
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const { task, existing } = await readState(entry)
+    if (!task || task.assetId !== entry.imageAssetId) return 'superseded'
+    const tx = clientWrite
+      .transaction()
+      .patch(entry.taskId, (p) =>
+        p.ifRevisionId(task._rev).unset(['_galleryGuard']),
+      )
+    let outcome: 'created' | 'replaced'
     if (existing) {
       if (existing.assetId === entry.imageAssetId)
         return created ? 'created' : 'unchanged'
@@ -118,43 +136,49 @@ export async function saveTaskRenderToGallery(
         createdImageAssetId: entry.imageAssetId,
       }
       // The image only, on the entry and on any Studio draft of it (which
-      // would otherwise put the old image back when published). Revision
-      // guarded: an entry another attach just moved fails this one.
-      const tx = clientWrite
-        .transaction()
-        .patch(existing._id, (p) => p.ifRevisionId(existing._rev).set(image))
+      // would otherwise put the old image back when published).
+      tx.patch(existing._id, (p) => p.ifRevisionId(existing._rev).set(image))
       if (await hasDraft(entry.orgId, existing._id))
         tx.patch(`drafts.${existing._id}`, (p) => p.set(image))
-      await tx.commit()
-      return 'replaced'
+      outcome = 'replaced'
+    } else {
+      // A create that lost a race to another attach is a no-op; the next
+      // pass reads back what it left and, if need be, replaces it.
+      const { set } = detailsPatch({
+        title: entry.title.trim() || 'Studio render',
+        alt: entry.alt,
+        scope: 'edition',
+        conferenceId: entry.conferenceId,
+        subject: entry.subject ?? undefined,
+        tags: [],
+        credit: undefined,
+      })
+      tx.createIfNotExists({
+        _id: taskRenderAssetDocumentId(entry.taskId),
+        _type: 'marketingAsset',
+        organization: { _type: 'reference', _ref: entry.orgId },
+        kind: 'image',
+        image: {
+          _type: 'image',
+          asset: { _type: 'reference', _ref: entry.imageAssetId },
+        },
+        createdImageAssetId: entry.imageAssetId,
+        source: 'studio',
+        task: { _type: 'reference', _ref: entry.taskId, _weak: true },
+        ...set,
+      })
+      outcome = 'created'
     }
-    if (created) break
-    const { set } = detailsPatch({
-      title: entry.title.trim() || 'Studio render',
-      alt: entry.alt,
-      scope: 'edition',
-      conferenceId: entry.conferenceId,
-      subject: entry.subject ?? undefined,
-      tags: [],
-      credit: undefined,
-    })
-    await clientWrite.createIfNotExists({
-      _id: taskRenderAssetDocumentId(entry.taskId),
-      _type: 'marketingAsset',
-      organization: { _type: 'reference', _ref: entry.orgId },
-      kind: 'image',
-      image: {
-        _type: 'image',
-        asset: { _type: 'reference', _ref: entry.imageAssetId },
-      },
-      createdImageAssetId: entry.imageAssetId,
-      source: 'studio',
-      task: { _type: 'reference', _ref: entry.taskId, _weak: true },
-      ...set,
-    })
+    try {
+      await tx.commit()
+    } catch (error) {
+      if (isRevisionConflict(error)) continue
+      throw error
+    }
+    if (outcome === 'replaced') return 'replaced'
     created = true
   }
   throw new Error(
-    `The gallery entry of Task ${entry.taskId} could not be found after creating it`,
+    `The gallery entry of Task ${entry.taskId} could not be saved: it kept changing`,
   )
 }
