@@ -22,9 +22,9 @@ export interface SkeletonRewrite {
 
 /**
  * 2026.2 → 2026.3 (#1153): talk posts name every speaker. The two Bluesky
- * `from` texts are also the 2026.1 texts. The 2026.1 LinkedIn lines still
- * carried `{url}` and are not matched: rewriting them would change wording
- * beyond #1153.
+ * `from` texts are also the 2026.1 texts. The 2026.1 LinkedIn texts (a plan
+ * backfilled by 053) still carry the link in the body: only their speaker
+ * phrase changes, so the link wording stays theirs.
  */
 export const LEGACY_SKELETONS: readonly SkeletonRewrite[] = [
   {
@@ -46,6 +46,16 @@ export const LEGACY_SKELETONS: readonly SkeletonRewrite[] = [
     recipeKey: 'videoDrip:bluesky',
     from: '🎬 "{title}" — {name} ({company}) at {event}.\n\n{hook}\n\n{url}',
     to: '🎬 "{title}" — {speakers} at {event}.\n\n{hook}\n\n{url}',
+  },
+  {
+    recipeKey: 'talkTeaser:linkedin',
+    from: '{hook}\n\n{name} ({company}) answers it at {event}.\n\n🎙️ "{title}"\n\nSchedule → {url}\n\n{eventTag}',
+    to: '{hook}\n\nAnswered at {event} by {speakers}.\n\n🎙️ "{title}"\n\nSchedule → {url}\n\n{eventTag}',
+  },
+  {
+    recipeKey: 'videoDrip:linkedin',
+    from: '{hook}\n\n{name} ({company}) at {event}: "{title}". Recording online.\n\nWatch → {url}\n\n{eventTag}',
+    to: '{hook}\n\n{speakers} at {event}: "{title}". Recording online.\n\nWatch → {url}\n\n{eventTag}',
   },
 ]
 

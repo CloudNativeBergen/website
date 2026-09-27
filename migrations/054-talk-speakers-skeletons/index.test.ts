@@ -4,6 +4,7 @@ import {
   BUILTIN_TEMPLATE_VERSION,
 } from '../../src/lib/marketing/template'
 import { REWRITES } from './rewrites'
+import { TEMPLATE_2026_1 } from '../053-store-campaign-recipes/template-2026.1'
 import migration from './index'
 
 type Doc = Record<string, unknown>
@@ -156,6 +157,49 @@ describe('migration 054', () => {
     ).toEqual([])
   })
 
+  it('rewrites the 2026.1 LinkedIn texts (a plan backfilled by 053) and keeps their link wording', async () => {
+    // Frozen by 053 (`template-2026.1.ts`): the link still in the body.
+    const v1 = campaign('camp-2026-1', [
+      recipe(
+        'talkTeaser:linkedin',
+        '{hook}\n\n{name} ({company}) answers it at {event}.\n\n🎙️ "{title}"\n\nSchedule → {url}\n\n{eventTag}',
+      ),
+      recipe(
+        'videoDrip:linkedin',
+        '{hook}\n\n{name} ({company}) at {event}: "{title}". Recording online.\n\nWatch → {url}\n\n{eventTag}',
+      ),
+    ])
+    expect(skeletons(apply([v1], await run([v1]))[0])).toEqual([
+      [
+        'talkTeaser:linkedin',
+        '{hook}\n\nAnswered at {event} by {speakers}.\n\n🎙️ "{title}"\n\nSchedule → {url}\n\n{eventTag}',
+      ],
+      [
+        'videoDrip:linkedin',
+        '{hook}\n\n{speakers} at {event}: "{title}". Recording online.\n\nWatch → {url}\n\n{eventTag}',
+      ],
+    ])
+  })
+
+  it('matches every 2026.1 talk skeleton 053 froze that names {name} ({company}) or "{name} has"', () => {
+    const froms = new Set(REWRITES.map((r) => `${r.recipeKey}|${r.from}`))
+    const legacy = TEMPLATE_2026_1.campaigns
+      .flatMap((c) => c.recipes)
+      .filter(
+        (r) =>
+          r.subjectSource === 'talk' &&
+          /\{name\} \(\{company\}\)|\{name\} has/.test(r.skeleton ?? ''),
+      )
+    expect(legacy.map((r) => r.key).sort()).toEqual([
+      'talkTeaser:bluesky',
+      'talkTeaser:linkedin',
+      'videoDrip:bluesky',
+      'videoDrip:linkedin',
+    ])
+    for (const r of legacy)
+      expect(froms.has(`${r.key}|${r.skeleton}`), r.key).toBe(true)
+  })
+
   it('writes exactly what the live built-in says while it is 2026.3', () => {
     expect(BUILTIN_TEMPLATE_VERSION).toBe('2026.3')
     const live = new Map(
@@ -163,13 +207,17 @@ describe('migration 054', () => {
         .flatMap((c) => c.recipes)
         .map((r) => [r.key, r.skeleton]),
     )
-    for (const r of REWRITES)
+    // The 2026.1 LinkedIn pairs keep their in-body link, so they are not
+    // the live text; their exact output is pinned in the test above.
+    const current = REWRITES.filter((r) => !r.to.includes('→ {url}'))
+    for (const r of current)
       expect(live.get(r.recipeKey), r.recipeKey).toBe(r.to)
-    expect(REWRITES.map((r) => [r.recipeKey, r.from])).toEqual([
+    expect(current.map((r) => [r.recipeKey, r.from])).toEqual([
       ['talkTeaser:linkedin', OLD.teaserLinkedin],
       ['talkTeaser:bluesky', OLD.teaserBluesky],
       ['videoDrip:linkedin', OLD.videoLinkedin],
       ['videoDrip:bluesky', OLD.videoBluesky],
     ])
+    expect(REWRITES).toHaveLength(6)
   })
 })

@@ -15,11 +15,11 @@ For each stored Recipe, it rewrites `recipes[_key].skeleton` to the `2026.3` tex
 
 - the Recipe is a talk Recipe (`subjectSource == "talk"`);
 - its `key` is one of `talkTeaser:linkedin`, `talkTeaser:bluesky`, `videoDrip:linkedin` or `videoDrip:bluesky`;
-- its skeleton is **exactly** the built-in `2026.2` text.
+- its skeleton is **exactly** a built-in `2026.2` or `2026.1` text.
 
 An edited skeleton is the organizer's and is never touched. Both the old and new texts are frozen in `src/lib/marketing/template/legacy-skeletons.ts`. Seeding and copying read the same table (see below).
 
-The two Bluesky `2026.2` texts are identical to `2026.1`, so a plan backfilled by 053 gets those two lines as well. The `2026.1` LinkedIn lines (which still carried `{url}`) are not matched.
+The two Bluesky `2026.2` texts are identical to `2026.1`, so a plan backfilled by 053 gets those two lines as well. The `2026.1` LinkedIn lines, which still carry the link in the body (`Schedule → {url}`, `Watch → {url}`), are matched too: only their speaker phrase changes, and the link wording stays.
 
 It does not touch:
 
