@@ -1063,11 +1063,7 @@ export function MemeGenerator({
       // The track now names the file the project holds, so a later save
       // keeps it even once its gallery entry is gone.
       const trackFileId = result.trackFileId
-      if (
-        trackFileId &&
-        savedTrack &&
-        !savedTrack.fileId
-      )
+      if (trackFileId && savedTrack && !savedTrack.fileId)
         // The file the save stored is the one just picked and decoded.
         rekeyDecoded(savedTrack.galleryAssetId ?? null, trackFileId)
       if (trackFileId && savedTrack)
