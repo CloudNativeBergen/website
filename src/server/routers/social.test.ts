@@ -23,10 +23,18 @@ const marketing = vi.hoisted(() => ({
 vi.mock('@/lib/marketing/sanity', () => marketing)
 const verify = vi.hoisted(() => ({
   withManualBody: vi.fn(async <T>(data: T) => data),
+  manualPostBody: vi.fn(
+    async (): Promise<{
+      body: string
+      untagged: string[]
+      removed: number
+    } | null> => null,
+  ),
 }))
 vi.mock('@/lib/marketing/tagging/verify', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/marketing/tagging/verify')>()),
   withManualBody: verify.withManualBody,
+  manualPostBody: verify.manualPostBody,
 }))
 vi.mock('next/cache', () => ({
   revalidateTag: vi.fn(),
@@ -618,6 +626,53 @@ describe('social.markPosted', () => {
       }),
       { ifRevision: 'rev-7' },
     )
+  })
+
+  it('a Bluesky post marked posted by hand records the CHECKED text, in the same compare-and-set (final round, T5)', async () => {
+    h.getSocialPostVariant.mockResolvedValue(
+      variant({
+        platform: 'bluesky',
+        status: 'awaiting-manual',
+        body: 'Hello @alice.dev',
+      }),
+    )
+    verify.manualPostBody.mockResolvedValueOnce({
+      body: 'Hello Alice Smith',
+      untagged: ['Alice Smith'],
+      removed: 0,
+    })
+    await social().markPosted({
+      variantId: 'variant-ours',
+      url: 'https://bsky.app/profile/x/post/1',
+    })
+    expect(verify.manualPostBody).toHaveBeenCalledWith({
+      conferenceId: CONF_A,
+      variantId: 'variant-ours',
+      body: 'Hello @alice.dev',
+    })
+    expect(h.transition).toHaveBeenCalledWith(
+      'variant-ours',
+      expect.objectContaining({
+        status: 'published',
+        body: 'Hello Alice Smith',
+      }),
+      { ifRevision: 'rev-7' },
+    )
+  })
+
+  it('a check that cannot run never blocks recording a live post: the stored text is kept', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    h.getSocialPostVariant.mockResolvedValue(
+      variant({ platform: 'bluesky', status: 'awaiting-manual' }),
+    )
+    verify.manualPostBody.mockRejectedValueOnce(new Error('Sanity down'))
+    const result = await social().markPosted({
+      variantId: 'variant-ours',
+      url: 'https://bsky.app/profile/x/post/1',
+    })
+    expect(result.status).toBe('published')
+    expect(h.transition.mock.calls.at(-1)![1]).not.toHaveProperty('body')
+    error.mockRestore()
   })
 
   it('supplies a MISSING address on a published variant (#1128)', async () => {
