@@ -1040,3 +1040,41 @@ export const TagSaveRefusedAndFixed: Story = {
     ).toBeNull()
   },
 }
+
+/** "Pull back to draft" in flight: the tag buttons wait for it. */
+export const UnscheduleHoldsTagButtons: Story = {
+  parameters: {
+    msw: {
+      handlers: [
+        http.post('/api/trpc/social.unscheduleVariant', async () => {
+          await delay('infinite')
+          return HttpResponse.json({})
+        }),
+        ...handlers(
+          fixture(
+            {
+              ...taggingFixture.task,
+              status: 'scheduled',
+              approvedAt: '2026-09-14T09:12:00.000Z',
+              approvedByName: 'Bob Builder',
+            },
+            variant({ body: TAG_BODY, status: 'scheduled' }),
+            [],
+            { tagPeople: taggingFixture.tagPeople, tagMentions: [] },
+          ),
+        ),
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const tag = await canvas.findByRole('button', {
+      name: 'Tag Alice Anderson',
+    })
+    await expect(tag).toBeEnabled()
+    await userEvent.click(
+      canvas.getByRole('button', { name: 'Pull back to draft' }),
+    )
+    await waitFor(() => expect(tag).toBeDisabled())
+  },
+}

@@ -842,7 +842,10 @@ function PublishingSection({
                     setTagPending(pending)
                     onTagPendingChange?.(pending)
                   },
-                  busy: approve.isPending || retry.isPending,
+                  busy:
+                    approve.isPending ||
+                    retry.isPending ||
+                    unschedule.isPending,
                 }
               : undefined
           }
