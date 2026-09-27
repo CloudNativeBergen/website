@@ -52,7 +52,7 @@ vi.mock('@/lib/sanity/client', async () => {
       h.beforeCreate = null
       h.afterTaskRead = null
       h.beforeTransaction = null
-  h.beforeDraftRead = null
+      h.beforeDraftRead = null
       race?.()
       const id = m.createIfNotExists._id as string
       const existing = h.dataset.find((d) => d._id === id)
