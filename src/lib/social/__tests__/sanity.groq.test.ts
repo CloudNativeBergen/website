@@ -365,6 +365,88 @@ describe('findWork — the composed due/stale scan', () => {
     expect(h.queries).toHaveLength(1)
   })
 
+  it("folds each recorded tag's speaker opt-out into the SAME single read (tagging §4.4, Publish)", async () => {
+    h.dataset = [
+      conference('c1'),
+      { _id: 'alice', _type: 'speaker', name: 'Alice', socialTagOptOut: true },
+      { _id: 'bob', _type: 'speaker', name: 'Bob' },
+      variant('v1', 'c1', {
+        mentions: [
+          {
+            _key: 'a',
+            handle: 'alice.dev',
+            did: 'did:plc:alice',
+            speaker: { _type: 'reference', _ref: 'alice', _weak: true },
+            status: 'tagged',
+            name: 'Alice Smith',
+          },
+          // Saved while Bluesky was unreachable: no DID, still a tag to check.
+          {
+            _key: 'b',
+            handle: 'bob.dev',
+            speaker: { _type: 'reference', _ref: 'bob', _weak: true },
+            status: 'tagged',
+            name: 'Bob Jones',
+          },
+          // A note, not a tag: nothing to swap.
+          {
+            _key: 'c',
+            handle: 'carol.dev',
+            speaker: { _type: 'reference', _ref: 'alice', _weak: true },
+            status: 'unresolved',
+            name: 'Carol',
+          },
+          // A speaker since deleted: the weak reference reads as not opted out.
+          {
+            _key: 'd',
+            handle: 'gone.dev',
+            did: 'did:plc:gone',
+            speaker: { _type: 'reference', _ref: 'gone', _weak: true },
+            status: 'tagged',
+            name: 'Gone',
+          },
+        ],
+      }),
+      variant('v2', 'c1'),
+    ]
+    const work = await sanitySocialVariantStore.findWork(
+      NOW,
+      STALE_BEFORE,
+      BOUNDS,
+    )
+    expect(work.due.map((v) => [v._id, v.recordedTags])).toEqual([
+      [
+        'v1',
+        [
+          {
+            handle: 'alice.dev',
+            did: 'did:plc:alice',
+            name: 'Alice Smith',
+            speakerId: 'alice',
+            optedOut: true,
+          },
+          {
+            handle: 'bob.dev',
+            name: 'Bob Jones',
+            speakerId: 'bob',
+            optedOut: false,
+          },
+          {
+            handle: 'gone.dev',
+            did: 'did:plc:gone',
+            name: 'Gone',
+            speakerId: 'gone',
+            optedOut: false,
+          },
+        ],
+      ],
+      ['v2', []],
+    ])
+    // ONE read per tick, the opt-out included: every extra query a minute is
+    // ~43k live-API requests a month.
+    expect(h.queries).toHaveLength(1)
+  })
+
   it('returns due variants grouped per conference, capped, oldest first, with orgId', async () => {
     h.dataset = [
       conference('c1'),
