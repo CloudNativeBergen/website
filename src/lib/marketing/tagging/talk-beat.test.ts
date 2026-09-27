@@ -156,6 +156,17 @@ describe('a talk beat names every speaker', () => {
     expect(subject.people?.map((p) => p._id)).toEqual(['spk-bob'])
   })
 
+  it('a speaker the talk lists twice is named and tagged once (a mention _key is unique)', () => {
+    const beat = build([alice, bob, alice], {
+      'spk-alice': tagged('alice.dev', DID_A),
+    })
+    const bluesky = on(beat, 'bluesky')
+    expect(bluesky.body).toContain(
+      '— @alice.dev (SRE, Acme) and Bob Smith (CTO, Initech) at CNB 2027.',
+    )
+    expect(bluesky.mentions?.map((m) => m.speakerId)).toEqual(['spk-alice'])
+  })
+
   it('the talk stays the subject: keys and target page do not depend on its speakers', () => {
     const shape = (beat: ReturnType<typeof build>) =>
       beat.tasks.map((t) => ({

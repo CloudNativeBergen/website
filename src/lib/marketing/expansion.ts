@@ -168,11 +168,17 @@ export interface TalkSubjectSource {
  * A talk as a Task subject (tagging spec §4.2): ALL of its speakers, in the
  * order the talk lists them. `{name}` joins their names, `{speakers}` adds
  * each one's title, and `{company}` stays the first one's — only meaningful
- * for a single-speaker talk. A dangling or nameless speaker ref is left out.
+ * for a single-speaker talk. A dangling or nameless speaker ref is left out,
+ * and a speaker listed twice is named once.
  */
 export function talkSubject(talk: TalkSubjectSource): GenerationSubject {
+  // Each speaker once: a talk listing someone twice would name them twice
+  // and record two mentions under one `_key`.
+  const seen = new Set<string>()
   const people = (talk.speakers ?? []).flatMap((s) =>
-    s?._id && s.name ? [{ _id: s._id, name: s.name, title: s.title }] : [],
+    s?._id && s.name && !seen.has(s._id) && seen.add(s._id)
+      ? [{ _id: s._id, name: s.name, title: s.title }]
+      : [],
   )
   const first = people[0]
   return {
