@@ -2716,7 +2716,9 @@ export const ProjectDeletedClearsBackground: Story = {
     projects: storyProjects({
       delete: async () => ({
         released: [],
-        unsaveable: ['image-hall-1782x1188-png'],
+        unsaveable: [
+          { fileId: 'image-hall-1782x1188-png', galleryAssetId: 'asset-hall' },
+        ],
       }),
     }),
     initialProjectId: 'vp-launch',

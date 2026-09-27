@@ -859,6 +859,32 @@ describe('speaker erasure removes their images everywhere (#1162)', () => {
       ).toHaveProperty('image')
     })
 
+    it('treats a gallery asset that survives only as a Studio draft as live', async () => {
+      h.dataset.push(
+        { ...doc('asset-bob'), _id: 'drafts.asset-bob-only' },
+        project('vp-draft-live', [
+          {
+            ...sceneWith('s-dl', '#0d0e0f'),
+            background: {
+              color: '#0d0e0f',
+              image: {
+                ...image(BOB_CARD),
+                name: 'b',
+                galleryAsset: weak('asset-bob-only'),
+                subject: weak(ADA),
+              },
+            },
+          },
+        ]),
+      )
+      await eraseSpeakerInPlace({ speakerId: ADA, actor: 'test' })
+      // The draft's own subject (Bob) decides, not the project's stale copy.
+      expect(doc(BOB_CARD)).toBeDefined()
+      expect(
+        (doc('vp-draft-live').scenes as { background: object }[])[0].background,
+      ).toHaveProperty('image')
+    })
+
     it('loses a track linked to the speaker', async () => {
       h.dataset.push(
         project('vp-track', [sceneWith('s', '#000000')], {

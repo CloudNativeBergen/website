@@ -1359,7 +1359,7 @@ describe('deleting a project', () => {
     expect(result).toEqual({
       deleted: true,
       released: [HALL],
-      unsaveable: [HALL],
+      unsaveable: [{ fileId: HALL, galleryAssetId: 'asset-hall' }],
     })
   })
 })
@@ -1389,8 +1389,42 @@ describe('deleting a project whose background outlives it', () => {
       image: { asset: ref(HALL) },
     })
     const result = await projects().delete({ id: created._id })
-    expect(result).toEqual({ deleted: true, released: [], unsaveable: [HALL] })
+    expect(result).toEqual({
+      deleted: true,
+      released: [],
+      unsaveable: [{ fileId: HALL, galleryAssetId: 'asset-hall' }],
+    })
     expect(doc(HALL)).toBeDefined()
+  })
+})
+
+describe('deleting a project whose scenes share a deduplicated file', () => {
+  it('names only the (file, entry) whose entry is gone, never the same file under a live entry', async () => {
+    h.dataset.push({
+      _id: 'asset-hall-2',
+      _rev: 'rev-h2',
+      _type: 'marketingAsset',
+      organization: ref('org-A'),
+      scope: 'organization',
+      kind: 'image',
+      title: 'Hall again',
+      alt: 'Same bytes',
+      image: { _type: 'image', asset: ref(HALL) },
+    })
+    const created = await projects().create({
+      title: 'T',
+      scenes: [
+        scene('a', { name: 'one', galleryAssetId: 'asset-hall' }),
+        scene('b', { name: 'two', galleryAssetId: 'asset-hall-2' }),
+      ],
+    })
+    await assets().delete({ id: 'asset-hall' })
+    const result = await projects().delete({ id: created._id })
+    expect(result.unsaveable).toEqual([
+      { fileId: HALL, galleryAssetId: 'asset-hall' },
+    ])
+    // asset-hall-2 still holds the file.
+    expect(result.released).toEqual([])
   })
 })
 

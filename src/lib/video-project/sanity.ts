@@ -51,6 +51,12 @@ export async function readVideoProject(
   )
 }
 
+/** A file a project held only through itself, with the entry it named. */
+export interface UnsaveableFile {
+  fileId: string
+  galleryAssetId: string | null
+}
+
 /** A file a stored project holds, and what the save that stored it knew. */
 export interface StoredFile {
   fileId: string
@@ -306,22 +312,33 @@ export async function countVideoProjectReleaseTwins(
 export async function readVideoProjectOrphanedFiles(
   orgId: string,
   id: string,
-): Promise<string[]> {
-  const row = await scopedFetch<{ ids: (string | null)[] | null } | null>(
+): Promise<UnsaveableFile[]> {
+  const row = await scopedFetch<{ files: UnsaveableFile[] | null } | null>(
     clientReadUncached,
     { orgId },
     `*[_type == "videoProject" && _id == $id][0]{
-      "ids": coalesce(scenes[defined(background.image.asset._ref) && !defined(background.image.galleryAsset->_id)].background.image.asset._ref, [])
-        + select(defined(track.file.asset._ref) && !defined(track.file.galleryAsset->_id) => [track.file.asset._ref], [])
+      "files": coalesce(scenes[defined(background.image.asset._ref) && !defined(background.image.galleryAsset->_id)]{
+        "fileId": background.image.asset._ref,
+        "galleryAssetId": background.image.galleryAsset._ref
+      }, []) + select(defined(track.file.asset._ref) && !defined(track.file.galleryAsset->_id) => [{
+        "fileId": track.file.asset._ref,
+        "galleryAssetId": track.file.galleryAsset._ref
+      }], [])
     }`,
     { id },
     opts,
   )
-  return [
-    ...new Set(
-      (row?.ids ?? []).filter((x): x is string => typeof x === 'string'),
-    ),
-  ]
+  // Per (file, gallery entry): the same deduplicated file under a LIVE
+  // entry is still saveable, and is never named here.
+  const seen = new Set<string>()
+  return (row?.files ?? []).flatMap((f) => {
+    if (typeof f.fileId !== 'string') return []
+    const galleryAssetId = f.galleryAssetId ?? null
+    const key = `${f.fileId}\u0000${galleryAssetId ?? ''}`
+    if (seen.has(key)) return []
+    seen.add(key)
+    return [{ fileId: f.fileId, galleryAssetId }]
+  })
 }
 
 /** Delete a project and any Studio draft of it, together. */

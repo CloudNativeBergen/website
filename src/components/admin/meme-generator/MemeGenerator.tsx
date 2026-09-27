@@ -113,6 +113,7 @@ import {
   VideoProjectError,
   carryFiles,
   dropReleasedFiles,
+  dropUnsaveable,
   fromProjectScenes,
   projectSnapshot,
   toProjectScenes,
@@ -839,7 +840,17 @@ export function MemeGenerator({
   useEffect(() => {
     if (warnOnLeave || !guardPushed.current) return
     guardPushed.current = false
-    if (isGuardEntry(window.history.state)) window.history.back()
+    if (!isGuardEntry(window.history.state)) return
+    // The guard entry may carry a URL set since it was pushed — a new
+    // project's `?project=<id>`. The entry below it gets the same URL, so a
+    // reload still opens the saved project.
+    const url = window.location.href
+    window.addEventListener(
+      'popstate',
+      () => window.history.replaceState(window.history.state, '', url),
+      { once: true },
+    )
+    window.history.back()
   }, [warnOnLeave])
 
   const discardOk = () =>
@@ -1045,14 +1056,15 @@ export function MemeGenerator({
       // Files the delete's orphan check removed, and files only the deleted
       // project authorized (their gallery entry is gone): neither can be
       // saved again, so neither is kept — in any state undo can reach.
-      const gone = new Set([...released, ...unsaveable])
-      const cleared = scenes.filter((scene) => {
-        const fileId = scene.design.background.image?.fileId
-        return !!fileId && gone.has(fileId)
-      }).length
-      setHistory((prev) =>
-        mapStates(prev, (states) => dropReleasedFiles(states, gone)),
-      )
+      const gone = new Set(released)
+      const drop = (states: Scene[]) =>
+        dropUnsaveable(dropReleasedFiles(states, gone), unsaveable)
+      const cleared = drop(scenes).filter(
+        (scene, i) =>
+          scene.design.background.image === null &&
+          scenes[i].design.background.image !== null,
+      ).length
+      setHistory((prev) => mapStates(prev, drop))
       // The editor now holds the ONLY copy: unsaved, so leaving asks.
       setSavedSnapshot(DELETED_SNAPSHOT)
       setProject(null)

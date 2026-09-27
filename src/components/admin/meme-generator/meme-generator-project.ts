@@ -44,7 +44,10 @@ export interface VideoProjects {
    * Resolves with the files the delete's orphan check removed, and the files
    * only the deleted project authorized (their gallery entry is gone).
    */
-  delete: (id: string) => Promise<{ released: string[]; unsaveable: string[] }>
+  delete: (id: string) => Promise<{
+    released: string[]
+    unsaveable: { fileId: string; galleryAssetId: string | null }[]
+  }>
 }
 
 /** Which stored file a scene's background became. */
@@ -240,6 +243,35 @@ export function dropReleasedFiles(
   return states.map((scene) => {
     const fileId = scene.design.background.image?.fileId
     if (!fileId || !released.has(fileId)) return scene
+    return {
+      ...scene,
+      design: {
+        ...scene.design,
+        background: { ...scene.design.background, image: null },
+      },
+    }
+  })
+}
+
+/**
+ * The scenes without any background only a deleted project authorized: the
+ * same file AND the same gallery entry (or none). The same deduplicated file
+ * under another, live entry is still saveable, and is kept.
+ */
+export function dropUnsaveable(
+  states: Scene[],
+  unsaveable: readonly { fileId: string; galleryAssetId: string | null }[],
+): Scene[] {
+  if (unsaveable.length === 0) return states
+  const gone = (image: NonNullable<Scene['design']['background']['image']>) =>
+    unsaveable.some(
+      (u) =>
+        u.fileId === image.fileId &&
+        (u.galleryAssetId ?? null) === (image.galleryAssetId ?? null),
+    )
+  return states.map((scene) => {
+    const image = scene.design.background.image
+    if (!image?.fileId || !gone(image)) return scene
     return {
       ...scene,
       design: {

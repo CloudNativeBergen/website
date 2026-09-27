@@ -542,15 +542,19 @@ export async function fetchSpeakerAssetInputs(
   const assetIds = [
     ...new Set(held.flatMap((f) => (f.assetId ? [f.assetId] : []))),
   ]
+  // Live in ANY version — published, a Studio draft or a Content Release
+  // copy: while one exists, the gallery's own subject decides.
   const liveAssets = new Set(
     assetIds.length > 0
-      ? ((await client.fetch<string[]>(
-          // groq-global: which of those gallery assets still exist, by id —
-          // an asset's own subject decides while it does.
-          groq`*[_id in $assetIds]._id`,
-          { assetIds },
-          opts,
-        )) ?? [])
+      ? (
+          (await client.fetch<string[]>(
+            // groq-global: which of those gallery assets still exist, by id,
+            // in any version — an asset's own subject decides while it does.
+            groq`*[_type == "marketingAsset" && (_id in $assetIds || _id in $draftIds || (_id in path("versions.**") && string::split(_id, ".")[2] in $assetIds))]._id`,
+            { assetIds, draftIds: assetIds.map((id) => `drafts.${id}`) },
+            opts,
+          )) ?? []
+        ).map((id) => id.split('.').pop() as string)
       : [],
   )
   const projectFiles: ProjectFileSubject[] = held.map((f) => ({

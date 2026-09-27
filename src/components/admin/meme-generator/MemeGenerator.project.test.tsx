@@ -111,7 +111,7 @@ function fakeProjects(overrides: Partial<VideoProjects> = {}) {
     duplicate: vi.fn(async () => ({ _id: 'vp-copy' })),
     delete: vi.fn(async () => ({
       released: [] as string[],
-      unsaveable: [] as string[],
+      unsaveable: [] as { fileId: string; galleryAssetId: string | null }[],
     })),
     ...overrides,
   } satisfies VideoProjects
@@ -505,6 +505,36 @@ describe('leaving with unsaved changes', () => {
     expect(confirm).toHaveBeenCalledTimes(1)
   })
 
+  it('keeps a new project’s URL when the guard comes off after its first save', async () => {
+    const onProjectChange = vi.fn((id: string | null) => {
+      // As the studio does: the project in the URL, on the current entry.
+      const url = new URL(window.location.href)
+      if (id) url.searchParams.set('project', id)
+      window.history.replaceState(window.history.state, '', url)
+    })
+    render(
+      <MemeGenerator
+        projects={fakeProjects()}
+        onProjectChange={onProjectChange}
+      />,
+    )
+    toVideo()
+    typeTitle('Teaser')
+    await waitFor(() =>
+      expect(window.history.state).toMatchObject({ __studioLeaveGuard: true }),
+    )
+    save()
+    await within(project()).findByText('All changes saved')
+    await waitFor(() =>
+      expect(window.history.state?.__studioLeaveGuard).toBeUndefined(),
+    )
+    await waitFor(() =>
+      expect(new URL(window.location.href).searchParams.get('project')).toBe(
+        'vp-new',
+      ),
+    )
+  })
+
   it('leaves on browser Back when the organizer confirms', async () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true)
     const back = vi.spyOn(window.history, 'back')
@@ -669,7 +699,7 @@ describe('deleting a project', () => {
       // The delete's orphan check took the background file.
       delete: vi.fn(async () => ({
         released: ['image-hall'],
-        unsaveable: ['image-hall'],
+        unsaveable: [{ fileId: 'image-hall', galleryAssetId: 'asset-hall' }],
       })),
     })
     render(<MemeGenerator projects={projects} initialProjectId="vp-1" />)
@@ -729,7 +759,7 @@ describe('deleting a project', () => {
       // is gone: nothing can authorize saving it again.
       delete: vi.fn(async () => ({
         released: [] as string[],
-        unsaveable: ['image-hall'],
+        unsaveable: [{ fileId: 'image-hall', galleryAssetId: 'asset-hall' }],
       })),
     })
     render(<MemeGenerator projects={projects} initialProjectId="vp-1" />)
@@ -756,6 +786,49 @@ describe('deleting a project', () => {
     expect(sent.scenes.every((sc) => sc.design.background.image === null)).toBe(
       true,
     )
+  })
+
+  it('keeps a scene on a live entry of the same file, clearing only the one whose entry is gone', async () => {
+    const second = openedScene('s-2', 'World')
+    second.design.background.image = {
+      ...second.design.background.image!,
+      galleryAssetId: 'asset-hall-2',
+    }
+    const projects = fakeProjects({
+      open: vi.fn(async () => ({
+        ...PROJECT,
+        scenes: [PROJECT.scenes[0], second],
+      })),
+      delete: vi.fn(async () => ({
+        released: [] as string[],
+        unsaveable: [{ fileId: 'image-hall', galleryAssetId: 'asset-hall' }],
+      })),
+    })
+    render(<MemeGenerator projects={projects} initialProjectId="vp-1" />)
+    await within(
+      await screen.findByRole('region', { name: 'Project' }),
+    ).findByText('All changes saved')
+    fireEvent.click(
+      within(project()).getByRole('button', { name: 'Delete project' }),
+    )
+    fireEvent.click(
+      within(await screen.findByRole('dialog')).getByRole('button', {
+        name: 'Delete project',
+      }),
+    )
+    expect(
+      await within(project()).findAllByText(
+        /One background was only in that project/,
+      ),
+    ).not.toHaveLength(0)
+    save()
+    await within(project()).findByText('All changes saved')
+    const sent = vi.mocked(projects.create).mock.calls[0][0]
+    expect(
+      sent.scenes.map(
+        (sc) => sc.design.background.image?.galleryAssetId ?? null,
+      ),
+    ).toEqual([null, 'asset-hall-2'])
   })
 
   it('does nothing when the dialog is cancelled', async () => {
