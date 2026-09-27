@@ -237,6 +237,12 @@ under LinkedIn's 192 kbit/s minimum.** So #1177 must enforce the floor rather th
 
 ## 8. Recommendation
 
+> **Superseded 2026-09-28: the add-on is turned off (#1179, PR #1231).** Its WebAssembly is FFmpeg's
+> libavcodec (62.23.103) under the LGPL. The package publishes neither the FFmpeg revision it was built
+> from nor its build script, so the corresponding source the LGPL requires cannot be provided. Browsers
+> without native AAC (Firefox, among those measured) now export the video **silent**, with a notice
+> saying so. Chrome, Edge and Safari are unchanged. It can come back if the build recipe is published.
+
 **Decided 2026-09-23: browsers without native AAC export with the add-on;** the LGPL obligation is
 accepted. It worked in all three browsers tested (§2 lists the versions), costs about 254 KB gzip
 fetched only when needed, and adds about 0.7 s per 10 s of sound, off the main thread. The add-on is
