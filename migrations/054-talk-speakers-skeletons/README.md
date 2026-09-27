@@ -28,7 +28,7 @@ It does not touch:
 
 ## Order
 
-**Run it before or with the deploy of #1153.** Once the new code is deployed, an unmigrated two-speaker talk post reads "Alice and Bob (Alice's title)". The old code resolves `{speakers}` nowhere, so migrating first is not safe either. Run it in the same window as the deploy, straight after it.
+**Run it now; it is safe to run any time.** #1153 is deployed, so the new code resolves `{speakers}`. When #1153 was deployed, production had no talk Recipe on any Campaign, and no draft, Release copy or `planTemplate`, so nothing was generated from a legacy skeleton in the meantime. New plans cannot pick one up either: seeding from a saved Template and copying an earlier plan bring each unedited legacy skeleton current.
 
 A post already generated is not rewritten. Only Tasks generated after the run use the new skeletons.
 
