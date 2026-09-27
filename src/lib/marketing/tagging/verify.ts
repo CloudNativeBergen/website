@@ -97,6 +97,7 @@ export async function checkTagsOnSave(input: {
       body: input.body,
       mentions: saved.mentions,
       people,
+      ownAccount,
     }),
     resolutions,
   )
@@ -133,7 +134,12 @@ export async function checkTagsForApproval(input: {
     ownBlueskyAccount(input.conferenceId),
   ])
   const resolutions = await resolveHandles(
-    approvalHandlesToResolve({ body: input.body, mentions, people }),
+    approvalHandlesToResolve({
+      body: input.body,
+      mentions,
+      people,
+      ownAccount,
+    }),
   )
   return approvalCheck({
     body: input.body,

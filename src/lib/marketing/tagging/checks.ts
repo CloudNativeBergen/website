@@ -505,9 +505,55 @@ export function handlesToResolve(input: {
   previous: readonly MentionRecord[]
   ownAccount?: string | null
 }): string[] {
-  return planTags(input).flatMap((p) =>
-    p.kind === 'record' && !p.did ? [p.handle] : [],
-  )
+  return [
+    ...planTags(input).flatMap((p) =>
+      p.kind === 'record' && !p.did ? [p.handle] : [],
+    ),
+    ...strangersToResolve(
+      input.body,
+      input.people,
+      input.previous,
+      input.ownAccount,
+    ),
+  ]
+}
+
+/**
+ * When our own account is known only by DID, a stranger's `@handle` may BE
+ * it — only Bluesky can tell. Only strangers are asked: no speaker lists
+ * these handles, so no opted-out speaker is ever looked up.
+ */
+function strangersToResolve(
+  body: string,
+  people: readonly TaggablePerson[],
+  mentions: readonly MentionRecord[],
+  ownAccount: string | null | undefined,
+): string[] {
+  if (!ownAccount?.startsWith('did:')) return []
+  const bound = bindTags(body, people, mentions)
+  return [
+    ...new Set(
+      mentionTokens(body)
+        .map((t) => t.handle)
+        .filter((h) => !bound.has(h)),
+    ),
+  ]
+}
+
+/** Strangers' handles that resolved to our own DID (§4.1). */
+function ownByDid(
+  body: string,
+  people: readonly TaggablePerson[],
+  mentions: readonly MentionRecord[],
+  ownAccount: string | null | undefined,
+  resolutions: ReadonlyMap<string, HandleResolution>,
+): MentionIssue[] {
+  return strangersToResolve(body, people, mentions, ownAccount).flatMap((h) => {
+    const r = resolutions.get(h)
+    return r?.kind === 'resolved' && r.did === ownAccount
+      ? [ownAccountIssue(h)]
+      : []
+  })
 }
 
 /**
@@ -571,6 +617,15 @@ export function saveMentions(input: {
       onRoster.has(m.speakerId) &&
       nameIndex(input.body, m.name) >= 0,
   )
+  issues.push(
+    ...ownByDid(
+      input.body,
+      input.people,
+      input.previous,
+      input.ownAccount,
+      input.resolutions,
+    ),
+  )
   const tooLong = plainLengthIssue(input.body, tagged)
   if (tooLong) issues.push(tooLong)
   return { mentions: [...tagged, ...notes], issues, warnings }
@@ -632,17 +687,24 @@ export function approvalHandlesToResolve(input: {
   body: string
   mentions: readonly MentionRecord[]
   people: readonly TaggablePerson[]
+  ownAccount?: string | null
 }): string[] {
   const byId = new Map(input.people.map((p) => [p.speakerId, p]))
   return [
-    ...new Set(
-      liveRecords(input.body, input.mentions, input.people).flatMap((m) => {
+    ...new Set([
+      ...liveRecords(input.body, input.mentions, input.people).flatMap((m) => {
         const p = byId.get(m.speakerId)
         return m.status === 'tagged' && p && !p.optedOut
           ? [normaliseHandle(m.handle)]
           : []
       }),
-    ),
+      ...strangersToResolve(
+        input.body,
+        input.people,
+        input.mentions,
+        input.ownAccount,
+      ),
+    ]),
   ]
 }
 
@@ -714,6 +776,15 @@ export function approvalCheck(input: {
   const own = input.ownAccount
   if (own && mentionTokens(input.body).some((t) => t.handle === own))
     issues.push(ownAccountIssue(own))
+  issues.push(
+    ...ownByDid(
+      input.body,
+      input.people,
+      input.mentions,
+      input.ownAccount,
+      input.resolutions,
+    ),
+  )
   for (const { handle, matches } of matchedTags(input.body, input.people)) {
     const optedOut = matches.find((p) => p.optedOut)
     if (optedOut) {

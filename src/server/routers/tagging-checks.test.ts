@@ -490,6 +490,34 @@ describe('social.updateVariant on a Bluesky body', () => {
     expect(h.updateSocialVariantContent).not.toHaveBeenCalled()
   })
 
+  it('with our account known only by DID, a stranger handle that IS it is refused', async () => {
+    seed([])
+    ownAccount(`https://bsky.app/profile/${DID_OTHER}`)
+    bluesky['cnb.example.com'] = DID_OTHER
+    bluesky['kubernetes.io'] = 'did:plc:kubernetesioaaaaaaaaaaaa'
+    expect(
+      await refusal(save('Follow @cnb.example.com and @kubernetes.io')),
+    ).toEqual([['own-account', 'own_002fcnb_002eexample_002ecom']])
+    expect(askedBluesky().sort()).toEqual(['cnb.example.com', 'kubernetes.io'])
+  })
+
+  it('…and scheduling a body no save checked refuses it too', async () => {
+    seed([])
+    ownAccount(`https://bsky.app/profile/${DID_OTHER}`)
+    bluesky['cnb.example.com'] = DID_OTHER
+    serveVariant(variantData({ body: 'Follow @cnb.example.com' }))
+    expect(
+      await refusal(social().scheduleVariant({ variantId: 'variant-ours' })),
+    ).toEqual([['own-account', 'own_002fcnb_002eexample_002ecom']])
+  })
+
+  it('an opted-out speaker is never looked up, even to rule out our own DID', async () => {
+    seed([])
+    ownAccount(`https://bsky.app/profile/${DID_OTHER}`)
+    await refusal(save('With @olga.dev'))
+    expect(askedBluesky()).toEqual([])
+  })
+
   it('scheduling refuses our own handle in a body no save checked', async () => {
     seed([])
     ownAccount('https://bsky.app/profile/cloudnativebergen.dev')
