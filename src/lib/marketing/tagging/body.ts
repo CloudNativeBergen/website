@@ -22,7 +22,7 @@ export const BLUESKY_MAX_GRAPHEMES = 300
  * imported by the admin stories, and those constraints pull in a domain list.
  */
 const segmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' })
-function graphemes(text: string): number {
+export function countGraphemes(text: string): number {
   return [...segmenter.segment(text)].length
 }
 
@@ -94,7 +94,10 @@ export function tagBlueskyBody(input: {
 
   const candidates = people.filter((p) => p.tag?.status === 'tagged')
   let body = render(new Set(candidates))
-  while (candidates.length > 0 && graphemes(body) > BLUESKY_MAX_GRAPHEMES) {
+  while (
+    candidates.length > 0 &&
+    countGraphemes(body) > BLUESKY_MAX_GRAPHEMES
+  ) {
     candidates.pop()
     body = render(new Set(candidates))
   }

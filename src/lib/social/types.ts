@@ -188,6 +188,22 @@ export interface SocialPostVariant {
   mentions?: { handle: string; did: string }[] | null
 }
 
+/**
+ * A recorded Bluesky mention as stored on the variant (tagging spec §4.3).
+ * The speaker reference is WEAK, so GDPR erasure can delete the speaker.
+ * Marketing builds these (`mentionDocuments`); the social layer only stores
+ * them.
+ */
+export interface SocialPostMentionDocument {
+  _key: string
+  _type: 'socialPostMention'
+  handle: string
+  did?: string
+  speaker: { _type: 'reference'; _ref: string; _weak: true }
+  name: string
+  status: 'tagged' | 'unresolved'
+}
+
 /** What the single-variant editor loads: the variant and its post's inputs. */
 export interface SocialVariantEditorData {
   variant: SocialPostVariant

@@ -1,4 +1,5 @@
 import type { MissingField } from '@/lib/sponsor-crm/contract-readiness'
+import type { TagIssue } from '@/lib/marketing/tagging/checks'
 
 /**
  * Client-side accessors for the structured error payload the tRPC error
@@ -9,7 +10,18 @@ import type { MissingField } from '@/lib/sponsor-crm/contract-readiness'
  */
 interface ClientError {
   message?: string
-  data?: { code?: string; missingFields?: MissingField[] } | null
+  data?: {
+    code?: string
+    missingFields?: MissingField[]
+    tagIssues?: TagIssue[]
+  } | null
+}
+
+/** The structured tag issues a refused save or approval carries (tagging spec §4.4). */
+export function clientTagIssues(
+  error: ClientError | null | undefined,
+): TagIssue[] {
+  return error?.data?.tagIssues ?? []
 }
 
 /** The structured missing fields a guard rejection carries, as seen on the client. */

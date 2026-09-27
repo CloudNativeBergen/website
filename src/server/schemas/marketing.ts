@@ -97,6 +97,12 @@ export const SetPlanOwnerSchema = z.object({ ownerId: LiveDocumentIdSchema })
 
 export const TaskIdSchema = z.object({ taskId: LiveDocumentIdSchema })
 
+/** The tag button (tagging spec §2): one of the Task's people, by speaker id. */
+export const ResolveTaskTagSchema = z.object({
+  taskId: LiveDocumentIdSchema,
+  speakerId: LiveDocumentIdSchema,
+})
+
 const UrlSchema = z
   .string()
   .trim()

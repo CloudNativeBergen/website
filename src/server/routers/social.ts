@@ -41,6 +41,12 @@ import {
   publishLinkFields,
   variantShortLinkOrigin,
 } from '@/lib/social/publish-link'
+import {
+  checkTagsForApproval,
+  checkTagsOnSave,
+} from '@/lib/marketing/tagging/verify'
+import { mentionDocuments } from '@/lib/marketing/tagging/records'
+import { tagIssuesError } from '@/server/errors'
 import { ceilingWarningsFor } from '@/lib/marketing/ceiling-check'
 import { getTaskForVariant, getTaskLinkInputs } from '@/lib/marketing/sanity'
 import { taggedUrl } from '@/lib/marketing/link'
@@ -376,6 +382,16 @@ export const socialRouter = router({
         taskOwned,
       })
       if (issues.length > 0) throw issuesToError(issues)
+      // Scheduling is one of the three approval paths (tagging spec §4.4).
+      const tags =
+        variant.platform === 'bluesky'
+          ? await checkTagsForApproval({
+              conferenceId: variant.conferenceId,
+              variantId: variant._id,
+              body: variant.body,
+            })
+          : null
+      if (tags && tags.issues.length > 0) throw tagIssuesError(tags.issues)
 
       // A fresh scheduling cycle: the retry cap counts from zero again while
       // `attempts[]` keeps the history.
@@ -394,6 +410,7 @@ export const socialRouter = router({
         ceilingWarnings: await ceilingWarningsFor(variant.conferenceId, {
           variantIds: [variant._id],
         }),
+        tagWarnings: tags?.warnings.map((w) => w.message) ?? [],
       }
     }),
 
@@ -496,6 +513,21 @@ export const socialRouter = router({
         })
       }
       if (issues.length > 0) throw issuesToError(issues)
+      // A Bluesky body's tags (tagging spec §4.3, §4.4): `mentions[]` is
+      // rebuilt from the body on EVERY save, so a handle typed by hand is
+      // checked like a generated one; a scheduled variant also gets the
+      // approval check. Standalone posts included: any Bluesky body could
+      // tag an opted-out speaker.
+      const tags =
+        variant.platform === 'bluesky'
+          ? await checkTagsOnSave({
+              conferenceId: variant.conferenceId,
+              variantId: variant._id,
+              body: input.body,
+              scheduled: variant.status === 'scheduled',
+            })
+          : null
+      if (tags && tags.issues.length > 0) throw tagIssuesError(tags.issues)
 
       const scheduledAt =
         input.timing.mode === 'custom'
@@ -519,6 +551,7 @@ export const socialRouter = router({
           attachments: input.attachments,
           scheduledAt,
           usesCustomTime: input.timing.mode === 'custom',
+          ...(tags ? { mentions: mentionDocuments(tags.mentions) } : {}),
         },
         {
           ifRevision: input.rev,
@@ -564,6 +597,7 @@ export const socialRouter = router({
         ceilingWarnings: await ceilingWarningsFor(variant.conferenceId, {
           variantIds: [variant._id],
         }),
+        tagWarnings: tags?.warnings.map((w) => w.message) ?? [],
       }
     }),
 

@@ -24,6 +24,18 @@ const HANDLE =
 export function blueskyHandleFromLinks(
   links: readonly (string | null | undefined)[] | null | undefined,
 ): string | null {
+  return blueskyHandlesFromLinks(links)[0] ?? null
+}
+
+/**
+ * EVERY Bluesky handle the links name, in order, once each. A speaker may
+ * list two accounts; their opt-out covers both, and either typed in a post
+ * is theirs.
+ */
+export function blueskyHandlesFromLinks(
+  links: readonly (string | null | undefined)[] | null | undefined,
+): string[] {
+  const out: string[] = []
   for (const raw of links ?? []) {
     const match = raw?.trim().match(PROFILE_URL)
     if (!match) continue
@@ -34,7 +46,8 @@ export function blueskyHandleFromLinks(
       continue
     }
     const handle = normaliseHandle(segment)
-    if (handle.length <= 253 && HANDLE.test(handle)) return handle
+    if (handle.length <= 253 && HANDLE.test(handle) && !out.includes(handle))
+      out.push(handle)
   }
-  return null
+  return out
 }

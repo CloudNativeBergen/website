@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { formatTRPCError } from '@/server/trpc'
-import { preconditionFailed } from '@/server/errors'
+import { preconditionFailed, tagIssuesError } from '@/server/errors'
+import { clientTagIssues } from '@/lib/trpc/errors'
 
 /**
  * Pins the wiring between the structured-error helpers and the tRPC error
@@ -39,5 +40,26 @@ describe('formatTRPCError', () => {
 
     expect(result.data.missingFields).toBeUndefined()
     expect(result.data.code).toBe('NOT_FOUND')
+  })
+
+  it('carries structured tag issues to the client (tagging spec §4.4)', () => {
+    const issue = {
+      code: 'opted-out' as const,
+      mentionKey: 'spk-olga',
+      handle: 'olga.dev',
+      name: 'Olga',
+      message: 'Olga has asked not to be tagged.',
+    }
+    const error = tagIssuesError([issue])
+    const result = formatTRPCError({
+      shape: { data: { code: 'BAD_REQUEST' } },
+      error,
+    })
+    expect(error.message).toBe('Olga has asked not to be tagged.')
+    expect(result.data.tagIssues).toEqual([issue])
+    // What the client reads off the serialized error.
+    expect(
+      clientTagIssues({ data: JSON.parse(JSON.stringify(result.data)) }),
+    ).toEqual([issue])
   })
 })

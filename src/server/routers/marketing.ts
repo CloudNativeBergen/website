@@ -91,6 +91,7 @@ import {
   SetTaskPrerequisitesSchema,
   SkipTaskSchema,
   TaskIdSchema,
+  ResolveTaskTagSchema,
   UpdateTaskSchema,
 } from '@/server/schemas/marketing'
 import { BUILTIN_TEMPLATE } from '@/lib/marketing/template'
@@ -197,6 +198,11 @@ import {
 } from '@/lib/social/state-machine'
 import type { VariantStatus } from '@/lib/social/types'
 import { getOrganizersByConference } from '@/lib/speaker/sanity'
+import { checkTagsForApproval } from '@/lib/marketing/tagging/verify'
+import { getTaskTagPeople } from '@/lib/marketing/tagging/sanity'
+import { ownBlueskyAccount } from '@/lib/marketing/tagging/own-account'
+import { resolveBlueskyHandle } from '@/lib/marketing/tagging/resolve'
+import { tagIssuesError } from '@/server/errors'
 import {
   getCurrentDateTime,
   osloTodayDateString,
@@ -1109,8 +1115,18 @@ export const marketingRouter = router({
             taggedLink = null
           }
         }
+        // A speaker who links our own account gets no Tag button (§4.1).
+        const own =
+          data.tagPeople.length > 0
+            ? await ownBlueskyAccount(conferenceId)
+            : null
         return {
           ...data,
+          tagPeople: data.tagPeople.map((p) =>
+            own && p.handle === own
+              ? { ...p, handle: null, ownAccount: true as const }
+              : p,
+          ),
           baseUrl,
           taggedLink,
           outreachBody: outreachBody(task, conference.title, taggedLink),
@@ -1313,6 +1329,7 @@ export const marketingRouter = router({
         // Whether THIS approval minted the variant's code — only a mint
         // changes the conference's membership set (§2.4).
         let approveMinted = false
+        let tagWarnings: string[] = []
         let variantStep: {
           id: string
           rev: string
@@ -1408,6 +1425,17 @@ export const marketingRouter = router({
               message: issues.map((i) => `${i.field}: ${i.message}`).join('; '),
             })
           }
+          // Approving the Task is one of the three approval paths (tagging
+          // spec §4.4): each recorded tag re-checked before it is queued.
+          if (v.platform === 'bluesky') {
+            const tags = await checkTagsForApproval({
+              conferenceId: v.conferenceId,
+              variantId: v._id,
+              body: v.body,
+            })
+            if (tags.issues.length > 0) throw tagIssuesError(tags.issues)
+            tagWarnings = tags.warnings.map((w) => w.message)
+          }
           approveMinted = approveCode.minted
           variantStep = {
             id: v._id,
@@ -1440,7 +1468,57 @@ export const marketingRouter = router({
                 variantIds: [variantStep.id],
               })
             : [],
+          tagWarnings,
         }
+      }),
+
+    /**
+     * The tag button (tagging spec §2): does this person's Bluesky handle
+     * name an account right now? Only for a person the Task is ABOUT, and
+     * never for one who opted out — Bluesky is not told whom we were about
+     * to tag. The Task id is guarded before anything is read.
+     */
+    resolveTag: adminProcedure
+      .input(ResolveTaskTagSchema)
+      .mutation(async ({ input }) => {
+        const conferenceId = await requireDocumentInCurrentConference(
+          input.taskId,
+          'marketingTask',
+        )
+        const person = (
+          await getTaskTagPeople(input.taskId, conferenceId)
+        ).find((p) => p.speakerId === input.speakerId)
+        if (!person) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Only the people this Task is about can be tagged.',
+          })
+        }
+        if (person.optedOut) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: `${person.name} has asked not to be tagged in social posts.`,
+          })
+        }
+        if (!person.handle) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: `${person.name} has no Bluesky link on their profile.`,
+          })
+        }
+        // Our own account is never tagged (spec §4.1): matched by handle
+        // before Bluesky is asked, and by DID when the conference names it so.
+        const own = await ownBlueskyAccount(conferenceId)
+        const ownAccount = () =>
+          new TRPCError({
+            code: 'BAD_REQUEST',
+            message: `${person.name}'s Bluesky link is the conference's own account, which is never tagged.`,
+          })
+        if (person.handle === own) throw ownAccount()
+        const resolution = await resolveBlueskyHandle(person.handle)
+        if (resolution.kind === 'resolved' && resolution.did === own)
+          throw ownAccount()
+        return { handle: person.handle, result: resolution.kind }
       }),
 
     attachAsset: adminProcedure

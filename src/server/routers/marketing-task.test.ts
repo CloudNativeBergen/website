@@ -250,6 +250,8 @@ function stored(
     siblings,
     variant: null,
     tagByHand: [],
+    tagPeople: [],
+    tagMentions: [],
   }
 }
 
@@ -344,7 +346,11 @@ describe('marketing.task.get', () => {
 describe('marketing.task.approve', () => {
   it('moves the variant draft → scheduled and records the approval, in one call', async () => {
     const result = await marketing().task.approve({ taskId: 'task-ours' })
-    expect(result).toEqual({ success: true, ceilingWarnings: [] })
+    expect(result).toEqual({
+      success: true,
+      ceilingWarnings: [],
+      tagWarnings: [],
+    })
     expect(h.approveTask).toHaveBeenCalledWith({
       taskId: 'task-ours',
       taskRev: 'rev-task',
@@ -457,7 +463,7 @@ describe('marketing.task.approve', () => {
     )
     await expect(
       marketing().task.approve({ taskId: 'task-ours' }),
-    ).resolves.toEqual({ success: true, ceilingWarnings: [] })
+    ).resolves.toEqual({ success: true, ceilingWarnings: [], tagWarnings: [] })
   })
 
   it('validates the variant the way scheduling does and refuses on an issue', async () => {
@@ -498,7 +504,7 @@ describe('marketing.task.approve', () => {
     )
     await expect(
       marketing().task.approve({ taskId: 'task-ours' }),
-    ).resolves.toEqual({ success: true, ceilingWarnings: [] })
+    ).resolves.toEqual({ success: true, ceilingWarnings: [], tagWarnings: [] })
     h.getTaskEditorData.mockResolvedValue(stored({ targetPage: null }))
     await expect(
       marketing().task.approve({ taskId: 'task-ours' }),

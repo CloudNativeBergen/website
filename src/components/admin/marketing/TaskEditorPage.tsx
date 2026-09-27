@@ -19,6 +19,9 @@ import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
 import { useNotification } from '@/components/admin/NotificationProvider'
 import { ModalShell } from '@/components/ModalShell'
 import { ConnectedVariantEditor } from '@/components/admin/social/ConnectedVariantEditor'
+import { useTagWarningToast } from './tagging'
+import type { TagIssue } from '@/lib/marketing/tagging/checks'
+import { clientTagIssues } from '@/lib/trpc/errors'
 import { ManualPostView } from '@/components/admin/social/ManualPostView'
 import { mayAlreadyBeLive } from '@/lib/social/state-machine'
 import { taggedUrl } from '@/lib/marketing/link'
@@ -127,6 +130,9 @@ function LoadedTaskEditor({
   // Unsaved edits in the post form: the header's Move and the approve /
   // retry actions wait for them to be saved.
   const [postDirty, setPostDirty] = useState(false)
+  // A tag lookup in flight: it is about to edit the post, so the header's
+  // Move waits for it like it waits for unsaved edits.
+  const [tagLookup, setTagLookup] = useState(false)
   const pendingRenderTasks = data.siblings.filter(
     (sibling) =>
       sibling.handoffPending && task.prerequisiteIds.includes(sibling._id),
@@ -194,7 +200,7 @@ function LoadedTaskEditor({
 
       <TaskMeta
         data={data}
-        postDirty={postDirty}
+        postDirty={postDirty || tagLookup}
         refreshing={refreshing}
         onChanged={refresh}
         onFailed={failed}
@@ -256,6 +262,7 @@ function LoadedTaskEditor({
           data={data}
           dirty={postDirty}
           setDirty={setPostDirty}
+          onTagPendingChange={setTagLookup}
           onChanged={refresh}
           onFailed={failed}
         />
@@ -552,14 +559,34 @@ function PublishingSection({
   data,
   dirty,
   setDirty,
+  onTagPendingChange,
   onChanged,
   onFailed,
 }: {
   data: TaskEditorData
   dirty: boolean
   setDirty: (dirty: boolean) => void
+  onTagPendingChange?: (pending: boolean) => void
 } & Handlers) {
-  const { task, campaign, variant, pages, baseUrl, tagByHand } = data
+  const {
+    task,
+    campaign,
+    variant,
+    pages,
+    baseUrl,
+    tagByHand,
+    tagPeople,
+    tagMentions,
+  } = data
+  // Tag issues from a refused save OR a refused approval (tagging spec
+  // §4.4): both land beside the tag buttons, each with its one-click fix.
+  const [tagIssues, setTagIssues] = useState<TagIssue[]>([])
+  const [tagPending, setTagPending] = useState(false)
+  const refusedForTags = (fallback: string) => (err: { message: string }) => {
+    const issues = clientTagIssues(err)
+    if (issues.length > 0) setTagIssues(issues)
+    else onFailed(fallback)(err)
+  }
   const [targetPage, setTargetPage] = useState(task.targetPage ?? '')
   // A path the picker does not list is a custom one; the choice sticks
   // even while the typed path happens to equal a listed page.
@@ -629,12 +656,15 @@ function PublishingSection({
   }, [editable, setDirty])
 
   const warnCeilings = useCeilingWarningToast()
+  const warnTags = useTagWarningToast()
   const approve = api.marketing.task.approve.useMutation({
     onSuccess: (result) => {
       onChanged()
       warnCeilings(result)
+      warnTags(result)
+      setTagIssues([])
     },
-    onError: onFailed('Could not approve'),
+    onError: refusedForTags('Could not approve'),
   })
   const unschedule = api.social.unscheduleVariant.useMutation({
     onSuccess: onChanged,
@@ -644,8 +674,10 @@ function PublishingSection({
     onSuccess: (result) => {
       onChanged()
       warnCeilings(result)
+      warnTags(result)
+      setTagIssues([])
     },
-    onError: onFailed('Could not retry'),
+    onError: refusedForTags('Could not retry'),
   })
   const markPosted = api.social.markPosted.useMutation({
     onSuccess: onChanged,
@@ -726,8 +758,13 @@ function PublishingSection({
       aside={
         <ApproveControls
           status={v.status}
-          dirty={dirty}
-          busy={approve.isPending || unschedule.isPending || retry.isPending}
+          dirty={dirty || tagPending}
+          busy={
+            approve.isPending ||
+            unschedule.isPending ||
+            retry.isPending ||
+            tagPending
+          }
           scheduledAt={v.scheduledAt}
           onApprove={() => approve.mutate({ taskId: task._id })}
           onUnschedule={() => unschedule.mutate({ variantId: v._id })}
@@ -793,6 +830,25 @@ function PublishingSection({
             targetPage: derived.link ? targetPage : null,
             taggedLink: derived.link,
           }}
+          tagging={
+            task.channel === 'bluesky'
+              ? {
+                  taskId: task._id,
+                  people: tagPeople,
+                  mentions: tagMentions,
+                  issues: tagIssues,
+                  onIssuesChange: setTagIssues,
+                  onPendingChange: (pending) => {
+                    setTagPending(pending)
+                    onTagPendingChange?.(pending)
+                  },
+                  busy:
+                    approve.isPending ||
+                    retry.isPending ||
+                    unschedule.isPending,
+                }
+              : undefined
+          }
         />
       </div>
     </Panel>

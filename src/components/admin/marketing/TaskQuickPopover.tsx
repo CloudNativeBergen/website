@@ -1,5 +1,6 @@
 'use client'
 
+import { useTagWarningToast } from './tagging'
 import { useState } from 'react'
 import Link from 'next/link'
 import clsx from 'clsx'
@@ -67,6 +68,7 @@ export function TaskQuickPopover({
   const utils = api.useUtils()
   const { showNotification } = useNotification()
   const warnCeilings = useCeilingWarningToast()
+  const warnTags = useTagWarningToast()
   const organizers = api.sponsor.crm.listOrganizers.useQuery()
   const [dateInput, setDateInput] = useState(() =>
     instantToOsloLocalInput(task.date ?? undefined),
@@ -100,6 +102,7 @@ export function TaskQuickPopover({
       refresh()
       showNotification({ type: 'success', title: 'Approved' })
       warnCeilings(result)
+      warnTags(result)
       onDone?.()
     },
     onError: failed('Could not approve'),

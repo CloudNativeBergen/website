@@ -1,5 +1,6 @@
 import { TRPCError } from '@trpc/server'
 import type { MissingField } from '@/lib/sponsor-crm/contract-readiness'
+import type { TagIssue } from '@/lib/marketing/tagging/checks'
 
 const FALLBACK_MESSAGE = 'This action is not allowed in the current state.'
 
@@ -48,9 +49,30 @@ export function extractMissingFields(error: {
     : undefined
 }
 
+/**
+ * A refused save or approval of a Bluesky body's tags (tagging spec §4.4):
+ * the issues ride on the cause so the editor gets each one's code and
+ * mention key and can offer the one-click fix, not just a joined string.
+ */
+export class TagIssuesError extends Error {
+  constructor(public readonly tagIssues: TagIssue[]) {
+    super(tagIssues.map((i) => i.message).join(' '))
+    this.name = 'TagIssuesError'
+  }
+}
+
+export function tagIssuesError(issues: TagIssue[]): TRPCError {
+  return new TRPCError({
+    code: 'BAD_REQUEST',
+    message: issues.map((i) => i.message).join(' '),
+    cause: new TagIssuesError(issues),
+  })
+}
+
 export interface StructuredErrorData {
   code: string
   missingFields?: MissingField[]
+  tagIssues?: TagIssue[]
 }
 
 /**
@@ -63,8 +85,11 @@ export function structuredErrorData(error: {
   cause?: unknown
 }): StructuredErrorData {
   const missingFields = extractMissingFields(error)
+  const tagIssues =
+    error.cause instanceof TagIssuesError ? error.cause.tagIssues : undefined
   return {
     code: error.code,
     ...(missingFields ? { missingFields } : {}),
+    ...(tagIssues ? { tagIssues } : {}),
   }
 }

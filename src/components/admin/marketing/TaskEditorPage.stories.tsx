@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
-import { expect, userEvent, within } from 'storybook/test'
-import { http, HttpResponse } from 'msw'
+import { expect, userEvent, waitFor, within } from 'storybook/test'
+import { delay, http, HttpResponse } from 'msw'
 import { ThemeProvider } from 'next-themes'
 import { mockDateBeforeEach } from '@/lib/storybook'
 import type {
@@ -130,10 +130,15 @@ function fixture(
   task: Partial<TaskEditorTask> = {},
   v: SocialVariantEditorData | null = variant(),
   tagByHand: TaskEditorData['tagByHand'] = [],
+  tagging: Pick<TaskEditorData, 'tagPeople' | 'tagMentions'> = {
+    tagPeople: [],
+    tagMentions: [],
+  },
 ): TaskEditorData {
   const t = editorTask(task)
   return {
     tagByHand,
+    ...tagging,
     task: t,
     campaign: { _id: 'camp-cfp', key: 'cfp', title: 'CFP' },
     planOwnerId: 'sp-1',
@@ -794,5 +799,282 @@ export const OutreachDestinationEdit: Story = {
     await expect(
       canvas.getByRole('button', { name: 'Send message' }),
     ).toBeDisabled()
+  },
+}
+
+// ---------------------------------------------------------------------------
+// Bluesky tags (#1151, tagging spec §2, §4.4)
+// ---------------------------------------------------------------------------
+
+const TAG_BODY =
+  '🎙️ @olga.dev and Alice Anderson on running Kubernetes at the edge. Catch them at Cloud Native Bergen 2027!'
+
+const taggingFixture = fixture(
+  {
+    title: 'Talk teaser',
+    key: 'talk-edge:bluesky',
+    subject: {
+      _id: 'talk-edge',
+      type: 'talk',
+      name: 'Kubernetes at the edge',
+      slug: 'kubernetes-at-the-edge',
+    },
+  },
+  variant({ body: TAG_BODY }),
+  [],
+  {
+    tagPeople: [
+      {
+        speakerId: 'spk-alice',
+        name: 'Alice Anderson',
+        handle: 'alice.dev',
+        optedOut: false,
+      },
+      {
+        speakerId: 'spk-olga',
+        name: 'Olga Nordmann',
+        handle: null,
+        optedOut: true,
+      },
+    ],
+    tagMentions: [],
+  },
+)
+
+/**
+ * Approval refused because a speaker opted out since the tag was written:
+ * the issue lands beside the tag buttons, and "Use the plain name" rewrites
+ * the post in the form and clears it.
+ */
+export const TagApprovalRefusedAndFixed: Story = {
+  parameters: {
+    msw: {
+      handlers: [
+        http.post('/api/trpc/marketing.task.approve', () =>
+          HttpResponse.json(
+            {
+              error: {
+                message: 'Olga Nordmann has asked not to be tagged.',
+                code: -32600,
+                data: {
+                  code: 'BAD_REQUEST',
+                  httpStatus: 400,
+                  tagIssues: [
+                    {
+                      code: 'opted-out',
+                      mentionKey: 'spk-olga',
+                      handle: 'olga.dev',
+                      name: 'Olga Nordmann',
+                      message:
+                        'Olga Nordmann has asked not to be tagged in social posts. Use the plain name instead of @olga.dev.',
+                    },
+                  ],
+                },
+              },
+            },
+            { status: 400 },
+          ),
+        ),
+        http.post('/api/trpc/marketing.task.resolveTag', () =>
+          HttpResponse.json({
+            result: { data: { handle: 'alice.dev', result: 'resolved' } },
+          }),
+        ),
+        ...handlers(taggingFixture),
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(
+      await canvas.findByRole('button', { name: /Approve/ }),
+    )
+    const alert = await canvas.findByText(/asked not to be tagged in social/)
+    await expect(alert).toBeVisible()
+    await userEvent.click(
+      canvas.getByRole('button', { name: 'Use the plain name' }),
+    )
+    const body = canvas.getByLabelText<HTMLTextAreaElement>('Body')
+    await expect(body.value).toContain('🎙️ Olga Nordmann and Alice Anderson')
+    await expect(
+      canvas.queryByText(/asked not to be tagged in social/),
+    ).toBeNull()
+    // The tag button on the same form: Alice's name becomes her handle.
+    await userEvent.click(
+      canvas.getByRole('button', { name: 'Tag Alice Anderson' }),
+    )
+    // The swap waits for Bluesky's answer (the lookup is a request).
+    await waitFor(() =>
+      expect(body.value).toContain('Olga Nordmann and @alice.dev on'),
+    )
+  },
+}
+export const TagApprovalRefusedAndFixedMobileDark: Story = {
+  ...TagApprovalRefusedAndFixed,
+  // The refused state on a phone: the issue stacks its fix under the text
+  // (TagPanel's narrow branch) instead of beside it.
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(
+      await canvas.findByRole('button', { name: /Approve/ }),
+    )
+    const issue = (
+      await canvas.findByText(/asked not to be tagged in social/)
+    ).closest('li')!
+    await expect(getComputedStyle(issue).flexDirection).toBe('column')
+    await expect(
+      within(issue).getByRole('button', { name: 'Use the plain name' }),
+    ).toBeVisible()
+  },
+  parameters: {
+    ...TagApprovalRefusedAndFixed.parameters,
+    theme: 'dark',
+    viewport: { defaultViewport: 'mobile1' },
+  },
+}
+
+/**
+ * A tag lookup in flight on an approved post: it is about to edit the body,
+ * so Move and "Pull back to draft" wait for it — neither may race the
+ * revision the lookup's edit will be saved against.
+ */
+export const TagLookupHoldsHeaderActions: Story = {
+  parameters: {
+    msw: {
+      handlers: [
+        http.post('/api/trpc/marketing.task.resolveTag', async () => {
+          await delay('infinite')
+          return HttpResponse.json({})
+        }),
+        ...handlers(
+          fixture(
+            {
+              ...taggingFixture.task,
+              status: 'scheduled',
+              approvedAt: '2026-09-14T09:12:00.000Z',
+              approvedByName: 'Bob Builder',
+            },
+            variant({ body: TAG_BODY, status: 'scheduled' }),
+            [],
+            {
+              tagPeople: taggingFixture.tagPeople,
+              tagMentions: [],
+            },
+          ),
+        ),
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const pullBack = await canvas.findByRole('button', {
+      name: 'Pull back to draft',
+    })
+    // Move is enabled by a date change; its date field is what the gate
+    // disables, and it disables Move with it.
+    const date = canvas.getByLabelText('Scheduled for')
+    await expect(pullBack).toBeEnabled()
+    await expect(date).toBeEnabled()
+    await userEvent.click(
+      canvas.getByRole('button', { name: 'Tag Alice Anderson' }),
+    )
+    await waitFor(() => expect(pullBack).toBeDisabled())
+    await expect(date).toBeDisabled()
+    await expect(
+      canvas.getByText('Save the post first; moving it re-times the post.'),
+    ).toBeVisible()
+  },
+}
+
+/**
+ * A refused SAVE: the editor says "Not saved…" beside Save; fixing the last
+ * issue with one click clears that too, since the refusal no longer stands.
+ */
+export const TagSaveRefusedAndFixed: Story = {
+  parameters: {
+    msw: {
+      handlers: [
+        http.post('/api/trpc/social.updateVariant', () =>
+          HttpResponse.json(
+            {
+              error: {
+                message: 'Olga Nordmann has asked not to be tagged.',
+                code: -32600,
+                data: {
+                  code: 'BAD_REQUEST',
+                  httpStatus: 400,
+                  tagIssues: [
+                    {
+                      code: 'opted-out',
+                      mentionKey: 'spk-olga',
+                      handle: 'olga.dev',
+                      name: 'Olga Nordmann',
+                      message:
+                        'Olga Nordmann has asked not to be tagged in social posts. Use the plain name instead of @olga.dev.',
+                    },
+                  ],
+                },
+              },
+            },
+            { status: 400 },
+          ),
+        ),
+        ...handlers(taggingFixture),
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const body = await canvas.findByLabelText<HTMLTextAreaElement>('Body')
+    await userEvent.type(body, ' See you there.')
+    await userEvent.click(canvas.getByRole('button', { name: 'Save variant' }))
+    await expect(
+      await canvas.findByText('Not saved. Fix the tag problems above first.'),
+    ).toBeVisible()
+    await userEvent.click(
+      canvas.getByRole('button', { name: 'Use the plain name' }),
+    )
+    await expect(body.value).toContain('🎙️ Olga Nordmann and Alice Anderson')
+    await expect(
+      canvas.queryByText('Not saved. Fix the tag problems above first.'),
+    ).toBeNull()
+  },
+}
+
+/** "Pull back to draft" in flight: the tag buttons wait for it. */
+export const UnscheduleHoldsTagButtons: Story = {
+  parameters: {
+    msw: {
+      handlers: [
+        http.post('/api/trpc/social.unscheduleVariant', async () => {
+          await delay('infinite')
+          return HttpResponse.json({})
+        }),
+        ...handlers(
+          fixture(
+            {
+              ...taggingFixture.task,
+              status: 'scheduled',
+              approvedAt: '2026-09-14T09:12:00.000Z',
+              approvedByName: 'Bob Builder',
+            },
+            variant({ body: TAG_BODY, status: 'scheduled' }),
+            [],
+            { tagPeople: taggingFixture.tagPeople, tagMentions: [] },
+          ),
+        ),
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const tag = await canvas.findByRole('button', {
+      name: 'Tag Alice Anderson',
+    })
+    await expect(tag).toBeEnabled()
+    await userEvent.click(
+      canvas.getByRole('button', { name: 'Pull back to draft' }),
+    )
+    await waitFor(() => expect(tag).toBeDisabled())
   },
 }
