@@ -676,6 +676,13 @@ export const BlueskyErasedSpeaker: Story = {
   },
 }
 
+export const BlueskyErasedSpeakerDark: Story = {
+  ...BlueskyErasedSpeaker,
+  // This file resolves dark through its OWN decorator's `parameters.theme`
+  // (not `globals`), so that is the one to set.
+  parameters: { theme: 'dark', backgrounds: { default: 'dark' } },
+}
+
 /** Once posted, the record is shown as it is: no check, no notice. */
 export const BlueskyLateOptOutPosted: Story = {
   args: {
