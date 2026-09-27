@@ -156,6 +156,11 @@ export const PUBLISH_RESERVE_MS = 40_000
  * cannot see through. Adapter budget + settle margin.
  */
 export const PUBLISH_START_RESERVE_MS = 35_000
+/**
+ * The pre-publish re-read of a tagged variant's speakers (review T6). Short:
+ * it runs inside the publish reserve, and a stall is a safe transient.
+ */
+export const TAG_RECHECK_TIMEOUT_MS = 3_000
 
 /**
  * One confirm read's budget. Short by design: the sweep runs BEFORE dispatch
@@ -716,11 +721,51 @@ async function dispatch(
 
   // A speaker who opted out after approval (tagging spec §4.4, Publish): their
   // recorded tag goes out as their plain name, and the post still goes out.
-  const tags = claimed.recordedTags
-    ? withholdOptedOutTags({
-        body: claimed.body,
-        recorded: claimed.recordedTags,
+  // Their state is read AGAIN right before the external call (review T6): the
+  // tick's one read may be most of a minute old by the time this variant's
+  // turn comes. BEFORE the platform call, so a failed read is a safe
+  // transient — never a post that might tag someone who said no.
+  let recorded = claimed.recordedTags
+  const speakerIds = [
+    ...new Set(
+      (recorded ?? []).flatMap((t) => (t.speakerId ? [t.speakerId] : [])),
+    ),
+  ]
+  if (recorded && speakerIds.length > 0) {
+    try {
+      const current = await withTimeout(
+        store.tagStates(speakerIds),
+        TAG_RECHECK_TIMEOUT_MS,
+        `Tag re-check took longer than ${TAG_RECHECK_TIMEOUT_MS} ms`,
+      )
+      recorded = recorded.map((t) => {
+        const state = t.speakerId ? current.get(t.speakerId) : undefined
+        return state
+          ? {
+              ...t,
+              optedOut: t.optedOut || state.optedOut,
+              gone: t.gone || state.gone,
+            }
+          : t
       })
+    } catch (error) {
+      await settle(
+        claimed,
+        {
+          ok: false,
+          kind: 'transient',
+          message: `Could not re-check who may be tagged: ${error instanceof Error ? error.message : String(error)}`,
+        },
+        store,
+        now,
+        summary,
+        onFailed,
+      )
+      return null
+    }
+  }
+  const tags = recorded
+    ? withholdOptedOutTags({ body: claimed.body, recorded })
     : null
   const swapped = tags && tags.withheld.length > 0 ? tags : null
   const input = publishInputFor(claimed, adapter, tags)

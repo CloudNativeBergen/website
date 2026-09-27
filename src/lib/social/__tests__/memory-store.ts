@@ -33,6 +33,16 @@ export class MemoryVariantStore implements SocialVariantStore {
    * due read joins them through the weak speaker reference (tagging §4.4).
    */
   readonly tags: Record<string, RecordedTag[]> = {}
+  /**
+   * The speakers as they are NOW (tagging §4.4, review T6): what the
+   * pre-publish re-read sees. A speaker not listed reads as their latest
+   * recorded tag says.
+   */
+  readonly speakers: Record<string, { optedOut?: boolean; gone?: boolean }> = {}
+  /** Each re-read's speaker ids, in order. */
+  readonly recheckCalls: string[][] = []
+  /** Makes the re-read throw. */
+  recheckError: Error | null = null
   /** Every write's patch, in order: claims and transitions alike. */
   readonly writes: Partial<SocialPostVariant>[] = []
 
@@ -130,6 +140,24 @@ export class MemoryVariantStore implements SocialVariantStore {
       .slice(0, bounds.submittedLimit)
       .map((v) => ({ ...v }))
     return { due, stale, submitted }
+  }
+
+  async tagStates(speakerIds: readonly string[]) {
+    this.recheckCalls.push([...speakerIds])
+    if (this.recheckError) throw this.recheckError
+    const latest = (id: string) =>
+      Object.values(this.tags)
+        .flat()
+        .find((t) => t.speakerId === id)
+    return new Map(
+      speakerIds.map((id) => {
+        const now = this.speakers[id] ?? latest(id) ?? {}
+        return [
+          id,
+          { optedOut: now.optedOut === true, gone: now.gone === true },
+        ] as const
+      }),
+    )
   }
 
   async claim<V extends SocialPostVariant>(variant: V, now: Date) {

@@ -313,6 +313,59 @@ describe('runPublishTick — due scan and dispatch', () => {
       expect(onTagsWithheld).not.toHaveBeenCalled()
     })
 
+    it('an opt-out landing AFTER the tick read but before this publish is still honoured: re-read just before the external call (review T6)', async () => {
+      const store = new MemoryVariantStore([tagged()])
+      store.tags['variant-1'] = tags(false)
+      // The opt-out reaches the database after `findWork`: a new value, not
+      // the snapshot the tick holds.
+      store.beforeClaim = () => {
+        store.speakers['speaker-alice'] = { optedOut: true }
+      }
+      const adapter = fakeAdapter({ ok: true, externalId: 'x', url: 'y' })
+
+      await runPublishTick({
+        store,
+        resolveAdapter: async () => adapter,
+        now: NOW,
+      })
+
+      expect(adapter.publish).toHaveBeenCalledWith(
+        expect.objectContaining({
+          text: 'Alice Smith and @bob.dev at the conf',
+          mentions: [{ handle: 'bob.dev', did: 'did:plc:bob' }],
+        }),
+      )
+      expect(store.recheckCalls).toEqual([['speaker-alice', 'speaker-bob']])
+    })
+
+    it('a re-read that fails posts nothing: the variant is re-queued as a safe transient', async () => {
+      const store = new MemoryVariantStore([tagged()])
+      store.tags['variant-1'] = tags(false)
+      store.recheckError = new Error('Sanity unreachable')
+      const adapter = fakeAdapter({ ok: true, externalId: 'x', url: 'y' })
+
+      const summary = await runPublishTick({
+        store,
+        resolveAdapter: async () => adapter,
+        now: NOW,
+      })
+
+      expect(adapter.publish).not.toHaveBeenCalled()
+      expect(store.get('variant-1').status).toBe('scheduled')
+      expect(summary.requeued).toBe(1)
+    })
+
+    it('a post with no recorded tags costs no re-read', async () => {
+      const store = new MemoryVariantStore([makeVariant()])
+      const adapter = fakeAdapter({ ok: true, externalId: 'x', url: 'y' })
+      await runPublishTick({
+        store,
+        resolveAdapter: async () => adapter,
+        now: NOW,
+      })
+      expect(store.recheckCalls).toEqual([])
+    })
+
     it('KNOWN HOLE (spec §4.4): a settle that loses its revision race loses the body rewrite — the stored body still shows the tag that was not posted', async () => {
       const store = new MemoryVariantStore([tagged()])
       store.tags['variant-1'] = tags(true)

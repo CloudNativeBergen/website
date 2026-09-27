@@ -457,6 +457,29 @@ export const sanitySocialVariantStore: SocialVariantStore = {
     }
   },
 
+  async tagStates(speakerIds) {
+    // groq-global-scoped: by-id read of the speakers a due variant's recorded
+    // mentions reference; the variant was read tenant-by-tenant in findWork.
+    // Only the opt-out and erasure are projected — nothing leaves the server.
+    const query = groq`*[_type == "speaker" && _id in $ids && !(_id in path("drafts.**")) && !(_id in path("versions.**"))]{ _id, "optedOut": socialTagOptOut == true, "erased": defined(erasedAt) }`
+    const rows = await clientWrite.fetch<
+      { _id: string; optedOut: boolean | null; erased: boolean | null }[]
+    >(query, { ids: [...speakerIds] })
+    const byId = new Map((rows ?? []).map((r) => [r._id, r]))
+    return new Map(
+      speakerIds.map((id) => {
+        const row = byId.get(id)
+        // Absent: deleted since — nobody to tag.
+        return [
+          id,
+          row
+            ? { optedOut: row.optedOut === true, gone: row.erased === true }
+            : { optedOut: false, gone: true },
+        ] as const
+      }),
+    )
+  },
+
   async claim(variant, now) {
     try {
       const claimedAt = now.toISOString()

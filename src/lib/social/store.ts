@@ -113,6 +113,16 @@ export interface SocialVariantStore {
     bounds: TickWorkBounds,
   ): Promise<TickWork>
   /**
+   * The recorded tags' speakers as they are NOW (tagging spec §4.4, review
+   * T6): read right before a tagged variant's external publish, so an
+   * opt-out that landed after `findWork` is still honoured. Only for a
+   * variant that carries recorded speaker tags — an idle tick never pays it.
+   * A speaker who no longer exists is `gone`.
+   */
+  tagStates(
+    speakerIds: readonly string[],
+  ): Promise<ReadonlyMap<string, { optedOut: boolean; gone: boolean }>>
+  /**
    * Compare-and-set `scheduled → publishing` on the variant's revision. Returns
    * the claimed variant (fresh `_rev`) or `null` when another tick won the race
    * or the document moved on.
