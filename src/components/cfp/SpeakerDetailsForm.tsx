@@ -656,7 +656,7 @@ export function SpeakerDetailsForm({
                         <HelpText>
                           {socialTagSaveState === 'saving' && 'Saving…'}
                           {socialTagSaveState === 'saved' &&
-                            'Saved. This applies to every post not yet published.'}
+                            'Saved. This applies to posts not yet published; a post we publish by hand is checked when we open it to post.'}
                           {socialTagSaveState === 'error' && (
                             <span className="text-red-600 dark:text-red-400">
                               Could not save that just now &mdash; nothing

@@ -347,6 +347,10 @@ export const SocialTagOptOutTogglesOff: Story = {
     await waitFor(() =>
       expect(canvas.getByRole('status')).toHaveTextContent(/saved/i),
     )
+    // The announcement keeps the caveat the help text and /privacy give: a
+    // post published by hand is checked only when it is opened (round 3, T7).
+    expect(canvas.getByRole('status')).not.toHaveTextContent(/every post/i)
+    expect(canvas.getByRole('status')).toHaveTextContent(/by hand/i)
     const emitted = (args.setSpeaker as ReturnType<typeof fn>).mock.calls.at(
       -1,
     )![0]
