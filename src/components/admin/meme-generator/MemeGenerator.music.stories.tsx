@@ -253,3 +253,21 @@ export const MusicRealExport: Story = {
     expect(written).toBeGreaterThanOrEqual(Math.round(5.9 * MIX_RATE))
   },
 }
+
+/**
+ * The REAL priming measurement (proof §4): the browser's AAC encoder — or
+ * the add-on where it has none — encodes a click, Mediabunny decodes it back,
+ * and the delay is read off. The proof measured 2112 samples for native AAC
+ * on macOS and 1024 for the add-on; either is accepted, anything else fails.
+ */
+export const MusicPrimingMeasured: Story = {
+  args: { gallery: musicGallery },
+  play: async ({ canvasElement }) => {
+    const { mediabunnyBackend } = await import('./meme-generator-mediabunny')
+    const result = await mediabunnyBackend.prepareAudio()
+    console.info('[music priming]', JSON.stringify(result))
+    canvasElement.dataset.priming = JSON.stringify(result)
+    expect(result).toHaveProperty('priming')
+    expect([1024, 2112]).toContain((result as { priming: number }).priming)
+  },
+}

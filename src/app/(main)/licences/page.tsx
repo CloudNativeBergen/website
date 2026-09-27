@@ -77,19 +77,47 @@ export default function LicencesPage() {
                 FOR A PARTICULAR PURPOSE. See the licence for more details.
               </p>
               <p>
-                The source code of FFmpeg is available from{' '}
+                Which FFmpeg revision it was built from is not published: the
+                encoder&apos;s repository holds the compiled WebAssembly and its
+                C bridge, but not the build script. Its version string,
+                libavcodec 62.23.103, was on FFmpeg&apos;s development branch
+                from commit{' '}
+                <a
+                  className={link}
+                  href="https://github.com/FFmpeg/FFmpeg/commit/499b5f5f92f73e5b0e6108242983695fcb6409e2"
+                >
+                  499b5f5f
+                </a>{' '}
+                (27 January 2026) until{' '}
+                <a
+                  className={link}
+                  href="https://github.com/FFmpeg/FFmpeg/commit/e245f4d5cf642faa6f43002654dfc84ba457b78c"
+                >
+                  e245f4d5
+                </a>{' '}
+                (28 February 2026), so the source is one of the revisions in{' '}
+                <a
+                  className={link}
+                  href="https://github.com/FFmpeg/FFmpeg/compare/499b5f5f92f73e5b0e6108242983695fcb6409e2...e245f4d5cf642faa6f43002654dfc84ba457b78c"
+                >
+                  that range
+                </a>
+                . The encoder&apos;s own code, including that bridge, is in{' '}
+                <a
+                  className={link}
+                  href="https://github.com/Vanilagy/mediabunny/tree/v1.59.0/packages/aac-encoder"
+                >
+                  Mediabunny 1.59.0
+                </a>
+                . The FFmpeg source is also available from{' '}
                 <a className={link} href="https://ffmpeg.org/download.html">
                   ffmpeg.org
                 </a>
-                , and the build scripts for this encoder from{' '}
-                <a
-                  className={link}
-                  href="https://github.com/Vanilagy/mediabunny/tree/main/packages/aac-encoder"
-                >
-                  Mediabunny&apos;s repository
-                </a>
-                . The encoder is a separate file your browser fetches on its
-                own, so it can be replaced with a modified version.
+                .
+              </p>
+              <p>
+                The encoder is shipped as a file of its own, about 1 MB, which
+                your browser fetches only when it needs it.
               </p>
             </section>
           </div>
