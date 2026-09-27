@@ -14,7 +14,7 @@
  * format to find keynote speakers by, so it is never expanded).
  *
  * Placeholders: see `../placeholders.ts`. Subject placeholders (`{name}`,
- * `{company}`, `{title}`, `{hook}`, `{tier}`) may only appear in recipes with
+ * `{speakers}`, `{company}`, `{title}`, `{hook}`, `{tier}`) may only appear in recipes with
  * a subject source — `builtin.test.ts` enforces it.
  *
  * `{url}` is per-CHANNEL (spec §3.1, #1134): a Bluesky skeleton resolves it
@@ -29,11 +29,13 @@
  *   2026.1 — first transcription of the playbook.
  *   2026.2 — LinkedIn skeletons lose `{url}` and say the link is in the
  *            first comment (#1134).
+ *   2026.3 — talk posts name every speaker: `{name} ({company})` becomes
+ *            `{speakers}`, and the teaser no longer reads "{name} has" (#1153).
  */
 
 import type { Anchor, CampaignRecipe, PlanTemplate, TaskRecipe } from './types'
 
-export const BUILTIN_TEMPLATE_VERSION = '2026.2' as const
+export const BUILTIN_TEMPLATE_VERSION = '2026.3' as const
 
 const wk = (weeks: number) => weeks * 7
 
@@ -526,9 +528,9 @@ const campaigns: CampaignRecipe[] = [
         PROGRAM,
         {
           linkedin:
-            '{hook}\n\n{name} ({company}) answers it at {event}.\n\n🎙️ "{title}"\n\nSchedule — link in the first comment.\n\n{eventTag}',
+            '{hook}\n\nAnswered at {event} by {speakers}.\n\n🎙️ "{title}"\n\nSchedule — link in the first comment.\n\n{eventTag}',
           bluesky:
-            '{hook}\n\n{name} has the answer — and the graphs. "{title}" at {event}.\n\n{url}',
+            '{hook}\n\nThe answer — and the graphs: "{title}" by {name} at {event}.\n\n{url}',
         },
         {
           subjectSource: 'talk',
@@ -760,9 +762,8 @@ const campaigns: CampaignRecipe[] = [
         PROGRAM,
         {
           linkedin:
-            '{hook}\n\n{name} ({company}) at {event}: "{title}". Recording online.\n\nWatch — link in the first comment.\n\n{eventTag}',
-          bluesky:
-            '🎬 "{title}" — {name} ({company}) at {event}.\n\n{hook}\n\n{url}',
+            '{hook}\n\n{speakers} at {event}: "{title}". Recording online.\n\nWatch — link in the first comment.\n\n{eventTag}',
+          bluesky: '🎬 "{title}" — {speakers} at {event}.\n\n{hook}\n\n{url}',
         },
         {
           subjectSource: 'talk',

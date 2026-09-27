@@ -40,8 +40,8 @@ export interface RecipeEdits {
 export const COUNTDOWN_MAX_DAYS = 120
 
 const SUBJECT_TOKENS: Record<SubjectSource, readonly string[]> = {
-  speaker: ['name', 'company', 'title', 'hook'],
-  talk: ['name', 'company', 'title', 'hook'],
+  speaker: ['name', 'speakers', 'company', 'title', 'hook'],
+  talk: ['name', 'speakers', 'company', 'title', 'hook'],
   sponsor: ['name', 'company', 'tier', 'hook'],
   // The only subjectless entry is the countdown, which counts `{days}`.
   none: ['days'],
