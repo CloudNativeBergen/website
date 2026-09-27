@@ -205,6 +205,20 @@ export function ManualPostView({
 
   return (
     <div className="space-y-6">
+      {/*
+       * ONE live region for the tag check, mounted for the life of the view
+       * (round 4, T4): it says the check started and that it finished. A
+       * region inserted with its text, or removed on success, announces
+       * unreliably or not at all — and on the Task page no dialog opening
+       * tells a screen-reader user that anything changed.
+       */}
+      <p role="status" className="sr-only">
+        {checking
+          ? 'Checking this post’s tags…'
+          : checked
+            ? 'Tags checked. The text is ready to copy.'
+            : ''}
+      </p>
       <ol className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500 dark:text-gray-400">
         {(postMayBeLive
           ? [
@@ -314,7 +328,7 @@ export function ManualPostView({
 
       {checking && (
         <p
-          role="status"
+          aria-hidden="true"
           className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700 dark:border-gray-700 dark:bg-gray-800/50 dark:text-gray-300"
         >
           Checking this post&apos;s tags&hellip;
