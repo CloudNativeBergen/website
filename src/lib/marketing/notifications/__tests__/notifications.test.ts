@@ -5,7 +5,9 @@ import { evaluate, parse } from 'groq-js'
 const h = vi.hoisted(() => ({
   dataset: [] as Record<string, unknown>[],
   createNotifications: vi.fn(async (items: unknown[]) => items.length),
-  organizers: vi.fn(async (_orgId: string | null) => [] as string[]),
+  organizers: vi.fn<(orgId: string | null) => Promise<string[]>>(
+    async () => [],
+  ),
   reminders: vi.fn(),
   readError: false,
 }))
