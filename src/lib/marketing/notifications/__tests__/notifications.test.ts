@@ -325,14 +325,14 @@ describe('a tag withheld at publish (tagging spec §4.4, Publish)', () => {
     )
   })
 
-  it('the cron is the actor, so EVERY organizer hears it — one who opted out too', async () => {
-    h.organizers.mockResolvedValue(['org-a', 'alice'])
+  it('every organizer hears it EXCEPT the speaker whose opt-out it is — never told about their own choice (review T5)', async () => {
+    h.organizers.mockResolvedValue(['org-a', 'alice', 'org-b'])
     await notifyMarketingTagsWithheld(withheldEvent())
     expect(
       (h.createNotifications.mock.calls[0][0] as { recipientId: string }[]).map(
         (n) => n.recipientId,
       ),
-    ).toEqual(['org-a', 'alice'])
+    ).toEqual(['org-a', 'org-b'])
   })
 
   it('says why: an opt-out and a speaker who is gone read differently', async () => {

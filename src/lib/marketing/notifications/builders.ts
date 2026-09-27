@@ -70,8 +70,10 @@ export function standalonePublishFailureNotification(
 /**
  * A post that went out with a tag swapped out at publish (tagging spec §4.4,
  * Publish): ONE notification per organizer of the organization, linking to
- * the Task (or, for a standalone post, the post). The cron made the swap, so
- * there is no human actor to leave out: every organizer hears it.
+ * the Task (or, for a standalone post, the post). The cron made the swap,
+ * but the opt-out that caused it is the speaker's own action: an organizer
+ * who is that speaker is left out, never told about their own choice
+ * (AGENTS.md "Actor exclusion", review T5).
  *
  * An opted-out speaker is named, with the handle that was not used. A
  * speaker who is GONE (deleted or erased) is only counted: an erased
@@ -100,14 +102,17 @@ export function tagsWithheldNotifications(
   const link = variant.marketingTaskId
     ? `/admin/marketing/tasks/${encodeURIComponent(variant.marketingTaskId)}`
     : manualPostPath(variant._id)
-  return [...new Set(organizerIds)].map((recipientId) => ({
-    recipientId,
-    conferenceId: variant.conferenceId,
-    notificationType: 'marketing_task_tag_withheld' as const,
-    title: 'Posted without a tag',
-    message,
-    link,
-    // One post is published once: its identity is the variant.
-    tag: `marketing-tag-withheld.${variant._id}`,
-  }))
+  const actors = new Set(optedOut.map((w) => w.speakerId))
+  return [...new Set(organizerIds)]
+    .filter((id) => !actors.has(id))
+    .map((recipientId) => ({
+      recipientId,
+      conferenceId: variant.conferenceId,
+      notificationType: 'marketing_task_tag_withheld' as const,
+      title: 'Posted without a tag',
+      message,
+      link,
+      // One post is published once: its identity is the variant.
+      tag: `marketing-tag-withheld.${variant._id}`,
+    }))
 }
