@@ -727,4 +727,41 @@ describe('a video’s music', () => {
       )
     })
   })
+
+  it('shows an export as current again once an edit to the music is undone', async () => {
+    const exporting: EncoderBackend = {
+      supports: async () => true,
+      probe: async () => true,
+      prepareAudio: async () => ({ priming: 0 }),
+      open: async () => ({
+        add: async () => {},
+        finish: async () => new Blob([new Uint8Array(1_000_000)]),
+        cancel: async () => {},
+      }),
+    }
+    render(<MemeGenerator gallery={fakeGallery()} encoder={exporting} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Video' }))
+    await within(music()).findByRole('option', { name: 'Theme (0:20)' })
+    fireEvent.change(within(music()).getByLabelText('Music'), {
+      target: { value: 'asset-theme' },
+    })
+    await within(music()).findByText(/Plays from/)
+    const panel = screen.getByRole('region', { name: 'Export' })
+    const button = within(panel).getByRole('button', { name: 'Export MP4' })
+    await waitFor(() => expect(button).not.toHaveAttribute('aria-disabled'))
+    fireEvent.click(button)
+    const status = within(panel).getByRole('status')
+    await waitFor(
+      () => expect(status).toHaveTextContent('Your video is ready.'),
+      {
+        timeout: 5000,
+      },
+    )
+    fireEvent.change(within(music()).getByLabelText(/Volume/), {
+      target: { value: '30' },
+    })
+    expect(status).toHaveTextContent('The video has changed since this export.')
+    fireEvent.click(screen.getByRole('button', { name: /^Undo/ }))
+    expect(status).toHaveTextContent('Your video is ready.')
+  })
 })

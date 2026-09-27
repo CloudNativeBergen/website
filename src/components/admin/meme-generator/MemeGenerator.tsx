@@ -2080,12 +2080,16 @@ export function MemeGenerator({
                   : 'none'
             }
             // The scenes, the late-arriving font faces that repaint them, and
-            // the music.
+            // the music — its settings by value, so an undo back to them
+            // makes the export current again.
             revision={[
               scenes,
               lateFaces,
               trackKey,
-              trackSettings,
+              start,
+              volume,
+              fadeIn,
+              fadeOut,
               trackChannels,
             ]}
           />
