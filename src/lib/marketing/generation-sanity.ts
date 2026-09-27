@@ -2,7 +2,12 @@ import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
 import { scopedFetch } from '@/lib/sanity/scoped'
 import { getCurrentDateTime } from '@/lib/time'
 import type { Conference } from '@/lib/conference/types'
-import { speakerSubject, type GenerationSubject } from './expansion'
+import {
+  speakerSubject,
+  talkSubject,
+  type GenerationSubject,
+  type TalkSubjectSource,
+} from './expansion'
 import type { TaskRecords } from './materialize'
 import {
   publishedPair,
@@ -166,32 +171,10 @@ export async function getGenerationContext(
   }
 }
 
-interface RawTalk {
-  _id: string
-  title: string | null
-  speakers:
-    ({ _id: string; name: string | null; title: string | null } | null)[] | null
-}
-
 const TALK_FIELDS = `_id, title, "speakers": speakers[]->{ _id, name, title }`
 
-function talkSubject(talk: RawTalk): GenerationSubject {
-  const first = (talk.speakers ?? []).find((s) => s?._id)
-  return {
-    _id: talk._id,
-    type: 'talk',
-    values: {
-      ...(talk.title ? { title: talk.title } : {}),
-      ...(first?.name ? { name: first.name } : {}),
-      ...(first?.title ? { company: first.title } : {}),
-    },
-    // A talk's `{name}` is its first speaker today (tagging spec §4.2, #1153).
-    ...(first?.name ? { people: [{ _id: first._id, name: first.name }] } : {}),
-  }
-}
-
 /** Speakers of confirmed talks, each once, with their first talk's title. */
-function speakerSubjects(talks: RawTalk[]): GenerationSubject[] {
+function speakerSubjects(talks: TalkSubjectSource[]): GenerationSubject[] {
   const seen = new Map<string, GenerationSubject>()
   for (const talk of talks) {
     for (const s of talk.speakers ?? []) {
@@ -212,7 +195,7 @@ export async function getSubjectList(
 ): Promise<GenerationSubject[]> {
   switch (list) {
     case 'confirmedSpeakers': {
-      const talks = await scopedFetch<RawTalk[] | null>(
+      const talks = await scopedFetch<TalkSubjectSource[] | null>(
         clientReadUncached,
         { conferenceId },
         `*[_type == "talk" && status == "confirmed" && !(_id in path("drafts.**")) && !(_id in path("versions.**"))] | order(_createdAt asc){${TALK_FIELDS}}`,
@@ -222,7 +205,7 @@ export async function getSubjectList(
       return speakerSubjects(talks ?? [])
     }
     case 'scheduledTalks': {
-      const talks = await scopedFetch<RawTalk[] | null>(
+      const talks = await scopedFetch<TalkSubjectSource[] | null>(
         clientReadUncached,
         { conferenceId },
         `*[_type == "talk" && status == "confirmed" && _id in *[_type == "schedule" && conference._ref == $conferenceId && (status == "official" || !defined(status)) && !(_id in path("drafts.**")) && !(_id in path("versions.**"))].tracks[].talks[].talk._ref && !(_id in path("drafts.**")) && !(_id in path("versions.**"))] | order(_createdAt asc){${TALK_FIELDS}}`,
@@ -232,7 +215,7 @@ export async function getSubjectList(
       return (talks ?? []).map(talkSubject)
     }
     case 'recordedTalks': {
-      const talks = await scopedFetch<RawTalk[] | null>(
+      const talks = await scopedFetch<TalkSubjectSource[] | null>(
         clientReadUncached,
         { conferenceId },
         `*[_type == "talk" && status == "confirmed" && count(attachments[_type == "urlAttachment" && attachmentType == "recording"]) > 0 && !(_id in path("drafts.**")) && !(_id in path("versions.**"))] | order(_createdAt asc){${TALK_FIELDS}}`,

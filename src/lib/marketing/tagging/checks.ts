@@ -331,6 +331,18 @@ export function plainBody(
   body: string,
   mentions: readonly Pick<MentionRecord, 'handle' | 'name' | 'status'>[],
 ): string {
+  return swapTags(body, mentions, () => true)
+}
+
+/**
+ * The body with each recorded tag replaced by its name where `swap` says so,
+ * occurrence-bound as {@link plainBody} is.
+ */
+function swapTags(
+  body: string,
+  mentions: readonly Pick<MentionRecord, 'handle' | 'name' | 'status'>[],
+  swap: (token: string, name: string) => boolean,
+): string {
   const names = new Map<string, string[]>()
   for (const m of mentions) {
     if (m.status !== 'tagged') continue
@@ -343,7 +355,8 @@ export function plainBody(
     if (!list) return []
     const k = seen.get(t.handle) ?? 0
     seen.set(t.handle, k + 1)
-    return [{ ...t, name: list[Math.min(k, list.length - 1)] }]
+    const name = list[Math.min(k, list.length - 1)]
+    return swap(body.slice(t.start, t.end), name) ? [{ ...t, name }] : []
   })
   let out = body
   for (const t of swaps.reverse())
@@ -660,17 +673,29 @@ export function saveMentions(input: {
 }
 
 /**
- * §4.4 "both forms must fit": the body with every tag replaced by its name.
- * A publish-time swap must never push a post past the limit.
+ * §4.4 "both forms must fit", bounded over EVERY form: at publish only an
+ * opted-out speaker's tag is swapped for the name, so any subset of tags may
+ * go back. The longest form swaps exactly the tags whose name is longer —
+ * stricter than "as written, and with every tag replaced", which misses a
+ * post where one name is longer than its tag and another shorter. Measured
+ * separately for characters and for bytes, whose longest forms can differ.
  */
 function plainLengthIssue(
   body: string,
   mentions: readonly MentionRecord[],
 ): TagIssue | null {
   if (!mentions.some((m) => m.status === 'tagged')) return null
-  const text = plainBody(body, mentions)
-  const plain = countGraphemes(text)
-  const bytes = new TextEncoder().encode(text).length
+  const utf8 = (t: string) => new TextEncoder().encode(t).length
+  const plain = countGraphemes(
+    swapTags(
+      body,
+      mentions,
+      (tag, name) => countGraphemes(name) > countGraphemes(tag),
+    ),
+  )
+  const bytes = utf8(
+    swapTags(body, mentions, (tag, name) => utf8(name) > utf8(tag)),
+  )
   const over =
     plain > BLUESKY_MAX_GRAPHEMES
       ? `${plain} characters; Bluesky allows ${BLUESKY_MAX_GRAPHEMES}`
@@ -683,7 +708,7 @@ function plainLengthIssue(
     mentionKey: null,
     handle: null,
     name: null,
-    message: `With every tag replaced by its name the post is ${over}. A tag may be swapped for the name at publish, so shorten the post until it fits both ways.`,
+    message: `A tag may be swapped back for the name at publish, and then the post can reach ${over}. Shorten it until it fits with or without each tag.`,
   }
 }
 

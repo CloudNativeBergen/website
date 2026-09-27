@@ -191,6 +191,25 @@ describe('editIssues — the strict placeholder rule', () => {
       'Alt text: {nmae} cannot be filled in for this Recipe.',
     ])
   })
+  it('lets a talk or speaker Recipe write {speakers}, but not a sponsor one (#1153)', () => {
+    for (const id of ['talkTeaser', 'videoDrip', 'speakerCard'] as const) {
+      const entry = libraryEntry(id)
+      expect(
+        editIssues(entry, {
+          ...editsOf(entry, entry.recipes),
+          alt: '{speakers}',
+        }),
+        id,
+      ).toEqual([])
+    }
+    const sponsor = libraryEntry('sponsorCard')
+    expect(
+      editIssues(sponsor, {
+        ...editsOf(sponsor, sponsor.recipes),
+        alt: '{speakers}',
+      }),
+    ).toEqual(['Alt text: {speakers} cannot be filled in for this Recipe.'])
+  })
   it('lets the countdown count {days} and a sponsor name its {tier}', () => {
     expect(
       editIssues(libraryEntry('sponsorCard'), {

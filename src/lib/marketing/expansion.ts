@@ -27,7 +27,13 @@ import {
   type TaskRecords,
 } from './materialize'
 import { publishedIn } from './recipes'
-import type { BlueskyTag, TagPerson } from './tagging/body'
+import {
+  joinNames,
+  speakersList,
+  type BlueskyTag,
+  type NamedPerson,
+  type TagPerson,
+} from './tagging/body'
 import type { Anchor, Cadence, TaskRecipe } from './template/types'
 import type { MarketingChannel, TaskOrigin } from './types'
 
@@ -123,7 +129,12 @@ export interface GenerationSubject extends SubjectLink {
    * The speakers the subject's `{name}` names, in order (tagging spec §4.1):
    * the ones a tagging Bluesky body can tag. Absent for a sponsor.
    */
-  people?: { _id: string; name: string }[]
+  people?: SubjectPerson[]
+}
+
+/** One of the people a subject names: a speaker, by id. */
+export interface SubjectPerson extends NamedPerson {
+  _id: string
 }
 
 /**
@@ -134,17 +145,62 @@ export function speakerSubject(
   speaker: { _id: string; name?: string | null; title?: string | null },
   talkTitle?: string | null,
 ): GenerationSubject {
+  const person = speaker.name
+    ? { _id: speaker._id, name: speaker.name, jobTitle: speaker.title ?? null }
+    : null
   return {
     _id: speaker._id,
     type: 'speaker',
     values: {
-      ...(speaker.name ? { name: speaker.name } : {}),
+      ...(person
+        ? { name: person.name, speakers: speakersList([person]) }
+        : {}),
       ...(speaker.title ? { company: speaker.title } : {}),
       ...(talkTitle ? { title: talkTitle } : {}),
     },
-    ...(speaker.name
-      ? { people: [{ _id: speaker._id, name: speaker.name }] }
-      : {}),
+    ...(person ? { people: [person] } : {}),
+  }
+}
+
+/** A talk as the talk-subject reads load it (`generation-sanity.ts`). */
+export interface TalkSubjectSource {
+  _id: string
+  title: string | null
+  speakers:
+    ({ _id: string; name: string | null; title: string | null } | null)[] | null
+}
+
+/**
+ * A talk as a Task subject (tagging spec §4.2): ALL of its speakers, in the
+ * order the talk lists them. `{name}` joins their names, `{speakers}` adds
+ * each one's title, and `{company}` stays the first one's — only meaningful
+ * for a single-speaker talk. A dangling or nameless speaker ref is left out,
+ * and a speaker listed twice is named once.
+ */
+export function talkSubject(talk: TalkSubjectSource): GenerationSubject {
+  const people: SubjectPerson[] = []
+  for (const s of talk.speakers ?? []) {
+    if (!s?._id || !s.name) continue
+    // Each speaker once: a talk listing someone twice would name them twice
+    // and record two mentions under one `_key`.
+    if (people.some((p) => p._id === s._id)) continue
+    people.push({ _id: s._id, name: s.name, jobTitle: s.title })
+  }
+  const first = people[0]
+  return {
+    _id: talk._id,
+    type: 'talk',
+    values: {
+      ...(talk.title ? { title: talk.title } : {}),
+      ...(first
+        ? {
+            name: joinNames(people.map((p) => p.name)),
+            speakers: speakersList(people),
+          }
+        : {}),
+      ...(first?.jobTitle ? { company: first.jobTitle } : {}),
+    },
+    ...(first ? { people } : {}),
   }
 }
 
@@ -280,6 +336,7 @@ export function buildSubjectBeat(
   const tagging: TagPerson[] = (input.subject.people ?? []).map((p) => ({
     speakerId: p._id,
     name: p.name,
+    jobTitle: p.jobTitle,
     tag: input.tags?.get(p._id) ?? null,
   }))
   const subject: SubjectLink = {

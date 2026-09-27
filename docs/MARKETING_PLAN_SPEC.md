@@ -368,8 +368,8 @@ which remains the source of record for offsets, copy skeletons, and benchmarks:
 
 Each recipe: `key`, `kind`, `channel`, `milestone`, `offsetDays`, `prerequisites` (recipe keys),
 `targetPage`, `subjectSource` (`speaker | sponsor | talk | none`), `skeleton: { linkedin, bluesky }`
-with placeholders `{event} {date} {venue} {city} {name} {company} {title} {hook} {tier} {url}
-{eventTag}` and an `alt` skeleton. LinkedIn and Bluesky are **sibling recipes** of one beat, never
+with placeholders `{event} {date} {venue} {city} {name} {speakers} {company} {title} {hook} {tier}
+{url} {eventTag}` and an `alt` skeleton. LinkedIn and Bluesky are **sibling recipes** of one beat, never
 one cross-posted Task. Every publishing recipe that needs an image is preceded by a `studioRender`
 recipe it lists as Prerequisite.
 

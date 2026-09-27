@@ -33,12 +33,20 @@ export type BlueskyTag =
   | { status: 'unresolved'; handle: string }
 
 /**
+ * A person as `{name}` and `{speakers}` name them. `jobTitle` is what
+ * `{company}` holds for a speaker — never the talk's `{title}`.
+ */
+export interface NamedPerson {
+  name: string
+  jobTitle?: string | null
+}
+
+/**
  * One person a subject's `{name}` names, in order. `tag` is null when there is
  * nothing to tag: no Bluesky link, opted out (#1148), or our own account.
  */
-export interface TagPerson {
+export interface TagPerson extends NamedPerson {
   speakerId: string
-  name: string
   tag: BlueskyTag | null
 }
 
@@ -72,6 +80,18 @@ export function joinNames(names: readonly string[]): string {
   return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`
 }
 
+/**
+ * `{speakers}` (spec §4.2): each name with what `{company}` holds for a
+ * speaker — their job title — "Alice (SRE, Acme) and Bob (CTO, Initech)".
+ */
+export function speakersList(people: readonly NamedPerson[]): string {
+  return joinNames(
+    people.map((p) =>
+      p.jobTitle?.trim() ? `${p.name} (${p.jobTitle.trim()})` : p.name,
+    ),
+  )
+}
+
 export function tagBlueskyBody(input: {
   skeleton: string
   values: Partial<Record<Placeholder, string>>
@@ -79,28 +99,45 @@ export function tagBlueskyBody(input: {
 }): { body: string; mentions: MentionRecord[] } {
   const { skeleton, values, people } = input
   const plain = resolvePlaceholders(skeleton, values)
-  if (people.length === 0 || !skeleton.includes('{name}'))
+  if (
+    people.length === 0 ||
+    !(skeleton.includes('{name}') || skeleton.includes('{speakers}'))
+  )
     return { body: plain, mentions: [] }
 
-  const render = (tagged: ReadonlySet<TagPerson>) =>
-    resolvePlaceholders(skeleton, {
+  const handleOf = (p: TagPerson) => (p.tag ? `@${p.tag.handle}` : p.name)
+  const render = (label: (p: TagPerson) => string) => {
+    const named = people.map((p) => ({
+      name: label(p),
+      jobTitle: p.jobTitle,
+    }))
+    return resolvePlaceholders(skeleton, {
       ...values,
-      name: joinNames(
-        people.map((p) =>
-          tagged.has(p) && p.tag ? `@${p.tag.handle}` : p.name,
-        ),
-      ),
+      name: joinNames(named.map((p) => p.name)),
+      speakers: speakersList(named),
     })
+  }
+  const withTags = (tagged: ReadonlySet<TagPerson>) =>
+    render((p) => (tagged.has(p) ? handleOf(p) : p.name))
+  // Every form must fit (§4.4), not just all-tagged and all-plain: at
+  // publish only an opted-out speaker's tag goes back to the name, so ANY
+  // subset may be swapped. The longest is each tag in its longer form.
+  const longest = (tagged: ReadonlySet<TagPerson>) =>
+    render((p) =>
+      tagged.has(p) && countGraphemes(handleOf(p)) > countGraphemes(p.name)
+        ? handleOf(p)
+        : p.name,
+    )
 
+  // Names fall back from the LAST speaker until every form fits; when even
+  // the plain form is over, nobody is tagged.
   const candidates = people.filter((p) => p.tag?.status === 'tagged')
-  let body = render(new Set(candidates))
   while (
     candidates.length > 0 &&
-    countGraphemes(body) > BLUESKY_MAX_GRAPHEMES
-  ) {
+    countGraphemes(longest(new Set(candidates))) > BLUESKY_MAX_GRAPHEMES
+  )
     candidates.pop()
-    body = render(new Set(candidates))
-  }
+  const body = withTags(new Set(candidates))
 
   const tagged = new Set(candidates)
   const mentions = people.flatMap((p): MentionRecord[] => {

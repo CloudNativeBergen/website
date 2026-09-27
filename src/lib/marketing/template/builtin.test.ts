@@ -237,6 +237,7 @@ describe('built-in Template', () => {
         'venue',
         'city',
         'name',
+        'speakers',
         'company',
         'title',
         'hook',

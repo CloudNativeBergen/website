@@ -143,6 +143,40 @@ export const AttachSpeakerCardMobile: Story = {
   parameters: { viewport: { defaultViewport: 'mobile1' } },
 }
 
+/**
+ * Attaching the talk teaser: a talk names ALL of its speakers, so the talk
+ * placeholders include `{speakers}` — each with their title (#1153).
+ */
+export const AttachTalkTeaser: Story = {
+  render: () => (
+    <RecipeForm
+      entry={row('talkTeaser')}
+      initial={row('talkTeaser').defaults}
+      attached={false}
+      onSubmit={fn()}
+      onCancel={fn()}
+    />
+  ),
+  play: async () => {
+    const modal = within(document.body)
+    await expect(
+      await modal.findByRole('button', { name: 'Attach Recipe' }),
+    ).toBeEnabled()
+    await expect(modal.getAllByText('{speakers}').length).toBeGreaterThan(0)
+    await expect(
+      modal.getByDisplayValue(/Answered at \{event\} by \{speakers\}\./),
+    ).toBeInTheDocument()
+  },
+}
+export const AttachTalkTeaserMobile: Story = {
+  ...AttachTalkTeaser,
+  parameters: { viewport: { defaultViewport: 'mobile1' } },
+}
+export const AttachTalkTeaserDark: Story = {
+  ...AttachTalkTeaser,
+  globals: { theme: 'dark' },
+}
+
 /** Editing the countdown: recurring, so a rate and a window — and already expanded. */
 export const EditCountdown: Story = {
   render: () => (

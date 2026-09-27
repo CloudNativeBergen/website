@@ -17,6 +17,8 @@ export const CONFERENCE_PLACEHOLDERS = [
 
 export const SUBJECT_PLACEHOLDERS = [
   'name',
+  /** A talk's speakers, each with their title (tagging spec §4.2). */
+  'speakers',
   'company',
   'title',
   'hook',
