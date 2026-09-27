@@ -31,7 +31,12 @@ describe('withholdOptedOutTags', () => {
     expect(out.body).toBe('🎙️ Alice Smith and @bob.dev at the conf')
     expect(out.mentions).toEqual([{ handle: 'bob.dev', did: 'did:plc:bob' }])
     expect(out.withheld).toEqual([
-      { speakerId: 'speaker-alice', name: 'Alice Smith', handle: 'alice.dev' },
+      {
+        speakerId: 'speaker-alice',
+        name: 'Alice Smith',
+        handle: 'alice.dev',
+        reason: 'opted-out',
+      },
     ])
   })
 
@@ -88,5 +93,36 @@ describe('withholdOptedOutTags', () => {
       recorded: [{ ...alice, optedOut: true }],
     })
     expect(out.body).toBe('@kubernetes.io and Alice Smith')
+  })
+
+  it('a speaker who is gone (deleted or erased) is not tagged either', () => {
+    const out = withholdOptedOutTags({
+      body: 'Hi @alice.dev',
+      recorded: [{ ...alice, gone: true }],
+    })
+    expect(out.body).toBe('Hi Alice Smith')
+    expect(out.mentions).toEqual([])
+    expect(out.withheld).toEqual([
+      expect.objectContaining({ speakerId: 'speaker-alice', reason: 'gone' }),
+    ])
+  })
+
+  it('a record with no speaker (a sponsor, #1154) is posted with its recorded DID', () => {
+    const out = withholdOptedOutTags({
+      body: 'Thanks @acme.com',
+      recorded: [
+        {
+          handle: 'acme.com',
+          did: 'did:plc:acme',
+          name: 'Acme',
+          optedOut: false,
+        },
+      ],
+    })
+    expect(out).toEqual({
+      body: 'Thanks @acme.com',
+      mentions: [{ handle: 'acme.com', did: 'did:plc:acme' }],
+      withheld: [],
+    })
   })
 })

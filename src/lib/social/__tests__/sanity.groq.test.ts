@@ -370,6 +370,8 @@ describe('findWork — the composed due/stale scan', () => {
       conference('c1'),
       { _id: 'alice', _type: 'speaker', name: 'Alice', socialTagOptOut: true },
       { _id: 'bob', _type: 'speaker', name: 'Bob' },
+      // GDPR erasure unsets the opt-out and keeps the document (#1162).
+      { _id: 'erased', _type: 'speaker', name: '', erasedAt: '2026-09-01' },
       variant('v1', 'c1', {
         mentions: [
           {
@@ -396,7 +398,7 @@ describe('findWork — the composed due/stale scan', () => {
             status: 'unresolved',
             name: 'Carol',
           },
-          // A speaker since deleted: the weak reference reads as not opted out.
+          // A speaker since deleted: the weak reference dangles — gone.
           {
             _key: 'd',
             handle: 'gone.dev',
@@ -404,6 +406,23 @@ describe('findWork — the composed due/stale scan', () => {
             speaker: { _type: 'reference', _ref: 'gone', _weak: true },
             status: 'tagged',
             name: 'Gone',
+          },
+          // A speaker since erased: gone too, though the opt-out was unset.
+          {
+            _key: 'e',
+            handle: 'erased.dev',
+            did: 'did:plc:erased',
+            speaker: { _type: 'reference', _ref: 'erased', _weak: true },
+            status: 'tagged',
+            name: 'Erased',
+          },
+          // No speaker at all (a sponsor's, #1154): kept, posted, never withheld.
+          {
+            _key: 'f',
+            handle: 'acme.com',
+            did: 'did:plc:acme',
+            status: 'tagged',
+            name: 'Acme',
           },
         ],
       }),
@@ -436,6 +455,21 @@ describe('findWork — the composed due/stale scan', () => {
             did: 'did:plc:gone',
             name: 'Gone',
             speakerId: 'gone',
+            optedOut: false,
+            gone: true,
+          },
+          {
+            handle: 'erased.dev',
+            did: 'did:plc:erased',
+            name: 'Erased',
+            speakerId: 'erased',
+            optedOut: false,
+            gone: true,
+          },
+          {
+            handle: 'acme.com',
+            did: 'did:plc:acme',
+            name: 'Acme',
             optedOut: false,
           },
         ],

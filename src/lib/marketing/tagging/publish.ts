@@ -17,6 +17,8 @@ export interface WithheldTag {
   speakerId: string
   name: string
   handle: string
+  /** Opted out since approval, or deleted/erased since (nobody to tag). */
+  reason: 'opted-out' | 'gone'
 }
 
 export function withholdOptedOutTags(input: {
@@ -38,11 +40,12 @@ export function withholdOptedOutTags(input: {
     const k = seen.get(t.handle) ?? 0
     seen.set(t.handle, k + 1)
     const r = list[Math.min(k, list.length - 1)]
-    if (!r.optedOut) return []
+    if (!r.speakerId || !(r.optedOut || r.gone)) return []
     withheld.set(r.speakerId, {
       speakerId: r.speakerId,
       name: r.name,
       handle: t.handle,
+      reason: r.gone ? 'gone' : 'opted-out',
     })
     return [{ ...t, name: r.name }]
   })

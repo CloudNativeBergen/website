@@ -757,8 +757,9 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                             <li>
                               • Your choice takes effect for every post not yet
                               published, including ones already written and
-                              scheduled: at the moment of publishing, a tag of
-                              you is replaced by your plain name
+                              scheduled: a tag of you is replaced by your plain
+                              name when the post is published, or, for a post we
+                              publish by hand, when we prepare it for posting
                             </li>
                             <li>
                               • Posts already published are not changed. Ask us

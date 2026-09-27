@@ -4,6 +4,8 @@ import type {
   VariantFailureEvent,
 } from '@/lib/social/publish-engine'
 import { manualPostPath } from '@/lib/social/notify'
+import { joinNames } from '@/lib/marketing/tagging/body'
+import type { WithheldTag } from '@/lib/marketing/tagging/publish'
 
 export interface FailureTask {
   _id: string
@@ -69,7 +71,7 @@ export function standalonePublishFailureNotification(
  * A post that went out with a late opt-out's tag swapped for the plain name
  * (tagging spec §4.4, Publish): ONE notification per organizer, linking to
  * the Task (or, for a standalone post, the post). The actor is the speaker
- * who opted out — an organizer who opted out is never told about their own
+ * who opted out (or whose profile is gone) — an organizer who opted out is never told about their own
  * choice. The cron made the swap; there is no other human actor.
  */
 export function tagsWithheldNotifications(
@@ -78,13 +80,21 @@ export function tagsWithheldNotifications(
 ): NotificationInput[] {
   const actors = new Set(withheld.map((w) => w.speakerId))
   const recipients = [...new Set(organizerIds)].filter((id) => !actors.has(id))
-  const who = withheld.map((w) => w.name)
-  const names =
-    who.length <= 1
-      ? (who[0] ?? '')
-      : `${who.slice(0, -1).join(', ')} and ${who[who.length - 1]}`
-  const handles = withheld.map((w) => `@${w.handle}`).join(', ')
-  const message = `${names} asked not to be tagged after the post was approved, so it went out with ${withheld.length > 1 ? 'their names' : 'their name'} instead of ${handles}.`
+  const sentence = (reason: WithheldTag['reason']) => {
+    const group = withheld.filter((w) => w.reason === reason)
+    if (group.length === 0) return null
+    const names = joinNames(group.map((w) => w.name))
+    const handles = group.map((w) => `@${w.handle}`).join(', ')
+    const theirs = group.length > 1 ? 'their names' : 'their name'
+    const why =
+      reason === 'opted-out'
+        ? `${names} asked not to be tagged after the post was approved`
+        : `${names} ${group.length > 1 ? 'are' : 'is'} no longer a speaker here`
+    return `${why}, so it went out with ${theirs} instead of ${handles}.`
+  }
+  const message = [sentence('opted-out'), sentence('gone')]
+    .filter(Boolean)
+    .join(' ')
   const link = variant.marketingTaskId
     ? `/admin/marketing/tasks/${encodeURIComponent(variant.marketingTaskId)}`
     : manualPostPath(variant._id)

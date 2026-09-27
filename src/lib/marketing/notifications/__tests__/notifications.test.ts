@@ -297,7 +297,12 @@ describe('a tag withheld at publish (tagging spec §4.4, Publish)', () => {
   const withheldEvent = (marketingTaskId: string | null = 'task-a') => ({
     variant: { ...publishable(), orgId: 'org-1', marketingTaskId },
     withheld: [
-      { speakerId: 'alice', name: 'Alice Smith', handle: 'alice.dev' },
+      {
+        speakerId: 'alice',
+        name: 'Alice Smith',
+        handle: 'alice.dev',
+        reason: 'opted-out' as const,
+      },
     ],
   })
 
@@ -328,6 +333,33 @@ describe('a tag withheld at publish (tagging spec §4.4, Publish)', () => {
         (n) => n.recipientId,
       ),
     ).toEqual(['org-a'])
+  })
+
+  it('says why: an opt-out and a speaker who is gone read differently', async () => {
+    h.organizers.mockResolvedValue(['org-a'])
+    await notifyMarketingTagsWithheld({
+      ...withheldEvent(),
+      withheld: [
+        {
+          speakerId: 'alice',
+          name: 'Alice Smith',
+          handle: 'alice.dev',
+          reason: 'opted-out',
+        },
+        {
+          speakerId: 'bob',
+          name: 'Bob Jones',
+          handle: 'bob.dev',
+          reason: 'gone',
+        },
+      ],
+    })
+    expect(h.createNotifications.mock.calls[0][0]).toMatchObject([
+      {
+        message:
+          'Alice Smith asked not to be tagged after the post was approved, so it went out with their name instead of @alice.dev. Bob Jones is no longer a speaker here, so it went out with their name instead of @bob.dev.',
+      },
+    ])
   })
 
   it('a standalone post links to the post itself', async () => {

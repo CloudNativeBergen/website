@@ -90,7 +90,7 @@ const POST_ATTACHMENTS_PROJECTION = groq`attachments[]{
  * boolean is read off the speaker, and it never leaves the server.
  */
 // groq-global-scoped: the Task subquery binds conference._ref to the outer variant's ^.conference._ref.
-const DUE_PROJECTION = groq`{ ...${VARIANT_PROJECTION}, "postAttachments": select(post->conference._ref == conference._ref => post->${POST_ATTACHMENTS_PROJECTION}), "conferenceDomains": conference->domains, "postCreatedBy": select(post->conference._ref == conference._ref => post->createdBy._ref), "marketingTaskId": *[_type == "marketingTask" && conference._ref == ^.conference._ref && variant._ref == ^._id && !(_id in path("drafts.**")) && !(_id in path("versions.**"))][0]._id, "recordedTags": mentions[status == "tagged"]{ handle, did, name, "speakerId": speaker._ref, "optedOut": speaker->socialTagOptOut == true } }`
+const DUE_PROJECTION = groq`{ ...${VARIANT_PROJECTION}, "postAttachments": select(post->conference._ref == conference._ref => post->${POST_ATTACHMENTS_PROJECTION}), "conferenceDomains": conference->domains, "postCreatedBy": select(post->conference._ref == conference._ref => post->createdBy._ref), "marketingTaskId": *[_type == "marketingTask" && conference._ref == ^.conference._ref && variant._ref == ^._id && !(_id in path("drafts.**")) && !(_id in path("versions.**"))][0]._id, "recordedTags": mentions[status == "tagged"]{ handle, did, name, "speakerId": speaker._ref, "optedOut": speaker->socialTagOptOut == true, "gone": defined(speaker._ref) && (!defined(speaker->_id) || defined(speaker->erasedAt)) } }`
 
 interface RawVariant {
   _id: string
@@ -165,21 +165,27 @@ interface RawRecordedTag {
   name: string | null
   speakerId: string | null
   optedOut: boolean | null
+  gone: boolean | null
 }
 
-/** Half a record is not a tag the tick can check: dropped. */
+/**
+ * A record without its handle is nothing to post: dropped. One without a
+ * speaker (a sponsor's, #1154) is kept — posted with its recorded DID, never
+ * withheld — rather than left to a second handle lookup.
+ */
 function normalizeRecordedTags(
   raw: readonly (RawRecordedTag | null)[] | null,
 ): RecordedTag[] {
   return (raw ?? []).flatMap((t): RecordedTag[] =>
-    t?.handle && t.name && t.speakerId
+    t?.handle
       ? [
           {
             handle: t.handle,
             ...(t.did ? { did: t.did } : {}),
-            name: t.name,
-            speakerId: t.speakerId,
+            name: t.name || t.handle,
+            ...(t.speakerId ? { speakerId: t.speakerId } : {}),
             optedOut: t.optedOut === true,
+            ...(t.gone === true ? { gone: true } : {}),
           },
         ]
       : [],

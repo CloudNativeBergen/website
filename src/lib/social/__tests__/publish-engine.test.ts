@@ -232,6 +232,7 @@ describe('runPublishTick — due scan and dispatch', () => {
             speakerId: 'speaker-alice',
             name: 'Alice Smith',
             handle: 'alice.dev',
+            reason: 'opted-out',
           },
         ],
       })

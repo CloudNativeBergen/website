@@ -199,8 +199,14 @@ export interface RecordedTag {
   /** Absent when saved while Bluesky was unreachable. */
   did?: string
   name: string
-  speakerId: string
+  /** Absent: the tag is not a speaker's (a sponsor's, #1154) — never withheld. */
+  speakerId?: string
   optedOut: boolean
+  /**
+   * The speaker is gone since approval: deleted (the weak reference dangles)
+   * or erased (#1162, which unsets the opt-out with the rest). Nobody to tag.
+   */
+  gone?: boolean
 }
 
 /**
