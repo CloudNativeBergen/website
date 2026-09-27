@@ -128,6 +128,24 @@ describe('manualPostBody', () => {
     expect(out?.body).not.toContain('@team.dev')
   })
 
+  it('no pass limit: 21 occurrences of a short shared handle all go (final round, T1)', async () => {
+    seed(true)
+    const body = `${Array.from({ length: 21 }, () => '@x.io').join(' ')} speak`
+    h.dataset = h.dataset.map((d) =>
+      d._id === 'alice' || d._id === 'bob'
+        ? {
+            ...d,
+            socialTagOptOut: true,
+            links: ['https://bsky.app/profile/x.io'],
+          }
+        : d._id === 'variant-A'
+          ? { ...d, body, mentions: [] }
+          : d,
+    )
+    const out = await manualPostBody({ ...input, body })
+    expect(out?.body).not.toContain('@x.io')
+  })
+
   it('nobody opted out: nothing to change', async () => {
     seed(false)
     expect(await manualPostBody(input)).toBeNull()

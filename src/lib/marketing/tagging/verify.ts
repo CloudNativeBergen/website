@@ -19,6 +19,7 @@ import {
   mentionTokens,
   saveMentions,
   type TagCheck,
+  type TagIssue,
   type TaggablePerson,
 } from './checks'
 import { resolveBlueskyHandle, type HandleResolution } from './resolve'
@@ -189,9 +190,14 @@ export async function manualPostBody(input: {
   // Fix, then CHECK AGAIN until the body passes (round 5, T1): one issue per
   // handle, and the one-click fix of a shared handle takes one occurrence,
   // so a single pass can leave a refused "@team.dev" in the text to copy.
-  // Only removals happen, so this ends; the cap is a guard, not a limit.
+  // No fixed pass limit (final round, T1): every fix turns a tag into text,
+  // so there are at most as many useful passes as tags. Anything still
+  // refused after that FAILS CLOSED — the view offers nothing to copy.
+  const refused = (issues: readonly TagIssue[]) =>
+    issues.filter((i) => i.code !== 'plain-too-long')
   let issues = check.issues
-  for (let pass = 0; pass < 20; pass++) {
+  const maxPasses = mentionTokens(body).length + 1
+  for (let pass = 0; pass < maxPasses; pass++) {
     let changed = false
     for (const issue of issues) {
       if (issue.code === 'plain-too-long') continue
@@ -214,6 +220,9 @@ export async function manualPostBody(input: {
     }
     if (!changed) break
     issues = recheck(body).issues
+  }
+  if (refused(recheck(body).issues).length > 0) {
+    throw new Error('a refused tag could not be removed from the manual copy')
   }
   return body === input.body ? null : { body, untagged, removed }
 }
