@@ -445,3 +445,23 @@ export async function snapshotGallerySubjectIntoProjects(
   if (writes > 0) await tx.commit()
   return { assetRev: asset?._rev ?? null, releaseHolders: 0 }
 }
+
+/**
+ * The track file one of the organization's projects holds, for the studio's
+ * track route — even once its gallery entry is gone. Null when it is not
+ * ours; `url` null when it holds no track.
+ */
+export async function readVideoProjectTrack(
+  orgId: string,
+  id: string,
+): Promise<{ url: string | null } | null> {
+  return scopedFetch<{ url: string | null } | null>(
+    clientReadUncached,
+    { orgId },
+    `*[_type == "videoProject" && _id == $id][0]{
+      "url": track.file.asset->url
+    }`,
+    { id },
+    opts,
+  )
+}
