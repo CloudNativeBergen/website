@@ -326,6 +326,21 @@ describe('attaching a render also saves it to the gallery (#1165)', () => {
     },
   )
 
+  it('a handoff retry never recreates an entry the organizer deleted', async () => {
+    await attach(FIRST)
+    await assets().delete({ id: gallery()[0]._id })
+    expect(gallery()).toEqual([])
+    // Retry handoff from the Task editor: the same, already saved render.
+    await attach(FIRST)
+    expect(gallery()).toEqual([])
+    // A new render of the Task goes to the gallery again.
+    upload(SECOND)
+    await attach(SECOND)
+    expect(gallery()).toEqual([
+      expect.objectContaining({ image: image(SECOND) }),
+    ])
+  })
+
   it('a re-render swaps the image and keeps what an organizer edited', async () => {
     await attach(FIRST)
     Object.assign(gallery()[0], {

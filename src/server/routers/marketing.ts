@@ -1635,11 +1635,13 @@ export const marketingRouter = router({
         // The gallery entry (spec §4.3): created, or its image replaced. One
         // more idempotent step, BEFORE the orphan check below so the render
         // it replaces is free to go. Never fails or rolls back the attach.
-        const gallery = await trySaveRenderToGallery(
-          task,
-          input.assetId,
-          conferenceId,
-        )
+        // Only a NEW render, or one whose save is still pending, goes to the
+        // gallery: a handoff-only retry of a saved render must not recreate
+        // an entry the organizer has since deleted.
+        const gallery =
+          task.assetId !== input.assetId || task.galleryPending === true
+            ? await trySaveRenderToGallery(task, input.assetId, conferenceId)
+            : 'skipped'
         // Only a mark this save set, or one already there, needs clearing.
         let galleryMarkFailed = false
         const clearGalleryMark =
