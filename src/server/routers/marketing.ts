@@ -37,7 +37,11 @@ import { getSponsorFanoutContext } from '@/lib/messaging/sponsor'
 import { notifyNewMessage, notifySponsorMessage } from '@/lib/messaging/notify'
 import { claimSendSlot } from '@/lib/messaging/send-rate'
 import { runAfterResponse } from '@/server/runAfterResponse'
-import { getStudioTask, getRenderSiblings } from '@/lib/marketing/render-sanity'
+import {
+  getStudioTask,
+  getRenderSiblings,
+  type StudioTask,
+} from '@/lib/marketing/render-sanity'
 import {
   renderAlt,
   renderHandoffRecipients,
@@ -62,7 +66,11 @@ import {
   expireShortLinkIndex,
 } from '@/lib/marketing/short-link-cache'
 import type { Conference } from '@/lib/conference/types'
-import { requireDocumentInCurrentConference } from '@/server/tenancy'
+import {
+  requireCurrentOrgId,
+  requireDocumentInCurrentConference,
+} from '@/server/tenancy'
+import { saveTaskRenderToGallery } from '@/lib/marketing-asset/task-render'
 import {
   AttachTaskAssetSchema,
   CreateTaskSchema,
@@ -530,6 +538,33 @@ async function loadTask(taskId: string): Promise<{
     data.variant = await getSocialVariantEditorData(data.task.variantId)
   }
   return { conferenceId, data }
+}
+
+/**
+ * Save a render Task's image to the gallery (spec §4.3, #1165). True once
+ * the entry holds this image. NEVER throws: the attach is already saved, and
+ * a gallery failure leaves the Task's `gallerySavePending` for a retry.
+ */
+async function saveRenderToGallery(
+  task: StudioTask,
+  imageAssetId: string,
+  conferenceId: string,
+): Promise<boolean> {
+  try {
+    await saveTaskRenderToGallery({
+      orgId: await requireCurrentOrgId(),
+      conferenceId,
+      taskId: task._id,
+      imageAssetId,
+      title: task.title,
+      alt: renderAlt(task),
+      subject: task.subject,
+    })
+    return true
+  } catch (error) {
+    console.error('Saving the render to the gallery failed', task._id, error)
+    return false
+  }
 }
 
 function conflict(): TRPCError {
@@ -1562,12 +1597,26 @@ export const marketingRouter = router({
               asset: { _type: 'reference', _ref: input.assetId },
             },
             handoffDoneFor: [...handoffDoneFor],
+            // A new render is not in the gallery yet (#1165). Written with
+            // the save, so a gallery save that fails leaves a durable mark
+            // the Task editor offers a retry for; cleared with the receipts.
+            ...(task.assetId !== input.assetId
+              ? { gallerySavePending: true }
+              : {}),
           },
           task.assetId !== input.assetId ? ['pendingStudioAsset'] : [],
           undefined,
           replaced ?? undefined,
         )
         if (!saved) throw conflict()
+        // The gallery entry (spec §4.3): created, or its image replaced. One
+        // more idempotent step, BEFORE the orphan check below so the render
+        // it replaces is free to go. Never fails or rolls back the attach.
+        const gallerySaved = await saveRenderToGallery(
+          task,
+          input.assetId,
+          conferenceId,
+        )
         // Then every recorded render goes, through the shared orphan check,
         // so a post it was handed to keeps it — and keeps it recorded, for a
         // retry and for a speaker's erasure. Never fails the save.
@@ -1624,25 +1673,36 @@ export const marketingRouter = router({
           console.error('Studio handoff discovery failed', task._id, error)
           handoffFailures.push(task._id)
         }
-        if (handoffDoneFor.size > 0 || handoffFailures.length === 0) {
+        if (
+          handoffDoneFor.size > 0 ||
+          handoffFailures.length === 0 ||
+          gallerySaved
+        ) {
           try {
             // Never associate an older image's receipts with a newer render.
             const current = await getStudioTask(task._id, conferenceId)
             if (
               !current ||
               current.assetId !== input.assetId ||
-              !(await updateTaskFields(current._id, current._rev, {
-                asset: {
-                  _type: 'image',
-                  asset: { _type: 'reference', _ref: input.assetId },
+              !(await updateTaskFields(
+                current._id,
+                current._rev,
+                {
+                  asset: {
+                    _type: 'image',
+                    asset: { _type: 'reference', _ref: input.assetId },
+                  },
+                  handoffDoneFor: [
+                    ...new Set([
+                      ...(current.handoffDoneFor ?? []),
+                      ...handoffDoneFor,
+                    ]),
+                  ],
                 },
-                handoffDoneFor: [
-                  ...new Set([
-                    ...(current.handoffDoneFor ?? []),
-                    ...handoffDoneFor,
-                  ]),
-                ],
-              }))
+                gallerySaved && current.gallerySavePending
+                  ? ['gallerySavePending']
+                  : [],
+              ))
             )
               handoffFailures.push(task._id)
           } catch (error) {
@@ -1653,6 +1713,7 @@ export const marketingRouter = router({
         return {
           success: true as const,
           handoffFailures,
+          ...(gallerySaved ? {} : { galleryFailed: true as const }),
           ...(handoffIssues.length > 0
             ? { handoffIssues: [...new Set(handoffIssues)] }
             : {}),

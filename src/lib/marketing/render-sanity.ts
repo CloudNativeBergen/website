@@ -9,12 +9,16 @@ export interface StudioTask {
   title: string
   alt: string | null
   subjectName: string | null
+  /** The subject a gallery entry is about (#1165). */
+  subject: { id: string; type: 'speaker' | 'sponsor' | 'talk' } | null
   pendingAssetId: string | null
   assetId: string | null
   campaignId: string
   handoffDoneFor: string[] | null
   /** Replaced renders not yet deleted (#1162); see `./replaced-renders`. */
   replacedRenders: string[] | null
+  /** Set by the save of a new render until its gallery save lands (#1165). */
+  gallerySavePending: boolean | null
 }
 
 /** Called only after the request's by-id tenancy guard. */
@@ -24,9 +28,10 @@ export function getStudioTask(taskId: string, conferenceId: string) {
     { conferenceId },
     `*[_type == "marketingTask" && _id == $taskId][0]{_id, _rev, kind, title, alt,
       "subjectName": coalesce(subject->name, subject->title),
+      "subject": select(subject->_type in ["speaker", "sponsor", "talk"] => { "id": subject._ref, "type": subject->_type }),
       "pendingAssetId": pendingStudioAsset.asset._ref, "assetId": asset.asset._ref,
       "campaignId": campaign._ref,
-      handoffDoneFor, replacedRenders}`,
+      handoffDoneFor, replacedRenders, gallerySavePending}`,
     { taskId },
     { cache: 'no-store' },
   )

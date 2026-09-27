@@ -49,6 +49,13 @@ const h = vi.hoisted(() => ({
   scheduleIssues: vi.fn(),
   getOrganizersByConference: vi.fn(),
   deleteOrphan: vi.fn(),
+  saveToGallery: vi.fn(),
+}))
+
+// Proven on stored documents in `marketing-task.gallery.test.ts` and
+// `src/lib/marketing-asset/task-render.test.ts`; here it always succeeds.
+vi.mock('@/lib/marketing-asset/task-render', () => ({
+  saveTaskRenderToGallery: h.saveToGallery,
 }))
 
 vi.mock('@/lib/sanity/orphaned-asset', () => ({
@@ -295,6 +302,7 @@ beforeEach(() => {
   })
   h.scheduleIssues.mockResolvedValue([])
   h.updateTaskFields.mockResolvedValue(true)
+  h.saveToGallery.mockResolvedValue('created')
   h.approveTask.mockResolvedValue(true)
   h.setTaskDate.mockResolvedValue(true)
   h.deleteTask.mockResolvedValue(true)
@@ -1104,6 +1112,64 @@ describe('task.attachAsset', () => {
     })
   })
 
+  describe('the gallery save (#1165)', () => {
+    it("saves the Task's render with its title, alt, subject and edition, under the host's organization", async () => {
+      h.getStudioTask.mockImplementation(async () => ({
+        ...render(),
+        subject: { id: 'sp-ada', type: 'speaker' },
+      }))
+      await marketing().task.attachAsset(input)
+      expect(h.saveToGallery).toHaveBeenCalledExactlyOnceWith({
+        orgId: ORG_A,
+        conferenceId: CONF_A,
+        taskId: 'task-ours',
+        imageAssetId: assetId,
+        title: 'Save the date',
+        alt: 'Conference announcement',
+        subject: { id: 'sp-ada', type: 'speaker' },
+      })
+    })
+    it('runs before the orphan check, so the render it replaces is free to go', async () => {
+      h.saveToGallery.mockImplementation(async () => {
+        expect(h.updateTaskFields).toHaveBeenCalledTimes(1)
+        expect(h.deleteOrphan).not.toHaveBeenCalled()
+        return 'replaced'
+      })
+      await marketing().task.attachAsset(input)
+      expect(h.saveToGallery).toHaveBeenCalledOnce()
+      expect(h.deleteOrphan).toHaveBeenCalledOnce()
+    })
+    it('a failure never fails the attach: the image is saved and handed off, the mark stays', async () => {
+      h.getRenderSiblings.mockResolvedValue([
+        {
+          _id: 'eligible',
+          kind: 'publishing',
+          prerequisiteIds: ['task-ours'],
+          variantId: 'eligible-v',
+        },
+      ])
+      h.saveToGallery.mockRejectedValue(new Error('Sanity down'))
+      const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
+      await expect(marketing().task.attachAsset(input)).resolves.toEqual({
+        success: true,
+        handoffFailures: [],
+        galleryFailed: true,
+      })
+      logged.mockRestore()
+      expect(h.handoffStudioAttachment).toHaveBeenCalledOnce()
+      const [save, receipts] = h.updateTaskFields.mock.calls
+      expect(save[2]).toMatchObject({ gallerySavePending: true })
+      // The receipts land; the gallery mark is NOT cleared.
+      expect(receipts[2].handoffDoneFor).toEqual(['eligible-v'])
+      expect(receipts[3]).toEqual([])
+    })
+    it('is never reached when the save loses its race', async () => {
+      h.updateTaskFields.mockResolvedValue(false)
+      await expect(marketing().task.attachAsset(input)).rejects.toThrow()
+      expect(h.saveToGallery).not.toHaveBeenCalled()
+    })
+  })
+
   async function placeholderHandoff(status: string, alt: string) {
     // Exercise the real handoff, projections and pending derivation; only the
     // Sanity boundary is stubbed. The post is empty and the variant editable.
@@ -1340,6 +1406,8 @@ describe('task.attachAsset', () => {
       {
         asset: { _type: 'image', asset: { _type: 'reference', _ref: assetId } },
         handoffDoneFor: [],
+        // A new render is marked until its gallery save lands (#1165).
+        gallerySavePending: true,
       },
       ['pendingStudioAsset'],
       undefined,
@@ -1778,7 +1846,9 @@ describe('task.attachAsset', () => {
       success: true,
       handoffFailures: ['eligible'],
     })
-    expect(h.updateTaskFields).toHaveBeenCalledTimes(1)
+    // The save, then (with nothing handed off) only the gallery mark's clear.
+    expect(h.updateTaskFields).toHaveBeenCalledTimes(2)
+    expect(h.updateTaskFields.mock.calls[1][3]).toEqual(['gallerySavePending'])
     h.getStudioTask.mockResolvedValue({
       ...render(),
       _rev: 'saved-rev',
@@ -1789,7 +1859,7 @@ describe('task.attachAsset', () => {
       success: true,
       handoffFailures: [],
     })
-    expect(h.updateTaskFields).toHaveBeenCalledTimes(3)
+    expect(h.updateTaskFields).toHaveBeenCalledTimes(4)
     expect(h.handoffStudioAttachment).toHaveBeenCalledTimes(2)
   })
   it.each([
@@ -1830,6 +1900,7 @@ describe('task.attachAsset', () => {
         asset: { _type: 'image', asset: { _type: 'reference', _ref: assetId } },
         handoffDoneFor: [],
       },
+      [],
     )
   })
   it('surfaces unavailable recipients for retry', async () => {
@@ -1853,6 +1924,8 @@ describe('task.attachAsset', () => {
       success: true,
       handoffFailures: ['task-ours'],
     })
-    expect(h.updateTaskFields).toHaveBeenCalledTimes(1)
+    // The save, then only the gallery mark's clear: no receipts are claimed.
+    expect(h.updateTaskFields).toHaveBeenCalledTimes(2)
+    expect(h.updateTaskFields.mock.calls[1][2].handoffDoneFor).toEqual([])
   })
 })
