@@ -72,11 +72,17 @@ async function measurePriming(mediabunny: Mediabunny): Promise<number | null> {
   })
   output.addAudioTrack(source)
   await output.start()
-  const click = new Float32Array(MIX_RATE / 2)
-  click.fill(0.9, CLICK_AT, CLICK_AT + 96)
-  await source.add(toAudioBuffer([click, click]))
-  source.close()
-  await output.finalize()
+  try {
+    const click = new Float32Array(MIX_RATE / 2)
+    click.fill(0.9, CLICK_AT, CLICK_AT + 96)
+    await source.add(toAudioBuffer([click, click]))
+    source.close()
+    await output.finalize()
+  } catch (error) {
+    // Its encoder is let go of, not left open behind a failed measurement.
+    await output.cancel().catch(() => {})
+    throw error
+  }
   if (!target.buffer) return null
   const input = new Input({
     source: new BufferSource(target.buffer),

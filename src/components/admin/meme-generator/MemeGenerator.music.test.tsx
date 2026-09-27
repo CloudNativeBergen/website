@@ -15,7 +15,7 @@ import {
   waitFor,
   within,
 } from '@testing-library/react'
-import type { BackgroundGallery } from './meme-generator-gallery'
+import type { BackgroundGallery, TrackSource } from './meme-generator-gallery'
 import type { VideoProjects } from './meme-generator-project'
 import type { EncoderBackend } from './meme-generator-export'
 import type { OpenedProject, VideoProjectRow } from '@/lib/video-project'
@@ -100,7 +100,9 @@ function fakeGallery() {
     tracks: vi.fn(async () => [
       { _id: 'asset-theme', title: 'Theme', durationSeconds: 20 },
     ]),
-    loadTrack: vi.fn(async () => new ArrayBuffer(8)),
+    loadTrack: vi.fn<
+      (source: TrackSource, signal: AbortSignal) => Promise<ArrayBuffer>
+    >(async () => new ArrayBuffer(8)),
   } satisfies BackgroundGallery
 }
 
@@ -139,7 +141,10 @@ describe('a video’s music', () => {
     fireEvent.change(within(music()).getByLabelText('Music'), {
       target: { value: 'asset-theme' },
     })
-    expect(gallery.loadTrack).toHaveBeenCalledWith({ asset: 'asset-theme' })
+    expect(gallery.loadTrack).toHaveBeenCalledWith(
+      { asset: 'asset-theme' },
+      expect.any(AbortSignal),
+    )
     await within(music()).findByText(
       'Plays from 0:00 of 0:20, and is cut at the end of the video.',
     )
@@ -203,10 +208,13 @@ describe('a video’s music', () => {
         'Old theme',
       ),
     )
-    expect(gallery.loadTrack).toHaveBeenCalledWith({
-      project: 'vp-1',
-      file: 'file-theme',
-    })
+    expect(gallery.loadTrack).toHaveBeenCalledWith(
+      {
+        project: 'vp-1',
+        file: 'file-theme',
+      },
+      expect.any(AbortSignal),
+    )
     expect(within(music()).getByLabelText('Start in track')).toHaveValue('4.0')
     expect(within(project()).getByText('All changes saved')).toBeInTheDocument()
 
@@ -356,10 +364,13 @@ describe('a video’s music', () => {
     )
     await screen.findByDisplayValue('vp-1')
     await waitFor(() =>
-      expect(gallery.loadTrack).toHaveBeenLastCalledWith({
-        project: 'vp-1',
-        file: 'file-old',
-      }),
+      expect(gallery.loadTrack).toHaveBeenLastCalledWith(
+        {
+          project: 'vp-1',
+          file: 'file-old',
+        },
+        expect.any(AbortSignal),
+      ),
     )
     await within(project()).findByRole('option', { name: /vp-2/ })
     fireEvent.change(within(project()).getByLabelText('Open a saved project'), {
@@ -367,10 +378,13 @@ describe('a video’s music', () => {
     })
     await screen.findByDisplayValue('vp-2')
     await waitFor(() =>
-      expect(gallery.loadTrack).toHaveBeenLastCalledWith({
-        project: 'vp-2',
-        file: 'file-new',
-      }),
+      expect(gallery.loadTrack).toHaveBeenLastCalledWith(
+        {
+          project: 'vp-2',
+          file: 'file-new',
+        },
+        expect.any(AbortSignal),
+      ),
     )
     confirm.mockRestore()
   })
@@ -478,5 +492,31 @@ describe('a video’s music', () => {
       { timeout: 5000 },
     )
     expect(status).not.toHaveTextContent('Chrome')
+  })
+
+  it('aborts a track still loading when another is picked, and on leaving', async () => {
+    const gallery = fakeGallery()
+    const signals: AbortSignal[] = []
+    gallery.loadTrack.mockImplementation((_source, signal) => {
+      signals.push(signal)
+      return new Promise<ArrayBuffer>(() => {})
+    })
+    gallery.tracks.mockResolvedValue([
+      { _id: 'asset-theme', title: 'Theme', durationSeconds: 20 },
+      { _id: 'asset-outro', title: 'Outro', durationSeconds: 20 },
+    ])
+    const { unmount } = render(
+      <MemeGenerator gallery={gallery} encoder={encoder} />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Video' }))
+    await within(music()).findByRole('option', { name: 'Outro (0:20)' })
+    const select = within(music()).getByLabelText('Music')
+    fireEvent.change(select, { target: { value: 'asset-theme' } })
+    fireEvent.change(select, { target: { value: 'asset-outro' } })
+    expect(signals).toHaveLength(2)
+    expect(signals[0].aborted).toBe(true)
+    expect(signals[1].aborted).toBe(false)
+    unmount()
+    expect(signals[1].aborted).toBe(true)
   })
 })

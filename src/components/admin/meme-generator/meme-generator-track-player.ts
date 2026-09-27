@@ -87,7 +87,7 @@ export function createTrackPlayer(
       // No Web Audio here: the preview plays silent, on its own clock.
       return
     }
-    void ctx.resume()
+    ctx.resume().catch(() => {})
     if (!channels) return
     const node = ctx.createBufferSource()
     node.buffer = bufferFor(ctx)
@@ -134,7 +134,7 @@ export function createTrackPlayer(
     dispose() {
       silence()
       clock = null
-      void ctx?.close()
+      ctx?.close().catch(() => {})
       ctx = null
     },
   }

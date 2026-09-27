@@ -215,4 +215,25 @@ describe('the track player', () => {
     expect(() => player.play(0)).not.toThrow()
     expect(player.time()).toBeNull()
   })
+
+  it('never leaves a rejected resume or close unhandled', async () => {
+    vi.useRealTimers()
+    const { ctx } = fakeContext()
+    const failing = {
+      ...ctx,
+      createBufferSource: ctx.createBufferSource,
+      createBuffer: ctx.createBuffer,
+      resume: () => Promise.reject(new Error('resume refused')),
+      close: () => Promise.reject(new Error('already closed')),
+    }
+    const unhandled = vi.fn()
+    process.on('unhandledRejection', unhandled)
+    const player = createTrackPlayer(() => failing)
+    player.load(mix(1))
+    player.play(0)
+    player.dispose()
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    process.off('unhandledRejection', unhandled)
+    expect(unhandled).not.toHaveBeenCalled()
+  })
 })

@@ -49,5 +49,5 @@ export interface BackgroundGallery {
    * A track's file, through our own origin: the Sanity CDN sends no CORS
    * header to tenant domains. The server proves the source ours.
    */
-  loadTrack?: (source: TrackSource) => Promise<ArrayBuffer>
+  loadTrack?: (source: TrackSource, signal: AbortSignal) => Promise<ArrayBuffer>
 }

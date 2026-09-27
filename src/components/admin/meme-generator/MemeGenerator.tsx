@@ -1460,16 +1460,17 @@ export function MemeGenerator({
     // A file already decoded is never fetched again, whichever way it is
     // reached now.
     if (!trackKey || !source || !loadTrack || decodedKey === trackKey) return
-    let current = true
-    loadTrack(source)
+    // Given up on — another track picked, or the editor left — the fetch is
+    // aborted, never left streaming megabytes nobody will decode.
+    const abort = new AbortController()
+    loadTrack(source, abort.signal)
       .then(decodeTrack)
       .then(
-        (channels) => current && setDecoded({ key: trackKey, channels }),
-        () => current && setTrackFailed(trackKey),
+        (channels) =>
+          !abort.signal.aborted && setDecoded({ key: trackKey, channels }),
+        () => !abort.signal.aborted && setTrackFailed(trackKey),
       )
-    return () => {
-      current = false
-    }
+    return () => abort.abort()
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: keyed by the source's words, not the object rebuilt every render
   }, [trackKey, sourceQuery, loadTrack, decodedKey, trackRetry])
   const trackChannels =

@@ -16,6 +16,7 @@ let releaseCancel = () => {}
 let addWaitsForCancel = false
 let rejectAdd = () => {}
 let rejectAudio = () => {}
+let audioAddFails = false
 
 vi.mock('mediabunny', () => {
   class Output {
@@ -64,6 +65,8 @@ vi.mock('mediabunny', () => {
     AudioBufferSource: class {
       add() {
         log.push('audio-add')
+        if (audioAddFails)
+          return Promise.reject(new Error('EncodingError: audio'))
         // The track's encode, still running: it settles only if cancelled.
         return new Promise<void>((_, reject) => {
           rejectAudio = () => reject(new Error('The output was canceled.'))
@@ -73,6 +76,11 @@ vi.mock('mediabunny', () => {
     },
     Quality: class {},
     Mp4OutputFormat: class {},
+    canEncodeAudio: async () => true,
+    ALL_FORMATS: [],
+    AudioBufferSink: class {},
+    BufferSource: class {},
+    Input: class {},
     canEncodeVideo: async () => {
       if (canEncodeFails)
         throw new Error('Failed to fetch dynamically imported module')
@@ -208,6 +216,26 @@ describe('mediabunnyBackend.open with a track', () => {
     releaseCancel()
     await cancelled
     expect(await frame).toBe('The output was canceled.')
+    vi.unstubAllGlobals()
+  })
+})
+
+describe('mediabunnyBackend.prepareAudio', () => {
+  it('cancels the measuring output when the test encode fails, and exports silent for it', async () => {
+    vi.stubGlobal(
+      'AudioBuffer',
+      class {
+        copyToChannel() {}
+      },
+    )
+    audioAddFails = true
+    const preparing = mediabunnyBackend.prepareAudio()
+    await vi.waitFor(() => expect(log).toContain('start'))
+    releaseStart()
+    await vi.waitFor(() => expect(log).toContain('cancel'))
+    releaseCancel()
+    expect(await preparing).toEqual({ silent: 'unmeasured' })
+    audioAddFails = false
     vi.unstubAllGlobals()
   })
 })
