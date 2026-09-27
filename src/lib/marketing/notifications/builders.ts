@@ -89,7 +89,7 @@ export function tagsWithheldNotifications(
   const gone = withheld.length - optedOut.length
   const message = [
     optedOut.length > 0
-      ? `${joinNames(optedOut.map((w) => w.name))} asked not to be tagged after the post was approved, so it went out with ${optedOut.length > 1 ? 'their names' : 'their name'} instead of ${optedOut.map((w) => `@${w.handle}`).join(', ')}.`
+      ? `${joinNames(optedOut.map((w) => w.name))} asked not to be tagged after the post was approved, so it went out with ${optedOut.length > 1 ? 'their names' : 'their name'} instead of ${optedOut.flatMap((w) => w.handles.map((h) => `@${h}`)).join(', ')}.`
       : null,
     gone === 1
       ? `A tag of someone who is no longer a speaker here was replaced with “${GONE_SPEAKER_TEXT}”.`

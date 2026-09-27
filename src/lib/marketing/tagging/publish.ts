@@ -22,7 +22,13 @@ export { GONE_SPEAKER_TEXT }
  * carries nothing of the person.
  */
 export type WithheldTag =
-  | { reason: 'opted-out'; speakerId: string; name: string; handle: string }
+  | {
+      reason: 'opted-out'
+      speakerId: string
+      name: string
+      /** Every handle of theirs that was withheld, in body order (round 4). */
+      handles: string[]
+    }
   | { reason: 'gone'; speakerId: string }
 
 export interface WithheldTags {
@@ -69,6 +75,7 @@ export function withholdOptedOutTags(input: {
       kept.push({ handle: t.handle, record: r })
       return []
     }
+    const before = withheld.get(r.speakerId)
     withheld.set(
       r.speakerId,
       r.gone
@@ -77,7 +84,12 @@ export function withholdOptedOutTags(input: {
             reason: 'opted-out',
             speakerId: r.speakerId,
             name: r.name,
-            handle: t.handle,
+            handles: [
+              ...new Set([
+                ...(before?.reason === 'opted-out' ? before.handles : []),
+                t.handle,
+              ]),
+            ],
           },
     )
     return [{ ...t, name: replacementText(r) }]

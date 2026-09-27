@@ -34,7 +34,7 @@ describe('withholdOptedOutTags', () => {
       {
         speakerId: 'speaker-alice',
         name: 'Alice Smith',
-        handle: 'alice.dev',
+        handles: ['alice.dev'],
         reason: 'opted-out',
       },
     ])
@@ -93,6 +93,30 @@ describe('withholdOptedOutTags', () => {
       recorded: [{ ...alice, optedOut: true }],
     })
     expect(out.body).toBe('@kubernetes.io and Alice Smith')
+  })
+
+  it('a speaker with two recorded handles, both withheld: the event names BOTH (round 4, T1)', () => {
+    const out = withholdOptedOutTags({
+      body: '@alice.dev (was @alice.bsky.social) speaks',
+      recorded: [
+        { ...alice, optedOut: true },
+        {
+          ...alice,
+          handle: 'alice.bsky.social',
+          did: 'did:plc:old',
+          optedOut: true,
+        },
+      ],
+    })
+    expect(out.body).toBe('Alice Smith (was Alice Smith) speaks')
+    expect(out.withheld).toEqual([
+      {
+        reason: 'opted-out',
+        speakerId: 'speaker-alice',
+        name: 'Alice Smith',
+        handles: ['alice.dev', 'alice.bsky.social'],
+      },
+    ])
   })
 
   it('a withheld name holding a shared handle that stays tagged is inserted as text (round 3, T1)', () => {

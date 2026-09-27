@@ -300,7 +300,7 @@ describe('a tag withheld at publish (tagging spec §4.4, Publish)', () => {
       {
         speakerId: 'alice',
         name: 'Alice Smith',
-        handle: 'alice.dev',
+        handles: ['alice.dev'],
         reason: 'opted-out' as const,
       },
     ],
@@ -343,7 +343,7 @@ describe('a tag withheld at publish (tagging spec §4.4, Publish)', () => {
         {
           speakerId: 'alice',
           name: 'Alice Smith',
-          handle: 'alice.dev',
+          handles: ['alice.dev'],
           reason: 'opted-out',
         },
         { speakerId: 'bob', reason: 'gone' },
@@ -352,6 +352,25 @@ describe('a tag withheld at publish (tagging spec §4.4, Publish)', () => {
     const [n] = h.createNotifications.mock.calls[0][0] as { message: string }[]
     expect(n.message).toBe(
       'Alice Smith asked not to be tagged after the post was approved, so it went out with their name instead of @alice.dev. A tag of someone who is no longer a speaker here was replaced with “a speaker”.',
+    )
+  })
+
+  it('a speaker with two withheld handles is named once, with both handles (round 4, T1)', async () => {
+    h.organizers.mockResolvedValue(['org-a'])
+    await notifyMarketingTagsWithheld({
+      ...withheldEvent(),
+      withheld: [
+        {
+          speakerId: 'alice',
+          name: 'Alice Smith',
+          handles: ['alice.dev', 'alice.bsky.social'],
+          reason: 'opted-out',
+        },
+      ],
+    })
+    const [n] = h.createNotifications.mock.calls[0][0] as { message: string }[]
+    expect(n.message).toBe(
+      'Alice Smith asked not to be tagged after the post was approved, so it went out with their name instead of @alice.dev, @alice.bsky.social.',
     )
   })
 
