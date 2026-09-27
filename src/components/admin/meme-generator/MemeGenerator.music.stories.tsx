@@ -327,3 +327,33 @@ export const MusicSurroundDownmix: Story = {
     for (const side of channels) expect(level(side)).toBeCloseTo(0.25, 2)
   },
 }
+
+/** The gallery's tracks could not be listed: said so, with a retry. */
+export const MusicListingFails: Story = {
+  args: {
+    gallery: {
+      ...musicGallery,
+      tracks: async () => {
+        throw new Error('offline')
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(canvas.getByRole('button', { name: 'Video' }))
+    const music = canvas.getByRole('region', { name: 'Music' })
+    await waitFor(() =>
+      expect(within(music).getByRole('status')).toHaveTextContent(
+        'The gallery’s tracks could not be listed.',
+      ),
+    )
+    expect(
+      within(music).getByRole('button', { name: 'List tracks again' }),
+    ).toBeVisible()
+  },
+}
+
+export const MusicListingFailsDark: Story = {
+  ...MusicListingFails,
+  globals: { theme: 'dark' },
+}
