@@ -563,7 +563,7 @@ describe('a video’s music', () => {
     expect(signals[1].aborted).toBe(true)
   })
 
-  it('warns that Safari may clip the very start only when there is no fade-in', async () => {
+  it('says the start is trimmed, in every browser, only when there is no fade-in', async () => {
     render(<MemeGenerator gallery={fakeGallery()} encoder={encoder} />)
     fireEvent.click(screen.getByRole('button', { name: 'Video' }))
     await within(music()).findByRole('option', { name: 'Theme (0:20)' })
@@ -571,7 +571,8 @@ describe('a video’s music', () => {
       target: { value: 'asset-theme' },
     })
     await within(music()).findByText(/Plays from/)
-    const clip = /Safari can drop the first 20 ms or so/
+    const clip =
+      /With no fade-in, the first 20–45 ms of the track are cut in every browser to keep it in step with the picture, about 65 ms in Safari./
     expect(within(music()).queryByText(clip)).toBeNull()
     fireEvent.change(within(music()).getByLabelText('Fade in'), {
       target: { value: '0' },

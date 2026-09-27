@@ -232,9 +232,11 @@ export function VideoMusic({
       {track && load?.state === 'ready' && (
         <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
           {track.fadeIn === 0 &&
-            // Measured in the proof (§4): Safari's own AAC encoder loses
-            // about 1,024 samples at the head, which a fade-in would hide.
-            'With no fade-in, Safari can drop the first 20 ms or so of the track. '}
+            // Measured in the proof (§4): every encoder puts 1,024–2,112
+            // samples of priming ahead of the sound, which the export trims
+            // from the head of the track; Safari's own also drops about
+            // 1,024 more. A fade-in hides both.
+            'With no fade-in, the first 20–45 ms of the track are cut in every browser to keep it in step with the picture, about 65 ms in Safari. '}
           Exported as AAC audio. Browsers without an AAC encoder of their own
           use an open-source one; see the{' '}
           <a
