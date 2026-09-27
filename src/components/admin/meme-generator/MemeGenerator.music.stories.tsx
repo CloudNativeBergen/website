@@ -271,3 +271,57 @@ export const MusicPrimingMeasured: Story = {
     expect([1024, 2112]).toContain((result as { priming: number }).priming)
   },
 }
+
+/** A 1 s, 48 kHz, 16-bit 5.1 WAV with a 0.5-amplitude tone in the centre only. */
+function centreOnlySurround(): ArrayBuffer {
+  const channels = 6
+  const frames = MIX_RATE
+  const bytes = new ArrayBuffer(44 + frames * channels * 2)
+  const view = new DataView(bytes)
+  const text = (at: number, s: string) =>
+    [...s].forEach((c, i) => view.setUint8(at + i, c.charCodeAt(0)))
+  text(0, 'RIFF')
+  view.setUint32(4, 36 + frames * channels * 2, true)
+  text(8, 'WAVE')
+  text(12, 'fmt ')
+  view.setUint32(16, 16, true)
+  view.setUint16(20, 1, true)
+  view.setUint16(22, channels, true)
+  view.setUint32(24, MIX_RATE, true)
+  view.setUint32(28, MIX_RATE * channels * 2, true)
+  view.setUint16(32, channels * 2, true)
+  view.setUint16(34, 16, true)
+  text(36, 'data')
+  view.setUint32(40, frames * channels * 2, true)
+  for (let i = 0; i < frames; i++) {
+    const tone = Math.round(
+      0.5 * Math.sin((2 * Math.PI * 440 * i) / MIX_RATE) * 32767,
+    )
+    // L R C LFE Ls Rs: only C carries sound.
+    view.setInt16(44 + (i * channels + 2) * 2, tone, true)
+  }
+  return bytes
+}
+
+/**
+ * A 5.1 track (the gallery takes them) is folded down to stereo with Web
+ * Audio's speaker rules — the centre at √½ into both sides — rather than
+ * losing every channel after the first two, which here would be all of it.
+ */
+export const MusicSurroundDownmix: Story = {
+  args: { gallery: musicGallery },
+  play: async () => {
+    const { decodeTrack } = await import('./meme-generator-track-player')
+    const channels = await decodeTrack(centreOnlySurround())
+    const level = (samples: Float32Array) =>
+      Math.sqrt(samples.reduce((sum, x) => sum + x * x, 0) / samples.length)
+    console.info(
+      '[surround]',
+      channels.length,
+      channels.map((c) => level(c).toFixed(4)).join(' '),
+    )
+    expect(channels).toHaveLength(2)
+    // 0.5 × √½ in each side, as an RMS of a sine: 0.5 × 0.7071 × 0.7071.
+    for (const side of channels) expect(level(side)).toBeCloseTo(0.25, 2)
+  },
+}

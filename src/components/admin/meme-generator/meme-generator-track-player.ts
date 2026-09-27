@@ -220,12 +220,25 @@ export function createTrackPlayer(
 /**
  * A track file decoded to samples at MIX_RATE, whatever the hardware's rate
  * (spec §6: pinned, so a project exports the same on every machine). An
- * offline context resamples as it decodes.
+ * offline context resamples as it decodes. More than two channels — the
+ * gallery takes a 5.1 WAV — are folded down to stereo by rendering through
+ * a stereo offline context, with Web Audio's speaker rules (the centre at √½
+ * into each side, the surrounds likewise, the LFE left out); decoding alone
+ * keeps every channel, and the mix reads only the first two.
  */
 export async function decodeTrack(bytes: ArrayBuffer): Promise<Float32Array[]> {
   const context = new OfflineAudioContext(2, 1, MIX_RATE)
   const decoded = await context.decodeAudioData(bytes)
-  return Array.from({ length: decoded.numberOfChannels }, (_, c) =>
-    decoded.getChannelData(c),
-  )
+  if (decoded.numberOfChannels <= 2)
+    return Array.from({ length: decoded.numberOfChannels }, (_, c) =>
+      decoded.getChannelData(c),
+    )
+  const stereo = new OfflineAudioContext(2, decoded.length, MIX_RATE)
+  const source = stereo.createBufferSource()
+  source.buffer = decoded
+  source.channelInterpretation = 'speakers'
+  source.connect(stereo.destination)
+  source.start()
+  const rendered = await stereo.startRendering()
+  return [rendered.getChannelData(0), rendered.getChannelData(1)]
 }
