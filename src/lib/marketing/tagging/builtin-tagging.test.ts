@@ -7,7 +7,12 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { beatRecipes, buildSubjectBeat, type BeatDates } from '../expansion'
+import {
+  beatRecipes,
+  buildSubjectBeat,
+  talkSubject,
+  type BeatDates,
+} from '../expansion'
 import { BUILTIN_TEMPLATE } from '../template'
 import type { BlueskyTag } from './body'
 
@@ -33,18 +38,27 @@ function build(
   let n = 0
   return buildSubjectBeat({
     recipes,
-    subject: {
-      _id: 'subject-1',
-      type,
-      values: {
-        name: 'Alice Liddell',
-        company: 'SRE',
-        title: 'Pods',
-        hook: 'Why pods',
-        tier: 'Gold',
-      },
-      people,
-    },
+    // A talk's people come from its speakers (`{speakers}`, #1153), as
+    // generation builds it; a speaker or sponsor from the plain values.
+    subject:
+      type === 'talk'
+        ? talkSubject({
+            _id: 'subject-1',
+            title: 'Pods',
+            speakers: people.map((p) => ({ ...p, title: 'SRE' })),
+          })
+        : {
+            _id: 'subject-1',
+            type,
+            values: {
+              name: 'Alice Liddell',
+              company: 'SRE',
+              title: 'Pods',
+              hook: 'Why pods',
+              tier: 'Gold',
+            },
+            people,
+          },
     tags: new Map([['spk-alice', tag]]),
     dates,
     campaign: { _id: 'camp', key: campaignKey },

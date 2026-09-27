@@ -478,6 +478,29 @@ describe('saveMentions (§4.3 rebuilt on every save, §4.4 Save)', () => {
     expect(approval.issues[0].message).toContain('320 characters')
   })
 
+  it('bounds the neutral word too: a speaker gone by publish is posted as "a speaker" (#1152)', () => {
+    // "@a.io" is 5, the name "Al" 2 — but a speaker deleted or erased before
+    // publish is swapped for GONE_SPEAKER_TEXT (9), never their name.
+    const al: TaggablePerson = {
+      speakerId: 'al',
+      name: 'Al',
+      handle: 'a.io',
+      optedOut: false,
+    }
+    const body = `@a.io ${'x'.repeat(292)}`
+    expect([...body].length).toBe(298)
+    const out = saveMentions({
+      body,
+      people: [al],
+      previous: [tagged(al, DID_A)],
+      resolutions: new Map(),
+    })
+    expect(out.issues).toEqual([
+      expect.objectContaining({ code: 'plain-too-long', mentionKey: null }),
+    ])
+    expect(out.issues[0].message).toContain('302 characters')
+  })
+
   it('refuses a plain form over the 3,000-byte cap, though under 300 characters', () => {
     const family = '👨‍👩‍👧‍👦' // one grapheme, 25 bytes
     const wide = { ...alice, name: family.repeat(120) }

@@ -12,15 +12,9 @@ import { normaliseHandle } from '@/lib/social/provider/bluesky-syntax'
 import type { PublishMention } from '@/lib/social/provider/types'
 import type { RecordedTag } from '@/lib/social/types'
 import { mentionTokens } from './checks'
+import { GONE_SPEAKER_TEXT } from './body'
 
-/**
- * What stands in for a speaker who is GONE — deleted, or erased (#1162). Not
- * their name: erasure never touches the variant, so the name stored on the
- * record is an erased person's real name, and it must never be posted or
- * repeated in a notification (GDPR). A neutral word keeps the sentence
- * readable ("a speaker and @bob.dev are speaking").
- */
-export const GONE_SPEAKER_TEXT = 'a speaker'
+export { GONE_SPEAKER_TEXT }
 
 /**
  * A tag that did not go out. An opted-out speaker is still a speaker: their
