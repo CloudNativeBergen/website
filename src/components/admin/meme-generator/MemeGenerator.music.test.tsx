@@ -938,4 +938,17 @@ describe('a video’s music', () => {
       vi.unstubAllGlobals()
     }
   })
+
+  it('fetches a gallery track afresh when it is picked again, as its file may have been replaced', async () => {
+    const gallery = fakeGallery()
+    render(<MemeGenerator gallery={gallery} encoder={encoder} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Video' }))
+    await within(music()).findByRole('option', { name: 'Theme (0:20)' })
+    const select = within(music()).getByLabelText('Music')
+    fireEvent.change(select, { target: { value: 'asset-theme' } })
+    await within(music()).findByText(/Plays from/)
+    fireEvent.change(select, { target: { value: '' } })
+    fireEvent.change(select, { target: { value: 'asset-theme' } })
+    await waitFor(() => expect(gallery.loadTrack).toHaveBeenCalledTimes(2))
+  })
 })

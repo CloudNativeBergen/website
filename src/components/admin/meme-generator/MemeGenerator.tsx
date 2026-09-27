@@ -2071,6 +2071,13 @@ export function MemeGenerator({
             videoSeconds={total}
             onPick={(row) => {
               setTrackFailed(null)
+              // Picked by hand: fetched afresh, never from samples decoded
+              // before — the gallery entry's file may have been replaced
+              // since. (Undo and redo keep the samples: they go back.)
+              if (row)
+                setDecoded((current) =>
+                  current?.key === row._id ? null : current,
+                )
               changeTrack((current) =>
                 row
                   ? {
