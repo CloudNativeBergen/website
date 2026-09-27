@@ -123,6 +123,8 @@ async function approvalWithInputs(input: {
   check: TagCheck
   people: TaggablePerson[]
   mentions: MentionRecord[]
+  /** Re-runs the same check on another body with the inputs gathered here. */
+  recheck: (body: string) => TagCheck
 }> {
   const mentions = await getVariantMentionRecords(
     input.variantId,
@@ -132,7 +134,12 @@ async function approvalWithInputs(input: {
     mentionTokens(input.body).length === 0 &&
     !mentions.some((m) => m.status === 'tagged')
   )
-    return { check: { issues: [], warnings: [] }, people: [], mentions }
+    return {
+      check: { issues: [], warnings: [] },
+      people: [],
+      mentions,
+      recheck: () => ({ issues: [], warnings: [] }),
+    }
   const [people, ownAccount] = await Promise.all([
     getConferenceTaggablePeople(input.conferenceId),
     ownBlueskyAccount(input.conferenceId),
@@ -145,14 +152,9 @@ async function approvalWithInputs(input: {
       ownAccount,
     }),
   )
-  const check = approvalCheck({
-    body: input.body,
-    mentions,
-    people,
-    resolutions,
-    ownAccount,
-  })
-  return { check, people, mentions }
+  const recheck = (body: string) =>
+    approvalCheck({ body, mentions, people, resolutions, ownAccount })
+  return { check: recheck(input.body), people, mentions, recheck }
 }
 
 /**
@@ -180,27 +182,38 @@ export async function manualPostBody(input: {
   variantId: string
   body: string
 }): Promise<ManualBody | null> {
-  const { check, people, mentions } = await approvalWithInputs(input)
+  const { check, people, mentions, recheck } = await approvalWithInputs(input)
   let body = input.body
   const untagged: string[] = []
   let removed = 0
-  for (const issue of check.issues) {
-    if (issue.code === 'plain-too-long') continue
-    // Someone no longer a speaker here — erased, deleted or taken off the
-    // programme. The name on the record may be an erased person's real name,
-    // so it is never shown or copied: a neutral word stands in (GDPR).
-    const gone = issue.code === 'not-a-speaker'
-    const fixed = fixTagIssue(
-      body,
-      // A name that holds a handle keeps it as text, not a tag (round 2, T3).
-      { ...issue, name: replacementText({ name: issue.name, gone }) },
-      people,
-      mentions,
-    )
-    if (fixed === body) continue
-    body = fixed
-    if (gone) removed++
-    else if (!untagged.includes(issue.name)) untagged.push(issue.name)
+  // Fix, then CHECK AGAIN until the body passes (round 5, T1): one issue per
+  // handle, and the one-click fix of a shared handle takes one occurrence,
+  // so a single pass can leave a refused "@team.dev" in the text to copy.
+  // Only removals happen, so this ends; the cap is a guard, not a limit.
+  let issues = check.issues
+  for (let pass = 0; pass < 20; pass++) {
+    let changed = false
+    for (const issue of issues) {
+      if (issue.code === 'plain-too-long') continue
+      // Someone no longer a speaker here — erased, deleted or taken off the
+      // programme. The name on the record may be an erased person's real
+      // name, so it is never shown or copied: a neutral word stands in.
+      const gone = issue.code === 'not-a-speaker'
+      const fixed = fixTagIssue(
+        body,
+        // A name that holds a handle keeps it as text (round 2, T3).
+        { ...issue, name: replacementText({ name: issue.name, gone }) },
+        people,
+        mentions,
+      )
+      if (fixed === body) continue
+      body = fixed
+      changed = true
+      if (gone) removed++
+      else if (!untagged.includes(issue.name)) untagged.push(issue.name)
+    }
+    if (!changed) break
+    issues = recheck(body).issues
   }
   return body === input.body ? null : { body, untagged, removed }
 }

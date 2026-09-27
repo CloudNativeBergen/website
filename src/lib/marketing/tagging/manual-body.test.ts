@@ -109,6 +109,25 @@ describe('manualPostBody', () => {
     )
   })
 
+  it('every refused occurrence goes, not just the first: an unrecorded shared handle both speakers opted out of (round 5, T1)', async () => {
+    seed(true)
+    const body = '@team.dev and @team.dev are speaking at the conf.'
+    h.dataset = h.dataset.map((d) =>
+      d._id === 'alice' || d._id === 'bob'
+        ? {
+            ...d,
+            socialTagOptOut: true,
+            links: ['https://bsky.app/profile/team.dev'],
+          }
+        : d._id === 'variant-A'
+          ? { ...d, body, mentions: [] }
+          : d,
+    )
+    const out = await manualPostBody({ ...input, body })
+    // Pasted into Bluesky's composer, any "@team.dev" left would tag.
+    expect(out?.body).not.toContain('@team.dev')
+  })
+
   it('nobody opted out: nothing to change', async () => {
     seed(false)
     expect(await manualPostBody(input)).toBeNull()
