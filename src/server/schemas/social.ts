@@ -68,6 +68,15 @@ export const SocialVariantIdSchema = z.object({
   variantId: LiveDocumentIdSchema,
 })
 
+/**
+ * The editor read. `opening` marks a manual view's read: it keys the
+ * client's cache per opening (review T4), and only such a read runs the
+ * manual tag check (round 4, T3).
+ */
+export const SocialVariantEditorReadSchema = SocialVariantIdSchema.extend({
+  opening: z.string().max(100).optional(),
+})
+
 export const SocialPostIdSchema = z.object({ postId: LiveDocumentIdSchema })
 
 /** Spec §3.2: "mark as posted" REQUIRES the post URL. */

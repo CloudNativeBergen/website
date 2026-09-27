@@ -1,13 +1,20 @@
 import { getCurrentDateTime } from '@/lib/time'
 import { clientWrite } from '@/lib/sanity/client'
 import { scopedFetch } from '@/lib/sanity/scoped'
-import { createNotifications } from '@/lib/notification/sanity'
-import type { VariantFailureEvent } from '@/lib/social/publish-engine'
+import {
+  createNotifications,
+  getOrganizerSpeakerIdsForOrg,
+} from '@/lib/notification/sanity'
+import type {
+  TagsWithheldEvent,
+  VariantFailureEvent,
+} from '@/lib/social/publish-engine'
 import type { PublishableVariant } from '@/lib/social/store'
 import { notifyAwaitingManual } from '@/lib/social/notify'
 import { runMarketingReminders } from '@/lib/marketing/reminders'
 import {
   standalonePublishFailureNotification,
+  tagsWithheldNotifications,
   taskFailureNotification,
   type FailureTask,
 } from './builders'
@@ -61,6 +68,25 @@ export async function notifyMarketingFailure(
   } catch (error) {
     // Reads can fail too. The failed business transition must remain successful.
     console.error('Could not notify marketing task failure:', error)
+    return 0
+  }
+}
+
+/**
+ * A late opt-out's tag was swapped for the plain name at publish (tagging
+ * spec §4.4): every organizer of the variant's organization hears it, in one
+ * transaction. Called only by the winner of the published transition. NEVER
+ * throws: the post is out, and a notification must not fail it.
+ */
+export async function notifyMarketingTagsWithheld(
+  event: TagsWithheldEvent,
+): Promise<number> {
+  try {
+    const organizers = await getOrganizerSpeakerIdsForOrg(event.variant.orgId)
+    const inputs = tagsWithheldNotifications(organizers, event)
+    return inputs.length > 0 ? await createNotifications(inputs) : 0
+  } catch (error) {
+    console.error('Could not notify a tag withheld at publish:', error)
     return 0
   }
 }

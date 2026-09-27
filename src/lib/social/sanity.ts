@@ -21,6 +21,7 @@ import type {
 import { parseImageRefDimensions } from '@/lib/homepage/richTextImage'
 import type {
   PublishAttempt,
+  RecordedTag,
   SocialPlatform,
   SocialPostAttachment,
   SocialPostMentionDocument,
@@ -83,9 +84,13 @@ const POST_ATTACHMENTS_PROJECTION = groq`attachments[]{
  * attachments (#1005), joined only when the post belongs to the same
  * conference — a hand-edited cross-tenant reference yields no attachments
  * rather than another tenant's images.
+ *
+ * `recordedTags` carries each recorded tag's speaker opt-out (tagging spec
+ * §4.4, Publish) in this same read — never a second query per tick. Only the
+ * boolean is read off the speaker, and it never leaves the server.
  */
 // groq-global-scoped: the Task subquery binds conference._ref to the outer variant's ^.conference._ref.
-const DUE_PROJECTION = groq`{ ...${VARIANT_PROJECTION}, "postAttachments": select(post->conference._ref == conference._ref => post->${POST_ATTACHMENTS_PROJECTION}), "conferenceDomains": conference->domains, "postCreatedBy": select(post->conference._ref == conference._ref => post->createdBy._ref), "marketingTaskId": *[_type == "marketingTask" && conference._ref == ^.conference._ref && variant._ref == ^._id && !(_id in path("drafts.**")) && !(_id in path("versions.**"))][0]._id }`
+const DUE_PROJECTION = groq`{ ...${VARIANT_PROJECTION}, "postAttachments": select(post->conference._ref == conference._ref => post->${POST_ATTACHMENTS_PROJECTION}), "conferenceDomains": conference->domains, "postCreatedBy": select(post->conference._ref == conference._ref => post->createdBy._ref), "marketingTaskId": *[_type == "marketingTask" && conference._ref == ^.conference._ref && variant._ref == ^._id && !(_id in path("drafts.**")) && !(_id in path("versions.**"))][0]._id, "recordedTags": mentions[status == "tagged"]{ handle, did, name, "speakerId": speaker._ref, "optedOut": speaker->socialTagOptOut == true, "gone": defined(speaker._ref) && (!defined(speaker->_id) || defined(speaker->erasedAt)) } }`
 
 interface RawVariant {
   _id: string
@@ -152,6 +157,39 @@ function normalizeVariant(raw: RawVariant): SocialPostVariant {
     attemptCount: raw.attemptCount ?? 0,
     mentions: raw.mentions?.length ? raw.mentions : null,
   }
+}
+
+interface RawRecordedTag {
+  handle: string | null
+  did: string | null
+  name: string | null
+  speakerId: string | null
+  optedOut: boolean | null
+  gone: boolean | null
+}
+
+/**
+ * A record without its handle is nothing to post: dropped. One without a
+ * speaker (a sponsor's, #1154) is kept — posted with its recorded DID, never
+ * withheld — rather than left to a second handle lookup.
+ */
+function normalizeRecordedTags(
+  raw: readonly (RawRecordedTag | null)[] | null,
+): RecordedTag[] {
+  return (raw ?? []).flatMap((t): RecordedTag[] =>
+    t?.handle
+      ? [
+          {
+            handle: t.handle,
+            ...(t.did ? { did: t.did } : {}),
+            name: t.name || t.handle,
+            ...(t.speakerId ? { speakerId: t.speakerId } : {}),
+            optedOut: t.optedOut === true,
+            ...(t.gone === true ? { gone: true } : {}),
+          },
+        ]
+      : [],
+  )
 }
 
 function normalizeVariantAttachments(
@@ -324,6 +362,7 @@ export const sanitySocialVariantStore: SocialVariantStore = {
       conferenceDomains: (string | null)[] | null
       postCreatedBy: string | null
       marketingTaskId: string | null
+      recordedTags: RawRecordedTag[] | null
     }
     const result = await clientWrite.fetch<{
       due: { comment: RawDue[] | null; other: RawDue[] | null }[] | null
@@ -396,6 +435,7 @@ export const sanitySocialVariantStore: SocialVariantStore = {
             domains: raw_domains,
           }),
           marketingTaskId: raw.marketingTaskId,
+          recordedTags: normalizeRecordedTags(raw.recordedTags),
           postCreatedBy:
             typeof raw.postCreatedBy === 'string' &&
             raw.postCreatedBy.length > 0
@@ -415,6 +455,39 @@ export const sanitySocialVariantStore: SocialVariantStore = {
         bounds.submittedLimit,
       ).map(normalizeVariant),
     }
+  },
+
+  async tagStates(conferenceId, speakerIds) {
+    // groq-global-scoped: by-id read of the speakers a due variant's recorded
+    // mentions reference; the variant was read tenant-by-tenant in findWork.
+    // Only the opt-out and erasure are projected — nothing leaves the server.
+    // `onProgramme`: a talk at THIS conference, any status — the roster the
+    // manual path's approval check reads (`getConferenceTaggablePeople`).
+    const query = groq`*[_type == "speaker" && _id in $ids && !(_id in path("drafts.**")) && !(_id in path("versions.**"))]{ _id, "optedOut": socialTagOptOut == true, "erased": defined(erasedAt), "onProgramme": count(*[_type == "talk" && conference._ref == $conferenceId && ^._id in speakers[]._ref && !(_id in path("drafts.**")) && !(_id in path("versions.**"))]) > 0 }`
+    const rows = await clientWrite.fetch<
+      {
+        _id: string
+        optedOut: boolean | null
+        erased: boolean | null
+        onProgramme: boolean | null
+      }[]
+    >(query, { ids: [...speakerIds], conferenceId })
+    const byId = new Map((rows ?? []).map((r) => [r._id, r]))
+    return new Map(
+      speakerIds.map((id) => {
+        const row = byId.get(id)
+        // Absent: deleted since — nobody to tag.
+        return [
+          id,
+          row
+            ? {
+                optedOut: row.optedOut === true,
+                gone: row.erased === true || row.onProgramme !== true,
+              }
+            : { optedOut: false, gone: true },
+        ] as const
+      }),
+    )
   },
 
   async claim(variant, now) {

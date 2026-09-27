@@ -13,6 +13,7 @@ import {
   BLUESKY_MAX_BYTES,
   BLUESKY_MAX_GRAPHEMES,
   countGraphemes,
+  GONE_SPEAKER_TEXT,
   type MentionRecord,
 } from './body'
 import type { HandleResolution } from './resolve'
@@ -284,6 +285,58 @@ function bindTags(
   return out
 }
 
+/**
+ * The text with the `@` dropped from every handle the adapter or Bluesky's
+ * composer would detect as a mention: a replacement name that itself holds a
+ * handle ("Alice (@alice.dev)") must not put the tag back.
+ */
+export function withoutTags(text: string): string {
+  let out = text
+  for (const t of mentionTokens(text).reverse())
+    out = `${out.slice(0, t.start)}${out.slice(t.start + 1)}`
+  return out
+}
+
+/**
+ * THE text that stands in for a withheld tag — at publish and in the manual
+ * view alike, so the two can never drift: a speaker who is gone gets the
+ * neutral word (never the stored name, GDPR); anyone else their name, with
+ * any handle inside it kept as text, not a tag (review rounds 2–3).
+ */
+export function replacementText(p: { name: string; gone?: boolean }): string {
+  return p.gone ? GONE_SPEAKER_TEXT : withoutTags(p.name)
+}
+
+/**
+ * {@link bindTags} with the roster: per handle, the speaker ids owning its
+ * occurrences, in occurrence order (extra occurrences: the last owner's).
+ */
+export function occurrenceOwnersWithRoster(
+  body: string,
+  people: readonly TaggablePerson[],
+  mentions: readonly Pick<
+    MentionRecord,
+    'handle' | 'speakerId' | 'status' | 'name'
+  >[],
+): Map<string, string[]> {
+  return bindTags(body, people, mentions)
+}
+
+/**
+ * {@link bindTags} over the recorded mentions alone — what the publish tick
+ * has, with no roster to hand (tagging spec §4.4, Publish). Per handle, the
+ * record ids that own its occurrences, in occurrence order.
+ */
+export function occurrenceOwners(
+  body: string,
+  mentions: readonly Pick<
+    MentionRecord,
+    'handle' | 'speakerId' | 'status' | 'name'
+  >[],
+): Map<string, string[]> {
+  return bindTags(body, [], mentions)
+}
+
 /** Hand a person's tag back to their name: all of it, or their occurrence. */
 export function untagOwned(
   body: string,
@@ -329,7 +382,7 @@ export function plainBody(
   body: string,
   mentions: readonly Pick<MentionRecord, 'handle' | 'name' | 'status'>[],
 ): string {
-  return swapTags(body, mentions, () => true)
+  return swapTags(body, mentions, (_, name) => name)
 }
 
 /**
@@ -339,7 +392,8 @@ export function plainBody(
 function swapTags(
   body: string,
   mentions: readonly Pick<MentionRecord, 'handle' | 'name' | 'status'>[],
-  swap: (token: string, name: string) => boolean,
+  /** The text to put in place of this tag, or null to keep it. */
+  swap: (token: string, name: string) => string | null,
 ): string {
   const names = new Map<string, string[]>()
   for (const m of mentions) {
@@ -353,8 +407,11 @@ function swapTags(
     if (!list) return []
     const k = seen.get(t.handle) ?? 0
     seen.set(t.handle, k + 1)
-    const name = list[Math.min(k, list.length - 1)]
-    return swap(body.slice(t.start, t.end), name) ? [{ ...t, name }] : []
+    const text = swap(
+      body.slice(t.start, t.end),
+      list[Math.min(k, list.length - 1)],
+    )
+    return text === null ? [] : [{ ...t, name: text }]
   })
   let out = body
   for (const t of swaps.reverse())
@@ -684,16 +741,20 @@ function plainLengthIssue(
 ): TagIssue | null {
   if (!mentions.some((m) => m.status === 'tagged')) return null
   const utf8 = (t: string) => new TextEncoder().encode(t).length
+  // What may stand in for a tag at publish: the name (an opt-out), or the
+  // neutral word for a speaker deleted or erased since (#1152). Per tag,
+  // the longest of those, if it is longer than the tag itself.
+  const longest =
+    (size: (t: string) => number) => (tag: string, name: string) => {
+      const text = [name, GONE_SPEAKER_TEXT].reduce((a, b) =>
+        size(b) > size(a) ? b : a,
+      )
+      return size(text) > size(tag) ? text : null
+    }
   const plain = countGraphemes(
-    swapTags(
-      body,
-      mentions,
-      (tag, name) => countGraphemes(name) > countGraphemes(tag),
-    ),
+    swapTags(body, mentions, longest(countGraphemes)),
   )
-  const bytes = utf8(
-    swapTags(body, mentions, (tag, name) => utf8(name) > utf8(tag)),
-  )
+  const bytes = utf8(swapTags(body, mentions, longest(utf8)))
   const over =
     plain > BLUESKY_MAX_GRAPHEMES
       ? `${plain} characters; Bluesky allows ${BLUESKY_MAX_GRAPHEMES}`

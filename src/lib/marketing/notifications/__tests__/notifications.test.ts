@@ -5,6 +5,9 @@ import { evaluate, parse } from 'groq-js'
 const h = vi.hoisted(() => ({
   dataset: [] as Record<string, unknown>[],
   createNotifications: vi.fn(async (items: unknown[]) => items.length),
+  organizers: vi.fn<(orgId: string | null) => Promise<string[]>>(
+    async () => [],
+  ),
   reminders: vi.fn(),
   readError: false,
 }))
@@ -20,6 +23,7 @@ vi.mock('@/lib/sanity/client', () => ({
 }))
 vi.mock('@/lib/notification/sanity', () => ({
   createNotifications: h.createNotifications,
+  getOrganizerSpeakerIdsForOrg: h.organizers,
 }))
 vi.mock('@/lib/marketing/reminders', () => ({
   runMarketingReminders: h.reminders,
@@ -28,6 +32,7 @@ vi.mock('@/lib/marketing/reminders', () => ({
 import {
   notifyMarketingFailure,
   notifyMarketingAwaitingManual,
+  notifyMarketingTagsWithheld,
 } from '../sanity'
 import { runPublishTick } from '@/lib/social/publish-engine'
 import {
@@ -285,5 +290,174 @@ describe('marketing transition notifications', () => {
       { recipientId: 'creator' },
     ])
     expect(h.reminders).toHaveBeenCalledTimes(0)
+  })
+})
+
+describe('a tag withheld at publish (tagging spec §4.4, Publish)', () => {
+  const withheldEvent = (marketingTaskId: string | null = 'task-a') => ({
+    variant: { ...publishable(), orgId: 'org-1', marketingTaskId },
+    withheld: [
+      {
+        speakerId: 'alice',
+        name: 'Alice Smith',
+        handles: ['alice.dev'],
+        reason: 'opted-out' as const,
+      },
+    ],
+  })
+
+  it("sends ONE notification per organizer of the variant's organization, linking to the Task", async () => {
+    h.organizers.mockResolvedValue(['org-a', 'org-b', 'org-a'])
+    expect(await notifyMarketingTagsWithheld(withheldEvent())).toBe(2)
+    expect(h.organizers).toHaveBeenCalledWith('org-1')
+    expect(h.createNotifications).toHaveBeenCalledTimes(1)
+    expect(h.createNotifications.mock.calls[0][0]).toEqual(
+      ['org-a', 'org-b'].map((recipientId) => ({
+        recipientId,
+        conferenceId: 'conf-1',
+        notificationType: 'marketing_task_tag_withheld',
+        title: 'Posted without a tag',
+        message:
+          'Alice Smith asked not to be tagged after the post was approved, so it went out with their name instead of @alice.dev.',
+        link: '/admin/marketing/tasks/task-a',
+        tag: 'marketing-tag-withheld.variant-1',
+      })),
+    )
+  })
+
+  it('every organizer hears it EXCEPT the speaker whose opt-out it is — never told about their own choice (review T5)', async () => {
+    h.organizers.mockResolvedValue(['org-a', 'alice', 'org-b'])
+    await notifyMarketingTagsWithheld(withheldEvent())
+    expect(
+      (h.createNotifications.mock.calls[0][0] as { recipientId: string }[]).map(
+        (n) => n.recipientId,
+      ),
+    ).toEqual(['org-a', 'org-b'])
+  })
+
+  it('says why: an opt-out and a speaker who is gone read differently', async () => {
+    h.organizers.mockResolvedValue(['org-a'])
+    await notifyMarketingTagsWithheld({
+      ...withheldEvent(),
+      withheld: [
+        {
+          speakerId: 'alice',
+          name: 'Alice Smith',
+          handles: ['alice.dev'],
+          reason: 'opted-out',
+        },
+        { speakerId: 'bob', reason: 'gone' },
+      ],
+    })
+    const [n] = h.createNotifications.mock.calls[0][0] as { message: string }[]
+    expect(n.message).toBe(
+      'Alice Smith asked not to be tagged after the post was approved, so it went out with their name instead of @alice.dev. A tag of someone who is no longer a speaker here was replaced with “a speaker”.',
+    )
+  })
+
+  it('a speaker with two withheld handles is named once, with both handles (round 4, T1)', async () => {
+    h.organizers.mockResolvedValue(['org-a'])
+    await notifyMarketingTagsWithheld({
+      ...withheldEvent(),
+      withheld: [
+        {
+          speakerId: 'alice',
+          name: 'Alice Smith',
+          handles: ['alice.dev', 'alice.bsky.social'],
+          reason: 'opted-out',
+        },
+      ],
+    })
+    const [n] = h.createNotifications.mock.calls[0][0] as { message: string }[]
+    expect(n.message).toBe(
+      'Alice Smith asked not to be tagged after the post was approved, so it went out with their name instead of @alice.dev, @alice.bsky.social.',
+    )
+  })
+
+  it('a gone speaker alone: the notification names nobody (GDPR)', async () => {
+    h.organizers.mockResolvedValue(['org-a'])
+    await notifyMarketingTagsWithheld({
+      ...withheldEvent(),
+      withheld: [
+        { speakerId: 'bob', reason: 'gone' },
+        { speakerId: 'carol', reason: 'gone' },
+      ],
+    })
+    const [n] = h.createNotifications.mock.calls[0][0] as { message: string }[]
+    expect(n.message).toBe(
+      '2 tags of people who are no longer speakers here were replaced with “a speaker”.',
+    )
+  })
+
+  it('a standalone post links to the post itself', async () => {
+    h.organizers.mockResolvedValue(['org-a'])
+    await notifyMarketingTagsWithheld(withheldEvent(null))
+    expect(h.createNotifications.mock.calls[0][0]).toMatchObject([
+      { link: '/admin/marketing/posts?variant=variant-1' },
+    ])
+  })
+
+  it('never throws: an organizer read or a write that fails is logged', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    h.organizers.mockRejectedValueOnce(new Error('read failed'))
+    await expect(notifyMarketingTagsWithheld(withheldEvent())).resolves.toBe(0)
+    h.organizers.mockResolvedValue(['org-a'])
+    h.createNotifications.mockRejectedValueOnce(new Error('write failed'))
+    await expect(notifyMarketingTagsWithheld(withheldEvent())).resolves.toBe(0)
+    expect(error).toHaveBeenCalledTimes(2)
+    error.mockRestore()
+  })
+
+  it('end to end: a failing notification write leaves the post published with the posted body', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    h.organizers.mockResolvedValue(['org-a'])
+    h.createNotifications.mockRejectedValueOnce(new Error('write failed'))
+    const store = new MemoryVariantStore([
+      makeVariant({ body: 'Hi @alice.dev' }),
+    ])
+    store.tags['variant-1'] = [
+      {
+        handle: 'alice.dev',
+        did: 'did:plc:alice',
+        name: 'Alice Smith',
+        speakerId: 'alice',
+        optedOut: true,
+      },
+    ]
+    const publish = vi.fn(async () => ({
+      ok: true as const,
+      externalId: 'x',
+      url: 'y',
+    }))
+    const summary = await runPublishTick({
+      store,
+      now,
+      resolveAdapter: async () => ({
+        platform: 'bluesky',
+        constraints: {
+          maxLength: 300,
+          counting: 'graphemes',
+          maxImages: 4,
+          imageMimeTypes: ['image/jpeg'],
+          requiresImage: false,
+          requiresAlt: true,
+          urlLengthCost: null,
+          linkPlacement: 'card',
+          imageAspectRatio: null,
+          maxBytes: null,
+          linkCardDisplacesImages: false,
+        },
+        validate: () => [],
+        publish,
+      }),
+      onTagsWithheld: notifyMarketingTagsWithheld,
+    })
+    expect(store.get('variant-1')).toMatchObject({
+      status: 'published',
+      body: 'Hi Alice Smith',
+    })
+    expect(summary).toMatchObject({ published: 1, errors: [] })
+    expect(h.createNotifications).toHaveBeenCalledTimes(1)
+    error.mockRestore()
   })
 })

@@ -23,6 +23,10 @@ import { useTagWarningToast } from './tagging'
 import type { TagIssue } from '@/lib/marketing/tagging/checks'
 import { clientTagIssues } from '@/lib/trpc/errors'
 import { ManualPostView } from '@/components/admin/social/ManualPostView'
+import {
+  manualBodyFor,
+  useFreshManualCheck,
+} from '@/components/admin/social/useFreshManualCheck'
 import { mayAlreadyBeLive } from '@/lib/social/state-machine'
 import { taggedUrl } from '@/lib/marketing/link'
 import { sitePathIssue, type PagePickerOption } from '@/lib/marketing/pages'
@@ -66,8 +70,9 @@ export function TaskEditorPage({ taskId }: { taskId: string }) {
     { taskId },
     { refetchOnWindowFocus: false },
   )
+  const data = query.data
 
-  if (query.error && !query.data) {
+  if (query.error && !data) {
     return (
       <div className="space-y-4">
         <BackToPlan />
@@ -81,7 +86,7 @@ export function TaskEditorPage({ taskId }: { taskId: string }) {
       </div>
     )
   }
-  if (!query.data) {
+  if (!data) {
     return (
       <div className="space-y-4">
         <BackToPlan />
@@ -93,8 +98,8 @@ export function TaskEditorPage({ taskId }: { taskId: string }) {
   // must not remount the page and drop an unsaved post body.
   return (
     <LoadedTaskEditor
-      key={query.data.task._id}
-      data={query.data}
+      key={data.task._id}
+      data={data}
       refreshing={query.isFetching}
       refreshFailed={Boolean(query.error)}
     />
@@ -684,6 +689,26 @@ function PublishingSection({
     onError: (err) => setManualError(err.message),
   })
 
+  // A Bluesky post to be posted by hand runs its tag check for THIS opening
+  // of the page (tagging spec §4.4, review T4 and round 3) — never from the
+  // Task read's cache, nor from a check an earlier visit left in flight.
+  const byHand =
+    variant?.variant.status === 'awaiting-manual' &&
+    variant.variant.platform === 'bluesky'
+  const check = useFreshManualCheck(byHand ? variant.variant._id : null)
+  // FAIL CLOSED (final round, T2): the text is offered only when the fresh
+  // answer is still this manual post with a checked body. When the post has
+  // moved on since the Task was read (a colleague marked it posted), nothing
+  // is offered and the Task is read again.
+  const fresh = byHand ? manualBodyFor(check, 'awaiting-manual') : null
+  const manualBody = fresh ? fresh.manualBody : null
+  const moved = fresh?.moved === true
+  useEffect(() => {
+    if (moved) onChanged()
+    // Once per detected move; `onChanged` re-reads the Task.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [moved])
+
   if (!variant) {
     return (
       <Panel title="Post">
@@ -705,6 +730,8 @@ function PublishingSection({
           conferenceDomains={variant.conferenceDomains}
           platformZone={variant.platformZone ?? null}
           tagByHand={tagByHand}
+          manualBody={manualBody}
+          onRetryCheck={() => void check.refetch()}
           saving={markPosted.isPending}
           error={manualError}
           onMarkPosted={(url) => {

@@ -221,8 +221,11 @@ describe('migration 054', () => {
       expect(froms.has(`${r.key}|${r.skeleton}`), r.key).toBe(true)
   })
 
-  it('writes exactly what the live built-in says while it is 2026.3', () => {
-    expect(BUILTIN_TEMPLATE_VERSION).toBe('2026.3')
+  it('writes exactly what the live built-in says (2026.3, and 2026.4 which only adds tagSubject)', () => {
+    // A tripwire: bumping the Template means re-checking that the frozen
+    // `to` texts are still the live skeletons. 2026.4 (#1152) switched
+    // `tagSubject` on and changed no skeleton text.
+    expect(BUILTIN_TEMPLATE_VERSION).toBe('2026.4')
     const live = new Map(
       BUILTIN_TEMPLATE.campaigns
         .flatMap((c) => c.recipes)

@@ -117,7 +117,7 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
     )
   }
 
-  const lastUpdated = 'September 26, 2026'
+  const lastUpdated = 'September 27, 2026'
   const legal = await resolveLegalConfig(conference)
   const contactEmail = legal.contactEmail
   // EMPTY when no legal entity could be resolved. `legal.controllerResolved`
@@ -718,20 +718,15 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                           </h4>
                           <ul className="space-y-1 text-sm text-violet-700 dark:text-violet-300">
                             <li>
-                              • <strong>We are not tagging anyone yet.</strong>{' '}
-                              This describes what we are preparing to do, so you
-                              can tell us now if you would rather we did not
-                            </li>
-                            <li>
                               • We promote the programme on our social media
                               channels, including posts about a speaker and
                               their talk
                             </li>
                             <li>
-                              • Once it is switched on, such a post{' '}
-                              <strong>may tag</strong> (@-mention) the social
-                              accounts you listed on your speaker profile, so it
-                              reaches your followers and you can reshare it
+                              • Such a post <strong>may tag</strong> (@-mention)
+                              the social accounts you listed on your speaker
+                              profile, so it reaches your followers and you can
+                              reshare it
                             </li>
                             <li>
                               • We only ever tag accounts you gave us yourself.
@@ -760,10 +755,15 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                               name out in plain text instead
                             </li>
                             <li>
-                              • Your choice is recorded now and will be honoured
-                              from the very first tagged post &mdash; it takes
-                              effect for every post not yet published, including
-                              ones already written and scheduled
+                              • Your choice takes effect for posts not yet
+                              published, including ones already written and
+                              scheduled. A post we publish automatically is
+                              checked at the moment it goes out, and a tag of
+                              you is replaced by your plain name. A post an
+                              organizer publishes by hand is checked when they
+                              open it to post, so text they copied before you
+                              ticked the box can still tag you &mdash; tell us
+                              and we will correct or remove that post
                             </li>
                             <li>
                               • Posts already published are not changed. Ask us
@@ -778,17 +778,14 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                       </div>
                       <div className="mt-3 rounded-lg bg-violet-100 p-2 dark:bg-violet-800/30">
                         <p className="text-xs text-violet-800 dark:text-violet-200">
-                          <strong>Status:</strong> Tagging is not live. No post
-                          tags anyone yet. This preference is already checked
-                          when a post is written. <strong>Legal Basis:</strong>{' '}
-                          Legitimate interest in promoting the conference and
-                          its programme. The accounts we tag are the links you
-                          gave us for your public speaker profile and for
-                          promotional material, and tagging is a use of those
-                          same links. Because it is a more visible use than
-                          displaying them, you can object to it on its own with
-                          the checkbox above, without changing anything else
-                          about your profile.
+                          <strong>Legal Basis:</strong> Legitimate interest in
+                          promoting the conference and its programme. The
+                          accounts we tag are the links you gave us for your
+                          public speaker profile and for promotional material,
+                          and tagging is a use of those same links. Because it
+                          is a more visible use than displaying them, you can
+                          object to it on its own with the checkbox above,
+                          without changing anything else about your profile.
                         </p>
                       </div>
                     </div>

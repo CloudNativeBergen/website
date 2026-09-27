@@ -622,16 +622,16 @@ export function SpeakerDetailsForm({
                   disabled={socialTagLocked || socialTagSaveState === 'saving'}
                 >
                   <HelpText>
-                    We promote the programme on social media, and we are
-                    preparing to <strong>tag (@-mention)</strong> the accounts
-                    you list above in posts about you or your talk &mdash; you
-                    gave us those links for your public profile and for
-                    promotion, and a tag puts the post in your followers&rsquo;
-                    feeds so you can reshare it.{' '}
-                    <strong>We are not tagging anyone yet.</strong> Tick this
-                    box and we never will: your name is written out in plain
-                    text instead, in every post not yet published. It changes
-                    nothing else about your profile.
+                    We promote the programme on social media, and a post about
+                    you or your talk may <strong>tag (@-mention)</strong> the
+                    accounts you list above &mdash; you gave us those links for
+                    your public profile and for promotion, and a tag puts the
+                    post in your followers&rsquo; feeds so you can reshare it.
+                    Tick this box and we will not: your name is written out in
+                    plain text instead in posts not yet published, including
+                    ones already scheduled (the privacy policy explains the one
+                    exception, posts we publish by hand). It changes nothing
+                    else about your profile.
                   </HelpText>
                   {socialTagLocked && (
                     <HelpText>
@@ -656,7 +656,7 @@ export function SpeakerDetailsForm({
                         <HelpText>
                           {socialTagSaveState === 'saving' && 'Saving…'}
                           {socialTagSaveState === 'saved' &&
-                            'Saved. This applies to every post not yet published.'}
+                            'Saved. This applies to posts not yet published; a post we publish by hand is checked when we open it to post.'}
                           {socialTagSaveState === 'error' && (
                             <span className="text-red-600 dark:text-red-400">
                               Could not save that just now &mdash; nothing

@@ -42,9 +42,10 @@ import type {
  *    is terminal for the state machine, so the organizer fixes the password
  *    rather than the cron burning the daily budget.
  *  - Facets come from the library's detection (UTF-8 byte offsets, never
- *    hand-computed). A recorded mention is tagged with its recorded DID and
- *    never resolved again; any other handle is resolved as `detectFacets`
- *    would (see `tagMentions`). Bluesky does not unfurl, so the link card
+ *    hand-computed). ONLY a recorded mention is tagged, with its recorded
+ *    DID and never resolved again; any other detected handle is posted as
+ *    plain text (see `tagMentions`). Links and hashtags are kept as
+ *    detected. Bluesky does not unfurl, so the link card
  *    is built by us from our own page's metadata, with the tagged link as
  *    its `uri`.
  *  - Typed outcomes are the API. Everything BEFORE `createRecord` fires is a
@@ -289,7 +290,7 @@ export class BlueskyPublishAdapter implements SocialPublishAdapter {
   ): Promise<AppBskyFeedPost.Record> {
     const richText = new RichText({ text: input.text })
     richText.detectFacetsWithoutResolution()
-    await tagMentions(agent, richText.facets, input.mentions ?? [])
+    tagMentions(richText.facets, input.mentions ?? [])
     const facets = resolvedFacets(richText.facets)
 
     // The embed slot holds the card OR images (spec §4.1 wants the card
@@ -453,55 +454,36 @@ function hostnameOf(link: string): string {
 
 /**
  * Fills in the DID of every detected mention feature (whose `did` holds the
- * handle until then): the RECORDED DID when the handle was recorded (spec
- * §4.4 — the checked resolution is the one posted), otherwise a resolution
- * through the PDS. That second path mirrors `RichText.detectFacets`, which
- * cannot skip recorded handles: concurrent, `''` on any failure (dropped by
- * `resolvedFacets`); unlike it, the handle is sent normalised. A recorded
- * entry without a DID was never checked and counts as unrecorded. A recorded
- * DID that is not a DID is posted as plain text: resolving the handle again
- * would post an unchecked DID, and one bad tag must not block the post.
+ * handle until then) from the RECORDED mentions only (spec §4.4 — the checked
+ * resolution is the one posted). Everything else the library detects as a
+ * mention — a job title "SRE @acme.io", a handle typed past every check — is
+ * posted as plain text: its DID is left `''` and `resolvedFacets` drops the
+ * feature. Nothing is resolved here (user decision, #1152). A recorded entry
+ * without a DID was never checked, and a recorded DID that is not a DID is
+ * posted as plain text too: one bad tag must not block the post.
  */
-async function tagMentions(
-  agent: Agent,
+function tagMentions(
   facets: AppBskyRichtextFacet.Main[] | undefined,
   mentions: readonly PublishMention[],
-): Promise<void> {
+): void {
   const recorded = new Map(
     mentions
       .filter((m) => m.did)
       .map((m) => [normaliseHandle(m.handle), m.did] as const),
   )
-  const resolutions: Promise<void>[] = []
   for (const facet of facets ?? []) {
     for (const feature of facet.features) {
       if (!AppBskyRichtextFacet.isMention(feature)) continue
       const handle = normaliseHandle(feature.did)
       const did = recorded.get(handle)
-      if (did !== undefined) {
-        if (isValidDid(did)) {
-          feature.did = did
-        } else {
-          console.warn(
-            `Bluesky: recorded DID for @${handle} is malformed; posting it untagged`,
-          )
-          feature.did = ''
-        }
-        continue
+      if (did !== undefined && !isValidDid(did)) {
+        console.warn(
+          `Bluesky: recorded DID for @${handle} is malformed; posting it untagged`,
+        )
       }
-      resolutions.push(
-        agent.com.atproto.identity.resolveHandle({ handle }).then(
-          (res) => {
-            feature.did = res.data.did || ''
-          },
-          () => {
-            feature.did = ''
-          },
-        ),
-      )
+      feature.did = did !== undefined && isValidDid(did) ? did : ''
     }
   }
-  await Promise.all(resolutions)
 }
 
 /**

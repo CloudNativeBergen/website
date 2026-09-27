@@ -365,6 +365,159 @@ describe('findWork — the composed due/stale scan', () => {
     expect(h.queries).toHaveLength(1)
   })
 
+  it("folds each recorded tag's speaker opt-out into the SAME single read (tagging §4.4, Publish)", async () => {
+    h.dataset = [
+      conference('c1'),
+      { _id: 'alice', _type: 'speaker', name: 'Alice', socialTagOptOut: true },
+      { _id: 'bob', _type: 'speaker', name: 'Bob' },
+      // GDPR erasure unsets the opt-out and keeps the document (#1162).
+      { _id: 'erased', _type: 'speaker', name: '', erasedAt: '2026-09-01' },
+      variant('v1', 'c1', {
+        mentions: [
+          {
+            _key: 'a',
+            handle: 'alice.dev',
+            did: 'did:plc:alice',
+            speaker: { _type: 'reference', _ref: 'alice', _weak: true },
+            status: 'tagged',
+            name: 'Alice Smith',
+          },
+          // Saved while Bluesky was unreachable: no DID, still a tag to check.
+          {
+            _key: 'b',
+            handle: 'bob.dev',
+            speaker: { _type: 'reference', _ref: 'bob', _weak: true },
+            status: 'tagged',
+            name: 'Bob Jones',
+          },
+          // A note, not a tag: nothing to swap.
+          {
+            _key: 'c',
+            handle: 'carol.dev',
+            speaker: { _type: 'reference', _ref: 'alice', _weak: true },
+            status: 'unresolved',
+            name: 'Carol',
+          },
+          // A speaker since deleted: the weak reference dangles — gone.
+          {
+            _key: 'd',
+            handle: 'gone.dev',
+            did: 'did:plc:gone',
+            speaker: { _type: 'reference', _ref: 'gone', _weak: true },
+            status: 'tagged',
+            name: 'Gone',
+          },
+          // A speaker since erased: gone too, though the opt-out was unset.
+          {
+            _key: 'e',
+            handle: 'erased.dev',
+            did: 'did:plc:erased',
+            speaker: { _type: 'reference', _ref: 'erased', _weak: true },
+            status: 'tagged',
+            name: 'Erased',
+          },
+          // No speaker at all (a sponsor's, #1154): kept, posted, never withheld.
+          {
+            _key: 'f',
+            handle: 'acme.com',
+            did: 'did:plc:acme',
+            status: 'tagged',
+            name: 'Acme',
+          },
+        ],
+      }),
+      variant('v2', 'c1'),
+    ]
+    const work = await sanitySocialVariantStore.findWork(
+      NOW,
+      STALE_BEFORE,
+      BOUNDS,
+    )
+    expect(work.due.map((v) => [v._id, v.recordedTags])).toEqual([
+      [
+        'v1',
+        [
+          {
+            handle: 'alice.dev',
+            did: 'did:plc:alice',
+            name: 'Alice Smith',
+            speakerId: 'alice',
+            optedOut: true,
+          },
+          {
+            handle: 'bob.dev',
+            name: 'Bob Jones',
+            speakerId: 'bob',
+            optedOut: false,
+          },
+          {
+            handle: 'gone.dev',
+            did: 'did:plc:gone',
+            name: 'Gone',
+            speakerId: 'gone',
+            optedOut: false,
+            gone: true,
+          },
+          {
+            handle: 'erased.dev',
+            did: 'did:plc:erased',
+            name: 'Erased',
+            speakerId: 'erased',
+            optedOut: false,
+            gone: true,
+          },
+          {
+            handle: 'acme.com',
+            did: 'did:plc:acme',
+            name: 'Acme',
+            optedOut: false,
+          },
+        ],
+      ],
+      ['v2', []],
+    ])
+    // ONE read per tick, the opt-out included: every extra query a minute is
+    // ~43k live-API requests a month.
+    expect(h.queries).toHaveLength(1)
+  })
+
+  it('tagStates: re-reads the speakers right before a tagged publish — opted out, erased, deleted and off this programme all withhold (review T6, round 3 T3)', async () => {
+    const talk = (id: string, conf: string, speakers: string[]) => ({
+      _id: id,
+      _type: 'talk',
+      conference: { _ref: conf },
+      speakers: speakers.map((s) => ({ _type: 'reference', _ref: s })),
+    })
+    h.dataset = [
+      { _id: 'alice', _type: 'speaker', name: 'Alice', socialTagOptOut: true },
+      { _id: 'bob', _type: 'speaker', name: 'Bob' },
+      { _id: 'erased', _type: 'speaker', name: '', erasedAt: '2026-09-01' },
+      // A Studio draft of a deleted speaker is not the speaker.
+      { _id: 'drafts.gone', _type: 'speaker', name: 'Gone' },
+      // Taken off this programme: only a talk at ANOTHER conference, and a
+      // draft talk here, remain.
+      { _id: 'carol', _type: 'speaker', name: 'Carol' },
+      talk('t1', 'c1', ['alice', 'bob', 'erased']),
+      talk('t2', 'c2', ['carol']),
+      talk('drafts.t3', 'c1', ['carol']),
+    ]
+    const states = await sanitySocialVariantStore.tagStates('c1', [
+      'alice',
+      'bob',
+      'erased',
+      'gone',
+      'carol',
+    ])
+    expect(Object.fromEntries(states)).toEqual({
+      alice: { optedOut: true, gone: false },
+      bob: { optedOut: false, gone: false },
+      erased: { optedOut: false, gone: true },
+      gone: { optedOut: false, gone: true },
+      carol: { optedOut: false, gone: true },
+    })
+    expect(h.queries).toHaveLength(1)
+  })
+
   it('returns due variants grouped per conference, capped, oldest first, with orgId', async () => {
     h.dataset = [
       conference('c1'),

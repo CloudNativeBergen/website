@@ -1,6 +1,11 @@
 import type { NotificationInput } from '@/lib/notification/types'
-import type { VariantFailureEvent } from '@/lib/social/publish-engine'
+import type {
+  TagsWithheldEvent,
+  VariantFailureEvent,
+} from '@/lib/social/publish-engine'
 import { manualPostPath } from '@/lib/social/notify'
+import { joinNames } from '@/lib/marketing/tagging/body'
+import { GONE_SPEAKER_TEXT } from '@/lib/marketing/tagging/publish'
 
 export interface FailureTask {
   _id: string
@@ -60,4 +65,54 @@ export function standalonePublishFailureNotification(
       tag: `social-failure.${variant._id}.${attempt._key}`,
     },
   ]
+}
+
+/**
+ * A post that went out with a tag swapped out at publish (tagging spec §4.4,
+ * Publish): ONE notification per organizer of the organization, linking to
+ * the Task (or, for a standalone post, the post). The cron made the swap,
+ * but the opt-out that caused it is the speaker's own action: an organizer
+ * who is that speaker is left out, never told about their own choice
+ * (AGENTS.md "Actor exclusion", review T5).
+ *
+ * An opted-out speaker is named, with the handle that was not used. A
+ * speaker who is GONE (deleted or erased) is only counted: an erased
+ * person's name must not be repeated in a notification kept for 90 days.
+ */
+export function tagsWithheldNotifications(
+  organizerIds: readonly string[],
+  { variant, withheld }: TagsWithheldEvent,
+): NotificationInput[] {
+  const optedOut = withheld.flatMap((w) =>
+    w.reason === 'opted-out' ? [w] : [],
+  )
+  const gone = withheld.length - optedOut.length
+  const message = [
+    optedOut.length > 0
+      ? `${joinNames(optedOut.map((w) => w.name))} asked not to be tagged after the post was approved, so it went out with ${optedOut.length > 1 ? 'their names' : 'their name'} instead of ${optedOut.flatMap((w) => w.handles.map((h) => `@${h}`)).join(', ')}.`
+      : null,
+    gone === 1
+      ? `A tag of someone who is no longer a speaker here was replaced with “${GONE_SPEAKER_TEXT}”.`
+      : gone > 1
+        ? `${gone} tags of people who are no longer speakers here were replaced with “${GONE_SPEAKER_TEXT}”.`
+        : null,
+  ]
+    .filter(Boolean)
+    .join(' ')
+  const link = variant.marketingTaskId
+    ? `/admin/marketing/tasks/${encodeURIComponent(variant.marketingTaskId)}`
+    : manualPostPath(variant._id)
+  const actors = new Set(optedOut.map((w) => w.speakerId))
+  return [...new Set(organizerIds)]
+    .filter((id) => !actors.has(id))
+    .map((recipientId) => ({
+      recipientId,
+      conferenceId: variant.conferenceId,
+      notificationType: 'marketing_task_tag_withheld' as const,
+      title: 'Posted without a tag',
+      message,
+      link,
+      // One post is published once: its identity is the variant.
+      tag: `marketing-tag-withheld.${variant._id}`,
+    }))
 }

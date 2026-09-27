@@ -115,6 +115,13 @@ vi.mock('@/lib/social/schedule-check', async (importOriginal) => ({
 vi.mock('@/lib/speaker/sanity', () => ({
   getOrganizersByConference: h.getOrganizersByConference,
 }))
+const verify = vi.hoisted(() => ({
+  withManualBody: vi.fn(async (data: unknown) => data),
+}))
+vi.mock('@/lib/marketing/tagging/verify', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/marketing/tagging/verify')>()),
+  withManualBody: verify.withManualBody,
+}))
 
 import { MAY_BE_LIVE_REFUSAL } from '@/lib/marketing/deletion'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
@@ -333,6 +340,11 @@ describe('marketing.task.get', () => {
     )
     expect(data.pages.map((p) => p.path)).toContain('/tickets')
     expect(data.organizers).toEqual([{ _id: 'sp-1', name: 'Ada' }])
+  })
+
+  it('does not run the manual-view tag check: the page asks for its own, per opening (round 3)', async () => {
+    await marketing().task.get({ taskId: 'task-ours' })
+    expect(verify.withManualBody).not.toHaveBeenCalled()
   })
 
   it('refuses a Task of another conference BEFORE reading it', async () => {

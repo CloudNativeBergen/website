@@ -603,3 +603,175 @@ export const TagByHandIgnoredOffLinkedIn: Story = {
     await expect(canvas.queryByText(/^tag by hand$/i)).toBeNull()
   },
 }
+
+/**
+ * A Bluesky post handed over to be posted by hand, whose speaker opted out
+ * of tags AFTER it was approved (tagging spec §4.4). The server ran the
+ * approval check as the view opened; the text to copy names her plainly,
+ * and the view says why it differs from what was approved.
+ */
+const LATE_OPT_OUT_BODY =
+  '🎙️ @alice.dev and @bob.dev are speaking at Cloud Native Bergen 2027.'
+export const BlueskyLateOptOut: Story = {
+  args: {
+    variant: {
+      ...variant,
+      platform: 'bluesky',
+      body: LATE_OPT_OUT_BODY,
+      attachments: [],
+    },
+    manualBody: {
+      body: '🎙️ Alice Smith and @bob.dev are speaking at Cloud Native Bergen 2027.',
+      untagged: ['Alice Smith'],
+      removed: 0,
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const text = canvas
+      .getByRole('button', { name: /copy text/i })
+      .closest('section')
+    await expect(text).toHaveTextContent('🎙️ Alice Smith and @bob.dev')
+    await expect(text).not.toHaveTextContent('@alice.dev')
+    await expect(
+      canvas.getByText(/Alice Smith is named in plain text/),
+    ).toBeInTheDocument()
+  },
+}
+
+export const BlueskyLateOptOutDark: Story = {
+  ...BlueskyLateOptOut,
+  // This file resolves dark through its OWN decorator's `parameters.theme`.
+  parameters: { theme: 'dark', backgrounds: { default: 'dark' } },
+}
+
+export const BlueskyLateOptOutMobile: Story = {
+  ...BlueskyLateOptOut,
+  parameters: { layout: 'fullscreen', viewport: { defaultViewport: 'phone' } },
+}
+
+/**
+ * A speaker erased since approval: neither the tag nor the recorded name
+ * (the erased person's real name) is shown — a neutral word stands in.
+ */
+export const BlueskyErasedSpeaker: Story = {
+  args: {
+    ...BlueskyLateOptOut.args,
+    manualBody: {
+      body: '🎙️ a speaker and @bob.dev are speaking at Cloud Native Bergen 2027.',
+      untagged: [],
+      removed: 1,
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const text = canvas
+      .getByRole('button', { name: /copy text/i })
+      .closest('section')
+    await expect(text).toHaveTextContent('🎙️ a speaker and @bob.dev')
+    await expect(canvasElement).not.toHaveTextContent('Alice')
+    await expect(
+      canvas.getByText(/no longer a speaker here/),
+    ).toBeInTheDocument()
+  },
+}
+
+export const BlueskyErasedSpeakerDark: Story = {
+  ...BlueskyErasedSpeaker,
+  // This file resolves dark through its OWN decorator's `parameters.theme`
+  // (not `globals`), so that is the one to set.
+  parameters: { theme: 'dark', backgrounds: { default: 'dark' } },
+}
+
+/**
+ * The check could not run as the view opened (review T1): FAIL CLOSED. The
+ * stored body may tag a speaker who opted out since approval, so there is
+ * no text to copy — only the way to try again.
+ */
+export const BlueskyCheckUnavailable: Story = {
+  args: {
+    ...BlueskyLateOptOut.args,
+    manualBody: { unavailable: true },
+    onRetryCheck: fn(),
+  },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement)
+    await expect(
+      canvas.queryByRole('button', { name: /copy text/i }),
+    ).not.toBeInTheDocument()
+    await expect(canvasElement).not.toHaveTextContent('@alice.dev')
+    await expect(canvas.getByRole('alert')).toHaveTextContent(
+      /could not check/i,
+    )
+    // Round 4, T2: retried in place — the Task page has no dialog to close.
+    await userEvent.click(canvas.getByRole('button', { name: /check again/i }))
+    await expect(args.onRetryCheck).toHaveBeenCalledTimes(1)
+  },
+}
+
+export const BlueskyCheckUnavailableDark: Story = {
+  ...BlueskyCheckUnavailable,
+  // This file resolves dark through its OWN decorator's `parameters.theme`.
+  parameters: { theme: 'dark', backgrounds: { default: 'dark' } },
+}
+
+/**
+ * This opening's tag check is still running (review T4): the cached answer
+ * may predate an opt-out, so there is nothing to copy yet.
+ */
+export const BlueskyCheckPending: Story = {
+  args: { ...BlueskyLateOptOut.args, manualBody: { checking: true } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(canvas.getByRole('status')).toHaveTextContent(/checking/i)
+    await expect(
+      canvas.queryByRole('button', { name: /copy text/i }),
+    ).not.toBeInTheDocument()
+    await expect(canvasElement).not.toHaveTextContent('@alice.dev')
+  },
+}
+
+/**
+ * The checked body can come back longer than what was approved (a speaker's
+ * current name, round 2 T5). Under 300 characters but over Bluesky's
+ * 3,000-byte cap, it must still say "shorten" — Bluesky would refuse it.
+ */
+const FAMILY = '👨‍👩‍👧‍👦' // one grapheme, 25 bytes
+export const BlueskyOverByteCap: Story = {
+  args: {
+    ...BlueskyLateOptOut.args,
+    manualBody: {
+      body: `${FAMILY.repeat(121)} Alice Smith`,
+      untagged: ['Alice Smith'],
+      removed: 0,
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const text = canvas
+      .getByRole('button', { name: /copy text/i })
+      .closest('section')
+    await expect(text).toHaveTextContent('Shorten the text before posting.')
+    await expect(text).toHaveTextContent(/bytes/)
+  },
+}
+
+/** Once posted, the record is shown as it is: no check, no notice. */
+export const BlueskyLateOptOutPosted: Story = {
+  args: {
+    ...BlueskyLateOptOut.args,
+    variant: {
+      ...variant,
+      platform: 'bluesky',
+      body: LATE_OPT_OUT_BODY,
+      attachments: [],
+      status: 'published',
+      publishResult: { url: 'https://bsky.app/profile/x/post/1' },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    await expect(
+      within(canvasElement).queryByText(/named in plain text/),
+    ).not.toBeInTheDocument()
+  },
+}

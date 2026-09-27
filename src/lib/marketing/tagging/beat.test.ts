@@ -17,8 +17,11 @@ const builtin = beatRecipes(speakers, 'speakerCard')
 
 // On EVERY recipe of the beat, LinkedIn too: a flag a Studio edit put on the
 // wrong sibling must still never put a handle into LinkedIn copy.
+// The built-in Bluesky sibling tags as it ships (#1152); off takes it away.
 const recipes = (tagSubject: boolean) =>
-  builtin.map((r) => (tagSubject ? { ...r, tagSubject: true } : r))
+  builtin.map((r) =>
+    tagSubject ? { ...r, tagSubject: true } : { ...r, tagSubject: undefined },
+  )
 
 function build(opts: {
   tagSubject: boolean

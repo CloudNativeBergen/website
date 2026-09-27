@@ -28,6 +28,8 @@ const mocks = vi.hoisted(() => ({
   update: vi.fn(),
   send: vi.fn(),
   query: vi.fn(),
+  editorQuery: vi.fn(() => ({ data: undefined, error: null })),
+  fetchEditor: vi.fn(),
 }))
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }))
 vi.mock('@/components/admin/NotificationProvider', () => ({
@@ -74,6 +76,7 @@ vi.mock('@/lib/trpc/client', () => {
         },
       },
       social: {
+        getVariantEditor: { useQuery: mocks.editorQuery },
         unscheduleVariant: mutation,
         scheduleVariant: mutation,
         markPosted: mutation,
@@ -709,5 +712,167 @@ describe('Task editor handoff recovery', () => {
         .getByRole('link', { name: 'Retry image handoff: Render the CFP card' })
         .getAttribute('href'),
     ).toBe('/admin/marketing/tasks/render-1')
+  })
+})
+
+describe('Task editor manual post view — a fresh check on every opening (review T4, round 3)', () => {
+  const TAGGED = 'Hello @alice.dev'
+  const PLAIN = 'Hello Alice Smith'
+  const variant = {
+    _id: 'v-1',
+    _rev: 'r1',
+    postId: 'p-1',
+    conferenceId: 'c-1',
+    orgId: 'o-1',
+    platform: 'bluesky' as const,
+    body: TAGGED,
+    status: 'awaiting-manual' as const,
+    scheduledAt: null,
+    usesCustomTime: false,
+    claimedAt: null,
+    submission: null,
+    shortCode: null,
+    link: null,
+    attachments: [],
+    publishResult: null,
+    attempts: [],
+    attemptCount: 0,
+  }
+  const editorRead = { post: { attachments: [], defaultScheduledAt: null } }
+  function manualTask(): TaskEditorData {
+    const data = pendingData()
+    return {
+      ...data,
+      task: {
+        ...data.task,
+        _id: 'post-1',
+        kind: 'publishing',
+        channel: 'bluesky',
+        variantId: 'v-1',
+        complete: false,
+        handoffPending: false,
+        assetUrl: null,
+        assetId: null,
+      },
+      variant: { variant, ...editorRead, conferenceDomains: [] },
+    }
+  }
+  // As the server answers since round 5: always a checked body — the stored
+  // one when nothing changed (null here), or the rewritten one.
+  const check = (manualBody: string | null) => ({
+    variant,
+    ...editorRead,
+    conferenceDomains: [],
+    manualBody: manualBody
+      ? { body: manualBody, untagged: ['Alice Smith'], removed: 0 }
+      : { body: TAGGED, untagged: [], removed: 0 },
+  })
+
+  function setup() {
+    // The app's default: data stays fresh for 60 s.
+    const client = new QueryClient({
+      defaultOptions: { queries: { staleTime: 60 * 1000, retry: false } },
+    })
+    mocks.data = manualTask()
+    mocks.editorQuery.mockImplementation(function useEditorQuery(
+      input: unknown,
+      options: object,
+    ) {
+      return useQuery({
+        queryKey: ['social.getVariantEditor', input],
+        queryFn: () => mocks.fetchEditor(input),
+        ...options,
+      })
+    } as never)
+    mocks.fetchEditor.mockReset()
+    return () => (
+      <QueryClientProvider client={client}>
+        <TaskEditorPage taskId="post-1" />
+      </QueryClientProvider>
+    )
+  }
+
+  it('reopening the page within the 60 s cache never shows the body checked for an earlier opening', async () => {
+    const page = setup()
+    mocks.fetchEditor.mockResolvedValueOnce(check(null))
+    const first = render(page())
+    expect(await screen.findByText(TAGGED)).toBeTruthy()
+    first.unmount()
+
+    // Alice opts out; the organizer comes back to the Task.
+    let answer: (data: unknown) => void = () => {}
+    mocks.fetchEditor.mockImplementationOnce(
+      () => new Promise((resolve) => (answer = resolve)),
+    )
+    render(page())
+    await waitFor(() => expect(mocks.fetchEditor).toHaveBeenCalledTimes(2))
+    expect(screen.queryByText(TAGGED)).toBeNull()
+    expect(screen.queryByRole('button', { name: /copy text/i })).toBeNull()
+
+    await act(async () => answer(check(PLAIN)))
+    expect(await screen.findByText(PLAIN)).toBeTruthy()
+    expect(screen.queryByText(TAGGED)).toBeNull()
+  })
+
+  it('reopening while the earlier visit is still checking asks again, and never shows that earlier answer (round 3, T5)', async () => {
+    const page = setup()
+    let first: (data: unknown) => void = () => {}
+    let second: (data: unknown) => void = () => {}
+    mocks.fetchEditor
+      .mockImplementationOnce(() => new Promise((r) => (first = r)))
+      .mockImplementationOnce(() => new Promise((r) => (second = r)))
+    const visit = render(page())
+    await waitFor(() => expect(mocks.fetchEditor).toHaveBeenCalledTimes(1))
+    visit.unmount()
+    render(page())
+    await waitFor(() => expect(mocks.fetchEditor).toHaveBeenCalledTimes(2))
+
+    await act(async () => first(check(null)))
+    expect(screen.queryByText(TAGGED)).toBeNull()
+    expect(screen.queryByRole('button', { name: /copy text/i })).toBeNull()
+
+    await act(async () => second(check(PLAIN)))
+    expect(await screen.findByText(PLAIN)).toBeTruthy()
+  })
+
+  it('a check that could not run can be retried in place: the page has no dialog to close (round 4, T2)', async () => {
+    const page = setup()
+    mocks.fetchEditor
+      .mockResolvedValueOnce({
+        ...check(null),
+        manualBody: { unavailable: true },
+      })
+      .mockResolvedValueOnce(check(PLAIN))
+    render(page())
+    fireEvent.click(await screen.findByRole('button', { name: /check again/i }))
+    expect(await screen.findByText(PLAIN)).toBeTruthy()
+    expect(mocks.fetchEditor).toHaveBeenCalledTimes(2)
+  })
+
+  it('the fresh check says the post went out meanwhile: no copy, no post steps, and the Task is re-read (final round, T2)', async () => {
+    const page = setup()
+    mocks.fetchEditor.mockResolvedValueOnce({
+      ...check(null),
+      variant: {
+        ...variant,
+        status: 'published',
+        publishResult: { url: 'https://bsky.app/profile/x/post/1' },
+      },
+    })
+    render(page())
+    await waitFor(() => expect(mocks.invalidate).toHaveBeenCalled())
+    // The stale awaiting-manual view must not offer the text to post again.
+    expect(screen.queryByRole('button', { name: /copy text/i })).toBeNull()
+    expect(screen.queryByText(TAGGED)).toBeNull()
+  })
+
+  it('a manual Bluesky answer without a checked body fails closed (final round, T2 sibling)', async () => {
+    const page = setup()
+    const { manualBody: _dropped, ...unchecked } = check(null)
+    void _dropped
+    mocks.fetchEditor.mockResolvedValueOnce(unchecked)
+    render(page())
+    expect(await screen.findByText(/could not check this post/i)).toBeTruthy()
+    expect(screen.queryByText(TAGGED)).toBeNull()
   })
 })

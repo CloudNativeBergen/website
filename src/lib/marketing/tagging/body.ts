@@ -15,6 +15,16 @@ import { resolvePlaceholders, type Placeholder } from '../placeholders'
 import { storedKey } from '../recipes'
 import type { TaskRecipe } from '../template/types'
 
+/**
+ * What stands in for a speaker who is GONE — deleted, or erased (#1162). Not
+ * their name: erasure never touches the variant, so the name stored on the
+ * record is an erased person's real name, and it must never be posted or
+ * repeated in a notification (GDPR). The save and approval length
+ * checks bound it like a name. A neutral word keeps the sentence
+ * readable ("a speaker and @bob.dev are speaking").
+ */
+export const GONE_SPEAKER_TEXT = 'a speaker'
+
 /** Bluesky's limit (`PLATFORM_CONSTRAINTS.bluesky.maxLength`). */
 export const BLUESKY_MAX_GRAPHEMES = 300
 
@@ -140,15 +150,21 @@ export function tagBlueskyBody(input: {
   // Every form must fit (§4.4), not just all-tagged and all-plain: at
   // publish only an opted-out speaker's tag goes back to the name, so ANY
   // subset may be swapped. Per bound, the longest form takes each tag in
-  // its longer form — max(handle, name) in that bound's unit.
+  // its longer form in that bound's unit: the handle or the name (an
+  // opt-out). NOT the neutral word for a speaker gone by publish: dropping a
+  // tag for it would drop its RECORD, the only thing through which a later
+  // erasure can neutralise the name. The save and approval checks bound it
+  // instead and refuse the body until it is shortened (final round, T3).
+  const worst = (p: TagPerson, b: LengthBound) =>
+    [handleOf(p), p.name].reduce((x, y) => (b.length(y) > b.length(x) ? y : x))
   const tagIsLonger = (p: TagPerson, b: LengthBound) =>
-    b.length(handleOf(p)) > b.length(p.name)
+    b.length(worst(p, b)) > b.length(p.name)
   const overBounds = (tagged: ReadonlySet<TagPerson>) =>
     LENGTH_BOUNDS.filter(
       (b) =>
         b.length(
           render((p) =>
-            tagged.has(p) && tagIsLonger(p, b) ? handleOf(p) : p.name,
+            tagged.has(p) && tagIsLonger(p, b) ? worst(p, b) : p.name,
           ),
         ) > b.max,
     )

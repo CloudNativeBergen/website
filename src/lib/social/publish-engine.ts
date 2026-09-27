@@ -24,6 +24,11 @@ import type { PublishableVariant, SocialVariantStore } from './store'
 import { publishLinkFields } from './publish-link'
 import type { ConfirmCheck } from './provider/types'
 import type { PublishAttempt, SocialPostVariant } from './types'
+import {
+  withholdOptedOutTags,
+  type WithheldTag,
+  type WithheldTags,
+} from '@/lib/marketing/tagging/publish'
 
 /**
  * Which adapter publishes a variant, or `null` when the variant is MANUAL —
@@ -37,6 +42,15 @@ export type AdapterResolver = (
 export interface VariantFailureEvent {
   variant: SocialPostVariant
   attempt: PublishAttempt
+}
+
+/**
+ * A post that went out with a late opt-out's tag swapped for the plain name
+ * (tagging spec §4.4, Publish). `variant.body` is the text as APPROVED.
+ */
+export interface TagsWithheldEvent {
+  variant: PublishableVariant
+  withheld: WithheldTag[]
 }
 
 export interface PublishTickOptions {
@@ -83,6 +97,12 @@ export interface PublishTickOptions {
    * touches the variants.
    */
   onAwaitingManual?: (variants: PublishableVariant[]) => Promise<unknown>
+  /**
+   * Runs after the transition that records a swapped post LANDED — never on a
+   * lost race. A throw is logged in `errors` and never touches the variant:
+   * the post is out, and a notification must not undo it.
+   */
+  onTagsWithheld?: (event: TagsWithheldEvent) => Promise<unknown>
 }
 
 export interface PublishTickSummary {
@@ -123,19 +143,25 @@ export interface PublishTickSummary {
 export const ADAPTER_RESOLUTION_TIMEOUT_MS = 5_000
 /**
  * Time one dispatch may need from claim to settle: adapter resolution
- * (≤ {@link ADAPTER_RESOLUTION_TIMEOUT_MS}) + the adapter's publish budget
+ * (≤ {@link ADAPTER_RESOLUTION_TIMEOUT_MS}) + a tagged variant's speaker
+ * re-read (≤ {@link TAG_RECHECK_TIMEOUT_MS}) + the adapter's publish budget
  * (Bluesky: 30 s) + a margin for the settle write. The cron route's
  * `maxDuration` minus its own margin must exceed it, or nothing is ever
  * claimed.
  */
-export const PUBLISH_RESERVE_MS = 40_000
+export const PUBLISH_RESERVE_MS = 43_000
 /**
  * Re-checked AFTER the claim and adapter resolution, right before the
  * platform is contacted: the claim write itself is unbounded I/O, and a
  * slow one must release the claim rather than start a publish the function
- * cannot see through. Adapter budget + settle margin.
+ * cannot see through. Speaker re-read + adapter budget + settle margin.
  */
-export const PUBLISH_START_RESERVE_MS = 35_000
+export const PUBLISH_START_RESERVE_MS = 38_000
+/**
+ * The pre-publish re-read of a tagged variant's speakers (review T6). Short:
+ * it runs inside the publish reserve, and a stall is a safe transient.
+ */
+export const TAG_RECHECK_TIMEOUT_MS = 3_000
 
 /**
  * One confirm read's budget. Short by design: the sweep runs BEFORE dispatch
@@ -295,16 +321,16 @@ export async function runPublishTick(
       break
     }
     try {
-      const handedOver = await dispatch(
-        variant,
+      const handedOver = await dispatch(variant, {
         store,
-        boundedResolver,
+        resolveAdapter: boundedResolver,
         now,
         summary,
-        options.deadline,
-        options.onFailed,
+        deadline: options.deadline,
+        onFailed: options.onFailed,
         clock,
-      )
+        onTagsWithheld: options.onTagsWithheld,
+      })
       if (handedOver) awaitingManual.push(handedOver)
     } catch (error) {
       summary.errors.push(
@@ -582,15 +608,29 @@ async function settleConfirm(
  * Claim and dispatch one due variant. Returns the variant when this tick
  * handed it to an organizer (`awaiting-manual` landed), else `null`.
  */
+interface DispatchContext {
+  store: SocialVariantStore
+  resolveAdapter: AdapterResolver
+  now: Date
+  summary: PublishTickSummary
+  deadline?: Date
+  onFailed?: PublishTickOptions['onFailed']
+  clock: () => Date
+  onTagsWithheld?: PublishTickOptions['onTagsWithheld']
+}
+
 async function dispatch(
   variant: PublishableVariant,
-  store: SocialVariantStore,
-  resolveAdapter: AdapterResolver,
-  now: Date,
-  summary: PublishTickSummary,
-  deadline?: Date,
-  onFailed?: PublishTickOptions['onFailed'],
-  clock: () => Date = () => now,
+  {
+    store,
+    resolveAdapter,
+    now,
+    summary,
+    deadline,
+    onFailed,
+    clock,
+    onTagsWithheld,
+  }: DispatchContext,
 ): Promise<PublishableVariant | null> {
   const claimed = await store.claim(variant, now)
   if (!claimed) {
@@ -680,7 +720,52 @@ async function dispatch(
     return null
   }
 
-  const input = publishInputFor(claimed, adapter)
+  // A speaker who opted out after approval (tagging spec §4.4, Publish): their
+  // recorded tag goes out as their plain name, and the post still goes out.
+  // Their state is read AGAIN right before the external call (review T6): the
+  // tick's one read may be most of a minute old by the time this variant's
+  // turn comes. BEFORE the platform call, so a failed read is a safe
+  // transient — never a post that might tag someone who said no.
+  let recorded = claimed.recordedTags
+  const speakerIds = [
+    ...new Set(
+      (recorded ?? []).flatMap((t) => (t.speakerId ? [t.speakerId] : [])),
+    ),
+  ]
+  if (recorded && speakerIds.length > 0) {
+    try {
+      const current = await withTimeout(
+        store.tagStates(claimed.conferenceId, speakerIds),
+        TAG_RECHECK_TIMEOUT_MS,
+        `Tag re-check took longer than ${TAG_RECHECK_TIMEOUT_MS} ms`,
+      )
+      recorded = recorded.map((t) => {
+        const state = t.speakerId ? current.get(t.speakerId) : undefined
+        // The fresh state REPLACES the snapshot: an opt-out withdrawn since
+        // the tick's read is honoured as surely as one made (round 3, T2).
+        return state ? { ...t, optedOut: state.optedOut, gone: state.gone } : t
+      })
+    } catch (error) {
+      await settle(
+        claimed,
+        {
+          ok: false,
+          kind: 'transient',
+          message: `Could not re-check who may be tagged: ${error instanceof Error ? error.message : String(error)}`,
+        },
+        store,
+        now,
+        summary,
+        onFailed,
+      )
+      return null
+    }
+  }
+  const tags = recorded
+    ? withholdOptedOutTags({ body: claimed.body, recorded })
+    : null
+  const swapped = tags && tags.withheld.length > 0 ? tags : null
+  const input = publishInputFor(claimed, adapter, tags)
   const outcome = input.ok
     ? await attemptPublish(adapter, input.input, {
         conferenceDomains: claimed.conferenceDomains,
@@ -689,7 +774,17 @@ async function dispatch(
   // AFTER the publish, not the tick's start: this is when the vendor answered,
   // and `submittedAt` is what the confirm cadence and the 15-minute timeout
   // are measured from.
-  await settle(claimed, outcome, store, clock(), summary, onFailed)
+  await settle(claimed, outcome, store, clock(), summary, onFailed, {
+    sent: swapped?.body,
+    onSent: swapped
+      ? () =>
+          notifyTagsWithheld(
+            onTagsWithheld,
+            { variant: claimed, withheld: swapped.withheld },
+            summary,
+          )
+      : undefined,
+  })
   return null
 }
 
@@ -706,7 +801,15 @@ async function settle(
   now: Date,
   summary: PublishTickSummary,
   onFailed?: PublishTickOptions['onFailed'],
+  /**
+   * `sent`: the text posted when it is not the stored body — written by the
+   * SAME compare-and-set that records the post went out (tagging spec §4.4),
+   * so a lost race loses it too: the known hole. `onSent` runs only after
+   * that write landed.
+   */
+  posted: { sent?: string; onSent?: () => Promise<void> } = {},
 ) {
+  const sentBody = posted.sent !== undefined ? { body: posted.sent } : {}
   const attempt: PublishAttempt = {
     _key: randomUUID(),
     at: now.toISOString(),
@@ -731,6 +834,7 @@ async function settle(
             claimedAt: null,
             attemptCount,
             submission: decision.submission,
+            ...sentBody,
             attempt: { ...attempt, outcome: 'submitted' },
           },
           { ifRevision: claimed._rev },
@@ -751,6 +855,7 @@ async function settle(
       }
       if (landed) {
         summary.submitted++
+        await posted.onSent?.()
       } else {
         // The stale sweep won the race after the vendor accepted the post.
         // The document stays FAILED (never re-posted). The receipt is LOGGED
@@ -774,12 +879,14 @@ async function settle(
             attemptCount,
             submission: null,
             publishResult: decision.publishResult,
+            ...sentBody,
             attempt,
           },
           { ifRevision: claimed._rev },
         )
       ) {
         summary.published++
+        await posted.onSent?.()
       } else {
         // The stale sweep won the race after the platform accepted the post.
         // The verdict on the document stays FAILED (never re-posted); the
@@ -823,6 +930,11 @@ async function settle(
             claimedAt: null,
             submission: null,
             attemptCount,
+            // AMBIGUOUS: the post may be live with the swapped text. Keep that
+            // text as the record, so a later "mark as posted" never records
+            // a tag that was not sent (round 3, T6). Harmless if it was not
+            // sent: a retry swaps the same way.
+            ...(!outcome.ok && outcome.kind === 'ambiguous' ? sentBody : {}),
             attempt,
           },
           { ifRevision: claimed._rev },
@@ -834,6 +946,21 @@ async function settle(
         summary.settleLost++
       }
       return
+  }
+}
+
+async function notifyTagsWithheld(
+  hook: PublishTickOptions['onTagsWithheld'],
+  event: TagsWithheldEvent,
+  summary: PublishTickSummary,
+) {
+  if (!hook) return
+  try {
+    await hook(event)
+  } catch (error) {
+    summary.errors.push(
+      `tag-withheld notification (${event.variant._id}): ${error instanceof Error ? error.message : String(error)}`,
+    )
   }
 }
 
@@ -862,6 +989,7 @@ async function notifyFailure(
 function publishInputFor(
   variant: PublishableVariant,
   adapter: SocialPublishAdapter,
+  tags: WithheldTags | null = null,
 ): { ok: true; input: PublishInput } | { ok: false; outcome: PublishOutcome } {
   const media = resolvePublishMedia(
     variant.attachments,
@@ -880,10 +1008,13 @@ function publishInputFor(
         : `media: the post no longer has attachment ${missing.join(', ')}; edit the post and schedule again.`
     return { ok: false, outcome: { ok: false, kind: 'rejected', message } }
   }
+  // With the opt-outs read (`recordedTags`), only the DIDs `withholdOptedOutTags`
+  // kept; a store that read none posts the variant's recorded DIDs as they are.
+  const mentions = tags ? tags.mentions : (variant.mentions ?? [])
   return {
     ok: true,
     input: {
-      text: variant.body,
+      text: tags?.body ?? variant.body,
       media,
       // A Task's variant posts its `/go/<code>` short link and keeps the long
       // tagged link as the page its card is scraped from (short-links spec
@@ -891,7 +1022,7 @@ function publishInputFor(
       ...publishLinkFields(variant, variant.shortLinkOrigin),
       // The DIDs generation checked: the adapter posts these rather than
       // resolving the handles a second time (tagging spec §4.4, Publish).
-      ...(variant.mentions?.length ? { mentions: variant.mentions } : {}),
+      ...(mentions.length ? { mentions } : {}),
     },
   }
 }

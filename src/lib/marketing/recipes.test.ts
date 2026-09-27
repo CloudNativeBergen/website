@@ -29,8 +29,18 @@ describe('stored Recipes', () => {
     }
   })
 
-  it('built-in Recipes do not tag yet: the last ticket of the chain turns them on (#1152)', () => {
-    expect(all.filter((r) => r.tagSubject !== undefined)).toEqual([])
+  it('exactly the five built-in Bluesky Recipes about a person or a company tag their subject (tagging spec §2, #1152)', () => {
+    expect(
+      all
+        .filter((r) => r.tagSubject !== undefined)
+        .map((r) => [r.key, r.tagSubject]),
+    ).toEqual([
+      ['sponsorCard:bluesky', true],
+      ['keynoteCard:bluesky', true],
+      ['speakerCard:bluesky', true],
+      ['talkTeaser:bluesky', true],
+      ['videoDrip:bluesky', true],
+    ])
   })
 
   it('gives every Recipe of a Campaign a unique _key', () => {

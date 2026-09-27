@@ -21,6 +21,21 @@ const marketing = vi.hoisted(() => ({
   getTaskLinkInputs: vi.fn(async () => null),
 }))
 vi.mock('@/lib/marketing/sanity', () => marketing)
+const verify = vi.hoisted(() => ({
+  withManualBody: vi.fn(async <T>(data: T) => data),
+  manualPostBody: vi.fn(
+    async (): Promise<{
+      body: string
+      untagged: string[]
+      removed: number
+    } | null> => null,
+  ),
+}))
+vi.mock('@/lib/marketing/tagging/verify', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/marketing/tagging/verify')>()),
+  withManualBody: verify.withManualBody,
+  manualPostBody: verify.manualPostBody,
+}))
 vi.mock('next/cache', () => ({
   revalidateTag: vi.fn(),
   cacheLife: vi.fn(),
@@ -613,6 +628,53 @@ describe('social.markPosted', () => {
     )
   })
 
+  it('a Bluesky post marked posted by hand records the CHECKED text, in the same compare-and-set (final round, T5)', async () => {
+    h.getSocialPostVariant.mockResolvedValue(
+      variant({
+        platform: 'bluesky',
+        status: 'awaiting-manual',
+        body: 'Hello @alice.dev',
+      }),
+    )
+    verify.manualPostBody.mockResolvedValueOnce({
+      body: 'Hello Alice Smith',
+      untagged: ['Alice Smith'],
+      removed: 0,
+    })
+    await social().markPosted({
+      variantId: 'variant-ours',
+      url: 'https://bsky.app/profile/x/post/1',
+    })
+    expect(verify.manualPostBody).toHaveBeenCalledWith({
+      conferenceId: CONF_A,
+      variantId: 'variant-ours',
+      body: 'Hello @alice.dev',
+    })
+    expect(h.transition).toHaveBeenCalledWith(
+      'variant-ours',
+      expect.objectContaining({
+        status: 'published',
+        body: 'Hello Alice Smith',
+      }),
+      { ifRevision: 'rev-7' },
+    )
+  })
+
+  it('a check that cannot run never blocks recording a live post: the stored text is kept', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    h.getSocialPostVariant.mockResolvedValue(
+      variant({ platform: 'bluesky', status: 'awaiting-manual' }),
+    )
+    verify.manualPostBody.mockRejectedValueOnce(new Error('Sanity down'))
+    const result = await social().markPosted({
+      variantId: 'variant-ours',
+      url: 'https://bsky.app/profile/x/post/1',
+    })
+    expect(result.status).toBe('published')
+    expect(h.transition.mock.calls.at(-1)![1]).not.toHaveProperty('body')
+    error.mockRestore()
+  })
+
   it('supplies a MISSING address on a published variant (#1128)', async () => {
     // An asynchronous confirmation may name a post without a URL —
     // `ConfirmCheck.published` carries `url` optionally. The post is live, so
@@ -893,6 +955,32 @@ describe('social.getVariantEditor', () => {
     expect(result.variant._id).toBe('variant-ours')
     expect(result.post.attachments).toEqual([POST_IMAGE])
     expect(h.getSocialVariantEditorData).toHaveBeenCalledWith('variant-ours')
+  })
+
+  it('returns the body that passes the approval check, for a variant posted by hand (tagging §4.4)', async () => {
+    const manualBody = { body: 'Alice Smith speaks', untagged: ['Alice Smith'] }
+    verify.withManualBody.mockImplementationOnce(async (data: unknown) => ({
+      ...(data as object),
+      manualBody,
+    }))
+    const result = await social().getVariantEditor({
+      variantId: 'variant-ours',
+      opening: 'opening-1',
+    })
+    expect(result.manualBody).toEqual(manualBody)
+    // Checked against the conference the guard resolved.
+    expect(verify.withManualBody).toHaveBeenCalledWith(
+      expect.objectContaining({ post: expect.anything() }),
+      CONF_A,
+    )
+  })
+
+  it('the ordinary editor read (no `opening`) runs no tag check: only a manual view pays for it (round 4, T3)', async () => {
+    const result = await social().getVariantEditor({
+      variantId: 'variant-ours',
+    })
+    expect(result.variant._id).toBe('variant-ours')
+    expect(verify.withManualBody).not.toHaveBeenCalled()
   })
 
   it("refuses another conference's variant before reading it", async () => {

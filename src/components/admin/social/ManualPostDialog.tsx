@@ -7,6 +7,7 @@ import { useNotification } from '@/components/admin/NotificationProvider'
 import { SOCIAL_PLATFORM_LABELS } from '@/lib/social/types'
 import { api } from '@/lib/trpc/client'
 import { ManualPostView } from './ManualPostView'
+import { manualBodyFor, useFreshManualCheck } from './useFreshManualCheck'
 
 /**
  * The copy-ready view wired to `social.*` (#1006): loads the variant with
@@ -26,10 +27,8 @@ export function ManualPostDialog({
   const isOpen = variantId !== null
   const utils = api.useUtils()
   const { showNotification } = useNotification()
-  const editor = api.social.getVariantEditor.useQuery(
-    { variantId: variantId ?? '' },
-    { enabled: isOpen, refetchOnWindowFocus: false },
-  )
+  // Each opening runs its own tag check (review T4, round 3).
+  const editor = useFreshManualCheck(isOpen ? variantId : null)
   const [error, setError] = useState<string | null>(null)
   const data = editor.data
   const loaded = data && data.variant._id === variantId ? data : null
@@ -94,6 +93,10 @@ export function ManualPostDialog({
           postAttachments={loaded.post.attachments}
           conferenceDomains={loaded.conferenceDomains}
           platformZone={loaded.platformZone ?? null}
+          // FAIL CLOSED (final round, T2): checked text only (the helper
+          // shared with the Task page); a retry shows "Checking…".
+          manualBody={manualBodyFor(editor).manualBody}
+          onRetryCheck={() => void editor.refetch()}
           saving={
             markPosted.isPending &&
             markPosted.variables?.variantId === loaded.variant._id

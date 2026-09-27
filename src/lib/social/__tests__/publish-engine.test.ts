@@ -15,7 +15,7 @@ import type {
 } from '../provider/types'
 import { CONFIRM_TIMEOUT_MINUTES, STALE_CLAIM_MINUTES } from '../state-machine'
 import type { PublishableVariant } from '../store'
-import type { SocialPostVariant } from '../types'
+import type { RecordedTag, SocialPostVariant } from '../types'
 import { MemoryVariantStore, makeVariant } from './memory-store'
 
 const NOW = new Date('2026-09-13T10:00:00.000Z')
@@ -165,6 +165,293 @@ describe('runPublishTick — due scan and dispatch', () => {
       media: [],
       link: undefined,
       mentions,
+    })
+  })
+
+  describe('a late opt-out (tagging spec §4.4, Publish)', () => {
+    const tags = (optedOut: boolean): RecordedTag[] => [
+      {
+        handle: 'alice.dev',
+        did: 'did:plc:alice',
+        name: 'Alice Smith',
+        speakerId: 'speaker-alice',
+        optedOut,
+      },
+      {
+        handle: 'bob.dev',
+        did: 'did:plc:bob',
+        name: 'Bob Jones',
+        speakerId: 'speaker-bob',
+        optedOut: false,
+      },
+    ]
+    const tagged = () =>
+      makeVariant({
+        body: '@alice.dev and @bob.dev at the conf',
+        mentions: [
+          { handle: 'alice.dev', did: 'did:plc:alice' },
+          { handle: 'bob.dev', did: 'did:plc:bob' },
+        ],
+      })
+
+    it('posts the plain name with no mention for her, rewrites the stored body in the publishing transition, and reports it once', async () => {
+      const store = new MemoryVariantStore([tagged()])
+      store.tags['variant-1'] = tags(true)
+      const adapter = fakeAdapter({ ok: true, externalId: 'x', url: 'y' })
+      const onTagsWithheld = vi.fn(async () => {})
+
+      const summary = await runPublishTick({
+        store,
+        resolveAdapter: async () => adapter,
+        now: NOW,
+        onTagsWithheld,
+      })
+
+      expect(adapter.publish).toHaveBeenCalledWith({
+        text: 'Alice Smith and @bob.dev at the conf',
+        media: [],
+        link: undefined,
+        mentions: [{ handle: 'bob.dev', did: 'did:plc:bob' }],
+      })
+      const doc = store.get('variant-1')
+      expect(doc.status).toBe('published')
+      expect(doc.body).toBe('Alice Smith and @bob.dev at the conf')
+      // ONE write carried both: the published transition itself.
+      expect(store.writes).toEqual([
+        expect.objectContaining({ status: 'publishing' }),
+        expect.objectContaining({
+          status: 'published',
+          body: 'Alice Smith and @bob.dev at the conf',
+        }),
+      ])
+      expect(onTagsWithheld).toHaveBeenCalledTimes(1)
+      expect(onTagsWithheld).toHaveBeenCalledWith({
+        variant: expect.objectContaining({ _id: 'variant-1' }),
+        withheld: [
+          {
+            speakerId: 'speaker-alice',
+            name: 'Alice Smith',
+            handles: ['alice.dev'],
+            reason: 'opted-out',
+          },
+        ],
+      })
+      expect(summary).toMatchObject({ published: 1, errors: [] })
+    })
+
+    it('nobody opted out: the body is not rewritten and nobody is told', async () => {
+      const store = new MemoryVariantStore([tagged()])
+      store.tags['variant-1'] = tags(false)
+      const adapter = fakeAdapter({ ok: true, externalId: 'x', url: 'y' })
+      const onTagsWithheld = vi.fn(async () => {})
+
+      await runPublishTick({
+        store,
+        resolveAdapter: async () => adapter,
+        now: NOW,
+        onTagsWithheld,
+      })
+
+      expect(adapter.publish).toHaveBeenCalledWith(
+        expect.objectContaining({
+          text: '@alice.dev and @bob.dev at the conf',
+          mentions: [
+            { handle: 'alice.dev', did: 'did:plc:alice' },
+            { handle: 'bob.dev', did: 'did:plc:bob' },
+          ],
+        }),
+      )
+      expect(store.writes[1]).not.toHaveProperty('body')
+      expect(onTagsWithheld).not.toHaveBeenCalled()
+    })
+
+    it('a failing notification never fails the publish', async () => {
+      const store = new MemoryVariantStore([tagged()])
+      store.tags['variant-1'] = tags(true)
+      const adapter = fakeAdapter({ ok: true, externalId: 'x', url: 'y' })
+
+      const summary = await runPublishTick({
+        store,
+        resolveAdapter: async () => adapter,
+        now: NOW,
+        onTagsWithheld: async () => {
+          throw new Error('notification write failed')
+        },
+      })
+
+      expect(store.get('variant-1')).toMatchObject({
+        status: 'published',
+        body: 'Alice Smith and @bob.dev at the conf',
+      })
+      expect(summary.published).toBe(1)
+      expect(summary.errors).toEqual([
+        'tag-withheld notification (variant-1): notification write failed',
+      ])
+    })
+
+    it('a rejected post keeps its body (nothing was posted) and tells nobody', async () => {
+      const store = new MemoryVariantStore([tagged()])
+      store.tags['variant-1'] = tags(true)
+      const adapter = fakeAdapter({
+        ok: false,
+        kind: 'rejected',
+        message: 'no',
+      })
+      const onTagsWithheld = vi.fn(async () => {})
+
+      await runPublishTick({
+        store,
+        resolveAdapter: async () => adapter,
+        now: NOW,
+        onTagsWithheld,
+      })
+
+      expect(store.get('variant-1')).toMatchObject({
+        status: 'failed',
+        body: '@alice.dev and @bob.dev at the conf',
+      })
+      expect(onTagsWithheld).not.toHaveBeenCalled()
+    })
+
+    it('an opt-out landing AFTER the tick read but before this publish is still honoured: re-read just before the external call (review T6)', async () => {
+      const store = new MemoryVariantStore([tagged()])
+      store.tags['variant-1'] = tags(false)
+      // The opt-out reaches the database after `findWork`: a new value, not
+      // the snapshot the tick holds.
+      store.beforeClaim = () => {
+        store.speakers['speaker-alice'] = { optedOut: true }
+      }
+      const adapter = fakeAdapter({ ok: true, externalId: 'x', url: 'y' })
+
+      await runPublishTick({
+        store,
+        resolveAdapter: async () => adapter,
+        now: NOW,
+      })
+
+      expect(adapter.publish).toHaveBeenCalledWith(
+        expect.objectContaining({
+          text: 'Alice Smith and @bob.dev at the conf',
+          mentions: [{ handle: 'bob.dev', did: 'did:plc:bob' }],
+        }),
+      )
+      expect(store.recheckCalls).toEqual([
+        ['conf-1', ['speaker-alice', 'speaker-bob']],
+      ])
+    })
+
+    it('an opt-out WITHDRAWN after the tick read is honoured too: the fresh state replaces the snapshot (round 3, T2)', async () => {
+      const store = new MemoryVariantStore([tagged()])
+      store.tags['variant-1'] = tags(true)
+      store.beforeClaim = () => {
+        store.speakers['speaker-alice'] = { optedOut: false }
+      }
+      const adapter = fakeAdapter({ ok: true, externalId: 'x', url: 'y' })
+      const onTagsWithheld = vi.fn(async () => {})
+
+      await runPublishTick({
+        store,
+        resolveAdapter: async () => adapter,
+        now: NOW,
+        onTagsWithheld,
+      })
+
+      expect(adapter.publish).toHaveBeenCalledWith(
+        expect.objectContaining({
+          text: '@alice.dev and @bob.dev at the conf',
+        }),
+      )
+      // Nobody is told she "asked not to be tagged": she no longer does.
+      expect(onTagsWithheld).not.toHaveBeenCalled()
+    })
+
+    it('a re-read that fails posts nothing: the variant is re-queued as a safe transient', async () => {
+      const store = new MemoryVariantStore([tagged()])
+      store.tags['variant-1'] = tags(false)
+      store.recheckError = new Error('Sanity unreachable')
+      const adapter = fakeAdapter({ ok: true, externalId: 'x', url: 'y' })
+
+      const summary = await runPublishTick({
+        store,
+        resolveAdapter: async () => adapter,
+        now: NOW,
+      })
+
+      expect(adapter.publish).not.toHaveBeenCalled()
+      expect(store.get('variant-1').status).toBe('scheduled')
+      expect(summary.requeued).toBe(1)
+    })
+
+    it('a post with no recorded tags costs no re-read', async () => {
+      const store = new MemoryVariantStore([makeVariant()])
+      const adapter = fakeAdapter({ ok: true, externalId: 'x', url: 'y' })
+      await runPublishTick({
+        store,
+        resolveAdapter: async () => adapter,
+        now: NOW,
+      })
+      expect(store.recheckCalls).toEqual([])
+    })
+
+    it('an AMBIGUOUS outcome keeps the swapped text: the post may be live, and a later "mark as posted" must not record the tag (round 3, T6)', async () => {
+      const store = new MemoryVariantStore([tagged()])
+      store.tags['variant-1'] = tags(true)
+      const adapter = fakeAdapter({
+        ok: false,
+        kind: 'ambiguous',
+        message: 'timed out after send',
+      })
+      const onTagsWithheld = vi.fn(async () => {})
+
+      await runPublishTick({
+        store,
+        resolveAdapter: async () => adapter,
+        now: NOW,
+        onTagsWithheld,
+      })
+
+      expect(store.get('variant-1')).toMatchObject({
+        status: 'failed',
+        body: 'Alice Smith and @bob.dev at the conf',
+      })
+      // Not known to be live: the failure notification speaks, not this one.
+      expect(onTagsWithheld).not.toHaveBeenCalled()
+    })
+
+    it('KNOWN HOLE (spec §4.4): a settle that loses its revision race loses the body rewrite — the stored body still shows the tag that was not posted', async () => {
+      const store = new MemoryVariantStore([tagged()])
+      store.tags['variant-1'] = tags(true)
+      const adapter = fakeAdapter({ ok: true, externalId: 'x', url: 'y' })
+      // The stale sweep (or any writer) moves the document while the
+      // platform call is in flight: the settle's compare-and-set loses.
+      adapter.publish.mockImplementation(async () => {
+        await store.transition('variant-1', {
+          status: 'failed',
+          claimedAt: null,
+        })
+        return { ok: true, externalId: 'x', url: 'y' }
+      })
+      const onTagsWithheld = vi.fn(async () => {})
+
+      const summary = await runPublishTick({
+        store,
+        resolveAdapter: async () => adapter,
+        now: NOW,
+        onTagsWithheld,
+      })
+
+      expect(summary.settleLost).toBe(1)
+      // What went out: the plain name. What the record says: the tag.
+      expect(adapter.publish).toHaveBeenCalledWith(
+        expect.objectContaining({
+          text: 'Alice Smith and @bob.dev at the conf',
+        }),
+      )
+      expect(store.get('variant-1').body).toBe(
+        '@alice.dev and @bob.dev at the conf',
+      )
+      // Only the winner of the transition notifies; this tick did not win.
+      expect(onTagsWithheld).not.toHaveBeenCalled()
     })
   })
 

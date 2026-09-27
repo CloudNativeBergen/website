@@ -190,6 +190,7 @@ export function pushCategoryForNotificationType(
     case 'marketing_task_due':
     case 'marketing_task_overdue':
     case 'marketing_task_failed':
+    case 'marketing_task_tag_withheld':
       return 'otherUpdates'
     default:
       return 'otherUpdates'

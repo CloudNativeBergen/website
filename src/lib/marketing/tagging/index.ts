@@ -21,4 +21,3 @@ export {
   type TagPerson,
 } from './body'
 export { blueskyTagFor, ownBlueskyHandle, type TagSource } from './lookup'
-export { TAG_SUBJECT_SWITCHABLE } from './rollout'

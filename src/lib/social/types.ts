@@ -189,6 +189,27 @@ export interface SocialPostVariant {
 }
 
 /**
+ * A recorded `tagged` mention as the publish tick reads it (tagging spec §4.4,
+ * Publish): whose tag it is and whether they have opted out SINCE it was
+ * approved. Read in the tick's one work query through the weak speaker
+ * reference, never fetched separately. Server-only: never sent to a browser.
+ */
+export interface RecordedTag {
+  handle: string
+  /** Absent when saved while Bluesky was unreachable. */
+  did?: string
+  name: string
+  /** Absent: the tag is not a speaker's (a sponsor's, #1154) — never withheld. */
+  speakerId?: string
+  optedOut: boolean
+  /**
+   * The speaker is gone since approval: deleted (the weak reference dangles)
+   * or erased (#1162, which unsets the opt-out with the rest). Nobody to tag.
+   */
+  gone?: boolean
+}
+
+/**
  * A recorded Bluesky mention as stored on the variant (tagging spec §4.3).
  * The speaker reference is WEAK, so GDPR erasure can delete the speaker.
  * Marketing builds these (`mentionDocuments`); the social layer only stores
@@ -202,6 +223,32 @@ export interface SocialPostMentionDocument {
   speaker: { _type: 'reference'; _ref: string; _weak: true }
   name: string
   status: 'tagged' | 'unresolved'
+}
+
+/** A body checked for posting by hand (tagging spec §4.4). */
+export interface ManualBody {
+  body: string
+  /** Named in plain text instead of tagged (opted out, handle changed…). */
+  untagged: string[]
+  /** Tags of people no longer speakers here, replaced by a neutral word. */
+  removed: number
+}
+
+/**
+ * The check could not run (Sanity or the roster read failed). FAIL CLOSED:
+ * the stored body may tag a speaker who has opted out, so the view offers
+ * nothing to copy until a reopen checks it.
+ */
+export interface ManualCheckUnavailable {
+  unavailable: true
+}
+
+/**
+ * Client-only: this opening's check is still in flight, and the cached one
+ * may predate an opt-out (review T4). Nothing is offered to copy yet.
+ */
+export interface ManualCheckPending {
+  checking: true
 }
 
 /** What the single-variant editor loads: the variant and its post's inputs. */
@@ -223,6 +270,13 @@ export interface SocialVariantEditorData {
    * `PublishContext.platformZone`). Optional for fixtures; the read sets it.
    */
   platformZone?: string | null
+  /**
+   * A Bluesky post to be posted BY HAND (`awaiting-manual`, `failed`): the
+   * body that passes the approval check as the view opens (tagging spec
+   * §4.4) — a tag of a speaker who opted out since approval as their plain
+   * name — and whose tags were dropped. Absent or null: post the stored body.
+   */
+  manualBody?: ManualBody | ManualCheckUnavailable | ManualCheckPending | null
 }
 
 /** The list-view row for the admin variant table. */

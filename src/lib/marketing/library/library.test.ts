@@ -55,38 +55,24 @@ describe('editing an entry', () => {
       )
   })
   it('tagSubject: the edit switches the Bluesky post only, and reads back from the stored Recipes', () => {
+    // The built-in entry tags by default (#1152): its defaults say so.
     const edits = editsOf(speakerCard, speakerCard.recipes)
-    expect(edits).not.toHaveProperty('tagSubject')
-    const on = applyEdits(speakerCard, { ...edits, tagSubject: true })
+    expect(edits.tagSubject).toBe(true)
+    const on = applyEdits(speakerCard, edits)
     expect(on.filter((r) => r.tagSubject).map((r) => r.key)).toEqual([
       'speakerCard:bluesky',
     ])
     expect(editsOf(speakerCard, on).tagSubject).toBe(true)
-    // The edits are authoritative: absent is off, whatever was stored before.
-    const off = applyEdits(
-      speakerCard,
-      editsOf(speakerCard, speakerCard.recipes),
-    )
+    // The edits are authoritative: off is off, whatever the entry defaults to.
+    const off = applyEdits(speakerCard, { ...edits, tagSubject: false })
     expect(off.some((r) => 'tagSubject' in r)).toBe(false)
-    expect(
-      applyEdits(speakerCard, {
-        ...editsOf(speakerCard, on),
-        tagSubject: false,
-      }).some((r) => 'tagSubject' in r),
-    ).toBe(false)
-    // An entry whose OWN recipe defaults to tagging still gives way to the edits.
-    const taggingEntry = {
-      ...speakerCard,
-      recipes: speakerCard.recipes.map((r) =>
-        r.channel === 'bluesky' ? { ...r, tagSubject: true } : r,
-      ),
-    }
-    expect(
-      applyEdits(taggingEntry, {
-        ...editsOf(taggingEntry, taggingEntry.recipes),
-        tagSubject: false,
-      }).some((r) => 'tagSubject' in r),
-    ).toBe(false)
+    expect(editsOf(speakerCard, off)).not.toHaveProperty('tagSubject')
+    // Absent is off too.
+    const { tagSubject: _omit, ...absent } = edits
+    void _omit
+    expect(applyEdits(speakerCard, absent).some((r) => 'tagSubject' in r)).toBe(
+      false,
+    )
   })
   it('the strict edit schema carries tagSubject, and only as a boolean', () => {
     const edits = editsOf(speakerCard, speakerCard.recipes)

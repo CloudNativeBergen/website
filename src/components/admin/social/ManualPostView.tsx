@@ -11,6 +11,12 @@ import {
 } from '@heroicons/react/24/outline'
 import { AdminButton } from '@/components/admin/AdminButton'
 import type { TagByHandEntry } from '@/lib/marketing/tag-by-hand'
+import type {
+  ManualBody,
+  ManualCheckPending,
+  ManualCheckUnavailable,
+} from '@/lib/social/types'
+import { joinNames } from '@/lib/marketing/tagging/body'
 import { richTextImageUrl } from '@/lib/homepage/richTextImage'
 import {
   countLength,
@@ -49,6 +55,15 @@ export interface ManualPostViewProps {
    * has already left opted-out speakers out; empty or absent shows nothing.
    */
   tagByHand?: readonly TagByHandEntry[]
+  /**
+   * A Bluesky body that passes the approval check as the view opened
+   * (tagging spec §4.4): a tag of a speaker who opted out since approval is
+   * their plain name. Shown and copied in place of `variant.body` until the
+   * post is recorded; absent or null: the stored body.
+   */
+  manualBody?: ManualBody | ManualCheckUnavailable | ManualCheckPending | null
+  /** Runs the tag check again after it could not run (round 4, T2). */
+  onRetryCheck?: () => void
 }
 
 const defaultImageSrc = (asset: SocialPostAttachment) =>
@@ -71,6 +86,8 @@ export function ManualPostView({
   conferenceDomains = [],
   platformZone = null,
   tagByHand: tagByHandProp = [],
+  manualBody = null,
+  onRetryCheck,
 }: ManualPostViewProps) {
   // A LinkedIn list, whoever passes it: on any other platform the hint
   // (type @ in the composer) would be wrong, so it is never shown there.
@@ -104,6 +121,15 @@ export function ManualPostView({
   const missingImages = variant.attachments.filter(
     (a) => !byKey.has(a.source),
   ).length
+  // What to post by hand: once the post is recorded, the record as it is.
+  const pending = variant.status !== 'published' ? manualBody : null
+  // FAIL CLOSED (review T1): the check could not run, so the stored body may
+  // still tag a speaker who opted out. Nothing is offered to copy.
+  const unchecked = pending !== null && 'unavailable' in pending
+  // This opening's check is still running (review T4): nothing to copy yet.
+  const checking = pending !== null && 'checking' in pending
+  const checked = pending !== null && 'body' in pending ? pending : null
+  const body = checked?.body ?? variant.body
   const link = variant.link?.trim() || null
   // Where the link goes by hand (spec §3.1, #1134).
   //
@@ -122,7 +148,7 @@ export function ManualPostView({
   const linkAsComment = link !== null && placement === 'comment'
   const linkInBody =
     link !== null && placement !== null && placement !== 'comment'
-  const linkAppended = linkInBody && !variant.body.includes(link)
+  const linkAppended = linkInBody && !body.includes(link)
   /**
    * A body that reached this view carrying a link to our own site, on a
    * platform where the link is the first comment (spec §3.1, #1134). Save,
@@ -135,18 +161,25 @@ export function ManualPostView({
    */
   const strayInBody =
     placement === 'comment' && variant.status !== 'published'
-      ? ownDomainUrlsIn(variant.body, conferenceDomains, platformZone)
+      ? ownDomainUrlsIn(body, conferenceDomains, platformZone)
       : []
-  const copyText = linkAppended ? `${variant.body}\n\n${link}` : variant.body
+  const copyText = linkAppended ? `${body}\n\n${link}` : body
   const copyLength = constraints
     ? countLength(copyText, constraints.counting)
     : null
   // The body validated on its own; the appended link can push the copied
   // text over the platform's cap, which the organizer must hear here.
+  // Bluesky also caps BYTES (3,000): a body of complex emoji fits 300
+  // characters and is still refused. The checked body can come back longer
+  // than the approved one (a speaker's current name, review round 2 T5).
+  const copyBytes = new TextEncoder().encode(copyText).length
+  const overBytes =
+    constraints?.maxBytes != null && copyBytes > constraints.maxBytes
   const overLimit =
-    constraints !== null &&
-    copyLength !== null &&
-    copyLength > constraints.maxLength
+    (constraints !== null &&
+      copyLength !== null &&
+      copyLength > constraints.maxLength) ||
+    overBytes
   const done = variant.status === 'published'
   // `failed` joins `awaiting-manual` (#1128, spec §5): with an asynchronous
   // publisher a variant never reaches `awaiting-manual`, so recording a post
@@ -172,6 +205,20 @@ export function ManualPostView({
 
   return (
     <div className="space-y-6">
+      {/*
+       * ONE live region for the tag check, mounted for the life of the view
+       * (round 4, T4): it says the check started and that it finished. A
+       * region inserted with its text, or removed on success, announces
+       * unreliably or not at all — and on the Task page no dialog opening
+       * tells a screen-reader user that anything changed.
+       */}
+      <p role="status" className="sr-only">
+        {checking
+          ? 'Checking this post’s tags…'
+          : checked
+            ? 'Tags checked. The text is ready to copy.'
+            : ''}
+      </p>
       <ol className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500 dark:text-gray-400">
         {(postMayBeLive
           ? [
@@ -228,6 +275,24 @@ export function ManualPostView({
         </p>
       )}
 
+      {checked && (checked.untagged.length > 0 || checked.removed > 0) && (
+        <p className="rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900 dark:border-sky-900 dark:bg-sky-900/20 dark:text-sky-200">
+          {checked.untagged.length > 0 && (
+            <>
+              {joinNames(checked.untagged)}{' '}
+              {checked.untagged.length > 1 ? 'are' : 'is'} named in plain text
+              below, not tagged. The tag no longer passes the check this post
+              was approved with &mdash; most often because the speaker has asked
+              not to be tagged since.{' '}
+            </>
+          )}
+          {checked.removed > 0 &&
+            (checked.removed === 1
+              ? 'A tag of someone who is no longer a speaker here is replaced with “a speaker”.'
+              : `${checked.removed} tags of people who are no longer speakers here are replaced with “a speaker”.`)}
+        </p>
+      )}
+
       {missingImages > 0 && (
         <p
           role="alert"
@@ -240,28 +305,61 @@ export function ManualPostView({
         </p>
       )}
 
-      <Section
-        title="Text"
-        hint={[
-          constraints ? `${copyLength} / ${constraints.maxLength}` : null,
-          linkAppended ? 'The link is added at the end.' : null,
-          overLimit ? 'Shorten the text before posting.' : null,
-        ]
-          .filter(Boolean)
-          .join(' · ')}
-        hintTone={overLimit ? 'error' : 'muted'}
-        action={<CopyButton value={copyText} label="Copy text" />}
-      >
-        <p className="text-sm break-words whitespace-pre-wrap text-gray-900 dark:text-gray-100">
-          {variant.body}
-          {linkAppended && (
-            <>
-              {'\n\n'}
-              <span className="text-brand-cloud-blue">{link}</span>
-            </>
+      {unchecked && (
+        <div
+          role="alert"
+          className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-900/20 dark:text-red-300"
+        >
+          <p className="min-w-0 flex-1">
+            We could not check this post&apos;s tags just now, so its text is
+            not shown: a speaker may have asked not to be tagged since it was
+            approved.{' '}
+            {onRetryCheck
+              ? 'Check again before posting.'
+              : 'Close this and open it again before posting.'}
+          </p>
+          {onRetryCheck && (
+            <AdminButton variant="secondary" size="sm" onClick={onRetryCheck}>
+              Check again
+            </AdminButton>
           )}
+        </div>
+      )}
+
+      {checking && (
+        <p
+          aria-hidden="true"
+          className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700 dark:border-gray-700 dark:bg-gray-800/50 dark:text-gray-300"
+        >
+          Checking this post&apos;s tags&hellip;
         </p>
-      </Section>
+      )}
+
+      {!unchecked && !checking && (
+        <Section
+          title="Text"
+          hint={[
+            constraints ? `${copyLength} / ${constraints.maxLength}` : null,
+            overBytes ? `${copyBytes} / ${constraints!.maxBytes} bytes` : null,
+            linkAppended ? 'The link is added at the end.' : null,
+            overLimit ? 'Shorten the text before posting.' : null,
+          ]
+            .filter(Boolean)
+            .join(' · ')}
+          hintTone={overLimit ? 'error' : 'muted'}
+          action={<CopyButton value={copyText} label="Copy text" />}
+        >
+          <p className="text-sm break-words whitespace-pre-wrap text-gray-900 dark:text-gray-100">
+            {body}
+            {linkAppended && (
+              <>
+                {'\n\n'}
+                <span className="text-brand-cloud-blue">{link}</span>
+              </>
+            )}
+          </p>
+        </Section>
+      )}
 
       {tagByHand.length > 0 && (
         <Section title="Tag by hand">

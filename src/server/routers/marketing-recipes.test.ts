@@ -157,25 +157,24 @@ describe('campaign.recipes.library', () => {
   })
 })
 
-describe('switching tagging on (tagging spec §7)', () => {
-  const tagging = {
-    ...editsOf(speakerCard, speakerCard.recipes),
-    tagSubject: true,
-  }
+describe('switching tagging on and off (tagging spec §2, §7)', () => {
+  // The rollout gate is gone (#1152): publish now honours a late opt-out.
+  const tagged = (r: { channel?: string; tagSubject?: boolean }) =>
+    r.channel === 'bluesky' && r.tagSubject === true
   it.each([
     [
       'attach',
-      () =>
+      (tagSubject: boolean) =>
         marketing().campaign.recipes.attach({
           campaignId: 'camp-ours',
           rev: 'rev-1',
           entry: 'speakerCard',
-          edits: tagging,
+          edits: { ...editsOf(speakerCard, speakerCard.recipes), tagSubject },
         }),
     ],
     [
       'update',
-      () => {
+      (tagSubject: boolean) => {
         h.readRecipes.mockResolvedValue(
           campaign({ recipes: speakerCard.recipes }),
         )
@@ -183,32 +182,16 @@ describe('switching tagging on (tagging spec §7)', () => {
           campaignId: 'camp-ours',
           rev: 'rev-1',
           entry: 'speakerCard',
-          edits: tagging,
+          edits: { ...editsOf(speakerCard, speakerCard.recipes), tagSubject },
         })
       },
     ],
-  ])(
-    '%s refuses tagSubject before reading anything, and saves nothing',
-    async (_name, call) => {
-      await expect(call()).rejects.toMatchObject({
-        code: 'BAD_REQUEST',
-        message: expect.stringContaining('not switched on yet'),
-      })
-      expect(h.tenantRead).not.toHaveBeenCalled()
-      expect(h.saveRecipes).not.toHaveBeenCalled()
-    },
-  )
-  it('the same edits without tagSubject save', async () => {
-    await marketing().campaign.recipes.attach({
-      campaignId: 'camp-ours',
-      rev: 'rev-1',
-      entry: 'speakerCard',
-      edits: { ...tagging, tagSubject: false },
-    })
-    expect(h.saveRecipes).toHaveBeenCalledTimes(1)
-    expect(
-      saved().recipes.some((r: { tagSubject?: boolean }) => r.tagSubject),
-    ).toBe(false)
+  ])('%s saves the value the organizer chose', async (_name, call) => {
+    await call(true)
+    expect(saved().recipes.filter(tagged)).toHaveLength(1)
+    h.saveRecipes.mockClear()
+    await call(false)
+    expect(saved().recipes.some(tagged)).toBe(false)
   })
 })
 

@@ -162,52 +162,49 @@ describe('BlueskyPublishAdapter — mentions (spec §4.4 Publish, #1149)', () =>
     expect(resolvedHandles(recorded)).toEqual([])
   })
 
-  it('an unrecorded handle the PDS knows is resolved once and tagged', async () => {
+  // User decision (#1152): the adapter tags ONLY recorded mentions. Any other
+  // `@handle` the library detects — a job title "SRE @acme.io" — is text.
+  it('an unrecorded handle the PDS knows is posted as plain text: no facet, never resolved', async () => {
     const recorded = pds({ resolve: { 'bob.bsky.social': BOB } })
+    const text = 'Hi @bob.bsky.social'
 
-    await adapter().publish({ text: 'Hi @bob.bsky.social', media: [] })
+    await adapter().publish({ text, media: [] })
 
-    expect(createdRecord(recorded).facets).toEqual([
-      {
-        $type: FACET,
-        index: { byteStart: 3, byteEnd: 19 },
-        features: [{ $type: MENTION, did: BOB }],
-      },
-    ])
-    expect(resolvedHandles(recorded)).toEqual(['bob.bsky.social'])
-  })
-
-  it('an unrecorded handle that does not resolve stays plain text and the post still goes out', async () => {
-    const recorded = pds({ resolve: { 'bob.bsky.social': BOB } })
-    const text = 'Hi @ghost.bsky.social'
-
-    const outcome = await adapter().publish({ text, media: [] })
-
-    expect(outcome).toMatchObject({ ok: true, externalId: expect.any(String) })
     expect(createdRecord(recorded)).toEqual({
       $type: 'app.bsky.feed.post',
       text,
       createdAt: NOW.toISOString(),
     })
-    expect(resolvedHandles(recorded)).toEqual(['ghost.bsky.social'])
+    expect(resolvedHandles(recorded)).toEqual([])
   })
 
-  it('an unrecorded handle written in mixed case is resolved normalised', async () => {
-    const recorded = pds({ resolve: { 'bob.bsky.social': BOB } })
+  it('a job title "SRE @acme.io" stays text, while the recorded tag beside it keeps its facet at the right bytes', async () => {
+    const recorded = pds({
+      resolve: { 'acme.io': 'did:plc:acmecorp000000000000000' },
+    })
+    // The real `@atproto/api` detection DOES see "@acme.io" as a mention.
+    const text = '🎙️ @alice.bsky.social (SRE @acme.io) is speaking'
 
-    await adapter().publish({ text: 'Hi @Bob.bsky.social', media: [] })
+    await adapter().publish({
+      text,
+      media: [],
+      mentions: [{ handle: 'alice.bsky.social', did: ALICE }],
+    })
 
-    expect(createdRecord(recorded).facets).toEqual([
+    const record = createdRecord(recorded)
+    expect(record.text).toBe(text)
+    expect(record.facets).toEqual([
       {
         $type: FACET,
-        index: { byteStart: 3, byteEnd: 19 },
-        features: [{ $type: MENTION, did: BOB }],
+        // "🎙️ " is 4 + 3 + 1 = 8 bytes: the @ is byte 8, the handle 18 long.
+        index: { byteStart: 8, byteEnd: 26 },
+        features: [{ $type: MENTION, did: ALICE }],
       },
     ])
-    expect(resolvedHandles(recorded)).toEqual(['bob.bsky.social'])
+    expect(resolvedHandles(recorded)).toEqual([])
   })
 
-  it('a recorded entry without a DID was never checked, so its handle is resolved like any other', async () => {
+  it('a recorded entry without a DID was never checked, so it is posted as plain text', async () => {
     const recorded = pds({ resolve: { 'bob.bsky.social': BOB } })
 
     await adapter().publish({
@@ -216,14 +213,8 @@ describe('BlueskyPublishAdapter — mentions (spec §4.4 Publish, #1149)', () =>
       mentions: [{ handle: 'bob.bsky.social', did: '' }],
     })
 
-    expect(createdRecord(recorded).facets).toEqual([
-      {
-        $type: FACET,
-        index: { byteStart: 3, byteEnd: 19 },
-        features: [{ $type: MENTION, did: BOB }],
-      },
-    ])
-    expect(resolvedHandles(recorded)).toEqual(['bob.bsky.social'])
+    expect(createdRecord(recorded).facets).toBeUndefined()
+    expect(resolvedHandles(recorded)).toEqual([])
   })
 
   it.each([
@@ -251,14 +242,9 @@ describe('BlueskyPublishAdapter — mentions (spec §4.4 Publish, #1149)', () =>
       expect(outcome).toMatchObject({ ok: true })
       const record = createdRecord(recorded)
       expect(record.text).toBe(text)
-      expect(record.facets).toEqual([
-        {
-          $type: FACET,
-          index: { byteStart: 26, byteEnd: 42 },
-          features: [{ $type: MENTION, did: BOB }],
-        },
-      ])
-      expect(resolvedHandles(recorded)).toEqual(['bob.bsky.social'])
+      // Bob is not recorded: text too. Nothing is resolved.
+      expect(record.facets).toBeUndefined()
+      expect(resolvedHandles(recorded)).toEqual([])
       expect(warn).toHaveBeenCalledWith(
         expect.stringContaining('@alice.bsky.social'),
       )
@@ -302,7 +288,7 @@ describe('BlueskyPublishAdapter — mentions (spec §4.4 Publish, #1149)', () =>
     expect(resolvedHandles(recorded)).toEqual([])
   })
 
-  it('recorded and unrecorded mentions, a link facet and the link card coexist in one post', async () => {
+  it('a recorded mention, unrecorded handles as text, a link facet and the link card coexist in one post', async () => {
     const recorded = pds({
       resolve: { 'alice.bsky.social': ALICE_LIVE, 'bob.bsky.social': BOB },
     })
@@ -327,11 +313,6 @@ describe('BlueskyPublishAdapter — mentions (spec §4.4 Publish, #1149)', () =>
         features: [{ $type: MENTION, did: ALICE }],
       },
       {
-        $type: FACET,
-        index: { byteStart: 29, byteEnd: 45 },
-        features: [{ $type: MENTION, did: BOB }],
-      },
-      {
         index: { byteStart: 73, byteEnd: 107 },
         features: [
           {
@@ -348,10 +329,7 @@ describe('BlueskyPublishAdapter — mentions (spec §4.4 Publish, #1149)', () =>
         title: 'Tickets & prices — Cloud Native Days',
       },
     })
-    expect(resolvedHandles(recorded).sort()).toEqual([
-      'bob.bsky.social',
-      'ghost.bsky.social',
-    ])
+    expect(resolvedHandles(recorded)).toEqual([])
   })
 })
 

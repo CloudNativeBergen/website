@@ -5,7 +5,11 @@ import type {
   TickWorkBounds,
   VariantTransition,
 } from '../store'
-import type { SocialPostAttachment, SocialPostVariant } from '../types'
+import type {
+  RecordedTag,
+  SocialPostAttachment,
+  SocialPostVariant,
+} from '../types'
 
 /**
  * In-memory `SocialVariantStore` with real compare-and-set semantics: every
@@ -24,6 +28,23 @@ export class MemoryVariantStore implements SocialVariantStore {
   readonly domains: Record<string, string[]>
   /** The posts' creators by post id, as the Sanity read joins them. */
   readonly creators: Record<string, string>
+  /**
+   * Recorded tags with their speakers' opt-out, by variant id, as the Sanity
+   * due read joins them through the weak speaker reference (tagging §4.4).
+   */
+  readonly tags: Record<string, RecordedTag[]> = {}
+  /**
+   * The speakers as they are NOW (tagging §4.4, review T6): what the
+   * pre-publish re-read sees. A speaker not listed reads as their latest
+   * recorded tag says.
+   */
+  readonly speakers: Record<string, { optedOut?: boolean; gone?: boolean }> = {}
+  /** Each re-read's conference and speaker ids, in order. */
+  readonly recheckCalls: [string, string[]][] = []
+  /** Makes the re-read throw. */
+  recheckError: Error | null = null
+  /** Every write's patch, in order: claims and transitions alike. */
+  readonly writes: Partial<SocialPostVariant>[] = []
 
   constructor(
     variants: SocialPostVariant[] = [],
@@ -45,6 +66,7 @@ export class MemoryVariantStore implements SocialVariantStore {
 
   private write(id: string, patch: Partial<SocialPostVariant>) {
     const current = this.get(id)
+    this.writes.push(patch)
     this.docs.set(id, {
       ...current,
       ...patch,
@@ -79,6 +101,7 @@ export class MemoryVariantStore implements SocialVariantStore {
           }),
           postCreatedBy: this.creators[v.postId] ?? null,
           marketingTaskId: null,
+          ...(this.tags[v._id] ? { recordedTags: this.tags[v._id] } : {}),
         })
       }
       byConference.set(v.conferenceId, bucket)
@@ -117,6 +140,24 @@ export class MemoryVariantStore implements SocialVariantStore {
       .slice(0, bounds.submittedLimit)
       .map((v) => ({ ...v }))
     return { due, stale, submitted }
+  }
+
+  async tagStates(conferenceId: string, speakerIds: readonly string[]) {
+    this.recheckCalls.push([conferenceId, [...speakerIds]])
+    if (this.recheckError) throw this.recheckError
+    const latest = (id: string) =>
+      Object.values(this.tags)
+        .flat()
+        .find((t) => t.speakerId === id)
+    return new Map(
+      speakerIds.map((id) => {
+        const now = this.speakers[id] ?? latest(id) ?? {}
+        return [
+          id,
+          { optedOut: now.optedOut === true, gone: now.gone === true },
+        ] as const
+      }),
+    )
   }
 
   async claim<V extends SocialPostVariant>(variant: V, now: Date) {

@@ -8,6 +8,7 @@ import {
   ScheduleSocialVariantSchema,
   SocialPostIdSchema,
   SocialVariantIdSchema,
+  SocialVariantEditorReadSchema,
   UpdateSocialPostDefaultTimeSchema,
   UpdateSocialVariantSchema,
 } from '@/server/schemas/social'
@@ -44,6 +45,8 @@ import {
 import {
   checkTagsForApproval,
   checkTagsOnSave,
+  manualPostBody,
+  withManualBody,
 } from '@/lib/marketing/tagging/verify'
 import { mentionDocuments } from '@/lib/marketing/tagging/records'
 import { tagIssuesError } from '@/server/errors'
@@ -416,9 +419,9 @@ export const socialRouter = router({
 
   /** What the single-variant editor loads (#1007). */
   getVariantEditor: adminProcedure
-    .input(SocialVariantIdSchema)
+    .input(SocialVariantEditorReadSchema)
     .query(async ({ input }) => {
-      await requireDocumentInCurrentConference(
+      const conferenceId = await requireDocumentInCurrentConference(
         input.variantId,
         'socialPostVariant',
       )
@@ -426,7 +429,12 @@ export const socialRouter = router({
       if (!data) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Variant not found' })
       }
-      return data
+      // Posted by hand: the approval check runs as the view opens (tagging
+      // spec §4.4), so a late opt-out is honoured there too. ONLY for a manual
+      // view's read, which sends `opening` (`useFreshManualCheck`): the
+      // ordinary editor — say, editing a failed post — never shows the checked
+      // body and must not pay for the reads and lookups (round 4, T3).
+      return input.opening ? withManualBody(data, conferenceId) : data
     }),
 
   /**
@@ -679,8 +687,33 @@ export const socialRouter = router({
             'This post already has an address. Edit it in the Studio if it is wrong.',
         })
       }
+      // The record says what went out (final round, T5): a Bluesky post
+      // posted by hand was copied from the CHECKED body, so that is what the
+      // same compare-and-set records. The check never blocks recording a live
+      // post — if it cannot run, the stored text stays and the error is logged.
+      let checkedBody: string | undefined
+      if (
+        variant.platform === 'bluesky' &&
+        (variant.status === 'awaiting-manual' || variant.status === 'failed')
+      ) {
+        try {
+          const checked = await manualPostBody({
+            conferenceId: variant.conferenceId,
+            variantId: variant._id,
+            body: variant.body,
+          })
+          if (checked && checked.body !== variant.body)
+            checkedBody = checked.body
+        } catch (error) {
+          console.error(
+            `[social] markPosted: tag check failed for ${variant._id}; the stored text is kept:`,
+            error,
+          )
+        }
+      }
       return applyOrConflict(variant, {
         status: 'published',
+        ...(checkedBody !== undefined ? { body: checkedBody } : {}),
         // MERGED, not replaced. The store applies this with `patch.set`, so
         // `{ url }` alone would overwrite the whole object — and on the
         // `published → published` path that deletes the `externalId` an
