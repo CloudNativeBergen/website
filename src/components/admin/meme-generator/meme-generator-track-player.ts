@@ -73,8 +73,16 @@ export function createTrackPlayer(
     node: ReturnType<PlayerContext['createBufferSource']>
     at: number
   } | null = null
-  /** Playing: the playhead `offset` at audio time `startedAt`. */
-  let clock: { offset: number; startedAt: number } | null = null
+  /**
+   * Playing: the playhead `offset` at audio time `startedAt`. A fresh start
+   * is heard only after the output latency, so the playhead waits at
+   * `offset` until then; a `continuous` one carries on sound already heard.
+   */
+  let clock: {
+    offset: number
+    startedAt: number
+    continuous?: boolean
+  } | null = null
   /** A scrub in progress: where it is, and the timer that settles it. */
   let scrub: { at: number; timer: ReturnType<typeof setTimeout> } | null = null
   /** Counts plays, so a late refusal only undoes the play it belongs to. */
@@ -130,7 +138,7 @@ export function createTrackPlayer(
     queued = { node: sourceAt(ctx, at, 0), at }
   }
 
-  const start = (from: number) => {
+  const start = (from: number, continuous = false) => {
     silence()
     clock = null
     // Opened and resumed inside the click even with no mix yet, so a track
@@ -152,7 +160,7 @@ export function createTrackPlayer(
     })
     if (!channels) return
     source = sourceAt(ctx, 0, from)
-    clock = { offset: from, startedAt: ctx.currentTime }
+    clock = { offset: from, startedAt: ctx.currentTime, continuous }
     queueNext()
   }
 
@@ -170,7 +178,7 @@ export function createTrackPlayer(
       queueNext()
     }
     const heard = ctx.currentTime - clock.startedAt - latency
-    return clock.offset + Math.max(0, heard)
+    return clock.offset + (clock.continuous ? heard : Math.max(0, heard))
   }
 
   return {
@@ -181,13 +189,20 @@ export function createTrackPlayer(
       if (at === null) return
       // Mid-scrub, the settling scrub starts the new mix: never before.
       if (next && scrub) return
-      if (next) start(at)
-      else {
+      // Mid-play, the new mix takes over where the sound has got to — the
+      // output latency ahead of what is heard — so the speakers play on
+      // from the old one's last samples without repeating any, and the
+      // picture carries on from what is heard.
+      if (next) {
+        const sent =
+          clock && ctx ? clock.offset + (ctx.currentTime - clock.startedAt) : at
+        start(sent, !!clock)
+      } else {
         silence()
         clock = null
       }
     },
-    play: start,
+    play: (from) => start(from),
     pause() {
       silence()
       clock = null

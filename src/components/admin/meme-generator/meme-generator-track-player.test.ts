@@ -364,4 +364,22 @@ describe('the track player', () => {
     vi.advanceTimersByTime(SCRUB_SETTLE_MS)
     expect(sources[1]).toMatchObject({ offset: 5, samples: 12 * MIX_RATE })
   })
+
+  it('hands a new mix over where the sound has got to, not where it is heard, so nothing repeats', () => {
+    const { ctx, sources } = fakeContext(0.1)
+    const player = createTrackPlayer(() => ctx)
+    player.load(mix(10))
+    player.play(0)
+    ctx.currentTime = 2
+    // Heard 1.9 s in; 2.0 s has already gone to the speakers.
+    expect(player.time()).toBeCloseTo(1.9, 10)
+    player.load(mix(12))
+    expect(sources[1]).toMatchObject({ startedAt: 2, offset: 2 })
+    // The picture carries on from what is heard, without a jump or a hold.
+    expect(player.time()).toBeCloseTo(1.9, 10)
+    ctx.currentTime = 2.05
+    expect(player.time()).toBeCloseTo(1.95, 10)
+    ctx.currentTime = 2.3
+    expect(player.time()).toBeCloseTo(2.2, 10)
+  })
 })
