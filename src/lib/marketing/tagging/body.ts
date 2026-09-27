@@ -2,11 +2,12 @@
  * A tagging Bluesky body (spec §4.1, §4.3). Pure.
  *
  * The value map a beat is built from serves BOTH Channels and the alt text,
- * so `{name}` stays a plain name in it. This is the one place a handle goes
- * in: when the body of a Bluesky `tagSubject` recipe is resolved, `{name}` is
- * the subject's people with each tag in place of the name — and a handle
- * costs its full length, so over the limit a tag longer than its name falls
- * back to plain text, from the last one, until the body fits.
+ * so `{name}` and `{speakers}` stay plain names in it. This is the one place
+ * a handle goes in: when the body of a Bluesky `tagSubject` recipe is
+ * resolved, `{name}` and `{speakers}` are the subject's people with each tag
+ * in place of the name — and a handle costs its full length, so over the
+ * limit a tag longer than its name falls back to plain text, from the last
+ * one, until the body fits.
  */
 
 import { resolvePlaceholders, type Placeholder } from '../placeholders'
@@ -51,8 +52,9 @@ export interface NamedPerson {
 }
 
 /**
- * One person a subject's `{name}` names, in order. `tag` is null when there is
- * nothing to tag: no Bluesky link, opted out (#1148), or our own account.
+ * One person a subject's `{name}` and `{speakers}` name, in order. `tag` is
+ * null when there is nothing to tag: no Bluesky link, opted out (#1148), or
+ * our own account.
  */
 export interface TagPerson extends NamedPerson {
   speakerId: string

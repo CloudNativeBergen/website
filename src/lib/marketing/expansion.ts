@@ -126,8 +126,9 @@ export function pickSlot(
 export interface GenerationSubject extends SubjectLink {
   values: PlaceholderValues
   /**
-   * The speakers the subject's `{name}` names, in order (tagging spec §4.1):
-   * the ones a tagging Bluesky body can tag. Absent for a sponsor.
+   * The speakers the subject's `{name}` and `{speakers}` name, in order
+   * (tagging spec §4.1): the ones a tagging Bluesky body can tag. Absent for
+   * a sponsor.
    */
   people?: SubjectPerson[]
 }
