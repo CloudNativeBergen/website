@@ -1,4 +1,5 @@
 import 'server-only'
+import { createHash } from 'node:crypto'
 import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
 import { scopedFetch } from '@/lib/sanity/scoped'
 import { detailsPatch } from './sanity'
@@ -42,8 +43,14 @@ export interface TaskRenderGalleryEntry {
   subject: { type: MarketingAssetSubjectType; id: string } | null
 }
 
+/**
+ * A ROOT-level id for a Task's entry. Task ids carry a dot
+ * (`marketingTask.<uuid>`, `marketingTask.gen-<hash>`), and an id with a dot
+ * is not a published document to `path("*")` — the gallery would never list
+ * or find it. A hash of the Task id is dot-free and deterministic.
+ */
 export function taskRenderAssetDocumentId(taskId: string): string {
-  return `marketingAsset-task-${taskId}`
+  return `marketingAsset-task-${createHash('sha256').update(taskId).digest('hex').slice(0, 32)}`
 }
 
 /** What the entry and its Task hold now. */

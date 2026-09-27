@@ -193,11 +193,13 @@ const assets = () => t.createCallerFactory(marketingAssetRouter)(context())
 
 const ref = (id: string) => ({ _type: 'reference', _ref: id })
 const image = (id: string) => ({ _type: 'image', asset: ref(id) })
+/** Production-shaped: every Task id in production has a dot (#1228 review). */
+const TASK = 'marketingTask.0ea845ff-af8f-4dc4-8694-63c2d47ce431'
 const FIRST = 'image-first-1080x1080-png'
 const SECOND = 'image-second-1080x1080-png'
 const byId = (id: string) => h.dataset.find((d) => d._id === id)
 const gallery = () => h.dataset.filter((d) => d._type === 'marketingAsset')
-const task = () => byId('task-r')!
+const task = () => byId(TASK)!
 
 function fixture(): Doc[] {
   return [
@@ -218,7 +220,7 @@ function fixture(): Doc[] {
       conference: ref('conf-A'),
     },
     {
-      _id: 'task-r',
+      _id: TASK,
       _type: 'marketingTask',
       _rev: 'rev-task',
       conference: ref('conf-A'),
@@ -236,7 +238,7 @@ function fixture(): Doc[] {
       conference: ref('conf-A'),
       campaign: { ...ref('camp'), _weak: true },
       kind: 'publishing',
-      prerequisites: [{ _key: 'r', ...ref('task-r'), _weak: true }],
+      prerequisites: [{ _key: 'r', ...ref(TASK), _weak: true }],
       variant: { ...ref('variant-1'), _weak: true },
     },
     {
@@ -250,7 +252,7 @@ function fixture(): Doc[] {
 /** Attach the image the Task's upload bound, as the studio does. */
 async function attach(assetId: string) {
   return marketing().task.attachAsset({
-    taskId: 'task-r',
+    taskId: TASK,
     taskRev: task()._rev as string,
     assetId,
   })
@@ -283,7 +285,7 @@ describe('attaching a render also saves it to the gallery (#1165)', () => {
         title: 'Speaker card: Ada',
         alt: 'Ada speaks at CNB',
         subject: { ...ref('sp-ada'), _weak: true },
-        task: { ...ref('task-r'), _weak: true },
+        task: { ...ref(TASK), _weak: true },
       }),
     ])
     expect(task()).not.toHaveProperty('galleryPending')
@@ -358,9 +360,7 @@ describe('attaching a render also saves it to the gallery (#1165)', () => {
     expect(h.handedOff).toEqual(['variant-1'])
     expect(gallery()).toEqual([])
     // The Task editor reads the mark and offers the retry.
-    expect(
-      (await marketing().task.get({ taskId: 'task-r' })).task,
-    ).toMatchObject({
+    expect((await marketing().task.get({ taskId: TASK })).task).toMatchObject({
       assetId: FIRST,
       galleryPending: true,
       handoffPending: false,
@@ -375,9 +375,9 @@ describe('attaching a render also saves it to the gallery (#1165)', () => {
       expect.objectContaining({ image: image(FIRST) }),
     ])
     expect(task()).not.toHaveProperty('galleryPending')
-    expect(
-      (await marketing().task.get({ taskId: 'task-r' })).task,
-    ).toMatchObject({ galleryPending: false })
+    expect((await marketing().task.get({ taskId: TASK })).task).toMatchObject({
+      galleryPending: false,
+    })
     // Handed off once: the retry does not hand the image off again.
     expect(h.handedOff).toEqual(['variant-1'])
   })
@@ -408,7 +408,7 @@ describe("deleting a render Task's gallery entry deletes its file once nothing h
   // the shared orphan check like any gallery upload's, in either order.
   const removeTask = () =>
     deleteTask({
-      taskId: 'task-r',
+      taskId: TASK,
       taskRev: task()._rev as string,
       conferenceId: 'conf-A',
       variant: null,
@@ -419,7 +419,7 @@ describe("deleting a render Task's gallery entry deletes its file once nothing h
   it('Task deleted first: the entry keeps the file; deleting the entry then deletes it', async () => {
     await attach(FIRST)
     expect(await removeTask()).toBe(true)
-    expect(byId('task-r')).toBeUndefined()
+    expect(byId(TASK)).toBeUndefined()
     expect(byId(FIRST)).toBeDefined()
     await removeEntry()
     expect(gallery()).toEqual([])

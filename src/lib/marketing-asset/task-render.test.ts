@@ -104,12 +104,18 @@ vi.mock('@/lib/sanity/client', async () => {
   }
 })
 
-import { saveTaskRenderToGallery } from './task-render'
+import {
+  saveTaskRenderToGallery,
+  taskRenderAssetDocumentId,
+} from './task-render'
+
+/** A production Task id: `marketingTask.gen-<hash>` — it has a DOT. */
+const TASK = 'marketingTask.gen-08a9f7bdf36600ee84200d4d2a5185e0'
 
 const ORG = 'org-A'
 /** The Task holds this render now, as the attach's save just wrote. */
 function holds(imageAssetId: string) {
-  const task = h.dataset.find((d) => d._id === 'task-1')!
+  const task = h.dataset.find((d) => d._id === TASK)!
   task.asset = {
     _type: 'image',
     asset: { _type: 'reference', _ref: imageAssetId },
@@ -120,7 +126,7 @@ const entry = (imageAssetId: string) => (
   {
     orgId: ORG,
     conferenceId: 'conf-A',
-    taskId: 'task-1',
+    taskId: TASK,
     imageAssetId,
     title: 'Speaker card: Ada',
     alt: 'Ada Lovelace speaks at Cloud Native Bergen',
@@ -134,7 +140,7 @@ beforeEach(() => {
     { _id: 'org-A', _type: 'organization' },
     { _id: 'conf-A', _type: 'conference', organization: { _ref: ORG } },
     {
-      _id: 'task-1',
+      _id: TASK,
       _type: 'marketingTask',
       conference: { _type: 'reference', _ref: 'conf-A' },
     },
@@ -164,7 +170,7 @@ describe('saveTaskRenderToGallery', () => {
         subject: { _type: 'reference', _ref: 'speaker-ada', _weak: true },
         tags: [],
         source: 'studio',
-        task: { _type: 'reference', _ref: 'task-1', _weak: true },
+        task: { _type: 'reference', _ref: TASK, _weak: true },
       }),
     ])
     // Its own file: deleting the entry runs the orphan check on it.
@@ -225,7 +231,7 @@ describe('saveTaskRenderToGallery', () => {
       scope: 'edition',
       title: 'Kept',
       image: { _type: 'image', asset: { _type: 'reference', _ref: 'image-a' } },
-      task: { _type: 'reference', _ref: 'task-1', _weak: true },
+      task: { _type: 'reference', _ref: TASK, _weak: true },
     })
     expect(await saveTaskRenderToGallery(entry('image-b'))).toBe('replaced')
     expect(gallery()).toHaveLength(1)
@@ -242,7 +248,7 @@ describe('saveTaskRenderToGallery', () => {
       _type: 'marketingAsset',
       organization: { _type: 'reference', _ref: 'org-B' },
       image: { _type: 'image', asset: { _type: 'reference', _ref: 'image-x' } },
-      task: { _type: 'reference', _ref: 'task-1', _weak: true },
+      task: { _type: 'reference', _ref: TASK, _weak: true },
     })
     await saveTaskRenderToGallery(entry('image-a'))
     expect(h.dataset.find((d) => d._id === 'theirs')).toMatchObject({
@@ -265,7 +271,7 @@ describe('saveTaskRenderToGallery', () => {
     // one's read and its create — which is then a no-op.
     h.beforeCreate = () =>
       h.dataset.push({
-        _id: 'marketingAsset-task-task-1',
+        _id: taskRenderAssetDocumentId(TASK),
         _type: 'marketingAsset',
         _rev: 'rev-other',
         organization: { _type: 'reference', _ref: ORG },
@@ -274,7 +280,7 @@ describe('saveTaskRenderToGallery', () => {
           _type: 'image',
           asset: { _type: 'reference', _ref: 'image-a' },
         },
-        task: { _type: 'reference', _ref: 'task-1', _weak: true },
+        task: { _type: 'reference', _ref: TASK, _weak: true },
       })
     expect(await saveTaskRenderToGallery(entry('image-b'))).toBe('replaced')
     expect(gallery()).toHaveLength(1)
