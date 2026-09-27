@@ -205,36 +205,65 @@ export function tagOwners(
   people: readonly TaggablePerson[],
   mentions: readonly Pick<MentionRecord, 'handle' | 'speakerId' | 'status'>[],
 ): Map<string, TagOwnership> {
-  const known = byHandle(people)
   const ids = new Set(people.map((p) => p.speakerId))
+  const out = new Map<string, TagOwnership>()
+  for (const [handle, owners] of bindTags(body, people, mentions)) {
+    const shared = owners.length > 1
+    owners.forEach((id, k) => {
+      if (ids.has(id) && !out.has(id))
+        out.set(id, { handle, occurrence: shared ? k : null })
+    })
+  }
+  return out
+}
+
+/**
+ * THE binding of each `@handle` occurrence to a person, shared by the save
+ * (what `mentions[]` records), the editor's tag buttons and the plain form,
+ * so all three agree on whose tag each occurrence is. Per handle, the
+ * owners in occurrence order, at most one per occurrence:
+ * 1. the people it is recorded for, in record order (they may have left
+ *    the roster: the save refuses those);
+ * 2. with nothing recorded, a handle only one person lists is theirs;
+ * 3. a handle SEVERAL list (a team account): the sharers whose plain name
+ *    is gone from the body — the ones the button swapped — in roster order;
+ * 4. any occurrence still unbound goes to the remaining sharers in roster
+ *    order, so no known handle escapes the checks.
+ * The chosen owners are then put in roster order, occurrence by occurrence.
+ * A handle nobody lists and nobody recorded is a stranger's: not bound.
+ */
+function bindTags(
+  body: string,
+  people: readonly TaggablePerson[],
+  mentions: readonly Pick<MentionRecord, 'handle' | 'speakerId' | 'status'>[],
+): Map<string, string[]> {
+  const known = byHandle(people)
   const counts = new Map<string, number>()
   for (const t of mentionTokens(body))
     counts.set(t.handle, (counts.get(t.handle) ?? 0) + 1)
-  const out = new Map<string, TagOwnership>()
+  const out = new Map<string, string[]>()
   for (const [handle, n] of counts) {
     const owners: string[] = []
-    for (const m of mentions) {
-      if (
-        m.status === 'tagged' &&
-        normaliseHandle(m.handle) === handle &&
-        ids.has(m.speakerId) &&
-        !owners.includes(m.speakerId)
-      )
-        owners.push(m.speakerId)
+    const add = (id: string) => {
+      if (owners.length < n && !owners.includes(id)) owners.push(id)
     }
-    const sharers = (known.get(handle) ?? []).filter(
-      (p) => !owners.includes(p.speakerId),
-    )
-    if (owners.length === 0 && sharers.length === 1) {
-      owners.push(sharers[0].speakerId)
-    } else {
-      for (const p of sharers)
-        if (nameIndex(body, p.name) < 0) owners.push(p.speakerId)
+    for (const m of mentions)
+      if (m.status === 'tagged' && normaliseHandle(m.handle) === handle)
+        add(m.speakerId)
+    const sharers = known.get(handle) ?? []
+    if (owners.length === 0 && sharers.length === 1) add(sharers[0].speakerId)
+    for (const p of sharers) if (nameIndex(body, p.name) < 0) add(p.speakerId)
+    for (const p of sharers) add(p.speakerId)
+    // Occurrence order is roster (talk) order — the order generation names
+    // people in — so the k-th occurrence is the k-th of them, whichever
+    // rule chose them. Recorded people no longer on the roster lead (the
+    // save refuses them).
+    const rank = (id: string) => {
+      const i = people.findIndex((p) => p.speakerId === id)
+      return i < 0 ? -1 : i
     }
-    const shared = owners.length > 1
-    owners.slice(0, n).forEach((id, k) => {
-      if (!out.has(id)) out.set(id, { handle, occurrence: shared ? k : null })
-    })
+    owners.sort((x, y) => rank(x) - rank(y))
+    if (owners.length > 0) out.set(handle, owners)
   }
   return out
 }
@@ -392,14 +421,13 @@ function planTags(input: {
 }): TagPlan[] {
   const known = byHandle(input.people)
   const byId = new Map(input.people.map((p) => [p.speakerId, p]))
-  // Every recorded person per handle: a shared (team) account can stand for
-  // several speakers, and each keeps their own record and their own checks.
-  const recorded = new Map<string, MentionRecord[]>()
-  for (const m of input.previous) {
-    if (m.status !== 'tagged') continue
-    const h = normaliseHandle(m.handle)
-    recorded.set(h, [...(recorded.get(h) ?? []), m])
-  }
+  const recordFor = (speakerId: string, handle: string) =>
+    input.previous.find(
+      (m) =>
+        m.status === 'tagged' &&
+        m.speakerId === speakerId &&
+        normaliseHandle(m.handle) === handle,
+    )
   const keys = new Set<string>()
   const keyFor = (speakerId: string, handle: string) => {
     let key = storedKey(speakerId)
@@ -408,6 +436,7 @@ function planTags(input: {
     keys.add(key)
     return key
   }
+  const bound = bindTags(input.body, input.people, input.previous)
   const seen = new Set<string>()
   const plans: TagPlan[] = []
   for (const { handle } of mentionTokens(input.body)) {
@@ -424,37 +453,32 @@ function planTags(input: {
       plans.push({ kind: 'refuse', issue: optedOutIssue(optedOut, handle) })
       continue
     }
-    const recs = recorded.get(handle)
-    if (recs) {
-      for (const rec of recs) {
-        const person = byId.get(rec.speakerId)
-        if (!person) {
-          plans.push({ kind: 'refuse', issue: notASpeaker(rec, handle) })
-        } else if (person.optedOut) {
-          plans.push({
-            kind: 'refuse',
-            issue: { ...optedOutIssue(person, handle), mentionKey: rec._key },
-          })
-        } else {
-          plans.push({
-            kind: 'record',
-            handle,
-            person,
-            key: keyFor(person.speakerId, handle),
-            ...(rec.did ? { did: rec.did } : {}),
-          })
-        }
+    // One record per occurrence owner, in occurrence order (`bindTags`).
+    for (const speakerId of bound.get(handle) ?? []) {
+      const rec = recordFor(speakerId, handle)
+      const person = byId.get(speakerId)
+      if (!person) {
+        if (rec) plans.push({ kind: 'refuse', issue: notASpeaker(rec, handle) })
+        continue
       }
-      continue
+      if (person.optedOut) {
+        plans.push({
+          kind: 'refuse',
+          issue: {
+            ...optedOutIssue(person, handle),
+            ...(rec ? { mentionKey: rec._key } : {}),
+          },
+        })
+        continue
+      }
+      plans.push({
+        kind: 'record',
+        handle,
+        person,
+        key: keyFor(person.speakerId, handle),
+        ...(rec?.did ? { did: rec.did } : {}),
+      })
     }
-    const person = known.get(handle)?.[0]
-    if (!person) continue // a stranger's handle is just text
-    plans.push({
-      kind: 'record',
-      handle,
-      person,
-      key: keyFor(person.speakerId, handle),
-    })
   }
   return plans
 }

@@ -146,41 +146,45 @@ describe('plainBody', () => {
   })
 })
 
-describe('tagOwners (per-speaker tag state)', () => {
+describe('a shared team handle, end to end: tag, save, read back', () => {
+  // Two speakers list the same team account, in talk order Bob then Alice.
   const team = { ...bob, handle: 'team.dev' }
   const mate = { ...alice, handle: 'team.dev' }
-  it('a shared handle belongs to the speaker whose name it replaced', () => {
-    expect([
-      ...tagOwners('@team.dev and Alice Anderson', [team, mate], []),
-    ]).toEqual([['speaker-bob', { handle: 'team.dev', occurrence: null }]])
-  })
-  it('recorded people keep their occurrences, and untag hands back only theirs', () => {
-    const body = '@team.dev and @team.dev'
-    const owners = tagOwners(
-      body,
-      [team, mate],
-      [tagged(team, DID_B), tagged(mate, DID_B)],
-    )
-    expect(owners.get('speaker-alice')).toEqual({
-      handle: 'team.dev',
-      occurrence: 1,
-    })
-    expect(untagOwned(body, owners.get('speaker-alice')!, mate.name)).toBe(
-      '@team.dev and Alice Anderson',
-    )
-  })
-})
+  const people = [team, mate]
+  const resolutions = new Map([['team.dev', resolved(DID_B)]])
+  const save = (body: string, previous: MentionRecord[] = []) =>
+    saveMentions({ body, people, previous, resolutions })
+  const start = 'Bob and Alice Anderson on platform teams.'
 
-describe('plainBody with a shared handle', () => {
-  it('names each occurrence after the person it was recorded for', () => {
-    const team = { ...bob, handle: 'team.dev' }
-    const mate = { ...alice, handle: 'team.dev' }
-    expect(
-      plainBody('@team.dev and @team.dev', [
-        tagged(team, DID_B),
-        tagged(mate, DID_B),
-      ]),
-    ).toBe('Bob and Alice Anderson')
+  it('tagging the second speaker records HER, and she stays tagged after the save', () => {
+    const body = tagName(start, mate)!
+    expect(body).toBe('Bob and @team.dev on platform teams.')
+    const saved = save(body)
+    expect(saved.issues).toEqual([])
+    expect(saved.mentions.map((m) => m.speakerId)).toEqual(['speaker-alice'])
+    expect([...tagOwners(body, people, saved.mentions)]).toEqual([
+      ['speaker-alice', { handle: 'team.dev', occurrence: null }],
+    ])
+    expect(plainBody(body, saved.mentions)).toBe(start)
+  })
+
+  it('tagging both records both, one per occurrence, and the plain form names each', () => {
+    const one = tagName(start, mate)!
+    const first = save(one)
+    const both = tagName(one, team)!
+    expect(both).toBe('@team.dev and @team.dev on platform teams.')
+    const saved = save(both, first.mentions)
+    expect(saved.issues).toEqual([])
+    expect(saved.mentions.map((m) => m.speakerId)).toEqual([
+      'speaker-bob',
+      'speaker-alice',
+    ])
+    expect(plainBody(both, saved.mentions)).toBe(start)
+    // "Use name" for Alice after the save hands back only her occurrence.
+    const owners = tagOwners(both, people, saved.mentions)
+    expect(untagOwned(both, owners.get('speaker-alice')!, mate.name)).toBe(
+      '@team.dev and Alice Anderson on platform teams.',
+    )
   })
 })
 
