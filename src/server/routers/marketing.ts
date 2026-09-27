@@ -553,14 +553,20 @@ async function trySaveRenderToGallery(
   conferenceId: string,
 ): Promise<'saved' | 'superseded' | 'failed'> {
   try {
+    const subject = await subjectOfThisOrganization(task.subject)
     const outcome = await saveTaskRenderToGallery({
       orgId: await requireCurrentOrgId(),
       conferenceId,
       taskId: task._id,
       imageAssetId,
       title: task.title,
-      alt: renderAlt(task),
-      subject: await subjectOfThisOrganization(task.subject),
+      // The subject's NAME only when its reference passed: a rejected one's
+      // name must not reach this organization's gallery through the alt.
+      alt: renderAlt({
+        ...task,
+        subjectName: subject ? task.subjectName : null,
+      }),
+      subject,
     })
     return outcome === 'superseded' ? 'superseded' : 'saved'
   } catch (error) {

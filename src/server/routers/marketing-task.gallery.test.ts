@@ -326,6 +326,22 @@ describe('attaching a render also saves it to the gallery (#1165)', () => {
     },
   )
 
+  it("never writes a rejected subject's name into the entry's alt text", async () => {
+    // No alt of its own: the alt is derived from the title and subject.
+    Object.assign(task(), {
+      alt: null,
+      subject: { ...ref('sp-foreign'), _weak: true },
+    })
+    await attach(FIRST)
+    expect(gallery()[0].alt).toBe('Speaker card: Ada')
+  })
+
+  it('derives the alt from a subject that passes', async () => {
+    Object.assign(task(), { alt: null })
+    await attach(FIRST)
+    expect(gallery()[0].alt).toBe('Speaker card: Ada — Ada')
+  })
+
   it('a handoff retry never recreates an entry the organizer deleted', async () => {
     await attach(FIRST)
     await assets().delete({ id: gallery()[0]._id })
