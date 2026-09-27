@@ -1063,7 +1063,7 @@ export function MemeGenerator({
         tone: 'info',
         text:
           cleared > 0
-            ? `Project deleted. ${cleared === 1 ? 'One background was' : `${cleared} backgrounds were`} only in that project and ${cleared === 1 ? 'is' : 'are'} gone; ${cleared === 1 ? 'its scene shows' : 'those scenes show'} their colour.`
+            ? `Project deleted. ${cleared === 1 ? 'One background was' : `${cleared} backgrounds were`} only in that project and ${cleared === 1 ? 'is' : 'are'} gone; ${cleared === 1 ? 'its scene shows its colour' : 'those scenes show their colour'}.`
             : 'Project deleted.',
       })
     } catch (error) {

@@ -2705,3 +2705,41 @@ export const ProjectDeleteConfirmDark: Story = {
   decorators: [withPortalTheme],
   globals: { theme: 'dark' },
 }
+
+/**
+ * After deleting a project whose background only it authorized: the
+ * background is cleared, the scene shows its colour, and the bar says so.
+ */
+export const ProjectDeletedClearsBackground: Story = {
+  args: {
+    gallery: storyGallery,
+    projects: storyProjects({
+      delete: async () => ({
+        released: [],
+        unsaveable: ['image-hall-1782x1188-png'],
+      }),
+    }),
+    initialProjectId: 'vp-launch',
+  },
+  parameters: { msw: { handlers: [proxyImage] } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const project = within(
+      await canvas.findByRole('region', { name: 'Project' }),
+    )
+    await project.findByText('All changes saved')
+    await userEvent.click(
+      project.getByRole('button', { name: 'Delete project' }),
+    )
+    const dialog = within(await within(document.body).findByRole('dialog'))
+    await userEvent.click(
+      dialog.getByRole('button', { name: 'Delete project' }),
+    )
+    await waitFor(() =>
+      expect(
+        project.getAllByText(/only in that project/)[0],
+      ).toBeInTheDocument(),
+    )
+    await expect(project.getByText('Not saved yet')).toBeVisible()
+  },
+}
