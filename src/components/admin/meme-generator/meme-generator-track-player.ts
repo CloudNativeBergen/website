@@ -177,6 +177,8 @@ export function createTrackPlayer(
       channels = next
       buffer = null
       if (at === null) return
+      // Mid-scrub, the settling scrub starts the new mix: never before.
+      if (next && scrub) return
       if (next) start(at)
       else {
         silence()

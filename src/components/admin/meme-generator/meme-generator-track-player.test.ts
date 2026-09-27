@@ -348,4 +348,18 @@ describe('the track player', () => {
     expect(sources).toHaveLength(1)
     expect(sources[0].stopped).toBe(false)
   })
+
+  it('keeps a mix that arrives mid-scrub silent until the scrub settles', () => {
+    const { ctx, sources } = fakeContext()
+    const player = createTrackPlayer(() => ctx)
+    player.load(mix(10))
+    player.play(0)
+    player.seek(5)
+    player.load(mix(12))
+    // Still scrubbing: nothing plays, the playhead stays where it was put.
+    expect(sources).toHaveLength(1)
+    expect(player.time()).toBe(5)
+    vi.advanceTimersByTime(SCRUB_SETTLE_MS)
+    expect(sources[1]).toMatchObject({ offset: 5, samples: 12 * MIX_RATE })
+  })
 })
