@@ -1645,3 +1645,75 @@ describe('a deleted Task takes its renders with it (#1162 follow-up to #1218)', 
     expect(stored('image-task-p-weak')).toBe(true)
   })
 })
+
+describe("a render Task's gallery entry outlives the Task (#1165)", () => {
+  // The entry holds its Task only WEAKLY (spec §4.3), so it neither blocks
+  // the preview nor wedges the delete, and it keeps the render's file: the
+  // shared orphan check, run for real here, counts the entry's image.
+  const image = (id: string) => ({ _type: 'image', asset: ref(id) })
+  const RENDER = 'image-task-g-render'
+  beforeEach(() => {
+    h.dataset.push(
+      doc('task-g', 'marketingTask', {
+        plan: ref('plan'),
+        campaign: ref('camp'),
+        kind: 'studioRender',
+        asset: image(RENDER),
+      }),
+      { _id: RENDER, _type: 'sanity.imageAsset' },
+      {
+        _id: 'marketingAsset-task-task-g',
+        _type: 'marketingAsset',
+        organization: ref('org-A'),
+        scope: 'edition',
+        conference: ref('conf-A'),
+        kind: 'image',
+        title: 'Speaker card',
+        alt: 'Ada',
+        image: image(RENDER),
+        task: { ...ref('task-g'), _weak: true },
+      },
+    )
+  })
+  const stored = (id: string) => h.dataset.some((row) => row._id === id)
+
+  it('deleteTask leaves the entry and its file', async () => {
+    expect(
+      await deleteTask({
+        taskId: 'task-g',
+        taskRev: 'rev-task-g',
+        conferenceId: 'conf-A',
+        variant: null,
+        dependantIds: [],
+      }),
+    ).toBe(true)
+    expect(stored('task-g')).toBe(false)
+    expect(stored('marketingAsset-task-task-g')).toBe(true)
+    expect(stored(RENDER)).toBe(true)
+  })
+
+  it.each([
+    ['plan', true],
+    ['Campaign', false],
+  ])(
+    'a %s delete is not blocked, and leaves the entry and its file',
+    async (_what, deletePlan) => {
+      const tree = await readDeletionTree(
+        'conf-A',
+        deletePlan ? undefined : 'camp',
+      )
+      expect(tree).toMatchObject({
+        strongOwnerRefs: 0,
+        danglingPrerequisites: 0,
+        heldMedia: 0,
+      })
+      expect(await attemptDelete(tree!, deletePlan)).toEqual({
+        preview: 'RESOLVED',
+        applied: 'RESOLVED',
+      })
+      expect(stored('task-g')).toBe(false)
+      expect(stored('marketingAsset-task-task-g')).toBe(true)
+      expect(stored(RENDER)).toBe(true)
+    },
+  )
+})

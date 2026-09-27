@@ -37,7 +37,11 @@ import { getSponsorFanoutContext } from '@/lib/messaging/sponsor'
 import { notifyNewMessage, notifySponsorMessage } from '@/lib/messaging/notify'
 import { claimSendSlot } from '@/lib/messaging/send-rate'
 import { runAfterResponse } from '@/server/runAfterResponse'
-import { getStudioTask, getRenderSiblings } from '@/lib/marketing/render-sanity'
+import {
+  getStudioTask,
+  getRenderSiblings,
+  type StudioTask,
+} from '@/lib/marketing/render-sanity'
 import {
   renderAlt,
   renderHandoffRecipients,
@@ -62,7 +66,12 @@ import {
   expireShortLinkIndex,
 } from '@/lib/marketing/short-link-cache'
 import type { Conference } from '@/lib/conference/types'
-import { requireDocumentInCurrentConference } from '@/server/tenancy'
+import {
+  requireCurrentOrgId,
+  requireDocumentInCurrentConference,
+  requireSpeakerInCurrentOrg,
+} from '@/server/tenancy'
+import { saveTaskRenderToGallery } from '@/lib/marketing-asset/task-render'
 import {
   AttachTaskAssetSchema,
   CreateTaskSchema,
@@ -530,6 +539,54 @@ async function loadTask(taskId: string): Promise<{
     data.variant = await getSocialVariantEditorData(data.task.variantId)
   }
   return { conferenceId, data }
+}
+
+/**
+ * Save a render Task's image to the gallery (spec §4.3, #1165). `saved` once
+ * the entry holds this image; `superseded` when the Task holds a newer render
+ * (whose own attach owns the entry). NEVER throws: the attach is already
+ * saved, and a failure leaves the Task's `galleryPending` for a retry.
+ */
+async function trySaveRenderToGallery(
+  task: StudioTask,
+  imageAssetId: string,
+  conferenceId: string,
+): Promise<'saved' | 'superseded' | 'failed'> {
+  try {
+    const outcome = await saveTaskRenderToGallery({
+      orgId: await requireCurrentOrgId(),
+      conferenceId,
+      taskId: task._id,
+      imageAssetId,
+      admitSubject: subjectOfThisOrganization,
+    })
+    return outcome === 'superseded' ? 'superseded' : 'saved'
+  } catch (error) {
+    console.error('Saving the render to the gallery failed', task._id, error)
+    return 'failed'
+  }
+}
+
+/**
+ * The Task's subject, re-checked with the gallery's own write guards (spec
+ * §3): a speaker must have standing in this organization, a talk or sponsor
+ * must belong to it. A Task's subject can be set in Studio past the Task
+ * editor's checks, and the gallery entry outlives the Task, so a subject that
+ * fails is LEFT OUT rather than stored. Any other error fails the save, for
+ * a retry.
+ */
+async function subjectOfThisOrganization(
+  subject: StudioTask['subject'],
+): Promise<StudioTask['subject']> {
+  if (!subject) return null
+  try {
+    if (subject.type === 'speaker') await requireSpeakerInCurrentOrg(subject.id)
+    else await requireDocumentInCurrentOrg(subject.id, subject.type)
+    return subject
+  } catch (error) {
+    if (error instanceof TRPCError && error.code === 'NOT_FOUND') return null
+    throw error
+  }
 }
 
 function conflict(): TRPCError {
@@ -1549,6 +1606,7 @@ export const marketingRouter = router({
         const handoffDoneFor = new Set(
           task.assetId === input.assetId ? (task.handoffDoneFor ?? []) : [],
         )
+        const receiptsBefore = handoffDoneFor.size
         // The render this one REPLACES is recorded in the save's own patch
         // (#1162), so nothing between the save and its cleanup can lose it.
         const replaced =
@@ -1562,12 +1620,31 @@ export const marketingRouter = router({
               asset: { _type: 'reference', _ref: input.assetId },
             },
             handoffDoneFor: [...handoffDoneFor],
+            // A new render is not in the gallery yet (#1165). Written with
+            // the save, so a gallery save that fails leaves a durable mark
+            // the Task editor offers a retry for; cleared with the receipts.
+            ...(task.assetId !== input.assetId ? { galleryPending: true } : {}),
           },
           task.assetId !== input.assetId ? ['pendingStudioAsset'] : [],
           undefined,
           replaced ?? undefined,
         )
         if (!saved) throw conflict()
+        // The gallery entry (spec §4.3): created, or its image replaced. One
+        // more idempotent step, BEFORE the orphan check below so the render
+        // it replaces is free to go. Never fails or rolls back the attach.
+        // Only a NEW render, or one whose save is still pending, goes to the
+        // gallery: a handoff-only retry of a saved render must not recreate
+        // an entry the organizer has since deleted.
+        const gallery =
+          task.assetId !== input.assetId || task.galleryPending === true
+            ? await trySaveRenderToGallery(task, input.assetId, conferenceId)
+            : 'skipped'
+        // Only a mark this save set, or one already there, needs clearing.
+        let galleryMarkFailed = false
+        const clearGalleryMark =
+          gallery === 'saved' &&
+          (task.assetId !== input.assetId || task.galleryPending === true)
         // Then every recorded render goes, through the shared orphan check,
         // so a post it was handed to keeps it — and keeps it recorded, for a
         // retry and for a speaker's erasure. Never fails the save.
@@ -1624,35 +1701,61 @@ export const marketingRouter = router({
           console.error('Studio handoff discovery failed', task._id, error)
           handoffFailures.push(task._id)
         }
-        if (handoffDoneFor.size > 0 || handoffFailures.length === 0) {
+        if (
+          handoffDoneFor.size > 0 ||
+          handoffFailures.length === 0 ||
+          clearGalleryMark
+        ) {
+          // When the gallery mark is all this write has to record, its
+          // failure is the gallery's to report: no publishing Task is waiting.
+          const failed = () => {
+            if (clearGalleryMark && handoffDoneFor.size === receiptsBefore)
+              galleryMarkFailed = true
+            else handoffFailures.push(task._id)
+          }
           try {
             // Never associate an older image's receipts with a newer render.
             const current = await getStudioTask(task._id, conferenceId)
-            if (
-              !current ||
-              current.assetId !== input.assetId ||
-              !(await updateTaskFields(current._id, current._rev, {
-                asset: {
-                  _type: 'image',
-                  asset: { _type: 'reference', _ref: input.assetId },
-                },
-                handoffDoneFor: [
-                  ...new Set([
-                    ...(current.handoffDoneFor ?? []),
-                    ...handoffDoneFor,
-                  ]),
-                ],
-              }))
-            )
+            if (!current || current.assetId !== input.assetId)
               handoffFailures.push(task._id)
+            else if (
+              !(await updateTaskFields(
+                current._id,
+                current._rev,
+                {
+                  asset: {
+                    _type: 'image',
+                    asset: { _type: 'reference', _ref: input.assetId },
+                  },
+                  handoffDoneFor: [
+                    ...new Set([
+                      ...(current.handoffDoneFor ?? []),
+                      ...handoffDoneFor,
+                    ]),
+                  ],
+                },
+                clearGalleryMark && current.galleryPending
+                  ? ['galleryPending']
+                  : [],
+              ))
+            )
+              failed()
           } catch (error) {
             console.error('Studio handoff receipt save failed', task._id, error)
-            handoffFailures.push(task._id)
+            failed()
           }
         }
         return {
           success: true as const,
           handoffFailures,
+          ...(gallery === 'failed' || galleryMarkFailed
+            ? { galleryFailed: true as const }
+            : {}),
+          // Only when THIS answer saved the render to the gallery: a
+          // handoff-only retry skips it, and a superseded one leaves it.
+          ...(clearGalleryMark && !galleryMarkFailed
+            ? { gallerySaved: true as const }
+            : {}),
           ...(handoffIssues.length > 0
             ? { handoffIssues: [...new Set(handoffIssues)] }
             : {}),

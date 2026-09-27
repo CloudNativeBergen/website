@@ -144,7 +144,7 @@ export default defineType({
       name: 'createdImageAssetId',
       title: 'Image asset created by this upload',
       description:
-        'Absent when Sanity already held these exact bytes. The image is deleted with the asset only while it is still this one.',
+        'Absent when Sanity already held these exact bytes. For a render Task entry, its current render. The image is deleted with the asset only while it is still this one, and only once nothing else references it.',
       type: 'string',
       readOnly: true,
       hidden: true,
@@ -214,6 +214,19 @@ export default defineType({
           options: { list: [...STUDIO_TABS] },
         }),
       ],
+    }),
+    defineField({
+      name: 'task',
+      title: 'Render Task',
+      description:
+        'The studio render Task this image came from. Rendering the Task again replaces the image here and keeps the title, tags and alt text.',
+      type: 'reference',
+      to: [{ type: 'marketingTask' }],
+      // Weak: the entry outlives its Task, Campaign and plan, and never
+      // blocks deleting them (spec §4.3).
+      weak: true,
+      readOnly: true,
+      hidden: ({ document }) => !document?.task,
     }),
   ],
   preview: {

@@ -22,10 +22,18 @@ const mocks = vi.hoisted(() => ({
   refetch: vi.fn(),
   rasterize: vi.fn(),
   upload: vi.fn(),
+  galleryList: vi.fn(),
+  galleryFilters: vi.fn(),
 }))
 vi.mock('html2canvas-pro', () => ({ default: mocks.rasterize }))
 vi.mock('@/lib/trpc/client', () => ({
   api: {
+    useUtils: () => ({
+      marketingAsset: {
+        list: { invalidate: mocks.galleryList },
+        filters: { invalidate: mocks.galleryFilters },
+      },
+    }),
     marketing: {
       task: {
         get: {
@@ -52,7 +60,11 @@ beforeEach(() => {
     ok: true,
     json: async () => ({ assetId: 'image-uploaded', taskRev: 'upload-rev' }),
   })
-  mocks.mutate.mockResolvedValue({ success: true, handoffFailures: [] })
+  mocks.mutate.mockResolvedValue({
+    success: true,
+    handoffFailures: [],
+    gallerySaved: true,
+  })
   mocks.refetch.mockResolvedValue({
     data: { task: { ...mocks.task, _rev: 'current-rev' } },
   })
@@ -108,8 +120,11 @@ describe('Studio Task attachment', () => {
     expect(request.body.get('taskId')).toBe('render-1')
     expect(request.body.get('file').type).toBe('image/png')
     expect((await screen.findByRole('status')).textContent).toBe(
-      'Image attached. This Task is complete.',
+      'Image attached and saved to the asset gallery. This Task is complete.',
     )
+    // The gallery's lists show it now, not after their cache goes stale.
+    expect(mocks.galleryList).toHaveBeenCalled()
+    expect(mocks.galleryFilters).toHaveBeenCalled()
   })
   it('uploads the real attach control raster with proxy rewriting and capture cleanup', async () => {
     const { card, image } = setup()
@@ -178,10 +193,14 @@ describe('Studio Task attachment', () => {
   })
 
   it('retries a failed handoff using the saved render without recapture or another upload', async () => {
-    mocks.mutate.mockResolvedValueOnce({
-      success: true,
-      handoffFailures: ['post-1'],
-    })
+    mocks.mutate
+      .mockResolvedValueOnce({
+        success: true,
+        handoffFailures: ['post-1'],
+        gallerySaved: true,
+      })
+      // A handoff-only retry leaves the gallery alone, and says so.
+      .mockResolvedValueOnce({ success: true, handoffFailures: [] })
     setup()
     fireEvent.click(screen.getByRole('button', { name: 'Attach to Task' }))
     const retry = await screen.findByRole('button', {
@@ -194,7 +213,10 @@ describe('Studio Task attachment', () => {
       expect((retry as HTMLButtonElement).disabled).toBe(false),
     )
     fireEvent.click(retry)
-    await screen.findByRole('status')
+    // The retry did not save to the gallery, so it does not claim it did.
+    expect((await screen.findByRole('status')).textContent).toBe(
+      'Image attached. This Task is complete.',
+    )
     expect(mocks.mutate.mock.calls).toEqual([
       [
         {
@@ -224,7 +246,7 @@ describe('Studio Task attachment', () => {
     })
     mocks.mutate.mockImplementation(async (input) => {
       if (input.taskRev !== 'r3') throw new Error('Revision conflict')
-      return { success: true, handoffFailures: [] }
+      return { success: true, handoffFailures: [], gallerySaved: true }
     })
     setup()
     fireEvent.click(screen.getByRole('button', { name: 'Attach to Task' }))
@@ -246,9 +268,49 @@ describe('Studio Task attachment', () => {
       }),
     )
     expect((await screen.findByRole('status')).textContent).toBe(
-      'Image attached. This Task is complete.',
+      'Image attached and saved to the asset gallery. This Task is complete.',
     )
     expect(mocks.rasterize).toHaveBeenCalledTimes(1)
+    expect(mocks.upload).toHaveBeenCalledTimes(1)
+  })
+  it('offers a retry when only the gallery save failed, and the retry completes it (#1165)', async () => {
+    mocks.mutate
+      .mockResolvedValueOnce({
+        success: true,
+        handoffFailures: [],
+        galleryFailed: true,
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        handoffFailures: [],
+        gallerySaved: true,
+      })
+    setup()
+    fireEvent.click(screen.getByRole('button', { name: 'Attach to Task' }))
+    expect((await screen.findByRole('alert')).textContent).toBe(
+      'The render is done and saved. It has not been saved to the asset gallery yet. Retry here or from the Task editor.',
+    )
+    // A failed save may still have changed the gallery (the entry landed,
+    // a later step failed): its lists are refreshed on every answer.
+    expect(mocks.galleryList).toHaveBeenCalled()
+    expect(mocks.galleryFilters).toHaveBeenCalled()
+    const retry = screen.getByRole('button', {
+      name: 'Retry attachment / handoff',
+    })
+    await waitFor(() =>
+      expect((retry as HTMLButtonElement).disabled).toBe(false),
+    )
+    fireEvent.click(retry)
+    await waitFor(() =>
+      expect(mocks.mutate).toHaveBeenNthCalledWith(2, {
+        taskId: 'render-1',
+        taskRev: 'current-rev',
+        assetId: 'image-uploaded',
+      }),
+    )
+    expect((await screen.findByRole('status')).textContent).toBe(
+      'Image attached and saved to the asset gallery. This Task is complete.',
+    )
     expect(mocks.upload).toHaveBeenCalledTimes(1)
   })
   it('does not offer attachment for a non-render Task', () => {

@@ -18,6 +18,8 @@ import { OWN_PAGES } from '@/lib/marketing/pages'
 import { TaskEditorPage } from './TaskEditorPage'
 
 const mocks = vi.hoisted(() => ({
+  galleryList: vi.fn(),
+  galleryFilters: vi.fn(),
   data: null as TaskEditorData | null,
   fetch: vi.fn(),
   attach: vi.fn(),
@@ -41,6 +43,10 @@ vi.mock('@/lib/trpc/client', () => {
         marketing: {
           task: { get: { fetch: mocks.fetch, invalidate: mocks.invalidate } },
           plan: { get: { invalidate: mocks.invalidate } },
+        },
+        marketingAsset: {
+          list: { invalidate: mocks.galleryList },
+          filters: { invalidate: mocks.galleryFilters },
         },
       }),
       marketing: {
@@ -484,6 +490,80 @@ describe('Task editor handoff recovery', () => {
       'Image handoff completed.',
     )
     expect(mocks.invalidate).toHaveBeenCalledWith({ taskId: 'render-1' })
+  })
+
+  it('a gallery-only retry says the render reached the gallery, not a handoff (#1165)', async () => {
+    mocks.data = {
+      ...pendingData(),
+      task: {
+        ...pendingData().task,
+        handoffPending: false,
+        galleryPending: true,
+      },
+    }
+    mocks.attach.mockResolvedValue({
+      success: true,
+      handoffFailures: [],
+      gallerySaved: true,
+    })
+    const page = render(<TaskEditorPage taskId="render-1" />)
+    fireEvent.click(screen.getByRole('button', { name: 'Save to the gallery' }))
+    await waitFor(() => expect(mocks.invalidate).toHaveBeenCalled())
+    mocks.data = {
+      ...mocks.data,
+      task: { ...mocks.data.task, galleryPending: false },
+    }
+    page.rerender(<TaskEditorPage taskId="render-1" />)
+    expect((await screen.findByRole('status')).textContent).toBe(
+      'The render is saved to the asset gallery.',
+    ) // The gallery's lists show it now, not after their cache goes stale.
+    expect(mocks.galleryList).toHaveBeenCalled()
+    expect(mocks.galleryFilters).toHaveBeenCalled()
+  })
+
+  it('never claims the gallery when the answer did not save to it', async () => {
+    mocks.data = {
+      ...pendingData(),
+      task: {
+        ...pendingData().task,
+        handoffPending: false,
+        galleryPending: true,
+      },
+    }
+    // Another tab's retry saved it first, and the organizer then deleted
+    // the entry: this answer skips the gallery.
+    mocks.attach.mockResolvedValue({ success: true, handoffFailures: [] })
+    const page = render(<TaskEditorPage taskId="render-1" />)
+    fireEvent.click(screen.getByRole('button', { name: 'Save to the gallery' }))
+    await waitFor(() => expect(mocks.invalidate).toHaveBeenCalled())
+    mocks.data = {
+      ...mocks.data,
+      task: { ...mocks.data.task, galleryPending: false },
+    }
+    page.rerender(<TaskEditorPage taskId="render-1" />)
+    expect((await screen.findByRole('status')).textContent).toBe(
+      'The render is attached to this Task.',
+    )
+  })
+
+  it('refreshes the gallery lists after a retry that reports a gallery failure too', async () => {
+    mocks.data = {
+      ...pendingData(),
+      task: {
+        ...pendingData().task,
+        handoffPending: false,
+        galleryPending: true,
+      },
+    }
+    mocks.attach.mockResolvedValue({
+      success: true,
+      handoffFailures: [],
+      galleryFailed: true,
+    })
+    render(<TaskEditorPage taskId="render-1" />)
+    fireEvent.click(screen.getByRole('button', { name: 'Save to the gallery' }))
+    await waitFor(() => expect(mocks.galleryList).toHaveBeenCalled())
+    expect(mocks.galleryFilters).toHaveBeenCalled()
   })
 
   it('bypasses a fresh cached revision when retrying the saved handoff', async () => {

@@ -7,6 +7,7 @@ import { defineConfig } from 'sanity'
 import { structureTool } from 'sanity/structure'
 import { slugOnSave } from './sanity/actions/slugOnSave'
 import { shortCodeSafeActions } from './sanity/actions/shortCodeSafeActions'
+import { taskEntrySafeActions } from './sanity/actions/taskEntrySafeActions'
 import { inlineSvgInput } from '@starefossen/sanity-plugin-inline-svg-input'
 
 // Go to https://www.sanity.io/docs/api-versioning to learn how API versioning works
@@ -44,7 +45,12 @@ export default defineConfig({
       // Duplicate is removed for the types carrying a `/go/<code>` short code
       // BEFORE the publish wrapper, so a duplicated document can never share
       // a code with the original (short-links spec §2.2).
-      shortCodeSafeActions(prev, context.schemaType).map((originalAction) =>
+      // Duplicate is also hidden on a render Task's gallery entry (#1165),
+      // which is found by the `task` a copy would carry too.
+      taskEntrySafeActions(
+        shortCodeSafeActions(prev, context.schemaType),
+        context.schemaType,
+      ).map((originalAction) =>
         originalAction.action === 'publish'
           ? slugOnSave(originalAction)
           : originalAction,

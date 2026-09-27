@@ -673,6 +673,62 @@ export const PlaceholderHandoffFailure: Story = {
     ).toBeEnabled()
   },
 }
+const pendingGalleryHandlers = [
+  http.post('/api/trpc/marketing.task.attachAsset', () =>
+    HttpResponse.json({
+      result: { data: { success: true, handoffFailures: [] } },
+    }),
+  ),
+  ...handlers(
+    fixture(
+      {
+        _id: 'task-render',
+        key: 'cfpOpenRender',
+        title: 'Render the CFP card',
+        kind: 'studioRender',
+        channel: null,
+        status: 'open',
+        complete: true,
+        variantId: null,
+        prerequisiteIds: [],
+        handoffPending: false,
+        galleryPending: true,
+        assetId: 'image-saved',
+        assetUrl: '/og/base.png',
+        date: '2027-01-08T08:00:00.000Z',
+      },
+      null,
+    ),
+  ),
+]
+
+/**
+ * The render reached every post but not the asset gallery (#1165): the
+ * attach never fails over it, and the retry completes the save.
+ */
+export const PendingGallerySave: Story = {
+  args: { taskId: 'task-render' },
+  parameters: { msw: { handlers: pendingGalleryHandlers } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(await canvas.findByRole('alert')).toHaveTextContent(
+      'The render is saved and attached to this Task, but it has not been saved to the asset gallery yet.',
+    )
+    await expect(
+      canvas.getByRole('button', { name: 'Save to the gallery' }),
+    ).toBeEnabled()
+  },
+}
+
+export const PendingGallerySaveDark: Story = {
+  ...PendingGallerySave,
+  parameters: {
+    ...PendingGallerySave.parameters,
+    theme: 'dark',
+    backgrounds: { default: 'dark' },
+  },
+}
+
 const outreach = (overrides: Partial<TaskEditorTask> = {}) =>
   fixture(
     {

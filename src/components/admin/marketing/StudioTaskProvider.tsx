@@ -30,6 +30,7 @@ function ConnectedStudioTask({
 }) {
   const query = api.marketing.task.get.useQuery({ taskId })
   const mutation = api.marketing.task.attachAsset.useMutation()
+  const utils = api.useUtils()
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
   const [failed, setFailed] = useState(false)
@@ -45,16 +46,37 @@ function ConnectedStudioTask({
     assetId: string
   }) {
     const result = await mutation.mutateAsync(input)
-    setFailed(result.handoffFailures.length > 0)
+    const handoffIncomplete = result.handoffFailures.length > 0
+    const galleryFailed = result.galleryFailed === true
+    // The gallery's lists are refreshed on EVERY answer, as the studio's
+    // own "Save to gallery" does: even a reported failure may have changed
+    // the gallery (the entry landed, a later step failed).
+    void utils.marketingAsset.list.invalidate()
+    void utils.marketingAsset.filters.invalidate()
+    const incomplete = handoffIncomplete || galleryFailed
+    setFailed(incomplete)
     setMessage(
-      result.handoffFailures.length > 0
+      incomplete
         ? [
-            'The render is done and saved. The image has not reached all publishing Tasks yet. Prerequisites are advisory, so they can publish without it. Retry here or from the Task editor.',
+            'The render is done and saved.',
+            ...(handoffIncomplete
+              ? [
+                  'The image has not reached all publishing Tasks yet. Prerequisites are advisory, so they can publish without it.',
+                ]
+              : []),
+            ...(galleryFailed
+              ? ['It has not been saved to the asset gallery yet.']
+              : []),
+            'Retry here or from the Task editor.',
             ...(result.handoffIssues ?? []),
           ].join(' ')
-        : 'Image attached. This Task is complete.',
+        : // Only an answer that saved the render claims the gallery: a
+          // handoff-only retry leaves it as the organizer left it.
+          result.gallerySaved
+          ? 'Image attached and saved to the asset gallery. This Task is complete.'
+          : 'Image attached. This Task is complete.',
     )
-    setPending(result.handoffFailures.length > 0 ? input : null)
+    setPending(incomplete ? input : null)
     await query.refetch()
   }
 
@@ -142,7 +164,7 @@ function ConnectedStudioTask({
           <button
             onClick={retry}
             disabled={busy}
-            className="mt-2 font-semibold underline disabled:opacity-50"
+            className="mt-2 mr-4 font-semibold underline disabled:opacity-50"
           >
             Retry attachment / handoff
           </button>
