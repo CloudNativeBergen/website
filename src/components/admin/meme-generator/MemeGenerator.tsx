@@ -1101,15 +1101,21 @@ export function MemeGenerator({
       if (trackFileId && savedTrack && !savedTrack.fileId)
         // The file the save stored is the one just picked and decoded.
         rekeyDecoded(savedTrack.galleryAssetId ?? null, trackFileId)
-      if (trackFileId && savedTrack)
-        // In every state that names the same file, so undo keeps it.
-        mapTrack((current) =>
-          current &&
+      // In every state undo can reach: the track saved names the file it
+      // became; one naming a file the project no longer holds falls back to
+      // its gallery entry — or, held by the project alone, is gone.
+      mapTrack((current) => {
+        if (!current) return current
+        if (
+          trackFileId &&
+          savedTrack &&
           current.galleryAssetId === savedTrack.galleryAssetId &&
           (current.fileId ?? null) === (savedTrack.fileId ?? null)
-            ? { ...current, fileId: trackFileId }
-            : current,
         )
+          return { ...current, fileId: trackFileId }
+        if (!current.fileId || current.fileId === trackFileId) return current
+        return current.galleryAssetId ? { ...current, fileId: undefined } : null
+      })
       const id = over?.id ?? result._id!
       setProject({ id, rev: result._rev })
       setConflicted(false)

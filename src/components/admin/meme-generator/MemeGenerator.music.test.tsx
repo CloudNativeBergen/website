@@ -665,4 +665,66 @@ describe('a video’s music', () => {
     // The same settings, but the entry's file may have been replaced since.
     expect(within(project()).getByText('Unsaved changes')).toBeInTheDocument()
   })
+
+  describe('undo past a save that replaced the track', () => {
+    async function replaceAndUndo(held: {
+      galleryAssetId?: string
+      fileId: string
+    }) {
+      const gallery = fakeGallery()
+      gallery.tracks.mockResolvedValue([
+        { _id: 'asset-theme', title: 'Theme', durationSeconds: 20 },
+        { _id: 'asset-outro', title: 'Outro', durationSeconds: 20 },
+      ])
+      const projects = fakeProjects()
+      projects.open.mockResolvedValue({
+        ...PROJECT,
+        track: { ...PROJECT.track!, ...held },
+      })
+      // The project now holds the new track's file.
+      projects.save.mockImplementation(async (input) => ({
+        _rev: 'rev-3',
+        scenes: input.scenes.map((s) => ({ key: s.key, fileId: null })),
+        trackFileId: input.track ? (input.track.fileId ?? 'file-outro') : null,
+        released: [],
+      }))
+      render(
+        <MemeGenerator
+          gallery={gallery}
+          projects={projects}
+          encoder={encoder}
+          initialProjectId="vp-1"
+        />,
+      )
+      await screen.findByDisplayValue('Launch teaser')
+      await within(music()).findByRole('option', { name: 'Outro (0:20)' })
+      fireEvent.change(within(music()).getByLabelText('Music'), {
+        target: { value: 'asset-outro' },
+      })
+      save()
+      await within(project()).findByText('All changes saved')
+      fireEvent.click(screen.getByRole('button', { name: /^Undo/ }))
+      return gallery
+    }
+
+    it('fetches the earlier track from its gallery entry, not the project that no longer holds it', async () => {
+      const gallery = await replaceAndUndo({
+        galleryAssetId: 'asset-theme',
+        fileId: 'file-theme',
+      })
+      await waitFor(() =>
+        expect(gallery.loadTrack).toHaveBeenLastCalledWith(
+          { asset: 'asset-theme' },
+          expect.any(AbortSignal),
+        ),
+      )
+    })
+
+    it('never brings back a track only the project held, which it no longer does', async () => {
+      await replaceAndUndo({ fileId: 'file-theme' })
+      expect(within(music()).getByLabelText('Music')).toHaveDisplayValue(
+        'No music',
+      )
+    })
+  })
 })
