@@ -215,6 +215,19 @@ export default defineType({
         }),
       ],
     }),
+    defineField({
+      name: 'task',
+      title: 'Render Task',
+      description:
+        'The studio render Task this image came from. Rendering the Task again replaces the image here and keeps the title, tags and alt text.',
+      type: 'reference',
+      to: [{ type: 'marketingTask' }],
+      // Weak: the entry outlives its Task, Campaign and plan, and never
+      // blocks deleting them (spec §4.3).
+      weak: true,
+      readOnly: true,
+      hidden: ({ document }) => !document?.task,
+    }),
   ],
   preview: {
     select: { title: 'title', subtitle: 'alt', media: 'image' },
