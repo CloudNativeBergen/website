@@ -172,6 +172,8 @@ vi.mock('@/lib/sanity/client', async () => {
 import { initTRPC } from '@trpc/server'
 import type { Context } from '@/server/trpc'
 import { marketingRouter } from './marketing'
+import { marketingAssetRouter } from './marketingAsset'
+import { deleteTask } from '@/lib/marketing/sanity'
 
 const t = initTRPC.context<Context>().create()
 function context(): Context {
@@ -187,6 +189,7 @@ function context(): Context {
   } as unknown as Context
 }
 const marketing = () => t.createCallerFactory(marketingRouter)(context())
+const assets = () => t.createCallerFactory(marketingAssetRouter)(context())
 
 const ref = (id: string) => ({ _type: 'reference', _ref: id })
 const image = (id: string) => ({ _type: 'image', asset: ref(id) })
@@ -396,6 +399,66 @@ describe('attaching a render also saves it to the gallery (#1165)', () => {
     h.galleryDown = false
     await attach(SECOND)
     expect(gallery()[0]).toMatchObject({ image: image(SECOND) })
+    expect(byId(FIRST)).toBeUndefined()
+  })
+})
+
+describe("deleting a render Task's gallery entry deletes its file once nothing holds it (#1165)", () => {
+  // The user's decision on PR #1228, spec §5: the entry's image goes through
+  // the shared orphan check like any gallery upload's, in either order.
+  const removeTask = () =>
+    deleteTask({
+      taskId: 'task-r',
+      taskRev: task()._rev as string,
+      conferenceId: 'conf-A',
+      variant: null,
+      dependantIds: [],
+    })
+  const removeEntry = () => assets().delete({ id: gallery()[0]._id })
+
+  it('Task deleted first: the entry keeps the file; deleting the entry then deletes it', async () => {
+    await attach(FIRST)
+    expect(await removeTask()).toBe(true)
+    expect(byId('task-r')).toBeUndefined()
+    expect(byId(FIRST)).toBeDefined()
+    await removeEntry()
+    expect(gallery()).toEqual([])
+    expect(byId(FIRST)).toBeUndefined()
+  })
+
+  it('after a re-render, the entry takes its CURRENT image with it', async () => {
+    await attach(FIRST)
+    upload(SECOND)
+    await attach(SECOND)
+    await removeTask()
+    expect(byId(SECOND)).toBeDefined()
+    await removeEntry()
+    expect(byId(SECOND)).toBeUndefined()
+  })
+
+  it('entry deleted first while a post holds the image: the file is kept, and still after the Task goes', async () => {
+    await attach(FIRST)
+    h.dataset.push({
+      _id: 'post-1',
+      _type: 'socialPost',
+      conference: ref('conf-A'),
+      attachments: [{ _key: 'a', image: image(FIRST), alt: 'Ada' }],
+    })
+    await removeEntry()
+    expect(gallery()).toEqual([])
+    expect(byId(FIRST)).toBeDefined()
+    await removeTask()
+    expect(byId(FIRST)).toBeDefined()
+    expect(byId('post-1')).toMatchObject({
+      attachments: [{ image: image(FIRST) }],
+    })
+  })
+
+  it('entry deleted first with no post: the Task still holds the file, and its delete takes it', async () => {
+    await attach(FIRST)
+    await removeEntry()
+    expect(byId(FIRST)).toBeDefined()
+    await removeTask()
     expect(byId(FIRST)).toBeUndefined()
   })
 })

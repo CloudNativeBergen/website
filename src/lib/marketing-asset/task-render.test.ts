@@ -167,8 +167,8 @@ describe('saveTaskRenderToGallery', () => {
         task: { _type: 'reference', _ref: 'task-1', _weak: true },
       }),
     ])
-    // Never claims the file as its own upload: the Task's upload made it.
-    expect(gallery()[0]).not.toHaveProperty('createdImageAssetId')
+    // Its own file: deleting the entry runs the orphan check on it.
+    expect(gallery()[0]).toMatchObject({ createdImageAssetId: 'image-a' })
     // A published id the gallery lists (no dot, so not a draft or version).
     expect(gallery()[0]._id).not.toContain('.')
   })
@@ -208,6 +208,7 @@ describe('saveTaskRenderToGallery', () => {
     expect(gallery()[0]).toMatchObject({
       _id: id,
       image: { asset: { _ref: 'image-b' } },
+      createdImageAssetId: 'image-b',
       title: 'Ada, final',
       alt: 'Edited alt',
       tags: ['keynote'],

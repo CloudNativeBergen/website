@@ -19,12 +19,13 @@ import type { MarketingAssetSubjectType } from './types'
  * being in the gallery. Nothing is written for a render the Task no longer
  * holds.
  *
- * The entry never records `createdImageAssetId`: the Task's own upload made
- * the file, and Sanity may have handed that upload bytes it already held, so
- * deleting the asset in the gallery never deletes the file (see the gallery's
- * delete). The file this replaces is the render the Task REPLACED, which the
- * Task already records for the shared orphan check (#1162); the caller runs
- * that check after this, so the old file goes only once nothing holds it.
+ * The entry records its image as `createdImageAssetId`, kept in step on
+ * every replace, so deleting the entry in the gallery runs the shared
+ * orphan check on it (spec §5; the user's decision on PR #1228): the file
+ * goes once NOTHING references it — the Task, a post, anything, counted
+ * across every tenant. The file this replaces is the render the Task
+ * REPLACED, which the Task already records for the same check (#1162); the
+ * caller runs it after this, so the old file goes once nothing holds it.
  *
  * Throws on failure. The caller must never let that fail the attach.
  */
@@ -105,6 +106,9 @@ export async function saveTaskRenderToGallery(
           _type: 'image',
           asset: { _type: 'reference', _ref: entry.imageAssetId },
         },
+        // The entry's own file, so deleting the entry deletes it once
+        // nothing references it (the gallery delete's orphan check).
+        createdImageAssetId: entry.imageAssetId,
       }
       // The image only, on the entry and on any Studio draft of it (which
       // would otherwise put the old image back when published). Revision
@@ -136,6 +140,7 @@ export async function saveTaskRenderToGallery(
         _type: 'image',
         asset: { _type: 'reference', _ref: entry.imageAssetId },
       },
+      createdImageAssetId: entry.imageAssetId,
       source: 'studio',
       task: { _type: 'reference', _ref: entry.taskId, _weak: true },
       ...set,

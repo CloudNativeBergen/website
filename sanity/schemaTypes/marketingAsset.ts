@@ -144,7 +144,7 @@ export default defineType({
       name: 'createdImageAssetId',
       title: 'Image asset created by this upload',
       description:
-        'Absent when Sanity already held these exact bytes. The image is deleted with the asset only while it is still this one.',
+        'Absent when Sanity already held these exact bytes. For a render Task entry, its current render. The image is deleted with the asset only while it is still this one, and only once nothing else references it.',
       type: 'string',
       readOnly: true,
       hidden: true,
