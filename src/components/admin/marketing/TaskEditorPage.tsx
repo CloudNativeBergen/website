@@ -66,8 +66,24 @@ export function TaskEditorPage({ taskId }: { taskId: string }) {
     { taskId },
     { refetchOnWindowFocus: false },
   )
+  // A Bluesky post to be posted by hand runs its tag check as the page opens
+  // (tagging spec §4.4, review T4). Queries stay fresh for 60 s, so a Task
+  // reopened within that would show a body checked BEFORE a later opt-out:
+  // ask again, and until this opening's answer arrives offer nothing to copy.
+  const [openedAt] = useState(() => query.dataUpdatedAt)
+  const { refetch } = query
+  const reopenedManual = openedAt > 0 && postedByHand(query.data)
+  useEffect(() => {
+    if (reopenedManual) void refetch()
+    // Once per opening: the check is what the page promises on open.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refetch])
+  const data =
+    query.data && openedAt > 0 && query.dataUpdatedAt <= openedAt
+      ? withPendingCheck(query.data, Boolean(query.error))
+      : query.data
 
-  if (query.error && !query.data) {
+  if (query.error && !data) {
     return (
       <div className="space-y-4">
         <BackToPlan />
@@ -81,7 +97,7 @@ export function TaskEditorPage({ taskId }: { taskId: string }) {
       </div>
     )
   }
-  if (!query.data) {
+  if (!data) {
     return (
       <div className="space-y-4">
         <BackToPlan />
@@ -93,12 +109,36 @@ export function TaskEditorPage({ taskId }: { taskId: string }) {
   // must not remount the page and drop an unsaved post body.
   return (
     <LoadedTaskEditor
-      key={query.data.task._id}
-      data={query.data}
+      key={data.task._id}
+      data={data}
       refreshing={query.isFetching}
       refreshFailed={Boolean(query.error)}
     />
   )
+}
+
+/** A Bluesky post to be posted by hand: its view runs the tag check. */
+function postedByHand(data: TaskEditorData | undefined): boolean {
+  const v = data?.variant?.variant
+  return (
+    v?.platform === 'bluesky' &&
+    (v.status === 'awaiting-manual' || v.status === 'failed')
+  )
+}
+
+/** The cached answer, with its manual body held back until a fresh check. */
+function withPendingCheck(
+  data: TaskEditorData,
+  failed: boolean,
+): TaskEditorData {
+  if (!postedByHand(data) || !data.variant) return data
+  return {
+    ...data,
+    variant: {
+      ...data.variant,
+      manualBody: failed ? { unavailable: true } : { checking: true },
+    },
+  }
 }
 
 function BackToPlan() {

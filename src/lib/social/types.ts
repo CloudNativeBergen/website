@@ -243,6 +243,14 @@ export interface ManualCheckUnavailable {
   unavailable: true
 }
 
+/**
+ * Client-only: this opening's check is still in flight, and the cached one
+ * may predate an opt-out (review T4). Nothing is offered to copy yet.
+ */
+export interface ManualCheckPending {
+  checking: true
+}
+
 /** What the single-variant editor loads: the variant and its post's inputs. */
 export interface SocialVariantEditorData {
   variant: SocialPostVariant
@@ -268,7 +276,7 @@ export interface SocialVariantEditorData {
    * §4.4) — a tag of a speaker who opted out since approval as their plain
    * name — and whose tags were dropped. Absent or null: post the stored body.
    */
-  manualBody?: ManualBody | ManualCheckUnavailable | null
+  manualBody?: ManualBody | ManualCheckUnavailable | ManualCheckPending | null
 }
 
 /** The list-view row for the admin variant table. */

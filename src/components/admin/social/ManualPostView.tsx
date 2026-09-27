@@ -11,7 +11,11 @@ import {
 } from '@heroicons/react/24/outline'
 import { AdminButton } from '@/components/admin/AdminButton'
 import type { TagByHandEntry } from '@/lib/marketing/tag-by-hand'
-import type { ManualBody, ManualCheckUnavailable } from '@/lib/social/types'
+import type {
+  ManualBody,
+  ManualCheckPending,
+  ManualCheckUnavailable,
+} from '@/lib/social/types'
 import { joinNames } from '@/lib/marketing/tagging/body'
 import { richTextImageUrl } from '@/lib/homepage/richTextImage'
 import {
@@ -57,7 +61,7 @@ export interface ManualPostViewProps {
    * their plain name. Shown and copied in place of `variant.body` until the
    * post is recorded; absent or null: the stored body.
    */
-  manualBody?: ManualBody | ManualCheckUnavailable | null
+  manualBody?: ManualBody | ManualCheckUnavailable | ManualCheckPending | null
 }
 
 const defaultImageSrc = (asset: SocialPostAttachment) =>
@@ -119,8 +123,9 @@ export function ManualPostView({
   // FAIL CLOSED (review T1): the check could not run, so the stored body may
   // still tag a speaker who opted out. Nothing is offered to copy.
   const unchecked = pending !== null && 'unavailable' in pending
-  const checked =
-    pending !== null && !('unavailable' in pending) ? pending : null
+  // This opening's check is still running (review T4): nothing to copy yet.
+  const checking = pending !== null && 'checking' in pending
+  const checked = pending !== null && 'body' in pending ? pending : null
   const body = checked?.body ?? variant.body
   const link = variant.link?.trim() || null
   // Where the link goes by hand (spec §3.1, #1134).
@@ -287,7 +292,16 @@ export function ManualPostView({
         </p>
       )}
 
-      {!unchecked && (
+      {checking && (
+        <p
+          role="status"
+          className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700 dark:border-gray-700 dark:bg-gray-800/50 dark:text-gray-300"
+        >
+          Checking this post&apos;s tags&hellip;
+        </p>
+      )}
+
+      {!unchecked && !checking && (
         <Section
           title="Text"
           hint={[

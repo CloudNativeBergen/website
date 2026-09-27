@@ -631,3 +631,98 @@ describe('Task editor handoff recovery', () => {
     ).toBe('/admin/marketing/tasks/render-1')
   })
 })
+
+describe('Task editor manual post view — a fresh check on every opening (review T4)', () => {
+  const TAGGED = 'Hello @alice.dev'
+  const PLAIN = 'Hello Alice Smith'
+  function manualData(manualBody: string | null): TaskEditorData {
+    const data = pendingData()
+    return {
+      ...data,
+      task: {
+        ...data.task,
+        _id: 'post-1',
+        kind: 'publishing',
+        channel: 'bluesky',
+        variantId: 'v-1',
+        complete: false,
+        handoffPending: false,
+        assetUrl: null,
+        assetId: null,
+      },
+      variant: {
+        variant: {
+          _id: 'v-1',
+          _rev: 'r1',
+          postId: 'p-1',
+          conferenceId: 'c-1',
+          orgId: 'o-1',
+          platform: 'bluesky',
+          body: TAGGED,
+          status: 'awaiting-manual',
+          scheduledAt: null,
+          usesCustomTime: false,
+          claimedAt: null,
+          submission: null,
+          shortCode: null,
+          link: null,
+          attachments: [],
+          publishResult: null,
+          attempts: [],
+          attemptCount: 0,
+        },
+        post: { attachments: [], defaultScheduledAt: null },
+        conferenceDomains: [],
+        ...(manualBody
+          ? {
+              manualBody: {
+                body: manualBody,
+                untagged: ['Alice Smith'],
+                removed: 0,
+              },
+            }
+          : {}),
+      },
+    }
+  }
+
+  it('reopening the page within the 60 s cache never shows the body checked for an earlier opening', async () => {
+    // The app's default: data stays fresh for 60 s.
+    const client = new QueryClient({
+      defaultOptions: { queries: { staleTime: 60 * 1000, retry: false } },
+    })
+    const queryKey = ['marketing.task.get', { taskId: 'post-1' }]
+    mocks.query.mockImplementation(function useTaskQuery(
+      _input: unknown,
+      options: object,
+    ) {
+      return useQuery({ queryKey, queryFn: () => mocks.fetch(), ...options })
+    })
+    const page = () => (
+      <QueryClientProvider client={client}>
+        <TaskEditorPage taskId="post-1" />
+      </QueryClientProvider>
+    )
+
+    // First opening: nobody has opted out yet.
+    mocks.fetch.mockResolvedValueOnce(manualData(null))
+    const first = render(page())
+    expect(await screen.findByText(TAGGED)).toBeTruthy()
+    first.unmount()
+
+    // Alice opts out; the organizer comes back to the Task.
+    let answer: (data: TaskEditorData) => void = () => {}
+    mocks.fetch.mockImplementationOnce(
+      () => new Promise((resolve) => (answer = resolve)),
+    )
+    render(page())
+    await waitFor(() => expect(mocks.fetch).toHaveBeenCalledTimes(2))
+    // The cached (tagged) body is not offered while this opening's check runs.
+    expect(screen.queryByText(TAGGED)).toBeNull()
+    expect(screen.queryByRole('button', { name: /copy text/i })).toBeNull()
+
+    await act(async () => answer(manualData(PLAIN)))
+    expect(await screen.findByText(PLAIN)).toBeTruthy()
+    expect(screen.queryByText(TAGGED)).toBeNull()
+  })
+})
