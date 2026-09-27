@@ -1460,6 +1460,9 @@ export function MemeGenerator({
     // A file already decoded is never fetched again, whichever way it is
     // reached now.
     if (!trackKey || !source || !loadTrack || decodedKey === trackKey) return
+    // Another track's samples — up to hundreds of megabytes for a long
+    // one — are let go of now, not once this one has decoded too.
+    if (decodedKey !== null) setDecoded(null)
     // Given up on — another track picked, or the editor left — the fetch is
     // aborted, never left streaming megabytes nobody will decode.
     const abort = new AbortController()

@@ -28,12 +28,25 @@ vi.mock('./meme-generator-draw', async (importOriginal) => ({
 vi.mock('./meme-generator-track-player', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./meme-generator-track-player')>()),
   // Twenty seconds of silence at 48 kHz, whatever the bytes.
-  decodeTrack: async () => [
-    new Float32Array(20 * 48_000),
-    new Float32Array(20 * 48_000),
-  ],
+  decodeTrack: async () => {
+    const channels = [
+      new Float32Array(20 * 48_000),
+      new Float32Array(20 * 48_000),
+    ]
+    decodedRefs.push(new WeakRef(channels[0]))
+    return channels
+  },
 }))
+/** Every decoded track, weakly: whether the editor still holds one. */
+const decodedRefs: WeakRef<Float32Array>[] = []
+/** A full garbage collection, without the --expose-gc flag. */
+const collectGarbage = () => {
+  setFlagsFromString('--expose-gc')
+  ;(runInNewContext('gc') as () => void)()
+}
 
+import { setFlagsFromString } from 'node:v8'
+import { runInNewContext } from 'node:vm'
 import { MemeGenerator } from './MemeGenerator'
 
 const PROJECT: OpenedProject = {
@@ -535,5 +548,32 @@ describe('a video’s music', () => {
     })
     fireEvent.blur(within(music()).getByLabelText('Fade in'))
     expect(within(music()).getByText(clip)).toBeInTheDocument()
+  })
+
+  it('lets go of the last track’s samples as soon as another is picked, not once it has decoded', async () => {
+    const gallery = fakeGallery()
+    gallery.tracks.mockResolvedValue([
+      { _id: 'asset-theme', title: 'Theme', durationSeconds: 20 },
+      { _id: 'asset-outro', title: 'Outro', durationSeconds: 20 },
+    ])
+    render(<MemeGenerator gallery={gallery} encoder={encoder} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Video' }))
+    await within(music()).findByRole('option', { name: 'Outro (0:20)' })
+    const select = within(music()).getByLabelText('Music')
+    fireEvent.change(select, { target: { value: 'asset-theme' } })
+    await within(music()).findByText(/Plays from/)
+    const first = decodedRefs[decodedRefs.length - 1]
+    // The next track's fetch never finishes.
+    gallery.loadTrack.mockImplementation(() => new Promise(() => {}))
+    fireEvent.change(select, { target: { value: 'asset-outro' } })
+    await within(music()).findByText('Loading the track…')
+    // Two more commits, so no alternate fiber still holds the old props.
+    for (const value of ['50', '60'])
+      fireEvent.change(within(music()).getByLabelText(/Volume/), {
+        target: { value },
+      })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    collectGarbage()
+    expect(first.deref()).toBeUndefined()
   })
 })
