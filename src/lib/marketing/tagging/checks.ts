@@ -308,6 +308,21 @@ export function replacementText(p: { name: string; gone?: boolean }): string {
 }
 
 /**
+ * {@link bindTags} with the roster: per handle, the speaker ids owning its
+ * occurrences, in occurrence order (extra occurrences: the last owner's).
+ */
+export function occurrenceOwnersWithRoster(
+  body: string,
+  people: readonly TaggablePerson[],
+  mentions: readonly Pick<
+    MentionRecord,
+    'handle' | 'speakerId' | 'status' | 'name'
+  >[],
+): Map<string, string[]> {
+  return bindTags(body, people, mentions)
+}
+
+/**
  * {@link bindTags} over the recorded mentions alone — what the publish tick
  * has, with no roster to hand (tagging spec §4.4, Publish). Per handle, the
  * record ids that own its occurrences, in occurrence order.

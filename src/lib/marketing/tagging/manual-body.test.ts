@@ -146,6 +146,38 @@ describe('manualPostBody', () => {
     expect(out?.body).not.toContain('@x.io')
   })
 
+  it('a shared handle keeps the tag of the owner who did NOT opt out (final round, T4)', async () => {
+    seed(true)
+    const body = '@team.dev and @team.dev are speaking at the conf.'
+    const team = (id: string, name: string) => ({
+      ...mention(id, 'team.dev', name),
+      did: 'did:plc:team',
+    })
+    h.dataset = h.dataset.map((d) =>
+      d._id === 'alice' || d._id === 'bob'
+        ? { ...d, links: ['https://bsky.app/profile/team.dev'] }
+        : d._id === 'variant-A'
+          ? {
+              ...d,
+              body,
+              mentions: [
+                team('alice', 'Alice Smith'),
+                team('bob', 'Bob Jones'),
+              ],
+            }
+          : d,
+    )
+    h.resolve.mockImplementation(async () => ({
+      kind: 'resolved',
+      did: 'did:plc:team',
+    }))
+    const out = await manualPostBody({ ...input, body })
+    // Alice's occurrence is her name; Bob's stays his tag — never her name.
+    expect(out?.body).toBe(
+      'Alice Smith and @team.dev are speaking at the conf.',
+    )
+  })
+
   it('nobody opted out: nothing to change', async () => {
     seed(false)
     expect(await manualPostBody(input)).toBeNull()

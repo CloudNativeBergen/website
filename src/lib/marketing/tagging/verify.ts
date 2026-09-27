@@ -14,6 +14,7 @@ import {
   approvalCheck,
   approvalHandlesToResolve,
   fixTagIssue,
+  occurrenceOwnersWithRoster,
   replacementText,
   handlesToResolve,
   mentionTokens,
@@ -193,14 +194,44 @@ export async function manualPostBody(input: {
   // No fixed pass limit (final round, T1): every fix turns a tag into text,
   // so there are at most as many useful passes as tags. Anything still
   // refused after that FAILS CLOSED — the view offers nothing to copy.
+  // Per occurrence, whose tag is it (final round, T4)? An opted-out speaker
+  // who merely LISTS a shared handle does not own the occurrence the check
+  // binds to someone else: that one is left as it is, never given her name.
+  const byId = new Map(people.map((p) => [p.speakerId, p]))
+  const optedOutOwned = (text: string, handle: string) => {
+    const owners = occurrenceOwnersWithRoster(text, people, mentions).get(
+      handle,
+    )
+    const tokens = mentionTokens(text).filter((t) => t.handle === handle)
+    return tokens.flatMap((t, k) => {
+      const id = owners?.[Math.min(k, owners.length - 1)]
+      const person = id ? byId.get(id) : undefined
+      return person?.optedOut ? [{ ...t, person }] : []
+    })
+  }
   const refused = (issues: readonly TagIssue[]) =>
-    issues.filter((i) => i.code !== 'plain-too-long')
+    issues.filter(
+      (i) =>
+        i.code !== 'plain-too-long' &&
+        !(i.code === 'opted-out' && optedOutOwned(body, i.handle).length === 0),
+    )
   let issues = check.issues
   const maxPasses = mentionTokens(body).length + 1
   for (let pass = 0; pass < maxPasses; pass++) {
     let changed = false
     for (const issue of issues) {
       if (issue.code === 'plain-too-long') continue
+      if (issue.code === 'opted-out') {
+        // Every occurrence an opted-out speaker OWNS, each with that
+        // speaker's own replacement; occurrences owned by others stay.
+        const owned = optedOutOwned(body, issue.handle)
+        for (const t of [...owned].reverse())
+          body = `${body.slice(0, t.start)}${replacementText({ name: t.person.name })}${body.slice(t.end)}`
+        for (const t of owned)
+          if (!untagged.includes(t.person.name)) untagged.push(t.person.name)
+        if (owned.length > 0) changed = true
+        continue
+      }
       // Someone no longer a speaker here — erased, deleted or taken off the
       // programme. The name on the record may be an erased person's real
       // name, so it is never shown or copied: a neutral word stands in.
