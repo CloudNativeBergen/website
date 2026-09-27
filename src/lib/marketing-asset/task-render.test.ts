@@ -22,6 +22,8 @@ const h = vi.hoisted(() => ({
   beforeCreate: null as null | (() => void),
   /** Runs once, right after the Task is read: a newer attach landing. */
   afterTaskRead: null as null | (() => void),
+  /** Runs once, just before a transaction lands: Studio opening a draft. */
+  beforeTransaction: null as null | (() => void),
 }))
 
 vi.mock('server-only', () => ({}))
@@ -47,6 +49,7 @@ vi.mock('@/lib/sanity/client', async () => {
       const race = h.beforeCreate
       h.beforeCreate = null
       h.afterTaskRead = null
+      h.beforeTransaction = null
       race?.()
       const id = m.createIfNotExists._id as string
       const existing = h.dataset.find((d) => d._id === id)
@@ -105,6 +108,9 @@ vi.mock('@/lib/sanity/client', async () => {
       transaction: () => {
         const tx = real.transaction()
         tx.commit = (async () => {
+          const race = h.beforeTransaction
+          h.beforeTransaction = null
+          race?.()
           // All or nothing, as a Sanity transaction is.
           const before = structuredClone(h.dataset)
           try {
@@ -379,6 +385,28 @@ describe('saveTaskRenderToGallery', () => {
     // Nothing moved: publishing the release could not undo a replace.
     expect(h.dataset.find((d) => d._id === published._id)).toMatchObject({
       image: { asset: { _ref: 'image-a' } },
+    })
+  })
+
+  it('a Studio draft opened between the draft check and the commit still gets the new image', async () => {
+    await saveTaskRenderToGallery(entry('image-a'))
+    const published = gallery()[0]
+    // An organizer starts editing: Studio copies the published entry, with
+    // its OLD image, into a draft — after this save looked for a draft.
+    h.beforeTransaction = () =>
+      h.dataset.push({
+        ...structuredClone(published),
+        _id: `drafts.${published._id}`,
+        _rev: 'rev-draft',
+        title: 'Being edited',
+      })
+    expect(await saveTaskRenderToGallery(entry('image-b'))).toBe('replaced')
+    expect(
+      h.dataset.find((d) => d._id === `drafts.${published._id}`),
+    ).toMatchObject({
+      image: { asset: { _ref: 'image-b' } },
+      createdImageAssetId: 'image-b',
+      title: 'Being edited',
     })
   })
 })

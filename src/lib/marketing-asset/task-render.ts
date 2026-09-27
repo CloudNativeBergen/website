@@ -80,16 +80,61 @@ async function readState(entry: TaskRenderGalleryEntry) {
   return { task, existing }
 }
 
-/** Whether a Studio draft of the entry exists, so its image moves too. */
-async function hasDraft(orgId: string, id: string): Promise<boolean> {
-  const n = await scopedFetch<{ n: number } | null>(
-    clientReadUncached,
-    { orgId },
-    `{ "n": count(*[_type == "marketingAsset" && _id == $draftId]) }`,
-    { draftId: `drafts.${id}` },
-    { cache: 'no-store' },
+/** The image fields a render writes on its entry. */
+function imageFields(imageAssetId: string) {
+  return {
+    image: {
+      _type: 'image',
+      asset: { _type: 'reference', _ref: imageAssetId },
+    },
+    // The entry's own file, so deleting the entry deletes it once nothing
+    // references it (the gallery delete's orphan check).
+    createdImageAssetId: imageAssetId,
+  }
+}
+
+/**
+ * Give a Studio draft of the entry this render too, image only: publishing
+ * a draft that still holds the old image would put it back after the Task's
+ * pending mark was cleared.
+ *
+ * Checked AFTER the entry's own write, not before it: a patch cannot say "if
+ * this document exists", so no transaction can cover a draft Studio opens in
+ * the meantime. Afterwards it can: a draft opened later is copied from the
+ * entry, which holds this render already, and one opened in between is
+ * found here. Revision-guarded, so an organizer's save in between is read
+ * again. Throws if it cannot finish, and the save stays pending.
+ */
+async function syncDraftImage(
+  entry: TaskRenderGalleryEntry,
+  id: string,
+): Promise<void> {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const draft = await scopedFetch<{
+      _rev: string
+      assetId: string | null
+    } | null>(
+      clientReadUncached,
+      { orgId: entry.orgId },
+      `*[_type == "marketingAsset" && _id == $draftId][0]{ _rev, "assetId": image.asset._ref }`,
+      { draftId: `drafts.${id}` },
+      { cache: 'no-store' },
+    )
+    if (!draft || draft.assetId === entry.imageAssetId) return
+    try {
+      await clientWrite
+        .patch(`drafts.${id}`)
+        .ifRevisionId(draft._rev)
+        .set(imageFields(entry.imageAssetId))
+        .commit()
+      return
+    } catch (error) {
+      if (!isRevisionConflict(error)) throw error
+    }
+  }
+  throw new Error(
+    `The Studio draft of gallery entry ${id} kept changing; its image is replaced on the next retry`,
   )
-  return (n?.n ?? 0) > 0
 }
 
 /** Sanity refused a revision guard: something moved since the read. */
@@ -122,10 +167,15 @@ export async function saveTaskRenderToGallery(
       .patch(entry.taskId, (p) =>
         p.ifRevisionId(task._rev).unset(['_galleryGuard']),
       )
+    const taskRenderEntryId =
+      existing?._id ?? taskRenderAssetDocumentId(entry.taskId)
     let outcome: 'created' | 'replaced'
     if (existing) {
-      if (existing.assetId === entry.imageAssetId)
+      if (existing.assetId === entry.imageAssetId) {
+        // Also on a retry: a draft a failed save left behind catches up.
+        await syncDraftImage(entry, existing._id)
         return created ? 'created' : 'unchanged'
+      }
       // A Content Release copy would put the old image back when it is
       // published, after this save had cleared the Task's pending mark. So
       // the save fails, and stays pending, until the release lets it go —
@@ -136,20 +186,10 @@ export async function saveTaskRenderToGallery(
         throw new Error(
           `The gallery entry ${existing._id} is part of a Content Release in Studio; its image is replaced once the release lets it go`,
         )
-      const image = {
-        image: {
-          _type: 'image',
-          asset: { _type: 'reference', _ref: entry.imageAssetId },
-        },
-        // The entry's own file, so deleting the entry deletes it once
-        // nothing references it (the gallery delete's orphan check).
-        createdImageAssetId: entry.imageAssetId,
-      }
-      // The image only, on the entry and on any Studio draft of it (which
-      // would otherwise put the old image back when published).
-      tx.patch(existing._id, (p) => p.ifRevisionId(existing._rev).set(image))
-      if (await hasDraft(entry.orgId, existing._id))
-        tx.patch(`drafts.${existing._id}`, (p) => p.set(image))
+      // The image only. A Studio draft of the entry follows once this lands.
+      tx.patch(existing._id, (p) =>
+        p.ifRevisionId(existing._rev).set(imageFields(entry.imageAssetId)),
+      )
       outcome = 'replaced'
     } else {
       // A create that lost a race to another attach is a no-op; the next
@@ -185,7 +225,10 @@ export async function saveTaskRenderToGallery(
       if (isRevisionConflict(error)) continue
       throw error
     }
-    if (outcome === 'replaced') return 'replaced'
+    if (outcome === 'replaced') {
+      await syncDraftImage(entry, taskRenderEntryId)
+      return 'replaced'
+    }
     created = true
   }
   throw new Error(
