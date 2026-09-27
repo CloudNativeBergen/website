@@ -2,6 +2,7 @@
 
 import { useMemo } from 'react'
 import { api } from '@/lib/trpc/client'
+import { trackUrl } from '@/lib/video-project'
 import { blobAssetUploader } from '@/components/admin/marketing/assets/upload'
 import type { BackgroundGallery } from './meme-generator-gallery'
 
@@ -39,6 +40,31 @@ export function useStudioGallery(orgId: string): BackgroundGallery {
       // exists, and a cached answer can predate its deletion.
       resolve: (id) =>
         utils.marketingAsset.background.fetch({ id }, { staleTime: 0 }),
+      tracks: async () => {
+        const rows = await utils.marketingAsset.list.fetch(undefined)
+        return rows.flatMap((row) =>
+          row.kind === 'audio'
+            ? [
+                {
+                  _id: row._id,
+                  title: row.title,
+                  durationSeconds: row.durationSeconds ?? 0,
+                },
+              ]
+            : [],
+        )
+      },
+      loadTrack: async (source, signal) => {
+        // Bounded, so a fetch that never settles fails — with Try again —
+        // rather than leaving Export waiting for the music for ever.
+        const response = await fetch(trackUrl(source), {
+          signal: AbortSignal.any([signal, AbortSignal.timeout(120_000)]),
+        })
+        const fileId = response.headers.get('x-track-file')
+        if (!response.ok || !fileId)
+          throw new Error('The track could not be loaded.')
+        return { bytes: await response.arrayBuffer(), fileId }
+      },
       keep: async (file, { title, alt }) => {
         // Organization-wide, with nothing else said about it: the Assets
         // page is where it gets a subject, tags or an edition.

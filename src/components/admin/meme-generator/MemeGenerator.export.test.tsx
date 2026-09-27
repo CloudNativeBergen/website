@@ -88,6 +88,7 @@ function fakeEncoder({
   const encoder: EncoderBackend = {
     supports: async () => supported,
     probe: async () => true,
+    prepareAudio: async () => ({ priming: 0 }),
     open: async (): Promise<EncodeSession> => {
       state.opened++
       let frames = 0

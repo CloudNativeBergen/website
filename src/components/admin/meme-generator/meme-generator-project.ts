@@ -1,6 +1,7 @@
 import type {
   OpenedProject,
   OpenedScene,
+  OpenedTrack,
   ProjectSceneInput,
   ProjectTrackInput,
   VideoProjectRow,
@@ -8,6 +9,7 @@ import type {
 import type { MemeDesign } from './meme-generator-draw'
 import type { ElementId, ElementMotion } from './meme-generator-motion'
 import type { Scene } from './meme-generator-timeline'
+import type { VideoTrack } from './meme-generator-music'
 
 /**
  * The editor's scenes as a saved project (docs/MARKETING_STUDIO_VIDEO_SPEC.md
@@ -27,15 +29,24 @@ export interface VideoProjects {
     track?: ProjectTrackInput | null
     /** A project whose files the new one may hold as that one does. */
     copyFilesFrom?: string
-  }) => Promise<{ _id: string; _rev: string; scenes: SceneFile[] }>
+  }) => Promise<{
+    _id: string
+    _rev: string
+    scenes: SceneFile[]
+    /** The file the track became; null without one. */
+    trackFileId?: string | null
+  }>
   save: (input: {
     id: string
     rev: string
     title: string
     scenes: ProjectSceneInput[]
+    /** Null removes the stored track. */
+    track?: ProjectTrackInput | null
   }) => Promise<{
     _rev: string
     scenes: SceneFile[]
+    trackFileId?: string | null
     /** Files this save let go of that are now deleted: never drawn again. */
     released: string[]
   }>
@@ -146,9 +157,28 @@ export function fromProjectScenes(scenes: OpenedScene[]): Scene[] {
  * gallery asset — two gallery entries can share one deduplicated file — but
  * not the file id a save carries back.
  */
-export function projectSnapshot(title: string, scenes: Scene[]): string {
+export function projectSnapshot(
+  title: string,
+  scenes: Scene[],
+  track: VideoTrack | null = null,
+): string {
   return stableJson({
     title: title.trim(),
+    // The track by what is heard: the file a project holds, or — for one
+    // picked afresh — the gallery entry, whose file a save resolves then
+    // (it may since have been replaced); and the settings. Not its title,
+    // which a save does not store.
+    track: track
+      ? {
+          file: track.fileId
+            ? `file:${track.fileId}`
+            : `gallery:${track.galleryAssetId ?? ''}`,
+          start: track.start,
+          volume: track.volume,
+          fadeIn: track.fadeIn,
+          fadeOut: track.fadeOut,
+        }
+      : null,
     scenes: scenes.map((scene) => ({
       ...scene,
       design: {
@@ -200,7 +230,7 @@ export function carryFiles(
   states: Scene[],
   files: Map<string, string>,
 ): Scene[] {
-  return states.map((scene) => {
+  const carried = states.map((scene) => {
     const image = scene.design.background.image
     const fileId = image ? files.get(image.url) : undefined
     if (!image || !fileId || image.fileId === fileId) return scene
@@ -215,6 +245,9 @@ export function carryFiles(
       },
     }
   })
+  // Nothing new to carry: the same list, so a save that changes nothing
+  // drawn never makes a finished export look out of date.
+  return carried.every((scene, i) => scene === states[i]) ? states : carried
 }
 
 /**
@@ -280,4 +313,36 @@ export function dropUnsaveable(
       },
     }
   })
+}
+
+/** The video's track as the server takes it. */
+export function toProjectTrack(
+  track: VideoTrack | null,
+): ProjectTrackInput | null {
+  if (!track) return null
+  const { start, volume, fadeIn, fadeOut, galleryAssetId, fileId } = track
+  return {
+    ...(galleryAssetId ? { galleryAssetId } : {}),
+    ...(fileId ? { fileId } : {}),
+    start,
+    volume,
+    fadeIn,
+    fadeOut,
+  }
+}
+
+/** An opened project's track as the editor holds it. */
+export function fromProjectTrack(track: OpenedTrack | null): VideoTrack | null {
+  if (!track) return null
+  const { start, volume, fadeIn, fadeOut, galleryAssetId, fileId, title } =
+    track
+  return {
+    title,
+    fileId,
+    ...(galleryAssetId ? { galleryAssetId } : {}),
+    start,
+    volume,
+    fadeIn,
+    fadeOut,
+  }
 }

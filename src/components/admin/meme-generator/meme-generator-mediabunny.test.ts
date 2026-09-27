@@ -15,6 +15,10 @@ let releaseCancel = () => {}
 /** Set by a test: `add()` stays pending until the output is cancelled, then rejects. */
 let addWaitsForCancel = false
 let rejectAdd = () => {}
+let rejectAudio = () => {}
+let audioAddFails = false
+/** Set by a test: the test encode finishes, and its decode never yields. */
+let audioAddSucceeds = false
 
 vi.mock('mediabunny', () => {
   class Output {
@@ -29,9 +33,11 @@ vi.mock('mediabunny', () => {
         }
       })
     }
+    addAudioTrack() {}
     cancel() {
       log.push('cancel')
       rejectAdd()
+      rejectAudio()
       return new Promise<void>((resolve) => {
         releaseCancel = () => {
           log.push('closed')
@@ -57,8 +63,44 @@ vi.mock('mediabunny', () => {
   return {
     Output,
     CanvasSource,
-    BufferTarget: class {},
+    BufferTarget: class {
+      buffer = audioAddSucceeds ? new ArrayBuffer(8) : null
+    },
+    AudioBufferSource: class {
+      add() {
+        log.push('audio-add')
+        if (audioAddFails)
+          return Promise.reject(new Error('EncodingError: audio'))
+        if (audioAddSucceeds) return Promise.resolve()
+        // The track's encode, still running: it settles only if cancelled.
+        return new Promise<void>((_, reject) => {
+          rejectAudio = () => reject(new Error('The output was canceled.'))
+        })
+      }
+      close() {}
+    },
+    Quality: class {},
     Mp4OutputFormat: class {},
+    canEncodeAudio: async () => true,
+    ALL_FORMATS: [],
+    AudioBufferSink: class {
+      buffers() {
+        log.push('decode')
+        return {
+          [Symbol.asyncIterator]: () => ({
+            // A decode that never delivers a buffer.
+            next: () => new Promise<never>(() => {}),
+          }),
+        }
+      }
+    },
+    BufferSource: class {},
+    Input: class {
+      getPrimaryAudioTrack = async () => ({})
+      dispose() {
+        log.push('input-disposed')
+      }
+    },
     canEncodeVideo: async () => {
       if (canEncodeFails)
         throw new Error('Failed to fetch dynamically imported module')
@@ -164,5 +206,131 @@ describe('mediabunnyBackend.supports', () => {
 
   it('answers no where there is no VideoEncoder at all', async () => {
     await expect(mediabunnyBackend.supports()).resolves.toBe(false)
+  })
+})
+
+describe('mediabunnyBackend.open with a track', () => {
+  it('hands back a session that can be cancelled while the track still encodes, and adds no frame before it', async () => {
+    vi.stubGlobal(
+      'AudioBuffer',
+      class {
+        copyToChannel() {}
+      },
+    )
+    const samples = new Float32Array(48_000)
+    const opening = mediabunnyBackend.open(
+      document.createElement('canvas'),
+      { latencyMode: 'quality', keyFrames: 'default' },
+      { channels: [samples, samples] },
+    )
+    await vi.waitFor(() => expect(log).toContain('start'))
+    releaseStart()
+    const session = await opening
+    expect(log).toContain('audio-add')
+    const frame = session.add(0, 1 / 30).catch((error: Error) => error.message)
+    await tick()
+    // The first frame waits for the track.
+    expect(log).not.toContain('add')
+    const cancelled = session.cancel()
+    expect(log).toContain('cancel')
+    releaseCancel()
+    await cancelled
+    expect(await frame).toBe('The output was canceled.')
+    vi.unstubAllGlobals()
+  })
+})
+
+describe('mediabunnyBackend.prepareAudio', () => {
+  it('cancels the measuring output when the test encode fails, and exports silent for it', async () => {
+    vi.stubGlobal(
+      'AudioBuffer',
+      class {
+        copyToChannel() {}
+      },
+    )
+    audioAddFails = true
+    const preparing = mediabunnyBackend.prepareAudio(
+      new AbortController().signal,
+    )
+    await vi.waitFor(() => expect(log).toContain('start'))
+    releaseStart()
+    await vi.waitFor(() => expect(log).toContain('cancel'))
+    releaseCancel()
+    expect(await preparing).toEqual({ silent: 'unmeasured' })
+    audioAddFails = false
+    vi.unstubAllGlobals()
+  })
+})
+
+describe('mediabunnyBackend.prepareAudio, stopped', () => {
+  it('cancels the measuring output when told to stop while it runs', async () => {
+    vi.stubGlobal(
+      'AudioBuffer',
+      class {
+        copyToChannel() {}
+      },
+    )
+    const stop = new AbortController()
+    const preparing = mediabunnyBackend.prepareAudio(stop.signal)
+    await vi.waitFor(() => expect(log).toContain('start'))
+    releaseStart()
+    // The test encode is running (it never finishes by itself here).
+    await vi.waitFor(() => expect(log).toContain('audio-add'))
+    stop.abort()
+    await vi.waitFor(() => expect(log).toContain('cancel'))
+    releaseCancel()
+    expect(await preparing).toEqual({ silent: 'unmeasured' })
+    vi.unstubAllGlobals()
+  })
+})
+
+describe('mediabunnyBackend.prepareAudio, stopped while decoding', () => {
+  it('lets go of the decoder when stopped while it decodes the test encode back', async () => {
+    vi.stubGlobal(
+      'AudioBuffer',
+      class {
+        copyToChannel() {}
+      },
+    )
+    audioAddSucceeds = true
+    const stop = new AbortController()
+    const preparing = mediabunnyBackend.prepareAudio(stop.signal)
+    await vi.waitFor(() => expect(log).toContain('start'))
+    releaseStart()
+    await vi.waitFor(() => expect(log).toContain('decode'))
+    stop.abort()
+    await vi.waitFor(() => expect(log).toContain('input-disposed'))
+    expect(await preparing).toEqual({ silent: 'unmeasured' })
+    audioAddSucceeds = false
+    vi.unstubAllGlobals()
+  })
+})
+
+describe('mediabunnyBackend.open, when the track cannot be set up', () => {
+  it('cancels the started output before failing', async () => {
+    vi.stubGlobal(
+      'AudioBuffer',
+      class {
+        constructor() {
+          throw new RangeError('Array buffer allocation failed')
+        }
+      },
+    )
+    const samples = new Float32Array(48_000)
+    const opening = mediabunnyBackend.open(
+      document.createElement('canvas'),
+      { latencyMode: 'quality', keyFrames: 'default' },
+      { channels: [samples, samples] },
+    )
+    const settled = opening.then(
+      () => 'opened',
+      (error: Error) => error.message,
+    )
+    await vi.waitFor(() => expect(log).toContain('start'))
+    releaseStart()
+    await vi.waitFor(() => expect(log).toContain('cancel'))
+    releaseCancel()
+    expect(await settled).toBe('Array buffer allocation failed')
+    vi.unstubAllGlobals()
   })
 })

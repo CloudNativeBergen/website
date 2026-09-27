@@ -1992,6 +1992,7 @@ function scriptedEncoder(script: {
   return {
     supports: async () => script.supported,
     probe: async () => true,
+    prepareAudio: async () => ({ priming: 0 }),
     open: async () => ({
       add: (timestamp) =>
         Math.round(timestamp * 30) === script.failAt
@@ -2118,6 +2119,7 @@ function readingEncoder(
   return {
     supports: async () => true,
     probe: async () => true,
+    prepareAudio: async () => ({ priming: 0 }),
     open: async (canvas) => ({
       add: async () => {
         frames.push(readCanvas(canvas))

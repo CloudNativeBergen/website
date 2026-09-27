@@ -204,6 +204,10 @@ AAC beside the video.
 **Measured in [the proof's report](MARKETING_STUDIO_VIDEO_PROOF.md)** (macOS only): the add-on
 encoder's licence, size and behaviour, and the priming offset, are in §2, §4 and §8 there.
 
+**The add-on is turned off (2026-09-28, #1179).** We cannot provide the FFmpeg source its LGPL
+requires: which revision the WebAssembly was built from is not published. So a browser without native
+AAC exports the video silent, with a notice; see the note at the top of the proof's §8.
+
 ## 7. Projects
 
 A video is saved as a **project** and reopened; nobody rebuilds five scenes for a typo. (Images

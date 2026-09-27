@@ -238,7 +238,9 @@ export const OPEN_PROJECTION = `{
   },
   "track": select(defined(track.file.asset._ref) => {
     "fileId": track.file.asset._ref,
-    "galleryAssetId": track.file.galleryAsset._ref,
+    // A weak reference keeps its _ref after the asset is deleted: only one
+    // that still resolves names a gallery entry.
+    "galleryAssetId": select(defined(track.file.galleryAsset->_id) => track.file.galleryAsset._ref, null),
     "title": track.title,
     "rights": select(defined(track.rightsConfirmation.confirmedAt) => {
       "confirmedBy": track.rightsConfirmation.confirmedBy._ref,

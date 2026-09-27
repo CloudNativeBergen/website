@@ -15,6 +15,8 @@ import {
   exportVideo,
   type EncoderBackend,
   type ExportJob,
+  type ExportedAudio,
+  type SilentReason,
   type ExportProgress,
 } from './meme-generator-export'
 import { FPS } from './meme-generator-timeline'
@@ -31,6 +33,10 @@ interface ExportedFile {
   url: string
   bytes: number
   seconds: number
+  /** Whether the file has the track. */
+  audio: ExportedAudio
+  /** The track failed to load when this was made: it is silent for that. */
+  trackFailed: boolean
   /** The video it was made from; any other and the file is out of date. */
   revision: readonly unknown[]
 }
@@ -69,16 +75,56 @@ function linkedInWarnings(file: ExportedFile): string[] {
   return warnings
 }
 
+/** The music, as the idle line puts it. */
+const SOUND: Record<Music, string> = {
+  none: 'silent',
+  track: 'with the music track',
+  failed: 'silent: the music track could not be loaded',
+}
+
+/** A file made without the track it should have, and why. */
+const MUSIC_LEFT_OUT: Record<SilentReason, string> = {
+  'no-encoder':
+    'This browser cannot encode the music, so the video is silent. Chrome, Edge or Safari on a computer can add it.',
+  unmeasured:
+    'The music could not be lined up with the picture on this browser’s encoder, so the video was made silent. Export again; if it keeps happening, try another browser.',
+}
+
+export type Music = 'none' | 'track' | 'failed'
+
+/** A file made while its track could not be loaded. */
+const TRACK_LEFT_OUT =
+  'The music track could not be loaded, so the video is silent.'
+
+/**
+ * What a file on offer is missing — said wherever it can still be
+ * downloaded, never only when it is fresh.
+ */
+function silenceNotes(file: ExportedFile | null): string[] {
+  if (!file) return []
+  return [
+    ...(file.audio === 'no-encoder' || file.audio === 'unmeasured'
+      ? [MUSIC_LEFT_OUT[file.audio]]
+      : []),
+    ...(file.trackFailed ? [TRACK_LEFT_OUT] : []),
+  ]
+}
+
 function statusText(
   status: Status,
   supported: boolean | 'error' | null,
   waiting: boolean,
   file: ExportedFile | null,
   stale: boolean,
+  music: Music,
 ): string {
   if (supported === false) return UNSUPPORTED_MESSAGE
   if (supported === 'error') return LOAD_FAILED_MESSAGE
-  const kept = file ? ' Your earlier export is still available.' : ''
+  const kept = file
+    ? [' Your earlier export is still available.', ...silenceNotes(file)].join(
+        ' ',
+      )
+    : ''
   switch (status.kind) {
     case 'running':
       return phaseText(status.progress)
@@ -88,17 +134,21 @@ function statusText(
       return `Export cancelled.${kept}`
   }
   if (stale)
-    return 'The video has changed since this export. Export again to include your changes.'
+    return [
+      'The video has changed since this export. Export again to include your changes.',
+      ...silenceNotes(file),
+    ].join(' ')
   switch (status.kind) {
     case 'done':
       return [
         'Your video is ready.',
+        ...silenceNotes(file),
         ...(file ? linkedInWarnings(file) : []),
       ].join(' ')
     case 'idle':
       return waiting
-        ? 'Waiting for images and fonts to load…'
-        : `H.264, ${CANVAS_SIZE} × ${CANVAS_SIZE}, ${FPS} frames a second, silent.`
+        ? 'Waiting for images, fonts and music to load…'
+        : `H.264, ${CANVAS_SIZE} × ${CANVAS_SIZE}, ${FPS} frames a second, ${SOUND[music]}.`
   }
 }
 
@@ -113,6 +163,7 @@ export function VideoExport({
   waiting,
   active,
   revision,
+  music = 'none',
 }: {
   encoder: EncoderBackend
   /** A snapshot of the video as it is when Export is pressed. */
@@ -130,6 +181,8 @@ export function VideoExport({
    * code fetched — only once it first is, so Image mode never loads it.
    */
   active: boolean
+  /** Whether the video has a track to export with it. */
+  music?: Music
 }) {
   // null until asked; 'error' when asking failed and may be tried again.
   const [supported, setSupported] = useState<boolean | 'error' | null>(null)
@@ -177,6 +230,7 @@ export function VideoExport({
     const abort = new AbortController()
     controller.current = abort
     const startedAt = revision
+    const musicAtStart = music
     setStatus({ kind: 'running', progress: { phase: 'checking' } })
     try {
       const job = prepare()
@@ -193,6 +247,8 @@ export function VideoExport({
         url: URL.createObjectURL(result.blob),
         bytes: result.blob.size,
         seconds: job.frameCount / FPS,
+        audio: result.audio,
+        trackFailed: musicAtStart === 'failed',
         revision: startedAt,
       })
       setStatus({ kind: 'done' })
@@ -294,7 +350,7 @@ export function VideoExport({
             : ''
         }`}
       >
-        {statusText(status, supported, waiting, file, stale)}
+        {statusText(status, supported, waiting, file, stale, music)}
       </p>
     </section>
   )

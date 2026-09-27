@@ -102,6 +102,16 @@ import {
 import { VideoTimeline, type SceneRefusal } from './VideoTimeline'
 import type { TimingControl } from './VideoElements'
 import { VideoExport } from './VideoExport'
+import { VideoMusic, type TrackLoad } from './VideoMusic'
+import {
+  MIX_RATE,
+  MIX_SETTLE_MS,
+  NEW_TRACK_SETTINGS,
+  mixTrack,
+  trackSource,
+  type VideoTrack,
+} from './meme-generator-music'
+import { createTrackPlayer, decodeTrack } from './meme-generator-track-player'
 import type { EncoderBackend, ExportJob } from './meme-generator-export'
 import { mediabunnyBackend } from './meme-generator-mediabunny'
 import type { BackgroundGallery } from './meme-generator-gallery'
@@ -115,8 +125,10 @@ import {
   dropReleasedFiles,
   dropUnsaveable,
   fromProjectScenes,
+  fromProjectTrack,
   projectSnapshot,
   toProjectScenes,
+  toProjectTrack,
   type SceneFile,
   type VideoProjects,
 } from './meme-generator-project'
@@ -161,6 +173,12 @@ const isGuardEntry = (state: unknown) =>
 
 /** Matches no project: after a delete, whatever the editor holds is unsaved. */
 const DELETED_SNAPSHOT = '(deleted)'
+
+/** What undo and redo cover: the scenes and the video's music. */
+interface VideoState {
+  scenes: Scene[]
+  track: VideoTrack | null
+}
 
 interface ColorButtonProps {
   color: { name: string; value: string }
@@ -337,14 +355,49 @@ export function MemeGenerator({
   // Every change to the scenes — timeline and design alike — is a step of
   // this history, so undo and redo cover all of it (see
   // meme-generator-history for how a drag or typing folds into one step).
+  // The video's music is part of it too (spec §3, §7).
   const [history, setHistory] = useState(() =>
-    startHistory<Scene[]>([newScene(DEFAULT_DESIGN)]),
+    startHistory<VideoState>({
+      scenes: [newScene(DEFAULT_DESIGN)],
+      track: null,
+    }),
   )
-  const scenes = history.present
+  const scenes = history.present.scenes
+  const track = history.present.track
   const changeScenes = (update: (prev: Scene[]) => Scene[], group?: string) => {
     const now = performance.now()
-    setHistory((prev) => record(prev, update(prev.present), { group, now }))
+    setHistory((prev) =>
+      record(
+        prev,
+        { ...prev.present, scenes: update(prev.present.scenes) },
+        { group, now },
+      ),
+    )
   }
+  /** A change to the track: a step of the same history, as a scene's is. */
+  const changeTrack = (
+    update: (prev: VideoTrack | null) => VideoTrack | null,
+    group?: string,
+  ) => {
+    const now = performance.now()
+    setHistory((prev) =>
+      record(
+        prev,
+        { ...prev.present, track: update(prev.present.track) },
+        { group, now },
+      ),
+    )
+  }
+  /** Rewrite the scenes in every state undo can reach, making no step. */
+  const mapScenes = (change: (states: Scene[]) => Scene[]) =>
+    setHistory((prev) =>
+      mapStates(prev, (state) => ({ ...state, scenes: change(state.scenes) })),
+    )
+  /** Rewrite the track in every state undo can reach, making no step. */
+  const mapTrack = (change: (track: VideoTrack | null) => VideoTrack | null) =>
+    setHistory((prev) =>
+      mapStates(prev, (state) => ({ ...state, track: change(state.track) })),
+    )
   const [time, setTime] = useState(0)
   const [playing, setPlaying] = useState(false)
   const [loop, setLoop] = useState(false)
@@ -507,7 +560,7 @@ export function MemeGenerator({
   const keptAssets = useRef(new Map<string, string>())
   useEffect(() => {
     const kept = new Set(
-      allStates(history).flatMap((states) =>
+      allStates(history).flatMap(({ scenes: states }) =>
         states.flatMap((scene) => scene.design.background.image?.url ?? []),
       ),
     )
@@ -671,22 +724,20 @@ export function MemeGenerator({
    */
   const markKept = (url: string, galleryAssetId: string) => {
     keptAssets.current.set(url, galleryAssetId)
-    setHistory((prev) =>
-      mapStates(prev, (states) =>
-        states.map((scene) =>
-          scene.design.background.image?.url === url
-            ? {
-                ...scene,
-                design: {
-                  ...scene.design,
-                  background: {
-                    ...scene.design.background,
-                    image: { ...scene.design.background.image, galleryAssetId },
-                  },
+    mapScenes((states) =>
+      states.map((scene) =>
+        scene.design.background.image?.url === url
+          ? {
+              ...scene,
+              design: {
+                ...scene.design,
+                background: {
+                  ...scene.design.background,
+                  image: { ...scene.design.background.image, galleryAssetId },
                 },
-              }
-            : scene,
-        ),
+              },
+            }
+          : scene,
       ),
     )
   }
@@ -701,6 +752,31 @@ export function MemeGenerator({
     setBackground({ image: null })
   }
 
+  // ── Music (#1179) ───────────────────────────────────────────────────────
+  // One track per video, from the gallery's audio. It is the video's, not a
+  // scene's, so undo and redo leave it alone.
+  // The track's samples at MIX_RATE, by the file they are: fetched and
+  // decoded once, whatever the settings.
+  const [decoded, setDecoded] = useState<{
+    key: string
+    channels: Float32Array[]
+    /** The file the server said it sent: what these samples are. */
+    fileId: string
+  } | null>(null)
+  const [trackFailed, setTrackFailed] = useState<string | null>(null)
+  const [trackRetry, setTrackRetry] = useState(0)
+  // Keyed by the file a project holds, once it holds one: two projects can
+  // name one gallery entry and hold different files, if the entry's file
+  // was replaced between their saves.
+  const trackKey = track ? (track.fileId ?? track.galleryAssetId ?? null) : null
+  /** The same samples under the key the track is known by now. */
+  const rekeyDecoded = (from: string | null, to: string | null) =>
+    setDecoded((current) =>
+      current && from && to && current.key === from
+        ? { ...current, key: to }
+        : current,
+    )
+
   // ── The saved project (#1181) ───────────────────────────────────────────
   // The project open in the editor, and the revision it was loaded or last
   // saved at: every save is compare-and-set on it.
@@ -711,12 +787,12 @@ export function MemeGenerator({
   // What the last save stored (or the editor started from), to tell whether
   // anything a save would store has changed since.
   const [savedSnapshot, setSavedSnapshot] = useState(() =>
-    projectSnapshot(UNTITLED, history.present),
+    projectSnapshot(UNTITLED, history.present.scenes),
   )
   // Memoized: playback re-renders every frame with the same scenes.
   const currentSnapshot = useMemo(
-    () => projectSnapshot(projectTitle, scenes),
-    [projectTitle, scenes],
+    () => projectSnapshot(projectTitle, scenes, track),
+    [projectTitle, scenes, track],
   )
   const unsaved = currentSnapshot !== savedSnapshot
   const [projectBusy, setProjectBusy] = useState<
@@ -748,6 +824,7 @@ export function MemeGenerator({
   // than one scene, or any scene motion, is video work to protect. A plain
   // one-scene image never asks.
   const holdsVideo =
+    track !== null ||
     scenes.length > 1 ||
     scenes.some(
       (scene) =>
@@ -858,7 +935,11 @@ export function MemeGenerator({
     window.confirm('Discard your unsaved changes to this video?')
 
   /** Put scenes in the editor as a fresh start: no undo back past them. */
-  const replaceVideo = (next: Scene[], title: string) => {
+  const replaceVideo = (
+    next: Scene[],
+    title: string,
+    nextTrack: VideoTrack | null = null,
+  ) => {
     // An upload or pick still decoding belongs to the video being left: it
     // must never land in this one, even under the same scene key.
     for (const key of new Set([
@@ -871,12 +952,19 @@ export function MemeGenerator({
       )
     setUploadingScenes(new Set())
     setPlaying(false)
-    setHistory(startHistory(next))
+    setHistory(startHistory<VideoState>({ scenes: next, track: nextTrack }))
     setMode('video')
     setPlaybackEditingKey(null)
     moveTo(0)
     setProjectTitle(title)
-    setSavedSnapshot(projectSnapshot(title, next))
+    setTrackFailed(null)
+    // A fresh start has no undo back to the old track: its samples go now,
+    // unless the new video's track is the very same file.
+    const nextKey = nextTrack?.fileId ?? nextTrack?.galleryAssetId ?? null
+    setDecoded((current) =>
+      current && current.key === nextKey ? current : null,
+    )
+    setSavedSnapshot(projectSnapshot(title, next, nextTrack))
     setBackgroundFailure(null)
     setConflicted(false)
   }
@@ -918,7 +1006,7 @@ export function MemeGenerator({
       ).filter(Boolean).length
       for (const [url, image] of decoded)
         backgroundRasters.current.set(url, image)
-      replaceVideo(next, opened.title)
+      replaceVideo(next, opened.title, fromProjectTrack(opened.track))
       setEditionOnly(false)
       setProject({ id: opened._id, rev: opened._rev })
       onProjectChange?.(opened._id)
@@ -973,7 +1061,8 @@ export function MemeGenerator({
       return
     }
     const title = projectTitle.trim() || UNTITLED
-    const snapshot = projectSnapshot(title, scenes)
+    const snapshot = projectSnapshot(title, scenes, track)
+    const savedTrack = track
     const drawnBy = new Map(
       scenes.map((scene) => [scene.key, scene.design.background.image?.url]),
     )
@@ -985,6 +1074,7 @@ export function MemeGenerator({
         _id?: string
         _rev: string
         scenes: SceneFile[]
+        trackFileId?: string | null
         released?: string[]
       } = over
         ? await projects.save({
@@ -992,11 +1082,13 @@ export function MemeGenerator({
             rev: over.rev,
             title,
             scenes: mapped.scenes,
+            track: toProjectTrack(savedTrack),
           })
         : await projects.create({
             title,
             edition: editionOnly ? 'current' : 'none',
             scenes: mapped.scenes,
+            track: toProjectTrack(savedTrack),
             // Saved as a new project after a conflict: backgrounds the open
             // project already holds are kept, even with no gallery asset.
             ...(project ? { copyFilesFrom: project.id } : {}),
@@ -1009,16 +1101,53 @@ export function MemeGenerator({
         if (url && fileId) files.set(url, fileId)
       }
       const released = new Set(result.released ?? [])
-      setHistory((prev) =>
-        mapStates(prev, (states) =>
-          dropReleasedFiles(carryFiles(states, files), released),
-        ),
+      mapScenes((states) =>
+        dropReleasedFiles(carryFiles(states, files), released),
       )
+      // The track now names the file the project holds, so a later save
+      // keeps it even once its gallery entry is gone.
+      const trackFileId = result.trackFileId
+      if (trackFileId && savedTrack && !savedTrack.fileId)
+        // The samples go on under the file the save stored — only if they
+        // ARE that file. The gallery entry is read again by the save, and
+        // its file may have been replaced since it was fetched: then they
+        // are dropped, and the stored file is fetched through the project.
+        setDecoded((current) =>
+          !current || current.key !== (savedTrack.galleryAssetId ?? null)
+            ? current
+            : current.fileId === trackFileId
+              ? { ...current, key: trackFileId }
+              : null,
+        )
+      // In every state undo can reach: the track saved names the file it
+      // became; one naming a file the project no longer holds falls back to
+      // its gallery entry — or, held by the project alone, is gone.
+      mapTrack((current) => {
+        if (!current) return current
+        if (
+          trackFileId &&
+          savedTrack &&
+          current.galleryAssetId === savedTrack.galleryAssetId &&
+          (current.fileId ?? null) === (savedTrack.fileId ?? null)
+        )
+          return { ...current, fileId: trackFileId }
+        if (!current.fileId || current.fileId === trackFileId) return current
+        return current.galleryAssetId ? { ...current, fileId: undefined } : null
+      })
       const id = over?.id ?? result._id!
       setProject({ id, rev: result._rev })
       setConflicted(false)
       setProjectTitle(title)
-      setSavedSnapshot(snapshot)
+      // What was stored, with the file the track became: that is what the
+      // editor holds from here on.
+      setSavedSnapshot(
+        trackFileId && savedTrack && !savedTrack.fileId
+          ? projectSnapshot(title, scenes, {
+              ...savedTrack,
+              fileId: trackFileId,
+            })
+          : snapshot,
+      )
       if (!over) onProjectChange?.(id)
       refreshProjects()
     } catch (error) {
@@ -1064,19 +1193,50 @@ export function MemeGenerator({
           scene.design.background.image === null &&
           scenes[i].design.background.image !== null,
       ).length
-      setHistory((prev) => mapStates(prev, drop))
+      mapScenes(drop)
+      // The track: a gallery track is picked again from the gallery on the
+      // next save; one only the deleted project held cannot be saved again,
+      // so it goes — never left looking ready for a save that must refuse it.
+      // Whether the gallery entry survives is the delete's answer, not the
+      // editor's cached id.
+      // A released file is gone for everyone; an unsaveable one only for
+      // the entry it was held under — the same deduplicated file under
+      // another, live gallery entry is still saveable, as for backgrounds.
+      const unusable = (held: VideoTrack) =>
+        !!held.fileId &&
+        (gone.has(held.fileId) ||
+          unsaveable.some(
+            (u) =>
+              u.fileId === held.fileId &&
+              (u.galleryAssetId ?? null) === (held.galleryAssetId ?? null),
+          ))
+      const trackGone = !!track && (!track.galleryAssetId || unusable(track))
+      if (track?.fileId && !trackGone)
+        rekeyDecoded(track.fileId, track.galleryAssetId ?? null)
+      // In every state undo can reach: none may bring back a track the
+      // next save would refuse.
+      mapTrack((held) =>
+        !held?.fileId
+          ? held
+          : !held.galleryAssetId || unusable(held)
+            ? null
+            : { ...held, fileId: undefined },
+      )
       // The editor now holds the ONLY copy: unsaved, so leaving asks.
       setSavedSnapshot(DELETED_SNAPSHOT)
       setProject(null)
       setConflicted(false)
       onProjectChange?.(null)
       refreshProjects()
+      const deleted =
+        cleared > 0
+          ? `Project deleted. ${cleared === 1 ? 'One background was' : `${cleared} backgrounds were`} only in that project and ${cleared === 1 ? 'is' : 'are'} gone; ${cleared === 1 ? 'its scene shows its colour' : 'those scenes show their colour'}.`
+          : 'Project deleted.'
       setProjectMessage({
         tone: 'info',
-        text:
-          cleared > 0
-            ? `Project deleted. ${cleared === 1 ? 'One background was' : `${cleared} backgrounds were`} only in that project and ${cleared === 1 ? 'is' : 'are'} gone; ${cleared === 1 ? 'its scene shows its colour' : 'those scenes show their colour'}.`
-            : 'Project deleted.',
+        text: trackGone
+          ? `${deleted} Its music track was only in that project, so the video has no music now.`
+          : deleted,
       })
     } catch (error) {
       setProjectMessage({
@@ -1325,10 +1485,156 @@ export function MemeGenerator({
   const total = totalDuration(scenes)
   const playbackAnchor = useRef({ time: 0, at: 0 })
 
-  // Playback carries on from wherever the playhead is put.
+  // The track, fetched through our own origin and decoded at MIX_RATE, once
+  // per file. A saved project's track whose gallery entry is gone comes
+  // through the project.
+  const source = track ? trackSource(track, project?.id ?? null) : null
+  const sourceQuery = source ? new URLSearchParams(source).toString() : null
+  const loadTrack = gallery?.loadTrack
+  const decodedKey = decoded?.key ?? null
+  /** The decode in flight, if any: the next waits for it. */
+  const decodeQueue = useRef<Promise<unknown>>(Promise.resolve())
+  /** The decode under way, and the file it is of; none once it settles. */
+  const decodeInFlight = useRef<{
+    fileId: string
+    result: Promise<{ channels: Float32Array[]; fileId: string } | null>
+  } | null>(null)
+  useEffect(() => {
+    // A file already decoded is never fetched again, whichever way it is
+    // reached now.
+    if (!trackKey || !source || !loadTrack || decodedKey === trackKey) return
+    // Another track's samples — up to hundreds of megabytes for a long
+    // one — are let go of now, not once this one has decoded too.
+    if (decodedKey !== null) setDecoded(null)
+    // Given up on — another track picked, or the editor left — the fetch is
+    // aborted, never left streaming megabytes nobody will decode.
+    const abort = new AbortController()
+    const load = () =>
+      loadTrack(source, abort.signal).then(({ bytes, fileId }) => {
+        // A decode cannot be stopped once begun, and a long track decodes
+        // to hundreds of megabytes: one at a time, and none for a pick
+        // given up on while it waited.
+        const decoding = decodeQueue.current.then(async () =>
+          abort.signal.aborted
+            ? null
+            : { channels: await decodeTrack(bytes), fileId },
+        )
+        // Settled to nothing: the queue never holds a track's samples.
+        decodeQueue.current = decoding.then(
+          () => undefined,
+          () => undefined,
+        )
+        const job = { fileId, result: decoding }
+        decodeInFlight.current = job
+        void decoding
+          .catch(() => {})
+          .finally(() => {
+            if (decodeInFlight.current === job) decodeInFlight.current = null
+          })
+        return decoding
+      })
+    // The very file this key names is already decoding — a save has just
+    // given the samples being decoded their stored file's name: that decode
+    // is taken over, not thrown away and started again. One that comes to
+    // nothing (given up on before it began) is fetched after all.
+    const running = decodeInFlight.current
+    const decoding =
+      running && running.fileId === trackKey
+        ? running.result.then((done) => done ?? load())
+        : load()
+    decoding.then(
+      (done) =>
+        done && !abort.signal.aborted && setDecoded({ key: trackKey, ...done }),
+      () => !abort.signal.aborted && setTrackFailed(trackKey),
+    )
+    return () => abort.abort()
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: keyed by the source's words, not the object rebuilt every render
+  }, [trackKey, sourceQuery, loadTrack, decodedKey, trackRetry])
+  const trackChannels =
+    decoded && decoded.key === trackKey ? decoded.channels : null
+  const trackLoad: TrackLoad | null = !track
+    ? null
+    : trackChannels
+      ? { state: 'ready', seconds: trackChannels[0].length / MIX_RATE }
+      : trackFailed === trackKey || !source || !loadTrack
+        ? { state: 'failed' }
+        : { state: 'loading' }
+  // How the track is mixed, by value: a save that only records the file it
+  // became changes the track object, never what is heard.
+  const { start, volume, fadeIn, fadeOut } = track ?? {}
+  const trackSettings = useMemo(
+    () =>
+      start === undefined ||
+      volume === undefined ||
+      fadeIn === undefined ||
+      fadeOut === undefined
+        ? null
+        : { start, volume, fadeIn, fadeOut },
+    [start, volume, fadeIn, fadeOut],
+  )
+  // The length the preview is mixed for: the video's, once it has held
+  // still for MIX_SETTLE_MS. (The export mixes for its own frames.)
+  const [mixTotal, setMixTotal] = useState(total)
+  useEffect(() => {
+    if (mixTotal === total) return
+    if (!trackChannels) {
+      setMixTotal(total)
+      return
+    }
+    const settle = setTimeout(() => setMixTotal(total), MIX_SETTLE_MS)
+    return () => clearTimeout(settle)
+  }, [total, mixTotal, trackChannels])
+  // What is heard: the mix the export encodes, at full volume — the volume
+  // is a gain on the preview's output, since the mix is linear in it. So a
+  // volume drag never rebuilds up to 2.9 million samples a channel, nor
+  // restarts the sound.
+  const mix = useMemo(
+    () =>
+      trackChannels &&
+      start !== undefined &&
+      fadeIn !== undefined &&
+      fadeOut !== undefined
+        ? mixTrack(
+            trackChannels,
+            { start, volume: 1, fadeIn, fadeOut },
+            mixTotal,
+          )
+        : null,
+    [trackChannels, start, fadeIn, fadeOut, mixTotal],
+  )
+
+  // The preview's sound, and its clock while it plays.
+  const [player] = useState(() => createTrackPlayer())
+  useEffect(() => () => player.dispose(), [player])
+  // A track that finishes loading while the video plays joins in where the
+  // playhead is.
+  const joinPlayback = useEffectEvent(() => {
+    if (playing && player.time() === null) player.play(time)
+  })
+  useEffect(() => {
+    player.load(mix)
+    if (mix) joinPlayback()
+  }, [player, mix])
+  useEffect(() => {
+    if (!playing) player.pause()
+  }, [player, playing])
+  useEffect(() => {
+    player.setVolume(volume ?? 1)
+  }, [player, volume])
+  // The sound loops by itself, gaplessly; the picture follows its clock.
+  useEffect(() => {
+    player.setLoop(loop && loopAllowed)
+  }, [player, loop, loopAllowed])
+
+  // Playback carries on from wherever the playhead is put. With a track the
+  // sound follows it — silently, until a scrub settles.
   const moveTo = (next: number) => {
     playbackAnchor.current = { time: next, at: performance.now() }
     setTime(next)
+    // Only a playhead that really moves moves the sound: a seek is a scrub,
+    // silent until it settles, and an undo of a colour or a volume, or a
+    // scene change that leaves the playhead where it is, is none.
+    if (next !== time) player.seek(next)
   }
   const seek = (to: number) => moveTo(clampTime(scenes, to))
 
@@ -1341,7 +1647,13 @@ export function MemeGenerator({
     // frame, where an edit at the end leaves the playhead.
     // Counted in whole frames: the playhead's sum and the total's can differ
     // in the last bit, so "a frame short" is not a subtraction.
-    seek(Math.round(time * FPS) >= Math.round(total * FPS) - 1 ? 0 : time)
+    const from = clampTime(
+      scenes,
+      Math.round(time * FPS) >= Math.round(total * FPS) - 1 ? 0 : time,
+    )
+    moveTo(from)
+    // Started inside the click, as browsers require of sound.
+    player.play(from)
     setPlaybackEditingKey(editingKey)
     setPlaying(true)
   }
@@ -1355,9 +1667,19 @@ export function MemeGenerator({
     }
     // A frame's timestamp can fall a moment before an anchor set by a seek
     // in the same frame; time never runs backwards from where it was put.
+    // With a track, the audio clock is the playhead: picture follows sound.
+    const heard = player.time()
+    if (heard !== null) playbackAnchor.current = { time: heard, at: now }
+    // Mid-scrub the playhead is where the scrub put it — the very end
+    // included — and nothing loops or ends until the scrub settles.
+    if (heard !== null && player.scrubbing()) {
+      setTime(Math.min(heard, total))
+      return true
+    }
     const next =
+      heard ??
       playbackAnchor.current.time +
-      Math.max(0, now - playbackAnchor.current.at) / 1000
+        Math.max(0, now - playbackAnchor.current.at) / 1000
     if (next < total) {
       setTime(next)
       return true
@@ -1366,6 +1688,7 @@ export function MemeGenerator({
     if (loop && loopAllowed) {
       playbackAnchor.current = { time: 0, at: now }
       setTime(0)
+      player.play(0)
       return true
     }
     setTime(total)
@@ -1510,12 +1833,13 @@ export function MemeGenerator({
     const next = to(history)
     if (next === history) return
     setHistory((prev) => to(prev))
-    const at = clampTime(next.present, time)
+    const nextScenes = next.present.scenes
+    const at = clampTime(nextScenes, time)
     moveTo(at)
     // During playback the controls stay on their scene; if undo took it
     // away, they settle on the scene under the playhead and stay there.
-    if (!next.present.some((scene) => scene.key === playbackEditingKey))
-      setPlaybackEditingKey(next.present[sceneIndexAt(next.present, at)].key)
+    if (!nextScenes.some((scene) => scene.key === playbackEditingKey))
+      setPlaybackEditingKey(nextScenes[sceneIndexAt(nextScenes, at)].key)
   }
   const rootRef = useRef<HTMLDivElement>(null)
   const onShortcut = useEffectEvent((event: KeyboardEvent) => {
@@ -1628,9 +1952,22 @@ export function MemeGenerator({
     if (!ctx) throw new Error('No 2D context to export from')
     const paintScene = scenePainter(snapshot)
     const exportLayers = offscreenLayers()
+    const frameCount = Math.round(totalDuration(snapshot) * FPS)
     return {
       canvas,
-      frameCount: Math.round(totalDuration(snapshot) * FPS),
+      frameCount,
+      // Mixed for exactly the frames exported.
+      ...(trackChannels && trackSettings
+        ? {
+            audio: {
+              channels: mixTrack(
+                trackChannels,
+                trackSettings,
+                frameCount / FPS,
+              ),
+            },
+          }
+        : {}),
       paint: (frame) =>
         drawFrame(
           ctx,
@@ -1774,16 +2111,78 @@ export function MemeGenerator({
             onLoopChange={setLoop}
           />
         )}
+        {mode === 'video' && gallery?.tracks && gallery.loadTrack && (
+          <VideoMusic
+            tracks={gallery.tracks}
+            track={track}
+            load={trackLoad}
+            videoSeconds={total}
+            onPick={(row) => {
+              setTrackFailed(null)
+              // Picked by hand: fetched afresh, never from samples decoded
+              // before — the gallery entry's file may have been replaced
+              // since. (Undo and redo keep the samples: they go back.)
+              if (row)
+                setDecoded((current) =>
+                  current?.key === row._id ? null : current,
+                )
+              changeTrack((current) =>
+                row
+                  ? {
+                      ...NEW_TRACK_SETTINGS,
+                      // Another track keeps how it was mixed, from its start.
+                      ...(current && {
+                        volume: current.volume,
+                        fadeIn: current.fadeIn,
+                        fadeOut: current.fadeOut,
+                      }),
+                      title: row.title,
+                      galleryAssetId: row._id,
+                    }
+                  : null,
+              )
+            }}
+            // A slider dragged or a field typed is one step per field.
+            onChange={(settings, field) =>
+              changeTrack(
+                (current) => current && { ...current, ...settings },
+                `track.${field}`,
+              )
+            }
+            onRetry={() => {
+              setTrackFailed(null)
+              setTrackRetry((n) => n + 1)
+            }}
+          />
+        )}
         {/* Kept mounted in Image mode: switching to look at a still never
             cancels an export or throws away the finished file. */}
         <div hidden={mode !== 'video'}>
           <VideoExport
             encoder={encoder}
             prepare={prepareExport}
-            waiting={capturePending}
+            waiting={capturePending || trackLoad?.state === 'loading'}
             active={mode === 'video'}
-            // The scenes, and the late-arriving font faces that repaint them.
-            revision={[scenes, lateFaces]}
+            music={
+              trackLoad?.state === 'ready'
+                ? 'track'
+                : trackLoad?.state === 'failed'
+                  ? 'failed'
+                  : 'none'
+            }
+            // The scenes, the late-arriving font faces that repaint them, and
+            // the music: the samples themselves (a new file is new samples)
+            // and its settings by value, so an undo back to them makes the
+            // export current again — never the id a save files it under.
+            revision={[
+              scenes,
+              lateFaces,
+              start,
+              volume,
+              fadeIn,
+              fadeOut,
+              trackChannels,
+            ]}
           />
         </div>
       </div>

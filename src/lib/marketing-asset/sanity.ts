@@ -405,3 +405,24 @@ export async function deleteMarketingAssetDocument(
   if (ifRev) tx.patch(id, (p) => p.ifRevisionId(ifRev).unset(['_deleteGuard']))
   await tx.delete(id).delete(`drafts.${id}`).commit()
 }
+
+/**
+ * The file of one of this organization's audio tracks, for the studio's
+ * track route. Null when it is not ours or holds no track (an image). The
+ * caller has already proven the id ours.
+ */
+export async function readMarketingAssetTrack(
+  orgId: string,
+  id: string,
+): Promise<{ url: string | null; fileId: string | null } | null> {
+  return scopedFetch<{ url: string | null; fileId: string | null } | null>(
+    clientReadUncached,
+    { orgId },
+    `*[_type == "marketingAsset" && _id == $id && kind == "audio"][0]{
+      "url": audio.asset->url,
+      "fileId": audio.asset._ref
+    }`,
+    { id },
+    { cache: 'no-store' },
+  )
+}
