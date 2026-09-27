@@ -22,7 +22,11 @@ import { ConnectedVariantEditor } from '@/components/admin/social/ConnectedVaria
 import { useTagWarningToast } from './tagging'
 import type { TagIssue } from '@/lib/marketing/tagging/checks'
 import { clientTagIssues } from '@/lib/trpc/errors'
-import { ManualPostView } from '@/components/admin/social/ManualPostView'
+import {
+  ManualPostView,
+  type ManualPostViewProps,
+} from '@/components/admin/social/ManualPostView'
+import { useFreshManualCheck } from '@/components/admin/social/useFreshManualCheck'
 import { mayAlreadyBeLive } from '@/lib/social/state-machine'
 import { taggedUrl } from '@/lib/marketing/link'
 import { sitePathIssue, type PagePickerOption } from '@/lib/marketing/pages'
@@ -66,22 +70,7 @@ export function TaskEditorPage({ taskId }: { taskId: string }) {
     { taskId },
     { refetchOnWindowFocus: false },
   )
-  // A Bluesky post to be posted by hand runs its tag check as the page opens
-  // (tagging spec §4.4, review T4). Queries stay fresh for 60 s, so a Task
-  // reopened within that would show a body checked BEFORE a later opt-out:
-  // ask again, and until this opening's answer arrives offer nothing to copy.
-  const [openedAt] = useState(() => query.dataUpdatedAt)
-  const { refetch } = query
-  const reopenedManual = openedAt > 0 && postedByHand(query.data)
-  useEffect(() => {
-    if (reopenedManual) void refetch()
-    // Once per opening: the check is what the page promises on open.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [refetch])
-  const data =
-    query.data && openedAt > 0 && query.dataUpdatedAt <= openedAt
-      ? withPendingCheck(query.data, Boolean(query.error))
-      : query.data
+  const data = query.data
 
   if (query.error && !data) {
     return (
@@ -115,30 +104,6 @@ export function TaskEditorPage({ taskId }: { taskId: string }) {
       refreshFailed={Boolean(query.error)}
     />
   )
-}
-
-/** A Bluesky post to be posted by hand: its view runs the tag check. */
-function postedByHand(data: TaskEditorData | undefined): boolean {
-  const v = data?.variant?.variant
-  return (
-    v?.platform === 'bluesky' &&
-    (v.status === 'awaiting-manual' || v.status === 'failed')
-  )
-}
-
-/** The cached answer, with its manual body held back until a fresh check. */
-function withPendingCheck(
-  data: TaskEditorData,
-  failed: boolean,
-): TaskEditorData {
-  if (!postedByHand(data) || !data.variant) return data
-  return {
-    ...data,
-    variant: {
-      ...data.variant,
-      manualBody: failed ? { unavailable: true } : { checking: true },
-    },
-  }
 }
 
 function BackToPlan() {
@@ -724,6 +689,21 @@ function PublishingSection({
     onError: (err) => setManualError(err.message),
   })
 
+  // A Bluesky post to be posted by hand runs its tag check for THIS opening
+  // of the page (tagging spec §4.4, review T4 and round 3) — never from the
+  // Task read's cache, nor from a check an earlier visit left in flight.
+  const byHand =
+    variant?.variant.status === 'awaiting-manual' &&
+    variant.variant.platform === 'bluesky'
+  const check = useFreshManualCheck(byHand ? variant.variant._id : null)
+  const manualBody: ManualPostViewProps['manualBody'] = !byHand
+    ? null
+    : check.data
+      ? (check.data.manualBody ?? null)
+      : check.error
+        ? { unavailable: true }
+        : { checking: true }
+
   if (!variant) {
     return (
       <Panel title="Post">
@@ -745,7 +725,7 @@ function PublishingSection({
           conferenceDomains={variant.conferenceDomains}
           platformZone={variant.platformZone ?? null}
           tagByHand={tagByHand}
-          manualBody={variant.manualBody ?? null}
+          manualBody={manualBody}
           saving={markPosted.isPending}
           error={manualError}
           onMarkPosted={(url) => {

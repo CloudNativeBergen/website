@@ -10,7 +10,7 @@
  * The tRPC hook is replaced by REAL React Query (the app's 60 s staleTime),
  * so the cache behaviour under test is the library's, not a mock's.
  */
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
 import {
   QueryClient,
@@ -88,6 +88,7 @@ const editor = (manualBody: string | null): SocialVariantEditorData => ({
 })
 
 afterEach(cleanup)
+beforeEach(() => h.fetchEditor.mockReset())
 
 describe('ManualPostDialog — a fresh check on every opening (review T4)', () => {
   it('a reopen never shows the body checked for an earlier opening', async () => {
@@ -122,6 +123,37 @@ describe('ManualPostDialog — a fresh check on every opening (review T4)', () =
     expect(screen.queryByRole('button', { name: /copy text/i })).toBeNull()
 
     await act(async () => answer(editor(PLAIN)))
+    expect(await screen.findByText(PLAIN)).toBeTruthy()
+    expect(screen.queryByText(TAGGED)).toBeNull()
+  })
+
+  it('a reopen while the earlier opening is still checking asks again, and never shows that earlier answer (round 3, T4)', async () => {
+    const client = new QueryClient({
+      defaultOptions: { queries: { staleTime: 60 * 1000, retry: false } },
+    })
+    const view = (variantId: string | null) => (
+      <QueryClientProvider client={client}>
+        <ManualPostDialog variantId={variantId} onClose={() => {}} />
+      </QueryClientProvider>
+    )
+    // The first opening's check read the roster BEFORE the opt-out, and is
+    // still waiting on Bluesky when the dialog is closed and opened again.
+    let first: (data: SocialVariantEditorData) => void = () => {}
+    let second: (data: SocialVariantEditorData) => void = () => {}
+    h.fetchEditor
+      .mockImplementationOnce(() => new Promise((r) => (first = r)))
+      .mockImplementationOnce(() => new Promise((r) => (second = r)))
+    const { rerender } = render(view('v-1'))
+    await waitFor(() => expect(h.fetchEditor).toHaveBeenCalledTimes(1))
+    rerender(view(null))
+    rerender(view('v-1'))
+    await waitFor(() => expect(h.fetchEditor).toHaveBeenCalledTimes(2))
+
+    await act(async () => first(editor(null)))
+    expect(screen.queryByText(TAGGED)).toBeNull()
+    expect(screen.queryByRole('button', { name: /copy text/i })).toBeNull()
+
+    await act(async () => second(editor(PLAIN)))
     expect(await screen.findByText(PLAIN)).toBeTruthy()
     expect(screen.queryByText(TAGGED)).toBeNull()
   })

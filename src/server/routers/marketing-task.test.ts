@@ -334,18 +334,9 @@ describe('marketing.task.get', () => {
     expect(data.organizers).toEqual([{ _id: 'sp-1', name: 'Ada' }])
   })
 
-  it("carries the variant's manual body, checked against the Task's conference (tagging §4.4)", async () => {
-    const manualBody = { body: 'Alice Smith speaks', untagged: ['Alice Smith'] }
-    verify.withManualBody.mockImplementationOnce(async (data: unknown) => ({
-      ...(data as object),
-      manualBody,
-    }))
-    const data = await marketing().task.get({ taskId: 'task-ours' })
-    expect(data.variant?.manualBody).toEqual(manualBody)
-    expect(verify.withManualBody).toHaveBeenCalledWith(
-      expect.objectContaining({ variant: expect.anything() }),
-      CONF_A,
-    )
+  it('does not run the manual-view tag check: the page asks for its own, per opening (round 3)', async () => {
+    await marketing().task.get({ taskId: 'task-ours' })
+    expect(verify.withManualBody).not.toHaveBeenCalled()
   })
 
   it('refuses a Task of another conference BEFORE reading it', async () => {

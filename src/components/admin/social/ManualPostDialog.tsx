@@ -1,12 +1,13 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { ClipboardDocumentListIcon } from '@heroicons/react/24/outline'
 import { ModalShell } from '@/components/ModalShell'
 import { useNotification } from '@/components/admin/NotificationProvider'
 import { SOCIAL_PLATFORM_LABELS } from '@/lib/social/types'
 import { api } from '@/lib/trpc/client'
 import { ManualPostView } from './ManualPostView'
+import { useFreshManualCheck } from './useFreshManualCheck'
 
 /**
  * The copy-ready view wired to `social.*` (#1006): loads the variant with
@@ -26,37 +27,10 @@ export function ManualPostDialog({
   const isOpen = variantId !== null
   const utils = api.useUtils()
   const { showNotification } = useNotification()
-  const editor = api.social.getVariantEditor.useQuery(
-    { variantId: variantId ?? '' },
-    { enabled: isOpen, refetchOnWindowFocus: false },
-  )
+  // Each opening runs its own tag check (review T4, round 3).
+  const editor = useFreshManualCheck(isOpen ? variantId : null)
   const [error, setError] = useState<string | null>(null)
-  // Every opening runs the tag check afresh (tagging spec §4.4, review T4).
-  // The dialog stays mounted while closed and queries stay fresh for 60 s,
-  // so a reopen would show the body checked for an EARLIER opening — before
-  // a speaker opted out. Each opening notes how old the cached answer is,
-  // asks again, and shows (and offers to copy) only an answer newer than
-  // that. Set during render, the React way to follow a prop change, so no
-  // frame shows the cached answer.
-  const [opening, setOpening] = useState({
-    variantId: null as string | null,
-    staleAt: 0,
-  })
-  if (opening.variantId !== variantId) {
-    setOpening({ variantId, staleAt: editor.dataUpdatedAt })
-  }
-  const { refetch } = editor
-  const hadCached = editor.dataUpdatedAt > 0
-  useEffect(() => {
-    // A first opening fetches on its own; a reopen must ask again.
-    if (variantId && hadCached) void refetch()
-    // Only on opening: `hadCached` is read as it was then.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [variantId, refetch])
-  const data =
-    opening.variantId === variantId && editor.dataUpdatedAt > opening.staleAt
-      ? editor.data
-      : undefined
+  const data = editor.data
   const loaded = data && data.variant._id === variantId ? data : null
 
   const markPosted = api.social.markPosted.useMutation({

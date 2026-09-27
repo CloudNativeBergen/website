@@ -197,10 +197,7 @@ import {
 } from '@/lib/social/state-machine'
 import type { VariantStatus } from '@/lib/social/types'
 import { getOrganizersByConference } from '@/lib/speaker/sanity'
-import {
-  checkTagsForApproval,
-  withManualBody,
-} from '@/lib/marketing/tagging/verify'
+import { checkTagsForApproval } from '@/lib/marketing/tagging/verify'
 import { getTaskTagPeople } from '@/lib/marketing/tagging/sanity'
 import { ownBlueskyAccount } from '@/lib/marketing/tagging/own-account'
 import { resolveBlueskyHandle } from '@/lib/marketing/tagging/resolve'
@@ -1110,11 +1107,6 @@ export const marketingRouter = router({
             : null
         return {
           ...data,
-          // Posted by hand: the approval check runs as the view opens
-          // (tagging spec §4.4), so a late opt-out is honoured there too.
-          variant: data.variant
-            ? await withManualBody(data.variant, conferenceId)
-            : null,
           tagPeople: data.tagPeople.map((p) =>
             own && p.handle === own
               ? { ...p, handle: null, ownAccount: true as const }

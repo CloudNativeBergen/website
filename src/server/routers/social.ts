@@ -8,6 +8,7 @@ import {
   ScheduleSocialVariantSchema,
   SocialPostIdSchema,
   SocialVariantIdSchema,
+  SocialVariantEditorReadSchema,
   UpdateSocialPostDefaultTimeSchema,
   UpdateSocialVariantSchema,
 } from '@/server/schemas/social'
@@ -417,7 +418,7 @@ export const socialRouter = router({
 
   /** What the single-variant editor loads (#1007). */
   getVariantEditor: adminProcedure
-    .input(SocialVariantIdSchema)
+    .input(SocialVariantEditorReadSchema)
     .query(async ({ input }) => {
       const conferenceId = await requireDocumentInCurrentConference(
         input.variantId,

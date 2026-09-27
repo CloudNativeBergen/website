@@ -26,6 +26,8 @@ const mocks = vi.hoisted(() => ({
   update: vi.fn(),
   send: vi.fn(),
   query: vi.fn(),
+  editorQuery: vi.fn(() => ({ data: undefined, error: null })),
+  fetchEditor: vi.fn(),
 }))
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }))
 vi.mock('@/components/admin/NotificationProvider', () => ({
@@ -68,6 +70,7 @@ vi.mock('@/lib/trpc/client', () => {
         },
       },
       social: {
+        getVariantEditor: { useQuery: mocks.editorQuery },
         unscheduleVariant: mutation,
         scheduleVariant: mutation,
         markPosted: mutation,
@@ -632,10 +635,31 @@ describe('Task editor handoff recovery', () => {
   })
 })
 
-describe('Task editor manual post view — a fresh check on every opening (review T4)', () => {
+describe('Task editor manual post view — a fresh check on every opening (review T4, round 3)', () => {
   const TAGGED = 'Hello @alice.dev'
   const PLAIN = 'Hello Alice Smith'
-  function manualData(manualBody: string | null): TaskEditorData {
+  const variant = {
+    _id: 'v-1',
+    _rev: 'r1',
+    postId: 'p-1',
+    conferenceId: 'c-1',
+    orgId: 'o-1',
+    platform: 'bluesky' as const,
+    body: TAGGED,
+    status: 'awaiting-manual' as const,
+    scheduledAt: null,
+    usesCustomTime: false,
+    claimedAt: null,
+    submission: null,
+    shortCode: null,
+    link: null,
+    attachments: [],
+    publishResult: null,
+    attempts: [],
+    attemptCount: 0,
+  }
+  const editorRead = { post: { attachments: [], defaultScheduledAt: null } }
+  function manualTask(): TaskEditorData {
     const data = pendingData()
     return {
       ...data,
@@ -650,79 +674,88 @@ describe('Task editor manual post view — a fresh check on every opening (revie
         assetUrl: null,
         assetId: null,
       },
-      variant: {
-        variant: {
-          _id: 'v-1',
-          _rev: 'r1',
-          postId: 'p-1',
-          conferenceId: 'c-1',
-          orgId: 'o-1',
-          platform: 'bluesky',
-          body: TAGGED,
-          status: 'awaiting-manual',
-          scheduledAt: null,
-          usesCustomTime: false,
-          claimedAt: null,
-          submission: null,
-          shortCode: null,
-          link: null,
-          attachments: [],
-          publishResult: null,
-          attempts: [],
-          attemptCount: 0,
-        },
-        post: { attachments: [], defaultScheduledAt: null },
-        conferenceDomains: [],
-        ...(manualBody
-          ? {
-              manualBody: {
-                body: manualBody,
-                untagged: ['Alice Smith'],
-                removed: 0,
-              },
-            }
-          : {}),
-      },
+      variant: { variant, ...editorRead, conferenceDomains: [] },
     }
   }
+  const check = (manualBody: string | null) => ({
+    variant,
+    ...editorRead,
+    conferenceDomains: [],
+    ...(manualBody
+      ? {
+          manualBody: {
+            body: manualBody,
+            untagged: ['Alice Smith'],
+            removed: 0,
+          },
+        }
+      : {}),
+  })
 
-  it('reopening the page within the 60 s cache never shows the body checked for an earlier opening', async () => {
+  function setup() {
     // The app's default: data stays fresh for 60 s.
     const client = new QueryClient({
       defaultOptions: { queries: { staleTime: 60 * 1000, retry: false } },
     })
-    const queryKey = ['marketing.task.get', { taskId: 'post-1' }]
-    mocks.query.mockImplementation(function useTaskQuery(
-      _input: unknown,
+    mocks.data = manualTask()
+    mocks.editorQuery.mockImplementation(function useEditorQuery(
+      input: unknown,
       options: object,
     ) {
-      return useQuery({ queryKey, queryFn: () => mocks.fetch(), ...options })
-    })
-    const page = () => (
+      return useQuery({
+        queryKey: ['social.getVariantEditor', input],
+        queryFn: () => mocks.fetchEditor(input),
+        ...options,
+      })
+    } as never)
+    mocks.fetchEditor.mockReset()
+    return () => (
       <QueryClientProvider client={client}>
         <TaskEditorPage taskId="post-1" />
       </QueryClientProvider>
     )
+  }
 
-    // First opening: nobody has opted out yet.
-    mocks.fetch.mockResolvedValueOnce(manualData(null))
+  it('reopening the page within the 60 s cache never shows the body checked for an earlier opening', async () => {
+    const page = setup()
+    mocks.fetchEditor.mockResolvedValueOnce(check(null))
     const first = render(page())
     expect(await screen.findByText(TAGGED)).toBeTruthy()
     first.unmount()
 
     // Alice opts out; the organizer comes back to the Task.
-    let answer: (data: TaskEditorData) => void = () => {}
-    mocks.fetch.mockImplementationOnce(
+    let answer: (data: unknown) => void = () => {}
+    mocks.fetchEditor.mockImplementationOnce(
       () => new Promise((resolve) => (answer = resolve)),
     )
     render(page())
-    await waitFor(() => expect(mocks.fetch).toHaveBeenCalledTimes(2))
-    // The cached (tagged) body is not offered while this opening's check runs.
+    await waitFor(() => expect(mocks.fetchEditor).toHaveBeenCalledTimes(2))
     expect(screen.queryByText(TAGGED)).toBeNull()
     expect(screen.queryByRole('button', { name: /copy text/i })).toBeNull()
 
-    await act(async () => answer(manualData(PLAIN)))
+    await act(async () => answer(check(PLAIN)))
     expect(await screen.findByText(PLAIN)).toBeTruthy()
     expect(screen.queryByText(TAGGED)).toBeNull()
+  })
+
+  it('reopening while the earlier visit is still checking asks again, and never shows that earlier answer (round 3, T5)', async () => {
+    const page = setup()
+    let first: (data: unknown) => void = () => {}
+    let second: (data: unknown) => void = () => {}
+    mocks.fetchEditor
+      .mockImplementationOnce(() => new Promise((r) => (first = r)))
+      .mockImplementationOnce(() => new Promise((r) => (second = r)))
+    const visit = render(page())
+    await waitFor(() => expect(mocks.fetchEditor).toHaveBeenCalledTimes(1))
+    visit.unmount()
+    render(page())
+    await waitFor(() => expect(mocks.fetchEditor).toHaveBeenCalledTimes(2))
+
+    await act(async () => first(check(null)))
+    expect(screen.queryByText(TAGGED)).toBeNull()
+    expect(screen.queryByRole('button', { name: /copy text/i })).toBeNull()
+
+    await act(async () => second(check(PLAIN)))
+    expect(await screen.findByText(PLAIN)).toBeTruthy()
   })
 })
