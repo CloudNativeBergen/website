@@ -285,6 +285,21 @@ function bindTags(
   return out
 }
 
+/**
+ * {@link bindTags} over the recorded mentions alone — what the publish tick
+ * has, with no roster to hand (tagging spec §4.4, Publish). Per handle, the
+ * record ids that own its occurrences, in occurrence order.
+ */
+export function occurrenceOwners(
+  body: string,
+  mentions: readonly Pick<
+    MentionRecord,
+    'handle' | 'speakerId' | 'status' | 'name'
+  >[],
+): Map<string, string[]> {
+  return bindTags(body, [], mentions)
+}
+
 /** Hand a person's tag back to their name: all of it, or their occurrence. */
 export function untagOwned(
   body: string,

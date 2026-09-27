@@ -95,6 +95,45 @@ describe('withholdOptedOutTags', () => {
     expect(out.body).toBe('@kubernetes.io and Alice Smith')
   })
 
+  it('a shared handle recorded with two DIDs posts the DID of the occurrence that stays — never the opted-out one (review round 2, T1)', () => {
+    const out = withholdOptedOutTags({
+      body: '@team.dev and @team.dev',
+      recorded: [
+        { ...alice, handle: 'team.dev', did: 'did:plc:old', optedOut: true },
+        { ...bob, handle: 'team.dev', did: 'did:plc:new' },
+      ],
+    })
+    expect(out.body).toBe('Alice Smith and @team.dev')
+    expect(out.mentions).toEqual([{ handle: 'team.dev', did: 'did:plc:new' }])
+  })
+
+  it('surviving occurrences of a shared handle disagreeing on the DID post none of them', () => {
+    const out = withholdOptedOutTags({
+      body: '@team.dev and @team.dev',
+      recorded: [
+        { ...alice, handle: 'team.dev', did: 'did:plc:a' },
+        { ...bob, handle: 'team.dev', did: 'did:plc:b' },
+      ],
+    })
+    expect(out.mentions).toEqual([])
+  })
+
+  it('binds a shared handle the way the approval check does: an occurrence Studio replaced with one owner’s name leaves the OTHER owner (round 2, T4)', () => {
+    // Records [Bob, Alice]; Studio swapped the first occurrence for "Bob".
+    // The approval check binds the remaining "@team.dev" to Alice, so her
+    // later opt-out must reach it.
+    const team = { handle: 'team.dev', did: 'did:plc:team' }
+    const out = withholdOptedOutTags({
+      body: 'Bob Jones and @team.dev',
+      recorded: [
+        { ...bob, ...team },
+        { ...alice, ...team, optedOut: true },
+      ],
+    })
+    expect(out.body).toBe('Bob Jones and Alice Smith')
+    expect(out.mentions).toEqual([])
+  })
+
   it('a name that itself contains the handle does not bring the tag back (review T2)', () => {
     // Only the ORIGINAL occurrences left unswapped may carry a DID: the
     // inserted name's "@alice.dev" is text, and the adapter posts

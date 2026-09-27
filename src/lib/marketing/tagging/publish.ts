@@ -11,7 +11,7 @@
 import { normaliseHandle } from '@/lib/social/provider/bluesky-syntax'
 import type { PublishMention } from '@/lib/social/provider/types'
 import type { RecordedTag } from '@/lib/social/types'
-import { mentionTokens } from './checks'
+import { mentionTokens, occurrenceOwners } from './checks'
 import { GONE_SPEAKER_TEXT } from './body'
 
 export { GONE_SPEAKER_TEXT }
@@ -37,22 +37,38 @@ export function withholdOptedOutTags(input: {
   body: string
   recorded: readonly RecordedTag[]
 }): WithheldTags {
-  // Per handle, the records in occurrence order (as `plainBody` binds them):
-  // the k-th occurrence is the k-th record, extra ones the last record's.
-  const byHandle = new Map<string, RecordedTag[]>()
-  for (const r of input.recorded) {
-    const h = normaliseHandle(r.handle)
-    byHandle.set(h, [...(byHandle.get(h) ?? []), r])
-  }
+  // Which record owns each occurrence: the SAME binding the approval check
+  // uses (`bindTags`), so a shared handle whose first occurrence was edited
+  // away in Studio still belongs to whoever the check bound it to. Records
+  // are keyed by index: publish has no roster, and a record may have no
+  // speaker (a sponsor's).
+  const owners = occurrenceOwners(
+    input.body,
+    input.recorded.map((r, i) => ({
+      handle: r.handle,
+      speakerId: String(i),
+      status: 'tagged' as const,
+      name: r.name,
+    })),
+  )
+  const lastOf = new Map<string, RecordedTag>()
+  for (const r of input.recorded) lastOf.set(normaliseHandle(r.handle), r)
   const seen = new Map<string, number>()
   const withheld = new Map<string, WithheldTag>()
+  const kept: { handle: string; record: RecordedTag }[] = []
   const swaps = mentionTokens(input.body).flatMap((t) => {
-    const list = byHandle.get(t.handle)
-    if (!list) return []
+    const ids = owners.get(t.handle)
+    const last = lastOf.get(t.handle)
+    if (!last) return []
     const k = seen.get(t.handle) ?? 0
     seen.set(t.handle, k + 1)
-    const r = list[Math.min(k, list.length - 1)]
-    if (!r.speakerId || !(r.optedOut || r.gone)) return []
+    // More occurrences than owners: the extras are the last record's.
+    const id = ids?.[k]
+    const r = id !== undefined ? input.recorded[Number(id)] : last
+    if (!r.speakerId || !(r.optedOut || r.gone)) {
+      kept.push({ handle: t.handle, record: r })
+      return []
+    }
     withheld.set(
       r.speakerId,
       r.gone
@@ -66,29 +82,30 @@ export function withholdOptedOutTags(input: {
     )
     return [{ ...t, name: r.gone ? GONE_SPEAKER_TEXT : r.name }]
   })
-  const swappedAt = new Set(swaps.map((t) => t.start))
   let body = input.body
   for (const t of [...swaps].reverse())
     body = `${body.slice(0, t.start)}${t.name}${body.slice(t.end)}`
 
-  // The DIDs the adapter posts: only for ORIGINAL occurrences left unswapped,
-  // once each. Not re-detected from the new text: a name that itself holds
-  // the handle ("Alice (@alice.dev)") must not bring the tag back — the
-  // adapter posts an unrecorded handle as text.
-  const left = new Set(
-    mentionTokens(input.body)
-      .filter((t) => !swappedAt.has(t.start))
-      .map((t) => t.handle),
-  )
-  const mentions = new Map<string, PublishMention>()
-  for (const r of input.recorded) {
-    const h = normaliseHandle(r.handle)
-    if (r.did && left.has(h) && !mentions.has(h))
-      mentions.set(h, { handle: r.handle, did: r.did })
+  // The DIDs the adapter posts: per handle, the DID of the records owning its
+  // SURVIVING original occurrences (never re-detected from the new text: a
+  // name holding the handle must not bring the tag back). The adapter applies
+  // one DID to every occurrence of a handle, so when those records disagree
+  // (a shared handle recorded at two DIDs) none is posted — never, say, the
+  // opted-out owner's DID on the other owner's occurrence.
+  const dids = new Map<string, { handle: string; did: Set<string> }>()
+  for (const { handle, record } of kept) {
+    const entry = dids.get(handle) ?? { handle: record.handle, did: new Set() }
+    entry.did.add(record.did ?? '')
+    dids.set(handle, entry)
+  }
+  const mentions: PublishMention[] = []
+  for (const { handle, did } of dids.values()) {
+    const [only] = [...did]
+    if (did.size === 1 && only) mentions.push({ handle, did: only })
   }
   return {
     body,
-    mentions: [...mentions.values()],
+    mentions,
     withheld: [...withheld.values()],
   }
 }
