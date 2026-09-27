@@ -211,6 +211,11 @@ export interface TaskEditorTask extends TaskView {
   /** studioRender output, when attached. */
   assetUrl: string | null
   assetId?: string | null
+  /**
+   * studioRender: the attached render has not reached the marketing asset
+   * gallery yet (#1165). Retrying the handoff completes the save.
+   */
+  galleryPending?: boolean
   origin: TaskOrigin | null
 }
 

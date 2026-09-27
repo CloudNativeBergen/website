@@ -62,11 +62,14 @@ describe('studio queries executed against a fixture dataset', () => {
       title: 'Save the date',
       alt: 'Conference dates',
       subjectName: 'Ada',
+      // What a gallery entry is about (#1165).
+      subject: { id: 'speaker', type: 'speaker' },
       pendingAssetId: 'image-upload',
       assetId: 'image-saved',
       campaignId: 'campaign',
       handoffDoneFor: null,
       replacedRenders: ['image-replaced'],
+      gallerySavePending: null,
     })
   })
 

@@ -466,6 +466,7 @@ interface RawTaskEditor extends RawTaskView {
   origin: TaskOrigin | null
   assetUrl: string | null
   assetId: string | null
+  galleryPending: boolean | null
   subject: {
     _id: string
     _type: string
@@ -516,6 +517,7 @@ export async function getTaskEditorData(
       "verbatimCopy": verbatimCopy == true && copyEdited != true,
       "assetUrl": asset.asset->url,
       "assetId": asset.asset._ref,
+      "galleryPending": kind == "studioRender" && defined(asset.asset) && gallerySavePending == true,
       "subject": subject->{ _id, _type, "name": coalesce(name, title), "slug": slug.current },
       "tagByHand": select(kind == "publishing" && channel == "linkedin" => subject->{
         "people": select(
@@ -563,6 +565,7 @@ export async function getTaskEditorData(
     messageId: row.messageId ?? null,
     assetUrl: row.assetUrl ?? null,
     assetId: row.assetId ?? null,
+    galleryPending: row.galleryPending === true,
     origin: row.origin ?? null,
   }
   return {

@@ -354,6 +354,14 @@ describe('attaching a render also saves it to the gallery (#1165)', () => {
     })
     expect(h.handedOff).toEqual(['variant-1'])
     expect(gallery()).toEqual([])
+    // The Task editor reads the mark and offers the retry.
+    expect(
+      (await marketing().task.get({ taskId: 'task-r' })).task,
+    ).toMatchObject({
+      assetId: FIRST,
+      galleryPending: true,
+      handoffPending: false,
+    })
 
     h.galleryDown = false
     expect(await attach(FIRST)).toEqual({
@@ -364,6 +372,9 @@ describe('attaching a render also saves it to the gallery (#1165)', () => {
       expect.objectContaining({ image: image(FIRST) }),
     ])
     expect(task()).not.toHaveProperty('gallerySavePending')
+    expect(
+      (await marketing().task.get({ taskId: 'task-r' })).task,
+    ).toMatchObject({ galleryPending: false })
     // Handed off once: the retry does not hand the image off again.
     expect(h.handedOff).toEqual(['variant-1'])
   })
