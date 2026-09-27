@@ -628,9 +628,10 @@ export function SpeakerDetailsForm({
                     your public profile and for promotion, and a tag puts the
                     post in your followers&rsquo; feeds so you can reshare it.
                     Tick this box and we will not: your name is written out in
-                    plain text instead, in every post not yet published,
-                    including ones already scheduled. It changes nothing else
-                    about your profile.
+                    plain text instead in posts not yet published, including
+                    ones already scheduled (the privacy policy explains the one
+                    exception, posts we publish by hand). It changes nothing
+                    else about your profile.
                   </HelpText>
                   {socialTagLocked && (
                     <HelpText>

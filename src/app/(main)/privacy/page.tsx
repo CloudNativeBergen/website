@@ -755,11 +755,15 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                               name out in plain text instead
                             </li>
                             <li>
-                              • Your choice takes effect for every post not yet
+                              • Your choice takes effect for posts not yet
                               published, including ones already written and
-                              scheduled: a tag of you is replaced by your plain
-                              name when the post is published, or, for a post we
-                              publish by hand, when we prepare it for posting
+                              scheduled. A post we publish automatically is
+                              checked at the moment it goes out, and a tag of
+                              you is replaced by your plain name. A post an
+                              organizer publishes by hand is checked when they
+                              open it to post, so text they copied before you
+                              ticked the box can still tag you &mdash; tell us
+                              and we will correct or remove that post
                             </li>
                             <li>
                               • Posts already published are not changed. Ask us
