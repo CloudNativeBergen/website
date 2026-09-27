@@ -404,6 +404,38 @@ describe('tagBlueskyBody', () => {
     expect(mentions.map((m) => m.speakerId)).toEqual(['al'])
   })
 
+  it('over the limit, a tag no longer than its name is kept: dropping it cannot shorten the worst case', () => {
+    // Al's tag is 37 graphemes longer than his name; Bartholomew's is 23
+    // SHORTER. Only Al's drop can shorten the longest form, so Bartholomew,
+    // the LAST speaker, keeps his tag.
+    const al = {
+      speakerId: 'al',
+      name: 'Al',
+      tag: {
+        status: 'tagged' as const,
+        handle: 'al-with-a-very-long-handle.bsky.social',
+        did: DID_A,
+      },
+    }
+    const bart = {
+      speakerId: 'bart',
+      name: 'Bartholomew Montgomery-Smithson',
+      tag: { status: 'tagged' as const, handle: 'bms.dev', did: DID_B },
+    }
+    const hook = 'h'.repeat(241)
+    expect(graphemes(`${hook} Al and ${bart.name}`)).toBe(280)
+    const { body, mentions } = tagBlueskyBody({
+      skeleton: '{hook} {name}',
+      values: { hook },
+      people: [al, bart],
+    })
+    expect(body).toBe(`${hook} Al and @bms.dev`)
+    expect(graphemes(body)).toBe(257)
+    expect(mentions.map((m) => [m.speakerId, m.status])).toEqual([
+      ['bart', 'tagged'],
+    ])
+  })
+
   it('when even the plain names do not fit, nobody is tagged', () => {
     const { body, mentions } = tagBlueskyBody({
       skeleton: `{name} ${'x'.repeat(300)}`,

@@ -5,8 +5,8 @@
  * so `{name}` stays a plain name in it. This is the one place a handle goes
  * in: when the body of a Bluesky `tagSubject` recipe is resolved, `{name}` is
  * the subject's people with each tag in place of the name — and a handle
- * costs its full length, so over the limit names fall back to plain text from
- * the last one until the body fits.
+ * costs its full length, so over the limit a tag longer than its name falls
+ * back to plain text, from the last one, until the body fits.
  */
 
 import { resolvePlaceholders, type Placeholder } from '../placeholders'
@@ -25,6 +25,15 @@ const segmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' })
 export function countGraphemes(text: string): number {
   return [...segmenter.segment(text)].length
 }
+
+/** One limit a generated body must fit in every form, in its own unit. */
+interface LengthBound {
+  length: (text: string) => number
+  max: number
+}
+const LENGTH_BOUNDS: readonly LengthBound[] = [
+  { length: countGraphemes, max: BLUESKY_MAX_GRAPHEMES },
+]
 
 /** What generation found for one person's Bluesky account. */
 export type BlueskyTag =
@@ -121,22 +130,38 @@ export function tagBlueskyBody(input: {
     render((p) => (tagged.has(p) ? handleOf(p) : p.name))
   // Every form must fit (§4.4), not just all-tagged and all-plain: at
   // publish only an opted-out speaker's tag goes back to the name, so ANY
-  // subset may be swapped. The longest is each tag in its longer form.
-  const longest = (tagged: ReadonlySet<TagPerson>) =>
-    render((p) =>
-      tagged.has(p) && countGraphemes(handleOf(p)) > countGraphemes(p.name)
-        ? handleOf(p)
-        : p.name,
+  // subset may be swapped. Per bound, the longest form takes each tag in
+  // its longer form — max(handle, name) in that bound's unit.
+  const tagIsLonger = (p: TagPerson, b: LengthBound) =>
+    b.length(handleOf(p)) > b.length(p.name)
+  const overBounds = (tagged: ReadonlySet<TagPerson>) =>
+    LENGTH_BOUNDS.filter(
+      (b) =>
+        b.length(
+          render((p) =>
+            tagged.has(p) && tagIsLonger(p, b) ? handleOf(p) : p.name,
+          ),
+        ) > b.max,
     )
 
-  // Names fall back from the LAST speaker until every form fits; when even
-  // the plain form is over, nobody is tagged.
+  // Walking back from the LAST speaker, drop only a tag that is longer than
+  // its name in a bound that is over: any other drop cannot shorten the
+  // worst case, and would cost that speaker their tag for nothing. When no
+  // such tag is left and a bound is still over, the plain form itself is
+  // over, and nobody is tagged.
   const candidates = people.filter((p) => p.tag?.status === 'tagged')
-  while (
-    candidates.length > 0 &&
-    countGraphemes(longest(new Set(candidates))) > BLUESKY_MAX_GRAPHEMES
-  )
-    candidates.pop()
+  for (;;) {
+    const over = overBounds(new Set(candidates))
+    if (over.length === 0) break
+    const i = candidates.findLastIndex((p) =>
+      over.some((b) => tagIsLonger(p, b)),
+    )
+    if (i < 0) {
+      candidates.length = 0
+      break
+    }
+    candidates.splice(i, 1)
+  }
   const body = withTags(new Set(candidates))
 
   const tagged = new Set(candidates)
