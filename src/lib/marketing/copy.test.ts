@@ -679,3 +679,44 @@ describe('copy seeded from a Template that kept literal copy (#1123)', () => {
     expect(task(plan, 'cfpOpen:bluesky').copyEdited).toBe(true)
   })
 })
+
+describe('a source plan still on the pre-2026.3 talk skeletons (#1153)', () => {
+  // Written out here, independent of the shared table under test.
+  const LEGACY_VIDEO_LINKEDIN =
+    '{hook}\n\n{name} ({company}) at {event}: "{title}". Recording online.\n\nWatch — link in the first comment.\n\n{eventTag}'
+  const LEGACY_TEASER_BLUESKY =
+    '{hook}\n\n{name} has the answer — and the graphs. "{title}" at {event}.\n\n{url}'
+  const EDITED = `${LEGACY_TEASER_BLUESKY} See you there!`
+
+  const legacySource = (skeletons: Record<string, string>) =>
+    lastYearSource((seed) => {
+      for (const c of seed.campaigns)
+        c.recipes = c.recipes.map((r) =>
+          skeletons[r.key] ? { ...r, skeleton: skeletons[r.key] } : r,
+        )
+    })
+  const skeletonOf = (plan: SeedPlan, key: string) =>
+    plan.campaigns.flatMap((c) => c.recipes).find((r) => r.key === key)!
+      .skeleton
+
+  it('copies the 2026.3 text for an UNEDITED legacy skeleton, and leaves the source as read', () => {
+    const source = legacySource({
+      'videoDrip:linkedin': LEGACY_VIDEO_LINKEDIN,
+      'talkTeaser:bluesky': LEGACY_TEASER_BLUESKY,
+    })
+    const read = structuredClone(source)
+    const copied = copy(source)
+    expect(skeletonOf(copied, 'videoDrip:linkedin')).toBe(
+      '{hook}\n\n{speakers} at {event}: "{title}". Recording online.\n\nWatch — link in the first comment.\n\n{eventTag}',
+    )
+    expect(skeletonOf(copied, 'talkTeaser:bluesky')).toBe(
+      '{hook}\n\nThe answer — and the graphs: "{title}" by {name} at {event}.\n\n{url}',
+    )
+    expect(source).toEqual(read)
+  })
+
+  it('keeps an EDITED skeleton as the organizer wrote it', () => {
+    const copied = copy(legacySource({ 'talkTeaser:bluesky': EDITED }))
+    expect(skeletonOf(copied, 'talkTeaser:bluesky')).toBe(EDITED)
+  })
+})

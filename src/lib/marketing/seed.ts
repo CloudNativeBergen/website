@@ -32,6 +32,7 @@ import {
 import { BLANK_ORIGIN } from './origin'
 import { publishedIn } from './recipes'
 import type { PlanTemplate, TaskRecipe } from './template/types'
+import { withCurrentSkeletons } from './template/legacy-skeletons'
 import type { CampaignTrigger, Outcome } from './types'
 
 export {
@@ -220,7 +221,9 @@ export function expandTemplate(input: SeedInput): SeedPlan {
           ? Math.round(recipe.target.shareOfCapacity * capacity)
           : null,
       triggers: recipe.triggers.map((t) => ({ ...t })),
-      recipes: structuredClone(recipe.recipes),
+      // A saved Template or an earlier plan may still hold a replaced
+      // built-in text (#1153); an unedited one is brought current.
+      recipes: withCurrentSkeletons(recipe.recipes),
       generatedKeys: [],
       optional: recipe.optional,
     }

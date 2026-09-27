@@ -17,14 +17,14 @@ For each stored Recipe, it rewrites `recipes[_key].skeleton` to the `2026.3` tex
 - its `key` is one of `talkTeaser:linkedin`, `talkTeaser:bluesky`, `videoDrip:linkedin` or `videoDrip:bluesky`;
 - its skeleton is **exactly** the built-in `2026.2` text.
 
-An edited skeleton is the organizer's and is never touched. Both the old and new texts are frozen in `rewrites.ts`.
+An edited skeleton is the organizer's and is never touched. Both the old and new texts are frozen in `src/lib/marketing/template/legacy-skeletons.ts`. Seeding and copying read the same table (see below).
 
 The two Bluesky `2026.2` texts are identical to `2026.1`, so a plan backfilled by 053 gets those two lines as well. The `2026.1` LinkedIn lines (which still carried `{url}`) are not matched.
 
 It does not touch:
 
 - `marketingPlan.templateVersion`, which records what the plan was seeded from.
-- Organization Templates (`planTemplate`). Each saved version is immutable history. A version saved from an unedited `2026.2` plan still seeds the old text, and the organizer edits it there.
+- Organization Templates (`planTemplate`). Each saved version is immutable history. Seeding a plan from one, and copying an earlier edition's plan, bring each unedited legacy skeleton current from the same table, so the stored text never reaches a new plan.
 
 ## Order
 

@@ -580,3 +580,48 @@ describe('stored Recipes (Templates spec §2.1)', () => {
     expect(again.tasks.map((t) => t.key)).toEqual(all.tasks.map((t) => t.key))
   })
 })
+
+describe('a stored Template with the pre-2026.3 talk skeletons (#1153)', () => {
+  // Written out here, independent of the shared table under test.
+  const LEGACY_VIDEO_BLUESKY =
+    '🎬 "{title}" — {name} ({company}) at {event}.\n\n{hook}\n\n{url}'
+  const LEGACY_TEASER_LINKEDIN =
+    '{hook}\n\n{name} ({company}) answers it at {event}.\n\n🎙️ "{title}"\n\nSchedule — link in the first comment.\n\n{eventTag}'
+
+  const withSkeletons = (skeletons: Record<string, string>) => ({
+    ...BUILTIN_TEMPLATE,
+    campaigns: BUILTIN_TEMPLATE.campaigns.map((c) => ({
+      ...c,
+      recipes: c.recipes.map((r) =>
+        skeletons[r.key] ? { ...r, skeleton: skeletons[r.key] } : r,
+      ),
+    })),
+  })
+  const skeletonOf = (plan: SeedPlan, key: string) =>
+    plan.campaigns.flatMap((c) => c.recipes).find((r) => r.key === key)!
+      .skeleton
+
+  it('seeds the 2026.3 text for an UNEDITED legacy skeleton, and leaves the Template as stored', () => {
+    const template = withSkeletons({
+      'videoDrip:bluesky': LEGACY_VIDEO_BLUESKY,
+      'talkTeaser:linkedin': LEGACY_TEASER_LINKEDIN,
+    })
+    const stored = structuredClone(template)
+    const plan = seed({ template })
+    expect(skeletonOf(plan, 'videoDrip:bluesky')).toBe(
+      '🎬 "{title}" — {speakers} at {event}.\n\n{hook}\n\n{url}',
+    )
+    expect(skeletonOf(plan, 'talkTeaser:linkedin')).toBe(
+      '{hook}\n\nAnswered at {event} by {speakers}.\n\n🎙️ "{title}"\n\nSchedule — link in the first comment.\n\n{eventTag}',
+    )
+    expect(template).toEqual(stored)
+  })
+
+  it('keeps an EDITED skeleton as the organizer wrote it', () => {
+    const edited = `${LEGACY_VIDEO_BLUESKY} 🎉`
+    const plan = seed({
+      template: withSkeletons({ 'videoDrip:bluesky': edited }),
+    })
+    expect(skeletonOf(plan, 'videoDrip:bluesky')).toBe(edited)
+  })
+})
