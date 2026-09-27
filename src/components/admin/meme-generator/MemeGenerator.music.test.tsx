@@ -1227,4 +1227,37 @@ describe('a video’s music', () => {
       { timeout: 5000 },
     )
   })
+
+  it('keeps a decode under way when a save names the very file it is decoding', async () => {
+    decodes.hold = true
+    decodes.waiting.length = 0
+    try {
+      const gallery = fakeGallery()
+      render(
+        <MemeGenerator
+          gallery={gallery}
+          projects={fakeProjects()}
+          encoder={encoder}
+        />,
+      )
+      fireEvent.click(screen.getByRole('button', { name: 'Video' }))
+      await within(music()).findByRole('option', { name: 'Theme (0:20)' })
+      fireEvent.change(within(music()).getByLabelText('Music'), {
+        target: { value: 'asset-theme' },
+      })
+      // The bytes are in; the decode is under way.
+      await waitFor(() => expect(decodes.waiting).toHaveLength(1))
+      save()
+      await within(project()).findByText('All changes saved')
+      decodes.hold = false
+      decodes.waiting.splice(0).forEach((release) => release())
+      await within(music()).findByText(/Plays from/)
+      // The save stored 'file-picked', the file being decoded: not fetched
+      // or decoded again.
+      expect(gallery.loadTrack).toHaveBeenCalledTimes(1)
+      expect(decodes.waiting).toHaveLength(0)
+    } finally {
+      decodes.hold = false
+    }
+  })
 })

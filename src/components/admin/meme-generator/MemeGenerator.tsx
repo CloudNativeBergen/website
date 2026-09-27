@@ -1494,6 +1494,11 @@ export function MemeGenerator({
   const decodedKey = decoded?.key ?? null
   /** The decode in flight, if any: the next waits for it. */
   const decodeQueue = useRef<Promise<unknown>>(Promise.resolve())
+  /** The decode under way, and the file it is of; none once it settles. */
+  const decodeInFlight = useRef<{
+    fileId: string
+    result: Promise<{ channels: Float32Array[]; fileId: string } | null>
+  } | null>(null)
   useEffect(() => {
     // A file already decoded is never fetched again, whichever way it is
     // reached now.
@@ -1504,8 +1509,8 @@ export function MemeGenerator({
     // Given up on — another track picked, or the editor left — the fetch is
     // aborted, never left streaming megabytes nobody will decode.
     const abort = new AbortController()
-    loadTrack(source, abort.signal)
-      .then(({ bytes, fileId }) => {
+    const load = () =>
+      loadTrack(source, abort.signal).then(({ bytes, fileId }) => {
         // A decode cannot be stopped once begun, and a long track decodes
         // to hundreds of megabytes: one at a time, and none for a pick
         // given up on while it waited.
@@ -1519,15 +1524,29 @@ export function MemeGenerator({
           () => undefined,
           () => undefined,
         )
+        const job = { fileId, result: decoding }
+        decodeInFlight.current = job
+        void decoding
+          .catch(() => {})
+          .finally(() => {
+            if (decodeInFlight.current === job) decodeInFlight.current = null
+          })
         return decoding
       })
-      .then(
-        (done) =>
-          done &&
-          !abort.signal.aborted &&
-          setDecoded({ key: trackKey, ...done }),
-        () => !abort.signal.aborted && setTrackFailed(trackKey),
-      )
+    // The very file this key names is already decoding — a save has just
+    // given the samples being decoded their stored file's name: that decode
+    // is taken over, not thrown away and started again. One that comes to
+    // nothing (given up on before it began) is fetched after all.
+    const running = decodeInFlight.current
+    const decoding =
+      running && running.fileId === trackKey
+        ? running.result.then((done) => done ?? load())
+        : load()
+    decoding.then(
+      (done) =>
+        done && !abort.signal.aborted && setDecoded({ key: trackKey, ...done }),
+      () => !abort.signal.aborted && setTrackFailed(trackKey),
+    )
     return () => abort.abort()
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: keyed by the source's words, not the object rebuilt every render
   }, [trackKey, sourceQuery, loadTrack, decodedKey, trackRetry])
