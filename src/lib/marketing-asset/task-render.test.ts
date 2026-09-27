@@ -46,7 +46,7 @@ vi.mock('@/lib/sanity/client', async () => {
       const created = {
         ...structuredClone(m.createIfNotExists),
         _rev: `rev-${++h.revs}`,
-      } as Doc
+      } as unknown as Doc
       h.dataset.push(created)
       return created
     }
