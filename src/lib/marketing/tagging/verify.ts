@@ -15,6 +15,7 @@ import {
   approvalCheck,
   approvalHandlesToResolve,
   fixTagIssue,
+  withoutTags,
   handlesToResolve,
   mentionTokens,
   saveMentions,
@@ -192,7 +193,8 @@ export async function manualPostBody(input: {
     const gone = issue.code === 'not-a-speaker'
     const fixed = fixTagIssue(
       body,
-      gone ? { ...issue, name: GONE_SPEAKER_TEXT } : issue,
+      // A name that holds a handle keeps it as text, not a tag (round 2, T3).
+      { ...issue, name: gone ? GONE_SPEAKER_TEXT : withoutTags(issue.name) },
       people,
       mentions,
     )

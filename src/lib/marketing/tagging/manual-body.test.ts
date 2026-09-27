@@ -97,6 +97,18 @@ describe('manualPostBody', () => {
     expect(h.resolve).not.toHaveBeenCalledWith('alice.dev')
   })
 
+  it('a name that contains the handle does not put a tag back in the text to copy (review round 2, T3)', async () => {
+    seed(true)
+    h.dataset = h.dataset.map((d) =>
+      d._id === 'alice' ? { ...d, name: 'Alice (@alice.dev)' } : d,
+    )
+    const out = await manualPostBody(input)
+    // Pasted into Bluesky's composer, "@alice.dev" would become a mention.
+    expect(out?.body).toBe(
+      '🎙️ Alice (alice.dev) and @bob.dev are speaking at the conf.',
+    )
+  })
+
   it('nobody opted out: nothing to change', async () => {
     seed(false)
     expect(await manualPostBody(input)).toBeNull()

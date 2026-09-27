@@ -286,6 +286,18 @@ function bindTags(
 }
 
 /**
+ * The text with the `@` dropped from every handle the adapter or Bluesky's
+ * composer would detect as a mention: a replacement name that itself holds a
+ * handle ("Alice (@alice.dev)") must not put the tag back.
+ */
+export function withoutTags(text: string): string {
+  let out = text
+  for (const t of mentionTokens(text).reverse())
+    out = `${out.slice(0, t.start)}${out.slice(t.start + 1)}`
+  return out
+}
+
+/**
  * {@link bindTags} over the recorded mentions alone — what the publish tick
  * has, with no roster to hand (tagging spec §4.4, Publish). Per handle, the
  * record ids that own its occurrences, in occurrence order.
