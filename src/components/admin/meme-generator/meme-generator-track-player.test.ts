@@ -131,6 +131,7 @@ describe('the track player', () => {
     ctx.currentTime = 1.05
     player.seek(6)
     expect(player.time()).toBe(6)
+    expect(player.scrubbing()).toBe(true)
     vi.advanceTimersByTime(SCRUB_SETTLE_MS - 1)
     expect(sources).toHaveLength(1)
     ctx.currentTime = 2
@@ -138,6 +139,7 @@ describe('the track player', () => {
     expect(sources[1]).toMatchObject({ startedAt: 2, offset: 6 })
     ctx.currentTime = 3
     expect(player.time()).toBeCloseTo(7, 10)
+    expect(player.scrubbing()).toBe(false)
   })
 
   it('restarts at once from where play is pressed, as a loop does', () => {

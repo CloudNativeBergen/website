@@ -31,6 +31,11 @@ vi.mock('./meme-generator-draw', async (importOriginal) => ({
 }))
 /** What the editor asks of the preview's player. */
 const playerCalls = vi.hoisted(() => [] as string[])
+/** What the mocked player reports: its clock, and whether a scrub is on. */
+const playerState = vi.hoisted(() => ({
+  time: null as number | null,
+  scrubbing: false,
+}))
 /**
  * Decodes as a test lets them run: held ones wait for `release`, and the
  * most that ran at once is counted.
@@ -52,7 +57,8 @@ vi.mock('./meme-generator-track-player', async (importOriginal) => ({
       seek: () => {},
       setLoop: () => {},
       setVolume: (volume: number) => calls.push(`volume:${volume}`),
-      time: () => null,
+      time: () => playerState.time,
+      scrubbing: () => playerState.scrubbing,
       dispose: () => {},
     }
   },
@@ -79,6 +85,7 @@ const collectGarbage = () => {
   ;(runInNewContext('gc') as () => void)()
 }
 
+import { act } from '@testing-library/react'
 import { setFlagsFromString } from 'node:v8'
 import { runInNewContext } from 'node:vm'
 import { MemeGenerator } from './MemeGenerator'
@@ -890,5 +897,45 @@ describe('a video’s music', () => {
         expect.any(AbortSignal),
       ),
     )
+  })
+
+  it('keeps a scrub to the very end silent while looping, restarting only once it settles', async () => {
+    let frames: FrameRequestCallback[] = []
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      frames.push(callback)
+      return frames.length
+    })
+    vi.stubGlobal('cancelAnimationFrame', () => {
+      frames = []
+    })
+    const frame = () => {
+      const due = frames
+      frames = []
+      act(() => due.forEach((callback) => callback(performance.now())))
+    }
+    try {
+      render(<MemeGenerator gallery={fakeGallery()} encoder={encoder} />)
+      fireEvent.click(screen.getByRole('button', { name: 'Video' }))
+      await within(music()).findByRole('option', { name: 'Theme (0:20)' })
+      fireEvent.change(within(music()).getByLabelText('Music'), {
+        target: { value: 'asset-theme' },
+      })
+      await within(music()).findByText(/Plays from/)
+      fireEvent.click(screen.getByRole('button', { name: 'Loop' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Play' }))
+      playerCalls.length = 0
+      // Held at the very end of the 3 s video, mid-scrub.
+      Object.assign(playerState, { time: 3, scrubbing: true })
+      frame()
+      frame()
+      expect(playerCalls).not.toContain('play')
+      // The scrub settles there: now the loop starts again.
+      Object.assign(playerState, { time: 3, scrubbing: false })
+      frame()
+      expect(playerCalls).toContain('play')
+    } finally {
+      Object.assign(playerState, { time: null, scrubbing: false })
+      vi.unstubAllGlobals()
+    }
   })
 })

@@ -52,6 +52,8 @@ export interface TrackPlayer {
   setVolume(volume: number): void
   /** The playhead while playing with a mix; null when it is not the clock. */
   time(): number | null
+  /** A scrub during playback has not settled yet: the sound is off. */
+  scrubbing(): boolean
   dispose(): void
 }
 
@@ -209,6 +211,7 @@ export function createTrackPlayer(
       else unqueue()
     },
     time,
+    scrubbing: () => scrub !== null,
     dispose() {
       silence()
       clock = null

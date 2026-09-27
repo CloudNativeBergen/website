@@ -1622,6 +1622,12 @@ export function MemeGenerator({
     // With a track, the audio clock is the playhead: picture follows sound.
     const heard = player.time()
     if (heard !== null) playbackAnchor.current = { time: heard, at: now }
+    // Mid-scrub the playhead is where the scrub put it — the very end
+    // included — and nothing loops or ends until the scrub settles.
+    if (heard !== null && player.scrubbing()) {
+      setTime(Math.min(heard, total))
+      return true
+    }
     const next =
       heard ??
       playbackAnchor.current.time +
