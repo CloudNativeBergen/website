@@ -12,6 +12,13 @@ import type { TrackSource } from '@/lib/video-project'
  */
 export const MIX_RATE = 48_000
 
+/**
+ * How long the video's length must hold still before the preview is mixed
+ * again: a scene's edge dragged changes it on every pointer move, and a
+ * minute's mix is millions of samples.
+ */
+export const MIX_SETTLE_MS = 200
+
 /** How a video uses its track. Times are seconds; volume is 0 to 1. */
 export interface TrackSettings {
   /** Where in the track the video starts. */

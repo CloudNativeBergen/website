@@ -89,6 +89,7 @@ import { act } from '@testing-library/react'
 import { setFlagsFromString } from 'node:v8'
 import { runInNewContext } from 'node:vm'
 import { MemeGenerator } from './MemeGenerator'
+import { MIX_SETTLE_MS } from './meme-generator-music'
 
 const PROJECT: OpenedProject = {
   _id: 'vp-1',
@@ -1038,6 +1039,28 @@ describe('a video’s music', () => {
     // The earlier track, Theme, is still saveable through its live entry.
     expect(within(music()).getByLabelText('Music')).toHaveDisplayValue(
       /^Theme \(0:20\)$/,
+    )
+  })
+
+  it('remixes the preview once a burst of length changes settles, not on each', async () => {
+    render(<MemeGenerator gallery={fakeGallery()} encoder={encoder} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Video' }))
+    await within(music()).findByRole('option', { name: 'Theme (0:20)' })
+    fireEvent.change(within(music()).getByLabelText('Music'), {
+      target: { value: 'asset-theme' },
+    })
+    await within(music()).findByText(/Plays from/)
+    playerCalls.length = 0
+    // As a drag of the scene's edge does: one length after another.
+    const length = screen.getByLabelText('Scene 1 length (s)')
+    for (const value of ['3.5', '4', '4.5', '5']) {
+      fireEvent.change(length, { target: { value } })
+      fireEvent.keyDown(length, { key: 'Enter' })
+    }
+    expect(playerCalls.filter((call) => call === 'load')).toHaveLength(0)
+    await new Promise((resolve) => setTimeout(resolve, MIX_SETTLE_MS + 100))
+    await waitFor(() =>
+      expect(playerCalls.filter((call) => call === 'load')).toHaveLength(1),
     )
   })
 })

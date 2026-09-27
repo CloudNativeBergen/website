@@ -105,6 +105,7 @@ import { VideoExport } from './VideoExport'
 import { VideoMusic, type TrackLoad } from './VideoMusic'
 import {
   MIX_RATE,
+  MIX_SETTLE_MS,
   NEW_TRACK_SETTINGS,
   mixTrack,
   trackSource,
@@ -1546,6 +1547,18 @@ export function MemeGenerator({
         : { start, volume, fadeIn, fadeOut },
     [start, volume, fadeIn, fadeOut],
   )
+  // The length the preview is mixed for: the video's, once it has held
+  // still for MIX_SETTLE_MS. (The export mixes for its own frames.)
+  const [mixTotal, setMixTotal] = useState(total)
+  useEffect(() => {
+    if (mixTotal === total) return
+    if (!trackChannels) {
+      setMixTotal(total)
+      return
+    }
+    const settle = setTimeout(() => setMixTotal(total), MIX_SETTLE_MS)
+    return () => clearTimeout(settle)
+  }, [total, mixTotal, trackChannels])
   // What is heard: the mix the export encodes, at full volume — the volume
   // is a gain on the preview's output, since the mix is linear in it. So a
   // volume drag never rebuilds up to 2.9 million samples a channel, nor
@@ -1556,9 +1569,13 @@ export function MemeGenerator({
       start !== undefined &&
       fadeIn !== undefined &&
       fadeOut !== undefined
-        ? mixTrack(trackChannels, { start, volume: 1, fadeIn, fadeOut }, total)
+        ? mixTrack(
+            trackChannels,
+            { start, volume: 1, fadeIn, fadeOut },
+            mixTotal,
+          )
         : null,
-    [trackChannels, start, fadeIn, fadeOut, total],
+    [trackChannels, start, fadeIn, fadeOut, mixTotal],
   )
 
   // The preview's sound, and its clock while it plays.
