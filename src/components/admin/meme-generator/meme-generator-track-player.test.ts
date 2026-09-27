@@ -15,7 +15,17 @@ function fakeContext(outputLatency = 0) {
     stopped: boolean
     samples: number
   }[] = []
+  const gain = { gain: { value: 1 }, connected: false }
   const ctx = {
+    gain,
+    createGain() {
+      return {
+        gain: gain.gain,
+        connect: () => {
+          gain.connected = true
+        },
+      }
+    },
     currentTime: 0,
     outputLatency,
     destination: {},
@@ -322,5 +332,20 @@ describe('the track player', () => {
     ctx.currentTime = 1
     player.setLoop(true)
     expect(sources[1]).toMatchObject({ startedAt: 6, offset: 0 })
+  })
+
+  it('changes the volume on a gain, never by restarting the sound', () => {
+    const { ctx, sources } = fakeContext()
+    const player = createTrackPlayer(() => ctx)
+    player.load(mix(10))
+    player.setVolume(0.8)
+    player.play(0)
+    expect(ctx.gain.gain.value).toBe(0.8)
+    expect(ctx.gain.connected).toBe(true)
+    ctx.currentTime = 1
+    for (const volume of [0.7, 0.5, 0.3]) player.setVolume(volume)
+    expect(ctx.gain.gain.value).toBe(0.3)
+    expect(sources).toHaveLength(1)
+    expect(sources[0].stopped).toBe(false)
   })
 })

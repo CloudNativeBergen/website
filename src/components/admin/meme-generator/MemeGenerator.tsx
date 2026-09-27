@@ -1498,13 +1498,19 @@ export function MemeGenerator({
         : { start, volume, fadeIn, fadeOut },
     [start, volume, fadeIn, fadeOut],
   )
-  // What is heard: the same mix the export encodes.
+  // What is heard: the mix the export encodes, at full volume — the volume
+  // is a gain on the preview's output, since the mix is linear in it. So a
+  // volume drag never rebuilds up to 2.9 million samples a channel, nor
+  // restarts the sound.
   const mix = useMemo(
     () =>
-      trackChannels && trackSettings
-        ? mixTrack(trackChannels, trackSettings, total)
+      trackChannels &&
+      start !== undefined &&
+      fadeIn !== undefined &&
+      fadeOut !== undefined
+        ? mixTrack(trackChannels, { start, volume: 1, fadeIn, fadeOut }, total)
         : null,
-    [trackChannels, trackSettings, total],
+    [trackChannels, start, fadeIn, fadeOut, total],
   )
 
   // The preview's sound, and its clock while it plays.
@@ -1522,11 +1528,13 @@ export function MemeGenerator({
   useEffect(() => {
     if (!playing) player.pause()
   }, [player, playing])
+  useEffect(() => {
+    player.setVolume(volume ?? 1)
+  }, [player, volume])
   // The sound loops by itself, gaplessly; the picture follows its clock.
-  useEffect(
-    () => player.setLoop(loop && loopAllowed),
-    [player, loop, loopAllowed],
-  )
+  useEffect(() => {
+    player.setLoop(loop && loopAllowed)
+  }, [player, loop, loopAllowed])
 
   // Playback carries on from wherever the playhead is put. With a track the
   // sound follows it — silently, until a scrub settles.

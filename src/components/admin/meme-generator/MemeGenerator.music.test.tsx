@@ -25,8 +25,23 @@ vi.mock('./meme-generator-draw', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./meme-generator-draw')>()),
   drawDesign: () => {},
 }))
+/** What the editor asks of the preview's player. */
+const playerCalls = vi.hoisted(() => [] as string[])
 vi.mock('./meme-generator-track-player', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./meme-generator-track-player')>()),
+  createTrackPlayer: () => {
+    const calls = playerCalls
+    return {
+      load: (mix: unknown) => calls.push(mix ? 'load' : 'load:none'),
+      play: () => calls.push('play'),
+      pause: () => {},
+      seek: () => {},
+      setLoop: () => {},
+      setVolume: (volume: number) => calls.push(`volume:${volume}`),
+      time: () => null,
+      dispose: () => {},
+    }
+  },
   // Twenty seconds of silence at 48 kHz, whatever the bytes.
   decodeTrack: async () => {
     const channels = [
@@ -575,5 +590,21 @@ describe('a video’s music', () => {
     await new Promise((resolve) => setTimeout(resolve, 0))
     collectGarbage()
     expect(first.deref()).toBeUndefined()
+  })
+
+  it('changes the preview’s volume without rebuilding the mix', async () => {
+    render(<MemeGenerator gallery={fakeGallery()} encoder={encoder} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Video' }))
+    await within(music()).findByRole('option', { name: 'Theme (0:20)' })
+    fireEvent.change(within(music()).getByLabelText('Music'), {
+      target: { value: 'asset-theme' },
+    })
+    await within(music()).findByText(/Plays from/)
+    playerCalls.length = 0
+    for (const value of ['70', '55', '40'])
+      fireEvent.change(within(music()).getByLabelText(/Volume/), {
+        target: { value },
+      })
+    expect(playerCalls).toEqual(['volume:0.7', 'volume:0.55', 'volume:0.4'])
   })
 })

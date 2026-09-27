@@ -26,6 +26,10 @@ export interface PlayerContext {
     start(when: number, offset: number): void
     stop(): void
   }
+  createGain(): {
+    readonly gain: { value: number }
+    connect(destination: never): unknown
+  }
   resume(): Promise<void>
   close(): Promise<void>
 }
@@ -44,6 +48,8 @@ export interface TrackPlayer {
    * would leave a gap as long as the output latency on every loop.
    */
   setLoop(on: boolean): void
+  /** 0 to 1, applied as the sound plays: nothing is rebuilt or restarted. */
+  setVolume(volume: number): void
   /** The playhead while playing with a mix; null when it is not the clock. */
   time(): number | null
   dispose(): void
@@ -57,6 +63,9 @@ export function createTrackPlayer(
   let buffer: unknown = null
   let source: ReturnType<PlayerContext['createBufferSource']> | null = null
   let loop = false
+  let volume = 1
+  /** Every source plays through this, which carries the volume. */
+  let output: ReturnType<PlayerContext['createGain']> | null = null
   /** The next pass, queued at audio time `at` while looping. */
   let queued: {
     node: ReturnType<PlayerContext['createBufferSource']>
@@ -100,9 +109,14 @@ export function createTrackPlayer(
 
   /** A source of the mix, started at audio time `when` from `offset`. */
   const sourceAt = (context: PlayerContext, when: number, offset: number) => {
+    if (!output) {
+      output = context.createGain()
+      output.gain.value = volume
+      output.connect(context.destination as never)
+    }
     const node = context.createBufferSource()
     node.buffer = bufferFor(context)
-    node.connect(context.destination as never)
+    node.connect(output as never)
     node.start(when, offset)
     return node
   }
@@ -183,6 +197,10 @@ export function createTrackPlayer(
         timer: setTimeout(() => start(to), SCRUB_SETTLE_MS),
       }
     },
+    setVolume(next) {
+      volume = next
+      if (output) output.gain.value = next
+    },
     setLoop(on) {
       loop = on
       if (on) queueNext()
@@ -194,6 +212,7 @@ export function createTrackPlayer(
       clock = null
       ctx?.close().catch(() => {})
       ctx = null
+      output = null
     },
   }
 }
