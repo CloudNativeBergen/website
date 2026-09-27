@@ -134,6 +134,8 @@ describe('refusals, before anything is fetched', () => {
       `asset=drafts.${OUR_ASSET}`,
       '',
       `asset=${OUR_ASSET}&project=${OUR_PROJECT}`,
+      `asset=${OUR_ASSET}&project=${OUR_PROJECT}&file=file-held`,
+      `asset=${OUR_ASSET}&file=file-held`,
     ])
       await expectTheOneRefusal(await get(query))
     expect(h.guard).not.toHaveBeenCalled()
@@ -162,6 +164,59 @@ describe('a project’s track', () => {
     )
     await expectTheOneRefusal(await get(`project=${OUR_PROJECT}`))
     expect(h.upstream).not.toHaveBeenCalled()
+  })
+})
+
+describe('what is sent back', () => {
+  it('passes the request’s abort signal to the upstream fetch', async () => {
+    const request = new Request(
+      `http://localhost/api/admin/studio-track?asset=${OUR_ASSET}`,
+    )
+    await GET(request)
+    expect(h.upstream).toHaveBeenCalledWith(
+      TRACK_URL,
+      expect.objectContaining({ signal: request.signal }),
+    )
+  })
+
+  it('is sandboxed, and only ever labelled as audio or as bytes', async () => {
+    h.upstream.mockResolvedValue(
+      new Response('<script>alert(1)</script>', {
+        headers: { 'content-type': 'text/html' },
+      }),
+    )
+    const response = await get(`asset=${OUR_ASSET}`)
+    expect(response.headers.get('content-type')).toBe(
+      'application/octet-stream',
+    )
+    expect(response.headers.get('content-security-policy')).toBe('sandbox')
+    expect(response.headers.get('x-content-type-options')).toBe('nosniff')
+  })
+
+  it('keeps an audio type as it is', async () => {
+    h.upstream.mockResolvedValue(
+      new Response('x', { headers: { 'content-type': 'audio/wav' } }),
+    )
+    const response = await get(`asset=${OUR_ASSET}`)
+    expect(response.headers.get('content-type')).toBe('audio/wav')
+  })
+
+  it('never claims the upstream’s length for a body it decoded', async () => {
+    const encoded = new Response('abc', {
+      headers: {
+        'content-type': 'audio/mpeg',
+        'content-encoding': 'gzip',
+        'content-length': '3',
+      },
+    })
+    h.upstream.mockResolvedValue(encoded)
+    const response = await get(`asset=${OUR_ASSET}`)
+    expect(response.headers.get('content-length')).toBeNull()
+  })
+
+  it('carries the length of a body sent as it is', async () => {
+    const response = await get(`asset=${OUR_ASSET}`)
+    expect(response.headers.get('content-length')).toBe('4')
   })
 })
 

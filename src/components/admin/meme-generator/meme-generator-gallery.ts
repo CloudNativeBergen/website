@@ -22,8 +22,10 @@ export interface GalleryTrack {
   durationSeconds: number
 }
 
+import type { TrackSource } from '@/lib/video-project'
+
 /** Where a track's bytes come from: a gallery track, or a saved project's. */
-export type TrackSource = { asset: string } | { project: string; file: string }
+export type { TrackSource }
 
 export interface BackgroundGallery {
   /** The organization's images to choose from. */

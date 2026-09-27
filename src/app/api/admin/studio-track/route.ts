@@ -4,6 +4,7 @@ import { isOrganizerForCurrentOrg } from '@/lib/authz/organizer'
 import { requireDocumentInCurrentOrg } from '@/server/tenancy'
 import { readMarketingAssetTrack } from '@/lib/marketing-asset/sanity'
 import { readVideoProjectTrack } from '@/lib/video-project/sanity'
+import { trackSourceSchema } from '@/lib/video-project/track-source'
 
 /**
  * A studio video's music track, streamed from our own origin
@@ -25,8 +26,11 @@ import { readVideoProjectTrack } from '@/lib/video-project/sanity'
 const refused = () =>
   NextResponse.json({ error: 'Track not found' }, { status: 404 })
 
-/** A published document id: never a draft or a release version. */
-const ID = /^[A-Za-z0-9_-]{1,200}$/
+/** What a track is sent as: its own audio type, else plain bytes. */
+function audioType(upstream: string | null): string {
+  const type = upstream?.split(';')[0].trim().toLowerCase() ?? ''
+  return /^audio\/[a-z0-9.+-]+$/.test(type) ? type : 'application/octet-stream'
+}
 
 /**
  * The only files this route relays: our own project and dataset's, on the
@@ -55,47 +59,60 @@ function isOurTrackFile(raw: string): boolean {
 }
 
 export async function GET(request: Request) {
-  const params = new URL(request.url).searchParams
-  const asset = params.get('asset')
-  const project = params.get('project')
-  const file = params.get('file')
-  // Exactly one of the two, a published id, and a project's file named.
-  const id = asset ?? project
-  if ((asset && project) || !id || !ID.test(id)) return refused()
-  if (project && (!file || !ID.test(file))) return refused()
+  // Exactly one source, of published ids.
+  const parsed = trackSourceSchema.safeParse(
+    Object.fromEntries(new URL(request.url).searchParams),
+  )
+  if (!parsed.success) return refused()
+  const source = parsed.data
 
   const session = await getAuthSession()
   if (!(await isOrganizerForCurrentOrg(session?.speaker))) return refused()
 
   let url: string | null
   try {
-    const orgId = await requireDocumentInCurrentOrg(
-      id,
-      asset ? 'marketingAsset' : 'videoProject',
-    )
-    if (asset) url = (await readMarketingAssetTrack(orgId, id))?.url ?? null
-    else {
-      const held = await readVideoProjectTrack(orgId, id)
-      url = held?.fileId === file ? (held?.url ?? null) : null
+    if ('asset' in source) {
+      const orgId = await requireDocumentInCurrentOrg(
+        source.asset,
+        'marketingAsset',
+      )
+      url = (await readMarketingAssetTrack(orgId, source.asset))?.url ?? null
+    } else {
+      const orgId = await requireDocumentInCurrentOrg(
+        source.project,
+        'videoProject',
+      )
+      const held = await readVideoProjectTrack(orgId, source.project)
+      url = held?.fileId === source.file ? (held.url ?? null) : null
     }
   } catch {
     return refused()
   }
   if (!url || !isOurTrackFile(url)) return refused()
 
-  const upstream = await fetch(url, { cache: 'no-store' }).catch(() => null)
+  // Aborted with the request: a closed tab stops the upstream read too.
+  const upstream = await fetch(url, {
+    cache: 'no-store',
+    signal: request.signal,
+  }).catch(() => null)
   if (!upstream?.ok || !upstream.body)
     return NextResponse.json(
       { error: 'The track could not be fetched.' },
       { status: 502 },
     )
   const headers = new Headers({
-    'content-type': upstream.headers.get('content-type') ?? 'audio/mpeg',
+    // Only ever audio or bytes, never anything a browser would render — and
+    // sandboxed if one tried.
+    'content-type': audioType(upstream.headers.get('content-type')),
+    'content-security-policy': 'sandbox',
     'cache-control': 'private, no-store',
     'x-content-type-options': 'nosniff',
   })
+  // fetch hands back a DECODED body when the upstream was compressed, so its
+  // length then is not this body's.
   const length = upstream.headers.get('content-length')
-  if (length) headers.set('content-length', length)
+  if (length && !upstream.headers.get('content-encoding'))
+    headers.set('content-length', length)
   // The body is passed through as it arrives, never buffered here.
   return new Response(upstream.body, { status: 200, headers })
 }

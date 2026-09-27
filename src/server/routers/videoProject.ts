@@ -15,6 +15,7 @@ import {
   projectTitleSchema,
   projectTrackInputSchema,
   type ProjectSceneInput,
+  type ProjectTrackInput,
 } from '@/lib/video-project/format'
 import {
   ProjectFormatError,
@@ -133,6 +134,15 @@ const sceneFiles = (
   images: (ResolvedFile | null)[],
 ) => scenes.map((s, i) => ({ key: s.key, fileId: images[i]?.fileId ?? null }))
 
+/**
+ * The file the track the editor sent became, so a later save holds it even
+ * once its gallery entry is gone; null for none.
+ */
+const trackFileId = (
+  sent: ProjectTrackInput | null | undefined,
+  resolved: ResolvedFile | null,
+) => (sent && resolved ? resolved.fileId : null)
+
 const contentsSchema = {
   title: projectTitleSchema,
   scenes: projectScenesSchema,
@@ -229,9 +239,7 @@ export const videoProjectRouter = router({
       return {
         ...created,
         scenes: sceneFiles(input.scenes, files.images),
-        // The file the track became, so a later save holds it even once its
-        // gallery entry is gone.
-        trackFileId: input.track && files.track ? files.track.fileId : null,
+        trackFileId: trackFileId(input.track, files.track),
       }
     }),
 
@@ -302,7 +310,7 @@ export const videoProjectRouter = router({
       return {
         _rev: rev,
         scenes: sceneFiles(input.scenes, files.images),
-        trackFileId: input.track && files.track ? files.track.fileId : null,
+        trackFileId: trackFileId(input.track, files.track),
         released,
       }
     }),

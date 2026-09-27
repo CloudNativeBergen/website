@@ -1,3 +1,5 @@
+import type { TrackSource } from '@/lib/video-project'
+
 /**
  * A video's music track, as arithmetic (docs/MARKETING_STUDIO_VIDEO_SPEC.md
  * §6). Pure: the preview and the export both play what `mixTrack` makes, so
@@ -127,7 +129,7 @@ export const NEW_TRACK_SETTINGS: TrackSettings = {
 export function trackSource(
   track: VideoTrack,
   projectId: string | null,
-): { asset: string } | { project: string; file: string } | null {
+): TrackSource | null {
   if (track.fileId && projectId)
     return { project: projectId, file: track.fileId }
   if (track.galleryAssetId) return { asset: track.galleryAssetId }
