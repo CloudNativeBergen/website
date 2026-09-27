@@ -1832,6 +1832,34 @@ describe('task.attachAsset', () => {
     expect(result.handoffFailures).toEqual(['task-ours'])
   })
 
+  it('a failed handoff retry with no gallery mark to clear writes no receipts', async () => {
+    h.getRenderSiblings.mockResolvedValue([
+      {
+        _id: 'eligible',
+        kind: 'publishing',
+        prerequisiteIds: ['task-ours'],
+        variantId: 'eligible-v',
+      },
+    ])
+    h.handoffStudioAttachment.mockResolvedValue('unavailable')
+    h.getStudioTask.mockImplementation(async () => ({
+      ...render(),
+      assetId,
+      pendingAssetId: null,
+      gallerySavePending: false,
+    }))
+    h.saveToGallery.mockResolvedValue('unchanged')
+    await marketing().task.attachAsset(input)
+    // Only the save itself: nothing was handed off and nothing to clear.
+    expect(h.updateTaskFields).toHaveBeenCalledOnce()
+  })
+  it('a superseded gallery save is neither a failure nor clears the mark', async () => {
+    h.saveToGallery.mockResolvedValue('superseded')
+    const result = await marketing().task.attachAsset(input)
+    expect(result).toEqual({ success: true, handoffFailures: [] })
+    for (const call of h.updateTaskFields.mock.calls)
+      expect(call[3] ?? []).not.toContain('gallerySavePending')
+  })
   it('retains the render after a handoff throws and retries the same saved asset', async () => {
     h.getRenderSiblings.mockResolvedValue([
       {

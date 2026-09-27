@@ -541,17 +541,18 @@ async function loadTask(taskId: string): Promise<{
 }
 
 /**
- * Save a render Task's image to the gallery (spec §4.3, #1165). True once
- * the entry holds this image. NEVER throws: the attach is already saved, and
- * a gallery failure leaves the Task's `gallerySavePending` for a retry.
+ * Save a render Task's image to the gallery (spec §4.3, #1165). `saved` once
+ * the entry holds this image; `superseded` when the Task holds a newer render
+ * (whose own attach owns the entry). NEVER throws: the attach is already
+ * saved, and a failure leaves the Task's `gallerySavePending` for a retry.
  */
-async function saveRenderToGallery(
+async function trySaveRenderToGallery(
   task: StudioTask,
   imageAssetId: string,
   conferenceId: string,
-): Promise<boolean> {
+): Promise<'saved' | 'superseded' | 'failed'> {
   try {
-    await saveTaskRenderToGallery({
+    const outcome = await saveTaskRenderToGallery({
       orgId: await requireCurrentOrgId(),
       conferenceId,
       taskId: task._id,
@@ -560,10 +561,10 @@ async function saveRenderToGallery(
       alt: renderAlt(task),
       subject: task.subject,
     })
-    return true
+    return outcome === 'superseded' ? 'superseded' : 'saved'
   } catch (error) {
     console.error('Saving the render to the gallery failed', task._id, error)
-    return false
+    return 'failed'
   }
 }
 
@@ -1612,11 +1613,15 @@ export const marketingRouter = router({
         // The gallery entry (spec §4.3): created, or its image replaced. One
         // more idempotent step, BEFORE the orphan check below so the render
         // it replaces is free to go. Never fails or rolls back the attach.
-        const gallerySaved = await saveRenderToGallery(
+        const gallery = await trySaveRenderToGallery(
           task,
           input.assetId,
           conferenceId,
         )
+        // Only a mark this save set, or one already there, needs clearing.
+        const clearGalleryMark =
+          gallery === 'saved' &&
+          (task.assetId !== input.assetId || task.gallerySavePending === true)
         // Then every recorded render goes, through the shared orphan check,
         // so a post it was handed to keeps it — and keeps it recorded, for a
         // retry and for a speaker's erasure. Never fails the save.
@@ -1676,7 +1681,7 @@ export const marketingRouter = router({
         if (
           handoffDoneFor.size > 0 ||
           handoffFailures.length === 0 ||
-          gallerySaved
+          clearGalleryMark
         ) {
           try {
             // Never associate an older image's receipts with a newer render.
@@ -1699,7 +1704,7 @@ export const marketingRouter = router({
                     ]),
                   ],
                 },
-                gallerySaved && current.gallerySavePending
+                clearGalleryMark && current.gallerySavePending
                   ? ['gallerySavePending']
                   : [],
               ))
@@ -1713,7 +1718,7 @@ export const marketingRouter = router({
         return {
           success: true as const,
           handoffFailures,
-          ...(gallerySaved ? {} : { galleryFailed: true as const }),
+          ...(gallery === 'failed' ? { galleryFailed: true as const } : {}),
           ...(handoffIssues.length > 0
             ? { handoffIssues: [...new Set(handoffIssues)] }
             : {}),
