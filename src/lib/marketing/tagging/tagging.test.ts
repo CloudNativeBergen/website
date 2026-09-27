@@ -14,7 +14,7 @@ import {
   speakersList,
   tagBlueskyBody,
 } from '.'
-import { saveMentions } from './checks'
+import { plainBody, saveMentions } from './checks'
 
 describe("naming a talk's speakers (spec §4.2)", () => {
   it('{name}: one, two and three names read naturally', () => {
@@ -477,6 +477,47 @@ describe('tagBlueskyBody', () => {
       resolutions: new Map(),
     })
     expect(saved.issues).toEqual([])
+  })
+
+  it('a skeleton naming people twice does not tag a SHARED handle: its occurrences could not be told apart', () => {
+    // "{name}: {speakers}" emits each tag twice. Ann and Bob share a team
+    // account, so four "@team.dev" would carry two records, and no swap
+    // could say whose each one is. Carol's own handle is still tagged.
+    const team = { status: 'tagged' as const, handle: 'team.dev', did: DID_A }
+    const ann = { speakerId: 'ann', name: 'Ann', jobTitle: 'SRE', tag: team }
+    const bob = { speakerId: 'bob', name: 'Bob', jobTitle: 'CTO', tag: team }
+    const carol = {
+      speakerId: 'carol',
+      name: 'Carol',
+      tag: { status: 'tagged' as const, handle: 'carol.dev', did: DID_B },
+    }
+    const { body, mentions } = tagBlueskyBody({
+      skeleton: '{name}: {speakers}',
+      values: {},
+      people: [ann, bob, carol],
+    })
+    expect(body).toBe(
+      'Ann, Bob and @carol.dev: Ann (SRE), Bob (CTO) and @carol.dev',
+    )
+    expect(mentions.map((m) => m.speakerId)).toEqual(['carol'])
+    expect(plainBody(body, mentions)).toBe(
+      'Ann, Bob and Carol: Ann (SRE), Bob (CTO) and Carol',
+    )
+  })
+
+  it('a skeleton naming people ONCE still tags a shared handle, one record per occurrence', () => {
+    const team = { status: 'tagged' as const, handle: 'team.dev', did: DID_A }
+    const { body, mentions } = tagBlueskyBody({
+      skeleton: '{name} on stage',
+      values: {},
+      people: [
+        { speakerId: 'ann', name: 'Ann', tag: team },
+        { speakerId: 'bob', name: 'Bob', tag: team },
+      ],
+    })
+    expect(body).toBe('@team.dev and @team.dev on stage')
+    expect(mentions.map((m) => m.speakerId)).toEqual(['ann', 'bob'])
+    expect(plainBody(body, mentions)).toBe('Ann and Bob on stage')
   })
 
   it('when even the plain names do not fit, nobody is tagged', () => {

@@ -10,6 +10,7 @@
  * unit falls back to plain text, from the last one, until every form fits.
  */
 
+import { normaliseHandle } from '@/lib/social/provider/bluesky-syntax'
 import { resolvePlaceholders, type Placeholder } from '../placeholders'
 import { storedKey } from '../recipes'
 import type { TaskRecipe } from '../template/types'
@@ -157,7 +158,17 @@ export function tagBlueskyBody(input: {
   // worst case, and would cost that speaker their tag for nothing. When no
   // such tag is left and a bound is still over, the plain form itself is
   // over, and nobody is tagged.
-  const candidates = people.filter((p) => p.tag?.status === 'tagged')
+  // A skeleton that names the people more than once emits each tag more
+  // than once. A handle two of them share (a team account) would then carry
+  // more occurrences than records, and no swap or check could tell whose
+  // each one is: those people keep their plain names.
+  const namings = skeleton.match(/\{(?:name|speakers)\}/g)?.length ?? 0
+  const taggable = people.filter((p) => p.tag?.status === 'tagged')
+  const sharers = (p: TagPerson) =>
+    taggable.filter(
+      (q) => normaliseHandle(q.tag!.handle) === normaliseHandle(p.tag!.handle),
+    ).length
+  const candidates = taggable.filter((p) => namings < 2 || sharers(p) === 1)
   for (;;) {
     const over = overBounds(new Set(candidates))
     if (over.length === 0) break
