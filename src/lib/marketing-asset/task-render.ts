@@ -2,7 +2,7 @@ import 'server-only'
 import { createHash } from 'node:crypto'
 import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
 import { scopedFetch } from '@/lib/sanity/scoped'
-import { detailsPatch } from './sanity'
+import { countMarketingAssetReleaseTwins, detailsPatch } from './sanity'
 import type { MarketingAssetSubjectType } from './types'
 
 /**
@@ -126,6 +126,16 @@ export async function saveTaskRenderToGallery(
     if (existing) {
       if (existing.assetId === entry.imageAssetId)
         return created ? 'created' : 'unchanged'
+      // A Content Release copy would put the old image back when it is
+      // published, after this save had cleared the Task's pending mark. So
+      // the save fails, and stays pending, until the release lets it go —
+      // as the gallery's own edit and delete refuse the same case.
+      if (
+        (await countMarketingAssetReleaseTwins(entry.orgId, existing._id)) > 0
+      )
+        throw new Error(
+          `The gallery entry ${existing._id} is part of a Content Release in Studio; its image is replaced once the release lets it go`,
+        )
       const image = {
         image: {
           _type: 'image',

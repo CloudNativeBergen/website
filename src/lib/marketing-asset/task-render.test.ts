@@ -71,6 +71,11 @@ vi.mock('@/lib/sanity/client', async () => {
   }
   return {
     clientReadUncached: {
+      // The release-twin count reads at a newer API version; same dataset.
+      withConfig: () => ({
+        fetch: async (query: string, params: Record<string, unknown> = {}) =>
+          (await evaluate(parse(query), { dataset: h.dataset, params })).get(),
+      }),
       fetch: async (query: string, params: Record<string, unknown> = {}) => {
         const value = (
           await evaluate(parse(query), { dataset: h.dataset, params })
@@ -358,6 +363,22 @@ describe('saveTaskRenderToGallery', () => {
     expect(await saveTaskRenderToGallery(stale)).toBe('superseded')
     expect(gallery()[0]).toMatchObject({
       image: { asset: { _ref: 'image-b' } },
+    })
+  })
+
+  it('refuses to replace while a Content Release holds a copy of the entry, so the save stays pending', async () => {
+    await saveTaskRenderToGallery(entry('image-a'))
+    const published = gallery()[0]
+    h.dataset.push({
+      ...structuredClone(published),
+      _id: `versions.r-launch.${published._id}`,
+    })
+    await expect(saveTaskRenderToGallery(entry('image-b'))).rejects.toThrow(
+      /Content Release/,
+    )
+    // Nothing moved: publishing the release could not undo a replace.
+    expect(h.dataset.find((d) => d._id === published._id)).toMatchObject({
+      image: { asset: { _ref: 'image-a' } },
     })
   })
 })
