@@ -108,7 +108,7 @@ describe('Studio Task attachment', () => {
     expect(request.body.get('taskId')).toBe('render-1')
     expect(request.body.get('file').type).toBe('image/png')
     expect((await screen.findByRole('status')).textContent).toBe(
-      'Image attached. This Task is complete.',
+      'Image attached and saved to the asset gallery. This Task is complete.',
     )
   })
   it('uploads the real attach control raster with proxy rewriting and capture cleanup', async () => {
@@ -246,9 +246,41 @@ describe('Studio Task attachment', () => {
       }),
     )
     expect((await screen.findByRole('status')).textContent).toBe(
-      'Image attached. This Task is complete.',
+      'Image attached and saved to the asset gallery. This Task is complete.',
     )
     expect(mocks.rasterize).toHaveBeenCalledTimes(1)
+    expect(mocks.upload).toHaveBeenCalledTimes(1)
+  })
+  it('offers a retry when only the gallery save failed, and the retry completes it (#1165)', async () => {
+    mocks.mutate
+      .mockResolvedValueOnce({
+        success: true,
+        handoffFailures: [],
+        galleryFailed: true,
+      })
+      .mockResolvedValueOnce({ success: true, handoffFailures: [] })
+    setup()
+    fireEvent.click(screen.getByRole('button', { name: 'Attach to Task' }))
+    expect((await screen.findByRole('alert')).textContent).toBe(
+      'The render is done and saved. It has not been saved to the asset gallery yet. Retry here or from the Task editor.',
+    )
+    const retry = screen.getByRole('button', {
+      name: 'Retry attachment / handoff',
+    })
+    await waitFor(() =>
+      expect((retry as HTMLButtonElement).disabled).toBe(false),
+    )
+    fireEvent.click(retry)
+    await waitFor(() =>
+      expect(mocks.mutate).toHaveBeenNthCalledWith(2, {
+        taskId: 'render-1',
+        taskRev: 'current-rev',
+        assetId: 'image-uploaded',
+      }),
+    )
+    expect((await screen.findByRole('status')).textContent).toBe(
+      'Image attached and saved to the asset gallery. This Task is complete.',
+    )
     expect(mocks.upload).toHaveBeenCalledTimes(1)
   })
   it('does not offer attachment for a non-render Task', () => {

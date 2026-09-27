@@ -45,16 +45,27 @@ function ConnectedStudioTask({
     assetId: string
   }) {
     const result = await mutation.mutateAsync(input)
-    setFailed(result.handoffFailures.length > 0)
+    const handoffIncomplete = result.handoffFailures.length > 0
+    const galleryFailed = result.galleryFailed === true
+    setFailed(handoffIncomplete || galleryFailed)
     setMessage(
-      result.handoffFailures.length > 0
+      handoffIncomplete || galleryFailed
         ? [
-            'The render is done and saved. The image has not reached all publishing Tasks yet. Prerequisites are advisory, so they can publish without it. Retry here or from the Task editor.',
+            'The render is done and saved.',
+            ...(handoffIncomplete
+              ? [
+                  'The image has not reached all publishing Tasks yet. Prerequisites are advisory, so they can publish without it.',
+                ]
+              : []),
+            ...(galleryFailed
+              ? ['It has not been saved to the asset gallery yet.']
+              : []),
+            'Retry here or from the Task editor.',
             ...(result.handoffIssues ?? []),
           ].join(' ')
-        : 'Image attached. This Task is complete.',
+        : 'Image attached and saved to the asset gallery. This Task is complete.',
     )
-    setPending(result.handoffFailures.length > 0 ? input : null)
+    setPending(handoffIncomplete || galleryFailed ? input : null)
     await query.refetch()
   }
 
@@ -142,7 +153,7 @@ function ConnectedStudioTask({
           <button
             onClick={retry}
             disabled={busy}
-            className="mt-2 font-semibold underline disabled:opacity-50"
+            className="mt-2 mr-4 font-semibold underline disabled:opacity-50"
           >
             Retry attachment / handoff
           </button>

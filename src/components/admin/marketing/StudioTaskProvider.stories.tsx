@@ -159,3 +159,52 @@ export const PlaceholderHandoffFailure: Story = {
     )
   },
 }
+
+/** Only the gallery save failed (#1165): the attach stands, retry offered. */
+export const GallerySaveFailure: Story = {
+  ...SubjectlessTask,
+  parameters: {
+    msw: {
+      handlers: [
+        ...meta.parameters.msw.handlers,
+        http.post('/api/admin/marketing-studio-image', () =>
+          HttpResponse.json({
+            assetId: 'image-saved',
+            taskRev: 'revision-2',
+          }),
+        ),
+        http.post('/api/trpc/marketing.task.attachAsset', () =>
+          HttpResponse.json({
+            result: {
+              data: {
+                success: true,
+                handoffFailures: [],
+                galleryFailed: true,
+              },
+            },
+          }),
+        ),
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(
+      await canvas.findByRole('button', { name: 'Attach to Task' }),
+    )
+    await expect(await canvas.findByRole('alert')).toHaveTextContent(
+      'The render is done and saved. It has not been saved to the asset gallery yet. Retry here or from the Task editor.',
+    )
+    await waitFor(() =>
+      expect(
+        canvas.getByRole('button', { name: 'Retry attachment / handoff' }),
+      ).toBeEnabled(),
+    )
+  },
+}
+
+export const GallerySaveFailureDark: Story = {
+  ...GallerySaveFailure,
+  // This file has no decorator of its own: the global one reads the global.
+  globals: { theme: 'dark' },
+}

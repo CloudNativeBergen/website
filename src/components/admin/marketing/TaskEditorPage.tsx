@@ -1245,6 +1245,10 @@ function StudioSection({
             'Retry the handoff when it is resolved.',
           ].join(' '),
         )
+      } else if (result.galleryFailed) {
+        setHandoffError(
+          'The image could not be saved to the asset gallery. Try again in a moment.',
+        )
       } else {
         setHandoffComplete(true)
       }
@@ -1312,6 +1316,9 @@ function StudioSection({
               ))}
             </ul>
           )}
+          {task.galleryPending && (
+            <p>It has not been saved to the asset gallery yet either.</p>
+          )}
           {handoffError && <p>{handoffError}</p>}
           <AdminButton
             onClick={() => void retryHandoff()}
@@ -1319,6 +1326,25 @@ function StudioSection({
             size="md"
           >
             {retrying ? 'Retrying handoff…' : 'Retry handoff'}
+          </AdminButton>
+        </div>
+      )}
+      {task.galleryPending && !task.handoffPending && (
+        <div
+          role="alert"
+          className="mb-4 space-y-3 rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-100"
+        >
+          <p className="font-medium">
+            The render is saved and attached to this Task, but it has not been
+            saved to the asset gallery yet.
+          </p>
+          {handoffError && <p>{handoffError}</p>}
+          <AdminButton
+            onClick={() => void retryHandoff()}
+            disabled={retrying}
+            size="md"
+          >
+            {retrying ? 'Saving to the gallery…' : 'Save to the gallery'}
           </AdminButton>
         </div>
       )}
