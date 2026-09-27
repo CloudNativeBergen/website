@@ -14,7 +14,10 @@ import type { MarketingAssetSubjectType } from './types'
  * survives the deletion of its Task, Campaign and plan, and never blocks them.
  *
  * A first entry gets a deterministic id through `createIfNotExists`, so two
- * attaches racing past the read cannot make two entries.
+ * attaches racing past the read cannot make two entries; what the create
+ * left is read back, so a no-op create is never mistaken for this render
+ * being in the gallery. Nothing is written for a render the Task no longer
+ * holds.
  *
  * The entry never records `createdImageAssetId`: the Task's own upload made
  * the file, and Sanity may have handed that upload bytes it already held, so
@@ -42,57 +45,104 @@ export function taskRenderAssetDocumentId(taskId: string): string {
   return `marketingAsset-task-${taskId}`
 }
 
-export async function saveTaskRenderToGallery(
-  entry: TaskRenderGalleryEntry,
-): Promise<'created' | 'replaced' | 'unchanged'> {
-  const existing = await scopedFetch<{
-    _id: string
-    _rev: string
-    assetId: string | null
-  } | null>(
+/** What the entry and its Task hold now. */
+async function readState(entry: TaskRenderGalleryEntry) {
+  const [taskAssetId, existing] = await Promise.all([
+    scopedFetch<string | null>(
+      clientReadUncached,
+      { conferenceId: entry.conferenceId },
+      `*[_type == "marketingTask" && _id == $taskId][0].asset.asset._ref`,
+      { taskId: entry.taskId },
+      { cache: 'no-store' },
+    ),
+    scopedFetch<{
+      _id: string
+      _rev: string
+      assetId: string | null
+    } | null>(
+      clientReadUncached,
+      { orgId: entry.orgId },
+      `*[_type == "marketingAsset" && task._ref == $taskId && _id in path("*")] | order(_createdAt asc)[0]{
+        _id, _rev, "assetId": image.asset._ref
+      }`,
+      { taskId: entry.taskId },
+      { cache: 'no-store' },
+    ),
+  ])
+  return { taskAssetId, existing }
+}
+
+/** Whether a Studio draft of the entry exists, so its image moves too. */
+async function hasDraft(orgId: string, id: string): Promise<boolean> {
+  const n = await scopedFetch<{ n: number } | null>(
     clientReadUncached,
-    { orgId: entry.orgId },
-    `*[_type == "marketingAsset" && task._ref == $taskId && _id in path("*")] | order(_createdAt asc)[0]{
-      _id, _rev, "assetId": image.asset._ref
-    }`,
-    { taskId: entry.taskId },
+    { orgId },
+    `{ "n": count(*[_type == "marketingAsset" && _id == $draftId]) }`,
+    { draftId: `drafts.${id}` },
     { cache: 'no-store' },
   )
-  if (existing) {
-    if (existing.assetId === entry.imageAssetId) return 'unchanged'
-    await clientWrite
-      .patch(existing._id)
-      .ifRevisionId(existing._rev)
-      .set({
+  return (n?.n ?? 0) > 0
+}
+
+/**
+ * `superseded`: the Task holds another render now, so nothing is written —
+ * a slower attach must never put an older render back.
+ */
+export async function saveTaskRenderToGallery(
+  entry: TaskRenderGalleryEntry,
+): Promise<'created' | 'replaced' | 'unchanged' | 'superseded'> {
+  let created = false
+  // Twice at most: a create that lost a race to another attach is a no-op,
+  // so what it left is read back and, if need be, replaced.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const { taskAssetId, existing } = await readState(entry)
+    if (taskAssetId !== entry.imageAssetId) return 'superseded'
+    if (existing) {
+      if (existing.assetId === entry.imageAssetId)
+        return created ? 'created' : 'unchanged'
+      const image = {
         image: {
           _type: 'image',
           asset: { _type: 'reference', _ref: entry.imageAssetId },
         },
-      })
-      .commit()
-    return 'replaced'
+      }
+      // The image only, on the entry and on any Studio draft of it (which
+      // would otherwise put the old image back when published). Revision
+      // guarded: an entry another attach just moved fails this one.
+      const tx = clientWrite
+        .transaction()
+        .patch(existing._id, (p) => p.ifRevisionId(existing._rev).set(image))
+      if (await hasDraft(entry.orgId, existing._id))
+        tx.patch(`drafts.${existing._id}`, (p) => p.set(image))
+      await tx.commit()
+      return 'replaced'
+    }
+    if (created) break
+    const { set } = detailsPatch({
+      title: entry.title.trim() || 'Studio render',
+      alt: entry.alt,
+      scope: 'edition',
+      conferenceId: entry.conferenceId,
+      subject: entry.subject ?? undefined,
+      tags: [],
+      credit: undefined,
+    })
+    await clientWrite.createIfNotExists({
+      _id: taskRenderAssetDocumentId(entry.taskId),
+      _type: 'marketingAsset',
+      organization: { _type: 'reference', _ref: entry.orgId },
+      kind: 'image',
+      image: {
+        _type: 'image',
+        asset: { _type: 'reference', _ref: entry.imageAssetId },
+      },
+      source: 'studio',
+      task: { _type: 'reference', _ref: entry.taskId, _weak: true },
+      ...set,
+    })
+    created = true
   }
-  const { set } = detailsPatch({
-    title: entry.title.trim() || 'Studio render',
-    alt: entry.alt,
-    scope: 'edition',
-    conferenceId: entry.conferenceId,
-    subject: entry.subject ?? undefined,
-    tags: [],
-    credit: undefined,
-  })
-  await clientWrite.createIfNotExists({
-    _id: taskRenderAssetDocumentId(entry.taskId),
-    _type: 'marketingAsset',
-    organization: { _type: 'reference', _ref: entry.orgId },
-    kind: 'image',
-    image: {
-      _type: 'image',
-      asset: { _type: 'reference', _ref: entry.imageAssetId },
-    },
-    source: 'studio',
-    task: { _type: 'reference', _ref: entry.taskId, _weak: true },
-    ...set,
-  })
-  return 'created'
+  throw new Error(
+    `The gallery entry of Task ${entry.taskId} could not be found after creating it`,
+  )
 }

@@ -18,6 +18,8 @@ const h = vi.hoisted(() => ({
   revs: 0,
   writes: 0,
   failWrites: false,
+  /** Runs once, just before a create lands: a concurrent attach. */
+  beforeCreate: null as null | (() => void),
 }))
 
 vi.mock('server-only', () => ({}))
@@ -40,6 +42,9 @@ vi.mock('@/lib/sanity/client', async () => {
     if (h.failWrites) throw new Error('Sanity down')
     h.writes++
     if (m.createIfNotExists) {
+      const race = h.beforeCreate
+      h.beforeCreate = null
+      race?.()
       const id = m.createIfNotExists._id as string
       const existing = h.dataset.find((d) => d._id === id)
       if (existing) return existing
@@ -80,6 +85,21 @@ vi.mock('@/lib/sanity/client', async () => {
           commit({ patch: p.serialize() } as never)) as typeof p.commit
         return p
       },
+      transaction: () => {
+        const tx = real.transaction()
+        tx.commit = (async () => {
+          // All or nothing, as a Sanity transaction is.
+          const before = structuredClone(h.dataset)
+          try {
+            for (const m of tx.serialize()) commit(m as never)
+          } catch (error) {
+            h.dataset = before
+            throw error
+          }
+          return {}
+        }) as unknown as typeof tx.commit
+        return tx
+      },
     },
   }
 })
@@ -87,22 +107,39 @@ vi.mock('@/lib/sanity/client', async () => {
 import { saveTaskRenderToGallery } from './task-render'
 
 const ORG = 'org-A'
-const entry = (imageAssetId: string) => ({
-  orgId: ORG,
-  conferenceId: 'conf-A',
-  taskId: 'task-1',
-  imageAssetId,
-  title: 'Speaker card: Ada',
-  alt: 'Ada Lovelace speaks at Cloud Native Bergen',
-  subject: { type: 'speaker' as const, id: 'speaker-ada' },
-})
+/** The Task holds this render now, as the attach's save just wrote. */
+function holds(imageAssetId: string) {
+  const task = h.dataset.find((d) => d._id === 'task-1')!
+  task.asset = {
+    _type: 'image',
+    asset: { _type: 'reference', _ref: imageAssetId },
+  }
+}
+const entry = (imageAssetId: string) => (
+  holds(imageAssetId),
+  {
+    orgId: ORG,
+    conferenceId: 'conf-A',
+    taskId: 'task-1',
+    imageAssetId,
+    title: 'Speaker card: Ada',
+    alt: 'Ada Lovelace speaks at Cloud Native Bergen',
+    subject: { type: 'speaker' as const, id: 'speaker-ada' },
+  }
+)
 const gallery = () => h.dataset.filter((d) => d._type === 'marketingAsset')
 
 beforeEach(() => {
   h.dataset = [
     { _id: 'org-A', _type: 'organization' },
     { _id: 'conf-A', _type: 'conference', organization: { _ref: ORG } },
+    {
+      _id: 'task-1',
+      _type: 'marketingTask',
+      conference: { _type: 'reference', _ref: 'conf-A' },
+    },
   ]
+  h.beforeCreate = null
   h.revs = 0
   h.writes = 0
   h.failWrites = false
@@ -220,5 +257,60 @@ describe('saveTaskRenderToGallery', () => {
   it('throws when the write fails, so the caller can report it', async () => {
     h.failWrites = true
     await expect(saveTaskRenderToGallery(entry('image-a'))).rejects.toThrow()
+  })
+
+  it('verifies a create that lost a race: the entry ends up holding THIS render', async () => {
+    // Another attach created the entry, with its older render, between this
+    // one's read and its create — which is then a no-op.
+    h.beforeCreate = () =>
+      h.dataset.push({
+        _id: 'marketingAsset-task-task-1',
+        _type: 'marketingAsset',
+        _rev: 'rev-other',
+        organization: { _type: 'reference', _ref: ORG },
+        title: 'Theirs',
+        image: {
+          _type: 'image',
+          asset: { _type: 'reference', _ref: 'image-a' },
+        },
+        task: { _type: 'reference', _ref: 'task-1', _weak: true },
+      })
+    expect(await saveTaskRenderToGallery(entry('image-b'))).toBe('replaced')
+    expect(gallery()).toHaveLength(1)
+    expect(gallery()[0]).toMatchObject({
+      image: { asset: { _ref: 'image-b' } },
+      title: 'Theirs',
+    })
+  })
+
+  it('writes nothing for a render the Task no longer holds', async () => {
+    await saveTaskRenderToGallery(entry('image-b'))
+    const before = structuredClone(gallery())
+    const stale = entry('image-a')
+    holds('image-b')
+    expect(await saveTaskRenderToGallery(stale)).toBe('superseded')
+    expect(gallery()).toEqual(before)
+  })
+
+  it('a re-render also swaps the image of a Studio draft of the entry, and only the image', async () => {
+    await saveTaskRenderToGallery(entry('image-a'))
+    const published = gallery()[0]
+    h.dataset.push({
+      ...structuredClone(published),
+      _id: `drafts.${published._id}`,
+      title: 'Draft title',
+      alt: 'Draft alt',
+    })
+    await saveTaskRenderToGallery(entry('image-b'))
+    expect(h.dataset.find((d) => d._id === published._id)).toMatchObject({
+      image: { asset: { _ref: 'image-b' } },
+    })
+    expect(
+      h.dataset.find((d) => d._id === `drafts.${published._id}`),
+    ).toMatchObject({
+      image: { asset: { _ref: 'image-b' } },
+      title: 'Draft title',
+      alt: 'Draft alt',
+    })
   })
 })
