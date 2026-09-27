@@ -22,10 +22,18 @@ const mocks = vi.hoisted(() => ({
   refetch: vi.fn(),
   rasterize: vi.fn(),
   upload: vi.fn(),
+  galleryList: vi.fn(),
+  galleryFilters: vi.fn(),
 }))
 vi.mock('html2canvas-pro', () => ({ default: mocks.rasterize }))
 vi.mock('@/lib/trpc/client', () => ({
   api: {
+    useUtils: () => ({
+      marketingAsset: {
+        list: { invalidate: mocks.galleryList },
+        filters: { invalidate: mocks.galleryFilters },
+      },
+    }),
     marketing: {
       task: {
         get: {
@@ -110,6 +118,9 @@ describe('Studio Task attachment', () => {
     expect((await screen.findByRole('status')).textContent).toBe(
       'Image attached and saved to the asset gallery. This Task is complete.',
     )
+    // The gallery's lists show it now, not after their cache goes stale.
+    expect(mocks.galleryList).toHaveBeenCalled()
+    expect(mocks.galleryFilters).toHaveBeenCalled()
   })
   it('uploads the real attach control raster with proxy rewriting and capture cleanup', async () => {
     const { card, image } = setup()

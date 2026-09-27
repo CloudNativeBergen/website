@@ -30,6 +30,7 @@ function ConnectedStudioTask({
 }) {
   const query = api.marketing.task.get.useQuery({ taskId })
   const mutation = api.marketing.task.attachAsset.useMutation()
+  const utils = api.useUtils()
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
   const [failed, setFailed] = useState(false)
@@ -47,6 +48,12 @@ function ConnectedStudioTask({
     const result = await mutation.mutateAsync(input)
     const handoffIncomplete = result.handoffFailures.length > 0
     const galleryFailed = result.galleryFailed === true
+    // The attach saved it to the gallery: its lists show it now, not after
+    // their cache goes stale (as the studio's own "Save to gallery" does).
+    if (!galleryFailed) {
+      void utils.marketingAsset.list.invalidate()
+      void utils.marketingAsset.filters.invalidate()
+    }
     const incomplete = handoffIncomplete || galleryFailed
     setFailed(incomplete)
     setMessage(

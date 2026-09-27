@@ -18,6 +18,8 @@ import { OWN_PAGES } from '@/lib/marketing/pages'
 import { TaskEditorPage } from './TaskEditorPage'
 
 const mocks = vi.hoisted(() => ({
+  galleryList: vi.fn(),
+  galleryFilters: vi.fn(),
   data: null as TaskEditorData | null,
   fetch: vi.fn(),
   attach: vi.fn(),
@@ -41,6 +43,10 @@ vi.mock('@/lib/trpc/client', () => {
         marketing: {
           task: { get: { fetch: mocks.fetch, invalidate: mocks.invalidate } },
           plan: { get: { invalidate: mocks.invalidate } },
+        },
+        marketingAsset: {
+          list: { invalidate: mocks.galleryList },
+          filters: { invalidate: mocks.galleryFilters },
         },
       }),
       marketing: {
@@ -505,7 +511,9 @@ describe('Task editor handoff recovery', () => {
     page.rerender(<TaskEditorPage taskId="render-1" />)
     expect((await screen.findByRole('status')).textContent).toBe(
       'The render is saved to the asset gallery.',
-    )
+    ) // The gallery's lists show it now, not after their cache goes stale.
+    expect(mocks.galleryList).toHaveBeenCalled()
+    expect(mocks.galleryFilters).toHaveBeenCalled()
   })
 
   it('bypasses a fresh cached revision when retrying the saved handoff', async () => {

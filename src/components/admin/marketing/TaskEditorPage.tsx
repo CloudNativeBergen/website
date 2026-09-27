@@ -1271,6 +1271,11 @@ function StudioSection({
         taskRev: current.task._rev,
         assetId: current.task.assetId,
       })
+      // The retry saved the render to the gallery: its lists show it now.
+      if (!result.galleryFailed) {
+        void utils.marketingAsset.list.invalidate()
+        void utils.marketingAsset.filters.invalidate()
+      }
       if (result.handoffFailures.length > 0) {
         setHandoffError(
           [
