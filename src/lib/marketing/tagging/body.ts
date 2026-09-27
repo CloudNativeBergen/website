@@ -150,15 +150,20 @@ export function tagBlueskyBody(input: {
   // Every form must fit (§4.4), not just all-tagged and all-plain: at
   // publish only an opted-out speaker's tag goes back to the name, so ANY
   // subset may be swapped. Per bound, the longest form takes each tag in
-  // its longer form — max(handle, name) in that bound's unit.
+  // its longest form in that bound's unit: the handle, the name (an
+  // opt-out), or the neutral word for a speaker gone since (#1152).
+  const worst = (p: TagPerson, b: LengthBound) =>
+    [handleOf(p), p.name, GONE_SPEAKER_TEXT].reduce((x, y) =>
+      b.length(y) > b.length(x) ? y : x,
+    )
   const tagIsLonger = (p: TagPerson, b: LengthBound) =>
-    b.length(handleOf(p)) > b.length(p.name)
+    b.length(worst(p, b)) > b.length(p.name)
   const overBounds = (tagged: ReadonlySet<TagPerson>) =>
     LENGTH_BOUNDS.filter(
       (b) =>
         b.length(
           render((p) =>
-            tagged.has(p) && tagIsLonger(p, b) ? handleOf(p) : p.name,
+            tagged.has(p) && tagIsLonger(p, b) ? worst(p, b) : p.name,
           ),
         ) > b.max,
     )

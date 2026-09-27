@@ -353,6 +353,26 @@ describe('tagBlueskyBody', () => {
     expect(mentions.map((m) => m.speakerId)).toEqual(['a', 'b'])
   })
 
+  it('bounds the neutral word too: a speaker gone by publish goes out as "a speaker" (#1152)', () => {
+    // "@a.io" is 5 and "Al" 2, but a speaker deleted or erased before publish
+    // is swapped for GONE_SPEAKER_TEXT (9): generation must not write a tag
+    // that the approval check would then refuse as too long.
+    const al = {
+      speakerId: 'al',
+      name: 'Al',
+      jobTitle: null,
+      tag: { status: 'tagged' as const, handle: 'a.io', did: 'did:plc:al' },
+    }
+    const filler = 'x'.repeat(292)
+    const { body, mentions } = tagBlueskyBody({
+      skeleton: `{name} ${filler}`,
+      values: {},
+      people: [al],
+    })
+    expect(body).toBe(`Al ${filler}`)
+    expect(mentions).toEqual([])
+  })
+
   it('a short handle that fits while the plain name would not is NOT a tag: the body must fit both ways', () => {
     // A publish-time swap (late opt-out) puts the name back; a body that only
     // fits tagged would then fail instead of posting (spec §4.4).
