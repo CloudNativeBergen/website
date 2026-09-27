@@ -31,11 +31,13 @@
  *            first comment (#1134).
  *   2026.3 — talk posts name every speaker: `{name} ({company})` becomes
  *            `{speakers}`, and the teaser no longer reads "{name} has" (#1153).
+ *   2026.4 — the five Bluesky beats about a person or a company tag their
+ *            subject (`tagSubject`, tagging spec §2, #1152).
  */
 
 import type { Anchor, CampaignRecipe, PlanTemplate, TaskRecipe } from './types'
 
-export const BUILTIN_TEMPLATE_VERSION = '2026.3' as const
+export const BUILTIN_TEMPLATE_VERSION = '2026.4' as const
 
 const wk = (weeks: number) => weeks * 7
 
@@ -65,6 +67,8 @@ function beat(
   options: {
     subjectSource?: TaskRecipe['subjectSource']
     cadence?: TaskRecipe['cadence']
+    /** The Bluesky sibling's body tags its subject (tagging spec §2). */
+    tagSubject?: true
   } = {},
 ): TaskRecipe[] {
   const subjectSource = options.subjectSource ?? 'none'
@@ -100,6 +104,9 @@ function beat(
       skeleton,
       alt: copy.alt,
       cadence: options.cadence,
+      ...(options.tagSubject && channel === 'bluesky'
+        ? { tagSubject: true }
+        : {}),
     })
   }
   return recipes
@@ -189,7 +196,7 @@ const campaigns: CampaignRecipe[] = [
             '🥇 {tier} sponsor: {name}\n\n{hook}\n\nThanks for making {event} happen 💙 {url}',
           alt: 'Sponsor card: {name}, {tier} sponsor of {event}, {date}.',
         },
-        { subjectSource: 'sponsor' },
+        { subjectSource: 'sponsor', tagSubject: true },
       ),
       {
         key: 'sponsorLastCall:linkedin',
@@ -403,6 +410,7 @@ const campaigns: CampaignRecipe[] = [
         },
         {
           subjectSource: 'speaker',
+          tagSubject: true,
           cadence: {
             from: at('SPEAKERS_ANNOUNCED', -wk(4)),
             to: at('SPEAKERS_ANNOUNCED'),
@@ -464,6 +472,7 @@ const campaigns: CampaignRecipe[] = [
         },
         {
           subjectSource: 'speaker',
+          tagSubject: true,
           cadence: {
             from: at('CFP_NOTIFY', wk(1)),
             to: at('CONFERENCE_START', -wk(1)),
@@ -534,6 +543,7 @@ const campaigns: CampaignRecipe[] = [
         },
         {
           subjectSource: 'talk',
+          tagSubject: true,
           cadence: {
             from: at('PROGRAM_PUBLISHED', wk(1)),
             to: at('CONFERENCE_START', -wk(1)),
@@ -767,6 +777,7 @@ const campaigns: CampaignRecipe[] = [
         },
         {
           subjectSource: 'talk',
+          tagSubject: true,
           cadence: {
             from: at('RECORDINGS_LIVE', 1),
             to: at('RECORDINGS_LIVE', wk(3)),

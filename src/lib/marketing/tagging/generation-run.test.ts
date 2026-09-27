@@ -79,11 +79,9 @@ function reset({ tagSubject = true } = {}) {
   ]
   const recipes = structuredClone(
     BUILTIN_TEMPLATE.campaigns.find((c) => c.key === 'speakers')!.recipes,
-  ).map((r) =>
-    r.channel === 'bluesky' && r.beat === 'speakerCard' && tagSubject
-      ? { ...r, tagSubject: true }
-      : r,
-  )
+    // The built-in speaker card tags as it ships (#1152); `tagSubject: false`
+    // takes the flag off to test the untagged path.
+  ).map((r) => (tagSubject ? r : { ...r, tagSubject: undefined }))
   store.context = {
     plan: { _id: 'plan', ownerId: 'owner' },
     conference: {
