@@ -1471,6 +1471,8 @@ export function MemeGenerator({
   const sourceQuery = source ? new URLSearchParams(source).toString() : null
   const loadTrack = gallery?.loadTrack
   const decodedKey = decoded?.key ?? null
+  /** The decode in flight, if any: the next waits for it. */
+  const decodeQueue = useRef<Promise<unknown>>(Promise.resolve())
   useEffect(() => {
     // A file already decoded is never fetched again, whichever way it is
     // reached now.
@@ -1482,10 +1484,25 @@ export function MemeGenerator({
     // aborted, never left streaming megabytes nobody will decode.
     const abort = new AbortController()
     loadTrack(source, abort.signal)
-      .then(decodeTrack)
+      .then((bytes) => {
+        // A decode cannot be stopped once begun, and a long track decodes
+        // to hundreds of megabytes: one at a time, and none for a pick
+        // given up on while it waited.
+        const decoding = decodeQueue.current.then(() =>
+          abort.signal.aborted ? null : decodeTrack(bytes),
+        )
+        // Settled to nothing: the queue never holds a track's samples.
+        decodeQueue.current = decoding.then(
+          () => undefined,
+          () => undefined,
+        )
+        return decoding
+      })
       .then(
         (channels) =>
-          !abort.signal.aborted && setDecoded({ key: trackKey, channels }),
+          channels &&
+          !abort.signal.aborted &&
+          setDecoded({ key: trackKey, channels }),
         () => !abort.signal.aborted && setTrackFailed(trackKey),
       )
     return () => abort.abort()

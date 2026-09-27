@@ -27,6 +27,16 @@ vi.mock('./meme-generator-draw', async (importOriginal) => ({
 }))
 /** What the editor asks of the preview's player. */
 const playerCalls = vi.hoisted(() => [] as string[])
+/**
+ * Decodes as a test lets them run: held ones wait for `release`, and the
+ * most that ran at once is counted.
+ */
+const decodes = vi.hoisted(() => ({
+  hold: false,
+  waiting: [] as (() => void)[],
+  running: 0,
+  mostAtOnce: 0,
+}))
 vi.mock('./meme-generator-track-player', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./meme-generator-track-player')>()),
   createTrackPlayer: () => {
@@ -44,6 +54,11 @@ vi.mock('./meme-generator-track-player', async (importOriginal) => ({
   },
   // Twenty seconds of silence at 48 kHz, whatever the bytes.
   decodeTrack: async () => {
+    decodes.running++
+    decodes.mostAtOnce = Math.max(decodes.mostAtOnce, decodes.running)
+    if (decodes.hold)
+      await new Promise<void>((resolve) => decodes.waiting.push(resolve))
+    decodes.running--
     const channels = [
       new Float32Array(20 * 48_000),
       new Float32Array(20 * 48_000),
@@ -763,5 +778,37 @@ describe('a video’s music', () => {
     expect(status).toHaveTextContent('The video has changed since this export.')
     fireEvent.click(screen.getByRole('button', { name: /^Undo/ }))
     expect(status).toHaveTextContent('Your video is ready.')
+  })
+
+  it('decodes one track at a time: a new pick waits for the decode it cannot stop', async () => {
+    decodes.hold = true
+    decodes.mostAtOnce = 0
+    decodes.waiting.length = 0
+    try {
+      const gallery = fakeGallery()
+      gallery.tracks.mockResolvedValue([
+        { _id: 'asset-theme', title: 'Theme', durationSeconds: 20 },
+        { _id: 'asset-outro', title: 'Outro', durationSeconds: 20 },
+        { _id: 'asset-intro', title: 'Intro', durationSeconds: 20 },
+      ])
+      render(<MemeGenerator gallery={gallery} encoder={encoder} />)
+      fireEvent.click(screen.getByRole('button', { name: 'Video' }))
+      await within(music()).findByRole('option', { name: 'Intro (0:20)' })
+      const select = within(music()).getByLabelText('Music')
+      fireEvent.change(select, { target: { value: 'asset-theme' } })
+      await waitFor(() => expect(decodes.waiting).toHaveLength(1))
+      fireEvent.change(select, { target: { value: 'asset-outro' } })
+      fireEvent.change(select, { target: { value: 'asset-intro' } })
+      await new Promise((resolve) => setTimeout(resolve, 20))
+      expect(decodes.mostAtOnce).toBe(1)
+      // The first ends; only the last pick is decoded after it.
+      decodes.hold = false
+      decodes.waiting.splice(0).forEach((release) => release())
+      await within(music()).findByText(/Plays from/)
+      expect(decodes.mostAtOnce).toBe(1)
+      expect(gallery.loadTrack).toHaveBeenCalledTimes(3)
+    } finally {
+      decodes.hold = false
+    }
   })
 })
