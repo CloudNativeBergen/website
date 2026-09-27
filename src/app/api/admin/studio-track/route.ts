@@ -70,13 +70,18 @@ export async function GET(request: Request) {
   if (!(await isOrganizerForCurrentOrg(session?.speaker))) return refused()
 
   let url: string | null
+  // Which file is sent, so the editor knows what it decoded: a gallery
+  // entry's file can be replaced at any time.
+  let fileId: string | null
   try {
     if ('asset' in source) {
       const orgId = await requireDocumentInCurrentOrg(
         source.asset,
         'marketingAsset',
       )
-      url = (await readMarketingAssetTrack(orgId, source.asset))?.url ?? null
+      const held = await readMarketingAssetTrack(orgId, source.asset)
+      url = held?.url ?? null
+      fileId = held?.fileId ?? null
     } else {
       const orgId = await requireDocumentInCurrentOrg(
         source.project,
@@ -84,11 +89,12 @@ export async function GET(request: Request) {
       )
       const held = await readVideoProjectTrack(orgId, source.project)
       url = held?.fileId === source.file ? (held.url ?? null) : null
+      fileId = source.file
     }
   } catch {
     return refused()
   }
-  if (!url || !isOurTrackFile(url)) return refused()
+  if (!url || !fileId || !isOurTrackFile(url)) return refused()
 
   // Aborted with the request: a closed tab stops the upstream read too.
   const upstream = await fetch(url, {
@@ -107,6 +113,7 @@ export async function GET(request: Request) {
     'content-security-policy': 'sandbox',
     'cache-control': 'private, no-store',
     'x-content-type-options': 'nosniff',
+    'x-track-file': fileId,
   })
   // fetch hands back a DECODED body when the upstream was compressed, so its
   // length then is not this body's.

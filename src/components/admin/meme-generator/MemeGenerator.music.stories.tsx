@@ -72,7 +72,7 @@ const musicGallery: BackgroundGallery = {
     { _id: 'track-theme', title: 'Conference theme', durationSeconds: 20 },
     { _id: 'track-outro', title: 'Outro sting', durationSeconds: 185 },
   ],
-  loadTrack: async () => testTrack(),
+  loadTrack: async () => ({ bytes: testTrack(), fileId: 'file-test' }),
 }
 
 type Canvas = ReturnType<typeof within>

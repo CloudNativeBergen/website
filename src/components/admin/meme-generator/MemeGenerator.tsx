@@ -759,6 +759,8 @@ export function MemeGenerator({
   const [decoded, setDecoded] = useState<{
     key: string
     channels: Float32Array[]
+    /** The file the server said it sent: what these samples are. */
+    fileId: string
   } | null>(null)
   const [trackFailed, setTrackFailed] = useState<string | null>(null)
   const [trackRetry, setTrackRetry] = useState(0)
@@ -1099,8 +1101,17 @@ export function MemeGenerator({
       // keeps it even once its gallery entry is gone.
       const trackFileId = result.trackFileId
       if (trackFileId && savedTrack && !savedTrack.fileId)
-        // The file the save stored is the one just picked and decoded.
-        rekeyDecoded(savedTrack.galleryAssetId ?? null, trackFileId)
+        // The samples go on under the file the save stored — only if they
+        // ARE that file. The gallery entry is read again by the save, and
+        // its file may have been replaced since it was fetched: then they
+        // are dropped, and the stored file is fetched through the project.
+        setDecoded((current) =>
+          !current || current.key !== (savedTrack.galleryAssetId ?? null)
+            ? current
+            : current.fileId === trackFileId
+              ? { ...current, key: trackFileId }
+              : null,
+        )
       // In every state undo can reach: the track saved names the file it
       // became; one naming a file the project no longer holds falls back to
       // its gallery entry — or, held by the project alone, is gone.
@@ -1484,12 +1495,14 @@ export function MemeGenerator({
     // aborted, never left streaming megabytes nobody will decode.
     const abort = new AbortController()
     loadTrack(source, abort.signal)
-      .then((bytes) => {
+      .then(({ bytes, fileId }) => {
         // A decode cannot be stopped once begun, and a long track decodes
         // to hundreds of megabytes: one at a time, and none for a pick
         // given up on while it waited.
-        const decoding = decodeQueue.current.then(() =>
-          abort.signal.aborted ? null : decodeTrack(bytes),
+        const decoding = decodeQueue.current.then(async () =>
+          abort.signal.aborted
+            ? null
+            : { channels: await decodeTrack(bytes), fileId },
         )
         // Settled to nothing: the queue never holds a track's samples.
         decodeQueue.current = decoding.then(
@@ -1499,10 +1512,10 @@ export function MemeGenerator({
         return decoding
       })
       .then(
-        (channels) =>
-          channels &&
+        (done) =>
+          done &&
           !abort.signal.aborted &&
-          setDecoded({ key: trackKey, channels }),
+          setDecoded({ key: trackKey, ...done }),
         () => !abort.signal.aborted && setTrackFailed(trackKey),
       )
     return () => abort.abort()

@@ -53,7 +53,7 @@ beforeEach(() => {
     if (id.endsWith(OUR_ASSET) || id.endsWith(OUR_PROJECT)) return 'org-ours'
     throw notFound()
   })
-  h.assetTrack.mockResolvedValue({ url: TRACK_URL })
+  h.assetTrack.mockResolvedValue({ url: TRACK_URL, fileId: 'file-gallery' })
   h.projectTrack.mockResolvedValue({ url: TRACK_URL, fileId: 'file-held' })
   h.upstream.mockResolvedValue(
     new Response(new Uint8Array([1, 2, 3, 4]), {
@@ -217,6 +217,15 @@ describe('what is sent back', () => {
   it('carries the length of a body sent as it is', async () => {
     const response = await get(`asset=${OUR_ASSET}`)
     expect(response.headers.get('content-length')).toBe('4')
+  })
+})
+
+describe('which file was sent', () => {
+  it('names the file it streamed, for a gallery track and a project’s alike', async () => {
+    const asset = await get(`asset=${OUR_ASSET}`)
+    expect(asset.headers.get('x-track-file')).toBe('file-gallery')
+    const project = await get(`project=${OUR_PROJECT}&file=file-held`)
+    expect(project.headers.get('x-track-file')).toBe('file-held')
   })
 })
 

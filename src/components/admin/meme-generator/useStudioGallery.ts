@@ -60,8 +60,10 @@ export function useStudioGallery(orgId: string): BackgroundGallery {
         const response = await fetch(trackUrl(source), {
           signal: AbortSignal.any([signal, AbortSignal.timeout(120_000)]),
         })
-        if (!response.ok) throw new Error('The track could not be loaded.')
-        return response.arrayBuffer()
+        const fileId = response.headers.get('x-track-file')
+        if (!response.ok || !fileId)
+          throw new Error('The track could not be loaded.')
+        return { bytes: await response.arrayBuffer(), fileId }
       },
       keep: async (file, { title, alt }) => {
         // Organization-wide, with nothing else said about it: the Assets

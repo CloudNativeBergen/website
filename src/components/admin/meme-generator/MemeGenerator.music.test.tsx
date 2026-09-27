@@ -15,7 +15,11 @@ import {
   waitFor,
   within,
 } from '@testing-library/react'
-import type { BackgroundGallery, TrackSource } from './meme-generator-gallery'
+import type {
+  BackgroundGallery,
+  LoadedTrack,
+  TrackSource,
+} from './meme-generator-gallery'
 import type { VideoProjects } from './meme-generator-project'
 import type { EncoderBackend } from './meme-generator-export'
 import type { OpenedProject, VideoProjectRow } from '@/lib/video-project'
@@ -144,8 +148,13 @@ function fakeGallery() {
       { _id: 'asset-theme', title: 'Theme', durationSeconds: 20 },
     ]),
     loadTrack: vi.fn<
-      (source: TrackSource, signal: AbortSignal) => Promise<ArrayBuffer>
-    >(async () => new ArrayBuffer(8)),
+      (source: TrackSource, signal: AbortSignal) => Promise<LoadedTrack>
+    >(async (source) => ({
+      bytes: new ArrayBuffer(8),
+      // What the server says it sent: the project's file, or the file the
+      // gallery entry holds — 'file-picked' in these tests.
+      fileId: 'file' in source ? source.file : 'file-picked',
+    })),
   } satisfies BackgroundGallery
 }
 
@@ -542,7 +551,7 @@ describe('a video’s music', () => {
     const signals: AbortSignal[] = []
     gallery.loadTrack.mockImplementation((_source, signal) => {
       signals.push(signal)
-      return new Promise<ArrayBuffer>(() => {})
+      return new Promise<LoadedTrack>(() => {})
     })
     gallery.tracks.mockResolvedValue([
       { _id: 'asset-theme', title: 'Theme', durationSeconds: 20 },
@@ -852,5 +861,34 @@ describe('a video’s music', () => {
     expect(status).toHaveTextContent('Your video is ready.')
     // The same samples, never fetched again for a new label.
     expect(gallery.loadTrack).toHaveBeenCalledTimes(1)
+  })
+
+  it('fetches the track again when the save stored another file than the one it had fetched', async () => {
+    const gallery = fakeGallery()
+    // The gallery entry's file was replaced between the fetch and the save.
+    const projects = fakeProjects()
+    projects.create.mockImplementation(async (input) => ({
+      _id: 'vp-new',
+      _rev: 'rev-2',
+      scenes: input.scenes.map((s) => ({ key: s.key, fileId: null })),
+      trackFileId: 'file-replaced',
+    }))
+    render(
+      <MemeGenerator gallery={gallery} projects={projects} encoder={encoder} />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Video' }))
+    await within(music()).findByRole('option', { name: 'Theme (0:20)' })
+    fireEvent.change(within(music()).getByLabelText('Music'), {
+      target: { value: 'asset-theme' },
+    })
+    await within(music()).findByText(/Plays from/)
+    save()
+    await within(project()).findByText('All changes saved')
+    await waitFor(() =>
+      expect(gallery.loadTrack).toHaveBeenLastCalledWith(
+        { project: 'vp-new', file: 'file-replaced' },
+        expect.any(AbortSignal),
+      ),
+    )
   })
 })

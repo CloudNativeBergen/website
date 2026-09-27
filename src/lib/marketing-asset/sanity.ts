@@ -414,12 +414,13 @@ export async function deleteMarketingAssetDocument(
 export async function readMarketingAssetTrack(
   orgId: string,
   id: string,
-): Promise<{ url: string | null } | null> {
-  return scopedFetch<{ url: string | null } | null>(
+): Promise<{ url: string | null; fileId: string | null } | null> {
+  return scopedFetch<{ url: string | null; fileId: string | null } | null>(
     clientReadUncached,
     { orgId },
     `*[_type == "marketingAsset" && _id == $id && kind == "audio"][0]{
-      "url": audio.asset->url
+      "url": audio.asset->url,
+      "fileId": audio.asset._ref
     }`,
     { id },
     { cache: 'no-store' },

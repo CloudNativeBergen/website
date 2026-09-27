@@ -114,7 +114,10 @@ const get = (query: string) =>
 
 describe('the track route on executed reads', () => {
   it('fetches our gallery track’s own file, and a project’s held file', async () => {
-    expect((await get('asset=track-ours')).status).toBe(200)
+    const gallery = await get('asset=track-ours')
+    expect(gallery.status).toBe(200)
+    // The file the gallery entry held when it was read, by its id.
+    expect(gallery.headers.get('x-track-file')).toBe('file-ours')
     expect(h.upstream).toHaveBeenLastCalledWith(
       url('file-ours'),
       expect.anything(),
