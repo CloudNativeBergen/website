@@ -24,6 +24,8 @@ const h = vi.hoisted(() => ({
   afterTaskRead: null as null | (() => void),
   /** Runs once, just before a transaction lands: Studio opening a draft. */
   beforeTransaction: null as null | (() => void),
+  /** Runs once, just before the entry's draft is read. */
+  beforeDraftRead: null as null | (() => void),
 }))
 
 vi.mock('server-only', () => ({}))
@@ -50,6 +52,7 @@ vi.mock('@/lib/sanity/client', async () => {
       h.beforeCreate = null
       h.afterTaskRead = null
       h.beforeTransaction = null
+  h.beforeDraftRead = null
       race?.()
       const id = m.createIfNotExists._id as string
       const existing = h.dataset.find((d) => d._id === id)
@@ -80,6 +83,11 @@ vi.mock('@/lib/sanity/client', async () => {
           (await evaluate(parse(query), { dataset: h.dataset, params })).get(),
       }),
       fetch: async (query: string, params: Record<string, unknown> = {}) => {
+        if (params.draftId && h.beforeDraftRead) {
+          const race = h.beforeDraftRead
+          h.beforeDraftRead = null
+          race()
+        }
         const value = (
           await evaluate(parse(query), { dataset: h.dataset, params })
         ).get()
@@ -408,5 +416,78 @@ describe('saveTaskRenderToGallery', () => {
       createdImageAssetId: 'image-b',
       title: 'Being edited',
     })
+  })
+
+  it('never syncs a draft back to an older render once a newer attach moved everything on', async () => {
+    await saveTaskRenderToGallery(entry('image-a'))
+    const published = gallery()[0]
+    const draftId = `drafts.${published._id}`
+    // A draft still on an older image: this attach (re-saving image-a) has
+    // the draft to bring up to date.
+    h.dataset.push({
+      ...structuredClone(published),
+      _id: draftId,
+      _rev: 'rev-draft-old',
+      image: {
+        _type: 'image',
+        asset: { _type: 'reference', _ref: 'image-old' },
+      },
+    })
+    const stale = { ...entry('image-a') }
+    // Attach B lands after this one found its entry on image-a and before
+    // it read the draft: Task, entry and draft all move to image-b.
+    h.beforeDraftRead = () => {
+      holds('image-b')
+      for (const doc of gallery()) {
+        doc.image = {
+          _type: 'image',
+          asset: { _type: 'reference', _ref: 'image-b' },
+        }
+        doc._rev = `${doc._id}-rev-b`
+      }
+    }
+    expect(await saveTaskRenderToGallery(stale)).toBe('superseded')
+    expect(h.dataset.find((d) => d._id === draftId)).toMatchObject({
+      image: { asset: { _ref: 'image-b' } },
+    })
+  })
+
+  it('a Content Release copy made from the old image during the replace keeps the save pending', async () => {
+    await saveTaskRenderToGallery(entry('image-a'))
+    const published = gallery()[0]
+    h.beforeTransaction = () =>
+      h.dataset.push({
+        ...structuredClone(published),
+        _id: `versions.r-launch.${published._id}`,
+      })
+    await expect(saveTaskRenderToGallery(entry('image-b'))).rejects.toThrow(
+      /Content Release/,
+    )
+  })
+
+  it('a release copy that already holds this render does not block', async () => {
+    await saveTaskRenderToGallery(entry('image-a'))
+    const published = gallery()[0]
+    h.dataset.push({
+      ...structuredClone(published),
+      _id: `versions.r-launch.${published._id}`,
+    })
+    expect(await saveTaskRenderToGallery(entry('image-a'))).toBe('unchanged')
+  })
+
+  it('the same-render fast path refuses while a stale release copy exists', async () => {
+    await saveTaskRenderToGallery(entry('image-a'))
+    const published = gallery()[0]
+    h.dataset.push({
+      ...structuredClone(published),
+      _id: `versions.r-launch.${published._id}`,
+      image: {
+        _type: 'image',
+        asset: { _type: 'reference', _ref: 'image-old' },
+      },
+    })
+    await expect(saveTaskRenderToGallery(entry('image-a'))).rejects.toThrow(
+      /Content Release/,
+    )
   })
 })

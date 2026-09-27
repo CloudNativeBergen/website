@@ -2,7 +2,7 @@ import 'server-only'
 import { createHash } from 'node:crypto'
 import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
 import { scopedFetch } from '@/lib/sanity/scoped'
-import { countMarketingAssetReleaseTwins, detailsPatch } from './sanity'
+import { detailsPatch } from './sanity'
 import type { MarketingAssetSubjectType } from './types'
 
 /**
@@ -53,21 +53,39 @@ export function taskRenderAssetDocumentId(taskId: string): string {
   return `marketingAsset-task-${createHash('sha256').update(taskId).digest('hex').slice(0, 32)}`
 }
 
-/** What the entry and its Task hold now. */
-async function readState(entry: TaskRenderGalleryEntry) {
-  const [task, existing] = await Promise.all([
-    scopedFetch<{ _rev: string; assetId: string | null } | null>(
+/**
+ * What a render's gallery save must hold against. Every write is guarded by
+ * ONE mechanism (below); these are the actors it guards against:
+ *
+ *  - a NEWER attach of the same Task (the Task, entry and draft move on);
+ *  - Studio opening a DRAFT of the entry, copied from its image at the time;
+ *  - a Content RELEASE copy of the entry, likewise;
+ *  - an organizer editing (title, tags, alt) or deleting the entry;
+ *  - a RETRY of this same attach.
+ *
+ * The invariant: a write lands only while the Task still holds THIS render,
+ * and the save reports done only once a read taken AFTER its last write shows
+ * the Task on this render, the entry on it, any draft on it, and no release
+ * copy on another image.
+ */
+interface GalleryState {
+  task: { _rev: string; assetId: string | null } | null
+  entry: { _id: string; _rev: string; assetId: string | null } | null
+  draft: { _rev: string; assetId: string | null } | null
+  /** Release copies of the entry holding another image than this render. */
+  staleReleaseCopies: number
+}
+
+async function readState(entry: TaskRenderGalleryEntry): Promise<GalleryState> {
+  const [task, found] = await Promise.all([
+    scopedFetch<GalleryState['task']>(
       clientReadUncached,
       { conferenceId: entry.conferenceId },
       `*[_type == "marketingTask" && _id == $taskId][0]{ _rev, "assetId": asset.asset._ref }`,
       { taskId: entry.taskId },
       { cache: 'no-store' },
     ),
-    scopedFetch<{
-      _id: string
-      _rev: string
-      assetId: string | null
-    } | null>(
+    scopedFetch<GalleryState['entry']>(
       clientReadUncached,
       { orgId: entry.orgId },
       `*[_type == "marketingAsset" && task._ref == $taskId && _id in path("*")] | order(_createdAt asc)[0]{
@@ -77,10 +95,37 @@ async function readState(entry: TaskRenderGalleryEntry) {
       { cache: 'no-store' },
     ),
   ])
-  return { task, existing }
+  if (!found) return { task, entry: null, draft: null, staleReleaseCopies: 0 }
+  const [draft, releases] = await Promise.all([
+    scopedFetch<GalleryState['draft']>(
+      clientReadUncached,
+      { orgId: entry.orgId },
+      `*[_type == "marketingAsset" && _id == $draftId][0]{ _rev, "assetId": image.asset._ref }`,
+      { draftId: `drafts.${found._id}` },
+      { cache: 'no-store' },
+    ),
+    // At an API version whose `raw` perspective includes release versions;
+    // the clients' own does not see them at all.
+    scopedFetch<{ n: number } | null>(
+      clientReadUncached.withConfig({
+        apiVersion: '2025-02-19',
+        perspective: 'raw',
+      }),
+      { orgId: entry.orgId },
+      `{ "n": count(*[_type == "marketingAsset" && _id in path("versions.*." + $id) && image.asset._ref != $imageAssetId]) }`,
+      { id: found._id, imageAssetId: entry.imageAssetId },
+      { cache: 'no-store' },
+    ),
+  ])
+  return {
+    task,
+    entry: found,
+    draft,
+    staleReleaseCopies: releases?.n ?? 0,
+  }
 }
 
-/** The image fields a render writes on its entry. */
+/** The image fields a render writes on its entry and on a draft of it. */
 function imageFields(imageAssetId: string) {
   return {
     image: {
@@ -93,50 +138,6 @@ function imageFields(imageAssetId: string) {
   }
 }
 
-/**
- * Give a Studio draft of the entry this render too, image only: publishing
- * a draft that still holds the old image would put it back after the Task's
- * pending mark was cleared.
- *
- * Checked AFTER the entry's own write, not before it: a patch cannot say "if
- * this document exists", so no transaction can cover a draft Studio opens in
- * the meantime. Afterwards it can: a draft opened later is copied from the
- * entry, which holds this render already, and one opened in between is
- * found here. Revision-guarded, so an organizer's save in between is read
- * again. Throws if it cannot finish, and the save stays pending.
- */
-async function syncDraftImage(
-  entry: TaskRenderGalleryEntry,
-  id: string,
-): Promise<void> {
-  for (let attempt = 0; attempt < 3; attempt++) {
-    const draft = await scopedFetch<{
-      _rev: string
-      assetId: string | null
-    } | null>(
-      clientReadUncached,
-      { orgId: entry.orgId },
-      `*[_type == "marketingAsset" && _id == $draftId][0]{ _rev, "assetId": image.asset._ref }`,
-      { draftId: `drafts.${id}` },
-      { cache: 'no-store' },
-    )
-    if (!draft || draft.assetId === entry.imageAssetId) return
-    try {
-      await clientWrite
-        .patch(`drafts.${id}`)
-        .ifRevisionId(draft._rev)
-        .set(imageFields(entry.imageAssetId))
-        .commit()
-      return
-    } catch (error) {
-      if (!isRevisionConflict(error)) throw error
-    }
-  }
-  throw new Error(
-    `The Studio draft of gallery entry ${id} kept changing; its image is replaced on the next retry`,
-  )
-}
-
 /** Sanity refused a revision guard: something moved since the read. */
 function isRevisionConflict(error: unknown): boolean {
   return (
@@ -145,55 +146,50 @@ function isRevisionConflict(error: unknown): boolean {
 }
 
 /**
- * `superseded`: the Task holds another render now, so nothing is written —
- * a slower attach must never put an older render back.
+ * Save this render to its Task's gallery entry: create it, or replace its
+ * IMAGE (and a Studio draft's) only.
  *
- * EVERY write is in one transaction with a revision guard on the TASK as it
- * was read holding this render (a no-op patch, as the gallery delete guards
- * its own document), so the write lands only while the Task still holds this
- * render. Two separate reads cannot promise that on their own: a newer
- * attach can move the Task and the entry between them. A guard that fails is
- * read again, and a newer render then answers `superseded`.
+ * ONE mechanism guards every write: read the state; write whatever is not on
+ * this render yet — the entry (created, or patched under its revision) and
+ * a draft (patched under ITS revision) — in ONE transaction that also carries
+ * a revision guard on the Task as read (a no-op patch, as the gallery delete
+ * guards its own document); then read again, and repeat until a read shows
+ * everything on this render. So nothing lands after a newer attach moved the
+ * Task (`superseded`), a draft or entry that changed under the write is read
+ * again, and a draft or release copy made from the old image while this ran
+ * is seen by the verifying read.
+ *
+ * A stale release copy cannot be written from here (a release is Studio's to
+ * change), so it FAILS the save, and the Task's pending mark stays for a
+ * retry, as the gallery's own edit and delete refuse the same case.
+ *
+ * NOT covered: a draft or release copy made AFTER the verifying read from a
+ * stale copy of the entry held in someone's browser. Sanity offers no
+ * condition on a document's absence to close that.
  */
 export async function saveTaskRenderToGallery(
   entry: TaskRenderGalleryEntry,
 ): Promise<'created' | 'replaced' | 'unchanged' | 'superseded'> {
-  let created = false
-  for (let attempt = 0; attempt < 3; attempt++) {
-    const { task, existing } = await readState(entry)
+  let result: 'created' | 'replaced' | 'unchanged' = 'unchanged'
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const state = await readState(entry)
+    const { task, entry: found, draft } = state
     if (!task || task.assetId !== entry.imageAssetId) return 'superseded'
+    if (found && state.staleReleaseCopies > 0)
+      throw new Error(
+        `The gallery entry ${found._id} is part of a Content Release in Studio; its image is replaced once the release lets it go`,
+      )
+    const entryDone = found?.assetId === entry.imageAssetId
+    const draftDone = !draft || draft.assetId === entry.imageAssetId
+    if (found && entryDone && draftDone) return result
     const tx = clientWrite
       .transaction()
       .patch(entry.taskId, (p) =>
         p.ifRevisionId(task._rev).unset(['_galleryGuard']),
       )
-    const taskRenderEntryId =
-      existing?._id ?? taskRenderAssetDocumentId(entry.taskId)
-    let outcome: 'created' | 'replaced'
-    if (existing) {
-      if (existing.assetId === entry.imageAssetId) {
-        // Also on a retry: a draft a failed save left behind catches up.
-        await syncDraftImage(entry, existing._id)
-        return created ? 'created' : 'unchanged'
-      }
-      // A Content Release copy would put the old image back when it is
-      // published, after this save had cleared the Task's pending mark. So
-      // the save fails, and stays pending, until the release lets it go —
-      // as the gallery's own edit and delete refuse the same case.
-      if (
-        (await countMarketingAssetReleaseTwins(entry.orgId, existing._id)) > 0
-      )
-        throw new Error(
-          `The gallery entry ${existing._id} is part of a Content Release in Studio; its image is replaced once the release lets it go`,
-        )
-      // The image only. A Studio draft of the entry follows once this lands.
-      tx.patch(existing._id, (p) =>
-        p.ifRevisionId(existing._rev).set(imageFields(entry.imageAssetId)),
-      )
-      outcome = 'replaced'
-    } else {
+    if (!found) {
       // A create that lost a race to another attach is a no-op; the next
-      // pass reads back what it left and, if need be, replaces it.
+      // read shows what it left.
       const { set } = detailsPatch({
         title: entry.title.trim() || 'Studio render',
         alt: entry.alt,
@@ -208,16 +204,20 @@ export async function saveTaskRenderToGallery(
         _type: 'marketingAsset',
         organization: { _type: 'reference', _ref: entry.orgId },
         kind: 'image',
-        image: {
-          _type: 'image',
-          asset: { _type: 'reference', _ref: entry.imageAssetId },
-        },
-        createdImageAssetId: entry.imageAssetId,
         source: 'studio',
         task: { _type: 'reference', _ref: entry.taskId, _weak: true },
         ...set,
+        ...imageFields(entry.imageAssetId),
       })
-      outcome = 'created'
+    } else {
+      if (!entryDone)
+        tx.patch(found._id, (p) =>
+          p.ifRevisionId(found._rev).set(imageFields(entry.imageAssetId)),
+        )
+      if (draft && !draftDone)
+        tx.patch(`drafts.${found._id}`, (p) =>
+          p.ifRevisionId(draft._rev).set(imageFields(entry.imageAssetId)),
+        )
     }
     try {
       await tx.commit()
@@ -225,11 +225,9 @@ export async function saveTaskRenderToGallery(
       if (isRevisionConflict(error)) continue
       throw error
     }
-    if (outcome === 'replaced') {
-      await syncDraftImage(entry, taskRenderEntryId)
-      return 'replaced'
-    }
-    created = true
+    // Replacing the image outranks a create that turned out a no-op.
+    if (!found) result = 'created'
+    else if (!entryDone || result === 'unchanged') result = 'replaced'
   }
   throw new Error(
     `The gallery entry of Task ${entry.taskId} could not be saved: it kept changing`,
