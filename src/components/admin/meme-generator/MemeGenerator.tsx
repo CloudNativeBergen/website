@@ -152,6 +152,8 @@ interface MemeGeneratorProps {
 }
 
 const UNTITLED = 'Untitled video'
+/** Matches no project: after a delete, whatever the editor holds is unsaved. */
+const DELETED_SNAPSHOT = '(deleted)'
 
 interface ColorButtonProps {
   color: { name: string; value: string }
@@ -984,7 +986,15 @@ export function MemeGenerator({
     setProjectBusy('deleting')
     setProjectMessage(null)
     try {
-      await projects.delete(project.id)
+      const { released } = await projects.delete(project.id)
+      // Files the delete's orphan check removed are never drawn or saved
+      // again — in any state undo can reach, as after a save.
+      const gone = new Set(released)
+      setHistory((prev) =>
+        mapStates(prev, (states) => dropReleasedFiles(states, gone)),
+      )
+      // The editor now holds the ONLY copy: unsaved, so leaving asks.
+      setSavedSnapshot(DELETED_SNAPSHOT)
       setProject(null)
       setConflicted(false)
       onProjectChange?.(null)

@@ -344,7 +344,8 @@ export const videoProjectRouter = router({
       await refuseIfInRelease(orgId, input.id, 'delete')
       const files = await readVideoProjectCreatedFiles(orgId, input.id)
       await deleteVideoProjectDocument(input.id)
-      await releaseFiles(input.id, files)
-      return { deleted: true }
+      // Named, so the editor still showing the video drops them too.
+      const released = await releaseFiles(input.id, files)
+      return { deleted: true, released }
     }),
 })

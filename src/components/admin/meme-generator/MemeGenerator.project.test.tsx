@@ -105,7 +105,7 @@ function fakeProjects(overrides: Partial<VideoProjects> = {}) {
       released: [],
     })),
     duplicate: vi.fn(async () => ({ _id: 'vp-copy' })),
-    delete: vi.fn(async () => {}),
+    delete: vi.fn(async () => ({ released: [] as string[] })),
     ...overrides,
   } satisfies VideoProjects
 }
@@ -603,6 +603,41 @@ describe('deleting a project', () => {
     await waitFor(() => expect(onProjectChange).toHaveBeenLastCalledWith(null))
     await within(project()).findByText('Not saved yet')
     expect(screen.getByDisplayValue('Launch teaser')).toBeInTheDocument()
+  })
+
+  it('leaves the multi-scene video as the only, unsaved copy: leaving asks, and it saves again', async () => {
+    const projects = fakeProjects({
+      // The delete's orphan check took the background file.
+      delete: vi.fn(async () => ({ released: ['image-hall'] })),
+    })
+    render(<MemeGenerator projects={projects} initialProjectId="vp-1" />)
+    await within(
+      await screen.findByRole('region', { name: 'Project' }),
+    ).findByText('All changes saved')
+    fireEvent.click(
+      within(project()).getByRole('button', { name: 'Delete project' }),
+    )
+    fireEvent.click(
+      within(await screen.findByRole('dialog')).getByRole('button', {
+        name: 'Delete project',
+      }),
+    )
+    await within(project()).findByText('Not saved yet')
+    // The editor holds the only copy now.
+    const event = new Event('beforeunload', { cancelable: true })
+    window.dispatchEvent(event)
+    expect(event.defaultPrevented).toBe(true)
+    // No scene still draws the deleted file, in any state.
+    await waitFor(() =>
+      expect(drawDesign.mock.lastCall![1].background.image).toBeNull(),
+    )
+    save()
+    await within(project()).findByText('All changes saved')
+    const sent = vi.mocked(projects.create).mock.calls[0][0]
+    expect(sent.scenes).toHaveLength(2)
+    expect(sent.scenes.every((sc) => sc.design.background.image === null)).toBe(
+      true,
+    )
   })
 
   it('does nothing when the dialog is cancelled', async () => {

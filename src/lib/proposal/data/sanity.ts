@@ -4,6 +4,7 @@ import {
   clientWrite,
 } from '@/lib/sanity/client'
 import { groq } from 'next-sanity'
+import { scopedFetch } from '@/lib/sanity/scoped'
 import { Reference } from 'sanity'
 import { v4 as randomUUID } from 'uuid'
 import { convertStringToPortableTextBlocks } from '../utils/validation'
@@ -533,6 +534,39 @@ const BLOCKING_TYPE_DESCRIPTIONS: Record<string, string> = {
  */
 export class ProposalDeletionBlockedError extends Error {}
 
+/**
+ * The saved studio videos blocking a talk's deletion (#1181), named by title
+ * so the organizer knows which to change — but only this organization's: the
+ * referencing read is global, and another tenant's title is not ours to show.
+ */
+async function describeBlockingProjects(
+  proposalId: string,
+  projects: Array<{ _id: string }>,
+): Promise<string> {
+  const ids = projects.map((doc) => doc._id)
+  // groq-global-scoped: by-id read of the talk whose ownership both callers
+  // have already proven; its organization scopes the title read below.
+  const orgQuery = groq`*[_id == $proposalId][0].conference->organization._ref`
+  const orgId = await clientRead.fetch<string | null>(
+    orgQuery,
+    { proposalId },
+    { cache: 'no-store' },
+  )
+  const titles = orgId
+    ? ((await scopedFetch<string[] | null>(
+        clientRead,
+        { orgId },
+        `*[_type == "videoProject" && _id in $ids].title`,
+        { ids },
+        { cache: 'no-store' },
+      )) ?? [])
+    : []
+  const named = titles.filter(Boolean).map((title) => `“${title}”`)
+  return named.length > 0
+    ? `saved studio video${named.length === 1 ? '' : 's'} ${named.join(', ')} (an image in ${named.length === 1 ? 'it is' : 'them is'} about this talk)`
+    : (BLOCKING_TYPE_DESCRIPTIONS.videoProject ?? 'a saved studio video')
+}
+
 export async function deleteProposal(
   proposalId: string,
 ): Promise<{ err: Error | null }> {
@@ -573,11 +607,14 @@ export async function deleteProposal(
     if (blocking.length > 0) {
       const descriptions = Array.from(
         new Set(
-          blocking.map(
-            (doc) => BLOCKING_TYPE_DESCRIPTIONS[doc._type] ?? doc._type,
-          ),
+          blocking
+            .filter((doc) => doc._type !== 'videoProject')
+            .map((doc) => BLOCKING_TYPE_DESCRIPTIONS[doc._type] ?? doc._type),
         ),
       )
+      const projects = blocking.filter((doc) => doc._type === 'videoProject')
+      if (projects.length > 0)
+        descriptions.push(await describeBlockingProjects(proposalId, projects))
       return {
         err: new ProposalDeletionBlockedError(
           `Cannot delete proposal: it is referenced by ${descriptions.join(' and ')}. Remove those references first.`,

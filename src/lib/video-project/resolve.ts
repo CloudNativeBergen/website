@@ -47,17 +47,17 @@ export async function resolveProjectFiles(
   stored: Pick<StoredProjectFiles, 'images' | 'track'> | null,
 ): Promise<{ images: (ResolvedFile | null)[]; track: ResolvedTrack | null }> {
   // Keyed by file AND gallery entry: two entries can share one deduplicated
-  // file, and each scene keeps the entry (and subject) it was saved with.
+  // file, and each scene keeps the entry (and subject) it names. The file
+  // alone decides only when the scene names no entry, or one that no longer
+  // resolves — never over a live, different entry.
   const heldKey = (fileId: string, galleryAssetId?: string | null) =>
     `${fileId}\u0000${galleryAssetId ?? ''}`
   const heldExact = new Map(
     (stored?.images ?? []).map((f) => [heldKey(f.fileId, f.galleryAssetId), f]),
   )
   const heldAny = new Map((stored?.images ?? []).map((f) => [f.fileId, f]))
-  const heldFor = (fileId?: string, galleryAssetId?: string) =>
-    fileId
-      ? (heldExact.get(heldKey(fileId, galleryAssetId)) ?? heldAny.get(fileId))
-      : undefined
+  const heldExactly = (fileId?: string, galleryAssetId?: string) =>
+    fileId ? heldExact.get(heldKey(fileId, galleryAssetId)) : undefined
   const heldTrack =
     track?.fileId && stored?.track?.fileId === track.fileId
       ? stored.track
@@ -66,7 +66,10 @@ export async function resolveProjectFiles(
   const wanted = new Set<string>()
   for (const scene of scenes) {
     const image = scene.design.background.image
-    if (image?.galleryAssetId && !heldFor(image.fileId, image.galleryAssetId))
+    if (
+      image?.galleryAssetId &&
+      !heldExactly(image.fileId, image.galleryAssetId)
+    )
       wanted.add(image.galleryAssetId)
   }
   if (track?.galleryAssetId && !heldTrack) wanted.add(track.galleryAssetId)
@@ -84,10 +87,13 @@ export async function resolveProjectFiles(
   const images = scenes.map((scene, i): ResolvedFile | null => {
     const image = scene.design.background.image
     if (!image) return null
-    const kept = heldFor(image.fileId, image.galleryAssetId)
-    if (kept) return fromStored(kept)
+    const exact = heldExactly(image.fileId, image.galleryAssetId)
+    if (exact) return fromStored(exact)
     const row = galleryFile(image.galleryAssetId, 'image')
     if (row) return fromGallery(row)
+    // No entry named, or it is gone: the file the project holds, as held.
+    const anyHeld = image.fileId ? heldAny.get(image.fileId) : undefined
+    if (anyHeld) return fromStored(anyHeld)
     unkept.push(i + 1)
     return null
   })

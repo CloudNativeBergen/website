@@ -1308,6 +1308,72 @@ describe('a gallery asset deleted while a project using it moves on', () => {
   })
 })
 
+describe('a scene switched to another entry of the same deduplicated file', () => {
+  it('is stored as the entry it names now, not the one it was saved with', async () => {
+    h.dataset.push({
+      _id: 'asset-hall-2',
+      _rev: 'rev-h2',
+      _type: 'marketingAsset',
+      organization: ref('org-A'),
+      scope: 'organization',
+      kind: 'image',
+      title: 'Hall again',
+      alt: 'Same bytes',
+      image: { _type: 'image', asset: ref(HALL) },
+      subject: { ...ref('sp-bob'), _weak: true },
+    })
+    // Saved with entry X…
+    const created = await projects().create({
+      title: 'T',
+      scenes: [scene('a', { name: 'one', galleryAssetId: 'asset-hall' })],
+    })
+    // …then the editor holds entry Y with X's file (carryFiles matches by URL).
+    await projects().save({
+      id: created._id,
+      rev: created._rev,
+      title: 'T',
+      scenes: [
+        scene('a', {
+          name: 'two',
+          galleryAssetId: 'asset-hall-2',
+          fileId: HALL,
+        }),
+      ],
+    })
+    const image = (
+      doc(created._id)!.scenes as { background: { image: unknown } }[]
+    )[0].background.image
+    expect(image).toMatchObject({
+      name: 'two',
+      galleryAsset: { ...ref('asset-hall-2'), _weak: true },
+      subject: { ...ref('sp-bob'), _weak: true },
+    })
+  })
+})
+
+describe('deleting a project', () => {
+  it('names the files its orphan check removed', async () => {
+    const created = await projects().create({ title: 'T', scenes: TWO_SCENES })
+    await assets().delete({ id: 'asset-hall' })
+    const result = await projects().delete({ id: created._id })
+    expect(result).toEqual({ deleted: true, released: [HALL] })
+  })
+})
+
+describe('a refusal that is not a revision conflict', () => {
+  it('is not reported as "someone saved first"', async () => {
+    // Something holds the asset strongly: Sanity refuses the delete with 409.
+    h.dataset.push({ _id: 'holder', _type: 'post', thing: ref('asset-hall') })
+    const error = await assets()
+      .delete({ id: 'asset-hall' })
+      .then(
+        () => null,
+        (e: { code: string }) => e,
+      )
+    expect(error?.code).not.toBe('CONFLICT')
+  })
+})
+
 /**
  * SURFACE TRIPWIRE, as in `tenancy.writes.test.ts`: a new mutation here must
  * decide whether it takes a client id and so needs the ownership guard.

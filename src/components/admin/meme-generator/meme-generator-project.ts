@@ -40,7 +40,8 @@ export interface VideoProjects {
     released: string[]
   }>
   duplicate: (id: string) => Promise<{ _id: string }>
-  delete: (id: string) => Promise<void>
+  /** Resolves with the files the delete's orphan check removed. */
+  delete: (id: string) => Promise<{ released: string[] }>
 }
 
 /** Which stored file a scene's background became. */

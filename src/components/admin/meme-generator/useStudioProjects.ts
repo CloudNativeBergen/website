@@ -46,7 +46,8 @@ export function useStudioProjects(): VideoProjects {
       save: (input) => refusals(() => saveAsync(input)),
       duplicate: (id) => refusals(() => duplicateAsync({ id })),
       delete: async (id) => {
-        await refusals(() => removeAsync({ id }))
+        const { released } = await refusals(() => removeAsync({ id }))
+        return { released }
       },
     }),
     [utils, createAsync, saveAsync, duplicateAsync, removeAsync],

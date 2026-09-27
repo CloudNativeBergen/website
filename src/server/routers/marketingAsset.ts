@@ -44,10 +44,10 @@ const notFound = () =>
 
 /** Sanity refused a compare-and-set write: the document moved on. */
 function isRevisionConflict(error: unknown): boolean {
-  const statusCode = (error as { statusCode?: number } | null)?.statusCode
-  if (statusCode === 409) return true
+  // Only a revision mismatch: a 409 for a document still referenced (or any
+  // other refusal) is not "someone saved first" and must not read as one.
   const message = error instanceof Error ? error.message.toLowerCase() : ''
-  return message.includes('revision') && message.includes('mismatch')
+  return message.includes('revision')
 }
 
 /** The asset has a staged copy in a Studio Content Release. */
