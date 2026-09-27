@@ -134,6 +134,11 @@ describe('migration 054', () => {
       // The video text on a teaser Recipe, and on a speaker-subject Recipe.
       recipe('talkTeaser:bluesky', OLD.videoBluesky),
       recipe('custom:bluesky', OLD.videoBluesky, { subjectSource: 'speaker' }),
+      // The right key on a Recipe that is not about a talk any more.
+      recipe('videoDrip:bluesky', OLD.videoBluesky, {
+        _key: 'vd-speaker',
+        subjectSource: 'speaker',
+      }),
     ])
     expect(await run([odd])).toEqual([])
   })
