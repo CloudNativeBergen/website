@@ -24,20 +24,20 @@ describe("naming a talk's speakers (spec §4.2)", () => {
   })
 
   it('{speakers}: each with their title, a speaker without one is just the name', () => {
-    expect(speakersList([{ name: 'Alice', title: 'SRE, Acme' }])).toBe(
+    expect(speakersList([{ name: 'Alice', jobTitle: 'SRE, Acme' }])).toBe(
       'Alice (SRE, Acme)',
     )
     expect(
       speakersList([
-        { name: 'Alice', title: 'SRE, Acme' },
-        { name: 'Bob', title: 'CTO, Initech' },
+        { name: 'Alice', jobTitle: 'SRE, Acme' },
+        { name: 'Bob', jobTitle: 'CTO, Initech' },
       ]),
     ).toBe('Alice (SRE, Acme) and Bob (CTO, Initech)')
     expect(
       speakersList([
-        { name: 'Alice', title: 'SRE, Acme' },
-        { name: 'Bob', title: null },
-        { name: 'Carol', title: '  ' },
+        { name: 'Alice', jobTitle: 'SRE, Acme' },
+        { name: 'Bob', jobTitle: null },
+        { name: 'Carol', jobTitle: '  ' },
       ]),
     ).toBe('Alice (SRE, Acme), Bob and Carol')
   })
@@ -256,7 +256,7 @@ describe('tagBlueskyBody', () => {
     const carol = {
       speakerId: 'spk-carol',
       name: 'Carol Danvers',
-      title: 'Staff Engineer',
+      jobTitle: 'Staff Engineer',
       tag: { status: 'unresolved' as const, handle: 'carol.gone' },
     }
     const { body, mentions } = tagBlueskyBody({
@@ -266,8 +266,8 @@ describe('tagBlueskyBody', () => {
         speakers: 'plain value the body must not use',
       },
       people: [
-        { ...alice, title: 'SRE, Acme' },
-        { ...bob, title: 'CTO, Initech', tag: null },
+        { ...alice, jobTitle: 'SRE, Acme' },
+        { ...bob, jobTitle: 'CTO, Initech', tag: null },
         carol,
       ],
     })
@@ -330,7 +330,7 @@ describe('tagBlueskyBody', () => {
     const person = (id: string, name: string, handle: string) => ({
       speakerId: id,
       name,
-      title: 'SRE',
+      jobTitle: 'SRE',
       tag: { status: 'tagged' as const, handle, did: `did:plc:${id}` },
     })
     const a = person('a', 'Ann', `${'a'.repeat(30)}.example.com`)

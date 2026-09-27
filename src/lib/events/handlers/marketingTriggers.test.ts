@@ -149,7 +149,9 @@ describe('handleMarketingSpeakerConfirmed', () => {
               company: 'Staff Engineer',
               title: 'Pods at scale',
             },
-            people: [{ _id: 'sp-ada', name: 'Ada', title: 'Staff Engineer' }],
+            people: [
+              { _id: 'sp-ada', name: 'Ada', jobTitle: 'Staff Engineer' },
+            ],
           },
           {
             _id: 'sp-grace',
@@ -159,7 +161,7 @@ describe('handleMarketingSpeakerConfirmed', () => {
               speakers: 'Grace',
               title: 'Pods at scale',
             },
-            people: [{ _id: 'sp-grace', name: 'Grace', title: null }],
+            people: [{ _id: 'sp-grace', name: 'Grace', jobTitle: null }],
           },
         ],
       },

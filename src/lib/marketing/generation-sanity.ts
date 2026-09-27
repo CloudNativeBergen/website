@@ -171,12 +171,10 @@ export async function getGenerationContext(
   }
 }
 
-type RawTalk = TalkSubjectSource
-
 const TALK_FIELDS = `_id, title, "speakers": speakers[]->{ _id, name, title }`
 
 /** Speakers of confirmed talks, each once, with their first talk's title. */
-function speakerSubjects(talks: RawTalk[]): GenerationSubject[] {
+function speakerSubjects(talks: TalkSubjectSource[]): GenerationSubject[] {
   const seen = new Map<string, GenerationSubject>()
   for (const talk of talks) {
     for (const s of talk.speakers ?? []) {
@@ -197,7 +195,7 @@ export async function getSubjectList(
 ): Promise<GenerationSubject[]> {
   switch (list) {
     case 'confirmedSpeakers': {
-      const talks = await scopedFetch<RawTalk[] | null>(
+      const talks = await scopedFetch<TalkSubjectSource[] | null>(
         clientReadUncached,
         { conferenceId },
         `*[_type == "talk" && status == "confirmed" && !(_id in path("drafts.**")) && !(_id in path("versions.**"))] | order(_createdAt asc){${TALK_FIELDS}}`,
@@ -207,7 +205,7 @@ export async function getSubjectList(
       return speakerSubjects(talks ?? [])
     }
     case 'scheduledTalks': {
-      const talks = await scopedFetch<RawTalk[] | null>(
+      const talks = await scopedFetch<TalkSubjectSource[] | null>(
         clientReadUncached,
         { conferenceId },
         `*[_type == "talk" && status == "confirmed" && _id in *[_type == "schedule" && conference._ref == $conferenceId && (status == "official" || !defined(status)) && !(_id in path("drafts.**")) && !(_id in path("versions.**"))].tracks[].talks[].talk._ref && !(_id in path("drafts.**")) && !(_id in path("versions.**"))] | order(_createdAt asc){${TALK_FIELDS}}`,
@@ -217,7 +215,7 @@ export async function getSubjectList(
       return (talks ?? []).map(talkSubject)
     }
     case 'recordedTalks': {
-      const talks = await scopedFetch<RawTalk[] | null>(
+      const talks = await scopedFetch<TalkSubjectSource[] | null>(
         clientReadUncached,
         { conferenceId },
         `*[_type == "talk" && status == "confirmed" && count(attachments[_type == "urlAttachment" && attachmentType == "recording"]) > 0 && !(_id in path("drafts.**")) && !(_id in path("versions.**"))] | order(_createdAt asc){${TALK_FIELDS}}`,

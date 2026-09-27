@@ -33,14 +33,20 @@ export type BlueskyTag =
   | { status: 'unresolved'; handle: string }
 
 /**
+ * A person as `{name}` and `{speakers}` name them. `jobTitle` is what
+ * `{company}` holds for a speaker — never the talk's `{title}`.
+ */
+export interface NamedPerson {
+  name: string
+  jobTitle?: string | null
+}
+
+/**
  * One person a subject's `{name}` names, in order. `tag` is null when there is
  * nothing to tag: no Bluesky link, opted out (#1148), or our own account.
  */
-export interface TagPerson {
+export interface TagPerson extends NamedPerson {
   speakerId: string
-  name: string
-  /** What `{company}` holds for them — their job title — for `{speakers}`. */
-  title?: string | null
   tag: BlueskyTag | null
 }
 
@@ -78,12 +84,10 @@ export function joinNames(names: readonly string[]): string {
  * `{speakers}` (spec §4.2): each name with what `{company}` holds for a
  * speaker — their job title — "Alice (SRE, Acme) and Bob (CTO, Initech)".
  */
-export function speakersList(
-  people: readonly { name: string; title?: string | null }[],
-): string {
+export function speakersList(people: readonly NamedPerson[]): string {
   return joinNames(
     people.map((p) =>
-      p.title?.trim() ? `${p.name} (${p.title.trim()})` : p.name,
+      p.jobTitle?.trim() ? `${p.name} (${p.jobTitle.trim()})` : p.name,
     ),
   )
 }
@@ -103,7 +107,10 @@ export function tagBlueskyBody(input: {
 
   const handleOf = (p: TagPerson) => (p.tag ? `@${p.tag.handle}` : p.name)
   const render = (label: (p: TagPerson) => string) => {
-    const named = people.map((p) => ({ name: label(p), title: p.title }))
+    const named = people.map((p) => ({
+      name: label(p),
+      jobTitle: p.jobTitle,
+    }))
     return resolvePlaceholders(skeleton, {
       ...values,
       name: joinNames(named.map((p) => p.name)),
