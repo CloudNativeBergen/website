@@ -985,3 +985,58 @@ export const TagLookupHoldsHeaderActions: Story = {
     ).toBeVisible()
   },
 }
+
+/**
+ * A refused SAVE: the editor says "Not saved…" beside Save; fixing the last
+ * issue with one click clears that too, since the refusal no longer stands.
+ */
+export const TagSaveRefusedAndFixed: Story = {
+  parameters: {
+    msw: {
+      handlers: [
+        http.post('/api/trpc/social.updateVariant', () =>
+          HttpResponse.json(
+            {
+              error: {
+                message: 'Olga Nordmann has asked not to be tagged.',
+                code: -32600,
+                data: {
+                  code: 'BAD_REQUEST',
+                  httpStatus: 400,
+                  tagIssues: [
+                    {
+                      code: 'opted-out',
+                      mentionKey: 'spk-olga',
+                      handle: 'olga.dev',
+                      name: 'Olga Nordmann',
+                      message:
+                        'Olga Nordmann has asked not to be tagged in social posts. Use the plain name instead of @olga.dev.',
+                    },
+                  ],
+                },
+              },
+            },
+            { status: 400 },
+          ),
+        ),
+        ...handlers(taggingFixture),
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const body = await canvas.findByLabelText<HTMLTextAreaElement>('Body')
+    await userEvent.type(body, ' See you there.')
+    await userEvent.click(canvas.getByRole('button', { name: 'Save variant' }))
+    await expect(
+      await canvas.findByText('Not saved. Fix the tag problems above first.'),
+    ).toBeVisible()
+    await userEvent.click(
+      canvas.getByRole('button', { name: 'Use the plain name' }),
+    )
+    await expect(body.value).toContain('🎙️ Olga Nordmann and Alice Anderson')
+    await expect(
+      canvas.queryByText('Not saved. Fix the tag problems above first.'),
+    ).toBeNull()
+  },
+}

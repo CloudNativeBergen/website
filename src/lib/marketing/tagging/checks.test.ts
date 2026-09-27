@@ -17,6 +17,8 @@ import {
   saveMentions,
   tagName,
   untagHandle,
+  fixTagIssue,
+  type MentionIssue,
   tagOwners,
   untagOwned,
   type TaggablePerson,
@@ -198,6 +200,24 @@ describe('a shared team handle, end to end: tag, save, read back', () => {
         resolutions,
       }),
     ).toEqual({ issues: [], warnings: [] })
+  })
+
+  it('the one-click fix hands back only the refused person’s occurrence', () => {
+    const one = tagName(start, mate)!
+    const both = tagName(one, team)!
+    const saved = save(both, save(one).mentions)
+    // Alice leaves the roster: the next save refuses her tag.
+    const refused = saveMentions({
+      body: both,
+      people: [team],
+      previous: saved.mentions,
+      resolutions,
+    })
+    const issue = refused.issues.find((i) => i.code === 'not-a-speaker')
+    expect(issue).toMatchObject({ mentionKey: 'speaker-alice' })
+    expect(
+      fixTagIssue(both, issue as MentionIssue, [team], saved.mentions),
+    ).toBe('@team.dev and Alice Anderson on platform teams.')
   })
 
   it('tagging both records both, one per occurrence, and the plain form names each', () => {

@@ -267,12 +267,19 @@ function bindTags(
     for (const p of sharers) add(p.speakerId)
     // Occurrence order is roster (talk) order — the order generation names
     // people in — so the k-th occurrence is the k-th of them, whichever
-    // rule chose them. Recorded people no longer on the roster lead (the
-    // save refuses them).
-    const rank = (id: string) => {
-      const i = people.findIndex((p) => p.speakerId === id)
-      return i < 0 ? -1 : i
+    // rule chose them. A recorded person no longer on the roster keeps the
+    // place their record had among the others (records are saved in
+    // occurrence order).
+    const roster = (id: string) => people.findIndex((p) => p.speakerId === id)
+    const ranks = new Map<string, number>()
+    let last = -1
+    for (const m of recorded) {
+      const r = roster(m.speakerId)
+      if (r >= 0) last = r
+      if (!ranks.has(m.speakerId))
+        ranks.set(m.speakerId, r >= 0 ? r : last + 0.5)
     }
+    const rank = (id: string) => ranks.get(id) ?? roster(id)
     owners.sort((x, y) => rank(x) - rank(y))
     if (owners.length > 0) out.set(handle, owners)
   }
@@ -290,6 +297,27 @@ export function untagOwned(
     own.occurrence
   ]
   return t ? `${body.slice(0, t.start)}${name}${body.slice(t.end)}` : body
+}
+
+/**
+ * The one-click fix ("use the plain name") for one issue: the issue's
+ * person's tag back to their name — only THEIR occurrence of a shared
+ * handle (`bindTags` says which), every occurrence otherwise.
+ */
+export function fixTagIssue(
+  body: string,
+  issue: MentionIssue,
+  people: readonly TaggablePerson[],
+  mentions: readonly MentionRecord[],
+): string {
+  const speakerId =
+    mentions.find((m) => m._key === issue.mentionKey)?.speakerId ??
+    people.find((p) => storedKey(p.speakerId) === issue.mentionKey)?.speakerId
+  const owners = bindTags(body, people, mentions).get(issue.handle) ?? []
+  const k = speakerId ? owners.indexOf(speakerId) : -1
+  return owners.length > 1 && k >= 0
+    ? untagOwned(body, { handle: issue.handle, occurrence: k }, issue.name)
+    : untagHandle(body, issue.handle, issue.name)
 }
 
 /**

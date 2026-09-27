@@ -4,7 +4,7 @@ import { expect, userEvent, within } from 'storybook/test'
 import type { MentionRecord } from '@/lib/marketing/tagging/body'
 import {
   tagName,
-  untagHandle,
+  fixTagIssue,
   untagOwned,
   type TagIssue,
   type TaggablePerson,
@@ -106,7 +106,7 @@ function Harness({
         onTag={(p) => setBody((b) => tagName(b, p) ?? b)}
         onUntag={(p, tag) => setBody((b) => untagOwned(b, tag, p.name))}
         onFix={(issue) => {
-          setBody((b) => untagHandle(b, issue.handle, issue.name))
+          setBody((b) => fixTagIssue(b, issue, people, mentions))
           setIssues((xs) => xs.filter((x) => x !== issue))
         }}
       />

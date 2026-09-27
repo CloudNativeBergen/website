@@ -22,7 +22,7 @@ import {
 import type { MentionRecord } from '@/lib/marketing/tagging/body'
 import {
   tagName,
-  untagHandle,
+  fixTagIssue,
   untagOwned,
   type TagOwnership,
   type MentionIssue,
@@ -189,9 +189,13 @@ export function ConnectedVariantEditor({
     editBody((body) => untagOwned(body, tag, person.name))
   const fix = (issue: MentionIssue) => {
     if (!tagging) return
-    const { handle, name } = issue
-    editBody((body) => untagHandle(body, handle, name))
-    tagging.onIssuesChange(tagging.issues.filter((i) => i !== issue))
+    editBody((body) =>
+      fixTagIssue(body, issue, tagging.people, tagging.mentions),
+    )
+    const rest = tagging.issues.filter((i) => i !== issue)
+    tagging.onIssuesChange(rest)
+    // The last one fixed: the refusal it explained no longer stands.
+    if (rest.length === 0) setError(null)
   }
 
   const warnCeilings = useCeilingWarningToast()
