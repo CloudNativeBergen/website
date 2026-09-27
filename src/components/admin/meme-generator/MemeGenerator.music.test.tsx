@@ -519,4 +519,21 @@ describe('a video’s music', () => {
     unmount()
     expect(signals[1].aborted).toBe(true)
   })
+
+  it('warns that Safari may clip the very start only when there is no fade-in', async () => {
+    render(<MemeGenerator gallery={fakeGallery()} encoder={encoder} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Video' }))
+    await within(music()).findByRole('option', { name: 'Theme (0:20)' })
+    fireEvent.change(within(music()).getByLabelText('Music'), {
+      target: { value: 'asset-theme' },
+    })
+    await within(music()).findByText(/Plays from/)
+    const clip = /Safari can drop the first 20 ms or so/
+    expect(within(music()).queryByText(clip)).toBeNull()
+    fireEvent.change(within(music()).getByLabelText('Fade in'), {
+      target: { value: '0' },
+    })
+    fireEvent.blur(within(music()).getByLabelText('Fade in'))
+    expect(within(music()).getByText(clip)).toBeInTheDocument()
+  })
 })
