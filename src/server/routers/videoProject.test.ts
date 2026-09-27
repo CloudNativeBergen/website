@@ -481,6 +481,8 @@ describe('save, leave, reopen', () => {
       scenes: [scene('s')],
       track,
     })
+    // The file comes back, so a later save holds it without the gallery.
+    expect(created.trackFileId).toBe(THEME)
     expect(doc(created._id)!.track).toEqual({
       file: {
         _type: 'file',
@@ -505,6 +507,22 @@ describe('save, leave, reopen', () => {
       title: 'Theme',
       rights: { confirmedBy: 'sp-1', confirmedAt: '2026-09-20T10:00:00Z' },
     })
+    const saved = await projects().save({
+      id: created._id,
+      rev: doc(created._id)!._rev as string,
+      title: 'With music',
+      scenes: [scene('s')],
+      track: { ...track, volume: 0.5 },
+    })
+    expect(saved.trackFileId).toBe(THEME)
+    const removed = await projects().save({
+      id: created._id,
+      rev: saved._rev,
+      title: 'With music',
+      scenes: [scene('s')],
+      track: null,
+    })
+    expect(removed.trackFileId).toBeNull()
   })
 })
 

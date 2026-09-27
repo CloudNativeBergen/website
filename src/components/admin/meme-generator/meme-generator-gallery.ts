@@ -15,6 +15,16 @@ export interface GalleryImage {
   thumbnailUrl: string | null
 }
 
+/** One gallery audio track as the music picker shows it (#1178). */
+export interface GalleryTrack {
+  _id: string
+  title: string
+  durationSeconds: number
+}
+
+/** Where a track's bytes come from: a gallery track, or a saved project's. */
+export type TrackSource = { asset: string } | { project: string }
+
 export interface BackgroundGallery {
   /** The organization's images to choose from. */
   images: () => Promise<GalleryImage[]>
@@ -33,4 +43,11 @@ export interface BackgroundGallery {
   ) => Promise<{
     _id: string
   }>
+  /** The organization's audio tracks, for a video's music (spec §6). */
+  tracks?: () => Promise<GalleryTrack[]>
+  /**
+   * A track's file, through our own origin: the Sanity CDN sends no CORS
+   * header to tenant domains. The server proves the source ours.
+   */
+  loadTrack?: (source: TrackSource) => Promise<ArrayBuffer>
 }

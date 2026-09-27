@@ -39,6 +39,27 @@ export function useStudioGallery(orgId: string): BackgroundGallery {
       // exists, and a cached answer can predate its deletion.
       resolve: (id) =>
         utils.marketingAsset.background.fetch({ id }, { staleTime: 0 }),
+      tracks: async () => {
+        const rows = await utils.marketingAsset.list.fetch(undefined)
+        return rows.flatMap((row) =>
+          row.kind === 'audio'
+            ? [
+                {
+                  _id: row._id,
+                  title: row.title,
+                  durationSeconds: row.durationSeconds ?? 0,
+                },
+              ]
+            : [],
+        )
+      },
+      loadTrack: async (source) => {
+        const response = await fetch(
+          `/api/admin/studio-track?${new URLSearchParams(source)}`,
+        )
+        if (!response.ok) throw new Error('The track could not be loaded.')
+        return response.arrayBuffer()
+      },
       keep: async (file, { title, alt }) => {
         // Organization-wide, with nothing else said about it: the Assets
         // page is where it gets a subject, tags or an edition.

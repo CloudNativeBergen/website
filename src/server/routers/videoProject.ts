@@ -226,7 +226,13 @@ export const videoProjectRouter = router({
           ? { track: storedTrack(input.track, files.track) }
           : {}),
       })
-      return { ...created, scenes: sceneFiles(input.scenes, files.images) }
+      return {
+        ...created,
+        scenes: sceneFiles(input.scenes, files.images),
+        // The file the track became, so a later save holds it even once its
+        // gallery entry is gone.
+        trackFileId: input.track && files.track ? files.track.fileId : null,
+      }
     }),
 
   /**
@@ -296,6 +302,7 @@ export const videoProjectRouter = router({
       return {
         _rev: rev,
         scenes: sceneFiles(input.scenes, files.images),
+        trackFileId: input.track && files.track ? files.track.fileId : null,
         released,
       }
     }),

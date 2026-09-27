@@ -102,6 +102,15 @@ import {
 import { VideoTimeline, type SceneRefusal } from './VideoTimeline'
 import type { TimingControl } from './VideoElements'
 import { VideoExport } from './VideoExport'
+import { VideoMusic, type TrackLoad } from './VideoMusic'
+import {
+  MIX_RATE,
+  NEW_TRACK_SETTINGS,
+  mixTrack,
+  trackSource,
+  type VideoTrack,
+} from './meme-generator-music'
+import { createTrackPlayer, decodeTrack } from './meme-generator-track-player'
 import type { EncoderBackend, ExportJob } from './meme-generator-export'
 import { mediabunnyBackend } from './meme-generator-mediabunny'
 import type { BackgroundGallery } from './meme-generator-gallery'
@@ -115,8 +124,10 @@ import {
   dropReleasedFiles,
   dropUnsaveable,
   fromProjectScenes,
+  fromProjectTrack,
   projectSnapshot,
   toProjectScenes,
+  toProjectTrack,
   type SceneFile,
   type VideoProjects,
 } from './meme-generator-project'
@@ -701,6 +712,20 @@ export function MemeGenerator({
     setBackground({ image: null })
   }
 
+  // ── Music (#1179) ───────────────────────────────────────────────────────
+  // One track per video, from the gallery's audio. It is the video's, not a
+  // scene's, so undo and redo leave it alone.
+  const [track, setTrack] = useState<VideoTrack | null>(null)
+  // The track's samples at MIX_RATE, by the file they are: fetched and
+  // decoded once, whatever the settings.
+  const [decoded, setDecoded] = useState<{
+    key: string
+    channels: Float32Array[]
+  } | null>(null)
+  const [trackFailed, setTrackFailed] = useState<string | null>(null)
+  const [trackRetry, setTrackRetry] = useState(0)
+  const trackKey = track ? (track.galleryAssetId ?? track.fileId ?? null) : null
+
   // ── The saved project (#1181) ───────────────────────────────────────────
   // The project open in the editor, and the revision it was loaded or last
   // saved at: every save is compare-and-set on it.
@@ -715,8 +740,8 @@ export function MemeGenerator({
   )
   // Memoized: playback re-renders every frame with the same scenes.
   const currentSnapshot = useMemo(
-    () => projectSnapshot(projectTitle, scenes),
-    [projectTitle, scenes],
+    () => projectSnapshot(projectTitle, scenes, track),
+    [projectTitle, scenes, track],
   )
   const unsaved = currentSnapshot !== savedSnapshot
   const [projectBusy, setProjectBusy] = useState<
@@ -748,6 +773,7 @@ export function MemeGenerator({
   // than one scene, or any scene motion, is video work to protect. A plain
   // one-scene image never asks.
   const holdsVideo =
+    track !== null ||
     scenes.length > 1 ||
     scenes.some(
       (scene) =>
@@ -858,7 +884,11 @@ export function MemeGenerator({
     window.confirm('Discard your unsaved changes to this video?')
 
   /** Put scenes in the editor as a fresh start: no undo back past them. */
-  const replaceVideo = (next: Scene[], title: string) => {
+  const replaceVideo = (
+    next: Scene[],
+    title: string,
+    nextTrack: VideoTrack | null = null,
+  ) => {
     // An upload or pick still decoding belongs to the video being left: it
     // must never land in this one, even under the same scene key.
     for (const key of new Set([
@@ -876,7 +906,9 @@ export function MemeGenerator({
     setPlaybackEditingKey(null)
     moveTo(0)
     setProjectTitle(title)
-    setSavedSnapshot(projectSnapshot(title, next))
+    setTrack(nextTrack)
+    setTrackFailed(null)
+    setSavedSnapshot(projectSnapshot(title, next, nextTrack))
     setBackgroundFailure(null)
     setConflicted(false)
   }
@@ -918,7 +950,7 @@ export function MemeGenerator({
       ).filter(Boolean).length
       for (const [url, image] of decoded)
         backgroundRasters.current.set(url, image)
-      replaceVideo(next, opened.title)
+      replaceVideo(next, opened.title, fromProjectTrack(opened.track))
       setEditionOnly(false)
       setProject({ id: opened._id, rev: opened._rev })
       onProjectChange?.(opened._id)
@@ -973,7 +1005,8 @@ export function MemeGenerator({
       return
     }
     const title = projectTitle.trim() || UNTITLED
-    const snapshot = projectSnapshot(title, scenes)
+    const snapshot = projectSnapshot(title, scenes, track)
+    const savedTrack = track
     const drawnBy = new Map(
       scenes.map((scene) => [scene.key, scene.design.background.image?.url]),
     )
@@ -985,6 +1018,7 @@ export function MemeGenerator({
         _id?: string
         _rev: string
         scenes: SceneFile[]
+        trackFileId?: string | null
         released?: string[]
       } = over
         ? await projects.save({
@@ -992,11 +1026,13 @@ export function MemeGenerator({
             rev: over.rev,
             title,
             scenes: mapped.scenes,
+            track: toProjectTrack(savedTrack),
           })
         : await projects.create({
             title,
             edition: editionOnly ? 'current' : 'none',
             scenes: mapped.scenes,
+            track: toProjectTrack(savedTrack),
             // Saved as a new project after a conflict: backgrounds the open
             // project already holds are kept, even with no gallery asset.
             ...(project ? { copyFilesFrom: project.id } : {}),
@@ -1014,6 +1050,17 @@ export function MemeGenerator({
           dropReleasedFiles(carryFiles(states, files), released),
         ),
       )
+      // The track now names the file the project holds, so a later save
+      // keeps it even once its gallery entry is gone.
+      const trackFileId = result.trackFileId
+      if (trackFileId && savedTrack)
+        setTrack((current) =>
+          current &&
+          current.galleryAssetId === savedTrack.galleryAssetId &&
+          (current.fileId ?? null) === (savedTrack.fileId ?? null)
+            ? { ...current, fileId: trackFileId }
+            : current,
+        )
       const id = over?.id ?? result._id!
       setProject({ id, rev: result._rev })
       setConflicted(false)
@@ -1325,10 +1372,59 @@ export function MemeGenerator({
   const total = totalDuration(scenes)
   const playbackAnchor = useRef({ time: 0, at: 0 })
 
-  // Playback carries on from wherever the playhead is put.
+  // The track, fetched through our own origin and decoded at MIX_RATE, once
+  // per file. A saved project's track whose gallery entry is gone comes
+  // through the project.
+  const source = track ? trackSource(track, project?.id ?? null) : null
+  const sourceQuery = source ? new URLSearchParams(source).toString() : null
+  const loadTrack = gallery?.loadTrack
+  const decodedKey = decoded?.key ?? null
+  useEffect(() => {
+    // A file already decoded is never fetched again, whichever way it is
+    // reached now.
+    if (!trackKey || !source || !loadTrack || decodedKey === trackKey) return
+    let current = true
+    loadTrack(source)
+      .then(decodeTrack)
+      .then(
+        (channels) => current && setDecoded({ key: trackKey, channels }),
+        () => current && setTrackFailed(trackKey),
+      )
+    return () => {
+      current = false
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: keyed by the source's words, not the object rebuilt every render
+  }, [trackKey, sourceQuery, loadTrack, decodedKey, trackRetry])
+  const trackChannels =
+    decoded && decoded.key === trackKey ? decoded.channels : null
+  const trackLoad: TrackLoad | null = !track
+    ? null
+    : trackChannels
+      ? { state: 'ready', seconds: trackChannels[0].length / MIX_RATE }
+      : trackFailed === trackKey || !source || !loadTrack
+        ? { state: 'failed' }
+        : { state: 'loading' }
+  // What is heard: the same mix the export encodes.
+  const mix = useMemo(
+    () =>
+      trackChannels && track ? mixTrack(trackChannels, track, total) : null,
+    [trackChannels, track, total],
+  )
+
+  // The preview's sound, and its clock while it plays.
+  const [player] = useState(() => createTrackPlayer())
+  useEffect(() => () => player.dispose(), [player])
+  useEffect(() => player.load(mix), [player, mix])
+  useEffect(() => {
+    if (!playing) player.pause()
+  }, [player, playing])
+
+  // Playback carries on from wherever the playhead is put. With a track the
+  // sound follows it — silently, until a scrub settles.
   const moveTo = (next: number) => {
     playbackAnchor.current = { time: next, at: performance.now() }
     setTime(next)
+    player.seek(next)
   }
   const seek = (to: number) => moveTo(clampTime(scenes, to))
 
@@ -1341,7 +1437,13 @@ export function MemeGenerator({
     // frame, where an edit at the end leaves the playhead.
     // Counted in whole frames: the playhead's sum and the total's can differ
     // in the last bit, so "a frame short" is not a subtraction.
-    seek(Math.round(time * FPS) >= Math.round(total * FPS) - 1 ? 0 : time)
+    const from = clampTime(
+      scenes,
+      Math.round(time * FPS) >= Math.round(total * FPS) - 1 ? 0 : time,
+    )
+    moveTo(from)
+    // Started inside the click, as browsers require of sound.
+    player.play(from)
     setPlaybackEditingKey(editingKey)
     setPlaying(true)
   }
@@ -1355,9 +1457,13 @@ export function MemeGenerator({
     }
     // A frame's timestamp can fall a moment before an anchor set by a seek
     // in the same frame; time never runs backwards from where it was put.
+    // With a track, the audio clock is the playhead: picture follows sound.
+    const heard = player.time()
+    if (heard !== null) playbackAnchor.current = { time: heard, at: now }
     const next =
+      heard ??
       playbackAnchor.current.time +
-      Math.max(0, now - playbackAnchor.current.at) / 1000
+        Math.max(0, now - playbackAnchor.current.at) / 1000
     if (next < total) {
       setTime(next)
       return true
@@ -1366,6 +1472,7 @@ export function MemeGenerator({
     if (loop && loopAllowed) {
       playbackAnchor.current = { time: 0, at: now }
       setTime(0)
+      player.play(0)
       return true
     }
     setTime(total)
@@ -1628,9 +1735,18 @@ export function MemeGenerator({
     if (!ctx) throw new Error('No 2D context to export from')
     const paintScene = scenePainter(snapshot)
     const exportLayers = offscreenLayers()
+    const frameCount = Math.round(totalDuration(snapshot) * FPS)
     return {
       canvas,
-      frameCount: Math.round(totalDuration(snapshot) * FPS),
+      frameCount,
+      // Mixed for exactly the frames exported.
+      ...(trackChannels && track
+        ? {
+            audio: {
+              channels: mixTrack(trackChannels, track, frameCount / FPS),
+            },
+          }
+        : {}),
       paint: (frame) =>
         drawFrame(
           ctx,
@@ -1774,16 +1890,57 @@ export function MemeGenerator({
             onLoopChange={setLoop}
           />
         )}
+        {mode === 'video' && gallery?.tracks && gallery.loadTrack && (
+          <VideoMusic
+            tracks={gallery.tracks}
+            track={track}
+            load={trackLoad}
+            videoSeconds={total}
+            onPick={(row) => {
+              setTrackFailed(null)
+              setTrack((current) =>
+                row
+                  ? {
+                      ...NEW_TRACK_SETTINGS,
+                      // Another track keeps how it was mixed, from its start.
+                      ...(current && {
+                        volume: current.volume,
+                        fadeIn: current.fadeIn,
+                        fadeOut: current.fadeOut,
+                      }),
+                      title: row.title,
+                      galleryAssetId: row._id,
+                    }
+                  : null,
+              )
+            }}
+            onChange={(settings) =>
+              setTrack((current) => current && { ...current, ...settings })
+            }
+            onRetry={() => {
+              setTrackFailed(null)
+              setTrackRetry((n) => n + 1)
+            }}
+          />
+        )}
         {/* Kept mounted in Image mode: switching to look at a still never
             cancels an export or throws away the finished file. */}
         <div hidden={mode !== 'video'}>
           <VideoExport
             encoder={encoder}
             prepare={prepareExport}
-            waiting={capturePending}
+            waiting={capturePending || trackLoad?.state === 'loading'}
             active={mode === 'video'}
-            // The scenes, and the late-arriving font faces that repaint them.
-            revision={[scenes, lateFaces]}
+            music={
+              trackLoad?.state === 'ready'
+                ? 'track'
+                : trackLoad?.state === 'failed'
+                  ? 'failed'
+                  : 'none'
+            }
+            // The scenes, the late-arriving font faces that repaint them, and
+            // the music.
+            revision={[scenes, lateFaces, track, trackChannels]}
           />
         </div>
       </div>

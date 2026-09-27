@@ -102,3 +102,33 @@ export function findClick(
     if (Math.abs(samples[i]) > threshold) return i
   return null
 }
+
+/** The video's music as the editor holds it and a project stores it. */
+export interface VideoTrack extends TrackSettings {
+  title: string
+  /** The gallery track it was picked from, while that exists. */
+  galleryAssetId?: string
+  /** The file a saved project holds, once saved or opened. */
+  fileId?: string
+}
+
+/** A newly picked track: from its start, a little under full, eased in and out. */
+export const NEW_TRACK_SETTINGS: TrackSettings = {
+  start: 0,
+  volume: 0.8,
+  fadeIn: 1,
+  fadeOut: 2,
+}
+
+/**
+ * Where the editor fetches a track's file: the gallery track while it
+ * exists, else the saved project that holds it; null for neither.
+ */
+export function trackSource(
+  track: VideoTrack,
+  projectId: string | null,
+): { asset: string } | { project: string } | null {
+  if (track.galleryAssetId) return { asset: track.galleryAssetId }
+  if (track.fileId && projectId) return { project: projectId }
+  return null
+}

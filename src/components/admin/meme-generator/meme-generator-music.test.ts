@@ -6,6 +6,7 @@ import {
   mixTrack,
   shiftForPriming,
   trackGainAt,
+  trackSource,
 } from './meme-generator-music'
 
 const settings = { start: 0, volume: 1, fadeIn: 0, fadeOut: 0 }
@@ -171,5 +172,22 @@ describe('findClick', () => {
 
   it('is null in silence', () => {
     expect(findClick(new Float32Array(100).fill(0.1), 0.45)).toBeNull()
+  })
+})
+
+describe('trackSource', () => {
+  const base = { title: 'Theme', ...settings }
+  it('fetches a gallery track by its gallery entry', () => {
+    expect(
+      trackSource({ ...base, galleryAssetId: 'a', fileId: 'f' }, 'p'),
+    ).toEqual({ asset: 'a' })
+  })
+  it('fetches a track whose gallery entry is gone through its project', () => {
+    expect(trackSource({ ...base, fileId: 'f' }, 'p')).toEqual({
+      project: 'p',
+    })
+  })
+  it('has no source for a file with no project to hold it', () => {
+    expect(trackSource({ ...base, fileId: 'f' }, null)).toBeNull()
   })
 })

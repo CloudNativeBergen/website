@@ -238,7 +238,10 @@ export const mediabunnyBackend: EncoderBackend = {
   async prepareAudio() {
     if (typeof AudioBuffer === 'undefined') return null
     const mediabunny = await loadMediabunny()
-    const aac = { ...AAC, quality: new mediabunny.Quality({ bitrate: AUDIO_BITRATE }) }
+    const aac = {
+      ...AAC,
+      quality: new mediabunny.Quality({ bitrate: AUDIO_BITRATE }),
+    }
     if (!(await mediabunny.canEncodeAudio('aac', aac))) {
       // No AAC of the browser's own: the add-on, or a silent video.
       try {

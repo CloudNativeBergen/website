@@ -13,6 +13,7 @@ import {
   OPEN_PROJECTION,
   openedProject,
   storedScenes,
+  storedTrack,
   type ProjectRow,
 } from '@/lib/video-project/document'
 import { DEFAULT_DESIGN, type MemeDesign } from './meme-generator-draw'
@@ -20,9 +21,12 @@ import { newScene, type Scene } from './meme-generator-timeline'
 import {
   carryFiles,
   fromProjectScenes,
+  fromProjectTrack,
   projectSnapshot,
   toProjectScenes,
+  toProjectTrack,
 } from './meme-generator-project'
+import type { VideoTrack } from './meme-generator-music'
 
 const HALL = 'image-hall-3000x2000-jpg'
 const HALL_CDN = 'https://cdn.sanity.io/images/p/d/hall-3000x2000.jpg'
@@ -203,5 +207,74 @@ describe('projectSnapshot', () => {
     const moved = structuredClone(list)
     moved[1].design.textLines[0].verticalPosition += 1
     expect(projectSnapshot('Teaser', moved)).not.toBe(base)
+  })
+})
+
+describe('a saved track reopens as the track it was (#1179)', () => {
+  const THEME = 'file-theme-mp3'
+  const picked: VideoTrack = {
+    title: 'Theme',
+    galleryAssetId: 'asset-theme',
+    start: 12.5,
+    volume: 0.8,
+    fadeIn: 1,
+    fadeOut: 2.5,
+  }
+
+  async function reopenTrack(track: VideoTrack) {
+    const input = toProjectTrack(track)!
+    const stored = storedTrack(input, {
+      fileId: THEME,
+      galleryAssetId: input.galleryAssetId,
+      createdByGallery: true,
+      title: 'Theme',
+      rights: { confirmedBy: 'sp-1', confirmedAt: '2026-09-20T10:00:00Z' },
+    })
+    const dataset = [
+      {
+        _id: 'vp-1',
+        _rev: 'rev-1',
+        _type: 'videoProject',
+        title: 'Teaser',
+        scope: 'organization',
+        formatVersion: 1,
+        scenes: storedScenes(
+          (toProjectScenes([newScene(design())]) as { scenes: never[] }).scenes,
+          [null],
+        ),
+        track: stored,
+      },
+    ]
+    const row = (await (
+      await evaluate(parse(`*[_id == "vp-1"][0]${OPEN_PROJECTION}`), {
+        dataset,
+      })
+    ).get()) as ProjectRow
+    return fromProjectTrack(openedProject(row, (url) => url).track)
+  }
+
+  it('gives back the settings, and the file it holds, and nothing a save would change', async () => {
+    const reopened = await reopenTrack(picked)
+    expect(reopened).toEqual({ ...picked, fileId: THEME })
+    const list = [newScene(design())]
+    expect(projectSnapshot('t', list, reopened)).toBe(
+      projectSnapshot('t', list, picked),
+    )
+  })
+
+  it('changes the snapshot with what is heard, never with the title', () => {
+    const list = [newScene(design())]
+    const base = projectSnapshot('t', list, picked)
+    expect(projectSnapshot('t', list, null)).not.toBe(base)
+    expect(projectSnapshot('t', list, { ...picked, volume: 0.5 })).not.toBe(
+      base,
+    )
+    expect(projectSnapshot('t', list, { ...picked, fadeOut: 1 })).not.toBe(base)
+    expect(
+      projectSnapshot('t', list, { ...picked, galleryAssetId: 'asset-b' }),
+    ).not.toBe(base)
+    expect(projectSnapshot('t', list, { ...picked, title: 'Renamed' })).toBe(
+      base,
+    )
   })
 })

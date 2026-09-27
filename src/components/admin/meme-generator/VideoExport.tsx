@@ -15,6 +15,7 @@ import {
   exportVideo,
   type EncoderBackend,
   type ExportJob,
+  type ExportedAudio,
   type ExportProgress,
 } from './meme-generator-export'
 import { FPS } from './meme-generator-timeline'
@@ -31,6 +32,8 @@ interface ExportedFile {
   url: string
   bytes: number
   seconds: number
+  /** Whether the file has the track. */
+  audio: ExportedAudio
   /** The video it was made from; any other and the file is out of date. */
   revision: readonly unknown[]
 }
@@ -69,12 +72,26 @@ function linkedInWarnings(file: ExportedFile): string[] {
   return warnings
 }
 
+/** The music, as the idle line puts it. */
+const SOUND: Record<Music, string> = {
+  none: 'silent',
+  track: 'with the music track',
+  failed: 'silent: the music track could not be loaded',
+}
+
+/** A file made without the track it should have, and why. */
+const MUSIC_LEFT_OUT =
+  'This browser could not encode the music, so the video is silent. Chrome, Edge or Safari on a computer can add it.'
+
+export type Music = 'none' | 'track' | 'failed'
+
 function statusText(
   status: Status,
   supported: boolean | 'error' | null,
   waiting: boolean,
   file: ExportedFile | null,
   stale: boolean,
+  music: Music,
 ): string {
   if (supported === false) return UNSUPPORTED_MESSAGE
   if (supported === 'error') return LOAD_FAILED_MESSAGE
@@ -93,12 +110,13 @@ function statusText(
     case 'done':
       return [
         'Your video is ready.',
+        ...(file?.audio === 'unavailable' ? [MUSIC_LEFT_OUT] : []),
         ...(file ? linkedInWarnings(file) : []),
       ].join(' ')
     case 'idle':
       return waiting
-        ? 'Waiting for images and fonts to load…'
-        : `H.264, ${CANVAS_SIZE} × ${CANVAS_SIZE}, ${FPS} frames a second, silent.`
+        ? 'Waiting for images, fonts and music to load…'
+        : `H.264, ${CANVAS_SIZE} × ${CANVAS_SIZE}, ${FPS} frames a second, ${SOUND[music]}.`
   }
 }
 
@@ -113,6 +131,7 @@ export function VideoExport({
   waiting,
   active,
   revision,
+  music = 'none',
 }: {
   encoder: EncoderBackend
   /** A snapshot of the video as it is when Export is pressed. */
@@ -130,6 +149,8 @@ export function VideoExport({
    * code fetched — only once it first is, so Image mode never loads it.
    */
   active: boolean
+  /** Whether the video has a track to export with it. */
+  music?: Music
 }) {
   // null until asked; 'error' when asking failed and may be tried again.
   const [supported, setSupported] = useState<boolean | 'error' | null>(null)
@@ -193,6 +214,7 @@ export function VideoExport({
         url: URL.createObjectURL(result.blob),
         bytes: result.blob.size,
         seconds: job.frameCount / FPS,
+        audio: result.audio,
         revision: startedAt,
       })
       setStatus({ kind: 'done' })
@@ -294,7 +316,7 @@ export function VideoExport({
             : ''
         }`}
       >
-        {statusText(status, supported, waiting, file, stale)}
+        {statusText(status, supported, waiting, file, stale, music)}
       </p>
     </section>
   )
