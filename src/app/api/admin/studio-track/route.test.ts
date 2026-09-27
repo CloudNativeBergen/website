@@ -54,7 +54,7 @@ beforeEach(() => {
     throw notFound()
   })
   h.assetTrack.mockResolvedValue({ url: TRACK_URL })
-  h.projectTrack.mockResolvedValue({ url: TRACK_URL })
+  h.projectTrack.mockResolvedValue({ url: TRACK_URL, fileId: 'file-held' })
   h.upstream.mockResolvedValue(
     new Response(new Uint8Array([1, 2, 3, 4]), {
       status: 200,
@@ -84,7 +84,7 @@ describe('streaming a gallery track', () => {
   })
 
   it('streams a saved project’s track by the project', async () => {
-    const response = await get(`project=${OUR_PROJECT}`)
+    const response = await get(`project=${OUR_PROJECT}&file=file-held`)
     expect(response.status).toBe(200)
     expect(h.guard).toHaveBeenCalledWith(OUR_PROJECT, 'videoProject')
     expect(h.projectTrack).toHaveBeenCalledWith('org-ours', OUR_PROJECT)
@@ -111,7 +111,9 @@ describe('refusals, before anything is fetched', () => {
 
   it('refuses another organization’s track, exactly as a missing one', async () => {
     await expectTheOneRefusal(await get('asset=asset-theirs'))
-    await expectTheOneRefusal(await get('project=project-theirs'))
+    await expectTheOneRefusal(
+      await get('project=project-theirs&file=file-held'),
+    )
     expect(h.assetTrack).not.toHaveBeenCalled()
     expect(h.projectTrack).not.toHaveBeenCalled()
     expect(h.upstream).not.toHaveBeenCalled()
@@ -120,8 +122,10 @@ describe('refusals, before anything is fetched', () => {
   it('refuses an asset that holds no track (an image), exactly as a missing one', async () => {
     h.assetTrack.mockResolvedValue(null)
     await expectTheOneRefusal(await get(`asset=${OUR_ASSET}`))
-    h.projectTrack.mockResolvedValue({ url: null })
-    await expectTheOneRefusal(await get(`project=${OUR_PROJECT}`))
+    h.projectTrack.mockResolvedValue({ url: null, fileId: null })
+    await expectTheOneRefusal(
+      await get(`project=${OUR_PROJECT}&file=file-held`),
+    )
     expect(h.upstream).not.toHaveBeenCalled()
   })
 
@@ -147,6 +151,16 @@ describe('refusals, before anything is fetched', () => {
       h.assetTrack.mockResolvedValue({ url })
       await expectTheOneRefusal(await get(`asset=${OUR_ASSET}`))
     }
+    expect(h.upstream).not.toHaveBeenCalled()
+  })
+})
+
+describe('a project’s track', () => {
+  it('is refused once the project holds another file than the one named, and without a file named', async () => {
+    await expectTheOneRefusal(
+      await get(`project=${OUR_PROJECT}&file=file-replaced`),
+    )
+    await expectTheOneRefusal(await get(`project=${OUR_PROJECT}`))
     expect(h.upstream).not.toHaveBeenCalled()
   })
 })

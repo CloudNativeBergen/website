@@ -203,7 +203,10 @@ describe('a video’s music', () => {
         'Old theme',
       ),
     )
-    expect(gallery.loadTrack).toHaveBeenCalledWith({ project: 'vp-1' })
+    expect(gallery.loadTrack).toHaveBeenCalledWith({
+      project: 'vp-1',
+      file: 'file-theme',
+    })
     expect(within(music()).getByLabelText('Start in track')).toHaveValue('4.0')
     expect(within(project()).getByText('All changes saved')).toBeInTheDocument()
 
@@ -353,7 +356,10 @@ describe('a video’s music', () => {
     )
     await screen.findByDisplayValue('vp-1')
     await waitFor(() =>
-      expect(gallery.loadTrack).toHaveBeenLastCalledWith({ project: 'vp-1' }),
+      expect(gallery.loadTrack).toHaveBeenLastCalledWith({
+        project: 'vp-1',
+        file: 'file-old',
+      }),
     )
     await within(project()).findByRole('option', { name: /vp-2/ })
     fireEvent.change(within(project()).getByLabelText('Open a saved project'), {
@@ -361,7 +367,10 @@ describe('a video’s music', () => {
     })
     await screen.findByDisplayValue('vp-2')
     await waitFor(() =>
-      expect(gallery.loadTrack).toHaveBeenLastCalledWith({ project: 'vp-2' }),
+      expect(gallery.loadTrack).toHaveBeenLastCalledWith({
+        project: 'vp-2',
+        file: 'file-new',
+      }),
     )
     confirm.mockRestore()
   })

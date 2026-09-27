@@ -23,7 +23,7 @@ export interface GalleryTrack {
 }
 
 /** Where a track's bytes come from: a gallery track, or a saved project's. */
-export type TrackSource = { asset: string } | { project: string }
+export type TrackSource = { asset: string } | { project: string; file: string }
 
 export interface BackgroundGallery {
   /** The organization's images to choose from. */

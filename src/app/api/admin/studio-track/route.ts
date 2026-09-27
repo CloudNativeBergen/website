@@ -12,8 +12,10 @@ import { readVideoProjectTrack } from '@/lib/video-project/sanity'
  * and the image proxy is images only, unstreamed, and under the platform's
  * response-size limit — a 20 MB track is not.
  *
- * `?asset=<id>` names a gallery track; `?project=<id>` a saved project's
- * track, which it holds even once its gallery entry is gone. Only an
+ * `?asset=<id>` names a gallery track; `?project=<id>&file=<file id>` the
+ * file a saved project holds — even once its gallery entry is gone — and
+ * only while it still holds THAT file: one another organizer has since
+ * replaced is refused, never served as though it were the one loaded. Only an
  * organizer of the organization that owns it gets the file. A non-organizer,
  * another organization's id, a missing one and one that holds no track all
  * get ONE answer, and every one of them is refused before anything is
@@ -56,9 +58,11 @@ export async function GET(request: Request) {
   const params = new URL(request.url).searchParams
   const asset = params.get('asset')
   const project = params.get('project')
-  // Exactly one of the two, and a published id.
+  const file = params.get('file')
+  // Exactly one of the two, a published id, and a project's file named.
   const id = asset ?? project
   if ((asset && project) || !id || !ID.test(id)) return refused()
+  if (project && (!file || !ID.test(file))) return refused()
 
   const session = await getAuthSession()
   if (!(await isOrganizerForCurrentOrg(session?.speaker))) return refused()
@@ -69,10 +73,11 @@ export async function GET(request: Request) {
       id,
       asset ? 'marketingAsset' : 'videoProject',
     )
-    const track = asset
-      ? await readMarketingAssetTrack(orgId, id)
-      : await readVideoProjectTrack(orgId, id)
-    url = track?.url ?? null
+    if (asset) url = (await readMarketingAssetTrack(orgId, id))?.url ?? null
+    else {
+      const held = await readVideoProjectTrack(orgId, id)
+      url = held?.fileId === file ? (held?.url ?? null) : null
+    }
   } catch {
     return refused()
   }

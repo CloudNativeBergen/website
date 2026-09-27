@@ -15,6 +15,7 @@ let releaseCancel = () => {}
 /** Set by a test: `add()` stays pending until the output is cancelled, then rejects. */
 let addWaitsForCancel = false
 let rejectAdd = () => {}
+let rejectAudio = () => {}
 
 vi.mock('mediabunny', () => {
   class Output {
@@ -29,9 +30,11 @@ vi.mock('mediabunny', () => {
         }
       })
     }
+    addAudioTrack() {}
     cancel() {
       log.push('cancel')
       rejectAdd()
+      rejectAudio()
       return new Promise<void>((resolve) => {
         releaseCancel = () => {
           log.push('closed')
@@ -58,7 +61,16 @@ vi.mock('mediabunny', () => {
     Output,
     CanvasSource,
     BufferTarget: class {},
-    AudioBufferSource: class {},
+    AudioBufferSource: class {
+      add() {
+        log.push('audio-add')
+        // The track's encode, still running: it settles only if cancelled.
+        return new Promise<void>((_, reject) => {
+          rejectAudio = () => reject(new Error('The output was canceled.'))
+        })
+      }
+      close() {}
+    },
     Quality: class {},
     Mp4OutputFormat: class {},
     canEncodeVideo: async () => {
@@ -166,5 +178,36 @@ describe('mediabunnyBackend.supports', () => {
 
   it('answers no where there is no VideoEncoder at all', async () => {
     await expect(mediabunnyBackend.supports()).resolves.toBe(false)
+  })
+})
+
+describe('mediabunnyBackend.open with a track', () => {
+  it('hands back a session that can be cancelled while the track still encodes, and adds no frame before it', async () => {
+    vi.stubGlobal(
+      'AudioBuffer',
+      class {
+        copyToChannel() {}
+      },
+    )
+    const samples = new Float32Array(48_000)
+    const opening = mediabunnyBackend.open(
+      document.createElement('canvas'),
+      { latencyMode: 'quality', keyFrames: 'default' },
+      { channels: [samples, samples] },
+    )
+    await vi.waitFor(() => expect(log).toContain('start'))
+    releaseStart()
+    const session = await opening
+    expect(log).toContain('audio-add')
+    const frame = session.add(0, 1 / 30).catch((error: Error) => error.message)
+    await tick()
+    // The first frame waits for the track.
+    expect(log).not.toContain('add')
+    const cancelled = session.cancel()
+    expect(log).toContain('cancel')
+    releaseCancel()
+    await cancelled
+    expect(await frame).toBe('The output was canceled.')
+    vi.unstubAllGlobals()
   })
 })

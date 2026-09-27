@@ -454,12 +454,13 @@ export async function snapshotGallerySubjectIntoProjects(
 export async function readVideoProjectTrack(
   orgId: string,
   id: string,
-): Promise<{ url: string | null } | null> {
-  return scopedFetch<{ url: string | null } | null>(
+): Promise<{ url: string | null; fileId: string | null } | null> {
+  return scopedFetch<{ url: string | null; fileId: string | null } | null>(
     clientReadUncached,
     { orgId },
     `*[_type == "videoProject" && _id == $id][0]{
-      "url": track.file.asset->url
+      "url": track.file.asset->url,
+      "fileId": track.file.asset._ref
     }`,
     { id },
     opts,

@@ -148,17 +148,16 @@ async function openOutput(
   if (sound) output.addAudioTrack(sound)
   await output.start()
   // The whole track first, then the frames, as the proof did (§4): the MP4
-  // is written in memory, so nothing waits on the tracks interleaving.
-  if (sound && audio) {
-    try {
-      await sound.add(toAudioBuffer(audio.channels))
-      sound.close()
-    } catch (error) {
-      await output.cancel().catch(() => {})
-      throw error
-    }
-  }
-  return { output, source, target }
+  // is written in memory, so nothing waits on the tracks interleaving. Not
+  // awaited here: the session exists — and can be cancelled — while it
+  // encodes, and its first frame waits for it, under the stall guard.
+  const audioAdded =
+    sound && audio
+      ? sound.add(toAudioBuffer(audio.channels)).then(() => sound.close())
+      : null
+  // A cancel before the first frame rejects it with no one waiting.
+  audioAdded?.catch(() => {})
+  return { output, source, target, audioAdded }
 }
 
 export const mediabunnyBackend: EncoderBackend = {
@@ -257,15 +256,22 @@ export const mediabunnyBackend: EncoderBackend = {
   },
 
   async open(canvas, encoding, audio): Promise<EncodeSession> {
-    const { output, source, target } = await openOutput(
+    const { output, source, target, audioAdded } = await openOutput(
       await loadMediabunny(),
       canvas,
       encoding,
       undefined,
       audio,
     )
+    let audioPending = audioAdded
     return {
-      add: (timestamp, duration) => source.add(timestamp, duration),
+      add: async (timestamp, duration) => {
+        if (audioPending) {
+          await audioPending
+          audioPending = null
+        }
+        return source.add(timestamp, duration)
+      },
       finish: async () => {
         await output.finalize()
         if (!target.buffer) throw new Error('The encoder wrote no file')

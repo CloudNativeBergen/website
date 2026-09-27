@@ -119,7 +119,7 @@ describe('the track route on executed reads', () => {
       url('file-ours'),
       expect.anything(),
     )
-    expect((await get('project=project-ours')).status).toBe(200)
+    expect((await get('project=project-ours&file=file-held')).status).toBe(200)
     expect(h.upstream).toHaveBeenLastCalledWith(
       url('file-held'),
       expect.anything(),
@@ -130,13 +130,15 @@ describe('the track route on executed reads', () => {
     const bodies = new Set<string>()
     for (const query of [
       'asset=track-theirs',
-      'project=project-theirs',
+      'project=project-theirs&file=file-theirs',
+      // Ours, but it no longer holds the file named.
+      'project=project-ours&file=file-ours',
       'asset=image-ours',
       'asset=nothing-here',
-      'project=project-silent',
+      'project=project-silent&file=file-held',
       // A project id asked for as a gallery asset, and the other way round.
       'asset=project-ours',
-      'project=track-ours',
+      'project=track-ours&file=file-ours',
     ]) {
       const response = await get(query)
       expect(response.status, query).toBe(404)
