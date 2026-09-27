@@ -5,9 +5,9 @@
  * so `{name}` and `{speakers}` stay plain names in it. This is the one place
  * a handle goes in: when the body of a Bluesky `tagSubject` recipe is
  * resolved, `{name}` and `{speakers}` are the subject's people with each tag
- * in place of the name — and a handle costs its full length, so over the
- * limit a tag longer than its name falls back to plain text, from the last
- * one, until the body fits.
+ * in place of the name — and a handle costs its full length, so over either
+ * limit (300 characters, 3,000 bytes) a tag longer than its name in that
+ * unit falls back to plain text, from the last one, until every form fits.
  */
 
 import { resolvePlaceholders, type Placeholder } from '../placeholders'
@@ -27,6 +27,11 @@ export function countGraphemes(text: string): number {
   return [...segmenter.segment(text)].length
 }
 
+/** Bluesky's byte cap on a post's text (`PLATFORM_CONSTRAINTS.bluesky.maxBytes`). */
+export const BLUESKY_MAX_BYTES = 3000
+const utf8 = new TextEncoder()
+const countBytes = (text: string) => utf8.encode(text).length
+
 /** One limit a generated body must fit in every form, in its own unit. */
 interface LengthBound {
   length: (text: string) => number
@@ -34,6 +39,7 @@ interface LengthBound {
 }
 const LENGTH_BOUNDS: readonly LengthBound[] = [
   { length: countGraphemes, max: BLUESKY_MAX_GRAPHEMES },
+  { length: countBytes, max: BLUESKY_MAX_BYTES },
 ]
 
 /** What generation found for one person's Bluesky account. */

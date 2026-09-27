@@ -14,6 +14,7 @@ import {
   speakersList,
   tagBlueskyBody,
 } from '.'
+import { saveMentions } from './checks'
 
 describe("naming a talk's speakers (spec §4.2)", () => {
   it('{name}: one, two and three names read naturally', () => {
@@ -434,6 +435,48 @@ describe('tagBlueskyBody', () => {
     expect(mentions.map((m) => [m.speakerId, m.status])).toEqual([
       ['bart', 'tagged'],
     ])
+  })
+
+  it('over the 3,000-byte cap, a tag longer than its name in BYTES falls back, so the save check accepts it', () => {
+    // Every form is under 300 characters. Bytes: all-plain is 2,983; Ann's
+    // name (100 bytes) with Bo's 53-byte tag is 3,034. Only Bo's drop helps.
+    const family = '👨‍👩‍👧‍👦' // one grapheme, 25 bytes
+    const ann = {
+      speakerId: 'ann',
+      name: family.repeat(4),
+      tag: { status: 'tagged' as const, handle: 'a.dev', did: DID_A },
+    }
+    const bo = {
+      speakerId: 'bo',
+      name: 'Bo',
+      tag: {
+        status: 'tagged' as const,
+        handle: `${'b'.repeat(40)}.bsky.social`,
+        did: DID_B,
+      },
+    }
+    const hook = family.repeat(115)
+    const { body, mentions } = tagBlueskyBody({
+      skeleton: '{hook} {name}',
+      values: { hook },
+      people: [ann, bo],
+    })
+    expect(body).toBe(`${hook} @a.dev and Bo`)
+    expect(mentions.map((m) => [m.speakerId, m.status])).toEqual([
+      ['ann', 'tagged'],
+    ])
+    const saved = saveMentions({
+      body,
+      people: [ann, bo].map((p) => ({
+        speakerId: p.speakerId,
+        name: p.name,
+        handle: p.tag.handle,
+        optedOut: false,
+      })),
+      previous: mentions,
+      resolutions: new Map(),
+    })
+    expect(saved.issues).toEqual([])
   })
 
   it('when even the plain names do not fit, nobody is tagged', () => {

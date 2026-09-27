@@ -10,14 +10,12 @@
 import { normaliseHandle } from '@/lib/social/provider/bluesky-syntax'
 import { storedKey } from '../recipes'
 import {
+  BLUESKY_MAX_BYTES,
   BLUESKY_MAX_GRAPHEMES,
   countGraphemes,
   type MentionRecord,
 } from './body'
 import type { HandleResolution } from './resolve'
-
-/** Bluesky's byte cap on a post's text (`PLATFORM_CONSTRAINTS.bluesky.maxBytes`). */
-export const BLUESKY_MAX_BYTES = 3000
 
 /**
  * `@atproto/api`'s `MENTION_REGEX` (what the adapter's facet detection runs),
