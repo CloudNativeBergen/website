@@ -85,7 +85,7 @@ const SOUND: Record<Music, string> = {
 /** A file made without the track it should have, and why. */
 const MUSIC_LEFT_OUT: Record<SilentReason, string> = {
   'no-encoder':
-    'The music encoder could not be loaded, so the video was made silent. Check your connection and export again.',
+    'This browser cannot encode the music, so the video is silent. Chrome, Edge or Safari on a computer can add it.',
   unmeasured:
     'The music could not be lined up with the picture on this browser’s encoder, so the video was made silent. Export again; if it keeps happening, try another browser.',
 }

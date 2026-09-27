@@ -77,6 +77,18 @@ const musicGallery: BackgroundGallery = {
 
 type Canvas = ReturnType<typeof within>
 
+/** Whether the browser encodes AAC itself, asked as the export asks it. */
+async function hasNativeAac(): Promise<boolean> {
+  if (typeof AudioEncoder === 'undefined') return false
+  const answer = await AudioEncoder.isConfigSupported({
+    codec: 'mp4a.40.2',
+    sampleRate: MIX_RATE,
+    numberOfChannels: 2,
+    bitrate: 128_000,
+  }).catch(() => ({ supported: false }))
+  return !!answer.supported
+}
+
 async function setSeconds(canvas: Canvas, label: string, value: number) {
   const field = canvas.getByLabelText(label)
   await userEvent.clear(field)
@@ -227,6 +239,15 @@ export const MusicRealExport: Story = {
       formats: ALL_FORMATS,
     })
     const audio = await input.getPrimaryAudioTrack()
+    // No AAC encoder of the browser's own: a silent file, said so.
+    if (!(await hasNativeAac())) {
+      expect(audio).toBeNull()
+      expect(within(panel).getByRole('status')).toHaveTextContent(
+        'This browser cannot encode the music, so the video is silent.',
+      )
+      input.dispose()
+      return
+    }
     expect(audio?.codec).toBe('aac')
     expect(audio?.sampleRate).toBe(MIX_RATE)
     expect(audio?.numberOfChannels).toBe(2)
@@ -255,10 +276,12 @@ export const MusicRealExport: Story = {
 }
 
 /**
- * The REAL priming measurement (proof §4): the browser's AAC encoder — or
- * the add-on where it has none — encodes a click, Mediabunny decodes it back,
- * and the delay is read off. The proof measured 2112 samples for native AAC
- * on macOS and 1024 for the add-on; either is accepted, anything else fails.
+ * The REAL priming measurement (proof §4): the browser's own AAC encoder
+ * encodes a click, Mediabunny decodes it back, and the delay is read off.
+ * The proof measured 2112 samples for native AAC on macOS (1024 for FFmpeg's,
+ * not shipped); either is accepted, anything else fails. A browser with no
+ * AAC encoder of its own (headless Chromium, Firefox) answers that it has
+ * none — the silent-video path — and nothing else.
  */
 export const MusicPrimingMeasured: Story = {
   args: { gallery: musicGallery },
@@ -269,6 +292,10 @@ export const MusicPrimingMeasured: Story = {
     )
     console.info('[music priming]', JSON.stringify(result))
     canvasElement.dataset.priming = JSON.stringify(result)
+    if (!(await hasNativeAac())) {
+      expect(result).toEqual({ silent: 'no-encoder' })
+      return
+    }
     expect(result).toHaveProperty('priming')
     expect([1024, 2112]).toContain((result as { priming: number }).priming)
   },

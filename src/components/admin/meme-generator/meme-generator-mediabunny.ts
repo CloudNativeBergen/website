@@ -25,24 +25,6 @@ type Mediabunny = Awaited<ReturnType<typeof loadMediabunny>>
 export const AUDIO_BITRATE = 128_000
 const AAC = { numberOfChannels: 2, sampleRate: MIX_RATE } as const
 
-/**
- * The FFmpeg AAC encoder for Mediabunny, for browsers with no AAC encoder of
- * their own — Firefox, among those measured (proof §2, §8). About 250 KB
- * gzipped, so it is fetched only there. It is LGPL-2.1 code (libavcodec);
- * its notice is on /licences.
- */
-let addOn: Promise<void> | null = null
-function registerAddOn(): Promise<void> {
-  addOn ??= import('@mediabunny/aac-encoder')
-    .then(({ registerAacEncoder }) => registerAacEncoder())
-    .catch((error: unknown) => {
-      // A failed fetch may succeed on the next export.
-      addOn = null
-      throw error
-    })
-  return addOn
-}
-
 /** Where the test click sits in its half second, in samples. */
 const CLICK_AT = 4_800
 
@@ -295,16 +277,12 @@ export const mediabunnyBackend: EncoderBackend = {
       ...AAC,
       quality: new mediabunny.Quality({ bitrate: AUDIO_BITRATE }),
     }
-    if (!(await mediabunny.canEncodeAudio('aac', aac))) {
-      // No AAC of the browser's own: the add-on, or a silent video.
-      try {
-        await registerAddOn()
-      } catch {
-        return { silent: 'no-encoder' }
-      }
-      if (!(await mediabunny.canEncodeAudio('aac', aac)))
-        return { silent: 'no-encoder' }
-    }
+    // No AAC of the browser's own (Firefox, among those measured): a silent
+    // video, said so. The FFmpeg-based add-on that could fill in is not
+    // shipped — we cannot provide the source its LGPL licence requires
+    // (docs/MARKETING_STUDIO_VIDEO_PROOF.md §8).
+    if (!(await mediabunny.canEncodeAudio('aac', aac)))
+      return { silent: 'no-encoder' }
     if (signal.aborted) return { silent: 'unmeasured' }
     const priming = await measurePriming(mediabunny, signal).catch(() => null)
     // Unmeasurable is an encoder that cannot be trusted with the track.

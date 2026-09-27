@@ -237,15 +237,15 @@ export function VideoMusic({
             // from the head of the track; Safari's own also drops about
             // 1,024 more. A fade-in hides both.
             'With no fade-in, the first 20–45 ms of the track are cut in every browser to keep it in step with the picture, about 65 ms in Safari. '}
-          Exported as AAC audio. Browsers without an AAC encoder of their own
-          use an open-source one; see the{' '}
+          Exported as AAC audio, which Chrome, Edge and Safari on a computer can
+          make; other browsers export the video silent.{' '}
           <a
             href="/licences"
             target="_blank"
             rel="noopener"
             className="underline hover:text-brand-cloud-blue dark:hover:text-blue-400"
           >
-            licences
+            Open-source licences
           </a>
           .
         </p>

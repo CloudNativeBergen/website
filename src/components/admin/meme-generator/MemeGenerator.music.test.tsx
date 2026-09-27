@@ -1195,4 +1195,36 @@ describe('a video’s music', () => {
     expect(status).toHaveTextContent('Your earlier export is still available.')
     expect(status).toHaveTextContent(silent)
   })
+
+  it('exports silent, and says why, in a browser with no AAC encoder of its own', async () => {
+    const exporting: EncoderBackend = {
+      supports: async () => true,
+      probe: async () => true,
+      prepareAudio: async () => ({ silent: 'no-encoder' }),
+      open: async () => ({
+        add: async () => {},
+        finish: async () => new Blob([new Uint8Array(1_000_000)]),
+        cancel: async () => {},
+      }),
+    }
+    render(<MemeGenerator gallery={fakeGallery()} encoder={exporting} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Video' }))
+    await within(music()).findByRole('option', { name: 'Theme (0:20)' })
+    fireEvent.change(within(music()).getByLabelText('Music'), {
+      target: { value: 'asset-theme' },
+    })
+    await within(music()).findByText(/Plays from/)
+    const panel = screen.getByRole('region', { name: 'Export' })
+    const button = within(panel).getByRole('button', { name: 'Export MP4' })
+    await waitFor(() => expect(button).not.toHaveAttribute('aria-disabled'))
+    fireEvent.click(button)
+    const status = within(panel).getByRole('status')
+    await waitFor(
+      () =>
+        expect(status).toHaveTextContent(
+          'This browser cannot encode the music, so the video is silent. Chrome, Edge or Safari on a computer can add it.',
+        ),
+      { timeout: 5000 },
+    )
+  })
 })

@@ -106,8 +106,8 @@ export interface EncoderBackend {
     signal: AbortSignal,
   ): Promise<boolean>
   /**
-   * Get an AAC encoder ready — the browser's own, or the add-on where there
-   * is none (proof §8) — and measure how many samples of priming it puts
+   * Get the browser's own AAC encoder ready — where there is none the video
+   * is made silent (proof §8; the FFmpeg add-on is not shipped) — and measure how many samples of priming it puts
    * ahead of the sound (proof §4). Where either cannot be done, the reason:
    * the video is then made silent, and the organizer told why. Stops, and
    * lets go of any encoder it opened, when `signal` aborts.
