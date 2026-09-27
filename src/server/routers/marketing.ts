@@ -1601,9 +1601,7 @@ export const marketingRouter = router({
             // A new render is not in the gallery yet (#1165). Written with
             // the save, so a gallery save that fails leaves a durable mark
             // the Task editor offers a retry for; cleared with the receipts.
-            ...(task.assetId !== input.assetId
-              ? { galleryPending: true }
-              : {}),
+            ...(task.assetId !== input.assetId ? { galleryPending: true } : {}),
           },
           task.assetId !== input.assetId ? ['pendingStudioAsset'] : [],
           undefined,
