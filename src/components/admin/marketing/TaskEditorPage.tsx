@@ -696,13 +696,16 @@ function PublishingSection({
     variant?.variant.status === 'awaiting-manual' &&
     variant.variant.platform === 'bluesky'
   const check = useFreshManualCheck(byHand ? variant.variant._id : null)
+  // A retry (round 4, T2) shows "Checking…" again until it answers.
   const manualBody: ManualPostViewProps['manualBody'] = !byHand
     ? null
-    : check.data
-      ? (check.data.manualBody ?? null)
-      : check.error
-        ? { unavailable: true }
-        : { checking: true }
+    : check.isFetching
+      ? { checking: true }
+      : check.data
+        ? (check.data.manualBody ?? null)
+        : check.error
+          ? { unavailable: true }
+          : { checking: true }
 
   if (!variant) {
     return (
@@ -726,6 +729,7 @@ function PublishingSection({
           platformZone={variant.platformZone ?? null}
           tagByHand={tagByHand}
           manualBody={manualBody}
+          onRetryCheck={() => void check.refetch()}
           saving={markPosted.isPending}
           error={manualError}
           onMarkPosted={(url) => {

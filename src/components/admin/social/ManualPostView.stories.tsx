@@ -692,8 +692,9 @@ export const BlueskyCheckUnavailable: Story = {
   args: {
     ...BlueskyLateOptOut.args,
     manualBody: { unavailable: true },
+    onRetryCheck: fn(),
   },
-  play: async ({ canvasElement }) => {
+  play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement)
     await expect(
       canvas.queryByRole('button', { name: /copy text/i }),
@@ -702,6 +703,9 @@ export const BlueskyCheckUnavailable: Story = {
     await expect(canvas.getByRole('alert')).toHaveTextContent(
       /could not check/i,
     )
+    // Round 4, T2: retried in place — the Task page has no dialog to close.
+    await userEvent.click(canvas.getByRole('button', { name: /check again/i }))
+    await expect(args.onRetryCheck).toHaveBeenCalledTimes(1)
   },
 }
 

@@ -93,7 +93,11 @@ export function ManualPostDialog({
           postAttachments={loaded.post.attachments}
           conferenceDomains={loaded.conferenceDomains}
           platformZone={loaded.platformZone ?? null}
-          manualBody={loaded.manualBody ?? null}
+          manualBody={
+            // A retry (round 4, T2) shows "Checking…" until it answers.
+            editor.isFetching ? { checking: true } : (loaded.manualBody ?? null)
+          }
+          onRetryCheck={() => void editor.refetch()}
           saving={
             markPosted.isPending &&
             markPosted.variables?.variantId === loaded.variant._id

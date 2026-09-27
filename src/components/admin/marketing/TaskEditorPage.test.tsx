@@ -758,4 +758,18 @@ describe('Task editor manual post view — a fresh check on every opening (revie
     await act(async () => second(check(PLAIN)))
     expect(await screen.findByText(PLAIN)).toBeTruthy()
   })
+
+  it('a check that could not run can be retried in place: the page has no dialog to close (round 4, T2)', async () => {
+    const page = setup()
+    mocks.fetchEditor
+      .mockResolvedValueOnce({
+        ...check(null),
+        manualBody: { unavailable: true },
+      })
+      .mockResolvedValueOnce(check(PLAIN))
+    render(page())
+    fireEvent.click(await screen.findByRole('button', { name: /check again/i }))
+    expect(await screen.findByText(PLAIN)).toBeTruthy()
+    expect(mocks.fetchEditor).toHaveBeenCalledTimes(2)
+  })
 })

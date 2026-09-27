@@ -62,6 +62,8 @@ export interface ManualPostViewProps {
    * post is recorded; absent or null: the stored body.
    */
   manualBody?: ManualBody | ManualCheckUnavailable | ManualCheckPending | null
+  /** Runs the tag check again after it could not run (round 4, T2). */
+  onRetryCheck?: () => void
 }
 
 const defaultImageSrc = (asset: SocialPostAttachment) =>
@@ -85,6 +87,7 @@ export function ManualPostView({
   platformZone = null,
   tagByHand: tagByHandProp = [],
   manualBody = null,
+  onRetryCheck,
 }: ManualPostViewProps) {
   // A LinkedIn list, whoever passes it: on any other platform the hint
   // (type @ in the composer) would be wrong, so it is never shown there.
@@ -289,14 +292,24 @@ export function ManualPostView({
       )}
 
       {unchecked && (
-        <p
+        <div
           role="alert"
-          className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-900/20 dark:text-red-300"
+          className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-900/20 dark:text-red-300"
         >
-          We could not check this post&apos;s tags just now, so its text is not
-          shown: a speaker may have asked not to be tagged since it was
-          approved. Close this and open it again before posting.
-        </p>
+          <p className="min-w-0 flex-1">
+            We could not check this post&apos;s tags just now, so its text is
+            not shown: a speaker may have asked not to be tagged since it was
+            approved.{' '}
+            {onRetryCheck
+              ? 'Check again before posting.'
+              : 'Close this and open it again before posting.'}
+          </p>
+          {onRetryCheck && (
+            <AdminButton variant="secondary" size="sm" onClick={onRetryCheck}>
+              Check again
+            </AdminButton>
+          )}
+        </div>
       )}
 
       {checking && (
