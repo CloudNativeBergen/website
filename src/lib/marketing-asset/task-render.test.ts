@@ -138,6 +138,7 @@ vi.mock('@/lib/sanity/client', async () => {
 import {
   saveTaskRenderToGallery,
   taskRenderAssetDocumentId,
+  type TaskRenderGalleryEntry,
 } from './task-render'
 
 /** A production Task id: `marketingTask.gen-<hash>` — it has a DOT. */
@@ -154,6 +155,10 @@ function holds(imageAssetId: string) {
   // A save of the Task is a new revision of it.
   task._rev = `rev-task-${++h.revs}`
 }
+type Subject = Parameters<TaskRenderGalleryEntry['admitSubject']>[0]
+const admitted = vi.fn(
+  async (subject: Subject): Promise<Subject | null> => subject,
+)
 const entry = (imageAssetId: string) => (
   holds(imageAssetId),
   {
@@ -161,23 +166,32 @@ const entry = (imageAssetId: string) => (
     conferenceId: 'conf-A',
     taskId: TASK,
     imageAssetId,
-    title: 'Speaker card: Ada',
-    alt: 'Ada Lovelace speaks at Cloud Native Bergen',
-    subject: { type: 'speaker' as const, id: 'speaker-ada' },
+    admitSubject: admitted,
   }
 )
+/** Edit the Task, as an organizer would: a new revision of it. */
+function editTask(fields: Record<string, unknown>) {
+  const task = h.dataset.find((d) => d._id === TASK)!
+  Object.assign(task, fields, { _rev: `rev-task-${++h.revs}` })
+}
 const gallery = () => h.dataset.filter((d) => d._type === 'marketingAsset')
 
 beforeEach(() => {
   h.dataset = [
     { _id: 'org-A', _type: 'organization' },
     { _id: 'conf-A', _type: 'conference', organization: { _ref: ORG } },
+    { _id: 'speaker-ada', _type: 'speaker', name: 'Ada' },
+    { _id: 'speaker-grace', _type: 'speaker', name: 'Grace' },
     {
       _id: TASK,
       _type: 'marketingTask',
       conference: { _type: 'reference', _ref: 'conf-A' },
+      title: 'Speaker card: Ada',
+      alt: 'Ada Lovelace speaks at Cloud Native Bergen',
+      subject: { _type: 'reference', _ref: 'speaker-ada', _weak: true },
     },
   ]
+  admitted.mockClear()
   h.beforeCreate = null
   h.revs = 0
   h.writes = 0
@@ -212,8 +226,39 @@ describe('saveTaskRenderToGallery', () => {
     expect(gallery()[0]._id).not.toContain('.')
   })
 
+  it('a subject that fails its guards is left out, its name with it', async () => {
+    editTask({ alt: null })
+    admitted.mockResolvedValueOnce(null)
+    await saveTaskRenderToGallery(entry('image-a'))
+    expect(gallery()[0]).not.toHaveProperty('subject')
+    expect(gallery()[0].alt).toBe('Speaker card: Ada')
+  })
+
+  it('the entry is described by the Task revision its write is guarded by', async () => {
+    editTask({ alt: null })
+    // The Task's subject changes while its subject is being checked: the
+    // write under the old revision is refused, and the entry is described
+    // from the Task as it is now.
+    admitted.mockImplementationOnce(async (subject) => {
+      editTask({
+        title: 'Speaker card: Grace',
+        subject: { _type: 'reference', _ref: 'speaker-grace', _weak: true },
+      })
+      return subject
+    })
+    expect(await saveTaskRenderToGallery(entry('image-a'))).toBe('created')
+    expect(gallery()).toEqual([
+      expect.objectContaining({
+        title: 'Speaker card: Grace',
+        alt: 'Speaker card: Grace — Grace',
+        subject: { _type: 'reference', _ref: 'speaker-grace', _weak: true },
+      }),
+    ])
+  })
+
   it('leaves out a subject the Task does not have', async () => {
-    await saveTaskRenderToGallery({ ...entry('image-a'), subject: null })
+    editTask({ subject: undefined })
+    await saveTaskRenderToGallery(entry('image-a'))
     expect(gallery()[0]).not.toHaveProperty('subject')
   })
 
@@ -235,14 +280,12 @@ describe('saveTaskRenderToGallery', () => {
       tags: ['keynote'],
       credit: 'Design team',
     })
-    expect(
-      await saveTaskRenderToGallery({
-        ...entry('image-b'),
-        title: 'New Task title',
-        alt: 'New Task alt',
-        subject: { type: 'speaker' as const, id: 'speaker-other' },
-      }),
-    ).toBe('replaced')
+    editTask({
+      title: 'New Task title',
+      alt: 'New Task alt',
+      subject: { _type: 'reference', _ref: 'speaker-grace', _weak: true },
+    })
+    expect(await saveTaskRenderToGallery(entry('image-b'))).toBe('replaced')
     expect(gallery()).toHaveLength(1)
     expect(gallery()[0]).toMatchObject({
       _id: id,
@@ -489,5 +532,24 @@ describe('saveTaskRenderToGallery', () => {
     await expect(saveTaskRenderToGallery(entry('image-a'))).rejects.toThrow(
       /Content Release/,
     )
+  })
+
+  it('a write that lands on the last attempt is verified, not reported failed', async () => {
+    await saveTaskRenderToGallery(entry('image-a'))
+    const published = gallery()[0]
+    // An organizer edits the entry three times, each just before this save's
+    // transaction: three revision conflicts, then the fourth write lands.
+    let edits = 3
+    const edit = () => {
+      const i = h.dataset.findIndex((d) => d._id === published._id)
+      h.dataset[i] = { ...h.dataset[i], _rev: `rev-edit-${edits}` }
+      if (--edits > 0) h.beforeTransaction = edit
+    }
+    h.beforeTransaction = edit
+    expect(await saveTaskRenderToGallery(entry('image-b'))).toBe('replaced')
+    expect(edits).toBe(0)
+    expect(gallery()[0]).toMatchObject({
+      image: { asset: { _ref: 'image-b' } },
+    })
   })
 })

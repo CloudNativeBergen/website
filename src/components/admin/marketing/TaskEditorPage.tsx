@@ -1256,7 +1256,6 @@ function StudioSection({
     setCompleted(null)
     // What this retry is completing, as the page showed it pending.
     const handoff = task.handoffPending === true
-    const gallery = task.galleryPending === true
     try {
       const current = await utils.marketing.task.get.fetch(
         { taskId: task._id },
@@ -1288,12 +1287,16 @@ function StudioSection({
           'The image could not be saved to the asset gallery. Try again in a moment.',
         )
       } else {
+        // The gallery only when THIS answer saved to it, whatever the
+        // page showed pending: another retry may have saved it first.
         setCompleted(
-          gallery && handoff
+          result.gallerySaved && handoff
             ? 'Image handoff completed, and the render is saved to the asset gallery.'
-            : gallery
+            : result.gallerySaved
               ? 'The render is saved to the asset gallery.'
-              : 'Image handoff completed.',
+              : handoff
+                ? 'Image handoff completed.'
+                : 'The render is attached to this Task.',
         )
       }
       onChanged()

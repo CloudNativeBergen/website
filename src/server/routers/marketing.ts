@@ -553,20 +553,12 @@ async function trySaveRenderToGallery(
   conferenceId: string,
 ): Promise<'saved' | 'superseded' | 'failed'> {
   try {
-    const subject = await subjectOfThisOrganization(task.subject)
     const outcome = await saveTaskRenderToGallery({
       orgId: await requireCurrentOrgId(),
       conferenceId,
       taskId: task._id,
       imageAssetId,
-      title: task.title,
-      // The subject's NAME only when its reference passed: a rejected one's
-      // name must not reach this organization's gallery through the alt.
-      alt: renderAlt({
-        ...task,
-        subjectName: subject ? task.subjectName : null,
-      }),
-      subject,
+      admitSubject: subjectOfThisOrganization,
     })
     return outcome === 'superseded' ? 'superseded' : 'saved'
   } catch (error) {
@@ -1758,6 +1750,11 @@ export const marketingRouter = router({
           handoffFailures,
           ...(gallery === 'failed' || galleryMarkFailed
             ? { galleryFailed: true as const }
+            : {}),
+          // Only when THIS answer saved the render to the gallery: a
+          // handoff-only retry skips it, and a superseded one leaves it.
+          ...(clearGalleryMark && !galleryMarkFailed
+            ? { gallerySaved: true as const }
             : {}),
           ...(handoffIssues.length > 0
             ? { handoffIssues: [...new Set(handoffIssues)] }

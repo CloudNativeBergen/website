@@ -34,6 +34,8 @@ const h = vi.hoisted(() => ({
   handedOff: [] as string[],
   /** Makes every write to a `marketingAsset` fail. */
   galleryDown: false,
+  /** Runs once, right after a write to the render Task lands. */
+  afterTaskSave: null as null | (() => void),
 }))
 
 vi.mock('@/lib/conference/sanity', () => ({
@@ -155,6 +157,17 @@ vi.mock('@/lib/sanity/client', async () => {
       }
     }
     h.dataset = next
+    const race = h.afterTaskSave
+    if (
+      race &&
+      (mutations as Record<string, Record<string, unknown>>[]).some(
+        (m) =>
+          m.patch?.id === 'marketingTask.0ea845ff-af8f-4dc4-8694-63c2d47ce431',
+      )
+    ) {
+      h.afterTaskSave = null
+      race()
+    }
     return out
   }
 
@@ -222,6 +235,12 @@ function fixture(): Doc[] {
     // Speakers are shared across tenants; this one has none here.
     { _id: 'sp-foreign', _type: 'speaker', name: 'Someone else' },
     {
+      _id: 'sponsor-ours',
+      _type: 'sponsor',
+      name: 'Acme',
+      organization: ref('org-A'),
+    },
+    {
       _id: 'sponsor-foreign',
       _type: 'sponsor',
       name: 'Not ours',
@@ -284,6 +303,7 @@ beforeEach(() => {
   h.revs = 0
   h.handedOff = []
   h.galleryDown = false
+  h.afterTaskSave = null
 })
 
 describe('attaching a render also saves it to the gallery (#1165)', () => {
@@ -291,6 +311,7 @@ describe('attaching a render also saves it to the gallery (#1165)', () => {
     expect(await attach(FIRST)).toEqual({
       success: true,
       handoffFailures: [],
+      gallerySaved: true,
     })
     expect(gallery()).toEqual([
       expect.objectContaining({
@@ -340,6 +361,34 @@ describe('attaching a render also saves it to the gallery (#1165)', () => {
     Object.assign(task(), { alt: null })
     await attach(FIRST)
     expect(gallery()[0].alt).toBe('Speaker card: Ada — Ada')
+  })
+
+  it('the entry takes the Task as it is when the entry is written, not as the attach first read it', async () => {
+    Object.assign(task(), { alt: null })
+    // Renamed, and its subject changed, right after the attach saved it.
+    h.afterTaskSave = () =>
+      Object.assign(task(), {
+        title: 'Sponsor card: Acme',
+        subject: { ...ref('sponsor-ours'), _weak: true },
+        _rev: 'rev-task-edited',
+      })
+    await attach(FIRST)
+    expect(gallery()).toEqual([
+      expect.objectContaining({
+        title: 'Sponsor card: Acme',
+        alt: 'Sponsor card: Acme — Acme',
+        subject: { ...ref('sponsor-ours'), _weak: true },
+      }),
+    ])
+  })
+
+  it('reports the gallery saved only when this answer saved it', async () => {
+    expect(await attach(FIRST)).toMatchObject({ gallerySaved: true })
+    await assets().delete({ id: gallery()[0]._id })
+    // A handoff-only retry leaves the organizer's delete alone, and says so
+    // by NOT claiming the gallery.
+    expect(await attach(FIRST)).not.toHaveProperty('gallerySaved')
+    expect(gallery()).toEqual([])
   })
 
   it('a handoff retry never recreates an entry the organizer deleted', async () => {
@@ -430,6 +479,7 @@ describe('attaching a render also saves it to the gallery (#1165)', () => {
     expect(await attach(FIRST)).toEqual({
       success: true,
       handoffFailures: [],
+      gallerySaved: true,
     })
     expect(gallery()).toEqual([
       expect.objectContaining({ image: image(FIRST) }),

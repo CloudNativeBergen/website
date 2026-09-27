@@ -70,7 +70,11 @@ function ConnectedStudioTask({
             'Retry here or from the Task editor.',
             ...(result.handoffIssues ?? []),
           ].join(' ')
-        : 'Image attached and saved to the asset gallery. This Task is complete.',
+        : // Only an answer that saved the render claims the gallery: a
+          // handoff-only retry leaves it as the organizer left it.
+          result.gallerySaved
+          ? 'Image attached and saved to the asset gallery. This Task is complete.'
+          : 'Image attached. This Task is complete.',
     )
     setPending(incomplete ? input : null)
     await query.refetch()

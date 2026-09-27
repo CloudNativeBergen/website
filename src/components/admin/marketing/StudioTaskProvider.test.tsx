@@ -60,7 +60,11 @@ beforeEach(() => {
     ok: true,
     json: async () => ({ assetId: 'image-uploaded', taskRev: 'upload-rev' }),
   })
-  mocks.mutate.mockResolvedValue({ success: true, handoffFailures: [] })
+  mocks.mutate.mockResolvedValue({
+    success: true,
+    handoffFailures: [],
+    gallerySaved: true,
+  })
   mocks.refetch.mockResolvedValue({
     data: { task: { ...mocks.task, _rev: 'current-rev' } },
   })
@@ -189,10 +193,14 @@ describe('Studio Task attachment', () => {
   })
 
   it('retries a failed handoff using the saved render without recapture or another upload', async () => {
-    mocks.mutate.mockResolvedValueOnce({
-      success: true,
-      handoffFailures: ['post-1'],
-    })
+    mocks.mutate
+      .mockResolvedValueOnce({
+        success: true,
+        handoffFailures: ['post-1'],
+        gallerySaved: true,
+      })
+      // A handoff-only retry leaves the gallery alone, and says so.
+      .mockResolvedValueOnce({ success: true, handoffFailures: [] })
     setup()
     fireEvent.click(screen.getByRole('button', { name: 'Attach to Task' }))
     const retry = await screen.findByRole('button', {
@@ -205,7 +213,10 @@ describe('Studio Task attachment', () => {
       expect((retry as HTMLButtonElement).disabled).toBe(false),
     )
     fireEvent.click(retry)
-    await screen.findByRole('status')
+    // The retry did not save to the gallery, so it does not claim it did.
+    expect((await screen.findByRole('status')).textContent).toBe(
+      'Image attached. This Task is complete.',
+    )
     expect(mocks.mutate.mock.calls).toEqual([
       [
         {
@@ -235,7 +246,7 @@ describe('Studio Task attachment', () => {
     })
     mocks.mutate.mockImplementation(async (input) => {
       if (input.taskRev !== 'r3') throw new Error('Revision conflict')
-      return { success: true, handoffFailures: [] }
+      return { success: true, handoffFailures: [], gallerySaved: true }
     })
     setup()
     fireEvent.click(screen.getByRole('button', { name: 'Attach to Task' }))
@@ -269,7 +280,11 @@ describe('Studio Task attachment', () => {
         handoffFailures: [],
         galleryFailed: true,
       })
-      .mockResolvedValueOnce({ success: true, handoffFailures: [] })
+      .mockResolvedValueOnce({
+        success: true,
+        handoffFailures: [],
+        gallerySaved: true,
+      })
     setup()
     fireEvent.click(screen.getByRole('button', { name: 'Attach to Task' }))
     expect((await screen.findByRole('alert')).textContent).toBe(

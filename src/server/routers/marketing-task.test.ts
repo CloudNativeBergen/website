@@ -1113,7 +1113,7 @@ describe('task.attachAsset', () => {
   })
 
   describe('the gallery save (#1165)', () => {
-    it("saves the Task's render with its title, alt, subject and edition, under the host's organization", async () => {
+    it("saves the Task's render in its edition, under the host's organization, with the subject guard", async () => {
       h.getStudioTask.mockImplementation(async () => ({
         ...render(),
         subject: { id: 'sp-ada', type: 'speaker' },
@@ -1138,10 +1138,14 @@ describe('task.attachAsset', () => {
         conferenceId: CONF_A,
         taskId: 'task-ours',
         imageAssetId: assetId,
-        title: 'Save the date',
-        alt: 'Conference announcement',
-        subject: { id: 'sp-ada', type: 'speaker' },
+        admitSubject: expect.any(Function),
       })
+      // The entry's metadata is read by the save itself, under its Task
+      // guard; the subject goes through this organization's guards.
+      const [{ admitSubject }] = h.saveToGallery.mock.calls[0]
+      await expect(
+        admitSubject({ id: 'sp-ada', type: 'speaker' }),
+      ).resolves.toEqual({ id: 'sp-ada', type: 'speaker' })
     })
     it('runs before the orphan check, so the render it replaces is free to go', async () => {
       h.saveToGallery.mockImplementation(async () => {
@@ -1316,6 +1320,7 @@ describe('task.attachAsset', () => {
       'Sponsor card: Acme, {tier} sponsor of Cloud Native Bergen.',
     )
     expect(await marketing().task.attachAsset(input)).toEqual({
+      gallerySaved: true,
       success: true,
       handoffFailures: ['eligible'],
       handoffIssues: ['Fill in {tier} in the alt text before scheduling.'],
@@ -1356,6 +1361,7 @@ describe('task.attachAsset', () => {
   ])('hands off a %s render with allowed alt: %s', async (status, alt) => {
     const state = await placeholderHandoff(status, alt)
     expect(await marketing().task.attachAsset(input)).toEqual({
+      gallerySaved: true,
       success: true,
       handoffFailures: [],
     })
@@ -1429,6 +1435,7 @@ describe('task.attachAsset', () => {
   it('attaches a subjectless save-the-date render with a correctly shaped image and no status write', async () => {
     expect(render().subjectName).toBeNull()
     await expect(marketing().task.attachAsset(input)).resolves.toEqual({
+      gallerySaved: true,
       success: true,
       handoffFailures: [],
     })
@@ -1503,6 +1510,7 @@ describe('task.attachAsset', () => {
       },
     ])
     await expect(marketing().task.attachAsset(input)).resolves.toEqual({
+      gallerySaved: true,
       success: true,
       handoffFailures: [],
     })
@@ -1546,6 +1554,7 @@ describe('task.attachAsset', () => {
     ])
     h.handoffStudioAttachment.mockResolvedValue('unavailable')
     expect(await marketing().task.attachAsset(input)).toEqual({
+      gallerySaved: true,
       success: true,
       handoffFailures: ['eligible'],
     })
@@ -1568,11 +1577,13 @@ describe('task.attachAsset', () => {
       .mockResolvedValueOnce('attached')
       .mockResolvedValueOnce('unavailable')
     expect(await marketing().task.attachAsset(input)).toEqual({
+      gallerySaved: true,
       success: true,
       handoffFailures: ['b'],
     })
     expect(h.updateTaskFields.mock.lastCall![2].handoffDoneFor).toEqual(['a-v'])
     expect(await marketing().task.attachAsset(input)).toEqual({
+      gallerySaved: true,
       success: true,
       handoffFailures: [],
     })
@@ -1764,6 +1775,7 @@ describe('task.attachAsset', () => {
       }
     }
     expect(await marketing().task.attachAsset(input)).toEqual({
+      gallerySaved: true,
       success: true,
       handoffFailures: ['eligible'],
     })
@@ -1913,6 +1925,7 @@ describe('task.attachAsset', () => {
     ])
     h.handoffStudioAttachment.mockRejectedValueOnce(new Error('commit failed'))
     await expect(marketing().task.attachAsset(input)).resolves.toEqual({
+      gallerySaved: true,
       success: true,
       handoffFailures: ['eligible'],
     })
@@ -1946,6 +1959,7 @@ describe('task.attachAsset', () => {
         .mockResolvedValueOnce(render())
         .mockResolvedValueOnce(current)
       await expect(marketing().task.attachAsset(input)).resolves.toEqual({
+        gallerySaved: true,
         success: true,
         handoffFailures: ['task-ours'],
       })
@@ -1969,6 +1983,7 @@ describe('task.attachAsset', () => {
     })
     h.updateTaskFields.mockResolvedValueOnce(true).mockResolvedValueOnce(false)
     await expect(marketing().task.attachAsset(input)).resolves.toEqual({
+      gallerySaved: true,
       success: true,
       handoffFailures: ['task-ours'],
     })
@@ -1993,6 +2008,7 @@ describe('task.attachAsset', () => {
     ])
     h.handoffStudioAttachment.mockResolvedValue('unavailable')
     await expect(marketing().task.attachAsset(input)).resolves.toEqual({
+      gallerySaved: true,
       success: true,
       handoffFailures: ['eligible'],
     })
@@ -2000,6 +2016,7 @@ describe('task.attachAsset', () => {
   it('retains the saved render when sibling discovery fails', async () => {
     h.getRenderSiblings.mockRejectedValueOnce(new Error('read failed'))
     await expect(marketing().task.attachAsset(input)).resolves.toEqual({
+      gallerySaved: true,
       success: true,
       handoffFailures: ['task-ours'],
     })

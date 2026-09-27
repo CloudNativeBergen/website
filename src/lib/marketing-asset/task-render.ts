@@ -2,8 +2,12 @@ import 'server-only'
 import { createHash } from 'node:crypto'
 import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
 import { scopedFetch } from '@/lib/sanity/scoped'
+import { renderAlt } from '@/lib/marketing/render-handoff'
 import { detailsPatch } from './sanity'
-import type { MarketingAssetSubjectType } from './types'
+import {
+  MARKETING_ASSET_SUBJECT_TYPES,
+  type MarketingAssetSubjectType,
+} from './types'
 
 /**
  * A render Task's gallery entry (spec §4.3, #1165).
@@ -28,8 +32,14 @@ import type { MarketingAssetSubjectType } from './types'
  * REPLACED, which the Task already records for the same check (#1162); the
  * caller runs it after this, so the old file goes once nothing holds it.
  *
+ * A first entry's title, alt and subject are taken from the SAME read of the
+ * Task whose revision guards the write, so an edit of the Task after the
+ * attach is either in the entry or refuses the write and is read again.
+ *
  * Throws on failure. The caller must never let that fail the attach.
  */
+type Subject = { type: MarketingAssetSubjectType; id: string }
+
 export interface TaskRenderGalleryEntry {
   /** The request host's organization; never from the client. */
   orgId: string
@@ -37,10 +47,12 @@ export interface TaskRenderGalleryEntry {
   conferenceId: string
   taskId: string
   imageAssetId: string
-  title: string
-  alt: string
-  /** The Task's subject, validated when the Task was made. */
-  subject: { type: MarketingAssetSubjectType; id: string } | null
+  /**
+   * The Task's subject as this organization's gallery may store it: the
+   * subject, or null to leave out one that fails its guards. Throws to fail
+   * the save.
+   */
+  admitSubject: (subject: Subject) => Promise<Subject | null>
 }
 
 /**
@@ -69,7 +81,14 @@ export function taskRenderAssetDocumentId(taskId: string): string {
  * copy on another image.
  */
 interface GalleryState {
-  task: { _rev: string; assetId: string | null } | null
+  task: {
+    _rev: string
+    assetId: string | null
+    title: string | null
+    alt: string | null
+    subjectName: string | null
+    subject: Subject | null
+  } | null
   entry: { _id: string; _rev: string; assetId: string | null } | null
   draft: { _rev: string; assetId: string | null } | null
   /** Release copies of the entry holding another image than this render. */
@@ -81,8 +100,13 @@ async function readState(entry: TaskRenderGalleryEntry): Promise<GalleryState> {
     scopedFetch<GalleryState['task']>(
       clientReadUncached,
       { conferenceId: entry.conferenceId },
-      `*[_type == "marketingTask" && _id == $taskId][0]{ _rev, "assetId": asset.asset._ref }`,
-      { taskId: entry.taskId },
+      `*[_type == "marketingTask" && _id == $taskId][0]{ _rev, "assetId": asset.asset._ref,
+        title, alt, "subjectName": coalesce(subject->name, subject->title),
+        "subject": select(subject->_type in $subjectTypes => { "id": subject._ref, "type": subject->_type }) }`,
+      {
+        taskId: entry.taskId,
+        subjectTypes: [...MARKETING_ASSET_SUBJECT_TYPES],
+      },
       { cache: 'no-store' },
     ),
     scopedFetch<GalleryState['entry']>(
@@ -163,15 +187,18 @@ function isRevisionConflict(error: unknown): boolean {
  * change), so it FAILS the save, and the Task's pending mark stays for a
  * retry, as the gallery's own edit and delete refuse the same case.
  *
+ * At most four writes, each followed by its verifying read, so the last
+ * write is verified too before the save gives up.
+ *
  * NOT covered: a draft or release copy made AFTER the verifying read from a
- * stale copy of the entry held in someone's browser. Sanity offers no
- * condition on a document's absence to close that.
+ * stale copy of the entry held in someone's browser. Studio writes that copy,
+ * not this save, so no condition on this save's writes can refuse it.
  */
 export async function saveTaskRenderToGallery(
   entry: TaskRenderGalleryEntry,
 ): Promise<'created' | 'replaced' | 'unchanged' | 'superseded'> {
   let result: 'created' | 'replaced' | 'unchanged' = 'unchanged'
-  for (let attempt = 0; attempt < 4; attempt++) {
+  for (let attempt = 0; ; attempt++) {
     const state = await readState(entry)
     const { task, entry: found, draft } = state
     if (!task || task.assetId !== entry.imageAssetId) return 'superseded'
@@ -182,6 +209,7 @@ export async function saveTaskRenderToGallery(
     const entryDone = found?.assetId === entry.imageAssetId
     const draftDone = !draft || draft.assetId === entry.imageAssetId
     if (found && entryDone && draftDone) return result
+    if (attempt === 4) break
     const tx = clientWrite
       .transaction()
       .patch(entry.taskId, (p) =>
@@ -190,12 +218,23 @@ export async function saveTaskRenderToGallery(
     if (!found) {
       // A create that lost a race to another attach is a no-op; the next
       // read shows what it left.
+      // From THIS read of the Task, which the transaction's guard binds.
+      const subject = task.subject
+        ? await entry.admitSubject(task.subject)
+        : null
+      const title = task.title ?? ''
       const { set } = detailsPatch({
-        title: entry.title.trim() || 'Studio render',
-        alt: entry.alt,
+        title: title.trim() || 'Studio render',
+        // The subject's NAME only when the subject passed: a rejected one's
+        // name must not reach this organization's gallery through the alt.
+        alt: renderAlt({
+          title,
+          alt: task.alt,
+          subjectName: subject ? task.subjectName : null,
+        }),
         scope: 'edition',
         conferenceId: entry.conferenceId,
-        subject: entry.subject ?? undefined,
+        subject: subject ?? undefined,
         tags: [],
         credit: undefined,
       })
