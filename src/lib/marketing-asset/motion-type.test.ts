@@ -1,10 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  isGif,
-  isMp4,
-  isQuickTimeFile,
-  motionKindForFile,
-} from './motion-type'
+import { isGif, isMp4, isQuickTimeFile, motionKindForFile } from './motion-type'
 
 const bytes = (s: string, pad = 0) =>
   new Uint8Array([...s].map((c) => c.charCodeAt(0)).concat(Array(pad).fill(0)))
