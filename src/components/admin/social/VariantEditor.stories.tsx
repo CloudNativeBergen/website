@@ -757,10 +757,10 @@ export const MarketingAssetPickerFailed: Story = {
 export const MarketingAssetPickerWhileSaving: Story = {
   args: pickerArgs as unknown as Story['args'],
   render: (args) => {
-    const { saving: _saving, ...rest } = args as unknown as Args & {
+    const props = args as unknown as Args & {
       onPickAsset: (asset: MarketingAssetPick) => void
     }
-    return <SavingToggle {...rest} />
+    return <SavingToggle {...props} />
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
