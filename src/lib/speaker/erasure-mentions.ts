@@ -23,7 +23,8 @@
  * Release copy was never sent anywhere, whatever status it copied, so it is
  * always scrubbed and never waited on.
  *  - posted (`published`, `submitted`): the body is what went out and is on
- *    the platform already — out of scope. Only its records are scrubbed.
+ *    the platform already — out of scope. Only a `published` variant's
+ *    records are scrubbed; a `submitted` one is still in flight (below).
  *  - in flight (`publishing`, `submitted`): the cron or the confirm sweep
  *    will settle it with a compare-and-set, and a write here would lose that
  *    race for one of the two. The erasure is REFUSED while such a variant

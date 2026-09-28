@@ -246,9 +246,10 @@ name is a stranger.
 - A **namesake** inside that scope — another person with exactly the same name
   — is neutralised too: the tool cannot tell two people apart by name. The dry
   run lists each variant it rewrites; read them.
-- A **posted** body (`published`, `submitted`) is left as it went out. It is on
-  the platform already, and deleting the post there is outside this tool. Its
-  records are still removed.
+- A **published** body is left as it went out. It is on the platform already,
+  and deleting the post there is outside this tool. Its records are still
+  removed. A live `submitted` (or `publishing`) variant holding them makes the
+  run **refuse** instead — see Refusals — until the publisher has settled it.
 - A variant **saved while the erasure ran** can carry them again. The commit's
   verification finds it with the name, handles and DIDs read before the
   erasure — the last moment those are known — and repairs it once, then

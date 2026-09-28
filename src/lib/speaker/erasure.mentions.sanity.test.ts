@@ -677,7 +677,12 @@ describe('speaker erasure scrubs post variants (#1232)', () => {
     it('a racing save the repair must not touch (in flight) is reported, not hidden', async () => {
       h.afterCommit = () => {
         h.afterCommit = null
-        h.dataset.push(variant('var-race-flight', 'publishing', TAGGED))
+        h.dataset.push(
+          variant('var-race-flight', 'publishing', TAGGED),
+          variant('var-race-draft', 'draft', 'Meet Ada Lovelace', {
+            mentions: [],
+          }),
+        )
       }
       const result = await eraseSpeakerInPlace({
         speakerId: ADA,
@@ -685,6 +690,9 @@ describe('speaker erasure scrubs post variants (#1232)', () => {
       })
       expect(result.err).toBeNull()
       expect(doc('var-race-flight').body).toBe(TAGGED)
+      // The other racing save is still repaired: this is the last moment
+      // the name is known.
+      expect(doc('var-race-draft').body).toBe('Meet a speaker')
       expect(result.verification?.residual.postVariants).toBe(1)
       expect(result.verification?.clean).toBe(false)
     })

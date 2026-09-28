@@ -1595,8 +1595,8 @@ export async function eraseSpeakerInPlace(
 
 /**
  * Re-plan and commit the post-variant branch alone, with the identity read
- * before the erasure. Returns how many variants it patched. A refusal (a
- * variant in flight) writes nothing: the verification then reports it.
+ * before the erasure. Returns how many variants it patched. A variant it
+ * refuses (in flight) is not written, and the verification reports it.
  */
 async function repairPostVariants(
   speakerId: string,
@@ -1609,8 +1609,10 @@ async function repairPostVariants(
     null,
     identity,
   )
-  const { patches, refusals } = planSpeakerMentionErasure(speakerId, mentions)
-  if (patches.length === 0 || refusals.length > 0) return 0
+  // A refused variant (in flight) is left for the verification to report;
+  // every other one is repaired now — no later run could.
+  const { patches } = planSpeakerMentionErasure(speakerId, mentions)
+  if (patches.length === 0) return 0
   const tx = clientWrite
     .withConfig({ apiVersion: COUNT_API_VERSION })
     .transaction()
