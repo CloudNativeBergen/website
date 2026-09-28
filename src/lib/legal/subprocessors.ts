@@ -61,6 +61,7 @@ export type SubprocessorId =
   | 'slack'
   | 'oauth-providers'
   | 'workos'
+  | 'buffer'
 
 /**
  * How sure we are that THIS tenant uses the processor.
@@ -182,6 +183,18 @@ export const SUBPROCESSOR_CATALOGUE: Record<SubprocessorId, CatalogueEntry> = {
     chosenBy: 'organizer',
     location: 'United States',
   },
+  // Buffer Inc. publishes an organization's approved LinkedIn posts once it
+  // connects a Buffer account (LinkedIn spec §2, #1130). The post text and
+  // images go to Buffer, and they can name and show speakers and sponsors.
+  buffer: {
+    id: 'buffer',
+    name: 'Buffer',
+    purpose:
+      'Publishing the conference’s LinkedIn posts: the post text, its images and its link, which can name and show speakers and sponsors',
+    group: 'infrastructure',
+    chosenBy: 'organizer',
+    location: 'United States',
+  },
   'oauth-providers': {
     id: 'oauth-providers',
     name: 'GitHub/LinkedIn',
@@ -211,6 +224,7 @@ const DISCLOSURE_ORDER: readonly SubprocessorId[] = [
   'pirsch',
   'posthog',
   'slack',
+  'buffer',
   'oauth-providers',
   'workos',
 ]
@@ -250,6 +264,12 @@ export interface TenantProcessingFacts {
   analyticsPosthogToken?: string | null
   /** Whether a Slack bot token resolves for this conference. `null` = unknown. */
   slackToken: boolean | null
+  /**
+   * Whether the organization publishes LinkedIn through Buffer — its
+   * `buffer` connection is COMPLETE, exactly as the publish cron decides it.
+   * `null` = unknown (the secret lookup threw).
+   */
+  bufferPublishing: boolean | null
   /** Whether workshops (and so WorkOS AuthKit) are enabled. `null` = unknown. */
   workshops: boolean | null
   /**
@@ -394,6 +414,9 @@ export function subprocessorSignals(
     posthog,
     slack: orgSignal(facts.slackToken),
     workos: orgSignal(facts.workshops),
+    buffer: facts.tenantKnown
+      ? fromNullableBoolean(facts.bufferPublishing)
+      : 'unknown',
   }
 }
 
