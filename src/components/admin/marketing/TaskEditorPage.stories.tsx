@@ -892,7 +892,7 @@ const GALLERY_COLORS: Record<string, [string, string]> = {
 const galleryImages = http.get(
   'https://cdn.sanity.io/images/*',
   ({ request }) => {
-    const letter = /image-?([a-d])/.exec(new URL(request.url).pathname)?.[1]
+    const letter = new URL(request.url).pathname.split('/').pop()?.[0]
     const [from, to] = GALLERY_COLORS[letter ?? 'a'] ?? GALLERY_COLORS.a
     return HttpResponse.text(
       `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1080"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${from}"/><stop offset="1" stop-color="${to}"/></linearGradient></defs><rect width="1080" height="1080" fill="url(#g)"/></svg>`,
@@ -979,7 +979,7 @@ export const StudioRenderFromGallery: Story = {
     )
     await expect(
       await canvas.findByText(
-        'Logo on dark from the asset gallery is attached to this Task.',
+        'Logo on dark from the asset gallery is attached to this Task and handed to its publishing Tasks.',
       ),
     ).toBeVisible()
     await expect(galleryAttachBodies).toEqual([
