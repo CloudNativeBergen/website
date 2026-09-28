@@ -248,6 +248,15 @@ export default defineType({
       readOnly: true,
     }),
     defineField({
+      name: 'galleryAlt',
+      title: 'Alt text from the asset gallery',
+      description:
+        'The alt text of the gallery asset this Task was finished with, as it was picked: what a handoff retry gives the posts. Cleared with the gallery asset.',
+      type: 'string',
+      hidden: true,
+      readOnly: true,
+    }),
+    defineField({
       name: 'handoffDoneFor',
       title: 'Studio handoff receipts',
       description:

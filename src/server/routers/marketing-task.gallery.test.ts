@@ -845,6 +845,47 @@ describe('finishing a render Task with an asset from the gallery (#1166)', () =>
     expect(entries()).toEqual(galleryBefore)
   })
 
+  it.each([
+    [
+      'deleted',
+      () => {
+        h.dataset = h.dataset.filter((d) => d._id !== 'asset-logo')
+      },
+    ],
+    [
+      'given another image',
+      () => {
+        Object.assign(byId('asset-logo')!, { image: image(THEIRS) })
+      },
+    ],
+  ])(
+    'a studio render records the image as replaced once its asset is %s: a post still holds it',
+    async (_what, change) => {
+      await finish('asset-logo')
+      expect(post('post-1').attachments).toEqual([
+        expect.objectContaining({ image: image(LOGO) }),
+      ])
+      change()
+      upload(SECOND)
+      await attach(SECOND)
+      expect(task().replacedRenders).toContain(LOGO)
+      expect(byId(LOGO)).toBeDefined()
+    },
+  )
+
+  it('a retry keeps the picked alt after the asset is deleted', async () => {
+    await finish('asset-logo')
+    expect(task().galleryAlt).toBe('The CNB logo')
+    h.dataset = h.dataset.filter((d) => d._id !== 'asset-logo')
+    Object.assign(post('post-1'), { attachments: [] })
+    Object.assign(byId('variant-1')!, { attachments: [] })
+    Object.assign(task(), { handoffDoneFor: [] })
+    await attach(LOGO)
+    expect(post('post-1').attachments).toEqual([
+      expect.objectContaining({ image: image(LOGO), alt: 'The CNB logo' }),
+    ])
+  })
+
   it("a studio render afterwards replaces it, and never records or deletes the gallery's file", async () => {
     await finish('asset-logo')
     upload(SECOND)

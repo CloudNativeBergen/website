@@ -395,7 +395,7 @@ export function planSpeakerAssetErasure(
           unset: [
             ...unset,
             ...(unset.includes('asset') && doc.galleryAsset !== undefined
-              ? ['galleryAsset']
+              ? ['galleryAsset', 'galleryAlt']
               : []),
             ...unrecord(doc),
           ],

@@ -1531,6 +1531,15 @@ function StudioSection({
           </p>
         </RetryAlert>
       )}
+      {/* A gallery pick's failure, before the reload shows it pending. */}
+      {handoffError && !task.handoffPending && !task.galleryPending && (
+        <p
+          role="alert"
+          className="mb-4 text-sm text-amber-800 dark:text-amber-200"
+        >
+          {handoffError}
+        </p>
+      )}
       {completed && !task.handoffPending && !task.galleryPending && (
         <p
           role="status"

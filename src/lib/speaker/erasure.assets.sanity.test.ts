@@ -969,6 +969,7 @@ describe('a Task finished with an image from the gallery (#1166)', () => {
     subject: weak(subject),
     asset: image(file),
     galleryAsset: weak(from),
+    galleryAlt: `Picked from ${from}`,
   })
   const logo = {
     ...galleryAsset('asset-logo', ADA, LOGO),
@@ -1051,6 +1052,7 @@ describe('a Task finished with an image from the gallery (#1166)', () => {
     expect(doc(ADA_CARD)).toBeUndefined()
     expect(doc('task-other')).not.toHaveProperty('asset')
     expect(doc('task-other')).not.toHaveProperty('galleryAsset')
+    expect(doc('task-other')).not.toHaveProperty('galleryAlt')
     expect(doc('task-other')).toMatchObject({ subject: weak(BOB) })
     expect(result.verification?.clean).toBe(true)
   })

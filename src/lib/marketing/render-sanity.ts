@@ -1,4 +1,6 @@
+import { groq } from 'next-sanity'
 import { clientReadUncached } from '@/lib/sanity/client'
+import { COUNT_API_VERSION } from '@/lib/sanity/orphaned-asset'
 import { scopedFetch } from '@/lib/sanity/scoped'
 import type { RenderHandoffSibling } from './render-handoff'
 import {
@@ -26,8 +28,9 @@ export interface StudioTask {
   /** The gallery asset the Task was finished with (#1166), if it was. */
   galleryAssetId: string | null
   /**
-   * That asset's alt, while it exists and is this organization's: what a
-   * hand-off retry gives the posts, as the first hand-off did.
+   * That asset's alt as it was picked, stored on the Task: what a hand-off
+   * retry gives the posts, as the first hand-off did, even once the asset
+   * is deleted.
    */
   galleryAlt: string | null
 }
@@ -44,7 +47,7 @@ export function getStudioTask(taskId: string, conferenceId: string) {
       "campaignId": campaign._ref,
       handoffDoneFor, replacedRenders, galleryPending,
       "galleryAssetId": galleryAsset._ref,
-      "galleryAlt": select(galleryAsset->organization._ref == conference->organization._ref => galleryAsset->alt)}`,
+      "galleryAlt": galleryAlt}`,
     { taskId, subjectTypes: [...MARKETING_ASSET_SUBJECT_TYPES] },
     { cache: 'no-store' },
   )
@@ -59,4 +62,26 @@ export function getRenderSiblings(campaignId: string, conferenceId: string) {
     { campaignId },
     { cache: 'no-store' },
   )
+}
+
+/**
+ * Whether the gallery asset `assetId`, in ANY version (published, a Studio
+ * draft, a Content Release copy), still holds the image `file` (#1166). A
+ * Task's gallery image is the gallery's only while it does; afterwards a
+ * render that replaces it is recorded as the Task's, so a speaker's erasure
+ * finds it.
+ */
+export async function galleryAssetHolds(
+  assetId: string,
+  file: string,
+): Promise<boolean> {
+  const count = await clientReadUncached
+    .withConfig({ apiVersion: COUNT_API_VERSION })
+    .fetch<number>(
+      // groq-global-scoped: by id, the asset the caller's Task recorded (written only after its organization guard), and that asset's draft and release copies.
+      groq`count(*[_type == "marketingAsset" && (_id == $assetId || _id == $draftId || (_id in path("versions.**") && string::split(_id, ".")[2] == $assetId)) && image.asset._ref == $file])`,
+      { assetId, draftId: `drafts.${assetId}`, file },
+      { cache: 'no-store', perspective: 'raw' },
+    )
+  return (count ?? 0) > 0
 }

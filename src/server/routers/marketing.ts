@@ -44,6 +44,7 @@ import {
   getStudioTask,
   getRenderSiblings,
   type StudioTask,
+  galleryAssetHolds,
 } from '@/lib/marketing/render-sanity'
 import {
   renderAlt,
@@ -1770,7 +1771,9 @@ export const marketingRouter = router({
         // recorded is the one whose alt a retry hands on, and whose subject
         // a speaker's erasure follows.
         const recordPick =
-          pick !== null && !ownEntry && task.galleryAssetId !== pick.id
+          pick !== null &&
+          !ownEntry &&
+          (task.galleryAssetId !== pick.id || task.galleryAlt !== pick.alt)
         const forgetPick = !!task.galleryAssetId && (pick ? ownEntry : newImage)
         // Identical saved output is an idempotent handoff retry, even after its save changed the revision.
         if (newImage || recordPick || forgetPick) {
@@ -1791,7 +1794,16 @@ export const marketingRouter = router({
         // A gallery asset's image is the gallery's, never recorded as this
         // Task's render: a speaker's erasure would take it for one (#1166).
         const previous = task.assetId && newImage ? task.assetId : null
-        const replaced = previous && !task.galleryAssetId ? previous : null
+        // Only while its asset still holds it: an image the gallery let go
+        // of (the asset deleted, or its image replaced) is the Task's again.
+        const replaced =
+          previous &&
+          !(
+            task.galleryAssetId &&
+            (await galleryAssetHolds(task.galleryAssetId, previous))
+          )
+            ? previous
+            : null
         const saved = await updateTaskFields(
           task._id,
           task._rev,
@@ -1813,6 +1825,7 @@ export const marketingRouter = router({
                     _ref: pick.id,
                     _weak: true,
                   },
+                  galleryAlt: pick.alt,
                 }
               : {}),
           },
@@ -1821,7 +1834,7 @@ export const marketingRouter = router({
             ...(newImage && pick && task.galleryPending
               ? ['galleryPending']
               : []),
-            ...(forgetPick ? ['galleryAsset'] : []),
+            ...(forgetPick ? ['galleryAsset', 'galleryAlt'] : []),
           ],
           undefined,
           replaced ?? undefined,

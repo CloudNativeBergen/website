@@ -75,32 +75,14 @@ describe('studio queries executed against a fixture dataset', () => {
     })
   })
 
-  it("hands a retry the gallery asset's alt only while the asset is this organization's (#1166)", async () => {
-    h.dataset.push(
-      { _id: 'ours', _type: 'conference', organization: ref('org-ours') },
-      {
-        _id: 'asset-ours',
-        _type: 'marketingAsset',
-        organization: ref('org-ours'),
-        alt: 'Our logo',
-      },
-      {
-        _id: 'asset-theirs',
-        _type: 'marketingAsset',
-        organization: ref('org-theirs'),
-        alt: 'Their logo',
-      },
-    )
-    const render = h.dataset[0]
-    render.galleryAsset = { ...ref('asset-ours'), _weak: true }
+  it('reads the gallery origin and the alt it was picked with (#1166)', async () => {
+    Object.assign(h.dataset[0], {
+      galleryAsset: { ...ref('asset-ours'), _weak: true },
+      galleryAlt: 'Our logo',
+    })
     expect(await getStudioTask('render', 'ours')).toMatchObject({
       galleryAssetId: 'asset-ours',
       galleryAlt: 'Our logo',
-    })
-    render.galleryAsset = { ...ref('asset-theirs'), _weak: true }
-    expect(await getStudioTask('render', 'ours')).toMatchObject({
-      galleryAssetId: 'asset-theirs',
-      galleryAlt: null,
     })
   })
 
