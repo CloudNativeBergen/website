@@ -23,7 +23,7 @@ import {
   untagOwned,
   type TaggablePerson,
 } from './checks'
-import type { MentionRecord } from './body'
+import { GONE_SPEAKER_TEXT, type MentionRecord } from './body'
 import type { HandleResolution } from './resolve'
 
 const alice: TaggablePerson = {
@@ -766,6 +766,22 @@ describe('approvalCheck (§4.4 Approval)', () => {
       resolutions: new Map(),
     })
     expect(out.issues.map((i) => i.code)).toEqual(['not-a-speaker'])
+  })
+
+  it('a gone speaker (read as the neutral words, #1232): the issue names nobody, and the fix puts in the neutral words', () => {
+    const gone = { ...tagged(alice, DID_A), name: GONE_SPEAKER_TEXT }
+    const body = 'Hear @alice.dev today'
+    const out = approvalCheck({
+      body,
+      mentions: [gone],
+      people: [bob],
+      resolutions: new Map(),
+    })
+    const [issue] = out.issues as MentionIssue[]
+    expect(issue.message).toBe(
+      '@alice.dev tags someone who is no longer a speaker at this conference. Replace it with “a speaker”.',
+    )
+    expect(fixTagIssue(body, issue, [bob], [gone])).toBe('Hear a speaker today')
   })
 
   it('refuses a handle that no longer exists', () => {

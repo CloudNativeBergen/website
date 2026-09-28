@@ -513,7 +513,12 @@ function notASpeaker(m: MentionRecord, handle: string): MentionIssue {
     mentionKey: m._key,
     handle,
     name: m.name,
-    message: `${m.name} is no longer a speaker at this conference. Use the plain name instead of @${handle}.`,
+    // A gone speaker's record reads as the neutral words, never their name
+    // (MENTION_RECORD_PROJECTION, #1232): say so without naming anyone.
+    message:
+      m.name === GONE_SPEAKER_TEXT
+        ? `@${handle} tags someone who is no longer a speaker at this conference. Replace it with “${GONE_SPEAKER_TEXT}”.`
+        : `${m.name} is no longer a speaker at this conference. Use the plain name instead of @${handle}.`,
   }
 }
 

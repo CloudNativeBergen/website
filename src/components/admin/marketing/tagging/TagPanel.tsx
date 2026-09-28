@@ -7,7 +7,10 @@ import {
 } from '@heroicons/react/24/outline'
 import clsx from 'clsx'
 import { AdminButton } from '@/components/admin/AdminButton'
-import type { MentionRecord } from '@/lib/marketing/tagging/body'
+import {
+  GONE_SPEAKER_TEXT,
+  type MentionRecord,
+} from '@/lib/marketing/tagging/body'
 import {
   mentionTokens,
   nameIndex,
@@ -59,6 +62,8 @@ export function TagPanel({
   const notes = mentions.filter(
     (m) =>
       m.status === 'unresolved' &&
+      // A gone speaker's note has no one to be about (#1232).
+      m.name !== GONE_SPEAKER_TEXT &&
       !inBody.has(m.handle) &&
       !taggedIds.has(m.speakerId),
   )
@@ -99,7 +104,9 @@ export function TagPanel({
                   disabled={disabled}
                   onClick={() => onFix(issue)}
                 >
-                  Use the plain name
+                  {issue.name === GONE_SPEAKER_TEXT
+                    ? `Use “${GONE_SPEAKER_TEXT}”`
+                    : 'Use the plain name'}
                 </AdminButton>
               )}
             </li>

@@ -217,6 +217,34 @@ surviving file to the speaker. One survives when:
   from the gallery by hand. Published posts on Bluesky or LinkedIn are outside
   our reach either way.
 
+### 3c. Post variants that tag or name them (#1232)
+
+A post variant records who it tags in `mentions[]` — the speaker reference,
+the Bluesky handle, the DID and the speaker's **name**. The transaction removes
+every record of the person from every `socialPostVariant`, drafts and Content
+Release versions included: found by the reference in **any** tenant, and by a
+handle or DID one of their records carries (the same account recorded under
+another reference is still theirs).
+
+A body **not yet posted** (`draft`, `scheduled`, `awaiting-manual`, `failed`)
+loses their `@handle` and every whole-word copy of their name, any case, and so
+does a variant's own alt text: each becomes **"a speaker"**, the words the
+publisher already posts for a gone speaker. The name is looked for in the open
+variants of every conference of the person's organizations and of every
+conference they have a talk at — not across other tenants, where the same name
+is a stranger.
+
+- A **namesake** inside that scope — another person with exactly the same name
+  — is neutralised too: the tool cannot tell two people apart by name. The dry
+  run lists each variant it rewrites; read them.
+- A **posted** body (`published`, `submitted`) is left as it went out. It is on
+  the platform already, and deleting the post there is outside this tool. Its
+  records are still removed.
+- `--verify` counts a variant still holding them as `postVariants`. The commit's
+  own verification checks the name, handles and DIDs it read before the
+  erasure; a standalone `--verify` has only the reference (the name is the
+  placeholder by then and the records are gone), like the email-keyed counts.
+
 ### 4. Invalidate caches
 
 `revalidateTag` needs a Next.js request scope, which the script has none of, so
@@ -278,6 +306,16 @@ profile image with the same bytes (Sanity stores identical bytes once), or a
 post attachment whose `_key` cannot be selected safely. The file cannot be
 deleted while that document holds it, so nothing has been written. Decide what
 that document should lose, change it by hand, then re-run.
+
+**"Post variant X names the subject and is being published right now."** The
+publish cron holds a claim on that variant and will write it with a
+compare-and-set; an erasure write in between would lose the race for one of the
+two. Nothing has been written. Wait a few minutes (a stale claim is failed by
+the cron, never re-posted) and re-run.
+
+**"Post variant X has … entries naming the subject that cannot be safely
+selected."** A `mentions[]` or `attachments[]` entry has a `_key` that cannot
+go in a selector. Clear that entry by hand and re-run.
 
 **"X is the only organizer of conference Y."** `conference.organizers[]` is
 `min(1)`, and an organization with no organizer cannot be administered by anyone
@@ -473,7 +511,9 @@ Say so.
   with
   `npx sanity documents query '{"n": count(*[_type=="speakerBadge" && speaker._ref == "<speakerId>"])}'`.
 - **The residual-mention scan.** No automated search for the person's name in
-  free text. Not built, by decision.
+  free text, with one exception: post variants not yet posted (step 3c). The
+  parent `socialPost` body, Task titles and instructions, and posted variant
+  bodies are not scanned.
 - **Self-service erasure.** Phase 3.
 - **Gallery photographs.** Untagging removes findability, not the face. The
   photograph is retained: conference photography is group photography, and
@@ -534,7 +574,9 @@ talks; they are removed from `conference.organizers[]`, `featuredSpeakers[]` and
 organizer teams; `bankingDetails` is deleted from **unpaid** travel-support
 records; and any `mergedWith[]` entry in **another** speaker's merge trail that
 carries them is redacted — personal values out, the record of the merge itself
-left standing (see [the merge trail](#the-merge-trail-mergedwith)).
+left standing (see [the merge trail](#the-merge-trail-mergedwith)); and every
+post variant loses its records of them, and an unposted one their tag and
+name (see step 3c).
 
 ### A property worth understanding before you answer questions about it
 

@@ -5,7 +5,7 @@
  */
 
 import type { SocialPostMentionDocument } from '@/lib/social/types'
-import type { MentionRecord } from './body'
+import { GONE_SPEAKER_TEXT, type MentionRecord } from './body'
 
 export function mentionDocuments(
   mentions: readonly MentionRecord[],
@@ -24,8 +24,17 @@ export function mentionDocuments(
   }))
 }
 
-/** The GROQ projection that reads `mentions[]` back as `MentionRecord`s. */
-export const MENTION_RECORD_PROJECTION = `{ _key, handle, did, "speakerId": coalesce(speaker._ref, sponsor._ref), "sponsor": defined(sponsor._ref), name, status }`
+/**
+ * The GROQ projection that reads `mentions[]` back as `MentionRecord`s.
+ *
+ * A speaker GONE since the record was written — erased, or deleted so the
+ * weak reference dangles — reads as the neutral words, never the stored
+ * name: that name is an erased person's real one, and this read feeds the
+ * editor (the issue text and its one-click fix) — #1232. Erasure also strips
+ * the record itself; this covers a record written back before it and a
+ * speaker deleted outright.
+ */
+export const MENTION_RECORD_PROJECTION = `{ _key, handle, did, "speakerId": coalesce(speaker._ref, sponsor._ref), "sponsor": defined(sponsor._ref), "name": select(defined(speaker._ref) && (!defined(speaker->_id) || defined(speaker->erasedAt)) => ${JSON.stringify(GONE_SPEAKER_TEXT)}, name), status }`
 
 export interface RawMentionRecord {
   _key: string | null
