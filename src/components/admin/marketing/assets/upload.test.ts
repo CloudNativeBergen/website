@@ -155,4 +155,66 @@ describe('blobAssetUploader', () => {
     expect(typeof init.body).toBe('string')
     expect(init.body.length).toBeLessThan(4096)
   })
+
+  it('uploads a video’s poster FIRST as an image, then the MP4 in parts, and sends both URLs (#1167)', async () => {
+    fetchMock.mockResolvedValue(
+      Response.json({ _id: 'asset-3', softOnSocial: false }),
+    )
+    h.upload
+      .mockResolvedValueOnce({ url: 'https://s/poster.jpg' })
+      .mockResolvedValueOnce({ url: 'https://s/clip.mp4' })
+    const video = new File([new Uint8Array(10)], 'Opening Clip.mp4', {
+      type: 'video/mp4',
+    })
+    const progress = vi.fn()
+    await blobAssetUploader('org-A')(
+      video,
+      DETAILS,
+      { kind: 'video', poster: new Blob([new Uint8Array(4)]) },
+      progress,
+    )
+    const [[posterPath, poster, posterOptions], [videoPath, , videoOptions]] =
+      h.upload.mock.calls
+    expect(posterPath).toMatch(
+      /^marketing-asset\/org-A\/\d{13}-opening-clip-poster\.jpg$/,
+    )
+    expect(poster.type).toBe('image/jpeg')
+    expect(posterOptions.contentType).toBe('image/jpeg')
+    expect(videoPath).toMatch(
+      /^marketing-asset\/org-A\/\d{13}-opening-clip\.mp4$/,
+    )
+    expect(videoOptions.contentType).toBe('video/mp4')
+    // Progress is the video's, reported as a fraction.
+    videoOptions.onUploadProgress({ loaded: 5, total: 10, percentage: 50 })
+    expect(progress).toHaveBeenCalledWith(0.5)
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
+      url: 'https://s/clip.mp4',
+      ...DETAILS,
+      kind: 'video',
+      posterUrl: 'https://s/poster.jpg',
+    })
+  })
+
+  it('sends a GIF as a GIF, whatever the browser called it', async () => {
+    fetchMock.mockResolvedValue(
+      Response.json({ _id: 'asset-4', softOnSocial: false }),
+    )
+    const gif = new File([new Uint8Array(10)], 'wave.gif', { type: '' })
+    await blobAssetUploader('org-A')(gif, DETAILS, { kind: 'gif' })
+    expect(h.upload.mock.calls[0][2].contentType).toBe('image/gif')
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toMatchObject({
+      kind: 'gif',
+    })
+  })
+
+  it('shows the video’s own failure, not the library’s text', async () => {
+    h.upload.mockRejectedValue(new Error('BlobError: token expired'))
+    const video = new File([new Uint8Array(10)], 'a.mp4', { type: 'video/mp4' })
+    await expect(
+      blobAssetUploader('org-A')(video, DETAILS, {
+        kind: 'video',
+        poster: new Blob([]),
+      }),
+    ).rejects.toThrow('The video could not be added. Try again.')
+  })
 })

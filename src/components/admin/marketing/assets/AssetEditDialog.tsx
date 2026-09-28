@@ -8,6 +8,7 @@ import type { MarketingAssetRow } from '@/lib/marketing-asset'
 import { api } from '@/lib/trpc/client'
 import {
   AssetDetailsFields,
+  KIND_NOUN,
   EMPTY_DRAFT,
   HINT,
   INPUT,
@@ -136,7 +137,9 @@ export function AssetEditDialog({
               aria-describedby={`${ids.alt}-hint`}
             />
             <p id={`${ids.alt}-hint`} className={HINT}>
-              Required. It goes into every post that uses the image.
+              {asset?.kind === 'gif' || asset?.kind === 'video'
+                ? `Required. Copy it in when you post the ${KIND_NOUN[asset.kind]} by hand.`
+                : 'Required. It goes into every post that uses the image.'}
             </p>
           </div>
         )}
@@ -146,7 +149,7 @@ export function AssetEditDialog({
           edition={edition}
           original={asset ? originalMark(asset) : null}
           disabled={update.isPending}
-          kind={track ? 'audio' : 'image'}
+          kind={asset?.kind ?? 'image'}
         />
         {error && (
           <p

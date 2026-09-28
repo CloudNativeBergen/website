@@ -8,8 +8,17 @@ import {
   type MarketingAssetDetails,
   type MarketingAssetRow,
   type MarketingAssetEditionChoice,
+  type MarketingAssetKind,
   type MarketingAssetSubject,
 } from '@/lib/marketing-asset'
+
+/** What an asset of each kind is called in running text. */
+export const KIND_NOUN: Record<MarketingAssetKind, string> = {
+  image: 'image',
+  gif: 'GIF',
+  video: 'video',
+  audio: 'track',
+}
 import { SubjectCombobox } from './SubjectCombobox'
 
 export const LABEL =
@@ -117,8 +126,8 @@ export function AssetDetailsFields({
    */
   original?: OriginalMark | null
   disabled?: boolean
-  /** What the fields describe, for their hints: an image or an audio track. */
-  kind?: 'image' | 'audio'
+  /** What the fields describe, for their hints. */
+  kind?: MarketingAssetKind
 }) {
   const id = useId()
   const set = (change: Partial<DetailsDraft>) =>
@@ -195,7 +204,7 @@ export function AssetDetailsFields({
         <p id={`${id}-subject-hint`} className={HINT}>
           {kind === 'audio'
             ? 'Who or what the track is for, such as a talk or a sponsor.'
-            : 'Who the image is about. An image with no subject cannot be found when a speaker asks to be erased.'}
+            : `Who the ${KIND_NOUN[kind]} is about. One with no subject cannot be found when a speaker asks to be erased.`}
         </p>
       </div>
       <div className="grid gap-4 sm:grid-cols-2">
