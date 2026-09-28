@@ -612,7 +612,12 @@ describe('finishing a render Task with an asset from the gallery (#1166)', () =>
   })
   const post = (id: string) => byId(id)!
   /** The gallery as an organizer sees it: the attach guard bumps a revision. */
-  const entries = () => gallery().map(({ _rev: _, ...doc }) => doc)
+  const entries = () =>
+    gallery().map((doc) => {
+      const copy = { ...doc }
+      delete copy._rev
+      return copy
+    })
   const finish = (marketingAssetId: string) =>
     marketing().task.attachAsset({
       taskId: TASK,

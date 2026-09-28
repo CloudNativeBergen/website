@@ -776,7 +776,7 @@ describe('Task editor handoff recovery', () => {
     expect(
       screen.getByRole('region', { name: 'Studio render' }).textContent,
     ).toBe(
-      'Studio renderOpen the promo studioSkip…' +
+      'Studio renderOpen the promo studioUse an asset from the gallerySkip…' +
         'The render is done and saved. The image has not reached all publishing Tasks listed below yet.' +
         'Prerequisites are advisory: these publishing Tasks can publish without this image until the handoff succeeds.' +
         'Retry handoffRendered; the image is attached to this task.',

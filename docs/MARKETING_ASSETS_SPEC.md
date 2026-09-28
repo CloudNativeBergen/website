@@ -150,6 +150,12 @@ it additionally accepts the image of an `image` asset of the current organizatio
 the hand-off to the waiting posts is the existing one. GIFs and videos cannot finish a render Task
 — the post they would be handed to cannot hold them yet.
 
+As built (#1166): the Task records the asset in a weak `galleryAsset` reference, and the posts get
+the asset's alt (a later "Retry handoff" reads it again). The image stays the gallery's: a later
+studio render never records it as a replaced render, and a speaker's erasure follows the ASSET's
+subject while the asset exists — a Task about a speaker holding the organization's logo must not
+cost the logo. Once the asset is deleted, the Task's subject decides again.
+
 ## 5. Using an asset in a post
 
 The post editor's image picker gains a **"Marketing assets"** source beside upload and photo
