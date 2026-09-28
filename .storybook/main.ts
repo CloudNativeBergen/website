@@ -14,7 +14,12 @@ const config: StorybookConfig = {
       nextConfigPath: join(__dirname, '../next.config.ts'),
     },
   },
-  staticDirs: ['../public'],
+  staticDirs: [
+    '../public',
+    // Real media for stories that need a browser to decode it (a video's
+    // first frame, a GIF that animates). Storybook only, never the site.
+    { from: './fixtures', to: '/storybook-fixtures' },
+  ],
   viteFinal: async (config) => {
     config.plugins = config.plugins || []
     // The admin dashboard widgets import their fetchers from the

@@ -814,3 +814,84 @@ export const BlueskyLateOptOutPosted: Story = {
     ).not.toBeInTheDocument()
   },
 }
+
+/** A flat thumbnail drawn in the browser, so the CDN is never needed. */
+const thumb = (label: string, fill: string) =>
+  `data:image/svg+xml,${encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><rect width="100%" height="100%" fill="${fill}"/><text x="50%" y="50%" fill="white" font-family="sans-serif" font-size="28" text-anchor="middle" dominant-baseline="middle">${label}</text></svg>`,
+  )}`
+
+/**
+ * The gallery's GIFs and videos (#1167): they cannot be attached to a post
+ * yet, so the manual view offers each ORIGINAL file to download and post by
+ * hand, with its alt text.
+ */
+export const WithGalleryMedia: Story = {
+  args: {
+    galleryMedia: [
+      {
+        id: 'asset-opening',
+        title: 'Opening night, 20-second cut',
+        kind: 'video',
+        alt: 'The main hall filling up before the opening keynote',
+        context: 'About Ada Lovelace · CND 2026',
+        thumbnailSrc: thumb('OPENING', '#1d4ed8'),
+        downloadUrl:
+          'https://cdn.sanity.io/files/p/d/clip.mp4?dl=opening-night-20-second-cut.mp4',
+      },
+      {
+        id: 'asset-wave',
+        title:
+          'Waving mascot with a very long title that has to wrap somewhere',
+        kind: 'gif',
+        alt: 'The conference mascot waving hello',
+        context: 'Whole organization',
+        thumbnailSrc: thumb('WAVE', '#be185d'),
+        downloadUrl: '/api/admin/marketing-assets/original?asset=asset-wave',
+      },
+      {
+        id: 'asset-crowd',
+        title: 'Crowd cheering',
+        kind: 'video',
+        alt: 'Attendees cheering at the closing',
+        context: 'CND 2026',
+        thumbnailSrc: thumb('CROWD', '#0f766e'),
+        downloadUrl: 'https://cdn.sanity.io/files/p/d/crowd.mp4?dl=crowd.mp4',
+      },
+      {
+        id: 'asset-extra',
+        title: 'Hidden until asked',
+        kind: 'gif',
+        alt: 'Extra',
+        context: 'Whole organization',
+        thumbnailSrc: null,
+        downloadUrl: '/api/admin/marketing-assets/original?asset=asset-extra',
+      },
+    ],
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(
+      canvas.getByRole('link', {
+        name: 'Download the original video: Opening night, 20-second cut',
+      }),
+    ).toHaveAttribute(
+      'href',
+      'https://cdn.sanity.io/files/p/d/clip.mp4?dl=opening-night-20-second-cut.mp4',
+    )
+    await expect(
+      canvas.getAllByRole('link', { name: /Download the original/ }),
+    ).toHaveLength(3)
+    await expect(
+      canvas.getByRole('button', { name: 'Show all 4' }),
+    ).toBeInTheDocument()
+  },
+}
+export const WithGalleryMediaMobile: Story = {
+  ...WithGalleryMedia,
+  parameters: { viewport: { defaultViewport: 'mobile1' } },
+}
+export const WithGalleryMediaDark: Story = {
+  ...WithGalleryMedia,
+  parameters: { theme: 'dark', backgrounds: { default: 'dark' } },
+}
