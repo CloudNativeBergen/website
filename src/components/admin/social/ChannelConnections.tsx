@@ -32,24 +32,26 @@ export function ChannelConnections({
             key={platform}
             data-platform={platform}
             data-mode={mode}
-            className="flex items-center gap-2"
+            className="flex items-start gap-2"
           >
             <Icon
               aria-hidden
               className={clsx(
-                'size-4 shrink-0',
+                'mt-0.5 size-4 shrink-0',
                 automatic
                   ? 'text-green-600 dark:text-green-400'
                   : 'text-amber-600 dark:text-amber-400',
               )}
             />
-            <span className="font-medium text-gray-900 dark:text-gray-100">
-              {SOCIAL_PLATFORM_LABELS[platform]}
-            </span>
-            <span className="text-gray-600 dark:text-gray-300">
-              {automatic
-                ? `Automatic${viaLabel ? ` via ${viaLabel}` : ''}`
-                : 'Manual — posted by hand'}
+            <span className="min-w-0">
+              <span className="font-medium text-gray-900 dark:text-gray-100">
+                {SOCIAL_PLATFORM_LABELS[platform]}
+              </span>{' '}
+              <span className="text-gray-600 dark:text-gray-300">
+                {automatic
+                  ? `Automatic${viaLabel ? ` via ${viaLabel}` : ''}`
+                  : 'Manual \u2014 posted by hand'}
+              </span>
             </span>
           </p>
         )
