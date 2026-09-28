@@ -56,6 +56,8 @@ interface Seen {
 let seen: Seen[] = []
 /** The request path of each upload: `/…/assets/images/…` or `/…/files/…`. */
 let paths: string[] = []
+/** The authorization header of each upload. */
+let auths: (string | undefined)[] = []
 let server: http.Server
 /** A server that stops reading, to prove the move waits for it. */
 const stall: { on: boolean; release: () => void } = {
@@ -73,6 +75,7 @@ beforeAll(async () => {
     }
     seen.push(record)
     paths.push(req.url ?? '')
+    auths.push(req.headers.authorization)
     req.on('data', (chunk: Buffer) => (record.bytes += chunk.length))
     // Sanity stops reading until the test lets it go on. After the `data`
     // listener, which would otherwise set the request flowing again.
@@ -106,6 +109,7 @@ beforeAll(async () => {
     apiVersion: '2023-05-03',
     token: 'test',
     useCdn: false,
+    requestTagPrefix: 'web.write',
     useProjectHostname: false,
     apiHost: `http://127.0.0.1:${port}`,
   })
@@ -151,6 +155,7 @@ function blobBody(total: number) {
 beforeEach(() => {
   seen = []
   paths = []
+  auths = []
   vi.stubEnv('BLOB_READ_WRITE_TOKEN', 'vercel_blob_rw_abcstore123_secret')
 })
 afterEach(() => {
@@ -397,5 +402,24 @@ describe('the GIF move through the real Sanity client (#1167)', () => {
       reason: 'type',
     })
     expect(seen).toEqual([])
+  })
+})
+
+describe('what the upload sends Sanity (#1167)', () => {
+  it('posts to the versioned asset endpoint with the token, filename and quota tag', async () => {
+    vi.stubGlobal(
+      'fetch',
+      blobFetch(async () => new Response(freshBody(1024, GIF_HEAD))),
+    )
+    const result = await moveGifBlobToSanity(
+      URL_OK.replace('logo-X1.png', 'wave-X1.gif'),
+      'org-A',
+    )
+    expect(result.ok).toBe(true)
+    const url = new URL(paths[0], 'http://local')
+    expect(url.pathname).toBe('/v2023-05-03/assets/images/test')
+    expect(url.searchParams.get('filename')).toBe('wave-X1.gif')
+    expect(url.searchParams.get('tag')).toBe('web.write.marketing-asset')
+    expect(auths[0]).toBe('Bearer test')
   })
 })

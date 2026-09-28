@@ -47,13 +47,23 @@ export async function uploadAssetStream(
   options: { filename: string; contentType: string },
   timeoutMs: number,
 ): Promise<SanityAssetDocument> {
-  const { dataset, token } = clientWrite.config()
+  const { dataset, token, requestTagPrefix } = clientWrite.config()
+  // The client would refuse without them; a request to `/undefined` must not
+  // read as Sanity being down.
+  if (!dataset || !token) throw new Error('Sanity write client not configured')
   const url = new URL(
     clientWrite.getUrl(
       `/assets/${kind === 'image' ? 'images' : 'files'}/${dataset}`,
     ),
   )
   url.searchParams.set('filename', options.filename)
+  // As the client tags every request: how quota use is told apart.
+  url.searchParams.set(
+    'tag',
+    requestTagPrefix
+      ? `${requestTagPrefix}.marketing-asset`
+      : 'marketing-asset',
+  )
   // The client sets NO timeout of its own. Give up well before the route's
   // `maxDuration`, so the blob delete and the answer still run.
   const deadline = new AbortController()
