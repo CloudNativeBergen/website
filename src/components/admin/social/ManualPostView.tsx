@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import clsx from 'clsx'
-import { mayAlreadyBeLive } from '@/lib/social/state-machine'
+import { failureNotice, mayAlreadyBeLive } from '@/lib/social/state-machine'
 import {
   ArrowDownTrayIcon,
   ArrowTopRightOnSquareIcon,
@@ -32,6 +32,7 @@ import {
   type SocialPostVariant,
 } from '@/lib/social/types'
 import { CroppedImage } from './CroppedImage'
+import { PublishFailureNotice } from './PublishFailureNotice'
 
 export interface ManualPostViewProps {
   variant: SocialPostVariant
@@ -212,13 +213,8 @@ export function ManualPostView({
   // rule lives in `state-machine.ts` so this view and the Task editor's retry
   // cannot drift apart about which failures are safe to act on.
   const postMayBeLive = mayAlreadyBeLive(variant)
-  // WHY it failed, when nothing went out (#1130): with Buffer that is
-  // Buffer's own message, and the organizer arrives here from the failure
-  // notification choosing between posting by hand and retrying.
-  const failure =
-    variant.status === 'failed' && !postMayBeLive
-      ? variant.attempts.at(-1)?.error?.trim() || null
-      : null
+  // WHY it failed (#1130): the rule the Task editor shares.
+  const failure = failureNotice(variant)
 
   const [url, setUrl] = useState('')
   const [urlIssue, setUrlIssue] = useState<string | null>(null)
@@ -290,22 +286,12 @@ export function ManualPostView({
       )}
 
       {failure && (
-        <div
-          role="alert"
-          className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-900/20 dark:text-red-200"
-        >
-          <p>
-            <strong className="font-semibold">
-              It did not go out on {platform}.
-            </strong>{' '}
-            The publisher said:
-          </p>
-          <p className="mt-1 break-words italic">&ldquo;{failure}&rdquo;</p>
-          <p className="mt-2">
-            Post it by hand and record it below &mdash; or close this and retry,
-            which sends it again.
-          </p>
-        </div>
+        <PublishFailureNotice
+          notice={failure}
+          platform={platform}
+          retry="close this and retry"
+          manual="post it by hand and record it below"
+        />
       )}
 
       {strayInBody.length > 0 && (

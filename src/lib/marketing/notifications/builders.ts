@@ -3,7 +3,7 @@ import type {
   TagsWithheldEvent,
   VariantFailureEvent,
 } from '@/lib/social/publish-engine'
-import { manualPostPath } from '@/lib/social/notify'
+import { manualPostPath } from '@/lib/social/paths'
 import { SOCIAL_PLATFORM_LABELS } from '@/lib/social/types'
 import { truncateToGraphemeBoundary } from '@/lib/messaging/links'
 import { joinNames } from '@/lib/marketing/tagging/body'
@@ -101,11 +101,12 @@ export function confirmationFailureNotifications(
     recipientId,
     conferenceId: variant.conferenceId,
     notificationType: 'social_publish_failed' as const,
-    // `rejected` is Buffer saying no; anything else (gone, timed out) is a
-    // post that MAY be live, which must never read as a plain failure.
+    // `rejected` is Buffer reporting an error on a post it accepted — it may
+    // still retry on its own, so never "could not post". Anything else (gone,
+    // timed out) MAY be live, which must never read as a failure either.
     title:
       attempt.outcome === 'rejected'
-        ? `Buffer could not post to ${platform}`
+        ? `Buffer reported an error on a ${platform} post`
         : `${platform} post not confirmed`,
     message,
     link: manualPostPath(variant._id),

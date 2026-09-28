@@ -522,7 +522,7 @@ describe('a failed confirmation notifies every organizer (#1130)', () => {
         recipientId,
         conferenceId: 'conf-1',
         notificationType: 'social_publish_failed',
-        title: 'Buffer could not post to LinkedIn',
+        title: 'Buffer reported an error on a LinkedIn post',
         message: 'LinkedIn access token expired. Reconnect the channel.',
         link: '/admin/marketing/posts?variant=variant-1',
         tag: 'social-failure.variant-1.confirm-1',

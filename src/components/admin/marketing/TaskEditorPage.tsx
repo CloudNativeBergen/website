@@ -24,11 +24,12 @@ import { useTagWarningToast } from './tagging'
 import type { TagIssue } from '@/lib/marketing/tagging/checks'
 import { clientTagIssues } from '@/lib/trpc/errors'
 import { ManualPostView } from '@/components/admin/social/ManualPostView'
+import { PublishFailureNotice } from '@/components/admin/social/PublishFailureNotice'
 import {
   manualBodyFor,
   useFreshManualCheck,
 } from '@/components/admin/social/useFreshManualCheck'
-import { mayAlreadyBeLive } from '@/lib/social/state-machine'
+import { failureNotice, mayAlreadyBeLive } from '@/lib/social/state-machine'
 import { manualPostPath } from '@/lib/social/paths'
 import { taggedUrl } from '@/lib/marketing/link'
 import { publishLinkFields } from '@/lib/social/publish-link'
@@ -759,7 +760,7 @@ function PublishingSection({
   }
   const v = variant.variant
   const platform = SOCIAL_PLATFORM_LABELS[v.platform]
-  const lastError = v.attempts.at(-1)?.error?.trim() || null
+  const failure = failureNotice(v)
 
   if (v.status === 'awaiting-manual') {
     return (
@@ -876,35 +877,30 @@ function PublishingSection({
         </p>
       )}
       {/*
-        A failure where nothing went out (#1130): say why — with Buffer, in
-        Buffer's words — and offer the manual fallback beside Retry. The
+        A failure that is not "may already be live" (#1130): say why — after a
+        Buffer accept, in Buffer's words — and offer the manual fallback beside
+        Retry (`failureNotice` decides the wording). The
         copy-ready view on the Social posts page is where it is posted by hand
         and recorded (`failed → published`, spec §5).
       */}
-      {v.status === 'failed' && !mayAlreadyBeLive(v) && (
-        <div
-          role="alert"
-          className="mb-5 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-900/20 dark:text-red-200"
-        >
-          <p>
-            <strong className="font-semibold">
-              It did not go out on {platform}.
-            </strong>{' '}
-            {lastError ? 'The publisher said:' : null}
-          </p>
-          {lastError && (
-            <p className="mt-1 break-words italic">&ldquo;{lastError}&rdquo;</p>
-          )}
-          <p className="mt-2">
-            Retry sends it again, or{' '}
-            <Link
-              href={manualPostPath(v._id)}
-              className="font-medium underline underline-offset-2"
-            >
-              post it by hand
-            </Link>{' '}
-            and record it.
-          </p>
+      {failure && (
+        <div className="mb-5">
+          <PublishFailureNotice
+            notice={failure}
+            platform={platform}
+            retry="retry"
+            manual={
+              <>
+                <Link
+                  href={manualPostPath(v._id)}
+                  className="font-medium underline underline-offset-2"
+                >
+                  post it by hand
+                </Link>{' '}
+                and record it
+              </>
+            }
+          />
         </div>
       )}
 

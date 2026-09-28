@@ -322,11 +322,18 @@ export const FailedAtBuffer: Story = {
     )
     // The dialog fades in: wait for it to be visible, not just mounted.
     await waitFor(() =>
-      expect(dialog.getByText(/did not go out on LinkedIn/i)).toBeVisible(),
+      expect(
+        dialog.getByText(/Buffer reported an error on this post/i),
+      ).toBeVisible(),
     )
     await expect(
       dialog.getByText(/Reconnect the channel in Buffer/),
     ).toBeVisible()
+    // Buffer may retry on its own: check first, never "it did not go out".
+    await expect(dialog.getByRole('alert')).toHaveTextContent(
+      /check LinkedIn and Buffer’s queue first/,
+    )
+    await expect(dialog.queryByText(/did not go out/i)).toBeNull()
     await expect(
       dialog.getByLabelText(/address of the published post/i),
     ).toBeVisible()

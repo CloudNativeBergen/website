@@ -6,8 +6,6 @@ import { SOCIAL_PLATFORM_LABELS } from './types'
 
 import { manualPostPath } from './paths'
 
-export { manualPostPath, SOCIAL_POSTS_PATH } from './paths'
-
 /** Body excerpt in the hub row; the full text lives in the view. */
 const EXCERPT_MAX = 140
 

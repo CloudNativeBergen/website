@@ -474,7 +474,9 @@ export const PublishingFailedAtBuffer: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
-    const notice = await canvas.findByText(/did not go out on LinkedIn/i)
+    const notice = await canvas.findByText(
+      /Buffer reported an error on this post/i,
+    )
     const box = notice.closest('[role="alert"]') as HTMLElement
     await expect(box).toHaveTextContent(/Reconnect the channel in Buffer/)
     await expect(

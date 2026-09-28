@@ -1013,9 +1013,12 @@ describe('social.connections (#1130)', () => {
       error: null,
     })
     // The org-scoped authz waist refuses first (FORBIDDEN); the procedure's
-    // own NOT_FOUND guard behind it is defence in depth. On the VALUE: no
-    // mode is claimed and the secret store is never asked.
-    await expect(social().connections()).rejects.toBeInstanceOf(Error)
+    // own NOT_FOUND guard behind it is defence in depth that this caller
+    // cannot reach. On the VALUE: no mode is claimed and the secret store is
+    // never asked.
+    await expect(social().connections()).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    })
     expect(secretsStore.resolveTenantSecrets).not.toHaveBeenCalled()
   })
 })

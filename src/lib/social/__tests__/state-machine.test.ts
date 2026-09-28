@@ -9,6 +9,7 @@ import {
   confirmIntervalMs,
   decideAfterConfirm,
   decideAfterPublish,
+  failureNotice,
   isConfirmDue,
   isConfirmTimedOut,
   isStaleClaim,
@@ -409,5 +410,49 @@ describe('mayAlreadyBeLive — which failures must not be retried blind (#1128)'
 
   it('is FALSE when there are no attempts', () => {
     expect(mayAlreadyBeLive(v('failed'))).toBe(false)
+  })
+})
+
+describe('failureNotice — what a failed variant says about itself (#1130)', () => {
+  const at = '2026-09-13T10:00:00.000Z'
+  const leg = (outcome: AttemptOutcome, error?: string) => ({
+    _key: outcome,
+    at,
+    outcome,
+    ...(error ? { error } : {}),
+  })
+
+  it('an error Buffer reported AFTER accepting is flagged, and is never "retry unchanged"', () => {
+    expect(
+      failureNotice({
+        status: 'failed',
+        attempts: [leg('submitted'), leg('rejected', '  Token expired  ')],
+      }),
+    ).toEqual({ error: 'Token expired', afterAccept: true, retryAlone: false })
+  })
+
+  it('a refusal or a dead connection is not "retry alone"; a transient give-up is', () => {
+    for (const outcome of ['rejected', 'credential-expired'] as const)
+      expect(
+        failureNotice({ status: 'failed', attempts: [leg(outcome, 'x')] }),
+      ).toMatchObject({ afterAccept: false, retryAlone: false })
+    expect(
+      failureNotice({ status: 'failed', attempts: [leg('transient')] }),
+    ).toEqual({ error: null, afterAccept: false, retryAlone: true })
+  })
+
+  it('says nothing when the post may already be live, or the variant is not failed', () => {
+    expect(
+      failureNotice({ status: 'failed', attempts: [leg('ambiguous', 'x')] }),
+    ).toBeNull()
+    expect(
+      failureNotice({ status: 'failed', attempts: [leg('stale-claim', 'x')] }),
+    ).toBeNull()
+    expect(
+      failureNotice({
+        status: 'scheduled',
+        attempts: [leg('rejected', 'x')],
+      }),
+    ).toBeNull()
   })
 })
