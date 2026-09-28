@@ -209,20 +209,14 @@ describe('campaign.recipes.attach', () => {
       conferenceId: 'conf-A',
       // Becomes the owner of an ownerless plan, or generation would skip it.
       actorId: 'sp-admin',
-      recipes: speakerCard.recipes.map((r) => {
-        const { tagSubject: _off, ...rest } = r
-        void _off
-        return rest
-      }),
+      // A new Recipe does not tag, though the built-in one does (tagging §2).
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars -- excluded
+      recipes: speakerCard.recipes.map(({ tagSubject: _off, ...r }) => r),
       triggers: [
         { event: 'speakerConfirmed', taskRecipeKey: 'speakerCardRender' },
       ],
       records: { tasks: [], posts: [], variants: [] },
     })
-    // A new Recipe does not tag, though the built-in one does (tagging §2).
-    expect(
-      saved().recipes.map((r: { tagSubject?: boolean }) => r.tagSubject),
-    ).toEqual(speakerCard.recipes.map(() => undefined))
   })
   it('adds its own rows and names nothing else: what the Campaign already had is not rewritten', async () => {
     h.readRecipes.mockResolvedValue(

@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useId, useRef, useState } from 'react'
 import { DialogTitle } from '@headlessui/react'
 import { ModalShell } from '@/components/ModalShell'
 import { AdminButton } from '@/components/admin/AdminButton'
@@ -68,6 +68,7 @@ export function RecipeForm({
   onCancel: () => void
 }) {
   const countdown = entry.id === 'countdown'
+  const tagNoteId = useId()
   const [edits, setEdits] = useState(initial)
   const parked = useRef<RecipeEdits['channels']>({})
   const issues = editIssues(libraryEntry(entry.id), edits)
@@ -159,7 +160,7 @@ export function RecipeForm({
                             type="checkbox"
                             role="switch"
                             checked={edits.tagSubject === true}
-                            aria-describedby="recipe-tag-note"
+                            aria-describedby={tagNoteId}
                             onChange={(event) =>
                               setEdits({
                                 ...edits,
@@ -170,12 +171,13 @@ export function RecipeForm({
                           Tag the subject
                         </label>
                         <span
-                          id="recipe-tag-note"
+                          id={tagNoteId}
                           className="mt-1 block text-xs text-gray-500 dark:text-gray-400"
                         >
-                          The generated Bluesky post names them by their Bluesky
-                          handle, when they have one and have not opted out.
-                          LinkedIn and the card keep the plain name.
+                          The generated Bluesky post uses their Bluesky handle
+                          where we know it and they have not opted out, and the
+                          plain name otherwise. LinkedIn and the card keep the
+                          plain name.
                         </span>
                       </div>
                     )}
