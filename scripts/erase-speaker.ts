@@ -18,6 +18,7 @@
  * pretending to revalidate them; the runbook has the manual step.
  */
 
+import { acceptedSharedHandleLines } from '@/lib/speaker/erasure-mentions'
 import {
   eraseSpeakerInPlace,
   verifySpeakerErasure,
@@ -187,6 +188,9 @@ async function main(): Promise<number> {
         : ''),
   )
   for (const file of kept) console.log(`  ${file.id}  ${file.error}`)
+  const accepted = acceptedSharedHandleLines(result.acceptedSharedHandles)
+  if (accepted.length > 0) console.log(`\n${accepted.join('\n')}`)
+
   console.log(`\nCache tags to invalidate (see the runbook):`)
   for (const tag of result.cache.tags) console.log(`  ${tag}`)
 

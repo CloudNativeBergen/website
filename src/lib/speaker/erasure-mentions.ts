@@ -838,3 +838,20 @@ export async function fetchSpeakerMentionInputs(
       .map(([handle, ids]) => ({ handle, listedBy: ids.sort() })),
   }
 }
+
+/**
+ * The lines the CLI prints after a commit with `--accept-shared-handles`,
+ * for the operator to copy into the DSR record (runbook 3c).
+ */
+export function acceptedSharedHandleLines(
+  accepted: readonly {
+    handle: string
+    listedBy: readonly string[]
+    variantIds: readonly string[]
+  }[],
+): string[] {
+  return accepted.map(
+    (a) =>
+      `Accepted as shared (record in the DSR): @${a.handle} — listed by ${a.listedBy.join(', ')} — variants ${a.variantIds.join(', ')}`,
+  )
+}
