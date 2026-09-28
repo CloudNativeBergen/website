@@ -744,23 +744,23 @@ export async function fetchSpeakerMentionInputs(
   }
 
   // A live speaker who LISTS one of her handles shares it, record or none.
-  const profileUrls = identity.handles.flatMap((h) =>
-    ['https://', 'http://', ''].flatMap((scheme) =>
-      ['', 'www.'].flatMap((www) =>
-        ['', '/'].map(
-          (slash) => `${scheme}${www}bsky.app/profile/${h}${slash}`,
-        ),
-      ),
-    ),
-  )
+  // A COARSE `match` per handle, OR-ed: the links are then parsed exactly
+  // (`blueskyHandlesFromLinks`), so any form it accepts — `@handle`, a
+  // trailing space, an encoded segment — counts. Parameters only.
+  const listedFilter = identity.handles
+    .map((_, i) => `links[] match $l${i}`)
+    .join(' || ')
   const othersLinks =
     identity.handles.length === 0
       ? []
       : ((await client.fetch<unknown[]>(
           // groq-global: other live speakers listing one of her handles, in
           // every tenant — the same account is theirs as well.
-          groq`*[_type == "speaker" && _id != $speakerId && !defined(erasedAt) && count(links[lower(@) in $urls]) > 0].links`,
-          { speakerId, urls: profileUrls },
+          groq`*[_type == "speaker" && _id != $speakerId && !defined(erasedAt) && (${listedFilter})].links`,
+          {
+            speakerId,
+            ...Object.fromEntries(identity.handles.map((h, i) => [`l${i}`, h])),
+          },
           opts,
         )) ?? [])
   const listed = blueskyHandlesFromLinks(
