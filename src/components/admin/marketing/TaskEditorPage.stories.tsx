@@ -953,11 +953,14 @@ export const OutreachSentDeleteWarning: Story = {
       ),
     )
     const dialog = within(canvasElement.ownerDocument.body)
-    await expect(
-      await dialog.findByText('1 short link may already be shared', undefined, {
-        timeout: 5000,
-      }),
-    ).toBeVisible()
+    // The dialog fades in: wait for the end of the transition, not only the node.
+    await waitFor(
+      () =>
+        expect(
+          dialog.getByText('1 short link may already be shared'),
+        ).toBeVisible(),
+      { timeout: 5000 },
+    )
     await waitFor(() =>
       expect(
         dialog.getAllByRole('button', { name: 'Delete task' }).at(-1),

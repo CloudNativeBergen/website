@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
-import { expect, fn, within } from 'storybook/test'
+import { expect, fn, waitFor, within } from 'storybook/test'
 import { http, HttpResponse } from 'msw'
 import { NotificationProvider } from '@/components/admin/NotificationProvider'
 import { mockDateBeforeEach, withPortalTheme } from '@/lib/storybook'
@@ -378,9 +378,14 @@ export const DeletePlanWithLiveLinks: Story = {
   ),
   play: async ({ canvasElement }) => {
     const body = within(canvasElement.ownerDocument.body)
-    await expect(
-      await body.findByText('3 short links may already be shared'),
-    ).toBeVisible()
+    // The dialog fades in: wait for the end of the transition, not only the node.
+    await waitFor(
+      () =>
+        expect(
+          body.getByText('3 short links may already be shared'),
+        ).toBeVisible(),
+      { timeout: 5000 },
+    )
     await expect(
       body.getByRole('button', { name: 'Delete plan' }),
     ).toBeEnabled()
@@ -412,10 +417,14 @@ export const DeleteCampaignWithLiveLinksMobile: Story = {
     await expect(
       canvasElement.ownerDocument.documentElement.clientWidth,
     ).toBeLessThan(500)
-    await expect(
-      await within(canvasElement.ownerDocument.body).findByText(
-        '1 short link may already be shared',
-      ),
-    ).toBeVisible()
+    await waitFor(
+      () =>
+        expect(
+          within(canvasElement.ownerDocument.body).getByText(
+            '1 short link may already be shared',
+          ),
+        ).toBeVisible(),
+      { timeout: 5000 },
+    )
   },
 }
