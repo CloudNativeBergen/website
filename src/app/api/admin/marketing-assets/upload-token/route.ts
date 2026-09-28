@@ -21,8 +21,11 @@ import {
   MARKETING_ASSET_VIDEO_TYPE,
 } from '@/lib/marketing-asset/motion-type'
 
-/** A token lives long enough for one upload to start, and no longer. */
-const TOKEN_LIFETIME_MS = 10 * 60 * 1000
+/**
+ * A token lives long enough for a 100 MB video to finish on a slow uplink
+ * (every part of a multipart upload carries it), and no longer.
+ */
+const TOKEN_LIFETIME_MS = 60 * 60 * 1000
 
 /**
  * The short-lived Vercel Blob client token for a marketing asset upload

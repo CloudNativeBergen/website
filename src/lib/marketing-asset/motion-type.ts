@@ -51,6 +51,21 @@ const MP4_BRANDS = new Set([
   'iso9',
 ])
 
+/**
+ * Box files that are not an MP4 video even when they list an MP4 brand as
+ * compatible: QuickTime, HEIF/AVIF stills and audio-only M4A.
+ */
+const NOT_VIDEO_BRANDS = new Set([
+  'qt  ',
+  'heic',
+  'heix',
+  'mif1',
+  'msf1',
+  'avif',
+  'M4A ',
+  'M4B ',
+])
+
 const text = (bytes: Uint8Array, from: number, to: number) =>
   String.fromCharCode(...bytes.subarray(from, to))
 
@@ -68,7 +83,7 @@ export function isGif(bytes: Uint8Array): boolean {
 export function isMp4(bytes: Uint8Array): boolean {
   if (bytes.length < 16 || text(bytes, 4, 8) !== 'ftyp') return false
   const major = text(bytes, 8, 12)
-  if (major === 'qt  ') return false
+  if (NOT_VIDEO_BRANDS.has(major)) return false
   if (MP4_BRANDS.has(major)) return true
   // A camera's own major brand (Sony `XAVC`, `MSNV`…) still lists the MP4
   // brands it conforms to after the minor version.

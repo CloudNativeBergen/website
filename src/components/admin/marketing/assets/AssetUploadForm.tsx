@@ -222,11 +222,15 @@ export function AssetUploadForm({
     // The server sniffs the bytes too; asking here saves a 100 MB upload
     // that would only be refused (a .mov renamed .mp4, say).
     if (kind === 'video') {
-      const head = new Uint8Array(
-        await file.slice(0, MOTION_SNIFF_BYTES).arrayBuffer(),
-      )
+      // A file the browser cannot read (a cloud file not yet downloaded)
+      // is refused here too, rather than failing with nothing on screen.
+      const head = await file
+        .slice(0, MOTION_SNIFF_BYTES)
+        .arrayBuffer()
+        .then((bytes) => new Uint8Array(bytes))
+        .catch(() => null)
       if (seq !== pickSeq.current) return
-      if (!isMp4(head)) {
+      if (!head || !isMp4(head)) {
         if (fileInput.current) fileInput.current.value = ''
         setError(MARKETING_ASSET_VIDEO_TYPE_REFUSAL)
         return

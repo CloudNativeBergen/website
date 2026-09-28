@@ -1,8 +1,13 @@
 /** How long the browser gets to decode the first frame before we give up. */
 const READ_TIMEOUT_MS = 15_000
 
-/** The poster's long side at most: a thumbnail, not a second copy. */
+/** The poster's long side at most: a thumbnail, not a second copy… */
 const POSTER_LONG_SIDE = 1920
+/**
+ * …unless that would take its short side under this: the server judges
+ * "soft on social" from the poster, and a 4K clip is not soft.
+ */
+const POSTER_MIN_SHORT_SIDE = 1080
 
 export interface VideoPoster {
   /** The first frame as a JPEG, uploaded beside the video (spec §4.1). */
@@ -46,7 +51,13 @@ export function readVideoPoster(file: File): Promise<VideoPoster | null> {
     video.onseeked = () => {
       const { videoWidth: width, videoHeight: height } = video
       if (!width || !height) return done(null)
-      const scale = Math.min(1, POSTER_LONG_SIDE / Math.max(width, height))
+      const scale = Math.min(
+        1,
+        Math.max(
+          POSTER_LONG_SIDE / Math.max(width, height),
+          POSTER_MIN_SHORT_SIDE / Math.min(width, height),
+        ),
+      )
       const canvas = document.createElement('canvas')
       canvas.width = Math.round(width * scale)
       canvas.height = Math.round(height * scale)

@@ -91,7 +91,7 @@ describe('the marketing asset upload token', () => {
     expect(signed.onUploadCompleted).toBeUndefined()
     expect(signed.allowOverwrite).toBeUndefined()
     expect(signed.validUntil).toBeGreaterThan(before)
-    expect(signed.validUntil).toBeLessThanOrEqual(Date.now() + 10 * 60 * 1000)
+    expect(signed.validUntil).toBeLessThanOrEqual(Date.now() + 60 * 60 * 1000)
   })
 
   it.each([

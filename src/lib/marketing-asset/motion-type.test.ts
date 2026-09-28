@@ -25,6 +25,8 @@ describe('motion sniffs', () => {
     expect(isMp4(bytes('\0\0\0\x18ftypXAVC\0\0\0\0isommp42'))).toBe(true)
     // HEIF stills share the box format, not the brands.
     expect(isMp4(bytes('\0\0\0\x18ftypheic\0\0\0\0mif1heic'))).toBe(false)
+    // Audio-only M4A lists `isom` too, and is no video.
+    expect(isMp4(bytes('\0\0\0\x18ftypM4A \0\0\0\0isommp42'))).toBe(false)
     // QuickTime is refused even when it lists an MP4 brand.
     expect(isMp4(bytes('\0\0\0\x18ftypqt  \0\0\0\0isom', 8))).toBe(false)
   })
