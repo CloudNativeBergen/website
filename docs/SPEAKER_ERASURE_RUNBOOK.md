@@ -240,9 +240,11 @@ person's organizations and of every conference they have a talk at, and in any
 variant holding a record of theirs — not across other tenants, where the same
 name is a stranger.
 
-- A **co-speaker who shares a team account** with them keeps their own record
-  and their own occurrence of the tag, and a variant reached only through that
-  shared account is not searched for the name.
+- A **co-speaker who shares a team account** with them (on a record anywhere,
+  or in their profile links) keeps their own record and their own occurrence
+  of the tag. A shared handle is scrubbed only where a tag is bound to the
+  erased person's record, never in text that records nobody, and a variant
+  reached only through it is not searched for the name.
 - A **namesake** inside that scope — another person with exactly the same name
   — is neutralised too: the tool cannot tell two people apart by name. The dry
   run lists each variant it rewrites; read them.
@@ -254,7 +256,7 @@ name is a stranger.
   and deleting the post there is outside this tool. Its records are still
   removed. A live `submitted` (or `publishing`) variant holding them makes the
   run **refuse** instead — see Refusals — until the publisher has settled it.
-- A variant **saved while the erasure ran** can carry them again. The commit's
+- A variant **saved while the erasure ran** (before its final verification) can carry them again. A save landing AFTER the final verification is not seen. The commit's
   verification finds it with the name, handles and DIDs read before the
   erasure — the last moment those are known — and repairs it once, then
   verifies again. A variant it must leave (in flight) is listed by id in
