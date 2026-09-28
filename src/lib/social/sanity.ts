@@ -1105,7 +1105,8 @@ export interface AddSocialPostAttachmentInput {
  * post the guard did not admit.
  */
 export type AddSocialPostAttachmentResult =
-  { key: string } | { refused: 'foreign-asset' | 'post-gone' }
+  | { key: string }
+  | { refused: 'foreign-asset' | 'post-gone' | 'holder-changed' }
 
 /**
  * Asset ids are dataset-wide and every image is public on the CDN, so this
@@ -1133,22 +1134,24 @@ export async function addSocialPostAttachment(
   input: AddSocialPostAttachmentInput,
   options: {
     /**
-     * The caller proved the image is held by a marketing asset of THIS
-     * conference's organization (#1163): the reference check is skipped, since
-     * an organization-wide or older edition's asset is referenced by no
-     * document of this conference and would read as foreign.
+     * The marketing asset of THIS conference's organization that holds the
+     * image (#1163), at the revision the caller read it. The reference check
+     * is skipped: an organization-wide or older edition's asset is referenced
+     * by no document of this conference and would read as foreign. Instead
+     * the append is compare-and-set on the asset, in ONE transaction: an
+     * asset deleted (or changed) since it was read refuses the attach, so
+     * its delete can never have orphan-removed the image the post is about
+     * to reference. Once the post holds it, the orphan check keeps it.
      */
-    assetProvenOurs?: boolean
+    heldBy?: { id: string; rev: string }
   } = {},
 ): Promise<AddSocialPostAttachmentResult> {
-  if (
-    !options.assetProvenOurs &&
-    (await assetBelongsElsewhere(input.assetId, conferenceId))
-  ) {
+  const { heldBy } = options
+  if (!heldBy && (await assetBelongsElsewhere(input.assetId, conferenceId))) {
     return { refused: 'foreign-asset' }
   }
   const key = randomUUID()
-  const result = await clientWrite
+  const append = clientWrite
     .patch({
       query:
         '*[_type == "socialPost" && _id == $postId && conference._ref == $conferenceId]',
@@ -1173,11 +1176,30 @@ export async function addSocialPostAttachment(
       },
     ])
     .set({ updatedAt: getCurrentDateTime() })
-    .commit({ returnDocuments: false })
+  let postResults: { id: string }[]
+  if (heldBy) {
+    try {
+      const result = await clientWrite
+        .transaction()
+        // A no-op patch carries the revision guard; a delete takes none.
+        .patch(heldBy.id, (p) =>
+          p.ifRevisionId(heldBy.rev).unset(['_attachGuard']),
+        )
+        .patch(append)
+        .commit({ returnDocuments: false })
+      postResults = result.results.filter((r) => r.id !== heldBy.id)
+    } catch (error) {
+      // A revision mismatch, or the asset document gone: both are 409s.
+      if (isRevisionConflict(error)) return { refused: 'holder-changed' }
+      throw error
+    }
+  } else {
+    postResults = (await append.commit({ returnDocuments: false })).results
+  }
   // A query patch that matched nothing commits fine and changes nothing:
   // the post was deleted (or moved) after the guard ran. Say so rather than
   // hand back a key that was never stored.
-  if (result.results.length === 0) return { refused: 'post-gone' }
+  if (postResults.length === 0) return { refused: 'post-gone' }
   return { key }
 }
 

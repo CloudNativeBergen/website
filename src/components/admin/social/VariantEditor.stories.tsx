@@ -578,8 +578,12 @@ const ASSET_PICKS: MarketingAssetPick[] = [
 /** The picker with its search and edition switch held, as the wired editor does. */
 function AssetPickerHarness({
   onPickAsset,
+  pickerError,
   ...args
-}: Args & { onPickAsset: (asset: MarketingAssetPick) => void }) {
+}: Args & {
+  onPickAsset: (asset: MarketingAssetPick) => void
+  pickerError?: string
+}) {
   const [search, setSearch] = useState('')
   const [allEditions, setAllEditions] = useState(false)
   const words = search.toLowerCase().split(/\s+/).filter(Boolean)
@@ -599,6 +603,8 @@ function AssetPickerHarness({
         marketingAssets: {
           assets,
           isLoading: false,
+          error: pickerError ?? null,
+          onRetry: () => {},
           search,
           onSearchChange: setSearch,
           allEditions,
@@ -653,14 +659,14 @@ export const MarketingAssetPicker: Story = {
   play: async ({ canvasElement }) => {
     const picker = await openPicker(canvasElement)
     const gif = picker.getByRole('button', {
-      name: "Countdown, animated: can't be attached yet",
+      name: "Countdown, animated (CND 2027): can't be attached yet",
     })
     await expect(gif).toBeDisabled()
     await expect(picker.getByText("Can't be attached yet")).toBeVisible()
     // The subject's assets lead.
     const tiles = picker.getAllByRole('button', { name: /^Add |: can't/ })
     await expect(tiles[0]).toHaveAccessibleName(
-      'Add Speaker card: Ada Lovelace to the post',
+      'Add Speaker card: Ada Lovelace (About Ada Lovelace) to the post',
     )
   },
 }
@@ -685,7 +691,7 @@ export const PickingAMarketingAsset: Story = {
     await expect(picker.getAllByRole('listitem')).toHaveLength(1)
     await userEvent.click(
       picker.getByRole('button', {
-        name: 'Add Logo, dark background to the post',
+        name: 'Add Logo, dark background (Whole organization) to the post',
       }),
     )
     const onPick = (args as unknown as { onPickAsset: ReturnType<typeof fn> })
@@ -728,4 +734,57 @@ export const MarketingAssetPickerMobile: Story = {
       window.innerWidth / 3,
     )
   },
+}
+
+/** The list could not be read: said so, never shown as an empty gallery. */
+export const MarketingAssetPickerFailed: Story = {
+  args: {
+    ...pickerArgs,
+    pickerError: 'Network error',
+  } as unknown as Story['args'],
+  render: MarketingAssetPicker.render,
+  play: async ({ canvasElement }) => {
+    const picker = await openPicker(canvasElement)
+    await expect(picker.getByRole('alert')).toHaveTextContent(
+      'Could not load the marketing assets: Network error',
+    )
+    await expect(picker.queryByText(/has nothing for this post/)).toBeNull()
+    await expect(picker.queryAllByRole('listitem')).toHaveLength(0)
+  },
+}
+
+/** A save in flight disables the open picker's tiles too. */
+export const MarketingAssetPickerWhileSaving: Story = {
+  args: pickerArgs as unknown as Story['args'],
+  render: (args) => {
+    const { saving: _saving, ...rest } = args as unknown as Args & {
+      onPickAsset: (asset: MarketingAssetPick) => void
+    }
+    return <SavingToggle {...rest} />
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const picker = await openPicker(canvasElement)
+    await userEvent.click(canvas.getByRole('button', { name: 'Start saving' }))
+    await expect(
+      picker.getByRole('button', {
+        name: 'Add Logo, dark background (Whole organization) to the post',
+      }),
+    ).toBeDisabled()
+  },
+}
+
+/** Opens the picker first, then flips `saving` — as a Save click would. */
+function SavingToggle(
+  props: Args & { onPickAsset: (asset: MarketingAssetPick) => void },
+) {
+  const [saving, setSaving] = useState(false)
+  return (
+    <>
+      <button type="button" onClick={() => setSaving(true)}>
+        Start saving
+      </button>
+      <AssetPickerHarness {...props} saving={saving} />
+    </>
+  )
 }

@@ -685,6 +685,17 @@ describe('picking an asset into a post (#1163)', () => {
     )
   })
 
+  it('never scans the posts for usage: the picker does not show it', async () => {
+    const rows = await listMarketingAssetsForPost(
+      'org-a',
+      'conf-a-2026',
+      'post-ada',
+      { editions: 'all' },
+    )
+    expect(h.queries.some((q) => q.includes('"socialPost"'))).toBe(false)
+    expect(rows.every((row) => row.usedInPosts === null)).toBe(true)
+  })
+
   it('marks a GIF as not attachable, and never lists a track', async () => {
     const rows = await listMarketingAssetsForPost(
       'org-a',
@@ -731,6 +742,7 @@ describe('picking an asset into a post (#1163)', () => {
     h.dataset = [
       ...PICKER.filter((d) => d._id !== 'logo'),
       asset('logo', 'org-a', {
+        _rev: 'rev-logo',
         image: {
           _type: 'image',
           asset: ref(PNG('a')),
@@ -752,6 +764,7 @@ describe('picking an asset into a post (#1163)', () => {
       }),
     ]
     expect(await readMarketingAssetForPost('org-a', 'logo')).toEqual({
+      rev: 'rev-logo',
       imageAssetId: PNG('a'),
       alt: 'alt of logo',
       hotspot: { x: 0.5, y: 0.4, width: 1, height: 1 },

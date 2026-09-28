@@ -294,7 +294,7 @@ describe('marketingAsset.forPost (#1163)', () => {
   it('lists the picker for our post, with the subject its Task names', async () => {
     const rows = await assets().forPost({ postId: 'post-ours', search: 'logo' })
     expect(rows).toEqual([
-      { ...ROWS[0], softOnSocial: true, attachable: true, usedInPosts: 2 },
+      { ...ROWS[0], softOnSocial: true, attachable: true, usedInPosts: null },
     ])
     const taskRead = h.read.mock.calls.find(([q]) =>
       String(q).includes('"marketingTask"'),

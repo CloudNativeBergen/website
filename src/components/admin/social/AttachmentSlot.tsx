@@ -79,6 +79,9 @@ export interface AttachmentSlotProps {
   marketingAssets?: {
     assets: MarketingAssetPick[]
     isLoading: boolean
+    /** The list could not be read: said, never shown as an empty gallery. */
+    error?: string | null
+    onRetry?: () => void
     search: string
     onSearchChange: (search: string) => void
     allEditions: boolean
@@ -378,6 +381,25 @@ export function AttachmentSlot({
           </div>
           {marketingAssets.isLoading ? (
             <div className="h-24 animate-pulse rounded bg-gray-100 dark:bg-gray-800" />
+          ) : marketingAssets.error ? (
+            <div
+              role="alert"
+              className="flex flex-wrap items-center gap-2 text-sm text-red-600 dark:text-red-400"
+            >
+              <span>
+                Could not load the marketing assets: {marketingAssets.error}
+              </span>
+              {marketingAssets.onRetry && (
+                <AdminButton
+                  type="button"
+                  size="xs"
+                  variant="secondary"
+                  onClick={marketingAssets.onRetry}
+                >
+                  Try again
+                </AdminButton>
+              )}
+            </div>
           ) : marketingAssets.assets.length === 0 ? (
             <p className="text-sm text-gray-500 dark:text-gray-400">
               {marketingAssets.search.trim()
@@ -390,14 +412,14 @@ export function AttachmentSlot({
                 <li key={asset.id} className="min-w-0">
                   <button
                     type="button"
-                    disabled={busy || !asset.attachable}
+                    disabled={disabled || busy || full || !asset.attachable}
                     onClick={() =>
                       void run(() => marketingAssets.onPick(asset))
                     }
                     aria-label={
                       asset.attachable
-                        ? `Add ${asset.title} to the post`
-                        : `${asset.title}: can't be attached yet`
+                        ? `Add ${asset.title} (${asset.context}) to the post`
+                        : `${asset.title} (${asset.context}): can't be attached yet`
                     }
                     title={asset.attachable ? asset.alt : NOT_ATTACHABLE_YET}
                     className="group block w-full rounded text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-cloud-blue disabled:cursor-not-allowed"

@@ -240,6 +240,7 @@ beforeEach(() => {
 
 /** An organization-wide logo: no document of THIS conference references it. */
 const ORG_ASSET = {
+  rev: 'asset-rev-4',
   imageAssetId: 'image-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-1200x1200-png',
   alt: 'The conference logo on dark blue',
   hotspot: null,
@@ -1407,7 +1408,8 @@ describe('social.addPostAttachmentFromAsset (#1163)', () => {
         hotspot: null,
         crop: null,
       },
-      { assetProvenOurs: true },
+      // The attach is compare-and-set on the asset as it was read.
+      { heldBy: { id: 'asset-ours', rev: 'asset-rev-4' } },
     )
   })
 
@@ -1481,6 +1483,16 @@ describe('social.addPostAttachmentFromAsset (#1163)', () => {
       }),
     ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
     expect(h.addSocialPostAttachment).not.toHaveBeenCalled()
+  })
+
+  it('answers an asset deleted or changed during the attach with CONFLICT', async () => {
+    h.addSocialPostAttachment.mockResolvedValue({ refused: 'holder-changed' })
+    await expect(
+      social().addPostAttachmentFromAsset({
+        postId: 'post-ours',
+        marketingAssetId: 'asset-ours',
+      }),
+    ).rejects.toMatchObject({ code: 'CONFLICT' })
   })
 
   it('reports a post deleted between the guard and the write as NOT_FOUND', async () => {

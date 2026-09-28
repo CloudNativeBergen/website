@@ -190,7 +190,9 @@ function AssetCard({
               </span>
             ) : null}
             {/* For display only: deleting never waits on it (spec §5). */}
-            <span>{usedInPostsLabel(asset.usedInPosts)}</span>
+            {asset.usedInPosts !== null && (
+              <span>{usedInPostsLabel(asset.usedInPosts)}</span>
+            )}
             {asset.softOnSocial && (
               <span className="inline-flex items-start gap-1 rounded-md bg-amber-50 px-1.5 py-0.5 font-medium text-amber-800 dark:bg-amber-950/60 dark:text-amber-200">
                 <ExclamationTriangleIcon

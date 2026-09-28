@@ -399,6 +399,8 @@ export function ConnectedVariantEditor({
           marketingAssets: {
             assets: assetPicks,
             isLoading: marketingAssets.isLoading,
+            error: marketingAssets.error?.message ?? null,
+            onRetry: () => void marketingAssets.refetch(),
             search: assetSearch,
             onSearchChange: setAssetSearch,
             allEditions,

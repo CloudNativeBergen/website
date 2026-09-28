@@ -84,6 +84,8 @@ export async function listMarketingAssets(
   orgId: string,
   conferenceId: string,
   filter: MarketingAssetFilter,
+  /** The picker shows no usage: it skips the post scan. */
+  options: { countUsage?: boolean } = {},
 ): Promise<MarketingAssetRow[]> {
   const rows = await scopedFetch<
     | (Omit<
@@ -116,15 +118,18 @@ export async function listMarketingAssets(
     },
     { cache: 'no-store' },
   )
-  const used = await countPostsUsingImages(
-    orgId,
-    (rows ?? []).flatMap((row) => (row.assetId ? [row.assetId] : [])),
-  )
+  const used =
+    options.countUsage === false
+      ? null
+      : await countPostsUsingImages(
+          orgId,
+          (rows ?? []).flatMap((row) => (row.assetId ? [row.assetId] : [])),
+        )
   return (rows ?? []).map(({ mimeType, ...row }) => ({
     ...row,
     softOnSocial: isSoftOnSocial(row),
     attachable: isAttachableToPost({ ...row, mimeType }),
-    usedInPosts: (row.assetId && used.get(row.assetId)) || 0,
+    usedInPosts: used ? (row.assetId && used.get(row.assetId)) || 0 : null,
   }))
 }
 
@@ -202,10 +207,12 @@ export async function listMarketingAssetsForPost(
   const [subjectId, rows] = await Promise.all([
     readPostSubjectId(conferenceId, postId),
     // Always every edition: the subject's assets lead from any of them.
-    listMarketingAssets(orgId, conferenceId, {
-      editions: 'all',
-      search: filter.search,
-    }),
+    listMarketingAssets(
+      orgId,
+      conferenceId,
+      { editions: 'all', search: filter.search },
+      { countUsage: false },
+    ),
   ])
   return rows
     .filter((row) => row.kind !== 'audio')
@@ -225,6 +232,8 @@ export async function readMarketingAssetForPost(
   orgId: string,
   id: string,
 ): Promise<{
+  /** The revision read, for the attach's compare-and-set. */
+  rev: string
   imageAssetId: string | null
   alt: string
   hotspot: { x: number; y: number; width: number; height: number } | null
@@ -232,6 +241,7 @@ export async function readMarketingAssetForPost(
   attachable: boolean
 } | null> {
   const row = await scopedFetch<{
+    _rev: string
     kind: string | null
     imageAssetId: string | null
     mimeType: string | null
@@ -242,6 +252,7 @@ export async function readMarketingAssetForPost(
     clientReadUncached,
     { orgId },
     `*[_type == "marketingAsset" && _id == $id][0]{
+      _rev,
       kind,
       "imageAssetId": image.asset._ref,
       "mimeType": image.asset->mimeType,
@@ -254,6 +265,7 @@ export async function readMarketingAssetForPost(
   )
   if (!row) return null
   return {
+    rev: row._rev,
     imageAssetId: row.imageAssetId,
     alt: row.alt ?? '',
     hotspot: row.hotspot ?? null,

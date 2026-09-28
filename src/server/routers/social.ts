@@ -706,13 +706,19 @@ export const socialRouter = router({
           hotspot: asset.hotspot,
           crop: asset.crop,
         },
-        { assetProvenOurs: true },
+        { heldBy: { id: input.marketingAssetId, rev: asset.rev } },
       )
       if ('refused' in added) {
-        throw new TRPCError({
-          code: 'NOT_FOUND',
-          message: 'The post is gone. Reload and retry.',
-        })
+        throw added.refused === 'holder-changed'
+          ? new TRPCError({
+              code: 'CONFLICT',
+              message:
+                'The asset changed or was deleted while it was being added. Reload and retry.',
+            })
+          : new TRPCError({
+              code: 'NOT_FOUND',
+              message: 'The post is gone. Reload and retry.',
+            })
       }
       return added
     }),
