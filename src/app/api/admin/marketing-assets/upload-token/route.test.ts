@@ -80,8 +80,11 @@ describe('the marketing asset upload token', () => {
         'audio/mpeg',
         'audio/mp4',
         'audio/wav',
+        'image/gif',
+        'video/mp4',
       ],
-      maximumSizeInBytes: 20 * 1024 * 1024,
+      // A video's cap (#1167); the move holds each kind to its own.
+      maximumSizeInBytes: 100 * 1024 * 1024,
       addRandomSuffix: true,
     })
     // No completion callback: the move is the only way in.

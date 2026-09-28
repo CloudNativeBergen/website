@@ -7,6 +7,8 @@ const h = vi.hoisted(() => ({
   orgId: vi.fn(),
   move: vi.fn(),
   moveAudio: vi.fn(),
+  moveGif: vi.fn(),
+  moveVideo: vi.fn(),
   discard: vi.fn(),
   orphanFile: vi.fn(),
   create: vi.fn(),
@@ -26,7 +28,10 @@ vi.mock('@/lib/authz/organizer', () => ({
 vi.mock('@/lib/marketing-asset/move', () => ({
   moveBlobToSanity: h.move,
   moveAudioBlobToSanity: h.moveAudio,
+  moveGifBlobToSanity: h.moveGif,
+  moveVideoBlobToSanity: h.moveVideo,
   discardBlob: h.discard,
+  VIDEO_UPLOAD_DEADLINE_MS: 240_000,
 }))
 vi.mock('@/lib/marketing-asset/sanity', () => ({
   createMarketingAsset: h.create,
@@ -44,6 +49,10 @@ vi.mock('@/lib/sanity/orphaned-asset', () => ({
 
 import { POST, maxDuration } from './route'
 import { SANITY_UPLOAD_DEADLINE_MS } from '@/lib/marketing-asset/image-type'
+// The real value, not the mock's: the route must fit the move's own deadline.
+const { VIDEO_UPLOAD_DEADLINE_MS } = await vi.importActual<
+  typeof import('@/lib/marketing-asset/move')
+>('@/lib/marketing-asset/move')
 
 const URL_OK =
   'https://abc.public.blob.vercel-storage.com/marketing-asset/org-A/1790000000000-logo-X1.png'
@@ -99,6 +108,24 @@ beforeEach(() => {
       created: true,
     },
   })
+  h.moveGif.mockResolvedValue({
+    ok: true,
+    asset: {
+      _id: 'image-wave-480x480-gif',
+      url: 'https://cdn/wave.gif',
+      width: 480,
+      height: 480,
+      created: true,
+    },
+  })
+  h.moveVideo.mockResolvedValue({
+    ok: true,
+    asset: {
+      _id: 'file-clip-mp4',
+      url: 'https://cdn/clip.mp4',
+      created: true,
+    },
+  })
   h.orphanFile.mockResolvedValue({ deleted: true })
   h.create.mockResolvedValue({ _id: 'asset-1' })
   h.orphan.mockResolvedValue({ deleted: true })
@@ -112,10 +139,11 @@ beforeEach(() => {
 
 describe('the marketing asset move route', () => {
   it('declares an explicit maxDuration the Sanity upload deadline fits inside', () => {
-    expect(maxDuration).toBe(60)
-    // Room left after the upload gives up, for the blob delete and the answer.
+    expect(maxDuration).toBe(300)
+    // Room left after the upload gives up, for the blob delete and the answer:
+    // for a video, after its poster's move AND its own (#1167).
     expect(
-      maxDuration * 1000 - SANITY_UPLOAD_DEADLINE_MS,
+      maxDuration * 1000 - SANITY_UPLOAD_DEADLINE_MS - VIDEO_UPLOAD_DEADLINE_MS,
     ).toBeGreaterThanOrEqual(10_000)
   })
 
@@ -220,6 +248,7 @@ describe('the marketing asset move route', () => {
       {
         orgId: 'org-A',
         details: RESOLVED,
+        kind: 'image',
         imageAssetId: 'image-a-800x600-png',
         createdImageAssetId: 'image-a-800x600-png',
       },
@@ -463,6 +492,7 @@ describe('a studio save through the move route (#1164)', () => {
     expect(h.create.mock.calls[0][0]).toEqual({
       orgId: 'org-A',
       details: RESOLVED,
+      kind: 'image',
       imageAssetId: 'image-a-800x600-png',
       createdImageAssetId: 'image-a-800x600-png',
     })
@@ -504,5 +534,154 @@ describe('a studio save through the move route (#1164)', () => {
       'orgId',
       'rights',
     ])
+  })
+})
+
+describe('a GIF or a video through the move route (#1167)', () => {
+  const GIF_URL = URL_OK.replace('logo-X1.png', 'wave-X1.gif')
+  const VIDEO_URL = URL_OK.replace('logo-X1.png', 'clip-X1.mp4')
+  const POSTER_URL = URL_OK.replace('logo-X1.png', 'clip-poster-X1.jpg')
+  const GIF = { ...VALID, url: GIF_URL, kind: 'gif' }
+  const VIDEO = {
+    ...VALID,
+    url: VIDEO_URL,
+    kind: 'video',
+    posterUrl: POSTER_URL,
+  }
+  const POSTER = {
+    ok: true,
+    asset: {
+      _id: 'image-poster-1920x1080-jpg',
+      url: 'https://cdn/poster.jpg',
+      width: 1920,
+      height: 1080,
+      created: true,
+    },
+  }
+
+  it('moves a GIF through the GIF move and writes a gif entry', async () => {
+    const response = await POST(request(GIF))
+    expect(response.status).toBe(200)
+    expect(h.moveGif).toHaveBeenCalledWith(GIF_URL, 'org-A')
+    expect(h.move).not.toHaveBeenCalled()
+    expect(h.create.mock.calls[0][0]).toEqual({
+      orgId: 'org-A',
+      details: RESOLVED,
+      kind: 'gif',
+      imageAssetId: 'image-wave-480x480-gif',
+      createdImageAssetId: 'image-wave-480x480-gif',
+    })
+  })
+
+  it('moves the poster FIRST, then streams the video, and writes both', async () => {
+    h.move.mockResolvedValue(POSTER)
+    const response = await POST(request(VIDEO))
+    expect(response.status).toBe(200)
+    expect(h.move).toHaveBeenCalledWith(POSTER_URL, 'org-A')
+    expect(h.moveVideo).toHaveBeenCalledWith(VIDEO_URL, 'org-A')
+    expect(h.move.mock.invocationCallOrder[0]).toBeLessThan(
+      h.moveVideo.mock.invocationCallOrder[0],
+    )
+    expect(h.create.mock.calls[0][0]).toEqual({
+      orgId: 'org-A',
+      details: RESOLVED,
+      kind: 'video',
+      fileAssetId: 'file-clip-mp4',
+      createdFileAssetId: 'file-clip-mp4',
+      posterAssetId: 'image-poster-1920x1080-jpg',
+      createdImageAssetId: 'image-poster-1920x1080-jpg',
+    })
+    expect(await response.json()).toEqual({
+      _id: 'asset-1',
+      softOnSocial: false,
+    })
+  })
+
+  it.each([
+    ['a GIF', GIF],
+    ['a video', VIDEO],
+  ])('requires alt text of %s, and discards the upload', async (_, body) => {
+    const response = await POST(request({ ...body, alt: '' }))
+    expect(response.status).toBe(400)
+    expect(h.moveGif).not.toHaveBeenCalled()
+    expect(h.moveVideo).not.toHaveBeenCalled()
+    expect(h.create).not.toHaveBeenCalled()
+    expect(h.discard).toHaveBeenCalledWith(body.url, 'org-A')
+  })
+
+  it('refuses a video with no poster before anything moves', async () => {
+    const response = await POST(request({ ...VIDEO, posterUrl: undefined }))
+    expect(response.status).toBe(400)
+    expect(h.move).not.toHaveBeenCalled()
+    expect(h.moveVideo).not.toHaveBeenCalled()
+    expect(h.discard).toHaveBeenCalledWith(VIDEO_URL, 'org-A')
+  })
+
+  it.each([
+    ['size', 'The video is larger than 100 MB.'],
+    [
+      'type',
+      'Only MP4 video can be added. Export a .mov again as MP4 and retry.',
+    ],
+  ] as const)(
+    'a %s refusal of the video saves nothing and removes the fresh poster',
+    async (reason, message) => {
+      h.move.mockResolvedValue(POSTER)
+      h.moveVideo.mockResolvedValue({ ok: false, reason })
+      const response = await POST(request(VIDEO))
+      expect(response.status).toBe(400)
+      expect((await response.json()).error).toBe(message)
+      expect(h.create).not.toHaveBeenCalled()
+      // After the answer, through the orphan check.
+      expect(h.orphan).not.toHaveBeenCalled()
+      for (const task of h.afterTasks) await task()
+      expect(h.orphan.mock.calls).toEqual([['image-poster-1920x1080-jpg']])
+    },
+  )
+
+  it('a refused poster discards the video without moving it', async () => {
+    h.move.mockResolvedValue({ ok: false, reason: 'type' })
+    const response = await POST(request(VIDEO))
+    expect(response.status).toBe(400)
+    expect(h.moveVideo).not.toHaveBeenCalled()
+    expect(h.discard).toHaveBeenCalledWith(VIDEO_URL, 'org-A')
+    expect(h.create).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['size', 'The GIF is larger than 10 MB.'],
+    ['type', 'That file is not a GIF.'],
+  ] as const)('a GIF %s refusal saves nothing', async (reason, message) => {
+    h.moveGif.mockResolvedValue({ ok: false, reason })
+    const response = await POST(request(GIF))
+    expect(response.status).toBe(400)
+    expect((await response.json()).error).toBe(message)
+    expect(h.create).not.toHaveBeenCalled()
+  })
+
+  it('removes the fresh MP4 AND poster when the gallery entry cannot be written', async () => {
+    h.move.mockResolvedValue(POSTER)
+    h.create.mockRejectedValue(new Error('boom'))
+    const response = await POST(request(VIDEO))
+    expect(response.status).toBe(500)
+    for (const task of h.afterTasks) await task()
+    expect(h.orphanFile.mock.calls).toEqual([['file-clip-mp4']])
+    expect(h.orphan.mock.calls).toEqual([['image-poster-1920x1080-jpg']])
+  })
+
+  it('never moves a poster sent with an image: it is discarded', async () => {
+    const response = await POST(request({ ...VALID, posterUrl: POSTER_URL }))
+    expect(response.status).toBe(200)
+    expect(h.move).toHaveBeenCalledTimes(1)
+    expect(h.move).toHaveBeenCalledWith(URL_OK, 'org-A')
+    expect(h.discard).toHaveBeenCalledWith(POSTER_URL, 'org-A')
+  })
+
+  it('never marks a GIF or a video as a studio save', async () => {
+    h.move.mockResolvedValue(POSTER)
+    await POST(request({ ...GIF, studio: { tab: 'speakers' } }))
+    await POST(request({ ...VIDEO, studio: { tab: 'speakers' } }))
+    for (const [input] of h.create.mock.calls)
+      expect(input).not.toHaveProperty('studio')
   })
 })
