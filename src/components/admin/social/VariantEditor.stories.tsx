@@ -684,7 +684,11 @@ export const PickingAMarketingAsset: Story = {
   },
   play: async ({ canvasElement, args }) => {
     const picker = await openPicker(canvasElement)
-    // Enter finishes the search; it must not submit the editor's form.
+    // Enter finishes the search; it must not submit the editor's form. Save
+    // is enabled, so a submit WOULD reach onSave: the check is not vacuous.
+    await expect(
+      within(canvasElement).getByRole('button', { name: 'Save variant' }),
+    ).toBeEnabled()
     await userEvent.type(
       picker.getByRole('searchbox', { name: 'Search marketing assets' }),
       'logo{Enter}',
