@@ -29,12 +29,15 @@ export function mentionDocuments(
  *
  * A speaker GONE since the record was written — erased, or deleted so the
  * weak reference dangles — reads as the neutral words, never the stored
- * name, and without its DID: that name is an erased person's real one, and this read feeds the
- * editor (the issue text and its one-click fix) — #1232. Erasure also strips
- * the record itself; this covers a record written back before it and a
- * speaker deleted outright.
+ * name, without its DID, and marked `gone` (the marker, not the name, is
+ * what the editor tells a gone speaker by). The stored name is an erased
+ * person's real one, and this read feeds the editor — the issue text and its
+ * one-click fix (#1232). Their UNRESOLVED note has no tag in the body to fix,
+ * so it is not read at all (no handle, so `mentionRecordsFrom` drops it).
+ * Erasure also strips the records themselves; this covers a record written
+ * back before it and a speaker deleted outright.
  */
-export const MENTION_RECORD_PROJECTION = `{ _key, handle, "did": select(defined(speaker._ref) && (!defined(speaker->_id) || defined(speaker->erasedAt)) => null, did), "speakerId": coalesce(speaker._ref, sponsor._ref), "sponsor": defined(sponsor._ref), "name": select(defined(speaker._ref) && (!defined(speaker->_id) || defined(speaker->erasedAt)) => ${JSON.stringify(GONE_SPEAKER_TEXT)}, name), status }`
+export const MENTION_RECORD_PROJECTION = `{ _key, "handle": select(status == "unresolved" && defined(speaker._ref) && (!defined(speaker->_id) || defined(speaker->erasedAt)) => null, handle), "did": select(defined(speaker._ref) && (!defined(speaker->_id) || defined(speaker->erasedAt)) => null, did), "speakerId": coalesce(speaker._ref, sponsor._ref), "sponsor": defined(sponsor._ref), "name": select(defined(speaker._ref) && (!defined(speaker->_id) || defined(speaker->erasedAt)) => ${JSON.stringify(GONE_SPEAKER_TEXT)}, name), status, "gone": defined(speaker._ref) && (!defined(speaker->_id) || defined(speaker->erasedAt)) }`
 
 export interface RawMentionRecord {
   _key: string | null
@@ -45,6 +48,7 @@ export interface RawMentionRecord {
   sponsor?: boolean | null
   name: string | null
   status: string | null
+  gone?: boolean | null
 }
 
 /** Rows that are not a whole record are dropped rather than half-trusted. */
@@ -63,6 +67,7 @@ export function mentionRecordsFrom(
         ...(m.sponsor === true ? { sponsor: true as const } : {}),
         name: m.name,
         status: m.status,
+        ...(m.gone === true ? { gone: true as const } : {}),
       },
     ]
   })

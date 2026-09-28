@@ -59,6 +59,9 @@ const POSTED_VARIANT_STATUSES = ['published', 'submitted'] as const
  */
 const IN_FLIGHT_STATUSES = ['publishing', 'submitted'] as const
 
+/** How many rounds of account discovery before the read refuses. */
+const MAX_ACCOUNT_ROUNDS = 20
+
 /** Sanity `_key`s are safe to interpolate only if they look like this. */
 const SAFE_KEY = /^[A-Za-z0-9._-]+$/
 
@@ -78,6 +81,12 @@ export interface MentionIdentity {
 export interface SpeakerMentionInputs {
   variants: Doc[]
   identity: MentionIdentity
+  /**
+   * The conferences whose variants are searched for the plain name. Outside
+   * them, only a variant holding a record of the subject is — a variant
+   * found through a team account another speaker shares is theirs.
+   */
+  nameScope: string[]
 }
 
 export interface SpeakerMentionPlan {
@@ -167,11 +176,15 @@ function mentionIdentity(
   return {
     // The neutral text is no name of theirs (the caller drops the erased
     // placeholder, which is the only name an erased document has).
-    names: [...names].filter((n) => n.trim() && n !== GONE_SPEAKER_TEXT),
+    names: [...new Set([...names].map((n) => n.normalize('NFC')))].filter(
+      (n) => n.trim() && n !== GONE_SPEAKER_TEXT,
+    ),
     handles: [...handles],
     dids: [...dids],
   }
 }
+
+const escape = (w: string) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
 /**
  * Any of the names as whole words, any case, across any run of whitespace —
@@ -182,15 +195,25 @@ function namePattern(names: readonly string[]): RegExp | null {
   if (names.length === 0) return null
   const alternatives = [...names]
     .sort((a, b) => b.length - a.length)
-    .map((n) =>
-      n
-        .trim()
-        .split(/\s+/)
-        .map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
-        .join('\\s+'),
-    )
+    .map((n) => n.trim().split(/\s+/).map(escape).join('\\s+'))
   return new RegExp(
     `(?<![\\p{L}\\p{N}_@./=#?&:-])(?:${alternatives.join('|')})(?![\\p{L}\\p{N}_]|[.@/-][\\p{L}\\p{N}_])`,
+    'giu',
+  )
+}
+
+/**
+ * Any of the handles as written ANYWHERE, with or without its `@` — after a
+ * quote or a colon, or in a profile URL, where the publisher would not make
+ * it a tag but it still names the account. Not inside a longer handle.
+ */
+function handlePattern(handles: readonly string[]): RegExp | null {
+  if (handles.length === 0) return null
+  const alternatives = [...handles]
+    .sort((a, b) => b.length - a.length)
+    .map(escape)
+  return new RegExp(
+    `(?<![\\p{L}\\p{N}_.-])@?(?:${alternatives.join('|')})(?![\\p{L}\\p{N}_-]|\\.[\\p{L}\\p{N}_])`,
     'giu',
   )
 }
@@ -198,80 +221,129 @@ function namePattern(names: readonly string[]): RegExp | null {
 /** Where a link stands: a URL is left whole, a name inside it untouched. */
 const LINK = /(?:https?:\/\/|www\.)\S+/gi
 
-/** Each match of the name outside a link: `[start, end]`. */
-function nameSpans(text: string, names: readonly string[]): [number, number][] {
+type Span = [number, number]
+const spansOf = (text: string, pattern: RegExp): Span[] =>
+  [...text.matchAll(pattern)].map((m) => [m.index, m.index + m[0].length])
+const overlaps = ([a, b]: Span, spans: readonly Span[]) =>
+  spans.some(([s, e]) => a < e && b > s)
+
+/** Each match of the name outside a link and outside a placeholder. */
+function nameSpans(text: string, names: readonly string[]): Span[] {
   const pattern = namePattern(names)
   if (!pattern) return []
-  const links = [...text.matchAll(LINK)].map((m) => [
-    m.index,
-    m.index + m[0].length,
-  ])
   // An earlier run's placeholder is not their name, either — or a speaker
   // named "Speaker" would be scrubbed again on every run.
-  const placeholders = [
-    ...text.matchAll(new RegExp(GONE_SPEAKER_TEXT, 'gi')),
-  ].map((m) => [m.index, m.index + m[0].length])
-  const kept = [...links, ...placeholders]
-  return [...text.matchAll(pattern)]
-    .map((m): [number, number] => [m.index, m.index + m[0].length])
-    .filter(([a, b]) => !kept.some(([s, e]) => a < e && b > s))
+  const kept = [
+    ...spansOf(text, LINK),
+    ...spansOf(text, new RegExp(GONE_SPEAKER_TEXT, 'gi')),
+  ]
+  return spansOf(text, pattern).filter((span) => !overlaps(span, kept))
 }
 
 /**
- * The `@handle` tokens that stand for the subject: a recorded handle's
- * occurrences as the publisher binds them to records (`occurrenceOwners`,
- * the same binding #1229's publish-time swap uses), and an unrecorded one
- * of their handles.
+ * Each occurrence of one of their handles, as a tag or not, except a handle
+ * another live speaker's record in this variant carries (a team account):
+ * that one's TAGS are bound per occurrence by {@link subjectTags}.
+ */
+function handleSpans(
+  text: string,
+  handles: readonly string[],
+  shared: ReadonlySet<string>,
+): Span[] {
+  const pattern = handlePattern(handles.filter((h) => !shared.has(h)))
+  return pattern ? spansOf(text, pattern) : []
+}
+
+/**
+ * The `@handle` tags of a team account that stand for the subject, as the
+ * publisher binds occurrences to records (`occurrenceOwners`, the same
+ * binding #1229's publish-time swap uses).
  */
 function subjectTags(
   text: string,
   v: Doc,
   speakerId: string,
   identity: MentionIdentity,
-) {
+): Span[] {
+  const shared = sharedHandles(v)
   const records = list<MentionEntry>(v.mentions)
     .filter((m) => m.status === 'tagged' && str(m.handle) !== null)
-    .map((m) => ({
+    .map((m, i) => ({
       handle: str(m.handle) as string,
-      speakerId: '',
+      speakerId: String(i),
       status: 'tagged' as const,
       name: str(m.name) ?? '',
       subject: isSubjectRecord(m, speakerId, identity),
     }))
-    .map((r, i) => ({ ...r, speakerId: String(i) }))
   const owners = occurrenceOwners(text, records)
   const seen = new Map<string, number>()
-  return mentionTokens(text).filter((t) => {
+  return mentionTokens(text).flatMap((t): Span[] => {
+    if (!shared.has(t.handle)) return []
     const mine = records.filter((r) => normaliseHandle(r.handle) === t.handle)
     const k = seen.get(t.handle) ?? 0
     seen.set(t.handle, k + 1)
-    // Unrecorded: one of their handles (a shared one is always recorded
-    // for its other owner, so it never lands here).
-    if (mine.length === 0) return identity.handles.includes(t.handle)
     // More occurrences than owners: the extras are the last record's.
     const id = owners.get(t.handle)?.[k]
     const r = id !== undefined ? records[Number(id)] : mine[mine.length - 1]
-    return r.subject
+    return r?.subject ? [[t.start, t.end]] : []
   })
 }
 
 /**
- * The text with every tag and whole-word name of the subject neutralised.
- * Tags first; the name pass then skips every placeholder, so a speaker named
- * "Speaker" never has one scrubbed again (see {@link nameSpans}).
+ * Every span of the text that names the subject: their tags and handles, and
+ * — when `byName` — their name. Matched on the NFC form, so a decomposed
+ * "Å" is their name too.
+ */
+function subjectSpans(
+  text: string,
+  v: Doc,
+  speakerId: string,
+  identity: MentionIdentity,
+  byName: boolean,
+): Span[] {
+  const handles = [
+    ...handleSpans(text, identity.handles, sharedHandles(v)),
+    ...subjectTags(text, v, speakerId, identity),
+  ]
+  const names = byName
+    ? nameSpans(text, identity.names).filter((span) => !overlaps(span, handles))
+    : []
+  return [...handles, ...names].sort((a, b) => a[0] - b[0])
+}
+
+/**
+ * The text with every span naming the subject replaced by the neutral words,
+ * or the text as it was when nothing names them.
  */
 function scrubText(
   text: string,
   v: Doc,
   speakerId: string,
   identity: MentionIdentity,
+  byName: boolean,
 ): string {
-  let out = text
-  for (const t of subjectTags(text, v, speakerId, identity).reverse())
-    out = `${out.slice(0, t.start)}${GONE_SPEAKER_TEXT}${out.slice(t.end)}`
-  for (const [a, b] of nameSpans(out, identity.names).reverse())
+  const nfc = text.normalize('NFC')
+  const spans = subjectSpans(nfc, v, speakerId, identity, byName)
+  if (spans.length === 0) return text
+  let out = nfc
+  let end = Infinity
+  for (const [a, b] of spans.reverse()) {
+    if (b > end) continue // overlapping: the earlier span already covers it
     out = `${out.slice(0, a)}${GONE_SPEAKER_TEXT}${out.slice(b)}`
+    end = a
+  }
   return out
+}
+
+/** A variant searched for the plain name: in scope, or holding their record. */
+function byName(v: Doc, speakerId: string, inputs: SpeakerMentionInputs) {
+  const conference = (v.conference as { _ref?: unknown } | undefined)?._ref
+  return (
+    (typeof conference === 'string' && inputs.nameScope.includes(conference)) ||
+    list<MentionEntry>(v.mentions).some((m) =>
+      isSubjectRecord(m, speakerId, inputs.identity),
+    )
+  )
 }
 
 /** A Studio draft or a Content Release copy was never sent anywhere. */
@@ -311,15 +383,16 @@ export function planSpeakerMentionErasure(
     }
 
     if (!isPosted(v)) {
+      const named = byName(v, speakerId, inputs)
       const body = str(v.body)
       if (body !== null) {
-        const scrubbed = scrubText(body, v, speakerId, identity)
+        const scrubbed = scrubText(body, v, speakerId, identity, named)
         if (scrubbed !== body) set.body = scrubbed
       }
       for (const a of list<AttachmentEntry>(v.attachments)) {
         const alt = str(a.altOverride)
         if (alt === null) continue
-        const scrubbed = scrubText(alt, v, speakerId, identity)
+        const scrubbed = scrubText(alt, v, speakerId, identity, named)
         if (scrubbed === alt) continue
         const key = str(a._key)
         if (key && SAFE_KEY.test(key))
@@ -379,19 +452,18 @@ export function planSpeakerMentionErasure(
  */
 export function residualMentionVariants(
   speakerId: string,
-  variants: readonly Doc[],
-  identity: MentionIdentity,
+  inputs: SpeakerMentionInputs,
 ): string[] {
+  const { identity } = inputs
   const ids = new Set<string>()
-  for (const v of variants) {
-    const shared = sharedHandles(v)
+  for (const v of inputs.variants) {
+    const named = byName(v, speakerId, inputs)
     const holds = (text: unknown) => {
       const t = str(text)
-      if (t === null) return false
       return (
-        mentionTokens(t).some(
-          (m) => identity.handles.includes(m.handle) && !shared.has(m.handle),
-        ) || nameSpans(t, identity.names).length > 0
+        t !== null &&
+        subjectSpans(t.normalize('NFC'), v, speakerId, identity, named).length >
+          0
       )
     }
     const recorded = list<MentionEntry>(v.mentions).some((m) => {
@@ -483,7 +555,10 @@ export async function fetchSpeakerMentionInputs(
       // candidates are only the unposted variants of the conferences above.
       groq`*[_type == "socialPostVariant" && !references($speakerId) && (
           count(mentions[lower(handle) in $handles || did in $dids]) > 0 ||
-          (conference._ref in $conferenceIds && !(status in $posted))
+          (conference._ref in $conferenceIds && (
+            !(status in $posted) ||
+            _id in path("drafts.**") || _id in path("versions.**")
+          ))
         )]${VARIANT_FIELDS}`,
       {
         speakerId,
@@ -497,20 +572,29 @@ export async function fetchSpeakerMentionInputs(
     )) ?? []
 
   // A record found by their account may carry another handle or DID of
-  // theirs, which finds more: read to a fixed point (bounded — each round
-  // must grow the identity, and a person has few accounts).
+  // theirs, which finds more: read to a FIXED POINT. Each round must grow
+  // the identity; one that is still growing at the limit is refused rather
+  // than returned partial (fail closed — a person has few accounts).
   let byAccountOrScope = await readByAccountOrScope(identity)
-  for (let round = 0; round < 5; round++) {
+  for (let round = 0; ; round++) {
     const grown = mentionIdentity(speakerId, byAccountOrScope, identity)
-    if (
-      grown.handles.length === identity.handles.length &&
-      grown.dids.length === identity.dids.length
-    ) {
-      identity = grown
-      break
-    }
+    const growing =
+      grown.handles.length > identity.handles.length ||
+      grown.dids.length > identity.dids.length
     identity = grown
+    if (!growing) break
+    if (round === MAX_ACCOUNT_ROUNDS) {
+      throw new Error(
+        `Speaker ${speakerId}'s Bluesky accounts are still being discovered ` +
+          `after ${MAX_ACCOUNT_ROUNDS} rounds; nothing was written — check ` +
+          'the mentions recorded for them by hand',
+      )
+    }
     byAccountOrScope = await readByAccountOrScope(identity)
   }
-  return { variants: [...byRef, ...byAccountOrScope], identity }
+  return {
+    variants: [...byRef, ...byAccountOrScope],
+    identity,
+    nameScope: conferenceIds,
+  }
 }

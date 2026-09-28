@@ -261,8 +261,8 @@ export const IssueWithFixMobile: Story = {
 
 /**
  * A speaker erased or deleted since the post was tagged (#1232): their record
- * reads as the neutral words, so the issue and its fix name nobody, and their
- * unresolved note is not shown.
+ * reads as the neutral words and is marked gone, so the issue and its fix
+ * name nobody.
  */
 const goneTag: MentionRecord = {
   _key: 'spk-gone',
@@ -271,13 +271,7 @@ const goneTag: MentionRecord = {
   speakerId: 'spk-gone',
   name: GONE_SPEAKER_TEXT,
   status: 'tagged',
-}
-const goneNote: MentionRecord = {
-  _key: 'spk-gone2',
-  handle: 'gone2.dev',
-  speakerId: 'spk-gone2',
-  name: GONE_SPEAKER_TEXT,
-  status: 'unresolved',
+  gone: true,
 }
 const goneBody =
   'Meet @grace.dev and Alice Anderson at Cloud Native Bergen 2027.'
@@ -285,7 +279,7 @@ export const GoneSpeakerIssue: Story = {
   args: {
     initialBody: goneBody,
     people: [alice],
-    mentions: [goneTag, goneNote],
+    mentions: [goneTag],
     initialIssues: approvalCheck({
       body: goneBody,
       mentions: [goneTag],
@@ -298,7 +292,6 @@ export const GoneSpeakerIssue: Story = {
     await expect(canvas.getByRole('alert')).toHaveTextContent(
       '@grace.dev tags someone who is no longer a speaker at this conference.',
     )
-    await expect(canvas.queryByText(/Bluesky link does not resolve/)).toBeNull()
     await userEvent.click(
       canvas.getByRole('button', { name: 'Use “a speaker”' }),
     )

@@ -62,8 +62,6 @@ export function TagPanel({
   const notes = mentions.filter(
     (m) =>
       m.status === 'unresolved' &&
-      // A gone speaker's note has no one to be about (#1232).
-      m.name !== GONE_SPEAKER_TEXT &&
       !inBody.has(m.handle) &&
       !taggedIds.has(m.speakerId),
   )
@@ -104,7 +102,7 @@ export function TagPanel({
                   disabled={disabled}
                   onClick={() => onFix(issue)}
                 >
-                  {issue.name === GONE_SPEAKER_TEXT
+                  {issue.gone
                     ? `Use “${GONE_SPEAKER_TEXT}”`
                     : 'Use the plain name'}
                 </AdminButton>

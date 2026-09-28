@@ -92,6 +92,8 @@ export interface MentionIssue {
   handle: string
   name: string
   message: string
+  /** The tag is of a speaker gone since (#1232): `name` is the neutral words. */
+  gone?: true
 }
 
 /** About the whole body: no one tag to fix. */
@@ -512,13 +514,13 @@ function notASpeaker(m: MentionRecord, handle: string): MentionIssue {
     code: 'not-a-speaker',
     mentionKey: m._key,
     handle,
-    name: m.name,
+    name: m.gone ? GONE_SPEAKER_TEXT : m.name,
+    ...(m.gone ? { gone: true as const } : {}),
     // A gone speaker's record reads as the neutral words, never their name
     // (MENTION_RECORD_PROJECTION, #1232): say so without naming anyone.
-    message:
-      m.name === GONE_SPEAKER_TEXT
-        ? `@${handle} tags someone who is no longer a speaker at this conference. Replace it with “${GONE_SPEAKER_TEXT}”.`
-        : `${m.name} is no longer a speaker at this conference. Use the plain name instead of @${handle}.`,
+    message: m.gone
+      ? `@${handle} tags someone who is no longer a speaker at this conference. Replace it with “${GONE_SPEAKER_TEXT}”.`
+      : `${m.name} is no longer a speaker at this conference. Use the plain name instead of @${handle}.`,
   }
 }
 

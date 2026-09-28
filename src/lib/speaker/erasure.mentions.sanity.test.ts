@@ -489,6 +489,117 @@ describe('speaker erasure scrubs post variants (#1232)', () => {
     })
   })
 
+  describe('review round 2 (Codex)', () => {
+    it('reads a draft copy that inherited a posted status and holds only her typed name', async () => {
+      h.dataset.push(
+        variant('drafts.var-typed', 'published', 'Meet Ada Lovelace', {
+          mentions: [],
+        }),
+      )
+      const result = await eraseSpeakerInPlace({
+        speakerId: ADA,
+        actor: 'test',
+      })
+      expect(doc('drafts.var-typed').body).toBe('Meet a speaker')
+      expect(result.verification?.clean).toBe(true)
+    })
+
+    it('scrubs her handle where it is no tag — quoted, after a colon, in a profile link', async () => {
+      h.dataset.push(
+        variant(
+          'var-raw',
+          'draft',
+          'Meet "@ada.bsky.social", See:@ada.bsky.social, bsky.app/profile/ada.bsky.social',
+          { mentions: [] },
+        ),
+      )
+      const result = await eraseSpeakerInPlace({
+        speakerId: ADA,
+        actor: 'test',
+      })
+      expect(doc('var-raw').body).toBe(
+        'Meet "a speaker", See:a speaker, bsky.app/profile/a speaker',
+      )
+      expect(result.verification?.clean).toBe(true)
+    })
+
+    it('leaves a namesake in a variant it reached only through an account another live speaker shares', async () => {
+      h.dataset.push(
+        variant(
+          'var-bob-elsewhere',
+          'draft',
+          'Hear @team.dev with Ada Lovelace',
+          {
+            conference: ref('conf-x'),
+            mentions: [
+              mention('t-bob', BOB, 'team.dev', 'Bob Builder', 'did:plc:team'),
+            ],
+          },
+        ),
+        variant('var-team-a', 'published', 'x', {
+          mentions: [
+            mention('t-ada', ADA, 'team.dev', 'Ada Lovelace', 'did:plc:team'),
+            mention('t-bob', BOB, 'team.dev', 'Bob Builder', 'did:plc:team'),
+          ],
+        }),
+      )
+      const result = await eraseSpeakerInPlace({
+        speakerId: ADA,
+        actor: 'test',
+      })
+      expect(doc('var-bob-elsewhere').body).toBe(
+        'Hear @team.dev with Ada Lovelace',
+      )
+      expect(result.verification?.clean).toBe(true)
+    })
+
+    it('matches a canonically equivalent spelling (decomposed Å)', async () => {
+      doc(ADA).name = 'Åsa Berg'
+      h.dataset.push(
+        variant('var-nfd', 'draft', 'Meet A\u030Asa Berg', { mentions: [] }),
+      )
+      const result = await eraseSpeakerInPlace({
+        speakerId: ADA,
+        actor: 'test',
+      })
+      expect(doc('var-nfd').body).toBe('Meet a speaker')
+      expect(result.verification?.clean).toBe(true)
+    })
+
+    it('REFUSES rather than return a partial identity when her accounts keep chaining', async () => {
+      // 25 records, each found by the previous one's DID and carrying the next.
+      for (let i = 0; i < 25; i++)
+        h.dataset.push(
+          variant(`var-chain-${i}`, 'published', 'x', {
+            conference: ref('conf-x'),
+            mentions: [
+              mention(
+                `c${i}`,
+                `spk-gone-${i}`,
+                `h${i}.dev`,
+                'X',
+                i === 0 ? ADA_DID : `did:plc:${i}`,
+              ),
+              mention(
+                `d${i}`,
+                `spk-gone-${i}`,
+                `h${i}.dev`,
+                'X',
+                `did:plc:${i + 1}`,
+              ),
+            ],
+          }),
+        )
+      const before = structuredClone(h.dataset)
+      const result = await eraseSpeakerInPlace({
+        speakerId: ADA,
+        actor: 'test',
+      })
+      expect(result.err?.message).toMatch(/still being discovered/)
+      expect(h.dataset).toEqual(before)
+    })
+  })
+
   it('REFUSES, writing nothing, while a variant naming her is being published', async () => {
     h.dataset.push(variant('var-in-flight', 'publishing', TAGGED))
     const before = structuredClone(h.dataset)
@@ -536,10 +647,11 @@ describe('speaker erasure scrubs post variants (#1232)', () => {
   })
 
   describe('the residual check reads the STORED variants', () => {
-    it('the commit’s own verification looks for the name, handle and DID it read BEFORE the erasure', async () => {
-      // A save racing the erasure: it lands after the transaction, so only
-      // the verification can see it — and only with what was read before.
-      h.afterCommit = () =>
+    it('a save racing the erasure is repaired with the name, handle and DID read BEFORE it — the last moment they are known', async () => {
+      // Lands after the transaction: only the commit's own verification can
+      // see it, and a re-run could not repair it (the identity is gone).
+      h.afterCommit = () => {
+        h.afterCommit = null
         h.dataset.push(
           variant('var-race-name', 'draft', 'Meet Ada Lovelace', {
             mentions: [],
@@ -549,11 +661,28 @@ describe('speaker erasure scrubs post variants (#1232)', () => {
             mentions: [mention('m', 'spk-other', 'x.dev', 'X', ADA_DID)],
           }),
         )
+      }
       const result = await eraseSpeakerInPlace({
         speakerId: ADA,
         actor: 'test',
       })
-      expect(result.verification?.residual.postVariants).toBe(2)
+      expect(doc('var-race-name').body).toBe('Meet a speaker')
+      expect(doc('var-race-did').mentions).toEqual([])
+      expect(result.verification?.clean).toBe(true)
+    })
+
+    it('a racing save the repair must not touch (in flight) is reported, not hidden', async () => {
+      h.afterCommit = () => {
+        h.afterCommit = null
+        h.dataset.push(variant('var-race-flight', 'publishing', TAGGED))
+      }
+      const result = await eraseSpeakerInPlace({
+        speakerId: ADA,
+        actor: 'test',
+      })
+      expect(result.err).toBeNull()
+      expect(doc('var-race-flight').body).toBe(TAGGED)
+      expect(result.verification?.residual.postVariants).toBe(1)
       expect(result.verification?.clean).toBe(false)
     })
 

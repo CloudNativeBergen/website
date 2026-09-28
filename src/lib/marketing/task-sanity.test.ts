@@ -670,7 +670,11 @@ describe('getTaskEditorData — Bluesky tag people and mentions (#1151)', () => 
         const viaVariant = await getVariantMentionRecords('variant-li', CONF_A)
         for (const records of [viaTask, viaVariant]) {
           expect(records).toEqual([
-            expect.objectContaining({ speakerId: id, name: 'a speaker' }),
+            expect.objectContaining({
+              speakerId: id,
+              name: 'a speaker',
+              gone: true,
+            }),
           ])
         }
         const payload = JSON.stringify([
@@ -683,6 +687,16 @@ describe('getTaskEditorData — Bluesky tag people and mentions (#1151)', () => 
         expect(payload).not.toContain('did:plc:gone')
       },
     )
+
+    it('drops a gone speaker’s unresolved note, handle and all', async () => {
+      doc('variant-li').mentions = [
+        { ...goneTag('sp-deleted'), did: undefined, status: 'unresolved' },
+      ]
+      expect(await getVariantMentionRecords('variant-li', CONF_A)).toEqual([])
+      const data = await getTaskEditorData('task-li', CONF_A)
+      expect(data!.tagMentions).toEqual([])
+      expect(JSON.stringify(data)).not.toContain('gone.dev')
+    })
 
     it('a live speaker keeps their name', async () => {
       doc('variant-li').mentions = [goneTag('sp-2')]
