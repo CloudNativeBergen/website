@@ -140,6 +140,50 @@ export async function resolveSocialCredentials(
   )
 }
 
+/** Whether a platform's approved variants publish themselves or are posted by hand. */
+export type SocialConnectionMode = 'automatic' | 'manual'
+
+/**
+ * One platform's connection as the admin may see it (#1130, spec §4): the
+ * mode, and the intermediary it publishes THROUGH when that is not the
+ * platform itself (LinkedIn via `buffer`). Nothing else — never a secret.
+ */
+export interface SocialConnection {
+  platform: SocialPlatform
+  mode: SocialConnectionMode
+  via: SecretFamily | null
+}
+
+/**
+ * Every platform's connection for this ORGANIZATION, DERIVED exactly as the
+ * publish cron derives it: the org's secret bag through the adapter FACTORY.
+ * Asking the factory, not whether a bag exists, is what makes a half-filled
+ * `buffer` bag (the JSON-blob path does not enforce both-or-nothing) read
+ * manual here as it does at publish time. No organization: all manual, no
+ * lookup. An indeterminate lookup throws rather than claiming "manual".
+ */
+export async function resolveSocialConnections(
+  orgId: string | null,
+  secrets: SecretsLookup = resolveTenantSecrets,
+): Promise<SocialConnection[]> {
+  return Promise.all(
+    SOCIAL_PLATFORMS.map(async (platform): Promise<SocialConnection> => {
+      const credentials = orgId
+        ? await resolveSocialCredentials(orgId, platform, secrets)
+        : null
+      const automatic =
+        credentials !== null &&
+        getSocialPublishAdapter(platform, credentials) !== null
+      const family = CONNECTION_FAMILY[platform] ?? null
+      return {
+        platform,
+        mode: automatic ? 'automatic' : 'manual',
+        via: automatic && family !== platform ? family : null,
+      }
+    }),
+  )
+}
+
 /**
  * The request-boundary resolver the cron hands the engine: a variant is
  * manual iff its organization has no connection for the platform — a

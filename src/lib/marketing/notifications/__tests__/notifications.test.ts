@@ -592,8 +592,15 @@ describe('a failed confirmation notifies every organizer (#1130)', () => {
           linkCardDisplacesImages: false,
         },
         validate: () => [],
-        publish: async () => ({ ok: false, outcome: 'transient' }),
-        confirm: async () => ({ state: 'failed', message: 'Token expired' }),
+        publish: async () => ({
+          ok: false as const,
+          kind: 'transient' as const,
+          message: 'unused',
+        }),
+        confirm: async () => ({
+          state: 'failed' as const,
+          message: 'Token expired',
+        }),
       }),
       onFailed: notifyMarketingFailure,
     })

@@ -93,6 +93,18 @@ vi.mock('@/lib/social/provider/constraints', async (importOriginal) => {
   constraints.validate.mockImplementation(real.validatePublishInput)
   return { ...real, validatePublishInput: constraints.validate }
 })
+// The tenant secret store behind `social.connections` (#1130): the real
+// derivation runs; only the store answers are scripted.
+const secretsStore = vi.hoisted(() => ({
+  resolveTenantSecrets: vi.fn(
+    async (_orgId: string | null | undefined, _family: string) =>
+      null as object | null,
+  ),
+}))
+vi.mock('@/lib/secrets/store', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/secrets/store')>()),
+  resolveTenantSecrets: secretsStore.resolveTenantSecrets,
+}))
 vi.mock('@/lib/social/provider', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/social/provider')>()),
   resolveSocialPublishAdapter: h.resolveAdapter,
@@ -970,6 +982,42 @@ describe('social.markPosted', () => {
       }),
     ).rejects.toMatchObject({ code: 'NOT_FOUND' })
     expect(h.getSocialPostVariant).not.toHaveBeenCalled()
+  })
+})
+
+describe('social.connections (#1130)', () => {
+  it("derives the REQUEST organization's modes, LinkedIn via Buffer, and sends no secret", async () => {
+    secretsStore.resolveTenantSecrets.mockImplementation(
+      async (_orgId, family) =>
+        family === 'buffer'
+          ? { apiKey: 'SECRET-KEY', linkedinChannelId: 'SECRET-CHANNEL' }
+          : null,
+    )
+    const rows = await social().connections()
+    expect(
+      new Set(secretsStore.resolveTenantSecrets.mock.calls.map(([o]) => o)),
+    ).toEqual(new Set([ORG_A]))
+    expect(rows.find((r) => r.platform === 'linkedin')).toEqual({
+      platform: 'linkedin',
+      mode: 'automatic',
+      via: 'buffer',
+    })
+    expect(JSON.stringify(rows)).not.toMatch(/SECRET/)
+    secretsStore.resolveTenantSecrets.mockReset()
+    secretsStore.resolveTenantSecrets.mockResolvedValue(null)
+  })
+
+  it('refuses rather than claiming manual when the organization is unresolvable', async () => {
+    h.getConference.mockResolvedValue({
+      conference: { _id: CONF_A, organization: null },
+      domain: 'localhost',
+      error: null,
+    })
+    // The org-scoped authz waist refuses first (FORBIDDEN); the procedure's
+    // own NOT_FOUND guard behind it is defence in depth. On the VALUE: no
+    // mode is claimed and the secret store is never asked.
+    await expect(social().connections()).rejects.toBeInstanceOf(Error)
+    expect(secretsStore.resolveTenantSecrets).not.toHaveBeenCalled()
   })
 })
 
