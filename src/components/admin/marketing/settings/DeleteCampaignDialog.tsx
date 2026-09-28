@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
 import { typeToConfirmMatches } from '@/components/admin/new-edition/wizardLogic'
 import { api } from '@/lib/trpc/client'
+import { LiveLinksWarning } from '../LiveLinksWarning'
 
 export interface DeletionPreview {
   campaigns: number
@@ -12,6 +13,8 @@ export interface DeletionPreview {
   publishedTasks: number
   snapshots: number
   requiresTypedConfirmation: boolean
+  /** Short links that may be live and fall back to the home page (§2.7). */
+  liveLinks: number
   conferenceTitle: string
 }
 export function DeleteConfirmation({
@@ -92,6 +95,7 @@ export function DeleteConfirmation({
             </li>
             <li>{preview.snapshots} stored measurements preserved</li>
           </ul>
+          <LiveLinksWarning count={preview.liveLinks} />
           {preview.requiresTypedConfirmation && (
             <label className="block">
               Type &ldquo;{preview.conferenceTitle}&rdquo; to confirm

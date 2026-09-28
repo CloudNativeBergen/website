@@ -43,6 +43,7 @@ const meta = {
                 publishedTasks: 3,
                 snapshots: 40,
                 requiresTypedConfirmation: true,
+                liveLinks: 0,
                 conferenceTitle: 'Cloud Native Days Norway 2026',
               },
             },
@@ -239,6 +240,7 @@ export const DeletePublishedCampaign: Story = {
         publishedTasks: 2,
         snapshots: 45,
         requiresTypedConfirmation: true,
+        liveLinks: 0,
         conferenceTitle: 'Cloud Native Days Norway 2026',
       }}
       onClose={fn()}
@@ -255,6 +257,7 @@ export const DeleteDraftCampaign: Story = {
         publishedTasks: 0,
         snapshots: 2,
         requiresTypedConfirmation: false,
+        liveLinks: 0,
         conferenceTitle: 'Cloud Native Days Norway 2026',
       }}
       onClose={fn()}
@@ -286,6 +289,7 @@ export const DeletePublishedPlan: Story = {
         publishedTasks: 12,
         snapshots: 240,
         requiresTypedConfirmation: true,
+        liveLinks: 0,
         conferenceTitle: 'Cloud Native Days Norway 2026',
       }}
       onClose={fn()}
@@ -303,6 +307,7 @@ export const DeleteUnpublishedPlan: Story = {
         publishedTasks: 0,
         snapshots: 10,
         requiresTypedConfirmation: false,
+        liveLinks: 0,
         conferenceTitle: 'Cloud Native Days Norway 2026',
       }}
       onClose={fn()}
@@ -326,6 +331,7 @@ export const DeletingPlan: Story = {
         publishedTasks: 0,
         snapshots: 10,
         requiresTypedConfirmation: false,
+        liveLinks: 0,
         conferenceTitle: 'Cloud Native Days Norway 2026',
       }}
       onClose={fn()}

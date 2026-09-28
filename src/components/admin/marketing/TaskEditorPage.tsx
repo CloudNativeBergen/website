@@ -52,6 +52,7 @@ import {
   STATUS_LABELS,
 } from './timeline-model'
 import { useCeilingWarningToast } from './useCeilingWarningToast'
+import { LiveLinksWarning } from './LiveLinksWarning'
 
 const inputClass =
   'block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-xs focus:border-brand-cloud-blue focus:ring-1 focus:ring-brand-cloud-blue focus:outline-none disabled:opacity-60 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100'
@@ -151,6 +152,13 @@ function LoadedTaskEditor({
   const failed = (title: string) => (err: { message: string }) =>
     showNotification({ type: 'error', title, message: err.message })
 
+  // What the delete would remove, read when the dialog opens: the same
+  // guarded read and refusals as the delete (short-links spec §2.7).
+  const deletion = api.marketing.task.deletionPreview.useQuery(
+    { taskId: task._id },
+    { enabled: deleting, refetchOnWindowFocus: false, retry: false },
+  )
+  const deletionPreview = deletion.isFetching ? undefined : deletion.data
   const del = api.marketing.task.delete.useMutation({
     onSuccess: () => {
       void utils.marketing.plan.get.invalidate()
@@ -311,7 +319,22 @@ function LoadedTaskEditor({
         confirmButtonText="Delete task"
         variant="danger"
         isLoading={del.isPending}
-      />
+        confirmDisabled={!deletionPreview}
+      >
+        {deletion.error ? (
+          <p role="alert" className="mt-4 text-sm text-red-600">
+            {deletion.error.message}
+          </p>
+        ) : !deletionPreview ? (
+          <p className="mt-4 text-sm">Checking the short link…</p>
+        ) : (
+          deletionPreview.liveLinks > 0 && (
+            <div className="mt-4">
+              <LiveLinksWarning count={deletionPreview.liveLinks} />
+            </div>
+          )
+        )}
+      </ConfirmationModal>
     </div>
   )
 }

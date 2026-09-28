@@ -30,6 +30,8 @@ const mocks = vi.hoisted(() => ({
   query: vi.fn(),
   editorQuery: vi.fn(() => ({ data: undefined, error: null })),
   fetchEditor: vi.fn(),
+  deletionPreview: vi.fn(),
+  remove: vi.fn(),
 }))
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }))
 vi.mock('@/components/admin/NotificationProvider', () => ({
@@ -55,7 +57,10 @@ vi.mock('@/lib/trpc/client', () => {
         task: {
           get: { useQuery: mocks.query },
           attachAsset: { useMutation: () => ({ mutateAsync: mocks.attach }) },
-          delete: mutation,
+          deletionPreview: { useQuery: mocks.deletionPreview },
+          delete: {
+            useMutation: () => ({ mutate: mocks.remove, isPending: false }),
+          },
           setAssignee: mutation,
           setDate: mutation,
           setPrerequisites: mutation,
@@ -137,6 +142,82 @@ function renderOutreachWithQuery(retry: number | false = false) {
     },
   }
 }
+
+/** §2.7: the Task delete preview warns about a link that may be live. */
+describe('Task delete preview (#1145)', () => {
+  beforeEach(() => {
+    mocks.data = outreachData()
+  })
+  const open = () => {
+    render(<TaskEditorPage taskId="outreach-1" />)
+    fireEvent.click(screen.getByRole('button', { name: 'Delete task' }))
+  }
+  const confirm = () =>
+    screen.getAllByRole('button', { name: 'Delete task' }).at(-1)!
+
+  it('reads the preview only once the dialog opens', () => {
+    render(<TaskEditorPage taskId="outreach-1" />)
+    expect(mocks.deletionPreview).toHaveBeenLastCalledWith(
+      { taskId: 'outreach-1' },
+      expect.objectContaining({ enabled: false }),
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Delete task' }))
+    expect(mocks.deletionPreview).toHaveBeenLastCalledWith(
+      { taskId: 'outreach-1' },
+      expect.objectContaining({ enabled: true }),
+    )
+  })
+
+  it('warns that the link falls back to the home page, and still deletes', () => {
+    mocks.deletionPreview.mockReturnValue({
+      data: { liveLinks: 1 },
+      isFetching: false,
+      error: null,
+    })
+    open()
+    expect(screen.getByText('1 short link may already be shared')).toBeTruthy()
+    expect(screen.getByText(/opens the conference home page/)).toBeTruthy()
+    fireEvent.click(confirm())
+    expect(mocks.remove).toHaveBeenCalledWith({ taskId: 'outreach-1' })
+  })
+
+  it('says nothing extra when no link may be live', () => {
+    mocks.deletionPreview.mockReturnValue({
+      data: { liveLinks: 0 },
+      isFetching: false,
+      error: null,
+    })
+    open()
+    expect(screen.queryByText(/may already be shared/)).toBeNull()
+    expect(screen.queryByText(/Checking/)).toBeNull()
+    fireEvent.click(confirm())
+    expect(mocks.remove).toHaveBeenCalledTimes(1)
+  })
+
+  it('waits for the preview, and shows a refusal instead of deleting', () => {
+    mocks.deletionPreview.mockReturnValue({
+      data: { liveLinks: 1 },
+      isFetching: true,
+      error: null,
+    })
+    open()
+    expect(screen.getByText('Checking the short link…')).toBeTruthy()
+    fireEvent.click(confirm())
+    expect(mocks.remove).not.toHaveBeenCalled()
+    cleanup()
+    mocks.deletionPreview.mockReturnValue({
+      data: undefined,
+      isFetching: false,
+      error: { message: 'The post has been published; the record is kept.' },
+    })
+    open()
+    expect(screen.getByRole('alert').textContent).toBe(
+      'The post has been published; the record is kept.',
+    )
+    fireEvent.click(confirm())
+    expect(mocks.remove).not.toHaveBeenCalled()
+  })
+})
 
 describe('Task editor outreach', () => {
   beforeEach(() => {
@@ -479,6 +560,11 @@ beforeEach(() => {
     isFetching: false,
   }))
   mocks.invalidate.mockReset()
+  mocks.deletionPreview.mockReturnValue({
+    data: undefined,
+    isFetching: false,
+    error: null,
+  })
   mocks.data = pendingData()
   mocks.fetch.mockResolvedValue({
     ...mocks.data,
