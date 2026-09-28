@@ -4,6 +4,7 @@ import { mediaDeletionBlockers } from './media-deletion'
 import { outcomeMayBeLive } from './state-machine'
 import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
 import { scopedFetch } from '@/lib/sanity/scoped'
+import { blueskyHandlesFromLinks } from '@/lib/marketing/tagging/handle'
 import { verifiedDomains } from '@/lib/domain-verification/routing'
 import { variantShortLinkOrigin } from './publish-link'
 import { withTimeout } from './with-timeout'
@@ -90,7 +91,7 @@ const POST_ATTACHMENTS_PROJECTION = groq`attachments[]{
  * boolean is read off the speaker, and it never leaves the server.
  */
 // groq-global-scoped: the Task subquery binds conference._ref to the outer variant's ^.conference._ref.
-const DUE_PROJECTION = groq`{ ...${VARIANT_PROJECTION}, "postAttachments": select(post->conference._ref == conference._ref => post->${POST_ATTACHMENTS_PROJECTION}), "conferenceDomains": conference->domains, "postCreatedBy": select(post->conference._ref == conference._ref => post->createdBy._ref), "marketingTaskId": *[_type == "marketingTask" && conference._ref == ^.conference._ref && variant._ref == ^._id && !(_id in path("drafts.**")) && !(_id in path("versions.**"))][0]._id, "recordedTags": mentions[status == "tagged"]{ handle, did, name, "speakerId": speaker._ref, "optedOut": speaker->socialTagOptOut == true, "gone": defined(speaker._ref) && (!defined(speaker->_id) || defined(speaker->erasedAt)) } }`
+const DUE_PROJECTION = groq`{ ...${VARIANT_PROJECTION}, "postAttachments": select(post->conference._ref == conference._ref => post->${POST_ATTACHMENTS_PROJECTION}), "conferenceDomains": conference->domains, "postCreatedBy": select(post->conference._ref == conference._ref => post->createdBy._ref), "marketingTaskId": *[_type == "marketingTask" && conference._ref == ^.conference._ref && variant._ref == ^._id && !(_id in path("drafts.**")) && !(_id in path("versions.**"))][0]._id, "recordedTags": mentions[status == "tagged"]{ handle, did, name, "speakerId": speaker._ref, "sponsorId": sponsor._ref, "optedOut": speaker->socialTagOptOut == true, "gone": defined(speaker._ref) && (!defined(speaker->_id) || defined(speaker->erasedAt)) } }`
 
 interface RawVariant {
   _id: string
@@ -164,6 +165,7 @@ interface RawRecordedTag {
   did: string | null
   name: string | null
   speakerId: string | null
+  sponsorId?: string | null
   optedOut: boolean | null
   gone: boolean | null
 }
@@ -184,6 +186,7 @@ function normalizeRecordedTags(
             ...(t.did ? { did: t.did } : {}),
             name: t.name || t.handle,
             ...(t.speakerId ? { speakerId: t.speakerId } : {}),
+            ...(t.sponsorId && !t.speakerId ? { sponsorId: t.sponsorId } : {}),
             optedOut: t.optedOut === true,
             ...(t.gone === true ? { gone: true } : {}),
           },
@@ -487,6 +490,32 @@ export const sanitySocialVariantStore: SocialVariantStore = {
             : { optedOut: false, gone: true },
         ] as const
       }),
+    )
+  },
+
+  async optedOutBlueskyHandles(conferenceId) {
+    // The speakers of THIS conference's talks (any status — the manual
+    // path's roster), opted out: only their links are read, and only to
+    // withhold a sponsor tag that names one of their accounts (#1154).
+    const rows = await scopedFetch<
+      ({ links: unknown; optedOut: boolean | null } | null)[] | null
+    >(
+      clientWrite,
+      { conferenceId },
+      groq`*[_type == "talk" && !(_id in path("drafts.**")) && !(_id in path("versions.**"))].speakers[]->{ links, "optedOut": socialTagOptOut == true }`,
+      {},
+      { cache: 'no-store' },
+    )
+    return new Set(
+      (rows ?? []).flatMap((r) =>
+        r?.optedOut !== true
+          ? []
+          : blueskyHandlesFromLinks(
+              Array.isArray(r?.links)
+                ? r.links.filter((l): l is string => typeof l === 'string')
+                : null,
+            ),
+      ),
     )
   },
 

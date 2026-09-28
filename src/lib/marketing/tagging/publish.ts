@@ -30,6 +30,16 @@ export type WithheldTag =
       handles: string[]
     }
   | { reason: 'gone'; speakerId: string }
+  /**
+   * A sponsor company's tag whose handle an opted-out speaker lists (#1154):
+   * the company's name went out. The speaker is never named.
+   */
+  | {
+      reason: 'listed-by-opted-out'
+      sponsorId: string
+      name: string
+      handles: string[]
+    }
 
 export interface WithheldTags {
   /** The text to post. */
@@ -71,18 +81,33 @@ export function withholdOptedOutTags(input: {
     // More occurrences than owners: the extras are the last record's.
     const id = ids?.[k]
     const r = id !== undefined ? input.recorded[Number(id)] : last
-    if (!r.speakerId || !(r.optedOut || r.gone)) {
+    const owner = r.speakerId ?? r.sponsorId
+    if (!owner || !(r.optedOut || r.gone)) {
       kept.push({ handle: t.handle, record: r })
       return []
     }
-    const before = withheld.get(r.speakerId)
+    const before = withheld.get(owner)
+    if (!r.speakerId && r.sponsorId) {
+      withheld.set(owner, {
+        reason: 'listed-by-opted-out',
+        sponsorId: r.sponsorId,
+        name: r.name,
+        handles: [
+          ...new Set([
+            ...(before?.reason === 'listed-by-opted-out' ? before.handles : []),
+            t.handle,
+          ]),
+        ],
+      })
+      return [{ ...t, name: replacementText(r) }]
+    }
     withheld.set(
-      r.speakerId,
+      owner,
       r.gone
-        ? { reason: 'gone', speakerId: r.speakerId }
+        ? { reason: 'gone', speakerId: r.speakerId! }
         : {
             reason: 'opted-out',
-            speakerId: r.speakerId,
+            speakerId: r.speakerId!,
             name: r.name,
             handles: [
               ...new Set([

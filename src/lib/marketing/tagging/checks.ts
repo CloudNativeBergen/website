@@ -451,8 +451,38 @@ function optedOutIssue(p: TaggablePerson, handle: string): MentionIssue {
     mentionKey: storedKey(p.speakerId),
     handle,
     name: p.name,
-    message: `${p.name} has asked not to be tagged in social posts. Use the plain name instead of @${handle}.`,
+    // A sponsor is refused for a speaker who lists its account: never named,
+    // since the Task editor is not hers to see (#1154).
+    message: p.sponsor
+      ? `Someone who has asked not to be tagged in social posts lists @${handle}. Use the plain name instead.`
+      : `${p.name} has asked not to be tagged in social posts. Use the plain name instead of @${handle}.`,
   }
+}
+
+/**
+ * The opt-out always wins (#1154): a sponsor whose handle an opted-out
+ * speaker of this conference also lists is treated as opted out itself — the
+ * company still OWNS the tag (`byHandle`), but it is refused at save and
+ * approval, and swapped for the name in the manual view. Pure.
+ */
+export function withSharedOptOuts(
+  people: readonly TaggablePerson[],
+): TaggablePerson[] {
+  const refused = new Set(
+    people
+      .filter((p) => !p.sponsor && p.optedOut)
+      .flatMap((p) =>
+        (p.handles ?? (p.handle ? [p.handle] : [])).map(normaliseHandle),
+      ),
+  )
+  return people.map((p) =>
+    p.sponsor &&
+    (p.handles ?? (p.handle ? [p.handle] : [])).some((h) =>
+      refused.has(normaliseHandle(h)),
+    )
+      ? { ...p, optedOut: true }
+      : p,
+  )
 }
 
 /**

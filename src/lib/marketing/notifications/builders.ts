@@ -86,11 +86,19 @@ export function tagsWithheldNotifications(
   const optedOut = withheld.flatMap((w) =>
     w.reason === 'opted-out' ? [w] : [],
   )
-  const gone = withheld.length - optedOut.length
+  const companies = withheld.flatMap((w) =>
+    w.reason === 'listed-by-opted-out' ? [w] : [],
+  )
+  const gone = withheld.filter((w) => w.reason === 'gone').length
   const message = [
     optedOut.length > 0
       ? `${joinNames(optedOut.map((w) => w.name))} asked not to be tagged after the post was approved, so it went out with ${optedOut.length > 1 ? 'their names' : 'their name'} instead of ${optedOut.flatMap((w) => w.handles.map((h) => `@${h}`)).join(', ')}.`
       : null,
+    // The speaker who listed the account is never named here (#1154).
+    ...companies.map(
+      (w) =>
+        `${w.handles.map((h) => `@${h}`).join(', ')} went out as “${w.name}”: someone who asked not to be tagged lists that account.`,
+    ),
     gone === 1
       ? `A tag of someone who is no longer a speaker here was replaced with “${GONE_SPEAKER_TEXT}”.`
       : gone > 1

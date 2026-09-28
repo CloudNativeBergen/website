@@ -889,33 +889,46 @@ describe('sponsor tags', () => {
     expect(h.updateSocialVariantContent.mock.calls[0][1].mentions).toEqual([])
   })
 
-  it('a sponsor handle a speaker ALSO lists is the sponsor’s: recorded as the company, not refused for her opt-out', async () => {
+  it('a sponsor handle a speaker (not opted out) also lists is recorded as the company', async () => {
     seedSponsors([])
-    // Olga (opted out, on the programme) lists the company account too.
-    const olga = dataset.find((d) => d._id === 'spk-olga')!
-    olga.links = [
-      'https://bsky.app/profile/olga.dev',
-      'https://bsky.app/profile/acme.example',
-    ]
+    const alice = dataset.find((d) => d._id === 'spk-alice')!
+    alice.links = ['https://bsky.app/profile/acme.example']
     await save('Thanks @acme.example!')
-    expect(h.updateSocialVariantContent.mock.calls[0][1].mentions).toEqual([
-      expect.objectContaining({
-        _key: 'sp-acme',
-        sponsor: { _type: 'reference', _ref: 'sp-acme', _weak: true },
-        name: 'Acme AS',
-      }),
-    ])
-    expect(
-      h.updateSocialVariantContent.mock.calls[0][1].mentions[0],
-    ).not.toHaveProperty('speaker')
+    const [m] = h.updateSocialVariantContent.mock.calls[0][1].mentions
+    expect(m).toMatchObject({
+      _key: 'sp-acme',
+      sponsor: { _type: 'reference', _ref: 'sp-acme', _weak: true },
+      name: 'Acme AS',
+    })
+    expect(m).not.toHaveProperty('speaker')
   })
 
-  it('…and a recorded sponsor tag passes scheduling though that speaker opted out', async () => {
+  it('the opt-out wins: a sponsor handle an OPTED-OUT speaker also lists is refused at save, without naming her', async () => {
+    seedSponsors([])
     const olga = dataset.find((d) => d._id === 'spk-olga')!
     olga.links = ['https://bsky.app/profile/acme.example']
-    const result = await social().scheduleVariant({ variantId: 'variant-ours' })
-    expect(h.transition).toHaveBeenCalled()
-    expect(result.tagWarnings).toEqual([])
+    const error = await save('Thanks @acme.example!').catch(
+      (e: { cause: TagIssuesError }) => e,
+    )
+    const issues = (error as { cause: TagIssuesError }).cause.tagIssues
+    expect(issues.map((i) => [i.code, i.mentionKey, i.name])).toEqual([
+      ['opted-out', 'sp-acme', 'Acme AS'],
+    ])
+    expect(issues[0].message).toBe(
+      'Someone who has asked not to be tagged in social posts lists @acme.example. Use the plain name instead.',
+    )
+    expect(JSON.stringify(issues)).not.toContain('Olga')
+    expect(h.updateSocialVariantContent).not.toHaveBeenCalled()
+    expect(askedBluesky()).toEqual([])
+  })
+
+  it('…and scheduling a recorded sponsor tag is refused the same way', async () => {
+    const olga = dataset.find((d) => d._id === 'spk-olga')!
+    olga.links = ['https://bsky.app/profile/acme.example']
+    expect(
+      await refusal(social().scheduleVariant({ variantId: 'variant-ours' })),
+    ).toEqual([['opted-out', 'sp-acme']])
+    expect(h.transition).not.toHaveBeenCalled()
   })
 
   it('a prospect of THIS conference is a stranger: not recorded, never asked', async () => {

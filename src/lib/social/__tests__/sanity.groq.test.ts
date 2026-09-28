@@ -472,6 +472,7 @@ describe('findWork — the composed due/stale scan', () => {
             handle: 'acme.com',
             did: 'did:plc:acme',
             name: 'Acme',
+            sponsorId: 'acme',
             optedOut: false,
           },
         ],
@@ -518,6 +519,40 @@ describe('findWork — the composed due/stale scan', () => {
       carol: { optedOut: false, gone: true },
     })
     expect(h.queries).toHaveLength(1)
+  })
+
+  it('optedOutBlueskyHandles: the handles opted-out speakers of THIS conference list (#1154)', async () => {
+    const talk = (id: string, conf: string, speakers: string[]) => ({
+      _id: id,
+      _type: 'talk',
+      conference: { _type: 'reference', _ref: conf },
+      speakers: speakers.map((s) => ({ _type: 'reference', _ref: s })),
+    })
+    h.dataset = [
+      {
+        _id: 'olga',
+        _type: 'speaker',
+        socialTagOptOut: true,
+        links: ['https://bsky.app/profile/Acme.com', 'https://olga.example'],
+      },
+      {
+        _id: 'bob',
+        _type: 'speaker',
+        links: ['https://bsky.app/profile/bob.dev'],
+      },
+      // Opted out, but speaking at ANOTHER conference only.
+      {
+        _id: 'mallory',
+        _type: 'speaker',
+        socialTagOptOut: true,
+        links: ['https://bsky.app/profile/mallory.dev'],
+      },
+      talk('t1', 'c1', ['olga', 'bob']),
+      talk('t2', 'c2', ['mallory']),
+    ]
+    expect([
+      ...(await sanitySocialVariantStore.optedOutBlueskyHandles('c1')),
+    ]).toEqual(['acme.com'])
   })
 
   it('returns due variants grouped per conference, capped, oldest first, with orgId', async () => {

@@ -8,7 +8,7 @@
 import { clientReadUncached } from '@/lib/sanity/client'
 import { scopedFetch } from '@/lib/sanity/scoped'
 import { blueskyHandlesFromLinks, parseBlueskyHandle } from './handle'
-import type { TaggablePerson } from './checks'
+import { withSharedOptOuts, type TaggablePerson } from './checks'
 import type { MentionRecord } from './body'
 import {
   MENTION_RECORD_PROJECTION,
@@ -118,7 +118,9 @@ export async function getConferenceTaggablePeople(
       { cache: 'no-store' },
     ),
   ])
-  return taggablePeopleFrom([...(speakers ?? []), ...(sponsors ?? [])])
+  return withSharedOptOuts(
+    taggablePeopleFrom([...(speakers ?? []), ...(sponsors ?? [])]),
+  )
 }
 
 /** The variant's recorded mentions, whole (the publish projection keeps only DIDs). */

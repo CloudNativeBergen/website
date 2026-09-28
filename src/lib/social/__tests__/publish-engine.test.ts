@@ -168,6 +168,100 @@ describe('runPublishTick — due scan and dispatch', () => {
     })
   })
 
+  describe('a sponsor tag whose handle an opted-out speaker lists (#1154)', () => {
+    const sponsorTagged = () =>
+      makeVariant({
+        body: 'Thanks @acme.com and @bob.dev',
+        mentions: [
+          { handle: 'acme.com', did: 'did:plc:acme' },
+          { handle: 'bob.dev', did: 'did:plc:bob' },
+        ],
+      })
+    const recorded: RecordedTag[] = [
+      {
+        handle: 'acme.com',
+        did: 'did:plc:acme',
+        name: 'Acme AS',
+        sponsorId: 'sponsor-acme',
+        optedOut: false,
+      },
+      {
+        handle: 'bob.dev',
+        did: 'did:plc:bob',
+        name: 'Bob Jones',
+        speakerId: 'speaker-bob',
+        optedOut: false,
+      },
+    ]
+
+    it('withholds the company tag — the plain name goes out — and reports it without naming the speaker', async () => {
+      const store = new MemoryVariantStore([sponsorTagged()])
+      store.tags['variant-1'] = recorded
+      store.optedOutHandles = ['acme.com']
+      const adapter = fakeAdapter({ ok: true, externalId: 'x', url: 'y' })
+      const onTagsWithheld = vi.fn(async () => {})
+
+      await runPublishTick({
+        store,
+        resolveAdapter: async () => adapter,
+        now: NOW,
+        onTagsWithheld,
+      })
+
+      expect(adapter.publish).toHaveBeenCalledWith({
+        text: 'Thanks Acme AS and @bob.dev',
+        media: [],
+        link: undefined,
+        mentions: [{ handle: 'bob.dev', did: 'did:plc:bob' }],
+      })
+      expect(store.get('variant-1').body).toBe('Thanks Acme AS and @bob.dev')
+      expect(onTagsWithheld).toHaveBeenCalledWith({
+        variant: expect.objectContaining({ _id: 'variant-1' }),
+        withheld: [
+          {
+            reason: 'listed-by-opted-out',
+            sponsorId: 'sponsor-acme',
+            name: 'Acme AS',
+            handles: ['acme.com'],
+          },
+        ],
+      })
+    })
+
+    it('nobody opted out lists it: the company is tagged', async () => {
+      const store = new MemoryVariantStore([sponsorTagged()])
+      store.tags['variant-1'] = recorded
+      const adapter = fakeAdapter({ ok: true, externalId: 'x', url: 'y' })
+      await runPublishTick({
+        store,
+        resolveAdapter: async () => adapter,
+        now: NOW,
+      })
+      expect(adapter.publish).toHaveBeenCalledWith(
+        expect.objectContaining({
+          text: 'Thanks @acme.com and @bob.dev',
+          mentions: [
+            { handle: 'acme.com', did: 'did:plc:acme' },
+            { handle: 'bob.dev', did: 'did:plc:bob' },
+          ],
+        }),
+      )
+    })
+
+    it('a failed read of who opted out holds the post back (transient), never posts the tag', async () => {
+      const store = new MemoryVariantStore([sponsorTagged()])
+      store.tags['variant-1'] = recorded
+      store.optedOutHandlesError = new Error('Sanity is down')
+      const adapter = fakeAdapter({ ok: true, externalId: 'x', url: 'y' })
+      await runPublishTick({
+        store,
+        resolveAdapter: async () => adapter,
+        now: NOW,
+      })
+      expect(adapter.publish).not.toHaveBeenCalled()
+    })
+  })
+
   describe('a late opt-out (tagging spec §4.4, Publish)', () => {
     const tags = (optedOut: boolean): RecordedTag[] => [
       {

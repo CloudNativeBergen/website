@@ -24,6 +24,7 @@ import type { PublishableVariant, SocialVariantStore } from './store'
 import { publishLinkFields } from './publish-link'
 import type { ConfirmCheck } from './provider/types'
 import type { PublishAttempt, SocialPostVariant } from './types'
+import { normaliseHandle } from './provider/bluesky-syntax'
 import {
   withholdOptedOutTags,
   type WithheldTag,
@@ -732,14 +733,26 @@ async function dispatch(
       (recorded ?? []).flatMap((t) => (t.speakerId ? [t.speakerId] : [])),
     ),
   ]
-  if (recorded && speakerIds.length > 0) {
+  // A sponsor tag (#1154) is withheld when an opted-out speaker of this
+  // conference lists the same handle: the opt-out always wins.
+  const hasSponsorTag = (recorded ?? []).some((t) => t.sponsorId)
+  if (recorded && (speakerIds.length > 0 || hasSponsorTag)) {
     try {
-      const current = await withTimeout(
-        store.tagStates(claimed.conferenceId, speakerIds),
+      const [current, refused] = await withTimeout(
+        Promise.all([
+          speakerIds.length > 0
+            ? store.tagStates(claimed.conferenceId, speakerIds)
+            : new Map<string, { optedOut: boolean; gone: boolean }>(),
+          hasSponsorTag
+            ? store.optedOutBlueskyHandles(claimed.conferenceId)
+            : new Set<string>(),
+        ]),
         TAG_RECHECK_TIMEOUT_MS,
         `Tag re-check took longer than ${TAG_RECHECK_TIMEOUT_MS} ms`,
       )
       recorded = recorded.map((t) => {
+        if (t.sponsorId)
+          return { ...t, optedOut: refused.has(normaliseHandle(t.handle)) }
         const state = t.speakerId ? current.get(t.speakerId) : undefined
         // The fresh state REPLACES the snapshot: an opt-out withdrawn since
         // the tick's read is honoured as surely as one made (round 3, T2).
