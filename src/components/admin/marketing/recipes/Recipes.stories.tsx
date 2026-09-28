@@ -1,32 +1,20 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
-import { expect, fn, within } from 'storybook/test'
+import { expect, fn, userEvent, within } from 'storybook/test'
 import { http, HttpResponse } from 'msw'
 import { NotificationProvider } from '@/components/admin/NotificationProvider'
 import { mockDateBeforeEach, withPortalTheme } from '@/lib/storybook'
 import {
   LIBRARY,
-  allowedPlaceholders,
   editsOf,
   libraryEntry,
+  libraryEntryView,
   type LibraryId,
 } from '@/lib/marketing/library'
 import { CampaignRecipesDialog } from './CampaignRecipesDialog'
 import { RecipeForm } from './RecipeForm'
-import type { LibraryEntryView } from './recipe-model'
 
 /** The `campaign.recipes.library` response, built the way the router builds it. */
-const rows: LibraryEntryView[] = LIBRARY.map((entry) => ({
-  id: entry.id,
-  title: entry.title,
-  description: entry.description,
-  recurring: entry.recipes.some((recipe) => recipe.cadence),
-  hasImage: entry.recipes.some((recipe) => recipe.alt),
-  channels: entry.recipes.flatMap((recipe) =>
-    recipe.kind === 'publishing' && recipe.channel ? [recipe.channel] : [],
-  ),
-  placeholders: allowedPlaceholders(entry),
-  defaults: editsOf(entry, entry.recipes),
-}))
+const rows = LIBRARY.map((entry) => libraryEntryView(entry))
 const row = (id: LibraryId) => rows.find((entry) => entry.id === id)!
 const attachedRow = (id: LibraryId) => ({
   entry: id,
@@ -177,6 +165,40 @@ export const AttachTalkTeaserDark: Story = {
   globals: { theme: 'dark' },
 }
 
+/**
+ * "Tag the subject" (#1156, tagging spec §2): off for a new Recipe, even
+ * though the built-in speaker card tags. Switched on here, as an organizer
+ * would, so the capture shows it on.
+ */
+export const TagTheSubject: Story = {
+  render: () => (
+    <RecipeForm
+      entry={row('speakerCard')}
+      initial={row('speakerCard').defaults}
+      attached={false}
+      onSubmit={fn()}
+      onCancel={fn()}
+    />
+  ),
+  play: async () => {
+    const modal = within(document.body)
+    const toggle = await modal.findByRole('switch', { name: 'Tag the subject' })
+    await expect(toggle).not.toBeChecked()
+    await expect(toggle).toHaveAccessibleDescription(/Bluesky handle/)
+    await userEvent.click(toggle)
+    await expect(toggle).toBeChecked()
+    toggle.scrollIntoView({ block: 'center' })
+  },
+}
+export const TagTheSubjectMobile: Story = {
+  ...TagTheSubject,
+  parameters: { viewport: { defaultViewport: 'mobile1' } },
+}
+export const TagTheSubjectDark: Story = {
+  ...TagTheSubject,
+  globals: { theme: 'dark' },
+}
+
 /** Editing the countdown: recurring, so a rate and a window — and already expanded. */
 export const EditCountdown: Story = {
   render: () => (
@@ -202,6 +224,8 @@ export const EditCountdown: Story = {
       30,
     )
     await expect(modal.queryByLabelText('Milestone')).toBeNull()
+    // Nobody to tag: a countdown has no subject.
+    await expect(modal.queryByRole('switch')).toBeNull()
   },
 }
 export const EditCountdownMobile: Story = {
