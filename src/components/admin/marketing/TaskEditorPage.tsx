@@ -1467,10 +1467,14 @@ function StudioSection({
                   ].join(' ')
                 : null,
             )
+            // Said only when nothing is left waiting: a failure shows in the
+            // handoff alert once the page reloads the Task.
             setCompleted(
-              recipients.length > 0
-                ? `${asset.title} from the asset gallery is attached to this Task and handed to its publishing Tasks.`
-                : `${asset.title} from the asset gallery is attached to this Task.`,
+              result.handoffFailures.length > 0
+                ? null
+                : recipients.length > 0
+                  ? `${asset.title} from the asset gallery is attached to this Task. Publishing Tasks waiting for an image have it.`
+                  : `${asset.title} from the asset gallery is attached to this Task.`,
             )
             onChanged()
           }}
@@ -1485,8 +1489,10 @@ function StudioSection({
           onRetry={() => void retryHandoff()}
         >
           <p className="font-medium">
-            The render is done and saved. The image has not reached all
-            publishing Tasks listed below yet.
+            {task.fromGallery
+              ? 'The image from the asset gallery is attached to this Task.'
+              : 'The render is done and saved.'}{' '}
+            The image has not reached all publishing Tasks listed below yet.
           </p>
           <p>
             Prerequisites are advisory: these publishing Tasks can publish

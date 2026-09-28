@@ -168,15 +168,17 @@ export function speakerSubjectIds(speakerId: string, talks: Doc[]): string[] {
  * ({@link taskRenderIds}) and nothing else of the speaker's.
  *
  * A Task finished with an image from the gallery (#1166) records the asset
- * in `galleryAsset`. While that asset exists (in any version, see
- * `liveGalleryAssets`) its image is the GALLERY's: the asset's own subject
- * decides, as for a saved video (#1181) — a Task about the speaker holding
- * the organization's logo must not cost the logo. Once the asset is gone the
- * Task's subject decides again.
+ * in `galleryAsset`. While that asset (in any version) still HOLDS the
+ * Task's image — `galleryImages`, asset id → the files its versions hold —
+ * the image is the GALLERY's: the asset's own subject decides, as for a
+ * saved video (#1181), so a Task about the speaker holding the
+ * organization's logo must not cost the logo. Once the asset is gone, or no
+ * longer holds that image (a render entry re-rendered, an image replaced),
+ * the Task's subject decides again.
  */
 export function linkedFileIds(
   subjectDocs: Doc[],
-  liveGalleryAssets: ReadonlySet<string> = new Set(),
+  galleryImages: ReadonlyMap<string, ReadonlySet<string>> = new Map(),
 ): string[] {
   const ids = new Set<string>()
   const walk = (value: unknown) => {
@@ -190,8 +192,9 @@ export function linkedFileIds(
     if (doc._type === 'marketingAsset') walk(doc)
     if (doc._type === 'marketingTask') {
       const gallery = refOf(doc.galleryAsset)
+      const file = fileRefOf(doc.asset)
       const galleryImage =
-        gallery && liveGalleryAssets.has(gallery) ? fileRefOf(doc.asset) : null
+        gallery && file && galleryImages.get(gallery)?.has(file) ? file : null
       taskRenderIds(doc)
         .filter((id) => id !== galleryImage)
         .forEach((id) => ids.add(id))
@@ -509,6 +512,32 @@ export function planSpeakerAssetErasure(
 }
 
 /**
+ * The files each gallery asset holds, in ANY version (published, a Studio
+ * draft, a Content Release copy), by its published id (#1166).
+ */
+async function readGalleryImages(
+  client: { fetch: typeof clientReadUncached.fetch },
+  assetIds: string[],
+): Promise<Map<string, Set<string>>> {
+  const held = new Map<string, Set<string>>()
+  if (assetIds.length === 0) return held
+  const rows =
+    (await client.fetch<{ _id: string; file: string | null }[]>(
+      // groq-global: by id, the gallery assets the subject's Tasks were
+      // finished with, in any version — the right is the person's.
+      groq`*[_type == "marketingAsset" && (_id in $assetIds || _id in $draftIds || (_id in path("versions.**") && string::split(_id, ".")[2] in $assetIds))]{ _id, "file": image.asset._ref }`,
+      { assetIds, draftIds: assetIds.map((id) => `drafts.${id}`) },
+      { cache: 'no-store', perspective: 'raw' },
+    )) ?? []
+  for (const row of rows) {
+    if (!row.file) continue
+    const id = row._id.split('.').pop() as string
+    held.set(id, (held.get(id) ?? new Set()).add(row.file))
+  }
+  return held
+}
+
+/**
  * The reads, in order: the talks the speaker gives, what is about the subject,
  * what holds its files, and the posts and variants among those.
  *
@@ -571,10 +600,7 @@ export async function fetchSpeakerAssetInputs(
   ])
   const held = [...(sceneFiles ?? []), ...(trackFiles ?? [])]
   const assetIds = [
-    ...new Set([
-      ...held.flatMap((f) => (f.assetId ? [f.assetId] : [])),
-      ...taskGalleryAssetIds(subjectDocs ?? []),
-    ]),
+    ...new Set([...held.flatMap((f) => (f.assetId ? [f.assetId] : []))]),
   ]
   // Live in ANY version — published, a Studio draft or a Content Release
   // copy: while one exists, the gallery's own subject decides.
@@ -598,7 +624,10 @@ export async function fetchSpeakerAssetInputs(
   }))
   const fileIds = [
     ...new Set([
-      ...linkedFileIds(subjectDocs ?? [], liveAssets),
+      ...linkedFileIds(
+        subjectDocs ?? [],
+        await readGalleryImages(client, taskGalleryAssetIds(subjectDocs ?? [])),
+      ),
       ...projectSubjectFileIds(projectFiles ?? [], subjectIds),
       ...extraFileIds,
     ]),

@@ -979,7 +979,7 @@ export const StudioRenderFromGallery: Story = {
     )
     await expect(
       await canvas.findByText(
-        'Logo on dark from the asset gallery is attached to this Task and handed to its publishing Tasks.',
+        'Logo on dark from the asset gallery is attached to this Task. Publishing Tasks waiting for an image have it.',
       ),
     ).toBeVisible()
     await expect(galleryAttachBodies).toEqual([

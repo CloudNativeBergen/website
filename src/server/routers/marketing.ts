@@ -1855,7 +1855,7 @@ export const marketingRouter = router({
                 recipient.variantId!,
                 conferenceId,
                 {
-                  assetId: assetId,
+                  assetId,
                   alt: pick
                     ? pick.alt
                     : (!newImage && task.galleryAlt?.trim()) || renderAlt(task),

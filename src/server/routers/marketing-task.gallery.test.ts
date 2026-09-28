@@ -784,19 +784,23 @@ describe('finishing a render Task with an asset from the gallery (#1166)', () =>
     [
       'edited',
       () => Object.assign(byId('asset-logo')!, { _rev: 'rev-edited' }),
+      { code: 'CONFLICT' },
     ],
     [
       'deleted',
       () => {
         h.dataset = h.dataset.filter((d) => d._id !== 'asset-logo')
       },
+      // The harness answers a patch of a missing document with a 404, which
+      // is not read as a conflict; what Sanity answers is not pinned here.
+      {},
     ],
   ])(
     'refuses an asset %s between its read and the save; the Task is unchanged',
-    async (_what, race) => {
+    async (_what, race, error) => {
       h.onFetch = (query) => (query.includes(ASSET_READ) ? race : undefined)
       const before = structuredClone(task())
-      await expect(finish('asset-logo')).rejects.toThrow()
+      await expect(finish('asset-logo')).rejects.toMatchObject(error)
       expect(task()).toEqual(before)
       expect(post('post-1')).not.toHaveProperty('attachments')
     },
