@@ -127,7 +127,11 @@ describe('migration 053', () => {
         now: '2027-01-01T00:00:00.000Z',
         campaign: { _id: 'camp-finalPush', key: 'finalPush' },
         planId: 'plan',
-        conference: { _id: 'conf', baseUrl: 'https://example.com' },
+        conference: {
+          _id: 'conf',
+          baseUrl: 'https://example.com',
+          shortLinkOrigin: 'https://example.com',
+        },
         values: {},
         assigneeId: 'owner',
         taskId: (key) => key,

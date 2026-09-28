@@ -143,6 +143,31 @@ describe('Task editor outreach', () => {
     mocks.data = outreachData()
   })
 
+  it('shows the short link, with the destination it expands to under it (short-links spec §2.7)', () => {
+    mocks.data = {
+      ...outreachData(),
+      task: { ...outreachData().task, shortCode: 'abc987' },
+      shortLinkOrigin: 'https://example.test',
+    }
+    render(<TaskEditorPage taskId="outreach-1" />)
+    expect(screen.getByText('Short link')).toBeTruthy()
+    expect(screen.getByTestId('tagged-link').textContent).toBe(
+      'https://example.test/go/abc987',
+    )
+    expect(screen.getByTestId('link-destination').textContent).toBe(
+      'https://example.test/tickets?utm_source=outreach',
+    )
+  })
+
+  it('shows the tagged link alone for a Task without a code yet', () => {
+    render(<TaskEditorPage taskId="outreach-1" />)
+    expect(screen.getByText('Tagged link')).toBeTruthy()
+    expect(screen.getByTestId('tagged-link').textContent).toBe(
+      'https://example.test/tickets?utm_source=outreach',
+    )
+    expect(screen.queryByTestId('link-destination')).toBeNull()
+  })
+
   it('preserves the edited draft after send and recovery refetch failures', async () => {
     mocks.fetch.mockRejectedValue(new Error('Recovery unavailable'))
     const { client, queryKey, dispose } = renderOutreachWithQuery(2)
@@ -436,6 +461,7 @@ function pendingData(): TaskEditorData {
     siblings: [],
     variant: null,
     baseUrl: 'https://example.test',
+    shortLinkOrigin: null,
     taggedLink: null,
     pages: [],
     organizers: [],
@@ -754,7 +780,12 @@ describe('Task editor manual post view — a fresh check on every opening (revie
         assetUrl: null,
         assetId: null,
       },
-      variant: { variant, ...editorRead, conferenceDomains: [] },
+      variant: {
+        variant,
+        ...editorRead,
+        conferenceDomains: [],
+        postedLink: null,
+      },
     }
   }
   // As the server answers since round 5: always a checked body — the stored
@@ -763,6 +794,7 @@ describe('Task editor manual post view — a fresh check on every opening (revie
     variant,
     ...editorRead,
     conferenceDomains: [],
+    postedLink: null,
     manualBody: manualBody
       ? { body: manualBody, untagged: ['Alice Smith'], removed: 0 }
       : { body: TAGGED, untagged: [], removed: 0 },

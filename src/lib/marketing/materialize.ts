@@ -11,6 +11,8 @@
 import { formatConferenceDateLong, osloLocalInputToIso } from '@/lib/time'
 import type { VariantStatus } from '@/lib/social/types'
 import { taggedUrl } from './link'
+import { publishLinkFields } from '@/lib/social/publish-link'
+import { conferenceBaseUrl, findOutboundOrigin } from '@/lib/conference/baseUrl'
 import type { Milestone, ResolvedMilestone } from './milestones'
 import { isOutreach } from './outreach'
 import {
@@ -213,13 +215,39 @@ export function appendRecords(into: TaskRecords, from: TaskRecords): void {
   into.variants.push(...from.variants)
 }
 
+/**
+ * The slice of the conference a Task is materialized against: the origin its
+ * tagged link is minted on, and the origin its `/go/<code>` short link is
+ * built on — `findOutboundOrigin`, `null` when the conference has no usable
+ * domain (its `baseUrl` is then the platform fallback, where `/go/` resolves
+ * no conference), in which case the copy carries the long link.
+ */
+export interface MaterializeConference {
+  _id: string
+  baseUrl: string
+  shortLinkOrigin: string | null
+}
+
+/** Both origins, derived from the conference's own `domains[]`. */
+export function materializeConference(conference: {
+  _id: string
+  title?: string | null
+  domains?: readonly string[] | null
+}): MaterializeConference {
+  return {
+    _id: conference._id,
+    baseUrl: conferenceBaseUrl(conference),
+    shortLinkOrigin: findOutboundOrigin(conference),
+  }
+}
+
 export interface MaterializeInput {
   recipe: TaskRecipe
   taskId: string
   key: string
   campaign: { _id: string; key: string }
   planId: string
-  conference: { _id: string; baseUrl: string }
+  conference: MaterializeConference
   values: PlaceholderValues
   /** ISO instant: the variant's time, or the Task's `dueAt`. */
   at: string
@@ -304,7 +332,16 @@ export function materializeTask(input: MaterializeInput): TaskRecords {
     campaignKey: input.campaign.key,
     taskKey: input.key,
   })
-  const bodyValues = { ...input.values, url: link }
+  // Minted BEFORE the copy is resolved: `{url}` in the body is the link a
+  // reader sees, the short one (short-links spec §2.3), through the same
+  // mapping the publisher uses. `link` stays the long tagged URL.
+  const shortCode = input.newShortCode()
+  const posted = publishLinkFields(
+    { link, shortCode },
+    conference.shortLinkOrigin,
+  ).link!
+  // `link` is a non-empty tagged URL, so the mapping always yields one.
+  const bodyValues = { ...input.values, url: posted }
   // The ONE place a handle enters copy: the body of a Bluesky `tagSubject`
   // recipe. The value map stays plain, so the LinkedIn sibling, the alt text
   // above and the render never see a handle. A body handed in (a copied
@@ -345,7 +382,7 @@ export function materializeTask(input: MaterializeInput): TaskRecords {
         platform: channel,
         body,
         link,
-        shortCode: input.newShortCode(),
+        shortCode,
         scheduledAt: input.at,
         status: 'draft',
         ...(tagged?.mentions.length ? { mentions: tagged.mentions } : {}),

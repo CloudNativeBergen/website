@@ -22,6 +22,7 @@ const CONFERENCE: SeedConference = {
   city: 'Bergen',
   venueName: 'Grieghallen',
   baseUrl: 'https://2026.cloudnativebergen.dev',
+  shortLinkOrigin: 'https://2026.cloudnativebergen.dev',
   ticketCapacity: 400,
   cfpStartDate: '2026-01-12',
   cfpEndDate: '2026-03-02',
@@ -36,6 +37,7 @@ const NEXT: SeedConference = {
   _id: 'conf-2027',
   title: 'Cloud Native Bergen 2027',
   baseUrl: 'https://2027.cloudnativebergen.dev',
+  shortLinkOrigin: 'https://2027.cloudnativebergen.dev',
   cfpStartDate: '2027-01-10',
   cfpEndDate: '2027-03-01',
   cfpNotifyDate: '2027-04-01',
@@ -45,11 +47,14 @@ const NEXT: SeedConference = {
   earlyBirdEndDate: '2027-05-01',
 }
 
-function sourceOf(seed: SeedPlan): SaveSource {
+function sourceOf(
+  seed: SeedPlan,
+  conference: SeedConference = CONFERENCE,
+): SaveSource {
   const variantOf = (id?: string) => seed.variants.find((v) => v._id === id)
   return {
     plan: { _id: seed.plan._id },
-    conference: CONFERENCE,
+    conference,
     ticketCapacity: CONFERENCE.ticketCapacity ?? null,
     campaigns: seed.campaigns.map((c) => ({ ...c })),
     tasks: seed.tasks.map((t): CopySourceTask => ({
@@ -72,6 +77,7 @@ function sourceOf(seed: SeedPlan): SaveSource {
         ? {
             body: variantOf(t.variantId)!.body,
             link: variantOf(t.variantId)!.link,
+            shortCode: variantOf(t.variantId)!.shortCode,
             scheduledAt: variantOf(t.variantId)!.scheduledAt,
           }
         : null,
@@ -340,6 +346,18 @@ describe('savePreview — exactly the Tasks that need a decision', () => {
       }).anchor,
     ).toEqual({ milestone: 'CFP_OPEN', offsetDays: 10 })
   })
+  it('turns the SHORT link `{url}` resolved to back into {url} (short-links spec §2.3)', () => {
+    const source = seeded((seed) => {
+      const t = seed.tasks.find((t) => t.key === 'cfpOpen:bluesky')!
+      t.copyEdited = true
+      const v = seed.variants.find((v) => v._id === t.variantId)!
+      v.body = `CFP opens 12 January 2026! https://2026.cloudnativebergen.dev/go/${v.shortCode}`
+    })
+    expect(savePreview(source)[0]).toMatchObject({
+      type: 'copy',
+      text: 'CFP opens 12 January 2026! {url}',
+    })
+  })
   it('lists a Task carrying literal copy with its link as {url}, saved verbatim and flagged unless rewritten', () => {
     const source = seeded((seed) => {
       const t = seed.tasks.find((t) => t.key === 'cfpOpen:bluesky')!
@@ -372,7 +390,7 @@ describe('savePreview — exactly the Tasks that need a decision', () => {
     expect(seededTask.verbatimCopy).toBe(true)
     expect(
       next.variants.find((v) => v._id === seededTask.variantId)!.body,
-    ).toContain('https://2027.cloudnativebergen.dev/cfp?')
+    ).toMatch(/2026! https:\/\/2027\.cloudnativebergen\.dev\/go\/[a-z2-9]{6}$/)
   })
   it('keeps asking about verbatim copy on every later save, so the flag cannot wear off by being ignored', () => {
     const first = seeded((seed) => {
@@ -382,7 +400,7 @@ describe('savePreview — exactly the Tasks that need a decision', () => {
       v.body = `CFP opens 12 January 2026! ${v.link}`
     })
     // Edition two: seeded from that Template, the copy never touched.
-    const second = sourceOf(reseed(first))
+    const second = sourceOf(reseed(first), NEXT)
     expect(savePreview(second)).toEqual([
       expect.objectContaining({
         type: 'copy',

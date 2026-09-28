@@ -357,6 +357,7 @@ describe('commitSeedPlan', () => {
         title: 'Cloud Native Bergen 2027',
         city: 'Bergen',
         baseUrl: 'https://cloudnativebergen.dev',
+        shortLinkOrigin: 'https://cloudnativebergen.dev',
         cfpStartDate: '2027-01-10',
         cfpEndDate: '2027-03-01',
         cfpNotifyDate: '2027-04-01',

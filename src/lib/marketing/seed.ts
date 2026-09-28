@@ -51,6 +51,11 @@ export interface SeedConference extends MilestoneSource {
   ticketCapacity?: number | null
   /** The conference origin the tagged links point at. */
   baseUrl: string
+  /**
+   * The origin `/go/<code>` short links are built on (short-links spec
+   * §2.3); `null` without a usable domain, and the copy keeps the long link.
+   */
+  shortLinkOrigin: string | null
 }
 
 export interface SeedInput {
@@ -232,7 +237,11 @@ export function expandTemplate(input: SeedInput): SeedPlan {
     const context = {
       campaign: { _id: campaignId, key: recipe.key },
       planId: plan._id,
-      conference: { _id: conference._id, baseUrl: conference.baseUrl },
+      conference: {
+        _id: conference._id,
+        baseUrl: conference.baseUrl,
+        shortLinkOrigin: conference.shortLinkOrigin,
+      },
       values,
       assigneeId: ownerId,
     }

@@ -1,3 +1,4 @@
+import { findOutboundOrigin } from '@/lib/conference/baseUrl'
 import { clientReadUncached } from '@/lib/sanity/client'
 import { scopedFetch } from '@/lib/sanity/scoped'
 import type { CopySource, CopySourceTask } from './copy'
@@ -96,7 +97,11 @@ interface RawSource {
   _id: string
   deletingAt?: string | null
   conference:
-    (CopySource['conference'] & { ticketCapacity?: number | null }) | null
+    | (Omit<CopySource['conference'], 'shortLinkOrigin'> & {
+        ticketCapacity?: number | null
+        domains?: string[] | null
+      })
+    | null
   campaigns:
     | {
         _id: string
@@ -170,7 +175,7 @@ export async function readPlanSource(
         title, city, venueName, ticketCapacity, startDate, endDate,
         cfpStartDate, cfpEndDate, cfpNotifyDate, programDate,
         earlyBirdEndDate, registrationCloseDate, speakersAnnouncedDate,
-        sponsorDeadlineDate, recordingsLiveDate, ticketTargets
+        sponsorDeadlineDate, recordingsLiveDate, ticketTargets, domains
       },
       "campaigns": *[_type == "marketingCampaign" && conference._ref == $conferenceId && plan._ref == ^._id && !(_id in path("drafts.**")) && !(_id in path("versions.**"))] | order(startDate asc){
         _id, key, title, startMilestone, startOffsetDays, endMilestone, endOffsetDays,
@@ -182,18 +187,24 @@ export async function readPlanSource(
         milestone, offsetDays, dueAt, origin,
         "prerequisiteIds": prerequisites[]._ref,
         targetPage, alt, instructions, copyEdited,
-        "variant": select(variant->conference._ref == conference._ref => variant->{ body, link, scheduledAt })
+        "variant": select(variant->conference._ref == conference._ref => variant->{ body, link, shortCode, scheduledAt })
       }
     }`,
     { planId },
     { cache: 'no-store' },
   )
   if (!row?.conference) return null
+  const { domains, ...conference } = row.conference
   return {
     ticketCapacity: row.conference.ticketCapacity ?? null,
     deletingAt: row.deletingAt ?? null,
     plan: { _id: row._id },
-    conference: row.conference,
+    conference: {
+      ...conference,
+      // The SOURCE edition's own origin: its copy's `{url}` was resolved on
+      // it, so its short URL is found there (short-links spec §2.3).
+      shortLinkOrigin: findOutboundOrigin({ domains }),
+    },
     campaigns: (row.campaigns ?? []).flatMap((c) =>
       c.key && c.startMilestone && c.endMilestone && c.primaryOutcome
         ? [
@@ -235,7 +246,10 @@ export async function readPlanSource(
               alt: t.alt ?? null,
               instructions: t.instructions ?? null,
               copyEdited: t.copyEdited ?? null,
-              variant: t.variant?.body != null ? t.variant : null,
+              variant:
+                t.variant?.body != null
+                  ? { ...t.variant, shortCode: t.variant.shortCode ?? null }
+                  : null,
             },
           ]
         : [],

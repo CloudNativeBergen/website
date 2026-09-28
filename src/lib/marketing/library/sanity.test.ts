@@ -103,6 +103,7 @@ describe('commitBuiltinCampaign', () => {
         title: 'Conf',
         city: 'Bergen',
         baseUrl: 'https://example.com',
+        shortLinkOrigin: 'https://example.com',
         cfpStartDate: '2027-01-01',
         cfpEndDate: '2027-02-01',
         cfpNotifyDate: '2027-03-01',

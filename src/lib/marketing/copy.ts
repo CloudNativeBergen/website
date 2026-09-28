@@ -32,6 +32,8 @@ import {
   type ConferenceValuesSource,
 } from './materialize'
 import { taggedUrl } from './link'
+import { isShortLinkPath } from './pages'
+import { publishLinkFields } from '@/lib/social/publish-link'
 import {
   MILESTONES,
   resolveAllMilestones,
@@ -75,13 +77,45 @@ export interface CopySourceTask {
   variant: {
     body: string
     link: string | null
+    /** Read to find the source's short URL in its copy; never written (§2.2). */
+    shortCode: string | null
     scheduledAt: string | null
   } | null
 }
 
+/**
+ * Every spelling of a source variant's link its body can hold: the short URL
+ * `{url}` resolved to (short-links spec §2.3), built on the SOURCE
+ * conference's origin and the source's code through the one mapping the
+ * publisher uses, and the long tagged link that copy from before short links
+ * carries. A reader swapping the link out of the copy replaces all of them.
+ */
+export function sourceLinks(
+  variant: { link: string | null; shortCode: string | null },
+  sourceShortLinkOrigin: string | null,
+): string[] {
+  const posted = publishLinkFields(variant, sourceShortLinkOrigin).link
+  return [...new Set([posted, variant.link])].filter(
+    (link): link is string => !!link,
+  )
+}
+
+/** `body` with every occurrence of each of `links` swapped for `replacement`. */
+export function replaceLinks(
+  body: string,
+  links: readonly string[],
+  replacement: string,
+): string {
+  return links.reduce((text, link) => text.split(link).join(replacement), body)
+}
+
 export interface CopySource {
   plan: { _id: string }
-  conference: MilestoneSource & ConferenceValuesSource
+  conference: MilestoneSource &
+    ConferenceValuesSource & {
+      /** The SOURCE edition's short-link origin (`findOutboundOrigin`). */
+      shortLinkOrigin: string | null
+    }
   campaigns: Omit<
     SeedCampaign,
     | 'planId'
@@ -240,7 +274,8 @@ function isSitePath(
   page: string | null | undefined,
   baseUrl: string,
 ): page is string {
-  if (!page) return false
+  // A destination under `/go/` derives, but a link never points at a link.
+  if (!page || isShortLinkPath(page)) return false
   try {
     taggedUrl({
       baseUrl,
@@ -416,6 +451,9 @@ export function copyPlan(input: CopyInput): SeedPlan {
     // copy carries the fact, so the edition after this one knows it too.
     const edited = isEdited(t, storedRecipe?.skeleton)
     let body: string | undefined
+    // A publishing Task's NEW code is drawn here, before its copy is written:
+    // edited copy swaps the source's link for the new edition's short URL.
+    const shortCode = t.kind === 'publishing' ? newShortCode() : null
     if (t.kind === 'publishing') {
       const link = taggedUrl({
         baseUrl: conference.baseUrl,
@@ -424,11 +462,23 @@ export function copyPlan(input: CopyInput): SeedPlan {
         campaignKey: campaign.key,
         taskKey: t.key,
       })
+      const posted = publishLinkFields(
+        { link, shortCode },
+        conference.shortLinkOrigin,
+      ).link!
+      // `link` is a non-empty tagged URL, so the mapping always yields one.
       const v = t.variant
-      if (v && edited) {
-        body = v.link ? v.body.split(v.link).join(link) : v.body
+      // Copy kept as written — the organizer's, or a post with no stored
+      // skeleton to write it again from — points at the NEW edition's link:
+      // the source's short URL would tie two editions to one code.
+      if (v && (edited || !storedRecipe?.skeleton)) {
+        body = replaceLinks(
+          v.body,
+          sourceLinks(v, source.conference.shortLinkOrigin),
+          posted,
+        )
       } else if (!storedRecipe?.skeleton) {
-        body = v?.body ?? ''
+        body = ''
       }
     }
     const alt =
@@ -446,7 +496,11 @@ export function copyPlan(input: CopyInput): SeedPlan {
         key: t.key,
         campaign: { _id: campaign._id, key: campaign.key },
         planId,
-        conference: { _id: conference._id, baseUrl: conference.baseUrl },
+        conference: {
+          _id: conference._id,
+          baseUrl: conference.baseUrl,
+          shortLinkOrigin: conference.shortLinkOrigin,
+        },
         values,
         at: slotAt(dated.date, slotTimeFor(recipe)),
         anchor,
@@ -457,7 +511,7 @@ export function copyPlan(input: CopyInput): SeedPlan {
           .filter((id): id is string => id !== undefined),
         origin: 'copy',
         newId,
-        newShortCode,
+        newShortCode: shortCode ? () => shortCode : newShortCode,
         ...(edited ? { copyEdited: true } : {}),
         ...(body !== undefined ? { body } : {}),
         ...(alt !== undefined ? { alt } : {}),
@@ -475,7 +529,11 @@ export function copyPlan(input: CopyInput): SeedPlan {
       now,
       campaign: { _id: campaign._id, key: campaign.key },
       planId,
-      conference: { _id: conference._id, baseUrl: conference.baseUrl },
+      conference: {
+        _id: conference._id,
+        baseUrl: conference.baseUrl,
+        shortLinkOrigin: conference.shortLinkOrigin,
+      },
       values,
       assigneeId: ownerId,
       taskId: () => newId('marketingTask'),

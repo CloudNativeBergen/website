@@ -141,7 +141,11 @@ describe('outreach scoped persistence', () => {
         key: 'share',
         campaign: { _id: 'campaign-a', key: 'tickets' },
         planId: 'plan-a',
-        conference: { _id: 'conf-a', baseUrl: 'https://conference.test' },
+        conference: {
+          _id: 'conf-a',
+          baseUrl: 'https://conference.test',
+          shortLinkOrigin: 'https://conference.test',
+        },
         values: {},
         at: '2026-09-16T10:00:00Z',
         anchor: null,

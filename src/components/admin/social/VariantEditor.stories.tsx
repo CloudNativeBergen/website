@@ -189,6 +189,29 @@ export const LinkedIn: Story = {
   },
 }
 
+/**
+ * A Task's post (short-links spec §2.3): the locked Link field and the
+ * first-comment preview show the `/go/<code>` short link that is posted, not
+ * the tagged link it expands to.
+ */
+export const LinkedInTaskShortLink: Story = {
+  args: {
+    linkLocked: true,
+    postedLink: 'https://2027.cloudnativebergen.dev/go/k7m2qp',
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(canvas.getByLabelText('Link')).toHaveValue(
+      'https://2027.cloudnativebergen.dev/go/k7m2qp',
+    )
+    const preview = canvas.getByText(/linkedin preview/i).parentElement!
+    await expect(
+      within(preview).getByText('https://2027.cloudnativebergen.dev/go/k7m2qp'),
+    ).toBeVisible()
+    await expect(within(preview).queryByText(/utm_/)).toBeNull()
+  },
+}
+
 export const LinkedInDark: Story = {
   parameters: {
     theme: 'dark',

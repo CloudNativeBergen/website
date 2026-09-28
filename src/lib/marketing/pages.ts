@@ -81,6 +81,17 @@ function normalizedPath(path: string): string | null {
   }
 }
 
+export const SHORT_LINK_PATH_ISSUE =
+  'The path must not be a short link (/go/…).'
+
+/**
+ * A path under `/go/` — a short link itself — tested on the normalized
+ * pathname (see {@link sitePathIssue}).
+ */
+export function isShortLinkPath(path: string): boolean {
+  return /^\/go(\/|$)/i.test(normalizedPath(path) ?? path)
+}
+
 export function sitePathIssue(path: string): string | null {
   if (path.length === 0) return 'Pick a page or enter a path.'
   if (path.length > SITE_PATH_MAX_LENGTH) {
@@ -99,8 +110,6 @@ export function sitePathIssue(path: string): string | null {
   // `/`. `/program/../go/abc987` and `/go\abc987` both arrive as `/go/abc987`,
   // so a raw-prefix test refuses the obvious spelling and admits the two that
   // reach exactly the same place.
-  if (/^\/go(\/|$)/i.test(normalizedPath(path) ?? path)) {
-    return 'The path must not be a short link (/go/…).'
-  }
+  if (isShortLinkPath(path)) return SHORT_LINK_PATH_ISSUE
   return null
 }

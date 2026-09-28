@@ -24,6 +24,7 @@ const LAST_YEAR: SeedConference = {
   city: 'Bergen',
   venueName: 'Grieghallen',
   baseUrl: 'https://2026.cloudnativebergen.dev',
+  shortLinkOrigin: 'https://2026.cloudnativebergen.dev',
   cfpStartDate: '2026-01-12',
   cfpEndDate: '2026-03-02',
   cfpNotifyDate: '2026-04-02',
@@ -39,6 +40,7 @@ const THIS_YEAR: SeedConference = {
   city: 'Bergen',
   venueName: 'Grieghallen',
   baseUrl: 'https://2027.cloudnativebergen.dev',
+  shortLinkOrigin: 'https://2027.cloudnativebergen.dev',
   cfpStartDate: '2027-01-10',
   cfpEndDate: '2027-03-01',
   cfpNotifyDate: '2027-04-01',
@@ -85,6 +87,7 @@ function lastYearSource(edit: (seed: SeedPlan) => void = () => {}): CopySource {
         ? {
             body: variantOf(t.variantId)!.body,
             link: variantOf(t.variantId)!.link,
+            shortCode: variantOf(t.variantId)!.shortCode,
             scheduledAt: variantOf(t.variantId)!.scheduledAt,
           }
         : null,
@@ -96,7 +99,9 @@ describe('short codes (short-links spec §2.2)', () => {
   it('a copied variant gets a NEW code, never the source edition’s', () => {
     const source = lastYearSource()
     const sourceCodes = new Set(
-      source.tasks.flatMap((t) => (t.variant ? [t.variant.link] : [])),
+      source.tasks.flatMap((t) =>
+        t.variant?.shortCode ? [t.variant.shortCode] : [],
+      ),
     )
     // A distinct sequence, as a real batch mint is: it checks the TARGET
     // conference's existing codes, not the source edition's.
@@ -316,7 +321,9 @@ describe('copyPlan — Tasks', () => {
     expect(variant.body).toContain('Cloud Native Bergen 2027 CFP is open')
     expect(variant.body).not.toContain('2026')
     expect(variant.link).toContain('https://2027.cloudnativebergen.dev/cfp?')
-    expect(variant.body).toContain(variant.link)
+    expect(variant.body).toContain(
+      `https://2027.cloudnativebergen.dev/go/${variant.shortCode}`,
+    )
     expect(task(plan, 'cfpOpenRender').alt).toContain(
       'Cloud Native Bergen 2027',
     )
@@ -333,7 +340,9 @@ describe('copyPlan — Tasks', () => {
       (v) => v._id === task(plan, 'cfpOpen:bluesky').variantId,
     )!
     expect(variant.body).toContain('Cloud Native Bergen 2026 CFP is open')
-    expect(variant.body).toContain(variant.link)
+    expect(variant.body).toContain(
+      `https://2027.cloudnativebergen.dev/go/${variant.shortCode}`,
+    )
     // And the copy carries the fact, so the edition after this one keeps it.
     expect(task(plan, 'cfpOpen:bluesky').copyEdited).toBe(true)
     expect(task(plan, 'cfpLastDay:bluesky').copyEdited).toBeUndefined()
@@ -351,19 +360,84 @@ describe('copyPlan — Tasks', () => {
     expect(variant.body).not.toContain('A new venue')
   })
 
-  it("keeps last year's edited copy, swapping only the tagged link", () => {
+  it("points last year's edited copy at the NEW edition's short link (short-links spec §2.3)", () => {
+    const source = lastYearSource((seed) => {
+      const t = seed.tasks.find((x) => x.key === 'cfpOpen:bluesky')!
+      const v = seed.variants.find((x) => x._id === t.variantId)!
+      // As `{url}` resolved it: the SOURCE origin and the SOURCE code.
+      v.body = `Our CFP is open: https://2026.cloudnativebergen.dev/go/${v.shortCode} #CNB`
+    })
+    const sourceVariant = source.tasks.find(
+      (t) => t.key === 'cfpOpen:bluesky',
+    )!.variant!
+    const before = structuredClone(sourceVariant)
+    // The target's batch mint: a range the source's codes never reach.
+    const fresh = sequentialShortCodes()
+    for (let i = 0; i < 500; i++) fresh()
+    let n = 0
+    const plan = copyPlan({
+      source,
+      conference: THIS_YEAR,
+      ownerId: 'sp-new-owner',
+      now: '2026-09-01T10:00:00.000Z',
+      newId: (type) => `${type}.new${++n}`,
+      newShortCode: fresh,
+    })
+    const variant = plan.variants.find(
+      (v) => v._id === task(plan, 'cfpOpen:bluesky').variantId,
+    )!
+    expect(variant.shortCode).not.toBe(sourceVariant.shortCode)
+    expect(variant.body).toBe(
+      `Our CFP is open: https://2027.cloudnativebergen.dev/go/${variant.shortCode} #CNB`,
+    )
+    // The source's code is read for the swap and never written.
+    expect(sourceVariant).toEqual(before)
+  })
+
+  it('never copies a destination under /go/ — a link never points at a link (short-links spec §2.3)', () => {
+    const source = lastYearSource()
+    const t = source.tasks.find((x) => x.key === 'cfpOpen:bluesky')!
+    // Hand-edited in Studio: it derives, but it is a short link itself.
+    t.targetPage = '/go/abc987'
+    const plan = copy(source)
+    expect(task(plan, 'cfpOpen:bluesky').targetPage).toBe('/cfp')
+  })
+
+  it('swaps the short link in copy it keeps word for word, so two editions never share a code', () => {
+    // Copy with no stored skeleton, recorded as NOT edited: kept as written.
+    const source = lastYearSource((seed) => {
+      const t = seed.tasks.find((x) => x.key === 'cfpOpen:bluesky')!
+      const v = seed.variants.find((x) => x._id === t.variantId)!
+      v.body = `Kept as it was: https://2026.cloudnativebergen.dev/go/${v.shortCode}`
+    })
+    const t = source.tasks.find((x) => x.key === 'cfpOpen:bluesky')!
+    t.copyEdited = false
+    for (const c of source.campaigns)
+      c.recipes = c.recipes.map((r) =>
+        r.key === 'cfpOpen:bluesky' ? { ...r, skeleton: undefined } : r,
+      )
+    const plan = copy(source)
+    const variant = plan.variants.find(
+      (v) => v._id === task(plan, 'cfpOpen:bluesky').variantId,
+    )!
+    expect(variant.body).toBe(
+      `Kept as it was: https://2027.cloudnativebergen.dev/go/${variant.shortCode}`,
+    )
+  })
+
+  it("points edited copy that still holds last year's LONG link at the new short link", () => {
     const plan = copy(
       lastYearSource((seed) => {
         const t = seed.tasks.find((x) => x.key === 'cfpOpen:bluesky')!
         const v = seed.variants.find((x) => x._id === t.variantId)!
-        v.body = `Our CFP is open and we mean it. ${v.link} #CNB`
+        v.body = `From before short links: ${v.link} #CNB`
       }),
     )
     const variant = plan.variants.find(
       (v) => v._id === task(plan, 'cfpOpen:bluesky').variantId,
     )!
     expect(variant.body).toBe(
-      `Our CFP is open and we mean it. ${variant.link} #CNB`,
+      `From before short links: https://2027.cloudnativebergen.dev/go/${variant.shortCode} #CNB`,
     )
   })
 

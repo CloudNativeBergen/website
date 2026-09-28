@@ -5,7 +5,7 @@ import { outcomeMayBeLive } from './state-machine'
 import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
 import { scopedFetch } from '@/lib/sanity/scoped'
 import { verifiedDomains } from '@/lib/domain-verification/routing'
-import { variantShortLinkOrigin } from './publish-link'
+import { publishLinkFields, variantShortLinkOrigin } from './publish-link'
 import { withTimeout } from './with-timeout'
 import { platformDomainSuffix } from '@/lib/domain-verification/platform'
 import { getCurrentDateTime } from '@/lib/time'
@@ -923,6 +923,13 @@ export async function getSocialVariantEditorData(
           return []
         })
       : domains,
+    // From the RAW list, as the publish tick derives it — never the verified
+    // one — so the view shows exactly the link that would be posted.
+    postedLink:
+      publishLinkFields(
+        variant,
+        variantShortLinkOrigin(variant.shortCode, { domains }),
+      ).link ?? null,
     platformZone: platformDomainSuffix(),
   }
 }

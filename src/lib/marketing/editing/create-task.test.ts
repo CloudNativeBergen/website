@@ -70,7 +70,11 @@ function records(channel: 'bluesky' | 'linkedin' = 'bluesky') {
     key: `custom-${channel}`,
     campaign: { _id: 'campaign', key: 'cfp' },
     planId: 'plan',
-    conference: { _id: 'conf', baseUrl: 'https://example.test' },
+    conference: {
+      _id: 'conf',
+      baseUrl: 'https://example.test',
+      shortLinkOrigin: 'https://example.test',
+    },
     values: {},
     at: '2027-01-03T17:00:00.000Z',
     anchor: null,

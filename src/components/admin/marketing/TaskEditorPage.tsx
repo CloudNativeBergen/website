@@ -29,6 +29,7 @@ import {
 } from '@/components/admin/social/useFreshManualCheck'
 import { mayAlreadyBeLive } from '@/lib/social/state-machine'
 import { taggedUrl } from '@/lib/marketing/link'
+import { publishLinkFields } from '@/lib/social/publish-link'
 import { sitePathIssue, type PagePickerOption } from '@/lib/marketing/pages'
 import {
   MARKETING_CHANNEL_LABELS,
@@ -726,6 +727,7 @@ function PublishingSection({
       <Panel title={`Post by hand on ${platform}`}>
         <ManualPostView
           variant={v}
+          postedLink={variant.postedLink}
           postAttachments={variant.post.attachments}
           conferenceDomains={variant.conferenceDomains}
           platformZone={variant.platformZone ?? null}
@@ -839,6 +841,8 @@ function PublishingSection({
             : derived.issue
         }
         link={derived.link}
+        shortCode={variant?.variant.shortCode}
+        shortLinkOrigin={data.shortLinkOrigin}
         onChange={(next, isCustom) => {
           if (pickRev === null) setPickRev(task._rev)
           setCustom(isCustom)
@@ -856,6 +860,11 @@ function PublishingSection({
             rev: pickRev ?? task._rev,
             targetPage: derived.link ? targetPage : null,
             taggedLink: derived.link,
+            postedLink:
+              publishLinkFields(
+                { link: derived.link, shortCode: variant?.variant.shortCode },
+                data.shortLinkOrigin,
+              ).link ?? null,
           }}
           tagging={
             task.channel === 'bluesky'
@@ -966,6 +975,8 @@ function PagePicker({
   targetPage,
   issue,
   link,
+  shortCode,
+  shortLinkOrigin,
   onChange,
   description = 'Written into the post when you save; the campaign and task tags are what the report attributes visits to.',
 }: {
@@ -974,9 +985,16 @@ function PagePicker({
   pageKey: string
   targetPage: string
   issue: string | null
+  /** The tagged link: what a short link expands to. */
   link: string | null
+  shortCode: string | null | undefined
+  shortLinkOrigin: string | null
   onChange: (path: string, custom: boolean) => void
 }) {
+  // What a reader sees is the short link (short-links spec §2.7), through
+  // the mapping the publisher uses; the tagged link is where it goes.
+  const shown = publishLinkFields({ link, shortCode }, shortLinkOrigin)
+  const destination = shown.linkDestination ?? null
   return (
     <div className="grid gap-4 md:grid-cols-2">
       <div>
@@ -1025,14 +1043,22 @@ function PagePicker({
       </div>
       <div>
         <p className="block text-sm font-medium text-gray-700 dark:text-gray-200">
-          Tagged link
+          {destination ? 'Short link' : 'Tagged link'}
         </p>
         <p
           data-testid="tagged-link"
           className="mt-1 rounded-md border border-dashed border-gray-300 bg-gray-50 px-3 py-2 font-mono text-xs break-all text-gray-700 dark:border-gray-600 dark:bg-gray-800/60 dark:text-gray-200"
         >
-          {link ?? '—'}
+          {shown.link ?? '—'}
         </p>
+        {destination && (
+          <p className="mt-1 text-xs break-all text-gray-600 dark:text-gray-300">
+            <span className="font-medium">Goes to </span>
+            <span data-testid="link-destination" className="font-mono">
+              {destination}
+            </span>
+          </p>
+        )}
         <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
           {description}
         </p>
@@ -1545,6 +1571,8 @@ function OutreachSection({
               targetPage={page}
               issue={issue}
               link={data.taggedLink}
+              shortCode={task.shortCode}
+              shortLinkOrigin={data.shortLinkOrigin}
               description="Save the destination to refresh the link and prefilled message."
               onChange={(path, custom) =>
                 setPick({ path, custom, rev: pick?.rev ?? task._rev })

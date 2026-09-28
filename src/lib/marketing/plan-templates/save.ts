@@ -12,6 +12,8 @@
 
 import {
   isEdited,
+  replaceLinks,
+  sourceLinks,
   isTemplateText,
   sourceAnchor,
   sourceDate,
@@ -80,11 +82,18 @@ const anchorOf = (
     campaign,
   })
 
-/** The post as written, with this edition's tagged link back as `{url}`. */
-function literalCopy(task: CopySourceTask): string {
+/**
+ * The post as written, with this edition's link back as `{url}` — the short
+ * URL `{url}` resolved to (short-links spec §2.3) and the long tagged link
+ * older copy carries.
+ */
+function literalCopy(
+  task: CopySourceTask,
+  shortLinkOrigin: string | null,
+): string {
   const v = task.variant
   if (!v) return ''
-  return v.link ? v.body.split(v.link).join('{url}') : v.body
+  return replaceLinks(v.body, sourceLinks(v, shortLinkOrigin), '{url}')
 }
 
 /**
@@ -92,9 +101,13 @@ function literalCopy(task: CopySourceTask): string {
  * Template that kept it verbatim and never rewritten since — which is asked
  * about again on every save, so the flag cannot wear off by being ignored.
  */
-const carriesLiteralCopy = (task: CopySourceTask, stored?: TaskRecipe) =>
+const carriesLiteralCopy = (
+  task: CopySourceTask,
+  source: SaveSource,
+  stored?: TaskRecipe,
+) =>
   task.kind === 'publishing' &&
-  literalCopy(task) !== '' &&
+  literalCopy(task, source.conference.shortLinkOrigin) !== '' &&
   (!stored?.skeleton || stored.verbatim || isEdited(task, stored.skeleton))
 
 /** Exactly the Tasks that need a decision before the plan is saved (§6.2). */
@@ -119,8 +132,14 @@ export function savePreview(source: SaveSource): ReviewItem[] {
               },
             ]
           : []),
-        ...(carriesLiteralCopy(task, stored)
-          ? [{ ...about, type: 'copy' as const, text: literalCopy(task) }]
+        ...(carriesLiteralCopy(task, source, stored)
+          ? [
+              {
+                ...about,
+                type: 'copy' as const,
+                text: literalCopy(task, source.conference.shortLinkOrigin),
+              },
+            ]
           : []),
       ]
     }),
@@ -174,10 +193,10 @@ export function buildTemplate(
     const keyById = new Map(tasks.map((t) => [t._id, t.key]))
     const staticRecipe = (task: CopySourceTask): TaskRecipe => {
       const stored = campaign.recipes.find((r) => r.key === task.key)
-      const literal = carriesLiteralCopy(task, stored)
+      const literal = carriesLiteralCopy(task, source, stored)
       const rewritten = decisions.copy?.[task._id]
       const skeleton = literal
-        ? (rewritten ?? literalCopy(task))
+        ? (rewritten ?? literalCopy(task, source.conference.shortLinkOrigin))
         : stored?.skeleton
       const alt =
         task.alt !== null && !isTemplateText(task.alt, stored?.alt)
@@ -204,7 +223,8 @@ export function buildTemplate(
         ...(skeleton ? { skeleton } : {}),
         ...(literal &&
         (rewritten === undefined ||
-          rewritten.trim() === literalCopy(task).trim())
+          rewritten.trim() ===
+            literalCopy(task, source.conference.shortLinkOrigin).trim())
           ? { verbatim: true }
           : {}),
         ...(alt ? { alt } : {}),

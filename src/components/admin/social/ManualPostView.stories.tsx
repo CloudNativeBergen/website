@@ -52,7 +52,7 @@ const variant: SocialPostVariant = {
   usesCustomTime: false,
   claimedAt: null,
   submission: null,
-  shortCode: null,
+  shortCode: 'k7m2qp',
   link: 'https://cloudnativebergen.dev/tickets?utm_source=linkedin&utm_medium=social&utm_campaign=tickets&utm_content=early-bird',
   attachments: [{ source: 'att-wide', crop: null, altOverride: null }],
   publishResult: null,
@@ -61,6 +61,9 @@ const variant: SocialPostVariant = {
   ],
   attemptCount: 1,
 }
+
+/** The link a reader sees: the Task's short link (short-links spec §2.3). */
+const SHORT = 'https://cloudnativebergen.dev/go/k7m2qp'
 
 const meta = {
   title: 'Systems/Marketing/Admin/ManualPostView',
@@ -76,6 +79,7 @@ const meta = {
   },
   args: {
     variant,
+    postedLink: SHORT,
     postAttachments: IMAGES,
     imageSrc,
     onMarkPosted: fn(),
@@ -127,7 +131,9 @@ export const AwaitingManual: Story = {
     const linkSection = canvas
       .getByRole('button', { name: /copy link/i })
       .closest('section')
-    await expect(linkSection).toHaveTextContent('utm_content=early-bird')
+    // The short link, never the long tagged one it expands to.
+    await expect(linkSection).toHaveTextContent(SHORT)
+    await expect(linkSection).not.toHaveTextContent('utm_content=early-bird')
     await expect(linkSection).toHaveTextContent(/first comment/i)
     await expect(
       canvas.getByText(/add the link as the first comment/i),
@@ -153,13 +159,37 @@ export const BlueskyLinkAppended: Story = {
     const text = canvas
       .getByRole('button', { name: /copy text/i })
       .closest('section')
-    await expect(text).toHaveTextContent('utm_content=early-bird')
+    await expect(text).toHaveTextContent(SHORT)
+    await expect(text).not.toHaveTextContent('utm_content=early-bird')
     await expect(text).toHaveTextContent('The link is added at the end.')
   },
 }
 
-/** A Bluesky body that already carries the link is copied as written. */
+/**
+ * A Bluesky body that already carries the short link — `{url}` resolved to it
+ * — is copied as written: no second link, and the count is the body's.
+ */
 export const LinkAlreadyInBody: Story = {
+  args: {
+    variant: {
+      ...variant,
+      platform: 'bluesky',
+      body: `Tickets: ${SHORT}`,
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const text = canvas
+      .getByRole('button', { name: /copy text/i })
+      .closest('section')
+    await expect(text).toHaveTextContent(SHORT)
+    await expect(text).toHaveTextContent('48 / 300')
+    await expect(text).not.toHaveTextContent('The link is added at the end.')
+  },
+}
+
+/** Copy from before short links carries the long link: nothing is appended. */
+export const LongLinkAlreadyInBody: Story = {
   args: {
     variant: {
       ...variant,
@@ -172,8 +202,8 @@ export const LinkAlreadyInBody: Story = {
     const text = canvas
       .getByRole('button', { name: /copy text/i })
       .closest('section')
-    await expect(text).toHaveTextContent('utm_content=early-bird')
     await expect(text).not.toHaveTextContent('The link is added at the end.')
+    await expect(text).not.toHaveTextContent(SHORT)
   },
 }
 
@@ -202,7 +232,7 @@ export const NoPlatformRules: Story = {
     const text = canvas
       .getByRole('button', { name: /copy text/i })
       .closest('section')
-    await expect(text).not.toHaveTextContent('utm_content=early-bird')
+    await expect(text).not.toHaveTextContent(SHORT)
     const linkSection = canvas
       .getByRole('button', { name: /copy link/i })
       .closest('section')
@@ -263,6 +293,7 @@ export const AwaitingManualDark: Story = {
 
 export const TwoImagesNoLink: Story = {
   args: {
+    postedLink: null,
     variant: {
       ...variant,
       link: null,
@@ -288,7 +319,10 @@ export const MissingImage: Story = {
 }
 
 export const TextOnly: Story = {
-  args: { variant: { ...variant, link: null, attachments: [] } },
+  args: {
+    postedLink: null,
+    variant: { ...variant, link: null, attachments: [] },
+  },
 }
 
 export const AlreadyPosted: Story = {

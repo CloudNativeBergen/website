@@ -42,6 +42,7 @@ describe('ManualPostView — the tag check is announced start to finish', () => 
     ) => (
       <ManualPostView
         variant={variant}
+        postedLink={null}
         postAttachments={[]}
         onMarkPosted={vi.fn()}
         manualBody={manualBody}
@@ -61,5 +62,48 @@ describe('ManualPostView — the tag check is announced start to finish', () => 
     // The SAME node, now saying the text is ready.
     expect(screen.getByRole('status')).toBe(status)
     expect(status.textContent).toMatch(/ready to copy/i)
+  })
+})
+
+describe('ManualPostView — the link a reader sees is the short link (short-links spec §2.3)', () => {
+  const SHORT = 'https://cndn.test/go/abc987'
+  const LONG =
+    'https://cndn.test/program?utm_source=bluesky&utm_medium=social&utm_campaign=cfp&utm_content=t'
+  const coded = (body: string): SocialPostVariant => ({
+    ...variant,
+    body,
+    link: LONG,
+    shortCode: 'abc987',
+  })
+  const show = (body: string) =>
+    render(
+      <ManualPostView
+        variant={coded(body)}
+        postedLink={SHORT}
+        postAttachments={[]}
+        onMarkPosted={vi.fn()}
+      />,
+    )
+
+  it('does not append a second link when the body already holds the short URL', () => {
+    show(`See the program: ${SHORT}`)
+    // 17 + 27 characters: the body alone, no link added.
+    expect(screen.getByText(/^44 \/ 300$/)).toBeTruthy()
+    expect(screen.queryByText(/The link is added at the end/)).toBeNull()
+  })
+
+  it('appends the SHORT link, and counts it, when the body has none', () => {
+    show('Hi')
+    // "Hi" + a blank line + the 27-character short link.
+    expect(
+      screen.getByText(/^31 \/ 300 · The link is added at the end\.$/),
+    ).toBeTruthy()
+    expect(screen.getByRole('link', { name: SHORT })).toBeTruthy()
+    expect(screen.queryByText(LONG)).toBeNull()
+  })
+
+  it('does not append the short link to copy that already holds the long one', () => {
+    show(`From before short links: ${LONG}`)
+    expect(screen.queryByText(/The link is added at the end/)).toBeNull()
   })
 })

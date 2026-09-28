@@ -25,6 +25,9 @@ import { TaskEditorPage } from './TaskEditorPage'
  */
 
 const BASE_URL = 'https://cloudnativebergen.dev'
+/** The post's `/go/<code>` short link (short-links spec §2.3). */
+const POST_CODE = 'k7m2qp'
+const OUTREACH_CODE = 'p4x8vr'
 
 function view(overrides: Partial<TaskView> = {}): TaskView {
   return {
@@ -105,30 +108,33 @@ const siblings: TaskView[] = [
 function variant(
   overrides: Partial<SocialVariantEditorData['variant']> = {},
 ): SocialVariantEditorData {
+  const v: SocialVariantEditorData['variant'] = {
+    _id: 'variant-1',
+    _rev: 'rev-v1',
+    postId: 'post-1',
+    conferenceId: 'conf-1',
+    orgId: 'org-1',
+    platform: 'bluesky',
+    body: 'The Cloud Native Bergen 2027 call for papers is open. Tell us what you have been building — talks, workshops and lightning talks welcome.',
+    status: 'draft',
+    scheduledAt: '2027-01-10T17:00:00.000Z',
+    usesCustomTime: false,
+    claimedAt: null,
+    submission: null,
+    shortCode: POST_CODE,
+    link: `${BASE_URL}/cfp?utm_source=bluesky&utm_medium=social&utm_campaign=cfp&utm_content=cfpOpen%3Abluesky`,
+    attachments: [],
+    publishResult: null,
+    attempts: [],
+    attemptCount: 0,
+    ...overrides,
+  }
   return {
-    variant: {
-      _id: 'variant-1',
-      _rev: 'rev-v1',
-      postId: 'post-1',
-      conferenceId: 'conf-1',
-      orgId: 'org-1',
-      platform: 'bluesky',
-      body: 'The Cloud Native Bergen 2027 call for papers is open. Tell us what you have been building — talks, workshops and lightning talks welcome.',
-      status: 'draft',
-      scheduledAt: '2027-01-10T17:00:00.000Z',
-      usesCustomTime: false,
-      claimedAt: null,
-      submission: null,
-      shortCode: null,
-      link: `${BASE_URL}/cfp?utm_source=bluesky&utm_medium=social&utm_campaign=cfp&utm_content=cfpOpen%3Abluesky`,
-      attachments: [],
-      publishResult: null,
-      attempts: [],
-      attemptCount: 0,
-      ...overrides,
-    },
+    variant: v,
     post: { attachments: [], defaultScheduledAt: '2027-01-10T17:00:00.000Z' },
     conferenceDomains: ['cloudnativebergen.no'],
+    // What the server's `publishLinkFields` answers for this variant.
+    postedLink: v.shortCode ? `${BASE_URL}/go/${v.shortCode}` : v.link,
   }
 }
 
@@ -151,6 +157,7 @@ function fixture(
     siblings,
     variant: t.kind === 'publishing' ? v : null,
     baseUrl: BASE_URL,
+    shortLinkOrigin: BASE_URL,
     taggedLink:
       t.kind === 'publishing' && t.targetPage && t.channel
         ? `${BASE_URL}${t.targetPage}?utm_source=${t.channel}&utm_medium=social&utm_campaign=cfp&utm_content=${encodeURIComponent(t.key)}`
@@ -160,7 +167,7 @@ function fixture(
           : null,
     outreachBody:
       t.kind === 'speakerOutreach' || t.kind === 'sponsorOutreach'
-        ? `Hi ${t.subject?.name},\n\nWe would love your help sharing Cloud Native Bergen 2027. Please share this link with your community:\n\n${BASE_URL}${t.targetPage}?utm_source=outreach&utm_medium=social&utm_campaign=cfp&utm_content=${encodeURIComponent(t.key)}\n\nThank you!`
+        ? `Hi ${t.subject?.name},\n\nWe would love your help sharing Cloud Native Bergen 2027. Please share this link with your community:\n\n${t.shortCode ? `${BASE_URL}/go/${t.shortCode}` : `${BASE_URL}${t.targetPage}?utm_source=outreach&utm_medium=social&utm_campaign=cfp&utm_content=${encodeURIComponent(t.key)}`}\n\nThank you!`
         : null,
     pages: pagePickerOptions(t.subject),
     organizers: [
@@ -239,11 +246,56 @@ const meta = {
 export default meta
 type Story = StoryObj<typeof meta>
 
-/** A Bluesky draft: page picker, derived link, editor, approve. */
-export const PublishingDraft: Story = {}
+/**
+ * A Bluesky draft: page picker, the short link with the destination it
+ * expands to (short-links spec §2.7), editor, approve.
+ */
+export const PublishingDraft: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(await canvas.findByTestId('tagged-link')).toHaveTextContent(
+      `${BASE_URL}/go/${POST_CODE}`,
+    )
+    await expect(canvas.getByText('Short link')).toBeVisible()
+    await expect(canvas.getByTestId('link-destination')).toHaveTextContent(
+      `${BASE_URL}/cfp?utm_source=bluesky&utm_medium=social&utm_campaign=cfp&utm_content=cfpOpen%3Abluesky`,
+    )
+  },
+}
 
 export const PublishingDraftDark: Story = {
+  ...PublishingDraft,
   parameters: { theme: 'dark', backgrounds: { default: 'dark' } },
+}
+
+export const PublishingDraftMobile: Story = {
+  // `globals` sizes it in the Storybook UI; the test-runner's preVisit reads
+  // the parameter.
+  globals: { viewport: { value: 'mobile1', isRotated: false } },
+  parameters: { viewport: { defaultViewport: 'mobile1' } },
+  play: async (ctx) => {
+    await expect(
+      ctx.canvasElement.ownerDocument.documentElement.clientWidth,
+    ).toBeLessThan(500)
+    await PublishingDraft.play!(ctx)
+  },
+}
+
+/** A post from before short codes: the tagged link alone, until a save mints one. */
+export const PublishingDraftNoCodeYet: Story = {
+  parameters: {
+    msw: {
+      handlers: handlers({
+        ...fixture({}, variant({ shortCode: null })),
+        shortLinkOrigin: null,
+      }),
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(await canvas.findByText('Tagged link')).toBeVisible()
+    await expect(canvas.queryByTestId('link-destination')).toBeNull()
+  },
 }
 
 /** Changing the page re-derives the link on screen before any save. */
@@ -252,7 +304,11 @@ export const PageChangeUpdatesLink: Story = {
     const canvas = within(canvasElement)
     const select = await canvas.findByLabelText('Target page')
     await userEvent.selectOptions(select, 'tickets')
+    // The code never changes; the destination it expands to does.
     await expect(canvas.getByTestId('tagged-link')).toHaveTextContent(
+      `${BASE_URL}/go/${POST_CODE}`,
+    )
+    await expect(canvas.getByTestId('link-destination')).toHaveTextContent(
       `${BASE_URL}/tickets?utm_source=bluesky&utm_medium=social&utm_campaign=cfp&utm_content=cfpOpen%3Abluesky`,
     )
     await userEvent.selectOptions(select, '__custom__')
@@ -795,6 +851,7 @@ const outreach = (overrides: Partial<TaskEditorTask> = {}) =>
       milestone: null,
       status: 'open',
       targetPage: '/tickets',
+      shortCode: OUTREACH_CODE,
       subject: {
         _id: 'speaker-ada',
         type: 'speaker',
@@ -808,6 +865,30 @@ const outreach = (overrides: Partial<TaskEditorTask> = {}) =>
 
 export const SpeakerOutreach: Story = {
   parameters: { msw: { handlers: handlers(outreach()) } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    // The message carries the short link; the destination shows under it.
+    const message = await canvas.findByLabelText<HTMLTextAreaElement>('Message')
+    await expect(message.value).toContain(`${BASE_URL}/go/${OUTREACH_CODE}`)
+    await expect(message.value).not.toContain('utm_')
+    await expect(canvas.getByTestId('tagged-link')).toHaveTextContent(
+      `${BASE_URL}/go/${OUTREACH_CODE}`,
+    )
+    await expect(canvas.getByTestId('link-destination')).toHaveTextContent(
+      `${BASE_URL}/tickets?utm_source=outreach`,
+    )
+  },
+}
+
+export const SpeakerOutreachMobileDark: Story = {
+  ...SpeakerOutreach,
+  globals: { viewport: { value: 'mobile1', isRotated: false } },
+  parameters: {
+    ...SpeakerOutreach.parameters,
+    theme: 'dark',
+    backgrounds: { default: 'dark' },
+    viewport: { defaultViewport: 'mobile1' },
+  },
 }
 
 export const SponsorOutreach: Story = {
@@ -846,7 +927,7 @@ export const OutreachSendOnce: Story = {
       timeout: 5000,
     })
     await expect((body as HTMLTextAreaElement).value).toContain(
-      'utm_source=outreach',
+      `${BASE_URL}/go/${OUTREACH_CODE}`,
     )
     await userEvent.type(body, ' Looking forward to seeing you.')
     await expect(canvas.getByLabelText('Target page')).toBeDisabled()
@@ -1244,7 +1325,7 @@ const twoSpeakerBeat = (() => {
     ),
     campaign: { _id: 'camp-cfp', key: 'postEvent' },
     planId: 'plan-1',
-    conference: { _id: 'conf-1', baseUrl: BASE_URL },
+    conference: { _id: 'conf-1', baseUrl: BASE_URL, shortLinkOrigin: BASE_URL },
     values: { event: 'Cloud Native Bergen 2027' },
     assigneeId: 'sp-1',
     origin: 'expansion',

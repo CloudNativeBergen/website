@@ -1301,6 +1301,35 @@ describe('getConferenceDomainsForRule — the live read the mutations validate a
 })
 
 describe('getSocialVariantEditorData — the editor read', () => {
+  it('hands the view the SHORT link a Task post publishes, from the RAW domains (short-links spec §2.3)', async () => {
+    const link =
+      'https://conf-A.example.no/program?utm_source=linkedin&utm_medium=social&utm_campaign=cfp&utm_content=t'
+    h.dataset = [
+      conference('conf-A'),
+      post('post-conf-A', 'conf-A'),
+      variant('v-task', 'conf-A', {
+        platform: 'linkedin',
+        link,
+        shortCode: 'abc987',
+      }),
+      variant('v-own', 'conf-A', { platform: 'linkedin', link }),
+    ]
+    // The verified list is empty: the short link must not depend on it.
+    verification.verifiedDomains.mockImplementation(async () => [])
+    try {
+      const task = await getSocialVariantEditorData('v-task')
+      expect(task?.postedLink).toBe('https://conf-a.example.no/go/abc987')
+      expect(task?.variant.link).toBe(link)
+      // A standalone post (no code) posts its own link.
+      const own = await getSocialVariantEditorData('v-own')
+      expect(own?.postedLink).toBe(link)
+    } finally {
+      verification.verifiedDomains.mockImplementation(async (claimed) => [
+        ...claimed,
+      ])
+    }
+  })
+
   it('still loads a LinkedIn editor when the verification read throws or hangs — the warning is advisory', async () => {
     // This read serves mark-posted, delete and set-date too; save, schedule
     // and approve re-read and refuse for themselves. So a failing or hanging

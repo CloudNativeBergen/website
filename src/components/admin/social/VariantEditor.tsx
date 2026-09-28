@@ -54,6 +54,12 @@ export interface VariantEditorProps {
    * §3.4): shown, never typed here.
    */
   linkLocked?: boolean
+  /**
+   * The link a reader sees, shown in place of `value.link` in the locked Link
+   * field and the preview: a Task's `/go/<code>` short link (short-links spec
+   * §2.3). `value.link` stays the tagged link it expands to.
+   */
+  postedLink?: string | null
 }
 
 const defaultImageSrc = (asset: SocialPostAttachment) =>
@@ -97,7 +103,9 @@ export function VariantEditor({
   sources,
   authorName = 'Your conference',
   linkLocked = false,
+  postedLink,
 }: VariantEditorProps) {
+  const shownLink = postedLink ?? value.link
   const id = useId()
   const platformLabel = SOCIAL_PLATFORM_LABELS[platform]
   // Switching default → custom → default must not lose a typed time.
@@ -194,7 +202,7 @@ export function VariantEditor({
               placeholder={
                 linkLocked ? 'Pick a target page above' : 'https://…'
               }
-              value={value.link}
+              value={linkLocked ? shownLink : value.link}
               onChange={(e) => set({ link: e.target.value })}
               disabled={saving}
               readOnly={linkLocked}
@@ -207,7 +215,11 @@ export function VariantEditor({
             />
             <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
               {linkLocked
-                ? `Derived from the target page, the campaign and this task; it carries the tracking tags.${
+                ? `${
+                    postedLink
+                      ? 'This task’s short link; it goes to the tagged link shown above.'
+                      : 'Derived from the target page, the campaign and this task; it carries the tracking tags.'
+                  }${
                     constraints?.linkPlacement === 'comment'
                       ? ` It is posted as the first comment on ${platformLabel}, so keep it out of the body.`
                       : ''
@@ -323,6 +335,7 @@ export function VariantEditor({
           <PreviewCard
             authorName={authorName}
             value={value}
+            link={shownLink}
             constraints={constraints}
             postAttachments={postAttachments}
             imageSrc={imageSrc}
@@ -412,12 +425,15 @@ function Issues({ id, messages }: { id: string; messages: string[] }) {
 function PreviewCard({
   authorName,
   value,
+  link: rawLink,
   constraints,
   postAttachments,
   imageSrc,
 }: {
   authorName: string
   value: VariantEditorValue
+  /** The link a reader sees (see `VariantEditorProps.postedLink`). */
+  link: string
   constraints: PlatformConstraints | null
   postAttachments: SocialPostAttachment[]
   imageSrc: (asset: SocialPostAttachment) => string
@@ -437,7 +453,7 @@ function PreviewCard({
       },
     ]
   })
-  const link = value.link.trim()
+  const link = rawLink.trim()
   let host: string | null = null
   try {
     host = link ? new URL(link).hostname : null

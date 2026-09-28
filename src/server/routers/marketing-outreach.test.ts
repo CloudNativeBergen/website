@@ -445,6 +445,9 @@ describe('marketing outreach delivery', () => {
       '//foreign.example/path',
       'The outreach destination must be on this conference site.',
     ],
+    // Derives, but a link never points at a link (short-links spec §2.3);
+    // Studio can hand-edit `targetPage` past the input schema.
+    ['targetPage', '/go/abc987', 'The path must not be a short link (/go/…).'],
   ])(
     'refuses invalid %s=%s before creating a conversation',
     async (field, value, error) => {
@@ -606,6 +609,39 @@ describe('marketing outreach delivery', () => {
       expect(data.outreachBody).not.toMatch(/\{[^{}]*\}/)
     },
   )
+  it('prefills the message with the SHORT link, and shows the destination it expands to (short-links spec §2.3)', async () => {
+    task.shortCode = 'abc987'
+    const data = await caller().task.get({ taskId: send.taskId })
+    expect(data.shortLinkOrigin).toBe('https://cloudnativebergen.dev')
+    expect(data.outreachBody).toContain(
+      'https://cloudnativebergen.dev/go/abc987',
+    )
+    expect(data.outreachBody).not.toContain('utm_')
+    // The destination the short link expands to is still the tagged link.
+    expect(data.taggedLink).toBe(
+      'https://cloudnativebergen.dev/tickets?utm_source=outreach&utm_medium=social&utm_campaign=tickets&utm_content=invite-ada',
+    )
+  })
+  it('sends the SHORT link for a Task that predates short codes: the send mints it and swaps the prefilled long link', async () => {
+    task.shortCode = null
+    const long =
+      'https://cloudnativebergen.dev/tickets?utm_source=outreach&utm_medium=social&utm_campaign=tickets&utm_content=invite-ada'
+    await caller().task.sendOutreach({
+      ...send,
+      body: `Please share ${long} !`,
+    })
+    const { body, marketingTask } = h.addMessage.mock.calls[0][0]
+    const code = marketingTask.fields.shortCode
+    expect(code).toMatch(/^[a-hjkmnp-z2-9]{6}$/)
+    expect(body).toBe(`Please share https://cloudnativebergen.dev/go/${code} !`)
+  })
+  it('prefills the long link for a Task that predates short codes (it mints on send, never in a read)', async () => {
+    task.shortCode = null
+    const data = await caller().task.get({ taskId: send.taskId })
+    expect(data.shortLinkOrigin).toBeNull()
+    expect(data.outreachBody).toContain(data.taggedLink)
+    expect(h.update).not.toHaveBeenCalled()
+  })
   it.each([
     { kind: 'speakerOutreach', recipientToken: '{name}' },
     { kind: 'sponsorOutreach', recipientToken: '{company}' },
@@ -623,16 +659,19 @@ describe('marketing outreach delivery', () => {
           ],
         })
       }
+      task.shortCode = 'abc987'
       const openTask = structuredClone(task)
       const data = await caller().task.get({ taskId: send.taskId })
       const defaultBody = data.outreachBody!
+      const shortLink = 'https://cloudnativebergen.dev/go/abc987'
+      expect(defaultBody).toContain(shortLink)
 
       // Try each built-in token independently: another unresolved token must not
       // conceal an exemption in the send guard.
       for (const [value, token] of [
         [task.subject.name, recipientToken],
         [conference.title, '{event}'],
-        [data.taggedLink!, '{url}'],
+        [shortLink, '{url}'],
       ]) {
         task = structuredClone(openTask)
         await caller()
