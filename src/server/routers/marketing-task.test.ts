@@ -1061,6 +1061,102 @@ describe('marketing.task.delete', () => {
   })
 })
 
+/**
+ * §2.1's known hole, §2.7: the Task delete preview counts the short link
+ * that may be live and that the delete sends to the home page. The same
+ * guarded read and the same refusals as `task.delete`.
+ */
+describe('marketing.task.deletionPreview (#1145)', () => {
+  const OUTREACH = {
+    kind: 'speakerOutreach' as const,
+    channel: null,
+    variantId: null,
+    status: 'open' as const,
+  }
+  const preview = () =>
+    marketing().task.deletionPreview({ taskId: 'task-ours' })
+
+  it('counts a sent outreach message that carried a code', async () => {
+    h.getTaskEditorData.mockResolvedValue(
+      stored({ ...OUTREACH, shortCode: 'abc234', messageId: 'msg-1' }),
+    )
+    expect(await preview()).toEqual({ liveLinks: 1 })
+  })
+
+  it.each(['failed', 'awaiting-manual'] as const)(
+    'counts a %s variant that carries a code',
+    async (status) => {
+      h.getSocialVariantEditorData.mockResolvedValue(
+        variantData({
+          status,
+          shortCode: 'abc234',
+          attempts: [
+            { _key: 'a', at: '2026-09-13T09:50:00Z', outcome: 'rejected' },
+          ],
+        }),
+      )
+      expect(await preview()).toEqual({ liveLinks: 1 })
+    },
+  )
+
+  it('counts nothing that was never out there', async () => {
+    h.getTaskEditorData.mockResolvedValue(
+      stored({ ...OUTREACH, shortCode: 'abc234', messageId: null }),
+    )
+    expect(await preview()).toEqual({ liveLinks: 0 })
+    h.getTaskEditorData.mockResolvedValue(stored())
+    for (const status of ['draft', 'scheduled'] as const) {
+      h.getSocialVariantEditorData.mockResolvedValue(
+        variantData({ status, shortCode: 'abc234' }),
+      )
+      expect(await preview()).toEqual({ liveLinks: 0 })
+    }
+    h.getSocialVariantEditorData.mockResolvedValue(
+      variantData({ status: 'failed', shortCode: null }),
+    )
+    expect(await preview()).toEqual({ liveLinks: 0 })
+  })
+
+  it('refuses what the delete refuses, with the same message', async () => {
+    h.getSocialVariantEditorData.mockResolvedValue(
+      variantData({ status: 'published', shortCode: 'abc234' }),
+    )
+    await expect(preview()).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: 'The post has been published; the record is kept.',
+    })
+    h.getSocialVariantEditorData.mockResolvedValue(
+      variantData({
+        status: 'failed',
+        shortCode: 'abc234',
+        attempts: [
+          { _key: 'a', at: '2026-09-13T09:50:00Z', outcome: 'stale-claim' },
+        ],
+      }),
+    )
+    await expect(preview()).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: MAY_BE_LIVE_REFUSAL,
+    })
+  })
+
+  it('warns and the delete still proceeds', async () => {
+    h.getSocialVariantEditorData.mockResolvedValue(
+      variantData({ status: 'awaiting-manual', shortCode: 'abc234' }),
+    )
+    expect(await preview()).toEqual({ liveLinks: 1 })
+    await marketing().task.delete({ taskId: 'task-ours' })
+    expect(h.deleteTask).toHaveBeenCalledTimes(1)
+  })
+
+  it('refuses a foreign Task before reading it', async () => {
+    await expect(
+      marketing().task.deletionPreview({ taskId: 'task-theirs' }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    expect(h.getTaskEditorData).not.toHaveBeenCalled()
+  })
+})
+
 describe('task.attachAsset', () => {
   const assetId = 'image-render-1200x630-png'
   const input = { taskId: 'task-ours', taskRev: 'rev-render', assetId }
