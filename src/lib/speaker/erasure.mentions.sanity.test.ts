@@ -894,7 +894,7 @@ describe('speaker erasure scrubs post variants (#1232)', () => {
         if (reads === 3)
           h.dataset = h.dataset.filter((d) => d._id !== 'var-bridge-2')
       }
-      const result = await eraseSpeakerInPlace({
+      await eraseSpeakerInPlace({
         speakerId: ADA,
         actor: 'test',
       })
