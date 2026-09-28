@@ -1172,6 +1172,11 @@ export interface EraseSpeakerResult {
   linkedFiles: LinkedFileDeletion[]
   cache: { tags: string[]; revalidated: boolean; error: string | null }
   verification: ErasureVerification | null
+  /**
+   * Post variants the commit's verification found saved during the run and
+   * repaired in a second transaction (#1232). Counts toward `committed`.
+   */
+  repairedPostVariants: number
   err: Error | null
 }
 
@@ -1444,6 +1449,7 @@ export async function eraseSpeakerInPlace(
     linkedFiles: [],
     cache: { tags: [], revalidated: false, error: null },
     verification: null,
+    repairedPostVariants: 0,
     err: null,
   }
 
@@ -1545,13 +1551,15 @@ export async function eraseSpeakerInPlace(
     // The linked file ids likewise: once their holders are stripped nothing
     // links them, so a file left behind is visible only by its id.
     const verify = (identity: MentionIdentity) =>
-      verifySpeakerErasure(
+      verifyErasureDetailed(
         plan.speakerId,
         inputs.speaker ? speakerEmailMatchSet(inputs.speaker) : [],
         plan.linkedFileIds,
         identity,
       )
-    let verification = await verify(inputs.mentions.identity)
+    const first = await verify(inputs.mentions.identity)
+    let verification = first?.verification ?? null
+    let repairedPostVariants = 0
 
     // A post variant written since the transaction can carry the name, a
     // handle or a DID again, and this is the LAST moment those are known: a
@@ -1560,18 +1568,22 @@ export async function eraseSpeakerInPlace(
     if (verification && verification.residual.postVariants > 0) {
       // Never throws past here: the erasure itself has committed, and a
       // failed repair leaves the residual for the verification to report.
-      // The repair's read can learn a new alias of theirs (a bridge record
-      // saved meanwhile); the last verification looks with that too.
+      // Each read can learn a new alias of theirs (a bridge record saved
+      // meanwhile): the repair starts from what this verification learned,
+      // and the last verification looks with what the repair learned.
       const repaired = await repairPostVariants(
         plan.speakerId,
         inputs.speaker?.organizations,
         inputs.speaker?.links,
-        inputs.mentions.identity,
+        first?.identity ?? inputs.mentions.identity,
       ).catch((error: unknown) => {
         console.error('[speaker-erasure] post-variant repair failed', error)
         return null
       })
-      if (repaired) verification = await verify(repaired.identity)
+      if (repaired) {
+        repairedPostVariants = repaired.patched
+        verification = (await verify(repaired.identity))?.verification ?? null
+      }
     }
 
     console.info('[speaker-erasure] anonymised speaker in place', {
@@ -1579,6 +1591,7 @@ export async function eraseSpeakerInPlace(
       speakerId: plan.speakerId,
       // Deliberately NO personal data in the audit line — ids and counts only.
       patched: plan.documentPatches.length,
+      repairedPostVariants,
       deleted: plan.documentDeletes.length,
       retainedBanking: plan.retainedBanking.length,
       imageAssetDeleted: imageAsset.deleted,
@@ -1589,11 +1602,12 @@ export async function eraseSpeakerInPlace(
 
     return {
       plan,
-      committed: !plan.noop,
+      committed: !plan.noop || repairedPostVariants > 0,
       imageAsset,
       linkedFiles,
       cache,
       verification,
+      repairedPostVariants,
       err: null,
     }
   } catch (error) {
@@ -1731,6 +1745,32 @@ export async function verifySpeakerErasure(
   priorFileIds: string[] = [],
   priorMentions: Partial<MentionIdentity> = {},
 ): Promise<ErasureVerification | null> {
+  return (
+    (
+      await verifyErasureDetailed(
+        speakerId,
+        priorEmails,
+        priorFileIds,
+        priorMentions,
+      )
+    )?.verification ?? null
+  )
+}
+
+/**
+ * {@link verifySpeakerErasure}, plus the post-variant identity its read grew
+ * to — server-side only, for the commit's repair; never printed or returned
+ * to an operator (it IS the erased person's name and accounts).
+ */
+async function verifyErasureDetailed(
+  speakerId: string,
+  priorEmails: string[] = [],
+  priorFileIds: string[] = [],
+  priorMentions: Partial<MentionIdentity> = {},
+): Promise<{
+  verification: ErasureVerification
+  identity: MentionIdentity
+} | null> {
   const targetSlug = erasedSlug(speakerId)
   const targetEmail = erasedEmail(speakerId)
 
@@ -1946,5 +1986,8 @@ export async function verifySpeakerErasure(
     linkedFiles === 0 &&
     postVariants === 0
 
-  return { clean, residual }
+  return {
+    verification: { clean, residual },
+    identity: inputs.mentions.identity,
+  }
 }

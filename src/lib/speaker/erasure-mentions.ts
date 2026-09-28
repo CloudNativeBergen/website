@@ -130,16 +130,22 @@ const str = (v: unknown) => (typeof v === 'string' ? v : null)
 
 /**
  * A record of the subject: by reference, or by a handle or DID of theirs on
- * a record that is not another live speaker's (a dangling or erased
- * reference, or none at all).
+ * a record that points at a speaker who is gone (a dangling or erased
+ * reference). Never another live speaker's, and never a record with NO
+ * speaker reference: that is a sponsor's (#1154 writes them, marked
+ * `sponsor: true`; none exist on main yet), and a company account shared
+ * with the subject is still the company's.
  */
+const isOthers = (m: MentionEntry) =>
+  m.otherLive === true || typeof m.speaker?._ref !== 'string'
+
 function isSubjectRecord(
   m: MentionEntry,
   speakerId: string,
   identity: MentionIdentity,
 ): boolean {
   if (m.speaker?._ref === speakerId) return true
-  if (m.otherLive === true) return false
+  if (isOthers(m)) return false
   const handle = str(m.handle)
   const did = str(m.did)
   return (
@@ -148,11 +154,11 @@ function isSubjectRecord(
   )
 }
 
-/** The handles another live speaker's record in this variant carries. */
+/** The handles someone else's record in this variant carries. */
 function sharedHandles(v: Doc): Set<string> {
   return new Set(
     list<MentionEntry>(v.mentions)
-      .filter((m) => m.otherLive === true)
+      .filter(isOthers)
       .map((m) => str(m.handle))
       .filter((h): h is string => h !== null)
       .map(normaliseHandle),
@@ -542,7 +548,7 @@ export function residualMentionVariants(
       if (m.speaker?._ref === speakerId) return true
       const [handle, did] = [str(m.handle), str(m.did)]
       return (
-        m.otherLive !== true &&
+        !isOthers(m) &&
         ((handle !== null &&
           identity.handles.includes(normaliseHandle(handle))) ||
           (did !== null && identity.dids.includes(did)))

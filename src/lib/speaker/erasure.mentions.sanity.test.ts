@@ -25,6 +25,8 @@ const h = vi.hoisted(() => ({
   revCounter: 0,
   /** A write landing after the transaction, before the verification. */
   afterCommit: null as null | (() => void),
+  /** Runs before each read, with its query: a write landing between reads. */
+  beforeFetch: null as null | ((query: string) => void),
 }))
 
 /** True when some other document holds a STRONG reference to `id`. */
@@ -78,13 +80,15 @@ vi.mock('@/lib/sanity/client', async () => {
       query: string,
       params: Record<string, unknown> = {},
       opts: { perspective?: unknown } = {},
-    ) =>
-      (
+    ) => {
+      h.beforeFetch?.(query)
+      return (
         await evaluate(parse(query), {
           dataset: visible(apiVersion, opts.perspective),
           params,
         })
       ).get()
+    }
   const reader = {
     fetch: fetchAt(OLD),
     withConfig: (c: { apiVersion: string }) => ({
@@ -222,6 +226,7 @@ function seed() {
   h.revCounter = 0
   h.failFileDelete = new Set()
   h.afterCommit = null
+  h.beforeFetch = null
   h.dataset = [
     { _id: 'org-a', _type: 'organization' },
     { _id: 'org-x', _type: 'organization' },
@@ -839,6 +844,83 @@ describe('speaker erasure scrubs post variants (#1232)', () => {
       expect(result.verification?.residual.postVariantIds).toEqual([
         'var-race-alias',
       ])
+    })
+
+    it('keeps a sponsor’s record (no speaker ref) and its tag on an account she shares', async () => {
+      const sponsorTag = {
+        _key: 'm-sponsor',
+        _type: 'socialPostMention',
+        handle: 'ada.bsky.social',
+        did: ADA_DID,
+        name: 'Acme',
+        status: 'tagged',
+        sponsor: true,
+      }
+      h.dataset.push(
+        variant('var-sponsor', 'draft', 'Thanks @ada.bsky.social', {
+          conference: ref('conf-x'),
+          mentions: [sponsorTag],
+        }),
+      )
+      const result = await eraseSpeakerInPlace({
+        speakerId: ADA,
+        actor: 'test',
+      })
+      expect(doc('var-sponsor').mentions).toEqual([sponsorTag])
+      expect(doc('var-sponsor').body).toBe('Thanks @ada.bsky.social')
+      expect(result.verification?.clean).toBe(true)
+    })
+
+    it('the repair starts from the aliases the first verification learned', async () => {
+      // Account reads: 1 plan, 2 first verification, 3 the repair. A bridge
+      // record saved during the run is seen by 2 and deleted again before 3.
+      let reads = 0
+      h.afterCommit = () => {
+        h.afterCommit = null
+        h.dataset.push(
+          variant('var-bridge-2', 'published', 'x', {
+            conference: ref('conf-x'),
+            mentions: [mention('mb', 'spk-gone', 'ada.v2', 'X', ADA_DID)],
+          }),
+          variant('var-alias-2', 'draft', 'Hi @ada.v2', {
+            conference: ref('conf-x'),
+            mentions: [],
+          }),
+        )
+      }
+      h.beforeFetch = (q) => {
+        if (!q.includes('!references($speakerId)')) return
+        reads++
+        if (reads === 3)
+          h.dataset = h.dataset.filter((d) => d._id !== 'var-bridge-2')
+      }
+      const result = await eraseSpeakerInPlace({
+        speakerId: ADA,
+        actor: 'test',
+      })
+      expect(doc('var-alias-2').body).toBe('Hi a speaker')
+    })
+
+    it('reports a repair as a write, even on a run whose plan was empty', async () => {
+      await eraseSpeakerInPlace({ speakerId: ADA, actor: 'test' })
+      // The second run's verification read: a record saved meanwhile.
+      let pushed = false
+      let refReads = 0
+      h.beforeFetch = (q) => {
+        if (!q.includes('&& references($speakerId)]')) return
+        refReads++
+        if (refReads === 2 && !pushed) {
+          pushed = true
+          h.dataset.push(
+            variant('var-late-ref', 'published', 'x', { mentions: [adaTag()] }),
+          )
+        }
+      }
+      const again = await eraseSpeakerInPlace({ speakerId: ADA, actor: 'test' })
+      expect(again.plan?.noop).toBe(true)
+      expect(again.repairedPostVariants).toBe(1)
+      expect(again.committed).toBe(true)
+      expect(doc('var-late-ref').mentions).toEqual([])
     })
 
     it('never matches a name that ends inside a grapheme', async () => {

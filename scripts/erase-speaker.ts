@@ -149,7 +149,12 @@ async function main(): Promise<number> {
 
   console.log(
     `\nCommitted: ${result.committed}` +
-      (result.plan?.noop ? ' (already erased — nothing to write)' : ''),
+      (result.plan?.noop && result.repairedPostVariants === 0
+        ? ' (already erased — nothing to write)'
+        : '') +
+      (result.repairedPostVariants > 0
+        ? ` (+${result.repairedPostVariants} post variant(s) saved during the run, repaired)`
+        : ''),
   )
   console.log(
     `Image asset: ${

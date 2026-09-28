@@ -290,7 +290,13 @@ function bindTags(
         ranks.set(m.speakerId, r >= 0 ? r : last + 0.5)
     }
     const rank = (id: string) => ranks.get(id) ?? roster(id)
-    owners.sort((x, y) => rank(x) - rank(y))
+    // Equal ranks (no roster: the publish tick) fall back to RECORD order, so
+    // which priority pass chose a person never reorders the occurrences.
+    const order = (id: string) => {
+      const i = recorded.findIndex((m) => m.speakerId === id)
+      return i >= 0 ? i : recorded.length
+    }
+    owners.sort((x, y) => rank(x) - rank(y) || order(x) - order(y))
     if (owners.length > 0) out.set(handle, owners)
   }
   return out

@@ -272,6 +272,15 @@ describe('a gone speaker on a shared handle (#1232)', () => {
     expect(owners.get('team.dev')).toEqual(['alice'])
   })
 
+  it('keeps record order across priority groups (three sharers, no roster)', () => {
+    const owners = occurrenceOwners('@team.dev and Bob and @team.dev', [
+      rec('alice', 'a speaker', true),
+      rec('bob', 'Bob'),
+      rec('carol', 'Carol'),
+    ])
+    expect(owners.get('team.dev')).toEqual(['alice', 'carol'])
+  })
+
   it('and to the gone one where the live speaker is still named', () => {
     const owners = occurrenceOwners('Bob and @team.dev', [
       rec('alice', 'a speaker', true),
