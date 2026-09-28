@@ -84,6 +84,7 @@ import {
 import {
   fetchSpeakerMentionInputs,
   planSpeakerMentionErasure,
+  linkOnlySharedResidual,
   residualMentionVariants,
   type MentionIdentity,
   type SpeakerMentionInputs,
@@ -424,6 +425,16 @@ export interface ErasurePlan {
    */
   linkedFileIds: string[]
   retainedBanking: RetainedBankingRecord[]
+  /**
+   * Her handles the scrub LEAVES in unposted text because another live
+   * speaker's profile lists them (see `ErasureVerification`). Shown in the
+   * dry run so the operator can decide before committing.
+   */
+  sharedByLinkOnly: {
+    handle: string
+    variantIds: string[]
+    listedBy: string[]
+  }[]
   /** Conference ids whose caches must be revalidated. */
   affectedConferenceIds: string[]
   /** Non-empty ⇒ the operation must not run. */
@@ -847,6 +858,7 @@ export function buildErasurePlan(inputs: ErasureInputs): ErasurePlan {
     imageAssetId,
     linkedFileIds: assetPlan.fileIds,
     retainedBanking,
+    sharedByLinkOnly: linkOnlySharedResidual(speakerId, inputs.mentions),
     affectedConferenceIds: [...affectedConferenceIds],
     refusals,
     noop,
@@ -1254,6 +1266,18 @@ export interface ErasureVerification {
      * NOW, so the operator clears these by hand once they have settled.
      */
     postVariantIds: string[]
+    /**
+     * Her handles left in unposted text because another live speaker's
+     * profile LISTS them and no record says whose they are (#1232). Never
+     * clean while non-empty: the operator confirms the account really is
+     * shared, or removes the link and re-runs (runbook 3c). Carries the
+     * handle, which the operator needs to judge it.
+     */
+    sharedByLinkOnly: {
+      handle: string
+      variantIds: string[]
+      listedBy: string[]
+    }[]
   }
 }
 
@@ -1934,6 +1958,7 @@ async function verifyErasureDetailed(
   }
 
   const postVariantIds = residualMentionVariants(speakerId, inputs.mentions)
+  const sharedByLinkOnly = linkOnlySharedResidual(speakerId, inputs.mentions)
   const postVariants = postVariantIds.length
 
   const speakerFields = ERASURE_UNSET_FIELDS.filter(
@@ -1968,6 +1993,7 @@ async function verifyErasureDetailed(
     linkedFiles,
     postVariants,
     postVariantIds,
+    sharedByLinkOnly,
   }
 
   const clean =
@@ -1992,7 +2018,8 @@ async function verifyErasureDetailed(
     linkedFileHolders === 0 &&
     videoProjects === 0 &&
     linkedFiles === 0 &&
-    postVariants === 0
+    postVariants === 0 &&
+    sharedByLinkOnly.length === 0
 
   return {
     verification: { clean, residual },

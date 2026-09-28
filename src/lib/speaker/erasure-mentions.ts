@@ -100,6 +100,14 @@ export interface SpeakerMentionInputs {
    * that records nobody (a team account in another tenant's post).
    */
   sharedHandles: string[]
+  /**
+   * Of those, the ones shared ONLY because another live speaker's profile
+   * LISTS them — no record anywhere says whose they are. Maybe a real team
+   * account, maybe a co-speaker linking to her, maybe her own duplicate
+   * speaker document: the scrub cannot tell, so it leaves the text and the
+   * verification REPORTS it (never clean) for the operator to decide.
+   */
+  linkOnlyShared: { handle: string; listedBy: string[] }[]
 }
 
 export interface SpeakerMentionPlan {
@@ -585,6 +593,49 @@ export function residualMentionVariants(
   return [...ids]
 }
 
+/**
+ * Per handle shared only through another speaker's links, the unposted
+ * variants whose text STILL carries it once the scrub is done (a tag bound
+ * to her record is scrubbed; anything else is left) — wherever it stands.
+ * The same answer before the commit (the dry run) and after it.
+ */
+export function linkOnlySharedResidual(
+  speakerId: string,
+  inputs: SpeakerMentionInputs,
+): { handle: string; variantIds: string[]; listedBy: string[] }[] {
+  const shared = new Set(inputs.sharedHandles)
+  return inputs.linkOnlyShared.flatMap(({ handle, listedBy }) => {
+    const pattern = handlePattern([handle])
+    if (!pattern) return []
+    const leftIn = (v: Doc) => (text: unknown) => {
+      const t = str(text)
+      if (t === null) return false
+      const after = scrubText(
+        t,
+        v,
+        speakerId,
+        inputs.identity,
+        byName(v, speakerId, inputs),
+        shared,
+      )
+      return spansOf(after.normalize('NFC'), pattern).length > 0
+    }
+    const variantIds = [
+      ...new Set(
+        inputs.variants
+          .filter(
+            (v) =>
+              !isPosted(v) &&
+              (leftIn(v)(v.body) ||
+                effectiveAlts(v).some((a) => leftIn(v)(a.alt))),
+          )
+          .map((v) => v._id),
+      ),
+    ].sort()
+    return variantIds.length > 0 ? [{ handle, variantIds, listedBy }] : []
+  })
+}
+
 // `otherLive`: see `MentionEntry`. Every read below passes `$speakerId`.
 const VARIANT_FIELDS = groq`{ _id, _type, _rev, status, body, attachments, conference, "sourceAlts": post->attachments[]{ _key, alt }, "mentions": mentions[]{ ..., "otherLive": defined(speaker._ref) && speaker._ref != $speakerId && defined(speaker->_id) && !defined(speaker->erasedAt) } }`
 
@@ -753,29 +804,37 @@ export async function fetchSpeakerMentionInputs(
   const othersLinks =
     identity.handles.length === 0
       ? []
-      : ((await client.fetch<unknown[]>(
+      : ((await client.fetch<{ _id: string; links?: unknown }[]>(
           // groq-global: other live speakers listing one of her handles, in
           // every tenant — the same account is theirs as well.
-          groq`*[_type == "speaker" && _id != $speakerId && !defined(erasedAt) && (${listedFilter})].links`,
+          groq`*[_type == "speaker" && _id != $speakerId && !defined(erasedAt) && (${listedFilter})]{ _id, links }`,
           {
             speakerId,
             ...Object.fromEntries(identity.handles.map((h, i) => [`l${i}`, h])),
           },
           opts,
         )) ?? [])
-  const listed = blueskyHandlesFromLinks(
-    othersLinks.flat().filter((l): l is string => typeof l === 'string'),
-  )
+  // Per handle of hers, the other speakers LISTING it.
+  const listedBy = new Map<string, string[]>()
+  for (const other of othersLinks) {
+    const links = Array.isArray(other.links)
+      ? other.links.filter((l): l is string => typeof l === 'string')
+      : []
+    for (const h of blueskyHandlesFromLinks(links))
+      if (identity.handles.includes(h))
+        listedBy.set(h, [...(listedBy.get(h) ?? []), other._id])
+  }
   const variants = [...byRef, ...byAccountOrScope]
-  const shared = new Set(
-    [...othersHandles(variants), ...listed].filter((h) =>
-      identity.handles.includes(h),
-    ),
+  const byRecord = new Set(
+    othersHandles(variants).filter((h) => identity.handles.includes(h)),
   )
   return {
     variants,
     identity,
     nameScope: conferenceIds,
-    sharedHandles: [...shared],
+    sharedHandles: [...new Set([...byRecord, ...listedBy.keys()])],
+    linkOnlyShared: [...listedBy]
+      .filter(([h]) => !byRecord.has(h))
+      .map(([handle, ids]) => ({ handle, listedBy: ids.sort() })),
   }
 }

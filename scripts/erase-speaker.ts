@@ -74,6 +74,16 @@ function printPlan(plan: ErasurePlan): void {
     }
   }
 
+  if (plan.sharedByLinkOnly.length > 0) {
+    console.log(
+      '\nHandles LEFT in unposted text — another speaker lists them (runbook 3c):',
+    )
+    for (const s of plan.sharedByLinkOnly)
+      console.log(
+        `  @${s.handle}  listed by ${s.listedBy.join(', ')}  in ${s.variantIds.join(', ')}`,
+      )
+  }
+
   if (plan.refusals.length > 0) {
     console.log('\nREFUSED:')
     for (const refusal of plan.refusals) console.log(`  - ${refusal}`)

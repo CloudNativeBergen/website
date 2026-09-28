@@ -977,7 +977,11 @@ describe('speaker erasure scrubs post variants (#1232)', () => {
       })
       expect(doc('var-team').body).toBe('a speaker speaks')
       expect(doc('var-foreign').body).toBe('Thanks @team.dev for hosting')
-      expect(result.verification?.clean).toBe(true)
+      // Shared only by a link, so whose it is cannot be told: reported.
+      expect(result.verification?.residual.sharedByLinkOnly).toEqual([
+        { handle: 'team.dev', variantIds: ['var-foreign'], listedBy: [BOB] },
+      ])
+      expect(result.verification?.clean).toBe(false)
     })
 
     it('keeps a bridge found in an earlier discovery round, so a retag meanwhile aborts the commit', async () => {
@@ -1032,6 +1036,71 @@ describe('speaker erasure scrubs post variants (#1232)', () => {
       expect(result.err).toBeNull()
       expect(doc('var-dr').body).toBe('Meet a speaker')
       expect(result.verification?.residual.postVariantIds).toContain('var-fl')
+    })
+
+    it('a handle shared ONLY through another speaker’s links is left, but reported and never CLEAN (a co-speaker linking to her)', async () => {
+      doc(BOB).links = [
+        'https://bsky.app/profile/bob.dev',
+        'https://bsky.app/profile/ada.bsky.social',
+      ]
+      h.dataset.push(
+        variant('var-foreign', 'draft', 'Meet "@ada.bsky.social" today', {
+          conference: ref('conf-x'),
+          mentions: [],
+        }),
+        variant(
+          'var-quoted',
+          'draft',
+          'Follow her: bsky.app/profile/ada.bsky.social',
+          {
+            mentions: [],
+          },
+        ),
+      )
+      const result = await eraseSpeakerInPlace({
+        speakerId: ADA,
+        actor: 'test',
+      })
+      expect(result.err).toBeNull()
+      expect(doc('var-foreign').body).toBe('Meet "@ada.bsky.social" today')
+      expect(result.verification?.residual.sharedByLinkOnly).toEqual([
+        {
+          handle: 'ada.bsky.social',
+          variantIds: ['var-foreign', 'var-quoted'],
+          listedBy: [BOB],
+        },
+      ])
+      expect(result.verification?.clean).toBe(false)
+    })
+
+    it('…and her own unmerged duplicate speaker document listing it is reported the same way', async () => {
+      h.dataset.push(
+        {
+          _id: 'spkada-dup',
+          _type: 'speaker',
+          name: 'Ada Lovelace',
+          links: ['https://bsky.app/profile/ada.bsky.social'],
+        },
+        variant('var-foreign', 'draft', 'Meet "@ada.bsky.social" today', {
+          conference: ref('conf-x'),
+          mentions: [],
+        }),
+      )
+      const result = await eraseSpeakerInPlace({
+        speakerId: ADA,
+        actor: 'test',
+      })
+      const expected = [
+        {
+          handle: 'ada.bsky.social',
+          variantIds: ['var-foreign'],
+          listedBy: ['spkada-dup'],
+        },
+      ]
+      expect(result.verification?.residual.sharedByLinkOnly).toEqual(expected)
+      // The dry run shows it too, before anything is written.
+      expect(result.plan?.sharedByLinkOnly).toEqual(expected)
+      expect(result.verification?.clean).toBe(false)
     })
 
     it('ends a link at the URL, so a name right after it is still hers', async () => {

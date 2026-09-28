@@ -245,6 +245,16 @@ name is a stranger.
   of the tag. A shared handle is scrubbed only where a tag is bound to the
   erased person's record, never in text that records nobody, and a variant
   reached only through it is not searched for the name.
+- A handle of theirs that another live speaker only **lists in their profile
+  links** (no record says whose it is) is **left** in unposted text: it may be
+  a real team account, a co-speaker linking to them, or their own unmerged
+  duplicate speaker document. The dry run prints it ("Handles LEFT in unposted
+  text"), and the verification reports it as `sharedByLinkOnly` (handle,
+  variant ids, the speakers listing it) and is **never CLEAN** while it
+  stands. Look at each: if the account really is shared, record that in the
+  DSR and accept it; if it is theirs (a co-speaker's stray link, or their own
+  duplicate — merge or erase that one too), remove the link from the listing
+  speaker and re-run, which then scrubs it.
 - A **namesake** inside that scope — another person with exactly the same name
   — is neutralised too: the tool cannot tell two people apart by name. The dry
   run lists each variant it rewrites; read them.
