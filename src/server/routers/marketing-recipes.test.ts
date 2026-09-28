@@ -209,7 +209,9 @@ describe('campaign.recipes.attach', () => {
       conferenceId: 'conf-A',
       // Becomes the owner of an ownerless plan, or generation would skip it.
       actorId: 'sp-admin',
-      recipes: speakerCard.recipes,
+      // A new Recipe does not tag, though the built-in one does (tagging §2).
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars -- excluded
+      recipes: speakerCard.recipes.map(({ tagSubject: _off, ...r }) => r),
       triggers: [
         { event: 'speakerConfirmed', taskRecipeKey: 'speakerCardRender' },
       ],

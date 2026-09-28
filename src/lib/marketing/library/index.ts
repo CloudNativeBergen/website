@@ -14,5 +14,7 @@ export {
   editsOf,
   entryCeilingNotes,
   hasEntry,
+  libraryEntryView,
+  newRecipeEdits,
   type RecipeEdits,
 } from './edits'

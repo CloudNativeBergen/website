@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useId, useRef, useState } from 'react'
 import { DialogTitle } from '@headlessui/react'
 import { ModalShell } from '@/components/ModalShell'
 import { AdminButton } from '@/components/admin/AdminButton'
@@ -68,6 +68,7 @@ export function RecipeForm({
   onCancel: () => void
 }) {
   const countdown = entry.id === 'countdown'
+  const tagNoteId = useId()
   const [edits, setEdits] = useState(initial)
   const parked = useRef<RecipeEdits['channels']>({})
   const issues = editIssues(libraryEntry(entry.id), edits)
@@ -152,6 +153,34 @@ export function RecipeForm({
                         }
                       />
                     </label>
+                    {channel === 'bluesky' && entry.hasSubject && (
+                      <div>
+                        <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200">
+                          <input
+                            type="checkbox"
+                            role="switch"
+                            checked={edits.tagSubject === true}
+                            aria-describedby={tagNoteId}
+                            onChange={(event) =>
+                              setEdits({
+                                ...edits,
+                                tagSubject: event.target.checked,
+                              })
+                            }
+                          />
+                          Tag the subject
+                        </label>
+                        <span
+                          id={tagNoteId}
+                          className="mt-1 block text-xs text-gray-500 dark:text-gray-400"
+                        >
+                          The generated Bluesky post uses their Bluesky handle
+                          where we know it and they have not opted out, and the
+                          plain name otherwise. LinkedIn and the card keep the
+                          plain name.
+                        </span>
+                      </div>
+                    )}
                     {entry.recurring && (
                       <div className="text-gray-700 dark:text-gray-200">
                         <NumberField
