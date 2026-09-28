@@ -405,6 +405,101 @@ export const PublishingSubmitted: Story = {
       ),
     },
   },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(
+      await canvas.findByText(/Sent to Buffer; confirming it went out/),
+    ).toBeVisible()
+    await expect(
+      canvas.getAllByText('Sent to Buffer, confirming…')[0],
+    ).toBeVisible()
+  },
+}
+
+export const PublishingSubmittedDark: Story = {
+  ...PublishingSubmitted,
+  parameters: {
+    ...PublishingSubmitted.parameters,
+    theme: 'dark',
+    backgrounds: { default: 'dark' },
+  },
+}
+
+/**
+ * LinkedIn that Buffer accepted and then reported an error on (#1130): the
+ * Task says why, in Buffer's words, and offers Retry beside the manual
+ * fallback — the copy-ready view where it is posted by hand and recorded.
+ */
+export const PublishingFailedAtBuffer: Story = {
+  parameters: {
+    msw: {
+      handlers: handlers(
+        fixture(
+          {
+            key: 'cfpOpen:linkedin',
+            channel: 'linkedin',
+            status: 'failed',
+            approvedAt: '2026-09-14T09:12:00.000Z',
+            approvedByName: 'Bob Builder',
+            date: '2027-01-10T07:00:00.000Z',
+          },
+          variant({
+            platform: 'linkedin',
+            status: 'failed',
+            scheduledAt: '2027-01-10T07:00:00.000Z',
+            attemptCount: 1,
+            submission: {
+              vendorPostId: 'buffer-9c1d',
+              submittedAt: '2027-01-10T07:00:11.000Z',
+              lastCheckedAt: '2027-01-10T07:01:41.000Z',
+            },
+            attempts: [
+              {
+                _key: 'a1',
+                at: '2027-01-10T07:00:11.000Z',
+                outcome: 'submitted',
+              },
+              {
+                _key: 'a2',
+                at: '2027-01-10T07:01:41.000Z',
+                outcome: 'rejected',
+                error:
+                  'Your LinkedIn connection needs to be refreshed. Reconnect the channel in Buffer and try again.',
+              },
+            ],
+          }),
+        ),
+      ),
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const notice = await canvas.findByText(/did not go out on LinkedIn/i)
+    const box = notice.closest('[role="alert"]') as HTMLElement
+    await expect(box).toHaveTextContent(/Reconnect the channel in Buffer/)
+    await expect(
+      within(box).getByRole('link', { name: /post it by hand/i }),
+    ).toHaveAttribute('href', '/admin/marketing/posts?variant=variant-1')
+    await expect(canvas.getByRole('button', { name: 'Retry' })).toBeVisible()
+  },
+}
+
+export const PublishingFailedAtBufferDark: Story = {
+  ...PublishingFailedAtBuffer,
+  parameters: {
+    ...PublishingFailedAtBuffer.parameters,
+    theme: 'dark',
+    backgrounds: { default: 'dark' },
+  },
+}
+
+export const PublishingFailedAtBufferMobile: Story = {
+  ...PublishingFailedAtBuffer,
+  globals: { viewport: { value: 'mobile1', isRotated: false } },
+  parameters: {
+    ...PublishingFailedAtBuffer.parameters,
+    viewport: { defaultViewport: 'mobile1' },
+  },
 }
 
 /** LinkedIn at due time: the copy-ready view with the required URL. */

@@ -1,9 +1,11 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
+import { expect, within } from 'storybook/test'
 import { http, HttpResponse } from 'msw'
 import { ThemeProvider } from 'next-themes'
 import { SocialPostsManager } from './SocialPostsManager'
 import { NotificationProvider } from '../NotificationProvider'
 import type { SocialPostVariantListItem } from '@/lib/social/types'
+import type { SocialConnection } from '@/lib/social/provider'
 
 const base = {
   _rev: 'rev-1',
@@ -112,9 +114,52 @@ const variants: SocialPostVariantListItem[] = [
       { _key: 'a1', at: '2026-09-13T08:00:11.000Z', outcome: 'submitted' },
     ],
   },
+  // #1130: Buffer accepted it, then reported an error during the confirm
+  // sweep. Terminal, never retried automatically: retry or post by hand.
+  {
+    ...base,
+    _id: 'v-7',
+    postId: 'post-5',
+    platform: 'linkedin',
+    body: 'Workshop day sold out in four hours. Thank you! The waiting list is open.',
+    status: 'failed',
+    scheduledAt: '2026-09-12T08:00:00.000Z',
+    attemptCount: 1,
+    submission: {
+      vendorPostId: 'buffer-9c1d',
+      submittedAt: '2026-09-12T08:00:11.000Z',
+      lastCheckedAt: '2026-09-12T08:01:41.000Z',
+    },
+    attempts: [
+      { _key: 'a1', at: '2026-09-12T08:00:11.000Z', outcome: 'submitted' },
+      {
+        _key: 'a2',
+        at: '2026-09-12T08:01:41.000Z',
+        outcome: 'rejected',
+        error:
+          'Your LinkedIn connection needs to be refreshed. Reconnect the channel in Buffer and try again.',
+      },
+    ],
+  },
 ]
 
-const handlers = (rows: SocialPostVariantListItem[]) => [
+/** LinkedIn connected through Buffer, Bluesky not connected (#1130). */
+const viaBuffer: SocialConnection[] = [
+  { platform: 'linkedin', mode: 'automatic', via: 'buffer' },
+  { platform: 'bluesky', mode: 'manual', via: null },
+]
+const allManual: SocialConnection[] = [
+  { platform: 'linkedin', mode: 'manual', via: null },
+  { platform: 'bluesky', mode: 'manual', via: null },
+]
+
+const handlers = (
+  rows: SocialPostVariantListItem[],
+  connections: SocialConnection[] = viaBuffer,
+) => [
+  http.get('/api/trpc/social.connections', () =>
+    HttpResponse.json({ result: { data: connections } }),
+  ),
   http.get('/api/trpc/social.listVariants', () =>
     HttpResponse.json({ result: { data: rows } }),
   ),
@@ -213,9 +258,80 @@ const meta = {
 export default meta
 type Story = StoryObj<typeof meta>
 
-export const Table: Story = {}
+/**
+ * LinkedIn publishes through Buffer (#1130): the connection strip says so, a
+ * submitted variant reads as with Buffer, and a variant Buffer failed shows
+ * Buffer's message with Retry and Post by hand.
+ */
+export const Table: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const strip = await canvas.findByRole('region', {
+      name: /how posts are published/i,
+    })
+    await expect(strip).toHaveTextContent(/LinkedIn\s*Automatic via Buffer/)
+    await expect(strip).toHaveTextContent(/Bluesky\s*Manual/)
+    await expect(
+      await canvas.findByText('Sent to Buffer, confirming…'),
+    ).toBeVisible()
+    const failedRow = (
+      await canvas.findByText(/Workshop day sold out/)
+    ).closest('tr')!
+    await expect(failedRow).toHaveTextContent(/Reconnect the channel in Buffer/)
+    await expect(
+      within(failedRow).getByRole('button', { name: 'Retry' }),
+    ).toBeVisible()
+    await expect(
+      within(failedRow).getByRole('button', { name: 'Post by hand' }),
+    ).toBeVisible()
+  },
+}
 
 export const TableDark: Story = {
+  parameters: { theme: 'dark', backgrounds: { default: 'dark' } },
+}
+
+/** Phone width: the strip stacks, the table scrolls inside its own box. */
+export const TableMobile: Story = {
+  globals: { viewport: { value: 'mobile1', isRotated: false } },
+  parameters: { viewport: { defaultViewport: 'mobile1' } },
+}
+
+/** An organization with no Buffer connection: LinkedIn is posted by hand. */
+export const ManualOrganization: Story = {
+  parameters: { msw: { handlers: handlers(variants, allManual) } },
+  play: async ({ canvasElement }) => {
+    const strip = await within(canvasElement).findByRole('region', {
+      name: /how posts are published/i,
+    })
+    await expect(strip).toHaveTextContent(/LinkedIn\s*Manual/)
+    await expect(strip).not.toHaveTextContent(/Buffer/)
+  },
+}
+
+/**
+ * The failure notification's deep link (`?variant=`) on a variant Buffer
+ * failed: the copy-ready view says why, in Buffer's words, and offers the
+ * manual fallback (`failed → published`, spec §5).
+ */
+export const FailedAtBuffer: Story = {
+  args: { defaultManualId: 'v-7' },
+  play: async ({ canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body)
+    await expect(
+      await body.findByText(/did not go out on LinkedIn/i),
+    ).toBeVisible()
+    await expect(
+      body.getByText(/Reconnect the channel in Buffer/),
+    ).toBeVisible()
+    await expect(
+      body.getByLabelText(/address of the published post/i),
+    ).toBeVisible()
+  },
+}
+
+export const FailedAtBufferDark: Story = {
+  args: { defaultManualId: 'v-7' },
   parameters: { theme: 'dark', backgrounds: { default: 'dark' } },
 }
 

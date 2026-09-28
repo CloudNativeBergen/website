@@ -20,6 +20,7 @@ import { EmptyState } from '@/components/EmptyState'
 import { api } from '@/lib/trpc/client'
 import { VariantEditorDialog } from './VariantEditorDialog'
 import { ManualPostDialog } from './ManualPostDialog'
+import { ChannelConnections } from './ChannelConnections'
 import {
   formatDateTimeSafe,
   instantToOsloLocalInput,
@@ -53,8 +54,10 @@ const STATUS_STYLES: Record<
     className:
       'bg-indigo-50 text-indigo-700 ring-indigo-600/20 dark:bg-indigo-900/30 dark:text-indigo-300',
   },
+  // Buffer is the only asynchronous publisher (#1129); a second one would
+  // key this by the variant's connection rather than its status.
   submitted: {
-    label: 'With the publisher',
+    label: 'Sent to Buffer, confirming…',
     className:
       'bg-indigo-50 text-indigo-700 ring-indigo-600/20 dark:bg-indigo-900/30 dark:text-indigo-300',
   },
@@ -136,6 +139,12 @@ export function SocialPostsManager({
     undefined,
     { refetchInterval: 30_000 },
   )
+
+  // Derived from the organization's secrets on the server (#1130). A failed
+  // read shows nothing rather than guessing "manual".
+  const { data: connections } = api.social.connections.useQuery(undefined, {
+    staleTime: 5 * 60_000,
+  })
 
   const [isFormOpen, setFormOpen] = useState(defaultOpen)
   const [draft, setDraft] = useState<PostDraft>(EMPTY_DRAFT)
@@ -323,6 +332,10 @@ export function SocialPostsManager({
           </AdminButton>
         }
       />
+
+      {connections && connections.length > 0 && (
+        <ChannelConnections connections={connections} />
+      )}
 
       {taskRefusal && (
         <div

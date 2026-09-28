@@ -183,7 +183,8 @@ describe('resolveSocialConnections (#1130)', () => {
       mode: 'manual',
       via: null,
     })
-    expect(modeOf(rows, 'mastodon')?.mode).toBe('manual')
+    // A platform with no connection family is always by hand: not listed.
+    expect(rows.map((r) => r.platform)).toEqual(['linkedin', 'bluesky'])
   })
 
   it.each([

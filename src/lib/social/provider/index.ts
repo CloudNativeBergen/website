@@ -155,7 +155,9 @@ export interface SocialConnection {
 }
 
 /**
- * Every platform's connection for this ORGANIZATION, DERIVED exactly as the
+ * Every CONNECTABLE platform's connection for this ORGANIZATION — the ones
+ * {@link CONNECTION_FAMILY} names; any other is always posted by hand —
+ * DERIVED exactly as the
  * publish cron derives it: the org's secret bag through the adapter FACTORY.
  * Asking the factory, not whether a bag exists, is what makes a half-filled
  * `buffer` bag (the JSON-blob path does not enforce both-or-nothing) read
@@ -167,20 +169,22 @@ export async function resolveSocialConnections(
   secrets: SecretsLookup = resolveTenantSecrets,
 ): Promise<SocialConnection[]> {
   return Promise.all(
-    SOCIAL_PLATFORMS.map(async (platform): Promise<SocialConnection> => {
-      const credentials = orgId
-        ? await resolveSocialCredentials(orgId, platform, secrets)
-        : null
-      const automatic =
-        credentials !== null &&
-        getSocialPublishAdapter(platform, credentials) !== null
-      const family = CONNECTION_FAMILY[platform] ?? null
-      return {
-        platform,
-        mode: automatic ? 'automatic' : 'manual',
-        via: automatic && family !== platform ? family : null,
-      }
-    }),
+    SOCIAL_PLATFORMS.filter((p) => Object.hasOwn(CONNECTION_FAMILY, p)).map(
+      async (platform): Promise<SocialConnection> => {
+        const credentials = orgId
+          ? await resolveSocialCredentials(orgId, platform, secrets)
+          : null
+        const automatic =
+          credentials !== null &&
+          getSocialPublishAdapter(platform, credentials) !== null
+        const family = CONNECTION_FAMILY[platform] ?? null
+        return {
+          platform,
+          mode: automatic ? 'automatic' : 'manual',
+          via: automatic && family !== platform ? family : null,
+        }
+      },
+    ),
   )
 }
 
