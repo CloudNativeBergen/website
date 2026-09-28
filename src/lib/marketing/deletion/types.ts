@@ -26,6 +26,11 @@ export interface DeletionTask {
    * must be expired rather than left to age out (§2.5).
    */
   shortCode: string | null
+  /**
+   * Whether the outreach message has gone out (`messageId` is set), so its
+   * short link may be in someone's inbox now (§2.1's known hole, §2.7).
+   */
+  messageSent: boolean
   variant: DeletionVariant | null
   /** Whether `drafts.<_id>` exists, so its prerequisites can be cleared too. */
   hasDraftTwin: boolean
@@ -89,4 +94,9 @@ export interface DeletionPreview {
   publishedTasks: number
   requiresTypedConfirmation: boolean
   snapshots: number
+  /**
+   * Short links that may already be live and that this delete sends to the
+   * conference home page (§2.1's known hole, §2.7). A warning, never a block.
+   */
+  liveLinks: number
 }

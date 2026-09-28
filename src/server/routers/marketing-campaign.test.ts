@@ -405,6 +405,7 @@ describe('Campaign cascade gates', () => {
         _id: 't',
         _rev: 't-rev',
         shortCode: null,
+        messageSent: false,
         variant: {
           _id: 'v',
           _rev: 'v-rev',
@@ -437,6 +438,7 @@ describe('Campaign cascade gates', () => {
       publishedTasks: 1,
       snapshots: 9,
       requiresTypedConfirmation: true,
+      liveLinks: 0,
       conferenceTitle: CONFERENCE.title,
     })
     expect(h.tree).toHaveBeenCalledTimes(1)

@@ -1,5 +1,60 @@
-import type { DeletionPreview, DeletionTree } from './types'
+import type {
+  DeletionPreview,
+  DeletionTask,
+  DeletionTree,
+  DeletionVariant,
+} from './types'
 import { outcomeMayBeLive } from '@/lib/social/state-machine'
+import type { VariantStatus } from '@/lib/social/types'
+
+/**
+ * Whether a plan or Campaign delete removes this variant: every variant but a
+ * `published` one, unless a Task outside the delete still uses it. The ONE
+ * rule — `deletePlanTree` deletes by it and the preview counts by it, so the
+ * warning cannot disagree with what goes.
+ */
+export function variantIsRemoved(
+  variant: Pick<DeletionVariant, 'status' | 'survivingTaskIds'>,
+): boolean {
+  return variant.status !== 'published' && variant.survivingTaskIds.length === 0
+}
+
+/**
+ * A variant whose short link may already be out there although it never
+ * reached `published` (§2.1's known hole): a `failed` one, which a stale
+ * publishing claim can leave behind a post that went out, and an
+ * `awaiting-manual` one, which may have been posted by hand and not yet
+ * confirmed. `published` is not here: it is kept, or its delete is refused.
+ */
+const LINK_MAY_BE_LIVE: readonly VariantStatus[] = ['failed', 'awaiting-manual']
+
+export function variantLinkMayBeLive(
+  variant: Pick<DeletionVariant, 'status' | 'shortCode'>,
+): boolean {
+  return !!variant.shortCode && LINK_MAY_BE_LIVE.includes(variant.status)
+}
+
+/** A sent outreach message carried its Task's short link to someone. */
+export function outreachLinkMayBeLive(
+  task: Pick<DeletionTask, 'shortCode' | 'messageSent'>,
+): boolean {
+  return !!task.shortCode && task.messageSent
+}
+
+/** The links that may be live and that this delete sends to the home page. */
+function liveLinks(tasks: DeletionTask[]): number {
+  const removed = new Map(
+    tasks.flatMap((task) =>
+      task.variant && variantIsRemoved(task.variant)
+        ? [[task.variant._id, task.variant] as const]
+        : [],
+    ),
+  )
+  return (
+    tasks.filter(outreachLinkMayBeLive).length +
+    [...removed.values()].filter(variantLinkMayBeLive).length
+  )
+}
 
 /**
  * Shared by every deletion path (plan, campaign, Task, standalone post): the
@@ -111,5 +166,6 @@ export function deletionPreview(tree: DeletionTree): DeletionPreview {
     publishedTasks,
     requiresTypedConfirmation: publishedTasks > 0,
     snapshots: tree.snapshots,
+    liveLinks: liveLinks(tree.tasks),
   }
 }

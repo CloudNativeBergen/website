@@ -60,6 +60,7 @@ function tree(status: VariantStatus = 'draft'): DeletionTree {
         _id: 'task',
         _rev: 't',
         shortCode: null,
+        messageSent: false,
         variant: {
           _id: 'variant',
           _rev: 'v',
@@ -102,6 +103,7 @@ describe('plan deletion boundary', () => {
       publishedTasks: 1,
       snapshots: 12,
       requiresTypedConfirmation: true,
+      liveLinks: 0,
       conferenceTitle: conference.title,
     })
     expect(h.tree).toHaveBeenCalledExactlyOnceWith('conf-A', undefined)
@@ -189,5 +191,100 @@ describe('plan deletion boundary', () => {
     await expect(caller().plan.delete({})).rejects.toMatchObject({
       code: 'CONFLICT',
     })
+  })
+})
+
+/**
+ * §2.1's known hole, §2.7: the links that may be live and that THIS delete
+ * sends to the home page. Counted from the same tree, by the same removal
+ * rule, as `deletePlanTree`.
+ */
+describe('plan deletion preview: short links that may be live (#1145)', () => {
+  type Variant = NonNullable<DeletionTree['tasks'][number]['variant']>
+  const base = tree().tasks[0]
+  const variantTask = (id: string, variant: Partial<Variant>) => ({
+    ...base,
+    _id: id,
+    variant: { ...base.variant!, _id: `v-${id}`, ...variant },
+  })
+  const outreachTask = (
+    id: string,
+    over: { shortCode: string | null; messageSent: boolean },
+  ) => ({
+    ...base,
+    _id: id,
+    variant: null,
+    ...over,
+  })
+  const liveLinks = async (tasks: DeletionTree['tasks']) => {
+    h.tree.mockResolvedValue({ ...tree(), tasks })
+    return (await caller().plan.deletionPreview()).liveLinks
+  }
+
+  it('counts sent outreach, failed and awaiting-manual variants with a code', async () => {
+    expect(
+      await liveLinks([
+        outreachTask('sent', { shortCode: 'abc234', messageSent: true }),
+        variantTask('failed', {
+          status: 'failed',
+          shortCode: 'def234',
+          lastOutcome: 'rejected',
+        }),
+        variantTask('manual', {
+          status: 'awaiting-manual',
+          shortCode: 'ghj234',
+        }),
+      ]),
+    ).toBe(3)
+  })
+
+  it('counts nothing a delete does not send to the home page', async () => {
+    expect(
+      await liveLinks([
+        // Never sent: nobody holds the link.
+        outreachTask('unsent', { shortCode: 'abc234', messageSent: false }),
+        // Sent before codes existed: no short link to break.
+        outreachTask('legacy', { shortCode: null, messageSent: true }),
+        // Never posted.
+        variantTask('draft', { status: 'draft', shortCode: 'def234' }),
+        variantTask('scheduled', { status: 'scheduled', shortCode: 'def235' }),
+        // Kept by the delete: no warning (§2.7).
+        variantTask('published', { status: 'published', shortCode: 'def236' }),
+        // Failed, but without a code.
+        variantTask('codeless', { status: 'failed', shortCode: null }),
+        // Kept because a Task outside the delete still uses it.
+        variantTask('kept', {
+          status: 'awaiting-manual',
+          shortCode: 'ghj234',
+          survivingTaskIds: ['task-elsewhere'],
+        }),
+      ]),
+    ).toBe(0)
+  })
+
+  it('counts a variant two deleted Tasks share once', async () => {
+    const shared = {
+      _id: 'v-shared',
+      status: 'failed' as const,
+      shortCode: 'abc234',
+    }
+    expect(
+      await liveLinks([variantTask('a', shared), variantTask('b', shared)]),
+    ).toBe(1)
+  })
+
+  it('warns and still deletes', async () => {
+    h.tree.mockResolvedValue({
+      ...tree(),
+      tasks: [
+        variantTask('manual', {
+          status: 'awaiting-manual',
+          shortCode: 'ghj234',
+        }),
+      ],
+    })
+    expect((await caller().plan.deletionPreview()).liveLinks).toBe(1)
+    await expect(caller().plan.delete({})).resolves.toEqual({ success: true })
+    expect(h.remove).toHaveBeenCalledTimes(1)
   })
 })
