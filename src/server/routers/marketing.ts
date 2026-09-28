@@ -127,13 +127,14 @@ import {
 import { requireDocumentInCurrentOrg } from '@/server/tenancy'
 import {
   LIBRARY,
-  allowedPlaceholders,
   applyEdits,
   editIssues,
   editsOf,
   entryCeilingNotes,
   hasEntry,
   libraryEntry,
+  libraryEntryView,
+  newRecipeEdits,
   type LibraryEntry,
   type RecipeEdits,
 } from '@/lib/marketing/library'
@@ -2094,18 +2095,7 @@ export const marketingRouter = router({
     /** The Recipe Library on any Campaign (Templates spec §5). */
     recipes: router({
       library: adminProcedure.query(() =>
-        LIBRARY.map((entry) => ({
-          id: entry.id,
-          title: entry.title,
-          description: entry.description,
-          recurring: entry.recipes.some((r) => r.cadence),
-          hasImage: entry.recipes.some((r) => r.alt),
-          channels: entry.recipes.flatMap((r) =>
-            r.kind === 'publishing' && r.channel ? [r.channel] : [],
-          ),
-          placeholders: allowedPlaceholders(entry),
-          defaults: editsOf(entry, entry.recipes),
-        })),
+        LIBRARY.map((entry) => libraryEntryView(entry)),
       ),
       attach: adminProcedure
         .input(AttachRecipeSchema)
@@ -2113,7 +2103,7 @@ export const marketingRouter = router({
           const { conferenceId, campaign } = await loadRecipeCampaign(input)
           const conference = await requireConference()
           const entry = libraryEntry(input.entry)
-          const edits = input.edits ?? editsOf(entry, entry.recipes)
+          const edits = input.edits ?? newRecipeEdits(entry)
           if (hasEntry(campaign, entry))
             throw new TRPCError({
               code: 'CONFLICT',

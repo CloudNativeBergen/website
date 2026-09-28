@@ -100,6 +100,31 @@ export function editsOf(
   }
 }
 
+/**
+ * What a Recipe the organizer attaches starts with: the entry's own copy and
+ * rates, with tagging OFF (tagging spec §2). The built-in Recipes tag as they
+ * ship; a new one in an organization's own plan tags only when switched on.
+ */
+export function newRecipeEdits(entry: LibraryEntry): RecipeEdits {
+  return { ...editsOf(entry, entry.recipes), tagSubject: false }
+}
+
+/** One row of the Recipe Library, as the Recipe form needs it. */
+export function libraryEntryView(entry: LibraryEntry) {
+  return {
+    id: entry.id,
+    title: entry.title,
+    description: entry.description,
+    recurring: entry.recipes.some((r) => r.cadence),
+    hasImage: entry.recipes.some((r) => r.alt),
+    channels: publishingOf(entry.recipes).map((r) => r.channel),
+    placeholders: allowedPlaceholders(entry),
+    /** Only a Recipe about someone has anyone to tag. */
+    hasSubject: entry.subject !== 'none',
+    defaults: newRecipeEdits(entry),
+  }
+}
+
 /** The entry's Recipes with the edits applied. Assumes `editIssues` is empty. */
 export function applyEdits(
   entry: LibraryEntry,

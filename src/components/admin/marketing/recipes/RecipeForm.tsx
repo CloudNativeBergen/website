@@ -152,6 +152,33 @@ export function RecipeForm({
                         }
                       />
                     </label>
+                    {channel === 'bluesky' && entry.hasSubject && (
+                      <div>
+                        <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200">
+                          <input
+                            type="checkbox"
+                            role="switch"
+                            checked={edits.tagSubject === true}
+                            aria-describedby="recipe-tag-note"
+                            onChange={(event) =>
+                              setEdits({
+                                ...edits,
+                                tagSubject: event.target.checked,
+                              })
+                            }
+                          />
+                          Tag the subject
+                        </label>
+                        <span
+                          id="recipe-tag-note"
+                          className="mt-1 block text-xs text-gray-500 dark:text-gray-400"
+                        >
+                          The generated Bluesky post names them by their
+                          Bluesky handle, when they have one and have not opted
+                          out. LinkedIn and the card keep the plain name.
+                        </span>
+                      </div>
+                    )}
                     {entry.recurring && (
                       <div className="text-gray-700 dark:text-gray-200">
                         <NumberField

@@ -3,24 +3,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import {
   LIBRARY,
-  allowedPlaceholders,
   editsOf,
   libraryEntry,
+  libraryEntryView,
   type LibraryId,
 } from '@/lib/marketing/library'
 
-const rows = LIBRARY.map((entry) => ({
-  id: entry.id,
-  title: entry.title,
-  description: entry.description,
-  recurring: entry.recipes.some((recipe) => recipe.cadence),
-  hasImage: entry.recipes.some((recipe) => recipe.alt),
-  channels: entry.recipes.flatMap((recipe) =>
-    recipe.kind === 'publishing' && recipe.channel ? [recipe.channel] : [],
-  ),
-  placeholders: allowedPlaceholders(entry),
-  defaults: editsOf(entry, entry.recipes),
-}))
+const rows = LIBRARY.map(libraryEntryView)
 const attachedRow = (id: LibraryId) => ({
   entry: id,
   edits: editsOf(libraryEntry(id), libraryEntry(id).recipes),
@@ -145,10 +134,14 @@ describe('attaching a Library Recipe', () => {
       campaignId: 'campaign',
       rev: 'rev-1',
       entry: 'sponsorCard',
-      edits: editsOf(
-        libraryEntry('sponsorCard'),
-        libraryEntry('sponsorCard').recipes,
-      ),
+      edits: {
+        ...editsOf(
+          libraryEntry('sponsorCard'),
+          libraryEntry('sponsorCard').recipes,
+        ),
+        // A new Recipe does not tag, though the built-in one does (spec §2).
+        tagSubject: false,
+      },
     })
   })
   it('does not offer a Recipe the Campaign already has', () => {
@@ -437,5 +430,45 @@ describe('the countdown form', () => {
       from: { milestone: 'CONFERENCE_START', offsetDays: -14 },
       to: { milestone: 'CONFERENCE_START', offsetDays: -1 },
     })
+  })
+})
+
+describe('the "Tag the subject" switch (tagging spec §2)', () => {
+  const tagSwitch = () => screen.getByRole('switch', { name: 'Tag the subject' })
+  it('is off for a new Recipe, even one whose built-in counterpart tags', () => {
+    state.attached = []
+    open()
+    fireEvent.click(screen.getByRole('button', { name: 'Attach Speaker card' }))
+    expect(tagSwitch()).not.toBeChecked()
+    fireEvent.click(screen.getByRole('button', { name: 'Attach Recipe' }))
+    expect(h.attach.mock.calls[0][0].edits.tagSubject).toBe(false)
+  })
+  it('switched on, is sent with the attach', () => {
+    state.attached = []
+    open()
+    fireEvent.click(screen.getByRole('button', { name: 'Attach Talk teaser' }))
+    fireEvent.click(tagSwitch())
+    fireEvent.click(screen.getByRole('button', { name: 'Attach Recipe' }))
+    expect(h.attach.mock.calls[0][0].edits.tagSubject).toBe(true)
+  })
+  it('shows what an attached Recipe stores, and an edit that only flips it is sent', () => {
+    // The attached speaker card is the built-in one, which tags.
+    open()
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Speaker card' }))
+    expect(tagSwitch()).toBeChecked()
+    fireEvent.click(tagSwitch())
+    fireEvent.click(screen.getByRole('button', { name: 'Save Recipe' }))
+    expect(h.update.mock.calls[0][0].edits).toEqual({
+      ...attachedRow('speakerCard').edits,
+      tagSubject: false,
+    })
+  })
+  it('is not offered on a Recipe with no subject', () => {
+    state.attached = []
+    open()
+    fireEvent.click(screen.getByRole('button', { name: 'Attach Countdown' }))
+    // The form is up: its Bluesky copy is there, the switch is not.
+    expect(screen.getByLabelText('Bluesky copy')).toBeInTheDocument()
+    expect(screen.queryByRole('switch')).toBeNull()
   })
 })
