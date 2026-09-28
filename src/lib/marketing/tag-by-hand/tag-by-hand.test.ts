@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { linkedinCompanyUrl, linkedinProfileUrl } from './links'
+import {
+  linkedinCompanyPageIssue,
+  linkedinCompanyUrl,
+  linkedinProfileUrl,
+} from './links'
+import sponsorSchema from '../../../../sanity/schemaTypes/sponsor'
 import { tagByHandEntries } from './index'
 
 describe('linkedinProfileUrl', () => {
@@ -99,5 +104,46 @@ describe('tagByHandEntries', () => {
       { name: 'Ada', url: 'https://www.linkedin.com/in/ada', kind: 'person' },
       { name: 'Bob', url: 'https://www.linkedin.com/in/bob', kind: 'person' },
     ])
+  })
+})
+
+describe('Studio: the sponsor LinkedIn field (#1154)', () => {
+  it('accepts a company page and an empty value', () => {
+    expect(
+      linkedinCompanyPageIssue('https://www.linkedin.com/company/acme'),
+    ).toBe(true)
+    expect(linkedinCompanyPageIssue('')).toBe(true)
+    expect(linkedinCompanyPageIssue(undefined)).toBe(true)
+  })
+
+  it('refuses a profile and another site with the message', () => {
+    for (const bad of [
+      'https://www.linkedin.com/in/alice',
+      'https://acme.example',
+    ]) {
+      expect(linkedinCompanyPageIssue(bad)).toMatch(
+        /^Enter the LinkedIn company page/,
+      )
+    }
+  })
+
+  it('is the rule the Studio schema runs on linkedinUrl', () => {
+    const field = (
+      sponsorSchema as unknown as {
+        fields: { name: string; validation?: (rule: unknown) => unknown }[]
+      }
+    ).fields.find((f) => f.name === 'linkedinUrl')!
+    let custom: ((v: string) => unknown) | undefined
+    const rule = {
+      custom: (fn: (v: string) => unknown) => {
+        custom = fn
+        return rule
+      },
+    }
+    field.validation!(rule)
+    expect(custom!('https://www.linkedin.com/in/alice')).toMatch(
+      /^Enter the LinkedIn company page/,
+    )
+    expect(custom!('https://www.linkedin.com/company/acme')).toBe(true)
   })
 })

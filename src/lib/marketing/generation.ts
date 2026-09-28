@@ -45,6 +45,7 @@ import {
   commitGeneratedTasks,
   getGenerationContext,
   getSpeakerTagSources,
+  getSponsorTagSources,
   publishedTaskKeys,
   type GenerationCampaign,
   type GenerationContext,
@@ -364,21 +365,43 @@ async function lookUpTags(
   beats: readonly DatedBeat[],
   cache: Map<string, BlueskyTag | null>,
 ): Promise<void> {
-  const wanted = new Set<string>()
+  const speakers = new Set<string>()
+  const sponsors = new Set<string>()
   for (const { item } of beats) {
     if (!item.recipes.some(tagsItsSubject)) continue
     for (const person of item.subject.people ?? [])
-      if (!cache.has(person._id)) wanted.add(person._id)
+      if (!cache.has(person._id))
+        (person.sponsor ? sponsors : speakers).add(person._id)
   }
-  if (wanted.size === 0) return
-  const ids = [...wanted]
+  const ids = [...speakers, ...sponsors]
+  if (ids.length === 0) return
   try {
     const own = ownBlueskyHandle(context.conference.socialLinks)
-    const rows = await withTimeout(
-      getSpeakerTagSources(conferenceId, ids),
-      TAG_SOURCES_TIMEOUT_MS,
-      `speaker tag sources timed out after ${TAG_SOURCES_TIMEOUT_MS} ms`,
-    )
+    // Each source on its own: a sponsor read that fails or hangs leaves only
+    // the sponsors untagged, never the speakers of the same batch.
+    const read = async (
+      wanted: ReadonlySet<string>,
+      get: (ids: string[]) => ReturnType<typeof getSpeakerTagSources>,
+      what: string,
+    ) => {
+      if (wanted.size === 0) return []
+      try {
+        return await withTimeout(
+          get([...wanted]),
+          TAG_SOURCES_TIMEOUT_MS,
+          `${what} tag sources timed out after ${TAG_SOURCES_TIMEOUT_MS} ms`,
+        )
+      } catch (error) {
+        console.warn(`marketing generation: ${what} tag sources failed`, error)
+        return []
+      }
+    }
+    const rows = (
+      await Promise.all([
+        read(speakers, (x) => getSpeakerTagSources(conferenceId, x), 'speaker'),
+        read(sponsors, (x) => getSponsorTagSources(conferenceId, x), 'sponsor'),
+      ])
+    ).flat()
     const sources = new Map(rows.map((s) => [s._id, s]))
     let next = 0
     const worker = async () => {

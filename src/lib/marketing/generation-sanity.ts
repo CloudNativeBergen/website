@@ -4,6 +4,7 @@ import { getCurrentDateTime } from '@/lib/time'
 import type { Conference } from '@/lib/conference/types'
 import {
   speakerSubject,
+  sponsorSubject,
   talkSubject,
   type GenerationSubject,
   type TalkSubjectSource,
@@ -19,6 +20,7 @@ import type { SubjectList, TaskRecipe } from './template/types'
 import type { CampaignTrigger, MarketingChannel } from './types'
 import { postDocument, taskDocument, variantDocument } from './sanity'
 import type { TagSource } from './tagging/lookup'
+import { getConferenceTaggablePeople } from './tagging/sanity'
 import { expireShortLinkIndex } from './short-link-cache'
 
 /**
@@ -251,16 +253,7 @@ export async function getSignedSponsorSubject(
     { cache: 'no-store' },
   )
   if (!row?.signed || !row.sponsor?._id) return null
-  return {
-    _id: row.sponsor._id,
-    type: 'sponsor',
-    values: {
-      ...(row.sponsor.name
-        ? { name: row.sponsor.name, company: row.sponsor.name }
-        : {}),
-      ...(row.tier ? { tier: row.tier } : {}),
-    },
-  }
+  return sponsorSubject(row.sponsor, row.tier)
 }
 
 /**
@@ -387,6 +380,30 @@ export async function markPlanExpanded(
   } catch (error) {
     console.error(`Could not stamp ${planId} as expanded`, error)
   }
+}
+
+/**
+ * The Bluesky handles of these sponsor companies (tagging spec §3.3), read
+ * FRESH like the speakers'. `sponsor` is an ORG-level document shared across
+ * editions: it is only read here through a `sponsorForConference` of THIS
+ * conference, so another tenant's sponsor — or ours, not at this edition —
+ * yields nothing. A sponsor has no opt-out.
+ */
+export async function getSponsorTagSources(
+  conferenceId: string,
+  sponsorIds: string[],
+): Promise<SpeakerTagSource[]> {
+  // The conference roster, so a sponsor whose handle an opted-out speaker
+  // lists reads as opted out — and is never looked up (#1154).
+  const wanted = new Set(sponsorIds)
+  return (await getConferenceTaggablePeople(conferenceId))
+    .filter((p) => p.sponsor && wanted.has(p.speakerId))
+    .map((p) => ({
+      _id: p.speakerId,
+      links: null,
+      socialTagOptOut: p.optedOut,
+      blueskyHandle: p.handle,
+    }))
 }
 
 /** What a speaker's Bluesky tag is derived from (tagging spec §3.1, §3.2). */

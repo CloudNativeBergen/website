@@ -109,7 +109,10 @@ export interface SponsorInput {
   logoBright?: string | null
   orgNumber?: string
   address?: string
-  linkedinUrl?: string
+  /** Null clears it. */
+  linkedinUrl?: string | null
+  /** Normalised (`acme.com`); null clears it (tagging spec §3.3). */
+  blueskyHandle?: string | null
   tierId?: string
 }
 
@@ -122,6 +125,16 @@ export interface SponsorExisting {
   logo?: string | null
   logoBright?: string | null
   linkedinUrl?: string
+  blueskyHandle?: string
+}
+
+/**
+ * A sponsor as `sponsor.create` / `sponsor.update` return it: with anything
+ * the organizer should know that did not stop the save (Bluesky unreachable
+ * when the handle was checked).
+ */
+export interface SponsorSaveResult extends SponsorExisting {
+  warnings: string[]
 }
 
 export type TemplateCategory =

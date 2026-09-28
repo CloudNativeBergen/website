@@ -46,6 +46,10 @@ import {
   reorderSponsorEmailTemplates,
 } from '@/lib/sponsor/sanity'
 import { validateSponsor, validateSponsorTier } from '@/lib/sponsor/validation'
+import {
+  checkSponsorBlueskyHandle,
+  parseSponsorSocials,
+} from '@/lib/sponsor/bluesky-handle'
 import { sanitizeSvgFieldOrThrow, SvgSanitizeError } from '@/lib/svg/upload'
 import {
   buildTemplateVariables,
@@ -61,7 +65,10 @@ import { getOrganizationRefForCurrentConference } from '@/lib/organization/sanit
 import type { Conference } from '@/lib/conference/types'
 import { clientWrite, clientReadUncached } from '@/lib/sanity/client'
 import { getCurrentDateTime } from '@/lib/time'
-import type { SponsorTierExisting } from '@/lib/sponsor/types'
+import type {
+  SponsorSaveResult,
+  SponsorTierExisting,
+} from '@/lib/sponsor/types'
 import type {
   SponsorTag,
   SponsorForConferenceInput,
@@ -373,6 +380,22 @@ async function assertCrmReferencesAreOurs(refs: {
 }
 
 /**
+ * A Bluesky handle the save sets (tagging spec §3.3): asked of Bluesky only
+ * when it is new — a save that keeps the stored handle asks nothing. Refuses
+ * on a definite "no such handle"; an unreachable Bluesky is a warning.
+ */
+async function blueskyHandleWarnings(
+  next: string | null | undefined,
+  stored?: string | null,
+): Promise<string[]> {
+  if (!next || next === stored) return []
+  const check = await checkSponsorBlueskyHandle(next)
+  if (!check.ok)
+    throw new TRPCError({ code: 'BAD_REQUEST', message: check.message })
+  return check.warnings
+}
+
+/**
  * SE-3: sanitize sponsor logo SVG fields SERVER-SIDE before persistence.
  *
  * Sponsor logos are `inlineSvg` strings uploaded by organizers (SponsorAddModal)
@@ -383,6 +406,16 @@ async function assertCrmReferencesAreOurs(refs: {
  * stripped per policy. Only fields actually PRESENT on `data` are touched, so a
  * partial update never wipes a slot it didn't mean to.
  */
+/** The social accounts normalised, or a BAD_REQUEST with the sentence. */
+function withSponsorSocials<
+  T extends { blueskyHandle?: string | null; linkedinUrl?: string | null },
+>(data: T): T {
+  const parsed = parseSponsorSocials(data)
+  if (!parsed.ok)
+    throw new TRPCError({ code: 'BAD_REQUEST', message: parsed.message })
+  return { ...data, ...parsed.value }
+}
+
 function sanitizeSponsorLogoInput<
   T extends { logo?: string | null; logoBright?: string | null },
 >(data: T): T {
@@ -467,7 +500,7 @@ export const sponsorRouter = router({
     .input(SponsorInputSchema)
     .mutation(async ({ input }) => {
       try {
-        const sanitized = sanitizeSponsorLogoInput(input)
+        const sanitized = withSponsorSocials(sanitizeSponsorLogoInput(input))
         const validationErrors = validateSponsor(sanitized)
         if (validationErrors.length > 0) {
           throw new TRPCError({
@@ -477,8 +510,9 @@ export const sponsorRouter = router({
           })
         }
 
+        const warnings = await blueskyHandleWarnings(sanitized.blueskyHandle)
         const { sponsor, error } = await createSponsor(sanitized)
-        if (error) {
+        if (error || !sponsor) {
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
             message: 'Failed to create sponsor',
@@ -486,7 +520,7 @@ export const sponsorRouter = router({
           })
         }
 
-        return sponsor
+        return { ...sponsor, warnings } satisfies SponsorSaveResult
       } catch (error) {
         if (error instanceof TRPCError) {
           throw error
@@ -518,10 +552,13 @@ export const sponsorRouter = router({
             })
           }
 
-          const mergedData = {
-            ...existingSponsor,
-            ...sanitizeSponsorLogoInput(input.data),
-          }
+          // Only what this request changes is written: the Bluesky check
+          // below can take seconds, and a patch rebuilt from the read above
+          // would put back an edit someone else made meanwhile.
+          const changes = withSponsorSocials(
+            sanitizeSponsorLogoInput(input.data),
+          )
+          const mergedData = { ...existingSponsor, ...changes }
           const validationErrors = validateSponsor(mergedData)
           if (validationErrors.length > 0) {
             throw new TRPCError({
@@ -530,8 +567,12 @@ export const sponsorRouter = router({
               cause: { validationErrors },
             })
           }
+          const warnings = await blueskyHandleWarnings(
+            changes.blueskyHandle,
+            existingSponsor.blueskyHandle,
+          )
 
-          const { sponsor, error } = await updateSponsor(input.id, mergedData)
+          const { sponsor, error } = await updateSponsor(input.id, changes)
 
           if (error) {
             throw new TRPCError({
@@ -548,7 +589,7 @@ export const sponsorRouter = router({
             })
           }
 
-          return sponsor
+          return { ...sponsor, warnings } satisfies SponsorSaveResult
         } else {
           const { sponsor } = await getSponsor(input.id)
           if (!sponsor) {
@@ -557,7 +598,7 @@ export const sponsorRouter = router({
               message: 'Sponsor not found',
             })
           }
-          return sponsor
+          return { ...sponsor, warnings: [] } satisfies SponsorSaveResult
         }
       } catch (error) {
         if (error instanceof TRPCError) {

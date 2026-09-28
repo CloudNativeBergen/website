@@ -17,6 +17,8 @@ export interface SponsorCRMFormData {
   logoBright: string | null
   orgNumber: string
   address: string
+  blueskyHandle: string
+  linkedinUrl: string
   tierId: string
   addonIds: string[]
   contractStatus: ContractStatus
@@ -86,8 +88,22 @@ export function useSponsorCRMFormMutations({
   })
 
   const updateGlobalSponsorMutation = api.sponsor.update.useMutation({
-    onSuccess: () => {
+    onSuccess: (data) => {
       utils.sponsor.list.invalidate()
+      // Saved, but something to know: Bluesky could not check the handle.
+      for (const message of data?.warnings ?? [])
+        showNotification({
+          title: 'Saved with a warning',
+          message,
+          type: 'warning',
+        })
+    },
+    onError: (error) => {
+      showNotification({
+        title: 'Error',
+        message: error.message || 'Failed to update the company details',
+        type: 'error',
+      })
     },
   })
 
@@ -111,7 +127,9 @@ export function useSponsorCRMFormMutations({
         formData.logoBright !== sponsor.sponsor.logoBright ||
         formData.name !== sponsor.sponsor.name ||
         formData.orgNumber !== (sponsor.sponsor.orgNumber || '') ||
-        formData.address !== (sponsor.sponsor.address || '')
+        formData.address !== (sponsor.sponsor.address || '') ||
+        formData.blueskyHandle !== (sponsor.sponsor.blueskyHandle || '') ||
+        formData.linkedinUrl !== (sponsor.sponsor.linkedinUrl || '')
       ) {
         await updateGlobalSponsorMutation.mutateAsync({
           id: sponsor.sponsor._id,
@@ -122,6 +140,9 @@ export function useSponsorCRMFormMutations({
             logoBright: formData.logoBright || null,
             orgNumber: formData.orgNumber || undefined,
             address: formData.address || undefined,
+            // Empty clears (null); the server normalises and checks the handle.
+            blueskyHandle: formData.blueskyHandle.trim() || null,
+            linkedinUrl: formData.linkedinUrl.trim() || null,
           },
         })
       }

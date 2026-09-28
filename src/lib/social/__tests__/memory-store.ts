@@ -43,6 +43,10 @@ export class MemoryVariantStore implements SocialVariantStore {
   readonly recheckCalls: [string, string[]][] = []
   /** Makes the re-read throw. */
   recheckError: Error | null = null
+  /** Handles opted-out speakers of the conference list, NOW (#1154). */
+  optedOutHandles: string[] = []
+  /** Makes that read throw. */
+  optedOutHandlesError: Error | null = null
   /** Every write's patch, in order: claims and transitions alike. */
   readonly writes: Partial<SocialPostVariant>[] = []
 
@@ -140,6 +144,11 @@ export class MemoryVariantStore implements SocialVariantStore {
       .slice(0, bounds.submittedLimit)
       .map((v) => ({ ...v }))
     return { due, stale, submitted }
+  }
+
+  async optedOutBlueskyHandles() {
+    if (this.optedOutHandlesError) throw this.optedOutHandlesError
+    return new Set(this.optedOutHandles)
   }
 
   async tagStates(conferenceId: string, speakerIds: readonly string[]) {

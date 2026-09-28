@@ -531,7 +531,7 @@ export async function getTaskEditorData(
       // rule cannot parse an interpolated projection here. task-sanity.test
       // asserts both read the same records. An opted-out speaker's
       // unresolved note is left out: its handle must not reach the browser.
-      "tagMentions": select(kind == "publishing" && channel == "bluesky" && variant->conference._ref == conference._ref => variant->mentions[!(status == "unresolved" && speaker->socialTagOptOut == true)]{ _key, handle, did, "speakerId": speaker._ref, name, status }),
+      "tagMentions": select(kind == "publishing" && channel == "bluesky" && variant->conference._ref == conference._ref => variant->mentions[!(status == "unresolved" && speaker->socialTagOptOut == true)]{ _key, handle, did, "speakerId": coalesce(speaker._ref, sponsor._ref), "sponsor": defined(sponsor._ref), name, status }),
       "campaign": select(campaign->conference._ref == conference._ref => campaign->{ _id, key, title }),
       "planOwnerId": plan->owner._ref,
       "siblings": *[_type == "marketingTask" && conference._ref == $conferenceId && campaign._ref == ^.campaign._ref && _id != ^._id && !(_id in path("drafts.**")) && !(_id in path("versions.**"))]{${TASK_VIEW_FIELDS}

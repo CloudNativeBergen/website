@@ -57,6 +57,38 @@ export const Disabled: Story = {
   },
 }
 
+/** Editing, with the company's Bluesky handle and LinkedIn page (#1154). */
+export const EditingWithSocialAccounts: Story = {
+  args: {
+    name: 'Acme Corporation',
+    website: 'https://acme.com',
+    orgNumber: '123456789',
+    address: 'Tech Street 42, 5020 Bergen',
+    blueskyHandle: 'acme.com',
+    linkedinUrl: 'https://www.linkedin.com/company/acme',
+    onNameChange: fn(),
+    onWebsiteChange: fn(),
+    onBlueskyHandleChange: fn(),
+    onLinkedinUrlChange: fn(),
+    initiallyEditing: true,
+  },
+  // Full width of the meta's grid: the width the CRM form gives it.
+  decorators: [
+    (Story: React.ComponentType) => (
+      <div className="max-w-2xl sm:col-span-4">
+        <Story />
+      </div>
+    ),
+  ],
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement)
+    const input = canvas.getByLabelText('Bluesky handle')
+    await expect(input).toHaveValue('acme.com')
+    await userEvent.type(input, 'x')
+    await expect(args.onBlueskyHandleChange).toHaveBeenCalledWith('acme.comx')
+  },
+}
+
 /**
  * Interactive story that demonstrates controlled form behavior.
  */

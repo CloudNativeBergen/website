@@ -46,13 +46,15 @@ export function mentionTokens(body: string): MentionToken[] {
 }
 
 /**
- * Someone a body may tag: a speaker of this conference (sponsors join in
- * #1154). `handle` is null without a Bluesky link — and for an opted-out
- * speaker in anything sent to the browser, so their links never leave the
- * server; the server-side checks get the real handle.
+ * Someone a body may tag: a speaker of this conference, or — with `sponsor`
+ * — a company sponsoring it (spec §3.3), whose id `speakerId` then holds.
+ * `handle` is null without a Bluesky link — and for an opted-out speaker in
+ * anything sent to the browser, so their links never leave the server; the
+ * server-side checks get the real handle. A sponsor never opts out.
  */
 export interface TaggablePerson {
   speakerId: string
+  sponsor?: true
   name: string
   handle: string | null
   /**
@@ -69,6 +71,8 @@ export interface TaggablePerson {
 export type TagIssueCode =
   | 'opted-out'
   | 'not-a-speaker'
+  /** A sponsor company's tag, and it no longer sponsors this conference. */
+  | 'not-a-sponsor'
   | 'not-found'
   | 'did-changed'
   | 'unchecked'
@@ -419,6 +423,12 @@ function swapTags(
   return out
 }
 
+/**
+ * Who lists each handle. A handle a SPONSOR holds is the company's account
+ * (spec §3.3): a speaker who also lists it — an employee linking the company
+ * page — does not share it, so the tag binds to the company and her opt-out
+ * (which covers her own accounts) does not refuse it.
+ */
 function byHandle(
   people: readonly TaggablePerson[],
 ): Map<string, TaggablePerson[]> {
@@ -427,6 +437,10 @@ function byHandle(
     const all = p.handles ?? (p.handle ? [p.handle] : [])
     for (const h of new Set(all.map(normaliseHandle)))
       map.set(h, [...(map.get(h) ?? []), p])
+  }
+  for (const [h, listers] of map) {
+    const companies = listers.filter((p) => p.sponsor)
+    if (companies.length > 0) map.set(h, companies)
   }
   return map
 }
@@ -437,8 +451,38 @@ function optedOutIssue(p: TaggablePerson, handle: string): MentionIssue {
     mentionKey: storedKey(p.speakerId),
     handle,
     name: p.name,
-    message: `${p.name} has asked not to be tagged in social posts. Use the plain name instead of @${handle}.`,
+    // A sponsor is refused for a speaker who lists its account: never named,
+    // since the Task editor is not hers to see (#1154).
+    message: p.sponsor
+      ? `Someone who has asked not to be tagged in social posts lists @${handle}. Use the plain name instead.`
+      : `${p.name} has asked not to be tagged in social posts. Use the plain name instead of @${handle}.`,
   }
+}
+
+/**
+ * The opt-out always wins (#1154): a sponsor whose handle an opted-out
+ * speaker of this conference also lists is treated as opted out itself — the
+ * company still OWNS the tag (`byHandle`), but it is refused at save and
+ * approval, and swapped for the name in the manual view. Pure.
+ */
+export function withSharedOptOuts(
+  people: readonly TaggablePerson[],
+): TaggablePerson[] {
+  const refused = new Set(
+    people
+      .filter((p) => !p.sponsor && p.optedOut)
+      .flatMap((p) =>
+        (p.handles ?? (p.handle ? [p.handle] : [])).map(normaliseHandle),
+      ),
+  )
+  return people.map((p) =>
+    p.sponsor &&
+    (p.handles ?? (p.handle ? [p.handle] : [])).some((h) =>
+      refused.has(normaliseHandle(h)),
+    )
+      ? { ...p, optedOut: true }
+      : p,
+  )
 }
 
 /**
@@ -456,6 +500,14 @@ function ownAccountIssue(handle: string, name = handle): MentionIssue {
 }
 
 function notASpeaker(m: MentionRecord, handle: string): MentionIssue {
+  if (m.sponsor)
+    return {
+      code: 'not-a-sponsor',
+      mentionKey: m._key,
+      handle,
+      name: m.name,
+      message: `${m.name} no longer sponsors this conference. Use the plain name instead of @${handle}.`,
+    }
   return {
     code: 'not-a-speaker',
     mentionKey: m._key,
@@ -698,6 +750,7 @@ export function saveMentions(input: {
       handle,
       ...(did ? { did } : {}),
       speakerId: person.speakerId,
+      ...(person.sponsor ? { sponsor: true as const } : {}),
       name: person.name,
       status: 'tagged',
     })

@@ -62,12 +62,14 @@ export const SponsorInputSchema = z.object({
   logoBright: z.string().nullable().optional(),
   orgNumber: z.string().nullable().optional().transform(nullToUndefined),
   address: z.string().nullable().optional().transform(nullToUndefined),
-  linkedinUrl: z
-    .string()
-    .url()
-    .nullable()
-    .optional()
-    .transform(nullToUndefined),
+  /**
+   * The company's LinkedIn page and Bluesky handle (tagging spec §3.3), as
+   * typed. Absent leaves the stored value; null or empty clears it. The
+   * router normalises and checks them (`parseSponsorSocials`), so a refusal
+   * reaches the organizer as a sentence, not as zod's issue JSON.
+   */
+  linkedinUrl: z.string().nullable().optional(),
+  blueskyHandle: z.string().nullable().optional(),
   tierId: z.string().nullable().optional().transform(nullToUndefined),
 })
 

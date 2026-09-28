@@ -125,6 +125,12 @@ export interface SocialVariantStore {
     speakerIds: readonly string[],
   ): Promise<ReadonlyMap<string, { optedOut: boolean; gone: boolean }>>
   /**
+   * Every Bluesky handle an opted-out speaker of this conference lists, NOW,
+   * normalised (#1154): a sponsor tag of one of them is withheld. Read right
+   * before the external call, and only for a variant carrying a sponsor tag.
+   */
+  optedOutBlueskyHandles(conferenceId: string): Promise<ReadonlySet<string>>
+  /**
    * Compare-and-set `scheduled → publishing` on the variant's revision. Returns
    * the claimed variant (fresh `_rev`) or `null` when another tick won the race
    * or the document moved on.

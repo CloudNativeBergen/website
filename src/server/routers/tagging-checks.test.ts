@@ -784,3 +784,311 @@ describe('marketing.task.resolveTag', () => {
     expect(askedBluesky()).toEqual([])
   })
 })
+
+// ---------------------------------------------------------------------------
+// Sponsors (§3.3, #1154): the same save, approval and tag-button path
+// ---------------------------------------------------------------------------
+
+describe('sponsor tags', () => {
+  const DID_ACME = 'did:plc:acmeacmeacmeacmeacmeacme'
+  const ACME_TAG = {
+    _key: 'sp-acme',
+    _type: 'socialPostMention',
+    handle: 'acme.example',
+    did: DID_ACME,
+    sponsor: { ...ref('sp-acme'), _weak: true },
+    name: 'Acme AS',
+    status: 'tagged',
+  }
+  /**
+   * `sponsor` is ORG-level and shared across editions: Acme sponsors THIS
+   * conference; Initech only another one (its org's, or another org's).
+   */
+  function seedSponsors(mentions: unknown[] = []) {
+    seed(mentions)
+    dataset.push(
+      {
+        _id: 'sp-acme',
+        _type: 'sponsor',
+        name: 'Acme AS',
+        organization: ref(ORG_A),
+        blueskyHandle: 'acme.example',
+      },
+      {
+        _id: 'sp-initech',
+        _type: 'sponsor',
+        name: 'Initech',
+        organization: ref(ORG_A),
+        blueskyHandle: 'initech.example',
+      },
+      {
+        _id: 'sfc-acme-A',
+        _type: 'sponsorForConference',
+        conference: ref(CONF_A),
+        sponsor: ref('sp-acme'),
+        contractStatus: 'contract-signed',
+      },
+      // A deal still open HERE: not a sponsor yet.
+      {
+        _id: 'sp-globex',
+        _type: 'sponsor',
+        name: 'Globex',
+        organization: ref(ORG_A),
+        blueskyHandle: 'globex.example',
+      },
+      {
+        _id: 'sfc-globex-A',
+        _type: 'sponsorForConference',
+        conference: ref(CONF_A),
+        sponsor: ref('sp-globex'),
+        status: 'negotiating',
+      },
+      {
+        _id: 'sfc-initech-B',
+        _type: 'sponsorForConference',
+        conference: ref(CONF_B),
+        sponsor: ref('sp-initech'),
+        contractStatus: 'contract-signed',
+      },
+    )
+  }
+  beforeEach(() => {
+    seedSponsors([ACME_TAG])
+    bluesky = { 'acme.example': DID_ACME, 'initech.example': 'did:plc:x' }
+    serveVariant(variantData({ body: 'Thanks @acme.example!' }))
+  })
+
+  it('a hand-typed sponsor handle is recorded in mentions[] on save, as a sponsor reference', async () => {
+    seedSponsors([])
+    await save('Thanks @Acme.Example!')
+    expect(askedBluesky()).toEqual(['acme.example'])
+    expect(h.updateSocialVariantContent.mock.calls[0][1].mentions).toEqual([
+      {
+        _key: 'sp-acme',
+        _type: 'socialPostMention',
+        handle: 'acme.example',
+        did: DID_ACME,
+        sponsor: { _type: 'reference', _ref: 'sp-acme', _weak: true },
+        name: 'Acme AS',
+        status: 'tagged',
+      },
+    ])
+  })
+
+  it('keeps a recorded sponsor tag through a save without asking again', async () => {
+    await save('Thanks @acme.example!')
+    expect(askedBluesky()).toEqual([])
+    expect(h.updateSocialVariantContent.mock.calls[0][1].mentions).toEqual([
+      ACME_TAG,
+    ])
+  })
+
+  it('a sponsor of ANOTHER conference is a stranger here: not recorded, never asked', async () => {
+    seedSponsors([])
+    await save('Thanks @initech.example!')
+    expect(askedBluesky()).toEqual([])
+    expect(h.updateSocialVariantContent.mock.calls[0][1].mentions).toEqual([])
+  })
+
+  it('a sponsor handle a speaker (not opted out) also lists is recorded as the company', async () => {
+    seedSponsors([])
+    const alice = dataset.find((d) => d._id === 'spk-alice')!
+    alice.links = ['https://bsky.app/profile/acme.example']
+    await save('Thanks @acme.example!')
+    const [m] = h.updateSocialVariantContent.mock.calls[0][1].mentions
+    expect(m).toMatchObject({
+      _key: 'sp-acme',
+      sponsor: { _type: 'reference', _ref: 'sp-acme', _weak: true },
+      name: 'Acme AS',
+    })
+    expect(m).not.toHaveProperty('speaker')
+  })
+
+  it('the opt-out wins: a sponsor handle an OPTED-OUT speaker also lists is refused at save, without naming her', async () => {
+    seedSponsors([])
+    const olga = dataset.find((d) => d._id === 'spk-olga')!
+    olga.links = ['https://bsky.app/profile/acme.example']
+    const error = await save('Thanks @acme.example!').catch(
+      (e: { cause: TagIssuesError }) => e,
+    )
+    const issues = (error as { cause: TagIssuesError }).cause.tagIssues
+    expect(issues.map((i) => [i.code, i.mentionKey, i.name])).toEqual([
+      ['opted-out', 'sp-acme', 'Acme AS'],
+    ])
+    expect(issues[0].message).toBe(
+      'Someone who has asked not to be tagged in social posts lists @acme.example. Use the plain name instead.',
+    )
+    expect(JSON.stringify(issues)).not.toContain('Olga')
+    expect(h.updateSocialVariantContent).not.toHaveBeenCalled()
+    expect(askedBluesky()).toEqual([])
+  })
+
+  it('…and scheduling a recorded sponsor tag is refused the same way', async () => {
+    const olga = dataset.find((d) => d._id === 'spk-olga')!
+    olga.links = ['https://bsky.app/profile/acme.example']
+    expect(
+      await refusal(social().scheduleVariant({ variantId: 'variant-ours' })),
+    ).toEqual([['opted-out', 'sp-acme']])
+    expect(h.transition).not.toHaveBeenCalled()
+  })
+
+  it('a prospect of THIS conference is a stranger: not recorded, never asked', async () => {
+    seedSponsors([])
+    await save('Thanks @globex.example!')
+    expect(askedBluesky()).toEqual([])
+    expect(h.updateSocialVariantContent.mock.calls[0][1].mentions).toEqual([])
+  })
+
+  it('a sponsor handle Bluesky does not know is refused at save', async () => {
+    seedSponsors([])
+    bluesky['acme.example'] = 'not-found'
+    expect(await refusal(save('Thanks @acme.example!'))).toEqual([
+      ['not-found', 'sp-acme'],
+    ])
+  })
+
+  it('scheduling passes a recorded sponsor tag that still resolves', async () => {
+    const result = await social().scheduleVariant({ variantId: 'variant-ours' })
+    expect(h.transition).toHaveBeenCalled()
+    expect(result.tagWarnings).toEqual([])
+    expect(askedBluesky()).toEqual(['acme.example'])
+  })
+
+  it('scheduling with Bluesky unreachable warns, and does not refuse', async () => {
+    delete bluesky['acme.example']
+    const result = await social().scheduleVariant({ variantId: 'variant-ours' })
+    expect(h.transition).toHaveBeenCalled()
+    expect(result.tagWarnings).toEqual([
+      expect.stringContaining('could not be reached to check @acme.example'),
+    ])
+  })
+
+  it('scheduling refuses a recorded sponsor tag whose handle now belongs to someone else', async () => {
+    bluesky['acme.example'] = DID_OTHER
+    expect(
+      await refusal(social().scheduleVariant({ variantId: 'variant-ours' })),
+    ).toEqual([['did-changed', 'sp-acme']])
+    expect(h.transition).not.toHaveBeenCalled()
+  })
+
+  it('a deal lost since, contractStatus kept as history (state machine), is refused too', async () => {
+    const sfc = dataset.find((d) => d._id === 'sfc-acme-A')!
+    sfc.status = 'closed-lost'
+    const issues = await social()
+      .scheduleVariant({ variantId: 'variant-ours' })
+      .catch((e: { cause: TagIssuesError }) => e.cause.tagIssues)
+    expect(issues).toEqual([
+      expect.objectContaining({ code: 'not-a-sponsor', mentionKey: 'sp-acme' }),
+    ])
+    expect(h.transition).not.toHaveBeenCalled()
+  })
+
+  it('scheduling refuses a tag of a company whose deal was lost since', async () => {
+    const sfc = dataset.find((d) => d._id === 'sfc-acme-A')!
+    sfc.contractStatus = 'none'
+    sfc.status = 'closed-lost'
+    const issues = await social()
+      .scheduleVariant({ variantId: 'variant-ours' })
+      .catch((e: { cause: TagIssuesError }) => e.cause.tagIssues)
+    expect(issues).toEqual([
+      expect.objectContaining({
+        code: 'not-a-sponsor',
+        mentionKey: 'sp-acme',
+        message: expect.stringContaining(
+          'Acme AS no longer sponsors this conference',
+        ),
+      }),
+    ])
+    expect(h.transition).not.toHaveBeenCalled()
+  })
+
+  it('the tag button resolves the sponsor a sponsor Task is about', async () => {
+    dataset.push({
+      _id: 'task-sponsor',
+      _type: 'marketingTask',
+      conference: ref(CONF_A),
+      kind: 'publishing',
+      channel: 'bluesky',
+      subject: ref('sp-acme'),
+    })
+    TENANTS['task-sponsor'] = { _type: 'marketingTask', conferenceId: CONF_A }
+    expect(
+      await marketing().task.resolveTag({
+        taskId: 'task-sponsor',
+        speakerId: 'sp-acme',
+      }),
+    ).toEqual({ handle: 'acme.example', result: 'resolved' })
+  })
+
+  it('the tag button offers no one for a prospect’s Task', async () => {
+    dataset.push({
+      _id: 'task-prospect',
+      _type: 'marketingTask',
+      conference: ref(CONF_A),
+      kind: 'publishing',
+      channel: 'bluesky',
+      subject: ref('sp-globex'),
+    })
+    TENANTS['task-prospect'] = { _type: 'marketingTask', conferenceId: CONF_A }
+    await expect(
+      marketing().task.resolveTag({
+        taskId: 'task-prospect',
+        speakerId: 'sp-globex',
+      }),
+    ).rejects.toMatchObject({ message: /Only the people this Task is about/ })
+    expect(askedBluesky()).toEqual([])
+  })
+
+  it('the tag button refuses a sponsor whose handle an opted-out speaker lists, and never asks Bluesky', async () => {
+    const olga = dataset.find((d) => d._id === 'spk-olga')!
+    olga.links = ['https://bsky.app/profile/acme.example']
+    dataset.push({
+      _id: 'task-sponsor2',
+      _type: 'marketingTask',
+      conference: ref(CONF_A),
+      kind: 'publishing',
+      channel: 'bluesky',
+      subject: ref('sp-acme'),
+    })
+    TENANTS['task-sponsor2'] = { _type: 'marketingTask', conferenceId: CONF_A }
+    await expect(
+      marketing().task.resolveTag({
+        taskId: 'task-sponsor2',
+        speakerId: 'sp-acme',
+      }),
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message:
+        "Someone who has asked not to be tagged in social posts lists Acme AS's Bluesky account.",
+    })
+    expect(askedBluesky()).toEqual([])
+  })
+
+  it('…and the editor offers no tag for it: no handle, marked opted out', async () => {
+    const olga = dataset.find((d) => d._id === 'spk-olga')!
+    olga.links = ['https://bsky.app/profile/acme.example']
+    h.getTaskEditorData.mockResolvedValue({
+      ...stored(),
+      tagPeople: [
+        {
+          speakerId: 'sp-acme',
+          sponsor: true,
+          name: 'Acme AS',
+          handle: 'acme.example',
+          optedOut: false,
+        },
+      ],
+    })
+    const data = await marketing().task.get({ taskId: 'task-ours' })
+    expect(data.tagPeople).toEqual([
+      {
+        speakerId: 'sp-acme',
+        sponsor: true,
+        name: 'Acme AS',
+        handle: null,
+        optedOut: true,
+      },
+    ])
+    expect(askedBluesky()).toEqual([])
+  })
+})

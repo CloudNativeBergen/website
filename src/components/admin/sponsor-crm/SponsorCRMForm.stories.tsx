@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
-import { fn } from 'storybook/test'
+import { expect, fn, userEvent, waitFor, within } from 'storybook/test'
 import { http, HttpResponse } from 'msw'
 import { SponsorCRMForm } from './SponsorCRMForm'
 import {
@@ -115,9 +115,22 @@ const defaultHandlers = [
     HttpResponse.json({ result: { data: { success: true } } }),
   ),
   http.post('/api/trpc/sponsor.update', () =>
-    HttpResponse.json({ result: { data: { success: true } } }),
+    HttpResponse.json({ result: { data: savedSponsor() } }),
   ),
 ]
+
+/** What `sponsor.update` returns: the sponsor, and any save warnings. */
+function savedSponsor(warnings: string[] = []) {
+  return {
+    _id: 'sponsor-123',
+    _createdAt: '2026-01-15T10:00:00Z',
+    _updatedAt: '2026-02-10T14:30:00Z',
+    name: 'Acme Corporation',
+    website: 'https://acme.example.com',
+    blueskyHandle: 'acme.bsky.social',
+    warnings,
+  }
+}
 
 const meta = {
   title: 'Systems/Sponsors/Admin/Pipeline/SponsorCRMForm',
@@ -334,5 +347,118 @@ export const ContactsViewNoInvoiceFormat: Story = {
       } as SponsorForConferenceExpanded['billing'],
     }),
     initialView: 'contacts',
+  },
+}
+
+const withSocials = () =>
+  mockSponsor({
+    sponsor: {
+      ...mockSponsor().sponsor,
+      blueskyHandle: 'acme.bsky.social',
+      linkedinUrl: 'https://www.linkedin.com/company/acme',
+    },
+  })
+
+/** Open the company details for editing and put a handle in. */
+async function editHandle(canvasElement: HTMLElement, handle: string) {
+  const body = within(canvasElement.ownerDocument.body)
+  await userEvent.click(await body.findByRole('button', { name: /edit/i }))
+  const input = await body.findByLabelText('Bluesky handle')
+  await userEvent.clear(input)
+  await userEvent.type(input, handle)
+  return body
+}
+
+/**
+ * The company's social accounts (tagging spec §3.3): the Bluesky handle that
+ * sponsor posts tag, and the LinkedIn page listed under "Tag by hand". Shown
+ * in the collapsed company row; editable under Edit.
+ */
+export const CompanySocialAccounts: Story = {
+  args: { sponsor: withSocials() },
+  play: async ({ canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body)
+    await expect(await body.findByText('acme.bsky.social')).toBeInTheDocument()
+    await userEvent.click(await body.findByRole('button', { name: /edit/i }))
+    await expect(await body.findByLabelText('Bluesky handle')).toHaveValue(
+      'acme.bsky.social',
+    )
+    await expect(body.getByLabelText('LinkedIn company page')).toHaveValue(
+      'https://www.linkedin.com/company/acme',
+    )
+  },
+}
+
+/** The same, on a phone: the two fields stack. */
+export const CompanySocialAccountsMobile: Story = {
+  ...CompanySocialAccounts,
+  globals: { viewport: { value: 'mobile1', isRotated: false } },
+  parameters: { viewport: { defaultViewport: 'mobile1' } },
+}
+
+/**
+ * A handle Bluesky does not know: the save is refused and the message says
+ * which handle, and where to find the right one.
+ */
+export const BlueskyHandleRejected: Story = {
+  args: { sponsor: mockSponsor() },
+  parameters: {
+    msw: {
+      handlers: [
+        http.post('/api/trpc/sponsor.update', () =>
+          HttpResponse.json(
+            {
+              error: {
+                message:
+                  "@acme-typo.example does not resolve on Bluesky. Check the handle: it is the part after bsky.app/profile/ on the company's Bluesky page.",
+                code: -32600,
+                data: { code: 'BAD_REQUEST', httpStatus: 400 },
+              },
+            },
+            { status: 400 },
+          ),
+        ),
+        ...defaultHandlers,
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const body = await editHandle(canvasElement, 'acme-typo.example')
+    await userEvent.click(body.getByRole('button', { name: /save/i }))
+    await waitFor(() =>
+      expect(
+        body.getByText(/@acme-typo\.example does not resolve on Bluesky/),
+      ).toBeInTheDocument(),
+    )
+  },
+}
+
+/** Bluesky could not be reached: the handle is saved, with a warning. */
+export const BlueskyUnreachableWarning: Story = {
+  args: { sponsor: mockSponsor() },
+  parameters: {
+    msw: {
+      handlers: [
+        http.post('/api/trpc/sponsor.update', () =>
+          HttpResponse.json({
+            result: {
+              data: savedSponsor([
+                'Bluesky could not be reached to check @acme.bsky.social. The handle is saved; each post that tags it is checked again.',
+              ]),
+            },
+          }),
+        ),
+        ...defaultHandlers,
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const body = await editHandle(canvasElement, 'acme.bsky.social')
+    await userEvent.click(body.getByRole('button', { name: /save/i }))
+    await waitFor(() =>
+      expect(
+        body.getByText(/Bluesky could not be reached to check/),
+      ).toBeInTheDocument(),
+    )
   },
 }

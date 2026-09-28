@@ -1,4 +1,5 @@
 import { defineField, defineType } from 'sanity'
+import { linkedinCompanyPageIssue } from '@/lib/marketing/tag-by-hand/links'
 
 export default defineType({
   name: 'sponsor',
@@ -56,6 +57,32 @@ export default defineType({
           )
         )
       },
+    }),
+    // The company's social accounts, entered once in the sponsor CRM and
+    // reused across editions (tagging spec §3.3). A sponsor has no opt-out:
+    // these are an organizer's entries about a commercial partner.
+    defineField({
+      name: 'blueskyHandle',
+      title: 'Bluesky handle',
+      type: 'string',
+      description:
+        'The company Bluesky handle without the @ (e.g. acme.com). Sponsor posts on Bluesky tag it. Checked against Bluesky when saved from the sponsor CRM.',
+      validation: (Rule) =>
+        Rule.max(253).regex(
+          /^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]([a-z0-9-]{0,61}[a-z0-9])?$/,
+          {
+            name: 'Bluesky handle, lower-case, without the @',
+          },
+        ),
+    }),
+    defineField({
+      name: 'linkedinUrl',
+      title: 'LinkedIn company page',
+      type: 'url',
+      description:
+        'Listed beside the company name under "Tag by hand" when a LinkedIn post about this sponsor is posted.',
+      validation: (Rule) =>
+        Rule.custom((value?: string) => linkedinCompanyPageIssue(value)),
     }),
     // Multi-tenant owner (CaaS T1-1, #613). Additive/optional; populated by the
     // 044 backfill and stamped at creation. Server code must not assume presence.

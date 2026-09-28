@@ -603,6 +603,37 @@ describe('getTaskEditorData — Bluesky tag people and mentions (#1151)', () => 
     })
   })
 
+  it('reads a SPONSOR mention as a sponsor’s, in both projections (#1154)', async () => {
+    Object.assign(doc('variant-li'), {
+      mentions: [
+        {
+          _key: 'sp-acme',
+          _type: 'socialPostMention',
+          handle: 'acme.example',
+          did: 'did:plc:acme',
+          sponsor: { ...r('sp-acme'), _weak: true },
+          name: 'Acme AS',
+          status: 'tagged',
+        },
+      ],
+    })
+    const viaTask = (await getTaskEditorData('task-li', CONF_A))!.tagMentions
+    expect(viaTask).toEqual(
+      await getVariantMentionRecords('variant-li', CONF_A),
+    )
+    expect(viaTask).toEqual([
+      {
+        _key: 'sp-acme',
+        handle: 'acme.example',
+        did: 'did:plc:acme',
+        speakerId: 'sp-acme',
+        sponsor: true,
+        name: 'Acme AS',
+        status: 'tagged',
+      },
+    ])
+  })
+
   it('leaves out an opted-out speaker’s unresolved note, handle and all', async () => {
     doc('sp-2').socialTagOptOut = true
     const data = await getTaskEditorData('task-li', CONF_A)

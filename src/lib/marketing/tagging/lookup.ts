@@ -7,12 +7,17 @@
 import { deriveBlueskyHandle } from '@/lib/stream/config'
 import type { BlueskyTag } from './body'
 import { normaliseHandle } from '@/lib/social/provider/bluesky-syntax'
-import { blueskyHandleFromLinks } from './handle'
+import { blueskyHandleFromLinks, parseBlueskyHandle } from './handle'
 import { resolveBlueskyHandle, type HandleResolution } from './resolve'
 
 export interface TagSource {
   links: readonly string[] | null
   socialTagOptOut: boolean | null
+  /**
+   * A sponsor company's handle, entered in the CRM (spec §3.3): used instead
+   * of the links, which a sponsor does not have.
+   */
+  blueskyHandle?: string | null
 }
 
 /**
@@ -38,7 +43,9 @@ export async function blueskyTagFor(
   resolve: (handle: string) => Promise<HandleResolution> = resolveBlueskyHandle,
 ): Promise<BlueskyTag | null> {
   if (!source || source.socialTagOptOut) return null
-  const handle = blueskyHandleFromLinks(source.links)
+  const handle = source.blueskyHandle
+    ? parseBlueskyHandle(source.blueskyHandle)
+    : blueskyHandleFromLinks(source.links)
   if (!handle || handle === ownHandle) return null
   const resolution = await resolve(handle).catch((): HandleResolution => ({
     kind: 'unreachable',

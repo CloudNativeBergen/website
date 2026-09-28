@@ -7,6 +7,8 @@ import {
   BuildingOffice2Icon,
   HashtagIcon,
   MapPinIcon,
+  AtSymbolIcon,
+  LinkIcon,
 } from '@heroicons/react/24/outline'
 import { formatOrgNumber } from '@/lib/format'
 
@@ -15,25 +17,41 @@ interface SponsorGlobalInfoFieldsProps {
   website: string
   orgNumber?: string
   address?: string
+  /** The company's Bluesky handle: sponsor posts on Bluesky tag it. */
+  blueskyHandle?: string
+  /** The company's LinkedIn page, listed under "Tag by hand". */
+  linkedinUrl?: string
   onNameChange: (value: string) => void
   onWebsiteChange: (value: string) => void
   onOrgNumberChange?: (value: string) => void
   onAddressChange?: (value: string) => void
+  onBlueskyHandleChange?: (value: string) => void
+  onLinkedinUrlChange?: (value: string) => void
   disabled?: boolean
+  /** Opens in edit mode (stories, and a form that must show the fields). */
+  initiallyEditing?: boolean
 }
+
+const INPUT_CLASS =
+  'block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500'
 
 export function SponsorGlobalInfoFields({
   name,
   website,
   orgNumber = '',
   address = '',
+  blueskyHandle = '',
+  linkedinUrl = '',
   onNameChange,
   onWebsiteChange,
   onOrgNumberChange,
   onAddressChange,
+  onBlueskyHandleChange,
+  onLinkedinUrlChange,
   disabled = false,
+  initiallyEditing = false,
 }: SponsorGlobalInfoFieldsProps) {
-  const [editing, setEditing] = useState(false)
+  const [editing, setEditing] = useState(initiallyEditing)
 
   if (!editing) {
     return (
@@ -67,6 +85,25 @@ export function SponsorGlobalInfoFields({
               <MapPinIcon className="h-3 w-3 shrink-0" />
               <span className="truncate">{address}</span>
             </span>
+          )}
+          {blueskyHandle && (
+            <span className="flex max-w-full min-w-0 items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
+              <AtSymbolIcon className="h-3 w-3 shrink-0" />
+              <span className="truncate">
+                {blueskyHandle.replace(/^@/, '')}
+              </span>
+            </span>
+          )}
+          {linkedinUrl && (
+            <a
+              href={linkedinUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex max-w-full min-w-0 items-center gap-1 text-xs text-gray-500 hover:text-indigo-600 dark:text-gray-400 dark:hover:text-indigo-400"
+            >
+              <LinkIcon className="h-3 w-3 shrink-0" />
+              <span className="truncate">LinkedIn</span>
+            </a>
           )}
         </div>
         <button
@@ -174,6 +211,64 @@ export function SponsorGlobalInfoFields({
             className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
             placeholder="Street 1, 0000 City"
           />
+        </div>
+      </div>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div>
+          <label
+            htmlFor="blueskyHandle"
+            className="block text-sm/6 font-medium text-gray-900 dark:text-white"
+          >
+            Bluesky handle
+          </label>
+          <div className="mt-1">
+            <input
+              type="text"
+              id="blueskyHandle"
+              value={blueskyHandle}
+              onChange={(e) => onBlueskyHandleChange?.(e.target.value)}
+              disabled={disabled}
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+              aria-describedby="blueskyHandle-help"
+              className={INPUT_CLASS}
+              placeholder="acme.com"
+            />
+          </div>
+          <p
+            id="blueskyHandle-help"
+            className="mt-1 text-xs text-gray-500 dark:text-gray-400"
+          >
+            Sponsor posts on Bluesky tag this account. Checked with Bluesky when
+            you save.
+          </p>
+        </div>
+        <div>
+          <label
+            htmlFor="linkedinUrl"
+            className="block text-sm/6 font-medium text-gray-900 dark:text-white"
+          >
+            LinkedIn company page
+          </label>
+          <div className="mt-1">
+            <input
+              type="url"
+              id="linkedinUrl"
+              value={linkedinUrl}
+              onChange={(e) => onLinkedinUrlChange?.(e.target.value)}
+              disabled={disabled}
+              aria-describedby="linkedinUrl-help"
+              className={INPUT_CLASS}
+              placeholder="https://www.linkedin.com/company/acme"
+            />
+          </div>
+          <p
+            id="linkedinUrl-help"
+            className="mt-1 text-xs text-gray-500 dark:text-gray-400"
+          >
+            Listed under &quot;Tag by hand&quot; for LinkedIn posts.
+          </p>
         </div>
       </div>
     </div>

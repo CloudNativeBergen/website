@@ -355,6 +355,25 @@ describe('a tag withheld at publish (tagging spec §4.4, Publish)', () => {
     )
   })
 
+  it('a sponsor tag withheld for a speaker who lists the account: the company is named, the speaker never (#1154)', async () => {
+    h.organizers.mockResolvedValue(['org-a'])
+    await notifyMarketingTagsWithheld({
+      ...withheldEvent(),
+      withheld: [
+        {
+          reason: 'listed-by-opted-out',
+          sponsorId: 'sponsor-acme',
+          name: 'Acme AS',
+          handles: ['acme.com'],
+        },
+      ],
+    })
+    const [n] = h.createNotifications.mock.calls[0][0] as { message: string }[]
+    expect(n.message).toBe(
+      '@acme.com went out as “Acme AS”: someone who asked not to be tagged lists that account.',
+    )
+  })
+
   it('a speaker with two withheld handles is named once, with both handles (round 4, T1)', async () => {
     h.organizers.mockResolvedValue(['org-a'])
     await notifyMarketingTagsWithheld({

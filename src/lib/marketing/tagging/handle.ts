@@ -51,3 +51,18 @@ export function blueskyHandlesFromLinks(
   }
   return out
 }
+
+/**
+ * A handle as an organizer types it for a sponsor company (spec §3.3):
+ * `acme.com`, `@Acme.com` or a `bsky.app/profile/acme.com` URL, lower-cased.
+ * Null when it is not a handle — a DID profile URL included, which carries no
+ * handle to put in the text.
+ */
+export function parseBlueskyHandle(raw: string): string | null {
+  const text = raw.trim()
+  const fromUrl = blueskyHandleFromLinks([text])
+  if (fromUrl) return fromUrl
+  if (/bsky\.app\//i.test(text)) return null
+  const handle = normaliseHandle(text)
+  return handle.length <= 253 && HANDLE.test(handle) ? handle : null
+}

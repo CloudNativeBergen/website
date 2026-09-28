@@ -13,6 +13,8 @@ const defaultFormData: SponsorPipelineFormData = {
   logoBright: null,
   orgNumber: '123456789',
   address: 'Tech Street 42, 5020 Bergen',
+  blueskyHandle: 'acme.example.com',
+  linkedinUrl: 'https://www.linkedin.com/company/acme',
   tierId: 'tier-ingress',
   addonIds: [],
   contractStatus: 'verbal-agreement',
@@ -226,6 +228,12 @@ export const Saving: Story = {
     addonTiers: mockAddonTiers,
     organizers: mockOrganizers,
     isPending: true,
+  },
+  // The company details (handle, LinkedIn page) cannot be edited while the
+  // save — and its Bluesky check — is in flight (#1154).
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(canvas.getByRole('button', { name: /edit/i })).toBeDisabled()
   },
 }
 

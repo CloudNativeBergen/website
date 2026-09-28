@@ -31,6 +31,8 @@ export interface SponsorPipelineFormData {
   logoBright: string | null
   orgNumber: string
   address: string
+  blueskyHandle: string
+  linkedinUrl: string
   tierId: string
   addonIds: string[]
   contractStatus: ContractStatus
@@ -145,6 +147,15 @@ export function SponsorPipelineView({
               website={formData.website}
               orgNumber={formData.orgNumber}
               address={formData.address}
+              disabled={isPending}
+              blueskyHandle={formData.blueskyHandle}
+              linkedinUrl={formData.linkedinUrl}
+              onBlueskyHandleChange={(blueskyHandle) =>
+                onFormDataChange((prev) => ({ ...prev, blueskyHandle }))
+              }
+              onLinkedinUrlChange={(linkedinUrl) =>
+                onFormDataChange((prev) => ({ ...prev, linkedinUrl }))
+              }
               onNameChange={(name) =>
                 onFormDataChange((prev) => ({ ...prev, name }))
               }

@@ -161,6 +161,15 @@ export default defineType({
               weak: true,
             }),
             defineField({
+              name: 'sponsor',
+              title: 'Sponsor',
+              description:
+                'Set instead of Speaker when the tag is a sponsor company.',
+              type: 'reference',
+              to: [{ type: 'sponsor' }],
+              weak: true,
+            }),
+            defineField({
               name: 'name',
               title: 'Plain name',
               description: 'What the tag stands for; the text used without it.',

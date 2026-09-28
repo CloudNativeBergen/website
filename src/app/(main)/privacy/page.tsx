@@ -117,7 +117,7 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
     )
   }
 
-  const lastUpdated = 'September 27, 2026'
+  const lastUpdated = 'September 28, 2026'
   const legal = await resolveLegalConfig(conference)
   const contactEmail = legal.contactEmail
   // EMPTY when no legal entity could be resolved. `legal.controllerResolved`
@@ -729,8 +729,9 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                               reshare it
                             </li>
                             <li>
-                              • We only ever tag accounts you gave us yourself.
-                              We do not look up accounts you have not listed
+                              • We only ever tag a speaker&apos;s accounts that
+                              the speaker gave us themselves. We do not look up
+                              accounts you have not listed
                             </li>
                             <li>
                               • Before a post tags a Bluesky account, we check
@@ -738,6 +739,14 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                               confirm the account exists. Only the handle is
                               sent, and a handle that does not check out is
                               written as your plain name
+                            </li>
+                            <li>
+                              • Posts about a sponsor may tag the company&apos;s
+                              Bluesky account. Organizers enter the
+                              company&apos;s handle and LinkedIn page in our
+                              sponsor records. The handle is checked with
+                              Bluesky&apos;s public directory when it is saved
+                              and before a post tags it. Only the handle is sent
                             </li>
                           </ul>
                         </div>

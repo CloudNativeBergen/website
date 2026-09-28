@@ -199,8 +199,13 @@ export interface RecordedTag {
   /** Absent when saved while Bluesky was unreachable. */
   did?: string
   name: string
-  /** Absent: the tag is not a speaker's (a sponsor's, #1154) — never withheld. */
+  /** Absent: the tag is not a speaker's (a sponsor's, #1154). */
   speakerId?: string
+  /**
+   * A sponsor company's tag (#1154). Withheld when an opted-out speaker of
+   * this conference lists the same handle: the opt-out always wins.
+   */
+  sponsorId?: string
   optedOut: boolean
   /**
    * The speaker is gone since approval: deleted (the weak reference dangles)
@@ -220,7 +225,9 @@ export interface SocialPostMentionDocument {
   _type: 'socialPostMention'
   handle: string
   did?: string
-  speaker: { _type: 'reference'; _ref: string; _weak: true }
+  /** Exactly one of `speaker` and `sponsor` (a sponsor company, #1154). */
+  speaker?: { _type: 'reference'; _ref: string; _weak: true }
+  sponsor?: { _type: 'reference'; _ref: string; _weak: true }
   name: string
   status: 'tagged' | 'unresolved'
 }
