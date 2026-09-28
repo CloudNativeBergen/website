@@ -964,4 +964,23 @@ describe('sponsor tags', () => {
       }),
     ).toEqual({ handle: 'acme.example', result: 'resolved' })
   })
+
+  it('the tag button offers no one for a prospect’s Task', async () => {
+    dataset.push({
+      _id: 'task-prospect',
+      _type: 'marketingTask',
+      conference: ref(CONF_A),
+      kind: 'publishing',
+      channel: 'bluesky',
+      subject: ref('sp-globex'),
+    })
+    TENANTS['task-prospect'] = { _type: 'marketingTask', conferenceId: CONF_A }
+    await expect(
+      marketing().task.resolveTag({
+        taskId: 'task-prospect',
+        speakerId: 'sp-globex',
+      }),
+    ).rejects.toMatchObject({ message: /Only the people this Task is about/ })
+    expect(askedBluesky()).toEqual([])
+  })
 })
