@@ -210,7 +210,7 @@ export function tagOwners(
   people: readonly TaggablePerson[],
   mentions: readonly Pick<
     MentionRecord,
-    'handle' | 'speakerId' | 'status' | 'name'
+    'handle' | 'speakerId' | 'status' | 'name' | 'gone'
   >[],
 ): Map<string, TagOwnership> {
   const ids = new Set(people.map((p) => p.speakerId))
@@ -245,7 +245,7 @@ function bindTags(
   people: readonly TaggablePerson[],
   mentions: readonly Pick<
     MentionRecord,
-    'handle' | 'speakerId' | 'status' | 'name'
+    'handle' | 'speakerId' | 'status' | 'name' | 'gone'
   >[],
 ): Map<string, string[]> {
   const known = byHandle(people)
@@ -264,7 +264,10 @@ function bindTags(
     const recorded = mentions.filter(
       (m) => m.status === 'tagged' && normaliseHandle(m.handle) === handle,
     )
-    for (const m of recorded) if (nameIndex(body, m.name) < 0) add(m.speakerId)
+    // A gone speaker's record reads as the neutral words (#1232): whether
+    // their name is in the body is unknowable, so it earns no priority.
+    for (const m of recorded)
+      if (!m.gone && nameIndex(body, m.name) < 0) add(m.speakerId)
     for (const m of recorded) add(m.speakerId)
     const sharers = known.get(handle) ?? []
     if (owners.length === 0 && sharers.length === 1) add(sharers[0].speakerId)
@@ -322,7 +325,7 @@ export function occurrenceOwnersWithRoster(
   people: readonly TaggablePerson[],
   mentions: readonly Pick<
     MentionRecord,
-    'handle' | 'speakerId' | 'status' | 'name'
+    'handle' | 'speakerId' | 'status' | 'name' | 'gone'
   >[],
 ): Map<string, string[]> {
   return bindTags(body, people, mentions)
@@ -337,7 +340,7 @@ export function occurrenceOwners(
   body: string,
   mentions: readonly Pick<
     MentionRecord,
-    'handle' | 'speakerId' | 'status' | 'name'
+    'handle' | 'speakerId' | 'status' | 'name' | 'gone'
   >[],
 ): Map<string, string[]> {
   return bindTags(body, [], mentions)
