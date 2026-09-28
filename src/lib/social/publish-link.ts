@@ -54,16 +54,23 @@ export function variantShortLinkOrigin(
  * `null` for a variant without a code. Global: use it with `replace`, or
  * `search` (which ignores `lastIndex`), never with a stateful `test`.
  */
+/** Prose punctuation a URL in copy may run into, as a character-class body. */
+const PROSE = String.raw`?!.,;:)\]}'"»…’`
+
 export function shortLinkPattern(
   shortCode: string | null | undefined,
 ): RegExp | null {
   const code = normalizeShortCode(shortCode)
   return code
     ? new RegExp(
-        // The WHOLE URL: an optional query or fragment, then only prose
-        // punctuation before whitespace or the end — so `/go/<code>/extra`,
-        // `-bad` or `.bad` (not a route `/go/` serves) never match a prefix.
-        `https?://[^\\s/?#]+/go/${code}(?:[?#]\\S*?)?(?=[.,;:!?)\\]}'"]*(?:\\s|$))`,
+        // The WHOLE URL. A query or fragment needs a character after its `?`
+        // or `#` and never ENDS in prose punctuation, so "Seen it? …/go/x?"
+        // keeps the organizer's `?`. Then nothing that continues a URL — so
+        // `/extra`, `-bad` or `.bad` (not a route `/go/` serves) never match
+        // a prefix — while `…`, an emoji, `»` or `’s` still end one.
+        String.raw`https?://[^\s/?#]+/go/${code}` +
+          String.raw`(?:[?#][^\s${PROSE}]+(?:\S*[^\s${PROSE}])?)?` +
+          String.raw`(?![a-z0-9/\-_~%]|\.[a-z0-9])`,
         'gi',
       )
     : null

@@ -121,6 +121,34 @@ describe('shortLinkPattern — the short URL on any host (review P1)', () => {
     )
   })
 
+  it.each([
+    // [text after the code, expected output] — the URL is `<url>` once swapped.
+    ['?', 'Seen it? <url>?'],
+    ['?!', 'Seen it? <url>?!'],
+    ['.', 'Seen it? <url>.'],
+    [')', 'Seen it? <url>)'],
+    ['…', 'Seen it? <url>…'],
+    [' 🚀', 'Seen it? <url> 🚀'],
+    ['🚀', 'Seen it? <url>🚀'],
+    ['»', 'Seen it? <url>»'],
+    ['’s', 'Seen it? <url>’s'],
+    ['?utm=x', 'Seen it? <url>'],
+    ['?utm=x.', 'Seen it? <url>.'],
+    ['#frag', 'Seen it? <url>'],
+    ['#frag!', 'Seen it? <url>!'],
+    ['', 'Seen it? <url>'],
+    // Not a route `/go/` serves: never a prefix match.
+    ['/extra', 'Seen it? https://o.ex/go/abc987/extra'],
+    ['-bad', 'Seen it? https://o.ex/go/abc987-bad'],
+    ['.bad', 'Seen it? https://o.ex/go/abc987.bad'],
+    ['2', 'Seen it? https://o.ex/go/abc9872'],
+  ])('after the code, %j → %j', (after, expected) => {
+    const body = `Seen it? https://o.ex/go/abc987${after}`
+    const pattern = shortLinkPattern('abc987')!
+    expect(body.replace(pattern, () => '<url>')).toBe(expected)
+    expect(body.search(pattern) !== -1).toBe(expected.includes('<url>'))
+  })
+
   it('is null for a variant without a code, or a stored value that is not one', () => {
     expect(shortLinkPattern(null)).toBeNull()
     expect(shortLinkPattern('not a code')).toBeNull()
