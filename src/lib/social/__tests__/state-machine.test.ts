@@ -431,6 +431,15 @@ describe('failureNotice — what a failed variant says about itself (#1130)', ()
     ).toEqual({ error: 'Token expired', afterAccept: true, retryAlone: false })
   })
 
+  it('a later retry that never reached Buffer is NOT an after-accept error', () => {
+    expect(
+      failureNotice({
+        status: 'failed',
+        attempts: [leg('submitted'), leg('rejected', 'x'), leg('transient')],
+      }),
+    ).toMatchObject({ afterAccept: false, retryAlone: true })
+  })
+
   it('a refusal or a dead connection is not "retry alone"; a transient give-up is', () => {
     for (const outcome of ['rejected', 'credential-expired'] as const)
       expect(

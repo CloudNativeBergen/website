@@ -76,7 +76,7 @@ const VENDOR_MESSAGE_MAX = 300
  * A FAILED CONFIRMATION (#1130, spec §3.3, §4): the asynchronous publisher —
  * Buffer, the only one there is (#1129) — accepted the post, then reported
  * an error, lost it, or never settled it. Buffer's error is terminal and
- * never retried, and its usual cause is LinkedIn's re-authorization inside
+ * never retried by us, and its usual cause is LinkedIn's re-authorization inside
  * Buffer's UI: an organization-wide problem any organizer may fix. So EVERY
  * organizer of the organization hears it (one row each, deduplicated),
  * carrying Buffer's own message, linked to the post's copy-ready view where
