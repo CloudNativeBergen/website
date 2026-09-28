@@ -268,10 +268,12 @@ describe('marketing.plan.create — shape', () => {
       // Bluesky resolves the tagged link into the copy (the card is made of
       // it); LinkedIn keeps it off the body — it is the first comment
       // (spec §3.1, #1134) — and carries it on the variant all the same.
+      const short = `https://cloudnativebergen.dev/go/${variant.shortCode}`
+      expect(variant.body, task.key).not.toContain(variant.link)
       if (variant.platform === 'linkedin') {
-        expect(variant.body, task.key).not.toContain(variant.link)
+        expect(variant.body, task.key).not.toContain(short)
       } else {
-        expect(variant.body, task.key).toContain(variant.link)
+        expect(variant.body, task.key).toContain(short)
       }
     }
     // Every Task is assigned to the plan owner.

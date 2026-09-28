@@ -265,6 +265,13 @@ export interface SocialVariantEditorData {
    */
   conferenceDomains: string[]
   /**
+   * The link a reader sees, through `publishLinkFields` — the ONE long→short
+   * mapping the publisher uses: a Task's `/go/<code>` short link, or the
+   * variant's own `link` when it has no code (a standalone post) or its
+   * conference no usable domain (short-links spec §2.3).
+   */
+  postedLink: string | null
+  /**
    * The platform's hosting zone as the SERVER resolves it, so the browser's
    * live rule keeps hosted tenants apart exactly as the router does (see
    * `PublishContext.platformZone`). Optional for fixtures; the read sets it.

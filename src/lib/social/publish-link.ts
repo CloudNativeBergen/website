@@ -45,3 +45,34 @@ export function variantShortLinkOrigin(
 ): string | null {
   return normalizeShortCode(shortCode) ? findOutboundOrigin(conference) : null
 }
+
+/**
+ * A variant's `/go/<code>` short URL on ANY host, matched by its path. Copy
+ * holds the short URL `{url}` resolved to on the primary domain OF THAT DAY;
+ * a conference that has since reordered or replaced its domains builds a
+ * different origin today, and the code is what identifies the link (§2.2).
+ * `null` for a variant without a code. Global: use it with `replace`, or
+ * `search` (which ignores `lastIndex`), never with a stateful `test`.
+ */
+/** Prose punctuation a URL in copy may run into, as a character-class body. */
+const PROSE = String.raw`?!.,;:)\]}'"»…’`
+
+export function shortLinkPattern(
+  shortCode: string | null | undefined,
+): RegExp | null {
+  const code = normalizeShortCode(shortCode)
+  return code
+    ? new RegExp(
+        // The WHOLE URL. A query or fragment needs a character after its `?`
+        // or `#` and never ENDS in prose punctuation, so "Seen it? …/go/x?"
+        // keeps the organizer's `?`. Then nothing that continues a URL — so
+        // `/extra`, `-bad` or `.bad` (not a route `/go/` serves) never match
+        // a prefix — while `…`, an emoji, `»` or `’s` still end one.
+        // (`{0,}`, not `*`: the tenancy lint reads `*[` as a GROQ root.)
+        String.raw`https?://[^\s/?#]+/go/${code}` +
+          String.raw`(?:[?#][^\s${PROSE}]+(?:\S{0,}[^\s${PROSE}])?)?` +
+          String.raw`(?![a-z0-9/\-_~%]|\.[a-z0-9])`,
+        'gi',
+      )
+    : null
+}

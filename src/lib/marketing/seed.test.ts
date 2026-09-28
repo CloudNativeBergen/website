@@ -26,6 +26,7 @@ const conference: SeedConference = {
   venueName: 'Grieghallen',
   ticketCapacity: 400,
   baseUrl: 'https://cloudnativebergen.dev',
+  shortLinkOrigin: 'https://cloudnativebergen.dev',
   cfpStartDate: '2027-01-10',
   cfpEndDate: '2027-03-01',
   cfpNotifyDate: '2027-04-01',
@@ -232,9 +233,14 @@ describe('expandTemplate — Tasks', () => {
     // is the first comment (§3.1, #1134). Its Bluesky sibling still carries
     // the URL in the copy, where the platform makes a card of it.
     expect(variant.body).not.toContain(variant.link)
+    expect(variant.body).not.toContain('/go/')
     const bs = byKey(plan, 'cfp', 'cfpOpen:bluesky')
     const bsVariant = plan.variants.find((v) => v._id === bs.variantId)!
-    expect(bsVariant.body).toContain(bsVariant.link)
+    // The copy carries the SHORT link (short-links spec §2.3).
+    expect(bsVariant.body).toContain(
+      `https://cloudnativebergen.dev/go/${bsVariant.shortCode}`,
+    )
+    expect(bsVariant.body).not.toContain(bsVariant.link)
     // Every publishing Task has exactly one variant, and every variant a post.
     const publishing = plan.tasks.filter((t) => t.kind === 'publishing')
     expect(plan.variants).toHaveLength(publishing.length)

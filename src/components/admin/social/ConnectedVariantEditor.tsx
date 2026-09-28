@@ -67,6 +67,11 @@ export interface VariantTaskContext {
   targetPage: string | null
   /** The tagged link derived from it, or null while none is picked. */
   taggedLink: string | null
+  /**
+   * The link a reader sees — the short link the tagged one sits behind
+   * (short-links spec §2.3) — shown in the Link field and the preview.
+   */
+  postedLink: string | null
 }
 
 /**
@@ -331,6 +336,7 @@ export function ConnectedVariantEditor({
         value={shown}
         onChange={setValue}
         linkLocked={task !== undefined}
+        postedLink={task?.postedLink}
         saving={update.isPending || pendingTag !== null}
         error={
           error ??

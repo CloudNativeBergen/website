@@ -658,9 +658,10 @@ describe('a Library Recipe on a custom Campaign (Templates spec §5)', () => {
                 `utm_campaign=${campaignKey}`,
                 'utm_campaign=<campaign>',
               ),
+              // …and the body's short link, which carries its own fresh code.
               body: variant?.body.replace(
-                `utm_campaign=${campaignKey}`,
-                'utm_campaign=<campaign>',
+                `/go/${variant.shortCode}`,
+                '/go/<code>',
               ),
             }
           }),

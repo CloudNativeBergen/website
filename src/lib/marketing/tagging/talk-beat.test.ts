@@ -55,7 +55,11 @@ function build(
     dates,
     campaign: { _id: 'camp', key: 'postEvent' },
     planId: 'plan',
-    conference: { _id: 'conf-A', baseUrl: 'https://example.dev' },
+    conference: {
+      _id: 'conf-A',
+      baseUrl: 'https://example.dev',
+      shortLinkOrigin: 'https://example.dev',
+    },
     values: { event: 'CNB 2027' },
     assigneeId: 'owner',
     origin: 'expansion',

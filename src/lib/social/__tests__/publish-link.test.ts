@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { publishLinkFields, variantShortLinkOrigin } from '../publish-link'
+import {
+  publishLinkFields,
+  shortLinkPattern,
+  variantShortLinkOrigin,
+} from '../publish-link'
 import { shortLinkUrl } from '@/lib/marketing/short-code'
 
 const LONG =
@@ -89,5 +93,64 @@ describe('shortLinkUrl', () => {
     expect(shortLinkUrl('https://x.dev', 'abc234')).toBe(
       'https://x.dev/go/abc234',
     )
+  })
+})
+
+describe('shortLinkPattern — the short URL on any host (review P1)', () => {
+  it('matches the code on any host, and nothing else', () => {
+    const body =
+      'a https://old.example/go/abc987 b https://new.example/go/ABC987. c https://x.example/go/abc9872 d https://x.example/go/abc986'
+    expect(body.replace(shortLinkPattern('abc987')!, () => '<url>')).toBe(
+      'a <url> b <url>. c https://x.example/go/abc9872 d https://x.example/go/abc986',
+    )
+  })
+  it('matches only a COMPLETE short URL: query, fragment and prose punctuation, never a longer path (review)', () => {
+    const swap = (body: string) =>
+      body.replace(shortLinkPattern('abc987')!, () => '<url>')
+    expect(swap('See https://o.example/go/abc987.')).toBe('See <url>.')
+    expect(swap('(https://o.example/go/abc987), next')).toBe('(<url>), next')
+    expect(swap('https://o.example/go/abc987?x=1#top end')).toBe('<url> end')
+    expect(swap('https://o.example/go/abc987/extra')).toBe(
+      'https://o.example/go/abc987/extra',
+    )
+    expect(swap('https://o.example/go/abc987-bad')).toBe(
+      'https://o.example/go/abc987-bad',
+    )
+    expect(swap('https://o.example/go/abc987.bad')).toBe(
+      'https://o.example/go/abc987.bad',
+    )
+  })
+
+  it.each([
+    // [text after the code, expected output] — the URL is `<url>` once swapped.
+    ['?', 'Seen it? <url>?'],
+    ['?!', 'Seen it? <url>?!'],
+    ['.', 'Seen it? <url>.'],
+    [')', 'Seen it? <url>)'],
+    ['…', 'Seen it? <url>…'],
+    [' 🚀', 'Seen it? <url> 🚀'],
+    ['🚀', 'Seen it? <url>🚀'],
+    ['»', 'Seen it? <url>»'],
+    ['’s', 'Seen it? <url>’s'],
+    ['?utm=x', 'Seen it? <url>'],
+    ['?utm=x.', 'Seen it? <url>.'],
+    ['#frag', 'Seen it? <url>'],
+    ['#frag!', 'Seen it? <url>!'],
+    ['', 'Seen it? <url>'],
+    // Not a route `/go/` serves: never a prefix match.
+    ['/extra', 'Seen it? https://o.ex/go/abc987/extra'],
+    ['-bad', 'Seen it? https://o.ex/go/abc987-bad'],
+    ['.bad', 'Seen it? https://o.ex/go/abc987.bad'],
+    ['2', 'Seen it? https://o.ex/go/abc9872'],
+  ])('after the code, %j → %j', (after, expected) => {
+    const body = `Seen it? https://o.ex/go/abc987${after}`
+    const pattern = shortLinkPattern('abc987')!
+    expect(body.replace(pattern, () => '<url>')).toBe(expected)
+    expect(body.search(pattern) !== -1).toBe(expected.includes('<url>'))
+  })
+
+  it('is null for a variant without a code, or a stored value that is not one', () => {
+    expect(shortLinkPattern(null)).toBeNull()
+    expect(shortLinkPattern('not a code')).toBeNull()
   })
 })

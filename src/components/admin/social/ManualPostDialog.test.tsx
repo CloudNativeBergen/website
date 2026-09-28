@@ -80,6 +80,7 @@ const editor = (manualBody: string | null): SocialVariantEditorData => ({
   },
   post: { attachments: [], defaultScheduledAt: null },
   conferenceDomains: [],
+  postedLink: null,
   // As the server answers since round 5: always a checked body.
   manualBody: manualBody
     ? { body: manualBody, untagged: ['Alice Smith'], removed: 0 }

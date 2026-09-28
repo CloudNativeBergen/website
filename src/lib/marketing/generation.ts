@@ -16,7 +16,6 @@
  */
 
 import { createHash, randomUUID } from 'node:crypto'
-import { conferenceBaseUrl } from '@/lib/conference/baseUrl'
 import { getCurrentDateTime, osloTodayDateString } from '@/lib/time'
 import { withTimeout } from '@/lib/social/with-timeout'
 import { ceilingWarningsFor } from './ceiling-check'
@@ -37,6 +36,7 @@ import {
   emptyRecords,
   appendRecords,
   generatedTaskKey,
+  materializeConference,
   slotAt,
   WORK_SLOT,
   type TaskRecords,
@@ -314,7 +314,7 @@ function buildBatch(
 ): TaskRecords {
   const { campaign } = batch
   const values = conferenceValuesFor(context.conference)
-  const baseUrl = conferenceBaseUrl(context.conference)
+  const conference = materializeConference(context.conference)
   const records = emptyRecords()
   for (const { item, dates } of batch.beats) {
     appendRecords(
@@ -328,7 +328,7 @@ function buildBatch(
         tags,
         campaign: { _id: campaign._id, key: campaign.key },
         planId: context.plan._id,
-        conference: { _id: context.conference._id, baseUrl },
+        conference,
         values,
         assigneeId: ownerId,
         taskId: (key) => generatedTaskId(campaign._id, key),

@@ -12,6 +12,8 @@
 
 import {
   isEdited,
+  replaceLinks,
+  sourceLinks,
   isTemplateText,
   sourceAnchor,
   sourceDate,
@@ -80,11 +82,15 @@ const anchorOf = (
     campaign,
   })
 
-/** The post as written, with this edition's tagged link back as `{url}`. */
+/**
+ * The post as written, with this edition's link back as `{url}` — the short
+ * URL `{url}` resolved to (short-links spec §2.3) and the long tagged link
+ * older copy carries.
+ */
 function literalCopy(task: CopySourceTask): string {
   const v = task.variant
   if (!v) return ''
-  return v.link ? v.body.split(v.link).join('{url}') : v.body
+  return replaceLinks(v.body, sourceLinks(v), '{url}')
 }
 
 /**
@@ -120,7 +126,13 @@ export function savePreview(source: SaveSource): ReviewItem[] {
             ]
           : []),
         ...(carriesLiteralCopy(task, stored)
-          ? [{ ...about, type: 'copy' as const, text: literalCopy(task) }]
+          ? [
+              {
+                ...about,
+                type: 'copy' as const,
+                text: literalCopy(task),
+              },
+            ]
           : []),
       ]
     }),

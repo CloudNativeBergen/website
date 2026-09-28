@@ -22,6 +22,7 @@ import {
   resolveAnchor,
   slotAt,
   WORK_SLOT,
+  type MaterializeConference,
   type PlaceholderValues,
   type SubjectLink,
   type TaskRecords,
@@ -277,7 +278,7 @@ export function subjectBeatDates(input: {
 export interface BeatContext {
   campaign: { _id: string; key: string }
   planId: string
-  conference: { _id: string; baseUrl: string }
+  conference: MaterializeConference
   /** Conference placeholder values. */
   values: PlaceholderValues
   assigneeId: string

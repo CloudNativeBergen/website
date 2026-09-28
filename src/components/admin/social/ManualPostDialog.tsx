@@ -90,6 +90,7 @@ export function ManualPostDialog({
         <ManualPostView
           key={loaded.variant._id}
           variant={loaded.variant}
+          postedLink={loaded.postedLink}
           postAttachments={loaded.post.attachments}
           conferenceDomains={loaded.conferenceDomains}
           platformZone={loaded.platformZone ?? null}

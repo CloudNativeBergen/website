@@ -158,6 +158,7 @@ function source(): SaveSource {
         variant: {
           body: 'Join us 1 June 2027! https://x.dev/community?utm=1',
           link: 'https://x.dev/community?utm=1',
+          shortCode: null,
           scheduledAt: '2027-01-05T17:00:00.000Z',
         },
       },

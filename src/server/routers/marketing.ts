@@ -22,6 +22,7 @@ import {
   appendRecords,
   conferenceValuesFor,
   emptyRecords,
+  materializeConference,
   resolveAnchor,
   slotAt,
   slotTimeFor,
@@ -55,7 +56,7 @@ import { adminProcedure, resolveConferenceId, router } from '@/server/trpc'
 import { loadReport } from '@/lib/marketing/report'
 import { buildReportCsv } from '@/lib/marketing/report-csv'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
-import { conferenceBaseUrl } from '@/lib/conference/baseUrl'
+import { conferenceBaseUrl, findOutboundOrigin } from '@/lib/conference/baseUrl'
 import {
   shortCodeForMutation,
   shortCodeMinterFor,
@@ -168,7 +169,7 @@ import {
   setTaskDate,
   updateTaskFields,
 } from '@/lib/marketing/sanity'
-import { copyPlan } from '@/lib/marketing/copy'
+import { copyPlan, replaceLinks } from '@/lib/marketing/copy'
 import {
   getCopySource,
   getCopySources,
@@ -179,7 +180,11 @@ import {
   channelCeilingWarnings,
 } from '@/lib/marketing/ceiling-check'
 import { taggedUrl } from '@/lib/marketing/link'
-import { pagePickerOptions } from '@/lib/marketing/pages'
+import {
+  isShortLinkPath,
+  pagePickerOptions,
+  SHORT_LINK_PATH_ISSUE,
+} from '@/lib/marketing/pages'
 import type {
   CampaignLedgerView,
   PlanView,
@@ -200,7 +205,11 @@ import {
   getSocialVariantEditorData,
 } from '@/lib/social/sanity'
 import { scheduleIssues } from '@/lib/social/schedule-check'
-import { variantShortLinkOrigin } from '@/lib/social/publish-link'
+import {
+  publishLinkFields,
+  shortLinkPattern,
+  variantShortLinkOrigin,
+} from '@/lib/social/publish-link'
 import {
   canOrganizerTransition,
   mayAlreadyBeLive,
@@ -280,6 +289,17 @@ function milestonesOrPrecondition(conference: Conference) {
   }
 }
 
+/**
+ * A stored destination that derives can still be a short link: Studio edits
+ * `targetPage` past the input schema, and `taggedUrl` admits `/go/<code>`.
+ * A link never points at a link (short-links spec §2.3) — the site-path
+ * check's `/go/` rule, run again on the stored value where the link is needed.
+ */
+function refuseLinkToLink(targetPage: string): void {
+  if (isShortLinkPath(targetPage))
+    throw new TRPCError({ code: 'BAD_REQUEST', message: SHORT_LINK_PATH_ISSUE })
+}
+
 /** The slice of the domain conference a new plan is built against. */
 function seedConference(conference: Conference): SeedConference {
   return {
@@ -289,6 +309,7 @@ function seedConference(conference: Conference): SeedConference {
     venueName: conference.venueName,
     ticketCapacity: conference.ticketCapacity,
     baseUrl: conferenceBaseUrl(conference),
+    shortLinkOrigin: findOutboundOrigin(conference),
     cfpStartDate: conference.cfpStartDate,
     cfpEndDate: conference.cfpEndDate,
     cfpNotifyDate: conference.cfpNotifyDate,
@@ -862,10 +883,10 @@ export const marketingRouter = router({
               'This sponsor has no sponsorForConference relationship in this conference.',
           })
         const current = await requireConference()
-        const conference = {
+        const conference = materializeConference({
+          ...current,
           _id: conferenceId,
-          baseUrl: conferenceBaseUrl(current),
-        }
+        })
         // An anchored Task takes the standard slot of its Channel or Kind, not
         // a typed time: `planRedates` recomputes that slot, so any other time
         // would move on the next sweep with no Milestone changed (§2.2).
@@ -986,8 +1007,9 @@ export const marketingRouter = router({
           })
         const conference = await requireConference()
         // Validate even hand-edited destinations before creating a conversation.
+        let destination: string
         try {
-          taggedUrl({
+          destination = taggedUrl({
             baseUrl: conferenceBaseUrl(conference),
             targetPage: task.targetPage,
             channel: 'outreach',
@@ -1001,6 +1023,7 @@ export const marketingRouter = router({
               'The outreach destination must be on this conference site.',
           })
         }
+        refuseLinkToLink(task.targetPage)
         let sponsor: Awaited<ReturnType<typeof resolveOutreachSponsor>> = null
         if (expectedType === 'speaker') {
           if (
@@ -1078,12 +1101,29 @@ export const marketingRouter = router({
           conferenceId,
           task.shortCode,
         )
+        // The message carries the SHORT link (short-links spec §2.3). A Task
+        // that predated the field had its long link prefilled; this send is
+        // where its code is minted, so that link is swapped here.
+        const shortLink = publishLinkFields(
+          { link: destination, shortCode: outreachCode.code },
+          variantShortLinkOrigin(outreachCode.code, conference),
+        ).link
+        // Also the short link itself on a host the conference has since
+        // dropped: the message goes out on the current one.
+        const staleShort = shortLinkPattern(outreachCode.code)
+        const body = shortLink
+          ? replaceLinks(
+              input.body,
+              [...(staleShort ? [staleShort] : []), destination],
+              shortLink,
+            )
+          : input.body
         let message
         try {
           message = await addMessage({
             conversationId,
             authorId: ctx.speaker._id,
-            body: input.body,
+            body,
             marketingTask: {
               id: task._id,
               rev: input.rev,
@@ -1158,6 +1198,17 @@ export const marketingRouter = router({
             taggedLink = null
           }
         }
+        // The link a reader sees is the short one (short-links spec §2.3):
+        // an outreach Task carries its code, a post's lives on its variant.
+        // A code that predates the field is minted by the next mutation that
+        // needs the link — never here — so until then the long link shows.
+        const shortCode = isOutreach(task.kind)
+          ? task.shortCode
+          : data.variant?.variant.shortCode
+        const shortLinkOrigin = variantShortLinkOrigin(shortCode, conference)
+        const postedLink =
+          publishLinkFields({ link: taggedLink, shortCode }, shortLinkOrigin)
+            .link ?? null
         // A speaker who links our own account gets no Tag button (§4.1).
         const own =
           data.tagPeople.length > 0
@@ -1171,8 +1222,9 @@ export const marketingRouter = router({
               : p,
           ),
           baseUrl,
+          shortLinkOrigin,
           taggedLink,
-          outreachBody: outreachBody(task, conference.title, taggedLink),
+          outreachBody: outreachBody(task, conference.title, postedLink),
           pages: pagePickerOptions(task.subject),
           organizers: (speakers ?? []).map((s) => ({
             _id: s._id,
@@ -1434,6 +1486,7 @@ export const marketingRouter = router({
                   : 'The target page is not valid',
             })
           }
+          refuseLinkToLink(task.targetPage)
           // Minted BEFORE validation (nothing is written until the approval
           // lands): §2.2 — a variant that predates the field gets its code in
           // the first MUTATION that needs its link, this is one of them — and
@@ -2118,10 +2171,10 @@ export const marketingRouter = router({
               ? expandCampaignSubjectless({
                   campaign: { _id: campaign._id, key: campaign.key },
                   planId: campaign.planId,
-                  conference: {
+                  conference: materializeConference({
+                    ...conference,
                     _id: conferenceId,
-                    baseUrl: conferenceBaseUrl(conference),
-                  },
+                  }),
                   values: conferenceValuesFor(conference),
                   assigneeId: campaign.planOwnerId ?? ctx.speaker._id,
                   recipes,

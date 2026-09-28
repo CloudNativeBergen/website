@@ -26,6 +26,7 @@ const conference = {
   city: 'Bergen',
   venueName: 'Grieghallen',
   baseUrl: 'https://cloudnativebergen.dev',
+  shortLinkOrigin: 'https://cloudnativebergen.dev',
   cfpStartDate: '2027-01-10',
   cfpEndDate: '2027-03-01',
   cfpNotifyDate: '2027-04-01',
@@ -140,7 +141,11 @@ describe('buildSubjectBeat', () => {
       dates: dates!,
       campaign: { _id: 'camp-speakers', key: 'speakers' },
       planId: 'plan-A',
-      conference: { _id: conference._id, baseUrl: conference.baseUrl },
+      conference: {
+        _id: conference._id,
+        baseUrl: conference.baseUrl,
+        shortLinkOrigin: conference.shortLinkOrigin,
+      },
       values: conferenceValuesFor(conference),
       assigneeId: 'sp-owner',
       origin: 'expansion',
@@ -189,12 +194,20 @@ describe('buildSubjectBeat', () => {
 
   it('resolves subject placeholders and keeps {hook} for the organizer', () => {
     const beat = build()
-    const body = beat.variants.find((v) => v.platform === 'bluesky')!.body
+    const bluesky = beat.variants.find((v) => v.platform === 'bluesky')!
+    const body = bluesky.body
     expect(body).toContain(
       'Ada (Staff Engineer) is speaking at Cloud Native Bergen 2027',
     )
     expect(body).toContain('"Pods at scale" — {hook}')
-    expect(body).toContain('utm_content=speakerCard%3Aspeaker-1%3Abluesky')
+    // `{url}` is the short link; the tagged link stays on the variant.
+    expect(body).toContain(
+      `https://cloudnativebergen.dev/go/${bluesky.shortCode}`,
+    )
+    expect(body).not.toContain('utm_')
+    expect(bluesky.link).toContain(
+      'utm_content=speakerCard%3Aspeaker-1%3Abluesky',
+    )
     expect(beat.tasks[0].alt).toContain('Speaker card: Ada, Staff Engineer.')
   })
 
@@ -236,7 +249,11 @@ describe('expandSubjectlessCadence (countdown)', () => {
       now,
       campaign: { _id: 'camp-final', key: 'finalPush' },
       planId: 'plan-A',
-      conference: { _id: conference._id, baseUrl: conference.baseUrl },
+      conference: {
+        _id: conference._id,
+        baseUrl: conference.baseUrl,
+        shortLinkOrigin: conference.shortLinkOrigin,
+      },
       values: conferenceValuesFor(conference),
       assigneeId: 'sp-owner',
       taskId: (key) => `task:${key}`,

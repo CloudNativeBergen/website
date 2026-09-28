@@ -250,6 +250,7 @@ function variantData(
     },
     post: { attachments: [], defaultScheduledAt: '2027-01-10T07:00:00.000Z' },
     conferenceDomains: ['conf-a.example.no'],
+    postedLink: null,
   }
 }
 
@@ -530,6 +531,33 @@ describe('marketing.task.approve', () => {
       marketing().task.approve({ taskId: 'task-ours' }),
     ).rejects.toMatchObject({ code: 'BAD_REQUEST', message: /target page/ })
     expect(h.approveTask).toHaveBeenCalledTimes(1)
+  })
+
+  it('refuses a stored destination that does not derive, before minting or writing anything', async () => {
+    h.getTaskEditorData.mockResolvedValue(
+      stored({ targetPage: '//foreign.example/x' }),
+    )
+    await expect(
+      marketing().task.approve({ taskId: 'task-ours' }),
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: expect.stringContaining('leaves https://cloudnativebergen.dev'),
+    })
+    expect(h.scheduleIssues).not.toHaveBeenCalled()
+    expect(h.approveTask).not.toHaveBeenCalled()
+  })
+
+  it('refuses a stored destination under /go/ — it derives, but a link never points at a link (short-links spec §2.3)', async () => {
+    // Studio can hand-edit `targetPage` past the input schema.
+    h.getTaskEditorData.mockResolvedValue(stored({ targetPage: '/go/abc987' }))
+    await expect(
+      marketing().task.approve({ taskId: 'task-ours' }),
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: 'The path must not be a short link (/go/…).',
+    })
+    expect(h.scheduleIssues).not.toHaveBeenCalled()
+    expect(h.approveTask).not.toHaveBeenCalled()
   })
 
   it('never follows a foreign variant: a publishing Task whose variant id was gated away has nothing to approve', async () => {

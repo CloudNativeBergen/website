@@ -246,7 +246,17 @@ export interface StoredTaskEditorData {
 export interface TaskEditorData extends StoredTaskEditorData {
   /** The conference origin the tagged link is built on. */
   baseUrl: string
-  /** Derived from the current target page (§3.4); null without one. */
+  /**
+   * The origin the Task's `/go/<code>` short link is built on (short-links
+   * spec §2.3), through `variantShortLinkOrigin`: null for a Task with no code
+   * yet (the long link shows until a mutation mints one) or a conference with
+   * no usable domain.
+   */
+  shortLinkOrigin: string | null
+  /**
+   * Derived from the current target page (§3.4); null without one. The
+   * DESTINATION a short link expands to.
+   */
   taggedLink: string | null
   outreachBody: string | null
   pages: PagePickerOption[]

@@ -233,6 +233,7 @@ function variantData(
     },
     post: { attachments: [], defaultScheduledAt: '2027-01-10T07:00:00.000Z' },
     conferenceDomains: [],
+    postedLink: null,
   }
 }
 

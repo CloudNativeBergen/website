@@ -24,6 +24,7 @@ import {
   ownDomainUrlsIn,
 } from '@/lib/social/provider/constraints'
 import { postUrlExample, postUrlIssue } from '@/lib/social/provider/manual'
+import { shortLinkPattern } from '@/lib/social/publish-link'
 import { renditionDownloadUrl, renditionRect } from '@/lib/social/rendition'
 import {
   SOCIAL_PLATFORM_LABELS,
@@ -34,6 +35,13 @@ import { CroppedImage } from './CroppedImage'
 
 export interface ManualPostViewProps {
   variant: SocialPostVariant
+  /**
+   * The link a reader sees (`SocialVariantEditorData.postedLink`): a Task's
+   * `/go/<code>` short link, or a standalone post's own link. What is shown,
+   * copied, appended and counted — never `variant.link`, the long tagged URL
+   * a short link expands to (short-links spec §2.3).
+   */
+  postedLink: string | null
   postAttachments: SocialPostAttachment[]
   /** Called with the pasted post URL once it passes the platform check. */
   onMarkPosted: (url: string) => void
@@ -78,6 +86,7 @@ const defaultImageSrc = (asset: SocialPostAttachment) =>
  */
 export function ManualPostView({
   variant,
+  postedLink,
   postAttachments,
   onMarkPosted,
   saving = false,
@@ -129,8 +138,14 @@ export function ManualPostView({
   // This opening's check is still running (review T4): nothing to copy yet.
   const checking = pending !== null && 'checking' in pending
   const checked = pending !== null && 'body' in pending ? pending : null
-  const body = checked?.body ?? variant.body
-  const link = variant.link?.trim() || null
+  const link = postedLink?.trim() || null
+  // The short URL is matched by its code on any host: a body resolved on a
+  // primary domain the conference has since changed holds it there, and the
+  // text is copied with the CURRENT link in its place (never saved).
+  const shortInBody = shortLinkPattern(variant.shortCode)
+  const stored = checked?.body ?? variant.body
+  const body =
+    link && shortInBody ? stored.replace(shortInBody, () => link) : stored
   // Where the link goes by hand (spec §3.1, #1134).
   //
   //   `comment` (LinkedIn) — the one placement that keeps the link OUT of the
@@ -148,7 +163,13 @@ export function ManualPostView({
   const linkAsComment = link !== null && placement === 'comment'
   const linkInBody =
     link !== null && placement !== null && placement !== 'comment'
-  const linkAppended = linkInBody && !body.includes(link)
+  // Copy resolved `{url}` to the short link; copy from before short links
+  // carries the long one. Either is the link already in the text.
+  const longLink = variant.link?.trim() || null
+  const linkAppended =
+    linkInBody &&
+    !body.includes(link) &&
+    !(longLink !== null && body.includes(longLink))
   /**
    * A body that reached this view carrying a link to our own site, on a
    * platform where the link is the first comment (spec §3.1, #1134). Save,
@@ -413,6 +434,14 @@ export function ManualPostView({
             {link}
             <ArrowTopRightOnSquareIcon className="size-3.5 shrink-0" />
           </a>
+          {longLink && longLink !== link && (
+            <p className="mt-1 text-xs break-all text-gray-600 dark:text-gray-300">
+              <span className="font-medium">Goes to </span>
+              <span data-testid="manual-link-destination" className="font-mono">
+                {longLink}
+              </span>
+            </p>
+          )}
         </Section>
       )}
 
