@@ -12,7 +12,7 @@ import type {
   MarketingAssetPick,
   ShareCardSource,
 } from './AttachmentSlot'
-import type { MarketingAssetRow } from '@/lib/marketing-asset'
+import { assetContext } from './asset-context'
 import { VariantEditor } from './VariantEditor'
 import {
   editorValueFrom,
@@ -39,13 +39,6 @@ import { clientTagIssues } from '@/lib/trpc/errors'
 
 /** The organizer image upload route; returns the asset id of our dataset. */
 const UPLOAD_ROUTE = '/api/admin/rich-text-image'
-
-/** Where an asset sits, as the picker names it under the title. */
-function assetContext(asset: MarketingAssetRow): string {
-  if (asset.subject) return `About ${asset.subject.name}`
-  if (asset.scope === 'edition') return asset.edition ?? 'An edition'
-  return 'Whole organization'
-}
 
 async function uploadImage(file: File): Promise<string> {
   const form = new FormData()

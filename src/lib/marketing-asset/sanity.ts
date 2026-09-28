@@ -84,7 +84,10 @@ export async function listMarketingAssets(
   orgId: string,
   conferenceId: string,
   filter: MarketingAssetFilter,
-  /** The picker shows no usage: it skips the post scan. */
+  /**
+   * Count "used in N posts": only the Assets page shows it, so the post scan
+   * is opt-in (the studio pickers and the post picker skip it).
+   */
   options: { countUsage?: boolean } = {},
 ): Promise<MarketingAssetRow[]> {
   const rows = await scopedFetch<
@@ -119,7 +122,7 @@ export async function listMarketingAssets(
     { cache: 'no-store' },
   )
   const used =
-    options.countUsage === false
+    options.countUsage !== true
       ? null
       : await countPostsUsingImages(
           orgId,
@@ -136,7 +139,7 @@ export async function listMarketingAssets(
 /**
  * How many of this organization's posts hold each image ("used in N
  * posts", spec §5): ONE read of the posts that hold any of them, rather than
- * a count per gallery row. Posts of any status, Studio drafts excluded. For
+ * a count per gallery row. Posts of any status; Studio drafts and release copies excluded. For
  * display only; never a delete precondition.
  */
 async function countPostsUsingImages(
@@ -148,7 +151,7 @@ async function countPostsUsingImages(
   const posts = await clientReadUncached.fetch<
     { refs: (string | null)[] | null }[] | null
   >(
-    `*[_type == "socialPost" && conference->organization._ref == $orgId && _id in path("*") && count(attachments[image.asset._ref in $assetIds]) > 0]{ "refs": attachments[].image.asset._ref }`,
+    `*[_type == "socialPost" && conference->organization._ref == $orgId && !(_id in path("drafts.**")) && !(_id in path("versions.**")) && count(attachments[image.asset._ref in $assetIds]) > 0]{ "refs": attachments[].image.asset._ref }`,
     { orgId, assetIds: [...new Set(assetIds)] },
     { cache: 'no-store' },
   )
@@ -172,7 +175,7 @@ async function readPostSubjectId(
   return scopedFetch<string | null>(
     clientReadUncached,
     { conferenceId },
-    `*[_type == "marketingTask" && _id in path("*") && defined(subject._ref) && variant->post._ref == $postId][0].subject._ref`,
+    `*[_type == "marketingTask" && !(_id in path("drafts.**")) && !(_id in path("versions.**")) && defined(subject._ref) && variant->post._ref == $postId][0].subject._ref`,
     { postId },
     { cache: 'no-store' },
   )
@@ -207,12 +210,10 @@ export async function listMarketingAssetsForPost(
   const [subjectId, rows] = await Promise.all([
     readPostSubjectId(conferenceId, postId),
     // Always every edition: the subject's assets lead from any of them.
-    listMarketingAssets(
-      orgId,
-      conferenceId,
-      { editions: 'all', search: filter.search },
-      { countUsage: false },
-    ),
+    listMarketingAssets(orgId, conferenceId, {
+      editions: 'all',
+      search: filter.search,
+    }),
   ])
   return rows
     .filter((row) => row.kind !== 'audio')

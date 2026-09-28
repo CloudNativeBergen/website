@@ -69,6 +69,8 @@ const filterSchema = z
     subjectId: z.string().min(1).max(200).optional(),
     tag: z.string().max(100).optional(),
     search: z.string().max(200).optional(),
+    /** Count "used in N posts" (the Assets page); off for every other reader. */
+    usage: z.boolean().optional(),
   })
   .optional()
 
@@ -82,7 +84,10 @@ export const marketingAssetRouter = router({
       requireCurrentOrgId(),
       resolveConferenceId(),
     ])
-    return listMarketingAssets(orgId, conferenceId, input ?? {})
+    const { usage, ...filter } = input ?? {}
+    return listMarketingAssets(orgId, conferenceId, filter, {
+      countUsage: usage === true,
+    })
   }),
 
   /**

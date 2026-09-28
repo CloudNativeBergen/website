@@ -250,9 +250,13 @@ export function AssetsPage({
     )
     return () => clearTimeout(timer)
   }, [search])
-  const list = api.marketingAsset.list.useQuery(filter, {
-    placeholderData: keepPreviousData,
-  })
+  // The one reader that shows "used in N posts", so the one that counts it.
+  const list = api.marketingAsset.list.useQuery(
+    { ...filter, usage: true },
+    {
+      placeholderData: keepPreviousData,
+    },
+  )
   const filters = api.marketingAsset.filters.useQuery()
   // A subject or tag whose last asset was edited or deleted leaves the menu;
   // its filter goes with it, rather than filtering on something unseen.

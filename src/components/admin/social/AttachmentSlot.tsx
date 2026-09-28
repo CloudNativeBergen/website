@@ -363,6 +363,10 @@ export function AttachmentSlot({
                 type="search"
                 value={marketingAssets.search}
                 onChange={(e) => marketingAssets.onSearchChange(e.target.value)}
+                // Inside the editor's form: Enter must not save the variant.
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') e.preventDefault()
+                }}
                 placeholder="Search title and tags"
                 className={clsx(inputClass, 'mt-0 pl-8')}
               />

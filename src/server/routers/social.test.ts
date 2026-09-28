@@ -1474,6 +1474,39 @@ describe('social.addPostAttachmentFromAsset (#1163)', () => {
     expect(h.addSocialPostAttachment).not.toHaveBeenCalled()
   })
 
+  it('refuses an asset whose Studio alt text is longer than a post may hold', async () => {
+    h.readMarketingAssetForPost.mockResolvedValue({
+      ...ORG_ASSET,
+      alt: 'a'.repeat(1001),
+    })
+    await expect(
+      social().addPostAttachmentFromAsset({
+        postId: 'post-ours',
+        marketingAssetId: 'asset-ours',
+      }),
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message:
+        "This asset's alt text is longer than 1000 characters. Shorten it in the asset gallery first.",
+    })
+    expect(h.addSocialPostAttachment).not.toHaveBeenCalled()
+    // At the limit it goes in.
+    h.readMarketingAssetForPost.mockResolvedValue({
+      ...ORG_ASSET,
+      alt: 'a'.repeat(1000),
+    })
+    await social().addPostAttachmentFromAsset({
+      postId: 'post-ours',
+      marketingAssetId: 'asset-ours',
+    })
+    expect(h.addSocialPostAttachment).toHaveBeenCalledWith(
+      'post-ours',
+      CONF_A,
+      expect.objectContaining({ alt: 'a'.repeat(1000) }),
+      expect.anything(),
+    )
+  })
+
   it('refuses an asset without alt text, which a post cannot carry', async () => {
     h.readMarketingAssetForPost.mockResolvedValue({ ...ORG_ASSET, alt: ' ' })
     await expect(

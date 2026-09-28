@@ -317,8 +317,18 @@ describe('marketingAsset.forPost (#1163)', () => {
 })
 
 describe('marketingAsset.list', () => {
-  it('lists this organization’s assets, read with the organization filter', async () => {
+  it('counts "used in N posts" only for the reader that asks (the Assets page)', async () => {
     const rows = await assets().list()
+    expect(rows[0].usedInPosts).toBeNull()
+    expect(
+      h.read.mock.calls.some(([q]) => String(q).includes('"socialPost"')),
+    ).toBe(false)
+    const counted = await assets().list({ usage: true })
+    expect(counted[0].usedInPosts).toBe(2)
+  })
+
+  it('lists this organization’s assets, read with the organization filter', async () => {
+    const rows = await assets().list({ usage: true })
     expect(rows).toEqual([
       { ...ROWS[0], softOnSocial: true, attachable: true, usedInPosts: 2 },
     ])

@@ -684,10 +684,12 @@ export const PickingAMarketingAsset: Story = {
   },
   play: async ({ canvasElement, args }) => {
     const picker = await openPicker(canvasElement)
+    // Enter finishes the search; it must not submit the editor's form.
     await userEvent.type(
       picker.getByRole('searchbox', { name: 'Search marketing assets' }),
-      'logo',
+      'logo{Enter}',
     )
+    await expect(args.onSave).not.toHaveBeenCalled()
     await expect(picker.getAllByRole('listitem')).toHaveLength(1)
     await userEvent.click(
       picker.getByRole('button', {

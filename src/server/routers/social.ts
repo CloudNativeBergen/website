@@ -75,6 +75,7 @@ import type {
   SocialVariantAttachment,
   VariantStatus,
 } from '@/lib/social/types'
+import { SOCIAL_ALT_MAX_LENGTH } from '@/lib/social/types'
 import type { VariantTransition } from '@/lib/social/store'
 import type { PublishInput, ValidationIssue } from '@/lib/social/provider'
 
@@ -690,6 +691,13 @@ export const socialRouter = router({
         })
       }
       const alt = asset.alt.trim()
+      // Studio sets no maximum; a post's alt text has one.
+      if (alt.length > SOCIAL_ALT_MAX_LENGTH) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: `This asset's alt text is longer than ${SOCIAL_ALT_MAX_LENGTH} characters. Shorten it in the asset gallery first.`,
+        })
+      }
       if (!alt) {
         throw new TRPCError({
           code: 'BAD_REQUEST',
