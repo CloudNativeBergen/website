@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
-import { expect, within } from 'storybook/test'
+import { expect, waitFor, within } from 'storybook/test'
 import { http, HttpResponse } from 'msw'
 import { ThemeProvider } from 'next-themes'
 import { SocialPostsManager } from './SocialPostsManager'
@@ -317,15 +317,18 @@ export const ManualOrganization: Story = {
 export const FailedAtBuffer: Story = {
   args: { defaultManualId: 'v-7' },
   play: async ({ canvasElement }) => {
-    const body = within(canvasElement.ownerDocument.body)
+    const dialog = within(
+      await within(canvasElement.ownerDocument.body).findByRole('dialog'),
+    )
+    // The dialog fades in: wait for it to be visible, not just mounted.
+    await waitFor(() =>
+      expect(dialog.getByText(/did not go out on LinkedIn/i)).toBeVisible(),
+    )
     await expect(
-      await body.findByText(/did not go out on LinkedIn/i),
+      dialog.getByText(/Reconnect the channel in Buffer/),
     ).toBeVisible()
     await expect(
-      body.getByText(/Reconnect the channel in Buffer/),
-    ).toBeVisible()
-    await expect(
-      body.getByLabelText(/address of the published post/i),
+      dialog.getByLabelText(/address of the published post/i),
     ).toBeVisible()
   },
 }
