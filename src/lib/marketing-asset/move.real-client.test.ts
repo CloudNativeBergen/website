@@ -30,8 +30,17 @@ vi.mock('@/lib/sanity/client', () => ({
   },
 }))
 
-import { moveAudioBlobToSanity, moveBlobToSanity } from './move'
+import {
+  moveAudioBlobToSanity,
+  moveBlobToSanity,
+  moveGifBlobToSanity,
+  moveVideoBlobToSanity,
+} from './move'
 import { MARKETING_ASSET_MAX_IMAGE_BYTES } from './image-type'
+import {
+  MARKETING_ASSET_MAX_GIF_BYTES,
+  MARKETING_ASSET_MAX_VIDEO_BYTES,
+} from './motion-type'
 import { mp3OfSeconds } from './__tests__/audio-fixtures'
 
 interface Seen {
@@ -200,4 +209,157 @@ describe('the move through the real Sanity client', () => {
       expect(seen[0].bytes).toBeLessThanOrEqual(MARKETING_ASSET_MAX_IMAGE_BYTES)
     },
   )
+})
+
+/**
+ * How far the blob's reader has run ahead of what Sanity has received, at
+ * most, over one move: the bytes the move holds (or that sit in socket
+ * buffers). A move that read the file whole would reach the whole file
+ * before Sanity saw a byte.
+ */
+let maxLead = 0
+
+/**
+ * A body of `total` bytes in 1 MiB chunks, each a FRESH buffer, starting with
+ * `head`. Every pull records how far it is ahead of the server.
+ */
+function freshBody(total: number, head: number[]) {
+  const MIB = 1024 * 1024
+  let sent = 0
+  maxLead = 0
+  return new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      await new Promise((resolve) => setImmediate(resolve))
+      maxLead = Math.max(maxLead, sent - (seen[0]?.bytes ?? 0))
+      if (sent >= total) return controller.close()
+      const chunk = new Uint8Array(Math.min(MIB, total - sent))
+      if (sent === 0) chunk.set(head)
+      sent += chunk.length
+      controller.enqueue(chunk)
+    },
+  })
+}
+
+const ascii = (s: string) => [...s].map((c) => c.charCodeAt(0))
+const MP4_HEAD = [0, 0, 0, 0x20, ...ascii('ftypisom')]
+const MOV_HEAD = [0, 0, 0, 0x14, ...ascii('ftypqt  ')]
+const GIF_HEAD = ascii('GIF89a')
+const VIDEO_URL = URL_OK.replace('logo-X1.png', 'clip-X1.mp4')
+
+describe('the video move through the real Sanity client (#1167)', () => {
+  it(
+    'streams a 100 MiB MP4 to the FILE endpoint without holding it',
+    { timeout: 120_000 },
+    async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(
+          async () =>
+            new Response(freshBody(MARKETING_ASSET_MAX_VIDEO_BYTES, MP4_HEAD)),
+        ),
+      )
+      const result = await moveVideoBlobToSanity(VIDEO_URL, 'org-A')
+      expect(result.ok).toBe(true)
+      expect(seen).toEqual([
+        {
+          bytes: MARKETING_ASSET_MAX_VIDEO_BYTES,
+          complete: true,
+          aborted: false,
+          contentType: 'video/mp4',
+        },
+      ])
+      expect(paths[0]).toMatch(/\/assets\/files\/test\?/)
+      // Streamed, not buffered: the read never ran more than a few MiB
+      // ahead of Sanity. Reading it whole would put all 100 MiB ahead.
+      expect(maxLead).toBeGreaterThan(0)
+      expect(maxLead).toBeLessThan(16 * 1024 * 1024)
+    },
+  )
+
+  it(
+    'aborts an MP4 one chunk past 100 MiB and refuses it as too large',
+    { timeout: 120_000 },
+    async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(
+          async () =>
+            new Response(
+              freshBody(MARKETING_ASSET_MAX_VIDEO_BYTES + 1024 * 1024, MP4_HEAD),
+            ),
+        ),
+      )
+      const result = await moveVideoBlobToSanity(VIDEO_URL, 'org-A')
+      expect(result).toEqual({ ok: false, reason: 'size' })
+      await vi.waitFor(() => expect(seen[0]?.aborted).toBe(true))
+      expect(seen[0].complete).toBe(false)
+      expect(seen[0].bytes).toBeLessThanOrEqual(MARKETING_ASSET_MAX_VIDEO_BYTES)
+    },
+  )
+
+  it('refuses a QuickTime .mov before a byte reaches Sanity', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(freshBody(4 * 1024 * 1024, MOV_HEAD))),
+    )
+    const result = await moveVideoBlobToSanity(
+      VIDEO_URL.replace('.mp4', '.mov'),
+      'org-A',
+    )
+    expect(result).toEqual({ ok: false, reason: 'type' })
+    expect(seen).toEqual([])
+  })
+})
+
+describe('the GIF move through the real Sanity client (#1167)', () => {
+  const GIF_URL = URL_OK.replace('logo-X1.png', 'wave-X1.gif')
+
+  it('streams a GIF to the IMAGE endpoint as image/gif', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(freshBody(3 * 1024 * 1024, GIF_HEAD))),
+    )
+    const result = await moveGifBlobToSanity(GIF_URL, 'org-A')
+    expect(result.ok).toBe(true)
+    expect(seen).toEqual([
+      {
+        bytes: 3 * 1024 * 1024,
+        complete: true,
+        aborted: false,
+        contentType: 'image/gif',
+      },
+    ])
+    expect(paths[0]).toMatch(/\/assets\/images\/test\?/)
+  })
+
+  it('refuses a GIF over 10 MB, and a PNG sent as a GIF', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(
+            freshBody(MARKETING_ASSET_MAX_GIF_BYTES + 1024 * 1024, GIF_HEAD),
+          ),
+      ),
+    )
+    expect(await moveGifBlobToSanity(GIF_URL, 'org-A')).toEqual({
+      ok: false,
+      reason: 'size',
+    })
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(
+            freshBody(1024, [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+          ),
+      ),
+    )
+    seen = []
+    expect(await moveGifBlobToSanity(GIF_URL, 'org-A')).toEqual({
+      ok: false,
+      reason: 'type',
+    })
+    expect(seen).toEqual([])
+  })
 })
