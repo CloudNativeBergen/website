@@ -353,3 +353,69 @@ export const PlanPublishingRefusal: Story = {
     />
   ),
 }
+
+/**
+ * Short links that may be live (short-links spec §2.1's known hole, §2.7):
+ * sent outreach Tasks, and failed or awaiting-manual posts. The preview warns
+ * that they fall back to the home page; the delete stays available.
+ */
+export const DeletePlanWithLiveLinks: Story = {
+  render: () => (
+    <DeleteConfirmation
+      label="plan"
+      preview={{
+        campaigns: 10,
+        tasks: 60,
+        publishedTasks: 0,
+        snapshots: 10,
+        requiresTypedConfirmation: false,
+        liveLinks: 3,
+        conferenceTitle: 'Cloud Native Days Norway 2026',
+      }}
+      onClose={fn()}
+      onConfirm={fn()}
+    />
+  ),
+  play: async ({ canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body)
+    await expect(
+      await body.findByText('3 short links may already be shared'),
+    ).toBeVisible()
+    await expect(
+      body.getByRole('button', { name: 'Delete plan' }),
+    ).toBeEnabled()
+  },
+}
+export const DeletePlanWithLiveLinksDark: Story = {
+  ...DeletePlanWithLiveLinks,
+  globals: { theme: 'dark' },
+}
+export const DeleteCampaignWithLiveLinksMobile: Story = {
+  globals: { viewport: { value: 'mobile1', isRotated: false } },
+  parameters: { viewport: { defaultViewport: 'mobile1' } },
+  render: () => (
+    <DeleteConfirmation
+      preview={{
+        campaigns: 1,
+        tasks: 6,
+        publishedTasks: 2,
+        snapshots: 45,
+        requiresTypedConfirmation: true,
+        liveLinks: 1,
+        conferenceTitle: 'Cloud Native Days Norway 2026',
+      }}
+      onClose={fn()}
+      onConfirm={fn()}
+    />
+  ),
+  play: async ({ canvasElement }) => {
+    await expect(
+      canvasElement.ownerDocument.documentElement.clientWidth,
+    ).toBeLessThan(500)
+    await expect(
+      await within(canvasElement.ownerDocument.body).findByText(
+        '1 short link may already be shared',
+      ),
+    ).toBeVisible()
+  },
+}

@@ -83,7 +83,7 @@ export function DeleteConfirmation({
           </p>
         )
       ) : (
-        <div className="mt-4 space-y-3 text-left text-sm">
+        <div className="mt-4 space-y-3 text-left text-sm text-gray-900 dark:text-gray-100">
           <ul className="list-disc space-y-1 pl-5">
             <li>
               {preview.campaigns} Campaigns and {preview.tasks} Tasks
