@@ -23,6 +23,13 @@ export interface StudioTask {
   replacedRenders: string[] | null
   /** Set by the save of a new render until its gallery save lands (#1165). */
   galleryPending: boolean | null
+  /** The gallery asset the Task was finished with (#1166), if it was. */
+  galleryAssetId: string | null
+  /**
+   * That asset's alt, while it exists and is this organization's: what a
+   * hand-off retry gives the posts, as the first hand-off did.
+   */
+  galleryAlt: string | null
 }
 
 /** Called only after the request's by-id tenancy guard. */
@@ -35,7 +42,9 @@ export function getStudioTask(taskId: string, conferenceId: string) {
       "subject": select(subject->_type in $subjectTypes => { "id": subject._ref, "type": subject->_type }),
       "pendingAssetId": pendingStudioAsset.asset._ref, "assetId": asset.asset._ref,
       "campaignId": campaign._ref,
-      handoffDoneFor, replacedRenders, galleryPending}`,
+      handoffDoneFor, replacedRenders, galleryPending,
+      "galleryAssetId": galleryAsset._ref,
+      "galleryAlt": select(galleryAsset->organization._ref == conference->organization._ref => galleryAsset->alt)}`,
     { taskId, subjectTypes: [...MARKETING_ASSET_SUBJECT_TYPES] },
     { cache: 'no-store' },
   )

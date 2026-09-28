@@ -179,13 +179,28 @@ export const SkipTaskSchema = z.object({
 export const CampaignIdSchema = z.object({ campaignId: LiveDocumentIdSchema })
 
 /** The upload has already bound this asset to this Task. */
-export const AttachTaskAssetSchema = z.object({
+const AttachTaskTarget = {
   taskId: LiveDocumentIdSchema,
   taskRev: z.string().min(1).max(200),
-  // An image asset only: a gallery audio track (a file asset) can never
-  // finish a render Task (docs/MARKETING_STUDIO_VIDEO_SPEC.md §6).
-  assetId: z.string().regex(/^image-[A-Za-z0-9]+-\d+x\d+-[a-z0-9]+$/),
-})
+}
+
+/**
+ * A render Task is finished by the image it uploaded, or by an image asset
+ * of the organization's gallery (assets spec §4.3), named by the ASSET's id:
+ * the server reads the image and the alt from it, never from the client.
+ */
+export const AttachTaskAssetSchema = z.union([
+  z.object({
+    ...AttachTaskTarget,
+    // An image asset only: a gallery audio track (a file asset) can never
+    // finish a render Task (docs/MARKETING_STUDIO_VIDEO_SPEC.md §6).
+    assetId: z.string().regex(/^image-[A-Za-z0-9]+-\d+x\d+-[a-z0-9]+$/),
+  }),
+  z.object({
+    ...AttachTaskTarget,
+    marketingAssetId: LiveDocumentIdSchema,
+  }),
+])
 
 /**
  * Outreach keeps messaging's size rules and refuses unfilled template tokens.

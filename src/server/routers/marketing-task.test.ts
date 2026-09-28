@@ -1606,6 +1606,7 @@ describe('task.attachAsset', () => {
       ['pendingStudioAsset'],
       undefined,
       undefined,
+      undefined,
     )
     const savedFields = Object.assign(
       {},

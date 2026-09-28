@@ -691,9 +691,22 @@ export async function updateTaskFields(
   campaign?: { id: string; rev?: string },
   /** A render this save REPLACES, recorded in the same patch (#1162). */
   replacedRender?: string,
+  /**
+   * The gallery asset whose image this save puts on the Task (#1166), at the
+   * revision the caller read it: compare-and-set in the SAME transaction, so
+   * an asset edited or deleted since (whose delete may have orphan-removed
+   * the image) refuses the save as a conflict.
+   */
+  heldBy?: { id: string; rev: string },
 ): Promise<boolean> {
   const now = getCurrentDateTime()
-  const tx = clientWrite.transaction().patch(taskId, (p) => {
+  const tx = clientWrite.transaction()
+  // A no-op patch carries the revision guard; a delete takes none.
+  if (heldBy)
+    tx.patch(heldBy.id, (p) =>
+      p.ifRevisionId(heldBy.rev).unset(['_attachGuard']),
+    )
+  tx.patch(taskId, (p) => {
     const set = p.ifRevisionId(rev).set({ ...fields, updatedAt: now })
     const unsetDone = unset.length > 0 ? set.unset(unset) : set
     return replacedRender

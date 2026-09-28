@@ -237,6 +237,17 @@ export default defineType({
       readOnly: true,
     }),
     defineField({
+      name: 'galleryAsset',
+      title: 'From the asset gallery',
+      description:
+        'Set when the Task was finished with an image from the marketing asset gallery instead of a render. The image is the gallery\'s: it is never recorded or deleted as this Task\'s render, and a speaker\'s erasure follows the asset\'s own subject while it exists. Cleared by the next studio render.',
+      type: 'reference',
+      to: [{ type: 'marketingAsset' }],
+      weak: true,
+      hidden: true,
+      readOnly: true,
+    }),
+    defineField({
       name: 'handoffDoneFor',
       title: 'Studio handoff receipts',
       description:
