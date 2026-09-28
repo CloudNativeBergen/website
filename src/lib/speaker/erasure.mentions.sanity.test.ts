@@ -23,6 +23,8 @@ const h = vi.hoisted(() => ({
   /** Asset ids whose direct delete fails, to leave a linked file behind. */
   failFileDelete: new Set<string>(),
   revCounter: 0,
+  /** A write landing after the transaction, before the verification. */
+  afterCommit: null as null | (() => void),
 }))
 
 /** True when some other document holds a STRONG reference to `id`. */
@@ -148,6 +150,7 @@ vi.mock('@/lib/sanity/client', async () => {
         }
       }
       h.dataset = next
+      h.afterCommit?.()
       return { transactionId: rev }
     }) as typeof tx.commit
     return tx
@@ -218,6 +221,7 @@ const TAGGED =
 function seed() {
   h.revCounter = 0
   h.failFileDelete = new Set()
+  h.afterCommit = null
   h.dataset = [
     { _id: 'org-a', _type: 'organization' },
     { _id: 'org-x', _type: 'organization' },
@@ -388,6 +392,38 @@ describe('speaker erasure scrubs post variants (#1232)', () => {
   })
 
   describe('the residual check reads the STORED variants', () => {
+    it('the commit’s own verification looks for the name, handle and DID it read BEFORE the erasure', async () => {
+      // A save racing the erasure: it lands after the transaction, so only
+      // the verification can see it — and only with what was read before.
+      h.afterCommit = () =>
+        h.dataset.push(
+          variant('var-race-name', 'draft', 'Meet Ada Lovelace', {
+            mentions: [],
+          }),
+          variant('var-race-did', 'published', 'x', {
+            conference: ref('conf-x'),
+            mentions: [mention('m', 'spk-other', 'x.dev', 'X', ADA_DID)],
+          }),
+        )
+      const result = await eraseSpeakerInPlace({
+        speakerId: ADA,
+        actor: 'test',
+      })
+      expect(result.verification?.residual.postVariants).toBe(2)
+      expect(result.verification?.clean).toBe(false)
+    })
+
+    it('finds a record of her account by its handle alone', async () => {
+      h.dataset.push(
+        variant('var-handle', 'published', 'x', {
+          conference: ref('conf-x'),
+          mentions: [mention('m', 'spk-other', 'Ada.bsky.social', 'X')],
+        }),
+      )
+      await eraseSpeakerInPlace({ speakerId: ADA, actor: 'test' })
+      expect(doc('var-handle').mentions).toEqual([])
+    })
+
     it('FAILS on a record of her left on a variant — by reference alone, as a later --verify has it', async () => {
       await eraseSpeakerInPlace({ speakerId: ADA, actor: 'test' })
       h.dataset.push(
