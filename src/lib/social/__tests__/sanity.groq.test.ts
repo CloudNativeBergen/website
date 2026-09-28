@@ -1508,6 +1508,36 @@ describe('addSocialPostAttachment — asset tenancy', () => {
       addSocialPostAttachment('post-conf-A', 'conf-A', input),
     ).resolves.toEqual({ key: expect.any(String) })
   })
+
+  it("attaches an older edition's asset image once the caller proved the asset ours (#1163)", async () => {
+    // Held only by a marketing asset marked with another edition: to the
+    // reference check that is "someone else's", which is why the picker
+    // proves ownership from the asset id instead.
+    h.dataset = [
+      {
+        _id: 'card-2025',
+        _type: 'marketingAsset',
+        conference: { _ref: 'conf-A-2025' },
+        image: { asset: { _ref: ASSET } },
+      },
+    ]
+    await expect(
+      addSocialPostAttachment('post-conf-A', 'conf-A', input),
+    ).resolves.toEqual({ refused: 'foreign-asset' })
+    await expect(
+      addSocialPostAttachment('post-conf-A', 'conf-A', input, {
+        assetProvenOurs: true,
+      }),
+    ).resolves.toEqual({ key: expect.any(String) })
+    expect(h.appended).toContainEqual(
+      expect.objectContaining({
+        image: expect.objectContaining({
+          asset: { _type: 'reference', _ref: ASSET },
+        }),
+        alt: 'x',
+      }),
+    )
+  })
 })
 
 it('persists the failure event attempt key unchanged for notification identity', async () => {

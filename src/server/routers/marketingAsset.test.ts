@@ -92,9 +92,22 @@ const DOCS: Record<
     _type: string
     orgId: string | null
     conferenceOrgId?: string
+    conferenceId?: string
     memberOrgIds?: string[]
   }
 > = {
+  'post-ours': {
+    _type: 'socialPost',
+    orgId: null,
+    conferenceId: 'conf-A',
+    conferenceOrgId: 'org-A',
+  },
+  'post-theirs': {
+    _type: 'socialPost',
+    orgId: null,
+    conferenceId: 'conf-B',
+    conferenceOrgId: 'org-B',
+  },
   'asset-ours': { _type: 'marketingAsset', orgId: 'org-A' },
   // A Studio draft of ours: same type, same organization, so the tenancy
   // guard alone would let it through.
@@ -216,6 +229,7 @@ beforeEach(() => {
               _type: doc._type,
               orgId: doc.orgId,
               conferenceOrgId: doc.conferenceOrgId ?? null,
+              conferenceId: doc.conferenceId ?? null,
               memberOrgIds: doc.memberOrgIds ?? [],
             }
           : null
@@ -223,6 +237,11 @@ beforeEach(() => {
       // The speaker guard's participation probe.
       if (query.includes('references($speakerId)'))
         return TALKS_AT[params.speakerId] ?? []
+      // The picker's read of a post's Task subject, scoped to the edition.
+      if (query.includes('"marketingTask"')) {
+        if (params.conferenceId !== 'conf-A') throw new Error('unscoped read')
+        return params.postId === 'post-ours' ? 'sp-member' : null
+      }
       // The asset reads, which must be scoped to the caller's organization.
       if (params.orgId !== 'org-A') throw new Error('unscoped read')
       // The edition mark an asset carries, for `edition: "keep"`.
@@ -265,10 +284,34 @@ beforeEach(() => {
   })
 })
 
+describe('marketingAsset.forPost (#1163)', () => {
+  it('lists the picker for our post, with the subject its Task names', async () => {
+    const rows = await assets().forPost({ postId: 'post-ours', search: 'logo' })
+    expect(rows).toEqual([{ ...ROWS[0], softOnSocial: true, attachable: true }])
+    const taskRead = h.read.mock.calls.find(([q]) =>
+      String(q).includes('"marketingTask"'),
+    )
+    expect(taskRead?.[1]).toMatchObject({
+      postId: 'post-ours',
+      conferenceId: 'conf-A',
+    })
+  })
+
+  it("refuses another conference's post before reading any asset", async () => {
+    await expect(
+      assets().forPost({ postId: 'post-theirs' }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    // Only the guard's own by-id read ran.
+    expect(
+      h.read.mock.calls.every(([q]) => String(q).includes('"memberOrgIds"')),
+    ).toBe(true)
+  })
+})
+
 describe('marketingAsset.list', () => {
   it('lists this organization’s assets, read with the organization filter', async () => {
     const rows = await assets().list()
-    expect(rows).toEqual([{ ...ROWS[0], softOnSocial: true }])
+    expect(rows).toEqual([{ ...ROWS[0], softOnSocial: true, attachable: true }])
     const [query, params] = h.read.mock.calls[0]
     expect(query).toContain('organization._ref == $orgId')
     expect(query).toContain('_type == "marketingAsset"')
@@ -348,6 +391,23 @@ describe('marketingAsset.delete', () => {
     expect(await assets().delete({ id: 'asset-ours' })).toEqual({
       deleted: true,
     })
+  })
+
+  it('deletes an asset posts still use: "used in N posts" is never a precondition (#1163)', async () => {
+    // A post holds its own reference to the image, so the orphan check keeps
+    // the file and the post keeps its image; the delete itself goes ahead.
+    h.orphan.mockResolvedValue({
+      id: 'image-logo-800x800-png',
+      deleted: false,
+      remainingReferences: 3,
+    })
+    expect(await assets().delete({ id: 'asset-ours' })).toEqual({
+      deleted: true,
+    })
+    expect(h.del).toHaveBeenCalledWith(['asset-ours', 'drafts.asset-ours'])
+    expect(
+      h.read.mock.calls.some(([q]) => String(q).includes('socialPost')),
+    ).toBe(false)
   })
 
   it('answers a foreign id exactly as a nonexistent one, and touches nothing', async () => {

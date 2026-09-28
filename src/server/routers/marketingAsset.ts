@@ -3,8 +3,10 @@ import { z } from 'zod'
 import { adminProcedure, router } from '@/server/trpc'
 import {
   requireCurrentOrgId,
+  requireDocumentInCurrentConference,
   requireDocumentInCurrentOrg,
 } from '@/server/tenancy'
+import { LiveDocumentIdSchema } from '@/server/schemas/social'
 import { resolveConferenceId } from '@/server/trpc'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { marketingAssetDetailsSchema } from '@/lib/marketing-asset/details'
@@ -13,6 +15,7 @@ import {
   deleteMarketingAssetDocument,
   listMarketingAssetFacets,
   listMarketingAssets,
+  listMarketingAssetsForPost,
   updateMarketingAssetDetails,
   countMarketingAssetReleaseTwins,
   readMarketingAssetMedia,
@@ -81,6 +84,32 @@ export const marketingAssetRouter = router({
     ])
     return listMarketingAssets(orgId, conferenceId, input ?? {})
   }),
+
+  /**
+   * The post editor's "Marketing assets" picker (spec §5): the post's subject
+   * first, then this edition's, then the organization's. The post is proven
+   * this conference's before anything is read; its subject comes from the
+   * post's Task on the server.
+   */
+  forPost: adminProcedure
+    .input(
+      z.object({
+        postId: LiveDocumentIdSchema,
+        editions: z.enum(['current', 'all']).optional(),
+        search: z.string().max(200).optional(),
+      }),
+    )
+    .query(async ({ input }) => {
+      const conferenceId = await requireDocumentInCurrentConference(
+        input.postId,
+        'socialPost',
+      )
+      const orgId = await requireCurrentOrgId()
+      return listMarketingAssetsForPost(orgId, conferenceId, input.postId, {
+        editions: input.editions,
+        search: input.search,
+      })
+    }),
 
   /** This edition (for the edition mark) and what the filter menus offer. */
   filters: adminProcedure.query(async () => {

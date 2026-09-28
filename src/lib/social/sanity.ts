@@ -1131,8 +1131,20 @@ export async function addSocialPostAttachment(
   postId: string,
   conferenceId: string,
   input: AddSocialPostAttachmentInput,
+  options: {
+    /**
+     * The caller proved the image is held by a marketing asset of THIS
+     * conference's organization (#1163): the reference check is skipped, since
+     * an organization-wide or older edition's asset is referenced by no
+     * document of this conference and would read as foreign.
+     */
+    assetProvenOurs?: boolean
+  } = {},
 ): Promise<AddSocialPostAttachmentResult> {
-  if (await assetBelongsElsewhere(input.assetId, conferenceId)) {
+  if (
+    !options.assetProvenOurs &&
+    (await assetBelongsElsewhere(input.assetId, conferenceId))
+  ) {
     return { refused: 'foreign-asset' }
   }
   const key = randomUUID()

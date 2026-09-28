@@ -1,12 +1,18 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { keepPreviousData } from '@tanstack/react-query'
 import { useNotification } from '@/components/admin/NotificationProvider'
 import { richTextImageUrl } from '@/lib/homepage/richTextImage'
 import { getPlatformConstraints } from '@/lib/social/provider/constraints'
 import type { SocialVariantEditorData } from '@/lib/social/types'
 import { api } from '@/lib/trpc/client'
-import type { GalleryPick, ShareCardSource } from './AttachmentSlot'
+import type {
+  GalleryPick,
+  MarketingAssetPick,
+  ShareCardSource,
+} from './AttachmentSlot'
+import type { MarketingAssetRow } from '@/lib/marketing-asset'
 import { VariantEditor } from './VariantEditor'
 import {
   editorValueFrom,
@@ -33,6 +39,13 @@ import { clientTagIssues } from '@/lib/trpc/errors'
 
 /** The organizer image upload route; returns the asset id of our dataset. */
 const UPLOAD_ROUTE = '/api/admin/rich-text-image'
+
+/** Where an asset sits, as the picker names it under the title. */
+function assetContext(asset: MarketingAssetRow): string {
+  if (asset.subject) return `About ${asset.subject.name}`
+  if (asset.scope === 'edition') return asset.edition ?? 'An edition'
+  return 'Whole organization'
+}
 
 async function uploadImage(file: File): Promise<string> {
   const form = new FormData()
@@ -135,6 +148,24 @@ export function ConnectedVariantEditor({
     { limit: 100 },
     { enabled: galleryOpen },
   )
+  // The marketing asset picker (#1163): the search asks the server once
+  // typing pauses, not per keystroke.
+  const [assetsOpen, setAssetsOpen] = useState(false)
+  const [assetSearch, setAssetSearch] = useState('')
+  const [assetQuery, setAssetQuery] = useState('')
+  const [allEditions, setAllEditions] = useState(false)
+  useEffect(() => {
+    const timer = setTimeout(() => setAssetQuery(assetSearch.trim()), 250)
+    return () => clearTimeout(timer)
+  }, [assetSearch])
+  const marketingAssets = api.marketingAsset.forPost.useQuery(
+    {
+      postId,
+      editions: allEditions ? 'all' : 'current',
+      ...(assetQuery ? { search: assetQuery } : {}),
+    },
+    { enabled: assetsOpen, placeholderData: keepPreviousData },
+  )
 
   // In a Task, the link is whatever the page picker derives right now.
   const shown: VariantEditorValue = task
@@ -226,15 +257,21 @@ export function ConnectedVariantEditor({
     },
   })
   const addAttachment = api.social.addPostAttachment.useMutation()
+  const addFromAsset = api.social.addPostAttachmentFromAsset.useMutation()
 
-  /** Put an asset on the post, then select it on this variant. */
-  const attachAsset = async (input: {
+  /** Put an image asset on the post, then select it on this variant. */
+  const attachAsset = (input: {
     assetId: string
     alt: string
     hotspot?: GalleryPick['hotspot']
     crop?: GalleryPick['crop']
-  }) => {
-    const { key } = await addAttachment.mutateAsync({ postId, ...input })
+  }) => selectAdded(addAttachment.mutateAsync({ postId, ...input }))
+
+  /** Select what just landed on the post on this variant. */
+  const selectAdded = async (added: Promise<{ key: string }>) => {
+    const { key } = await added
+    // The picker's "used in N posts" moved with it.
+    void utils.marketingAsset.invalidate()
     await utils.social.getVariantEditor.invalidate({ variantId })
     if (task) {
       await utils.marketing.task.get.invalidate({ taskId: task.taskId })
@@ -263,6 +300,17 @@ export function ConnectedVariantEditor({
       },
     ]
   })
+
+  const assetPicks: MarketingAssetPick[] = (marketingAssets.data ?? []).map(
+    (asset) => ({
+      id: asset._id,
+      title: asset.title,
+      alt: asset.alt ?? '',
+      thumbnailSrc: asset.assetId ? richTextImageUrl(asset.assetId, 300) : null,
+      attachable: asset.attachable,
+      context: assetContext(asset),
+    }),
+  )
 
   return (
     <div className="space-y-4">
@@ -347,6 +395,23 @@ export function ConnectedVariantEditor({
                 crop: image.crop,
               })
             },
+          },
+          marketingAssets: {
+            assets: assetPicks,
+            isLoading: marketingAssets.isLoading,
+            search: assetSearch,
+            onSearchChange: setAssetSearch,
+            allEditions,
+            onAllEditionsChange: setAllEditions,
+            onOpen: () => setAssetsOpen(true),
+            // Only the id travels: the server copies the image and alt text.
+            onPick: (asset) =>
+              selectAdded(
+                addFromAsset.mutateAsync({
+                  postId,
+                  marketingAssetId: asset.id,
+                }),
+              ),
           },
           shareCards,
           onAttachShareCard: shareCards

@@ -1,7 +1,14 @@
 import { TRPCError } from '@trpc/server'
 import { adminProcedure, resolveConferenceId, router } from '@/server/trpc'
-import { requireDocumentInCurrentConference } from '@/server/tenancy'
 import {
+  notFoundMessage,
+  requireDocumentInCurrentConference,
+  requireDocumentInCurrentOrg,
+} from '@/server/tenancy'
+import { readMarketingAssetForPost } from '@/lib/marketing-asset/sanity'
+import { NOT_ATTACHABLE_YET } from '@/lib/marketing-asset/post-attach'
+import {
+  AddSocialPostAttachmentFromAssetSchema,
   AddSocialPostAttachmentSchema,
   CreateSocialPostSchema,
   MarkSocialVariantPostedSchema,
@@ -634,6 +641,77 @@ export const socialRouter = router({
             added.refused === 'post-gone'
               ? 'The post is gone. Reload and retry.'
               : 'That image belongs to another conference.',
+        })
+      }
+      return added
+    }),
+
+  /**
+   * Pick a marketing asset into the post (#1163, assets spec §5): its image
+   * REFERENCE and alt text are copied onto the post, no re-upload, so
+   * deleting the asset later never breaks the post.
+   *
+   * The generic attach refuses an image no document of THIS conference
+   * references, and an organization-wide logo is exactly that. Here the
+   * ownership is proven instead from the asset id: the asset must be this
+   * organization's, checked by the guard BEFORE the asset is read, so a
+   * foreign id and a nonexistent one get the guard's one answer.
+   */
+  addPostAttachmentFromAsset: adminProcedure
+    .input(AddSocialPostAttachmentFromAssetSchema)
+    .mutation(async ({ input }) => {
+      const conferenceId = await requireDocumentInCurrentConference(
+        input.postId,
+        'socialPost',
+      )
+      const notFound = () =>
+        new TRPCError({
+          code: 'NOT_FOUND',
+          message: notFoundMessage('marketingAsset'),
+        })
+      // Published ids only, as the gallery lists them: a Studio draft or a
+      // release copy is never picked on its own.
+      if (input.marketingAssetId.includes('.')) throw notFound()
+      const orgId = await requireDocumentInCurrentOrg(
+        input.marketingAssetId,
+        'marketingAsset',
+      )
+      const asset = await readMarketingAssetForPost(
+        orgId,
+        input.marketingAssetId,
+      )
+      if (!asset) throw notFound()
+      // The attachment schema would take a GIF's image id: the picker's mark
+      // alone would be decoration (spec §5).
+      if (!asset.attachable || !asset.imageAssetId) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: NOT_ATTACHABLE_YET,
+        })
+      }
+      const alt = asset.alt.trim()
+      if (!alt) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message:
+            'This asset has no alt text. Add one in the asset gallery first.',
+        })
+      }
+      const added = await addSocialPostAttachment(
+        input.postId,
+        conferenceId,
+        {
+          assetId: asset.imageAssetId,
+          alt,
+          hotspot: asset.hotspot,
+          crop: asset.crop,
+        },
+        { assetProvenOurs: true },
+      )
+      if ('refused' in added) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'The post is gone. Reload and retry.',
         })
       }
       return added

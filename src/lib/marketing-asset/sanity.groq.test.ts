@@ -33,6 +33,8 @@ vi.mock('@/lib/sanity/client', () => ({
 import {
   listMarketingAssetFacets,
   listMarketingAssets,
+  listMarketingAssetsForPost,
+  readMarketingAssetForPost,
   readMarketingAssetBackground,
   readMarketingAssetMark,
   readMarketingAssetMedia,
@@ -542,5 +544,222 @@ describe('a studio save’s origin (#1164)', () => {
       odd: null,
       old: null,
     })
+  })
+})
+
+describe('picking an asset into a post (#1163)', () => {
+  const img = (id: string, mimeType = 'image/png') => ({
+    _id: id,
+    _type: 'sanity.imageAsset',
+    mimeType,
+    url: `https://cdn.sanity.io/${id}`,
+  })
+  const imageOf = (assetId: string) => ({
+    image: { _type: 'image', asset: ref(assetId) },
+  })
+  const PNG = (n: string) => `image-${n.repeat(40)}-1200x1200-png`
+  const post = (id: string, conf: string, assetIds: string[]) => ({
+    _id: id,
+    _type: 'socialPost',
+    conference: ref(conf),
+    attachments: assetIds.map((assetId, i) => ({
+      _key: `k${i}`,
+      image: { _type: 'image', asset: ref(assetId) },
+      alt: 'x',
+    })),
+  })
+  const variant = (id: string, conf: string, postId: string) => ({
+    _id: id,
+    _type: 'socialPostVariant',
+    conference: ref(conf),
+    post: ref(postId),
+  })
+  const task = (
+    id: string,
+    conf: string,
+    variantId: string,
+    subject: string,
+  ) => ({
+    _id: id,
+    _type: 'marketingTask',
+    conference: ref(conf),
+    variant: weak(variantId),
+    subject: weak(subject),
+  })
+
+  const PICKER = [
+    ...DATASET.filter((d) => d._type !== 'marketingAsset'),
+    img(PNG('a')),
+    img(PNG('b')),
+    img(PNG('c')),
+    img(PNG('d')),
+    img(PNG('e')),
+    img(
+      'image-ffffffffffffffffffffffffffffffffffffffff-400x400-gif',
+      'image/gif',
+    ),
+    asset('logo', 'org-a', {
+      ...imageOf(PNG('a')),
+      _createdAt: '2026-09-05T00:00:00Z',
+    }),
+    asset('card-2026', 'org-a', {
+      ...imageOf(PNG('b')),
+      scope: 'edition',
+      conference: ref('conf-a-2026'),
+      _createdAt: '2026-09-04T00:00:00Z',
+    }),
+    // About the post's subject, from LAST year: it still leads.
+    asset('ada-2025', 'org-a', {
+      ...imageOf(PNG('c')),
+      scope: 'edition',
+      conference: ref('conf-a-2025'),
+      subject: weak('sp-ada'),
+      _createdAt: '2025-09-01T00:00:00Z',
+    }),
+    asset('old-2025', 'org-a', {
+      ...imageOf(PNG('d')),
+      scope: 'edition',
+      conference: ref('conf-a-2025'),
+      _createdAt: '2025-08-01T00:00:00Z',
+    }),
+    asset('ada-org', 'org-a', {
+      ...imageOf(PNG('e')),
+      subject: weak('sp-ada'),
+      _createdAt: '2026-01-01T00:00:00Z',
+    }),
+    asset('party-gif', 'org-a', {
+      ...imageOf('image-ffffffffffffffffffffffffffffffffffffffff-400x400-gif'),
+      _createdAt: '2026-09-06T00:00:00Z',
+    }),
+    asset('track', 'org-a', { kind: 'audio', alt: undefined }),
+    asset('b-ada', 'org-b', {
+      ...imageOf(PNG('a')),
+      subject: weak('sp-ada'),
+    }),
+    post('post-ada', 'conf-a-2026', [PNG('a')]),
+    variant('v-ada', 'conf-a-2026', 'post-ada'),
+    task('task-ada', 'conf-a-2026', 'v-ada', 'sp-ada'),
+    // A Task of ANOTHER conference pointing at our post names no subject.
+    task('task-b', 'conf-b', 'v-ada', 'sponsor-1'),
+    post('post-plain', 'conf-a-2026', []),
+  ]
+
+  beforeEach(() => {
+    h.dataset = PICKER
+  })
+
+  const pick = (
+    postId: string,
+    filter: Parameters<typeof listMarketingAssetsForPost>[3] = {},
+  ) =>
+    listMarketingAssetsForPost('org-a', 'conf-a-2026', postId, filter).then(ids)
+
+  it("lists the post's subject first, then this edition, then the organization's, then older editions", async () => {
+    expect(await pick('post-ada', { editions: 'all' })).toEqual([
+      'ada-org',
+      'ada-2025',
+      'card-2026',
+      'party-gif',
+      'logo',
+      'old-2025',
+    ])
+  })
+
+  it('without a subject: this edition, then the organization; older editions only on request', async () => {
+    expect(await pick('post-plain')).toEqual([
+      'card-2026',
+      'party-gif',
+      'logo',
+      'ada-org',
+    ])
+  })
+
+  it('searches within the same order', async () => {
+    h.dataset = PICKER.map((d) =>
+      d._id === 'ada-2025' || d._id === 'logo'
+        ? { ...d, tags: ['keynote'] }
+        : d,
+    )
+    expect(await pick('post-ada', { search: 'keyn', editions: 'all' })).toEqual(
+      ['ada-2025', 'logo'],
+    )
+  })
+
+  it('marks a GIF as not attachable, and never lists a track', async () => {
+    const rows = await listMarketingAssetsForPost(
+      'org-a',
+      'conf-a-2026',
+      'post-plain',
+      {},
+    )
+    const attachable = Object.fromEntries(
+      rows.map((row) => [row._id, row.attachable]),
+    )
+    expect(attachable).toEqual({
+      'card-2026': true,
+      'party-gif': false,
+      logo: true,
+      'ada-org': true,
+    })
+  })
+
+  it("counts the posts using an asset's image, in THIS organization only", async () => {
+    h.dataset = [
+      ...PICKER,
+      post('post-2025', 'conf-a-2025', [PNG('a'), PNG('b')]),
+      // Another tenant's post holding the same bytes, and a Studio draft.
+      post('post-b', 'conf-b', [PNG('a')]),
+      post('drafts.post-ada', 'conf-a-2026', [PNG('a')]),
+    ]
+    const rows = await listMarketingAssets('org-a', 'conf-a-2026', {
+      editions: 'all',
+    })
+    const used = Object.fromEntries(
+      rows.map((row) => [row._id, row.usedInPosts]),
+    )
+    expect(used).toMatchObject({ logo: 2, 'card-2026': 1, 'old-2025': 0 })
+  })
+
+  it("reads an asset's image, alt, crop and whether it can go into a post", async () => {
+    h.dataset = [
+      ...PICKER.filter((d) => d._id !== 'logo'),
+      asset('logo', 'org-a', {
+        image: {
+          _type: 'image',
+          asset: ref(PNG('a')),
+          hotspot: {
+            _type: 'sanity.imageHotspot',
+            x: 0.5,
+            y: 0.4,
+            width: 1,
+            height: 1,
+          },
+          crop: {
+            _type: 'sanity.imageCrop',
+            top: 0,
+            bottom: 0.1,
+            left: 0,
+            right: 0,
+          },
+        },
+      }),
+    ]
+    expect(await readMarketingAssetForPost('org-a', 'logo')).toEqual({
+      imageAssetId: PNG('a'),
+      alt: 'alt of logo',
+      hotspot: { x: 0.5, y: 0.4, width: 1, height: 1 },
+      crop: { top: 0, bottom: 0.1, left: 0, right: 0 },
+      attachable: true,
+    })
+    expect(await readMarketingAssetForPost('org-a', 'party-gif')).toMatchObject(
+      {
+        attachable: false,
+      },
+    )
+    expect(await readMarketingAssetForPost('org-a', 'track')).toMatchObject({
+      attachable: false,
+    })
+    // Scoped: another organization's asset reads as nothing.
+    expect(await readMarketingAssetForPost('org-a', 'b-ada')).toBeNull()
   })
 })

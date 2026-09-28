@@ -1,0 +1,15 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`the social mutation surface is pinned > lists every mutation 1`] = `
+[
+  "addPostAttachment",
+  "addPostAttachmentFromAsset",
+  "createPost",
+  "deletePost",
+  "markPosted",
+  "scheduleVariant",
+  "unscheduleVariant",
+  "updatePostDefaultTime",
+  "updateVariant",
+]
+`;

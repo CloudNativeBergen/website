@@ -58,6 +58,10 @@ const h = vi.hoisted(() => ({
   getSocialPostEditorInputs: vi.fn(),
   updateSocialVariantContent: vi.fn(),
   addSocialPostAttachment: vi.fn(),
+  readMarketingAssetForPost: vi.fn(),
+}))
+vi.mock('@/lib/marketing-asset/sanity', () => ({
+  readMarketingAssetForPost: h.readMarketingAssetForPost,
 }))
 
 vi.mock('@/lib/conference/sanity', () => ({
@@ -116,6 +120,14 @@ const TENANTS: Record<string, { _type: string; conferenceId: string }> = {
   'variant-theirs': { _type: 'socialPostVariant', conferenceId: CONF_B },
   'post-ours': { _type: 'socialPost', conferenceId: CONF_A },
   'post-theirs': { _type: 'socialPost', conferenceId: CONF_B },
+}
+
+/** Marketing assets are owned by an ORGANIZATION, not a conference. */
+const ORG_TENANTS: Record<string, { _type: string; orgId: string }> = {
+  'asset-ours': { _type: 'marketingAsset', orgId: ORG_A },
+  // A Studio draft of ours: the tenancy guard alone would admit it.
+  'drafts.asset-ours': { _type: 'marketingAsset', orgId: ORG_A },
+  'asset-theirs': { _type: 'marketingAsset', orgId: 'org-B' },
 }
 
 function ctx(orgId: string = ORG_A): Context {
@@ -177,6 +189,16 @@ beforeEach(() => {
   })
   h.tenantRead.mockImplementation(
     async (_query: string, params: { id?: string }) => {
+      const owned = params?.id ? ORG_TENANTS[params.id] : undefined
+      if (owned) {
+        return {
+          _type: owned._type,
+          orgId: owned.orgId,
+          conferenceId: null,
+          conferenceOrgId: null,
+          memberOrgIds: [],
+        }
+      }
       const tenant = params?.id ? TENANTS[params.id] : undefined
       if (!tenant) return null
       return {
@@ -213,7 +235,17 @@ beforeEach(() => {
   // Cleared calls keep implementations, so each test starts unowned.
   marketing.getTaskForVariant.mockResolvedValue(null)
   h.addSocialPostAttachment.mockResolvedValue({ key: 'att-new' })
+  h.readMarketingAssetForPost.mockResolvedValue(ORG_ASSET)
 })
+
+/** An organization-wide logo: no document of THIS conference references it. */
+const ORG_ASSET = {
+  imageAssetId: 'image-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-1200x1200-png',
+  alt: 'The conference logo on dark blue',
+  hotspot: null,
+  crop: null,
+  attachable: true,
+}
 
 const ASSET_ID = 'image-0123456789abcdef0123456789abcdef01234567-2000x1000-jpg'
 const POST_IMAGE = {
@@ -1355,6 +1387,113 @@ describe('social.addPostAttachment', () => {
   })
 })
 
+describe('social.addPostAttachmentFromAsset (#1163)', () => {
+  it("copies an asset's image reference and alt text onto our post, without the foreign-reference check", async () => {
+    const result = await social().addPostAttachmentFromAsset({
+      postId: 'post-ours',
+      marketingAssetId: 'asset-ours',
+    })
+    expect(result).toEqual({ key: 'att-new' })
+    expect(h.readMarketingAssetForPost).toHaveBeenCalledWith(
+      ORG_A,
+      'asset-ours',
+    )
+    expect(h.addSocialPostAttachment).toHaveBeenCalledWith(
+      'post-ours',
+      CONF_A,
+      {
+        assetId: ORG_ASSET.imageAssetId,
+        alt: ORG_ASSET.alt,
+        hotspot: null,
+        crop: null,
+      },
+      { assetProvenOurs: true },
+    )
+  })
+
+  it("refuses another organization's asset exactly as a nonexistent one, reading neither", async () => {
+    const refusal = async (marketingAssetId: string) => {
+      const error = await social()
+        .addPostAttachmentFromAsset({ postId: 'post-ours', marketingAssetId })
+        .then(
+          () => null,
+          (e: unknown) => e as { code: string; message: string },
+        )
+      return error && { code: error.code, message: error.message }
+    }
+    const foreign = await refusal('asset-theirs')
+    const missing = await refusal('asset-nowhere')
+    expect(foreign).toEqual({
+      code: 'NOT_FOUND',
+      message: 'No marketingAsset with that id for this request',
+    })
+    expect(missing).toEqual(foreign)
+    expect(h.readMarketingAssetForPost).not.toHaveBeenCalled()
+    expect(h.addSocialPostAttachment).not.toHaveBeenCalled()
+  })
+
+  it('refuses a draft or release copy of an asset with the same answer', async () => {
+    await expect(
+      social().addPostAttachmentFromAsset({
+        postId: 'post-ours',
+        marketingAssetId: 'drafts.asset-ours',
+      }),
+    ).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+      message: 'No marketingAsset with that id for this request',
+    })
+    expect(h.readMarketingAssetForPost).not.toHaveBeenCalled()
+  })
+
+  it("refuses another conference's post before the asset is read", async () => {
+    await expect(
+      social().addPostAttachmentFromAsset({
+        postId: 'post-theirs',
+        marketingAssetId: 'asset-ours',
+      }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    expect(h.readMarketingAssetForPost).not.toHaveBeenCalled()
+  })
+
+  it('refuses a GIF, video or track the picker marks as not attachable yet', async () => {
+    h.readMarketingAssetForPost.mockResolvedValue({
+      ...ORG_ASSET,
+      attachable: false,
+    })
+    await expect(
+      social().addPostAttachmentFromAsset({
+        postId: 'post-ours',
+        marketingAssetId: 'asset-ours',
+      }),
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: "GIFs and videos can't be attached to a post yet.",
+    })
+    expect(h.addSocialPostAttachment).not.toHaveBeenCalled()
+  })
+
+  it('refuses an asset without alt text, which a post cannot carry', async () => {
+    h.readMarketingAssetForPost.mockResolvedValue({ ...ORG_ASSET, alt: ' ' })
+    await expect(
+      social().addPostAttachmentFromAsset({
+        postId: 'post-ours',
+        marketingAssetId: 'asset-ours',
+      }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    expect(h.addSocialPostAttachment).not.toHaveBeenCalled()
+  })
+
+  it('reports a post deleted between the guard and the write as NOT_FOUND', async () => {
+    h.addSocialPostAttachment.mockResolvedValue({ refused: 'post-gone' })
+    await expect(
+      social().addPostAttachmentFromAsset({
+        postId: 'post-ours',
+        marketingAssetId: 'asset-ours',
+      }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+  })
+})
+
 describe('social.updateVariant timing on a queued variant', () => {
   it('refuses to follow a post default that does not exist while scheduled', async () => {
     h.getSocialPostVariant.mockResolvedValue(
@@ -1694,5 +1833,23 @@ describe('validation sees the link the tick posts (#1143)', () => {
     })
     // The stored link is still the LONG tagged URL.
     expect(h.updateSocialVariantContent.mock.calls[0][1].link).toBe(LONG)
+  })
+})
+
+/**
+ * SURFACE TRIPWIRE, as in `marketingAsset.test.ts`: a new mutation here must
+ * decide which client ids it takes and how each is proven ours.
+ */
+describe('the social mutation surface is pinned', () => {
+  it('lists every mutation', () => {
+    const procedures = (
+      socialRouter as unknown as {
+        _def: { procedures: Record<string, { _def?: { type?: string } }> }
+      }
+    )._def.procedures
+    const mutations = Object.entries(procedures)
+      .filter(([, p]) => p._def?.type === 'mutation')
+      .map(([path]) => path)
+    expect(mutations.sort()).toMatchSnapshot()
   })
 })
