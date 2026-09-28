@@ -7,21 +7,25 @@
  * accounts, and the editor shows them to organizers. So every variant, in any
  * version, loses every record of the subject — found by its reference, and by
  * a handle or DID one of their records carries (the same account recorded
- * under another reference is still their account).
+ * under another reference is still their account), followed to a fixed
+ * point. A record of ANOTHER speaker who is still here is never theirs, even
+ * on a team account the two share.
  *
- * A body NOT YET POSTED is scrubbed too: each `@handle` of theirs and each
- * whole-word copy of their name becomes the neutral words #1229 posts for a
- * gone speaker ({@link GONE_SPEAKER_TEXT}), and so does a per-variant alt
- * text naming them. That covers a name typed by hand, which no record links
- * to them (the owner's comment on #1232).
+ * A body NOT YET POSTED is scrubbed too: each `@handle` occurrence that stands
+ * for them and each whole-word copy of their name (outside a link) becomes the
+ * neutral words #1229 posts for a gone speaker ({@link GONE_SPEAKER_TEXT}),
+ * and so does a per-variant alt text naming them. That covers a name typed by
+ * hand, which no record links to them (the owner's comment on #1232).
  *
- * STATUS DECIDES THE BODY:
+ * STATUS DECIDES THE BODY — of the LIVE document. A Studio draft or a Content
+ * Release copy was never sent anywhere, whatever status it copied, so it is
+ * always scrubbed and never waited on.
  *  - posted (`published`, `submitted`): the body is what went out and is on
  *    the platform already — out of scope. Only its records are scrubbed.
- *  - `publishing`: the cron holds a claim and will write the variant with a
- *    compare-and-set. Any write here would lose that race for one of the two,
- *    so the erasure is REFUSED while such a variant still holds the subject;
- *    the operator re-runs once the tick has settled it.
+ *  - in flight (`publishing`, `submitted`): the cron or the confirm sweep
+ *    will settle it with a compare-and-set, and a write here would lose that
+ *    race for one of the two. The erasure is REFUSED while such a variant
+ *    still holds the subject; the operator re-runs once it has settled.
  *  - everything else (`draft`, `scheduled`, `awaiting-manual`, `failed`, and
  *    an unknown status — fail toward scrubbing): scrubbed.
  *
@@ -33,14 +37,14 @@
  * which erasure keeps) and of every conference they have a talk at. A
  * namesake inside that scope is scrubbed too — see the runbook.
  *
- * Pure planner, an independent residual check, and one read function — split
+ * Pure planner, a residual check over stored values, and one read function — split
  * from `./erasure.ts` like `./erasure-assets.ts`.
  */
 import { groq } from 'next-sanity'
 import { clientReadUncached } from '@/lib/sanity/client'
 import { COUNT_API_VERSION } from '@/lib/sanity/orphaned-asset'
 import { GONE_SPEAKER_TEXT } from '@/lib/marketing/tagging/body'
-import { mentionTokens } from '@/lib/marketing/tagging/checks'
+import { mentionTokens, occurrenceOwners } from '@/lib/marketing/tagging/checks'
 import { normaliseHandle } from '@/lib/social/provider/bluesky-syntax'
 import type { ErasureDocumentPatch } from './erasure'
 
@@ -48,11 +52,18 @@ type Doc = Record<string, unknown> & { _id: string; _type: string }
 
 /** Statuses whose body has gone out: only their records are scrubbed. */
 const POSTED_VARIANT_STATUSES = ['published', 'submitted'] as const
-/** The cron's claim: the erasure refuses rather than race it. */
-const IN_FLIGHT_STATUS = 'publishing'
+/**
+ * The publisher's claims — the cron's (`publishing`) and an asynchronous
+ * publisher's awaiting confirmation (`submitted`). Each is settled by a
+ * revision-guarded write, so the erasure refuses rather than race it.
+ */
+const IN_FLIGHT_STATUSES = ['publishing', 'submitted'] as const
 
 /** Sanity `_key`s are safe to interpolate only if they look like this. */
 const SAFE_KEY = /^[A-Za-z0-9._-]+$/
+
+/** Stands in for an inserted placeholder until every pass is done. */
+const SENTINEL = '\uE000'
 
 /**
  * Who to scrub: the subject's name, and every name, handle and DID a record
@@ -82,7 +93,14 @@ interface MentionEntry {
   name?: unknown
   handle?: unknown
   did?: unknown
+  status?: unknown
   speaker?: { _ref?: unknown }
+  /**
+   * Read with the variant: the record is ANOTHER speaker's, and they are
+   * still here. A team account two speakers share is theirs too, so such a
+   * record is never the subject's, whatever handle or DID it carries.
+   */
+  otherLive?: unknown
 }
 
 interface AttachmentEntry {
@@ -98,34 +116,52 @@ function list<T>(value: unknown): T[] {
 
 const str = (v: unknown) => (typeof v === 'string' ? v : null)
 
-/** A record of the subject: by reference, or by a handle or DID of theirs. */
+/**
+ * A record of the subject: by reference, or by a handle or DID of theirs on
+ * a record that is not another live speaker's (a dangling or erased
+ * reference, or none at all).
+ */
 function isSubjectRecord(
   m: MentionEntry,
   speakerId: string,
   identity: MentionIdentity,
 ): boolean {
+  if (m.speaker?._ref === speakerId) return true
+  if (m.otherLive === true) return false
   const handle = str(m.handle)
   const did = str(m.did)
   return (
-    m.speaker?._ref === speakerId ||
     (handle !== null && identity.handles.includes(normaliseHandle(handle))) ||
     (did !== null && identity.dids.includes(did))
   )
 }
 
-/** Every name, handle and DID the subject's records carry, plus `name`. */
+/** The handles another live speaker's record in this variant carries. */
+function sharedHandles(v: Doc): Set<string> {
+  return new Set(
+    list<MentionEntry>(v.mentions)
+      .filter((m) => m.otherLive === true)
+      .map((m) => str(m.handle))
+      .filter((h): h is string => h !== null)
+      .map(normaliseHandle),
+  )
+}
+
+/**
+ * The identity grown by every record of the subject among `variants` — by
+ * reference, or by an account already known to be theirs.
+ */
 function mentionIdentity(
   speakerId: string,
   variants: readonly Doc[],
-  name: string | null,
-  prior: Partial<MentionIdentity> = {},
+  base: MentionIdentity,
 ): MentionIdentity {
-  const names = new Set([...(name ? [name] : []), ...(prior.names ?? [])])
-  const handles = new Set(prior.handles ?? [])
-  const dids = new Set(prior.dids ?? [])
+  const names = new Set(base.names)
+  const handles = new Set(base.handles)
+  const dids = new Set(base.dids)
   for (const v of variants)
     for (const m of list<MentionEntry>(v.mentions)) {
-      if (m.speaker?._ref !== speakerId) continue
+      if (!isSubjectRecord(m, speakerId, base)) continue
       const [stored, handle, did] = [str(m.name), str(m.handle), str(m.did)]
       if (stored) names.add(stored)
       if (handle) handles.add(normaliseHandle(handle))
@@ -142,9 +178,8 @@ function mentionIdentity(
 
 /**
  * Any of the names as whole words, any case, across any run of whitespace —
- * longest first. Not inside a longer word, and not part of a handle, a
- * domain or a URL ("Ada" is not in "@ada-l.dev" or "x.dev/Ada"), so another
- * person's tag is never broken. Null when there is no name to look for.
+ * longest first. Not inside a longer word, and not part of a handle or a
+ * domain ("Ada" is not in "@ada-l.dev"). Null when there is no name.
  */
 function namePattern(names: readonly string[]): RegExp | null {
   if (names.length === 0) return null
@@ -158,23 +193,96 @@ function namePattern(names: readonly string[]): RegExp | null {
         .join('\\s+'),
     )
   return new RegExp(
-    `(?<![\\p{L}\\p{N}_@./-])(?:${alternatives.join('|')})(?![\\p{L}\\p{N}_]|[.@/-][\\p{L}\\p{N}_])`,
+    `(?<![\\p{L}\\p{N}_@./=#?&:-])(?:${alternatives.join('|')})(?![\\p{L}\\p{N}_]|[.@/-][\\p{L}\\p{N}_])`,
     'giu',
   )
 }
 
-/** The text with every tag and whole-word name of the subject neutralised. */
-function scrubText(text: string, identity: MentionIdentity): string {
-  let out = text
-  for (const t of mentionTokens(out).reverse())
-    if (identity.handles.includes(t.handle))
-      out = `${out.slice(0, t.start)}${GONE_SPEAKER_TEXT}${out.slice(t.end)}`
-  const pattern = namePattern(identity.names)
-  return pattern ? out.replace(pattern, GONE_SPEAKER_TEXT) : out
+/** Where a link stands: a URL is left whole, a name inside it untouched. */
+const LINK = /(?:https?:\/\/|www\.)\S+/gi
+
+/** Each match of the name outside a link: `[start, end]`. */
+function nameSpans(text: string, names: readonly string[]): [number, number][] {
+  const pattern = namePattern(names)
+  if (!pattern) return []
+  const links = [...text.matchAll(LINK)].map((m) => [
+    m.index,
+    m.index + m[0].length,
+  ])
+  // An earlier run's placeholder is not their name, either — or a speaker
+  // named "Speaker" would be scrubbed again on every run.
+  const placeholders = [
+    ...text.matchAll(new RegExp(GONE_SPEAKER_TEXT, 'gi')),
+  ].map((m) => [m.index, m.index + m[0].length])
+  const kept = [...links, ...placeholders]
+  return [...text.matchAll(pattern)]
+    .map((m): [number, number] => [m.index, m.index + m[0].length])
+    .filter(([a, b]) => !kept.some(([s, e]) => a < e && b > s))
 }
 
-const isPosted = (status: unknown) =>
-  (POSTED_VARIANT_STATUSES as readonly unknown[]).includes(status)
+/**
+ * The `@handle` tokens that stand for the subject: a recorded handle's
+ * occurrences as the publisher binds them to records (`occurrenceOwners`,
+ * the same binding #1229's publish-time swap uses), and an unrecorded one
+ * of their handles.
+ */
+function subjectTags(
+  text: string,
+  v: Doc,
+  speakerId: string,
+  identity: MentionIdentity,
+) {
+  const records = list<MentionEntry>(v.mentions)
+    .filter((m) => m.status === 'tagged' && str(m.handle) !== null)
+    .map((m) => ({
+      handle: str(m.handle) as string,
+      speakerId: '',
+      status: 'tagged' as const,
+      name: str(m.name) ?? '',
+      subject: isSubjectRecord(m, speakerId, identity),
+    }))
+    .map((r, i) => ({ ...r, speakerId: String(i) }))
+  const owners = occurrenceOwners(text, records)
+  const seen = new Map<string, number>()
+  return mentionTokens(text).filter((t) => {
+    const mine = records.filter((r) => normaliseHandle(r.handle) === t.handle)
+    const k = seen.get(t.handle) ?? 0
+    seen.set(t.handle, k + 1)
+    // Unrecorded: one of their handles (a shared one is always recorded
+    // for its other owner, so it never lands here).
+    if (mine.length === 0) return identity.handles.includes(t.handle)
+    // More occurrences than owners: the extras are the last record's.
+    const id = owners.get(t.handle)?.[k]
+    const r = id !== undefined ? records[Number(id)] : mine[mine.length - 1]
+    return r.subject
+  })
+}
+
+/** The text with every tag and whole-word name of the subject neutralised. */
+function scrubText(
+  text: string,
+  v: Doc,
+  speakerId: string,
+  identity: MentionIdentity,
+): string {
+  // Tags first, into a sentinel, so the name pass never matches inside an
+  // inserted placeholder (a speaker named "Speaker").
+  let out = text
+  for (const t of subjectTags(text, v, speakerId, identity).reverse())
+    out = `${out.slice(0, t.start)}${SENTINEL}${out.slice(t.end)}`
+  for (const [a, b] of nameSpans(out, identity.names).reverse())
+    out = `${out.slice(0, a)}${SENTINEL}${out.slice(b)}`
+  return out.replaceAll(SENTINEL, GONE_SPEAKER_TEXT)
+}
+
+/** A Studio draft or a Content Release copy was never sent anywhere. */
+const isLive = (v: Doc) =>
+  !v._id.startsWith('drafts.') && !v._id.startsWith('versions.')
+const isPosted = (v: Doc) =>
+  isLive(v) &&
+  (POSTED_VARIANT_STATUSES as readonly unknown[]).includes(v.status)
+const isInFlight = (v: Doc) =>
+  isLive(v) && (IN_FLIGHT_STATUSES as readonly unknown[]).includes(v.status)
 
 /**
  * One patch per variant still holding the subject; a variant mid-publish, or
@@ -203,16 +311,16 @@ export function planSpeakerMentionErasure(
       else unaddressable.push('mentions')
     }
 
-    if (!isPosted(v.status)) {
+    if (!isPosted(v)) {
       const body = str(v.body)
       if (body !== null) {
-        const scrubbed = scrubText(body, identity)
+        const scrubbed = scrubText(body, v, speakerId, identity)
         if (scrubbed !== body) set.body = scrubbed
       }
       for (const a of list<AttachmentEntry>(v.attachments)) {
         const alt = str(a.altOverride)
         if (alt === null) continue
-        const scrubbed = scrubText(alt, identity)
+        const scrubbed = scrubText(alt, v, speakerId, identity)
         if (scrubbed === alt) continue
         const key = str(a._key)
         if (key && SAFE_KEY.test(key))
@@ -227,10 +335,11 @@ export function planSpeakerMentionErasure(
       unaddressable.length === 0
     )
       continue
-    if (v.status === IN_FLIGHT_STATUS) {
+    if (isInFlight(v)) {
       refusals.push(
         `Post variant ${v._id} names the subject and is being published right ` +
-          'now; re-run the erasure once the publish tick has settled it',
+          `now (${String(v.status)}); re-run the erasure once the publisher ` +
+          'has settled it',
       )
       continue
     }
@@ -274,27 +383,30 @@ export function residualMentionVariants(
   variants: readonly Doc[],
   identity: MentionIdentity,
 ): string[] {
-  const holds = (text: unknown) => {
-    const t = str(text)
-    if (t === null) return false
-    if (mentionTokens(t).some((m) => identity.handles.includes(m.handle)))
-      return true
-    return namePattern(identity.names)?.test(t) ?? false
-  }
   const ids = new Set<string>()
   for (const v of variants) {
-    const records = list<MentionEntry>(v.mentions)
-    const recorded = records.some((m) => {
+    const shared = sharedHandles(v)
+    const holds = (text: unknown) => {
+      const t = str(text)
+      if (t === null) return false
+      return (
+        mentionTokens(t).some(
+          (m) => identity.handles.includes(m.handle) && !shared.has(m.handle),
+        ) || nameSpans(t, identity.names).length > 0
+      )
+    }
+    const recorded = list<MentionEntry>(v.mentions).some((m) => {
+      if (m.speaker?._ref === speakerId) return true
       const [handle, did] = [str(m.handle), str(m.did)]
       return (
-        m.speaker?._ref === speakerId ||
-        (handle !== null &&
+        m.otherLive !== true &&
+        ((handle !== null &&
           identity.handles.includes(normaliseHandle(handle))) ||
-        (did !== null && identity.dids.includes(did))
+          (did !== null && identity.dids.includes(did)))
       )
     })
     const inText =
-      !isPosted(v.status) &&
+      !isPosted(v) &&
       (holds(v.body) ||
         list<AttachmentEntry>(v.attachments).some((a) => holds(a.altOverride)))
     if (recorded || inText) ids.add(v._id)
@@ -302,7 +414,8 @@ export function residualMentionVariants(
   return [...ids]
 }
 
-const VARIANT_FIELDS = groq`{ _id, _type, _rev, status, body, mentions, attachments, conference }`
+// `otherLive`: see `MentionEntry`. Every read below passes `$speakerId`.
+const VARIANT_FIELDS = groq`{ _id, _type, _rev, status, body, attachments, conference, "mentions": mentions[]{ ..., "otherLive": defined(speaker._ref) && speaker._ref != $speakerId && defined(speaker->_id) && !defined(speaker->erasedAt) } }`
 
 /**
  * The reads: variants recording the subject by reference, then (knowing
@@ -335,7 +448,11 @@ export async function fetchSpeakerMentionInputs(
       { speakerId },
       opts,
     )) ?? []
-  const identity = mentionIdentity(speakerId, byRef, currentName, prior)
+  let identity = mentionIdentity(speakerId, byRef, {
+    names: [...(currentName ? [currentName] : []), ...(prior.names ?? [])],
+    handles: prior.handles ?? [],
+    dids: prior.dids ?? [],
+  })
 
   const orgIds = list<{ _ref?: unknown }>(organizations)
     .map((r) => str(r._ref))
@@ -360,7 +477,7 @@ export async function fetchSpeakerMentionInputs(
     ...new Set([...(orgConferences ?? []), ...(talkConferences ?? [])]),
   ].filter((id) => typeof id === 'string')
 
-  const byAccountOrScope =
+  const readByAccountOrScope = async (known: MentionIdentity) =>
     (await client.fetch<Doc[]>(
       // groq-global: the same account recorded under another reference is
       // found in every tenant, like the reference read above; the plain-name
@@ -372,13 +489,29 @@ export async function fetchSpeakerMentionInputs(
       {
         speakerId,
         // Stored handles are normalised; one kept with its `@` still counts.
-        handles: identity.handles.flatMap((h) => [h, `@${h}`]),
-        dids: identity.dids,
+        handles: known.handles.flatMap((h) => [h, `@${h}`]),
+        dids: known.dids,
         conferenceIds,
         posted: [...POSTED_VARIANT_STATUSES],
       },
       opts,
     )) ?? []
 
+  // A record found by their account may carry another handle or DID of
+  // theirs, which finds more: read to a fixed point (bounded — each round
+  // must grow the identity, and a person has few accounts).
+  let byAccountOrScope = await readByAccountOrScope(identity)
+  for (let round = 0; round < 5; round++) {
+    const grown = mentionIdentity(speakerId, byAccountOrScope, identity)
+    if (
+      grown.handles.length === identity.handles.length &&
+      grown.dids.length === identity.dids.length
+    ) {
+      identity = grown
+      break
+    }
+    identity = grown
+    byAccountOrScope = await readByAccountOrScope(identity)
+  }
   return { variants: [...byRef, ...byAccountOrScope], identity }
 }

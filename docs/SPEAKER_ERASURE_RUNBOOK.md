@@ -236,6 +236,8 @@ variants of every conference of the person's organizations and of every
 conference they have a talk at — not across other tenants, where the same name
 is a stranger.
 
+- A **co-speaker who shares a team account** with them keeps their own record
+  and their own occurrence of the tag.
 - A **namesake** inside that scope — another person with exactly the same name
   — is neutralised too: the tool cannot tell two people apart by name. The dry
   run lists each variant it rewrites; read them.
@@ -309,11 +311,14 @@ post attachment whose `_key` cannot be selected safely. The file cannot be
 deleted while that document holds it, so nothing has been written. Decide what
 that document should lose, change it by hand, then re-run.
 
-**"Post variant X names the subject and is being published right now."** The
-publish cron holds a claim on that variant and will write it with a
-compare-and-set; an erasure write in between would lose the race for one of the
-two. Nothing has been written. Wait a few minutes (a stale claim is failed by
-the cron, never re-posted) and re-run.
+**"Post variant X names the subject and is being published right now
+(publishing | submitted)."** The publish cron, or the sweep confirming an
+asynchronous publisher, holds that variant and will settle it with a
+compare-and-set; an erasure write in between would lose the race for one of
+the two. Nothing has been written. Wait a few minutes (a stale claim is failed
+by the cron, never re-posted; a submission settles on the next confirm sweep)
+and re-run. Only the live variant counts — a Studio draft or release copy is
+scrubbed whatever status it copied.
 
 **"Post variant X has … entries naming the subject that cannot be safely
 selected."** A `mentions[]` or `attachments[]` entry has a `_key` that cannot

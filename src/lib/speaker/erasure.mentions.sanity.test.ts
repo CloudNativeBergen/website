@@ -390,6 +390,105 @@ describe('speaker erasure scrubs post variants (#1232)', () => {
     expect(doc('var-at').mentions).toEqual([])
   })
 
+  describe('review round 1 (Codex)', () => {
+    it('keeps a live co-speaker’s record and tag on a team account they share', async () => {
+      const team = (key: string, speaker: string, name: string) =>
+        mention(key, speaker, 'team.dev', name, 'did:plc:team')
+      h.dataset.push(
+        variant('var-team', 'scheduled', '@team.dev and @team.dev speak', {
+          mentions: [
+            team('t-ada', ADA, 'Ada Lovelace'),
+            team('t-bob', BOB, 'Bob Builder'),
+          ],
+        }),
+        variant('var-bob-team', 'draft', 'Hear @team.dev', {
+          conference: ref('conf-x'),
+          mentions: [team('t-bob', BOB, 'Bob Builder')],
+        }),
+      )
+      const result = await eraseSpeakerInPlace({
+        speakerId: ADA,
+        actor: 'test',
+      })
+      expect(result.err).toBeNull()
+      expect(doc('var-team').body).toBe('a speaker and @team.dev speak')
+      expect(doc('var-team').mentions).toEqual([
+        team('t-bob', BOB, 'Bob Builder'),
+      ])
+      expect(doc('var-bob-team').body).toBe('Hear @team.dev')
+      expect(doc('var-bob-team').mentions).toHaveLength(1)
+      expect(result.verification?.clean).toBe(true)
+    })
+
+    it('REFUSES while a live variant naming her awaits the publisher’s confirmation (submitted)', async () => {
+      h.dataset.push(variant('var-submitted', 'submitted', TAGGED))
+      const before = structuredClone(h.dataset)
+      const result = await eraseSpeakerInPlace({
+        speakerId: ADA,
+        actor: 'test',
+      })
+      expect(result.err?.message).toMatch(/var-submitted.*submitted/)
+      expect(h.dataset).toEqual(before)
+    })
+
+    it('a speaker named "Speaker": the placeholder is never scrubbed again, and verification is clean', async () => {
+      doc(ADA).name = 'Speaker'
+      const first = await eraseSpeakerInPlace({ speakerId: ADA, actor: 'test' })
+      expect(doc('var-scheduled').body).toBe(
+        '🎙️ a speaker and @bob.dev are speaking. Meet a speaker!',
+      )
+      expect(first.verification?.clean).toBe(true)
+    })
+
+    it('leaves a URL whole, query and fragment included', async () => {
+      const body =
+        'See https://example.test/?name=Ada and https://example.test/#Ada'
+      h.dataset.push(variant('var-url', 'draft', body, { mentions: [] }))
+      doc(ADA).name = 'Ada'
+      await eraseSpeakerInPlace({ speakerId: ADA, actor: 'test' })
+      expect(doc('var-url').body).toBe(body)
+    })
+
+    it('scrubs a draft or release copy whatever status it copied, and never waits on one', async () => {
+      h.dataset.push(
+        variant('drafts.var-published', 'published', TAGGED),
+        variant('versions.rlaunch.var-stuck', 'publishing', TAGGED),
+      )
+      const result = await eraseSpeakerInPlace({
+        speakerId: ADA,
+        actor: 'test',
+      })
+      expect(result.err).toBeNull()
+      const scrubbed = '🎙️ a speaker and @bob.dev are speaking. Meet a speaker!'
+      expect(doc('drafts.var-published').body).toBe(scrubbed)
+      expect(doc('versions.rlaunch.var-stuck').body).toBe(scrubbed)
+    })
+
+    it('follows her account to a fixed point: another handle and spelling on a record found by DID, and what that handle finds', async () => {
+      h.dataset.push(
+        variant('var-alias', 'draft', 'Hi @ada.other and A. Lovelace', {
+          conference: ref('conf-x'),
+          mentions: [
+            mention('m1', 'spk-gone-1', 'ada.other', 'A. Lovelace', ADA_DID),
+          ],
+        }),
+        variant('var-alias-2', 'draft', 'Hi @ada.other', {
+          conference: ref('conf-x'),
+          mentions: [mention('m2', 'spk-gone-2', 'ada.other', 'A. L.')],
+        }),
+      )
+      const result = await eraseSpeakerInPlace({
+        speakerId: ADA,
+        actor: 'test',
+      })
+      expect(result.err).toBeNull()
+      expect(doc('var-alias').body).toBe('Hi a speaker and a speaker')
+      expect(doc('var-alias-2').body).toBe('Hi a speaker')
+      expect(doc('var-alias-2').mentions).toEqual([])
+      expect(result.verification?.clean).toBe(true)
+    })
+  })
+
   it('REFUSES, writing nothing, while a variant naming her is being published', async () => {
     h.dataset.push(variant('var-in-flight', 'publishing', TAGGED))
     const before = structuredClone(h.dataset)
