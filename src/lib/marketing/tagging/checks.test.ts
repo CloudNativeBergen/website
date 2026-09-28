@@ -23,7 +23,7 @@ import {
   untagOwned,
   type TaggablePerson,
 } from './checks'
-import { GONE_SPEAKER_TEXT, type MentionRecord } from './body'
+import type { MentionRecord } from './body'
 import type { HandleResolution } from './resolve'
 
 const alice: TaggablePerson = {
