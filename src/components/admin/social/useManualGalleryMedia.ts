@@ -1,6 +1,7 @@
 'use client'
 
 import { api } from '@/lib/trpc/client'
+import { isPostedByHand } from '@/lib/marketing-asset'
 import { richTextImageUrl } from '@/lib/homepage/richTextImage'
 import { assetContext } from './asset-context'
 import type { GalleryMediaItem } from './ManualPostView'
@@ -15,14 +16,14 @@ export function useManualGalleryMedia(
   postId: string | null,
 ): readonly GalleryMediaItem[] | 'error' | undefined {
   const query = api.marketingAsset.forPost.useQuery(
-    { postId: postId ?? '' },
+    { postId: postId ?? '', byHand: true },
     { enabled: postId !== null },
   )
   if (query.error) return 'error'
   if (!query.data) return undefined
+  // The server sends only GIFs and videos; the narrowing is for the types.
   return query.data.flatMap((asset): GalleryMediaItem[] => {
-    if ((asset.kind !== 'gif' && asset.kind !== 'video') || !asset.downloadUrl)
-      return []
+    if (!isPostedByHand(asset.kind) || !asset.downloadUrl) return []
     // A video's poster stands in for it; a GIF's own (still) rendition.
     const thumbnailId =
       asset.kind === 'video' ? asset.posterAssetId : asset.assetId

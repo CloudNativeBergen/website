@@ -988,7 +988,7 @@ export const MotionGallery: Story = {
     await expect(canvas.getByText('GIF')).toBeInTheDocument()
     await expect(
       canvas.getByRole('link', {
-        name: 'Download the original video of Opening night, 20-second cut',
+        name: 'Download original video: Opening night, 20-second cut',
       }),
     ).toHaveAttribute(
       'href',
@@ -996,7 +996,7 @@ export const MotionGallery: Story = {
     )
     await expect(
       canvas.getByRole('link', {
-        name: 'Download the original GIF of Waving mascot',
+        name: 'Download original GIF: Waving mascot',
       }),
     ).toHaveAttribute(
       'href',

@@ -677,7 +677,7 @@ function GalleryMediaSection({
               <a
                 href={item.downloadUrl}
                 download
-                aria-label={`Download the original ${item.kind === 'gif' ? 'GIF' : 'video'}: ${item.title}`}
+                aria-label={`Download original ${item.kind === 'gif' ? 'GIF' : 'video'}: ${item.title}`}
                 className={actionClass}
               >
                 <ArrowDownTrayIcon className="size-4" />

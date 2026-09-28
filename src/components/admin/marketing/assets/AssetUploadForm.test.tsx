@@ -424,6 +424,21 @@ describe('picking an audio track (#1178)', () => {
   })
 })
 
+/** A file an MP4 sniff accepts: an `ftyp` box with the `isom` brand. */
+const mp4 = (name: string) =>
+  new File(
+    [
+      new Uint8Array(
+        [0, 0, 0, 0x20, ...'ftypisom'].map((c) =>
+          typeof c === 'string' ? c.charCodeAt(0) : c,
+        ),
+      ),
+      new Uint8Array(64),
+    ],
+    name,
+    { type: 'video/mp4' },
+  )
+
 describe('GIFs and videos (#1167)', () => {
   beforeEach(() => {
     poster.read = {
@@ -466,7 +481,7 @@ describe('GIFs and videos (#1167)', () => {
 
   it('previews a video, requires alt text, and uploads it with its poster', async () => {
     const { pick, uploader } = renderForm()
-    await pick(new File(['x'], 'Opening.mp4', { type: 'video/mp4' }))
+    await pick(mp4('Opening.mp4'))
     const preview = screen.getByLabelText('Preview of Opening.mp4')
     expect(preview.tagName).toBe('VIDEO')
     // The poster drawn from the first frame is what it shows until played.
@@ -503,7 +518,7 @@ describe('GIFs and videos (#1167)', () => {
     render(<AssetUploadForm uploader={uploader} onSaved={() => {}} />)
     await act(async () => {
       fireEvent.change(screen.getByLabelText(/Choose an image/), {
-        target: { files: [new File(['x'], 'a.mp4', { type: 'video/mp4' })] },
+        target: { files: [mp4('a.mp4')] },
       })
     })
     fireEvent.change(screen.getByLabelText('Alt text'), {
@@ -519,10 +534,29 @@ describe('GIFs and videos (#1167)', () => {
     await act(async () => finish())
   })
 
+  it('refuses a .mov renamed .mp4 by its bytes, before reading or uploading it', async () => {
+    const { pick, uploader } = renderForm()
+    const renamed = new File(
+      [
+        new Uint8Array([
+          0, 0, 0, 0x14, 0x66, 0x74, 0x79, 0x70, 0x71, 0x74, 0x20, 0x20,
+        ]),
+        new Uint8Array(64),
+      ],
+      'clip.mp4',
+      { type: 'video/mp4' },
+    )
+    await pick(renamed)
+    expect(screen.getByRole('alert').textContent).toBe(
+      'Only MP4 video can be added. Export a .mov again as MP4 and retry.',
+    )
+    expect(uploader).not.toHaveBeenCalled()
+  })
+
   it('refuses a video this browser cannot draw a first frame of', async () => {
     poster.read = null
     const { pick } = renderForm()
-    await pick(new File(['x'], 'hevc.mp4', { type: 'video/mp4' }))
+    await pick(mp4('hevc.mp4'))
     expect(screen.getByRole('alert').textContent).toMatch(
       /could not read the video’s first frame/,
     )

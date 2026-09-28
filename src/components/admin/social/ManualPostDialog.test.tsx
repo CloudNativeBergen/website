@@ -19,7 +19,12 @@ import {
 } from '@tanstack/react-query'
 import type { SocialVariantEditorData } from '@/lib/social/types'
 
-const h = vi.hoisted(() => ({ fetchEditor: vi.fn() }))
+const h = vi.hoisted(() => ({
+  fetchEditor: vi.fn(),
+  // What `marketingAsset.forPost` answers, and every input it was asked with.
+  gallery: [] as unknown[],
+  galleryInputs: [] as unknown[],
+}))
 
 vi.mock('@/lib/trpc/client', () => ({
   api: {
@@ -48,7 +53,12 @@ vi.mock('@/lib/trpc/client', () => ({
     },
     // The manual view's GIFs and videos (#1167): none in these tests.
     marketingAsset: {
-      forPost: { useQuery: () => ({ data: [], error: null }) },
+      forPost: {
+        useQuery: (input: unknown) => {
+          h.galleryInputs.push(input)
+          return { data: h.gallery, error: null }
+        },
+      },
     },
   },
 }))
@@ -92,7 +102,11 @@ const editor = (manualBody: string | null): SocialVariantEditorData => ({
 })
 
 afterEach(cleanup)
-beforeEach(() => h.fetchEditor.mockReset())
+beforeEach(() => {
+  h.fetchEditor.mockReset()
+  h.gallery = []
+  h.galleryInputs = []
+})
 
 describe('ManualPostDialog — a fresh check on every opening (review T4)', () => {
   it('a reopen never shows the body checked for an earlier opening', async () => {
@@ -176,5 +190,63 @@ describe('ManualPostDialog — a fresh check on every opening (review T4)', () =
     )
     expect(await screen.findByText(/could not check this post/i)).toBeTruthy()
     expect(screen.queryByText(TAGGED)).toBeNull()
+  })
+})
+
+describe('ManualPostDialog — the gallery’s GIFs and videos (#1167)', () => {
+  const galleryRow = (fields: Record<string, unknown>) => ({
+    title: 'x',
+    alt: 'alt',
+    scope: 'organization',
+    edition: null,
+    subject: null,
+    assetId: null,
+    posterAssetId: null,
+    downloadUrl: null,
+    ...fields,
+  })
+
+  it('asks the server for the post’s GIFs and videos and offers each original', async () => {
+    h.gallery = [
+      galleryRow({
+        _id: 'clip',
+        kind: 'video',
+        title: 'Opening',
+        posterAssetId: 'image-poster-1920x1080-jpg',
+        downloadUrl: 'https://cdn.sanity.io/files/p/d/clip.mp4?dl=opening.mp4',
+      }),
+      galleryRow({
+        _id: 'wave',
+        kind: 'gif',
+        title: 'Wave',
+        assetId: 'image-wave-480x480-gif',
+        downloadUrl: '/api/admin/marketing-assets/original?asset=wave',
+      }),
+      // Were the server ever to send one, a still image is not offered here.
+      galleryRow({ _id: 'logo', kind: 'image', title: 'Logo' }),
+    ]
+    h.fetchEditor.mockResolvedValue(editor(null))
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+    render(
+      <QueryClientProvider client={client}>
+        <ManualPostDialog variantId="v-1" onClose={() => {}} />
+      </QueryClientProvider>,
+    )
+    const video = await screen.findByRole('link', {
+      name: 'Download original video: Opening',
+    })
+    expect(video.getAttribute('href')).toBe(
+      'https://cdn.sanity.io/files/p/d/clip.mp4?dl=opening.mp4',
+    )
+    expect(
+      screen
+        .getByRole('link', { name: 'Download original GIF: Wave' })
+        .getAttribute('href'),
+    ).toBe('/api/admin/marketing-assets/original?asset=wave')
+    expect(screen.queryByText('Logo')).toBeNull()
+    // For THIS post, and only the kinds posted by hand.
+    expect(h.galleryInputs).toContainEqual({ postId: 'p-1', byHand: true })
   })
 })

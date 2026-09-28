@@ -162,7 +162,7 @@ describe('ManualPostView — GIFs and videos from the gallery (#1167)', () => {
   it('offers each ORIGINAL file to download, with its alt text to copy', () => {
     view(media(2))
     const video = screen.getByRole('link', {
-      name: 'Download the original video: Clip 0',
+      name: 'Download original video: Clip 0',
     })
     expect(video.getAttribute('href')).toBe(
       'https://cdn.sanity.io/files/p/d/m-0.mp4?dl=clip-0.mp4',
@@ -170,7 +170,7 @@ describe('ManualPostView — GIFs and videos from the gallery (#1167)', () => {
     expect(video.hasAttribute('download')).toBe(true)
     expect(
       screen
-        .getByRole('link', { name: 'Download the original GIF: Clip 1' })
+        .getByRole('link', { name: 'Download original GIF: Clip 1' })
         .getAttribute('href'),
     ).toBe('/api/admin/marketing-assets/original?asset=m-1')
     expect(
@@ -182,11 +182,11 @@ describe('ManualPostView — GIFs and videos from the gallery (#1167)', () => {
   it('shows three, then all on request', () => {
     view(media(5))
     expect(
-      screen.getAllByRole('link', { name: /Download the original/ }),
+      screen.getAllByRole('link', { name: /Download original/ }),
     ).toHaveLength(3)
     fireEvent.click(screen.getByRole('button', { name: 'Show all 5' }))
     expect(
-      screen.getAllByRole('link', { name: /Download the original/ }),
+      screen.getAllByRole('link', { name: /Download original/ }),
     ).toHaveLength(5)
   })
 
@@ -202,8 +202,6 @@ describe('ManualPostView — GIFs and videos from the gallery (#1167)', () => {
 
   it('offers nothing once the post is recorded', () => {
     view(media(1), 'published')
-    expect(
-      screen.queryByRole('link', { name: /Download the original/ }),
-    ).toBeNull()
+    expect(screen.queryByRole('link', { name: /Download original/ })).toBeNull()
   })
 })

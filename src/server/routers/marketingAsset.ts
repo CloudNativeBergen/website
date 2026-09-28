@@ -112,6 +112,8 @@ export const marketingAssetRouter = router({
         postId: LiveDocumentIdSchema,
         editions: z.enum(['current', 'all']).optional(),
         search: z.string().max(200).optional(),
+        /** Only the GIFs and videos, which the manual view offers (#1167). */
+        byHand: z.boolean().optional(),
       }),
     )
     .query(async ({ input }) => {
@@ -123,6 +125,7 @@ export const marketingAssetRouter = router({
       return listMarketingAssetsForPost(orgId, conferenceId, input.postId, {
         editions: input.editions,
         search: input.search,
+        byHand: input.byHand,
       })
     }),
 

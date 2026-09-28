@@ -873,14 +873,14 @@ export const WithGalleryMedia: Story = {
     const canvas = within(canvasElement)
     await expect(
       canvas.getByRole('link', {
-        name: 'Download the original video: Opening night, 20-second cut',
+        name: 'Download original video: Opening night, 20-second cut',
       }),
     ).toHaveAttribute(
       'href',
       'https://cdn.sanity.io/files/p/d/clip.mp4?dl=opening-night-20-second-cut.mp4',
     )
     await expect(
-      canvas.getAllByRole('link', { name: /Download the original/ }),
+      canvas.getAllByRole('link', { name: /Download original/ }),
     ).toHaveLength(3)
     await expect(
       canvas.getByRole('button', { name: 'Show all 4' }),

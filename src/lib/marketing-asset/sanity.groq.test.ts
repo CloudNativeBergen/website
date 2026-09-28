@@ -1000,5 +1000,13 @@ describe('GIFs and videos (#1167)', () => {
       ['wave', false],
       ['clip', false],
     ])
+    // The manual view asks for only these, filtered on the server.
+    const byHand = await listMarketingAssetsForPost(
+      'org-a',
+      'conf-a-2026',
+      'post-1',
+      { byHand: true },
+    )
+    expect(byHand.map((r) => r._id)).toEqual(['wave', 'clip'])
   })
 })

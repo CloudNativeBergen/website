@@ -37,7 +37,9 @@ export function readVideoPoster(file: File): Promise<VideoPoster | null> {
     video.playsInline = true
     video.preload = 'auto'
     video.onerror = () => done(null)
-    video.onloadeddata = () => {
+    // On metadata, not on data: iOS loads no frame of a video that is not in
+    // the page until something (a seek) asks for one.
+    video.onloadedmetadata = () => {
       // A hair past zero: some browsers skip a seek to where they already are.
       video.currentTime = Math.min(0.001, video.duration || 0)
     }

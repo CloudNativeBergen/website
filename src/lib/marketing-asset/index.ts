@@ -33,7 +33,11 @@ export {
   audioTypeForFile,
   formatTrackLength,
 } from './audio-type'
-export { MARKETING_ASSET_SUBJECT_TYPES, kindHasAlt } from './types'
+export {
+  MARKETING_ASSET_SUBJECT_TYPES,
+  isPostedByHand,
+  kindHasAlt,
+} from './types'
 export {
   MARKETING_ASSET_GIF_SIZE_REFUSAL,
   MARKETING_ASSET_GIF_TYPE,
@@ -46,6 +50,8 @@ export {
   MARKETING_ASSET_VIDEO_SIZE_REFUSAL,
   MARKETING_ASSET_VIDEO_TYPE,
   MARKETING_ASSET_VIDEO_TYPE_REFUSAL,
+  MOTION_SNIFF_BYTES,
+  isMp4,
   isQuickTimeFile,
   motionKindForFile,
 } from './motion-type'

@@ -17,6 +17,8 @@ import { AdminPageHeader } from '@/components/admin/AdminPageHeader'
 import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
 import { useNotification } from '@/components/admin/NotificationProvider'
 import {
+  isPostedByHand,
+  kindHasAlt,
   openInStudioHref,
   opensTheCard,
   type MarketingAssetFilter,
@@ -25,6 +27,7 @@ import {
 import { api } from '@/lib/trpc/client'
 import { formatDateSafe } from '@/lib/time'
 import { AssetEditDialog } from './AssetEditDialog'
+import { KIND_NOUN } from './AssetDetailsFields'
 import { AssetFilters } from './AssetFilters'
 import { AssetUploadForm } from './AssetUploadForm'
 import { SUBJECT_LABEL } from './SubjectCombobox'
@@ -88,7 +91,7 @@ function AssetCard({
             />
           )
         )}
-        {(asset.kind === 'gif' || asset.kind === 'video') && (
+        {isPostedByHand(asset.kind) && (
           <span className="pointer-events-none absolute top-2 left-2 rounded-md bg-gray-900/80 px-1.5 py-0.5 text-[11px] font-semibold tracking-wide text-white uppercase">
             {asset.kind === 'gif' ? 'GIF' : 'Video'}
           </span>
@@ -209,7 +212,7 @@ function AssetCard({
             <a
               href={asset.downloadUrl}
               download
-              aria-label={`Download the original ${asset.kind === 'gif' ? 'GIF' : 'video'} of ${asset.title}`}
+              aria-label={`Download original ${KIND_NOUN[asset.kind]}: ${asset.title}`}
               className="inline-flex items-center gap-1 text-xs font-medium text-brand-cloud-blue hover:underline focus-visible:outline-2 focus-visible:outline-brand-cloud-blue dark:text-blue-300"
             >
               <ArrowDownTrayIcon className="size-3.5" aria-hidden />
@@ -220,16 +223,15 @@ function AssetCard({
             </span>
           </div>
         )}
-        {(asset.kind === 'image' ||
-          asset.kind === 'gif' ||
-          asset.kind === 'video') && (
+        {kindHasAlt(asset.kind) && (
           <p
             className={clsx(
               'flex flex-wrap items-center gap-x-2 gap-y-1 pt-1 text-xs text-gray-500 tabular-nums dark:text-gray-400',
               !asset.downloadUrl && 'mt-auto',
             )}
           >
-            {asset.width && asset.height ? (
+            {/* A video's size is its poster's, which is capped: not said. */}
+            {asset.kind !== 'video' && asset.width && asset.height ? (
               <span>
                 {asset.width} × {asset.height}
               </span>
@@ -475,9 +477,7 @@ export function AssetsPage({
         onConfirm={() => deleting && remove.mutate({ id: deleting._id })}
         title={`Delete “${deleting?.title ?? ''}”?`}
         message={
-          deleting?.kind === 'audio' ||
-          deleting?.kind === 'video' ||
-          deleting?.kind === 'gif'
+          deleting && deleting.kind !== 'image'
             ? 'It leaves the gallery, and its file is deleted unless something else still uses it.'
             : 'It leaves the gallery. Posts that already use the image keep it.'
         }

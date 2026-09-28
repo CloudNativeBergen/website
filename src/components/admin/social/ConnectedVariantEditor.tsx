@@ -300,18 +300,18 @@ export function ConnectedVariantEditor({
   })
 
   const assetPicks: MarketingAssetPick[] = (marketingAssets.data ?? []).map(
-    (asset) => ({
-      id: asset._id,
-      title: asset.title,
-      alt: asset.alt ?? '',
+    (asset) => {
       // A video has no image of its own: its poster stands in.
-      thumbnailSrc:
-        (asset.assetId ?? asset.posterAssetId)
-          ? richTextImageUrl((asset.assetId ?? asset.posterAssetId)!, 300)
-          : null,
-      attachable: asset.attachable,
-      context: assetContext(asset),
-    }),
+      const thumbnailId = asset.assetId ?? asset.posterAssetId
+      return {
+        id: asset._id,
+        title: asset.title,
+        alt: asset.alt ?? '',
+        thumbnailSrc: thumbnailId ? richTextImageUrl(thumbnailId, 300) : null,
+        attachable: asset.attachable,
+        context: assetContext(asset),
+      }
+    },
   )
 
   return (

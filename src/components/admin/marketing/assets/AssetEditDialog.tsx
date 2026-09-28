@@ -4,7 +4,7 @@ import { useId, useState } from 'react'
 import { PencilSquareIcon } from '@heroicons/react/24/outline'
 import { AdminButton } from '@/components/admin/AdminButton'
 import { ModalShell } from '@/components/ModalShell'
-import type { MarketingAssetRow } from '@/lib/marketing-asset'
+import { isPostedByHand, type MarketingAssetRow } from '@/lib/marketing-asset'
 import { api } from '@/lib/trpc/client'
 import {
   AssetDetailsFields,
@@ -137,7 +137,7 @@ export function AssetEditDialog({
               aria-describedby={`${ids.alt}-hint`}
             />
             <p id={`${ids.alt}-hint`} className={HINT}>
-              {asset?.kind === 'gif' || asset?.kind === 'video'
+              {asset && isPostedByHand(asset.kind)
                 ? `Required. Copy it in when you post the ${KIND_NOUN[asset.kind]} by hand.`
                 : 'Required. It goes into every post that uses the image.'}
             </p>

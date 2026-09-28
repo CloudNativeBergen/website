@@ -13,6 +13,7 @@ import type {
   MarketingAssetRow,
   MarketingAssetSubject,
 } from './types'
+import { isPostedByHand } from './types'
 
 /**
  * `marketingAsset` reads and writes (spec §3). Every read is scoped to ONE
@@ -210,7 +211,10 @@ export async function listMarketingAssetsForPost(
   orgId: string,
   conferenceId: string,
   postId: string,
-  filter: Pick<MarketingAssetFilter, 'editions' | 'search'>,
+  filter: Pick<MarketingAssetFilter, 'editions' | 'search'> & {
+    /** Only the kinds posted by hand: GIFs and videos (#1167). */
+    byHand?: boolean
+  },
 ): Promise<MarketingAssetRow[]> {
   const [subjectId, rows] = await Promise.all([
     readPostSubjectId(conferenceId, postId),
@@ -221,7 +225,9 @@ export async function listMarketingAssetsForPost(
     }),
   ])
   return rows
-    .filter((row) => row.kind !== 'audio')
+    .filter((row) =>
+      filter.byHand ? isPostedByHand(row.kind) : row.kind !== 'audio',
+    )
     .map((row) => ({ row, rank: pickerRank(row, subjectId, conferenceId) }))
     .filter(({ rank }) => rank < 3 || filter.editions === 'all')
     .sort((a, b) => a.rank - b.rank)

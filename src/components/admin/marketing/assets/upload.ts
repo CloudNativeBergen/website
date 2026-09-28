@@ -76,16 +76,16 @@ export interface StudioUploadOptions {
   studio: { tab: StudioTab }
 }
 
-/**
- * Uploads one image (or, with `audio`, one track) and adds it to the gallery,
- * or throws a message to show.
- */
 export type AssetUploadOptions =
   | AudioUploadOptions
   | StudioUploadOptions
   | GifUploadOptions
   | VideoUploadOptions
 
+/**
+ * Uploads one file of any kind (an image unless `options` says otherwise) and
+ * adds it to the gallery, or throws a message to show.
+ */
 export type AssetUploader = (
   file: File,
   details: MarketingAssetDetails,

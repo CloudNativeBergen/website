@@ -36,8 +36,12 @@ import {
   SOFT_ON_SOCIAL_SHORT_SIDE,
   audioTypeForFile,
   formatTrackLength,
+  MOTION_SNIFF_BYTES,
+  isMp4,
+  isPostedByHand,
   isQuickTimeFile,
   isSoftOnSocial,
+  type MarketingAssetKind,
   motionKindForFile,
 } from '@/lib/marketing-asset'
 import type { AssetUploader, AssetUploadOptions } from './upload'
@@ -58,7 +62,7 @@ import {
 
 interface Picked {
   file: File
-  kind: 'image' | 'gif' | 'video' | 'audio'
+  kind: MarketingAssetKind
   previewUrl: string
   /** A video's first frame, drawn here and uploaded beside it. */
   poster: Blob | null
@@ -155,6 +159,8 @@ export function AssetUploadForm({
   const [rights, setRights] = useState(false)
   const [draft, setDraft] = useState(EMPTY_DRAFT)
   const [error, setError] = useState<string | null>(null)
+  // A video's first frame is being drawn: it can take a few seconds.
+  const [reading, setReading] = useState(false)
   const [saving, setSaving] = useState(false)
   // How much of the file has reached Blob while saving; null before it starts.
   const [progress, setProgress] = useState<number | null>(null)
@@ -196,6 +202,7 @@ export function AssetUploadForm({
     // Every pick, refused or not, makes any earlier pending read stale.
     const seq = ++pickSeq.current
     setError(null)
+    setReading(false)
     if (!file) return
     const refusal = refusalFor(file)
     if (refusal) {
@@ -210,8 +217,22 @@ export function AssetUploadForm({
     // size has been read: until then there is nothing to save.
     setPicked(null)
     setRights(false)
-    const kind =
+    const kind: MarketingAssetKind =
       motionKindForFile(file) ?? (audioTypeForFile(file) ? 'audio' : 'image')
+    // The server sniffs the bytes too; asking here saves a 100 MB upload
+    // that would only be refused (a .mov renamed .mp4, say).
+    if (kind === 'video') {
+      const head = new Uint8Array(
+        await file.slice(0, MOTION_SNIFF_BYTES).arrayBuffer(),
+      )
+      if (seq !== pickSeq.current) return
+      if (!isMp4(head)) {
+        if (fileInput.current) fileInput.current.value = ''
+        setError(MARKETING_ASSET_VIDEO_TYPE_REFUSAL)
+        return
+      }
+      setReading(true)
+    }
     const [dimensions, durationSeconds, poster] =
       kind === 'audio'
         ? [null, await readTrackLength(file), null]
@@ -221,6 +242,7 @@ export function AssetUploadForm({
             )
           : [await readDimensions(file), null, null]
     if (seq !== pickSeq.current) return
+    setReading(false)
     // The server needs the first frame, and a browser that cannot draw it
     // cannot play the video either: say so now, not after a 100 MB upload.
     if (kind === 'video' && !poster) {
@@ -256,6 +278,7 @@ export function AssetUploadForm({
 
   function reset() {
     pickSeq.current++
+    setReading(false)
     autoTitle.current = ''
     setPicked(null)
     setTitle('')
@@ -374,6 +397,10 @@ export function AssetUploadForm({
                 className="size-12 text-gray-400 dark:text-gray-500"
                 aria-hidden
               />
+            ) : reading ? (
+              <span className="px-4 text-sm text-gray-500 dark:text-gray-400">
+                Reading the video…
+              </span>
             ) : (
               <span className="flex flex-col items-center px-4 text-gray-500 dark:text-gray-400">
                 <ArrowUpTrayIcon className="size-8" aria-hidden />
@@ -518,7 +545,7 @@ export function AssetUploadForm({
                 aria-describedby={`${ids.alt}-hint`}
               />
               <p id={`${ids.alt}-hint`} className={HINT}>
-                {picked?.kind === 'gif' || picked?.kind === 'video'
+                {picked && isPostedByHand(picked.kind)
                   ? `Required. Say what the ${KIND_NOUN[picked.kind]} shows. It can’t be attached to a post yet: you download it and post it by hand, with this text.`
                   : 'Required. Say what the image shows; it goes into every post that uses it.'}
               </p>
@@ -550,6 +577,12 @@ export function AssetUploadForm({
                 Clear
               </AdminButton>
             )}
+            {/* The button's text says it too; this is what is announced. */}
+            <p role="status" className="sr-only">
+              {saving && progress !== null && progress < 1
+                ? `Uploading ${Math.round(progress * 100)}%`
+                : ''}
+            </p>
             <AdminButton type="submit" color="brand" disabled={!ready}>
               {!saving
                 ? 'Add to gallery'

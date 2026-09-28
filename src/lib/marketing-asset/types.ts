@@ -30,6 +30,11 @@ export type MarketingAssetKind = 'image' | 'gif' | 'video' | 'audio'
 export const kindHasAlt = (kind: MarketingAssetKind): boolean =>
   kind !== 'audio'
 
+/** A GIF or a video: kept in the gallery, posted by hand for now (§5). */
+export const isPostedByHand = (
+  kind: MarketingAssetKind,
+): kind is 'gif' | 'video' => kind === 'gif' || kind === 'video'
+
 /** Who confirmed the right to use a track, and when (server-stamped). */
 export interface MarketingAssetRights {
   /** Null once the organizer's profile no longer resolves (erased, merged). */

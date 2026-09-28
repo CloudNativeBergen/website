@@ -12,6 +12,8 @@ import {
   type MarketingAssetSubject,
 } from '@/lib/marketing-asset'
 
+import { SubjectCombobox } from './SubjectCombobox'
+
 /** What an asset of each kind is called in running text. */
 export const KIND_NOUN: Record<MarketingAssetKind, string> = {
   image: 'image',
@@ -19,7 +21,6 @@ export const KIND_NOUN: Record<MarketingAssetKind, string> = {
   video: 'video',
   audio: 'track',
 }
-import { SubjectCombobox } from './SubjectCombobox'
 
 export const LABEL =
   'block text-sm font-medium text-gray-900 dark:text-gray-100'
