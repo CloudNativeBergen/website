@@ -254,13 +254,10 @@ export async function updateSponsor(
   try {
     // The company's social accounts (tagging spec §3.3): a value sets, null
     // clears, absent leaves the stored one.
-    const socials = {
-      linkedinUrl: data.linkedinUrl,
-      blueskyHandle: data.blueskyHandle,
-    }
-    const cleared = Object.entries(socials)
-      .filter(([, v]) => v === null)
-      .map(([k]) => k)
+    const cleared = [
+      ...(data.linkedinUrl === null ? ['linkedinUrl'] : []),
+      ...(data.blueskyHandle === null ? ['blueskyHandle'] : []),
+    ]
     let patch = clientWrite.patch(id).set({
       name: data.name,
       website: data.website,
@@ -268,9 +265,8 @@ export async function updateSponsor(
       logoBright: data.logoBright,
       orgNumber: data.orgNumber,
       address: data.address,
-      ...Object.fromEntries(
-        Object.entries(socials).filter(([, v]) => typeof v === 'string'),
-      ),
+      ...(data.linkedinUrl ? { linkedinUrl: data.linkedinUrl } : {}),
+      ...(data.blueskyHandle ? { blueskyHandle: data.blueskyHandle } : {}),
     })
     if (cleared.length > 0) patch = patch.unset(cleared)
     const sponsor = await patch.commit()

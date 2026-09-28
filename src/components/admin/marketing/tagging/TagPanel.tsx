@@ -116,7 +116,9 @@ export function TagPanel({
             >
               <ExclamationTriangleIcon className="mt-0.5 size-4 shrink-0" />
               <span className="min-w-0 break-words">
-                {m.name}&apos;s Bluesky link does not resolve
+                {m.sponsor
+                  ? `${m.name}'s Bluesky handle in the sponsor CRM does not resolve`
+                  : `${m.name}'s Bluesky link does not resolve`}
               </span>
             </li>
           ))}
@@ -171,7 +173,12 @@ function PersonRow({
   else if (person.ownAccount)
     status = { text: "Links the conference's own account", tone: 'muted' }
   else if (!person.handle)
-    status = { text: 'No Bluesky link on their profile', tone: 'muted' }
+    status = {
+      text: person.sponsor
+        ? 'No Bluesky handle in the sponsor CRM'
+        : 'No Bluesky link on their profile',
+      tone: 'muted',
+    }
   else if (!tagged && lookup === 'not-found')
     status = { text: `@${person.handle} does not resolve`, tone: 'error' }
   else if (!tagged && lookup === 'unreachable')

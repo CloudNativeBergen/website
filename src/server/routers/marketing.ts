@@ -1545,7 +1545,9 @@ export const marketingRouter = router({
         if (!person.handle) {
           throw new TRPCError({
             code: 'BAD_REQUEST',
-            message: `${person.name} has no Bluesky link on their profile.`,
+            message: person.sponsor
+              ? `${person.name} has no Bluesky handle in the sponsor CRM.`
+              : `${person.name} has no Bluesky link on their profile.`,
           })
         }
         // Our own account is never tagged (spec §4.1): matched by handle

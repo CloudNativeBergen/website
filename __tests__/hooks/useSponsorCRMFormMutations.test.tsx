@@ -28,7 +28,7 @@ vi.mock('@/components/admin/NotificationProvider', () => ({
 
 vi.mock('@/lib/trpc/client', () => {
   const mutation =
-    (spy: ReturnType<typeof vi.fn>, isGlobal = false) =>
+    (spy: (input: unknown) => void, isGlobal = false) =>
     (options: Options = {}) => ({
       mutateAsync: async (input: unknown) => {
         spy(input)

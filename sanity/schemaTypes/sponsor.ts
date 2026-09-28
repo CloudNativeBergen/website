@@ -66,6 +66,13 @@ export default defineType({
       type: 'string',
       description:
         'The company Bluesky handle without the @ (e.g. acme.com). Sponsor posts on Bluesky tag it. Checked against Bluesky when saved from the sponsor CRM.',
+      validation: (Rule) =>
+        Rule.regex(
+          /^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]([a-z0-9-]{0,61}[a-z0-9])?$/,
+          {
+            name: 'Bluesky handle, lower-case, without the @',
+          },
+        ),
     }),
     defineField({
       name: 'linkedinUrl',

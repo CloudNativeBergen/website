@@ -825,12 +825,29 @@ describe('sponsor tags', () => {
         _type: 'sponsorForConference',
         conference: ref(CONF_A),
         sponsor: ref('sp-acme'),
+        contractStatus: 'contract-signed',
+      },
+      // A deal still open HERE: not a sponsor yet.
+      {
+        _id: 'sp-globex',
+        _type: 'sponsor',
+        name: 'Globex',
+        organization: ref(ORG_A),
+        blueskyHandle: 'globex.example',
+      },
+      {
+        _id: 'sfc-globex-A',
+        _type: 'sponsorForConference',
+        conference: ref(CONF_A),
+        sponsor: ref('sp-globex'),
+        status: 'negotiating',
       },
       {
         _id: 'sfc-initech-B',
         _type: 'sponsorForConference',
         conference: ref(CONF_B),
         sponsor: ref('sp-initech'),
+        contractStatus: 'contract-signed',
       },
     )
   }
@@ -872,6 +889,13 @@ describe('sponsor tags', () => {
     expect(h.updateSocialVariantContent.mock.calls[0][1].mentions).toEqual([])
   })
 
+  it('a prospect of THIS conference is a stranger: not recorded, never asked', async () => {
+    seedSponsors([])
+    await save('Thanks @globex.example!')
+    expect(askedBluesky()).toEqual([])
+    expect(h.updateSocialVariantContent.mock.calls[0][1].mentions).toEqual([])
+  })
+
   it('a sponsor handle Bluesky does not know is refused at save', async () => {
     seedSponsors([])
     bluesky['acme.example'] = 'not-found'
@@ -904,8 +928,10 @@ describe('sponsor tags', () => {
     expect(h.transition).not.toHaveBeenCalled()
   })
 
-  it('scheduling refuses a tag of a company that no longer sponsors this conference', async () => {
-    dataset = dataset.filter((d) => d._id !== 'sfc-acme-A')
+  it('scheduling refuses a tag of a company whose deal was lost since', async () => {
+    const sfc = dataset.find((d) => d._id === 'sfc-acme-A')!
+    sfc.contractStatus = 'none'
+    sfc.status = 'closed-lost'
     const issues = await social()
       .scheduleVariant({ variantId: 'variant-ours' })
       .catch((e: { cause: TagIssuesError }) => e.cause.tagIssues)

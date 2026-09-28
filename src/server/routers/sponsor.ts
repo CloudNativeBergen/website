@@ -377,17 +377,6 @@ async function assertCrmReferencesAreOurs(refs: {
 }
 
 /**
- * SE-3: sanitize sponsor logo SVG fields SERVER-SIDE before persistence.
- *
- * Sponsor logos are `inlineSvg` strings uploaded by organizers (SponsorAddModal)
- * AND by sponsors themselves via the public registration portal — the client
- * `sanitizeSvg` pass is defence-in-depth only and is trivially bypassed by a
- * crafted request. This is the authoritative gate: a hard rejection (oversize /
- * non-SVG / entity) becomes a BAD_REQUEST; disallowed content is silently
- * stripped per policy. Only fields actually PRESENT on `data` are touched, so a
- * partial update never wipes a slot it didn't mean to.
- */
-/**
  * A Bluesky handle the save sets (tagging spec §3.3): asked of Bluesky only
  * when it is new — a save that keeps the stored handle asks nothing. Refuses
  * on a definite "no such handle"; an unreachable Bluesky is a warning.
@@ -403,6 +392,17 @@ async function blueskyHandleWarnings(
   return check.warnings
 }
 
+/**
+ * SE-3: sanitize sponsor logo SVG fields SERVER-SIDE before persistence.
+ *
+ * Sponsor logos are `inlineSvg` strings uploaded by organizers (SponsorAddModal)
+ * AND by sponsors themselves via the public registration portal — the client
+ * `sanitizeSvg` pass is defence-in-depth only and is trivially bypassed by a
+ * crafted request. This is the authoritative gate: a hard rejection (oversize /
+ * non-SVG / entity) becomes a BAD_REQUEST; disallowed content is silently
+ * stripped per policy. Only fields actually PRESENT on `data` are touched, so a
+ * partial update never wipes a slot it didn't mean to.
+ */
 function sanitizeSponsorLogoInput<
   T extends { logo?: string | null; logoBright?: string | null },
 >(data: T): T {

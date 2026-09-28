@@ -20,7 +20,7 @@ import {
 } from '../generation-sanity'
 
 const ref = (id: string) => ({ _type: 'reference', _ref: id })
-const dataset = [
+const dataset: Record<string, unknown>[] = [
   {
     _id: 'spk-alice',
     _type: 'speaker',
@@ -128,6 +128,21 @@ describe('getSponsorTagSources (#1154)', () => {
         blueskyHandle: 'acme.example',
       },
     ])
+  })
+
+  it('does not read a sponsor whose deal here is not signed', async () => {
+    dataset.push({
+      _id: 'sfc-initech-A',
+      _type: 'sponsorForConference',
+      conference: ref('conf-A'),
+      sponsor: ref('sp-initech'),
+      status: 'closed-lost',
+    })
+    try {
+      expect(await getSponsorTagSources('conf-A', ['sp-initech'])).toEqual([])
+    } finally {
+      dataset.pop()
+    }
   })
 
   it('does not read a sponsor of another edition, though the org owns both', async () => {

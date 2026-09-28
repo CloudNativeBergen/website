@@ -7,7 +7,7 @@
 import { deriveBlueskyHandle } from '@/lib/stream/config'
 import type { BlueskyTag } from './body'
 import { normaliseHandle } from '@/lib/social/provider/bluesky-syntax'
-import { blueskyHandleFromLinks } from './handle'
+import { blueskyHandleFromLinks, parseBlueskyHandle } from './handle'
 import { resolveBlueskyHandle, type HandleResolution } from './resolve'
 
 export interface TagSource {
@@ -44,7 +44,7 @@ export async function blueskyTagFor(
 ): Promise<BlueskyTag | null> {
   if (!source || source.socialTagOptOut) return null
   const handle = source.blueskyHandle
-    ? normaliseHandle(source.blueskyHandle)
+    ? parseBlueskyHandle(source.blueskyHandle)
     : blueskyHandleFromLinks(source.links)
   if (!handle || handle === ownHandle) return null
   const resolution = await resolve(handle).catch((): HandleResolution => ({
