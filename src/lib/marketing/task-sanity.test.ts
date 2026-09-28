@@ -673,9 +673,14 @@ describe('getTaskEditorData — Bluesky tag people and mentions (#1151)', () => 
             expect.objectContaining({ speakerId: id, name: 'a speaker' }),
           ])
         }
-        expect(
-          JSON.stringify(await getTaskEditorData('task-li', CONF_A)),
-        ).not.toContain('Grace Hopper')
+        const payload = JSON.stringify([
+          await getTaskEditorData('task-li', CONF_A),
+          viaVariant,
+        ])
+        expect(payload).not.toContain('Grace Hopper')
+        // Nor their account id. The handle stays: the body shows it, and
+        // the fix must find it there.
+        expect(payload).not.toContain('did:plc:gone')
       },
     )
 

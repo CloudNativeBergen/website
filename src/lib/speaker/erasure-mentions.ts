@@ -47,7 +47,7 @@ import type { ErasureDocumentPatch } from './erasure'
 type Doc = Record<string, unknown> & { _id: string; _type: string }
 
 /** Statuses whose body has gone out: only their records are scrubbed. */
-export const POSTED_VARIANT_STATUSES = ['published', 'submitted'] as const
+const POSTED_VARIANT_STATUSES = ['published', 'submitted'] as const
 /** The cron's claim: the erasure refuses rather than race it. */
 const IN_FLIGHT_STATUS = 'publishing'
 
@@ -55,13 +55,13 @@ const IN_FLIGHT_STATUS = 'publishing'
 const SAFE_KEY = /^[A-Za-z0-9._-]+$/
 
 /**
- * Who to scrub: the subject's name, and every handle and DID a record of
- * theirs carries. Threaded into the verification as it was BEFORE the
+ * Who to scrub: the subject's name, and every name, handle and DID a record
+ * of theirs carries. Threaded into the verification as it was BEFORE the
  * erasure, which destroys the name and every record that holds the rest.
  */
 export interface MentionIdentity {
-  /** Null when not known — the speaker is already erased. */
-  name: string | null
+  /** Their name and the spellings their records stored; empty once erased. */
+  names: string[]
   handles: string[]
   dids: string[]
 }
@@ -79,6 +79,7 @@ export interface SpeakerMentionPlan {
 
 interface MentionEntry {
   _key?: unknown
+  name?: unknown
   handle?: unknown
   did?: unknown
   speaker?: { _ref?: unknown }
@@ -112,45 +113,64 @@ function isSubjectRecord(
   )
 }
 
-/** Every handle and DID the subject's records carry, plus `name`. */
-export function mentionIdentity(
+/** Every name, handle and DID the subject's records carry, plus `name`. */
+function mentionIdentity(
   speakerId: string,
   variants: readonly Doc[],
   name: string | null,
   prior: Partial<MentionIdentity> = {},
 ): MentionIdentity {
+  const names = new Set([...(name ? [name] : []), ...(prior.names ?? [])])
   const handles = new Set(prior.handles ?? [])
   const dids = new Set(prior.dids ?? [])
   for (const v of variants)
     for (const m of list<MentionEntry>(v.mentions)) {
       if (m.speaker?._ref !== speakerId) continue
-      const handle = str(m.handle)
-      const did = str(m.did)
+      const [stored, handle, did] = [str(m.name), str(m.handle), str(m.did)]
+      if (stored) names.add(stored)
       if (handle) handles.add(normaliseHandle(handle))
       if (did) dids.add(did)
     }
   return {
-    name: name || prior.name || null,
+    // The neutral text is no name of theirs (the caller drops the erased
+    // placeholder, which is the only name an erased document has).
+    names: [...names].filter((n) => n.trim() && n !== GONE_SPEAKER_TEXT),
     handles: [...handles],
     dids: [...dids],
   }
 }
 
-/** The name as a whole word, any case: not inside a longer word. */
-function namePattern(name: string): RegExp {
-  const escaped = name.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  return new RegExp(`(?<![\\p{L}\\p{N}_])${escaped}(?![\\p{L}\\p{N}_])`, 'giu')
+/**
+ * Any of the names as whole words, any case, across any run of whitespace —
+ * longest first. Not inside a longer word, and not part of a handle, a
+ * domain or a URL ("Ada" is not in "@ada-l.dev" or "x.dev/Ada"), so another
+ * person's tag is never broken. Null when there is no name to look for.
+ */
+function namePattern(names: readonly string[]): RegExp | null {
+  if (names.length === 0) return null
+  const alternatives = [...names]
+    .sort((a, b) => b.length - a.length)
+    .map((n) =>
+      n
+        .trim()
+        .split(/\s+/)
+        .map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+        .join('\\s+'),
+    )
+  return new RegExp(
+    `(?<![\\p{L}\\p{N}_@./-])(?:${alternatives.join('|')})(?![\\p{L}\\p{N}_]|[.@/-][\\p{L}\\p{N}_])`,
+    'giu',
+  )
 }
 
 /** The text with every tag and whole-word name of the subject neutralised. */
-export function scrubText(text: string, identity: MentionIdentity): string {
+function scrubText(text: string, identity: MentionIdentity): string {
   let out = text
   for (const t of mentionTokens(out).reverse())
     if (identity.handles.includes(t.handle))
       out = `${out.slice(0, t.start)}${GONE_SPEAKER_TEXT}${out.slice(t.end)}`
-  if (identity.name?.trim())
-    out = out.replace(namePattern(identity.name), GONE_SPEAKER_TEXT)
-  return out
+  const pattern = namePattern(identity.names)
+  return pattern ? out.replace(pattern, GONE_SPEAKER_TEXT) : out
 }
 
 const isPosted = (status: unknown) =>
@@ -242,11 +262,12 @@ export function planSpeakerMentionErasure(
 }
 
 /**
- * The variants a STORED check finds still holding the subject — written
- * apart from the planner, over the stored values, so a planner that stops
- * scrubbing something is caught rather than agreed with: any record carrying
- * their reference, handle or DID, or an unposted body or alt text carrying
- * their tag or name.
+ * The variants a STORED check finds still holding the subject: any record
+ * carrying their reference, handle or DID, or an unposted body or alt text
+ * carrying their tag or name. Judged over the stored values, apart from the
+ * planner's patches, so a planner that stops scrubbing something is caught
+ * rather than agreed with. It shares the planner's reads and its name and
+ * handle MATCHERS, though — a spelling those miss, both miss.
  */
 export function residualMentionVariants(
   speakerId: string,
@@ -258,20 +279,20 @@ export function residualMentionVariants(
     if (t === null) return false
     if (mentionTokens(t).some((m) => identity.handles.includes(m.handle)))
       return true
-    return !!identity.name?.trim() && namePattern(identity.name).test(t)
+    return namePattern(identity.names)?.test(t) ?? false
   }
   const ids = new Set<string>()
   for (const v of variants) {
     const records = list<MentionEntry>(v.mentions)
-    const recorded = records.some(
-      (m) =>
+    const recorded = records.some((m) => {
+      const [handle, did] = [str(m.handle), str(m.did)]
+      return (
         m.speaker?._ref === speakerId ||
-        (str(m.handle) !== null &&
-          identity.handles.includes(
-            normaliseHandle(str(m.handle) as string),
-          )) ||
-        (str(m.did) !== null && identity.dids.includes(str(m.did) as string)),
-    )
+        (handle !== null &&
+          identity.handles.includes(normaliseHandle(handle))) ||
+        (did !== null && identity.dids.includes(did))
+      )
+    })
     const inText =
       !isPosted(v.status) &&
       (holds(v.body) ||
@@ -297,7 +318,7 @@ const VARIANT_FIELDS = groq`{ _id, _type, _rev, status, body, mentions, attachme
  */
 export async function fetchSpeakerMentionInputs(
   speakerId: string,
-  speaker: { name?: unknown; organizations?: unknown } | null,
+  organizations: unknown,
   currentName: string | null,
   prior: Partial<MentionIdentity> = {},
 ): Promise<SpeakerMentionInputs> {
@@ -316,7 +337,7 @@ export async function fetchSpeakerMentionInputs(
     )) ?? []
   const identity = mentionIdentity(speakerId, byRef, currentName, prior)
 
-  const orgIds = list<{ _ref?: unknown }>(speaker?.organizations)
+  const orgIds = list<{ _ref?: unknown }>(organizations)
     .map((r) => str(r._ref))
     .filter((id): id is string => id !== null)
   const [orgConferences, talkConferences] = await Promise.all([
@@ -339,7 +360,7 @@ export async function fetchSpeakerMentionInputs(
     ...new Set([...(orgConferences ?? []), ...(talkConferences ?? [])]),
   ].filter((id) => typeof id === 'string')
 
-  const others =
+  const byAccountOrScope =
     (await client.fetch<Doc[]>(
       // groq-global: the same account recorded under another reference is
       // found in every tenant, like the reference read above; the plain-name
@@ -350,7 +371,8 @@ export async function fetchSpeakerMentionInputs(
         )]${VARIANT_FIELDS}`,
       {
         speakerId,
-        handles: identity.handles,
+        // Stored handles are normalised; one kept with its `@` still counts.
+        handles: identity.handles.flatMap((h) => [h, `@${h}`]),
         dids: identity.dids,
         conferenceIds,
         posted: [...POSTED_VARIANT_STATUSES],
@@ -358,5 +380,5 @@ export async function fetchSpeakerMentionInputs(
       opts,
     )) ?? []
 
-  return { variants: [...byRef, ...others], identity }
+  return { variants: [...byRef, ...byAccountOrScope], identity }
 }

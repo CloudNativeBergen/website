@@ -345,6 +345,51 @@ describe('speaker erasure scrubs post variants (#1232)', () => {
     expect(doc('var-elsewhere').mentions).toEqual([])
   })
 
+  it('leaves another person’s handle and a URL alone even where they spell her name', async () => {
+    const body = 'Ada\u00a0Lovelace and @ada-l.dev at x.dev/Ada. Ada.'
+    h.dataset.push(variant('var-lookalike', 'draft', body, { mentions: [] }))
+    doc(ADA).name = 'Ada'
+    await eraseSpeakerInPlace({ speakerId: ADA, actor: 'test' })
+    expect(doc('var-lookalike').body).toBe(
+      'a speaker and @ada-l.dev at x.dev/Ada. a speaker.',
+    )
+  })
+
+  it('matches her name across any run of whitespace, and the other spellings her records stored', async () => {
+    h.dataset.push(
+      variant(
+        'var-spaced',
+        'draft',
+        'Meet Ada\u00a0 Lovelace and Countess Ada L.',
+        {
+          mentions: [
+            mention(
+              'm-old',
+              ADA,
+              'ada.bsky.social',
+              'Countess Ada L.',
+              ADA_DID,
+              'unresolved',
+            ),
+          ],
+        },
+      ),
+    )
+    await eraseSpeakerInPlace({ speakerId: ADA, actor: 'test' })
+    expect(doc('var-spaced').body).toBe('Meet a speaker and a speaker')
+  })
+
+  it('finds a record whose handle was stored with its @', async () => {
+    h.dataset.push(
+      variant('var-at', 'published', 'x', {
+        conference: ref('conf-x'),
+        mentions: [mention('m', 'spk-other', '@ada.bsky.social', 'X')],
+      }),
+    )
+    await eraseSpeakerInPlace({ speakerId: ADA, actor: 'test' })
+    expect(doc('var-at').mentions).toEqual([])
+  })
+
   it('REFUSES, writing nothing, while a variant naming her is being published', async () => {
     h.dataset.push(variant('var-in-flight', 'publishing', TAGGED))
     const before = structuredClone(h.dataset)
@@ -453,13 +498,29 @@ describe('speaker erasure scrubs post variants (#1232)', () => {
         variant('var-late', 'draft', 'Meet Ada Lovelace', { mentions: [] }),
       )
       const v = await verifySpeakerErasure(ADA, [], [], {
-        name: 'Ada Lovelace',
+        names: ['Ada Lovelace'],
       })
       expect(v?.residual.postVariants).toBe(1)
       expect(v?.clean).toBe(false)
       // The documented limit (runbook): a standalone --verify has no name to
       // look for once the erasure has replaced it.
       expect((await verifySpeakerErasure(ADA))?.residual.postVariants).toBe(0)
+    })
+
+    it('FAILS on her name in a variant’s alt text', async () => {
+      await eraseSpeakerInPlace({ speakerId: ADA, actor: 'test' })
+      h.dataset.push(
+        variant('var-late', 'draft', 'x', {
+          mentions: [],
+          attachments: [
+            { _key: 'a', source: 's', altOverride: 'Ada Lovelace' },
+          ],
+        }),
+      )
+      const v = await verifySpeakerErasure(ADA, [], [], {
+        names: ['Ada Lovelace'],
+      })
+      expect(v?.residual.postVariants).toBe(1)
     })
 
     it('FAILS on her tag in an unposted body', async () => {

@@ -1389,7 +1389,7 @@ async function fetchErasureInputs(
       : null
   const mentions = await fetchSpeakerMentionInputs(
     speakerId,
-    speaker,
+    speaker?.organizations,
     liveName,
     priorMentions,
   )

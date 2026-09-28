@@ -227,8 +227,10 @@ handle or DID one of their records carries (the same account recorded under
 another reference is still theirs).
 
 A body **not yet posted** (`draft`, `scheduled`, `awaiting-manual`, `failed`)
-loses their `@handle` and every whole-word copy of their name, any case, and so
-does a variant's own alt text: each becomes **"a speaker"**, the words the
+loses their `@handle` and every whole-word copy of their name — and of the
+spellings their records stored — in any case and across any whitespace, but
+never inside a handle, domain or URL. A variant's own alt text is scrubbed the
+same way: each becomes **"a speaker"**, the words the
 publisher already posts for a gone speaker. The name is looked for in the open
 variants of every conference of the person's organizations and of every
 conference they have a talk at — not across other tenants, where the same name

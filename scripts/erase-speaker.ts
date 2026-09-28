@@ -109,6 +109,14 @@ async function main(): Promise<number> {
     // ids by hand.
     const files = (arg('files') ?? '').split(',').filter(Boolean)
     printVerification(await verifySpeakerErasure(speakerId, [], files))
+    // Do not overstate a standalone CLEAN (runbook, step 5 and 3c).
+    console.log(
+      '\nStandalone --verify cannot recount anything keyed on the person’s ' +
+        'addresses, name or Bluesky account: invitations, sign-in tokens, ' +
+        'ticket entries, the merge trail by email, and post variants naming ' +
+        'them in plain text or recording their account under another ' +
+        'reference. File the verification the commit printed.',
+    )
     return 0
   }
 
