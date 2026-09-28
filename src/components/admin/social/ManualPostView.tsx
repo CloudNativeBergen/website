@@ -78,7 +78,7 @@ export interface ManualPostViewProps {
    * be attached yet, so they are offered here to download and post by hand.
    * `error` when the gallery could not be read; absent or empty shows nothing.
    */
-  galleryMedia?: readonly GalleryMediaItem[] | 'error'
+  galleryMedia?: readonly GalleryMediaItem[] | 'error' | 'loading'
 }
 
 /** A gallery GIF or video as the manual view offers it. */
@@ -625,10 +625,17 @@ function GalleryMediaSection({
   media,
   platform,
 }: {
-  media: readonly GalleryMediaItem[] | 'error'
+  media: readonly GalleryMediaItem[] | 'error' | 'loading'
   platform: string
 }) {
   const [all, setAll] = useState(false)
+  // Said, so nobody posts before the GIFs and videos have had a chance to show.
+  if (media === 'loading')
+    return (
+      <p className="text-sm text-gray-500 dark:text-gray-400">
+        Looking for GIFs and videos in the gallery&hellip;
+      </p>
+    )
   if (media === 'error')
     return (
       <p className="text-sm text-gray-500 dark:text-gray-400">

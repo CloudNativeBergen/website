@@ -93,7 +93,11 @@ export async function listMarketingAssets(
    * Count "used in N posts": only the Assets page shows it, so the post scan
    * is opt-in (the studio pickers and the post picker skip it).
    */
-  options: { countUsage?: boolean } = {},
+  options: {
+    countUsage?: boolean
+    /** Only these kinds, in the query itself (the manual view's GIFs and videos). */
+    kinds?: MarketingAssetKind[]
+  } = {},
 ): Promise<MarketingAssetRow[]> {
   const rows = await scopedFetch<
     | (Omit<
@@ -112,6 +116,7 @@ export async function listMarketingAssets(
     `*[_type == "marketingAsset" && _id in path("*")
       && (scope == "organization" || (scope == "edition" && ($allEditions || conference._ref == $conferenceId)))
       && ($kind == null || coalesce(kind, "image") == $kind)
+      && ($kinds == null || coalesce(kind, "image") in $kinds)
       && ($subjectId == null || subject._ref == $subjectId)
       && ($tag == null || count(coalesce(tags, [])[lower(@) == $tag]) > 0)
       && ($terms == null || ([title] + coalesce(tags, [])) match $terms)
@@ -120,6 +125,7 @@ export async function listMarketingAssets(
       conferenceId,
       allEditions: filter.editions === 'all',
       kind: filter.kind ?? null,
+      kinds: options.kinds ?? null,
       subjectId: filter.subjectId || null,
       tag: filter.tag?.trim().toLowerCase() || null,
       terms: searchTerms(filter.search),
@@ -219,10 +225,12 @@ export async function listMarketingAssetsForPost(
   const [subjectId, rows] = await Promise.all([
     readPostSubjectId(conferenceId, postId),
     // Always every edition: the subject's assets lead from any of them.
-    listMarketingAssets(orgId, conferenceId, {
-      editions: 'all',
-      search: filter.search,
-    }),
+    listMarketingAssets(
+      orgId,
+      conferenceId,
+      { editions: 'all', search: filter.search },
+      filter.byHand ? { kinds: ['gif', 'video'] } : {},
+    ),
   ])
   return rows
     .filter((row) =>

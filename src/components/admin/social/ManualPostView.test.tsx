@@ -205,3 +205,20 @@ describe('ManualPostView — GIFs and videos from the gallery (#1167)', () => {
     expect(screen.queryByRole('link', { name: /Download original/ })).toBeNull()
   })
 })
+
+describe('ManualPostView — while the gallery is read (#1167)', () => {
+  it('says it is looking, rather than showing nothing', () => {
+    render(
+      <ManualPostView
+        variant={variant}
+        postedLink={null}
+        postAttachments={[]}
+        onMarkPosted={vi.fn()}
+        galleryMedia="loading"
+      />,
+    )
+    expect(
+      screen.getByText(/Looking for GIFs and videos in the gallery/),
+    ).toBeTruthy()
+  })
+})

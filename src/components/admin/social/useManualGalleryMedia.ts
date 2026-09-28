@@ -14,13 +14,14 @@ import type { GalleryMediaItem } from './ManualPostView'
  */
 export function useManualGalleryMedia(
   postId: string | null,
-): readonly GalleryMediaItem[] | 'error' | undefined {
+): readonly GalleryMediaItem[] | 'error' | 'loading' | undefined {
   const query = api.marketingAsset.forPost.useQuery(
     { postId: postId ?? '', byHand: true },
     { enabled: postId !== null },
   )
   if (query.error) return 'error'
-  if (!query.data) return undefined
+  if (postId === null) return undefined
+  if (!query.data) return 'loading'
   // The server sends only GIFs and videos; the narrowing is for the types.
   return query.data.flatMap((asset): GalleryMediaItem[] => {
     if (!isPostedByHand(asset.kind) || !asset.downloadUrl) return []
