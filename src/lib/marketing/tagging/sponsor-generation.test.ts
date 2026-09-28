@@ -10,6 +10,7 @@ const store = vi.hoisted(() => ({
   context: null as null | import('../generation-sanity').GenerationContext,
   commits: [] as import('../materialize').TaskRecords[],
   sponsorSources: [] as { _id: string; blueskyHandle: string | null }[],
+  sponsorError: null as Error | null,
 }))
 
 vi.mock('../generation-sanity', () => ({
@@ -17,15 +18,22 @@ vi.mock('../generation-sanity', () => ({
   getGenerationContext: vi.fn(async () =>
     store.context ? structuredClone(store.context) : null,
   ),
-  getSpeakerTagSources: vi.fn(async () => []),
-  getSponsorTagSources: vi.fn(async () =>
-    store.sponsorSources.map((s) => ({
+  getSpeakerTagSources: vi.fn(async () => [
+    {
+      _id: 'spk-alice',
+      links: ['https://bsky.app/profile/alice.dev'],
+      socialTagOptOut: null,
+    },
+  ]),
+  getSponsorTagSources: vi.fn(async () => {
+    if (store.sponsorError) throw store.sponsorError
+    return store.sponsorSources.map((s) => ({
       _id: s._id,
       links: null,
       socialTagOptOut: null,
       blueskyHandle: s.blueskyHandle,
-    })),
-  ),
+    }))
+  }),
   commitGeneratedTasks: vi.fn(
     async (input: { records: import('../materialize').TaskRecords }) => {
       const campaign = store.context!.campaigns[0]
@@ -48,7 +56,7 @@ vi.mock('../short-code-sanity', () => ({
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { runGeneration } from '../generation'
-import { sponsorSubject } from '../expansion'
+import { speakerSubject, sponsorSubject } from '../expansion'
 import { getSpeakerTagSources } from '../generation-sanity'
 import { BUILTIN_TEMPLATE } from '../template'
 import { mentionDocuments } from './records'
@@ -61,6 +69,7 @@ const fetchMock = vi.fn<typeof fetch>()
 
 function reset() {
   store.commits = []
+  store.sponsorError = null
   store.sponsorSources = [{ _id: 'sp-acme', blueskyHandle: 'acme.example' }]
   store.context = {
     plan: { _id: 'plan', ownerId: 'owner' },
@@ -197,5 +206,35 @@ describe('the SHIPPED built-in sponsor card, for a sponsor with a Bluesky handle
     expect(resolveCalls()).toHaveLength(0)
     expect(variant('bluesky').body).toContain('🥇 Gold sponsor: Acme AS\n')
     expect(variant('bluesky').mentions).toBeUndefined()
+  })
+})
+
+describe('a sponsor source that fails in a mixed batch', () => {
+  it('leaves only the sponsor untagged: a speaker of the same batch is still tagged', async () => {
+    store.sponsorError = new Error('Sanity is down')
+    await runGeneration(
+      'conf-A',
+      [
+        {
+          kind: 'trigger',
+          event: 'sponsorSigned',
+          subjects: [
+            sponsorSubject({ _id: 'sp-acme', name: 'Acme AS' }, 'Gold'),
+            speakerSubject({ _id: 'spk-alice', name: 'Alice Liddell' }),
+          ],
+        },
+      ],
+      NOW,
+    )
+    const bodies = store.commits
+      .flatMap((c) => c.variants)
+      .filter((v) => v.platform === 'bluesky')
+      .map((v) => v.body)
+    expect(bodies).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('sponsor: Acme AS\n'),
+        expect.stringContaining('sponsor: @alice.dev\n'),
+      ]),
+    )
   })
 })

@@ -229,6 +229,12 @@ export const Saving: Story = {
     organizers: mockOrganizers,
     isPending: true,
   },
+  // The company details (handle, LinkedIn page) cannot be edited while the
+  // save — and its Bluesky check — is in flight (#1154).
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(canvas.getByRole('button', { name: /edit/i })).toBeDisabled()
+  },
 }
 
 export const WithAddons: Story = {

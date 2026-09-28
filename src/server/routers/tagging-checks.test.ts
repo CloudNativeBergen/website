@@ -928,6 +928,18 @@ describe('sponsor tags', () => {
     expect(h.transition).not.toHaveBeenCalled()
   })
 
+  it('a deal lost since, contractStatus kept as history (state machine), is refused too', async () => {
+    const sfc = dataset.find((d) => d._id === 'sfc-acme-A')!
+    sfc.status = 'closed-lost'
+    const issues = await social()
+      .scheduleVariant({ variantId: 'variant-ours' })
+      .catch((e: { cause: TagIssuesError }) => e.cause.tagIssues)
+    expect(issues).toEqual([
+      expect.objectContaining({ code: 'not-a-sponsor', mentionKey: 'sp-acme' }),
+    ])
+    expect(h.transition).not.toHaveBeenCalled()
+  })
+
   it('scheduling refuses a tag of a company whose deal was lost since', async () => {
     const sfc = dataset.find((d) => d._id === 'sfc-acme-A')!
     sfc.contractStatus = 'none'

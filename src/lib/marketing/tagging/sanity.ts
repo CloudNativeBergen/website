@@ -91,7 +91,9 @@ export function taggablePeopleFrom(
  * links and their opt-out, then every company sponsoring it — a signed deal,
  * as a sponsor Trigger subject is — with its CRM handle (spec §3.3): what a
  * body's `@handle`s are matched against. A prospect or a lost deal is a
- * stranger here, and a tag recorded for a deal lost since is refused.
+ * stranger here, and a tag recorded for a deal lost since is refused. A lost
+ * deal keeps its `contractStatus` as history (`state-machine.ts`), so
+ * `closed-lost` is excluded explicitly.
  *
  * `sponsor` is an ORG-level document shared across editions, so it is only
  * reached through a `sponsorForConference` of THIS conference: another
@@ -111,7 +113,7 @@ export async function getConferenceTaggablePeople(
     scopedFetch<(RawTaggablePerson | null)[] | null>(
       clientReadUncached,
       { conferenceId },
-      `*[_type == "sponsorForConference" && (contractStatus == "contract-signed" || status == "closed-won") && !(_id in path("drafts.**")) && !(_id in path("versions.**"))].sponsor->${SPONSOR_FIELDS}`,
+      `*[_type == "sponsorForConference" && (contractStatus == "contract-signed" || status == "closed-won") && status != "closed-lost" && !(_id in path("drafts.**")) && !(_id in path("versions.**"))].sponsor->${SPONSOR_FIELDS}`,
       {},
       { cache: 'no-store' },
     ),
@@ -146,7 +148,7 @@ export const TAG_PEOPLE_PROJECTION = `select(kind == "publishing" && channel == 
   "people": select(
     _type == "speaker" && count(*[_type == "talk" && conference._ref == $conferenceId && ^._id in speakers[]._ref && !(_id in path("drafts.**")) && !(_id in path("versions.**"))]) > 0 => [${PERSON_FIELDS}],
     _type == "talk" && conference._ref == $conferenceId && !(_id in path("drafts.**")) && !(_id in path("versions.**")) => speakers[]->${PERSON_FIELDS},
-    _type == "sponsor" && count(*[_type == "sponsorForConference" && conference._ref == $conferenceId && sponsor._ref == ^._id && (contractStatus == "contract-signed" || status == "closed-won") && !(_id in path("drafts.**")) && !(_id in path("versions.**"))]) > 0 => [${SPONSOR_FIELDS}]
+    _type == "sponsor" && count(*[_type == "sponsorForConference" && conference._ref == $conferenceId && sponsor._ref == ^._id && (contractStatus == "contract-signed" || status == "closed-won") && status != "closed-lost" && !(_id in path("drafts.**")) && !(_id in path("versions.**"))]) > 0 => [${SPONSOR_FIELDS}]
   )
 })`
 

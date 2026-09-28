@@ -276,6 +276,23 @@ describe('sponsor.update: the Bluesky handle', () => {
     expect(h.stored!.linkedinUrl).toBeUndefined()
   })
 
+  it('a LinkedIn page is stored canonical; a profile or another site is refused', async () => {
+    await sponsor().update({
+      id: 'sp-A',
+      data: { linkedinUrl: 'linkedin.com/company/acme/?locale=en_US' },
+    })
+    expect(h.stored!.linkedinUrl).toBe('https://www.linkedin.com/company/acme')
+    for (const bad of [
+      'https://www.linkedin.com/in/alice',
+      'https://acme.example/linkedin',
+    ]) {
+      await expect(
+        sponsor().update({ id: 'sp-A', data: { linkedinUrl: bad } }),
+      ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    }
+    expect(h.stored!.linkedinUrl).toBe('https://www.linkedin.com/company/acme')
+  })
+
   it("another organization's sponsor: refused before Bluesky is asked (guard before fetch)", async () => {
     bluesky('resolves')
     h.tenant = { ...ours, orgId: 'org-B' }

@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { parseBlueskyHandle } from '@/lib/marketing/tagging/handle'
+import { linkedinCompanyUrl } from '@/lib/marketing/tag-by-hand/links'
 
 const nullToUndefined = <T>(val: T | null): T | undefined =>
   val === null ? undefined : val
@@ -68,10 +69,25 @@ export const SponsorInputSchema = z.object({
    * Absent leaves it as stored; null or empty clears it.
    */
   linkedinUrl: z
-    .union([z.string().url('Enter the full LinkedIn page URL'), z.literal('')])
+    .string()
     .nullable()
     .optional()
-    .transform((v) => (v === undefined ? undefined : v || null)),
+    .transform((v, ctx) => {
+      if (v === undefined) return undefined
+      if (v === null || v.trim() === '') return null
+      // Stored as "Tag by hand" shows it (`linkedinCompanyUrl`): a profile or
+      // a non-LinkedIn URL would save and then silently never be listed.
+      const page = linkedinCompanyUrl(v)
+      if (!page) {
+        ctx.addIssue({
+          code: 'custom',
+          message:
+            'Enter the LinkedIn company page, like https://www.linkedin.com/company/acme.',
+        })
+        return z.NEVER
+      }
+      return page
+    }),
   /**
    * The company's Bluesky handle (tagging spec §3.3), normalised: `@Acme.com`
    * and a `bsky.app/profile/…` URL are both `acme.com`. Absent leaves it as

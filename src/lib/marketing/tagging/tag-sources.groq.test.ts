@@ -145,6 +145,22 @@ describe('getSponsorTagSources (#1154)', () => {
     }
   })
 
+  it('does not read a lost deal that keeps contractStatus as history', async () => {
+    dataset.push({
+      _id: 'sfc-initech-A',
+      _type: 'sponsorForConference',
+      conference: ref('conf-A'),
+      sponsor: ref('sp-initech'),
+      contractStatus: 'contract-signed',
+      status: 'closed-lost',
+    })
+    try {
+      expect(await getSponsorTagSources('conf-A', ['sp-initech'])).toEqual([])
+    } finally {
+      dataset.pop()
+    }
+  })
+
   it('does not read a sponsor of another edition, though the org owns both', async () => {
     expect(await getSponsorTagSources('conf-A', ['sp-initech'])).toEqual([])
   })

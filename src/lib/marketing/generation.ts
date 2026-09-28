@@ -377,19 +377,30 @@ async function lookUpTags(
   if (ids.length === 0) return
   try {
     const own = ownBlueskyHandle(context.conference.socialLinks)
+    // Each source on its own: a sponsor read that fails or hangs leaves only
+    // the sponsors untagged, never the speakers of the same batch.
+    const read = async (
+      wanted: ReadonlySet<string>,
+      get: (ids: string[]) => ReturnType<typeof getSpeakerTagSources>,
+      what: string,
+    ) => {
+      if (wanted.size === 0) return []
+      try {
+        return await withTimeout(
+          get([...wanted]),
+          TAG_SOURCES_TIMEOUT_MS,
+          `${what} tag sources timed out after ${TAG_SOURCES_TIMEOUT_MS} ms`,
+        )
+      } catch (error) {
+        console.warn(`marketing generation: ${what} tag sources failed`, error)
+        return []
+      }
+    }
     const rows = (
-      await withTimeout(
-        Promise.all([
-          speakers.size
-            ? getSpeakerTagSources(conferenceId, [...speakers])
-            : [],
-          sponsors.size
-            ? getSponsorTagSources(conferenceId, [...sponsors])
-            : [],
-        ]),
-        TAG_SOURCES_TIMEOUT_MS,
-        `tag sources timed out after ${TAG_SOURCES_TIMEOUT_MS} ms`,
-      )
+      await Promise.all([
+        read(speakers, (x) => getSpeakerTagSources(conferenceId, x), 'speaker'),
+        read(sponsors, (x) => getSponsorTagSources(conferenceId, x), 'sponsor'),
+      ])
     ).flat()
     const sources = new Map(rows.map((s) => [s._id, s]))
     let next = 0

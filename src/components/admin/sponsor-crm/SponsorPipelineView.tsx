@@ -147,6 +147,7 @@ export function SponsorPipelineView({
               website={formData.website}
               orgNumber={formData.orgNumber}
               address={formData.address}
+              disabled={isPending}
               blueskyHandle={formData.blueskyHandle}
               linkedinUrl={formData.linkedinUrl}
               onBlueskyHandleChange={(blueskyHandle) =>

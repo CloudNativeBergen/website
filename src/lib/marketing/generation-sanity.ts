@@ -397,7 +397,7 @@ export async function getSponsorTagSources(
   >(
     clientReadUncached,
     { conferenceId },
-    `*[_type == "sponsorForConference" && sponsor._ref in $ids && (contractStatus == "contract-signed" || status == "closed-won") && !(_id in path("drafts.**")) && !(_id in path("versions.**"))].sponsor->{ _id, blueskyHandle }`,
+    `*[_type == "sponsorForConference" && sponsor._ref in $ids && (contractStatus == "contract-signed" || status == "closed-won") && status != "closed-lost" && !(_id in path("drafts.**")) && !(_id in path("versions.**"))].sponsor->{ _id, blueskyHandle }`,
     { ids: sponsorIds },
     { cache: 'no-store' },
   )
