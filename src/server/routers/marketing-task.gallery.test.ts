@@ -856,3 +856,65 @@ describe('finishing a render Task with an asset from the gallery (#1166)', () =>
     expect(byId('asset-logo')).toMatchObject({ image: image(LOGO) })
   })
 })
+
+describe('which gallery asset a Task records (#1166 review)', () => {
+  const LOGO = 'image-logo-1080x1080-png'
+  const pick = (marketingAssetId: string) =>
+    marketing().task.attachAsset({
+      taskId: TASK,
+      taskRev: task()._rev as string,
+      marketingAssetId,
+    })
+  const entry = (id: string, fields: Record<string, unknown>): Doc => ({
+    _id: id,
+    _type: 'marketingAsset',
+    _rev: `rev-${id}`,
+    organization: ref('org-A'),
+    scope: 'organization',
+    kind: 'image',
+    title: id,
+    ...fields,
+  })
+
+  beforeEach(() => {
+    h.dataset.push(
+      { _id: LOGO, _type: 'sanity.imageAsset', mimeType: 'image/png' },
+      entry('asset-logo', { image: image(LOGO), alt: 'Old logo entry' }),
+      entry('asset-logo-2', { image: image(LOGO), alt: 'New logo entry' }),
+    )
+  })
+
+  it('a second asset holding the same image becomes the one recorded, and its alt the one retried', async () => {
+    await pick('asset-logo')
+    await pick('asset-logo-2')
+    expect(task().galleryAsset).toEqual({ ...ref('asset-logo-2'), _weak: true })
+    h.handedOff = []
+    // What a retry hands on is the recorded asset's alt.
+    const { getStudioTask } = await import('@/lib/marketing/render-sanity')
+    expect(await getStudioTask(TASK, 'conf-A')).toMatchObject({
+      galleryAlt: 'New logo entry',
+    })
+  })
+
+  it("picking the Task's own render entry is its render: nothing is recorded, and a re-render records it as replaced", async () => {
+    await attach(FIRST) // the render, and its #1165 entry
+    const own = gallery().find(
+      (d) => d._id !== 'asset-logo' && d._id !== 'asset-logo-2',
+    )!
+    await pick('asset-logo') // the logo replaces it
+    await pick(own._id) // back to the Task's own render
+    expect(task().asset).toEqual(image(FIRST))
+    expect(task()).not.toHaveProperty('galleryAsset')
+    // A post holds the render, so its replacement must stay recorded:
+    // it is how a speaker's erasure finds it.
+    h.dataset.push({
+      _id: 'post-first',
+      _type: 'socialPost',
+      conference: ref('conf-A'),
+      attachments: [{ _key: 'a', image: image(FIRST), alt: 'Ada' }],
+    })
+    upload(SECOND)
+    await attach(SECOND)
+    expect(task().replacedRenders).toContain(FIRST)
+  })
+})

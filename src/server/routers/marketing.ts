@@ -74,7 +74,10 @@ import {
   requireDocumentInCurrentConference,
   requireSpeakerInCurrentOrg,
 } from '@/server/tenancy'
-import { saveTaskRenderToGallery } from '@/lib/marketing-asset/task-render'
+import {
+  saveTaskRenderToGallery,
+  taskRenderAssetDocumentId,
+} from '@/lib/marketing-asset/task-render'
 import {
   AttachTaskAssetSchema,
   CreateTaskSchema,
@@ -1758,8 +1761,19 @@ export const marketingRouter = router({
           assetId = pick.imageAssetId
         } else assetId = input.assetId
         const newImage = task.assetId !== assetId
+        // The Task's own render entry (#1165) is its render, not the
+        // gallery's: picking it records nothing, so a later re-render still
+        // records the render it replaces.
+        const ownEntry =
+          pick !== null && pick.id === taskRenderAssetDocumentId(task._id)
+        // Another asset holding the same image is recorded too: the one
+        // recorded is the one whose alt a retry hands on, and whose subject
+        // a speaker's erasure follows.
+        const recordPick =
+          pick !== null && !ownEntry && task.galleryAssetId !== pick.id
+        const forgetPick = !!task.galleryAssetId && (pick ? ownEntry : newImage)
         // Identical saved output is an idempotent handoff retry, even after its save changed the revision.
-        if (newImage) {
+        if (newImage || recordPick || forgetPick) {
           if (!pick && task.pendingAssetId !== assetId)
             throw new TRPCError({
               code: 'BAD_REQUEST',
@@ -1792,7 +1806,7 @@ export const marketingRouter = router({
             // the Task editor offers a retry for; cleared with the receipts.
             // A gallery asset is there already.
             ...(newImage && !pick ? { galleryPending: true } : {}),
-            ...(newImage && pick
+            ...(recordPick && pick
               ? {
                   galleryAsset: {
                     _type: 'reference',
@@ -1802,16 +1816,13 @@ export const marketingRouter = router({
                 }
               : {}),
           },
-          !newImage
-            ? []
-            : pick
-              ? task.galleryPending
-                ? ['galleryPending']
-                : []
-              : [
-                  'pendingStudioAsset',
-                  ...(task.galleryAssetId ? ['galleryAsset'] : []),
-                ],
+          [
+            ...(newImage && !pick ? ['pendingStudioAsset'] : []),
+            ...(newImage && pick && task.galleryPending
+              ? ['galleryPending']
+              : []),
+            ...(forgetPick ? ['galleryAsset'] : []),
+          ],
           undefined,
           replaced ?? undefined,
           pick ? { id: pick.id, rev: pick.rev } : undefined,
