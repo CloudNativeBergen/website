@@ -710,6 +710,8 @@ describe('picking an asset into a post (#1163)', () => {
       // Another tenant's post holding the same bytes, and a Studio draft.
       post('post-b', 'conf-b', [PNG('a')]),
       post('drafts.post-ada', 'conf-a-2026', [PNG('a')]),
+      // The same image twice in one post is one post.
+      post('post-twice', 'conf-a-2026', [PNG('d'), PNG('d')]),
     ]
     const rows = await listMarketingAssets('org-a', 'conf-a-2026', {
       editions: 'all',
@@ -717,7 +719,12 @@ describe('picking an asset into a post (#1163)', () => {
     const used = Object.fromEntries(
       rows.map((row) => [row._id, row.usedInPosts]),
     )
-    expect(used).toMatchObject({ logo: 2, 'card-2026': 1, 'old-2025': 0 })
+    expect(used).toMatchObject({
+      logo: 2,
+      'card-2026': 1,
+      'old-2025': 1,
+      'ada-org': 0,
+    })
   })
 
   it("reads an asset's image, alt, crop and whether it can go into a post", async () => {
