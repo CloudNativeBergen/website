@@ -434,7 +434,8 @@ describe('the countdown form', () => {
 })
 
 describe('the "Tag the subject" switch (tagging spec §2)', () => {
-  const tagSwitch = () => screen.getByRole('switch', { name: 'Tag the subject' })
+  const tagSwitch = () =>
+    screen.getByRole('switch', { name: 'Tag the subject' })
   it('is off for a new Recipe, even one whose built-in counterpart tags', () => {
     state.attached = []
     open()

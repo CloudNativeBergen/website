@@ -35,12 +35,7 @@ vi.mock('@/lib/sanity/client', () => ({
 }))
 
 import { RecipeEditsSchema } from '@/server/schemas/marketing'
-import {
-  applyEdits,
-  editsOf,
-  libraryEntry,
-  newRecipeEdits,
-} from '../library'
+import { applyEdits, editsOf, libraryEntry, newRecipeEdits } from '../library'
 import { buildTemplate, type SaveSource } from '../plan-templates'
 import {
   createTemplateVersion,
@@ -128,7 +123,11 @@ async function throughTemplate(recipes: TaskRecipe[]) {
   // Seeding from it is the ordinary expansion (§6.1); the plan is frozen at
   // the Recipes it was given.
   const plan = expandTemplate({
-    template: { name: version.name, version: '1', campaigns: version.campaigns },
+    template: {
+      name: version.name,
+      version: '1',
+      campaigns: version.campaigns,
+    },
     conference: { ...CONFERENCE, baseUrl: 'https://cloudnativebergen.dev' },
     includeOptional: [],
     ownerId: 'sp-1',

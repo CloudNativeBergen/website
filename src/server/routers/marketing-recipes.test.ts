@@ -209,7 +209,11 @@ describe('campaign.recipes.attach', () => {
       conferenceId: 'conf-A',
       // Becomes the owner of an ownerless plan, or generation would skip it.
       actorId: 'sp-admin',
-      recipes: speakerCard.recipes.map(({ tagSubject: _, ...r }) => r),
+      recipes: speakerCard.recipes.map((r) => {
+        const { tagSubject: _off, ...rest } = r
+        void _off
+        return rest
+      }),
       triggers: [
         { event: 'speakerConfirmed', taskRecipeKey: 'speakerCardRender' },
       ],

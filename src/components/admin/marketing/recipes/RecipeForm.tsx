@@ -173,9 +173,9 @@ export function RecipeForm({
                           id="recipe-tag-note"
                           className="mt-1 block text-xs text-gray-500 dark:text-gray-400"
                         >
-                          The generated Bluesky post names them by their
-                          Bluesky handle, when they have one and have not opted
-                          out. LinkedIn and the card keep the plain name.
+                          The generated Bluesky post names them by their Bluesky
+                          handle, when they have one and have not opted out.
+                          LinkedIn and the card keep the plain name.
                         </span>
                       </div>
                     )}
