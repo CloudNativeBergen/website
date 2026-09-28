@@ -932,6 +932,129 @@ describe('speaker erasure scrubs post variants (#1232)', () => {
     })
   })
 
+  describe('adversarial review of #1239', () => {
+    const team = (key: string, speaker: string, name: string) =>
+      mention(key, speaker, 'team.dev', name, 'did:plc:team')
+
+    it('a team account she shares with a live speaker is left in another tenant’s text that records nobody', async () => {
+      h.dataset.push(
+        variant('var-team', 'scheduled', '@team.dev speaks', {
+          mentions: [team('t-ada', ADA, 'Ada Lovelace')],
+        }),
+        variant('var-bob-team', 'draft', 'Hear @team.dev', {
+          conference: ref('conf-x'),
+          mentions: [team('t-bob', BOB, 'Bob Builder')],
+        }),
+        variant('var-foreign', 'draft', 'Thanks @team.dev for hosting', {
+          conference: ref('conf-x'),
+          mentions: [],
+        }),
+      )
+      const result = await eraseSpeakerInPlace({
+        speakerId: ADA,
+        actor: 'test',
+      })
+      expect(result.err).toBeNull()
+      expect(doc('var-team').body).toBe('a speaker speaks')
+      expect(doc('var-foreign').body).toBe('Thanks @team.dev for hosting')
+      expect(result.verification?.clean).toBe(true)
+    })
+
+    it('…and so is one a live speaker only LISTS in their profile links', async () => {
+      doc(BOB).links = ['https://bsky.app/profile/team.dev']
+      h.dataset.push(
+        variant('var-team', 'scheduled', '@team.dev speaks', {
+          mentions: [team('t-ada', ADA, 'Ada Lovelace')],
+        }),
+        variant('var-foreign', 'draft', 'Thanks @team.dev for hosting', {
+          mentions: [],
+        }),
+      )
+      const result = await eraseSpeakerInPlace({
+        speakerId: ADA,
+        actor: 'test',
+      })
+      expect(doc('var-team').body).toBe('a speaker speaks')
+      expect(doc('var-foreign').body).toBe('Thanks @team.dev for hosting')
+      expect(result.verification?.clean).toBe(true)
+    })
+
+    it('keeps a bridge found in an earlier discovery round, so a retag meanwhile aborts the commit', async () => {
+      h.dataset.push(
+        variant('var-bridge-r', 'published', 'x', {
+          conference: ref('conf-x'),
+          mentions: [mention('mb', 'spk-gone', 'ada.b2', 'X', ADA_DID)],
+        }),
+      )
+      let reads = 0
+      h.beforeFetch = (q) => {
+        if (!q.includes('!references($speakerId)')) return
+        reads++
+        // Between round 1 (found by her DID) and round 2: retagged.
+        if (reads === 2) {
+          const b = doc('var-bridge-r')
+          b.mentions = [
+            mention('mb', 'spk-gone', 'other.dev', 'X', 'did:plc:o'),
+          ]
+          b._rev = 'r-retagged'
+        }
+      }
+      const before = () => structuredClone(doc(ADA))
+      const speakerBefore = before()
+      const result = await eraseSpeakerInPlace({
+        speakerId: ADA,
+        actor: 'test',
+      })
+      expect(result.err?.message).toMatch(/409/)
+      expect(doc(ADA)).toEqual(speakerBefore)
+    })
+
+    it('keeps the first verification’s residual ids when the re-verification fails', async () => {
+      h.afterCommit = () => {
+        h.afterCommit = null
+        h.dataset.push(
+          variant('var-fl', 'publishing', TAGGED),
+          variant('var-dr', 'draft', 'Meet Ada Lovelace', { mentions: [] }),
+        )
+      }
+      let refReads = 0
+      h.beforeFetch = (q) => {
+        if (!q.includes('&& references($speakerId)]')) return
+        refReads++
+        // 1 plan, 2 first verification, 3 repair, 4 re-verification.
+        if (refReads === 4) throw new Error('503: try again')
+      }
+      const result = await eraseSpeakerInPlace({
+        speakerId: ADA,
+        actor: 'test',
+      })
+      expect(result.err).toBeNull()
+      expect(doc('var-dr').body).toBe('Meet a speaker')
+      expect(result.verification?.residual.postVariantIds).toContain('var-fl')
+    })
+
+    it('ends a link at the URL, so a name right after it is still hers', async () => {
+      h.dataset.push(
+        variant(
+          'var-link',
+          'draft',
+          'See (https://example.test)Ada Lovelace and https://x.test/a.',
+          {
+            mentions: [],
+          },
+        ),
+      )
+      const result = await eraseSpeakerInPlace({
+        speakerId: ADA,
+        actor: 'test',
+      })
+      expect(doc('var-link').body).toBe(
+        'See (https://example.test)a speaker and https://x.test/a.',
+      )
+      expect(result.verification?.clean).toBe(true)
+    })
+  })
+
   it('REFUSES, writing nothing, while a variant naming her is being published', async () => {
     h.dataset.push(variant('var-in-flight', 'publishing', TAGGED))
     const before = structuredClone(h.dataset)

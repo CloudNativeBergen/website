@@ -103,6 +103,7 @@ function inputs(overrides: Partial<ErasureInputs> = {}): ErasureInputs {
       variants: [],
       identity: { names: [], handles: [], dids: [] },
       nameScope: [],
+      sharedHandles: [],
     },
     now: NOW,
     ...overrides,
@@ -414,6 +415,7 @@ describe('idempotency — the whole patch is a fixed point', () => {
         variants: [],
         identity: { names: [], handles: [], dids: [] },
         nameScope: [],
+        sharedHandles: [],
       },
       now: '2099-12-31T23:59:59.000Z',
     }

@@ -1582,7 +1582,15 @@ export async function eraseSpeakerInPlace(
       })
       if (repaired) {
         repairedPostVariants = repaired.patched
-        verification = (await verify(repaired.identity))?.verification ?? null
+        // A failed re-read keeps the FIRST verification: its residual ids
+        // are the only record of a variant the repair had to leave.
+        verification =
+          (
+            await verify(repaired.identity).catch((error: unknown) => {
+              console.error('[speaker-erasure] re-verification failed', error)
+              return null
+            })
+          )?.verification ?? verification
       }
     }
 

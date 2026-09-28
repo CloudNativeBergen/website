@@ -93,6 +93,13 @@ export interface SpeakerMentionInputs {
    * found through a team account another speaker shares is theirs.
    */
   nameScope: string[]
+  /**
+   * Handles someone ELSE holds too — on a live speaker's or a sponsor's
+   * record in any variant read, or in a live speaker's profile links. Such a
+   * handle is hers only where a tag is bound to her record: never in text
+   * that records nobody (a team account in another tenant's post).
+   */
+  sharedHandles: string[]
 }
 
 export interface SpeakerMentionPlan {
@@ -154,15 +161,20 @@ function isSubjectRecord(
   )
 }
 
-/** The handles someone else's record in this variant carries. */
-function sharedHandles(v: Doc): Set<string> {
-  return new Set(
+/** The handles someone else's record in these variants carries. */
+function othersHandles(variants: readonly Doc[]): string[] {
+  return variants.flatMap((v) =>
     list<MentionEntry>(v.mentions)
       .filter(isOthers)
       .map((m) => str(m.handle))
       .filter((h): h is string => h !== null)
       .map(normaliseHandle),
   )
+}
+
+/** This variant's shared handles, and every one known to be shared. */
+function sharedHandles(v: Doc, global: ReadonlySet<string>): Set<string> {
+  return new Set([...global, ...othersHandles([v])])
 }
 
 /**
@@ -243,7 +255,20 @@ function handlePattern(handles: readonly string[]): RegExp | null {
 }
 
 /** Where a link stands: a URL is left whole, a name inside it untouched. */
-const LINK = /(?:https?:\/\/|www\.)\S+/gi
+const LINK = /(?:https?:\/\/|www\.)[^\s)\]}>"']+/gi
+
+/**
+ * Each link's span, ending at the URL: not a closing bracket or quote, and
+ * not the sentence's own punctuation after it — so a name right after a link
+ * ("(https://x.test)Ada") is not swallowed into it.
+ */
+function linkSpans(text: string): Span[] {
+  return spansOf(text, LINK).map(([a, b]): Span => {
+    let end = b
+    while (end > a && /[.,;:!?]/.test(text[end - 1])) end--
+    return [a, end]
+  })
+}
 
 type Span = [number, number]
 const spansOf = (text: string, pattern: RegExp): Span[] =>
@@ -257,7 +282,7 @@ function nameSpans(text: string, names: readonly string[]): Span[] {
   if (!pattern) return []
   // An earlier run's placeholder is not their name, either — or a speaker
   // named "Speaker" would be scrubbed again on every run.
-  const links = spansOf(text, LINK)
+  const links = linkSpans(text)
   // A whole phrase only: "Data Speaker" holds no placeholder. A match INSIDE
   // one is exempt; a longer name containing one ("A Speaker Jr") is not.
   const placeholders = spansOf(
@@ -298,8 +323,9 @@ function subjectTags(
   v: Doc,
   speakerId: string,
   identity: MentionIdentity,
+  global: ReadonlySet<string>,
 ): Span[] {
-  const shared = sharedHandles(v)
+  const shared = sharedHandles(v, global)
   const records = list<MentionEntry>(v.mentions)
     .filter((m) => m.status === 'tagged' && str(m.handle) !== null)
     .map((m, i) => ({
@@ -335,10 +361,11 @@ function subjectSpans(
   speakerId: string,
   identity: MentionIdentity,
   byName: boolean,
+  global: ReadonlySet<string>,
 ): Span[] {
   const handles = [
-    ...handleSpans(text, identity.handles, sharedHandles(v)),
-    ...subjectTags(text, v, speakerId, identity),
+    ...handleSpans(text, identity.handles, sharedHandles(v, global)),
+    ...subjectTags(text, v, speakerId, identity, global),
   ]
   const names = byName
     ? nameSpans(text, identity.names).filter((span) => !overlaps(span, handles))
@@ -376,9 +403,10 @@ function scrubText(
   speakerId: string,
   identity: MentionIdentity,
   byName: boolean,
+  global: ReadonlySet<string>,
 ): string {
   const { nfc, toOriginal } = nfcWithMap(text)
-  const spans = subjectSpans(nfc, v, speakerId, identity, byName)
+  const spans = subjectSpans(nfc, v, speakerId, identity, byName, global)
   if (spans.length === 0) return text
   let out = text
   let end = Infinity
@@ -442,6 +470,7 @@ export function planSpeakerMentionErasure(
   inputs: SpeakerMentionInputs,
 ): SpeakerMentionPlan {
   const { identity } = inputs
+  const shared = new Set(inputs.sharedHandles)
   const patches: ErasureDocumentPatch[] = []
   const refusals: string[] = []
   const seen = new Set<string>()
@@ -464,14 +493,14 @@ export function planSpeakerMentionErasure(
       const named = byName(v, speakerId, inputs)
       const body = str(v.body)
       if (body !== null) {
-        const scrubbed = scrubText(body, v, speakerId, identity, named)
+        const scrubbed = scrubText(body, v, speakerId, identity, named, shared)
         if (scrubbed !== body) set.body = scrubbed
       }
       // The override is set even where only the POST's alt names them: that
       // is what this variant would publish, and the post is not scanned.
       for (const { key, alt } of effectiveAlts(v)) {
         if (alt === null) continue
-        const scrubbed = scrubText(alt, v, speakerId, identity, named)
+        const scrubbed = scrubText(alt, v, speakerId, identity, named, shared)
         if (scrubbed === alt) continue
         if (key && SAFE_KEY.test(key))
           set[`attachments[_key=="${key}"].altOverride`] = scrubbed
@@ -533,6 +562,7 @@ export function residualMentionVariants(
   inputs: SpeakerMentionInputs,
 ): string[] {
   const { identity } = inputs
+  const shared = new Set(inputs.sharedHandles)
   const ids = new Set<string>()
   for (const v of inputs.variants) {
     const named = byName(v, speakerId, inputs)
@@ -540,8 +570,8 @@ export function residualMentionVariants(
       const t = str(text)
       return (
         t !== null &&
-        subjectSpans(t.normalize('NFC'), v, speakerId, identity, named).length >
-          0
+        subjectSpans(t.normalize('NFC'), v, speakerId, identity, named, shared)
+          .length > 0
       )
     }
     const recorded = list<MentionEntry>(v.mentions).some((m) => {
@@ -694,7 +724,15 @@ export async function fetchSpeakerMentionInputs(
   // theirs, which finds more: read to a FIXED POINT. Each round must grow
   // the identity; one that is still growing at the limit is refused rather
   // than returned partial (fail closed — a person has few accounts).
-  let byAccountOrScope = await readByAccountOrScope(identity)
+  // Every round's batch is KEPT, first read first: a variant that stops
+  // matching between rounds (retagged meanwhile) is still patched under
+  // the revision it was read at, so a concurrent edit aborts the commit.
+  const found = new Map<string, Doc>()
+  const keep = (batch: Doc[]) => {
+    for (const d of batch) if (!found.has(d._id)) found.set(d._id, d)
+    return [...found.values()]
+  }
+  let byAccountOrScope = keep(await readByAccountOrScope(identity))
   for (let round = 0; ; round++) {
     const grown = mentionIdentity(speakerId, byAccountOrScope, identity)
     const growing =
@@ -709,11 +747,42 @@ export async function fetchSpeakerMentionInputs(
           'the mentions recorded for them by hand',
       )
     }
-    byAccountOrScope = await readByAccountOrScope(identity)
+    byAccountOrScope = keep(await readByAccountOrScope(identity))
   }
+
+  // A live speaker who LISTS one of her handles shares it, record or none.
+  const profileUrls = identity.handles.flatMap((h) =>
+    ['https://', 'http://', ''].flatMap((scheme) =>
+      ['', 'www.'].flatMap((www) =>
+        ['', '/'].map(
+          (slash) => `${scheme}${www}bsky.app/profile/${h}${slash}`,
+        ),
+      ),
+    ),
+  )
+  const othersLinks =
+    identity.handles.length === 0
+      ? []
+      : ((await client.fetch<unknown[]>(
+          // groq-global: other live speakers listing one of her handles, in
+          // every tenant — the same account is theirs as well.
+          groq`*[_type == "speaker" && _id != $speakerId && !defined(erasedAt) && count(links[lower(@) in $urls]) > 0].links`,
+          { speakerId, urls: profileUrls },
+          opts,
+        )) ?? [])
+  const listed = blueskyHandlesFromLinks(
+    othersLinks.flat().filter((l): l is string => typeof l === 'string'),
+  )
+  const variants = [...byRef, ...byAccountOrScope]
+  const shared = new Set(
+    [...othersHandles(variants), ...listed].filter((h) =>
+      identity.handles.includes(h),
+    ),
+  )
   return {
-    variants: [...byRef, ...byAccountOrScope],
+    variants,
     identity,
     nameScope: conferenceIds,
+    sharedHandles: [...shared],
   }
 }
