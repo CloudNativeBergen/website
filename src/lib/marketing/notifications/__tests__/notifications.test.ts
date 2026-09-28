@@ -480,3 +480,144 @@ describe('a tag withheld at publish (tagging spec §4.4, Publish)', () => {
     error.mockRestore()
   })
 })
+
+/**
+ * A FAILED CONFIRMATION (#1130, spec §3.3/§4): the asynchronous publisher
+ * (Buffer) accepted the post and then reported it did not go out, or it
+ * vanished, or never settled. The usual cause is LinkedIn's re-authorization
+ * in Buffer's UI — an organization-wide problem any organizer can fix — so
+ * every organizer hears it, with Buffer's own words, linked to the post.
+ */
+describe('a failed confirmation notifies every organizer (#1130)', () => {
+  const submitted = () =>
+    makeVariant({
+      platform: 'linkedin',
+      status: 'submitted',
+      orgId: 'org-1',
+      submission: {
+        vendorPostId: 'buffer-1',
+        submittedAt: '2026-09-13T09:55:00.000Z',
+        lastCheckedAt: null,
+      },
+    })
+  const failed = (
+    outcome: 'rejected' | 'ambiguous' = 'rejected',
+    error = 'LinkedIn access token expired. Reconnect the channel.',
+  ) => ({
+    variant: submitted(),
+    attempt: { _key: 'confirm-1', at: now.toISOString(), outcome, error },
+  })
+
+  it("sends Buffer's message to each organizer, linked to the post, one doc per organizer in ONE call", async () => {
+    // A Task behind the variant must not divert it to the assignee alone.
+    h.dataset = [task()]
+    h.organizers.mockResolvedValueOnce(['org-a', 'org-b', 'org-a'])
+
+    expect(await notifyMarketingFailure(failed())).toBe(2)
+
+    expect(h.organizers).toHaveBeenCalledWith('org-1')
+    expect(h.createNotifications).toHaveBeenCalledTimes(1)
+    expect(h.createNotifications.mock.calls[0][0]).toEqual(
+      ['org-a', 'org-b'].map((recipientId) => ({
+        recipientId,
+        conferenceId: 'conf-1',
+        notificationType: 'social_publish_failed',
+        title: 'Buffer could not post to LinkedIn',
+        message: 'LinkedIn access token expired. Reconnect the channel.',
+        link: '/admin/marketing/posts?variant=variant-1',
+        tag: 'social-failure.variant-1.confirm-1',
+      })),
+    )
+  })
+
+  it('an AMBIGUOUS confirmation says it could not confirm, never that it failed', async () => {
+    h.organizers.mockResolvedValueOnce(['org-a'])
+    await notifyMarketingFailure(
+      failed(
+        'ambiguous',
+        'The publisher did not confirm the post within 15 minutes. Check the platform before posting again.',
+      ),
+    )
+    expect(h.createNotifications.mock.calls[0][0]).toMatchObject([
+      {
+        title: 'LinkedIn post not confirmed',
+        message:
+          'The publisher did not confirm the post within 15 minutes. Check the platform before posting again.',
+      },
+    ])
+  })
+
+  it("caps Buffer's free-text message", async () => {
+    h.organizers.mockResolvedValueOnce(['org-a'])
+    await notifyMarketingFailure(failed('rejected', 'x'.repeat(2000)))
+    const [item] = h.createNotifications.mock.calls[0][0] as {
+      message: string
+    }[]
+    expect(item.message.length).toBeLessThanOrEqual(300)
+    expect(item.message.endsWith('…')).toBe(true)
+  })
+
+  it('an organization with no organizers notifies nobody and writes nothing', async () => {
+    h.organizers.mockResolvedValueOnce([])
+    expect(await notifyMarketingFailure(failed())).toBe(0)
+    expect(h.createNotifications).not.toHaveBeenCalled()
+  })
+
+  it('an organizer lookup that throws never escapes into the sweep', async () => {
+    h.organizers.mockRejectedValueOnce(new Error('sanity down'))
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    expect(await notifyMarketingFailure(failed())).toBe(0)
+    error.mockRestore()
+  })
+
+  it('END TO END: the confirm sweep hands this path the submitted variant, and the variant stays failed', async () => {
+    h.organizers.mockResolvedValue(['org-a'])
+    const store = new MemoryVariantStore([submitted()])
+    const summary = await runPublishTick({
+      store,
+      now,
+      resolveAdapter: async () => ({
+        platform: 'linkedin',
+        constraints: {
+          maxLength: 3000,
+          counting: 'graphemes',
+          maxImages: 9,
+          imageMimeTypes: ['image/jpeg'],
+          requiresImage: false,
+          requiresAlt: true,
+          urlLengthCost: null,
+          linkPlacement: 'comment',
+          imageAspectRatio: null,
+          maxBytes: null,
+          linkCardDisplacesImages: false,
+        },
+        validate: () => [],
+        publish: async () => ({ ok: false, outcome: 'transient' }),
+        confirm: async () => ({ state: 'failed', message: 'Token expired' }),
+      }),
+      onFailed: notifyMarketingFailure,
+    })
+    expect(summary).toMatchObject({ confirmFailed: 1, errors: [] })
+    expect(store.get('variant-1').status).toBe('failed')
+    expect(h.createNotifications.mock.calls[0][0]).toMatchObject([
+      {
+        recipientId: 'org-a',
+        message: 'Token expired',
+        link: '/admin/marketing/posts?variant=variant-1',
+      },
+    ])
+    h.organizers.mockReset()
+  })
+
+  it('a stale PUBLISHING claim keeps the assignee path (only a failed confirmation fans out)', async () => {
+    h.dataset = [task()]
+    await notifyMarketingFailure({
+      variant: makeVariant({ platform: 'linkedin', status: 'publishing' }),
+      attempt: { _key: 'k', at: now.toISOString(), outcome: 'stale-claim' },
+    })
+    expect(h.organizers).not.toHaveBeenCalled()
+    expect(h.createNotifications.mock.calls[0][0]).toMatchObject([
+      { recipientId: 'assignee', notificationType: 'marketing_task_failed' },
+    ])
+  })
+})

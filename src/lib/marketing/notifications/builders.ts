@@ -4,6 +4,8 @@ import type {
   VariantFailureEvent,
 } from '@/lib/social/publish-engine'
 import { manualPostPath } from '@/lib/social/notify'
+import { SOCIAL_PLATFORM_LABELS } from '@/lib/social/types'
+import { truncateToGraphemeBoundary } from '@/lib/messaging/links'
 import { joinNames } from '@/lib/marketing/tagging/body'
 import { GONE_SPEAKER_TEXT } from '@/lib/marketing/tagging/publish'
 
@@ -65,6 +67,51 @@ export function standalonePublishFailureNotification(
       tag: `social-failure.${variant._id}.${attempt._key}`,
     },
   ]
+}
+
+/** Buffer's error is free text; the full trail stays on the variant. */
+const VENDOR_MESSAGE_MAX = 300
+
+/**
+ * A FAILED CONFIRMATION (#1130, spec §3.3, §4): the asynchronous publisher —
+ * Buffer, the only one there is (#1129) — accepted the post, then reported
+ * an error, lost it, or never settled it. Buffer's error is terminal and
+ * never retried, and its usual cause is LinkedIn's re-authorization inside
+ * Buffer's UI: an organization-wide problem any organizer may fix. So EVERY
+ * organizer of the organization hears it (one row each, deduplicated),
+ * carrying Buffer's own message, linked to the post's copy-ready view where
+ * it can be recorded, posted by hand, or retried from its row.
+ *
+ * THE ACTOR is the publish cron, which runs as no one: the failure is
+ * Buffer's verdict, not any organizer's action, so there is nobody to
+ * exclude. The organizer who approved the post is deliberately NOT treated
+ * as the actor — they are the person who most needs to hear it failed.
+ */
+export function confirmationFailureNotifications(
+  organizerIds: readonly string[],
+  { variant, attempt }: VariantFailureEvent,
+): NotificationInput[] {
+  const platform = SOCIAL_PLATFORM_LABELS[variant.platform]
+  const text = (attempt.error ?? '').trim() || attempt.outcome
+  const message =
+    text.length > VENDOR_MESSAGE_MAX
+      ? `${truncateToGraphemeBoundary(text, VENDOR_MESSAGE_MAX - 1)}…`
+      : text
+  return [...new Set(organizerIds)].map((recipientId) => ({
+    recipientId,
+    conferenceId: variant.conferenceId,
+    notificationType: 'social_publish_failed' as const,
+    // `rejected` is Buffer saying no; anything else (gone, timed out) is a
+    // post that MAY be live, which must never read as a plain failure.
+    title:
+      attempt.outcome === 'rejected'
+        ? `Buffer could not post to ${platform}`
+        : `${platform} post not confirmed`,
+    message,
+    link: manualPostPath(variant._id),
+    // Identity of this failure, not its timestamp: a retry can fail again.
+    tag: `social-failure.${variant._id}.${attempt._key}`,
+  }))
 }
 
 /**

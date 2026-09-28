@@ -13,6 +13,7 @@ import type { PublishableVariant } from '@/lib/social/store'
 import { notifyAwaitingManual } from '@/lib/social/notify'
 import { runMarketingReminders } from '@/lib/marketing/reminders'
 import {
+  confirmationFailureNotifications,
   standalonePublishFailureNotification,
   tagsWithheldNotifications,
   taskFailureNotification,
@@ -24,6 +25,15 @@ export async function notifyMarketingFailure(
   event: VariantFailureEvent,
 ): Promise<number> {
   try {
+    // The event carries the variant AS READ before the failure landed: a
+    // `submitted` one failed its CONFIRMATION with the asynchronous publisher
+    // (#1130). That goes to every organizer, not the Task's assignee alone —
+    // see `confirmationFailureNotifications`.
+    if (event.variant.status === 'submitted') {
+      const organizers = await getOrganizerSpeakerIdsForOrg(event.variant.orgId)
+      const inputs = confirmationFailureNotifications(organizers, event)
+      return inputs.length > 0 ? await createNotifications(inputs) : 0
+    }
     const task = await scopedFetch<FailureTask | null>(
       clientWrite,
       { conferenceId: event.variant.conferenceId },
