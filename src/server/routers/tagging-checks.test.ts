@@ -1037,4 +1037,57 @@ describe('sponsor tags', () => {
     ).rejects.toMatchObject({ message: /Only the people this Task is about/ })
     expect(askedBluesky()).toEqual([])
   })
+
+  it('the tag button refuses a sponsor whose handle an opted-out speaker lists, and never asks Bluesky', async () => {
+    const olga = dataset.find((d) => d._id === 'spk-olga')!
+    olga.links = ['https://bsky.app/profile/acme.example']
+    dataset.push({
+      _id: 'task-sponsor2',
+      _type: 'marketingTask',
+      conference: ref(CONF_A),
+      kind: 'publishing',
+      channel: 'bluesky',
+      subject: ref('sp-acme'),
+    })
+    TENANTS['task-sponsor2'] = { _type: 'marketingTask', conferenceId: CONF_A }
+    await expect(
+      marketing().task.resolveTag({
+        taskId: 'task-sponsor2',
+        speakerId: 'sp-acme',
+      }),
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message:
+        "Someone who has asked not to be tagged in social posts lists Acme AS's Bluesky account.",
+    })
+    expect(askedBluesky()).toEqual([])
+  })
+
+  it('…and the editor offers no tag for it: no handle, marked opted out', async () => {
+    const olga = dataset.find((d) => d._id === 'spk-olga')!
+    olga.links = ['https://bsky.app/profile/acme.example']
+    h.getTaskEditorData.mockResolvedValue({
+      ...stored(),
+      tagPeople: [
+        {
+          speakerId: 'sp-acme',
+          sponsor: true,
+          name: 'Acme AS',
+          handle: 'acme.example',
+          optedOut: false,
+        },
+      ],
+    })
+    const data = await marketing().task.get({ taskId: 'task-ours' })
+    expect(data.tagPeople).toEqual([
+      {
+        speakerId: 'sp-acme',
+        sponsor: true,
+        name: 'Acme AS',
+        handle: null,
+        optedOut: true,
+      },
+    ])
+    expect(askedBluesky()).toEqual([])
+  })
 })

@@ -124,10 +124,28 @@ describe('getSponsorTagSources (#1154)', () => {
       {
         _id: 'sp-acme',
         links: null,
-        socialTagOptOut: null,
+        socialTagOptOut: false,
         blueskyHandle: 'acme.example',
       },
     ])
+  })
+
+  it('reads a sponsor as OPTED OUT when an opted-out speaker here lists its handle (#1154)', async () => {
+    const alice = dataset.find((d) => d._id === 'spk-alice')!
+    const before = alice.links
+    alice.links = ['https://bsky.app/profile/acme.example']
+    try {
+      expect(await getSponsorTagSources('conf-A', ['sp-acme'])).toEqual([
+        {
+          _id: 'sp-acme',
+          links: null,
+          socialTagOptOut: true,
+          blueskyHandle: 'acme.example',
+        },
+      ])
+    } finally {
+      alice.links = before
+    }
   })
 
   it('does not read a sponsor whose deal here is not signed', async () => {

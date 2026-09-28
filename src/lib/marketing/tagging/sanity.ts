@@ -169,5 +169,32 @@ export async function getTaskTagPeople(
     { taskId },
     { cache: 'no-store' },
   )
-  return taggablePeopleFrom(row?.tagPeople?.people)
+  return withConferenceOptOuts(
+    taggablePeopleFrom(row?.tagPeople?.people),
+    conferenceId,
+  )
+}
+
+/**
+ * The opt-out wins in every path (#1154): a sponsor among `people` whose
+ * handle an opted-out speaker of this conference lists is opted out, as the
+ * conference roster (`withSharedOptOuts`) says. `forClient` blanks its handle
+ * too, as for an opted-out speaker. No sponsor, no read.
+ */
+export async function withConferenceOptOuts(
+  people: readonly TaggablePerson[],
+  conferenceId: string,
+  options: { forClient?: boolean } = {},
+): Promise<TaggablePerson[]> {
+  if (!people.some((p) => p.sponsor)) return [...people]
+  const blocked = new Set(
+    (await getConferenceTaggablePeople(conferenceId))
+      .filter((p) => p.sponsor && p.optedOut)
+      .map((p) => p.speakerId),
+  )
+  return people.map((p) =>
+    p.sponsor && blocked.has(p.speakerId)
+      ? { ...p, optedOut: true, ...(options.forClient ? { handle: null } : {}) }
+      : p,
+  )
 }

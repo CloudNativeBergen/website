@@ -169,7 +169,12 @@ function PersonRow({
   const nameInBody = nameIndex(body, person.name, person.handle) >= 0
   let status: { text: string; tone: 'muted' | 'warn' | 'error' } | null = null
   if (person.optedOut)
-    status = { text: 'Asked not to be tagged', tone: 'muted' }
+    status = {
+      text: person.sponsor
+        ? 'Its account is listed by someone who asked not to be tagged'
+        : 'Asked not to be tagged',
+      tone: 'muted',
+    }
   else if (person.ownAccount)
     status = { text: "Links the conference's own account", tone: 'muted' }
   else if (!person.handle)

@@ -11,6 +11,7 @@ const store = vi.hoisted(() => ({
   commits: [] as import('../materialize').TaskRecords[],
   sponsorSources: [] as { _id: string; blueskyHandle: string | null }[],
   sponsorError: null as Error | null,
+  sponsorOptedOut: false,
 }))
 
 vi.mock('../generation-sanity', () => ({
@@ -30,7 +31,7 @@ vi.mock('../generation-sanity', () => ({
     return store.sponsorSources.map((s) => ({
       _id: s._id,
       links: null,
-      socialTagOptOut: null,
+      socialTagOptOut: store.sponsorOptedOut,
       blueskyHandle: s.blueskyHandle,
     }))
   }),
@@ -70,6 +71,7 @@ const fetchMock = vi.fn<typeof fetch>()
 function reset() {
   store.commits = []
   store.sponsorError = null
+  store.sponsorOptedOut = false
   store.sponsorSources = [{ _id: 'sp-acme', blueskyHandle: 'acme.example' }]
   store.context = {
     plan: { _id: 'plan', ownerId: 'owner' },
@@ -198,6 +200,14 @@ describe('the SHIPPED built-in sponsor card, for a sponsor with a Bluesky handle
     expect(variant('bluesky').mentions).toEqual([
       expect.objectContaining({ handle: 'acme.example', status: 'unresolved' }),
     ])
+  })
+
+  it('a sponsor whose handle an opted-out speaker lists: the plain name, and Bluesky is NEVER asked', async () => {
+    store.sponsorOptedOut = true
+    await signed()
+    expect(resolveCalls()).toHaveLength(0)
+    expect(variant('bluesky').body).toContain('🥇 Gold sponsor: Acme AS\n')
+    expect(variant('bluesky').mentions).toBeUndefined()
   })
 
   it('a sponsor with no handle: the plain name, and Bluesky is never asked', async () => {

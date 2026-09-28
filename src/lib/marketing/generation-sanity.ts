@@ -20,6 +20,7 @@ import type { SubjectList, TaskRecipe } from './template/types'
 import type { CampaignTrigger, MarketingChannel } from './types'
 import { postDocument, taskDocument, variantDocument } from './sanity'
 import type { TagSource } from './tagging/lookup'
+import { getConferenceTaggablePeople } from './tagging/sanity'
 import { expireShortLinkIndex } from './short-link-cache'
 
 /**
@@ -392,27 +393,17 @@ export async function getSponsorTagSources(
   conferenceId: string,
   sponsorIds: string[],
 ): Promise<SpeakerTagSource[]> {
-  const rows = await scopedFetch<
-    ({ _id: string | null; blueskyHandle: string | null } | null)[] | null
-  >(
-    clientReadUncached,
-    { conferenceId },
-    `*[_type == "sponsorForConference" && sponsor._ref in $ids && (contractStatus == "contract-signed" || status == "closed-won") && status != "closed-lost" && !(_id in path("drafts.**")) && !(_id in path("versions.**"))].sponsor->{ _id, blueskyHandle }`,
-    { ids: sponsorIds },
-    { cache: 'no-store' },
-  )
+  // The conference roster, so a sponsor whose handle an opted-out speaker
+  // lists reads as opted out — and is never looked up (#1154).
   const wanted = new Set(sponsorIds)
-  const byId = new Map<string, SpeakerTagSource>()
-  for (const row of rows ?? []) {
-    if (!row?._id || !wanted.has(row._id)) continue
-    byId.set(row._id, {
-      _id: row._id,
+  return (await getConferenceTaggablePeople(conferenceId))
+    .filter((p) => p.sponsor && wanted.has(p.speakerId))
+    .map((p) => ({
+      _id: p.speakerId,
       links: null,
-      socialTagOptOut: null,
-      blueskyHandle: row.blueskyHandle,
-    })
-  }
-  return [...byId.values()]
+      socialTagOptOut: p.optedOut,
+      blueskyHandle: p.handle,
+    }))
 }
 
 /** What a speaker's Bluesky tag is derived from (tagging spec §3.1, §3.2). */

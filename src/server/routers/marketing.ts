@@ -207,7 +207,10 @@ import {
 import type { VariantStatus } from '@/lib/social/types'
 import { getOrganizersByConference } from '@/lib/speaker/sanity'
 import { checkTagsForApproval } from '@/lib/marketing/tagging/verify'
-import { getTaskTagPeople } from '@/lib/marketing/tagging/sanity'
+import {
+  getTaskTagPeople,
+  withConferenceOptOuts,
+} from '@/lib/marketing/tagging/sanity'
 import { ownBlueskyAccount } from '@/lib/marketing/tagging/own-account'
 import { resolveBlueskyHandle } from '@/lib/marketing/tagging/resolve'
 import { tagIssuesError } from '@/server/errors'
@@ -1162,9 +1165,14 @@ export const marketingRouter = router({
           data.tagPeople.length > 0
             ? await ownBlueskyAccount(conferenceId)
             : null
+        const tagPeople = await withConferenceOptOuts(
+          data.tagPeople,
+          conferenceId,
+          { forClient: true },
+        )
         return {
           ...data,
-          tagPeople: data.tagPeople.map((p) =>
+          tagPeople: tagPeople.map((p) =>
             own && p.handle === own
               ? { ...p, handle: null, ownAccount: true as const }
               : p,
@@ -1539,7 +1547,11 @@ export const marketingRouter = router({
         if (person.optedOut) {
           throw new TRPCError({
             code: 'BAD_REQUEST',
-            message: `${person.name} has asked not to be tagged in social posts.`,
+            // A sponsor is refused for a speaker who lists its account:
+            // never named (#1154).
+            message: person.sponsor
+              ? `Someone who has asked not to be tagged in social posts lists ${person.name}'s Bluesky account.`
+              : `${person.name} has asked not to be tagged in social posts.`,
           })
         }
         if (!person.handle) {
