@@ -68,8 +68,9 @@ export function shortLinkPattern(
         // keeps the organizer's `?`. Then nothing that continues a URL — so
         // `/extra`, `-bad` or `.bad` (not a route `/go/` serves) never match
         // a prefix — while `…`, an emoji, `»` or `’s` still end one.
+        // (`{0,}`, not `*`: the tenancy lint reads `*[` as a GROQ root.)
         String.raw`https?://[^\s/?#]+/go/${code}` +
-          String.raw`(?:[?#][^\s${PROSE}]+(?:\S*[^\s${PROSE}])?)?` +
+          String.raw`(?:[?#][^\s${PROSE}]+(?:\S{0,}[^\s${PROSE}])?)?` +
           String.raw`(?![a-z0-9/\-_~%]|\.[a-z0-9])`,
         'gi',
       )
