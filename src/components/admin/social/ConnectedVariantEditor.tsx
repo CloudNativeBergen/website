@@ -270,7 +270,7 @@ export function ConnectedVariantEditor({
   /** Select what just landed on the post on this variant. */
   const selectAdded = async (added: Promise<{ key: string }>) => {
     const { key } = await added
-    // The picker's "used in N posts" moved with it.
+    // The gallery's "used in N posts" moved with it.
     void utils.marketingAsset.invalidate()
     await utils.social.getVariantEditor.invalidate({ variantId })
     if (task) {

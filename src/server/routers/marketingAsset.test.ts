@@ -244,6 +244,12 @@ beforeEach(() => {
       }
       // The asset reads, which must be scoped to the caller's organization.
       if (params.orgId !== 'org-A') throw new Error('unscoped read')
+      // "Used in N posts": two of our posts hold the logo.
+      if (query.includes('"refs"'))
+        return [
+          { refs: ['image-logo-800x800-png'] },
+          { refs: ['image-logo-800x800-png', 'image-logo-800x800-png'] },
+        ]
       // The edition mark an asset carries, for `edition: "keep"`.
       if (query.includes('][0]') && query.includes('"conferenceId"'))
         return params.id in MARKS ? { conferenceId: MARKS[params.id] } : null
@@ -287,7 +293,9 @@ beforeEach(() => {
 describe('marketingAsset.forPost (#1163)', () => {
   it('lists the picker for our post, with the subject its Task names', async () => {
     const rows = await assets().forPost({ postId: 'post-ours', search: 'logo' })
-    expect(rows).toEqual([{ ...ROWS[0], softOnSocial: true, attachable: true }])
+    expect(rows).toEqual([
+      { ...ROWS[0], softOnSocial: true, attachable: true, usedInPosts: 2 },
+    ])
     const taskRead = h.read.mock.calls.find(([q]) =>
       String(q).includes('"marketingTask"'),
     )
@@ -311,7 +319,9 @@ describe('marketingAsset.forPost (#1163)', () => {
 describe('marketingAsset.list', () => {
   it('lists this organization’s assets, read with the organization filter', async () => {
     const rows = await assets().list()
-    expect(rows).toEqual([{ ...ROWS[0], softOnSocial: true, attachable: true }])
+    expect(rows).toEqual([
+      { ...ROWS[0], softOnSocial: true, attachable: true, usedInPosts: 2 },
+    ])
     const [query, params] = h.read.mock.calls[0]
     expect(query).toContain('organization._ref == $orgId')
     expect(query).toContain('_type == "marketingAsset"')

@@ -48,7 +48,6 @@ const ROW_PROJECTION = `{
     "sponsorId": select(studio.tab == "sponsors" && subject->_type == "sponsor" => subject._ref, null)
   }, null),
   "mimeType": image.asset->mimeType,
-  "usedInPosts": select(defined(image.asset._ref) => count(*[_type == "socialPost" && conference->organization._ref == $orgId && _id in path("*") && references(^.image.asset._ref)]), 0),
   "rights": select(defined(rightsConfirmation.confirmedAt) => {
     "confirmedBy": rightsConfirmation.confirmedBy->name,
     "confirmedAt": rightsConfirmation.confirmedAt
@@ -87,7 +86,10 @@ export async function listMarketingAssets(
   filter: MarketingAssetFilter,
 ): Promise<MarketingAssetRow[]> {
   const rows = await scopedFetch<
-    | (Omit<MarketingAssetRow, 'softOnSocial' | 'attachable'> & {
+    | (Omit<
+        MarketingAssetRow,
+        'softOnSocial' | 'attachable' | 'usedInPosts'
+      > & {
         mimeType: string | null
       })[]
     | null
@@ -114,11 +116,43 @@ export async function listMarketingAssets(
     },
     { cache: 'no-store' },
   )
+  const used = await countPostsUsingImages(
+    orgId,
+    (rows ?? []).flatMap((row) => (row.assetId ? [row.assetId] : [])),
+  )
   return (rows ?? []).map(({ mimeType, ...row }) => ({
     ...row,
     softOnSocial: isSoftOnSocial(row),
     attachable: isAttachableToPost({ ...row, mimeType }),
+    usedInPosts: (row.assetId && used.get(row.assetId)) || 0,
   }))
+}
+
+/**
+ * How many of this organization's posts hold each image ("used in N
+ * posts", spec §5): ONE read of the posts that hold any of them, rather than
+ * a count per gallery row. Posts of any status, Studio drafts excluded. For
+ * display only; never a delete precondition.
+ */
+async function countPostsUsingImages(
+  orgId: string,
+  assetIds: string[],
+): Promise<Map<string, number>> {
+  const counts = new Map<string, number>()
+  if (assetIds.length === 0) return counts
+  const posts = await clientReadUncached.fetch<
+    { refs: (string | null)[] | null }[] | null
+  >(
+    `*[_type == "socialPost" && conference->organization._ref == $orgId && _id in path("*") && count(attachments[image.asset._ref in $assetIds]) > 0]{ "refs": attachments[].image.asset._ref }`,
+    { orgId, assetIds: [...new Set(assetIds)] },
+    { cache: 'no-store' },
+  )
+  for (const post of posts ?? []) {
+    // A post holding the same image twice is still one post.
+    for (const ref of new Set(post.refs ?? []))
+      if (ref) counts.set(ref, (counts.get(ref) ?? 0) + 1)
+  }
+  return counts
 }
 
 /**
@@ -184,7 +218,8 @@ export async function listMarketingAssetsForPost(
 /**
  * One of this organization's assets as a post takes it (#1163): the image
  * reference, its crop and hotspot, the alt text, and whether it can go into a
- * post at all. Null when it is not ours. The caller has proven the id ours.
+ * post at all. The read is scoped too, so an id that is not ours (or is gone)
+ * reads as null; the caller's guard has already refused a foreign one.
  */
 export async function readMarketingAssetForPost(
   orgId: string,

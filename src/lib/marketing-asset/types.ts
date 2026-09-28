@@ -59,8 +59,8 @@ export interface MarketingAssetRow {
   /** Which studio tab and subject made it; null for anything uploaded. */
   studio: MarketingAssetStudioOrigin | null
   /**
-   * Published posts of this organization holding the asset's image. For
-   * display only: never a delete precondition (posts keep their own copy).
+   * Posts of this organization (any status, Studio drafts excluded) holding
+   * the asset's image. For display only: never a delete precondition (posts keep their own copy).
    */
   usedInPosts: number
   /** Whether it can go into a post yet: a GIF, video or track cannot. */
