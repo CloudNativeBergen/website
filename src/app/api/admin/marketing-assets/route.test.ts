@@ -578,7 +578,16 @@ describe('a GIF or a video through the move route (#1167)', () => {
     const response = await POST(request(VIDEO))
     expect(response.status).toBe(200)
     expect(h.move).toHaveBeenCalledWith(POSTER_URL, 'org-A')
-    expect(h.moveVideo).toHaveBeenCalledWith(VIDEO_URL, 'org-A')
+    expect(h.moveVideo).toHaveBeenCalledWith(
+      VIDEO_URL,
+      'org-A',
+      expect.any(Number),
+    )
+    // What is left of maxDuration after the checks and the poster, less the
+    // write's reserve: never the full 240 s regardless.
+    const budget = h.moveVideo.mock.calls[0][2] as number
+    expect(budget).toBeLessThanOrEqual(maxDuration * 1000 - 3_000 - 15_000)
+    expect(budget).toBeGreaterThan(maxDuration * 1000 - 3_000 - 15_000 - 5_000)
     expect(h.move.mock.invocationCallOrder[0]).toBeLessThan(
       h.moveVideo.mock.invocationCallOrder[0],
     )
@@ -595,6 +604,20 @@ describe('a GIF or a video through the move route (#1167)', () => {
       _id: 'asset-1',
       softOnSocial: false,
     })
+  })
+
+  it('takes what the poster used off the video’s time', async () => {
+    let now = 1_000_000
+    const clock = vi.spyOn(Date, 'now').mockImplementation(() => now)
+    h.move.mockImplementation(async () => {
+      now += 100_000
+      return POSTER
+    })
+    await POST(request(VIDEO))
+    clock.mockRestore()
+    expect(h.moveVideo.mock.calls[0][2]).toBe(
+      maxDuration * 1000 - 3_000 - 15_000 - 100_000,
+    )
   })
 
   it.each([

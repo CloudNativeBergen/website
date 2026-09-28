@@ -24,8 +24,11 @@ export const MARKETING_ASSET_VIDEO_SIZE_REFUSAL = `The video is larger than ${MA
 export const MARKETING_ASSET_POSTER_REFUSAL =
   'This browser could not read the video’s first frame. Try another browser, or export the video again as H.264 MP4.'
 
-/** How many leading bytes {@link sniffMotionType} needs. */
-export const MOTION_SNIFF_BYTES = 12
+/**
+ * How many leading bytes the sniffs read: enough for an `ftyp` box's major
+ * brand and its compatible brands.
+ */
+export const MOTION_SNIFF_BYTES = 64
 
 /**
  * The `ftyp` major brands of an MP4. A QuickTime file says `qt  `; an MP4
@@ -43,6 +46,9 @@ const MP4_BRANDS = new Set([
   'avc1',
   'M4V ',
   'dash',
+  'iso7',
+  'iso8',
+  'iso9',
 ])
 
 const text = (bytes: Uint8Array, from: number, to: number) =>
@@ -60,8 +66,17 @@ export function isGif(bytes: Uint8Array): boolean {
  * QuickTime `.mov` (brand `qt  `, or no `ftyp` at all) whatever it is called.
  */
 export function isMp4(bytes: Uint8Array): boolean {
-  if (bytes.length < MOTION_SNIFF_BYTES) return false
-  return text(bytes, 4, 8) === 'ftyp' && MP4_BRANDS.has(text(bytes, 8, 12))
+  if (bytes.length < 16 || text(bytes, 4, 8) !== 'ftyp') return false
+  const major = text(bytes, 8, 12)
+  if (major === 'qt  ') return false
+  if (MP4_BRANDS.has(major)) return true
+  // A camera's own major brand (Sony `XAVC`, `MSNV`…) still lists the MP4
+  // brands it conforms to after the minor version.
+  const size = (bytes[0] << 24) | (bytes[1] << 16) | (bytes[2] << 8) | bytes[3]
+  const end = Math.min(size, bytes.length)
+  for (let at = 16; at + 4 <= end; at += 4)
+    if (MP4_BRANDS.has(text(bytes, at, at + 4))) return true
+  return false
 }
 
 export type MotionKind = 'gif' | 'video'

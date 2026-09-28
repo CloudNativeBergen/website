@@ -65,7 +65,10 @@ describe('the GIF original route (#1167)', () => {
     const response = await get('asset=wave')
     expect(response.status).toBe(200)
     // The original: the CDN URL exactly, no rendition parameter.
-    expect(h.upstream).toHaveBeenCalledWith(GIF_URL, expect.any(Object))
+    expect(h.upstream).toHaveBeenCalledWith(
+      GIF_URL,
+      expect.objectContaining({ redirect: 'error' }),
+    )
     expect(new Uint8Array(await response.arrayBuffer())).toEqual(BYTES)
     expect(response.headers.get('content-disposition')).toBe(
       'attachment; filename="wave-hello.gif"',

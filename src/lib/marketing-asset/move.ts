@@ -292,15 +292,15 @@ async function transferAudio(
  * bytes it may carry, how its real type is read from its first bytes, and how
  * long the whole move may take.
  */
-interface StreamedKind<T extends string> {
+interface StreamedKind {
   asset: 'image' | 'file'
   maxBytes: number
   sniffBytes: number
-  sniff: (head: Uint8Array) => T | null
+  sniff: (head: Uint8Array) => string | null
   deadlineMs: number
 }
 
-const IMAGE: StreamedKind<string> = {
+const IMAGE: StreamedKind = {
   asset: 'image',
   maxBytes: MARKETING_ASSET_MAX_IMAGE_BYTES,
   sniffBytes: SNIFF_BYTES,
@@ -308,7 +308,7 @@ const IMAGE: StreamedKind<string> = {
   deadlineMs: SANITY_UPLOAD_DEADLINE_MS,
 }
 
-const GIF: StreamedKind<string> = {
+const GIF: StreamedKind = {
   asset: 'image',
   maxBytes: MARKETING_ASSET_MAX_GIF_BYTES,
   sniffBytes: MOTION_SNIFF_BYTES,
@@ -316,7 +316,7 @@ const GIF: StreamedKind<string> = {
   deadlineMs: SANITY_UPLOAD_DEADLINE_MS,
 }
 
-const VIDEO: StreamedKind<string> = {
+const VIDEO: StreamedKind = {
   asset: 'file',
   maxBytes: MARKETING_ASSET_MAX_VIDEO_BYTES,
   sniffBytes: MOTION_SNIFF_BYTES,
@@ -365,16 +365,22 @@ export async function moveGifBlobToSanity(
  * Node stream the Sanity client sends as it arrives, so the function never
  * holds the file — only the chunk in flight. Refused, without a byte reaching
  * Sanity, when the first box is not an MP4 `ftyp` (a QuickTime `.mov` says
- * `qt  `); aborted mid-upload the moment it passes 100 MB. Its deadline is the
- * route's `maxDuration` less the margin the answer needs.
+ * `qt  `); aborted mid-upload the moment it passes 100 MB. It gives up after
+ * `deadlineMs` — the caller passes what is left of its `maxDuration` less
+ * what the write and the answer need — and never after
+ * {@link VIDEO_UPLOAD_DEADLINE_MS}.
  */
 export async function moveVideoBlobToSanity(
   url: string,
   orgId: string,
+  deadlineMs: number = VIDEO_UPLOAD_DEADLINE_MS,
 ): Promise<VideoMoveResult> {
   const check = claimBlob(url, orgId)
   if (!check.ok) return check
-  const moved = await transfer(check.url, check.filename, VIDEO)
+  const moved = await transfer(check.url, check.filename, {
+    ...VIDEO,
+    deadlineMs: Math.max(0, Math.min(deadlineMs, VIDEO_UPLOAD_DEADLINE_MS)),
+  })
   if (!moved.ok) return moved
   return {
     ok: true,
@@ -389,7 +395,7 @@ export async function moveVideoBlobToSanity(
 async function transfer(
   url: string,
   filename: string,
-  kind: StreamedKind<string>,
+  kind: StreamedKind,
 ): Promise<StreamedResult> {
   const startedAt = Date.now()
   const deadlineAt = startedAt + kind.deadlineMs
@@ -413,7 +419,7 @@ async function transfer(
 async function transferWithin(
   url: string,
   filename: string,
-  kind: StreamedKind<string>,
+  kind: StreamedKind,
   startedAt: number,
   deadlineAt: number,
   signal: AbortSignal,

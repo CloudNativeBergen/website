@@ -55,6 +55,12 @@ import { getCurrentDateTime } from '@/lib/time'
  */
 export const maxDuration = 300
 
+/**
+ * What a video's move leaves for the gallery write and the cleanup after it,
+ * inside {@link ANSWER_MARGIN_MS}.
+ */
+const WRITE_RESERVE_MS = 15_000
+
 /** Kept back from `maxDuration`, so there is always time left to answer. */
 const ANSWER_MARGIN_MS = 3_000
 
@@ -249,7 +255,7 @@ export async function POST(request: Request) {
     )
   }
 
-  const moved = await moveFor(kindName, url, posterUrl, orgId)
+  const moved = await moveFor(kindName, url, posterUrl, orgId, answerBy)
   if (!moved.ok) {
     const refusal =
       moved.reason === 'poster' ? POSTER_REFUSED : kind.refusals[moved.reason]
@@ -375,6 +381,8 @@ async function moveFor(
   url: string,
   posterUrl: string | undefined,
   orgId: string,
+  /** When the route must answer: the video's move ends in time to write. */
+  answerBy: number,
 ): Promise<Moved> {
   if (kind === 'audio') {
     const moved = await moveAudioBlobToSanity(url, orgId)
@@ -398,7 +406,13 @@ async function moveFor(
       discardBlob(url, orgId)
       return { ok: false, reason: 'poster' }
     }
-    const video = await moveVideoBlobToSanity(url, orgId)
+    // Whatever the poster and the checks before it took comes off the
+    // video's time, so the gallery write and the cleanup still fit.
+    const video = await moveVideoBlobToSanity(
+      url,
+      orgId,
+      answerBy - Date.now() - WRITE_RESERVE_MS,
+    )
     if (!video.ok) {
       const posterId = poster.asset._id
       if (poster.asset.created)

@@ -78,6 +78,8 @@ export async function GET(request: Request) {
 
   // Aborted with the request: a closed tab stops the upstream read too.
   const upstream = await fetch(gif.url, {
+    // The host check holds for the first hop only: never follow one.
+    redirect: 'error',
     cache: 'no-store',
     signal: request.signal,
   }).catch(() => null)

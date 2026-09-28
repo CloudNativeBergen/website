@@ -21,6 +21,12 @@ describe('motion sniffs', () => {
     // An old .mov starts with `moov` or `wide`, not `ftyp`.
     expect(isMp4(bytes('\0\0\0\x08wide', 8))).toBe(false)
     expect(isMp4(bytes('\0\0\0\x20ftyp'))).toBe(false)
+    // A camera brand that lists MP4 among its compatible brands.
+    expect(isMp4(bytes('\0\0\0\x18ftypXAVC\0\0\0\0isommp42'))).toBe(true)
+    // HEIF stills share the box format, not the brands.
+    expect(isMp4(bytes('\0\0\0\x18ftypheic\0\0\0\0mif1heic'))).toBe(false)
+    // QuickTime is refused even when it lists an MP4 brand.
+    expect(isMp4(bytes('\0\0\0\x18ftypqt  \0\0\0\0isom', 8))).toBe(false)
   })
 
   it('picks the kind the form uploads as', () => {
