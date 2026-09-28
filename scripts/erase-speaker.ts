@@ -107,7 +107,7 @@ async function main(): Promise<number> {
   const speakerId = process.argv[2]
   if (!speakerId || speakerId.startsWith('--')) {
     console.error(
-      'Usage: pnpm erase-speaker <speakerId> --actor "<who>" [--commit]\n' +
+      'Usage: pnpm erase-speaker <speakerId> --actor "<who>" [--commit [--accept-shared-handles]]\n' +
         '       pnpm erase-speaker <speakerId> --verify [--files <id,id>]\n\n' +
         'Read docs/SPEAKER_ERASURE_RUNBOOK.md first.',
     )
@@ -143,6 +143,7 @@ async function main(): Promise<number> {
     speakerId,
     actor: actor ?? 'dry-run',
     dryRun: !commit,
+    acceptSharedHandles: has('accept-shared-handles'),
   })
 
   if (result.plan) printPlan(result.plan)

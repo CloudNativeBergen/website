@@ -974,6 +974,7 @@ describe('speaker erasure scrubs post variants (#1232)', () => {
       const result = await eraseSpeakerInPlace({
         speakerId: ADA,
         actor: 'test',
+        acceptSharedHandles: true,
       })
       expect(doc('var-team').body).toBe('a speaker speaks')
       expect(doc('var-foreign').body).toBe('Thanks @team.dev for hosting')
@@ -1060,6 +1061,7 @@ describe('speaker erasure scrubs post variants (#1232)', () => {
       const result = await eraseSpeakerInPlace({
         speakerId: ADA,
         actor: 'test',
+        acceptSharedHandles: true,
       })
       expect(result.err).toBeNull()
       expect(doc('var-foreign').body).toBe('Meet "@ada.bsky.social" today')
@@ -1089,6 +1091,7 @@ describe('speaker erasure scrubs post variants (#1232)', () => {
       const result = await eraseSpeakerInPlace({
         speakerId: ADA,
         actor: 'test',
+        acceptSharedHandles: true,
       })
       const expected = [
         {
@@ -1101,6 +1104,67 @@ describe('speaker erasure scrubs post variants (#1232)', () => {
       // The dry run shows it too, before anything is written.
       expect(result.plan?.sharedByLinkOnly).toEqual(expected)
       expect(result.verification?.clean).toBe(false)
+    })
+
+    it('a commit REFUSES, writing nothing, while a handle is shared only by a link — the decision is made at the dry run', async () => {
+      doc(BOB).links = [
+        'https://bsky.app/profile/bob.dev',
+        'https://bsky.app/profile/ada.bsky.social',
+      ]
+      h.dataset.push(
+        variant('var-foreign', 'draft', 'Meet "@ada.bsky.social" today', {
+          conference: ref('conf-x'),
+          mentions: [],
+        }),
+      )
+      const before = structuredClone(h.dataset)
+      const refused = await eraseSpeakerInPlace({
+        speakerId: ADA,
+        actor: 'test',
+      })
+      expect(refused.committed).toBe(false)
+      expect(refused.err?.message).toMatch(
+        /ada\.bsky\.social.*spkbob0002.*var-foreign.*--accept-shared-handles/,
+      )
+      expect(h.dataset).toEqual(before)
+
+      // The stray link removed, the dry run's list empties, and the commit
+      // then scrubs it — while her identity is still known.
+      doc(BOB).links = ['https://bsky.app/profile/bob.dev']
+      const dry = await eraseSpeakerInPlace({
+        speakerId: ADA,
+        actor: 'test',
+        dryRun: true,
+      })
+      expect(dry.plan?.sharedByLinkOnly).toEqual([])
+      const done = await eraseSpeakerInPlace({ speakerId: ADA, actor: 'test' })
+      expect(done.err).toBeNull()
+      expect(doc('var-foreign').body).toBe('Meet "a speaker" today')
+      expect(done.verification?.clean).toBe(true)
+    })
+
+    it('with --accept-shared-handles it commits and the report carries what was accepted', async () => {
+      doc(BOB).links = ['https://bsky.app/profile/ada.bsky.social']
+      h.dataset.push(
+        variant('var-foreign', 'draft', 'Meet "@ada.bsky.social" today', {
+          conference: ref('conf-x'),
+          mentions: [],
+        }),
+      )
+      const result = await eraseSpeakerInPlace({
+        speakerId: ADA,
+        actor: 'test',
+        acceptSharedHandles: true,
+      })
+      expect(result.err).toBeNull()
+      expect(result.committed).toBe(true)
+      expect(result.acceptedSharedHandles).toEqual([
+        {
+          handle: 'ada.bsky.social',
+          variantIds: ['var-foreign'],
+          listedBy: [BOB],
+        },
+      ])
     })
 
     it('ends a link at the URL, so a name right after it is still hers', async () => {

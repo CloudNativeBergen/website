@@ -1168,6 +1168,14 @@ export interface EraseSpeakerOptions {
    * wrapper reports the tags it could not revalidate instead of pretending.
    */
   revalidate?: (tag: string) => void | Promise<void>
+  /**
+   * Commit although a handle of theirs is shared only through another
+   * speaker's profile links (`plan.sharedByLinkOnly`): the operator has
+   * confirmed at the dry run that the account really is shared. Without it
+   * such a commit is REFUSED — after it the identity is gone, and no re-run
+   * or `--verify` can find those handles again.
+   */
+  acceptSharedHandles?: boolean
 }
 
 /** What the operator gets back. */
@@ -1189,6 +1197,11 @@ export interface EraseSpeakerResult {
    * repaired in a second transaction (#1232). Counts toward `committed`.
    */
   repairedPostVariants: number
+  /**
+   * The link-only shared handles committed over with `acceptSharedHandles`,
+   * for the DSR record. Their variants still carry the handle.
+   */
+  acceptedSharedHandles: ErasurePlan['sharedByLinkOnly']
   err: Error | null
 }
 
@@ -1465,7 +1478,13 @@ async function fetchErasureInputs(
 export async function eraseSpeakerInPlace(
   opts: EraseSpeakerOptions,
 ): Promise<EraseSpeakerResult> {
-  const { speakerId, actor, dryRun = false, revalidate } = opts
+  const {
+    speakerId,
+    actor,
+    dryRun = false,
+    revalidate,
+    acceptSharedHandles = false,
+  } = opts
   const empty: EraseSpeakerResult = {
     plan: null,
     committed: false,
@@ -1474,6 +1493,7 @@ export async function eraseSpeakerInPlace(
     cache: { tags: [], revalidated: false, error: null },
     verification: null,
     repairedPostVariants: 0,
+    acceptedSharedHandles: [],
     err: null,
   }
 
@@ -1489,6 +1509,27 @@ export async function eraseSpeakerInPlace(
       }
     }
     if (dryRun) return { ...empty, plan }
+
+    // Decided at the DRY RUN, while her identity is still known (#1232).
+    if (plan.sharedByLinkOnly.length > 0 && !acceptSharedHandles) {
+      const list = plan.sharedByLinkOnly
+        .map(
+          (s) =>
+            `@${s.handle} (listed by ${s.listedBy.join(', ')}; in ${s.variantIds.join(', ')})`,
+        )
+        .join('; ')
+      return {
+        ...empty,
+        plan,
+        err: new ErasureValidationError(
+          `Handles of the subject are shared only through another speaker's ` +
+            `profile links: ${list}. Nothing was written. Remove the stray link ` +
+            `(or merge/erase the duplicate speaker) and dry-run again until the ` +
+            `list is empty — or, if the account really is shared, commit with ` +
+            `--accept-shared-handles and record it in the DSR (runbook 3c).`,
+        ),
+      }
+    }
 
     // --- phase 2: one transaction ------------------------------------------
     if (!plan.noop) {
@@ -1640,6 +1681,7 @@ export async function eraseSpeakerInPlace(
       cache,
       verification,
       repairedPostVariants,
+      acceptedSharedHandles: plan.sharedByLinkOnly,
       err: null,
     }
   } catch (error) {

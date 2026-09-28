@@ -248,13 +248,20 @@ name is a stranger.
 - A handle of theirs that another live speaker only **lists in their profile
   links** (no record says whose it is) is **left** in unposted text: it may be
   a real team account, a co-speaker linking to them, or their own unmerged
-  duplicate speaker document. The dry run prints it ("Handles LEFT in unposted
-  text"), and the verification reports it as `sharedByLinkOnly` (handle,
-  variant ids, the speakers listing it) and is **never CLEAN** while it
-  stands. Look at each: if the account really is shared, record that in the
-  DSR and accept it; if it is theirs (a co-speaker's stray link, or their own
-  duplicate — merge or erase that one too), remove the link from the listing
-  speaker and re-run, which then scrubs it.
+  duplicate speaker document. **Decide at the dry run**, which prints it
+  ("Handles LEFT in unposted text"), because after the commit their identity
+  is gone and nothing can find these handles again: not a re-run, and not a
+  later `--verify`. `--commit` therefore **refuses**, writing nothing, while
+  the list is non-empty. Either:
+  - it is theirs (a co-speaker's stray link, or their own duplicate): remove
+    the link from the listing speaker, or merge/erase the duplicate, and
+    dry-run again until the list is empty, then commit — the scrub then takes
+    it; or
+  - the account really is shared: commit with `--accept-shared-handles`,
+    record the accepted handles (`acceptedSharedHandles` in the result) in the
+    DSR, and clear the listed variant ids by hand if they should not keep it.
+    The verification then reports them as `sharedByLinkOnly` and is not CLEAN
+    — expected, and filed with the DSR.
 - A **namesake** inside that scope — another person with exactly the same name
   — is neutralised too: the tool cannot tell two people apart by name. The dry
   run lists each variant it rewrites; read them.
