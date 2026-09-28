@@ -961,7 +961,8 @@ describe('speaker erasure scrubs post variants (#1232)', () => {
     })
 
     it('…and so is one a live speaker only LISTS in their profile links', async () => {
-      doc(BOB).links = ['https://bsky.app/profile/team.dev']
+      // A form the parser accepts and an exact URL list would not.
+      doc(BOB).links = ['https://bsky.app/profile/@team.dev ']
       h.dataset.push(
         variant('var-team', 'scheduled', '@team.dev speaks', {
           mentions: [team('t-ada', ADA, 'Ada Lovelace')],
