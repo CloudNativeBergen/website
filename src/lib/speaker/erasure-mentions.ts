@@ -258,17 +258,10 @@ function handlePattern(handles: readonly string[]): RegExp | null {
 const LINK = /(?:https?:\/\/|www\.)[^\s)\]}>"']+/gi
 
 /**
- * Each link's span, ending at the URL: not a closing bracket or quote, and
- * not the sentence's own punctuation after it — so a name right after a link
- * ("(https://x.test)Ada") is not swallowed into it.
+ * Each link's span, ending at the URL: never a closing bracket or quote, so
+ * a name right after a link ("(https://x.test)Ada") is not swallowed into it.
  */
-function linkSpans(text: string): Span[] {
-  return spansOf(text, LINK).map(([a, b]): Span => {
-    let end = b
-    while (end > a && /[.,;:!?]/.test(text[end - 1])) end--
-    return [a, end]
-  })
-}
+const linkSpans = (text: string): Span[] => spansOf(text, LINK)
 
 type Span = [number, number]
 const spansOf = (text: string, pattern: RegExp): Span[] =>
