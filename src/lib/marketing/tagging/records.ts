@@ -15,20 +15,25 @@ export function mentionDocuments(
     _type: 'socialPostMention',
     handle: m.handle,
     ...(m.did ? { did: m.did } : {}),
-    speaker: { _type: 'reference', _ref: m.speakerId, _weak: true },
+    // A sponsor's tag refers to the company, not to a speaker (spec §3.3).
+    ...(m.sponsor
+      ? { sponsor: { _type: 'reference', _ref: m.speakerId, _weak: true } }
+      : { speaker: { _type: 'reference', _ref: m.speakerId, _weak: true } }),
     name: m.name,
     status: m.status,
   }))
 }
 
 /** The GROQ projection that reads `mentions[]` back as `MentionRecord`s. */
-export const MENTION_RECORD_PROJECTION = `{ _key, handle, did, "speakerId": speaker._ref, name, status }`
+export const MENTION_RECORD_PROJECTION = `{ _key, handle, did, "speakerId": coalesce(speaker._ref, sponsor._ref), "sponsor": defined(sponsor._ref), name, status }`
 
 export interface RawMentionRecord {
   _key: string | null
   handle: string | null
   did: string | null
   speakerId: string | null
+  /** The record's reference is a sponsor's. */
+  sponsor?: boolean | null
   name: string | null
   status: string | null
 }
@@ -46,6 +51,7 @@ export function mentionRecordsFrom(
         handle: m.handle,
         ...(m.did ? { did: m.did } : {}),
         speakerId: m.speakerId,
+        ...(m.sponsor === true ? { sponsor: true as const } : {}),
         name: m.name,
         status: m.status,
       },

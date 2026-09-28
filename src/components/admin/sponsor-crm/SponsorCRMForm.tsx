@@ -91,6 +91,8 @@ export function SponsorCRMForm({
     logoBright: (sponsor?.sponsor.logoBright || null) as string | null,
     orgNumber: sponsor?.sponsor.orgNumber || '',
     address: sponsor?.sponsor.address || '',
+    blueskyHandle: sponsor?.sponsor.blueskyHandle || '',
+    linkedinUrl: sponsor?.sponsor.linkedinUrl || '',
     tierId: sponsor?.tier?._id || '',
     addonIds: sponsor?.addons?.map((a) => a._id) || ([] as string[]),
     contractStatus: (sponsor?.contractStatus || 'none') as ContractStatus,

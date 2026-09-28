@@ -31,7 +31,8 @@ const SPONSOR_FOR_CONFERENCE_FIELDS = `
     logoBright,
     orgNumber,
     address,
-    linkedinUrl
+    linkedinUrl,
+    blueskyHandle
   },
   conference->{
     _id,

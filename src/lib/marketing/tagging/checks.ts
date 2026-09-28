@@ -46,13 +46,15 @@ export function mentionTokens(body: string): MentionToken[] {
 }
 
 /**
- * Someone a body may tag: a speaker of this conference (sponsors join in
- * #1154). `handle` is null without a Bluesky link — and for an opted-out
- * speaker in anything sent to the browser, so their links never leave the
- * server; the server-side checks get the real handle.
+ * Someone a body may tag: a speaker of this conference, or — with `sponsor`
+ * — a company sponsoring it (spec §3.3), whose id `speakerId` then holds.
+ * `handle` is null without a Bluesky link — and for an opted-out speaker in
+ * anything sent to the browser, so their links never leave the server; the
+ * server-side checks get the real handle. A sponsor never opts out.
  */
 export interface TaggablePerson {
   speakerId: string
+  sponsor?: true
   name: string
   handle: string | null
   /**
@@ -69,6 +71,8 @@ export interface TaggablePerson {
 export type TagIssueCode =
   | 'opted-out'
   | 'not-a-speaker'
+  /** A sponsor company's tag, and it no longer sponsors this conference. */
+  | 'not-a-sponsor'
   | 'not-found'
   | 'did-changed'
   | 'unchecked'
@@ -456,6 +460,14 @@ function ownAccountIssue(handle: string, name = handle): MentionIssue {
 }
 
 function notASpeaker(m: MentionRecord, handle: string): MentionIssue {
+  if (m.sponsor)
+    return {
+      code: 'not-a-sponsor',
+      mentionKey: m._key,
+      handle,
+      name: m.name,
+      message: `${m.name} no longer sponsors this conference. Use the plain name instead of @${handle}.`,
+    }
   return {
     code: 'not-a-speaker',
     mentionKey: m._key,
@@ -698,6 +710,7 @@ export function saveMentions(input: {
       handle,
       ...(did ? { did } : {}),
       speakerId: person.speakerId,
+      ...(person.sponsor ? { sponsor: true as const } : {}),
       name: person.name,
       status: 'tagged',
     })

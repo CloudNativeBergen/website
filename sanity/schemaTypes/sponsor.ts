@@ -57,6 +57,23 @@ export default defineType({
         )
       },
     }),
+    // The company's social accounts, entered once in the sponsor CRM and
+    // reused across editions (tagging spec §3.3). A sponsor has no opt-out:
+    // these are an organizer's entries about a commercial partner.
+    defineField({
+      name: 'blueskyHandle',
+      title: 'Bluesky handle',
+      type: 'string',
+      description:
+        'The company Bluesky handle without the @ (e.g. acme.com). Sponsor posts on Bluesky tag it. Checked against Bluesky when saved from the sponsor CRM.',
+    }),
+    defineField({
+      name: 'linkedinUrl',
+      title: 'LinkedIn company page',
+      type: 'url',
+      description:
+        'Listed beside the company name under "Tag by hand" when a LinkedIn post about this sponsor is posted.',
+    }),
     // Multi-tenant owner (CaaS T1-1, #613). Additive/optional; populated by the
     // 044 backfill and stamped at creation. Server code must not assume presence.
     defineField({

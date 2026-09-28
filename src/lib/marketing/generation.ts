@@ -45,6 +45,7 @@ import {
   commitGeneratedTasks,
   getGenerationContext,
   getSpeakerTagSources,
+  getSponsorTagSources,
   publishedTaskKeys,
   type GenerationCampaign,
   type GenerationContext,
@@ -364,21 +365,32 @@ async function lookUpTags(
   beats: readonly DatedBeat[],
   cache: Map<string, BlueskyTag | null>,
 ): Promise<void> {
-  const wanted = new Set<string>()
+  const speakers = new Set<string>()
+  const sponsors = new Set<string>()
   for (const { item } of beats) {
     if (!item.recipes.some(tagsItsSubject)) continue
     for (const person of item.subject.people ?? [])
-      if (!cache.has(person._id)) wanted.add(person._id)
+      if (!cache.has(person._id))
+        (person.sponsor ? sponsors : speakers).add(person._id)
   }
-  if (wanted.size === 0) return
-  const ids = [...wanted]
+  const ids = [...speakers, ...sponsors]
+  if (ids.length === 0) return
   try {
     const own = ownBlueskyHandle(context.conference.socialLinks)
-    const rows = await withTimeout(
-      getSpeakerTagSources(conferenceId, ids),
-      TAG_SOURCES_TIMEOUT_MS,
-      `speaker tag sources timed out after ${TAG_SOURCES_TIMEOUT_MS} ms`,
-    )
+    const rows = (
+      await withTimeout(
+        Promise.all([
+          speakers.size
+            ? getSpeakerTagSources(conferenceId, [...speakers])
+            : [],
+          sponsors.size
+            ? getSponsorTagSources(conferenceId, [...sponsors])
+            : [],
+        ]),
+        TAG_SOURCES_TIMEOUT_MS,
+        `tag sources timed out after ${TAG_SOURCES_TIMEOUT_MS} ms`,
+      )
+    ).flat()
     const sources = new Map(rows.map((s) => [s._id, s]))
     let next = 0
     const worker = async () => {

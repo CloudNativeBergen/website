@@ -74,7 +74,9 @@ export interface NamedPerson {
  * our own account.
  */
 export interface TagPerson extends NamedPerson {
+  /** A speaker's id — or, with `sponsor`, the sponsor company's (§3.3). */
   speakerId: string
+  sponsor?: true
   tag: BlueskyTag | null
 }
 
@@ -87,7 +89,12 @@ export interface MentionRecord {
   _key: string
   handle: string
   did?: string
+  /**
+   * Whom the tag stands for: a speaker's id — or, with `sponsor`, the sponsor
+   * company's (tagging spec §3.3), stored as a `sponsor` reference instead.
+   */
   speakerId: string
+  sponsor?: true
   name: string
   status: 'tagged' | 'unresolved'
 }
@@ -206,6 +213,7 @@ export function tagBlueskyBody(input: {
       _key: storedKey(p.speakerId),
       handle: p.tag.handle,
       speakerId: p.speakerId,
+      ...(p.sponsor ? { sponsor: true as const } : {}),
       name: p.name,
     }
     if (p.tag.status === 'unresolved')

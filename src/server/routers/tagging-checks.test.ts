@@ -783,3 +783,159 @@ describe('marketing.task.resolveTag', () => {
     expect(askedBluesky()).toEqual([])
   })
 })
+
+// ---------------------------------------------------------------------------
+// Sponsors (§3.3, #1154): the same save, approval and tag-button path
+// ---------------------------------------------------------------------------
+
+describe('sponsor tags', () => {
+  const DID_ACME = 'did:plc:acmeacmeacmeacmeacmeacme'
+  const ACME_TAG = {
+    _key: 'sp-acme',
+    _type: 'socialPostMention',
+    handle: 'acme.example',
+    did: DID_ACME,
+    sponsor: { ...ref('sp-acme'), _weak: true },
+    name: 'Acme AS',
+    status: 'tagged',
+  }
+  /**
+   * `sponsor` is ORG-level and shared across editions: Acme sponsors THIS
+   * conference; Initech only another one (its org's, or another org's).
+   */
+  function seedSponsors(mentions: unknown[] = []) {
+    seed(mentions)
+    dataset.push(
+      {
+        _id: 'sp-acme',
+        _type: 'sponsor',
+        name: 'Acme AS',
+        organization: ref(ORG_A),
+        blueskyHandle: 'acme.example',
+      },
+      {
+        _id: 'sp-initech',
+        _type: 'sponsor',
+        name: 'Initech',
+        organization: ref(ORG_A),
+        blueskyHandle: 'initech.example',
+      },
+      {
+        _id: 'sfc-acme-A',
+        _type: 'sponsorForConference',
+        conference: ref(CONF_A),
+        sponsor: ref('sp-acme'),
+      },
+      {
+        _id: 'sfc-initech-B',
+        _type: 'sponsorForConference',
+        conference: ref(CONF_B),
+        sponsor: ref('sp-initech'),
+      },
+    )
+  }
+  beforeEach(() => {
+    seedSponsors([ACME_TAG])
+    bluesky = { 'acme.example': DID_ACME, 'initech.example': 'did:plc:x' }
+    serveVariant(variantData({ body: 'Thanks @acme.example!' }))
+  })
+
+  it('a hand-typed sponsor handle is recorded in mentions[] on save, as a sponsor reference', async () => {
+    seedSponsors([])
+    await save('Thanks @Acme.Example!')
+    expect(askedBluesky()).toEqual(['acme.example'])
+    expect(h.updateSocialVariantContent.mock.calls[0][1].mentions).toEqual([
+      {
+        _key: 'sp-acme',
+        _type: 'socialPostMention',
+        handle: 'acme.example',
+        did: DID_ACME,
+        sponsor: { _type: 'reference', _ref: 'sp-acme', _weak: true },
+        name: 'Acme AS',
+        status: 'tagged',
+      },
+    ])
+  })
+
+  it('keeps a recorded sponsor tag through a save without asking again', async () => {
+    await save('Thanks @acme.example!')
+    expect(askedBluesky()).toEqual([])
+    expect(h.updateSocialVariantContent.mock.calls[0][1].mentions).toEqual([
+      ACME_TAG,
+    ])
+  })
+
+  it('a sponsor of ANOTHER conference is a stranger here: not recorded, never asked', async () => {
+    seedSponsors([])
+    await save('Thanks @initech.example!')
+    expect(askedBluesky()).toEqual([])
+    expect(h.updateSocialVariantContent.mock.calls[0][1].mentions).toEqual([])
+  })
+
+  it('a sponsor handle Bluesky does not know is refused at save', async () => {
+    seedSponsors([])
+    bluesky['acme.example'] = 'not-found'
+    expect(await refusal(save('Thanks @acme.example!'))).toEqual([
+      ['not-found', 'sp-acme'],
+    ])
+  })
+
+  it('scheduling passes a recorded sponsor tag that still resolves', async () => {
+    const result = await social().scheduleVariant({ variantId: 'variant-ours' })
+    expect(h.transition).toHaveBeenCalled()
+    expect(result.tagWarnings).toEqual([])
+    expect(askedBluesky()).toEqual(['acme.example'])
+  })
+
+  it('scheduling with Bluesky unreachable warns, and does not refuse', async () => {
+    delete bluesky['acme.example']
+    const result = await social().scheduleVariant({ variantId: 'variant-ours' })
+    expect(h.transition).toHaveBeenCalled()
+    expect(result.tagWarnings).toEqual([
+      expect.stringContaining('could not be reached to check @acme.example'),
+    ])
+  })
+
+  it('scheduling refuses a recorded sponsor tag whose handle now belongs to someone else', async () => {
+    bluesky['acme.example'] = DID_OTHER
+    expect(
+      await refusal(social().scheduleVariant({ variantId: 'variant-ours' })),
+    ).toEqual([['did-changed', 'sp-acme']])
+    expect(h.transition).not.toHaveBeenCalled()
+  })
+
+  it('scheduling refuses a tag of a company that no longer sponsors this conference', async () => {
+    dataset = dataset.filter((d) => d._id !== 'sfc-acme-A')
+    const issues = await social()
+      .scheduleVariant({ variantId: 'variant-ours' })
+      .catch((e: { cause: TagIssuesError }) => e.cause.tagIssues)
+    expect(issues).toEqual([
+      expect.objectContaining({
+        code: 'not-a-sponsor',
+        mentionKey: 'sp-acme',
+        message: expect.stringContaining(
+          'Acme AS no longer sponsors this conference',
+        ),
+      }),
+    ])
+    expect(h.transition).not.toHaveBeenCalled()
+  })
+
+  it('the tag button resolves the sponsor a sponsor Task is about', async () => {
+    dataset.push({
+      _id: 'task-sponsor',
+      _type: 'marketingTask',
+      conference: ref(CONF_A),
+      kind: 'publishing',
+      channel: 'bluesky',
+      subject: ref('sp-acme'),
+    })
+    TENANTS['task-sponsor'] = { _type: 'marketingTask', conferenceId: CONF_A }
+    expect(
+      await marketing().task.resolveTag({
+        taskId: 'task-sponsor',
+        speakerId: 'sp-acme',
+      }),
+    ).toEqual({ handle: 'acme.example', result: 'resolved' })
+  })
+})

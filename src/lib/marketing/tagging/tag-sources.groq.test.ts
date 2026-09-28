@@ -13,7 +13,11 @@ vi.mock('@/lib/sanity/client', () => ({
   clientWrite: { fetch: (...a: unknown[]) => fetchMock(...a) },
 }))
 
-import { getSpeakerTagSources } from '../generation-sanity'
+import {
+  getSignedSponsorSubject,
+  getSpeakerTagSources,
+  getSponsorTagSources,
+} from '../generation-sanity'
 
 const ref = (id: string) => ({ _type: 'reference', _ref: id })
 const dataset = [
@@ -42,6 +46,38 @@ const dataset = [
     _type: 'talk',
     conference: ref('conf-B'),
     speakers: [ref('spk-bob')],
+  },
+  // Sponsors (#1154): `sponsor` is ORG-level, shared across editions.
+  {
+    _id: 'sp-acme',
+    _type: 'sponsor',
+    name: 'Acme AS',
+    organization: ref('org-A'),
+    blueskyHandle: 'acme.example',
+  },
+  {
+    _id: 'sp-initech',
+    _type: 'sponsor',
+    name: 'Initech',
+    organization: ref('org-A'),
+    blueskyHandle: 'initech.example',
+  },
+  {
+    _id: 'sfc-acme-A',
+    _type: 'sponsorForConference',
+    conference: ref('conf-A'),
+    sponsor: ref('sp-acme'),
+    contractStatus: 'contract-signed',
+    tier: ref('tier-gold'),
+  },
+  { _id: 'tier-gold', _type: 'sponsorTier', title: 'Gold' },
+  // Initech sponsors ANOTHER edition of the same organization only.
+  {
+    _id: 'sfc-initech-B',
+    _type: 'sponsorForConference',
+    conference: ref('conf-B'),
+    sponsor: ref('sp-initech'),
+    contractStatus: 'contract-signed',
   },
   // A second talk of Alice's at this conference: still one row.
   {
@@ -79,5 +115,33 @@ describe('getSpeakerTagSources', () => {
         socialTagOptOut: null,
       },
     ])
+  })
+})
+
+describe('getSponsorTagSources (#1154)', () => {
+  it('reads the CRM handle of a sponsor of THIS conference', async () => {
+    expect(await getSponsorTagSources('conf-A', ['sp-acme'])).toEqual([
+      {
+        _id: 'sp-acme',
+        links: null,
+        socialTagOptOut: null,
+        blueskyHandle: 'acme.example',
+      },
+    ])
+  })
+
+  it('does not read a sponsor of another edition, though the org owns both', async () => {
+    expect(await getSponsorTagSources('conf-A', ['sp-initech'])).toEqual([])
+  })
+})
+
+describe('getSignedSponsorSubject (#1154)', () => {
+  it('names the company as the one person a tagging body tags', async () => {
+    expect(await getSignedSponsorSubject('conf-A', 'sfc-acme-A')).toEqual({
+      _id: 'sp-acme',
+      type: 'sponsor',
+      values: { name: 'Acme AS', company: 'Acme AS', tier: 'Gold' },
+      people: [{ _id: 'sp-acme', name: 'Acme AS', sponsor: true }],
+    })
   })
 })

@@ -127,15 +127,41 @@ export interface GenerationSubject extends SubjectLink {
   values: PlaceholderValues
   /**
    * The speakers the subject's `{name}` and `{speakers}` name, in order
-   * (tagging spec §4.1): the ones a tagging Bluesky body can tag. Absent for
-   * a sponsor.
+   * (tagging spec §4.1): the ones a tagging Bluesky body can tag. For a
+   * sponsor, the company itself (§3.3).
    */
   people?: SubjectPerson[]
 }
 
-/** One of the people a subject names: a speaker, by id. */
+/**
+ * One of the people a subject names: a speaker, by id — or, with `sponsor`,
+ * the sponsor company, by its org-level `sponsor` id (tagging spec §3.3).
+ */
 export interface SubjectPerson extends NamedPerson {
   _id: string
+  sponsor?: true
+}
+
+/**
+ * A signed sponsor as a Task subject: `{name}` and `{company}` are the
+ * company's name, and the company is the one "person" a tagging Bluesky body
+ * tags (tagging spec §3.3).
+ */
+export function sponsorSubject(
+  sponsor: { _id: string; name?: string | null },
+  tier?: string | null,
+): GenerationSubject {
+  return {
+    _id: sponsor._id,
+    type: 'sponsor',
+    values: {
+      ...(sponsor.name ? { name: sponsor.name, company: sponsor.name } : {}),
+      ...(tier ? { tier } : {}),
+    },
+    ...(sponsor.name
+      ? { people: [{ _id: sponsor._id, name: sponsor.name, sponsor: true }] }
+      : {}),
+  }
 }
 
 /**
@@ -336,6 +362,7 @@ export function buildSubjectBeat(
   const values = { ...input.values, ...input.subject.values }
   const tagging: TagPerson[] = (input.subject.people ?? []).map((p) => ({
     speakerId: p._id,
+    ...(p.sponsor ? { sponsor: true as const } : {}),
     name: p.name,
     jobTitle: p.jobTitle,
     tag: input.tags?.get(p._id) ?? null,

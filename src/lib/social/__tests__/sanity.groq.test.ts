@@ -416,11 +416,13 @@ describe('findWork — the composed due/stale scan', () => {
             status: 'tagged',
             name: 'Erased',
           },
-          // No speaker at all (a sponsor's, #1154): kept, posted, never withheld.
+          // No speaker at all (a sponsor's, #1154 — as `mentionDocuments`
+          // stores it): kept, posted, never withheld.
           {
             _key: 'f',
             handle: 'acme.com',
             did: 'did:plc:acme',
+            sponsor: { _type: 'reference', _ref: 'acme', _weak: true },
             status: 'tagged',
             name: 'Acme',
           },

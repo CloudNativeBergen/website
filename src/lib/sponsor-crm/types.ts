@@ -105,6 +105,7 @@ export interface SponsorForConferenceExpanded {
     orgNumber?: string
     address?: string
     linkedinUrl?: string
+    blueskyHandle?: string
   }
   conference: {
     _id: string

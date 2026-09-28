@@ -204,6 +204,22 @@ export async function getSponsorTier(
   }
 }
 
+function existingFrom(doc: Record<string, unknown>): SponsorExisting {
+  const str = (v: unknown) => (typeof v === 'string' ? v : undefined)
+  return {
+    _id: String(doc._id),
+    _createdAt: String(doc._createdAt),
+    _updatedAt: String(doc._updatedAt),
+    name: String(doc.name ?? ''),
+    website: String(doc.website ?? ''),
+    logo: str(doc.logo),
+    ...(str(doc.linkedinUrl) ? { linkedinUrl: str(doc.linkedinUrl) } : {}),
+    ...(str(doc.blueskyHandle)
+      ? { blueskyHandle: str(doc.blueskyHandle) }
+      : {}),
+  }
+}
+
 export async function createSponsor(
   data: SponsorInput,
 ): Promise<{ sponsor?: SponsorExisting; error?: Error }> {
@@ -218,17 +234,12 @@ export async function createSponsor(
       logo: data.logo,
       logoBright: data.logoBright,
       orgNumber: data.orgNumber,
+      ...(data.linkedinUrl ? { linkedinUrl: data.linkedinUrl } : {}),
+      ...(data.blueskyHandle ? { blueskyHandle: data.blueskyHandle } : {}),
       ...organizationField(orgRef),
     })
 
-    const result: SponsorExisting = {
-      _id: sponsor._id,
-      _createdAt: sponsor._createdAt,
-      _updatedAt: sponsor._updatedAt,
-      name: sponsor.name,
-      website: sponsor.website,
-      logo: sponsor.logo,
-    }
+    const result = existingFrom(sponsor)
 
     return { sponsor: result }
   } catch (error) {
@@ -241,26 +252,30 @@ export async function updateSponsor(
   data: SponsorInput,
 ): Promise<{ sponsor?: SponsorExisting; error?: Error }> {
   try {
-    const sponsor = await clientWrite
-      .patch(id)
-      .set({
-        name: data.name,
-        website: data.website,
-        logo: data.logo,
-        logoBright: data.logoBright,
-        orgNumber: data.orgNumber,
-        address: data.address,
-      })
-      .commit()
-
-    const result: SponsorExisting = {
-      _id: sponsor._id,
-      _createdAt: sponsor._createdAt,
-      _updatedAt: sponsor._updatedAt,
-      name: sponsor.name,
-      website: sponsor.website,
-      logo: sponsor.logo,
+    // The company's social accounts (tagging spec §3.3): a value sets, null
+    // clears, absent leaves the stored one.
+    const socials = {
+      linkedinUrl: data.linkedinUrl,
+      blueskyHandle: data.blueskyHandle,
     }
+    const cleared = Object.entries(socials)
+      .filter(([, v]) => v === null)
+      .map(([k]) => k)
+    let patch = clientWrite.patch(id).set({
+      name: data.name,
+      website: data.website,
+      logo: data.logo,
+      logoBright: data.logoBright,
+      orgNumber: data.orgNumber,
+      address: data.address,
+      ...Object.fromEntries(
+        Object.entries(socials).filter(([, v]) => typeof v === 'string'),
+      ),
+    })
+    if (cleared.length > 0) patch = patch.unset(cleared)
+    const sponsor = await patch.commit()
+
+    const result = existingFrom(sponsor)
 
     return { sponsor: result }
   } catch (error) {
@@ -394,7 +409,9 @@ export async function getSponsor(id: string): Promise<{
         name,
         website,
         logo,
-        logoBright
+        logoBright,
+        linkedinUrl,
+        blueskyHandle
       }`,
       { id },
     )

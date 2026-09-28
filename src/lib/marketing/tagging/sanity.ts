@@ -7,7 +7,7 @@
 
 import { clientReadUncached } from '@/lib/sanity/client'
 import { scopedFetch } from '@/lib/sanity/scoped'
-import { blueskyHandlesFromLinks } from './handle'
+import { blueskyHandlesFromLinks, parseBlueskyHandle } from './handle'
 import type { TaggablePerson } from './checks'
 import type { MentionRecord } from './body'
 import {
@@ -19,6 +19,12 @@ import {
 /** What the checks read off a speaker: `RawTaggablePerson`. */
 const PERSON_FIELDS = '{ _id, name, links, socialTagOptOut, erasedAt }'
 
+/**
+ * What the checks read off a sponsor company (spec §3.3): its CRM handle, and
+ * no opt-out — the organizer's own entry about a commercial partner.
+ */
+const SPONSOR_FIELDS = '{ _id, name, blueskyHandle, "sponsor": true }'
+
 export interface RawTaggablePerson {
   _id: string | null
   name: string | null
@@ -26,6 +32,10 @@ export interface RawTaggablePerson {
   socialTagOptOut: boolean | null
   /** Set by the GDPR erasure (#1162): the person is gone, never tagged. */
   erasedAt?: string | null
+  /** A sponsor company's CRM handle (spec §3.3), in place of `links`. */
+  blueskyHandle?: string | null
+  /** The row is a sponsor company, not a speaker. */
+  sponsor?: boolean | null
 }
 
 /**
@@ -45,16 +55,28 @@ export function taggablePeopleFrom(
     // as not a speaker here, and the button does not list them.
     if (row.erasedAt) return []
     seen.add(row._id)
-    const optedOut = row.socialTagOptOut === true
+    const sponsor = row.sponsor === true
+    // A sponsor has no opt-out (spec §3.3).
+    const optedOut = !sponsor && row.socialTagOptOut === true
     const links = Array.isArray(row.links)
       ? row.links.filter((l): l is string => typeof l === 'string')
       : null
+    const sponsorHandle =
+      sponsor && row.blueskyHandle
+        ? parseBlueskyHandle(row.blueskyHandle)
+        : null
     // An opted-out speaker's links never reach the browser (spec §3.2).
-    const handles =
-      optedOut && options.forClient ? [] : blueskyHandlesFromLinks(links)
+    const handles = sponsor
+      ? sponsorHandle
+        ? [sponsorHandle]
+        : []
+      : optedOut && options.forClient
+        ? []
+        : blueskyHandlesFromLinks(links)
     return [
       {
         speakerId: row._id,
+        ...(sponsor ? { sponsor: true as const } : {}),
         name: row.name ?? '',
         handle: handles[0] ?? null,
         ...(options.forClient ? {} : { handles }),
@@ -66,19 +88,33 @@ export function taggablePeopleFrom(
 
 /**
  * Every speaker with a talk at this conference, with the handle from their
- * links and their opt-out: what a body's `@handle`s are matched against.
+ * links and their opt-out, then every company sponsoring it, with its CRM
+ * handle (spec §3.3): what a body's `@handle`s are matched against.
+ *
+ * `sponsor` is an ORG-level document shared across editions, so it is only
+ * reached through a `sponsorForConference` of THIS conference: another
+ * edition's sponsor — or another tenant's — is a stranger here.
  */
 export async function getConferenceTaggablePeople(
   conferenceId: string,
 ): Promise<TaggablePerson[]> {
-  const rows = await scopedFetch<(RawTaggablePerson | null)[] | null>(
-    clientReadUncached,
-    { conferenceId },
-    `*[_type == "talk" && !(_id in path("drafts.**")) && !(_id in path("versions.**"))].speakers[]->${PERSON_FIELDS}`,
-    {},
-    { cache: 'no-store' },
-  )
-  return taggablePeopleFrom(rows)
+  const [speakers, sponsors] = await Promise.all([
+    scopedFetch<(RawTaggablePerson | null)[] | null>(
+      clientReadUncached,
+      { conferenceId },
+      `*[_type == "talk" && !(_id in path("drafts.**")) && !(_id in path("versions.**"))].speakers[]->${PERSON_FIELDS}`,
+      {},
+      { cache: 'no-store' },
+    ),
+    scopedFetch<(RawTaggablePerson | null)[] | null>(
+      clientReadUncached,
+      { conferenceId },
+      `*[_type == "sponsorForConference" && !(_id in path("drafts.**")) && !(_id in path("versions.**"))].sponsor->${SPONSOR_FIELDS}`,
+      {},
+      { cache: 'no-store' },
+    ),
+  ])
+  return taggablePeopleFrom([...(speakers ?? []), ...(sponsors ?? [])])
 }
 
 /** The variant's recorded mentions, whole (the publish projection keeps only DIDs). */
@@ -97,8 +133,8 @@ export async function getVariantMentionRecords(
 }
 
 /**
- * A Bluesky publishing Task's subject's people — a speaker, or a talk's
- * speakers in the talk's order — for the tag button. Gated like the
+ * A Bluesky publishing Task's subject's people — a speaker, a talk's
+ * speakers in the talk's order, or a sponsor company — for the tag button. Gated like the
  * "Tag by hand" list: the subject reference may point at any speaker or
  * talk, so only a speaker with a talk HERE, or a talk of this conference,
  * yields anyone. Embedded in the Task editor read; `$conferenceId` is bound
@@ -107,7 +143,8 @@ export async function getVariantMentionRecords(
 export const TAG_PEOPLE_PROJECTION = `select(kind == "publishing" && channel == "bluesky" => subject->{
   "people": select(
     _type == "speaker" && count(*[_type == "talk" && conference._ref == $conferenceId && ^._id in speakers[]._ref && !(_id in path("drafts.**")) && !(_id in path("versions.**"))]) > 0 => [${PERSON_FIELDS}],
-    _type == "talk" && conference._ref == $conferenceId && !(_id in path("drafts.**")) && !(_id in path("versions.**")) => speakers[]->${PERSON_FIELDS}
+    _type == "talk" && conference._ref == $conferenceId && !(_id in path("drafts.**")) && !(_id in path("versions.**")) => speakers[]->${PERSON_FIELDS},
+    _type == "sponsor" && count(*[_type == "sponsorForConference" && conference._ref == $conferenceId && sponsor._ref == ^._id && !(_id in path("drafts.**")) && !(_id in path("versions.**"))]) > 0 => [${SPONSOR_FIELDS}]
   )
 })`
 

@@ -220,7 +220,9 @@ export interface SocialPostMentionDocument {
   _type: 'socialPostMention'
   handle: string
   did?: string
-  speaker: { _type: 'reference'; _ref: string; _weak: true }
+  /** Exactly one of `speaker` and `sponsor` (a sponsor company, #1154). */
+  speaker?: { _type: 'reference'; _ref: string; _weak: true }
+  sponsor?: { _type: 'reference'; _ref: string; _weak: true }
   name: string
   status: 'tagged' | 'unresolved'
 }

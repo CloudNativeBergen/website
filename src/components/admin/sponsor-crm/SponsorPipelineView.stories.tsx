@@ -13,6 +13,8 @@ const defaultFormData: SponsorPipelineFormData = {
   logoBright: null,
   orgNumber: '123456789',
   address: 'Tech Street 42, 5020 Bergen',
+  blueskyHandle: 'acme.example.com',
+  linkedinUrl: 'https://www.linkedin.com/company/acme',
   tierId: 'tier-ingress',
   addonIds: [],
   contractStatus: 'verbal-agreement',

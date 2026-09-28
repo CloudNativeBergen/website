@@ -4,6 +4,7 @@ import { getCurrentDateTime } from '@/lib/time'
 import type { Conference } from '@/lib/conference/types'
 import {
   speakerSubject,
+  sponsorSubject,
   talkSubject,
   type GenerationSubject,
   type TalkSubjectSource,
@@ -251,16 +252,7 @@ export async function getSignedSponsorSubject(
     { cache: 'no-store' },
   )
   if (!row?.signed || !row.sponsor?._id) return null
-  return {
-    _id: row.sponsor._id,
-    type: 'sponsor',
-    values: {
-      ...(row.sponsor.name
-        ? { name: row.sponsor.name, company: row.sponsor.name }
-        : {}),
-      ...(row.tier ? { tier: row.tier } : {}),
-    },
-  }
+  return sponsorSubject(row.sponsor, row.tier)
 }
 
 /**
@@ -387,6 +379,40 @@ export async function markPlanExpanded(
   } catch (error) {
     console.error(`Could not stamp ${planId} as expanded`, error)
   }
+}
+
+/**
+ * The Bluesky handles of these sponsor companies (tagging spec §3.3), read
+ * FRESH like the speakers'. `sponsor` is an ORG-level document shared across
+ * editions: it is only read here through a `sponsorForConference` of THIS
+ * conference, so another tenant's sponsor — or ours, not at this edition —
+ * yields nothing. A sponsor has no opt-out.
+ */
+export async function getSponsorTagSources(
+  conferenceId: string,
+  sponsorIds: string[],
+): Promise<SpeakerTagSource[]> {
+  const rows = await scopedFetch<
+    ({ _id: string | null; blueskyHandle: string | null } | null)[] | null
+  >(
+    clientReadUncached,
+    { conferenceId },
+    `*[_type == "sponsorForConference" && sponsor._ref in $ids && !(_id in path("drafts.**")) && !(_id in path("versions.**"))].sponsor->{ _id, blueskyHandle }`,
+    { ids: sponsorIds },
+    { cache: 'no-store' },
+  )
+  const wanted = new Set(sponsorIds)
+  const byId = new Map<string, SpeakerTagSource>()
+  for (const row of rows ?? []) {
+    if (!row?._id || !wanted.has(row._id)) continue
+    byId.set(row._id, {
+      _id: row._id,
+      links: null,
+      socialTagOptOut: null,
+      blueskyHandle: row.blueskyHandle,
+    })
+  }
+  return [...byId.values()]
 }
 
 /** What a speaker's Bluesky tag is derived from (tagging spec §3.1, §3.2). */
