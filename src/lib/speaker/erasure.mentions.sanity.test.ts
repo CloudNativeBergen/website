@@ -1,0 +1,442 @@
+/**
+ * @vitest-environment node
+ *
+ * Speaker erasure scrubs the erased speaker from post variants (#1232) —
+ * asserted on the STORED DOCUMENTS. A variant records who it tags in
+ * `mentions[]` (speaker ref, handle, DID, name), and a body not yet posted
+ * may still carry their tag or plain name.
+ *
+ * The harness is the one in `erasure.assets.sanity.test.ts`, copied (a
+ * `vi.mock` factory cannot be shared): reads run `groq-js` over an in-memory
+ * dataset, and the transaction is a REAL `@sanity/client` transaction whose
+ * serialized mutations are applied by Sanity's own `@sanity/mutator`. What it
+ * MODELS rather than runs is listed there: visibility by API version and
+ * perspective, `ifRevisionID` (checked, whole transaction refused), deletes
+ * refused while a strong reference remains.
+ */
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+type Doc = Record<string, unknown> & { _id: string; _type: string }
+
+const h = vi.hoisted(() => ({
+  dataset: [] as Array<Record<string, unknown> & { _id: string }>,
+  /** Asset ids whose direct delete fails, to leave a linked file behind. */
+  failFileDelete: new Set<string>(),
+  revCounter: 0,
+}))
+
+/** True when some other document holds a STRONG reference to `id`. */
+function stronglyReferenced(
+  dataset: Array<Record<string, unknown> & { _id: string }>,
+  id: string,
+): boolean {
+  const walk = (value: unknown): boolean => {
+    if (Array.isArray(value)) return value.some(walk)
+    if (typeof value !== 'object' || value === null) return false
+    const v = value as Record<string, unknown>
+    if (v._ref === id && v._weak !== true && v.weak !== true) return true
+    return Object.values(v).some(walk)
+  }
+  return dataset.some((doc) => doc._id !== id && walk(doc))
+}
+
+vi.mock('@/lib/sanity/client', async () => {
+  const { createClient } = await import('@sanity/client')
+  const { parse, evaluate } = await import('groq-js')
+  const { createRequire: req } = await import('node:module')
+  const { Mutation } = req(req(import.meta.url).resolve('sanity/package.json'))(
+    '@sanity/mutator',
+  ) as {
+    Mutation: new (o: { mutations: unknown[] }) => {
+      apply: (d: unknown) => Record<string, unknown> | null
+    }
+  }
+  const client = createClient({
+    projectId: 'test',
+    dataset: 'test',
+    apiVersion: '2025-02-19',
+    useCdn: false,
+  })
+
+  const OLD = '2023-05-03' // the clients' own apiVersion
+  const knowsReleases = (apiVersion: string) => apiVersion >= '2025-02-19'
+  const isVersion = (id: string) => id.startsWith('versions.')
+
+  const visible = (apiVersion: string, perspective: unknown) =>
+    h.dataset.filter((d) => {
+      if (knowsReleases(apiVersion)) {
+        if (perspective === 'raw') return true
+        return !isVersion(d._id) && !d._id.startsWith('drafts.')
+      }
+      return !isVersion(d._id)
+    })
+  const fetchAt =
+    (apiVersion: string) =>
+    async (
+      query: string,
+      params: Record<string, unknown> = {},
+      opts: { perspective?: unknown } = {},
+    ) =>
+      (
+        await evaluate(parse(query), {
+          dataset: visible(apiVersion, opts.perspective),
+          params,
+        })
+      ).get()
+  const reader = {
+    fetch: fetchAt(OLD),
+    withConfig: (c: { apiVersion: string }) => ({
+      fetch: fetchAt(c.apiVersion),
+    }),
+  }
+
+  type Mut =
+    | { patch: { id: string; ifRevisionID?: string } }
+    | { delete: { id: string } }
+
+  return {
+    clientReadUncached: reader,
+    clientReadCached: reader,
+    clientWrite: {
+      fetch: fetchAt(OLD),
+      withConfig: (c: { apiVersion: string }) => ({
+        transaction: () => transactionAt(c.apiVersion),
+      }),
+      transaction: () => transactionAt(OLD),
+      delete: async (id: string) => {
+        if (h.failFileDelete.has(id)) throw new Error('503: try again')
+        if (stronglyReferenced(h.dataset, id)) {
+          throw new Error(`409: ${id} is still referenced`)
+        }
+        h.dataset = h.dataset.filter((d) => d._id !== id)
+        return {}
+      },
+    },
+  }
+
+  function transactionAt(apiVersion: string) {
+    const tx = client.transaction()
+    tx.commit = (async () => {
+      const next = structuredClone(h.dataset)
+      const rev = `rev-${++h.revCounter}`
+      // Modelled, not verified: an empty transaction is treated as refused,
+      // so a run that has nothing to write must not send one.
+      if (tx.serialize().length === 0) throw new Error('400: empty transaction')
+      for (const m of tx.serialize() as Mut[]) {
+        const id = 'delete' in m ? m.delete.id : m.patch.id
+        if (isVersion(id) && !knowsReleases(apiVersion)) {
+          throw new Error(`400: ${id} needs API 2025-02-19 (modelled)`)
+        }
+      }
+      for (const m of tx.serialize() as Mut[]) {
+        if ('delete' in m) {
+          const i = next.findIndex((d) => d._id === m.delete.id)
+          if (i !== -1) next.splice(i, 1)
+          continue
+        }
+        const i = next.findIndex((d) => d._id === m.patch.id)
+        if (i === -1) throw new Error(`no such document: ${m.patch.id}`)
+        if (m.patch.ifRevisionID && next[i]._rev !== m.patch.ifRevisionID) {
+          throw new Error(`409: ${m.patch.id} revision mismatch`)
+        }
+        const patched = new Mutation({ mutations: [m] }).apply(next[i])
+        next[i] = { ...(patched as (typeof next)[number]), _rev: rev }
+      }
+      for (const m of tx.serialize() as Mut[]) {
+        if ('delete' in m && stronglyReferenced(next, m.delete.id)) {
+          throw new Error(`409: ${m.delete.id} is still referenced`)
+        }
+      }
+      h.dataset = next
+      return { transactionId: rev }
+    }) as typeof tx.commit
+    return tx
+  }
+})
+
+import { eraseSpeakerInPlace, verifySpeakerErasure } from './erasure'
+
+const ADA = 'spkada0001'
+const BOB = 'spkbob0002'
+const ADA_DID = 'did:plc:ada'
+const BOB_DID = 'did:plc:bob'
+
+const ref = (id: string, extra: Record<string, unknown> = {}) => ({
+  _type: 'reference',
+  _ref: id,
+  ...extra,
+})
+const weak = (id: string) => ref(id, { _weak: true })
+
+const doc = (id: string) => h.dataset.find((d) => d._id === id) as Doc
+
+function mention(
+  key: string,
+  speaker: string,
+  handle: string,
+  name: string,
+  did?: string,
+  status = 'tagged',
+) {
+  return {
+    _key: key,
+    _type: 'socialPostMention',
+    handle,
+    ...(did ? { did } : {}),
+    speaker: weak(speaker),
+    name,
+    status,
+  }
+}
+const adaTag = () =>
+  mention('m-ada', ADA, 'ada.bsky.social', 'Ada Lovelace', ADA_DID)
+const bobTag = () => mention('m-bob', BOB, 'bob.dev', 'Bob Builder', BOB_DID)
+
+function variant(
+  id: string,
+  status: string,
+  body: string,
+  extra: Record<string, unknown> = {},
+): Doc {
+  return {
+    _id: id,
+    _type: 'socialPostVariant',
+    _rev: 'r0',
+    post: weak('post-1'),
+    conference: ref('conf-a'),
+    platform: 'bluesky',
+    status,
+    body,
+    mentions: [adaTag(), bobTag()],
+    ...extra,
+  }
+}
+
+const TAGGED =
+  '🎙️ @ada.bsky.social and @bob.dev are speaking. Meet Ada Lovelace!'
+
+function seed() {
+  h.revCounter = 0
+  h.failFileDelete = new Set()
+  h.dataset = [
+    { _id: 'org-a', _type: 'organization' },
+    { _id: 'org-x', _type: 'organization' },
+    { _id: 'conf-a', _type: 'conference', organization: ref('org-a') },
+    // Last year's edition of the same organization.
+    { _id: 'conf-a-2025', _type: 'conference', organization: ref('org-a') },
+    // Somebody else's conference.
+    { _id: 'conf-x', _type: 'conference', organization: ref('org-x') },
+    {
+      _id: ADA,
+      _type: 'speaker',
+      _rev: 'r0',
+      name: 'Ada Lovelace',
+      email: 'ada@example.com',
+      slug: { _type: 'slug', current: 'ada' },
+      organizations: [ref('org-a', { _key: 'o1' })],
+      links: ['https://bsky.app/profile/ada.bsky.social'],
+    },
+    {
+      _id: BOB,
+      _type: 'speaker',
+      _rev: 'r0',
+      name: 'Bob Builder',
+      email: 'bob@example.com',
+      slug: { _type: 'slug', current: 'bob' },
+      organizations: [ref('org-a', { _key: 'o1' })],
+    },
+    {
+      _id: 'talk-ada',
+      _type: 'talk',
+      conference: ref('conf-a'),
+      speakers: [ref(ADA), ref(BOB)],
+    },
+    { _id: 'post-1', _type: 'socialPost', _rev: 'r0', body: TAGGED },
+    variant('var-scheduled', 'scheduled', TAGGED),
+    variant('var-published', 'published', TAGGED),
+    // A Content Release copy of a draft variant.
+    variant('versions.rlaunch.var-draft', 'draft', TAGGED),
+  ].map((d) => JSON.parse(JSON.stringify(d)))
+}
+
+beforeEach(() => {
+  seed()
+  vi.spyOn(console, 'info').mockImplementation(() => {})
+})
+
+/** Every place a stored variant could still hold Ada. */
+function adaIn(v: Doc): string[] {
+  const found: string[] = []
+  const json = JSON.stringify(v.mentions ?? [])
+  if (json.includes(ADA)) found.push('ref')
+  if (json.includes('Ada Lovelace')) found.push('name')
+  if (json.includes('ada.bsky.social')) found.push('handle')
+  if (json.includes(ADA_DID)) found.push('did')
+  return found
+}
+
+describe('speaker erasure scrubs post variants (#1232)', () => {
+  it('leaves no variant, in any version, recording her ref, name, handle or DID — and keeps Bob', async () => {
+    const result = await eraseSpeakerInPlace({ speakerId: ADA, actor: 'test' })
+    expect(result.err).toBeNull()
+
+    for (const id of [
+      'var-scheduled',
+      'var-published',
+      'versions.rlaunch.var-draft',
+    ]) {
+      expect(adaIn(doc(id)), id).toEqual([])
+      expect(doc(id).mentions, id).toEqual([bobTag()])
+    }
+    expect(result.verification?.residual.postVariants).toBe(0)
+    expect(result.verification?.clean).toBe(true)
+  })
+
+  it('neutralises her tag and plain name in bodies not yet posted, and leaves a posted body as it went out', async () => {
+    await eraseSpeakerInPlace({ speakerId: ADA, actor: 'test' })
+    const scrubbed = '🎙️ a speaker and @bob.dev are speaking. Meet a speaker!'
+    expect(doc('var-scheduled').body).toBe(scrubbed)
+    expect(doc('versions.rlaunch.var-draft').body).toBe(scrubbed)
+    expect(doc('var-published').body).toBe(TAGGED)
+  })
+
+  it('finds her plain name, typed by hand with no record, in another edition of her organization — and not in a stranger’s conference', async () => {
+    const byHand = 'Last year ADA LOVELACE opened the day.'
+    h.dataset.push(
+      variant('var-2025', 'awaiting-manual', byHand, {
+        conference: ref('conf-a-2025'),
+        mentions: [],
+        attachments: [
+          { _key: 'va1', source: 'a1', altOverride: 'Ada Lovelace on stage' },
+          { _key: 'va2', source: 'a2', altOverride: 'The venue' },
+        ],
+      }),
+      variant('var-stranger', 'scheduled', byHand, {
+        conference: ref('conf-x'),
+        mentions: [],
+      }),
+    )
+    const result = await eraseSpeakerInPlace({ speakerId: ADA, actor: 'test' })
+    expect(result.err).toBeNull()
+    expect(doc('var-2025').body).toBe('Last year a speaker opened the day.')
+    expect(doc('var-2025').attachments).toEqual([
+      { _key: 'va1', source: 'a1', altOverride: 'a speaker on stage' },
+      { _key: 'va2', source: 'a2', altOverride: 'The venue' },
+    ])
+    expect(doc('var-stranger').body).toBe(byHand)
+    expect(result.verification?.clean).toBe(true)
+  })
+
+  it('finds her account recorded under another reference, in any tenant, by its DID', async () => {
+    h.dataset.push(
+      variant('var-elsewhere', 'published', 'Hi @ada.example', {
+        conference: ref('conf-x'),
+        mentions: [
+          mention('m-dup', 'spk-merged-away', 'ada.example', 'Ada L.', ADA_DID),
+        ],
+      }),
+    )
+    const result = await eraseSpeakerInPlace({ speakerId: ADA, actor: 'test' })
+    expect(result.err).toBeNull()
+    expect(doc('var-elsewhere').mentions).toEqual([])
+  })
+
+  it('REFUSES, writing nothing, while a variant naming her is being published', async () => {
+    h.dataset.push(variant('var-in-flight', 'publishing', TAGGED))
+    const before = structuredClone(h.dataset)
+    const result = await eraseSpeakerInPlace({ speakerId: ADA, actor: 'test' })
+    expect(result.err?.message).toMatch(/var-in-flight.*being published/)
+    expect(result.committed).toBe(false)
+    expect(h.dataset).toEqual(before)
+  })
+
+  it('gives a variant the image branch also strips ONE patch, so its revision guard holds', async () => {
+    h.dataset.push(
+      { _id: 'image-adacard-1200x630-png', _type: 'sanity.imageAsset' },
+      {
+        _id: 'asset-ada',
+        _type: 'marketingAsset',
+        _rev: 'r0',
+        organization: ref('org-a'),
+        kind: 'image',
+        subject: weak(ADA),
+        image: { _type: 'image', asset: ref('image-adacard-1200x630-png') },
+      },
+    )
+    const post = doc('post-1')
+    post.attachments = [
+      {
+        _key: 'att-ada',
+        image: { _type: 'image', asset: ref('image-adacard-1200x630-png') },
+      },
+    ]
+    doc('var-scheduled').attachments = [{ _key: 'va-ada', source: 'att-ada' }]
+    const result = await eraseSpeakerInPlace({ speakerId: ADA, actor: 'test' })
+    expect(result.err).toBeNull()
+    expect(
+      result.plan?.documentPatches.filter((p) => p.id === 'var-scheduled'),
+    ).toHaveLength(1)
+    expect(doc('var-scheduled').attachments).toEqual([])
+    expect(adaIn(doc('var-scheduled'))).toEqual([])
+  })
+
+  it('is a fixed point: a second run plans nothing', async () => {
+    await eraseSpeakerInPlace({ speakerId: ADA, actor: 'test' })
+    const again = await eraseSpeakerInPlace({ speakerId: ADA, actor: 'test' })
+    expect(again.plan?.noop).toBe(true)
+    expect(again.verification?.clean).toBe(true)
+  })
+
+  describe('the residual check reads the STORED variants', () => {
+    it('FAILS on a record of her left on a variant — by reference alone, as a later --verify has it', async () => {
+      await eraseSpeakerInPlace({ speakerId: ADA, actor: 'test' })
+      h.dataset.push(
+        variant('var-late', 'published', 'x', { mentions: [adaTag()] }),
+      )
+      const v = await verifySpeakerErasure(ADA)
+      expect(v?.residual.postVariants).toBe(1)
+      expect(v?.clean).toBe(false)
+    })
+
+    it('FAILS on her handle or DID recorded under another reference, given the identity read before', async () => {
+      await eraseSpeakerInPlace({ speakerId: ADA, actor: 'test' })
+      h.dataset.push(
+        variant('var-late', 'published', 'x', {
+          conference: ref('conf-x'),
+          mentions: [mention('m', 'spk-other', 'x.dev', 'X', ADA_DID)],
+        }),
+      )
+      const v = await verifySpeakerErasure(ADA, [], [], { dids: [ADA_DID] })
+      expect(v?.residual.postVariants).toBe(1)
+      expect(v?.clean).toBe(false)
+    })
+
+    it('FAILS on her name in an unposted body, given the name read before — and says nothing of it without', async () => {
+      await eraseSpeakerInPlace({ speakerId: ADA, actor: 'test' })
+      h.dataset.push(
+        variant('var-late', 'draft', 'Meet Ada Lovelace', { mentions: [] }),
+      )
+      const v = await verifySpeakerErasure(ADA, [], [], {
+        name: 'Ada Lovelace',
+      })
+      expect(v?.residual.postVariants).toBe(1)
+      expect(v?.clean).toBe(false)
+      // The documented limit (runbook): a standalone --verify has no name to
+      // look for once the erasure has replaced it.
+      expect((await verifySpeakerErasure(ADA))?.residual.postVariants).toBe(0)
+    })
+
+    it('FAILS on her tag in an unposted body', async () => {
+      await eraseSpeakerInPlace({ speakerId: ADA, actor: 'test' })
+      h.dataset.push(
+        variant('var-late', 'scheduled', 'Hi @Ada.bsky.social', {
+          mentions: [],
+        }),
+      )
+      const v = await verifySpeakerErasure(ADA, [], [], {
+        handles: ['ada.bsky.social'],
+      })
+      expect(v?.residual.postVariants).toBe(1)
+    })
+  })
+})

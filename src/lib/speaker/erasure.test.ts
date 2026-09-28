@@ -99,6 +99,7 @@ function inputs(overrides: Partial<ErasureInputs> = {}): ErasureInputs {
       variants: [],
       publishedPosts: [],
     },
+    mentions: { variants: [], identity: { name: null, handles: [], dids: [] } },
     now: NOW,
     ...overrides,
   }
@@ -404,6 +405,10 @@ describe('idempotency — the whole patch is a fixed point', () => {
         fileHolders: [],
         variants: [],
         publishedPosts: [],
+      },
+      mentions: {
+        variants: [],
+        identity: { name: null, handles: [], dids: [] },
       },
       now: '2099-12-31T23:59:59.000Z',
     }

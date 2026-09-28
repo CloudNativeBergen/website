@@ -50,6 +50,10 @@
  * unconditionally. See `./erasure-assets.ts`, which also names the hole: an
  * image with no subject is linked to nobody and is not found.
  *
+ * POST VARIANTS (#1232). Every `socialPostVariant` loses its records of the
+ * speaker (`mentions[]`: ref, handle, DID, name), and a body not yet posted
+ * loses their tag and plain name. See `./erasure-mentions.ts`.
+ *
  * WHAT PHASE 1 DOES NOT ERASE — see `docs/SPEAKER_ERASURE_RUNBOOK.md`, which the
  * operator answers the data subject from. Badges, paid travel records and their
  * receipts, all free text (abstracts, outlines, review comments, message
@@ -77,6 +81,13 @@ import {
   planSpeakerAssetErasure,
   type SpeakerAssetInputs,
 } from './erasure-assets'
+import {
+  fetchSpeakerMentionInputs,
+  planSpeakerMentionErasure,
+  residualMentionVariants,
+  type MentionIdentity,
+  type SpeakerMentionInputs,
+} from './erasure-mentions'
 
 // ---------------------------------------------------------------------------
 // Field policy
@@ -344,6 +355,12 @@ export interface ErasureInputs {
   assetFileIds: string[]
   /** The documents about the subject and the holders of those files. */
   assets: SpeakerAssetInputs
+  /**
+   * Post variants holding the subject — recorded mentions, or an unposted
+   * body naming them — and who they are to a variant. See
+   * `./erasure-mentions.ts`.
+   */
+  mentions: SpeakerMentionInputs
   /** Erasure timestamp, injected so tests are deterministic. */
   now: string
 }
@@ -777,6 +794,24 @@ export function buildErasurePlan(inputs: ErasureInputs): ErasurePlan {
   documentDeletes.push(...assetPlan.deletes)
   refusals.push(...assetPlan.refusals)
 
+  // --- post variants recording or naming the subject (#1232) --------------
+
+  // A variant the image branch already patches gets ONE patch, so it keeps
+  // one revision guard: a second guarded patch of the same document in the
+  // same transaction would be refused against the revision the first wrote.
+  const mentionPlan = planSpeakerMentionErasure(speakerId, inputs.mentions)
+  for (const patch of mentionPlan.patches) {
+    const same = documentPatches.find((p) => p.id === patch.id)
+    if (!same) {
+      documentPatches.push(patch)
+      continue
+    }
+    if (patch.set) same.set = { ...same.set, ...patch.set }
+    if (patch.unset) same.unset = [...(same.unset ?? []), ...patch.unset]
+    same.reason = `${same.reason}; ${patch.reason}`
+  }
+  refusals.push(...mentionPlan.refusals)
+
   // --- the merge trail on OTHER speakers ----------------------------------
 
   // The subject's own trail is unset with the rest of the speaker patch; this
@@ -1201,6 +1236,13 @@ export interface ErasureVerification {
     videoProjects: number
     /** Linked marketing files still stored. */
     linkedFiles: number
+    /**
+     * `socialPostVariant` documents, any version, still holding the subject
+     * (#1232): a record carrying their reference, handle or DID, or an
+     * unposted body or alt text carrying their tag or name. Checked over the
+     * STORED values, apart from the planner.
+     */
+    postVariants: number
   }
 }
 
@@ -1217,6 +1259,7 @@ async function fetchErasureInputs(
   now: string,
   priorEmails: string[] = [],
   priorFileIds: string[] = [],
+  priorMentions: Partial<MentionIdentity> = {},
 ): Promise<ErasureInputs> {
   const speaker = await clientRead.fetch<ErasureSpeakerDoc | null>(
     // groq-global: erasure is a GLOBAL operation on a cross-org person
@@ -1338,6 +1381,18 @@ async function fetchErasureInputs(
     ...priorFileIds,
     ...survivingRecorded,
   ])
+  // The placeholder is not a name to look for: after an erasure the real one
+  // is known only from `priorMentions`.
+  const liveName =
+    typeof speaker?.name === 'string' && speaker.name !== ERASED_SPEAKER_NAME
+      ? speaker.name
+      : null
+  const mentions = await fetchSpeakerMentionInputs(
+    speakerId,
+    speaker,
+    liveName,
+    priorMentions,
+  )
 
   return {
     speaker,
@@ -1348,6 +1403,7 @@ async function fetchErasureInputs(
     slugConflictIds: (slugConflicts ?? []).map((d) => d._id),
     assetFileIds: assets.fileIds,
     assets: assets.inputs,
+    mentions,
     now,
   }
 }
@@ -1484,6 +1540,7 @@ export async function eraseSpeakerInPlace(
       plan.speakerId,
       inputs.speaker ? speakerEmailMatchSet(inputs.speaker) : [],
       plan.linkedFileIds,
+      inputs.mentions.identity,
     )
 
     console.info('[speaker-erasure] anonymised speaker in place', {
@@ -1604,6 +1661,7 @@ export async function verifySpeakerErasure(
   speakerId: string,
   priorEmails: string[] = [],
   priorFileIds: string[] = [],
+  priorMentions: Partial<MentionIdentity> = {},
 ): Promise<ErasureVerification | null> {
   const targetSlug = erasedSlug(speakerId)
   const targetEmail = erasedEmail(speakerId)
@@ -1613,6 +1671,7 @@ export async function verifySpeakerErasure(
     new Date().toISOString(),
     priorEmails,
     priorFileIds,
+    priorMentions,
   )
   const doc = inputs.speaker
   if (!doc) return null
@@ -1758,6 +1817,12 @@ export async function verifySpeakerErasure(
     linkedFiles = found?.n ?? 0
   }
 
+  const postVariants = residualMentionVariants(
+    speakerId,
+    inputs.mentions.variants,
+    inputs.mentions.identity,
+  ).length
+
   const speakerFields = ERASURE_UNSET_FIELDS.filter(
     (field) => !isAbsent(doc, field),
   ) as string[]
@@ -1788,6 +1853,7 @@ export async function verifySpeakerErasure(
     linkedFileHolders,
     videoProjects,
     linkedFiles,
+    postVariants,
   }
 
   const clean =
@@ -1811,7 +1877,8 @@ export async function verifySpeakerErasure(
     marketingAssets === 0 &&
     linkedFileHolders === 0 &&
     videoProjects === 0 &&
-    linkedFiles === 0
+    linkedFiles === 0 &&
+    postVariants === 0
 
   return { clean, residual }
 }
