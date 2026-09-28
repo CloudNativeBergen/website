@@ -232,7 +232,7 @@ A body **not yet posted** — `draft`, `scheduled`, `awaiting-manual`, `failed`,
 and every Studio draft or release copy whatever status it copied — loses their
 handle wherever it stands (a tag, in quotes, in a profile link) and every
 whole-word copy of their name and of the spellings their records stored: any
-case, any whitespace, composed or decomposed letters, but never inside another
+case (simple case folding — "STRASSE" does not match "Straße"), any whitespace, composed or decomposed letters, but never inside another
 handle, a domain or a URL. A variant's own alt text is scrubbed the same way.
 Each becomes **"a speaker"**, the words the publisher already posts for a gone
 speaker. The name is looked for in the variants of every conference of the
