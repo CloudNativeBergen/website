@@ -55,7 +55,10 @@ describe('plan deletion settings', () => {
     render(<DeletePlanSection />)
     expect(h.query).toHaveBeenCalledTimes(0)
     fireEvent.click(screen.getByRole('button', { name: 'Delete plan' }))
+    // `staleTime: 0`: every open reads the tree afresh — the counts it shows
+    // (and the live-link warning, #1145) must not come from a cache.
     expect(h.query).toHaveBeenCalledWith(undefined, {
+      staleTime: 0,
       refetchOnWindowFocus: false,
     })
     expect(

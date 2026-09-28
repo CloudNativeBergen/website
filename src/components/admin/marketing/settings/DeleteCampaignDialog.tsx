@@ -121,7 +121,7 @@ export function DeleteCampaignDialog({
 }) {
   const preview = api.marketing.campaign.deletionPreview.useQuery(
     { campaignId },
-    { refetchOnWindowFocus: false },
+    { staleTime: 0, refetchOnWindowFocus: false },
   )
   const utils = api.useUtils()
   const router = useRouter()

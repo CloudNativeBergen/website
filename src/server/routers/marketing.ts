@@ -1918,11 +1918,6 @@ export const marketingRouter = router({
     }),
 
     /**
-     * Delete the Task and, for a publishing Task, its variant and post
-     * (§2.3). Refused while the variant is in flight or published: the
-     * posting core keeps the record of a post that went out.
-     */
-    /**
      * What `delete` would remove, from the same guarded read and with the
      * same refusals: the short link that may be live and falls back to the
      * home page (§2.1's known hole, §2.7). A warning, never a block.
@@ -1934,6 +1929,11 @@ export const marketingRouter = router({
         return { liveLinks: taskDeletion(data).liveLinks }
       }),
 
+    /**
+     * Delete the Task and, for a publishing Task, its variant and post
+     * (§2.3). Refused while the variant is in flight or published: the
+     * posting core keeps the record of a post that went out.
+     */
     delete: adminProcedure.input(TaskIdSchema).mutation(async ({ input }) => {
       const { conferenceId, data } = await loadTask(input.taskId)
       const { task } = data

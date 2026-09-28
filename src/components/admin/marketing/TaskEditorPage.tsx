@@ -156,7 +156,14 @@ function LoadedTaskEditor({
   // guarded read and refusals as the delete (short-links spec §2.7).
   const deletion = api.marketing.task.deletionPreview.useQuery(
     { taskId: task._id },
-    { enabled: deleting, refetchOnWindowFocus: false, retry: false },
+    {
+      enabled: deleting,
+      // Every open reads afresh: a send or a failed post since the last open
+      // changes the count, and nothing else invalidates it.
+      staleTime: 0,
+      refetchOnWindowFocus: false,
+      retry: false,
+    },
   )
   const deletionPreview = deletion.isFetching ? undefined : deletion.data
   const del = api.marketing.task.delete.useMutation({
@@ -319,20 +326,25 @@ function LoadedTaskEditor({
         confirmButtonText="Delete task"
         variant="danger"
         isLoading={del.isPending}
-        confirmDisabled={!deletionPreview}
+        // Wait for the count, but never block on it (§2.7): a failed preview
+        // shows its message and the delete, which re-checks everything the
+        // preview refuses on, stays available — as it was before #1145.
+        confirmDisabled={deletion.isFetching}
       >
         {deletion.error ? (
           <p role="alert" className="mt-4 text-sm text-red-600">
             {deletion.error.message}
           </p>
-        ) : !deletionPreview ? (
-          <p className="mt-4 text-sm">Checking the short link…</p>
         ) : (
-          deletionPreview.liveLinks > 0 && (
-            <div className="mt-4">
+          // One live region from the first render, so a screen reader hears
+          // the warning replace the "checking" line.
+          <div role="status" className="mt-4 text-sm empty:hidden">
+            {deletionPreview ? (
               <LiveLinksWarning count={deletionPreview.liveLinks} />
-            </div>
-          )
+            ) : (
+              'Checking what the delete removes…'
+            )}
+          </div>
         )}
       </ConfirmationModal>
     </div>

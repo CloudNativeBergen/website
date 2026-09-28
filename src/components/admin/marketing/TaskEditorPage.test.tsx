@@ -164,8 +164,38 @@ describe('Task delete preview (#1145)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Delete task' }))
     expect(mocks.deletionPreview).toHaveBeenLastCalledWith(
       { taskId: 'outreach-1' },
-      expect.objectContaining({ enabled: true }),
+      expect.objectContaining({ enabled: true, staleTime: 0 }),
     )
+  })
+
+  it('reads afresh on every open, despite the app-wide 60s staleTime', async () => {
+    const client = new QueryClient({
+      defaultOptions: { queries: { staleTime: 60_000 } },
+    })
+    const fetchPreview = vi.fn().mockResolvedValue({ liveLinks: 0 })
+    mocks.deletionPreview.mockImplementation(
+      (input: unknown, options: Record<string, unknown>) =>
+        useQuery({
+          queryKey: ['marketing.task.deletionPreview', input],
+          queryFn: fetchPreview,
+          ...options,
+        }),
+    )
+    render(
+      <QueryClientProvider client={client}>
+        <TaskEditorPage taskId="outreach-1" />
+      </QueryClientProvider>,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Delete task' }))
+    await waitFor(() => expect(fetchPreview).toHaveBeenCalledTimes(1))
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    fetchPreview.mockResolvedValue({ liveLinks: 1 })
+    fireEvent.click(screen.getAllByRole('button', { name: 'Delete task' })[0])
+    await waitFor(() => expect(fetchPreview).toHaveBeenCalledTimes(2))
+    expect(
+      await screen.findByText('1 short link may already be shared'),
+    ).toBeTruthy()
+    client.clear()
   })
 
   it('warns that the link falls back to the home page, and still deletes', () => {
@@ -194,17 +224,19 @@ describe('Task delete preview (#1145)', () => {
     expect(mocks.remove).toHaveBeenCalledTimes(1)
   })
 
-  it('waits for the preview, and shows a refusal instead of deleting', () => {
+  it('waits for the preview before confirming', () => {
     mocks.deletionPreview.mockReturnValue({
       data: { liveLinks: 1 },
       isFetching: true,
       error: null,
     })
     open()
-    expect(screen.getByText('Checking the short link…')).toBeTruthy()
+    expect(screen.getByText('Checking what the delete removes…')).toBeTruthy()
     fireEvent.click(confirm())
     expect(mocks.remove).not.toHaveBeenCalled()
-    cleanup()
+  })
+
+  it('never blocks on a failed preview: the delete re-checks on the server', () => {
     mocks.deletionPreview.mockReturnValue({
       data: undefined,
       isFetching: false,
@@ -215,7 +247,7 @@ describe('Task delete preview (#1145)', () => {
       'The post has been published; the record is kept.',
     )
     fireEvent.click(confirm())
-    expect(mocks.remove).not.toHaveBeenCalled()
+    expect(mocks.remove).toHaveBeenCalledWith({ taskId: 'outreach-1' })
   })
 })
 
