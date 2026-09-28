@@ -216,6 +216,11 @@ export interface TaskEditorTask extends TaskView {
    * gallery yet (#1165). Retrying the handoff completes the save.
    */
   galleryPending?: boolean
+  /**
+   * studioRender: the image is an asset of the marketing asset gallery
+   * (#1166), with its title while the asset exists (null once deleted).
+   */
+  fromGallery?: { title: string | null } | null
   origin: TaskOrigin | null
 }
 

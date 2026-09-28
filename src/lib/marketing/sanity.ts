@@ -467,6 +467,7 @@ interface RawTaskEditor extends RawTaskView {
   assetUrl: string | null
   assetId: string | null
   galleryPending: boolean | null
+  fromGallery: { title: string | null } | null
   subject: {
     _id: string
     _type: string
@@ -518,6 +519,7 @@ export async function getTaskEditorData(
       "assetUrl": asset.asset->url,
       "assetId": asset.asset._ref,
       "galleryPending": kind == "studioRender" && defined(asset.asset) && galleryPending == true,
+      "fromGallery": select(kind == "studioRender" && defined(asset.asset) && defined(galleryAsset._ref) => { "title": select(galleryAsset->organization._ref == conference->organization._ref => galleryAsset->title) }),
       "subject": subject->{ _id, _type, "name": coalesce(name, title), "slug": slug.current },
       "tagByHand": select(kind == "publishing" && channel == "linkedin" => subject->{
         "people": select(
@@ -567,6 +569,9 @@ export async function getTaskEditorData(
     assetUrl: row.assetUrl ?? null,
     assetId: row.assetId ?? null,
     galleryPending: row.galleryPending === true,
+    fromGallery: row.fromGallery
+      ? { title: row.fromGallery.title ?? null }
+      : null,
     origin: row.origin ?? null,
   }
   return {

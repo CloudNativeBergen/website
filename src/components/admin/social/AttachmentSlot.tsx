@@ -5,7 +5,6 @@ import clsx from 'clsx'
 import {
   ArrowUpTrayIcon,
   CheckIcon,
-  MagnifyingGlassIcon,
   PhotoIcon,
   SparklesIcon,
   SwatchIcon,
@@ -19,6 +18,11 @@ import type {
   SocialPostAttachment,
   SocialVariantAttachment,
 } from '@/lib/social/types'
+import {
+  MarketingAssetPicker,
+  type MarketingAssetPick,
+  type MarketingAssetSource,
+} from '@/components/admin/marketing/assets/MarketingAssetPicker'
 import { CropEditor } from './CropEditor'
 import { CroppedImage } from './CroppedImage'
 
@@ -32,21 +36,7 @@ export interface GalleryPick {
   thumbnailSrc: string
 }
 
-/**
- * An entry of the organization's marketing asset gallery (assets spec §5).
- * Picking one sends only its id: the server copies the image reference and
- * the alt text onto the post.
- */
-export interface MarketingAssetPick {
-  id: string
-  title: string
-  alt: string
-  thumbnailSrc: string | null
-  /** A GIF or video cannot go into a post yet: shown, but not pickable. */
-  attachable: boolean
-  /** Where it sits: "About Ada Lovelace", "CND 2026", "Whole organization". */
-  context: string
-}
+export type { MarketingAssetPick } from '@/components/admin/marketing/assets/MarketingAssetPicker'
 
 /**
  * A share card the studio can rasterize on demand (spec §7: "studio asset").
@@ -76,16 +66,7 @@ export interface AttachmentSlotProps {
     onOpen?: () => void
     onPick: (image: GalleryPick) => Promise<void>
   }
-  marketingAssets?: {
-    assets: MarketingAssetPick[]
-    isLoading: boolean
-    /** The list could not be read: said, never shown as an empty gallery. */
-    error?: string | null
-    onRetry?: () => void
-    search: string
-    onSearchChange: (search: string) => void
-    allEditions: boolean
-    onAllEditionsChange: (all: boolean) => void
+  marketingAssets?: MarketingAssetSource & {
     /** Called when the picker opens, so the list can load lazily. */
     onOpen?: () => void
     onPick: (asset: MarketingAssetPick) => Promise<void>
@@ -347,117 +328,19 @@ export function AttachmentSlot({
       )}
 
       {picker === 'assets' && marketingAssets && (
-        <div
-          role="group"
-          aria-label="Marketing assets"
-          className="space-y-3 rounded-lg border border-gray-200 p-3 dark:border-gray-700"
-        >
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-            <label className="relative min-w-0 flex-1 basis-48">
-              <span className="sr-only">Search marketing assets</span>
-              <MagnifyingGlassIcon
-                className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-gray-400"
-                aria-hidden
-              />
-              <input
-                type="search"
-                value={marketingAssets.search}
-                onChange={(e) => marketingAssets.onSearchChange(e.target.value)}
-                // Inside the editor's form: Enter must not save the variant.
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') e.preventDefault()
-                }}
-                placeholder="Search title and tags"
-                className={clsx(inputClass, 'mt-0 pl-8')}
-              />
-            </label>
-            <label className="inline-flex min-h-[40px] items-center gap-2 text-sm text-gray-700 dark:text-gray-200">
-              <input
-                type="checkbox"
-                checked={marketingAssets.allEditions}
-                onChange={(e) =>
-                  marketingAssets.onAllEditionsChange(e.target.checked)
-                }
-                className="size-4 rounded border-gray-300 text-brand-cloud-blue focus:ring-brand-cloud-blue dark:border-gray-600 dark:bg-gray-700"
-              />
-              All editions
-            </label>
-          </div>
-          {marketingAssets.isLoading ? (
-            <div className="h-24 animate-pulse rounded bg-gray-100 dark:bg-gray-800" />
-          ) : marketingAssets.error ? (
-            <div
-              role="alert"
-              className="flex flex-wrap items-center gap-2 text-sm text-red-600 dark:text-red-400"
-            >
-              <span>
-                Could not load the marketing assets: {marketingAssets.error}
-              </span>
-              {marketingAssets.onRetry && (
-                <AdminButton
-                  type="button"
-                  size="xs"
-                  variant="secondary"
-                  onClick={marketingAssets.onRetry}
-                >
-                  Try again
-                </AdminButton>
-              )}
-            </div>
-          ) : marketingAssets.assets.length === 0 ? (
-            <p className="text-sm text-gray-500 dark:text-gray-400">
-              {marketingAssets.search.trim()
-                ? 'No marketing asset matches.'
-                : 'The asset gallery has nothing for this post yet.'}
-            </p>
-          ) : (
-            <ul className="grid max-h-72 grid-cols-3 gap-2 overflow-y-auto sm:grid-cols-5">
-              {marketingAssets.assets.map((asset) => (
-                <li key={asset.id} className="min-w-0">
-                  <button
-                    type="button"
-                    disabled={disabled || busy || full || !asset.attachable}
-                    onClick={() =>
-                      void run(() => marketingAssets.onPick(asset))
-                    }
-                    aria-label={
-                      asset.attachable
-                        ? `Add ${asset.title} (${asset.context}) to the post`
-                        : `${asset.title} (${asset.context}): can't be attached yet`
-                    }
-                    title={asset.attachable ? asset.alt : NOT_ATTACHABLE_YET}
-                    className="group block w-full rounded text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-cloud-blue disabled:cursor-not-allowed"
-                  >
-                    <span className="relative block aspect-square overflow-hidden rounded bg-gray-100 ring-offset-2 group-enabled:group-hover:ring-2 group-enabled:group-hover:ring-brand-cloud-blue dark:bg-gray-800 dark:ring-offset-gray-900">
-                      {asset.thumbnailSrc && (
-                        <img
-                          src={asset.thumbnailSrc}
-                          alt=""
-                          loading="lazy"
-                          className={clsx(
-                            'size-full object-cover',
-                            !asset.attachable && 'opacity-40',
-                          )}
-                        />
-                      )}
-                      {!asset.attachable && (
-                        <span className="absolute inset-x-1 bottom-1 rounded bg-gray-900/80 px-1 py-0.5 text-center text-[11px] leading-tight font-medium text-white">
-                          Can&apos;t be attached yet
-                        </span>
-                      )}
-                    </span>
-                    <span className="mt-1 block truncate text-xs font-medium text-gray-800 dark:text-gray-100">
-                      {asset.title}
-                    </span>
-                    <span className="block truncate text-[11px] text-gray-500 dark:text-gray-400">
-                      {asset.context}
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
+        <MarketingAssetPicker
+          source={marketingAssets}
+          disabled={disabled || busy || full}
+          onPick={(asset) => void run(() => marketingAssets.onPick(asset))}
+          pickLabel={(asset) =>
+            `Add ${asset.title} (${asset.context}) to the post`
+          }
+          notPickable={{
+            reason: NOT_ATTACHABLE_YET,
+            badge: "Can't be attached yet",
+          }}
+          empty="The asset gallery has nothing for this post yet."
+        />
       )}
 
       {picker === 'share-card' && shareCards && onAttachShareCard && (

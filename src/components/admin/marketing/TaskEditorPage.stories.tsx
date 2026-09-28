@@ -16,6 +16,7 @@ import {
 } from '@/lib/marketing/expansion'
 import { BUILTIN_TEMPLATE } from '@/lib/marketing/template'
 import type { SocialVariantEditorData } from '@/lib/social/types'
+import type { MarketingAssetRow } from '@/lib/marketing-asset'
 import { NotificationProvider } from '../NotificationProvider'
 import { TaskEditorPage } from './TaskEditorPage'
 
@@ -844,6 +845,269 @@ export const PendingGallerySaveDark: Story = {
     ...PendingGallerySave.parameters,
     theme: 'dark',
     backgrounds: { default: 'dark' },
+  },
+}
+
+/** One of the organization's gallery assets, as `marketingAsset.list` returns it. */
+function galleryRow(
+  title: string,
+  hash: string,
+  overrides: Partial<MarketingAssetRow> = {},
+): MarketingAssetRow {
+  return {
+    _id: `asset-${hash}`,
+    title,
+    alt: `Alt of ${title}`,
+    kind: 'image',
+    scope: 'organization',
+    conferenceId: null,
+    edition: null,
+    subject: null,
+    tags: [],
+    credit: null,
+    imageUrl: null,
+    assetId: `image-${hash.repeat(40).slice(0, 40)}-1080x1080-png`,
+    width: 1080,
+    height: 1080,
+    createdAt: '2026-09-01T10:00:00Z',
+    softOnSocial: false,
+    audioUrl: null,
+    durationSeconds: null,
+    rights: null,
+    studio: null,
+    usedInPosts: null,
+    attachable: true,
+    ...overrides,
+  }
+}
+
+const GALLERY_COLORS: Record<string, [string, string]> = {
+  a: ['#1d4ed8', '#7c3aed'],
+  b: ['#0f766e', '#84cc16'],
+  c: ['#b91c1c', '#f59e0b'],
+  d: ['#be185d', '#f472b6'],
+}
+
+/** The Sanity CDN, answered with a gradient per asset (the hash's letter). */
+const galleryImages = http.get(
+  'https://cdn.sanity.io/images/*',
+  ({ request }) => {
+    const letter = /image-?([a-d])/.exec(new URL(request.url).pathname)?.[1]
+    const [from, to] = GALLERY_COLORS[letter ?? 'a'] ?? GALLERY_COLORS.a
+    return HttpResponse.text(
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1080"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${from}"/><stop offset="1" stop-color="${to}"/></linearGradient></defs><rect width="1080" height="1080" fill="url(#g)"/></svg>`,
+      { headers: { 'Content-Type': 'image/svg+xml' } },
+    )
+  },
+)
+
+const galleryRows: MarketingAssetRow[] = [
+  galleryRow('Logo on dark', 'a', { alt: 'The Cloud Native Bergen logo' }),
+  galleryRow('CFP card', 'b', {
+    scope: 'edition',
+    conferenceId: 'conf-2027',
+    edition: 'Cloud Native Bergen 2027',
+  }),
+  galleryRow('Venue at dusk', 'c', {
+    subject: { _id: 'sp-ada', _type: 'speaker', name: 'Ada Lovelace' },
+  }),
+  // A GIF: listed, but it cannot finish a render Task.
+  galleryRow('Countdown loop', 'd', { attachable: false }),
+]
+
+const renderTaskOpen: Partial<TaskEditorTask> = {
+  _id: 'task-render',
+  key: 'cfpOpenRender',
+  title: 'Render the CFP card',
+  kind: 'studioRender',
+  channel: null,
+  status: 'open',
+  complete: false,
+  variantId: null,
+  prerequisiteIds: [],
+  date: '2027-01-08T08:00:00.000Z',
+}
+
+/** What the picker sent, so a play can assert only the asset id travelled. */
+const galleryAttachBodies: unknown[] = []
+
+const galleryPickHandlers = [
+  galleryImages,
+  http.get('/api/trpc/marketingAsset.list', ({ request }) => {
+    const input = JSON.parse(
+      new URL(request.url).searchParams.get('input') ?? '{}',
+    ) as { kind?: string }
+    // The Task asks for images only.
+    return HttpResponse.json({
+      result: { data: input.kind === 'image' ? galleryRows : [] },
+    })
+  }),
+  http.post('/api/trpc/marketing.task.attachAsset', async ({ request }) => {
+    galleryAttachBodies.push(await request.json())
+    return HttpResponse.json({
+      result: { data: { success: true, handoffFailures: [] } },
+    })
+  }),
+  ...handlers(fixture(renderTaskOpen, null)),
+]
+
+/**
+ * A render Task finished without rendering (#1166): "Use an asset from the
+ * gallery" lists this organization's images; a GIF is shown but cannot be
+ * picked; picking an image sends only its id.
+ */
+export const StudioRenderFromGallery: Story = {
+  args: { taskId: 'task-render' },
+  parameters: { msw: { handlers: galleryPickHandlers } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    galleryAttachBodies.length = 0
+    const open = await canvas.findByRole('button', {
+      name: 'Use an asset from the gallery',
+    })
+    await userEvent.click(open)
+    await expect(open).toHaveAttribute('aria-expanded', 'true')
+    await expect(
+      await canvas.findByRole('button', {
+        name: "Countdown loop (Whole organization): can't be used yet",
+      }),
+    ).toBeDisabled()
+    await userEvent.click(
+      canvas.getByRole('button', {
+        name: 'Finish this Task with Logo on dark (Whole organization)',
+      }),
+    )
+    await expect(
+      await canvas.findByText(
+        'Logo on dark from the asset gallery is attached to this Task.',
+      ),
+    ).toBeVisible()
+    await expect(galleryAttachBodies).toEqual([
+      expect.objectContaining({
+        taskId: 'task-render',
+        taskRev: 'rev-1',
+        marketingAssetId: 'asset-a',
+      }),
+    ])
+    await expect(JSON.stringify(galleryAttachBodies[0])).not.toContain(
+      'assetId"',
+    )
+  },
+}
+
+/** The picker open, for looking at: light, dark and a phone. */
+export const StudioRenderGalleryPickerOpen: Story = {
+  args: { taskId: 'task-render' },
+  parameters: { msw: { handlers: galleryPickHandlers } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(
+      await canvas.findByRole('button', {
+        name: 'Use an asset from the gallery',
+      }),
+    )
+    await expect(
+      await canvas.findByRole('button', {
+        name: 'Finish this Task with CFP card (Cloud Native Bergen 2027)',
+      }),
+    ).toBeEnabled()
+  },
+}
+
+export const StudioRenderGalleryPickerOpenDark: Story = {
+  ...StudioRenderGalleryPickerOpen,
+  parameters: {
+    ...StudioRenderGalleryPickerOpen.parameters,
+    theme: 'dark',
+    backgrounds: { default: 'dark' },
+  },
+}
+
+export const StudioRenderGalleryPickerOpenMobile: Story = {
+  ...StudioRenderGalleryPickerOpen,
+  globals: { viewport: { value: 'mobile1', isRotated: false } },
+  parameters: {
+    ...StudioRenderGalleryPickerOpen.parameters,
+    viewport: { defaultViewport: 'mobile1' },
+  },
+  play: async (ctx) => {
+    await expect(
+      ctx.canvasElement.ownerDocument.documentElement.clientWidth,
+    ).toBeLessThan(500)
+    await StudioRenderGalleryPickerOpen.play!(ctx)
+  },
+}
+
+/** A refusal from the server is said beside the picker; nothing changes. */
+export const StudioRenderGalleryRefused: Story = {
+  args: { taskId: 'task-render' },
+  parameters: {
+    msw: {
+      handlers: [
+        http.post('/api/trpc/marketing.task.attachAsset', () =>
+          HttpResponse.json(
+            {
+              error: {
+                message:
+                  'The Task changed while you were editing. Reload and retry.',
+                code: -32009,
+                data: { code: 'CONFLICT', httpStatus: 409 },
+              },
+            },
+            { status: 409 },
+          ),
+        ),
+        ...galleryPickHandlers,
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(
+      await canvas.findByRole('button', {
+        name: 'Use an asset from the gallery',
+      }),
+    )
+    await userEvent.click(
+      await canvas.findByRole('button', {
+        name: 'Finish this Task with Logo on dark (Whole organization)',
+      }),
+    )
+    await expect(await canvas.findByRole('alert')).toHaveTextContent(
+      'The Task changed while you were editing. Reload and retry.',
+    )
+  },
+}
+
+/** Finished from the gallery: the page says where the image came from. */
+export const StudioRenderDoneFromGallery: Story = {
+  args: { taskId: 'task-render' },
+  parameters: {
+    msw: {
+      handlers: [
+        galleryImages,
+        ...handlers(
+          fixture(
+            {
+              ...renderTaskOpen,
+              complete: true,
+              assetId: `image-${'a'.repeat(40)}-1080x1080-png`,
+              assetUrl: `https://cdn.sanity.io/images/test/test/${'a'.repeat(40)}-1080x1080.png`,
+              fromGallery: { title: 'Logo on dark' },
+            },
+            null,
+          ),
+        ),
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(
+      await canvas.findByText(
+        'From the asset gallery: Logo on dark; the image is attached to this task.',
+      ),
+    ).toBeVisible()
   },
 }
 
