@@ -5,6 +5,8 @@ import clsx from 'clsx'
 import {
   ArrowUpTrayIcon,
   ExclamationTriangleIcon,
+  FilmIcon,
+  GifIcon,
   MusicalNoteIcon,
   PhotoIcon,
 } from '@heroicons/react/24/outline'
@@ -13,7 +15,17 @@ import {
   MARKETING_ASSET_AUDIO_LENGTH_REFUSAL,
   MARKETING_ASSET_AUDIO_SIZE_REFUSAL,
   MARKETING_ASSET_AUDIO_TYPES,
+  MARKETING_ASSET_GIF_SIZE_REFUSAL,
+  MARKETING_ASSET_GIF_TYPE,
   MARKETING_ASSET_IMAGE_TYPES,
+  MARKETING_ASSET_MAX_GIF_BYTES,
+  MARKETING_ASSET_MAX_GIF_LABEL,
+  MARKETING_ASSET_MAX_VIDEO_BYTES,
+  MARKETING_ASSET_MAX_VIDEO_LABEL,
+  MARKETING_ASSET_POSTER_REFUSAL,
+  MARKETING_ASSET_VIDEO_SIZE_REFUSAL,
+  MARKETING_ASSET_VIDEO_TYPE,
+  MARKETING_ASSET_VIDEO_TYPE_REFUSAL,
   MARKETING_ASSET_MAX_AUDIO_BYTES,
   MARKETING_ASSET_MAX_AUDIO_LABEL,
   MARKETING_ASSET_MAX_AUDIO_SECONDS,
@@ -24,14 +36,18 @@ import {
   SOFT_ON_SOCIAL_SHORT_SIDE,
   audioTypeForFile,
   formatTrackLength,
+  isQuickTimeFile,
   isSoftOnSocial,
+  motionKindForFile,
 } from '@/lib/marketing-asset'
-import type { AssetUploader } from './upload'
+import type { AssetUploader, AssetUploadOptions } from './upload'
+import { readVideoPoster } from './video-poster'
 import { readTrackLength } from './track-length'
 import { TrackPlayer } from './TrackPlayer'
 import {
   AssetDetailsFields,
   EMPTY_DRAFT,
+  KIND_NOUN,
   HINT,
   INPUT,
   LABEL,
@@ -42,8 +58,11 @@ import {
 
 interface Picked {
   file: File
-  kind: 'image' | 'audio'
+  kind: 'image' | 'gif' | 'video' | 'audio'
   previewUrl: string
+  /** A video's first frame, drawn here and uploaded beside it. */
+  poster: Blob | null
+  posterUrl: string | null
   width: number | null
   height: number | null
   /** A track's length as the browser read it; null for an image or unknown. */
@@ -53,7 +72,11 @@ interface Picked {
 /** What the picker offers: the image types, and tracks by type and extension. */
 const ACCEPT = [
   ...MARKETING_ASSET_IMAGE_TYPES,
+  MARKETING_ASSET_GIF_TYPE,
+  MARKETING_ASSET_VIDEO_TYPE,
   ...MARKETING_ASSET_AUDIO_TYPES,
+  '.gif',
+  '.mp4',
   '.mp3',
   '.m4a',
   '.m4b',
@@ -61,7 +84,7 @@ const ACCEPT = [
 ].join(',')
 
 const TYPE_REFUSAL =
-  'Only PNG, JPEG and WebP images, or MP3, M4A and WAV tracks, can be added.'
+  'Only PNG, JPEG, WebP and GIF images, MP4 video, or MP3, M4A and WAV tracks, can be added.'
 
 /** `min-logo_final.png` → `min logo final`: a starting title, not a rule. */
 function titleFromFilename(name: string): string {
@@ -71,6 +94,16 @@ function titleFromFilename(name: string): string {
 
 /** The client's own check, for a quick answer. The server checks again. */
 function refusalFor(file: File): string | null {
+  if (isQuickTimeFile(file)) return MARKETING_ASSET_VIDEO_TYPE_REFUSAL
+  const motion = motionKindForFile(file)
+  if (motion === 'gif')
+    return file.size > MARKETING_ASSET_MAX_GIF_BYTES
+      ? MARKETING_ASSET_GIF_SIZE_REFUSAL
+      : null
+  if (motion === 'video')
+    return file.size > MARKETING_ASSET_MAX_VIDEO_BYTES
+      ? MARKETING_ASSET_VIDEO_SIZE_REFUSAL
+      : null
   if (audioTypeForFile(file)) {
     return file.size > MARKETING_ASSET_MAX_AUDIO_BYTES
       ? MARKETING_ASSET_AUDIO_SIZE_REFUSAL
@@ -123,6 +156,8 @@ export function AssetUploadForm({
   const [draft, setDraft] = useState(EMPTY_DRAFT)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  // How much of the file has reached Blob while saving; null before it starts.
+  const [progress, setProgress] = useState<number | null>(null)
   // Set by reset(); honoured once the picker is enabled again after a render.
   const refocus = useRef(false)
   const form = useRef<HTMLFormElement>(null)
@@ -143,7 +178,9 @@ export function AssetUploadForm({
 
   useEffect(
     () => () => {
-      if (picked) URL.revokeObjectURL(picked.previewUrl)
+      if (!picked) return
+      URL.revokeObjectURL(picked.previewUrl)
+      if (picked.posterUrl) URL.revokeObjectURL(picked.posterUrl)
     },
     [picked],
   )
@@ -173,11 +210,24 @@ export function AssetUploadForm({
     // size has been read: until then there is nothing to save.
     setPicked(null)
     setRights(false)
-    const audio = Boolean(audioTypeForFile(file))
-    const [dimensions, durationSeconds] = audio
-      ? [null, await readTrackLength(file)]
-      : [await readDimensions(file), null]
+    const kind =
+      motionKindForFile(file) ?? (audioTypeForFile(file) ? 'audio' : 'image')
+    const [dimensions, durationSeconds, poster] =
+      kind === 'audio'
+        ? [null, await readTrackLength(file), null]
+        : kind === 'video'
+          ? await readVideoPoster(file).then(
+              (read) => [read, null, read?.poster ?? null] as const,
+            )
+          : [await readDimensions(file), null, null]
     if (seq !== pickSeq.current) return
+    // The server needs the first frame, and a browser that cannot draw it
+    // cannot play the video either: say so now, not after a 100 MB upload.
+    if (kind === 'video' && !poster) {
+      if (fileInput.current) fileInput.current.value = ''
+      setError(MARKETING_ASSET_POSTER_REFUSAL)
+      return
+    }
     if (
       durationSeconds !== null &&
       durationSeconds > MARKETING_ASSET_MAX_AUDIO_SECONDS
@@ -188,8 +238,10 @@ export function AssetUploadForm({
     }
     setPicked({
       file,
-      kind: audio ? 'audio' : 'image',
+      kind,
       previewUrl: URL.createObjectURL(file),
+      poster,
+      posterUrl: poster ? URL.createObjectURL(poster) : null,
       width: dimensions?.width ?? null,
       height: dimensions?.height ?? null,
       durationSeconds,
@@ -227,23 +279,34 @@ export function AssetUploadForm({
     }
     setSaving(true)
     setError(null)
+    setProgress(null)
     try {
-      if (track)
-        await uploader(picked.file, detailsFromDraft(title, '', draft), {
-          kind: 'audio',
-          rightsConfirmed: rights,
-        })
-      else await uploader(picked.file, detailsFromDraft(title, alt, draft))
+      const options: AssetUploadOptions | undefined =
+        picked.kind === 'audio'
+          ? { kind: 'audio', rightsConfirmed: rights }
+          : picked.kind === 'gif'
+            ? { kind: 'gif' }
+            : picked.kind === 'video' && picked.poster
+              ? { kind: 'video', poster: picked.poster }
+              : undefined
+      await uploader(
+        picked.file,
+        detailsFromDraft(title, track ? '' : alt, draft),
+        options,
+        // Only a video is large enough for progress to matter.
+        picked.kind === 'video' ? setProgress : undefined,
+      )
       onSaved({ title: title.trim() })
       reset()
     } catch (caught) {
       setError(
         caught instanceof Error
           ? caught.message
-          : `The ${track ? 'track' : 'image'} could not be added. Try again.`,
+          : `The ${KIND_NOUN[picked.kind]} could not be added. Try again.`,
       )
     } finally {
       setSaving(false)
+      setProgress(null)
     }
   }
 
@@ -285,12 +348,26 @@ export function AssetUploadForm({
                 : 'border-gray-300 py-6 hover:border-brand-cloud-blue md:aspect-square dark:border-gray-600 dark:hover:border-blue-400',
             )}
           >
-            {picked?.kind === 'image' ? (
-              // A local object URL: next/image cannot optimize it.
+            {picked?.kind === 'image' || picked?.kind === 'gif' ? (
+              // A local object URL: next/image cannot optimize it. A GIF
+              // animates here as it will when posted.
               <img
                 src={picked.previewUrl}
                 alt=""
                 className="size-full object-contain"
+              />
+            ) : picked?.kind === 'video' ? (
+              // Muted and still until played: the poster is the frame the
+              // server will keep.
+              <video
+                src={picked.previewUrl}
+                poster={picked.posterUrl ?? undefined}
+                controls
+                muted
+                playsInline
+                preload="metadata"
+                aria-label={`Preview of ${picked.file.name}`}
+                className="size-full bg-black object-contain"
               />
             ) : picked ? (
               <MusicalNoteIcon
@@ -301,10 +378,14 @@ export function AssetUploadForm({
               <span className="flex flex-col items-center px-4 text-gray-500 dark:text-gray-400">
                 <ArrowUpTrayIcon className="size-8" aria-hidden />
                 <span className="mt-2 text-sm font-medium text-brand-cloud-blue dark:text-blue-300">
-                  Choose an image or a track
+                  Choose an image, GIF, video or track
                 </span>
                 <span className="mt-1 text-xs">
                   PNG, JPEG or WebP, up to {MARKETING_ASSET_MAX_IMAGE_LABEL}
+                </span>
+                <span className="mt-0.5 text-xs">
+                  GIF up to {MARKETING_ASSET_MAX_GIF_LABEL} · MP4 up to{' '}
+                  {MARKETING_ASSET_MAX_VIDEO_LABEL}
                 </span>
                 <span className="mt-0.5 text-xs">
                   MP3, M4A or WAV, up to {MARKETING_ASSET_MAX_AUDIO_LABEL}
@@ -317,8 +398,8 @@ export function AssetUploadForm({
               type="file"
               aria-label={
                 picked
-                  ? `Replace the ${track ? 'track' : 'image'}`
-                  : 'Choose an image or a track'
+                  ? `Replace the ${KIND_NOUN[picked.kind]}`
+                  : 'Choose an image, GIF, video or track'
               }
               accept={ACCEPT}
               className="sr-only"
@@ -330,6 +411,10 @@ export function AssetUploadForm({
             <p className="mt-2 flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
               {track ? (
                 <MusicalNoteIcon className="size-4 shrink-0" aria-hidden />
+              ) : picked.kind === 'video' ? (
+                <FilmIcon className="size-4 shrink-0" aria-hidden />
+              ) : picked.kind === 'gif' ? (
+                <GifIcon className="size-4 shrink-0" aria-hidden />
               ) : (
                 <PhotoIcon className="size-4 shrink-0" aria-hidden />
               )}
@@ -433,8 +518,9 @@ export function AssetUploadForm({
                 aria-describedby={`${ids.alt}-hint`}
               />
               <p id={`${ids.alt}-hint`} className={HINT}>
-                Required. Say what the image shows; it goes into every post that
-                uses it.
+                {picked?.kind === 'gif' || picked?.kind === 'video'
+                  ? `Required. Say what the ${KIND_NOUN[picked.kind]} shows. It can’t be attached to a post yet: you download it and post it by hand, with this text.`
+                  : 'Required. Say what the image shows; it goes into every post that uses it.'}
               </p>
             </div>
           )}
@@ -443,7 +529,7 @@ export function AssetUploadForm({
             onChange={setDraft}
             edition={edition}
             disabled={saving}
-            kind={track ? 'audio' : 'image'}
+            kind={picked?.kind ?? 'image'}
           />
           {error && (
             <p
@@ -465,7 +551,11 @@ export function AssetUploadForm({
               </AdminButton>
             )}
             <AdminButton type="submit" color="brand" disabled={!ready}>
-              {saving ? 'Adding…' : 'Add to gallery'}
+              {!saving
+                ? 'Add to gallery'
+                : progress !== null && progress < 1
+                  ? `Uploading ${Math.round(progress * 100)}%`
+                  : 'Adding…'}
             </AdminButton>
           </div>
         </div>

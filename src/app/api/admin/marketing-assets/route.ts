@@ -25,7 +25,6 @@ import {
   MARKETING_ASSET_VIDEO_TYPE_REFUSAL,
 } from '@/lib/marketing-asset/motion-type'
 import {
-  VIDEO_UPLOAD_DEADLINE_MS,
   discardBlob,
   moveAudioBlobToSanity,
   moveBlobToSanity,
@@ -52,7 +51,7 @@ import { getCurrentDateTime } from '@/lib/time'
 /**
  * Set explicitly (§4.1): the streamed move of a 100 MB video, with its poster,
  * the gallery write and the answer. An image's move keeps its own 45 s
- * deadline; a video's is {@link VIDEO_UPLOAD_DEADLINE_MS}, inside this.
+ * deadline; a video’s is `VIDEO_UPLOAD_DEADLINE_MS` (move.ts), inside this.
  */
 export const maxDuration = 300
 
