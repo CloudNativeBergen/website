@@ -304,7 +304,11 @@ export function ConnectedVariantEditor({
       id: asset._id,
       title: asset.title,
       alt: asset.alt ?? '',
-      thumbnailSrc: asset.assetId ? richTextImageUrl(asset.assetId, 300) : null,
+      // A video has no image of its own: its poster stands in.
+      thumbnailSrc:
+        (asset.assetId ?? asset.posterAssetId)
+          ? richTextImageUrl((asset.assetId ?? asset.posterAssetId)!, 300)
+          : null,
       attachable: asset.attachable,
       context: assetContext(asset),
     }),

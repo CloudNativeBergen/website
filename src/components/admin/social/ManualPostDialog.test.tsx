@@ -46,6 +46,10 @@ vi.mock('@/lib/trpc/client', () => ({
         }),
       },
     },
+    // The manual view's GIFs and videos (#1167): none in these tests.
+    marketingAsset: {
+      forPost: { useQuery: () => ({ data: [], error: null }) },
+    },
   },
 }))
 vi.mock('@/components/admin/NotificationProvider', () => ({

@@ -957,6 +957,32 @@ describe('GIFs and videos (#1167)', () => {
     expect(await readMarketingAssetGif('org-b', 'wave')).toBeNull()
   })
 
+  it('reads neither as attachable when a post takes it, whatever its bytes', async () => {
+    expect(await readMarketingAssetForPost('org-a', 'clip')).toMatchObject({
+      imageAssetId: null,
+      attachable: false,
+    })
+    expect(await readMarketingAssetForPost('org-a', 'wave')).toMatchObject({
+      imageAssetId: 'image-wave-480x480-gif',
+      attachable: false,
+    })
+    // Refused by its KIND, even were its asset id and type to say "still".
+    h.dataset.push({
+      _id: 'image-still-1x1-png',
+      _type: 'sanity.imageAsset',
+      mimeType: 'image/png',
+    })
+    h.dataset.push(
+      asset('odd-gif', 'org-a', {
+        kind: 'gif',
+        image: { _type: 'image', asset: ref('image-still-1x1-png') },
+      }),
+    )
+    expect(await readMarketingAssetForPost('org-a', 'odd-gif')).toMatchObject({
+      attachable: false,
+    })
+  })
+
   it('offers both in the post picker, marked not attachable', async () => {
     h.dataset.push({
       _id: 'post-1',
