@@ -603,6 +603,89 @@ describe('speaker erasure scrubs post variants (#1232)', () => {
     })
   })
 
+  describe('review round 3 (Codex)', () => {
+    it('finds her handle typed in an unposted body in ANY tenant, with no record', async () => {
+      h.dataset.push(
+        variant('var-foreign', 'draft', 'Meet "@ada.bsky.social" today', {
+          conference: ref('conf-x'),
+          mentions: [],
+        }),
+      )
+      const result = await eraseSpeakerInPlace({
+        speakerId: ADA,
+        actor: 'test',
+      })
+      expect(doc('var-foreign').body).toBe('Meet "a speaker" today')
+      expect(result.verification?.clean).toBe(true)
+    })
+
+    it('treats ordinary punctuation outside a link as a boundary', async () => {
+      h.dataset.push(
+        variant('var-colon', 'draft', 'Speaker:Ada Lovelace #Ada Lovelace', {
+          mentions: [],
+        }),
+      )
+      await eraseSpeakerInPlace({ speakerId: ADA, actor: 'test' })
+      expect(doc('var-colon').body).toBe('Speaker:a speaker #a speaker')
+    })
+
+    it('follows a bridge record inside a variant that also references her', async () => {
+      h.dataset.push(
+        variant('var-bridge', 'published', 'x', {
+          conference: ref('conf-x'),
+          mentions: [
+            adaTag(),
+            mention('m-bridge', 'spk-gone', 'ada.alias', 'X', ADA_DID),
+          ],
+        }),
+        variant('var-alias-only', 'draft', 'Hi @ada.alias', {
+          conference: ref('conf-x'),
+          mentions: [mention('m-a', 'spk-gone-2', 'ada.alias', 'Y')],
+        }),
+      )
+      const result = await eraseSpeakerInPlace({
+        speakerId: ADA,
+        actor: 'test',
+      })
+      expect(doc('var-alias-only').body).toBe('Hi a speaker')
+      expect(doc('var-alias-only').mentions).toEqual([])
+      expect(result.verification?.clean).toBe(true)
+    })
+
+    it('leaves unrelated non-NFC text byte for byte while scrubbing the name', async () => {
+      const body = 'Ada Lovelace and https://example.test/e\u0301 ok'
+      h.dataset.push(variant('var-nfd-url', 'draft', body, { mentions: [] }))
+      await eraseSpeakerInPlace({ speakerId: ADA, actor: 'test' })
+      expect(doc('var-nfd-url').body).toBe(
+        'a speaker and https://example.test/e\u0301 ok',
+      )
+    })
+
+    it('gives an unposted variant a neutral override where it would publish the post’s own alt naming her', async () => {
+      doc('post-1').attachments = [
+        { _key: 'att-1', alt: 'Ada Lovelace on stage' },
+        { _key: 'att-2', alt: 'The venue' },
+      ]
+      doc('var-scheduled').attachments = [
+        { _key: 'va-1', source: 'att-1' },
+        { _key: 'va-2', source: 'att-2' },
+      ]
+      doc('var-published').attachments = [{ _key: 'vp-1', source: 'att-1' }]
+      const result = await eraseSpeakerInPlace({
+        speakerId: ADA,
+        actor: 'test',
+      })
+      expect(doc('var-scheduled').attachments).toEqual([
+        { _key: 'va-1', source: 'att-1', altOverride: 'a speaker on stage' },
+        { _key: 'va-2', source: 'att-2' },
+      ])
+      expect(doc('var-published').attachments).toEqual([
+        { _key: 'vp-1', source: 'att-1' },
+      ])
+      expect(result.verification?.clean).toBe(true)
+    })
+  })
+
   it('REFUSES, writing nothing, while a variant naming her is being published', async () => {
     h.dataset.push(variant('var-in-flight', 'publishing', TAGGED))
     const before = structuredClone(h.dataset)

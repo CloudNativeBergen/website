@@ -192,7 +192,9 @@ const escape = (w: string) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 /**
  * Any of the names as whole words, any case, across any run of whitespace —
  * longest first. Not inside a longer word, and not part of a handle or a
- * domain ("Ada" is not in "@ada-l.dev"). Null when there is no name.
+ * domain ("Ada" is not in "@ada-l.dev"); a URL is excluded whole by
+ * {@link nameSpans}, so other punctuation ("Speaker:Ada") is a boundary.
+ * Null when there is no name.
  */
 function namePattern(names: readonly string[]): RegExp | null {
   if (names.length === 0) return null
@@ -200,7 +202,7 @@ function namePattern(names: readonly string[]): RegExp | null {
     .sort((a, b) => b.length - a.length)
     .map((n) => n.trim().split(/\s+/).map(escape).join('\\s+'))
   return new RegExp(
-    `(?<![\\p{L}\\p{N}_@./=#?&:-])(?:${alternatives.join('|')})(?![\\p{L}\\p{N}_]|[.@/-][\\p{L}\\p{N}_])`,
+    `(?<![\\p{L}\\p{N}_@./-])(?:${alternatives.join('|')})(?![\\p{L}\\p{N}_]|[.@/-][\\p{L}\\p{N}_])`,
     'giu',
   )
 }
@@ -314,6 +316,26 @@ function subjectSpans(
   return [...handles, ...names].sort((a, b) => a[0] - b[0])
 }
 
+const graphemes = new Intl.Segmenter(undefined, { granularity: 'grapheme' })
+
+/**
+ * The text's NFC form, and where each of its offsets falls in the ORIGINAL:
+ * built grapheme by grapheme (a cluster normalises on its own), so a span
+ * found in the NFC form can be replaced in the original and nothing else in
+ * it — a link with a decomposed "é", say — changes by a byte.
+ */
+function nfcWithMap(text: string): { nfc: string; toOriginal: number[] } {
+  let nfc = ''
+  const toOriginal: number[] = []
+  for (const { segment, index } of graphemes.segment(text)) {
+    const n = segment.normalize('NFC')
+    for (let i = 0; i < n.length; i++) toOriginal.push(index)
+    nfc += n
+  }
+  toOriginal.push(text.length)
+  return { nfc, toOriginal }
+}
+
 /**
  * The text with every span naming the subject replaced by the neutral words,
  * or the text as it was when nothing names them.
@@ -325,17 +347,40 @@ function scrubText(
   identity: MentionIdentity,
   byName: boolean,
 ): string {
-  const nfc = text.normalize('NFC')
+  const { nfc, toOriginal } = nfcWithMap(text)
   const spans = subjectSpans(nfc, v, speakerId, identity, byName)
   if (spans.length === 0) return text
-  let out = nfc
+  let out = text
   let end = Infinity
   for (const [a, b] of spans.reverse()) {
     if (b > end) continue // overlapping: the earlier span already covers it
-    out = `${out.slice(0, a)}${GONE_SPEAKER_TEXT}${out.slice(b)}`
+    const [from, to] = [toOriginal[a], toOriginal[b]]
+    out = `${out.slice(0, from)}${GONE_SPEAKER_TEXT}${out.slice(to)}`
     end = a
   }
   return out
+}
+
+/**
+ * Per variant attachment, the alt text it publishes: its own override, else
+ * the post attachment's own alt (`resolvePublishMedia`).
+ */
+function effectiveAlts(v: Doc) {
+  const sourceAlts = new Map(
+    list<{ _key?: unknown; alt?: unknown }>(v.sourceAlts).map((a) => [
+      a._key,
+      str(a.alt),
+    ]),
+  )
+  return list<AttachmentEntry & { source?: unknown }>(v.attachments).map(
+    (a) => {
+      const own = str(a.altOverride)
+      return {
+        key: str(a._key),
+        alt: own ?? sourceAlts.get(a.source) ?? null,
+      }
+    },
+  )
 }
 
 /** A variant searched for the plain name: in scope, or holding their record. */
@@ -392,12 +437,12 @@ export function planSpeakerMentionErasure(
         const scrubbed = scrubText(body, v, speakerId, identity, named)
         if (scrubbed !== body) set.body = scrubbed
       }
-      for (const a of list<AttachmentEntry>(v.attachments)) {
-        const alt = str(a.altOverride)
+      // The override is set even where only the POST's alt names them: that
+      // is what this variant would publish, and the post is not scanned.
+      for (const { key, alt } of effectiveAlts(v)) {
         if (alt === null) continue
         const scrubbed = scrubText(alt, v, speakerId, identity, named)
         if (scrubbed === alt) continue
-        const key = str(a._key)
         if (key && SAFE_KEY.test(key))
           set[`attachments[_key=="${key}"].altOverride`] = scrubbed
         else unaddressable.push('attachments')
@@ -481,15 +526,14 @@ export function residualMentionVariants(
     })
     const inText =
       !isPosted(v) &&
-      (holds(v.body) ||
-        list<AttachmentEntry>(v.attachments).some((a) => holds(a.altOverride)))
+      (holds(v.body) || effectiveAlts(v).some((a) => holds(a.alt)))
     if (recorded || inText) ids.add(v._id)
   }
   return [...ids]
 }
 
 // `otherLive`: see `MentionEntry`. Every read below passes `$speakerId`.
-const VARIANT_FIELDS = groq`{ _id, _type, _rev, status, body, attachments, conference, "mentions": mentions[]{ ..., "otherLive": defined(speaker._ref) && speaker._ref != $speakerId && defined(speaker->_id) && !defined(speaker->erasedAt) } }`
+const VARIANT_FIELDS = groq`{ _id, _type, _rev, status, body, attachments, conference, "sourceAlts": post->attachments[]{ _key, alt }, "mentions": mentions[]{ ..., "otherLive": defined(speaker._ref) && speaker._ref != $speakerId && defined(speaker->_id) && !defined(speaker->erasedAt) } }`
 
 /**
  * The reads: variants recording the subject by reference, then (knowing
@@ -522,11 +566,22 @@ export async function fetchSpeakerMentionInputs(
       { speakerId },
       opts,
     )) ?? []
-  let identity = mentionIdentity(speakerId, byRef, {
+  // To a fixed point over this batch too: a record here may carry an alias
+  // only another record here — found by that alias — ties to them, and the
+  // account read below never returns these variants again.
+  let identity: MentionIdentity = {
     names: [...(currentName ? [currentName] : []), ...(prior.names ?? [])],
     handles: prior.handles ?? [],
     dids: prior.dids ?? [],
-  })
+  }
+  for (;;) {
+    const grown = mentionIdentity(speakerId, byRef, identity)
+    const growing =
+      grown.handles.length > identity.handles.length ||
+      grown.dids.length > identity.dids.length
+    identity = grown
+    if (!growing) break
+  }
 
   const orgIds = list<{ _ref?: unknown }>(organizations)
     .map((r) => str(r._ref))
@@ -551,28 +606,45 @@ export async function fetchSpeakerMentionInputs(
     ...new Set([...(orgConferences ?? []), ...(talkConferences ?? [])]),
   ].filter((id) => typeof id === 'string')
 
-  const readByAccountOrScope = async (known: MentionIdentity) =>
-    (await client.fetch<Doc[]>(
-      // groq-global: the same account recorded under another reference is
-      // found in every tenant, like the reference read above; the plain-name
-      // candidates are only the unposted variants of the conferences above.
-      groq`*[_type == "socialPostVariant" && !references($speakerId) && (
+  const readByAccountOrScope = async (known: MentionIdentity) => {
+    // One `match` per handle, OR-ed (an array on the right of `match` means
+    // ALL of it): a COARSE full-text prefilter for a handle typed with no
+    // record — the planner decides on the exact text. Parameters only.
+    const typed = known.handles.map((_, i) => `$h${i}`)
+    const typedFilter =
+      typed.length === 0
+        ? 'false'
+        : typed
+            .map(
+              (h) => `body match ${h} || attachments[].altOverride match ${h}`,
+            )
+            .join(' || ')
+    return (
+      (await client.fetch<Doc[]>(
+        // groq-global: the same account recorded under another reference —
+        // or typed with no record — is found in every tenant, like the
+        // reference read above; the plain-name candidates are only the
+        // unposted variants of the conferences above.
+        groq`*[_type == "socialPostVariant" && !references($speakerId) && (
           count(mentions[lower(handle) in $handles || did in $dids]) > 0 ||
-          (conference._ref in $conferenceIds && (
-            !(status in $posted) ||
-            _id in path("drafts.**") || _id in path("versions.**")
+          ((!(status in $posted) ||
+            _id in path("drafts.**") || _id in path("versions.**")) && (
+            conference._ref in $conferenceIds || ${typedFilter}
           ))
         )]${VARIANT_FIELDS}`,
-      {
-        speakerId,
-        // Stored handles are normalised; one kept with its `@` still counts.
-        handles: known.handles.flatMap((h) => [h, `@${h}`]),
-        dids: known.dids,
-        conferenceIds,
-        posted: [...POSTED_VARIANT_STATUSES],
-      },
-      opts,
-    )) ?? []
+        {
+          speakerId,
+          // Stored handles are normalised; one kept with its `@` still counts.
+          handles: known.handles.flatMap((h) => [h, `@${h}`]),
+          dids: known.dids,
+          conferenceIds,
+          posted: [...POSTED_VARIANT_STATUSES],
+          ...Object.fromEntries(known.handles.map((h, i) => [`h${i}`, h])),
+        },
+        opts,
+      )) ?? []
+    )
+  }
 
   // A record found by their account may carry another handle or DID of
   // theirs, which finds more: read to a FIXED POINT. Each round must grow
