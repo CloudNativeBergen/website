@@ -425,6 +425,24 @@ describe('copyPlan — Tasks', () => {
     )
   })
 
+  it('finds the source short URL on a domain the source edition has since dropped (review P1)', () => {
+    const plan = copy(
+      lastYearSource((seed) => {
+        const t = seed.tasks.find((x) => x.key === 'cfpOpen:bluesky')!
+        t.copyEdited = true
+        const v = seed.variants.find((x) => x._id === t.variantId)!
+        // Resolved while an older primary domain was first in `domains[]`.
+        v.body = `Old host: https://cnb-old.example/go/${v.shortCode} #CNB`
+      }),
+    )
+    const variant = plan.variants.find(
+      (v) => v._id === task(plan, 'cfpOpen:bluesky').variantId,
+    )!
+    expect(variant.body).toBe(
+      `Old host: https://2027.cloudnativebergen.dev/go/${variant.shortCode} #CNB`,
+    )
+  })
+
   it("points edited copy that still holds last year's LONG link at the new short link", () => {
     const plan = copy(
       lastYearSource((seed) => {

@@ -33,7 +33,7 @@ import {
 } from './materialize'
 import { taggedUrl } from './link'
 import { isShortLinkPath } from './pages'
-import { publishLinkFields } from '@/lib/social/publish-link'
+import { publishLinkFields, shortLinkPattern } from '@/lib/social/publish-link'
 import {
   MILESTONES,
   resolveAllMilestones,
@@ -85,37 +85,37 @@ export interface CopySourceTask {
 
 /**
  * Every spelling of a source variant's link its body can hold: the short URL
- * `{url}` resolved to (short-links spec §2.3), built on the SOURCE
- * conference's origin and the source's code through the one mapping the
- * publisher uses, and the long tagged link that copy from before short links
- * carries. A reader swapping the link out of the copy replaces all of them.
+ * `{url}` resolved to (short-links spec §2.3) — matched by its code on ANY
+ * host, since the source's primary domain may have changed since — and the
+ * long tagged link that copy from before short links carries. A reader
+ * swapping the link out of the copy replaces all of them.
  */
-export function sourceLinks(
-  variant: { link: string | null; shortCode: string | null },
-  sourceShortLinkOrigin: string | null,
-): string[] {
-  const posted = publishLinkFields(variant, sourceShortLinkOrigin).link
-  return [...new Set([posted, variant.link])].filter(
-    (link): link is string => !!link,
-  )
+export function sourceLinks(variant: {
+  link: string | null
+  shortCode: string | null
+}): (string | RegExp)[] {
+  const short = shortLinkPattern(variant.shortCode)
+  return [...(short ? [short] : []), ...(variant.link ? [variant.link] : [])]
 }
 
 /** `body` with every occurrence of each of `links` swapped for `replacement`. */
 export function replaceLinks(
   body: string,
-  links: readonly string[],
+  links: readonly (string | RegExp)[],
   replacement: string,
 ): string {
-  return links.reduce((text, link) => text.split(link).join(replacement), body)
+  return links.reduce<string>(
+    (text, link) =>
+      typeof link === 'string'
+        ? text.split(link).join(replacement)
+        : text.replace(link, () => replacement),
+    body,
+  )
 }
 
 export interface CopySource {
   plan: { _id: string }
-  conference: MilestoneSource &
-    ConferenceValuesSource & {
-      /** The SOURCE edition's short-link origin (`findOutboundOrigin`). */
-      shortLinkOrigin: string | null
-    }
+  conference: MilestoneSource & ConferenceValuesSource
   campaigns: Omit<
     SeedCampaign,
     | 'planId'
@@ -472,11 +472,7 @@ export function copyPlan(input: CopyInput): SeedPlan {
       // skeleton to write it again from — points at the NEW edition's link:
       // the source's short URL would tie two editions to one code.
       if (v && (edited || !storedRecipe?.skeleton)) {
-        body = replaceLinks(
-          v.body,
-          sourceLinks(v, source.conference.shortLinkOrigin),
-          posted,
-        )
+        body = replaceLinks(v.body, sourceLinks(v), posted)
       } else if (!storedRecipe?.skeleton) {
         body = ''
       }

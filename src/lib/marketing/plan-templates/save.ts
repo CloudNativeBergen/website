@@ -87,13 +87,10 @@ const anchorOf = (
  * URL `{url}` resolved to (short-links spec §2.3) and the long tagged link
  * older copy carries.
  */
-function literalCopy(
-  task: CopySourceTask,
-  shortLinkOrigin: string | null,
-): string {
+function literalCopy(task: CopySourceTask): string {
   const v = task.variant
   if (!v) return ''
-  return replaceLinks(v.body, sourceLinks(v, shortLinkOrigin), '{url}')
+  return replaceLinks(v.body, sourceLinks(v), '{url}')
 }
 
 /**
@@ -107,7 +104,7 @@ const carriesLiteralCopy = (
   stored?: TaskRecipe,
 ) =>
   task.kind === 'publishing' &&
-  literalCopy(task, source.conference.shortLinkOrigin) !== '' &&
+  literalCopy(task) !== '' &&
   (!stored?.skeleton || stored.verbatim || isEdited(task, stored.skeleton))
 
 /** Exactly the Tasks that need a decision before the plan is saved (§6.2). */
@@ -137,7 +134,7 @@ export function savePreview(source: SaveSource): ReviewItem[] {
               {
                 ...about,
                 type: 'copy' as const,
-                text: literalCopy(task, source.conference.shortLinkOrigin),
+                text: literalCopy(task),
               },
             ]
           : []),
@@ -196,7 +193,7 @@ export function buildTemplate(
       const literal = carriesLiteralCopy(task, source, stored)
       const rewritten = decisions.copy?.[task._id]
       const skeleton = literal
-        ? (rewritten ?? literalCopy(task, source.conference.shortLinkOrigin))
+        ? (rewritten ?? literalCopy(task))
         : stored?.skeleton
       const alt =
         task.alt !== null && !isTemplateText(task.alt, stored?.alt)
@@ -223,8 +220,7 @@ export function buildTemplate(
         ...(skeleton ? { skeleton } : {}),
         ...(literal &&
         (rewritten === undefined ||
-          rewritten.trim() ===
-            literalCopy(task, source.conference.shortLinkOrigin).trim())
+          rewritten.trim() === literalCopy(task).trim())
           ? { verbatim: true }
           : {}),
         ...(alt ? { alt } : {}),

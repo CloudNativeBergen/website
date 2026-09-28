@@ -24,6 +24,7 @@ import {
   ownDomainUrlsIn,
 } from '@/lib/social/provider/constraints'
 import { postUrlExample, postUrlIssue } from '@/lib/social/provider/manual'
+import { shortLinkPattern } from '@/lib/social/publish-link'
 import { renditionDownloadUrl, renditionRect } from '@/lib/social/rendition'
 import {
   SOCIAL_PLATFORM_LABELS,
@@ -159,10 +160,14 @@ export function ManualPostView({
   // Copy resolved `{url}` to the short link; copy from before short links
   // carries the long one. Either is the link already in the text.
   const longLink = variant.link?.trim() || null
+  // The short URL is matched by its code on any host: the body may hold it
+  // on a primary domain the conference has since changed.
+  const shortInBody = shortLinkPattern(variant.shortCode)
   const linkAppended =
     linkInBody &&
     !body.includes(link) &&
-    !(longLink !== null && body.includes(longLink))
+    !(longLink !== null && body.includes(longLink)) &&
+    !(shortInBody !== null && body.search(shortInBody) !== -1)
   /**
    * A body that reached this view carrying a link to our own site, on a
    * platform where the link is the first comment (spec §3.1, #1134). Save,
@@ -427,6 +432,14 @@ export function ManualPostView({
             {link}
             <ArrowTopRightOnSquareIcon className="size-3.5 shrink-0" />
           </a>
+          {longLink && longLink !== link && (
+            <p className="mt-1 text-xs break-all text-gray-600 dark:text-gray-300">
+              <span className="font-medium">Goes to </span>
+              <span data-testid="manual-link-destination" className="font-mono">
+                {longLink}
+              </span>
+            </p>
+          )}
         </Section>
       )}
 

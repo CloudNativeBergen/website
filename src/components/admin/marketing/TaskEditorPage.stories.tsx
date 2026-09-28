@@ -295,6 +295,11 @@ export const PublishingDraftNoCodeYet: Story = {
     const canvas = within(canvasElement)
     await expect(await canvas.findByText('Tagged link')).toBeVisible()
     await expect(canvas.queryByTestId('link-destination')).toBeNull()
+    // The Link field below is the long fallback, and says so (review P2).
+    await expect(
+      canvas.getByText(/derived from the target page/i),
+    ).toBeVisible()
+    await expect(canvas.queryByText(/short link; it goes to/i)).toBeNull()
   },
 }
 

@@ -358,6 +358,18 @@ describe('savePreview — exactly the Tasks that need a decision', () => {
       text: 'CFP opens 12 January 2026! {url}',
     })
   })
+  it('turns a short link minted on a since-dropped domain back into {url} (review P1)', () => {
+    const source = seeded((seed) => {
+      const t = seed.tasks.find((t) => t.key === 'cfpOpen:bluesky')!
+      t.copyEdited = true
+      const v = seed.variants.find((v) => v._id === t.variantId)!
+      v.body = `CFP opens 12 January 2026! https://cnb-old.example/go/${v.shortCode}`
+    })
+    expect(savePreview(source)[0]).toMatchObject({
+      type: 'copy',
+      text: 'CFP opens 12 January 2026! {url}',
+    })
+  })
   it('lists a Task carrying literal copy with its link as {url}, saved verbatim and flagged unless rewritten', () => {
     const source = seeded((seed) => {
       const t = seed.tasks.find((t) => t.key === 'cfpOpen:bluesky')!

@@ -1,4 +1,3 @@
-import { findOutboundOrigin } from '@/lib/conference/baseUrl'
 import { clientReadUncached } from '@/lib/sanity/client'
 import { scopedFetch } from '@/lib/sanity/scoped'
 import type { CopySource, CopySourceTask } from './copy'
@@ -97,11 +96,7 @@ interface RawSource {
   _id: string
   deletingAt?: string | null
   conference:
-    | (Omit<CopySource['conference'], 'shortLinkOrigin'> & {
-        ticketCapacity?: number | null
-        domains?: string[] | null
-      })
-    | null
+    (CopySource['conference'] & { ticketCapacity?: number | null }) | null
   campaigns:
     | {
         _id: string
@@ -175,7 +170,7 @@ export async function readPlanSource(
         title, city, venueName, ticketCapacity, startDate, endDate,
         cfpStartDate, cfpEndDate, cfpNotifyDate, programDate,
         earlyBirdEndDate, registrationCloseDate, speakersAnnouncedDate,
-        sponsorDeadlineDate, recordingsLiveDate, ticketTargets, domains
+        sponsorDeadlineDate, recordingsLiveDate, ticketTargets
       },
       "campaigns": *[_type == "marketingCampaign" && conference._ref == $conferenceId && plan._ref == ^._id && !(_id in path("drafts.**")) && !(_id in path("versions.**"))] | order(startDate asc){
         _id, key, title, startMilestone, startOffsetDays, endMilestone, endOffsetDays,
@@ -194,17 +189,11 @@ export async function readPlanSource(
     { cache: 'no-store' },
   )
   if (!row?.conference) return null
-  const { domains, ...conference } = row.conference
   return {
     ticketCapacity: row.conference.ticketCapacity ?? null,
     deletingAt: row.deletingAt ?? null,
     plan: { _id: row._id },
-    conference: {
-      ...conference,
-      // The SOURCE edition's own origin: its copy's `{url}` was resolved on
-      // it, so its short URL is found there (short-links spec §2.3).
-      shortLinkOrigin: findOutboundOrigin({ domains }),
-    },
+    conference: row.conference,
     campaigns: (row.campaigns ?? []).flatMap((c) =>
       c.key && c.startMilestone && c.endMilestone && c.primaryOutcome
         ? [

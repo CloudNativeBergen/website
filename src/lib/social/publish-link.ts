@@ -45,3 +45,20 @@ export function variantShortLinkOrigin(
 ): string | null {
   return normalizeShortCode(shortCode) ? findOutboundOrigin(conference) : null
 }
+
+/**
+ * A variant's `/go/<code>` short URL on ANY host, matched by its path. Copy
+ * holds the short URL `{url}` resolved to on the primary domain OF THAT DAY;
+ * a conference that has since reordered or replaced its domains builds a
+ * different origin today, and the code is what identifies the link (§2.2).
+ * `null` for a variant without a code. Global: use it with `replace`, or
+ * `search` (which ignores `lastIndex`), never with a stateful `test`.
+ */
+export function shortLinkPattern(
+  shortCode: string | null | undefined,
+): RegExp | null {
+  const code = normalizeShortCode(shortCode)
+  return code
+    ? new RegExp(`https?://[^\\s/?#]+/go/${code}(?![a-z0-9])`, 'gi')
+    : null
+}

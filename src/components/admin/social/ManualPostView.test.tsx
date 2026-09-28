@@ -99,7 +99,21 @@ describe('ManualPostView — the link a reader sees is the short link (short-lin
       screen.getByText(/^31 \/ 300 · The link is added at the end\.$/),
     ).toBeTruthy()
     expect(screen.getByRole('link', { name: SHORT })).toBeTruthy()
-    expect(screen.queryByText(LONG)).toBeNull()
+    // The long link is the destination shown under it, never the copy.
+    expect(
+      screen.getByRole('button', { name: /copy text/i }).closest('section')!
+        .textContent,
+    ).not.toContain('utm_')
+  })
+
+  it('does not append the short link when the body holds it on a since-dropped domain (review P2)', () => {
+    show('Old host: https://cnb-old.example/go/abc987')
+    expect(screen.queryByText(/The link is added at the end/)).toBeNull()
+  })
+
+  it('shows where the short link goes, under it (review P2)', () => {
+    show('Hi')
+    expect(screen.getByTestId('manual-link-destination').textContent).toBe(LONG)
   })
 
   it('does not append the short link to copy that already holds the long one', () => {

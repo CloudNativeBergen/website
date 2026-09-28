@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { publishLinkFields, variantShortLinkOrigin } from '../publish-link'
+import {
+  publishLinkFields,
+  shortLinkPattern,
+  variantShortLinkOrigin,
+} from '../publish-link'
 import { shortLinkUrl } from '@/lib/marketing/short-code'
 
 const LONG =
@@ -89,5 +93,19 @@ describe('shortLinkUrl', () => {
     expect(shortLinkUrl('https://x.dev', 'abc234')).toBe(
       'https://x.dev/go/abc234',
     )
+  })
+})
+
+describe('shortLinkPattern — the short URL on any host (review P1)', () => {
+  it('matches the code on any host, and nothing else', () => {
+    const body =
+      'a https://old.example/go/abc987 b https://new.example/go/ABC987. c https://x.example/go/abc9872 d https://x.example/go/abc986'
+    expect(body.replace(shortLinkPattern('abc987')!, () => '<url>')).toBe(
+      'a <url> b <url>. c https://x.example/go/abc9872 d https://x.example/go/abc986',
+    )
+  })
+  it('is null for a variant without a code, or a stored value that is not one', () => {
+    expect(shortLinkPattern(null)).toBeNull()
+    expect(shortLinkPattern('not a code')).toBeNull()
   })
 })

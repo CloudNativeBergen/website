@@ -860,11 +860,10 @@ function PublishingSection({
             rev: pickRev ?? task._rev,
             targetPage: derived.link ? targetPage : null,
             taggedLink: derived.link,
-            postedLink:
-              publishLinkFields(
-                { link: derived.link, shortCode: variant?.variant.shortCode },
-                data.shortLinkOrigin,
-              ).link ?? null,
+            postedLink: shortLinkOf(
+              { link: derived.link, shortCode: variant?.variant.shortCode },
+              data.shortLinkOrigin,
+            ),
           }}
           tagging={
             task.channel === 'bluesky'
@@ -967,6 +966,19 @@ function ApproveControls({
     )
   }
   return null
+}
+
+/**
+ * The short link a Task's link sits behind, or `null` when there is none — no
+ * code yet, or no short-link origin — so a long fallback is never labelled a
+ * short link. Decided by `linkDestination`, set only when shortening happened.
+ */
+function shortLinkOf(
+  variant: { link: string | null; shortCode?: string | null },
+  shortLinkOrigin: string | null,
+): string | null {
+  const fields = publishLinkFields(variant, shortLinkOrigin)
+  return fields.linkDestination ? (fields.link ?? null) : null
 }
 
 function PagePicker({

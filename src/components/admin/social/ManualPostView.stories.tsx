@@ -131,9 +131,14 @@ export const AwaitingManual: Story = {
     const linkSection = canvas
       .getByRole('button', { name: /copy link/i })
       .closest('section')
-    // The short link, never the long tagged one it expands to.
-    await expect(linkSection).toHaveTextContent(SHORT)
-    await expect(linkSection).not.toHaveTextContent('utm_content=early-bird')
+    // The short link is what is copied; the tagged link it expands to is
+    // shown under it, as context only.
+    await expect(
+      within(linkSection as HTMLElement).getByRole('link'),
+    ).toHaveTextContent(SHORT)
+    await expect(linkSection).toHaveTextContent(
+      /goes to .*utm_content=early-bird/i,
+    )
     await expect(linkSection).toHaveTextContent(/first comment/i)
     await expect(
       canvas.getByText(/add the link as the first comment/i),

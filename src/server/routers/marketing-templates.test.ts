@@ -119,7 +119,7 @@ const keynotes = BUILTIN_TEMPLATE.campaigns.filter((c) => c.key === 'keynotes')
 function source(): SaveSource {
   return {
     plan: { _id: 'marketingPlan.conf-A' },
-    conference: { ...CONFERENCE, shortLinkOrigin: 'https://x.dev' },
+    conference: CONFERENCE,
     ticketCapacity: 400,
     campaigns: [
       {
