@@ -554,15 +554,18 @@ describe('speaker erasure scrubs post variants (#1232)', () => {
     })
 
     it('matches a canonically equivalent spelling (decomposed Å)', async () => {
-      doc(ADA).name = 'Åsa Berg'
+      // Either way round: a decomposed name, a composed body — and back.
+      doc(ADA).name = 'A\u030Asa Berg'
       h.dataset.push(
         variant('var-nfd', 'draft', 'Meet A\u030Asa Berg', { mentions: [] }),
+        variant('var-nfc', 'draft', 'Meet \u00C5sa Berg', { mentions: [] }),
       )
       const result = await eraseSpeakerInPlace({
         speakerId: ADA,
         actor: 'test',
       })
       expect(doc('var-nfd').body).toBe('Meet a speaker')
+      expect(doc('var-nfc').body).toBe('Meet a speaker')
       expect(result.verification?.clean).toBe(true)
     })
 

@@ -11,11 +11,13 @@
  * point. A record of ANOTHER speaker who is still here is never theirs, even
  * on a team account the two share.
  *
- * A body NOT YET POSTED is scrubbed too: each `@handle` occurrence that stands
- * for them and each whole-word copy of their name (outside a link) becomes the
- * neutral words #1229 posts for a gone speaker ({@link GONE_SPEAKER_TEXT}),
+ * A body NOT YET POSTED is scrubbed too: their handle wherever it stands (a
+ * tag's occurrence of a SHARED account only where it is bound to them) and
+ * each whole-word copy of their name, NFC-matched and outside a link, becomes
+ * the neutral words #1229 posts for a gone speaker ({@link GONE_SPEAKER_TEXT}),
  * and so does a per-variant alt text naming them. That covers a name typed by
- * hand, which no record links to them (the owner's comment on #1232).
+ * hand, which no record links to them (the owner's comment on #1232). The name
+ * is looked for only in scope (below) or where a record of theirs is.
  *
  * STATUS DECIDES THE BODY — of the LIVE document. A Studio draft or a Content
  * Release copy was never sent anywhere, whatever status it copied, so it is

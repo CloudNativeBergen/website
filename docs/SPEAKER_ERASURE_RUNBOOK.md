@@ -224,30 +224,39 @@ the Bluesky handle, the DID and the speaker's **name**. The transaction removes
 every record of the person from every `socialPostVariant`, drafts and Content
 Release versions included: found by the reference in **any** tenant, and by a
 handle or DID one of their records carries (the same account recorded under
-another reference is still theirs).
+another reference is still theirs), followed until nothing new turns up. If
+their accounts keep chaining past 20 rounds the run refuses, writing nothing:
+look at the mentions recorded for them by hand.
 
-A body **not yet posted** (`draft`, `scheduled`, `awaiting-manual`, `failed`)
-loses their `@handle` and every whole-word copy of their name — and of the
-spellings their records stored — in any case and across any whitespace, but
-never inside a handle, domain or URL. A variant's own alt text is scrubbed the
-same way: each becomes **"a speaker"**, the words the
-publisher already posts for a gone speaker. The name is looked for in the open
-variants of every conference of the person's organizations and of every
-conference they have a talk at — not across other tenants, where the same name
-is a stranger.
+A body **not yet posted** — `draft`, `scheduled`, `awaiting-manual`, `failed`,
+and every Studio draft or release copy whatever status it copied — loses their
+handle wherever it stands (a tag, in quotes, in a profile link) and every
+whole-word copy of their name and of the spellings their records stored: any
+case, any whitespace, composed or decomposed letters, but never inside another
+handle, a domain or a URL. A variant's own alt text is scrubbed the same way.
+Each becomes **"a speaker"**, the words the publisher already posts for a gone
+speaker. The name is looked for in the variants of every conference of the
+person's organizations and of every conference they have a talk at, and in any
+variant holding a record of theirs — not across other tenants, where the same
+name is a stranger.
 
 - A **co-speaker who shares a team account** with them keeps their own record
-  and their own occurrence of the tag.
+  and their own occurrence of the tag, and a variant reached only through that
+  shared account is not searched for the name.
 - A **namesake** inside that scope — another person with exactly the same name
   — is neutralised too: the tool cannot tell two people apart by name. The dry
   run lists each variant it rewrites; read them.
 - A **posted** body (`published`, `submitted`) is left as it went out. It is on
   the platform already, and deleting the post there is outside this tool. Its
   records are still removed.
-- `--verify` counts a variant still holding them as `postVariants`. The commit's
-  own verification checks the name, handles and DIDs it read before the
-  erasure; a standalone `--verify` has only the reference (the name is the
-  placeholder by then and the records are gone), like the email-keyed counts.
+- A variant **saved while the erasure ran** can carry them again. The commit's
+  verification finds it with the name, handles and DIDs read before the
+  erasure — the last moment those are known — and repairs it once, then
+  verifies again. Anything left (a variant in flight) is reported.
+- `--verify` counts a variant still holding them as `postVariants`. A
+  standalone `--verify` has only the reference (the name is the placeholder by
+  then and the records are gone), like the email-keyed counts. File the
+  verification the commit printed.
 
 ### 4. Invalidate caches
 

@@ -769,11 +769,9 @@ describe('approvalCheck (§4.4 Approval)', () => {
   })
 
   it('a gone speaker (read as the neutral words, #1232): the issue names nobody, and the fix puts in the neutral words', () => {
-    const gone: MentionRecord = {
-      ...tagged(alice, DID_A),
-      name: GONE_SPEAKER_TEXT,
-      gone: true,
-    }
+    // The MARKER decides, not the name: even a record still carrying one
+    // shows none.
+    const gone: MentionRecord = { ...tagged(alice, DID_A), gone: true }
     const body = 'Hear @alice.dev today'
     const out = approvalCheck({
       body,
