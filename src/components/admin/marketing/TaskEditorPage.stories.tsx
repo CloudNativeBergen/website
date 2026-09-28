@@ -486,6 +486,25 @@ export const PublishingFailedAtBuffer: Story = {
   },
 }
 
+/**
+ * Unsaved edits on a failed post: the copy-ready view reloads the SAVED
+ * variant, so the way there is withheld until the edits are saved (bot
+ * review, #1130) — as Retry already is.
+ */
+export const PublishingFailedAtBufferEdited: Story = {
+  ...PublishingFailedAtBuffer,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const body = await canvas.findByLabelText(/^body/i)
+    await userEvent.type(body, ' Edited.')
+    const notice = (
+      await canvas.findByText(/Buffer reported an error on this post/i)
+    ).closest('[role="alert"]') as HTMLElement
+    await waitFor(() => expect(within(notice).queryByRole('link')).toBeNull())
+    await expect(notice).toHaveTextContent(/save your changes first/)
+  },
+}
+
 export const PublishingFailedAtBufferDark: Story = {
   ...PublishingFailedAtBuffer,
   parameters: {

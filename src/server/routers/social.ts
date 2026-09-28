@@ -1,10 +1,5 @@
 import { TRPCError } from '@trpc/server'
-import {
-  adminProcedure,
-  resolveConferenceId,
-  resolveOrganizationId,
-  router,
-} from '@/server/trpc'
+import { adminProcedure, resolveConferenceId, router } from '@/server/trpc'
 import {
   notFoundMessage,
   requireDocumentInCurrentConference,
@@ -351,15 +346,16 @@ export const socialRouter = router({
    * An organization that cannot be resolved is refused rather than shown as
    * "manual", which would be a claim about a connection nobody looked up.
    */
-  connections: adminProcedure.query(async () => {
-    const orgId = await resolveOrganizationId()
-    if (!orgId) {
+  connections: adminProcedure.query(async ({ ctx }) => {
+    // THE org the authz waist gated on, never a second resolution that could
+    // answer differently between the two reads.
+    if (!ctx.orgId) {
       throw new TRPCError({
         code: 'NOT_FOUND',
         message: 'Could not resolve the organization from the domain',
       })
     }
-    return resolveSocialConnections(orgId)
+    return resolveSocialConnections(ctx.orgId)
   }),
 
   listVariants: adminProcedure.query(async () => {

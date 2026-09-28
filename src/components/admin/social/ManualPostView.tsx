@@ -251,6 +251,10 @@ export function ManualPostView({
               'Only post it by hand if it is NOT there',
             ]
           : [
+              // Buffer may still post it on its own (#1130): look first.
+              failure?.afterAccept
+                ? `Check ${platform} and Buffer’s queue first`
+                : null,
               'Copy the text',
               link && !linkInBody && !linkAsComment ? 'Copy the link' : null,
               images.length > 0 ? 'Save the image' : null,

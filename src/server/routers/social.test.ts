@@ -1006,6 +1006,26 @@ describe('social.connections (#1130)', () => {
     secretsStore.resolveTenantSecrets.mockResolvedValue(null)
   })
 
+  it('reads the org the authz waist GATED on, never a second resolution', async () => {
+    // The domain answers A for the waist, then B: a handler that resolved the
+    // org again would read B's connection state for a caller authorized on A.
+    h.getConference
+      .mockResolvedValueOnce({
+        conference: { _id: CONF_A, organization: { _ref: ORG_A } },
+        domain: 'localhost',
+        error: null,
+      })
+      .mockResolvedValue({
+        conference: { _id: CONF_B, organization: { _ref: 'org-B' } },
+        domain: 'localhost',
+        error: null,
+      })
+    await social().connections()
+    expect(
+      new Set(secretsStore.resolveTenantSecrets.mock.calls.map(([o]) => o)),
+    ).toEqual(new Set([ORG_A]))
+  })
+
   it('refuses rather than claiming manual when the organization is unresolvable', async () => {
     h.getConference.mockResolvedValue({
       conference: { _id: CONF_A, organization: null },

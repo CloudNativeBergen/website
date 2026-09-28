@@ -761,6 +761,19 @@ function PublishingSection({
   const v = variant.variant
   const platform = SOCIAL_PLATFORM_LABELS[v.platform]
   const failure = failureNotice(v)
+  // The copy-ready view reloads the SAVED variant: leaving for it with
+  // unsaved edits would drop them and offer stale copy as ready to post.
+  const toManualView = (label: string) =>
+    dirty ? (
+      <span>{label} (save your changes first)</span>
+    ) : (
+      <Link
+        href={manualPostPath(v._id)}
+        className="font-medium underline underline-offset-2"
+      >
+        {label}
+      </Link>
+    )
 
   if (v.status === 'awaiting-manual') {
     return (
@@ -867,13 +880,7 @@ function PublishingSection({
           </strong>{' '}
           We could not confirm whether it went out. Check {platform} before
           retrying — retrying publishes a second post. If it is already there,{' '}
-          <Link
-            href={manualPostPath(v._id)}
-            className="font-medium underline underline-offset-2"
-          >
-            record it instead
-          </Link>
-          .
+          {toManualView('record it instead')}.
         </p>
       )}
       {/*
@@ -889,17 +896,7 @@ function PublishingSection({
             notice={failure}
             platform={platform}
             retry="retry"
-            manual={
-              <>
-                <Link
-                  href={manualPostPath(v._id)}
-                  className="font-medium underline underline-offset-2"
-                >
-                  post it by hand
-                </Link>{' '}
-                and record it
-              </>
-            }
+            manual={<>{toManualView('post it by hand')} and record it</>}
           />
         </div>
       )}
