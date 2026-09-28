@@ -1,10 +1,13 @@
 /**
  * @vitest-environment node
  *
- * The move against the REAL `@sanity/client` and a local HTTP server standing
- * in for Sanity's asset endpoint. The unit tests mock the client; this is the
- * evidence for what they assume of it: that the body really streams, and that
- * a body which fails mid-upload ABORTS the request instead of hanging it.
+ * The move against a local HTTP server standing in for Sanity's asset
+ * endpoint, through the REAL upload (`./sanity-upload`: our own `fetch`, with
+ * the real client only building the URL). The unit tests fake the upload;
+ * this is the evidence for what they assume of it: that the body really
+ * streams — backpressure from a server that stops reading reaches the blob —
+ * and that a body which fails mid-upload ABORTS the request instead of
+ * hanging it.
  */
 import http from 'node:http'
 import type { AddressInfo } from 'node:net'
@@ -54,6 +57,11 @@ let seen: Seen[] = []
 /** The request path of each upload: `/…/assets/images/…` or `/…/files/…`. */
 let paths: string[] = []
 let server: http.Server
+/** A server that stops reading, to prove the move waits for it. */
+const stall: { on: boolean; release: () => void } = {
+  on: false,
+  release: () => {},
+}
 
 beforeAll(async () => {
   server = http.createServer((req, res) => {
@@ -66,6 +74,12 @@ beforeAll(async () => {
     seen.push(record)
     paths.push(req.url ?? '')
     req.on('data', (chunk: Buffer) => (record.bytes += chunk.length))
+    // Sanity stops reading until the test lets it go on. After the `data`
+    // listener, which would otherwise set the request flowing again.
+    if (stall.on) {
+      req.pause()
+      stall.release = () => req.resume()
+    }
     req.on('close', () => {
       if (!req.complete) record.aborted = true
     })
@@ -99,6 +113,19 @@ beforeAll(async () => {
 afterAll(() => new Promise<void>((resolve) => server.close(() => resolve())))
 
 const HOST = 'abcstore123.public.blob.vercel-storage.com'
+
+/**
+ * The blob's `fetch` answered by the test; every other request — the upload
+ * to the local "Sanity" — goes out for real.
+ */
+const realFetch = globalThis.fetch
+function blobFetch(answer: () => Promise<Response>) {
+  return vi.fn((input: RequestInfo | URL, init?: RequestInit) =>
+    new URL(String(input)).hostname === HOST
+      ? answer()
+      : realFetch(input, init),
+  )
+}
 const URL_OK = `https://${HOST}/marketing-asset/org-A/1790000000000-logo-X1.png`
 const CHUNK = 256 * 1024
 
@@ -136,7 +163,7 @@ describe('the audio move through the real Sanity client (#1178)', () => {
     const track = mp3OfSeconds(5)
     vi.stubGlobal(
       'fetch',
-      vi.fn(async () => new Response(new Uint8Array(track))),
+      blobFetch(async () => new Response(new Uint8Array(track))),
     )
     const result = await moveAudioBlobToSanity(
       URL_OK.replace('logo-X1.png', 'theme-X1.mp3'),
@@ -160,7 +187,7 @@ describe('the move through the real Sanity client', () => {
   it('streams the whole blob to the asset endpoint with the sniffed type', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn(async () => new Response(blobBody(2 * 1024 * 1024))),
+      blobFetch(async () => new Response(blobBody(2 * 1024 * 1024))),
     )
     const result = await moveBlobToSanity(URL_OK, 'org-A')
     expect(result).toEqual({
@@ -189,7 +216,7 @@ describe('the move through the real Sanity client', () => {
     async () => {
       vi.stubGlobal(
         'fetch',
-        vi.fn(
+        blobFetch(
           async () =>
             new Response(blobBody(MARKETING_ASSET_MAX_IMAGE_BYTES + CHUNK)),
         ),
@@ -211,30 +238,23 @@ describe('the move through the real Sanity client', () => {
   )
 })
 
-/**
- * How far the blob's reader has run ahead of what Sanity has received, at
- * most, over one move: the bytes the move holds (or that sit in socket
- * buffers). A move that read the file whole would reach the whole file
- * before Sanity saw a byte.
- */
-let maxLead = 0
+/** How many bytes of the blob the move has pulled so far. */
+let pulled = 0
 
 /**
  * A body of `total` bytes in 1 MiB chunks, each a FRESH buffer, starting with
- * `head`. Every pull records how far it is ahead of the server.
+ * `head`. Pulled only as the move asks for more.
  */
 function freshBody(total: number, head: number[]) {
   const MIB = 1024 * 1024
-  let sent = 0
-  maxLead = 0
+  pulled = 0
   return new ReadableStream<Uint8Array>({
     async pull(controller) {
       await new Promise((resolve) => setImmediate(resolve))
-      maxLead = Math.max(maxLead, sent - (seen[0]?.bytes ?? 0))
-      if (sent >= total) return controller.close()
-      const chunk = new Uint8Array(Math.min(MIB, total - sent))
-      if (sent === 0) chunk.set(head)
-      sent += chunk.length
+      if (pulled >= total) return controller.close()
+      const chunk = new Uint8Array(Math.min(MIB, total - pulled))
+      if (pulled === 0) chunk.set(head)
+      pulled += chunk.length
       controller.enqueue(chunk)
     },
   })
@@ -253,13 +273,30 @@ describe('the video move through the real Sanity client (#1167)', () => {
     async () => {
       vi.stubGlobal(
         'fetch',
-        vi.fn(
+        blobFetch(
           async () =>
             new Response(freshBody(MARKETING_ASSET_MAX_VIDEO_BYTES, MP4_HEAD)),
         ),
       )
-      const result = await moveVideoBlobToSanity(VIDEO_URL, 'org-A')
+      stall.on = true
+      const moving = moveVideoBlobToSanity(VIDEO_URL, 'org-A')
+      // Sanity has stopped reading. A streamed move stops pulling once the
+      // socket's buffers are full; one that read the file whole would pull
+      // all 100 MiB whatever Sanity does. Wait until the pulling settles.
+      await vi.waitFor(() => expect(seen).toHaveLength(1), { timeout: 10_000 })
+      let last = -1
+      while (pulled !== last) {
+        last = pulled
+        await new Promise((resolve) => setTimeout(resolve, 300))
+      }
+      const heldBack = pulled
+      stall.on = false
+      stall.release()
+      const result = await moving
       expect(result.ok).toBe(true)
+      // Backpressure reached the blob: a few MiB of socket buffer, never
+      // the file.
+      expect(heldBack).toBeLessThan(40 * 1024 * 1024)
       expect(seen).toEqual([
         {
           bytes: MARKETING_ASSET_MAX_VIDEO_BYTES,
@@ -269,10 +306,6 @@ describe('the video move through the real Sanity client (#1167)', () => {
         },
       ])
       expect(paths[0]).toMatch(/\/assets\/files\/test\?/)
-      // Streamed, not buffered: the read never ran more than a few MiB
-      // ahead of Sanity. Reading it whole would put all 100 MiB ahead.
-      expect(maxLead).toBeGreaterThan(0)
-      expect(maxLead).toBeLessThan(16 * 1024 * 1024)
     },
   )
 
@@ -282,7 +315,7 @@ describe('the video move through the real Sanity client (#1167)', () => {
     async () => {
       vi.stubGlobal(
         'fetch',
-        vi.fn(
+        blobFetch(
           async () =>
             new Response(
               freshBody(
@@ -303,7 +336,7 @@ describe('the video move through the real Sanity client (#1167)', () => {
   it('refuses a QuickTime .mov before a byte reaches Sanity', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn(async () => new Response(freshBody(4 * 1024 * 1024, MOV_HEAD))),
+      blobFetch(async () => new Response(freshBody(4 * 1024 * 1024, MOV_HEAD))),
     )
     const result = await moveVideoBlobToSanity(
       VIDEO_URL.replace('.mp4', '.mov'),
@@ -320,7 +353,7 @@ describe('the GIF move through the real Sanity client (#1167)', () => {
   it('streams a GIF to the IMAGE endpoint as image/gif', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn(async () => new Response(freshBody(3 * 1024 * 1024, GIF_HEAD))),
+      blobFetch(async () => new Response(freshBody(3 * 1024 * 1024, GIF_HEAD))),
     )
     const result = await moveGifBlobToSanity(GIF_URL, 'org-A')
     expect(result.ok).toBe(true)
@@ -338,7 +371,7 @@ describe('the GIF move through the real Sanity client (#1167)', () => {
   it('refuses a GIF over 10 MB, and a PNG sent as a GIF', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn(
+      blobFetch(
         async () =>
           new Response(
             freshBody(MARKETING_ASSET_MAX_GIF_BYTES + 1024 * 1024, GIF_HEAD),
@@ -351,7 +384,7 @@ describe('the GIF move through the real Sanity client (#1167)', () => {
     })
     vi.stubGlobal(
       'fetch',
-      vi.fn(
+      blobFetch(
         async () =>
           new Response(
             freshBody(1024, [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),

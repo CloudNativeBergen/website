@@ -1,12 +1,11 @@
 import 'server-only'
-import { Readable } from 'node:stream'
 import { abortAfter, deleteBlobWithin } from './blob-delete'
 import { after } from 'next/server'
 import type {
   SanityAssetDocument,
   SanityImageAssetDocument,
 } from '@sanity/client'
-import { clientWrite } from '@/lib/sanity/client'
+import { uploadAssetStream } from './sanity-upload'
 import { blobStoreHost, checkMarketingAssetBlobUrl } from './blob-url'
 import {
   MARKETING_ASSET_MAX_IMAGE_BYTES,
@@ -264,9 +263,7 @@ async function transferAudio(
   try {
     const asset = await uploadAssetStream(
       'file',
-      Readable.from([
-        Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength),
-      ]),
+      bytes,
       { filename: displayFilename(filename), contentType: type },
       Math.max(0, startedAt + SANITY_UPLOAD_DEADLINE_MS - Date.now()),
     )
@@ -476,7 +473,7 @@ async function transferWithin(
         drop()
         throw new TooLarge()
       }
-      return Buffer.from(chunk.buffer, chunk.byteOffset, chunk.byteLength)
+      return chunk
     }
     for (const chunk of head) yield pass(chunk)
     // The peeked chunks are sent; nothing keeps them past that.
@@ -497,7 +494,7 @@ async function transferWithin(
   try {
     const document = await uploadAssetStream(
       kind.asset,
-      Readable.from(counted()),
+      pulledFrom(counted()),
       { filename: displayFilename(filename), contentType: type },
       Math.max(0, deadlineAt - Date.now()),
     )
@@ -518,77 +515,22 @@ async function transferWithin(
 }
 
 /**
- * Upload a Node stream as a Sanity image or file asset, ABORTING the request when the stream
- * fails. Measured against the real `@sanity/client` (7.x) and a local server:
- * the promise API neither listens for a body stream's `error` (an unhandled
- * `error` event takes the process down) nor ends the request when one is
- * handled — it hangs with the request half-sent. `move.real-client.test.ts`
- * holds that measurement in CI. Through the observable API,
- * unsubscribing aborts the request, and the server sees it incomplete.
+ * A web stream that pulls the next chunk only when the upload asks for one,
+ * so backpressure reaches the blob. A chunk that throws (the byte counter's
+ * cap, a failed read) errors the stream, which aborts the upload.
  */
-function uploadAssetStream(
-  kind: 'image',
-  body: Readable,
-  options: { filename: string; contentType: string },
-  timeoutMs: number,
-): Promise<SanityImageAssetDocument>
-function uploadAssetStream(
-  kind: 'file',
-  body: Readable,
-  options: { filename: string; contentType: string },
-  timeoutMs: number,
-): Promise<SanityAssetDocument>
-function uploadAssetStream(
-  kind: 'image' | 'file',
-  body: Readable,
-  options: { filename: string; contentType: string },
-  timeoutMs: number,
-): Promise<SanityAssetDocument>
-function uploadAssetStream(
-  kind: 'image' | 'file',
-  body: Readable,
-  options: { filename: string; contentType: string },
-  timeoutMs: number,
-): Promise<SanityAssetDocument> {
-  return new Promise((resolve, reject) => {
-    // Declared before subscribing: the client can fail synchronously INSIDE
-    // subscribe, and that error handler must be able to clear it.
-    const deadline: { timer?: ReturnType<typeof setTimeout> } = {}
-    // Settled once, by whichever path gets there first; each clears the
-    // deadline.
-    let settled = false
-    const finish = (fn: () => void) => {
-      if (settled) return
-      settled = true
-      clearTimeout(deadline.timer)
-      fn()
-    }
-    const subscription = clientWrite.observable.assets
-      .upload(kind, body, options)
-      .subscribe({
-        next: (event) => {
-          if (event.type === 'response')
-            finish(() => resolve(event.body.document))
-        },
-        error: (error) => finish(() => reject(error)),
-        complete: () =>
-          finish(() =>
-            reject(new Error('Sanity upload ended without a response')),
-          ),
-      })
-    if (settled) return
-    body.once('error', (error) => {
-      subscription.unsubscribe()
-      finish(() => reject(error))
-    })
-    // The client sets NO timeout of its own (`timeout: 0`). Give up well
-    // before the route's `maxDuration`, so the blob delete and the answer
-    // still run instead of the function being killed mid-request.
-    deadline.timer = setTimeout(() => {
-      subscription.unsubscribe()
-      body.destroy()
-      finish(() => reject(new Error('Sanity upload timed out')))
-    }, timeoutMs)
+function pulledFrom(
+  chunks: AsyncGenerator<Uint8Array>,
+): ReadableStream<Uint8Array> {
+  return new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      const next = await chunks.next()
+      if (next.done) controller.close()
+      else controller.enqueue(next.value)
+    },
+    async cancel() {
+      await chunks.return(undefined)
+    },
   })
 }
 

@@ -1,6 +1,5 @@
 /** @vitest-environment node */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Readable } from 'node:stream'
 
 const h = vi.hoisted(() => ({
   upload: vi.fn(),
@@ -13,63 +12,17 @@ const h = vi.hoisted(() => ({
   // Work handed to `after()`: it runs once the response has gone.
   afterTasks: [] as (() => Promise<unknown> | unknown)[],
   syncThrow: false,
-  handlerThrew: undefined as unknown,
+  refuseMidBody: null as Error | null,
 }))
 vi.mock('next/server', () => ({
   after: (task: () => Promise<unknown>) => h.afterTasks.push(task),
 }))
 vi.mock('server-only', () => ({}))
 vi.mock('@vercel/blob', () => ({ del: h.del }))
-vi.mock('@/lib/sanity/client', () => ({
-  // The observable API, shaped like the real client's: it reads the body but,
-  // like the real one, never reacts to the body stream failing, and an
-  // unsubscribe is how a request is aborted — so the mock records it.
-  clientWrite: {
-    observable: {
-      assets: {
-        upload: (...args: unknown[]) => ({
-          subscribe(observer: {
-            next: (event: unknown) => void
-            error: (error: unknown) => void
-          }) {
-            // The real client validates options synchronously inside
-            // subscribe, so a bad request errors before subscribe returns.
-            // Like rxjs, an error thrown BY the error handler is not the
-            // subscriber's problem: it is reported elsewhere (rxjs rethrows it
-            // on a later tick) and subscribe returns normally.
-            if (h.syncThrow) {
-              try {
-                observer.error(new Error('invalid options'))
-              } catch (thrown) {
-                h.handlerThrew = thrown
-              }
-              return { unsubscribe() {} }
-            }
-            let open = true
-            h.upload(...args).then(
-              (document: unknown) => {
-                if (!open) return
-                open = false
-                observer.next({ type: 'response', body: { document } })
-              },
-              (error: unknown) => {
-                if (!open) return
-                open = false
-                observer.error(error)
-              },
-            )
-            return {
-              unsubscribe() {
-                if (open) h.aborted = true
-                open = false
-              },
-            }
-          },
-        }),
-      },
-    },
-  },
-}))
+vi.mock('./sanity-upload', async () => {
+  const { makeFakeUpload } = await import('./__tests__/sanity-upload-fake')
+  return { uploadAssetStream: makeFakeUpload(h) }
+})
 
 import { moveBlobToSanity } from './move'
 import {
@@ -113,34 +66,18 @@ beforeEach(() => {
   h.aborted = false
   h.afterTasks = []
   h.syncThrow = false
-  h.handlerThrew = undefined
+  h.refuseMidBody = null
   h.cancelled = false
   h.pulls = 0
   vi.stubEnv('BLOB_STORE_ID', 'store_abcstore123')
   vi.stubGlobal('fetch', fetchMock)
   h.del.mockResolvedValue(undefined)
-  h.upload.mockImplementation(
-    async (
-      _kind: string,
-      stream: Readable,
-      options: { contentType?: string },
-    ) => {
-      h.uploadedType = options.contentType
-      h.uploadedBytes = 0
-      // Read like an HTTP client pipes a body: on `data`/`end` only. A body
-      // that fails therefore never settles this — as with the real client.
-      await new Promise<void>((resolve) => {
-        stream.on('data', (chunk: Buffer) => (h.uploadedBytes += chunk.length))
-        stream.on('end', resolve)
-      })
-      return {
-        _id: 'image-abc-1200x630-png',
-        _createdAt: new Date().toISOString(),
-        url: 'https://cdn.sanity.io/x.png',
-        metadata: { dimensions: { width: 1200, height: 630 } },
-      }
-    },
-  )
+  h.upload.mockResolvedValue({
+    _id: 'image-abc-1200x630-png',
+    _createdAt: new Date().toISOString(),
+    url: 'https://cdn.sanity.io/x.png',
+    metadata: { dimensions: { width: 1200, height: 630 } },
+  })
 })
 
 /** Run what the move handed to `after()`, as Next does after responding. */
@@ -263,7 +200,7 @@ describe('the move checks the file itself', () => {
 
   it('reports a failed Sanity upload and still deletes the blob', async () => {
     fetchMock.mockResolvedValue(respond(png(100)))
-    h.upload.mockRejectedValue(new Error('sanity down'))
+    h.refuseMidBody = new Error('sanity down')
     expect(await moveBlobToSanity(URL_OK, ORG)).toEqual({
       ok: false,
       reason: 'upload',
@@ -378,8 +315,7 @@ describe('the move checks the file itself', () => {
       const moved = moveBlobToSanity(URL_OK, ORG)
       await vi.advanceTimersByTimeAsync(10)
       expect(await moved).toEqual({ ok: false, reason: 'upload' })
-      // The error handler itself did not blow up, and no deadline is left.
-      expect(h.handlerThrew).toBeUndefined()
+      // No deadline is left behind.
       expect(vi.getTimerCount()).toBe(0)
     } finally {
       vi.useRealTimers()
