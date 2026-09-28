@@ -547,7 +547,16 @@ describe('findWork — the composed due/stale scan', () => {
         socialTagOptOut: true,
         links: ['https://bsky.app/profile/mallory.dev'],
       },
-      talk('t1', 'c1', ['olga', 'bob']),
+      // Erased (#1162): off the roster save and approval read, so off this
+      // one too, whatever her stale opt-out and links say.
+      {
+        _id: 'erased',
+        _type: 'speaker',
+        socialTagOptOut: true,
+        erasedAt: '2026-09-01',
+        links: ['https://bsky.app/profile/erased.dev'],
+      },
+      talk('t1', 'c1', ['olga', 'bob', 'erased']),
       talk('t2', 'c2', ['mallory']),
     ]
     expect([

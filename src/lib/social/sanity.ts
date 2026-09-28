@@ -502,7 +502,7 @@ export const sanitySocialVariantStore: SocialVariantStore = {
     >(
       clientWrite,
       { conferenceId },
-      `*[_type == "talk" && !(_id in path("drafts.**")) && !(_id in path("versions.**"))].speakers[]->{ links, "optedOut": socialTagOptOut == true }`,
+      `*[_type == "talk" && !(_id in path("drafts.**")) && !(_id in path("versions.**"))].speakers[]->{ links, "optedOut": !defined(erasedAt) && socialTagOptOut == true }`,
       {},
       { cache: 'no-store' },
     )
