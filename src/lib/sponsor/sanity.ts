@@ -247,9 +247,10 @@ export async function createSponsor(
   }
 }
 
+/** Writes only the fields `data` carries; a null social account clears it. */
 export async function updateSponsor(
   id: string,
-  data: SponsorInput,
+  data: Partial<SponsorInput>,
 ): Promise<{ sponsor?: SponsorExisting; error?: Error }> {
   try {
     // The company's social accounts (tagging spec §3.3): a value sets, null
@@ -258,16 +259,23 @@ export async function updateSponsor(
       ...(data.linkedinUrl === null ? ['linkedinUrl'] : []),
       ...(data.blueskyHandle === null ? ['blueskyHandle'] : []),
     ]
-    let patch = clientWrite.patch(id).set({
+    const fields = {
       name: data.name,
       website: data.website,
       logo: data.logo,
       logoBright: data.logoBright,
       orgNumber: data.orgNumber,
       address: data.address,
-      ...(data.linkedinUrl ? { linkedinUrl: data.linkedinUrl } : {}),
-      ...(data.blueskyHandle ? { blueskyHandle: data.blueskyHandle } : {}),
-    })
+      linkedinUrl: data.linkedinUrl ?? undefined,
+      blueskyHandle: data.blueskyHandle ?? undefined,
+    }
+    let patch = clientWrite
+      .patch(id)
+      .set(
+        Object.fromEntries(
+          Object.entries(fields).filter(([, v]) => v !== undefined),
+        ),
+      )
     if (cleared.length > 0) patch = patch.unset(cleared)
     const sponsor = await patch.commit()
 

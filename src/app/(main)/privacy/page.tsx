@@ -729,8 +729,9 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                               reshare it
                             </li>
                             <li>
-                              • We only ever tag accounts you gave us yourself.
-                              We do not look up accounts you have not listed
+                              • We only ever tag a speaker&apos;s accounts that
+                              the speaker gave us themselves. We do not look up
+                              accounts you have not listed
                             </li>
                             <li>
                               • Before a post tags a Bluesky account, we check

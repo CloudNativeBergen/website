@@ -46,7 +46,10 @@ import {
   reorderSponsorEmailTemplates,
 } from '@/lib/sponsor/sanity'
 import { validateSponsor, validateSponsorTier } from '@/lib/sponsor/validation'
-import { checkSponsorBlueskyHandle } from '@/lib/sponsor/bluesky-handle'
+import {
+  checkSponsorBlueskyHandle,
+  parseSponsorSocials,
+} from '@/lib/sponsor/bluesky-handle'
 import { sanitizeSvgFieldOrThrow, SvgSanitizeError } from '@/lib/svg/upload'
 import {
   buildTemplateVariables,
@@ -403,6 +406,16 @@ async function blueskyHandleWarnings(
  * stripped per policy. Only fields actually PRESENT on `data` are touched, so a
  * partial update never wipes a slot it didn't mean to.
  */
+/** The social accounts normalised, or a BAD_REQUEST with the sentence. */
+function withSponsorSocials<
+  T extends { blueskyHandle?: string | null; linkedinUrl?: string | null },
+>(data: T): T {
+  const parsed = parseSponsorSocials(data)
+  if (!parsed.ok)
+    throw new TRPCError({ code: 'BAD_REQUEST', message: parsed.message })
+  return { ...data, ...parsed.value }
+}
+
 function sanitizeSponsorLogoInput<
   T extends { logo?: string | null; logoBright?: string | null },
 >(data: T): T {
@@ -487,7 +500,7 @@ export const sponsorRouter = router({
     .input(SponsorInputSchema)
     .mutation(async ({ input }) => {
       try {
-        const sanitized = sanitizeSponsorLogoInput(input)
+        const sanitized = withSponsorSocials(sanitizeSponsorLogoInput(input))
         const validationErrors = validateSponsor(sanitized)
         if (validationErrors.length > 0) {
           throw new TRPCError({
@@ -539,10 +552,13 @@ export const sponsorRouter = router({
             })
           }
 
-          const mergedData = {
-            ...existingSponsor,
-            ...sanitizeSponsorLogoInput(input.data),
-          }
+          // Only what this request changes is written: the Bluesky check
+          // below can take seconds, and a patch rebuilt from the read above
+          // would put back an edit someone else made meanwhile.
+          const changes = withSponsorSocials(
+            sanitizeSponsorLogoInput(input.data),
+          )
+          const mergedData = { ...existingSponsor, ...changes }
           const validationErrors = validateSponsor(mergedData)
           if (validationErrors.length > 0) {
             throw new TRPCError({
@@ -552,11 +568,11 @@ export const sponsorRouter = router({
             })
           }
           const warnings = await blueskyHandleWarnings(
-            input.data.blueskyHandle,
+            changes.blueskyHandle,
             existingSponsor.blueskyHandle,
           )
 
-          const { sponsor, error } = await updateSponsor(input.id, mergedData)
+          const { sponsor, error } = await updateSponsor(input.id, changes)
 
           if (error) {
             throw new TRPCError({

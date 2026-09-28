@@ -889,6 +889,35 @@ describe('sponsor tags', () => {
     expect(h.updateSocialVariantContent.mock.calls[0][1].mentions).toEqual([])
   })
 
+  it('a sponsor handle a speaker ALSO lists is the sponsor’s: recorded as the company, not refused for her opt-out', async () => {
+    seedSponsors([])
+    // Olga (opted out, on the programme) lists the company account too.
+    const olga = dataset.find((d) => d._id === 'spk-olga')!
+    olga.links = [
+      'https://bsky.app/profile/olga.dev',
+      'https://bsky.app/profile/acme.example',
+    ]
+    await save('Thanks @acme.example!')
+    expect(h.updateSocialVariantContent.mock.calls[0][1].mentions).toEqual([
+      expect.objectContaining({
+        _key: 'sp-acme',
+        sponsor: { _type: 'reference', _ref: 'sp-acme', _weak: true },
+        name: 'Acme AS',
+      }),
+    ])
+    expect(
+      h.updateSocialVariantContent.mock.calls[0][1].mentions[0],
+    ).not.toHaveProperty('speaker')
+  })
+
+  it('…and a recorded sponsor tag passes scheduling though that speaker opted out', async () => {
+    const olga = dataset.find((d) => d._id === 'spk-olga')!
+    olga.links = ['https://bsky.app/profile/acme.example']
+    const result = await social().scheduleVariant({ variantId: 'variant-ours' })
+    expect(h.transition).toHaveBeenCalled()
+    expect(result.tagWarnings).toEqual([])
+  })
+
   it('a prospect of THIS conference is a stranger: not recorded, never asked', async () => {
     seedSponsors([])
     await save('Thanks @globex.example!')

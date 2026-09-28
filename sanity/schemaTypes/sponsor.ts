@@ -1,4 +1,5 @@
 import { defineField, defineType } from 'sanity'
+import { linkedinCompanyPageIssue } from '@/lib/marketing/tag-by-hand/links'
 
 export default defineType({
   name: 'sponsor',
@@ -80,6 +81,8 @@ export default defineType({
       type: 'url',
       description:
         'Listed beside the company name under "Tag by hand" when a LinkedIn post about this sponsor is posted.',
+      validation: (Rule) =>
+        Rule.custom((value?: string) => linkedinCompanyPageIssue(value)),
     }),
     // Multi-tenant owner (CaaS T1-1, #613). Additive/optional; populated by the
     // 044 backfill and stamped at creation. Server code must not assume presence.

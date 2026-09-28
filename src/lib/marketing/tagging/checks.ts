@@ -423,6 +423,12 @@ function swapTags(
   return out
 }
 
+/**
+ * Who lists each handle. A handle a SPONSOR holds is the company's account
+ * (spec §3.3): a speaker who also lists it — an employee linking the company
+ * page — does not share it, so the tag binds to the company and her opt-out
+ * (which covers her own accounts) does not refuse it.
+ */
 function byHandle(
   people: readonly TaggablePerson[],
 ): Map<string, TaggablePerson[]> {
@@ -431,6 +437,10 @@ function byHandle(
     const all = p.handles ?? (p.handle ? [p.handle] : [])
     for (const h of new Set(all.map(normaliseHandle)))
       map.set(h, [...(map.get(h) ?? []), p])
+  }
+  for (const [h, listers] of map) {
+    const companies = listers.filter((p) => p.sponsor)
+    if (companies.length > 0) map.set(h, companies)
   }
   return map
 }

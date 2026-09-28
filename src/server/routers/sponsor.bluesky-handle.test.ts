@@ -226,13 +226,38 @@ describe('sponsor.update: the Bluesky handle', () => {
     ])
   })
 
-  it('a handle that is not handle syntax is refused before Bluesky is asked', async () => {
+  it('a handle that is not handle syntax is refused before Bluesky is asked — with a human message, not zod JSON', async () => {
     bluesky('resolves')
     await expect(
       sponsor().update({ id: 'sp-A', data: { blueskyHandle: 'not a handle' } }),
-    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message:
+        '"not a handle" is not a Bluesky handle. Enter it like acme.com or acme.bsky.social.',
+    })
     expect(asked).toEqual([])
     expect(h.patches).toEqual([])
+  })
+
+  it('an edit made elsewhere while Bluesky is being asked is not overwritten', async () => {
+    server.use(
+      http.get(RESOLVE, () => {
+        // Someone renames the company while the check is in flight.
+        h.stored = {
+          ...h.stored,
+          name: 'Acme Group',
+          website: 'https://acme.group',
+        }
+        return HttpResponse.json({ did: DID })
+      }),
+    )
+    await sponsor().update({
+      id: 'sp-A',
+      data: { blueskyHandle: 'acme.example' },
+    })
+    expect(h.stored!.name).toBe('Acme Group')
+    expect(h.stored!.website).toBe('https://acme.group')
+    expect(h.stored!.blueskyHandle).toBe('acme.example')
   })
 
   it('an unchanged handle is not asked again', async () => {
@@ -288,7 +313,11 @@ describe('sponsor.update: the Bluesky handle', () => {
     ]) {
       await expect(
         sponsor().update({ id: 'sp-A', data: { linkedinUrl: bad } }),
-      ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+      ).rejects.toMatchObject({
+        code: 'BAD_REQUEST',
+        message:
+          'Enter the LinkedIn company page, like https://www.linkedin.com/company/acme.',
+      })
     }
     expect(h.stored!.linkedinUrl).toBe('https://www.linkedin.com/company/acme')
   })

@@ -1,6 +1,4 @@
 import { z } from 'zod'
-import { parseBlueskyHandle } from '@/lib/marketing/tagging/handle'
-import { linkedinCompanyUrl } from '@/lib/marketing/tag-by-hand/links'
 
 const nullToUndefined = <T>(val: T | null): T | undefined =>
   val === null ? undefined : val
@@ -65,52 +63,13 @@ export const SponsorInputSchema = z.object({
   orgNumber: z.string().nullable().optional().transform(nullToUndefined),
   address: z.string().nullable().optional().transform(nullToUndefined),
   /**
-   * The company page, for LinkedIn's "Tag by hand" list (tagging spec §3.3).
-   * Absent leaves it as stored; null or empty clears it.
+   * The company's LinkedIn page and Bluesky handle (tagging spec §3.3), as
+   * typed. Absent leaves the stored value; null or empty clears it. The
+   * router normalises and checks them (`parseSponsorSocials`), so a refusal
+   * reaches the organizer as a sentence, not as zod's issue JSON.
    */
-  linkedinUrl: z
-    .string()
-    .nullable()
-    .optional()
-    .transform((v, ctx) => {
-      if (v === undefined) return undefined
-      if (v === null || v.trim() === '') return null
-      // Stored as "Tag by hand" shows it (`linkedinCompanyUrl`): a profile or
-      // a non-LinkedIn URL would save and then silently never be listed.
-      const page = linkedinCompanyUrl(v)
-      if (!page) {
-        ctx.addIssue({
-          code: 'custom',
-          message:
-            'Enter the LinkedIn company page, like https://www.linkedin.com/company/acme.',
-        })
-        return z.NEVER
-      }
-      return page
-    }),
-  /**
-   * The company's Bluesky handle (tagging spec §3.3), normalised: `@Acme.com`
-   * and a `bsky.app/profile/…` URL are both `acme.com`. Absent leaves it as
-   * stored; null or empty clears it. Whether Bluesky knows it is checked by
-   * the router, on save.
-   */
-  blueskyHandle: z
-    .string()
-    .nullable()
-    .optional()
-    .transform((v, ctx) => {
-      if (v === undefined) return undefined
-      if (v === null || v.trim() === '') return null
-      const handle = parseBlueskyHandle(v)
-      if (!handle) {
-        ctx.addIssue({
-          code: 'custom',
-          message: `"${v.trim()}" is not a Bluesky handle. Enter it like acme.com or acme.bsky.social.`,
-        })
-        return z.NEVER
-      }
-      return handle
-    }),
+  linkedinUrl: z.string().nullable().optional(),
+  blueskyHandle: z.string().nullable().optional(),
   tierId: z.string().nullable().optional().transform(nullToUndefined),
 })
 

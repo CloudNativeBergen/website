@@ -50,3 +50,16 @@ export function linkedinCompanyUrl(
 ): string | null {
   return url ? pageUrl(url, ['company', 'showcase', 'school']) : null
 }
+
+/**
+ * Studio's check on a sponsor's `linkedinUrl` (tagging spec §3.3): the same
+ * rule as the CRM, so a value Studio accepts is one "Tag by hand" lists and
+ * the CRM can save back. `true`, or the message to show.
+ */
+export function linkedinCompanyPageIssue(
+  value: string | null | undefined,
+): true | string {
+  return !value || linkedinCompanyUrl(value)
+    ? true
+    : 'Enter the LinkedIn company page, like https://www.linkedin.com/company/acme. A profile or another site is never listed, and the sponsor CRM refuses to save it.'
+}
