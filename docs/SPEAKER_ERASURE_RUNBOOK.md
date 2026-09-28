@@ -246,6 +246,10 @@ name is a stranger.
 - A **namesake** inside that scope — another person with exactly the same name
   — is neutralised too: the tool cannot tell two people apart by name. The dry
   run lists each variant it rewrites; read them.
+- The neutral words are longer than a short name, so a **scheduled** Bluesky
+  body already at its 300-character limit can end up over it. The publisher
+  then rejects it and it shows as failed for the organizers to shorten. The
+  erasure does not refuse over this.
 - A **published** body is left as it went out. It is on the platform already,
   and deleting the post there is outside this tool. Its records are still
   removed. A live `submitted` (or `publishing`) variant holding them makes the

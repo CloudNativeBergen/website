@@ -268,6 +268,8 @@ function bindTags(
     // their name is in the body is unknowable, so it earns no priority.
     for (const m of recorded)
       if (!m.gone && nameIndex(body, m.name) < 0) add(m.speakerId)
+    // Then a gone speaker, before anyone still named in the body.
+    for (const m of recorded) if (m.gone) add(m.speakerId)
     for (const m of recorded) add(m.speakerId)
     const sharers = known.get(handle) ?? []
     if (owners.length === 0 && sharers.length === 1) add(sharers[0].speakerId)

@@ -264,6 +264,14 @@ describe('a gone speaker on a shared handle (#1232)', () => {
     ])
     expect(owners.get('team.dev')).toEqual(['bob'])
   })
+  it('and to the gone one where the live speaker is still named, whatever the record order', () => {
+    const owners = occurrenceOwners('Bob and @team.dev', [
+      rec('bob', 'Bob'),
+      rec('alice', 'a speaker', true),
+    ])
+    expect(owners.get('team.dev')).toEqual(['alice'])
+  })
+
   it('and to the gone one where the live speaker is still named', () => {
     const owners = occurrenceOwners('Bob and @team.dev', [
       rec('alice', 'a speaker', true),

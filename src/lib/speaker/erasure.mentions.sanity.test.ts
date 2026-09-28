@@ -792,6 +792,64 @@ describe('speaker erasure scrubs post variants (#1232)', () => {
     })
   })
 
+  describe('review round 5 (Codex)', () => {
+    it('REFUSES on a live submitted variant naming her only in text', async () => {
+      h.dataset.push(
+        variant('var-sub-text', 'submitted', 'Meet Ada Lovelace', {
+          mentions: [],
+        }),
+      )
+      const result = await eraseSpeakerInPlace({
+        speakerId: ADA,
+        actor: 'test',
+      })
+      expect(result.err?.message).toMatch(/var-sub-text/)
+    })
+
+    it('scrubs a name that merely CONTAINS the placeholder phrase', async () => {
+      doc(ADA).name = 'A Speaker Jr'
+      h.dataset.push(
+        variant('var-jr', 'draft', 'Meet A Speaker Jr', { mentions: [] }),
+      )
+      await eraseSpeakerInPlace({ speakerId: ADA, actor: 'test' })
+      expect(doc('var-jr').body).toBe('Meet a speaker')
+    })
+
+    it('re-verifies with the alias the repair learned, so a refused variant reached only by it is still named', async () => {
+      h.afterCommit = () => {
+        h.afterCommit = null
+        h.dataset.push(
+          // A bridge record (her DID, a new alias) saved during the run…
+          variant('var-race-bridge', 'published', 'x', {
+            conference: ref('conf-x'),
+            mentions: [mention('mb', 'spk-gone', 'ada.new', 'X', ADA_DID)],
+          }),
+          // …and an in-flight variant reachable only through that alias.
+          variant('var-race-alias', 'publishing', 'Hi @ada.new', {
+            conference: ref('conf-x'),
+            mentions: [mention('ma', 'spk-gone-2', 'ada.new', 'Y')],
+          }),
+        )
+      }
+      const result = await eraseSpeakerInPlace({
+        speakerId: ADA,
+        actor: 'test',
+      })
+      expect(doc('var-race-bridge').mentions).toEqual([])
+      expect(result.verification?.residual.postVariantIds).toEqual([
+        'var-race-alias',
+      ])
+    })
+
+    it('never matches a name that ends inside a grapheme', async () => {
+      doc(ADA).name = '李'
+      const body = 'Meet 李\u0332 and 李.'
+      h.dataset.push(variant('var-mark', 'draft', body, { mentions: [] }))
+      await eraseSpeakerInPlace({ speakerId: ADA, actor: 'test' })
+      expect(doc('var-mark').body).toBe('Meet 李\u0332 and a speaker.')
+    })
+  })
+
   it('REFUSES, writing nothing, while a variant naming her is being published', async () => {
     h.dataset.push(variant('var-in-flight', 'publishing', TAGGED))
     const before = structuredClone(h.dataset)

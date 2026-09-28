@@ -1544,14 +1544,14 @@ export async function eraseSpeakerInPlace(
     // over live data. This is the one moment those addresses still exist.
     // The linked file ids likewise: once their holders are stripped nothing
     // links them, so a file left behind is visible only by its id.
-    const verify = () =>
+    const verify = (identity: MentionIdentity) =>
       verifySpeakerErasure(
         plan.speakerId,
         inputs.speaker ? speakerEmailMatchSet(inputs.speaker) : [],
         plan.linkedFileIds,
-        inputs.mentions.identity,
+        identity,
       )
-    let verification = await verify()
+    let verification = await verify(inputs.mentions.identity)
 
     // A post variant written since the transaction can carry the name, a
     // handle or a DID again, and this is the LAST moment those are known: a
@@ -1560,6 +1560,8 @@ export async function eraseSpeakerInPlace(
     if (verification && verification.residual.postVariants > 0) {
       // Never throws past here: the erasure itself has committed, and a
       // failed repair leaves the residual for the verification to report.
+      // The repair's read can learn a new alias of theirs (a bridge record
+      // saved meanwhile); the last verification looks with that too.
       const repaired = await repairPostVariants(
         plan.speakerId,
         inputs.speaker?.organizations,
@@ -1567,9 +1569,9 @@ export async function eraseSpeakerInPlace(
         inputs.mentions.identity,
       ).catch((error: unknown) => {
         console.error('[speaker-erasure] post-variant repair failed', error)
-        return 0
+        return null
       })
-      if (repaired > 0) verification = await verify()
+      if (repaired) verification = await verify(repaired.identity)
     }
 
     console.info('[speaker-erasure] anonymised speaker in place', {
@@ -1604,15 +1606,16 @@ export async function eraseSpeakerInPlace(
 
 /**
  * Re-plan and commit the post-variant branch alone, with the identity read
- * before the erasure. Returns how many variants it patched. A variant it
- * refuses (in flight) is not written, and the verification reports it.
+ * before the erasure. Returns how many variants it patched and the identity
+ * its read grew to. A variant it refuses (in flight) is not written, and
+ * the verification reports it.
  */
 async function repairPostVariants(
   speakerId: string,
   organizations: unknown,
   links: unknown,
   identity: MentionIdentity,
-): Promise<number> {
+): Promise<{ patched: number; identity: MentionIdentity }> {
   const mentions = await fetchSpeakerMentionInputs(
     speakerId,
     organizations,
@@ -1623,7 +1626,7 @@ async function repairPostVariants(
   // A refused variant (in flight) is left for the verification to report;
   // every other one is repaired now — no later run could.
   const { patches } = planSpeakerMentionErasure(speakerId, mentions)
-  if (patches.length === 0) return 0
+  if (patches.length === 0) return { patched: 0, identity: mentions.identity }
   const tx = clientWrite
     .withConfig({ apiVersion: COUNT_API_VERSION })
     .transaction()
@@ -1635,7 +1638,7 @@ async function repairPostVariants(
       return patch.rev ? applied.ifRevisionId(patch.rev) : applied
     })
   await tx.commit()
-  return patches.length
+  return { patched: patches.length, identity: mentions.identity }
 }
 
 /**

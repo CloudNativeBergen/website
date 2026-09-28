@@ -22,9 +22,8 @@
  * STATUS DECIDES THE BODY — of the LIVE document. A Studio draft or a Content
  * Release copy was never sent anywhere, whatever status it copied, so it is
  * always scrubbed and never waited on.
- *  - posted (`published`, `submitted`): the body is what went out and is on
- *    the platform already — out of scope. Only a `published` variant's
- *    records are scrubbed; a `submitted` one is still in flight (below).
+ *  - posted (`published`): the body is what went out and is on the
+ *    platform already — out of scope. Only its records are scrubbed.
  *  - in flight (`publishing`, `submitted`): the cron or the confirm sweep
  *    will settle it with a compare-and-set, and a write here would lose that
  *    race for one of the two. The erasure is REFUSED while such a variant
@@ -56,7 +55,9 @@ import type { ErasureDocumentPatch } from './erasure'
 type Doc = Record<string, unknown> & { _id: string; _type: string }
 
 /** Statuses whose body has gone out: only their records are scrubbed. */
-const POSTED_VARIANT_STATUSES = ['published', 'submitted'] as const
+// Not `submitted`: that one is still in flight (below), so its text is read
+// and a variant naming them refuses the erasure.
+const POSTED_VARIANT_STATUSES = ['published'] as const
 /**
  * The publisher's claims — the cron's (`publishing`) and an asynchronous
  * publisher's awaiting confirmation (`submitted`). Each is settled by a
@@ -214,7 +215,7 @@ function namePattern(names: readonly string[]): RegExp | null {
     .sort((a, b) => b.length - a.length)
     .map((n) => n.trim().split(/\s+/).map(escape).join('\\s+'))
   return new RegExp(
-    `(?<![\\p{L}\\p{N}_@./-])(?:${alternatives.join('|')})(?![\\p{L}\\p{N}_]|[.@/-][\\p{L}\\p{N}_])`,
+    `(?<![\\p{L}\\p{N}_@./-])(?:${alternatives.join('|')})(?![\\p{L}\\p{N}\\p{M}_]|[.@/-][\\p{L}\\p{N}_])`,
     'giu',
   )
 }
@@ -250,18 +251,21 @@ function nameSpans(text: string, names: readonly string[]): Span[] {
   if (!pattern) return []
   // An earlier run's placeholder is not their name, either — or a speaker
   // named "Speaker" would be scrubbed again on every run.
-  const kept = [
-    ...spansOf(text, LINK),
-    // A whole phrase only: "Data Speaker" holds no placeholder.
-    ...spansOf(
-      text,
-      new RegExp(
-        `(?<![\\p{L}\\p{N}_])${GONE_SPEAKER_TEXT}(?![\\p{L}\\p{N}_])`,
-        'giu',
-      ),
+  const links = spansOf(text, LINK)
+  // A whole phrase only: "Data Speaker" holds no placeholder. A match INSIDE
+  // one is exempt; a longer name containing one ("A Speaker Jr") is not.
+  const placeholders = spansOf(
+    text,
+    new RegExp(
+      `(?<![\\p{L}\\p{N}_])${GONE_SPEAKER_TEXT}(?![\\p{L}\\p{N}_])`,
+      'giu',
     ),
-  ]
-  return spansOf(text, pattern).filter((span) => !overlaps(span, kept))
+  )
+  const within = ([a, b]: Span) =>
+    placeholders.some(([s, e]) => s <= a && b <= e)
+  return spansOf(text, pattern).filter(
+    (span) => !overlaps(span, links) && !within(span),
+  )
 }
 
 /**
