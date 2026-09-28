@@ -53,7 +53,7 @@ describe('updateSponsor', () => {
     expect(mockCommit).toHaveBeenCalled()
   })
 
-  it('should pass undefined address when not provided', async () => {
+  it('does not touch the address when it is not provided (only the given fields are written)', async () => {
     const data: SponsorInput = {
       name: 'Acme Corp',
       website: 'https://acme.com',
@@ -61,9 +61,8 @@ describe('updateSponsor', () => {
 
     await updateSponsor(sponsorId, data)
 
-    expect(mockSet).toHaveBeenCalledWith(
-      expect.objectContaining({ address: undefined }),
-    )
+    expect(mockSet.mock.calls[0][0]).not.toHaveProperty('address')
+    expect(mockSet.mock.calls[0][0]).toMatchObject({ name: 'Acme Corp' })
   })
 
   it('should return the updated sponsor on success', async () => {
