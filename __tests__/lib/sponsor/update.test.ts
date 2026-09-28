@@ -61,8 +61,9 @@ describe('updateSponsor', () => {
 
     await updateSponsor(sponsorId, data)
 
-    expect(mockSet.mock.calls[0][0]).not.toHaveProperty('address')
-    expect(mockSet.mock.calls[0][0]).toMatchObject({ name: 'Acme Corp' })
+    const written = (mockSet.mock.calls as unknown as [object][])[0][0]
+    expect(written).not.toHaveProperty('address')
+    expect(written).toMatchObject({ name: 'Acme Corp' })
   })
 
   it('should return the updated sponsor on success', async () => {
