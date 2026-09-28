@@ -182,13 +182,17 @@ function AssetCard({
             {formatDateSafe(asset.rights.confirmedAt)}
           </p>
         )}
-        {(Boolean(asset.width && asset.height) || asset.softOnSocial) && (
+        {asset.kind !== 'audio' && (
           <p className="mt-auto flex flex-wrap items-center gap-x-2 gap-y-1 pt-1 text-xs text-gray-500 tabular-nums dark:text-gray-400">
             {asset.width && asset.height ? (
               <span>
                 {asset.width} × {asset.height}
               </span>
             ) : null}
+            {/* For display only: deleting never waits on it (spec §5). */}
+            {asset.usedInPosts !== null && (
+              <span>{usedInPostsLabel(asset.usedInPosts)}</span>
+            )}
             {asset.softOnSocial && (
               <span className="inline-flex items-start gap-1 rounded-md bg-amber-50 px-1.5 py-0.5 font-medium text-amber-800 dark:bg-amber-950/60 dark:text-amber-200">
                 <ExclamationTriangleIcon
@@ -203,6 +207,12 @@ function AssetCard({
       </div>
     </li>
   )
+}
+
+/** "Used in N posts": posts of this organization holding the image. */
+export function usedInPostsLabel(count: number): string {
+  if (count === 0) return 'Not in a post yet'
+  return `Used in ${count} ${count === 1 ? 'post' : 'posts'}`
 }
 
 /**
@@ -240,9 +250,13 @@ export function AssetsPage({
     )
     return () => clearTimeout(timer)
   }, [search])
-  const list = api.marketingAsset.list.useQuery(filter, {
-    placeholderData: keepPreviousData,
-  })
+  // The one reader that shows "used in N posts", so the one that counts it.
+  const list = api.marketingAsset.list.useQuery(
+    { ...filter, usage: true },
+    {
+      placeholderData: keepPreviousData,
+    },
+  )
   const filters = api.marketingAsset.filters.useQuery()
   // A subject or tag whose last asset was edited or deleted leaves the menu;
   // its filter goes with it, rather than filtering on something unseen.

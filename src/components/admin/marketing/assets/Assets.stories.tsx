@@ -75,6 +75,8 @@ const row = (
   durationSeconds: null,
   rights: null,
   studio: null,
+  usedInPosts: 0,
+  attachable: fields.kind !== 'audio',
   ...fields,
 })
 
@@ -85,6 +87,7 @@ const ASSETS: MarketingAssetRow[] = [
     alt: 'The Cloud Native Days Norway logo in white on navy',
     imageUrl: card('LOGO', '#1e3a8a', 2000, 2000),
     tags: ['brand', 'logo'],
+    usedInPosts: 3,
   }),
   row({
     _id: 'asset-ada',
@@ -99,6 +102,7 @@ const ASSETS: MarketingAssetRow[] = [
     credit: 'Jane Designer, Studio Nord',
     createdAt: '2026-09-19T10:00:00Z',
     studio: { tab: 'speakers', speakerId: ADA._id, sponsorId: null },
+    usedInPosts: 1,
   }),
   row({
     _id: 'asset-theme',

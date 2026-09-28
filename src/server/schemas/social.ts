@@ -177,6 +177,16 @@ export const UpdateSocialVariantSchema = z.object({
     .optional(),
 })
 
+/**
+ * Pick a marketing asset into a post (#1163): the post and the ASSET's id,
+ * nothing else. The image, its crop and its alt text are read from the asset
+ * on the server once the asset is proven this organization's.
+ */
+export const AddSocialPostAttachmentFromAssetSchema = z.object({
+  postId: LiveDocumentIdSchema,
+  marketingAssetId: z.string().min(1).max(200),
+})
+
 export const AddSocialPostAttachmentSchema = z.object({
   postId: LiveDocumentIdSchema,
   assetId: ImageAssetIdSchema,

@@ -2,6 +2,7 @@ import 'server-only'
 import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
 import { scopedFetch } from '@/lib/sanity/scoped'
 import { isSoftOnSocial } from './image-type'
+import { isAttachableToPost } from './post-attach'
 import type { ResolvedMarketingAssetDetails } from './details'
 import type { StudioOriginInput } from './studio'
 import type {
@@ -46,6 +47,7 @@ const ROW_PROJECTION = `{
     "speakerId": select(studio.tab == "speakers" && subject->_type == "speaker" => subject._ref, null),
     "sponsorId": select(studio.tab == "sponsors" && subject->_type == "sponsor" => subject._ref, null)
   }, null),
+  "mimeType": image.asset->mimeType,
   "rights": select(defined(rightsConfirmation.confirmedAt) => {
     "confirmedBy": rightsConfirmation.confirmedBy->name,
     "confirmedAt": rightsConfirmation.confirmedAt
@@ -82,9 +84,20 @@ export async function listMarketingAssets(
   orgId: string,
   conferenceId: string,
   filter: MarketingAssetFilter,
+  /**
+   * Count "used in N posts": only the Assets page shows it, so the post scan
+   * is opt-in (the studio pickers and the post picker skip it).
+   */
+  options: { countUsage?: boolean } = {},
 ): Promise<MarketingAssetRow[]> {
   const rows = await scopedFetch<
-    Omit<MarketingAssetRow, 'softOnSocial'>[] | null
+    | (Omit<
+        MarketingAssetRow,
+        'softOnSocial' | 'attachable' | 'usedInPosts'
+      > & {
+        mimeType: string | null
+      })[]
+    | null
   >(
     clientReadUncached,
     { orgId },
@@ -108,10 +121,162 @@ export async function listMarketingAssets(
     },
     { cache: 'no-store' },
   )
-  return (rows ?? []).map((row) => ({
+  const used =
+    options.countUsage !== true
+      ? null
+      : await countPostsUsingImages(
+          orgId,
+          (rows ?? []).flatMap((row) => (row.assetId ? [row.assetId] : [])),
+        )
+  return (rows ?? []).map(({ mimeType, ...row }) => ({
     ...row,
     softOnSocial: isSoftOnSocial(row),
+    attachable: isAttachableToPost({ ...row, mimeType }),
+    usedInPosts: used ? (row.assetId && used.get(row.assetId)) || 0 : null,
   }))
+}
+
+/**
+ * How many of this organization's posts hold each image ("used in N
+ * posts", spec §5): ONE read of the posts that hold any of them, rather than
+ * a count per gallery row. Posts of any status; Studio drafts and release copies excluded. For
+ * display only; never a delete precondition.
+ */
+async function countPostsUsingImages(
+  orgId: string,
+  assetIds: string[],
+): Promise<Map<string, number>> {
+  const counts = new Map<string, number>()
+  if (assetIds.length === 0) return counts
+  const posts = await clientReadUncached.fetch<
+    { refs: (string | null)[] | null }[] | null
+  >(
+    `*[_type == "socialPost" && conference->organization._ref == $orgId && !(_id in path("drafts.**")) && !(_id in path("versions.**")) && count(attachments[image.asset._ref in $assetIds]) > 0]{ "refs": attachments[].image.asset._ref }`,
+    { orgId, assetIds: [...new Set(assetIds)] },
+    { cache: 'no-store' },
+  )
+  for (const post of posts ?? []) {
+    // A post holding the same image twice is still one post.
+    for (const ref of new Set(post.refs ?? []))
+      if (ref) counts.set(ref, (counts.get(ref) ?? 0) + 1)
+  }
+  return counts
+}
+
+/**
+ * The subject of the Marketing Task a post belongs to, or null for a post no
+ * Task of THIS conference owns. Found through the Task's variant: a post
+ * holds no Task reference of its own.
+ */
+async function readPostSubjectId(
+  conferenceId: string,
+  postId: string,
+): Promise<string | null> {
+  return scopedFetch<string | null>(
+    clientReadUncached,
+    { conferenceId },
+    `*[_type == "marketingTask" && !(_id in path("drafts.**")) && !(_id in path("versions.**")) && defined(subject._ref) && variant->post._ref == $postId][0].subject._ref`,
+    { postId },
+    { cache: 'no-store' },
+  )
+}
+
+/** Where a row falls in the picker: lower first. */
+function pickerRank(
+  row: MarketingAssetRow,
+  subjectId: string | null,
+  conferenceId: string,
+): number {
+  if (subjectId && row.subject?._id === subjectId) return 0
+  if (row.scope === 'edition' && row.conferenceId === conferenceId) return 1
+  if (row.scope === 'organization') return 2
+  return 3
+}
+
+/**
+ * The post editor's "Marketing assets" picker (spec §5): assets about the
+ * post's subject first (from any edition), then this edition's, then the
+ * organization-wide ones, and — with `editions: "all"` — the older editions
+ * last; newest first within each. The gallery's own read does the scoping and
+ * the search. Audio tracks never go into a post, so they are not listed; a GIF
+ * or video is, marked not attachable.
+ */
+export async function listMarketingAssetsForPost(
+  orgId: string,
+  conferenceId: string,
+  postId: string,
+  filter: Pick<MarketingAssetFilter, 'editions' | 'search'>,
+): Promise<MarketingAssetRow[]> {
+  const [subjectId, rows] = await Promise.all([
+    readPostSubjectId(conferenceId, postId),
+    // Always every edition: the subject's assets lead from any of them.
+    listMarketingAssets(orgId, conferenceId, {
+      editions: 'all',
+      search: filter.search,
+    }),
+  ])
+  return rows
+    .filter((row) => row.kind !== 'audio')
+    .map((row) => ({ row, rank: pickerRank(row, subjectId, conferenceId) }))
+    .filter(({ rank }) => rank < 3 || filter.editions === 'all')
+    .sort((a, b) => a.rank - b.rank)
+    .map(({ row }) => row)
+}
+
+/**
+ * One of this organization's assets as a post takes it (#1163): the image
+ * reference, its crop and hotspot, the alt text, and whether it can go into a
+ * post at all. The read is scoped too, so an id that is not ours (or is gone)
+ * reads as null; the caller's guard has already refused a foreign one.
+ */
+export async function readMarketingAssetForPost(
+  orgId: string,
+  id: string,
+): Promise<{
+  /** The revision read, for the attach's compare-and-set. */
+  rev: string
+  imageAssetId: string | null
+  alt: string
+  hotspot: { x: number; y: number; width: number; height: number } | null
+  crop: { top: number; bottom: number; left: number; right: number } | null
+  attachable: boolean
+} | null> {
+  const row = await scopedFetch<{
+    _rev: string
+    kind: string | null
+    imageAssetId: string | null
+    mimeType: string | null
+    alt: string | null
+    hotspot: { x: number; y: number; width: number; height: number } | null
+    crop: { top: number; bottom: number; left: number; right: number } | null
+  } | null>(
+    clientReadUncached,
+    { orgId },
+    `*[_type == "marketingAsset" && _id == $id][0]{
+      _rev,
+      kind,
+      "imageAssetId": image.asset._ref,
+      "mimeType": image.asset->mimeType,
+      alt,
+      "hotspot": image.hotspot{ x, y, width, height },
+      "crop": image.crop{ top, bottom, left, right }
+    }`,
+    { id },
+    { cache: 'no-store' },
+  )
+  if (!row) return null
+  return {
+    rev: row._rev,
+    imageAssetId: row.imageAssetId,
+    alt: row.alt ?? '',
+    hotspot: row.hotspot ?? null,
+    crop: row.crop ?? null,
+    attachable: isAttachableToPost({
+      kind: row.kind,
+      assetId: row.imageAssetId,
+      mimeType: row.mimeType,
+    }),
+  }
 }
 
 /**

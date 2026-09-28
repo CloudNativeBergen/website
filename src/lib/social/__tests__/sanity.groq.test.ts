@@ -13,13 +13,22 @@ import { evaluate, parse } from 'groq-js'
 const h = vi.hoisted(() => {
   const deleted: string[] = []
   const guarded: string[] = []
-  const state = { commitError: null as Error | null }
+  const state = {
+    commitError: null as Error | null,
+    txResults: [] as { id: string }[],
+  }
+  const txPatches: unknown[] = []
   const tx = {
     delete: (id: string) => {
       deleted.push(id)
       return tx
     },
-    patch: (id: string, build: (p: unknown) => unknown) => {
+    patch: (id: unknown, build?: (p: unknown) => unknown) => {
+      // A prepared Patch (a query patch) joins the transaction as it is.
+      if (typeof id !== 'string') {
+        txPatches.push(id)
+        return tx
+      }
       const p = {
         ifRevisionId(rev: string) {
           guarded.push(`${id}@${rev}`)
@@ -28,13 +37,16 @@ const h = vi.hoisted(() => {
         set() {
           return p
         },
+        unset() {
+          return p
+        },
       }
-      build(p)
+      build?.(p)
       return tx
     },
     commit: async () => {
       if (state.commitError) throw state.commitError
-      return {}
+      return { results: state.txResults }
     },
   }
   return {
@@ -46,6 +58,7 @@ const h = vi.hoisted(() => {
     appended: [] as unknown[],
     state,
     tx,
+    txPatches,
   }
 })
 
@@ -141,6 +154,8 @@ beforeEach(() => {
   h.guarded.length = 0
   h.patched.length = 0
   h.state.commitError = null
+  h.state.txResults = [{ id: 'card-2025' }, { id: 'post-conf-A' }]
+  h.txPatches.length = 0
 })
 
 describe('deleteSocialPost', () => {
@@ -1507,6 +1522,59 @@ describe('addSocialPostAttachment — asset tenancy', () => {
     await expect(
       addSocialPostAttachment('post-conf-A', 'conf-A', input),
     ).resolves.toEqual({ key: expect.any(String) })
+  })
+
+  it("attaches an older edition's asset image once the caller proved the asset ours (#1163)", async () => {
+    // Held only by a marketing asset marked with another edition: to the
+    // reference check that is "someone else's", which is why the picker
+    // proves ownership from the asset id instead.
+    h.dataset = [
+      {
+        _id: 'card-2025',
+        _type: 'marketingAsset',
+        conference: { _ref: 'conf-A-2025' },
+        image: { asset: { _ref: ASSET } },
+      },
+    ]
+    await expect(
+      addSocialPostAttachment('post-conf-A', 'conf-A', input),
+    ).resolves.toEqual({ refused: 'foreign-asset' })
+    await expect(
+      addSocialPostAttachment('post-conf-A', 'conf-A', input, {
+        heldBy: { id: 'card-2025', rev: 'rev-9' },
+      }),
+    ).resolves.toEqual({ key: expect.any(String) })
+    // ONE transaction: compare-and-set on the asset, and the post's append.
+    expect(h.guarded).toEqual(['card-2025@rev-9'])
+    expect(h.txPatches).toHaveLength(1)
+    expect(h.appended).toContainEqual(
+      expect.objectContaining({
+        image: expect.objectContaining({
+          asset: { _type: 'reference', _ref: ASSET },
+        }),
+        alt: 'x',
+      }),
+    )
+  })
+
+  it('refuses the attach when the asset was deleted or changed since it was read', async () => {
+    h.state.commitError = Object.assign(new Error('Document not found'), {
+      statusCode: 409,
+    })
+    await expect(
+      addSocialPostAttachment('post-conf-A', 'conf-A', input, {
+        heldBy: { id: 'card-2025', rev: 'rev-9' },
+      }),
+    ).resolves.toEqual({ refused: 'holder-changed' })
+  })
+
+  it('says the post is gone when only the asset guard landed', async () => {
+    h.state.txResults = [{ id: 'card-2025' }]
+    await expect(
+      addSocialPostAttachment('post-conf-A', 'conf-A', input, {
+        heldBy: { id: 'card-2025', rev: 'rev-9' },
+      }),
+    ).resolves.toEqual({ refused: 'post-gone' })
   })
 })
 

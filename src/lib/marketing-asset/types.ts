@@ -58,6 +58,14 @@ export interface MarketingAssetRow {
   rights: MarketingAssetRights | null
   /** Which studio tab and subject made it; null for anything uploaded. */
   studio: MarketingAssetStudioOrigin | null
+  /**
+   * Posts of this organization (any status, Studio drafts excluded) holding
+   * the asset's image; null where it is not counted (the post picker). For
+   * display only: never a delete precondition (posts keep their own copy).
+   */
+  usedInPosts: number | null
+  /** Whether it can go into a post yet: a GIF, video or track cannot. */
+  attachable: boolean
 }
 
 /** Which assets the gallery shows. Every field narrows; none widens. */

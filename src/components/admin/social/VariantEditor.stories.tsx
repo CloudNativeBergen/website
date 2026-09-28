@@ -5,6 +5,7 @@ import { ThemeProvider } from 'next-themes'
 import { PLATFORM_CONSTRAINTS } from '@/lib/social/provider/constraints'
 import type { SocialPostAttachment } from '@/lib/social/types'
 import { VariantEditor, type VariantEditorProps } from './VariantEditor'
+import type { MarketingAssetPick } from './AttachmentSlot'
 import type { VariantEditorValue } from './variant-editor-model'
 
 /**
@@ -528,4 +529,268 @@ export const BlueskyDark: Story = {
     backgrounds: { default: 'dark' },
     docs: { description: { story: 'The Bluesky editor in dark mode.' } },
   },
+}
+
+/** The marketing asset gallery as the picker lists it for a talk's post. */
+const ASSET_PICKS: MarketingAssetPick[] = [
+  {
+    id: 'asset-ada-card',
+    title: 'Speaker card: Ada Lovelace',
+    alt: 'Ada Lovelace, speaking on distributed tracing',
+    thumbnailSrc: svgImage(1200, 1200, '#be185d', '#f472b6'),
+    attachable: true,
+    context: 'About Ada Lovelace',
+  },
+  {
+    id: 'asset-ada-2025',
+    title: 'Ada at the 2025 keynote',
+    alt: 'Ada Lovelace on the main stage in 2025',
+    thumbnailSrc: svgImage(1600, 900, '#0f766e', '#84cc16'),
+    attachable: true,
+    context: 'About Ada Lovelace',
+  },
+  {
+    id: 'asset-venue',
+    title: 'Venue, evening',
+    alt: 'The venue lit up at dusk',
+    thumbnailSrc: svgImage(2000, 1000, '#1d4ed8', '#7c3aed'),
+    attachable: true,
+    context: 'CND 2027',
+  },
+  {
+    id: 'asset-countdown',
+    title: 'Countdown, animated',
+    alt: 'A countdown to opening day',
+    thumbnailSrc: svgImage(1080, 1080, '#b91c1c', '#f59e0b'),
+    attachable: false,
+    context: 'CND 2027',
+  },
+  {
+    id: 'asset-logo',
+    title: 'Logo, dark background',
+    alt: 'The Cloud Native Bergen logo in white on navy',
+    thumbnailSrc: svgImage(1200, 1200, '#1e3a8a', '#334155'),
+    attachable: true,
+    context: 'Whole organization',
+  },
+]
+
+/** The picker with its search and edition switch held, as the wired editor does. */
+function AssetPickerHarness({
+  onPickAsset,
+  pickerError,
+  ...args
+}: Args & {
+  onPickAsset: (asset: MarketingAssetPick) => void
+  pickerError?: string
+}) {
+  const [search, setSearch] = useState('')
+  const [allEditions, setAllEditions] = useState(false)
+  const words = search.toLowerCase().split(/\s+/).filter(Boolean)
+  const assets = ASSET_PICKS.filter((asset) =>
+    words.every((word) =>
+      asset.title
+        .toLowerCase()
+        .split(/\W+/)
+        .some((w) => w.startsWith(word)),
+    ),
+  )
+  return (
+    <Harness
+      {...args}
+      sources={{
+        ...args.sources,
+        marketingAssets: {
+          assets,
+          isLoading: false,
+          error: pickerError ?? null,
+          onRetry: () => {},
+          search,
+          onSearchChange: setSearch,
+          allEditions,
+          onAllEditionsChange: setAllEditions,
+          onPick: async (asset) => onPickAsset(asset),
+        },
+      }}
+    />
+  )
+}
+
+const pickerArgs = {
+  onPickAsset: fn(),
+  initialValue: {
+    body: BODY_LINKEDIN,
+    link: LINK,
+    attachments: [],
+    timing: { mode: 'default' as const },
+  },
+}
+
+const openPicker = async (canvasElement: HTMLElement) => {
+  const canvas = within(canvasElement)
+  await userEvent.click(
+    canvas.getByRole('button', { name: 'Marketing assets' }),
+  )
+  return within(canvas.getByRole('group', { name: 'Marketing assets' }))
+}
+
+/**
+ * "Marketing assets" beside upload and photo gallery (#1163, assets spec §5):
+ * the post's subject first, then this edition, then the organization. A GIF
+ * is shown but marked, and cannot be picked.
+ */
+export const MarketingAssetPicker: Story = {
+  args: pickerArgs as unknown as Story['args'],
+  render: (args) => (
+    <AssetPickerHarness
+      {...(args as unknown as Args & {
+        onPickAsset: (asset: MarketingAssetPick) => void
+      })}
+    />
+  ),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'The marketing asset source: search over title and tags, the post’s subject first, and a GIF marked “can’t be attached yet”. Picking sends only the asset id; the server copies the image and alt text.',
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const picker = await openPicker(canvasElement)
+    const gif = picker.getByRole('button', {
+      name: "Countdown, animated (CND 2027): can't be attached yet",
+    })
+    await expect(gif).toBeDisabled()
+    await expect(picker.getByText("Can't be attached yet")).toBeVisible()
+    // The subject's assets lead.
+    const tiles = picker.getAllByRole('button', { name: /^Add |: can't/ })
+    await expect(tiles[0]).toHaveAccessibleName(
+      'Add Speaker card: Ada Lovelace (About Ada Lovelace) to the post',
+    )
+  },
+}
+
+/** Search, then pick: only the asset's id leaves the slot. */
+export const PickingAMarketingAsset: Story = {
+  args: pickerArgs as unknown as Story['args'],
+  render: MarketingAssetPicker.render,
+  parameters: {
+    docs: {
+      description: {
+        story: 'Searching narrows the list; picking hands the asset on.',
+      },
+    },
+  },
+  play: async ({ canvasElement, args }) => {
+    const picker = await openPicker(canvasElement)
+    // Enter finishes the search; it must not submit the editor's form. Save
+    // is enabled, so a submit WOULD reach onSave: the check is not vacuous.
+    await expect(
+      within(canvasElement).getByRole('button', { name: 'Save variant' }),
+    ).toBeEnabled()
+    await userEvent.type(
+      picker.getByRole('searchbox', { name: 'Search marketing assets' }),
+      'logo{Enter}',
+    )
+    await expect(args.onSave).not.toHaveBeenCalled()
+    await expect(picker.getAllByRole('listitem')).toHaveLength(1)
+    await userEvent.click(
+      picker.getByRole('button', {
+        name: 'Add Logo, dark background (Whole organization) to the post',
+      }),
+    )
+    const onPick = (args as unknown as { onPickAsset: ReturnType<typeof fn> })
+      .onPickAsset
+    await expect(onPick).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'asset-logo' }),
+    )
+  },
+}
+
+export const MarketingAssetPickerDark: Story = {
+  args: pickerArgs as unknown as Story['args'],
+  render: MarketingAssetPicker.render,
+  parameters: {
+    theme: 'dark',
+    backgrounds: { default: 'dark' },
+    docs: {
+      description: { story: 'The marketing asset picker in dark mode.' },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    await openPicker(canvasElement)
+  },
+}
+
+export const MarketingAssetPickerMobile: Story = {
+  args: pickerArgs as unknown as Story['args'],
+  render: MarketingAssetPicker.render,
+  parameters: {
+    viewport: { defaultViewport: 'mobile1' },
+    docs: {
+      description: { story: 'The marketing asset picker on a phone.' },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const picker = await openPicker(canvasElement)
+    // Three across on a phone, every tile inside the viewport.
+    const tile = picker.getAllByRole('listitem')[0]
+    await expect(tile.getBoundingClientRect().width).toBeLessThan(
+      window.innerWidth / 3,
+    )
+  },
+}
+
+/** The list could not be read: said so, never shown as an empty gallery. */
+export const MarketingAssetPickerFailed: Story = {
+  args: {
+    ...pickerArgs,
+    pickerError: 'Network error',
+  } as unknown as Story['args'],
+  render: MarketingAssetPicker.render,
+  play: async ({ canvasElement }) => {
+    const picker = await openPicker(canvasElement)
+    await expect(picker.getByRole('alert')).toHaveTextContent(
+      'Could not load the marketing assets: Network error',
+    )
+    await expect(picker.queryByText(/has nothing for this post/)).toBeNull()
+    await expect(picker.queryAllByRole('listitem')).toHaveLength(0)
+  },
+}
+
+/** A save in flight disables the open picker's tiles too. */
+export const MarketingAssetPickerWhileSaving: Story = {
+  args: pickerArgs as unknown as Story['args'],
+  render: (args) => {
+    const props = args as unknown as Args & {
+      onPickAsset: (asset: MarketingAssetPick) => void
+    }
+    return <SavingToggle {...props} />
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const picker = await openPicker(canvasElement)
+    await userEvent.click(canvas.getByRole('button', { name: 'Start saving' }))
+    await expect(
+      picker.getByRole('button', {
+        name: 'Add Logo, dark background (Whole organization) to the post',
+      }),
+    ).toBeDisabled()
+  },
+}
+
+/** Opens the picker first, then flips `saving` — as a Save click would. */
+function SavingToggle(
+  props: Args & { onPickAsset: (asset: MarketingAssetPick) => void },
+) {
+  const [saving, setSaving] = useState(false)
+  return (
+    <>
+      <button type="button" onClick={() => setSaving(true)}>
+        Start saving
+      </button>
+      <AssetPickerHarness {...props} saving={saving} />
+    </>
+  )
 }

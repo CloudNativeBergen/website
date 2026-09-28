@@ -45,7 +45,11 @@ export interface VariantEditorProps {
   /** Where new images come from; absent sources render no button. */
   sources?: Pick<
     AttachmentSlotProps,
-    'onUpload' | 'gallery' | 'shareCards' | 'onAttachShareCard'
+    | 'onUpload'
+    | 'gallery'
+    | 'marketingAssets'
+    | 'shareCards'
+    | 'onAttachShareCard'
   >
   /** Shown in the preview card as the author. */
   authorName?: string
