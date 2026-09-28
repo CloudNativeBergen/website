@@ -48,6 +48,8 @@ import { clientReadUncached } from '@/lib/sanity/client'
 import { COUNT_API_VERSION } from '@/lib/sanity/orphaned-asset'
 import { GONE_SPEAKER_TEXT } from '@/lib/marketing/tagging/body'
 import { mentionTokens, occurrenceOwners } from '@/lib/marketing/tagging/checks'
+import { blueskyHandlesFromLinks } from '@/lib/marketing/tagging/handle'
+import { getPublishedId } from '@sanity/client/csm'
 import { normaliseHandle } from '@/lib/social/provider/bluesky-syntax'
 import type { ErasureDocumentPatch } from './erasure'
 
@@ -173,7 +175,8 @@ function mentionIdentity(
       if (!isSubjectRecord(m, speakerId, base)) continue
       const [stored, handle, did] = [str(m.name), str(m.handle), str(m.did)]
       if (stored) names.add(stored)
-      if (handle) handles.add(normaliseHandle(handle))
+      if (handle && isHandle(normaliseHandle(handle)))
+        handles.add(normaliseHandle(handle))
       if (did) dids.add(did)
     }
   return {
@@ -186,6 +189,15 @@ function mentionIdentity(
     dids: [...dids],
   }
 }
+
+/**
+ * The atproto handle syntax. A stored handle has no schema validation, and a
+ * malformed one ("@", say, normalised to "") would build a matcher that hits
+ * every boundary: it is never taken into the identity.
+ */
+const HANDLE =
+  /^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]([a-z0-9-]{0,61}[a-z0-9])?$/
+const isHandle = (h: string) => h.length <= 253 && HANDLE.test(h)
 
 const escape = (w: string) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
@@ -240,7 +252,14 @@ function nameSpans(text: string, names: readonly string[]): Span[] {
   // named "Speaker" would be scrubbed again on every run.
   const kept = [
     ...spansOf(text, LINK),
-    ...spansOf(text, new RegExp(GONE_SPEAKER_TEXT, 'gi')),
+    // A whole phrase only: "Data Speaker" holds no placeholder.
+    ...spansOf(
+      text,
+      new RegExp(
+        `(?<![\\p{L}\\p{N}_])${GONE_SPEAKER_TEXT}(?![\\p{L}\\p{N}_])`,
+        'giu',
+      ),
+    ),
   ]
   return spansOf(text, pattern).filter((span) => !overlaps(span, kept))
 }
@@ -277,7 +296,8 @@ function subjectTags(
       handle: str(m.handle) as string,
       speakerId: String(i),
       status: 'tagged' as const,
-      name: str(m.name) ?? '',
+      // NFC like the text it is bound against.
+      name: (str(m.name) ?? '').normalize('NFC'),
       subject: isSubjectRecord(m, speakerId, identity),
     }))
   const owners = occurrenceOwners(text, records)
@@ -550,6 +570,8 @@ const VARIANT_FIELDS = groq`{ _id, _type, _rev, status, body, attachments, confe
 export async function fetchSpeakerMentionInputs(
   speakerId: string,
   organizations: unknown,
+  /** The speaker's profile links: their Bluesky handles, record or none. */
+  links: unknown,
   currentName: string | null,
   prior: Partial<MentionIdentity> = {},
 ): Promise<SpeakerMentionInputs> {
@@ -571,7 +593,12 @@ export async function fetchSpeakerMentionInputs(
   // account read below never returns these variants again.
   let identity: MentionIdentity = {
     names: [...(currentName ? [currentName] : []), ...(prior.names ?? [])],
-    handles: prior.handles ?? [],
+    handles: [
+      ...blueskyHandlesFromLinks(
+        Array.isArray(links) ? links.filter((l) => typeof l === 'string') : [],
+      ),
+      ...(prior.handles ?? []),
+    ].filter(isHandle),
     dids: prior.dids ?? [],
   }
   for (;;) {
@@ -603,8 +630,14 @@ export async function fetchSpeakerMentionInputs(
     ),
   ])
   const conferenceIds = [
-    ...new Set([...(orgConferences ?? []), ...(talkConferences ?? [])]),
-  ].filter((id) => typeof id === 'string')
+    ...new Set(
+      // A conference that exists only as a draft or a release copy is
+      // referenced by its published id.
+      [...(orgConferences ?? []), ...(talkConferences ?? [])]
+        .filter((id) => typeof id === 'string')
+        .map(getPublishedId),
+    ),
+  ]
 
   const readByAccountOrScope = async (known: MentionIdentity) => {
     // One `match` per handle, OR-ed (an array on the right of `match` means
@@ -616,7 +649,8 @@ export async function fetchSpeakerMentionInputs(
         ? 'false'
         : typed
             .map(
-              (h) => `body match ${h} || attachments[].altOverride match ${h}`,
+              (h) =>
+                `body match ${h} || attachments[].altOverride match ${h} || post->attachments[].alt match ${h}`,
             )
             .join(' || ')
     return (

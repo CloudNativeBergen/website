@@ -253,7 +253,10 @@ name is a stranger.
 - A variant **saved while the erasure ran** can carry them again. The commit's
   verification finds it with the name, handles and DIDs read before the
   erasure — the last moment those are known — and repairs it once, then
-  verifies again. Anything left (a variant in flight) is reported.
+  verifies again. A variant it must leave (in flight) is listed by id in
+  `postVariantIds`: **a re-run cannot find it again** (the name and accounts
+  are gone by then), so once the publisher has settled it, open it and replace
+  their name and handle by hand.
 - `--verify` counts a variant still holding them as `postVariants`. A
   standalone `--verify` has only the reference (the name is the placeholder by
   then and the records are gone), like the email-keyed counts. File the

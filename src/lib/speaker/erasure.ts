@@ -1243,6 +1243,12 @@ export interface ErasureVerification {
      * STORED values, apart from the planner.
      */
     postVariants: number
+    /**
+     * Their ids (document ids, no personal data): a variant the erasure had
+     * to leave — in flight while it ran — is known by its identity only
+     * NOW, so the operator clears these by hand once they have settled.
+     */
+    postVariantIds: string[]
   }
 }
 
@@ -1383,13 +1389,15 @@ async function fetchErasureInputs(
   ])
   // The placeholder is not a name to look for: after an erasure the real one
   // is known only from `priorMentions`.
+  // The erasure MARKER decides, not the name: a live speaker may be called
+  // "Deleted speaker". After an erasure the real name is known only from
+  // `priorMentions`.
   const liveName =
-    typeof speaker?.name === 'string' && speaker.name !== ERASED_SPEAKER_NAME
-      ? speaker.name
-      : null
+    typeof speaker?.name === 'string' && !speaker.erasedAt ? speaker.name : null
   const mentions = await fetchSpeakerMentionInputs(
     speakerId,
     speaker?.organizations,
+    speaker?.links,
     liveName,
     priorMentions,
   )
@@ -1555,6 +1563,7 @@ export async function eraseSpeakerInPlace(
       const repaired = await repairPostVariants(
         plan.speakerId,
         inputs.speaker?.organizations,
+        inputs.speaker?.links,
         inputs.mentions.identity,
       ).catch((error: unknown) => {
         console.error('[speaker-erasure] post-variant repair failed', error)
@@ -1601,11 +1610,13 @@ export async function eraseSpeakerInPlace(
 async function repairPostVariants(
   speakerId: string,
   organizations: unknown,
+  links: unknown,
   identity: MentionIdentity,
 ): Promise<number> {
   const mentions = await fetchSpeakerMentionInputs(
     speakerId,
     organizations,
+    links,
     null,
     identity,
   )
@@ -1871,10 +1882,8 @@ export async function verifySpeakerErasure(
     linkedFiles = found?.n ?? 0
   }
 
-  const postVariants = residualMentionVariants(
-    speakerId,
-    inputs.mentions,
-  ).length
+  const postVariantIds = residualMentionVariants(speakerId, inputs.mentions)
+  const postVariants = postVariantIds.length
 
   const speakerFields = ERASURE_UNSET_FIELDS.filter(
     (field) => !isAbsent(doc, field),
@@ -1907,6 +1916,7 @@ export async function verifySpeakerErasure(
     videoProjects,
     linkedFiles,
     postVariants,
+    postVariantIds,
   }
 
   const clean =

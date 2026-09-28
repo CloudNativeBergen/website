@@ -686,6 +686,112 @@ describe('speaker erasure scrubs post variants (#1232)', () => {
     })
   })
 
+  describe('review round 4 (Codex)', () => {
+    it('finds her handle in a foreign variant only through the post alt it inherits', async () => {
+      h.dataset.push(
+        {
+          _id: 'post-x',
+          _type: 'socialPost',
+          attachments: [{ _key: 'px', alt: 'With @ada.bsky.social' }],
+        },
+        variant('var-x-alt', 'draft', 'x', {
+          conference: ref('conf-x'),
+          post: weak('post-x'),
+          mentions: [],
+          attachments: [{ _key: 'vx', source: 'px' }],
+        }),
+      )
+      const result = await eraseSpeakerInPlace({
+        speakerId: ADA,
+        actor: 'test',
+      })
+      expect(doc('var-x-alt').attachments).toEqual([
+        { _key: 'vx', source: 'px', altOverride: 'With a speaker' },
+      ])
+      expect(result.verification?.clean).toBe(true)
+    })
+
+    it('a live speaker legally named "Deleted speaker" is still looked for by name', async () => {
+      doc(ADA).name = 'Deleted speaker'
+      h.dataset.push(
+        variant('var-ds', 'draft', 'Meet Deleted speaker', { mentions: [] }),
+      )
+      await eraseSpeakerInPlace({ speakerId: ADA, actor: 'test' })
+      expect(doc('var-ds').body).toBe('Meet a speaker')
+    })
+
+    it('a placeholder is exempt only as a whole phrase', async () => {
+      doc(ADA).name = 'Speaker'
+      h.dataset.push(
+        variant('var-data', 'draft', 'Our Data Speaker', { mentions: [] }),
+      )
+      await eraseSpeakerInPlace({ speakerId: ADA, actor: 'test' })
+      expect(doc('var-data').body).toBe('Our Data a speaker')
+    })
+
+    it('ignores a malformed stored handle rather than match everywhere', async () => {
+      h.dataset.push(
+        variant('var-bad', 'published', 'x', {
+          mentions: [mention('m-bad', ADA, '@', 'Ada Lovelace')],
+        }),
+        variant('var-clean', 'draft', 'Wait , what ?', {
+          mentions: [],
+        }),
+      )
+      await eraseSpeakerInPlace({ speakerId: ADA, actor: 'test' })
+      expect(doc('var-clean').body).toBe('Wait , what ?')
+      expect(doc('var-bad').mentions).toEqual([])
+    })
+
+    it('knows her handle from her profile links, with no record anywhere', async () => {
+      doc(ADA).links = ['https://bsky.app/profile/ada.profile.dev']
+      h.dataset.push(
+        variant('var-legacy', 'draft', 'Hi @ada.profile.dev', {
+          conference: ref('conf-x'),
+          mentions: [],
+        }),
+      )
+      const result = await eraseSpeakerInPlace({
+        speakerId: ADA,
+        actor: 'test',
+      })
+      expect(doc('var-legacy').body).toBe('Hi a speaker')
+      expect(result.verification?.clean).toBe(true)
+    })
+
+    it('binds a shared tag on the NFC form of the stored names too', async () => {
+      doc(ADA).name = 'A\u030Asa Berg'
+      const team = (key: string, speaker: string, name: string) =>
+        mention(key, speaker, 'team.dev', name, 'did:plc:team')
+      h.dataset.push(
+        variant('var-nfd-team', 'draft', '\u00C5sa Berg and @team.dev', {
+          mentions: [
+            team('t-ada', ADA, 'A\u030Asa Berg'),
+            team('t-bob', BOB, 'Bob Builder'),
+          ],
+        }),
+      )
+      await eraseSpeakerInPlace({ speakerId: ADA, actor: 'test' })
+      expect(doc('var-nfd-team').body).toBe('a speaker and @team.dev')
+    })
+
+    it('scopes by a conference that exists only as a draft or release copy', async () => {
+      h.dataset.push(
+        {
+          _id: 'drafts.conf-new',
+          _type: 'conference',
+          organization: ref('org-a'),
+        },
+        variant('var-new', 'draft', 'Meet Ada Lovelace', {
+          conference: ref('conf-new'),
+          mentions: [],
+        }),
+      )
+      await eraseSpeakerInPlace({ speakerId: ADA, actor: 'test' })
+      expect(doc('var-new').body).toBe('Meet a speaker')
+    })
+  })
+
   it('REFUSES, writing nothing, while a variant naming her is being published', async () => {
     h.dataset.push(variant('var-in-flight', 'publishing', TAGGED))
     const before = structuredClone(h.dataset)
@@ -776,6 +882,10 @@ describe('speaker erasure scrubs post variants (#1232)', () => {
       // The other racing save is still repaired: this is the last moment
       // the name is known.
       expect(doc('var-race-draft').body).toBe('Meet a speaker')
+      // Named for the operator to clear by hand once it settles.
+      expect(result.verification?.residual.postVariantIds).toEqual([
+        'var-race-flight',
+      ])
       expect(result.verification?.residual.postVariants).toBe(1)
       expect(result.verification?.clean).toBe(false)
     })

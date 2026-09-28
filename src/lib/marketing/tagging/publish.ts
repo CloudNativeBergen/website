@@ -65,6 +65,8 @@ export function withholdOptedOutTags(input: {
       speakerId: String(i),
       status: 'tagged' as const,
       name: r.name,
+      // A gone record earns no binding priority, as in the approval check.
+      ...(r.gone ? { gone: true as const } : {}),
     })),
   )
   const lastOf = new Map<string, RecordedTag>()

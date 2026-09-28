@@ -219,4 +219,22 @@ describe('withholdOptedOutTags', () => {
       withheld: [],
     })
   })
+
+  it('binds a shared handle past a GONE record, as the approval check does (#1232)', () => {
+    const team = { handle: 'team.dev', did: 'did:plc:team', optedOut: false }
+    const out = withholdOptedOutTags({
+      body: 'a speaker and @team.dev',
+      recorded: [
+        {
+          ...team,
+          name: 'Alice Smith',
+          speakerId: 'speaker-alice',
+          gone: true,
+        },
+        { ...team, name: 'Bob Jones', speakerId: 'speaker-bob' },
+      ],
+    })
+    expect(out.body).toBe('a speaker and @team.dev')
+    expect(out.mentions).toEqual([{ handle: 'team.dev', did: 'did:plc:team' }])
+  })
 })
