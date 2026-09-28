@@ -447,21 +447,26 @@ export const UploadSoftImage: Story = {
       canvas.getByRole('button', { name: 'Add to gallery' }),
     )
     await waitFor(() =>
-      expect(context.args.uploader).toHaveBeenCalledWith(expect.any(File), {
-        title: 'speaker card',
-        alt: 'Speaker card for Ada Lovelace',
-        edition: 'none',
-        subject: null,
-        tags: [],
-      }),
+      expect(context.args.uploader).toHaveBeenCalledWith(
+        expect.any(File),
+        {
+          title: 'speaker card',
+          alt: 'Speaker card for Ada Lovelace',
+          edition: 'none',
+          subject: null,
+          tags: [],
+        },
+        undefined,
+        undefined,
+      ),
     )
     // The form is ready for the next image, and focus is back on its picker.
     await expect(
-      await canvas.findByText('Choose an image or a track'),
+      await canvas.findByText('Choose an image, GIF, video or track'),
     ).toBeInTheDocument()
     await waitFor(() =>
       expect(document.activeElement).toBe(
-        canvas.getByLabelText('Choose an image or a track'),
+        canvas.getByLabelText('Choose an image, GIF, video or track'),
       ),
     )
   },
@@ -551,7 +556,7 @@ export const ClearKeepsFocus: Story = {
     )
     await userEvent.click(await canvas.findByRole('button', { name: 'Clear' }))
     await expect(document.activeElement).toBe(
-      canvas.getByLabelText('Choose an image or a track'),
+      canvas.getByLabelText('Choose an image, GIF, video or track'),
     )
   },
 }
@@ -803,11 +808,12 @@ export const UploadTrack: Story = {
           tags: [],
         },
         { kind: 'audio', rightsConfirmed: true },
+        undefined,
       ),
     )
     // The next pick asks for the confirmation again.
     await expect(
-      await canvas.findByText('Choose an image or a track'),
+      await canvas.findByText('Choose an image, GIF, video or track'),
     ).toBeInTheDocument()
   },
 }
