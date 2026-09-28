@@ -15,8 +15,10 @@
 export function originalFilename(title: string, kind: 'gif' | 'video'): string {
   const base =
     title
-      .toLowerCase()
       .normalize('NFKD')
+      // The accents NFKD splits off: `naïve` stays one word, `naive`.
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-+|-+$/g, '')
       .slice(0, 60) || 'asset'
