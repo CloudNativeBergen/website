@@ -96,10 +96,9 @@ vi.mock('@/lib/social/provider/constraints', async (importOriginal) => {
 // The tenant secret store behind `social.connections` (#1130): the real
 // derivation runs; only the store answers are scripted.
 const secretsStore = vi.hoisted(() => ({
-  resolveTenantSecrets: vi.fn(
-    async (_orgId: string | null | undefined, _family: string) =>
-      null as object | null,
-  ),
+  resolveTenantSecrets: vi.fn<
+    (orgId: string | null | undefined, family: string) => Promise<object | null>
+  >(async () => null),
 }))
 vi.mock('@/lib/secrets/store', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/secrets/store')>()),
