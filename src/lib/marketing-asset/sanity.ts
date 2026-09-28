@@ -3,6 +3,7 @@ import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
 import { scopedFetch } from '@/lib/sanity/scoped'
 import { isSoftOnSocial } from './image-type'
 import { isAttachableToPost } from './post-attach'
+import { originalDownloadUrl } from './original'
 import type { ResolvedMarketingAssetDetails } from './details'
 import type { StudioOriginInput } from './studio'
 import type {
@@ -37,10 +38,13 @@ const ROW_PROJECTION = `{
   "credit": coalesce(credit, null),
   "imageUrl": image.asset->url,
   "assetId": image.asset._ref,
-  "width": image.asset->metadata.dimensions.width,
-  "height": image.asset->metadata.dimensions.height,
+  "width": coalesce(image.asset->metadata.dimensions.width, poster.asset->metadata.dimensions.width),
+  "height": coalesce(image.asset->metadata.dimensions.height, poster.asset->metadata.dimensions.height),
   "createdAt": _createdAt,
   "audioUrl": audio.asset->url,
+  "videoUrl": video.asset->url,
+  "posterUrl": poster.asset->url,
+  "posterAssetId": poster.asset._ref,
   "durationSeconds": durationSeconds,
   "studio": select(source == "studio" && defined(studio.tab) => {
     "tab": studio.tab,
@@ -93,7 +97,7 @@ export async function listMarketingAssets(
   const rows = await scopedFetch<
     | (Omit<
         MarketingAssetRow,
-        'softOnSocial' | 'attachable' | 'usedInPosts'
+        'softOnSocial' | 'attachable' | 'usedInPosts' | 'downloadUrl'
       > & {
         mimeType: string | null
       })[]
@@ -132,6 +136,7 @@ export async function listMarketingAssets(
     ...row,
     softOnSocial: isSoftOnSocial(row),
     attachable: isAttachableToPost({ ...row, mimeType }),
+    downloadUrl: originalDownloadUrl(row),
     usedInPosts: used ? (row.assetId && used.get(row.assetId)) || 0 : null,
   }))
 }
@@ -334,44 +339,85 @@ export async function readMarketingAssetMark(
   return row?.conferenceId ?? null
 }
 
+/** One Sanity asset a gallery entry holds, and whether its upload made it. */
+export interface MarketingAssetFile {
+  assetId: string
+  /** `image-…` or `file-…`: which orphan check deletes it. */
+  type: 'image' | 'file'
+  createdByUpload: boolean
+}
+
 /**
- * The kind of one of this organization's assets, the image or audio file it
- * holds, and whether this gallery's upload CREATED that file. Sanity
- * deduplicates identical bytes across the whole dataset, so an upload can be
- * handed another tenant's existing asset; only one this gallery created is
- * ever its to delete.
+ * The kind of one of this organization's assets and every Sanity asset it
+ * holds — an image, a GIF, a track, or a video's file AND its poster — each
+ * with whether this gallery's upload CREATED it. Sanity deduplicates
+ * identical bytes across the whole dataset, so an upload can be handed
+ * another tenant's existing asset; only one this gallery created is ever its
+ * to delete.
  */
 export async function readMarketingAssetMedia(
   orgId: string,
   id: string,
 ): Promise<{
   kind: MarketingAssetKind
-  assetId: string | null
-  createdByUpload: boolean
+  files: MarketingAssetFile[]
 } | null> {
   const row = await scopedFetch<{
     kind: MarketingAssetKind
-    assetId: string | null
-    createdAssetId: string | null
+    imageId: string | null
+    fileId: string | null
+    createdImageAssetId: string | null
+    createdFileAssetId: string | null
   } | null>(
     clientReadUncached,
     { orgId },
     `*[_type == "marketingAsset" && _id == $id][0]{
       "kind": coalesce(kind, "image"),
-      "assetId": select(kind == "audio" => audio.asset._ref, image.asset._ref),
-      "createdAssetId": select(kind == "audio" => createdFileAssetId, createdImageAssetId)
+      "imageId": select(kind == "video" => poster.asset._ref, kind == "audio" => null, image.asset._ref),
+      "fileId": select(kind == "audio" => audio.asset._ref, kind == "video" => video.asset._ref, null),
+      createdImageAssetId,
+      createdFileAssetId
     }`,
     { id },
     { cache: 'no-store' },
   )
   if (!row) return null
-  return {
-    kind: row.kind,
-    assetId: row.assetId,
-    // The upload created THIS file: a later swap (Studio) to any other
-    // asset, possibly another tenant's, is never the gallery's to delete.
-    createdByUpload: !!row.assetId && row.createdAssetId === row.assetId,
-  }
+  const files: MarketingAssetFile[] = []
+  // The upload created THIS asset: a later swap (Studio) to any other asset,
+  // possibly another tenant's, is never the gallery's to delete.
+  if (row.imageId)
+    files.push({
+      assetId: row.imageId,
+      type: 'image',
+      createdByUpload: row.createdImageAssetId === row.imageId,
+    })
+  if (row.fileId)
+    files.push({
+      assetId: row.fileId,
+      type: 'file',
+      createdByUpload: row.createdFileAssetId === row.fileId,
+    })
+  return { kind: row.kind, files }
+}
+
+/**
+ * A GIF of this organization's gallery, for the route that relays its
+ * original bytes. Null when it is not ours or not a GIF.
+ */
+export async function readMarketingAssetGif(
+  orgId: string,
+  id: string,
+): Promise<{ title: string; url: string | null } | null> {
+  return scopedFetch<{ title: string; url: string | null } | null>(
+    clientReadUncached,
+    { orgId },
+    `*[_type == "marketingAsset" && _id == $id && kind == "gif"][0]{
+      "title": coalesce(title, ""),
+      "url": image.asset->url
+    }`,
+    { id },
+    { cache: 'no-store' },
+  )
 }
 
 /**
@@ -444,6 +490,20 @@ export type NewMarketingAsset = {
       studio?: StudioOriginInput
     }
   | {
+      kind: 'gif'
+      imageAssetId: string
+      createdImageAssetId?: string
+    }
+  | {
+      kind: 'video'
+      fileAssetId: string
+      /** As `createdImageAssetId`, for the MP4. */
+      createdFileAssetId?: string
+      posterAssetId: string
+      /** As `createdImageAssetId`, for the poster. */
+      createdImageAssetId?: string
+    }
+  | {
       kind: 'audio'
       fileAssetId: string
       /** As `createdImageAssetId`, for the track's file. */
@@ -454,7 +514,52 @@ export type NewMarketingAsset = {
     }
 )
 
-/** Create an uploaded image or track. The organization is the caller's. */
+/** The media fields of a new asset, by kind. */
+function mediaFields(input: NewMarketingAsset): Record<string, unknown> {
+  const reference = (id: string) => ({ _type: 'reference', _ref: id })
+  if (input.kind === 'gif')
+    return {
+      kind: 'gif',
+      image: { _type: 'image', asset: reference(input.imageAssetId) },
+      ...(input.createdImageAssetId
+        ? { createdImageAssetId: input.createdImageAssetId }
+        : {}),
+    }
+  if (input.kind === 'video')
+    return {
+      kind: 'video',
+      video: { _type: 'file', asset: reference(input.fileAssetId) },
+      poster: { _type: 'image', asset: reference(input.posterAssetId) },
+      ...(input.createdFileAssetId
+        ? { createdFileAssetId: input.createdFileAssetId }
+        : {}),
+      ...(input.createdImageAssetId
+        ? { createdImageAssetId: input.createdImageAssetId }
+        : {}),
+    }
+  if (input.kind === 'audio')
+    return {
+      kind: 'audio',
+      audio: { _type: 'file', asset: reference(input.fileAssetId) },
+      ...(input.createdFileAssetId
+        ? { createdFileAssetId: input.createdFileAssetId }
+        : {}),
+      durationSeconds: input.durationSeconds,
+      rightsConfirmation: {
+        confirmedBy: { ...reference(input.rights.confirmedBy), _weak: true },
+        confirmedAt: input.rights.confirmedAt,
+      },
+    }
+  return {
+    kind: 'image',
+    image: { _type: 'image', asset: reference(input.imageAssetId) },
+    ...(input.createdImageAssetId
+      ? { createdImageAssetId: input.createdImageAssetId }
+      : {}),
+  }
+}
+
+/** Create an uploaded asset of any kind. The organization is the caller's. */
 export async function createMarketingAsset(
   input: NewMarketingAsset,
   options: { signal?: AbortSignal } = {},
@@ -463,38 +568,12 @@ export async function createMarketingAsset(
   const { set } = detailsPatch(input.details)
   // An audio track has no alt text, whatever the details carried.
   if (input.kind === 'audio') delete set.alt
-  const media: Record<string, unknown> =
-    input.kind === 'audio'
-      ? {
-          kind: 'audio',
-          audio: {
-            _type: 'file',
-            asset: { _type: 'reference', _ref: input.fileAssetId },
-          },
-          ...(input.createdFileAssetId
-            ? { createdFileAssetId: input.createdFileAssetId }
-            : {}),
-          durationSeconds: input.durationSeconds,
-          rightsConfirmation: {
-            confirmedBy: {
-              _type: 'reference',
-              _ref: input.rights.confirmedBy,
-              _weak: true,
-            },
-            confirmedAt: input.rights.confirmedAt,
-          },
-        }
-      : {
-          kind: 'image',
-          image: {
-            _type: 'image',
-            asset: { _type: 'reference', _ref: input.imageAssetId },
-          },
-          ...(input.createdImageAssetId
-            ? { createdImageAssetId: input.createdImageAssetId }
-            : {}),
-        }
-  const studio = input.kind === 'audio' ? undefined : input.studio
+  const media = mediaFields(input)
+  // Only an image is ever a studio render.
+  const studio =
+    input.kind === undefined || input.kind === 'image'
+      ? input.studio
+      : undefined
   const created = await clientWrite.create(
     {
       _type: 'marketingAsset',

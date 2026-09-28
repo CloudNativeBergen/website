@@ -23,7 +23,7 @@ const h = vi.hoisted(() => ({
   orphan: vi.fn(),
   orphanFile: vi.fn(),
   /** What `asset-ours` is: the image, or an audio track. */
-  kind: 'image' as 'image' | 'audio',
+  kind: 'image' as 'image' | 'audio' | 'video' | 'gif',
   createdImageAssetId: 'image-logo-800x800-png' as string | undefined,
   releaseTwins: 0,
   versionedConfig: undefined as unknown,
@@ -258,22 +258,32 @@ beforeEach(() => {
         return BACKGROUNDS[params.id] ?? null
       if (query.includes('path("versions.*." + $id)'))
         return { n: params.id === 'asset-ours' ? h.releaseTwins : 0 }
-      if (query.includes('"createdAssetId"'))
+      if (query.includes('"imageId"'))
         return params.id !== 'asset-ours'
           ? params.id in MARKS
-            ? { kind: 'image', assetId: null, createdAssetId: null }
+            ? { kind: 'image', imageId: null, fileId: null }
             : null
           : h.kind === 'audio'
             ? {
                 kind: 'audio',
-                assetId: 'file-theme-mp3',
-                createdAssetId: 'file-theme-mp3',
+                imageId: null,
+                fileId: 'file-theme-mp3',
+                createdFileAssetId: 'file-theme-mp3',
               }
-            : {
-                kind: 'image',
-                assetId: 'image-logo-800x800-png',
-                createdAssetId: h.createdImageAssetId,
-              }
+            : h.kind === 'video'
+              ? {
+                  kind: 'video',
+                  imageId: 'image-poster-1920x1080-jpg',
+                  fileId: 'file-clip-mp4',
+                  createdImageAssetId: 'image-poster-1920x1080-jpg',
+                  createdFileAssetId: 'file-clip-mp4',
+                }
+              : {
+                  kind: h.kind,
+                  imageId: 'image-logo-800x800-png',
+                  fileId: null,
+                  createdImageAssetId: h.createdImageAssetId,
+                }
       return ROWS
     },
   )
@@ -294,7 +304,13 @@ describe('marketingAsset.forPost (#1163)', () => {
   it('lists the picker for our post, with the subject its Task names', async () => {
     const rows = await assets().forPost({ postId: 'post-ours', search: 'logo' })
     expect(rows).toEqual([
-      { ...ROWS[0], softOnSocial: true, attachable: true, usedInPosts: null },
+      {
+        ...ROWS[0],
+        softOnSocial: true,
+        attachable: true,
+        usedInPosts: null,
+        downloadUrl: null,
+      },
     ])
     const taskRead = h.read.mock.calls.find(([q]) =>
       String(q).includes('"marketingTask"'),
@@ -330,7 +346,13 @@ describe('marketingAsset.list', () => {
   it('lists this organization’s assets, read with the organization filter', async () => {
     const rows = await assets().list({ usage: true })
     expect(rows).toEqual([
-      { ...ROWS[0], softOnSocial: true, attachable: true, usedInPosts: 2 },
+      {
+        ...ROWS[0],
+        softOnSocial: true,
+        attachable: true,
+        usedInPosts: 2,
+        downloadUrl: null,
+      },
     ])
     const [query, params] = h.read.mock.calls[0]
     expect(query).toContain('organization._ref == $orgId')
@@ -399,6 +421,21 @@ describe('marketingAsset.delete', () => {
     expect(h.orphan).not.toHaveBeenCalled()
     expect(h.del.mock.invocationCallOrder[0]).toBeLessThan(
       h.orphanFile.mock.invocationCallOrder[0],
+    )
+  })
+
+  it('deletes a video’s MP4 AND its poster, each only through the orphan check (#1167)', async () => {
+    h.kind = 'video'
+    expect(await assets().delete({ id: 'asset-ours' })).toEqual({
+      deleted: true,
+    })
+    expect(h.orphanFile.mock.calls).toEqual([['file-clip-mp4']])
+    expect(h.orphan.mock.calls).toEqual([['image-poster-1920x1080-jpg']])
+    expect(h.del.mock.invocationCallOrder[0]).toBeLessThan(
+      Math.min(
+        h.orphan.mock.invocationCallOrder[0],
+        h.orphanFile.mock.invocationCallOrder[0],
+      ),
     )
   })
 
@@ -735,6 +772,22 @@ describe('marketingAsset.update', () => {
         details: { ...DETAILS, alt: undefined },
       }),
     ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    expect(h.patches).toEqual([])
+  })
+
+  it('refuses a GIF or a video with its alt text taken away (#1167)', async () => {
+    for (const kind of ['gif', 'video'] as const) {
+      h.kind = kind
+      await expect(
+        assets().update({
+          id: 'asset-ours',
+          details: { ...DETAILS, alt: undefined },
+        }),
+      ).rejects.toMatchObject({
+        code: 'BAD_REQUEST',
+        message: `${kind === 'gif' ? 'A GIF' : 'A video'} needs its alt text.`,
+      })
+    }
     expect(h.patches).toEqual([])
   })
 

@@ -58,9 +58,9 @@ export default defineType({
       name: 'kind',
       title: 'Kind',
       type: 'string',
-      // GIF and video arrive with #1167; until their fields and UI exist, an
-      // asset is an image or an audio track. Read-only: the upload sets it.
-      options: { list: ['image', 'audio'] },
+      // Read-only: the upload sets it. A GIF is an image the gallery keeps
+      // apart because it cannot go into a post yet; a video is a file.
+      options: { list: ['image', 'gif', 'video', 'audio'] },
       initialValue: 'image',
       readOnly: true,
       validation: (Rule) => Rule.required(),
@@ -72,10 +72,38 @@ export default defineType({
       description: 'For an image or a GIF.',
       validation: (Rule) =>
         Rule.custom((value, { document }) =>
-          // Every kind but a track (and, with #1167, a video) has an image;
-          // so does a document with no kind yet, which reads as an image.
+          // Every kind but a track and a video has an image; so does a
+          // document with no kind yet, which reads as an image.
           document?.kind !== 'audio' && document?.kind !== 'video' && !value
             ? 'An image or GIF asset needs its image'
+            : true,
+        ),
+    }),
+    defineField({
+      name: 'video',
+      title: 'Video',
+      description: 'For a video: an MP4 of at most 100 MB.',
+      type: 'file',
+      options: { accept: 'video/mp4' },
+      hidden: ({ document }) => document?.kind !== 'video',
+      validation: (Rule) =>
+        Rule.custom((value, { document }) =>
+          document?.kind === 'video' && !value
+            ? 'A video asset needs its file'
+            : true,
+        ),
+    }),
+    defineField({
+      name: 'poster',
+      title: 'Poster',
+      description:
+        'For a video: its first frame, drawn in the browser on upload. Shown before it plays.',
+      type: 'image',
+      hidden: ({ document }) => document?.kind !== 'video',
+      validation: (Rule) =>
+        Rule.custom((value, { document }) =>
+          document?.kind === 'video' && !value
+            ? 'A video asset needs its poster'
             : true,
         ),
     }),
@@ -97,7 +125,7 @@ export default defineType({
       name: 'createdFileAssetId',
       title: 'File asset created by this upload',
       description:
-        'Absent when Sanity already held these exact bytes. The file is deleted with the asset only while it is still this one.',
+        'A track’s or a video’s. Absent when Sanity already held these exact bytes. The file is deleted with the asset only while it is still this one.',
       type: 'string',
       readOnly: true,
       hidden: true,
@@ -144,7 +172,7 @@ export default defineType({
       name: 'createdImageAssetId',
       title: 'Image asset created by this upload',
       description:
-        'Absent when Sanity already held these exact bytes. For a render Task entry, its current render. The image is deleted with the asset only while it is still this one, and only once nothing else references it.',
+        'For a video, its poster. Absent when Sanity already held these exact bytes. For a render Task entry, its current render. The image is deleted with the asset only while it is still this one, and only once nothing else references it.',
       type: 'string',
       readOnly: true,
       hidden: true,
@@ -230,6 +258,16 @@ export default defineType({
     }),
   ],
   preview: {
-    select: { title: 'title', subtitle: 'alt', media: 'image' },
+    select: {
+      title: 'title',
+      subtitle: 'alt',
+      image: 'image',
+      poster: 'poster',
+    },
+    prepare: ({ title, subtitle, image, poster }) => ({
+      title,
+      subtitle,
+      media: image ?? poster,
+    }),
   },
 })

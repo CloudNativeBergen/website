@@ -72,11 +72,15 @@ const row = (
   createdAt: '2026-09-20T10:00:00Z',
   softOnSocial: false,
   audioUrl: null,
+  videoUrl: null,
+  posterUrl: null,
+  posterAssetId: null,
+  downloadUrl: null,
   durationSeconds: null,
   rights: null,
   studio: null,
   usedInPosts: 0,
-  attachable: fields.kind !== 'audio',
+  attachable: (fields.kind ?? 'image') === 'image',
   ...fields,
 })
 

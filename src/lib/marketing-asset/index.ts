@@ -33,7 +33,23 @@ export {
   audioTypeForFile,
   formatTrackLength,
 } from './audio-type'
-export { MARKETING_ASSET_SUBJECT_TYPES } from './types'
+export { MARKETING_ASSET_SUBJECT_TYPES, kindHasAlt } from './types'
+export {
+  MARKETING_ASSET_GIF_SIZE_REFUSAL,
+  MARKETING_ASSET_GIF_TYPE,
+  MARKETING_ASSET_GIF_TYPE_REFUSAL,
+  MARKETING_ASSET_MAX_GIF_BYTES,
+  MARKETING_ASSET_MAX_GIF_LABEL,
+  MARKETING_ASSET_MAX_VIDEO_BYTES,
+  MARKETING_ASSET_MAX_VIDEO_LABEL,
+  MARKETING_ASSET_POSTER_REFUSAL,
+  MARKETING_ASSET_VIDEO_SIZE_REFUSAL,
+  MARKETING_ASSET_VIDEO_TYPE,
+  MARKETING_ASSET_VIDEO_TYPE_REFUSAL,
+  isQuickTimeFile,
+  motionKindForFile,
+} from './motion-type'
+export type { MotionKind } from './motion-type'
 export { NOT_ATTACHABLE_YET, isAttachableToPost } from './post-attach'
 export { STUDIO_TABS, openInStudioHref, opensTheCard } from './studio'
 export type { MarketingAssetStudioOrigin, StudioTab } from './studio'

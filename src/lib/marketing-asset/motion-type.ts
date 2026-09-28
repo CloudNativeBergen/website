@@ -82,7 +82,5 @@ export function motionKindForFile(file: {
 
 /** A `.mov` (or any QuickTime) the form refuses by name before uploading. */
 export function isQuickTimeFile(file: { name: string; type: string }): boolean {
-  return (
-    file.type === 'video/quicktime' || /\.mov$/i.test(file.name.trim())
-  )
+  return file.type === 'video/quicktime' || /\.mov$/i.test(file.name.trim())
 }

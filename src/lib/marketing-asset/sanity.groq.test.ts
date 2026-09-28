@@ -37,6 +37,7 @@ import {
   readMarketingAssetForPost,
   readMarketingAssetBackground,
   readMarketingAssetMark,
+  readMarketingAssetGif,
   readMarketingAssetMedia,
 } from '@/lib/marketing-asset/sanity'
 
@@ -445,8 +446,9 @@ describe('audio tracks (#1178)', () => {
   it('reads a track’s FILE for delete, and an old kindless asset as an image', async () => {
     expect(await readMarketingAssetMedia('org-a', 'theme')).toEqual({
       kind: 'audio',
-      assetId: 'file-theme-mp3',
-      createdByUpload: true,
+      files: [
+        { assetId: 'file-theme-mp3', type: 'file', createdByUpload: true },
+      ],
     })
     expect(await readMarketingAssetMedia('org-a', 'kindless')).toMatchObject({
       kind: 'image',
@@ -832,5 +834,145 @@ describe('picking an asset into a post (#1163)', () => {
     })
     // Scoped: another organization's asset reads as nothing.
     expect(await readMarketingAssetForPost('org-a', 'b-ada')).toBeNull()
+  })
+})
+
+describe('GIFs and videos (#1167)', () => {
+  const MOTION = [
+    {
+      _id: 'file-clip-mp4',
+      _type: 'sanity.fileAsset',
+      url: 'https://cdn.sanity.io/files/p/d/clip.mp4',
+    },
+    {
+      _id: 'image-poster-1920x1080-jpg',
+      _type: 'sanity.imageAsset',
+      url: 'https://cdn.sanity.io/images/p/d/poster-1920x1080.jpg',
+      mimeType: 'image/jpeg',
+      metadata: { dimensions: { width: 1920, height: 1080 } },
+    },
+    {
+      _id: 'image-wave-480x480-gif',
+      _type: 'sanity.imageAsset',
+      url: 'https://cdn.sanity.io/images/p/d/wave-480x480.gif',
+      mimeType: 'image/gif',
+      metadata: { dimensions: { width: 480, height: 480 } },
+    },
+    asset('clip', 'org-a', {
+      kind: 'video',
+      title: 'Opening, 20 s',
+      video: { _type: 'file', asset: ref('file-clip-mp4') },
+      poster: { _type: 'image', asset: ref('image-poster-1920x1080-jpg') },
+      createdFileAssetId: 'file-clip-mp4',
+      // The poster Sanity already held: not ours to delete.
+      _createdAt: '2026-09-06T00:00:00Z',
+    }),
+    asset('wave', 'org-a', {
+      kind: 'gif',
+      title: 'Wave!',
+      image: { _type: 'image', asset: ref('image-wave-480x480-gif') },
+      createdImageAssetId: 'image-wave-480x480-gif',
+      _createdAt: '2026-09-07T00:00:00Z',
+    }),
+    // B's video, on the same bytes.
+    asset('b-clip', 'org-b', {
+      kind: 'video',
+      video: { _type: 'file', asset: ref('file-clip-mp4') },
+    }),
+  ]
+  beforeEach(() => {
+    h.dataset = [...DATASET, ...MOTION]
+  })
+
+  it('lists each by its kind, within this organization', async () => {
+    expect(await list({ kind: 'video' })).toEqual(['clip'])
+    expect(await list({ kind: 'gif' })).toEqual(['wave'])
+  })
+
+  it('carries a video’s file, poster and original download; never attachable', async () => {
+    const [video] = await listMarketingAssets('org-a', 'conf-a-2026', {
+      kind: 'video',
+    })
+    expect(video).toMatchObject({
+      kind: 'video',
+      alt: 'alt of clip',
+      videoUrl: 'https://cdn.sanity.io/files/p/d/clip.mp4',
+      posterUrl: 'https://cdn.sanity.io/images/p/d/poster-1920x1080.jpg',
+      posterAssetId: 'image-poster-1920x1080-jpg',
+      width: 1920,
+      height: 1080,
+      imageUrl: null,
+      assetId: null,
+      attachable: false,
+      // The file endpoint's `dl` keeps the bytes; it only adds the header.
+      downloadUrl:
+        'https://cdn.sanity.io/files/p/d/clip.mp4?dl=opening-20-s.mp4',
+    })
+  })
+
+  it('downloads a GIF through our route, never a CDN rendition', async () => {
+    const [gif] = await listMarketingAssets('org-a', 'conf-a-2026', {
+      kind: 'gif',
+    })
+    expect(gif).toMatchObject({
+      kind: 'gif',
+      imageUrl: 'https://cdn.sanity.io/images/p/d/wave-480x480.gif',
+      attachable: false,
+      downloadUrl: '/api/admin/marketing-assets/original?asset=wave',
+      videoUrl: null,
+    })
+  })
+
+  it('reads a video’s MP4 AND poster for delete, each with its own provenance', async () => {
+    expect(await readMarketingAssetMedia('org-a', 'clip')).toEqual({
+      kind: 'video',
+      files: [
+        {
+          assetId: 'image-poster-1920x1080-jpg',
+          type: 'image',
+          createdByUpload: false,
+        },
+        { assetId: 'file-clip-mp4', type: 'file', createdByUpload: true },
+      ],
+    })
+    expect(await readMarketingAssetMedia('org-a', 'wave')).toEqual({
+      kind: 'gif',
+      files: [
+        {
+          assetId: 'image-wave-480x480-gif',
+          type: 'image',
+          createdByUpload: true,
+        },
+      ],
+    })
+    expect(await readMarketingAssetMedia('org-a', 'b-clip')).toBeNull()
+  })
+
+  it('reads a GIF for its original route, and nothing else', async () => {
+    expect(await readMarketingAssetGif('org-a', 'wave')).toEqual({
+      title: 'Wave!',
+      url: 'https://cdn.sanity.io/images/p/d/wave-480x480.gif',
+    })
+    expect(await readMarketingAssetGif('org-a', 'clip')).toBeNull()
+    expect(await readMarketingAssetGif('org-b', 'wave')).toBeNull()
+  })
+
+  it('offers both in the post picker, marked not attachable', async () => {
+    h.dataset.push({
+      _id: 'post-1',
+      _type: 'socialPost',
+      conference: ref('conf-a-2026'),
+    })
+    const rows = await listMarketingAssetsForPost(
+      'org-a',
+      'conf-a-2026',
+      'post-1',
+      {},
+    )
+    const motion = rows.filter((r) => r.kind === 'gif' || r.kind === 'video')
+    expect(motion.map((r) => [r._id, r.attachable])).toEqual([
+      ['wave', false],
+      ['clip', false],
+    ])
   })
 })

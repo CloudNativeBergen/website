@@ -20,7 +20,15 @@ export type MarketingAssetScope = 'organization' | 'edition'
 
 export type MarketingAssetEditionChoice = 'none' | 'current' | 'keep'
 
-export type MarketingAssetKind = 'image' | 'audio'
+/**
+ * `image` (PNG, JPEG, WebP) goes into a post; `gif` and `video` live in the
+ * gallery and are posted by hand (spec §4.1, §5); `audio` is a studio track.
+ */
+export type MarketingAssetKind = 'image' | 'gif' | 'video' | 'audio'
+
+/** The kinds that carry alt text: every one but a track. */
+export const kindHasAlt = (kind: MarketingAssetKind): boolean =>
+  kind !== 'audio'
 
 /** Who confirmed the right to use a track, and when (server-stamped). */
 export interface MarketingAssetRights {
@@ -54,6 +62,16 @@ export interface MarketingAssetRow {
   softOnSocial: boolean
   /** An audio track's file on the Sanity CDN; null for an image. */
   audioUrl: string | null
+  /** A video's MP4 on the Sanity CDN; null for every other kind. */
+  videoUrl: string | null
+  /** A video's poster (its first frame); null for every other kind. */
+  posterUrl: string | null
+  posterAssetId: string | null
+  /**
+   * Where the ORIGINAL file of a GIF or video is downloaded (spec §5) — never
+   * a rendition, which re-encodes. Null for an image or a track.
+   */
+  downloadUrl: string | null
   durationSeconds: number | null
   rights: MarketingAssetRights | null
   /** Which studio tab and subject made it; null for anything uploaded. */

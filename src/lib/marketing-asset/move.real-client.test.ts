@@ -285,7 +285,10 @@ describe('the video move through the real Sanity client (#1167)', () => {
         vi.fn(
           async () =>
             new Response(
-              freshBody(MARKETING_ASSET_MAX_VIDEO_BYTES + 1024 * 1024, MP4_HEAD),
+              freshBody(
+                MARKETING_ASSET_MAX_VIDEO_BYTES + 1024 * 1024,
+                MP4_HEAD,
+              ),
             ),
         ),
       )
