@@ -166,8 +166,18 @@ export function speakerSubjectIds(speakerId: string, talks: Doc[]): string[] {
  * `{ asset: { _ref } }` rather than read from a named field, so a video and
  * its poster (#1167) are linked the day they exist. A Task holds its renders
  * ({@link taskRenderIds}) and nothing else of the speaker's.
+ *
+ * A Task finished with an image from the gallery (#1166) records the asset
+ * in `galleryAsset`. While that asset exists (in any version, see
+ * `liveGalleryAssets`) its image is the GALLERY's: the asset's own subject
+ * decides, as for a saved video (#1181) — a Task about the speaker holding
+ * the organization's logo must not cost the logo. Once the asset is gone the
+ * Task's subject decides again.
  */
-export function linkedFileIds(subjectDocs: Doc[]): string[] {
+export function linkedFileIds(
+  subjectDocs: Doc[],
+  liveGalleryAssets: ReadonlySet<string> = new Set(),
+): string[] {
   const ids = new Set<string>()
   const walk = (value: unknown) => {
     if (Array.isArray(value)) return value.forEach(walk)
@@ -178,10 +188,24 @@ export function linkedFileIds(subjectDocs: Doc[]): string[] {
   }
   for (const doc of subjectDocs) {
     if (doc._type === 'marketingAsset') walk(doc)
-    if (doc._type === 'marketingTask')
-      taskRenderIds(doc).forEach((id) => ids.add(id))
+    if (doc._type === 'marketingTask') {
+      const gallery = refOf(doc.galleryAsset)
+      const galleryImage =
+        gallery && liveGalleryAssets.has(gallery) ? fileRefOf(doc.asset) : null
+      taskRenderIds(doc)
+        .filter((id) => id !== galleryImage)
+        .forEach((id) => ids.add(id))
+    }
   }
   return [...ids]
+}
+
+/** The gallery assets the subject Tasks were finished with (#1166). */
+export function taskGalleryAssetIds(subjectDocs: Doc[]): string[] {
+  return subjectDocs.flatMap((doc) => {
+    const id = doc._type === 'marketingTask' ? refOf(doc.galleryAsset) : null
+    return id ? [id] : []
+  })
 }
 
 /** A saved video's file with the subject it copied, as erasure reads it. */
@@ -364,7 +388,14 @@ export function planSpeakerAssetErasure(
           id: doc._id,
           type: doc._type,
           rev: revOf(doc),
-          unset: [...unset, ...unrecord(doc)],
+          // Where a gallery image came from (#1166) goes with it.
+          unset: [
+            ...unset,
+            ...(unset.includes('asset') && doc.galleryAsset !== undefined
+              ? ['galleryAsset']
+              : []),
+            ...unrecord(doc),
+          ],
           reason: 'Task render linked to the subject',
         })
         patchedTasks.add(doc._id)
@@ -540,7 +571,10 @@ export async function fetchSpeakerAssetInputs(
   ])
   const held = [...(sceneFiles ?? []), ...(trackFiles ?? [])]
   const assetIds = [
-    ...new Set(held.flatMap((f) => (f.assetId ? [f.assetId] : []))),
+    ...new Set([
+      ...held.flatMap((f) => (f.assetId ? [f.assetId] : [])),
+      ...taskGalleryAssetIds(subjectDocs ?? []),
+    ]),
   ]
   // Live in ANY version — published, a Studio draft or a Content Release
   // copy: while one exists, the gallery's own subject decides.
@@ -564,7 +598,7 @@ export async function fetchSpeakerAssetInputs(
   }))
   const fileIds = [
     ...new Set([
-      ...linkedFileIds(subjectDocs ?? []),
+      ...linkedFileIds(subjectDocs ?? [], liveAssets),
       ...projectSubjectFileIds(projectFiles ?? [], subjectIds),
       ...extraFileIds,
     ]),

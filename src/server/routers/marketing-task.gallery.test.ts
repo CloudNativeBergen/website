@@ -61,7 +61,9 @@ vi.mock('@/lib/social/sanity', async (importOriginal) => {
       ...args: Parameters<typeof actual.handoffStudioAttachment>
     ) => {
       h.handedOff.push(args[0])
-      return h.realHandoff ? actual.handoffStudioAttachment(...args) : 'attached'
+      return h.realHandoff
+        ? actual.handoffStudioAttachment(...args)
+        : 'attached'
     },
   }
 })
@@ -597,10 +599,7 @@ describe('finishing a render Task with an asset from the gallery (#1166)', () =>
   const POSTER = 'image-poster-1920x1080-jpg'
   /** The organization-scoped read of the picked asset. */
   const ASSET_READ = '"imageAssetId": image.asset._ref'
-  const asset = (
-    id: string,
-    fields: Record<string, unknown>,
-  ): Doc => ({
+  const asset = (id: string, fields: Record<string, unknown>): Doc => ({
     _id: id,
     _type: 'marketingAsset',
     _rev: `rev-${id}`,
@@ -767,7 +766,7 @@ describe('finishing a render Task with an asset from the gallery (#1166)', () =>
   it.each([
     ["a gallery asset's image, sent as a bare image id", LOGO],
     ['an arbitrary image id', THEIRS],
-  ])('still refuses %s that is not this Task\'s upload', async (_what, id) => {
+  ])("still refuses %s that is not this Task's upload", async (_what, id) => {
     const before = structuredClone(h.dataset)
     await expect(attach(id)).rejects.toMatchObject({
       code: 'BAD_REQUEST',
@@ -802,7 +801,12 @@ describe('finishing a render Task with an asset from the gallery (#1166)', () =>
     await finish('asset-logo')
     // A publishing Task that starts waiting afterwards.
     h.dataset.push(
-      { _id: 'post-3', _type: 'socialPost', _rev: 'r', conference: ref('conf-A') },
+      {
+        _id: 'post-3',
+        _type: 'socialPost',
+        _rev: 'r',
+        conference: ref('conf-A'),
+      },
       {
         _id: 'task-pub-3',
         _type: 'marketingTask',

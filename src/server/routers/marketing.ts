@@ -127,10 +127,7 @@ import {
   templateDocId,
   templateNameTaken,
 } from '@/lib/marketing/plan-templates/sanity'
-import {
-  notFoundMessage,
-  requireDocumentInCurrentOrg,
-} from '@/server/tenancy'
+import { notFoundMessage, requireDocumentInCurrentOrg } from '@/server/tenancy'
 import { readMarketingAssetForPost } from '@/lib/marketing-asset/sanity'
 import { SOCIAL_ALT_MAX_LENGTH } from '@/lib/social/types'
 import {
@@ -689,7 +686,8 @@ async function galleryImageForTask(
   if (!alt)
     throw new TRPCError({
       code: 'BAD_REQUEST',
-      message: 'This asset has no alt text. Add one in the asset gallery first.',
+      message:
+        'This asset has no alt text. Add one in the asset gallery first.',
     })
   if (alt.length > SOCIAL_ALT_MAX_LENGTH)
     throw new TRPCError({
@@ -1794,13 +1792,15 @@ export const marketingRouter = router({
             // the Task editor offers a retry for; cleared with the receipts.
             // A gallery asset is there already.
             ...(newImage && !pick ? { galleryPending: true } : {}),
-            ...(newImage && pick ? {
+            ...(newImage && pick
+              ? {
                   galleryAsset: {
                     _type: 'reference',
                     _ref: pick.id,
                     _weak: true,
                   },
-                } : {}),
+                }
+              : {}),
           },
           !newImage
             ? []
@@ -1830,8 +1830,7 @@ export const marketingRouter = router({
         // Only a mark this save set, or one already there, needs clearing.
         let galleryMarkFailed = false
         const clearGalleryMark =
-          gallery === 'saved' &&
-          (newImage || task.galleryPending === true)
+          gallery === 'saved' && (newImage || task.galleryPending === true)
         // Then every recorded render goes, through the shared orphan check,
         // so a post it was handed to keeps it — and keeps it recorded, for a
         // retry and for a speaker's erasure. Never fails the save.
@@ -1859,8 +1858,7 @@ export const marketingRouter = router({
                   assetId: assetId,
                   alt: pick
                     ? pick.alt
-                    : (!newImage && task.galleryAlt?.trim()) ||
-                      renderAlt(task),
+                    : (!newImage && task.galleryAlt?.trim()) || renderAlt(task),
                 },
               )
               if (typeof outcome === 'object') {

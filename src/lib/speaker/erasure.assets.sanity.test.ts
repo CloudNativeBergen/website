@@ -952,3 +952,79 @@ describe('speaker erasure removes their images everywhere (#1162)', () => {
     expect(h.dataset).toEqual(before)
   })
 })
+
+describe('a Task finished with an image from the gallery (#1166)', () => {
+  const LOGO = 'image-logo-1080x1080-png'
+  /** A Task about `subject`, holding `file` from the gallery asset `from`. */
+  const fromGallery = (
+    id: string,
+    subject: string,
+    file: string,
+    from: string,
+  ) => ({
+    _id: id,
+    _type: 'marketingTask',
+    _rev: 'r0',
+    title: `Card ${id}`,
+    subject: weak(subject),
+    asset: image(file),
+    galleryAsset: weak(from),
+  })
+  const logo = {
+    ...galleryAsset('asset-logo', ADA, LOGO),
+    subject: undefined,
+    title: 'Logo',
+  }
+  const logoPost = {
+    _id: 'post-logo',
+    _type: 'socialPost',
+    _rev: 'r0',
+    body: 'Tickets on sale',
+    attachments: [{ _key: 'att-logo', image: image(LOGO), alt: 'Logo' }],
+  }
+
+  it("a Task ABOUT the speaker holding the organization's logo leaves the logo, its entry and its posts alone", async () => {
+    h.dataset.push(
+      { _id: LOGO, _type: 'sanity.imageAsset' },
+      JSON.parse(JSON.stringify(logo)),
+      fromGallery('task-logo', ADA, LOGO, 'asset-logo'),
+      logoPost,
+    )
+    const before = structuredClone([
+      doc('asset-logo'),
+      doc('task-logo'),
+      doc('post-logo'),
+    ])
+    const result = await eraseSpeakerInPlace({ speakerId: ADA, actor: 'test' })
+    expect(result.err).toBeNull()
+    expect(doc(LOGO)).toBeDefined()
+    expect([doc('asset-logo'), doc('task-logo'), doc('post-logo')]).toEqual(
+      before,
+    )
+    expect(result.verification?.clean).toBe(true)
+  })
+
+  it('treats the logo as the Task’s own once its gallery asset is gone', async () => {
+    h.dataset.push(
+      { _id: LOGO, _type: 'sanity.imageAsset' },
+      fromGallery('task-logo', ADA, LOGO, 'asset-logo'),
+    )
+    const result = await eraseSpeakerInPlace({ speakerId: ADA, actor: 'test' })
+    expect(result.err).toBeNull()
+    expect(doc(LOGO)).toBeUndefined()
+    expect(doc('task-logo').asset).toBeUndefined()
+    expect(doc('task-logo').galleryAsset).toBeUndefined()
+    expect(result.verification?.clean).toBe(true)
+  })
+
+  it("a Task about someone else holding the speaker's card loses it, and the record of where it came from", async () => {
+    h.dataset.push(fromGallery('task-other', BOB, ADA_CARD, 'asset-ada'))
+    const result = await eraseSpeakerInPlace({ speakerId: ADA, actor: 'test' })
+    expect(result.err).toBeNull()
+    expect(doc(ADA_CARD)).toBeUndefined()
+    expect(doc('task-other')).not.toHaveProperty('asset')
+    expect(doc('task-other')).not.toHaveProperty('galleryAsset')
+    expect(doc('task-other')).toMatchObject({ subject: weak(BOB) })
+    expect(result.verification?.clean).toBe(true)
+  })
+})
