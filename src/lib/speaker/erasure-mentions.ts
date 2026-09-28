@@ -62,9 +62,6 @@ const IN_FLIGHT_STATUSES = ['publishing', 'submitted'] as const
 /** Sanity `_key`s are safe to interpolate only if they look like this. */
 const SAFE_KEY = /^[A-Za-z0-9._-]+$/
 
-/** Stands in for an inserted placeholder until every pass is done. */
-const SENTINEL = '\uE000'
-
 /**
  * Who to scrub: the subject's name, and every name, handle and DID a record
  * of theirs carries. Threaded into the verification as it was BEFORE the
@@ -258,21 +255,23 @@ function subjectTags(
   })
 }
 
-/** The text with every tag and whole-word name of the subject neutralised. */
+/**
+ * The text with every tag and whole-word name of the subject neutralised.
+ * Tags first; the name pass then skips every placeholder, so a speaker named
+ * "Speaker" never has one scrubbed again (see {@link nameSpans}).
+ */
 function scrubText(
   text: string,
   v: Doc,
   speakerId: string,
   identity: MentionIdentity,
 ): string {
-  // Tags first, into a sentinel, so the name pass never matches inside an
-  // inserted placeholder (a speaker named "Speaker").
   let out = text
   for (const t of subjectTags(text, v, speakerId, identity).reverse())
-    out = `${out.slice(0, t.start)}${SENTINEL}${out.slice(t.end)}`
+    out = `${out.slice(0, t.start)}${GONE_SPEAKER_TEXT}${out.slice(t.end)}`
   for (const [a, b] of nameSpans(out, identity.names).reverse())
-    out = `${out.slice(0, a)}${SENTINEL}${out.slice(b)}`
-  return out.replaceAll(SENTINEL, GONE_SPEAKER_TEXT)
+    out = `${out.slice(0, a)}${GONE_SPEAKER_TEXT}${out.slice(b)}`
+  return out
 }
 
 /** A Studio draft or a Content Release copy was never sent anywhere. */

@@ -442,7 +442,7 @@ describe('speaker erasure scrubs post variants (#1232)', () => {
 
     it('leaves a URL whole, query and fragment included', async () => {
       const body =
-        'See https://example.test/?name=Ada and https://example.test/#Ada'
+        'See https://example.test/?name=Ada, https://example.test/#Ada and https://example.test/?q=x+Ada'
       h.dataset.push(variant('var-url', 'draft', body, { mentions: [] }))
       doc(ADA).name = 'Ada'
       await eraseSpeakerInPlace({ speakerId: ADA, actor: 'test' })
