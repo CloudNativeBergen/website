@@ -98,11 +98,7 @@ function literalCopy(task: CopySourceTask): string {
  * Template that kept it verbatim and never rewritten since — which is asked
  * about again on every save, so the flag cannot wear off by being ignored.
  */
-const carriesLiteralCopy = (
-  task: CopySourceTask,
-  source: SaveSource,
-  stored?: TaskRecipe,
-) =>
+const carriesLiteralCopy = (task: CopySourceTask, stored?: TaskRecipe) =>
   task.kind === 'publishing' &&
   literalCopy(task) !== '' &&
   (!stored?.skeleton || stored.verbatim || isEdited(task, stored.skeleton))
@@ -129,7 +125,7 @@ export function savePreview(source: SaveSource): ReviewItem[] {
               },
             ]
           : []),
-        ...(carriesLiteralCopy(task, source, stored)
+        ...(carriesLiteralCopy(task, stored)
           ? [
               {
                 ...about,
@@ -190,7 +186,7 @@ export function buildTemplate(
     const keyById = new Map(tasks.map((t) => [t._id, t.key]))
     const staticRecipe = (task: CopySourceTask): TaskRecipe => {
       const stored = campaign.recipes.find((r) => r.key === task.key)
-      const literal = carriesLiteralCopy(task, source, stored)
+      const literal = carriesLiteralCopy(task, stored)
       const rewritten = decisions.copy?.[task._id]
       const skeleton = literal
         ? (rewritten ?? literalCopy(task))

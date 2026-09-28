@@ -403,6 +403,18 @@ describe('copyPlan — Tasks', () => {
     expect(task(plan, 'cfpOpen:bluesky').targetPage).toBe('/cfp')
   })
 
+  it('never falls back to a stored recipe page under /go/ either (review)', () => {
+    const source = lastYearSource()
+    source.tasks.find((x) => x.key === 'cfpOpen:bluesky')!.targetPage =
+      '/go/abc987'
+    for (const c of source.campaigns)
+      c.recipes = c.recipes.map((r) =>
+        r.key === 'cfpOpen:bluesky' ? { ...r, targetPage: '/go/abc987' } : r,
+      )
+    const plan = copy(source)
+    expect(task(plan, 'cfpOpen:bluesky').targetPage).toBe('/')
+  })
+
   it('swaps the short link in copy it keeps word for word, so two editions never share a code', () => {
     // Copy with no stored skeleton, recorded as NOT edited: kept as written.
     const source = lastYearSource((seed) => {

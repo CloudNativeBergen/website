@@ -138,8 +138,14 @@ export function ManualPostView({
   // This opening's check is still running (review T4): nothing to copy yet.
   const checking = pending !== null && 'checking' in pending
   const checked = pending !== null && 'body' in pending ? pending : null
-  const body = checked?.body ?? variant.body
   const link = postedLink?.trim() || null
+  // The short URL is matched by its code on any host: a body resolved on a
+  // primary domain the conference has since changed holds it there, and the
+  // text is copied with the CURRENT link in its place (never saved).
+  const shortInBody = shortLinkPattern(variant.shortCode)
+  const stored = checked?.body ?? variant.body
+  const body =
+    link && shortInBody ? stored.replace(shortInBody, () => link) : stored
   // Where the link goes by hand (spec §3.1, #1134).
   //
   //   `comment` (LinkedIn) — the one placement that keeps the link OUT of the
@@ -160,14 +166,10 @@ export function ManualPostView({
   // Copy resolved `{url}` to the short link; copy from before short links
   // carries the long one. Either is the link already in the text.
   const longLink = variant.link?.trim() || null
-  // The short URL is matched by its code on any host: the body may hold it
-  // on a primary domain the conference has since changed.
-  const shortInBody = shortLinkPattern(variant.shortCode)
   const linkAppended =
     linkInBody &&
     !body.includes(link) &&
-    !(longLink !== null && body.includes(longLink)) &&
-    !(shortInBody !== null && body.search(shortInBody) !== -1)
+    !(longLink !== null && body.includes(longLink))
   /**
    * A body that reached this view carrying a link to our own site, on a
    * platform where the link is the first comment (spec §3.1, #1134). Save,

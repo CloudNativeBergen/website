@@ -635,6 +635,16 @@ describe('marketing outreach delivery', () => {
     expect(code).toMatch(/^[a-hjkmnp-z2-9]{6}$/)
     expect(body).toBe(`Please share https://cloudnativebergen.dev/go/${code} !`)
   })
+  it('sends the short link on the CURRENT host when the message holds it on a dropped one (review)', async () => {
+    task.shortCode = 'abc987'
+    await caller().task.sendOutreach({
+      ...send,
+      body: 'Share https://cnb-old.example/go/abc987 please',
+    })
+    expect(h.addMessage.mock.calls[0][0].body).toBe(
+      'Share https://cloudnativebergen.dev/go/abc987 please',
+    )
+  })
   it('prefills the long link for a Task that predates short codes (it mints on send, never in a read)', async () => {
     task.shortCode = null
     const data = await caller().task.get({ taskId: send.taskId })

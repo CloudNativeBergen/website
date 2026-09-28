@@ -111,6 +111,15 @@ describe('ManualPostView — the link a reader sees is the short link (short-lin
     expect(screen.queryByText(/The link is added at the end/)).toBeNull()
   })
 
+  it('copies the CURRENT short link in place of one on a since-dropped domain (review)', () => {
+    show('Old host: https://cnb-old.example/go/abc987 !')
+    const text = screen
+      .getByRole('button', { name: /copy text/i })
+      .closest('section')!.textContent
+    expect(text).toContain(`Old host: ${SHORT} !`)
+    expect(text).not.toContain('cnb-old.example')
+  })
+
   it('shows where the short link goes, under it (review P2)', () => {
     show('Hi')
     expect(screen.getByTestId('manual-link-destination').textContent).toBe(LONG)

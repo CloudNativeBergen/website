@@ -425,9 +425,13 @@ export function copyPlan(input: CopyInput): SeedPlan {
     })
     const dated = resolveAnchor(anchor, target)
 
+    // Both candidates are checked: a stored Recipe's page is a Studio string
+    // too, and may be a `/go/` short link just like the Task's.
     const targetPage = isSitePath(t.targetPage, conference.baseUrl)
       ? t.targetPage
-      : (storedRecipe?.targetPage ?? '/')
+      : isSitePath(storedRecipe?.targetPage, conference.baseUrl)
+        ? storedRecipe.targetPage
+        : '/'
     const recipe: TaskRecipe = {
       key: t.key,
       beat: t.key.split(':')[0],

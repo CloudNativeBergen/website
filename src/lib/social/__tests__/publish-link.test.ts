@@ -104,6 +104,23 @@ describe('shortLinkPattern — the short URL on any host (review P1)', () => {
       'a <url> b <url>. c https://x.example/go/abc9872 d https://x.example/go/abc986',
     )
   })
+  it('matches only a COMPLETE short URL: query, fragment and prose punctuation, never a longer path (review)', () => {
+    const swap = (body: string) =>
+      body.replace(shortLinkPattern('abc987')!, () => '<url>')
+    expect(swap('See https://o.example/go/abc987.')).toBe('See <url>.')
+    expect(swap('(https://o.example/go/abc987), next')).toBe('(<url>), next')
+    expect(swap('https://o.example/go/abc987?x=1#top end')).toBe('<url> end')
+    expect(swap('https://o.example/go/abc987/extra')).toBe(
+      'https://o.example/go/abc987/extra',
+    )
+    expect(swap('https://o.example/go/abc987-bad')).toBe(
+      'https://o.example/go/abc987-bad',
+    )
+    expect(swap('https://o.example/go/abc987.bad')).toBe(
+      'https://o.example/go/abc987.bad',
+    )
+  })
+
   it('is null for a variant without a code, or a stored value that is not one', () => {
     expect(shortLinkPattern(null)).toBeNull()
     expect(shortLinkPattern('not a code')).toBeNull()

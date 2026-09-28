@@ -207,6 +207,7 @@ import {
 import { scheduleIssues } from '@/lib/social/schedule-check'
 import {
   publishLinkFields,
+  shortLinkPattern,
   variantShortLinkOrigin,
 } from '@/lib/social/publish-link'
 import {
@@ -1107,8 +1108,15 @@ export const marketingRouter = router({
           { link: destination, shortCode: outreachCode.code },
           variantShortLinkOrigin(outreachCode.code, conference),
         ).link
+        // Also the short link itself on a host the conference has since
+        // dropped: the message goes out on the current one.
+        const staleShort = shortLinkPattern(outreachCode.code)
         const body = shortLink
-          ? replaceLinks(input.body, [destination], shortLink)
+          ? replaceLinks(
+              input.body,
+              [...(staleShort ? [staleShort] : []), destination],
+              shortLink,
+            )
           : input.body
         let message
         try {

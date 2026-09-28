@@ -59,6 +59,12 @@ export function shortLinkPattern(
 ): RegExp | null {
   const code = normalizeShortCode(shortCode)
   return code
-    ? new RegExp(`https?://[^\\s/?#]+/go/${code}(?![a-z0-9])`, 'gi')
+    ? new RegExp(
+        // The WHOLE URL: an optional query or fragment, then only prose
+        // punctuation before whitespace or the end — so `/go/<code>/extra`,
+        // `-bad` or `.bad` (not a route `/go/` serves) never match a prefix.
+        `https?://[^\\s/?#]+/go/${code}(?:[?#]\\S*?)?(?=[.,;:!?)\\]}'"]*(?:\\s|$))`,
+        'gi',
+      )
     : null
 }
