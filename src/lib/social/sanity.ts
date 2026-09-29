@@ -62,7 +62,9 @@ const VARIANT_PROJECTION = groq`{
   attempts[]{ _key, at, outcome, error, "by": by._ref },
   attemptCount,
   updatedAt,
-  "mentions": mentions[status == "tagged" && defined(did)]{ handle, did }
+  // A gone speaker's (erased, or deleted: the weak ref dangles) DID is never
+  // read — not tagged, and not sent to the editor either (#1232).
+  "mentions": mentions[status == "tagged" && defined(did) && !(defined(speaker._ref) && (!defined(speaker->_id) || defined(speaker->erasedAt)))]{ handle, did }
 }`
 
 /**

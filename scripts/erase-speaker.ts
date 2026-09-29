@@ -18,6 +18,7 @@
  * pretending to revalidate them; the runbook has the manual step.
  */
 
+import { acceptedSharedHandleLines } from '@/lib/speaker/erasure-mentions'
 import {
   eraseSpeakerInPlace,
   verifySpeakerErasure,
@@ -74,6 +75,16 @@ function printPlan(plan: ErasurePlan): void {
     }
   }
 
+  if (plan.sharedByLinkOnly.length > 0) {
+    console.log(
+      '\nHandles LEFT in unposted text — another speaker lists them (runbook 3c):',
+    )
+    for (const s of plan.sharedByLinkOnly)
+      console.log(
+        `  @${s.handle}  listed by ${s.listedBy.join(', ')}  in ${s.variantIds.join(', ')}`,
+      )
+  }
+
   if (plan.refusals.length > 0) {
     console.log('\nREFUSED:')
     for (const refusal of plan.refusals) console.log(`  - ${refusal}`)
@@ -97,7 +108,7 @@ async function main(): Promise<number> {
   const speakerId = process.argv[2]
   if (!speakerId || speakerId.startsWith('--')) {
     console.error(
-      'Usage: pnpm erase-speaker <speakerId> --actor "<who>" [--commit]\n' +
+      'Usage: pnpm erase-speaker <speakerId> --actor "<who>" [--commit [--accept-shared-handles]]\n' +
         '       pnpm erase-speaker <speakerId> --verify [--files <id,id>]\n\n' +
         'Read docs/SPEAKER_ERASURE_RUNBOOK.md first.',
     )
@@ -109,6 +120,14 @@ async function main(): Promise<number> {
     // ids by hand.
     const files = (arg('files') ?? '').split(',').filter(Boolean)
     printVerification(await verifySpeakerErasure(speakerId, [], files))
+    // Do not overstate a standalone CLEAN (runbook, step 5 and 3c).
+    console.log(
+      '\nStandalone --verify cannot recount anything keyed on the person’s ' +
+        'addresses, name or Bluesky account: invitations, sign-in tokens, ' +
+        'ticket entries, the merge trail by email, and post variants naming ' +
+        'them in plain text or recording their account under another ' +
+        'reference. File the verification the commit printed.',
+    )
     return 0
   }
 
@@ -125,6 +144,7 @@ async function main(): Promise<number> {
     speakerId,
     actor: actor ?? 'dry-run',
     dryRun: !commit,
+    acceptSharedHandles: has('accept-shared-handles'),
   })
 
   if (result.plan) printPlan(result.plan)
@@ -141,7 +161,12 @@ async function main(): Promise<number> {
 
   console.log(
     `\nCommitted: ${result.committed}` +
-      (result.plan?.noop ? ' (already erased — nothing to write)' : ''),
+      (result.plan?.noop && result.repairedPostVariants === 0
+        ? ' (already erased — nothing to write)'
+        : '') +
+      (result.repairedPostVariants > 0
+        ? ` (+${result.repairedPostVariants} post variant(s) saved during the run, repaired)`
+        : ''),
   )
   console.log(
     `Image asset: ${
@@ -163,6 +188,9 @@ async function main(): Promise<number> {
         : ''),
   )
   for (const file of kept) console.log(`  ${file.id}  ${file.error}`)
+  const accepted = acceptedSharedHandleLines(result.acceptedSharedHandles)
+  if (accepted.length > 0) console.log(`\n${accepted.join('\n')}`)
+
   console.log(`\nCache tags to invalidate (see the runbook):`)
   for (const tag of result.cache.tags) console.log(`  ${tag}`)
 

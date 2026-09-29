@@ -531,7 +531,8 @@ export async function getTaskEditorData(
       // rule cannot parse an interpolated projection here. task-sanity.test
       // asserts both read the same records. An opted-out speaker's
       // unresolved note is left out: its handle must not reach the browser.
-      "tagMentions": select(kind == "publishing" && channel == "bluesky" && variant->conference._ref == conference._ref => variant->mentions[!(status == "unresolved" && speaker->socialTagOptOut == true)]{ _key, handle, did, "speakerId": coalesce(speaker._ref, sponsor._ref), "sponsor": defined(sponsor._ref), name, status }),
+      // A gone speaker reads as GONE_SPEAKER_TEXT, never the stored name (#1232).
+      "tagMentions": select(kind == "publishing" && channel == "bluesky" && variant->conference._ref == conference._ref => variant->mentions[!(status == "unresolved" && speaker->socialTagOptOut == true)]{ _key, "handle": select(status == "unresolved" && defined(speaker._ref) && (!defined(speaker->_id) || defined(speaker->erasedAt)) => null, handle), "did": select(defined(speaker._ref) && (!defined(speaker->_id) || defined(speaker->erasedAt)) => null, did), "speakerId": coalesce(speaker._ref, sponsor._ref), "sponsor": defined(sponsor._ref), "name": select(defined(speaker._ref) && (!defined(speaker->_id) || defined(speaker->erasedAt)) => "a speaker", name), status, "gone": defined(speaker._ref) && (!defined(speaker->_id) || defined(speaker->erasedAt)) }),
       "campaign": select(campaign->conference._ref == conference._ref => campaign->{ _id, key, title }),
       "planOwnerId": plan->owner._ref,
       "siblings": *[_type == "marketingTask" && conference._ref == $conferenceId && campaign._ref == ^.campaign._ref && _id != ^._id && !(_id in path("drafts.**")) && !(_id in path("versions.**"))]{${TASK_VIEW_FIELDS}

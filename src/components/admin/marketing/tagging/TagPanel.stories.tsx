@@ -1,8 +1,12 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { useState } from 'react'
 import { expect, userEvent, within } from 'storybook/test'
-import type { MentionRecord } from '@/lib/marketing/tagging/body'
 import {
+  GONE_SPEAKER_TEXT,
+  type MentionRecord,
+} from '@/lib/marketing/tagging/body'
+import {
+  approvalCheck,
   tagName,
   fixTagIssue,
   untagOwned,
@@ -252,6 +256,56 @@ export const IssueWithFixDark: Story = {
 }
 export const IssueWithFixMobile: Story = {
   args: IssueWithFix.args,
+  parameters: { viewport: { defaultViewport: 'mobile1' } },
+}
+
+/**
+ * A speaker erased or deleted since the post was tagged (#1232): their record
+ * reads as the neutral words and is marked gone, so the issue and its fix
+ * name nobody.
+ */
+const goneTag: MentionRecord = {
+  _key: 'spk-gone',
+  handle: 'grace.dev',
+  did: 'did:plc:grace',
+  speakerId: 'spk-gone',
+  name: GONE_SPEAKER_TEXT,
+  status: 'tagged',
+  gone: true,
+}
+const goneBody =
+  'Meet @grace.dev and Alice Anderson at Cloud Native Bergen 2027.'
+export const GoneSpeakerIssue: Story = {
+  args: {
+    initialBody: goneBody,
+    people: [alice],
+    mentions: [goneTag],
+    initialIssues: approvalCheck({
+      body: goneBody,
+      mentions: [goneTag],
+      people: [alice],
+      resolutions: new Map(),
+    }).issues,
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(canvas.getByRole('alert')).toHaveTextContent(
+      '@grace.dev tags someone who is no longer a speaker at this conference.',
+    )
+    await userEvent.click(
+      canvas.getByRole('button', { name: 'Use “a speaker”' }),
+    )
+    await expect(canvas.getByTestId('body')).toHaveTextContent(
+      'Meet a speaker and Alice Anderson',
+    )
+  },
+}
+export const GoneSpeakerIssueDark: Story = {
+  args: GoneSpeakerIssue.args,
+  parameters: { theme: 'dark' },
+}
+export const GoneSpeakerIssueMobile: Story = {
+  args: GoneSpeakerIssue.args,
   parameters: { viewport: { defaultViewport: 'mobile1' } },
 }
 

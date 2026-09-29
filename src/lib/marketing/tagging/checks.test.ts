@@ -13,6 +13,7 @@ import {
   approvalHandlesToResolve,
   handlesToResolve,
   mentionTokens,
+  occurrenceOwners,
   plainBody,
   saveMentions,
   tagName,
@@ -237,6 +238,55 @@ describe('a shared team handle, end to end: tag, save, read back', () => {
     expect(untagOwned(both, owners.get('speaker-alice')!, mate.name)).toBe(
       '@team.dev and Alice Anderson on platform teams.',
     )
+  })
+})
+
+describe('a gone speaker on a shared handle (#1232)', () => {
+  // Records read back for a gone speaker carry the neutral words, not their
+  // name, so their name can never be found in the body. They must not be
+  // bound first on that account alone.
+  const rec = (
+    speakerId: string,
+    name: string,
+    gone?: true,
+  ): MentionRecord => ({
+    _key: speakerId,
+    handle: 'team.dev',
+    speakerId,
+    name,
+    status: 'tagged',
+    ...(gone ? { gone } : {}),
+  })
+  it('an occurrence goes to the live speaker whose name is gone from the body', () => {
+    const owners = occurrenceOwners('Alice and @team.dev', [
+      rec('alice', 'a speaker', true),
+      rec('bob', 'Bob'),
+    ])
+    expect(owners.get('team.dev')).toEqual(['bob'])
+  })
+  it('and to the gone one where the live speaker is still named, whatever the record order', () => {
+    const owners = occurrenceOwners('Bob and @team.dev', [
+      rec('bob', 'Bob'),
+      rec('alice', 'a speaker', true),
+    ])
+    expect(owners.get('team.dev')).toEqual(['alice'])
+  })
+
+  it('keeps record order across priority groups (three sharers, no roster)', () => {
+    const owners = occurrenceOwners('@team.dev and Bob and @team.dev', [
+      rec('alice', 'a speaker', true),
+      rec('bob', 'Bob'),
+      rec('carol', 'Carol'),
+    ])
+    expect(owners.get('team.dev')).toEqual(['alice', 'carol'])
+  })
+
+  it('and to the gone one where the live speaker is still named', () => {
+    const owners = occurrenceOwners('Bob and @team.dev', [
+      rec('alice', 'a speaker', true),
+      rec('bob', 'Bob'),
+    ])
+    expect(owners.get('team.dev')).toEqual(['alice'])
   })
 })
 
@@ -766,6 +816,24 @@ describe('approvalCheck (§4.4 Approval)', () => {
       resolutions: new Map(),
     })
     expect(out.issues.map((i) => i.code)).toEqual(['not-a-speaker'])
+  })
+
+  it('a gone speaker (read as the neutral words, #1232): the issue names nobody, and the fix puts in the neutral words', () => {
+    // The MARKER decides, not the name: even a record still carrying one
+    // shows none.
+    const gone: MentionRecord = { ...tagged(alice, DID_A), gone: true }
+    const body = 'Hear @alice.dev today'
+    const out = approvalCheck({
+      body,
+      mentions: [gone],
+      people: [bob],
+      resolutions: new Map(),
+    })
+    const [issue] = out.issues as MentionIssue[]
+    expect(issue.message).toBe(
+      '@alice.dev tags someone who is no longer a speaker at this conference. Replace it with “a speaker”.',
+    )
+    expect(fixTagIssue(body, issue, [bob], [gone])).toBe('Hear a speaker today')
   })
 
   it('refuses a handle that no longer exists', () => {

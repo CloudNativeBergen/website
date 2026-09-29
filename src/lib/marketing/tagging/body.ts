@@ -97,6 +97,12 @@ export interface MentionRecord {
   sponsor?: true
   name: string
   status: 'tagged' | 'unresolved'
+  /**
+   * Read, never stored: the speaker is gone — erased, or deleted so the weak
+   * reference dangles. `name` is then the neutral words, never theirs
+   * (`MENTION_RECORD_PROJECTION`, #1232).
+   */
+  gone?: true
 }
 
 /** The only kind of recipe `tagSubject` applies to (tagging spec §2). */

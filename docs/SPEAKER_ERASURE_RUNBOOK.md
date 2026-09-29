@@ -217,6 +217,74 @@ surviving file to the speaker. One survives when:
   from the gallery by hand. Published posts on Bluesky or LinkedIn are outside
   our reach either way.
 
+### 3c. Post variants that tag or name them (#1232)
+
+A post variant records who it tags in `mentions[]` — the speaker reference,
+the Bluesky handle, the DID and the speaker's **name**. The transaction removes
+every record of the person from every `socialPostVariant`, drafts and Content
+Release versions included: found by the reference in **any** tenant, and by a
+handle or DID one of their records carries (the same account recorded under
+another reference is still theirs), followed until nothing new turns up. If
+their accounts keep chaining past 20 rounds the run refuses, writing nothing:
+look at the mentions recorded for them by hand.
+
+A body **not yet posted** — `draft`, `scheduled`, `awaiting-manual`, `failed`,
+and every Studio draft or release copy whatever status it copied — loses their
+handle wherever it stands (a tag, in quotes, in a profile link) and every
+whole-word copy of their name and of the spellings their records stored: any
+case (simple case folding — "STRASSE" does not match "Straße"), any whitespace, composed or decomposed letters, but never inside another
+handle, a domain or a URL. A variant's own alt text is scrubbed the same way.
+Each becomes **"a speaker"**, the words the publisher already posts for a gone
+speaker. The name is looked for in the variants of every conference of the
+person's organizations and of every conference they have a talk at, and in any
+variant holding a record of theirs — not across other tenants, where the same
+name is a stranger.
+
+- A **co-speaker who shares a team account** with them (on a record anywhere,
+  or in their profile links) keeps their own record and their own occurrence
+  of the tag. A shared handle is scrubbed only where a tag is bound to the
+  erased person's record, never in text that records nobody, and a variant
+  reached only through it is not searched for the name.
+- A handle of theirs that another live speaker only **lists in their profile
+  links** (no record says whose it is) is **left** in unposted text: it may be
+  a real team account, a co-speaker linking to them, or their own unmerged
+  duplicate speaker document. **Decide at the dry run**, which prints it
+  ("Handles LEFT in unposted text"), because after the commit their identity
+  is gone and nothing can find these handles again: not a re-run, and not a
+  later `--verify`. `--commit` therefore **refuses**, writing nothing, while
+  the list is non-empty. Either:
+  - it is theirs (a co-speaker's stray link, or their own duplicate): remove
+    the link from the listing speaker, or merge/erase the duplicate, and
+    dry-run again until the list is empty, then commit — the scrub then takes
+    it; or
+  - the account really is shared: commit with `--accept-shared-handles`,
+    record the accepted handles (`acceptedSharedHandles` in the result) in the
+    DSR, and clear the listed variant ids by hand if they should not keep it.
+    The verification then reports them as `sharedByLinkOnly` and is not CLEAN
+    — expected, and filed with the DSR.
+- A **namesake** inside that scope — another person with exactly the same name
+  — is neutralised too: the tool cannot tell two people apart by name. The dry
+  run lists each variant it rewrites; read them.
+- The neutral words are longer than a short name, so a **scheduled** Bluesky
+  body already at its 300-character limit can end up over it. The publisher
+  then rejects it and it shows as failed for the organizers to shorten. The
+  erasure does not refuse over this.
+- A **published** body is left as it went out. It is on the platform already,
+  and deleting the post there is outside this tool. Its records are still
+  removed. A live `submitted` (or `publishing`) variant holding them makes the
+  run **refuse** instead — see Refusals — until the publisher has settled it.
+- A variant **saved while the erasure ran** (before its final verification) can carry them again. A save landing AFTER the final verification is not seen. The commit's
+  verification finds it with the name, handles and DIDs read before the
+  erasure — the last moment those are known — and repairs it once, then
+  verifies again. A variant it must leave (in flight) is listed by id in
+  `postVariantIds`: **a re-run cannot find it again** (the name and accounts
+  are gone by then), so once the publisher has settled it, open it and replace
+  their name and handle by hand.
+- `--verify` counts a variant still holding them as `postVariants`. A
+  standalone `--verify` has only the reference (the name is the placeholder by
+  then and the records are gone), like the email-keyed counts. File the
+  verification the commit printed.
+
 ### 4. Invalidate caches
 
 `revalidateTag` needs a Next.js request scope, which the script has none of, so
@@ -278,6 +346,19 @@ profile image with the same bytes (Sanity stores identical bytes once), or a
 post attachment whose `_key` cannot be selected safely. The file cannot be
 deleted while that document holds it, so nothing has been written. Decide what
 that document should lose, change it by hand, then re-run.
+
+**"Post variant X names the subject and is being published right now
+(publishing | submitted)."** The publish cron, or the sweep confirming an
+asynchronous publisher, holds that variant and will settle it with a
+compare-and-set; an erasure write in between would lose the race for one of
+the two. Nothing has been written. Wait a few minutes (a stale claim is failed
+by the cron, never re-posted; a submission settles on the next confirm sweep)
+and re-run. Only the live variant counts — a Studio draft or release copy is
+scrubbed whatever status it copied.
+
+**"Post variant X has … entries naming the subject that cannot be safely
+selected."** A `mentions[]` or `attachments[]` entry has a `_key` that cannot
+go in a selector. Clear that entry by hand and re-run.
 
 **"X is the only organizer of conference Y."** `conference.organizers[]` is
 `min(1)`, and an organization with no organizer cannot be administered by anyone
@@ -473,7 +554,9 @@ Say so.
   with
   `npx sanity documents query '{"n": count(*[_type=="speakerBadge" && speaker._ref == "<speakerId>"])}'`.
 - **The residual-mention scan.** No automated search for the person's name in
-  free text. Not built, by decision.
+  free text, with one exception: post variants not yet posted (step 3c). The
+  parent `socialPost` body, Task titles and instructions, and posted variant
+  bodies are not scanned.
 - **Self-service erasure.** Phase 3.
 - **Gallery photographs.** Untagging removes findability, not the face. The
   photograph is retained: conference photography is group photography, and
@@ -534,7 +617,9 @@ talks; they are removed from `conference.organizers[]`, `featuredSpeakers[]` and
 organizer teams; `bankingDetails` is deleted from **unpaid** travel-support
 records; and any `mergedWith[]` entry in **another** speaker's merge trail that
 carries them is redacted — personal values out, the record of the merge itself
-left standing (see [the merge trail](#the-merge-trail-mergedwith)).
+left standing (see [the merge trail](#the-merge-trail-mergedwith)); and every
+post variant loses its records of them, and an unposted one their tag and
+name (see step 3c).
 
 ### A property worth understanding before you answer questions about it
 

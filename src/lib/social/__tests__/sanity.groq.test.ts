@@ -380,6 +380,46 @@ describe('findWork — the composed due/stale scan', () => {
     expect(h.queries).toHaveLength(1)
   })
 
+  it('never carries a gone speaker’s DID — erased, or deleted with a dangling reference (#1232)', async () => {
+    const tag = (key: string, speaker?: string) => ({
+      _key: key,
+      handle: `${key}.dev`,
+      did: `did:plc:${key}`,
+      status: 'tagged',
+      name: key,
+      ...(speaker
+        ? { speaker: { _type: 'reference', _ref: speaker, _weak: true } }
+        : {}),
+    })
+    h.dataset = [
+      conference('c1'),
+      { _id: 'live', _type: 'speaker', name: 'Live' },
+      {
+        _id: 'erased',
+        _type: 'speaker',
+        name: 'Deleted speaker',
+        erasedAt: '2026-09-01T00:00:00Z',
+      },
+      variant('v1', 'c1', {
+        mentions: [
+          tag('a', 'live'),
+          tag('b', 'erased'),
+          tag('c', 'deleted'),
+          tag('d'),
+        ],
+      }),
+    ]
+    const work = await sanitySocialVariantStore.findWork(
+      NOW,
+      STALE_BEFORE,
+      BOUNDS,
+    )
+    expect(work.due[0].mentions).toEqual([
+      { handle: 'a.dev', did: 'did:plc:a' },
+      { handle: 'd.dev', did: 'did:plc:d' },
+    ])
+  })
+
   it("folds each recorded tag's speaker opt-out into the SAME single read (tagging §4.4, Publish)", async () => {
     h.dataset = [
       conference('c1'),

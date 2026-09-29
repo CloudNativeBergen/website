@@ -50,6 +50,10 @@
  * unconditionally. See `./erasure-assets.ts`, which also names the hole: an
  * image with no subject is linked to nobody and is not found.
  *
+ * POST VARIANTS (#1232). Every `socialPostVariant` loses its records of the
+ * speaker (`mentions[]`: ref, handle, DID, name), and a body not yet posted
+ * loses their tag and plain name. See `./erasure-mentions.ts`.
+ *
  * WHAT PHASE 1 DOES NOT ERASE — see `docs/SPEAKER_ERASURE_RUNBOOK.md`, which the
  * operator answers the data subject from. Badges, paid travel records and their
  * receipts, all free text (abstracts, outlines, review comments, message
@@ -77,6 +81,14 @@ import {
   planSpeakerAssetErasure,
   type SpeakerAssetInputs,
 } from './erasure-assets'
+import {
+  fetchSpeakerMentionInputs,
+  planSpeakerMentionErasure,
+  linkOnlySharedResidual,
+  residualMentionVariants,
+  type MentionIdentity,
+  type SpeakerMentionInputs,
+} from './erasure-mentions'
 
 // ---------------------------------------------------------------------------
 // Field policy
@@ -344,6 +356,12 @@ export interface ErasureInputs {
   assetFileIds: string[]
   /** The documents about the subject and the holders of those files. */
   assets: SpeakerAssetInputs
+  /**
+   * Post variants holding the subject — recorded mentions, or an unposted
+   * body naming them — and who they are to a variant. See
+   * `./erasure-mentions.ts`.
+   */
+  mentions: SpeakerMentionInputs
   /** Erasure timestamp, injected so tests are deterministic. */
   now: string
 }
@@ -407,6 +425,16 @@ export interface ErasurePlan {
    */
   linkedFileIds: string[]
   retainedBanking: RetainedBankingRecord[]
+  /**
+   * Her handles the scrub LEAVES in unposted text because another live
+   * speaker's profile lists them (see `ErasureVerification`). Shown in the
+   * dry run so the operator can decide before committing.
+   */
+  sharedByLinkOnly: {
+    handle: string
+    variantIds: string[]
+    listedBy: string[]
+  }[]
   /** Conference ids whose caches must be revalidated. */
   affectedConferenceIds: string[]
   /** Non-empty ⇒ the operation must not run. */
@@ -777,6 +805,24 @@ export function buildErasurePlan(inputs: ErasureInputs): ErasurePlan {
   documentDeletes.push(...assetPlan.deletes)
   refusals.push(...assetPlan.refusals)
 
+  // --- post variants recording or naming the subject (#1232) --------------
+
+  // A variant the image branch already patches gets ONE patch, so it keeps
+  // one revision guard: a second guarded patch of the same document in the
+  // same transaction would be refused against the revision the first wrote.
+  const mentionPlan = planSpeakerMentionErasure(speakerId, inputs.mentions)
+  for (const patch of mentionPlan.patches) {
+    const same = documentPatches.find((p) => p.id === patch.id)
+    if (!same) {
+      documentPatches.push(patch)
+      continue
+    }
+    if (patch.set) same.set = { ...same.set, ...patch.set }
+    if (patch.unset) same.unset = [...(same.unset ?? []), ...patch.unset]
+    same.reason = `${same.reason}; ${patch.reason}`
+  }
+  refusals.push(...mentionPlan.refusals)
+
   // --- the merge trail on OTHER speakers ----------------------------------
 
   // The subject's own trail is unset with the rest of the speaker patch; this
@@ -812,6 +858,7 @@ export function buildErasurePlan(inputs: ErasureInputs): ErasurePlan {
     imageAssetId,
     linkedFileIds: assetPlan.fileIds,
     retainedBanking,
+    sharedByLinkOnly: linkOnlySharedResidual(speakerId, inputs.mentions),
     affectedConferenceIds: [...affectedConferenceIds],
     refusals,
     noop,
@@ -1121,6 +1168,14 @@ export interface EraseSpeakerOptions {
    * wrapper reports the tags it could not revalidate instead of pretending.
    */
   revalidate?: (tag: string) => void | Promise<void>
+  /**
+   * Commit although a handle of theirs is shared only through another
+   * speaker's profile links (`plan.sharedByLinkOnly`): the operator has
+   * confirmed at the dry run that the account really is shared. Without it
+   * such a commit is REFUSED — after it the identity is gone, and no re-run
+   * or `--verify` can find those handles again.
+   */
+  acceptSharedHandles?: boolean
 }
 
 /** What the operator gets back. */
@@ -1137,6 +1192,16 @@ export interface EraseSpeakerResult {
   linkedFiles: LinkedFileDeletion[]
   cache: { tags: string[]; revalidated: boolean; error: string | null }
   verification: ErasureVerification | null
+  /**
+   * Post variants the commit's verification found saved during the run and
+   * repaired in a second transaction (#1232). Counts toward `committed`.
+   */
+  repairedPostVariants: number
+  /**
+   * The link-only shared handles committed over with `acceptSharedHandles`,
+   * for the DSR record. Their variants still carry the handle.
+   */
+  acceptedSharedHandles: ErasurePlan['sharedByLinkOnly']
   err: Error | null
 }
 
@@ -1201,6 +1266,31 @@ export interface ErasureVerification {
     videoProjects: number
     /** Linked marketing files still stored. */
     linkedFiles: number
+    /**
+     * `socialPostVariant` documents, any version, still holding the subject
+     * (#1232): a record carrying their reference, handle or DID, or an
+     * unposted body or alt text carrying their tag or name. Checked over the
+     * STORED values, apart from the planner.
+     */
+    postVariants: number
+    /**
+     * Their ids (document ids, no personal data): a variant the erasure had
+     * to leave — in flight while it ran — is known by its identity only
+     * NOW, so the operator clears these by hand once they have settled.
+     */
+    postVariantIds: string[]
+    /**
+     * Her handles left in unposted text because another live speaker's
+     * profile LISTS them and no record says whose they are (#1232). Never
+     * clean while non-empty: the operator confirms the account really is
+     * shared, or removes the link and re-runs (runbook 3c). Carries the
+     * handle, which the operator needs to judge it.
+     */
+    sharedByLinkOnly: {
+      handle: string
+      variantIds: string[]
+      listedBy: string[]
+    }[]
   }
 }
 
@@ -1217,6 +1307,7 @@ async function fetchErasureInputs(
   now: string,
   priorEmails: string[] = [],
   priorFileIds: string[] = [],
+  priorMentions: Partial<MentionIdentity> = {},
 ): Promise<ErasureInputs> {
   const speaker = await clientRead.fetch<ErasureSpeakerDoc | null>(
     // groq-global: erasure is a GLOBAL operation on a cross-org person
@@ -1338,6 +1429,20 @@ async function fetchErasureInputs(
     ...priorFileIds,
     ...survivingRecorded,
   ])
+  // The placeholder is not a name to look for: after an erasure the real one
+  // is known only from `priorMentions`.
+  // The erasure MARKER decides, not the name: a live speaker may be called
+  // "Deleted speaker". After an erasure the real name is known only from
+  // `priorMentions`.
+  const liveName =
+    typeof speaker?.name === 'string' && !speaker.erasedAt ? speaker.name : null
+  const mentions = await fetchSpeakerMentionInputs(
+    speakerId,
+    speaker?.organizations,
+    speaker?.links,
+    liveName,
+    priorMentions,
+  )
 
   return {
     speaker,
@@ -1348,6 +1453,7 @@ async function fetchErasureInputs(
     slugConflictIds: (slugConflicts ?? []).map((d) => d._id),
     assetFileIds: assets.fileIds,
     assets: assets.inputs,
+    mentions,
     now,
   }
 }
@@ -1372,7 +1478,13 @@ async function fetchErasureInputs(
 export async function eraseSpeakerInPlace(
   opts: EraseSpeakerOptions,
 ): Promise<EraseSpeakerResult> {
-  const { speakerId, actor, dryRun = false, revalidate } = opts
+  const {
+    speakerId,
+    actor,
+    dryRun = false,
+    revalidate,
+    acceptSharedHandles = false,
+  } = opts
   const empty: EraseSpeakerResult = {
     plan: null,
     committed: false,
@@ -1380,6 +1492,8 @@ export async function eraseSpeakerInPlace(
     linkedFiles: [],
     cache: { tags: [], revalidated: false, error: null },
     verification: null,
+    repairedPostVariants: 0,
+    acceptedSharedHandles: [],
     err: null,
   }
 
@@ -1395,6 +1509,27 @@ export async function eraseSpeakerInPlace(
       }
     }
     if (dryRun) return { ...empty, plan }
+
+    // Decided at the DRY RUN, while her identity is still known (#1232).
+    if (plan.sharedByLinkOnly.length > 0 && !acceptSharedHandles) {
+      const list = plan.sharedByLinkOnly
+        .map(
+          (s) =>
+            `@${s.handle} (listed by ${s.listedBy.join(', ')}; in ${s.variantIds.join(', ')})`,
+        )
+        .join('; ')
+      return {
+        ...empty,
+        plan,
+        err: new ErasureValidationError(
+          `Handles of the subject are shared only through another speaker's ` +
+            `profile links: ${list}. Nothing was written. Remove the stray link ` +
+            `(or merge/erase the duplicate speaker) and dry-run again until the ` +
+            `list is empty — or, if the account really is shared, commit with ` +
+            `--accept-shared-handles and record it in the DSR (runbook 3c).`,
+        ),
+      }
+    }
 
     // --- phase 2: one transaction ------------------------------------------
     if (!plan.noop) {
@@ -1480,17 +1615,56 @@ export async function eraseSpeakerInPlace(
     // over live data. This is the one moment those addresses still exist.
     // The linked file ids likewise: once their holders are stripped nothing
     // links them, so a file left behind is visible only by its id.
-    const verification = await verifySpeakerErasure(
-      plan.speakerId,
-      inputs.speaker ? speakerEmailMatchSet(inputs.speaker) : [],
-      plan.linkedFileIds,
-    )
+    const verify = (identity: MentionIdentity) =>
+      verifyErasureDetailed(
+        plan.speakerId,
+        inputs.speaker ? speakerEmailMatchSet(inputs.speaker) : [],
+        plan.linkedFileIds,
+        identity,
+      )
+    const first = await verify(inputs.mentions.identity)
+    let verification = first?.verification ?? null
+    let repairedPostVariants = 0
+
+    // A post variant written since the transaction can carry the name, a
+    // handle or a DID again, and this is the LAST moment those are known: a
+    // re-run reads an erased speaker and has none of them. So a residual
+    // variant is repaired here, once, with the identity read before (#1232).
+    if (verification && verification.residual.postVariants > 0) {
+      // Never throws past here: the erasure itself has committed, and a
+      // failed repair leaves the residual for the verification to report.
+      // Each read can learn a new alias of theirs (a bridge record saved
+      // meanwhile): the repair starts from what this verification learned,
+      // and the last verification looks with what the repair learned.
+      const repaired = await repairPostVariants(
+        plan.speakerId,
+        inputs.speaker?.organizations,
+        inputs.speaker?.links,
+        first?.identity ?? inputs.mentions.identity,
+      ).catch((error: unknown) => {
+        console.error('[speaker-erasure] post-variant repair failed', error)
+        return null
+      })
+      if (repaired) {
+        repairedPostVariants = repaired.patched
+        // A failed re-read keeps the FIRST verification: its residual ids
+        // are the only record of a variant the repair had to leave.
+        verification =
+          (
+            await verify(repaired.identity).catch((error: unknown) => {
+              console.error('[speaker-erasure] re-verification failed', error)
+              return null
+            })
+          )?.verification ?? verification
+      }
+    }
 
     console.info('[speaker-erasure] anonymised speaker in place', {
       actor,
       speakerId: plan.speakerId,
       // Deliberately NO personal data in the audit line — ids and counts only.
       patched: plan.documentPatches.length,
+      repairedPostVariants,
       deleted: plan.documentDeletes.length,
       retainedBanking: plan.retainedBanking.length,
       imageAssetDeleted: imageAsset.deleted,
@@ -1501,11 +1675,13 @@ export async function eraseSpeakerInPlace(
 
     return {
       plan,
-      committed: !plan.noop,
+      committed: !plan.noop || repairedPostVariants > 0,
       imageAsset,
       linkedFiles,
       cache,
       verification,
+      repairedPostVariants,
+      acceptedSharedHandles: plan.sharedByLinkOnly,
       err: null,
     }
   } catch (error) {
@@ -1514,6 +1690,43 @@ export async function eraseSpeakerInPlace(
     }
     return { ...empty, err: error as Error }
   }
+}
+
+/**
+ * Re-plan and commit the post-variant branch alone, with the identity read
+ * before the erasure. Returns how many variants it patched and the identity
+ * its read grew to. A variant it refuses (in flight) is not written, and
+ * the verification reports it.
+ */
+async function repairPostVariants(
+  speakerId: string,
+  organizations: unknown,
+  links: unknown,
+  identity: MentionIdentity,
+): Promise<{ patched: number; identity: MentionIdentity }> {
+  const mentions = await fetchSpeakerMentionInputs(
+    speakerId,
+    organizations,
+    links,
+    null,
+    identity,
+  )
+  // A refused variant (in flight) is left for the verification to report;
+  // every other one is repaired now — no later run could.
+  const { patches } = planSpeakerMentionErasure(speakerId, mentions)
+  if (patches.length === 0) return { patched: 0, identity: mentions.identity }
+  const tx = clientWrite
+    .withConfig({ apiVersion: COUNT_API_VERSION })
+    .transaction()
+  for (const patch of patches)
+    tx.patch(patch.id, (p) => {
+      let applied = p
+      if (patch.set) applied = applied.set(patch.set)
+      if (patch.unset) applied = applied.unset(patch.unset)
+      return patch.rev ? applied.ifRevisionId(patch.rev) : applied
+    })
+  await tx.commit()
+  return { patched: patches.length, identity: mentions.identity }
 }
 
 /**
@@ -1604,7 +1817,34 @@ export async function verifySpeakerErasure(
   speakerId: string,
   priorEmails: string[] = [],
   priorFileIds: string[] = [],
+  priorMentions: Partial<MentionIdentity> = {},
 ): Promise<ErasureVerification | null> {
+  return (
+    (
+      await verifyErasureDetailed(
+        speakerId,
+        priorEmails,
+        priorFileIds,
+        priorMentions,
+      )
+    )?.verification ?? null
+  )
+}
+
+/**
+ * {@link verifySpeakerErasure}, plus the post-variant identity its read grew
+ * to — server-side only, for the commit's repair; never printed or returned
+ * to an operator (it IS the erased person's name and accounts).
+ */
+async function verifyErasureDetailed(
+  speakerId: string,
+  priorEmails: string[] = [],
+  priorFileIds: string[] = [],
+  priorMentions: Partial<MentionIdentity> = {},
+): Promise<{
+  verification: ErasureVerification
+  identity: MentionIdentity
+} | null> {
   const targetSlug = erasedSlug(speakerId)
   const targetEmail = erasedEmail(speakerId)
 
@@ -1613,6 +1853,7 @@ export async function verifySpeakerErasure(
     new Date().toISOString(),
     priorEmails,
     priorFileIds,
+    priorMentions,
   )
   const doc = inputs.speaker
   if (!doc) return null
@@ -1758,6 +1999,10 @@ export async function verifySpeakerErasure(
     linkedFiles = found?.n ?? 0
   }
 
+  const postVariantIds = residualMentionVariants(speakerId, inputs.mentions)
+  const sharedByLinkOnly = linkOnlySharedResidual(speakerId, inputs.mentions)
+  const postVariants = postVariantIds.length
+
   const speakerFields = ERASURE_UNSET_FIELDS.filter(
     (field) => !isAbsent(doc, field),
   ) as string[]
@@ -1788,6 +2033,9 @@ export async function verifySpeakerErasure(
     linkedFileHolders,
     videoProjects,
     linkedFiles,
+    postVariants,
+    postVariantIds,
+    sharedByLinkOnly,
   }
 
   const clean =
@@ -1811,7 +2059,12 @@ export async function verifySpeakerErasure(
     marketingAssets === 0 &&
     linkedFileHolders === 0 &&
     videoProjects === 0 &&
-    linkedFiles === 0
+    linkedFiles === 0 &&
+    postVariants === 0 &&
+    sharedByLinkOnly.length === 0
 
-  return { clean, residual }
+  return {
+    verification: { clean, residual },
+    identity: inputs.mentions.identity,
+  }
 }

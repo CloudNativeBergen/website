@@ -641,6 +641,71 @@ describe('getTaskEditorData — Bluesky tag people and mentions (#1151)', () => 
     expect(JSON.stringify(data)).not.toContain('bob.dev')
   })
 
+  describe('a gone speaker’s stored name never reaches the editor (#1232)', () => {
+    const goneTag = (speakerRef: string) => ({
+      _key: 'k-gone',
+      _type: 'socialPostMention',
+      handle: 'gone.dev',
+      did: 'did:plc:gone',
+      speaker: { ...r(speakerRef), _weak: true },
+      name: 'Grace Hopper',
+      status: 'tagged',
+    })
+
+    it.each([
+      ['erased', 'sp-erased'],
+      ['deleted (the weak reference dangles)', 'sp-deleted'],
+    ])(
+      '%s: both reads carry the neutral words, not the name',
+      async (_, id) => {
+        h.dataset.push({
+          _id: 'sp-erased',
+          _type: 'speaker',
+          name: 'Deleted speaker',
+          erasedAt: '2026-09-01T00:00:00Z',
+        })
+        doc('variant-li').mentions = [goneTag(id)]
+        const viaTask = (await getTaskEditorData('task-li', CONF_A))!
+          .tagMentions
+        const viaVariant = await getVariantMentionRecords('variant-li', CONF_A)
+        for (const records of [viaTask, viaVariant]) {
+          expect(records).toEqual([
+            expect.objectContaining({
+              speakerId: id,
+              name: 'a speaker',
+              gone: true,
+            }),
+          ])
+        }
+        const payload = JSON.stringify([
+          await getTaskEditorData('task-li', CONF_A),
+          viaVariant,
+        ])
+        expect(payload).not.toContain('Grace Hopper')
+        // Nor their account id. The handle stays: the body shows it, and
+        // the fix must find it there.
+        expect(payload).not.toContain('did:plc:gone')
+      },
+    )
+
+    it('drops a gone speaker’s unresolved note, handle and all', async () => {
+      doc('variant-li').mentions = [
+        { ...goneTag('sp-deleted'), did: undefined, status: 'unresolved' },
+      ]
+      expect(await getVariantMentionRecords('variant-li', CONF_A)).toEqual([])
+      const data = await getTaskEditorData('task-li', CONF_A)
+      expect(data!.tagMentions).toEqual([])
+      expect(JSON.stringify(data)).not.toContain('gone.dev')
+    })
+
+    it('a live speaker keeps their name', async () => {
+      doc('variant-li').mentions = [goneTag('sp-2')]
+      expect(await getVariantMentionRecords('variant-li', CONF_A)).toEqual([
+        expect.objectContaining({ name: 'Grace Hopper' }),
+      ])
+    })
+  })
+
   it('a LinkedIn Task gets neither', async () => {
     doc('task-li').channel = 'linkedin'
     const data = await getTaskEditorData('task-li', CONF_A)

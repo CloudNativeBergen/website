@@ -92,6 +92,8 @@ export interface MentionIssue {
   handle: string
   name: string
   message: string
+  /** The tag is of a speaker gone since (#1232): `name` is the neutral words. */
+  gone?: true
 }
 
 /** About the whole body: no one tag to fix. */
@@ -208,7 +210,7 @@ export function tagOwners(
   people: readonly TaggablePerson[],
   mentions: readonly Pick<
     MentionRecord,
-    'handle' | 'speakerId' | 'status' | 'name'
+    'handle' | 'speakerId' | 'status' | 'name' | 'gone'
   >[],
 ): Map<string, TagOwnership> {
   const ids = new Set(people.map((p) => p.speakerId))
@@ -243,7 +245,7 @@ function bindTags(
   people: readonly TaggablePerson[],
   mentions: readonly Pick<
     MentionRecord,
-    'handle' | 'speakerId' | 'status' | 'name'
+    'handle' | 'speakerId' | 'status' | 'name' | 'gone'
   >[],
 ): Map<string, string[]> {
   const known = byHandle(people)
@@ -262,7 +264,12 @@ function bindTags(
     const recorded = mentions.filter(
       (m) => m.status === 'tagged' && normaliseHandle(m.handle) === handle,
     )
-    for (const m of recorded) if (nameIndex(body, m.name) < 0) add(m.speakerId)
+    // A gone speaker's record reads as the neutral words (#1232): whether
+    // their name is in the body is unknowable, so it earns no priority.
+    for (const m of recorded)
+      if (!m.gone && nameIndex(body, m.name) < 0) add(m.speakerId)
+    // Then a gone speaker, before anyone still named in the body.
+    for (const m of recorded) if (m.gone) add(m.speakerId)
     for (const m of recorded) add(m.speakerId)
     const sharers = known.get(handle) ?? []
     if (owners.length === 0 && sharers.length === 1) add(sharers[0].speakerId)
@@ -283,7 +290,13 @@ function bindTags(
         ranks.set(m.speakerId, r >= 0 ? r : last + 0.5)
     }
     const rank = (id: string) => ranks.get(id) ?? roster(id)
-    owners.sort((x, y) => rank(x) - rank(y))
+    // Equal ranks (no roster: the publish tick) fall back to RECORD order, so
+    // which priority pass chose a person never reorders the occurrences.
+    const order = (id: string) => {
+      const i = recorded.findIndex((m) => m.speakerId === id)
+      return i >= 0 ? i : recorded.length
+    }
+    owners.sort((x, y) => rank(x) - rank(y) || order(x) - order(y))
     if (owners.length > 0) out.set(handle, owners)
   }
   return out
@@ -320,7 +333,7 @@ export function occurrenceOwnersWithRoster(
   people: readonly TaggablePerson[],
   mentions: readonly Pick<
     MentionRecord,
-    'handle' | 'speakerId' | 'status' | 'name'
+    'handle' | 'speakerId' | 'status' | 'name' | 'gone'
   >[],
 ): Map<string, string[]> {
   return bindTags(body, people, mentions)
@@ -335,7 +348,7 @@ export function occurrenceOwners(
   body: string,
   mentions: readonly Pick<
     MentionRecord,
-    'handle' | 'speakerId' | 'status' | 'name'
+    'handle' | 'speakerId' | 'status' | 'name' | 'gone'
   >[],
 ): Map<string, string[]> {
   return bindTags(body, [], mentions)
@@ -512,8 +525,13 @@ function notASpeaker(m: MentionRecord, handle: string): MentionIssue {
     code: 'not-a-speaker',
     mentionKey: m._key,
     handle,
-    name: m.name,
-    message: `${m.name} is no longer a speaker at this conference. Use the plain name instead of @${handle}.`,
+    name: m.gone ? GONE_SPEAKER_TEXT : m.name,
+    ...(m.gone ? { gone: true as const } : {}),
+    // A gone speaker's record reads as the neutral words, never their name
+    // (MENTION_RECORD_PROJECTION, #1232): say so without naming anyone.
+    message: m.gone
+      ? `@${handle} tags someone who is no longer a speaker at this conference. Replace it with “${GONE_SPEAKER_TEXT}”.`
+      : `${m.name} is no longer a speaker at this conference. Use the plain name instead of @${handle}.`,
   }
 }
 

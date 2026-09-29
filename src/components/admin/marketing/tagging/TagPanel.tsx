@@ -7,7 +7,10 @@ import {
 } from '@heroicons/react/24/outline'
 import clsx from 'clsx'
 import { AdminButton } from '@/components/admin/AdminButton'
-import type { MentionRecord } from '@/lib/marketing/tagging/body'
+import {
+  GONE_SPEAKER_TEXT,
+  type MentionRecord,
+} from '@/lib/marketing/tagging/body'
 import {
   mentionTokens,
   nameIndex,
@@ -99,7 +102,9 @@ export function TagPanel({
                   disabled={disabled}
                   onClick={() => onFix(issue)}
                 >
-                  Use the plain name
+                  {issue.gone
+                    ? `Use “${GONE_SPEAKER_TEXT}”`
+                    : 'Use the plain name'}
                 </AdminButton>
               )}
             </li>
