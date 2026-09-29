@@ -8,7 +8,7 @@
  * announces nothing at all.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { SocialPostVariant } from '@/lib/social/types'
 import { ManualPostView } from './ManualPostView'
 
@@ -128,5 +128,97 @@ describe('ManualPostView — the link a reader sees is the short link (short-lin
   it('does not append the short link to copy that already holds the long one', () => {
     show(`From before short links: ${LONG}`)
     expect(screen.queryByText(/The link is added at the end/)).toBeNull()
+  })
+})
+
+describe('ManualPostView — GIFs and videos from the gallery (#1167)', () => {
+  const media = (n: number) =>
+    Array.from({ length: n }, (_, i) => ({
+      id: `m-${i}`,
+      title: `Clip ${i}`,
+      kind: (i % 2 ? 'gif' : 'video') as 'gif' | 'video',
+      alt: `Alt of clip ${i}`,
+      context: 'Whole organization',
+      thumbnailSrc: null,
+      downloadUrl:
+        i % 2
+          ? `/api/admin/marketing-assets/original?asset=m-${i}`
+          : `https://cdn.sanity.io/files/p/d/m-${i}.mp4?dl=clip-${i}.mp4`,
+    }))
+  const view = (
+    galleryMedia: Parameters<typeof ManualPostView>[0]['galleryMedia'],
+    status: SocialPostVariant['status'] = 'awaiting-manual',
+  ) =>
+    render(
+      <ManualPostView
+        variant={{ ...variant, status }}
+        postedLink={null}
+        postAttachments={[]}
+        onMarkPosted={vi.fn()}
+        galleryMedia={galleryMedia}
+      />,
+    )
+
+  it('offers each ORIGINAL file to download, with its alt text to copy', () => {
+    view(media(2))
+    const video = screen.getByRole('link', {
+      name: 'Download original video: Clip 0',
+    })
+    expect(video.getAttribute('href')).toBe(
+      'https://cdn.sanity.io/files/p/d/m-0.mp4?dl=clip-0.mp4',
+    )
+    expect(video.hasAttribute('download')).toBe(true)
+    expect(
+      screen
+        .getByRole('link', { name: 'Download original GIF: Clip 1' })
+        .getAttribute('href'),
+    ).toBe('/api/admin/marketing-assets/original?asset=m-1')
+    expect(
+      screen.getByRole('button', { name: 'Copy alt text of Clip 1' }),
+    ).toBeTruthy()
+    expect(screen.getByText(/can't be attached to a post yet/)).toBeTruthy()
+  })
+
+  it('shows three, then all on request', () => {
+    view(media(5))
+    expect(
+      screen.getAllByRole('link', { name: /Download original/ }),
+    ).toHaveLength(3)
+    fireEvent.click(screen.getByRole('button', { name: 'Show all 5' }))
+    expect(
+      screen.getAllByRole('link', { name: /Download original/ }),
+    ).toHaveLength(5)
+  })
+
+  it('says so when the gallery could not be read, and shows nothing when empty', () => {
+    view('error')
+    expect(
+      screen.getByText("The gallery's GIFs and videos could not be loaded."),
+    ).toBeTruthy()
+    cleanup()
+    view([])
+    expect(screen.queryByText(/GIFs and videos from the gallery/)).toBeNull()
+  })
+
+  it('offers nothing once the post is recorded', () => {
+    view(media(1), 'published')
+    expect(screen.queryByRole('link', { name: /Download original/ })).toBeNull()
+  })
+})
+
+describe('ManualPostView — while the gallery is read (#1167)', () => {
+  it('says it is looking, rather than showing nothing', () => {
+    render(
+      <ManualPostView
+        variant={variant}
+        postedLink={null}
+        postAttachments={[]}
+        onMarkPosted={vi.fn()}
+        galleryMedia="loading"
+      />,
+    )
+    expect(
+      screen.getByText(/Looking for GIFs and videos in the gallery/),
+    ).toBeTruthy()
   })
 })

@@ -8,6 +8,7 @@ import { SOCIAL_PLATFORM_LABELS } from '@/lib/social/types'
 import { api } from '@/lib/trpc/client'
 import { ManualPostView } from './ManualPostView'
 import { manualBodyFor, useFreshManualCheck } from './useFreshManualCheck'
+import { useManualGalleryMedia } from './useManualGalleryMedia'
 
 /**
  * The copy-ready view wired to `social.*` (#1006): loads the variant with
@@ -32,6 +33,9 @@ export function ManualPostDialog({
   const [error, setError] = useState<string | null>(null)
   const data = editor.data
   const loaded = data && data.variant._id === variantId ? data : null
+  const galleryMedia = useManualGalleryMedia(
+    loaded ? loaded.variant.postId : null,
+  )
 
   const markPosted = api.social.markPosted.useMutation({
     onSuccess: (_result, variables) => {
@@ -98,6 +102,7 @@ export function ManualPostDialog({
           // shared with the Task page); a retry shows "Checking…".
           manualBody={manualBodyFor(editor).manualBody}
           onRetryCheck={() => void editor.refetch()}
+          galleryMedia={galleryMedia}
           saving={
             markPosted.isPending &&
             markPosted.variables?.variantId === loaded.variant._id

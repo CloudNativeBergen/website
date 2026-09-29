@@ -6,6 +6,7 @@ import { OPEN_PROJECTION, VIDEO_PROJECT_FORMAT_VERSION } from './document'
 import type { ProjectRow } from './document'
 import { PROJECT_KEY } from './format'
 import type { ProjectRights, VideoProjectRow } from './format'
+import type { MarketingAssetKind } from '@/lib/marketing-asset/types'
 
 /**
  * `videoProject` reads and writes (docs/MARKETING_STUDIO_VIDEO_SPEC.md §7).
@@ -122,7 +123,8 @@ export async function readVideoProjectFiles(
 /** A gallery asset as a project would hold its file. */
 export interface GalleryFile {
   _id: string
-  kind: 'image' | 'audio'
+  /** Any gallery kind: a project takes only an image or a track. */
+  kind: MarketingAssetKind
   title: string
   fileId: string | null
   createdByUpload: boolean

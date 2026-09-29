@@ -3,6 +3,7 @@ import {
   getSocialPublishAdapter,
   isSocialPlatform,
   linkCardHostsFor,
+  resolveSocialConnections,
   resolveSocialCredentials,
   resolveSocialPublishAdapter,
 } from '../provider'
@@ -150,5 +151,100 @@ describe('LinkedIn through Buffer (#1129)', () => {
 
   it('the factory never builds LinkedIn from an empty bag any more', () => {
     expect(getSocialPublishAdapter('linkedin', {})).toBeNull()
+  })
+})
+
+/**
+ * CONNECTION VISIBILITY (#1130, spec §4): whether each platform is automatic
+ * or manual for the organization, DERIVED from its secrets through the very
+ * factory the cron uses — never stored, and never carrying a secret.
+ */
+describe('resolveSocialConnections (#1130)', () => {
+  const buffer = { apiKey: 'SECRET-KEY', linkedinChannelId: 'SECRET-CHANNEL' }
+  const bluesky = { identifier: 'cndn.bsky.social', appPassword: 'SECRET-PW' }
+  const lookup =
+    (bags: Record<string, object | null>) =>
+    async (_org: string, family: string) =>
+      bags[family] ?? null
+  const modeOf = (
+    rows: Awaited<ReturnType<typeof resolveSocialConnections>>,
+    platform: SocialPlatform,
+  ) => rows.find((r) => r.platform === platform)
+
+  it('a full buffer bag makes LinkedIn automatic VIA Buffer; the rest stay manual', async () => {
+    const rows = await resolveSocialConnections('org-1', lookup({ buffer }))
+    expect(modeOf(rows, 'linkedin')).toEqual({
+      platform: 'linkedin',
+      mode: 'automatic',
+      via: 'buffer',
+    })
+    expect(modeOf(rows, 'bluesky')).toEqual({
+      platform: 'bluesky',
+      mode: 'manual',
+      via: null,
+    })
+    // A platform with no connection family is always by hand: not listed.
+    expect(rows.map((r) => r.platform)).toEqual(['linkedin', 'bluesky'])
+  })
+
+  it.each([
+    ['an api key without the pinned channel', { apiKey: 'k' }],
+    ['a pinned channel without the api key', { linkedinChannelId: 'c' }],
+    ['empty strings', { apiKey: '', linkedinChannelId: '' }],
+  ])(
+    'a HALF-filled buffer bag (%s — the JSON-blob path allows it) reads MANUAL, as the cron treats it',
+    async (_label, bag) => {
+      const rows = await resolveSocialConnections(
+        'org-1',
+        lookup({ buffer: bag }),
+      )
+      expect(modeOf(rows, 'linkedin')).toEqual({
+        platform: 'linkedin',
+        mode: 'manual',
+        via: null,
+      })
+    },
+  )
+
+  it('a direct connection (Bluesky) is automatic with no intermediary', async () => {
+    const rows = await resolveSocialConnections('org-1', lookup({ bluesky }))
+    expect(modeOf(rows, 'bluesky')).toEqual({
+      platform: 'bluesky',
+      mode: 'automatic',
+      via: null,
+    })
+  })
+
+  it('NEVER carries a secret, whatever the bag holds', async () => {
+    const rows = await resolveSocialConnections(
+      'org-1',
+      lookup({ buffer, bluesky }),
+    )
+    const wire = JSON.stringify(rows)
+    for (const secret of ['SECRET-KEY', 'SECRET-CHANNEL', 'SECRET-PW'])
+      expect(wire).not.toContain(secret)
+    for (const row of rows)
+      expect(Object.keys(row).sort()).toEqual(['mode', 'platform', 'via'])
+  })
+
+  it('asks the lookup for THIS organization only, and no organization is all manual without a lookup', async () => {
+    const secrets = vi.fn(lookup({ buffer }))
+    await resolveSocialConnections('org-1', secrets)
+    expect(new Set(secrets.mock.calls.map(([org]) => org))).toEqual(
+      new Set(['org-1']),
+    )
+
+    const none = vi.fn(lookup({ buffer }))
+    const rows = await resolveSocialConnections(null, none)
+    expect(none).not.toHaveBeenCalled()
+    expect(rows.every((r) => r.mode === 'manual')).toBe(true)
+  })
+
+  it('an indeterminate lookup THROWS rather than claiming manual', async () => {
+    await expect(
+      resolveSocialConnections('org-1', async () => {
+        throw new Error('store unreachable')
+      }),
+    ).rejects.toThrow('store unreachable')
   })
 })

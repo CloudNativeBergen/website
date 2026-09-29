@@ -8,6 +8,11 @@ const trackLength = vi.hoisted(() => ({ seconds: 92 as number | null }))
 vi.mock('./track-length', () => ({
   readTrackLength: async () => trackLength.seconds,
 }))
+// Nor decodes video: the first frame the browser draws is stubbed too.
+const poster = vi.hoisted(() => ({
+  read: null as null | { poster: Blob; width: number; height: number },
+}))
+vi.mock('./video-poster', () => ({ readVideoPoster: async () => poster.read }))
 
 // The subject picker's search; these tests never type into it.
 vi.mock('@/lib/trpc/client', () => ({
@@ -53,7 +58,7 @@ function renderForm(edition: { _id: string; title: string } | null = null) {
       edition={edition}
     />,
   )
-  const input = screen.getByLabelText(/Choose an image|Replace the image/)
+  const input = screen.getByLabelText(/Choose an image|Replace the /)
   const pick = (file: File) =>
     act(async () => {
       fireEvent.change(input, { target: { files: [file] } })
@@ -84,9 +89,9 @@ describe('picking a file', () => {
     fireEvent.change(screen.getByLabelText('Alt text'), {
       target: { value: 'The logo' },
     })
-    await pick(new File(['GIF89a'], 'anim.gif', { type: 'image/gif' }))
+    await pick(new File(['moov'], 'clip.mov', { type: 'video/quicktime' }))
     expect(screen.getByRole('alert').textContent).toBe(
-      'Only PNG, JPEG and WebP images, or MP3, M4A and WAV tracks, can be added.',
+      'Only MP4 video can be added. Export a .mov again as MP4 and retry.',
     )
     expect(screen.queryByText('logo.png')).toBeNull()
     const add = screen.getByRole('button', { name: 'Add to gallery' })
@@ -185,7 +190,9 @@ describe('picking a file', () => {
     elsewhere.focus()
     await act(async () => finish({ _id: 'x', softOnSocial: false }))
     // The save finished and the form reset: the effect had its chance.
-    expect(screen.getByLabelText('Choose an image or a track')).toBeTruthy()
+    expect(
+      screen.getByLabelText('Choose an image, GIF, video or track'),
+    ).toBeTruthy()
     expect(document.activeElement).toBe(elsewhere)
     elsewhere.remove()
   })
@@ -202,7 +209,7 @@ describe('picking a file', () => {
       fireEvent.submit(screen.getByRole('button', { name: 'Add to gallery' }))
     })
     expect(document.activeElement).toBe(
-      screen.getByLabelText('Choose an image or a track'),
+      screen.getByLabelText('Choose an image, GIF, video or track'),
     )
   })
 
@@ -285,14 +292,19 @@ describe('describing the image', () => {
     await act(async () => {
       fireEvent.submit(screen.getByRole('button', { name: 'Add to gallery' }))
     })
-    expect(uploader).toHaveBeenCalledWith(expect.any(File), {
-      title: 'card',
-      alt: 'Ada on stage',
-      edition: 'current',
-      subject: null,
-      tags: ['speaker card', 'keynote'],
-      credit: 'Jane',
-    })
+    expect(uploader).toHaveBeenCalledWith(
+      expect.any(File),
+      {
+        title: 'card',
+        alt: 'Ada on stage',
+        edition: 'current',
+        subject: null,
+        tags: ['speaker card', 'keynote'],
+        credit: 'Jane',
+      },
+      undefined,
+      undefined,
+    )
   })
 
   it('is organization-wide unless an edition is chosen', async () => {
@@ -353,6 +365,7 @@ describe('picking an audio track (#1178)', () => {
       expect.any(File),
       expect.objectContaining({ title: 'conference theme', alt: undefined }),
       { kind: 'audio', rightsConfirmed: true },
+      undefined,
     )
   })
 
@@ -407,6 +420,164 @@ describe('picking an audio track (#1178)', () => {
     await pick(mp3('huge.mp3', 20 * 1024 * 1024 + 1))
     expect(screen.getByRole('alert').textContent).toBe(
       'The track is larger than 20 MB.',
+    )
+  })
+})
+
+/** A file an MP4 sniff accepts: an `ftyp` box with the `isom` brand. */
+const mp4 = (name: string) =>
+  new File(
+    [
+      new Uint8Array(
+        [0, 0, 0, 0x20, ...'ftypisom'].map((c) =>
+          typeof c === 'string' ? c.charCodeAt(0) : c,
+        ),
+      ),
+      new Uint8Array(64),
+    ],
+    name,
+    { type: 'video/mp4' },
+  )
+
+describe('GIFs and videos (#1167)', () => {
+  beforeEach(() => {
+    poster.read = {
+      poster: new Blob([new Uint8Array(3)], { type: 'image/jpeg' }),
+      width: 1920,
+      height: 1080,
+    }
+  })
+  const sized = (file: File, bytes: number) =>
+    Object.defineProperty(file, 'size', { value: bytes })
+
+  it.each([
+    [
+      'a GIF over 10 MB',
+      sized(
+        new File(['GIF89a'], 'big.gif', { type: 'image/gif' }),
+        10 * 1024 * 1024 + 1,
+      ),
+      'The GIF is larger than 10 MB.',
+    ],
+    [
+      'an MP4 over 100 MB',
+      sized(
+        new File(['x'], 'big.mp4', { type: 'video/mp4' }),
+        101 * 1024 * 1024,
+      ),
+      'The video is larger than 100 MB.',
+    ],
+    [
+      'a .mov',
+      new File(['x'], 'IMG_0001.MOV', { type: '' }),
+      'Only MP4 video can be added. Export a .mov again as MP4 and retry.',
+    ],
+  ])('refuses %s before uploading anything', async (_, file, message) => {
+    const { pick, uploader } = renderForm()
+    await pick(file)
+    expect(screen.getByRole('alert').textContent).toBe(message)
+    expect(uploader).not.toHaveBeenCalled()
+  })
+
+  it('previews a video, requires alt text, and uploads it with its poster', async () => {
+    const { pick, uploader } = renderForm()
+    await pick(mp4('Opening.mp4'))
+    const preview = screen.getByLabelText('Preview of Opening.mp4')
+    expect(preview.tagName).toBe('VIDEO')
+    // The poster drawn from the first frame is what it shows until played.
+    expect(preview.getAttribute('poster')).toMatch(/^blob:preview-/)
+    expect(screen.getByText('· 1920 × 1080')).toBeTruthy()
+    const add = screen.getByRole('button', { name: 'Add to gallery' })
+    // Alt text is required of a video as of an image.
+    expect((add as HTMLButtonElement).disabled).toBe(true)
+    fireEvent.change(screen.getByLabelText('Alt text'), {
+      target: { value: 'The opening, crowd cheering' },
+    })
+    expect(screen.getByText(/post it by hand, with this text/)).toBeTruthy()
+    await act(async () => {
+      fireEvent.click(add)
+    })
+    expect(uploader).toHaveBeenCalledWith(
+      expect.any(File),
+      expect.objectContaining({ alt: 'The opening, crowd cheering' }),
+      { kind: 'video', poster: poster.read!.poster },
+      expect.any(Function),
+    )
+  })
+
+  it('says how far a video upload has got', async () => {
+    let report: (fraction: number) => void = () => {}
+    let finish: () => void = () => {}
+    const uploader = vi.fn(
+      (_f: File, _d: unknown, _o: unknown, onProgress?: (n: number) => void) =>
+        new Promise<{ _id: string; softOnSocial: boolean }>((resolve) => {
+          report = onProgress!
+          finish = () => resolve({ _id: 'x', softOnSocial: false })
+        }),
+    )
+    render(<AssetUploadForm uploader={uploader} onSaved={() => {}} />)
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText(/Choose an image/), {
+        target: { files: [mp4('a.mp4')] },
+      })
+    })
+    fireEvent.change(screen.getByLabelText('Alt text'), {
+      target: { value: 'alt' },
+    })
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Add to gallery' }))
+    })
+    await act(async () => report(0.42))
+    expect(screen.getByRole('button', { name: 'Uploading 42%' })).toBeTruthy()
+    await act(async () => report(1))
+    expect(screen.getByRole('button', { name: 'Adding…' })).toBeTruthy()
+    await act(async () => finish())
+  })
+
+  it('refuses a .mov renamed .mp4 by its bytes, before reading or uploading it', async () => {
+    const { pick, uploader } = renderForm()
+    const renamed = new File(
+      [
+        new Uint8Array([
+          0, 0, 0, 0x14, 0x66, 0x74, 0x79, 0x70, 0x71, 0x74, 0x20, 0x20,
+        ]),
+        new Uint8Array(64),
+      ],
+      'clip.mp4',
+      { type: 'video/mp4' },
+    )
+    await pick(renamed)
+    expect(screen.getByRole('alert').textContent).toBe(
+      'Only MP4 video can be added. Export a .mov again as MP4 and retry.',
+    )
+    expect(uploader).not.toHaveBeenCalled()
+  })
+
+  it('refuses a video this browser cannot draw a first frame of', async () => {
+    poster.read = null
+    const { pick } = renderForm()
+    await pick(mp4('hevc.mp4'))
+    expect(screen.getByRole('alert').textContent).toMatch(
+      /could not read the video’s first frame/,
+    )
+    expect(screen.queryByLabelText(/Preview of/)).toBeNull()
+  })
+
+  it('uploads a GIF as a GIF, previewed as the animation itself', async () => {
+    const { pick, settle, uploader } = renderForm()
+    await pick(new File(['GIF89a'], 'wave.gif', { type: 'image/gif' }))
+    await settle('wave.gif', 480, 480)
+    fireEvent.change(screen.getByLabelText('Alt text'), {
+      target: { value: 'A waving hand' },
+    })
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Add to gallery' }))
+    })
+    expect(uploader).toHaveBeenCalledWith(
+      expect.any(File),
+      expect.objectContaining({ alt: 'A waving hand' }),
+      { kind: 'gif' },
+      undefined,
     )
   })
 })

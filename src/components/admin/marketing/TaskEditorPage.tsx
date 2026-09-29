@@ -24,11 +24,14 @@ import { useTagWarningToast } from './tagging'
 import type { TagIssue } from '@/lib/marketing/tagging/checks'
 import { clientTagIssues } from '@/lib/trpc/errors'
 import { ManualPostView } from '@/components/admin/social/ManualPostView'
+import { PublishFailureNotice } from '@/components/admin/social/PublishFailureNotice'
 import {
   manualBodyFor,
   useFreshManualCheck,
 } from '@/components/admin/social/useFreshManualCheck'
-import { mayAlreadyBeLive } from '@/lib/social/state-machine'
+import { useManualGalleryMedia } from '@/components/admin/social/useManualGalleryMedia'
+import { failureNotice, mayAlreadyBeLive } from '@/lib/social/state-machine'
+import { manualPostPath } from '@/lib/social/paths'
 import { taggedUrl } from '@/lib/marketing/link'
 import { publishLinkFields } from '@/lib/social/publish-link'
 import { sitePathIssue, type PagePickerOption } from '@/lib/marketing/pages'
@@ -734,6 +737,12 @@ function PublishingSection({
     variant?.variant.status === 'awaiting-manual' &&
     variant.variant.platform === 'bluesky'
   const check = useFreshManualCheck(byHand ? variant.variant._id : null)
+  // The gallery's GIFs and videos, offered to post by hand (assets spec §5).
+  const galleryMedia = useManualGalleryMedia(
+    variant?.variant.status === 'awaiting-manual'
+      ? variant.variant.postId
+      : null,
+  )
   // FAIL CLOSED (final round, T2): the text is offered only when the fresh
   // answer is still this manual post with a checked body. When the post has
   // moved on since the Task was read (a colleague marked it posted), nothing
@@ -758,6 +767,20 @@ function PublishingSection({
   }
   const v = variant.variant
   const platform = SOCIAL_PLATFORM_LABELS[v.platform]
+  const failure = failureNotice(v)
+  // The copy-ready view reloads the SAVED variant: leaving for it with
+  // unsaved edits would drop them and offer stale copy as ready to post.
+  const toManualView = (label: string) =>
+    dirty ? (
+      <span>{label} (save your changes first)</span>
+    ) : (
+      <Link
+        href={manualPostPath(v._id)}
+        className="font-medium underline underline-offset-2"
+      >
+        {label}
+      </Link>
+    )
 
   if (v.status === 'awaiting-manual') {
     return (
@@ -771,6 +794,7 @@ function PublishingSection({
           tagByHand={tagByHand}
           manualBody={manualBody}
           onRetryCheck={() => void check.refetch()}
+          galleryMedia={galleryMedia}
           saving={markPosted.isPending}
           error={manualError}
           onMarkPosted={(url) => {
@@ -793,7 +817,7 @@ function PublishingSection({
           {v.status === 'publishing'
             ? 'Being published right now.'
             : v.status === 'submitted'
-              ? 'Handed to the publisher; waiting for it to confirm the post went out.'
+              ? 'Sent to Buffer; confirming it went out. It usually settles within a minute.'
               : 'Published.'}{' '}
           {v.publishResult?.url && (
             <a
@@ -863,9 +887,26 @@ function PublishingSection({
             This post may already be live.
           </strong>{' '}
           We could not confirm whether it went out. Check {platform} before
-          retrying — retrying publishes a second post. If it is already there,
-          record it from the Social posts page instead.
+          retrying — retrying publishes a second post. If it is already there,{' '}
+          {toManualView('record it instead')}.
         </p>
+      )}
+      {/*
+        A failure that is not "may already be live" (#1130): say why — after a
+        Buffer accept, in Buffer's words — and offer the manual fallback beside
+        Retry (`failureNotice` decides the wording). The
+        copy-ready view on the Social posts page is where it is posted by hand
+        and recorded (`failed → published`, spec §5).
+      */}
+      {failure && (
+        <div className="mb-5">
+          <PublishFailureNotice
+            notice={failure}
+            platform={platform}
+            retry="retry"
+            manual={<>{toManualView('post it by hand')} and record it</>}
+          />
+        </div>
       )}
 
       <PagePicker

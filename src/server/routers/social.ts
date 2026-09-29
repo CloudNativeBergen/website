@@ -36,7 +36,10 @@ import {
 import { getCurrentDateTime } from '@/lib/time'
 import { canOrganizerTransition } from '@/lib/social/state-machine'
 import { MAY_BE_LIVE_REFUSAL } from '@/lib/marketing/deletion'
-import { isSocialPlatform } from '@/lib/social/provider'
+import {
+  isSocialPlatform,
+  resolveSocialConnections,
+} from '@/lib/social/provider'
 import { postUrlIssue } from '@/lib/social/provider/manual'
 import {
   getPlatformConstraints,
@@ -335,6 +338,41 @@ export const socialRouter = router({
       }
       return result
     }),
+
+  /**
+   * Whether each platform publishes automatically for the REQUEST's
+   * organization, or is posted by hand (#1130, spec §4) — derived from its
+   * secrets the way the publish cron derives it, and carrying no secret.
+   * An organization that cannot be resolved is refused rather than shown as
+   * "manual", which would be a claim about a connection nobody looked up.
+   */
+  connections: adminProcedure.query(async ({ ctx }) => {
+    // THE org the authz waist gated on, never a second resolution that could
+    // answer differently between the two reads.
+    if (!ctx.orgId) {
+      throw new TRPCError({
+        code: 'NOT_FOUND',
+        message: 'Could not resolve the organization from the domain',
+      })
+    }
+    try {
+      return await resolveSocialConnections(ctx.orgId)
+    } catch (error) {
+      // The secret store's reasons name env-var slugs and OTHER organizations'
+      // ids (`TenantEnvSlugUnavailableError`: "claimed by N organizations
+      // (...)"). tRPC would send that message to the browser verbatim, so the
+      // detail is logged here and the client gets a message naming neither.
+      // Still a refusal, never a "manual" answer.
+      console.error(
+        `[social] connection lookup failed for organization ${ctx.orgId}`,
+        error,
+      )
+      throw new TRPCError({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'Could not check how posts are published right now',
+      })
+    }
+  }),
 
   listVariants: adminProcedure.query(async () => {
     const conferenceId = await resolveConferenceId()

@@ -3,7 +3,9 @@ import type {
   TagsWithheldEvent,
   VariantFailureEvent,
 } from '@/lib/social/publish-engine'
-import { manualPostPath } from '@/lib/social/notify'
+import { manualPostPath } from '@/lib/social/paths'
+import { SOCIAL_PLATFORM_LABELS } from '@/lib/social/types'
+import { capVendorMessage } from '@/lib/social/vendor-message'
 import { joinNames } from '@/lib/marketing/tagging/body'
 import { GONE_SPEAKER_TEXT } from '@/lib/marketing/tagging/publish'
 
@@ -65,6 +67,47 @@ export function standalonePublishFailureNotification(
       tag: `social-failure.${variant._id}.${attempt._key}`,
     },
   ]
+}
+
+/**
+ * A FAILED CONFIRMATION (#1130, spec §3.3, §4): the asynchronous publisher —
+ * Buffer, the only one there is (#1129) — accepted the post, then reported
+ * an error, lost it, or never settled it. Buffer's error is terminal and
+ * never retried by us, and its usual cause is LinkedIn's re-authorization inside
+ * Buffer's UI: an organization-wide problem any organizer may fix. So EVERY
+ * organizer of the organization hears it (one row each, deduplicated),
+ * carrying Buffer's own message, linked to the post's copy-ready view where
+ * it can be recorded, posted by hand, or retried from its row.
+ *
+ * THE ACTOR is the publish cron, which runs as no one: the failure is
+ * Buffer's verdict, not any organizer's action, so there is nobody to
+ * exclude. The organizer who approved the post is deliberately NOT treated
+ * as the actor — they are the person who most needs to hear it failed.
+ */
+export function confirmationFailureNotifications(
+  organizerIds: readonly string[],
+  { variant, attempt }: VariantFailureEvent,
+): NotificationInput[] {
+  const platform = SOCIAL_PLATFORM_LABELS[variant.platform]
+  const message = capVendorMessage(
+    (attempt.error ?? '').trim() || attempt.outcome,
+  )
+  return [...new Set(organizerIds)].map((recipientId) => ({
+    recipientId,
+    conferenceId: variant.conferenceId,
+    notificationType: 'social_publish_failed' as const,
+    // `rejected` is Buffer reporting an error on a post it accepted — it may
+    // still retry on its own, so never "could not post". Anything else (gone,
+    // timed out) MAY be live, which must never read as a failure either.
+    title:
+      attempt.outcome === 'rejected'
+        ? `Buffer reported an error on a ${platform} post`
+        : `${platform} post not confirmed`,
+    message,
+    link: manualPostPath(variant._id),
+    // Identity of this failure, not its timestamp: a retry can fail again.
+    tag: `social-failure.${variant._id}.${attempt._key}`,
+  }))
 }
 
 /**
