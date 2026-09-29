@@ -1196,7 +1196,7 @@ describe('speaker erasure scrubs post variants (#1232)', () => {
     })
   })
 
-  describe('Codex review after the rebase', () => {
+  describe('inherited alt and shared-handle discovery', () => {
     it('never copies the alt of a post in ANOTHER conference into a variant', async () => {
       h.dataset.push(
         {
@@ -1236,6 +1236,36 @@ describe('speaker erasure scrubs post variants (#1232)', () => {
       })
       expect(doc('var-foreign').body).toBe('Meet "@ada.bsky.social" today')
       expect(result.verification?.residual.sharedByLinkOnly).toEqual([
+        {
+          handle: 'ada.bsky.social',
+          variantIds: ['var-foreign'],
+          listedBy: [BOB],
+        },
+      ])
+    })
+
+    it('names a co-speaker listing her account ONCE, by their published id, whatever copies list it', async () => {
+      const links = ['https://bsky.app/profile/ada.bsky.social']
+      doc(BOB).links = links
+      h.dataset.push(
+        { _id: `drafts.${BOB}`, _type: 'speaker', name: 'Bob Builder', links },
+        {
+          _id: `versions.rfix.${BOB}`,
+          _type: 'speaker',
+          name: 'Bob Builder',
+          links,
+        },
+        variant('var-foreign', 'draft', 'Meet "@ada.bsky.social" today', {
+          conference: ref('conf-x'),
+          mentions: [],
+        }),
+      )
+      const result = await eraseSpeakerInPlace({
+        speakerId: ADA,
+        actor: 'test',
+        acceptSharedHandles: true,
+      })
+      expect(result.plan?.sharedByLinkOnly).toEqual([
         {
           handle: 'ada.bsky.social',
           variantIds: ['var-foreign'],

@@ -143,14 +143,6 @@ function list<T>(value: unknown): T[] {
 
 const str = (v: unknown) => (typeof v === 'string' ? v : null)
 
-/** The published id a Studio draft or Content Release copy belongs to. */
-const publishedIdOf = (id: string) =>
-  id.startsWith('drafts.')
-    ? id.slice('drafts.'.length)
-    : id.startsWith('versions.')
-      ? id.split('.').slice(2).join('.')
-      : id
-
 /**
  * A record of the subject: by reference, or by a handle or DID of theirs on
  * a record that points at a speaker who is gone (a dangling or erased
@@ -803,22 +795,25 @@ export async function fetchSpeakerMentionInputs(
   }
 
   // A live speaker who LISTS one of her handles shares it, record or none.
-  // Every live speaker's links are read and parsed exactly
+  // Every non-erased speaker document with links is read — in `raw`, Studio
+  // drafts and release copies included — and parsed exactly here
   // (`blueskyHandlesFromLinks`): a GROQ `match` prefilter misses a form the
-  // parser accepts, such as a percent-encoded profile URL. `raw` reads Studio
-  // drafts and release copies too; her OWN versions are not someone else.
+  // parser accepts, such as a percent-encoded profile URL. Copies count as
+  // their published speaker, and her OWN are not someone else.
   const othersLinks =
     identity.handles.length === 0
       ? []
       : (
           (await client.fetch<{ _id: string; links?: unknown }[]>(
-            // groq-global: other live speakers listing one of her handles, in
-            // every tenant — the same account is theirs as well.
+            // groq-global: every speaker's links, in every tenant — another
+            // speaker listing her account shares it, wherever they spoke.
             groq`*[_type == "speaker" && !defined(erasedAt) && count(links) > 0]{ _id, links }`,
             {},
             opts,
           )) ?? []
-        ).filter((other) => publishedIdOf(other._id) !== speakerId)
+        )
+          .map((other) => ({ ...other, _id: getPublishedId(other._id) }))
+          .filter((other) => other._id !== speakerId)
   // Per handle of hers, the other speakers LISTING it.
   const listedBy = new Map<string, string[]>()
   for (const other of othersLinks) {
@@ -827,7 +822,7 @@ export async function fetchSpeakerMentionInputs(
       : []
     for (const h of blueskyHandlesFromLinks(links))
       if (identity.handles.includes(h))
-        listedBy.set(h, [...(listedBy.get(h) ?? []), other._id])
+        listedBy.set(h, [...new Set([...(listedBy.get(h) ?? []), other._id])])
   }
   const variants = [...byRef, ...byAccountOrScope]
   const byRecord = new Set(
