@@ -742,7 +742,7 @@ export async function fetchSpeakerMentionInputs(
         : typed
             .map(
               (h) =>
-                `body match ${h} || attachments[].altOverride match ${h} || (post->conference._ref == conference._ref && post->attachments[].alt match ${h})`,
+                `body match ${h} || attachments[].altOverride match ${h} || post->attachments[].alt match ${h}`,
             )
             .join(' || ')
     return (
