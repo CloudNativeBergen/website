@@ -52,6 +52,7 @@ import {
   STATUS_LABELS,
 } from './timeline-model'
 import { useCeilingWarningToast } from './useCeilingWarningToast'
+import { LiveLinksWarning } from './LiveLinksWarning'
 
 const inputClass =
   'block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-xs focus:border-brand-cloud-blue focus:ring-1 focus:ring-brand-cloud-blue focus:outline-none disabled:opacity-60 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100'
@@ -151,6 +152,20 @@ function LoadedTaskEditor({
   const failed = (title: string) => (err: { message: string }) =>
     showNotification({ type: 'error', title, message: err.message })
 
+  // What the delete would remove, read when the dialog opens: the same
+  // guarded read and refusals as the delete (short-links spec §2.7).
+  const deletion = api.marketing.task.deletionPreview.useQuery(
+    { taskId: task._id },
+    {
+      enabled: deleting,
+      // Every open reads afresh: a send or a failed post since the last open
+      // changes the count, and nothing else invalidates it.
+      staleTime: 0,
+      refetchOnWindowFocus: false,
+      retry: false,
+    },
+  )
+  const deletionPreview = deletion.isFetching ? undefined : deletion.data
   const del = api.marketing.task.delete.useMutation({
     onSuccess: () => {
       void utils.marketing.plan.get.invalidate()
@@ -311,7 +326,27 @@ function LoadedTaskEditor({
         confirmButtonText="Delete task"
         variant="danger"
         isLoading={del.isPending}
-      />
+        // Wait for the count, but never block on it (§2.7): a failed preview
+        // shows its message and the delete, which re-checks everything the
+        // preview refuses on, stays available — as it was before #1145.
+        confirmDisabled={deletion.isFetching}
+      >
+        {deletion.error ? (
+          <p role="alert" className="mt-4 text-sm text-red-600">
+            {deletion.error.message}
+          </p>
+        ) : (
+          // One live region from the first render, so a screen reader hears
+          // the warning replace the "checking" line.
+          <div role="status" className="mt-4 text-sm empty:hidden">
+            {deletionPreview ? (
+              <LiveLinksWarning count={deletionPreview.liveLinks} />
+            ) : (
+              'Checking what the delete removes…'
+            )}
+          </div>
+        )}
+      </ConfirmationModal>
     </div>
   )
 }

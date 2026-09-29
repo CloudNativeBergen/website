@@ -42,6 +42,7 @@ const preview = {
   publishedTasks: 2,
   snapshots: 50,
   requiresTypedConfirmation: true,
+  liveLinks: 0,
   conferenceTitle: 'My Conference',
 }
 beforeEach(() => {
@@ -54,7 +55,10 @@ describe('plan deletion settings', () => {
     render(<DeletePlanSection />)
     expect(h.query).toHaveBeenCalledTimes(0)
     fireEvent.click(screen.getByRole('button', { name: 'Delete plan' }))
+    // `staleTime: 0`: every open reads the tree afresh — the counts it shows
+    // (and the live-link warning, #1145) must not come from a cache.
     expect(h.query).toHaveBeenCalledWith(undefined, {
+      staleTime: 0,
       refetchOnWindowFocus: false,
     })
     expect(
@@ -119,5 +123,26 @@ describe('plan deletion settings', () => {
     expect(
       screen.getAllByRole('button', { name: 'Delete plan' }).at(-1),
     ).toBeDisabled()
+  })
+  it('warns about short links that may be live, and still deletes (#1145)', () => {
+    h.query.mockReturnValue({
+      data: { ...preview, liveLinks: 3, requiresTypedConfirmation: false },
+      isFetching: false,
+    })
+    render(<DeletePlanSection />)
+    fireEvent.click(screen.getByRole('button', { name: 'Delete plan' }))
+    expect(
+      screen.getByText('3 short links may already be shared'),
+    ).toBeVisible()
+    expect(screen.getByText(/they open the conference home page/)).toBeVisible()
+    fireEvent.click(
+      screen.getAllByRole('button', { name: 'Delete plan' }).at(-1)!,
+    )
+    expect(h.mutate).toHaveBeenCalledWith({ confirmTitle: '' })
+  })
+  it('says nothing about short links when none may be live', () => {
+    render(<DeletePlanSection />)
+    fireEvent.click(screen.getByRole('button', { name: 'Delete plan' }))
+    expect(screen.queryByText(/may already be shared/)).toBeNull()
   })
 })

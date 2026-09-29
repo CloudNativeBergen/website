@@ -4,7 +4,7 @@ import { groq } from 'next-sanity'
 import { scopedFetch } from '@/lib/sanity/scoped'
 import { getCurrentDateTime } from '@/lib/time'
 import { commitOrConflict } from '../sanity'
-import { deletionPreview } from './preview'
+import { deletionPreview, variantIsRemoved } from './preview'
 import { mediaDeletionBlockers } from '@/lib/social/media-deletion'
 import type { DeletionTask, DeletionTree } from './types'
 import { expireShortLinkIndex, expireShortLinks } from '../short-link-cache'
@@ -25,7 +25,7 @@ export async function readDeletionTree(
       "plan": { _id, _rev },
       "campaigns": *[_type == "marketingCampaign" && conference._ref == $conferenceId && plan._ref == ^._id && (!defined($campaignId) || _id == $campaignId) && !(_id in path("drafts.**")) && !(_id in path("versions.**"))]{_id, _rev, key},
       "tasks": *[_type == "marketingTask" && conference._ref == $conferenceId && plan._ref == ^._id && (!defined($campaignId) || campaign._ref == $campaignId) && !(_id in path("drafts.**")) && !(_id in path("versions.**"))]{
-        _id, _rev, shortCode,
+        _id, _rev, shortCode, "messageSent": defined(messageId),
         "survivingDependantIds": *[_type == "marketingTask" && conference._ref == $conferenceId && ^._id in prerequisites[]._ref && (plan._ref != ^.plan._ref || (defined($campaignId) && campaign._ref != $campaignId)) && !(_id in path("drafts.**")) && !(_id in path("versions.**"))]._id,
         "variant": select(variant->conference._ref == $conferenceId => variant->{
           _id, _rev, shortCode, status, "lastOutcome": attempts[-1].outcome, "postId": post._ref,
@@ -169,13 +169,7 @@ function removedMedia(tasks: DeletionTask[]): {
       ),
     )
     const deletable = new Set(
-      [...byId.values()]
-        .filter(
-          (variant) =>
-            variant.status !== 'published' &&
-            variant.survivingTaskIds.length === 0,
-        )
-        .map((variant) => variant._id),
+      [...byId.values()].filter(variantIsRemoved).map((variant) => variant._id),
     )
     for (const variant of byId.values()) {
       if (!deletable.has(variant._id)) continue
@@ -595,11 +589,7 @@ export async function deletePlanTree(input: {
     )
     const deletableVariants = new Set(
       [...variants.values()]
-        .filter(
-          (variant) =>
-            variant.status !== 'published' &&
-            variant.survivingTaskIds.length === 0,
-        )
+        .filter(variantIsRemoved)
         .map((variant) => variant._id),
     )
     const deletedPosts = new Set<string>()

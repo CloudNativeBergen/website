@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
-import { expect, fn, within } from 'storybook/test'
+import { expect, fn, waitFor, within } from 'storybook/test'
 import { http, HttpResponse } from 'msw'
 import { NotificationProvider } from '@/components/admin/NotificationProvider'
 import { mockDateBeforeEach, withPortalTheme } from '@/lib/storybook'
@@ -43,6 +43,7 @@ const meta = {
                 publishedTasks: 3,
                 snapshots: 40,
                 requiresTypedConfirmation: true,
+                liveLinks: 0,
                 conferenceTitle: 'Cloud Native Days Norway 2026',
               },
             },
@@ -239,6 +240,7 @@ export const DeletePublishedCampaign: Story = {
         publishedTasks: 2,
         snapshots: 45,
         requiresTypedConfirmation: true,
+        liveLinks: 0,
         conferenceTitle: 'Cloud Native Days Norway 2026',
       }}
       onClose={fn()}
@@ -255,6 +257,7 @@ export const DeleteDraftCampaign: Story = {
         publishedTasks: 0,
         snapshots: 2,
         requiresTypedConfirmation: false,
+        liveLinks: 0,
         conferenceTitle: 'Cloud Native Days Norway 2026',
       }}
       onClose={fn()}
@@ -286,6 +289,7 @@ export const DeletePublishedPlan: Story = {
         publishedTasks: 12,
         snapshots: 240,
         requiresTypedConfirmation: true,
+        liveLinks: 0,
         conferenceTitle: 'Cloud Native Days Norway 2026',
       }}
       onClose={fn()}
@@ -303,6 +307,7 @@ export const DeleteUnpublishedPlan: Story = {
         publishedTasks: 0,
         snapshots: 10,
         requiresTypedConfirmation: false,
+        liveLinks: 0,
         conferenceTitle: 'Cloud Native Days Norway 2026',
       }}
       onClose={fn()}
@@ -326,6 +331,7 @@ export const DeletingPlan: Story = {
         publishedTasks: 0,
         snapshots: 10,
         requiresTypedConfirmation: false,
+        liveLinks: 0,
         conferenceTitle: 'Cloud Native Days Norway 2026',
       }}
       onClose={fn()}
@@ -346,4 +352,79 @@ export const PlanPublishingRefusal: Story = {
       onConfirm={fn()}
     />
   ),
+}
+
+/**
+ * Short links that may be live (short-links spec §2.1's known hole, §2.7):
+ * sent outreach Tasks, and failed or awaiting-manual posts. The preview warns
+ * that they fall back to the home page; the delete stays available.
+ */
+export const DeletePlanWithLiveLinks: Story = {
+  render: () => (
+    <DeleteConfirmation
+      label="plan"
+      preview={{
+        campaigns: 10,
+        tasks: 60,
+        publishedTasks: 0,
+        snapshots: 10,
+        requiresTypedConfirmation: false,
+        liveLinks: 3,
+        conferenceTitle: 'Cloud Native Days Norway 2026',
+      }}
+      onClose={fn()}
+      onConfirm={fn()}
+    />
+  ),
+  play: async ({ canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body)
+    // The dialog fades in: wait for the end of the transition, not only the node.
+    await waitFor(
+      () =>
+        expect(
+          body.getByText('3 short links may already be shared'),
+        ).toBeVisible(),
+      { timeout: 5000 },
+    )
+    await expect(
+      body.getByRole('button', { name: 'Delete plan' }),
+    ).toBeEnabled()
+  },
+}
+export const DeletePlanWithLiveLinksDark: Story = {
+  ...DeletePlanWithLiveLinks,
+  globals: { theme: 'dark' },
+}
+export const DeleteCampaignWithLiveLinksMobile: Story = {
+  globals: { viewport: { value: 'mobile1', isRotated: false } },
+  parameters: { viewport: { defaultViewport: 'mobile1' } },
+  render: () => (
+    <DeleteConfirmation
+      preview={{
+        campaigns: 1,
+        tasks: 6,
+        publishedTasks: 2,
+        snapshots: 45,
+        requiresTypedConfirmation: true,
+        liveLinks: 1,
+        conferenceTitle: 'Cloud Native Days Norway 2026',
+      }}
+      onClose={fn()}
+      onConfirm={fn()}
+    />
+  ),
+  play: async ({ canvasElement }) => {
+    await expect(
+      canvasElement.ownerDocument.documentElement.clientWidth,
+    ).toBeLessThan(500)
+    await waitFor(
+      () =>
+        expect(
+          within(canvasElement.ownerDocument.body).getByText(
+            '1 short link may already be shared',
+          ),
+        ).toBeVisible(),
+      { timeout: 5000 },
+    )
+  },
 }

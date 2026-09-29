@@ -10,6 +10,8 @@ import {
   deletePlanTree,
   MAY_BE_LIVE_REFUSAL,
   DeletionRefusalError,
+  outreachLinkMayBeLive,
+  variantLinkMayBeLive,
 } from '@/lib/marketing/deletion'
 import { PAGE_OUTCOMES } from '@/lib/marketing/types'
 import { isOutreach, outreachBody } from '@/lib/marketing/outreach'
@@ -549,6 +551,48 @@ async function loadTask(taskId: string): Promise<{
     data.variant = await getSocialVariantEditorData(data.task.variantId)
   }
   return { conferenceId, data }
+}
+
+/**
+ * Delete a single Task: refused while its variant is in flight or published
+ * (the posting core keeps the record of a post that went out), or failed and
+ * possibly live. Shared by `task.delete` and its preview so the warning is
+ * about exactly what goes — the Task, and with it its variant.
+ */
+function taskDeletion(data: StoredTaskEditorData): {
+  variantRef: { id: string; rev: string; postId: string } | null
+  liveLinks: number
+} {
+  const { task, variant } = data
+  const outreach = outreachLinkMayBeLive({
+    shortCode: task.shortCode,
+    messageSent: !!task.messageId,
+  })
+  if (!variant) return { variantRef: null, liveLinks: outreach ? 1 : 0 }
+  const v = variant.variant
+  // `submitted` is in flight as `publishing` is (#1128).
+  if (
+    v.status === 'publishing' ||
+    v.status === 'submitted' ||
+    v.status === 'published'
+  ) {
+    throw new TRPCError({
+      code: 'BAD_REQUEST',
+      message:
+        v.status === 'published'
+          ? 'The post has been published; the record is kept.'
+          : 'The post is being published right now. Try again in a minute.',
+    })
+  }
+  // A failed variant that may be live (#1128): the same refusal the plan and
+  // post deletes give, because the remedy is the same.
+  if (mayAlreadyBeLive(v)) {
+    throw new TRPCError({ code: 'BAD_REQUEST', message: MAY_BE_LIVE_REFUSAL })
+  }
+  return {
+    variantRef: { id: v._id, rev: v._rev, postId: v.postId },
+    liveLinks: (outreach ? 1 : 0) + (variantLinkMayBeLive(v) ? 1 : 0),
+  }
 }
 
 /**
@@ -1874,40 +1918,26 @@ export const marketingRouter = router({
     }),
 
     /**
+     * What `delete` would remove, from the same guarded read and with the
+     * same refusals: the short link that may be live and falls back to the
+     * home page (§2.1's known hole, §2.7). A warning, never a block.
+     */
+    deletionPreview: adminProcedure
+      .input(TaskIdSchema)
+      .query(async ({ input }) => {
+        const { data } = await loadTask(input.taskId)
+        return { liveLinks: taskDeletion(data).liveLinks }
+      }),
+
+    /**
      * Delete the Task and, for a publishing Task, its variant and post
      * (§2.3). Refused while the variant is in flight or published: the
      * posting core keeps the record of a post that went out.
      */
     delete: adminProcedure.input(TaskIdSchema).mutation(async ({ input }) => {
       const { conferenceId, data } = await loadTask(input.taskId)
-      const { task, variant } = data
-      let variantRef: { id: string; rev: string; postId: string } | null = null
-      if (variant) {
-        const v = variant.variant
-        // `submitted` is in flight as `publishing` is (#1128).
-        if (
-          v.status === 'publishing' ||
-          v.status === 'submitted' ||
-          v.status === 'published'
-        ) {
-          throw new TRPCError({
-            code: 'BAD_REQUEST',
-            message:
-              v.status === 'published'
-                ? 'The post has been published; the record is kept.'
-                : 'The post is being published right now. Try again in a minute.',
-          })
-        }
-        // A failed variant that may be live (#1128): the same refusal the
-        // plan and post deletes give, because the remedy is the same.
-        if (mayAlreadyBeLive(v)) {
-          throw new TRPCError({
-            code: 'BAD_REQUEST',
-            message: MAY_BE_LIVE_REFUSAL,
-          })
-        }
-        variantRef = { id: v._id, rev: v._rev, postId: v.postId }
-      }
+      const { task } = data
+      const { variantRef } = taskDeletion(data)
       const landed = await deleteTask({
         taskId: task._id,
         taskRev: task._rev,

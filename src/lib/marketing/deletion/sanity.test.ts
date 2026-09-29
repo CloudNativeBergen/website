@@ -318,6 +318,7 @@ describe('deletion read and refusals', () => {
       publishedTasks: 1,
       snapshots: 1,
       requiresTypedConfirmation: true,
+      liveLinks: 0,
     })
     expect(tree!.tasks.map((t) => t._id)).toEqual(['task-1', 'task-2'])
     const published = structuredClone(byId('variant-1'))
@@ -1152,6 +1153,93 @@ describe('short-link entries of a chunked delete (short-links spec §2.5)', () =
     expect(revalidateTag).toHaveBeenCalledWith(shortLinkTag('task-0'), {
       expire: 0,
     })
+  })
+})
+
+describe('links that may be live, on the executed read (#1145, spec §2.7)', () => {
+  it('counts exactly the may-be-live codes the delete then removes', async () => {
+    const coded = (n: number, status: string, code: string) => {
+      const rows = task(n, status, 'camp', 'rejected')
+      Object.assign(rows[1], { shortCode: code })
+      return rows
+    }
+    h.dataset.push(
+      doc('task-sent', 'marketingTask', {
+        plan: ref('plan'),
+        campaign: ref('camp'),
+        kind: 'speakerOutreach',
+        shortCode: 'ssssss',
+        messageId: 'msg-1',
+      }),
+      doc('task-unsent', 'marketingTask', {
+        plan: ref('plan'),
+        campaign: ref('camp'),
+        kind: 'speakerOutreach',
+        shortCode: 'uuuuuu',
+      }),
+      ...coded(0, 'failed', 'ffffff'),
+      ...coded(1, 'awaiting-manual', 'mmmmmm'),
+      ...coded(2, 'draft', 'dddddd'),
+      ...coded(3, 'published', 'pppppp'),
+      // Awaiting manual, but a Task on another plan still uses it: kept.
+      ...coded(4, 'awaiting-manual', 'kkkkkk'),
+      doc('task-elsewhere', 'marketingTask', {
+        plan: ref('other-plan'),
+        campaign: ref('other-camp'),
+        variant: ref('variant-4'),
+      }),
+    )
+    const tree = await readDeletionTree('conf-A')
+    expect(deletionPreview(tree!).liveLinks).toBe(3)
+    expect(
+      await deletePlanTree({
+        conferenceId: 'conf-A',
+        tree: tree!,
+        deletePlan: true,
+      }),
+    ).toBe(true)
+    // The three counted are gone; the kept and published ones survive.
+    expect(byId('task-sent')).toBeUndefined()
+    expect(byId('variant-0')).toBeUndefined()
+    expect(byId('variant-1')).toBeUndefined()
+    expect(byId('variant-3')).toBeDefined()
+    expect(byId('variant-4')).toBeDefined()
+  })
+})
+
+describe('links that may be live, on a Campaign delete (#1145, spec §2.7)', () => {
+  it('does not count a variant a Task in ANOTHER Campaign still uses, and the delete keeps it', async () => {
+    const coded = (n: number, status: string, code: string) => {
+      const rows = task(n, status, 'camp', 'rejected')
+      Object.assign(rows[1], { shortCode: code })
+      return rows
+    }
+    h.dataset.push(
+      doc('camp-2', 'marketingCampaign', {
+        key: 'speakers',
+        plan: ref('plan'),
+      }),
+      ...coded(0, 'awaiting-manual', 'mmmmmm'),
+      ...coded(1, 'awaiting-manual', 'kkkkkk'),
+      // Same plan, other Campaign, same variant: it outlives this delete.
+      doc('task-other-camp', 'marketingTask', {
+        plan: ref('plan'),
+        campaign: ref('camp-2'),
+        variant: ref('variant-1'),
+      }),
+    )
+    const tree = await readDeletionTree('conf-A', 'camp')
+    expect(deletionPreview(tree!).liveLinks).toBe(1)
+    expect(
+      await deletePlanTree({
+        conferenceId: 'conf-A',
+        tree: tree!,
+        deletePlan: false,
+      }),
+    ).toBe(true)
+    expect(byId('variant-0')).toBeUndefined()
+    expect(byId('variant-1')).toBeDefined()
+    expect(byId('task-other-camp')).toBeDefined()
   })
 })
 

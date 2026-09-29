@@ -8,6 +8,7 @@ import { DeleteConfirmation } from './DeleteCampaignDialog'
 
 export function DeletePlanDialog({ onClose }: { onClose: () => void }) {
   const preview = api.marketing.plan.deletionPreview.useQuery(undefined, {
+    staleTime: 0,
     refetchOnWindowFocus: false,
   })
   const utils = api.useUtils()

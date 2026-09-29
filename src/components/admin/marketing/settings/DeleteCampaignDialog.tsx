@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
 import { typeToConfirmMatches } from '@/components/admin/new-edition/wizardLogic'
 import { api } from '@/lib/trpc/client'
+import { LiveLinksWarning } from '../LiveLinksWarning'
 
 export interface DeletionPreview {
   campaigns: number
@@ -12,10 +13,12 @@ export interface DeletionPreview {
   publishedTasks: number
   snapshots: number
   requiresTypedConfirmation: boolean
+  /** Short links that may be live and fall back to the home page (§2.7). */
+  liveLinks: number
   conferenceTitle: string
 }
 export function DeleteConfirmation({
-  preview,
+  preview: lastPreview,
   error,
   previewError,
   pending = false,
@@ -33,6 +36,9 @@ export function DeleteConfirmation({
   label?: string
 }) {
   const [title, setTitle] = useState('')
+  // React Query keeps the last data beside a refetch error: counts and a
+  // live-link warning from an earlier read must not sit next to that error.
+  const preview = previewError ? undefined : lastPreview
   return (
     <ConfirmationModal
       isOpen
@@ -72,38 +78,39 @@ export function DeleteConfirmation({
           {error}
         </p>
       )}
-      {!preview ? (
-        // Not "checking" once it has refused — the banner above is the answer.
+      {preview && (
+        <ul className="mt-4 list-disc space-y-1 pl-5 text-left text-sm text-gray-900 dark:text-gray-100">
+          <li>
+            {preview.campaigns} Campaigns and {preview.tasks} Tasks permanently
+            deleted
+          </li>
+          <li>
+            {preview.publishedTasks} published posts kept, including their URLs
+            and publication history
+          </li>
+          <li>{preview.snapshots} stored measurements preserved</li>
+        </ul>
+      )}
+      {/* One live region from the first render, so a screen reader hears the
+          warning replace the "checking" line (as in the Task dialog). */}
+      <div role="status" className="mt-3 text-left text-sm empty:hidden">
+        {preview ? (
+          <LiveLinksWarning count={preview.liveLinks} />
+        ) : // Not "checking" once it has refused — the banner above is the answer.
         previewError ? null : (
-          <p className="mt-4 text-sm">
-            Checking Campaigns, Tasks and publications…
-          </p>
-        )
-      ) : (
-        <div className="mt-4 space-y-3 text-left text-sm">
-          <ul className="list-disc space-y-1 pl-5">
-            <li>
-              {preview.campaigns} Campaigns and {preview.tasks} Tasks
-              permanently deleted
-            </li>
-            <li>
-              {preview.publishedTasks} published posts kept, including their
-              URLs and publication history
-            </li>
-            <li>{preview.snapshots} stored measurements preserved</li>
-          </ul>
-          {preview.requiresTypedConfirmation && (
-            <label className="block">
-              Type &ldquo;{preview.conferenceTitle}&rdquo; to confirm
-              <input
-                value={title}
-                onChange={(event) => setTitle(event.target.value)}
-                className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 dark:border-gray-600 dark:bg-gray-800"
-                autoComplete="off"
-              />
-            </label>
-          )}
-        </div>
+          'Checking Campaigns, Tasks and publications…'
+        )}
+      </div>
+      {preview?.requiresTypedConfirmation && (
+        <label className="mt-3 block text-left text-sm text-gray-900 dark:text-gray-100">
+          Type &ldquo;{preview.conferenceTitle}&rdquo; to confirm
+          <input
+            value={title}
+            onChange={(event) => setTitle(event.target.value)}
+            className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 dark:border-gray-600 dark:bg-gray-800"
+            autoComplete="off"
+          />
+        </label>
       )}
     </ConfirmationModal>
   )
@@ -117,7 +124,7 @@ export function DeleteCampaignDialog({
 }) {
   const preview = api.marketing.campaign.deletionPreview.useQuery(
     { campaignId },
-    { refetchOnWindowFocus: false },
+    { staleTime: 0, refetchOnWindowFocus: false },
   )
   const utils = api.useUtils()
   const router = useRouter()

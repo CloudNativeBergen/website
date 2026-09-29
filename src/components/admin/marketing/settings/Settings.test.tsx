@@ -84,6 +84,7 @@ describe('Campaign editing confirmation', () => {
           publishedTasks: 3,
           snapshots: 20,
           requiresTypedConfirmation: true,
+          liveLinks: 0,
           conferenceTitle: 'My Conference',
         }}
         onClose={vi.fn()}

@@ -193,6 +193,9 @@ const handlers = (data: TaskEditorData) => [
   http.post('/api/trpc/marketing.task.setAssignee', ok),
   http.post('/api/trpc/marketing.task.setDate', ok),
   http.post('/api/trpc/marketing.task.setPrerequisites', ok),
+  http.get('/api/trpc/marketing.task.deletionPreview', () =>
+    HttpResponse.json({ result: { data: { liveLinks: 0 } } }),
+  ),
   http.post('/api/trpc/marketing.task.delete', ok),
   http.post('/api/trpc/social.updateVariant', ok),
   http.post('/api/trpc/social.markPosted', ok),
@@ -921,6 +924,72 @@ export const OutreachSent: Story = {
     msw: {
       handlers: handlers(outreach({ messageId: 'message-1', complete: true })),
     },
+  },
+}
+
+/**
+ * Deleting a sent outreach Task (short-links spec §2.1's known hole, §2.7):
+ * the preview warns that its link falls back to the home page, and the delete
+ * stays available.
+ */
+export const OutreachSentDeleteWarning: Story = {
+  parameters: {
+    msw: {
+      handlers: [
+        http.get('/api/trpc/marketing.task.deletionPreview', () =>
+          HttpResponse.json({ result: { data: { liveLinks: 1 } } }),
+        ),
+        ...handlers(outreach({ messageId: 'message-1', complete: true })),
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(
+      await canvas.findByRole(
+        'button',
+        { name: 'Delete task' },
+        { timeout: 5000 },
+      ),
+    )
+    const dialog = within(canvasElement.ownerDocument.body)
+    // The dialog fades in: wait for the end of the transition, not only the node.
+    await waitFor(
+      () =>
+        expect(
+          dialog.getByText('1 short link may already be shared'),
+        ).toBeVisible(),
+      { timeout: 5000 },
+    )
+    await waitFor(() =>
+      expect(
+        dialog.getAllByRole('button', { name: 'Delete task' }).at(-1),
+      ).toBeEnabled(),
+    )
+  },
+}
+
+export const OutreachSentDeleteWarningDark: Story = {
+  ...OutreachSentDeleteWarning,
+  parameters: {
+    ...OutreachSentDeleteWarning.parameters,
+    theme: 'dark',
+    backgrounds: { default: 'dark' },
+  },
+}
+
+export const OutreachSentDeleteWarningMobile: Story = {
+  ...OutreachSentDeleteWarning,
+  globals: { viewport: { value: 'mobile1', isRotated: false } },
+  parameters: {
+    ...OutreachSentDeleteWarning.parameters,
+    viewport: { defaultViewport: 'mobile1' },
+  },
+  play: async (ctx) => {
+    await expect(
+      ctx.canvasElement.ownerDocument.documentElement.clientWidth,
+    ).toBeLessThan(500)
+    await OutreachSentDeleteWarning.play!(ctx)
   },
 }
 
