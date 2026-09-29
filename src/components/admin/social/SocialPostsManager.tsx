@@ -20,6 +20,11 @@ import { EmptyState } from '@/components/EmptyState'
 import { api } from '@/lib/trpc/client'
 import { VariantEditorDialog } from './VariantEditorDialog'
 import { ManualPostDialog } from './ManualPostDialog'
+import { capVendorMessage } from '@/lib/social/vendor-message'
+import {
+  ChannelConnections,
+  ChannelConnectionsUnavailable,
+} from './ChannelConnections'
 import {
   formatDateTimeSafe,
   instantToOsloLocalInput,
@@ -53,8 +58,10 @@ const STATUS_STYLES: Record<
     className:
       'bg-indigo-50 text-indigo-700 ring-indigo-600/20 dark:bg-indigo-900/30 dark:text-indigo-300',
   },
+  // Buffer is the only asynchronous publisher (#1129); a second one would
+  // key this by the variant's connection rather than its status.
   submitted: {
-    label: 'With the publisher',
+    label: 'Sent to Buffer, confirming…',
     className:
       'bg-indigo-50 text-indigo-700 ring-indigo-600/20 dark:bg-indigo-900/30 dark:text-indigo-300',
   },
@@ -136,6 +143,11 @@ export function SocialPostsManager({
     undefined,
     { refetchInterval: 30_000 },
   )
+
+  // Derived from the organization's secrets on the server (#1130). A failed
+  // read says the status is unavailable rather than guessing "manual".
+  const { data: connections, isError: connectionsUnavailable } =
+    api.social.connections.useQuery(undefined, { staleTime: 5 * 60_000 })
 
   const [isFormOpen, setFormOpen] = useState(defaultOpen)
   const [draft, setDraft] = useState<PostDraft>(EMPTY_DRAFT)
@@ -323,6 +335,15 @@ export function SocialPostsManager({
           </AdminButton>
         }
       />
+
+      {connectionsUnavailable ? (
+        <ChannelConnectionsUnavailable />
+      ) : (
+        connections &&
+        connections.length > 0 && (
+          <ChannelConnections connections={connections} />
+        )
+      )}
 
       {taskRefusal && (
         <div
@@ -632,7 +653,7 @@ function VariantRow({
         <p className="line-clamp-2">{variant.body}</p>
         {variant.status === 'failed' && lastAttempt?.error && (
           <p className="mt-1 line-clamp-2 text-xs text-red-600 dark:text-red-400">
-            {lastAttempt.error}
+            {capVendorMessage(lastAttempt.error)}
           </p>
         )}
         {variant.status === 'published' &&

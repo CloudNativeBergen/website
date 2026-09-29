@@ -1,4 +1,5 @@
 import type { ConfirmCheck, PublishOutcome } from './provider/types'
+import { capVendorMessage } from './vendor-message'
 import type {
   AttemptOutcome,
   PublishAttempt,
@@ -308,4 +309,40 @@ export function outcomeMayBeLive(
     typeof lastOutcome === 'string' &&
     (MAY_BE_LIVE_OUTCOMES as readonly string[]).includes(lastOutcome)
   )
+}
+
+/**
+ * What a `failed` variant tells the organizer about ITS failure (#1130), one
+ * rule for the Task editor and the copy-ready view. `null` when the variant is
+ * not failed, or may already be live — that case has its own check-first
+ * warning, which must not be contradicted by "it did not go out".
+ *
+ * `afterAccept` — the publisher (Buffer) ACCEPTED the post and reported an
+ *   error on it later (the leg before is `submitted`). Buffer may retry such a
+ *   post on its own (spec §3.3), so "it did not go out" would overclaim.
+ * `retryAlone` — whether sending it again, unchanged, can succeed. A refusal
+ *   (`rejected`) or a dead connection (`credential-expired`) fails the same
+ *   way until something is fixed; only a Buffer-side error after accept is
+ *   expected to clear by fixing it in Buffer, which is still not "unchanged".
+ */
+export interface FailureNotice {
+  error: string | null
+  afterAccept: boolean
+  retryAlone: boolean
+}
+
+export function failureNotice(variant: {
+  status: VariantStatus
+  attempts: readonly PublishAttempt[]
+}): FailureNotice | null {
+  if (variant.status !== 'failed' || mayAlreadyBeLive(variant)) return null
+  const last = variant.attempts.at(-1)
+  return {
+    // Capped for display by the notification's own rule; the attempt keeps
+    // the whole message.
+    error: capVendorMessage(last?.error?.trim() ?? '') || null,
+    afterAccept: variant.attempts.at(-2)?.outcome === 'submitted',
+    retryAlone:
+      last?.outcome !== 'rejected' && last?.outcome !== 'credential-expired',
+  }
 }

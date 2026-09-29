@@ -24,6 +24,7 @@ function disclosure(overrides: Partial<TenantProcessingFacts> = {}) {
     slackToken: true,
     workshops: true,
     dedicatedEmailAccount: false,
+    bufferPublishing: true,
     ...overrides,
   })
 }

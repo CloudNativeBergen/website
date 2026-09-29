@@ -93,13 +93,25 @@ vi.mock('@/lib/social/provider/constraints', async (importOriginal) => {
   constraints.validate.mockImplementation(real.validatePublishInput)
   return { ...real, validatePublishInput: constraints.validate }
 })
+// The tenant secret store behind `social.connections` (#1130): the real
+// derivation runs; only the store answers are scripted.
+const secretsStore = vi.hoisted(() => ({
+  resolveTenantSecrets: vi.fn<
+    (orgId: string | null | undefined, family: string) => Promise<object | null>
+  >(async () => null),
+}))
+vi.mock('@/lib/secrets/store', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/secrets/store')>()),
+  resolveTenantSecrets: secretsStore.resolveTenantSecrets,
+}))
 vi.mock('@/lib/social/provider', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/social/provider')>()),
   resolveSocialPublishAdapter: h.resolveAdapter,
 }))
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { initTRPC } from '@trpc/server'
+import { initTRPC, TRPCError } from '@trpc/server'
+import { TenantEnvSlugUnavailableError } from '@/lib/secrets/env-per-org'
 import type { Context } from '@/server/trpc'
 import type { SocialPostVariant } from '@/lib/social/types'
 import type { PublishInput, ValidationIssue } from '@/lib/social/provider/types'
@@ -970,6 +982,99 @@ describe('social.markPosted', () => {
       }),
     ).rejects.toMatchObject({ code: 'NOT_FOUND' })
     expect(h.getSocialPostVariant).not.toHaveBeenCalled()
+  })
+})
+
+describe('social.connections (#1130)', () => {
+  it("derives the REQUEST organization's modes, LinkedIn via Buffer, and sends no secret", async () => {
+    secretsStore.resolveTenantSecrets.mockImplementation(
+      async (_orgId, family) =>
+        family === 'buffer'
+          ? { apiKey: 'SECRET-KEY', linkedinChannelId: 'SECRET-CHANNEL' }
+          : null,
+    )
+    const rows = await social().connections()
+    expect(
+      new Set(secretsStore.resolveTenantSecrets.mock.calls.map(([o]) => o)),
+    ).toEqual(new Set([ORG_A]))
+    expect(rows.find((r) => r.platform === 'linkedin')).toEqual({
+      platform: 'linkedin',
+      mode: 'automatic',
+      via: 'buffer',
+    })
+    expect(JSON.stringify(rows)).not.toMatch(/SECRET/)
+    secretsStore.resolveTenantSecrets.mockReset()
+    secretsStore.resolveTenantSecrets.mockResolvedValue(null)
+  })
+
+  it('reads the org the authz waist GATED on, never a second resolution', async () => {
+    // The domain answers A for the waist, then B: a handler that resolved the
+    // org again would read B's connection state for a caller authorized on A.
+    h.getConference
+      .mockResolvedValueOnce({
+        conference: { _id: CONF_A, organization: { _ref: ORG_A } },
+        domain: 'localhost',
+        error: null,
+      })
+      .mockResolvedValue({
+        conference: { _id: CONF_B, organization: { _ref: 'org-B' } },
+        domain: 'localhost',
+        error: null,
+      })
+    await social().connections()
+    expect(
+      new Set(secretsStore.resolveTenantSecrets.mock.calls.map(([o]) => o)),
+    ).toEqual(new Set([ORG_A]))
+  })
+
+  it("never sends the secret store's reason — a slug or another org's id — to the client", async () => {
+    // The REAL error class and reason format the discrete store raises when
+    // two organizations claim one slug (env-per-org.ts).
+    secretsStore.resolveTenantSecrets.mockRejectedValue(
+      new TenantEnvSlugUnavailableError(
+        ORG_A,
+        'secretEnvSlug ACME is claimed by 2 organizations (org-A, org-OTHER); they would read the same credentials',
+      ),
+    )
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      const error = await social()
+        .connections()
+        .then(
+          () => null,
+          (e: unknown) => e,
+        )
+      expect(error).toBeInstanceOf(TRPCError)
+      const { code, message } = error as TRPCError
+      // The client-visible VALUE: a generic refusal, not a mode and not the reason.
+      expect({ code, message }).toEqual({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'Could not check how posts are published right now',
+      })
+      expect(JSON.stringify(error)).not.toMatch(/ACME|org-OTHER/)
+      // The detail is kept, server-side.
+      expect(String(logged.mock.calls.flat().at(-1))).toMatch(/ACME.*org-OTHER/)
+    } finally {
+      logged.mockRestore()
+      secretsStore.resolveTenantSecrets.mockReset()
+      secretsStore.resolveTenantSecrets.mockResolvedValue(null)
+    }
+  })
+
+  it('refuses rather than claiming manual when the organization is unresolvable', async () => {
+    h.getConference.mockResolvedValue({
+      conference: { _id: CONF_A, organization: null },
+      domain: 'localhost',
+      error: null,
+    })
+    // The org-scoped authz waist refuses first (FORBIDDEN); the procedure's
+    // own NOT_FOUND guard behind it is defence in depth that this caller
+    // cannot reach. On the VALUE: no mode is claimed and the secret store is
+    // never asked.
+    await expect(social().connections()).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    })
+    expect(secretsStore.resolveTenantSecrets).not.toHaveBeenCalled()
   })
 })
 

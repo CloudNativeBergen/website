@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import clsx from 'clsx'
-import { mayAlreadyBeLive } from '@/lib/social/state-machine'
+import { failureNotice, mayAlreadyBeLive } from '@/lib/social/state-machine'
 import {
   ArrowDownTrayIcon,
   ArrowTopRightOnSquareIcon,
@@ -32,6 +32,7 @@ import {
   type SocialPostVariant,
 } from '@/lib/social/types'
 import { CroppedImage } from './CroppedImage'
+import { PublishFailureNotice } from './PublishFailureNotice'
 
 export interface ManualPostViewProps {
   variant: SocialPostVariant
@@ -212,6 +213,8 @@ export function ManualPostView({
   // rule lives in `state-machine.ts` so this view and the Task editor's retry
   // cannot drift apart about which failures are safe to act on.
   const postMayBeLive = mayAlreadyBeLive(variant)
+  // WHY it failed (#1130): the rule the Task editor shares.
+  const failure = failureNotice(variant)
 
   const [url, setUrl] = useState('')
   const [urlIssue, setUrlIssue] = useState<string | null>(null)
@@ -248,6 +251,10 @@ export function ManualPostView({
               'Only post it by hand if it is NOT there',
             ]
           : [
+              // Buffer may still post it on its own (#1130): look first.
+              failure?.afterAccept
+                ? `Check ${platform} and Buffer’s queue first`
+                : null,
               'Copy the text',
               link && !linkInBody && !linkAsComment ? 'Copy the link' : null,
               images.length > 0 ? 'Save the image' : null,
@@ -280,6 +287,15 @@ export function ManualPostView({
           doing anything else. If the post is there, paste its address below to
           record it — do not post it again.
         </p>
+      )}
+
+      {failure && (
+        <PublishFailureNotice
+          notice={failure}
+          platform={platform}
+          retry="close this and retry"
+          manual="post it by hand and record it below"
+        />
       )}
 
       {strayInBody.length > 0 && (

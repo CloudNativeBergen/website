@@ -5,6 +5,7 @@ import {
   PER_ORG_SECRETS_STORES,
 } from '@/lib/secrets/store'
 import { resolveConferenceSlackToken } from '@/lib/slack/token'
+import { resolveSocialConnections } from '@/lib/social/provider'
 import { isWorkshopsEnabledForConference } from '@/lib/features/workshops'
 import {
   conferenceProviderType,
@@ -70,6 +71,7 @@ async function resolveProcessingFacts(
       slackToken: null,
       workshops: null,
       dedicatedEmailAccount: null,
+      bufferPublishing: null,
     }
   }
 
@@ -111,6 +113,17 @@ async function resolveProcessingFacts(
           .catch(() => null),
       ])
 
+  // Buffer publishes LinkedIn iff the connection is COMPLETE — asked through
+  // the very derivation the publish cron and the admin use, so a half-filled
+  // `buffer` bag (which sends nothing) reads "no". A lookup that THROWS is
+  // "could not find out" and discloses (rule 1). Not gated on the org
+  // DOCUMENT read: the connection is a secret, not a field on it.
+  const bufferPublishing = await resolveSocialConnections(orgRef)
+    .then((rows) =>
+      rows.some((r) => r.platform === 'linkedin' && r.via === 'buffer'),
+    )
+    .catch(() => null)
+
   return {
     tenantKnown: true,
     organizationReadFailed,
@@ -138,6 +151,7 @@ async function resolveProcessingFacts(
     slackToken,
     workshops,
     dedicatedEmailAccount,
+    bufferPublishing,
   }
 }
 

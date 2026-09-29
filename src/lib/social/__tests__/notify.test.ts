@@ -5,11 +5,8 @@ vi.mock('@/lib/notification/sanity', () => ({
   createNotifications: h.createNotifications,
 }))
 
-import {
-  manualDueNotifications,
-  manualPostPath,
-  notifyAwaitingManual,
-} from '../notify'
+import { manualDueNotifications, notifyAwaitingManual } from '../notify'
+import { manualPostPath } from '../paths'
 import type { PublishableVariant } from '../store'
 import { makeVariant } from './memory-store'
 

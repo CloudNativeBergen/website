@@ -27,6 +27,7 @@ function facts(
     slackToken: false,
     workshops: false,
     dedicatedEmailAccount: false,
+    bufferPublishing: false,
     ...overrides,
   }
 }
@@ -383,5 +384,50 @@ describe('the international-transfer list is derived from the SAME disclosure', 
     expect(
       internationalTransferProcessors(disclosure).every((p) => p.location),
     ).toBe(true)
+  })
+})
+
+/**
+ * Buffer (#1130, LinkedIn spec §2): an organization that connects Buffer has
+ * its approved LinkedIn posts — text and images, which can name and show
+ * speakers and sponsors — sent to Buffer to publish. Buffer is the
+ * organizer's processor for that, in the United States.
+ */
+describe('Buffer, when the organization publishes LinkedIn through it', () => {
+  it('discloses Buffer as CONFIRMED, chosen by the organizer, processing in the US', () => {
+    const disclosure = buildSubprocessorDisclosure(
+      facts({ bufferPublishing: true }),
+    )
+    expect(disclosure.processors.find((p) => p.id === 'buffer')).toMatchObject({
+      name: 'Buffer',
+      chosenBy: 'organizer',
+      location: 'United States',
+      certainty: 'confirmed',
+    })
+    expect(
+      internationalTransferProcessors(disclosure).map((p) => p.id),
+    ).toContain('buffer')
+  })
+
+  it('omits Buffer when a successful read says it is not connected', () => {
+    expect(ids(facts({ bufferPublishing: false }))).not.toContain('buffer')
+  })
+
+  it('discloses Buffer as POSSIBLE when the connection could not be determined', () => {
+    const disclosure = buildSubprocessorDisclosure(
+      facts({ bufferPublishing: null }),
+    )
+    expect(
+      disclosure.processors.find((p) => p.id === 'buffer')?.certainty,
+    ).toBe('possible')
+    expect(disclosure.incomplete).toBe(true)
+  })
+
+  it('discloses Buffer as POSSIBLE when nothing about the tenant is knowable', () => {
+    expect(
+      buildSubprocessorDisclosure(
+        facts({ tenantKnown: false, bufferPublishing: false }),
+      ).processors.find((p) => p.id === 'buffer')?.certainty,
+    ).toBe('possible')
   })
 })

@@ -4,16 +4,7 @@ import { truncateToGraphemeBoundary } from '@/lib/messaging/links'
 import type { PublishableVariant } from './store'
 import { SOCIAL_PLATFORM_LABELS } from './types'
 
-/** The organizer surface every social deep link lands on. */
-export const SOCIAL_POSTS_PATH = '/admin/marketing/posts'
-
-/**
- * The copy-ready view for one variant: the posts page with the manual
- * dialog opened on it (`SocialPostsManager` reads the `variant` query).
- */
-export function manualPostPath(variantId: string): string {
-  return `${SOCIAL_POSTS_PATH}?variant=${encodeURIComponent(variantId)}`
-}
+import { manualPostPath } from './paths'
 
 /** Body excerpt in the hub row; the full text lives in the view. */
 const EXCERPT_MAX = 140
