@@ -59,7 +59,10 @@ export type MoveResult =
          * False when Sanity already held these exact bytes (assets are
          * deduplicated by content hash) and handed back an existing asset,
          * which may be another tenant's. Only a created asset is ever the
-         * gallery's to delete.
+         * gallery's to delete. True is NOT proof this upload alone holds it:
+         * a concurrent upload of the same bytes sees it created too, so a
+         * failed upload's file is only recorded for the DELAYED orphan check
+         * (`pending-cleanup.ts`), never deleted on the spot.
          */
         created: boolean
       }
@@ -99,7 +102,8 @@ const BLOB_DELETE_DEADLINE_MS = 10_000
 
 /**
  * Slack for clock skew between this server and Sanity when deciding whether an
- * asset was created by this upload or already existed.
+ * asset is new since this upload began or already existed. "New" may still be
+ * shared with a concurrent upload of the same bytes; see `created`.
  */
 const CREATED_CLOCK_SKEW_MS = 5_000
 

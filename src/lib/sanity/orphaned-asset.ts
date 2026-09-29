@@ -32,7 +32,7 @@ export interface OrphanedAssetDeletion {
 /** The first API version whose `raw` perspective includes release versions. */
 export const COUNT_API_VERSION = '2025-02-19'
 
-async function deleteAssetIfOrphaned(
+export async function deleteAssetIfOrphaned(
   assetId: string | null,
 ): Promise<OrphanedAssetDeletion> {
   if (!assetId) return { id: null, deleted: false, remainingReferences: 0 }

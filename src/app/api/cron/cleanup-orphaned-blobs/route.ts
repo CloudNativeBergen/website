@@ -3,6 +3,10 @@ import { list } from '@vercel/blob'
 import { cleanupOrphanedBlob } from '@/lib/attachment/blob'
 import { unstable_noStore as noStore } from 'next/cache'
 import { MARKETING_ASSET_BLOB_PREFIX } from '@/lib/marketing-asset/blob-url'
+import {
+  sweepPendingCleanups,
+  type PendingCleanupSweep,
+} from '@/lib/marketing-asset/pending-cleanup'
 
 /**
  * The temporary upload prefixes this sweeper owns: proposal attachments and
@@ -35,6 +39,25 @@ async function listAll(prefix: string) {
   return all
 }
 
+/**
+ * The Sanity files failed gallery uploads left behind (#1167), through the
+ * delayed orphan check. On its own: a failure here never stops the Blob sweep.
+ */
+async function sweepFailedUploadFiles(): Promise<
+  PendingCleanupSweep | { error: string }
+> {
+  try {
+    const result = await sweepPendingCleanups()
+    console.log(
+      `Failed-upload files: deleted=${result.deleted} kept=${result.kept} retried=${result.retried}`,
+    )
+    return result
+  } catch (error) {
+    console.error('Could not sweep failed-upload files', error)
+    return { error: 'Could not sweep failed-upload files' }
+  }
+}
+
 export async function GET(request: NextRequest) {
   noStore()
   try {
@@ -53,6 +76,8 @@ export async function GET(request: NextRequest) {
       console.error('Invalid or missing authorization token')
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+
+    const failedUploadFiles = await sweepFailedUploadFiles()
 
     const retentionThreshold = new Date(
       Date.now() - BLOB_RETENTION_HOURS * 60 * 60 * 1000,
@@ -73,7 +98,11 @@ export async function GET(request: NextRequest) {
     // Nothing could be looked at: that is a failure, not "nothing to clean".
     if (unlisted.length === TEMPORARY_PREFIXES.length) {
       return NextResponse.json(
-        { error: 'Could not list temporary blobs', unlisted },
+        {
+          error: 'Could not list temporary blobs',
+          unlisted,
+          failedUploadFiles,
+        },
         { status: 500 },
       )
     }
@@ -95,6 +124,7 @@ export async function GET(request: NextRequest) {
         message: 'No orphaned blobs found',
         cleaned: 0,
         unlisted,
+        failedUploadFiles,
       })
     }
 
@@ -129,6 +159,7 @@ export async function GET(request: NextRequest) {
       failed: failureCount,
       total: orphanedBlobs.length,
       unlisted,
+      failedUploadFiles,
     })
   } catch (error) {
     console.error('Error in cleanup orphaned blobs cron job:', error)

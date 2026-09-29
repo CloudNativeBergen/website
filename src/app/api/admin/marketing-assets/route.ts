@@ -42,10 +42,7 @@ import {
 } from '@/lib/marketing-asset/studio'
 import { resolveAssetDetailsForCurrentOrg } from '@/lib/marketing-asset/guard'
 import type { ResolvedMarketingAssetDetails } from '@/lib/marketing-asset/details'
-import {
-  deleteFileAssetIfOrphaned,
-  deleteImageAssetIfOrphaned,
-} from '@/lib/sanity/orphaned-asset'
+import { recordPendingCleanup } from '@/lib/marketing-asset/pending-cleanup'
 import { getCurrentDateTime } from '@/lib/time'
 
 /**
@@ -131,25 +128,21 @@ const KINDS = {
     missing: 'An image, a title and alt text are required.',
     refusals: REFUSALS,
     notAdded: 'The image could not be added. Try again.',
-    deleteIfOrphaned: deleteImageAssetIfOrphaned,
   },
   gif: {
     missing: 'A GIF, a title and alt text are required.',
     refusals: GIF_REFUSALS,
     notAdded: 'The GIF could not be added. Try again.',
-    deleteIfOrphaned: deleteImageAssetIfOrphaned,
   },
   video: {
     missing: 'A video, its poster, a title and alt text are required.',
     refusals: VIDEO_REFUSALS,
     notAdded: 'The video could not be added. Try again.',
-    deleteIfOrphaned: deleteFileAssetIfOrphaned,
   },
   audio: {
     missing: 'A track and a title are required.',
     refusals: AUDIO_REFUSALS,
     notAdded: 'The track could not be added. Try again.',
-    deleteIfOrphaned: deleteFileAssetIfOrphaned,
   },
 } as const
 
@@ -188,6 +181,10 @@ export async function POST(request: Request) {
   const audio = kindName === 'audio'
   const kind = KINDS[kindName]
   if (!parsedUrl.success || !parsed.success) {
+    // Nothing will move what was uploaded for this request: delete it after
+    // the answer. `discardBlob` pins each URL to our store and this
+    // organization's prefix first; anything else is never touched.
+    for (const known of uploadedUrls(body)) discardBlob(known, orgId)
     // Title and alt text are what an organizer can fix in the form; any
     // other failing field (subject, tags, edition) gets its own message.
     const otherFieldFailed = parsed.error?.issues.some(
@@ -285,20 +282,32 @@ export async function POST(request: Request) {
     })
   } catch (error) {
     console.error('Marketing asset: gallery entry not written', error)
-    // After the answer, not before it: the cleanup must never be what pushes
-    // the route past `maxDuration`. Sanity dedupes identical uploads across
-    // tenants, so an asset it already held may be another tenant's, possibly
-    // not yet referenced: never ours to delete. A created one goes only if
-    // still unreferenced, so an entry that did land after all keeps it.
+    // After the answer, not before it: recording must never be what pushes
+    // the route past `maxDuration`. Never deleted here: Sanity dedupes
+    // identical bytes, so a file this upload saw created may be another
+    // upload's too, still moving and not yet referenced. The delayed orphan
+    // check (`pending-cleanup.ts`) deletes it once no concurrent move can be
+    // in flight, and only if nothing references it.
     const created = moved.created
-    if (created.length > 0)
-      after(async () => {
-        for (const file of created) await file.deleteIfOrphaned(file.id)
-      })
+    if (created.length > 0) after(() => recordPendingCleanup(created))
     return NextResponse.json({ error: kind.notAdded }, { status: 500 })
   } finally {
     writeDeadline.clear()
   }
+}
+
+/**
+ * The upload URLs a refused body names, read leniently (the schema may be
+ * what refused it): any string under `url` or `posterUrl`, within the
+ * schema's length. Only candidates — `discardBlob` decides which are ours.
+ */
+function uploadedUrls(body: unknown): string[] {
+  if (typeof body !== 'object' || body === null) return []
+  const { url, posterUrl } = body as Record<string, unknown>
+  return [url, posterUrl].filter(
+    (value): value is string =>
+      typeof value === 'string' && value.length > 0 && value.length <= 2048,
+  )
 }
 
 /**
@@ -322,12 +331,6 @@ function newAsset(
       ...(extra.studio ? { studio: extra.studio } : {}),
     }
   return { ...base, ...fields }
-}
-
-/** One Sanity asset a move made, with the orphan check that removes it. */
-interface CreatedFile {
-  id: string
-  deleteIfOrphaned: (id: string) => Promise<unknown>
 }
 
 /** The fields each kind writes, as `createMarketingAsset` takes them. */
@@ -356,25 +359,19 @@ type Moved =
       ok: true
       fields: MovedFields
       softOnSocial: boolean
-      /** What this move created, for the cleanup if the write fails. */
-      created: CreatedFile[]
+      /** The asset ids this move saw created, for the cleanup if the write fails. */
+      created: string[]
     }
   | { ok: false; reason: MoveRefusal | 'poster' }
 
-const createdImage = (asset: { _id: string; created: boolean }) =>
-  asset.created
-    ? [{ id: asset._id, deleteIfOrphaned: deleteImageAssetIfOrphaned }]
-    : []
-const createdFile = (asset: { _id: string; created: boolean }) =>
-  asset.created
-    ? [{ id: asset._id, deleteIfOrphaned: deleteFileAssetIfOrphaned }]
-    : []
+const createdIds = (...assets: { _id: string; created: boolean }[]) =>
+  assets.filter((asset) => asset.created).map((asset) => asset._id)
 
 /**
  * Move the upload into Sanity by its kind. A video moves its poster FIRST
  * (small, and refused like any image) and then streams the MP4; a refusal of
  * either leaves nothing behind: the other blob is discarded, and a poster
- * already stored goes through the orphan check after the answer.
+ * already stored is recorded for the delayed orphan check.
  */
 async function moveFor(
   kind: 'image' | 'gif' | 'video' | 'audio',
@@ -396,7 +393,7 @@ async function moveFor(
         durationSeconds: moved.asset.durationSeconds,
       },
       softOnSocial: false,
-      created: createdFile(moved.asset),
+      created: createdIds(moved.asset),
     }
   }
   if (kind === 'video') {
@@ -414,11 +411,10 @@ async function moveFor(
       answerBy - Date.now() - WRITE_RESERVE_MS,
     )
     if (!video.ok) {
-      const posterId = poster.asset._id
-      if (poster.asset.created)
-        after(async () => {
-          await deleteImageAssetIfOrphaned(posterId)
-        })
+      // Recorded for the delayed orphan check, never deleted now: see the
+      // write's failure below.
+      const posterIds = createdIds(poster.asset)
+      if (posterIds.length > 0) after(() => recordPendingCleanup(posterIds))
       return video
     }
     return {
@@ -433,7 +429,7 @@ async function moveFor(
           : {}),
       },
       softOnSocial: isSoftOnSocial(poster.asset),
-      created: [...createdFile(video.asset), ...createdImage(poster.asset)],
+      created: createdIds(video.asset, poster.asset),
     }
   }
   // A poster belongs to a video only: any other kind never moves one.
@@ -451,6 +447,6 @@ async function moveFor(
       ...(moved.asset.created ? { createdImageAssetId: moved.asset._id } : {}),
     },
     softOnSocial: isSoftOnSocial(moved.asset),
-    created: createdImage(moved.asset),
+    created: createdIds(moved.asset),
   }
 }
