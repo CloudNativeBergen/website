@@ -260,7 +260,13 @@ function seed() {
       conference: ref('conf-a'),
       speakers: [ref(ADA), ref(BOB)],
     },
-    { _id: 'post-1', _type: 'socialPost', _rev: 'r0', body: TAGGED },
+    {
+      _id: 'post-1',
+      _type: 'socialPost',
+      _rev: 'r0',
+      conference: ref('conf-a'),
+      body: TAGGED,
+    },
     variant('var-scheduled', 'scheduled', TAGGED),
     variant('var-published', 'published', TAGGED),
     // A Content Release copy of a draft variant.
@@ -697,6 +703,7 @@ describe('speaker erasure scrubs post variants (#1232)', () => {
         {
           _id: 'post-x',
           _type: 'socialPost',
+          conference: ref('conf-x'),
           attachments: [{ _key: 'px', alt: 'With @ada.bsky.social' }],
         },
         variant('var-x-alt', 'draft', 'x', {
@@ -854,7 +861,7 @@ describe('speaker erasure scrubs post variants (#1232)', () => {
         did: ADA_DID,
         name: 'Acme',
         status: 'tagged',
-        sponsor: true,
+        sponsor: weak('sponsor-acme'),
       }
       h.dataset.push(
         variant('var-sponsor', 'draft', 'Thanks @ada.bsky.social', {
@@ -1186,6 +1193,79 @@ describe('speaker erasure scrubs post variants (#1232)', () => {
         'See (https://example.test)a speaker and https://x.test/a.',
       )
       expect(result.verification?.clean).toBe(true)
+    })
+  })
+
+  describe('Codex review after the rebase', () => {
+    it('never copies the alt of a post in ANOTHER conference into a variant', async () => {
+      h.dataset.push(
+        {
+          _id: 'post-foreign',
+          _type: 'socialPost',
+          conference: ref('conf-x'),
+          attachments: [{ _key: 'pf', alt: 'Ada Lovelace at Acme HQ' }],
+        },
+        variant('var-cross', 'draft', 'x', {
+          post: weak('post-foreign'),
+          mentions: [],
+          attachments: [{ _key: 'vc', source: 'pf' }],
+        }),
+      )
+      const result = await eraseSpeakerInPlace({
+        speakerId: ADA,
+        actor: 'test',
+      })
+      expect(result.err).toBeNull()
+      expect(doc('var-cross').attachments).toEqual([
+        { _key: 'vc', source: 'pf' },
+      ])
+    })
+
+    it('a co-speaker listing her account by an ENCODED profile link still shares it', async () => {
+      doc(BOB).links = ['https://bsky.app/profile/%61da.bsky.social']
+      h.dataset.push(
+        variant('var-foreign', 'draft', 'Meet "@ada.bsky.social" today', {
+          conference: ref('conf-x'),
+          mentions: [],
+        }),
+      )
+      const result = await eraseSpeakerInPlace({
+        speakerId: ADA,
+        actor: 'test',
+        acceptSharedHandles: true,
+      })
+      expect(doc('var-foreign').body).toBe('Meet "@ada.bsky.social" today')
+      expect(result.verification?.residual.sharedByLinkOnly).toEqual([
+        {
+          handle: 'ada.bsky.social',
+          variantIds: ['var-foreign'],
+          listedBy: [BOB],
+        },
+      ])
+    })
+
+    it('her OWN draft and release copies listing her account are not someone else', async () => {
+      const links = ['https://bsky.app/profile/ada.bsky.social']
+      h.dataset.push(
+        { _id: `drafts.${ADA}`, _type: 'speaker', name: 'Ada Lovelace', links },
+        {
+          _id: `versions.rfix.${ADA}`,
+          _type: 'speaker',
+          name: 'Ada Lovelace',
+          links,
+        },
+        variant('var-foreign', 'draft', 'Meet "@ada.bsky.social" today', {
+          conference: ref('conf-x'),
+          mentions: [],
+        }),
+      )
+      const result = await eraseSpeakerInPlace({
+        speakerId: ADA,
+        actor: 'test',
+      })
+      expect(result.err).toBeNull()
+      expect(result.plan?.sharedByLinkOnly).toEqual([])
+      expect(doc('var-foreign').body).toBe('Meet "a speaker" today')
     })
   })
 

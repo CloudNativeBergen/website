@@ -143,12 +143,20 @@ function list<T>(value: unknown): T[] {
 
 const str = (v: unknown) => (typeof v === 'string' ? v : null)
 
+/** The published id a Studio draft or Content Release copy belongs to. */
+const publishedIdOf = (id: string) =>
+  id.startsWith('drafts.')
+    ? id.slice('drafts.'.length)
+    : id.startsWith('versions.')
+      ? id.split('.').slice(2).join('.')
+      : id
+
 /**
  * A record of the subject: by reference, or by a handle or DID of theirs on
  * a record that points at a speaker who is gone (a dangling or erased
  * reference). Never another live speaker's, and never a record with NO
- * speaker reference: that is a sponsor's (#1154 writes them, marked
- * `sponsor: true`; none exist on main yet), and a company account shared
+ * speaker reference: that is a sponsor's (#1154 writes them with a weak
+ * `sponsor` reference instead), and a company account shared
  * with the subject is still the company's.
  */
 const isOthers = (m: MentionEntry) =>
@@ -637,7 +645,7 @@ export function linkOnlySharedResidual(
 }
 
 // `otherLive`: see `MentionEntry`. Every read below passes `$speakerId`.
-const VARIANT_FIELDS = groq`{ _id, _type, _rev, status, body, attachments, conference, "sourceAlts": post->attachments[]{ _key, alt }, "mentions": mentions[]{ ..., "otherLive": defined(speaker._ref) && speaker._ref != $speakerId && defined(speaker->_id) && !defined(speaker->erasedAt) } }`
+const VARIANT_FIELDS = groq`{ _id, _type, _rev, status, body, attachments, conference, "sourceAlts": select(post->conference._ref == conference._ref => post->attachments[]{ _key, alt }), "mentions": mentions[]{ ..., "otherLive": defined(speaker._ref) && speaker._ref != $speakerId && defined(speaker->_id) && !defined(speaker->erasedAt) } }`
 
 /**
  * The reads: variants recording the subject by reference, then (knowing
@@ -734,7 +742,7 @@ export async function fetchSpeakerMentionInputs(
         : typed
             .map(
               (h) =>
-                `body match ${h} || attachments[].altOverride match ${h} || post->attachments[].alt match ${h}`,
+                `body match ${h} || attachments[].altOverride match ${h} || (post->conference._ref == conference._ref && post->attachments[].alt match ${h})`,
             )
             .join(' || ')
     return (
@@ -795,25 +803,22 @@ export async function fetchSpeakerMentionInputs(
   }
 
   // A live speaker who LISTS one of her handles shares it, record or none.
-  // A COARSE `match` per handle, OR-ed: the links are then parsed exactly
-  // (`blueskyHandlesFromLinks`), so any form it accepts — `@handle`, a
-  // trailing space, an encoded segment — counts. Parameters only.
-  const listedFilter = identity.handles
-    .map((_, i) => `links[] match $l${i}`)
-    .join(' || ')
+  // Every live speaker's links are read and parsed exactly
+  // (`blueskyHandlesFromLinks`): a GROQ `match` prefilter misses a form the
+  // parser accepts, such as a percent-encoded profile URL. `raw` reads Studio
+  // drafts and release copies too; her OWN versions are not someone else.
   const othersLinks =
     identity.handles.length === 0
       ? []
-      : ((await client.fetch<{ _id: string; links?: unknown }[]>(
-          // groq-global: other live speakers listing one of her handles, in
-          // every tenant — the same account is theirs as well.
-          groq`*[_type == "speaker" && _id != $speakerId && !defined(erasedAt) && (${listedFilter})]{ _id, links }`,
-          {
-            speakerId,
-            ...Object.fromEntries(identity.handles.map((h, i) => [`l${i}`, h])),
-          },
-          opts,
-        )) ?? [])
+      : (
+          (await client.fetch<{ _id: string; links?: unknown }[]>(
+            // groq-global: other live speakers listing one of her handles, in
+            // every tenant — the same account is theirs as well.
+            groq`*[_type == "speaker" && !defined(erasedAt) && count(links) > 0]{ _id, links }`,
+            {},
+            opts,
+          )) ?? []
+        ).filter((other) => publishedIdOf(other._id) !== speakerId)
   // Per handle of hers, the other speakers LISTING it.
   const listedBy = new Map<string, string[]>()
   for (const other of othersLinks) {
