@@ -42,4 +42,20 @@ describe('DeleteConfirmation live-links warning (#1145)', () => {
     render(<DeleteConfirmation {...props} preview={preview(0)} />)
     expect((await screen.findByRole('status')).textContent).toBe('')
   })
+
+  it('shows no counts or warning from an earlier read once the fresh read failed', () => {
+    const props = { onClose: vi.fn(), onConfirm: vi.fn() }
+    // React Query keeps the last data beside a refetch error.
+    render(
+      <DeleteConfirmation
+        {...props}
+        preview={preview(3)}
+        error="Sanity down"
+        previewError="Sanity down"
+      />,
+    )
+    expect(screen.getByRole('alert').textContent).toBe('Sanity down')
+    expect(screen.queryByText(/may already be shared/)).toBeNull()
+    expect(screen.queryByText(/permanently deleted/)).toBeNull()
+  })
 })

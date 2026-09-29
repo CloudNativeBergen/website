@@ -1146,7 +1146,26 @@ describe('marketing.task.deletionPreview (#1145)', () => {
     )
     expect(await preview()).toEqual({ liveLinks: 1 })
     await marketing().task.delete({ taskId: 'task-ours' })
-    expect(h.deleteTask).toHaveBeenCalledTimes(1)
+    // The counted variant is the one handed to the delete, which removes it
+    // in its transaction (task-sanity.test: "deleteTask removes the Task, its
+    // variant…", on executed GROQ).
+    expect(h.deleteTask).toHaveBeenCalledWith(
+      expect.objectContaining({
+        taskId: 'task-ours',
+        variant: expect.objectContaining({ id: 'variant-ours' }),
+      }),
+    )
+  })
+
+  it('a sent outreach message: the counted code goes with the Task itself', async () => {
+    h.getTaskEditorData.mockResolvedValue(
+      stored({ ...OUTREACH, shortCode: 'abc234', messageId: 'msg-1' }),
+    )
+    expect(await preview()).toEqual({ liveLinks: 1 })
+    await marketing().task.delete({ taskId: 'task-ours' })
+    expect(h.deleteTask).toHaveBeenCalledWith(
+      expect.objectContaining({ taskId: 'task-ours', variant: null }),
+    )
   })
 
   it('refuses a foreign Task before reading it', async () => {

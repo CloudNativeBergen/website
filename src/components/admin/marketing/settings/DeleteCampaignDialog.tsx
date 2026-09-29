@@ -18,7 +18,7 @@ export interface DeletionPreview {
   conferenceTitle: string
 }
 export function DeleteConfirmation({
-  preview,
+  preview: lastPreview,
   error,
   previewError,
   pending = false,
@@ -36,6 +36,9 @@ export function DeleteConfirmation({
   label?: string
 }) {
   const [title, setTitle] = useState('')
+  // React Query keeps the last data beside a refetch error: counts and a
+  // live-link warning from an earlier read must not sit next to that error.
+  const preview = previewError ? undefined : lastPreview
   return (
     <ConfirmationModal
       isOpen

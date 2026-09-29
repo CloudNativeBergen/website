@@ -1207,6 +1207,42 @@ describe('links that may be live, on the executed read (#1145, spec §2.7)', () 
   })
 })
 
+describe('links that may be live, on a Campaign delete (#1145, spec §2.7)', () => {
+  it('does not count a variant a Task in ANOTHER Campaign still uses, and the delete keeps it', async () => {
+    const coded = (n: number, status: string, code: string) => {
+      const rows = task(n, status, 'camp', 'rejected')
+      Object.assign(rows[1], { shortCode: code })
+      return rows
+    }
+    h.dataset.push(
+      doc('camp-2', 'marketingCampaign', {
+        key: 'speakers',
+        plan: ref('plan'),
+      }),
+      ...coded(0, 'awaiting-manual', 'mmmmmm'),
+      ...coded(1, 'awaiting-manual', 'kkkkkk'),
+      // Same plan, other Campaign, same variant: it outlives this delete.
+      doc('task-other-camp', 'marketingTask', {
+        plan: ref('plan'),
+        campaign: ref('camp-2'),
+        variant: ref('variant-1'),
+      }),
+    )
+    const tree = await readDeletionTree('conf-A', 'camp')
+    expect(deletionPreview(tree!).liveLinks).toBe(1)
+    expect(
+      await deletePlanTree({
+        conferenceId: 'conf-A',
+        tree: tree!,
+        deletePlan: false,
+      }),
+    ).toBe(true)
+    expect(byId('variant-0')).toBeUndefined()
+    expect(byId('variant-1')).toBeDefined()
+    expect(byId('task-other-camp')).toBeDefined()
+  })
+})
+
 describe('transaction boundary safety', () => {
   it('a publisher claim at a chunk boundary rolls back the entire Task bundle', async () => {
     for (let n = 0; n < 15; n++) h.dataset.push(...task(n))
