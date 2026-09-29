@@ -1920,7 +1920,7 @@ export const marketingRouter = router({
             : { id: pick.id, alt: pick.alt }
           : newImage
             ? { id: null, alt: null }
-            : { id: task.galleryAssetId, alt: task.galleryAlt }
+            : { id: task.galleryAssetId ?? null, alt: task.galleryAlt ?? null }
         let alt: string | undefined
         const handoffAlt = async () =>
           pick
@@ -1996,7 +1996,7 @@ export const marketingRouter = router({
               !current ||
               current.assetId !== assetId ||
               (current.galleryAssetId ?? null) !== selection.id ||
-              (current.galleryAlt ?? null) !== (selection.alt ?? null)
+              (current.galleryAlt ?? null) !== selection.alt
             )
               handoffFailures.push(task._id)
             else if (
