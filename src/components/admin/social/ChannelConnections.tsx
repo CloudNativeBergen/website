@@ -1,5 +1,9 @@
 import clsx from 'clsx'
-import { BoltIcon, HandRaisedIcon } from '@heroicons/react/24/outline'
+import {
+  BoltIcon,
+  ExclamationTriangleIcon,
+  HandRaisedIcon,
+} from '@heroicons/react/24/outline'
 import type { SocialConnection } from '@/lib/social/provider'
 import type { SecretFamily } from '@/lib/secrets/types'
 import { SOCIAL_PLATFORM_LABELS } from '@/lib/social/types'
@@ -59,6 +63,29 @@ export function ChannelConnections({
       <p className="text-xs text-gray-500 sm:ml-auto dark:text-gray-400">
         Other platforms are posted by hand.
       </p>
+    </section>
+  )
+}
+
+/**
+ * The connection lookup was REFUSED (the secret store could not tell whose
+ * credentials to use). Saying "manual" here would be a claim about a
+ * connection nobody looked up, so this says only that the status is unknown.
+ */
+export function ChannelConnectionsUnavailable() {
+  return (
+    <section
+      aria-label="How posts are published"
+      className="flex items-start gap-2 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600 dark:border-gray-700 dark:bg-gray-800/50 dark:text-gray-300"
+    >
+      <ExclamationTriangleIcon
+        aria-hidden
+        className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400"
+      />
+      <span>
+        Connection status unavailable &mdash; we could not check which platforms
+        publish automatically. Try reloading in a few minutes.
+      </span>
     </section>
   )
 }

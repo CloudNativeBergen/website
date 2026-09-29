@@ -5,7 +5,7 @@ import type {
 } from '@/lib/social/publish-engine'
 import { manualPostPath } from '@/lib/social/paths'
 import { SOCIAL_PLATFORM_LABELS } from '@/lib/social/types'
-import { truncateToGraphemeBoundary } from '@/lib/messaging/links'
+import { capVendorMessage } from '@/lib/social/vendor-message'
 import { joinNames } from '@/lib/marketing/tagging/body'
 import { GONE_SPEAKER_TEXT } from '@/lib/marketing/tagging/publish'
 
@@ -69,9 +69,6 @@ export function standalonePublishFailureNotification(
   ]
 }
 
-/** Buffer's error is free text; the full trail stays on the variant. */
-const VENDOR_MESSAGE_MAX = 300
-
 /**
  * A FAILED CONFIRMATION (#1130, spec §3.3, §4): the asynchronous publisher —
  * Buffer, the only one there is (#1129) — accepted the post, then reported
@@ -92,11 +89,9 @@ export function confirmationFailureNotifications(
   { variant, attempt }: VariantFailureEvent,
 ): NotificationInput[] {
   const platform = SOCIAL_PLATFORM_LABELS[variant.platform]
-  const text = (attempt.error ?? '').trim() || attempt.outcome
-  const message =
-    text.length > VENDOR_MESSAGE_MAX
-      ? `${truncateToGraphemeBoundary(text, VENDOR_MESSAGE_MAX - 1)}…`
-      : text
+  const message = capVendorMessage(
+    (attempt.error ?? '').trim() || attempt.outcome,
+  )
   return [...new Set(organizerIds)].map((recipientId) => ({
     recipientId,
     conferenceId: variant.conferenceId,

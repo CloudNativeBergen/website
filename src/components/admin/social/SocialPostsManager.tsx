@@ -20,7 +20,11 @@ import { EmptyState } from '@/components/EmptyState'
 import { api } from '@/lib/trpc/client'
 import { VariantEditorDialog } from './VariantEditorDialog'
 import { ManualPostDialog } from './ManualPostDialog'
-import { ChannelConnections } from './ChannelConnections'
+import { capVendorMessage } from '@/lib/social/vendor-message'
+import {
+  ChannelConnections,
+  ChannelConnectionsUnavailable,
+} from './ChannelConnections'
 import {
   formatDateTimeSafe,
   instantToOsloLocalInput,
@@ -141,10 +145,9 @@ export function SocialPostsManager({
   )
 
   // Derived from the organization's secrets on the server (#1130). A failed
-  // read shows nothing rather than guessing "manual".
-  const { data: connections } = api.social.connections.useQuery(undefined, {
-    staleTime: 5 * 60_000,
-  })
+  // read says the status is unavailable rather than guessing "manual".
+  const { data: connections, isError: connectionsUnavailable } =
+    api.social.connections.useQuery(undefined, { staleTime: 5 * 60_000 })
 
   const [isFormOpen, setFormOpen] = useState(defaultOpen)
   const [draft, setDraft] = useState<PostDraft>(EMPTY_DRAFT)
@@ -333,8 +336,13 @@ export function SocialPostsManager({
         }
       />
 
-      {connections && connections.length > 0 && (
-        <ChannelConnections connections={connections} />
+      {connectionsUnavailable ? (
+        <ChannelConnectionsUnavailable />
+      ) : (
+        connections &&
+        connections.length > 0 && (
+          <ChannelConnections connections={connections} />
+        )
       )}
 
       {taskRefusal && (
@@ -645,7 +653,7 @@ function VariantRow({
         <p className="line-clamp-2">{variant.body}</p>
         {variant.status === 'failed' && lastAttempt?.error && (
           <p className="mt-1 line-clamp-2 text-xs text-red-600 dark:text-red-400">
-            {lastAttempt.error}
+            {capVendorMessage(lastAttempt.error)}
           </p>
         )}
         {variant.status === 'published' &&

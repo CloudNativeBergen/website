@@ -4,8 +4,9 @@ import type { FailureNotice } from '@/lib/social/state-machine'
 /**
  * Why a failed variant failed, and what to do next (#1130) — one notice for
  * the Task editor and the copy-ready view, driven by `failureNotice`. The
- * error is quoted as-is (Buffer's own words after an accept, otherwise the
- * adapter's or the engine's) and rendered as text, never markup.
+ * error is quoted (Buffer's own words after an accept, otherwise the
+ * adapter's or the engine's), already capped by `failureNotice` to the
+ * notification's length, and rendered as text, never markup.
  */
 export function PublishFailureNotice({
   notice,

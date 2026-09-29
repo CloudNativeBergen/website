@@ -310,6 +310,39 @@ export const ManualOrganization: Story = {
 }
 
 /**
+ * The connection lookup was refused (#1242 review): the strip says the status
+ * is unavailable and claims neither "manual" nor "automatic".
+ */
+export const ConnectionsUnavailable: Story = {
+  parameters: {
+    msw: {
+      handlers: [
+        http.get('/api/trpc/social.connections', () =>
+          HttpResponse.json(
+            {
+              error: {
+                message: 'Could not check how posts are published right now',
+                code: -32603,
+                data: { code: 'INTERNAL_SERVER_ERROR' },
+              },
+            },
+            { status: 500 },
+          ),
+        ),
+        ...handlers(variants).slice(1),
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const strip = await within(canvasElement).findByRole('region', {
+      name: /how posts are published/i,
+    })
+    await expect(strip).toHaveTextContent(/Connection status unavailable/)
+    await expect(strip).not.toHaveTextContent(/Manual|Automatic/)
+  },
+}
+
+/**
  * The failure notification's deep link (`?variant=`) on a variant Buffer
  * failed: the copy-ready view says why, in Buffer's words, and offers the
  * manual fallback (`failed → published`, spec §5).
@@ -343,6 +376,56 @@ export const FailedAtBuffer: Story = {
 export const FailedAtBufferDark: Story = {
   args: { defaultManualId: 'v-7' },
   parameters: { theme: 'dark', backgrounds: { default: 'dark' } },
+}
+
+/**
+ * Buffer's free text can be arbitrarily long. The notice shows at most 300
+ * characters (the notification's rule, cut at a grapheme boundary); the
+ * stored attempt keeps all of it.
+ */
+const LONG_BUFFER_ERROR = `LinkedIn rejected the update: ${'The access token used in the request has been revoked by the member, or the organization page admin role was removed from the connected account. '.repeat(12)}END-OF-MESSAGE`
+const withLongError = variants.map((v) =>
+  v._id === 'v-7'
+    ? {
+        ...v,
+        attempts: v.attempts.map((a) =>
+          a.outcome === 'rejected' ? { ...a, error: LONG_BUFFER_ERROR } : a,
+        ),
+      }
+    : v,
+)
+
+export const FailedAtBufferLongMessage: Story = {
+  args: { defaultManualId: 'v-7' },
+  parameters: { msw: { handlers: handlers(withLongError) } },
+  play: async ({ canvasElement }) => {
+    const dialog = within(
+      await within(canvasElement.ownerDocument.body).findByRole('dialog'),
+    )
+    const alert = await dialog.findByRole('alert')
+    await waitFor(() => expect(alert).toBeVisible())
+    await expect(alert).toHaveTextContent(/LinkedIn rejected the update/)
+    await expect(alert).toHaveTextContent(/…/)
+    await expect(alert).not.toHaveTextContent(/END-OF-MESSAGE/)
+  },
+}
+
+export const FailedAtBufferLongMessageDark: Story = {
+  ...FailedAtBufferLongMessage,
+  parameters: {
+    ...FailedAtBufferLongMessage.parameters,
+    theme: 'dark',
+    backgrounds: { default: 'dark' },
+  },
+}
+
+export const FailedAtBufferLongMessageMobile: Story = {
+  ...FailedAtBufferLongMessage,
+  globals: { viewport: { value: 'mobile1', isRotated: false } },
+  parameters: {
+    ...FailedAtBufferLongMessage.parameters,
+    viewport: { defaultViewport: 'mobile1' },
+  },
 }
 
 /** The copy-ready view opened from a row or the notification deep link. */

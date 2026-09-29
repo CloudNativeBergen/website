@@ -110,7 +110,8 @@ vi.mock('@/lib/social/provider', async (importOriginal) => ({
 }))
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { initTRPC } from '@trpc/server'
+import { initTRPC, TRPCError } from '@trpc/server'
+import { TenantEnvSlugUnavailableError } from '@/lib/secrets/env-per-org'
 import type { Context } from '@/server/trpc'
 import type { SocialPostVariant } from '@/lib/social/types'
 import type { PublishInput, ValidationIssue } from '@/lib/social/provider/types'
@@ -1024,6 +1025,40 @@ describe('social.connections (#1130)', () => {
     expect(
       new Set(secretsStore.resolveTenantSecrets.mock.calls.map(([o]) => o)),
     ).toEqual(new Set([ORG_A]))
+  })
+
+  it("never sends the secret store's reason — a slug or another org's id — to the client", async () => {
+    // The REAL error class and reason format the discrete store raises when
+    // two organizations claim one slug (env-per-org.ts).
+    secretsStore.resolveTenantSecrets.mockRejectedValue(
+      new TenantEnvSlugUnavailableError(
+        ORG_A,
+        'secretEnvSlug ACME is claimed by 2 organizations (org-A, org-OTHER); they would read the same credentials',
+      ),
+    )
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      const error = await social()
+        .connections()
+        .then(
+          () => null,
+          (e: unknown) => e,
+        )
+      expect(error).toBeInstanceOf(TRPCError)
+      const { code, message } = error as TRPCError
+      // The client-visible VALUE: a generic refusal, not a mode and not the reason.
+      expect({ code, message }).toEqual({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'Could not check how posts are published right now',
+      })
+      expect(JSON.stringify(error)).not.toMatch(/ACME|org-OTHER/)
+      // The detail is kept, server-side.
+      expect(String(logged.mock.calls.flat().at(-1))).toMatch(/ACME.*org-OTHER/)
+    } finally {
+      logged.mockRestore()
+      secretsStore.resolveTenantSecrets.mockReset()
+      secretsStore.resolveTenantSecrets.mockResolvedValue(null)
+    }
   })
 
   it('refuses rather than claiming manual when the organization is unresolvable', async () => {

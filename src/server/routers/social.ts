@@ -355,7 +355,23 @@ export const socialRouter = router({
         message: 'Could not resolve the organization from the domain',
       })
     }
-    return resolveSocialConnections(ctx.orgId)
+    try {
+      return await resolveSocialConnections(ctx.orgId)
+    } catch (error) {
+      // The secret store's reasons name env-var slugs and OTHER organizations'
+      // ids (`TenantEnvSlugUnavailableError`: "claimed by N organizations
+      // (...)"). tRPC would send that message to the browser verbatim, so the
+      // detail is logged here and the client gets a message naming neither.
+      // Still a refusal, never a "manual" answer.
+      console.error(
+        `[social] connection lookup failed for organization ${ctx.orgId}`,
+        error,
+      )
+      throw new TRPCError({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'Could not check how posts are published right now',
+      })
+    }
   }),
 
   listVariants: adminProcedure.query(async () => {

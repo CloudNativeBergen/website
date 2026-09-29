@@ -1,4 +1,5 @@
 import type { ConfirmCheck, PublishOutcome } from './provider/types'
+import { capVendorMessage } from './vendor-message'
 import type {
   AttemptOutcome,
   PublishAttempt,
@@ -337,7 +338,9 @@ export function failureNotice(variant: {
   if (variant.status !== 'failed' || mayAlreadyBeLive(variant)) return null
   const last = variant.attempts.at(-1)
   return {
-    error: last?.error?.trim() || null,
+    // Capped for display by the notification's own rule; the attempt keeps
+    // the whole message.
+    error: capVendorMessage(last?.error?.trim() ?? '') || null,
     afterAccept: variant.attempts.at(-2)?.outcome === 'submitted',
     retryAlone:
       last?.outcome !== 'rejected' && last?.outcome !== 'credential-expired',

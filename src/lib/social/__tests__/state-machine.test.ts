@@ -16,6 +16,8 @@ import {
   mayAlreadyBeLive,
 } from '../state-machine'
 import type { AttemptOutcome, VariantStatus } from '../types'
+import { confirmationFailureNotifications } from '@/lib/marketing/notifications/builders'
+import type { VariantFailureEvent } from '../publish-engine'
 
 const NOW = new Date('2026-09-13T10:00:00.000Z')
 const minutesLater = (m: number) =>
@@ -448,6 +450,40 @@ describe('failureNotice — what a failed variant says about itself (#1130)', ()
     expect(
       failureNotice({ status: 'failed', attempts: [leg('transient')] }),
     ).toEqual({ error: null, afterAccept: false, retryAlone: true })
+  })
+
+  it("caps Buffer's message for DISPLAY at 300, the notification's rule, and keeps the stored one whole", () => {
+    const long = 'x'.repeat(5000)
+    const attempts = [leg('submitted'), leg('rejected', long)]
+    const notice = failureNotice({ status: 'failed', attempts })
+    expect(notice?.error).toBe(`${'x'.repeat(299)}…`)
+    // One rule: the hub row shows the very same text.
+    const [row] = confirmationFailureNotifications(['org-a'], {
+      variant: {
+        _id: 'v',
+        conferenceId: 'c',
+        platform: 'linkedin',
+      } as VariantFailureEvent['variant'],
+      attempt: attempts[1] as VariantFailureEvent['attempt'],
+    })
+    expect(row.message).toBe(notice?.error)
+    expect(attempts[1].error).toBe(long)
+  })
+
+  it('never splits an emoji or a combining mark at the cut', () => {
+    const cut = (tail: string) =>
+      failureNotice({
+        status: 'failed',
+        attempts: [
+          leg('rejected', `${'a'.repeat(298)}${tail}${'z'.repeat(50)}`),
+        ],
+      })?.error
+    // A skin-toned emoji (4 UTF-16 units) and e + U+0301 straddle unit 299:
+    // the whole grapheme is dropped, never half of it.
+    expect(cut('\u{1F44D}\u{1F3FD}')).toBe(`${'a'.repeat(298)}…`)
+    expect(cut('e\u0301')).toBe(`${'a'.repeat(298)}…`)
+    // One that fits is kept whole.
+    expect(cut('\u00e9')).toBe(`${'a'.repeat(298)}\u00e9…`)
   })
 
   it('says nothing when the post may already be live, or the variant is not failed', () => {
