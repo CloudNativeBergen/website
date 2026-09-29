@@ -962,6 +962,86 @@ describe('finishing a render Task with an asset from the gallery (#1166)', () =>
     },
   )
 
+  /** Empty the waiting posts and the receipts, as before a Retry handoff. */
+  const unhand = () => {
+    Object.assign(post('post-1'), { attachments: [] })
+    Object.assign(byId('variant-1')!, { attachments: [] })
+    Object.assign(task(), { handoffDoneFor: [] })
+  }
+
+  it("a retry after picking the Task's own entry hands on the alt the pick did, and records no gallery asset (#1241)", async () => {
+    upload(FIRST)
+    await attach(FIRST) // the render, and its #1165 entry
+    const own = gallery().find((d) => d._id.startsWith('marketingAsset-task-'))!
+    Object.assign(own, { alt: 'Ada, as filed' })
+    await finish('asset-logo')
+    unhand()
+    await finish(own._id)
+    expect(post('post-1').attachments).toEqual([
+      expect.objectContaining({ image: image(FIRST), alt: 'Ada, as filed' }),
+    ])
+    // The render stays the Task's: a speaker's erasure follows its subject.
+    expect(task()).not.toHaveProperty('galleryAsset')
+    Object.assign(own, { alt: 'Edited after the pick' })
+    unhand()
+    await attach(FIRST) // Retry handoff
+    expect(post('post-1').attachments).toEqual([
+      expect.objectContaining({ image: image(FIRST), alt: 'Ada, as filed' }),
+    ])
+  })
+
+  describe("the asset's crop and hotspot (#1241)", () => {
+    const hotspot = { x: 0.4, y: 0.3, width: 0.5, height: 0.6 }
+    const crop = { top: 0.1, bottom: 0, left: 0.05, right: 0.2 }
+    const framed = (h: typeof hotspot, c: typeof crop) => ({
+      _type: 'image',
+      asset: ref(LOGO),
+      hotspot: { _type: 'sanity.imageHotspot', ...h },
+      crop: { _type: 'sanity.imageCrop', ...c },
+    })
+    beforeEach(() => {
+      Object.assign(byId('asset-logo')!, {
+        image: { ...image(LOGO), hotspot, crop },
+      })
+    })
+
+    it('go to the posts with the image, as a post-editor pick sends them', async () => {
+      await finish('asset-logo')
+      expect(post('post-1').attachments).toEqual([
+        expect.objectContaining({
+          image: framed(hotspot, crop),
+          alt: 'The CNB logo',
+        }),
+      ])
+    })
+
+    it("a retry sends the asset's CURRENT framing while it holds the image", async () => {
+      await finish('asset-logo')
+      const moved = { ...hotspot, x: 0.7 }
+      Object.assign(byId('asset-logo')!, {
+        image: { ...image(LOGO), hotspot: moved, crop },
+      })
+      unhand()
+      await attach(LOGO)
+      expect(post('post-1').attachments).toEqual([
+        expect.objectContaining({ image: framed(moved, crop) }),
+      ])
+    })
+
+    it('a retry sends the framing picked once the asset is deleted', async () => {
+      await finish('asset-logo')
+      h.dataset = h.dataset.filter((d) => d._id !== 'asset-logo')
+      unhand()
+      await attach(LOGO)
+      expect(post('post-1').attachments).toEqual([
+        expect.objectContaining({
+          image: framed(hotspot, crop),
+          alt: 'The CNB logo',
+        }),
+      ])
+    })
+  })
+
   it('a retry keeps the picked alt after the asset is deleted', async () => {
     await finish('asset-logo')
     expect(task().galleryAlt).toBe('The CNB logo')

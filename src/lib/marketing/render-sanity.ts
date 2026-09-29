@@ -3,6 +3,7 @@ import { clientReadUncached } from '@/lib/sanity/client'
 import { COUNT_API_VERSION } from '@/lib/sanity/orphaned-asset'
 import { scopedFetch } from '@/lib/sanity/scoped'
 import type { RenderHandoffSibling } from './render-handoff'
+import type { AddSocialPostAttachmentInput } from '@/lib/social/sanity'
 import {
   MARKETING_ASSET_SUBJECT_TYPES,
   type MarketingAssetSubjectType,
@@ -25,15 +26,22 @@ export interface StudioTask {
   replacedRenders: string[] | null
   /** Set by the save of a new render until its gallery save lands (#1165). */
   galleryPending: boolean | null
-  /** The gallery asset the Task was finished with (#1166), if it was. */
+  /**
+   * The gallery asset the Task was finished with (#1166), if it was — never
+   * the Task's own render entry (#1165), whose image stays its render.
+   */
   galleryAssetId: string | null
   /**
-   * That asset's alt as it was picked, stored on the Task: what a hand-off
-   * retry gives the posts once the asset is deleted, is another
-   * organization's, or holds another image. While it still holds the image,
-   * a retry reads its current alt instead (spec §4.3).
+   * The picked asset's alt as it was picked, stored on the Task — for the
+   * Task's own render entry too: what a hand-off retry gives the posts once
+   * the asset is deleted, is another organization's, or holds another image.
+   * While a recorded `galleryAssetId` still holds the image, a retry reads
+   * its current alt instead (spec §4.3).
    */
   galleryAlt: string | null
+  /** That asset's framing as it was picked, kept with its alt. */
+  galleryHotspot: AddSocialPostAttachmentInput['hotspot']
+  galleryCrop: AddSocialPostAttachmentInput['crop']
 }
 
 /** Called only after the request's by-id tenancy guard. */
@@ -48,7 +56,9 @@ export function getStudioTask(taskId: string, conferenceId: string) {
       "campaignId": campaign._ref,
       handoffDoneFor, replacedRenders, galleryPending,
       "galleryAssetId": galleryAsset._ref,
-      "galleryAlt": galleryAlt}`,
+      "galleryAlt": galleryAlt,
+      "galleryHotspot": galleryHotspot{x, y, width, height},
+      "galleryCrop": galleryCrop{top, bottom, left, right}}`,
     { taskId, subjectTypes: [...MARKETING_ASSET_SUBJECT_TYPES] },
     { cache: 'no-store' },
   )

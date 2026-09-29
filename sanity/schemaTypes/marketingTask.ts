@@ -251,8 +251,38 @@ export default defineType({
       name: 'galleryAlt',
       title: 'Alt text from the asset gallery',
       description:
-        'The alt text of the gallery asset this Task was finished with, as it was picked: what a handoff retry gives the posts. Cleared with the gallery asset.',
+        "The alt text of the gallery asset this Task was finished with, as it was picked (also when it was the Task's own render entry): what a handoff retry gives the posts. Cleared by the next studio render.",
       type: 'string',
+      hidden: true,
+      readOnly: true,
+    }),
+    defineField({
+      name: 'galleryHotspot',
+      title: 'Hotspot from the asset gallery',
+      description:
+        'The hotspot of the gallery asset this Task was finished with, as it was picked: handed to the posts with the image. Cleared with the alt text.',
+      type: 'object',
+      fields: [
+        { name: 'x', type: 'number' },
+        { name: 'y', type: 'number' },
+        { name: 'width', type: 'number' },
+        { name: 'height', type: 'number' },
+      ],
+      hidden: true,
+      readOnly: true,
+    }),
+    defineField({
+      name: 'galleryCrop',
+      title: 'Crop from the asset gallery',
+      description:
+        'The crop of the gallery asset this Task was finished with, as it was picked: handed to the posts with the image. Cleared with the alt text.',
+      type: 'object',
+      fields: [
+        { name: 'top', type: 'number' },
+        { name: 'bottom', type: 'number' },
+        { name: 'left', type: 'number' },
+        { name: 'right', type: 'number' },
+      ],
       hidden: true,
       readOnly: true,
     }),
