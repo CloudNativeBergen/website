@@ -29,6 +29,7 @@ import {
   manualBodyFor,
   useFreshManualCheck,
 } from '@/components/admin/social/useFreshManualCheck'
+import { useManualGalleryMedia } from '@/components/admin/social/useManualGalleryMedia'
 import { failureNotice, mayAlreadyBeLive } from '@/lib/social/state-machine'
 import { manualPostPath } from '@/lib/social/paths'
 import { taggedUrl } from '@/lib/marketing/link'
@@ -736,6 +737,12 @@ function PublishingSection({
     variant?.variant.status === 'awaiting-manual' &&
     variant.variant.platform === 'bluesky'
   const check = useFreshManualCheck(byHand ? variant.variant._id : null)
+  // The gallery's GIFs and videos, offered to post by hand (assets spec §5).
+  const galleryMedia = useManualGalleryMedia(
+    variant?.variant.status === 'awaiting-manual'
+      ? variant.variant.postId
+      : null,
+  )
   // FAIL CLOSED (final round, T2): the text is offered only when the fresh
   // answer is still this manual post with a checked body. When the post has
   // moved on since the Task was read (a colleague marked it posted), nothing
@@ -787,6 +794,7 @@ function PublishingSection({
           tagByHand={tagByHand}
           manualBody={manualBody}
           onRetryCheck={() => void check.refetch()}
+          galleryMedia={galleryMedia}
           saving={markPosted.isPending}
           error={manualError}
           onMarkPosted={(url) => {

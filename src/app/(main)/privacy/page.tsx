@@ -617,8 +617,9 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                           </h4>
                           <ul className="space-y-1 text-sm text-amber-700 dark:text-amber-300">
                             <li>
-                              • Images our organizers upload for promotional
-                              posts, such as logos, graphics and speaker cards.
+                              • Images, GIFs and short videos our organizers
+                              upload for promotional posts, such as logos,
+                              graphics, speaker cards and clips from the event.
                               Some may show speakers or attendees
                             </li>
                             <li>
@@ -677,10 +678,11 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                               • Removing yourself from the photo gallery does
                               not reach these images or the graphics made from
                               your photo. Asking us to erase your data does:
-                              every image about you or a talk you give is
-                              deleted, including from our copies of posts (which
-                              keep their text), planning tasks and saved video
-                              projects (where the scene keeps its colour)
+                              every image, GIF or video about you or a talk you
+                              give is deleted, including from our copies of
+                              posts (which keep their text), planning tasks and
+                              saved video projects (where the scene keeps its
+                              colour)
                             </li>
                             <li>
                               • An image not marked as being about anyone, such

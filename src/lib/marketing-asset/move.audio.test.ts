@@ -3,12 +3,11 @@
  *
  * The audio move (#1178): the same URL check and blob delete as an image, and
  * a track judged from its own bytes — format sniffed, length measured by
- * `measureAudio` on real MP3/WAV/M4A bytes. Only the Sanity client and
+ * `measureAudio` on real MP3/WAV/M4A bytes. Only the Sanity upload and
  * Vercel Blob are mocked (the image move's tests prove the stream plumbing
  * against them).
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Readable } from 'node:stream'
 import {
   behindId3,
   flacTone,
@@ -22,6 +21,8 @@ import {
 
 const h = vi.hoisted(() => ({
   upload: vi.fn(),
+  aborted: false,
+  uploadedBytes: 0,
   del: vi.fn(),
   afterTasks: [] as (() => Promise<unknown> | unknown)[],
 }))
@@ -30,24 +31,10 @@ vi.mock('next/server', () => ({
 }))
 vi.mock('server-only', () => ({}))
 vi.mock('@vercel/blob', () => ({ del: h.del }))
-vi.mock('@/lib/sanity/client', () => ({
-  clientWrite: {
-    observable: {
-      assets: {
-        upload: (...args: unknown[]) => ({
-          subscribe(observer: { next: (event: unknown) => void }) {
-            void h
-              .upload(...args)
-              .then((document: unknown) =>
-                observer.next({ type: 'response', body: { document } }),
-              )
-            return { unsubscribe() {} }
-          },
-        }),
-      },
-    },
-  },
-}))
+vi.mock('./sanity-upload', async () => {
+  const { makeFakeUpload } = await import('./__tests__/sanity-upload-fake')
+  return { uploadAssetStream: makeFakeUpload(h) }
+})
 
 import { discardBlob, moveAudioBlobToSanity } from './move'
 import { MARKETING_ASSET_MAX_AUDIO_BYTES } from './audio-type'
@@ -72,13 +59,7 @@ beforeEach(() => {
   vi.stubGlobal('fetch', fetchMock)
   h.del.mockResolvedValue(undefined)
   h.upload.mockImplementation(
-    async (
-      kind: string,
-      stream: Readable,
-      options: { contentType?: string },
-    ) => {
-      let bytes = 0
-      for await (const chunk of stream) bytes += (chunk as Buffer).length
+    async (kind: string, options: { contentType?: string }, bytes: number) => {
       uploaded = { kind, bytes, type: options.contentType }
       return {
         _id: 'file-abc-mp3',

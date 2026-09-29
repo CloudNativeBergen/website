@@ -53,6 +53,10 @@ vi.mock('@/lib/trpc/client', () => {
           filters: { invalidate: mocks.galleryFilters },
         },
       }),
+      // The manual view's GIFs and videos (#1167): none in these tests.
+      marketingAsset: {
+        forPost: { useQuery: () => ({ data: [], error: null }) },
+      },
       marketing: {
         task: {
           get: { useQuery: mocks.query },

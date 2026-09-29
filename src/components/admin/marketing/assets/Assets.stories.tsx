@@ -72,11 +72,15 @@ const row = (
   createdAt: '2026-09-20T10:00:00Z',
   softOnSocial: false,
   audioUrl: null,
+  videoUrl: null,
+  posterUrl: null,
+  posterAssetId: null,
+  downloadUrl: null,
   durationSeconds: null,
   rights: null,
   studio: null,
   usedInPosts: 0,
-  attachable: fields.kind !== 'audio',
+  attachable: (fields.kind ?? 'image') === 'image',
   ...fields,
 })
 
@@ -443,21 +447,26 @@ export const UploadSoftImage: Story = {
       canvas.getByRole('button', { name: 'Add to gallery' }),
     )
     await waitFor(() =>
-      expect(context.args.uploader).toHaveBeenCalledWith(expect.any(File), {
-        title: 'speaker card',
-        alt: 'Speaker card for Ada Lovelace',
-        edition: 'none',
-        subject: null,
-        tags: [],
-      }),
+      expect(context.args.uploader).toHaveBeenCalledWith(
+        expect.any(File),
+        {
+          title: 'speaker card',
+          alt: 'Speaker card for Ada Lovelace',
+          edition: 'none',
+          subject: null,
+          tags: [],
+        },
+        undefined,
+        undefined,
+      ),
     )
     // The form is ready for the next image, and focus is back on its picker.
     await expect(
-      await canvas.findByText('Choose an image or a track'),
+      await canvas.findByText('Choose an image, GIF, video or track'),
     ).toBeInTheDocument()
     await waitFor(() =>
       expect(document.activeElement).toBe(
-        canvas.getByLabelText('Choose an image or a track'),
+        canvas.getByLabelText('Choose an image, GIF, video or track'),
       ),
     )
   },
@@ -547,7 +556,7 @@ export const ClearKeepsFocus: Story = {
     )
     await userEvent.click(await canvas.findByRole('button', { name: 'Clear' }))
     await expect(document.activeElement).toBe(
-      canvas.getByLabelText('Choose an image or a track'),
+      canvas.getByLabelText('Choose an image, GIF, video or track'),
     )
   },
 }
@@ -799,11 +808,12 @@ export const UploadTrack: Story = {
           tags: [],
         },
         { kind: 'audio', rightsConfirmed: true },
+        undefined,
       ),
     )
     // The next pick asks for the confirmation again.
     await expect(
-      await canvas.findByText('Choose an image or a track'),
+      await canvas.findByText('Choose an image, GIF, video or track'),
     ).toBeInTheDocument()
   },
 }
@@ -906,4 +916,203 @@ export const TrackPlaying: Story = {
 export const TrackPlayingDark: Story = {
   ...TrackPlaying,
   globals: { theme: 'dark' },
+}
+
+// ---------------------------------------------------------------------------
+// GIFs and short videos (#1167)
+// ---------------------------------------------------------------------------
+
+/** Real media, served by Storybook from `.storybook/fixtures`. */
+const FIXTURES = '/storybook-fixtures'
+
+const MOTION: MarketingAssetRow[] = [
+  row({
+    _id: 'asset-opening',
+    kind: 'video',
+    title: 'Opening night, 20-second cut',
+    alt: 'The main hall filling up before the opening keynote',
+    imageUrl: null,
+    assetId: null,
+    videoUrl: `${FIXTURES}/clip.mp4`,
+    posterUrl: card('OPENING', '#1d4ed8', 1920, 1080),
+    posterAssetId: 'image-poster-1920x1080-jpg',
+    width: 1920,
+    height: 1080,
+    downloadUrl: `${FIXTURES}/clip.mp4?dl=opening-night-20-second-cut.mp4`,
+    attachable: false,
+    tags: ['video'],
+    createdAt: '2026-09-21T10:00:00Z',
+  }),
+  row({
+    _id: 'asset-wave',
+    kind: 'gif',
+    title: 'Waving mascot',
+    alt: 'The conference mascot waving hello',
+    imageUrl: `${FIXTURES}/wave.gif`,
+    assetId: 'image-wave-480x480-gif',
+    width: 480,
+    height: 480,
+    softOnSocial: true,
+    downloadUrl: '/api/admin/marketing-assets/original?asset=asset-wave',
+    attachable: false,
+    tags: ['mascot'],
+    createdAt: '2026-09-20T12:00:00Z',
+  }),
+]
+
+/** The media file a story uploads, fetched as the browser would pick it. */
+async function fixture(name: string, type: string) {
+  const blob = await (await fetch(`${FIXTURES}/${name}`)).blob()
+  return new File([blob], name, { type })
+}
+
+/**
+ * A video and a GIF beside the images: each marked with its kind, offering its
+ * ORIGINAL file to download, and never "used in" a post — neither can be
+ * attached yet.
+ */
+export const MotionGallery: Story = {
+  parameters: {
+    ...meta.parameters,
+    msw: { handlers: handlers([...MOTION, ...ASSETS]) },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await canvas.findByText('Opening night, 20-second cut')
+    const video = canvas.getByLabelText(
+      /^Opening night, 20-second cut: The main hall/,
+    )
+    await expect(video.tagName).toBe('VIDEO')
+    await expect(video).toHaveAttribute('preload', 'none')
+    await expect(canvas.getByText('Video')).toBeInTheDocument()
+    await expect(canvas.getByText('GIF')).toBeInTheDocument()
+    await expect(
+      canvas.getByRole('link', {
+        name: 'Download original video: Opening night, 20-second cut',
+      }),
+    ).toHaveAttribute(
+      'href',
+      `${FIXTURES}/clip.mp4?dl=opening-night-20-second-cut.mp4`,
+    )
+    await expect(
+      canvas.getByRole('link', {
+        name: 'Download original GIF: Waving mascot',
+      }),
+    ).toHaveAttribute(
+      'href',
+      '/api/admin/marketing-assets/original?asset=asset-wave',
+    )
+    // Only the images count posts; the logo is in three.
+    await expect(
+      canvas.getAllByText(/^Used in|^Not in a post yet/),
+    ).toHaveLength(ASSETS.filter((a) => a.kind === 'image').length)
+  },
+}
+export const MotionGalleryMobile: Story = {
+  ...MotionGallery,
+  parameters: {
+    ...MotionGallery.parameters,
+    viewport: { defaultViewport: 'mobile1' },
+  },
+}
+export const MotionGalleryDark: Story = {
+  ...MotionGallery,
+  globals: { theme: 'dark' },
+}
+
+/**
+ * A real MP4 picked: its first frame is drawn in the browser as the poster the
+ * server keeps, and alt text is required as for an image.
+ */
+export const VideoPicked: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await canvas.findByText('Venue from the harbour')
+    await userEvent.upload(
+      canvas.getByLabelText(/Choose an image/),
+      await fixture('clip.mp4', 'video/mp4'),
+    )
+    const preview = await canvas.findByLabelText(
+      'Preview of clip.mp4',
+      {},
+      {
+        timeout: 10_000,
+      },
+    )
+    await expect(preview.getAttribute('poster')).toMatch(/^blob:/)
+    await expect(canvas.getByText('· 480 × 270')).toBeInTheDocument()
+    await expect(canvas.getByLabelText('Title')).toHaveValue('clip')
+    const add = canvas.getByRole('button', { name: 'Add to gallery' })
+    await expect(add).toBeDisabled()
+    await userEvent.type(
+      canvas.getByLabelText('Alt text'),
+      'A test pattern, moving',
+    )
+    await expect(add).toBeEnabled()
+  },
+}
+export const VideoPickedMobile: Story = {
+  ...VideoPicked,
+  parameters: {
+    ...meta.parameters,
+    viewport: { defaultViewport: 'mobile1' },
+  },
+}
+export const VideoPickedDark: Story = {
+  ...VideoPicked,
+  globals: { theme: 'dark' },
+}
+
+/** Saving hands the uploader the video AND the poster it drew. */
+export const UploadVideo: Story = {
+  play: async (context) => {
+    await VideoPicked.play!(context)
+    const canvas = within(context.canvasElement)
+    await userEvent.click(
+      canvas.getByRole('button', { name: 'Add to gallery' }),
+    )
+    await waitFor(() => expect(context.args.uploader).toHaveBeenCalled())
+    const [file, , options] = (context.args.uploader as ReturnType<typeof fn>)
+      .mock.calls[0] as [File, unknown, { kind: string; poster: Blob }]
+    await expect(file.name).toBe('clip.mp4')
+    await expect(options.kind).toBe('video')
+    await expect(options.poster.type).toBe('image/jpeg')
+    await expect(options.poster.size).toBeGreaterThan(0)
+  },
+}
+
+/** A .mov is refused before anything is uploaded. */
+export const MovRefused: Story = {
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement)
+    await canvas.findByText('Venue from the harbour')
+    await userEvent.upload(
+      canvas.getByLabelText(/Choose an image/),
+      new File([new Uint8Array(64)], 'IMG_0042.MOV', {
+        type: 'video/quicktime',
+      }),
+      // The picker's accept list would drop it; a drop or "All files" would not.
+      { applyAccept: false },
+    )
+    await expect(await canvas.findByRole('alert')).toHaveTextContent(
+      'Only MP4 video can be added. Export a .mov again as MP4 and retry.',
+    )
+    await expect(args.uploader).not.toHaveBeenCalled()
+  },
+}
+
+/** A GIF previews as the animation itself. */
+export const GifPicked: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await canvas.findByText('Venue from the harbour')
+    await userEvent.upload(
+      canvas.getByLabelText(/Choose an image/),
+      await fixture('wave.gif', 'image/gif'),
+    )
+    await expect(await canvas.findByText('· 160 × 160')).toBeInTheDocument()
+    await expect(
+      canvas.getByText(/post it by hand, with this text/),
+    ).toBeInTheDocument()
+  },
 }

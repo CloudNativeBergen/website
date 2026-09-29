@@ -73,7 +73,29 @@ export interface ManualPostViewProps {
   manualBody?: ManualBody | ManualCheckUnavailable | ManualCheckPending | null
   /** Runs the tag check again after it could not run (round 4, T2). */
   onRetryCheck?: () => void
+  /**
+   * The gallery's GIFs and videos for this post (assets spec §5): they cannot
+   * be attached yet, so they are offered here to download and post by hand.
+   * `error` when the gallery could not be read; absent or empty shows nothing.
+   */
+  galleryMedia?: readonly GalleryMediaItem[] | 'error' | 'loading'
 }
+
+/** A gallery GIF or video as the manual view offers it. */
+export interface GalleryMediaItem {
+  id: string
+  title: string
+  kind: 'gif' | 'video'
+  alt: string
+  /** Where it sits: "About Ada Lovelace", "CND 2026", "Whole organization". */
+  context: string
+  thumbnailSrc: string | null
+  /** The ORIGINAL file, never a rendition, which would re-encode it. */
+  downloadUrl: string
+}
+
+/** How many gallery GIFs and videos show before "Show all". */
+const GALLERY_MEDIA_SHOWN = 3
 
 const defaultImageSrc = (asset: SocialPostAttachment) =>
   richTextImageUrl(asset.assetId, 1200)
@@ -98,6 +120,7 @@ export function ManualPostView({
   tagByHand: tagByHandProp = [],
   manualBody = null,
   onRetryCheck,
+  galleryMedia,
 }: ManualPostViewProps) {
   // A LinkedIn list, whoever passes it: on any other platform the hint
   // (type @ in the composer) would be wrong, so it is never shown there.
@@ -514,6 +537,10 @@ export function ManualPostView({
         </Section>
       ))}
 
+      {!done && galleryMedia && (
+        <GalleryMediaSection media={galleryMedia} platform={platform} />
+      )}
+
       {done ? (
         <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800 dark:border-green-900 dark:bg-green-900/20 dark:text-green-300">
           Posted
@@ -589,6 +616,104 @@ export function ManualPostView({
   )
 }
 
+/**
+ * The gallery's GIFs and videos, each with its ORIGINAL file to download and
+ * its alt text to copy (assets spec §5). Nothing here goes into the post: the
+ * organizer adds the file in the platform's composer.
+ */
+function GalleryMediaSection({
+  media,
+  platform,
+}: {
+  media: readonly GalleryMediaItem[] | 'error' | 'loading'
+  platform: string
+}) {
+  const [all, setAll] = useState(false)
+  // Said, so nobody posts before the GIFs and videos have had a chance to show.
+  if (media === 'loading')
+    return (
+      <p className="text-sm text-gray-500 dark:text-gray-400">
+        Looking for GIFs and videos in the gallery&hellip;
+      </p>
+    )
+  if (media === 'error')
+    return (
+      <p className="text-sm text-gray-500 dark:text-gray-400">
+        The gallery&apos;s GIFs and videos could not be loaded.
+      </p>
+    )
+  if (media.length === 0) return null
+  const shown = all ? media : media.slice(0, GALLERY_MEDIA_SHOWN)
+  return (
+    <Section
+      title="GIFs and videos from the gallery"
+      hint={`They can't be attached to a post yet. To use one, download the original and add it in ${platform}'s composer, with its alt text.`}
+    >
+      <ul className="divide-y divide-gray-100 dark:divide-gray-800">
+        {shown.map((item) => (
+          <li
+            key={item.id}
+            className="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-3 py-3 first:pt-1 last:pb-0 sm:grid-cols-[5.5rem_minmax(0,1fr)_auto]"
+          >
+            <span className="relative block aspect-square overflow-hidden rounded-md bg-gray-100 dark:bg-gray-800">
+              {item.thumbnailSrc && (
+                <img
+                  src={item.thumbnailSrc}
+                  alt=""
+                  loading="lazy"
+                  className="size-full object-cover"
+                />
+              )}
+              <span className="absolute bottom-1 left-1 rounded bg-gray-900/80 px-1 text-[10px] font-semibold tracking-wide text-white uppercase">
+                {item.kind === 'gif' ? 'GIF' : 'Video'}
+              </span>
+            </span>
+            <div className="min-w-0">
+              <p className="truncate text-sm font-medium text-gray-900 dark:text-gray-100">
+                {item.title}
+              </p>
+              <p className="truncate text-xs text-gray-500 dark:text-gray-400">
+                {item.context}
+              </p>
+              <p className="mt-1 line-clamp-2 text-xs break-words text-gray-700 dark:text-gray-300">
+                <span className="font-medium">Alt text: </span>
+                {item.alt}
+              </p>
+            </div>
+            <div className="col-span-2 flex flex-wrap items-start gap-2 sm:col-span-1 sm:flex-col sm:items-end">
+              <a
+                href={item.downloadUrl}
+                download
+                aria-label={`Download original ${item.kind === 'gif' ? 'GIF' : 'video'}: ${item.title}`}
+                className={actionClass}
+              >
+                <ArrowDownTrayIcon className="size-4" />
+                Download original
+              </a>
+              {item.alt.trim() && (
+                <CopyButton
+                  value={item.alt}
+                  label={`Copy alt text of ${item.title}`}
+                  text="Copy alt text"
+                />
+              )}
+            </div>
+          </li>
+        ))}
+      </ul>
+      {media.length > shown.length && (
+        <button
+          type="button"
+          onClick={() => setAll(true)}
+          className="mt-2 text-xs font-medium text-brand-cloud-blue hover:underline focus-visible:outline-2 focus-visible:outline-brand-cloud-blue dark:text-blue-300"
+        >
+          Show all {media.length}
+        </button>
+      )}
+    </Section>
+  )
+}
+
 function Section({
   title,
   hint,
@@ -643,7 +768,17 @@ const inputClass =
  * the clipboard is unavailable (an insecure context, a denied permission)
  * the button says so instead of pretending.
  */
-function CopyButton({ value, label }: { value: string; label: string }) {
+function CopyButton({
+  value,
+  label,
+  text = label,
+}: {
+  value: string
+  /** The accessible name. */
+  label: string
+  /** What the button says, when shorter than its name. */
+  text?: string
+}) {
   const [state, setState] = useState<'idle' | 'copied' | 'failed'>('idle')
   useEffect(() => {
     if (state === 'idle') return
@@ -685,7 +820,7 @@ function CopyButton({ value, label }: { value: string; label: string }) {
         ? 'Copied'
         : state === 'failed'
           ? 'Copy by hand'
-          : label}
+          : text}
     </button>
   )
 }

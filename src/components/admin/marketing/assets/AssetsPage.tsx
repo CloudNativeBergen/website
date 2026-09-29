@@ -2,8 +2,10 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
+import clsx from 'clsx'
 import { keepPreviousData } from '@tanstack/react-query'
 import {
+  ArrowDownTrayIcon,
   ArrowTopRightOnSquareIcon,
   ExclamationTriangleIcon,
   MusicalNoteIcon,
@@ -15,6 +17,8 @@ import { AdminPageHeader } from '@/components/admin/AdminPageHeader'
 import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
 import { useNotification } from '@/components/admin/NotificationProvider'
 import {
+  isPostedByHand,
+  kindHasAlt,
   openInStudioHref,
   opensTheCard,
   type MarketingAssetFilter,
@@ -23,6 +27,7 @@ import {
 import { api } from '@/lib/trpc/client'
 import { formatDateSafe } from '@/lib/time'
 import { AssetEditDialog } from './AssetEditDialog'
+import { KIND_NOUN } from './AssetDetailsFields'
 import { AssetFilters } from './AssetFilters'
 import { AssetUploadForm } from './AssetUploadForm'
 import { SUBJECT_LABEL } from './SubjectCombobox'
@@ -62,9 +67,22 @@ function AssetCard({
               />
             )}
           </div>
+        ) : asset.kind === 'video' ? (
+          asset.videoUrl && (
+            // Nothing is fetched until it is played: the poster stands in.
+            <video
+              src={asset.videoUrl}
+              poster={asset.posterUrl ? thumbnail(asset.posterUrl) : undefined}
+              controls
+              playsInline
+              preload="none"
+              aria-label={`${asset.title}: ${asset.alt ?? ''}`}
+              className="size-full bg-black object-contain"
+            />
+          )
         ) : (
           asset.imageUrl && (
-            // A Sanity CDN rendition, sized by the URL.
+            // A Sanity CDN rendition, sized by the URL. A GIF's still moves.
             <img
               src={thumbnail(asset.imageUrl)}
               alt={asset.alt ?? ''}
@@ -72,6 +90,11 @@ function AssetCard({
               className="size-full object-contain"
             />
           )
+        )}
+        {isPostedByHand(asset.kind) && (
+          <span className="pointer-events-none absolute top-2 left-2 rounded-md bg-gray-900/80 px-1.5 py-0.5 text-[11px] font-semibold tracking-wide text-white uppercase">
+            {asset.kind === 'gif' ? 'GIF' : 'Video'}
+          </span>
         )}
       </div>
       <div className="flex flex-1 flex-col gap-1 p-3">
@@ -182,15 +205,40 @@ function AssetCard({
             {formatDateSafe(asset.rights.confirmedAt)}
           </p>
         )}
-        {asset.kind !== 'audio' && (
-          <p className="mt-auto flex flex-wrap items-center gap-x-2 gap-y-1 pt-1 text-xs text-gray-500 tabular-nums dark:text-gray-400">
-            {asset.width && asset.height ? (
+        {asset.downloadUrl && (
+          // The ORIGINAL file, to post by hand (spec §5): it cannot go into
+          // a post yet.
+          <div className="mt-auto flex flex-wrap items-center gap-x-2 gap-y-1 pt-1">
+            <a
+              href={asset.downloadUrl}
+              download
+              aria-label={`Download original ${KIND_NOUN[asset.kind]}: ${asset.title}`}
+              className="inline-flex items-center gap-1 text-xs font-medium text-brand-cloud-blue hover:underline focus-visible:outline-2 focus-visible:outline-brand-cloud-blue dark:text-blue-300"
+            >
+              <ArrowDownTrayIcon className="size-3.5" aria-hidden />
+              Download original
+            </a>
+            <span className="text-xs text-gray-500 dark:text-gray-400">
+              Post it by hand for now
+            </span>
+          </div>
+        )}
+        {kindHasAlt(asset.kind) && (
+          <p
+            className={clsx(
+              'flex flex-wrap items-center gap-x-2 gap-y-1 pt-1 text-xs text-gray-500 tabular-nums dark:text-gray-400',
+              !asset.downloadUrl && 'mt-auto',
+            )}
+          >
+            {/* A video's size is its poster's, which is capped: not said. */}
+            {asset.kind !== 'video' && asset.width && asset.height ? (
               <span>
                 {asset.width} × {asset.height}
               </span>
             ) : null}
-            {/* For display only: deleting never waits on it (spec §5). */}
-            {asset.usedInPosts !== null && (
+            {/* For display only: deleting never waits on it (spec §5). A GIF
+                or video is in no post: it cannot be attached yet. */}
+            {asset.usedInPosts !== null && asset.kind === 'image' && (
               <span>{usedInPostsLabel(asset.usedInPosts)}</span>
             )}
             {asset.softOnSocial && (
@@ -322,7 +370,7 @@ export function AssetsPage({
       <AdminPageHeader
         icon={<Squares2X2Icon />}
         title="Marketing assets"
-        description="Images for social posts, kept once with their alt text, and music for studio videos. Only organizers see this gallery."
+        description="Images, GIFs and short videos for social posts, kept once with their alt text, and music for studio videos. Only organizers see this gallery."
       />
 
       <AssetUploadForm
@@ -429,7 +477,7 @@ export function AssetsPage({
         onConfirm={() => deleting && remove.mutate({ id: deleting._id })}
         title={`Delete “${deleting?.title ?? ''}”?`}
         message={
-          deleting?.kind === 'audio'
+          deleting && deleting.kind !== 'image'
             ? 'It leaves the gallery, and its file is deleted unless something else still uses it.'
             : 'It leaves the gallery. Posts that already use the image keep it.'
         }

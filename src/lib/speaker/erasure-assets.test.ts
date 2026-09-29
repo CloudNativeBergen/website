@@ -67,6 +67,24 @@ describe('linkedFileIds', () => {
     expect(ids.sort()).toEqual([VID, IMG, RENDER].sort())
   })
 
+  it('collects a video’s MP4 AND its poster, in the shape the gallery writes (#1167)', () => {
+    const POSTER = 'image-poster-1920x1080-jpg'
+    expect(
+      linkedFileIds([
+        {
+          _id: 'asset-video',
+          _type: 'marketingAsset',
+          kind: 'video',
+          video: { _type: 'file', asset: ref(VID) },
+          poster: image(POSTER),
+          createdFileAssetId: VID,
+          createdImageAssetId: POSTER,
+          subject: ref(SPEAKER),
+        },
+      ]).sort(),
+    ).toEqual([VID, POSTER].sort())
+  })
+
   it('does not treat the subject reference itself as a file', () => {
     expect(
       linkedFileIds([

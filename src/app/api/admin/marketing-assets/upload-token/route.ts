@@ -14,9 +14,18 @@ import {
   MARKETING_ASSET_AUDIO_TYPES,
   MARKETING_ASSET_MAX_AUDIO_BYTES,
 } from '@/lib/marketing-asset/audio-type'
+import {
+  MARKETING_ASSET_GIF_TYPE,
+  MARKETING_ASSET_MAX_GIF_BYTES,
+  MARKETING_ASSET_MAX_VIDEO_BYTES,
+  MARKETING_ASSET_VIDEO_TYPE,
+} from '@/lib/marketing-asset/motion-type'
 
-/** A token lives long enough for one upload to start, and no longer. */
-const TOKEN_LIFETIME_MS = 10 * 60 * 1000
+/**
+ * A token lives long enough for a 100 MB video to finish on a slow uplink
+ * (every part of a multipart upload carries it), and no longer.
+ */
+const TOKEN_LIFETIME_MS = 60 * 60 * 1000
 
 /**
  * The short-lived Vercel Blob client token for a marketing asset upload
@@ -25,8 +34,10 @@ const TOKEN_LIFETIME_MS = 10 * 60 * 1000
  *
  * Organizer of the request host's organization only, checked before the body
  * is read. The token is bound to a pathname under THIS organization's
- * `marketing-asset/<orgId>/` folder, to PNG/JPEG/WebP or MP3/M4A/WAV and to
- * the larger of the two size caps (one token serves either kind). The
+ * `marketing-asset/<orgId>/` folder, to PNG/JPEG/WebP, GIF, MP4 or
+ * MP3/M4A/WAV and to the largest size cap, a video's 100 MB (one token serves
+ * any kind: which kind a client says it sends is its own claim, so a tighter
+ * per-kind token would guard nothing the move does not). The
  * move re-checks all of it from the file itself: this is the first gate, not
  * the only one. No upload-completed callback is registered — the browser hands
  * the URL to the move, and an abandoned upload is the orphan sweeper's.
@@ -57,10 +68,14 @@ export async function POST(request: Request) {
           allowedContentTypes: [
             ...MARKETING_ASSET_IMAGE_TYPES,
             ...MARKETING_ASSET_AUDIO_TYPES,
+            MARKETING_ASSET_GIF_TYPE,
+            MARKETING_ASSET_VIDEO_TYPE,
           ],
           maximumSizeInBytes: Math.max(
             MARKETING_ASSET_MAX_IMAGE_BYTES,
             MARKETING_ASSET_MAX_AUDIO_BYTES,
+            MARKETING_ASSET_MAX_GIF_BYTES,
+            MARKETING_ASSET_MAX_VIDEO_BYTES,
           ),
           addRandomSuffix: true,
           validUntil: Date.now() + TOKEN_LIFETIME_MS,

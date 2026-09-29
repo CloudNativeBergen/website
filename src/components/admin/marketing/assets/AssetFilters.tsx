@@ -6,11 +6,14 @@ import { MagnifyingGlassIcon } from '@heroicons/react/24/outline'
 import type {
   MarketingAssetFacets,
   MarketingAssetFilter,
+  MarketingAssetKind,
 } from '@/lib/marketing-asset'
 import { SUBJECT_LABEL } from './SubjectCombobox'
 
 const SELECT =
   'block min-h-[40px] w-full rounded-md border border-gray-300 bg-white py-2 pr-8 pl-3 text-sm text-gray-900 shadow-xs focus:border-brand-cloud-blue focus:ring-1 focus:ring-brand-cloud-blue focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100'
+
+const KINDS: readonly MarketingAssetKind[] = ['image', 'gif', 'video', 'audio']
 
 /**
  * The gallery's filters (spec §3): this edition or all editions, kind,
@@ -76,16 +79,15 @@ export function AssetFilters({
           onChange={(event) =>
             onFilterChange({
               ...filter,
-              kind:
-                event.target.value === 'image' || event.target.value === 'audio'
-                  ? event.target.value
-                  : undefined,
+              kind: KINDS.find((kind) => kind === event.target.value),
             })
           }
           className={SELECT}
         >
           <option value="">Any kind</option>
           <option value="image">Images</option>
+          <option value="gif">GIFs</option>
+          <option value="video">Videos</option>
           <option value="audio">Audio tracks</option>
         </select>
       </div>

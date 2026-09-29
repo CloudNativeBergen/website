@@ -11,6 +11,8 @@ import { resolveConferenceId } from '@/server/trpc'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { marketingAssetDetailsSchema } from '@/lib/marketing-asset/details'
 import { resolveAssetDetailsForCurrentOrg } from '@/lib/marketing-asset/guard'
+import { kindHasAlt } from '@/lib/marketing-asset/types'
+import type { MarketingAssetKind } from '@/lib/marketing-asset/types'
 import {
   deleteMarketingAssetDocument,
   listMarketingAssetFacets,
@@ -62,10 +64,18 @@ const inRelease = (action: 'edit' | 'delete') =>
 
 const assetId = z.string().min(1).max(200)
 
+/** Who is refused an edit without alt text, in the refusal's words. */
+const ALT_OWNER: Record<MarketingAssetKind, string> = {
+  image: 'An image',
+  gif: 'A GIF',
+  video: 'A video',
+  audio: 'A track',
+}
+
 const filterSchema = z
   .object({
     editions: z.enum(['current', 'all']).optional(),
-    kind: z.enum(['image', 'audio']).optional(),
+    kind: z.enum(['image', 'gif', 'video', 'audio']).optional(),
     subjectId: z.string().min(1).max(200).optional(),
     tag: z.string().max(100).optional(),
     search: z.string().max(200).optional(),
@@ -102,6 +112,8 @@ export const marketingAssetRouter = router({
         postId: LiveDocumentIdSchema,
         editions: z.enum(['current', 'all']).optional(),
         search: z.string().max(200).optional(),
+        /** Only the GIFs and videos, which the manual view offers (#1167). */
+        byHand: z.boolean().optional(),
       }),
     )
     .query(async ({ input }) => {
@@ -113,6 +125,7 @@ export const marketingAssetRouter = router({
       return listMarketingAssetsForPost(orgId, conferenceId, input.postId, {
         editions: input.editions,
         search: input.search,
+        byHand: input.byHand,
       })
     }),
 
@@ -151,17 +164,18 @@ export const marketingAssetRouter = router({
       // when published, silently undoing this edit. Refused, as for delete.
       if ((await countMarketingAssetReleaseTwins(orgId, input.id)) > 0)
         throw inRelease('edit')
-      // An image keeps its required alt text; an audio track never has any.
+      // An image, GIF or video keeps its required alt text; an audio track
+      // never has any.
       const media = await readMarketingAssetMedia(orgId, input.id)
       if (!media) throw notFound()
       const { alt, ...rest } = input.details
-      if (media.kind === 'image' && !alt)
+      if (kindHasAlt(media.kind) && !alt)
         throw new TRPCError({
           code: 'BAD_REQUEST',
-          message: 'An image needs its alt text.',
+          message: `${ALT_OWNER[media.kind]} needs its alt text.`,
         })
       const details = await resolveAssetDetailsForCurrentOrg(
-        { ...rest, alt: media.kind === 'audio' ? undefined : alt },
+        { ...rest, alt: kindHasAlt(media.kind) ? alt : undefined },
         input.id,
       )
       await updateMarketingAssetDetails(input.id, details)
@@ -252,16 +266,18 @@ export const marketingAssetRouter = router({
         if (isRevisionConflict(error)) throw changed()
         throw error
       }
-      // Only an image or track this gallery's upload created is its to
-      // delete: Sanity deduplicates identical bytes across tenants, so any
-      // other may be another tenant's, possibly still unreferenced. A Studio
-      // draft's own file is left alone for the same reason.
-      if (media?.createdByUpload && media.assetId) {
+      // Only a file this gallery's upload created is its to delete — an
+      // image, a GIF, a track, a video's MP4 and its poster, each on its own:
+      // Sanity deduplicates identical bytes across tenants, so any other may
+      // be another tenant's, possibly still unreferenced. A Studio draft's
+      // own file is left alone for the same reason.
+      for (const file of media?.files ?? []) {
+        if (!file.createdByUpload) continue
         const result = await (
-          media.kind === 'audio'
+          file.type === 'file'
             ? deleteFileAssetIfOrphaned
             : deleteImageAssetIfOrphaned
-        )(media.assetId)
+        )(file.assetId)
         // The check fails closed: an unreadable count keeps the file. Say
         // which, so it can be retried by hand; nothing else will find it.
         if (result.remainingReferences === -1)

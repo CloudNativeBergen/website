@@ -51,6 +51,7 @@ import marketingCampaign from './schemaTypes/marketingCampaign'
 import marketingTask from './schemaTypes/marketingTask'
 import marketingSnapshot from './schemaTypes/marketingSnapshot'
 import marketingRateLimit from './schemaTypes/marketingRateLimit'
+import marketingAssetCleanup from './schemaTypes/marketingAssetCleanup'
 import planTemplate from './schemaTypes/planTemplate'
 import marketingAsset from './schemaTypes/marketingAsset'
 import videoProject from './schemaTypes/videoProject'
@@ -146,6 +147,9 @@ export const schema: { types: SchemaTypeDefinition[] } = {
     marketingRateLimit,
     // The atomic reservation of a Plan Template's name (#1123). Same rule.
     planTemplateName,
+    // A failed gallery upload's file, awaiting the delayed orphan check
+    // (#1167). Same rule.
+    marketingAssetCleanup,
   ],
 }
 
@@ -160,4 +164,5 @@ export const STUDIO_HIDDEN_TYPES: readonly string[] = [
   'provisioningRateLimit',
   'marketingRateLimit',
   'planTemplateName',
+  'marketingAssetCleanup',
 ]

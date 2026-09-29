@@ -107,6 +107,18 @@ then moves the file into Sanity and deletes the blob. Three things differ from t
   same path as a second, image, file.
 - The orphan sweeper cron lists blobs by the `proposal-` prefix. It gains the new prefix, so an
   upload abandoned before the move is cleaned up the same way.
+- A request refused on its details deletes the uploads it names at once, each under the same
+  host-and-prefix pin as the move; a URL that is not ours is never touched. The sweeper stays the
+  fallback.
+- **A failed upload's file in Sanity is never deleted on the spot** (#1167). Sanity deduplicates
+  identical bytes into one asset, so a second upload of the same file, in any tenant, sees it
+  created too and may still be moving, unreferenced. The route records the asset id
+  (`marketingAssetCleanup`, a plain string, never a reference), and the daily sweep runs the shared
+  orphan check only on records older than an hour, far past the route's `maxDuration`: by then any
+  concurrent upload has written its reference or failed. A LATER upload that gets the same asset
+  back takes it off the queue before it goes on (before a video's MP4 streams, before the gallery
+  write), and the sweep deletes in one transaction that claims the record at the revision it read,
+  so a record taken off or re-queued since is never acted on.
 
 Nothing is kept in Blob. **This reverses what the interview was told** — that video would stay in
 file storage by direct upload. A permanent blob would have had no deletion owner: asset delete,
