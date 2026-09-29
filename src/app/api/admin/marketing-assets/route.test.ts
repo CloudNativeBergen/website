@@ -13,6 +13,7 @@ const h = vi.hoisted(() => ({
   orphanFile: vi.fn(),
   create: vi.fn(),
   orphan: vi.fn(),
+  record: vi.fn(),
   guard: vi.fn(),
   afterTasks: [] as (() => unknown)[],
 }))
@@ -42,6 +43,12 @@ vi.mock('@/lib/marketing-asset/sanity', () => ({
 vi.mock('@/lib/marketing-asset/guard', () => ({
   resolveAssetDetailsForCurrentOrg: h.guard,
 }))
+// The delayed cleanup itself is proven over a dataset in
+// `route.cleanup.sanity.test.ts`; here, what the route hands it.
+vi.mock('@/lib/marketing-asset/pending-cleanup', () => ({
+  recordPendingCleanup: h.record,
+}))
+// Never called any more: the route deletes nothing on the spot.
 vi.mock('@/lib/sanity/orphaned-asset', () => ({
   deleteImageAssetIfOrphaned: h.orphan,
   deleteFileAssetIfOrphaned: h.orphanFile,
@@ -129,6 +136,7 @@ beforeEach(() => {
   h.orphanFile.mockResolvedValue({ deleted: true })
   h.create.mockResolvedValue({ _id: 'asset-1' })
   h.orphan.mockResolvedValue({ deleted: true })
+  h.record.mockResolvedValue(undefined)
   h.guard.mockImplementation(
     async ({ edition, ...rest }: { edition: string }) =>
       edition === 'current'
@@ -311,13 +319,15 @@ describe('the marketing asset move route', () => {
     expect((await POST(request(VALID))).status).toBe(500)
     for (const task of h.afterTasks) await task()
     expect(h.orphan).not.toHaveBeenCalled()
+    expect(h.record).not.toHaveBeenCalled()
   })
 
-  it('removes the fresh image when the gallery entry cannot be written', async () => {
+  it('records the fresh image for the delayed cleanup when the gallery entry cannot be written, deleting nothing now', async () => {
     h.create.mockRejectedValue(new Error('sanity down'))
     expect((await POST(request(VALID))).status).toBe(500)
     for (const task of h.afterTasks) await task()
-    expect(h.orphan).toHaveBeenCalledWith('image-a-800x600-png')
+    expect(h.record.mock.calls).toEqual([[['image-a-800x600-png']]])
+    expect(h.orphan).not.toHaveBeenCalled()
   })
 
   it('gives up on a gallery write that stalls, answering inside maxDuration', async () => {
@@ -345,14 +355,14 @@ describe('the marketing asset move route', () => {
     }
   })
 
-  it('answers a failed write without waiting on the image cleanup, which runs after', async () => {
+  it('answers a failed write without waiting on the cleanup record, which is written after', async () => {
     h.create.mockRejectedValue(new Error('sanity down'))
-    h.orphan.mockImplementation(() => new Promise(() => {}))
+    h.record.mockImplementation(() => new Promise(() => {}))
     expect((await POST(request(VALID))).status).toBe(500)
-    expect(h.orphan).not.toHaveBeenCalled()
+    expect(h.record).not.toHaveBeenCalled()
     expect(h.afterTasks).toHaveLength(1)
     void h.afterTasks[0]()
-    expect(h.orphan).toHaveBeenCalledWith('image-a-800x600-png')
+    expect(h.record).toHaveBeenCalledWith(['image-a-800x600-png'])
   })
 })
 
@@ -443,12 +453,12 @@ describe('an audio track through the move route (#1178)', () => {
     expect(h.create).not.toHaveBeenCalled()
   })
 
-  it('removes the fresh FILE when the gallery entry cannot be written', async () => {
+  it('records the fresh FILE for the delayed cleanup when the gallery entry cannot be written', async () => {
     h.create.mockRejectedValue(new Error('sanity down'))
     expect((await POST(request(TRACK))).status).toBe(500)
     for (const task of h.afterTasks) await task()
-    expect(h.orphanFile).toHaveBeenCalledWith('file-theme-mp3')
-    expect(h.orphan).not.toHaveBeenCalled()
+    expect(h.record.mock.calls).toEqual([[['file-theme-mp3']]])
+    expect(h.orphanFile).not.toHaveBeenCalled()
   })
 
   it('still requires alt text of an image, and discards the upload', async () => {
@@ -647,7 +657,7 @@ describe('a GIF or a video through the move route (#1167)', () => {
       'Only MP4 video can be added. Export a .mov again as MP4 and retry.',
     ],
   ] as const)(
-    'a %s refusal of the video saves nothing and removes the fresh poster',
+    'a %s refusal of the video saves nothing and records the fresh poster for the delayed cleanup',
     async (reason, message) => {
       h.move.mockResolvedValue(POSTER)
       h.moveVideo.mockResolvedValue({ ok: false, reason })
@@ -655,10 +665,11 @@ describe('a GIF or a video through the move route (#1167)', () => {
       expect(response.status).toBe(400)
       expect((await response.json()).error).toBe(message)
       expect(h.create).not.toHaveBeenCalled()
-      // After the answer, through the orphan check.
-      expect(h.orphan).not.toHaveBeenCalled()
+      // After the answer, and never deleted on the spot.
+      expect(h.record).not.toHaveBeenCalled()
       for (const task of h.afterTasks) await task()
-      expect(h.orphan.mock.calls).toEqual([['image-poster-1920x1080-jpg']])
+      expect(h.record.mock.calls).toEqual([[['image-poster-1920x1080-jpg']]])
+      expect(h.orphan).not.toHaveBeenCalled()
     },
   )
 
@@ -682,14 +693,17 @@ describe('a GIF or a video through the move route (#1167)', () => {
     expect(h.create).not.toHaveBeenCalled()
   })
 
-  it('removes the fresh MP4 AND poster when the gallery entry cannot be written', async () => {
+  it('records the fresh MP4 AND poster for the delayed cleanup when the gallery entry cannot be written', async () => {
     h.move.mockResolvedValue(POSTER)
     h.create.mockRejectedValue(new Error('boom'))
     const response = await POST(request(VIDEO))
     expect(response.status).toBe(500)
     for (const task of h.afterTasks) await task()
-    expect(h.orphanFile.mock.calls).toEqual([['file-clip-mp4']])
-    expect(h.orphan.mock.calls).toEqual([['image-poster-1920x1080-jpg']])
+    expect(h.record.mock.calls).toEqual([
+      [['file-clip-mp4', 'image-poster-1920x1080-jpg']],
+    ])
+    expect(h.orphan).not.toHaveBeenCalled()
+    expect(h.orphanFile).not.toHaveBeenCalled()
   })
 
   it('never moves a poster sent with an image: it is discarded', async () => {

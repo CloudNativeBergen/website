@@ -1,10 +1,17 @@
 /** @vitest-environment node */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const h = vi.hoisted(() => ({ list: vi.fn(), cleanup: vi.fn() }))
+const h = vi.hoisted(() => ({
+  list: vi.fn(),
+  cleanup: vi.fn(),
+  sweepFiles: vi.fn(),
+}))
 vi.mock('@vercel/blob', () => ({ list: h.list }))
 vi.mock('@/lib/attachment/blob', () => ({ cleanupOrphanedBlob: h.cleanup }))
 vi.mock('next/cache', () => ({ unstable_noStore: vi.fn() }))
+vi.mock('@/lib/marketing-asset/pending-cleanup', () => ({
+  sweepPendingCleanups: h.sweepFiles,
+}))
 
 import { GET } from './route'
 
@@ -34,6 +41,7 @@ beforeEach(() => {
     blobs: STORE.filter((b) => b.pathname.startsWith(prefix)),
   }))
   h.cleanup.mockResolvedValue(true)
+  h.sweepFiles.mockResolvedValue({ deleted: 2, kept: 1, retried: 0 })
 })
 
 describe('the orphaned blob sweeper', () => {
@@ -125,11 +133,33 @@ describe('the orphaned blob sweeper', () => {
     expect(most).toBeLessThanOrEqual(25)
   })
 
+  it('sweeps failed uploads’ Sanity files on the same run, and reports it', async () => {
+    const response = await GET(request())
+    expect(h.sweepFiles).toHaveBeenCalledTimes(1)
+    expect((await response.json()).failedUploadFiles).toEqual({
+      deleted: 2,
+      kept: 1,
+      retried: 0,
+    })
+  })
+
+  it('still sweeps Blob when the Sanity file sweep fails', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    h.sweepFiles.mockRejectedValue(new Error('Sanity down'))
+    const response = await GET(request())
+    expect(response.status).toBe(200)
+    expect(h.cleanup).toHaveBeenCalledWith(STORE[1].url)
+    expect((await response.json()).failedUploadFiles).toEqual({
+      error: 'Could not sweep failed-upload files',
+    })
+  })
+
   it('still refuses without the cron secret', async () => {
     const unauthorized = new Request(
       'http://localhost/x',
     ) as unknown as Parameters<typeof GET>[0]
     expect((await GET(unauthorized)).status).toBe(401)
     expect(h.list).not.toHaveBeenCalled()
+    expect(h.sweepFiles).not.toHaveBeenCalled()
   })
 })
