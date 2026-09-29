@@ -1971,20 +1971,39 @@ export const marketingRouter = router({
           ...(task.replacedRenders ?? []),
           ...(previous ? [previous] : []),
         ])
-        // A retry of a gallery asset reads it again (spec §4.3); otherwise
-        // the posts get what the pick did, or the render's alt.
-        let handed: ({ alt: string } & Partial<Framing>) | undefined
-        const handoffImage = async () =>
-          (!pick &&
-            selection.id &&
-            (await currentGalleryImage(selection.id, assetId))) ||
-          (selection.alt?.trim()
-            ? {
-                alt: selection.alt.trim(),
-                hotspot: selection.hotspot,
-                crop: selection.crop,
-              }
-            : { alt: renderAlt(task) })
+        // What the posts get, read once, AFTER this call's last write to the
+        // Task (the cleanup above may write it) and before the first post
+        // write. The revision read guards every post write: a newer render or
+        // pick saved since refuses it rather than fill a post with a
+        // superseded image. Null when one has been saved already.
+        type Handoff = {
+          image: { alt: string } & Partial<Framing>
+          task: { id: string; rev: string }
+        }
+        let handoff: Promise<Handoff | null> | undefined
+        const prepareHandoff = async (): Promise<Handoff | null> => {
+          const live = await getStudioTask(task._id, conferenceId)
+          if (
+            !live ||
+            live.assetId !== assetId ||
+            !isDeepStrictEqual(recordedSelection(live), selection)
+          )
+            return null
+          // A retry of a gallery asset reads it again (spec §4.3); otherwise
+          // the posts get what the pick did, or the render's alt.
+          const image =
+            (!pick &&
+              selection.id &&
+              (await currentGalleryImage(selection.id, assetId))) ||
+            (selection.alt?.trim()
+              ? {
+                  alt: selection.alt.trim(),
+                  hotspot: selection.hotspot,
+                  crop: selection.crop,
+                }
+              : { alt: renderAlt(live) })
+          return { image, task: { id: live._id, rev: live._rev } }
+        }
         const handoffFailures: string[] = []
         const handoffIssues: string[] = []
         try {
@@ -1996,19 +2015,31 @@ export const marketingRouter = router({
           for (const recipient of recipients) {
             if (handoffDoneFor.has(recipient.variantId!)) continue
             try {
+              const prepared = await (handoff ??= prepareHandoff())
+              if (!prepared) {
+                handoffFailures.push(recipient._id)
+                continue
+              }
               const outcome = await handoffStudioAttachment(
                 recipient.variantId!,
                 conferenceId,
-                { assetId, ...(handed ??= await handoffImage()) },
+                { assetId, ...prepared.image },
+                { ...prepared.task },
               )
-              if (typeof outcome === 'object') {
+              if (outcome === 'unavailable' || outcome === 'conflict')
+                handoffFailures.push(recipient._id)
+              else if (outcome === 'occupied')
+                handoffDoneFor.add(recipient.variantId!)
+              else if ('issues' in outcome) {
                 handoffFailures.push(recipient._id)
                 handoffIssues.push(
                   ...outcome.issues.map((issue) => issue.message),
                 )
-              } else if (outcome === 'unavailable')
-                handoffFailures.push(recipient._id)
-              else handoffDoneFor.add(recipient.variantId!)
+              } else {
+                handoffDoneFor.add(recipient.variantId!)
+                // The guard moved the Task on: the next post guards on that.
+                prepared.task.rev = outcome.attached.taskRev
+              }
             } catch (error) {
               console.error('Studio handoff failed', recipient._id, error)
               handoffFailures.push(recipient._id)

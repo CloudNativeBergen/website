@@ -61,9 +61,10 @@ vi.mock('@/lib/social/sanity', async (importOriginal) => {
       ...args: Parameters<typeof actual.handoffStudioAttachment>
     ) => {
       h.handedOff.push(args[0])
+      // The recorder writes nothing: the Task keeps its revision.
       return h.realHandoff
         ? actual.handoffStudioAttachment(...args)
-        : 'attached'
+        : { attached: { taskRev: args[3].rev } }
     },
   }
 })
@@ -1042,6 +1043,111 @@ describe('finishing a render Task with an asset from the gallery (#1166)', () =>
     })
   })
 
+  describe('a hand-off superseded while it runs never fills the post (#1241)', () => {
+    const VARIANT_READ = '"socialPostVariant" && _id == $variantId'
+    /** Runs `change` once, as the first hand-off reads its variant. */
+    const duringHandoff = (change: () => void) => {
+      let raced = false
+      h.onFetch = (query) => {
+        if (raced || !query.includes(VARIANT_READ)) return
+        raced = true
+        change()
+      }
+      return () => raced
+    }
+
+    it('a pick of another entry with the same image: the post gets the newer pick', async () => {
+      const newer = { top: 0.2, bottom: 0, left: 0, right: 0.1 }
+      h.dataset.push(
+        asset('asset-logo-2', {
+          image: { ...image(LOGO), crop: newer },
+          alt: 'The newer logo entry',
+        }),
+      )
+      // Pick B commits while pick A hands off.
+      const raced = duringHandoff(() =>
+        Object.assign(task(), {
+          galleryAsset: { ...ref('asset-logo-2'), _weak: true },
+          galleryAlt: 'The newer logo entry',
+          galleryCrop: newer,
+          _rev: 'rev-pick-b',
+        }),
+      )
+      const a = await finish('asset-logo')
+      expect(raced()).toBe(true)
+      expect(a.handoffFailures).not.toEqual([])
+      expect(post('post-1')).not.toHaveProperty('attachments')
+      // Pick B's own hand-off, which the stale one would have beaten.
+      h.onFetch = null
+      await attach(LOGO)
+      expect(post('post-1').attachments).toEqual([
+        expect.objectContaining({
+          alt: 'The newer logo entry',
+          image: {
+            ...image(LOGO),
+            crop: { _type: 'sanity.imageCrop', ...newer },
+          },
+        }),
+      ])
+    })
+
+    it('a pick saved between this save and its hand-off: the post gets the newer pick', async () => {
+      h.dataset.push(
+        asset('asset-logo-2', {
+          image: image(LOGO),
+          alt: 'The newer logo entry',
+        }),
+      )
+      h.afterTaskSave = () =>
+        Object.assign(task(), {
+          galleryAsset: { ...ref('asset-logo-2'), _weak: true },
+          galleryAlt: 'The newer logo entry',
+          _rev: 'rev-pick-b',
+        })
+      const a = await finish('asset-logo')
+      expect(a.handoffFailures).not.toEqual([])
+      expect(post('post-1')).not.toHaveProperty('attachments')
+      await attach(LOGO)
+      expect(post('post-1').attachments).toEqual([
+        expect.objectContaining({
+          image: image(LOGO),
+          alt: 'The newer logo entry',
+        }),
+      ])
+    })
+
+    it('fills every waiting post: each guard follows the revision the last one wrote', async () => {
+      Object.assign(post('post-2'), { attachments: [] })
+      expect(await finish('asset-logo')).toEqual({
+        success: true,
+        handoffFailures: [],
+      })
+      for (const id of ['post-1', 'post-2'])
+        expect(post(id).attachments).toEqual([
+          expect.objectContaining({ image: image(LOGO), alt: 'The CNB logo' }),
+        ])
+    })
+
+    it('a newer studio render: the post gets the newer render', async () => {
+      const raced = duringHandoff(() =>
+        Object.assign(task(), {
+          asset: image(SECOND),
+          handoffDoneFor: [],
+          _rev: 'rev-render-b',
+        }),
+      )
+      const a = await attach(FIRST)
+      expect(raced()).toBe(true)
+      expect(a.handoffFailures).not.toEqual([])
+      expect(post('post-1')).not.toHaveProperty('attachments')
+      h.onFetch = null
+      await attach(SECOND) // render B's hand-off
+      expect(post('post-1').attachments).toEqual([
+        expect.objectContaining({ image: image(SECOND) }),
+      ])
+    })
+  })
+
   it('a retry keeps the picked alt after the asset is deleted', async () => {
     await finish('asset-logo')
     expect(task().galleryAlt).toBe('The CNB logo')
@@ -1118,7 +1224,7 @@ describe('which gallery asset a Task records (#1166 review)', () => {
     const result = await pick('asset-logo')
     expect(task().galleryAsset).toEqual({ ...ref('asset-logo-2'), _weak: true })
     expect(task().handoffDoneFor ?? []).toEqual([])
-    expect(result.handoffFailures).toContain(TASK)
+    expect(result.handoffFailures).not.toEqual([])
   })
 
   it("a pick of the render's own image clears a pending gallery save: a retry adds no second entry (#1241)", async () => {
