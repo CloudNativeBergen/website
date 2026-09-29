@@ -71,7 +71,6 @@ beforeEach(() => {
 describe('a refusal of the details deletes the uploads it names', () => {
   it.each([
     ['no title', { alt: 'A clip' }],
-    ['no alt text', { title: 'Clip' }],
     ['a malformed tag list', { title: 'Clip', alt: 'A clip', tags: 'x' }],
   ])('%s: the video and its poster go', async (_, details) => {
     const response = await post({
@@ -115,7 +114,8 @@ describe('a refusal of the details deletes the uploads it names', () => {
       kind: 'video',
       url: foreign,
       posterUrl: POSTER,
-      title: 'Clip',
+      // No title: refused by the details schema, the branch under test.
+      alt: 'A clip',
     })
     expect(response.status).toBe(400)
     // The pinned poster goes; the foreign URL is never handed to `del`.
