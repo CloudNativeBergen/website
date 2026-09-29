@@ -29,8 +29,9 @@ export interface StudioTask {
   galleryAssetId: string | null
   /**
    * That asset's alt as it was picked, stored on the Task: what a hand-off
-   * retry gives the posts, as the first hand-off did, even once the asset
-   * is deleted.
+   * retry gives the posts once the asset is deleted, is another
+   * organization's, or holds another image. While it still holds the image,
+   * a retry reads its current alt instead (spec §4.3).
    */
   galleryAlt: string | null
 }
@@ -64,24 +65,35 @@ export function getRenderSiblings(campaignId: string, conferenceId: string) {
   )
 }
 
+/** A document version the caller read, for a compare-and-set. */
+export interface ReadVersion {
+  id: string
+  rev: string
+}
+
 /**
  * Whether the gallery asset `assetId`, in ANY version (published, a Studio
  * draft, a Content Release copy), still holds the image `file` (#1166). A
  * Task's gallery image is the gallery's only while it does; afterwards a
  * render that replaces it is recorded as the Task's, so a speaker's erasure
- * finds it.
+ * finds it. `copies` is every version read, by revision: the save that acts
+ * on the answer guards them, so an edit or delete in between refuses it.
  */
-export async function galleryAssetHolds(
+export async function galleryAssetHolding(
   assetId: string,
   file: string,
-): Promise<boolean> {
-  const count = await clientReadUncached
+): Promise<{ holds: boolean; copies: ReadVersion[] }> {
+  const rows = await clientReadUncached
     .withConfig({ apiVersion: COUNT_API_VERSION })
-    .fetch<number>(
+    .fetch<{ id: string; rev: string; file: string | null }[] | null>(
       // groq-global-scoped: by id, the asset the caller's Task recorded (written only after its organization guard), and that asset's draft and release copies.
-      groq`count(*[_type == "marketingAsset" && (_id == $assetId || _id == $draftId || (_id in path("versions.**") && string::split(_id, ".")[2] == $assetId)) && image.asset._ref == $file])`,
-      { assetId, draftId: `drafts.${assetId}`, file },
+      groq`*[_type == "marketingAsset" && (_id == $assetId || _id == $draftId || (_id in path("versions.**") && string::split(_id, ".")[2] == $assetId))] | order(_id) {"id": _id, "rev": _rev, "file": image.asset._ref}`,
+      { assetId, draftId: `drafts.${assetId}` },
       { cache: 'no-store', perspective: 'raw' },
     )
-  return (count ?? 0) > 0
+  const copies = rows ?? []
+  return {
+    holds: copies.some((copy) => copy.file === file),
+    copies: copies.map(({ id, rev }) => ({ id, rev })),
+  }
 }

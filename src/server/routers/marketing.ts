@@ -44,7 +44,7 @@ import {
   getStudioTask,
   getRenderSiblings,
   type StudioTask,
-  galleryAssetHolds,
+  galleryAssetHolding,
 } from '@/lib/marketing/render-sanity'
 import {
   renderAlt,
@@ -53,6 +53,7 @@ import {
 import { handoffStudioAttachment } from '@/lib/social/sanity'
 import { retireReplacedRenders } from '@/lib/marketing/replaced-renders'
 import { createHash, randomUUID } from 'node:crypto'
+import { isDeepStrictEqual } from 'node:util'
 import { TRPCError } from '@trpc/server'
 import { needsOwnDomains } from '@/lib/social/provider/constraints'
 import { adminProcedure, resolveConferenceId, router } from '@/server/trpc'
@@ -704,6 +705,32 @@ async function galleryImageForTask(
     imageAssetId: asset.imageAssetId,
     alt,
   }
+}
+
+/**
+ * What a hand-off retry gives the posts for a Task finished from the gallery
+ * (spec §4.3): the recorded asset's CURRENT alt, while it is still this
+ * organization's (proven before it is read) and still holds the Task's
+ * image. Null otherwise, for the alt saved when it was picked.
+ */
+async function currentGalleryAlt(
+  marketingAssetId: string,
+  imageAssetId: string,
+): Promise<string | null> {
+  let orgId: string
+  try {
+    orgId = await requireDocumentInCurrentOrg(
+      marketingAssetId,
+      'marketingAsset',
+    )
+  } catch (error) {
+    if (error instanceof TRPCError && error.code === 'NOT_FOUND') return null
+    throw error
+  }
+  const asset = await readMarketingAssetForPost(orgId, marketingAssetId)
+  if (asset?.imageAssetId !== imageAssetId) return null
+  const alt = asset.alt.trim()
+  return alt && alt.length <= SOCIAL_ALT_MAX_LENGTH ? alt : null
 }
 
 function conflict(): TRPCError {
@@ -1775,8 +1802,12 @@ export const marketingRouter = router({
           !ownEntry &&
           (task.galleryAssetId !== pick.id || task.galleryAlt !== pick.alt)
         const forgetPick = !!task.galleryAssetId && (pick ? ownEntry : newImage)
+        // A pick supersedes a pending gallery save, whatever its image: the
+        // picked asset is in the gallery already, and the Task's own entry
+        // (#1165) holds the render once picked — the save it waited for.
+        const clearPending = pick !== null && task.galleryPending === true
         // Identical saved output is an idempotent handoff retry, even after its save changed the revision.
-        if (newImage || recordPick || forgetPick) {
+        if (newImage || recordPick || forgetPick || clearPending) {
           if (!pick && task.pendingAssetId !== assetId)
             throw new TRPCError({
               code: 'BAD_REQUEST',
@@ -1794,53 +1825,70 @@ export const marketingRouter = router({
         // A gallery asset's image is the gallery's, never recorded as this
         // Task's render: a speaker's erasure would take it for one (#1166).
         const previous = task.assetId && newImage ? task.assetId : null
+        const fields = {
+          asset: {
+            _type: 'image',
+            asset: { _type: 'reference', _ref: assetId },
+          },
+          handoffDoneFor: [...handoffDoneFor],
+          // A new render is not in the gallery yet (#1165). Written with
+          // the save, so a gallery save that fails leaves a durable mark
+          // the Task editor offers a retry for; cleared with the receipts.
+          // A gallery asset is there already.
+          ...(newImage && !pick ? { galleryPending: true } : {}),
+          ...(recordPick && pick
+            ? {
+                galleryAsset: {
+                  _type: 'reference',
+                  _ref: pick.id,
+                  _weak: true,
+                },
+                galleryAlt: pick.alt,
+              }
+            : {}),
+        }
+        const unset = [
+          ...(newImage && !pick ? ['pendingStudioAsset'] : []),
+          ...(clearPending ? ['galleryPending'] : []),
+          ...(forgetPick ? ['galleryAsset', 'galleryAlt'] : []),
+        ]
         // Only while its asset still holds it: an image the gallery let go
         // of (the asset deleted, or its image replaced) is the Task's again.
-        const replaced =
-          previous &&
-          !(
-            task.galleryAssetId &&
-            (await galleryAssetHolds(task.galleryAssetId, previous))
-          )
-            ? previous
-            : null
-        const saved = await updateTaskFields(
-          task._id,
-          task._rev,
-          {
-            asset: {
-              _type: 'image',
-              asset: { _type: 'reference', _ref: assetId },
-            },
-            handoffDoneFor: [...handoffDoneFor],
-            // A new render is not in the gallery yet (#1165). Written with
-            // the save, so a gallery save that fails leaves a durable mark
-            // the Task editor offers a retry for; cleared with the receipts.
-            // A gallery asset is there already.
-            ...(newImage && !pick ? { galleryPending: true } : {}),
-            ...(recordPick && pick
-              ? {
-                  galleryAsset: {
-                    _type: 'reference',
-                    _ref: pick.id,
-                    _weak: true,
-                  },
-                  galleryAlt: pick.alt,
-                }
-              : {}),
-          },
-          [
-            ...(newImage && !pick ? ['pendingStudioAsset'] : []),
-            ...(newImage && pick && task.galleryPending
-              ? ['galleryPending']
-              : []),
-            ...(forgetPick ? ['galleryAsset', 'galleryAlt'] : []),
-          ],
-          undefined,
-          replaced ?? undefined,
-          pick ? { id: pick.id, rev: pick.rev } : undefined,
-        )
-        if (!saved) throw conflict()
+        // The save guards every copy of the asset the decision read, so the
+        // two are one: a copy edited or deleted in between refuses the save,
+        // and the decision is taken again on what the asset is now.
+        const holding = () =>
+          previous && task.galleryAssetId
+            ? galleryAssetHolding(task.galleryAssetId, previous)
+            : Promise.resolve(null)
+        let read = await holding()
+        for (let attempt = 1; ; attempt++) {
+          let failure: unknown = null
+          const saved = await updateTaskFields(
+            task._id,
+            task._rev,
+            fields,
+            unset,
+            undefined,
+            previous && !read?.holds ? previous : undefined,
+            [
+              ...(pick ? [{ id: pick.id, rev: pick.rev }] : []),
+              ...(read?.copies ?? []),
+            ],
+          ).catch((error: unknown) => {
+            failure = error
+            return false
+          })
+          if (saved) break
+          // Taken again only when a copy it read moved: otherwise the Task
+          // changed, or the picked asset did, or the save failed on its own.
+          const now = read && attempt < 3 ? await holding() : null
+          if (!read || !now || isDeepStrictEqual(now.copies, read.copies)) {
+            if (failure) throw failure
+            throw conflict()
+          }
+          read = now
+        }
         // The gallery entry (spec §4.3): created, or its image replaced. One
         // more idempotent step, BEFORE the orphan check below so the render
         // it replaces is free to go. Never fails or rolls back the attach.
@@ -1864,6 +1912,23 @@ export const marketingRouter = router({
           ...(task.replacedRenders ?? []),
           ...(previous ? [previous] : []),
         ])
+        // The gallery selection this call leaves on the Task, and hands on:
+        // receipts are recorded only while it is still the Task's.
+        const selection = pick
+          ? ownEntry
+            ? { id: null, alt: null }
+            : { id: pick.id, alt: pick.alt }
+          : newImage
+            ? { id: null, alt: null }
+            : { id: task.galleryAssetId, alt: task.galleryAlt }
+        let alt: string | undefined
+        const handoffAlt = async () =>
+          pick
+            ? pick.alt
+            : (selection.id &&
+                (await currentGalleryAlt(selection.id, assetId))) ||
+              selection.alt?.trim() ||
+              renderAlt(task)
         const handoffFailures: string[] = []
         const handoffIssues: string[] = []
         try {
@@ -1878,12 +1943,7 @@ export const marketingRouter = router({
               const outcome = await handoffStudioAttachment(
                 recipient.variantId!,
                 conferenceId,
-                {
-                  assetId,
-                  alt: pick
-                    ? pick.alt
-                    : (!newImage && task.galleryAlt?.trim()) || renderAlt(task),
-                },
+                { assetId, alt: (alt ??= await handoffAlt()) },
               )
               if (typeof outcome === 'object') {
                 handoffFailures.push(recipient._id)
@@ -1930,7 +1990,14 @@ export const marketingRouter = router({
           try {
             // Never associate an older image's receipts with a newer render.
             const current = await getStudioTask(task._id, conferenceId)
-            if (!current || current.assetId !== assetId)
+            // Nor this call's with another pick's: the same image, picked
+            // from another entry, hands on another alt.
+            if (
+              !current ||
+              current.assetId !== assetId ||
+              (current.galleryAssetId ?? null) !== selection.id ||
+              (current.galleryAlt ?? null) !== (selection.alt ?? null)
+            )
               handoffFailures.push(task._id)
             else if (
               !(await updateTaskFields(

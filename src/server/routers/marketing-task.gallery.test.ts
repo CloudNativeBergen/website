@@ -873,6 +873,95 @@ describe('finishing a render Task with an asset from the gallery (#1166)', () =>
     },
   )
 
+  it.each([
+    [
+      'deleted',
+      () => {
+        h.dataset = h.dataset.filter((d) => d._id !== 'asset-logo')
+      },
+    ],
+    [
+      'given another image',
+      () => {
+        Object.assign(byId('asset-logo')!, {
+          image: image(THEIRS),
+          _rev: 'rev-logo-edited',
+        })
+      },
+    ],
+  ])(
+    'a studio render records the image as replaced when its asset is %s between the check and the save (#1241)',
+    async (_what, change) => {
+      await finish('asset-logo')
+      let raced = false
+      // Right after the re-render reads whether the asset holds the image.
+      h.onFetch = (query) =>
+        !raced && query.includes('$draftId')
+          ? () => {
+              raced = true
+              change()
+            }
+          : undefined
+      upload(SECOND)
+      await attach(SECOND)
+      expect(raced).toBe(true)
+      expect(task().asset).toEqual(image(SECOND))
+      // A post still holds it, so it stays, recorded for an erasure.
+      expect(task().replacedRenders).toContain(LOGO)
+      expect(byId(LOGO)).toBeDefined()
+    },
+  )
+
+  it("a retry hands on the asset's CURRENT alt while it still holds the image (#1241)", async () => {
+    await finish('asset-logo')
+    Object.assign(byId('asset-logo')!, { alt: 'The new CNB logo' })
+    Object.assign(post('post-1'), { attachments: [] })
+    Object.assign(byId('variant-1')!, { attachments: [] })
+    Object.assign(task(), { handoffDoneFor: [] })
+    await attach(LOGO)
+    expect(post('post-1').attachments).toEqual([
+      expect.objectContaining({ image: image(LOGO), alt: 'The new CNB logo' }),
+    ])
+  })
+
+  it.each([
+    [
+      'holds another image',
+      () =>
+        Object.assign(byId('asset-logo')!, {
+          image: image(THEIRS),
+          alt: 'Their picture',
+        }),
+      true,
+    ],
+    [
+      "is now another organization's",
+      () =>
+        Object.assign(byId('asset-logo')!, {
+          organization: ref('org-B'),
+          alt: 'Their logo',
+        }),
+      false,
+    ],
+  ])(
+    'a retry falls back to the picked alt when the asset %s (#1241)',
+    async (_what, change, read) => {
+      await finish('asset-logo')
+      change()
+      Object.assign(post('post-1'), { attachments: [] })
+      Object.assign(byId('variant-1')!, { attachments: [] })
+      Object.assign(task(), { handoffDoneFor: [] })
+      const reads: string[] = []
+      h.onFetch = (query) => void reads.push(query)
+      await attach(LOGO)
+      expect(post('post-1').attachments).toEqual([
+        expect.objectContaining({ image: image(LOGO), alt: 'The CNB logo' }),
+      ])
+      // Another organization's asset is refused before it is read.
+      expect(reads.some((q) => q.includes(ASSET_READ))).toBe(read)
+    },
+  )
+
   it('a retry keeps the picked alt after the asset is deleted', async () => {
     await finish('asset-logo')
     expect(task().galleryAlt).toBe('The CNB logo')
@@ -935,6 +1024,55 @@ describe('which gallery asset a Task records (#1166 review)', () => {
     expect(await getStudioTask(TASK, 'conf-A')).toMatchObject({
       galleryAlt: 'New logo entry',
     })
+  })
+
+  it('a hand-off records no receipts once another pick of the same image replaced its selection (#1241)', async () => {
+    // Pick B of another entry holding the same image commits while this
+    // pick is still handing off.
+    h.afterTaskSave = () =>
+      Object.assign(task(), {
+        galleryAsset: { ...ref('asset-logo-2'), _weak: true },
+        galleryAlt: 'New logo entry',
+        _rev: 'rev-pick-b',
+      })
+    const result = await pick('asset-logo')
+    expect(task().galleryAsset).toEqual({ ...ref('asset-logo-2'), _weak: true })
+    expect(task().handoffDoneFor ?? []).toEqual([])
+    expect(result.handoffFailures).toContain(TASK)
+  })
+
+  it("a pick of the render's own image clears a pending gallery save: a retry adds no second entry (#1241)", async () => {
+    h.galleryDown = true
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
+    await attach(FIRST)
+    logged.mockRestore()
+    h.galleryDown = false
+    expect(task()).toMatchObject({ asset: image(FIRST), galleryPending: true })
+    // An entry holding the very image the Task already has.
+    h.dataset.push(
+      entry('asset-first', { image: image(FIRST), alt: 'First, filed' }),
+    )
+    await pick('asset-first')
+    expect(task()).not.toHaveProperty('galleryPending')
+    await attach(FIRST) // Retry handoff
+    expect(
+      gallery().filter(
+        (d) => d._id !== 'asset-logo' && d._id !== 'asset-logo-2',
+      ),
+    ).toEqual([expect.objectContaining({ _id: 'asset-first' })])
+  })
+
+  it("picking the Task's own entry once it holds the pending render clears the mark (#1241)", async () => {
+    await attach(FIRST) // the render, and its #1165 entry
+    // The entry landed but clearing the mark did not.
+    Object.assign(task(), { galleryPending: true })
+    const own = gallery().find(
+      (d) => d._id !== 'asset-logo' && d._id !== 'asset-logo-2',
+    )!
+    Object.assign(own, { alt: 'Ada, filed' })
+    await pick(own._id)
+    expect(task()).not.toHaveProperty('galleryPending')
+    expect(task()).not.toHaveProperty('galleryAsset')
   })
 
   it("picking the Task's own render entry is its render: nothing is recorded, and a re-render records it as replaced", async () => {

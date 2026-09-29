@@ -43,8 +43,9 @@ async function deleteAssetIfOrphaned(
       .withConfig({ apiVersion: COUNT_API_VERSION })
       .fetch<{ n: number }>(
         // groq-global: an asset can be shared by documents in any tenant, so the
-        // safety check must see all of them. A bare zero `count()` is wrapped in
-        // an object because Sanity errors on a bare scalar count projection.
+        // safety check must see all of them. The object wrapper is not needed:
+        // the API answers a bare `count()` with a plain number, 0 included. It
+        // is the `sanity documents query` CLI that errors on a bare zero.
         groq`{ "n": count(*[references($assetId)]) }`,
         { assetId },
         { cache: 'no-store', perspective: 'raw' },
