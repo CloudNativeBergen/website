@@ -1266,8 +1266,20 @@ export async function handoffStudioAttachment(
   /** Framing only for a gallery asset's image (#1166); a render has none. */
   input: Pick<AddSocialPostAttachmentInput, 'assetId' | 'alt'> &
     Partial<Pick<AddSocialPostAttachmentInput, 'hotspot' | 'crop'>>,
+  /**
+   * The render Task at the revision this hand-off's image was read from. A
+   * no-op patch guards it in the SAME transaction as the post, so a newer
+   * render or pick saved since refuses the write (`'conflict'`) instead of
+   * filling the post with a superseded image. The guard moves the Task's
+   * revision: an attach answers the new one, for the next hand-off.
+   */
+  task: { id: string; rev: string },
 ): Promise<
-  'attached' | 'occupied' | 'unavailable' | { issues: ValidationIssue[] }
+  | { attached: { taskRev: string } }
+  | 'occupied'
+  | 'unavailable'
+  | 'conflict'
+  | { issues: ValidationIssue[] }
 > {
   const variant = await scopedFetch<{
     _id: string
@@ -1313,8 +1325,9 @@ export async function handoffStudioAttachment(
   }
   const key = randomUUID()
   const now = getCurrentDateTime()
-  await clientWrite
+  const tx = clientWrite
     .transaction()
+    .patch(task.id, (p) => p.ifRevisionId(task.rev).unset(['_handoffGuard']))
     .patch(post._id, (p) =>
       p.ifRevisionId(post._rev).set({
         attachments: [
@@ -1341,6 +1354,15 @@ export async function handoffStudioAttachment(
         ])
         .set({ updatedAt: now }),
     )
-    .commit()
-  return 'attached'
+  let written: { _id: string; _rev: string }[]
+  try {
+    written = await tx.commit({ returnDocuments: true })
+  } catch (error) {
+    // The Task, the post or the variant moved on: nothing was written.
+    if (isRevisionConflict(error)) return 'conflict'
+    throw error
+  }
+  const taskRev = written.find((doc) => doc._id === task.id)?._rev
+  if (!taskRev) throw new Error('The hand-off wrote no Task revision')
+  return { attached: { taskRev } }
 }

@@ -1176,6 +1176,9 @@ describe('marketing.task.deletionPreview (#1145)', () => {
   })
 })
 
+/** A hand-off that attached; the Task revision its guard wrote. */
+const ATTACHED = { attached: { taskRev: 'rev-after-handoff' } } as const
+
 describe('task.attachAsset', () => {
   const assetId = 'image-render-1200x630-png'
   const input = { taskId: 'task-ours', taskRev: 'rev-render', assetId }
@@ -1191,10 +1194,14 @@ describe('task.attachAsset', () => {
     campaignId: 'camp-A',
     handoffDoneFor: [] as string[],
   })
+  /** The stored Task, as every read returns it and every save changes it. */
+  let current: ReturnType<typeof render>
+  /** The guard a hand-off gets: the Task as this attach's save left it. */
+  const savedTask = { id: 'task-ours', rev: 'rev-render-saved' }
   beforeEach(() => {
     h.getStudioTask.mockReset()
     h.updateTaskFields.mockReset()
-    let current = render()
+    current = render()
     h.getStudioTask.mockImplementation(async () => current)
     h.getRenderSiblings.mockResolvedValue([])
     h.updateTaskFields.mockImplementation(async (_id, _rev, fields) => {
@@ -1206,7 +1213,7 @@ describe('task.attachAsset', () => {
       } as ReturnType<typeof render>
       return true
     })
-    h.handoffStudioAttachment.mockResolvedValue('attached')
+    h.handoffStudioAttachment.mockResolvedValue(ATTACHED)
     h.deleteOrphan.mockReset()
     h.deleteOrphan.mockResolvedValue({
       id: null,
@@ -1442,6 +1449,18 @@ describe('task.attachAsset', () => {
     h.handoffStudioAttachment.mockImplementation(social.handoffStudioAttachment)
     const tx = {
       patch: vi.fn((id: string, callback: (p: unknown) => unknown) => {
+        // The hand-off's Task guard: a no-op that moves the revision.
+        if (id === saved._id) {
+          const guard = {
+            ifRevisionId: () => guard,
+            unset: () => {
+              saved._rev = `${saved._rev}-guarded`
+              return guard
+            },
+          }
+          callback(guard)
+          return tx
+        }
         const document = id === post._id ? post : variant
         const p = {
           ifRevisionId: () => p,
@@ -1458,7 +1477,7 @@ describe('task.attachAsset', () => {
         callback(p)
         return tx
       }),
-      commit: vi.fn().mockResolvedValue({}),
+      commit: vi.fn(async () => [{ _id: saved._id, _rev: saved._rev }]),
     }
     h.transaction.mockReturnValue(tx)
     const real = await vi.importActual<typeof import('@/lib/marketing/sanity')>(
@@ -1672,13 +1691,18 @@ describe('task.attachAsset', () => {
       handoffFailures: [],
     })
     expect(h.handoffStudioAttachment.mock.calls).toEqual([
-      ['eligible-v', CONF_A, { assetId, alt: 'Conference announcement' }],
+      [
+        'eligible-v',
+        CONF_A,
+        { assetId, alt: 'Conference announcement' },
+        savedTask,
+      ],
     ])
   })
   it.each([undefined, null, '   '])(
     'hands off a fallback alt VALUE when configured alt is %j',
     async (alt) => {
-      h.getStudioTask.mockResolvedValueOnce({ ...render(), alt })
+      Object.assign(current, { alt })
       h.getRenderSiblings.mockResolvedValue([
         {
           _id: 'eligible',
@@ -1692,6 +1716,7 @@ describe('task.attachAsset', () => {
         'eligible-v',
         CONF_A,
         { assetId, alt: 'Save the date' },
+        savedTask,
       )
     },
   )
@@ -1731,7 +1756,7 @@ describe('task.attachAsset', () => {
       })),
     )
     h.handoffStudioAttachment
-      .mockResolvedValueOnce('attached')
+      .mockResolvedValueOnce(ATTACHED)
       .mockResolvedValueOnce('unavailable')
     expect(await marketing().task.attachAsset(input)).toEqual({
       gallerySaved: true,
@@ -1822,7 +1847,7 @@ describe('task.attachAsset', () => {
       const delivered: string[] = []
       h.handoffStudioAttachment.mockImplementation(async (variantId) => {
         delivered.push(variantId)
-        return 'attached'
+        return ATTACHED
       })
       await marketing().task.attachAsset(input)
       if (timing === 'after completion') {
@@ -1989,7 +2014,7 @@ describe('task.attachAsset', () => {
                 { ...recipient, _id: 'new-recipient', variantId: 'new-v' },
               ]
             : [{ ...recipient, variantId: 'new-v' }]
-        return 'attached'
+        return ATTACHED
       })
       const result = await marketing().task.attachAsset(input)
       expect(saved.handoffDoneFor).toEqual(['eligible-v'])
@@ -2133,11 +2158,11 @@ describe('task.attachAsset', () => {
         variantId: 'eligible-v',
       },
     ])
-    h.getStudioTask.mockResolvedValueOnce(render()).mockResolvedValueOnce({
-      ...render(),
-      _rev: 'saved-rev',
-      assetId,
-    })
+    h.getStudioTask
+      .mockResolvedValueOnce(render())
+      // Read before the hand-off, as the save left it.
+      .mockResolvedValueOnce({ ...render(), _rev: 'rev-render-saved', assetId })
+      .mockResolvedValueOnce({ ...render(), _rev: 'saved-rev', assetId })
     h.updateTaskFields.mockResolvedValueOnce(true).mockResolvedValueOnce(false)
     await expect(marketing().task.attachAsset(input)).resolves.toEqual({
       gallerySaved: true,

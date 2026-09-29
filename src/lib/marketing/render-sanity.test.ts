@@ -31,6 +31,9 @@ vi.mock('@/lib/sanity/client', () => ({
             setIfMissing() {
               return p
             },
+            unset() {
+              return p
+            },
             append(path: string, items: unknown[]) {
               recorded.appended = { path, items }
               return p
@@ -51,7 +54,8 @@ import { getStudioTask, getRenderSiblings } from './render-sanity'
 beforeEach(() => {
   vi.clearAllMocks()
   h.patches.length = 0
-  h.commit.mockReset().mockResolvedValue({})
+  // With `returnDocuments`, as the hand-off commits: the Task's new revision.
+  h.commit.mockReset().mockResolvedValue([{ _id: 'task', _rev: 't2' }])
   h.fetch
     .mockReset()
     .mockResolvedValueOnce({
@@ -65,16 +69,19 @@ beforeEach(() => {
 
 describe('atomic studio attachment handoff', () => {
   const image = { assetId: 'image-render-1200x630-png', alt: 'Save the date' }
+  const task = { id: 'task', rev: 't1' }
   it('writes an image to the empty post AND selects its key on the variant in one revision-protected transaction', async () => {
-    expect(await handoffStudioAttachment('variant', 'conference', image)).toBe(
-      'attached',
-    )
+    expect(
+      await handoffStudioAttachment('variant', 'conference', image, task),
+    ).toEqual({ attached: { taskRev: 't2' } })
     expect(h.commit).toHaveBeenCalledTimes(1)
+    // The Task guard rides the same transaction as the post and variant.
     expect(h.patches.map((p) => [p.id, p.rev])).toEqual([
+      ['task', 't1'],
       ['post', 'p1'],
       ['variant', 'v1'],
     ])
-    const attachments = h.patches[0].fields?.attachments as {
+    const attachments = h.patches[1].fields?.attachments as {
       _key: string
       alt: string
       image: unknown
@@ -90,7 +97,7 @@ describe('atomic studio attachment handoff', () => {
         },
       },
     ])
-    expect(h.patches[1].appended).toEqual({
+    expect(h.patches[2].appended).toEqual({
       path: 'attachments',
       items: [
         {
@@ -127,9 +134,9 @@ describe('atomic studio attachment handoff', () => {
     h.fetch.mockReset().mockImplementation(async (query, params) => {
       return (await evaluate(parse(query), { dataset, params })).get()
     })
-    expect(await handoffStudioAttachment('variant', 'conference', image)).toBe(
-      'occupied',
-    )
+    expect(
+      await handoffStudioAttachment('variant', 'conference', image, task),
+    ).toBe('occupied')
     expect(h.patches).toEqual([])
   })
   // `submitted` joins the in-flight set (#1128): attaching a render to a post
@@ -148,16 +155,16 @@ describe('atomic studio attachment handoff', () => {
         })
         .mockResolvedValueOnce({ _id: 'post', _rev: 'p1', count: 0 })
       expect(
-        await handoffStudioAttachment('variant', 'conference', image),
+        await handoffStudioAttachment('variant', 'conference', image, task),
       ).toBe('unavailable')
       expect(h.patches).toEqual([])
     },
   )
   it('reports a missing variant', async () => {
     h.fetch.mockReset().mockResolvedValueOnce(null)
-    expect(await handoffStudioAttachment('variant', 'conference', image)).toBe(
-      'unavailable',
-    )
+    expect(
+      await handoffStudioAttachment('variant', 'conference', image, task),
+    ).toBe('unavailable')
   })
   it('reports a missing post', async () => {
     h.fetch
@@ -169,9 +176,9 @@ describe('atomic studio attachment handoff', () => {
         status: 'draft',
       })
       .mockResolvedValueOnce(null)
-    expect(await handoffStudioAttachment('variant', 'conference', image)).toBe(
-      'unavailable',
-    )
+    expect(
+      await handoffStudioAttachment('variant', 'conference', image, task),
+    ).toBe('unavailable')
   })
   it('preserves a concurrent append when the post changes after the empty read', async () => {
     const post = {
@@ -190,7 +197,16 @@ describe('atomic studio attachment handoff', () => {
       status: 'draft',
       attachments: [] as unknown[],
     }
-    const dataset = [post, variant]
+    const dataset = [
+      post,
+      variant,
+      {
+        _id: 'task',
+        _type: 'marketingTask',
+        _rev: 't1',
+        attachments: [] as unknown[],
+      },
+    ]
     h.fetch.mockReset().mockImplementation(async (query, params) => {
       return (await evaluate(parse(query), { dataset, params })).get()
     })
@@ -219,13 +235,14 @@ describe('atomic studio attachment handoff', () => {
       'variant',
       'conference',
       image,
-    ).catch((error: { statusCode: number }) => error.statusCode)
+      task,
+    )
     expect({
       outcome,
       post: post.attachments,
       variant: variant.attachments,
     }).toEqual({
-      outcome: 409,
+      outcome: 'conflict',
       post: [{ _key: 'concurrent-image' }],
       variant: [],
     })
