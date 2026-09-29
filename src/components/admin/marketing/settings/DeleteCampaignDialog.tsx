@@ -75,39 +75,39 @@ export function DeleteConfirmation({
           {error}
         </p>
       )}
-      {!preview ? (
-        // Not "checking" once it has refused — the banner above is the answer.
-        previewError ? null : (
-          <p className="mt-4 text-sm">
-            Checking Campaigns, Tasks and publications…
-          </p>
-        )
-      ) : (
-        <div className="mt-4 space-y-3 text-left text-sm text-gray-900 dark:text-gray-100">
-          <ul className="list-disc space-y-1 pl-5">
-            <li>
-              {preview.campaigns} Campaigns and {preview.tasks} Tasks
-              permanently deleted
-            </li>
-            <li>
-              {preview.publishedTasks} published posts kept, including their
-              URLs and publication history
-            </li>
-            <li>{preview.snapshots} stored measurements preserved</li>
-          </ul>
+      {preview && (
+        <ul className="mt-4 list-disc space-y-1 pl-5 text-left text-sm text-gray-900 dark:text-gray-100">
+          <li>
+            {preview.campaigns} Campaigns and {preview.tasks} Tasks permanently
+            deleted
+          </li>
+          <li>
+            {preview.publishedTasks} published posts kept, including their URLs
+            and publication history
+          </li>
+          <li>{preview.snapshots} stored measurements preserved</li>
+        </ul>
+      )}
+      {/* One live region from the first render, so a screen reader hears the
+          warning replace the "checking" line (as in the Task dialog). */}
+      <div role="status" className="mt-3 text-left text-sm empty:hidden">
+        {preview ? (
           <LiveLinksWarning count={preview.liveLinks} />
-          {preview.requiresTypedConfirmation && (
-            <label className="block">
-              Type &ldquo;{preview.conferenceTitle}&rdquo; to confirm
-              <input
-                value={title}
-                onChange={(event) => setTitle(event.target.value)}
-                className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 dark:border-gray-600 dark:bg-gray-800"
-                autoComplete="off"
-              />
-            </label>
-          )}
-        </div>
+        ) : // Not "checking" once it has refused — the banner above is the answer.
+        previewError ? null : (
+          'Checking Campaigns, Tasks and publications…'
+        )}
+      </div>
+      {preview?.requiresTypedConfirmation && (
+        <label className="mt-3 block text-left text-sm text-gray-900 dark:text-gray-100">
+          Type &ldquo;{preview.conferenceTitle}&rdquo; to confirm
+          <input
+            value={title}
+            onChange={(event) => setTitle(event.target.value)}
+            className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 dark:border-gray-600 dark:bg-gray-800"
+            autoComplete="off"
+          />
+        </label>
       )}
     </ConfirmationModal>
   )

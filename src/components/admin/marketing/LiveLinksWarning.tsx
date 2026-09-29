@@ -3,7 +3,7 @@ import { ExclamationTriangleIcon } from '@heroicons/react/24/outline'
 /**
  * The delete previews' note about short links that may already be live
  * (short-links spec §2.1's known hole, §2.7): a sent outreach message, or a
- * post that failed or waits to be posted by hand. They fall back to the
+ * post that failed or may already have been posted by hand. They fall back to the
  * conference home page. A warning, never a block — renders nothing at zero.
  */
 export function LiveLinksWarning({ count }: { count: number }) {
@@ -21,8 +21,8 @@ export function LiveLinksWarning({ count }: { count: number }) {
         </p>
         <p className="mt-1">
           {one
-            ? 'It belongs to a sent outreach message, or to a post that failed or awaits posting by hand, so someone may already have it. After the delete, it opens the conference home page instead.'
-            : 'They belong to sent outreach messages, or to posts that failed or await posting by hand, so people may already have them. After the delete, they open the conference home page instead.'}
+            ? 'It belongs to a sent outreach message, or to a post that failed or may already have been posted by hand, so someone may already have it. After the delete, it opens the conference home page instead.'
+            : 'They belong to sent outreach messages, or to posts that failed or may already have been posted by hand, so people may already have them. After the delete, they open the conference home page instead.'}
         </p>
       </div>
     </div>
