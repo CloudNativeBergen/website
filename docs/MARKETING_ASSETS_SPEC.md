@@ -115,7 +115,10 @@ then moves the file into Sanity and deletes the blob. Three things differ from t
   created too and may still be moving, unreferenced. The route records the asset id
   (`marketingAssetCleanup`, a plain string, never a reference), and the daily sweep runs the shared
   orphan check only on records older than an hour, far past the route's `maxDuration`: by then any
-  concurrent upload has written its reference or failed.
+  concurrent upload has written its reference or failed. A LATER upload that gets the same asset
+  back takes it off the queue before it goes on (before a video's MP4 streams, before the gallery
+  write), and the sweep deletes in one transaction that claims the record at the revision it read,
+  so a record taken off or re-queued since is never acted on.
 
 Nothing is kept in Blob. **This reverses what the interview was told** — that video would stay in
 file storage by direct upload. A permanent blob would have had no deletion owner: asset delete,

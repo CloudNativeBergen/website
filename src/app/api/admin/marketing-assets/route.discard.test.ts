@@ -11,6 +11,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const h = vi.hoisted(() => ({
   del: vi.fn(),
+  guard: vi.fn(),
   afterTasks: [] as (() => unknown)[],
 }))
 vi.mock('server-only', () => ({}))
@@ -38,9 +39,7 @@ vi.mock('@/lib/marketing-asset/sanity', () => ({
   },
 }))
 vi.mock('@/lib/marketing-asset/guard', () => ({
-  resolveAssetDetailsForCurrentOrg: async () => {
-    throw new Error('the guard is after the details check')
-  },
+  resolveAssetDetailsForCurrentOrg: h.guard,
 }))
 
 import { POST } from './route'
@@ -65,6 +64,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   h.afterTasks = []
   h.del.mockResolvedValue(undefined)
+  h.guard.mockRejectedValue(new Error('the guard is after the details check'))
   vi.stubEnv('BLOB_READ_WRITE_TOKEN', 'vercel_blob_rw_abcstore123_secret')
 })
 
@@ -133,6 +133,11 @@ describe('a poster sent with a track is discarded, as with any kind but a video'
   }
 
   beforeEach(() => {
+    // Past the guard, so the request reaches the move.
+    h.guard.mockImplementation(async (details: object) => ({
+      ...details,
+      scope: 'organization',
+    }))
     // The track's move reaches its fetch and is refused there; nothing is
     // uploaded. Its own blob goes by the move's claim either way.
     vi.stubGlobal(
@@ -143,7 +148,8 @@ describe('a poster sent with a track is discarded, as with any kind but a video'
   })
 
   it('an own-organization poster goes', async () => {
-    await post({ ...TRACK_BODY, posterUrl: POSTER })
+    // The move's fetch refusal, not an earlier one: the branch under test.
+    expect((await post({ ...TRACK_BODY, posterUrl: POSTER })).status).toBe(502)
     expect(deleted()).toEqual([TRACK, POSTER].sort())
   })
 
