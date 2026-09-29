@@ -1,7 +1,7 @@
 import 'server-only'
 import { groq } from 'next-sanity'
 import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
-import { deleteAssetIfOrphaned } from '@/lib/sanity/orphaned-asset'
+import { countAssetReferences } from '@/lib/sanity/orphaned-asset'
 
 /**
  * A Sanity asset a failed gallery upload stored, waiting for the delayed
@@ -59,30 +59,66 @@ export async function recordPendingCleanup(
   }
 }
 
+/**
+ * Take assets a move just returned off the queue (#1243 review): Sanity hands
+ * the SAME asset to a later upload of the same bytes, in any tenant, and that
+ * upload holds no reference to it until its gallery write. Called before the
+ * route goes on (before a video's MP4 streams, before the write). Never
+ * throws: a removal that fails is logged and the upload goes on — the sweep's
+ * delete of a file then referenced is refused by Sanity, and a gallery write
+ * to a file it did delete fails loudly (a strong reference), never silently.
+ */
+export async function unqueuePendingCleanup(
+  assetIds: readonly string[],
+): Promise<void> {
+  if (assetIds.length === 0) return
+  try {
+    const tx = clientWrite.transaction()
+    // A delete of a record that does not exist is a no-op.
+    for (const assetId of assetIds) tx.delete(recordId(assetId))
+    await tx.commit()
+  } catch (error) {
+    console.error(
+      'Marketing asset: a reused file was not taken off the cleanup queue',
+      assetIds,
+      error,
+    )
+  }
+}
+
 export interface PendingCleanupSweep {
   deleted: number
   /** Still referenced: some upload of the same bytes kept it. */
   kept: number
-  /** The check or the delete failed: tried again on the next run. */
+  /** The check or the delete failed, or the record changed: next run. */
   retried: number
 }
 
 /**
  * Run the shared orphan check (#1159) on every recorded asset older than
  * {@link PENDING_CLEANUP_DELAY_MS}: an unreferenced one is deleted, a
- * referenced one kept, and either way its record goes. A failed check or
- * delete keeps the record for the next run.
+ * referenced one kept, and either way its record goes.
+ *
+ * The delete is ONE transaction that first claims the record at the revision
+ * this sweep read (`ifRevisionID`), then deletes the record and the asset. A
+ * record the route took off the queue since (a later upload reusing the
+ * file) or queued again (a newer failure) fails the claim, and the asset is
+ * not touched; Sanity also refuses the delete of an asset referenced since
+ * the count. What stays open: an upload whose move got the asset back AFTER
+ * the count but whose un-queue lands after this commit — a round trip wide —
+ * whose gallery write is then refused (a strong reference to a missing
+ * document), so the organizer sees a failure to retry, not a broken entry.
  */
 export async function sweepPendingCleanups(
   now: number = Date.now(),
 ): Promise<PendingCleanupSweep> {
   const result: PendingCleanupSweep = { deleted: 0, kept: 0, retried: 0 }
   const due = await clientReadUncached.fetch<
-    { _id: string; assetId: string }[]
+    { _id: string; _rev: string; assetId: string }[]
   >(
     // groq-global: platform-internal cleanup queue of Sanity assets, which are
     // shared across tenants; the record carries no tenant.
-    groq`*[_type == $type && recordedAt < $before]{ _id, assetId }`,
+    groq`*[_type == $type && recordedAt < $before]{ _id, _rev, assetId }`,
     {
       type: PENDING_CLEANUP_TYPE,
       before: new Date(now - PENDING_CLEANUP_DELAY_MS).toISOString(),
@@ -90,17 +126,30 @@ export async function sweepPendingCleanups(
     { cache: 'no-store' },
   )
   for (const record of due ?? []) {
-    const outcome = await deleteAssetIfOrphaned(record.assetId)
-    if (outcome.deleted) result.deleted++
-    else if (outcome.remainingReferences > 0) result.kept++
-    else {
+    const references = await countAssetReferences(record.assetId)
+    if (references < 0) {
       result.retried++
       continue
     }
+    const tx = clientWrite
+      .transaction()
+      .patch(record._id, (p) =>
+        p
+          .ifRevisionId(record._rev)
+          .set({ claimedAt: new Date(now).toISOString() }),
+      )
+      .delete(record._id)
+    if (references === 0) tx.delete(record.assetId)
     try {
-      await clientWrite.delete(record._id)
+      await tx.commit()
+      if (references === 0) result.deleted++
+      else result.kept++
     } catch (error) {
-      console.error('Marketing asset: cleanup record not removed', error)
+      console.error(
+        'Marketing asset: cleanup of a failed upload deferred',
+        error,
+      )
+      result.retried++
     }
   }
   return result

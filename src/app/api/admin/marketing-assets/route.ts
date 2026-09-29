@@ -42,7 +42,10 @@ import {
 } from '@/lib/marketing-asset/studio'
 import { resolveAssetDetailsForCurrentOrg } from '@/lib/marketing-asset/guard'
 import type { ResolvedMarketingAssetDetails } from '@/lib/marketing-asset/details'
-import { recordPendingCleanup } from '@/lib/marketing-asset/pending-cleanup'
+import {
+  recordPendingCleanup,
+  unqueuePendingCleanup,
+} from '@/lib/marketing-asset/pending-cleanup'
 import { getCurrentDateTime } from '@/lib/time'
 
 /**
@@ -372,6 +375,11 @@ const createdIds = (...assets: { _id: string; created: boolean }[]) =>
  * (small, and refused like any image) and then streams the MP4; a refusal of
  * either leaves nothing behind: the other blob is discarded, and a poster
  * already stored is recorded for the delayed orphan check.
+ *
+ * Every asset a move returns is taken off that queue BEFORE the route goes
+ * on: Sanity hands a later upload of the same bytes the same asset, which a
+ * failed upload may have queued, and nothing references it until the
+ * gallery write.
  */
 async function moveFor(
   kind: 'image' | 'gif' | 'video' | 'audio',
@@ -381,9 +389,12 @@ async function moveFor(
   /** When the route must answer: the video's move ends in time to write. */
   answerBy: number,
 ): Promise<Moved> {
+  // A poster belongs to a video only: any other kind never moves one.
+  if (kind !== 'video' && posterUrl) discardBlob(posterUrl, orgId)
   if (kind === 'audio') {
     const moved = await moveAudioBlobToSanity(url, orgId)
     if (!moved.ok) return moved
+    await unqueuePendingCleanup([moved.asset._id])
     return {
       ok: true,
       fields: {
@@ -403,6 +414,8 @@ async function moveFor(
       discardBlob(url, orgId)
       return { ok: false, reason: 'poster' }
     }
+    // Before the MP4 streams: that is the longest the poster goes unreferenced.
+    await unqueuePendingCleanup([poster.asset._id])
     // Whatever the poster and the checks before it took comes off the
     // video's time, so the gallery write and the cleanup still fit.
     const video = await moveVideoBlobToSanity(
@@ -417,6 +430,7 @@ async function moveFor(
       if (posterIds.length > 0) after(() => recordPendingCleanup(posterIds))
       return video
     }
+    await unqueuePendingCleanup([video.asset._id])
     return {
       ok: true,
       fields: {
@@ -432,13 +446,12 @@ async function moveFor(
       created: createdIds(video.asset, poster.asset),
     }
   }
-  // A poster belongs to a video only: any other kind never moves one.
-  if (posterUrl) discardBlob(posterUrl, orgId)
   const moved =
     kind === 'gif'
       ? await moveGifBlobToSanity(url, orgId)
       : await moveBlobToSanity(url, orgId)
   if (!moved.ok) return moved
+  await unqueuePendingCleanup([moved.asset._id])
   return {
     ok: true,
     fields: {

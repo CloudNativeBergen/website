@@ -14,6 +14,8 @@ const h = vi.hoisted(() => ({
   create: vi.fn(),
   orphan: vi.fn(),
   record: vi.fn(),
+  unqueue: vi.fn(),
+  order: [] as string[],
   guard: vi.fn(),
   afterTasks: [] as (() => unknown)[],
 }))
@@ -47,6 +49,7 @@ vi.mock('@/lib/marketing-asset/guard', () => ({
 // `route.cleanup.sanity.test.ts`; here, what the route hands it.
 vi.mock('@/lib/marketing-asset/pending-cleanup', () => ({
   recordPendingCleanup: h.record,
+  unqueuePendingCleanup: h.unqueue,
 }))
 // Never called any more: the route deletes nothing on the spot.
 vi.mock('@/lib/sanity/orphaned-asset', () => ({
@@ -137,6 +140,10 @@ beforeEach(() => {
   h.create.mockResolvedValue({ _id: 'asset-1' })
   h.orphan.mockResolvedValue({ deleted: true })
   h.record.mockResolvedValue(undefined)
+  h.order = []
+  h.unqueue.mockImplementation(async (ids: string[]) => {
+    h.order.push(`unqueue:${ids.join(',')}`)
+  })
   h.guard.mockImplementation(
     async ({ edition, ...rest }: { edition: string }) =>
       edition === 'current'
@@ -704,6 +711,32 @@ describe('a GIF or a video through the move route (#1167)', () => {
     ])
     expect(h.orphan).not.toHaveBeenCalled()
     expect(h.orphanFile).not.toHaveBeenCalled()
+  })
+
+  it('takes the poster off the cleanup queue BEFORE the MP4 streams, and the MP4 before the write', async () => {
+    h.move.mockResolvedValue(POSTER)
+    h.moveVideo.mockImplementation(async () => {
+      h.order.push('stream')
+      return {
+        ok: true,
+        asset: {
+          _id: 'file-clip-mp4',
+          url: 'https://cdn/clip.mp4',
+          created: false,
+        },
+      }
+    })
+    h.create.mockImplementation(async () => {
+      h.order.push('write')
+      return { _id: 'asset-1' }
+    })
+    expect((await POST(request(VIDEO))).status).toBe(200)
+    expect(h.order).toEqual([
+      'unqueue:image-poster-1920x1080-jpg',
+      'stream',
+      'unqueue:file-clip-mp4',
+      'write',
+    ])
   })
 
   it('never moves a poster sent with an image: it is discarded', async () => {

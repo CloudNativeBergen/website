@@ -122,3 +122,34 @@ describe('a refusal of the details deletes the uploads it names', () => {
     expect(deleted()).toEqual([POSTER])
   })
 })
+
+describe('a poster sent with a track is discarded, as with any kind but a video', () => {
+  const TRACK = `https://${HOST}/marketing-asset/org-A/1790000000002-theme-X3.mp3`
+  const TRACK_BODY = {
+    kind: 'audio',
+    url: TRACK,
+    title: 'Theme',
+    rightsConfirmed: true,
+  }
+
+  beforeEach(() => {
+    // The track's move reaches its fetch and is refused there; nothing is
+    // uploaded. Its own blob goes by the move's claim either way.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(null, { status: 404 })),
+    )
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+  })
+
+  it('an own-organization poster goes', async () => {
+    await post({ ...TRACK_BODY, posterUrl: POSTER })
+    expect(deleted()).toEqual([TRACK, POSTER].sort())
+  })
+
+  it('a foreign poster is never touched', async () => {
+    const foreign = `https://${HOST}/marketing-asset/org-B/1790000000001-clip-poster-X2.png`
+    await post({ ...TRACK_BODY, posterUrl: foreign })
+    expect(deleted()).toEqual([TRACK])
+  })
+})

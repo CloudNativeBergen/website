@@ -32,12 +32,11 @@ export interface OrphanedAssetDeletion {
 /** The first API version whose `raw` perspective includes release versions. */
 export const COUNT_API_VERSION = '2025-02-19'
 
-export async function deleteAssetIfOrphaned(
-  assetId: string | null,
-): Promise<OrphanedAssetDeletion> {
-  if (!assetId) return { id: null, deleted: false, remainingReferences: 0 }
-
-  let remainingReferences = -1
+/**
+ * How many documents, in any tenant, reference `assetId`: the count
+ * {@link deleteAssetIfOrphaned} decides by. -1 when it could not be read.
+ */
+export async function countAssetReferences(assetId: string): Promise<number> {
   try {
     const result = await clientReadUncached
       .withConfig({ apiVersion: COUNT_API_VERSION })
@@ -50,11 +49,18 @@ export async function deleteAssetIfOrphaned(
         { assetId },
         { cache: 'no-store', perspective: 'raw' },
       )
-    remainingReferences = result?.n ?? -1
+    return result?.n ?? -1
   } catch {
-    return { id: assetId, deleted: false, remainingReferences: -1 }
+    return -1
   }
+}
 
+async function deleteAssetIfOrphaned(
+  assetId: string | null,
+): Promise<OrphanedAssetDeletion> {
+  if (!assetId) return { id: null, deleted: false, remainingReferences: 0 }
+
+  const remainingReferences = await countAssetReferences(assetId)
   if (remainingReferences !== 0) {
     return { id: assetId, deleted: false, remainingReferences }
   }
