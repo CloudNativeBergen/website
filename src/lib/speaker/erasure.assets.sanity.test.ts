@@ -952,3 +952,195 @@ describe('speaker erasure removes their images everywhere (#1162)', () => {
     expect(h.dataset).toEqual(before)
   })
 })
+
+describe('a Task finished with an image from the gallery (#1166)', () => {
+  const LOGO = 'image-logo-1080x1080-png'
+  /** A Task about `subject`, holding `file` from the gallery asset `from`. */
+  const fromGallery = (
+    id: string,
+    subject: string,
+    file: string,
+    from: string,
+  ) => ({
+    _id: id,
+    _type: 'marketingTask',
+    _rev: 'r0',
+    title: `Card ${id}`,
+    subject: weak(subject),
+    asset: image(file),
+    galleryAsset: weak(from),
+    galleryAlt: `Picked from ${from}`,
+  })
+  const logo = {
+    ...galleryAsset('asset-logo', ADA, LOGO),
+    subject: undefined,
+    title: 'Logo',
+  }
+  const logoPost = {
+    _id: 'post-logo',
+    _type: 'socialPost',
+    _rev: 'r0',
+    body: 'Tickets on sale',
+    attachments: [{ _key: 'att-logo', image: image(LOGO), alt: 'Logo' }],
+  }
+
+  it("a Task ABOUT the speaker holding the organization's logo leaves the logo, its entry and its posts alone", async () => {
+    h.dataset.push(
+      { _id: LOGO, _type: 'sanity.imageAsset' },
+      JSON.parse(JSON.stringify(logo)),
+      fromGallery('task-logo', ADA, LOGO, 'asset-logo'),
+      logoPost,
+    )
+    const before = structuredClone([
+      doc('asset-logo'),
+      doc('task-logo'),
+      doc('post-logo'),
+    ])
+    const result = await eraseSpeakerInPlace({ speakerId: ADA, actor: 'test' })
+    expect(result.err).toBeNull()
+    expect(doc(LOGO)).toBeDefined()
+    expect([doc('asset-logo'), doc('task-logo'), doc('post-logo')]).toEqual(
+      before,
+    )
+    expect(result.verification?.clean).toBe(true)
+  })
+
+  it('treats the logo as the Task’s own once its gallery asset is gone', async () => {
+    h.dataset.push(
+      { _id: LOGO, _type: 'sanity.imageAsset' },
+      fromGallery('task-logo', ADA, LOGO, 'asset-logo'),
+    )
+    const result = await eraseSpeakerInPlace({ speakerId: ADA, actor: 'test' })
+    expect(result.err).toBeNull()
+    expect(doc(LOGO)).toBeUndefined()
+    expect(doc('task-logo').asset).toBeUndefined()
+    expect(doc('task-logo').galleryAsset).toBeUndefined()
+    expect(result.verification?.clean).toBe(true)
+  })
+
+  it('treats the logo as the Task’s own once its gallery asset holds another image', async () => {
+    // A render entry re-rendered since, say: the asset lives on, its image
+    // is no longer the one the Task holds.
+    h.dataset.push(
+      { _id: LOGO, _type: 'sanity.imageAsset' },
+      JSON.parse(JSON.stringify({ ...logo, image: image(BOB_CARD) })),
+      fromGallery('task-logo', ADA, LOGO, 'asset-logo'),
+    )
+    const result = await eraseSpeakerInPlace({ speakerId: ADA, actor: 'test' })
+    expect(result.err).toBeNull()
+    expect(doc(LOGO)).toBeUndefined()
+    expect(doc('task-logo')).not.toHaveProperty('asset')
+    expect(doc('asset-logo')).toMatchObject({ image: image(BOB_CARD) })
+  })
+
+  it('keeps the logo while only a Studio draft of its asset holds it', async () => {
+    h.dataset.push(
+      { _id: LOGO, _type: 'sanity.imageAsset' },
+      JSON.parse(JSON.stringify({ ...logo, _id: 'drafts.asset-logo' })),
+      fromGallery('task-logo', ADA, LOGO, 'asset-logo'),
+    )
+    const result = await eraseSpeakerInPlace({ speakerId: ADA, actor: 'test' })
+    expect(result.err).toBeNull()
+    expect(doc(LOGO)).toBeDefined()
+    expect(doc('task-logo').asset).toEqual(image(LOGO))
+  })
+
+  it('keeps a replaced render a gallery asset about nobody holds, even in a draft copy the Task never recorded (#1241)', async () => {
+    // A re-render recorded the logo as replaced: the gallery asset's draft
+    // that holds it was created after the re-render's check.
+    h.dataset.push(
+      { _id: LOGO, _type: 'sanity.imageAsset' },
+      JSON.parse(JSON.stringify({ ...logo, _id: 'drafts.asset-logo' })),
+      {
+        _id: 'task-logo',
+        _type: 'marketingTask',
+        _rev: 'r0',
+        title: 'Card',
+        subject: weak(ADA),
+        replacedRenders: [LOGO],
+      },
+    )
+    const result = await eraseSpeakerInPlace({ speakerId: ADA, actor: 'test' })
+    expect(result.err).toBeNull()
+    expect(doc(LOGO)).toBeDefined()
+    expect(doc('drafts.asset-logo')).toMatchObject({ image: image(LOGO) })
+    expect(result.verification?.clean).toBe(true)
+  })
+
+  it('erases a replaced render only an asset about the speaker holds (#1241)', async () => {
+    h.dataset.push(
+      { _id: LOGO, _type: 'sanity.imageAsset' },
+      galleryAsset('asset-ada-logo', ADA, LOGO),
+      {
+        _id: 'task-logo',
+        _type: 'marketingTask',
+        _rev: 'r0',
+        title: 'Card',
+        subject: weak(ADA),
+        replacedRenders: [LOGO],
+      },
+    )
+    const result = await eraseSpeakerInPlace({ speakerId: ADA, actor: 'test' })
+    expect(result.err).toBeNull()
+    expect(doc(LOGO)).toBeUndefined()
+    expect(doc('task-logo').replacedRenders).toEqual([])
+    expect(result.verification?.clean).toBe(true)
+  })
+
+  it("erases the Task's render its own gallery entry holds, even with the entry's subject left out (#1241)", async () => {
+    // The #1165 entry of a Task about the speaker, saved without a subject:
+    // it is the Task's render, not the gallery's.
+    h.dataset.push(
+      { _id: LOGO, _type: 'sanity.imageAsset' },
+      {
+        ...galleryAsset('asset-own', ADA, LOGO),
+        subject: undefined,
+        task: weak('task-own'),
+      },
+      {
+        _id: 'task-own',
+        _type: 'marketingTask',
+        _rev: 'r0',
+        title: 'Card',
+        subject: weak(ADA),
+        asset: image(LOGO),
+      },
+    )
+    const result = await eraseSpeakerInPlace({ speakerId: ADA, actor: 'test' })
+    expect(result.err).toBeNull()
+    expect(doc(LOGO)).toBeUndefined()
+    expect(doc('task-own')).not.toHaveProperty('asset')
+  })
+
+  it('a Task finished with its own entry loses the alt and framing it was picked with, with its render (#1241)', async () => {
+    h.dataset.push({
+      _id: 'task-own',
+      _type: 'marketingTask',
+      _rev: 'r0',
+      title: 'Card',
+      subject: weak(ADA),
+      asset: image(ADA_CARD),
+      galleryAlt: 'Ada Lovelace speaks at CNB',
+      galleryHotspot: { x: 0.5, y: 0.5, width: 1, height: 1 },
+      galleryCrop: { top: 0, bottom: 0, left: 0, right: 0 },
+    })
+    const result = await eraseSpeakerInPlace({ speakerId: ADA, actor: 'test' })
+    expect(result.err).toBeNull()
+    expect(doc('task-own')).not.toHaveProperty('asset')
+    expect(doc('task-own')).not.toHaveProperty('galleryAlt')
+    expect(doc('task-own')).not.toHaveProperty('galleryHotspot')
+    expect(doc('task-own')).not.toHaveProperty('galleryCrop')
+  })
+
+  it("a Task about someone else holding the speaker's card loses it, and the record of where it came from", async () => {
+    h.dataset.push(fromGallery('task-other', BOB, ADA_CARD, 'asset-ada'))
+    const result = await eraseSpeakerInPlace({ speakerId: ADA, actor: 'test' })
+    expect(result.err).toBeNull()
+    expect(doc(ADA_CARD)).toBeUndefined()
+    expect(doc('task-other')).not.toHaveProperty('asset')
+    expect(doc('task-other')).not.toHaveProperty('galleryAsset')
+    expect(doc('task-other')).not.toHaveProperty('galleryAlt')
+    expect(doc('task-other')).toMatchObject({ subject: weak(BOB) })
+    expect(result.verification?.clean).toBe(true)
+  })
+})

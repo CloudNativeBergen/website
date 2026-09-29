@@ -467,6 +467,7 @@ interface RawTaskEditor extends RawTaskView {
   assetUrl: string | null
   assetId: string | null
   galleryPending: boolean | null
+  fromGallery: { title: string | null } | null
   subject: {
     _id: string
     _type: string
@@ -518,6 +519,7 @@ export async function getTaskEditorData(
       "assetUrl": asset.asset->url,
       "assetId": asset.asset._ref,
       "galleryPending": kind == "studioRender" && defined(asset.asset) && galleryPending == true,
+      "fromGallery": select(kind == "studioRender" && defined(asset.asset) && defined(galleryAsset._ref) => { "title": select(galleryAsset->organization._ref == conference->organization._ref => galleryAsset->title) }),
       "subject": subject->{ _id, _type, "name": coalesce(name, title), "slug": slug.current },
       "tagByHand": select(kind == "publishing" && channel == "linkedin" => subject->{
         "people": select(
@@ -567,6 +569,9 @@ export async function getTaskEditorData(
     assetUrl: row.assetUrl ?? null,
     assetId: row.assetId ?? null,
     galleryPending: row.galleryPending === true,
+    fromGallery: row.fromGallery
+      ? { title: row.fromGallery.title ?? null }
+      : null,
     origin: row.origin ?? null,
   }
   return {
@@ -691,9 +696,21 @@ export async function updateTaskFields(
   campaign?: { id: string; rev?: string },
   /** A render this save REPLACES, recorded in the same patch (#1162). */
   replacedRender?: string,
+  /**
+   * Documents this save depends on, at the revisions the caller read them
+   * (#1166): the gallery asset whose image it puts on the Task, and the
+   * copies of the one whose hold decided `replacedRender`. Compare-and-set in
+   * the SAME transaction, so one edited since refuses the save as a conflict,
+   * and one deleted since fails it (a patch needs the document).
+   */
+  guards: { id: string; rev: string }[] = [],
 ): Promise<boolean> {
   const now = getCurrentDateTime()
-  const tx = clientWrite.transaction().patch(taskId, (p) => {
+  const tx = clientWrite.transaction()
+  // A no-op patch carries the revision guard; a delete takes none.
+  for (const guard of guards)
+    tx.patch(guard.id, (p) => p.ifRevisionId(guard.rev).unset(['_attachGuard']))
+  tx.patch(taskId, (p) => {
     const set = p.ifRevisionId(rev).set({ ...fields, updatedAt: now })
     const unsetDone = unset.length > 0 ? set.unset(unset) : set
     return replacedRender

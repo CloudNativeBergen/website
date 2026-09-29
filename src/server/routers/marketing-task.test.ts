@@ -1606,6 +1606,8 @@ describe('task.attachAsset', () => {
       ['pendingStudioAsset'],
       undefined,
       undefined,
+      // No gallery asset to guard: not picked, and no earlier pick.
+      [],
     )
     const savedFields = Object.assign(
       {},

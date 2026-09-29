@@ -70,6 +70,25 @@ describe('studio queries executed against a fixture dataset', () => {
       handoffDoneFor: null,
       replacedRenders: ['image-replaced'],
       galleryPending: null,
+      galleryAssetId: null,
+      galleryAlt: null,
+      galleryHotspot: null,
+      galleryCrop: null,
+    })
+  })
+
+  it('reads the gallery origin and the alt it was picked with (#1166)', async () => {
+    Object.assign(h.dataset[0], {
+      galleryAsset: { ...ref('asset-ours'), _weak: true },
+      galleryAlt: 'Our logo',
+      galleryHotspot: { x: 0.5, y: 0.4, width: 0.3, height: 0.2 },
+      galleryCrop: { top: 0.1, bottom: 0, left: 0, right: 0.25 },
+    })
+    expect(await getStudioTask('render', 'ours')).toMatchObject({
+      galleryAssetId: 'asset-ours',
+      galleryAlt: 'Our logo',
+      galleryHotspot: { x: 0.5, y: 0.4, width: 0.3, height: 0.2 },
+      galleryCrop: { top: 0.1, bottom: 0, left: 0, right: 0.25 },
     })
   })
 

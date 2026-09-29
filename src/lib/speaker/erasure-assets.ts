@@ -84,6 +84,14 @@ export interface SpeakerAssetPlan {
 /** The Task fields that hold a render. */
 const TASK_RENDER_FIELDS = ['asset', 'pendingStudioAsset'] as const
 
+/** What a Task records of the gallery image it was finished with (#1166). */
+const TASK_GALLERY_FIELDS = [
+  'galleryAsset',
+  'galleryAlt',
+  'galleryHotspot',
+  'galleryCrop',
+] as const
+
 /**
  * Every render a Task names: its render, its pending upload, and the renders
  * it replaced that could not be deleted yet (`replacedRenders`, plain asset
@@ -166,8 +174,21 @@ export function speakerSubjectIds(speakerId: string, talks: Doc[]): string[] {
  * `{ asset: { _ref } }` rather than read from a named field, so a video and
  * its poster (#1167) are linked the day they exist. A Task holds its renders
  * ({@link taskRenderIds}) and nothing else of the speaker's.
+ *
+ * A Task's file that a gallery asset still holds, in any version —
+ * `galleryHeld`, see {@link readGalleryHeldFiles} — is the GALLERY's
+ * (#1166): the asset's own subject decides, as for a saved video (#1181),
+ * so a Task about the speaker holding the organization's logo must
+ * not cost the logo. That holds for the image it was finished with and for
+ * one it recorded as replaced (a gallery copy the re-render could not guard
+ * may hold it). An asset about the speaker is among `subjectDocs` and takes
+ * its file with it. Once no such asset holds the file, the Task's subject
+ * decides again.
  */
-export function linkedFileIds(subjectDocs: Doc[]): string[] {
+export function linkedFileIds(
+  subjectDocs: Doc[],
+  galleryHeld: ReadonlySet<string> = new Set(),
+): string[] {
   const ids = new Set<string>()
   const walk = (value: unknown) => {
     if (Array.isArray(value)) return value.forEach(walk)
@@ -179,7 +200,9 @@ export function linkedFileIds(subjectDocs: Doc[]): string[] {
   for (const doc of subjectDocs) {
     if (doc._type === 'marketingAsset') walk(doc)
     if (doc._type === 'marketingTask')
-      taskRenderIds(doc).forEach((id) => ids.add(id))
+      taskRenderIds(doc)
+        .filter((id) => !galleryHeld.has(id))
+        .forEach((id) => ids.add(id))
   }
   return [...ids]
 }
@@ -364,7 +387,15 @@ export function planSpeakerAssetErasure(
           id: doc._id,
           type: doc._type,
           rev: revOf(doc),
-          unset: [...unset, ...unrecord(doc)],
+          // Where a gallery image came from (#1166), and the alt and framing
+          // it was picked with, go with it.
+          unset: [
+            ...unset,
+            ...(unset.includes('asset')
+              ? TASK_GALLERY_FIELDS.filter((f) => doc[f] !== undefined)
+              : []),
+            ...unrecord(doc),
+          ],
           reason: 'Task render linked to the subject',
         })
         patchedTasks.add(doc._id)
@@ -477,6 +508,41 @@ export function planSpeakerAssetErasure(
   return { fileIds: [...files], patches, deletes, refusals, refused }
 }
 
+/** A document's published id: a Studio draft's or a release copy's. */
+function publishedId(id: string): string {
+  return id.replace(/^drafts\./, '').replace(/^versions\.[^.]+\./, '')
+}
+
+/**
+ * Which of the subject Tasks' files a gallery asset holds, in ANY version
+ * (published, a Studio draft, a Content Release copy) (#1166). Spared on the
+ * Task's side only: an asset ABOUT the subject is among `subjectDocs`, and
+ * {@link linkedFileIds} takes its file through it all the same. A Task's own
+ * render entry (#1165) is the Task's render, not the gallery's, even with
+ * its subject left out: it never spares the render.
+ */
+async function readGalleryHeldFiles(
+  client: { fetch: typeof clientReadUncached.fetch },
+  subjectDocs: Doc[],
+): Promise<Set<string>> {
+  const tasks = subjectDocs.filter((doc) => doc._type === 'marketingTask')
+  const files = [...new Set(tasks.flatMap(taskRenderIds))]
+  if (files.length === 0) return new Set()
+  const held =
+    (await client.fetch<(string | null)[]>(
+      // groq-global: by file, the gallery assets that hold a subject Task's
+      // image, in every tenant — the right is the person's, and a holder
+      // anywhere keeps the file.
+      groq`*[_type == "marketingAsset" && image.asset._ref in $files && !(task._ref in $taskIds)].image.asset._ref`,
+      {
+        files,
+        taskIds: [...new Set(tasks.map((doc) => publishedId(doc._id)))],
+      },
+      { cache: 'no-store', perspective: 'raw' },
+    )) ?? []
+  return new Set(held.filter((id): id is string => !!id))
+}
+
 /**
  * The reads, in order: the talks the speaker gives, what is about the subject,
  * what holds its files, and the posts and variants among those.
@@ -564,7 +630,10 @@ export async function fetchSpeakerAssetInputs(
   }))
   const fileIds = [
     ...new Set([
-      ...linkedFileIds(subjectDocs ?? []),
+      ...linkedFileIds(
+        subjectDocs ?? [],
+        await readGalleryHeldFiles(client, subjectDocs ?? []),
+      ),
       ...projectSubjectFileIds(projectFiles ?? [], subjectIds),
       ...extraFileIds,
     ]),

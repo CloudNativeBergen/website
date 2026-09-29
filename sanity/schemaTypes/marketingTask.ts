@@ -237,6 +237,56 @@ export default defineType({
       readOnly: true,
     }),
     defineField({
+      name: 'galleryAsset',
+      title: 'From the asset gallery',
+      description:
+        "Set when the Task was finished with an image from the marketing asset gallery instead of a render. The image is the gallery's: it is never recorded or deleted as this Task's render, and a speaker's erasure follows the asset's own subject while it exists. Cleared by the next studio render.",
+      type: 'reference',
+      to: [{ type: 'marketingAsset' }],
+      weak: true,
+      hidden: true,
+      readOnly: true,
+    }),
+    defineField({
+      name: 'galleryAlt',
+      title: 'Alt text from the asset gallery',
+      description:
+        "The alt text of the gallery asset this Task was finished with, as it was picked (also when it was the Task's own render entry): what a handoff retry gives the posts. Cleared by the next studio render.",
+      type: 'string',
+      hidden: true,
+      readOnly: true,
+    }),
+    defineField({
+      name: 'galleryHotspot',
+      title: 'Hotspot from the asset gallery',
+      description:
+        'The hotspot of the gallery asset this Task was finished with, as it was picked: handed to the posts with the image. Cleared with the alt text.',
+      type: 'object',
+      fields: [
+        { name: 'x', type: 'number' },
+        { name: 'y', type: 'number' },
+        { name: 'width', type: 'number' },
+        { name: 'height', type: 'number' },
+      ],
+      hidden: true,
+      readOnly: true,
+    }),
+    defineField({
+      name: 'galleryCrop',
+      title: 'Crop from the asset gallery',
+      description:
+        'The crop of the gallery asset this Task was finished with, as it was picked: handed to the posts with the image. Cleared with the alt text.',
+      type: 'object',
+      fields: [
+        { name: 'top', type: 'number' },
+        { name: 'bottom', type: 'number' },
+        { name: 'left', type: 'number' },
+        { name: 'right', type: 'number' },
+      ],
+      hidden: true,
+      readOnly: true,
+    }),
+    defineField({
       name: 'handoffDoneFor',
       title: 'Studio handoff receipts',
       description:

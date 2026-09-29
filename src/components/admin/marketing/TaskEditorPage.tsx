@@ -11,6 +11,7 @@ import {
   ExclamationTriangleIcon,
   PaintBrushIcon,
   PaperAirplaneIcon,
+  SwatchIcon,
   TrashIcon,
 } from '@heroicons/react/24/outline'
 import { AdminButton } from '@/components/admin/AdminButton'
@@ -52,6 +53,7 @@ import {
   STATUS_LABELS,
 } from './timeline-model'
 import { useCeilingWarningToast } from './useCeilingWarningToast'
+import { TaskGalleryPicker } from './TaskGalleryPicker'
 import { LiveLinksWarning } from './LiveLinksWarning'
 
 const inputClass =
@@ -1345,6 +1347,8 @@ function StudioSection({
   const [handoffError, setHandoffError] = useState<string | null>(null)
   /** What the last successful retry completed, in words. */
   const [completed, setCompleted] = useState<string | null>(null)
+  /** "Use an asset from the gallery" is open (#1166). */
+  const [picking, setPicking] = useState(false)
   const recipients = siblings.filter(
     (sibling) =>
       sibling.kind === 'publishing' &&
@@ -1418,7 +1422,7 @@ function StudioSection({
     <Panel
       title="Studio render"
       aside={
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Link
             href={`/admin/marketing/studio?${params}`}
             className="inline-flex items-center rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700"
@@ -1426,6 +1430,18 @@ function StudioSection({
             <PaintBrushIcon className="mr-1 size-4" />
             Open the promo studio
           </Link>
+          <AdminButton
+            variant="secondary"
+            size="md"
+            onClick={() => {
+              setPicking((open) => !open)
+              setCompleted(null)
+            }}
+            aria-expanded={picking}
+          >
+            <SwatchIcon className="mr-1 size-4" />
+            Use an asset from the gallery
+          </AdminButton>
           {task.status === 'open' && (
             <SkipControl
               task={task}
@@ -1436,6 +1452,34 @@ function StudioSection({
         </div>
       }
     >
+      {picking && (
+        <TaskGalleryPicker
+          taskId={task._id}
+          taskRev={task._rev}
+          onAttached={(asset, result) => {
+            setPicking(false)
+            setHandoffError(
+              result.handoffFailures.length > 0
+                ? [
+                    'Some publishing Tasks still need the image.',
+                    ...(result.handoffIssues ?? []),
+                    'Retry the handoff when it is resolved.',
+                  ].join(' ')
+                : null,
+            )
+            // Said only when nothing is left waiting: a failure shows in the
+            // handoff alert once the page reloads the Task.
+            setCompleted(
+              result.handoffFailures.length > 0
+                ? null
+                : recipients.length > 0
+                  ? `${asset.title} from the asset gallery is attached to this Task. Publishing Tasks waiting for an image have it.`
+                  : `${asset.title} from the asset gallery is attached to this Task.`,
+            )
+            onChanged()
+          }}
+        />
+      )}
       {task.handoffPending && (
         <RetryAlert
           error={handoffError}
@@ -1445,8 +1489,10 @@ function StudioSection({
           onRetry={() => void retryHandoff()}
         >
           <p className="font-medium">
-            The render is done and saved. The image has not reached all
-            publishing Tasks listed below yet.
+            {task.fromGallery
+              ? 'The image from the asset gallery is attached to this Task.'
+              : 'The render is done and saved.'}{' '}
+            The image has not reached all publishing Tasks listed below yet.
           </p>
           <p>
             Prerequisites are advisory: these publishing Tasks can publish
@@ -1485,6 +1531,15 @@ function StudioSection({
           </p>
         </RetryAlert>
       )}
+      {/* A gallery pick's failure, before the reload shows it pending. */}
+      {handoffError && !task.handoffPending && !task.galleryPending && (
+        <p
+          role="alert"
+          className="mb-4 text-sm text-amber-800 dark:text-amber-200"
+        >
+          {handoffError}
+        </p>
+      )}
       {completed && !task.handoffPending && !task.galleryPending && (
         <p
           role="status"
@@ -1496,7 +1551,9 @@ function StudioSection({
       {task.assetUrl ? (
         <div>
           <p className="mb-2 text-sm text-green-700 dark:text-green-300">
-            Rendered; the image is attached to this task.
+            {task.fromGallery
+              ? `From the asset gallery${task.fromGallery.title ? `: ${task.fromGallery.title}` : ''}; the image is attached to this task.`
+              : 'Rendered; the image is attached to this task.'}
           </p>
           <img
             src={task.assetUrl}
@@ -1507,9 +1564,10 @@ function StudioSection({
       ) : (
         <p className="text-sm text-gray-600 dark:text-gray-300">
           Render the image in the studio
-          {task.subject ? ` for ${task.subject.name}` : ''}. Choose &quot;Attach
-          to Task&quot; below a render to complete this Task and pass the image
-          to publishing Tasks that need it.
+          {task.subject ? ` for ${task.subject.name}` : ''}, and choose
+          &quot;Attach to Task&quot; below a render; or use an image from the
+          asset gallery. Either completes this Task and passes the image to
+          publishing Tasks that need it.
         </p>
       )}
       <SkippedNote task={task} />

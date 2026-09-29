@@ -1137,6 +1137,26 @@ export interface AddSocialPostAttachmentInput {
 }
 
 /**
+ * An attachment's image: the asset, and the framing a gallery asset gives it
+ * (#1163), shared by a post-editor pick and a render Task's hand-off (#1166).
+ */
+function attachmentImage(
+  input: Pick<AddSocialPostAttachmentInput, 'assetId'> &
+    Partial<Pick<AddSocialPostAttachmentInput, 'hotspot' | 'crop'>>,
+) {
+  return {
+    _type: 'image',
+    asset: { _type: 'reference', _ref: input.assetId },
+    ...(input.hotspot
+      ? { hotspot: { _type: 'sanity.imageHotspot', ...input.hotspot } }
+      : {}),
+    ...(input.crop
+      ? { crop: { _type: 'sanity.imageCrop', ...input.crop } }
+      : {}),
+  }
+}
+
+/**
  * Append an image (an upload, a gallery pick, a share-card raster — all are
  * asset references by the time they get here) to the post's attachments.
  * The patch is query-scoped to the conference so it can never land on a
@@ -1200,16 +1220,7 @@ export async function addSocialPostAttachment(
       {
         _key: key,
         _type: 'socialPostAttachment',
-        image: {
-          _type: 'image',
-          asset: { _type: 'reference', _ref: input.assetId },
-          ...(input.hotspot
-            ? { hotspot: { _type: 'sanity.imageHotspot', ...input.hotspot } }
-            : {}),
-          ...(input.crop
-            ? { crop: { _type: 'sanity.imageCrop', ...input.crop } }
-            : {}),
-        },
+        image: attachmentImage(input),
         alt: input.alt,
       },
     ])
@@ -1252,7 +1263,9 @@ export type { VariantTransition }
 export async function handoffStudioAttachment(
   variantId: string,
   conferenceId: string,
-  input: { assetId: string; alt: string },
+  /** Framing only for a gallery asset's image (#1166); a render has none. */
+  input: Pick<AddSocialPostAttachmentInput, 'assetId' | 'alt'> &
+    Partial<Pick<AddSocialPostAttachmentInput, 'hotspot' | 'crop'>>,
 ): Promise<
   'attached' | 'occupied' | 'unavailable' | { issues: ValidationIssue[] }
 > {
@@ -1309,10 +1322,7 @@ export async function handoffStudioAttachment(
             _key: key,
             _type: 'socialPostAttachment',
             alt: input.alt,
-            image: {
-              _type: 'image',
-              asset: { _type: 'reference', _ref: input.assetId },
-            },
+            image: attachmentImage(input),
           },
         ],
         updatedAt: now,

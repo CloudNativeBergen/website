@@ -36,6 +36,10 @@ const h = vi.hoisted(() => ({
   galleryDown: false,
   /** Runs once, right after a write to the render Task lands. */
   afterTaskSave: null as null | (() => void),
+  /** The real hand-off to posts instead of the recorder (#1166). */
+  realHandoff: false,
+  /** Runs before every read, with its query; what it returns runs after. */
+  onFetch: null as null | ((query: string) => void | (() => void)),
 }))
 
 vi.mock('@/lib/conference/sanity', () => ({
@@ -49,13 +53,20 @@ vi.mock('@/lib/conference/sanity', () => ({
     error: null,
   }),
 }))
-vi.mock('@/lib/social/sanity', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/social/sanity')>()),
-  handoffStudioAttachment: async (variantId: string) => {
-    h.handedOff.push(variantId)
-    return 'attached'
-  },
-}))
+vi.mock('@/lib/social/sanity', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/social/sanity')>()
+  return {
+    ...actual,
+    handoffStudioAttachment: async (
+      ...args: Parameters<typeof actual.handoffStudioAttachment>
+    ) => {
+      h.handedOff.push(args[0])
+      return h.realHandoff
+        ? actual.handoffStudioAttachment(...args)
+        : 'attached'
+    },
+  }
+})
 
 vi.mock('@/lib/sanity/client', async () => {
   const { createClient } = await import('@sanity/client')
@@ -65,8 +76,14 @@ vi.mock('@/lib/sanity/client', async () => {
     apiVersion: '2025-02-19',
     useCdn: false,
   })
-  const run = async (query: string, params: Record<string, unknown> = {}) =>
-    (await evaluate(parse(query), { dataset: h.dataset, params })).get()
+  const run = async (query: string, params: Record<string, unknown> = {}) => {
+    const after = h.onFetch?.(query)
+    const result = await (
+      await evaluate(parse(query), { dataset: h.dataset, params })
+    ).get()
+    if (after) after()
+    return result
+  }
   const client = {
     fetch: run,
     withConfig: () => ({ fetch: run }),
@@ -304,6 +321,8 @@ beforeEach(() => {
   h.handedOff = []
   h.galleryDown = false
   h.afterTaskSave = null
+  h.realHandoff = false
+  h.onFetch = null
 })
 
 describe('attaching a render also saves it to the gallery (#1165)', () => {
@@ -570,5 +589,591 @@ describe("deleting a render Task's gallery entry deletes its file once nothing h
     expect(byId(FIRST)).toBeDefined()
     await removeTask()
     expect(byId(FIRST)).toBeUndefined()
+  })
+})
+
+describe('finishing a render Task with an asset from the gallery (#1166)', () => {
+  const LOGO = 'image-logo-1080x1080-png'
+  const THEIRS = 'image-theirs-1080x1080-png'
+  const GIF = 'image-dance-480x480-gif'
+  const POSTER = 'image-poster-1920x1080-jpg'
+  /** The organization-scoped read of the picked asset. */
+  const ASSET_READ = '"imageAssetId": image.asset._ref'
+  const asset = (id: string, fields: Record<string, unknown>): Doc => ({
+    _id: id,
+    _type: 'marketingAsset',
+    _rev: `rev-${id}`,
+    organization: ref('org-A'),
+    scope: 'organization',
+    kind: 'image',
+    title: id,
+    alt: `Alt of ${id}`,
+    ...fields,
+  })
+  const post = (id: string) => byId(id)!
+  /** The gallery as an organizer sees it: the attach guard bumps a revision. */
+  const entries = () =>
+    gallery().map((doc) => {
+      const copy = { ...doc }
+      delete copy._rev
+      return copy
+    })
+  const finish = (marketingAssetId: string) =>
+    marketing().task.attachAsset({
+      taskId: TASK,
+      taskRev: task()._rev as string,
+      marketingAssetId,
+    })
+
+  beforeEach(() => {
+    h.realHandoff = true
+    h.dataset.push(
+      { _id: LOGO, _type: 'sanity.imageAsset', mimeType: 'image/png' },
+      { _id: THEIRS, _type: 'sanity.imageAsset', mimeType: 'image/png' },
+      { _id: GIF, _type: 'sanity.imageAsset', mimeType: 'image/gif' },
+      { _id: POSTER, _type: 'sanity.imageAsset', mimeType: 'image/jpeg' },
+      { _id: 'file-clip-mp4', _type: 'sanity.fileAsset' },
+      asset('asset-logo', { image: image(LOGO), alt: 'The CNB logo' }),
+      asset('asset-theirs', {
+        organization: ref('org-B'),
+        image: image(THEIRS),
+      }),
+      asset('asset-gif', { image: image(GIF) }),
+      // A future kind (#1167) refused by the allowlist, not a denylist.
+      asset('asset-kind-gif', { kind: 'gif', image: image(LOGO) }),
+      asset('asset-video', {
+        kind: 'video',
+        video: { _type: 'file', asset: ref('file-clip-mp4') },
+        poster: image(POSTER),
+      }),
+      asset('asset-audio', {
+        kind: 'audio',
+        audio: { _type: 'file', asset: ref('file-clip-mp4') },
+      }),
+      {
+        _id: 'post-1',
+        _type: 'socialPost',
+        _rev: 'rev-post-1',
+        conference: ref('conf-A'),
+      },
+      {
+        _id: 'post-2',
+        _type: 'socialPost',
+        _rev: 'rev-post-2',
+        conference: ref('conf-A'),
+        attachments: [
+          {
+            _key: 'own',
+            _type: 'socialPostAttachment',
+            image: image(SECOND),
+            alt: 'Already chosen',
+          },
+        ],
+      },
+      {
+        _id: 'task-pub-2',
+        _type: 'marketingTask',
+        _rev: 'rev-pub-2',
+        conference: ref('conf-A'),
+        campaign: { ...ref('camp'), _weak: true },
+        kind: 'publishing',
+        prerequisites: [{ _key: 'r', ...ref(TASK), _weak: true }],
+        variant: { ...ref('variant-2'), _weak: true },
+      },
+      {
+        _id: 'variant-2',
+        _type: 'socialPostVariant',
+        _rev: 'rev-variant-2',
+        conference: ref('conf-A'),
+        post: ref('post-2'),
+        status: 'draft',
+        body: 'Two',
+      },
+    )
+    Object.assign(byId('variant-1')!, {
+      _rev: 'rev-variant-1',
+      post: ref('post-1'),
+      status: 'draft',
+      body: 'One',
+    })
+  })
+
+  it("completes the Task, and the waiting posts receive the image with the asset's alt", async () => {
+    const galleryBefore = structuredClone(entries())
+    expect(await finish('asset-logo')).toEqual({
+      success: true,
+      handoffFailures: [],
+    })
+    expect(task()).toMatchObject({
+      asset: image(LOGO),
+      galleryAsset: { ...ref('asset-logo'), _weak: true },
+    })
+    expect(task().handoffDoneFor).toEqual(
+      expect.arrayContaining(['variant-1', 'variant-2']),
+    )
+    expect(post('post-1').attachments).toEqual([
+      expect.objectContaining({
+        _type: 'socialPostAttachment',
+        image: image(LOGO),
+        alt: 'The CNB logo',
+      }),
+    ])
+    const key = (post('post-1').attachments as { _key: string }[])[0]._key
+    expect(byId('variant-1')!.attachments).toEqual([
+      expect.objectContaining({ source: key }),
+    ])
+    // Already in the gallery: no second entry, and no gallery mark.
+    expect(entries()).toEqual(galleryBefore)
+    expect(task()).not.toHaveProperty('galleryPending')
+    // The Task's own pending upload is not this image and is left alone.
+    expect(task().pendingStudioAsset).toEqual(image(FIRST))
+  })
+
+  it('leaves a post that already has an attachment as it is', async () => {
+    const before = structuredClone(post('post-2'))
+    await finish('asset-logo')
+    expect(post('post-2')).toEqual(before)
+  })
+
+  it('clears a gallery mark a failed render save left: that render is replaced', async () => {
+    Object.assign(task(), { asset: image(FIRST), galleryPending: true })
+    const galleryBefore = structuredClone(entries())
+    await finish('asset-logo')
+    expect(task()).not.toHaveProperty('galleryPending')
+    expect(entries()).toEqual(galleryBefore)
+  })
+
+  it.each([
+    ["another organization's asset", 'asset-theirs', 'NOT_FOUND'],
+    ['an id that does not exist', 'asset-nope', 'NOT_FOUND'],
+    ['a GIF', 'asset-gif', 'BAD_REQUEST'],
+    ['a video', 'asset-video', 'BAD_REQUEST'],
+    ['an audio track', 'asset-audio', 'BAD_REQUEST'],
+    ['a kind the allowlist does not name', 'asset-kind-gif', 'BAD_REQUEST'],
+  ])('refuses %s and leaves the Task unchanged', async (_what, id, code) => {
+    const before = structuredClone(h.dataset)
+    await expect(finish(id)).rejects.toMatchObject({ code })
+    expect(h.dataset).toEqual(before)
+    expect(h.handedOff).toEqual([])
+  })
+
+  it("refuses another organization's asset exactly as a missing one, before reading it", async () => {
+    const reads: string[] = []
+    h.onFetch = (query) => void reads.push(query)
+    const theirs = await finish('asset-theirs').catch((e: Error) => e)
+    const missing = await finish('asset-nope').catch((e: Error) => e)
+    expect(theirs).toMatchObject({ code: 'NOT_FOUND' })
+    expect(missing).toMatchObject({ code: 'NOT_FOUND' })
+    expect((theirs as Error).message).toBe((missing as Error).message)
+    expect(reads.some((q) => q.includes(ASSET_READ))).toBe(false)
+  })
+
+  it.each([
+    ["a gallery asset's image, sent as a bare image id", LOGO],
+    ['an arbitrary image id', THEIRS],
+  ])("still refuses %s that is not this Task's upload", async (_what, id) => {
+    const before = structuredClone(h.dataset)
+    await expect(attach(id)).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: 'Upload this image for this Task first.',
+    })
+    expect(h.dataset).toEqual(before)
+  })
+
+  it.each([
+    [
+      'edited',
+      () => Object.assign(byId('asset-logo')!, { _rev: 'rev-edited' }),
+      { code: 'CONFLICT' },
+    ],
+    [
+      'deleted',
+      () => {
+        h.dataset = h.dataset.filter((d) => d._id !== 'asset-logo')
+      },
+      // The harness answers a patch of a missing document with a 404, which
+      // is not read as a conflict; what Sanity answers is not pinned here.
+      {},
+    ],
+  ])(
+    'refuses an asset %s between its read and the save; the Task is unchanged',
+    async (_what, race, error) => {
+      h.onFetch = (query) => (query.includes(ASSET_READ) ? race : undefined)
+      const before = structuredClone(task())
+      await expect(finish('asset-logo')).rejects.toMatchObject(error)
+      expect(task()).toEqual(before)
+      expect(post('post-1')).not.toHaveProperty('attachments')
+    },
+  )
+
+  it("a retry hands the asset's alt, not the Task's", async () => {
+    await finish('asset-logo')
+    // A publishing Task that starts waiting afterwards.
+    h.dataset.push(
+      {
+        _id: 'post-3',
+        _type: 'socialPost',
+        _rev: 'r',
+        conference: ref('conf-A'),
+      },
+      {
+        _id: 'task-pub-3',
+        _type: 'marketingTask',
+        _rev: 'rev-pub-3',
+        conference: ref('conf-A'),
+        campaign: { ...ref('camp'), _weak: true },
+        kind: 'publishing',
+        prerequisites: [{ _key: 'r', ...ref(TASK), _weak: true }],
+        variant: { ...ref('variant-3'), _weak: true },
+      },
+      {
+        _id: 'variant-3',
+        _type: 'socialPostVariant',
+        _rev: 'rev-variant-3',
+        conference: ref('conf-A'),
+        post: ref('post-3'),
+        status: 'draft',
+        body: 'Three',
+      },
+    )
+    const galleryBefore = structuredClone(entries())
+    // Retry handoff, as the Task editor sends it: the Task's own image id.
+    expect(await attach(LOGO)).toEqual({ success: true, handoffFailures: [] })
+    expect(post('post-3').attachments).toEqual([
+      expect.objectContaining({ image: image(LOGO), alt: 'The CNB logo' }),
+    ])
+    expect(entries()).toEqual(galleryBefore)
+  })
+
+  it.each([
+    [
+      'deleted',
+      () => {
+        h.dataset = h.dataset.filter((d) => d._id !== 'asset-logo')
+      },
+    ],
+    [
+      'given another image',
+      () => {
+        Object.assign(byId('asset-logo')!, { image: image(THEIRS) })
+      },
+    ],
+  ])(
+    'a studio render records the image as replaced once its asset is %s: a post still holds it',
+    async (_what, change) => {
+      await finish('asset-logo')
+      expect(post('post-1').attachments).toEqual([
+        expect.objectContaining({ image: image(LOGO) }),
+      ])
+      change()
+      upload(SECOND)
+      await attach(SECOND)
+      expect(task().replacedRenders).toContain(LOGO)
+      expect(byId(LOGO)).toBeDefined()
+    },
+  )
+
+  it.each([
+    [
+      'deleted',
+      () => {
+        h.dataset = h.dataset.filter((d) => d._id !== 'asset-logo')
+      },
+    ],
+    [
+      'given another image',
+      () => {
+        Object.assign(byId('asset-logo')!, {
+          image: image(THEIRS),
+          _rev: 'rev-logo-edited',
+        })
+      },
+    ],
+  ])(
+    'a studio render records the image as replaced when its asset is %s between the check and the save (#1241)',
+    async (_what, change) => {
+      await finish('asset-logo')
+      let raced = false
+      // Right after the re-render reads whether the asset holds the image.
+      h.onFetch = (query) =>
+        !raced && query.includes('$draftId')
+          ? () => {
+              raced = true
+              change()
+            }
+          : undefined
+      upload(SECOND)
+      await attach(SECOND)
+      expect(raced).toBe(true)
+      expect(task().asset).toEqual(image(SECOND))
+      // A post still holds it, so it stays, recorded for an erasure.
+      expect(task().replacedRenders).toContain(LOGO)
+      expect(byId(LOGO)).toBeDefined()
+    },
+  )
+
+  it("a retry hands on the asset's CURRENT alt while it still holds the image (#1241)", async () => {
+    await finish('asset-logo')
+    Object.assign(byId('asset-logo')!, { alt: 'The new CNB logo' })
+    Object.assign(post('post-1'), { attachments: [] })
+    Object.assign(byId('variant-1')!, { attachments: [] })
+    Object.assign(task(), { handoffDoneFor: [] })
+    await attach(LOGO)
+    expect(post('post-1').attachments).toEqual([
+      expect.objectContaining({ image: image(LOGO), alt: 'The new CNB logo' }),
+    ])
+  })
+
+  it.each([
+    [
+      'holds another image',
+      () =>
+        Object.assign(byId('asset-logo')!, {
+          image: image(THEIRS),
+          alt: 'Their picture',
+        }),
+      true,
+    ],
+    [
+      "is now another organization's",
+      () =>
+        Object.assign(byId('asset-logo')!, {
+          organization: ref('org-B'),
+          alt: 'Their logo',
+        }),
+      false,
+    ],
+  ])(
+    'a retry falls back to the picked alt when the asset %s (#1241)',
+    async (_what, change, read) => {
+      await finish('asset-logo')
+      change()
+      Object.assign(post('post-1'), { attachments: [] })
+      Object.assign(byId('variant-1')!, { attachments: [] })
+      Object.assign(task(), { handoffDoneFor: [] })
+      const reads: string[] = []
+      h.onFetch = (query) => void reads.push(query)
+      await attach(LOGO)
+      expect(post('post-1').attachments).toEqual([
+        expect.objectContaining({ image: image(LOGO), alt: 'The CNB logo' }),
+      ])
+      // Another organization's asset is refused before it is read.
+      expect(reads.some((q) => q.includes(ASSET_READ))).toBe(read)
+    },
+  )
+
+  /** Empty the waiting posts and the receipts, as before a Retry handoff. */
+  const unhand = () => {
+    Object.assign(post('post-1'), { attachments: [] })
+    Object.assign(byId('variant-1')!, { attachments: [] })
+    Object.assign(task(), { handoffDoneFor: [] })
+  }
+
+  it("a retry after picking the Task's own entry hands on the alt the pick did, and records no gallery asset (#1241)", async () => {
+    upload(FIRST)
+    await attach(FIRST) // the render, and its #1165 entry
+    const own = gallery().find((d) => d._id.startsWith('marketingAsset-task-'))!
+    Object.assign(own, { alt: 'Ada, as filed' })
+    await finish('asset-logo')
+    unhand()
+    await finish(own._id)
+    expect(post('post-1').attachments).toEqual([
+      expect.objectContaining({ image: image(FIRST), alt: 'Ada, as filed' }),
+    ])
+    // The render stays the Task's: a speaker's erasure follows its subject.
+    expect(task()).not.toHaveProperty('galleryAsset')
+    Object.assign(own, { alt: 'Edited after the pick' })
+    unhand()
+    await attach(FIRST) // Retry handoff
+    expect(post('post-1').attachments).toEqual([
+      expect.objectContaining({ image: image(FIRST), alt: 'Ada, as filed' }),
+    ])
+  })
+
+  describe("the asset's crop and hotspot (#1241)", () => {
+    const hotspot = { x: 0.4, y: 0.3, width: 0.5, height: 0.6 }
+    const crop = { top: 0.1, bottom: 0, left: 0.05, right: 0.2 }
+    const framed = (h: typeof hotspot, c: typeof crop) => ({
+      _type: 'image',
+      asset: ref(LOGO),
+      hotspot: { _type: 'sanity.imageHotspot', ...h },
+      crop: { _type: 'sanity.imageCrop', ...c },
+    })
+    beforeEach(() => {
+      Object.assign(byId('asset-logo')!, {
+        image: { ...image(LOGO), hotspot, crop },
+      })
+    })
+
+    it('go to the posts with the image, as a post-editor pick sends them', async () => {
+      await finish('asset-logo')
+      expect(post('post-1').attachments).toEqual([
+        expect.objectContaining({
+          image: framed(hotspot, crop),
+          alt: 'The CNB logo',
+        }),
+      ])
+    })
+
+    it("a retry sends the asset's CURRENT framing while it holds the image", async () => {
+      await finish('asset-logo')
+      const moved = { ...hotspot, x: 0.7 }
+      Object.assign(byId('asset-logo')!, {
+        image: { ...image(LOGO), hotspot: moved, crop },
+      })
+      unhand()
+      await attach(LOGO)
+      expect(post('post-1').attachments).toEqual([
+        expect.objectContaining({ image: framed(moved, crop) }),
+      ])
+    })
+
+    it('a retry sends the framing picked once the asset is deleted', async () => {
+      await finish('asset-logo')
+      h.dataset = h.dataset.filter((d) => d._id !== 'asset-logo')
+      unhand()
+      await attach(LOGO)
+      expect(post('post-1').attachments).toEqual([
+        expect.objectContaining({
+          image: framed(hotspot, crop),
+          alt: 'The CNB logo',
+        }),
+      ])
+    })
+  })
+
+  it('a retry keeps the picked alt after the asset is deleted', async () => {
+    await finish('asset-logo')
+    expect(task().galleryAlt).toBe('The CNB logo')
+    h.dataset = h.dataset.filter((d) => d._id !== 'asset-logo')
+    Object.assign(post('post-1'), { attachments: [] })
+    Object.assign(byId('variant-1')!, { attachments: [] })
+    Object.assign(task(), { handoffDoneFor: [] })
+    await attach(LOGO)
+    expect(post('post-1').attachments).toEqual([
+      expect.objectContaining({ image: image(LOGO), alt: 'The CNB logo' }),
+    ])
+  })
+
+  it("a studio render afterwards replaces it, and never records or deletes the gallery's file", async () => {
+    await finish('asset-logo')
+    upload(SECOND)
+    await attach(SECOND)
+    expect(task().asset).toEqual(image(SECOND))
+    expect(task()).not.toHaveProperty('galleryAsset')
+    expect(task().replacedRenders ?? []).not.toContain(LOGO)
+    expect(byId(LOGO)).toBeDefined()
+    expect(byId('asset-logo')).toMatchObject({ image: image(LOGO) })
+  })
+})
+
+describe('which gallery asset a Task records (#1166 review)', () => {
+  const LOGO = 'image-logo-1080x1080-png'
+  const pick = (marketingAssetId: string) =>
+    marketing().task.attachAsset({
+      taskId: TASK,
+      taskRev: task()._rev as string,
+      marketingAssetId,
+    })
+  const entry = (id: string, fields: Record<string, unknown>): Doc => ({
+    _id: id,
+    _type: 'marketingAsset',
+    _rev: `rev-${id}`,
+    organization: ref('org-A'),
+    scope: 'organization',
+    kind: 'image',
+    title: id,
+    ...fields,
+  })
+
+  beforeEach(() => {
+    h.dataset.push(
+      { _id: LOGO, _type: 'sanity.imageAsset', mimeType: 'image/png' },
+      entry('asset-logo', { image: image(LOGO), alt: 'Old logo entry' }),
+      entry('asset-logo-2', { image: image(LOGO), alt: 'New logo entry' }),
+    )
+  })
+
+  it('a second asset holding the same image becomes the one recorded, and its alt the one retried', async () => {
+    await pick('asset-logo')
+    await pick('asset-logo-2')
+    expect(task().galleryAsset).toEqual({ ...ref('asset-logo-2'), _weak: true })
+    h.handedOff = []
+    // What a retry hands on is the recorded asset's alt.
+    const { getStudioTask } = await import('@/lib/marketing/render-sanity')
+    expect(await getStudioTask(TASK, 'conf-A')).toMatchObject({
+      galleryAlt: 'New logo entry',
+    })
+  })
+
+  it('a hand-off records no receipts once another pick of the same image replaced its selection (#1241)', async () => {
+    // Pick B of another entry holding the same image commits while this
+    // pick is still handing off.
+    h.afterTaskSave = () =>
+      Object.assign(task(), {
+        galleryAsset: { ...ref('asset-logo-2'), _weak: true },
+        galleryAlt: 'New logo entry',
+        _rev: 'rev-pick-b',
+      })
+    const result = await pick('asset-logo')
+    expect(task().galleryAsset).toEqual({ ...ref('asset-logo-2'), _weak: true })
+    expect(task().handoffDoneFor ?? []).toEqual([])
+    expect(result.handoffFailures).toContain(TASK)
+  })
+
+  it("a pick of the render's own image clears a pending gallery save: a retry adds no second entry (#1241)", async () => {
+    h.galleryDown = true
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
+    await attach(FIRST)
+    logged.mockRestore()
+    h.galleryDown = false
+    expect(task()).toMatchObject({ asset: image(FIRST), galleryPending: true })
+    // An entry holding the very image the Task already has.
+    h.dataset.push(
+      entry('asset-first', { image: image(FIRST), alt: 'First, filed' }),
+    )
+    await pick('asset-first')
+    expect(task()).not.toHaveProperty('galleryPending')
+    await attach(FIRST) // Retry handoff
+    expect(
+      gallery().filter(
+        (d) => d._id !== 'asset-logo' && d._id !== 'asset-logo-2',
+      ),
+    ).toEqual([expect.objectContaining({ _id: 'asset-first' })])
+  })
+
+  it("picking the Task's own entry once it holds the pending render clears the mark (#1241)", async () => {
+    await attach(FIRST) // the render, and its #1165 entry
+    // The entry landed but clearing the mark did not.
+    Object.assign(task(), { galleryPending: true })
+    const own = gallery().find(
+      (d) => d._id !== 'asset-logo' && d._id !== 'asset-logo-2',
+    )!
+    Object.assign(own, { alt: 'Ada, filed' })
+    await pick(own._id)
+    expect(task()).not.toHaveProperty('galleryPending')
+    expect(task()).not.toHaveProperty('galleryAsset')
+  })
+
+  it("picking the Task's own render entry is its render: nothing is recorded, and a re-render records it as replaced", async () => {
+    await attach(FIRST) // the render, and its #1165 entry
+    const own = gallery().find(
+      (d) => d._id !== 'asset-logo' && d._id !== 'asset-logo-2',
+    )!
+    await pick('asset-logo') // the logo replaces it
+    await pick(own._id) // back to the Task's own render
+    expect(task().asset).toEqual(image(FIRST))
+    expect(task()).not.toHaveProperty('galleryAsset')
+    // A post holds the render, so its replacement must stay recorded:
+    // it is how a speaker's erasure finds it.
+    h.dataset.push({
+      _id: 'post-first',
+      _type: 'socialPost',
+      conference: ref('conf-A'),
+      attachments: [{ _key: 'a', image: image(FIRST), alt: 'Ada' }],
+    })
+    upload(SECOND)
+    await attach(SECOND)
+    expect(task().replacedRenders).toContain(FIRST)
   })
 })
