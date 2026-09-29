@@ -175,10 +175,10 @@ export function speakerSubjectIds(speakerId: string, talks: Doc[]): string[] {
  * its poster (#1167) are linked the day they exist. A Task holds its renders
  * ({@link taskRenderIds}) and nothing else of the speaker's.
  *
- * A Task's file that a gallery asset NOT about the speaker still holds, in
- * any version — `galleryHeld`, see {@link readGalleryHeldFiles} — is the
- * GALLERY's (#1166): the asset's own subject decides, as for a saved video
- * (#1181), so a Task about the speaker holding the organization's logo must
+ * A Task's file that a gallery asset still holds, in any version —
+ * `galleryHeld`, see {@link readGalleryHeldFiles} — is the GALLERY's
+ * (#1166): the asset's own subject decides, as for a saved video (#1181),
+ * so a Task about the speaker holding the organization's logo must
  * not cost the logo. That holds for the image it was finished with and for
  * one it recorded as replaced (a gallery copy the re-render could not guard
  * may hold it). An asset about the speaker is among `subjectDocs` and takes
@@ -514,15 +514,16 @@ function publishedId(id: string): string {
 }
 
 /**
- * Which of the subject Tasks' files a gallery asset NOT about the subject
- * holds, in ANY version (published, a Studio draft, a Content Release copy)
- * (#1166). A Task's own render entry (#1165) is the Task's render, not the
- * gallery's, even with its subject left out: it never spares the render.
+ * Which of the subject Tasks' files a gallery asset holds, in ANY version
+ * (published, a Studio draft, a Content Release copy) (#1166). Spared on the
+ * Task's side only: an asset ABOUT the subject is among `subjectDocs`, and
+ * {@link linkedFileIds} takes its file through it all the same. A Task's own
+ * render entry (#1165) is the Task's render, not the gallery's, even with
+ * its subject left out: it never spares the render.
  */
 async function readGalleryHeldFiles(
   client: { fetch: typeof clientReadUncached.fetch },
   subjectDocs: Doc[],
-  subjectIds: string[],
 ): Promise<Set<string>> {
   const tasks = subjectDocs.filter((doc) => doc._type === 'marketingTask')
   const files = [...new Set(tasks.flatMap(taskRenderIds))]
@@ -532,10 +533,9 @@ async function readGalleryHeldFiles(
       // groq-global: by file, the gallery assets that hold a subject Task's
       // image, in every tenant — the right is the person's, and a holder
       // anywhere keeps the file.
-      groq`*[_type == "marketingAsset" && image.asset._ref in $files && !(subject._ref in $subjectIds) && !(task._ref in $taskIds)].image.asset._ref`,
+      groq`*[_type == "marketingAsset" && image.asset._ref in $files && !(task._ref in $taskIds)].image.asset._ref`,
       {
         files,
-        subjectIds,
         taskIds: [...new Set(tasks.map((doc) => publishedId(doc._id)))],
       },
       { cache: 'no-store', perspective: 'raw' },
@@ -632,7 +632,7 @@ export async function fetchSpeakerAssetInputs(
     ...new Set([
       ...linkedFileIds(
         subjectDocs ?? [],
-        await readGalleryHeldFiles(client, subjectDocs ?? [], subjectIds),
+        await readGalleryHeldFiles(client, subjectDocs ?? []),
       ),
       ...projectSubjectFileIds(projectFiles ?? [], subjectIds),
       ...extraFileIds,
