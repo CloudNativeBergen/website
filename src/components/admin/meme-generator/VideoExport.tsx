@@ -351,7 +351,6 @@ export function VideoExport({
               !running &&
               onSaveToGallery({
                 blob: file.blob,
-                seconds: file.seconds,
                 poster: file.poster,
               })
             }

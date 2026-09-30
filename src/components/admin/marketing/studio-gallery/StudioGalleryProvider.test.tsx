@@ -368,9 +368,7 @@ describe('Save an exported video to the gallery (#1182)', () => {
     return (
       <button
         type="button"
-        onClick={() =>
-          gallery.saveVideo({ blob: MP4, seconds: 6, poster }, origin)
-        }
+        onClick={() => gallery.saveVideo({ blob: MP4, poster }, origin)}
       >
         Save to gallery
       </button>

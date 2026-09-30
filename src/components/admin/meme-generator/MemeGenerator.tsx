@@ -1942,9 +1942,6 @@ export function MemeGenerator({
     lateFaces,
   ])
 
-  // An export paints the video as it was when Export was pressed, onto a
-  // canvas of its own — frame n at frame n's time, through the same
-  // `drawFrame` as the preview, so what was scrubbed is what is exported.
   // "Save to gallery" on an export, on the studio page only (#1182). A
   // conflicted editor still came from its project, so the id is kept.
   const gallerySave = useGallerySave()
@@ -1957,6 +1954,9 @@ export function MemeGenerator({
           })
       : undefined
 
+  // An export paints the video as it was when Export was pressed, onto a
+  // canvas of its own — frame n at frame n's time, through the same
+  // `drawFrame` as the preview, so what was scrubbed is what is exported.
   const prepareExport = (): ExportJob => {
     const snapshot = scenes
     const canvas = document.createElement('canvas')

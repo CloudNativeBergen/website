@@ -601,10 +601,9 @@ describe('a video exported from a studio project (#1182)', () => {
     )
     expect(response.status).toBe(200)
     expect(h.projectGuard).not.toHaveBeenCalled()
-    expect(h.create.mock.calls[0][0]).toMatchObject({
-      kind: 'video',
-      studio: { tab: 'meme-generator' },
-    })
+    const input = h.create.mock.calls[0][0]
+    expect(input.kind).toBe('video')
+    expect(input.studio).toEqual({ tab: 'meme-generator' })
   })
 
   it('refuses a project on any other tab, as a studio refusal', async () => {

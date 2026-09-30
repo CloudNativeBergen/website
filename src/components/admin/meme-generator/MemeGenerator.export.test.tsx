@@ -465,7 +465,6 @@ describe('Save an export to the gallery (#1182)', () => {
     // 90 frames of 50 kB: the encoder's own file, not a copy of something.
     expect(video.blob).toBeInstanceOf(Blob)
     expect(video.blob.size).toBe(90 * 50_000)
-    expect(video.seconds).toBe(90 / 30)
     expect(origin).toEqual({ title: 'Untitled video', projectId: null })
   })
 

@@ -140,6 +140,11 @@ describe('createMarketingAsset', () => {
       imageAssetId: 'image-a-1x1-png',
       studio: { tab: 'meme-generator', projectId: 'vp-1' },
     })
+    expect(h.created[1]).toMatchObject({
+      kind: 'image',
+      source: 'studio',
+      studio: { tab: 'meme-generator' },
+    })
     expect(h.created[1]).not.toHaveProperty('project')
   })
 

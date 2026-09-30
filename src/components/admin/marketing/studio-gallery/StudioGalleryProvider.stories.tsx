@@ -239,7 +239,6 @@ function ExportedClip({ origin }: { origin: VideoOrigin }) {
         gallery.saveVideo(
           {
             blob,
-            seconds: 6,
             poster: async () => new Blob(['poster'], { type: 'image/jpeg' }),
           },
           origin,

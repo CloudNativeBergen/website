@@ -29,7 +29,6 @@ export interface StudioCard {
 /** A finished MP4 from the meme generator's export (#1182). */
 export interface ExportedVideo {
   blob: Blob
-  seconds: number
   /** Draws the first frame and encodes it as a JPEG, for the gallery. */
   poster: () => Promise<Blob>
 }

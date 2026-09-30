@@ -56,11 +56,11 @@ export function StudioGalleryProvider({
   const captures = useRef(0)
   // The dialog's preview of the last capture, revoked when replaced.
   const previewUrl = useRef<string | null>(null)
-  const videoUrl = useRef<string | null>(null)
+  const videoPreviewUrl = useRef<string | null>(null)
   useEffect(
     () => () => {
       if (previewUrl.current) URL.revokeObjectURL(previewUrl.current)
-      if (videoUrl.current) URL.revokeObjectURL(videoUrl.current)
+      if (videoPreviewUrl.current) URL.revokeObjectURL(videoPreviewUrl.current)
     },
     [],
   )
@@ -70,9 +70,9 @@ export function StudioGalleryProvider({
     return previewUrl.current
   }
   function replaceVideoPreview(blob: Blob | null): string | null {
-    if (videoUrl.current) URL.revokeObjectURL(videoUrl.current)
-    videoUrl.current = blob ? URL.createObjectURL(blob) : null
-    return videoUrl.current
+    if (videoPreviewUrl.current) URL.revokeObjectURL(videoPreviewUrl.current)
+    videoPreviewUrl.current = blob ? URL.createObjectURL(blob) : null
+    return videoPreviewUrl.current
   }
 
   const value = useMemo<GallerySave>(
