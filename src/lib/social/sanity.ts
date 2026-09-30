@@ -1362,7 +1362,20 @@ export async function handoffStudioAttachment(
     if (isRevisionConflict(error)) return 'conflict'
     throw error
   }
-  const taskRev = written.find((doc) => doc._id === task.id)?._rev
+  // The Task's revision after the commit, for the next recipient's guard.
+  // Verified against a real dataset (2025-02-19): the guard-only patch
+  // comes back with a NEW revision and a stale one is refused with 409.
+  // Should the returned documents ever omit the Task, the post is already
+  // written: continue from a fresh read rather than fail a landed hand-off.
+  const taskRev =
+    written.find((doc) => doc._id === task.id)?._rev ??
+    (await scopedFetch<string | null>(
+      clientReadUncached,
+      { conferenceId },
+      '*[_type == "marketingTask" && _id == $taskId][0]._rev',
+      { taskId: task.id },
+      { cache: 'no-store' },
+    ))
   if (!taskRev) throw new Error('The hand-off wrote no Task revision')
   return { attached: { taskRev } }
 }

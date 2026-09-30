@@ -112,6 +112,23 @@ describe('atomic studio attachment handoff', () => {
       expect(call[1].conferenceId).toBe('conference')
     }
   })
+  it('re-reads the Task revision when the commit returns no Task document, rather than fail a post it just wrote', async () => {
+    // Verified on a real dataset: a guard-only patch DOES come back with a
+    // new revision. Should a client or API version ever leave it out, the
+    // post is already written — the chain continues from a fresh read.
+    h.commit.mockResolvedValue([{ _id: 'post', _rev: 'p2' }])
+    h.fetch.mockResolvedValueOnce('t9')
+    expect(
+      await handoffStudioAttachment('variant', 'conference', image, task),
+    ).toEqual({ attached: { taskRev: 't9' } })
+    const reread = h.fetch.mock.calls.at(-1)!
+    expect(reread[0]).toContain('_rev')
+    expect(reread[0]).toContain('conference._ref == $conferenceId')
+    expect(reread[1]).toMatchObject({
+      taskId: 'task',
+      conferenceId: 'conference',
+    })
+  })
   it('evaluates the real attachment-count projection and leaves an occupied post unchanged', async () => {
     // Evaluate the production GROQ, so a hardcoded zero cannot bypass occupancy.
     const dataset = [
