@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   ArrowDownTrayIcon,
   RectangleStackIcon,
@@ -40,7 +40,21 @@ export function DownloadableImage({
   // a capture is 4× the CSS box, as it always was.
   const format = useStudioFormat()
   const size = format ? STUDIO_FORMATS[format] : undefined
-  const capture = (element: HTMLElement) => captureImage(element, size)
+  // The switch stays live while a capture waits for images: a card that
+  // changed shape underneath the render would be stretched to the old
+  // Format and saved under its name. Refuse it instead.
+  const shown = useRef(format)
+  useEffect(() => {
+    shown.current = format
+  }, [format])
+  const capture = async (element: HTMLElement) => {
+    const blob = await captureImage(element, size)
+    if (shown.current !== format)
+      throw new Error(
+        'The Format changed while the image was being made. Try again.',
+      )
+    return blob
+  }
   const card: StudioCard | undefined =
     studio && format ? { ...studio, format } : studio
   // The same name for a download, a Task attachment and a gallery save.

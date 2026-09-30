@@ -1,7 +1,7 @@
 import React from 'react'
 import { StudioSearchParamsSchema } from '@/server/schemas/studio'
 import { StudioCardGrid } from '@/components/admin/marketing/StudioCardGrid'
-import { FormatSwitch } from '@/components/studio-cards'
+import { FormatSwitch } from '@/components/admin/marketing/studio-cards'
 import { StudioTaskProvider } from '@/components/admin/marketing/StudioTaskProvider'
 import { StudioGalleryProvider } from '@/components/admin/marketing/studio-gallery'
 import { getAuthSession } from '@/lib/auth'

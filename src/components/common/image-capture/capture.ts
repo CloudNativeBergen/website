@@ -68,6 +68,8 @@ export interface CaptureSize {
 
 /** What a capture is rendered at when no size is asked for: 4× the CSS box. */
 const DEFAULT_SCALE = 4
+/** html2canvas-pro refuses a scale above this ("Scale factor too large"). */
+const MAX_SCALE = 10
 
 const generateCanvas = async (
   element: HTMLElement,
@@ -152,9 +154,13 @@ export async function captureImage(
     await waitForImages(element)
     await updateImageSources(element)
     await new Promise((resolve) => setTimeout(resolve, 300))
+    // A card narrower than a tenth of its Format is rendered at the largest
+    // scale the library takes; the exact-size canvas below does the rest.
     canvas = await generateCanvas(
       element,
-      size ? size.width / element.offsetWidth : DEFAULT_SCALE,
+      size
+        ? Math.min(size.width / element.offsetWidth, MAX_SCALE)
+        : DEFAULT_SCALE,
     )
     output = size ? fitToSize(canvas, size) : canvas
     return await new Promise<Blob>((resolve, reject) => {

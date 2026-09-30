@@ -81,7 +81,7 @@ export function QrBadge({
       <img
         src={url}
         alt={alt}
-        className="h-full w-full object-cover"
+        className="size-full object-cover"
         style={{ imageRendering: 'crisp-edges' }}
       />
     </div>

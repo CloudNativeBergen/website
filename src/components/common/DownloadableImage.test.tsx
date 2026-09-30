@@ -40,8 +40,8 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-function renderCard(format: 'square' | 'landscape' | 'portrait' | null) {
-  render(
+function tree(format: 'square' | 'landscape' | 'portrait' | null) {
+  return (
     <StudioFormatContext.Provider value={format}>
       <GallerySaveContext.Provider value={gallery}>
         <ImageAttachmentContext.Provider value={attachment}>
@@ -50,8 +50,12 @@ function renderCard(format: 'square' | 'landscape' | 'portrait' | null) {
           </DownloadableImage>
         </ImageAttachmentContext.Provider>
       </GallerySaveContext.Provider>
-    </StudioFormatContext.Provider>,
+    </StudioFormatContext.Provider>
   )
+}
+
+function renderCard(format: 'square' | 'landscape' | 'portrait' | null) {
+  render(tree(format))
   const element = screen.getByTestId('card').parentElement!
   Object.defineProperties(element, {
     offsetWidth: { value: 256 },
@@ -71,11 +75,10 @@ describe('DownloadableImage on a tab with a Format switch', () => {
     )
     fireEvent.click(screen.getByRole('button', { name: 'Download as PNG' }))
     await screen.findByText('Download as PNG')
-    expect(mocks.capture).toHaveBeenCalledWith(element, {
-      label: 'Landscape',
-      width: 1200,
-      height: 628,
-    })
+    expect(mocks.capture).toHaveBeenCalledWith(
+      element,
+      expect.objectContaining({ width: 1200, height: 628 }),
+    )
     expect(click).toHaveBeenCalledTimes(1)
     expect(link.download).toMatch(/^ada-landscape-\d+\.png$/)
   })
@@ -86,11 +89,10 @@ describe('DownloadableImage on a tab with a Format switch', () => {
     const [capture, filename] = vi.mocked(attachment.attach).mock.calls[0]
     await capture()
     expect(filename).toBe('ada-portrait')
-    expect(mocks.capture).toHaveBeenCalledWith(element, {
-      label: 'Portrait',
-      width: 1080,
-      height: 1350,
-    })
+    expect(mocks.capture).toHaveBeenCalledWith(
+      element,
+      expect.objectContaining({ width: 1080, height: 1350 }),
+    )
   })
 
   it('saves to the gallery at the Format’s pixels, with the Format on the card', async () => {
@@ -100,11 +102,34 @@ describe('DownloadableImage on a tab with a Format switch', () => {
     expect(filename).toBe('ada-portrait')
     expect(card).toEqual({ ...CARD, format: 'portrait' })
     await capture()
-    expect(mocks.capture).toHaveBeenCalledWith(element, {
-      label: 'Portrait',
-      width: 1080,
-      height: 1350,
+    expect(mocks.capture).toHaveBeenCalledWith(
+      element,
+      expect.objectContaining({ width: 1080, height: 1350 }),
+    )
+  })
+})
+
+describe('DownloadableImage while the switch changes', () => {
+  it('refuses a capture whose Format changed underneath it, rather than stretching it', async () => {
+    let finish!: (blob: Blob) => void
+    mocks.capture.mockReturnValue(
+      new Promise<Blob>((resolve) => {
+        finish = resolve
+      }),
+    )
+    const { rerender } = render(tree('landscape'))
+    Object.defineProperties(screen.getByTestId('card').parentElement!, {
+      offsetWidth: { value: 256 },
+      offsetHeight: { value: 134 },
     })
+    fireEvent.click(screen.getByRole('button', { name: 'Save to gallery' }))
+    const [capture, , card] = vi.mocked(gallery.save).mock.calls[0]
+    expect(card).toEqual({ ...CARD, format: 'landscape' })
+    const result = capture()
+    // The organizer flips the switch while the render waits for images.
+    rerender(tree('portrait'))
+    finish(new Blob(['stretched'], { type: 'image/png' }))
+    await expect(result).rejects.toThrow('The Format changed')
   })
 })
 

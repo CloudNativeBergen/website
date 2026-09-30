@@ -26,7 +26,7 @@ import {
   type StudioCard,
   type VideoOrigin,
 } from '@/components/common/image-capture'
-import { FormatSwitch } from '@/components/studio-cards'
+import { FormatSwitch } from '@/components/admin/marketing/studio-cards'
 import { StudioTaskProvider } from '../StudioTaskProvider'
 import { StudioGalleryProvider } from './StudioGalleryProvider'
 

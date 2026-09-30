@@ -62,28 +62,55 @@ interface CardArgs {
   format: StudioFormat
   /** The card's CSS width; the capture is the Format's pixels regardless. */
   width: number
+  /** Long names, titles and event names: what the clamps are for. */
+  long?: boolean
 }
 
-function Card({ template, format, width }: CardArgs) {
+const LONG_EVENT = 'Cloud Native Days Norway 2026, Bergen — Grieghallen'
+
+function Card({ template, format, width, long = false }: CardArgs) {
   return (
     <div style={{ width }}>
       {template === 'speaker' ? (
         <SpeakerCard
-          speaker={ADA}
+          speaker={
+            long
+              ? {
+                  ...ADA,
+                  name: 'Augusta Ada King-Noel, Countess of Lovelace',
+                  title:
+                    'Principal Analytical Engineer and Head of Programme Verification, Babbage & Co',
+                  talks: [
+                    {
+                      title:
+                        'Notes on the Analytical Engine: how a nineteenth-century programme anticipated loops, conditionals and the software supply chain',
+                      format: 'workshop_120',
+                    },
+                  ],
+                }
+              : ADA
+          }
           qrCodeUrl={QR}
           variant="speaker-spotlight"
           isFeatured
-          eventName="Cloud Native Days Norway"
+          eventName={long ? LONG_EVENT : 'Cloud Native Days Norway'}
           showCloudNativePattern
           format={format}
         />
       ) : (
         <SponsorCard
-          sponsor={ACME}
-          tier={GOLD}
+          sponsor={
+            long
+              ? {
+                  _id: 'nordic-labs',
+                  name: 'Nordic Cloud Foundry Laboratories',
+                }
+              : ACME
+          }
+          tier={long ? { ...GOLD, title: 'Platinum Community Partner' } : GOLD}
           qrCodeUrl={QR}
           variant="cloud-wizards"
-          eventName="Cloud Native Days Norway"
+          eventName={long ? LONG_EVENT : 'Cloud Native Days Norway'}
           eventDate="June 10–11, 2026 · Bergen"
           showCloudNativePattern
           format={format}
@@ -184,6 +211,20 @@ export const SponsorPortrait: Story = {
   play: provesEveryElementAndTheCapture,
 }
 
+/** Long text in the tightest Formats: every element still inside the frame. */
+export const SpeakerLandscapeLongText: Story = {
+  args: { template: 'speaker', format: 'landscape', long: true },
+  play: provesEveryElementAndTheCapture,
+}
+export const SponsorSquareLongText: Story = {
+  args: { template: 'sponsor', format: 'square', long: true },
+  play: provesEveryElementAndTheCapture,
+}
+export const SponsorLandscapeLongText: Story = {
+  args: { template: 'sponsor', format: 'landscape', long: true },
+  play: provesEveryElementAndTheCapture,
+}
+
 /** The switch above a tab's grid (spec §4): every card on the tab follows it. */
 export const SwitchOnATab: Story = {
   args: { template: 'speaker', format: 'square', width: 256 },
@@ -232,5 +273,39 @@ export const SwitchOnATab: Story = {
     await expect(formats()).toEqual(['landscape', 'landscape', 'landscape'])
     await userEvent.click(canvas.getByRole('radio', { name: /Portrait/ }))
     await expect(formats()).toEqual(['portrait', 'portrait', 'portrait'])
+  },
+}
+
+/** The switch at phone width: no horizontal overflow, the sizes hidden. */
+export const SwitchOnAPhone: Story = {
+  args: { template: 'speaker', format: 'square', width: 256 },
+  render: () => (
+    <FormatSwitch>
+      <div className="max-w-64">
+        <SpeakerCard
+          speaker={ADA}
+          qrCodeUrl={QR}
+          variant="speaker-spotlight"
+          isFeatured
+          eventName="Cloud Native Days Norway"
+          showCloudNativePattern
+        />
+      </div>
+    </FormatSwitch>
+  ),
+  parameters: {
+    layout: 'fullscreen',
+    viewport: { defaultViewport: 'mobile1' },
+  },
+  play: async ({ canvasElement }) => {
+    const group = within(canvasElement).getByRole('radiogroup', {
+      name: 'Format',
+    })
+    await expect(group.getBoundingClientRect().right).toBeLessThanOrEqual(
+      document.documentElement.clientWidth,
+    )
+    await expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(
+      document.documentElement.clientWidth,
+    )
   },
 }

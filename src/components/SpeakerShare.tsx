@@ -1,6 +1,10 @@
 import { SpeakerWithTalks } from '@/lib/speaker/types'
 import type { StudioFormat } from '@/lib/marketing-asset'
-import { SpeakerCard, type SpeakerCardVariant } from './studio-cards'
+import { PLATFORM_NAME } from '@/lib/branding/platform'
+import {
+  SpeakerCard,
+  type SpeakerCardVariant,
+} from '@/components/admin/marketing/studio-cards'
 
 const qrCodeCache = new Map<string, string>()
 
@@ -98,7 +102,7 @@ export async function SpeakerShare({
       qrCodeUrl={qrCodeUrl}
       variant={variant}
       isFeatured={isFeatured}
-      eventName={eventName}
+      eventName={eventName || PLATFORM_NAME}
       showCloudNativePattern={showCloudNativePattern}
       format={format}
       className={className}

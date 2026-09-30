@@ -80,6 +80,11 @@ describe('SpeakerCard', () => {
         .getByText('Ada Lovelace')
         .closest<HTMLElement>('[data-card="speaker"]')!
       expect(card.dataset.format).toBe(format)
+      // The Format's own layout branch rendered, not another's.
+      expect(card.querySelectorAll('[data-layout]')).toHaveLength(1)
+      expect(
+        card.querySelector<HTMLElement>('[data-layout]')!.dataset.layout,
+      ).toBe(format)
       expect(card.style.aspectRatio).toBe(
         {
           square: '1080 / 1080',
@@ -117,6 +122,7 @@ describe('SpeakerCard', () => {
       <SpeakerCard
         speaker={{ ...ADA, image: undefined }}
         qrCodeUrl={QR}
+        eventName="CND"
         format="landscape"
       />,
     )
@@ -147,6 +153,9 @@ describe('SponsorCard', () => {
         .getByText('Cloud Wizards')
         .closest<HTMLElement>('[data-card="sponsor"]')!
       expect(card.dataset.format).toBe(format)
+      expect(
+        card.querySelector<HTMLElement>('[data-layout]')!.dataset.layout,
+      ).toBe(format)
       for (const name of SPONSOR_CARD_ELEMENTS) {
         expect(
           card.querySelectorAll(`[data-card-element="${name}"]`),
@@ -195,10 +204,11 @@ describe('FormatSwitch', () => {
   it('starts square and changes every card on the tab at once', () => {
     render(
       <FormatSwitch>
-        <SpeakerCard speaker={ADA} qrCodeUrl={QR} />
+        <SpeakerCard speaker={ADA} qrCodeUrl={QR} eventName="CND" />
         <SpeakerCard
           speaker={{ ...ADA, name: 'Grace Hopper' }}
           qrCodeUrl={QR}
+          eventName="CND"
         />
         <SponsorCard
           sponsor={ACME}
@@ -237,7 +247,7 @@ describe('FormatSwitch', () => {
   it('moves the choice with the arrow keys and keeps one tab stop', () => {
     render(
       <FormatSwitch>
-        <SpeakerCard speaker={ADA} qrCodeUrl={QR} />
+        <SpeakerCard speaker={ADA} qrCodeUrl={QR} eventName="CND" />
       </FormatSwitch>,
     )
     const group = screen.getByRole('radiogroup', { name: 'Format' })
@@ -253,7 +263,7 @@ describe('FormatSwitch', () => {
   })
 
   it('is square outside any switch, as every card was before Formats', () => {
-    render(<SpeakerCard speaker={ADA} qrCodeUrl={QR} />)
+    render(<SpeakerCard speaker={ADA} qrCodeUrl={QR} eventName="CND" />)
     expect(formats()).toEqual(['square'])
   })
 })

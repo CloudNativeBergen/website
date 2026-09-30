@@ -17,6 +17,9 @@ export const STUDIO_TABS = [
 ] as const
 export type StudioTab = (typeof STUDIO_TABS)[number]
 
+/** The tabs whose cards come in a Format (the promo joins in slice 4). */
+const FORMAT_TABS: ReadonlySet<StudioTab> = new Set(['speakers', 'sponsors'])
+
 /** A Sanity image asset id: `image-<hash>-<w>x<h>-<ext>`. */
 const IMAGE_ASSET_ID = /^image-[A-Za-z0-9]+-\d+x\d+-[a-z0-9]+$/
 
@@ -62,6 +65,10 @@ export const studioOriginSchema = z
       (origin.projectId === undefined && origin.sources === undefined) ||
       origin.tab === 'meme-generator',
     { message: 'Only the meme generator makes videos' },
+  )
+  .refine(
+    (origin) => origin.format === undefined || FORMAT_TABS.has(origin.tab),
+    { message: 'Only a speaker or sponsor card has a Format' },
   )
 export type StudioOriginInput = z.output<typeof studioOriginSchema>
 

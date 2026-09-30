@@ -1,5 +1,8 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
-import { SPONSOR_CARD_VARIANTS, SponsorCard } from '@/components/studio-cards'
+import {
+  SPONSOR_CARD_VARIANTS,
+  SponsorCard,
+} from '@/components/admin/marketing/studio-cards'
 
 /**
  * The sponsor thank-you card as the studio renders it: `SponsorThankYou` (a

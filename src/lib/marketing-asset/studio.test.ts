@@ -69,6 +69,13 @@ describe('studioOriginSchema', () => {
       studioOriginSchema.safeParse({ tab: 'speakers', format: 'story' })
         .success,
     ).toBe(false)
+    // Only a speaker or sponsor card comes in a Format: the meme generator,
+    // the collage and (until slice 4) the promo keep their shapes.
+    for (const tab of ['meme-generator', 'conference', 'photo-gallery']) {
+      expect(
+        studioOriginSchema.safeParse({ tab, format: 'portrait' }).success,
+      ).toBe(false)
+    }
     // No Format claimed reads as square later (§6); nothing is invented here.
     expect(studioOriginSchema.parse({ tab: 'speakers' })).toEqual({
       tab: 'speakers',

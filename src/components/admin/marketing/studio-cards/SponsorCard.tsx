@@ -95,7 +95,8 @@ const QR_ALT = 'QR Code - Learn more about our partnership'
 
 /**
  * The elements a sponsor card keeps in every Format (docs/MARKETING_STUDIO_
- * FORMATS_SPEC.md §3), as `data-card-element` values.
+ * FORMATS_SPEC.md §3), as `data-card-element` values. Nothing is dropped by
+ * a Format; `qr` is present when there is a code to show.
  */
 export const SPONSOR_CARD_ELEMENTS = [
   'header',
@@ -139,7 +140,7 @@ function Logo({
       >
         <InlineSvg
           value={logoSrc}
-          className="flex h-full w-full items-center justify-center [&>svg]:h-full [&>svg]:max-h-full [&>svg]:w-full [&>svg]:max-w-full [&>svg]:object-contain"
+          className="flex size-full items-center justify-center [&>svg]:h-full [&>svg]:max-h-full [&>svg]:w-full [&>svg]:max-w-full [&>svg]:object-contain"
         />
       </div>
     )
@@ -197,7 +198,9 @@ export function SponsorCard({
   )
   const event = (size: { name: string; date: string }) => (
     <div data-card-element="event">
-      <h1 className={`font-space-grotesk leading-tight font-bold ${size.name}`}>
+      <h1
+        className={`font-space-grotesk line-clamp-2 leading-tight font-bold ${size.name}`}
+      >
         {eventName}
       </h1>
       {eventDate && (
@@ -214,7 +217,7 @@ export function SponsorCard({
     >
       <StarIcon className={`shrink-0 text-brand-sunbeam-yellow ${size.icon}`} />
       <span
-        className={`font-space-grotesk leading-tight font-bold ${size.text}`}
+        className={`font-space-grotesk line-clamp-1 leading-tight font-bold ${size.text}`}
       >
         {tier.title} Sponsor
       </span>
@@ -247,7 +250,10 @@ export function SponsorCard({
   if (format === 'landscape') {
     return (
       <CardFrame {...frame}>
-        <div className="flex h-full gap-[3cqw] p-[3.5cqw] text-left">
+        <div
+          data-layout="landscape"
+          className="flex h-full gap-[3cqw] p-[3.5cqw] text-left"
+        >
           <div className="flex w-[38cqw] shrink-0 items-center justify-center">
             <Logo sponsor={sponsor} size={36} />
           </div>
@@ -255,7 +261,7 @@ export function SponsorCard({
             <header className="shrink-0">
               {header({
                 row: 'mb-[0.5cqw]',
-                icon: 'h-[4cqw] w-[4cqw]',
+                icon: 'size-[4cqw]',
                 text: 'text-[3cqw]',
               })}
               {event({
@@ -266,7 +272,7 @@ export function SponsorCard({
             <div className="min-h-0 shrink-0 py-[1cqw]">
               {tierLine({
                 row: 'mb-[1cqw]',
-                icon: 'h-[3cqw] w-[3cqw]',
+                icon: 'size-[3cqw]',
                 text: 'text-[3.5cqw]',
               })}
               {tagline('line-clamp-2 text-[2.4cqw]')}
@@ -274,7 +280,7 @@ export function SponsorCard({
             <footer className="flex shrink-0 items-end justify-end gap-[2cqw]">
               {eventInfo({
                 row: 'pb-[0.5cqw]',
-                icon: 'h-[2.5cqw] w-[2.5cqw]',
+                icon: 'size-[2.5cqw]',
                 text: 'text-[2.5cqw]',
               })}
               <QrBadge url={qrCodeUrl} alt={QR_ALT} size={10} />
@@ -288,11 +294,14 @@ export function SponsorCard({
   if (format === 'portrait') {
     return (
       <CardFrame {...frame}>
-        <div className="flex h-full flex-col items-center p-[5cqw] text-center">
+        <div
+          data-layout="portrait"
+          className="flex h-full flex-col items-center p-[5cqw] text-center"
+        >
           <header className="shrink-0">
             {header({
               row: 'mb-[1cqw] justify-center',
-              icon: 'h-[5cqw] w-[5cqw]',
+              icon: 'size-[5cqw]',
               text: 'text-[3.5cqw]',
             })}
             {event({ name: 'text-[6cqw]', date: 'mt-[1cqw] text-[3cqw]' })}
@@ -303,7 +312,7 @@ export function SponsorCard({
           <div className="flex shrink-0 flex-col items-center">
             {tierLine({
               row: 'mb-[2cqw] justify-center',
-              icon: 'h-[4.5cqw] w-[4.5cqw]',
+              icon: 'size-[4.5cqw]',
               text: 'text-[4.5cqw]',
             })}
             {tagline('line-clamp-3 px-[4cqw] text-[3.2cqw]')}
@@ -312,7 +321,7 @@ export function SponsorCard({
             <QrBadge url={qrCodeUrl} alt={QR_ALT} size={20} />
             {eventInfo({
               row: 'mt-[1.5cqw] justify-center',
-              icon: 'h-[3cqw] w-[3cqw]',
+              icon: 'size-[3cqw]',
               text: 'text-[3cqw]',
             })}
           </footer>
@@ -323,11 +332,14 @@ export function SponsorCard({
 
   return (
     <CardFrame {...frame}>
-      <div className="flex h-full flex-col items-center justify-between p-[5cqw] text-center">
+      <div
+        data-layout="square"
+        className="flex h-full flex-col items-center justify-between p-[5cqw] text-center"
+      >
         <header className="shrink-0">
           {header({
             row: 'mb-[1cqw] justify-center',
-            icon: 'h-[5cqw] w-[5cqw]',
+            icon: 'size-[5cqw]',
             text: 'text-[3.5cqw]',
           })}
           {event({ name: 'text-[6cqw]', date: 'mt-[0.5cqw] text-[3cqw]' })}
@@ -336,14 +348,14 @@ export function SponsorCard({
         <Logo sponsor={sponsor} size={50} />
         {tierLine({
           row: 'justify-center',
-          icon: 'h-[4cqw] w-[4cqw]',
+          icon: 'size-[4cqw]',
           text: 'text-[4.5cqw]',
         })}
         <footer className="flex shrink-0 flex-col items-center">
           <QrBadge url={qrCodeUrl} alt={QR_ALT} size={18} />
           {eventInfo({
             row: 'mt-[1cqw] justify-center',
-            icon: 'h-[2.5cqw] w-[2.5cqw]',
+            icon: 'size-[2.5cqw]',
             text: 'text-[2.5cqw]',
           })}
         </footer>

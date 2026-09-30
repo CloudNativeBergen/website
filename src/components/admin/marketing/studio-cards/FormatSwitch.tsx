@@ -54,7 +54,7 @@ export function FormatSwitch({
           role="radiogroup"
           aria-labelledby={labelId}
           onKeyDown={onKeyDown}
-          className="inline-flex rounded-lg bg-gray-100 p-1 dark:bg-gray-800"
+          className="inline-flex max-w-full flex-wrap rounded-lg bg-gray-100 p-1 dark:bg-gray-800"
         >
           {STUDIO_FORMAT_IDS.map((id) => {
             const { label, width, height } = STUDIO_FORMATS[id]
@@ -87,7 +87,7 @@ export function FormatSwitch({
                   }}
                 />
                 {label}
-                <span className="text-xs text-gray-500 dark:text-gray-400">
+                <span className="hidden text-xs text-gray-500 sm:inline dark:text-gray-400">
                   {width}×{height}
                 </span>
               </button>

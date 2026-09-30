@@ -39,7 +39,8 @@ const QR_ALT = 'QR Code - Scan to view speaker profile'
 /**
  * The elements a speaker card keeps in every Format (docs/MARKETING_STUDIO_
  * FORMATS_SPEC.md §3), as `data-card-element` values: only their place and
- * size change between Formats. Nothing is dropped.
+ * size change between Formats. Nothing is dropped by a Format; `talk` is
+ * present when the speaker has a talk and `qr` when there is a code to show.
  */
 export const SPEAKER_CARD_ELEMENTS = [
   'header',
@@ -68,7 +69,7 @@ export interface SpeakerCardProps {
   qrCodeUrl: string
   variant?: SpeakerCardVariant
   isFeatured?: boolean
-  eventName?: string
+  eventName: string
   showCloudNativePattern?: boolean
   /** Fixed; otherwise the studio tab's Format switch, otherwise square. */
   format?: StudioFormat
@@ -220,7 +221,10 @@ export function SpeakerCard({
   if (format === 'landscape') {
     return (
       <CardFrame {...frame}>
-        <div className="flex h-full gap-[3cqw] p-[3cqw] text-left">
+        <div
+          data-layout="landscape"
+          className="flex h-full gap-[2.5cqw] p-[2.5cqw] text-left"
+        >
           <Photo
             speaker={speaker}
             className="aspect-square h-full rounded-[2cqw]"
@@ -229,23 +233,26 @@ export function SpeakerCard({
             <header className="shrink-0">
               {header({
                 row: 'mb-[0.5cqw]',
-                icon: 'h-[2.8cqw] w-[2.8cqw]',
+                icon: 'size-[2.8cqw]',
                 kicker: 'text-[2.4cqw]',
               })}
-              {event('line-clamp-2 text-[3.4cqw]')}
+              {event('line-clamp-2 text-[3cqw]')}
             </header>
-            <main className="flex min-h-0 flex-1 flex-col justify-center overflow-hidden">
-              {speakerName('text-[4cqw]')}
-              {jobTitle('mt-[0.4cqw] line-clamp-1 text-[2.4cqw]')}
+            {/* Top-anchored: the name and title keep their clamped lines and
+                only the talk box gives way, clipped at its own bottom, so long
+                words never climb into the header or push the QR out. */}
+            <main className="mt-[1.2cqw] flex min-h-0 flex-1 flex-col">
+              {speakerName('line-clamp-2 shrink-0 text-[3.4cqw]')}
+              {jobTitle('mt-[0.4cqw] line-clamp-1 shrink-0 text-[2.2cqw]')}
               {talk && (
-                <div className="mt-[1.2cqw] [&>[data-card-element=talk]>div]:justify-start">
+                <div className="mt-[1cqw] min-h-0 overflow-hidden [&>[data-card-element=talk]>div]:justify-start">
                   <Talk
                     talk={talk}
                     size={{
                       box: 'p-[1.2cqw]',
-                      icon: 'h-[2.2cqw] w-[2.2cqw]',
+                      icon: 'size-[2.2cqw]',
                       label: 'text-[2.2cqw]',
-                      title: 'line-clamp-2 text-[2.8cqw]',
+                      title: 'line-clamp-2 text-[2.5cqw]',
                     }}
                   />
                 </div>
@@ -254,10 +261,10 @@ export function SpeakerCard({
             <footer className="mt-[1cqw] flex shrink-0 items-end justify-between gap-[2cqw]">
               {scanLine({
                 row: 'pb-[0.4cqw]',
-                icon: 'h-[2cqw] w-[2cqw]',
+                icon: 'size-[2cqw]',
                 text: 'text-[2cqw]',
               })}
-              <QrBadge url={qrCodeUrl} alt={QR_ALT} size={9} />
+              <QrBadge url={qrCodeUrl} alt={QR_ALT} size={8.5} />
             </footer>
           </div>
         </div>
@@ -268,18 +275,21 @@ export function SpeakerCard({
   if (format === 'portrait') {
     return (
       <CardFrame {...frame}>
-        <div className="flex h-full flex-col items-center p-[4cqw] text-center">
+        <div
+          data-layout="portrait"
+          className="flex h-full flex-col items-center p-[4cqw] text-center"
+        >
           <header className="mb-[3cqw] shrink-0">
             {header({
               row: 'mb-[1cqw] justify-center',
-              icon: 'h-[6cqw] w-[6cqw]',
+              icon: 'size-[6cqw]',
               kicker: 'text-[4.5cqw]',
             })}
             {event('line-clamp-2 px-[1cqw] text-[6cqw]')}
           </header>
           <Photo
             speaker={speaker}
-            className="mb-[3cqw] h-[30cqw] w-[30cqw] rounded-[2.5cqw]"
+            className="mb-[3cqw] size-[30cqw] rounded-[2.5cqw]"
           />
           <main className="flex w-full flex-1 flex-col justify-center px-[1cqw]">
             {speakerName('text-[6.5cqw]')}
@@ -290,7 +300,7 @@ export function SpeakerCard({
                   talk={talk}
                   size={{
                     box: 'p-[2.5cqw]',
-                    icon: 'h-[4cqw] w-[4cqw]',
+                    icon: 'size-[4cqw]',
                     label: 'text-[3.5cqw]',
                     title: 'line-clamp-3 text-[5cqw]',
                   }}
@@ -302,7 +312,7 @@ export function SpeakerCard({
             <QrBadge url={qrCodeUrl} alt={QR_ALT} size={18} />
             {scanLine({
               row: 'mt-[1.5cqw] justify-center',
-              icon: 'h-[4cqw] w-[4cqw]',
+              icon: 'size-[4cqw]',
               text: 'text-[3.5cqw]',
             })}
           </footer>
@@ -313,20 +323,20 @@ export function SpeakerCard({
 
   return (
     <CardFrame {...frame}>
-      <div className="flex h-full flex-col p-[3cqw] text-center">
+      <div
+        data-layout="square"
+        className="flex h-full flex-col p-[3cqw] text-center"
+      >
         <header className="mb-[3cqw] shrink-0">
           {header({
             row: 'mb-[1cqw] justify-center',
-            icon: 'h-[6cqw] w-[6cqw]',
+            icon: 'size-[6cqw]',
             kicker: 'text-[4.5cqw]',
           })}
           {event('line-clamp-2 px-[1cqw] text-[6cqw]')}
         </header>
         <section className="mb-[2cqw] flex shrink-0 items-center justify-center gap-[7cqw]">
-          <Photo
-            speaker={speaker}
-            className="h-[25cqw] w-[25cqw] rounded-[2cqw]"
-          />
+          <Photo speaker={speaker} className="size-[25cqw] rounded-[2cqw]" />
           <QrBadge url={qrCodeUrl} alt={QR_ALT} size={25} />
         </section>
         <main className="flex flex-1 flex-col justify-center px-[1cqw]">
@@ -338,7 +348,7 @@ export function SpeakerCard({
                 talk={talk}
                 size={{
                   box: 'p-[2cqw]',
-                  icon: 'h-[4cqw] w-[4cqw]',
+                  icon: 'size-[4cqw]',
                   label: 'text-[3.5cqw]',
                   title: 'line-clamp-2 text-[4cqw]',
                 }}
@@ -349,7 +359,7 @@ export function SpeakerCard({
         <footer className="mt-[1cqw] shrink-0">
           {scanLine({
             row: 'justify-center',
-            icon: 'h-[4cqw] w-[4cqw]',
+            icon: 'size-[4cqw]',
             text: 'text-[3.5cqw]',
           })}
         </footer>

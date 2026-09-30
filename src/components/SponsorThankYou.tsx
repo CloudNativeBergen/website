@@ -5,7 +5,7 @@ import {
   type SponsorCardSponsor,
   type SponsorCardTier,
   type SponsorCardVariant,
-} from './studio-cards'
+} from '@/components/admin/marketing/studio-cards'
 
 interface SponsorThankYouProps {
   sponsor: SponsorCardSponsor

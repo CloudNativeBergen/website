@@ -540,6 +540,10 @@ describe('a studio save through the move route (#1164)', () => {
   it.each([
     ['an unknown tab', { tab: 'video' }],
     ['an unknown Format', { tab: 'speakers', format: 'story' }],
+    [
+      'a Format on a tab that has none',
+      { tab: 'conference', format: 'square' },
+    ],
     ['no tab', {}],
     ['not an object', 'speakers'],
   ])('refuses %s, and discards the upload', async (_, studio) => {

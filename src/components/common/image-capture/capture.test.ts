@@ -242,6 +242,21 @@ describe('capture at a Format’s exact pixels (docs/MARKETING_STUDIO_FORMATS_SP
     expect(h.render.mock.calls[0][1]).toMatchObject({ scale: 1080 / 256 })
   })
 
+  it('never asks html2canvas for more than 10×, which it refuses; the exact-size canvas upscales the rest', async () => {
+    const { element } = card()
+    Object.defineProperties(element, {
+      offsetWidth: { value: 100 },
+      offsetHeight: { value: 52 },
+    })
+    h.render.mockResolvedValue({ ...canvas(null), width: 1000, height: 520 })
+    const { sizeAtBlob } = target(new Blob(['tiny'], { type: 'image/png' }))
+    const result = captureImage(element, { width: 1200, height: 628 })
+    await vi.runAllTimersAsync()
+    await result
+    expect(h.render.mock.calls[0][1]).toMatchObject({ scale: 10 })
+    expect(sizeAtBlob).toEqual([1200, 628])
+  })
+
   it('still captures at 4× of the CSS size when no Format is asked for', async () => {
     const { element } = card()
     const output = canvas(new Blob(['x'], { type: 'image/png' }))
