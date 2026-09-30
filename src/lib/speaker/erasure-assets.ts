@@ -215,27 +215,30 @@ export interface ProjectFileSubject {
   subjectId: string | null
   /** Its gallery asset still exists: then the gallery's subject decides. */
   live: boolean | null
+  /** That asset's subject NOW, where it still exists. */
+  liveSubjectId?: string | null
 }
 
 /**
- * The files a saved video holds whose stored subject (copied from the gallery
- * asset, #1181) is linked to the speaker — but only where that gallery asset
- * is GONE. While it exists its own, possibly corrected, subject decides
- * (through {@link linkedFileIds}), never the project's older copy.
+ * The files a saved video (#1181) or an exported one (#1182) holds under a
+ * subject copied from the gallery asset, where that subject is linked to
+ * the speaker. While the asset exists its own, possibly corrected, subject
+ * decides — applied to THIS file, which may be an older image the entry has
+ * since replaced and so is not the entry's to link any more. Once the asset
+ * is gone, the copy is all that is left, and it decides.
  */
 export function projectSubjectFileIds(
   files: ProjectFileSubject[],
   subjectIds: string[],
 ): string[] {
   const subjects = new Set(subjectIds)
+  const linked = (f: ProjectFileSubject) =>
+    f.live
+      ? !!f.liveSubjectId && subjects.has(f.liveSubjectId)
+      : !!f.subjectId && subjects.has(f.subjectId)
   return [
     ...new Set(
-      files
-        .filter(
-          (f) =>
-            !f.live && f.fileId && f.subjectId && subjects.has(f.subjectId),
-        )
-        .map((f) => f.fileId as string),
+      files.filter((f) => f.fileId && linked(f)).map((f) => f.fileId as string),
     ),
   ]
 }
@@ -624,24 +627,32 @@ export async function fetchSpeakerAssetInputs(
     ...new Set(held.flatMap((f) => (f.assetId ? [f.assetId] : []))),
   ]
   // Live in ANY version — published, a Studio draft or a Content Release
-  // copy: while one exists, the gallery's own subject decides.
-  const liveAssets = new Set(
-    assetIds.length > 0
-      ? (
-          (await client.fetch<string[]>(
-            // groq-global: which of those gallery assets still exist, by id,
-            // in any version — an asset's own subject decides while it does.
-            groq`*[_type == "marketingAsset" && (_id in $assetIds || _id in $draftIds || (_id in path("versions.**") && string::split(_id, ".")[2] in $assetIds))]._id`,
-            { assetIds, draftIds: assetIds.map((id) => `drafts.${id}`) },
-            opts,
-          )) ?? []
-        ).map((id) => id.split('.').pop() as string)
-      : [],
-  )
+  // copy: while one exists, the gallery's own subject NOW decides, for the
+  // held file too. A version's subject stands in where it differs; any
+  // version naming the person links the file.
+  const liveAssets = new Map<string, string | null>()
+  if (assetIds.length > 0) {
+    const rows =
+      (await client.fetch<{ _id: string; subjectId: string | null }[]>(
+        // groq-global: which of those gallery assets still exist, by id,
+        // in any version, and who each says it shows — an asset's own
+        // subject decides while it does.
+        groq`*[_type == "marketingAsset" && (_id in $assetIds || _id in $draftIds || (_id in path("versions.**") && string::split(_id, ".")[2] in $assetIds))]{ _id, "subjectId": subject._ref }`,
+        { assetIds, draftIds: assetIds.map((id) => `drafts.${id}`) },
+        opts,
+      )) ?? []
+    for (const row of rows) {
+      const id = row._id.split('.').pop() as string
+      const known = liveAssets.get(id)
+      if (known === undefined || (!known && row.subjectId))
+        liveAssets.set(id, row.subjectId)
+    }
+  }
   const projectFiles: ProjectFileSubject[] = held.map((f) => ({
     fileId: f.fileId,
     subjectId: f.subjectId,
     live: !!f.assetId && liveAssets.has(f.assetId),
+    liveSubjectId: f.assetId ? (liveAssets.get(f.assetId) ?? null) : null,
   }))
   const fileIds = [
     ...new Set([

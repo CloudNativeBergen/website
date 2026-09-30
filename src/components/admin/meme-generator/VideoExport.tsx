@@ -72,18 +72,25 @@ const POSTER_FAILED = 'The first frame could not be encoded as an image.'
 
 /**
  * The poster: frame 0 repainted onto the export's canvas (which the export
- * left on its last frame) and encoded at the canvas's full 1080 px.
+ * left on its last frame) and encoded at the canvas's full 1080 px — taken
+ * THE MOMENT the export ends, with the fonts and images it was made with,
+ * never later, when a font that arrived since would draw the frame afresh
+ * and the poster would not match the video's first frame.
  */
 function posterOf(job: ExportJob): () => Promise<Blob> {
-  return () =>
-    new Promise((resolve, reject) => {
-      job.paint(0)
-      job.canvas.toBlob(
-        (blob) => (blob ? resolve(blob) : reject(new Error(POSTER_FAILED))),
-        'image/jpeg',
-        0.92,
-      )
-    })
+  const poster = new Promise<Blob>((resolve, reject) => {
+    if (typeof job.canvas.toBlob !== 'function')
+      return reject(new Error(POSTER_FAILED))
+    job.paint(0)
+    job.canvas.toBlob(
+      (blob) => (blob ? resolve(blob) : reject(new Error(POSTER_FAILED))),
+      'image/jpeg',
+      0.92,
+    )
+  })
+  // Failure is reported where the poster is asked for; not before.
+  poster.catch(() => {})
+  return () => poster
 }
 
 const megabytes = (bytes: number) => `${(bytes / 1_000_000).toFixed(1)} MB`

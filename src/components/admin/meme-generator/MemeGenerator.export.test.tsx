@@ -158,9 +158,11 @@ describe('Export MP4', () => {
     expect(added).toEqual(Array.from({ length: 180 }, (_, n) => n))
     // Each frame drawn at its scene's own time: frame 100 is 0.333 s into
     // scene 2.
+    // …then frame 0 once more, for the poster (#1182), the moment it ends.
     const times = drawDesign.mock.calls.map(([, , , time]) => time)
-    expect(times).toHaveLength(180)
+    expect(times).toHaveLength(181)
     expect(times[100]).toBeCloseTo(100 / 30 - 3, 10)
+    expect(times[180]).toBe(0)
     expect(status()).toHaveTextContent('Your video is ready.')
   })
 
@@ -801,23 +803,27 @@ describe('Save an export to the gallery (#1182)', () => {
     render(ui)
     fireEvent.click(screen.getByRole('button', { name: 'Video' }))
     await exportOnce()
-    fireEvent.click(saveButton()!)
-    const [video] = vi.mocked(gallery.saveVideo).mock.calls[0]
-    // The export ended on its last frame.
-    expect(drawDesign.mock.lastCall![3]).toBeCloseTo(89 / 30, 10)
-    drawDesign.mockClear()
-
-    const poster = await video.poster()
-    expect(poster.type).toBe('image/jpeg')
+    // Taken the moment the export ended: after its last frame, frame 0 is
+    // painted again onto the export's own canvas and encoded, before any
+    // font that arrives later could draw it differently.
     expect(toBlob).toHaveBeenCalledTimes(1)
     expect(toBlob.mock.calls[0].slice(1)).toEqual(['image/jpeg', 0.92])
     const canvas = toBlob.mock.contexts[0] as HTMLCanvasElement
     expect(canvas.width).toBe(1080)
-    // Frame 0, painted onto the canvas the poster is taken from.
-    expect(drawDesign).toHaveBeenCalledTimes(1)
-    const [ctx, , , time] = drawDesign.mock.calls[0]
-    expect(ctx).toBe(contexts.get(canvas))
-    expect(time).toBe(0)
+    const last = drawDesign.mock.lastCall!
+    expect(last[0]).toBe(contexts.get(canvas))
+    expect(last[3]).toBe(0)
+    const beforeLast = drawDesign.mock.calls.at(-2)!
+    expect(beforeLast[3]).toBeCloseTo(89 / 30, 10)
+    drawDesign.mockClear()
+
+    fireEvent.click(saveButton()!)
+    const [video] = vi.mocked(gallery.saveVideo).mock.calls[0]
+    const poster = await video.poster()
+    expect(poster.type).toBe('image/jpeg')
+    // Nothing is painted again when it is asked for.
+    expect(drawDesign).not.toHaveBeenCalled()
+    expect(toBlob).toHaveBeenCalledTimes(1)
   })
 
   it('says so when the poster cannot be encoded', async () => {

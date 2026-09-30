@@ -1120,6 +1120,46 @@ describe('speaker erasure removes their images everywhere (#1162)', () => {
         expect(result.verification?.clean).toBe(true)
       })
 
+      it('finds the older image an entry has since replaced, while the entry still says the speaker', async () => {
+        // asset-ada's image was swapped in Studio for a new photo of Ada.
+        // The exported video still shows the old one; the entry no longer
+        // holds it, but still says who it shows.
+        const NEW_ADA = 'image-adanew-1200x630-png'
+        h.dataset.push({ _id: NEW_ADA, _type: 'sanity.imageAsset' })
+        for (const id of [
+          'asset-ada',
+          'drafts.asset-ada',
+          'versions.rlaunch.asset-ada',
+        ]) {
+          const i = h.dataset.findIndex((d) => d._id === id)
+          h.dataset[i] = { ...h.dataset[i], image: image(NEW_ADA) }
+        }
+        // Nothing else holds the old card: the post and Task are re-pointed.
+        h.dataset = h.dataset.filter(
+          (d) =>
+            !['post-1', 'versions.rlaunch.post-1', 'var-1'].includes(d._id),
+        )
+        h.dataset.push(
+          lineageVideo('asset-old-frame', 'vp-gone', [
+            {
+              fileId: ADA_CARD,
+              galleryAsset: weak('asset-ada'),
+              subject: weak(ADA),
+            },
+          ]),
+        )
+        const result = await eraseSpeakerInPlace({
+          speakerId: ADA,
+          actor: 'test',
+        })
+        expect(result.err).toBeNull()
+        expect(doc('asset-old-frame')).toBeUndefined()
+        expect(doc(LINEAGE_MP4)).toBeUndefined()
+        expect(doc(ADA_CARD)).toBeUndefined()
+        expect(doc(NEW_ADA)).toBeUndefined()
+        expect(result.verification?.clean).toBe(true)
+      })
+
       it('ignores a copied subject while the gallery entry lives and says otherwise', async () => {
         // Saved while asset-bob was (wrongly) about Ada; corrected since.
         h.dataset.push(
