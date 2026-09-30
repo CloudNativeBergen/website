@@ -122,6 +122,18 @@ describe('gallery reads are tenant-scoped by construction (#616)', () => {
     expect(lastParams()).toMatchObject({ orgId: 'org-A', speakerId: 'sp-1' })
   })
 
+  it('a conference scope that ALSO names the org carries BOTH predicates (#1191)', async () => {
+    await getGalleryImages({ conferenceId: 'conf-2025', orgId: 'org-A' })
+
+    const query = lastQuery()
+    expect(query).toContain(CONFERENCE_SCOPE)
+    expect(query).toContain(ORG_SCOPE)
+    expect(lastParams()).toMatchObject({
+      conferenceId: 'conf-2025',
+      orgId: 'org-A',
+    })
+  })
+
   it('EVERY emitted gallery query carries one of the two tenant predicates', async () => {
     fetchMock.mockResolvedValue([])
     await getGalleryImages({ conferenceId: 'conf-1' })
