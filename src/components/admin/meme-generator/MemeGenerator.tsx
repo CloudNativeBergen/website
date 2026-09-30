@@ -1955,16 +1955,31 @@ export function MemeGenerator({
       ? (video: ExportedVideo, origin: VideoOrigin) =>
           gallerySave.saveVideo(video, origin)
       : undefined
-  // The export panel captures this at export time (#1182).
+  // The export panel captures this at export time (#1182). The sources are
+  // the backgrounds as this editor knows them — the gallery asset each was
+  // picked from, and the file once a save recorded it — never a local
+  // upload that was not kept, which nothing can name.
   const exportOrigin: VideoOrigin = {
     title: projectTitle.trim() || UNTITLED,
     projectId: project?.id ?? null,
+    sources: scenes.flatMap((scene) => {
+      const image = scene.design.background.image
+      if (!image || (!image.fileId && !image.galleryAssetId)) return []
+      return [
+        {
+          ...(image.fileId ? { fileId: image.fileId } : {}),
+          ...(image.galleryAssetId
+            ? { galleryAssetId: image.galleryAssetId }
+            : {}),
+        },
+      ]
+    }),
   }
-  // The scenes as drawn: the same reference across a save's rewrite of
-  // where a background's file is kept, so an export made just before the
-  // save is still current and is filed under the project it made.
-  const drawnScenes = useRef(scenes)
-  if (!sameDrawn(drawnScenes.current, scenes)) drawnScenes.current = scenes
+  // A finished export is current while the scenes DRAW the same video: a
+  // save's rewrite of where a file is kept, and an undo back to the same
+  // video under new objects, never make it stale.
+  const sameExportPart = (a: unknown, b: unknown, index: number) =>
+    index === 0 ? sameDrawn(a as Scene[], b as Scene[]) : Object.is(a, b)
 
   // An export paints the video as it was when Export was pressed, onto a
   // canvas of its own — frame n at frame n's time, through the same
@@ -2199,8 +2214,9 @@ export function MemeGenerator({
             // the music: the samples themselves (a new file is new samples)
             // and its settings by value, so an undo back to them makes the
             // export current again — never the id a save files it under.
+            samePart={sameExportPart}
             revision={[
-              drawnScenes.current,
+              scenes,
               lateFaces,
               start,
               volume,

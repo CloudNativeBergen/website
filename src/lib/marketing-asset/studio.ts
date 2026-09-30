@@ -21,15 +21,29 @@ export type StudioTab = (typeof STUDIO_TABS)[number]
  * from, which only the meme generator has. The id is a client claim the
  * server proves this organization's before anything moves.
  */
+/**
+ * One background an exported video showed, as the editor knew it at export
+ * time: the gallery asset it was picked from, and the file once a save has
+ * recorded it. Client claims, resolved and proven on the server; a local
+ * upload that was never kept has neither and is not named.
+ */
+export const exportSourceSchema = z.object({
+  fileId: publishedDocumentId.optional(),
+  galleryAssetId: publishedDocumentId.optional(),
+})
+export type ExportSourceInput = z.output<typeof exportSourceSchema>
+
 export const studioOriginSchema = z
   .object({
     tab: z.enum(STUDIO_TABS),
     projectId: publishedDocumentId.optional(),
+    sources: z.array(exportSourceSchema).max(100).optional(),
   })
   .refine(
     (origin) =>
-      origin.projectId === undefined || origin.tab === 'meme-generator',
-    { message: 'Only the meme generator makes videos from a project' },
+      (origin.projectId === undefined && origin.sources === undefined) ||
+      origin.tab === 'meme-generator',
+    { message: 'Only the meme generator makes videos' },
   )
 export type StudioOriginInput = z.output<typeof studioOriginSchema>
 

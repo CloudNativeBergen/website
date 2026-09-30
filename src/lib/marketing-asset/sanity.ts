@@ -526,10 +526,10 @@ export type NewMarketingAsset = {
        */
       studio?: StudioOriginInput
       /**
-       * The scene backgrounds its project held when it was saved (#1182):
-       * plain asset ids, never references, so they keep no file alive. A
-       * speaker erasure finds the video by them once the project has moved
-       * on; nothing else reads them.
+       * The backgrounds it showed (#1182), as the route resolved them: plain
+       * asset ids, never references, so they keep no file alive. A speaker
+       * erasure finds the video by them whatever its project holds later;
+       * nothing else reads them. With or without a project.
        */
       sourceFileIds?: string[]
     }
@@ -609,7 +609,7 @@ export async function createMarketingAsset(
   // editor state to reopen (spec §7).
   const projectId = input.kind === 'video' ? studio?.projectId : undefined
   const sourceFileIds =
-    input.kind === 'video' && projectId && input.sourceFileIds?.length
+    input.kind === 'video' && studio && input.sourceFileIds?.length
       ? input.sourceFileIds
       : undefined
   const created = await clientWrite.create(

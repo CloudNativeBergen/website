@@ -1057,6 +1057,21 @@ describe('speaker erasure removes their images everywhere (#1162)', () => {
         expect(result.verification?.clean).toBe(true)
       })
 
+      it('deletes a video that was never saved as a project, by its lineage', async () => {
+        h.dataset.push({
+          ...lineageVideo('asset-unsaved', 'vp-gone', [ADA_CARD]),
+          project: undefined,
+        })
+        const result = await eraseSpeakerInPlace({
+          speakerId: ADA,
+          actor: 'test',
+        })
+        expect(result.err).toBeNull()
+        expect(doc('asset-unsaved')).toBeUndefined()
+        expect(doc(LINEAGE_MP4)).toBeUndefined()
+        expect(result.verification?.clean).toBe(true)
+      })
+
       it('keeps a video whose lineage names none of the speaker’s files', async () => {
         h.dataset.push(lineageVideo('asset-bob-lineage', 'vp-gone', [BOB_CARD]))
         const result = await eraseSpeakerInPlace({

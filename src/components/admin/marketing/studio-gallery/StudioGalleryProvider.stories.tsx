@@ -273,7 +273,11 @@ async function openVideoDialog(canvasElement: HTMLElement) {
 
 /** From a saved project: its title prefilled, alt text asked for. */
 export const SaveVideoToGallery: Story = {
-  render: videoRender({ title: 'Launch teaser', projectId: 'vp-launch' }),
+  render: videoRender({
+    title: 'Launch teaser',
+    projectId: 'vp-launch',
+    sources: [],
+  }),
   play: async ({ canvasElement }) => {
     const form = within(await openVideoDialog(canvasElement))
     await expect(form.getByLabelText('Title')).toHaveValue('Launch teaser')
@@ -296,7 +300,11 @@ export const SaveVideoToGalleryMobile: Story = {
 
 /** An unsaved video: the gallery will not be able to reopen it. */
 export const SaveVideoToGalleryUnsaved: Story = {
-  render: videoRender({ title: 'Untitled video', projectId: null }),
+  render: videoRender({
+    title: 'Untitled video',
+    projectId: null,
+    sources: [],
+  }),
   play: async ({ canvasElement }) => {
     const form = within(await openVideoDialog(canvasElement))
     await expect(

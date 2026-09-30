@@ -164,6 +164,7 @@ function SaveVideoForm({
           studio: {
             tab: 'meme-generator',
             ...(origin.projectId ? { projectId: origin.projectId } : {}),
+            sources: origin.sources,
           },
         },
         setProgress,

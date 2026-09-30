@@ -55,9 +55,15 @@ interface ExportedFile {
   origin: VideoOrigin | null
 }
 
-/** Two revisions are the same video when every part is the same object. */
-const sameRevision = (a: readonly unknown[], b: readonly unknown[]) =>
-  a.length === b.length && a.every((part, i) => Object.is(part, b[i]))
+/** How two parts of a revision compare; the same object unless told otherwise. */
+export type SamePart = (a: unknown, b: unknown, index: number) => boolean
+
+/** Two revisions are the same video when every part is the same. */
+const sameRevision = (
+  a: readonly unknown[],
+  b: readonly unknown[],
+  same: SamePart,
+) => a.length === b.length && a.every((part, i) => same(part, b[i], i))
 
 const LOAD_FAILED_MESSAGE =
   'The video encoder could not be loaded. Check your connection, then press Export MP4 to try again.'
@@ -198,6 +204,7 @@ export function VideoExport({
   music = 'none',
   onSaveToGallery,
   origin,
+  samePart = Object.is,
 }: {
   encoder: EncoderBackend
   /** A snapshot of the video as it is when Export is pressed. */
@@ -222,6 +229,12 @@ export function VideoExport({
    * to save to (#1182).
    */
   onSaveToGallery?: (video: ExportedVideo, origin: VideoOrigin) => void
+  /**
+   * How a part of `revision` compares with the exported one, where identity
+   * is too strict: the editor's scenes are rewritten by a save without a
+   * pixel changing, and undo restores the same video under new objects.
+   */
+  samePart?: SamePart
   /**
    * The project open in the editor now, for a current file. A file made
    * before the editor moved to another project keeps the origin it was
@@ -261,7 +274,8 @@ export function VideoExport({
   // Leaving mid-export stops it and frees the encoder.
   useEffect(() => () => controller.current?.abort(), [])
 
-  const stale = file !== null && !sameRevision(file.revision, revision)
+  const stale =
+    file !== null && !sameRevision(file.revision, revision, samePart)
   const running = status.kind === 'running'
   const blocked = supported === false || waiting || running
 
@@ -370,7 +384,7 @@ export function VideoExport({
               // project saved or renamed since the export is its origin. A
               // stale one is filed under what it was exported from.
               const under = (stale ? file.origin : origin) ??
-                origin ?? { title: '', projectId: null }
+                origin ?? { title: '', projectId: null, sources: [] }
               onSaveToGallery({ blob: file.blob, poster: file.poster }, under)
             }}
             // Not `disabled`, like Export: it says why while an export runs.

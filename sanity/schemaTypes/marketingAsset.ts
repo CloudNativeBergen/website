@@ -274,7 +274,7 @@ export default defineType({
       name: 'sourceFileIds',
       title: 'Files the video was made from',
       description:
-        'The scene backgrounds the project held when this video was saved: plain asset ids, so a speaker erasure finds the video by them even after the project has changed.',
+        'The backgrounds the video showed when it was exported, and those its project held when it was saved: plain asset ids, so a speaker erasure finds the video by them whatever the project holds later.',
       type: 'array',
       of: [{ type: 'string' }],
       readOnly: true,

@@ -1,7 +1,7 @@
 'use client'
 
 import { createContext, useContext } from 'react'
-import type { StudioTab } from '@/lib/marketing-asset'
+import type { ExportSourceInput, StudioTab } from '@/lib/marketing-asset'
 
 export interface ImageAttachment {
   busy: boolean
@@ -39,6 +39,12 @@ export interface VideoOrigin {
   title: string
   /** The saved project it was exported from; null for an unsaved video. */
   projectId: string | null
+  /**
+   * The backgrounds it showed, as the editor knew them at export time:
+   * what a speaker erasure finds the video by, whatever its project holds
+   * later. Empty for a video of colours, or of uploads never kept.
+   */
+  sources: ExportSourceInput[]
 }
 
 /** "Save to gallery", present on every studio card, Task or not. */

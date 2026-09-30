@@ -45,7 +45,7 @@ vi.mock('@/lib/marketing-asset/sanity', () => ({
 // first and obeys its answer.
 vi.mock('@/lib/marketing-asset/guard', () => ({
   resolveAssetDetailsForCurrentOrg: h.guard,
-  requireProjectInCurrentOrg: h.projectGuard,
+  resolveVideoLineage: h.projectGuard,
 }))
 // The delayed cleanup itself is proven over a dataset in
 // `route.cleanup.sanity.test.ts`; here, what the route hands it.
@@ -573,7 +573,10 @@ describe('a video exported from a studio project (#1182)', () => {
     })
     const response = await POST(request(EXPORTED))
     expect(response.status).toBe(200)
-    expect(h.projectGuard).toHaveBeenCalledWith('vp-1')
+    expect(h.projectGuard).toHaveBeenCalledWith('org-A', {
+      tab: 'meme-generator',
+      projectId: 'vp-1',
+    })
     expect(h.projectGuard.mock.invocationCallOrder[0]).toBeLessThan(
       h.move.mock.invocationCallOrder[0],
     )

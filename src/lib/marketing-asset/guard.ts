@@ -1,7 +1,10 @@
 import 'server-only'
 import { TRPCError } from '@trpc/server'
 import { readMarketingAssetMark } from './sanity'
-import { readVideoProjectFiles } from '@/lib/video-project/sanity'
+import {
+  readGalleryFiles,
+  readVideoProjectFiles,
+} from '@/lib/video-project/sanity'
 import {
   requireCurrentOrgId,
   requireDocumentInCurrentOrg,
@@ -12,6 +15,7 @@ import type {
   ParsedMarketingAssetDetails,
   ResolvedMarketingAssetDetails,
 } from './details'
+import type { ExportSourceInput } from './studio'
 
 /**
  * Resolve and validate an asset's details on write (spec §3), BEFORE anything
@@ -61,22 +65,48 @@ export async function resolveAssetDetailsForCurrentOrg(
 }
 
 /**
- * Prove a client-supplied studio video project id names one of THIS
- * organization's projects (#1182), before the video it says it exported
- * moves anywhere, and read the files the project holds NOW: the scene
- * backgrounds an export of it can show. They are written on the gallery
- * entry as its lineage, so a speaker erasure finds the video by them even
- * once the project has been edited or deleted. Only after the guard: the
- * tenancy refusal never says whether a foreign id exists, and nothing of a
- * foreign project is ever read.
+ * What a speaker erasure will find an exported video by (#1182): the files
+ * it showed. Two client claims, each proven before it is believed:
+ *
+ *  - the project it was exported from, proven THIS organization's by the
+ *    tenancy guard before anything of it is read — the refusal never says
+ *    whether a foreign id exists — and then the backgrounds it holds now;
+ *  - the backgrounds the editor knew at export time: a gallery asset id,
+ *    resolved to its file by an organization-scoped read where a foreign or
+ *    deleted one is simply absent, never refused; or a bare file id, taken
+ *    only if the project holds that file.
+ *
+ * The union, so an edit or a save that follows the export hides nothing.
+ * Never a gallery asset that is not an image: a track is heard, not shown.
  */
-export async function requireProjectInCurrentOrg(
-  id: string,
+export async function resolveVideoLineage(
+  orgId: string,
+  origin: { projectId?: string; sources?: ExportSourceInput[] },
 ): Promise<{ sourceFileIds: string[] }> {
-  const orgId = await requireDocumentInCurrentOrg(id, 'videoProject')
-  const stored = await readVideoProjectFiles(orgId, id)
-  // The backgrounds only: a track is heard, never shown.
-  return {
-    sourceFileIds: [...new Set((stored?.images ?? []).map((f) => f.fileId))],
+  const held: string[] = []
+  if (origin.projectId) {
+    await requireDocumentInCurrentOrg(origin.projectId, 'videoProject')
+    const stored = await readVideoProjectFiles(orgId, origin.projectId)
+    for (const image of stored?.images ?? []) held.push(image.fileId)
   }
+  const sources = origin.sources ?? []
+  const galleryIds = [
+    ...new Set(
+      sources.flatMap((s) => (s.galleryAssetId ? [s.galleryAssetId] : [])),
+    ),
+  ]
+  const gallery = new Map(
+    (await readGalleryFiles(orgId, galleryIds))
+      .filter((row) => row.kind === 'image' && row.fileId)
+      .map((row) => [row._id, row.fileId as string]),
+  )
+  const holds = new Set(held)
+  const shown = sources.flatMap((s) => {
+    const fromGallery = s.galleryAssetId
+      ? gallery.get(s.galleryAssetId)
+      : undefined
+    if (fromGallery) return [fromGallery]
+    return s.fileId && holds.has(s.fileId) ? [s.fileId] : []
+  })
+  return { sourceFileIds: [...new Set([...held, ...shown])] }
 }

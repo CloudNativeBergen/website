@@ -41,8 +41,8 @@ import {
   type StudioOriginInput,
 } from '@/lib/marketing-asset/studio'
 import {
-  requireProjectInCurrentOrg,
   resolveAssetDetailsForCurrentOrg,
+  resolveVideoLineage,
 } from '@/lib/marketing-asset/guard'
 import type { ResolvedMarketingAssetDetails } from '@/lib/marketing-asset/details'
 import {
@@ -258,12 +258,18 @@ export async function POST(request: Request) {
     )
   }
 
-  // An exported video's project (#1182) is a client id: proven ours before
-  // the move, like the subject. The refusal never says whether it exists.
+  // An exported video's project and sources (#1182) are client ids: the
+  // project is proven ours before the move, like the subject, and the
+  // refusal never says whether it exists; a source that is not ours is
+  // simply not recorded.
   let sourceFileIds: string[] = []
-  if (studio?.projectId) {
+  if (
+    kindName === 'video' &&
+    studio?.tab === 'meme-generator' &&
+    (studio.projectId || studio.sources?.length)
+  ) {
     try {
-      ;({ sourceFileIds } = await requireProjectInCurrentOrg(studio.projectId))
+      ;({ sourceFileIds } = await resolveVideoLineage(orgId, studio))
     } catch {
       discard()
       return NextResponse.json(

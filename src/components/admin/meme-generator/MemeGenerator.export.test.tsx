@@ -466,7 +466,11 @@ describe('Save an export to the gallery (#1182)', () => {
     // 90 frames of 50 kB: the encoder's own file, not a copy of something.
     expect(video.blob).toBeInstanceOf(Blob)
     expect(video.blob.size).toBe(90 * 50_000)
-    expect(origin).toEqual({ title: 'Untitled video', projectId: null })
+    expect(origin).toEqual({
+      title: 'Untitled video',
+      projectId: null,
+      sources: [],
+    })
   })
 
   it('records the project the video was opened from, and its title', async () => {
@@ -483,7 +487,11 @@ describe('Save an export to the gallery (#1182)', () => {
     await exportOnce()
     fireEvent.click(saveButton()!)
     const [, origin] = vi.mocked(gallery.saveVideo).mock.calls[0]
-    expect(origin).toEqual({ title: 'Launch teaser', projectId: 'vp-1' })
+    expect(origin).toEqual({
+      title: 'Launch teaser',
+      projectId: 'vp-1',
+      sources: [],
+    })
   })
 
   it('files a stale export under the project it was exported from, not the one open now', async () => {
@@ -503,7 +511,11 @@ describe('Save an export to the gallery (#1182)', () => {
     await screen.findByRole('link', { name: /Download earlier export/ })
     fireEvent.click(saveButton()!)
     const [, origin] = vi.mocked(gallery.saveVideo).mock.calls[0]
-    expect(origin).toEqual({ title: 'Launch teaser', projectId: 'vp-1' })
+    expect(origin).toEqual({
+      title: 'Launch teaser',
+      projectId: 'vp-1',
+      sources: [],
+    })
   })
 
   it('files a current export under the title the project has now', async () => {
@@ -523,7 +535,11 @@ describe('Save an export to the gallery (#1182)', () => {
     expect(screen.getByRole('link', { name: /Download video/ })).toBeTruthy()
     fireEvent.click(saveButton()!)
     const [, origin] = vi.mocked(gallery.saveVideo).mock.calls[0]
-    expect(origin).toEqual({ title: 'Keynote teaser', projectId: 'vp-1' })
+    expect(origin).toEqual({
+      title: 'Keynote teaser',
+      projectId: 'vp-1',
+      sources: [],
+    })
   })
 
   it('stays current across the first save, and is filed under the project that save made', async () => {
@@ -587,8 +603,92 @@ describe('Save an export to the gallery (#1182)', () => {
     expect(screen.getByRole('link', { name: /Download video/ })).toBeTruthy()
     fireEvent.click(saveButton()!)
     const [, origin] = vi.mocked(save.saveVideo).mock.calls[0]
-    expect(origin).toEqual({ title: 'Untitled video', projectId: 'vp-new' })
+    // The background as the editor knows it NOW: the gallery asset it was
+    // picked from, and the file the save just recorded.
+    expect(origin).toEqual({
+      title: 'Untitled video',
+      projectId: 'vp-new',
+      sources: [{ fileId: 'image-hall', galleryAssetId: 'asset-hall' }],
+    })
+    return { save }
   }
+
+  it('is current again after an undo back to the same video, under new objects', async () => {
+    Object.defineProperty(HTMLImageElement.prototype, 'decode', {
+      configurable: true,
+      value: () => Promise.resolve(),
+    })
+    try {
+      const { save } = await saveThenGallery()
+      // An edit after the save, then undone: the history was rewritten by
+      // the save, so the undone scenes are new objects drawing the same video.
+      const length = screen.getByLabelText('Scene 1 length (s)')
+      fireEvent.change(length, { target: { value: '4' } })
+      fireEvent.blur(length)
+      await screen.findByRole('link', { name: /Download earlier export/ })
+      fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
+      await screen.findByRole('link', { name: /Download video/ })
+      fireEvent.click(saveButton()!)
+      const [, origin] = vi.mocked(save.saveVideo).mock.calls[1]
+      expect(origin).toMatchObject({ projectId: 'vp-new' })
+    } finally {
+      Reflect.deleteProperty(HTMLImageElement.prototype, 'decode')
+    }
+  })
+
+  it('names, at export time, a background picked after the project was saved', async () => {
+    Object.defineProperty(HTMLImageElement.prototype, 'decode', {
+      configurable: true,
+      value: () => Promise.resolve(),
+    })
+    try {
+      const { encoder } = fakeEncoder()
+      const gallery: BackgroundGallery = {
+        images: async () => [
+          {
+            _id: 'asset-hall',
+            title: 'Keynote hall',
+            alt: 'The hall',
+            thumbnailUrl: null,
+          },
+        ],
+        resolve: async (id) => ({
+          _id: id,
+          title: 'Keynote hall',
+          url: '/hall',
+        }),
+        keep: async () => ({ _id: 'asset-kept' }),
+      }
+      const { gallery: save, ui } = withGallery(
+        <MemeGenerator
+          encoder={encoder}
+          gallery={gallery}
+          projects={fakeProjects()}
+          initialProjectId="vp-1"
+        />,
+      )
+      render(ui)
+      await screen.findByDisplayValue('Launch teaser')
+      // A photo picked into the saved project, without saving again.
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Choose from gallery' }),
+      )
+      fireEvent.click(
+        await screen.findByRole('button', { name: /Keynote hall/ }),
+      )
+      await screen.findByText('Current: Keynote hall')
+      await exportOnce()
+      fireEvent.click(saveButton()!)
+      const [, origin] = vi.mocked(save.saveVideo).mock.calls[0]
+      expect(origin).toEqual({
+        title: 'Launch teaser',
+        projectId: 'vp-1',
+        sources: [{ galleryAssetId: 'asset-hall' }],
+      })
+    } finally {
+      Reflect.deleteProperty(HTMLImageElement.prototype, 'decode')
+    }
+  })
 
   it('offers no Save to gallery without the gallery, or outside the studio', async () => {
     const bare = fakeEncoder()

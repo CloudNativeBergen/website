@@ -123,6 +123,22 @@ describe('an exported video’s project (#1182)', () => {
     })
   })
 
+  it('takes the backgrounds shown only on the meme generator tab, as published ids', () => {
+    const sources = [{ galleryAssetId: 'asset-hall' }, { fileId: 'image-ada' }]
+    expect(
+      studioOriginSchema.parse({ tab: 'meme-generator', sources }),
+    ).toEqual({ tab: 'meme-generator', sources })
+    expect(
+      studioOriginSchema.safeParse({ tab: 'speakers', sources }).success,
+    ).toBe(false)
+    expect(
+      studioOriginSchema.safeParse({
+        tab: 'meme-generator',
+        sources: [{ galleryAssetId: 'drafts.asset-hall' }],
+      }).success,
+    ).toBe(false)
+  })
+
   it('takes a project id only on the meme generator tab, and only a published one', () => {
     expect(
       studioOriginSchema.parse({ tab: 'meme-generator', projectId: 'vp-1' }),

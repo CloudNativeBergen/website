@@ -126,7 +126,7 @@ describe('createMarketingAsset', () => {
     })
   })
 
-  it('records no project for a video saved unsaved, and none for an image (#1182)', async () => {
+  it('records no project for a video saved unsaved, but still its lineage, and none for an image (#1182)', async () => {
     await createMarketingAsset({
       orgId: 'org-a',
       details: { ...DETAILS, alt: 'A teaser' },
@@ -134,8 +134,12 @@ describe('createMarketingAsset', () => {
       fileAssetId: 'file-clip-mp4',
       posterAssetId: 'image-poster-1080x1080-jpg',
       studio: { tab: 'meme-generator' },
+      sourceFileIds: ['image-venue-1080x1080-png'],
     })
-    expect(h.created[0]).toMatchObject({ source: 'studio' })
+    expect(h.created[0]).toMatchObject({
+      source: 'studio',
+      sourceFileIds: ['image-venue-1080x1080-png'],
+    })
     expect(h.created[0]).not.toHaveProperty('project')
     await createMarketingAsset({
       orgId: 'org-a',

@@ -63,7 +63,11 @@ export {
   opensTheCard,
   projectDeleted,
 } from './studio'
-export type { MarketingAssetStudioOrigin, StudioTab } from './studio'
+export type {
+  ExportSourceInput,
+  MarketingAssetStudioOrigin,
+  StudioTab,
+} from './studio'
 export type {
   MarketingAssetDetails,
   MarketingAssetEditionChoice,

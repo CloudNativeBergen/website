@@ -5,6 +5,7 @@ import {
   audioTypeForFile,
   motionKindForFile,
   marketingAssetPathname,
+  type ExportSourceInput,
   type MarketingAssetDetails,
   type StudioTab,
 } from '@/lib/marketing-asset'
@@ -72,7 +73,11 @@ export interface VideoUploadOptions {
    * Set by "Save to gallery" on an export (#1182): the meme generator, and
    * the saved project the video came from, when it has one.
    */
-  studio?: { tab: 'meme-generator'; projectId?: string }
+  studio?: {
+    tab: 'meme-generator'
+    projectId?: string
+    sources?: ExportSourceInput[]
+  }
 }
 
 /** What "Save to gallery" in the studio adds: the tab it saved from (§4.2). */

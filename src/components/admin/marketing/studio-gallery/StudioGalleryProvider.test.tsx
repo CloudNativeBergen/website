@@ -356,7 +356,11 @@ describe('the real upload path', () => {
 describe('Save an exported video to the gallery (#1182)', () => {
   const MP4 = new Blob([new Uint8Array(4096)], { type: 'video/mp4' })
   const POSTER = new Blob(['first frame'], { type: 'image/jpeg' })
-  const SAVED: VideoOrigin = { title: 'Launch teaser', projectId: 'vp-1' }
+  const SAVED: VideoOrigin = {
+    title: 'Launch teaser',
+    projectId: 'vp-1',
+    sources: [{ galleryAssetId: 'asset-hall' }],
+  }
 
   function Exported({
     origin,
@@ -478,7 +482,11 @@ describe('Save an exported video to the gallery (#1182)', () => {
     expect(options).toEqual({
       kind: 'video',
       poster: POSTER,
-      studio: { tab: 'meme-generator', projectId: 'vp-1' },
+      studio: {
+        tab: 'meme-generator',
+        projectId: 'vp-1',
+        sources: [{ galleryAssetId: 'asset-hall' }],
+      },
     })
     expect(options.poster).toBe(POSTER)
     expect(onProgress).toBeTypeOf('function')
@@ -493,6 +501,7 @@ describe('Save an exported video to the gallery (#1182)', () => {
     const form = await openVideoDialog({
       title: 'Untitled video',
       projectId: null,
+      sources: [],
     })
     expect(
       within(form).getByText(
@@ -507,7 +516,7 @@ describe('Save an exported video to the gallery (#1182)', () => {
     expect(options).toEqual({
       kind: 'video',
       poster: POSTER,
-      studio: { tab: 'meme-generator' },
+      studio: { tab: 'meme-generator', sources: [] },
     })
   })
 
