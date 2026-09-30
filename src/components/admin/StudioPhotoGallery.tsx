@@ -32,33 +32,46 @@ export function StudioPhotoGallery({
 }: StudioPhotoGalleryProps) {
   const [edition, setEdition] = useState<string | undefined>()
   const editions = api.gallery.admin.editions.useQuery()
-  const previous = api.gallery.admin.list.useQuery(
+  const editionPhotos = api.gallery.admin.list.useQuery(
     { edition, featured: true, limit: 100, offset: 0 },
     { enabled: Boolean(edition) },
   )
-  const shown = edition ? (previous.data ?? []) : photos
-  const loading = Boolean(edition) && previous.isLoading
+  const shown = edition ? (editionPhotos.data ?? []) : photos
+  const loading = Boolean(edition) && editionPhotos.isLoading
   const editionTitle = editions.data?.previous.find(
     (e) => e._id === edition,
   )?.title
+  const scopeTitle = editionTitle ?? editions.data?.current.title ?? null
 
   return (
     <div className="space-y-4">
-      <EditionSelect
-        id="studio-photo-gallery-edition"
-        editions={editions.data}
-        value={edition}
-        onChange={setEdition}
-        className="max-w-xs"
-      />
+      <div className="flex flex-wrap items-center gap-3">
+        <EditionSelect
+          id="studio-photo-gallery-edition"
+          editions={editions.data}
+          value={edition}
+          onChange={setEdition}
+          className="max-w-xs"
+        />
+        {!loading && (
+          <p
+            className="text-sm text-gray-600 dark:text-gray-400"
+            data-testid="studio-photo-count"
+          >
+            {shown.length} featured {shown.length === 1 ? 'photo' : 'photos'}
+            {scopeTitle ? ` from ${scopeTitle}` : ''}
+          </p>
+        )}
+      </div>
       {loading ? (
         <div className="h-64 animate-pulse rounded-lg bg-gray-100 dark:bg-gray-800" />
-      ) : edition && previous.isError ? (
+      ) : edition && editionPhotos.isError ? (
         <div
           role="alert"
           className="py-12 text-center text-sm text-red-700 dark:text-red-400"
         >
-          {previous.error.message || 'Failed to load that edition’s photos'}
+          {editionPhotos.error.message ||
+            'Failed to load that edition’s photos'}
         </div>
       ) : shown.length === 0 ? (
         <div className="py-12 text-center">

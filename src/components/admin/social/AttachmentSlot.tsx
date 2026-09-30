@@ -37,7 +37,6 @@ import type { GalleryEditions } from '@/lib/gallery/editions'
  */
 export interface GalleryPick {
   id: string
-  assetId: string
   alt: string
   thumbnailSrc: string
 }

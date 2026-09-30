@@ -396,7 +396,8 @@ export default async function MarketingPage({
               id: 'photo-gallery',
               name: 'Photo Gallery',
               icon: 'photo',
-              count: featuredPhotos.length,
+              // No badge: the tab's count follows the edition chosen inside it.
+              // Its default-scope count is the current edition's.
               description:
                 'Showcase conference moments with customizable photo grid layouts, perfect for social media promotion.',
             },

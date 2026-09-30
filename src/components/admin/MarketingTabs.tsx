@@ -15,7 +15,8 @@ interface Tab {
   id: string
   name: string
   icon: IconType
-  count: number
+  /** Absent when the tab's content chooses its own scope (the photo tab, #1191). */
+  count?: number
   description: string
   /**
    * Once first shown, stays mounted, hidden, while another tab is shown —
@@ -108,15 +109,17 @@ export function MarketingTabs({
                 <span className="font-space-grotesk hidden font-semibold sm:inline">
                   {tab.name}
                 </span>
-                <span
-                  className={`inline-flex items-center justify-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                    isActive
-                      ? 'bg-brand-cloud-blue/10 text-brand-cloud-blue dark:bg-blue-300/10 dark:text-blue-300'
-                      : 'bg-gray-200 text-gray-600 dark:bg-gray-600 dark:text-gray-300'
-                  }`}
-                >
-                  {tab.count}
-                </span>
+                {tab.count !== undefined && (
+                  <span
+                    className={`inline-flex items-center justify-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                      isActive
+                        ? 'bg-brand-cloud-blue/10 text-brand-cloud-blue dark:bg-blue-300/10 dark:text-blue-300'
+                        : 'bg-gray-200 text-gray-600 dark:bg-gray-600 dark:text-gray-300'
+                    }`}
+                  >
+                    {tab.count}
+                  </span>
+                )}
               </button>
             )
           })}

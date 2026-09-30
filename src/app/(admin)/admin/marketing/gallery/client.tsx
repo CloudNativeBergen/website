@@ -8,6 +8,7 @@ import {
   ImageGrid,
   ImageMetadataModal,
   GalleryFilters,
+  hasGalleryFilters,
   type GalleryFilterValues,
 } from '@/components/admin/gallery'
 import { PhotoIcon, ClockIcon } from '@heroicons/react/24/outline'
@@ -16,15 +17,7 @@ import type { GalleryImageWithSpeakers } from '@/lib/gallery/types'
 function GalleryPageContent() {
   const { showNotification } = useNotification()
   const utils = api.useUtils()
-  const [filters, setFilters] = useState({
-    edition: undefined as string | undefined,
-    featured: undefined as boolean | undefined,
-    speakerId: undefined as string | undefined,
-    dateFrom: undefined as string | undefined,
-    dateTo: undefined as string | undefined,
-    photographerSearch: undefined as string | undefined,
-    locationSearch: undefined as string | undefined,
-  })
+  const [filters, setFilters] = useState<GalleryFilterValues>({})
   const [selectedImage, setSelectedImage] =
     useState<GalleryImageWithSpeakers | null>(null)
   const [isMetadataModalOpen, setIsMetadataModalOpen] = useState(false)
@@ -138,15 +131,7 @@ function GalleryPageContent() {
     setSelectedImages([])
     setIsMetadataModalOpen(false)
     setSelectedImage(null)
-    setFilters({
-      edition: newFilters.edition ?? undefined,
-      featured: newFilters.featured ?? undefined,
-      speakerId: newFilters.speakerId ?? undefined,
-      dateFrom: newFilters.dateFrom ?? undefined,
-      dateTo: newFilters.dateTo ?? undefined,
-      photographerSearch: newFilters.photographerSearch ?? undefined,
-      locationSearch: newFilters.locationSearch ?? undefined,
-    })
+    setFilters(newFilters)
     setCurrentPage(1)
   }, [])
 
@@ -211,7 +196,7 @@ function GalleryPageContent() {
           role="status"
           className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-200"
         >
-          <ClockIcon className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
+          <ClockIcon className="mt-0.5 size-5 shrink-0" aria-hidden="true" />
           <p>
             Browsing pictures from{' '}
             <strong>{browsingPrevious?.title ?? 'a previous edition'}</strong>.
@@ -272,7 +257,7 @@ function GalleryPageContent() {
             <PhotoIcon className="h-16 w-16 text-gray-300 dark:text-gray-600" />
             <div className="text-center">
               <p className="text-lg font-medium text-gray-900 dark:text-gray-100">
-                {Object.values(filters).some((v) => v !== undefined)
+                {hasGalleryFilters(filters)
                   ? 'No matching images'
                   : 'No images yet'}
               </p>
@@ -282,7 +267,7 @@ function GalleryPageContent() {
                     No pictures from {browsingPrevious?.title ?? 'that edition'}{' '}
                     match these filters
                   </>
-                ) : Object.values(filters).some((v) => v !== undefined) ? (
+                ) : hasGalleryFilters(filters) ? (
                   <>Try adjusting your filters to see more results</>
                 ) : (
                   <>Upload your first conference photos using the form above</>

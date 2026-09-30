@@ -211,3 +211,33 @@ export const DeepLinkedEdition: Story = {
     await expect(parameters.nextjs.navigation.push).not.toHaveBeenCalled()
   },
 }
+
+/**
+ * On a phone the bar collapses to the sheet trigger with the edition counted
+ * as an active filter; opening the sheet shows the edition select stacked and
+ * inside the viewport.
+ */
+export const PreviousEditionSelectedMobile: Story = {
+  args: PreviousEditionSelected.args,
+  parameters: {
+    ...PreviousEditionSelected.parameters,
+    viewport: { defaultViewport: 'mobile1' },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const trigger = canvas.getByRole('button', { name: /Filters/ })
+    await expect(trigger).toBeVisible()
+    await expect(trigger).toHaveTextContent('1')
+    await userEvent.click(trigger)
+    // The sheet is a Dialog, portalled outside the story's canvas.
+    const selects = await within(document.body).findAllByRole('combobox', {
+      name: 'Edition',
+    })
+    const visible = selects.filter((el) => el.checkVisibility())
+    await expect(visible).toHaveLength(1)
+    await expect(visible[0]).toHaveValue('conf-2025')
+    await expect(visible[0].getBoundingClientRect().right).toBeLessThanOrEqual(
+      window.innerWidth,
+    )
+  },
+}

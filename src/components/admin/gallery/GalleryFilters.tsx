@@ -44,7 +44,8 @@ interface GalleryFiltersProps {
   editions?: GalleryEditions
 }
 
-const hasFilters = (values: GalleryFilterValues) =>
+/** Whether any filter is set (`''` counts as unset). */
+export const hasGalleryFilters = (values: GalleryFilterValues) =>
   Object.values(values).some((v) => v !== undefined && v !== '')
 
 export function GalleryFilters({
@@ -99,10 +100,10 @@ export function GalleryFilters({
       locationSearch: location || undefined,
     }
 
-    const urlHasFilters = Object.values(urlFilters).some((v) => v !== undefined)
+    const urlHasFilters = hasGalleryFilters(urlFilters)
     // An EMPTY URL is a state too: navigating Back from `?edition=…` to the
     // bare page must land on the current edition, not keep the last filters.
-    if (urlHasFilters || hasFilters(appliedFilters.current)) {
+    if (urlHasFilters || hasGalleryFilters(appliedFilters.current)) {
       onFiltersChange(urlFilters)
       setSelectedSpeaker(
         speakerId ? { _id: speakerId, name: 'Selected speaker' } : null,

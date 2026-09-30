@@ -106,7 +106,7 @@ export function ImageGrid({
               }
             >
               <div
-                className={`h-4 w-4 rounded border ${
+                className={`size-4 rounded border ${
                   selectedImages.length === images.length && images.length > 0
                     ? 'border-indigo-600 bg-indigo-600 dark:border-indigo-500 dark:bg-indigo-500'
                     : 'border-gray-300 dark:border-gray-600'
@@ -114,7 +114,7 @@ export function ImageGrid({
               >
                 {selectedImages.length === images.length &&
                   images.length > 0 && (
-                    <CheckIcon className="h-3 w-3 text-white" />
+                    <CheckIcon className="size-3 text-white" />
                   )}
               </div>
               Select All
@@ -194,14 +194,14 @@ export function ImageGrid({
                   className="rounded bg-white/80 p-1 shadow-sm hover:bg-white dark:bg-gray-900/80 dark:hover:bg-gray-900"
                 >
                   <div
-                    className={`h-4 w-4 rounded border ${
+                    className={`size-4 rounded border ${
                       selectedImages.includes(image._id)
                         ? 'border-indigo-600 bg-indigo-600 dark:border-indigo-500 dark:bg-indigo-500'
                         : 'border-gray-400 dark:border-gray-500'
                     }`}
                   >
                     {selectedImages.includes(image._id) && (
-                      <CheckIcon className="h-3 w-3 text-white" />
+                      <CheckIcon className="size-3 text-white" />
                     )}
                   </div>
                 </button>
@@ -275,7 +275,7 @@ export function ImageGrid({
                   className="rounded-full bg-white p-2 text-gray-700 shadow-lg hover:bg-gray-100 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
                   title="Edit metadata"
                 >
-                  <PencilIcon className="h-5 w-5" />
+                  <PencilIcon className="size-5" />
                 </button>
                 <button
                   onClick={(e) => {
@@ -289,9 +289,9 @@ export function ImageGrid({
                   }
                 >
                   {image.featured ? (
-                    <StarIconSolid className="h-5 w-5 text-yellow-500" />
+                    <StarIconSolid className="size-5 text-yellow-500" />
                   ) : (
-                    <StarIcon className="h-5 w-5" />
+                    <StarIcon className="size-5" />
                   )}
                 </button>
                 <button
@@ -302,7 +302,7 @@ export function ImageGrid({
                   className="rounded-full bg-white p-2 text-red-600 shadow-lg hover:bg-red-50 dark:bg-gray-800 dark:text-red-400 dark:hover:bg-gray-700"
                   title="Delete image"
                 >
-                  <TrashIcon className="h-5 w-5" />
+                  <TrashIcon className="size-5" />
                 </button>
               </div>
             )}

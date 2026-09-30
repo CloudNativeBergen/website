@@ -190,7 +190,7 @@ export const AddSocialPostAttachmentFromAssetSchema = z.object({
 /** A gallery image by id (#1191): the server reads asset, alt and framing. */
 export const AddSocialPostAttachmentFromGallerySchema = z.object({
   postId: LiveDocumentIdSchema,
-  imageId: z.string().min(1).max(200),
+  imageId: LiveDocumentIdSchema,
 })
 
 export const AddSocialPostAttachmentSchema = z.object({

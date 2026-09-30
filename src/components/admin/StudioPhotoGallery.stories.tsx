@@ -150,6 +150,10 @@ export const PreviousEditionWithPhotos: Story = {
     await userEvent.selectOptions(select, 'conf-2026')
     const pictures = await canvas.findAllByAltText(/Previous-edition picture/)
     await expect(pictures.length).toBeGreaterThan(0)
+    // The count follows the edition shown, not the current edition's.
+    await expect(canvas.getByTestId('studio-photo-count')).toHaveTextContent(
+      '9 featured photos from Cloud Native Bergen 2026',
+    )
     await expect(canvas.queryByText(/has no featured photos/)).toBeNull()
   },
 }

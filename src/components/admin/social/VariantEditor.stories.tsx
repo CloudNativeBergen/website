@@ -838,7 +838,6 @@ export const GalleryPickerPreviousEdition: Story = {
         onPick: async () => {},
         images: IMAGES.slice(0, 3).map((image) => ({
           id: `gal-${image._key}`,
-          assetId: image.assetId,
           alt: image.alt,
           thumbnailSrc: SRC[image._key],
         })),

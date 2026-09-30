@@ -1202,10 +1202,25 @@ export async function addSocialPostAttachment(
      * to reference. Once the post holds it, the orphan check keeps it.
      */
     heldBy?: { id: string; rev: string }
+    /**
+     * The caller proved the asset's ownership from a gallery image of ANOTHER
+     * edition of this organization (#1191). The reference check is skipped —
+     * that image is exactly a document of another conference — and, unlike
+     * `heldBy`, NO write touches the other edition's document: mutations stay
+     * single-edition. Accepted window: a picture deleted between its read and
+     * this append is caught by `deleteGalleryImage`'s asset refcount only if
+     * the append lands first; otherwise the post references an asset that is
+     * gone and its rendition shows as missing (no data crosses tenants).
+     */
+    assetProvenBy?: 'previous-edition-image'
   } = {},
 ): Promise<AddSocialPostAttachmentResult> {
-  const { heldBy } = options
-  if (!heldBy && (await assetBelongsElsewhere(input.assetId, conferenceId))) {
+  const { heldBy, assetProvenBy } = options
+  if (
+    !heldBy &&
+    !assetProvenBy &&
+    (await assetBelongsElsewhere(input.assetId, conferenceId))
+  ) {
     return { refused: 'foreign-asset' }
   }
   const key = randomUUID()

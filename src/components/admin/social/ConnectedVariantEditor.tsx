@@ -297,7 +297,6 @@ export function ConnectedVariantEditor({
     return [
       {
         id: image._id,
-        assetId,
         alt: image.image.alt ?? image.imageAlt ?? '',
         thumbnailSrc: richTextImageUrl(assetId, 300),
       },

@@ -1476,8 +1476,26 @@ describe('social.addPostAttachmentFromGallery', () => {
         hotspot: { x: 0.5, y: 0.4, width: 0.6, height: 0.6 },
         crop: { top: 0, bottom: 0.1, left: 0, right: 0 },
       },
-      { heldBy: { id: 'img-2025', rev: 'img-rev-4' } },
+      { assetProvenBy: 'previous-edition-image' },
     )
+    // MUTATIONS STAY SINGLE-EDITION: no compare-and-set (a write) names the
+    // previous edition's document.
+    const options = h.addSocialPostAttachment.mock.calls[0][3]
+    expect(options).not.toHaveProperty('heldBy')
+  })
+
+  it("attaches the CURRENT edition's picture compare-and-set on ITS revision", async () => {
+    gallery.getGalleryImageTenant.mockResolvedValue({
+      conferenceId: CONF_A,
+      orgId: ORG_A,
+    })
+    await social().addPostAttachmentFromGallery({
+      postId: 'post-ours',
+      imageId: 'img-2025',
+    })
+    expect(h.addSocialPostAttachment.mock.calls[0][3]).toEqual({
+      heldBy: { id: 'img-2025', rev: 'img-rev-4' },
+    })
   })
 
   it("attaches the CURRENT edition's picture without consulting previous editions", async () => {
@@ -1520,16 +1538,13 @@ describe('social.addPostAttachmentFromGallery', () => {
     expect(h.addSocialPostAttachment).not.toHaveBeenCalled()
   })
 
-  it('refuses a draft or release id (`.` in the id) before any tenant read', async () => {
+  it('refuses a draft id at the input boundary, before any tenant read', async () => {
     await expect(
       social().addPostAttachmentFromGallery({
         postId: 'post-ours',
         imageId: 'drafts.img-2025',
       }),
-    ).rejects.toMatchObject({
-      code: 'NOT_FOUND',
-      message: notFoundMessage('imageGallery'),
-    })
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
     expect(gallery.getGalleryImageTenant).not.toHaveBeenCalled()
   })
 

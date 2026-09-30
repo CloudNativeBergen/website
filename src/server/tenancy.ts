@@ -5,7 +5,10 @@ import type { MergeBlockReason } from '@/lib/speaker/duplicates'
 import { resolveConferenceId, resolveOrganizationId } from './trpc'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { getGalleryImageTenant } from '@/lib/gallery/sanity'
-import { getPreviousEditions } from '@/lib/gallery/editions'
+import {
+  getPreviousEditions,
+  type GalleryEdition,
+} from '@/lib/gallery/editions'
 
 /**
  * OWNERSHIP CHECKS FOR CLIENT-SUPPLIED DOCUMENT IDS (#730).
@@ -215,9 +218,7 @@ export async function requireDocumentInCurrentConference(
 export async function requireGalleryImageReadable(
   imageId: string,
 ): Promise<{ conferenceId: string }> {
-  const conferenceId = await resolveConferenceId()
-  const { conference, error } = await getConferenceForCurrentDomain()
-  if (error || conference?._id !== conferenceId) throw notFound('imageGallery')
+  const conference = await requireCurrentConference()
   const tenant = await getGalleryImageTenant(imageId)
   if (!tenant?.conferenceId) throw notFound('imageGallery')
   if (tenant.conferenceId === conference._id) {
@@ -225,11 +226,42 @@ export async function requireGalleryImageReadable(
   }
   const orgId = conference.organization?._ref
   if (!orgId || tenant.orgId !== orgId) throw notFound('imageGallery')
-  const previous = await getPreviousEditions(orgId, conference)
+  const { previous } = await browsableGalleryEditions(conference)
   if (!previous.some((edition) => edition._id === tenant.conferenceId)) {
     throw notFound('imageGallery')
   }
   return { conferenceId: tenant.conferenceId }
+}
+
+/**
+ * The request's conference DOCUMENT, or NOT_FOUND on an unresolvable host.
+ * The tenant is resolved the one sanctioned way (`resolveConferenceId`); the
+ * document read after it is the same request-cached read, for the fields the
+ * gallery edition selector needs (start date, organization).
+ */
+export async function requireCurrentConference() {
+  const conferenceId = await resolveConferenceId()
+  const { conference, error } = await getConferenceForCurrentDomain()
+  if (error || conference?._id !== conferenceId) {
+    throw new TRPCError({
+      code: 'NOT_FOUND',
+      message: 'Could not resolve conference from domain',
+    })
+  }
+  return conference
+}
+
+/**
+ * The gallery editions an organizer of `conference`'s host may browse
+ * (#1191): its organization id and the organization's PREVIOUS editions, as
+ * the server resolves them. A conference without an organization has none.
+ */
+export async function browsableGalleryEditions(
+  conference: Awaited<ReturnType<typeof requireCurrentConference>>,
+): Promise<{ orgId: string | null; previous: GalleryEdition[] }> {
+  const orgId = conference.organization?._ref ?? null
+  const previous = orgId ? await getPreviousEditions(orgId, conference) : []
+  return { orgId, previous }
 }
 
 /**

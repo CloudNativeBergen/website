@@ -264,6 +264,25 @@ async function taskLinkFor(
   }
 }
 
+/**
+ * The one mapping of an attach refusal onto a client error, for every
+ * ownership-proven attach (a marketing asset, a gallery picture).
+ */
+function attachRefusal(
+  refused: 'holder-changed' | 'post-gone' | 'foreign-asset',
+  holder: 'asset' | 'picture',
+): TRPCError {
+  return refused === 'holder-changed'
+    ? new TRPCError({
+        code: 'CONFLICT',
+        message: `The ${holder} changed or was deleted while it was being added. Reload and retry.`,
+      })
+    : new TRPCError({
+        code: 'NOT_FOUND',
+        message: 'The post is gone. Reload and retry.',
+      })
+}
+
 export const socialRouter = router({
   createPost: adminProcedure
     .input(CreateSocialPostSchema)
@@ -710,7 +729,6 @@ export const socialRouter = router({
           code: 'NOT_FOUND',
           message: notFoundMessage('imageGallery'),
         })
-      if (input.imageId.includes('.')) throw notFound()
       const readable = await requireGalleryImageReadable(input.imageId)
       const image = await getGalleryImage(input.imageId, readable.conferenceId)
       if (!image?.image?.asset?._ref) throw notFound()
@@ -742,20 +760,14 @@ export const socialRouter = router({
           hotspot: parsed.data.hotspot ?? null,
           crop: parsed.data.crop ?? null,
         },
-        { heldBy: { id: image._id, rev: image._rev } },
+        // Our own picture: compare-and-set on its revision. A PREVIOUS
+        // edition's: its ownership is proven above and its document is NOT
+        // written to — mutations stay single-edition (#1191).
+        readable.conferenceId === conferenceId
+          ? { heldBy: { id: image._id, rev: image._rev } }
+          : { assetProvenBy: 'previous-edition-image' },
       )
-      if ('refused' in added) {
-        throw added.refused === 'holder-changed'
-          ? new TRPCError({
-              code: 'CONFLICT',
-              message:
-                'The picture changed or was deleted while it was being added. Reload and retry.',
-            })
-          : new TRPCError({
-              code: 'NOT_FOUND',
-              message: 'The post is gone. Reload and retry.',
-            })
-      }
+      if ('refused' in added) throw attachRefusal(added.refused, 'picture')
       return added
     }),
 
@@ -828,18 +840,7 @@ export const socialRouter = router({
         },
         { heldBy: { id: input.marketingAssetId, rev: asset.rev } },
       )
-      if ('refused' in added) {
-        throw added.refused === 'holder-changed'
-          ? new TRPCError({
-              code: 'CONFLICT',
-              message:
-                'The asset changed or was deleted while it was being added. Reload and retry.',
-            })
-          : new TRPCError({
-              code: 'NOT_FOUND',
-              message: 'The post is gone. Reload and retry.',
-            })
-      }
+      if ('refused' in added) throw attachRefusal(added.refused, 'asset')
       return added
     }),
 

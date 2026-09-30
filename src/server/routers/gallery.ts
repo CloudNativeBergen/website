@@ -1,5 +1,9 @@
 import { TRPCError } from '@trpc/server'
-import { requireCurrentOrgId } from '@/server/tenancy'
+import {
+  browsableGalleryEditions,
+  requireCurrentConference,
+  requireCurrentOrgId,
+} from '@/server/tenancy'
 import {
   adminProcedure,
   protectedProcedure,
@@ -22,8 +26,6 @@ import {
   untagSpeakerFromImage,
 } from '@/lib/gallery/sanity'
 import { requireSpeakersInCurrentOrg } from '../tenancy'
-import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
-import { getPreviousEditions } from '@/lib/gallery/editions'
 import type { GalleryScope } from '@/lib/gallery/sanity'
 
 /**
@@ -59,25 +61,6 @@ async function requireImageInOrg(imageId: string): Promise<string> {
 }
 
 /**
- * The request's conference document, or NOT_FOUND on an unresolvable host —
- * `resolveConferenceId` with the fields the edition selector needs (#1191).
- */
-async function requireCurrentConference() {
-  // The tenant is resolved the one sanctioned way; the document read after it
-  // is the same request-cached read `resolveConferenceId` made, for the
-  // fields the edition selector needs (start date, organization).
-  const conferenceId = await resolveConferenceId()
-  const { conference, error } = await getConferenceForCurrentDomain()
-  if (error || conference?._id !== conferenceId) {
-    throw new TRPCError({
-      code: 'NOT_FOUND',
-      message: 'Could not resolve conference from domain',
-    })
-  }
-  return conference
-}
-
-/**
  * The READ scope for an admin gallery listing (#1191). No selector, or the
  * current conference, is the plain single-edition read. Any other selector
  * must be one of the organization's PREVIOUS editions — a set the server
@@ -93,8 +76,7 @@ async function resolveGalleryReadScope(
   if (!edition || edition === conference._id) {
     return { conferenceId: conference._id }
   }
-  const orgId = conference.organization?._ref
-  const previous = orgId ? await getPreviousEditions(orgId, conference) : []
+  const { orgId, previous } = await browsableGalleryEditions(conference)
   if (!orgId || !previous.some((e) => e._id === edition)) {
     throw new TRPCError({
       code: 'NOT_FOUND',
@@ -236,8 +218,7 @@ export const galleryRouter = router({
      */
     editions: adminProcedure.query(async () => {
       const conference = await requireCurrentConference()
-      const orgId = conference.organization?._ref
-      const previous = orgId ? await getPreviousEditions(orgId, conference) : []
+      const { previous } = await browsableGalleryEditions(conference)
       return {
         current: { _id: conference._id, title: conference.title },
         previous,
