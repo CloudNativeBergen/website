@@ -388,6 +388,9 @@ export function ConnectedVariantEditor({
           gallery: {
             images: galleryPicks,
             isLoading: gallery.isLoading,
+            error: gallery.error
+              ? gallery.error.message || 'The gallery could not be read.'
+              : null,
             onOpen: () => setGalleryOpen(true),
             editions: {
               options: galleryEditions.data,

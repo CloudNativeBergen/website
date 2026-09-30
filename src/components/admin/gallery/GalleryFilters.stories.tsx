@@ -109,9 +109,18 @@ export const CurrentEdition: Story = {
   },
 }
 
-/** A previous edition selected: the filter counts as active (Clear appears). */
+/**
+ * A previous edition selected — via the URL, which is the source of truth
+ * (an empty URL means "no filters"): the filter counts as active (Clear appears).
+ */
 export const PreviousEditionSelected: Story = {
-  args: { initial: { edition: 'conf-2025' }, editions: EDITIONS },
+  args: { initial: {}, editions: EDITIONS },
+  parameters: {
+    nextjs: {
+      appDirectory: true,
+      navigation: { push: fn(), query: { edition: 'conf-2025' } },
+    },
+  },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
     const select = canvas.getAllByRole('combobox', {
@@ -130,7 +139,7 @@ export const PreviousEditionSelected: Story = {
 export const PreviousEditionSelectedDark: Story = {
   args: PreviousEditionSelected.args,
   play: PreviousEditionSelected.play,
-  parameters: { theme: 'dark' },
+  parameters: { ...PreviousEditionSelected.parameters, theme: 'dark' },
 }
 
 /**

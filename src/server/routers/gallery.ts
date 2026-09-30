@@ -63,8 +63,12 @@ async function requireImageInOrg(imageId: string): Promise<string> {
  * `resolveConferenceId` with the fields the edition selector needs (#1191).
  */
 async function requireCurrentConference() {
+  // The tenant is resolved the one sanctioned way; the document read after it
+  // is the same request-cached read `resolveConferenceId` made, for the
+  // fields the edition selector needs (start date, organization).
+  const conferenceId = await resolveConferenceId()
   const { conference, error } = await getConferenceForCurrentDomain()
-  if (error || !conference?._id) {
+  if (error || conference?._id !== conferenceId) {
     throw new TRPCError({
       code: 'NOT_FOUND',
       message: 'Could not resolve conference from domain',

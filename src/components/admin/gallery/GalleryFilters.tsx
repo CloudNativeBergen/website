@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { Combobox } from '@headlessui/react'
 import {
   ChevronUpDownIcon,
@@ -44,6 +44,9 @@ interface GalleryFiltersProps {
   editions?: GalleryEditions
 }
 
+const hasFilters = (values: GalleryFilterValues) =>
+  Object.values(values).some((v) => v !== undefined && v !== '')
+
 export function GalleryFilters({
   filters,
   onFiltersChange,
@@ -66,6 +69,12 @@ export function GalleryFilters({
   const [localLocation, setLocalLocation] = useState(
     filters.locationSearch || '',
   )
+  // What the page currently applies, readable from the URL-sync effect without
+  // re-running it on every filter change.
+  const appliedFilters = useRef(filters)
+  useEffect(() => {
+    appliedFilters.current = filters
+  })
   const debouncedQuery = useDebounce(speakerQuery, 300)
   const debouncedPhotographer = useDebounce(localPhotographer, 500)
   const debouncedLocation = useDebounce(localLocation, 500)
@@ -90,13 +99,14 @@ export function GalleryFilters({
       locationSearch: location || undefined,
     }
 
-    if (speakerId) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setSelectedSpeaker({ _id: speakerId, name: 'Selected speaker' })
-    }
-
-    if (Object.values(urlFilters).some((v) => v !== undefined)) {
+    const urlHasFilters = Object.values(urlFilters).some((v) => v !== undefined)
+    // An EMPTY URL is a state too: navigating Back from `?edition=…` to the
+    // bare page must land on the current edition, not keep the last filters.
+    if (urlHasFilters || hasFilters(appliedFilters.current)) {
       onFiltersChange(urlFilters)
+      setSelectedSpeaker(
+        speakerId ? { _id: speakerId, name: 'Selected speaker' } : null,
+      )
       setLocalDateFrom(dateFrom || '')
       setLocalDateTo(dateTo || '')
       setLocalPhotographer(photographer || '')

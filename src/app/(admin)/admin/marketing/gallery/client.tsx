@@ -136,6 +136,8 @@ function GalleryPageContent() {
     // A selection never survives a filter change: ids of pictures no longer
     // shown — another edition's above all — must not feed a bulk action.
     setSelectedImages([])
+    setIsMetadataModalOpen(false)
+    setSelectedImage(null)
     setFilters({
       edition: newFilters.edition ?? undefined,
       featured: newFilters.featured ?? undefined,

@@ -893,3 +893,27 @@ export const GalleryPickerPreviousEditionDark: Story = {
   play: GalleryPickerPreviousEdition.play,
   parameters: { theme: 'dark' },
 }
+
+/** The gallery could not be read: said so, never shown as an empty gallery. */
+export const GalleryPickerFailed: Story = {
+  args: {
+    ...GalleryPickerPreviousEdition.args,
+    sources: {
+      onUpload: async () => {},
+      gallery: {
+        images: [],
+        isLoading: false,
+        error: 'That edition is not one this organization can browse.',
+        onPick: async () => {},
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(canvas.getByRole('button', { name: 'From gallery' }))
+    await expect(canvas.getByRole('alert')).toHaveTextContent(
+      'That edition is not one this organization can browse.',
+    )
+    await expect(canvas.queryByText('The gallery is empty.')).toBeNull()
+  },
+}

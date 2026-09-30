@@ -215,8 +215,9 @@ export async function requireDocumentInCurrentConference(
 export async function requireGalleryImageReadable(
   imageId: string,
 ): Promise<{ conferenceId: string }> {
+  const conferenceId = await resolveConferenceId()
   const { conference, error } = await getConferenceForCurrentDomain()
-  if (error || !conference?._id) throw notFound('imageGallery')
+  if (error || conference?._id !== conferenceId) throw notFound('imageGallery')
   const tenant = await getGalleryImageTenant(imageId)
   if (!tenant?.conferenceId) throw notFound('imageGallery')
   if (tenant.conferenceId === conference._id) {

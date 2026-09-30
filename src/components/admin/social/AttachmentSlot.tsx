@@ -68,6 +68,8 @@ export interface AttachmentSlotProps {
   gallery?: {
     images: GalleryPick[]
     isLoading: boolean
+    /** The list could not be read: said so, never shown as an empty gallery. */
+    error?: string | null
     /** Called when the picker opens, so the list can load lazily. */
     onOpen?: () => void
     onPick: (image: GalleryPick) => Promise<void>
@@ -327,6 +329,10 @@ export function AttachmentSlot({
           )}
           {gallery.isLoading ? (
             <div className="h-24 animate-pulse rounded bg-gray-100 dark:bg-gray-800" />
+          ) : gallery.error ? (
+            <p role="alert" className="text-sm text-red-700 dark:text-red-400">
+              {gallery.error}
+            </p>
           ) : gallery.images.length === 0 ? (
             <p className="text-sm text-gray-500">
               {gallery.editions?.value
