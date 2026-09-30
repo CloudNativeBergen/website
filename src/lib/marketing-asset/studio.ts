@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { publishedDocumentId } from './details'
+import { studioFormatSchema, type StudioFormat } from './format'
 import { VIDEO_PROJECT_MAX_SCENES } from '@/lib/video-project/format'
 
 /**
@@ -47,6 +48,12 @@ export type ExportSourceInput = z.output<typeof exportSourceSchema>
 export const studioOriginSchema = z
   .object({
     tab: z.enum(STUDIO_TABS),
+    /**
+     * The Format the card was captured in (docs/MARKETING_STUDIO_FORMATS_
+     * SPEC.md §4). Absent for anything saved before Formats, which reads as
+     * square (§6).
+     */
+    format: studioFormatSchema.optional(),
     projectId: publishedDocumentId.optional(),
     sources: z.array(exportSourceSchema).max(MAX_EXPORT_SOURCES).optional(),
   })
@@ -68,6 +75,8 @@ export type StudioOriginInput = z.output<typeof studioOriginSchema>
  */
 export interface MarketingAssetStudioOrigin {
   tab: StudioTab
+  /** The Format it was captured in; square where none was recorded (§6). */
+  format: StudioFormat
   speakerId: string | null
   sponsorId: string | null
   /**

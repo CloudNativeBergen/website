@@ -507,6 +507,15 @@ describe('a studio save through the move route (#1164)', () => {
     expect(h.guard).toHaveBeenCalledTimes(1)
   })
 
+  it('records the Format the card was captured in (#1247)', async () => {
+    const body = { ...VALID, studio: { tab: 'sponsors', format: 'portrait' } }
+    expect((await POST(request(body))).status).toBe(200)
+    expect(h.create.mock.calls[0][0].studio).toEqual({
+      tab: 'sponsors',
+      format: 'portrait',
+    })
+  })
+
   it('answers an image save with its file, for a studio background kept from the editor (#1182)', async () => {
     const response = await POST(request(VALID))
     expect(await response.json()).toEqual({
@@ -530,6 +539,7 @@ describe('a studio save through the move route (#1164)', () => {
 
   it.each([
     ['an unknown tab', { tab: 'video' }],
+    ['an unknown Format', { tab: 'speakers', format: 'story' }],
     ['no tab', {}],
     ['not an object', 'speakers'],
   ])('refuses %s, and discards the upload', async (_, studio) => {

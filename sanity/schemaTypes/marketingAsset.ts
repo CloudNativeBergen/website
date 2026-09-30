@@ -1,5 +1,6 @@
 import { defineField, defineType } from 'sanity'
 import { STUDIO_TABS } from '@/lib/marketing-asset/studio'
+import { STUDIO_FORMATS } from '@/lib/marketing-asset/format'
 
 /**
  * An organization's marketing asset (docs/MARKETING_ASSETS_SPEC.md §3): a
@@ -240,6 +241,19 @@ export default defineType({
           title: 'Tab',
           type: 'string',
           options: { list: [...STUDIO_TABS] },
+        }),
+        defineField({
+          name: 'format',
+          title: 'Format',
+          description:
+            'The shape it was captured in. Absent for a card saved before Formats, which is square.',
+          type: 'string',
+          options: {
+            list: Object.entries(STUDIO_FORMATS).map(([value, size]) => ({
+              value,
+              title: `${size.label} (${size.width}×${size.height})`,
+            })),
+          },
         }),
       ],
     }),

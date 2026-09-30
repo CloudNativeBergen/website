@@ -516,6 +516,12 @@ describe('a studio save’s origin (#1164)', () => {
         studio: { tab: 'meme-generator' },
         subject: weak('sp-ada'),
       }),
+      // Captured in a Format (#1247); everything before Formats reads square.
+      asset('wide', 'org-a', {
+        source: 'studio',
+        studio: { tab: 'speakers', format: 'landscape' },
+        subject: weak('sp-ada'),
+      }),
       asset('upload', 'org-a', { source: 'upload', subject: weak('sp-ada') }),
       // An upload carrying a stray studio object is still an upload.
       asset('odd', 'org-a', {
@@ -535,10 +541,12 @@ describe('a studio save’s origin (#1164)', () => {
       speakerId,
       sponsorId: null,
       project: null,
+      format: 'square',
     })
-    const none = { project: null }
+    const none = { project: null, format: 'square' }
     expect(studio).toEqual({
       card: speakers('sp-ada'),
+      wide: { ...speakers('sp-ada'), format: 'landscape' },
       edited: speakers('sp-bob'),
       cleared: speakers(null),
       'talk-subject': speakers(null),
@@ -604,6 +612,7 @@ describe('a video exported from a studio project (#1182)', () => {
       speakerId: null,
       sponsorId: null,
       project,
+      format: 'square',
     })
     expect(studio).toEqual({
       'from-live': meme({ _id: 'vp-live', exists: true }),

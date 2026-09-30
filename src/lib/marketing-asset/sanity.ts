@@ -51,6 +51,7 @@ const ROW_PROJECTION = `{
   "durationSeconds": durationSeconds,
   "studio": select(source == "studio" && defined(studio.tab) => {
     "tab": studio.tab,
+    "format": coalesce(studio.format, "square"),
     "speakerId": select(studio.tab == "speakers" && subject->_type == "speaker" => subject._ref, null),
     "sponsorId": select(studio.tab == "sponsors" && subject->_type == "sponsor" => subject._ref, null),
     "project": select(studio.tab == "meme-generator" && defined(project._ref) => {
@@ -649,7 +650,14 @@ export async function createMarketingAsset(
       source: studio ? 'studio' : 'upload',
       // Only the tab: the speaker or sponsor it was opened on IS the subject,
       // so an edit or an erasure of the subject can never leave a stale copy.
-      ...(studio ? { studio: { tab: studio.tab } } : {}),
+      ...(studio
+        ? {
+            studio: {
+              tab: studio.tab,
+              ...(studio.format ? { format: studio.format } : {}),
+            },
+          }
+        : {}),
       // Weak: the entry outlives its project and never blocks deleting it.
       ...(projectId
         ? { project: { _type: 'reference', _ref: projectId, _weak: true } }

@@ -263,12 +263,24 @@ describe('Promo Studio Save to gallery (#1164)', () => {
 
   it.each([
     [
-      { tab: 'speakers', speakerId: 'grace', sponsorId: null, project: null },
+      {
+        tab: 'speakers',
+        speakerId: 'grace',
+        sponsorId: null,
+        project: null,
+        format: 'square',
+      },
       'Grace',
       'Ada',
     ],
     [
-      { tab: 'sponsors', speakerId: null, sponsorId: 'other', project: null },
+      {
+        tab: 'sponsors',
+        speakerId: null,
+        sponsorId: 'other',
+        project: null,
+        format: 'square',
+      },
       'Other',
       'Acme',
     ],
@@ -299,6 +311,7 @@ describe('Promo Studio Save to gallery (#1164)', () => {
           speakerId: null,
           sponsorId: null,
           project: { _id: 'vp-1', exists: true },
+          format: 'square',
         }),
         'https://x',
       ).searchParams,
@@ -322,6 +335,7 @@ describe('Promo Studio Save to gallery (#1164)', () => {
             speakerId: null,
             sponsorId: null,
             project: null,
+            format: 'square',
           }),
           'https://x',
         ).searchParams,

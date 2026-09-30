@@ -10,7 +10,7 @@ import {
   studioOriginSchema,
 } from './studio'
 
-const NO_PROJECT = { project: null }
+const NO_PROJECT = { project: null, format: 'square' } as const
 
 describe('openInStudioHref', () => {
   it('opens the tab on its speaker or sponsor', () => {
@@ -58,6 +58,23 @@ describe('openInStudioHref', () => {
 })
 
 describe('studioOriginSchema', () => {
+  it('carries the Format a card was captured in, and refuses one it does not know (#1247)', () => {
+    expect(
+      studioOriginSchema.parse({ tab: 'speakers', format: 'landscape' }),
+    ).toEqual({ tab: 'speakers', format: 'landscape' })
+    expect(
+      studioOriginSchema.parse({ tab: 'sponsors', format: 'portrait' }),
+    ).toEqual({ tab: 'sponsors', format: 'portrait' })
+    expect(
+      studioOriginSchema.safeParse({ tab: 'speakers', format: 'story' })
+        .success,
+    ).toBe(false)
+    // No Format claimed reads as square later (§6); nothing is invented here.
+    expect(studioOriginSchema.parse({ tab: 'speakers' })).toEqual({
+      tab: 'speakers',
+    })
+  })
+
   it('accepts the five tabs and nothing else', () => {
     expect(STUDIO_TABS).toHaveLength(5)
     expect(studioOriginSchema.safeParse({ tab: 'video' }).success).toBe(false)
@@ -90,6 +107,7 @@ describe('an exported video’s project (#1182)', () => {
     speakerId: null,
     sponsorId: null,
     project: { _id: 'vp-1', exists },
+    format: 'square' as const,
   })
 
   it('opens the project in the studio while it exists', () => {
