@@ -1,4 +1,5 @@
 export { captureImage } from './capture'
+export type { CaptureSize } from './capture'
 export {
   GallerySaveContext,
   ImageAttachmentContext,
