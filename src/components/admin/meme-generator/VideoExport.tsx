@@ -4,8 +4,10 @@ import { useEffect, useId, useRef, useState } from 'react'
 import {
   ArrowDownTrayIcon,
   FilmIcon,
+  RectangleStackIcon,
   XMarkIcon,
 } from '@heroicons/react/24/outline'
+import type { ExportedVideo } from '@/components/common/image-capture'
 import { CANVAS_SIZE, styles } from './meme-generator-config'
 import {
   ExportCancelled,
@@ -31,6 +33,10 @@ type Status =
 /** The last file an export made. Kept until a newer one replaces it. */
 interface ExportedFile {
   url: string
+  /** The file itself, for the gallery; let go of with the file. */
+  blob: Blob
+  /** The first frame as a JPEG, drawn on the export's own canvas. */
+  poster: () => Promise<Blob>
   bytes: number
   seconds: number
   /** Whether the file has the track. */
@@ -47,6 +53,24 @@ const sameRevision = (a: readonly unknown[], b: readonly unknown[]) =>
 
 const LOAD_FAILED_MESSAGE =
   'The video encoder could not be loaded. Check your connection, then press Export MP4 to try again.'
+
+const POSTER_FAILED = 'The first frame could not be encoded as an image.'
+
+/**
+ * The poster: frame 0 repainted onto the export's canvas (which the export
+ * left on its last frame) and encoded at the canvas's full 1080 px.
+ */
+function posterOf(job: ExportJob): () => Promise<Blob> {
+  return () =>
+    new Promise((resolve, reject) => {
+      job.paint(0)
+      job.canvas.toBlob(
+        (blob) => (blob ? resolve(blob) : reject(new Error(POSTER_FAILED))),
+        'image/jpeg',
+        0.92,
+      )
+    })
+}
 
 const megabytes = (bytes: number) => `${(bytes / 1_000_000).toFixed(1)} MB`
 
@@ -164,6 +188,7 @@ export function VideoExport({
   active,
   revision,
   music = 'none',
+  onSaveToGallery,
 }: {
   encoder: EncoderBackend
   /** A snapshot of the video as it is when Export is pressed. */
@@ -183,6 +208,11 @@ export function VideoExport({
   active: boolean
   /** Whether the video has a track to export with it. */
   music?: Music
+  /**
+   * Offers "Save to gallery" beside Download, where the studio has a gallery
+   * to save to (#1182).
+   */
+  onSaveToGallery?: (video: ExportedVideo) => void
 }) {
   // null until asked; 'error' when asking failed and may be tried again.
   const [supported, setSupported] = useState<boolean | 'error' | null>(null)
@@ -245,6 +275,8 @@ export function VideoExport({
       if (abort.signal.aborted) return
       setFile({
         url: URL.createObjectURL(result.blob),
+        blob: result.blob,
+        poster: posterOf(job),
         bytes: result.blob.size,
         seconds: job.frameCount / FPS,
         audio: result.audio,
@@ -311,6 +343,26 @@ export function VideoExport({
               : 'Download video'}{' '}
             ({megabytes(file.bytes)}, {file.seconds.toFixed(1)} s)
           </a>
+        )}
+        {file && onSaveToGallery && (
+          <button
+            type="button"
+            onClick={() =>
+              !running &&
+              onSaveToGallery({
+                blob: file.blob,
+                seconds: file.seconds,
+                poster: file.poster,
+              })
+            }
+            // Not `disabled`, like Export: it says why while an export runs.
+            aria-disabled={running || undefined}
+            aria-describedby={statusId}
+            className="flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm font-medium text-brand-cloud-blue hover:bg-brand-cloud-blue/10 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 dark:border-gray-600 dark:text-blue-400"
+          >
+            <RectangleStackIcon className="size-4" aria-hidden="true" />
+            Save to gallery
+          </button>
         )}
       </div>
 

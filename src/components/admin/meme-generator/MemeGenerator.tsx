@@ -22,6 +22,7 @@ import {
   ArrowUturnRightIcon,
 } from '@heroicons/react/24/outline'
 import type { ConferenceLogos } from '../../common/DashboardLayout'
+import { useGallerySave, type ExportedVideo } from '../../common/image-capture'
 import {
   CANVAS_SIZE,
   BRAND_COLORS,
@@ -1944,6 +1945,18 @@ export function MemeGenerator({
   // An export paints the video as it was when Export was pressed, onto a
   // canvas of its own — frame n at frame n's time, through the same
   // `drawFrame` as the preview, so what was scrubbed is what is exported.
+  // "Save to gallery" on an export, on the studio page only (#1182). A
+  // conflicted editor still came from its project, so the id is kept.
+  const gallerySave = useGallerySave()
+  const saveVideoToGallery =
+    gallerySave && projects
+      ? (video: ExportedVideo) =>
+          gallerySave.saveVideo(video, {
+            title: projectTitle.trim() || UNTITLED,
+            projectId: project?.id ?? null,
+          })
+      : undefined
+
   const prepareExport = (): ExportJob => {
     const snapshot = scenes
     const canvas = document.createElement('canvas')
@@ -2183,6 +2196,7 @@ export function MemeGenerator({
               fadeOut,
               trackChannels,
             ]}
+            onSaveToGallery={saveVideoToGallery}
           />
         </div>
       </div>

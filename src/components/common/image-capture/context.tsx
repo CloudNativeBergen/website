@@ -26,6 +26,22 @@ export interface StudioCard {
   subject?: { type: 'speaker' | 'sponsor'; id: string; name: string }
 }
 
+/** A finished MP4 from the meme generator's export (#1182). */
+export interface ExportedVideo {
+  blob: Blob
+  seconds: number
+  /** Draws the first frame and encodes it as a JPEG, for the gallery. */
+  poster: () => Promise<Blob>
+}
+
+/** Where an exported video came from, for its gallery record. */
+export interface VideoOrigin {
+  /** The project's title, to prefill the asset's. */
+  title: string
+  /** The saved project it was exported from; null for an unsaved video. */
+  projectId: string | null
+}
+
 /** "Save to gallery", present on every studio card, Task or not. */
 export interface GallerySave {
   busy: boolean
@@ -34,6 +50,8 @@ export interface GallerySave {
     filename: string,
     card: StudioCard,
   ) => Promise<void>
+  /** An exported video, from Video mode's export panel. */
+  saveVideo: (video: ExportedVideo, origin: VideoOrigin) => void
 }
 export const GallerySaveContext = createContext<GallerySave | null>(null)
 export const useGallerySave = () => useContext(GallerySaveContext)

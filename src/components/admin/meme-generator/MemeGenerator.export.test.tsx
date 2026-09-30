@@ -17,6 +17,12 @@ import {
 } from '@testing-library/react'
 import type { Animation, MemeAssets, MemeDesign } from './meme-generator-draw'
 import type { EncodeSession, EncoderBackend } from './meme-generator-export'
+import type { VideoProjects } from './meme-generator-project'
+import {
+  GallerySaveContext,
+  type GallerySave,
+} from '@/components/common/image-capture'
+import type { OpenedProject } from '@/lib/video-project'
 
 const drawDesign =
   vi.fn<
@@ -50,6 +56,7 @@ vi.mock('./meme-generator-fonts', async (importOriginal) => {
 })
 
 import { MemeGenerator } from './MemeGenerator'
+import { DEFAULT_DESIGN } from './meme-generator-draw'
 
 beforeEach(() => {
   drawDesign.mockReset()
@@ -380,6 +387,181 @@ describe('Export MP4', () => {
       expect(status()).toHaveTextContent(
         'H.264, 1080 × 1080, 30 frames a second, silent.',
       ),
+    )
+  })
+})
+
+/** A saved-project store with one project in it, `vp-1`. */
+function fakeProjects(): VideoProjects {
+  const opened: OpenedProject = {
+    _id: 'vp-1',
+    _rev: 'rev-1',
+    title: 'Launch teaser',
+    scope: 'organization',
+    edition: null,
+    scenes: [
+      {
+        key: 's-1',
+        duration: 3,
+        transition: 'cut',
+        motion: { drift: false, elements: [] },
+        design: {
+          ...structuredClone(DEFAULT_DESIGN),
+          background: { color: '#1D4ED8', image: null },
+        },
+      },
+    ],
+    track: null,
+  }
+  return {
+    list: vi.fn(async () => []),
+    open: vi.fn(async () => opened),
+    create: vi.fn(),
+    save: vi.fn(),
+    duplicate: vi.fn(),
+    delete: vi.fn(),
+  } as unknown as VideoProjects
+}
+
+function withGallery(node: React.ReactNode) {
+  const gallery: GallerySave = {
+    busy: false,
+    save: vi.fn(),
+    saveVideo: vi.fn(),
+  }
+  const ui = (
+    <GallerySaveContext.Provider value={gallery}>
+      {node}
+    </GallerySaveContext.Provider>
+  )
+  return { gallery, ui }
+}
+
+async function exportOnce() {
+  await waitFor(() =>
+    expect(exportButton()).not.toHaveAttribute('aria-disabled'),
+  )
+  fireEvent.click(exportButton())
+  await screen.findByRole('link', { name: /Download video/ }, { timeout: 5000 })
+}
+
+const saveButton = () =>
+  screen.queryByRole('button', { name: 'Save to gallery' })
+
+describe('Save an export to the gallery (#1182)', () => {
+  it('hands the exported file, its length and an unsaved origin to the gallery', async () => {
+    const { encoder } = fakeEncoder()
+    const { gallery, ui } = withGallery(
+      <MemeGenerator encoder={encoder} projects={fakeProjects()} />,
+    )
+    render(ui)
+    fireEvent.click(screen.getByRole('button', { name: 'Video' }))
+    // Nothing to save before there is a file.
+    expect(saveButton()).toBeNull()
+    await exportOnce()
+    fireEvent.click(saveButton()!)
+    expect(gallery.saveVideo).toHaveBeenCalledTimes(1)
+    const [video, origin] = vi.mocked(gallery.saveVideo).mock.calls[0]
+    // 90 frames of 50 kB: the encoder's own file, not a copy of something.
+    expect(video.blob).toBeInstanceOf(Blob)
+    expect(video.blob.size).toBe(90 * 50_000)
+    expect(video.seconds).toBe(90 / 30)
+    expect(origin).toEqual({ title: 'Untitled video', projectId: null })
+  })
+
+  it('records the project the video was opened from, and its title', async () => {
+    const { encoder } = fakeEncoder()
+    const { gallery, ui } = withGallery(
+      <MemeGenerator
+        encoder={encoder}
+        projects={fakeProjects()}
+        initialProjectId="vp-1"
+      />,
+    )
+    render(ui)
+    await screen.findByDisplayValue('Launch teaser')
+    await exportOnce()
+    fireEvent.click(saveButton()!)
+    const [, origin] = vi.mocked(gallery.saveVideo).mock.calls[0]
+    expect(origin).toEqual({ title: 'Launch teaser', projectId: 'vp-1' })
+  })
+
+  it('offers no Save to gallery without the gallery, or outside the studio', async () => {
+    const bare = fakeEncoder()
+    const { unmount } = render(
+      <MemeGenerator encoder={bare.encoder} projects={fakeProjects()} />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Video' }))
+    await exportOnce()
+    expect(saveButton()).toBeNull()
+    unmount()
+
+    // A gallery but no saved projects: not the studio page.
+    const noProjects = withGallery(
+      <MemeGenerator encoder={fakeEncoder().encoder} />,
+    )
+    render(noProjects.ui)
+    fireEvent.click(screen.getByRole('button', { name: 'Video' }))
+    await exportOnce()
+    expect(saveButton()).toBeNull()
+  })
+
+  it('draws the poster from frame 0 of the export, as a JPEG', async () => {
+    // One context per canvas, so the poster's paint can be told apart from
+    // the preview's.
+    const contexts = new WeakMap<HTMLCanvasElement, object>()
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(
+      function (this: HTMLCanvasElement) {
+        if (!contexts.has(this)) contexts.set(this, {})
+        return contexts.get(this) as CanvasRenderingContext2D
+      },
+    )
+    const toBlob = vi
+      .spyOn(HTMLCanvasElement.prototype, 'toBlob')
+      .mockImplementation(function (this: HTMLCanvasElement, callback, type) {
+        callback(new Blob(['poster'], { type }))
+      })
+    const { encoder } = fakeEncoder()
+    const { gallery, ui } = withGallery(
+      <MemeGenerator encoder={encoder} projects={fakeProjects()} />,
+    )
+    render(ui)
+    fireEvent.click(screen.getByRole('button', { name: 'Video' }))
+    await exportOnce()
+    fireEvent.click(saveButton()!)
+    const [video] = vi.mocked(gallery.saveVideo).mock.calls[0]
+    // The export ended on its last frame.
+    expect(drawDesign.mock.lastCall![3]).toBeCloseTo(89 / 30, 10)
+    drawDesign.mockClear()
+
+    const poster = await video.poster()
+    expect(poster.type).toBe('image/jpeg')
+    expect(toBlob).toHaveBeenCalledTimes(1)
+    expect(toBlob.mock.calls[0].slice(1)).toEqual(['image/jpeg', 0.92])
+    const canvas = toBlob.mock.contexts[0] as HTMLCanvasElement
+    expect(canvas.width).toBe(1080)
+    // Frame 0, painted onto the canvas the poster is taken from.
+    expect(drawDesign).toHaveBeenCalledTimes(1)
+    const [ctx, , , time] = drawDesign.mock.calls[0]
+    expect(ctx).toBe(contexts.get(canvas))
+    expect(time).toBe(0)
+  })
+
+  it('says so when the poster cannot be encoded', async () => {
+    vi.spyOn(HTMLCanvasElement.prototype, 'toBlob').mockImplementation(
+      (callback) => callback(null),
+    )
+    const { encoder } = fakeEncoder()
+    const { gallery, ui } = withGallery(
+      <MemeGenerator encoder={encoder} projects={fakeProjects()} />,
+    )
+    render(ui)
+    fireEvent.click(screen.getByRole('button', { name: 'Video' }))
+    await exportOnce()
+    fireEvent.click(saveButton()!)
+    const [video] = vi.mocked(gallery.saveVideo).mock.calls[0]
+    await expect(video.poster()).rejects.toThrow(
+      'The first frame could not be encoded as an image.',
     )
   })
 })
