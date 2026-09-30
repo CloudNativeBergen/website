@@ -346,6 +346,46 @@ describe('Promo Studio Save to gallery (#1164)', () => {
   )
 })
 
+describe('Promo Studio Formats (#1247)', () => {
+  it('has one Format switch above the speaker grid and one above the sponsor grid, each starting square', async () => {
+    render(
+      await MarketingPage({
+        searchParams: Promise.resolve({ task: 'render-1', speaker: 'ada' }),
+      }),
+    )
+    const groups = screen.getAllByRole('radiogroup', { name: 'Format' })
+    // Two: the meme generator, the promo and the photo collage keep their shapes.
+    expect(groups).toHaveLength(2)
+    for (const [group, label] of [
+      [groups[0], 'speakers'],
+      [groups[1], 'sponsors'],
+    ] as const) {
+      const tab = group.parentElement!.parentElement!
+      const grid = within(tab).getByRole('region', { name: `All ${label}` })
+      expect(
+        group.compareDocumentPosition(grid) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy()
+      expect(
+        within(group)
+          .getAllByRole('radio')
+          .map((radio) => [
+            radio.textContent,
+            radio.getAttribute('aria-checked'),
+          ]),
+      ).toEqual([
+        ['Square1080×1080', 'true'],
+        ['Landscape1200×628', 'false'],
+        ['Portrait1080×1350', 'false'],
+      ])
+    }
+    // The pinned card is inside its tab's switch too: it changes with the grid.
+    const speakersTab = groups[0].parentElement!.parentElement!
+    expect(
+      within(speakersTab).getByRole('region', { name: 'Card for your Task' }),
+    ).toBeTruthy()
+  })
+})
+
 describe('Promo Studio without a resolvable organization', () => {
   afterEach(() => {
     orgIdMock.value = 'org-1'

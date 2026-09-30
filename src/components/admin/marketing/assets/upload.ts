@@ -7,6 +7,7 @@ import {
   marketingAssetPathname,
   type ExportSourceInput,
   type MarketingAssetDetails,
+  type StudioFormat,
   type StudioTab,
 } from '@/lib/marketing-asset'
 
@@ -80,10 +81,13 @@ export interface VideoUploadOptions {
   }
 }
 
-/** What "Save to gallery" in the studio adds: the tab it saved from (§4.2). */
+/**
+ * What "Save to gallery" in the studio adds: the tab it saved from (§4.2) and,
+ * on a tab with a Format switch, the Format the card was captured in.
+ */
 export interface StudioUploadOptions {
   kind: 'image'
-  studio: { tab: StudioTab }
+  studio: { tab: StudioTab; format?: StudioFormat }
 }
 
 export type AssetUploadOptions =

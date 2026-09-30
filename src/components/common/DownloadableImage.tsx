@@ -9,8 +9,10 @@ import {
   captureImage,
   useGallerySave,
   useImageAttachment,
+  useStudioFormat,
   type StudioCard,
 } from './image-capture'
+import { STUDIO_FORMATS } from '@/lib/marketing-asset'
 
 interface DownloadableImageProps {
   filename?: string
@@ -33,6 +35,14 @@ export function DownloadableImage({
   const attachment = useImageAttachment()
   const gallery = useGallerySave()
   const busy = isDownloading || Boolean(attachment?.busy || gallery?.busy)
+  // On a tab with a Format switch, every capture is the Format shown, at
+  // exactly its pixels (docs/MARKETING_STUDIO_FORMATS_SPEC.md §4); elsewhere
+  // a capture is 4× the CSS box, as it always was.
+  const format = useStudioFormat()
+  const size = format ? STUDIO_FORMATS[format] : undefined
+  const capture = (element: HTMLElement) => captureImage(element, size)
+  const card: StudioCard | undefined =
+    studio && format ? { ...studio, format } : studio
 
   const downloadAsImage = async () => {
     if (!componentRef.current) {
@@ -54,12 +64,12 @@ export function DownloadableImage({
     setIsDownloading(true)
 
     try {
-      const blob = await captureImage(element)
+      const blob = await capture(element)
       const url = URL.createObjectURL(blob)
       const link = document.createElement('a')
       try {
         link.href = url
-        link.download = `${filename}-${Date.now()}.png`
+        link.download = `${filename}${format ? `-${format}` : ''}-${Date.now()}.png`
         link.style.display = 'none'
         document.body.appendChild(link)
         link.click()
@@ -116,10 +126,7 @@ export function DownloadableImage({
         {attachment && (
           <button
             onClick={() =>
-              attachment.attach(
-                () => captureImage(componentRef.current!),
-                filename,
-              )
+              attachment.attach(() => capture(componentRef.current!), filename)
             }
             disabled={busy}
             className="inline-flex items-center rounded-lg border border-blue-600 px-4 py-2 text-sm font-semibold text-blue-700 disabled:opacity-50 dark:text-blue-300"
@@ -127,14 +134,10 @@ export function DownloadableImage({
             {attachment.busy ? 'Attaching…' : 'Attach to Task'}
           </button>
         )}
-        {gallery && studio && (
+        {gallery && card && (
           <button
             onClick={() =>
-              gallery.save(
-                () => captureImage(componentRef.current!),
-                filename,
-                studio,
-              )
+              gallery.save(() => capture(componentRef.current!), filename, card)
             }
             disabled={busy}
             className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-800 transition-colors hover:bg-gray-50 disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700"

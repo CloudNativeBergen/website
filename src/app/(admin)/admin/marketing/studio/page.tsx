@@ -1,6 +1,7 @@
 import React from 'react'
 import { StudioSearchParamsSchema } from '@/server/schemas/studio'
 import { StudioCardGrid } from '@/components/admin/marketing/StudioCardGrid'
+import { FormatSwitch } from '@/components/studio-cards'
 import { StudioTaskProvider } from '@/components/admin/marketing/StudioTaskProvider'
 import { StudioGalleryProvider } from '@/components/admin/marketing/studio-gallery'
 import { getAuthSession } from '@/lib/auth'
@@ -571,38 +572,40 @@ export default async function MarketingPage({
                 </p>
               </div>
             ) : (
-              <StudioCardGrid
-                selectedId={selection.speaker}
-                pinnedTitle={pinnedTitle}
-                label="speakers"
-                className="grid grid-cols-2 gap-6 sm:grid-cols-3 md:grid-cols-4"
-              >
-                {speakersWithTalks.map(({ speaker, talks }) => (
-                  <div key={speaker._id} className="flex flex-col items-center">
-                    <DownloadableImage
-                      filename={`${getSpeakerFilename(speaker)}-speaker-spotlight`}
-                      studio={speakerCard(speaker, talks, conference.title)}
+              <FormatSwitch>
+                <StudioCardGrid
+                  selectedId={selection.speaker}
+                  pinnedTitle={pinnedTitle}
+                  label="speakers"
+                  className="grid grid-cols-2 gap-6 sm:grid-cols-3 md:grid-cols-4"
+                >
+                  {speakersWithTalks.map(({ speaker, talks }) => (
+                    <div
+                      key={speaker._id}
+                      className="flex flex-col items-center"
                     >
-                      <div
-                        className="h-64 w-64"
-                        style={{ width: '256px', height: '256px' }}
+                      <DownloadableImage
+                        filename={`${getSpeakerFilename(speaker)}-speaker-spotlight`}
+                        studio={speakerCard(speaker, talks, conference.title)}
                       >
-                        <SpeakerShare
-                          speaker={{
-                            ...speaker,
-                            talks: talks,
-                          }}
-                          variant="speaker-spotlight"
-                          isFeatured={true}
-                          eventName={conference.title || PLATFORM_NAME}
-                          className="h-full w-full"
-                          showCloudNativePattern={true}
-                        />
-                      </div>
-                    </DownloadableImage>
-                  </div>
-                ))}
-              </StudioCardGrid>
+                        {/* Width only: the card takes its Format's aspect. */}
+                        <div style={{ width: '256px' }}>
+                          <SpeakerShare
+                            speaker={{
+                              ...speaker,
+                              talks: talks,
+                            }}
+                            variant="speaker-spotlight"
+                            isFeatured={true}
+                            eventName={conference.title || PLATFORM_NAME}
+                            showCloudNativePattern={true}
+                          />
+                        </div>
+                      </DownloadableImage>
+                    </div>
+                  ))}
+                </StudioCardGrid>
+              </FormatSwitch>
             )}
           </div>
 
@@ -620,58 +623,57 @@ export default async function MarketingPage({
                 </p>
               </div>
             ) : (
-              <StudioCardGrid
-                selectedId={selection.sponsor}
-                pinnedTitle={pinnedTitle}
-                label="sponsors"
-                className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3"
-              >
-                {sponsorsWithData.map((sponsorRef, index) => {
-                  const sponsor = sponsorRef.sponsor as SponsorData
-                  const tier = sponsorRef.tier as SponsorTierData
-                  const variants = [
-                    'code-heroes',
-                    'cloud-wizards',
-                    'tech-ninjas',
-                    'deploy-legends',
-                    'kubernetes-masters',
-                    'devops-rockstars',
-                  ] as const
-                  const variant = variants[index % variants.length]
+              <FormatSwitch>
+                <StudioCardGrid
+                  selectedId={selection.sponsor}
+                  pinnedTitle={pinnedTitle}
+                  label="sponsors"
+                  className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3"
+                >
+                  {sponsorsWithData.map((sponsorRef, index) => {
+                    const sponsor = sponsorRef.sponsor as SponsorData
+                    const tier = sponsorRef.tier as SponsorTierData
+                    const variants = [
+                      'code-heroes',
+                      'cloud-wizards',
+                      'tech-ninjas',
+                      'deploy-legends',
+                      'kubernetes-masters',
+                      'devops-rockstars',
+                    ] as const
+                    const variant = variants[index % variants.length]
 
-                  return (
-                    <div
-                      key={sponsor._id}
-                      className="flex flex-col items-center"
-                    >
-                      <DownloadableImage
-                        filename={`${sponsor.name.replace(/\s+/g, '-').toLowerCase()}-${tier.title.replace(/\s+/g, '-').toLowerCase()}-thank-you`}
-                        studio={sponsorCard(sponsor, tier, conference.title)}
+                    return (
+                      <div
+                        key={sponsor._id}
+                        className="flex flex-col items-center"
                       >
-                        <div
-                          className="w-full"
-                          style={{ width: '400px', height: '225px' }} // 16:9 aspect ratio
+                        <DownloadableImage
+                          filename={`${sponsor.name.replace(/\s+/g, '-').toLowerCase()}-${tier.title.replace(/\s+/g, '-').toLowerCase()}-thank-you`}
+                          studio={sponsorCard(sponsor, tier, conference.title)}
                         >
-                          <SponsorThankYou
-                            sponsor={sponsor}
-                            tier={tier}
-                            variant={variant}
-                            eventName={conference.title}
-                            eventDate={eventDate}
-                            baseUrl={
-                              hasConferenceDomain(conference)
-                                ? conferenceBaseUrl(conference)
-                                : undefined
-                            }
-                            showCloudNativePattern={true}
-                            className="h-full w-full"
-                          />
-                        </div>
-                      </DownloadableImage>
-                    </div>
-                  )
-                })}
-              </StudioCardGrid>
+                          {/* Width only: the card takes its Format's aspect. */}
+                          <div style={{ width: '400px' }}>
+                            <SponsorThankYou
+                              sponsor={sponsor}
+                              tier={tier}
+                              variant={variant}
+                              eventName={conference.title}
+                              eventDate={eventDate}
+                              baseUrl={
+                                hasConferenceDomain(conference)
+                                  ? conferenceBaseUrl(conference)
+                                  : undefined
+                              }
+                              showCloudNativePattern={true}
+                            />
+                          </div>
+                        </DownloadableImage>
+                      </div>
+                    )
+                  })}
+                </StudioCardGrid>
+              </FormatSwitch>
             )}
           </div>
         </MarketingTabs>

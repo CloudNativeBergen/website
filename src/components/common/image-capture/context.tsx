@@ -1,7 +1,11 @@
 'use client'
 
 import { createContext, useContext } from 'react'
-import type { ExportSourceInput, StudioTab } from '@/lib/marketing-asset'
+import type {
+  ExportSourceInput,
+  StudioFormat,
+  StudioTab,
+} from '@/lib/marketing-asset'
 
 export interface ImageAttachment {
   busy: boolean
@@ -24,7 +28,21 @@ export interface StudioCard {
   /** The prefilled alt text, where the card knows its subject. */
   alt?: string
   subject?: { type: 'speaker' | 'sponsor'; id: string; name: string }
+  /**
+   * The Format the card was shown, and so captured, in (docs/MARKETING_
+   * STUDIO_FORMATS_SPEC.md §4). Absent on a tab without a Format switch.
+   */
+  format?: StudioFormat
 }
+
+/**
+ * The Format a studio tab is showing (spec §4): set by the tab's Format switch,
+ * read by every card on the tab to lay itself out and by every capture to
+ * size itself. Null outside a switch, where a card is square and a capture is
+ * 4× its CSS box, as before Formats.
+ */
+export const StudioFormatContext = createContext<StudioFormat | null>(null)
+export const useStudioFormat = () => useContext(StudioFormatContext)
 
 /** A finished MP4 from the meme generator's export (#1182). */
 export interface ExportedVideo {

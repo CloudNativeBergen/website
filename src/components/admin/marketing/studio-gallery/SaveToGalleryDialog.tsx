@@ -10,6 +10,7 @@ import {
 import { AdminButton } from '@/components/admin/AdminButton'
 import { ModalShell } from '@/components/ModalShell'
 import type { StudioCard } from '@/components/common/image-capture'
+import { STUDIO_FORMATS } from '@/lib/marketing-asset'
 import type { AssetUploader } from '@/components/admin/marketing/assets/upload'
 import {
   HINT,
@@ -136,7 +137,14 @@ function SaveForm({
             : null,
           tags: [],
         },
-        { kind: 'image', studio: { tab: card.tab } },
+        {
+          kind: 'image',
+          // The Format the card was shown, and captured, in (Formats spec §4).
+          studio: {
+            tab: card.tab,
+            ...(card.format ? { format: card.format } : {}),
+          },
+        },
       )
       setSaved({ softOnSocial: result.softOnSocial })
       onSaved()
@@ -249,6 +257,13 @@ function SaveForm({
         )}
       </p>
       <p className={HINT}>
+        {card.format && (
+          <>
+            {STUDIO_FORMATS[card.format].label},{' '}
+            {STUDIO_FORMATS[card.format].width}×
+            {STUDIO_FORMATS[card.format].height} px.{' '}
+          </>
+        )}
         Marked with this edition. Tags, credit and the edition can be changed in
         the gallery.
       </p>
