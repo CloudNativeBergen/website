@@ -126,6 +126,22 @@ describe('resolveVideoLineage', () => {
     ])
   })
 
+  it('keeps the file the export showed when the entry’s image was replaced since', async () => {
+    await expect(
+      resolveVideoLineage('org-a', {
+        sources: [{ fileId: 'image-venue-old', galleryAssetId: 'asset-venue' }],
+      }),
+    ).resolves.toEqual({
+      sources: [
+        {
+          fileId: 'image-venue-old',
+          galleryAssetId: 'asset-venue',
+          subjectId: 'talk-1',
+        },
+      ],
+    })
+  })
+
   it('takes a bare file id as given: a photo the project has since dropped, its entry gone too', async () => {
     await expect(
       resolveVideoLineage('org-a', {

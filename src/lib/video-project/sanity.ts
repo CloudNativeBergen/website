@@ -400,17 +400,69 @@ export async function snapshotGallerySubjectIntoProjects(
     { assetId },
     opts,
   )
-  const releaseHolders = (holders ?? []).filter((h) =>
+  // An exported gallery video copies the subject with each file it showed
+  // (#1182), exactly as a project does: refreshed here for the same reason.
+  const exports = await scopedFetch<
+    | {
+        _id: string
+        _rev: string
+        sources: { key: string | null; subjectId: string | null }[] | null
+      }[]
+    | null
+  >(
+    raw,
+    { orgId },
+    `*[_type == "marketingAsset" && count(sources[galleryAsset._ref == $assetId]) > 0]{
+      _id,
+      _rev,
+      "sources": sources[galleryAsset._ref == $assetId]{ "key": _key, "subjectId": subject._ref }
+    }`,
+    { assetId },
+    opts,
+  )
+  const releaseHolders = [...(holders ?? []), ...(exports ?? [])].filter((h) =>
     h._id.startsWith('versions.'),
   ).length
   if (releaseHolders > 0) return { assetRev: null, releaseHolders }
   const subjectId = asset?.subjectId ?? null
   const tx = clientWrite.transaction()
   let writes = 0
+  const patch = (id: string, rev: string, paths: string[]) => {
+    if (paths.length === 0) return
+    writes++
+    tx.patch(id, (p) =>
+      subjectId
+        ? p
+            .ifRevisionId(rev)
+            .set(
+              Object.fromEntries(
+                paths.map((path) => [
+                  path,
+                  { _type: 'reference', _ref: subjectId, _weak: true },
+                ]),
+              ),
+            )
+        : p.ifRevisionId(rev).unset(paths),
+    )
+  }
+  const stale = (stored: string | null) => (stored ?? null) !== subjectId
+  for (const holder of exports ?? []) {
+    patch(
+      holder._id,
+      holder._rev,
+      (holder.sources ?? [])
+        .filter(
+          (source): source is { key: string; subjectId: string | null } =>
+            typeof source.key === 'string' &&
+            PROJECT_KEY.test(source.key) &&
+            stale(source.subjectId),
+        )
+        .map((source) => `sources[_key=="${source.key}"].subject`),
+    )
+  }
   for (const holder of holders ?? []) {
     // Only where the copy differs: an unchanged one is left alone, so the
     // project's revision — and an open editor's next save — is untouched.
-    const stale = (stored: string | null) => (stored ?? null) !== subjectId
     const paths = [
       ...(holder.scenes ?? [])
         .filter(
@@ -426,22 +478,7 @@ export async function snapshotGallerySubjectIntoProjects(
         ? ['track.file.subject']
         : []),
     ]
-    if (paths.length === 0) continue
-    writes++
-    tx.patch(holder._id, (p) =>
-      subjectId
-        ? p
-            .ifRevisionId(holder._rev)
-            .set(
-              Object.fromEntries(
-                paths.map((path) => [
-                  path,
-                  { _type: 'reference', _ref: subjectId, _weak: true },
-                ]),
-              ),
-            )
-        : p.ifRevisionId(holder._rev).unset(paths),
-    )
+    patch(holder._id, holder._rev, paths)
   }
   // One transaction: every copy is written, or none is.
   if (writes > 0) await tx.commit()

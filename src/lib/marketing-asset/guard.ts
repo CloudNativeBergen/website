@@ -132,8 +132,11 @@ export async function resolveVideoLineage(
   for (const s of sources) {
     const row = s.galleryAssetId ? gallery.get(s.galleryAssetId) : undefined
     if (row)
+      // The file the export SHOWED: the one the editor captured, where it
+      // knew one — the entry's image may have been replaced in Studio
+      // since, and the export still shows the old one.
       found.push({
-        fileId: row.fileId as string,
+        fileId: s.fileId ?? (row.fileId as string),
         galleryAssetId: row._id,
         ...(row.subjectId ? { subjectId: row.subjectId } : {}),
       })

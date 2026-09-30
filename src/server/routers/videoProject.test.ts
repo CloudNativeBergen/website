@@ -708,6 +708,79 @@ describe('the gallery asset behind a background', () => {
     expect(image).toMatchObject({ subject: { ...ref('sp-bob'), _weak: true } })
   })
 
+  it('refreshes the subject an exported video copied with the file, as it does a project’s (#1182)', async () => {
+    h.dataset.push({
+      _id: 'asset-export',
+      _rev: 'rev-export',
+      _type: 'marketingAsset',
+      organization: ref('org-A'),
+      scope: 'organization',
+      kind: 'video',
+      title: 'Teaser',
+      source: 'studio',
+      studio: { tab: 'meme-generator' },
+      sources: [
+        {
+          _key: 'src-0',
+          _type: 'exportSource',
+          fileId: HALL,
+          galleryAsset: { ...ref('asset-hall'), _weak: true },
+          subject: { ...ref('sp-ada'), _weak: true },
+        },
+        // Another entry's file: untouched.
+        {
+          _key: 'src-1',
+          _type: 'exportSource',
+          fileId: 'image-other-1080x1080-png',
+          subject: { ...ref('sp-ada'), _weak: true },
+        },
+      ],
+    })
+    const i = h.dataset.findIndex((d) => d._id === 'asset-hall')
+    h.dataset[i] = {
+      ...h.dataset[i],
+      subject: { ...ref('sp-bob'), _weak: true },
+    }
+    await assets().delete({ id: 'asset-hall' })
+    const sources = doc('asset-export')!.sources as Record<string, unknown>[]
+    expect(sources[0]).toMatchObject({
+      fileId: HALL,
+      subject: { ...ref('sp-bob'), _weak: true },
+    })
+    expect(sources[1]).toMatchObject({
+      subject: { ...ref('sp-ada'), _weak: true },
+    })
+  })
+
+  it('clears the subject an exported video copied when the asset no longer names one (#1182)', async () => {
+    h.dataset.push({
+      _id: 'asset-export-2',
+      _rev: 'rev-export-2',
+      _type: 'marketingAsset',
+      organization: ref('org-A'),
+      scope: 'organization',
+      kind: 'video',
+      title: 'Teaser',
+      sources: [
+        {
+          _key: 'src-0',
+          _type: 'exportSource',
+          fileId: HALL,
+          galleryAsset: { ...ref('asset-hall'), _weak: true },
+          subject: { ...ref('sp-ada'), _weak: true },
+        },
+      ],
+    })
+    const i = h.dataset.findIndex((d) => d._id === 'asset-hall')
+    const rest = { ...h.dataset[i] }
+    delete rest.subject
+    h.dataset[i] = rest
+    await assets().delete({ id: 'asset-hall' })
+    const sources = doc('asset-export-2')!.sources as Record<string, unknown>[]
+    expect(sources[0]).not.toHaveProperty('subject')
+    expect(sources[0]).toMatchObject({ fileId: HALL })
+  })
+
   it('removes the copied subject when the asset no longer names one', async () => {
     const created = await projects().create({ title: 'T', scenes: TWO_SCENES })
     const i = h.dataset.findIndex((d) => d._id === 'asset-hall')
