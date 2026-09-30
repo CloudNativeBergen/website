@@ -2674,6 +2674,77 @@ export const ProjectWithSaveToGallery: Story = {
   },
 }
 
+/**
+ * An export from a saved project, on the studio page: "Save to gallery" sits
+ * beside Download (#1182). The encoder is scripted, so it is quick anywhere.
+ */
+export const VideoExportSaveToGallery: Story = {
+  args: {
+    encoder: scriptedEncoder({ supported: true }),
+    gallery: storyGallery,
+    projects: storyProjects(),
+    initialProjectId: 'vp-launch',
+  },
+  decorators: [
+    (Story) => (
+      <StudioGalleryProvider
+        orgId="org-storybook"
+        uploader={async () => ({ _id: 'asset-new', softOnSocial: false })}
+      >
+        <Story />
+      </StudioGalleryProvider>
+    ),
+  ],
+  parameters: { msw: { handlers: [proxyImage] } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const project = within(
+      await canvas.findByRole('region', { name: 'Project' }),
+    )
+    await expect(
+      await project.findByDisplayValue('Launch teaser'),
+    ).toBeInTheDocument()
+    const panel = canvas.getByRole('region', { name: 'Export' })
+    await pressExport(panel)
+    await within(panel).findByRole(
+      'link',
+      { name: /Download video/ },
+      { timeout: 30_000 },
+    )
+    const save = within(panel).getByRole('button', { name: 'Save to gallery' })
+    await expect(save).toBeVisible()
+    panel.scrollIntoView({ block: 'center' })
+  },
+}
+export const VideoExportSaveToGalleryDark: Story = {
+  ...VideoExportSaveToGallery,
+  globals: { theme: 'dark' },
+}
+
+/** Pressed: the dialog opens with the project's title and the video. */
+export const VideoExportSaveToGalleryDialog: Story = {
+  ...VideoExportSaveToGallery,
+  play: async (context) => {
+    await VideoExportSaveToGallery.play!(context)
+    const panel = within(context.canvasElement).getByRole('region', {
+      name: 'Export',
+    })
+    await userEvent.click(
+      within(panel).getByRole('button', { name: 'Save to gallery' }),
+    )
+    const body = within(context.canvasElement.ownerDocument.body)
+    const form = await body.findByRole(
+      'form',
+      { name: 'Save video to gallery' },
+      { timeout: 10_000 },
+    )
+    await expect(within(form).getByLabelText('Title')).toHaveValue(
+      'Launch teaser',
+    )
+    await expect(within(form).queryByText(/not saved as a project/)).toBeNull()
+  },
+}
+
 /** Deleting the open project asks first, in the app's confirmation dialog. */
 export const ProjectDeleteConfirm: Story = {
   args: {
