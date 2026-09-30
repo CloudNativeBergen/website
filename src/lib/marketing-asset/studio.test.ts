@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { StudioSearchParamsSchema } from '@/server/schemas/studio'
+import { VIDEO_PROJECT_MAX_SCENES } from '@/lib/video-project/format'
 import {
+  MAX_EXPORT_SOURCES,
   STUDIO_TABS,
   openInStudioHref,
   opensTheCard,
@@ -154,6 +156,25 @@ describe('an exported video’s project (#1182)', () => {
           sources: [{ fileId }],
         }).success,
       ).toBe(false)
+  })
+
+  it('takes two sources per scene of the longest video, and no more', () => {
+    const source = (i: number) => ({
+      fileId: `image-abc${i}-1080x1080-png`,
+      galleryAssetId: `asset-${i}`,
+    })
+    const full = Array.from({ length: MAX_EXPORT_SOURCES }, (_, i) => source(i))
+    expect(MAX_EXPORT_SOURCES).toBe(2 * VIDEO_PROJECT_MAX_SCENES)
+    expect(
+      studioOriginSchema.parse({ tab: 'meme-generator', sources: full })
+        .sources,
+    ).toHaveLength(MAX_EXPORT_SOURCES)
+    expect(
+      studioOriginSchema.safeParse({
+        tab: 'meme-generator',
+        sources: [...full, source(MAX_EXPORT_SOURCES)],
+      }).success,
+    ).toBe(false)
   })
 
   it('takes a project id only on the meme generator tab, and only a published one', () => {

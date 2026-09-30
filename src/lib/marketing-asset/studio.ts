@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { publishedDocumentId } from './details'
+import { VIDEO_PROJECT_MAX_SCENES } from '@/lib/video-project/format'
 
 /**
  * The studio's tabs (docs/MARKETING_ASSETS_SPEC.md §4.2), in the order the
@@ -30,6 +31,13 @@ export type StudioTab = (typeof STUDIO_TABS)[number]
 /** A Sanity image asset id: `image-<hash>-<w>x<h>-<ext>`. */
 const IMAGE_ASSET_ID = /^image-[A-Za-z0-9]+-\d+x\d+-[a-z0-9]+$/
 
+/**
+ * A video has at most `VIDEO_PROJECT_MAX_SCENES` backgrounds, and a current
+ * export names each once as exported and once as a save recorded it since
+ * (the entry's image replaced in between): two per scene, never more.
+ */
+export const MAX_EXPORT_SOURCES = 2 * VIDEO_PROJECT_MAX_SCENES
+
 export const exportSourceSchema = z.object({
   fileId: z.string().regex(IMAGE_ASSET_ID).optional(),
   galleryAssetId: publishedDocumentId.optional(),
@@ -40,7 +48,7 @@ export const studioOriginSchema = z
   .object({
     tab: z.enum(STUDIO_TABS),
     projectId: publishedDocumentId.optional(),
-    sources: z.array(exportSourceSchema).max(100).optional(),
+    sources: z.array(exportSourceSchema).max(MAX_EXPORT_SOURCES).optional(),
   })
   .refine(
     (origin) =>
