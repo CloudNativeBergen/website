@@ -71,6 +71,39 @@ const LOAD_FAILED_MESSAGE =
 const POSTER_FAILED = 'The first frame could not be encoded as an image.'
 
 /**
+ * The sources of a current file: what it showed at export time AND what the
+ * editor names now, once each. A save that followed the export may have
+ * rewritten a scene's file (the entry's image was replaced in between) —
+ * the scenes still draw the same video, so the file is current, but the
+ * video shows the file it was exported with. Both are named; neither hides
+ * the other.
+ */
+function mergedSources(
+  exported: VideoOrigin['sources'],
+  current: VideoOrigin['sources'],
+): VideoOrigin['sources'] {
+  // An entry named without its file at export time, now known with one:
+  // the current entry says the same thing, better.
+  const refined = new Set(
+    current.flatMap((s) =>
+      s.fileId && s.galleryAssetId ? [s.galleryAssetId] : [],
+    ),
+  )
+  const seen = new Set<string>()
+  return [
+    ...exported.filter(
+      (s) => s.fileId || !s.galleryAssetId || !refined.has(s.galleryAssetId),
+    ),
+    ...current,
+  ].filter((s) => {
+    const key = `${s.fileId ?? ''}\u0000${s.galleryAssetId ?? ''}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
+/**
  * The poster is frame 0 AS THE ENCODER TOOK IT: the canvas is copied by the
  * very paint the export loop made for that frame, before the next frame is
  * drawn — never repainted afterwards, when a font that arrived during the
@@ -412,8 +445,16 @@ export function VideoExport({
               // A current file is the editor's video as it is now, so a
               // project saved or renamed since the export is its origin. A
               // stale one is filed under what it was exported from.
-              const captured = (stale ? file.origin : origin) ??
-                origin ?? { title: '', projectId: null, sources: [] }
+              const none = { title: '', projectId: null, sources: [] }
+              const captured = stale
+                ? (file.origin ?? origin ?? none)
+                : {
+                    ...(origin ?? none),
+                    sources: mergedSources(
+                      file.origin?.sources ?? [],
+                      origin?.sources ?? [],
+                    ),
+                  }
               const under =
                 captured.projectId && projectGone?.(captured.projectId)
                   ? { ...captured, projectId: null }

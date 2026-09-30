@@ -613,6 +613,77 @@ describe('Save an export to the gallery (#1182)', () => {
     return { save }
   }
 
+  it('names the file it was exported with as well as the one a save recorded since', async () => {
+    // Picked with its file known; the entry's image was replaced before the
+    // first save, so the save records another file for the same scene.
+    Object.defineProperty(HTMLImageElement.prototype, 'decode', {
+      configurable: true,
+      value: () => Promise.resolve(),
+    })
+    try {
+      const { encoder } = fakeEncoder()
+      const gallery: BackgroundGallery = {
+        images: async () => [
+          {
+            _id: 'asset-hall',
+            title: 'Keynote hall',
+            alt: 'The hall',
+            thumbnailUrl: null,
+          },
+        ],
+        resolve: async (id) => ({
+          _id: id,
+          title: 'Keynote hall',
+          url: '/hall',
+          fileId: 'image-hall-old',
+        }),
+        keep: async () => ({ _id: 'asset-kept' }),
+      }
+      const projects = fakeProjects()
+      vi.mocked(projects.create).mockImplementation(async (input) => ({
+        _id: 'vp-new',
+        _rev: 'rev-1',
+        scenes: input.scenes.map((scene) => ({
+          key: scene.key,
+          fileId: scene.design.background.image ? 'image-hall-new' : null,
+        })),
+      }))
+      const { gallery: save, ui } = withGallery(
+        <MemeGenerator
+          encoder={encoder}
+          gallery={gallery}
+          projects={projects}
+        />,
+      )
+      render(ui)
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Choose from gallery' }),
+      )
+      fireEvent.click(
+        await screen.findByRole('button', { name: /Keynote hall/ }),
+      )
+      await screen.findByText('Current: Keynote hall')
+      fireEvent.click(screen.getByRole('button', { name: 'Video' }))
+      await exportOnce()
+      const bar = screen.getByRole('region', { name: 'Project' })
+      fireEvent.click(within(bar).getByRole('button', { name: 'Save' }))
+      await within(bar).findByText('All changes saved')
+      expect(screen.getByRole('link', { name: /Download video/ })).toBeTruthy()
+      fireEvent.click(saveButton()!)
+      const [, origin] = vi.mocked(save.saveVideo).mock.calls[0]
+      expect(origin).toEqual({
+        title: 'Untitled video',
+        projectId: 'vp-new',
+        sources: [
+          { fileId: 'image-hall-old', galleryAssetId: 'asset-hall' },
+          { fileId: 'image-hall-new', galleryAssetId: 'asset-hall' },
+        ],
+      })
+    } finally {
+      Reflect.deleteProperty(HTMLImageElement.prototype, 'decode')
+    }
+  })
+
   it('is current again after an undo back to the same video, under new objects', async () => {
     Object.defineProperty(HTMLImageElement.prototype, 'decode', {
       configurable: true,
