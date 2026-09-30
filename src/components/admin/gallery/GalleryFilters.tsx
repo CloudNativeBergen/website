@@ -242,7 +242,7 @@ export function GalleryFilters({
           editions={editions}
           value={filters.edition}
           onChange={handleEditionChange}
-          className={fieldWidth('w-56')}
+          className={fieldWidth('w-72')}
         />
 
         {/* Featured Filter */}
