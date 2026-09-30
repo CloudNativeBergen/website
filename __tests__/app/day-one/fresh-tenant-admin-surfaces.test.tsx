@@ -104,8 +104,8 @@ vi.mock('@/components/CloudNativePattern', () => ({
 vi.mock('@/components/admin/meme-generator', () => ({
   MemeGeneratorWithDownload: () => <div data-testid="meme-generator" />,
 }))
-vi.mock('@/components/admin/PhotoGalleryWithDownload', () => ({
-  PhotoGalleryWithDownload: () => <div data-testid="photo-gallery" />,
+vi.mock('@/components/admin/StudioPhotoGallery', () => ({
+  StudioPhotoGallery: () => <div data-testid="photo-gallery" />,
 }))
 vi.mock('@/components/common/DownloadableImage', () => ({
   DownloadableImage: ({ children }: { children: React.ReactNode }) => (

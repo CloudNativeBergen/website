@@ -10,6 +10,12 @@ export interface GalleryEdition {
   endDate: string
 }
 
+/** What `gallery.admin.editions` returns: the current edition plus the past ones. */
+export interface GalleryEditions {
+  current: { _id: string; title?: string }
+  previous: GalleryEdition[]
+}
+
 /**
  * The organization's PREVIOUS editions (#1191): sibling conferences whose end
  * date is strictly before the current edition's start date, newest first.

@@ -23,7 +23,7 @@ import type { StudioCard } from '@/components/common/image-capture'
 import { AdminPageHeader } from '@/components/admin'
 import { MarketingTabs } from '@/components/admin/MarketingTabs'
 import { MemeGeneratorWithDownload } from '@/components/admin/meme-generator'
-import { PhotoGalleryWithDownload } from '@/components/admin/PhotoGalleryWithDownload'
+import { StudioPhotoGallery } from '@/components/admin/StudioPhotoGallery'
 import { CloudNativePattern } from '@/components/CloudNativePattern'
 import { getSpeakerFilename } from '@/lib/speaker/utils'
 import { PLATFORM_NAME, PLATFORM_SLUG } from '@/lib/branding/platform'
@@ -529,32 +529,19 @@ export default async function MarketingPage({
             </DownloadableImage>
           </div>
 
-          {/* Photo Gallery Tab */}
+          {/* Photo Gallery Tab (#1191: current or a previous edition's featured photos) */}
           <div>
-            {featuredPhotos.length === 0 ? (
-              <div className="py-12 text-center">
-                <PhotoIcon className="mx-auto mb-4 h-12 w-12 text-gray-400 dark:text-gray-500" />
-                <h3 className="font-space-grotesk mb-2 text-xl font-semibold text-gray-900 dark:text-white">
-                  No Featured Photos Yet
-                </h3>
-                <p className="font-inter text-gray-600 dark:text-gray-400">
-                  Featured photo galleries will appear here once photos are
-                  uploaded and marked as featured.
-                </p>
-              </div>
-            ) : (
-              <PhotoGalleryWithDownload
-                photos={featuredPhotos}
-                qrCodeUrl={`https://${conferenceDomain}${programUrl}`}
-                conferenceTitle={conference.title || PLATFORM_NAME}
-                conferenceLogos={{
-                  logoBright: conference.logoBright,
-                  logoDark: conference.logoDark,
-                  logomarkBright: conference.logomarkBright,
-                  logomarkDark: conference.logomarkDark,
-                }}
-              />
-            )}
+            <StudioPhotoGallery
+              photos={featuredPhotos}
+              qrCodeUrl={`https://${conferenceDomain}${programUrl}`}
+              conferenceTitle={conference.title || PLATFORM_NAME}
+              conferenceLogos={{
+                logoBright: conference.logoBright,
+                logoDark: conference.logoDark,
+                logomarkBright: conference.logomarkBright,
+                logomarkDark: conference.logomarkDark,
+              }}
+            />
           </div>
 
           {/* Speaker Cards Tab */}

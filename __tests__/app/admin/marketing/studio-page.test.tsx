@@ -83,8 +83,8 @@ vi.mock('@/components/admin/meme-generator', () => ({
     />
   ),
 }))
-vi.mock('@/components/admin/PhotoGalleryWithDownload', () => ({
-  PhotoGalleryWithDownload: () => null,
+vi.mock('@/components/admin/StudioPhotoGallery', () => ({
+  StudioPhotoGallery: () => null,
 }))
 vi.mock(
   '@/components/common/DownloadableImage',

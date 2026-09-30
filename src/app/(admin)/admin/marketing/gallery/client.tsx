@@ -9,13 +9,14 @@ import {
   ImageMetadataModal,
   GalleryFilters,
 } from '@/components/admin/gallery'
-import { PhotoIcon } from '@heroicons/react/24/outline'
+import { PhotoIcon, ClockIcon } from '@heroicons/react/24/outline'
 import type { GalleryImageWithSpeakers } from '@/lib/gallery/types'
 
 function GalleryPageContent() {
   const { showNotification } = useNotification()
   const utils = api.useUtils()
   const [filters, setFilters] = useState({
+    edition: undefined as string | undefined,
     featured: undefined as boolean | undefined,
     speakerId: undefined as string | undefined,
     dateFrom: undefined as string | undefined,
@@ -31,12 +32,19 @@ function GalleryPageContent() {
   const [isWaitingForUpload, setIsWaitingForUpload] = useState(false)
   const itemsPerPage = 50
 
+  // The editions this organizer may browse (#1191); the server lists them.
+  const { data: editions } = api.gallery.admin.editions.useQuery()
+  const browsingPrevious = editions?.previous.find(
+    (edition) => edition._id === filters.edition,
+  )
+
   const {
     data: images,
     isLoading,
     refetch: refetchImages,
   } = api.gallery.admin.list.useQuery(
     {
+      edition: filters.edition,
       featured: filters.featured,
       speakerId: filters.speakerId,
       dateFrom: filters.dateFrom,
@@ -54,6 +62,7 @@ function GalleryPageContent() {
   )
 
   const { data: filteredCount } = api.gallery.admin.count.useQuery({
+    edition: filters.edition,
     featured: filters.featured,
     speakerId: filters.speakerId,
     dateFrom: filters.dateFrom,
@@ -172,21 +181,37 @@ function GalleryPageContent() {
         backLink={{ href: '/admin/marketing', label: 'Back to Marketing' }}
       />
 
-      <div className="rounded-lg bg-white p-4 shadow dark:bg-gray-900 dark:ring-1 dark:ring-gray-800">
-        <ImageUploadZone
-          onUploadComplete={handleUploadComplete}
-          defaultMetadata={{
-            photographer: '',
-            location: '',
-            featured: false,
-          }}
-        />
-      </div>
+      {browsingPrevious ? (
+        <div
+          role="status"
+          className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-200"
+        >
+          <ClockIcon className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
+          <p>
+            Browsing pictures from <strong>{browsingPrevious.title}</strong>.
+            They are read-only here: upload, edit, feature and delete them from
+            that edition&apos;s admin.
+          </p>
+        </div>
+      ) : (
+        <div className="rounded-lg bg-white p-4 shadow dark:bg-gray-900 dark:ring-1 dark:ring-gray-800">
+          <ImageUploadZone
+            onUploadComplete={handleUploadComplete}
+            defaultMetadata={{
+              photographer: '',
+              location: '',
+              featured: false,
+            }}
+          />
+        </div>
+      )}
 
       <GalleryFilters
         filters={filters}
+        editions={editions}
         onFiltersChange={(newFilters) => {
           setFilters({
+            edition: newFilters.edition ?? undefined,
             featured: newFilters.featured ?? undefined,
             speakerId: newFilters.speakerId ?? undefined,
             dateFrom: newFilters.dateFrom ?? undefined,
@@ -216,6 +241,7 @@ function GalleryPageContent() {
             selectedImages={selectedImages}
             onSelectionChange={setSelectedImages}
             onBulkTag={handleBulkTag}
+            readOnly={Boolean(browsingPrevious)}
           />
         ) : (
           <div className="flex h-64 flex-col items-center justify-center gap-4">
@@ -227,7 +253,9 @@ function GalleryPageContent() {
                   : 'No images yet'}
               </p>
               <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                {Object.values(filters).some((v) => v !== undefined) ? (
+                {browsingPrevious ? (
+                  <>{browsingPrevious.title} has no pictures</>
+                ) : Object.values(filters).some((v) => v !== undefined) ? (
                   <>Try adjusting your filters to see more results</>
                 ) : (
                   <>Upload your first conference photos using the form above</>

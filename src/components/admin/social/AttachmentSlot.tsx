@@ -25,6 +25,8 @@ import {
 } from '@/components/admin/marketing/assets/MarketingAssetPicker'
 import { CropEditor } from './CropEditor'
 import { CroppedImage } from './CroppedImage'
+import { EditionSelect } from '@/components/admin/gallery/EditionSelect'
+import type { GalleryEditions } from '@/lib/gallery/editions'
 
 /** An image the organizer can pull in from the conference gallery. */
 export interface GalleryPick {
@@ -65,6 +67,16 @@ export interface AttachmentSlotProps {
     /** Called when the picker opens, so the list can load lazily. */
     onOpen?: () => void
     onPick: (image: GalleryPick) => Promise<void>
+    /**
+     * Browse a previous edition's pictures (#1191): the server-listed editions,
+     * the selected one (`undefined` = current) and the change handler. Absent
+     * or single-edition: no control.
+     */
+    editions?: {
+      options: GalleryEditions | undefined
+      value: string | undefined
+      onChange: (edition: string | undefined) => void
+    }
   }
   marketingAssets?: MarketingAssetSource & {
     /** Called when the picker opens, so the list can load lazily. */
@@ -298,11 +310,25 @@ export function AttachmentSlot({
       )}
 
       {picker === 'gallery' && gallery && (
-        <div className="rounded-lg border border-gray-200 p-3 dark:border-gray-700">
+        <div className="space-y-3 rounded-lg border border-gray-200 p-3 dark:border-gray-700">
+          {gallery.editions && (
+            <EditionSelect
+              id="attachment-gallery-edition"
+              editions={gallery.editions.options}
+              value={gallery.editions.value}
+              onChange={gallery.editions.onChange}
+              disabled={busy}
+              className="max-w-xs"
+            />
+          )}
           {gallery.isLoading ? (
             <div className="h-24 animate-pulse rounded bg-gray-100 dark:bg-gray-800" />
           ) : gallery.images.length === 0 ? (
-            <p className="text-sm text-gray-500">The gallery is empty.</p>
+            <p className="text-sm text-gray-500">
+              {gallery.editions?.value
+                ? 'This edition has no pictures.'
+                : 'The gallery is empty.'}
+            </p>
           ) : (
             <ul className="grid max-h-56 grid-cols-4 gap-2 overflow-y-auto sm:grid-cols-6">
               {gallery.images.map((image) => (

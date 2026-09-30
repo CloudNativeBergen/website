@@ -15,29 +15,34 @@ import { useDebounce } from '@/hooks/useDebounce'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import { AdminFilterBar } from '@/components/admin/AdminFilterBar'
 import clsx from 'clsx'
+import { EditionSelect } from './EditionSelect'
+import type { GalleryEditions } from '@/lib/gallery/editions'
+
+export interface GalleryFilterValues {
+  /** A previous edition's id (#1191); `undefined` is the current edition. */
+  edition?: string
+  featured?: boolean
+  speakerId?: string
+  dateFrom?: string
+  dateTo?: string
+  photographerSearch?: string
+  locationSearch?: string
+}
 
 interface GalleryFiltersProps {
-  filters: {
-    featured?: boolean
-    speakerId?: string
-    dateFrom?: string
-    dateTo?: string
-    photographerSearch?: string
-    locationSearch?: string
-  }
-  onFiltersChange: (filters: {
-    featured?: boolean
-    speakerId?: string
-    dateFrom?: string
-    dateTo?: string
-    photographerSearch?: string
-    locationSearch?: string
-  }) => void
+  filters: GalleryFilterValues
+  onFiltersChange: (filters: GalleryFilterValues) => void
+  /**
+   * The editions the organizer may browse, as the server lists them (#1191).
+   * Absent or single-edition: no edition control is shown.
+   */
+  editions?: GalleryEditions
 }
 
 export function GalleryFilters({
   filters,
   onFiltersChange,
+  editions,
 }: GalleryFiltersProps) {
   const router = useRouter()
   const pathname = usePathname()
@@ -61,6 +66,7 @@ export function GalleryFilters({
   const debouncedLocation = useDebounce(localLocation, 500)
 
   useEffect(() => {
+    const edition = searchParams.get('edition')
     const featured = searchParams.get('featured')
     const speakerId = searchParams.get('speakerId')
     const dateFrom = searchParams.get('dateFrom')
@@ -69,6 +75,7 @@ export function GalleryFilters({
     const location = searchParams.get('location')
 
     const urlFilters = {
+      edition: edition || undefined,
       featured:
         featured === 'true' ? true : featured === 'false' ? false : undefined,
       speakerId: speakerId || undefined,
@@ -96,6 +103,9 @@ export function GalleryFilters({
     (newFilters: typeof filters) => {
       const params = new URLSearchParams()
 
+      if (newFilters.edition) {
+        params.set('edition', newFilters.edition)
+      }
       if (newFilters.featured !== undefined) {
         params.set('featured', String(newFilters.featured))
       }
@@ -127,6 +137,12 @@ export function GalleryFilters({
       enabled: debouncedQuery.length > 0,
     },
   )
+
+  const handleEditionChange = (edition: string | undefined) => {
+    const newFilters = { ...filters, edition }
+    onFiltersChange(newFilters)
+    updateURL(newFilters)
+  }
 
   const handleFeaturedChange = (value: string) => {
     const newFeatured = value === 'all' ? undefined : value === 'featured'
@@ -161,6 +177,7 @@ export function GalleryFilters({
     setLocalPhotographer('')
     setLocalLocation('')
     const newFilters = {
+      edition: undefined,
       featured: undefined,
       speakerId: undefined,
       dateFrom: undefined,
@@ -173,6 +190,7 @@ export function GalleryFilters({
   }
 
   const hasActiveFilters =
+    filters.edition !== undefined ||
     filters.featured !== undefined ||
     filters.speakerId !== undefined ||
     filters.dateFrom !== undefined ||
@@ -205,6 +223,7 @@ export function GalleryFilters({
   }, [debouncedLocation])
 
   const activeFilterCount = [
+    filters.edition,
     filters.featured,
     filters.speakerId,
     filters.dateFrom,
@@ -217,6 +236,15 @@ export function GalleryFilters({
     const fieldWidth = (inline: string) => (stacked ? 'w-full' : inline)
     return (
       <>
+        {/* Edition Filter (#1191): only when the organization has previous editions */}
+        <EditionSelect
+          id={`${idPrefix}-edition`}
+          editions={editions}
+          value={filters.edition}
+          onChange={handleEditionChange}
+          className={fieldWidth('w-56')}
+        />
+
         {/* Featured Filter */}
         <div className={clsx('relative', stacked && 'w-full')}>
           <StarIcon className="pointer-events-none absolute top-1/2 left-2 h-4 w-4 -translate-y-1/2 text-gray-400" />

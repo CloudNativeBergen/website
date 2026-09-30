@@ -142,9 +142,15 @@ export function ConnectedVariantEditor({
   const changedUnderneath = data.variant._rev !== loadedRev
   const [error, setError] = useState<string | null>(null)
   const [galleryOpen, setGalleryOpen] = useState(false)
+  // Pictures from a previous edition of the organization (#1191): the server
+  // lists the editions, and only one of its ids is ever sent back as `edition`.
+  const [galleryEdition, setGalleryEdition] = useState<string | undefined>()
+  const galleryEditions = api.gallery.admin.editions.useQuery(undefined, {
+    enabled: galleryOpen,
+  })
   const gallery = api.gallery.admin.list.useQuery(
-    { limit: 100 },
-    { enabled: galleryOpen },
+    { limit: 100, edition: galleryEdition },
+    { enabled: galleryOpen, placeholderData: keepPreviousData },
   )
   // The marketing asset picker (#1163): the search asks the server once
   // typing pauses, not per keystroke.
@@ -384,6 +390,11 @@ export function ConnectedVariantEditor({
             images: galleryPicks,
             isLoading: gallery.isLoading,
             onOpen: () => setGalleryOpen(true),
+            editions: {
+              options: galleryEditions.data,
+              value: galleryEdition,
+              onChange: setGalleryEdition,
+            },
             onPick: async (image) => {
               // Alt text is the platform's, not a placeholder of ours.
               if (!image.alt.trim()) {
