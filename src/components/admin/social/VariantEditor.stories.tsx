@@ -876,7 +876,7 @@ export const GalleryPickerPreviousEdition: Story = {
       },
     },
   },
-  play: async ({ canvasElement }) => {
+  play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement)
     await userEvent.click(canvas.getByRole('button', { name: 'From gallery' }))
     const select = canvas.getByRole('combobox', {
@@ -884,6 +884,9 @@ export const GalleryPickerPreviousEdition: Story = {
     }) as HTMLSelectElement
     await expect(select.value).toBe('conf-2026')
     await expect(canvas.getAllByRole('listitem').length).toBeGreaterThan(0)
+    await userEvent.selectOptions(select, 'conf-2025')
+    const onChange = args.sources?.gallery?.editions?.onChange
+    await expect(onChange).toHaveBeenLastCalledWith('conf-2025')
   },
 }
 

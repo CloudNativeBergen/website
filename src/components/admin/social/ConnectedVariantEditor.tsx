@@ -148,9 +148,11 @@ export function ConnectedVariantEditor({
   const galleryEditions = api.gallery.admin.editions.useQuery(undefined, {
     enabled: galleryOpen,
   })
+  // No placeholder data here: after switching edition the previous edition's
+  // tiles must not stay pickable under the new edition's label.
   const gallery = api.gallery.admin.list.useQuery(
     { limit: 100, edition: galleryEdition },
-    { enabled: galleryOpen, placeholderData: keepPreviousData },
+    { enabled: galleryOpen },
   )
   // The marketing asset picker (#1163): the search asks the server once
   // typing pauses, not per keystroke.

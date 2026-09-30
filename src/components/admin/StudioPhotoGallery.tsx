@@ -51,11 +51,18 @@ export function StudioPhotoGallery({
       />
       {loading ? (
         <div className="h-64 animate-pulse rounded-lg bg-gray-100 dark:bg-gray-800" />
+      ) : edition && previous.isError ? (
+        <div
+          role="alert"
+          className="py-12 text-center text-sm text-red-700 dark:text-red-400"
+        >
+          {previous.error.message || 'Failed to load that edition’s photos'}
+        </div>
       ) : shown.length === 0 ? (
         <div className="py-12 text-center">
-          <PhotoIcon className="mx-auto mb-4 h-12 w-12 text-gray-400 dark:text-gray-500" />
+          <PhotoIcon className="mx-auto mb-4 size-12 text-gray-400 dark:text-gray-500" />
           <h3 className="font-space-grotesk mb-2 text-xl font-semibold text-gray-900 dark:text-white">
-            No Featured Photos Yet
+            {editionTitle ? 'No Featured Photos' : 'No Featured Photos Yet'}
           </h3>
           <p className="font-inter text-gray-600 dark:text-gray-400">
             {editionTitle

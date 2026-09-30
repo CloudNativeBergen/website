@@ -1,5 +1,4 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { TRPCError } from '@trpc/server'
 import type { Context } from '@/server/trpc'
 
 /**
@@ -280,10 +279,10 @@ describe('gallery reads from a previous edition of the same organization (#1191)
     expect(getGalleryImageCountMock).not.toHaveBeenCalled()
   })
 
-  // The org-scoped authz waist already refuses (FORBIDDEN) a host whose
-  // organization cannot be resolved; these lock in that the edition path never
-  // reaches a read in either case — whichever guard fires first.
-  it('a host whose conference has NO organization can select no previous edition', async () => {
+  // A host whose conference has NO organization never reaches the edition
+  // path: the org-scoped authz waist refuses it first, with FORBIDDEN. This
+  // pins THAT value — the router's own `!orgId` branch is unreachable behind it.
+  it('a host whose conference has NO organization is refused by the authz waist (FORBIDDEN), before any read', async () => {
     getConferenceMock.mockResolvedValue({
       conference: {
         _id: CONFERENCE_ID,
@@ -294,14 +293,16 @@ describe('gallery reads from a previous edition of the same organization (#1191)
     })
     await expect(
       caller().admin.list({ edition: 'conf-2025', limit: 50, offset: 0 }),
-    ).rejects.toBeInstanceOf(TRPCError)
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' })
     expect(getPreviousEditionsMock).not.toHaveBeenCalled()
     expect(getGalleryImagesMock).not.toHaveBeenCalled()
   })
 
-  it('an UNKNOWN host lists no editions', async () => {
+  it('an UNKNOWN host lists no editions (refused by the authz waist)', async () => {
     unknownHost()
-    await expect(caller().admin.editions()).rejects.toBeInstanceOf(TRPCError)
+    await expect(caller().admin.editions()).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    })
     expect(getPreviousEditionsMock).not.toHaveBeenCalled()
   })
 })

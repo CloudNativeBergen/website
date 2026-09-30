@@ -8,6 +8,7 @@ import {
   ImageGrid,
   ImageMetadataModal,
   GalleryFilters,
+  type GalleryFilterValues,
 } from '@/components/admin/gallery'
 import { PhotoIcon, ClockIcon } from '@heroicons/react/24/outline'
 import type { GalleryImageWithSpeakers } from '@/lib/gallery/types'
@@ -34,6 +35,11 @@ function GalleryPageContent() {
 
   // The editions this organizer may browse (#1191); the server lists them.
   const { data: editions } = api.gallery.admin.editions.useQuery()
+  // READ-ONLY follows the SELECTOR, not the editions query: a deep link with
+  // `?edition=` must never show upload/edit/delete controls on another
+  // edition's pictures while the editions list is still loading.
+  const readOnly =
+    filters.edition !== undefined && filters.edition !== editions?.current._id
   const browsingPrevious = editions?.previous.find(
     (edition) => edition._id === filters.edition,
   )
@@ -41,6 +47,7 @@ function GalleryPageContent() {
   const {
     data: images,
     isLoading,
+    error: listError,
     refetch: refetchImages,
   } = api.gallery.admin.list.useQuery(
     {
@@ -125,6 +132,24 @@ function GalleryPageContent() {
     [utils, refetchImages, images],
   )
 
+  const handleFiltersChange = useCallback((newFilters: GalleryFilterValues) => {
+    setFilters((prev) => {
+      // Selection never survives an edition switch: ids of one edition's
+      // pictures must not feed a bulk action while another is shown.
+      if (prev.edition !== newFilters.edition) setSelectedImages([])
+      return {
+        edition: newFilters.edition ?? undefined,
+        featured: newFilters.featured ?? undefined,
+        speakerId: newFilters.speakerId ?? undefined,
+        dateFrom: newFilters.dateFrom ?? undefined,
+        dateTo: newFilters.dateTo ?? undefined,
+        photographerSearch: newFilters.photographerSearch ?? undefined,
+        locationSearch: newFilters.locationSearch ?? undefined,
+      }
+    })
+    setCurrentPage(1)
+  }, [])
+
   const handleImageUpdate = useCallback(() => {
     utils.gallery.admin.list.invalidate()
     utils.gallery.admin.count.invalidate()
@@ -181,14 +206,15 @@ function GalleryPageContent() {
         backLink={{ href: '/admin/marketing', label: 'Back to Marketing' }}
       />
 
-      {browsingPrevious ? (
+      {readOnly ? (
         <div
           role="status"
           className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-200"
         >
           <ClockIcon className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
           <p>
-            Browsing pictures from <strong>{browsingPrevious.title}</strong>.
+            Browsing pictures from{' '}
+            <strong>{browsingPrevious?.title ?? 'a previous edition'}</strong>.
             They are read-only here: upload, edit, feature and delete them from
             that edition&apos;s admin.
           </p>
@@ -209,22 +235,20 @@ function GalleryPageContent() {
       <GalleryFilters
         filters={filters}
         editions={editions}
-        onFiltersChange={(newFilters) => {
-          setFilters({
-            edition: newFilters.edition ?? undefined,
-            featured: newFilters.featured ?? undefined,
-            speakerId: newFilters.speakerId ?? undefined,
-            dateFrom: newFilters.dateFrom ?? undefined,
-            dateTo: newFilters.dateTo ?? undefined,
-            photographerSearch: newFilters.photographerSearch ?? undefined,
-            locationSearch: newFilters.locationSearch ?? undefined,
-          })
-          setCurrentPage(1)
-        }}
+        onFiltersChange={handleFiltersChange}
       />
 
       <div className="rounded-lg bg-white p-6 shadow dark:bg-gray-900 dark:ring-1 dark:ring-gray-800">
-        {isLoading || isWaitingForUpload ? (
+        {listError ? (
+          <div
+            role="alert"
+            className="flex h-64 items-center justify-center text-sm text-red-700 dark:text-red-400"
+          >
+            {listError.data?.code === 'NOT_FOUND' && filters.edition
+              ? 'That edition is not one this organization can browse.'
+              : listError.message || 'Failed to load images'}
+          </div>
+        ) : isLoading || isWaitingForUpload ? (
           <div className="flex h-64 items-center justify-center">
             <div className="text-gray-500 dark:text-gray-400">
               {isWaitingForUpload
@@ -241,7 +265,7 @@ function GalleryPageContent() {
             selectedImages={selectedImages}
             onSelectionChange={setSelectedImages}
             onBulkTag={handleBulkTag}
-            readOnly={Boolean(browsingPrevious)}
+            readOnly={readOnly}
           />
         ) : (
           <div className="flex h-64 flex-col items-center justify-center gap-4">
@@ -253,8 +277,11 @@ function GalleryPageContent() {
                   : 'No images yet'}
               </p>
               <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                {browsingPrevious ? (
-                  <>{browsingPrevious.title} has no pictures</>
+                {readOnly ? (
+                  <>
+                    No pictures from {browsingPrevious?.title ?? 'that edition'}{' '}
+                    match these filters
+                  </>
                 ) : Object.values(filters).some((v) => v !== undefined) ? (
                   <>Try adjusting your filters to see more results</>
                 ) : (

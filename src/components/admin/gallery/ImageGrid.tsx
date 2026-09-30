@@ -173,7 +173,11 @@ export function ImageGrid({
             onMouseEnter={() => setHoveredImage(image._id)}
             onMouseLeave={() => setHoveredImage(null)}
             onClick={(e) => {
-              if (selectedImages.length > 0 && e.currentTarget === e.target) {
+              if (
+                !readOnly &&
+                selectedImages.length > 0 &&
+                e.currentTarget === e.target
+              ) {
                 handleSelectImage(image._id)
               }
             }}
@@ -211,7 +215,7 @@ export function ImageGrid({
             <div
               className="relative aspect-video"
               onClick={() => {
-                if (selectedImages.length > 0) {
+                if (!readOnly && selectedImages.length > 0) {
                   handleSelectImage(image._id)
                 }
               }}

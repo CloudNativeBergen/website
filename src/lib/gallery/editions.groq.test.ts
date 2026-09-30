@@ -88,6 +88,10 @@ const DATASET = [
   conference('conf-a-2027', 'org-a', '2027-10-01', '2027-10-02'),
   // No dates at all: cannot be proven past, so excluded.
   conference('conf-a-undated', 'org-a', undefined as never, undefined as never),
+  // Bad data: an edition whose end date precedes its own start date. As the
+  // CURRENT edition it satisfies the date clause against itself, so only the
+  // `_id != $currentId` clause keeps it off its own list.
+  conference('conf-a-baddata', 'org-a', '2026-12-01', '2026-11-01'),
   // Another organization's finished edition — the one that must never show.
   conference('conf-b-2025', 'org-b', '2025-05-01', '2025-05-02'),
   { _id: 'asset-1', _type: 'sanity.imageAsset', url: 'https://cdn/x.jpg' },
@@ -122,6 +126,16 @@ describe('getPreviousEditions (#1191)', () => {
       startDate: '2026-10-01',
     })
     expect(editions.map((e) => e._id)).not.toContain('conf-b-2025')
+  })
+
+  it('never lists the current edition itself, even when its dates would qualify it', async () => {
+    const editions = await getPreviousEditions('org-a', {
+      _id: 'conf-a-baddata',
+      startDate: '2026-12-01',
+    })
+    expect(editions.map((e) => e._id)).not.toContain('conf-a-baddata')
+    // …while still listing the genuinely past ones.
+    expect(editions.map((e) => e._id)).toContain('conf-a-2025')
   })
 
   it('a current edition WITHOUT a start date has no previous editions (fail closed)', async () => {

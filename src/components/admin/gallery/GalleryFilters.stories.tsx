@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { useState } from 'react'
-import { fn, expect, within } from 'storybook/test'
+import { fn, expect, userEvent, within } from 'storybook/test'
 import { http, HttpResponse } from 'msw'
 import { GalleryFilters, type GalleryFilterValues } from './GalleryFilters'
 import type { GalleryEditions } from '@/lib/gallery/editions'
@@ -32,16 +32,22 @@ const EDITIONS: GalleryEditions = {
 function Harness({
   initial,
   editions,
+  onChange,
 }: {
   initial: GalleryFilterValues
   editions?: GalleryEditions
+  /** Spy on every filter change the component emits. */
+  onChange?: (filters: GalleryFilterValues) => void
 }) {
   const [filters, setFilters] = useState<GalleryFilterValues>(initial)
   return (
     <GalleryFilters
       filters={filters}
       editions={editions}
-      onFiltersChange={setFilters}
+      onFiltersChange={(next) => {
+        onChange?.(next)
+        setFilters(next)
+      }}
     />
   )
 }
@@ -121,15 +127,40 @@ export const PreviousEditionSelectedDark: Story = {
   parameters: { theme: 'dark' },
 }
 
-/** A single-edition organization: no edition control at all. */
+/**
+ * Switching editions: a previous edition is emitted by id, and choosing the
+ * current option again emits `undefined` — the server default — not its id.
+ */
+export const SwitchingEditions: Story = {
+  args: { initial: {}, editions: EDITIONS, onChange: fn() },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement)
+    const select = canvas.getAllByRole('combobox', { name: 'Edition' })[0]
+    await userEvent.selectOptions(select, 'conf-2024')
+    await expect(args.onChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({ edition: 'conf-2024' }),
+    )
+    await expect(
+      canvas.getAllByRole('button', { name: 'Clear all filters' })[0],
+    ).toBeVisible()
+    await userEvent.selectOptions(select, 'conf-2026')
+    await expect(args.onChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({ edition: undefined }),
+    )
+  },
+}
+
+/** A single-edition organization: the bar renders, without an edition control. */
 export const SingleEdition: Story = {
   args: {
     initial: {},
     editions: { current: EDITIONS.current, previous: [] },
   },
   play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
     await expect(
-      within(canvasElement).queryByRole('combobox', { name: 'Edition' }),
-    ).toBeNull()
+      canvas.getAllByRole('combobox', { name: 'Featured filter' })[0],
+    ).toBeVisible()
+    await expect(canvas.queryByRole('combobox', { name: 'Edition' })).toBeNull()
   },
 }

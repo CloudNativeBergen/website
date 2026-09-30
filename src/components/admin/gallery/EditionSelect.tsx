@@ -33,7 +33,7 @@ export function EditionSelect({
   const current = editions.current
   return (
     <div className={clsx('relative', className)}>
-      <ClockIcon className="pointer-events-none absolute top-1/2 left-2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+      <ClockIcon className="pointer-events-none absolute top-1/2 left-2 size-4 -translate-y-1/2 text-gray-400" />
       <select
         id={id}
         value={value ?? current._id}
@@ -53,7 +53,7 @@ export function EditionSelect({
           </option>
         ))}
       </select>
-      <ChevronUpDownIcon className="pointer-events-none absolute top-1/2 right-2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+      <ChevronUpDownIcon className="pointer-events-none absolute top-1/2 right-2 size-4 -translate-y-1/2 text-gray-400" />
     </div>
   )
 }
