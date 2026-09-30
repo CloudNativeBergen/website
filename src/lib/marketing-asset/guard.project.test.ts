@@ -108,25 +108,28 @@ describe('resolveVideoLineage', () => {
     ])
   })
 
-  it('believes a bare file id only where the project holds that file', async () => {
+  it('takes a bare file id as given: a photo the project has since dropped, its entry gone too', async () => {
     await expect(
       resolveVideoLineage('org-a', {
         projectId: 'vp-1',
-        sources: [{ fileId: 'image-ada' }, { fileId: 'image-someone-elses' }],
-      }),
-    ).resolves.toEqual({ sourceFileIds: ['image-hall', 'image-ada'] })
-  })
-
-  it('names the backgrounds of an unsaved video from the gallery alone', async () => {
-    await expect(
-      resolveVideoLineage('org-a', {
         sources: [
-          { galleryAssetId: 'asset-venue' },
-          // No project to hold it: not believed.
+          // The entry is gone: absent from the gallery read, so the file
+          // id it was saved with is what is left of the photo.
+          { fileId: 'image-dropped', galleryAssetId: 'asset-gone' },
           { fileId: 'image-ada' },
         ],
       }),
-    ).resolves.toEqual({ sourceFileIds: ['image-venue'] })
+    ).resolves.toEqual({
+      sourceFileIds: ['image-hall', 'image-ada', 'image-dropped'],
+    })
+  })
+
+  it('names the backgrounds of an unsaved video without a project', async () => {
+    await expect(
+      resolveVideoLineage('org-a', {
+        sources: [{ galleryAssetId: 'asset-venue' }, { fileId: 'image-ada' }],
+      }),
+    ).resolves.toEqual({ sourceFileIds: ['image-venue', 'image-ada'] })
     expect(h.requireDocument).not.toHaveBeenCalled()
     expect(h.readFiles).not.toHaveBeenCalled()
   })

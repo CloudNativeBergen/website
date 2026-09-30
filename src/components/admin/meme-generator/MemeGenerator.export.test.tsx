@@ -690,6 +690,75 @@ describe('Save an export to the gallery (#1182)', () => {
     }
   })
 
+  it('saves an export of a project deleted since with no project, keeping what it showed', async () => {
+    const { encoder } = fakeEncoder()
+    const projects = fakeProjects()
+    // The delete's orphan check took the background: the export is stale.
+    vi.mocked(projects.delete).mockResolvedValue({
+      released: ['image-hall'],
+      unsaveable: [],
+    })
+    vi.mocked(projects.open).mockResolvedValue({
+      ...(await projects.open('vp-1')),
+      scenes: [
+        {
+          key: 's-1',
+          duration: 3,
+          transition: 'cut',
+          motion: { drift: false, elements: [] },
+          design: {
+            ...structuredClone(DEFAULT_DESIGN),
+            background: {
+              color: '#1D4ED8',
+              image: {
+                url: '/hall',
+                name: 'Keynote hall',
+                fileId: 'image-hall',
+                galleryAssetId: 'asset-hall',
+              },
+            },
+          },
+        },
+      ],
+    })
+    Object.defineProperty(HTMLImageElement.prototype, 'decode', {
+      configurable: true,
+      value: () => Promise.resolve(),
+    })
+    try {
+      const { gallery, ui } = withGallery(
+        <MemeGenerator
+          encoder={encoder}
+          projects={projects}
+          initialProjectId="vp-1"
+        />,
+      )
+      render(ui)
+      await screen.findByDisplayValue('Launch teaser')
+      await exportOnce()
+      const bar = screen.getByRole('region', { name: 'Project' })
+      fireEvent.click(
+        within(bar).getByRole('button', { name: 'Delete project' }),
+      )
+      fireEvent.click(
+        within(await screen.findByRole('dialog')).getByRole('button', {
+          name: 'Delete project',
+        }),
+      )
+      await within(bar).findByText('Not saved yet')
+      await screen.findByRole('link', { name: /Download earlier export/ })
+      fireEvent.click(saveButton()!)
+      const [, origin] = vi.mocked(gallery.saveVideo).mock.calls[0]
+      expect(origin).toEqual({
+        title: 'Launch teaser',
+        projectId: null,
+        sources: [{ fileId: 'image-hall', galleryAssetId: 'asset-hall' }],
+      })
+    } finally {
+      Reflect.deleteProperty(HTMLImageElement.prototype, 'decode')
+    }
+  })
+
   it('offers no Save to gallery without the gallery, or outside the studio', async () => {
     const bare = fakeEncoder()
     const { unmount } = render(

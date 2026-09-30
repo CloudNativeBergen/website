@@ -74,7 +74,15 @@ export async function resolveAssetDetailsForCurrentOrg(
  *  - the backgrounds the editor knew at export time: a gallery asset id,
  *    resolved to its file by an organization-scoped read where a foreign or
  *    deleted one is simply absent, never refused; or a bare file id, taken
- *    only if the project holds that file.
+ *    as given.
+ *
+ * A bare id is TAKEN, not proven, on purpose. The lineage is inert: plain
+ * strings that only ever make THIS video deletable when an erasure deletes
+ * a file they name. Naming a file that is not ours costs the namer their
+ * own video and nobody else anything, so proving it would guard nothing —
+ * while refusing it loses the case the lineage exists for: a photo the
+ * project has since dropped, whose gallery entry is gone too, still shown
+ * by the export. The shape alone is checked, by the schema.
  *
  * The union, so an edit or a save that follows the export hides nothing.
  * Never a gallery asset that is not an image: a track is heard, not shown.
@@ -100,13 +108,12 @@ export async function resolveVideoLineage(
       .filter((row) => row.kind === 'image' && row.fileId)
       .map((row) => [row._id, row.fileId as string]),
   )
-  const holds = new Set(held)
   const shown = sources.flatMap((s) => {
     const fromGallery = s.galleryAssetId
       ? gallery.get(s.galleryAssetId)
       : undefined
     if (fromGallery) return [fromGallery]
-    return s.fileId && holds.has(s.fileId) ? [s.fileId] : []
+    return s.fileId ? [s.fileId] : []
   })
   return { sourceFileIds: [...new Set([...held, ...shown])] }
 }

@@ -27,8 +27,11 @@ export type StudioTab = (typeof STUDIO_TABS)[number]
  * recorded it. Client claims, resolved and proven on the server; a local
  * upload that was never kept has neither and is not named.
  */
+/** A Sanity image asset id: `image-<hash>-<w>x<h>-<ext>`. */
+const IMAGE_ASSET_ID = /^image-[A-Za-z0-9]+-\d+x\d+-[a-z0-9]+$/
+
 export const exportSourceSchema = z.object({
-  fileId: publishedDocumentId.optional(),
+  fileId: z.string().regex(IMAGE_ASSET_ID).optional(),
   galleryAssetId: publishedDocumentId.optional(),
 })
 export type ExportSourceInput = z.output<typeof exportSourceSchema>

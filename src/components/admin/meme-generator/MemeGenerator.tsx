@@ -1182,12 +1182,16 @@ export function MemeGenerator({
   const [confirmingDelete, setConfirmingDelete] = useState(false)
 
   /** Delete the open project, once confirmed; the editor keeps the video. */
+  // Projects deleted from this editor: an export made from one is saved to
+  // the gallery with no project, never refused for naming it (#1182).
+  const deletedProjects = useRef(new Set<string>())
   const deleteProject = async () => {
     if (!projects || !project) return
     setProjectBusy('deleting')
     setProjectMessage(null)
     try {
       const { released, unsaveable } = await projects.delete(project.id)
+      deletedProjects.current.add(project.id)
       // Files the delete's orphan check removed, and files only the deleted
       // project authorized (their gallery entry is gone): neither can be
       // saved again, so neither is kept — in any state undo can reach.
@@ -2215,6 +2219,7 @@ export function MemeGenerator({
             // and its settings by value, so an undo back to them makes the
             // export current again — never the id a save files it under.
             samePart={sameExportPart}
+            projectGone={(id) => deletedProjects.current.has(id)}
             revision={[
               scenes,
               lateFaces,

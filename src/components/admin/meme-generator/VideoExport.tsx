@@ -205,6 +205,7 @@ export function VideoExport({
   onSaveToGallery,
   origin,
   samePart = Object.is,
+  projectGone,
 }: {
   encoder: EncoderBackend
   /** A snapshot of the video as it is when Export is pressed. */
@@ -235,6 +236,12 @@ export function VideoExport({
    * pixel changing, and undo restores the same video under new objects.
    */
   samePart?: SamePart
+  /**
+   * Whether a project a file was exported from has been deleted since: a
+   * stale file is then saved with no project, and its sources, rather than
+   * refused by the server for naming one that is gone.
+   */
+  projectGone?: (id: string) => boolean
   /**
    * The project open in the editor now, for a current file. A file made
    * before the editor moved to another project keeps the origin it was
@@ -383,8 +390,12 @@ export function VideoExport({
               // A current file is the editor's video as it is now, so a
               // project saved or renamed since the export is its origin. A
               // stale one is filed under what it was exported from.
-              const under = (stale ? file.origin : origin) ??
+              const captured = (stale ? file.origin : origin) ??
                 origin ?? { title: '', projectId: null, sources: [] }
+              const under =
+                captured.projectId && projectGone?.(captured.projectId)
+                  ? { ...captured, projectId: null }
+                  : captured
               onSaveToGallery({ blob: file.blob, poster: file.poster }, under)
             }}
             // Not `disabled`, like Export: it says why while an export runs.
