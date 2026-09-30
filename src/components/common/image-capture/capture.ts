@@ -60,12 +60,22 @@ const updateImageSources = async (element: HTMLElement): Promise<void> => {
   }
 }
 
+/** The pixels a capture must come out at (a studio Format's size). */
+export interface CaptureSize {
+  width: number
+  height: number
+}
+
+/** What a capture is rendered at when no size is asked for: 4× the CSS box. */
+const DEFAULT_SCALE = 4
+
 const generateCanvas = async (
   element: HTMLElement,
+  scale: number,
 ): Promise<HTMLCanvasElement> => {
   const canvas = await html2canvas(element, {
     backgroundColor: null,
-    scale: 4,
+    scale,
     useCORS: true,
     allowTaint: false,
     removeContainer: false,
@@ -101,8 +111,33 @@ const generateCanvas = async (
   return canvas
 }
 
-/** Shared raster lifecycle for downloads and Task attachments. */
-export async function captureImage(element: HTMLElement): Promise<Blob> {
+/**
+ * The render drawn onto a canvas of EXACTLY `size` (docs/MARKETING_STUDIO_
+ * FORMATS_SPEC.md §2). The card's CSS box is laid out in the Format's aspect
+ * but rounded to whole CSS pixels, so the scaled render can come out a pixel
+ * off; the image handed out never does.
+ */
+const fitToSize = (
+  source: HTMLCanvasElement,
+  size: CaptureSize,
+): HTMLCanvasElement => {
+  const target = document.createElement('canvas')
+  target.width = size.width
+  target.height = size.height
+  const context = target.getContext('2d')
+  if (!context) throw new Error('Canvas 2D context unavailable')
+  context.drawImage(source, 0, 0, size.width, size.height)
+  return target
+}
+
+/**
+ * Shared raster lifecycle for downloads, Task attachments and gallery saves.
+ * With `size`, the PNG is exactly that many pixels; without, 4× the CSS box.
+ */
+export async function captureImage(
+  element: HTMLElement,
+  size?: CaptureSize,
+): Promise<Blob> {
   if (!element.offsetWidth || !element.offsetHeight) {
     throw new Error('Cannot capture an element with zero dimensions')
   }
@@ -111,14 +146,19 @@ export async function captureImage(element: HTMLElement): Promise<Blob> {
     src: image.getAttribute('src'),
   }))
   let canvas: HTMLCanvasElement | undefined
+  let output: HTMLCanvasElement | undefined
   try {
     await waitForPending(element)
     await waitForImages(element)
     await updateImageSources(element)
     await new Promise((resolve) => setTimeout(resolve, 300))
-    canvas = await generateCanvas(element)
+    canvas = await generateCanvas(
+      element,
+      size ? size.width / element.offsetWidth : DEFAULT_SCALE,
+    )
+    output = size ? fitToSize(canvas, size) : canvas
     return await new Promise<Blob>((resolve, reject) => {
-      canvas!.toBlob(
+      output!.toBlob(
         (blob) =>
           blob
             ? resolve(blob)
@@ -132,9 +172,11 @@ export async function captureImage(element: HTMLElement): Promise<Blob> {
       if (src === null) image.removeAttribute('src')
       else image.setAttribute('src', src)
     }
-    if (canvas) {
-      canvas.width = 0
-      canvas.height = 0
+    for (const used of new Set([canvas, output])) {
+      if (used) {
+        used.width = 0
+        used.height = 0
+      }
     }
   }
 }
