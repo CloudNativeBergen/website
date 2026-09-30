@@ -34,6 +34,10 @@ _Avoid_: platform, network, medium
 A curated, Milestone-relative set of Campaigns, Tasks, Triggers, copy skeletons, and default Targets that seeds a new Marketing Plan. The built-in one ships with the platform in code; an organization owns its own by saving a Marketing Plan as a Template, never by editing one directly.
 _Avoid_: playbook, blueprint, preset
 
+**Format**:
+The shape and pixel size a studio card is rendered in: square (1080×1080), landscape 1.91:1 (1200×628) or portrait 4:5 (1080×1350). Chosen once per studio tab, recorded on a gallery entry saved from the studio, and carried by a render Task, where it defaults from the Channel. A card without one is square.
+_Avoid_: size, aspect ratio, crop, variant
+
 **Task Recipe**:
 A description of one Task to create: its Kind, Channel, Milestone offset, Prerequisites and copy skeleton. A recurring Recipe expands into many dated Tasks once its Milestone and subject list are known. Recipes are stored on the Campaign they belong to; a Plan Template is where they come from, not where they are looked up.
 _Avoid_: task template, blueprint, rule
