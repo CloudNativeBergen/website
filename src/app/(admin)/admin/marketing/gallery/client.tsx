@@ -136,16 +136,14 @@ function GalleryPageContent() {
     // A selection never survives a filter change: ids of pictures no longer
     // shown — another edition's above all — must not feed a bulk action.
     setSelectedImages([])
-    setFilters(() => {
-      return {
-        edition: newFilters.edition ?? undefined,
-        featured: newFilters.featured ?? undefined,
-        speakerId: newFilters.speakerId ?? undefined,
-        dateFrom: newFilters.dateFrom ?? undefined,
-        dateTo: newFilters.dateTo ?? undefined,
-        photographerSearch: newFilters.photographerSearch ?? undefined,
-        locationSearch: newFilters.locationSearch ?? undefined,
-      }
+    setFilters({
+      edition: newFilters.edition ?? undefined,
+      featured: newFilters.featured ?? undefined,
+      speakerId: newFilters.speakerId ?? undefined,
+      dateFrom: newFilters.dateFrom ?? undefined,
+      dateTo: newFilters.dateTo ?? undefined,
+      photographerSearch: newFilters.photographerSearch ?? undefined,
+      locationSearch: newFilters.locationSearch ?? undefined,
     })
     setCurrentPage(1)
   }, [])

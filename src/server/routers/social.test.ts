@@ -1500,14 +1500,37 @@ describe('social.addPostAttachmentFromGallery', () => {
       conferenceId: 'conf-B-2025',
       orgId: 'org-B',
     })
+    // A misbehaving edition list that DOES contain the foreign conference:
+    // the org comparison must refuse before the list is even consulted.
+    gallery.getPreviousEditions.mockResolvedValue([
+      { _id: 'conf-A-2025', title: 'CND 2025' },
+      { _id: 'conf-B-2025', title: 'Theirs 2025' },
+    ])
     await expect(
       social().addPostAttachmentFromGallery({
         postId: 'post-ours',
         imageId: 'img-theirs',
       }),
-    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    ).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+      message: notFoundMessage('imageGallery'),
+    })
+    expect(gallery.getPreviousEditions).not.toHaveBeenCalled()
     expect(gallery.getGalleryImage).not.toHaveBeenCalled()
     expect(h.addSocialPostAttachment).not.toHaveBeenCalled()
+  })
+
+  it('refuses a draft or release id (`.` in the id) before any tenant read', async () => {
+    await expect(
+      social().addPostAttachmentFromGallery({
+        postId: 'post-ours',
+        imageId: 'drafts.img-2025',
+      }),
+    ).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+      message: notFoundMessage('imageGallery'),
+    })
+    expect(gallery.getGalleryImageTenant).not.toHaveBeenCalled()
   })
 
   it('refuses a same-org sibling that is NOT a previous edition (future), the same way', async () => {
@@ -1520,7 +1543,10 @@ describe('social.addPostAttachmentFromGallery', () => {
         postId: 'post-ours',
         imageId: 'img-2027',
       }),
-    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    ).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+      message: notFoundMessage('imageGallery'),
+    })
     expect(gallery.getGalleryImage).not.toHaveBeenCalled()
     expect(h.addSocialPostAttachment).not.toHaveBeenCalled()
   })

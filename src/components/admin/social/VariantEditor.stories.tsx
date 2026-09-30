@@ -840,8 +840,6 @@ export const GalleryPickerPreviousEdition: Story = {
           id: `gal-${image._key}`,
           assetId: image.assetId,
           alt: image.alt,
-          hotspot: null,
-          crop: null,
           thumbnailSrc: SRC[image._key],
         })),
         editions: {

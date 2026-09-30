@@ -30,13 +30,15 @@ import { CroppedImage } from './CroppedImage'
 import { EditionSelect } from '@/components/admin/gallery/EditionSelect'
 import type { GalleryEditions } from '@/lib/gallery/editions'
 
-/** An image the organizer can pull in from the conference gallery. */
+/**
+ * An image the organizer can pull in from the photo gallery. Only the id
+ * travels on a pick (#1191): the server proves the picture readable and
+ * reads its asset, alt text and framing itself.
+ */
 export interface GalleryPick {
   id: string
   assetId: string
   alt: string
-  hotspot: { x: number; y: number; width: number; height: number } | null
-  crop: { top: number; bottom: number; left: number; right: number } | null
   thumbnailSrc: string
 }
 

@@ -269,12 +269,8 @@ export function ConnectedVariantEditor({
   const addFromAsset = api.social.addPostAttachmentFromAsset.useMutation()
 
   /** Put an image asset on the post, then select it on this variant. */
-  const attachAsset = (input: {
-    assetId: string
-    alt: string
-    hotspot?: GalleryPick['hotspot']
-    crop?: GalleryPick['crop']
-  }) => selectAdded(addAttachment.mutateAsync({ postId, ...input }))
+  const attachAsset = (input: { assetId: string; alt: string }) =>
+    selectAdded(addAttachment.mutateAsync({ postId, ...input }))
 
   /** Select what just landed on the post on this variant. */
   const selectAdded = async (added: Promise<{ key: string }>) => {
@@ -303,8 +299,6 @@ export function ConnectedVariantEditor({
         id: image._id,
         assetId,
         alt: image.image.alt ?? image.imageAlt ?? '',
-        hotspot: image.image.hotspot ?? null,
-        crop: image.image.crop ?? null,
         thumbnailSrc: richTextImageUrl(assetId, 300),
       },
     ]
