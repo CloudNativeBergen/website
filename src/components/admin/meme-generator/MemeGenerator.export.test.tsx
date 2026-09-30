@@ -56,6 +56,7 @@ vi.mock('./meme-generator-fonts', async (importOriginal) => {
 })
 
 import { MemeGenerator } from './MemeGenerator'
+import type { BackgroundGallery } from './meme-generator-gallery'
 import { DEFAULT_DESIGN } from './meme-generator-draw'
 
 beforeEach(() => {
@@ -524,6 +525,70 @@ describe('Save an export to the gallery (#1182)', () => {
     const [, origin] = vi.mocked(gallery.saveVideo).mock.calls[0]
     expect(origin).toEqual({ title: 'Keynote teaser', projectId: 'vp-1' })
   })
+
+  it('stays current across the first save, and is filed under the project that save made', async () => {
+    // A gallery background: the first save writes back which file the
+    // project holds, rewriting the scenes without changing a pixel.
+    // Loads at once, like the gallery test: the draw itself is mocked.
+    Object.defineProperty(HTMLImageElement.prototype, 'decode', {
+      configurable: true,
+      value: () => Promise.resolve(),
+    })
+    try {
+      await saveThenGallery()
+    } finally {
+      Reflect.deleteProperty(HTMLImageElement.prototype, 'decode')
+    }
+  })
+
+  async function saveThenGallery() {
+    const { encoder } = fakeEncoder()
+    const gallery: BackgroundGallery = {
+      images: async () => [
+        {
+          _id: 'asset-hall',
+          title: 'Keynote hall',
+          alt: 'The hall',
+          thumbnailUrl: null,
+        },
+      ],
+      resolve: async (id) => ({ _id: id, title: 'Keynote hall', url: '/hall' }),
+      keep: async () => ({ _id: 'asset-kept' }),
+    }
+    const projects = fakeProjects()
+    vi.mocked(projects.create).mockImplementation(async (input) => ({
+      _id: 'vp-new',
+      _rev: 'rev-1',
+      scenes: input.scenes.map((scene) => ({
+        key: scene.key,
+        fileId: scene.design.background.image ? 'image-hall' : null,
+      })),
+    }))
+    const { gallery: save, ui } = withGallery(
+      <MemeGenerator encoder={encoder} gallery={gallery} projects={projects} />,
+    )
+    render(ui)
+    fireEvent.click(screen.getByRole('button', { name: 'Choose from gallery' }))
+    fireEvent.click(await screen.findByRole('button', { name: /Keynote hall/ }))
+    await screen.findByText('Current: Keynote hall')
+    fireEvent.click(screen.getByRole('button', { name: 'Video' }))
+    await exportOnce()
+    fireEvent.click(
+      within(screen.getByRole('region', { name: 'Project' })).getByRole(
+        'button',
+        { name: 'Save' },
+      ),
+    )
+    await waitFor(() => expect(projects.create).toHaveBeenCalled())
+    await within(screen.getByRole('region', { name: 'Project' })).findByText(
+      'All changes saved',
+    )
+    // Not "earlier export": nothing drawn changed.
+    expect(screen.getByRole('link', { name: /Download video/ })).toBeTruthy()
+    fireEvent.click(saveButton()!)
+    const [, origin] = vi.mocked(save.saveVideo).mock.calls[0]
+    expect(origin).toEqual({ title: 'Untitled video', projectId: 'vp-new' })
+  }
 
   it('offers no Save to gallery without the gallery, or outside the studio', async () => {
     const bare = fakeEncoder()

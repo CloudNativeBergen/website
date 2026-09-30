@@ -132,6 +132,7 @@ import {
   fromProjectScenes,
   fromProjectTrack,
   projectSnapshot,
+  sameDrawn,
   toProjectScenes,
   toProjectTrack,
   type SceneFile,
@@ -1959,6 +1960,11 @@ export function MemeGenerator({
     title: projectTitle.trim() || UNTITLED,
     projectId: project?.id ?? null,
   }
+  // The scenes as drawn: the same reference across a save's rewrite of
+  // where a background's file is kept, so an export made just before the
+  // save is still current and is filed under the project it made.
+  const drawnScenes = useRef(scenes)
+  if (!sameDrawn(drawnScenes.current, scenes)) drawnScenes.current = scenes
 
   // An export paints the video as it was when Export was pressed, onto a
   // canvas of its own — frame n at frame n's time, through the same
@@ -2194,7 +2200,7 @@ export function MemeGenerator({
             // and its settings by value, so an undo back to them makes the
             // export current again — never the id a save files it under.
             revision={[
-              scenes,
+              drawnScenes.current,
               lateFaces,
               start,
               volume,

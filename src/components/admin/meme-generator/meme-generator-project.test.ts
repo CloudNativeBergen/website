@@ -25,6 +25,7 @@ import {
   projectSnapshot,
   toProjectScenes,
   toProjectTrack,
+  sameDrawn,
 } from './meme-generator-project'
 import type { VideoTrack } from './meme-generator-music'
 
@@ -300,5 +301,48 @@ describe('a saved track reopens as the track it was (#1179)', () => {
     expect(projectSnapshot('t', list, { ...picked, title: 'Renamed' })).toBe(
       base,
     )
+  })
+})
+
+describe('sameDrawn (#1182)', () => {
+  const scene = (image: Scene['design']['background']['image']): Scene => ({
+    key: 's-1',
+    duration: 3,
+    transition: 'cut',
+    motion: { drift: false, elements: {} },
+    design: {
+      ...structuredClone(DEFAULT_DESIGN),
+      background: { color: '#123456', image },
+    },
+  })
+  const picked = { url: '/api/proxy-image?url=hall', name: 'Hall' }
+
+  it('is the same video across a rewrite of where the file is kept', () => {
+    const before = [scene({ ...picked, galleryAssetId: 'asset-hall' })]
+    const carried = carryFiles(before, new Map([[picked.url, 'image-hall']]))
+    expect(carried).not.toBe(before)
+    expect(sameDrawn(before, carried)).toBe(true)
+  })
+
+  it('is another video when a pixel changes', () => {
+    const before = [scene({ ...picked, galleryAssetId: 'asset-hall' })]
+    expect(sameDrawn(before, [scene(null)])).toBe(false)
+    expect(
+      sameDrawn(before, [
+        {
+          ...before[0],
+          design: {
+            ...before[0].design,
+            background: {
+              color: '#654321',
+              image: before[0].design.background.image,
+            },
+          },
+        },
+      ]),
+    ).toBe(false)
+    expect(sameDrawn(before, [{ ...before[0], duration: 4 }])).toBe(false)
+    expect(sameDrawn(before, [...before, scene(null)])).toBe(false)
+    expect(sameDrawn(before, [scene({ ...picked, url: '/other' })])).toBe(false)
   })
 })
