@@ -22,6 +22,9 @@ import {
   untagSpeakerFromImage,
 } from '@/lib/gallery/sanity'
 import { requireSpeakersInCurrentOrg } from '../tenancy'
+import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import { getPreviousEditions } from '@/lib/gallery/editions'
+import type { GalleryScope } from '@/lib/gallery/sanity'
 
 /**
  * Every gallery mutation takes an image id from CLIENT INPUT, so each one must
@@ -55,6 +58,48 @@ async function requireImageInOrg(imageId: string): Promise<string> {
   return orgId
 }
 
+/**
+ * The request's conference document, or NOT_FOUND on an unresolvable host —
+ * `resolveConferenceId` with the fields the edition selector needs (#1191).
+ */
+async function requireCurrentConference() {
+  const { conference, error } = await getConferenceForCurrentDomain()
+  if (error || !conference?._id) {
+    throw new TRPCError({
+      code: 'NOT_FOUND',
+      message: 'Could not resolve conference from domain',
+    })
+  }
+  return conference
+}
+
+/**
+ * The READ scope for an admin gallery listing (#1191). No selector, or the
+ * current conference, is the plain single-edition read. Any other selector
+ * must be one of the organization's PREVIOUS editions — a set the server
+ * resolves from the request's conference, never from the client — and is
+ * refused with NOT_FOUND before any image query runs. A previous-edition scope
+ * carries the organization too, so the GROQ predicate is a second, independent
+ * control against a foreign conference id.
+ */
+async function resolveGalleryReadScope(
+  edition: string | undefined,
+): Promise<GalleryScope> {
+  const conference = await requireCurrentConference()
+  if (!edition || edition === conference._id) {
+    return { conferenceId: conference._id }
+  }
+  const orgId = conference.organization?._ref
+  const previous = orgId ? await getPreviousEditions(orgId, conference) : []
+  if (!orgId || !previous.some((e) => e._id === edition)) {
+    throw new TRPCError({
+      code: 'NOT_FOUND',
+      message: 'Gallery edition not found for this organization',
+    })
+  }
+  return { conferenceId: edition, orgId }
+}
+
 export const galleryRouter = router({
   admin: router({
     list: adminProcedure
@@ -65,11 +110,11 @@ export const galleryRouter = router({
           // `if (!conference)` guard never fired — `getConferenceForDomain`
           // returns a truthy `{} as Conference` — so an unknown host reached the
           // query with `conferenceId: undefined` and read every tenant's images.
-          const conferenceId = await resolveConferenceId()
+          const scope = await resolveGalleryReadScope(input.edition)
 
           const images = await getGalleryImages(
             {
-              conferenceId,
+              ...scope,
               featured: input.featured,
               speakerId: input.speakerId,
               dateFrom: input.dateFrom,
@@ -180,16 +225,31 @@ export const galleryRouter = router({
         }
       }),
 
+    /**
+     * The editions an organizer may browse (#1191): the current conference and
+     * the organization's previous ones, newest first. The ids are the ONLY
+     * selectors `list`/`count` accept as `edition`.
+     */
+    editions: adminProcedure.query(async () => {
+      const conference = await requireCurrentConference()
+      const orgId = conference.organization?._ref
+      const previous = orgId ? await getPreviousEditions(orgId, conference) : []
+      return {
+        current: { _id: conference._id, title: conference.title },
+        previous,
+      }
+    }),
+
     count: adminProcedure
       .input(galleryImageFilterSchema)
       .query(async ({ input }) => {
         try {
           // Fail closed on an unresolvable host — see `admin.list` above.
-          const conferenceId = await resolveConferenceId()
+          const scope = await resolveGalleryReadScope(input.edition)
 
           const count = await getGalleryImageCount(
             {
-              conferenceId,
+              ...scope,
               featured: input.featured,
               speakerId: input.speakerId,
               dateFrom: input.dateFrom,
