@@ -21,6 +21,7 @@ import {
   kindHasAlt,
   openInStudioHref,
   opensTheCard,
+  projectDeleted,
   type MarketingAssetFilter,
   type MarketingAssetRow,
 } from '@/lib/marketing-asset'
@@ -180,9 +181,17 @@ function AssetCard({
             )}
           </dl>
         )}
+        {asset.studio && projectDeleted(asset.studio) && (
+          // An exported video remembers its project (#1182); this one is gone,
+          // so the link below can only open the tab.
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            Made from a studio video project that has since been deleted.
+          </p>
+        )}
         {asset.studio && (
-          // Back to the tab and the speaker or sponsor that made it (§4.2).
-          // The studio cannot address a talk or a card variant.
+          // Back to the tab and the speaker, sponsor or saved video project
+          // that made it (§4.2, #1182). The studio cannot address a talk or a
+          // card variant.
           <Link
             href={openInStudioHref(asset.studio)}
             aria-label={

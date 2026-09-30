@@ -981,6 +981,97 @@ async function fixture(name: string, type: string) {
   return new File([blob], name, { type })
 }
 
+/** Videos exported from the studio (#1182): one project live, one deleted. */
+const EXPORTED: MarketingAssetRow[] = [
+  row({
+    _id: 'asset-teaser',
+    kind: 'video',
+    title: 'Speaker teaser: Ada Lovelace',
+    alt: 'Ada Lovelace’s name and talk title over the venue, with the logo',
+    imageUrl: null,
+    assetId: null,
+    videoUrl: `${FIXTURES}/clip.mp4`,
+    posterUrl: card('TEASER', '#be185d', 1080, 1080),
+    posterAssetId: 'image-teaser-1080x1080-jpg',
+    width: 1080,
+    height: 1080,
+    downloadUrl: `${FIXTURES}/clip.mp4?dl=speaker-teaser-ada-lovelace.mp4`,
+    attachable: false,
+    scope: 'edition',
+    conferenceId: EDITION._id,
+    edition: EDITION.title,
+    subject: ADA,
+    tags: ['teaser'],
+    createdAt: '2026-09-22T09:00:00Z',
+    studio: {
+      tab: 'meme-generator',
+      speakerId: null,
+      sponsorId: null,
+      project: { _id: 'vp-teaser', exists: true },
+    },
+  }),
+  row({
+    _id: 'asset-teaser-2025',
+    kind: 'video',
+    title: 'Save the date (2025)',
+    alt: 'Last year’s dates fading in over the brand gradient',
+    imageUrl: null,
+    assetId: null,
+    videoUrl: `${FIXTURES}/clip.mp4`,
+    posterUrl: card('2025', '#0f766e', 1080, 1080),
+    posterAssetId: 'image-teaser-2025-1080x1080-jpg',
+    width: 1080,
+    height: 1080,
+    downloadUrl: `${FIXTURES}/clip.mp4?dl=save-the-date-2025.mp4`,
+    attachable: false,
+    tags: ['teaser'],
+    createdAt: '2026-09-21T09:00:00Z',
+    studio: {
+      tab: 'meme-generator',
+      speakerId: null,
+      sponsorId: null,
+      project: { _id: 'vp-gone', exists: false },
+    },
+  }),
+]
+
+/**
+ * A video exported from the studio reopens its saved project (#1182); one
+ * whose project was deleted says so and offers the tab alone.
+ */
+export const ExportedVideos: Story = {
+  parameters: {
+    ...meta.parameters,
+    msw: { handlers: handlers([...EXPORTED, ...ASSETS]) },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await canvas.findByText('Speaker teaser: Ada Lovelace')
+    await expect(
+      canvas.getByRole('link', {
+        name: 'Open Speaker teaser: Ada Lovelace in the studio',
+      }),
+    ).toHaveAttribute(
+      'href',
+      '/admin/marketing/studio?tab=meme-generator&project=vp-teaser',
+    )
+    await expect(
+      canvas.getByText(
+        'Made from a studio video project that has since been deleted.',
+      ),
+    ).toBeInTheDocument()
+    await expect(
+      canvas.getByRole('link', {
+        name: 'Open the studio tab Save the date (2025) was made on',
+      }),
+    ).toHaveAttribute('href', '/admin/marketing/studio?tab=meme-generator')
+  },
+}
+export const ExportedVideosDark: Story = {
+  ...ExportedVideos,
+  globals: { theme: 'dark' },
+}
+
 /**
  * A video and a GIF beside the images: each marked with its kind, offering its
  * ORIGINAL file to download, and never "used in" a post — neither can be
