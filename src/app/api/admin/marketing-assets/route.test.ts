@@ -567,8 +567,10 @@ describe('a video exported from a studio project (#1182)', () => {
     studio: { tab: 'meme-generator', projectId: 'vp-1' },
   }
 
-  it('proves the project ours BEFORE anything moves, and writes the origin with the video', async () => {
-    h.projectGuard.mockResolvedValue('org-A')
+  it('proves the project ours BEFORE anything moves, and writes the origin and lineage with the video', async () => {
+    h.projectGuard.mockResolvedValue({
+      sourceFileIds: ['image-hall-1080x1080-png'],
+    })
     const response = await POST(request(EXPORTED))
     expect(response.status).toBe(200)
     expect(h.projectGuard).toHaveBeenCalledWith('vp-1')
@@ -578,7 +580,16 @@ describe('a video exported from a studio project (#1182)', () => {
     expect(h.create.mock.calls[0][0]).toMatchObject({
       kind: 'video',
       studio: { tab: 'meme-generator', projectId: 'vp-1' },
+      sourceFileIds: ['image-hall-1080x1080-png'],
     })
+  })
+
+  it('writes no lineage for a project with no backgrounds', async () => {
+    h.projectGuard.mockResolvedValue({ sourceFileIds: [] })
+    expect((await POST(request(EXPORTED))).status).toBe(200)
+    const input = h.create.mock.calls[0][0]
+    expect(input.studio).toEqual({ tab: 'meme-generator', projectId: 'vp-1' })
+    expect(input).not.toHaveProperty('sourceFileIds')
   })
 
   it('refuses a project that is not ours, discarding both uploads, never moving', async () => {

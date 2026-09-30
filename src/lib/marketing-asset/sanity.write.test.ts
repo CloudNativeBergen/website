@@ -113,6 +113,7 @@ describe('createMarketingAsset', () => {
       createdFileAssetId: 'file-clip-mp4',
       posterAssetId: 'image-poster-1080x1080-jpg',
       studio: { tab: 'meme-generator', projectId: 'vp-1' },
+      sourceFileIds: ['image-hall-1080x1080-png', 'image-ada-1080x1080-png'],
     })
     expect(h.created[0]).toMatchObject({
       kind: 'video',
@@ -120,6 +121,8 @@ describe('createMarketingAsset', () => {
       studio: { tab: 'meme-generator' },
       // Weak: the entry outlives its project and never blocks deleting it.
       project: { _type: 'reference', _ref: 'vp-1', _weak: true },
+      // Plain ids, never references: they keep no file alive.
+      sourceFileIds: ['image-hall-1080x1080-png', 'image-ada-1080x1080-png'],
     })
   })
 

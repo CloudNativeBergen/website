@@ -1,6 +1,7 @@
 import 'server-only'
 import { TRPCError } from '@trpc/server'
 import { readMarketingAssetMark } from './sanity'
+import { readVideoProjectFiles } from '@/lib/video-project/sanity'
 import {
   requireCurrentOrgId,
   requireDocumentInCurrentOrg,
@@ -62,8 +63,20 @@ export async function resolveAssetDetailsForCurrentOrg(
 /**
  * Prove a client-supplied studio video project id names one of THIS
  * organization's projects (#1182), before the video it says it exported
- * moves anywhere. The tenancy refusal never says whether a foreign id exists.
+ * moves anywhere, and read the files the project holds NOW: the scene
+ * backgrounds an export of it can show. They are written on the gallery
+ * entry as its lineage, so a speaker erasure finds the video by them even
+ * once the project has been edited or deleted. Only after the guard: the
+ * tenancy refusal never says whether a foreign id exists, and nothing of a
+ * foreign project is ever read.
  */
-export async function requireProjectInCurrentOrg(id: string): Promise<string> {
-  return requireDocumentInCurrentOrg(id, 'videoProject')
+export async function requireProjectInCurrentOrg(
+  id: string,
+): Promise<{ sourceFileIds: string[] }> {
+  const orgId = await requireDocumentInCurrentOrg(id, 'videoProject')
+  const stored = await readVideoProjectFiles(orgId, id)
+  // The backgrounds only: a track is heard, never shown.
+  return {
+    sourceFileIds: [...new Set((stored?.images ?? []).map((f) => f.fileId))],
+  }
 }

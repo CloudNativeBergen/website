@@ -260,9 +260,10 @@ export async function POST(request: Request) {
 
   // An exported video's project (#1182) is a client id: proven ours before
   // the move, like the subject. The refusal never says whether it exists.
+  let sourceFileIds: string[] = []
   if (studio?.projectId) {
     try {
-      await requireProjectInCurrentOrg(studio.projectId)
+      ;({ sourceFileIds } = await requireProjectInCurrentOrg(studio.projectId))
     } catch {
       discard()
       return NextResponse.json(
@@ -292,6 +293,7 @@ export async function POST(request: Request) {
           // The organizer who made this request, proven one above.
           rights: { confirmedBy: organizerId, confirmedAt },
           studio,
+          sourceFileIds,
         },
       ),
       { signal: writeDeadline.signal },
@@ -341,6 +343,8 @@ function newAsset(
   extra: {
     rights: { confirmedBy: string; confirmedAt: string }
     studio: StudioOriginInput | undefined
+    /** The files the named project holds (#1182); empty without one. */
+    sourceFileIds: string[]
   },
 ): NewMarketingAsset {
   if (fields.kind === 'audio')
@@ -357,7 +361,12 @@ function newAsset(
       ...base,
       ...fields,
       ...(extra.studio?.tab === 'meme-generator'
-        ? { studio: extra.studio }
+        ? {
+            studio: extra.studio,
+            ...(extra.sourceFileIds.length > 0
+              ? { sourceFileIds: extra.sourceFileIds }
+              : {}),
+          }
         : {}),
     }
   return { ...base, ...fields }

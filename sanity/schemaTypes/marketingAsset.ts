@@ -270,6 +270,16 @@ export default defineType({
       hidden: ({ document }) =>
         document?.kind !== 'video' || !document?.project,
     }),
+    defineField({
+      name: 'sourceFileIds',
+      title: 'Files the video was made from',
+      description:
+        'The scene backgrounds the project held when this video was saved: plain asset ids, so a speaker erasure finds the video by them even after the project has changed.',
+      type: 'array',
+      of: [{ type: 'string' }],
+      readOnly: true,
+      hidden: true,
+    }),
   ],
   preview: {
     select: {

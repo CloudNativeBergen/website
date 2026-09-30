@@ -525,6 +525,13 @@ export type NewMarketingAsset = {
        * project it came from — proven this organization's by the caller.
        */
       studio?: StudioOriginInput
+      /**
+       * The scene backgrounds its project held when it was saved (#1182):
+       * plain asset ids, never references, so they keep no file alive. A
+       * speaker erasure finds the video by them once the project has moved
+       * on; nothing else reads them.
+       */
+      sourceFileIds?: string[]
     }
   | {
       kind: 'audio'
@@ -601,6 +608,10 @@ export async function createMarketingAsset(
   // Only a video remembers its project: an image is a finished file with no
   // editor state to reopen (spec §7).
   const projectId = input.kind === 'video' ? studio?.projectId : undefined
+  const sourceFileIds =
+    input.kind === 'video' && projectId && input.sourceFileIds?.length
+      ? input.sourceFileIds
+      : undefined
   const created = await clientWrite.create(
     {
       _type: 'marketingAsset',
@@ -613,6 +624,7 @@ export async function createMarketingAsset(
       ...(projectId
         ? { project: { _type: 'reference', _ref: projectId, _weak: true } }
         : {}),
+      ...(sourceFileIds ? { sourceFileIds } : {}),
       ...set,
       ...media,
     },

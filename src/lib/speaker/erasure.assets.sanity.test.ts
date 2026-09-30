@@ -1001,6 +1001,85 @@ describe('speaker erasure removes their images everywhere (#1162)', () => {
       )
     })
 
+    describe('by the lineage the video recorded', () => {
+      const LINEAGE_MP4 = 'file-lineage-mp4'
+      const LINEAGE_POSTER = 'image-lineageposter-1080x1080-jpg'
+      const lineageVideo = (
+        id: string,
+        projectId: string,
+        sources: string[],
+      ) => ({
+        ...exportedVideo(id, projectId, LINEAGE_MP4, LINEAGE_POSTER),
+        sourceFileIds: sources,
+      })
+      beforeEach(() => {
+        h.dataset.push(
+          { _id: LINEAGE_MP4, _type: 'sanity.fileAsset' },
+          { _id: LINEAGE_POSTER, _type: 'sanity.imageAsset' },
+        )
+      })
+
+      it('deletes a video whose project has since been saved without the photo', async () => {
+        h.dataset.push(
+          // Exported while it showed Ada; the scene is a colour now.
+          {
+            ...project('vp-moved-on', BOB_CARD),
+            scenes: [
+              { _key: 's1', duration: 3, background: { color: '#000' } },
+            ],
+          },
+          lineageVideo('asset-lineage', 'vp-moved-on', [ADA_CARD]),
+        )
+        const result = await eraseSpeakerInPlace({
+          speakerId: ADA,
+          actor: 'test',
+        })
+        expect(result.err).toBeNull()
+        expect(doc('asset-lineage')).toBeUndefined()
+        expect(doc(LINEAGE_MP4)).toBeUndefined()
+        expect(doc(LINEAGE_POSTER)).toBeUndefined()
+        expect(doc('vp-moved-on')).toBeDefined()
+        expect(result.verification?.clean).toBe(true)
+        expect(doc(ADA).erasedFileIds).toEqual(
+          expect.arrayContaining([LINEAGE_MP4, LINEAGE_POSTER]),
+        )
+      })
+
+      it('deletes a video whose project has since been deleted', async () => {
+        h.dataset.push(lineageVideo('asset-orphan', 'vp-gone', [ADA_CARD]))
+        const result = await eraseSpeakerInPlace({
+          speakerId: ADA,
+          actor: 'test',
+        })
+        expect(result.err).toBeNull()
+        expect(doc('asset-orphan')).toBeUndefined()
+        expect(doc(LINEAGE_MP4)).toBeUndefined()
+        expect(result.verification?.clean).toBe(true)
+      })
+
+      it('keeps a video whose lineage names none of the speaker’s files', async () => {
+        h.dataset.push(lineageVideo('asset-bob-lineage', 'vp-gone', [BOB_CARD]))
+        const result = await eraseSpeakerInPlace({
+          speakerId: ADA,
+          actor: 'test',
+        })
+        expect(result.err).toBeNull()
+        expect(doc('asset-bob-lineage')).toMatchObject({
+          sourceFileIds: [BOB_CARD],
+        })
+        expect(doc(LINEAGE_MP4)).toBeDefined()
+      })
+
+      it('verification FAILS on a video left behind, found by its lineage alone', async () => {
+        await eraseSpeakerInPlace({ speakerId: ADA, actor: 'test' })
+        // Its project is long gone; only the lineage says what it showed.
+        h.dataset.push(lineageVideo('asset-late', 'vp-gone', [ADA_CARD]))
+        const v = await verifySpeakerErasure(ADA, [], [ADA_CARD])
+        expect(v?.residual).toMatchObject({ linkedFileHolders: 1 })
+        expect(v?.clean).toBe(false)
+      })
+    })
+
     it('deletes the gallery video made from a project that showed the speaker, with its MP4 and poster', async () => {
       const result = await eraseSpeakerInPlace({
         speakerId: ADA,

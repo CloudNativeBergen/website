@@ -677,16 +677,36 @@ export async function fetchSpeakerAssetInputs(
         .map((d) => publishedId(d._id)),
     ),
   ]
-  const exported =
+  // Two ways to a gallery video: through the project it records, and by
+  // its own lineage — the files the project held when the video was saved
+  // (`sourceFileIds`, plain ids). The lineage holds up once the project has
+  // been edited to drop the photo, or deleted, where the project no longer
+  // leads here.
+  const [throughProjects, byLineage] = await Promise.all([
     projectIds.length === 0
       ? []
-      : ((await client.fetch<Doc[]>(
+      : client.fetch<Doc[]>(
           // groq-global: the gallery videos made from the projects found
           // above, whatever tenant they are in — the right is the person's.
           groq`*[_type == "marketingAsset" && project._ref in $projectIds]`,
           { projectIds },
           opts,
-        )) ?? [])
+        ),
+    client.fetch<Doc[]>(
+      // groq-global: the gallery videos whose recorded lineage names a
+      // linked file, in every tenant — the right is the person's.
+      groq`*[_type == "marketingAsset" && count(coalesce(sourceFileIds, [])[@ in $fileIds]) > 0]`,
+      { fileIds },
+      opts,
+    ),
+  ])
+  const exportedIds = new Set<string>()
+  const exported: Doc[] = []
+  for (const d of [...(throughProjects ?? []), ...(byLineage ?? [])]) {
+    if (exportedIds.has(d._id)) continue
+    exportedIds.add(d._id)
+    exported.push(d)
+  }
   const known = new Set(fileIds)
   const exportFileIds = linkedFileIds(exported).filter((id) => !known.has(id))
   fileIds.push(...exportFileIds)
