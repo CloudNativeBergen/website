@@ -209,7 +209,7 @@ export function SpeakerCard({
   if (format === 'landscape') {
     return (
       <CardFrame {...frame}>
-        <div className="flex h-full gap-[3.5cqw] p-[3cqw] text-left">
+        <div className="flex h-full gap-[3cqw] p-[3cqw] text-left">
           <Photo
             speaker={speaker}
             className="aspect-square h-full rounded-[2cqw]"
@@ -218,35 +218,35 @@ export function SpeakerCard({
             <header className="shrink-0">
               {header({
                 row: 'mb-[0.5cqw]',
-                icon: 'h-[3.5cqw] w-[3.5cqw]',
-                kicker: 'text-[3cqw]',
+                icon: 'h-[2.8cqw] w-[2.8cqw]',
+                kicker: 'text-[2.4cqw]',
               })}
-              {event('text-[4.5cqw]')}
+              {event('line-clamp-2 text-[3.4cqw]')}
             </header>
-            <main className="flex min-h-0 flex-1 flex-col justify-center">
-              {speakerName('text-[4.5cqw]')}
-              {jobTitle('mt-[0.5cqw] line-clamp-1 text-[3cqw]')}
+            <main className="flex min-h-0 flex-1 flex-col justify-center overflow-hidden">
+              {speakerName('text-[4cqw]')}
+              {jobTitle('mt-[0.4cqw] line-clamp-1 text-[2.4cqw]')}
               {talk && (
-                <div className="mt-[1.5cqw] [&>[data-card-element=talk]>div]:justify-start">
+                <div className="mt-[1.2cqw] [&>[data-card-element=talk]>div]:justify-start">
                   <Talk
                     talk={talk}
                     size={{
-                      box: 'p-[1.5cqw]',
-                      icon: 'h-[2.5cqw] w-[2.5cqw]',
-                      label: 'text-[2.5cqw]',
-                      title: 'line-clamp-2 text-[3.2cqw]',
+                      box: 'p-[1.2cqw]',
+                      icon: 'h-[2.2cqw] w-[2.2cqw]',
+                      label: 'text-[2.2cqw]',
+                      title: 'line-clamp-2 text-[2.8cqw]',
                     }}
                   />
                 </div>
               )}
             </main>
-            <footer className="flex shrink-0 items-end justify-between gap-[2cqw]">
+            <footer className="mt-[1cqw] flex shrink-0 items-end justify-between gap-[2cqw]">
               {scanLine({
-                row: 'pb-[0.5cqw]',
-                icon: 'h-[2.5cqw] w-[2.5cqw]',
-                text: 'text-[2.5cqw]',
+                row: 'pb-[0.4cqw]',
+                icon: 'h-[2.2cqw] w-[2.2cqw]',
+                text: 'text-[2.2cqw]',
               })}
-              <QrBadge url={qrCodeUrl} alt={QR_ALT} size={10} />
+              <QrBadge url={qrCodeUrl} alt={QR_ALT} size={9} />
             </footer>
           </div>
         </div>
