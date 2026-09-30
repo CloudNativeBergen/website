@@ -742,7 +742,15 @@ describe('speaker erasure removes their images everywhere (#1162)', () => {
               image: {
                 ...image(file),
                 name: 'card',
-                galleryAsset: weak('asset-ada'),
+                // Each card under its own entry; an entry's subject NOW
+                // links the files held under it.
+                galleryAsset: weak(
+                  file === BOB_CARD
+                    ? 'asset-bob'
+                    : file === TALK_CARD
+                      ? 'asset-talk'
+                      : 'asset-ada',
+                ),
               },
             }
           : {}),
@@ -774,7 +782,7 @@ describe('speaker erasure removes their images everywhere (#1162)', () => {
           image: {
             ...image(BOB_CARD),
             name: 'card',
-            galleryAsset: weak('asset-ada'),
+            galleryAsset: weak('asset-bob'),
           },
         },
         { color: '#778899' },
@@ -934,6 +942,550 @@ describe('speaker erasure removes their images everywhere (#1162)', () => {
       expect(v?.residual).toMatchObject({
         videoProjects: 1,
         linkedFileHolders: 0,
+      })
+      expect(v?.clean).toBe(false)
+    })
+  })
+
+  describe('a gallery video exported from a project (#1182)', () => {
+    const EXPORT_MP4 = 'file-export-mp4'
+    const EXPORT_POSTER = 'image-exportposter-1080x1920-jpg'
+    const BOB_MP4 = 'file-bobexport-mp4'
+    const BOB_POSTER = 'image-bobposter-1080x1920-jpg'
+
+    const project = (id: string, file: string, imageExtra = {}) => ({
+      _id: id,
+      _type: 'videoProject',
+      _rev: 'r0',
+      organization: ref('org-a'),
+      scope: 'organization',
+      title: 'Teaser',
+      formatVersion: 1,
+      scenes: [
+        {
+          _key: 's1',
+          _type: 'videoProjectScene',
+          duration: 3,
+          background: {
+            color: '#123456',
+            image: { ...image(file), name: 'card', ...imageExtra },
+          },
+        },
+      ],
+    })
+    const exportedVideo = (
+      id: string,
+      projectId: string,
+      mp4: string,
+      poster: string,
+    ) => ({
+      _id: id,
+      _type: 'marketingAsset',
+      _rev: 'r0',
+      organization: ref('org-a'),
+      scope: 'organization',
+      kind: 'video',
+      title: 'Teaser',
+      source: 'studio',
+      studio: { tab: 'meme-generator' },
+      project: weak(projectId),
+      video: { _type: 'file', asset: ref(mp4) },
+      poster: image(poster),
+    })
+    const files = () => [
+      { _id: EXPORT_MP4, _type: 'sanity.fileAsset' },
+      { _id: EXPORT_POSTER, _type: 'sanity.imageAsset' },
+      { _id: BOB_MP4, _type: 'sanity.fileAsset' },
+      { _id: BOB_POSTER, _type: 'sanity.imageAsset' },
+    ]
+
+    beforeEach(() => {
+      h.dataset.push(
+        ...files(),
+        project('vp-export', ADA_CARD, { galleryAsset: weak('asset-ada') }),
+        exportedVideo('asset-export', 'vp-export', EXPORT_MP4, EXPORT_POSTER),
+        project('vp-bob', BOB_CARD, { galleryAsset: weak('asset-bob') }),
+        exportedVideo('asset-bob-export', 'vp-bob', BOB_MP4, BOB_POSTER),
+      )
+    })
+
+    describe('by the lineage the video recorded', () => {
+      const LINEAGE_MP4 = 'file-lineage-mp4'
+      const LINEAGE_POSTER = 'image-lineageposter-1080x1080-jpg'
+      const lineageVideo = (
+        id: string,
+        projectId: string,
+        sources: (string | Record<string, unknown>)[],
+      ) => ({
+        ...exportedVideo(id, projectId, LINEAGE_MP4, LINEAGE_POSTER),
+        sources: sources.map((source, i) =>
+          typeof source === 'string'
+            ? { _key: `src-${i}`, _type: 'exportSource', fileId: source }
+            : { _key: `src-${i}`, _type: 'exportSource', ...source },
+        ),
+      })
+      beforeEach(() => {
+        h.dataset.push(
+          { _id: LINEAGE_MP4, _type: 'sanity.fileAsset' },
+          { _id: LINEAGE_POSTER, _type: 'sanity.imageAsset' },
+        )
+      })
+
+      it('deletes a video whose project has since been saved without the photo', async () => {
+        h.dataset.push(
+          // Exported while it showed Ada; the scene is a colour now.
+          {
+            ...project('vp-moved-on', BOB_CARD),
+            scenes: [
+              { _key: 's1', duration: 3, background: { color: '#000' } },
+            ],
+          },
+          lineageVideo('asset-lineage', 'vp-moved-on', [ADA_CARD]),
+        )
+        const result = await eraseSpeakerInPlace({
+          speakerId: ADA,
+          actor: 'test',
+        })
+        expect(result.err).toBeNull()
+        expect(doc('asset-lineage')).toBeUndefined()
+        expect(doc(LINEAGE_MP4)).toBeUndefined()
+        expect(doc(LINEAGE_POSTER)).toBeUndefined()
+        expect(doc('vp-moved-on')).toBeDefined()
+        expect(result.verification?.clean).toBe(true)
+        expect(doc(ADA).erasedFileIds).toEqual(
+          expect.arrayContaining([LINEAGE_MP4, LINEAGE_POSTER]),
+        )
+      })
+
+      it('deletes a video whose project has since been deleted', async () => {
+        h.dataset.push(lineageVideo('asset-orphan', 'vp-gone', [ADA_CARD]))
+        const result = await eraseSpeakerInPlace({
+          speakerId: ADA,
+          actor: 'test',
+        })
+        expect(result.err).toBeNull()
+        expect(doc('asset-orphan')).toBeUndefined()
+        expect(doc(LINEAGE_MP4)).toBeUndefined()
+        expect(result.verification?.clean).toBe(true)
+      })
+
+      it('deletes a video that was never saved as a project, by its lineage', async () => {
+        h.dataset.push({
+          ...lineageVideo('asset-unsaved', 'vp-gone', [ADA_CARD]),
+          project: undefined,
+        })
+        const result = await eraseSpeakerInPlace({
+          speakerId: ADA,
+          actor: 'test',
+        })
+        expect(result.err).toBeNull()
+        expect(doc('asset-unsaved')).toBeUndefined()
+        expect(doc(LINEAGE_MP4)).toBeUndefined()
+        expect(result.verification?.clean).toBe(true)
+      })
+
+      it('keeps a video whose lineage names none of the speaker’s files', async () => {
+        h.dataset.push(lineageVideo('asset-bob-lineage', 'vp-gone', [BOB_CARD]))
+        const result = await eraseSpeakerInPlace({
+          speakerId: ADA,
+          actor: 'test',
+        })
+        expect(result.err).toBeNull()
+        expect(doc('asset-bob-lineage')).toMatchObject({
+          sources: [{ fileId: BOB_CARD }],
+        })
+        expect(doc(LINEAGE_MP4)).toBeDefined()
+      })
+
+      it('finds a video by the subject its source copied, once the gallery entry is gone and the project moved on', async () => {
+        // Ada's card was in project P when V was exported; the entry has
+        // since been deleted and P saved without the photo. Only V's copy
+        // of who the file showed is left to link it to Ada.
+        h.dataset = h.dataset.filter((d) => !d._id.endsWith('asset-ada'))
+        h.dataset.push(
+          {
+            ...project('vp-moved-on', BOB_CARD),
+            scenes: [
+              { _key: 's1', duration: 3, background: { color: '#000' } },
+            ],
+          },
+          lineageVideo('asset-copied', 'vp-moved-on', [
+            {
+              fileId: ADA_CARD,
+              galleryAsset: weak('asset-ada'),
+              subject: weak(ADA),
+            },
+          ]),
+        )
+        const result = await eraseSpeakerInPlace({
+          speakerId: ADA,
+          actor: 'test',
+        })
+        expect(result.err).toBeNull()
+        expect(doc('asset-copied')).toBeUndefined()
+        expect(doc(LINEAGE_MP4)).toBeUndefined()
+        expect(doc(ADA_CARD)).toBeUndefined()
+        expect(result.verification?.clean).toBe(true)
+      })
+
+      it('finds the older image an entry has since replaced, while the entry still says the speaker', async () => {
+        // asset-ada's image was swapped in Studio for a new photo of Ada.
+        // The exported video still shows the old one; the entry no longer
+        // holds it, but still says who it shows.
+        const NEW_ADA = 'image-adanew-1200x630-png'
+        h.dataset.push({ _id: NEW_ADA, _type: 'sanity.imageAsset' })
+        for (const id of [
+          'asset-ada',
+          'drafts.asset-ada',
+          'versions.rlaunch.asset-ada',
+        ]) {
+          const i = h.dataset.findIndex((d) => d._id === id)
+          h.dataset[i] = { ...h.dataset[i], image: image(NEW_ADA) }
+        }
+        // Nothing else holds the old card: the post and Task are re-pointed.
+        h.dataset = h.dataset.filter(
+          (d) =>
+            !['post-1', 'versions.rlaunch.post-1', 'var-1'].includes(d._id),
+        )
+        h.dataset.push(
+          lineageVideo('asset-old-frame', 'vp-gone', [
+            {
+              fileId: ADA_CARD,
+              galleryAsset: weak('asset-ada'),
+              subject: weak(ADA),
+            },
+          ]),
+        )
+        const result = await eraseSpeakerInPlace({
+          speakerId: ADA,
+          actor: 'test',
+        })
+        expect(result.err).toBeNull()
+        expect(doc('asset-old-frame')).toBeUndefined()
+        expect(doc(LINEAGE_MP4)).toBeUndefined()
+        expect(doc(ADA_CARD)).toBeUndefined()
+        expect(doc(NEW_ADA)).toBeUndefined()
+        expect(result.verification?.clean).toBe(true)
+      })
+
+      it('finds an older image by the entry’s subject NOW, though the export copied another', async () => {
+        // Exported while asset-ada (wrongly) said Bob; corrected to Ada
+        // since, and its image swapped. The export still shows the old one.
+        // No project holds the old card any more: the export's own record
+        // is the only path to it.
+        h.dataset = h.dataset.filter(
+          (d) => !['vp-export', 'asset-export'].includes(d._id),
+        )
+        const NEW_ADA = 'image-adanew2-1200x630-png'
+        h.dataset.push({ _id: NEW_ADA, _type: 'sanity.imageAsset' })
+        for (const id of [
+          'asset-ada',
+          'drafts.asset-ada',
+          'versions.rlaunch.asset-ada',
+        ]) {
+          const i = h.dataset.findIndex((d) => d._id === id)
+          h.dataset[i] = { ...h.dataset[i], image: image(NEW_ADA) }
+        }
+        h.dataset = h.dataset.filter(
+          (d) =>
+            !['post-1', 'versions.rlaunch.post-1', 'var-1'].includes(d._id),
+        )
+        h.dataset.push(
+          lineageVideo('asset-copied-bob', 'vp-gone', [
+            {
+              fileId: ADA_CARD,
+              galleryAsset: weak('asset-ada'),
+              subject: weak(BOB),
+            },
+          ]),
+        )
+        const result = await eraseSpeakerInPlace({
+          speakerId: ADA,
+          actor: 'test',
+        })
+        expect(result.err).toBeNull()
+        expect(doc('asset-copied-bob')).toBeUndefined()
+        expect(doc(ADA_CARD)).toBeUndefined()
+        expect(result.verification?.clean).toBe(true)
+      })
+
+      it('links a held file when ANY version of its entry names the speaker', async () => {
+        // Published and draft say Bob; a release copy says Ada. All hold
+        // new images; the export shows the old one.
+        const NEW_ONE = 'image-newone-1200x630-png'
+        const NEW_TWO = 'image-newtwo-1200x630-png'
+        h.dataset.push(
+          { _id: NEW_ONE, _type: 'sanity.imageAsset' },
+          { _id: NEW_TWO, _type: 'sanity.imageAsset' },
+        )
+        h.dataset = h.dataset.filter(
+          (d) =>
+            !['post-1', 'versions.rlaunch.post-1', 'var-1'].includes(d._id),
+        )
+        for (const id of ['asset-ada', 'drafts.asset-ada']) {
+          const i = h.dataset.findIndex((d) => d._id === id)
+          h.dataset[i] = {
+            ...h.dataset[i],
+            image: image(NEW_ONE),
+            subject: weak(BOB),
+          }
+        }
+        const rel = h.dataset.findIndex(
+          (d) => d._id === 'versions.rlaunch.asset-ada',
+        )
+        h.dataset[rel] = { ...h.dataset[rel], image: image(NEW_TWO) }
+        h.dataset.push(
+          lineageVideo('asset-versioned', 'vp-gone', [
+            {
+              fileId: ADA_CARD,
+              galleryAsset: weak('asset-ada'),
+              subject: weak(BOB),
+            },
+          ]),
+        )
+        const result = await eraseSpeakerInPlace({
+          speakerId: ADA,
+          actor: 'test',
+        })
+        expect(result.err).toBeNull()
+        expect(doc('asset-versioned')).toBeUndefined()
+        expect(doc(ADA_CARD)).toBeUndefined()
+        expect(result.verification?.clean).toBe(true)
+      })
+
+      it('follows an export’s poster into a second project and its exports, to a fixed point', async () => {
+        // V1's poster was picked as P2's background in Studio; P2 was
+        // exported as V2. Erasing Ada must reach V2 in the same run.
+        const V2_MP4 = 'file-second-mp4'
+        const V2_POSTER = 'image-secondposter-1080x1080-jpg'
+        h.dataset.push(
+          { _id: V2_MP4, _type: 'sanity.fileAsset' },
+          { _id: V2_POSTER, _type: 'sanity.imageAsset' },
+          {
+            ...project('vp-second', EXPORT_POSTER),
+            scenes: [
+              {
+                _key: 's1',
+                _type: 'videoProjectScene',
+                duration: 3,
+                background: {
+                  color: '#000',
+                  image: { ...image(EXPORT_POSTER), name: 'poster' },
+                },
+              },
+            ],
+          },
+          exportedVideo('asset-second', 'vp-second', V2_MP4, V2_POSTER),
+        )
+        const result = await eraseSpeakerInPlace({
+          speakerId: ADA,
+          actor: 'test',
+        })
+        expect(result.err).toBeNull()
+        expect(doc('asset-export')).toBeUndefined()
+        expect(doc('asset-second')).toBeUndefined()
+        expect(doc(V2_MP4)).toBeUndefined()
+        expect(doc(V2_POSTER)).toBeUndefined()
+        expect(
+          (doc('vp-second').scenes as { background: unknown }[])[0].background,
+        ).toEqual({ color: '#000' })
+        expect(result.verification?.clean).toBe(true)
+        expect(result.verification?.residual.linkedFiles).toBe(0)
+      })
+
+      it('deletes the MP4 of a video found by its poster alone, never leaving it stored', async () => {
+        // The poster IS Ada's card (the same bytes, so the same asset).
+        const SHARED_MP4 = 'file-sharedposter-mp4'
+        h.dataset.push(
+          { _id: SHARED_MP4, _type: 'sanity.fileAsset' },
+          {
+            ...exportedVideo('asset-shared', 'vp-gone', SHARED_MP4, ADA_CARD),
+            sources: [],
+          },
+        )
+        const result = await eraseSpeakerInPlace({
+          speakerId: ADA,
+          actor: 'test',
+        })
+        expect(result.err).toBeNull()
+        expect(doc('asset-shared')).toBeUndefined()
+        expect(doc(SHARED_MP4)).toBeUndefined()
+        expect(doc(ADA).erasedFileIds).toEqual(
+          expect.arrayContaining([SHARED_MP4]),
+        )
+        expect(result.verification?.clean).toBe(true)
+      })
+
+      it('ignores a copied subject while the gallery entry lives and says otherwise', async () => {
+        // Saved while asset-bob was (wrongly) about Ada; corrected since.
+        h.dataset.push(
+          lineageVideo('asset-corrected', 'vp-gone', [
+            {
+              fileId: BOB_CARD,
+              galleryAsset: weak('asset-bob'),
+              subject: weak(ADA),
+            },
+          ]),
+        )
+        const result = await eraseSpeakerInPlace({
+          speakerId: ADA,
+          actor: 'test',
+        })
+        expect(result.err).toBeNull()
+        expect(doc('asset-corrected')).toBeDefined()
+        expect(doc(BOB_CARD)).toBeDefined()
+        expect(doc(LINEAGE_MP4)).toBeDefined()
+      })
+
+      it('verification FAILS on a video left behind, found by its lineage alone', async () => {
+        await eraseSpeakerInPlace({ speakerId: ADA, actor: 'test' })
+        // Its project is long gone; only the lineage says what it showed.
+        h.dataset.push(lineageVideo('asset-late', 'vp-gone', [ADA_CARD]))
+        const v = await verifySpeakerErasure(ADA, [], [ADA_CARD])
+        expect(v?.residual).toMatchObject({ linkedFileHolders: 1 })
+        expect(v?.clean).toBe(false)
+      })
+    })
+
+    it('deletes the gallery video made from a project that showed the speaker, with its MP4 and poster', async () => {
+      const result = await eraseSpeakerInPlace({
+        speakerId: ADA,
+        actor: 'test',
+      })
+      expect(result.err).toBeNull()
+      expect(doc('asset-export')).toBeUndefined()
+      expect(doc(EXPORT_MP4)).toBeUndefined()
+      expect(doc(EXPORT_POSTER)).toBeUndefined()
+      expect(referencesTo(EXPORT_MP4)).toEqual([])
+      expect(referencesTo(EXPORT_POSTER)).toEqual([])
+      // The project itself is kept: its scene falls back to its colour.
+      expect(
+        (doc('vp-export').scenes as { background: unknown }[])[0].background,
+      ).toEqual({ color: '#123456' })
+      expect(doc(ADA)?.erasedFileIds).toEqual(
+        expect.arrayContaining([EXPORT_MP4, EXPORT_POSTER]),
+      )
+      expect(result.verification?.clean).toBe(true)
+    })
+
+    it('strips the exported poster from a post that attached it', async () => {
+      h.dataset.push({
+        _id: 'post-teaser',
+        _type: 'socialPost',
+        _rev: 'r0',
+        body: 'Watch the teaser',
+        attachments: [
+          { _key: 'att-p', image: image(EXPORT_POSTER), alt: 'Teaser' },
+        ],
+      })
+      const result = await eraseSpeakerInPlace({
+        speakerId: ADA,
+        actor: 'test',
+      })
+      expect(result.err).toBeNull()
+      expect(doc('post-teaser')).toMatchObject({
+        body: 'Watch the teaser',
+        attachments: [],
+      })
+      expect(doc(EXPORT_POSTER)).toBeUndefined()
+      expect(result.verification?.clean).toBe(true)
+    })
+
+    it('keeps a gallery video whose project holds no file linked to the speaker', async () => {
+      const before = structuredClone(doc('asset-bob-export'))
+      await eraseSpeakerInPlace({ speakerId: ADA, actor: 'test' })
+      expect(doc('asset-bob-export')).toEqual(before)
+      expect(doc(BOB_MP4)).toBeDefined()
+      expect(doc(BOB_POSTER)).toBeDefined()
+    })
+
+    it('deletes a Studio draft and a release copy of the exported video too', async () => {
+      h.dataset.push(
+        exportedVideo(
+          'drafts.asset-export',
+          'vp-export',
+          EXPORT_MP4,
+          EXPORT_POSTER,
+        ),
+        exportedVideo(
+          'versions.rlaunch.asset-export',
+          'vp-export',
+          EXPORT_MP4,
+          EXPORT_POSTER,
+        ),
+      )
+      const result = await eraseSpeakerInPlace({
+        speakerId: ADA,
+        actor: 'test',
+      })
+      expect(result.err).toBeNull()
+      for (const id of [
+        'asset-export',
+        'drafts.asset-export',
+        'versions.rlaunch.asset-export',
+      ])
+        expect(doc(id), id).toBeUndefined()
+      expect(doc(EXPORT_MP4)).toBeUndefined()
+      expect(result.verification?.clean).toBe(true)
+    })
+
+    it('follows a draft of the project to the videos made from it', async () => {
+      // Only the project's DRAFT still shows the card.
+      h.dataset = h.dataset.filter((d) => d._id !== 'vp-export')
+      h.dataset.push(project('drafts.vp-export', ADA_CARD))
+      await eraseSpeakerInPlace({ speakerId: ADA, actor: 'test' })
+      expect(doc('asset-export')).toBeUndefined()
+      expect(doc(EXPORT_MP4)).toBeUndefined()
+    })
+
+    it('follows a project found by the subject it copied, its gallery asset deleted', async () => {
+      const GONE = 'image-exportgone-1080x1080-png'
+      h.dataset.push(
+        { _id: GONE, _type: 'sanity.imageAsset' },
+        project('vp-gone', GONE, { subject: weak(ADA) }),
+        exportedVideo('asset-gone-export', 'vp-gone', BOB_MP4, BOB_POSTER),
+      )
+      // asset-bob-export shares its files with this one: drop it so the
+      // files' fate is this video's alone.
+      h.dataset = h.dataset.filter((d) => d._id !== 'asset-bob-export')
+      const result = await eraseSpeakerInPlace({
+        speakerId: ADA,
+        actor: 'test',
+      })
+      expect(result.err).toBeNull()
+      expect(doc('asset-gone-export')).toBeUndefined()
+      expect(doc(BOB_MP4)).toBeUndefined()
+      expect(doc(BOB_POSTER)).toBeUndefined()
+      expect(doc(GONE)).toBeUndefined()
+      expect(result.verification?.clean).toBe(true)
+    })
+
+    it('verification FAILS while a gallery video still holds an exported file', async () => {
+      await eraseSpeakerInPlace({ speakerId: ADA, actor: 'test' })
+      // A copy that escaped the delete — created concurrently, say.
+      h.dataset.push(
+        exportedVideo('asset-late', 'vp-export', EXPORT_MP4, EXPORT_POSTER),
+      )
+      const v = await verifySpeakerErasure(ADA, [], [EXPORT_MP4])
+      expect(v?.residual).toMatchObject({
+        marketingAssets: 0,
+        linkedFileHolders: 1,
+        videoProjects: 0,
+      })
+      expect(v?.clean).toBe(false)
+    })
+
+    it('verification FAILS on the recorded ids alone when the MP4 delete failed and a copy holds it', async () => {
+      h.failFileDelete.add(EXPORT_MP4)
+      await eraseSpeakerInPlace({ speakerId: ADA, actor: 'test' })
+      expect(doc(EXPORT_MP4)).toBeDefined()
+      h.dataset.push(
+        exportedVideo('asset-late', 'vp-export', EXPORT_MP4, EXPORT_POSTER),
+      )
+      const v = await verifySpeakerErasure(ADA)
+      expect(v?.residual).toMatchObject({
+        linkedFileHolders: 1,
+        linkedFiles: 1,
       })
       expect(v?.clean).toBe(false)
     })

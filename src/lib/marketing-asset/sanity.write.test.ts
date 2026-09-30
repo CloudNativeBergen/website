@@ -104,6 +104,74 @@ describe('createMarketingAsset', () => {
     expect(h.created[0].studio).toEqual({ tab: 'speakers' })
   })
 
+  it('records a video’s project as a weak reference, with its tab (#1182)', async () => {
+    await createMarketingAsset({
+      orgId: 'org-a',
+      details: { ...DETAILS, alt: 'A teaser' },
+      kind: 'video',
+      fileAssetId: 'file-clip-mp4',
+      createdFileAssetId: 'file-clip-mp4',
+      posterAssetId: 'image-poster-1080x1080-jpg',
+      studio: { tab: 'meme-generator', projectId: 'vp-1' },
+      sources: [
+        { fileId: 'image-hall-1080x1080-png', galleryAssetId: 'asset-hall' },
+        { fileId: 'image-ada-1080x1080-png', subjectId: 'sp-ada' },
+      ],
+    })
+    expect(h.created[0]).toMatchObject({
+      kind: 'video',
+      source: 'studio',
+      studio: { tab: 'meme-generator' },
+      // Weak: the entry outlives its project and never blocks deleting it.
+      project: { _type: 'reference', _ref: 'vp-1', _weak: true },
+    })
+    // The file as a plain id, never a reference, so it keeps no file
+    // alive; the gallery asset and the subject weak; every item keyed.
+    const sources = h.created[0].sources as Record<string, unknown>[]
+    expect(sources).toHaveLength(2)
+    expect(sources[0]).toMatchObject({
+      _type: 'exportSource',
+      fileId: 'image-hall-1080x1080-png',
+      galleryAsset: { _type: 'reference', _ref: 'asset-hall', _weak: true },
+    })
+    expect(sources[0]).not.toHaveProperty('subject')
+    expect(sources[1]).toMatchObject({
+      fileId: 'image-ada-1080x1080-png',
+      subject: { _type: 'reference', _ref: 'sp-ada', _weak: true },
+    })
+    expect(sources[1]).not.toHaveProperty('galleryAsset')
+    expect(new Set(sources.map((s) => s._key)).size).toBe(2)
+  })
+
+  it('records no project for a video saved unsaved, but still its lineage, and none for an image (#1182)', async () => {
+    await createMarketingAsset({
+      orgId: 'org-a',
+      details: { ...DETAILS, alt: 'A teaser' },
+      kind: 'video',
+      fileAssetId: 'file-clip-mp4',
+      posterAssetId: 'image-poster-1080x1080-jpg',
+      studio: { tab: 'meme-generator' },
+      sources: [{ fileId: 'image-venue-1080x1080-png' }],
+    })
+    expect(h.created[0]).toMatchObject({
+      source: 'studio',
+      sources: [{ fileId: 'image-venue-1080x1080-png' }],
+    })
+    expect(h.created[0]).not.toHaveProperty('project')
+    await createMarketingAsset({
+      orgId: 'org-a',
+      details: { ...DETAILS, alt: 'A card' },
+      imageAssetId: 'image-a-1x1-png',
+      studio: { tab: 'meme-generator', projectId: 'vp-1' },
+    })
+    expect(h.created[1]).toMatchObject({
+      kind: 'image',
+      source: 'studio',
+      studio: { tab: 'meme-generator' },
+    })
+    expect(h.created[1]).not.toHaveProperty('project')
+  })
+
   it('keeps an upload an upload, with no studio origin', async () => {
     await createMarketingAsset({
       orgId: 'org-a',

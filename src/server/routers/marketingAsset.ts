@@ -202,6 +202,7 @@ export const marketingAssetRouter = router({
         _id: input.id,
         title: asset.title,
         alt: asset.alt,
+        fileId: asset.fileId,
         url: proxiedImageUrl(
           backgroundRenditionUrl(asset.url, asset.width, asset.height),
         ),

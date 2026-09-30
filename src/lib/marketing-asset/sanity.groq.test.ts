@@ -354,6 +354,7 @@ describe('an asset as a studio background (#1180)', () => {
       title: 'Keynote hall',
       alt: 'alt of hall',
       url: 'https://cdn.sanity.io/images/p/d/hall-3000x2000.jpg',
+      fileId: expect.stringMatching(/^image-/),
       width: 3000,
       height: 2000,
     })
@@ -368,6 +369,7 @@ describe('an asset as a studio background (#1180)', () => {
       title: 'track',
       alt: '',
       url: null,
+      fileId: null,
       width: null,
       height: null,
     })
@@ -532,19 +534,83 @@ describe('a studio save’s origin (#1164)', () => {
       tab: 'speakers',
       speakerId,
       sponsorId: null,
+      project: null,
     })
+    const none = { project: null }
     expect(studio).toEqual({
       card: speakers('sp-ada'),
       edited: speakers('sp-bob'),
       cleared: speakers(null),
       'talk-subject': speakers(null),
       gone: speakers(null),
-      thanks: { tab: 'sponsors', speakerId: null, sponsorId: 'acme' },
-      'wrong-tab': { tab: 'sponsors', speakerId: null, sponsorId: null },
-      meme: { tab: 'meme-generator', speakerId: null, sponsorId: null },
+      thanks: { tab: 'sponsors', speakerId: null, sponsorId: 'acme', ...none },
+      'wrong-tab': {
+        tab: 'sponsors',
+        speakerId: null,
+        sponsorId: null,
+        ...none,
+      },
+      meme: {
+        tab: 'meme-generator',
+        speakerId: null,
+        sponsorId: null,
+        ...none,
+      },
       upload: null,
       odd: null,
       old: null,
+    })
+  })
+})
+
+describe('a video exported from a studio project (#1182)', () => {
+  const clip = (id: string, extra: Record<string, unknown>) =>
+    asset(id, 'org-a', {
+      kind: 'video',
+      alt: undefined,
+      source: 'studio',
+      studio: { tab: 'meme-generator' },
+      video: { _type: 'file', asset: ref('file-clip-mp4') },
+      poster: { _type: 'image', asset: ref('image-poster-1080x1080-jpg') },
+      ...extra,
+    })
+  beforeEach(() => {
+    h.dataset = [
+      {
+        _id: 'vp-live',
+        _type: 'videoProject',
+        organization: ref('org-a'),
+        title: 'Teaser',
+      },
+      { _id: 'drafts.vp-draft-only', _type: 'videoProject', title: 'Draft' },
+      clip('from-live', { project: weak('vp-live') }),
+      clip('from-deleted', { project: weak('vp-deleted') }),
+      // Only a Studio draft exists: the studio cannot open it.
+      clip('from-draft', { project: weak('vp-draft-only') }),
+      clip('unsaved', {}),
+      // A stray project reference on an upload is not a studio origin.
+      asset('upload-with-ref', 'org-a', {
+        source: 'upload',
+        project: weak('vp-live'),
+      }),
+    ]
+  })
+
+  it('names the project, and whether it still exists', async () => {
+    const rows = await listMarketingAssets('org-a', 'conf-a-2026', {})
+    const studio = Object.fromEntries(rows.map((row) => [row._id, row.studio]))
+    const meme = (project: { _id: string; exists: boolean } | null) => ({
+      tab: 'meme-generator',
+      speakerId: null,
+      sponsorId: null,
+      project,
+    })
+    expect(studio).toEqual({
+      'from-live': meme({ _id: 'vp-live', exists: true }),
+      'from-deleted': meme({ _id: 'vp-deleted', exists: false }),
+      'from-draft': meme({ _id: 'vp-draft-only', exists: false }),
+      unsaved: meme(null),
+      'upload-with-ref': null,
     })
   })
 })

@@ -12,7 +12,11 @@
  *     assets and Tasks whose subject is the speaker or a talk they give;
  *  2. collects every file those hold ({@link linkedFileIds}) — a gallery asset's
  *     image or video, a Task's render — and every file a saved video holds
- *     under a subject it copied from the gallery ({@link projectSubjectFileIds});
+ *     under a subject it copied from the gallery ({@link projectSubjectFileIds}),
+ *     and — through each saved video holding one, and through the lineage an
+ *     exported gallery video records of what it showed — the files of every
+ *     gallery entry reached, to a fixed point (#1182, see
+ *     {@link fetchSpeakerAssetInputs});
  *  3. finds every document holding one of those files by the FILE's references,
  *     drafts and release versions included, and plans what each loses
  *     ({@link planSpeakerAssetErasure});
@@ -213,27 +217,30 @@ export interface ProjectFileSubject {
   subjectId: string | null
   /** Its gallery asset still exists: then the gallery's subject decides. */
   live: boolean | null
+  /** That asset's subjects NOW, one per version, where it still exists. */
+  liveSubjectIds?: string[]
 }
 
 /**
- * The files a saved video holds whose stored subject (copied from the gallery
- * asset, #1181) is linked to the speaker — but only where that gallery asset
- * is GONE. While it exists its own, possibly corrected, subject decides
- * (through {@link linkedFileIds}), never the project's older copy.
+ * The files a saved video (#1181) or an exported one (#1182) holds under a
+ * subject copied from the gallery asset, where that subject is linked to
+ * the speaker. While the asset exists its own, possibly corrected, subject
+ * decides — applied to THIS file, which may be an older image the entry has
+ * since replaced and so is not the entry's to link any more. Once the asset
+ * is gone, the copy is all that is left, and it decides.
  */
 export function projectSubjectFileIds(
   files: ProjectFileSubject[],
   subjectIds: string[],
 ): string[] {
   const subjects = new Set(subjectIds)
+  const linked = (f: ProjectFileSubject) =>
+    f.live
+      ? (f.liveSubjectIds ?? []).some((id) => subjects.has(id))
+      : !!f.subjectId && subjects.has(f.subjectId)
   return [
     ...new Set(
-      files
-        .filter(
-          (f) =>
-            !f.live && f.fileId && f.subjectId && subjects.has(f.subjectId),
-        )
-        .map((f) => f.fileId as string),
+      files.filter((f) => f.fileId && linked(f)).map((f) => f.fileId as string),
     ),
   ]
 }
@@ -583,50 +590,85 @@ export async function fetchSpeakerAssetInputs(
     { subjectIds },
     opts,
   )
+  // The gallery entries ABOUT the subject, in any version: a file held
+  // under one of them — a saved video's background or track, an export's
+  // source — is read whatever subject was copied with it, so the entry's
+  // subject NOW decides (a version naming the person counts), and the copy
+  // only once the entry is gone. Never a deref: `->` follows the published
+  // document alone, blind to a draft or release copy that names the person.
+  const linkedAssetIds = [
+    ...new Set(
+      (subjectDocs ?? [])
+        .filter((d) => d._type === 'marketingAsset')
+        .map((d) => publishedId(d._id)),
+    ),
+  ]
   type Held = {
     fileId: string | null
     subjectId: string | null
     assetId: string | null
   }
-  const [sceneFiles, trackFiles] = await Promise.all([
+  const [sceneFiles, trackFiles, exportSources] = await Promise.all([
     client.fetch<Held[]>(
       // groq-global: a saved video (#1181) keeps a gallery image's subject
       // with the file, so the file is found after its gallery asset is
       // deleted — in every tenant, because the right is the person's.
-      groq`*[_type == "videoProject" && count(scenes[background.image.subject._ref in $subjectIds]) > 0].scenes[background.image.subject._ref in $subjectIds]{ "fileId": background.image.asset._ref, "subjectId": background.image.subject._ref, "assetId": background.image.galleryAsset._ref }`,
-      { subjectIds },
+      groq`*[_type == "videoProject" && count(scenes[background.image.subject._ref in $subjectIds || background.image.galleryAsset._ref in $linkedAssetIds]) > 0].scenes[background.image.subject._ref in $subjectIds || background.image.galleryAsset._ref in $linkedAssetIds]{ "fileId": background.image.asset._ref, "subjectId": background.image.subject._ref, "assetId": background.image.galleryAsset._ref }`,
+      { subjectIds, linkedAssetIds },
       opts,
     ),
     client.fetch<Held[]>(
       // groq-global: the same, for a saved video's music track.
-      groq`*[_type == "videoProject" && track.file.subject._ref in $subjectIds]{ "fileId": track.file.asset._ref, "subjectId": track.file.subject._ref, "assetId": track.file.galleryAsset._ref }`,
-      { subjectIds },
+      groq`*[_type == "videoProject" && (track.file.subject._ref in $subjectIds || track.file.galleryAsset._ref in $linkedAssetIds)]{ "fileId": track.file.asset._ref, "subjectId": track.file.subject._ref, "assetId": track.file.galleryAsset._ref }`,
+      { subjectIds, linkedAssetIds },
+      opts,
+    ),
+    client.fetch<Held[]>(
+      // groq-global: an exported gallery video (#1182) copies, with each
+      // file it showed, who the file's gallery asset said it showed — so
+      // the file is found after that asset is deleted and the project has
+      // moved on. In every tenant, because the right is the person's.
+      groq`*[_type == "marketingAsset" && count(sources[subject._ref in $subjectIds || galleryAsset._ref in $linkedAssetIds]) > 0].sources[subject._ref in $subjectIds || galleryAsset._ref in $linkedAssetIds]{ fileId, "subjectId": subject._ref, "assetId": galleryAsset._ref }`,
+      { subjectIds, linkedAssetIds },
       opts,
     ),
   ])
-  const held = [...(sceneFiles ?? []), ...(trackFiles ?? [])]
+  const held = [
+    ...(sceneFiles ?? []),
+    ...(trackFiles ?? []),
+    ...(exportSources ?? []),
+  ]
   const assetIds = [
     ...new Set(held.flatMap((f) => (f.assetId ? [f.assetId] : []))),
   ]
   // Live in ANY version — published, a Studio draft or a Content Release
-  // copy: while one exists, the gallery's own subject decides.
-  const liveAssets = new Set(
-    assetIds.length > 0
-      ? (
-          (await client.fetch<string[]>(
-            // groq-global: which of those gallery assets still exist, by id,
-            // in any version — an asset's own subject decides while it does.
-            groq`*[_type == "marketingAsset" && (_id in $assetIds || _id in $draftIds || (_id in path("versions.**") && string::split(_id, ".")[2] in $assetIds))]._id`,
-            { assetIds, draftIds: assetIds.map((id) => `drafts.${id}`) },
-            opts,
-          )) ?? []
-        ).map((id) => id.split('.').pop() as string)
-      : [],
-  )
+  // copy: while one exists, the gallery's own subject NOW decides, for the
+  // held file too. Every version's subject counts: one naming the person
+  // links the file, whatever another version says.
+  const liveAssets = new Map<string, string[]>()
+  if (assetIds.length > 0) {
+    const rows =
+      (await client.fetch<{ _id: string; subjectId: string | null }[]>(
+        // groq-global: which of those gallery assets still exist, by id,
+        // in any version, and who each says it shows — an asset's own
+        // subject decides while it does.
+        groq`*[_type == "marketingAsset" && (_id in $assetIds || _id in $draftIds || (_id in path("versions.**") && string::split(_id, ".")[2] in $assetIds))]{ _id, "subjectId": subject._ref }`,
+        { assetIds, draftIds: assetIds.map((id) => `drafts.${id}`) },
+        opts,
+      )) ?? []
+    for (const row of rows) {
+      const id = row._id.split('.').pop() as string
+      const known = liveAssets.get(id) ?? []
+      if (row.subjectId && !known.includes(row.subjectId))
+        known.push(row.subjectId)
+      liveAssets.set(id, known)
+    }
+  }
   const projectFiles: ProjectFileSubject[] = held.map((f) => ({
     fileId: f.fileId,
     subjectId: f.subjectId,
     live: !!f.assetId && liveAssets.has(f.assetId),
+    liveSubjectIds: f.assetId ? (liveAssets.get(f.assetId) ?? []) : [],
   }))
   const fileIds = [
     ...new Set([
@@ -643,19 +685,99 @@ export async function fetchSpeakerAssetInputs(
     return { fileIds, inputs: { subjectDocs: subjectDocs ?? [], ...empty } }
   }
 
-  const fileHolders = await client.fetch<Doc[]>(
-    // groq-global: a file is dataset-wide and Sanity deduplicates identical
-    // bytes, so a holder may be in any tenant — and the file cannot be deleted
-    // while any of them still references it.
-    // WHOLE documents: the planner refuses a holder that would still
-    // reference a file after the fields it strips, which a projection hides.
-    groq`*[references($fileIds)]`,
-    { fileIds },
-    opts,
-  )
+  const readHolders = async (ids: string[]) =>
+    (await client.fetch<Doc[]>(
+      // groq-global: a file is dataset-wide and Sanity deduplicates identical
+      // bytes, so a holder may be in any tenant — and the file cannot be
+      // deleted while any of them still references it.
+      // WHOLE documents: the planner refuses a holder that would still
+      // reference a file after the fields it strips, which a projection hides.
+      groq`*[references($ids)]`,
+      { ids },
+      opts,
+    )) ?? []
+  const fileHolders = await readHolders(fileIds)
+
+  // A gallery video EXPORTED from a saved video (#1182) may show the file in
+  // any frame, and records its project (a weak `project` reference). So the
+  // chain is followed: from the file to the projects that hold it, to the
+  // gallery videos those projects made — every version of each — and to
+  // every file those hold (their MP4 and poster), whose holders are read in
+  // turn. The planner then deletes each video like any gallery entry holding
+  // a linked file, and its files go with the rest.
+  // DELIBERATE OVER-REACH: the file alone decides, not what a frame shows —
+  // a project holding it only as its TRACK, or in a scene cut from the
+  // export, still takes its exported videos.
+  // KNOWN HOLE: a video that was only downloaded, or one made from a project
+  // deleted since, records nothing that leads here and is out of reach.
+  // TO A FIXED POINT: an export's poster can itself become a background of
+  // another project (Studio's image picker takes any image), and that
+  // project's exports show it in turn. Each pass takes the projects among
+  // the holders found so far, the exports made from them or naming a
+  // linked file, and every file those exports hold; it ends when a pass
+  // finds no new file. Bounded, since every pass adds a file or stops.
+  const known = new Set(fileIds)
+  const holderIds = new Set(fileHolders.map((d) => d._id))
+  const projectsSeen = new Set<string>()
+  const expanded = new Set<string>()
+  const addHolders = (docs: Doc[]) => {
+    for (const d of docs) {
+      if (holderIds.has(d._id)) continue
+      holderIds.add(d._id)
+      fileHolders.push(d)
+    }
+  }
+  for (;;) {
+    const projectIds = [
+      ...new Set(
+        fileHolders
+          .filter((d) => d._type === 'videoProject')
+          .map((d) => publishedId(d._id))
+          .filter((id) => !projectsSeen.has(id)),
+      ),
+    ]
+    projectIds.forEach((id) => projectsSeen.add(id))
+    // Two ways to a gallery video: through the project it records, and by
+    // its own lineage — the files it showed (`sources[].fileId`, plain
+    // ids). The lineage holds up once the project has been edited to drop
+    // the photo, or deleted, where the project no longer leads here.
+    const [throughProjects, byLineage] = await Promise.all([
+      projectIds.length === 0
+        ? []
+        : client.fetch<Doc[]>(
+            // groq-global: the gallery videos made from the projects found
+            // above, whatever tenant they are in — the right is the person's.
+            groq`*[_type == "marketingAsset" && project._ref in $projectIds]`,
+            { projectIds },
+            opts,
+          ),
+      client.fetch<Doc[]>(
+        // groq-global: the gallery videos whose recorded lineage names a
+        // linked file, in every tenant — the right is the person's.
+        groq`*[_type == "marketingAsset" && count(sources[fileId in $fileIds]) > 0]`,
+        { fileIds },
+        opts,
+      ),
+    ])
+    // The exported videos themselves are holders even with no file stored yet.
+    addHolders([...(throughProjects ?? []), ...(byLineage ?? [])])
+    // EVERY gallery entry among the holders gives up EVERY file it holds —
+    // an entry found by its poster alone still has an MP4 that shows the
+    // person, and the entry is deleted either way, which would leave that
+    // file stored and reachable on the CDN. Each entry is expanded once.
+    const entries = fileHolders.filter(
+      (d) => d._type === 'marketingAsset' && !expanded.has(d._id),
+    )
+    entries.forEach((d) => expanded.add(d._id))
+    const exportFileIds = linkedFileIds(entries).filter((id) => !known.has(id))
+    if (exportFileIds.length === 0) break
+    exportFileIds.forEach((id) => known.add(id))
+    fileIds.push(...exportFileIds)
+    addHolders(await readHolders(exportFileIds))
+  }
   const postIds = [
     ...new Set(
-      (fileHolders ?? [])
+      fileHolders
         .filter((d) => d._type === 'socialPost')
         .map((d) => getPublishedId(d._id)),
     ),
@@ -666,7 +788,7 @@ export async function fetchSpeakerAssetInputs(
       inputs: {
         subjectDocs: subjectDocs ?? [],
         ...empty,
-        fileHolders: fileHolders ?? [],
+        fileHolders,
       },
     }
   }
@@ -692,7 +814,7 @@ export async function fetchSpeakerAssetInputs(
     fileIds,
     inputs: {
       subjectDocs: subjectDocs ?? [],
-      fileHolders: fileHolders ?? [],
+      fileHolders,
       variants: variants ?? [],
       publishedPosts: publishedPosts ?? [],
     },

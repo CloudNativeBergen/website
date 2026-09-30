@@ -10,6 +10,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -19,7 +20,12 @@ import {
 } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { DownloadableImage } from '@/components/common/DownloadableImage'
-import type { StudioCard } from '@/components/common/image-capture'
+import {
+  useGallerySave,
+  type ExportedVideo,
+  type StudioCard,
+  type VideoOrigin,
+} from '@/components/common/image-capture'
 import { StudioTaskProvider } from '../StudioTaskProvider'
 import { StudioGalleryProvider } from './StudioGalleryProvider'
 
@@ -39,6 +45,16 @@ vi.mock('html2canvas-pro', () => ({ default: mocks.rasterize }))
 vi.mock('@vercel/blob/client', () => ({ upload: mocks.blobUpload }))
 vi.mock('@/lib/trpc/client', () => ({
   api: {
+    search: {
+      unified: {
+        useQuery: ({ query }: { query: string }) => ({
+          data: query
+            ? { speakers: [{ _id: 'ada', name: 'Ada Lovelace' }] }
+            : undefined,
+          isFetching: false,
+        }),
+      },
+    },
     useUtils: () => ({
       marketingAsset: {
         list: { invalidate: mocks.invalidateList },
@@ -334,5 +350,232 @@ describe('the real upload path', () => {
       subject: { type: 'speaker', id: 'ada' },
       edition: 'current',
     })
+  })
+})
+
+describe('Save an exported video to the gallery (#1182)', () => {
+  const MP4 = new Blob([new Uint8Array(4096)], { type: 'video/mp4' })
+  const POSTER = new Blob(['first frame'], { type: 'image/jpeg' })
+  const SAVED: VideoOrigin = {
+    title: 'Launch teaser',
+    projectId: 'vp-1',
+    sources: [{ galleryAssetId: 'asset-hall' }],
+  }
+
+  function Exported({
+    origin,
+    poster = async () => POSTER,
+  }: {
+    origin: VideoOrigin
+    poster?: ExportedVideo['poster']
+  }) {
+    const gallery = useGallerySave()!
+    return (
+      <button
+        type="button"
+        onClick={() => gallery.saveVideo({ blob: MP4, poster }, origin)}
+      >
+        Save to gallery
+      </button>
+    )
+  }
+
+  async function openVideoDialog(
+    origin: VideoOrigin,
+    poster?: () => Promise<Blob>,
+  ) {
+    render(
+      <StudioGalleryProvider orgId="org-A" uploader={mocks.uploader}>
+        <Exported origin={origin} poster={poster} />
+      </StudioGalleryProvider>,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Save to gallery' }))
+    return screen.findByRole('form', { name: 'Save video to gallery' })
+  }
+
+  const describeAlt = (form: HTMLElement) =>
+    fireEvent.change(within(form).getByLabelText('Alt text'), {
+      target: { value: 'Five scenes counting down to the keynote.' },
+    })
+
+  it('keeps the video dialog when an image capture that was still running lands', async () => {
+    let finishCapture: (() => void) | null = null
+    mocks.rasterize.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finishCapture = () =>
+            resolve({
+              width: 1024,
+              height: 1024,
+              toBlob: (callback: BlobCallback) =>
+                callback(new Blob(['pixels'], { type: 'image/png' })),
+            })
+        }),
+    )
+    render(
+      <StudioGalleryProvider orgId="org-A" uploader={mocks.uploader}>
+        <StudioTaskProvider>
+          <Card card={SPEAKER_CARD} id="ada-card" />
+        </StudioTaskProvider>
+        <Exported origin={SAVED} />
+      </StudioGalleryProvider>,
+    )
+    sized('ada-card')
+    const [imageButton, videoButton] = screen.getAllByRole('button', {
+      name: 'Save to gallery',
+    })
+    fireEvent.click(imageButton)
+    await waitFor(() => expect(mocks.rasterize).toHaveBeenCalled())
+    fireEvent.click(videoButton)
+    const form = await screen.findByRole('form', {
+      name: 'Save video to gallery',
+    })
+    const previews = vi.spyOn(URL, 'createObjectURL')
+    await act(async () => finishCapture!())
+    // Nothing of the superseded capture is kept: no preview URL was made
+    // for it, so there is none that nothing would revoke.
+    expect(previews).not.toHaveBeenCalled()
+    // The newer ask stands: the video dialog is still up, with its title.
+    expect(within(form).getByLabelText('Title')).toHaveProperty(
+      'value',
+      SAVED.title,
+    )
+    expect(screen.queryByRole('form', { name: 'Save to gallery' })).toBeNull()
+  })
+
+  it('says so when the video was saved without a project that no longer exists', async () => {
+    mocks.uploader.mockResolvedValue({
+      _id: 'asset-video',
+      softOnSocial: false,
+      projectDropped: true,
+    })
+    const form = await openVideoDialog(SAVED)
+    describeAlt(form)
+    fireEvent.click(within(form).getByRole('button', { name: 'Save' }))
+    await screen.findByRole('status')
+    expect(
+      screen.getByText(
+        /Its project no longer exists, so it was saved without one/,
+      ),
+    ).toBeInTheDocument()
+  })
+
+  it('saves the MP4 with its poster, subject and the project it came from', async () => {
+    mocks.uploader.mockImplementation(async (_f, _d, _o, onProgress) => {
+      onProgress?.(0.4)
+      return { _id: 'asset-video', softOnSocial: false }
+    })
+    const form = await openVideoDialog(SAVED)
+    expect(within(form).getByLabelText('Title')).toHaveValue('Launch teaser')
+    expect(within(form).queryByText(/not saved as a project/)).toBeNull()
+    const save = within(form).getByRole('button', { name: 'Save' })
+    expect(save).toBeDisabled()
+    describeAlt(form)
+    expect(save).toBeEnabled()
+
+    fireEvent.change(within(form).getByLabelText(/Subject/), {
+      target: { value: 'Ada' },
+    })
+    // Headless UI's Combobox picks on the keyboard in jsdom.
+    await screen.findByRole('option', { name: /Ada Lovelace/ })
+    const search = within(form).getByLabelText(/Subject/)
+    fireEvent.keyDown(search, { key: 'ArrowDown' })
+    fireEvent.keyDown(search, { key: 'Enter' })
+    expect(search).toHaveValue('Ada Lovelace (Speaker)')
+    fireEvent.click(save)
+
+    expect(
+      await screen.findByText(/is in the gallery/, {}, { timeout: 3000 }),
+    ).toHaveTextContent('Launch teaser is in the gallery.')
+    expect(mocks.uploader).toHaveBeenCalledTimes(1)
+    const [file, details, options, onProgress] = mocks.uploader.mock.calls[0]
+    expect(file).toBeInstanceOf(File)
+    expect(file.name).toBe('launch-teaser.mp4')
+    expect(file.type).toBe('video/mp4')
+    expect(file.size).toBe(4096)
+    expect(details).toEqual({
+      title: 'Launch teaser',
+      alt: 'Five scenes counting down to the keynote.',
+      edition: 'current',
+      subject: { type: 'speaker', id: 'ada' },
+      tags: [],
+    })
+    expect(options).toEqual({
+      kind: 'video',
+      poster: POSTER,
+      studio: {
+        tab: 'meme-generator',
+        projectId: 'vp-1',
+        sources: [{ galleryAssetId: 'asset-hall' }],
+      },
+    })
+    expect(options.poster).toBe(POSTER)
+    expect(onProgress).toBeTypeOf('function')
+    expect(mocks.invalidateList).toHaveBeenCalledTimes(1)
+    expect(mocks.invalidateFilters).toHaveBeenCalledTimes(1)
+    expect(
+      screen.getByRole('link', { name: 'Open the gallery' }),
+    ).toHaveAttribute('href', '/admin/marketing/assets')
+  })
+
+  it('says an unsaved video cannot be reopened, and records no project', async () => {
+    const form = await openVideoDialog({
+      title: 'Untitled video',
+      projectId: null,
+      sources: [],
+    })
+    expect(
+      within(form).getByText(
+        'This video is not saved as a project, so the gallery cannot reopen it in the studio. Save the project first if you want that.',
+      ),
+    ).toBeInTheDocument()
+    describeAlt(form)
+    fireEvent.click(within(form).getByRole('button', { name: 'Save' }))
+    await screen.findByText(/is in the gallery/)
+    const [, details, options] = mocks.uploader.mock.calls[0]
+    expect(details.subject).toBeNull()
+    expect(options).toEqual({
+      kind: 'video',
+      poster: POSTER,
+      studio: { tab: 'meme-generator', sources: [] },
+    })
+  })
+
+  it('shows the upload’s progress, then its refusal, and keeps what was typed', async () => {
+    let refuse = () => {}
+    mocks.uploader.mockImplementationOnce(async (_f, _d, _o, onProgress) => {
+      onProgress?.(0.4)
+      await new Promise<void>((resolve) => (refuse = resolve))
+      throw new Error('The video is longer than 60 seconds.')
+    })
+    const form = await openVideoDialog(SAVED)
+    describeAlt(form)
+    fireEvent.click(within(form).getByRole('button', { name: 'Save' }))
+    const bar = await within(form).findByRole('progressbar', {
+      name: 'Upload progress',
+    })
+    expect(bar).toHaveAttribute('aria-valuenow', '40')
+    refuse()
+    expect(await within(form).findByRole('alert')).toHaveTextContent(
+      'The video is longer than 60 seconds.',
+    )
+    expect(within(form).queryByRole('progressbar')).toBeNull()
+    expect(within(form).getByLabelText('Alt text')).toHaveValue(
+      'Five scenes counting down to the keynote.',
+    )
+    expect(mocks.invalidateList).not.toHaveBeenCalled()
+  })
+
+  it('uploads nothing when the first frame cannot be drawn', async () => {
+    const form = await openVideoDialog(SAVED, async () => {
+      throw new Error('toBlob gave null')
+    })
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    describeAlt(form)
+    fireEvent.click(within(form).getByRole('button', { name: 'Save' }))
+    expect(await within(form).findByRole('alert')).toHaveTextContent(
+      "The video's first frame could not be drawn. Export again and retry.",
+    )
+    expect(mocks.uploader).not.toHaveBeenCalled()
   })
 })

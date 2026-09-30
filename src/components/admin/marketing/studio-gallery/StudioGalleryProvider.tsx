@@ -4,14 +4,20 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '@/lib/trpc/client'
 import {
   GallerySaveContext,
+  type ExportedVideo,
   type GallerySave,
   type StudioCard,
+  type VideoOrigin,
 } from '@/components/common/image-capture'
 import {
   blobAssetUploader,
   type AssetUploader,
 } from '@/components/admin/marketing/assets/upload'
 import { SaveToGalleryDialog, type CapturedCard } from './SaveToGalleryDialog'
+import {
+  SaveVideoToGalleryDialog,
+  type CapturedVideo,
+} from './SaveVideoToGalleryDialog'
 
 /**
  * "Save to gallery" for every studio card (docs/MARKETING_ASSETS_SPEC.md
@@ -43,13 +49,18 @@ export function StudioGalleryProvider({
   const [saving, setSaving] = useState(false)
   const [open, setOpen] = useState(false)
   const [captured, setCaptured] = useState<CapturedCard | null>(null)
+  // An exported video (#1182): its own dialog, never open with the image's.
+  const [videoOpen, setVideoOpen] = useState(false)
+  const [capturedVideo, setCapturedVideo] = useState<CapturedVideo | null>(null)
   // Each capture is a fresh form: nothing typed for one card carries over.
   const captures = useRef(0)
   // The dialog's preview of the last capture, revoked when replaced.
   const previewUrl = useRef<string | null>(null)
+  const videoPreviewUrl = useRef<string | null>(null)
   useEffect(
     () => () => {
       if (previewUrl.current) URL.revokeObjectURL(previewUrl.current)
+      if (videoPreviewUrl.current) URL.revokeObjectURL(videoPreviewUrl.current)
     },
     [],
   )
@@ -57,6 +68,11 @@ export function StudioGalleryProvider({
     if (previewUrl.current) URL.revokeObjectURL(previewUrl.current)
     previewUrl.current = blob ? URL.createObjectURL(blob) : null
     return previewUrl.current
+  }
+  function replaceVideoPreview(blob: Blob | null): string | null {
+    if (videoPreviewUrl.current) URL.revokeObjectURL(videoPreviewUrl.current)
+    videoPreviewUrl.current = blob ? URL.createObjectURL(blob) : null
+    return videoPreviewUrl.current
   }
 
   const value = useMemo<GallerySave>(
@@ -68,10 +84,14 @@ export function StudioGalleryProvider({
         card: StudioCard,
       ) {
         setCapturing(true)
+        const mine = ++captures.current
         try {
           const blob = await capture()
+          // Superseded by a video save while it ran: nothing of it is kept,
+          // not the blob and not a preview URL nothing would revoke.
+          if (captures.current !== mine) return
           setCaptured({
-            id: ++captures.current,
+            id: mine,
             blob,
             previewUrl: replacePreview(blob),
             filename,
@@ -79,9 +99,10 @@ export function StudioGalleryProvider({
             error: null,
           })
         } catch (error) {
+          if (captures.current !== mine) return
           console.error('Save to gallery: capture failed', error)
           setCaptured({
-            id: ++captures.current,
+            id: mine,
             blob: null,
             previewUrl: replacePreview(null),
             filename,
@@ -90,8 +111,24 @@ export function StudioGalleryProvider({
           })
         } finally {
           setCapturing(false)
-          setOpen(true)
+          // A video save that came while the capture ran is the newer ask:
+          // its dialog stays, and this capture is not shown over it.
+          if (captures.current === mine) {
+            setVideoOpen(false)
+            setOpen(true)
+          }
         }
+      },
+      saveVideo(video: ExportedVideo, origin: VideoOrigin) {
+        if (saving) return
+        setCapturedVideo({
+          id: ++captures.current,
+          video,
+          previewUrl: replaceVideoPreview(video.blob)!,
+          origin,
+        })
+        setOpen(false)
+        setVideoOpen(true)
       },
     }),
     [capturing, saving],
@@ -101,6 +138,16 @@ export function StudioGalleryProvider({
   function release() {
     replacePreview(null)
     setCaptured(null)
+  }
+  // A video can be tens of MB: the same, once its dialog has faded out.
+  function releaseVideo() {
+    replaceVideoPreview(null)
+    setCapturedVideo(null)
+  }
+  function onSaved() {
+    // The gallery and the studio's background picker show it next.
+    void utils.marketingAsset.list.invalidate()
+    void utils.marketingAsset.filters.invalidate()
   }
 
   return (
@@ -113,11 +160,16 @@ export function StudioGalleryProvider({
         onSavingChange={setSaving}
         onClose={() => setOpen(false)}
         afterLeave={release}
-        onSaved={() => {
-          // The gallery and the studio's background picker show it next.
-          void utils.marketingAsset.list.invalidate()
-          void utils.marketingAsset.filters.invalidate()
-        }}
+        onSaved={onSaved}
+      />
+      <SaveVideoToGalleryDialog
+        isOpen={videoOpen}
+        captured={capturedVideo}
+        uploader={upload}
+        onSavingChange={setSaving}
+        onClose={() => setVideoOpen(false)}
+        afterLeave={releaseVideo}
+        onSaved={onSaved}
       />
     </GallerySaveContext.Provider>
   )

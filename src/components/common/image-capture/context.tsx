@@ -1,7 +1,7 @@
 'use client'
 
 import { createContext, useContext } from 'react'
-import type { StudioTab } from '@/lib/marketing-asset'
+import type { ExportSourceInput, StudioTab } from '@/lib/marketing-asset'
 
 export interface ImageAttachment {
   busy: boolean
@@ -26,6 +26,27 @@ export interface StudioCard {
   subject?: { type: 'speaker' | 'sponsor'; id: string; name: string }
 }
 
+/** A finished MP4 from the meme generator's export (#1182). */
+export interface ExportedVideo {
+  blob: Blob
+  /** Draws the first frame and encodes it as a JPEG, for the gallery. */
+  poster: () => Promise<Blob>
+}
+
+/** Where an exported video came from, for its gallery record. */
+export interface VideoOrigin {
+  /** The project's title, to prefill the asset's. */
+  title: string
+  /** The saved project it was exported from; null for an unsaved video. */
+  projectId: string | null
+  /**
+   * The backgrounds it showed, as the editor knew them at export time:
+   * what a speaker erasure finds the video by, whatever its project holds
+   * later. Empty for a video of colours, or of uploads never kept.
+   */
+  sources: ExportSourceInput[]
+}
+
 /** "Save to gallery", present on every studio card, Task or not. */
 export interface GallerySave {
   busy: boolean
@@ -34,6 +55,8 @@ export interface GallerySave {
     filename: string,
     card: StudioCard,
   ) => Promise<void>
+  /** An exported video, from Video mode's export panel. */
+  saveVideo: (video: ExportedVideo, origin: VideoOrigin) => void
 }
 export const GallerySaveContext = createContext<GallerySave | null>(null)
 export const useGallerySave = () => useContext(GallerySaveContext)

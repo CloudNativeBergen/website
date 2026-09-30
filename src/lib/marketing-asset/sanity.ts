@@ -6,6 +6,8 @@ import { isAttachableToPost } from './post-attach'
 import { originalDownloadUrl } from './original'
 import type { ResolvedMarketingAssetDetails } from './details'
 import type { StudioOriginInput } from './studio'
+import type { ResolvedExportSource } from './guard'
+import { prepareArrayWithKeys } from '@/lib/sanity/helpers'
 import type {
   MarketingAssetFacets,
   MarketingAssetKind,
@@ -50,7 +52,11 @@ const ROW_PROJECTION = `{
   "studio": select(source == "studio" && defined(studio.tab) => {
     "tab": studio.tab,
     "speakerId": select(studio.tab == "speakers" && subject->_type == "speaker" => subject._ref, null),
-    "sponsorId": select(studio.tab == "sponsors" && subject->_type == "sponsor" => subject._ref, null)
+    "sponsorId": select(studio.tab == "sponsors" && subject->_type == "sponsor" => subject._ref, null),
+    "project": select(studio.tab == "meme-generator" && defined(project._ref) => {
+      "_id": project._ref,
+      "exists": defined(project->_id)
+    }, null)
   }, null),
   "mimeType": image.asset->mimeType,
   "rights": select(defined(rightsConfirmation.confirmedAt) => {
@@ -446,6 +452,8 @@ export async function readMarketingAssetBackground(
   title: string
   alt: string
   url: string | null
+  /** The image asset, for an export's lineage (#1182). */
+  fileId: string | null
   width: number | null
   height: number | null
 } | null> {
@@ -456,6 +464,7 @@ export async function readMarketingAssetBackground(
       title,
       "alt": coalesce(alt, ""),
       "url": image.asset->url,
+      "fileId": image.asset._ref,
       "width": image.asset->metadata.dimensions.width,
       "height": image.asset->metadata.dimensions.height
     }`,
@@ -516,6 +525,20 @@ export type NewMarketingAsset = {
       posterAssetId: string
       /** As `createdImageAssetId`, for the poster. */
       createdImageAssetId?: string
+      /**
+       * Set when the studio exported it (#1182): the tab, and the saved
+       * project it came from — proven this organization's by the caller.
+       */
+      studio?: StudioOriginInput
+      /**
+       * The backgrounds it showed (#1182), as the route resolved them: each
+       * file as a plain id, never a reference, so it keeps no file alive;
+       * the gallery asset and the subject as WEAK references. A speaker
+       * erasure finds the video by them whatever its project or the gallery
+       * hold later, and deleting a gallery asset refreshes the subject copied
+       * from it. With or without a project.
+       */
+      sources?: ResolvedExportSource[]
     }
   | {
       kind: 'audio'
@@ -583,10 +606,41 @@ export async function createMarketingAsset(
   // An audio track has no alt text, whatever the details carried.
   if (input.kind === 'audio') delete set.alt
   const media = mediaFields(input)
-  // Only an image is ever a studio render.
+  // A studio render is an image, or a video exported from the meme
+  // generator (#1182); a GIF or a track never is.
   const studio =
-    input.kind === undefined || input.kind === 'image'
+    input.kind === undefined || input.kind === 'image' || input.kind === 'video'
       ? input.studio
+      : undefined
+  // Only a video remembers its project: an image is a finished file with no
+  // editor state to reopen (spec §7).
+  const projectId = input.kind === 'video' ? studio?.projectId : undefined
+  const sources =
+    input.kind === 'video' && studio && input.sources?.length
+      ? prepareArrayWithKeys(
+          input.sources.map((s) => ({
+            _type: 'exportSource',
+            fileId: s.fileId,
+            ...(s.galleryAssetId
+              ? {
+                  galleryAsset: {
+                    _type: 'reference',
+                    _ref: s.galleryAssetId,
+                    _weak: true,
+                  },
+                }
+              : {}),
+            ...(s.subjectId
+              ? {
+                  subject: {
+                    _type: 'reference',
+                    _ref: s.subjectId,
+                    _weak: true,
+                  },
+                }
+              : {}),
+          })),
+        )
       : undefined
   const created = await clientWrite.create(
     {
@@ -596,6 +650,11 @@ export async function createMarketingAsset(
       // Only the tab: the speaker or sponsor it was opened on IS the subject,
       // so an edit or an erasure of the subject can never leave a stale copy.
       ...(studio ? { studio: { tab: studio.tab } } : {}),
+      // Weak: the entry outlives its project and never blocks deleting it.
+      ...(projectId
+        ? { project: { _type: 'reference', _ref: projectId, _weak: true } }
+        : {}),
+      ...(sources ? { sources } : {}),
       ...set,
       ...media,
     },

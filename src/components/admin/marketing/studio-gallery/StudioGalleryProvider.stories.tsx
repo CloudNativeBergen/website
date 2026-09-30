@@ -2,7 +2,11 @@ import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { http, HttpResponse } from 'msw'
 import { expect, fn, userEvent, within } from 'storybook/test'
 import { DownloadableImage } from '@/components/common/DownloadableImage'
-import type { StudioCard } from '@/components/common/image-capture'
+import {
+  useGallerySave,
+  type StudioCard,
+  type VideoOrigin,
+} from '@/components/common/image-capture'
 import { withPortalTheme } from '@/lib/storybook'
 import { StudioTaskProvider } from '../StudioTaskProvider'
 import { StudioGalleryProvider } from './StudioGalleryProvider'
@@ -218,5 +222,116 @@ export const WithTaskMobile: Story = {
         width,
       )
     }
+  },
+}
+
+// ── An exported video (#1182) ─────────────────────────────────────────────
+
+/** Stands in for the export panel: the real clip, handed over on click. */
+function ExportedClip({ origin }: { origin: VideoOrigin }) {
+  const gallery = useGallerySave()!
+  return (
+    <button
+      type="button"
+      className="rounded-md border px-3 py-1.5 text-sm font-medium text-brand-cloud-blue dark:border-gray-600 dark:text-blue-400"
+      onClick={async () => {
+        const blob = await (await fetch('/storybook-fixtures/clip.mp4')).blob()
+        gallery.saveVideo(
+          {
+            blob,
+            poster: async () => new Blob(['poster'], { type: 'image/jpeg' }),
+          },
+          origin,
+        )
+      }}
+    >
+      Save to gallery
+    </button>
+  )
+}
+
+const videoRender =
+  (origin: VideoOrigin): Story['render'] =>
+  (args) => (
+    <div className="min-h-screen bg-gray-50 p-4 dark:bg-gray-950">
+      <StudioGalleryProvider {...args}>
+        <ExportedClip origin={origin} />
+      </StudioGalleryProvider>
+    </div>
+  )
+
+async function openVideoDialog(canvasElement: HTMLElement) {
+  await userEvent.click(
+    within(canvasElement).getByRole('button', { name: 'Save to gallery' }),
+  )
+  return within(canvasElement.ownerDocument.body).findByRole(
+    'form',
+    { name: 'Save video to gallery' },
+    { timeout: 10_000 },
+  )
+}
+
+/** From a saved project: its title prefilled, alt text asked for. */
+export const SaveVideoToGallery: Story = {
+  render: videoRender({
+    title: 'Launch teaser',
+    projectId: 'vp-launch',
+    sources: [],
+  }),
+  play: async ({ canvasElement }) => {
+    const form = within(await openVideoDialog(canvasElement))
+    await expect(form.getByLabelText('Title')).toHaveValue('Launch teaser')
+    await expect(form.getByLabelText('Alt text')).toHaveValue('')
+    await expect(form.getByRole('button', { name: 'Save' })).toBeDisabled()
+    await expect(form.queryByText(/not saved as a project/)).toBeNull()
+  },
+}
+export const SaveVideoToGalleryDark: Story = {
+  ...SaveVideoToGallery,
+  globals: { theme: 'dark' },
+}
+export const SaveVideoToGalleryMobile: Story = {
+  ...SaveVideoToGallery,
+  parameters: {
+    ...meta.parameters,
+    viewport: { defaultViewport: 'mobile1' },
+  },
+}
+
+/** An unsaved video: the gallery will not be able to reopen it. */
+export const SaveVideoToGalleryUnsaved: Story = {
+  render: videoRender({
+    title: 'Untitled video',
+    projectId: null,
+    sources: [],
+  }),
+  play: async ({ canvasElement }) => {
+    const form = within(await openVideoDialog(canvasElement))
+    await expect(
+      form.getByText(/This video is not saved as a project/),
+    ).toBeInTheDocument()
+  },
+}
+export const SaveVideoToGalleryUnsavedDark: Story = {
+  ...SaveVideoToGalleryUnsaved,
+  globals: { theme: 'dark' },
+}
+
+/** Saved: the same confirmation as an image's. */
+export const SaveVideoToGallerySaved: Story = {
+  ...SaveVideoToGallery,
+  play: async (context) => {
+    const { canvasElement, args } = context
+    const form = within(await openVideoDialog(canvasElement))
+    await userEvent.type(
+      form.getByLabelText('Alt text'),
+      'Five scenes counting down to the keynote.',
+    )
+    await userEvent.click(form.getByRole('button', { name: 'Save' }))
+    const body = within(canvasElement.ownerDocument.body)
+    await expect(
+      await body.findByRole('status', {}, { timeout: 5_000 }),
+    ).toHaveTextContent('Launch teaser is in the gallery.')
+    await expect(args.uploader).toHaveBeenCalledTimes(1)
   },
 }

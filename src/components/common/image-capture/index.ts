@@ -5,4 +5,10 @@ export {
   useGallerySave,
   useImageAttachment,
 } from './context'
-export type { GallerySave, ImageAttachment, StudioCard } from './context'
+export type {
+  ExportedVideo,
+  GallerySave,
+  ImageAttachment,
+  StudioCard,
+  VideoOrigin,
+} from './context'

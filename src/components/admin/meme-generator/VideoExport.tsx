@@ -4,8 +4,13 @@ import { useEffect, useId, useRef, useState } from 'react'
 import {
   ArrowDownTrayIcon,
   FilmIcon,
+  RectangleStackIcon,
   XMarkIcon,
 } from '@heroicons/react/24/outline'
+import type {
+  ExportedVideo,
+  VideoOrigin,
+} from '@/components/common/image-capture'
 import { CANVAS_SIZE, styles } from './meme-generator-config'
 import {
   ExportCancelled,
@@ -31,6 +36,10 @@ type Status =
 /** The last file an export made. Kept until a newer one replaces it. */
 interface ExportedFile {
   url: string
+  /** The file itself, for the gallery; let go of with the file. */
+  blob: Blob
+  /** The first frame as a JPEG, drawn on the export's own canvas. */
+  poster: () => Promise<Blob>
   bytes: number
   seconds: number
   /** Whether the file has the track. */
@@ -39,14 +48,126 @@ interface ExportedFile {
   trackFailed: boolean
   /** The video it was made from; any other and the file is out of date. */
   revision: readonly unknown[]
+  /**
+   * The project open when it was made (#1182): what a stale file is saved
+   * under, since the editor may have moved on to another project.
+   */
+  origin: VideoOrigin | null
 }
 
-/** Two revisions are the same video when every part is the same object. */
-const sameRevision = (a: readonly unknown[], b: readonly unknown[]) =>
-  a.length === b.length && a.every((part, i) => Object.is(part, b[i]))
+/** How two parts of a revision compare; the same object unless told otherwise. */
+export type SamePart = (a: unknown, b: unknown, index: number) => boolean
+
+/** Two revisions are the same video when every part is the same. */
+const sameRevision = (
+  a: readonly unknown[],
+  b: readonly unknown[],
+  same: SamePart,
+) => a.length === b.length && a.every((part, i) => same(part, b[i], i))
 
 const LOAD_FAILED_MESSAGE =
   'The video encoder could not be loaded. Check your connection, then press Export MP4 to try again.'
+
+const POSTER_FAILED = 'The first frame could not be encoded as an image.'
+
+/**
+ * The sources of a current file: what it showed at export time AND what the
+ * editor names now, once each. A save that followed the export may have
+ * rewritten a scene's file (the entry's image was replaced in between) —
+ * the scenes still draw the same video, so the file is current, but the
+ * video shows the file it was exported with. Both are named; neither hides
+ * the other.
+ */
+function mergedSources(
+  exported: VideoOrigin['sources'],
+  current: VideoOrigin['sources'],
+): VideoOrigin['sources'] {
+  // An entry named without its file at export time, now known with one:
+  // the current entry says the same thing, better.
+  const refined = new Set(
+    current.flatMap((s) =>
+      s.fileId && s.galleryAssetId ? [s.galleryAssetId] : [],
+    ),
+  )
+  const seen = new Set<string>()
+  return [
+    ...exported.filter(
+      (s) => s.fileId || !s.galleryAssetId || !refined.has(s.galleryAssetId),
+    ),
+    ...current,
+  ].filter((s) => {
+    const key = `${s.fileId ?? ''}\u0000${s.galleryAssetId ?? ''}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
+/**
+ * A JPEG with a comment segment naming this export, so that no two posters
+ * are ever the same bytes. Sanity deduplicates identical bytes into ONE
+ * asset across every tenant, and a speaker erasure deletes a linked file
+ * everywhere it is held: two videos whose first frame is the same flat
+ * colour (their text fading in from frame 0) would share a poster, and
+ * erasing the person in one would delete the other. The segment is a
+ * standard COM marker right after SOI, which every decoder skips.
+ */
+export async function uniqueJpeg(blob: Blob): Promise<Blob> {
+  const bytes = new Uint8Array(await blob.arrayBuffer())
+  if (bytes.length < 2 || bytes[0] !== 0xff || bytes[1] !== 0xd8) return blob
+  const comment = new TextEncoder().encode(
+    `studio-export:${crypto.randomUUID()}`,
+  )
+  const length = comment.length + 2
+  const segment = new Uint8Array([
+    0xff,
+    0xfe,
+    (length >> 8) & 0xff,
+    length & 0xff,
+    ...comment,
+  ])
+  return new Blob([bytes.subarray(0, 2), segment, bytes.subarray(2)], {
+    type: blob.type,
+  })
+}
+
+/**
+ * The poster is frame 0 AS THE ENCODER TOOK IT: the canvas is copied by the
+ * very paint the export loop made for that frame, before the next frame is
+ * drawn — never repainted afterwards, when a font that arrived during the
+ * export would draw the text afresh and the poster would not match the
+ * video's first frame. A second, higher-bitrate pass paints frame 0 again;
+ * the last pass is the file, so its copy wins.
+ */
+function withPoster(job: ExportJob): {
+  job: ExportJob
+  poster: () => Promise<Blob>
+} {
+  let latest: Promise<Blob> = Promise.reject(new Error(POSTER_FAILED))
+  latest.catch(() => {})
+  return {
+    job: {
+      ...job,
+      paint: (frame) => {
+        job.paint(frame)
+        if (frame !== 0) return
+        latest = new Promise<Blob>((resolve, reject) => {
+          if (typeof job.canvas.toBlob !== 'function')
+            return reject(new Error(POSTER_FAILED))
+          // A copy of the bitmap is taken now; only the encoding is deferred.
+          job.canvas.toBlob(
+            (blob) => (blob ? resolve(blob) : reject(new Error(POSTER_FAILED))),
+            'image/jpeg',
+            0.92,
+          )
+        }).then(uniqueJpeg)
+        // Failure is reported where the poster is asked for; not before.
+        latest.catch(() => {})
+      },
+    },
+    poster: () => latest,
+  }
+}
 
 const megabytes = (bytes: number) => `${(bytes / 1_000_000).toFixed(1)} MB`
 
@@ -164,6 +285,10 @@ export function VideoExport({
   active,
   revision,
   music = 'none',
+  onSaveToGallery,
+  origin,
+  samePart = Object.is,
+  projectGone,
 }: {
   encoder: EncoderBackend
   /** A snapshot of the video as it is when Export is pressed. */
@@ -183,6 +308,29 @@ export function VideoExport({
   active: boolean
   /** Whether the video has a track to export with it. */
   music?: Music
+  /**
+   * Offers "Save to gallery" beside Download, where the studio has a gallery
+   * to save to (#1182).
+   */
+  onSaveToGallery?: (video: ExportedVideo, origin: VideoOrigin) => void
+  /**
+   * How a part of `revision` compares with the exported one, where identity
+   * is too strict: the editor's scenes are rewritten by a save without a
+   * pixel changing, and undo restores the same video under new objects.
+   */
+  samePart?: SamePart
+  /**
+   * Whether a project a file was exported from has been deleted since: a
+   * stale file is then saved with no project, and its sources, rather than
+   * refused by the server for naming one that is gone.
+   */
+  projectGone?: (id: string) => boolean
+  /**
+   * The project open in the editor now, for a current file. A file made
+   * before the editor moved to another project keeps the origin it was
+   * exported under, so a video is never filed under a project it is not.
+   */
+  origin?: VideoOrigin
 }) {
   // null until asked; 'error' when asking failed and may be tried again.
   const [supported, setSupported] = useState<boolean | 'error' | null>(null)
@@ -216,7 +364,8 @@ export function VideoExport({
   // Leaving mid-export stops it and frees the encoder.
   useEffect(() => () => controller.current?.abort(), [])
 
-  const stale = file !== null && !sameRevision(file.revision, revision)
+  const stale =
+    file !== null && !sameRevision(file.revision, revision, samePart)
   const running = status.kind === 'running'
   const blocked = supported === false || waiting || running
 
@@ -230,10 +379,11 @@ export function VideoExport({
     const abort = new AbortController()
     controller.current = abort
     const startedAt = revision
+    const originAtStart = origin ?? null
     const musicAtStart = music
     setStatus({ kind: 'running', progress: { phase: 'checking' } })
     try {
-      const job = prepare()
+      const { job, poster } = withPoster(prepare())
       const result = await exportVideo({
         backend: encoder,
         job,
@@ -245,11 +395,14 @@ export function VideoExport({
       if (abort.signal.aborted) return
       setFile({
         url: URL.createObjectURL(result.blob),
+        blob: result.blob,
+        poster,
         bytes: result.blob.size,
         seconds: job.frameCount / FPS,
         audio: result.audio,
         trackFailed: musicAtStart === 'failed',
         revision: startedAt,
+        origin: originAtStart,
       })
       setStatus({ kind: 'done' })
     } catch (error) {
@@ -311,6 +464,39 @@ export function VideoExport({
               : 'Download video'}{' '}
             ({megabytes(file.bytes)}, {file.seconds.toFixed(1)} s)
           </a>
+        )}
+        {file && onSaveToGallery && (
+          <button
+            type="button"
+            onClick={() => {
+              if (running) return
+              // A current file is the editor's video as it is now, so a
+              // project saved or renamed since the export is its origin. A
+              // stale one is filed under what it was exported from.
+              const none = { title: '', projectId: null, sources: [] }
+              const captured = stale
+                ? (file.origin ?? origin ?? none)
+                : {
+                    ...(origin ?? none),
+                    sources: mergedSources(
+                      file.origin?.sources ?? [],
+                      origin?.sources ?? [],
+                    ),
+                  }
+              const under =
+                captured.projectId && projectGone?.(captured.projectId)
+                  ? { ...captured, projectId: null }
+                  : captured
+              onSaveToGallery({ blob: file.blob, poster: file.poster }, under)
+            }}
+            // Not `disabled`, like Export: it says why while an export runs.
+            aria-disabled={running || undefined}
+            aria-describedby={statusId}
+            className="flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm font-medium text-brand-cloud-blue hover:bg-brand-cloud-blue/10 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 dark:border-gray-600 dark:text-blue-400"
+          >
+            <RectangleStackIcon className="size-4" aria-hidden="true" />
+            Save to gallery
+          </button>
         )}
       </div>
 

@@ -40,13 +40,22 @@ import {
   studioOriginSchema,
   type StudioOriginInput,
 } from '@/lib/marketing-asset/studio'
-import { resolveAssetDetailsForCurrentOrg } from '@/lib/marketing-asset/guard'
+import {
+  resolveAssetDetailsForCurrentOrg,
+  resolveVideoLineage,
+  type ResolvedExportSource,
+} from '@/lib/marketing-asset/guard'
 import type { ResolvedMarketingAssetDetails } from '@/lib/marketing-asset/details'
 import {
   recordPendingCleanup,
   unqueuePendingCleanup,
 } from '@/lib/marketing-asset/pending-cleanup'
 import { getCurrentDateTime } from '@/lib/time'
+import { TRPCError } from '@trpc/server'
+
+/** The tenancy guard's refusal, which never says whether the id exists. */
+const isTenancyRefusal = (error: unknown) =>
+  error instanceof TRPCError && error.code === 'NOT_FOUND'
 
 /**
  * Set explicitly (§4.1): the streamed move of a 100 MB video, with its poster,
@@ -218,7 +227,7 @@ export async function POST(request: Request) {
       { status: 400 },
     )
   }
-  // Only the image write takes it: a track, GIF or video is never a studio
+  // The image and the video write take it: a track or GIF is never a studio
   // render.
   const { studio } = parsedStudio.data
   // Alt text for every kind but a track (spec §3); a video needs its poster.
@@ -255,6 +264,50 @@ export async function POST(request: Request) {
     )
   }
 
+  // An exported video's project and sources (#1182) are client ids: the
+  // project is proven ours before the move, like the subject, and the
+  // refusal never says whether it exists; a source that is not ours is
+  // simply not recorded. A project the guard refuses — deleted in another
+  // tab, or never ours — is DROPPED, not fatal: the video is saved with no
+  // project and the sources the gallery alone proves, and the answer says
+  // so. Refusing would send the organizer's MP4 up again for every retry
+  // with a refusal that reads as a tenancy fault, for a pointer that is
+  // weak by design. Nothing of the refused project is ever read.
+  let sources: ResolvedExportSource[] = []
+  let projectDropped = false
+  let origin = studio
+  if (
+    kindName === 'video' &&
+    studio?.tab === 'meme-generator' &&
+    (studio.projectId || studio.sources?.length)
+  ) {
+    try {
+      ;({ sources } = await resolveVideoLineage(orgId, studio))
+    } catch (error) {
+      if (!isTenancyRefusal(error)) {
+        // Not a refusal: the gallery or the project could not be read.
+        discard()
+        return NextResponse.json(
+          { error: 'The gallery could not be reached. Try again.' },
+          { status: 502 },
+        )
+      }
+      projectDropped = true
+      const rest = { ...studio }
+      delete rest.projectId
+      origin = rest
+      try {
+        ;({ sources } = await resolveVideoLineage(orgId, rest))
+      } catch {
+        discard()
+        return NextResponse.json(
+          { error: 'The gallery could not be reached. Try again.' },
+          { status: 502 },
+        )
+      }
+    }
+  }
+
   const moved = await moveFor(kindName, url, posterUrl, orgId, answerBy)
   if (!moved.ok) {
     const refusal =
@@ -274,7 +327,8 @@ export async function POST(request: Request) {
         {
           // The organizer who made this request, proven one above.
           rights: { confirmedBy: organizerId, confirmedAt },
-          studio,
+          studio: origin,
+          sources,
         },
       ),
       { signal: writeDeadline.signal },
@@ -282,6 +336,13 @@ export async function POST(request: Request) {
     return NextResponse.json({
       _id: created._id,
       softOnSocial: moved.softOnSocial,
+      // The project it named no longer resolved: saved without it (#1182).
+      ...(projectDropped ? { projectDropped: true } : {}),
+      // An image's file, for a studio background kept from the editor: an
+      // export names it in its lineage from then on (#1182).
+      ...(moved.fields.kind === 'image'
+        ? { imageAssetId: moved.fields.imageAssetId }
+        : {}),
     })
   } catch (error) {
     console.error('Marketing asset: gallery entry not written', error)
@@ -315,7 +376,8 @@ function uploadedUrls(body: unknown): string[] {
 
 /**
  * The gallery entry to write for what moved: a track takes the rights
- * confirmation, only an image takes the studio it was saved from.
+ * confirmation; an image, or a video exported from the meme generator
+ * (#1182), takes the studio it was saved from.
  */
 function newAsset(
   fields: MovedFields,
@@ -323,6 +385,8 @@ function newAsset(
   extra: {
     rights: { confirmedBy: string; confirmedAt: string }
     studio: StudioOriginInput | undefined
+    /** What the video showed (#1182); empty for one of colours. */
+    sources: ResolvedExportSource[]
   },
 ): NewMarketingAsset {
   if (fields.kind === 'audio')
@@ -332,6 +396,18 @@ function newAsset(
       ...base,
       ...fields,
       ...(extra.studio ? { studio: extra.studio } : {}),
+    }
+  // Only the meme generator makes videos: another tab's claim is dropped.
+  if (fields.kind === 'video')
+    return {
+      ...base,
+      ...fields,
+      ...(extra.studio?.tab === 'meme-generator'
+        ? {
+            studio: extra.studio,
+            ...(extra.sources.length > 0 ? { sources: extra.sources } : {}),
+          }
+        : {}),
     }
   return { ...base, ...fields }
 }

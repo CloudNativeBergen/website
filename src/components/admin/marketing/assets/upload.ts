@@ -5,6 +5,7 @@ import {
   audioTypeForFile,
   motionKindForFile,
   marketingAssetPathname,
+  type ExportSourceInput,
   type MarketingAssetDetails,
   type StudioTab,
 } from '@/lib/marketing-asset'
@@ -68,6 +69,15 @@ export interface GifUploadOptions {
 export interface VideoUploadOptions {
   kind: 'video'
   poster: Blob
+  /**
+   * Set by "Save to gallery" on an export (#1182): the meme generator, and
+   * the saved project the video came from, when it has one.
+   */
+  studio?: {
+    tab: 'meme-generator'
+    projectId?: string
+    sources?: ExportSourceInput[]
+  }
 }
 
 /** What "Save to gallery" in the studio adds: the tab it saved from (§4.2). */
@@ -92,7 +102,14 @@ export type AssetUploader = (
   options?: AssetUploadOptions,
   /** How much of the file has reached Blob, 0 to 1; a video can take a while. */
   onProgress?: (fraction: number) => void,
-) => Promise<{ _id: string; softOnSocial: boolean }>
+) => Promise<{
+  _id: string
+  softOnSocial: boolean
+  /** An image's file, as stored; an export's lineage names it (#1182). */
+  imageAssetId?: string
+  /** A video's project no longer resolved: saved without it (#1182). */
+  projectDropped?: boolean
+}>
 
 /** One file straight to Vercel Blob, under this organization's folder. */
 function toBlob(
@@ -149,7 +166,13 @@ export function blobAssetUploader(orgId: string): AssetUploader {
     }
     // The poster travels as its URL; the move checks it like any upload.
     const sent =
-      options?.kind === 'video' ? { kind: 'video', posterUrl } : options
+      options?.kind === 'video'
+        ? {
+            kind: 'video',
+            posterUrl,
+            ...(options.studio ? { studio: options.studio } : {}),
+          }
+        : options
     let response: Response
     try {
       response = await fetch('/api/admin/marketing-assets', {
@@ -165,11 +188,18 @@ export function blobAssetUploader(orgId: string): AssetUploader {
     const body = (await response.json().catch(() => null)) as {
       _id?: string
       softOnSocial?: boolean
+      imageAssetId?: string
+      projectDropped?: boolean
       error?: string
     } | null
     if (!response.ok || !body?._id) {
       throw new Error(body?.error ?? failure)
     }
-    return { _id: body._id, softOnSocial: Boolean(body.softOnSocial) }
+    return {
+      _id: body._id,
+      softOnSocial: Boolean(body.softOnSocial),
+      ...(body.imageAssetId ? { imageAssetId: body.imageAssetId } : {}),
+      ...(body.projectDropped ? { projectDropped: true } : {}),
+    }
   }
 }

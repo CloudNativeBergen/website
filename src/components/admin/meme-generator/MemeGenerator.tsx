@@ -23,6 +23,11 @@ import {
 } from '@heroicons/react/24/outline'
 import type { ConferenceLogos } from '../../common/DashboardLayout'
 import {
+  useGallerySave,
+  type ExportedVideo,
+  type VideoOrigin,
+} from '../../common/image-capture'
+import {
   CANVAS_SIZE,
   BRAND_COLORS,
   TEXT_COLOR_PRESETS,
@@ -127,6 +132,7 @@ import {
   fromProjectScenes,
   fromProjectTrack,
   projectSnapshot,
+  sameDrawn,
   toProjectScenes,
   toProjectTrack,
   type SceneFile,
@@ -667,8 +673,9 @@ export function MemeGenerator({
   const confirmKept = async (url: string) => {
     const galleryAssetId = keptAssets.current.get(url)
     if (!galleryAssetId || !gallery) return
+    let fileId: string | null | undefined
     try {
-      await gallery.resolve(galleryAssetId)
+      ;({ fileId } = await gallery.resolve(galleryAssetId))
     } catch {
       if (keptAssets.current.get(url) === galleryAssetId)
         keptAssets.current.delete(url)
@@ -682,7 +689,7 @@ export function MemeGenerator({
       shownUpload.current === url &&
       !!area?.contains(document.activeElement) &&
       document.activeElement !== galleryStatus.current
-    markKept(url, galleryAssetId)
+    markKept(url, galleryAssetId, fileId)
   }
 
   const pickGalleryBackground = async (id: string) => {
@@ -692,7 +699,14 @@ export function MemeGenerator({
       await loadBackground(async () => {
         const picked = await gallery.resolve(id)
         return {
-          image: { url: picked.url, name: picked.title, galleryAssetId: id },
+          image: {
+            url: picked.url,
+            name: picked.title,
+            galleryAssetId: id,
+            // Known from the pick (#1182): an export names the file it
+            // showed even if the gallery entry is deleted before the save.
+            ...(picked.fileId ? { fileId: picked.fileId } : {}),
+          },
         }
       })
     } catch {
@@ -722,7 +736,11 @@ export function MemeGenerator({
    * An upload now in the gallery is kept in every state undo and redo can
    * reach, with no step of its own: it is kept whichever one is shown.
    */
-  const markKept = (url: string, galleryAssetId: string) => {
+  const markKept = (
+    url: string,
+    galleryAssetId: string,
+    fileId?: string | null,
+  ) => {
     keptAssets.current.set(url, galleryAssetId)
     mapScenes((states) =>
       states.map((scene) =>
@@ -733,7 +751,11 @@ export function MemeGenerator({
                 ...scene.design,
                 background: {
                   ...scene.design.background,
-                  image: { ...scene.design.background.image, galleryAssetId },
+                  image: {
+                    ...scene.design.background.image,
+                    galleryAssetId,
+                    ...(fileId ? { fileId } : {}),
+                  },
                 },
               },
             }
@@ -1176,12 +1198,16 @@ export function MemeGenerator({
   const [confirmingDelete, setConfirmingDelete] = useState(false)
 
   /** Delete the open project, once confirmed; the editor keeps the video. */
+  // Projects deleted from this editor: an export made from one is saved to
+  // the gallery with no project, never refused for naming it (#1182).
+  const deletedProjects = useRef(new Set<string>())
   const deleteProject = async () => {
     if (!projects || !project) return
     setProjectBusy('deleting')
     setProjectMessage(null)
     try {
       const { released, unsaveable } = await projects.delete(project.id)
+      deletedProjects.current.add(project.id)
       // Files the delete's orphan check removed, and files only the deleted
       // project authorized (their gallery entry is gone): neither can be
       // saved again, so neither is kept — in any state undo can reach.
@@ -1941,6 +1967,40 @@ export function MemeGenerator({
     lateFaces,
   ])
 
+  // "Save to gallery" on an export, on the studio page only (#1182). A
+  // conflicted editor still came from its project, so the id is kept.
+  const gallerySave = useGallerySave()
+  const saveVideoToGallery =
+    gallerySave && projects
+      ? (video: ExportedVideo, origin: VideoOrigin) =>
+          gallerySave.saveVideo(video, origin)
+      : undefined
+  // The export panel captures this at export time (#1182). The sources are
+  // the backgrounds as this editor knows them — the gallery asset each was
+  // picked from, and the file once a save recorded it — never a local
+  // upload that was not kept, which nothing can name.
+  const exportOrigin: VideoOrigin = {
+    title: projectTitle.trim() || UNTITLED,
+    projectId: project?.id ?? null,
+    sources: scenes.flatMap((scene) => {
+      const image = scene.design.background.image
+      if (!image || (!image.fileId && !image.galleryAssetId)) return []
+      return [
+        {
+          ...(image.fileId ? { fileId: image.fileId } : {}),
+          ...(image.galleryAssetId
+            ? { galleryAssetId: image.galleryAssetId }
+            : {}),
+        },
+      ]
+    }),
+  }
+  // A finished export is current while the scenes DRAW the same video: a
+  // save's rewrite of where a file is kept, and an undo back to the same
+  // video under new objects, never make it stale.
+  const sameExportPart = (a: unknown, b: unknown, index: number) =>
+    index === 0 ? sameDrawn(a as Scene[], b as Scene[]) : Object.is(a, b)
+
   // An export paints the video as it was when Export was pressed, onto a
   // canvas of its own — frame n at frame n's time, through the same
   // `drawFrame` as the preview, so what was scrubbed is what is exported.
@@ -2174,6 +2234,8 @@ export function MemeGenerator({
             // the music: the samples themselves (a new file is new samples)
             // and its settings by value, so an undo back to them makes the
             // export current again — never the id a save files it under.
+            samePart={sameExportPart}
+            projectGone={(id) => deletedProjects.current.has(id)}
             revision={[
               scenes,
               lateFaces,
@@ -2183,6 +2245,8 @@ export function MemeGenerator({
               fadeOut,
               trackChannels,
             ]}
+            onSaveToGallery={saveVideoToGallery}
+            origin={exportOrigin}
           />
         </div>
       </div>
@@ -2319,9 +2383,9 @@ export function MemeGenerator({
                       key={background.image.url}
                       file={keptFile}
                       keep={gallery.keep}
-                      onKept={(id, hadFocus) => {
+                      onKept={(id, hadFocus, fileId) => {
                         focusGalleryStatus.current = hadFocus
-                        markKept(background.image!.url, id)
+                        markKept(background.image!.url, id, fileId)
                       }}
                     />
                   )}

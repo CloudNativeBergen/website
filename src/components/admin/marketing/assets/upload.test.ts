@@ -195,6 +195,57 @@ describe('blobAssetUploader', () => {
     })
   })
 
+  it('sends an exported video’s studio origin and project with it (#1182)', async () => {
+    fetchMock.mockResolvedValue(
+      Response.json({ _id: 'asset-5', softOnSocial: false }),
+    )
+    h.upload
+      .mockResolvedValueOnce({ url: 'https://s/poster.jpg' })
+      .mockResolvedValueOnce({ url: 'https://s/clip.mp4' })
+    const video = new File([new Uint8Array(10)], 'teaser.mp4', {
+      type: 'video/mp4',
+    })
+    await blobAssetUploader('org-A')(video, DETAILS, {
+      kind: 'video',
+      poster: new Blob([new Uint8Array(4)]),
+      studio: { tab: 'meme-generator', projectId: 'vp-1' },
+    })
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
+      url: 'https://s/clip.mp4',
+      ...DETAILS,
+      kind: 'video',
+      posterUrl: 'https://s/poster.jpg',
+      studio: { tab: 'meme-generator', projectId: 'vp-1' },
+    })
+  })
+
+  it('passes on that a video was saved without its project (#1182)', async () => {
+    fetchMock.mockResolvedValue(
+      Response.json({
+        _id: 'asset-6',
+        softOnSocial: false,
+        projectDropped: true,
+      }),
+    )
+    h.upload
+      .mockResolvedValueOnce({ url: 'https://s/poster.jpg' })
+      .mockResolvedValueOnce({ url: 'https://s/clip.mp4' })
+    const video = new File([new Uint8Array(10)], 'teaser.mp4', {
+      type: 'video/mp4',
+    })
+    await expect(
+      blobAssetUploader('org-A')(video, DETAILS, {
+        kind: 'video',
+        poster: new Blob([new Uint8Array(4)]),
+        studio: { tab: 'meme-generator', projectId: 'vp-gone' },
+      }),
+    ).resolves.toEqual({
+      _id: 'asset-6',
+      softOnSocial: false,
+      projectDropped: true,
+    })
+  })
+
   it('sends a GIF as a GIF, whatever the browser called it', async () => {
     fetchMock.mockResolvedValue(
       Response.json({ _id: 'asset-4', softOnSocial: false }),

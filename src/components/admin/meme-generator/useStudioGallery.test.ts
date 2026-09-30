@@ -70,7 +70,7 @@ describe('useStudioGallery', () => {
     const file = new File(['x'], 'a.png', { type: 'image/png' })
     expect(
       await result.current.keep(file, { title: 'Stage', alt: 'A stage' }),
-    ).toEqual({ _id: 'kept' })
+    ).toEqual({ _id: 'kept', fileId: null })
     expect(h.upload).toHaveBeenCalledWith('org-A', file, {
       title: 'Stage',
       alt: 'A stage',

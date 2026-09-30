@@ -256,6 +256,50 @@ export default defineType({
       readOnly: true,
       hidden: ({ document }) => !document?.task,
     }),
+    defineField({
+      name: 'project',
+      title: 'Studio video project',
+      description:
+        'The saved studio video this video was exported from. "Open in studio" reopens it. Absent for a video saved before its project was.',
+      type: 'reference',
+      to: [{ type: 'videoProject' }],
+      // Weak: the entry outlives its project and never blocks deleting it
+      // (docs/MARKETING_STUDIO_VIDEO_SPEC.md §7).
+      weak: true,
+      readOnly: true,
+      hidden: ({ document }) =>
+        document?.kind !== 'video' || !document?.project,
+    }),
+    defineField({
+      name: 'sources',
+      title: 'What the video was made from',
+      description:
+        'The backgrounds the video showed when it was exported, and those its project held when it was saved: each file as a plain id (never a reference, so it keeps no file alive), the gallery asset it came from, and who that asset said it showed. A speaker erasure finds the video by them whatever the project or the gallery hold later.',
+      type: 'array',
+      readOnly: true,
+      hidden: true,
+      of: [
+        {
+          type: 'object',
+          name: 'exportSource',
+          fields: [
+            defineField({ name: 'fileId', type: 'string' }),
+            defineField({
+              name: 'galleryAsset',
+              type: 'reference',
+              to: [{ type: 'marketingAsset' }],
+              weak: true,
+            }),
+            defineField({
+              name: 'subject',
+              type: 'reference',
+              to: [{ type: 'speaker' }, { type: 'talk' }, { type: 'sponsor' }],
+              weak: true,
+            }),
+          ],
+        },
+      ],
+    }),
   ],
   preview: {
     select: {

@@ -263,6 +263,39 @@ export class VideoProjectError extends Error {
   }
 }
 
+/** Shallow equality over every key of both objects but `except`. */
+function sameExcept(a: object, b: object, except: readonly string[]): boolean {
+  const left = a as Record<string, unknown>
+  const right = b as Record<string, unknown>
+  const keys = new Set([...Object.keys(left), ...Object.keys(right)])
+  for (const key of keys)
+    if (!except.includes(key) && !Object.is(left[key], right[key])) return false
+  return true
+}
+
+/**
+ * Whether two scene lists draw the same video: everything but where a
+ * background's file is kept (`fileId`, `galleryAssetId`), which a save
+ * rewrites ({@link carryFiles}) without changing a pixel. A finished export
+ * stays current across such a rewrite, so it is saved under the project the
+ * save just made (#1182).
+ */
+export function sameDrawn(a: Scene[], b: Scene[]): boolean {
+  if (a === b) return true
+  if (a.length !== b.length) return false
+  return a.every((scene, i) => {
+    const other = b[i]
+    if (scene === other) return true
+    if (!sameExcept(scene, other, ['design'])) return false
+    if (!sameExcept(scene.design, other.design, ['background'])) return false
+    const bg = scene.design.background
+    const otherBg = other.design.background
+    if (!sameExcept(bg, otherBg, ['image'])) return false
+    if (!bg.image || !otherBg.image) return bg.image === otherBg.image
+    return sameExcept(bg.image, otherBg.image, ['fileId', 'galleryAssetId'])
+  })
+}
+
 /**
  * The scenes without any background whose file a save deleted: an undo must
  * never bring back an image the next save would refuse. Such a scene falls
