@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { fn, expect, userEvent, within } from 'storybook/test'
 import { http, HttpResponse } from 'msw'
 import { GalleryFilters, type GalleryFilterValues } from './GalleryFilters'
@@ -40,14 +40,20 @@ function Harness({
   onChange?: (filters: GalleryFilterValues) => void
 }) {
   const [filters, setFilters] = useState<GalleryFilterValues>(initial)
+  // STABLE, as the page's handler is: the URL-sync effect depends on it, and
+  // an inline arrow would re-run that effect on every render.
+  const handleChange = useCallback(
+    (next: GalleryFilterValues) => {
+      onChange?.(next)
+      setFilters(next)
+    },
+    [onChange],
+  )
   return (
     <GalleryFilters
       filters={filters}
       editions={editions}
-      onFiltersChange={(next) => {
-        onChange?.(next)
-        setFilters(next)
-      }}
+      onFiltersChange={handleChange}
     />
   )
 }
@@ -162,5 +168,37 @@ export const SingleEdition: Story = {
       canvas.getAllByRole('combobox', { name: 'Featured filter' })[0],
     ).toBeVisible()
     await expect(canvas.queryByRole('combobox', { name: 'Edition' })).toBeNull()
+  },
+}
+
+/**
+ * A deep link: `?edition=conf-2025` lands on that edition. The debounced text
+ * filters must not fire on mount and wipe it (they did, for every deep link),
+ * so the router is never asked to push a stripped URL.
+ */
+export const DeepLinkedEdition: Story = {
+  args: { initial: {}, editions: EDITIONS, onChange: fn() },
+  parameters: {
+    nextjs: {
+      appDirectory: true,
+      navigation: {
+        push: fn(),
+        query: { edition: 'conf-2025' },
+      },
+    },
+  },
+  play: async ({ canvasElement, args, parameters }) => {
+    const canvas = within(canvasElement)
+    const select = canvas.getAllByRole('combobox', {
+      name: 'Edition',
+    })[0] as HTMLSelectElement
+    await expect(select).toHaveValue('conf-2025')
+    await expect(args.onChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({ edition: 'conf-2025' }),
+    )
+    // Wait past the 500ms debounce: still nothing pushed, still selected.
+    await new Promise((resolve) => setTimeout(resolve, 700))
+    await expect(select).toHaveValue('conf-2025')
+    await expect(parameters.nextjs.navigation.push).not.toHaveBeenCalled()
   },
 }

@@ -130,7 +130,7 @@ export const PreviousEditionEmpty: Story = {
     await userEvent.selectOptions(select, 'conf-2026')
     await expect(
       await canvas.findByText(
-        'Cloud Native Bergen 2026 has no featured photos.',
+        /Cloud Native Bergen 2026 has no featured photos\./,
       ),
     ).toBeVisible()
   },

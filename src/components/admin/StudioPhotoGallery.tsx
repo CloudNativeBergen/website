@@ -3,6 +3,8 @@
 import { useState } from 'react'
 import { PhotoIcon } from '@heroicons/react/24/outline'
 import { api } from '@/lib/trpc/client'
+// Deep import on purpose: the gallery barrel pulls in the uploader
+// (react-dropzone), the hotspot editor and the Sanity client.
 import { EditionSelect } from '@/components/admin/gallery/EditionSelect'
 import { PhotoGalleryWithDownload } from './PhotoGalleryWithDownload'
 import type { GalleryImageWithSpeakers } from '@/lib/gallery/types'
@@ -66,7 +68,7 @@ export function StudioPhotoGallery({
           </h3>
           <p className="font-inter text-gray-600 dark:text-gray-400">
             {editionTitle
-              ? `${editionTitle} has no featured photos.`
+              ? `${editionTitle} has no featured photos. Feature some in that edition’s admin gallery first.`
               : 'Featured photo galleries will appear here once photos are uploaded and marked as featured.'}
             {!editionTitle && editions.data && editions.data.previous.length > 0
               ? ' Pick a previous edition above to build a collage from its pictures.'

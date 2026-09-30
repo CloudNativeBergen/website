@@ -214,6 +214,9 @@ const handlers = (
   http.post('/api/trpc/social.addPostAttachment', () =>
     HttpResponse.json({ result: { data: { key: 'att-new' } } }),
   ),
+  http.post('/api/trpc/social.addPostAttachmentFromGallery', () =>
+    HttpResponse.json({ result: { data: { key: 'att-new' } } }),
+  ),
   http.get('/api/trpc/gallery.admin.list', () =>
     HttpResponse.json({ result: { data: [] } }),
   ),

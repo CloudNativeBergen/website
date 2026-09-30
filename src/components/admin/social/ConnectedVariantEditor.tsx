@@ -263,6 +263,9 @@ export function ConnectedVariantEditor({
     },
   })
   const addAttachment = api.social.addPostAttachment.useMutation()
+  // A gallery pick goes by IMAGE id (#1191): the server proves the picture
+  // is this edition's or a previous edition's and reads its asset itself.
+  const addFromGallery = api.social.addPostAttachmentFromGallery.useMutation()
   const addFromAsset = api.social.addPostAttachmentFromAsset.useMutation()
 
   /** Put an image asset on the post, then select it on this variant. */
@@ -404,12 +407,9 @@ export function ConnectedVariantEditor({
                   'This gallery image has no alt text. Add one in the gallery first.',
                 )
               }
-              await attachAsset({
-                assetId: image.assetId,
-                alt: image.alt,
-                hotspot: image.hotspot,
-                crop: image.crop,
-              })
+              await selectAdded(
+                addFromGallery.mutateAsync({ postId, imageId: image.id }),
+              )
             },
           },
           marketingAssets: {

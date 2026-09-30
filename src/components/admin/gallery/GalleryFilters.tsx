@@ -31,6 +31,11 @@ export interface GalleryFilterValues {
 
 interface GalleryFiltersProps {
   filters: GalleryFilterValues
+  /**
+   * Must be referentially STABLE (`useCallback`): the URL-sync effect depends
+   * on it, and a new function per render re-applies the URL filters on every
+   * render — a loop that also pins pagination to page 1.
+   */
   onFiltersChange: (filters: GalleryFilterValues) => void
   /**
    * The editions the organizer may browse, as the server lists them (#1191).
@@ -198,8 +203,10 @@ export function GalleryFilters({
     filters.photographerSearch !== undefined ||
     filters.locationSearch !== undefined
 
+  // `''` and `undefined` are the same "no filter": comparing them as different
+  // made these effects fire on mount and wipe every deep-linked filter (#1191).
   useEffect(() => {
-    if (debouncedPhotographer !== filters.photographerSearch) {
+    if ((debouncedPhotographer || undefined) !== filters.photographerSearch) {
       const newFilters = {
         ...filters,
         photographerSearch: debouncedPhotographer || undefined,
@@ -211,7 +218,7 @@ export function GalleryFilters({
   }, [debouncedPhotographer])
 
   useEffect(() => {
-    if (debouncedLocation !== filters.locationSearch) {
+    if ((debouncedLocation || undefined) !== filters.locationSearch) {
       const newFilters = {
         ...filters,
         locationSearch: debouncedLocation || undefined,

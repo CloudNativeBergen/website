@@ -189,6 +189,8 @@ export function ImageGrid({
                     e.stopPropagation()
                     handleSelectImage(image._id)
                   }}
+                  aria-pressed={selectedImages.includes(image._id)}
+                  aria-label={`Select ${image.imageAlt || image.photographer}`}
                   className="rounded bg-white/80 p-1 shadow-sm hover:bg-white dark:bg-gray-900/80 dark:hover:bg-gray-900"
                 >
                   <div

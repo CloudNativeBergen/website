@@ -63,6 +63,18 @@ const h = vi.hoisted(() => ({
 vi.mock('@/lib/marketing-asset/sanity', () => ({
   readMarketingAssetForPost: h.readMarketingAssetForPost,
 }))
+const gallery = vi.hoisted(() => ({
+  getGalleryImageTenant: vi.fn(),
+  getGalleryImage: vi.fn(),
+  getPreviousEditions: vi.fn(),
+}))
+vi.mock('@/lib/gallery/sanity', () => ({
+  getGalleryImageTenant: gallery.getGalleryImageTenant,
+  getGalleryImage: gallery.getGalleryImage,
+}))
+vi.mock('@/lib/gallery/editions', () => ({
+  getPreviousEditions: gallery.getPreviousEditions,
+}))
 
 vi.mock('@/lib/conference/sanity', () => ({
   getConferenceForCurrentDomain: h.getConference,
@@ -116,6 +128,7 @@ import type { Context } from '@/server/trpc'
 import type { SocialPostVariant } from '@/lib/social/types'
 import type { PublishInput, ValidationIssue } from '@/lib/social/provider/types'
 import { socialRouter } from './social'
+import { notFoundMessage } from '@/server/tenancy'
 import { revalidateTag } from 'next/cache'
 import { normalizeShortCode } from '@/lib/marketing/short-code'
 import { shortLinkIndexTag } from '@/lib/cache/tags'
@@ -1400,6 +1413,172 @@ describe('social.updateVariant', () => {
     ).rejects.toMatchObject({ code: 'NOT_FOUND' })
     expect(h.getSocialPostVariant).not.toHaveBeenCalled()
     expect(h.updateSocialVariantContent).not.toHaveBeenCalled()
+  })
+})
+
+/**
+ * A GALLERY pick by image id (#1191). Ownership is proven from the image's
+ * tenant before its content is read: the current conference's pictures and
+ * the organization's previous editions' attach; another organization's, a
+ * future sibling's and a missing id refuse with NOT_FOUND and no image read.
+ */
+describe('social.addPostAttachmentFromGallery', () => {
+  const GALLERY_IMAGE = {
+    _id: 'img-2025',
+    _rev: 'img-rev-4',
+    image: {
+      _type: 'image',
+      asset: { _type: 'reference', _ref: ASSET_ID },
+      alt: 'Keynote crowd, 2025',
+      hotspot: { x: 0.5, y: 0.4, width: 0.6, height: 0.6 },
+      crop: { top: 0, bottom: 0.1, left: 0, right: 0 },
+    },
+    imageAlt: 'Keynote crowd, 2025',
+  }
+  beforeEach(() => {
+    h.getConference.mockResolvedValue({
+      conference: {
+        _id: CONF_A,
+        startDate: '2026-10-01',
+        organization: { _ref: ORG_A },
+      },
+      domain: 'localhost',
+      error: null,
+    })
+    gallery.getPreviousEditions.mockResolvedValue([
+      { _id: 'conf-A-2025', title: 'CND 2025' },
+    ])
+    gallery.getGalleryImage.mockResolvedValue(GALLERY_IMAGE)
+    h.addSocialPostAttachment.mockResolvedValue({ key: 'att-gallery' })
+  })
+
+  it("attaches a PREVIOUS edition's picture, compare-and-set on the image's revision", async () => {
+    gallery.getGalleryImageTenant.mockResolvedValue({
+      conferenceId: 'conf-A-2025',
+      orgId: ORG_A,
+    })
+    const result = await social().addPostAttachmentFromGallery({
+      postId: 'post-ours',
+      imageId: 'img-2025',
+    })
+    expect(result).toEqual({ key: 'att-gallery' })
+    // The by-id read is scoped to the image's OWN conference.
+    expect(gallery.getGalleryImage).toHaveBeenCalledWith(
+      'img-2025',
+      'conf-A-2025',
+    )
+    expect(h.addSocialPostAttachment).toHaveBeenCalledWith(
+      'post-ours',
+      CONF_A,
+      {
+        assetId: ASSET_ID,
+        alt: 'Keynote crowd, 2025',
+        hotspot: { x: 0.5, y: 0.4, width: 0.6, height: 0.6 },
+        crop: { top: 0, bottom: 0.1, left: 0, right: 0 },
+      },
+      { heldBy: { id: 'img-2025', rev: 'img-rev-4' } },
+    )
+  })
+
+  it("attaches the CURRENT edition's picture without consulting previous editions", async () => {
+    gallery.getGalleryImageTenant.mockResolvedValue({
+      conferenceId: CONF_A,
+      orgId: ORG_A,
+    })
+    await expect(
+      social().addPostAttachmentFromGallery({
+        postId: 'post-ours',
+        imageId: 'img-2025',
+      }),
+    ).resolves.toEqual({ key: 'att-gallery' })
+    expect(gallery.getPreviousEditions).not.toHaveBeenCalled()
+    expect(gallery.getGalleryImage).toHaveBeenCalledWith('img-2025', CONF_A)
+  })
+
+  it("refuses another ORGANIZATION's picture: NOT_FOUND, image never read, nothing written", async () => {
+    gallery.getGalleryImageTenant.mockResolvedValue({
+      conferenceId: 'conf-B-2025',
+      orgId: 'org-B',
+    })
+    await expect(
+      social().addPostAttachmentFromGallery({
+        postId: 'post-ours',
+        imageId: 'img-theirs',
+      }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    expect(gallery.getGalleryImage).not.toHaveBeenCalled()
+    expect(h.addSocialPostAttachment).not.toHaveBeenCalled()
+  })
+
+  it('refuses a same-org sibling that is NOT a previous edition (future), the same way', async () => {
+    gallery.getGalleryImageTenant.mockResolvedValue({
+      conferenceId: 'conf-A-2027',
+      orgId: ORG_A,
+    })
+    await expect(
+      social().addPostAttachmentFromGallery({
+        postId: 'post-ours',
+        imageId: 'img-2027',
+      }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    expect(gallery.getGalleryImage).not.toHaveBeenCalled()
+    expect(h.addSocialPostAttachment).not.toHaveBeenCalled()
+  })
+
+  it('a missing image refuses identically (no existence oracle)', async () => {
+    gallery.getGalleryImageTenant.mockResolvedValue(null)
+    await expect(
+      social().addPostAttachmentFromGallery({
+        postId: 'post-ours',
+        imageId: 'img-missing',
+      }),
+    ).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+      message: notFoundMessage('imageGallery'),
+    })
+  })
+
+  it("another conference's POST refuses before the image tenant is even read", async () => {
+    await expect(
+      social().addPostAttachmentFromGallery({
+        postId: 'post-theirs',
+        imageId: 'img-2025',
+      }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    expect(gallery.getGalleryImageTenant).not.toHaveBeenCalled()
+  })
+
+  it('a picture without alt text is BAD_REQUEST and nothing is written', async () => {
+    gallery.getGalleryImageTenant.mockResolvedValue({
+      conferenceId: CONF_A,
+      orgId: ORG_A,
+    })
+    gallery.getGalleryImage.mockResolvedValue({
+      ...GALLERY_IMAGE,
+      image: { ...GALLERY_IMAGE.image, alt: '  ' },
+      imageAlt: undefined,
+    })
+    await expect(
+      social().addPostAttachmentFromGallery({
+        postId: 'post-ours',
+        imageId: 'img-2025',
+      }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    expect(h.addSocialPostAttachment).not.toHaveBeenCalled()
+  })
+
+  it('a picture deleted while attaching is CONFLICT', async () => {
+    gallery.getGalleryImageTenant.mockResolvedValue({
+      conferenceId: CONF_A,
+      orgId: ORG_A,
+    })
+    h.addSocialPostAttachment.mockResolvedValue({ refused: 'holder-changed' })
+    await expect(
+      social().addPostAttachmentFromGallery({
+        postId: 'post-ours',
+        imageId: 'img-2025',
+      }),
+    ).rejects.toMatchObject({ code: 'CONFLICT' })
   })
 })
 

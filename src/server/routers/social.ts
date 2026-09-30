@@ -4,11 +4,14 @@ import {
   notFoundMessage,
   requireDocumentInCurrentConference,
   requireDocumentInCurrentOrg,
+  requireGalleryImageReadable,
 } from '@/server/tenancy'
+import { getGalleryImage } from '@/lib/gallery/sanity'
 import { readMarketingAssetForPost } from '@/lib/marketing-asset/sanity'
 import { NOT_ATTACHABLE_YET } from '@/lib/marketing-asset/post-attach'
 import {
   AddSocialPostAttachmentFromAssetSchema,
+  AddSocialPostAttachmentFromGallerySchema,
   AddSocialPostAttachmentSchema,
   CreateSocialPostSchema,
   MarkSocialVariantPostedSchema,
@@ -681,6 +684,77 @@ export const socialRouter = router({
               ? 'The post is gone. Reload and retry.'
               : 'That image belongs to another conference.',
         })
+      }
+      return added
+    }),
+
+  /**
+   * Pick a GALLERY image into the post by its id (#1191). The generic attach
+   * refuses an asset no document of THIS conference references — which is
+   * every picture of a previous edition. Here ownership is proven from the
+   * image id instead: it must be the current conference's or one of the
+   * organization's previous editions', checked BEFORE the image is read, so
+   * a foreign id and a nonexistent one get the guard's one answer. The
+   * append is then compare-and-set on the image's revision, like a marketing
+   * asset's: a picture deleted meanwhile refuses the attach.
+   */
+  addPostAttachmentFromGallery: adminProcedure
+    .input(AddSocialPostAttachmentFromGallerySchema)
+    .mutation(async ({ input }) => {
+      const conferenceId = await requireDocumentInCurrentConference(
+        input.postId,
+        'socialPost',
+      )
+      const notFound = () =>
+        new TRPCError({
+          code: 'NOT_FOUND',
+          message: notFoundMessage('imageGallery'),
+        })
+      if (input.imageId.includes('.')) throw notFound()
+      const readable = await requireGalleryImageReadable(input.imageId)
+      const image = await getGalleryImage(input.imageId, readable.conferenceId)
+      if (!image?.image?.asset?._ref) throw notFound()
+      // The same rules as a direct attach: alt text present and bounded, a
+      // crop that leaves something of the image, an IMAGE asset id.
+      const parsed = AddSocialPostAttachmentSchema.safeParse({
+        postId: input.postId,
+        assetId: image.image.asset._ref,
+        alt: image.image.alt ?? image.imageAlt ?? '',
+        hotspot: image.image.hotspot ?? undefined,
+        crop: image.image.crop ?? undefined,
+      })
+      if (!parsed.success) {
+        const [issue] = parsed.error.issues
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message:
+            issue?.path[0] === 'alt'
+              ? 'This gallery image has no usable alt text. Fix it in the gallery first.'
+              : issue?.message || 'This gallery image cannot be attached.',
+        })
+      }
+      const added = await addSocialPostAttachment(
+        input.postId,
+        conferenceId,
+        {
+          assetId: parsed.data.assetId,
+          alt: parsed.data.alt,
+          hotspot: parsed.data.hotspot ?? null,
+          crop: parsed.data.crop ?? null,
+        },
+        { heldBy: { id: image._id, rev: image._rev } },
+      )
+      if ('refused' in added) {
+        throw added.refused === 'holder-changed'
+          ? new TRPCError({
+              code: 'CONFLICT',
+              message:
+                'The picture changed or was deleted while it was being added. Reload and retry.',
+            })
+          : new TRPCError({
+              code: 'NOT_FOUND',
+              message: 'The post is gone. Reload and retry.',
+            })
       }
       return added
     }),

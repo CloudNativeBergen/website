@@ -74,21 +74,27 @@ export const Editable: Story = {
     ).toBeVisible()
     await expect(canvas.getAllByTitle('Edit metadata')).toHaveLength(3)
     // Clicking a card's checkbox selects it.
-    const card = canvas.getByAltText('Picture img-2').closest('.group')!
-    await userEvent.click(within(card as HTMLElement).getAllByRole('button')[0])
+    await userEvent.click(
+      canvas.getByRole('button', { name: 'Select Picture img-2' }),
+    )
     await expect(args.onSelectionChange).toHaveBeenCalledWith(['img-2'])
   },
 }
 
-/** A previous edition: pictures only. */
+/**
+ * A previous edition: pictures only. The selection is deliberately NON-empty
+ * (a stale one from the current edition): with a selection, a card click is
+ * what would normally toggle it, so `readOnly` is the only thing stopping it.
+ */
 export const ReadOnly: Story = {
-  args: { readOnly: true },
+  args: { readOnly: true, selectedImages: ['img-1'] },
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement)
     await expect(canvas.getAllByRole('img')).toHaveLength(3)
     await expect(
       canvas.queryByRole('button', { name: 'Select all images' }),
     ).toBeNull()
+    await expect(canvas.queryByText('1 selected')).toBeNull()
     await expect(canvas.queryByTitle('Edit metadata')).toBeNull()
     await expect(canvas.queryByTitle('Delete image')).toBeNull()
     await expect(canvas.queryAllByRole('button')).toHaveLength(0)

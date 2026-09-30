@@ -25,6 +25,8 @@ import {
 } from '@/components/admin/marketing/assets/MarketingAssetPicker'
 import { CropEditor } from './CropEditor'
 import { CroppedImage } from './CroppedImage'
+// Deep import on purpose: the gallery barrel pulls in the uploader
+// (react-dropzone), the hotspot editor and the Sanity client.
 import { EditionSelect } from '@/components/admin/gallery/EditionSelect'
 import type { GalleryEditions } from '@/lib/gallery/editions'
 

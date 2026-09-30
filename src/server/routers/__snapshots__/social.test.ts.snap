@@ -4,6 +4,7 @@ exports[`the social mutation surface is pinned > lists every mutation 1`] = `
 [
   "addPostAttachment",
   "addPostAttachmentFromAsset",
+  "addPostAttachmentFromGallery",
   "createPost",
   "deletePost",
   "markPosted",
