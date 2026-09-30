@@ -7,7 +7,10 @@ import {
   RectangleStackIcon,
   XMarkIcon,
 } from '@heroicons/react/24/outline'
-import type { ExportedVideo } from '@/components/common/image-capture'
+import type {
+  ExportedVideo,
+  VideoOrigin,
+} from '@/components/common/image-capture'
 import { CANVAS_SIZE, styles } from './meme-generator-config'
 import {
   ExportCancelled,
