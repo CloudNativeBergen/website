@@ -43,6 +43,7 @@ import {
 import {
   resolveAssetDetailsForCurrentOrg,
   resolveVideoLineage,
+  type ResolvedExportSource,
 } from '@/lib/marketing-asset/guard'
 import type { ResolvedMarketingAssetDetails } from '@/lib/marketing-asset/details'
 import {
@@ -262,14 +263,14 @@ export async function POST(request: Request) {
   // project is proven ours before the move, like the subject, and the
   // refusal never says whether it exists; a source that is not ours is
   // simply not recorded.
-  let sourceFileIds: string[] = []
+  let sources: ResolvedExportSource[] = []
   if (
     kindName === 'video' &&
     studio?.tab === 'meme-generator' &&
     (studio.projectId || studio.sources?.length)
   ) {
     try {
-      ;({ sourceFileIds } = await resolveVideoLineage(orgId, studio))
+      ;({ sources } = await resolveVideoLineage(orgId, studio))
     } catch {
       discard()
       return NextResponse.json(
@@ -299,7 +300,7 @@ export async function POST(request: Request) {
           // The organizer who made this request, proven one above.
           rights: { confirmedBy: organizerId, confirmedAt },
           studio,
-          sourceFileIds,
+          sources,
         },
       ),
       { signal: writeDeadline.signal },
@@ -307,6 +308,11 @@ export async function POST(request: Request) {
     return NextResponse.json({
       _id: created._id,
       softOnSocial: moved.softOnSocial,
+      // An image's file, for a studio background kept from the editor: an
+      // export names it in its lineage from then on (#1182).
+      ...(moved.fields.kind === 'image'
+        ? { imageAssetId: moved.fields.imageAssetId }
+        : {}),
     })
   } catch (error) {
     console.error('Marketing asset: gallery entry not written', error)
@@ -349,8 +355,8 @@ function newAsset(
   extra: {
     rights: { confirmedBy: string; confirmedAt: string }
     studio: StudioOriginInput | undefined
-    /** The files the named project holds (#1182); empty without one. */
-    sourceFileIds: string[]
+    /** What the video showed (#1182); empty for one of colours. */
+    sources: ResolvedExportSource[]
   },
 ): NewMarketingAsset {
   if (fields.kind === 'audio')
@@ -369,9 +375,7 @@ function newAsset(
       ...(extra.studio?.tab === 'meme-generator'
         ? {
             studio: extra.studio,
-            ...(extra.sourceFileIds.length > 0
-              ? { sourceFileIds: extra.sourceFileIds }
-              : {}),
+            ...(extra.sources.length > 0 ? { sources: extra.sources } : {}),
           }
         : {}),
     }

@@ -271,14 +271,34 @@ export default defineType({
         document?.kind !== 'video' || !document?.project,
     }),
     defineField({
-      name: 'sourceFileIds',
-      title: 'Files the video was made from',
+      name: 'sources',
+      title: 'What the video was made from',
       description:
-        'The backgrounds the video showed when it was exported, and those its project held when it was saved: plain asset ids, so a speaker erasure finds the video by them whatever the project holds later.',
+        'The backgrounds the video showed when it was exported, and those its project held when it was saved: each file as a plain id (never a reference, so it keeps no file alive), the gallery asset it came from, and who that asset said it showed. A speaker erasure finds the video by them whatever the project or the gallery hold later.',
       type: 'array',
-      of: [{ type: 'string' }],
       readOnly: true,
       hidden: true,
+      of: [
+        {
+          type: 'object',
+          name: 'exportSource',
+          fields: [
+            defineField({ name: 'fileId', type: 'string' }),
+            defineField({
+              name: 'galleryAsset',
+              type: 'reference',
+              to: [{ type: 'marketingAsset' }],
+              weak: true,
+            }),
+            defineField({
+              name: 'subject',
+              type: 'reference',
+              to: [{ type: 'speaker' }, { type: 'talk' }, { type: 'sponsor' }],
+              weak: true,
+            }),
+          ],
+        },
+      ],
     }),
   ],
   preview: {

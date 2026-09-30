@@ -6,6 +6,8 @@ import { isAttachableToPost } from './post-attach'
 import { originalDownloadUrl } from './original'
 import type { ResolvedMarketingAssetDetails } from './details'
 import type { StudioOriginInput } from './studio'
+import type { ResolvedExportSource } from './guard'
+import { prepareArrayWithKeys } from '@/lib/sanity/helpers'
 import type {
   MarketingAssetFacets,
   MarketingAssetKind,
@@ -450,6 +452,8 @@ export async function readMarketingAssetBackground(
   title: string
   alt: string
   url: string | null
+  /** The image asset, for an export's lineage (#1182). */
+  fileId: string | null
   width: number | null
   height: number | null
 } | null> {
@@ -460,6 +464,7 @@ export async function readMarketingAssetBackground(
       title,
       "alt": coalesce(alt, ""),
       "url": image.asset->url,
+      "fileId": image.asset._ref,
       "width": image.asset->metadata.dimensions.width,
       "height": image.asset->metadata.dimensions.height
     }`,
@@ -526,12 +531,13 @@ export type NewMarketingAsset = {
        */
       studio?: StudioOriginInput
       /**
-       * The backgrounds it showed (#1182), as the route resolved them: plain
-       * asset ids, never references, so they keep no file alive. A speaker
-       * erasure finds the video by them whatever its project holds later;
-       * nothing else reads them. With or without a project.
+       * The backgrounds it showed (#1182), as the route resolved them: each
+       * file as a plain id, never a reference, so it keeps no file alive;
+       * the gallery asset and the subject as WEAK references. A speaker
+       * erasure finds the video by them whatever its project or the gallery
+       * hold later; nothing else reads them. With or without a project.
        */
-      sourceFileIds?: string[]
+      sources?: ResolvedExportSource[]
     }
   | {
       kind: 'audio'
@@ -608,9 +614,32 @@ export async function createMarketingAsset(
   // Only a video remembers its project: an image is a finished file with no
   // editor state to reopen (spec §7).
   const projectId = input.kind === 'video' ? studio?.projectId : undefined
-  const sourceFileIds =
-    input.kind === 'video' && studio && input.sourceFileIds?.length
-      ? input.sourceFileIds
+  const sources =
+    input.kind === 'video' && studio && input.sources?.length
+      ? prepareArrayWithKeys(
+          input.sources.map((s) => ({
+            _type: 'exportSource',
+            fileId: s.fileId,
+            ...(s.galleryAssetId
+              ? {
+                  galleryAsset: {
+                    _type: 'reference',
+                    _ref: s.galleryAssetId,
+                    _weak: true,
+                  },
+                }
+              : {}),
+            ...(s.subjectId
+              ? {
+                  subject: {
+                    _type: 'reference',
+                    _ref: s.subjectId,
+                    _weak: true,
+                  },
+                }
+              : {}),
+          })),
+        )
       : undefined
   const created = await clientWrite.create(
     {
@@ -624,7 +653,7 @@ export async function createMarketingAsset(
       ...(projectId
         ? { project: { _type: 'reference', _ref: projectId, _weak: true } }
         : {}),
-      ...(sourceFileIds ? { sourceFileIds } : {}),
+      ...(sources ? { sources } : {}),
       ...set,
       ...media,
     },

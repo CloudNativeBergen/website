@@ -274,6 +274,7 @@ describe('the marketing asset move route', () => {
     expect(await response.json()).toEqual({
       _id: 'asset-1',
       softOnSocial: true,
+      imageAssetId: 'image-a-800x600-png',
     })
   })
 
@@ -505,6 +506,15 @@ describe('a studio save through the move route (#1164)', () => {
     expect(h.guard).toHaveBeenCalledTimes(1)
   })
 
+  it('answers an image save with its file, for a studio background kept from the editor (#1182)', async () => {
+    const response = await POST(request(VALID))
+    expect(await response.json()).toEqual({
+      _id: 'asset-1',
+      softOnSocial: true,
+      imageAssetId: 'image-a-800x600-png',
+    })
+  })
+
   it('is an upload when no studio is named', async () => {
     expect((await POST(request(VALID))).status).toBe(200)
     // The whole write input, so a stray `studio` key would show as a diff.
@@ -569,7 +579,7 @@ describe('a video exported from a studio project (#1182)', () => {
 
   it('proves the project ours BEFORE anything moves, and writes the origin and lineage with the video', async () => {
     h.projectGuard.mockResolvedValue({
-      sourceFileIds: ['image-hall-1080x1080-png'],
+      sources: [{ fileId: 'image-hall-1080x1080-png' }],
     })
     const response = await POST(request(EXPORTED))
     expect(response.status).toBe(200)
@@ -583,16 +593,16 @@ describe('a video exported from a studio project (#1182)', () => {
     expect(h.create.mock.calls[0][0]).toMatchObject({
       kind: 'video',
       studio: { tab: 'meme-generator', projectId: 'vp-1' },
-      sourceFileIds: ['image-hall-1080x1080-png'],
+      sources: [{ fileId: 'image-hall-1080x1080-png' }],
     })
   })
 
   it('writes no lineage for a project with no backgrounds', async () => {
-    h.projectGuard.mockResolvedValue({ sourceFileIds: [] })
+    h.projectGuard.mockResolvedValue({ sources: [] })
     expect((await POST(request(EXPORTED))).status).toBe(200)
     const input = h.create.mock.calls[0][0]
     expect(input.studio).toEqual({ tab: 'meme-generator', projectId: 'vp-1' })
-    expect(input).not.toHaveProperty('sourceFileIds')
+    expect(input).not.toHaveProperty('sources')
   })
 
   it('refuses a project that is not ours, discarding both uploads, never moving', async () => {

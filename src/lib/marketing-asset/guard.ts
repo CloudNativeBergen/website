@@ -64,17 +64,31 @@ export async function resolveAssetDetailsForCurrentOrg(
   return mark
 }
 
+/** One background an exported video showed, as the entry records it. */
+export interface ResolvedExportSource {
+  fileId: string
+  /** The gallery asset it came from, if one was named or is known. */
+  galleryAssetId?: string
+  /**
+   * Who that gallery asset said it showed, copied as a saved video copies
+   * it: what an erasure finds the file by once the asset is gone.
+   */
+  subjectId?: string
+}
+
 /**
  * What a speaker erasure will find an exported video by (#1182): the files
- * it showed. Two client claims, each proven before it is believed:
+ * it showed, each with the gallery asset it came from and who that asset
+ * said it showed. Two client claims, each proven before it is believed:
  *
  *  - the project it was exported from, proven THIS organization's by the
  *    tenancy guard before anything of it is read — the refusal never says
- *    whether a foreign id exists — and then the backgrounds it holds now;
+ *    whether a foreign id exists — and then the backgrounds it holds now,
+ *    with the subject each carries;
  *  - the backgrounds the editor knew at export time: a gallery asset id,
- *    resolved to its file by an organization-scoped read where a foreign or
- *    deleted one is simply absent, never refused; or a bare file id, taken
- *    as given.
+ *    resolved to its file and subject by an organization-scoped read where
+ *    a foreign or deleted one is simply absent, never refused; or a bare
+ *    file id, taken as given.
  *
  * A bare id is TAKEN, not proven, on purpose. The lineage is inert: plain
  * strings that only ever make THIS video deletable when an erasure deletes
@@ -90,12 +104,19 @@ export async function resolveAssetDetailsForCurrentOrg(
 export async function resolveVideoLineage(
   orgId: string,
   origin: { projectId?: string; sources?: ExportSourceInput[] },
-): Promise<{ sourceFileIds: string[] }> {
-  const held: string[] = []
+): Promise<{ sources: ResolvedExportSource[] }> {
+  const found: ResolvedExportSource[] = []
   if (origin.projectId) {
     await requireDocumentInCurrentOrg(origin.projectId, 'videoProject')
     const stored = await readVideoProjectFiles(orgId, origin.projectId)
-    for (const image of stored?.images ?? []) held.push(image.fileId)
+    for (const image of stored?.images ?? [])
+      found.push({
+        fileId: image.fileId,
+        ...(image.galleryAssetId
+          ? { galleryAssetId: image.galleryAssetId }
+          : {}),
+        ...(image.subjectId ? { subjectId: image.subjectId } : {}),
+      })
   }
   const sources = origin.sources ?? []
   const galleryIds = [
@@ -106,14 +127,32 @@ export async function resolveVideoLineage(
   const gallery = new Map(
     (await readGalleryFiles(orgId, galleryIds))
       .filter((row) => row.kind === 'image' && row.fileId)
-      .map((row) => [row._id, row.fileId as string]),
+      .map((row) => [row._id, row]),
   )
-  const shown = sources.flatMap((s) => {
-    const fromGallery = s.galleryAssetId
-      ? gallery.get(s.galleryAssetId)
-      : undefined
-    if (fromGallery) return [fromGallery]
-    return s.fileId ? [s.fileId] : []
-  })
-  return { sourceFileIds: [...new Set([...held, ...shown])] }
+  for (const s of sources) {
+    const row = s.galleryAssetId ? gallery.get(s.galleryAssetId) : undefined
+    if (row)
+      found.push({
+        fileId: row.fileId as string,
+        galleryAssetId: row._id,
+        ...(row.subjectId ? { subjectId: row.subjectId } : {}),
+      })
+    else if (s.fileId)
+      // The entry is gone or was never named: the file, and the entry it
+      // was picked from, as the editor knew them.
+      found.push({
+        fileId: s.fileId,
+        ...(s.galleryAssetId ? { galleryAssetId: s.galleryAssetId } : {}),
+      })
+  }
+  // One entry per file and gallery asset; the first mention's subject wins.
+  const seen = new Set<string>()
+  return {
+    sources: found.filter((s) => {
+      const key = `${s.fileId}\u0000${s.galleryAssetId ?? ''}`
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    }),
+  }
 }

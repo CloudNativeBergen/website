@@ -1007,10 +1007,14 @@ describe('speaker erasure removes their images everywhere (#1162)', () => {
       const lineageVideo = (
         id: string,
         projectId: string,
-        sources: string[],
+        sources: (string | Record<string, unknown>)[],
       ) => ({
         ...exportedVideo(id, projectId, LINEAGE_MP4, LINEAGE_POSTER),
-        sourceFileIds: sources,
+        sources: sources.map((source, i) =>
+          typeof source === 'string'
+            ? { _key: `src-${i}`, _type: 'exportSource', fileId: source }
+            : { _key: `src-${i}`, _type: 'exportSource', ...source },
+        ),
       })
       beforeEach(() => {
         h.dataset.push(
@@ -1080,8 +1084,60 @@ describe('speaker erasure removes their images everywhere (#1162)', () => {
         })
         expect(result.err).toBeNull()
         expect(doc('asset-bob-lineage')).toMatchObject({
-          sourceFileIds: [BOB_CARD],
+          sources: [{ fileId: BOB_CARD }],
         })
+        expect(doc(LINEAGE_MP4)).toBeDefined()
+      })
+
+      it('finds a video by the subject its source copied, once the gallery entry is gone and the project moved on', async () => {
+        // Ada's card was in project P when V was exported; the entry has
+        // since been deleted and P saved without the photo. Only V's copy
+        // of who the file showed is left to link it to Ada.
+        h.dataset = h.dataset.filter((d) => !d._id.endsWith('asset-ada'))
+        h.dataset.push(
+          {
+            ...project('vp-moved-on', BOB_CARD),
+            scenes: [
+              { _key: 's1', duration: 3, background: { color: '#000' } },
+            ],
+          },
+          lineageVideo('asset-copied', 'vp-moved-on', [
+            {
+              fileId: ADA_CARD,
+              galleryAsset: weak('asset-ada'),
+              subject: weak(ADA),
+            },
+          ]),
+        )
+        const result = await eraseSpeakerInPlace({
+          speakerId: ADA,
+          actor: 'test',
+        })
+        expect(result.err).toBeNull()
+        expect(doc('asset-copied')).toBeUndefined()
+        expect(doc(LINEAGE_MP4)).toBeUndefined()
+        expect(doc(ADA_CARD)).toBeUndefined()
+        expect(result.verification?.clean).toBe(true)
+      })
+
+      it('ignores a copied subject while the gallery entry lives and says otherwise', async () => {
+        // Saved while asset-bob was (wrongly) about Ada; corrected since.
+        h.dataset.push(
+          lineageVideo('asset-corrected', 'vp-gone', [
+            {
+              fileId: BOB_CARD,
+              galleryAsset: weak('asset-bob'),
+              subject: weak(ADA),
+            },
+          ]),
+        )
+        const result = await eraseSpeakerInPlace({
+          speakerId: ADA,
+          actor: 'test',
+        })
+        expect(result.err).toBeNull()
+        expect(doc('asset-corrected')).toBeDefined()
+        expect(doc(BOB_CARD)).toBeDefined()
         expect(doc(LINEAGE_MP4)).toBeDefined()
       })
 

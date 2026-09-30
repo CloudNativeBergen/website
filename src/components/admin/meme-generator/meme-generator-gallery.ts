@@ -40,7 +40,13 @@ export interface BackgroundGallery {
    * One image by id, as a SAME-ORIGIN URL the canvas can draw without being
    * tainted. The server proves the id is this organization's.
    */
-  resolve: (id: string) => Promise<{ _id: string; title: string; url: string }>
+  resolve: (id: string) => Promise<{
+    _id: string
+    title: string
+    url: string
+    /** Its image asset, so an export can name what it showed (#1182). */
+    fileId?: string | null
+  }>
   /**
    * Put an uploaded background in the gallery, through its own upload path,
    * or throw a message to show.
@@ -50,6 +56,8 @@ export interface BackgroundGallery {
     details: { title: string; alt: string },
   ) => Promise<{
     _id: string
+    /** Its image asset, once known (#1182). */
+    fileId?: string | null
   }>
   /** The organization's audio tracks, for a video's music (spec §6). */
   tracks?: () => Promise<GalleryTrack[]>

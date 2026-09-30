@@ -29,13 +29,18 @@ vi.mock('@/lib/video-project/sanity', () => ({
 
 import { resolveVideoLineage } from './guard'
 
-const galleryRow = (id: string, fileId: string, kind = 'image') => ({
+const galleryRow = (
+  id: string,
+  fileId: string,
+  kind = 'image',
+  subjectId: string | null = null,
+) => ({
   _id: id,
   kind,
   title: id,
   fileId,
   createdByUpload: true,
-  subjectId: null,
+  subjectId,
   rights: null,
 })
 
@@ -44,17 +49,17 @@ beforeEach(() => {
   h.requireDocument.mockResolvedValue('org-a')
   h.readFiles.mockResolvedValue({
     images: [
-      { fileId: 'image-hall', galleryAssetId: 'asset-hall' },
-      { fileId: 'image-ada', galleryAssetId: null },
-      // The same deduplicated file in two scenes is one id.
-      { fileId: 'image-hall', galleryAssetId: null },
+      { fileId: 'image-hall', galleryAssetId: 'asset-hall', subjectId: null },
+      { fileId: 'image-ada', galleryAssetId: null, subjectId: 'sp-ada' },
+      // The same deduplicated file under the same entry twice is one.
+      { fileId: 'image-hall', galleryAssetId: 'asset-hall', subjectId: null },
     ],
     track: { fileId: 'file-theme' },
   })
   h.readGallery.mockImplementation(async (_org: string, ids: string[]) =>
     ids.flatMap((id) =>
       id === 'asset-venue'
-        ? [galleryRow(id, 'image-venue')]
+        ? [galleryRow(id, 'image-venue', 'image', 'talk-1')]
         : id === 'asset-theme'
           ? [galleryRow(id, 'file-theme', 'audio')]
           : [],
@@ -63,10 +68,15 @@ beforeEach(() => {
 })
 
 describe('resolveVideoLineage', () => {
-  it('proves the project ours, then names its backgrounds once each, and never the track', async () => {
+  it('proves the project ours, then names its backgrounds once each with their subjects, and never the track', async () => {
     await expect(
       resolveVideoLineage('org-a', { projectId: 'vp-1' }),
-    ).resolves.toEqual({ sourceFileIds: ['image-hall', 'image-ada'] })
+    ).resolves.toEqual({
+      sources: [
+        { fileId: 'image-hall', galleryAssetId: 'asset-hall' },
+        { fileId: 'image-ada', subjectId: 'sp-ada' },
+      ],
+    })
     expect(h.requireDocument).toHaveBeenCalledWith('vp-1', 'videoProject')
     expect(h.readFiles).toHaveBeenCalledWith('org-a', 'vp-1')
     expect(h.requireDocument.mock.invocationCallOrder[0]).toBeLessThan(
@@ -99,7 +109,15 @@ describe('resolveVideoLineage', () => {
         ],
       }),
     ).resolves.toEqual({
-      sourceFileIds: ['image-hall', 'image-ada', 'image-venue'],
+      sources: [
+        { fileId: 'image-hall', galleryAssetId: 'asset-hall' },
+        { fileId: 'image-ada', subjectId: 'sp-ada' },
+        {
+          fileId: 'image-venue',
+          galleryAssetId: 'asset-venue',
+          subjectId: 'talk-1',
+        },
+      ],
     })
     expect(h.readGallery).toHaveBeenCalledWith('org-a', [
       'asset-venue',
@@ -120,7 +138,12 @@ describe('resolveVideoLineage', () => {
         ],
       }),
     ).resolves.toEqual({
-      sourceFileIds: ['image-hall', 'image-ada', 'image-dropped'],
+      sources: [
+        { fileId: 'image-hall', galleryAssetId: 'asset-hall' },
+        { fileId: 'image-ada', subjectId: 'sp-ada' },
+        // The entry as the editor named it, though gone: what is left.
+        { fileId: 'image-dropped', galleryAssetId: 'asset-gone' },
+      ],
     })
   })
 
@@ -129,7 +152,16 @@ describe('resolveVideoLineage', () => {
       resolveVideoLineage('org-a', {
         sources: [{ galleryAssetId: 'asset-venue' }, { fileId: 'image-ada' }],
       }),
-    ).resolves.toEqual({ sourceFileIds: ['image-venue', 'image-ada'] })
+    ).resolves.toEqual({
+      sources: [
+        {
+          fileId: 'image-venue',
+          galleryAssetId: 'asset-venue',
+          subjectId: 'talk-1',
+        },
+        { fileId: 'image-ada' },
+      ],
+    })
     expect(h.requireDocument).not.toHaveBeenCalled()
     expect(h.readFiles).not.toHaveBeenCalled()
   })
@@ -138,6 +170,6 @@ describe('resolveVideoLineage', () => {
     h.readFiles.mockResolvedValue({ images: [], track: null })
     await expect(
       resolveVideoLineage('org-a', { projectId: 'vp-1', sources: [] }),
-    ).resolves.toEqual({ sourceFileIds: [] })
+    ).resolves.toEqual({ sources: [] })
   })
 })

@@ -354,6 +354,7 @@ describe('an asset as a studio background (#1180)', () => {
       title: 'Keynote hall',
       alt: 'alt of hall',
       url: 'https://cdn.sanity.io/images/p/d/hall-3000x2000.jpg',
+      fileId: expect.stringMatching(/^image-/),
       width: 3000,
       height: 2000,
     })
@@ -368,6 +369,7 @@ describe('an asset as a studio background (#1180)', () => {
       title: 'track',
       alt: '',
       url: null,
+      fileId: null,
       width: null,
       height: null,
     })

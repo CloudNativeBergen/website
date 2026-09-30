@@ -87,6 +87,9 @@ export function StudioGalleryProvider({
         const mine = ++captures.current
         try {
           const blob = await capture()
+          // Superseded by a video save while it ran: nothing of it is kept,
+          // not the blob and not a preview URL nothing would revoke.
+          if (captures.current !== mine) return
           setCaptured({
             id: mine,
             blob,
@@ -96,6 +99,7 @@ export function StudioGalleryProvider({
             error: null,
           })
         } catch (error) {
+          if (captures.current !== mine) return
           console.error('Save to gallery: capture failed', error)
           setCaptured({
             id: mine,

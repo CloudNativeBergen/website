@@ -113,7 +113,10 @@ describe('createMarketingAsset', () => {
       createdFileAssetId: 'file-clip-mp4',
       posterAssetId: 'image-poster-1080x1080-jpg',
       studio: { tab: 'meme-generator', projectId: 'vp-1' },
-      sourceFileIds: ['image-hall-1080x1080-png', 'image-ada-1080x1080-png'],
+      sources: [
+        { fileId: 'image-hall-1080x1080-png', galleryAssetId: 'asset-hall' },
+        { fileId: 'image-ada-1080x1080-png', subjectId: 'sp-ada' },
+      ],
     })
     expect(h.created[0]).toMatchObject({
       kind: 'video',
@@ -121,9 +124,23 @@ describe('createMarketingAsset', () => {
       studio: { tab: 'meme-generator' },
       // Weak: the entry outlives its project and never blocks deleting it.
       project: { _type: 'reference', _ref: 'vp-1', _weak: true },
-      // Plain ids, never references: they keep no file alive.
-      sourceFileIds: ['image-hall-1080x1080-png', 'image-ada-1080x1080-png'],
     })
+    // The file as a plain id, never a reference, so it keeps no file
+    // alive; the gallery asset and the subject weak; every item keyed.
+    const sources = h.created[0].sources as Record<string, unknown>[]
+    expect(sources).toHaveLength(2)
+    expect(sources[0]).toMatchObject({
+      _type: 'exportSource',
+      fileId: 'image-hall-1080x1080-png',
+      galleryAsset: { _type: 'reference', _ref: 'asset-hall', _weak: true },
+    })
+    expect(sources[0]).not.toHaveProperty('subject')
+    expect(sources[1]).toMatchObject({
+      fileId: 'image-ada-1080x1080-png',
+      subject: { _type: 'reference', _ref: 'sp-ada', _weak: true },
+    })
+    expect(sources[1]).not.toHaveProperty('galleryAsset')
+    expect(new Set(sources.map((s) => s._key)).size).toBe(2)
   })
 
   it('records no project for a video saved unsaved, but still its lineage, and none for an image (#1182)', async () => {
@@ -134,11 +151,11 @@ describe('createMarketingAsset', () => {
       fileAssetId: 'file-clip-mp4',
       posterAssetId: 'image-poster-1080x1080-jpg',
       studio: { tab: 'meme-generator' },
-      sourceFileIds: ['image-venue-1080x1080-png'],
+      sources: [{ fileId: 'image-venue-1080x1080-png' }],
     })
     expect(h.created[0]).toMatchObject({
       source: 'studio',
-      sourceFileIds: ['image-venue-1080x1080-png'],
+      sources: [{ fileId: 'image-venue-1080x1080-png' }],
     })
     expect(h.created[0]).not.toHaveProperty('project')
     await createMarketingAsset({

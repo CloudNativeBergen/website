@@ -77,7 +77,7 @@ export function useStudioGallery(orgId: string): BackgroundGallery {
         })
         void utils.marketingAsset.list.invalidate()
         void utils.marketingAsset.filters.invalidate()
-        return { _id: kept._id }
+        return { _id: kept._id, fileId: kept.imageAssetId ?? null }
       },
     }
   }, [orgId, utils])

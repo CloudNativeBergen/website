@@ -590,7 +590,7 @@ export async function fetchSpeakerAssetInputs(
     subjectId: string | null
     assetId: string | null
   }
-  const [sceneFiles, trackFiles] = await Promise.all([
+  const [sceneFiles, trackFiles, exportSources] = await Promise.all([
     client.fetch<Held[]>(
       // groq-global: a saved video (#1181) keeps a gallery image's subject
       // with the file, so the file is found after its gallery asset is
@@ -605,8 +605,21 @@ export async function fetchSpeakerAssetInputs(
       { subjectIds },
       opts,
     ),
+    client.fetch<Held[]>(
+      // groq-global: an exported gallery video (#1182) copies, with each
+      // file it showed, who the file's gallery asset said it showed — so
+      // the file is found after that asset is deleted and the project has
+      // moved on. In every tenant, because the right is the person's.
+      groq`*[_type == "marketingAsset" && count(sources[subject._ref in $subjectIds]) > 0].sources[subject._ref in $subjectIds]{ fileId, "subjectId": subject._ref, "assetId": galleryAsset._ref }`,
+      { subjectIds },
+      opts,
+    ),
   ])
-  const held = [...(sceneFiles ?? []), ...(trackFiles ?? [])]
+  const held = [
+    ...(sceneFiles ?? []),
+    ...(trackFiles ?? []),
+    ...(exportSources ?? []),
+  ]
   const assetIds = [
     ...new Set(held.flatMap((f) => (f.assetId ? [f.assetId] : []))),
   ]
@@ -679,7 +692,7 @@ export async function fetchSpeakerAssetInputs(
   ]
   // Two ways to a gallery video: through the project it records, and by
   // its own lineage — the files the project held when the video was saved
-  // (`sourceFileIds`, plain ids). The lineage holds up once the project has
+  // (`sources[].fileId`, plain ids). The lineage holds up once the project has
   // been edited to drop the photo, or deleted, where the project no longer
   // leads here.
   const [throughProjects, byLineage] = await Promise.all([
@@ -695,7 +708,7 @@ export async function fetchSpeakerAssetInputs(
     client.fetch<Doc[]>(
       // groq-global: the gallery videos whose recorded lineage names a
       // linked file, in every tenant — the right is the person's.
-      groq`*[_type == "marketingAsset" && count(coalesce(sourceFileIds, [])[@ in $fileIds]) > 0]`,
+      groq`*[_type == "marketingAsset" && count(sources[fileId in $fileIds]) > 0]`,
       { fileIds },
       opts,
     ),

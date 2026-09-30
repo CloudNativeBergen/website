@@ -430,7 +430,11 @@ describe('Save an exported video to the gallery (#1182)', () => {
     const form = await screen.findByRole('form', {
       name: 'Save video to gallery',
     })
+    const previews = vi.spyOn(URL, 'createObjectURL')
     await act(async () => finishCapture!())
+    // Nothing of the superseded capture is kept: no preview URL was made
+    // for it, so there is none that nothing would revoke.
+    expect(previews).not.toHaveBeenCalled()
     // The newer ask stands: the video dialog is still up, with its title.
     expect(within(form).getByLabelText('Title')).toHaveProperty(
       'value',

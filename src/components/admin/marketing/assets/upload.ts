@@ -102,7 +102,12 @@ export type AssetUploader = (
   options?: AssetUploadOptions,
   /** How much of the file has reached Blob, 0 to 1; a video can take a while. */
   onProgress?: (fraction: number) => void,
-) => Promise<{ _id: string; softOnSocial: boolean }>
+) => Promise<{
+  _id: string
+  softOnSocial: boolean
+  /** An image's file, as stored; an export's lineage names it (#1182). */
+  imageAssetId?: string
+}>
 
 /** One file straight to Vercel Blob, under this organization's folder. */
 function toBlob(
@@ -181,11 +186,16 @@ export function blobAssetUploader(orgId: string): AssetUploader {
     const body = (await response.json().catch(() => null)) as {
       _id?: string
       softOnSocial?: boolean
+      imageAssetId?: string
       error?: string
     } | null
     if (!response.ok || !body?._id) {
       throw new Error(body?.error ?? failure)
     }
-    return { _id: body._id, softOnSocial: Boolean(body.softOnSocial) }
+    return {
+      _id: body._id,
+      softOnSocial: Boolean(body.softOnSocial),
+      ...(body.imageAssetId ? { imageAssetId: body.imageAssetId } : {}),
+    }
   }
 }

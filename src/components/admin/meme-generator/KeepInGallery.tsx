@@ -25,7 +25,11 @@ export function KeepInGallery({
    * `hadFocus`: whether focus was still this form's when the save landed
    * (see `focusStillHere`). Only then is it the editor's to move.
    */
-  onKept: (galleryAssetId: string, hadFocus: boolean) => void
+  onKept: (
+    galleryAssetId: string,
+    hadFocus: boolean,
+    fileId?: string | null,
+  ) => void
 }) {
   const ids = { title: useId(), alt: useId() }
   const [open, setOpen] = useState(false)
@@ -70,7 +74,7 @@ export function KeepInGallery({
     setError(null)
     try {
       const kept = await keep(file, { title: title.trim(), alt: alt.trim() })
-      onKept(kept._id, focusStillHere())
+      onKept(kept._id, focusStillHere(), kept.fileId)
     } catch (caught) {
       setError(
         caught instanceof Error

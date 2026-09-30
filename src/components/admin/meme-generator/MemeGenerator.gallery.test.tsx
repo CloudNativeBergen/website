@@ -105,6 +105,28 @@ describe('a gallery image as the background', () => {
     ).not.toBeInTheDocument()
   })
 
+  it('remembers the picked image’s file, so an export can name what it showed (#1182)', async () => {
+    const gallery = fakeGallery({
+      resolve: vi.fn(async (id: string) => ({
+        _id: id,
+        title: HALL.title,
+        url: HALL_URL,
+        fileId: 'image-hall-1080x1080-png',
+      })),
+    })
+    render(<MemeGenerator gallery={gallery} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Choose from gallery' }))
+    fireEvent.click(await screen.findByRole('button', { name: /Keynote hall/ }))
+    await waitFor(() =>
+      expect(lastDrawn().image).toEqual({
+        url: HALL_URL,
+        name: 'Keynote hall',
+        galleryAssetId: 'asset-hall',
+        fileId: 'image-hall-1080x1080-png',
+      }),
+    )
+  })
+
   it('says so when the image cannot be had, and leaves the background as it was', async () => {
     const gallery = fakeGallery({
       resolve: vi.fn(async () => {

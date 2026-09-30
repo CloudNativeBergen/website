@@ -673,8 +673,9 @@ export function MemeGenerator({
   const confirmKept = async (url: string) => {
     const galleryAssetId = keptAssets.current.get(url)
     if (!galleryAssetId || !gallery) return
+    let fileId: string | null | undefined
     try {
-      await gallery.resolve(galleryAssetId)
+      ;({ fileId } = await gallery.resolve(galleryAssetId))
     } catch {
       if (keptAssets.current.get(url) === galleryAssetId)
         keptAssets.current.delete(url)
@@ -688,7 +689,7 @@ export function MemeGenerator({
       shownUpload.current === url &&
       !!area?.contains(document.activeElement) &&
       document.activeElement !== galleryStatus.current
-    markKept(url, galleryAssetId)
+    markKept(url, galleryAssetId, fileId)
   }
 
   const pickGalleryBackground = async (id: string) => {
@@ -698,7 +699,14 @@ export function MemeGenerator({
       await loadBackground(async () => {
         const picked = await gallery.resolve(id)
         return {
-          image: { url: picked.url, name: picked.title, galleryAssetId: id },
+          image: {
+            url: picked.url,
+            name: picked.title,
+            galleryAssetId: id,
+            // Known from the pick (#1182): an export names the file it
+            // showed even if the gallery entry is deleted before the save.
+            ...(picked.fileId ? { fileId: picked.fileId } : {}),
+          },
         }
       })
     } catch {
@@ -728,7 +736,11 @@ export function MemeGenerator({
    * An upload now in the gallery is kept in every state undo and redo can
    * reach, with no step of its own: it is kept whichever one is shown.
    */
-  const markKept = (url: string, galleryAssetId: string) => {
+  const markKept = (
+    url: string,
+    galleryAssetId: string,
+    fileId?: string | null,
+  ) => {
     keptAssets.current.set(url, galleryAssetId)
     mapScenes((states) =>
       states.map((scene) =>
@@ -739,7 +751,11 @@ export function MemeGenerator({
                 ...scene.design,
                 background: {
                   ...scene.design.background,
-                  image: { ...scene.design.background.image, galleryAssetId },
+                  image: {
+                    ...scene.design.background.image,
+                    galleryAssetId,
+                    ...(fileId ? { fileId } : {}),
+                  },
                 },
               },
             }
@@ -2367,9 +2383,9 @@ export function MemeGenerator({
                       key={background.image.url}
                       file={keptFile}
                       keep={gallery.keep}
-                      onKept={(id, hadFocus) => {
+                      onKept={(id, hadFocus, fileId) => {
                         focusGalleryStatus.current = hadFocus
-                        markKept(background.image!.url, id)
+                        markKept(background.image!.url, id, fileId)
                       }}
                     />
                   )}
