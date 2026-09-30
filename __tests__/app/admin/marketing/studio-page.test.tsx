@@ -148,7 +148,7 @@ describe('Promo Studio Task preselection', () => {
 
 describe('Promo Studio search parameter boundary', () => {
   it.each(
-    ['task', 'speaker', 'sponsor'].flatMap((param) => [
+    ['task', 'speaker', 'sponsor', 'format'].flatMap((param) => [
       { param, kind: 'unsafe', value: '<script>alert(1)</script>' },
       { param, kind: 'repeated', value: ['ada', 'acme'] },
       { param, kind: 'oversized', value: 'a'.repeat(201) },

@@ -148,7 +148,7 @@ export async function listMarketingAssets(
         )
   return (rows ?? []).map(({ mimeType, ...row }) => ({
     ...row,
-    softOnSocial: isSoftOnSocial(row),
+    softOnSocial: isSoftOnSocial(row, row.studio?.format),
     attachable: isAttachableToPost({ ...row, mimeType }),
     downloadUrl: originalDownloadUrl(row),
     usedInPosts: used ? (row.assetId && used.get(row.assetId)) || 0 : null,

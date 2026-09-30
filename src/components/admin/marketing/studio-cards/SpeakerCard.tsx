@@ -285,31 +285,33 @@ export function SpeakerCard({
               icon: 'size-[6cqw]',
               kicker: 'text-[4.5cqw]',
             })}
-            {event('line-clamp-2 px-[1cqw] text-[6cqw]')}
+            {event('line-clamp-2 px-[1cqw] text-[5.5cqw]')}
           </header>
           <Photo
             speaker={speaker}
-            className="mb-[3cqw] size-[30cqw] rounded-[2.5cqw]"
+            className="mb-[3cqw] size-[26cqw] rounded-[2.5cqw]"
           />
-          <main className="flex w-full flex-1 flex-col justify-center px-[1cqw]">
-            {speakerName('text-[6.5cqw]')}
-            {jobTitle('mt-[1cqw] line-clamp-2 text-[4.5cqw]')}
+          {/* The name and the talk keep their lines; a long job title is
+              the one thing that gives way, so the QR never leaves the frame. */}
+          <main className="flex min-h-0 w-full flex-1 flex-col justify-center px-[1cqw]">
+            {speakerName('line-clamp-2 shrink-0 text-[5.5cqw]')}
+            {jobTitle('mt-[1cqw] line-clamp-1 text-[4cqw]')}
             {talk && (
-              <div className="mx-[1cqw] mt-[2.5cqw]">
+              <div className="mx-[1cqw] mt-[2.5cqw] shrink-0">
                 <Talk
                   talk={talk}
                   size={{
                     box: 'p-[2.5cqw]',
                     icon: 'size-[4cqw]',
                     label: 'text-[3.5cqw]',
-                    title: 'line-clamp-3 text-[5cqw]',
+                    title: 'line-clamp-2 text-[4.5cqw]',
                   }}
                 />
               </div>
             )}
           </main>
           <footer className="mt-[3cqw] flex shrink-0 flex-col items-center">
-            <QrBadge url={qrCodeUrl} alt={QR_ALT} size={18} />
+            <QrBadge url={qrCodeUrl} alt={QR_ALT} size={16} />
             {scanLine({
               row: 'mt-[1.5cqw] justify-center',
               icon: 'size-[4cqw]',
@@ -339,18 +341,19 @@ export function SpeakerCard({
           <Photo speaker={speaker} className="size-[25cqw] rounded-[2cqw]" />
           <QrBadge url={qrCodeUrl} alt={QR_ALT} size={25} />
         </section>
-        <main className="flex flex-1 flex-col justify-center px-[1cqw]">
-          {speakerName('text-[6cqw]')}
-          {jobTitle('mt-[1cqw] line-clamp-2 text-[4.5cqw]')}
+        {/* As in portrait: a long job title gives way, nothing else. */}
+        <main className="flex min-h-0 flex-1 flex-col justify-center px-[1cqw]">
+          {speakerName('line-clamp-2 shrink-0 text-[5.5cqw]')}
+          {jobTitle('mt-[1cqw] line-clamp-1 text-[4cqw]')}
           {talk && (
-            <div className="mx-[1cqw] mt-[2cqw]">
+            <div className="mx-[1cqw] mt-[2cqw] shrink-0">
               <Talk
                 talk={talk}
                 size={{
                   box: 'p-[2cqw]',
                   icon: 'size-[4cqw]',
                   label: 'text-[3.5cqw]',
-                  title: 'line-clamp-2 text-[4cqw]',
+                  title: 'line-clamp-2 text-[3.8cqw]',
                 }}
               />
             </div>

@@ -516,6 +516,27 @@ describe('a studio save through the move route (#1164)', () => {
     })
   })
 
+  it('does not call a landscape card soft: 1200×628 is LinkedIn’s own size (#1247)', async () => {
+    h.move.mockResolvedValue({
+      ok: true,
+      asset: {
+        _id: 'image-a-1200x628-png',
+        url: 'https://cdn/wide.png',
+        width: 1200,
+        height: 628,
+        created: true,
+      },
+    })
+    const saved = await POST(
+      request({ ...VALID, studio: { tab: 'speakers', format: 'landscape' } }),
+    )
+    expect((await saved.json()).softOnSocial).toBe(false)
+    // The same pixels uploaded by hand are just an image with a short side
+    // under 1080.
+    const uploaded = await POST(request(VALID))
+    expect((await uploaded.json()).softOnSocial).toBe(true)
+  })
+
   it('answers an image save with its file, for a studio background kept from the editor (#1182)', async () => {
     const response = await POST(request(VALID))
     expect(await response.json()).toEqual({

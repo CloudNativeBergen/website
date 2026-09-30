@@ -117,7 +117,7 @@ function ConnectedStudioTask({
       // card with a photo can reach that. Say so, rather than an opaque 413.
       if (blob.size > ATTACH_MAX_BYTES)
         throw new Error(
-          `This image is ${(blob.size / 1024 / 1024).toFixed(1)} MB, more than "Attach to Task" can send. Save it to the gallery and finish the Task with it from there.`,
+          `This image is ${(blob.size / 1024 / 1024).toFixed(1)} MB, over the 4 MB "Attach to Task" can send. Save it to the gallery and finish the Task with it from there.`,
         )
       const form = new FormData()
       form.set('taskId', taskId)

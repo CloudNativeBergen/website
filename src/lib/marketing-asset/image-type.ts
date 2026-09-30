@@ -1,3 +1,4 @@
+import { STUDIO_FORMATS, type StudioFormat } from './format'
 /** The image types the gallery accepts in this slice (spec §4.1). */
 export const MARKETING_ASSET_IMAGE_TYPES = [
   'image/png',
@@ -56,8 +57,22 @@ export function sniffImageType(
 export function isSoftOnSocial(
   dimensions:
     { width: number | null; height: number | null } | null | undefined,
+  /**
+   * The studio Format the image was captured in, if any: an image at exactly
+   * its Format's pixels is the platform's own size (landscape's short side is
+   * 628 by LinkedIn's design), never "soft".
+   */
+  format?: StudioFormat | null,
 ): boolean {
   if (!dimensions?.width || !dimensions.height) return false
+  if (format) {
+    const native = STUDIO_FORMATS[format]
+    if (
+      dimensions.width === native.width &&
+      dimensions.height === native.height
+    )
+      return false
+  }
   return (
     Math.min(dimensions.width, dimensions.height) < SOFT_ON_SOCIAL_SHORT_SIDE
   )

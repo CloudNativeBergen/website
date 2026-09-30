@@ -49,7 +49,10 @@ export function DownloadableImage({
   // Format and saved under its name. Refuse it instead — counting changes,
   // so a switch flipped away and back is refused too.
   const changes = useRef(0)
+  const previous = useRef(format)
   useEffect(() => {
+    if (previous.current === format) return
+    previous.current = format
     changes.current += 1
   }, [format])
   const capture = async (element: HTMLElement) => {

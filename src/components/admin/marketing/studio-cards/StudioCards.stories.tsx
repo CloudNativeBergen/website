@@ -216,6 +216,18 @@ export const SpeakerLandscapeLongText: Story = {
   args: { template: 'speaker', format: 'landscape', long: true },
   play: provesEveryElementAndTheCapture,
 }
+export const SpeakerSquareLongText: Story = {
+  args: { template: 'speaker', format: 'square', long: true },
+  play: provesEveryElementAndTheCapture,
+}
+export const SpeakerPortraitLongText: Story = {
+  args: { template: 'speaker', format: 'portrait', long: true },
+  play: provesEveryElementAndTheCapture,
+}
+export const SponsorPortraitLongText: Story = {
+  args: { template: 'sponsor', format: 'portrait', long: true },
+  play: provesEveryElementAndTheCapture,
+}
 export const SponsorSquareLongText: Story = {
   args: { template: 'sponsor', format: 'square', long: true },
   play: provesEveryElementAndTheCapture,

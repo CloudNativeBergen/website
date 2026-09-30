@@ -517,10 +517,23 @@ describe('a studio save’s origin (#1164)', () => {
         subject: weak('sp-ada'),
       }),
       // Captured in a Format (#1247); everything before Formats reads square.
+      {
+        _id: 'image-wide-1200x628-png',
+        _type: 'sanity.imageAsset',
+        url: 'https://cdn.sanity.io/images/p/d/wide-1200x628.png',
+        mimeType: 'image/png',
+        metadata: { dimensions: { width: 1200, height: 628 } },
+      },
       asset('wide', 'org-a', {
         source: 'studio',
         studio: { tab: 'speakers', format: 'landscape' },
         subject: weak('sp-ada'),
+        image: { _type: 'image', asset: ref('image-wide-1200x628-png') },
+      }),
+      // The same pixels, uploaded by hand: a short side under 1080.
+      asset('wide-upload', 'org-a', {
+        source: 'upload',
+        image: { _type: 'image', asset: ref('image-wide-1200x628-png') },
       }),
       asset('upload', 'org-a', { source: 'upload', subject: weak('sp-ada') }),
       // An upload carrying a stray studio object is still an upload.
@@ -531,6 +544,15 @@ describe('a studio save’s origin (#1164)', () => {
       }),
       asset('old', 'org-a'),
     ]
+  })
+
+  it('never calls a card at its Format’s own pixels soft, while the same upload is (#1247)', async () => {
+    const rows = await listMarketingAssets('org-a', 'conf-a-2026', {})
+    const soft = Object.fromEntries(
+      rows.map((row) => [row._id, row.softOnSocial]),
+    )
+    expect(soft.wide).toBe(false)
+    expect(soft['wide-upload']).toBe(true)
   })
 
   it('carries the tab, and the subject when it is that tab’s kind', async () => {
@@ -564,6 +586,7 @@ describe('a studio save’s origin (#1164)', () => {
         sponsorId: null,
         ...none,
       },
+      'wide-upload': null,
       upload: null,
       odd: null,
       old: null,
