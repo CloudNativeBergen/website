@@ -12,7 +12,9 @@
  *     assets and Tasks whose subject is the speaker or a talk they give;
  *  2. collects every file those hold ({@link linkedFileIds}) — a gallery asset's
  *     image or video, a Task's render — and every file a saved video holds
- *     under a subject it copied from the gallery ({@link projectSubjectFileIds});
+ *     under a subject it copied from the gallery ({@link projectSubjectFileIds}),
+ *     and — through each saved video holding one — the files of every gallery
+ *     video exported from it (#1182, see {@link fetchSpeakerAssetInputs});
  *  3. finds every document holding one of those files by the FILE's references,
  *     drafts and release versions included, and plans what each loses
  *     ({@link planSpeakerAssetErasure});
@@ -643,19 +645,64 @@ export async function fetchSpeakerAssetInputs(
     return { fileIds, inputs: { subjectDocs: subjectDocs ?? [], ...empty } }
   }
 
-  const fileHolders = await client.fetch<Doc[]>(
-    // groq-global: a file is dataset-wide and Sanity deduplicates identical
-    // bytes, so a holder may be in any tenant — and the file cannot be deleted
-    // while any of them still references it.
-    // WHOLE documents: the planner refuses a holder that would still
-    // reference a file after the fields it strips, which a projection hides.
-    groq`*[references($fileIds)]`,
-    { fileIds },
-    opts,
-  )
+  const readHolders = async (ids: string[]) =>
+    (await client.fetch<Doc[]>(
+      // groq-global: a file is dataset-wide and Sanity deduplicates identical
+      // bytes, so a holder may be in any tenant — and the file cannot be
+      // deleted while any of them still references it.
+      // WHOLE documents: the planner refuses a holder that would still
+      // reference a file after the fields it strips, which a projection hides.
+      groq`*[references($ids)]`,
+      { ids },
+      opts,
+    )) ?? []
+  const fileHolders = await readHolders(fileIds)
+
+  // A gallery video EXPORTED from a saved video (#1182) may show the file in
+  // any frame, and records its project (a weak `project` reference). So the
+  // chain is followed: from the file to the projects that hold it, to the
+  // gallery videos those projects made — every version of each — and to
+  // every file those hold (their MP4 and poster), whose holders are read in
+  // turn. The planner then deletes each video like any gallery entry holding
+  // a linked file, and its files go with the rest.
+  // DELIBERATE OVER-REACH: the file alone decides, not what a frame shows —
+  // a project holding it only as its TRACK, or in a scene cut from the
+  // export, still takes its exported videos.
+  // KNOWN HOLE: a video that was only downloaded, or one made from a project
+  // deleted since, records nothing that leads here and is out of reach.
+  const projectIds = [
+    ...new Set(
+      fileHolders
+        .filter((d) => d._type === 'videoProject')
+        .map((d) => publishedId(d._id)),
+    ),
+  ]
+  const exported =
+    projectIds.length === 0
+      ? []
+      : ((await client.fetch<Doc[]>(
+          // groq-global: the gallery videos made from the projects found
+          // above, whatever tenant they are in — the right is the person's.
+          groq`*[_type == "marketingAsset" && project._ref in $projectIds]`,
+          { projectIds },
+          opts,
+        )) ?? [])
+  const known = new Set(fileIds)
+  const exportFileIds = linkedFileIds(exported).filter((id) => !known.has(id))
+  fileIds.push(...exportFileIds)
+  const holderIds = new Set(fileHolders.map((d) => d._id))
+  // The exported videos themselves are holders even with no file stored yet.
+  for (const d of [
+    ...exported,
+    ...(exportFileIds.length > 0 ? await readHolders(exportFileIds) : []),
+  ]) {
+    if (holderIds.has(d._id)) continue
+    holderIds.add(d._id)
+    fileHolders.push(d)
+  }
   const postIds = [
     ...new Set(
-      (fileHolders ?? [])
+      fileHolders
         .filter((d) => d._type === 'socialPost')
         .map((d) => getPublishedId(d._id)),
     ),
@@ -666,7 +713,7 @@ export async function fetchSpeakerAssetInputs(
       inputs: {
         subjectDocs: subjectDocs ?? [],
         ...empty,
-        fileHolders: fileHolders ?? [],
+        fileHolders,
       },
     }
   }
@@ -692,7 +739,7 @@ export async function fetchSpeakerAssetInputs(
     fileIds,
     inputs: {
       subjectDocs: subjectDocs ?? [],
-      fileHolders: fileHolders ?? [],
+      fileHolders,
       variants: variants ?? [],
       publishedPosts: publishedPosts ?? [],
     },
