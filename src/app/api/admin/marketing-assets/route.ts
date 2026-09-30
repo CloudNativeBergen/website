@@ -40,7 +40,10 @@ import {
   studioOriginSchema,
   type StudioOriginInput,
 } from '@/lib/marketing-asset/studio'
-import { resolveAssetDetailsForCurrentOrg } from '@/lib/marketing-asset/guard'
+import {
+  requireProjectInCurrentOrg,
+  resolveAssetDetailsForCurrentOrg,
+} from '@/lib/marketing-asset/guard'
 import type { ResolvedMarketingAssetDetails } from '@/lib/marketing-asset/details'
 import {
   recordPendingCleanup,
@@ -218,7 +221,7 @@ export async function POST(request: Request) {
       { status: 400 },
     )
   }
-  // Only the image write takes it: a track, GIF or video is never a studio
+  // The image and the video write take it: a track or GIF is never a studio
   // render.
   const { studio } = parsedStudio.data
   // Alt text for every kind but a track (spec §3); a video needs its poster.
@@ -253,6 +256,20 @@ export async function POST(request: Request) {
       },
       { status: 400 },
     )
+  }
+
+  // An exported video's project (#1182) is a client id: proven ours before
+  // the move, like the subject. The refusal never says whether it exists.
+  if (studio?.projectId) {
+    try {
+      await requireProjectInCurrentOrg(studio.projectId)
+    } catch {
+      discard()
+      return NextResponse.json(
+        { error: 'That project is not one of this organization’s.' },
+        { status: 400 },
+      )
+    }
   }
 
   const moved = await moveFor(kindName, url, posterUrl, orgId, answerBy)
@@ -315,7 +332,8 @@ function uploadedUrls(body: unknown): string[] {
 
 /**
  * The gallery entry to write for what moved: a track takes the rights
- * confirmation, only an image takes the studio it was saved from.
+ * confirmation; an image, or a video exported from the meme generator
+ * (#1182), takes the studio it was saved from.
  */
 function newAsset(
   fields: MovedFields,
@@ -332,6 +350,15 @@ function newAsset(
       ...base,
       ...fields,
       ...(extra.studio ? { studio: extra.studio } : {}),
+    }
+  // Only the meme generator makes videos: another tab's claim is dropped.
+  if (fields.kind === 'video')
+    return {
+      ...base,
+      ...fields,
+      ...(extra.studio?.tab === 'meme-generator'
+        ? { studio: extra.studio }
+        : {}),
     }
   return { ...base, ...fields }
 }

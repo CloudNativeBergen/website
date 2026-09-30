@@ -262,8 +262,16 @@ describe('Promo Studio Save to gallery (#1164)', () => {
   })
 
   it.each([
-    [{ tab: 'speakers', speakerId: 'grace', sponsorId: null }, 'Grace', 'Ada'],
-    [{ tab: 'sponsors', speakerId: null, sponsorId: 'other' }, 'Other', 'Acme'],
+    [
+      { tab: 'speakers', speakerId: 'grace', sponsorId: null, project: null },
+      'Grace',
+      'Ada',
+    ],
+    [
+      { tab: 'sponsors', speakerId: null, sponsorId: 'other', project: null },
+      'Other',
+      'Acme',
+    ],
   ] as const)(
     'Open in studio lands on the tab and the card of %o',
     async (origin, selected, other) => {
@@ -283,12 +291,38 @@ describe('Promo Studio Save to gallery (#1164)', () => {
     },
   )
 
+  it('Open in studio on an exported video reopens its project (#1182)', async () => {
+    const query = Object.fromEntries(
+      new URL(
+        openInStudioHref({
+          tab: 'meme-generator',
+          speakerId: null,
+          sponsorId: null,
+          project: { _id: 'vp-1', exists: true },
+        }),
+        'https://x',
+      ).searchParams,
+    )
+    render(await MarketingPage({ searchParams: Promise.resolve(query) }))
+    expect(screen.getByTestId('tabs').getAttribute('data-tab')).toBe(
+      'meme-generator',
+    )
+    expect(
+      screen.getByTestId('meme-generator').getAttribute('data-project'),
+    ).toBe('vp-1')
+  })
+
   it.each(['meme-generator', 'conference', 'photo-gallery'] as const)(
     'Open in studio lands on the %s tab',
     async (tab) => {
       const query = Object.fromEntries(
         new URL(
-          openInStudioHref({ tab, speakerId: null, sponsorId: null }),
+          openInStudioHref({
+            tab,
+            speakerId: null,
+            sponsorId: null,
+            project: null,
+          }),
           'https://x',
         ).searchParams,
       )

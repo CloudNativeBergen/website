@@ -50,7 +50,11 @@ const ROW_PROJECTION = `{
   "studio": select(source == "studio" && defined(studio.tab) => {
     "tab": studio.tab,
     "speakerId": select(studio.tab == "speakers" && subject->_type == "speaker" => subject._ref, null),
-    "sponsorId": select(studio.tab == "sponsors" && subject->_type == "sponsor" => subject._ref, null)
+    "sponsorId": select(studio.tab == "sponsors" && subject->_type == "sponsor" => subject._ref, null),
+    "project": select(studio.tab == "meme-generator" && defined(project._ref) => {
+      "_id": project._ref,
+      "exists": defined(project->_id)
+    }, null)
   }, null),
   "mimeType": image.asset->mimeType,
   "rights": select(defined(rightsConfirmation.confirmedAt) => {
@@ -516,6 +520,11 @@ export type NewMarketingAsset = {
       posterAssetId: string
       /** As `createdImageAssetId`, for the poster. */
       createdImageAssetId?: string
+      /**
+       * Set when the studio exported it (#1182): the tab, and the saved
+       * project it came from — proven this organization's by the caller.
+       */
+      studio?: StudioOriginInput
     }
   | {
       kind: 'audio'
@@ -583,11 +592,15 @@ export async function createMarketingAsset(
   // An audio track has no alt text, whatever the details carried.
   if (input.kind === 'audio') delete set.alt
   const media = mediaFields(input)
-  // Only an image is ever a studio render.
+  // A studio render is an image, or a video exported from the meme
+  // generator (#1182); a GIF or a track never is.
   const studio =
-    input.kind === undefined || input.kind === 'image'
+    input.kind === undefined || input.kind === 'image' || input.kind === 'video'
       ? input.studio
       : undefined
+  // Only a video remembers its project: an image is a finished file with no
+  // editor state to reopen (spec §7).
+  const projectId = input.kind === 'video' ? studio?.projectId : undefined
   const created = await clientWrite.create(
     {
       _type: 'marketingAsset',
@@ -596,6 +609,10 @@ export async function createMarketingAsset(
       // Only the tab: the speaker or sponsor it was opened on IS the subject,
       // so an edit or an erasure of the subject can never leave a stale copy.
       ...(studio ? { studio: { tab: studio.tab } } : {}),
+      // Weak: the entry outlives its project and never blocks deleting it.
+      ...(projectId
+        ? { project: { _type: 'reference', _ref: projectId, _weak: true } }
+        : {}),
       ...set,
       ...media,
     },

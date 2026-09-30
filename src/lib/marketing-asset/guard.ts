@@ -58,3 +58,12 @@ export async function resolveAssetDetailsForCurrentOrg(
   else if (subject) await requireDocumentInCurrentOrg(subject.id, subject.type)
   return mark
 }
+
+/**
+ * Prove a client-supplied studio video project id names one of THIS
+ * organization's projects (#1182), before the video it says it exported
+ * moves anywhere. The tenancy refusal never says whether a foreign id exists.
+ */
+export async function requireProjectInCurrentOrg(id: string): Promise<string> {
+  return requireDocumentInCurrentOrg(id, 'videoProject')
+}

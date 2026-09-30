@@ -8,7 +8,7 @@ export const MARKETING_ASSET_MAX_TAG_LENGTH = 40
  * A published document id. A draft (`drafts.x`) or Content Release version
  * (`versions.r.x`) is never something to mark an asset with.
  */
-const documentId = z
+export const publishedDocumentId = z
   .string()
   .min(1)
   .max(200)
@@ -48,7 +48,10 @@ export const marketingAssetDetailsSchema = z.object({
     .transform((alt) => alt || undefined),
   edition: z.enum(['none', 'current', 'keep']).default('none'),
   subject: z
-    .object({ type: z.enum(MARKETING_ASSET_SUBJECT_TYPES), id: documentId })
+    .object({
+      type: z.enum(MARKETING_ASSET_SUBJECT_TYPES),
+      id: publishedDocumentId,
+    })
     .nullish(),
   tags: z
     .array(z.string().max(MARKETING_ASSET_MAX_TAG_LENGTH))

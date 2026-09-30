@@ -104,6 +104,45 @@ describe('createMarketingAsset', () => {
     expect(h.created[0].studio).toEqual({ tab: 'speakers' })
   })
 
+  it('records a video’s project as a weak reference, with its tab (#1182)', async () => {
+    await createMarketingAsset({
+      orgId: 'org-a',
+      details: { ...DETAILS, alt: 'A teaser' },
+      kind: 'video',
+      fileAssetId: 'file-clip-mp4',
+      createdFileAssetId: 'file-clip-mp4',
+      posterAssetId: 'image-poster-1080x1080-jpg',
+      studio: { tab: 'meme-generator', projectId: 'vp-1' },
+    })
+    expect(h.created[0]).toMatchObject({
+      kind: 'video',
+      source: 'studio',
+      studio: { tab: 'meme-generator' },
+      // Weak: the entry outlives its project and never blocks deleting it.
+      project: { _type: 'reference', _ref: 'vp-1', _weak: true },
+    })
+  })
+
+  it('records no project for a video saved unsaved, and none for an image (#1182)', async () => {
+    await createMarketingAsset({
+      orgId: 'org-a',
+      details: { ...DETAILS, alt: 'A teaser' },
+      kind: 'video',
+      fileAssetId: 'file-clip-mp4',
+      posterAssetId: 'image-poster-1080x1080-jpg',
+      studio: { tab: 'meme-generator' },
+    })
+    expect(h.created[0]).toMatchObject({ source: 'studio' })
+    expect(h.created[0]).not.toHaveProperty('project')
+    await createMarketingAsset({
+      orgId: 'org-a',
+      details: { ...DETAILS, alt: 'A card' },
+      imageAssetId: 'image-a-1x1-png',
+      studio: { tab: 'meme-generator', projectId: 'vp-1' },
+    })
+    expect(h.created[1]).not.toHaveProperty('project')
+  })
+
   it('keeps an upload an upload, with no studio origin', async () => {
     await createMarketingAsset({
       orgId: 'org-a',

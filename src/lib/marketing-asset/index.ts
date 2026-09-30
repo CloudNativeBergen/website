@@ -57,7 +57,12 @@ export {
 } from './motion-type'
 export type { MotionKind } from './motion-type'
 export { NOT_ATTACHABLE_YET, isAttachableToPost } from './post-attach'
-export { STUDIO_TABS, openInStudioHref, opensTheCard } from './studio'
+export {
+  STUDIO_TABS,
+  openInStudioHref,
+  opensTheCard,
+  projectDeleted,
+} from './studio'
 export type { MarketingAssetStudioOrigin, StudioTab } from './studio'
 export type {
   MarketingAssetDetails,

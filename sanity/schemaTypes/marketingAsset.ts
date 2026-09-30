@@ -256,6 +256,20 @@ export default defineType({
       readOnly: true,
       hidden: ({ document }) => !document?.task,
     }),
+    defineField({
+      name: 'project',
+      title: 'Studio video project',
+      description:
+        'The saved studio video this video was exported from. "Open in studio" reopens it. Absent for a video saved before its project was.',
+      type: 'reference',
+      to: [{ type: 'videoProject' }],
+      // Weak: the entry outlives its project and never blocks deleting it
+      // (docs/MARKETING_STUDIO_VIDEO_SPEC.md §7).
+      weak: true,
+      readOnly: true,
+      hidden: ({ document }) =>
+        document?.kind !== 'video' || !document?.project,
+    }),
   ],
   preview: {
     select: {

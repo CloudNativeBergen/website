@@ -105,7 +105,12 @@ const ASSETS: MarketingAssetRow[] = [
     tags: ['speaker card'],
     credit: 'Jane Designer, Studio Nord',
     createdAt: '2026-09-19T10:00:00Z',
-    studio: { tab: 'speakers', speakerId: ADA._id, sponsorId: null },
+    studio: {
+      tab: 'speakers',
+      speakerId: ADA._id,
+      sponsorId: null,
+      project: null,
+    },
     usedInPosts: 1,
   }),
   row({
@@ -146,7 +151,12 @@ const ASSETS: MarketingAssetRow[] = [
     subject: ACME,
     tags: ['sponsors'],
     createdAt: '2026-09-15T10:00:00Z',
-    studio: { tab: 'sponsors', speakerId: null, sponsorId: ACME._id },
+    studio: {
+      tab: 'sponsors',
+      speakerId: null,
+      sponsorId: ACME._id,
+      project: null,
+    },
   }),
   row({
     _id: 'asset-old-banner',
@@ -159,7 +169,12 @@ const ASSETS: MarketingAssetRow[] = [
     createdAt: '2026-09-10T10:00:00Z',
     softOnSocial: true,
     // Made in the free-form editor, which reopens empty.
-    studio: { tab: 'meme-generator', speakerId: null, sponsorId: null },
+    studio: {
+      tab: 'meme-generator',
+      speakerId: null,
+      sponsorId: null,
+      project: null,
+    },
   }),
 ]
 

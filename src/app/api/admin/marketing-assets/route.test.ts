@@ -17,6 +17,7 @@ const h = vi.hoisted(() => ({
   unqueue: vi.fn(),
   order: [] as string[],
   guard: vi.fn(),
+  projectGuard: vi.fn(),
   afterTasks: [] as (() => unknown)[],
 }))
 vi.mock('next/server', async (importOriginal) => ({
@@ -44,6 +45,7 @@ vi.mock('@/lib/marketing-asset/sanity', () => ({
 // first and obeys its answer.
 vi.mock('@/lib/marketing-asset/guard', () => ({
   resolveAssetDetailsForCurrentOrg: h.guard,
+  requireProjectInCurrentOrg: h.projectGuard,
 }))
 // The delayed cleanup itself is proven over a dataset in
 // `route.cleanup.sanity.test.ts`; here, what the route hands it.
@@ -554,6 +556,72 @@ describe('a studio save through the move route (#1164)', () => {
   })
 })
 
+describe('a video exported from a studio project (#1182)', () => {
+  const VIDEO_URL = URL_OK.replace('logo-X1.png', 'teaser-X1.mp4')
+  const POSTER_URL = URL_OK.replace('logo-X1.png', 'teaser-poster-X1.jpg')
+  const EXPORTED = {
+    ...VALID,
+    url: VIDEO_URL,
+    kind: 'video',
+    posterUrl: POSTER_URL,
+    studio: { tab: 'meme-generator', projectId: 'vp-1' },
+  }
+
+  it('proves the project ours BEFORE anything moves, and writes the origin with the video', async () => {
+    h.projectGuard.mockResolvedValue('org-A')
+    const response = await POST(request(EXPORTED))
+    expect(response.status).toBe(200)
+    expect(h.projectGuard).toHaveBeenCalledWith('vp-1')
+    expect(h.projectGuard.mock.invocationCallOrder[0]).toBeLessThan(
+      h.move.mock.invocationCallOrder[0],
+    )
+    expect(h.create.mock.calls[0][0]).toMatchObject({
+      kind: 'video',
+      studio: { tab: 'meme-generator', projectId: 'vp-1' },
+    })
+  })
+
+  it('refuses a project that is not ours, discarding both uploads, never moving', async () => {
+    h.projectGuard.mockRejectedValue(new Error('NOT_FOUND'))
+    const response = await POST(request(EXPORTED))
+    expect(response.status).toBe(400)
+    expect(await response.json()).toEqual({
+      error: 'That project is not one of this organization’s.',
+    })
+    expect(h.move).not.toHaveBeenCalled()
+    expect(h.moveVideo).not.toHaveBeenCalled()
+    expect(h.create).not.toHaveBeenCalled()
+    expect(h.discard).toHaveBeenCalledWith(VIDEO_URL, 'org-A')
+    expect(h.discard).toHaveBeenCalledWith(POSTER_URL, 'org-A')
+  })
+
+  it('records the tab alone for a video saved before its project was', async () => {
+    const response = await POST(
+      request({ ...EXPORTED, studio: { tab: 'meme-generator' } }),
+    )
+    expect(response.status).toBe(200)
+    expect(h.projectGuard).not.toHaveBeenCalled()
+    expect(h.create.mock.calls[0][0]).toMatchObject({
+      kind: 'video',
+      studio: { tab: 'meme-generator' },
+    })
+  })
+
+  it('refuses a project on any other tab, as a studio refusal', async () => {
+    const response = await POST(
+      request({ ...EXPORTED, studio: { tab: 'speakers', projectId: 'vp-1' } }),
+    )
+    expect(response.status).toBe(400)
+    expect(await response.json()).toEqual({
+      error: 'Those details cannot be saved. Check the studio tab.',
+    })
+    expect(h.projectGuard).not.toHaveBeenCalled()
+    expect(h.move).not.toHaveBeenCalled()
+    expect(h.discard).toHaveBeenCalledWith(VIDEO_URL, 'org-A')
+    expect(h.discard).toHaveBeenCalledWith(POSTER_URL, 'org-A')
+  })
+})
+
 describe('a GIF or a video through the move route (#1167)', () => {
   const GIF_URL = URL_OK.replace('logo-X1.png', 'wave-X1.gif')
   const VIDEO_URL = URL_OK.replace('logo-X1.png', 'clip-X1.mp4')
@@ -747,7 +815,7 @@ describe('a GIF or a video through the move route (#1167)', () => {
     expect(h.discard).toHaveBeenCalledWith(POSTER_URL, 'org-A')
   })
 
-  it('never marks a GIF or a video as a studio save', async () => {
+  it('never marks a GIF as a studio save, nor a video from any tab but the meme generator', async () => {
     h.move.mockResolvedValue(POSTER)
     await POST(request({ ...GIF, studio: { tab: 'speakers' } }))
     await POST(request({ ...VIDEO, studio: { tab: 'speakers' } }))

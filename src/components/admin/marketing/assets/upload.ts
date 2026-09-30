@@ -68,6 +68,11 @@ export interface GifUploadOptions {
 export interface VideoUploadOptions {
   kind: 'video'
   poster: Blob
+  /**
+   * Set by "Save to gallery" on an export (#1182): the meme generator, and
+   * the saved project the video came from, when it has one.
+   */
+  studio?: { tab: 'meme-generator'; projectId?: string }
 }
 
 /** What "Save to gallery" in the studio adds: the tab it saved from (§4.2). */
@@ -149,7 +154,13 @@ export function blobAssetUploader(orgId: string): AssetUploader {
     }
     // The poster travels as its URL; the move checks it like any upload.
     const sent =
-      options?.kind === 'video' ? { kind: 'video', posterUrl } : options
+      options?.kind === 'video'
+        ? {
+            kind: 'video',
+            posterUrl,
+            ...(options.studio ? { studio: options.studio } : {}),
+          }
+        : options
     let response: Response
     try {
       response = await fetch('/api/admin/marketing-assets', {
