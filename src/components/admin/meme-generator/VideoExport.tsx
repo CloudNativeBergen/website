@@ -71,26 +71,41 @@ const LOAD_FAILED_MESSAGE =
 const POSTER_FAILED = 'The first frame could not be encoded as an image.'
 
 /**
- * The poster: frame 0 repainted onto the export's canvas (which the export
- * left on its last frame) and encoded at the canvas's full 1080 px — taken
- * THE MOMENT the export ends, with the fonts and images it was made with,
- * never later, when a font that arrived since would draw the frame afresh
- * and the poster would not match the video's first frame.
+ * The poster is frame 0 AS THE ENCODER TOOK IT: the canvas is copied by the
+ * very paint the export loop made for that frame, before the next frame is
+ * drawn — never repainted afterwards, when a font that arrived during the
+ * export would draw the text afresh and the poster would not match the
+ * video's first frame. A second, higher-bitrate pass paints frame 0 again;
+ * the last pass is the file, so its copy wins.
  */
-function posterOf(job: ExportJob): () => Promise<Blob> {
-  const poster = new Promise<Blob>((resolve, reject) => {
-    if (typeof job.canvas.toBlob !== 'function')
-      return reject(new Error(POSTER_FAILED))
-    job.paint(0)
-    job.canvas.toBlob(
-      (blob) => (blob ? resolve(blob) : reject(new Error(POSTER_FAILED))),
-      'image/jpeg',
-      0.92,
-    )
-  })
-  // Failure is reported where the poster is asked for; not before.
-  poster.catch(() => {})
-  return () => poster
+function withPoster(job: ExportJob): {
+  job: ExportJob
+  poster: () => Promise<Blob>
+} {
+  let latest: Promise<Blob> = Promise.reject(new Error(POSTER_FAILED))
+  latest.catch(() => {})
+  return {
+    job: {
+      ...job,
+      paint: (frame) => {
+        job.paint(frame)
+        if (frame !== 0) return
+        latest = new Promise<Blob>((resolve, reject) => {
+          if (typeof job.canvas.toBlob !== 'function')
+            return reject(new Error(POSTER_FAILED))
+          // A copy of the bitmap is taken now; only the encoding is deferred.
+          job.canvas.toBlob(
+            (blob) => (blob ? resolve(blob) : reject(new Error(POSTER_FAILED))),
+            'image/jpeg',
+            0.92,
+          )
+        })
+        // Failure is reported where the poster is asked for; not before.
+        latest.catch(() => {})
+      },
+    },
+    poster: () => latest,
+  }
 }
 
 const megabytes = (bytes: number) => `${(bytes / 1_000_000).toFixed(1)} MB`
@@ -307,7 +322,7 @@ export function VideoExport({
     const musicAtStart = music
     setStatus({ kind: 'running', progress: { phase: 'checking' } })
     try {
-      const job = prepare()
+      const { job, poster } = withPoster(prepare())
       const result = await exportVideo({
         backend: encoder,
         job,
@@ -320,7 +335,7 @@ export function VideoExport({
       setFile({
         url: URL.createObjectURL(result.blob),
         blob: result.blob,
-        poster: posterOf(job),
+        poster,
         bytes: result.blob.size,
         seconds: job.frameCount / FPS,
         audio: result.audio,

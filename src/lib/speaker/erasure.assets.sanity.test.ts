@@ -1293,6 +1293,29 @@ describe('speaker erasure removes their images everywhere (#1162)', () => {
         expect(result.verification?.residual.linkedFiles).toBe(0)
       })
 
+      it('deletes the MP4 of a video found by its poster alone, never leaving it stored', async () => {
+        // The poster IS Ada's card (the same bytes, so the same asset).
+        const SHARED_MP4 = 'file-sharedposter-mp4'
+        h.dataset.push(
+          { _id: SHARED_MP4, _type: 'sanity.fileAsset' },
+          {
+            ...exportedVideo('asset-shared', 'vp-gone', SHARED_MP4, ADA_CARD),
+            sources: [],
+          },
+        )
+        const result = await eraseSpeakerInPlace({
+          speakerId: ADA,
+          actor: 'test',
+        })
+        expect(result.err).toBeNull()
+        expect(doc('asset-shared')).toBeUndefined()
+        expect(doc(SHARED_MP4)).toBeUndefined()
+        expect(doc(ADA).erasedFileIds).toEqual(
+          expect.arrayContaining([SHARED_MP4]),
+        )
+        expect(result.verification?.clean).toBe(true)
+      })
+
       it('ignores a copied subject while the gallery entry lives and says otherwise', async () => {
         // Saved while asset-bob was (wrongly) about Ada; corrected since.
         h.dataset.push(

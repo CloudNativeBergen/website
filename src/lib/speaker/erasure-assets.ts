@@ -717,6 +717,7 @@ export async function fetchSpeakerAssetInputs(
   const known = new Set(fileIds)
   const holderIds = new Set(fileHolders.map((d) => d._id))
   const projectsSeen = new Set<string>()
+  const expanded = new Set<string>()
   const addHolders = (docs: Doc[]) => {
     for (const d of docs) {
       if (holderIds.has(d._id)) continue
@@ -756,12 +757,17 @@ export async function fetchSpeakerAssetInputs(
         opts,
       ),
     ])
-    const exported = [...(throughProjects ?? []), ...(byLineage ?? [])].filter(
-      (d) => !holderIds.has(d._id),
-    )
     // The exported videos themselves are holders even with no file stored yet.
-    addHolders(exported)
-    const exportFileIds = linkedFileIds(exported).filter((id) => !known.has(id))
+    addHolders([...(throughProjects ?? []), ...(byLineage ?? [])])
+    // EVERY gallery entry among the holders gives up EVERY file it holds —
+    // an entry found by its poster alone still has an MP4 that shows the
+    // person, and the entry is deleted either way, which would leave that
+    // file stored and reachable on the CDN. Each entry is expanded once.
+    const entries = fileHolders.filter(
+      (d) => d._type === 'marketingAsset' && !expanded.has(d._id),
+    )
+    entries.forEach((d) => expanded.add(d._id))
+    const exportFileIds = linkedFileIds(entries).filter((id) => !known.has(id))
     if (exportFileIds.length === 0) break
     exportFileIds.forEach((id) => known.add(id))
     fileIds.push(...exportFileIds)

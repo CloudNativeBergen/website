@@ -158,11 +158,9 @@ describe('Export MP4', () => {
     expect(added).toEqual(Array.from({ length: 180 }, (_, n) => n))
     // Each frame drawn at its scene's own time: frame 100 is 0.333 s into
     // scene 2.
-    // …then frame 0 once more, for the poster (#1182), the moment it ends.
     const times = drawDesign.mock.calls.map(([, , , time]) => time)
-    expect(times).toHaveLength(181)
+    expect(times).toHaveLength(180)
     expect(times[100]).toBeCloseTo(100 / 30 - 3, 10)
-    expect(times[180]).toBe(0)
     expect(status()).toHaveTextContent('Your video is ready.')
   })
 
@@ -800,30 +798,52 @@ describe('Save an export to the gallery (#1182)', () => {
     const { gallery, ui } = withGallery(
       <MemeGenerator encoder={encoder} projects={fakeProjects()} />,
     )
+    // The export's paint order, with the canvas copied for the poster right
+    // after frame 0 was painted, before frame 1: the very bitmap the
+    // encoder took, never a repaint.
+    type Event = { kind: 'paint'; ctx: unknown; time: number } | 'copy'
+    const events: Event[] = []
+    drawDesign.mockImplementation((ctx, _d, _a, time) =>
+      events.push({ kind: 'paint', ctx, time }),
+    )
+    toBlob.mockImplementation(function (this: HTMLCanvasElement, cb, type) {
+      events.push('copy')
+      cb(new Blob(['poster'], { type }))
+    })
     render(ui)
     fireEvent.click(screen.getByRole('button', { name: 'Video' }))
     await exportOnce()
-    // Taken the moment the export ended: after its last frame, frame 0 is
-    // painted again onto the export's own canvas and encoded, before any
-    // font that arrives later could draw it differently.
-    expect(toBlob).toHaveBeenCalledTimes(1)
     expect(toBlob.mock.calls[0].slice(1)).toEqual(['image/jpeg', 0.92])
     const canvas = toBlob.mock.contexts[0] as HTMLCanvasElement
     expect(canvas.width).toBe(1080)
-    const last = drawDesign.mock.lastCall!
-    expect(last[0]).toBe(contexts.get(canvas))
-    expect(last[3]).toBe(0)
-    const beforeLast = drawDesign.mock.calls.at(-2)!
-    expect(beforeLast[3]).toBeCloseTo(89 / 30, 10)
+    // The export canvas's own paints (the preview paints on another context)
+    // and the copies, in order: one copy per paint of frame 0 (the support
+    // probe paints it too), each right after that paint; the pass that made
+    // the file painted it last, so its copy is the poster.
+    const trail = events
+      .filter((e) => e === 'copy' || e.ctx === contexts.get(canvas))
+      .map((e) => (e === 'copy' ? 'copy' : `paint:${e.time}`))
+    const zeros = trail.filter((e) => e === 'paint:0').length
+    expect(zeros).toBeGreaterThanOrEqual(1)
+    expect(toBlob).toHaveBeenCalledTimes(zeros)
+    expect(trail[0]).toBe('paint:0')
+    expect(trail[1]).toBe('copy')
+    expect(trail.lastIndexOf('copy')).toBe(trail.lastIndexOf('paint:0') + 1)
+    expect(trail.at(-1)).toBe(`paint:${89 / 30}`)
     drawDesign.mockClear()
 
+    // A font arriving after the export changes nothing already taken.
+    act(() => lateFace())
     fireEvent.click(saveButton()!)
     const [video] = vi.mocked(gallery.saveVideo).mock.calls[0]
     const poster = await video.poster()
     expect(poster.type).toBe('image/jpeg')
-    // Nothing is painted again when it is asked for.
-    expect(drawDesign).not.toHaveBeenCalled()
-    expect(toBlob).toHaveBeenCalledTimes(1)
+    // The preview redraws with the late font; the export canvas is never
+    // painted again, and no further copy is taken.
+    expect(toBlob).toHaveBeenCalledTimes(zeros)
+    expect(
+      drawDesign.mock.calls.some(([ctx]) => ctx === contexts.get(canvas)),
+    ).toBe(false)
   })
 
   it('says so when the poster cannot be encoded', async () => {
