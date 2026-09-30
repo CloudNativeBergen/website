@@ -536,11 +536,13 @@ describe('a studio save’s origin (#1164)', () => {
         image: { _type: 'image', asset: ref('image-wide-1200x628-png') },
       }),
       asset('upload', 'org-a', { source: 'upload', subject: weak('sp-ada') }),
-      // An upload carrying a stray studio object is still an upload.
+      // An upload carrying a stray studio object is still an upload — and
+      // its Format never exempts it from the soft warning.
       asset('odd', 'org-a', {
         source: 'upload',
-        studio: { tab: 'speakers' },
+        studio: { tab: 'speakers', format: 'landscape' },
         subject: weak('sp-ada'),
+        image: { _type: 'image', asset: ref('image-wide-1200x628-png') },
       }),
       asset('old', 'org-a'),
     ]
@@ -553,6 +555,7 @@ describe('a studio save’s origin (#1164)', () => {
     )
     expect(soft.wide).toBe(false)
     expect(soft['wide-upload']).toBe(true)
+    expect(soft.odd).toBe(true)
   })
 
   it('carries the tab, and the subject when it is that tab’s kind', async () => {

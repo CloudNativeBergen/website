@@ -291,8 +291,9 @@ export function SpeakerCard({
             speaker={speaker}
             className="mb-[3cqw] size-[26cqw] rounded-[2.5cqw]"
           />
-          {/* The name and the talk keep their lines; a long job title is
-              the one thing that gives way, so the QR never leaves the frame. */}
+          {/* The name and the talk keep their lines; the job title is the
+              one thing that gives way — entirely, once the event name and
+              the name both wrap — so the QR never leaves the frame. */}
           <main className="flex min-h-0 w-full flex-1 flex-col justify-center px-[1cqw]">
             {speakerName('line-clamp-2 shrink-0 text-[5.5cqw]')}
             {jobTitle('mt-[1cqw] line-clamp-1 text-[4cqw]')}
@@ -341,7 +342,7 @@ export function SpeakerCard({
           <Photo speaker={speaker} className="size-[25cqw] rounded-[2cqw]" />
           <QrBadge url={qrCodeUrl} alt={QR_ALT} size={25} />
         </section>
-        {/* As in portrait: a long job title gives way, nothing else. */}
+        {/* As in portrait: the job title gives way, nothing else. */}
         <main className="flex min-h-0 flex-1 flex-col justify-center px-[1cqw]">
           {speakerName('line-clamp-2 shrink-0 text-[5.5cqw]')}
           {jobTitle('mt-[1cqw] line-clamp-1 text-[4cqw]')}

@@ -915,6 +915,25 @@ describe('a GIF or a video through the move route (#1167)', () => {
     expect(h.discard).toHaveBeenCalledWith(POSTER_URL, 'org-A')
   })
 
+  it('does not exempt a GIF at a Format’s pixels from the soft warning: it is an upload (#1247)', async () => {
+    h.move.mockResolvedValue({
+      ok: true,
+      asset: {
+        _id: 'image-wave-1200x628-gif',
+        url: 'https://cdn/wave.gif',
+        width: 1200,
+        height: 628,
+        created: true,
+      },
+    })
+    const response = await POST(
+      request({ ...GIF, studio: { tab: 'speakers', format: 'landscape' } }),
+    )
+    expect(response.status).toBe(200)
+    expect((await response.json()).softOnSocial).toBe(true)
+    expect(h.create.mock.calls[0][0]).not.toHaveProperty('studio')
+  })
+
   it('never marks a GIF as a studio save, nor a video from any tab but the meme generator', async () => {
     h.move.mockResolvedValue(POSTER)
     await POST(request({ ...GIF, studio: { tab: 'speakers' } }))
