@@ -67,7 +67,11 @@ export async function resolveAssetDetailsForCurrentOrg(
 /** One background an exported video showed, as the entry records it. */
 export interface ResolvedExportSource {
   fileId: string
-  /** The gallery asset it came from, if one was named or is known. */
+  /**
+   * The gallery asset it came from — named only where the file is PROVEN
+   * that asset's: its image now, or a file the proven project holds under
+   * it. A bare file carries neither this nor a subject.
+   */
   galleryAssetId?: string
   /**
    * Who that gallery asset said it showed, copied as a saved video copies
@@ -84,19 +88,24 @@ export interface ResolvedExportSource {
  *  - the project it was exported from, proven THIS organization's by the
  *    tenancy guard before anything of it is read — the refusal never says
  *    whether a foreign id exists — and then the backgrounds it holds now,
- *    with the subject each carries;
+ *    with the entry and subject each carries (proven when it was saved);
  *  - the backgrounds the editor knew at export time: a gallery asset id,
- *    resolved to its file and subject by an organization-scoped read where
- *    a foreign or deleted one is simply absent, never refused; or a bare
- *    file id, taken as given.
+ *    resolved by an organization-scoped read where a foreign or deleted one
+ *    is simply absent, never refused, and a file id.
  *
- * A bare id is TAKEN, not proven, on purpose. The lineage is inert: plain
- * strings that only ever make THIS video deletable when an erasure deletes
- * a file they name. Naming a file that is not ours costs the namer their
- * own video and nobody else anything, so proving it would guard nothing —
- * while refusing it loses the case the lineage exists for: a photo the
- * project has since dropped, whose gallery entry is gone too, still shown
- * by the export. The shape alone is checked, by the schema.
+ * A SUBJECT IS COPIED ONLY ONTO A FILE PROVEN TO BE THAT ASSET'S — the
+ * asset's image now, or a file the proven project holds under that asset.
+ * The copy is what links the FILE to a person at erasure, and a file linked
+ * to a person is deleted everywhere it is held, in every tenant; a subject
+ * copied onto a file an organizer merely named would let them have any
+ * file, anyone's, deleted at the next erasure of their own speaker. So a
+ * file that cannot be proven the asset's is recorded BARE: no asset, no
+ * subject. Bare, it is inert — it only ever makes THIS video deletable
+ * when an erasure deletes that file for reasons of its own — so it is
+ * taken as given; the schema checks its shape. What that leaves out: an
+ * unsaved video whose entry's image was swapped in Studio between the pick
+ * and this save records the old file bare, and nothing links it to the
+ * person but the entry's subject, which the swap detached.
  *
  * The union, so an edit or a save that follows the export hides nothing.
  * Never a gallery asset that is not an image: a track is heard, not shown.
@@ -106,17 +115,27 @@ export async function resolveVideoLineage(
   origin: { projectId?: string; sources?: ExportSourceInput[] },
 ): Promise<{ sources: ResolvedExportSource[] }> {
   const found: ResolvedExportSource[] = []
+  /** Files the proven project holds, by file and the entry it holds it under. */
+  const heldUnder = new Map<string, { subjectId: string | null }>()
+  const under = (fileId: string, galleryAssetId: string) =>
+    `${fileId}\u0000${galleryAssetId}`
   if (origin.projectId) {
     await requireDocumentInCurrentOrg(origin.projectId, 'videoProject')
     const stored = await readVideoProjectFiles(orgId, origin.projectId)
-    for (const image of stored?.images ?? [])
+    for (const image of stored?.images ?? []) {
+      if (image.galleryAssetId)
+        heldUnder.set(under(image.fileId, image.galleryAssetId), {
+          subjectId: image.subjectId,
+        })
       found.push({
         fileId: image.fileId,
         ...(image.galleryAssetId
           ? { galleryAssetId: image.galleryAssetId }
           : {}),
+        // Proven when the project was saved, entry or no entry.
         ...(image.subjectId ? { subjectId: image.subjectId } : {}),
       })
+    }
   }
   const sources = origin.sources ?? []
   const galleryIds = [
@@ -131,22 +150,20 @@ export async function resolveVideoLineage(
   )
   for (const s of sources) {
     const row = s.galleryAssetId ? gallery.get(s.galleryAssetId) : undefined
-    if (row)
-      // The file the export SHOWED: the one the editor captured, where it
-      // knew one — the entry's image may have been replaced in Studio
-      // since, and the export still shows the old one.
+    const fileId = s.fileId ?? row?.fileId ?? null
+    if (!fileId) continue
+    const proven =
+      s.galleryAssetId &&
+      (row?.fileId === fileId
+        ? { subjectId: row.subjectId }
+        : heldUnder.get(under(fileId, s.galleryAssetId)))
+    if (proven && s.galleryAssetId)
       found.push({
-        fileId: s.fileId ?? (row.fileId as string),
-        galleryAssetId: row._id,
-        ...(row.subjectId ? { subjectId: row.subjectId } : {}),
+        fileId,
+        galleryAssetId: s.galleryAssetId,
+        ...(proven.subjectId ? { subjectId: proven.subjectId } : {}),
       })
-    else if (s.fileId)
-      // The entry is gone or was never named: the file, and the entry it
-      // was picked from, as the editor knew them.
-      found.push({
-        fileId: s.fileId,
-        ...(s.galleryAssetId ? { galleryAssetId: s.galleryAssetId } : {}),
-      })
+    else found.push({ fileId })
   }
   // One entry per file and gallery asset; the first mention's subject wins.
   const seen = new Set<string>()

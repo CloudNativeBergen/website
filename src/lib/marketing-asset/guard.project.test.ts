@@ -126,18 +126,45 @@ describe('resolveVideoLineage', () => {
     ])
   })
 
-  it('keeps the file the export showed when the entry’s image was replaced since', async () => {
+  it('keeps the file the export showed when the entry’s image was replaced since — bare, unless the project held it under that entry', async () => {
+    // Unsaved: nothing proves the old file was ever the entry's. Bare.
     await expect(
       resolveVideoLineage('org-a', {
         sources: [{ fileId: 'image-venue-old', galleryAssetId: 'asset-venue' }],
       }),
+    ).resolves.toEqual({ sources: [{ fileId: 'image-venue-old' }] })
+    // The project holds it under that entry: proven when it was saved.
+    await expect(
+      resolveVideoLineage('org-a', {
+        projectId: 'vp-1',
+        sources: [{ fileId: 'image-hall', galleryAssetId: 'asset-hall' }],
+      }),
     ).resolves.toEqual({
       sources: [
-        {
-          fileId: 'image-venue-old',
-          galleryAssetId: 'asset-venue',
-          subjectId: 'talk-1',
-        },
+        { fileId: 'image-hall', galleryAssetId: 'asset-hall' },
+        { fileId: 'image-ada', subjectId: 'sp-ada' },
+      ],
+    })
+  })
+
+  it('never copies a subject onto a file an organizer merely paired with their entry', async () => {
+    // Their own entry, someone else's file: the subject would link that
+    // file to a person, and the next erasure would delete it everywhere.
+    await expect(
+      resolveVideoLineage('org-a', {
+        projectId: 'vp-1',
+        sources: [
+          {
+            fileId: 'image-someone-elses-1080x1080-png',
+            galleryAssetId: 'asset-venue',
+          },
+        ],
+      }),
+    ).resolves.toEqual({
+      sources: [
+        { fileId: 'image-hall', galleryAssetId: 'asset-hall' },
+        { fileId: 'image-ada', subjectId: 'sp-ada' },
+        { fileId: 'image-someone-elses-1080x1080-png' },
       ],
     })
   })
@@ -147,8 +174,8 @@ describe('resolveVideoLineage', () => {
       resolveVideoLineage('org-a', {
         projectId: 'vp-1',
         sources: [
-          // The entry is gone: absent from the gallery read, so the file
-          // id it was saved with is what is left of the photo.
+          // The entry is gone: absent from the gallery read. Bare: nothing
+          // proves the file was its, so no subject is copied.
           { fileId: 'image-dropped', galleryAssetId: 'asset-gone' },
           { fileId: 'image-ada' },
         ],
@@ -157,8 +184,7 @@ describe('resolveVideoLineage', () => {
       sources: [
         { fileId: 'image-hall', galleryAssetId: 'asset-hall' },
         { fileId: 'image-ada', subjectId: 'sp-ada' },
-        // The entry as the editor named it, though gone: what is left.
-        { fileId: 'image-dropped', galleryAssetId: 'asset-gone' },
+        { fileId: 'image-dropped' },
       ],
     })
   })

@@ -215,8 +215,8 @@ export interface ProjectFileSubject {
   subjectId: string | null
   /** Its gallery asset still exists: then the gallery's subject decides. */
   live: boolean | null
-  /** That asset's subject NOW, where it still exists. */
-  liveSubjectId?: string | null
+  /** That asset's subjects NOW, one per version, where it still exists. */
+  liveSubjectIds?: string[]
 }
 
 /**
@@ -234,7 +234,7 @@ export function projectSubjectFileIds(
   const subjects = new Set(subjectIds)
   const linked = (f: ProjectFileSubject) =>
     f.live
-      ? !!f.liveSubjectId && subjects.has(f.liveSubjectId)
+      ? (f.liveSubjectIds ?? []).some((id) => subjects.has(id))
       : !!f.subjectId && subjects.has(f.subjectId)
   return [
     ...new Set(
@@ -588,6 +588,19 @@ export async function fetchSpeakerAssetInputs(
     { subjectIds },
     opts,
   )
+  // The gallery entries ABOUT the subject, in any version: a file held
+  // under one of them — a saved video's background or track, an export's
+  // source — is read whatever subject was copied with it, so the entry's
+  // subject NOW decides (a version naming the person counts), and the copy
+  // only once the entry is gone. Never a deref: `->` follows the published
+  // document alone, blind to a draft or release copy that names the person.
+  const linkedAssetIds = [
+    ...new Set(
+      (subjectDocs ?? [])
+        .filter((d) => d._type === 'marketingAsset')
+        .map((d) => publishedId(d._id)),
+    ),
+  ]
   type Held = {
     fileId: string | null
     subjectId: string | null
@@ -598,14 +611,14 @@ export async function fetchSpeakerAssetInputs(
       // groq-global: a saved video (#1181) keeps a gallery image's subject
       // with the file, so the file is found after its gallery asset is
       // deleted — in every tenant, because the right is the person's.
-      groq`*[_type == "videoProject" && count(scenes[background.image.subject._ref in $subjectIds]) > 0].scenes[background.image.subject._ref in $subjectIds]{ "fileId": background.image.asset._ref, "subjectId": background.image.subject._ref, "assetId": background.image.galleryAsset._ref }`,
-      { subjectIds },
+      groq`*[_type == "videoProject" && count(scenes[background.image.subject._ref in $subjectIds || background.image.galleryAsset._ref in $linkedAssetIds]) > 0].scenes[background.image.subject._ref in $subjectIds || background.image.galleryAsset._ref in $linkedAssetIds]{ "fileId": background.image.asset._ref, "subjectId": background.image.subject._ref, "assetId": background.image.galleryAsset._ref }`,
+      { subjectIds, linkedAssetIds },
       opts,
     ),
     client.fetch<Held[]>(
       // groq-global: the same, for a saved video's music track.
-      groq`*[_type == "videoProject" && track.file.subject._ref in $subjectIds]{ "fileId": track.file.asset._ref, "subjectId": track.file.subject._ref, "assetId": track.file.galleryAsset._ref }`,
-      { subjectIds },
+      groq`*[_type == "videoProject" && (track.file.subject._ref in $subjectIds || track.file.galleryAsset._ref in $linkedAssetIds)]{ "fileId": track.file.asset._ref, "subjectId": track.file.subject._ref, "assetId": track.file.galleryAsset._ref }`,
+      { subjectIds, linkedAssetIds },
       opts,
     ),
     client.fetch<Held[]>(
@@ -613,8 +626,8 @@ export async function fetchSpeakerAssetInputs(
       // file it showed, who the file's gallery asset said it showed — so
       // the file is found after that asset is deleted and the project has
       // moved on. In every tenant, because the right is the person's.
-      groq`*[_type == "marketingAsset" && count(sources[subject._ref in $subjectIds]) > 0].sources[subject._ref in $subjectIds]{ fileId, "subjectId": subject._ref, "assetId": galleryAsset._ref }`,
-      { subjectIds },
+      groq`*[_type == "marketingAsset" && count(sources[subject._ref in $subjectIds || galleryAsset._ref in $linkedAssetIds]) > 0].sources[subject._ref in $subjectIds || galleryAsset._ref in $linkedAssetIds]{ fileId, "subjectId": subject._ref, "assetId": galleryAsset._ref }`,
+      { subjectIds, linkedAssetIds },
       opts,
     ),
   ])
@@ -628,9 +641,9 @@ export async function fetchSpeakerAssetInputs(
   ]
   // Live in ANY version — published, a Studio draft or a Content Release
   // copy: while one exists, the gallery's own subject NOW decides, for the
-  // held file too. A version's subject stands in where it differs; any
-  // version naming the person links the file.
-  const liveAssets = new Map<string, string | null>()
+  // held file too. Every version's subject counts: one naming the person
+  // links the file, whatever another version says.
+  const liveAssets = new Map<string, string[]>()
   if (assetIds.length > 0) {
     const rows =
       (await client.fetch<{ _id: string; subjectId: string | null }[]>(
@@ -643,16 +656,17 @@ export async function fetchSpeakerAssetInputs(
       )) ?? []
     for (const row of rows) {
       const id = row._id.split('.').pop() as string
-      const known = liveAssets.get(id)
-      if (known === undefined || (!known && row.subjectId))
-        liveAssets.set(id, row.subjectId)
+      const known = liveAssets.get(id) ?? []
+      if (row.subjectId && !known.includes(row.subjectId))
+        known.push(row.subjectId)
+      liveAssets.set(id, known)
     }
   }
   const projectFiles: ProjectFileSubject[] = held.map((f) => ({
     fileId: f.fileId,
     subjectId: f.subjectId,
     live: !!f.assetId && liveAssets.has(f.assetId),
-    liveSubjectId: f.assetId ? (liveAssets.get(f.assetId) ?? null) : null,
+    liveSubjectIds: f.assetId ? (liveAssets.get(f.assetId) ?? []) : [],
   }))
   const fileIds = [
     ...new Set([
@@ -694,55 +708,64 @@ export async function fetchSpeakerAssetInputs(
   // export, still takes its exported videos.
   // KNOWN HOLE: a video that was only downloaded, or one made from a project
   // deleted since, records nothing that leads here and is out of reach.
-  const projectIds = [
-    ...new Set(
-      fileHolders
-        .filter((d) => d._type === 'videoProject')
-        .map((d) => publishedId(d._id)),
-    ),
-  ]
-  // Two ways to a gallery video: through the project it records, and by
-  // its own lineage — the files the project held when the video was saved
-  // (`sources[].fileId`, plain ids). The lineage holds up once the project has
-  // been edited to drop the photo, or deleted, where the project no longer
-  // leads here.
-  const [throughProjects, byLineage] = await Promise.all([
-    projectIds.length === 0
-      ? []
-      : client.fetch<Doc[]>(
-          // groq-global: the gallery videos made from the projects found
-          // above, whatever tenant they are in — the right is the person's.
-          groq`*[_type == "marketingAsset" && project._ref in $projectIds]`,
-          { projectIds },
-          opts,
-        ),
-    client.fetch<Doc[]>(
-      // groq-global: the gallery videos whose recorded lineage names a
-      // linked file, in every tenant — the right is the person's.
-      groq`*[_type == "marketingAsset" && count(sources[fileId in $fileIds]) > 0]`,
-      { fileIds },
-      opts,
-    ),
-  ])
-  const exportedIds = new Set<string>()
-  const exported: Doc[] = []
-  for (const d of [...(throughProjects ?? []), ...(byLineage ?? [])]) {
-    if (exportedIds.has(d._id)) continue
-    exportedIds.add(d._id)
-    exported.push(d)
-  }
+  // TO A FIXED POINT: an export's poster can itself become a background of
+  // another project (Studio's image picker takes any image), and that
+  // project's exports show it in turn. Each pass takes the projects among
+  // the holders found so far, the exports made from them or naming a
+  // linked file, and every file those exports hold; it ends when a pass
+  // finds no new file. Bounded, since every pass adds a file or stops.
   const known = new Set(fileIds)
-  const exportFileIds = linkedFileIds(exported).filter((id) => !known.has(id))
-  fileIds.push(...exportFileIds)
   const holderIds = new Set(fileHolders.map((d) => d._id))
-  // The exported videos themselves are holders even with no file stored yet.
-  for (const d of [
-    ...exported,
-    ...(exportFileIds.length > 0 ? await readHolders(exportFileIds) : []),
-  ]) {
-    if (holderIds.has(d._id)) continue
-    holderIds.add(d._id)
-    fileHolders.push(d)
+  const projectsSeen = new Set<string>()
+  const addHolders = (docs: Doc[]) => {
+    for (const d of docs) {
+      if (holderIds.has(d._id)) continue
+      holderIds.add(d._id)
+      fileHolders.push(d)
+    }
+  }
+  for (;;) {
+    const projectIds = [
+      ...new Set(
+        fileHolders
+          .filter((d) => d._type === 'videoProject')
+          .map((d) => publishedId(d._id))
+          .filter((id) => !projectsSeen.has(id)),
+      ),
+    ]
+    projectIds.forEach((id) => projectsSeen.add(id))
+    // Two ways to a gallery video: through the project it records, and by
+    // its own lineage — the files it showed (`sources[].fileId`, plain
+    // ids). The lineage holds up once the project has been edited to drop
+    // the photo, or deleted, where the project no longer leads here.
+    const [throughProjects, byLineage] = await Promise.all([
+      projectIds.length === 0
+        ? []
+        : client.fetch<Doc[]>(
+            // groq-global: the gallery videos made from the projects found
+            // above, whatever tenant they are in — the right is the person's.
+            groq`*[_type == "marketingAsset" && project._ref in $projectIds]`,
+            { projectIds },
+            opts,
+          ),
+      client.fetch<Doc[]>(
+        // groq-global: the gallery videos whose recorded lineage names a
+        // linked file, in every tenant — the right is the person's.
+        groq`*[_type == "marketingAsset" && count(sources[fileId in $fileIds]) > 0]`,
+        { fileIds },
+        opts,
+      ),
+    ])
+    const exported = [...(throughProjects ?? []), ...(byLineage ?? [])].filter(
+      (d) => !holderIds.has(d._id),
+    )
+    // The exported videos themselves are holders even with no file stored yet.
+    addHolders(exported)
+    const exportFileIds = linkedFileIds(exported).filter((id) => !known.has(id))
+    if (exportFileIds.length === 0) break
+    exportFileIds.forEach((id) => known.add(id))
+    fileIds.push(...exportFileIds)
+    addHolders(await readHolders(exportFileIds))
   }
   const postIds = [
     ...new Set(

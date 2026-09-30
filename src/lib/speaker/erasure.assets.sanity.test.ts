@@ -742,7 +742,15 @@ describe('speaker erasure removes their images everywhere (#1162)', () => {
               image: {
                 ...image(file),
                 name: 'card',
-                galleryAsset: weak('asset-ada'),
+                // Each card under its own entry; an entry's subject NOW
+                // links the files held under it.
+                galleryAsset: weak(
+                  file === BOB_CARD
+                    ? 'asset-bob'
+                    : file === TALK_CARD
+                      ? 'asset-talk'
+                      : 'asset-ada',
+                ),
               },
             }
           : {}),
@@ -774,7 +782,7 @@ describe('speaker erasure removes their images everywhere (#1162)', () => {
           image: {
             ...image(BOB_CARD),
             name: 'card',
-            galleryAsset: weak('asset-ada'),
+            galleryAsset: weak('asset-bob'),
           },
         },
         { color: '#778899' },
@@ -1158,6 +1166,131 @@ describe('speaker erasure removes their images everywhere (#1162)', () => {
         expect(doc(ADA_CARD)).toBeUndefined()
         expect(doc(NEW_ADA)).toBeUndefined()
         expect(result.verification?.clean).toBe(true)
+      })
+
+      it('finds an older image by the entry’s subject NOW, though the export copied another', async () => {
+        // Exported while asset-ada (wrongly) said Bob; corrected to Ada
+        // since, and its image swapped. The export still shows the old one.
+        // No project holds the old card any more: the export's own record
+        // is the only path to it.
+        h.dataset = h.dataset.filter(
+          (d) => !['vp-export', 'asset-export'].includes(d._id),
+        )
+        const NEW_ADA = 'image-adanew2-1200x630-png'
+        h.dataset.push({ _id: NEW_ADA, _type: 'sanity.imageAsset' })
+        for (const id of [
+          'asset-ada',
+          'drafts.asset-ada',
+          'versions.rlaunch.asset-ada',
+        ]) {
+          const i = h.dataset.findIndex((d) => d._id === id)
+          h.dataset[i] = { ...h.dataset[i], image: image(NEW_ADA) }
+        }
+        h.dataset = h.dataset.filter(
+          (d) =>
+            !['post-1', 'versions.rlaunch.post-1', 'var-1'].includes(d._id),
+        )
+        h.dataset.push(
+          lineageVideo('asset-copied-bob', 'vp-gone', [
+            {
+              fileId: ADA_CARD,
+              galleryAsset: weak('asset-ada'),
+              subject: weak(BOB),
+            },
+          ]),
+        )
+        const result = await eraseSpeakerInPlace({
+          speakerId: ADA,
+          actor: 'test',
+        })
+        expect(result.err).toBeNull()
+        expect(doc('asset-copied-bob')).toBeUndefined()
+        expect(doc(ADA_CARD)).toBeUndefined()
+        expect(result.verification?.clean).toBe(true)
+      })
+
+      it('links a held file when ANY version of its entry names the speaker', async () => {
+        // Published and draft say Bob; a release copy says Ada. All hold
+        // new images; the export shows the old one.
+        const NEW_ONE = 'image-newone-1200x630-png'
+        const NEW_TWO = 'image-newtwo-1200x630-png'
+        h.dataset.push(
+          { _id: NEW_ONE, _type: 'sanity.imageAsset' },
+          { _id: NEW_TWO, _type: 'sanity.imageAsset' },
+        )
+        h.dataset = h.dataset.filter(
+          (d) =>
+            !['post-1', 'versions.rlaunch.post-1', 'var-1'].includes(d._id),
+        )
+        for (const id of ['asset-ada', 'drafts.asset-ada']) {
+          const i = h.dataset.findIndex((d) => d._id === id)
+          h.dataset[i] = {
+            ...h.dataset[i],
+            image: image(NEW_ONE),
+            subject: weak(BOB),
+          }
+        }
+        const rel = h.dataset.findIndex(
+          (d) => d._id === 'versions.rlaunch.asset-ada',
+        )
+        h.dataset[rel] = { ...h.dataset[rel], image: image(NEW_TWO) }
+        h.dataset.push(
+          lineageVideo('asset-versioned', 'vp-gone', [
+            {
+              fileId: ADA_CARD,
+              galleryAsset: weak('asset-ada'),
+              subject: weak(BOB),
+            },
+          ]),
+        )
+        const result = await eraseSpeakerInPlace({
+          speakerId: ADA,
+          actor: 'test',
+        })
+        expect(result.err).toBeNull()
+        expect(doc('asset-versioned')).toBeUndefined()
+        expect(doc(ADA_CARD)).toBeUndefined()
+        expect(result.verification?.clean).toBe(true)
+      })
+
+      it('follows an export’s poster into a second project and its exports, to a fixed point', async () => {
+        // V1's poster was picked as P2's background in Studio; P2 was
+        // exported as V2. Erasing Ada must reach V2 in the same run.
+        const V2_MP4 = 'file-second-mp4'
+        const V2_POSTER = 'image-secondposter-1080x1080-jpg'
+        h.dataset.push(
+          { _id: V2_MP4, _type: 'sanity.fileAsset' },
+          { _id: V2_POSTER, _type: 'sanity.imageAsset' },
+          {
+            ...project('vp-second', EXPORT_POSTER),
+            scenes: [
+              {
+                _key: 's1',
+                _type: 'videoProjectScene',
+                duration: 3,
+                background: {
+                  color: '#000',
+                  image: { ...image(EXPORT_POSTER), name: 'poster' },
+                },
+              },
+            ],
+          },
+          exportedVideo('asset-second', 'vp-second', V2_MP4, V2_POSTER),
+        )
+        const result = await eraseSpeakerInPlace({
+          speakerId: ADA,
+          actor: 'test',
+        })
+        expect(result.err).toBeNull()
+        expect(doc('asset-export')).toBeUndefined()
+        expect(doc('asset-second')).toBeUndefined()
+        expect(doc(V2_MP4)).toBeUndefined()
+        expect(doc(V2_POSTER)).toBeUndefined()
+        expect(
+          (doc('vp-second').scenes as { background: unknown }[])[0].background,
+        ).toEqual({ color: '#000' })
+        expect(result.verification?.clean).toBe(true)
+        expect(result.verification?.residual.linkedFiles).toBe(0)
       })
 
       it('ignores a copied subject while the gallery entry lives and says otherwise', async () => {
