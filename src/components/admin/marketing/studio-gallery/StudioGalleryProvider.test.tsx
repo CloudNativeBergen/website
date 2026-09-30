@@ -10,6 +10,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -392,6 +393,47 @@ describe('Save an exported video to the gallery (#1182)', () => {
     fireEvent.change(within(form).getByLabelText('Alt text'), {
       target: { value: 'Five scenes counting down to the keynote.' },
     })
+
+  it('keeps the video dialog when an image capture that was still running lands', async () => {
+    let finishCapture: (() => void) | null = null
+    mocks.rasterize.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finishCapture = () =>
+            resolve({
+              width: 1024,
+              height: 1024,
+              toBlob: (callback: BlobCallback) =>
+                callback(new Blob(['pixels'], { type: 'image/png' })),
+            })
+        }),
+    )
+    render(
+      <StudioGalleryProvider orgId="org-A" uploader={mocks.uploader}>
+        <StudioTaskProvider>
+          <Card card={SPEAKER_CARD} id="ada-card" />
+        </StudioTaskProvider>
+        <Exported origin={SAVED} />
+      </StudioGalleryProvider>,
+    )
+    sized('ada-card')
+    const [imageButton, videoButton] = screen.getAllByRole('button', {
+      name: 'Save to gallery',
+    })
+    fireEvent.click(imageButton)
+    await waitFor(() => expect(mocks.rasterize).toHaveBeenCalled())
+    fireEvent.click(videoButton)
+    const form = await screen.findByRole('form', {
+      name: 'Save video to gallery',
+    })
+    await act(async () => finishCapture!())
+    // The newer ask stands: the video dialog is still up, with its title.
+    expect(within(form).getByLabelText('Title')).toHaveProperty(
+      'value',
+      SAVED.title,
+    )
+    expect(screen.queryByRole('form', { name: 'Save to gallery' })).toBeNull()
+  })
 
   it('saves the MP4 with its poster, subject and the project it came from', async () => {
     mocks.uploader.mockImplementation(async (_f, _d, _o, onProgress) => {

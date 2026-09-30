@@ -84,10 +84,11 @@ export function StudioGalleryProvider({
         card: StudioCard,
       ) {
         setCapturing(true)
+        const mine = ++captures.current
         try {
           const blob = await capture()
           setCaptured({
-            id: ++captures.current,
+            id: mine,
             blob,
             previewUrl: replacePreview(blob),
             filename,
@@ -97,7 +98,7 @@ export function StudioGalleryProvider({
         } catch (error) {
           console.error('Save to gallery: capture failed', error)
           setCaptured({
-            id: ++captures.current,
+            id: mine,
             blob: null,
             previewUrl: replacePreview(null),
             filename,
@@ -106,8 +107,12 @@ export function StudioGalleryProvider({
           })
         } finally {
           setCapturing(false)
-          setVideoOpen(false)
-          setOpen(true)
+          // A video save that came while the capture ran is the newer ask:
+          // its dialog stays, and this capture is not shown over it.
+          if (captures.current === mine) {
+            setVideoOpen(false)
+            setOpen(true)
+          }
         }
       },
       saveVideo(video: ExportedVideo, origin: VideoOrigin) {

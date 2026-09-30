@@ -22,7 +22,11 @@ import {
   ArrowUturnRightIcon,
 } from '@heroicons/react/24/outline'
 import type { ConferenceLogos } from '../../common/DashboardLayout'
-import { useGallerySave, type ExportedVideo } from '../../common/image-capture'
+import {
+  useGallerySave,
+  type ExportedVideo,
+  type VideoOrigin,
+} from '../../common/image-capture'
 import {
   CANVAS_SIZE,
   BRAND_COLORS,
@@ -1947,12 +1951,14 @@ export function MemeGenerator({
   const gallerySave = useGallerySave()
   const saveVideoToGallery =
     gallerySave && projects
-      ? (video: ExportedVideo) =>
-          gallerySave.saveVideo(video, {
-            title: projectTitle.trim() || UNTITLED,
-            projectId: project?.id ?? null,
-          })
+      ? (video: ExportedVideo, origin: VideoOrigin) =>
+          gallerySave.saveVideo(video, origin)
       : undefined
+  // The export panel captures this at export time (#1182).
+  const exportOrigin: VideoOrigin = {
+    title: projectTitle.trim() || UNTITLED,
+    projectId: project?.id ?? null,
+  }
 
   // An export paints the video as it was when Export was pressed, onto a
   // canvas of its own — frame n at frame n's time, through the same
@@ -2197,6 +2203,7 @@ export function MemeGenerator({
               trackChannels,
             ]}
             onSaveToGallery={saveVideoToGallery}
+            origin={exportOrigin}
           />
         </div>
       </div>

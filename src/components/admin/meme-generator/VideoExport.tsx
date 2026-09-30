@@ -45,6 +45,11 @@ interface ExportedFile {
   trackFailed: boolean
   /** The video it was made from; any other and the file is out of date. */
   revision: readonly unknown[]
+  /**
+   * The project open when it was made (#1182): what a stale file is saved
+   * under, since the editor may have moved on to another project.
+   */
+  origin: VideoOrigin | null
 }
 
 /** Two revisions are the same video when every part is the same object. */
@@ -189,6 +194,7 @@ export function VideoExport({
   revision,
   music = 'none',
   onSaveToGallery,
+  origin,
 }: {
   encoder: EncoderBackend
   /** A snapshot of the video as it is when Export is pressed. */
@@ -212,7 +218,13 @@ export function VideoExport({
    * Offers "Save to gallery" beside Download, where the studio has a gallery
    * to save to (#1182).
    */
-  onSaveToGallery?: (video: ExportedVideo) => void
+  onSaveToGallery?: (video: ExportedVideo, origin: VideoOrigin) => void
+  /**
+   * The project open in the editor now, for a current file. A file made
+   * before the editor moved to another project keeps the origin it was
+   * exported under, so a video is never filed under a project it is not.
+   */
+  origin?: VideoOrigin
 }) {
   // null until asked; 'error' when asking failed and may be tried again.
   const [supported, setSupported] = useState<boolean | 'error' | null>(null)
@@ -260,6 +272,7 @@ export function VideoExport({
     const abort = new AbortController()
     controller.current = abort
     const startedAt = revision
+    const originAtStart = origin ?? null
     const musicAtStart = music
     setStatus({ kind: 'running', progress: { phase: 'checking' } })
     try {
@@ -282,6 +295,7 @@ export function VideoExport({
         audio: result.audio,
         trackFailed: musicAtStart === 'failed',
         revision: startedAt,
+        origin: originAtStart,
       })
       setStatus({ kind: 'done' })
     } catch (error) {
@@ -347,13 +361,15 @@ export function VideoExport({
         {file && onSaveToGallery && (
           <button
             type="button"
-            onClick={() =>
-              !running &&
-              onSaveToGallery({
-                blob: file.blob,
-                poster: file.poster,
-              })
-            }
+            onClick={() => {
+              if (running) return
+              // A current file is the editor's video as it is now, so a
+              // project saved or renamed since the export is its origin. A
+              // stale one is filed under what it was exported from.
+              const under = (stale ? file.origin : origin) ??
+                origin ?? { title: '', projectId: null }
+              onSaveToGallery({ blob: file.blob, poster: file.poster }, under)
+            }}
             // Not `disabled`, like Export: it says why while an export runs.
             aria-disabled={running || undefined}
             aria-describedby={statusId}

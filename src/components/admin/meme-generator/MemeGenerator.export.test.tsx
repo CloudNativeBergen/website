@@ -485,6 +485,46 @@ describe('Save an export to the gallery (#1182)', () => {
     expect(origin).toEqual({ title: 'Launch teaser', projectId: 'vp-1' })
   })
 
+  it('files a stale export under the project it was exported from, not the one open now', async () => {
+    const { encoder } = fakeEncoder()
+    const { gallery, ui } = withGallery(
+      <MemeGenerator
+        encoder={encoder}
+        projects={fakeProjects()}
+        initialProjectId="vp-1"
+      />,
+    )
+    render(ui)
+    await screen.findByDisplayValue('Launch teaser')
+    await exportOnce()
+    // On to a new, unsaved video: the file on offer is now out of date.
+    fireEvent.click(screen.getByRole('button', { name: 'New video' }))
+    await screen.findByRole('link', { name: /Download earlier export/ })
+    fireEvent.click(saveButton()!)
+    const [, origin] = vi.mocked(gallery.saveVideo).mock.calls[0]
+    expect(origin).toEqual({ title: 'Launch teaser', projectId: 'vp-1' })
+  })
+
+  it('files a current export under the title the project has now', async () => {
+    const { encoder } = fakeEncoder()
+    const { gallery, ui } = withGallery(
+      <MemeGenerator
+        encoder={encoder}
+        projects={fakeProjects()}
+        initialProjectId="vp-1"
+      />,
+    )
+    render(ui)
+    const title = await screen.findByDisplayValue('Launch teaser')
+    await exportOnce()
+    // A rename is not a change to the video: the file is still current.
+    fireEvent.change(title, { target: { value: 'Keynote teaser' } })
+    expect(screen.getByRole('link', { name: /Download video/ })).toBeTruthy()
+    fireEvent.click(saveButton()!)
+    const [, origin] = vi.mocked(gallery.saveVideo).mock.calls[0]
+    expect(origin).toEqual({ title: 'Keynote teaser', projectId: 'vp-1' })
+  })
+
   it('offers no Save to gallery without the gallery, or outside the studio', async () => {
     const bare = fakeEncoder()
     const { unmount } = render(
