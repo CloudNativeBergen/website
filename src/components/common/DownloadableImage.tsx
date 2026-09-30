@@ -43,6 +43,8 @@ export function DownloadableImage({
   const capture = (element: HTMLElement) => captureImage(element, size)
   const card: StudioCard | undefined =
     studio && format ? { ...studio, format } : studio
+  // The same name for a download, a Task attachment and a gallery save.
+  const name = format ? `${filename}-${format}` : filename
 
   const downloadAsImage = async () => {
     if (!componentRef.current) {
@@ -69,7 +71,7 @@ export function DownloadableImage({
       const link = document.createElement('a')
       try {
         link.href = url
-        link.download = `${filename}${format ? `-${format}` : ''}-${Date.now()}.png`
+        link.download = `${name}-${Date.now()}.png`
         link.style.display = 'none'
         document.body.appendChild(link)
         link.click()
@@ -126,7 +128,7 @@ export function DownloadableImage({
         {attachment && (
           <button
             onClick={() =>
-              attachment.attach(() => capture(componentRef.current!), filename)
+              attachment.attach(() => capture(componentRef.current!), name)
             }
             disabled={busy}
             className="inline-flex items-center rounded-lg border border-blue-600 px-4 py-2 text-sm font-semibold text-blue-700 disabled:opacity-50 dark:text-blue-300"
@@ -137,7 +139,7 @@ export function DownloadableImage({
         {gallery && card && (
           <button
             onClick={() =>
-              gallery.save(() => capture(componentRef.current!), filename, card)
+              gallery.save(() => capture(componentRef.current!), name, card)
             }
             disabled={busy}
             className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-800 transition-colors hover:bg-gray-50 disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700"

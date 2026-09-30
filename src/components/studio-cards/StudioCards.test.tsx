@@ -234,6 +234,24 @@ describe('FormatSwitch', () => {
     expect(formats()).toEqual(['portrait', 'portrait', 'portrait'])
   })
 
+  it('moves the choice with the arrow keys and keeps one tab stop', () => {
+    render(
+      <FormatSwitch>
+        <SpeakerCard speaker={ADA} qrCodeUrl={QR} />
+      </FormatSwitch>,
+    )
+    const group = screen.getByRole('radiogroup', { name: 'Format' })
+    const radios = within(group).getAllByRole('radio')
+    expect(radios.map((radio) => radio.tabIndex)).toEqual([0, -1, -1])
+    fireEvent.keyDown(group, { key: 'ArrowRight' })
+    expect(formats()).toEqual(['landscape'])
+    expect(radios.map((radio) => radio.tabIndex)).toEqual([-1, 0, -1])
+    fireEvent.keyDown(group, { key: 'ArrowLeft' })
+    fireEvent.keyDown(group, { key: 'ArrowLeft' })
+    expect(formats()).toEqual(['portrait'])
+    expect(document.activeElement).toBe(radios[2])
+  })
+
   it('is square outside any switch, as every card was before Formats', () => {
     render(<SpeakerCard speaker={ADA} qrCodeUrl={QR} />)
     expect(formats()).toEqual(['square'])

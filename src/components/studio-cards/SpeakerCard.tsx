@@ -5,7 +5,6 @@ import { MicrophoneIcon, StarIcon } from '@heroicons/react/24/solid'
 import { speakerImageUrl } from '@/lib/sanity/client'
 import { Format } from '@/lib/proposal/types'
 import { formatConfig } from '@/lib/proposal'
-import type { SpeakerWithTalks } from '@/lib/speaker/types'
 import { MissingAvatar } from '@/components/common/MissingAvatar'
 import { SpeakerAvatarImage } from '@/components/common/SpeakerAvatarImage'
 import { useStudioFormat } from '@/components/common/image-capture'
@@ -51,8 +50,20 @@ export const SPEAKER_CARD_ELEMENTS = [
   'qr',
 ] as const
 
+/**
+ * What the card shows of a speaker: only this crosses to the client, never the
+ * whole speaker with their email and every proposal body.
+ */
+export interface SpeakerCardSpeaker {
+  name: string
+  title?: string
+  /** A Sanity image reference or a plain URL. */
+  image?: string
+  talks?: { title?: string; format?: string }[]
+}
+
 export interface SpeakerCardProps {
-  speaker: SpeakerWithTalks
+  speaker: SpeakerCardSpeaker
   /** A data URL; empty leaves the QR out (it would point nowhere). */
   qrCodeUrl: string
   variant?: SpeakerCardVariant
@@ -68,7 +79,7 @@ function Photo({
   speaker,
   className,
 }: {
-  speaker: SpeakerWithTalks
+  speaker: SpeakerCardSpeaker
   className: string
 }) {
   const { image, name } = speaker
@@ -243,8 +254,8 @@ export function SpeakerCard({
             <footer className="mt-[1cqw] flex shrink-0 items-end justify-between gap-[2cqw]">
               {scanLine({
                 row: 'pb-[0.4cqw]',
-                icon: 'h-[2.2cqw] w-[2.2cqw]',
-                text: 'text-[2.2cqw]',
+                icon: 'h-[2cqw] w-[2cqw]',
+                text: 'text-[2cqw]',
               })}
               <QrBadge url={qrCodeUrl} alt={QR_ALT} size={9} />
             </footer>
@@ -264,7 +275,7 @@ export function SpeakerCard({
               icon: 'h-[6cqw] w-[6cqw]',
               kicker: 'text-[4.5cqw]',
             })}
-            {event('px-[1cqw] text-[6cqw]')}
+            {event('line-clamp-2 px-[1cqw] text-[6cqw]')}
           </header>
           <Photo
             speaker={speaker}
@@ -309,7 +320,7 @@ export function SpeakerCard({
             icon: 'h-[6cqw] w-[6cqw]',
             kicker: 'text-[4.5cqw]',
           })}
-          {event('px-[1cqw] text-[6cqw]')}
+          {event('line-clamp-2 px-[1cqw] text-[6cqw]')}
         </header>
         <section className="mb-[2cqw] flex shrink-0 items-center justify-center gap-[7cqw]">
           <Photo

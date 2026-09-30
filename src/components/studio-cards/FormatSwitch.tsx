@@ -24,6 +24,23 @@ export function FormatSwitch({
 }) {
   const [format, setFormat] = useState<StudioFormat>(defaultFormat)
   const labelId = useId()
+  // A radio group: arrow keys move the choice, one tab stop for the group.
+  function onKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
+    const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[
+      event.key
+    ]
+    if (!step) return
+    event.preventDefault()
+    const at = STUDIO_FORMAT_IDS.indexOf(format)
+    const next =
+      STUDIO_FORMAT_IDS[
+        (at + step + STUDIO_FORMAT_IDS.length) % STUDIO_FORMAT_IDS.length
+      ]
+    setFormat(next)
+    event.currentTarget
+      .querySelector<HTMLButtonElement>(`[data-format="${next}"]`)
+      ?.focus()
+  }
   return (
     <StudioFormatContext.Provider value={format}>
       <div className="mb-6 flex flex-wrap items-center gap-3">
@@ -36,6 +53,7 @@ export function FormatSwitch({
         <div
           role="radiogroup"
           aria-labelledby={labelId}
+          onKeyDown={onKeyDown}
           className="inline-flex rounded-lg bg-gray-100 p-1 dark:bg-gray-800"
         >
           {STUDIO_FORMAT_IDS.map((id) => {
@@ -47,6 +65,8 @@ export function FormatSwitch({
                 type="button"
                 role="radio"
                 aria-checked={active}
+                tabIndex={active ? 0 : -1}
+                data-format={id}
                 onClick={() => setFormat(id)}
                 className={`font-inter inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
                   active

@@ -64,7 +64,7 @@ import { SpeakerShare } from '@/components/SpeakerShare'
 - **QR Code Generation**: Automatic QR code creation for speaker profile URLs
 - **Server-side Rendering**: QR codes are generated server-side for performance
 - **Caching**: QR codes are cached to avoid regeneration
-- **Responsive**: Optimized for social media aspect ratios (4:5)
+- **Formats**: square 1080×1080, landscape 1200×628 or portrait 1080×1350, chosen per studio tab (docs/MARKETING_STUDIO_FORMATS_SPEC.md); square outside the studio
 - **High-DPI Support**: 2x resolution images for crisp display
 - **Conference Branding**: Includes event name and branding elements
 

@@ -85,7 +85,7 @@ describe('DownloadableImage on a tab with a Format switch', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Attach to Task' }))
     const [capture, filename] = vi.mocked(attachment.attach).mock.calls[0]
     await capture()
-    expect(filename).toBe('ada')
+    expect(filename).toBe('ada-portrait')
     expect(mocks.capture).toHaveBeenCalledWith(element, {
       label: 'Portrait',
       width: 1080,
@@ -97,7 +97,7 @@ describe('DownloadableImage on a tab with a Format switch', () => {
     const element = renderCard('portrait')
     fireEvent.click(screen.getByRole('button', { name: 'Save to gallery' }))
     const [capture, filename, card] = vi.mocked(gallery.save).mock.calls[0]
-    expect(filename).toBe('ada')
+    expect(filename).toBe('ada-portrait')
     expect(card).toEqual({ ...CARD, format: 'portrait' })
     await capture()
     expect(mocks.capture).toHaveBeenCalledWith(element, {

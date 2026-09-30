@@ -83,10 +83,18 @@ export async function SpeakerShare({
 }: SpeakerShareProps) {
   const finalCtaUrl = ctaUrl || `/speaker/${speaker.slug}`
   const qrCodeUrl = await generateQRCode(finalCtaUrl, 512, baseDomain)
+  // Only what the card shows crosses to the client: never the speaker's
+  // email or the full proposals behind their talks.
+  const shown = {
+    name: speaker.name,
+    title: speaker.title,
+    image: speaker.image,
+    talks: speaker.talks?.map(({ title, format }) => ({ title, format })),
+  }
 
   return (
     <SpeakerCard
-      speaker={speaker}
+      speaker={shown}
       qrCodeUrl={qrCodeUrl}
       variant={variant}
       isFeatured={isFeatured}

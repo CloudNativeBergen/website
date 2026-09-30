@@ -144,13 +144,17 @@ function Logo({
       </div>
     )
   }
+  // No logo: the name, sized to the box so a long one wraps inside it.
   return (
     <div
       data-card-element="logo"
-      className="flex shrink-0 items-center justify-center rounded-[1cqw] bg-white/10 p-[2cqw] backdrop-blur-sm"
+      className="flex shrink-0 items-center justify-center overflow-hidden rounded-[1cqw] bg-white/10 p-[1.5cqw] backdrop-blur-sm"
       style={dimensions}
     >
-      <span className="text-center text-[4cqw] leading-tight font-bold">
+      <span
+        className="line-clamp-2 text-center leading-tight font-bold"
+        style={{ fontSize: `${size * 0.1}cqw` }}
+      >
         {sponsor.name}
       </span>
     </div>

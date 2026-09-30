@@ -221,7 +221,9 @@ describe('Save to gallery on a studio card', () => {
       const form = await openDialog(
         screen.getByRole('button', { name: 'Save to gallery' }),
       )
-      expect(form.textContent).toContain('Portrait, 1080×1350 px.')
+      expect(form.textContent).toContain(
+        'Saved as Portrait (1080×1350 px), marked with this edition.',
+      )
       fireEvent.click(within(form).getByRole('button', { name: 'Save' }))
       await screen.findByRole('status')
 

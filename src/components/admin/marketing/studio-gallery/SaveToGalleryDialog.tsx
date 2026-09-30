@@ -257,15 +257,10 @@ function SaveForm({
         )}
       </p>
       <p className={HINT}>
-        {card.format && (
-          <>
-            {STUDIO_FORMATS[card.format].label},{' '}
-            {STUDIO_FORMATS[card.format].width}×
-            {STUDIO_FORMATS[card.format].height} px.{' '}
-          </>
-        )}
-        Marked with this edition. Tags, credit and the edition can be changed in
-        the gallery.
+        {card.format
+          ? `Saved as ${STUDIO_FORMATS[card.format].label} (${STUDIO_FORMATS[card.format].width}×${STUDIO_FORMATS[card.format].height} px), marked with this edition.`
+          : 'Marked with this edition.'}{' '}
+        Tags, credit and the edition can be changed in the gallery.
       </p>
       {error && (
         <p
