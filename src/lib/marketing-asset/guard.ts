@@ -100,9 +100,11 @@ export interface ResolvedExportSource {
  * copied onto a file an organizer merely named would let them have any
  * file, anyone's, deleted at the next erasure of their own speaker. So a
  * file that cannot be proven the asset's is recorded BARE: no asset, no
- * subject. Bare, it is inert — it only ever makes THIS video deletable
- * when an erasure deletes that file for reasons of its own — so it is
- * taken as given; the schema checks its shape. What that leaves out: an
+ * subject. A bare id links no file to anyone: it only ever makes THIS video
+ * deletable when an erasure deletes that file for reasons of its own — and
+ * then this video's own MP4 and poster join the deletion, as every file of
+ * a deleted entry does, with any bytes-identical copy Sanity deduplicated
+ * them into. So it is taken as given; the schema checks its shape. What that leaves out: an
  * unsaved video whose entry's image was swapped in Studio between the pick
  * and this save records the old file bare, and nothing links it to the
  * person but the entry's subject, which the swap detached.

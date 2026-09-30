@@ -104,6 +104,34 @@ function mergedSources(
 }
 
 /**
+ * A JPEG with a comment segment naming this export, so that no two posters
+ * are ever the same bytes. Sanity deduplicates identical bytes into ONE
+ * asset across every tenant, and a speaker erasure deletes a linked file
+ * everywhere it is held: two videos whose first frame is the same flat
+ * colour (their text fading in from frame 0) would share a poster, and
+ * erasing the person in one would delete the other. The segment is a
+ * standard COM marker right after SOI, which every decoder skips.
+ */
+export async function uniqueJpeg(blob: Blob): Promise<Blob> {
+  const bytes = new Uint8Array(await blob.arrayBuffer())
+  if (bytes.length < 2 || bytes[0] !== 0xff || bytes[1] !== 0xd8) return blob
+  const comment = new TextEncoder().encode(
+    `studio-export:${crypto.randomUUID()}`,
+  )
+  const length = comment.length + 2
+  const segment = new Uint8Array([
+    0xff,
+    0xfe,
+    (length >> 8) & 0xff,
+    length & 0xff,
+    ...comment,
+  ])
+  return new Blob([bytes.subarray(0, 2), segment, bytes.subarray(2)], {
+    type: blob.type,
+  })
+}
+
+/**
  * The poster is frame 0 AS THE ENCODER TOOK IT: the canvas is copied by the
  * very paint the export loop made for that frame, before the next frame is
  * drawn — never repainted afterwards, when a font that arrived during the
@@ -132,7 +160,7 @@ function withPoster(job: ExportJob): {
             'image/jpeg',
             0.92,
           )
-        })
+        }).then(uniqueJpeg)
         // Failure is reported where the poster is asked for; not before.
         latest.catch(() => {})
       },

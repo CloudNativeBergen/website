@@ -263,11 +263,6 @@ export class VideoProjectError extends Error {
   }
 }
 
-/**
- * The scenes without any background whose file a save deleted: an undo must
- * never bring back an image the next save would refuse. Such a scene falls
- * back to its colour, as after an erasure.
- */
 /** Shallow equality over every key of both objects but `except`. */
 function sameExcept(a: object, b: object, except: readonly string[]): boolean {
   const left = a as Record<string, unknown>
@@ -301,6 +296,11 @@ export function sameDrawn(a: Scene[], b: Scene[]): boolean {
   })
 }
 
+/**
+ * The scenes without any background whose file a save deleted: an undo must
+ * never bring back an image the next save would refuse. Such a scene falls
+ * back to its colour, as after an erasure.
+ */
 export function dropReleasedFiles(
   states: Scene[],
   released: ReadonlySet<string>,

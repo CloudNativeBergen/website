@@ -443,6 +443,23 @@ describe('Save an exported video to the gallery (#1182)', () => {
     expect(screen.queryByRole('form', { name: 'Save to gallery' })).toBeNull()
   })
 
+  it('says so when the video was saved without a project that no longer exists', async () => {
+    mocks.uploader.mockResolvedValue({
+      _id: 'asset-video',
+      softOnSocial: false,
+      projectDropped: true,
+    })
+    const form = await openVideoDialog(SAVED)
+    describeAlt(form)
+    fireEvent.click(within(form).getByRole('button', { name: 'Save' }))
+    await screen.findByRole('status')
+    expect(
+      screen.getByText(
+        /Its project no longer exists, so it was saved without one/,
+      ),
+    ).toBeInTheDocument()
+  })
+
   it('saves the MP4 with its poster, subject and the project it came from', async () => {
     mocks.uploader.mockImplementation(async (_f, _d, _o, onProgress) => {
       onProgress?.(0.4)

@@ -13,8 +13,10 @@
  *  2. collects every file those hold ({@link linkedFileIds}) — a gallery asset's
  *     image or video, a Task's render — and every file a saved video holds
  *     under a subject it copied from the gallery ({@link projectSubjectFileIds}),
- *     and — through each saved video holding one — the files of every gallery
- *     video exported from it (#1182, see {@link fetchSpeakerAssetInputs});
+ *     and — through each saved video holding one, and through the lineage an
+ *     exported gallery video records of what it showed — the files of every
+ *     gallery entry reached, to a fixed point (#1182, see
+ *     {@link fetchSpeakerAssetInputs});
  *  3. finds every document holding one of those files by the FILE's references,
  *     drafts and release versions included, and plans what each loses
  *     ({@link planSpeakerAssetErasure});

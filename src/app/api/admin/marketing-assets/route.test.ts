@@ -1,5 +1,6 @@
 /** @vitest-environment node */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { TRPCError } from '@trpc/server'
 
 const h = vi.hoisted(() => ({
   session: vi.fn(),
@@ -605,12 +606,53 @@ describe('a video exported from a studio project (#1182)', () => {
     expect(input).not.toHaveProperty('sources')
   })
 
-  it('refuses a project that is not ours, discarding both uploads, never moving', async () => {
-    h.projectGuard.mockRejectedValue(new Error('NOT_FOUND'))
-    const response = await POST(request(EXPORTED))
-    expect(response.status).toBe(400)
+  it('saves a video whose project no longer resolves WITHOUT it, keeping the sources the gallery proves, and says so', async () => {
+    // Deleted in another tab, or never ours: the guard's refusal, which
+    // never says which. Nothing of that project is read; the sources are
+    // resolved again without it.
+    h.projectGuard
+      .mockRejectedValueOnce(
+        new TRPCError({ code: 'NOT_FOUND', message: 'No videoProject' }),
+      )
+      .mockResolvedValueOnce({
+        sources: [
+          {
+            fileId: 'image-venue-1080x1080-png',
+            galleryAssetId: 'asset-venue',
+          },
+        ],
+      })
+    const sources = [{ galleryAssetId: 'asset-venue' }]
+    const response = await POST(
+      request({
+        ...EXPORTED,
+        studio: { tab: 'meme-generator', projectId: 'vp-gone', sources },
+      }),
+    )
+    expect(response.status).toBe(200)
+    expect(h.projectGuard.mock.calls).toEqual([
+      ['org-A', { tab: 'meme-generator', projectId: 'vp-gone', sources }],
+      ['org-A', { tab: 'meme-generator', sources }],
+    ])
+    expect(h.moveVideo).toHaveBeenCalled()
+    const input = h.create.mock.calls[0][0]
+    expect(input.studio).toEqual({ tab: 'meme-generator', sources })
+    expect(input.sources).toEqual([
+      { fileId: 'image-venue-1080x1080-png', galleryAssetId: 'asset-venue' },
+    ])
     expect(await response.json()).toEqual({
-      error: 'That project is not one of this organization’s.',
+      _id: 'asset-1',
+      softOnSocial: true,
+      projectDropped: true,
+    })
+  })
+
+  it('answers a gallery that cannot be read with a 502, discarding both uploads, never moving', async () => {
+    h.projectGuard.mockRejectedValue(new Error('ECONNRESET'))
+    const response = await POST(request(EXPORTED))
+    expect(response.status).toBe(502)
+    expect(await response.json()).toEqual({
+      error: 'The gallery could not be reached. Try again.',
     })
     expect(h.move).not.toHaveBeenCalled()
     expect(h.moveVideo).not.toHaveBeenCalled()

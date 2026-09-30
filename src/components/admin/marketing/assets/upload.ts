@@ -107,6 +107,8 @@ export type AssetUploader = (
   softOnSocial: boolean
   /** An image's file, as stored; an export's lineage names it (#1182). */
   imageAssetId?: string
+  /** A video's project no longer resolved: saved without it (#1182). */
+  projectDropped?: boolean
 }>
 
 /** One file straight to Vercel Blob, under this organization's folder. */
@@ -187,6 +189,7 @@ export function blobAssetUploader(orgId: string): AssetUploader {
       _id?: string
       softOnSocial?: boolean
       imageAssetId?: string
+      projectDropped?: boolean
       error?: string
     } | null
     if (!response.ok || !body?._id) {
@@ -196,6 +199,7 @@ export function blobAssetUploader(orgId: string): AssetUploader {
       _id: body._id,
       softOnSocial: Boolean(body.softOnSocial),
       ...(body.imageAssetId ? { imageAssetId: body.imageAssetId } : {}),
+      ...(body.projectDropped ? { projectDropped: true } : {}),
     }
   }
 }

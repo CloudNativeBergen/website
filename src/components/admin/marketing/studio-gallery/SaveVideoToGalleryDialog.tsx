@@ -122,7 +122,7 @@ function SaveVideoForm({
   const [progress, setProgress] = useState<number | null>(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [saved, setSaved] = useState(false)
+  const [saved, setSaved] = useState<{ projectDropped: boolean } | null>(null)
   useEffect(() => {
     onDirtyChange(
       !saved && (title !== origin.title || alt !== '' || subject !== null),
@@ -148,7 +148,7 @@ function SaveVideoForm({
       }
       setProgress(0)
       const name = title.trim()
-      await uploader(
+      const result = await uploader(
         new File([video.blob], `${slug(name)}.mp4`, { type: 'video/mp4' }),
         {
           title: name,
@@ -169,7 +169,7 @@ function SaveVideoForm({
         },
         setProgress,
       )
-      setSaved(true)
+      setSaved({ projectDropped: Boolean(result.projectDropped) })
       onSaved()
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : GENERIC_FAILURE)
@@ -196,6 +196,16 @@ function SaveVideoForm({
             gallery.
           </span>
         </p>
+        {saved.projectDropped && (
+          <p className="flex items-start gap-2 rounded-md bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-950/60 dark:text-amber-200">
+            <InformationCircleIcon
+              className="mt-0.5 size-4 shrink-0"
+              aria-hidden
+            />
+            Its project no longer exists, so it was saved without one: the
+            gallery cannot reopen it in the studio.
+          </p>
+        )}
         <div className="flex flex-wrap justify-end gap-2">
           <Link
             href="/admin/marketing/assets"

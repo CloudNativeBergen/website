@@ -535,7 +535,8 @@ export type NewMarketingAsset = {
        * file as a plain id, never a reference, so it keeps no file alive;
        * the gallery asset and the subject as WEAK references. A speaker
        * erasure finds the video by them whatever its project or the gallery
-       * hold later; nothing else reads them. With or without a project.
+       * hold later, and deleting a gallery asset refreshes the subject copied
+       * from it. With or without a project.
        */
       sources?: ResolvedExportSource[]
     }

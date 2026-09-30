@@ -16,18 +16,6 @@ export const STUDIO_TABS = [
 ] as const
 export type StudioTab = (typeof STUDIO_TABS)[number]
 
-/**
- * Which studio tab made an asset, as the save request names it — and, for a
- * video exported from a saved studio video (#1182), the project it came
- * from, which only the meme generator has. The id is a client claim the
- * server proves this organization's before anything moves.
- */
-/**
- * One background an exported video showed, as the editor knew it at export
- * time: the gallery asset it was picked from, and the file once a save has
- * recorded it. Client claims, resolved and proven on the server; a local
- * upload that was never kept has neither and is not named.
- */
 /** A Sanity image asset id: `image-<hash>-<w>x<h>-<ext>`. */
 const IMAGE_ASSET_ID = /^image-[A-Za-z0-9]+-\d+x\d+-[a-z0-9]+$/
 
@@ -38,12 +26,24 @@ const IMAGE_ASSET_ID = /^image-[A-Za-z0-9]+-\d+x\d+-[a-z0-9]+$/
  */
 export const MAX_EXPORT_SOURCES = 2 * VIDEO_PROJECT_MAX_SCENES
 
+/**
+ * One background an exported video showed, as the editor knew it at export
+ * time: the gallery asset it was picked from, and the file once a save has
+ * recorded it. Client claims, resolved and proven on the server; a local
+ * upload that was never kept has neither and is not named.
+ */
 export const exportSourceSchema = z.object({
   fileId: z.string().regex(IMAGE_ASSET_ID).optional(),
   galleryAssetId: publishedDocumentId.optional(),
 })
 export type ExportSourceInput = z.output<typeof exportSourceSchema>
 
+/**
+ * Which studio tab made an asset, as the save request names it — and, for a
+ * video exported from a saved studio video (#1182), the project it came
+ * from and what it showed, which only the meme generator has. Client claims
+ * the server proves this organization's before anything moves.
+ */
 export const studioOriginSchema = z
   .object({
     tab: z.enum(STUDIO_TABS),

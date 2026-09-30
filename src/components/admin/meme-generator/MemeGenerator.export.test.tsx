@@ -879,7 +879,9 @@ describe('Save an export to the gallery (#1182)', () => {
     )
     toBlob.mockImplementation(function (this: HTMLCanvasElement, cb, type) {
       events.push('copy')
-      cb(new Blob(['poster'], { type }))
+      // A JPEG as far as its first bytes go, so the export's own mark on
+      // it can be seen.
+      cb(new Blob([new Uint8Array([0xff, 0xd8]), 'poster'], { type }))
     })
     render(ui)
     fireEvent.click(screen.getByRole('button', { name: 'Video' }))
@@ -909,6 +911,9 @@ describe('Save an export to the gallery (#1182)', () => {
     const [video] = vi.mocked(gallery.saveVideo).mock.calls[0]
     const poster = await video.poster()
     expect(poster.type).toBe('image/jpeg')
+    // Marked as this export's, so no two posters are ever the same bytes.
+    const bytes = new Uint8Array(await poster.arrayBuffer())
+    expect([...bytes.subarray(0, 4)]).toEqual([0xff, 0xd8, 0xff, 0xfe])
     // The preview redraws with the late font; the export canvas is never
     // painted again, and no further copy is taken.
     expect(toBlob).toHaveBeenCalledTimes(zeros)
