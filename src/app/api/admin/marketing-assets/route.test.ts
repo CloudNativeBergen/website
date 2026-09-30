@@ -916,7 +916,7 @@ describe('a GIF or a video through the move route (#1167)', () => {
   })
 
   it('does not exempt a GIF at a Format’s pixels from the soft warning: it is an upload (#1247)', async () => {
-    h.move.mockResolvedValue({
+    h.moveGif.mockResolvedValue({
       ok: true,
       asset: {
         _id: 'image-wave-1200x628-gif',

@@ -315,7 +315,8 @@ export async function POST(request: Request) {
     posterUrl,
     orgId,
     answerBy,
-    origin?.format,
+    // Only an image is a studio card: a GIF with a stray Format is an upload.
+    kindName === 'image' ? origin?.format : undefined,
   )
   if (!moved.ok) {
     const refusal =
