@@ -1,7 +1,10 @@
 import React from 'react'
 import { StudioSearchParamsSchema } from '@/server/schemas/studio'
 import { StudioCardGrid } from '@/components/admin/marketing/StudioCardGrid'
-import { FormatSwitch } from '@/components/admin/marketing/studio-cards'
+import {
+  FormatSwitch,
+  SPONSOR_CARD_VARIANTS,
+} from '@/components/admin/marketing/studio-cards'
 import { StudioTaskProvider } from '@/components/admin/marketing/StudioTaskProvider'
 import { StudioGalleryProvider } from '@/components/admin/marketing/studio-gallery'
 import { getAuthSession } from '@/lib/auth'
@@ -633,15 +636,10 @@ export default async function MarketingPage({
                   {sponsorsWithData.map((sponsorRef, index) => {
                     const sponsor = sponsorRef.sponsor as SponsorData
                     const tier = sponsorRef.tier as SponsorTierData
-                    const variants = [
-                      'code-heroes',
-                      'cloud-wizards',
-                      'tech-ninjas',
-                      'deploy-legends',
-                      'kubernetes-masters',
-                      'devops-rockstars',
-                    ] as const
-                    const variant = variants[index % variants.length]
+                    const variant =
+                      SPONSOR_CARD_VARIANTS[
+                        index % SPONSOR_CARD_VARIANTS.length
+                      ]
 
                     return (
                       <div

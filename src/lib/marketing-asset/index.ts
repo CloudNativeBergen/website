@@ -61,6 +61,7 @@ export {
   STUDIO_FORMATS,
   STUDIO_FORMAT_IDS,
   studioFormatAspect,
+  studioFormatLabel,
   studioFormatSchema,
 } from './format'
 export type { StudioFormat, StudioFormatSize } from './format'

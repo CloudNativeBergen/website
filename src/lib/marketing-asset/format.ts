@@ -37,3 +37,9 @@ export function studioFormatAspect(format: StudioFormat): string {
   const { width, height } = STUDIO_FORMATS[format]
   return `${width} / ${height}`
 }
+
+/** "Landscape (1200×628)": the Format named with its pixels, for people. */
+export function studioFormatLabel(format: StudioFormat): string {
+  const { label, width, height } = STUDIO_FORMATS[format]
+  return `${label} (${width}×${height})`
+}

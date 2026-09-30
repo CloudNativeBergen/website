@@ -1,6 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { expect, userEvent, within } from 'storybook/test'
-import type { SpeakerWithTalks } from '@/lib/speaker/types'
 import { captureImage } from '@/components/common/image-capture'
 import { STUDIO_FORMATS, type StudioFormat } from '@/lib/marketing-asset'
 import {
@@ -9,6 +8,7 @@ import {
   SPONSOR_CARD_ELEMENTS,
   SpeakerCard,
   SponsorCard,
+  type SpeakerCardSpeaker,
 } from '.'
 
 /**
@@ -26,20 +26,17 @@ const PHOTO = `data:image/svg+xml,${encodeURIComponent(
   `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f6c177"/><stop offset="1" stop-color="#c4a1ff"/></linearGradient></defs><rect width="400" height="400" fill="url(#g)"/><circle cx="200" cy="150" r="80" fill="#3b2a4a"/><path d="M60 400 Q200 220 340 400 Z" fill="#3b2a4a"/></svg>`,
 )}`
 
-const ADA = {
-  _id: 'ada',
+const ADA: SpeakerCardSpeaker = {
   name: 'Ada Lovelace',
-  slug: 'ada-lovelace',
   title: 'Analytical Engineer, Babbage & Co',
   image: PHOTO,
   talks: [
     {
-      _id: 'talk-1',
       title: 'Notes on the Analytical Engine: programming before computers',
       format: 'presentation_45',
     },
   ],
-} as unknown as SpeakerWithTalks
+}
 
 const ACME = {
   _id: 'acme-corp',
@@ -286,6 +283,12 @@ export const SwitchOnATab: Story = {
     await userEvent.click(canvas.getByRole('radio', { name: /Portrait/ }))
     await expect(formats()).toEqual(['portrait', 'portrait', 'portrait'])
   },
+}
+
+/** The switch in dark mode, through the global theme (not a local decorator). */
+export const SwitchOnATabDark: Story = {
+  ...SwitchOnATab,
+  globals: { theme: 'dark' },
 }
 
 /** The switch at phone width: no horizontal overflow, the sizes hidden. */

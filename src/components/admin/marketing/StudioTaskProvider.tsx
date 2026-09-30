@@ -5,10 +5,10 @@ import Link from 'next/link'
 import { api } from '@/lib/trpc/client'
 import { ImageAttachmentContext } from '@/components/common/image-capture'
 
-/** Provides attachment controls to every studio renderer, including subjectless Tasks. */
 /** What the studio's multipart attach route can carry (Vercel's body cut). */
 const ATTACH_MAX_BYTES = 4 * 1024 * 1024
 
+/** Provides attachment controls to every studio renderer, including subjectless Tasks. */
 export function StudioTaskProvider({
   taskId,
   children,

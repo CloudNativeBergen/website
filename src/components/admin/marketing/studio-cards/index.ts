@@ -1,6 +1,10 @@
 export { FormatSwitch } from './FormatSwitch'
 export { SPEAKER_CARD_ELEMENTS, SpeakerCard } from './SpeakerCard'
-export type { SpeakerCardProps, SpeakerCardVariant } from './SpeakerCard'
+export type {
+  SpeakerCardProps,
+  SpeakerCardSpeaker,
+  SpeakerCardVariant,
+} from './SpeakerCard'
 export {
   SPONSOR_CARD_ELEMENTS,
   SPONSOR_CARD_VARIANTS,
@@ -12,3 +16,5 @@ export type {
   SponsorCardTier,
   SponsorCardVariant,
 } from './SponsorCard'
+export { useCardFormat } from './CardFrame'
+export type { IconLineSizes } from './CardFrame'

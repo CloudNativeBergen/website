@@ -10,9 +10,13 @@ import {
   BoltIcon,
 } from '@heroicons/react/24/solid'
 import { InlineSvg } from '@/components/InlineSvg'
-import { useStudioFormat } from '@/components/common/image-capture'
-import { DEFAULT_STUDIO_FORMAT, type StudioFormat } from '@/lib/marketing-asset'
-import { CardFrame, QrBadge } from './CardFrame'
+import type { StudioFormat } from '@/lib/marketing-asset'
+import {
+  CardFrame,
+  QrBadge,
+  useCardFormat,
+  type IconLineSizes,
+} from './CardFrame'
 
 export interface SponsorCardSponsor {
   _id: string
@@ -180,12 +184,11 @@ export function SponsorCard({
   format: fixedFormat,
   className = '',
 }: SponsorCardProps) {
-  const tabFormat = useStudioFormat()
-  const format = fixedFormat ?? tabFormat ?? DEFAULT_STUDIO_FORMAT
+  const format = useCardFormat(fixedFormat)
   const config = variantConfig[variant]
   const Icon = config.icon
 
-  const header = (size: { row: string; icon: string; text: string }) => (
+  const header = (size: IconLineSizes) => (
     <div
       data-card-element="header"
       className={`flex items-center gap-[2cqw] ${size.row}`}
@@ -210,7 +213,7 @@ export function SponsorCard({
       )}
     </div>
   )
-  const tierLine = (size: { row: string; icon: string; text: string }) => (
+  const tierLine = (size: IconLineSizes) => (
     <div
       data-card-element="tier"
       className={`flex items-center gap-[1.5cqw] ${size.row}`}
@@ -231,7 +234,7 @@ export function SponsorCard({
       {config.footerText}
     </p>
   )
-  const eventInfo = (size: { row: string; icon: string; text: string }) => (
+  const eventInfo = (size: IconLineSizes) => (
     <div className={`flex items-center gap-[1cqw] ${size.row}`}>
       <QrCodeIcon className={`shrink-0 ${size.icon}`} />
       <p className={`font-inter leading-tight ${size.text}`}>Event info</p>

@@ -12,7 +12,6 @@ import {
   screen,
   within,
 } from '@testing-library/react'
-import type { SpeakerWithTalks } from '@/lib/speaker/types'
 import { STUDIO_FORMAT_IDS, type StudioFormat } from '@/lib/marketing-asset'
 import {
   FormatSwitch,
@@ -20,6 +19,7 @@ import {
   SPONSOR_CARD_ELEMENTS,
   SpeakerCard,
   SponsorCard,
+  type SpeakerCardSpeaker,
 } from '.'
 
 vi.mock('@/components/CloudNativePattern', () => ({
@@ -33,20 +33,17 @@ afterEach(cleanup)
 
 const QR = 'data:image/png;base64,AA=='
 
-const ADA = {
-  _id: 'ada',
+const ADA: SpeakerCardSpeaker = {
   name: 'Ada Lovelace',
-  slug: 'ada-lovelace',
   title: 'Analytical Engineer',
   image: 'image-ada',
   talks: [
     {
-      _id: 'talk-1',
       title: 'Notes on the Analytical Engine',
       format: 'presentation_45',
     },
   ],
-} as unknown as SpeakerWithTalks
+}
 
 const ACME = {
   _id: 'acme',

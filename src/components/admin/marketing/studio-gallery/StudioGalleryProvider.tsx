@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '@/lib/trpc/client'
-import { FORMAT_CHANGED } from '@/components/common/DownloadableImage'
 import {
+  FORMAT_CHANGED,
   GallerySaveContext,
   type ExportedVideo,
   type GallerySave,

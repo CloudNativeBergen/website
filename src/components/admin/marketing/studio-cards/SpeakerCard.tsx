@@ -7,9 +7,13 @@ import { Format } from '@/lib/proposal/types'
 import { formatConfig } from '@/lib/proposal'
 import { MissingAvatar } from '@/components/common/MissingAvatar'
 import { SpeakerAvatarImage } from '@/components/common/SpeakerAvatarImage'
-import { useStudioFormat } from '@/components/common/image-capture'
-import { DEFAULT_STUDIO_FORMAT, type StudioFormat } from '@/lib/marketing-asset'
-import { CardFrame, QrBadge } from './CardFrame'
+import type { StudioFormat } from '@/lib/marketing-asset'
+import {
+  CardFrame,
+  QrBadge,
+  useCardFormat,
+  type IconLineSizes,
+} from './CardFrame'
 
 export type SpeakerCardVariant = 'speaker-share' | 'speaker-spotlight'
 
@@ -158,20 +162,19 @@ export function SpeakerCard({
   format: fixedFormat,
   className = '',
 }: SpeakerCardProps) {
-  const tabFormat = useStudioFormat()
-  const format = fixedFormat ?? tabFormat ?? DEFAULT_STUDIO_FORMAT
+  const format = useCardFormat(fixedFormat)
   const config = variantConfig[variant]
   const Icon = config.icon
   const talk = speaker.talks?.[0] ?? null
   const { name, title } = speaker
 
-  const header = (size: { row: string; icon: string; kicker: string }) => (
+  const header = (size: IconLineSizes) => (
     <div
       data-card-element="header"
       className={`flex items-center gap-[2cqw] ${size.row}`}
     >
       <Icon className={size.icon} />
-      <span className={`font-inter leading-tight font-bold ${size.kicker}`}>
+      <span className={`font-inter leading-tight font-bold ${size.text}`}>
         {config.headerText(isFeatured)}
       </span>
     </div>
@@ -234,7 +237,7 @@ export function SpeakerCard({
               {header({
                 row: 'mb-[0.5cqw]',
                 icon: 'size-[2.8cqw]',
-                kicker: 'text-[2.4cqw]',
+                text: 'text-[2.4cqw]',
               })}
               {event('line-clamp-2 text-[3cqw]')}
             </header>
@@ -283,7 +286,7 @@ export function SpeakerCard({
             {header({
               row: 'mb-[1cqw] justify-center',
               icon: 'size-[6cqw]',
-              kicker: 'text-[4.5cqw]',
+              text: 'text-[4.5cqw]',
             })}
             {event('line-clamp-2 px-[1cqw] text-[5.5cqw]')}
           </header>
@@ -334,7 +337,7 @@ export function SpeakerCard({
           {header({
             row: 'mb-[1cqw] justify-center',
             icon: 'size-[6cqw]',
-            kicker: 'text-[4.5cqw]',
+            text: 'text-[4.5cqw]',
           })}
           {event('line-clamp-2 px-[1cqw] text-[6cqw]')}
         </header>

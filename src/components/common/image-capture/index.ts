@@ -1,6 +1,7 @@
 export { captureImage } from './capture'
 export type { CaptureSize } from './capture'
 export {
+  FORMAT_CHANGED,
   GallerySaveContext,
   ImageAttachmentContext,
   StudioFormatContext,

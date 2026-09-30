@@ -10,7 +10,7 @@ import {
 import { AdminButton } from '@/components/admin/AdminButton'
 import { ModalShell } from '@/components/ModalShell'
 import type { StudioCard } from '@/components/common/image-capture'
-import { STUDIO_FORMATS } from '@/lib/marketing-asset'
+import { studioFormatLabel } from '@/lib/marketing-asset'
 import type { AssetUploader } from '@/components/admin/marketing/assets/upload'
 import {
   HINT,
@@ -258,7 +258,7 @@ function SaveForm({
       </p>
       <p className={HINT}>
         {card.format
-          ? `Saved as ${STUDIO_FORMATS[card.format].label} (${STUDIO_FORMATS[card.format].width}×${STUDIO_FORMATS[card.format].height} px), marked with this edition.`
+          ? `Saved as ${studioFormatLabel(card.format).replace(')', ' px)')}, marked with this edition.`
           : 'Marked with this edition.'}{' '}
         Tags, credit and the edition can be changed in the gallery.
       </p>

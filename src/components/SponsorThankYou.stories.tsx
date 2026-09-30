@@ -3,6 +3,7 @@ import {
   SPONSOR_CARD_VARIANTS,
   SponsorCard,
 } from '@/components/admin/marketing/studio-cards'
+import { STUDIO_FORMAT_IDS } from '@/lib/marketing-asset'
 
 /**
  * The sponsor thank-you card as the studio renders it: `SponsorThankYou` (a
@@ -48,7 +49,7 @@ const meta = {
     },
     format: {
       control: 'select',
-      options: ['square', 'landscape', 'portrait'],
+      options: [...STUDIO_FORMAT_IDS],
     },
     showCloudNativePattern: {
       control: 'boolean',

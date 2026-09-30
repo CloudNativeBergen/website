@@ -6,6 +6,7 @@ import {
   RectangleStackIcon,
 } from '@heroicons/react/24/outline'
 import {
+  FORMAT_CHANGED,
   captureImage,
   useGallerySave,
   useImageAttachment,
@@ -13,10 +14,6 @@ import {
   type StudioCard,
 } from './image-capture'
 import { STUDIO_FORMATS } from '@/lib/marketing-asset'
-
-/** Refuses a capture the Format switch moved under; shown as it is. */
-export const FORMAT_CHANGED =
-  'The Format changed while the image was being made. Try again.'
 
 interface DownloadableImageProps {
   filename?: string

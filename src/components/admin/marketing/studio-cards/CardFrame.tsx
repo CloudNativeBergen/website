@@ -1,7 +1,28 @@
 'use client'
 
 import { CloudNativePattern } from '@/components/CloudNativePattern'
-import { studioFormatAspect, type StudioFormat } from '@/lib/marketing-asset'
+import { useStudioFormat } from '@/components/common/image-capture'
+import {
+  DEFAULT_STUDIO_FORMAT,
+  studioFormatAspect,
+  type StudioFormat,
+} from '@/lib/marketing-asset'
+
+/**
+ * The Format a card is laid out in: fixed by its props, else the studio
+ * tab's switch, else square, as every card was before Formats.
+ */
+export function useCardFormat(fixed: StudioFormat | undefined): StudioFormat {
+  const tab = useStudioFormat()
+  return fixed ?? tab ?? DEFAULT_STUDIO_FORMAT
+}
+
+/** Sizes of an icon-and-text line, as Tailwind classes. */
+export interface IconLineSizes {
+  row: string
+  icon: string
+  text: string
+}
 
 /**
  * The frame every studio card is drawn in (docs/MARKETING_STUDIO_FORMATS_

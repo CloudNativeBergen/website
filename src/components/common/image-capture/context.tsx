@@ -42,6 +42,14 @@ export interface StudioCard {
  * 4× its CSS box, as before Formats.
  */
 export const StudioFormatContext = createContext<StudioFormat | null>(null)
+
+/**
+ * Why a capture is refused when the switch moved under it (spec §4): the
+ * render would be stretched to the old Format. Shown to the organizer as it
+ * is, on every path.
+ */
+export const FORMAT_CHANGED =
+  'The Format changed while the image was being made. Try again.'
 export const useStudioFormat = () => useContext(StudioFormatContext)
 
 /** A finished MP4 from the meme generator's export (#1182). */
