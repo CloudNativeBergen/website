@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '@/lib/trpc/client'
+import { FORMAT_CHANGED } from '@/components/common/DownloadableImage'
 import {
   GallerySaveContext,
   type ExportedVideo,
@@ -107,7 +108,10 @@ export function StudioGalleryProvider({
             previewUrl: replacePreview(null),
             filename,
             card,
-            error: 'The image could not be made. Close this and try again.',
+            error:
+              error instanceof Error && error.message === FORMAT_CHANGED
+                ? error.message
+                : 'The image could not be made. Close this and try again.',
           })
         } finally {
           setCapturing(false)

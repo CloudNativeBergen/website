@@ -137,6 +137,9 @@ export function openInStudioHref(origin: MarketingAssetStudioOrigin): string {
     params.set('speaker', origin.speakerId)
   if (origin.tab === 'sponsors' && origin.sponsorId)
     params.set('sponsor', origin.sponsorId)
+  // The shape it was saved in; square is the switch's default anyway.
+  if (FORMAT_TABS.has(origin.tab) && origin.format !== 'square')
+    params.set('format', origin.format)
   const project = openableProject(origin)
   if (project) params.set('project', project)
   return `/admin/marketing/studio?${params.toString()}`

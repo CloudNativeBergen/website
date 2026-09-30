@@ -572,7 +572,7 @@ export default async function MarketingPage({
                 </p>
               </div>
             ) : (
-              <FormatSwitch>
+              <FormatSwitch defaultFormat={selection.format}>
                 <StudioCardGrid
                   selectedId={selection.speaker}
                   pinnedTitle={pinnedTitle}
@@ -623,7 +623,7 @@ export default async function MarketingPage({
                 </p>
               </div>
             ) : (
-              <FormatSwitch>
+              <FormatSwitch defaultFormat={selection.format}>
                 <StudioCardGrid
                   selectedId={selection.sponsor}
                   pinnedTitle={pinnedTitle}

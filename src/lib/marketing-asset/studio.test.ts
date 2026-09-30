@@ -32,6 +32,37 @@ describe('openInStudioHref', () => {
     ).toBe('/admin/marketing/studio?tab=sponsors&sponsor=acme')
   })
 
+  it('reopens a card in the Format it was saved in, and says nothing for square (#1247)', () => {
+    expect(
+      openInStudioHref({
+        tab: 'sponsors',
+        speakerId: null,
+        sponsorId: 'acme',
+        project: null,
+        format: 'landscape',
+      }),
+    ).toBe('/admin/marketing/studio?tab=sponsors&sponsor=acme&format=landscape')
+    expect(
+      openInStudioHref({
+        tab: 'speakers',
+        speakerId: 'ada',
+        sponsorId: null,
+        project: null,
+        format: 'portrait',
+      }),
+    ).toBe('/admin/marketing/studio?tab=speakers&speaker=ada&format=portrait')
+    // A Format on a tab without a switch is never put in the URL.
+    expect(
+      openInStudioHref({
+        tab: 'conference',
+        speakerId: null,
+        sponsorId: null,
+        project: null,
+        format: 'portrait',
+      }),
+    ).toBe('/admin/marketing/studio?tab=conference')
+  })
+
   it('opens a subjectless tab alone, and never pairs a subject with the wrong tab', () => {
     expect(
       openInStudioHref({

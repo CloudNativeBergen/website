@@ -14,6 +14,10 @@ import {
 } from './image-capture'
 import { STUDIO_FORMATS } from '@/lib/marketing-asset'
 
+/** Refuses a capture the Format switch moved under; shown as it is. */
+export const FORMAT_CHANGED =
+  'The Format changed while the image was being made. Try again.'
+
 interface DownloadableImageProps {
   filename?: string
   /**
@@ -42,17 +46,16 @@ export function DownloadableImage({
   const size = format ? STUDIO_FORMATS[format] : undefined
   // The switch stays live while a capture waits for images: a card that
   // changed shape underneath the render would be stretched to the old
-  // Format and saved under its name. Refuse it instead.
-  const shown = useRef(format)
+  // Format and saved under its name. Refuse it instead — counting changes,
+  // so a switch flipped away and back is refused too.
+  const changes = useRef(0)
   useEffect(() => {
-    shown.current = format
+    changes.current += 1
   }, [format])
   const capture = async (element: HTMLElement) => {
+    const started = changes.current
     const blob = await captureImage(element, size)
-    if (shown.current !== format)
-      throw new Error(
-        'The Format changed while the image was being made. Try again.',
-      )
+    if (changes.current !== started) throw new Error(FORMAT_CHANGED)
     return blob
   }
   const card: StudioCard | undefined =
@@ -100,7 +103,9 @@ export function DownloadableImage({
       let message = 'Failed to generate image. Please try again.'
 
       if (error instanceof Error) {
-        if (error.message.includes('timeout')) {
+        if (error.message === FORMAT_CHANGED) {
+          message = error.message
+        } else if (error.message.includes('timeout')) {
           message =
             'Image generation timed out. Please check your connection and try again.'
         } else if (error.message.includes('dimensions')) {

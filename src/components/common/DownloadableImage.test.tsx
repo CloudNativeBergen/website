@@ -126,10 +126,35 @@ describe('DownloadableImage while the switch changes', () => {
     const [capture, , card] = vi.mocked(gallery.save).mock.calls[0]
     expect(card).toEqual({ ...CARD, format: 'landscape' })
     const result = capture()
-    // The organizer flips the switch while the render waits for images.
+    // The organizer flips the switch while the render waits for images —
+    // and back again, which still rendered a portrait card in between.
     rerender(tree('portrait'))
+    rerender(tree('landscape'))
     finish(new Blob(['stretched'], { type: 'image/png' }))
     await expect(result).rejects.toThrow('The Format changed')
+  })
+
+  it('tells the organizer why a download was refused, in the refusal’s own words', async () => {
+    let finish!: (blob: Blob) => void
+    mocks.capture.mockReturnValue(
+      new Promise<Blob>((resolve) => {
+        finish = resolve
+      }),
+    )
+    const alert = vi.fn()
+    vi.stubGlobal('alert', alert)
+    const { rerender } = render(tree('landscape'))
+    Object.defineProperties(screen.getByTestId('card').parentElement!, {
+      offsetWidth: { value: 256 },
+      offsetHeight: { value: 134 },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Download as PNG' }))
+    rerender(tree('portrait'))
+    finish(new Blob(['stretched'], { type: 'image/png' }))
+    await screen.findByText('Download as PNG')
+    expect(alert).toHaveBeenCalledWith(
+      'The Format changed while the image was being made. Try again.',
+    )
   })
 })
 

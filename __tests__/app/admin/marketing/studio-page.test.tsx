@@ -384,6 +384,37 @@ describe('Promo Studio Formats (#1247)', () => {
       within(speakersTab).getByRole('region', { name: 'Card for your Task' }),
     ).toBeTruthy()
   })
+
+  it('opens both switches on the Format a gallery entry names, and ignores one it does not know', async () => {
+    const checked = () =>
+      screen.getAllByRole('radiogroup', { name: 'Format' }).map((group) =>
+        within(group)
+          .getAllByRole('radio')
+          .find((radio) => radio.getAttribute('aria-checked') === 'true')!
+          .textContent?.replace(/\d+×\d+$/, ''),
+      )
+    const query = Object.fromEntries(
+      new URL(
+        openInStudioHref({
+          tab: 'sponsors',
+          speakerId: null,
+          sponsorId: 'acme',
+          project: null,
+          format: 'landscape',
+        }),
+        'https://x',
+      ).searchParams,
+    )
+    render(await MarketingPage({ searchParams: Promise.resolve(query) }))
+    expect(checked()).toEqual(['Landscape', 'Landscape'])
+    cleanup()
+    render(
+      await MarketingPage({
+        searchParams: Promise.resolve({ format: 'story' }),
+      }),
+    )
+    expect(checked()).toEqual(['Square', 'Square'])
+  })
 })
 
 describe('Promo Studio without a resolvable organization', () => {

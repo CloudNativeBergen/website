@@ -313,6 +313,26 @@ describe('Studio Task attachment', () => {
     )
     expect(mocks.upload).toHaveBeenCalledTimes(1)
   })
+  it('refuses a capture the multipart route could not carry, naming the gallery path (#1247)', async () => {
+    mocks.rasterize.mockImplementation(async () => ({
+      width: 1080,
+      height: 1350,
+      toBlob: (callback: BlobCallback) =>
+        callback(
+          new Blob([new Uint8Array(4 * 1024 * 1024 + 1)], {
+            type: 'image/png',
+          }),
+        ),
+    }))
+    setup()
+    fireEvent.click(screen.getByRole('button', { name: 'Attach to Task' }))
+    const alert = await screen.findByRole('alert')
+    expect(alert.textContent).toContain('4.0 MB')
+    expect(alert.textContent).toContain('Save it to the gallery')
+    expect(mocks.upload).not.toHaveBeenCalled()
+    expect(mocks.mutate).not.toHaveBeenCalled()
+  })
+
   it('does not offer attachment for a non-render Task', () => {
     mocks.task.kind = 'checklist'
     setup()
