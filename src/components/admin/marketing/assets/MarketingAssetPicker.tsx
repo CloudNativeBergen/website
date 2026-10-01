@@ -29,6 +29,8 @@ export interface MarketingAssetPick {
    * Format. Null when it is the Channel's own. Never a refusal.
    */
   formatWarning?: string | null
+  /** Its Format is the one the post's Channel ranks first: highlighted. */
+  formatPreferred?: boolean
 }
 
 /** The list a picker shows, with its search and edition filter. */
@@ -156,11 +158,12 @@ export function MarketingAssetPicker({
                   {asset.format && (
                     <span
                       aria-hidden
+                      data-format-preferred={asset.formatPreferred === true}
                       className={clsx(
                         'absolute top-1 left-1 rounded px-1 py-0.5 text-[10px] leading-none font-medium',
-                        asset.formatWarning
-                          ? 'bg-white/90 text-gray-700 dark:bg-gray-900/85 dark:text-gray-300'
-                          : 'bg-brand-cloud-blue text-white',
+                        asset.formatPreferred
+                          ? 'bg-brand-cloud-blue text-white'
+                          : 'bg-white/90 text-gray-700 dark:bg-gray-900/85 dark:text-gray-300',
                       )}
                     >
                       {STUDIO_FORMATS[asset.format].label}

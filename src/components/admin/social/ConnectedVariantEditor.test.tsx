@@ -70,7 +70,9 @@ vi.mock('@/lib/trpc/client', () => {
 
 import { ConnectedVariantEditor } from './ConnectedVariantEditor'
 
-const variant = (platform: 'linkedin' | 'bluesky'): SocialPostVariant => ({
+const variant = (
+  platform: SocialPostVariant['platform'],
+): SocialPostVariant => ({
   _id: 'variant-1',
   _rev: 'r1',
   postId: 'post-1',
@@ -91,7 +93,9 @@ const variant = (platform: 'linkedin' | 'bluesky'): SocialPostVariant => ({
   attemptCount: 0,
 })
 
-const data = (platform: 'linkedin' | 'bluesky'): SocialVariantEditorData => ({
+const data = (
+  platform: SocialPostVariant['platform'],
+): SocialVariantEditorData => ({
   variant: variant(platform),
   post: { attachments: [], defaultScheduledAt: null },
   conferenceDomains: [],
@@ -175,6 +179,27 @@ describe('ConnectedVariantEditor: the picker ranks for this variant (#1249)', ()
       ).toBeNull(),
     )
     expect(screen.getByRole('status')).toHaveTextContent('')
+  })
+
+  it("highlights only the Channel's own Format, and none for a Channel without one", () => {
+    const preferred = () =>
+      Object.fromEntries(
+        within(screen.getByRole('group', { name: 'Marketing assets' }))
+          .getAllByRole('listitem')
+          .map((item) => [
+            item.textContent?.match(/Venue|Logo/)?.[0],
+            item
+              .querySelector('[data-format-preferred]')
+              ?.getAttribute('data-format-preferred'),
+          ]),
+      )
+    const linkedin = render(<ConnectedVariantEditor data={data('linkedin')} />)
+    openPicker()
+    expect(preferred()).toEqual({ Venue: 'true', Logo: 'false' })
+    linkedin.unmount()
+    render(<ConnectedVariantEditor data={data('x')} />)
+    openPicker()
+    expect(preferred()).toEqual({ Venue: 'false', Logo: 'false' })
   })
 
   it('a 2:1 studio card that reads as square warns from its pixels: it loses its sides', async () => {

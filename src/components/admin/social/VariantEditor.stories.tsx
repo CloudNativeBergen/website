@@ -4,7 +4,10 @@ import { expect, fn, userEvent, within } from 'storybook/test'
 import { ThemeProvider } from 'next-themes'
 import { PLATFORM_CONSTRAINTS } from '@/lib/social/provider/constraints'
 import { STUDIO_FORMATS, type StudioFormat } from '@/lib/marketing-asset'
-import { formatMismatchWarning } from '@/lib/marketing-asset/channel-format'
+import {
+  channelFormat,
+  formatMismatchWarning,
+} from '@/lib/marketing-asset/channel-format'
 import type { SocialPostAttachment } from '@/lib/social/types'
 import { VariantEditor, type VariantEditorProps } from './VariantEditor'
 import type { MarketingAssetPick } from './AttachmentSlot'
@@ -848,6 +851,7 @@ function rankedPicks(
       context,
       format,
       formatWarning: formatMismatchWarning(platform, format),
+      formatPreferred: channelFormat(platform) === format,
     }
   })
 }

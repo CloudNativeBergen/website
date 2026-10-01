@@ -4,7 +4,10 @@ import { useEffect, useState } from 'react'
 import { keepPreviousData } from '@tanstack/react-query'
 import { useNotification } from '@/components/admin/NotificationProvider'
 import { richTextImageUrl } from '@/lib/homepage/richTextImage'
-import { formatMismatchWarning } from '@/lib/marketing-asset/channel-format'
+import {
+  channelFormat,
+  formatMismatchWarning,
+} from '@/lib/marketing-asset/channel-format'
 import { getPlatformConstraints } from '@/lib/social/provider/constraints'
 import type { SocialVariantEditorData } from '@/lib/social/types'
 import { api } from '@/lib/trpc/client'
@@ -323,6 +326,7 @@ export function ConnectedVariantEditor({
           asset.format,
           asset,
         ),
+        formatPreferred: channelFormat(data.variant.platform) === asset.format,
       }
     },
   )
