@@ -162,6 +162,8 @@ export function AttachmentSlot({
   }
 
   const toggle = (key: string) => {
+    // The images changed: a warning about the last pick may no longer apply.
+    setPickWarning(null)
     if (selected.has(key)) {
       onChange(attachments.filter((a) => a.source !== key))
     } else if (!full) {

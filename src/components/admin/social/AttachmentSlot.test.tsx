@@ -45,14 +45,28 @@ const PICKS: MarketingAssetPick[] = [
   },
 ]
 
-function slot(onPick: (asset: MarketingAssetPick) => Promise<void>) {
+/** The image the pick put on the post, already selected on the variant. */
+const PICKED = {
+  _key: 'picked',
+  assetId: 'image-0000000000000000000000000000000000000001-1080x1080-png',
+  width: 1080,
+  height: 1080,
+  hotspot: null,
+  crop: null,
+  alt: 'The logo',
+}
+
+function slot(
+  onPick: (asset: MarketingAssetPick) => Promise<void>,
+  onChange: () => void = () => {},
+) {
   render(
     <AttachmentSlot
-      postAttachments={[]}
-      attachments={[]}
+      postAttachments={[PICKED]}
+      attachments={[{ source: 'picked', crop: null, altOverride: null }]}
       constraints={PLATFORM_CONSTRAINTS.linkedin}
       imageSrc={() => ''}
-      onChange={() => {}}
+      onChange={onChange}
       marketingAssets={{
         assets: PICKS,
         isLoading: false,
@@ -96,6 +110,16 @@ describe('AttachmentSlot: a Format the Channel crops (#1249)', () => {
     )
     // Not an error: nothing was refused.
     expect(screen.queryByRole('alert')).toBeNull()
+  })
+
+  it('the warning goes when an image is removed: it no longer describes the post', async () => {
+    const onChange = vi.fn()
+    const { status } = slot(async () => {}, onChange)
+    fireEvent.click(tile(/Logo/))
+    await waitFor(() => expect(status).toHaveTextContent(`Added Logo.`))
+    fireEvent.click(screen.getByRole('button', { name: 'Remove image 1' }))
+    expect(onChange).toHaveBeenCalledWith([])
+    expect(status).toHaveTextContent('')
   })
 
   it("a pick in the Channel's own Format adds without a warning", async () => {
