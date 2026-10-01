@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   channelFormat,
+  croppedSize,
   entryFormat,
   formatMismatchWarning,
   shapeFormat,
@@ -34,6 +35,31 @@ describe('shapeFormat: an upload ranks by its shape', () => {
     expect(shapeFormat(null, null)).toBe('square')
     expect(shapeFormat(1200, null)).toBe('square')
     expect(shapeFormat(0, 600)).toBe('square')
+  })
+})
+
+describe('croppedSize: the size an image is posted at', () => {
+  it('keeps the pixels inside the stored crop; no crop, a degenerate one or no size leaves them', () => {
+    const crop = { top: 0.1, bottom: 0.1, left: 0.25, right: 0.25 }
+    expect(croppedSize({ width: 2000, height: 1000, crop })).toEqual({
+      width: 1000,
+      height: 800,
+    })
+    expect(croppedSize({ width: 2000, height: 1000, crop: null })).toEqual({
+      width: 2000,
+      height: 1000,
+    })
+    expect(
+      croppedSize({
+        width: 2000,
+        height: 1000,
+        crop: { top: 0, bottom: 0, left: 0.6, right: 0.6 },
+      }),
+    ).toEqual({ width: 2000, height: 1000 })
+    expect(croppedSize({ width: null, height: null, crop })).toEqual({
+      width: null,
+      height: null,
+    })
   })
 })
 

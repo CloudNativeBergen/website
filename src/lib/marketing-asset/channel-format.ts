@@ -55,14 +55,34 @@ export function shapeFormat(
 }
 
 /**
+ * The size an entry's image is posted at: its pixels inside the stored crop,
+ * which a post keeps and the rendition applies before the platform's own crop
+ * (`defaultCropRect`). A crop that trims everything is ignored there, and so
+ * here.
+ */
+export function croppedSize(
+  row: Pick<MarketingAssetRow, 'width' | 'height' | 'crop'>,
+): { width: number | null; height: number | null } {
+  const { width, height, crop } = row
+  if (!width || !height || !crop) return { width, height }
+  const keptX = 1 - crop.left - crop.right
+  const keptY = 1 - crop.top - crop.bottom
+  if (keptX <= 0 || keptY <= 0 || keptX > 1 || keptY > 1)
+    return { width, height }
+  return { width: width * keptX, height: height * keptY }
+}
+
+/**
  * A gallery entry's Format: the one the studio recorded (the row projection
- * reads a studio card without one as square, spec §6), else an upload's
- * shape.
+ * reads a studio card without one as square, spec §6), else the shape an
+ * upload is posted at.
  */
 export function entryFormat(
-  row: Pick<MarketingAssetRow, 'studio' | 'width' | 'height'>,
+  row: Pick<MarketingAssetRow, 'studio' | 'width' | 'height' | 'crop'>,
 ): StudioFormat {
-  return row.studio?.format ?? shapeFormat(row.width, row.height)
+  if (row.studio) return row.studio.format
+  const { width, height } = croppedSize(row)
+  return shapeFormat(width, height)
 }
 
 /**

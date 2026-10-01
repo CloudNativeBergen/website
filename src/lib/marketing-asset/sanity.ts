@@ -47,6 +47,7 @@ const ROW_PROJECTION = `{
   "assetId": image.asset._ref,
   "width": coalesce(image.asset->metadata.dimensions.width, poster.asset->metadata.dimensions.width),
   "height": coalesce(image.asset->metadata.dimensions.height, poster.asset->metadata.dimensions.height),
+  "crop": image.crop{ top, bottom, left, right },
   "createdAt": _createdAt,
   "audioUrl": audio.asset->url,
   "videoUrl": video.asset->url,

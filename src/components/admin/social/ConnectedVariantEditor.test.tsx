@@ -202,6 +202,28 @@ describe('ConnectedVariantEditor: the picker ranks for this variant (#1249)', ()
     expect(preferred()).toEqual({ Venue: 'false', Logo: 'false' })
   })
 
+  it('a 2:1 upload cropped to a square warns from the CROPPED shape: it loses its top and bottom', async () => {
+    h.forPost.mockReturnValue({
+      data: [
+        {
+          ...row('cropped', 'Cropped', 'square'),
+          width: 2000,
+          height: 1000,
+          crop: { top: 0, bottom: 0, left: 0.25, right: 0.25 },
+        },
+      ],
+      isLoading: false,
+      error: null,
+    })
+    render(<ConnectedVariantEditor data={data('linkedin')} />)
+    fireEvent.click(openPicker().getByRole('button', { name: /^Add Cropped/ }))
+    await waitFor(() =>
+      expect(screen.getByRole('status')).toHaveTextContent(
+        'Added Cropped. LinkedIn posts go out cropped to 1.91:1, so this image loses its top and bottom.',
+      ),
+    )
+  })
+
   it('a 2:1 studio card that reads as square warns from its pixels: it loses its sides', async () => {
     h.forPost.mockReturnValue({
       data: [{ ...row('promo', 'Promo', 'square'), width: 2000, height: 1000 }],

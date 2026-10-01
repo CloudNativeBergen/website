@@ -63,6 +63,12 @@ export interface MarketingAssetRow {
   assetId: string | null
   width: number | null
   height: number | null
+  /**
+   * The image's stored crop (fractions trimmed from each edge), which a post
+   * keeps when it takes the image (#1249): the shape it is posted at. Null
+   * when none; optional only so fixtures predating it still type-check.
+   */
+  crop?: { top: number; bottom: number; left: number; right: number } | null
   createdAt: string
   /** Short side under 1080 px: may look soft on social. A warning only. */
   softOnSocial: boolean

@@ -6,6 +6,7 @@ import { useNotification } from '@/components/admin/NotificationProvider'
 import { richTextImageUrl } from '@/lib/homepage/richTextImage'
 import {
   channelFormat,
+  croppedSize,
   formatMismatchWarning,
 } from '@/lib/marketing-asset/channel-format'
 import { getPlatformConstraints } from '@/lib/social/provider/constraints'
@@ -324,7 +325,7 @@ export function ConnectedVariantEditor({
         formatWarning: formatMismatchWarning(
           data.variant.platform,
           asset.format,
-          asset,
+          croppedSize(asset),
         ),
         formatPreferred: channelFormat(data.variant.platform) === asset.format,
       }

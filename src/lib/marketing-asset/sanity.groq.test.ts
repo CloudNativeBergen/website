@@ -1080,6 +1080,58 @@ describe('picking an asset into a post (#1163)', () => {
       ])
     })
 
+    it('an upload ranks by the shape it is POSTED at: a 2:1 image cropped to a square is square', async () => {
+      h.dataset = [
+        ...RANKED,
+        // 2000×1000 with a quarter trimmed from each side: 1000×1000 is what
+        // `defaultCropRect` starts from, so LinkedIn crops it like a square.
+        asset('ed-cropped', 'org-a', {
+          image: {
+            _type: 'image',
+            asset: ref(imageId('6', 2000, 1000)),
+            crop: {
+              _type: 'sanity.imageCrop',
+              top: 0,
+              bottom: 0,
+              left: 0.25,
+              right: 0.25,
+            },
+          },
+          ...thisEdition,
+          ...at('11'),
+        }),
+        sized('6', 2000, 1000),
+      ]
+      const rows = await listMarketingAssetsForPost(
+        'org-a',
+        'conf-a-2026',
+        POST,
+        { variantId: V.linkedin },
+      )
+      expect(ids(rows)).toEqual([
+        'ada-landscape',
+        'ada-square',
+        'ed-wide',
+        'ed-cropped',
+        'ed-old-sponsor',
+        'ed-tall',
+        'ed-square',
+        'org-landscape',
+        'org-no-size',
+      ])
+      const cropped = rows.find((r) => r._id === 'ed-cropped')
+      expect(cropped?.format).toBe('square')
+      // The crop travels to the editor, which warns from the same shape.
+      expect(cropped?.crop).toEqual({
+        top: 0,
+        bottom: 0,
+        left: 0.25,
+        right: 0.25,
+      })
+      // Never a field taken away: the row still reports the original pixels.
+      expect([cropped?.width, cropped?.height]).toEqual([2000, 1000])
+    })
+
     it('sends each entry its Format: the recorded one, square for a studio card without one, the shape of an upload', async () => {
       const rows = await listMarketingAssetsForPost(
         'org-a',
