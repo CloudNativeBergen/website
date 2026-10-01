@@ -148,7 +148,7 @@ describe('Promo Studio Task preselection', () => {
 
 describe('Promo Studio search parameter boundary', () => {
   it.each(
-    ['task', 'speaker', 'sponsor'].flatMap((param) => [
+    ['task', 'speaker', 'sponsor', 'format'].flatMap((param) => [
       { param, kind: 'unsafe', value: '<script>alert(1)</script>' },
       { param, kind: 'repeated', value: ['ada', 'acme'] },
       { param, kind: 'oversized', value: 'a'.repeat(201) },
@@ -263,12 +263,24 @@ describe('Promo Studio Save to gallery (#1164)', () => {
 
   it.each([
     [
-      { tab: 'speakers', speakerId: 'grace', sponsorId: null, project: null },
+      {
+        tab: 'speakers',
+        speakerId: 'grace',
+        sponsorId: null,
+        project: null,
+        format: 'square',
+      },
       'Grace',
       'Ada',
     ],
     [
-      { tab: 'sponsors', speakerId: null, sponsorId: 'other', project: null },
+      {
+        tab: 'sponsors',
+        speakerId: null,
+        sponsorId: 'other',
+        project: null,
+        format: 'square',
+      },
       'Other',
       'Acme',
     ],
@@ -299,6 +311,7 @@ describe('Promo Studio Save to gallery (#1164)', () => {
           speakerId: null,
           sponsorId: null,
           project: { _id: 'vp-1', exists: true },
+          format: 'square',
         }),
         'https://x',
       ).searchParams,
@@ -322,6 +335,7 @@ describe('Promo Studio Save to gallery (#1164)', () => {
             speakerId: null,
             sponsorId: null,
             project: null,
+            format: 'square',
           }),
           'https://x',
         ).searchParams,
@@ -330,6 +344,77 @@ describe('Promo Studio Save to gallery (#1164)', () => {
       expect(screen.getByTestId('tabs').getAttribute('data-tab')).toBe(tab)
     },
   )
+})
+
+describe('Promo Studio Formats (#1247)', () => {
+  it('has one Format switch above the speaker grid and one above the sponsor grid, each starting square', async () => {
+    render(
+      await MarketingPage({
+        searchParams: Promise.resolve({ task: 'render-1', speaker: 'ada' }),
+      }),
+    )
+    const groups = screen.getAllByRole('radiogroup', { name: 'Format' })
+    // Two: the meme generator, the promo and the photo collage keep their shapes.
+    expect(groups).toHaveLength(2)
+    for (const [group, label] of [
+      [groups[0], 'speakers'],
+      [groups[1], 'sponsors'],
+    ] as const) {
+      const tab = group.parentElement!.parentElement!
+      const grid = within(tab).getByRole('region', { name: `All ${label}` })
+      expect(
+        group.compareDocumentPosition(grid) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy()
+      expect(
+        within(group)
+          .getAllByRole('radio')
+          .map((radio) => [
+            radio.textContent,
+            radio.getAttribute('aria-checked'),
+          ]),
+      ).toEqual([
+        ['Square1080×1080', 'true'],
+        ['Landscape1200×628', 'false'],
+        ['Portrait1080×1350', 'false'],
+      ])
+    }
+    // The pinned card is inside its tab's switch too: it changes with the grid.
+    const speakersTab = groups[0].parentElement!.parentElement!
+    expect(
+      within(speakersTab).getByRole('region', { name: 'Card for your Task' }),
+    ).toBeTruthy()
+  })
+
+  it('opens both switches on the Format a gallery entry names, and ignores one it does not know', async () => {
+    const checked = () =>
+      screen.getAllByRole('radiogroup', { name: 'Format' }).map((group) =>
+        within(group)
+          .getAllByRole('radio')
+          .find((radio) => radio.getAttribute('aria-checked') === 'true')!
+          .textContent?.replace(/\d+×\d+$/, ''),
+      )
+    const query = Object.fromEntries(
+      new URL(
+        openInStudioHref({
+          tab: 'sponsors',
+          speakerId: null,
+          sponsorId: 'acme',
+          project: null,
+          format: 'landscape',
+        }),
+        'https://x',
+      ).searchParams,
+    )
+    render(await MarketingPage({ searchParams: Promise.resolve(query) }))
+    expect(checked()).toEqual(['Landscape', 'Landscape'])
+    cleanup()
+    render(
+      await MarketingPage({
+        searchParams: Promise.resolve({ format: 'story' }),
+      }),
+    )
+    expect(checked()).toEqual(['Square', 'Square'])
+  })
 })
 
 describe('Promo Studio without a resolvable organization', () => {

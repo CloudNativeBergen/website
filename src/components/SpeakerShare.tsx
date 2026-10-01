@@ -1,12 +1,10 @@
-import { MissingAvatar } from '@/components/common/MissingAvatar'
-import { QrCodeIcon } from '@heroicons/react/24/outline'
-import { MicrophoneIcon, StarIcon } from '@heroicons/react/24/solid'
-import { speakerImageUrl } from '@/lib/sanity/client'
-import { Format } from '@/lib/proposal/types'
-import { formatConfig } from '@/lib/proposal'
 import { SpeakerWithTalks } from '@/lib/speaker/types'
-import { CloudNativePattern } from '@/components/CloudNativePattern'
-import { SpeakerAvatarImage } from '@/components/common/SpeakerAvatarImage'
+import type { StudioFormat } from '@/lib/marketing-asset'
+import { PLATFORM_NAME } from '@/lib/branding/platform'
+import {
+  SpeakerCard,
+  type SpeakerCardVariant,
+} from '@/components/admin/marketing/studio-cards'
 
 const qrCodeCache = new Map<string, string>()
 
@@ -15,39 +13,18 @@ const FALLBACK_QR_CODE =
 
 interface SpeakerShareProps {
   speaker: SpeakerWithTalks
-  variant?: 'speaker-share' | 'speaker-spotlight'
+  variant?: SpeakerCardVariant
   className?: string
   isFeatured?: boolean
   ctaUrl?: string
   eventName?: string
   baseDomain?: string
   showCloudNativePattern?: boolean
-}
-
-type VariantConfig = {
-  gradient: string
-  accentColor: string
-  icon: React.ComponentType<{ className?: string }>
-  headerText: (isFeatured: boolean) => string
-}
-
-const variantConfig: Record<
-  NonNullable<SpeakerShareProps['variant']>,
-  VariantConfig
-> = {
-  'speaker-share': {
-    gradient: 'from-brand-cloud-blue to-brand-fresh-green',
-    accentColor: 'text-white',
-    icon: MicrophoneIcon,
-    headerText: () => "I'm speaking at",
-  },
-  'speaker-spotlight': {
-    gradient: 'from-brand-fresh-green to-brand-cloud-blue',
-    accentColor: 'text-white',
-    icon: StarIcon,
-    headerText: (isFeatured) =>
-      isFeatured ? 'Featured Speaker' : 'Speaker Spotlight',
-  },
+  /**
+   * A fixed Format (docs/MARKETING_STUDIO_FORMATS_SPEC.md §2). Left out, the
+   * card follows the studio tab's Format switch, or is square outside one.
+   */
+  format?: StudioFormat
 }
 
 export async function generateQRCode(
@@ -87,130 +64,12 @@ export async function generateQRCode(
   }
 }
 
-interface SpeakerImageProps {
-  image?: SpeakerWithTalks['image']
-  name: string
-  size: number
-  className?: string
-}
-
-const SpeakerImage = ({
-  image,
-  name,
-  size,
-  className = '',
-}: SpeakerImageProps) => {
-  if (image) {
-    return (
-      <div className={`overflow-hidden ${className}`}>
-        <SpeakerAvatarImage
-          src={speakerImageUrl(image, {
-            width: size * 2,
-            height: size * 2,
-            fit: 'crop',
-          })}
-          name={name}
-          size={size}
-        />
-      </div>
-    )
-  }
-
-  return (
-    <div className={`${className} relative overflow-hidden`}>
-      <MissingAvatar
-        name={name}
-        size={size}
-        className="absolute inset-0 flex items-center justify-center rounded-[inherit]"
-        textSizeClass="text-2xl font-bold text-white z-10"
-      />
-    </div>
-  )
-}
-
-interface QRCodeDisplayProps {
-  qrCodeUrl?: string
-  size: number
-  className?: string
-}
-
-const QRCodeDisplay = ({
-  qrCodeUrl,
-  size,
-  className = '',
-}: QRCodeDisplayProps) => {
-  if (!qrCodeUrl) return null
-
-  return (
-    <div
-      className={`rounded-[1.5cqw] bg-white shadow-lg ${className}`}
-      style={{
-        padding: `${Math.max(0.3, size * 0.04)}cqw`,
-      }}
-      data-qr-code="true"
-    >
-      <img
-        src={qrCodeUrl}
-        alt="QR Code - Scan to view speaker profile"
-        className="h-full w-full object-cover"
-        style={{
-          imageRendering: 'crisp-edges',
-        }}
-      />
-    </div>
-  )
-}
-
-interface TalkFormatDisplayProps {
-  talk: { format?: string; title?: string }
-  size?: 'sm' | 'md' | 'lg'
-}
-
-const TalkFormatDisplay = ({ talk, size = 'md' }: TalkFormatDisplayProps) => {
-  const talkConfig = formatConfig[talk.format as Format]
-  const TalkIcon = talkConfig?.icon || MicrophoneIcon
-
-  const sizeClasses = {
-    sm: { icon: 'h-3 w-3', text: 'text-xs', title: 'text-sm' },
-    md: { icon: 'h-4 w-4', text: 'text-sm', title: 'text-base' },
-    lg: {
-      icon: 'h-[4cqw] w-[4cqw] @xs:h-[4.5cqw] @xs:w-[4.5cqw] @md:h-[5cqw] @md:w-[5cqw] @xl:h-[5.5cqw] @xl:w-[5.5cqw]',
-      text: 'text-[3.5cqw] @xs:text-[4cqw] @md:text-[4.5cqw] @xl:text-[5cqw]',
-      title: 'text-[4cqw] @xs:text-[4.5cqw] @md:text-[5.5cqw] @xl:text-[6cqw]',
-    },
-  }
-
-  const classes = sizeClasses[size]
-
-  return (
-    <div className="flex flex-col space-y-[1cqw] @xs:space-y-[1.5cqw] @md:space-y-[2cqw]">
-      <div className="flex items-center justify-center space-x-[1.5cqw] @xs:space-x-[2cqw] @md:space-x-[2.5cqw]">
-        <TalkIcon
-          className={`${classes.icon} ${talkConfig?.color || 'text-brand-cloud-blue'}`}
-        />
-        <span className={`font-inter font-semibold ${classes.text}`}>
-          {talkConfig?.label || 'Talk'}
-        </span>
-      </div>
-      {talk.title && (
-        <h3
-          className={`font-space-grotesk line-clamp-2 @lg:line-clamp-3 ${classes.title || 'text-base'} leading-tight font-bold`}
-        >
-          {talk.title}
-        </h3>
-      )}
-    </div>
-  )
-}
-
 /**
  * SpeakerShare component for social media sharing with QR codes
  *
- * Specialized component for generating speaker sharing cards with:
- * - QR codes for easy profile access
- * - Social media optimized layouts
- * - Conference branding
- * - Speaker spotlight variants
+ * Generates the QR code on the server, then renders the card itself as a
+ * client component (`SpeakerCard`) so it can follow the studio tab's Format
+ * switch: square, landscape or portrait, every element kept in each.
  *
  * @param props - SpeakerShareProps
  * @returns Server-rendered React component with QR code
@@ -224,102 +83,31 @@ export async function SpeakerShare({
   eventName,
   baseDomain,
   showCloudNativePattern = false,
+  format,
 }: SpeakerShareProps) {
-  const config = variantConfig[variant]
-  const Icon = config.icon
-
   const finalCtaUrl = ctaUrl || `/speaker/${speaker.slug}`
-
   const qrCodeUrl = await generateQRCode(finalCtaUrl, 512, baseDomain)
+  // Only what the card shows crosses to the client: never the speaker's
+  // email or the full proposals behind their talks.
+  const shown = {
+    name: speaker.name,
+    title: speaker.title,
+    image: speaker.image,
+    talks: speaker.talks?.map(({ title, format }) => ({ title, format })),
+  }
 
-  const primaryTalk =
-    speaker.talks && speaker.talks.length > 0 ? speaker.talks[0] : null
-
-  const { name, title, image } = speaker
-
-  const backgroundStyle = showCloudNativePattern
-    ? 'from-slate-900 via-blue-900 to-slate-900'
-    : config.gradient
-
-  const shareCard = (
-    <div
-      className={`group @container relative aspect-square overflow-hidden rounded-2xl bg-linear-to-br ${backgroundStyle} border border-gray-200 transition-all duration-300 hover:shadow-xl ${className}`}
-    >
-      {showCloudNativePattern && (
-        <CloudNativePattern
-          className="absolute inset-0"
-          variant="dark"
-          opacity={0.25}
-          animated={true}
-          baseSize={35}
-          iconCount={45}
-          seed={42}
-        />
-      )}
-
-      <div className="relative flex h-full flex-col p-[3cqw] text-center text-white @xs:p-[4cqw] @md:p-[5cqw] @xl:p-[6cqw]">
-        <header className="mb-[3cqw] shrink-0 @xs:mb-[4cqw] @md:mb-[6cqw] @xl:mb-[8cqw]">
-          <div className="mb-[1cqw] flex items-center justify-center gap-[2cqw] @xs:mb-[1.5cqw] @xs:gap-[2.5cqw] @md:mb-[2cqw] @md:gap-[3cqw]">
-            <Icon className="h-[6cqw] w-[6cqw] @xs:h-[6.5cqw] @xs:w-[6.5cqw] @md:h-[7cqw] @md:w-[7cqw] @xl:h-[8cqw] @xl:w-[8cqw]" />
-            <span className="font-inter text-[4.5cqw] leading-tight font-bold @xs:text-[5cqw] @md:text-[5.5cqw] @xl:text-[6cqw]">
-              {config.headerText(isFeatured)}
-            </span>
-          </div>
-          <h1 className="font-space-grotesk px-[1cqw] text-[6cqw] leading-tight font-bold @xs:text-[7cqw] @md:text-[8cqw] @xl:text-[9cqw]">
-            {eventName}
-          </h1>
-        </header>
-
-        <section className="mb-[2cqw] shrink-0 @xs:mb-[3cqw] @md:mb-[4cqw]">
-          <div className="flex items-center justify-center gap-[7cqw] @xs:gap-[8cqw] @md:gap-[12cqw] @xl:gap-[15cqw]">
-            <div className="shrink-0">
-              <SpeakerImage
-                image={image}
-                name={name}
-                size={400}
-                className="h-[25cqw] w-[25cqw] rounded-[2cqw] object-cover shadow-lg @xs:h-[28cqw] @xs:w-[28cqw] @md:h-[35cqw] @md:w-[35cqw] @md:rounded-[2.5cqw] @xl:h-[40cqw] @xl:w-[40cqw] @xl:rounded-[3cqw]"
-              />
-            </div>
-
-            <QRCodeDisplay
-              qrCodeUrl={qrCodeUrl}
-              size={55}
-              className="h-[25cqw] w-[25cqw] shrink-0 @xs:h-[28cqw] @xs:w-[28cqw] @md:h-[35cqw] @md:w-[35cqw] @xl:h-[40cqw] @xl:w-[40cqw]"
-            />
-          </div>
-        </section>
-
-        <main className="flex flex-1 flex-col justify-center px-[1cqw] @md:px-[2cqw]">
-          <h2 className="font-space-grotesk mb-[1cqw] text-[6cqw] leading-tight font-bold @xs:mb-[1.5cqw] @xs:text-[6cqw] @md:mb-[2cqw] @md:text-[7.5cqw] @xl:text-[8.5cqw]">
-            {name}
-          </h2>
-
-          {title && (
-            <p className="font-inter mb-[2cqw] text-[4.5cqw] leading-tight font-semibold text-white/90 @xs:mb-[2.5cqw] @xs:text-[5cqw] @md:mb-[3cqw] @md:text-[5.5cqw] @xl:text-[6cqw]">
-              {title}
-            </p>
-          )}
-
-          {primaryTalk && (
-            <div className="mx-[1cqw] rounded-[1.5cqw] bg-white/20 p-[2cqw] backdrop-blur-sm @xs:p-[2.5cqw] @md:mx-[2cqw] @md:rounded-[2cqw] @md:p-[3cqw] @xl:rounded-[2.5cqw] @xl:p-[3.5cqw]">
-              <TalkFormatDisplay talk={primaryTalk} size="lg" />
-            </div>
-          )}
-        </main>
-
-        <footer className="mt-[1cqw] shrink-0 @xs:mt-[1.5cqw] @md:mt-[2cqw]">
-          <div className="flex items-center justify-center gap-[1.5cqw] @xs:gap-[2cqw] @md:gap-[2.5cqw]">
-            <QrCodeIcon className="h-[4cqw] w-[4cqw] @xs:h-[4.5cqw] @xs:w-[4.5cqw] @md:h-[5cqw] @md:w-[5cqw]" />
-            <p className="font-inter text-[3.5cqw] leading-tight @xs:text-[4cqw] @md:text-[4.5cqw] @xl:text-[5cqw]">
-              Scan QR code to view full profile
-            </p>
-          </div>
-        </footer>
-      </div>
-    </div>
+  return (
+    <SpeakerCard
+      speaker={shown}
+      qrCodeUrl={qrCodeUrl}
+      variant={variant}
+      isFeatured={isFeatured}
+      eventName={eventName || PLATFORM_NAME}
+      showCloudNativePattern={showCloudNativePattern}
+      format={format}
+      className={className}
+    />
   )
-
-  return shareCard
 }
 
 // Props for the client wrapper version
@@ -330,7 +118,7 @@ export interface SpeakerShareClientProps {
   speakerName: string
   qrCodeUrl: string
   speaker: SpeakerWithTalks
-  variant?: 'speaker-share' | 'speaker-spotlight'
+  variant?: SpeakerCardVariant
   className?: string
   isFeatured?: boolean
   showCloudNativePattern?: boolean

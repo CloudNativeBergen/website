@@ -26,6 +26,7 @@ import {
   type StudioCard,
   type VideoOrigin,
 } from '@/components/common/image-capture'
+import { FormatSwitch } from '@/components/admin/marketing/studio-cards'
 import { StudioTaskProvider } from '../StudioTaskProvider'
 import { StudioGalleryProvider } from './StudioGalleryProvider'
 
@@ -193,6 +194,106 @@ describe('Save to gallery on a studio card', () => {
     // The gallery and the background picker show it next time.
     expect(mocks.invalidateList).toHaveBeenCalledTimes(1)
     expect(mocks.invalidateFilters).toHaveBeenCalledTimes(1)
+  })
+
+  it('saves the Format the tab shows, captured at exactly its pixels (#1247)', async () => {
+    // jsdom has no 2D context: stand in for the Format-sized canvas the
+    // capture draws the render onto, and record its size when the PNG is made.
+    const drawImage = vi.fn()
+    const context = vi
+      .spyOn(HTMLCanvasElement.prototype, 'getContext')
+      .mockReturnValue({ drawImage } as unknown as CanvasRenderingContext2D)
+    const sizes: number[][] = []
+    const toBlob = vi
+      .spyOn(HTMLCanvasElement.prototype, 'toBlob')
+      .mockImplementation(function (this: HTMLCanvasElement, callback) {
+        sizes.push([this.width, this.height])
+        callback(new Blob([mocks.pixels], { type: 'image/png' }))
+      })
+    try {
+      renderStudio(
+        <FormatSwitch>
+          <Card card={SPEAKER_CARD} id="ada-portrait" />
+        </FormatSwitch>,
+      )
+      sized('ada-portrait')
+      fireEvent.click(screen.getByRole('radio', { name: /Portrait/ }))
+      const form = await openDialog(
+        screen.getByRole('button', { name: 'Save to gallery' }),
+      )
+      expect(form.textContent).toContain(
+        'Saved as Portrait (1080×1350 px), marked with this edition.',
+      )
+      fireEvent.click(within(form).getByRole('button', { name: 'Save' }))
+      await screen.findByRole('status')
+
+      // Rendered at the Format's width over the card's CSS width, not 4×.
+      expect(mocks.rasterize.mock.calls[0][1]).toMatchObject({
+        scale: 1080 / 256,
+        width: 256,
+        height: 256,
+      })
+      // The PNG was made of a canvas of exactly the Format's pixels.
+      expect(sizes).toEqual([[1080, 1350]])
+      expect(drawImage).toHaveBeenCalledWith(
+        expect.anything(),
+        0,
+        0,
+        1080,
+        1350,
+      )
+      expect(mocks.uploader.mock.calls[0][2]).toEqual({
+        kind: 'image',
+        studio: { tab: 'speakers', format: 'portrait' },
+      })
+    } finally {
+      context.mockRestore()
+      toBlob.mockRestore()
+    }
+  })
+
+  it('says why a save was refused when the switch moved during the capture (#1247)', async () => {
+    const context = vi
+      .spyOn(HTMLCanvasElement.prototype, 'getContext')
+      .mockReturnValue({
+        drawImage: vi.fn(),
+      } as unknown as CanvasRenderingContext2D)
+    const toBlob = vi
+      .spyOn(HTMLCanvasElement.prototype, 'toBlob')
+      .mockImplementation(function (callback) {
+        callback(new Blob([mocks.pixels], { type: 'image/png' }))
+      })
+    let finish!: (canvas: unknown) => void
+    mocks.rasterize.mockReturnValue(
+      new Promise((resolve) => {
+        finish = resolve
+      }),
+    )
+    try {
+      renderStudio(
+        <FormatSwitch>
+          <Card card={SPEAKER_CARD} id="ada-moved" />
+        </FormatSwitch>,
+      )
+      sized('ada-moved')
+      fireEvent.click(screen.getByRole('button', { name: 'Save to gallery' }))
+      await waitFor(() => expect(mocks.rasterize).toHaveBeenCalledTimes(1))
+      fireEvent.click(screen.getByRole('radio', { name: /Landscape/ }))
+      finish({
+        width: 1080,
+        height: 1080,
+        toBlob: (callback: BlobCallback) =>
+          callback(new Blob([mocks.pixels], { type: 'image/png' })),
+      })
+      const alert = await screen.findByRole('alert')
+      expect(alert.textContent).toBe(
+        'The Format changed while the image was being made. Try again.',
+      )
+      expect(mocks.uploader).not.toHaveBeenCalled()
+    } finally {
+      context.mockRestore()
+      toBlob.mockRestore()
+    }
   })
 
   it('lets a closed capture go once the dialog has faded out', async () => {

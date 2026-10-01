@@ -110,6 +110,7 @@ const ASSETS: MarketingAssetRow[] = [
       speakerId: ADA._id,
       sponsorId: null,
       project: null,
+      format: 'square',
     },
     usedInPosts: 1,
   }),
@@ -156,6 +157,7 @@ const ASSETS: MarketingAssetRow[] = [
       speakerId: null,
       sponsorId: ACME._id,
       project: null,
+      format: 'square',
     },
   }),
   row({
@@ -174,6 +176,7 @@ const ASSETS: MarketingAssetRow[] = [
       speakerId: null,
       sponsorId: null,
       project: null,
+      format: 'square',
     },
   }),
 ]
@@ -1008,6 +1011,7 @@ const EXPORTED: MarketingAssetRow[] = [
       speakerId: null,
       sponsorId: null,
       project: { _id: 'vp-teaser', exists: true },
+      format: 'square',
     },
   }),
   row({
@@ -1031,6 +1035,7 @@ const EXPORTED: MarketingAssetRow[] = [
       speakerId: null,
       sponsorId: null,
       project: { _id: 'vp-gone', exists: false },
+      format: 'square',
     },
   }),
 ]

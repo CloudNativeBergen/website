@@ -10,6 +10,7 @@ import {
 import { AdminButton } from '@/components/admin/AdminButton'
 import { ModalShell } from '@/components/ModalShell'
 import type { StudioCard } from '@/components/common/image-capture'
+import { studioFormatLabel } from '@/lib/marketing-asset'
 import type { AssetUploader } from '@/components/admin/marketing/assets/upload'
 import {
   HINT,
@@ -136,7 +137,14 @@ function SaveForm({
             : null,
           tags: [],
         },
-        { kind: 'image', studio: { tab: card.tab } },
+        {
+          kind: 'image',
+          // The Format the card was shown, and captured, in (Formats spec §4).
+          studio: {
+            tab: card.tab,
+            ...(card.format ? { format: card.format } : {}),
+          },
+        },
       )
       setSaved({ softOnSocial: result.softOnSocial })
       onSaved()
@@ -249,8 +257,10 @@ function SaveForm({
         )}
       </p>
       <p className={HINT}>
-        Marked with this edition. Tags, credit and the edition can be changed in
-        the gallery.
+        {card.format
+          ? `Saved as ${studioFormatLabel(card.format).replace(')', ' px)')}, marked with this edition.`
+          : 'Marked with this edition.'}{' '}
+        Tags, credit and the edition can be changed in the gallery.
       </p>
       {error && (
         <p

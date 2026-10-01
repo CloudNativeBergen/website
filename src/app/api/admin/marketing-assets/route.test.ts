@@ -507,6 +507,36 @@ describe('a studio save through the move route (#1164)', () => {
     expect(h.guard).toHaveBeenCalledTimes(1)
   })
 
+  it('records the Format the card was captured in (#1247)', async () => {
+    const body = { ...VALID, studio: { tab: 'sponsors', format: 'portrait' } }
+    expect((await POST(request(body))).status).toBe(200)
+    expect(h.create.mock.calls[0][0].studio).toEqual({
+      tab: 'sponsors',
+      format: 'portrait',
+    })
+  })
+
+  it('does not call a landscape card soft: 1200×628 is LinkedIn’s own size (#1247)', async () => {
+    h.move.mockResolvedValue({
+      ok: true,
+      asset: {
+        _id: 'image-a-1200x628-png',
+        url: 'https://cdn/wide.png',
+        width: 1200,
+        height: 628,
+        created: true,
+      },
+    })
+    const saved = await POST(
+      request({ ...VALID, studio: { tab: 'speakers', format: 'landscape' } }),
+    )
+    expect((await saved.json()).softOnSocial).toBe(false)
+    // The same pixels uploaded by hand are just an image with a short side
+    // under 1080.
+    const uploaded = await POST(request(VALID))
+    expect((await uploaded.json()).softOnSocial).toBe(true)
+  })
+
   it('answers an image save with its file, for a studio background kept from the editor (#1182)', async () => {
     const response = await POST(request(VALID))
     expect(await response.json()).toEqual({
@@ -530,6 +560,11 @@ describe('a studio save through the move route (#1164)', () => {
 
   it.each([
     ['an unknown tab', { tab: 'video' }],
+    ['an unknown Format', { tab: 'speakers', format: 'story' }],
+    [
+      'a Format on a tab that has none',
+      { tab: 'conference', format: 'square' },
+    ],
     ['no tab', {}],
     ['not an object', 'speakers'],
   ])('refuses %s, and discards the upload', async (_, studio) => {
@@ -878,6 +913,25 @@ describe('a GIF or a video through the move route (#1167)', () => {
     expect(h.move).toHaveBeenCalledTimes(1)
     expect(h.move).toHaveBeenCalledWith(URL_OK, 'org-A')
     expect(h.discard).toHaveBeenCalledWith(POSTER_URL, 'org-A')
+  })
+
+  it('does not exempt a GIF at a Format’s pixels from the soft warning: it is an upload (#1247)', async () => {
+    h.moveGif.mockResolvedValue({
+      ok: true,
+      asset: {
+        _id: 'image-wave-1200x628-gif',
+        url: 'https://cdn/wave.gif',
+        width: 1200,
+        height: 628,
+        created: true,
+      },
+    })
+    const response = await POST(
+      request({ ...GIF, studio: { tab: 'speakers', format: 'landscape' } }),
+    )
+    expect(response.status).toBe(200)
+    expect((await response.json()).softOnSocial).toBe(true)
+    expect(h.create.mock.calls[0][0]).not.toHaveProperty('studio')
   })
 
   it('never marks a GIF as a studio save, nor a video from any tab but the meme generator', async () => {

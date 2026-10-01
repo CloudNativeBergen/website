@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { publishedDocumentId } from './details'
+import { studioFormatSchema, type StudioFormat } from './format'
 import { VIDEO_PROJECT_MAX_SCENES } from '@/lib/video-project/format'
 
 /**
@@ -15,6 +16,9 @@ export const STUDIO_TABS = [
   'sponsors',
 ] as const
 export type StudioTab = (typeof STUDIO_TABS)[number]
+
+/** The tabs whose cards come in a Format (the promo joins in slice 4). */
+const FORMAT_TABS: ReadonlySet<StudioTab> = new Set(['speakers', 'sponsors'])
 
 /** A Sanity image asset id: `image-<hash>-<w>x<h>-<ext>`. */
 const IMAGE_ASSET_ID = /^image-[A-Za-z0-9]+-\d+x\d+-[a-z0-9]+$/
@@ -47,6 +51,12 @@ export type ExportSourceInput = z.output<typeof exportSourceSchema>
 export const studioOriginSchema = z
   .object({
     tab: z.enum(STUDIO_TABS),
+    /**
+     * The Format the card was captured in (docs/MARKETING_STUDIO_FORMATS_
+     * SPEC.md §4). Absent for anything saved before Formats, which reads as
+     * square (§6).
+     */
+    format: studioFormatSchema.optional(),
     projectId: publishedDocumentId.optional(),
     sources: z.array(exportSourceSchema).max(MAX_EXPORT_SOURCES).optional(),
   })
@@ -55,6 +65,10 @@ export const studioOriginSchema = z
       (origin.projectId === undefined && origin.sources === undefined) ||
       origin.tab === 'meme-generator',
     { message: 'Only the meme generator makes videos' },
+  )
+  .refine(
+    (origin) => origin.format === undefined || FORMAT_TABS.has(origin.tab),
+    { message: 'Only a speaker or sponsor card has a Format' },
   )
 export type StudioOriginInput = z.output<typeof studioOriginSchema>
 
@@ -68,6 +82,8 @@ export type StudioOriginInput = z.output<typeof studioOriginSchema>
  */
 export interface MarketingAssetStudioOrigin {
   tab: StudioTab
+  /** The Format it was captured in; square where none was recorded (§6). */
+  format: StudioFormat
   speakerId: string | null
   sponsorId: string | null
   /**
@@ -121,6 +137,9 @@ export function openInStudioHref(origin: MarketingAssetStudioOrigin): string {
     params.set('speaker', origin.speakerId)
   if (origin.tab === 'sponsors' && origin.sponsorId)
     params.set('sponsor', origin.sponsorId)
+  // The shape it was saved in; square is the switch's default anyway.
+  if (FORMAT_TABS.has(origin.tab) && origin.format !== 'square')
+    params.set('format', origin.format)
   const project = openableProject(origin)
   if (project) params.set('project', project)
   return `/admin/marketing/studio?${params.toString()}`

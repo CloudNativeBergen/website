@@ -10,7 +10,7 @@ import {
   studioOriginSchema,
 } from './studio'
 
-const NO_PROJECT = { project: null }
+const NO_PROJECT = { project: null, format: 'square' } as const
 
 describe('openInStudioHref', () => {
   it('opens the tab on its speaker or sponsor', () => {
@@ -30,6 +30,37 @@ describe('openInStudioHref', () => {
         ...NO_PROJECT,
       }),
     ).toBe('/admin/marketing/studio?tab=sponsors&sponsor=acme')
+  })
+
+  it('reopens a card in the Format it was saved in, and says nothing for square (#1247)', () => {
+    expect(
+      openInStudioHref({
+        tab: 'sponsors',
+        speakerId: null,
+        sponsorId: 'acme',
+        project: null,
+        format: 'landscape',
+      }),
+    ).toBe('/admin/marketing/studio?tab=sponsors&sponsor=acme&format=landscape')
+    expect(
+      openInStudioHref({
+        tab: 'speakers',
+        speakerId: 'ada',
+        sponsorId: null,
+        project: null,
+        format: 'portrait',
+      }),
+    ).toBe('/admin/marketing/studio?tab=speakers&speaker=ada&format=portrait')
+    // A Format on a tab without a switch is never put in the URL.
+    expect(
+      openInStudioHref({
+        tab: 'conference',
+        speakerId: null,
+        sponsorId: null,
+        project: null,
+        format: 'portrait',
+      }),
+    ).toBe('/admin/marketing/studio?tab=conference')
   })
 
   it('opens a subjectless tab alone, and never pairs a subject with the wrong tab', () => {
@@ -58,6 +89,30 @@ describe('openInStudioHref', () => {
 })
 
 describe('studioOriginSchema', () => {
+  it('carries the Format a card was captured in, and refuses one it does not know (#1247)', () => {
+    expect(
+      studioOriginSchema.parse({ tab: 'speakers', format: 'landscape' }),
+    ).toEqual({ tab: 'speakers', format: 'landscape' })
+    expect(
+      studioOriginSchema.parse({ tab: 'sponsors', format: 'portrait' }),
+    ).toEqual({ tab: 'sponsors', format: 'portrait' })
+    expect(
+      studioOriginSchema.safeParse({ tab: 'speakers', format: 'story' })
+        .success,
+    ).toBe(false)
+    // Only a speaker or sponsor card comes in a Format: the meme generator,
+    // the collage and (until slice 4) the promo keep their shapes.
+    for (const tab of ['meme-generator', 'conference', 'photo-gallery']) {
+      expect(
+        studioOriginSchema.safeParse({ tab, format: 'portrait' }).success,
+      ).toBe(false)
+    }
+    // No Format claimed reads as square later (§6); nothing is invented here.
+    expect(studioOriginSchema.parse({ tab: 'speakers' })).toEqual({
+      tab: 'speakers',
+    })
+  })
+
   it('accepts the five tabs and nothing else', () => {
     expect(STUDIO_TABS).toHaveLength(5)
     expect(studioOriginSchema.safeParse({ tab: 'video' }).success).toBe(false)
@@ -90,6 +145,7 @@ describe('an exported video’s project (#1182)', () => {
     speakerId: null,
     sponsorId: null,
     project: { _id: 'vp-1', exists },
+    format: 'square' as const,
   })
 
   it('opens the project in the studio while it exists', () => {

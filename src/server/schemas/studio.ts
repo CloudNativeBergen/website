@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { STUDIO_TABS } from '@/lib/marketing-asset/studio'
+import { studioFormatSchema } from '@/lib/marketing-asset/format'
 import { LiveDocumentIdSchema } from './social'
 
 // These select cards from the server's org-scoped data; they do not scope queries.
@@ -15,4 +16,7 @@ export const StudioSearchParamsSchema = z.object({
   // proves it this organization's.
   project: StudioDocumentIdSchema,
   tab: z.enum(STUDIO_TABS).optional().catch(undefined),
+  // The Format to open the speaker and sponsor switches on: a gallery entry
+  // reopened in the studio comes back in the shape it was saved in.
+  format: studioFormatSchema.optional().catch(undefined),
 })

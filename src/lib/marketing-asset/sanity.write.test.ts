@@ -104,6 +104,27 @@ describe('createMarketingAsset', () => {
     expect(h.created[0].studio).toEqual({ tab: 'speakers' })
   })
 
+  it('records the Format a card was captured in, and nothing when none was (#1247)', async () => {
+    await createMarketingAsset({
+      orgId: 'org-a',
+      details: { ...DETAILS, alt: 'Speaker card' },
+      imageAssetId: 'image-a-1200x628-png',
+      studio: { tab: 'speakers', format: 'landscape' },
+    })
+    expect(h.created[0].studio).toEqual({
+      tab: 'speakers',
+      format: 'landscape',
+    })
+    await createMarketingAsset({
+      orgId: 'org-a',
+      details: { ...DETAILS, alt: 'Speaker card' },
+      imageAssetId: 'image-a-1x1-png',
+      studio: { tab: 'speakers' },
+    })
+    // Not even `format: undefined`: the read side coalesces to square.
+    expect(h.created[1].studio).toEqual({ tab: 'speakers' })
+  })
+
   it('records a video’s project as a weak reference, with its tab (#1182)', async () => {
     await createMarketingAsset({
       orgId: 'org-a',

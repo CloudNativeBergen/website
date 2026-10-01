@@ -1,16 +1,19 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   ArrowDownTrayIcon,
   RectangleStackIcon,
 } from '@heroicons/react/24/outline'
 import {
+  FORMAT_CHANGED,
   captureImage,
   useGallerySave,
   useImageAttachment,
+  useStudioFormat,
   type StudioCard,
 } from './image-capture'
+import { STUDIO_FORMATS } from '@/lib/marketing-asset'
 
 interface DownloadableImageProps {
   filename?: string
@@ -33,6 +36,32 @@ export function DownloadableImage({
   const attachment = useImageAttachment()
   const gallery = useGallerySave()
   const busy = isDownloading || Boolean(attachment?.busy || gallery?.busy)
+  // On a tab with a Format switch, every capture is the Format shown, at
+  // exactly its pixels (docs/MARKETING_STUDIO_FORMATS_SPEC.md §4); elsewhere
+  // a capture is 4× the CSS box, as it always was.
+  const format = useStudioFormat()
+  const size = format ? STUDIO_FORMATS[format] : undefined
+  // The switch stays live while a capture waits for images: a card that
+  // changed shape underneath the render would be stretched to the old
+  // Format and saved under its name. Refuse it instead — counting changes,
+  // so a switch flipped away and back is refused too.
+  const changes = useRef(0)
+  const previous = useRef(format)
+  useEffect(() => {
+    if (previous.current === format) return
+    previous.current = format
+    changes.current += 1
+  }, [format])
+  const capture = async (element: HTMLElement) => {
+    const started = changes.current
+    const blob = await captureImage(element, size)
+    if (changes.current !== started) throw new Error(FORMAT_CHANGED)
+    return blob
+  }
+  const card: StudioCard | undefined =
+    studio && format ? { ...studio, format } : studio
+  // The same name for a download, a Task attachment and a gallery save.
+  const name = format ? `${filename}-${format}` : filename
 
   const downloadAsImage = async () => {
     if (!componentRef.current) {
@@ -54,12 +83,12 @@ export function DownloadableImage({
     setIsDownloading(true)
 
     try {
-      const blob = await captureImage(element)
+      const blob = await capture(element)
       const url = URL.createObjectURL(blob)
       const link = document.createElement('a')
       try {
         link.href = url
-        link.download = `${filename}-${Date.now()}.png`
+        link.download = `${name}-${Date.now()}.png`
         link.style.display = 'none'
         document.body.appendChild(link)
         link.click()
@@ -74,7 +103,9 @@ export function DownloadableImage({
       let message = 'Failed to generate image. Please try again.'
 
       if (error instanceof Error) {
-        if (error.message.includes('timeout')) {
+        if (error.message === FORMAT_CHANGED) {
+          message = error.message
+        } else if (error.message.includes('timeout')) {
           message =
             'Image generation timed out. Please check your connection and try again.'
         } else if (error.message.includes('dimensions')) {
@@ -116,10 +147,7 @@ export function DownloadableImage({
         {attachment && (
           <button
             onClick={() =>
-              attachment.attach(
-                () => captureImage(componentRef.current!),
-                filename,
-              )
+              attachment.attach(() => capture(componentRef.current!), name)
             }
             disabled={busy}
             className="inline-flex items-center rounded-lg border border-blue-600 px-4 py-2 text-sm font-semibold text-blue-700 disabled:opacity-50 dark:text-blue-300"
@@ -127,14 +155,10 @@ export function DownloadableImage({
             {attachment.busy ? 'Attaching…' : 'Attach to Task'}
           </button>
         )}
-        {gallery && studio && (
+        {gallery && card && (
           <button
             onClick={() =>
-              gallery.save(
-                () => captureImage(componentRef.current!),
-                filename,
-                studio,
-              )
+              gallery.save(() => capture(componentRef.current!), name, card)
             }
             disabled={busy}
             className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-800 transition-colors hover:bg-gray-50 disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700"

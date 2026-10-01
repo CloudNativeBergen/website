@@ -56,6 +56,15 @@ export {
   motionKindForFile,
 } from './motion-type'
 export type { MotionKind } from './motion-type'
+export {
+  DEFAULT_STUDIO_FORMAT,
+  STUDIO_FORMATS,
+  STUDIO_FORMAT_IDS,
+  studioFormatAspect,
+  studioFormatLabel,
+  studioFormatSchema,
+} from './format'
+export type { StudioFormat, StudioFormatSize } from './format'
 export { NOT_ATTACHABLE_YET, isAttachableToPost } from './post-attach'
 export {
   STUDIO_TABS,

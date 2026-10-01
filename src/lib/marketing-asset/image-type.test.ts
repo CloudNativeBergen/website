@@ -46,6 +46,15 @@ describe('isSoftOnSocial', () => {
     expect(isSoftOnSocial({ width: 1080, height: 1350 })).toBe(false)
     expect(isSoftOnSocial({ width: 4000, height: 1080 })).toBe(false)
   })
+  it('never warns about an image at exactly its Format’s pixels, and still warns off them (#1247)', () => {
+    expect(isSoftOnSocial({ width: 1200, height: 628 }, 'landscape')).toBe(
+      false,
+    )
+    expect(isSoftOnSocial({ width: 1200, height: 628 })).toBe(true)
+    expect(isSoftOnSocial({ width: 1200, height: 628 }, 'square')).toBe(true)
+    expect(isSoftOnSocial({ width: 1200, height: 627 }, 'landscape')).toBe(true)
+    expect(isSoftOnSocial({ width: 1080, height: 1080 }, null)).toBe(false)
+  })
   it('does not warn when the size is unknown', () => {
     expect(isSoftOnSocial(null)).toBe(false)
     expect(isSoftOnSocial({ width: 0, height: 0 })).toBe(false)

@@ -168,3 +168,105 @@ describe('shared studio raster capture', () => {
     await expect(result).resolves.toBeInstanceOf(Blob)
   })
 })
+
+describe('capture at a Format’s exact pixels (docs/MARKETING_STUDIO_FORMATS_SPEC.md §2)', () => {
+  /** A stand-in for the browser's canvas: jsdom has no 2D context. */
+  function target(blob: Blob | null) {
+    const drawImage = vi.fn()
+    /** The canvas's size when the PNG was made of it (it is released after). */
+    const sizeAtBlob: number[] = []
+    const fake = {
+      width: 0,
+      height: 0,
+      getContext: vi.fn(() => ({ drawImage })),
+      toBlob: vi.fn((callback: BlobCallback) => {
+        sizeAtBlob.push(fake.width, fake.height)
+        callback(blob)
+      }),
+    }
+    const original = document.createElement.bind(document)
+    vi.spyOn(document, 'createElement').mockImplementation((tag, options) =>
+      tag === 'canvas'
+        ? (fake as unknown as HTMLCanvasElement)
+        : original(tag, options),
+    )
+    return { fake, drawImage, sizeAtBlob }
+  }
+  afterEach(() => vi.restoreAllMocks())
+
+  it('scales the render to the Format and draws it onto a canvas of exactly the Format’s pixels', async () => {
+    const { element } = card()
+    // The card's CSS box is laid out in the Format's aspect; its height is
+    // rounded to whole CSS pixels, so the render can come out a pixel over.
+    Object.defineProperty(element, 'offsetHeight', { value: 157 })
+    const rendered = { ...canvas(null), width: 1200, height: 629 }
+    h.render.mockResolvedValue(rendered)
+    const png = new Blob(['landscape'], { type: 'image/png' })
+    const { fake, drawImage, sizeAtBlob } = target(png)
+
+    const result = captureImage(element, { width: 1200, height: 628 })
+    await vi.runAllTimersAsync()
+    expect(await result).toBe(png)
+
+    expect(h.render.mock.calls[0][1]).toMatchObject({
+      scale: 4,
+      width: 300,
+      height: 157,
+    })
+    // The image handed out is the Format's size, whatever the render's.
+    expect(sizeAtBlob).toEqual([1200, 628])
+    expect(drawImage).toHaveBeenCalledWith(rendered, 0, 0, 1200, 628)
+    expect(fake.toBlob).toHaveBeenCalledWith(
+      expect.any(Function),
+      'image/png',
+      1,
+    )
+    // Never the render's own blob.
+    expect(rendered.toBlob).not.toHaveBeenCalled()
+    // Both canvases released.
+    expect([rendered.width, rendered.height]).toEqual([0, 0])
+    expect([fake.width, fake.height]).toEqual([0, 0])
+  })
+
+  it('uses a scale that is the Format’s width over the CSS width, not a fixed 4×', async () => {
+    const { element } = card()
+    Object.defineProperties(element, {
+      offsetWidth: { value: 256 },
+      offsetHeight: { value: 320 },
+    })
+    h.render.mockResolvedValue({ ...canvas(null), width: 1080, height: 1350 })
+    target(new Blob(['portrait'], { type: 'image/png' }))
+    const result = captureImage(element, { width: 1080, height: 1350 })
+    await vi.runAllTimersAsync()
+    await result
+    expect(h.render.mock.calls[0][1]).toMatchObject({ scale: 1080 / 256 })
+  })
+
+  it('never asks html2canvas for more than 10×, which it refuses; the exact-size canvas upscales the rest', async () => {
+    const { element } = card()
+    Object.defineProperties(element, {
+      offsetWidth: { value: 100 },
+      offsetHeight: { value: 52 },
+    })
+    h.render.mockResolvedValue({ ...canvas(null), width: 1000, height: 520 })
+    const { sizeAtBlob } = target(new Blob(['tiny'], { type: 'image/png' }))
+    const result = captureImage(element, { width: 1200, height: 628 })
+    await vi.runAllTimersAsync()
+    await result
+    expect(h.render.mock.calls[0][1]).toMatchObject({ scale: 10 })
+    expect(sizeAtBlob).toEqual([1200, 628])
+  })
+
+  it('still captures at 4× of the CSS size when no Format is asked for', async () => {
+    const { element } = card()
+    const output = canvas(new Blob(['x'], { type: 'image/png' }))
+    h.render.mockResolvedValue(output)
+    const { fake } = target(null)
+    const result = captureImage(element)
+    await vi.runAllTimersAsync()
+    await result
+    expect(h.render.mock.calls[0][1]).toMatchObject({ scale: 4 })
+    expect(output.toBlob).toHaveBeenCalled()
+    expect(fake.toBlob).not.toHaveBeenCalled()
+  })
+})

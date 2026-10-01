@@ -36,6 +36,7 @@ import type { NewMarketingAsset } from '@/lib/marketing-asset/sanity'
 import { abortAfter } from '@/lib/marketing-asset/blob-delete'
 import { createMarketingAsset } from '@/lib/marketing-asset/sanity'
 import { marketingAssetDetailsSchema } from '@/lib/marketing-asset/details'
+import type { StudioFormat } from '@/lib/marketing-asset/format'
 import {
   studioOriginSchema,
   type StudioOriginInput,
@@ -308,7 +309,15 @@ export async function POST(request: Request) {
     }
   }
 
-  const moved = await moveFor(kindName, url, posterUrl, orgId, answerBy)
+  const moved = await moveFor(
+    kindName,
+    url,
+    posterUrl,
+    orgId,
+    answerBy,
+    // Only an image is a studio card: a GIF with a stray Format is an upload.
+    kindName === 'image' ? origin?.format : undefined,
+  )
   if (!moved.ok) {
     const refusal =
       moved.reason === 'poster' ? POSTER_REFUSED : kind.refusals[moved.reason]
@@ -464,6 +473,8 @@ async function moveFor(
   orgId: string,
   /** When the route must answer: the video's move ends in time to write. */
   answerBy: number,
+  /** The Format a studio card was captured in: its own pixels are never soft. */
+  format?: StudioFormat,
 ): Promise<Moved> {
   // A poster belongs to a video only: any other kind never moves one.
   if (kind !== 'video' && posterUrl) discardBlob(posterUrl, orgId)
@@ -535,7 +546,7 @@ async function moveFor(
       imageAssetId: moved.asset._id,
       ...(moved.asset.created ? { createdImageAssetId: moved.asset._id } : {}),
     },
-    softOnSocial: isSoftOnSocial(moved.asset),
+    softOnSocial: isSoftOnSocial(moved.asset, format),
     created: createdIds(moved.asset),
   }
 }
