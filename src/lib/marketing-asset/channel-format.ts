@@ -1,6 +1,7 @@
 import { getPlatformConstraints } from '@/lib/social/provider/constraints'
 import { SOCIAL_PLATFORM_LABELS, type SocialPlatform } from '@/lib/social/types'
 import {
+  channelFormat,
   DEFAULT_STUDIO_FORMAT,
   STUDIO_FORMATS,
   STUDIO_FORMAT_IDS,
@@ -16,17 +17,10 @@ import type { MarketingAssetRow } from './types'
  */
 
 /**
- * The Format a Channel's feed is laid out for: LinkedIn → landscape, Bluesky
- * → square. Null for a Channel with no native Format, whose picker keeps its
- * order.
+ * The Format a Channel's feed is laid out for; null for a Channel with no
+ * native Format, whose picker keeps its order. The table is `./format`'s.
  */
-export function channelFormat(
-  platform: SocialPlatform | null | undefined,
-): StudioFormat | null {
-  if (platform === 'linkedin') return 'landscape'
-  if (platform === 'bluesky') return 'square'
-  return null
-}
+export { channelFormat }
 
 const aspect = (format: StudioFormat) =>
   STUDIO_FORMATS[format].width / STUDIO_FORMATS[format].height
