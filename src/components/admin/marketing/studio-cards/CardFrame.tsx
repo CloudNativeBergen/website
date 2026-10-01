@@ -30,46 +30,55 @@ export interface IconLineSizes {
  * filling the whole frame whatever the shape. `cqw` units inside it are
  * hundredths of the card's width, so a layout is written once per Format and
  * scales with the card's CSS size; the capture scales it to the Format's pixels.
+ *
+ * Two tones: `dark` (speaker and sponsor cards) is slate under the dark
+ * pattern, or `gradient` with the pattern off; `brand` (the conference promo)
+ * is the conference's own brand gradient under the brand pattern and a shade,
+ * as the promo always looked.
  */
 export function CardFrame({
   kind,
   format,
-  gradient,
+  tone = 'dark',
+  gradient = '',
   pattern,
   seed,
   className = '',
   children,
 }: {
-  kind: 'speaker' | 'sponsor'
+  kind: 'speaker' | 'sponsor' | 'promo'
   format: StudioFormat
-  /** Tailwind gradient stops, used when the pattern is off. */
-  gradient: string
+  tone?: 'dark' | 'brand'
+  /** Tailwind gradient stops, used by the dark tone when the pattern is off. */
+  gradient?: string
   pattern: boolean
   seed: number
   className?: string
   children: React.ReactNode
 }) {
-  const background = pattern
-    ? 'from-slate-900 via-blue-900 to-slate-900'
-    : gradient
+  const brand = tone === 'brand'
+  const background = brand
+    ? 'bg-brand-gradient'
+    : `bg-linear-to-br ${pattern ? 'from-slate-900 via-blue-900 to-slate-900' : gradient}`
   return (
     <div
       data-card={kind}
       data-format={format}
-      className={`group @container relative w-full overflow-hidden rounded-2xl border border-gray-200 bg-linear-to-br ${background} text-white transition-all duration-300 hover:shadow-xl ${className}`}
+      className={`group @container relative w-full overflow-hidden rounded-2xl border border-gray-200 ${background} text-white transition-all duration-300 hover:shadow-xl ${className}`}
       style={{ aspectRatio: studioFormatAspect(format) }}
     >
       {pattern && (
         <CloudNativePattern
           className="absolute inset-0"
-          variant="dark"
-          opacity={0.25}
+          variant={brand ? 'brand' : 'dark'}
+          opacity={brand ? 0.15 : 0.25}
           animated
-          baseSize={35}
-          iconCount={45}
+          baseSize={brand ? 45 : 35}
+          iconCount={brand ? 80 : 45}
           seed={seed}
         />
       )}
+      {brand && <div aria-hidden className="absolute inset-0 bg-black/30" />}
       <div className="relative h-full">{children}</div>
     </div>
   )

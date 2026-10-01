@@ -516,6 +516,18 @@ describe('a studio save through the move route (#1164)', () => {
     })
   })
 
+  it('records the Format the conference promo was captured in (#1250)', async () => {
+    const body = {
+      ...VALID,
+      studio: { tab: 'conference', format: 'landscape' },
+    }
+    expect((await POST(request(body))).status).toBe(200)
+    expect(h.create.mock.calls[0][0].studio).toEqual({
+      tab: 'conference',
+      format: 'landscape',
+    })
+  })
+
   it('does not call a landscape card soft: 1200×628 is LinkedIn’s own size (#1247)', async () => {
     h.move.mockResolvedValue({
       ok: true,
@@ -563,7 +575,7 @@ describe('a studio save through the move route (#1164)', () => {
     ['an unknown Format', { tab: 'speakers', format: 'story' }],
     [
       'a Format on a tab that has none',
-      { tab: 'conference', format: 'square' },
+      { tab: 'photo-gallery', format: 'square' },
     ],
     ['no tab', {}],
     ['not an object', 'speakers'],

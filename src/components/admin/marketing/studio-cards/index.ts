@@ -1,4 +1,6 @@
 export { FormatSwitch } from './FormatSwitch'
+export { PROMO_CARD_ELEMENTS, PromoCard } from './PromoCard'
+export type { PromoCardCounts, PromoCardProps } from './PromoCard'
 export { SPEAKER_CARD_ELEMENTS, SpeakerCard } from './SpeakerCard'
 export type {
   SpeakerCardProps,
