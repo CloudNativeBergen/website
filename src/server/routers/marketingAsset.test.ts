@@ -242,6 +242,11 @@ beforeEach(() => {
         if (params.conferenceId !== 'conf-A') throw new Error('unscoped read')
         return params.postId === 'post-ours' ? 'sp-member' : null
       }
+      // The picker's read of the variant's Channel (#1249), scoped likewise.
+      if (query.includes('"socialPostVariant"')) {
+        if (params.conferenceId !== 'conf-A') throw new Error('unscoped read')
+        return params.variantId === 'variant-linkedin' ? 'linkedin' : null
+      }
       // The asset reads, which must be scoped to the caller's organization.
       if (params.orgId !== 'org-A') throw new Error('unscoped read')
       // "Used in N posts": two of our posts hold the logo.
@@ -310,6 +315,7 @@ describe('marketingAsset.forPost (#1163)', () => {
         attachable: true,
         usedInPosts: null,
         downloadUrl: null,
+        format: 'square',
       },
     ])
     const taskRead = h.read.mock.calls.find(([q]) =>
@@ -319,6 +325,37 @@ describe('marketingAsset.forPost (#1163)', () => {
       postId: 'post-ours',
       conferenceId: 'conf-A',
     })
+    // No variant named: no Channel is read.
+    expect(
+      h.read.mock.calls.some(([q]) =>
+        String(q).includes('"socialPostVariant"'),
+      ),
+    ).toBe(false)
+  })
+
+  it('reads the Channel from the variant named, in this conference and on this post (#1249)', async () => {
+    await assets().forPost({
+      postId: 'post-ours',
+      variantId: 'variant-linkedin',
+    })
+    const variantRead = h.read.mock.calls.find(([q]) =>
+      String(q).includes('"socialPostVariant"'),
+    )
+    expect(variantRead?.[1]).toMatchObject({
+      variantId: 'variant-linkedin',
+      postId: 'post-ours',
+      conferenceId: 'conf-A',
+    })
+  })
+
+  it('refuses a Studio draft of a variant', async () => {
+    await expect(
+      assets().forPost({
+        postId: 'post-ours',
+        variantId: 'drafts.variant-linkedin',
+      }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    expect(h.read).not.toHaveBeenCalled()
   })
 
   it("refuses another conference's post before reading any asset", async () => {

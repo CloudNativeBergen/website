@@ -1,5 +1,8 @@
 // Client-safe surface. Server-only modules (`./move`, `./sanity`) are imported
 // by path so they never reach a client bundle through this barrel.
+// `./channel-format` is client-safe but also imported by path: it pulls in
+// the social platform rules (and their domain parser), which most of this
+// barrel's importers never need.
 export {
   MARKETING_ASSET_BLOB_PREFIX,
   marketingAssetPathname,

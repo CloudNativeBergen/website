@@ -102,7 +102,8 @@ export const marketingAssetRouter = router({
 
   /**
    * The post editor's "Marketing assets" picker (spec §5): the post's subject
-   * first, then this edition's, then the organization's. The post is proven
+   * first, then this edition's, then the organization's, and within each the
+   * variant's Channel's Format first (formats spec §6). The post is proven
    * this conference's before anything is read; its subject comes from the
    * post's Task on the server.
    */
@@ -114,6 +115,11 @@ export const marketingAssetRouter = router({
         search: z.string().max(200).optional(),
         /** Only the GIFs and videos, which the manual view offers (#1167). */
         byHand: z.boolean().optional(),
+        /**
+         * The variant the picker is open in (#1249): its Channel's Format
+         * leads. Its Channel is read on the server, scoped to this post.
+         */
+        variantId: LiveDocumentIdSchema.optional(),
       }),
     )
     .query(async ({ input }) => {
@@ -126,6 +132,7 @@ export const marketingAssetRouter = router({
         editions: input.editions,
         search: input.search,
         byHand: input.byHand,
+        variantId: input.variantId,
       })
     }),
 

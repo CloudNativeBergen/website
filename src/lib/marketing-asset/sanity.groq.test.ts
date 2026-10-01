@@ -40,6 +40,10 @@ import {
   readMarketingAssetGif,
   readMarketingAssetMedia,
 } from '@/lib/marketing-asset/sanity'
+import {
+  croppedSize,
+  formatMismatchWarning,
+} from '@/lib/marketing-asset/channel-format'
 
 const ref = (id: string) => ({ _type: 'reference', _ref: id })
 const weak = (id: string) => ({ _type: 'reference', _ref: id, _weak: true })
@@ -935,6 +939,285 @@ describe('picking an asset into a post (#1163)', () => {
     })
     // Scoped: another organization's asset reads as nothing.
     expect(await readMarketingAssetForPost('org-a', 'b-ada')).toBeNull()
+  })
+
+  describe("the post Channel's Format first (#1249)", () => {
+    const POST = 'socialPost.6f1c2a9e-4b3d-4e21-9a55-0d7e8c1b2a01'
+    const OTHER_POST = 'socialPost.0a9b8c7d-6e5f-4a3b-8c2d-1e0f9a8b7c02'
+    const V = {
+      linkedin: 'socialPostVariant.11111111-1111-4111-8111-111111111111',
+      bluesky: 'socialPostVariant.22222222-2222-4222-8222-222222222222',
+      x: 'socialPostVariant.33333333-3333-4333-8333-333333333333',
+      foreign: 'socialPostVariant.44444444-4444-4444-8444-444444444444',
+      otherPost: 'socialPostVariant.55555555-5555-4555-8555-555555555555',
+    }
+    const imageId = (n: string, width: number, height: number) =>
+      `image-${n.repeat(40)}-${width}x${height}-png`
+    const sized = (n: string, width: number, height: number) => ({
+      ...img(imageId(n, width, height)),
+      metadata: { dimensions: { width, height } },
+    })
+    const imageAt = (n: string, width: number, height: number) =>
+      imageOf(imageId(n, width, height))
+    const studio = (tab: string, format?: string) => ({
+      source: 'studio',
+      studio: { tab, ...(format ? { format } : {}) },
+    })
+    const at = (day: string) => ({ _createdAt: `2026-09-${day}T00:00:00Z` })
+    const thisEdition = { scope: 'edition', conference: ref('conf-a-2026') }
+    const platformVariant = (
+      id: string,
+      conf: string,
+      postId: string,
+      platform: string,
+    ) => ({ ...variant(id, conf, postId), platform })
+
+    const RANKED = [
+      ...DATASET.filter((d) => d._type !== 'marketingAsset'),
+      sized('1', 1080, 1080),
+      sized('2', 1200, 628),
+      sized('3', 1920, 1080),
+      sized('4', 1080, 1350),
+      sized('5', 1600, 900),
+      img('image-nodims'),
+      // About the post's subject: this group leads whatever its Format.
+      asset('ada-square', 'org-a', {
+        ...imageAt('1', 1080, 1080),
+        subject: weak('sp-ada'),
+        ...at('10'),
+      }),
+      asset('ada-landscape', 'org-a', {
+        ...imageAt('2', 1200, 628),
+        ...studio('speakers', 'landscape'),
+        subject: weak('sp-ada'),
+        ...at('01'),
+      }),
+      // This edition's. A studio card saved before Formats existed reads as
+      // square, whatever shape its pixels are (spec §6).
+      asset('ed-old-sponsor', 'org-a', {
+        ...imageAt('3', 1920, 1080),
+        ...studio('sponsors'),
+        ...thisEdition,
+        ...at('09'),
+      }),
+      // Uploads have no Format: their shape ranks them.
+      asset('ed-tall', 'org-a', {
+        ...imageAt('4', 1080, 1350),
+        ...thisEdition,
+        ...at('08'),
+      }),
+      asset('ed-wide', 'org-a', {
+        ...imageAt('5', 1600, 900),
+        ...thisEdition,
+        ...at('07'),
+      }),
+      asset('ed-square', 'org-a', {
+        ...imageAt('1', 1080, 1080),
+        ...thisEdition,
+        ...at('06'),
+      }),
+      // The organization's: an upload of unknown size reads as square.
+      asset('org-no-size', 'org-a', {
+        ...imageOf('image-nodims'),
+        ...at('05'),
+      }),
+      asset('org-landscape', 'org-a', {
+        ...imageAt('2', 1200, 628),
+        ...studio('sponsors', 'landscape'),
+        ...at('04'),
+      }),
+      post(POST, 'conf-a-2026', []),
+      post(OTHER_POST, 'conf-a-2026', []),
+      platformVariant(V.linkedin, 'conf-a-2026', POST, 'linkedin'),
+      platformVariant(V.bluesky, 'conf-a-2026', POST, 'bluesky'),
+      platformVariant(V.x, 'conf-a-2026', POST, 'x'),
+      // Another conference's LinkedIn variant naming our post, and a LinkedIn
+      // variant of our OTHER post: neither is this post's Channel.
+      platformVariant(V.foreign, 'conf-b', POST, 'linkedin'),
+      platformVariant(V.otherPost, 'conf-a-2026', OTHER_POST, 'linkedin'),
+      task(
+        'marketingTask.9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c66',
+        'conf-a-2026',
+        V.linkedin,
+        'sp-ada',
+      ),
+    ]
+
+    beforeEach(() => {
+      h.dataset = RANKED
+    })
+
+    const UNRANKED = [
+      'ada-square',
+      'ada-landscape',
+      'ed-old-sponsor',
+      'ed-tall',
+      'ed-wide',
+      'ed-square',
+      'org-no-size',
+      'org-landscape',
+    ]
+
+    it('a LinkedIn post: the landscape entries lead each group, subject first', async () => {
+      expect(await pick(POST, { variantId: V.linkedin })).toEqual([
+        'ada-landscape',
+        'ada-square',
+        'ed-wide',
+        'ed-old-sponsor',
+        'ed-tall',
+        'ed-square',
+        'org-landscape',
+        'org-no-size',
+      ])
+    })
+
+    it('a Bluesky post: the square entries lead each group, subject first', async () => {
+      expect(await pick(POST, { variantId: V.bluesky })).toEqual([
+        'ada-square',
+        'ada-landscape',
+        'ed-old-sponsor',
+        'ed-square',
+        'ed-tall',
+        'ed-wide',
+        'org-no-size',
+        'org-landscape',
+      ])
+    })
+
+    it('an upload ranks by the shape it is POSTED at: a 2:1 image cropped to a square is square', async () => {
+      h.dataset = [
+        ...RANKED,
+        // 2000×1000 with a quarter trimmed from each side: 1000×1000 is what
+        // `defaultCropRect` starts from, so LinkedIn crops it like a square.
+        asset('ed-cropped', 'org-a', {
+          image: {
+            _type: 'image',
+            asset: ref(imageId('6', 2000, 1000)),
+            crop: {
+              _type: 'sanity.imageCrop',
+              top: 0,
+              bottom: 0,
+              left: 0.25,
+              right: 0.25,
+            },
+          },
+          ...thisEdition,
+          ...at('11'),
+        }),
+        sized('6', 2000, 1000),
+      ]
+      const rows = await listMarketingAssetsForPost(
+        'org-a',
+        'conf-a-2026',
+        POST,
+        { variantId: V.linkedin },
+      )
+      expect(ids(rows)).toEqual([
+        'ada-landscape',
+        'ada-square',
+        'ed-wide',
+        'ed-cropped',
+        'ed-old-sponsor',
+        'ed-tall',
+        'ed-square',
+        'org-landscape',
+        'org-no-size',
+      ])
+      const cropped = rows.find((r) => r._id === 'ed-cropped')
+      expect(cropped?.format).toBe('square')
+      // The crop travels to the editor, which warns from the same shape.
+      expect(cropped?.crop).toEqual({
+        top: 0,
+        bottom: 0,
+        left: 0.25,
+        right: 0.25,
+      })
+      // Never a field taken away: the row still reports the original pixels.
+      expect([cropped?.width, cropped?.height]).toEqual([2000, 1000])
+    })
+
+    it('a 4:1 banner and a 3:2 photo rank as landscape (the nearest Format); the editor warns about their crop', async () => {
+      h.dataset = [
+        ...RANKED,
+        sized('7', 4000, 1000),
+        sized('8', 1500, 1000),
+        asset('ed-banner', 'org-a', {
+          ...imageAt('7', 4000, 1000),
+          ...thisEdition,
+          ...at('12'),
+        }),
+        asset('ed-photo', 'org-a', {
+          ...imageAt('8', 1500, 1000),
+          ...thisEdition,
+          ...at('11'),
+        }),
+      ]
+      const rows = await listMarketingAssetsForPost(
+        'org-a',
+        'conf-a-2026',
+        POST,
+        { variantId: V.linkedin },
+      )
+      expect(ids(rows)).toEqual([
+        'ada-landscape',
+        'ada-square',
+        'ed-banner',
+        'ed-photo',
+        'ed-wide',
+        'ed-old-sponsor',
+        'ed-tall',
+        'ed-square',
+        'org-landscape',
+        'org-no-size',
+      ])
+      const [banner, photo] = ['ed-banner', 'ed-photo'].map((id) =>
+        rows.find((r) => r._id === id),
+      )
+      expect([banner?.format, photo?.format]).toEqual([
+        'landscape',
+        'landscape',
+      ])
+      // What the editor makes of the same rows: ranked first, still warned.
+      const warn = (row: (typeof rows)[number] | undefined) =>
+        row &&
+        formatMismatchWarning('linkedin', {
+          format: row.format,
+          size: croppedSize(row),
+          studio: Boolean(row.studio),
+        })
+      expect(warn(banner)).toContain('loses about 52% of its width (sides)')
+      expect(warn(photo)).toContain(
+        'loses about 21% of its height (top and bottom)',
+      )
+      expect(warn(rows.find((r) => r._id === 'ed-wide'))).toBeNull()
+    })
+
+    it('sends each entry its Format: the recorded one, square for a studio card without one, the shape of an upload', async () => {
+      const rows = await listMarketingAssetsForPost(
+        'org-a',
+        'conf-a-2026',
+        POST,
+        { variantId: V.linkedin },
+      )
+      expect(Object.fromEntries(rows.map((r) => [r._id, r.format]))).toEqual({
+        'ada-square': 'square',
+        'ada-landscape': 'landscape',
+        'ed-old-sponsor': 'square',
+        'ed-tall': 'portrait',
+        'ed-wide': 'landscape',
+        'ed-square': 'square',
+        'org-no-size': 'square',
+        'org-landscape': 'landscape',
+      })
+    })
+
+    it("no variant, a Channel with no native Format, or a variant that is not this post's: the order is unchanged", async () => {
+      expect(await pick(POST)).toEqual(UNRANKED)
+      expect(await pick(POST, { variantId: V.x })).toEqual(UNRANKED)
+      // Scoped to this conference: another conference's variant reads as none.
+      expect(await pick(POST, { variantId: V.foreign })).toEqual(UNRANKED)
+      expect(await pick(POST, { variantId: V.otherPost })).toEqual(UNRANKED)
+    })
   })
 })
 

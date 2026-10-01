@@ -1,3 +1,4 @@
+import type { StudioFormat } from './format'
 import type { MarketingAssetStudioOrigin } from './studio'
 
 /** What an asset can be about (spec §3): a speaker, a talk or a sponsor. */
@@ -62,6 +63,12 @@ export interface MarketingAssetRow {
   assetId: string | null
   width: number | null
   height: number | null
+  /**
+   * The image's stored crop (fractions trimmed from each edge), which a post
+   * keeps when it takes the image (#1249): the shape it is posted at. Null
+   * when none; optional only so fixtures predating it still type-check.
+   */
+  crop?: { top: number; bottom: number; left: number; right: number } | null
   createdAt: string
   /** Short side under 1080 px: may look soft on social. A warning only. */
   softOnSocial: boolean
@@ -89,6 +96,12 @@ export interface MarketingAssetRow {
   usedInPosts: number | null
   /** Whether it can go into a post yet: a GIF, video or track cannot. */
   attachable: boolean
+}
+
+/** A row as the post picker lists it (#1249): with the Format it ranked by. */
+export interface MarketingAssetPostRow extends MarketingAssetRow {
+  /** The studio's recorded Format (square if none), or an upload's shape. */
+  format: StudioFormat
 }
 
 /** Which assets the gallery shows. Every field narrows; none widens. */
