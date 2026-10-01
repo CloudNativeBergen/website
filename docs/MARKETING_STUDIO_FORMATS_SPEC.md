@@ -32,8 +32,11 @@ A fixed set of three:
 | landscape | 1.91:1 | 1200×628  | LinkedIn feed and link cards                 |
 | portrait  | 4:5    | 1080×1350 | LinkedIn mobile feed at full height; Bluesky |
 
-Every size clears the 1080 px short-side warning, stays under Bluesky's 2000 px and, as a JPEG, well
-under its 1 MB. A card is captured at exactly its Format's pixels, never at a scale of its CSS size.
+Square and portrait clear the 1080 px short-side warning; landscape's 628 px short side is
+LinkedIn's own size, so the warning is Format-aware: an image at exactly its Format's pixels is never
+flagged "may look soft" (`isSoftOnSocial`), while a 1200×628 image uploaded by hand still is. Every
+size stays under Bluesky's 2000 px and, as a JPEG, well under its 1 MB. A card is captured at
+exactly its Format's pixels, never at a scale of its CSS size.
 
 ## 3. Templates and layouts
 
