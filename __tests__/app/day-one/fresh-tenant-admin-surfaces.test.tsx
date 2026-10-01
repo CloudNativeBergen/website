@@ -337,13 +337,13 @@ describe('/admin/marketing/studio share assets on an unconfigured conference', (
   it('omits the date line rather than leaving it blank', async () => {
     await renderPromoTab()
 
-    // The promo card's metadata row is a date chip and a location chip sharing
-    // one span style. With no start date the card must carry the location chip
-    // ALONE — a share graphic with an empty date slot is its own defect.
-    const chips = Array.from(
-      document.querySelectorAll('span.font-inter.text-lg'),
-    )
-    expect(chips).toHaveLength(1)
-    expect(chips[0].textContent).toBe('Bergen, Norway')
+    // The promo card's metadata row is a date line and a place line. With no
+    // start date the card must carry the place line ALONE — a share graphic
+    // with an empty date slot is its own defect.
+    const promo = document.querySelector('[data-card="promo"]')!
+    expect(promo.querySelector('[data-card-element="date"]')).toBeNull()
+    expect(
+      promo.querySelector('[data-card-element="place"]')?.textContent,
+    ).toBe('Bergen, Norway')
   })
 })

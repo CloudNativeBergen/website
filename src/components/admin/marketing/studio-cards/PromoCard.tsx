@@ -110,7 +110,7 @@ export function PromoCard({
       {title}
     </h1>
   )
-  const meta = (
+  const iconLine = (
     element: 'date' | 'place',
     Icon: React.ComponentType<{ className?: string }>,
     text: string,
@@ -128,8 +128,8 @@ export function PromoCard({
   )
   const dateAndPlace = (size: IconLineSizes) => (
     <>
-      {date && meta('date', CalendarDaysIcon, date, size)}
-      {meta('place', MapPinIcon, place, size)}
+      {date && iconLine('date', CalendarDaysIcon, date, size)}
+      {iconLine('place', MapPinIcon, place, size)}
     </>
   )
   const countTiles = (size: {
@@ -164,7 +164,7 @@ export function PromoCard({
       ))}
     </div>
   )
-  const about = (size: string) => (
+  const descriptionLine = (size: string) => (
     <p
       data-card-element="description"
       className={`font-inter shrink-0 leading-snug text-white/95 ${size}`}
@@ -209,7 +209,7 @@ export function PromoCard({
           </header>
           <div className="mt-[2cqw] flex min-h-0 flex-1 items-end gap-[4cqw]">
             <div className="flex min-w-0 flex-1 flex-col justify-between gap-[2cqw] self-stretch">
-              {about('line-clamp-3 text-[2.1cqw]')}
+              {descriptionLine('line-clamp-3 text-[2.1cqw]')}
               {countTiles({
                 grid: 'gap-[2cqw]',
                 tile: 'p-[1.4cqw]',
@@ -257,7 +257,7 @@ export function PromoCard({
               number: 'text-[8cqw]',
               label: 'mt-[1cqw] text-[3.6cqw]',
             })}
-            {about('line-clamp-4 px-[2cqw] text-[3.8cqw]')}
+            {descriptionLine('line-clamp-4 px-[2cqw] text-[3.8cqw]')}
           </main>
           <footer className="flex shrink-0 flex-col items-center">
             <QrBadge url={qrCodeUrl} alt={QR_ALT} size={18} />
@@ -296,7 +296,7 @@ export function PromoCard({
             number: 'text-[6.5cqw]',
             label: 'mt-[1cqw] text-[3cqw]',
           })}
-          {about('line-clamp-3 px-[2cqw] text-[3.2cqw]')}
+          {descriptionLine('line-clamp-3 px-[2cqw] text-[3.2cqw]')}
         </main>
         <footer className="flex shrink-0 items-center justify-center gap-[3cqw]">
           <QrBadge url={qrCodeUrl} alt={QR_ALT} size={15} />

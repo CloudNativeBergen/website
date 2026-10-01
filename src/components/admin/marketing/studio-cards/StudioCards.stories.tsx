@@ -343,6 +343,22 @@ export const PromoTab: Story = {
     await expect(format()).toBe('square')
     await userEvent.click(canvas.getByRole('radio', { name: /Landscape/ }))
     await expect(format()).toBe('landscape')
+    // The downloaded promo never follows the admin theme: the light brand
+    // gradient (#1d4ed8 here) in light and dark alike. Dark is toggled here
+    // because the test runner does not play the Dark story.
+    const card = canvasElement.querySelector<HTMLElement>(
+      '[data-card="promo"]',
+    )!
+    const root = document.documentElement
+    const wasDark = root.classList.contains('dark')
+    for (const dark of [false, true]) {
+      root.classList.toggle('dark', dark)
+      await expect(
+        getComputedStyle(card).backgroundImage,
+        `dark ${dark}`,
+      ).toContain('rgb(29, 78, 216)')
+    }
+    root.classList.toggle('dark', wasDark)
   },
 }
 
