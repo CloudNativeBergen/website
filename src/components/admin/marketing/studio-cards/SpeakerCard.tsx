@@ -112,13 +112,18 @@ function Photo({
 }
 
 /**
- * A talk Format's `text-*` colour class as its theme variable. The
- * `text-brand-*` classes have `.dark` overrides, which would make a
- * downloaded card follow the organizer's admin theme (as the promo's count
- * icons did, #1250); the variable is the same in both.
+ * The talk icon's colour, from the brand variables where the talk's colour
+ * class is a `text-brand-*` one: those have `.dark` overrides, which would make
+ * a downloaded card follow the organizer's admin theme (as the promo's count
+ * icons did, #1250). Any other colour class has none and is kept.
  */
-function themeFreeColor(textClass = 'text-brand-cloud-blue'): string {
-  return `var(--color-${textClass.replace(/^text-/, '')})`
+const THEME_FREE_TALK_COLORS: Record<string, string> = {
+  'text-brand-cloud-blue': 'text-[color:var(--color-brand-cloud-blue)]',
+  'text-brand-fresh-green': 'text-[color:var(--color-brand-fresh-green)]',
+}
+
+function talkIconColor(textClass = 'text-brand-cloud-blue'): string {
+  return THEME_FREE_TALK_COLORS[textClass] ?? textClass
 }
 
 function Talk({
@@ -137,8 +142,7 @@ function Talk({
     >
       <div className="flex items-center justify-center gap-[1.5cqw]">
         <TalkIcon
-          className={size.icon}
-          style={{ color: themeFreeColor(talkConfig?.color) }}
+          className={`${size.icon} ${talkIconColor(talkConfig?.color)}`}
         />
         <span className={`font-inter font-semibold ${size.label}`}>
           {talkConfig?.label || 'Talk'}
