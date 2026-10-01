@@ -10,6 +10,7 @@
  * instances are not). Campaign and Task keys are preserved.
  */
 
+import { isDeepStrictEqual } from 'node:util'
 import {
   isEdited,
   replaceLinks,
@@ -204,13 +205,31 @@ export function buildTemplate(
           t.kind === 'studioRender' &&
           recipeForTaskKey(campaign.recipes, t.key) === render,
       )
+    const taskKeyById = new Map(tasks.map((t) => [t._id, t.key]))
+    const sameKeys = (a: readonly string[], b: readonly string[]) =>
+      a.length === b.length && a.every((key) => b.includes(key))
+    // Each render exactly as the split made it — Format, title, anchor and
+    // Prerequisites — and the pair alike in alt and instructions; anything
+    // the organizer changed would be lost by folding them.
     const asSplit = (group: CopySourceTask[]) =>
-      group.every(
-        (t) =>
-          storedRenderFormat(t.format) === split.get(t.key)?.format &&
+      group.every((t) => {
+        const made = split.get(t.key)
+        const anchor =
+          (t.milestone === null ? decisions.anchors?.[t._id] : null) ??
+          anchorOf(t, campaign, milestones)
+        return (
+          made !== undefined &&
+          storedRenderFormat(t.format) === made.format &&
+          t.title === made.title &&
+          isDeepStrictEqual(anchor, made.anchor) &&
+          sameKeys(
+            t.prerequisiteIds.flatMap((id) => taskKeyById.get(id) ?? []),
+            made.prerequisites ?? [],
+          ) &&
           t.alt === group[0].alt &&
-          t.instructions === group[0].instructions,
-      )
+          t.instructions === group[0].instructions
+        )
+      })
     const ownRecipe = new Set(
       campaign.recipes.flatMap((r) => {
         if (r.kind !== 'studioRender' || r.format) return []

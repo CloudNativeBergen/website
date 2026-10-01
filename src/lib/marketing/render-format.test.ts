@@ -112,15 +112,54 @@ describe('splitRendersByFormat', () => {
     ])
   })
 
-  it('a LinkedIn-only beat gets one landscape render', () => {
+  it('a LinkedIn-only beat gets one landscape render, under the landscape key', () => {
     expect(shape(splitRendersByFormat([render(), post('linkedin')]))).toEqual([
-      // One render: it keeps the Recipe's key, as every render before Formats.
-      { key: 'cardRender', format: 'landscape', prerequisites: undefined },
+      {
+        key: 'cardRender:landscape',
+        format: 'landscape',
+        prerequisites: undefined,
+      },
       {
         key: 'card:linkedin',
         format: undefined,
-        prerequisites: ['cardRender'],
+        prerequisites: ['cardRender:landscape'],
       },
+    ])
+  })
+
+  it('gives each Format the same key whichever Channels the beat posts on: the plain key is always square', () => {
+    const keyOf = (recipes: TaskRecipe[]) =>
+      Object.fromEntries(
+        splitRendersByFormat(recipes)
+          .filter((r) => r.kind === 'studioRender')
+          .map((r) => [r.format, r.key]),
+      )
+    expect(keyOf([render(), post('linkedin')])).toEqual({
+      landscape: 'cardRender:landscape',
+    })
+    expect(keyOf([render(), post('bluesky')])).toEqual({ square: 'cardRender' })
+    expect(keyOf([render(), post('linkedin'), post('bluesky')])).toEqual({
+      square: 'cardRender',
+      landscape: 'cardRender:landscape',
+    })
+  })
+
+  it('a render that waits on a split render waits on every Format of it', () => {
+    const poster = render({
+      key: 'posterRender',
+      beat: 'poster',
+      prerequisites: ['cardRender', 'somethingElse'],
+    })
+    const split = splitRendersByFormat([
+      render(),
+      post('linkedin'),
+      post('bluesky'),
+      poster,
+    ])
+    expect(split.find((r) => r.key === 'posterRender')?.prerequisites).toEqual([
+      'cardRender',
+      'cardRender:landscape',
+      'somethingElse',
     ])
   })
 

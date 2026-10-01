@@ -362,6 +362,29 @@ describe('speakerConfirmed Trigger and speaker expansion', () => {
     expect(records.tasks[1].prerequisiteIds).toEqual([records.tasks[0]._id])
   })
 
+  it('a Channel added to the beat later gets a render of its own Format, never the one another Format made', async () => {
+    const speakers = store.context!.campaigns[1]
+    const bluesky = speakers.recipes.find(
+      (r) => r.key === 'speakerCard:bluesky',
+    )!
+    // LinkedIn only at first: one landscape render.
+    speakers.recipes = speakers.recipes.filter((r) => r !== bluesky)
+    await confirm('ada')
+    expect(store.commits[0].tasks.map((t) => [t.key, t.format])).toEqual([
+      ['speakerCardRender:ada:landscape', 'landscape'],
+      ['speakerCard:ada:linkedin', undefined],
+    ])
+    // Bluesky is added to the beat: its post waits on a NEW square render.
+    speakers.recipes.push(bluesky)
+    await confirm('ada')
+    const added = store.commits[1].tasks
+    expect(added.map((t) => [t.key, t.format])).toEqual([
+      ['speakerCardRender:ada', 'square'],
+      ['speakerCard:ada:bluesky', undefined],
+    ])
+    expect(added[1].prerequisiteIds).toEqual([added[0]._id])
+  })
+
   it('a subject generated before Formats is handed no new render: every post of the beat exists', async () => {
     store.context!.campaigns[1].generatedKeys.push(
       'speakerCardRender:ada',

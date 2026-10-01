@@ -533,6 +533,52 @@ describe('buildTemplate — renders of every Format an organizer edited (Formats
     ).toHaveLength(2)
   })
 
+  it('keeps a renamed landscape render as a Recipe of its own', () => {
+    const source = seeded((seed) => {
+      seed.tasks.find((t) => t.key === 'cfpOpenRender:landscape')!.title =
+        'LinkedIn card, wide'
+    })
+    const next = reseed(source)
+    const titleOf = (key: string) =>
+      next.tasks.find((t) => t.key === key)!.title
+    expect(titleOf('cfpOpenRender:landscape')).toBe('LinkedIn card, wide')
+    expect(titleOf('cfpOpenRender')).toBe('Render: CFP open')
+  })
+
+  it('keeps a re-anchored landscape render as a Recipe of its own', () => {
+    const source = seeded((seed) => {
+      const wide = seed.tasks.find((t) => t.key === 'cfpOpenRender:landscape')!
+      // Moved two days earlier, anchor and date together, as the editor does.
+      wide.offsetDays = -4
+      wide.dueAt = new Date(
+        Date.parse(wide.dueAt!) - 2 * 86_400_000,
+      ).toISOString()
+    })
+    const next = reseed(source)
+    const anchorOf = (key: string) => {
+      const t = next.tasks.find((x) => x.key === key)!
+      return [t.milestone, t.offsetDays]
+    }
+    expect(anchorOf('cfpOpenRender:landscape')).toEqual(['CFP_OPEN', -4])
+    expect(anchorOf('cfpOpenRender')).toEqual(['CFP_OPEN', -2])
+  })
+
+  it('keeps a landscape render given a Prerequisite of its own as a Recipe of its own', () => {
+    const source = seeded((seed) => {
+      const wide = seed.tasks.find((t) => t.key === 'cfpOpenRender:landscape')!
+      const check = seed.tasks.find((t) => t.key === 'cfpReminder2w:linkedin')!
+      wide.prerequisiteIds = [check._id]
+    })
+    const cfp = buildTemplate(source, {}).find((c) => c.key === 'cfp')!
+    expect(
+      cfp.recipes.filter((r) => r.key.startsWith('cfpOpenRender')).length,
+    ).toBe(2)
+    expect(
+      cfp.recipes.find((r) => r.key === 'cfpOpenRender:landscape')!
+        .prerequisites,
+    ).toEqual(['cfpReminder2w:linkedin'])
+  })
+
   it('an untouched pair still folds into the one Recipe it came from', () => {
     const cfp = buildTemplate(seeded(), {}).find((c) => c.key === 'cfp')!
     expect(
