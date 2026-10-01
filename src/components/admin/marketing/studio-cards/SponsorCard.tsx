@@ -32,15 +32,8 @@ export interface SponsorCardTier {
   tierType: 'standard' | 'special'
 }
 
-export const SPONSOR_CARD_VARIANTS = [
-  'code-heroes',
-  'cloud-wizards',
-  'tech-ninjas',
-  'deploy-legends',
-  'kubernetes-masters',
-  'devops-rockstars',
-] as const
-export type SponsorCardVariant = (typeof SPONSOR_CARD_VARIANTS)[number]
+import type { SponsorCardVariant } from './variants'
+export type { SponsorCardVariant } from './variants'
 
 const variantConfig: Record<
   SponsorCardVariant,

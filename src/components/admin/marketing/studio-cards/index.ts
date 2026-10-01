@@ -5,16 +5,13 @@ export type {
   SpeakerCardSpeaker,
   SpeakerCardVariant,
 } from './SpeakerCard'
-export {
-  SPONSOR_CARD_ELEMENTS,
-  SPONSOR_CARD_VARIANTS,
-  SponsorCard,
-} from './SponsorCard'
+export { SPONSOR_CARD_ELEMENTS, SponsorCard } from './SponsorCard'
+export { SPONSOR_CARD_VARIANTS } from './variants'
 export type {
   SponsorCardProps,
   SponsorCardSponsor,
   SponsorCardTier,
-  SponsorCardVariant,
 } from './SponsorCard'
+export type { SponsorCardVariant } from './variants'
 export { useCardFormat } from './CardFrame'
 export type { IconLineSizes } from './CardFrame'
