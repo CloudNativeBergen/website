@@ -259,6 +259,40 @@ describe('FormatSwitch', () => {
     expect(document.activeElement).toBe(radios[2])
   })
 
+  it('follows a new URL Format without undoing a choice made on the tab', () => {
+    // The studio stays mounted when "Open in studio" navigates from one gallery
+    // card to another: the page re-renders with a new ?format= and the switch
+    // must follow it (Greptile on #1251), while a same-URL re-render keeps the
+    // organizer's own choice.
+    const { rerender } = render(
+      <FormatSwitch defaultFormat="square">
+        <SpeakerCard speaker={ADA} qrCodeUrl={QR} eventName="CND" />
+      </FormatSwitch>,
+    )
+    const group = screen.getByRole('radiogroup', { name: 'Format' })
+    fireEvent.click(within(group).getByRole('radio', { name: /Landscape/ }))
+    expect(formats()).toEqual(['landscape'])
+
+    rerender(
+      <FormatSwitch defaultFormat="square">
+        <SpeakerCard speaker={ADA} qrCodeUrl={QR} eventName="CND" />
+      </FormatSwitch>,
+    )
+    expect(formats()).toEqual(['landscape'])
+
+    rerender(
+      <FormatSwitch defaultFormat="portrait">
+        <SpeakerCard speaker={ADA} qrCodeUrl={QR} eventName="CND" />
+      </FormatSwitch>,
+    )
+    expect(formats()).toEqual(['portrait'])
+    expect(
+      within(group)
+        .getByRole('radio', { name: /Portrait/ })
+        .getAttribute('aria-checked'),
+    ).toBe('true')
+  })
+
   it('is square outside any switch, as every card was before Formats', () => {
     render(<SpeakerCard speaker={ADA} qrCodeUrl={QR} eventName="CND" />)
     expect(formats()).toEqual(['square'])

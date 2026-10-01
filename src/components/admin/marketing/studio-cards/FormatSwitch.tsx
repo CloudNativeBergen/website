@@ -23,6 +23,14 @@ export function FormatSwitch({
   children: React.ReactNode
 }) {
   const [format, setFormat] = useState<StudioFormat>(defaultFormat)
+  // The studio stays mounted when "Open in studio" moves from one gallery card
+  // to another, so a new ?format= arrives as a prop change. Follow it, and only
+  // it: a re-render with the same URL Format keeps the choice made on the tab.
+  const [followed, setFollowed] = useState(defaultFormat)
+  if (defaultFormat !== followed) {
+    setFollowed(defaultFormat)
+    setFormat(defaultFormat)
+  }
   const labelId = useId()
   // A radio group: arrow keys move the choice, one tab stop for the group.
   function onKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
