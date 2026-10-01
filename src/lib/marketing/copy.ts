@@ -44,6 +44,11 @@ import {
 import { copyTemplateVersion } from './origin'
 import { resolvePlaceholders } from './placeholders'
 import { publishedIn } from './recipes'
+import { recipeForTaskKey } from './render-format'
+import {
+  DEFAULT_STUDIO_FORMAT,
+  type StudioFormat,
+} from '@/lib/marketing-asset/format'
 import {
   planIdFor,
   type SeedCampaign,
@@ -72,6 +77,8 @@ export interface CopySourceTask {
   targetPage: string | null
   alt: string | null
   instructions: string | null
+  /** studioRender: its Format; absent or null reads as square (Formats §6). */
+  format?: StudioFormat | null
   /** True once an organizer saved the post with their own words (§3.1). */
   copyEdited: boolean | null
   variant: {
@@ -415,7 +422,8 @@ export function copyPlan(input: CopyInput): SeedPlan {
 
   for (const t of kept) {
     const campaign = campaignById.get(t.campaignId)!
-    const storedRecipe = campaign.recipes.find((r) => r.key === t.key)
+    // A render of another Format is its render Recipe's too.
+    const storedRecipe = recipeForTaskKey(campaign.recipes, t.key)
 
     const anchor = sourceAnchor({
       task: t,
@@ -447,6 +455,10 @@ export function copyPlan(input: CopyInput): SeedPlan {
         ? { verbatim: true }
         : {}),
       ...(t.instructions ? { instructions: t.instructions } : {}),
+      // The render's Format as it stands, the organizer's choice included.
+      ...(t.kind === 'studioRender'
+        ? { format: t.format ?? DEFAULT_STUDIO_FORMAT }
+        : {}),
     }
     if (t.kind === 'publishing' && !t.channel) continue
 

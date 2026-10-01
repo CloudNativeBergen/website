@@ -1,6 +1,10 @@
 import { defineArrayMember, defineField, defineType } from 'sanity'
 import { MILESTONES } from '@/lib/marketing/milestones'
 import {
+  STUDIO_FORMAT_IDS,
+  studioFormatLabel,
+} from '@/lib/marketing-asset/format'
+import {
   MARKETING_CHANNELS,
   OUTCOMES,
   SUBJECT_SOURCES,
@@ -263,6 +267,19 @@ export default defineType({
                       name: 'instructions',
                       title: 'Instructions',
                       type: 'text',
+                    }),
+                    defineField({
+                      name: 'format',
+                      title: 'Format',
+                      description:
+                        'Render recipes only: the Format the render is made in. Absent, one render is made per Format the posts waiting on it need; a recipe stored before Formats is square.',
+                      type: 'string',
+                      options: {
+                        list: STUDIO_FORMAT_IDS.map((value) => ({
+                          value,
+                          title: studioFormatLabel(value),
+                        })),
+                      },
                     }),
                     defineField({
                       name: 'cadence',

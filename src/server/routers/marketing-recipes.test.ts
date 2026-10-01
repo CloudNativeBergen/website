@@ -53,6 +53,7 @@ vi.mock('@/lib/marketing/ceiling-check', () => ({
   ceilingWarningsFor: h.ceilings,
 }))
 
+import { splitRendersByFormat } from '@/lib/marketing/render-format'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { initTRPC } from '@trpc/server'
 import type { Context } from '@/server/trpc'
@@ -620,8 +621,14 @@ describe('campaign.addBuiltin', () => {
       (c) => c.key === 'keynotes',
     )!
     expect(seed().campaigns[0].recipes).toEqual(builtin.recipes)
+    // One render per Format the posts need (Formats spec §5).
     expect(seed().tasks.map((t) => t.key)).toEqual(
-      builtin.recipes.filter((r) => r.anchor && !r.cadence).map((r) => r.key),
+      splitRendersByFormat(builtin.recipes)
+        .filter((r) => r.anchor && !r.cadence)
+        .map((r) => r.key),
+    )
+    expect(seed().tasks.map((t) => t.key)).toContain(
+      'keynoteAnnounceRender:landscape',
     )
     expect(seed().tasks.every((t) => t.planId === 'plan-A')).toBe(true)
     expect(seed().tasks.every((t) => t.assigneeId === 'sp-owner')).toBe(true)
@@ -657,8 +664,12 @@ describe('campaign.addBuiltin', () => {
       new Set([publishedPair('cfp', 'cfpOpen:linkedin')]),
     )
     await marketing().campaign.addBuiltin({ key: 'cfp' })
+    // The landscape render fed only that post, and goes with it.
     expect(seed().tasks.map((t) => t.key)).toEqual(
-      all.filter((key) => key !== 'cfpOpen:linkedin'),
+      all.filter(
+        (key) =>
+          key !== 'cfpOpen:linkedin' && key !== 'cfpOpenRender:landscape',
+      ),
     )
   })
   it('refuses a built-in Campaign the plan already has, before expanding anything', async () => {

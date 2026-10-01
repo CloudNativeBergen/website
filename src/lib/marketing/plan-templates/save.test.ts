@@ -72,6 +72,7 @@ function sourceOf(
       targetPage: t.targetPage ?? null,
       alt: t.alt ?? null,
       instructions: t.instructions ?? null,
+      format: t.format ?? null,
       copyEdited: t.copyEdited ?? null,
       variant: variantOf(t.variantId)
         ? {
@@ -289,6 +290,8 @@ describe('buildTemplate', () => {
         anchor: { milestone: 'CONFERENCE_START', offsetDays: -20 },
         subjectSource: 'none',
         alt: 'Community day poster',
+        // A manual render has no Recipe to derive it from: its Format is kept.
+        format: 'square',
       },
       {
         key: 'custom-post',
@@ -309,6 +312,45 @@ describe('buildTemplate', () => {
     const seededRender = next.tasks.find((t) => t.key === 'custom-render')!
     expect(seededPost.prerequisiteIds).toEqual([seededRender._id])
     expect(seededPost.origin).toBe('template')
+  })
+  it('saves the renders of every Format of a seeded beat as the one render Recipe they came from, and keeps the Format chosen for a manual render', () => {
+    const source = seeded((seed) => {
+      const render = seed.tasks.find((t) => t.key === 'cfpOpenRender')!
+      seed.tasks.push({
+        ...render,
+        _id: 'manual-render',
+        key: 'custom-render',
+        origin: 'manual',
+        format: 'portrait',
+      })
+    })
+    const cfp = buildTemplate(source, {}).find((c) => c.key === 'cfp')!
+    const keys = cfp.recipes.map((r) => r.key)
+    expect(keys.filter((k) => k.startsWith('cfpOpenRender'))).toEqual([
+      'cfpOpenRender',
+    ])
+    expect(cfp.recipes.find((r) => r.key === 'cfpOpenRender')!.format).toBe(
+      undefined,
+    )
+    expect(
+      cfp.recipes.find((r) => r.key === 'cfpOpen:linkedin')!.prerequisites,
+    ).toEqual(['cfpOpenRender'])
+    expect(cfp.recipes.find((r) => r.key === 'custom-render')!.format).toBe(
+      'portrait',
+    )
+    // The next edition renders in the Formats its posts need, and in the one
+    // the organizer chose.
+    const next = reseed(source)
+    const formats = next.tasks
+      .filter(
+        (t) => t.kind === 'studioRender' && /^cfpOpen|^custom/.test(t.key),
+      )
+      .map((t) => [t.key, t.format])
+    expect(formats).toEqual([
+      ['cfpOpenRender', 'square'],
+      ['cfpOpenRender:landscape', 'landscape'],
+      ['custom-render', 'portrait'],
+    ])
   })
 })
 

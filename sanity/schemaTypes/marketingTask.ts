@@ -1,4 +1,8 @@
 import { defineArrayMember, defineField, defineType } from 'sanity'
+import {
+  STUDIO_FORMAT_IDS,
+  studioFormatLabel,
+} from '@/lib/marketing-asset/format'
 import { MILESTONES } from '@/lib/marketing/milestones'
 import {
   MARKETING_CHANNEL_LABELS,
@@ -202,6 +206,20 @@ export default defineType({
       type: 'reference',
       to: [{ type: 'speaker' }, { type: 'sponsor' }, { type: 'talk' }],
       weak: true,
+    }),
+    defineField({
+      name: 'format',
+      title: 'Format',
+      description:
+        "studioRender only: the Format the render is made in (docs/MARKETING_STUDIO_FORMATS_SPEC.md §4). Set from the Channel of the posts it feeds when the Task is made; absent reads as square. A publishing Task never has one: its Format is its Channel's.",
+      type: 'string',
+      options: {
+        list: STUDIO_FORMAT_IDS.map((value) => ({
+          value,
+          title: studioFormatLabel(value),
+        })),
+      },
+      hidden: ({ document }) => document?.kind !== 'studioRender',
     }),
     defineField({
       name: 'asset',

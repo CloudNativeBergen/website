@@ -29,6 +29,11 @@ import {
 } from './materialize'
 import { publishedIn } from './recipes'
 import {
+  renderKeysOf,
+  splitRendersByFormat,
+  waitsOnRender,
+} from './render-format'
+import {
   joinNames,
   speakersList,
   type BlueskyTag,
@@ -53,12 +58,17 @@ export interface Slot {
   provisional: boolean
 }
 
-/** The render and publishing siblings of one beat, render first. */
+/**
+ * The render and publishing siblings of one beat, render first: one render
+ * per Format its posts need, each post listing its own (Formats spec §5).
+ */
 export function beatRecipes(
   campaign: { recipes: TaskRecipe[] },
   beat: string,
 ): TaskRecipe[] {
-  const recipes = campaign.recipes.filter((r) => r.beat === beat)
+  const recipes = splitRendersByFormat(campaign.recipes).filter(
+    (r) => r.beat === beat,
+  )
   return [
     ...recipes.filter((r) => r.kind !== 'publishing'),
     ...recipes.filter((r) => r.kind === 'publishing'),
@@ -346,11 +356,11 @@ export function buildSubjectBeat(
     dates: BeatDates
     origin: TaskOrigin
     /**
-     * Renders of this beat that were created on an earlier run (one Channel
-     * had a slot then and another did not): a sibling created now still
-     * waits on them.
+     * Render Recipes of this beat whose Task an earlier run created (one
+     * Channel had a slot then and another did not): a sibling created now
+     * still waits on the one it waits on.
      */
-    existingRenderIds?: string[]
+    existingRenders?: TaskRecipe[]
     /**
      * What generation found for each person's Bluesky account (tagging spec
      * §4.4), by speaker id; null when there is nothing to tag. A person
@@ -372,13 +382,33 @@ export function buildSubjectBeat(
     _id: input.subject._id,
     type: input.subject.type,
   }
-  const renderIds: string[] = [...(input.existingRenderIds ?? [])]
-  for (const r of input.recipes) {
+  const idOf = (r: TaskRecipe) =>
+    input.taskId(generatedTaskKey(r.key, input.subject._id))
+  const renders: TaskRecipe[] = [...(input.existingRenders ?? [])]
+  const renderKeys = renderKeysOf([...renders, ...input.recipes])
+  // A post waits on every other non-publishing Task of its beat made before
+  // it, and on the render of its own Format (`splitRendersByFormat`).
+  const waitedOnBy = (post: TaskRecipe) =>
+    renders
+      .filter(
+        (r) => r.kind !== 'studioRender' || waitsOnRender(post, r, renderKeys),
+      )
+      .map(idOf)
+  /** The later posts of this build a render feeds. */
+  const fedBy = (render: TaskRecipe, index: number) =>
+    input.recipes
+      .slice(index + 1)
+      .filter((p) => waitsOnRender(p, render, renderKeys))
+  for (const [index, r] of input.recipes.entries()) {
     const date = input.dates.get(r.key)
     if (!date) continue
+    // A render of a Format no post of this build is dated in waits for one:
+    // the landscape card is made when the LinkedIn post gets its slot.
+    const fed = r.kind === 'studioRender' ? fedBy(r, index) : []
+    if (fed.length > 0 && !fed.some((p) => input.dates.has(p.key))) continue
     const key = generatedTaskKey(r.key, input.subject._id)
     const taskId = input.taskId(key)
-    if (r.kind !== 'publishing') renderIds.push(taskId)
+    if (r.kind !== 'publishing') renders.push(r)
     appendRecords(
       records,
       materializeTask({
@@ -395,7 +425,7 @@ export function buildSubjectBeat(
         anchor: input.origin === 'trigger' ? null : date.anchor,
         provisional: date.provisional,
         assigneeId: input.assigneeId,
-        prerequisiteIds: r.kind === 'publishing' ? [...renderIds] : [],
+        prerequisiteIds: r.kind === 'publishing' ? waitedOnBy(r) : [],
         subject,
         origin: input.origin,
         newId: input.newId,

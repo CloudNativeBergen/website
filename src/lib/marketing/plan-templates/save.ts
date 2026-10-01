@@ -23,6 +23,8 @@ import {
 import { resolveAllMilestones, type ResolvedMilestones } from '../milestones'
 import { CONFERENCE_PLACEHOLDERS, unknownTokens } from '../placeholders'
 import { seedsAtCreation } from '../seed'
+import { recipeForTaskKey } from '../render-format'
+import { DEFAULT_STUDIO_FORMAT } from '@/lib/marketing-asset/format'
 import type { Anchor, CampaignRecipe, TaskRecipe } from '../template/types'
 
 export interface SaveSource extends CopySource {
@@ -183,9 +185,16 @@ export function buildTemplate(
   const milestones = milestonesOf(source)
   return source.campaigns.map((campaign) => {
     const tasks = savedTasks(source, campaign)
-    const keyById = new Map(tasks.map((t) => [t._id, t.key]))
+    // A seeded beat's renders of every Format are the one render Recipe they
+    // were split from (Formats spec §5): saved as it, and re-split when the
+    // Template seeds the next edition.
+    const recipeOf = (task: CopySourceTask) =>
+      recipeForTaskKey(campaign.recipes, task.key)
+    const keyById = new Map(
+      tasks.map((t) => [t._id, recipeOf(t)?.key ?? t.key]),
+    )
     const staticRecipe = (task: CopySourceTask): TaskRecipe => {
-      const stored = campaign.recipes.find((r) => r.key === task.key)
+      const stored = recipeOf(task)
       const literal = carriesLiteralCopy(task, stored)
       const rewritten = decisions.copy?.[task._id]
       const skeleton = literal
@@ -195,12 +204,12 @@ export function buildTemplate(
         task.alt !== null && !isTemplateText(task.alt, stored?.alt)
           ? task.alt
           : stored?.alt
-      const prerequisites = task.prerequisiteIds.flatMap(
-        (id) => keyById.get(id) ?? [],
-      )
+      const prerequisites = [
+        ...new Set(task.prerequisiteIds.flatMap((id) => keyById.get(id) ?? [])),
+      ]
       const targetPage = task.targetPage ?? stored?.targetPage
       return {
-        key: task.key,
+        key: stored?.key ?? task.key,
         beat: stored?.beat ?? task.key.split(':')[0],
         title: task.title,
         kind: task.kind,
@@ -221,10 +230,22 @@ export function buildTemplate(
           : {}),
         ...(alt ? { alt } : {}),
         ...(task.instructions ? { instructions: task.instructions } : {}),
+        // A render made once, in a Format of its own (a manual render, or a
+        // Recipe that names its Format), keeps the Task's Format, the
+        // organizer's choice included. A render split per Format is saved
+        // without one and split again.
+        ...(task.kind === 'studioRender' && (stored?.format || !stored)
+          ? { format: task.format ?? stored?.format ?? DEFAULT_STUDIO_FORMAT }
+          : {}),
       }
     }
-    const taskByKey = new Map(tasks.map((t) => [t.key, t]))
-    const stored = new Set(campaign.recipes.map((r) => r.key))
+    // The first Task of each stored Recipe: a render's square one, or the one
+    // of another Format when that is all that is left.
+    const taskByKey = new Map<string, CopySourceTask>()
+    for (const t of tasks) {
+      const key = recipeOf(t)?.key ?? t.key
+      if (!taskByKey.has(key) || t.key === key) taskByKey.set(key, t)
+    }
     const capacity = source.ticketCapacity
     return {
       key: campaign.key,
@@ -255,7 +276,7 @@ export function buildTemplate(
           return task ? [staticRecipe(task)] : []
         }),
         // Manual Tasks have no stored Recipe: they become one here.
-        ...tasks.filter((t) => !stored.has(t.key)).map(staticRecipe),
+        ...tasks.filter((t) => !recipeOf(t)).map(staticRecipe),
       ],
     }
   })

@@ -176,7 +176,7 @@ describe('the SHIPPED built-in speaker card, end to end (#1152)', () => {
 
 describe('generation with a Bluesky tagSubject recipe', () => {
   it('a resolvable handle: the Bluesky body tags, LinkedIn and alt keep the name, the DID is recorded', async () => {
-    expect((await confirm()).created).toBe(3)
+    expect((await confirm()).created).toBe(4)
     expect(String(resolveCalls()[0][0])).toBe(`${RESOLVE}?handle=alice.dev`)
     expect(variant('bluesky').body).toContain('@alice.dev (SRE) is speaking')
     expect(variant('bluesky').mentions).toEqual([
@@ -241,7 +241,7 @@ describe('generation with a Bluesky tagSubject recipe', () => {
     fetchMock.mockImplementation(() => new Promise<Response>(() => {}))
     const run = confirm()
     await vi.advanceTimersByTimeAsync(RESOLVE_TIMEOUT_MS)
-    expect((await run).created).toBe(3)
+    expect((await run).created).toBe(4)
     expect(variant('bluesky').body).toContain('🎙️ Alice Liddell (SRE)')
     expect(variant('bluesky').mentions).toEqual([
       expect.objectContaining({ status: 'unresolved' }),
@@ -250,7 +250,7 @@ describe('generation with a Bluesky tagSubject recipe', () => {
 
   it('a failed read of the speakers’ links: the Tasks still land, untagged', async () => {
     store.sourcesError = new Error('Sanity is down')
-    expect((await confirm()).created).toBe(3)
+    expect((await confirm()).created).toBe(4)
     expect(variant('bluesky').body).toContain('🎙️ Alice Liddell (SRE)')
     expect(variant('bluesky').mentions).toBeUndefined()
   })
@@ -260,7 +260,7 @@ describe('generation with a Bluesky tagSubject recipe', () => {
     store.sourcesHang = true
     const run = confirm()
     await vi.advanceTimersByTimeAsync(TAG_SOURCES_TIMEOUT_MS)
-    expect((await run).created).toBe(3)
+    expect((await run).created).toBe(4)
     expect(variant('bluesky').body).toContain('🎙️ Alice Liddell (SRE)')
     expect(variant('bluesky').mentions).toBeUndefined()
     expect(resolveCalls()).toHaveLength(0)

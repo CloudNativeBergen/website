@@ -139,6 +139,7 @@ export function taskDocument(t: SeedTask, conference: Ref) {
     provisional: t.provisional,
     plannedAt: t.plannedAt,
     ...(t.status ? { status: t.status } : {}),
+    ...(t.format ? { format: t.format } : {}),
     assignee: weakRef(t.assigneeId),
     prerequisites: t.prerequisiteIds.map((id) => ({
       _key: randomUUID(),

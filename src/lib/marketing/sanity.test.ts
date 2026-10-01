@@ -449,6 +449,11 @@ describe('commitSeedPlan', () => {
     })
     expect(doc.dueAt).toBeUndefined()
     expect(doc.status).toBeUndefined()
+    // A post's Format is its Channel's, never stored; its render stores its.
+    expect(doc).not.toHaveProperty('format')
+    expect(
+      h.created.find((d) => d._id === li.prerequisiteIds[0]),
+    ).toMatchObject({ key: 'cfpOpenRender:landscape', format: 'landscape' })
     const prerequisites = doc.prerequisites as { _key: string; _ref: string }[]
     expect(prerequisites).toHaveLength(1)
     expect(prerequisites[0]._key).toBeTruthy()

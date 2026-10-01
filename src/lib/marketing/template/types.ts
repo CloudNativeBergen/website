@@ -6,6 +6,7 @@
  * Templates later.
  */
 
+import type { StudioFormat } from '@/lib/marketing-asset/format'
 import type { Milestone } from '../milestones'
 import type {
   CampaignTrigger,
@@ -86,6 +87,13 @@ export interface TaskRecipe {
   /** Body for checklist / eventPageUpdate recipes. */
   instructions?: string
   cadence?: Cadence
+  /**
+   * `studioRender` only: the Format the render is made in
+   * (docs/MARKETING_STUDIO_FORMATS_SPEC.md §4). Absent, the render is made
+   * once per distinct Format among the posts waiting on it
+   * (`../render-format.ts`); a stored Recipe without one is square.
+   */
+  format?: StudioFormat
 }
 
 export interface CampaignRecipe {
