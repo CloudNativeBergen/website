@@ -850,7 +850,12 @@ function rankedPicks(
       attachable: true,
       context,
       format,
-      formatWarning: formatMismatchWarning(platform, format),
+      // Studio cards at their Format's pixels.
+      formatWarning: formatMismatchWarning(platform, {
+        format,
+        size: { width, height },
+        studio: true,
+      }),
       formatPreferred: channelFormat(platform) === format,
     }
   })
@@ -973,7 +978,7 @@ export const PickingAMismatchedFormat: Story = {
       ),
     ).toBeVisible()
     await expect(within(canvasElement).getByRole('status')).toHaveTextContent(
-      'Added Logo, dark background. LinkedIn posts go out cropped to 1.91:1, so this image loses its top and bottom. Check the crop, or pick a landscape entry.',
+      'Added Logo, dark background. LinkedIn posts go out cropped to 1.91:1, so this image loses about 48% of its height (top and bottom). Check the crop, or pick a landscape (1200×628) entry.',
     )
     await expect(within(canvasElement).queryByRole('alert')).toBeNull()
   },

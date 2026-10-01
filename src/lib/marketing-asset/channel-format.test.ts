@@ -89,45 +89,79 @@ describe('entryFormat', () => {
 })
 
 describe('formatMismatchWarning: warns, naming the crop', () => {
+  const PICK = 'Check the crop, or pick a landscape (1200×628) entry.'
+  const upload = (width: number, height: number) => ({
+    format: shapeFormat(width, height),
+    size: { width, height },
+  })
+
   it("is silent for the Channel's own Format, and for a Channel without one", () => {
-    expect(formatMismatchWarning('linkedin', 'landscape')).toBeNull()
-    expect(formatMismatchWarning('bluesky', 'square')).toBeNull()
-    expect(formatMismatchWarning('x', 'portrait')).toBeNull()
+    expect(
+      formatMismatchWarning('linkedin', { format: 'landscape' }),
+    ).toBeNull()
+    expect(formatMismatchWarning('bluesky', { format: 'square' })).toBeNull()
+    expect(formatMismatchWarning('x', { format: 'portrait' })).toBeNull()
   })
 
-  it("names LinkedIn's 1.91:1 crop for a square or portrait entry", () => {
-    expect(formatMismatchWarning('linkedin', 'square')).toBe(
-      'LinkedIn posts go out cropped to 1.91:1, so this image loses its top and bottom. Check the crop, or pick a landscape entry.',
+  it("names LinkedIn's 1.91:1 crop for a square or portrait entry of unknown size", () => {
+    expect(formatMismatchWarning('linkedin', { format: 'square' })).toBe(
+      `LinkedIn posts go out cropped to 1.91:1, so this image loses its top and bottom. ${PICK}`,
     )
-    expect(formatMismatchWarning('linkedin', 'portrait')).toBe(
-      'LinkedIn posts go out cropped to 1.91:1, so this image loses its top and bottom. Check the crop, or pick a landscape entry.',
+    expect(formatMismatchWarning('linkedin', { format: 'portrait' })).toBe(
+      `LinkedIn posts go out cropped to 1.91:1, so this image loses its top and bottom. ${PICK}`,
     )
   })
 
-  it('names the edges lost from the PIXELS when known: a 2:1 studio card that reads as square loses its sides', () => {
+  it('a studio card goes by its Format, and says how much from its pixels', () => {
+    // At its Format's pixels: LinkedIn's own shape, nothing to say.
     expect(
-      formatMismatchWarning('linkedin', 'square', {
-        width: 2000,
-        height: 1000,
+      formatMismatchWarning('linkedin', {
+        format: 'landscape',
+        size: { width: 1200, height: 628 },
+        studio: true,
+      }),
+    ).toBeNull()
+    expect(
+      formatMismatchWarning('linkedin', {
+        format: 'square',
+        size: { width: 1080, height: 1080 },
+        studio: true,
       }),
     ).toBe(
-      'LinkedIn posts go out cropped to 1.91:1, so this image loses its sides. Check the crop, or pick a landscape entry.',
+      `LinkedIn posts go out cropped to 1.91:1, so this image loses about 48% of its height (top and bottom). ${PICK}`,
     )
+    // Saved before Formats, so it reads as square, but it is 2:1: its sides go.
     expect(
-      formatMismatchWarning('linkedin', 'square', {
-        width: 1080,
-        height: 1080,
+      formatMismatchWarning('linkedin', {
+        format: 'square',
+        size: { width: 2000, height: 1000 },
+        studio: true,
       }),
     ).toBe(
-      'LinkedIn posts go out cropped to 1.91:1, so this image loses its top and bottom. Check the crop, or pick a landscape entry.',
+      `LinkedIn posts go out cropped to 1.91:1, so this image loses about 5% of its width (sides). ${PICK}`,
     )
+  })
+
+  it('an upload ranked landscape still warns when the crop takes more than 10%', () => {
+    expect(formatMismatchWarning('linkedin', upload(4000, 1000))).toBe(
+      `LinkedIn posts go out cropped to 1.91:1, so this image loses about 52% of its width (sides). ${PICK}`,
+    )
+    expect(formatMismatchWarning('linkedin', upload(1500, 1000))).toBe(
+      `LinkedIn posts go out cropped to 1.91:1, so this image loses about 21% of its height (top and bottom). ${PICK}`,
+    )
+  })
+
+  it('an upload within 10% of 1.91:1 is silent, 16:9 included (it loses 7%)', () => {
+    expect(formatMismatchWarning('linkedin', upload(1200, 628))).toBeNull()
+    expect(formatMismatchWarning('linkedin', upload(1600, 900))).toBeNull()
+    expect(formatMismatchWarning('linkedin', upload(2000, 1000))).toBeNull()
   })
 
   it('says Bluesky does not crop a landscape or portrait entry', () => {
-    expect(formatMismatchWarning('bluesky', 'landscape')).toBe(
+    expect(formatMismatchWarning('bluesky', { format: 'landscape' })).toBe(
       'Bluesky does not crop images: this one is posted at its own shape rather than square.',
     )
-    expect(formatMismatchWarning('bluesky', 'portrait')).toBe(
+    expect(formatMismatchWarning('bluesky', upload(1080, 1350))).toBe(
       'Bluesky does not crop images: this one is posted at its own shape rather than square.',
     )
   })

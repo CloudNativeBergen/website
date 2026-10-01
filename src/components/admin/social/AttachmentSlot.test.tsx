@@ -20,7 +20,7 @@ import { AttachmentSlot, type MarketingAssetPick } from './AttachmentSlot'
 afterEach(cleanup)
 
 const CROP =
-  'LinkedIn posts go out cropped to 1.91:1, so this image loses its top and bottom. Check the crop, or pick a landscape entry.'
+  'LinkedIn posts go out cropped to 1.91:1, so this image loses about 48% of its height (top and bottom). Check the crop, or pick a landscape (1200×628) entry.'
 
 const PICKS: MarketingAssetPick[] = [
   {

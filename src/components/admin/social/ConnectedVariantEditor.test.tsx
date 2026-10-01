@@ -115,6 +115,7 @@ const row = (id: string, title: string, format: string) => ({
   assetId: `image-${id}`,
   posterAssetId: null,
   attachable: true,
+  studio: null,
   format,
 })
 
@@ -219,14 +220,22 @@ describe('ConnectedVariantEditor: the picker ranks for this variant (#1249)', ()
     fireEvent.click(openPicker().getByRole('button', { name: /^Add Cropped/ }))
     await waitFor(() =>
       expect(screen.getByRole('status')).toHaveTextContent(
-        'Added Cropped. LinkedIn posts go out cropped to 1.91:1, so this image loses its top and bottom.',
+        'Added Cropped. LinkedIn posts go out cropped to 1.91:1, so this image loses about 48% of its height (top and bottom).',
       ),
     )
   })
 
   it('a 2:1 studio card that reads as square warns from its pixels: it loses its sides', async () => {
     h.forPost.mockReturnValue({
-      data: [{ ...row('promo', 'Promo', 'square'), width: 2000, height: 1000 }],
+      data: [
+        {
+          ...row('promo', 'Promo', 'square'),
+          width: 2000,
+          height: 1000,
+          // Saved from the studio before Formats: judged by its Format.
+          studio: { tab: 'promo', format: 'square' },
+        },
+      ],
       isLoading: false,
       error: null,
     })
@@ -234,8 +243,34 @@ describe('ConnectedVariantEditor: the picker ranks for this variant (#1249)', ()
     fireEvent.click(openPicker().getByRole('button', { name: /^Add Promo/ }))
     await waitFor(() =>
       expect(screen.getByRole('status')).toHaveTextContent(
-        'Added Promo. LinkedIn posts go out cropped to 1.91:1, so this image loses its sides.',
+        'Added Promo. LinkedIn posts go out cropped to 1.91:1, so this image loses about 5% of its width (sides).',
       ),
     )
+  })
+
+  it('an upload ranked landscape still warns when LinkedIn crops away half of it; a 16:9 one is silent', async () => {
+    h.forPost.mockReturnValue({
+      data: [
+        { ...row('banner', 'Banner', 'landscape'), width: 4000, height: 1000 },
+        { ...row('photo', 'Photo', 'landscape'), width: 1600, height: 900 },
+      ],
+      isLoading: false,
+      error: null,
+    })
+    render(<ConnectedVariantEditor data={data('linkedin')} />)
+    fireEvent.click(openPicker().getByRole('button', { name: /^Add Banner/ }))
+    await waitFor(() =>
+      expect(screen.getByRole('status')).toHaveTextContent(
+        'Added Banner. LinkedIn posts go out cropped to 1.91:1, so this image loses about 52% of its width (sides).',
+      ),
+    )
+    fireEvent.click(openPicker().getByRole('button', { name: /^Add Photo/ }))
+    await waitFor(() => expect(h.addFromAsset).toHaveBeenCalledTimes(2))
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('group', { name: 'Marketing assets' }),
+      ).toBeNull(),
+    )
+    expect(screen.getByRole('status')).toHaveTextContent('')
   })
 })

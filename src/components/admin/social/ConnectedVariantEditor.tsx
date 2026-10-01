@@ -322,11 +322,11 @@ export function ConnectedVariantEditor({
         attachable: asset.attachable,
         context: assetContext(asset),
         format: asset.format,
-        formatWarning: formatMismatchWarning(
-          data.variant.platform,
-          asset.format,
-          croppedSize(asset),
-        ),
+        formatWarning: formatMismatchWarning(data.variant.platform, {
+          format: asset.format,
+          size: croppedSize(asset),
+          studio: Boolean(asset.studio),
+        }),
         formatPreferred: channelFormat(data.variant.platform) === asset.format,
       }
     },

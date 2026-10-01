@@ -86,29 +86,57 @@ export function entryFormat(
 }
 
 /**
- * What picking an entry of `format` into a post on `platform` warns, or null
- * when the Format is the Channel's own (or the Channel has none). A warning
+ * How much of an upload a platform's crop may take before picking it warns:
+ * 10% of its width or height. 16:9, the commonest camera and screen shape,
+ * loses 7% to LinkedIn's 1.91:1 and stays silent; 3:2 loses 21% and warns.
+ */
+export const CROP_LOSS_TOLERANCE = 0.1
+
+/** An entry as picking it is judged: its Format, and its posted size if known. */
+export interface PickedEntry {
+  format: StudioFormat
+  /** The size it is posted at (`croppedSize`); unknown leaves the Format to judge. */
+  size?: { width: number | null; height: number | null } | null
+  /** A studio card: captured at its Format's pixels, judged by its Format. */
+  studio?: boolean
+}
+
+/**
+ * What picking `entry` into a post on `platform` warns, or null. A warning
  * only: the organizer may want it, and the pick goes through.
  *
- * Which edges the crop takes comes from the image's own pixels when known:
- * a studio card saved before Formats reads as square for ranking (§6), but
- * a 2:1 one loses its sides, not its top and bottom.
+ * A studio card, or an upload of unknown size, warns when its Format is not
+ * the Channel's. An upload of known size warns when the platform's crop takes
+ * more than {@link CROP_LOSS_TOLERANCE} of it, whatever Format it ranked as: a
+ * 4:1 banner ranks as landscape yet loses half its width. Where the size is
+ * known the warning says how much, and from which edges.
  */
 export function formatMismatchWarning(
   platform: SocialPlatform,
-  format: StudioFormat,
-  size?: { width: number | null; height: number | null } | null,
+  entry: PickedEntry,
 ): string | null {
   const wanted = channelFormat(platform)
-  if (wanted === null || wanted === format) return null
+  if (wanted === null) return null
   const name = SOCIAL_PLATFORM_LABELS[platform]
-  const wantedLabel = STUDIO_FORMATS[wanted].label.toLowerCase()
   const crop = getPlatformConstraints(platform)?.imageAspectRatio ?? null
+  const { width, height } = entry.size ?? {}
+  const shape = width && height ? width / height : null
   if (crop === null) {
-    return `${name} does not crop images: this one is posted at its own shape rather than ${wantedLabel}.`
+    if (entry.format === wanted) return null
+    return `${name} does not crop images: this one is posted at its own shape rather than ${STUDIO_FORMATS[wanted].label.toLowerCase()}.`
   }
-  const shape =
-    size?.width && size.height ? size.width / size.height : aspect(format)
-  const lost = shape < crop ? 'top and bottom' : 'sides'
-  return `${name} posts go out cropped to ${crop}:1, so this image loses its ${lost}. Check the crop, or pick a ${wantedLabel} entry.`
+  const judgedByFormat = entry.studio === true || shape === null
+  const loss =
+    shape === null ? null : 1 - Math.min(shape, crop) / Math.max(shape, crop)
+  const quiet = judgedByFormat
+    ? entry.format === wanted
+    : (loss ?? 0) <= CROP_LOSS_TOLERANCE
+  if (quiet) return null
+  const tall = (shape ?? aspect(entry.format)) < crop
+  const lost =
+    loss === null
+      ? `its ${tall ? 'top and bottom' : 'sides'}`
+      : `about ${Math.round(loss * 100)}% of its ${tall ? 'height (top and bottom)' : 'width (sides)'}`
+  const target = STUDIO_FORMATS[wanted]
+  return `${name} posts go out cropped to ${crop}:1, so this image loses ${lost}. Check the crop, or pick a ${target.label.toLowerCase()} (${target.width}×${target.height}) entry.`
 }

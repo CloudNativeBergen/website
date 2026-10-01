@@ -40,6 +40,10 @@ import {
   readMarketingAssetGif,
   readMarketingAssetMedia,
 } from '@/lib/marketing-asset/sanity'
+import {
+  croppedSize,
+  formatMismatchWarning,
+} from '@/lib/marketing-asset/channel-format'
 
 const ref = (id: string) => ({ _type: 'reference', _ref: id })
 const weak = (id: string) => ({ _type: 'reference', _ref: id, _weak: true })
@@ -1130,6 +1134,62 @@ describe('picking an asset into a post (#1163)', () => {
       })
       // Never a field taken away: the row still reports the original pixels.
       expect([cropped?.width, cropped?.height]).toEqual([2000, 1000])
+    })
+
+    it('a 4:1 banner and a 3:2 photo rank as landscape (the nearest Format); the editor warns about their crop', async () => {
+      h.dataset = [
+        ...RANKED,
+        sized('7', 4000, 1000),
+        sized('8', 1500, 1000),
+        asset('ed-banner', 'org-a', {
+          ...imageAt('7', 4000, 1000),
+          ...thisEdition,
+          ...at('12'),
+        }),
+        asset('ed-photo', 'org-a', {
+          ...imageAt('8', 1500, 1000),
+          ...thisEdition,
+          ...at('11'),
+        }),
+      ]
+      const rows = await listMarketingAssetsForPost(
+        'org-a',
+        'conf-a-2026',
+        POST,
+        { variantId: V.linkedin },
+      )
+      expect(ids(rows)).toEqual([
+        'ada-landscape',
+        'ada-square',
+        'ed-banner',
+        'ed-photo',
+        'ed-wide',
+        'ed-old-sponsor',
+        'ed-tall',
+        'ed-square',
+        'org-landscape',
+        'org-no-size',
+      ])
+      const [banner, photo] = ['ed-banner', 'ed-photo'].map((id) =>
+        rows.find((r) => r._id === id),
+      )
+      expect([banner?.format, photo?.format]).toEqual([
+        'landscape',
+        'landscape',
+      ])
+      // What the editor makes of the same rows: ranked first, still warned.
+      const warn = (row: (typeof rows)[number] | undefined) =>
+        row &&
+        formatMismatchWarning('linkedin', {
+          format: row.format,
+          size: croppedSize(row),
+          studio: Boolean(row.studio),
+        })
+      expect(warn(banner)).toContain('loses about 52% of its width (sides)')
+      expect(warn(photo)).toContain(
+        'loses about 21% of its height (top and bottom)',
+      )
+      expect(warn(rows.find((r) => r._id === 'ed-wide'))).toBeNull()
     })
 
     it('sends each entry its Format: the recorded one, square for a studio card without one, the shape of an upload', async () => {
