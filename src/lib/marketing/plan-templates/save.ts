@@ -211,7 +211,8 @@ export function buildTemplate(
       return {
         key: stored?.key ?? task.key,
         beat: stored?.beat ?? task.key.split(':')[0],
-        title: task.title,
+        // A render of a second Format is named for it; its Recipe is not.
+        title: stored && stored.key !== task.key ? stored.title : task.title,
         kind: task.kind,
         ...(task.channel ? { channel: task.channel } : {}),
         anchor:

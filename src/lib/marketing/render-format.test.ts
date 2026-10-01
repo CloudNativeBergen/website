@@ -51,6 +51,14 @@ describe('channelFormat', () => {
 })
 
 describe('splitRendersByFormat', () => {
+  it('names the render of a second Format by it, so the two read apart on the timeline', () => {
+    expect(
+      splitRendersByFormat([render(), post('linkedin'), post('bluesky')])
+        .filter((r) => r.kind === 'studioRender')
+        .map((r) => r.title),
+    ).toEqual(['Render: Card', 'Render: Card (Landscape)'])
+  })
+
   it('LinkedIn and Bluesky at their defaults get two renders, each post waiting on its own', () => {
     expect(
       shape(

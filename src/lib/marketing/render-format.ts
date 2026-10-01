@@ -13,6 +13,7 @@
 
 import {
   DEFAULT_STUDIO_FORMAT,
+  STUDIO_FORMATS,
   STUDIO_FORMAT_IDS,
   studioFormatSchema,
   type StudioFormat,
@@ -132,7 +133,16 @@ export function splitRendersByFormat(recipes: TaskRecipe[]): TaskRecipe[] {
   return recipes.flatMap((recipe): TaskRecipe[] => {
     const own = splits.get(recipe.key)
     if (recipe.kind === 'studioRender' && own) {
-      return [...own].map(([format, key]) => ({ ...recipe, key, format }))
+      return [...own].map(([format, key]) => ({
+        ...recipe,
+        key,
+        // The render of a second Format says which, beside the first.
+        title:
+          key === recipe.key
+            ? recipe.title
+            : `${recipe.title} (${STUDIO_FORMATS[format].label})`,
+        format,
+      }))
     }
     if (recipe.kind !== 'publishing') {
       if (!recipe.prerequisites?.some((key) => splits.has(key))) return [recipe]
