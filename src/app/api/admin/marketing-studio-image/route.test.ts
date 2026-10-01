@@ -336,7 +336,8 @@ describe('the Format of a render Task (Formats spec §4)', () => {
   })
 
   it('takes a capture from a tab without a Format switch as it is', async () => {
-    // The meme generator, collage and promo (Formats spec §1): no `format`.
+    // The meme generator and collage (Formats spec §1): no `format`. The
+    // route never sees the tab, so a promo card is checked as any other.
     expect((await POST(request())).status).toBe(200)
   })
 })
