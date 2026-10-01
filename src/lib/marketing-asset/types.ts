@@ -1,3 +1,4 @@
+import type { StudioFormat } from './format'
 import type { MarketingAssetStudioOrigin } from './studio'
 
 /** What an asset can be about (spec §3): a speaker, a talk or a sponsor. */
@@ -89,6 +90,12 @@ export interface MarketingAssetRow {
   usedInPosts: number | null
   /** Whether it can go into a post yet: a GIF, video or track cannot. */
   attachable: boolean
+}
+
+/** A row as the post picker lists it (#1249): with the Format it ranked by. */
+export interface MarketingAssetPostRow extends MarketingAssetRow {
+  /** The studio's recorded Format (square if none), or an upload's shape. */
+  format: StudioFormat
 }
 
 /** Which assets the gallery shows. Every field narrows; none widens. */

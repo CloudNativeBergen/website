@@ -3,6 +3,7 @@
 import clsx from 'clsx'
 import { MagnifyingGlassIcon } from '@heroicons/react/24/outline'
 import { AdminButton } from '@/components/admin/AdminButton'
+import { STUDIO_FORMATS, type StudioFormat } from '@/lib/marketing-asset'
 
 /**
  * An entry of the organization's marketing asset gallery (assets spec §5).
@@ -18,6 +19,16 @@ export interface MarketingAssetPick {
   attachable: boolean
   /** Where it sits: "About Ada Lovelace", "CND 2026", "Whole organization". */
   context: string
+  /**
+   * Its Format (formats spec §6), shown on the tile; absent where the picker
+   * does not rank by one.
+   */
+  format?: StudioFormat
+  /**
+   * What picking it warns: the crop the post's Channel applies to this
+   * Format. Null when it is the Channel's own. Never a refusal.
+   */
+  formatWarning?: string | null
 }
 
 /** The list a picker shows, with its search and edition filter. */
@@ -141,6 +152,19 @@ export function MarketingAssetPicker({
                         !asset.attachable && 'opacity-40',
                       )}
                     />
+                  )}
+                  {asset.format && (
+                    <span
+                      aria-hidden
+                      className={clsx(
+                        'absolute top-1 left-1 rounded px-1 py-0.5 text-[10px] leading-none font-medium',
+                        asset.formatWarning
+                          ? 'bg-white/90 text-gray-700 dark:bg-gray-900/85 dark:text-gray-300'
+                          : 'bg-brand-cloud-blue text-white',
+                      )}
+                    >
+                      {STUDIO_FORMATS[asset.format].label}
+                    </span>
                   )}
                   {!asset.attachable && (
                     <span className="absolute inset-x-1 bottom-1 rounded bg-gray-900/80 px-1 py-0.5 text-center text-[11px] leading-tight font-medium text-white">

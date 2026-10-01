@@ -5,13 +5,14 @@ import clsx from 'clsx'
 import {
   ArrowUpTrayIcon,
   CheckIcon,
+  ExclamationTriangleIcon,
   PhotoIcon,
   SparklesIcon,
   SwatchIcon,
   XMarkIcon,
 } from '@heroicons/react/24/outline'
 import { AdminButton } from '@/components/admin/AdminButton'
-import { NOT_ATTACHABLE_YET } from '@/lib/marketing-asset'
+import { NOT_ATTACHABLE_YET, STUDIO_FORMATS } from '@/lib/marketing-asset'
 import type { PlatformConstraints } from '@/lib/social/provider/types'
 import { renditionRect } from '@/lib/social/rendition'
 import type {
@@ -117,6 +118,9 @@ export function AttachmentSlot({
   const [busy, setBusy] = useState(false)
   const [sourceError, setSourceError] = useState<string | null>(null)
   const [cropOpen, setCropOpen] = useState<string | null>(null)
+  // Said after a pick the Channel will crop (#1249): a warning, never a
+  // refusal, so it waits until the pick has gone through.
+  const [pickWarning, setPickWarning] = useState<string | null>(null)
   const fileInput = useRef<HTMLInputElement>(null)
 
   const byKey = new Map(postAttachments.map((a) => [a._key, a]))
@@ -129,6 +133,7 @@ export function AttachmentSlot({
     setBusy(true)
     onBusyChange?.(true)
     setSourceError(null)
+    setPickWarning(null)
     try {
       await work()
       setPicker(null)
@@ -171,6 +176,7 @@ export function AttachmentSlot({
 
   const openPicker = (next: Picker) => {
     setSourceError(null)
+    setPickWarning(null)
     setPicker((current) => (current === next ? null : next))
     if (next === 'gallery') gallery?.onOpen?.()
     if (next === 'assets') marketingAssets?.onOpen?.()
@@ -366,9 +372,20 @@ export function AttachmentSlot({
         <MarketingAssetPicker
           source={marketingAssets}
           disabled={disabled || busy || full}
-          onPick={(asset) => void run(() => marketingAssets.onPick(asset))}
+          onPick={(asset) =>
+            void run(async () => {
+              await marketingAssets.onPick(asset)
+              if (asset.formatWarning)
+                setPickWarning(`Added ${asset.title}. ${asset.formatWarning}`)
+            })
+          }
           pickLabel={(asset) =>
-            `Add ${asset.title} (${asset.context}) to the post`
+            `Add ${asset.title} (${[
+              asset.context,
+              asset.format && STUDIO_FORMATS[asset.format].label.toLowerCase(),
+            ]
+              .filter(Boolean)
+              .join(', ')}) to the post`
           }
           notPickable={{
             reason: NOT_ATTACHABLE_YET,
@@ -400,6 +417,27 @@ export function AttachmentSlot({
           {sourceError}
         </p>
       )}
+
+      {/* Mounted throughout: a region inserted with its text is unreliably announced. */}
+      <div role="status">
+        {pickWarning && (
+          <div className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-700/60 dark:bg-amber-950/40 dark:text-amber-200">
+            <ExclamationTriangleIcon
+              className="mt-0.5 size-4 shrink-0"
+              aria-hidden
+            />
+            <p className="min-w-0 flex-1">{pickWarning}</p>
+            <button
+              type="button"
+              onClick={() => setPickWarning(null)}
+              className="-m-1 rounded p-1 hover:bg-amber-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 dark:hover:bg-amber-900/50"
+            >
+              <XMarkIcon className="size-4" aria-hidden />
+              <span className="sr-only">Dismiss</span>
+            </button>
+          </div>
+        )}
+      </div>
 
       {postAttachments.length > 0 && (
         <ul

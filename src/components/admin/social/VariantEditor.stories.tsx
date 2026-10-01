@@ -3,6 +3,8 @@ import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { expect, fn, userEvent, within } from 'storybook/test'
 import { ThemeProvider } from 'next-themes'
 import { PLATFORM_CONSTRAINTS } from '@/lib/social/provider/constraints'
+import { STUDIO_FORMATS, type StudioFormat } from '@/lib/marketing-asset'
+import { formatMismatchWarning } from '@/lib/marketing-asset/channel-format'
 import type { SocialPostAttachment } from '@/lib/social/types'
 import { VariantEditor, type VariantEditorProps } from './VariantEditor'
 import type { MarketingAssetPick } from './AttachmentSlot'
@@ -602,15 +604,17 @@ const ASSET_PICKS: MarketingAssetPick[] = [
 function AssetPickerHarness({
   onPickAsset,
   pickerError,
+  picks = ASSET_PICKS,
   ...args
 }: Args & {
   onPickAsset: (asset: MarketingAssetPick) => void
   pickerError?: string
+  picks?: MarketingAssetPick[]
 }) {
   const [search, setSearch] = useState('')
   const [allEditions, setAllEditions] = useState(false)
   const words = search.toLowerCase().split(/\s+/).filter(Boolean)
-  const assets = ASSET_PICKS.filter((asset) =>
+  const assets = picks.filter((asset) =>
     words.every((word) =>
       asset.title
         .toLowerCase()
@@ -816,6 +820,184 @@ function SavingToggle(
       <AssetPickerHarness {...props} saving={saving} />
     </>
   )
+}
+
+/**
+ * The gallery as the server ranks it for one Channel (#1249): within the
+ * subject / edition / organization groups, the Channel's own Format first.
+ * Each tile carries its Format; a mismatch carries the platform's warning.
+ */
+const THUMB_COLORS: Record<StudioFormat, [string, string]> = {
+  square: ['#be185d', '#f472b6'],
+  landscape: ['#0f766e', '#84cc16'],
+  portrait: ['#7c2d12', '#f59e0b'],
+}
+
+function rankedPicks(
+  platform: 'linkedin' | 'bluesky',
+  entries: [id: string, title: string, context: string, format: StudioFormat][],
+): MarketingAssetPick[] {
+  return entries.map(([id, title, context, format]) => {
+    const { width, height } = STUDIO_FORMATS[format]
+    return {
+      id,
+      title,
+      alt: title,
+      thumbnailSrc: svgImage(width, height, ...THUMB_COLORS[format]),
+      attachable: true,
+      context,
+      format,
+      formatWarning: formatMismatchWarning(platform, format),
+    }
+  })
+}
+
+const RANKED_FOR_LINKEDIN = rankedPicks('linkedin', [
+  [
+    'ada-landscape',
+    'Speaker card, landscape',
+    'About Ada Lovelace',
+    'landscape',
+  ],
+  ['ada-square', 'Speaker card: Ada Lovelace', 'About Ada Lovelace', 'square'],
+  ['venue', 'Venue, evening', 'CND 2027', 'landscape'],
+  ['sponsor-wall', 'Sponsor wall', 'CND 2027', 'square'],
+  ['speaker-portrait', 'Ada on stage', 'CND 2027', 'portrait'],
+  ['logo', 'Logo, dark background', 'Whole organization', 'square'],
+])
+
+const RANKED_FOR_BLUESKY = rankedPicks('bluesky', [
+  ['ada-square', 'Speaker card: Ada Lovelace', 'About Ada Lovelace', 'square'],
+  [
+    'ada-landscape',
+    'Speaker card, landscape',
+    'About Ada Lovelace',
+    'landscape',
+  ],
+  ['sponsor-wall', 'Sponsor wall', 'CND 2027', 'square'],
+  ['venue', 'Venue, evening', 'CND 2027', 'landscape'],
+  ['speaker-portrait', 'Ada on stage', 'CND 2027', 'portrait'],
+  ['logo', 'Logo, dark background', 'Whole organization', 'square'],
+])
+
+const tileNames = (picker: ReturnType<typeof within>) =>
+  picker
+    .getAllByRole('button', { name: /^Add / })
+    .map((tile: HTMLElement) => tile.getAttribute('aria-label'))
+
+const linkedInRanked = {
+  ...pickerArgs,
+  picks: RANKED_FOR_LINKEDIN,
+} as unknown as Story['args']
+
+/** A LinkedIn post: landscape entries lead each group, the subject's first. */
+export const MarketingAssetPickerRankedForLinkedIn: Story = {
+  args: linkedInRanked,
+  render: MarketingAssetPicker.render,
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'The order the server sends for a LinkedIn post: within the subject, edition and organization groups, landscape (LinkedIn’s 1.91:1) leads. Every tile names its Format; the Channel’s own is highlighted.',
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const picker = await openPicker(canvasElement)
+    await expect(tileNames(picker)).toEqual([
+      'Add Speaker card, landscape (About Ada Lovelace, landscape) to the post',
+      'Add Speaker card: Ada Lovelace (About Ada Lovelace, square) to the post',
+      'Add Venue, evening (CND 2027, landscape) to the post',
+      'Add Sponsor wall (CND 2027, square) to the post',
+      'Add Ada on stage (CND 2027, portrait) to the post',
+      'Add Logo, dark background (Whole organization, square) to the post',
+    ])
+  },
+}
+
+export const MarketingAssetPickerRankedForLinkedInDark: Story = {
+  ...MarketingAssetPickerRankedForLinkedIn,
+  parameters: { theme: 'dark', backgrounds: { default: 'dark' } },
+}
+
+/** A Bluesky post: the same gallery, square first. */
+export const MarketingAssetPickerRankedForBluesky: Story = {
+  args: {
+    ...pickerArgs,
+    picks: RANKED_FOR_BLUESKY,
+    platform: 'bluesky',
+    constraints: PLATFORM_CONSTRAINTS.bluesky,
+    initialValue: { ...pickerArgs.initialValue, body: BODY_BLUESKY },
+  } as unknown as Story['args'],
+  render: MarketingAssetPicker.render,
+  play: async ({ canvasElement }) => {
+    const picker = await openPicker(canvasElement)
+    await expect(tileNames(picker).slice(0, 4)).toEqual([
+      'Add Speaker card: Ada Lovelace (About Ada Lovelace, square) to the post',
+      'Add Speaker card, landscape (About Ada Lovelace, landscape) to the post',
+      'Add Sponsor wall (CND 2027, square) to the post',
+      'Add Venue, evening (CND 2027, landscape) to the post',
+    ])
+  },
+}
+
+export const MarketingAssetPickerRankedForBlueskyDark: Story = {
+  ...MarketingAssetPickerRankedForBluesky,
+  parameters: { theme: 'dark', backgrounds: { default: 'dark' } },
+}
+
+/**
+ * A square entry picked into a LinkedIn post: it is added, and the slot says
+ * what LinkedIn's 1.91:1 crop does to it. A warning, never a refusal.
+ */
+export const PickingAMismatchedFormat: Story = {
+  args: linkedInRanked,
+  render: MarketingAssetPicker.render,
+  play: async ({ canvasElement, args }) => {
+    const picker = await openPicker(canvasElement)
+    await userEvent.click(
+      picker.getByRole('button', { name: /^Add Logo, dark background/ }),
+    )
+    const onPick = (args as unknown as { onPickAsset: ReturnType<typeof fn> })
+      .onPickAsset
+    await expect(onPick).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'logo' }),
+    )
+    await expect(
+      await within(canvasElement).findByText(
+        /LinkedIn crops images to 1\.91:1/,
+      ),
+    ).toBeVisible()
+    await expect(within(canvasElement).getByRole('status')).toHaveTextContent(
+      'Added Logo, dark background. LinkedIn crops images to 1.91:1 in the feed, so this square one loses its top and bottom. Check the crop, or pick a landscape entry.',
+    )
+    await expect(within(canvasElement).queryByRole('alert')).toBeNull()
+  },
+}
+
+export const PickingAMismatchedFormatDark: Story = {
+  ...PickingAMismatchedFormat,
+  parameters: { theme: 'dark', backgrounds: { default: 'dark' } },
+}
+
+export const PickingAMismatchedFormatMobile: Story = {
+  ...PickingAMismatchedFormat,
+  parameters: { viewport: { defaultViewport: 'mobile1' } },
+}
+
+/** Bluesky does not crop: the warning says so rather than inventing a crop. */
+export const PickingAMismatchedFormatOnBluesky: Story = {
+  args: MarketingAssetPickerRankedForBluesky.args,
+  render: MarketingAssetPicker.render,
+  play: async ({ canvasElement }) => {
+    const picker = await openPicker(canvasElement)
+    await userEvent.click(
+      picker.getByRole('button', { name: /^Add Venue, evening/ }),
+    )
+    await expect(
+      await within(canvasElement).findByText(/Bluesky does not crop images/),
+    ).toBeVisible()
+  },
 }
 
 /**

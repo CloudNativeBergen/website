@@ -8,10 +8,14 @@ import type { ResolvedMarketingAssetDetails } from './details'
 import type { StudioOriginInput } from './studio'
 import type { ResolvedExportSource } from './guard'
 import { prepareArrayWithKeys } from '@/lib/sanity/helpers'
+import type { SocialPlatform } from '@/lib/social/types'
+import { channelFormat, entryFormat } from './channel-format'
+import type { StudioFormat } from './format'
 import type {
   MarketingAssetFacets,
   MarketingAssetKind,
   MarketingAssetFilter,
+  MarketingAssetPostRow,
   MarketingAssetRow,
   MarketingAssetSubject,
 } from './types'
@@ -200,6 +204,24 @@ async function readPostSubjectId(
   )
 }
 
+/**
+ * The Channel of one of THIS post's variants, or null for a variant of another
+ * post or another conference (the scope makes both read as nothing).
+ */
+async function readVariantPlatform(
+  conferenceId: string,
+  postId: string,
+  variantId: string,
+): Promise<SocialPlatform | null> {
+  return scopedFetch<SocialPlatform | null>(
+    clientReadUncached,
+    { conferenceId },
+    `*[_type == "socialPostVariant" && _id == $variantId && post._ref == $postId][0].platform`,
+    { variantId, postId },
+    { cache: 'no-store' },
+  )
+}
+
 /** Where a row falls in the picker: lower first. */
 function pickerRank(
   row: MarketingAssetRow,
@@ -227,10 +249,19 @@ export async function listMarketingAssetsForPost(
   filter: Pick<MarketingAssetFilter, 'editions' | 'search'> & {
     /** Only the kinds posted by hand: GIFs and videos (#1167). */
     byHand?: boolean
+    /**
+     * The variant the picker is open in (#1249): its Channel's Format leads
+     * each group. Read scoped to this conference and this post, so any other
+     * variant reads as no Channel and the order is left alone.
+     */
+    variantId?: string
   },
-): Promise<MarketingAssetRow[]> {
-  const [subjectId, rows] = await Promise.all([
+): Promise<MarketingAssetPostRow[]> {
+  const [subjectId, platform, rows] = await Promise.all([
     readPostSubjectId(conferenceId, postId),
+    filter.variantId
+      ? readVariantPlatform(conferenceId, postId, filter.variantId)
+      : null,
     // Always every edition: the subject's assets lead from any of them.
     listMarketingAssets(
       orgId,
@@ -239,14 +270,30 @@ export async function listMarketingAssetsForPost(
       filter.byHand ? { kinds: ['gif', 'video'] } : {},
     ),
   ])
-  return rows
-    .filter((row) =>
-      filter.byHand ? isPostedByHand(row.kind) : row.kind !== 'audio',
-    )
-    .map((row) => ({ row, rank: pickerRank(row, subjectId, conferenceId) }))
-    .filter(({ rank }) => rank < 3 || filter.editions === 'all')
-    .sort((a, b) => a.rank - b.rank)
-    .map(({ row }) => row)
+  const wanted = channelFormat(platform)
+  return (
+    rows
+      .filter((row) =>
+        filter.byHand ? isPostedByHand(row.kind) : row.kind !== 'audio',
+      )
+      .map((row) => ({
+        row: { ...row, format: entryFormat(row) },
+        rank: pickerRank(row, subjectId, conferenceId),
+      }))
+      .filter(({ rank }) => rank < 3 || filter.editions === 'all')
+      // Stable: newest first stays the order within each (group, Format).
+      .sort(
+        (a, b) =>
+          a.rank - b.rank ||
+          formatRank(a.row.format, wanted) - formatRank(b.row.format, wanted),
+      )
+      .map(({ row }) => row)
+  )
+}
+
+/** The Channel's own Format before every other; no Channel, no preference. */
+function formatRank(format: StudioFormat, wanted: StudioFormat | null): number {
+  return wanted !== null && format !== wanted ? 1 : 0
 }
 
 /**

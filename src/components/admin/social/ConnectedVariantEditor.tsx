@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { keepPreviousData } from '@tanstack/react-query'
 import { useNotification } from '@/components/admin/NotificationProvider'
 import { richTextImageUrl } from '@/lib/homepage/richTextImage'
+import { formatMismatchWarning } from '@/lib/marketing-asset/channel-format'
 import { getPlatformConstraints } from '@/lib/social/provider/constraints'
 import type { SocialVariantEditorData } from '@/lib/social/types'
 import { api } from '@/lib/trpc/client'
@@ -167,6 +168,8 @@ export function ConnectedVariantEditor({
   const marketingAssets = api.marketingAsset.forPost.useQuery(
     {
       postId,
+      // The server reads this variant's Channel and ranks its Format first.
+      variantId,
       editions: allEditions ? 'all' : 'current',
       ...(assetQuery ? { search: assetQuery } : {}),
     },
@@ -314,6 +317,11 @@ export function ConnectedVariantEditor({
         thumbnailSrc: thumbnailId ? richTextImageUrl(thumbnailId, 300) : null,
         attachable: asset.attachable,
         context: assetContext(asset),
+        format: asset.format,
+        formatWarning: formatMismatchWarning(
+          data.variant.platform,
+          asset.format,
+        ),
       }
     },
   )
