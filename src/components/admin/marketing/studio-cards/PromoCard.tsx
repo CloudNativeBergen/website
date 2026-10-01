@@ -56,6 +56,11 @@ export interface PromoCardProps {
   className?: string
 }
 
+/**
+ * The count icons' colours, read from the brand variables rather than the
+ * `text-brand-*` classes: those have `.dark` overrides, which would make the
+ * downloaded promo follow the organizer's admin theme.
+ */
 const COUNTS: {
   key: keyof PromoCardCounts
   label: string
@@ -66,19 +71,19 @@ const COUNTS: {
     key: 'speakers',
     label: 'Speakers',
     icon: UsersIcon,
-    color: 'text-brand-sunbeam-yellow',
+    color: 'text-[color:var(--color-brand-sunbeam-yellow)]',
   },
   {
     key: 'talks',
     label: 'Talks',
     icon: MicrophoneIcon,
-    color: 'text-brand-fresh-green',
+    color: 'text-[color:var(--color-brand-fresh-green)]',
   },
   {
     key: 'workshops',
     label: 'Workshops',
     icon: TrophyIcon,
-    color: 'text-brand-sunbeam-yellow',
+    color: 'text-[color:var(--color-brand-sunbeam-yellow)]',
   },
 ]
 
