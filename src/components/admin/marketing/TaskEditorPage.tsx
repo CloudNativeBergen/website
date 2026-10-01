@@ -57,6 +57,11 @@ import {
 } from './timeline-model'
 import { useCeilingWarningToast } from './useCeilingWarningToast'
 import { TaskGalleryPicker } from './TaskGalleryPicker'
+import {
+  STUDIO_FORMAT_IDS,
+  studioFormatLabel,
+  type StudioFormat,
+} from '@/lib/marketing-asset'
 import { LiveLinksWarning } from './LiveLinksWarning'
 
 const inputClass =
@@ -1456,6 +1461,8 @@ function StudioSection({
     }
   }
   const params = new URLSearchParams({ task: task._id })
+  // The studio opens on the Task's Format, the switch preset to it (§4).
+  if (task.format) params.set('format', task.format)
   if (task.subject?.type === 'speaker' || task.subject?.type === 'sponsor') {
     params.set(task.subject.type, task.subject._id)
   }
@@ -1493,6 +1500,14 @@ function StudioSection({
         </div>
       }
     >
+      {task.format && (
+        <RenderFormat
+          task={task}
+          format={task.format}
+          onChanged={onChanged}
+          onFailed={onFailed}
+        />
+      )}
       {picking && (
         <TaskGalleryPicker
           taskId={task._id}
@@ -1613,6 +1628,66 @@ function StudioSection({
       )}
       <SkippedNote task={task} />
     </Panel>
+  )
+}
+
+/**
+ * The Format the render is made in (docs/MARKETING_STUDIO_FORMATS_SPEC.md
+ * §4): set from the posts it feeds, and the organizer's to change until the
+ * render is made. The studio opens on it, and takes only a render in it.
+ */
+function RenderFormat({
+  task,
+  format,
+  onChanged,
+  onFailed,
+}: { task: TaskEditorTask; format: StudioFormat } & Handlers) {
+  const update = api.marketing.task.update.useMutation({
+    onSuccess: onChanged,
+    onError: onFailed('Could not change the Format'),
+  })
+  if (task.complete || task.status !== 'open')
+    return (
+      <p className="mb-4 text-sm text-gray-600 dark:text-gray-300">
+        Format: {studioFormatLabel(format)}
+      </p>
+    )
+  return (
+    <div className="mb-4 max-w-xs">
+      <label
+        htmlFor="task-format"
+        className="block text-xs font-medium text-gray-500 dark:text-gray-400"
+      >
+        Format
+      </label>
+      <select
+        id="task-format"
+        value={format}
+        disabled={update.isPending}
+        aria-describedby="task-format-hint"
+        onChange={(e) =>
+          update.mutate({
+            taskId: task._id,
+            rev: task._rev,
+            format: e.target.value as StudioFormat,
+          })
+        }
+        className={clsx(inputClass, 'mt-1')}
+      >
+        {STUDIO_FORMAT_IDS.map((id) => (
+          <option key={id} value={id}>
+            {studioFormatLabel(id)}
+          </option>
+        ))}
+      </select>
+      <p
+        id="task-format-hint"
+        className="mt-1 text-xs text-gray-500 dark:text-gray-400"
+      >
+        The studio opens in this Format, and only a render in it can be
+        attached.
+      </p>
+    </div>
   )
 }
 

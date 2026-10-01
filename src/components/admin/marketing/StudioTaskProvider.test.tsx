@@ -9,6 +9,7 @@ import {
 } from '@testing-library/react'
 import { DownloadableImage } from '@/components/common/DownloadableImage'
 import { StudioTaskProvider } from './StudioTaskProvider'
+import { FormatSwitch } from './studio-cards'
 
 const mocks = vi.hoisted(() => ({
   task: {
@@ -356,5 +357,87 @@ describe('Studio Task attachment', () => {
       ).toContain('Task not found'),
     )
     expect(mocks.mutate).toHaveBeenCalledTimes(0)
+  })
+})
+
+describe('the Format of the render Task (Formats spec §4)', () => {
+  /** A speaker card on a tab with a Format switch, opened from the Task. */
+  function setupCard(defaultFormat: 'square' | 'landscape') {
+    render(
+      <StudioTaskProvider taskId="render-1">
+        <FormatSwitch defaultFormat={defaultFormat}>
+          <DownloadableImage
+            filename="speaker"
+            studio={{ tab: 'speakers', title: 'Ada' }}
+          >
+            <div data-testid="speaker-card">Speaker card</div>
+          </DownloadableImage>
+        </FormatSwitch>
+      </StudioTaskProvider>,
+    )
+    const card = screen.getByTestId('speaker-card').parentElement!
+    Object.defineProperties(card, {
+      offsetWidth: { value: 256 },
+      offsetHeight: { value: 134 },
+    })
+  }
+  /** jsdom has no 2D context: record the size of the canvas the PNG is of. */
+  function canvasSizes() {
+    const sizes: number[][] = []
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
+      drawImage: vi.fn(),
+    } as unknown as CanvasRenderingContext2D)
+    vi.spyOn(HTMLCanvasElement.prototype, 'toBlob').mockImplementation(
+      function (this: HTMLCanvasElement, callback) {
+        sizes.push([this.width, this.height])
+        callback(new Blob(['card pixels'], { type: 'image/png' }))
+      },
+    )
+    return sizes
+  }
+  beforeEach(() => {
+    Object.assign(mocks.task, { format: 'landscape' })
+  })
+  afterEach(() => {
+    vi.restoreAllMocks()
+    Object.assign(mocks.task, { format: undefined })
+  })
+
+  it('says which Format the Task asks for', () => {
+    setupCard('landscape')
+    expect(screen.getByText(/This Task asks for/).textContent).toBe(
+      'This Task asks for Landscape (1200×628). Choose a render below and attach it to this Task.',
+    )
+  })
+
+  it('attaches the Format the Task asks for, at exactly its pixels, and names the card it came from', async () => {
+    const sizes = canvasSizes()
+    setupCard('landscape')
+    fireEvent.click(screen.getByRole('button', { name: 'Attach to Task' }))
+    await waitFor(() =>
+      expect(mocks.mutate).toHaveBeenCalledWith({
+        taskId: 'render-1',
+        taskRev: 'upload-rev',
+        assetId: 'image-uploaded',
+        studio: { tab: 'speakers', format: 'landscape' },
+      }),
+    )
+    expect(sizes).toEqual([[1200, 628]])
+    const request = mocks.upload.mock.calls[0][1]
+    expect(request.body.get('format')).toBe('landscape')
+    expect(request.body.get('file').name).toBe('speaker-landscape.png')
+  })
+
+  it('refuses a card switched to another Format, before it is captured or sent', async () => {
+    const sizes = canvasSizes()
+    setupCard('landscape')
+    fireEvent.click(screen.getByRole('radio', { name: /Square/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Attach to Task' }))
+    expect((await screen.findByRole('alert')).textContent).toBe(
+      'This Task asks for Landscape (1200×628), and the studio is showing Square (1080×1080). Switch the studio to Landscape, or change the Format on the Task.',
+    )
+    expect(sizes).toEqual([])
+    expect(mocks.upload).not.toHaveBeenCalled()
+    expect(mocks.mutate).not.toHaveBeenCalled()
   })
 })

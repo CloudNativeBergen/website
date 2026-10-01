@@ -611,6 +611,60 @@ beforeEach(() => {
 })
 afterEach(cleanup)
 
+describe('the Format of a render Task (Formats spec §4)', () => {
+  /** A render Task not made yet, asking for landscape. */
+  function unrendered() {
+    const data = pendingData()
+    mocks.data = {
+      ...data,
+      task: {
+        ...data.task,
+        format: 'landscape',
+        complete: false,
+        assetUrl: null,
+        assetId: null,
+        handoffPending: false,
+      },
+    }
+  }
+
+  it('opens the studio on the Format of the Task, with the switch preset', () => {
+    unrendered()
+    render(<TaskEditorPage taskId="render-1" />)
+    const link = screen.getByRole('link', { name: 'Open the promo studio' })
+    expect(
+      new URL(link.getAttribute('href')!, 'https://x.test').searchParams.get(
+        'format',
+      ),
+    ).toBe('landscape')
+  })
+
+  it('lets the organizer choose another Format before rendering, saved on the loaded revision', () => {
+    unrendered()
+    render(<TaskEditorPage taskId="render-1" />)
+    const select = screen.getByRole('combobox', {
+      name: 'Format',
+    }) as HTMLSelectElement
+    expect(select.value).toBe('landscape')
+    expect([...select.options].map((o) => o.text)).toEqual([
+      'Square (1080×1080)',
+      'Landscape (1200×628)',
+      'Portrait (1080×1350)',
+    ])
+    fireEvent.change(select, { target: { value: 'portrait' } })
+    expect(mocks.update).toHaveBeenCalledWith(
+      { taskId: 'render-1', rev: 'r2', format: 'portrait' },
+      expect.anything(),
+    )
+  })
+
+  it('shows the Format of a render already made, and no choice', () => {
+    render(<TaskEditorPage taskId="render-1" />)
+    expect(screen.queryByRole('combobox', { name: 'Format' })).toBeNull()
+    expect(screen.getByText('Format: Square (1080×1080)')).toBeTruthy()
+  })
+})
+
 describe('Task editor handoff recovery', () => {
   it('recovers server-side pending handoff after a reload using the latest revision and saved asset', async () => {
     const first = render(<TaskEditorPage taskId="render-1" />)
@@ -782,6 +836,7 @@ describe('Task editor handoff recovery', () => {
       screen.getByRole('region', { name: 'Studio render' }).textContent,
     ).toBe(
       'Studio renderOpen the promo studioUse an asset from the gallerySkip…' +
+        'Format: Square (1080×1080)' +
         'The render is done and saved. The image has not reached all publishing Tasks listed below yet.' +
         'Prerequisites are advisory: these publishing Tasks can publish without this image until the handoff succeeds.' +
         'Retry handoffRendered; the image is attached to this task.',

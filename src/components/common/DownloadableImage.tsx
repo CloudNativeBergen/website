@@ -147,7 +147,10 @@ export function DownloadableImage({
         {attachment && (
           <button
             onClick={() =>
-              attachment.attach(() => capture(componentRef.current!), name)
+              attachment.attach(() => capture(componentRef.current!), name, {
+                format,
+                card,
+              })
             }
             disabled={busy}
             className="inline-flex items-center rounded-lg border border-blue-600 px-4 py-2 text-sm font-semibold text-blue-700 disabled:opacity-50 dark:text-blue-300"

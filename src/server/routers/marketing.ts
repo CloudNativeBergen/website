@@ -1460,7 +1460,9 @@ export const marketingRouter = router({
         // attached already is in the Format it was made in (Formats spec §4).
         if (
           input.format !== undefined &&
-          (data.task.kind !== 'studioRender' || data.task.status !== 'open')
+          (data.task.kind !== 'studioRender' ||
+            data.task.status !== 'open' ||
+            data.task.complete)
         ) {
           throw new TRPCError({
             code: 'BAD_REQUEST',

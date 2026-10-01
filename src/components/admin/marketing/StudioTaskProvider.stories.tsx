@@ -4,6 +4,7 @@ import { expect, userEvent, waitFor, within } from 'storybook/test'
 import { DownloadableImage } from '@/components/common/DownloadableImage'
 import { MarketingTabs } from '../MarketingTabs'
 import { StudioTaskProvider } from './StudioTaskProvider'
+import { FormatSwitch, SpeakerCard } from './studio-cards'
 
 const meta = {
   title: 'Systems/Marketing/PromoStudio',
@@ -205,6 +206,95 @@ export const GallerySaveFailure: Story = {
 
 export const GallerySaveFailureDark: Story = {
   ...GallerySaveFailure,
+  // This file has no decorator of its own: the global one reads the global.
+  globals: { theme: 'dark' },
+}
+
+const QR =
+  "data:image/svg+xml,%3csvg width='120' height='120' xmlns='http://www.w3.org/2000/svg'%3e%3crect width='120' height='120' fill='white'/%3e%3cpath d='M10,10 L40,10 L40,40 L10,40 Z M80,10 L110,10 L110,40 L80,40 Z M10,80 L40,80 L40,110 L10,110 Z M60,60 L70,60 L70,70 L60,70 Z' fill='black'/%3e%3c/svg%3e"
+
+/**
+ * The landscape render of a speaker beat, opened from its Task (Formats spec
+ * §4): the banner names the Format the Task asks for, the switch is preset to
+ * it, and a card switched to another Format is refused before it is made.
+ */
+export const LandscapeSpeakerTask: Story = {
+  args: { taskId: 'render-ada-landscape', children: null },
+  parameters: {
+    msw: {
+      handlers: [
+        http.get('/api/trpc/marketing.task.get', () =>
+          HttpResponse.json({
+            result: {
+              data: {
+                task: {
+                  _id: 'render-ada-landscape',
+                  _rev: 'revision-1',
+                  title: 'Render: Speaker card',
+                  kind: 'studioRender',
+                  format: 'landscape',
+                  subject: { _id: 'sp-ada', type: 'speaker', name: 'Ada' },
+                },
+              },
+            },
+          }),
+        ),
+      ],
+    },
+  },
+  render: (args) => (
+    <div className="p-4">
+      <StudioTaskProvider {...args}>
+        <FormatSwitch defaultFormat="landscape">
+          <div style={{ width: 420 }}>
+            <DownloadableImage
+              filename="speaker-ada"
+              studio={{ tab: 'speakers', title: 'Ada Lovelace' }}
+            >
+              <div style={{ width: 420 }}>
+                <SpeakerCard
+                  speaker={{
+                    name: 'Ada Lovelace',
+                    title: 'Analytical Engineer, Babbage & Co',
+                    talks: [
+                      {
+                        title: 'Notes on the Analytical Engine',
+                        format: 'presentation_45',
+                      },
+                    ],
+                  }}
+                  qrCodeUrl={QR}
+                  variant="speaker-spotlight"
+                  eventName="Cloud Native Days Norway"
+                  showCloudNativePattern
+                />
+              </div>
+            </DownloadableImage>
+          </div>
+        </FormatSwitch>
+      </StudioTaskProvider>
+    </div>
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(
+      await canvas.findByText(/This Task asks for Landscape \(1200×628\)\./),
+    ).toBeVisible()
+    await expect(
+      canvas.getByRole('radio', { name: /Landscape/ }),
+    ).toHaveAttribute('aria-checked', 'true')
+    await userEvent.click(canvas.getByRole('radio', { name: /Square/ }))
+    await userEvent.click(
+      canvas.getByRole('button', { name: 'Attach to Task' }),
+    )
+    await expect(await canvas.findByRole('alert')).toHaveTextContent(
+      'This Task asks for Landscape (1200×628), and the studio is showing Square (1080×1080). Switch the studio to Landscape, or change the Format on the Task.',
+    )
+  },
+}
+
+export const LandscapeSpeakerTaskDark: Story = {
+  ...LandscapeSpeakerTask,
   // This file has no decorator of its own: the global one reads the global.
   globals: { theme: 'dark' },
 }

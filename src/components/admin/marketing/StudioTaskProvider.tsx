@@ -3,10 +3,23 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { api } from '@/lib/trpc/client'
-import { ImageAttachmentContext } from '@/components/common/image-capture'
+import {
+  ImageAttachmentContext,
+  type AttachedCapture,
+} from '@/components/common/image-capture'
+import { STUDIO_FORMATS, studioFormatLabel } from '@/lib/marketing-asset'
+import type { TaskRenderCard } from '@/lib/marketing-asset/task-render'
 
 /** What the studio's multipart attach route can carry (Vercel's body cut). */
 const ATTACH_MAX_BYTES = 4 * 1024 * 1024
+
+/** What `task.attachAsset` is sent for a studio render. */
+interface AttachInput {
+  taskId: string
+  taskRev: string
+  assetId: string
+  studio?: TaskRenderCard
+}
 
 /** Provides attachment controls to every studio renderer, including subjectless Tasks. */
 export function StudioTaskProvider({
@@ -37,17 +50,9 @@ function ConnectedStudioTask({
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
   const [failed, setFailed] = useState(false)
-  const [pending, setPending] = useState<{
-    taskId: string
-    taskRev: string
-    assetId: string
-  } | null>(null)
+  const [pending, setPending] = useState<AttachInput | null>(null)
 
-  async function save(input: {
-    taskId: string
-    taskRev: string
-    assetId: string
-  }) {
+  async function save(input: AttachInput) {
     const result = await mutation.mutateAsync(input)
     const handoffIncomplete = result.handoffFailures.length > 0
     const galleryFailed = result.galleryFailed === true
@@ -105,12 +110,25 @@ function ConnectedStudioTask({
     }
   }
 
-  async function attach(capture: () => Promise<Blob>, filename: string) {
+  async function attach(
+    capture: () => Promise<Blob>,
+    filename: string,
+    shown?: AttachedCapture,
+  ) {
     setBusy(true)
     setMessage('')
     setFailed(false)
     setPending(null)
     try {
+      // The render attached is the Task's Format (Formats spec §4): a card
+      // switched to another is refused before it is made. The upload route
+      // checks the same on the bytes.
+      const wanted = query.data?.task?.format
+      const format = shown?.format ?? null
+      if (format && wanted && format !== wanted)
+        throw new Error(
+          `This Task asks for ${studioFormatLabel(wanted)}, and the studio is showing ${studioFormatLabel(format)}. Switch the studio to ${STUDIO_FORMATS[wanted].label}, or change the Format on the Task.`,
+        )
       const blob = await capture()
       // The multipart route is cut by Vercel at about 4.5 MB before the
       // server sees it (docs/MARKETING_ASSETS_SPEC.md §4.2): a Format-sized
@@ -121,6 +139,7 @@ function ConnectedStudioTask({
         )
       const form = new FormData()
       form.set('taskId', taskId)
+      if (format) form.set('format', format)
       form.set('file', blob, `${filename}.png`)
       const response = await fetch('/api/admin/marketing-studio-image', {
         method: 'POST',
@@ -128,10 +147,17 @@ function ConnectedStudioTask({
       })
       const upload = await response.json()
       if (!response.ok) throw new Error(upload.error || 'Image upload failed')
-      const input = {
+      const tab = shown?.card?.tab
+      // The card it was made from, for the Task's gallery entry.
+      const studio: TaskRenderCard | undefined =
+        format && (tab === 'speakers' || tab === 'sponsors')
+          ? { tab, format }
+          : undefined
+      const input: AttachInput = {
         taskId,
         taskRev: upload.taskRev as string,
         assetId: upload.assetId as string,
+        ...(studio ? { studio } : {}),
       }
       setPending(input)
       await save(input)
@@ -158,6 +184,9 @@ function ConnectedStudioTask({
         </p>
         {task?.kind === 'studioRender' && (
           <p className="mt-1">
+            {task.format
+              ? `This Task asks for ${studioFormatLabel(task.format)}. `
+              : ''}
             Choose a render below and attach it to this Task.
           </p>
         )}

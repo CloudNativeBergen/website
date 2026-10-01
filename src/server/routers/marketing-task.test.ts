@@ -886,7 +886,8 @@ describe('marketing.task.update', () => {
     for (const task of [
       {},
       CHECKLIST,
-      { ...RENDER, status: 'done' as const, complete: true },
+      // Rendered: a render Task stays open, and is complete once it has one.
+      { ...RENDER, complete: true },
       { ...RENDER, status: 'skipped' as const },
     ]) {
       h.getTaskEditorData.mockResolvedValue(stored(task))
