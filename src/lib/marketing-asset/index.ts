@@ -71,12 +71,15 @@ export {
   openInStudioHref,
   opensTheCard,
   projectDeleted,
+  taskRenderCardSchema,
 } from './studio'
 export type {
   ExportSourceInput,
   MarketingAssetStudioOrigin,
   StudioTab,
+  TaskRenderCard,
 } from './studio'
+export { PNG_SIZE_BYTES, pngSize } from './png-size'
 export type {
   MarketingAssetDetails,
   MarketingAssetEditionChoice,

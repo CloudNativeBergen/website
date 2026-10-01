@@ -29,6 +29,12 @@ export interface StudioTask {
    * made before Formats, which is square (`storedRenderFormat`).
    */
   format: string | null
+  /**
+   * The studio card the saved render was attached from (tab and Format), for
+   * a gallery save retried later; unvalidated, read through
+   * `taskRenderCardSchema`.
+   */
+  renderCard: unknown
   /** Set by the save of a new render until its gallery save lands (#1165). */
   galleryPending: boolean | null
   /**
@@ -58,7 +64,7 @@ export function getStudioTask(taskId: string, conferenceId: string) {
       "subjectName": coalesce(subject->name, subject->title),
       "subject": select(subject->_type in $subjectTypes => { "id": subject._ref, "type": subject->_type }),
       "pendingAssetId": pendingStudioAsset.asset._ref, "assetId": asset.asset._ref,
-      "campaignId": campaign._ref, format,
+      "campaignId": campaign._ref, format, renderCard,
       handoffDoneFor, replacedRenders, galleryPending,
       "galleryAssetId": galleryAsset._ref,
       "galleryAlt": galleryAlt,

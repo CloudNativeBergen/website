@@ -522,7 +522,7 @@ export async function getTaskEditorData(
       "assetUrl": asset.asset->url,
       "assetId": asset.asset._ref,
       "galleryPending": kind == "studioRender" && defined(asset.asset) && galleryPending == true,
-      "format": select(kind == "studioRender" => coalesce(format, "square")),
+      "format": select(kind == "studioRender" => format),
       "fromGallery": select(kind == "studioRender" && defined(asset.asset) && defined(galleryAsset._ref) => { "title": select(galleryAsset->organization._ref == conference->organization._ref => galleryAsset->title) }),
       "subject": subject->{ _id, _type, "name": coalesce(name, title), "slug": slug.current },
       "tagByHand": select(kind == "publishing" && channel == "linkedin" => subject->{

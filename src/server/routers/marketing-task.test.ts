@@ -1671,7 +1671,8 @@ describe('task.attachAsset', () => {
         // A new render is marked until its gallery save lands (#1165).
         galleryPending: true,
       },
-      ['pendingStudioAsset'],
+      // A render from a tab without a Format switch claims no card.
+      ['pendingStudioAsset', 'renderCard'],
       undefined,
       undefined,
       // No gallery asset to guard: not picked, and no earlier pick.

@@ -3,6 +3,7 @@ import { MILESTONES } from '@/lib/marketing/milestones'
 import { OUTCOMES, TASK_KINDS, MARKETING_CHANNELS } from '@/lib/marketing/types'
 import { z } from 'zod'
 import { studioFormatSchema } from '@/lib/marketing-asset/format'
+import { taskRenderCardSchema } from '@/lib/marketing-asset/studio'
 import {
   BUILTIN_TEMPLATE_VERSION,
   optionalCampaigns,
@@ -202,13 +203,7 @@ export const AttachTaskAssetSchema = z.union([
      * The card it was made from, on a tab with a Format switch (Formats spec
      * §4): recorded on the Task's gallery entry. Must be the Task's Format.
      */
-    studio: z
-      .object({
-        tab: z.enum(['speakers', 'sponsors']),
-        format: studioFormatSchema,
-      })
-      .strict()
-      .optional(),
+    studio: taskRenderCardSchema.optional(),
   }),
   z.object({
     ...AttachTaskTarget,

@@ -225,6 +225,36 @@ describe('splitRendersByFormat', () => {
     ])
   })
 
+  it('never makes a key another Recipe already has: such a render is made once, in its first Format', () => {
+    const taken = render({
+      key: 'cardRender:landscape',
+      beat: 'other',
+      format: 'portrait',
+    })
+    const split = splitRendersByFormat([
+      render(),
+      post('linkedin'),
+      post('bluesky'),
+      taken,
+    ])
+    const keys = split.map((r) => r.key)
+    expect(new Set(keys).size).toBe(keys.length)
+    expect(shape(split)).toEqual([
+      { key: 'cardRender', format: 'square', prerequisites: undefined },
+      {
+        key: 'card:linkedin',
+        format: undefined,
+        prerequisites: ['cardRender'],
+      },
+      { key: 'card:bluesky', format: undefined, prerequisites: ['cardRender'] },
+      {
+        key: 'cardRender:landscape',
+        format: 'portrait',
+        prerequisites: undefined,
+      },
+    ])
+  })
+
   it('leaves a list without renders exactly as it was', () => {
     const recipes = [post('linkedin', { prerequisites: undefined })]
     expect(splitRendersByFormat(recipes)).toEqual(recipes)

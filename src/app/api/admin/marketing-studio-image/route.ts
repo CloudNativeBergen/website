@@ -10,13 +10,16 @@ import {
 import { requireDocumentInCurrentConference } from '@/server/tenancy'
 import { TaskIdSchema } from '@/server/schemas/marketing'
 import { getStudioTask } from '@/lib/marketing/render-sanity'
-import { storedRenderFormat } from '@/lib/marketing/render-format'
+import {
+  formatMismatch,
+  storedRenderFormat,
+} from '@/lib/marketing/render-format'
 import {
   studioFormatLabel,
   studioFormatSchema,
   STUDIO_FORMATS,
 } from '@/lib/marketing-asset/format'
-import { pngSize } from '@/lib/marketing-asset/png-size'
+import { PNG_SIZE_BYTES, pngSize } from '@/lib/marketing-asset/png-size'
 
 export async function POST(request: Request) {
   try {
@@ -64,12 +67,12 @@ export async function POST(request: Request) {
       if (shown.data !== wanted)
         return NextResponse.json(
           {
-            error: `This Task asks for ${studioFormatLabel(wanted)}, and the studio is showing ${studioFormatLabel(shown.data)}. Switch the studio to ${STUDIO_FORMATS[wanted].label}, or change the Format on the Task.`,
+            error: formatMismatch(wanted, shown.data),
           },
           { status: 400 },
         )
       const size = pngSize(
-        new Uint8Array(await file.slice(0, 24).arrayBuffer()),
+        new Uint8Array(await file.slice(0, PNG_SIZE_BYTES).arrayBuffer()),
       )
       const { width, height } = STUDIO_FORMATS[wanted]
       if (size?.width !== width || size.height !== height)

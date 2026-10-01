@@ -9,7 +9,7 @@ import {
   MARKETING_ASSET_SUBJECT_TYPES,
   type MarketingAssetSubjectType,
 } from './types'
-import type { StudioFormat } from './format'
+import type { TaskRenderCard } from './studio'
 
 /**
  * A render Task's gallery entry (spec §4.3, #1165).
@@ -42,15 +42,6 @@ import type { StudioFormat } from './format'
  */
 type Subject = { type: MarketingAssetSubjectType; id: string }
 
-/**
- * The studio card a render was attached from: a tab with a Format switch and
- * the Format it showed (docs/MARKETING_STUDIO_FORMATS_SPEC.md §4), recorded
- * on the entry as a "Save to gallery" from the studio records it.
- */
-export interface TaskRenderCard {
-  tab: 'speakers' | 'sponsors'
-  format: StudioFormat
-}
 
 export interface TaskRenderGalleryEntry {
   /** The request host's organization; never from the client. */

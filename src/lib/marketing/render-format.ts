@@ -15,6 +15,7 @@ import {
   DEFAULT_STUDIO_FORMAT,
   STUDIO_FORMATS,
   STUDIO_FORMAT_IDS,
+  studioFormatLabel,
   studioFormatSchema,
   type StudioFormat,
 } from '@/lib/marketing-asset/format'
@@ -26,6 +27,17 @@ export function channelFormat(
   channel: MarketingChannel | null | undefined,
 ): StudioFormat {
   return channel === 'linkedin' ? 'landscape' : DEFAULT_STUDIO_FORMAT
+}
+
+/**
+ * Why a render in `shown` cannot finish a render Task asking for `wanted`
+ * (spec §4): the studio, the upload route and `task.attachAsset` all say this.
+ */
+export function formatMismatch(
+  wanted: StudioFormat,
+  shown: StudioFormat,
+): string {
+  return `This Task asks for ${studioFormatLabel(wanted)}, and the studio is showing ${studioFormatLabel(shown)}. Switch the studio to ${STUDIO_FORMATS[wanted].label}, or change the Format on the Task.`
 }
 
 /**
@@ -93,8 +105,11 @@ export function recipeForTaskKey(
   )
 }
 
-/** Does publishing Recipe `post` wait on render Recipe `render`? */
-function waitsOn(post: TaskRecipe, render: TaskRecipe): boolean {
+/**
+ * Is `post` among the posts a render Recipe is split for: listing it, or in
+ * its beat?
+ */
+function splitsFor(post: TaskRecipe, render: TaskRecipe): boolean {
   return (
     post.kind === 'publishing' &&
     // Listed, or in the render's beat: `buildSubjectBeat` has always made
@@ -120,7 +135,7 @@ export function splitRendersByFormat(recipes: TaskRecipe[]): TaskRecipe[] {
   for (const render of renders) {
     const wanted = new Set(
       recipes
-        .filter((post) => waitsOn(post, render))
+        .filter((post) => splitsFor(post, render))
         .map((post) => channelFormat(post.channel)),
     )
     const formats: StudioFormat[] = render.format
@@ -128,7 +143,16 @@ export function splitRendersByFormat(recipes: TaskRecipe[]): TaskRecipe[] {
       : wanted.size > 0
         ? STUDIO_FORMAT_IDS.filter((f) => wanted.has(f))
         : [channelFormat(render.channel)]
-    splits.set(render.key, renderKeys(render.key, formats))
+    const keys = renderKeys(render.key, formats)
+    // A key another Recipe already has would make two Tasks of one key: such
+    // a render is made once, in its first Format, and every post waits on it.
+    const clash = [...keys.values()].some(
+      (key) => key !== render.key && recipes.some((r) => r.key === key),
+    )
+    splits.set(
+      render.key,
+      clash ? renderKeys(render.key, formats.slice(0, 1)) : keys,
+    )
   }
   return recipes.flatMap((recipe): TaskRecipe[] => {
     const own = splits.get(recipe.key)
@@ -157,7 +181,7 @@ export function splitRendersByFormat(recipes: TaskRecipe[]): TaskRecipe[] {
       ]
     }
     const format = channelFormat(recipe.channel)
-    const waited = renders.filter((render) => waitsOn(recipe, render))
+    const waited = renders.filter((render) => splitsFor(recipe, render))
     if (waited.length === 0) return [recipe]
     const forPost = (render: TaskRecipe) => {
       const split = splits.get(render.key)!

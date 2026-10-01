@@ -7,8 +7,8 @@ import {
   ImageAttachmentContext,
   type AttachedCapture,
 } from '@/components/common/image-capture'
-import { STUDIO_FORMATS, studioFormatLabel } from '@/lib/marketing-asset'
-import type { TaskRenderCard } from '@/lib/marketing-asset/task-render'
+import { studioFormatLabel, type TaskRenderCard } from '@/lib/marketing-asset'
+import { formatMismatch } from '@/lib/marketing/render-format'
 
 /** What the studio's multipart attach route can carry (Vercel's body cut). */
 const ATTACH_MAX_BYTES = 4 * 1024 * 1024
@@ -126,9 +126,7 @@ function ConnectedStudioTask({
       const wanted = query.data?.task?.format
       const format = shown?.format ?? null
       if (format && wanted && format !== wanted)
-        throw new Error(
-          `This Task asks for ${studioFormatLabel(wanted)}, and the studio is showing ${studioFormatLabel(format)}. Switch the studio to ${STUDIO_FORMATS[wanted].label}, or change the Format on the Task.`,
-        )
+        throw new Error(formatMismatch(wanted, format))
       const blob = await capture()
       // The multipart route is cut by Vercel at about 4.5 MB before the
       // server sees it (docs/MARKETING_ASSETS_SPEC.md §4.2): a Format-sized

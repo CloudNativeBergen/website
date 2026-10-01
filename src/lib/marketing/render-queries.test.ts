@@ -69,6 +69,7 @@ describe('studio queries executed against a fixture dataset', () => {
       campaignId: 'campaign',
       // Stored before Formats: none, read as square (`storedRenderFormat`).
       format: null,
+      renderCard: null,
       handoffDoneFor: null,
       replacedRenders: ['image-replaced'],
       galleryPending: null,

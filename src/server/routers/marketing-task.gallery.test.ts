@@ -370,6 +370,33 @@ describe('attaching a render also saves it to the gallery (#1165)', () => {
     ])
   })
 
+  it('a gallery save retried from the Task editor still records the card the render was attached from', async () => {
+    Object.assign(task(), { format: 'landscape' })
+    h.galleryDown = true
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const first = await marketing().task.attachAsset({
+      taskId: TASK,
+      taskRev: task()._rev as string,
+      assetId: FIRST,
+      studio: { tab: 'speakers', format: 'landscape' },
+    })
+    logged.mockRestore()
+    expect(first.galleryFailed).toBe(true)
+    h.galleryDown = false
+    // The editor's retry knows only the Task and its saved render.
+    expect((await attach(FIRST)).gallerySaved).toBe(true)
+    expect(gallery()).toEqual([
+      expect.objectContaining({
+        studio: { tab: 'speakers', format: 'landscape' },
+      }),
+    ])
+    // A render attached later from a tab without a switch claims no card.
+    upload(SECOND)
+    await attach(SECOND)
+    expect(gallery()[0]).not.toHaveProperty('studio')
+    expect(task()).not.toHaveProperty('renderCard')
+  })
+
   it('refuses a card in another Format than the one of the Task, before anything is written', async () => {
     // A render Task stored before Formats is square.
     const before = structuredClone(h.dataset)
@@ -383,7 +410,7 @@ describe('attaching a render also saves it to the gallery (#1165)', () => {
     ).rejects.toMatchObject({
       code: 'BAD_REQUEST',
       message:
-        'This Task asks for Square (1080×1080), and the render is Landscape (1200×628).',
+        'This Task asks for Square (1080×1080), and the studio is showing Landscape (1200×628). Switch the studio to Square, or change the Format on the Task.',
     })
     expect(h.dataset).toEqual(before)
   })

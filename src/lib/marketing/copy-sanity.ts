@@ -183,7 +183,7 @@ export async function readPlanSource(
         milestone, offsetDays, dueAt, origin,
         "prerequisiteIds": prerequisites[]._ref,
         targetPage, alt, instructions, copyEdited,
-        "format": select(kind == "studioRender" => coalesce(format, "square")),
+        "format": select(kind == "studioRender" => format),
         "variant": select(variant->conference._ref == conference._ref => variant->{ body, link, shortCode, scheduledAt })
       }
     }`,

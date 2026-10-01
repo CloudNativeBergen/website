@@ -1,9 +1,6 @@
 import { defineArrayMember, defineField, defineType } from 'sanity'
 import { MILESTONES } from '@/lib/marketing/milestones'
-import {
-  STUDIO_FORMAT_IDS,
-  studioFormatLabel,
-} from '@/lib/marketing-asset/format'
+import { STUDIO_FORMAT_OPTIONS } from './constants'
 import {
   MARKETING_CHANNELS,
   OUTCOMES,
@@ -272,13 +269,10 @@ export default defineType({
                       name: 'format',
                       title: 'Format',
                       description:
-                        'Render recipes only: the Format the render is made in. Absent, one render is made per Format the posts waiting on it need; a recipe stored before Formats is square.',
+                        'Render recipes only: the one Format the render is made in. Absent (every recipe stored before Formats included), one render is made per Format the posts waiting on it need: LinkedIn landscape, Bluesky square.',
                       type: 'string',
                       options: {
-                        list: STUDIO_FORMAT_IDS.map((value) => ({
-                          value,
-                          title: studioFormatLabel(value),
-                        })),
+                        list: STUDIO_FORMAT_OPTIONS,
                       },
                     }),
                     defineField({

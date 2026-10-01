@@ -60,6 +60,7 @@ import { TaskGalleryPicker } from './TaskGalleryPicker'
 import {
   STUDIO_FORMAT_IDS,
   studioFormatLabel,
+  studioFormatSchema,
   type StudioFormat,
 } from '@/lib/marketing-asset'
 import { LiveLinksWarning } from './LiveLinksWarning'
@@ -1669,7 +1670,7 @@ function RenderFormat({
           update.mutate({
             taskId: task._id,
             rev: task._rev,
-            format: e.target.value as StudioFormat,
+            format: studioFormatSchema.parse(e.target.value),
           })
         }
         className={clsx(inputClass, 'mt-1')}

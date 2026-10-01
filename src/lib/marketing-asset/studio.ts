@@ -73,6 +73,19 @@ export const studioOriginSchema = z
 export type StudioOriginInput = z.output<typeof studioOriginSchema>
 
 /**
+ * The studio card a render Task's render was attached from: a tab with a
+ * Format switch and the Format it showed (docs/MARKETING_STUDIO_FORMATS_SPEC.md
+ * §4), recorded on the Task's gallery entry as "Save to gallery" records it.
+ */
+export const taskRenderCardSchema = z
+  .object({
+    tab: z.enum(['speakers', 'sponsors']),
+    format: studioFormatSchema,
+  })
+  .strict()
+export type TaskRenderCard = z.output<typeof taskRenderCardSchema>
+
+/**
  * Where a studio-made asset came from, as the gallery reads it: the tab, and
  * the speaker or sponsor the studio was opened on. Only the tab is stored; the
  * speaker or sponsor is the asset's SUBJECT when it matches the tab, so an
