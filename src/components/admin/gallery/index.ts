@@ -1,5 +1,10 @@
 export { ImageUploadZone } from './ImageUploadZone'
 export { ImageGrid } from './ImageGrid'
 export { ImageMetadataModal } from './ImageMetadataModal'
-export { GalleryFilters } from './GalleryFilters'
+export {
+  GalleryFilters,
+  hasGalleryFilters,
+  type GalleryFilterValues,
+} from './GalleryFilters'
 export { ImageHotspotEditor } from './ImageHotspotEditor'
+export { EditionSelect } from './EditionSelect'

@@ -25,14 +25,19 @@ import {
 } from '@/components/admin/marketing/assets/MarketingAssetPicker'
 import { CropEditor } from './CropEditor'
 import { CroppedImage } from './CroppedImage'
+// Deep import on purpose: the gallery barrel pulls in the uploader
+// (react-dropzone), the hotspot editor and the Sanity client.
+import { EditionSelect } from '@/components/admin/gallery/EditionSelect'
+import type { GalleryEditions } from '@/lib/gallery/editions'
 
-/** An image the organizer can pull in from the conference gallery. */
+/**
+ * An image the organizer can pull in from the photo gallery. Only the id
+ * travels on a pick (#1191): the server proves the picture readable and
+ * reads its asset, alt text and framing itself.
+ */
 export interface GalleryPick {
   id: string
-  assetId: string
   alt: string
-  hotspot: { x: number; y: number; width: number; height: number } | null
-  crop: { top: number; bottom: number; left: number; right: number } | null
   thumbnailSrc: string
 }
 
@@ -62,9 +67,21 @@ export interface AttachmentSlotProps {
   gallery?: {
     images: GalleryPick[]
     isLoading: boolean
+    /** The list could not be read: said so, never shown as an empty gallery. */
+    error?: string | null
     /** Called when the picker opens, so the list can load lazily. */
     onOpen?: () => void
     onPick: (image: GalleryPick) => Promise<void>
+    /**
+     * Browse a previous edition's pictures (#1191): the server-listed editions,
+     * the selected one (`undefined` = current) and the change handler. Absent
+     * or single-edition: no control.
+     */
+    editions?: {
+      options: GalleryEditions | undefined
+      value: string | undefined
+      onChange: (edition: string | undefined) => void
+    }
   }
   marketingAssets?: MarketingAssetSource & {
     /** Called when the picker opens, so the list can load lazily. */
@@ -298,11 +315,29 @@ export function AttachmentSlot({
       )}
 
       {picker === 'gallery' && gallery && (
-        <div className="rounded-lg border border-gray-200 p-3 dark:border-gray-700">
+        <div className="space-y-3 rounded-lg border border-gray-200 p-3 dark:border-gray-700">
+          {gallery.editions && (
+            <EditionSelect
+              id="attachment-gallery-edition"
+              editions={gallery.editions.options}
+              value={gallery.editions.value}
+              onChange={gallery.editions.onChange}
+              disabled={busy}
+              className="max-w-xs"
+            />
+          )}
           {gallery.isLoading ? (
             <div className="h-24 animate-pulse rounded bg-gray-100 dark:bg-gray-800" />
+          ) : gallery.error ? (
+            <p role="alert" className="text-sm text-red-700 dark:text-red-400">
+              {gallery.error}
+            </p>
           ) : gallery.images.length === 0 ? (
-            <p className="text-sm text-gray-500">The gallery is empty.</p>
+            <p className="text-sm text-gray-500">
+              {gallery.editions?.value
+                ? 'This edition has no pictures.'
+                : 'The gallery is empty.'}
+            </p>
           ) : (
             <ul className="grid max-h-56 grid-cols-4 gap-2 overflow-y-auto sm:grid-cols-6">
               {gallery.images.map((image) => (

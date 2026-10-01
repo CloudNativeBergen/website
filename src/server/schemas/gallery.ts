@@ -42,6 +42,13 @@ export const galleryImageUpdateSchema = z.object({
 })
 
 export const galleryImageFilterSchema = z.object({
+  /**
+   * An OPAQUE edition selector (#1191): the id of one of the organization's
+   * previous editions as listed by `gallery.admin.editions`, or the current
+   * conference. The server validates it against the set it resolved itself;
+   * it is never trusted as a scope on its own.
+   */
+  edition: z.string().min(1).max(200).optional(),
   featured: z.boolean().optional(),
   speakerId: z.string().optional(),
   dateFrom: z

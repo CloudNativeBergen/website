@@ -1672,6 +1672,36 @@ describe('addSocialPostAttachment — asset tenancy', () => {
     )
   })
 
+  it("attaches a PREVIOUS edition's picture with NO write to that edition's document (#1191)", async () => {
+    // Referenced only by another edition's gallery image: foreign to the
+    // reference check, and that document must not be patched either.
+    h.dataset = [
+      {
+        _id: 'img-2025',
+        _type: 'imageGallery',
+        conference: { _ref: 'conf-A-2025' },
+        image: { asset: { _ref: ASSET } },
+      },
+    ]
+    await expect(
+      addSocialPostAttachment('post-conf-A', 'conf-A', input),
+    ).resolves.toEqual({ refused: 'foreign-asset' })
+    await expect(
+      addSocialPostAttachment('post-conf-A', 'conf-A', input, {
+        assetProvenBy: 'previous-edition-image',
+      }),
+    ).resolves.toEqual({ key: expect.any(String) })
+    expect(h.guarded).toEqual([])
+    expect(h.txPatches).toHaveLength(0)
+    expect(h.appended).toContainEqual(
+      expect.objectContaining({
+        image: expect.objectContaining({
+          asset: { _type: 'reference', _ref: ASSET },
+        }),
+      }),
+    )
+  })
+
   it('refuses the attach when the asset was deleted or changed since it was read', async () => {
     h.state.commitError = Object.assign(new Error('Document not found'), {
       statusCode: 409,

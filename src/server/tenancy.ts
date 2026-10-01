@@ -3,6 +3,12 @@ import { groq } from 'next-sanity'
 import { clientReadUncached } from '@/lib/sanity/client'
 import type { MergeBlockReason } from '@/lib/speaker/duplicates'
 import { resolveConferenceId, resolveOrganizationId } from './trpc'
+import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import { getGalleryImageTenant } from '@/lib/gallery/sanity'
+import {
+  getPreviousEditions,
+  type GalleryEdition,
+} from '@/lib/gallery/editions'
 
 /**
  * OWNERSHIP CHECKS FOR CLIENT-SUPPLIED DOCUMENT IDS (#730).
@@ -198,6 +204,64 @@ export async function requireDocumentInCurrentConference(
     throw notFound(expectedType)
   }
   return conferenceId
+}
+
+/**
+ * A gallery image an organizer may READ from this host (#1191): one of the
+ * current conference's, or one of the organization's PREVIOUS editions' (as
+ * `getPreviousEditions` resolves them — never from client input). The tenant
+ * read IS the ownership check: no image content is fetched before it. Another
+ * organization's image, a future sibling's, and a missing id all refuse with
+ * the same NOT_FOUND. Returns the image's own conference id, so the caller can
+ * scope its by-id read to it.
+ */
+export async function requireGalleryImageReadable(
+  imageId: string,
+): Promise<{ conferenceId: string }> {
+  const conference = await requireCurrentConference()
+  const tenant = await getGalleryImageTenant(imageId)
+  if (!tenant?.conferenceId) throw notFound('imageGallery')
+  if (tenant.conferenceId === conference._id) {
+    return { conferenceId: conference._id }
+  }
+  const orgId = conference.organization?._ref
+  if (!orgId || tenant.orgId !== orgId) throw notFound('imageGallery')
+  const { previous } = await browsableGalleryEditions(conference)
+  if (!previous.some((edition) => edition._id === tenant.conferenceId)) {
+    throw notFound('imageGallery')
+  }
+  return { conferenceId: tenant.conferenceId }
+}
+
+/**
+ * The request's conference DOCUMENT, or NOT_FOUND on an unresolvable host.
+ * The tenant is resolved the one sanctioned way (`resolveConferenceId`); the
+ * document read after it is the same request-cached read, for the fields the
+ * gallery edition selector needs (start date, organization).
+ */
+export async function requireCurrentConference() {
+  const conferenceId = await resolveConferenceId()
+  const { conference, error } = await getConferenceForCurrentDomain()
+  if (error || conference?._id !== conferenceId) {
+    throw new TRPCError({
+      code: 'NOT_FOUND',
+      message: 'Could not resolve conference from domain',
+    })
+  }
+  return conference
+}
+
+/**
+ * The gallery editions an organizer of `conference`'s host may browse
+ * (#1191): its organization id and the organization's PREVIOUS editions, as
+ * the server resolves them. A conference without an organization has none.
+ */
+export async function browsableGalleryEditions(
+  conference: Awaited<ReturnType<typeof requireCurrentConference>>,
+): Promise<{ orgId: string | null; previous: GalleryEdition[] }> {
+  const orgId = conference.organization?._ref ?? null
+  const previous = orgId ? await getPreviousEditions(orgId, conference) : []
+  return { orgId, previous }
 }
 
 /**

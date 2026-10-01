@@ -817,3 +817,102 @@ function SavingToggle(
     </>
   )
 }
+
+/**
+ * The photo-gallery source with the EDITION control (#1191): pictures from a
+ * previous edition of the organization, chosen from the editions the server
+ * lists. Single-edition organizations never see the control.
+ */
+export const GalleryPickerPreviousEdition: Story = {
+  args: {
+    initialValue: {
+      body: BODY_LINKEDIN,
+      link: LINK,
+      attachments: [],
+      timing: { mode: 'default' as const },
+    },
+    sources: {
+      onUpload: async () => {},
+      gallery: {
+        isLoading: false,
+        onPick: async () => {},
+        images: IMAGES.slice(0, 3).map((image) => ({
+          id: `gal-${image._key}`,
+          alt: image.alt,
+          thumbnailSrc: SRC[image._key],
+        })),
+        editions: {
+          options: {
+            current: { _id: 'conf-2027', title: 'Cloud Native Bergen 2027' },
+            previous: [
+              {
+                _id: 'conf-2026',
+                title: 'Cloud Native Bergen 2026',
+                startDate: '2026-10-28',
+                endDate: '2026-10-29',
+              },
+              {
+                _id: 'conf-2025',
+                title: 'Cloud Native Days Bergen 2025',
+                startDate: '2025-10-28',
+                endDate: '2025-10-29',
+              },
+            ],
+          },
+          value: 'conf-2026',
+          onChange: fn(),
+        },
+      },
+    },
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'The gallery picker open on a previous edition: the edition select above the tiles, the current edition as its default option.',
+      },
+    },
+  },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(canvas.getByRole('button', { name: 'From gallery' }))
+    const select = canvas.getByRole('combobox', {
+      name: 'Edition',
+    }) as HTMLSelectElement
+    await expect(select.value).toBe('conf-2026')
+    await expect(canvas.getAllByRole('listitem').length).toBeGreaterThan(0)
+    await userEvent.selectOptions(select, 'conf-2025')
+    const onChange = args.sources?.gallery?.editions?.onChange
+    await expect(onChange).toHaveBeenLastCalledWith('conf-2025')
+  },
+}
+
+export const GalleryPickerPreviousEditionDark: Story = {
+  args: GalleryPickerPreviousEdition.args,
+  play: GalleryPickerPreviousEdition.play,
+  parameters: { theme: 'dark' },
+}
+
+/** The gallery could not be read: said so, never shown as an empty gallery. */
+export const GalleryPickerFailed: Story = {
+  args: {
+    ...GalleryPickerPreviousEdition.args,
+    sources: {
+      onUpload: async () => {},
+      gallery: {
+        images: [],
+        isLoading: false,
+        error: 'That edition is not one this organization can browse.',
+        onPick: async () => {},
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(canvas.getByRole('button', { name: 'From gallery' }))
+    await expect(canvas.getByRole('alert')).toHaveTextContent(
+      'That edition is not one this organization can browse.',
+    )
+    await expect(canvas.queryByText('The gallery is empty.')).toBeNull()
+  },
+}

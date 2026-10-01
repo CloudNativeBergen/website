@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { Combobox } from '@headlessui/react'
 import {
   ChevronUpDownIcon,
@@ -15,29 +15,43 @@ import { useDebounce } from '@/hooks/useDebounce'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import { AdminFilterBar } from '@/components/admin/AdminFilterBar'
 import clsx from 'clsx'
+import { EditionSelect } from './EditionSelect'
+import type { GalleryEditions } from '@/lib/gallery/editions'
+
+export interface GalleryFilterValues {
+  /** A previous edition's id (#1191); `undefined` is the current edition. */
+  edition?: string
+  featured?: boolean
+  speakerId?: string
+  dateFrom?: string
+  dateTo?: string
+  photographerSearch?: string
+  locationSearch?: string
+}
 
 interface GalleryFiltersProps {
-  filters: {
-    featured?: boolean
-    speakerId?: string
-    dateFrom?: string
-    dateTo?: string
-    photographerSearch?: string
-    locationSearch?: string
-  }
-  onFiltersChange: (filters: {
-    featured?: boolean
-    speakerId?: string
-    dateFrom?: string
-    dateTo?: string
-    photographerSearch?: string
-    locationSearch?: string
-  }) => void
+  filters: GalleryFilterValues
+  /**
+   * Must be referentially STABLE (`useCallback`): the URL-sync effect depends
+   * on it, and a new function per render re-applies the URL filters on every
+   * render — a loop that also pins pagination to page 1.
+   */
+  onFiltersChange: (filters: GalleryFilterValues) => void
+  /**
+   * The editions the organizer may browse, as the server lists them (#1191).
+   * Absent or single-edition: no edition control is shown.
+   */
+  editions?: GalleryEditions
 }
+
+/** Whether any filter is set (`''` counts as unset). */
+export const hasGalleryFilters = (values: GalleryFilterValues) =>
+  Object.values(values).some((v) => v !== undefined && v !== '')
 
 export function GalleryFilters({
   filters,
   onFiltersChange,
+  editions,
 }: GalleryFiltersProps) {
   const router = useRouter()
   const pathname = usePathname()
@@ -56,11 +70,18 @@ export function GalleryFilters({
   const [localLocation, setLocalLocation] = useState(
     filters.locationSearch || '',
   )
+  // What the page currently applies, readable from the URL-sync effect without
+  // re-running it on every filter change.
+  const appliedFilters = useRef(filters)
+  useEffect(() => {
+    appliedFilters.current = filters
+  })
   const debouncedQuery = useDebounce(speakerQuery, 300)
   const debouncedPhotographer = useDebounce(localPhotographer, 500)
   const debouncedLocation = useDebounce(localLocation, 500)
 
   useEffect(() => {
+    const edition = searchParams.get('edition')
     const featured = searchParams.get('featured')
     const speakerId = searchParams.get('speakerId')
     const dateFrom = searchParams.get('dateFrom')
@@ -69,6 +90,7 @@ export function GalleryFilters({
     const location = searchParams.get('location')
 
     const urlFilters = {
+      edition: edition || undefined,
       featured:
         featured === 'true' ? true : featured === 'false' ? false : undefined,
       speakerId: speakerId || undefined,
@@ -78,13 +100,14 @@ export function GalleryFilters({
       locationSearch: location || undefined,
     }
 
-    if (speakerId) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setSelectedSpeaker({ _id: speakerId, name: 'Selected speaker' })
-    }
-
-    if (Object.values(urlFilters).some((v) => v !== undefined)) {
+    const urlHasFilters = hasGalleryFilters(urlFilters)
+    // An EMPTY URL is a state too: navigating Back from `?edition=…` to the
+    // bare page must land on the current edition, not keep the last filters.
+    if (urlHasFilters || hasGalleryFilters(appliedFilters.current)) {
       onFiltersChange(urlFilters)
+      setSelectedSpeaker(
+        speakerId ? { _id: speakerId, name: 'Selected speaker' } : null,
+      )
       setLocalDateFrom(dateFrom || '')
       setLocalDateTo(dateTo || '')
       setLocalPhotographer(photographer || '')
@@ -96,6 +119,9 @@ export function GalleryFilters({
     (newFilters: typeof filters) => {
       const params = new URLSearchParams()
 
+      if (newFilters.edition) {
+        params.set('edition', newFilters.edition)
+      }
       if (newFilters.featured !== undefined) {
         params.set('featured', String(newFilters.featured))
       }
@@ -127,6 +153,12 @@ export function GalleryFilters({
       enabled: debouncedQuery.length > 0,
     },
   )
+
+  const handleEditionChange = (edition: string | undefined) => {
+    const newFilters = { ...filters, edition }
+    onFiltersChange(newFilters)
+    updateURL(newFilters)
+  }
 
   const handleFeaturedChange = (value: string) => {
     const newFeatured = value === 'all' ? undefined : value === 'featured'
@@ -161,6 +193,7 @@ export function GalleryFilters({
     setLocalPhotographer('')
     setLocalLocation('')
     const newFilters = {
+      edition: undefined,
       featured: undefined,
       speakerId: undefined,
       dateFrom: undefined,
@@ -173,6 +206,7 @@ export function GalleryFilters({
   }
 
   const hasActiveFilters =
+    filters.edition !== undefined ||
     filters.featured !== undefined ||
     filters.speakerId !== undefined ||
     filters.dateFrom !== undefined ||
@@ -180,8 +214,10 @@ export function GalleryFilters({
     filters.photographerSearch !== undefined ||
     filters.locationSearch !== undefined
 
+  // `''` and `undefined` are the same "no filter": comparing them as different
+  // made these effects fire on mount and wipe every deep-linked filter (#1191).
   useEffect(() => {
-    if (debouncedPhotographer !== filters.photographerSearch) {
+    if ((debouncedPhotographer || undefined) !== filters.photographerSearch) {
       const newFilters = {
         ...filters,
         photographerSearch: debouncedPhotographer || undefined,
@@ -193,7 +229,7 @@ export function GalleryFilters({
   }, [debouncedPhotographer])
 
   useEffect(() => {
-    if (debouncedLocation !== filters.locationSearch) {
+    if ((debouncedLocation || undefined) !== filters.locationSearch) {
       const newFilters = {
         ...filters,
         locationSearch: debouncedLocation || undefined,
@@ -205,6 +241,7 @@ export function GalleryFilters({
   }, [debouncedLocation])
 
   const activeFilterCount = [
+    filters.edition,
     filters.featured,
     filters.speakerId,
     filters.dateFrom,
@@ -217,6 +254,15 @@ export function GalleryFilters({
     const fieldWidth = (inline: string) => (stacked ? 'w-full' : inline)
     return (
       <>
+        {/* Edition Filter (#1191): only when the organization has previous editions */}
+        <EditionSelect
+          id={`${idPrefix}-edition`}
+          editions={editions}
+          value={filters.edition}
+          onChange={handleEditionChange}
+          className={fieldWidth('w-72')}
+        />
+
         {/* Featured Filter */}
         <div className={clsx('relative', stacked && 'w-full')}>
           <StarIcon className="pointer-events-none absolute top-1/2 left-2 h-4 w-4 -translate-y-1/2 text-gray-400" />

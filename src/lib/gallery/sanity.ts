@@ -354,9 +354,14 @@ export async function getGalleryImage(
  * or exactly one organization (all of that org's conferences — what a speaker's
  * cross-edition "my photos" list needs). There is deliberately no "unscoped"
  * member: a gallery read that cannot name its tenant must not run.
+ *
+ * A conference scope MAY also name the organization (#1191): a previous-edition
+ * read passes a sibling conference id the router already proved belongs to the
+ * request's org, and the query carries the org clause too, so a foreign
+ * conference id yields nothing even if that proof were bypassed.
  */
 export type GalleryScope =
-  | { conferenceId: string; orgId?: undefined }
+  | { conferenceId: string; orgId?: string }
   | { orgId: string; conferenceId?: undefined }
 
 /**
@@ -366,6 +371,13 @@ export type GalleryScope =
 function galleryScopeClause(
   scope: Partial<GalleryScope> | undefined,
 ): { clause: string; params: Record<string, string> } | null {
+  if (scope?.conferenceId && scope.orgId) {
+    return {
+      clause:
+        'conference._ref == $conferenceId && conference->organization._ref == $orgId',
+      params: { conferenceId: scope.conferenceId, orgId: scope.orgId },
+    }
+  }
   if (scope?.conferenceId) {
     return {
       clause: 'conference._ref == $conferenceId',
@@ -401,8 +413,9 @@ export async function getGalleryImageCount(
   }
   try {
     // groq-global-scoped: `scope.clause` is galleryScopeClause() — always exactly
-    // `conference._ref == $conferenceId` or `conference->organization._ref ==
-    // $orgId`, and a blank scope failed CLOSED (returned 0) above the query.
+    // `conference._ref == $conferenceId`, `conference->organization._ref ==
+    // $orgId`, or both (a previous-edition read, #1191), and a blank scope failed
+    // CLOSED (returned 0) above the query.
     const query = groq`
       count(*[_type == "imageGallery"
         && ${scope.clause}
@@ -476,8 +489,9 @@ export async function getGalleryImages(
     const useCache = options?.useCache ?? true
 
     // groq-global-scoped: `scope.clause` is galleryScopeClause() — always exactly
-    // `conference._ref == $conferenceId` or `conference->organization._ref ==
-    // $orgId`, and a blank scope failed CLOSED (returned []) above the query.
+    // `conference._ref == $conferenceId`, `conference->organization._ref ==
+    // $orgId`, or both (a previous-edition read, #1191), and a blank scope failed
+    // CLOSED (returned []) above the query.
     const query = groq`
       *[_type == "imageGallery"
         && ${scope.clause}

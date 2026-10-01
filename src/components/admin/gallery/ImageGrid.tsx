@@ -21,6 +21,11 @@ interface ImageGridProps {
   selectedImages: string[]
   onSelectionChange: (selected: string[]) => void
   onBulkTag?: () => void
+  /**
+   * Browsing a PREVIOUS edition (#1191): pictures are shown, never selected,
+   * edited, featured or deleted from here — metadata belongs to that edition.
+   */
+  readOnly?: boolean
 }
 
 export function ImageGrid({
@@ -31,6 +36,7 @@ export function ImageGrid({
   selectedImages,
   onSelectionChange,
   onBulkTag,
+  readOnly = false,
 }: ImageGridProps) {
   const [hoveredImage, setHoveredImage] = useState<string | null>(null)
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
@@ -81,78 +87,81 @@ export function ImageGrid({
 
   return (
     <>
-      <div
-        className={`mb-4 flex min-h-[2rem] items-center justify-between transition-all ${
-          selectedImages.length > 0
-            ? 'sticky top-16 z-30 -mx-6 bg-white px-6 py-3 shadow-md dark:bg-gray-900'
-            : ''
-        }`}
-      >
-        <div className="flex items-center gap-4">
-          <button
-            onClick={handleSelectAll}
-            className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200"
-            aria-label={
-              selectedImages.length === images.length
-                ? 'Deselect all images'
-                : 'Select all images'
-            }
-          >
-            <div
-              className={`h-4 w-4 rounded border ${
-                selectedImages.length === images.length && images.length > 0
-                  ? 'border-indigo-600 bg-indigo-600 dark:border-indigo-500 dark:bg-indigo-500'
-                  : 'border-gray-300 dark:border-gray-600'
-              }`}
+      {!readOnly && (
+        <div
+          className={`mb-4 flex min-h-[2rem] items-center justify-between transition-all ${
+            selectedImages.length > 0
+              ? 'sticky top-16 z-30 -mx-6 bg-white px-6 py-3 shadow-md dark:bg-gray-900'
+              : ''
+          }`}
+        >
+          <div className="flex items-center gap-4">
+            <button
+              onClick={handleSelectAll}
+              className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200"
+              aria-label={
+                selectedImages.length === images.length
+                  ? 'Deselect all images'
+                  : 'Select all images'
+              }
             >
-              {selectedImages.length === images.length && images.length > 0 && (
-                <CheckIcon className="h-3 w-3 text-white" />
-              )}
-            </div>
-            Select All
-          </button>
+              <div
+                className={`size-4 rounded border ${
+                  selectedImages.length === images.length && images.length > 0
+                    ? 'border-indigo-600 bg-indigo-600 dark:border-indigo-500 dark:bg-indigo-500'
+                    : 'border-gray-300 dark:border-gray-600'
+                }`}
+              >
+                {selectedImages.length === images.length &&
+                  images.length > 0 && (
+                    <CheckIcon className="size-3 text-white" />
+                  )}
+              </div>
+              Select All
+            </button>
+            {selectedImages.length > 0 && (
+              <span className="text-sm text-gray-600 dark:text-gray-400">
+                {selectedImages.length} selected
+              </span>
+            )}
+          </div>
           {selectedImages.length > 0 && (
-            <span className="text-sm text-gray-600 dark:text-gray-400">
-              {selectedImages.length} selected
-            </span>
+            <div className="flex items-center gap-2">
+              {onBulkTag && (
+                <AdminButton size="xs" onClick={onBulkTag}>
+                  Bulk Update
+                </AdminButton>
+              )}
+              <button
+                onClick={async () => {
+                  const toToggle = images.filter((img) =>
+                    selectedImages.includes(img._id),
+                  )
+                  const allFeatured = toToggle.every((img) => img.featured)
+                  for (const image of toToggle) {
+                    await handleToggleFeatured(image._id, !allFeatured)
+                  }
+                  onSelectionChange([])
+                }}
+                className="rounded-md bg-gray-600 px-3 py-1 text-sm font-medium text-white hover:bg-gray-700 dark:bg-gray-500 dark:hover:bg-gray-600"
+              >
+                {images
+                  .filter((img) => selectedImages.includes(img._id))
+                  .every((img) => img.featured)
+                  ? 'Unfeature Selected'
+                  : 'Feature Selected'}
+              </button>
+              <AdminButton
+                color="red"
+                size="xs"
+                onClick={() => setDeleteConfirmId('bulk')}
+              >
+                Delete Selected
+              </AdminButton>
+            </div>
           )}
         </div>
-        {selectedImages.length > 0 && (
-          <div className="flex items-center gap-2">
-            {onBulkTag && (
-              <AdminButton size="xs" onClick={onBulkTag}>
-                Bulk Update
-              </AdminButton>
-            )}
-            <button
-              onClick={async () => {
-                const toToggle = images.filter((img) =>
-                  selectedImages.includes(img._id),
-                )
-                const allFeatured = toToggle.every((img) => img.featured)
-                for (const image of toToggle) {
-                  await handleToggleFeatured(image._id, !allFeatured)
-                }
-                onSelectionChange([])
-              }}
-              className="rounded-md bg-gray-600 px-3 py-1 text-sm font-medium text-white hover:bg-gray-700 dark:bg-gray-500 dark:hover:bg-gray-600"
-            >
-              {images
-                .filter((img) => selectedImages.includes(img._id))
-                .every((img) => img.featured)
-                ? 'Unfeature Selected'
-                : 'Feature Selected'}
-            </button>
-            <AdminButton
-              color="red"
-              size="xs"
-              onClick={() => setDeleteConfirmId('bulk')}
-            >
-              Delete Selected
-            </AdminButton>
-          </div>
-        )}
-      </div>
+      )}
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {images.map((image) => (
@@ -164,32 +173,40 @@ export function ImageGrid({
             onMouseEnter={() => setHoveredImage(image._id)}
             onMouseLeave={() => setHoveredImage(null)}
             onClick={(e) => {
-              if (selectedImages.length > 0 && e.currentTarget === e.target) {
+              if (
+                !readOnly &&
+                selectedImages.length > 0 &&
+                e.currentTarget === e.target
+              ) {
                 handleSelectImage(image._id)
               }
             }}
           >
-            <div className="absolute top-2 left-2 z-10">
-              <button
-                onClick={(e) => {
-                  e.stopPropagation()
-                  handleSelectImage(image._id)
-                }}
-                className="rounded bg-white/80 p-1 shadow-sm hover:bg-white dark:bg-gray-900/80 dark:hover:bg-gray-900"
-              >
-                <div
-                  className={`h-4 w-4 rounded border ${
-                    selectedImages.includes(image._id)
-                      ? 'border-indigo-600 bg-indigo-600 dark:border-indigo-500 dark:bg-indigo-500'
-                      : 'border-gray-400 dark:border-gray-500'
-                  }`}
+            {!readOnly && (
+              <div className="absolute top-2 left-2 z-10">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    handleSelectImage(image._id)
+                  }}
+                  aria-pressed={selectedImages.includes(image._id)}
+                  aria-label={`Select ${image.imageAlt || image.photographer}`}
+                  className="rounded bg-white/80 p-1 shadow-sm hover:bg-white dark:bg-gray-900/80 dark:hover:bg-gray-900"
                 >
-                  {selectedImages.includes(image._id) && (
-                    <CheckIcon className="h-3 w-3 text-white" />
-                  )}
-                </div>
-              </button>
-            </div>
+                  <div
+                    className={`size-4 rounded border ${
+                      selectedImages.includes(image._id)
+                        ? 'border-indigo-600 bg-indigo-600 dark:border-indigo-500 dark:bg-indigo-500'
+                        : 'border-gray-400 dark:border-gray-500'
+                    }`}
+                  >
+                    {selectedImages.includes(image._id) && (
+                      <CheckIcon className="size-3 text-white" />
+                    )}
+                  </div>
+                </button>
+              </div>
+            )}
 
             {image.featured && (
               <div className="absolute top-2 right-2 z-10">
@@ -200,7 +217,7 @@ export function ImageGrid({
             <div
               className="relative aspect-video"
               onClick={() => {
-                if (selectedImages.length > 0) {
+                if (!readOnly && selectedImages.length > 0) {
                   handleSelectImage(image._id)
                 }
               }}
@@ -244,49 +261,51 @@ export function ImageGrid({
               </div>
             </div>
 
-            <div
-              className={`absolute inset-x-0 top-1/2 flex -translate-y-1/2 justify-center gap-2 transition-opacity ${
-                hoveredImage === image._id ? 'opacity-100' : 'opacity-0'
-              }`}
-            >
-              <button
-                onClick={(e) => {
-                  e.stopPropagation()
-                  onImageUpdate(image)
-                }}
-                className="rounded-full bg-white p-2 text-gray-700 shadow-lg hover:bg-gray-100 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
-                title="Edit metadata"
+            {!readOnly && (
+              <div
+                className={`absolute inset-x-0 top-1/2 flex -translate-y-1/2 justify-center gap-2 transition-opacity ${
+                  hoveredImage === image._id ? 'opacity-100' : 'opacity-0'
+                }`}
               >
-                <PencilIcon className="h-5 w-5" />
-              </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation()
-                  handleToggleFeatured(image._id, !image.featured)
-                }}
-                disabled={loadingStates[image._id]}
-                className="rounded-full bg-white p-2 text-gray-700 shadow-lg hover:bg-gray-100 disabled:opacity-50 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
-                title={
-                  image.featured ? 'Remove from featured' : 'Add to featured'
-                }
-              >
-                {image.featured ? (
-                  <StarIconSolid className="h-5 w-5 text-yellow-500" />
-                ) : (
-                  <StarIcon className="h-5 w-5" />
-                )}
-              </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setDeleteConfirmId(image._id)
-                }}
-                className="rounded-full bg-white p-2 text-red-600 shadow-lg hover:bg-red-50 dark:bg-gray-800 dark:text-red-400 dark:hover:bg-gray-700"
-                title="Delete image"
-              >
-                <TrashIcon className="h-5 w-5" />
-              </button>
-            </div>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onImageUpdate(image)
+                  }}
+                  className="rounded-full bg-white p-2 text-gray-700 shadow-lg hover:bg-gray-100 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+                  title="Edit metadata"
+                >
+                  <PencilIcon className="size-5" />
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    handleToggleFeatured(image._id, !image.featured)
+                  }}
+                  disabled={loadingStates[image._id]}
+                  className="rounded-full bg-white p-2 text-gray-700 shadow-lg hover:bg-gray-100 disabled:opacity-50 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+                  title={
+                    image.featured ? 'Remove from featured' : 'Add to featured'
+                  }
+                >
+                  {image.featured ? (
+                    <StarIconSolid className="size-5 text-yellow-500" />
+                  ) : (
+                    <StarIcon className="size-5" />
+                  )}
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setDeleteConfirmId(image._id)
+                  }}
+                  className="rounded-full bg-white p-2 text-red-600 shadow-lg hover:bg-red-50 dark:bg-gray-800 dark:text-red-400 dark:hover:bg-gray-700"
+                  title="Delete image"
+                >
+                  <TrashIcon className="size-5" />
+                </button>
+              </div>
+            )}
           </div>
         ))}
       </div>

@@ -142,8 +142,16 @@ export function ConnectedVariantEditor({
   const changedUnderneath = data.variant._rev !== loadedRev
   const [error, setError] = useState<string | null>(null)
   const [galleryOpen, setGalleryOpen] = useState(false)
+  // Pictures from a previous edition of the organization (#1191): the server
+  // lists the editions, and only one of its ids is ever sent back as `edition`.
+  const [galleryEdition, setGalleryEdition] = useState<string | undefined>()
+  const galleryEditions = api.gallery.admin.editions.useQuery(undefined, {
+    enabled: galleryOpen,
+  })
+  // No placeholder data here: after switching edition the previous edition's
+  // tiles must not stay pickable under the new edition's label.
   const gallery = api.gallery.admin.list.useQuery(
-    { limit: 100 },
+    { limit: 100, edition: galleryEdition },
     { enabled: galleryOpen },
   )
   // The marketing asset picker (#1163): the search asks the server once
@@ -255,15 +263,14 @@ export function ConnectedVariantEditor({
     },
   })
   const addAttachment = api.social.addPostAttachment.useMutation()
+  // A gallery pick goes by IMAGE id (#1191): the server proves the picture
+  // is this edition's or a previous edition's and reads its asset itself.
+  const addFromGallery = api.social.addPostAttachmentFromGallery.useMutation()
   const addFromAsset = api.social.addPostAttachmentFromAsset.useMutation()
 
   /** Put an image asset on the post, then select it on this variant. */
-  const attachAsset = (input: {
-    assetId: string
-    alt: string
-    hotspot?: GalleryPick['hotspot']
-    crop?: GalleryPick['crop']
-  }) => selectAdded(addAttachment.mutateAsync({ postId, ...input }))
+  const attachAsset = (input: { assetId: string; alt: string }) =>
+    selectAdded(addAttachment.mutateAsync({ postId, ...input }))
 
   /** Select what just landed on the post on this variant. */
   const selectAdded = async (added: Promise<{ key: string }>) => {
@@ -290,10 +297,7 @@ export function ConnectedVariantEditor({
     return [
       {
         id: image._id,
-        assetId,
         alt: image.image.alt ?? image.imageAlt ?? '',
-        hotspot: image.image.hotspot ?? null,
-        crop: image.image.crop ?? null,
         thumbnailSrc: richTextImageUrl(assetId, 300),
       },
     ]
@@ -383,7 +387,15 @@ export function ConnectedVariantEditor({
           gallery: {
             images: galleryPicks,
             isLoading: gallery.isLoading,
+            error: gallery.error
+              ? gallery.error.message || 'The gallery could not be read.'
+              : null,
             onOpen: () => setGalleryOpen(true),
+            editions: {
+              options: galleryEditions.data,
+              value: galleryEdition,
+              onChange: setGalleryEdition,
+            },
             onPick: async (image) => {
               // Alt text is the platform's, not a placeholder of ours.
               if (!image.alt.trim()) {
@@ -391,12 +403,9 @@ export function ConnectedVariantEditor({
                   'This gallery image has no alt text. Add one in the gallery first.',
                 )
               }
-              await attachAsset({
-                assetId: image.assetId,
-                alt: image.alt,
-                hotspot: image.hotspot,
-                crop: image.crop,
-              })
+              await selectAdded(
+                addFromGallery.mutateAsync({ postId, imageId: image.id }),
+              )
             },
           },
           marketingAssets: {
