@@ -69,19 +69,26 @@ export function entryFormat(
  * What picking an entry of `format` into a post on `platform` warns, or null
  * when the Format is the Channel's own (or the Channel has none). A warning
  * only: the organizer may want it, and the pick goes through.
+ *
+ * Which edges the crop takes comes from the image's own pixels when known:
+ * a studio card saved before Formats reads as square for ranking (§6), but
+ * a 2:1 one loses its sides, not its top and bottom.
  */
 export function formatMismatchWarning(
   platform: SocialPlatform,
   format: StudioFormat,
+  size?: { width: number | null; height: number | null } | null,
 ): string | null {
   const wanted = channelFormat(platform)
   if (wanted === null || wanted === format) return null
   const name = SOCIAL_PLATFORM_LABELS[platform]
-  const shape = STUDIO_FORMATS[format].label.toLowerCase()
+  const wantedLabel = STUDIO_FORMATS[wanted].label.toLowerCase()
   const crop = getPlatformConstraints(platform)?.imageAspectRatio ?? null
   if (crop === null) {
-    return `${name} does not crop images: this ${shape} one is posted at its own shape rather than ${STUDIO_FORMATS[wanted].label.toLowerCase()}.`
+    return `${name} does not crop images: this one is posted at its own shape rather than ${wantedLabel}.`
   }
-  const lost = aspect(format) < crop ? 'top and bottom' : 'sides'
-  return `${name} posts go out cropped to ${crop}:1, so this ${shape} image loses its ${lost}. Check the crop, or pick a ${STUDIO_FORMATS[wanted].label.toLowerCase()} entry.`
+  const shape =
+    size?.width && size.height ? size.width / size.height : aspect(format)
+  const lost = shape < crop ? 'top and bottom' : 'sides'
+  return `${name} posts go out cropped to ${crop}:1, so this image loses its ${lost}. Check the crop, or pick a ${wantedLabel} entry.`
 }

@@ -321,6 +321,7 @@ export function ConnectedVariantEditor({
         formatWarning: formatMismatchWarning(
           data.variant.platform,
           asset.format,
+          asset,
         ),
       }
     },

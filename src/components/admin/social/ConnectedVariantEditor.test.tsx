@@ -157,7 +157,7 @@ describe('ConnectedVariantEditor: the picker ranks for this variant (#1249)', ()
     fireEvent.click(openPicker().getByRole('button', { name: /^Add Logo/ }))
     await waitFor(() =>
       expect(screen.getByRole('status')).toHaveTextContent(
-        'Added Logo. LinkedIn posts go out cropped to 1.91:1, so this square image loses its top and bottom.',
+        'Added Logo. LinkedIn posts go out cropped to 1.91:1, so this image loses its top and bottom.',
       ),
     )
     expect(h.addFromAsset).toHaveBeenCalledWith(
@@ -175,5 +175,20 @@ describe('ConnectedVariantEditor: the picker ranks for this variant (#1249)', ()
       ).toBeNull(),
     )
     expect(screen.getByRole('status')).toHaveTextContent('')
+  })
+
+  it('a 2:1 studio card that reads as square warns from its pixels: it loses its sides', async () => {
+    h.forPost.mockReturnValue({
+      data: [{ ...row('promo', 'Promo', 'square'), width: 2000, height: 1000 }],
+      isLoading: false,
+      error: null,
+    })
+    render(<ConnectedVariantEditor data={data('linkedin')} />)
+    fireEvent.click(openPicker().getByRole('button', { name: /^Add Promo/ }))
+    await waitFor(() =>
+      expect(screen.getByRole('status')).toHaveTextContent(
+        'Added Promo. LinkedIn posts go out cropped to 1.91:1, so this image loses its sides.',
+      ),
+    )
   })
 })
