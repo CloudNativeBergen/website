@@ -484,3 +484,61 @@ describe('savePreview — exactly the Tasks that need a decision', () => {
     expect(recipe.verbatim).toBe(true)
   })
 })
+
+describe('buildTemplate — renders of every Format an organizer edited (Formats spec §5)', () => {
+  it('keeps the alt, instructions and Format of an edited landscape render: each render becomes its own Recipe', () => {
+    const source = seeded((seed) => {
+      const wide = seed.tasks.find((t) => t.key === 'cfpOpenRender:landscape')!
+      wide.alt = 'The LinkedIn card: wide, with the venue photo.'
+      wide.instructions = 'Use the wide venue photo.'
+      wide.format = 'portrait'
+    })
+    const cfp = buildTemplate(source, {}).find((c) => c.key === 'cfp')!
+    const renders = cfp.recipes
+      .filter((r) => r.key.startsWith('cfpOpenRender'))
+      .map((r) => [r.key, r.format, r.alt, r.instructions])
+    expect(renders).toEqual([
+      [
+        'cfpOpenRender',
+        'square',
+        cfp.recipes.find((r) => r.key === 'cfpOpenRender')!.alt,
+        undefined,
+      ],
+      [
+        'cfpOpenRender:landscape',
+        'portrait',
+        'The LinkedIn card: wide, with the venue photo.',
+        'Use the wide venue photo.',
+      ],
+    ])
+    expect(
+      cfp.recipes.find((r) => r.key === 'cfpOpen:linkedin')!.prerequisites,
+    ).toEqual(['cfpOpenRender:landscape'])
+    expect(
+      cfp.recipes.find((r) => r.key === 'cfpOpen:bluesky')!.prerequisites,
+    ).toEqual(['cfpOpenRender'])
+    // The next edition has the organizer's render, not a copy of the square.
+    const next = reseed(source)
+    const wide = next.tasks.find((t) => t.key === 'cfpOpenRender:landscape')!
+    expect([wide.format, wide.alt, wide.instructions]).toEqual([
+      'portrait',
+      'The LinkedIn card: wide, with the venue photo.',
+      'Use the wide venue photo.',
+    ])
+    expect(
+      next.tasks.find((t) => t.key === 'cfpOpen:linkedin')!.prerequisiteIds,
+    ).toEqual([wide._id])
+    expect(
+      next.tasks.filter((t) => t.key.startsWith('cfpOpenRender')),
+    ).toHaveLength(2)
+  })
+
+  it('an untouched pair still folds into the one Recipe it came from', () => {
+    const cfp = buildTemplate(seeded(), {}).find((c) => c.key === 'cfp')!
+    expect(
+      cfp.recipes
+        .filter((r) => r.key.startsWith('cfpOpenRender'))
+        .map((r) => [r.key, r.format]),
+    ).toEqual([['cfpOpenRender', undefined]])
+  })
+})

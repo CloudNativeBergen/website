@@ -53,13 +53,22 @@ export function storedRenderFormat(value: unknown): StudioFormat {
  * The key of each render made from render Recipe `key`, one per Format: the
  * first keeps the Recipe's own key (the key every render made before Formats
  * has, so a plan's existing renders and generation markers still match it),
- * and every other Format is `<key>:<format>`.
+ * and every other Format is `<key>:<format>` — or `<key>:<format>-<n>`, the
+ * first free one, when another Recipe already has that key (`taken`).
  */
 function renderKeys(
   key: string,
   formats: StudioFormat[],
+  taken: ReadonlySet<string>,
 ): Map<StudioFormat, string> {
-  return new Map(formats.map((f, i) => [f, i === 0 ? key : `${key}:${f}`]))
+  const free = (base: string) => {
+    let candidate = base
+    for (let n = 2; taken.has(candidate); n++) candidate = `${base}-${n}`
+    return candidate
+  }
+  return new Map(
+    formats.map((f, i) => [f, i === 0 ? key : free(`${key}:${f}`)]),
+  )
 }
 
 /**
@@ -90,32 +99,36 @@ export function renderKeysOf(recipes: readonly TaskRecipe[]): Set<string> {
  * render of another Format (`<key>:<format>`), the render Recipe it was split
  * from. Its skeletons are that render's too.
  */
+/** `<render key>:<format>`, with the `-<n>` a taken key adds. */
+const SPLIT_KEY = new RegExp(`^(.*):(${STUDIO_FORMAT_IDS.join('|')})(-\\d+)?$`)
+
 export function recipeForTaskKey(
   recipes: readonly TaskRecipe[],
   taskKey: string,
 ): TaskRecipe | undefined {
   const own = recipes.find((r) => r.key === taskKey)
   if (own) return own
-  const at = taskKey.lastIndexOf(':')
-  const format = taskKey.slice(at + 1)
-  if (at === -1 || !(STUDIO_FORMAT_IDS as readonly string[]).includes(format))
-    return undefined
-  return recipes.find(
-    (r) => r.kind === 'studioRender' && r.key === taskKey.slice(0, at),
-  )
+  const split = SPLIT_KEY.exec(taskKey)
+  if (!split) return undefined
+  return recipes.find((r) => r.kind === 'studioRender' && r.key === split[1])
 }
 
 /**
  * Is `post` among the posts a render Recipe is split for: listing it, or in
- * its beat?
+ * its beat and listing no render at all (`renderKeys`)? `buildSubjectBeat`
+ * has always made every post of a beat wait on the beat's render; a post that
+ * names its render waits on that one only.
  */
-function splitsFor(post: TaskRecipe, render: TaskRecipe): boolean {
+function splitsFor(
+  post: TaskRecipe,
+  render: TaskRecipe,
+  renderKeys: ReadonlySet<string>,
+): boolean {
+  if (post.kind !== 'publishing') return false
+  if (post.prerequisites?.includes(render.key)) return true
   return (
-    post.kind === 'publishing' &&
-    // Listed, or in the render's beat: `buildSubjectBeat` has always made
-    // every post of a beat wait on the beat's render.
-    (post.prerequisites?.includes(render.key) === true ||
-      post.beat === render.beat)
+    post.beat === render.beat &&
+    !post.prerequisites?.some((key) => renderKeys.has(key))
   )
 }
 
@@ -130,12 +143,14 @@ function splitsFor(post: TaskRecipe, render: TaskRecipe): boolean {
 export function splitRendersByFormat(recipes: TaskRecipe[]): TaskRecipe[] {
   const renders = recipes.filter((r) => r.kind === 'studioRender')
   if (renders.length === 0) return recipes
+  const taken = new Set(recipes.map((r) => r.key))
+  const allRenderKeys = renderKeysOf(recipes)
   /** Render key → the key of each Format it is made in. */
   const splits = new Map<string, Map<StudioFormat, string>>()
   for (const render of renders) {
     const wanted = new Set(
       recipes
-        .filter((post) => splitsFor(post, render))
+        .filter((post) => splitsFor(post, render, allRenderKeys))
         .map((post) => channelFormat(post.channel)),
     )
     const formats: StudioFormat[] = render.format
@@ -143,16 +158,8 @@ export function splitRendersByFormat(recipes: TaskRecipe[]): TaskRecipe[] {
       : wanted.size > 0
         ? STUDIO_FORMAT_IDS.filter((f) => wanted.has(f))
         : [channelFormat(render.channel)]
-    const keys = renderKeys(render.key, formats)
-    // A key another Recipe already has would make two Tasks of one key: such
-    // a render is made once, in its first Format, and every post waits on it.
-    const clash = [...keys.values()].some(
-      (key) => key !== render.key && recipes.some((r) => r.key === key),
-    )
-    splits.set(
-      render.key,
-      clash ? renderKeys(render.key, formats.slice(0, 1)) : keys,
-    )
+    // A key another Recipe already has would make two Tasks of one key.
+    splits.set(render.key, renderKeys(render.key, formats, taken))
   }
   return recipes.flatMap((recipe): TaskRecipe[] => {
     const own = splits.get(recipe.key)
@@ -181,7 +188,9 @@ export function splitRendersByFormat(recipes: TaskRecipe[]): TaskRecipe[] {
       ]
     }
     const format = channelFormat(recipe.channel)
-    const waited = renders.filter((render) => splitsFor(recipe, render))
+    const waited = renders.filter((render) =>
+      splitsFor(recipe, render, allRenderKeys),
+    )
     if (waited.length === 0) return [recipe]
     const forPost = (render: TaskRecipe) => {
       const split = splits.get(render.key)!

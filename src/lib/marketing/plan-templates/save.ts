@@ -23,7 +23,11 @@ import {
 import { resolveAllMilestones, type ResolvedMilestones } from '../milestones'
 import { CONFERENCE_PLACEHOLDERS, unknownTokens } from '../placeholders'
 import { seedsAtCreation } from '../seed'
-import { recipeForTaskKey } from '../render-format'
+import {
+  recipeForTaskKey,
+  splitRendersByFormat,
+  storedRenderFormat,
+} from '../render-format'
 import { DEFAULT_STUDIO_FORMAT } from '@/lib/marketing-asset/format'
 import type { Anchor, CampaignRecipe, TaskRecipe } from '../template/types'
 
@@ -187,30 +191,65 @@ export function buildTemplate(
     const tasks = savedTasks(source, campaign)
     // A seeded beat's renders of every Format are the one render Recipe they
     // were split from (Formats spec §5): saved as it, and re-split when the
-    // Template seeds the next edition.
+    // Template seeds the next edition — while they are as the split made
+    // them. Once an organizer gave one its own alt, instructions or Format,
+    // each is saved as a Recipe of its own, in its Format, so nothing of
+    // theirs is lost.
+    const split = new Map(
+      splitRendersByFormat(campaign.recipes).map((r) => [r.key, r]),
+    )
+    const renderGroup = (render: TaskRecipe) =>
+      tasks.filter(
+        (t) =>
+          t.kind === 'studioRender' &&
+          recipeForTaskKey(campaign.recipes, t.key) === render,
+      )
+    const asSplit = (group: CopySourceTask[]) =>
+      group.every(
+        (t) =>
+          storedRenderFormat(t.format) === split.get(t.key)?.format &&
+          t.alt === group[0].alt &&
+          t.instructions === group[0].instructions,
+      )
+    const ownRecipe = new Set(
+      campaign.recipes.flatMap((r) => {
+        if (r.kind !== 'studioRender' || r.format) return []
+        const group = renderGroup(r)
+        return asSplit(group) ? [] : group.map((t) => t._id)
+      }),
+    )
     const recipeOf = (task: CopySourceTask) =>
-      recipeForTaskKey(campaign.recipes, task.key)
+      ownRecipe.has(task._id)
+        ? undefined
+        : recipeForTaskKey(campaign.recipes, task.key)
+    /** A render saved as its own Recipe: the Recipe it was split from. */
+    const splitFrom = (task: CopySourceTask) =>
+      ownRecipe.has(task._id)
+        ? recipeForTaskKey(campaign.recipes, task.key)
+        : undefined
     const keyById = new Map(
       tasks.map((t) => [t._id, recipeOf(t)?.key ?? t.key]),
     )
     const staticRecipe = (task: CopySourceTask): TaskRecipe => {
       const stored = recipeOf(task)
+      // Its skeletons and beat are still the Recipe it was split from.
+      const base = stored ?? splitFrom(task)
       const literal = carriesLiteralCopy(task, stored)
       const rewritten = decisions.copy?.[task._id]
       const skeleton = literal
         ? (rewritten ?? literalCopy(task))
         : stored?.skeleton
       const alt =
-        task.alt !== null && !isTemplateText(task.alt, stored?.alt)
+        task.alt !== null && !isTemplateText(task.alt, base?.alt)
           ? task.alt
-          : stored?.alt
+          : base?.alt
       const prerequisites = [
         ...new Set(task.prerequisiteIds.flatMap((id) => keyById.get(id) ?? [])),
       ]
       const targetPage = task.targetPage ?? stored?.targetPage
       return {
         key: stored?.key ?? task.key,
-        beat: stored?.beat ?? task.key.split(':')[0],
+        beat: base?.beat ?? task.key.split(':')[0],
         // A render of a second Format is named for it; its Recipe is not.
         title: stored && stored.key !== task.key ? stored.title : task.title,
         kind: task.kind,
@@ -247,6 +286,9 @@ export function buildTemplate(
       const key = recipeOf(t)?.key ?? t.key
       if (!taskByKey.has(key) || t.key === key) taskByKey.set(key, t)
     }
+    /** The Tasks of a render saved as Recipes of their own, square first. */
+    const ownRenders = (r: TaskRecipe) =>
+      renderGroup(r).filter((t) => ownRecipe.has(t._id))
     const capacity = source.ticketCapacity
     return {
       key: campaign.key,
@@ -273,11 +315,13 @@ export function buildTemplate(
         // when the Task was deleted), a Library Recipe is kept as it stands.
         ...campaign.recipes.flatMap((r) => {
           if (!seedsAtCreation(r)) return [structuredClone(r)]
+          const own = ownRenders(r)
+          if (own.length > 0) return own.map(staticRecipe)
           const task = taskByKey.get(r.key)
           return task ? [staticRecipe(task)] : []
         }),
         // Manual Tasks have no stored Recipe: they become one here.
-        ...tasks.filter((t) => !recipeOf(t)).map(staticRecipe),
+        ...tasks.filter((t) => !recipeOf(t) && !splitFrom(t)).map(staticRecipe),
       ],
     }
   })

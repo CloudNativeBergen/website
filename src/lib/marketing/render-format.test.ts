@@ -7,7 +7,11 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { channelFormat, splitRendersByFormat } from './render-format'
+import {
+  channelFormat,
+  recipeForTaskKey,
+  splitRendersByFormat,
+} from './render-format'
 import type { TaskRecipe } from './template/types'
 
 const render = (over: Partial<TaskRecipe> = {}): TaskRecipe => ({
@@ -225,7 +229,7 @@ describe('splitRendersByFormat', () => {
     ])
   })
 
-  it('never makes a key another Recipe already has: such a render is made once, in its first Format', () => {
+  it('never makes a key another Recipe already has, and still makes every Format: a taken key gets the next free one', () => {
     const taken = render({
       key: 'cardRender:landscape',
       beat: 'other',
@@ -242,9 +246,14 @@ describe('splitRendersByFormat', () => {
     expect(shape(split)).toEqual([
       { key: 'cardRender', format: 'square', prerequisites: undefined },
       {
+        key: 'cardRender:landscape-2',
+        format: 'landscape',
+        prerequisites: undefined,
+      },
+      {
         key: 'card:linkedin',
         format: undefined,
-        prerequisites: ['cardRender'],
+        prerequisites: ['cardRender:landscape-2'],
       },
       { key: 'card:bluesky', format: undefined, prerequisites: ['cardRender'] },
       {
@@ -253,6 +262,24 @@ describe('splitRendersByFormat', () => {
         prerequisites: undefined,
       },
     ])
+  })
+
+  it('finds the render Recipe a Task of another Format was split from, under a free key too', () => {
+    const recipes = [
+      render(),
+      render({ key: 'cardRender:landscape', beat: 'other' }),
+    ]
+    expect(recipeForTaskKey(recipes, 'cardRender:landscape-2')?.key).toBe(
+      'cardRender',
+    )
+    expect(recipeForTaskKey(recipes, 'cardRender:portrait')?.key).toBe(
+      'cardRender',
+    )
+    // A key that is a Recipe's own is that Recipe's.
+    expect(recipeForTaskKey(recipes, 'cardRender:landscape')?.beat).toBe(
+      'other',
+    )
+    expect(recipeForTaskKey(recipes, 'cardRender:banner')).toBeUndefined()
   })
 
   it('leaves a list without renders exactly as it was', () => {
