@@ -533,6 +533,31 @@ describe('buildTemplate — renders of every Format an organizer edited (Formats
     ).toHaveLength(2)
   })
 
+  it.each([
+    ['its own Format', { format: 'portrait' as const }, 'format', 'portrait'],
+    ['its own alt', { alt: 'The wide card.' }, 'alt', 'The wide card.'],
+    [
+      'its own instructions',
+      { instructions: 'Use the venue photo.' },
+      'instructions',
+      'Use the venue photo.',
+    ],
+  ] as const)(
+    'keeps a landscape render given %s, alone, as a Recipe of its own',
+    (_what, change, field, value) => {
+      const source = seeded((seed) => {
+        Object.assign(
+          seed.tasks.find((t) => t.key === 'cfpOpenRender:landscape')!,
+          change,
+        )
+      })
+      const wide = reseed(source).tasks.find(
+        (t) => t.key === 'cfpOpenRender:landscape',
+      )!
+      expect(wide[field]).toBe(value)
+    },
+  )
+
   it('keeps a renamed landscape render as a Recipe of its own', () => {
     const source = seeded((seed) => {
       seed.tasks.find((t) => t.key === 'cfpOpenRender:landscape')!.title =
@@ -577,6 +602,39 @@ describe('buildTemplate — renders of every Format an organizer edited (Formats
       cfp.recipes.find((r) => r.key === 'cfpOpenRender:landscape')!
         .prerequisites,
     ).toEqual(['cfpReminder2w:linkedin'])
+  })
+
+  it('a render of one Format the organizer deleted stays deleted in the next edition (Templates spec §6.1)', () => {
+    const source = seeded((seed) => {
+      seed.tasks = seed.tasks.filter((t) => t.key !== 'cfpOpenRender:landscape')
+    })
+    const next = reseed(source)
+    const renders = next.tasks.filter((t) => t.key.startsWith('cfpOpenRender'))
+    expect(renders.map((t) => [t.key, t.format])).toEqual([
+      ['cfpOpenRender', 'square'],
+    ])
+    // The LinkedIn post is not handed a recreated landscape render; the one
+    // render left is its beat's, so it waits on that.
+    expect(
+      next.tasks.find((t) => t.key === 'cfpOpen:linkedin')!.prerequisiteIds,
+    ).toEqual([renders[0]._id])
+  })
+
+  it('a post the organizer pointed at the other render keeps it in the next edition', () => {
+    const source = seeded((seed) => {
+      const square = seed.tasks.find((t) => t.key === 'cfpOpenRender')!
+      seed.tasks.find((t) => t.key === 'cfpOpen:linkedin')!.prerequisiteIds = [
+        square._id,
+      ]
+    })
+    const next = reseed(source)
+    const square = next.tasks.find((t) => t.key === 'cfpOpenRender')!
+    expect(
+      next.tasks.find((t) => t.key === 'cfpOpen:linkedin')!.prerequisiteIds,
+    ).toEqual([square._id])
+    expect(
+      next.tasks.find((t) => t.key === 'cfpOpenRender:landscape')?.format,
+    ).toBe('landscape')
   })
 
   it('an untouched pair still folds into the one Recipe it came from', () => {

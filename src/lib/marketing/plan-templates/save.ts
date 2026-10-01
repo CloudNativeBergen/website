@@ -191,123 +191,172 @@ export function buildTemplate(
   return source.campaigns.map((campaign) => {
     const tasks = savedTasks(source, campaign)
     // A seeded beat's renders of every Format are the one render Recipe they
-    // were split from (Formats spec §5): saved as it, and re-split when the
-    // Template seeds the next edition — while they are as the split made
-    // them. Once an organizer gave one its own alt, instructions or Format,
-    // each is saved as a Recipe of its own, in its Format, so nothing of
-    // theirs is lost.
-    const split = new Map(
-      splitRendersByFormat(campaign.recipes).map((r) => [r.key, r]),
-    )
+    // were split from (Formats spec §5). A beat's renders are folded back into
+    // that one Recipe only when splitting it again reproduces EXACTLY what the
+    // plan holds now: the same renders (keys, Formats, titles, anchors,
+    // Prerequisites, one alt and one set of instructions) and every Task's
+    // Prerequisites among them. Anything else (a render deleted, renamed,
+    // re-dated or given its own Format, a post pointed at another render) is
+    // saved as it stands: each surviving render a Recipe of its own, in its
+    // Format, and each post with the Prerequisites it has.
     const renderGroup = (render: TaskRecipe) =>
       tasks.filter(
         (t) =>
           t.kind === 'studioRender' &&
           recipeForTaskKey(campaign.recipes, t.key) === render,
       )
+    const groups = campaign.recipes
+      .filter((r) => r.kind === 'studioRender' && !r.format)
+      .map((recipe) => ({ recipe, tasks: renderGroup(recipe) }))
+      .filter((g) => g.tasks.length > 0)
     const taskKeyById = new Map(tasks.map((t) => [t._id, t.key]))
+    const liveKeys = (t: CopySourceTask) =>
+      t.prerequisiteIds.flatMap((id) => taskKeyById.get(id) ?? [])
     const sameKeys = (a: readonly string[], b: readonly string[]) =>
-      a.length === b.length && a.every((key) => b.includes(key))
-    // Each render exactly as the split made it — Format, title, anchor and
-    // Prerequisites — and the pair alike in alt and instructions; anything
-    // the organizer changed would be lost by folding them.
-    const asSplit = (group: CopySourceTask[]) =>
-      group.every((t) => {
-        const made = split.get(t.key)
-        const anchor =
-          (t.milestone === null ? decisions.anchors?.[t._id] : null) ??
-          anchorOf(t, campaign, milestones)
+      new Set(a).size === new Set(b).size && a.every((key) => b.includes(key))
+    const effectiveAnchor = (t: CopySourceTask) =>
+      (t.milestone === null ? decisions.anchors?.[t._id] : null) ??
+      anchorOf(t, campaign, milestones)
+
+    /** The Campaign's Recipes, with the renders of `ownRecipe` unfolded. */
+    const recipesFor = (ownRecipe: ReadonlySet<string>): TaskRecipe[] => {
+      const recipeOf = (task: CopySourceTask) =>
+        ownRecipe.has(task._id)
+          ? undefined
+          : recipeForTaskKey(campaign.recipes, task.key)
+      /** A render saved as its own Recipe: the Recipe it was split from. */
+      const splitFrom = (task: CopySourceTask) =>
+        ownRecipe.has(task._id)
+          ? recipeForTaskKey(campaign.recipes, task.key)
+          : undefined
+      const keyById = new Map(
+        tasks.map((t) => [t._id, recipeOf(t)?.key ?? t.key]),
+      )
+      const staticRecipe = (task: CopySourceTask): TaskRecipe => {
+        const stored = recipeOf(task)
+        // Its skeletons and beat are still the Recipe it was split from.
+        const base = stored ?? splitFrom(task)
+        const literal = carriesLiteralCopy(task, stored)
+        const rewritten = decisions.copy?.[task._id]
+        const skeleton = literal
+          ? (rewritten ?? literalCopy(task))
+          : stored?.skeleton
+        const alt =
+          task.alt !== null && !isTemplateText(task.alt, base?.alt)
+            ? task.alt
+            : base?.alt
+        const prerequisites = [
+          ...new Set(
+            task.prerequisiteIds.flatMap((id) => keyById.get(id) ?? []),
+          ),
+        ]
+        const targetPage = task.targetPage ?? stored?.targetPage
+        return {
+          key: stored?.key ?? task.key,
+          beat: base?.beat ?? task.key.split(':')[0],
+          // A render of a second Format is named for it; its Recipe is not.
+          title: stored && stored.key !== task.key ? stored.title : task.title,
+          kind: task.kind,
+          ...(task.channel ? { channel: task.channel } : {}),
+          anchor:
+            (task.milestone === null ? decisions.anchors?.[task._id] : null) ??
+            anchorOf(task, campaign, milestones),
+          ...(prerequisites.length > 0 || stored?.prerequisites
+            ? { prerequisites }
+            : {}),
+          ...(targetPage ? { targetPage } : {}),
+          subjectSource: 'none',
+          ...(skeleton ? { skeleton } : {}),
+          ...(literal &&
+          (rewritten === undefined ||
+            rewritten.trim() === literalCopy(task).trim())
+            ? { verbatim: true }
+            : {}),
+          ...(alt ? { alt } : {}),
+          ...(task.instructions ? { instructions: task.instructions } : {}),
+          // A render made once, in a Format of its own (a manual render, or a
+          // Recipe that names its Format), keeps the Task's Format, the
+          // organizer's choice included. A render split per Format is saved
+          // without one and split again.
+          ...(task.kind === 'studioRender' && (stored?.format || !stored)
+            ? { format: task.format ?? stored?.format ?? DEFAULT_STUDIO_FORMAT }
+            : {}),
+        }
+      }
+      // The first Task of each stored Recipe: a render's square one, or the one
+      // of another Format when that is all that is left.
+      const taskByKey = new Map<string, CopySourceTask>()
+      for (const t of tasks) {
+        const key = recipeOf(t)?.key ?? t.key
+        if (!taskByKey.has(key) || t.key === key) taskByKey.set(key, t)
+      }
+      /** The Tasks of a render saved as Recipes of their own, square first. */
+      const ownRenders = (r: TaskRecipe) =>
+        renderGroup(r).filter((t) => ownRecipe.has(t._id))
+      return [
+        // In stored order: a static Recipe follows its Task (and goes with it
+        // when the Task was deleted), a Library Recipe is kept as it stands.
+        ...campaign.recipes.flatMap((r) => {
+          if (!seedsAtCreation(r)) return [structuredClone(r)]
+          const own = ownRenders(r)
+          if (own.length > 0) return own.map(staticRecipe)
+          const task = taskByKey.get(r.key)
+          return task ? [staticRecipe(task)] : []
+        }),
+        // Manual Tasks have no stored Recipe: they become one here.
+        ...tasks.filter((t) => !recipeOf(t) && !splitFrom(t)).map(staticRecipe),
+      ]
+    }
+
+    // Fold every beat, split the result again, and keep a fold only where
+    // the split is the plan as it is.
+    const folded = recipesFor(new Set())
+    const resplit = new Map(splitRendersByFormat(folded).map((r) => [r.key, r]))
+    const reproduces = (group: (typeof groups)[number]): boolean => {
+      const made = [...resplit.values()].filter(
+        (r) =>
+          r.kind === 'studioRender' &&
+          recipeForTaskKey(folded, r.key)?.key === group.recipe.key,
+      )
+      const madeKeys = made.map((r) => r.key)
+      if (
+        !sameKeys(
+          madeKeys,
+          group.tasks.map((t) => t.key),
+        )
+      )
+        return false
+      const [first] = group.tasks
+      const rendersMatch = group.tasks.every((t) => {
+        const e = resplit.get(t.key)!
         return (
-          made !== undefined &&
-          storedRenderFormat(t.format) === made.format &&
-          t.title === made.title &&
-          isDeepStrictEqual(anchor, made.anchor) &&
-          sameKeys(
-            t.prerequisiteIds.flatMap((id) => taskKeyById.get(id) ?? []),
-            made.prerequisites ?? [],
-          ) &&
-          t.alt === group[0].alt &&
-          t.instructions === group[0].instructions
+          storedRenderFormat(t.format) === e.format &&
+          t.title === e.title &&
+          isDeepStrictEqual(effectiveAnchor(t), e.anchor) &&
+          sameKeys(liveKeys(t), e.prerequisites ?? []) &&
+          t.alt === first.alt &&
+          t.instructions === first.instructions
         )
       })
+      const among = (keys: readonly string[]) =>
+        keys.filter((key) => madeKeys.includes(key))
+      return (
+        rendersMatch &&
+        tasks.every(
+          (c) =>
+            group.tasks.includes(c) ||
+            sameKeys(
+              among(liveKeys(c)),
+              among(resplit.get(c.key)?.prerequisites ?? []),
+            ),
+        )
+      )
+    }
     const ownRecipe = new Set(
-      campaign.recipes.flatMap((r) => {
-        if (r.kind !== 'studioRender' || r.format) return []
-        const group = renderGroup(r)
-        return asSplit(group) ? [] : group.map((t) => t._id)
-      }),
+      groups
+        .filter((g) => !reproduces(g))
+        .flatMap((g) => g.tasks.map((t) => t._id)),
     )
-    const recipeOf = (task: CopySourceTask) =>
-      ownRecipe.has(task._id)
-        ? undefined
-        : recipeForTaskKey(campaign.recipes, task.key)
-    /** A render saved as its own Recipe: the Recipe it was split from. */
-    const splitFrom = (task: CopySourceTask) =>
-      ownRecipe.has(task._id)
-        ? recipeForTaskKey(campaign.recipes, task.key)
-        : undefined
-    const keyById = new Map(
-      tasks.map((t) => [t._id, recipeOf(t)?.key ?? t.key]),
-    )
-    const staticRecipe = (task: CopySourceTask): TaskRecipe => {
-      const stored = recipeOf(task)
-      // Its skeletons and beat are still the Recipe it was split from.
-      const base = stored ?? splitFrom(task)
-      const literal = carriesLiteralCopy(task, stored)
-      const rewritten = decisions.copy?.[task._id]
-      const skeleton = literal
-        ? (rewritten ?? literalCopy(task))
-        : stored?.skeleton
-      const alt =
-        task.alt !== null && !isTemplateText(task.alt, base?.alt)
-          ? task.alt
-          : base?.alt
-      const prerequisites = [
-        ...new Set(task.prerequisiteIds.flatMap((id) => keyById.get(id) ?? [])),
-      ]
-      const targetPage = task.targetPage ?? stored?.targetPage
-      return {
-        key: stored?.key ?? task.key,
-        beat: base?.beat ?? task.key.split(':')[0],
-        // A render of a second Format is named for it; its Recipe is not.
-        title: stored && stored.key !== task.key ? stored.title : task.title,
-        kind: task.kind,
-        ...(task.channel ? { channel: task.channel } : {}),
-        anchor:
-          (task.milestone === null ? decisions.anchors?.[task._id] : null) ??
-          anchorOf(task, campaign, milestones),
-        ...(prerequisites.length > 0 || stored?.prerequisites
-          ? { prerequisites }
-          : {}),
-        ...(targetPage ? { targetPage } : {}),
-        subjectSource: 'none',
-        ...(skeleton ? { skeleton } : {}),
-        ...(literal &&
-        (rewritten === undefined ||
-          rewritten.trim() === literalCopy(task).trim())
-          ? { verbatim: true }
-          : {}),
-        ...(alt ? { alt } : {}),
-        ...(task.instructions ? { instructions: task.instructions } : {}),
-        // A render made once, in a Format of its own (a manual render, or a
-        // Recipe that names its Format), keeps the Task's Format, the
-        // organizer's choice included. A render split per Format is saved
-        // without one and split again.
-        ...(task.kind === 'studioRender' && (stored?.format || !stored)
-          ? { format: task.format ?? stored?.format ?? DEFAULT_STUDIO_FORMAT }
-          : {}),
-      }
-    }
-    // The first Task of each stored Recipe: a render's square one, or the one
-    // of another Format when that is all that is left.
-    const taskByKey = new Map<string, CopySourceTask>()
-    for (const t of tasks) {
-      const key = recipeOf(t)?.key ?? t.key
-      if (!taskByKey.has(key) || t.key === key) taskByKey.set(key, t)
-    }
-    /** The Tasks of a render saved as Recipes of their own, square first. */
-    const ownRenders = (r: TaskRecipe) =>
-      renderGroup(r).filter((t) => ownRecipe.has(t._id))
     const capacity = source.ticketCapacity
     return {
       key: campaign.key,
@@ -329,19 +378,7 @@ export function buildTemplate(
         : {}),
       optional: campaign.optional,
       triggers: campaign.triggers.map((t) => ({ ...t })),
-      recipes: [
-        // In stored order: a static Recipe follows its Task (and goes with it
-        // when the Task was deleted), a Library Recipe is kept as it stands.
-        ...campaign.recipes.flatMap((r) => {
-          if (!seedsAtCreation(r)) return [structuredClone(r)]
-          const own = ownRenders(r)
-          if (own.length > 0) return own.map(staticRecipe)
-          const task = taskByKey.get(r.key)
-          return task ? [staticRecipe(task)] : []
-        }),
-        // Manual Tasks have no stored Recipe: they become one here.
-        ...tasks.filter((t) => !recipeOf(t) && !splitFrom(t)).map(staticRecipe),
-      ],
+      recipes: recipesFor(ownRecipe),
     }
   })
 }
