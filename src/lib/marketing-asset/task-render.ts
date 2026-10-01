@@ -42,7 +42,6 @@ import type { TaskRenderCard } from './studio'
  */
 type Subject = { type: MarketingAssetSubjectType; id: string }
 
-
 export interface TaskRenderGalleryEntry {
   /** The request host's organization; never from the client. */
   orgId: string
