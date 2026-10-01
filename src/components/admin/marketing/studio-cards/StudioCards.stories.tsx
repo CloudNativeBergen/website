@@ -423,6 +423,9 @@ export const CardIconsIgnoreTheme: Story = {
           '[data-card-element="talk"] svg, [data-card-element="tier"] svg',
         ),
       ).map((icon) => getComputedStyle(icon).color)
+    // `.dark` on the root reaches every `.dark .text-brand-*` override, as
+    // the theme decorator's wrapper would; html2canvas-pro reads exactly
+    // these computed colours from the live page.
     const root = document.documentElement
     const wasDark = root.classList.contains('dark')
     try {
