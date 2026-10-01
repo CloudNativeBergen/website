@@ -157,7 +157,7 @@ describe('ConnectedVariantEditor: the picker ranks for this variant (#1249)', ()
     fireEvent.click(openPicker().getByRole('button', { name: /^Add Logo/ }))
     await waitFor(() =>
       expect(screen.getByRole('status')).toHaveTextContent(
-        'Added Logo. LinkedIn crops images to 1.91:1 in the feed, so this square one loses its top and bottom.',
+        'Added Logo. LinkedIn posts go out cropped to 1.91:1, so this square image loses its top and bottom.',
       ),
     )
     expect(h.addFromAsset).toHaveBeenCalledWith(

@@ -80,8 +80,8 @@ export function formatMismatchWarning(
   const shape = STUDIO_FORMATS[format].label.toLowerCase()
   const crop = getPlatformConstraints(platform)?.imageAspectRatio ?? null
   if (crop === null) {
-    return `${name} does not crop images: this ${shape} one shows at its own shape, not as a ${STUDIO_FORMATS[wanted].label.toLowerCase()}.`
+    return `${name} does not crop images: this ${shape} one is posted at its own shape rather than ${STUDIO_FORMATS[wanted].label.toLowerCase()}.`
   }
   const lost = aspect(format) < crop ? 'top and bottom' : 'sides'
-  return `${name} crops images to ${crop}:1 in the feed, so this ${shape} one loses its ${lost}. Check the crop, or pick a ${STUDIO_FORMATS[wanted].label.toLowerCase()} entry.`
+  return `${name} posts go out cropped to ${crop}:1, so this ${shape} image loses its ${lost}. Check the crop, or pick a ${STUDIO_FORMATS[wanted].label.toLowerCase()} entry.`
 }

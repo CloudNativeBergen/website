@@ -20,7 +20,7 @@ import { AttachmentSlot, type MarketingAssetPick } from './AttachmentSlot'
 afterEach(cleanup)
 
 const CROP =
-  'LinkedIn crops images to 1.91:1 in the feed, so this square one loses its top and bottom. Check the crop, or pick a landscape entry.'
+  'LinkedIn posts go out cropped to 1.91:1, so this square image loses its top and bottom. Check the crop, or pick a landscape entry.'
 
 const PICKS: MarketingAssetPick[] = [
   {

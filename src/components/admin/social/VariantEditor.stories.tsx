@@ -965,11 +965,11 @@ export const PickingAMismatchedFormat: Story = {
     )
     await expect(
       await within(canvasElement).findByText(
-        /LinkedIn crops images to 1\.91:1/,
+        /LinkedIn posts go out cropped to 1\.91:1/,
       ),
     ).toBeVisible()
     await expect(within(canvasElement).getByRole('status')).toHaveTextContent(
-      'Added Logo, dark background. LinkedIn crops images to 1.91:1 in the feed, so this square one loses its top and bottom. Check the crop, or pick a landscape entry.',
+      'Added Logo, dark background. LinkedIn posts go out cropped to 1.91:1, so this square image loses its top and bottom. Check the crop, or pick a landscape entry.',
     )
     await expect(within(canvasElement).queryByRole('alert')).toBeNull()
   },

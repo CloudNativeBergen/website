@@ -380,12 +380,11 @@ export function AttachmentSlot({
             })
           }
           pickLabel={(asset) =>
-            `Add ${asset.title} (${[
-              asset.context,
-              asset.format && STUDIO_FORMATS[asset.format].label.toLowerCase(),
-            ]
-              .filter(Boolean)
-              .join(', ')}) to the post`
+            `Add ${asset.title} (${asset.context}${
+              asset.format
+                ? `, ${STUDIO_FORMATS[asset.format].label.toLowerCase()}`
+                : ''
+            }) to the post`
           }
           notPickable={{
             reason: NOT_ATTACHABLE_YET,

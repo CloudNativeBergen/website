@@ -71,19 +71,19 @@ describe('formatMismatchWarning: warns, naming the crop', () => {
 
   it("names LinkedIn's 1.91:1 crop for a square or portrait entry", () => {
     expect(formatMismatchWarning('linkedin', 'square')).toBe(
-      'LinkedIn crops images to 1.91:1 in the feed, so this square one loses its top and bottom. Check the crop, or pick a landscape entry.',
+      'LinkedIn posts go out cropped to 1.91:1, so this square image loses its top and bottom. Check the crop, or pick a landscape entry.',
     )
     expect(formatMismatchWarning('linkedin', 'portrait')).toBe(
-      'LinkedIn crops images to 1.91:1 in the feed, so this portrait one loses its top and bottom. Check the crop, or pick a landscape entry.',
+      'LinkedIn posts go out cropped to 1.91:1, so this portrait image loses its top and bottom. Check the crop, or pick a landscape entry.',
     )
   })
 
   it('says Bluesky does not crop a landscape or portrait entry', () => {
     expect(formatMismatchWarning('bluesky', 'landscape')).toBe(
-      'Bluesky does not crop images: this landscape one shows at its own shape, not as a square.',
+      'Bluesky does not crop images: this landscape one is posted at its own shape rather than square.',
     )
     expect(formatMismatchWarning('bluesky', 'portrait')).toBe(
-      'Bluesky does not crop images: this portrait one shows at its own shape, not as a square.',
+      'Bluesky does not crop images: this portrait one is posted at its own shape rather than square.',
     )
   })
 })
