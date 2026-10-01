@@ -17,8 +17,16 @@ export const STUDIO_TABS = [
 ] as const
 export type StudioTab = (typeof STUDIO_TABS)[number]
 
-/** The tabs whose cards come in a Format (the promo joins in slice 4). */
-const FORMAT_TABS: ReadonlySet<StudioTab> = new Set(['speakers', 'sponsors'])
+/**
+ * The tabs whose cards come in a Format: the speaker and sponsor cards and
+ * the conference promo (#1250). The meme generator and the collage keep
+ * their shapes (docs/MARKETING_STUDIO_FORMATS_SPEC.md §1).
+ */
+const FORMAT_TABS: ReadonlySet<StudioTab> = new Set([
+  'conference',
+  'speakers',
+  'sponsors',
+])
 
 /** A Sanity image asset id: `image-<hash>-<w>x<h>-<ext>`. */
 const IMAGE_ASSET_ID = /^image-[A-Za-z0-9]+-\d+x\d+-[a-z0-9]+$/
@@ -68,7 +76,7 @@ export const studioOriginSchema = z
   )
   .refine(
     (origin) => origin.format === undefined || FORMAT_TABS.has(origin.tab),
-    { message: 'Only a speaker or sponsor card has a Format' },
+    { message: 'Only a speaker, sponsor or promo card has a Format' },
   )
 export type StudioOriginInput = z.output<typeof studioOriginSchema>
 

@@ -15,10 +15,13 @@ import {
 import { STUDIO_FORMAT_IDS, type StudioFormat } from '@/lib/marketing-asset'
 import {
   FormatSwitch,
+  PROMO_CARD_ELEMENTS,
+  PromoCard,
   SPEAKER_CARD_ELEMENTS,
   SPONSOR_CARD_ELEMENTS,
   SpeakerCard,
   SponsorCard,
+  type PromoCardProps,
   type SpeakerCardSpeaker,
 } from '.'
 
@@ -188,6 +191,95 @@ describe('SponsorCard', () => {
       .getByText('Gold Sponsor')
       .closest<HTMLElement>('[data-card="sponsor"]')!
     expect(element(card, 'logo').textContent).toBe('Nordic Labs')
+  })
+})
+
+const PROMO: PromoCardProps = {
+  title: 'Cloud Native Days Norway',
+  date: 'June 10, 2026',
+  place: 'Bergen, Norway',
+  counts: { speakers: 42, talks: 38, workshops: 5 },
+  description: 'Two days of talks and workshops by and for the community.',
+  qrCodeUrl: QR,
+}
+
+function promoCard(): HTMLElement {
+  return screen
+    .getByText('Cloud Native Days Norway')
+    .closest<HTMLElement>('[data-card="promo"]')!
+}
+
+describe('PromoCard', () => {
+  it.each(STUDIO_FORMAT_IDS)(
+    'keeps title, date, place, the counts, QR and description in %s',
+    (format) => {
+      render(<PromoCard {...PROMO} format={format} />)
+      const card = promoCard()
+      expect(card.dataset.format).toBe(format)
+      expect(card.querySelectorAll('[data-layout]')).toHaveLength(1)
+      expect(
+        card.querySelector<HTMLElement>('[data-layout]')!.dataset.layout,
+      ).toBe(format)
+      expect(card.style.aspectRatio).toBe(
+        {
+          square: '1080 / 1080',
+          landscape: '1200 / 628',
+          portrait: '1080 / 1350',
+        }[format],
+      )
+      for (const name of PROMO_CARD_ELEMENTS) {
+        expect(
+          card.querySelectorAll(`[data-card-element="${name}"]`),
+        ).toHaveLength(1)
+      }
+      expect(element(card, 'title').textContent).toBe(
+        'Cloud Native Days Norway',
+      )
+      expect(element(card, 'date').textContent).toBe('June 10, 2026')
+      expect(element(card, 'place').textContent).toBe('Bergen, Norway')
+      // Each count with its own number, in a fixed order.
+      expect(
+        Array.from(
+          element(card, 'counts').querySelectorAll<HTMLElement>('[data-count]'),
+        ).map((count) => [count.dataset.count, count.textContent]),
+      ).toEqual([
+        ['speakers', '42Speakers'],
+        ['talks', '38Talks'],
+        ['workshops', '5Workshops'],
+      ])
+      expect(element(card, 'description').textContent).toBe(
+        'Two days of talks and workshops by and for the community.',
+      )
+      expect(
+        within(element(card, 'qr')).getByRole('img').getAttribute('src'),
+      ).toBe(QR)
+      expect(within(card).getByTestId('pattern')).toBeTruthy()
+    },
+  )
+
+  it('leaves the date out rather than invent one, and keeps everything else', () => {
+    render(<PromoCard {...PROMO} date={undefined} format="landscape" />)
+    const card = promoCard()
+    expect(card.querySelector('[data-card-element="date"]')).toBeNull()
+    for (const name of PROMO_CARD_ELEMENTS.filter((name) => name !== 'date')) {
+      expect(
+        card.querySelectorAll(`[data-card-element="${name}"]`),
+      ).toHaveLength(1)
+    }
+  })
+
+  it('follows the tab’s Format switch with the other cards', () => {
+    render(
+      <FormatSwitch>
+        <PromoCard {...PROMO} />
+      </FormatSwitch>,
+    )
+    expect(promoCard().dataset.format).toBe('square')
+    fireEvent.click(screen.getByRole('radio', { name: /Portrait/ }))
+    expect(promoCard().dataset.format).toBe('portrait')
+    expect(
+      promoCard().querySelector<HTMLElement>('[data-layout]')!.dataset.layout,
+    ).toBe('portrait')
   })
 })
 

@@ -3,6 +3,7 @@ import { StudioSearchParamsSchema } from '@/server/schemas/studio'
 import { StudioCardGrid } from '@/components/admin/marketing/StudioCardGrid'
 import {
   FormatSwitch,
+  PromoCard,
   SPONSOR_CARD_VARIANTS,
 } from '@/components/admin/marketing/studio-cards'
 import { StudioTaskProvider } from '@/components/admin/marketing/StudioTaskProvider'
@@ -28,15 +29,11 @@ import { AdminPageHeader } from '@/components/admin'
 import { MarketingTabs } from '@/components/admin/MarketingTabs'
 import { MemeGeneratorWithDownload } from '@/components/admin/meme-generator'
 import { StudioPhotoGallery } from '@/components/admin/StudioPhotoGallery'
-import { CloudNativePattern } from '@/components/CloudNativePattern'
 import { getSpeakerFilename } from '@/lib/speaker/utils'
 import { PLATFORM_NAME, PLATFORM_SLUG } from '@/lib/branding/platform'
 import { getFeaturedGalleryImages } from '@/lib/gallery/sanity'
 import {
   UserGroupIcon,
-  CalendarDaysIcon,
-  MapPinIcon,
-  UsersIcon,
   MicrophoneIcon,
   TrophyIcon,
   PhotoIcon,
@@ -88,36 +85,6 @@ async function generateQRCode(
     qrCodeCache.set(fullUrl, FALLBACK_QR_CODE)
     return FALLBACK_QR_CODE
   }
-}
-
-const QRCodeDisplay = ({
-  qrCodeUrl,
-  size,
-  className = '',
-}: {
-  qrCodeUrl?: string
-  size: number
-  className?: string
-}) => {
-  if (!qrCodeUrl) return null
-
-  return (
-    <div
-      className={`rounded-lg bg-white shadow-lg ${className}`}
-      style={{
-        padding: '8px',
-        width: `${size}px`,
-        height: `${size}px`,
-      }}
-    >
-      <img
-        src={qrCodeUrl}
-        alt="QR Code - Scan to view conference program"
-        className="h-full w-full object-cover"
-        style={{ imageRendering: 'crisp-edges' }}
-      />
-    </div>
-  )
 }
 
 const getFirstParagraph = (text?: string): string => {
@@ -327,7 +294,8 @@ export default async function MarketingPage({
 
   const programUrl = '/program'
   const conferenceDomain = conference.domains[0]
-  const qrCodeUrl = await generateQRCode(programUrl, conferenceDomain, 80)
+  // Sharper than any capture needs: the largest QR, portrait's, is ~195 px.
+  const qrCodeUrl = await generateQRCode(programUrl, conferenceDomain, 512)
 
   // These cards are DOWNLOADABLE share assets, so anything printed on them can
   // leave the product entirely. A conference provisioned without dates used to
@@ -442,96 +410,35 @@ export default async function MarketingPage({
 
           {/* Conference Promotional Tab */}
           <div>
-            <DownloadableImage
-              filename={`${conference.title?.replace(/\s+/g, '-').toLowerCase() || PLATFORM_SLUG}-conference-promo`}
-              studio={{
-                tab: 'conference',
-                title: `${conference.title} promo`,
-              }}
-            >
-              <div
-                className="relative overflow-hidden rounded-xl bg-brand-gradient p-6 text-center md:p-8"
-                style={{ width: '800px', height: '400px' }}
+            <FormatSwitch defaultFormat={selection.format}>
+              <DownloadableImage
+                filename={`${conference.title?.replace(/\s+/g, '-').toLowerCase() || PLATFORM_SLUG}-conference-promo`}
+                studio={{
+                  tab: 'conference',
+                  title: `${conference.title} promo`,
+                }}
               >
-                <CloudNativePattern
-                  className="z-0"
-                  opacity={0.15}
-                  animated={true}
-                  variant="brand"
-                  baseSize={45}
-                  iconCount={80}
-                />
-                <div className="absolute inset-0 z-10 rounded-xl bg-black/30"></div>
-                <div className="relative z-20">
-                  <h1 className="font-space-grotesk mb-4 text-3xl font-bold text-white md:text-4xl">
-                    {conference.title}
-                  </h1>
-                  <div className="mb-6 flex flex-col items-center justify-center gap-4 sm:flex-row sm:gap-8">
-                    {eventDate && (
-                      <div className="flex items-center gap-2 text-white/90">
-                        <CalendarDaysIcon className="h-5 w-5" />
-                        <span className="font-inter text-lg">{eventDate}</span>
-                      </div>
-                    )}
-                    <div className="flex items-center gap-2 text-white/90">
-                      <MapPinIcon className="h-5 w-5" />
-                      <span className="font-inter text-lg">
-                        {conference.city && conference.country
-                          ? `${conference.city}, ${conference.country}`
-                          : 'Location TBA'}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="mb-6 grid grid-cols-2 gap-6 md:grid-cols-4">
-                    <div className="rounded-lg bg-white/10 p-4 backdrop-blur-sm">
-                      <div className="mb-2 flex items-center justify-center gap-2">
-                        <UsersIcon className="h-5 w-5 text-brand-sunbeam-yellow" />
-                        <span className="font-space-grotesk text-2xl font-bold text-white">
-                          {uniqueSpeakersCount}
-                        </span>
-                      </div>
-                      <p className="font-inter text-sm text-white/80">
-                        Speakers
-                      </p>
-                    </div>
-
-                    <div className="rounded-lg bg-white/10 p-4 backdrop-blur-sm">
-                      <div className="mb-2 flex items-center justify-center gap-2">
-                        <MicrophoneIcon className="h-5 w-5 text-brand-fresh-green" />
-                        <span className="font-space-grotesk text-2xl font-bold text-white">
-                          {totalTalks}
-                        </span>
-                      </div>
-                      <p className="font-inter text-sm text-white/80">Talks</p>
-                    </div>
-
-                    <div className="rounded-lg bg-white/10 p-4 backdrop-blur-sm">
-                      <div className="mb-2 flex items-center justify-center gap-2">
-                        <TrophyIcon className="h-5 w-5 text-brand-sunbeam-yellow" />
-                        <span className="font-space-grotesk text-2xl font-bold text-white">
-                          {workshopCount}
-                        </span>
-                      </div>
-                      <p className="font-inter text-sm text-white/80">
-                        Workshops
-                      </p>
-                    </div>
-
-                    <div className="flex flex-col items-center justify-center">
-                      <QRCodeDisplay qrCodeUrl={qrCodeUrl} size={80} />
-                      <p className="font-inter mt-2 text-center text-xs text-white/80">
-                        Scan for Program
-                      </p>
-                    </div>
-                  </div>
-
-                  <p className="font-inter mx-auto mb-4 max-w-2xl text-lg text-white/95">
-                    {conferenceDescription || fallbackDescription}
-                  </p>
+                {/* Width only: the card takes its Format's aspect. */}
+                <div style={{ width: 'min(600px, calc(100vw - 3rem))' }}>
+                  <PromoCard
+                    title={conference.title}
+                    date={eventDate}
+                    place={
+                      conference.city && conference.country
+                        ? `${conference.city}, ${conference.country}`
+                        : 'Location TBA'
+                    }
+                    counts={{
+                      speakers: uniqueSpeakersCount,
+                      talks: totalTalks,
+                      workshops: workshopCount,
+                    }}
+                    description={conferenceDescription || fallbackDescription}
+                    qrCodeUrl={qrCodeUrl}
+                  />
                 </div>
-              </div>
-            </DownloadableImage>
+              </DownloadableImage>
+            </FormatSwitch>
           </div>
 
           {/* Photo Gallery Tab (#1191: current or a previous edition's featured photos) */}

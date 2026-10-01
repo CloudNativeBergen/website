@@ -347,18 +347,19 @@ describe('Promo Studio Save to gallery (#1164)', () => {
 })
 
 describe('Promo Studio Formats (#1247)', () => {
-  it('has one Format switch above the speaker grid and one above the sponsor grid, each starting square', async () => {
+  it('has one Format switch above the promo, the speaker grid and the sponsor grid, each starting square', async () => {
     render(
       await MarketingPage({
         searchParams: Promise.resolve({ task: 'render-1', speaker: 'ada' }),
       }),
     )
     const groups = screen.getAllByRole('radiogroup', { name: 'Format' })
-    // Two: the meme generator, the promo and the photo collage keep their shapes.
-    expect(groups).toHaveLength(2)
+    // Three: the promo (#1250), the speakers and the sponsors. The meme
+    // generator and the photo collage keep their shapes.
+    expect(groups).toHaveLength(3)
     for (const [group, label] of [
-      [groups[0], 'speakers'],
-      [groups[1], 'sponsors'],
+      [groups[1], 'speakers'],
+      [groups[2], 'sponsors'],
     ] as const) {
       const tab = group.parentElement!.parentElement!
       const grid = within(tab).getByRole('region', { name: `All ${label}` })
@@ -379,13 +380,66 @@ describe('Promo Studio Formats (#1247)', () => {
       ])
     }
     // The pinned card is inside its tab's switch too: it changes with the grid.
-    const speakersTab = groups[0].parentElement!.parentElement!
+    const speakersTab = groups[1].parentElement!.parentElement!
     expect(
       within(speakersTab).getByRole('region', { name: 'Card for your Task' }),
     ).toBeTruthy()
   })
 
-  it('opens both switches on the Format a gallery entry names, and ignores one it does not know', async () => {
+  it('puts the promo under its own switch, starting square, with every element (#1250)', async () => {
+    render(await MarketingPage({ searchParams: Promise.resolve({}) }))
+    const [group] = screen.getAllByRole('radiogroup', { name: 'Format' })
+    const tab = group.parentElement!.parentElement!
+    const promo = tab.querySelector<HTMLElement>('[data-card="promo"]')!
+    expect(promo.dataset.format).toBe('square')
+    expect(
+      group.compareDocumentPosition(promo) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+    // No other card shares the promo's switch.
+    expect(tab.querySelectorAll('[data-card]')).toHaveLength(1)
+    const text = (name: string) =>
+      promo.querySelector(`[data-card-element="${name}"]`)?.textContent
+    expect(text('title')).toBe('Test Conference')
+    // No start date: the line is left out, never invented.
+    expect(text('date')).toBeUndefined()
+    expect(text('place')).toBe('Location TBA')
+    expect(text('counts')).toBe('2Speakers2Talks0Workshops')
+    expect(text('description')).toBe(
+      'Join 2 confirmed speakers at Test Conference for a day of talks, hands-on workshops and meaningful connections.',
+    )
+    expect(
+      promo.querySelector('[data-card-element="qr"] img')?.getAttribute('src'),
+    ).toBe('data:image/png;base64,AA==')
+    // Its gallery card is the conference tab's, with no subject.
+    const card = promo.closest<HTMLElement>('[data-testid="card"]')!
+    expect(JSON.parse(card.getAttribute('data-studio')!)).toEqual({
+      tab: 'conference',
+      title: 'Test Conference promo',
+    })
+  })
+
+  it('reopens a promo gallery entry on its tab in its Format (#1250)', async () => {
+    const query = Object.fromEntries(
+      new URL(
+        openInStudioHref({
+          tab: 'conference',
+          speakerId: null,
+          sponsorId: null,
+          project: null,
+          format: 'portrait',
+        }),
+        'https://x',
+      ).searchParams,
+    )
+    render(await MarketingPage({ searchParams: Promise.resolve(query) }))
+    expect(screen.getByTestId('tabs').getAttribute('data-tab')).toBe(
+      'conference',
+    )
+    const promo = document.querySelector<HTMLElement>('[data-card="promo"]')!
+    expect(promo.dataset.format).toBe('portrait')
+  })
+
+  it('opens every switch on the Format a gallery entry names, and ignores one it does not know', async () => {
     const checked = () =>
       screen.getAllByRole('radiogroup', { name: 'Format' }).map((group) =>
         within(group)
@@ -406,14 +460,14 @@ describe('Promo Studio Formats (#1247)', () => {
       ).searchParams,
     )
     render(await MarketingPage({ searchParams: Promise.resolve(query) }))
-    expect(checked()).toEqual(['Landscape', 'Landscape'])
+    expect(checked()).toEqual(['Landscape', 'Landscape', 'Landscape'])
     cleanup()
     render(
       await MarketingPage({
         searchParams: Promise.resolve({ format: 'story' }),
       }),
     )
-    expect(checked()).toEqual(['Square', 'Square'])
+    expect(checked()).toEqual(['Square', 'Square', 'Square'])
   })
 })
 

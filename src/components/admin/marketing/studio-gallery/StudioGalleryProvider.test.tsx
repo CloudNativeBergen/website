@@ -26,7 +26,10 @@ import {
   type StudioCard,
   type VideoOrigin,
 } from '@/components/common/image-capture'
-import { FormatSwitch } from '@/components/admin/marketing/studio-cards'
+import {
+  FormatSwitch,
+  PromoCard,
+} from '@/components/admin/marketing/studio-cards'
 import { StudioTaskProvider } from '../StudioTaskProvider'
 import { StudioGalleryProvider } from './StudioGalleryProvider'
 
@@ -43,6 +46,9 @@ const mocks = vi.hoisted(() => ({
   pixels: 'rendered card pixels' as BlobPart,
 }))
 vi.mock('html2canvas-pro', () => ({ default: mocks.rasterize }))
+vi.mock('@/components/CloudNativePattern', () => ({
+  CloudNativePattern: () => null,
+}))
 vi.mock('@vercel/blob/client', () => ({ upload: mocks.blobUpload }))
 vi.mock('@/lib/trpc/client', () => ({
   api: {
@@ -245,6 +251,85 @@ describe('Save to gallery on a studio card', () => {
       expect(mocks.uploader.mock.calls[0][2]).toEqual({
         kind: 'image',
         studio: { tab: 'speakers', format: 'portrait' },
+      })
+    } finally {
+      context.mockRestore()
+      toBlob.mockRestore()
+    }
+  })
+
+  it('captures the conference promo at its Format’s pixels for the Task and the gallery (#1250)', async () => {
+    const drawImage = vi.fn()
+    const context = vi
+      .spyOn(HTMLCanvasElement.prototype, 'getContext')
+      .mockReturnValue({ drawImage } as unknown as CanvasRenderingContext2D)
+    const sizes: number[][] = []
+    const toBlob = vi
+      .spyOn(HTMLCanvasElement.prototype, 'toBlob')
+      .mockImplementation(function (this: HTMLCanvasElement, callback) {
+        sizes.push([this.width, this.height])
+        callback(new Blob([mocks.pixels], { type: 'image/png' }))
+      })
+    try {
+      renderStudio(
+        <FormatSwitch>
+          <DownloadableImage
+            filename="cnd-conference-promo"
+            studio={{ tab: 'conference', title: 'CND promo' }}
+          >
+            <div data-testid="promo">
+              <PromoCard
+                title="CND"
+                place="Bergen, Norway"
+                counts={{ speakers: 3, talks: 4, workshops: 1 }}
+                description="Talks."
+                // jsdom never loads an image, so the capture would wait on
+                // it forever; the QR is asserted in StudioCards.test.tsx.
+                qrCodeUrl=""
+              />
+            </div>
+          </DownloadableImage>
+        </FormatSwitch>,
+        'render-1',
+      )
+      sized('promo')
+      fireEvent.click(screen.getByRole('radio', { name: /Landscape/ }))
+      expect(
+        screen
+          .getByTestId('promo')
+          .querySelector<HTMLElement>('[data-card="promo"]')!.dataset.format,
+      ).toBe('landscape')
+
+      // The render Task gets the Format shown, at exactly its pixels.
+      fireEvent.click(screen.getByRole('button', { name: 'Attach to Task' }))
+      await waitFor(() => expect(mocks.mutate).toHaveBeenCalledTimes(1))
+      expect(sizes).toEqual([[1200, 628]])
+      expect(mocks.fetch.mock.calls[0][1].body.get('file').name).toBe(
+        'cnd-conference-promo-landscape.png',
+      )
+
+      const form = await openDialog(
+        screen.getByRole('button', { name: 'Save to gallery' }),
+      )
+      expect(form.textContent).toContain(
+        'Saved as Landscape (1200×628 px), marked with this edition.',
+      )
+      // The promo knows no subject, so its alt text is the organizer's.
+      fireEvent.change(within(form).getByLabelText('Alt text'), {
+        target: { value: 'CND in Bergen: 3 speakers, 4 talks, 1 workshop' },
+      })
+      fireEvent.click(within(form).getByRole('button', { name: 'Save' }))
+      await waitFor(() => expect(mocks.uploader).toHaveBeenCalledTimes(1))
+      expect(mocks.rasterize.mock.calls[1][1]).toMatchObject({
+        scale: 1200 / 256,
+      })
+      expect(sizes).toEqual([
+        [1200, 628],
+        [1200, 628],
+      ])
+      expect(mocks.uploader.mock.calls[0][2]).toEqual({
+        kind: 'image',
+        studio: { tab: 'conference', format: 'landscape' },
       })
     } finally {
       context.mockRestore()

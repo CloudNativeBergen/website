@@ -16,7 +16,7 @@ export const StudioSearchParamsSchema = z.object({
   // proves it this organization's.
   project: StudioDocumentIdSchema,
   tab: z.enum(STUDIO_TABS).optional().catch(undefined),
-  // The Format to open the speaker and sponsor switches on: a gallery entry
+  // The Format to open the promo, speaker and sponsor switches on: a gallery entry
   // reopened in the studio comes back in the shape it was saved in.
   format: studioFormatSchema.optional().catch(undefined),
 })

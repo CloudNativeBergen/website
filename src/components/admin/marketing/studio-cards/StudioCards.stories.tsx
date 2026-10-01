@@ -4,6 +4,8 @@ import { captureImage } from '@/components/common/image-capture'
 import { STUDIO_FORMATS, type StudioFormat } from '@/lib/marketing-asset'
 import {
   FormatSwitch,
+  PROMO_CARD_ELEMENTS,
+  PromoCard,
   SPEAKER_CARD_ELEMENTS,
   SPONSOR_CARD_ELEMENTS,
   SpeakerCard,
@@ -49,23 +51,56 @@ const GOLD = {
   tierType: 'standard' as const,
 }
 
+const PROMO = {
+  title: 'Cloud Native Days Norway',
+  date: 'June 10–11, 2026',
+  place: 'Bergen, Norway',
+  counts: { speakers: 42, talks: 38, workshops: 5 },
+  description:
+    'Two days of talks, hands-on workshops and meaningful connections, by and for the cloud native community.',
+}
+const LONG_PROMO = {
+  title: 'Cloud Native Days Norway 2026 — the Bergen Community Edition',
+  date: 'Wednesday June 10 – Thursday June 11, 2026',
+  place: 'Grieghallen Conference Centre, Edvard Griegs plass 1, Bergen, Norway',
+  counts: { speakers: 128, talks: 112, workshops: 24 },
+  description:
+    'Two full days of talks, hands-on workshops and meaningful connections, by and for the cloud native community: platform engineering, observability, security and the software supply chain, with a hallway track that runs from the first coffee to the last train home and a community evening by the harbour.',
+}
+
 const ELEMENTS = {
   speaker: SPEAKER_CARD_ELEMENTS,
   sponsor: SPONSOR_CARD_ELEMENTS,
+  promo: PROMO_CARD_ELEMENTS,
 } as const
 
 interface CardArgs {
-  template: 'speaker' | 'sponsor'
+  template: 'speaker' | 'sponsor' | 'promo'
   format: StudioFormat
   /** The card's CSS width; the capture is the Format's pixels regardless. */
   width: number
   /** Long names, titles and event names: what the clamps are for. */
   long?: boolean
+  /** A promo for a conference with no date yet: the date line is left out. */
+  noDate?: boolean
 }
 
 const LONG_EVENT = 'Cloud Native Days Norway 2026, Bergen — Grieghallen'
 
-function Card({ template, format, width, long = false }: CardArgs) {
+function Card({ template, format, width, long = false, noDate }: CardArgs) {
+  if (template === 'promo') {
+    const promo = long ? LONG_PROMO : PROMO
+    return (
+      <div style={{ width }}>
+        <PromoCard
+          {...promo}
+          date={noDate ? undefined : promo.date}
+          qrCodeUrl={QR}
+          format={format}
+        />
+      </div>
+    )
+  }
   return (
     <div style={{ width }}>
       {template === 'speaker' ? (
@@ -125,7 +160,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'The speaker card and the sponsor thank-you card in each of the three Formats (square 1080×1080, landscape 1200×628, portrait 1080×1350). Every element survives in every Format; only its place and size change.',
+          'The speaker card, the sponsor thank-you card and the conference promo in each of the three Formats (square 1080×1080, landscape 1200×628, portrait 1080×1350). Every element survives in every Format; only its place and size change.',
       },
     },
   },
@@ -152,6 +187,14 @@ function inside(part: DOMRect, frame: DOMRect): boolean {
   )
 }
 
+/** Whether two elements share more than a pixel of rounding. */
+function overlap(a: DOMRect, b: DOMRect): boolean {
+  return (
+    Math.min(a.right, b.right) - Math.max(a.left, b.left) > 1 &&
+    Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 1
+  )
+}
+
 const provesEveryElementAndTheCapture: Story['play'] = async ({
   canvasElement,
   args,
@@ -161,7 +204,12 @@ const provesEveryElementAndTheCapture: Story['play'] = async ({
   await expect(card!.dataset.card).toBe(args.template)
   await expect(card!.dataset.format).toBe(args.format)
   const frame = card!.getBoundingClientRect()
-  for (const name of ELEMENTS[args.template]) {
+  const expected = ELEMENTS[args.template].filter(
+    (name) => !(args.noDate && name === 'date'),
+  )
+  if (args.noDate)
+    await expect(card!.querySelector('[data-card-element="date"]')).toBeNull()
+  for (const name of expected) {
     const element = card!.querySelector<HTMLElement>(
       `[data-card-element="${name}"]`,
     )
@@ -172,6 +220,19 @@ const provesEveryElementAndTheCapture: Story['play'] = async ({
       true,
     )
   }
+  // No element is drawn over another: a layout that runs out of room
+  // collides inside the frame before it leaves it.
+  const placed = expected.map((name) => ({
+    name,
+    rect: card!
+      .querySelector<HTMLElement>(`[data-card-element="${name}"]`)!
+      .getBoundingClientRect(),
+  }))
+  for (const [i, a] of placed.entries())
+    for (const b of placed.slice(i + 1))
+      await expect(overlap(a.rect, b.rect), `${a.name} over ${b.name}`).toBe(
+        false,
+      )
   // The real capture, at exactly the Format's pixels.
   const { width, height } = STUDIO_FORMATS[args.format]
   const blob = await captureImage(card!, { width, height })
@@ -232,6 +293,92 @@ export const SponsorSquareLongText: Story = {
 export const SponsorLandscapeLongText: Story = {
   args: { template: 'sponsor', format: 'landscape', long: true },
   play: provesEveryElementAndTheCapture,
+}
+
+export const PromoSquare: Story = {
+  args: { template: 'promo', format: 'square' },
+  play: provesEveryElementAndTheCapture,
+}
+export const PromoLandscape: Story = {
+  args: { template: 'promo', format: 'landscape' },
+  play: provesEveryElementAndTheCapture,
+}
+export const PromoPortrait: Story = {
+  args: { template: 'promo', format: 'portrait' },
+  play: provesEveryElementAndTheCapture,
+}
+export const PromoSquareLongText: Story = {
+  args: { template: 'promo', format: 'square', long: true },
+  play: provesEveryElementAndTheCapture,
+}
+export const PromoLandscapeLongText: Story = {
+  args: { template: 'promo', format: 'landscape', long: true },
+  play: provesEveryElementAndTheCapture,
+}
+export const PromoPortraitLongText: Story = {
+  args: { template: 'promo', format: 'portrait', long: true },
+  play: provesEveryElementAndTheCapture,
+}
+/** A conference without dates: the date line is left out, never invented. */
+export const PromoLandscapeWithoutDate: Story = {
+  args: { template: 'promo', format: 'landscape', noDate: true },
+  play: provesEveryElementAndTheCapture,
+}
+
+/** The promo tab: its own switch, the promo following it (#1250). */
+export const PromoTab: Story = {
+  args: { template: 'promo', format: 'square', width: 600 },
+  render: () => (
+    <FormatSwitch>
+      <div style={{ width: 600 }}>
+        <PromoCard {...PROMO} qrCodeUrl={QR} />
+      </div>
+    </FormatSwitch>
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const format = () =>
+      canvasElement.querySelector<HTMLElement>('[data-card="promo"]')!.dataset
+        .format
+    await expect(format()).toBe('square')
+    await userEvent.click(canvas.getByRole('radio', { name: /Landscape/ }))
+    await expect(format()).toBe('landscape')
+    // The downloaded promo never follows the admin theme: the light brand
+    // gradient (#1d4ed8 here) and the same count icon colours in light and
+    // dark alike. Dark is toggled here because the test runner does not play
+    // the Dark story.
+    const card = canvasElement.querySelector<HTMLElement>(
+      '[data-card="promo"]',
+    )!
+    const look = () => ({
+      background: getComputedStyle(card).backgroundImage,
+      icons: Array.from(card.querySelectorAll('[data-count] svg')).map(
+        (icon) => getComputedStyle(icon).color,
+      ),
+    })
+    const root = document.documentElement
+    const wasDark = root.classList.contains('dark')
+    try {
+      root.classList.toggle('dark', false)
+      const light = look()
+      await expect(light.background).toContain('rgb(29, 78, 216)')
+      await expect(light.icons).toEqual([
+        'rgb(250, 204, 21)',
+        'rgb(16, 185, 129)',
+        'rgb(250, 204, 21)',
+      ])
+      root.classList.toggle('dark', true)
+      await expect(look()).toEqual(light)
+    } finally {
+      root.classList.toggle('dark', wasDark)
+    }
+  },
+}
+
+/** The promo tab in dark mode, through the global theme. */
+export const PromoTabDark: Story = {
+  ...PromoTab,
+  globals: { theme: 'dark' },
 }
 
 /** The switch above a tab's grid (spec §4): every card on the tab follows it. */

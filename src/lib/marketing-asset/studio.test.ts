@@ -51,7 +51,7 @@ describe('openInStudioHref', () => {
         format: 'portrait',
       }),
     ).toBe('/admin/marketing/studio?tab=speakers&speaker=ada&format=portrait')
-    // A Format on a tab without a switch is never put in the URL.
+    // The promo comes back in its shape too (#1250).
     expect(
       openInStudioHref({
         tab: 'conference',
@@ -60,7 +60,19 @@ describe('openInStudioHref', () => {
         project: null,
         format: 'portrait',
       }),
-    ).toBe('/admin/marketing/studio?tab=conference')
+    ).toBe('/admin/marketing/studio?tab=conference&format=portrait')
+    // A Format on a tab without a switch is never put in the URL.
+    for (const tab of ['meme-generator', 'photo-gallery'] as const) {
+      expect(
+        openInStudioHref({
+          tab,
+          speakerId: null,
+          sponsorId: null,
+          project: null,
+          format: 'landscape',
+        }),
+      ).toBe(`/admin/marketing/studio?tab=${tab}`)
+    }
   })
 
   it('opens a subjectless tab alone, and never pairs a subject with the wrong tab', () => {
@@ -100,9 +112,13 @@ describe('studioOriginSchema', () => {
       studioOriginSchema.safeParse({ tab: 'speakers', format: 'story' })
         .success,
     ).toBe(false)
-    // Only a speaker or sponsor card comes in a Format: the meme generator,
-    // the collage and (until slice 4) the promo keep their shapes.
-    for (const tab of ['meme-generator', 'conference', 'photo-gallery']) {
+    // The promo comes in a Format too (#1250).
+    expect(
+      studioOriginSchema.parse({ tab: 'conference', format: 'landscape' }),
+    ).toEqual({ tab: 'conference', format: 'landscape' })
+    // Only the speaker, sponsor and promo cards come in a Format: the meme
+    // generator and the collage keep their shapes.
+    for (const tab of ['meme-generator', 'photo-gallery']) {
       expect(
         studioOriginSchema.safeParse({ tab, format: 'portrait' }).success,
       ).toBe(false)

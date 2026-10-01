@@ -25,6 +25,25 @@ export interface IconLineSizes {
 }
 
 /**
+ * How a card's backdrop looks. `dark` (speaker and sponsor cards) is slate
+ * under the dark pattern, or the card's own gradient with the pattern off.
+ * `brand` (the conference promo) is the conference's brand gradient under the
+ * brand pattern and a shade, as the promo always looked — read from the
+ * gradient variable, not `.bg-brand-gradient`, whose `.dark` override would
+ * make the downloaded promo follow the organizer's admin theme.
+ */
+const TONES = {
+  dark: {
+    pattern: { variant: 'dark', opacity: 0.25, baseSize: 35, iconCount: 45 },
+    shade: false,
+  },
+  brand: {
+    pattern: { variant: 'brand', opacity: 0.15, baseSize: 45, iconCount: 80 },
+    shade: true,
+  },
+} as const
+
+/**
  * The frame every studio card is drawn in (docs/MARKETING_STUDIO_FORMATS_
  * SPEC.md §3): the Format's aspect, the gradient, and the brand pattern
  * filling the whole frame whatever the shape. `cqw` units inside it are
@@ -34,41 +53,48 @@ export interface IconLineSizes {
 export function CardFrame({
   kind,
   format,
-  gradient,
+  tone = 'dark',
+  gradient = '',
   pattern,
   seed,
   className = '',
   children,
 }: {
-  kind: 'speaker' | 'sponsor'
+  kind: 'speaker' | 'sponsor' | 'promo'
   format: StudioFormat
-  /** Tailwind gradient stops, used when the pattern is off. */
-  gradient: string
+  tone?: keyof typeof TONES
+  /** Tailwind gradient stops, used by the dark tone when the pattern is off. */
+  gradient?: string
   pattern: boolean
   seed: number
   className?: string
   children: React.ReactNode
 }) {
-  const background = pattern
-    ? 'from-slate-900 via-blue-900 to-slate-900'
-    : gradient
+  const look = TONES[tone]
+  const brand = tone === 'brand'
+  const background = brand
+    ? ''
+    : `bg-linear-to-br ${pattern ? 'from-slate-900 via-blue-900 to-slate-900' : gradient}`
   return (
     <div
       data-card={kind}
       data-format={format}
-      className={`group @container relative w-full overflow-hidden rounded-2xl border border-gray-200 bg-linear-to-br ${background} text-white transition-all duration-300 hover:shadow-xl ${className}`}
-      style={{ aspectRatio: studioFormatAspect(format) }}
+      className={`group @container relative w-full overflow-hidden rounded-2xl border border-gray-200 ${background} text-white transition-all duration-300 hover:shadow-xl ${className}`}
+      style={{
+        aspectRatio: studioFormatAspect(format),
+        ...(brand && { backgroundImage: 'var(--gradient-brand)' }),
+      }}
     >
       {pattern && (
         <CloudNativePattern
           className="absolute inset-0"
-          variant="dark"
-          opacity={0.25}
+          {...look.pattern}
           animated
-          baseSize={35}
-          iconCount={45}
           seed={seed}
         />
+      )}
+      {look.shade && (
+        <div aria-hidden className="absolute inset-0 bg-black/30" />
       )}
       <div className="relative h-full">{children}</div>
     </div>

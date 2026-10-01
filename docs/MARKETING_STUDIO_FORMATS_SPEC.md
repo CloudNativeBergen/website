@@ -50,7 +50,12 @@ cards exist to be recognisable across platforms. The brand pattern fills every F
 - **Sponsor card.** Square stacks tagline, logo, tier, event line, QR. Landscape is today's 16:9
   layout widened to 1.91:1, logo left, text right. Portrait stacks with the logo given the middle
   third.
-- **Conference promo** (second slice): the same rule; its layout is decided when that slice is built.
+- **Conference promo** (second slice, #1250): the same rule, in the brand gradient it always had,
+  independent of the organizer's admin theme. Square stacks title, date and place, the counts, the
+  description, and the QR beside its scan line. Landscape keeps the title, date and place across the
+  top, the description over the counts on the left and the QR in the lower right. Portrait is the
+  square's stack with the date and place on their own lines and the QR centred below. A conference
+  without a start date has no date line; one is never invented.
 
 Every template has a Storybook story per Format, and the capture is checked against the story: the
 shot succeeding is not the same as the shot being of the right thing.
