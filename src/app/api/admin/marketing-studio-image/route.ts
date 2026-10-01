@@ -10,6 +10,13 @@ import {
 import { requireDocumentInCurrentConference } from '@/server/tenancy'
 import { TaskIdSchema } from '@/server/schemas/marketing'
 import { getStudioTask } from '@/lib/marketing/render-sanity'
+import { storedRenderFormat } from '@/lib/marketing/render-format'
+import {
+  studioFormatLabel,
+  studioFormatSchema,
+  STUDIO_FORMATS,
+} from '@/lib/marketing-asset/format'
+import { pngSize } from '@/lib/marketing-asset/png-size'
 
 export async function POST(request: Request) {
   try {
@@ -20,8 +27,14 @@ export async function POST(request: Request) {
     const form = await request.formData()
     const parsed = TaskIdSchema.safeParse({ taskId: form.get('taskId') })
     const file = form.get('file')
+    // The Format the studio showed, sent from a tab with a Format switch
+    // (Formats spec §4); absent from the tabs without one.
+    const shown = form.has('format')
+      ? studioFormatSchema.safeParse(form.get('format'))
+      : null
     if (
       !parsed.success ||
+      shown?.success === false ||
       !(file instanceof File) ||
       !['image/png', 'image/jpeg', 'image/webp'].includes(file.type) ||
       file.size > 20 * 1024 * 1024
@@ -44,6 +57,29 @@ export async function POST(request: Request) {
         { error: 'Only studio render Tasks accept a render.' },
         { status: 400 },
       )
+    // The render attached to the Task is the Task's Format, at its pixels —
+    // checked on the bytes, before anything is uploaded.
+    if (shown?.success) {
+      const wanted = storedRenderFormat(task.format)
+      if (shown.data !== wanted)
+        return NextResponse.json(
+          {
+            error: `This Task asks for ${studioFormatLabel(wanted)}, and the studio is showing ${studioFormatLabel(shown.data)}. Switch the studio to ${STUDIO_FORMATS[wanted].label}, or change the Format on the Task.`,
+          },
+          { status: 400 },
+        )
+      const size = pngSize(
+        new Uint8Array(await file.slice(0, 24).arrayBuffer()),
+      )
+      const { width, height } = STUDIO_FORMATS[wanted]
+      if (size?.width !== width || size.height !== height)
+        return NextResponse.json(
+          {
+            error: `The image is not ${studioFormatLabel(wanted)}. Make it again in the studio.`,
+          },
+          { status: 400 },
+        )
+    }
     const asset = await clientWrite.assets.upload(
       'image',
       Buffer.from(await file.arrayBuffer()),

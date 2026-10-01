@@ -207,6 +207,7 @@ function editorTask(overrides: Partial<TaskEditorTask> = {}): TaskEditorTask {
   return {
     ...view(),
     _rev: 'rev-task',
+    format: null,
     approvedByName: null,
     assigneeName: 'Ada',
     targetPage: '/cfp',
@@ -855,6 +856,53 @@ describe('marketing.task.update', () => {
     await expect(
       marketing().task.update({ taskId: 'task-ours', title: 'x' }),
     ).rejects.toMatchObject({ code: 'CONFLICT' })
+  })
+
+  const RENDER = {
+    kind: 'studioRender' as const,
+    channel: null,
+    status: 'open' as const,
+    variantId: null,
+    key: 'cfpOpenRender',
+    format: 'square' as const,
+  }
+
+  it('stores the Format an organizer chooses for an open render Task (Formats spec §4)', async () => {
+    h.getTaskEditorData.mockResolvedValue(stored(RENDER))
+    await marketing().task.update({
+      taskId: 'task-ours',
+      rev: 'rev-loaded',
+      format: 'portrait',
+    })
+    expect(h.updateTaskFields).toHaveBeenCalledWith(
+      'task-ours',
+      'rev-loaded',
+      { format: 'portrait' },
+      [],
+    )
+  })
+
+  it('refuses a Format on any other Kind, and on a render already made or skipped', async () => {
+    for (const task of [
+      {},
+      CHECKLIST,
+      { ...RENDER, status: 'done' as const, complete: true },
+      { ...RENDER, status: 'skipped' as const },
+    ]) {
+      h.getTaskEditorData.mockResolvedValue(stored(task))
+      await expect(
+        marketing().task.update({ taskId: 'task-ours', format: 'landscape' }),
+      ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    }
+    // A value no Format has never reaches the Task either.
+    h.getTaskEditorData.mockResolvedValue(stored(RENDER))
+    await expect(
+      marketing().task.update({
+        taskId: 'task-ours',
+        format: 'banner' as never,
+      }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    expect(h.updateTaskFields).not.toHaveBeenCalled()
   })
 })
 

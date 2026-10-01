@@ -226,6 +226,47 @@ describe('saveTaskRenderToGallery', () => {
     expect(gallery()[0]._id).not.toContain('.')
   })
 
+  it('records the tab and Format a card was attached from, and a re-render from elsewhere drops them (Formats spec §4)', async () => {
+    const card = { tab: 'speakers', format: 'landscape' } as const
+    await saveTaskRenderToGallery({ ...entry('image-a'), studio: card })
+    expect(gallery()[0].studio).toEqual(card)
+    // Re-rendered in another Format: the entry says the new one.
+    await saveTaskRenderToGallery({
+      ...entry('image-b'),
+      studio: { tab: 'speakers', format: 'portrait' },
+    })
+    expect(gallery()[0].studio).toEqual({
+      tab: 'speakers',
+      format: 'portrait',
+    })
+    // Re-rendered on a tab without a Format: nothing is claimed for it.
+    await saveTaskRenderToGallery(entry('image-c'))
+    expect(gallery()[0]).not.toHaveProperty('studio')
+    expect(gallery()).toHaveLength(1)
+  })
+
+  it('a Studio draft of the entry gets the new Format with the new image', async () => {
+    await saveTaskRenderToGallery({
+      ...entry('image-a'),
+      studio: { tab: 'sponsors', format: 'square' },
+    })
+    const published = gallery()[0]
+    h.dataset.push({
+      ...structuredClone(published),
+      _id: `drafts.${published._id}`,
+      title: 'Draft title',
+    })
+    await saveTaskRenderToGallery({
+      ...entry('image-b'),
+      studio: { tab: 'sponsors', format: 'portrait' },
+    })
+    const draft = h.dataset.find((d) => d._id === `drafts.${published._id}`)!
+    expect(draft).toMatchObject({
+      title: 'Draft title',
+      studio: { tab: 'sponsors', format: 'portrait' },
+    })
+  })
+
   it('a subject that fails its guards is left out, its name with it', async () => {
     editTask({ alt: null })
     admitted.mockResolvedValueOnce(null)

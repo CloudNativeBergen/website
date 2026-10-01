@@ -6,6 +6,7 @@
  */
 
 import type { SocialVariantEditorData, VariantStatus } from '@/lib/social/types'
+import type { StudioFormat } from '@/lib/marketing-asset/format'
 import type {
   Milestone,
   ResolvedMilestone,
@@ -222,6 +223,12 @@ export interface TaskEditorTask extends TaskView {
    */
   fromGallery?: { title: string | null } | null
   origin: TaskOrigin | null
+  /**
+   * studioRender: the Format the render is made in, square when the Task has
+   * none (docs/MARKETING_STUDIO_FORMATS_SPEC.md §4, §6). Null for every other
+   * Kind: a post's Format is its Channel's.
+   */
+  format: StudioFormat | null
 }
 
 export interface StoredTaskEditorData {

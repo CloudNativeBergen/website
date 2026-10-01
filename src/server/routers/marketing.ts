@@ -82,7 +82,10 @@ import {
 import {
   saveTaskRenderToGallery,
   taskRenderAssetDocumentId,
+  type TaskRenderCard,
 } from '@/lib/marketing-asset/task-render'
+import { studioFormatLabel } from '@/lib/marketing-asset/format'
+import { storedRenderFormat } from '@/lib/marketing/render-format'
 import {
   AttachTaskAssetSchema,
   CreateTaskSchema,
@@ -615,6 +618,7 @@ async function trySaveRenderToGallery(
   task: StudioTask,
   imageAssetId: string,
   conferenceId: string,
+  studio: TaskRenderCard | undefined,
 ): Promise<'saved' | 'superseded' | 'failed'> {
   try {
     const outcome = await saveTaskRenderToGallery({
@@ -622,6 +626,7 @@ async function trySaveRenderToGallery(
       conferenceId,
       taskId: task._id,
       imageAssetId,
+      ...(studio ? { studio } : {}),
       admitSubject: subjectOfThisOrganization,
     })
     return outcome === 'superseded' ? 'superseded' : 'saved'
@@ -1451,7 +1456,22 @@ export const marketingRouter = router({
             message: 'Only unsent, open outreach Tasks can change destination.',
           })
         }
+        // The Format a render is made in, chosen before it is made: a render
+        // attached already is in the Format it was made in (Formats spec §4).
+        if (
+          input.format !== undefined &&
+          (data.task.kind !== 'studioRender' || data.task.status !== 'open')
+        ) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message:
+              data.task.kind === 'studioRender'
+                ? 'The Format is chosen before the render is made.'
+                : 'Only a studio render Task has a Format.',
+          })
+        }
         const fields: Record<string, unknown> = {}
+        if (input.format !== undefined) fields.format = input.format
         let updateCode: MutationShortCode | undefined
         if (input.targetPage !== undefined) {
           fields.targetPage = input.targetPage
@@ -1839,6 +1859,14 @@ export const marketingRouter = router({
           })
         // Or an image asset of this organization's gallery (spec §4.3,
         // #1166): proven ours before anything of it is read.
+        // A card made in the studio is the Task's Format (Formats spec §4),
+        // refused before anything is read or written of the image.
+        const card = 'assetId' in input ? input.studio : undefined
+        if (card && card.format !== storedRenderFormat(task.format))
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: `This Task asks for ${studioFormatLabel(storedRenderFormat(task.format))}, and the render is ${studioFormatLabel(card.format)}.`,
+          })
         let pick: GalleryPickForTask | null = null
         let assetId: string
         if ('marketingAssetId' in input) {
@@ -1956,7 +1984,7 @@ export const marketingRouter = router({
         // an entry the organizer has since deleted.
         const gallery =
           !pick && (newImage || task.galleryPending === true)
-            ? await trySaveRenderToGallery(task, assetId, conferenceId)
+            ? await trySaveRenderToGallery(task, assetId, conferenceId, card)
             : 'skipped'
         // Only a mark this save set, or one already there, needs clearing.
         let galleryMarkFailed = false

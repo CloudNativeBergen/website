@@ -252,6 +252,25 @@ describe('getTaskEditorData', () => {
     },
   )
 
+  it('reads the Format of a render Task, square when it has none, and none on a post (Formats spec §6)', async () => {
+    const task = h.dataset.find((doc) => doc._id === 'task-render')!
+    expect(task.kind).toBe('studioRender')
+    // A render made before Formats.
+    delete task.format
+    expect((await getTaskEditorData('task-render', CONF_A))!.task.format).toBe(
+      'square',
+    )
+    task.format = 'landscape'
+    expect((await getTaskEditorData('task-render', CONF_A))!.task.format).toBe(
+      'landscape',
+    )
+    delete task.format
+    const post = h.dataset.find((doc) => doc._id === 'task-li')!
+    post.format = 'landscape'
+    expect((await getTaskEditorData('task-li', CONF_A))!.task.format).toBe(null)
+    delete post.format
+  })
+
   it('flags copy a Template saved verbatim, until an organizer has rewritten it', async () => {
     const task = h.dataset.find((doc) => doc._id === 'task-li')!
     expect(

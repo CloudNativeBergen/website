@@ -2,6 +2,7 @@ import { LIBRARY_IDS } from '@/lib/marketing/library'
 import { MILESTONES } from '@/lib/marketing/milestones'
 import { OUTCOMES, TASK_KINDS, MARKETING_CHANNELS } from '@/lib/marketing/types'
 import { z } from 'zod'
+import { studioFormatSchema } from '@/lib/marketing-asset/format'
 import {
   BUILTIN_TEMPLATE_VERSION,
   optionalCampaigns,
@@ -136,6 +137,8 @@ export const UpdateTaskSchema = z.object({
   instructions: z.string().trim().max(5000).nullable().optional(),
   externalUrl: UrlSchema.nullable().optional(),
   targetPage: SitePathSchema.optional(),
+  /** studioRender only, while it is open (Formats spec §4). */
+  format: studioFormatSchema.optional(),
 })
 
 export const SetTaskAssigneeSchema = z.object({
@@ -195,6 +198,17 @@ export const AttachTaskAssetSchema = z.union([
     // An image asset only: a gallery audio track (a file asset) can never
     // finish a render Task (docs/MARKETING_STUDIO_VIDEO_SPEC.md §6).
     assetId: z.string().regex(/^image-[A-Za-z0-9]+-\d+x\d+-[a-z0-9]+$/),
+    /**
+     * The card it was made from, on a tab with a Format switch (Formats spec
+     * §4): recorded on the Task's gallery entry. Must be the Task's Format.
+     */
+    studio: z
+      .object({
+        tab: z.enum(['speakers', 'sponsors']),
+        format: studioFormatSchema,
+      })
+      .strict()
+      .optional(),
   }),
   z.object({
     ...AttachTaskTarget,

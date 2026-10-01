@@ -354,6 +354,40 @@ describe('attaching a render also saves it to the gallery (#1165)', () => {
     expect(gallery()).toEqual(entry)
   })
 
+  it('records the card and Format the render was attached from on the entry (Formats spec §4)', async () => {
+    Object.assign(task(), { format: 'landscape' })
+    await marketing().task.attachAsset({
+      taskId: TASK,
+      taskRev: task()._rev as string,
+      assetId: FIRST,
+      studio: { tab: 'speakers', format: 'landscape' },
+    })
+    expect(gallery()).toEqual([
+      expect.objectContaining({
+        image: image(FIRST),
+        studio: { tab: 'speakers', format: 'landscape' },
+      }),
+    ])
+  })
+
+  it('refuses a card in another Format than the one of the Task, before anything is written', async () => {
+    // A render Task stored before Formats is square.
+    const before = structuredClone(h.dataset)
+    await expect(
+      marketing().task.attachAsset({
+        taskId: TASK,
+        taskRev: task()._rev as string,
+        assetId: FIRST,
+        studio: { tab: 'speakers', format: 'landscape' },
+      }),
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message:
+        'This Task asks for Square (1080×1080), and the render is Landscape (1200×628).',
+    })
+    expect(h.dataset).toEqual(before)
+  })
+
   it.each([
     ['a speaker with no standing here', 'sp-foreign'],
     ["another organization's sponsor", 'sponsor-foreign'],

@@ -542,6 +542,7 @@ describe('Task editor outreach', () => {
 function pendingData(): TaskEditorData {
   return {
     task: {
+      format: 'square',
       _id: 'render-1',
       _rev: 'r2',
       campaignId: 'campaign-1',

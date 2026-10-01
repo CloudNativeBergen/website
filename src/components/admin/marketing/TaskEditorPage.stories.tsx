@@ -55,6 +55,7 @@ function editorTask(overrides: Partial<TaskEditorTask> = {}): TaskEditorTask {
   return {
     ...view(),
     _rev: 'rev-1',
+    format: null,
     approvedByName: null,
     assigneeName: 'Ada Organizer',
     targetPage: '/cfp',

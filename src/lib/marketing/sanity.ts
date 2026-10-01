@@ -13,6 +13,7 @@ import type { VariantStatus } from '@/lib/social/types'
 import type { Milestone } from './milestones'
 import type { TaskRecords } from './materialize'
 import { recipeToStored } from './recipes'
+import { storedRenderFormat } from './render-format'
 import type {
   SeedCampaign,
   SeedPlan,
@@ -469,6 +470,7 @@ interface RawTaskEditor extends RawTaskView {
   assetId: string | null
   galleryPending: boolean | null
   fromGallery: { title: string | null } | null
+  format: string | null
   subject: {
     _id: string
     _type: string
@@ -520,6 +522,7 @@ export async function getTaskEditorData(
       "assetUrl": asset.asset->url,
       "assetId": asset.asset._ref,
       "galleryPending": kind == "studioRender" && defined(asset.asset) && galleryPending == true,
+      "format": select(kind == "studioRender" => coalesce(format, "square")),
       "fromGallery": select(kind == "studioRender" && defined(asset.asset) && defined(galleryAsset._ref) => { "title": select(galleryAsset->organization._ref == conference->organization._ref => galleryAsset->title) }),
       "subject": subject->{ _id, _type, "name": coalesce(name, title), "slug": slug.current },
       "tagByHand": select(kind == "publishing" && channel == "linkedin" => subject->{
@@ -574,6 +577,7 @@ export async function getTaskEditorData(
       ? { title: row.fromGallery.title ?? null }
       : null,
     origin: row.origin ?? null,
+    format: row.kind === 'studioRender' ? storedRenderFormat(row.format) : null,
   }
   return {
     task,
