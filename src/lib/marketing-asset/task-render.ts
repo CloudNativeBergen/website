@@ -51,7 +51,7 @@ export interface TaskRenderGalleryEntry {
   imageAssetId: string
   /**
    * Where the render was made, when it was a card on a tab with a Format
-   * switch. Absent (the meme generator, a collage, the promo), the entry
+   * switch. Absent (the meme generator, a collage), the entry
    * claims none, and a replaced image's record goes with it.
    */
   studio?: TaskRenderCard

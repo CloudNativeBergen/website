@@ -7,7 +7,11 @@ import {
   ImageAttachmentContext,
   type AttachedCapture,
 } from '@/components/common/image-capture'
-import { studioFormatLabel, type TaskRenderCard } from '@/lib/marketing-asset'
+import {
+  studioFormatLabel,
+  taskRenderCardSchema,
+  type TaskRenderCard,
+} from '@/lib/marketing-asset'
 import { formatMismatch } from '@/lib/marketing/render-format'
 
 /** What the studio's multipart attach route can carry (Vercel's body cut). */
@@ -145,12 +149,12 @@ function ConnectedStudioTask({
       })
       const upload = await response.json()
       if (!response.ok) throw new Error(upload.error || 'Image upload failed')
-      const tab = shown?.card?.tab
-      // The card it was made from, for the Task's gallery entry.
-      const studio: TaskRenderCard | undefined =
-        format && (tab === 'speakers' || tab === 'sponsors')
-          ? { tab, format }
-          : undefined
+      // The card it was made from, for the Task's gallery entry: any tab
+      // with a Format switch, as "Save to gallery" records it.
+      const studio = taskRenderCardSchema.safeParse({
+        tab: shown?.card?.tab,
+        format,
+      }).data
       const input: AttachInput = {
         taskId,
         taskRev: upload.taskRev as string,

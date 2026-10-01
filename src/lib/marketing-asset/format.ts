@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import type { SocialPlatform } from '@/lib/social/types'
 
 /**
  * A studio card's Format (docs/MARKETING_STUDIO_FORMATS_SPEC.md §2): a shape
@@ -42,4 +43,20 @@ export function studioFormatAspect(format: StudioFormat): string {
 export function studioFormatLabel(format: StudioFormat): string {
   const { label, width, height } = STUDIO_FORMATS[format]
   return `${label} (${width}×${height})`
+}
+
+/**
+ * The Format a Channel's feed is laid out for (§6): LinkedIn → landscape,
+ * Bluesky → square, null for a Channel with no native Format. The one
+ * Channel→Format table: the post picker (`./channel-format`) and the render
+ * split (`@/lib/marketing/render-format`) both read it. Here, not in
+ * `./channel-format`, so the render split stays free of the social platform
+ * rules and their domain parser.
+ */
+export function channelFormat(
+  platform: SocialPlatform | null | undefined,
+): StudioFormat | null {
+  if (platform === 'linkedin') return 'landscape'
+  if (platform === 'bluesky') return 'square'
+  return null
 }

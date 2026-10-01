@@ -22,11 +22,12 @@ export type StudioTab = (typeof STUDIO_TABS)[number]
  * the conference promo (#1250). The meme generator and the collage keep
  * their shapes (docs/MARKETING_STUDIO_FORMATS_SPEC.md §1).
  */
-const FORMAT_TABS: ReadonlySet<StudioTab> = new Set([
+const STUDIO_FORMAT_TABS = [
   'conference',
   'speakers',
   'sponsors',
-])
+] as const satisfies readonly StudioTab[]
+const FORMAT_TABS: ReadonlySet<StudioTab> = new Set(STUDIO_FORMAT_TABS)
 
 /** A Sanity image asset id: `image-<hash>-<w>x<h>-<ext>`. */
 const IMAGE_ASSET_ID = /^image-[A-Za-z0-9]+-\d+x\d+-[a-z0-9]+$/
@@ -87,7 +88,7 @@ export type StudioOriginInput = z.output<typeof studioOriginSchema>
  */
 export const taskRenderCardSchema = z
   .object({
-    tab: z.enum(['speakers', 'sponsors']),
+    tab: z.enum(STUDIO_FORMAT_TABS),
     format: studioFormatSchema,
   })
   .strict()

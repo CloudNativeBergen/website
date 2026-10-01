@@ -361,14 +361,17 @@ describe('Studio Task attachment', () => {
 })
 
 describe('the Format of the render Task (Formats spec §4)', () => {
-  /** A speaker card on a tab with a Format switch, opened from the Task. */
-  function setupCard(defaultFormat: 'square' | 'landscape') {
+  /** A card on a tab with a Format switch, opened from the Task. */
+  function setupCard(
+    defaultFormat: 'square' | 'landscape',
+    tab: 'speakers' | 'conference' = 'speakers',
+  ) {
     render(
       <StudioTaskProvider taskId="render-1">
         <FormatSwitch defaultFormat={defaultFormat}>
           <DownloadableImage
-            filename="speaker"
-            studio={{ tab: 'speakers', title: 'Ada' }}
+            filename={tab === 'speakers' ? 'speaker' : 'promo'}
+            studio={{ tab, title: 'Ada' }}
           >
             <div data-testid="speaker-card">Speaker card</div>
           </DownloadableImage>
@@ -435,6 +438,35 @@ describe('the Format of the render Task (Formats spec §4)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Attach to Task' }))
     expect((await screen.findByRole('alert')).textContent).toBe(
       'This Task asks for Landscape (1200×628), and the studio is showing Square (1080×1080). Switch the studio to Landscape, or change the Format on the Task.',
+    )
+    expect(sizes).toEqual([])
+    expect(mocks.upload).not.toHaveBeenCalled()
+    expect(mocks.mutate).not.toHaveBeenCalled()
+  })
+
+  it('names the promo card and its Format too, so the gallery entry reopens it in that Format (#1250)', async () => {
+    const sizes = canvasSizes()
+    setupCard('landscape', 'conference')
+    fireEvent.click(screen.getByRole('button', { name: 'Attach to Task' }))
+    await waitFor(() =>
+      expect(mocks.mutate).toHaveBeenCalledWith({
+        taskId: 'render-1',
+        taskRev: 'upload-rev',
+        assetId: 'image-uploaded',
+        studio: { tab: 'conference', format: 'landscape' },
+      }),
+    )
+    expect(sizes).toEqual([[1200, 628]])
+    expect(mocks.upload.mock.calls[0][1].body.get('format')).toBe('landscape')
+  })
+
+  it('refuses a promo card switched to another Format, before it is captured or sent', async () => {
+    const sizes = canvasSizes()
+    setupCard('landscape', 'conference')
+    fireEvent.click(screen.getByRole('radio', { name: /Portrait/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Attach to Task' }))
+    expect((await screen.findByRole('alert')).textContent).toBe(
+      'This Task asks for Landscape (1200×628), and the studio is showing Portrait (1080×1350). Switch the studio to Landscape, or change the Format on the Task.',
     )
     expect(sizes).toEqual([])
     expect(mocks.upload).not.toHaveBeenCalled()

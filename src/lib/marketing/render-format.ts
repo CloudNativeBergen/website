@@ -12,6 +12,7 @@
  */
 
 import {
+  channelFormat as platformFormat,
   DEFAULT_STUDIO_FORMAT,
   STUDIO_FORMATS,
   STUDIO_FORMAT_IDS,
@@ -22,11 +23,14 @@ import {
 import type { TaskRecipe } from './template/types'
 import type { MarketingChannel } from './types'
 
-/** The Format a Channel posts natively: LinkedIn landscape, else square. */
+/**
+ * The Format a Channel posts natively (the one table, in `format.ts`); square
+ * for a Task with no Channel, like everything else without a Format.
+ */
 export function channelFormat(
   channel: MarketingChannel | null | undefined,
 ): StudioFormat {
-  return channel === 'linkedin' ? 'landscape' : DEFAULT_STUDIO_FORMAT
+  return platformFormat(channel) ?? DEFAULT_STUDIO_FORMAT
 }
 
 /**

@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { expect, userEvent, within } from 'storybook/test'
 import { captureImage } from '@/components/common/image-capture'
 import { STUDIO_FORMATS, type StudioFormat } from '@/lib/marketing-asset'
+import { Format } from '@/lib/proposal/types'
 import {
   FormatSwitch,
   PROMO_CARD_ELEMENTS,
@@ -378,6 +379,84 @@ export const PromoTab: Story = {
 /** The promo tab in dark mode, through the global theme. */
 export const PromoTabDark: Story = {
   ...PromoTab,
+  globals: { theme: 'dark' },
+}
+
+/** Every talk Format's icon, and none, beside the sponsor tier star. */
+const TALK_FORMATS = [...Object.values(Format), undefined]
+
+/**
+ * The speaker talk icons and the sponsor tier star never follow the admin
+ * theme (#1250 follow-up): a downloaded card is the same in light and dark.
+ */
+export const CardIconsIgnoreTheme: Story = {
+  args: { template: 'speaker', format: 'square', width: 200 },
+  render: () => (
+    <div className="grid grid-cols-3 gap-4 sm:grid-cols-5">
+      {TALK_FORMATS.map((format) => (
+        <div key={format ?? 'none'} style={{ width: 200 }}>
+          <SpeakerCard
+            speaker={{ ...ADA, talks: [{ ...ADA.talks![0], format }] }}
+            qrCodeUrl={QR}
+            variant="speaker-spotlight"
+            isFeatured
+            eventName="Cloud Native Days Norway"
+            showCloudNativePattern
+          />
+        </div>
+      ))}
+      <div style={{ width: 200 }}>
+        <SponsorCard
+          sponsor={ACME}
+          tier={GOLD}
+          qrCodeUrl={QR}
+          eventName="Cloud Native Days Norway"
+          showCloudNativePattern
+        />
+      </div>
+    </div>
+  ),
+  play: async ({ canvasElement }) => {
+    const colours = () =>
+      Array.from(
+        canvasElement.querySelectorAll(
+          '[data-card-element="talk"] svg, [data-card-element="tier"] svg',
+        ),
+      ).map((icon) => getComputedStyle(icon).color)
+    // `.dark` on the root reaches every `.dark .text-brand-*` override, as
+    // the theme decorator's wrapper would; html2canvas-pro reads exactly
+    // these computed colours from the live page.
+    const root = document.documentElement
+    const wasDark = root.classList.contains('dark')
+    try {
+      root.classList.toggle('dark', false)
+      const light = colours()
+      const yellow = 'rgb(250, 204, 21)'
+      const blue = 'rgb(29, 78, 216)'
+      const green = 'rgb(16, 185, 129)'
+      const purple = 'rgb(99, 102, 241)'
+      await expect(light).toEqual([
+        yellow, // lightning
+        blue, // presentation 20
+        blue, // presentation 25
+        green, // deep dive 40
+        green, // deep dive 45
+        purple, // workshop
+        purple, // extended workshop
+        blue, // no Format: the microphone
+        yellow, // the sponsor tier star
+      ])
+      root.classList.toggle('dark', true)
+      await expect(colours()).toEqual(light)
+    } finally {
+      root.classList.toggle('dark', wasDark)
+    }
+  },
+}
+
+/** The same icons in dark mode, through the global theme, for the eye. */
+export const CardIconsIgnoreThemeDark: Story = {
+  ...CardIconsIgnoreTheme,
   globals: { theme: 'dark' },
 }
 

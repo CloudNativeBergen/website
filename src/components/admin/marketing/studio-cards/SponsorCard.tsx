@@ -211,7 +211,11 @@ export function SponsorCard({
       data-card-element="tier"
       className={`flex items-center gap-[1.5cqw] ${size.row}`}
     >
-      <StarIcon className={`shrink-0 text-brand-sunbeam-yellow ${size.icon}`} />
+      {/* The brand variable, not `text-brand-sunbeam-yellow`: its `.dark`
+          override would make a downloaded card follow the admin theme. */}
+      <StarIcon
+        className={`shrink-0 text-[color:var(--color-brand-sunbeam-yellow)] ${size.icon}`}
+      />
       <span
         className={`font-space-grotesk line-clamp-1 leading-tight font-bold ${size.text}`}
       >

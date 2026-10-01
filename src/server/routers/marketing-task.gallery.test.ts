@@ -370,6 +370,44 @@ describe('attaching a render also saves it to the gallery (#1165)', () => {
     ])
   })
 
+  it('records a promo card and its Format on the entry, as for a speaker card (#1250)', async () => {
+    Object.assign(task(), { format: 'landscape' })
+    await marketing().task.attachAsset({
+      taskId: TASK,
+      taskRev: task()._rev as string,
+      assetId: FIRST,
+      studio: { tab: 'conference', format: 'landscape' },
+    })
+    expect(gallery()).toEqual([
+      expect.objectContaining({
+        image: image(FIRST),
+        studio: { tab: 'conference', format: 'landscape' },
+      }),
+    ])
+    expect(task().renderCard).toEqual({
+      tab: 'conference',
+      format: 'landscape',
+    })
+  })
+
+  it('refuses a promo card in another Format than the one of the Task, before anything is written', async () => {
+    Object.assign(task(), { format: 'landscape' })
+    const before = structuredClone(h.dataset)
+    await expect(
+      marketing().task.attachAsset({
+        taskId: TASK,
+        taskRev: task()._rev as string,
+        assetId: FIRST,
+        studio: { tab: 'conference', format: 'portrait' },
+      }),
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message:
+        'This Task asks for Landscape (1200×628), and the studio is showing Portrait (1080×1350). Switch the studio to Landscape, or change the Format on the Task.',
+    })
+    expect(h.dataset).toEqual(before)
+  })
+
   it('a gallery save retried from the Task editor still records the card the render was attached from', async () => {
     Object.assign(task(), { format: 'landscape' })
     h.galleryDown = true
