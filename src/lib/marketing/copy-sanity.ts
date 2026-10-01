@@ -1,3 +1,4 @@
+import { storedRenderFormat } from './render-format'
 import { clientReadUncached } from '@/lib/sanity/client'
 import { scopedFetch } from '@/lib/sanity/scoped'
 import type { CopySource, CopySourceTask } from './copy'
@@ -182,6 +183,7 @@ export async function readPlanSource(
         milestone, offsetDays, dueAt, origin,
         "prerequisiteIds": prerequisites[]._ref,
         targetPage, alt, instructions, copyEdited,
+        "format": select(kind == "studioRender" => format),
         "variant": select(variant->conference._ref == conference._ref => variant->{ body, link, shortCode, scheduledAt })
       }
     }`,
@@ -235,6 +237,8 @@ export async function readPlanSource(
               alt: t.alt ?? null,
               instructions: t.instructions ?? null,
               copyEdited: t.copyEdited ?? null,
+              format:
+                t.kind === 'studioRender' ? storedRenderFormat(t.format) : null,
               variant:
                 t.variant?.body != null
                   ? { ...t.variant, shortCode: t.variant.shortCode ?? null }

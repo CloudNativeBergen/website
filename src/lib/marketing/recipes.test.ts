@@ -10,6 +10,7 @@ import { generatedTaskKey } from './materialize'
 import {
   isSubjectlessKey,
   publishedPair,
+  RECIPE_PROJECTION,
   recipeFromStored,
   recipeToStored,
 } from './recipes'
@@ -91,6 +92,30 @@ describe('stored Recipes', () => {
       channel: 'linkedin',
       subjectSource: 'none',
     })
+  })
+
+  it('keeps the Format of a render Recipe through the store, and reads anything else as none (Formats spec §6)', () => {
+    const render = {
+      key: 'cardRender',
+      beat: 'card',
+      title: 'Render: Card',
+      kind: 'studioRender' as const,
+      subjectSource: 'none' as const,
+    }
+    const stored = JSON.parse(
+      JSON.stringify(recipeToStored({ ...render, format: 'portrait' })),
+    )
+    expect(stored.format).toBe('portrait')
+    expect(recipeFromStored(stored)).toEqual({ ...render, format: 'portrait' })
+    // A Recipe stored before Formats, or with a value no Format has.
+    expect(recipeFromStored({ ...render, format: null })).toEqual(render)
+    expect(recipeFromStored({ ...render, format: 'banner' as never })).toEqual(
+      render,
+    )
+  })
+
+  it('names the Format in the projection every Recipe is read with', () => {
+    expect(RECIPE_PROJECTION).toMatch(/\bformat\b/)
   })
 
   it('drops a Recipe it cannot identify rather than guessing', () => {

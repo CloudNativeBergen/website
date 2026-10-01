@@ -1,5 +1,6 @@
 import 'server-only'
 import { createHash } from 'node:crypto'
+import type { Patch } from '@sanity/client'
 import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
 import { scopedFetch } from '@/lib/sanity/scoped'
 import { renderAlt } from '@/lib/marketing/render-handoff'
@@ -8,6 +9,7 @@ import {
   MARKETING_ASSET_SUBJECT_TYPES,
   type MarketingAssetSubjectType,
 } from './types'
+import type { TaskRenderCard } from './studio'
 
 /**
  * A render Task's gallery entry (spec §4.3, #1165).
@@ -47,6 +49,12 @@ export interface TaskRenderGalleryEntry {
   conferenceId: string
   taskId: string
   imageAssetId: string
+  /**
+   * Where the render was made, when it was a card on a tab with a Format
+   * switch. Absent (the meme generator, a collage, the promo), the entry
+   * claims none, and a replaced image's record goes with it.
+   */
+  studio?: TaskRenderCard
   /**
    * The Task's subject as this organization's gallery may store it: the
    * subject, or null to leave out one that fails its guards. Throws to fail
@@ -150,7 +158,7 @@ async function readState(entry: TaskRenderGalleryEntry): Promise<GalleryState> {
 }
 
 /** The image fields a render writes on its entry and on a draft of it. */
-function imageFields(imageAssetId: string) {
+function imageFields(imageAssetId: string, studio?: TaskRenderCard) {
   return {
     image: {
       _type: 'image',
@@ -159,7 +167,15 @@ function imageFields(imageAssetId: string) {
     // The entry's own file, so deleting the entry deletes it once nothing
     // references it (the gallery delete's orphan check).
     createdImageAssetId: imageAssetId,
+    // The card it was made from, its Format with it, moves with the image.
+    ...(studio ? { studio: { tab: studio.tab, format: studio.format } } : {}),
   }
+}
+
+/** A replaced image's patch: the new image, and no stale card record. */
+function replaceImage(patch: Patch, entry: TaskRenderGalleryEntry) {
+  const set = patch.set(imageFields(entry.imageAssetId, entry.studio))
+  return entry.studio ? set : set.unset(['studio'])
 }
 
 /** Sanity refused a revision guard: something moved since the read. */
@@ -246,16 +262,16 @@ export async function saveTaskRenderToGallery(
         source: 'studio',
         task: { _type: 'reference', _ref: entry.taskId, _weak: true },
         ...set,
-        ...imageFields(entry.imageAssetId),
+        ...imageFields(entry.imageAssetId, entry.studio),
       })
     } else {
       if (!entryDone)
         tx.patch(found._id, (p) =>
-          p.ifRevisionId(found._rev).set(imageFields(entry.imageAssetId)),
+          replaceImage(p.ifRevisionId(found._rev), entry),
         )
       if (draft && !draftDone)
         tx.patch(`drafts.${found._id}`, (p) =>
-          p.ifRevisionId(draft._rev).set(imageFields(entry.imageAssetId)),
+          replaceImage(p.ifRevisionId(draft._rev), entry),
         )
     }
     try {

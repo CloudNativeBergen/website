@@ -242,9 +242,11 @@ describe('marketing.plan.create — shape', () => {
     const li = seed.tasks.find((t) => t.key === 'cfpOpen:linkedin')!
     expect(li.prerequisiteIds).toHaveLength(1)
     const render = seed.tasks.find((t) => t._id === li.prerequisiteIds[0])!
+    // LinkedIn's render is the landscape one (Formats spec §5).
     expect(render).toMatchObject({
-      key: 'cfpOpenRender',
+      key: 'cfpOpenRender:landscape',
       kind: 'studioRender',
+      format: 'landscape',
       campaignId: li.campaignId,
       status: 'open',
     })

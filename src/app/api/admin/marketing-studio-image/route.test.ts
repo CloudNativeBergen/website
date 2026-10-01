@@ -237,3 +237,106 @@ describe('studio upload provenance', () => {
     },
   )
 })
+
+/**
+ * The first bytes of a PNG of `width` × `height`: the signature and the
+ * IHDR chunk, which is where a PNG says its size. Enough for the route,
+ * which reads nothing past the header before it uploads.
+ */
+function pngOf(width: number, height: number): Uint8Array<ArrayBuffer> {
+  const bytes = new Uint8Array(33)
+  bytes.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+  const view = new DataView(bytes.buffer)
+  view.setUint32(8, 13)
+  bytes.set([0x49, 0x48, 0x44, 0x52], 12)
+  view.setUint32(16, width)
+  view.setUint32(20, height)
+  bytes.set([8, 6, 0, 0, 0], 24)
+  return bytes
+}
+
+function formatRequest(
+  format: string,
+  bytes: Uint8Array<ArrayBuffer>,
+  type = 'image/png',
+) {
+  const form = new FormData()
+  form.set('taskId', 'render')
+  form.set('format', format)
+  form.set('file', new File([bytes], 'render.png', { type }))
+  return new Request('http://localhost/api/admin/marketing-studio-image', {
+    method: 'POST',
+    body: form,
+  })
+}
+
+describe('the Format of a render Task (Formats spec §4)', () => {
+  beforeEach(() => {
+    h.read.mockResolvedValue({
+      _id: 'render',
+      _rev: 'r1',
+      kind: 'studioRender',
+      format: 'landscape',
+    })
+  })
+
+  it('takes a capture in the Task’s Format at exactly its pixels', async () => {
+    expect(
+      (await POST(formatRequest('landscape', pngOf(1200, 628)))).status,
+    ).toBe(200)
+    expect(h.upload).toHaveBeenCalledOnce()
+  })
+
+  it('refuses a capture in another Format, naming both, before anything is uploaded', async () => {
+    const response = await POST(formatRequest('square', pngOf(1080, 1080)))
+    expect(response.status).toBe(400)
+    expect((await response.json()).error).toBe(
+      'This Task asks for Landscape (1200×628), and the studio is showing Square (1080×1080). Switch the studio to Landscape, or change the Format on the Task.',
+    )
+    expect(h.upload).not.toHaveBeenCalled()
+  })
+
+  it('refuses a capture that says the Task’s Format but is not its pixels', async () => {
+    for (const bytes of [pngOf(1080, 1080), pngOf(1200, 629), pngOf(0, 0)]) {
+      const response = await POST(formatRequest('landscape', bytes))
+      expect(response.status).toBe(400)
+      expect((await response.json()).error).toBe(
+        'The image is not Landscape (1200×628). Make it again in the studio.',
+      )
+    }
+    // A JPEG cannot be measured here (the studio captures PNG): refused too.
+    const jpeg = new Uint8Array(33)
+    jpeg.set([0xff, 0xd8, 0xff, 0xe0])
+    expect(
+      (await POST(formatRequest('landscape', jpeg, 'image/jpeg'))).status,
+    ).toBe(400)
+    expect(h.upload).not.toHaveBeenCalled()
+  })
+
+  it('reads a render Task without a Format as square', async () => {
+    h.read.mockResolvedValue({
+      _id: 'render',
+      _rev: 'r1',
+      kind: 'studioRender',
+      format: null,
+    })
+    expect(
+      (await POST(formatRequest('square', pngOf(1080, 1080)))).status,
+    ).toBe(200)
+    expect(
+      (await POST(formatRequest('landscape', pngOf(1200, 628)))).status,
+    ).toBe(400)
+  })
+
+  it('refuses a value that is no Format', async () => {
+    expect((await POST(formatRequest('banner', pngOf(1200, 628)))).status).toBe(
+      400,
+    )
+    expect(h.upload).not.toHaveBeenCalled()
+  })
+
+  it('takes a capture from a tab without a Format switch as it is', async () => {
+    // The meme generator, collage and promo (Formats spec §1): no `format`.
+    expect((await POST(request())).status).toBe(200)
+  })
+})

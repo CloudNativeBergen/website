@@ -1,4 +1,5 @@
 import { defineArrayMember, defineField, defineType } from 'sanity'
+import { STUDIO_FORMAT_OPTIONS } from './constants'
 import { MILESTONES } from '@/lib/marketing/milestones'
 import {
   MARKETING_CHANNEL_LABELS,
@@ -204,11 +205,35 @@ export default defineType({
       weak: true,
     }),
     defineField({
+      name: 'format',
+      title: 'Format',
+      description:
+        "studioRender only: the Format the render is made in (docs/MARKETING_STUDIO_FORMATS_SPEC.md §4). Set from the Channel of the posts it feeds when the Task is made; absent reads as square. A publishing Task never has one: its Format is its Channel's.",
+      type: 'string',
+      options: {
+        list: STUDIO_FORMAT_OPTIONS,
+      },
+      hidden: ({ document }) => document?.kind !== 'studioRender',
+    }),
+    defineField({
       name: 'asset',
       title: 'Asset',
       description:
         'studioRender output; publishing Tasks with a render Prerequisite pull it.',
       type: 'image',
+    }),
+    defineField({
+      name: 'renderCard',
+      title: 'Render card',
+      description:
+        'The studio card the attached render was made from (tab and Format), recorded on the gallery entry when its save is retried.',
+      type: 'object',
+      fields: [
+        { name: 'tab', type: 'string' },
+        { name: 'format', type: 'string' },
+      ],
+      hidden: true,
+      readOnly: true,
     }),
     defineField({
       name: 'pendingStudioAsset',

@@ -240,6 +240,7 @@ function variantData(
 function stored(): StoredTaskEditorData {
   return {
     task: {
+      format: null,
       _id: 'task-ours',
       campaignId: 'camp-A',
       key: 'talk:bluesky',

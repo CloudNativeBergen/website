@@ -138,29 +138,31 @@ const signed = () =>
 beforeEach(() => reset())
 
 describe('sponsorSigned Trigger', () => {
-  it('creates the render and both thank-you posts, due +1 d and +3 d, Prerequisite on the render', async () => {
+  it('creates a render per Format and both thank-you posts, due +1 d and +3 d, each post on the render of its Format', async () => {
     const result = await signed()
-    expect(result.created).toBe(3)
+    expect(result.created).toBe(4)
     const [records] = store.commits
-    expect(records.tasks.map((t) => t.key)).toEqual([
-      'sponsorCardRender:sponsor-acme',
-      'sponsorCard:sponsor-acme:linkedin',
-      'sponsorCard:sponsor-acme:bluesky',
+    expect(records.tasks.map((t) => [t.key, t.format])).toEqual([
+      ['sponsorCardRender:sponsor-acme', 'square'],
+      ['sponsorCardRender:sponsor-acme:landscape', 'landscape'],
+      ['sponsorCard:sponsor-acme:linkedin', undefined],
+      ['sponsorCard:sponsor-acme:bluesky', undefined],
     ])
-    const [render, li, bs] = records.tasks
-    expect(render).toMatchObject({
-      kind: 'studioRender',
-      origin: 'trigger',
-      status: 'open',
-      assigneeId: 'sp-owner',
-      subject: { _id: 'sponsor-acme', type: 'sponsor' },
-      dueAt: '2027-03-21T08:00:00.000Z',
-    })
+    const [render, wide, li, bs] = records.tasks
+    for (const r of [render, wide])
+      expect(r).toMatchObject({
+        kind: 'studioRender',
+        origin: 'trigger',
+        status: 'open',
+        assigneeId: 'sp-owner',
+        subject: { _id: 'sponsor-acme', type: 'sponsor' },
+        dueAt: '2027-03-21T08:00:00.000Z',
+      })
     expect(render.milestone).toBeUndefined()
     expect(render._id).toBe(
       generatedTaskId('camp-sponsorAcquisition', render.key),
     )
-    expect(li.prerequisiteIds).toEqual([render._id])
+    expect(li.prerequisiteIds).toEqual([wide._id])
     expect(bs.prerequisiteIds).toEqual([render._id])
     expect(records.variants.map((v) => [v.status, v.scheduledAt])).toEqual([
       ['draft', '2027-03-23T07:00:00.000Z'],
@@ -195,7 +197,7 @@ describe('sponsorSigned Trigger', () => {
 
   it('retries a lost revision race from a fresh read and creates once', async () => {
     store.conflictsToRaise = 2
-    expect((await signed()).created).toBe(3)
+    expect((await signed()).created).toBe(4)
     expect(store.commits).toHaveLength(1)
   })
 
@@ -216,7 +218,7 @@ describe('sponsorSigned Trigger', () => {
       ],
       NOW,
     )
-    expect(result.created).toBe(3)
+    expect(result.created).toBe(4)
     expect(store.commits).toHaveLength(1)
   })
 
@@ -236,7 +238,7 @@ describe('sponsorSigned Trigger', () => {
       ],
       NOW,
     )
-    expect(result).toMatchObject({ created: 3, skipped: 'conflicts' })
+    expect(result).toMatchObject({ created: 4, skipped: 'conflicts' })
     expect(store.commits.map((c) => c.tasks[0].key)).toEqual([
       'speakerCardRender:ada',
     ])
@@ -265,10 +267,11 @@ describe('speakerConfirmed Trigger and speaker expansion', () => {
   it('dates a confirmed speaker on the next free cadence slot', async () => {
     await confirm('ada')
     const [records] = store.commits
-    expect(records.tasks.map((t) => t.key)).toEqual([
-      'speakerCardRender:ada',
-      'speakerCard:ada:linkedin',
-      'speakerCard:ada:bluesky',
+    expect(records.tasks.map((t) => [t.key, t.format])).toEqual([
+      ['speakerCardRender:ada', 'square'],
+      ['speakerCardRender:ada:landscape', 'landscape'],
+      ['speakerCard:ada:linkedin', undefined],
+      ['speakerCard:ada:bluesky', undefined],
     ])
     // Speaker cards run from CFP_NOTIFY +1 wk (2027-04-08).
     expect(records.variants.map((v) => v.scheduledAt)).toEqual([
@@ -302,7 +305,7 @@ describe('speakerConfirmed Trigger and speaker expansion', () => {
       ],
       NOW,
     )
-    expect(result.created).toBe(3)
+    expect(result.created).toBe(4)
     expect(store.commits[1].tasks.every((t) => t.key.includes(':grace'))).toBe(
       true,
     )
@@ -327,10 +330,11 @@ describe('speakerConfirmed Trigger and speaker expansion', () => {
   })
 
   it('keeps waiting on a render an earlier run already made for the subject', async () => {
-    // Only Bluesky had a slot the first time; the render went with it.
+    // The landscape render exists already, its post does not.
     store.context!.campaigns[1].generatedKeys.push(
-      'speakerCardRender:ada',
+      'speakerCardRender:ada:landscape',
       'speakerCard:ada:bluesky',
+      'speakerCardRender:ada',
     )
     await confirm('ada')
     const [records] = store.commits
@@ -338,8 +342,56 @@ describe('speakerConfirmed Trigger and speaker expansion', () => {
       'speakerCard:ada:linkedin',
     ])
     expect(records.tasks[0].prerequisiteIds).toEqual([
-      generatedTaskId('camp-speakers', 'speakerCardRender:ada'),
+      generatedTaskId('camp-speakers', 'speakerCardRender:ada:landscape'),
     ])
+  })
+
+  it('a beat finished over two runs: the LinkedIn post that gets its slot later gets the landscape render, not the square one Bluesky had', async () => {
+    // Only Bluesky had a slot the first time (or the subject was generated
+    // before Formats); its square render went with it.
+    store.context!.campaigns[1].generatedKeys.push(
+      'speakerCardRender:ada',
+      'speakerCard:ada:bluesky',
+    )
+    await confirm('ada')
+    const [records] = store.commits
+    expect(records.tasks.map((t) => [t.key, t.format])).toEqual([
+      ['speakerCardRender:ada:landscape', 'landscape'],
+      ['speakerCard:ada:linkedin', undefined],
+    ])
+    expect(records.tasks[1].prerequisiteIds).toEqual([records.tasks[0]._id])
+  })
+
+  it('a Channel added to the beat later gets a render of its own Format, never the one another Format made', async () => {
+    const speakers = store.context!.campaigns[1]
+    const bluesky = speakers.recipes.find(
+      (r) => r.key === 'speakerCard:bluesky',
+    )!
+    // LinkedIn only at first: one landscape render.
+    speakers.recipes = speakers.recipes.filter((r) => r !== bluesky)
+    await confirm('ada')
+    expect(store.commits[0].tasks.map((t) => [t.key, t.format])).toEqual([
+      ['speakerCardRender:ada:landscape', 'landscape'],
+      ['speakerCard:ada:linkedin', undefined],
+    ])
+    // Bluesky is added to the beat: its post waits on a NEW square render.
+    speakers.recipes.push(bluesky)
+    await confirm('ada')
+    const added = store.commits[1].tasks
+    expect(added.map((t) => [t.key, t.format])).toEqual([
+      ['speakerCardRender:ada', 'square'],
+      ['speakerCard:ada:bluesky', undefined],
+    ])
+    expect(added[1].prerequisiteIds).toEqual([added[0]._id])
+  })
+
+  it('a subject generated before Formats is handed no new render: every post of the beat exists', async () => {
+    store.context!.campaigns[1].generatedKeys.push(
+      'speakerCardRender:ada',
+      'speakerCard:ada:linkedin',
+      'speakerCard:ada:bluesky',
+    )
+    expect((await confirm('ada')).created).toBe(0)
   })
 
   it('creates nothing once the cadence window is over', async () => {
@@ -370,8 +422,8 @@ describe('speakerConfirmed Trigger and speaker expansion', () => {
       ],
       NOW,
     )
-    expect(result.created).toBe(45 * 3)
-    expect(store.commits.map((c) => c.tasks.length)).toEqual([60, 60, 15])
+    expect(result.created).toBe(45 * 4)
+    expect(store.commits.map((c) => c.tasks.length)).toEqual([80, 80, 20])
   })
 })
 
@@ -408,7 +460,7 @@ describe('published promotion history after deletion and reseeding', () => {
     const original = store.commits[0].tasks.map((task) => task.key)
     reset(['sponsorAcquisition'])
     store.context!.campaigns[0]._id = 'reseeded-campaign'
-    expect((await signed()).created).toBe(3)
+    expect((await signed()).created).toBe(4)
     expect(store.commits[0].tasks.map((task) => task.key)).toEqual(original)
     expect(
       store.commits[0].tasks.every(
@@ -464,6 +516,10 @@ describe('pendingRecipes published-key fold', () => {
     expect(
       pendingRecipes(campaign, recipes, 'acme', new Set()).map((r) => r.key),
     ).toEqual(['render', 'laterRender', 'post:bluesky'])
+    // A render is made for a post still to be made. The LinkedIn post exists
+    // already (it was made without this render, and would never wait on one
+    // made now) and the Bluesky one has gone out: nothing is left to feed.
+    // Before Formats the render was made anyway, as open work no post used.
     expect(
       pendingRecipes(
         campaign,
@@ -471,7 +527,17 @@ describe('pendingRecipes published-key fold', () => {
         'acme',
         new Set([publishedPair(campaign.key, 'post:acme:bluesky')]),
       ).map((r) => r.key),
-    ).toEqual(['render'])
+    ).toEqual([])
+    campaign.generatedKeys = []
+    // The LinkedIn post still to be made: the render is kept for it.
+    expect(
+      pendingRecipes(
+        campaign,
+        recipes,
+        'acme',
+        new Set([publishedPair(campaign.key, 'post:acme:bluesky')]),
+      ).map((r) => r.key),
+    ).toEqual(['render', 'post:linkedin'])
   })
   it('uses actual recipe-order dependencies, and never suppresses a render with no publishing dependants', () => {
     expect(
@@ -513,7 +579,7 @@ describe('stored Recipes are the only Recipes (Templates spec §2.1)', () => {
   it('a custom Campaign carrying the Recipes and the Trigger generates like a built-in one', async () => {
     const campaign = store.context!.campaigns[0]
     campaign.key = 'custom-1'
-    expect((await signed()).created).toBe(3)
+    expect((await signed()).created).toBe(4)
     expect(store.commits[0].variants).toHaveLength(2)
     expect(
       store.commits[0].variants.every((v) =>
@@ -576,7 +642,7 @@ describe('no double generation from stored Recipes (engine level)', () => {
         'sponsorCard:sponsor-acme:bluesky',
       ].map((key) => publishedPair('custom-elsewhere', key)),
     )
-    expect((await signed()).created).toBe(3)
+    expect((await signed()).created).toBe(4)
   })
 })
 
@@ -593,7 +659,7 @@ describe('the marker alone stops a backfilled Recipe (pure, per key class)', () 
   it('Trigger keys', () => {
     const recipes = stored('sponsorAcquisition', 'sponsorCard')
     const marker = recipes.map((r) => generatedTaskKey(r.key, 'sponsor-acme'))
-    expect(marker).toHaveLength(3)
+    expect(marker).toHaveLength(4)
     expect(
       pendingRecipes(
         { key: 'sponsorAcquisition', generatedKeys: marker },
@@ -694,7 +760,7 @@ describe('a Library Recipe on a custom Campaign (Templates spec §5)', () => {
     custom()
     await runGeneration('conf-A', requests, NOW)
     const attached = shape('camp-custom', 'custom-1234')
-    expect(attached).toHaveLength(6)
+    expect(attached).toHaveLength(8)
     expect(attached).toEqual(builtin)
   })
   it('puts the Recipe’s instructions on every Task it creates, posts included', async () => {
@@ -744,7 +810,7 @@ describe('a Library Recipe on a custom Campaign (Templates spec §5)', () => {
       ],
       NOW,
     )
-    expect(result.created).toBe(3)
+    expect(result.created).toBe(4)
     expect(store.commits[0].variants[0].link).toContain(
       'utm_campaign=custom-1234',
     )
@@ -760,12 +826,12 @@ describe('a Library Recipe on a custom Campaign (Templates spec §5)', () => {
       [{ ...requests[0], subjects: [speaker('sp-1'), speaker('sp-3')] }],
       NOW,
     )
-    expect(result.created).toBe(3)
+    expect(result.created).toBe(4)
     expect(
       store.commits.flatMap((c) => c.tasks.map((t) => t.subject?._id)),
-    ).toEqual(['sp-3', 'sp-3', 'sp-3'])
-    // The marker grew by exactly the new subject's three keys: no duplicates.
-    expect(campaign.generatedKeys).toHaveLength(marker.length + 3)
-    expect(new Set(campaign.generatedKeys).size).toBe(marker.length + 3)
+    ).toEqual(['sp-3', 'sp-3', 'sp-3', 'sp-3'])
+    // The marker grew by exactly the new subject's four keys: no duplicates.
+    expect(campaign.generatedKeys).toHaveLength(marker.length + 4)
+    expect(new Set(campaign.generatedKeys).size).toBe(marker.length + 4)
   })
 })

@@ -7,9 +7,22 @@ import type {
   StudioTab,
 } from '@/lib/marketing-asset'
 
+/** What a capture for "Attach to Task" shows (Formats spec §4). */
+export interface AttachedCapture {
+  /** The Format the tab's switch shows; null on a tab without one. */
+  format: StudioFormat | null
+  /** The studio card, when the image is one. */
+  card?: StudioCard
+}
+
 export interface ImageAttachment {
   busy: boolean
-  attach: (capture: () => Promise<Blob>, filename: string) => Promise<void>
+  /** A render Task takes only its own Format, when the tab has a switch. */
+  attach: (
+    capture: () => Promise<Blob>,
+    filename: string,
+    shown?: AttachedCapture,
+  ) => Promise<void>
 }
 export const ImageAttachmentContext = createContext<ImageAttachment | null>(
   null,

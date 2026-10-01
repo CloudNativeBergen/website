@@ -155,24 +155,27 @@ describe('buildSubjectBeat', () => {
     })
   }
 
-  it('finds the render and both siblings of a beat', () => {
-    expect(recipes.map((r) => r.key)).toEqual([
-      'speakerCardRender',
-      'speakerCard:linkedin',
-      'speakerCard:bluesky',
+  it('finds a render per Format and both siblings of a beat', () => {
+    expect(recipes.map((r) => [r.key, r.format])).toEqual([
+      ['speakerCardRender', 'square'],
+      ['speakerCardRender:landscape', 'landscape'],
+      ['speakerCard:linkedin', undefined],
+      ['speakerCard:bluesky', undefined],
     ])
   })
 
-  it('keys each Task by recipe and subject, and waits on the render', () => {
+  it('keys each Task by recipe and subject, and each post waits on the render of its Format', () => {
     const beat = build()
-    expect(beat.tasks.map((t) => t.key)).toEqual([
-      'speakerCardRender:speaker-1',
-      'speakerCard:speaker-1:linkedin',
-      'speakerCard:speaker-1:bluesky',
+    expect(beat.tasks.map((t) => [t.key, t.format])).toEqual([
+      ['speakerCardRender:speaker-1', 'square'],
+      ['speakerCardRender:speaker-1:landscape', 'landscape'],
+      ['speakerCard:speaker-1:linkedin', undefined],
+      ['speakerCard:speaker-1:bluesky', undefined],
     ])
-    const [render, li, bs] = beat.tasks
+    const [render, wide, li, bs] = beat.tasks
     expect(render._id).toBe('task:speakerCardRender:speaker-1')
-    expect(li.prerequisiteIds).toEqual([render._id])
+    expect(wide._id).toBe('task:speakerCardRender:speaker-1:landscape')
+    expect(li.prerequisiteIds).toEqual([wide._id])
     expect(bs.prerequisiteIds).toEqual([render._id])
     expect(beat.tasks.every((t) => t.subject?._id === 'speaker-1')).toBe(true)
     expect(beat.tasks.every((t) => t.origin === 'expansion')).toBe(true)
@@ -180,7 +183,7 @@ describe('buildSubjectBeat', () => {
   })
 
   it('dates the siblings on the cadence and the render two days before the first', () => {
-    const [render, li, bs] = build().tasks
+    const [render, , li, bs] = build().tasks
     const variants = build().variants
     expect(li).toMatchObject({ milestone: 'CFP_NOTIFY', offsetDays: 7 })
     expect(bs).toMatchObject({ milestone: 'CFP_NOTIFY', offsetDays: 7 })
@@ -190,6 +193,40 @@ describe('buildSubjectBeat', () => {
     ])
     expect(render.dueAt).toBe('2027-04-06T07:00:00.000Z')
     expect(render).toMatchObject({ milestone: 'CFP_NOTIFY', offsetDays: 5 })
+  })
+
+  it('makes the render of a Format only once a post in it has a slot', () => {
+    const occupancy = { linkedin: new Map(), bluesky: new Map() }
+    const dates = subjectBeatDates({
+      recipes,
+      milestones,
+      occupancy,
+      now: '2027-03-20T12:00:00.000Z',
+    })!
+    // LinkedIn has no slot left this run; Bluesky does.
+    dates.delete('speakerCard:linkedin')
+    const beat = buildSubjectBeat({
+      recipes,
+      subject,
+      dates,
+      campaign: { _id: 'camp-speakers', key: 'speakers' },
+      planId: 'plan-A',
+      conference: {
+        _id: conference._id,
+        baseUrl: conference.baseUrl,
+        shortLinkOrigin: conference.shortLinkOrigin,
+      },
+      values: conferenceValuesFor(conference),
+      assigneeId: 'sp-owner',
+      origin: 'expansion',
+      taskId: (key) => `task:${key}`,
+      newShortCode: sequentialShortCodes(),
+      newId: (type) => `${type}.${++n}`,
+    })
+    expect(beat.tasks.map((t) => [t.key, t.format])).toEqual([
+      ['speakerCardRender:speaker-1', 'square'],
+      ['speakerCard:speaker-1:bluesky', undefined],
+    ])
   })
 
   it('resolves subject placeholders and keeps {hook} for the organizer', () => {

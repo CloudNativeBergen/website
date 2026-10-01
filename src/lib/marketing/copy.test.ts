@@ -82,6 +82,7 @@ function lastYearSource(edit: (seed: SeedPlan) => void = () => {}): CopySource {
       targetPage: t.targetPage ?? null,
       alt: t.alt ?? null,
       instructions: t.instructions ?? null,
+      format: t.format ?? null,
       copyEdited: null,
       variant: variantOf(t.variantId)
         ? {
@@ -308,9 +309,13 @@ describe('copyPlan — Tasks', () => {
     const render = source.tasks.find((t) => t.key === 'cfpOpenRender')!
     render.origin = 'trigger'
     const plan = copy(source)
-    expect(task(plan, 'cfpOpen:linkedin').prerequisiteIds).toEqual([])
-    const save = task(plan, 'saveTheDate:linkedin')
+    expect(task(plan, 'cfpOpen:bluesky').prerequisiteIds).toEqual([])
+    const save = task(plan, 'saveTheDate:bluesky')
     expect(save.prerequisiteIds).toEqual([task(plan, 'saveTheDateRender')._id])
+    // The LinkedIn post waits on its own Format's render, copied too.
+    expect(task(plan, 'saveTheDate:linkedin').prerequisiteIds).toEqual([
+      task(plan, 'saveTheDateRender:landscape')._id,
+    ])
   })
 
   it('writes unedited copy for the new edition, with the new tagged link', () => {
@@ -325,6 +330,32 @@ describe('copyPlan — Tasks', () => {
       `https://2027.cloudnativebergen.dev/go/${variant.shortCode}`,
     )
     expect(task(plan, 'cfpOpenRender').alt).toContain(
+      'Cloud Native Bergen 2027',
+    )
+  })
+
+  it('carries the Format of a render Task, an override included, and reads a render without one as square (Formats spec §5, §6)', () => {
+    const source = lastYearSource()
+    const wide = source.tasks.find((t) => t.key === 'cfpOpenRender:landscape')!
+    expect(wide.format).toBe('landscape')
+    // The organizer chose portrait for it last year.
+    wide.format = 'portrait'
+    // A render made before Formats has none.
+    source.tasks.find((t) => t.key === 'saveTheDateRender')!.format = null
+    const plan = copy(source)
+    expect(task(plan, 'cfpOpenRender:landscape').format).toBe('portrait')
+    expect(task(plan, 'cfpOpenRender').format).toBe('square')
+    expect(task(plan, 'saveTheDateRender').format).toBe('square')
+    for (const t of plan.tasks)
+      if (t.kind === 'publishing') expect(t.format, t.key).toBeUndefined()
+  })
+
+  it('writes the alt of the render of every Format again for the new edition', () => {
+    const plan = copy()
+    expect(task(plan, 'cfpOpenRender:landscape').alt).toBe(
+      task(plan, 'cfpOpenRender').alt,
+    )
+    expect(task(plan, 'cfpOpenRender:landscape').alt).toContain(
       'Cloud Native Bergen 2027',
     )
   })
@@ -586,7 +617,10 @@ it('skips a post this edition already sent without dangling its dependants', () 
   // without that, nothing can dangle and the assertion holds either way.
   let sentKey = ''
   const source = lastYearSource((seed) => {
-    const sent = seed.tasks.find((t) => t.kind === 'publishing')!
+    // A post with no render, so no render goes with it.
+    const sent = seed.tasks.find(
+      (t) => t.kind === 'publishing' && t.prerequisiteIds.length === 0,
+    )!
     sentKey = sent.key
     const dependant = seed.tasks.find(
       (t) => t._id !== sent._id && t.kind !== 'publishing',

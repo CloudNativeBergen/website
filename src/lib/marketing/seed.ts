@@ -31,6 +31,7 @@ import {
 } from './milestones'
 import { BLANK_ORIGIN } from './origin'
 import { publishedIn } from './recipes'
+import { splitRendersByFormat } from './render-format'
 import type { PlanTemplate, TaskRecipe } from './template/types'
 import { withCurrentSkeletons } from './template/legacy-skeletons'
 import type { CampaignTrigger, Outcome } from './types'
@@ -266,13 +267,24 @@ export function expandTemplate(input: SeedInput): SeedPlan {
     // And a dependant of ANY kind counts. Prerequisites are editable for every
     // Kind, so a checklist that needs the asset keeps the render even when every
     // post in the beat has gone.
-    const atCreation = recipe.recipes.filter(seedsAtCreation)
+    //
+    // One render per Format its posts need (Formats spec §5): after the split
+    // every post LISTS the render of its own Format, so a post is a dependant
+    // only of that one — the square render is not kept alive by an
+    // unpublished LinkedIn post that waits on the landscape one, nor by the
+    // landscape render beside it in the beat.
+    const atCreation = splitRendersByFormat(recipe.recipes).filter(
+      seedsAtCreation,
+    )
     const dependantsOfRender = (render: TaskRecipe, index: number) =>
       atCreation.filter(
         (d, i) =>
           d.key !== render.key &&
           (d.prerequisites?.includes(render.key) ||
-            (d.beat === render.beat && i > index)),
+            (d.kind !== 'publishing' &&
+              d.kind !== 'studioRender' &&
+              d.beat === render.beat &&
+              i > index)),
       )
     const seeded = atCreation.filter((r, index) => {
       if (r.kind === 'publishing') return !published.has(r.key)

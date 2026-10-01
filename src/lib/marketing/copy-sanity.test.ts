@@ -64,6 +64,32 @@ it('reads a source Campaign with the Recipes stored on it', async () => {
   )
 })
 
+it('reads the Format of a render Task, a render stored without one as square, and a post as having none (Formats spec §6)', async () => {
+  const task = (id: string, kind: string, extra: Record<string, unknown>) => ({
+    _id: id,
+    _type: 'marketingTask',
+    conference: r('conf-old'),
+    plan: r('plan-old'),
+    campaign: r('camp-old'),
+    key: id,
+    title: id,
+    kind,
+    ...extra,
+  })
+  h.dataset.push(
+    task('wide', 'studioRender', { format: 'landscape' }),
+    task('old', 'studioRender', {}),
+    task('post', 'publishing', { channel: 'linkedin', format: 'landscape' }),
+  )
+  const source = await getCopySource('plan-old', 'org', 'conf-now')
+  const formatOf = (id: string) =>
+    source!.tasks.find((t) => t._id === id)!.format
+  expect(formatOf('wide')).toBe('landscape')
+  expect(formatOf('old')).toBe('square')
+  // A publishing Task's Format is its Channel's, never read from the Task.
+  expect(formatOf('post')).toBeNull()
+})
+
 it('reads a Campaign from before 053 as having no Recipes, not as broken', async () => {
   delete h.dataset.find((d) => d._id === 'camp-old')!.recipes
   const source = await getCopySource('plan-old', 'org', 'conf-now')

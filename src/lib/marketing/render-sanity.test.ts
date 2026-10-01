@@ -290,4 +290,30 @@ describe('studio scoped reads', () => {
       expect(params.conferenceId).toBe('conf')
     }
   })
+
+  it('reads the Format the render Task stores, executed (Formats spec §4)', async () => {
+    const dataset = [
+      {
+        _id: 'render',
+        _type: 'marketingTask',
+        conference: { _ref: 'conf' },
+        kind: 'studioRender',
+        format: 'landscape',
+      },
+      {
+        _id: 'old',
+        _type: 'marketingTask',
+        conference: { _ref: 'conf' },
+        kind: 'studioRender',
+      },
+    ]
+    h.fetch
+      .mockReset()
+      .mockImplementation(async (query: string, params: object) =>
+        (await evaluate(parse(query), { dataset, params })).get(),
+      )
+    expect((await getStudioTask('render', 'conf'))!.format).toBe('landscape')
+    // Read as null, and so as square (`storedRenderFormat`).
+    expect((await getStudioTask('old', 'conf'))!.format).toBeNull()
+  })
 })

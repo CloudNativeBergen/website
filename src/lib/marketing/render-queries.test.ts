@@ -67,6 +67,9 @@ describe('studio queries executed against a fixture dataset', () => {
       pendingAssetId: 'image-upload',
       assetId: 'image-saved',
       campaignId: 'campaign',
+      // Stored before Formats: none, read as square (`storedRenderFormat`).
+      format: null,
+      renderCard: null,
       handoffDoneFor: null,
       replacedRenders: ['image-replaced'],
       galleryPending: null,

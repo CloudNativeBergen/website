@@ -7,6 +7,7 @@
  * 053 writes through it too.
  */
 
+import { studioFormatSchema } from '@/lib/marketing-asset/format'
 import type { Milestone } from './milestones'
 import type { Anchor, Cadence, SubjectList, TaskRecipe } from './template/types'
 import type { MarketingChannel, SubjectSource, TaskKind } from './types'
@@ -29,6 +30,8 @@ export interface StoredRecipe {
   tagSubject?: boolean | null
   alt?: string | null
   instructions?: string | null
+  /** A render Recipe's Format; any other value reads as none. */
+  format?: string | null
   cadence?: {
     from?: StoredAnchor | null
     to?: StoredAnchor | null
@@ -40,7 +43,7 @@ export interface StoredRecipe {
 export const RECIPE_PROJECTION = `recipes[]{
   key, beat, title, kind, channel, subjectSource,
   anchor{ milestone, offsetDays }, prerequisites, targetPage,
-  skeleton, verbatim, tagSubject, alt, instructions,
+  skeleton, verbatim, tagSubject, alt, instructions, format,
   cadence{ from{ milestone, offsetDays }, to{ milestone, offsetDays }, perWeek{ linkedin, bluesky }, subjects }
 }`
 
@@ -96,6 +99,7 @@ export function recipeFromStored(
   if (!stored?.key || !stored.beat || !stored.kind) return null
   const anchor = anchorFrom(stored.anchor)
   const cadence = cadenceFrom(stored.cadence)
+  const format = studioFormatSchema.safeParse(stored.format)
   const prerequisites = (stored.prerequisites ?? []).filter(
     (key): key is string => typeof key === 'string',
   )
@@ -115,6 +119,7 @@ export function recipeFromStored(
     ...(stored.alt ? { alt: stored.alt } : {}),
     ...(stored.instructions ? { instructions: stored.instructions } : {}),
     ...(cadence ? { cadence } : {}),
+    ...(format.success ? { format: format.data } : {}),
   }
 }
 

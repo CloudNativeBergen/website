@@ -1,3 +1,8 @@
+import {
+  STUDIO_FORMAT_IDS,
+  studioFormatLabel,
+} from '../../src/lib/marketing-asset/format'
+
 /**
  * Shared constants for Sanity schema field options.
  *
@@ -52,3 +57,9 @@ export const HEROICON_OPTIONS = [
   { title: 'Trophy', value: 'TrophyIcon' },
   { title: 'User Group', value: 'UserGroupIcon' },
 ] as const
+
+/** The studio Formats (docs/MARKETING_STUDIO_FORMATS_SPEC.md §2), named with their pixels. */
+export const STUDIO_FORMAT_OPTIONS = STUDIO_FORMAT_IDS.map((value) => ({
+  value,
+  title: studioFormatLabel(value),
+}))

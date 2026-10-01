@@ -84,6 +84,14 @@ import {
   taskRenderAssetDocumentId,
 } from '@/lib/marketing-asset/task-render'
 import {
+  taskRenderCardSchema,
+  type TaskRenderCard,
+} from '@/lib/marketing-asset'
+import {
+  formatMismatch,
+  storedRenderFormat,
+} from '@/lib/marketing/render-format'
+import {
   AttachTaskAssetSchema,
   CreateTaskSchema,
   DeleteTemplateSchema,
@@ -615,6 +623,7 @@ async function trySaveRenderToGallery(
   task: StudioTask,
   imageAssetId: string,
   conferenceId: string,
+  studio: TaskRenderCard | undefined,
 ): Promise<'saved' | 'superseded' | 'failed'> {
   try {
     const outcome = await saveTaskRenderToGallery({
@@ -622,6 +631,7 @@ async function trySaveRenderToGallery(
       conferenceId,
       taskId: task._id,
       imageAssetId,
+      ...(studio ? { studio } : {}),
       admitSubject: subjectOfThisOrganization,
     })
     return outcome === 'superseded' ? 'superseded' : 'saved'
@@ -651,6 +661,12 @@ async function subjectOfThisOrganization(
     if (error instanceof TRPCError && error.code === 'NOT_FOUND') return null
     throw error
   }
+}
+
+/** The card the Task's saved render was attached from, if it was one. */
+function savedCard(task: StudioTask): TaskRenderCard | undefined {
+  const parsed = taskRenderCardSchema.safeParse(task.renderCard)
+  return parsed.success ? parsed.data : undefined
 }
 
 /** A gallery asset's framing of its image, as a post takes it (#1163). */
@@ -1451,7 +1467,24 @@ export const marketingRouter = router({
             message: 'Only unsent, open outreach Tasks can change destination.',
           })
         }
+        // The Format a render is made in, chosen before it is made: a render
+        // attached already is in the Format it was made in (Formats spec §4).
+        if (
+          input.format !== undefined &&
+          (data.task.kind !== 'studioRender' ||
+            data.task.status !== 'open' ||
+            data.task.complete)
+        ) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message:
+              data.task.kind === 'studioRender'
+                ? 'The Format is chosen before the render is made.'
+                : 'Only a studio render Task has a Format.',
+          })
+        }
         const fields: Record<string, unknown> = {}
+        if (input.format !== undefined) fields.format = input.format
         let updateCode: MutationShortCode | undefined
         if (input.targetPage !== undefined) {
           fields.targetPage = input.targetPage
@@ -1839,6 +1872,17 @@ export const marketingRouter = router({
           })
         // Or an image asset of this organization's gallery (spec §4.3,
         // #1166): proven ours before anything of it is read.
+        // A card made in the studio is the Task's Format (Formats spec §4),
+        // refused before anything is read or written of the image.
+        const card = 'assetId' in input ? input.studio : undefined
+        if (card && card.format !== storedRenderFormat(task.format))
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: formatMismatch(
+              storedRenderFormat(task.format),
+              card.format,
+            ),
+          })
         let pick: GalleryPickForTask | null = null
         let assetId: string
         if ('marketingAssetId' in input) {
@@ -1904,10 +1948,14 @@ export const marketingRouter = router({
           // the Task editor offers a retry for; cleared with the receipts.
           // A gallery asset is there already.
           ...(newImage && !pick ? { galleryPending: true } : {}),
+          // The card a new render was made from, kept with it so a gallery
+          // save retried from the Task editor records it too (Formats §4).
+          ...(newImage && !pick && card ? { renderCard: card } : {}),
           ...selectionSet,
         }
         const unset = [
           ...(newImage && !pick ? ['pendingStudioAsset'] : []),
+          ...(newImage && (pick || !card) ? ['renderCard'] : []),
           ...(clearPending ? ['galleryPending'] : []),
           ...selectionUnset,
         ]
@@ -1956,7 +2004,13 @@ export const marketingRouter = router({
         // an entry the organizer has since deleted.
         const gallery =
           !pick && (newImage || task.galleryPending === true)
-            ? await trySaveRenderToGallery(task, assetId, conferenceId)
+            ? await trySaveRenderToGallery(
+                task,
+                assetId,
+                conferenceId,
+                // A retry of the saved render: the card it was attached from.
+                card ?? (newImage ? undefined : savedCard(task)),
+              )
             : 'skipped'
         // Only a mark this save set, or one already there, needs clearing.
         let galleryMarkFailed = false

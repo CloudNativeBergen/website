@@ -1,5 +1,6 @@
 import { defineArrayMember, defineField, defineType } from 'sanity'
 import { MILESTONES } from '@/lib/marketing/milestones'
+import { STUDIO_FORMAT_OPTIONS } from './constants'
 import {
   MARKETING_CHANNELS,
   OUTCOME_LABELS,
@@ -260,6 +261,16 @@ export default defineType({
               name: 'instructions',
               title: 'Instructions',
               type: 'text',
+            }),
+            defineField({
+              name: 'format',
+              title: 'Format',
+              description:
+                'Render recipes only: the one Format the render is made in. Absent (every recipe stored before Formats included), one render is made per Format the posts waiting on it need: LinkedIn landscape, Bluesky square.',
+              type: 'string',
+              options: {
+                list: STUDIO_FORMAT_OPTIONS,
+              },
             }),
             defineField({
               name: 'cadence',

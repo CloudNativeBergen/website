@@ -206,11 +206,70 @@ describe('expandTemplate — Tasks', () => {
   it('resolves Prerequisites to Task ids in the same Campaign', () => {
     const plan = seed()
     const render = byKey(plan, 'cfp', 'cfpOpenRender')
-    const li = byKey(plan, 'cfp', 'cfpOpen:linkedin')
+    const bs = byKey(plan, 'cfp', 'cfpOpen:bluesky')
     expect(render.kind).toBe('studioRender')
-    expect(li.prerequisiteIds).toEqual([render._id])
+    expect(bs.prerequisiteIds).toEqual([render._id])
     // The render is dated two days before the beat.
     expect(render.dueAt).toBe('2027-01-08T08:00:00.000Z') // 09:00 Oslo
+  })
+
+  it('makes one render per Format the beat posts in: LinkedIn waits on the landscape one, Bluesky on the square one (Formats spec §5)', () => {
+    const plan = seed()
+    const cfp = plan.campaigns.find((c) => c.key === 'cfp')!
+    const renders = plan.tasks.filter(
+      (t) => t.campaignId === cfp._id && t.key.startsWith('cfpOpenRender'),
+    )
+    expect(renders.map((t) => [t.key, t.kind, t.format])).toEqual([
+      ['cfpOpenRender', 'studioRender', 'square'],
+      ['cfpOpenRender:landscape', 'studioRender', 'landscape'],
+    ])
+    const [square, landscape] = renders
+    expect(byKey(plan, 'cfp', 'cfpOpen:linkedin').prerequisiteIds).toEqual([
+      landscape._id,
+    ])
+    expect(byKey(plan, 'cfp', 'cfpOpen:bluesky').prerequisiteIds).toEqual([
+      square._id,
+    ])
+    // Both are the same beat's work: same day, same alt.
+    expect(landscape.dueAt).toBe(square.dueAt)
+    expect(landscape.alt).toBe(square.alt)
+  })
+
+  it('never stores a Format on a publishing Task, and stores one on every render', () => {
+    const plan = seed({ includeOptional: ['sponsorAcquisition', 'keynotes'] })
+    for (const t of plan.tasks) {
+      if (t.kind === 'studioRender') expect(t.format, t.key).toBeDefined()
+      else expect(t.format, t.key).toBeUndefined()
+    }
+  })
+
+  it('two posts wanting square share one render, and a Recipe that names a Format is made once in it', () => {
+    const template = structuredClone(BUILTIN_TEMPLATE)
+    const cfp = template.campaigns.find((c) => c.key === 'cfp')!
+    // Both of the beat's posts on Bluesky: one Format wanted.
+    cfp.recipes = cfp.recipes.map((r) =>
+      r.key === 'cfpOpen:linkedin' ? { ...r, channel: 'bluesky' } : r,
+    )
+    const shared = seed({ template })
+    const renders = (plan: SeedPlan) => {
+      const id = plan.campaigns.find((c) => c.key === 'cfp')!._id
+      return plan.tasks
+        .filter((t) => t.campaignId === id && t.key.startsWith('cfpOpenRender'))
+        .map((t) => [t.key, t.format])
+    }
+    expect(renders(shared)).toEqual([['cfpOpenRender', 'square']])
+    const render = byKey(shared, 'cfp', 'cfpOpenRender')
+    expect(byKey(shared, 'cfp', 'cfpOpen:linkedin').prerequisiteIds).toEqual([
+      render._id,
+    ])
+
+    cfp.recipes = structuredClone(BUILTIN_TEMPLATE)
+      .campaigns.find((c) => c.key === 'cfp')!
+      .recipes.map((r) =>
+        r.key === 'cfpOpenRender' ? { ...r, format: 'portrait' as const } : r,
+      )
+    const pinned = seed({ template })
+    expect(renders(pinned)).toEqual([['cfpOpenRender', 'portrait']])
   })
 
   it('creates a post plus one draft variant per publishing Task, placeholders resolved', () => {
@@ -485,7 +544,11 @@ it('does not re-offer a post this edition has already published', () => {
   // second time. Trigger and expansion generation has always consulted these
   // keys; seeding did not.
   const all = seed()
-  const sent = all.tasks.find((t) => t.kind === 'publishing')!
+  // A post with no render: one render per Format means a render with one
+  // post would go with it (the next test).
+  const sent = all.tasks.find(
+    (t) => t.kind === 'publishing' && t.prerequisiteIds.length === 0,
+  )!
   const again = seed({ publishedKeys: pairsOf(all, [sent]) })
   expect(again.tasks.some((t) => t.key === sent.key)).toBe(false)
   // Only that one: every other Task is still seeded.

@@ -600,7 +600,7 @@ export const ListView: Story = {
     const table = await canvas.findByRole('table', {
       name: 'Marketing plan tasks',
     })
-    await expect(within(table).getAllByRole('row')).toHaveLength(95)
+    await expect(within(table).getAllByRole('row')).toHaveLength(101)
     await expect(within(table).getAllByRole('columnheader')).toHaveLength(7)
   },
 }
@@ -822,7 +822,7 @@ export const ListViewMobile: Story = {
     const table = await canvas.findByRole('table', {
       name: 'Marketing plan tasks',
     })
-    await expect(within(table).getAllByRole('row')).toHaveLength(95)
+    await expect(within(table).getAllByRole('row')).toHaveLength(101)
     await expect(canvas.getByRole('button', { name: 'Filters' })).toBeVisible()
   },
   parameters: {
@@ -857,7 +857,7 @@ export const FiltersSurviveViewSwitch: Story = {
     // role="status" live region and is always mounted by the decorator.
     await expect(
       canvas.getByRole('status', { name: 'Filter results' }),
-    ).toHaveTextContent(`${expected} of 94 tasks`)
+    ).toHaveTextContent(`${expected} of 100 tasks`)
     await userEvent.click(canvas.getByRole('button', { name: 'Task list' }))
     await canvas.findByRole('table', { name: 'Marketing plan tasks' })
     await expect(taskLinks()).toEqual(before)

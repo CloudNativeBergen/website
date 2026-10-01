@@ -56,6 +56,7 @@ import {
   type ResolvedMilestone,
 } from './milestones'
 import { publishedIn } from './recipes'
+import { renderKeysOf, waitsOnRender } from './render-format'
 import { tagsItsSubject, type BlueskyTag } from './tagging/body'
 import { blueskyTagFor, ownBlueskyHandle } from './tagging/lookup'
 import type { SubjectList, TaskRecipe } from './template/types'
@@ -92,8 +93,8 @@ interface PendingBeat {
   recipes: TaskRecipe[]
   subject: GenerationSubject
   origin: TaskOrigin
-  /** Renders of this beat an earlier run already created. */
-  existingRenderIds: string[]
+  /** Render Recipes of this beat whose Task an earlier run created. */
+  existingRenders: TaskRecipe[]
 }
 
 /**
@@ -133,20 +134,25 @@ export function pendingRecipes(
 ): TaskRecipe[] {
   const generated = new Set(campaign.generatedKeys)
   const published = publishedIn(publishedPairs, campaign.key)
+  const renderKeys = renderKeysOf(recipes)
   return recipes.filter((recipe, index) => {
     const key = generatedTaskKey(recipe.key, subjectId)
     if (generated.has(key) || published.has(key)) return false
     if (recipe.kind !== 'studioRender') return true
-    // buildSubjectBeat makes every later publishing recipe depend on all
-    // earlier non-publishing recipes, even without explicit prerequisites.
+    // The later posts that wait on it: after `splitRendersByFormat`, the
+    // posts of its own Format.
     const dependants = recipes
       .slice(index + 1)
-      .filter((r) => r.kind === 'publishing')
+      .filter((r) => waitsOnRender(r, recipe, renderKeys))
+    // Made only for a post still to be made: a subject whose posts were
+    // generated before Formats waits on its square render, and is not handed
+    // a landscape one nothing would wait on.
     return (
       dependants.length === 0 ||
-      !dependants.every((r) =>
-        published.has(generatedTaskKey(r.key, subjectId)),
-      )
+      dependants.some((r) => {
+        const post = generatedTaskKey(r.key, subjectId)
+        return !generated.has(post) && !published.has(post)
+      })
     )
   })
 }
@@ -156,17 +162,16 @@ export function pendingRecipes(
  * subject. A sibling created now waits on them, so a beat completed over two
  * runs (one Channel had a slot, the other did not) still shows as waiting.
  */
-function existingRenderIds(
+function existingRenders(
   campaign: GenerationCampaign,
   recipes: TaskRecipe[],
   subjectId: string,
-): string[] {
+): TaskRecipe[] {
   const done = new Set(campaign.generatedKeys)
-  return recipes
-    .filter((r) => r.kind !== 'publishing')
-    .map((r) => generatedTaskKey(r.key, subjectId))
-    .filter((key) => done.has(key))
-    .map((key) => generatedTaskId(campaign._id, key))
+  return recipes.filter(
+    (r) =>
+      r.kind !== 'publishing' && done.has(generatedTaskKey(r.key, subjectId)),
+  )
 }
 
 /**
@@ -237,11 +242,7 @@ function pendingBeats(
               recipes: todo,
               subject,
               origin,
-              existingRenderIds: existingRenderIds(
-                campaign,
-                recipes,
-                subject._id,
-              ),
+              existingRenders: existingRenders(campaign, recipes, subject._id),
             })
           }
         }
@@ -325,7 +326,7 @@ function buildBatch(
         subject: item.subject,
         dates,
         origin: item.origin,
-        existingRenderIds: item.existingRenderIds,
+        existingRenders: item.existingRenders,
         tags,
         campaign: { _id: campaign._id, key: campaign.key },
         planId: context.plan._id,

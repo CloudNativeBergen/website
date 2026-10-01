@@ -10,6 +10,7 @@ export {
   useStudioFormat,
 } from './context'
 export type {
+  AttachedCapture,
   ExportedVideo,
   GallerySave,
   ImageAttachment,

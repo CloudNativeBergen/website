@@ -55,6 +55,8 @@ function editorTask(overrides: Partial<TaskEditorTask> = {}): TaskEditorTask {
   return {
     ...view(),
     _rev: 'rev-1',
+    // As the server reads it: a render always has a Format, a post never.
+    format: overrides.kind === 'studioRender' ? 'square' : null,
     approvedByName: null,
     assigneeName: 'Ada Organizer',
     targetPage: '/cfp',
@@ -794,6 +796,64 @@ export const StudioRenderProvisional: Story = {
         ),
       ),
     },
+  },
+}
+
+/**
+ * The landscape render of a beat, for its LinkedIn post (Formats spec §4,
+ * §5): its Format chosen from the post's Channel, the organizer's to change
+ * until it is made, and the studio opened on it.
+ */
+export const StudioRenderLandscape: Story = {
+  args: { taskId: 'task-render' },
+  parameters: {
+    msw: {
+      handlers: handlers(
+        fixture(
+          {
+            _id: 'task-render',
+            key: 'cfpOpenRender:landscape',
+            title: 'Render: CFP open',
+            kind: 'studioRender',
+            channel: null,
+            status: 'open',
+            variantId: null,
+            prerequisiteIds: [],
+            format: 'landscape',
+            date: '2027-01-08T08:00:00.000Z',
+          },
+          null,
+        ),
+      ),
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const select = await canvas.findByRole('combobox', { name: 'Format' })
+    await expect(select).toHaveValue('landscape')
+    await expect(select).toHaveAccessibleDescription(
+      'The studio opens in this Format, and only a render in it can be attached.',
+    )
+    const link = canvas.getByRole('link', { name: 'Open the promo studio' })
+    await expect(link.getAttribute('href')).toContain('format=landscape')
+  },
+}
+
+export const StudioRenderLandscapeDark: Story = {
+  ...StudioRenderLandscape,
+  parameters: {
+    ...StudioRenderLandscape.parameters,
+    theme: 'dark',
+    backgrounds: { default: 'dark' },
+  },
+}
+
+export const StudioRenderLandscapeMobile: Story = {
+  ...StudioRenderLandscape,
+  globals: { viewport: { value: 'mobile1', isRotated: false } },
+  parameters: {
+    ...StudioRenderLandscape.parameters,
+    viewport: { defaultViewport: 'mobile1' },
   },
 }
 

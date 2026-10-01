@@ -15,6 +15,8 @@ import { publishLinkFields } from '@/lib/social/publish-link'
 import { conferenceBaseUrl, findOutboundOrigin } from '@/lib/conference/baseUrl'
 import type { Milestone, ResolvedMilestone } from './milestones'
 import { isOutreach } from './outreach'
+import { channelFormat } from './render-format'
+import type { StudioFormat } from '@/lib/marketing-asset/format'
 import {
   eventTagFor,
   resolvePlaceholders,
@@ -152,6 +154,11 @@ export interface SeedTask {
   plannedAt: string
   /** Only for non-publishing Kinds. */
   status?: TaskStatus
+  /**
+   * studioRender only: the Format it is made in (Formats spec §4). A
+   * publishing Task never has one: its Format is its Channel's.
+   */
+  format?: StudioFormat
   assigneeId: string
   prerequisiteIds: string[]
   /** Publishing Kind only. */
@@ -319,6 +326,10 @@ export function materializeTask(input: MaterializeInput): TaskRecords {
     if (r.targetPage) task.targetPage = r.targetPage
     // Outreach only: its `{url}` is the one non-publishing link a reader sees.
     if (isOutreach(r.kind)) task.shortCode = input.newShortCode()
+    // The Recipe's Format (one per Format its posts need, `render-format.ts`),
+    // else the default of the render's own Channel.
+    if (r.kind === 'studioRender')
+      task.format = r.format ?? channelFormat(r.channel)
     task.dueAt = input.at
     task.status = 'open'
     return { tasks: [task], posts: [], variants: [] }
