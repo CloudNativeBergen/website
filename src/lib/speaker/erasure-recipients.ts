@@ -8,9 +8,13 @@
  * privacy page says so). When the person asks to be erased, the two values
  * that identify them — `name` and `email` — are replaced by a marker, and
  * everything else stays: the body, the subject, the template, the provider
- * id, the other recipients. The generated timeline line is built from the
- * first recipient's name, so a copy of the name standing there is replaced
- * too.
+ * id, the other recipients. Two derived copies go with them: the generated
+ * timeline line ends in the FIRST recipient's name (`describeCommunication`),
+ * and a failed send's provider `error` text may quote the address.
+ *
+ * NOT REACHED: a name or address written into the subject or body of the
+ * email itself. That is free text, which Phase 1 does not erase; the privacy
+ * page and the runbook both say so.
  *
  * THE EMAIL-KEYED CLASS, array shape. The entry holds no reference to the
  * person, so `*[references($id)]` cannot find it; it is reached by address,
@@ -58,7 +62,30 @@ export interface SponsorActivityRecipientDoc {
   _id: string
   _rev?: string
   description?: string
+  /** The provider's message for a failed send; may quote the address. */
+  error?: string
   recipients?: SponsorActivityRecipientEntry[]
+}
+
+/**
+ * The timeline line is `<label> <verb> <first name>` or `… <first name>
+ * (+N)`. Only that tail is replaced, and only for the first recipient, so
+ * a short name never rewrites a word that is not theirs.
+ */
+function redactDescription(description: string, name: string): string | null {
+  const suffix = description.match(/ \(\+\d+\)$/)?.[0] ?? ''
+  const head = description.slice(0, description.length - suffix.length)
+  if (!head.endsWith(` ${name}`)) return null
+  return `${head.slice(0, -name.length)}${REDACTED_RECIPIENT_NAME}${suffix}`
+}
+
+/** Every occurrence of the address in a text, whatever its casing. */
+function redactAddress(text: string, email: string): string | null {
+  const escaped = email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const pattern = new RegExp(escaped, 'gi')
+  return pattern.test(text)
+    ? text.replace(pattern, REDACTED_RECIPIENT_EMAIL)
+    : null
 }
 
 /**
@@ -79,17 +106,14 @@ export function planSponsorRecipientRedaction(
   const entries = Array.isArray(doc.recipients) ? doc.recipients : []
   const set: Record<string, unknown> = {}
   const keys: string[] = []
-  let description =
-    typeof doc.description === 'string' ? doc.description : undefined
-  let descriptionChanged = false
 
-  for (const entry of entries) {
+  entries.forEach((entry, index) => {
     const stored = typeof entry.email === 'string' ? entry.email : ''
-    if (!stored || !emails.includes(normalizeEmail(stored))) continue
+    if (!stored || !emails.includes(normalizeEmail(stored))) return
 
     const nameDone = entry.name === REDACTED_RECIPIENT_NAME
     const emailDone = normalizeEmail(stored) === REDACTED_RECIPIENT_EMAIL
-    if (nameDone && emailDone) continue
+    if (nameDone && emailDone) return
 
     const key = entry._key
     if (typeof key !== 'string' || !SAFE_KEY.test(key)) {
@@ -97,22 +121,27 @@ export function planSponsorRecipientRedaction(
         `Sponsor activity ${doc._id} has a recipient entry naming the subject ` +
           `whose _key ${JSON.stringify(key)} cannot be safely selected; redact it by hand`,
       )
-      continue
+      return
     }
     const path = `recipients[_key=="${key}"]`
     if (!nameDone) set[`${path}.name`] = REDACTED_RECIPIENT_NAME
     if (!emailDone) set[`${path}.email`] = REDACTED_RECIPIENT_EMAIL
     keys.push(key)
 
-    // The timeline line copies the first recipient's name verbatim.
-    if (description && entry.name && description.includes(entry.name)) {
-      description = description.split(entry.name).join(REDACTED_RECIPIENT_NAME)
-      descriptionChanged = true
+    if (index === 0 && entry.name && typeof doc.description === 'string') {
+      const redacted = redactDescription(doc.description, entry.name)
+      if (redacted !== null) set.description = redacted
     }
-  }
+    if (typeof doc.error === 'string' && !emailDone) {
+      const redacted = redactAddress(
+        typeof set.error === 'string' ? set.error : doc.error,
+        stored.trim(),
+      )
+      if (redacted !== null) set.error = redacted
+    }
+  })
 
   if (keys.length === 0) return null
-  if (descriptionChanged) set.description = description
   return {
     id: doc._id,
     type: 'sponsorActivity',
@@ -139,7 +168,7 @@ export async function fetchSponsorRecipientDocs(
       // right belongs to the person, who may be a contact for sponsors of
       // several organizations, so this is not scoped to a tenant.
       groq`*[_type == "sponsorActivity" && count(recipients[lower(email) in $emails]) > 0]{
-        _id, _rev, description, recipients
+        _id, _rev, description, error, recipients
       }`,
       { emails },
       { cache: 'no-store' },

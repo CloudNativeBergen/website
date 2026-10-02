@@ -1314,6 +1314,8 @@ function sendRecord(
 
 describe('a sponsor send record naming the subject is redacted, not deleted', () => {
   it('stages a revision-guarded patch replacing the name and address, nothing else', () => {
+    // The record carries `ADA.L@work.io` — a `knownEmails` entry, not the
+    // display email, and not in the match set's casing.
     const plan = buildErasurePlan(
       inputs({ sponsorActivityDocs: [sendRecord()] }),
     )
@@ -1331,14 +1333,6 @@ describe('a sponsor send record naming the subject is redacted, not deleted', ()
     // touched, and the record itself is never deleted.
     expect(patch.unset).toBeUndefined()
     expect(plan.documentDeletes.find((d) => d.id === ACTIVITY)).toBeUndefined()
-  })
-
-  it('matches any address in the subject’s match set, case-insensitively', () => {
-    // `ADA.L@work.io` is a `knownEmails` entry, not the display email.
-    const plan = buildErasurePlan(
-      inputs({ sponsorActivityDocs: [sendRecord()] }),
-    )
-    expect(plan.documentPatches.some((p) => p.id === ACTIVITY)).toBe(true)
   })
 
   it('leaves a record addressed to somebody else alone', () => {

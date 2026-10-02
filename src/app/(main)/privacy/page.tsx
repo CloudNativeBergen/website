@@ -547,7 +547,8 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                           your data, your name and email address in these
                           records are replaced by a marker; the subject and body
                           as sent are kept as the organization&apos;s business
-                          record.
+                          record, so a name written into the email text itself
+                          stays.
                         </li>
                       </ul>
                       <div className="mt-3 rounded-lg bg-sky-100 p-2 dark:bg-sky-800/30">

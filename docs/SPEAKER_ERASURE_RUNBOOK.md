@@ -441,9 +441,9 @@ references the person.
 
 **What erasure does to an entry: redacts, does not delete** (website#1265).
 
-| Kept                                                                                                                                     | Replaced                                                                                                                                        |
-| ---------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| `subject`, `body`, `template`, `attachments`, `providerMessageId`, `deliveryStatus`, `error`, `contactKey`, `role`, the other recipients | `recipients[].name` → `Erased contact`, `recipients[].email` → `erased@anonymous.invalid`, and the name inside the generated `description` line |
+| Kept                                                                                                                            | Replaced                                                                                                                                                                                                         |
+| ------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `subject`, `body`, `template`, `attachments`, `providerMessageId`, `deliveryStatus`, `contactKey`, `role`, the other recipients | `recipients[].name` → `Erased contact`, `recipients[].email` → `erased@anonymous.invalid`, the name ending the generated `description` line, and the address wherever a failed send's provider `error` quotes it |
 
 Only entries carrying one of the subject's addresses are touched; another
 contact on the same record is left alone. A second run finds nothing to change.

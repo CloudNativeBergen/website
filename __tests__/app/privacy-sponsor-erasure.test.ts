@@ -27,7 +27,7 @@ describe('sponsor send records on /privacy', () => {
 
   it('states what an erasure request does: name and email replaced, content kept', () => {
     expect(privacy).toContain(
-      "If you ask us to erase your data, your name and email address in these records are replaced by a marker; the subject and body as sent are kept as the organization's business record.",
+      "If you ask us to erase your data, your name and email address in these records are replaced by a marker; the subject and body as sent are kept as the organization's business record, so a name written into the email text itself stays.",
     )
   })
 

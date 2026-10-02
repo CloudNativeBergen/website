@@ -1,12 +1,20 @@
 /**
  * Pure-planner tests for the sent-communication branch of erasure (#1265).
  *
- * Every test fails on a VALUE — the name or address still standing, a field
- * that should have survived being touched, a patch addressing the wrong
- * document — never on an absence.
+ * The positive tests fail on a VALUE: the name or address still standing, a
+ * field that should have survived being touched, the wrong document
+ * addressed. The negative ones (somebody else's record, no recipients, an
+ * already-redacted entry) assert `null`, and each is paired with a positive
+ * test on the same fixture so the path cannot pass vacuously.
+ *
+ * Two of the tests go through the real thing rather than this module's view
+ * of it: the planned `set` is applied by `@sanity/mutator`, Sanity's own
+ * patch engine, and the GROQ read is run by `groq-js` over a tiny dataset.
  */
 
 import { describe, it, expect } from 'vitest'
+import { createRequire } from 'node:module'
+import { parse, evaluate } from 'groq-js'
 import {
   planSponsorRecipientRedaction,
   REDACTED_RECIPIENT_EMAIL,
@@ -15,6 +23,16 @@ import {
 } from './erasure-recipients'
 
 const EMAILS = ['ada@example.com', 'ada.l@work.io']
+
+// `@sanity/mutator` is a dependency of `sanity`, not of this repo, so it is
+// resolved from there — the same way `speaker.socialTagOptOut.test.ts` does.
+const { Mutation } = createRequire(
+  createRequire(import.meta.url).resolve('sanity/package.json'),
+)('@sanity/mutator') as {
+  Mutation: new (o: { mutations: unknown[] }) => {
+    apply: (d: unknown) => Record<string, unknown> | null
+  }
+}
 
 function activity(
   overrides: Partial<SponsorActivityRecipientDoc> = {},
@@ -75,13 +93,63 @@ describe('a sent-communication record loses the subject’s name and address', (
     )
   })
 
-  it('leaves the description alone when it does not carry the name', () => {
+  it('leaves the description alone when the subject is not its first recipient', () => {
+    // "Al" is inside "Alan": a substring replace would turn the line into
+    // "Erased contactan (+1)". Only the first recipient is ever in the line.
     const patch = planSponsorRecipientRedaction(
-      activity({ description: 'Information sent to Bob Builder (+1)' }),
+      activity({
+        description: 'Information sent to Alan Turing (+1)',
+        recipients: [
+          {
+            _key: 'k-alan',
+            contactKey: 'k-alan',
+            name: 'Alan Turing',
+            email: 'alan@example.com',
+            isDefault: true,
+          },
+          {
+            _key: 'k-al',
+            contactKey: 'k-al',
+            name: 'Al',
+            email: 'ada@example.com',
+            isDefault: false,
+          },
+        ],
+      }),
       EMAILS,
       [],
     )!
-    expect(patch.set!.description).toBeUndefined()
+    expect(patch.set).toEqual({
+      'recipients[_key=="k-al"].name': REDACTED_RECIPIENT_NAME,
+      'recipients[_key=="k-al"].email': REDACTED_RECIPIENT_EMAIL,
+    })
+  })
+
+  it('redacts the address out of a failed send’s provider error, whatever its casing', () => {
+    const patch = planSponsorRecipientRedaction(
+      activity({
+        error:
+          'Mailbox for ADA@example.com does not exist (ada@example.com rejected)',
+      }),
+      EMAILS,
+      [],
+    )!
+    expect(patch.set!.error).toBe(
+      `Mailbox for ${REDACTED_RECIPIENT_EMAIL} does not exist (${REDACTED_RECIPIENT_EMAIL} rejected)`,
+    )
+  })
+
+  it('leaves an error that does not quote the address alone', () => {
+    const patch = planSponsorRecipientRedaction(
+      activity({ error: 'Rate limited (429)' }),
+      EMAILS,
+      [],
+    )!
+    expect(patch.set).toEqual({
+      'recipients[_key=="contact-ada"].name': REDACTED_RECIPIENT_NAME,
+      'recipients[_key=="contact-ada"].email': REDACTED_RECIPIENT_EMAIL,
+      description: `Information sent to ${REDACTED_RECIPIENT_NAME} (+1)`,
+    })
   })
 
   it('matches case-insensitively against the whole match set', () => {
@@ -168,5 +236,66 @@ describe('a sent-communication record loses the subject’s name and address', (
     expect(patch).toBeNull()
     expect(refusals).toHaveLength(1)
     expect(refusals[0]).toContain('activity-1')
+  })
+})
+
+describe('the patch and the read work against the real engines, not this module’s mock of them', () => {
+  const RECIPIENTS = activity().recipients!
+  const FULL_RECORD = {
+    ...activity(),
+    recipients: RECIPIENTS,
+    _type: 'sponsorActivity',
+    activityType: 'email',
+    communicationKind: 'information',
+    subject: 'Welcome, Ada',
+    body: '<p>Hi Ada, here is the information.</p>',
+    providerMessageId: 'msg-1',
+    deliveryStatus: 'sent',
+    createdAt: '2026-10-01T10:00:00.000Z',
+  }
+
+  it('applied by @sanity/mutator, the set reaches the keyed entry and nothing else moves', () => {
+    const patch = planSponsorRecipientRedaction(FULL_RECORD, EMAILS, [])!
+    const after = new Mutation({
+      mutations: [{ patch: { id: FULL_RECORD._id, set: patch.set } }],
+    }).apply(FULL_RECORD)!
+
+    const recipients = after.recipients as Array<Record<string, unknown>>
+    expect(recipients[0]).toEqual({
+      _key: 'contact-ada',
+      contactKey: 'contact-ada',
+      name: REDACTED_RECIPIENT_NAME,
+      email: REDACTED_RECIPIENT_EMAIL,
+      role: 'Signer',
+      isDefault: true,
+    })
+    expect(recipients[1]).toEqual(RECIPIENTS[1])
+    expect(after.description).toBe(
+      `Information sent to ${REDACTED_RECIPIENT_NAME} (+1)`,
+    )
+    // The business record, byte for byte.
+    expect(after.subject).toBe('Welcome, Ada')
+    expect(after.body).toBe('<p>Hi Ada, here is the information.</p>')
+    expect(after.providerMessageId).toBe('msg-1')
+    expect(after.deliveryStatus).toBe('sent')
+    expect(after.communicationKind).toBe('information')
+  })
+
+  it('the GROQ read selects by any recipient address, case-insensitively, and nothing else', async () => {
+    const query =
+      '*[_type == "sponsorActivity" && count(recipients[lower(email) in $emails]) > 0]{ _id }'
+    const dataset = [
+      FULL_RECORD,
+      {
+        ...FULL_RECORD,
+        _id: 'activity-other',
+        recipients: [RECIPIENTS[1]],
+      },
+      { _id: 'not-an-activity', _type: 'speaker', email: 'ada@example.com' },
+    ]
+    const ids = await (
+      await evaluate(parse(query), { dataset, params: { emails: EMAILS } })
+    ).get()
+    expect(ids).toEqual([{ _id: 'activity-1' }])
   })
 })
