@@ -175,9 +175,11 @@ export const NewPrimarySpeakerSchema = z.strictObject({
 // organizer typing a proposal into the admin modal arrived through no campaign
 // link, and must not be able to assert one.
 export const ProposalAdminCreateSchema = ProposalInputBaseSchema.omit({
+  topics: true,
   utm: true,
 })
   .extend({
+    topics: z.array(ReferenceSchema),
     speakers: z
       .array(z.string())
       .max(MAX_SPEAKERS_PER_PROPOSAL, TOO_MANY_SPEAKERS_MESSAGE)
