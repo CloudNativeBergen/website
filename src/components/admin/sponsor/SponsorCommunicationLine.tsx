@@ -49,7 +49,7 @@ export function SponsorCommunicationLine({
           onClick={() => setExpanded((v) => !v)}
           aria-expanded={expanded}
           aria-controls={recordId}
-          className="min-w-0 flex-1 cursor-pointer text-left"
+          className="min-w-0 flex-1 cursor-pointer rounded-md text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
         >
           <p className="text-sm text-gray-700 dark:text-gray-200">
             {activity.description}
@@ -77,6 +77,9 @@ export function SponsorCommunicationLine({
             aria-label={expanded ? 'Hide sent email' : 'Show sent email'}
             aria-expanded={expanded}
             aria-controls={recordId}
+            // The line itself is the keyboard control; this is a pointer
+            // affordance, so it does not add a second tab stop per row.
+            tabIndex={-1}
             className="flex h-7 w-7 items-center justify-center rounded-md text-gray-400 hover:bg-gray-100 hover:text-gray-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:hover:bg-gray-700 dark:hover:text-gray-200"
           >
             <ChevronDownIcon

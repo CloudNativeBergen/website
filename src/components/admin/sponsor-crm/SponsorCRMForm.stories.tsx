@@ -316,7 +316,7 @@ export const HistoryView: Story = {
   },
 }
 
-/** Sent emails view — the send audit for this sponsor (#1261). */
+/** Communications view — the send audit for this sponsor (#1261). */
 export const CommunicationsView: Story = {
   args: {
     sponsor: mockSponsor(),
@@ -371,7 +371,7 @@ export const CommunicationsView: Story = {
   play: async ({ canvasElement }) => {
     const body = within(canvasElement.ownerDocument.body)
     await body.findByText('Information sent to Jane Smith')
-    await expect(body.getByText('Sent emails')).toBeInTheDocument()
+    await expect(body.getByText('Communications')).toBeInTheDocument()
   },
 }
 

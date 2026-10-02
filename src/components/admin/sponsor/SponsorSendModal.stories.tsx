@@ -224,7 +224,7 @@ export const SendToTwoContacts: Story = {
   },
 }
 
-/** Deselecting every contact surfaces the hint and the send is refused client-side. */
+/** Deselecting every contact surfaces the hint (the client-side refusal itself is pinned in vitest). */
 export const NoRecipientChosen: Story = {
   play: async ({ canvasElement }) => {
     const body = within(canvasElement.ownerDocument.body)
@@ -246,6 +246,6 @@ export const NoContacts: Story = {
 
 export const Mobile: Story = {
   parameters: {
-    viewport: { defaultViewport: 'mobile1' },
+    viewport: { value: 'mobile1', isRotated: false },
   },
 }

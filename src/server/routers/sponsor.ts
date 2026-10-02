@@ -185,6 +185,7 @@ import { brandedOr, resolveEmailBrandPalette } from '@/lib/branding/email'
 import { isValidPortableText } from '@/lib/portabletext/validation'
 import type { PortableTextBlock } from '@portabletext/types'
 import type { SponsorForConferenceExpanded } from '@/lib/sponsor-crm/types'
+import type { SponsorEmailTemplate } from '@/lib/sponsor/types'
 import { publishSponsorStatusChange } from '@/lib/sponsor-crm/events'
 import '@/lib/events/registry'
 
@@ -2910,10 +2911,11 @@ export const sponsorRouter = router({
         // STORED on the audit record as a reference the timeline dereferences.
         // Resolve it through the org-scoped reader (fails closed), so a foreign
         // or wrong-typed id can never become provenance.
+        let template: SponsorEmailTemplate | undefined
         if (input.template) {
-          const { template, error } = await getSponsorEmailTemplate(
-            input.template.id,
-          )
+          const found = await getSponsorEmailTemplate(input.template.id)
+          const { error } = found
+          template = found.template
           if (error) {
             throw new TRPCError({
               code: 'INTERNAL_SERVER_ERROR',
@@ -2948,7 +2950,8 @@ export const sponsorRouter = router({
           recipientKeys: input.recipientKeys,
           subject: input.subject,
           message,
-          template: input.template,
+          template,
+          senderName: ctx.speaker.name || undefined,
         })
 
         if (!result.ok) {
@@ -2980,6 +2983,97 @@ export const sponsorRouter = router({
           success: true as const,
           activityId: result.activityId,
           providerMessageId: result.providerMessageId,
+          recipientCount: result.recipients.length,
+        }
+      }),
+
+    /**
+     * DEPRECATED shim for the external `cnctl` CLI (`cnctl admin sponsors
+     * email` posts here with a Markdown body — see
+     * CloudNativeBergen/cnctl `src/commands/sponsors/email.rs`). It is the
+     * old wire shape on top of the ONE send primitive: every contact with an
+     * email is a recipient, the kind is `information`, and the send is
+     * recorded exactly like a modal send. Remove once cnctl calls
+     * `sendCommunication` itself.
+     */
+    sendEmailBySfc: adminProcedure
+      .input(
+        z.object({
+          sponsorForConferenceId: z.string().min(1),
+          subject: z.string().trim().min(1).max(200),
+          body: z.string().min(1).max(50000),
+        }),
+      )
+      .mutation(async ({ input, ctx }) => {
+        await requireDocumentInCurrentConference(
+          input.sponsorForConferenceId,
+          'sponsorForConference',
+        )
+        const { conference, error: conferenceError } =
+          await getConferenceForCurrentDomain({ sponsors: true })
+        if (conferenceError || !conference) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to fetch conference',
+          })
+        }
+        const { markdownToPortableTextBody } =
+          await import('@/lib/email/markdown')
+        const message = markdownToPortableTextBody(input.body)
+        if (message.length === 0) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Message body is empty after conversion',
+          })
+        }
+        // The old contract: every contact that has an email. Resolved on the
+        // server from the sponsor's own contacts, like any other send.
+        const contacts = await clientReadUncached.fetch<
+          Array<{ _key: string; email?: string }>
+        >(
+          `*[_type == "sponsorForConference" && _id == $sfcId && conference._ref == $conferenceId][0].contactPersons[]{ _key, email }`,
+          {
+            sfcId: input.sponsorForConferenceId,
+            conferenceId: conference._id,
+          },
+        )
+        const recipientKeys = (contacts ?? [])
+          .filter((c) => !!c.email)
+          .map((c) => c._key)
+        if (recipientKeys.length === 0) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Sponsor has no contact persons with email addresses',
+          })
+        }
+        const result = await sendSponsorCommunication({
+          conference,
+          orgId: ctx.orgId,
+          actorId: ctx.speaker._id ?? null,
+          sponsorForConferenceId: input.sponsorForConferenceId,
+          kind: 'information',
+          recipientKeys,
+          subject: input.subject,
+          message,
+          senderName: ctx.speaker.name || undefined,
+        })
+        if (!result.ok) {
+          throw new TRPCError({
+            code:
+              result.reason === 'not-found'
+                ? 'NOT_FOUND'
+                : result.reason === 'bad-recipients'
+                  ? 'BAD_REQUEST'
+                  : 'INTERNAL_SERVER_ERROR',
+            message:
+              result.reason === 'not-found'
+                ? 'Sponsor not found in this conference'
+                : result.message,
+          })
+        }
+        return {
+          success: true as const,
+          emailId: result.providerMessageId,
           recipientCount: result.recipients.length,
         }
       }),

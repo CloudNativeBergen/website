@@ -309,7 +309,7 @@ export function SponsorCRMForm({
     logo: 'Logo',
     history: 'History',
     messages: 'Messages',
-    communications: 'Sent emails',
+    communications: 'Communications',
   }
 
   // ModalShell hosts the canonical header (title + subtitle + guarded 44px

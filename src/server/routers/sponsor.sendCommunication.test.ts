@@ -61,6 +61,9 @@ vi.mock('@/lib/sanity/client', () => {
   const fetch = async (query: string, params?: Record<string, unknown>) => {
     h.fetches.push({ query, params })
     if (query.includes('"memberOrgIds"')) return h.tenant
+    if (query.includes('].contactPersons[]')) {
+      return (h.sfc?.contactPersons as unknown[] | undefined) ?? null
+    }
     if (query.includes('_type == "sponsorForConference"')) return h.sfc
     if (query.includes('communicationKind }')) return h.activityProbe
     return h.recordRead
@@ -171,6 +174,51 @@ const INPUT = {
   message: MESSAGE,
 }
 
+/** What the org-scoped reader returns for `tpl-info-en` (merge fields included). */
+const INFO_TEMPLATE = {
+  _id: 'tpl-info-en',
+  category: 'follow-up',
+  language: 'en',
+  subject: 'Booth information for {{{CONFERENCE_TITLE}}}',
+  body: [
+    {
+      _type: 'block',
+      _key: 't1',
+      style: 'normal',
+      markDefs: [],
+      children: [
+        {
+          _type: 'span',
+          _key: 't1s',
+          text: 'Hi {{{CONTACT_NAMES}}}, here is the booth information.',
+          marks: [],
+        },
+      ],
+    },
+  ],
+}
+
+/** The INFO_TEMPLATE as the composer merges it for Kari alone (re-keyed). */
+const MERGED_FOR_KARI = {
+  subject: 'Booth information for Cloud Native Days Bergen',
+  message: JSON.stringify([
+    {
+      _type: 'block',
+      _key: 'editor-1',
+      style: 'normal',
+      markDefs: [],
+      children: [
+        {
+          _type: 'span',
+          _key: 'editor-1a',
+          text: 'Hi Kari Nordmann, here is the booth information.',
+          marks: [],
+        },
+      ],
+    },
+  ]),
+}
+
 const contacts = [
   {
     _key: 'c-primary',
@@ -203,6 +251,8 @@ beforeEach(() => {
     status: 'prospect',
     outreachCount: 0,
     contactPersons: contacts,
+    sponsor: { name: 'Acme AS' },
+    tier: { title: 'Gold' },
   }
   h.activityProbe = null
   h.recordRead = null
@@ -227,9 +277,7 @@ beforeEach(() => {
     slug: 'cloud-native-days-norway',
   })
   h.send.mockResolvedValue({ data: { id: 'resend-msg-1' }, error: null })
-  h.getTemplate.mockResolvedValue({
-    template: { _id: 'tpl-info-en', category: 'follow-up' },
-  })
+  h.getTemplate.mockResolvedValue({ template: INFO_TEMPLATE })
   vi.spyOn(console, 'warn').mockImplementation(() => {})
   vi.spyOn(console, 'error').mockImplementation(() => {})
 })
@@ -304,7 +352,7 @@ describe('a successful send', () => {
     const result = await sponsor().crm.sendCommunication({
       ...INPUT,
       recipientKeys: ['c-primary', 'c-billing'],
-      template: { id: 'tpl-info-en', edited: true },
+      template: { id: 'tpl-info-en', edited: false },
     })
 
     expect(h.send).toHaveBeenCalledTimes(1)
@@ -321,6 +369,7 @@ describe('a successful send', () => {
       subject: 'Booth information',
       deliveryStatus: 'sent',
       providerMessageId: 'resend-msg-1',
+      // Computed on the server: this body is NOT what the template produces.
       templateEdited: true,
       template: { _ref: 'tpl-info-en' },
       createdBy: { _ref: 'sp-admin' },
@@ -423,6 +472,78 @@ describe('template provenance is validated, not trusted', () => {
     await sponsor().crm.sendCommunication(INPUT)
     expect(h.getTemplate).not.toHaveBeenCalled()
     expect(sentCreate()!.template).toBeUndefined()
+  })
+})
+
+describe('the edited flag is computed, not trusted', () => {
+  it('records edited=false when the message is exactly the merged template (re-keyed)', async () => {
+    await sponsor().crm.sendCommunication({
+      ...INPUT,
+      ...MERGED_FOR_KARI,
+      template: { id: 'tpl-info-en', edited: true }, // client lies: ignored
+    })
+    expect(sentCreate()).toMatchObject({
+      template: { _ref: 'tpl-info-en' },
+      templateEdited: false,
+    })
+  })
+
+  it('records edited=true when a single character differs, whatever the client says', async () => {
+    await sponsor().crm.sendCommunication({
+      ...INPUT,
+      ...MERGED_FOR_KARI,
+      subject: MERGED_FOR_KARI.subject + '!',
+      template: { id: 'tpl-info-en', edited: false },
+    })
+    expect(sentCreate()).toMatchObject({ templateEdited: true })
+  })
+
+  it('records edited=true when the greeting names other recipients than those sent to', async () => {
+    await sponsor().crm.sendCommunication({
+      ...INPUT,
+      ...MERGED_FOR_KARI,
+      recipientKeys: ['c-billing'],
+      template: { id: 'tpl-info-en', edited: false },
+    })
+    expect(sentCreate()).toMatchObject({ templateEdited: true })
+  })
+})
+
+describe('the cnctl shim — crm.sendEmailBySfc', () => {
+  it('is the old wire shape on top of the primitive: every mailable contact, recorded like any send', async () => {
+    const result = await sponsor().crm.sendEmailBySfc({
+      sponsorForConferenceId: SFC,
+      subject: 'From the CLI',
+      body: 'Hello **there**',
+    })
+    expect(h.send).toHaveBeenCalledTimes(1)
+    expect(h.send.mock.calls[0][0].to).toEqual([
+      'kari@acme.test',
+      'ola@acme.test',
+    ])
+    expect(sentCreate()).toMatchObject({
+      communicationKind: 'information',
+      subject: 'From the CLI',
+      deliveryStatus: 'sent',
+    })
+    expect(sentCreate()!.recipients).toHaveLength(2)
+    expect(result).toMatchObject({
+      success: true,
+      emailId: 'resend-msg-1',
+      recipientCount: 2,
+    })
+  })
+
+  it("refuses another tenant's sponsor before reading it", async () => {
+    h.tenant = { _type: 'sponsorForConference', conferenceId: 'conf-other' }
+    await expect(
+      sponsor().crm.sendEmailBySfc({
+        sponsorForConferenceId: SFC,
+        subject: 'x',
+        body: 'y',
+      }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    expect(h.send).not.toHaveBeenCalled()
   })
 })
 
@@ -586,10 +707,10 @@ describe('reading the record back', () => {
 })
 
 describe('the old per-kind senders are gone', () => {
-  it('crm.sendEmail and crm.sendEmailBySfc no longer exist on the router', () => {
+  it('crm.sendEmail is gone; crm.sendEmailBySfc survives only as the cnctl shim', () => {
     const crm = sponsorRouter._def.procedures as Record<string, unknown>
     expect(crm['crm.sendEmail']).toBeUndefined()
-    expect(crm['crm.sendEmailBySfc']).toBeUndefined()
+    expect(crm['crm.sendEmailBySfc']).toBeDefined()
     expect(crm['crm.sendCommunication']).toBeDefined()
   })
 })

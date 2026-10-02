@@ -7,6 +7,7 @@
  * assertion here is about SponsorSendModal — recipient KEYS only, the primary
  * contact preselected, template provenance and the edited flag.
  */
+import React from 'react'
 import {
   render,
   screen,
@@ -80,7 +81,11 @@ vi.mock('@/components/admin/sponsor/SponsorTemplatePicker', () => ({
             ],
           },
         ] as unknown as PortableTextBlock[]
-        const template = { _id: 'tpl-1' }
+        const template = {
+          _id: 'tpl-1',
+          subject: 'Template subject',
+          body,
+        }
         h.applied = { subject: 'Template subject', body, template }
         onApply('Template subject', body, template)
       }}
@@ -121,6 +126,8 @@ vi.mock('@/components/admin/EmailModal', () => ({
     }) => Promise<void>
     submitButtonText?: string
   }) => {
+    // eslint-disable-next-line react-hooks/rules-of-hooks -- test stub
+    const [tick, setTick] = React.useState(0)
     if (!isOpen) return null
     // Mirror EmailModal: the draft starts from initialValues.
     if (initialValues && !draftSeeded) {
@@ -133,6 +140,7 @@ vi.mock('@/components/admin/EmailModal', () => ({
     return (
       <div>
         <p data-testid="subject">{draft.subject}</p>
+        <span hidden>{tick}</span>
         <button
           type="button"
           onClick={() => {
@@ -459,6 +467,38 @@ describe('provenance edge cases (round 2)', () => {
   })
 })
 
+describe('recipients changed after a template was applied', () => {
+  it('warns, and Re-apply re-merges the greeting for the new recipients', async () => {
+    h.templates = [
+      tpl({
+        _id: 'tpl-default',
+        isDefault: true,
+        language: 'no',
+        subject: 'For {{{CONTACT_NAMES}}}',
+      }),
+    ]
+    renderModal()
+    expect(screen.getByTestId('subject')).toHaveTextContent('For Kari Nordmann')
+    expect(
+      screen.queryByText(/recipients changed after the template was applied/i),
+    ).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Ola Nordmann' }))
+    expect(
+      screen.getByText(/recipients changed after the template was applied/i),
+    ).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Re-apply template' }))
+    expect(
+      screen.queryByText(/recipients changed after the template was applied/i),
+    ).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Send to 2 contacts' }))
+    await waitFor(() => expect(h.mutateAsync).toHaveBeenCalledTimes(1))
+    // Contact order (Ola is listed first on this sponsor), matching the server.
+    expect(h.mutateAsync.mock.calls[0][0].subject).toBe(
+      'For Ola Nordmann and Kari Nordmann',
+    )
+  })
+})
+
 describe('pickDefaultTemplate', () => {
   const crm = { currency: 'NOK' }
   it('never picks a contract template for the information kind', () => {
@@ -481,10 +521,10 @@ describe('pickDefaultTemplate', () => {
     )
     expect(picked?._id).toBe('no')
   })
-  it('falls back to a non-default candidate when nothing is flagged default', () => {
+  it('preselects nothing when no template is flagged default (spec AC4)', () => {
     expect(
-      pickDefaultTemplate([tpl({ _id: 'only' })], 'information', crm)?._id,
-    ).toBe('only')
+      pickDefaultTemplate([tpl({ _id: 'only' })], 'information', crm),
+    ).toBeUndefined()
   })
 })
 

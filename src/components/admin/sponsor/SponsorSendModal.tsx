@@ -32,6 +32,7 @@ import {
   TEMPLATE_NOT_FOUND_MESSAGE,
   TEMPLATE_WRONG_KIND_MESSAGE,
   defaultRecipientKey,
+  isTemplateEdited,
 } from '@/lib/sponsor-crm/communication'
 import { formatConferenceDateLong } from '@/lib/time'
 import { conferenceBaseUrl } from '@/lib/conference/baseUrl'
@@ -62,33 +63,23 @@ export interface SponsorSendModalProps {
   }
 }
 
-/** Strip editor-assigned `_key`s so a re-keyed but unchanged body compares equal. */
-function withoutKeys(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(withoutKeys)
-  if (value && typeof value === 'object') {
-    const out: Record<string, unknown> = {}
-    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-      if (k === '_key') continue
-      out[k] = withoutKeys(v)
-    }
-    return out
-  }
-  return value
-}
-
 interface AppliedTemplate {
   id: string
   subject: string
   body: PortableTextBlock[]
+  /** Recipients whose names were merged into the greeting at apply time. */
+  recipientKeys?: string[]
 }
 
 /**
- * The template a send of this kind starts from (#1261 AC4): a default of the
- * kind's category in the sponsor's suggested language, else any default of
- * the kind, else the best-scoring candidate — `undefined` only when the
- * conference has no template for the kind at all. `information` draws on every
+ * The template a send of this kind starts from (#1261 AC4): among the
+ * templates flagged `isDefault` for the kind, the one in the sponsor's
+ * suggested language and category wins. Nothing flagged default ⇒ nothing is
+ * preselected; the organizer picks or writes. `information` draws on every
  * non-contract category; the contract kind (slice #1264) on `contract`.
  */
+export { isTemplateEdited }
+
 export function pickDefaultTemplate(
   templates: readonly SponsorEmailTemplate[] | undefined,
   kind: CommunicationKind,
@@ -101,17 +92,19 @@ export function pickDefaultTemplate(
   },
 ): SponsorEmailTemplate | undefined {
   if (!templates?.length) return undefined
-  const forKind = templates.filter((t) =>
-    kind === 'contract' ? t.category === 'contract' : t.category !== 'contract',
+  const candidates = templates.filter(
+    (t) =>
+      t.isDefault &&
+      (kind === 'contract'
+        ? t.category === 'contract'
+        : t.category !== 'contract'),
   )
-  if (forKind.length === 0) return undefined
+  if (candidates.length === 0) return undefined
   const language: TemplateLanguage = suggestTemplateLanguage(crm)
   const category: TemplateCategory = suggestTemplateCategory(crm)
   const score = (t: SponsorEmailTemplate) =>
-    (t.isDefault ? 8 : 0) +
-    (t.language === language ? 2 : 0) +
-    (t.category === category ? 1 : 0)
-  return [...forKind].sort(
+    (t.language === language ? 2 : 0) + (t.category === category ? 1 : 0)
+  return [...candidates].sort(
     (a, b) => score(b) - score(a) || (a.sortOrder ?? 0) - (b.sortOrder ?? 0),
   )[0]
 }
@@ -147,21 +140,6 @@ function writeStorage(key: string, value: string | null) {
   } catch {
     // Storage is a convenience; a blocked store must not block sending.
   }
-}
-
-/**
- * Whether the organizer changed what the template produced. Compared on the
- * normalized content, so merely re-keyed blocks do not read as an edit.
- */
-export function isTemplateEdited(
-  applied: AppliedTemplate,
-  sent: { subject: string; message: PortableTextBlock[] },
-): boolean {
-  if (applied.subject !== sent.subject) return true
-  return (
-    JSON.stringify(withoutKeys(applied.body)) !==
-    JSON.stringify(withoutKeys(sent.message))
-  )
 }
 
 /**
@@ -303,9 +281,15 @@ export function SponsorSendModal({
 
   // The template a send started from. Persisted next to EmailModal's draft so
   // a draft restored on reopen keeps its provenance (and its edited baseline).
+  // The ref is what the send reads (always current, even mid-event); the
+  // state mirror is what the RENDER reads (the picker's selected value, the
+  // recipients-changed hint). Both are written only through rememberApplied.
   const appliedTemplateRef = useRef<AppliedTemplate | null>(null)
+  const [appliedTemplate, setAppliedTemplate] =
+    useState<AppliedTemplate | null>(null)
   const rememberApplied = (applied: AppliedTemplate | null) => {
     appliedTemplateRef.current = applied
+    setAppliedTemplate(applied)
     writeStorage(
       provenanceKey(draftKey),
       applied ? JSON.stringify(applied) : null,
@@ -314,14 +298,19 @@ export function SponsorSendModal({
   useEffect(() => {
     if (!isOpen) {
       appliedTemplateRef.current = null
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- reset per close
+      setAppliedTemplate(null)
       return
     }
     const stored = readStorage(provenanceKey(draftKey))
     if (stored) {
       try {
-        appliedTemplateRef.current = JSON.parse(stored) as AppliedTemplate
+        const parsed = JSON.parse(stored) as AppliedTemplate
+        appliedTemplateRef.current = parsed
+        setAppliedTemplate(parsed)
       } catch {
         appliedTemplateRef.current = null
+        setAppliedTemplate(null)
       }
     }
   }, [isOpen, draftKey])
@@ -377,10 +366,48 @@ export function SponsorSendModal({
     senderName,
     tierName: sponsorForConference.tier?.title,
   })
+  // EmailModal hands its setters to the template slot; keeping them lets the
+  // greeting be re-merged when the recipients change AFTER a template was
+  // applied, instead of silently sending "Hi Kari" to Ola.
+  const editorRef = useRef<{
+    setSubject: (s: string) => void
+    setMessage: (b: PortableTextBlock[]) => void
+  } | null>(null)
+  const applyTemplate = (template: SponsorEmailTemplate) => {
+    const subject = processTemplateVariables(
+      template.subject,
+      templateVariables,
+    )
+    const body = (template.body
+      ? processPortableTextVariables(
+          template.body as TemplateBlock[],
+          templateVariables,
+        )
+      : []) as unknown as PortableTextBlock[]
+    rememberApplied({
+      id: template._id,
+      subject,
+      body,
+      recipientKeys: Array.from(selectedKeys),
+    })
+    editorRef.current?.setSubject(subject)
+    editorRef.current?.setMessage(body)
+  }
+  const appliedTemplateDoc = templatesQuery.data?.find(
+    (t) => t._id === appliedTemplate?.id,
+  )
+  const appliedKeys = appliedTemplate?.recipientKeys
+  const recipientsChangedSinceApply =
+    !!appliedTemplateDoc &&
+    !!appliedKeys &&
+    (appliedKeys.length !== selectedKeys.size ||
+      appliedKeys.some((k) => !selectedKeys.has(k)))
+
   const initialFromDefault = useMemo(() => {
     if (!defaultTemplate) return undefined
     return {
       id: defaultTemplate._id,
+      recipientKeys: Array.from(selectedKeys),
       subject: processTemplateVariables(
         defaultTemplate.subject,
         templateVariables,
@@ -440,7 +467,7 @@ export function SponsorSendModal({
         }
       : base
     // A failed send is RECORDED on the server before the mutation rejects, so
-    // the timeline and the Sent emails tab must refresh on either outcome.
+    // the timeline and the Communications tab must refresh on either outcome.
     const invalidateRecords = () => {
       utils.sponsor.crm.activities.list.invalidate()
       utils.sponsor.crm.activities.listCommunications.invalidate()
@@ -499,6 +526,28 @@ export function SponsorSendModal({
   )
 
   const localhostWarning = createLocalhostWarning(domain, 'sponsors')
+  const templatesFailedNotice = templatesQuery.isError ? (
+    <p className="font-inter text-sm text-amber-700 dark:text-amber-300">
+      Templates could not be loaded, so none was applied. You can still write
+      and send.
+    </p>
+  ) : null
+  const recipientsChangedHint =
+    recipientsChangedSinceApply && appliedTemplateDoc ? (
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <p className="font-inter text-sm text-amber-700 dark:text-amber-300">
+          The recipients changed after the template was applied, so the greeting
+          may name the wrong person.
+        </p>
+        <button
+          type="button"
+          onClick={() => applyTemplate(appliedTemplateDoc)}
+          className="font-space-grotesk cursor-pointer rounded-md border border-amber-300 px-2.5 py-1 text-xs font-medium text-amber-800 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-200 dark:hover:bg-amber-900/30"
+        >
+          Re-apply template
+        </button>
+      </div>
+    ) : null
   const noRecipientHint =
     contacts.length > 0 && selectedCount === 0 ? (
       <p className="font-inter text-sm text-amber-700 dark:text-amber-300">
@@ -530,33 +579,40 @@ export function SponsorSendModal({
       brandColor={emailBrandColor(conference.theme)}
       fromAddress={fromEmail}
       warningContent={
-        (localhostWarning || noRecipientHint) && (
+        (localhostWarning ||
+          noRecipientHint ||
+          recipientsChangedHint ||
+          templatesFailedNotice) && (
           <div className="space-y-3">
             {localhostWarning}
+            {templatesFailedNotice}
             {noRecipientHint}
+            {recipientsChangedHint}
           </div>
         )
       }
-      templateSelector={({ setSubject, setMessage }) => (
-        <SponsorTemplatePicker
-          sponsorName={sponsorForConference.sponsor.name}
-          contactNames={
-            selectedNames.length > 0 ? selectedNames.join(' and ') : undefined
-          }
-          conference={conference}
-          senderName={senderName}
-          tierName={sponsorForConference.tier?.title}
-          onApply={(subject, body, template: SponsorEmailTemplate) => {
-            rememberApplied({ id: template._id, subject, body })
-            setSubject(subject)
-            setMessage(body)
-          }}
-          crmContext={crmContext}
-          excludeCategories={
-            kind === 'contract' ? NON_CONTRACT_CATEGORIES : ['contract']
-          }
-        />
-      )}
+      templateSelector={({ setSubject, setMessage }) => {
+        editorRef.current = { setSubject, setMessage }
+        return (
+          <SponsorTemplatePicker
+            sponsorName={sponsorForConference.sponsor.name}
+            contactNames={
+              selectedNames.length > 0 ? selectedNames.join(' and ') : undefined
+            }
+            conference={conference}
+            senderName={senderName}
+            tierName={sponsorForConference.tier?.title}
+            selectedId={appliedTemplate?.id ?? ''}
+            onApply={(_subject, _body, template: SponsorEmailTemplate) =>
+              applyTemplate(template)
+            }
+            crmContext={crmContext}
+            excludeCategories={
+              kind === 'contract' ? NON_CONTRACT_CATEGORIES : ['contract']
+            }
+          />
+        )
+      }}
       initialValues={{
         subject:
           initialFromDefault?.subject ?? `${kindLabel}: ${conference.title}`,

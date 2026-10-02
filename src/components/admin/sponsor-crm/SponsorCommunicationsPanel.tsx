@@ -58,7 +58,8 @@ export function SponsorCommunicationsPanel({
   const first = pages[0]
   const total = first?.data?.total ?? 0
   const firstLoad = !!first && first.isLoading
-  const isError = pages.some((q) => q.isError)
+  const failedPage = pages.find((q) => q.isError)
+  const isError = !!failedPage
   const isFetching = pages.some((q) => q.isFetching)
   const canLoadMore = !isError && !firstLoad && items.length < total
 
@@ -95,31 +96,42 @@ export function SponsorCommunicationsPanel({
             )
           })}
         </div>
-        {!firstLoad && !first?.isError && (
+        {!firstLoad && !isError && (
           <span className="font-inter text-xs text-gray-500 dark:text-gray-400">
             {total === 1 ? '1 email' : `${total} emails`}
           </span>
         )}
       </div>
 
-      {first?.isError ? (
+      {failedPage ? (
         <div
           role="alert"
           className="rounded-lg border border-red-200 bg-red-50/60 p-4 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300"
         >
-          <p className="font-medium">The sent emails could not be loaded.</p>
+          <p className="font-medium">
+            {items.length > 0
+              ? 'More sent emails could not be loaded.'
+              : 'The sent emails could not be loaded.'}
+          </p>
           <p className="mt-1">
             This is a loading problem, not an empty history.{' '}
             <button
               type="button"
-              onClick={() => first.refetch()}
+              onClick={() => failedPage.refetch()}
               className="cursor-pointer font-medium underline underline-offset-2"
             >
               Try again
             </button>
           </p>
         </div>
-      ) : firstLoad ? (
+      ) : null}
+      {failedPage && items.length > 0 ? (
+        <div className="divide-y divide-gray-100 dark:divide-gray-700/50">
+          {items.map((activity) => (
+            <SponsorCommunicationLine key={activity._id} activity={activity} />
+          ))}
+        </div>
+      ) : failedPage ? null : firstLoad ? (
         <div className="space-y-3">
           {[1, 2, 3].map((i) => (
             <div key={i} className="flex gap-3">

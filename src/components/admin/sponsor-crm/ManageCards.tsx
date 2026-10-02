@@ -132,18 +132,18 @@ export function ManageCards({
       dot: null,
       onSelect: () => onOpen('messages'),
     },
-    // Composed one-off email. Kept LAST so the existing four cards keep their
-    // positions, and always offered when the host wires it: the compose modal
-    // itself explains a missing recipient ("No contact persons found"), which
-    // is more useful than a card that silently vanishes.
+    // The send audit (#1261): every email sent to this sponsor.
     {
       key: 'communications',
-      label: 'Sent emails',
+      label: 'Communications',
       icon: PaperAirplaneIcon,
-      status: 'What this sponsor received',
+      status: 'Every email sent',
       dot: null,
       onSelect: () => onOpen('communications'),
     },
+    // Send email. Kept LAST, and always offered when the host wires it: the
+    // modal itself explains a missing recipient, which is more useful than a
+    // card that silently vanishes.
     ...(onEmail
       ? [
           {

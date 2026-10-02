@@ -2,7 +2,13 @@ import 'server-only'
 import { render } from '@react-email/render'
 import type { PortableTextBlock } from '@portabletext/types'
 import type { Conference } from '@/lib/conference/types'
-import type { ContactPerson } from '@/lib/sponsor/types'
+import type { ContactPerson, SponsorEmailTemplate } from '@/lib/sponsor/types'
+import type { PortableTextBlock as TemplateBlock } from '@/lib/sponsor/types'
+import {
+  buildTemplateVariables,
+  processPortableTextVariables,
+  processTemplateVariables,
+} from '@/lib/sponsor/templates'
 import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
 import { resolveEmailSender, retryWithBackoff } from '@/lib/email/config'
 import { resolveConferenceFrom } from '@/lib/email/from'
@@ -12,7 +18,11 @@ import {
 } from '@/lib/email/route-helpers'
 import { getCurrentDateTime } from '@/lib/time'
 import { logCommunication, logStageChange } from './activity'
-import { CommunicationRecipientError, resolveRecipients } from './communication'
+import {
+  CommunicationRecipientError,
+  isTemplateEdited,
+  resolveRecipients,
+} from './communication'
 import type {
   CommunicationAttachment,
   CommunicationKind,
@@ -31,7 +41,15 @@ export interface SendSponsorCommunicationArgs {
   recipientKeys: readonly string[]
   subject: string
   message: PortableTextBlock[]
-  template?: { id: string; edited: boolean }
+  /**
+   * The template the send started from, already proven to belong to this
+   * org by the caller. Whether it was EDITED is computed here, never trusted
+   * from the client: the template is re-merged with the same variables the
+   * composer used and compared to what is actually being sent.
+   */
+  template?: SponsorEmailTemplate
+  /** Who is sending, for the `SENDER_NAME` merge field. */
+  senderName?: string
   attachments?: CommunicationAttachment[]
 }
 
@@ -59,6 +77,48 @@ interface SfcForSend {
   contactInitiatedAt?: string
   outreachCount?: number
   contactPersons?: ContactPerson[]
+  sponsor?: { name?: string }
+  tier?: { title?: string }
+}
+
+/**
+ * Re-merge the template exactly as the composer did (same variable builder,
+ * recipients joined with " and ") and compare with what is being sent. Any
+ * mismatch — including one caused by a variable the composer merged
+ * differently — reads as EDITED, never as "sent as written".
+ */
+function computeTemplateEdited(
+  template: SponsorEmailTemplate,
+  sfc: SfcForSend,
+  conference: Conference,
+  recipients: readonly CommunicationRecipient[],
+  senderName: string | undefined,
+  sent: { subject: string; message: PortableTextBlock[] },
+): boolean {
+  const variables = buildTemplateVariables({
+    sponsorName: sfc.sponsor?.name ?? 'Unknown',
+    contactNames: recipients.map((r) => r.name).join(' and ') || undefined,
+    conference: {
+      title: conference.title,
+      startDate: conference.startDate,
+      city: conference.city,
+      organizer: conference.organizer,
+      domains: conference.domains,
+      prospectusUrl: conference.sponsorshipCustomization?.prospectusUrl,
+    },
+    senderName,
+    tierName: sfc.tier?.title,
+  })
+  const applied = {
+    subject: processTemplateVariables(template.subject, variables),
+    body: template.body
+      ? processPortableTextVariables(
+          template.body as TemplateBlock[],
+          variables,
+        )
+      : [],
+  }
+  return isTemplateEdited(applied, sent)
 }
 
 /**
@@ -77,7 +137,9 @@ export async function sendSponsorCommunication(
   const sfc = await clientReadUncached.fetch<SfcForSend | null>(
     `*[_type == "sponsorForConference" && _id == $sfcId && conference._ref == $conferenceId][0]{
       _id, status, contactInitiatedAt, outreachCount,
-      contactPersons[]{ _key, name, email, role, isPrimary }
+      contactPersons[]{ _key, name, email, role, isPrimary },
+      sponsor->{ name },
+      tier->{ title }
     }`,
     { sfcId: args.sponsorForConferenceId, conferenceId: conference._id },
   )
@@ -126,7 +188,19 @@ export async function sendSponsorCommunication(
     recipients,
     subject: args.subject,
     body: html,
-    template: args.template,
+    template: args.template
+      ? {
+          id: args.template._id,
+          edited: computeTemplateEdited(
+            args.template,
+            sfc,
+            conference,
+            recipients,
+            args.senderName,
+            { subject: args.subject, message: args.message },
+          ),
+        }
+      : undefined,
     attachments: args.attachments,
     createdBy: args.actorId,
   }

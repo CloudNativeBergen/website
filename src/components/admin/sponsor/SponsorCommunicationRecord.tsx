@@ -12,6 +12,7 @@ import type {
 } from '@/lib/sponsor-crm/types'
 import { COMMUNICATION_KIND_LABELS } from '@/lib/sponsor-crm/communication'
 import { formatDateTimeSafe } from '@/lib/time'
+import { isSafeLinkHref } from '@/lib/portabletext/safeHref'
 
 function RecipientChip({ recipient }: { recipient: CommunicationRecipient }) {
   return (
@@ -120,7 +121,7 @@ export function SponsorCommunicationRecord({
         <Field label="Subject">
           <span className="font-medium">{activity.subject}</span>
         </Field>
-        <Field label="Sent">
+        <Field label={failed ? 'Attempted' : 'Sent'}>
           {formatDateTimeSafe(activity.createdAt)}
           {activity.createdBy
             ? ` by ${activity.createdBy.name}`
@@ -145,7 +146,7 @@ export function SponsorCommunicationRecord({
             <ul className="space-y-0.5">
               {record.attachments.map((a, i) => (
                 <li key={i}>
-                  {a.url ? (
+                  {a.url && isSafeLinkHref(a.url) ? (
                     <a
                       href={a.url}
                       target="_blank"

@@ -618,7 +618,9 @@ export function SponsorCRMPipeline({
           sponsorForConference={emailSponsor}
           kind="information"
           domain={domain}
-          fromEmail={conference.sponsorEmail || ''}
+          // Mirrors the server's `resolveConferenceFrom(…, 'sponsorEmail')`
+          // fallback so the From: line shows what will actually be used.
+          fromEmail={conference.sponsorEmail || `sponsors@${domain}`}
           senderName={session?.user?.name || ''}
           conference={{
             title: conference.title || '',

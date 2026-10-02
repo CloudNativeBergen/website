@@ -466,7 +466,7 @@ export const EditActivityDark: Story = {
 export const SentEmailInFeed: Story = {
   parameters: { msw: { handlers: sentEmailHandlers } },
   render: () => (
-    <div className="w-[40rem] rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
+    <div className="w-full max-w-[40rem] rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
       <SponsorActivityTimeline
         sponsorForConferenceId="sfc-1"
         showHeaderFooter={false}

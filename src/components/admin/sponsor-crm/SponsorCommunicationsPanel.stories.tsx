@@ -166,7 +166,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'The Sent emails tab in the sponsor drawer (#1261): only what was sent, newest first, filterable by kind. Each line expands in place to the full record — recipients with role and default marker, subject, template and whether it was edited, provider id, and the body exactly as sent in a sandboxed frame. Failed sends are kept and marked.',
+          'The Communications tab in the sponsor drawer (#1261): only what was sent, newest first, filterable by kind. Each line expands in place to the full record — recipients with role and default marker, subject, template and whether it was edited, provider id, and the body exactly as sent in a sandboxed frame. Failed sends are kept and marked.',
       },
     },
     msw: { handlers: handlersFor(all) },
@@ -267,7 +267,7 @@ export const Empty: Story = {
 export const Mobile: Story = {
   parameters: {
     layout: 'fullscreen',
-    viewport: { defaultViewport: 'mobile1' },
+    viewport: { value: 'mobile1', isRotated: false },
   },
   decorators: [
     (Story) => (

@@ -539,9 +539,11 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                           name, email address and role as they were at the time,
                           the subject and body exactly as sent, which template
                           it started from, when it was sent and by whom, and the
-                          delivery provider&apos;s message id. This record is
-                          kept for the life of the sponsor record so the
-                          organization can show what it sent and to whom.
+                          delivery provider&apos;s message id. A failed delivery
+                          attempt is recorded the same way, together with the
+                          provider&apos;s error message. This record is kept for
+                          the life of the sponsor record so the organization can
+                          show what it sent and to whom.
                         </li>
                       </ul>
                       <div className="mt-3 rounded-lg bg-sky-100 p-2 dark:bg-sky-800/30">

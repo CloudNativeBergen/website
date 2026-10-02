@@ -44,6 +44,8 @@ interface SponsorTemplatePickerProps {
   ) => void
   /** Categories to leave out of the picker (e.g. `contract` for an information send). */
   excludeCategories?: readonly TemplateCategory[]
+  /** The template currently applied, so the select reflects it instead of the placeholder. */
+  selectedId?: string
   crmContext?: {
     tags?: string[]
     status?: string
@@ -62,6 +64,7 @@ export function SponsorTemplatePicker({
   onApply,
   crmContext,
   excludeCategories,
+  selectedId,
 }: SponsorTemplatePickerProps) {
   const { data: allTemplates, isLoading } =
     api.sponsor.emailTemplates.list.useQuery()
@@ -136,8 +139,8 @@ export function SponsorTemplatePicker({
       template,
     )
 
-    // Reset the select so it can be re-selected
-    e.target.value = ''
+    // Uncontrolled use: reset so the same template can be re-selected.
+    if (selectedId === undefined) e.target.value = ''
   }
 
   if (isLoading) {
@@ -155,7 +158,9 @@ export function SponsorTemplatePicker({
   return (
     <select
       onChange={handleSelect}
-      defaultValue=""
+      {...(selectedId === undefined
+        ? { defaultValue: '' }
+        : { value: selectedId ?? '' })}
       className="font-inter w-full border-none bg-transparent px-0 py-1 text-sm text-gray-600 focus:ring-0 focus:outline-none dark:text-gray-300"
     >
       <option value="" disabled>

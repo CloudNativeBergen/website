@@ -113,7 +113,7 @@ Audit log for CRM actions. Each activity references a `sponsorForConference` doc
 | `createdBy`    | Reference to the organizer who performed the action                                                                                                                                                    |
 | `createdAt`    | ISO timestamp                                                                                                                                                                                          |
 
-**Sent-email audit record (#1261).** An `email` activity written by `sponsor.crm.sendCommunication` additionally carries `communicationKind` (`information` · `contract` · `registration` · `discount`), `recipients[]` (contact key, name, email, role, `isDefault` — a snapshot as sent), `subject`, `body` (the rendered HTML exactly as handed to Resend), `template` (weak ref) + `templateEdited`, `attachments[]`, `providerMessageId`, `deliveryStatus` (`sent` · `failed`) and `error`. A record with `communicationKind` is immutable: `activities.update`/`delete` refuse it. The list projection omits `body`/`attachments`; `activities.get` loads them on expand, and `activities.listCommunications` powers the drawer's **Sent emails** tab (kind filter, paged).
+**Sent-email audit record (#1261).** An `email` activity written by `sponsor.crm.sendCommunication` additionally carries `communicationKind` (`information` · `contract` · `registration` · `discount`), `recipients[]` (contact key, name, email, role, `isDefault` — a snapshot as sent), `subject`, `body` (the rendered HTML exactly as handed to Resend), `template` (weak ref) + `templateEdited`, `attachments[]`, `providerMessageId`, `deliveryStatus` (`sent` · `failed`) and `error`. A record with `communicationKind` is immutable: `activities.update`/`delete` refuse it. The list projection omits `body`/`attachments`; `activities.get` loads them on expand, and `activities.listCommunications` powers the drawer's **Communications** tab (kind filter, paged).
 
 ## Status Enumerations
 
@@ -158,8 +158,8 @@ Reusable email templates stored in Sanity for sponsor outreach. Global (not conf
 
 **Access paths:**
 
-- **Web UI**: Template picker inside `SponsorSendModal` (the one Send action on a sponsor, #1261). The organizer picks recipients (primary contact preselected as the default), applies a template, edits, previews and sends via `sponsor.crm.sendCommunication`. `sponsor.crm.sendEmail` / `sendEmailBySfc` were removed in #1261.
-- **Markdown bodies**: `sponsor.emailTemplates.listForSponsor` still serves templates with Markdown bodies for non-web clients.
+- **Web UI**: Template picker inside `SponsorSendModal` (the one Send action on a sponsor, #1261). The organizer picks recipients (primary contact preselected as the default), applies a template, edits, previews and sends via `sponsor.crm.sendCommunication`. `sponsor.crm.sendEmail` was removed in #1261.
+- **CLI**: `cnctl admin sponsors email <id>` still posts a Markdown body to `sponsor.crm.sendEmailBySfc`, which is now a DEPRECATED shim on top of `sendCommunication` (every mailable contact, kind `information`, recorded like any send). Remove the shim once cnctl calls `sendCommunication` itself.
 
 See [EMAIL_SYSTEM.md](EMAIL_SYSTEM.md) for the full email architecture.
 

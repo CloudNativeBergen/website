@@ -20,6 +20,7 @@ The Cloud Native Days Norway website features a comprehensive email system built
 ├─────────────────────────────────────────────────────────────────┤
 │  API Routes / tRPC                                               │
 │  ├── sponsor.crm.sendCommunication (the ONE sponsor send, #1261) │
+│  ├── sponsor.crm.sendEmailBySfc (DEPRECATED cnctl shim → above)  │
 │  ├── sponsor.emailTemplates.listForSponsor (CLI: template list) │
 │  ├── /admin/api/speakers/email/multi (multi-speaker emails)      │
 │  ├── /admin/api/speakers/email/broadcast (audience emails)       │
