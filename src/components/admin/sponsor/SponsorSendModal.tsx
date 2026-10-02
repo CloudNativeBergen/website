@@ -72,11 +72,14 @@ export interface SponsorSendModalProps {
 /** The kinds the Send mutation accepts — mirrors `SendCommunicationSchema.kind`. */
 export type SendableKind = Extract<CommunicationKind, 'information'>
 
+/**
+ * Provenance of the template a draft started from — only what is persisted
+ * (via EmailModal's `additionalFields`) and compared: the id, and which
+ * recipients' names were merged into the greeting at apply time. The edited
+ * baseline is NOT kept here; the server recomputes it from the template.
+ */
 interface AppliedTemplate {
   id: string
-  subject: string
-  body: PortableTextBlock[]
-  /** Recipients whose names were merged into the greeting at apply time. */
   recipientKeys?: string[]
 }
 
@@ -315,7 +318,7 @@ export function SponsorSendModal({
       fields.templateRecipientKeys.length > 0
         ? fields.templateRecipientKeys.split(',')
         : []
-    rememberApplied({ id, subject: '', body: [], recipientKeys: keys })
+    rememberApplied({ id, recipientKeys: keys })
   }
 
   const crmContext = {
@@ -389,8 +392,6 @@ export function SponsorSendModal({
       : []) as unknown as PortableTextBlock[]
     rememberApplied({
       id: template._id,
-      subject,
-      body,
       recipientKeys: Array.from(selectedKeys),
     })
     editorRef.current?.setSubject(subject)

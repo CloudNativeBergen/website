@@ -132,7 +132,8 @@ export function ManageCards({
       dot: null,
       onSelect: () => onOpen('messages'),
     },
-    // The send audit (#1261): every email sent to this sponsor.
+    // The send audit (#1261): emails sent to this sponsor from the CRM's Send
+    // action (the other senders join it in #1262–#1264).
     {
       key: 'communications',
       label: 'Communications',
