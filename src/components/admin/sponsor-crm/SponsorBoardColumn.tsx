@@ -24,6 +24,7 @@ interface SponsorBoardColumnProps {
   onSponsorClick: (sponsor: SponsorForConferenceExpanded) => void
   onSponsorDelete: (sponsorId: string) => void
   onSponsorEmail?: (sponsor: SponsorForConferenceExpanded) => void
+  onSponsorSendDiscountCodes?: (sponsor: SponsorForConferenceExpanded) => void
   onSponsorContract?: (sponsor: SponsorForConferenceExpanded) => void
   onSponsorOpenHistory?: (sponsor: SponsorForConferenceExpanded) => void
   onSponsorAdvanceStage?: (
@@ -46,6 +47,7 @@ export function SponsorBoardColumn({
   onSponsorClick,
   onSponsorDelete,
   onSponsorEmail,
+  onSponsorSendDiscountCodes,
   onSponsorContract,
   onSponsorOpenHistory,
   onSponsorAdvanceStage,
@@ -173,6 +175,11 @@ export function SponsorBoardColumn({
               onDelete={() => onSponsorDelete(sponsor._id)}
               onEmail={
                 onSponsorEmail ? () => onSponsorEmail(sponsor) : undefined
+              }
+              onSendDiscountCodes={
+                onSponsorSendDiscountCodes
+                  ? () => onSponsorSendDiscountCodes(sponsor)
+                  : undefined
               }
               onContract={
                 onSponsorContract ? () => onSponsorContract(sponsor) : undefined

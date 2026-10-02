@@ -438,9 +438,8 @@ describe('standalone discount codes (no sponsor)', () => {
       const linkedRows = (rows: unknown) =>
         vi
           .mocked(clientReadUncached.fetch)
-          .mockImplementation(async (query: string) =>
-            query.includes('"linkedCodes"') ? rows : null,
-          )
+          .mockImplementation((async (query: string) =>
+            query.includes('"linkedCodes"') ? rows : null) as never)
 
       beforeEach(() => {
         h.getConference.mockResolvedValue({
@@ -500,12 +499,12 @@ describe('standalone discount codes (no sponsor)', () => {
       })
 
       it('refuses when the links read FAILED rather than assuming none', async () => {
-        vi.mocked(clientReadUncached.fetch).mockImplementation(
-          async (query: string) => {
-            if (query.includes('"linkedCodes"')) throw new Error('sanity down')
-            return null
-          },
-        )
+        vi.mocked(clientReadUncached.fetch).mockImplementation((async (
+          query: string,
+        ) => {
+          if (query.includes('"linkedCodes"')) throw new Error('sanity down')
+          return null
+        }) as never)
         await expect(
           tickets().admin.createDiscountCode({
             eventId: OUR_EVENT,

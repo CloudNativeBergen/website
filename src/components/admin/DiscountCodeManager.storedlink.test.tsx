@@ -1,0 +1,224 @@
+/**
+ * @vitest-environment jsdom
+ *
+ * THE STORED SPONSOR↔CODE LINK in the discount code manager (#1262).
+ *
+ * A sponsor that stores codes is matched by them ALONE: its row counts the
+ * stored code (whatever it is called) and no longer claims a code by its name,
+ * which then reads as standalone. A standalone code can be ASSIGNED to a
+ * sponsor without sending it — asserted on the mutation arguments.
+ */
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  render,
+  screen,
+  cleanup,
+  fireEvent,
+  within,
+  waitFor,
+} from '@testing-library/react'
+import type { inferRouterOutputs } from '@trpc/server'
+import type { AppRouter } from '@/server/_app'
+
+type UsagePayload =
+  inferRouterOutputs<AppRouter>['tickets']['admin']['getDiscountCodesWithUsage']
+
+vi.stubGlobal(
+  'IntersectionObserver',
+  class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+    takeRecords() {
+      return []
+    }
+  },
+)
+
+const q = vi.hoisted(() => ({
+  useQuery: vi.fn(),
+  invalidate: vi.fn(),
+  createMutate: vi.fn(),
+  deleteMutate: vi.fn(),
+  assign: vi.fn(),
+  refresh: vi.fn(),
+}))
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ refresh: q.refresh }),
+}))
+
+vi.mock('@/lib/trpc/client', () => ({
+  api: {
+    useUtils: () => ({
+      tickets: {
+        admin: { getDiscountCodesWithUsage: { invalidate: q.invalidate } },
+      },
+    }),
+    tickets: {
+      admin: {
+        getDiscountCodesWithUsage: { useQuery: q.useQuery },
+        createDiscountCode: {
+          useMutation: () => ({ mutate: q.createMutate, isPending: false }),
+        },
+        deleteDiscountCode: {
+          useMutation: () => ({ mutate: q.deleteMutate, isPending: false }),
+        },
+      },
+    },
+    sponsor: {
+      crm: {
+        assignDiscountCodes: {
+          useMutation: () => ({ mutateAsync: q.assign, isPending: false }),
+        },
+      },
+    },
+  },
+}))
+
+import { DiscountCodeManager } from './DiscountCodeManager'
+import { NotificationProvider } from './NotificationProvider'
+
+const CONFERENCE = {
+  title: 'Konf 2026',
+  city: 'Bergen',
+  country: 'Norway',
+  startDate: '2026-09-10',
+  domains: ['konf.example'],
+  contactEmail: 'organizers@konf.example',
+  domain: 'konf.example',
+}
+
+const sponsor = (linkedCodes: string[]) => ({
+  id: 'sponsor-acme',
+  name: 'Acme Cloud',
+  tier: { title: 'Gold', tagline: '', tierType: 'standard' as const },
+  ticketEntitlement: 5,
+  sponsorForConferenceId: 'sfc-acme',
+  linkedCodes,
+})
+
+const discount = (triggerValue: string, usageCount: number) => ({
+  id: triggerValue,
+  trigger: 'coupon',
+  triggerValue,
+  type: 'percentage',
+  value: '100',
+  affects: 'total',
+  affectsValue: null,
+  includeBooking: false,
+  modes: [],
+  tickets: ['1'],
+  ticketsOnly: true,
+  timesTotal: 10,
+  times: 0,
+  actualUsage: { usageCount, ticketIds: [], totalPaid: 0 },
+})
+
+const PAYLOAD: UsagePayload = {
+  success: true,
+  discounts: [
+    discount('ACMECLOUD1234', 4),
+    discount('COMP-7Q2', 2),
+    discount('COMMUNITY2026', 9),
+  ],
+  ticketTypes: [{ id: 1, name: 'Sponsor Pass', description: null }],
+  totalTickets: 120,
+  count: 3,
+  usageStatus: 'resolved',
+  conferenceInfo: { customerId: 7, eventId: 4242, title: 'Konf 2026' },
+}
+
+function renderPanel(linkedCodes: string[]) {
+  q.useQuery.mockReturnValue({ data: PAYLOAD, isLoading: false, error: null })
+  return render(
+    <NotificationProvider>
+      <DiscountCodeManager
+        sponsors={[sponsor(linkedCodes)]}
+        eventId={4242}
+        providerLabel="Checkin.no"
+        conference={CONFERENCE}
+        defaultCustomDiscountsExpanded={true}
+      />
+    </NotificationProvider>,
+  )
+}
+
+const codeTable = () =>
+  document.getElementById('discount-codes-section') as HTMLElement
+const sponsorTable = () =>
+  document.getElementById('sponsor-discount-codes-section') as HTMLElement
+
+function codeRow(code: string): HTMLElement {
+  const row = within(codeTable())
+    .getAllByText(code)
+    .map((el) => el.closest('tr'))
+    .find((el): el is HTMLTableRowElement => el !== null)
+  if (!row) throw new Error(`no code-table row rendered for ${code}`)
+  return row
+}
+
+beforeEach(() => vi.clearAllMocks())
+afterEach(cleanup)
+
+describe('attribution by the stored link', () => {
+  // The code table lists the codes NO sponsor owns; an owned code shows in
+  // its sponsor's row instead. So which table a code sits in IS the answer.
+  const inCodeTable = (code: string) =>
+    within(codeTable()).queryAllByText(code).length > 0
+  const inSponsorTable = (code: string) =>
+    within(sponsorTable()).queryAllByText(code).length > 0
+
+  it('without stored codes, the name heuristic still claims the sponsor-named code', () => {
+    renderPanel([])
+    expect(inSponsorTable('ACMECLOUD1234')).toBe(true)
+    expect(inCodeTable('ACMECLOUD1234')).toBe(false)
+    expect(inCodeTable('COMP-7Q2')).toBe(true)
+    expect(inSponsorTable('COMP-7Q2')).toBe(false)
+  })
+
+  it('a stored code is the sponsor’s whatever it is called, and the name stops claiming', () => {
+    renderPanel(['comp-7q2'])
+    expect(inSponsorTable('COMP-7Q2')).toBe(true)
+    expect(inCodeTable('COMP-7Q2')).toBe(false)
+    expect(within(codeRow('ACMECLOUD1234')).getByText('Standalone'))
+    expect(inSponsorTable('ACMECLOUD1234')).toBe(false)
+  })
+})
+
+describe('Assign to sponsor', () => {
+  it('links a standalone code to the chosen sponsor without sending', async () => {
+    q.assign.mockResolvedValue({
+      success: true,
+      linkedCodes: ['COMMUNITY2026'],
+    })
+    renderPanel([])
+    fireEvent.click(
+      within(codeRow('COMMUNITY2026')).getByRole('button', {
+        name: 'Assign COMMUNITY2026 to a sponsor',
+      }),
+    )
+    fireEvent.change(await screen.findByLabelText('Sponsor'), {
+      target: { value: 'sfc-acme' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Assign' }))
+    await waitFor(() => expect(q.refresh).toHaveBeenCalled())
+    expect(q.assign).toHaveBeenCalledWith({
+      sponsorForConferenceId: 'sfc-acme',
+      discountCodes: ['COMMUNITY2026'],
+    })
+  })
+
+  it('offers Assign on every unowned code, and on none a sponsor owns', () => {
+    renderPanel([])
+    expect(
+      screen.queryAllByRole('button', {
+        name: 'Assign ACMECLOUD1234 to a sponsor',
+      }),
+    ).toHaveLength(0)
+    expect(
+      screen.getAllByRole('button', { name: 'Assign COMP-7Q2 to a sponsor' })
+        .length,
+    ).toBeGreaterThan(0)
+  })
+})

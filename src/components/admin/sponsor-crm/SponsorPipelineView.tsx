@@ -80,6 +80,8 @@ export interface SponsorPipelineViewProps {
    * card.
    */
   onSendEmail?: () => void
+  /** Send → Discount codes (#1262). Omitted when ticketing is off. */
+  onSendDiscountCodes?: () => void
 }
 
 /** A titled block with an uppercase eyebrow, separated by hairline dividers. */
@@ -121,6 +123,7 @@ export function SponsorPipelineView({
   onCancel,
   onOpenView,
   onSendEmail,
+  onSendDiscountCodes,
 }: SponsorPipelineViewProps) {
   const isContractProcessStarted =
     sponsor?.contractStatus === 'registration-sent' ||
@@ -256,6 +259,7 @@ export function SponsorPipelineView({
               hasLogo={Boolean(formData.logo)}
               onOpen={onOpenView}
               onEmail={onSendEmail}
+              onSendDiscountCodes={onSendDiscountCodes}
             />
           </Section>
         )}

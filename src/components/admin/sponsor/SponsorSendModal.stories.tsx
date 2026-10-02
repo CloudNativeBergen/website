@@ -3,6 +3,7 @@ import { expect, fn, userEvent, waitFor, within } from 'storybook/test'
 import { http, HttpResponse } from 'msw'
 import { SponsorSendModal } from './SponsorSendModal'
 import { NotificationProvider } from '@/components/admin/NotificationProvider'
+import { withPortalTheme } from '@/lib/storybook'
 import { mockContactPerson, mockSponsor } from '@/__mocks__/sponsor-data'
 
 const FIXED_NOW = new Date('2026-02-15T12:00:00Z')
@@ -100,6 +101,29 @@ const handlers = [
   }),
 ]
 
+/** What `crm.discountCodeOptions` answers for the Acme sponsor (#1262). */
+const discountOptions = {
+  ticketUrl: 'https://tickets.example.test/sponsor-invite',
+  codes: [
+    { code: 'ACMECLOUD-2026', selected: true, linked: true },
+    { code: 'ACMECLOUD-WORKSHOP', selected: false, linked: false },
+    { code: 'COMMUNITY2026', selected: false, linked: false },
+    {
+      code: 'GLOBEX-VIP',
+      selected: false,
+      linked: false,
+      linkedTo: 'Globex Corporation',
+    },
+  ],
+}
+
+const discountHandlers = [
+  http.get('/api/trpc/sponsor.crm.discountCodeOptions', () =>
+    HttpResponse.json({ result: { data: discountOptions } }),
+  ),
+  ...handlers,
+]
+
 const meta = {
   title: 'Systems/Sponsors/Admin/Email/SponsorSendModal',
   component: SponsorSendModal,
@@ -157,6 +181,9 @@ const meta = {
     },
   },
   decorators: [
+    // The modal portals to <body>, outside the global decorator's `dark`
+    // wrapper — without this a dark capture renders light.
+    withPortalTheme,
     (Story) => (
       <NotificationProvider>
         <Story />
@@ -281,4 +308,86 @@ export const Mobile: Story = {
   parameters: {
     viewport: { value: 'mobile1', isRotated: false },
   },
+}
+
+/**
+ * Send → Discount codes (#1262). The Codes: line lists the event's codes from
+ * the ticket provider: the sponsor's stored code is preselected and marked
+ * Linked, and a code stored on another sponsor is shown but cannot be picked.
+ * The preview carries the same codes block the server appends.
+ */
+export const DiscountCodes: Story = {
+  args: { kind: 'discount' },
+  parameters: { msw: { handlers: discountHandlers } },
+  play: async ({ canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body)
+    const codes = await body.findByRole('group', { name: 'Discount codes' })
+    await expect(
+      within(codes).getByRole('checkbox', { name: 'ACMECLOUD-2026' }),
+    ).toBeChecked()
+    await expect(
+      within(codes).getByRole('checkbox', {
+        name: 'GLOBEX-VIP (linked to Globex Corporation)',
+      }),
+    ).toBeDisabled()
+    await userEvent.click(
+      within(codes).getByRole('checkbox', { name: 'ACMECLOUD-WORKSHOP' }),
+    )
+    await expect(
+      within(codes).getByRole('checkbox', { name: 'ACMECLOUD-WORKSHOP' }),
+    ).toBeChecked()
+    await expect(
+      body.getByDisplayValue('Discount codes: Cloud Native Days Norway 2026'),
+    ).toBeInTheDocument()
+  },
+}
+
+/** Unticking every code surfaces the hint; the refusal itself is pinned in vitest. */
+export const DiscountCodesNoneChosen: Story = {
+  args: { kind: 'discount' },
+  parameters: { msw: { handlers: discountHandlers } },
+  play: async ({ canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body)
+    const linked = await body.findByRole('checkbox', { name: 'ACMECLOUD-2026' })
+    await userEvent.click(linked)
+    await expect(linked).not.toBeChecked()
+    await expect(
+      body.getByText('Choose at least one discount code before sending.'),
+    ).toBeInTheDocument()
+  },
+}
+
+/** The preview shows the codes block the server appends to the email. */
+export const DiscountCodesPreview: Story = {
+  args: { kind: 'discount' },
+  parameters: { msw: { handlers: discountHandlers } },
+  play: async ({ canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body)
+    await body.findByRole('checkbox', { name: 'ACMECLOUD-2026' })
+    await userEvent.click(body.getByRole('button', { name: /Preview/ }))
+    await expect(
+      await body.findByText('Your discount code'),
+    ).toBeInTheDocument()
+    await expect(body.getByText('ACMECLOUD-2026')).toBeInTheDocument()
+  },
+}
+
+export const DiscountCodesMobile: Story = {
+  args: { kind: 'discount' },
+  parameters: {
+    msw: { handlers: discountHandlers },
+    viewport: { value: 'mobile1', isRotated: false },
+  },
+  play: async ({ canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body)
+    await expect(
+      await body.findByRole('checkbox', { name: 'ACMECLOUD-2026' }),
+    ).toBeChecked()
+  },
+}
+
+export const DiscountCodesDark: Story = {
+  args: { kind: 'discount' },
+  globals: { theme: 'dark' },
+  parameters: { msw: { handlers: discountHandlers } },
 }

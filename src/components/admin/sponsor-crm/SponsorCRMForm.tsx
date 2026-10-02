@@ -52,6 +52,8 @@ interface SponsorCRMFormProps {
    * saved yet) ⇒ no Email card in the Manage grid.
    */
   onSendEmail?: () => void
+  /** Send → Discount codes (#1262). Omitted when ticketing is off. */
+  onSendDiscountCodes?: () => void
 }
 
 export function SponsorCRMForm({
@@ -64,6 +66,7 @@ export function SponsorCRMForm({
   initialView = 'pipeline',
   onViewChange,
   onSendEmail,
+  onSendDiscountCodes,
 }: SponsorCRMFormProps) {
   const [view, setViewState] = useState<FormView>(initialView)
   const setView = useCallback(
@@ -451,6 +454,9 @@ export function SponsorCRMForm({
               // Only a PERSISTED sponsor can be emailed — the compose modal is
               // keyed off the stored record's contacts.
               onSendEmail={sponsor && onSendEmail ? onSendEmail : undefined}
+              onSendDiscountCodes={
+                sponsor && onSendDiscountCodes ? onSendDiscountCodes : undefined
+              }
             />
           )}
         </div>

@@ -13,6 +13,10 @@ import {
 } from '@/components/admin'
 import { DiscountCodeManager } from '@/components/admin/DiscountCodeManager'
 import {
+  readSponsorCodeLinks,
+  type SponsorCodeLink,
+} from '@/lib/sponsor-crm/discount-codes'
+import {
   TicketIcon,
   BuildingOfficeIcon,
   HomeIcon,
@@ -30,6 +34,8 @@ interface SponsorWithTierInfo {
     tierType: 'standard' | 'special'
   }
   ticketEntitlement: number
+  sponsorForConferenceId?: string
+  linkedCodes: string[]
 }
 
 export default async function DiscountCodesAdminPage() {
@@ -97,8 +103,25 @@ export default async function DiscountCodesAdminPage() {
     )
   }
 
+  // The stored sponsor↔code links (#1262), uncached: an Assign made on this
+  // page must show on the refresh that follows it. A failed read refuses the
+  // page rather than silently attributing every code by name.
+  let links: SponsorCodeLink[]
+  try {
+    links = await readSponsorCodeLinks(conference._id)
+  } catch (linksError) {
+    return (
+      <ErrorDisplay
+        title="Error Loading Sponsors"
+        message={`Failed to load the sponsors' discount codes: ${linksError instanceof Error ? linksError.message : String(linksError)}`}
+        backLink={{ href: '/admin/tickets', label: 'Back to Tickets' }}
+      />
+    )
+  }
+
   const sponsorsWithTierInfo: SponsorWithTierInfo[] =
     conference.sponsors?.map((sponsorData) => {
+      const link = links.find((l) => l.sponsorId === sponsorData.sponsor._id)
       const tierTitle = sponsorData.tier?.title || 'Unknown'
       const ticketEntitlement = ticketEntitlementOf(sponsorData.tier)
 
@@ -114,6 +137,8 @@ export default async function DiscountCodesAdminPage() {
             'standard' | 'special',
         },
         ticketEntitlement,
+        sponsorForConferenceId: link?.sponsorForConferenceId,
+        linkedCodes: link?.linkedCodes ?? [],
       }
     }) || []
 
@@ -144,6 +169,8 @@ export default async function DiscountCodesAdminPage() {
             theme: conference.theme,
             registrationLink: conference.registrationLink,
             sponsorRegistrationLink: conference.sponsorRegistrationLink,
+            sponsorEmail: conference.sponsorEmail,
+            organizer: conference.organizer,
           }}
         />
       </div>

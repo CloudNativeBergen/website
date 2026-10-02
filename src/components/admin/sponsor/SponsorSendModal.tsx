@@ -37,6 +37,7 @@ import { formatConferenceDateLong } from '@/lib/time'
 import { conferenceBaseUrl } from '@/lib/conference/baseUrl'
 import { emailBrandColor, type ConferenceTheme } from '@/lib/branding/theme'
 import { createLocalhostWarning } from '@/lib/localhost-warning'
+import { discountCodesCardHtml } from '@/lib/sponsor-crm/discount-email'
 import { SponsorTemplatePicker } from './SponsorTemplatePicker'
 
 export interface SponsorSendModalProps {
@@ -46,9 +47,9 @@ export interface SponsorSendModalProps {
   sponsorForConference: SponsorForConferenceExpanded
   /**
    * Which kind of email this is. Narrowed to what `sendCommunication`
-   * accepts today (slice 1, #1261, sends `information`); #1262–#1264 widen
-   * both this type and the Zod enum together, so a kind the server would
-   * refuse can never be posted.
+   * accepts today (`information`, and `discount` since #1262); #1263–#1264
+   * widen both this type and the Zod enum together, so a kind the server
+   * would refuse can never be posted.
    */
   kind?: SendableKind
   domain: string
@@ -70,7 +71,21 @@ export interface SponsorSendModalProps {
 }
 
 /** The kinds the Send mutation accepts — mirrors `SendCommunicationSchema.kind`. */
-export type SendableKind = Extract<CommunicationKind, 'information'>
+export type SendableKind = Extract<
+  CommunicationKind,
+  'information' | 'discount'
+>
+
+/** One row of `crm.discountCodeOptions` (#1262). */
+export interface DiscountCodeOption {
+  code: string
+  /** Attributed to this sponsor — preselected. */
+  selected: boolean
+  /** Already stored on this sponsor. */
+  linked: boolean
+  /** Stored on ANOTHER sponsor; the server refuses it, so it cannot be picked. */
+  linkedTo?: string
+}
 
 /**
  * Provenance of the template a draft started from — only what is persisted
@@ -88,7 +103,8 @@ interface AppliedTemplate {
  * templates flagged `isDefault` for the kind, the one in the sponsor's
  * suggested language and category wins. Nothing flagged default ⇒ nothing is
  * preselected; the organizer picks or writes. `information` draws on every
- * non-contract category; the contract kind (slice #1264) on `contract`.
+ * non-contract category; the contract kind (slice #1264) on `contract`;
+ * `discount` preselects nothing.
  */
 export function pickDefaultTemplate(
   templates: readonly SponsorEmailTemplate[] | undefined,
@@ -102,6 +118,10 @@ export function pickDefaultTemplate(
   },
 ): SponsorEmailTemplate | undefined {
   if (!templates?.length) return undefined
+  // No template category is FOR discount codes, so no default is: a booth or
+  // outreach default would open a code send with the wrong copy (#1262). The
+  // organizer can still pick one; the codes block is appended either way.
+  if (kind === 'discount') return undefined
   const candidates = templates.filter(
     (t) =>
       t.isDefault &&
@@ -128,6 +148,29 @@ const NON_CONTRACT_CATEGORIES: readonly TemplateCategory[] = [
   'follow-up',
   'custom',
 ]
+
+/**
+ * The starting body of a discount send with no default template: the codes
+ * themselves are appended by the server, so the message only introduces them.
+ */
+function discountGreeting(conferenceTitle: string): PortableTextBlock[] {
+  return [
+    {
+      _type: 'block',
+      _key: 'discount-greeting',
+      style: 'normal',
+      markDefs: [],
+      children: [
+        {
+          _type: 'span',
+          _key: 'discount-greeting-text',
+          text: `Here are your sponsor discount codes for ${conferenceTitle}.`,
+          marks: [],
+        },
+      ],
+    },
+  ]
+}
 
 /** Read-only probe of EmailModal's draft slot (never written from here). */
 function readStorage(key: string): string | null {
@@ -223,6 +266,115 @@ export function SponsorRecipientPicker({
               </span>
             )}
             {!selectable && <span className="text-xs italic">no email</span>}
+          </label>
+        )
+      })}
+    </div>
+  )
+}
+
+/**
+ * The Codes: line of a discount send (#1262) — the conference's discount
+ * codes from the ticket provider as toggles, the sponsor's own preselected.
+ * A code stored on another sponsor is shown but cannot be chosen, with the
+ * reason, so the organizer is not left wondering where it went.
+ */
+export function SponsorDiscountCodePicker({
+  options,
+  selectedCodes,
+  onToggle,
+  state = 'ready',
+}: {
+  options: readonly DiscountCodeOption[]
+  selectedCodes: ReadonlySet<string>
+  onToggle: (code: string) => void
+  state?: 'loading' | 'error' | 'ready'
+}) {
+  if (state === 'loading') {
+    return (
+      <span className="font-inter text-sm text-gray-500 dark:text-gray-400">
+        Loading discount codes…
+      </span>
+    )
+  }
+  if (state === 'error') {
+    return (
+      <span
+        role="alert"
+        className="font-inter text-sm text-red-600 dark:text-red-400"
+      >
+        The discount codes could not be loaded from the ticket provider.
+      </span>
+    )
+  }
+  if (options.length === 0) {
+    return (
+      <span className="font-inter text-sm text-red-600 dark:text-red-400">
+        This event has no discount codes yet — create one in Discount Codes
+        first.
+      </span>
+    )
+  }
+  return (
+    <div
+      role="group"
+      aria-label="Discount codes"
+      className="flex flex-wrap items-center gap-2"
+    >
+      {options.map((option) => {
+        const selectable = !option.linkedTo
+        const selected = selectedCodes.has(option.code)
+        return (
+          <label
+            key={option.code}
+            title={
+              selectable
+                ? option.code
+                : `${option.code} is linked to ${option.linkedTo}`
+            }
+            className={clsx(
+              'font-inter inline-flex min-h-8 max-w-full items-center gap-1.5 rounded-full border px-2.5 py-1 text-sm transition-colors select-none',
+              'has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-indigo-500 has-[:focus-visible]:ring-offset-1 dark:has-[:focus-visible]:ring-offset-gray-900',
+              selectable && 'cursor-pointer',
+              selected
+                ? 'border-brand-cloud-blue bg-brand-sky-mist text-brand-slate-gray dark:border-indigo-400 dark:bg-indigo-900/40 dark:text-indigo-100'
+                : selectable
+                  ? 'border-gray-300 bg-white text-gray-700 hover:border-gray-400 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:border-gray-500'
+                  : 'cursor-not-allowed border-dashed border-gray-300 text-gray-400 dark:border-gray-600 dark:text-gray-500',
+            )}
+          >
+            <input
+              type="checkbox"
+              className="sr-only"
+              checked={selected}
+              disabled={!selectable}
+              onChange={() => onToggle(option.code)}
+              aria-label={`${option.code}${selectable ? '' : ` (linked to ${option.linkedTo})`}`}
+            />
+            <span
+              aria-hidden="true"
+              className={clsx(
+                'flex size-4 shrink-0 items-center justify-center rounded-full border',
+                selected
+                  ? 'border-brand-cloud-blue bg-brand-cloud-blue text-white dark:border-indigo-400 dark:bg-indigo-500'
+                  : 'border-gray-300 dark:border-gray-500',
+              )}
+            >
+              {selected && <CheckIcon className="size-3" />}
+            </span>
+            <span className="truncate font-mono text-[13px] font-medium">
+              {option.code}
+            </span>
+            {option.linked && (
+              <span className="rounded-sm bg-white/70 px-1 text-[10px] font-semibold tracking-wide text-brand-cloud-blue uppercase dark:bg-indigo-950/60 dark:text-indigo-300">
+                Linked
+              </span>
+            )}
+            {option.linkedTo && (
+              <span className="min-w-0 truncate text-xs italic">
+                {option.linkedTo}
+              </span>
+            )}
           </label>
         )
       })}
@@ -439,6 +591,50 @@ export function SponsorSendModal({
       return next
     })
 
+  // DISCOUNT KIND (#1262): which codes go out. Seeded once per open from
+  // the server's attribution (the sponsor's stored codes, or by name while it
+  // stores none), then the organizer's to change.
+  const isDiscount = kind === 'discount'
+  const codesQuery = api.sponsor.crm.discountCodeOptions.useQuery(
+    { sponsorForConferenceId: sponsorForConference._id },
+    { enabled: isOpen && isDiscount, refetchOnWindowFocus: false },
+  )
+  const codeOptions = useMemo(
+    () => codesQuery.data?.codes ?? [],
+    [codesQuery.data],
+  )
+  const [selectedCodes, setSelectedCodes] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  )
+  const codesSeededForRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!isOpen) {
+      codesSeededForRef.current = null
+      return
+    }
+    if (!codesQuery.data) return
+    if (codesSeededForRef.current === sponsorForConference._id) return
+    codesSeededForRef.current = sponsorForConference._id
+    setSelectedCodes(
+      new Set(
+        codesQuery.data.codes
+          .filter((c) => c.selected && !c.linkedTo)
+          .map((c) => c.code),
+      ),
+    )
+  }, [isOpen, codesQuery.data, sponsorForConference._id])
+  const toggleCode = (code: string) =>
+    setSelectedCodes((prev) => {
+      const next = new Set(prev)
+      if (next.has(code)) next.delete(code)
+      else next.add(code)
+      return next
+    })
+  // Option order, not click order: the email lists codes as the picker does.
+  const chosenCodes = codeOptions
+    .map((c) => c.code)
+    .filter((code) => selectedCodes.has(code))
+
   const kindLabel = COMMUNICATION_KIND_LABELS[kind]
   const selectedCount = selectedKeys.size
 
@@ -452,6 +648,9 @@ export function SponsorSendModal({
     if (selectedCount === 0) {
       throw new Error('Choose at least one recipient')
     }
+    if (isDiscount && chosenCodes.length === 0) {
+      throw new Error('Choose at least one discount code')
+    }
     const applied = appliedTemplateRef.current
     const base = {
       sponsorForConferenceId: sponsorForConference._id,
@@ -459,6 +658,7 @@ export function SponsorSendModal({
       recipientKeys: Array.from(selectedKeys),
       subject,
       message: JSON.stringify(message as PortableTextBlockForHTML[]),
+      ...(isDiscount && { discountCodes: chosenCodes }),
     }
     // `edited` is computed on the server; only the id travels.
     const withProvenance = applied
@@ -469,6 +669,7 @@ export function SponsorSendModal({
     const invalidateRecords = () => {
       utils.sponsor.crm.activities.list.invalidate()
       utils.sponsor.crm.activities.listCommunications.invalidate()
+      if (isDiscount) utils.sponsor.crm.discountCodeOptions.invalidate()
     }
     let result: Awaited<ReturnType<typeof sendMutation.mutateAsync>>
     try {
@@ -519,7 +720,21 @@ export function SponsorSendModal({
       eventUrl={conferenceBaseUrl(conference)}
       socialLinks={conference.socialLinks || []}
       brandColor={emailBrandColor(conference.theme)}
-      content={<div dangerouslySetInnerHTML={{ __html: messageHTML }} />}
+      content={
+        <div
+          dangerouslySetInnerHTML={{
+            // The SAME block the server appends, so the preview is the send.
+            __html:
+              isDiscount && codesQuery.data && chosenCodes.length > 0
+                ? `${messageHTML}${discountCodesCardHtml({
+                    codes: chosenCodes,
+                    ticketUrl: codesQuery.data.ticketUrl,
+                    theme: conference.theme,
+                  })}`
+                : messageHTML,
+          }}
+        />
+      }
     />
   )
 
@@ -557,6 +772,12 @@ export function SponsorSendModal({
         Choose at least one recipient before sending.
       </p>
     ) : null
+  const noCodeHint =
+    isDiscount && codeOptions.length > 0 && chosenCodes.length === 0 ? (
+      <p className="font-inter text-sm text-amber-700 dark:text-amber-300">
+        Choose at least one discount code before sending.
+      </p>
+    ) : null
 
   return (
     <EmailModal
@@ -586,15 +807,38 @@ export function SponsorSendModal({
       warningContent={
         (localhostWarning ||
           noRecipientHint ||
+          noCodeHint ||
           recipientsChangedHint ||
           templatesFailedNotice) && (
           <div className="space-y-3">
             {localhostWarning}
             {templatesFailedNotice}
             {noRecipientHint}
+            {noCodeHint}
             {recipientsChangedHint}
           </div>
         )
+      }
+      extraField={
+        isDiscount
+          ? {
+              label: 'Codes:',
+              content: (
+                <SponsorDiscountCodePicker
+                  options={codeOptions}
+                  selectedCodes={selectedCodes}
+                  onToggle={toggleCode}
+                  state={
+                    codesQuery.isError
+                      ? 'error'
+                      : codesQuery.data
+                        ? 'ready'
+                        : 'loading'
+                  }
+                />
+              ),
+            }
+          : undefined
       }
       templateSelector={({ setSubject, setMessage }) => {
         editorRef.current = { setSubject, setMessage }
@@ -623,7 +867,9 @@ export function SponsorSendModal({
       initialValues={{
         subject:
           initialFromDefault?.subject ?? `${kindLabel}: ${conference.title}`,
-        message: initialFromDefault?.body ?? [],
+        message:
+          initialFromDefault?.body ??
+          (isDiscount ? discountGreeting(conference.title) : []),
       }}
       placeholder={{
         subject: 'Enter email subject...',

@@ -13,7 +13,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'Generic email composition modal used as the base for all email sending flows. Built on the shared ModalShell (mobile bottom-sheet); keeps a compliant custom header for the draft-saved pill + clear-draft control. Features a rich text editor (PortableText), auto-save drafts to localStorage, email preview, template selector slot, and configurable fields. Used by SponsorSendModal and SponsorDiscountEmailModal. Inspect at 393px and in dark mode.',
+          'Generic email composition modal used as the base for all email sending flows. Built on the shared ModalShell (mobile bottom-sheet); keeps a compliant custom header for the draft-saved pill + clear-draft control. Features a rich text editor (PortableText), auto-save drafts to localStorage, email preview, template selector slot, and configurable fields. Used by SponsorSendModal. Inspect at 393px and in dark mode.',
       },
     },
   },
@@ -79,21 +79,27 @@ export const WithContext: Story = {
   },
 }
 
-export const WithTicketUrl: Story = {
+export const WithExtraField: Story = {
   args: {
-    title: 'Send Discount Code Email',
-    contextInfo: 'Discount code: SPONSOR2025 • Gold tier',
-    ticketUrl: 'https://cloudnativebergen.no/tickets',
-    onTicketUrlChange: fn(),
+    title: 'Send discount codes',
+    contextInfo: 'Sponsor: TechGiant Corp',
+    extraField: {
+      label: 'Codes:',
+      content: (
+        <span className="font-inter text-sm text-gray-600 dark:text-gray-300">
+          TECHGIANT2025
+        </span>
+      ),
+    },
     initialValues: {
-      subject: 'Your Cloud Native Days Sponsor Discount Code',
+      subject: 'Your Cloud Native Days sponsor discount codes',
     },
   },
   parameters: {
     docs: {
       description: {
         story:
-          'When ticketUrl and onTicketUrlChange are provided, an additional Tickets field appears for the ticket registration URL.',
+          'A host-specific labelled row under the subject (`extraField`) — the discount send renders its code picker here.',
       },
     },
   },

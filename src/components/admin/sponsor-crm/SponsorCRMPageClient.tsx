@@ -12,11 +12,14 @@ import { api } from '@/lib/trpc/client'
 interface SponsorCRMPageClientProps {
   conference: Conference
   domain: string
+  /** Send → Discount codes is offered (#1262); see the page. */
+  canSendDiscountCodes?: boolean
 }
 
 export function SponsorCRMPageClient({
   conference,
   domain,
+  canSendDiscountCodes = false,
 }: SponsorCRMPageClientProps) {
   const utils = api.useUtils()
   // Control hook to trigger form from header
@@ -62,6 +65,7 @@ export function SponsorCRMPageClient({
           conferenceId={conference._id}
           conference={conference}
           domain={domain}
+          canSendDiscountCodes={canSendDiscountCodes}
           externalNewTrigger={triggerNew}
         />
       </div>

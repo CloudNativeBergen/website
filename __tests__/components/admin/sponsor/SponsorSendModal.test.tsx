@@ -24,6 +24,7 @@ const h = vi.hoisted(() => ({
   invalidateComms: vi.fn(),
   showNotification: vi.fn(),
   templates: [] as unknown[],
+  codeOptions: undefined as unknown,
   applied: null as null | {
     subject: string
     body: PortableTextBlock[]
@@ -47,6 +48,9 @@ vi.mock('@/lib/trpc/client', () => ({
       crm: {
         sendCommunication: {
           useMutation: () => ({ mutateAsync: h.mutateAsync }),
+        },
+        discountCodeOptions: {
+          useQuery: () => ({ data: h.codeOptions, isError: false }),
         },
       },
       emailTemplates: {
@@ -113,7 +117,9 @@ vi.mock('@/components/admin/EmailModal', () => ({
     additionalFields,
     onAdditionalFieldsChange,
     storageKey,
+    extraField,
   }: {
+    extraField?: { label: string; content: React.ReactNode }
     additionalFields?: Record<string, string | number | boolean>
     onAdditionalFieldsChange?: (
       f: Record<string, string | number | boolean>,
@@ -177,6 +183,7 @@ vi.mock('@/components/admin/EmailModal', () => ({
         </button>
         {warningContent}
         <div data-testid="to">{recipientInfo}</div>
+        {extraField && <div data-testid="extra">{extraField.content}</div>}
         {templateSelector?.({
           setSubject: (s) => {
             draft = { ...draft, subject: s }
@@ -240,10 +247,12 @@ const contacts = [
 
 function renderModal(
   overrides: Partial<Parameters<typeof mockSponsor>[0]> = {},
+  kind: 'information' | 'discount' = 'information',
 ) {
   return render(
     <SponsorSendModal
       isOpen
+      kind={kind}
       onClose={vi.fn()}
       sponsorForConference={mockSponsor({
         contactPersons: contacts,
@@ -267,6 +276,7 @@ beforeEach(() => {
   localStorage.clear()
   h.applied = null
   h.templates = []
+  h.codeOptions = undefined
   draftSeeded = false
   lastAdditionalFields = {}
   draft = { subject: 'Hand-written subject', message: [] }
@@ -540,6 +550,79 @@ describe('zero recipients', () => {
   })
 })
 
+/**
+ * Send → Discount codes (#1262): the picker is seeded from the server's
+ * attribution and the chosen codes travel as `discountCodes` — the codes
+ * block itself is the server's to build.
+ */
+describe('discount kind', () => {
+  const options = {
+    ticketUrl: 'https://tickets.example.test/sponsor',
+    codes: [
+      { code: 'ACME-2026', selected: true, linked: true },
+      { code: 'ACME-WORKSHOP', selected: false, linked: false },
+      {
+        code: 'GLOBEX-VIP',
+        selected: false,
+        linked: false,
+        linkedTo: 'Globex',
+      },
+    ],
+  }
+
+  it("preselects the sponsor's codes and posts them with the send", async () => {
+    h.codeOptions = options
+    renderModal({}, 'discount')
+    expect(screen.getByRole('checkbox', { name: 'ACME-2026' })).toBeChecked()
+    expect(
+      screen.getByRole('checkbox', { name: 'ACME-WORKSHOP' }),
+    ).not.toBeChecked()
+    fireEvent.click(screen.getByRole('checkbox', { name: 'ACME-WORKSHOP' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+    await waitFor(() => expect(h.mutateAsync).toHaveBeenCalledTimes(1))
+    expect(h.mutateAsync.mock.calls[0][0]).toMatchObject({
+      kind: 'discount',
+      recipientKeys: ['c-primary'],
+      // Picker order, not click order.
+      discountCodes: ['ACME-2026', 'ACME-WORKSHOP'],
+      subject: 'Discount codes: Conf',
+    })
+  })
+
+  it('shows a code stored on another sponsor as unpickable, with whose it is', () => {
+    h.codeOptions = options
+    renderModal({}, 'discount')
+    expect(
+      screen.getByRole('checkbox', { name: 'GLOBEX-VIP (linked to Globex)' }),
+    ).toBeDisabled()
+  })
+
+  it('refuses to post with no code ticked', async () => {
+    h.codeOptions = options
+    renderModal({}, 'discount')
+    fireEvent.click(screen.getByRole('checkbox', { name: 'ACME-2026' }))
+    expect(
+      screen.getByText('Choose at least one discount code before sending.'),
+    ).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+    await waitFor(() =>
+      expect(h.showNotification).toHaveBeenCalledWith(
+        expect.objectContaining({ title: 'Choose at least one discount code' }),
+      ),
+    )
+    expect(h.mutateAsync).not.toHaveBeenCalled()
+  })
+
+  it('an information send carries no codes', async () => {
+    h.codeOptions = options
+    renderModal()
+    expect(screen.queryByRole('group', { name: 'Discount codes' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+    await waitFor(() => expect(h.mutateAsync).toHaveBeenCalledTimes(1))
+    expect(h.mutateAsync.mock.calls[0][0].discountCodes).toBeUndefined()
+  })
+})
+
 describe('pickDefaultTemplate', () => {
   const crm = { currency: 'NOK' }
   it('never picks a contract template for the information kind', () => {
@@ -562,6 +645,11 @@ describe('pickDefaultTemplate', () => {
     )
     expect(picked?._id).toBe('no')
   })
+  it('never preselects a template for a discount send — none is for codes', () => {
+    const info = tpl({ _id: 'info', category: 'follow-up', isDefault: true })
+    expect(pickDefaultTemplate([info], 'discount', {})).toBeUndefined()
+  })
+
   it('preselects nothing when no template is flagged default (spec AC4)', () => {
     expect(
       pickDefaultTemplate([tpl({ _id: 'only' })], 'information', crm),
