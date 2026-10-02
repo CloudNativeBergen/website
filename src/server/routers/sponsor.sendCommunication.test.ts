@@ -365,6 +365,10 @@ describe('a successful send', () => {
     expect(sent.from).toBe('CNDN <sponsors@example.test>')
     expect(sent.subject).toBe('Booth information')
     expect(sent.html).toContain('Here is the booth information.')
+    // Transactional: no Broadcast-only unsubscribe merge tag in what is sent
+    // (or stored).
+    expect(sent.html).not.toContain('RESEND_UNSUBSCRIBE_URL')
+    expect(sent.html).not.toMatch(/unsubscribe/i)
 
     const record = sentCreate()
     expect(record).toMatchObject({

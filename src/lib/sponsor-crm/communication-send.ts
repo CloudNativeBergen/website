@@ -193,7 +193,11 @@ export async function sendSponsorCommunication(
       conference,
       subject: args.subject,
       htmlContent,
-      unsubscribeUrl: undefined,
+      // A one-to-one transactional email: NO unsubscribe link. `undefined`
+      // would select the template's default — Resend's `{{{RESEND_UNSUBSCRIBE_URL}}}`
+      // merge tag, which only Broadcasts resolve — and the literal tag would
+      // be sent AND frozen into the audit body.
+      unsubscribeUrl: '',
     }),
   )
 

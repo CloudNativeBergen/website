@@ -45,8 +45,13 @@ export interface SponsorSendModalProps {
   onClose: () => void
   onSent?: () => void
   sponsorForConference: SponsorForConferenceExpanded
-  /** Which kind of email this is. Slice 1 (#1261) sends `information`. */
-  kind?: CommunicationKind
+  /**
+   * Which kind of email this is. Narrowed to what `sendCommunication`
+   * accepts today (slice 1, #1261, sends `information`); #1262–#1264 widen
+   * both this type and the Zod enum together, so a kind the server would
+   * refuse can never be posted.
+   */
+  kind?: SendableKind
   domain: string
   fromEmail: string
   senderName?: string
@@ -64,6 +69,9 @@ export interface SponsorSendModalProps {
     theme?: ConferenceTheme | null
   }
 }
+
+/** The kinds the Send mutation accepts — mirrors `SendCommunicationSchema.kind`. */
+export type SendableKind = Extract<CommunicationKind, 'information'>
 
 interface AppliedTemplate {
   id: string
@@ -455,7 +463,7 @@ export function SponsorSendModal({
     const applied = appliedTemplateRef.current
     const base = {
       sponsorForConferenceId: sponsorForConference._id,
-      kind: 'information' as const,
+      kind,
       recipientKeys: Array.from(selectedKeys),
       subject,
       message: JSON.stringify(message as PortableTextBlockForHTML[]),
@@ -616,7 +624,9 @@ export function SponsorSendModal({
             }
             crmContext={crmContext}
             excludeCategories={
-              kind === 'contract' ? NON_CONTRACT_CATEGORIES : ['contract']
+              (kind as CommunicationKind) === 'contract'
+                ? NON_CONTRACT_CATEGORIES
+                : ['contract']
             }
           />
         )
