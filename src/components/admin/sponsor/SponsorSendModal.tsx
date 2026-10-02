@@ -744,7 +744,7 @@ export function SponsorSendModal({
         type: 'warning',
         title: 'Codes not linked to the sponsor',
         message:
-          'The email went out, but the codes could not be stored on the sponsor. Assign them from Discount Codes so their usage counts for this sponsor.',
+          'The email went out, but the codes could not be stored on the sponsor. A code that still matches the sponsor by name keeps counting for them and is stored on the next send; one that now shows as standalone in Discount Codes can be assigned there.',
       })
     }
     onSent?.()

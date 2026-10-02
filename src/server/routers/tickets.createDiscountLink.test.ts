@@ -281,6 +281,31 @@ describe('tickets.admin.createDiscountCode for a sponsor row', () => {
     ])
   })
 
+  /**
+   * IDENTITY FROM THE GUARDED RECORD (Codex bot): the tenancy guard proves
+   * the CRM record is this conference's, not that `sponsorName` names it.
+   */
+  it('names the sponsor from its CRM record, never from a mismatched sponsorName', async () => {
+    const result = await tickets().admin.createDiscountCode({
+      ...INPUT,
+      sponsorName: 'Globex',
+    })
+    expect(result.message).toContain('for Acme Cloud (Gold tier)')
+    expect(result.message).not.toContain('Globex')
+  })
+
+  it('treats a create carrying only the CRM record as a sponsor code, not a standalone one', async () => {
+    // Without the record's identity this would hit the standalone guard and be
+    // refused for containing the sponsor's own name.
+    h.links[0].linkedCodes = null // matched by name, so the guard would bite
+    const { sponsorName: _unused, ...withoutName } = INPUT
+    void _unused
+    await expect(
+      tickets().admin.createDiscountCode(withoutName),
+    ).resolves.toMatchObject({ success: true })
+    expect(h.createDiscount).toHaveBeenCalledTimes(1)
+  })
+
   it('a standalone code links to nobody', async () => {
     await tickets().admin.createDiscountCode({
       eventId: EVENT,

@@ -1039,11 +1039,14 @@ export const ticketsRouter = router({
         const {
           discountCode,
           numberOfTickets,
-          sponsorName,
           tierTitle,
           discountPercentage,
           selectedTicketTypes,
         } = input
+        // With a CRM record the SPONSOR is that record — the tenancy guard
+        // below proves it is this conference's, and its name replaces any
+        // client-supplied `sponsorName`, which is only a label.
+        let sponsorName = input.sponsorName
 
         try {
           // OWNERSHIP of the sponsor the code will be linked to (#1262):
@@ -1081,6 +1084,16 @@ export const ticketsRouter = router({
                 cause: linksError,
               })
             }
+            const target = sponsorLinks.find(
+              (l) => l.sponsorForConferenceId === input.sponsorForConferenceId,
+            )
+            if (!target) {
+              throw new TRPCError({
+                code: 'NOT_FOUND',
+                message: 'Sponsor not found in this conference',
+              })
+            }
+            sponsorName = target.name || sponsorName
             const wanted = normalizeDiscountCode(discountCode)
             const holder = sponsorLinks.find(
               (l) =>
