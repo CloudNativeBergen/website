@@ -45,6 +45,7 @@ const h = vi.hoisted(() => ({
 vi.mock('@/lib/sponsor/sanity', async (importOriginal) => ({
   ...((await importOriginal()) as Record<string, unknown>),
   getSponsorEmailTemplate: h.getTemplate,
+  getSponsorEmailTemplates: async () => ({ templates: [] }),
 }))
 
 vi.mock('@/lib/conference/sanity', () => ({
@@ -567,6 +568,20 @@ describe('the edited flag is computed, not trusted', () => {
       template: { id: 'tpl-info-en', edited: false },
     })
     expect(sentCreate()).toMatchObject({ templateEdited: true })
+  })
+})
+
+describe('emailTemplates.listForSponsor merges the same link', () => {
+  it('asks the conference read for the link and exposes SPONSOR_REGISTRATION_URL', async () => {
+    const result = await sponsor().emailTemplates.listForSponsor({
+      sponsorForConferenceId: SFC,
+    })
+    expect(h.getConference).toHaveBeenCalledWith(
+      expect.objectContaining({ includeSponsorRegistrationLink: true }),
+    )
+    expect(result.variables.SPONSOR_REGISTRATION_URL).toBe(
+      'https://tickets.example.test/sponsor',
+    )
   })
 })
 
