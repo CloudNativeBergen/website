@@ -156,6 +156,10 @@ const DISPOSITIONS: Record<string, Disposition> = {
     verdict: 'not-the-speaker-rail',
     why: 'sponsor contact — sponsor-contact rail',
   },
+  'sponsorActivity.email': {
+    verdict: 'not-the-speaker-rail',
+    why: 'a sent-email audit record’s recipient snapshot (#1261) — sponsor-contact rail; its redaction on a sponsor-contact erasure is #1265',
+  },
   // --- organization / conference configuration, not a person ----------------
   'organization.contactEmail': {
     verdict: 'no-pii',

@@ -287,9 +287,9 @@ export const Overview: Story = {
           </p>
           <div className="grid gap-4 md:grid-cols-2">
             <ComponentCard
-              name="SponsorIndividualEmailModal"
-              path="@/components/admin/sponsor/SponsorIndividualEmailModal"
-              description="Email composition modal with template selection and preview."
+              name="SponsorSendModal"
+              path="@/components/admin/sponsor/SponsorSendModal"
+              description="The one Send action: pick recipients (primary preselected), start from a template, edit, preview, send — every send is recorded."
               hasStory
             />
             <ComponentCard

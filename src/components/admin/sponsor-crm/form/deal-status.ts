@@ -31,6 +31,8 @@ export type SponsorSubView =
   | 'history'
   // The sponsor↔organizer message thread (messaging G2b).
   | 'messages'
+  // Everything SENT to this sponsor — the send audit (#1261).
+  | 'communications'
 
 /**
  * Project the staged form + persisted sponsor into the shape the state-machine

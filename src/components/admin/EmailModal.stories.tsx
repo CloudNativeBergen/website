@@ -13,7 +13,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'Generic email composition modal used as the base for all email sending flows. Built on the shared ModalShell (mobile bottom-sheet); keeps a compliant custom header for the draft-saved pill + clear-draft control. Features a rich text editor (PortableText), auto-save drafts to localStorage, email preview, template selector slot, and configurable fields. Used by SponsorIndividualEmailModal and SponsorDiscountEmailModal. Inspect at 393px and in dark mode.',
+          'Generic email composition modal used as the base for all email sending flows. Built on the shared ModalShell (mobile bottom-sheet); keeps a compliant custom header for the draft-saved pill + clear-draft control. Features a rich text editor (PortableText), auto-save drafts to localStorage, email preview, template selector slot, and configurable fields. Used by SponsorSendModal and SponsorDiscountEmailModal. Inspect at 393px and in dark mode.',
       },
     },
   },

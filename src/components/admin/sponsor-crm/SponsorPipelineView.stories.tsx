@@ -167,7 +167,7 @@ export const AddNew: Story = {
  * The Manage grid with the "Email" action card (last cell): composing a one-off
  * sponsor email is reachable from the DETAIL modal, not just the board card's
  * overflow menu. Selecting it raises `onSendEmail` so the host opens the shared
- * `SponsorIndividualEmailModal` over this one — there is no second email path.
+ * `SponsorSendModal` over this one — there is no second email path.
  * Inspect at 393px: six cards wrap 2-up without clipping.
  */
 export const ManageGridWithEmail: Story = {

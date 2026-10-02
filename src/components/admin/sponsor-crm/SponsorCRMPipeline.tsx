@@ -9,7 +9,7 @@ import { useState, useEffect, useRef, useCallback, useMemo, useId } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import { SponsorCRMForm } from '@/components/admin/sponsor-crm/SponsorCRMForm'
-import { SponsorIndividualEmailModal } from '@/components/admin'
+import { SponsorSendModal } from '@/components/admin'
 import {
   BoardViewSwitcher,
   type BoardView,
@@ -597,8 +597,8 @@ export function SponsorCRMPipeline({
           existingSponsorsInCRM={sponsors.map((s) => s.sponsor._id)}
           initialView={initialFormView}
           onViewChange={handleFormViewChange}
-          // "Email" in the detail modal's Manage grid reuses the SAME composed
-          // email modal the board card's overflow opens; it is rendered below
+          // "Send email" in the detail modal's Manage grid reuses the SAME Send
+          // modal the board card's overflow opens; it is rendered below
           // this one, so it layers over the detail modal and closing it returns
           // to the sponsor. Needs `conference` for the sender identity, exactly
           // like the card path.
@@ -611,11 +611,12 @@ export function SponsorCRMPipeline({
       )}
 
       {emailSponsor && conference && (
-        <SponsorIndividualEmailModal
+        <SponsorSendModal
           isOpen={isEmailModalOpen}
           onClose={handleCloseEmail}
           onSent={() => utils.sponsor.crm.list.invalidate()}
           sponsorForConference={emailSponsor}
+          kind="information"
           domain={domain}
           fromEmail={conference.sponsorEmail || ''}
           senderName={session?.user?.name || ''}
@@ -629,8 +630,6 @@ export function SponsorCRMPipeline({
             socialLinks: conference.socialLinks,
             prospectusUrl: conference.sponsorshipCustomization?.prospectusUrl,
             theme: conference.theme,
-            registrationLink: conference.registrationLink,
-            sponsorRegistrationLink: conference.sponsorRegistrationLink,
           }}
         />
       )}

@@ -113,6 +113,8 @@ Audit log for CRM actions. Each activity references a `sponsorForConference` doc
 | `createdBy`    | Reference to the organizer who performed the action                                                                                                                                                    |
 | `createdAt`    | ISO timestamp                                                                                                                                                                                          |
 
+**Sent-email audit record (#1261).** An `email` activity written by `sponsor.crm.sendCommunication` additionally carries `communicationKind` (`information` · `contract` · `registration` · `discount`), `recipients[]` (contact key, name, email, role, `isDefault` — a snapshot as sent), `subject`, `body` (the rendered HTML exactly as handed to Resend), `template` (weak ref) + `templateEdited`, `attachments[]`, `providerMessageId`, `deliveryStatus` (`sent` · `failed`) and `error`. A record with `communicationKind` is immutable: `activities.update`/`delete` refuse it. The list projection omits `body`/`attachments`; `activities.get` loads them on expand, and `activities.listCommunications` powers the drawer's **Sent emails** tab (kind filter, paged).
+
 ## Status Enumerations
 
 All CRM status values are defined as TypeScript union types in `src/lib/sponsor-crm/types.ts` and as UI constants (with labels and icons) in `src/components/admin/sponsor-crm/form/constants.ts`.
@@ -156,8 +158,8 @@ Reusable email templates stored in Sanity for sponsor outreach. Global (not conf
 
 **Access paths:**
 
-- **Web UI**: Template picker in the sponsor detail page email modal (PortableText bodies)
-- **CLI**: `cnctl admin sponsors email <id>` — templates served with Markdown bodies via `sponsor.emailTemplates.listForSponsor`; variable substitution happens client-side before sending via `sponsor.crm.sendEmailBySfc`
+- **Web UI**: Template picker inside `SponsorSendModal` (the one Send action on a sponsor, #1261). The organizer picks recipients (primary contact preselected as the default), applies a template, edits, previews and sends via `sponsor.crm.sendCommunication`. `sponsor.crm.sendEmail` / `sendEmailBySfc` were removed in #1261.
+- **Markdown bodies**: `sponsor.emailTemplates.listForSponsor` still serves templates with Markdown bodies for non-web clients.
 
 See [EMAIL_SYSTEM.md](EMAIL_SYSTEM.md) for the full email architecture.
 
@@ -227,7 +229,7 @@ src/
 │       │   ├── SponsorActionItems.tsx       # Action item checklist
 │       │   ├── SponsorActivityTimeline.tsx  # Activity log display
 │       │   ├── SponsorDiscountEmailModal.tsx# Discount code emails
-│       │   ├── SponsorIndividualEmailModal.tsx # Individual email compose
+│       │   ├── SponsorSendModal.tsx         # The one Send action (recipients, template, preview)
 │       │   ├── SponsorTemplatePicker.tsx    # Email template selector dropdown
 │       │   ├── SponsorEmailTemplatesPageClient.tsx # Template list + editor page
 │       │   └── SponsorEmailTemplateEditor.tsx # Full-page template editor with preview
@@ -319,7 +321,7 @@ The CRM operates with a background polling interval (30 seconds) and optimistic 
 
 Sponsor contact management integrates with the email system (see `docs/EMAIL_SYSTEM.md`) for:
 
-- Individual sponsor emails via `SponsorIndividualEmailModal`
+- Individual sponsor emails via `SponsorSendModal` (`sponsor.crm.sendCommunication`, every send recorded)
 - Broadcast emails to all sponsors via `SponsorContactActions`
 - Resend audience sync for sponsor contacts
 

@@ -66,7 +66,7 @@ export const speakerRouter = router({
     create: adminProcedure.input(...).mutation(...),
     update: adminProcedure.input(...).mutation(...),
     delete: adminProcedure.input(IdParamSchema).mutation(...),
-    sendEmail: adminProcedure.input(...).mutation(...),
+    sendCommunication: adminProcedure.input(...).mutation(...),
   }),
 })
 ```
@@ -82,7 +82,7 @@ export const speakerRouter = router({
 | Pattern             | Example                          | Purpose                            |
 | ------------------- | -------------------------------- | ---------------------------------- |
 | `admin`             | `speaker.admin.list`             | Organizer-only CRUD and management |
-| `crm`               | `sponsor.crm.sendEmail`          | CRM-specific operations            |
+| `crm`               | `sponsor.crm.sendCommunication`  | CRM-specific operations            |
 | `tiers`             | `sponsor.tiers.create`           | Domain sub-entity management       |
 | `invitation`        | `proposal.invitation.send`       | Feature-specific workflows         |
 | `activities`        | `sponsor.crm.activities.list`    | Nested sub-entities                |
@@ -442,7 +442,7 @@ http.get('/api/trpc/registration.validate', () => {
 })
 ```
 
-The URL pattern is `/api/trpc/{router}.{procedure}` with dot-separated sub-routers (e.g., `/api/trpc/sponsor.crm.sendEmail`). The `TRPCDecorator` in `.storybook/decorators/` provides the tRPC provider context using `httpLink` (not batch) so each call becomes a separate HTTP request that MSW can intercept.
+The URL pattern is `/api/trpc/{router}.{procedure}` with dot-separated sub-routers (e.g., `/api/trpc/sponsor.crm.sendCommunication`). The `TRPCDecorator` in `.storybook/decorators/` provides the tRPC provider context using `httpLink` (not batch) so each call becomes a separate HTTP request that MSW can intercept.
 
 ## Common Patterns
 

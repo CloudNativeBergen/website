@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { BoltIcon } from '@heroicons/react/24/solid'
 import { http, HttpResponse } from 'msw'
 import { ThemeProvider } from 'next-themes'
-import { within, userEvent, waitFor } from 'storybook/test'
+import { expect, within, userEvent, waitFor } from 'storybook/test'
 import { SponsorActivityTimeline } from './SponsorActivityTimeline'
 
 const now = new Date().toISOString()
@@ -36,6 +36,66 @@ const editableActivities = [
     createdBy: null,
     createdAt: now,
   },
+]
+
+/**
+ * A sent email (#1261) sits in the feed as a compact line — kind + recipients,
+ * subject beneath — and expands in place to the full record. The body is
+ * fetched only on expand.
+ */
+const sentEmailActivity = {
+  _id: 'act-sent',
+  _createdAt: now,
+  _updatedAt: now,
+  sponsorForConference: {
+    _id: 'sfc-1',
+    sponsor: { _id: 'sp-1', name: 'Tieto Tech Consulting' },
+  },
+  activityType: 'email',
+  description: 'Information sent to Kari Nordmann (+1)',
+  createdBy: { _id: 'org-1', name: 'Hans K.', email: 'hans@example.com' },
+  createdAt: now,
+  communicationKind: 'information',
+  recipients: [
+    {
+      contactKey: 'c1',
+      name: 'Kari Nordmann',
+      email: 'kari@tieto.example',
+      role: 'Partnership Manager',
+      isDefault: true,
+    },
+    {
+      contactKey: 'c2',
+      name: 'Ola Nordmann',
+      email: 'ola@tieto.example',
+      role: 'Billing Reference',
+      isDefault: false,
+    },
+  ],
+  subject: 'Booth information for Cloud Native Days Norway 2026',
+  deliveryStatus: 'sent',
+  template: { _id: 'tpl-1', title: 'Booth information' },
+  templateEdited: false,
+  providerMessageId: 'a1b2c3d4-0000-4000-8000-000000000001',
+}
+
+const sentEmailHandlers = [
+  http.get('/api/trpc/sponsor.crm.activities.list', () =>
+    HttpResponse.json({
+      result: { data: [sentEmailActivity, ...editableActivities] },
+    }),
+  ),
+  http.get('/api/trpc/sponsor.crm.activities.get', () =>
+    HttpResponse.json({
+      result: {
+        data: {
+          ...sentEmailActivity,
+          body: '<!doctype html><html><body style="font-family:system-ui;padding:24px"><p>Hi Kari and Ola, here is everything about your booth.</p></body></html>',
+          attachments: [],
+        },
+      },
+    }),
+  ),
 ]
 
 const editHandlers = [
@@ -394,5 +454,46 @@ export const EditActivityDark: Story = {
     )
     await userEvent.click(editButton)
     await canvas.findByLabelText('Edit activity description')
+  },
+}
+
+/**
+ * A sent email in the feed: compact line with the subject beneath, no edit
+ * pencil (it is an audit record), and a chevron that expands the full record
+ * — recipients, template provenance, provider id and the body as sent.
+ */
+export const SentEmailInFeed: Story = {
+  parameters: { msw: { handlers: sentEmailHandlers } },
+  render: () => (
+    <div className="w-[40rem] rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
+      <SponsorActivityTimeline
+        sponsorForConferenceId="sfc-1"
+        showHeaderFooter={false}
+        limit={20}
+      />
+    </div>
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await canvas.findByText('Information sent to Kari Nordmann (+1)')
+    await expect(
+      canvas.getByText('Booth information for Cloud Native Days Norway 2026'),
+    ).toBeInTheDocument()
+    // Only the hand-written note gets an edit pencil; the sent email does not.
+    await expect(
+      canvas.getAllByRole('button', { name: 'Edit activity' }),
+    ).toHaveLength(1)
+    await expect(canvas.queryByTitle(/Email body/)).not.toBeInTheDocument()
+    await userEvent.click(
+      canvas.getByRole('button', { name: 'Show sent email' }),
+    )
+    const record = await canvas.findByTestId('communication-record')
+    await expect(
+      within(record).getByText('kari@tieto.example'),
+    ).toBeInTheDocument()
+    await expect(
+      within(record).getByText('sent as written'),
+    ).toBeInTheDocument()
+    await within(record).findByTitle(/Email body/)
   },
 }

@@ -33,7 +33,15 @@ interface SponsorTemplatePickerProps {
   }
   senderName?: string
   tierName?: string
-  onApply: (subject: string, body: PortableTextBlock[]) => void
+  /**
+   * The chosen template, variables already merged. The third argument names
+   * the template so a caller can record which one a send started from (#1261).
+   */
+  onApply: (
+    subject: string,
+    body: PortableTextBlock[],
+    template: SponsorEmailTemplate,
+  ) => void
   crmContext?: {
     tags?: string[]
     status?: string
@@ -112,7 +120,11 @@ export function SponsorTemplatePicker({
         )
       : []
 
-    onApply(processedSubject, processedBody as unknown as PortableTextBlock[])
+    onApply(
+      processedSubject,
+      processedBody as unknown as PortableTextBlock[],
+      template,
+    )
 
     // Reset the select so it can be re-selected
     e.target.value = ''

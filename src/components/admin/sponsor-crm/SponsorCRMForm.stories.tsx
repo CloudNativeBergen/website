@@ -316,6 +316,65 @@ export const HistoryView: Story = {
   },
 }
 
+/** Sent emails view — the send audit for this sponsor (#1261). */
+export const CommunicationsView: Story = {
+  args: {
+    sponsor: mockSponsor(),
+    initialView: 'communications',
+    onSendEmail: fn(),
+  },
+  parameters: {
+    msw: {
+      handlers: [
+        ...defaultHandlers,
+        http.get('/api/trpc/sponsor.crm.activities.listCommunications', () =>
+          HttpResponse.json({
+            result: {
+              data: {
+                items: [
+                  {
+                    _id: 'act-sent-1',
+                    _createdAt: '2026-02-14T09:00:00Z',
+                    _updatedAt: '2026-02-14T09:00:00Z',
+                    sponsorForConference: mockSponsorRef,
+                    activityType: 'email',
+                    description: 'Information sent to Jane Smith',
+                    createdBy: {
+                      _id: 'org-1',
+                      name: 'Hans Kristian Flaatten',
+                      email: 'hans@example.com',
+                    },
+                    createdAt: '2026-02-14T09:00:00Z',
+                    communicationKind: 'information',
+                    recipients: [
+                      {
+                        contactKey: 'c1',
+                        name: 'Jane Smith',
+                        email: 'jane.smith@example.com',
+                        role: 'Marketing Manager',
+                        isDefault: true,
+                      },
+                    ],
+                    subject: 'Booth information for Cloud Native Days 2026',
+                    deliveryStatus: 'sent',
+                    providerMessageId: 'resend-0001',
+                  },
+                ],
+                total: 1,
+              },
+            },
+          }),
+        ),
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body)
+    await body.findByText('Information sent to Jane Smith')
+    await expect(body.getByText('Sent emails')).toBeInTheDocument()
+  },
+}
+
 /** Logo view for uploading and managing sponsor logos */
 export const LogoView: Story = {
   args: {
