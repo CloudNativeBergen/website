@@ -17,7 +17,7 @@ import { FPS, FRAME } from './meme-generator-timeline'
  * 30 fps (proof §1) — never the level-3.1 string its examples use.
  */
 
-// @ts-ignore
+
 const loadMediabunny = () => import('mediabunny')
 
 type Mediabunny = Awaited<ReturnType<typeof loadMediabunny>>

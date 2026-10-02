@@ -155,11 +155,16 @@ describe('classifyTicket', () => {
   it('grants workshop to a speaker ticket if they RSVP yes in fields', () => {
     expect(
       classifyTicket(
-        ticket({ 
-          category: 'Speaker ticket', 
+        ticket({
+          category: 'Speaker ticket',
           sum: '0.00',
-          fields: [{ key: 'Will you attend the Monday workshops?', value: 'Yes, please!' }]
-        }) as any,
+          fields: [
+            {
+              key: 'Will you attend the Monday workshops?',
+              value: 'Yes, please!',
+            },
+          ],
+        }) as EventTicket,
         { speakerTicketTypeName: 'Speaker ticket' },
       ),
     ).toEqual({
