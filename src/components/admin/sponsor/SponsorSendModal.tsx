@@ -124,7 +124,7 @@ export function SponsorRecipientPicker({
                 : `${contact.name} has no email address`
             }
             className={clsx(
-              'font-inter inline-flex min-h-8 items-center gap-1.5 rounded-full border px-2.5 py-1 text-sm transition-colors select-none',
+              'font-inter inline-flex min-h-8 max-w-full items-center gap-1.5 rounded-full border px-2.5 py-1 text-sm transition-colors select-none',
               selectable && 'cursor-pointer',
               selected
                 ? 'border-brand-cloud-blue bg-brand-sky-mist text-brand-slate-gray dark:border-indigo-400 dark:bg-indigo-900/40 dark:text-indigo-100'
@@ -152,9 +152,11 @@ export function SponsorRecipientPicker({
             >
               {selected && <CheckIcon className="size-3" />}
             </span>
-            <span className="font-medium">{contact.name}</span>
+            <span className="font-medium whitespace-nowrap">
+              {contact.name}
+            </span>
             {contact.role && (
-              <span className="text-xs text-gray-500 dark:text-gray-400">
+              <span className="min-w-0 truncate text-xs text-gray-500 dark:text-gray-400">
                 {contact.role}
               </span>
             )}

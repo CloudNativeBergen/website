@@ -168,41 +168,38 @@ export const Default: Story = {
     await expect(
       body.getByRole('checkbox', { name: 'Per Hansen (no email)' }),
     ).toBeDisabled()
-    await expect(body.getByText('Default')).toBeInTheDocument()
+    const recipients = body.getByRole('group', { name: 'Recipients' })
+    await expect(within(recipients).getByText('Default')).toBeInTheDocument()
   },
 }
 
-/** Adding a second recipient relabels the button and posts both contact keys — and only keys. */
+/**
+ * A second recipient is one click, and a template fills subject and body with
+ * the chosen contacts' names merged in. Sending itself is disabled on
+ * localhost by EmailModal, so the posted payload (keys only, template
+ * provenance) is pinned in the vitest suite instead.
+ */
 export const SendToTwoContacts: Story = {
   play: async ({ canvasElement }) => {
     const body = within(canvasElement.ownerDocument.body)
     await body.findByRole('checkbox', { name: 'Kari Nordmann' })
     await userEvent.click(body.getByRole('checkbox', { name: 'Ola Nordmann' }))
-    const send = await body.findByRole('button', { name: 'Send to 2 contacts' })
+    await expect(
+      body.getByRole('checkbox', { name: 'Ola Nordmann' }),
+    ).toBeChecked()
 
-    // Start from the template so the body is non-empty and provenance is set.
     const picker = await body.findByRole('combobox')
     await userEvent.selectOptions(picker, 'tpl-info-en')
     await waitFor(() =>
       expect(
-        body.getByDisplayValue(/Booth information for/),
+        body.getByDisplayValue(
+          'Booth information for Cloud Native Days Norway 2026',
+        ),
       ).toBeInTheDocument(),
     )
-
-    await userEvent.click(send)
-    await waitFor(() => expect(sent).toHaveLength(1))
-    const posted = sent[0] as {
-      recipientKeys: string[]
-      template?: { id: string; edited: boolean }
-      kind: string
-    }
-    await expect(posted.kind).toBe('information')
-    await expect(posted.recipientKeys.sort()).toEqual([
-      'c-billing',
-      'c-primary',
-    ])
-    await expect(posted.template).toEqual({ id: 'tpl-info-en', edited: false })
-    await expect(JSON.stringify(posted)).not.toContain('@acme.example')
+    await expect(
+      body.getByText(/Hi Kari Nordmann and Ola Nordmann/),
+    ).toBeInTheDocument()
   },
 }
 
@@ -230,15 +227,4 @@ export const Mobile: Story = {
   parameters: {
     viewport: { defaultViewport: 'mobile1' },
   },
-}
-
-export const DarkMode: Story = {
-  parameters: { theme: 'dark' },
-  decorators: [
-    (Story) => (
-      <div className="dark">
-        <Story />
-      </div>
-    ),
-  ],
 }
