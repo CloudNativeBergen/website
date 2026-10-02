@@ -532,6 +532,17 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                           portal thread with the organizers, along with the
                           contact name you send it under and the timestamp
                         </li>
+                        <li>
+                          • <strong>Emails sent to sponsor contacts:</strong>{' '}
+                          When organizers email you as a sponsor contact from
+                          the sponsor CRM, we keep a record of that email: your
+                          name, email address and role as they were at the time,
+                          the subject and body exactly as sent, which template
+                          it started from, when it was sent and by whom, and the
+                          delivery provider&apos;s message id. This record is
+                          kept for the life of the sponsor record so the
+                          organization can show what it sent and to whom.
+                        </li>
                       </ul>
                       <div className="mt-3 rounded-lg bg-sky-100 p-2 dark:bg-sky-800/30">
                         <p className="text-xs text-sky-800 dark:text-sky-200">

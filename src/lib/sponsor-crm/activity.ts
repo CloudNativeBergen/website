@@ -573,11 +573,6 @@ export async function updateSponsorActivity(
       return { success: false, error: new Error('Activity not found') }
     }
 
-    // A sent-communication record is an audit entry, whatever its type says.
-    if (activity.communicationKind) {
-      return { success: false, error: new Error(AUDIT_IMMUTABLE_MESSAGE) }
-    }
-
     if (!USER_AUTHORED_ACTIVITY_TYPES.includes(activity.activityType)) {
       return {
         success: false,
@@ -592,6 +587,13 @@ export async function updateSponsorActivity(
         success: false,
         error: new Error('You can only edit your own activities'),
       }
+    }
+
+    // A sent-communication record is an audit entry, whatever its type says —
+    // checked AFTER the creator check so a foreign id answers exactly as it
+    // did before this field existed.
+    if (activity.communicationKind) {
+      return { success: false, error: new Error(AUDIT_IMMUTABLE_MESSAGE) }
     }
 
     let patch = clientWrite.patch(activityId).set({ description })
@@ -626,10 +628,6 @@ export async function deleteSponsorActivity(
       return { success: false, error: new Error('Activity not found') }
     }
 
-    if (activity.communicationKind) {
-      return { success: false, error: new Error(AUDIT_IMMUTABLE_MESSAGE) }
-    }
-
     // Only allow deleting user-supplied activity types
     const deletableTypes: ActivityType[] = ['note', 'call', 'meeting', 'email']
     if (!deletableTypes.includes(activity.activityType)) {
@@ -647,6 +645,10 @@ export async function deleteSponsorActivity(
         success: false,
         error: new Error('You can only delete your own activities'),
       }
+    }
+
+    if (activity.communicationKind) {
+      return { success: false, error: new Error(AUDIT_IMMUTABLE_MESSAGE) }
     }
 
     await clientWrite.delete(activityId)

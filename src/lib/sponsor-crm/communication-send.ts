@@ -134,15 +134,23 @@ export async function sendSponsorCommunication(
   let providerMessageId: string | undefined
   try {
     const { client } = await resolveEmailSender(args.orgId)
-    const result = await retryWithBackoff(() =>
-      client.emails.send({
+    // Resend reports failures as a RESOLVED `{ error }` (including 429), so the
+    // throw has to happen INSIDE the callback or `retryWithBackoff` never sees
+    // a retryable failure and every send gets exactly one attempt.
+    const result = await retryWithBackoff(async () => {
+      const r = await client.emails.send({
         from,
         to: recipients.map((r) => r.email),
         subject: args.subject,
         html,
-      }),
-    )
-    if (result.error) throw new Error(result.error.message)
+      })
+      if (r.error) {
+        throw Object.assign(new Error(r.error.message), {
+          status: (r.error as { statusCode?: number }).statusCode,
+        })
+      }
+      return r
+    })
     providerMessageId = result.data?.id
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)

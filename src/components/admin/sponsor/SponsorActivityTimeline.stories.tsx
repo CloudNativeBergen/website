@@ -74,6 +74,7 @@ const sentEmailActivity = {
   ],
   subject: 'Booth information for Cloud Native Days Norway 2026',
   deliveryStatus: 'sent',
+  templateId: 'tpl-1',
   template: { _id: 'tpl-1', title: 'Booth information' },
   templateEdited: false,
   providerMessageId: 'a1b2c3d4-0000-4000-8000-000000000001',

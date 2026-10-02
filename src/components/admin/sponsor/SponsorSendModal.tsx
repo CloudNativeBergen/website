@@ -9,7 +9,20 @@ import { EmailModal } from '@/components/admin/EmailModal'
 import { useNotification } from '@/components/admin/NotificationProvider'
 import { BroadcastTemplate } from '@/components/email/BroadcastTemplate'
 import { api } from '@/lib/trpc/client'
-import type { ContactPerson, SponsorEmailTemplate } from '@/lib/sponsor/types'
+import type {
+  ContactPerson,
+  SponsorEmailTemplate,
+  TemplateCategory,
+  TemplateLanguage,
+  PortableTextBlock as TemplateBlock,
+} from '@/lib/sponsor/types'
+import {
+  buildTemplateVariables,
+  processPortableTextVariables,
+  processTemplateVariables,
+  suggestTemplateCategory,
+  suggestTemplateLanguage,
+} from '@/lib/sponsor/templates'
 import type {
   CommunicationKind,
   SponsorForConferenceExpanded,
@@ -65,6 +78,63 @@ interface AppliedTemplate {
   id: string
   subject: string
   body: PortableTextBlock[]
+}
+
+/**
+ * The template a send of this kind starts from (#1261 AC4): a default of the
+ * kind's category in the sponsor's suggested language, else any default of
+ * the kind, else the best-scoring candidate — `undefined` only when the
+ * conference has no template for the kind at all. `information` draws on every
+ * non-contract category; the contract kind (slice #1264) on `contract`.
+ */
+export function pickDefaultTemplate(
+  templates: readonly SponsorEmailTemplate[] | undefined,
+  kind: CommunicationKind,
+  crm: {
+    tags?: string[]
+    status?: string
+    currency?: string
+    orgNumber?: string
+    website?: string
+  },
+): SponsorEmailTemplate | undefined {
+  if (!templates?.length) return undefined
+  const forKind = templates.filter((t) =>
+    kind === 'contract' ? t.category === 'contract' : t.category !== 'contract',
+  )
+  if (forKind.length === 0) return undefined
+  const language: TemplateLanguage = suggestTemplateLanguage(crm)
+  const category: TemplateCategory = suggestTemplateCategory(crm)
+  const score = (t: SponsorEmailTemplate) =>
+    (t.isDefault ? 8 : 0) +
+    (t.language === language ? 2 : 0) +
+    (t.category === category ? 1 : 0)
+  return [...forKind].sort(
+    (a, b) => score(b) - score(a) || (a.sortOrder ?? 0) - (b.sortOrder ?? 0),
+  )[0]
+}
+
+/** Where the applied template's provenance rides alongside EmailModal's draft. */
+function provenanceKey(draftKey: string) {
+  return `${draftKey}:template`
+}
+
+function readStorage(key: string): string | null {
+  try {
+    return typeof window === 'undefined' ? null : localStorage.getItem(key)
+  } catch {
+    return null
+  }
+}
+
+function writeStorage(key: string, value: string | null) {
+  try {
+    if (typeof window === 'undefined') return
+    if (value === null) localStorage.removeItem(key)
+    else localStorage.setItem(key, value)
+  } catch {
+    // Storage is a convenience; a blocked store must not block sending.
+  }
 }
 
 /**
@@ -217,10 +287,91 @@ export function SponsorSendModal({
     if (!isOpen) seededForRef.current = null
   }, [isOpen, sponsorForConference._id, defaultKey])
 
+  const draftKey = `sponsor-send-${kind}-${sponsorForConference._id}`
+
+  // The template a send started from. Persisted next to EmailModal's draft so
+  // a draft restored on reopen keeps its provenance (and its edited baseline).
   const appliedTemplateRef = useRef<AppliedTemplate | null>(null)
+  const rememberApplied = (applied: AppliedTemplate | null) => {
+    appliedTemplateRef.current = applied
+    writeStorage(
+      provenanceKey(draftKey),
+      applied ? JSON.stringify(applied) : null,
+    )
+  }
   useEffect(() => {
-    if (!isOpen) appliedTemplateRef.current = null
-  }, [isOpen])
+    if (!isOpen) {
+      appliedTemplateRef.current = null
+      return
+    }
+    const stored = readStorage(provenanceKey(draftKey))
+    if (stored) {
+      try {
+        appliedTemplateRef.current = JSON.parse(stored) as AppliedTemplate
+      } catch {
+        appliedTemplateRef.current = null
+      }
+    }
+  }, [isOpen, draftKey])
+
+  const crmContext = {
+    tags: sponsorForConference.tags,
+    status: sponsorForConference.status,
+    currency: sponsorForConference.contractCurrency,
+    orgNumber: sponsorForConference.sponsor.orgNumber,
+    website: sponsorForConference.sponsor.website,
+  }
+
+  // AC4: the kind's default template is preselected. EmailModal reads
+  // `initialValues` once per open, so the modal waits for the template list
+  // and the default is only applied when no draft is waiting in storage.
+  const templatesQuery = api.sponsor.emailTemplates.list.useQuery(undefined, {
+    enabled: isOpen,
+  })
+  const templatesSettled = !templatesQuery.isLoading
+  const hasDraft = isOpen && !!readStorage(draftKey)
+  const defaultTemplate = useMemo(
+    () =>
+      hasDraft
+        ? undefined
+        : pickDefaultTemplate(templatesQuery.data, kind, crmContext),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- crmContext is derived from the sponsor
+    [hasDraft, templatesQuery.data, kind, sponsorForConference._id],
+  )
+  const selectedNames = contacts
+    .filter((c) => selectedKeys.has(c._key))
+    .map((c) => c.name)
+  const templateVariables = buildTemplateVariables({
+    sponsorName: sponsorForConference.sponsor.name,
+    contactNames:
+      selectedNames.length > 0 ? selectedNames.join(' and ') : undefined,
+    conference,
+    senderName,
+    tierName: sponsorForConference.tier?.title,
+  })
+  const initialFromDefault = useMemo(() => {
+    if (!defaultTemplate) return undefined
+    return {
+      id: defaultTemplate._id,
+      subject: processTemplateVariables(
+        defaultTemplate.subject,
+        templateVariables,
+      ),
+      body: (defaultTemplate.body
+        ? processPortableTextVariables(
+            defaultTemplate.body as TemplateBlock[],
+            templateVariables,
+          )
+        : []) as unknown as PortableTextBlock[],
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- recomputed per open, not per keystroke
+  }, [defaultTemplate?._id, isOpen])
+  useEffect(() => {
+    if (isOpen && initialFromDefault && !appliedTemplateRef.current) {
+      rememberApplied(initialFromDefault)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- rememberApplied is stable per draftKey
+  }, [isOpen, initialFromDefault])
 
   const toggleRecipient = (key: string) =>
     setSelectedKeys((prev) => {
@@ -259,6 +410,7 @@ export function SponsorSendModal({
           }
         : {}),
     })
+    rememberApplied(null)
     utils.sponsor.crm.activities.list.invalidate()
     utils.sponsor.crm.activities.listCommunications.invalidate()
     showNotification({
@@ -296,13 +448,9 @@ export function SponsorSendModal({
       </p>
     ) : null
 
-  const selectedNames = contacts
-    .filter((c) => selectedKeys.has(c._key))
-    .map((c) => c.name)
-
   return (
     <EmailModal
-      isOpen={isOpen}
+      isOpen={isOpen && templatesSettled}
       onClose={onClose}
       title={`Send ${kindLabel.toLowerCase()}`}
       recipientInfo={
@@ -318,7 +466,7 @@ export function SponsorSendModal({
       submitButtonText={
         selectedCount > 1 ? `Send to ${selectedCount} contacts` : 'Send'
       }
-      storageKey={`sponsor-send-${kind}-${sponsorForConference._id}`}
+      storageKey={draftKey}
       previewComponent={createPreview}
       brandColor={emailBrandColor(conference.theme)}
       fromAddress={fromEmail}
@@ -340,22 +488,17 @@ export function SponsorSendModal({
           senderName={senderName}
           tierName={sponsorForConference.tier?.title}
           onApply={(subject, body, template: SponsorEmailTemplate) => {
-            appliedTemplateRef.current = { id: template._id, subject, body }
+            rememberApplied({ id: template._id, subject, body })
             setSubject(subject)
             setMessage(body)
           }}
-          crmContext={{
-            tags: sponsorForConference.tags,
-            status: sponsorForConference.status,
-            currency: sponsorForConference.contractCurrency,
-            orgNumber: sponsorForConference.sponsor.orgNumber,
-            website: sponsorForConference.sponsor.website,
-          }}
+          crmContext={crmContext}
         />
       )}
       initialValues={{
-        subject: `${kindLabel}: ${conference.title}`,
-        message: [],
+        subject:
+          initialFromDefault?.subject ?? `${kindLabel}: ${conference.title}`,
+        message: initialFromDefault?.body ?? [],
       }}
       placeholder={{
         subject: 'Enter email subject...',

@@ -44,6 +44,7 @@ function sentEmail(
     ],
     subject: 'Booth information for Cloud Native Days Norway 2026',
     deliveryStatus: 'sent',
+    templateId: 'tpl-info-en',
     template: { _id: 'tpl-info-en', title: 'Booth information' },
     templateEdited: true,
     providerMessageId: 'a1b2c3d4-0000-4000-8000-000000000001',
@@ -68,7 +69,8 @@ const all = [
       },
     ],
     providerMessageId: undefined,
-    template: undefined,
+    templateId: null,
+    template: null,
     templateEdited: undefined,
   }),
   sentEmail('act-contract', {
@@ -85,6 +87,7 @@ const all = [
         isDefault: true,
       },
     ],
+    templateId: 'tpl-contract',
     template: { _id: 'tpl-contract', title: 'Contract (EN)' },
     templateEdited: false,
   }),
@@ -201,7 +204,7 @@ export const FilterByKind: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
     await canvas.findByText('3 emails')
-    await userEvent.click(canvas.getByRole('tab', { name: 'Contract' }))
+    await userEvent.click(canvas.getByRole('button', { name: 'Contract' }))
     await waitFor(() => expect(canvas.getByText('1 email')).toBeInTheDocument())
     await expect(
       canvas.getByText('Contract sent to Kari Nordmann'),

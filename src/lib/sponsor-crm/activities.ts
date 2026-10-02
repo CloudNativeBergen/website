@@ -34,6 +34,7 @@ const SPONSOR_ACTIVITY_FIELDS = `
   subject,
   deliveryStatus,
   error,
+  "templateId": template._ref,
   template->{ _id, title },
   templateEdited,
   providerMessageId

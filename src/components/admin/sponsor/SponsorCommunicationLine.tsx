@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import clsx from 'clsx'
 import {
   ChevronDownIcon,
@@ -27,6 +27,7 @@ export function SponsorCommunicationLine({
   defaultExpanded?: boolean
 }) {
   const [expanded, setExpanded] = useState(defaultExpanded)
+  const recordId = useId()
   const failed = activity.deliveryStatus === 'failed'
   const Icon = failed ? ExclamationTriangleIcon : EnvelopeIcon
 
@@ -47,6 +48,7 @@ export function SponsorCommunicationLine({
           type="button"
           onClick={() => setExpanded((v) => !v)}
           aria-expanded={expanded}
+          aria-controls={recordId}
           className="min-w-0 flex-1 cursor-pointer text-left"
         >
           <p className="text-sm text-gray-700 dark:text-gray-200">
@@ -60,17 +62,23 @@ export function SponsorCommunicationLine({
         </button>
         <div className="flex shrink-0 items-center gap-1.5">
           {trailing ?? (
-            <time className="text-xs text-gray-400 dark:text-gray-500">
-              {formatDistanceToNow(new Date(activity.createdAt), {
-                addSuffix: true,
-              })}
-            </time>
+            <span className="text-xs text-gray-400 dark:text-gray-500">
+              <span className="hidden sm:inline">
+                {activity.createdBy?.name ?? 'Automatic'} ·{' '}
+              </span>
+              <time>
+                {formatDistanceToNow(new Date(activity.createdAt), {
+                  addSuffix: true,
+                })}
+              </time>
+            </span>
           )}
           <button
             type="button"
             onClick={() => setExpanded((v) => !v)}
             aria-label={expanded ? 'Hide sent email' : 'Show sent email'}
             aria-expanded={expanded}
+            aria-controls={recordId}
             className="flex h-7 w-7 items-center justify-center rounded-md text-gray-400 hover:bg-gray-100 hover:text-gray-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:hover:bg-gray-700 dark:hover:text-gray-200"
           >
             <ChevronDownIcon
@@ -82,7 +90,9 @@ export function SponsorCommunicationLine({
           </button>
         </div>
       </div>
-      {expanded && <SponsorCommunicationRecord activity={activity} />}
+      {expanded && (
+        <SponsorCommunicationRecord activity={activity} id={recordId} />
+      )}
     </div>
   )
 }

@@ -11,16 +11,16 @@ import type {
   SponsorActivityExpanded,
 } from '@/lib/sponsor-crm/types'
 import { COMMUNICATION_KIND_LABELS } from '@/lib/sponsor-crm/communication'
-import { formatDate } from '@/lib/time'
+import { format } from 'date-fns'
 
 function RecipientChip({ recipient }: { recipient: CommunicationRecipient }) {
   return (
     <span
-      className="font-inter inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-2.5 py-1 text-xs text-gray-700 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
+      className="font-inter inline-flex max-w-full flex-wrap items-center gap-x-1.5 gap-y-0.5 rounded-full border border-gray-200 bg-white px-2.5 py-1 text-xs text-gray-700 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
       title={recipient.email}
     >
       <span className="font-medium">{recipient.name}</span>
-      <span className="text-gray-500 dark:text-gray-400">
+      <span className="min-w-0 break-all text-gray-500 dark:text-gray-400">
         {recipient.email}
       </span>
       {recipient.role && (
@@ -65,8 +65,11 @@ function Field({
  */
 export function SponsorCommunicationRecord({
   activity,
+  id,
 }: {
   activity: SponsorActivityExpanded
+  /** DOM id the expanding control points at via `aria-controls`. */
+  id?: string
 }) {
   const {
     data: record,
@@ -87,6 +90,7 @@ export function SponsorCommunicationRecord({
           : 'border-gray-200 bg-gray-50/70 dark:border-gray-700 dark:bg-gray-800/60',
       )}
       data-testid="communication-record"
+      id={id}
     >
       {failed && (
         <div className="mb-3 flex items-start gap-2 text-sm text-red-700 dark:text-red-300">
@@ -117,12 +121,12 @@ export function SponsorCommunicationRecord({
           <span className="font-medium">{activity.subject}</span>
         </Field>
         <Field label="Sent">
-          {formatDate(activity.createdAt)}
+          {format(new Date(activity.createdAt), 'd MMM yyyy, HH:mm')}
           {activity.createdBy
             ? ` by ${activity.createdBy.name}`
             : ' automatically'}
         </Field>
-        {activity.template !== undefined && (
+        {activity.templateId && (
           <Field label="Template">
             {activity.template ? activity.template.title : 'Deleted template'}
             {activity.templateEdited ? (

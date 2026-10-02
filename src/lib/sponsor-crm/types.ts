@@ -257,6 +257,9 @@ export interface SponsorActivityExpanded {
   subject?: string
   deliveryStatus?: CommunicationDeliveryStatus
   error?: string
+  /** The stored reference, kept even when the template was later deleted. */
+  templateId?: string | null
+  /** Dereferenced title; `null` when no template was used OR it was deleted. */
   template?: { _id: string; title: string } | null
   templateEdited?: boolean
   providerMessageId?: string

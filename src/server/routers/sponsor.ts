@@ -2902,6 +2902,20 @@ export const sponsorRouter = router({
           })
         }
 
+        // OWNERSHIP of the template reference: the id is client input and is
+        // STORED on the audit record as a reference the timeline dereferences.
+        // Resolve it through the org-scoped reader (fails closed), so a foreign
+        // or wrong-typed id can never become provenance.
+        if (input.template) {
+          const { template } = await getSponsorEmailTemplate(input.template.id)
+          if (!template) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: 'Template not found',
+            })
+          }
+        }
+
         const result = await sendSponsorCommunication({
           conference,
           orgId: ctx.orgId,
@@ -3036,7 +3050,7 @@ export const sponsorRouter = router({
      * Not a claim about whether those codes work. A deny is platform-side and
      * revokes nothing in the vendor account, so a code minted before it still
      * redeems. The point is narrower: this is a ticketing surface the operator
-     * turned off. The neighbouring sponsor mail (`sendEmailBySfc`,
+     * turned off. The neighbouring sponsor mail (`sendCommunication`,
      * `broadcastEmail`) stays ungated — a ticketing deny switches off
      * ticketing, not sponsor contact.
      */

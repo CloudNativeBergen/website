@@ -39,6 +39,12 @@ const h = vi.hoisted(() => ({
   patches: [] as Array<{ id: string; sets: Record<string, unknown>[] }>,
   createShouldThrow: false,
   send: vi.fn(),
+  /** What the org-scoped template reader answers for a client-supplied id. */
+  getTemplate: vi.fn(),
+}))
+vi.mock('@/lib/sponsor/sanity', async (importOriginal) => ({
+  ...((await importOriginal()) as Record<string, unknown>),
+  getSponsorEmailTemplate: h.getTemplate,
 }))
 
 vi.mock('@/lib/conference/sanity', () => ({
@@ -97,7 +103,14 @@ vi.mock('@/lib/sanity/client', () => {
 vi.mock('@/lib/email/config', async (importOriginal) => ({
   ...((await importOriginal()) as Record<string, unknown>),
   resolveEmailSender: async () => ({ client: { emails: { send: h.send } } }),
-  retryWithBackoff: async <T>(fn: () => Promise<T>) => fn(),
+  /** Two attempts, like the real backoff — enough to prove the throw is INSIDE. */
+  retryWithBackoff: async <T>(fn: () => Promise<T>) => {
+    try {
+      return await fn()
+    } catch {
+      return await fn()
+    }
+  },
 }))
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
@@ -214,6 +227,7 @@ beforeEach(() => {
     slug: 'cloud-native-days-norway',
   })
   h.send.mockResolvedValue({ data: { id: 'resend-msg-1' }, error: null })
+  h.getTemplate.mockResolvedValue({ template: { _id: 'tpl-info-en' } })
   vi.spyOn(console, 'warn').mockImplementation(() => {})
   vi.spyOn(console, 'error').mockImplementation(() => {})
 })
@@ -359,6 +373,48 @@ describe('a successful send', () => {
   })
 })
 
+describe('template provenance is validated, not trusted', () => {
+  it('refuses a template id the org-scoped reader does not return, before any send', async () => {
+    h.getTemplate.mockResolvedValue({ template: undefined })
+    await expect(
+      sponsor().crm.sendCommunication({
+        ...INPUT,
+        template: { id: 'tpl-of-another-org', edited: false },
+      }),
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: 'Template not found',
+    })
+    expect(h.getTemplate).toHaveBeenCalledWith('tpl-of-another-org')
+    expect(h.send).not.toHaveBeenCalled()
+    expect(h.creates).toHaveLength(0)
+  })
+
+  it('does not touch the template reader when no template is claimed', async () => {
+    await sponsor().crm.sendCommunication(INPUT)
+    expect(h.getTemplate).not.toHaveBeenCalled()
+    expect(sentCreate()!.template).toBeUndefined()
+  })
+})
+
+describe('provider errors are retried', () => {
+  it('recovers when the first attempt resolves with an error and the second succeeds', async () => {
+    h.send
+      .mockResolvedValueOnce({
+        data: null,
+        error: { message: 'Too many requests', statusCode: 429 },
+      })
+      .mockResolvedValueOnce({ data: { id: 'resend-msg-2' }, error: null })
+    const result = await sponsor().crm.sendCommunication(INPUT)
+    expect(h.send).toHaveBeenCalledTimes(2)
+    expect(result).toMatchObject({
+      success: true,
+      providerMessageId: 'resend-msg-2',
+    })
+    expect(sentCreate()).toMatchObject({ deliveryStatus: 'sent' })
+  })
+})
+
 describe('a failed send', () => {
   it('is recorded as failed with the error, surfaces INTERNAL_SERVER_ERROR and flips nothing', async () => {
     h.send.mockResolvedValue({
@@ -376,6 +432,7 @@ describe('a failed send', () => {
     })
     expect(sentCreate()!.providerMessageId).toBeUndefined()
     expect(h.patches.filter((p) => p.id === SFC)).toHaveLength(0)
+    expect(h.send).toHaveBeenCalledTimes(2)
   })
 
   it('records a thrown provider error the same way', async () => {

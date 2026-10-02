@@ -1,10 +1,13 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import clsx from 'clsx'
 import { PaperAirplaneIcon } from '@heroicons/react/24/outline'
 import { api } from '@/lib/trpc/client'
-import type { CommunicationKind } from '@/lib/sponsor-crm/types'
+import type {
+  CommunicationKind,
+  SponsorActivityExpanded,
+} from '@/lib/sponsor-crm/types'
 import {
   COMMUNICATION_KINDS,
   COMMUNICATION_KIND_LABELS,
@@ -12,12 +15,13 @@ import {
 import { SponsorCommunicationLine } from '../sponsor/SponsorCommunicationLine'
 
 const PAGE_SIZE = 20
-const MAX_LIMIT = 100
 
 /**
  * The Communications tab (#1261): only what has been SENT to this sponsor,
  * newest first, filterable by kind — no notes or status changes in the way.
- * "Load more" widens the same query, so the filter and the page agree.
+ * Pages are fetched by offset and ACCUMULATED, so "Load more" appends below
+ * the records already open instead of re-rendering the list, and the whole
+ * history is reachable, not just the first hundred.
  */
 export function SponsorCommunicationsPanel({
   sponsorForConferenceId,
@@ -28,30 +32,54 @@ export function SponsorCommunicationsPanel({
   onSend?: () => void
 }) {
   const [kind, setKind] = useState<CommunicationKind | undefined>(undefined)
-  const [limit, setLimit] = useState(PAGE_SIZE)
+  const [offset, setOffset] = useState(0)
+  const [pages, setPages] = useState<SponsorActivityExpanded[][]>([])
 
-  const { data, isLoading, isFetching } =
+  const { data, isLoading, isFetching, isError } =
     api.sponsor.crm.activities.listCommunications.useQuery({
       sponsorForConferenceId,
       kind,
-      offset: 0,
-      limit,
+      offset,
+      limit: PAGE_SIZE,
     })
 
-  const items = data?.items ?? []
+  // Append each fetched page at its offset. A refetch of page 0 (after a new
+  // send invalidates the query) replaces the first page in place.
+  useEffect(() => {
+    if (!data) return
+    const pageIndex = offset / PAGE_SIZE
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- accumulate pages
+    setPages((prev) => {
+      const next = prev.slice(0, pageIndex)
+      next[pageIndex] = data.items
+      return next
+    })
+  }, [data, offset])
+
+  const items = useMemo(() => {
+    const seen = new Set<string>()
+    return pages.flat().filter((a) => {
+      if (seen.has(a._id)) return false
+      seen.add(a._id)
+      return true
+    })
+  }, [pages])
   const total = data?.total ?? 0
-  const canLoadMore = items.length < total && limit < MAX_LIMIT
+  const canLoadMore = !isError && items.length < total
 
   const pickKind = (next: CommunicationKind | undefined) => {
     setKind(next)
-    setLimit(PAGE_SIZE)
+    setOffset(0)
+    setPages([])
   }
+
+  const firstLoad = isLoading && items.length === 0
 
   return (
     <div className="space-y-4 py-2" data-testid="communications-panel">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div
-          role="tablist"
+          role="group"
           aria-label="Filter by kind"
           className="flex flex-wrap gap-1 rounded-lg bg-gray-100 p-1 dark:bg-gray-800"
         >
@@ -60,9 +88,8 @@ export function SponsorCommunicationsPanel({
             return (
               <button
                 key={k ?? 'all'}
-                role="tab"
                 type="button"
-                aria-selected={active}
+                aria-pressed={active}
                 onClick={() => pickKind(k)}
                 className={clsx(
                   'font-inter cursor-pointer rounded-md px-2.5 py-1 text-xs font-medium transition-colors',
@@ -76,14 +103,14 @@ export function SponsorCommunicationsPanel({
             )
           })}
         </div>
-        {!isLoading && (
+        {!firstLoad && (
           <span className="font-inter text-xs text-gray-500 dark:text-gray-400">
             {total === 1 ? '1 email' : `${total} emails`}
           </span>
         )}
       </div>
 
-      {isLoading ? (
+      {firstLoad ? (
         <div className="space-y-3">
           {[1, 2, 3].map((i) => (
             <div key={i} className="flex gap-3">
@@ -130,7 +157,7 @@ export function SponsorCommunicationsPanel({
         <div className="flex justify-center">
           <button
             type="button"
-            onClick={() => setLimit((l) => Math.min(MAX_LIMIT, l + PAGE_SIZE))}
+            onClick={() => setOffset(pages.length * PAGE_SIZE)}
             disabled={isFetching}
             className="cursor-pointer rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-800"
           >
@@ -139,11 +166,6 @@ export function SponsorCommunicationsPanel({
               : `Load more (${total - items.length} left)`}
           </button>
         </div>
-      )}
-      {!canLoadMore && items.length < total && (
-        <p className="text-center text-xs text-gray-500 dark:text-gray-400">
-          Showing the {MAX_LIMIT} most recent of {total}.
-        </p>
       )}
     </div>
   )

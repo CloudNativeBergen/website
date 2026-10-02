@@ -22,6 +22,7 @@ const h = vi.hoisted(() => ({
   invalidateList: vi.fn(),
   invalidateComms: vi.fn(),
   showNotification: vi.fn(),
+  templates: [] as unknown[],
   applied: null as null | {
     subject: string
     body: PortableTextBlock[]
@@ -46,6 +47,9 @@ vi.mock('@/lib/trpc/client', () => ({
         sendCommunication: {
           useMutation: () => ({ mutateAsync: h.mutateAsync }),
         },
+      },
+      emailTemplates: {
+        list: { useQuery: () => ({ data: h.templates, isLoading: false }) },
       },
     },
   },
@@ -98,7 +102,11 @@ vi.mock('@/components/admin/EmailModal', () => ({
     onSend,
     submitButtonText,
     warningContent,
+    initialValues,
+    isOpen,
   }: {
+    isOpen: boolean
+    initialValues?: { subject?: string; message?: unknown }
     warningContent?: React.ReactNode
     recipientInfo: React.ReactNode
     templateSelector?: (a: {
@@ -110,36 +118,64 @@ vi.mock('@/components/admin/EmailModal', () => ({
       message: PortableTextBlock[]
     }) => Promise<void>
     submitButtonText?: string
-  }) => (
-    <div>
-      {warningContent}
-      <div data-testid="to">{recipientInfo}</div>
-      {templateSelector?.({
-        setSubject: (s) => {
-          draft = { ...draft, subject: s }
-        },
-        setMessage: (b) => {
-          draft = { ...draft, message: b }
-        },
-      })}
-      <button
-        type="button"
-        onClick={() =>
-          onSend(draft).catch((e: Error) => {
-            h.showNotification({ type: 'error', title: e.message })
-          })
-        }
-      >
-        {submitButtonText ?? 'Send'}
-      </button>
-    </div>
-  ),
+  }) => {
+    if (!isOpen) return null
+    // Mirror EmailModal: the draft starts from initialValues.
+    if (initialValues && !draftSeeded) {
+      draftSeeded = true
+      draft = {
+        subject: initialValues.subject ?? '',
+        message: (initialValues.message as PortableTextBlock[]) ?? [],
+      }
+    }
+    return (
+      <div>
+        <p data-testid="subject">{draft.subject}</p>
+        {warningContent}
+        <div data-testid="to">{recipientInfo}</div>
+        {templateSelector?.({
+          setSubject: (s) => {
+            draft = { ...draft, subject: s }
+          },
+          setMessage: (b) => {
+            draft = { ...draft, message: b }
+          },
+        })}
+        <button
+          type="button"
+          onClick={() =>
+            onSend(draft).catch((e: Error) => {
+              h.showNotification({ type: 'error', title: e.message })
+            })
+          }
+        >
+          {submitButtonText ?? 'Send'}
+        </button>
+      </div>
+    )
+  },
 }))
+let draftSeeded = false
 
 import {
   SponsorSendModal,
   isTemplateEdited,
+  pickDefaultTemplate,
 } from '@/components/admin/sponsor/SponsorSendModal'
+import type { SponsorEmailTemplate } from '@/lib/sponsor/types'
+
+const tpl = (o: Partial<SponsorEmailTemplate>): SponsorEmailTemplate =>
+  ({
+    _id: 'tpl',
+    _createdAt: '',
+    _updatedAt: '',
+    title: 'T',
+    slug: { current: 't' },
+    category: 'follow-up',
+    language: 'en',
+    subject: 'S',
+    ...o,
+  }) as SponsorEmailTemplate
 
 const contacts = [
   mockContactPerson({
@@ -183,7 +219,10 @@ function renderModal(
 
 beforeEach(() => {
   vi.clearAllMocks()
+  localStorage.clear()
   h.applied = null
+  h.templates = []
+  draftSeeded = false
   draft = { subject: 'Hand-written subject', message: [] }
   h.mutateAsync.mockResolvedValue({ success: true, recipientCount: 1 })
 })
@@ -216,7 +255,8 @@ describe('recipients', () => {
     expect(posted).toMatchObject({
       sponsorForConferenceId: 'sfc-123',
       kind: 'information',
-      subject: 'Hand-written subject',
+      // No templates ⇒ the kind's generic subject seeds the draft.
+      subject: 'Information: Conf',
     })
     expect([...posted.recipientKeys].sort()).toEqual(['c-billing', 'c-primary'])
     expect(JSON.stringify(posted)).not.toContain('@acme.example')
@@ -268,6 +308,81 @@ describe('template provenance', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Send' }))
     await waitFor(() => expect(h.invalidateList).toHaveBeenCalled())
     expect(h.invalidateComms).toHaveBeenCalled()
+  })
+})
+
+describe('default template (AC4)', () => {
+  it('opens with the default template of the kind applied and records its provenance', async () => {
+    h.templates = [
+      tpl({ _id: 'tpl-contract', category: 'contract', isDefault: true }),
+      tpl({
+        _id: 'tpl-info-default',
+        category: 'follow-up',
+        language: 'no',
+        isDefault: true,
+        subject: 'Info for {{{SPONSOR_NAME}}}',
+      }),
+    ]
+    renderModal()
+    expect(screen.getByTestId('subject')).toHaveTextContent(
+      'Info for Acme Corporation',
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+    await waitFor(() => expect(h.mutateAsync).toHaveBeenCalledTimes(1))
+    expect(h.mutateAsync.mock.calls[0][0].template).toEqual({
+      id: 'tpl-info-default',
+      edited: false,
+    })
+  })
+
+  it('keeps the applied template across a reopen with a stored draft', async () => {
+    localStorage.setItem(
+      'sponsor-send-information-sfc-123',
+      JSON.stringify({ subject: 'Restored', message: [] }),
+    )
+    localStorage.setItem(
+      'sponsor-send-information-sfc-123:template',
+      JSON.stringify({ id: 'tpl-earlier', subject: 'Restored', body: [] }),
+    )
+    renderModal()
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+    await waitFor(() => expect(h.mutateAsync).toHaveBeenCalledTimes(1))
+    expect(h.mutateAsync.mock.calls[0][0].template).toMatchObject({
+      id: 'tpl-earlier',
+    })
+    // A successful send clears the stored provenance with the draft.
+    expect(
+      localStorage.getItem('sponsor-send-information-sfc-123:template'),
+    ).toBeNull()
+  })
+})
+
+describe('pickDefaultTemplate', () => {
+  const crm = { currency: 'NOK' }
+  it('never picks a contract template for the information kind', () => {
+    expect(
+      pickDefaultTemplate(
+        [tpl({ _id: 'c', category: 'contract', isDefault: true })],
+        'information',
+        crm,
+      ),
+    ).toBeUndefined()
+  })
+  it('prefers a default in the suggested language over a default in another', () => {
+    const picked = pickDefaultTemplate(
+      [
+        tpl({ _id: 'en', language: 'en', isDefault: true }),
+        tpl({ _id: 'no', language: 'no', isDefault: true }),
+      ],
+      'information',
+      crm,
+    )
+    expect(picked?._id).toBe('no')
+  })
+  it('falls back to a non-default candidate when nothing is flagged default', () => {
+    expect(
+      pickDefaultTemplate([tpl({ _id: 'only' })], 'information', crm)?._id,
+    ).toBe('only')
   })
 })
 

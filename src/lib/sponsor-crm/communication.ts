@@ -21,8 +21,10 @@ export const COMMUNICATION_KIND_LABELS: Record<CommunicationKind, string> = {
 
 /**
  * The default recipient is the contact flagged `isPrimary`, or the only
- * contact when there is exactly one — the SAME rule `hasPrimaryContact` uses
- * for contract readiness, so "default" never disagrees with "primary".
+ * contact when there is exactly one — `hasPrimaryContact`'s rule, restricted
+ * to contacts that can actually receive mail. A primary contact WITHOUT an
+ * email is therefore never the default (nothing could be sent to them), and
+ * when they are the only primary the only other mailable contact stands in.
  */
 export function defaultRecipientKey(
   contacts: readonly ContactPerson[] | undefined,
