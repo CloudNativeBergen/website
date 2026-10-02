@@ -117,7 +117,7 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
     )
   }
 
-  const lastUpdated = 'September 28, 2026'
+  const lastUpdated = 'October 2, 2026'
   const legal = await resolveLegalConfig(conference)
   const contactEmail = legal.contactEmail
   // EMPTY when no legal entity could be resolved. `legal.controllerResolved`
@@ -543,7 +543,12 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                           attempt is recorded the same way, together with the
                           provider&apos;s error message. This record is kept for
                           the life of the sponsor record so the organization can
-                          show what it sent and to whom.
+                          show what it sent and to whom. If you ask us to erase
+                          your data, your name and email address in these
+                          records are replaced by a marker; the subject and body
+                          as sent are kept as the organization&apos;s business
+                          record, so a name written into the email text itself
+                          stays.
                         </li>
                       </ul>
                       <div className="mt-3 rounded-lg bg-sky-100 p-2 dark:bg-sky-800/30">
@@ -1853,7 +1858,9 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                                 role, subject and body as sent, template,
                                 sender, time, provider message id and any failed
                                 attempt &mdash; is kept for the life of the
-                                sponsor record
+                                sponsor record; on an erasure request the
+                                recipient name and email are replaced by a
+                                marker and the rest of the record stays
                               </div>
                             </td>
                             <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">

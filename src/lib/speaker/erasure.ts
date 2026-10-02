@@ -54,6 +54,11 @@
  * speaker (`mentions[]`: ref, handle, DID, name), and a body not yet posted
  * loses their tag and plain name. See `./erasure-mentions.ts`.
  *
+ * SENT COMMUNICATIONS (#1265). Every `sponsorActivity` send record naming the
+ * subject as a recipient — by ADDRESS, it holds no reference — has that
+ * entry's name and email replaced by a marker; the subject, body and the rest
+ * of the business record stay. See `./erasure-recipients.ts`.
+ *
  * WHAT PHASE 1 DOES NOT ERASE — see `docs/SPEAKER_ERASURE_RUNBOOK.md`, which the
  * operator answers the data subject from. Badges, paid travel records and their
  * receipts, all free text (abstracts, outlines, review comments, message
@@ -89,6 +94,11 @@ import {
   type MentionIdentity,
   type SpeakerMentionInputs,
 } from './erasure-mentions'
+import {
+  fetchSponsorRecipientDocs,
+  planSponsorRecipientRedaction,
+  type SponsorActivityRecipientDoc,
+} from './erasure-recipients'
 
 // ---------------------------------------------------------------------------
 // Field policy
@@ -346,6 +356,11 @@ export interface ErasureInputs {
    * ran it (matched on `actorId`). See {@link MERGE_TRAIL_ERASURE}.
    */
   mergeTrailDocs: MergeTrailDoc[]
+  /**
+   * Sponsor send records (#1261) snapshotting the subject as a recipient by
+   * ADDRESS. Redacted in place, never deleted — see `./erasure-recipients.ts`.
+   */
+  sponsorActivityDocs: SponsorActivityRecipientDoc[]
   /** Ids of OTHER documents already holding the target slug. */
   slugConflictIds: string[]
   /**
@@ -834,6 +849,24 @@ export function buildErasurePlan(inputs: ErasureInputs): ErasurePlan {
     if (patch) documentPatches.push(patch)
   }
 
+  // --- sent-communication records (#1265) ----------------------------------
+
+  // The recipient snapshot on a sponsor send record. Name and address out, the
+  // record of the send itself left standing. See `./erasure-recipients.ts`.
+  // Merged into an existing patch of the same document for the same reason
+  // the mentions branch is: one document, one revision guard.
+  for (const doc of inputs.sponsorActivityDocs) {
+    const patch = planSponsorRecipientRedaction(doc, emails, refusals)
+    if (!patch) continue
+    const same = documentPatches.find((p) => p.id === patch.id)
+    if (!same) {
+      documentPatches.push(patch)
+      continue
+    }
+    same.set = { ...same.set, ...patch.set }
+    same.reason = `${same.reason}; ${patch.reason}`
+  }
+
   const noop =
     refusals.length === 0 &&
     Object.keys(speakerSet).length === 0 &&
@@ -1241,6 +1274,14 @@ export interface ErasureVerification {
      * it cannot drift from what the sweep actually does.
      */
     mergeTrailEntries: number
+    /**
+     * Sponsor send records (documents, not entries) still carrying the
+     * subject's name or address in a recipient entry, the timeline line or
+     * a failed send's error text (#1265). Counted by re-running the planner,
+     * so it cannot drift from what the sweep does; a record with a refused
+     * entry counts too.
+     */
+    sentCommunicationRecipients: number
     galleryTags: number
     curationEntries: number
     unpaidBankingDetails: number
@@ -1331,6 +1372,7 @@ async function fetchErasureInputs(
     ticketTalks,
     emailKeyedDocs,
     mergeTrailDocs,
+    sponsorActivityDocs,
     slugConflicts,
   ] = await Promise.all([
     clientRead.fetch<Array<Record<string, unknown>>>(
@@ -1399,6 +1441,7 @@ async function fetchErasureInputs(
       { speakerId, emails },
       { cache: 'no-store' },
     ),
+    fetchSponsorRecipientDocs(emails),
     clientRead.fetch<Array<{ _id: string }>>(
       // groq-global: a slug collision must be detected across ALL tenants —
       // speaker slugs share one public URL space.
@@ -1450,6 +1493,7 @@ async function fetchErasureInputs(
     ticketTalks: ticketTalks ?? [],
     emailKeyedDocs: emailKeyedDocs ?? [],
     mergeTrailDocs: mergeTrailDocs ?? [],
+    sponsorActivityDocs,
     slugConflictIds: (slugConflicts ?? []).map((d) => d._id),
     assetFileIds: assets.fileIds,
     assets: assets.inputs,
@@ -1935,6 +1979,13 @@ async function verifyErasureDetailed(
         ) !== null,
     ).length + mergeTrailRefusals.length
 
+  const recipientRefusals: string[] = []
+  const sentCommunicationRecipients =
+    inputs.sponsorActivityDocs.filter(
+      (d) =>
+        planSponsorRecipientRedaction(d, emails, recipientRefusals) !== null,
+    ).length + recipientRefusals.length
+
   const ticketEntries = inputs.ticketTalks.reduce(
     (total, talk) =>
       total +
@@ -2024,6 +2075,7 @@ async function verifyErasureDetailed(
     emailKeyedInvitations: invitationIds.size,
     signInTokens,
     mergeTrailEntries,
+    sentCommunicationRecipients,
     galleryTags,
     curationEntries,
     unpaidBankingDetails,
@@ -2051,6 +2103,7 @@ async function verifyErasureDetailed(
     residual.emailKeyedInvitations === 0 &&
     signInTokens === 0 &&
     mergeTrailEntries === 0 &&
+    sentCommunicationRecipients === 0 &&
     galleryTags === 0 &&
     curationEntries === 0 &&
     unpaidBankingDetails === 0 &&

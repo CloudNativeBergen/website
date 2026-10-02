@@ -3,6 +3,7 @@
  * (#1261). Pure: no Sanity, no Resend, no React — safe to import anywhere.
  */
 import type { ContactPerson } from '@/lib/sponsor/types'
+import { canonicalEmail } from '@/lib/speaker/email'
 import type { CommunicationKind, CommunicationRecipient } from './types'
 
 export const COMMUNICATION_KINDS: readonly CommunicationKind[] = [
@@ -163,7 +164,11 @@ export function resolveRecipients(
       return {
         contactKey: contact._key,
         name: contact.name,
-        email: contact.email,
+        // Canonical (trimmed, lowercased; never NFKC — it is delivered to):
+        // the ONE form the erasure's GROQ read can match with `lower()`
+        // (#1265, `erasure-recipients.ts`). A contact typed with stray
+        // whitespace is still mailed, and still findable.
+        email: canonicalEmail(contact.email),
         ...(contact.role ? { role: contact.role } : {}),
         isDefault: contact._key === defaultKey,
       }

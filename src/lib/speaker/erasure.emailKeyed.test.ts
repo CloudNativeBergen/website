@@ -45,6 +45,10 @@ import { EMAIL_KEYED_ERASURE_SITES, MERGE_TRAIL_ERASURE } from './erasure'
 
 const SCHEMA_DIR = join(__dirname, '..', '..', '..', 'sanity', 'schemaTypes')
 const ERASURE_SOURCE = readFileSync(join(__dirname, 'erasure.ts'), 'utf8')
+const RECIPIENTS_SOURCE = readFileSync(
+  join(__dirname, 'erasure-recipients.ts'),
+  'utf8',
+)
 
 /** A field name that plausibly stores an email ADDRESS (not a flag or a date). */
 const EMAIL_FIELD = /^(.*[Ee]mail.*|identifier)$/
@@ -156,9 +160,16 @@ const DISPOSITIONS: Record<string, Disposition> = {
     verdict: 'not-the-speaker-rail',
     why: 'sponsor contact — sponsor-contact rail',
   },
+  // The email-keyed class in its ARRAY shape again, on a different document:
+  // a sent-email audit record (#1261) snapshots each recipient's name and
+  // address beside the body as sent. Nothing references the person, so it is
+  // reached by address and REDACTED in place (#1265) — the body, subject and
+  // the rest of the business record stay. Not in EMAIL_KEYED_ERASURE_SITES
+  // (that list drives whole-document deletes); it has its own read in
+  // `erasure-recipients.ts`, pinned below.
   'sponsorActivity.email': {
-    verdict: 'not-the-speaker-rail',
-    why: 'a sent-email audit record’s recipient snapshot (#1261) — sponsor-contact rail; its redaction on a sponsor-contact erasure is #1265',
+    verdict: 'swept',
+    why: 'recipients[].email — name and address replaced by a marker by the sent-communication redaction (#1265)',
   },
   // --- organization / conference configuration, not a person ----------------
   'organization.contactEmail': {
@@ -574,6 +585,23 @@ describe('the swept set and the query that implements it cannot drift', () => {
     )
   })
 
+  it('the sent-communication recipients are swept by their own email-keyed read', () => {
+    // Same class, array shape: the person is findable in a send record ONLY
+    // by the address the snapshot kept, which the erasure then destroys. The
+    // read is pinned as a string like the others, and `lower()` is not
+    // optional — the snapshot keeps the address as the contact typed it.
+    expect(RECIPIENTS_SOURCE).toContain(
+      '_type == "sponsorActivity" && count(recipients[lower(email) in $emails]) > 0',
+    )
+    // Release-aware like the asset and mention reads: `raw` at the version
+    // that sees `versions.**` copies, or a release copy of a record survives.
+    expect(RECIPIENTS_SOURCE).toContain('apiVersion: COUNT_API_VERSION')
+    expect(RECIPIENTS_SOURCE).toContain("perspective: 'raw'")
+    // …and erasure.ts actually calls it, so the read cannot be orphaned.
+    expect(ERASURE_SOURCE).toContain('fetchSponsorRecipientDocs(emails)')
+    expect(ERASURE_SOURCE).toContain('planSponsorRecipientRedaction(')
+  })
+
   it('every DISPOSITIONS row marked `swept` outside the speaker document is a declared site', () => {
     const declared = new Set(
       EMAIL_KEYED_ERASURE_SITES.map((s) => `${s.type}.${s.field}`),
@@ -583,8 +611,9 @@ describe('the swept set and the query that implements it cannot drift', () => {
         ([key, d]) => d.verdict === 'swept' && !key.startsWith('speaker.'),
       )
       .map(([key]) => key)
-      // `talk.email` is swept by the ticket read, not the email-keyed read.
-      .filter((key) => key !== 'talk.email')
+      // `talk.email` is swept by the ticket read, not the email-keyed read;
+      // `sponsorActivity.email` by the recipient redaction read (pinned above).
+      .filter((key) => key !== 'talk.email' && key !== 'sponsorActivity.email')
     expect(sweptElsewhere.filter((key) => !declared.has(key))).toEqual([])
   })
 })

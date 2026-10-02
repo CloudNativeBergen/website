@@ -429,6 +429,59 @@ is replaced outright with `{ loserRedactedAt, unreadable: true }`, because a blo
 we cannot read is not a blob we can promise is clean. `actorId` is retained and
 resolves to the anonymised placeholder, exactly like every other audit reference.
 
+## Sent communications (`sponsorActivity`)
+
+When an organizer emails a sponsor contact from the CRM (website#1261), the
+send is recorded as an `email` activity carrying a **snapshot** of each
+recipient — contact key, name, address, role — beside the subject and body
+exactly as sent. The record is the organization's evidence of what it sent and
+to whom, and the privacy page says it is kept for the life of the sponsor
+record. A contact who is also a speaker is found here **by address**: nothing
+references the person.
+
+**What erasure does to an entry: redacts, does not delete** (website#1265).
+
+| Kept                                                                                                                            | Replaced                                                                                                                                                                                                         |
+| ------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `subject`, `body`, `template`, `attachments`, `providerMessageId`, `deliveryStatus`, `contactKey`, `role`, the other recipients | `recipients[].name` → `Erased contact`, `recipients[].email` → `erased@anonymous.invalid`, the name ending the generated `description` line, and the address wherever a failed send's provider `error` quotes it |
+
+Only entries carrying one of the subject's addresses are touched; another
+contact on the same record is left alone. A second run finds nothing to change.
+**If you ever redact an entry by hand, redact the line and the error with it**:
+once the entry carries the marker address the record is no longer selected by
+the read, and the sweep cannot know the name the line still shows.
+The verification counts `sentCommunicationRecipients` and needs the pre-erasure
+match set like the merge trail does — a standalone `--verify` cannot recount it.
+
+**What the speaker erasure does not reach.** A record is found only by an
+address on the speaker's own profile (`email` + `knownEmails`). A contact
+entry using an address they never had on their profile — a work address typed
+into the sponsor's contact list — and a sponsor contact with no speaker
+document at all are both reached by the sponsor-contact tool below instead.
+The sponsor's own contact list (`sponsorForConference.contactPersons[]`) is
+the organizer's to edit in the CRM and is not swept by either tool. A name
+typed by hand into the subject or body, the subject copied into
+`metadata.additionalData`, and a `description` an organizer has edited away
+from its generated form are free text, which Phase 1 does not erase.
+
+### A sponsor contact without a speaker document
+
+Most sponsor contacts never had a speaker document, so `erase-speaker` has
+nothing to run on. For them:
+
+```bash
+pnpm erase-sponsor-contact --email "<address>[,<other address>]" --actor "<you>"            # dry run
+pnpm erase-sponsor-contact --email "<address>[,<other address>]" --actor "<you>" --commit   # writes
+```
+
+It runs the same planner over every send record carrying one of the addresses,
+in any tenant, in one revision-guarded transaction, then re-reads and prints
+`CLEAN` or the residual count. Give it every address the person used as a
+contact; the match is by address only. Then remove their entry from the
+sponsor's contact list in the CRM (the tool does not), and answer the request
+naming the free text it leaves. A refusal writes nothing; a second run stages
+nothing.
+
 ### The limit: no live speaker document, no erasure
 
 The tool works from the subject's **live** `speaker` document. If they have none,
@@ -497,9 +550,12 @@ the hole.
 
 Currently swept: `coSpeakerInvitation.invitedEmail`,
 `organizerInvitation.invitedEmail`, `emailSignInToken.identifier`,
-`talk.issuedSpeakerTickets[].email`, and `speaker.mergedWith[].loserEmails` (see
-[the merge trail](#the-merge-trail-mergedwith)). All matched case-insensitively —
-`loserEmails` is written already normalised, so it needs no `lower()`.
+`talk.issuedSpeakerTickets[].email`, `speaker.mergedWith[].loserEmails` (see
+[the merge trail](#the-merge-trail-mergedwith)), and
+`sponsorActivity.recipients[].email` (see
+[sent communications](#sent-communications-sponsoractivity)). All matched
+case-insensitively — `loserEmails` is written already normalised, so it needs no
+`lower()`.
 
 **If you add a document type with an email field**, decide whether it can hold a
 speaker's address. If it can, add it to `EMAIL_KEYED_ERASURE_SITES` and to the
@@ -617,7 +673,10 @@ talks; they are removed from `conference.organizers[]`, `featuredSpeakers[]` and
 organizer teams; `bankingDetails` is deleted from **unpaid** travel-support
 records; and any `mergedWith[]` entry in **another** speaker's merge trail that
 carries them is redacted — personal values out, the record of the merge itself
-left standing (see [the merge trail](#the-merge-trail-mergedwith)); and every
+left standing (see [the merge trail](#the-merge-trail-mergedwith)); every
+sponsor send record naming them as a recipient has that entry's name and
+address replaced, the email itself left standing (see
+[sent communications](#sent-communications-sponsoractivity)); and every
 post variant loses its records of them, and an unposted one their tag and
 name (see step 3c).
 
