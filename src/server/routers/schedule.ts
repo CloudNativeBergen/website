@@ -323,6 +323,115 @@ export const scheduleRouter = router({
         await clientWrite.delete(input.id)
         return { success: true }
       }),
+
+    addTalk: adminProcedure
+      .input(
+        z.object({
+          scheduleId: z.string(),
+          trackIndex: z.number().int().min(0),
+          startTime: z.string(),
+          endTime: z.string(),
+          proposalId: z.string().optional(),
+          placeholder: z.string().optional(),
+        }),
+      )
+      .mutation(async ({ input }) => {
+        const { conference, error } = await getConferenceForCurrentDomain()
+        if (error || !conference)
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to fetch conference',
+          })
+
+        const doc = await clientWrite.fetch(
+          `*[_type == "schedule" && _id == $id && conference._ref == $conferenceId][0]`,
+          { id: input.scheduleId, conferenceId: conference._id },
+        )
+        if (!doc) throw new TRPCError({ code: 'NOT_FOUND' })
+        if (doc.status === ScheduleStatus.Official) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Cannot directly mutate an official schedule.',
+          })
+        }
+
+        if (!doc.tracks || !doc.tracks[input.trackIndex]) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Track index out of bounds.',
+          })
+        }
+
+        const trackKey = doc.tracks[input.trackIndex]._key
+        const newTalk = {
+          _key: crypto.randomUUID().replace(/-/g, '').slice(0, 16),
+          startTime: input.startTime,
+          endTime: input.endTime,
+          ...(input.proposalId
+            ? { talk: { _ref: input.proposalId, _type: 'reference' } }
+            : { placeholder: input.placeholder }),
+        }
+
+        await clientWrite
+          .patch(input.scheduleId)
+          .insert('after', `tracks[_key=="${trackKey}"].talks[-1]`, [newTalk])
+          .commit()
+
+        revalidateTag(conferenceTag(conference._id), 'default')
+        return { success: true }
+      }),
+
+    removeTalk: adminProcedure
+      .input(
+        z.object({
+          scheduleId: z.string(),
+          trackIndex: z.number().int().min(0),
+          talkIndex: z.number().int().min(0),
+        }),
+      )
+      .mutation(async ({ input }) => {
+        const { conference, error } = await getConferenceForCurrentDomain()
+        if (error || !conference)
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to fetch conference',
+          })
+
+        const doc = await clientWrite.fetch(
+          `*[_type == "schedule" && _id == $id && conference._ref == $conferenceId][0]`,
+          { id: input.scheduleId, conferenceId: conference._id },
+        )
+        if (!doc) throw new TRPCError({ code: 'NOT_FOUND' })
+        if (doc.status === ScheduleStatus.Official) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Cannot directly mutate an official schedule.',
+          })
+        }
+
+        if (
+          !doc.tracks ||
+          !doc.tracks[input.trackIndex] ||
+          !doc.tracks[input.trackIndex].talks ||
+          !doc.tracks[input.trackIndex].talks[input.talkIndex]
+        ) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Track or talk index out of bounds.',
+          })
+        }
+
+        const trackKey = doc.tracks[input.trackIndex]._key
+        const talkKey = doc.tracks[input.trackIndex].talks[input.talkIndex]._key
+
+        await clientWrite
+          .patch(input.scheduleId)
+          .unset([`tracks[_key=="${trackKey}"].talks[_key=="${talkKey}"]`])
+          .commit()
+
+        revalidateTag(conferenceTag(conference._id), 'default')
+        return { success: true }
+      }),
   }),
 
   action: adminProcedure

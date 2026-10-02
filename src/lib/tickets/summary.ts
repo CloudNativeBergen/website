@@ -32,6 +32,7 @@ import {
   type TicketingAdminAccess,
 } from './admin-access'
 import type { TicketingProviderType } from './provider'
+import { classifyTicket } from './classification'
 import { buildClassificationContext } from './classificationContext'
 import { isPaidTicket } from './classification'
 import { DEFAULT_TARGET_CONFIG } from './config'
@@ -182,6 +183,85 @@ async function analyse(
  * @param conference must be read WITH sponsors — the free-ticket allocation and
  *                   the sponsor tier table are both derived from them.
  */
+
+export interface ExportedParticipant {
+  firstName: string
+  lastName: string
+  email: string
+  categories: string
+  isComp: boolean
+  grantsWorkshop: boolean
+}
+
+export async function exportParticipants(
+  conference: Conference,
+  workshopOnly?: boolean,
+): Promise<ExportedParticipant[]> {
+  const access = await resolveTicketingAdminAccess(conference)
+  if (access.state !== 'ready') {
+    throw new Error('Ticketing provider not configured')
+  }
+  const allTickets = await fetchTickets(access)
+  const classification = await buildClassificationContext(
+    access,
+    conference,
+    allTickets,
+  )
+
+  const classified = allTickets.map((t) => ({
+    ticket: t,
+    class: classifyTicket(t, classification),
+  }))
+
+  const byEmail = new Map<string, typeof classified>()
+  const anonymous: typeof classified = []
+
+  for (const item of classified) {
+    const e = item.ticket.crm?.email?.toLowerCase().trim()
+    if (!e) {
+      anonymous.push(item)
+    } else {
+      if (!byEmail.has(e)) byEmail.set(e, [])
+      byEmail.get(e)!.push(item)
+    }
+  }
+
+  const result: ExportedParticipant[] = []
+
+  const addGroup = (group: typeof classified) => {
+    const grantsWorkshop = group.some((g) => g.class.grantsWorkshop)
+    if (workshopOnly && !grantsWorkshop) return
+
+    // Paid if ANY ticket in their bundle is not a comp
+    const isComp = group.every((g) => g.class.comp === true)
+
+    // Deduplicate categories in case they bought 5 of the same ticket
+    const uniqueCategories = Array.from(
+      new Set(group.map((g) => g.ticket.category).filter(Boolean)),
+    )
+    const categories = uniqueCategories.join(', ')
+
+    const first = group[0].ticket
+    result.push({
+      firstName: first.crm?.first_name || '',
+      lastName: first.crm?.last_name || '',
+      email: first.crm?.email?.toLowerCase().trim() || '',
+      categories,
+      isComp,
+      grantsWorkshop,
+    })
+  }
+
+  for (const group of byEmail.values()) {
+    addGroup(group)
+  }
+  for (const anon of anonymous) {
+    addGroup([anon])
+  }
+
+  return result
+}
+
 export async function buildTicketSummary(
   conference: Conference,
 ): Promise<TicketSummary> {

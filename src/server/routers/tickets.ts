@@ -36,7 +36,7 @@ import {
   joinSpeakerTicketStatus,
 } from '@/lib/tickets/speakerStatus'
 import { fetchSpeakerTicketInputs } from '@/lib/speaker/ticketInputs'
-import { buildTicketSummary } from '@/lib/tickets/summary'
+import { buildTicketSummary, exportParticipants } from '@/lib/tickets/summary'
 import { calculateDiscountUsage, sponsorOwningCode } from '@/lib/discounts'
 import {
   getTicketingProvider,
@@ -560,6 +560,22 @@ export const ticketsRouter = router({
      *
      * PII: counts and aggregates only. No `EventTicket` reaches the caller.
      */
+
+    exportParticipants: ticketingAdminProcedure
+      .input(z.object({ workshopOnly: z.boolean().optional() }))
+      .query(async ({ input }) => {
+        const { conference, error } = await getConferenceForCurrentDomain({
+          sponsors: true,
+        })
+        if (error || !conference?._id) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Conference not found',
+          })
+        }
+        return exportParticipants(conference, input.workshopOnly)
+      }),
+
     summary: ticketingAdminProcedure.query(async () => {
       const { conference, error } = await getConferenceForCurrentDomain({
         sponsors: true,

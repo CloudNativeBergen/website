@@ -112,6 +112,8 @@ const meta = {
     participantTally: {
       participants: latest.actualTickets + 36,
       workshopParticipants: 0,
+      paidWorkshopParticipants: 0,
+      freeWorkshopParticipants: 0,
       addOnsWithSeat: 4,
       addOnsWithoutSeat: 1,
       repeatTickets: 1,
@@ -247,6 +249,8 @@ export const UnverifiedParticipants: Story = {
     participantTally: {
       participants: 155,
       workshopParticipants: 0,
+      paidWorkshopParticipants: 0,
+      freeWorkshopParticipants: 0,
       addOnsWithSeat: 0,
       addOnsWithoutSeat: 0,
       repeatTickets: 0,
@@ -266,6 +270,8 @@ export const ProposedParticipantRoles: Story = {
     participantTally: {
       participants: 155,
       workshopParticipants: 0,
+      paidWorkshopParticipants: 0,
+      freeWorkshopParticipants: 0,
       addOnsWithSeat: 0,
       addOnsWithoutSeat: 0,
       repeatTickets: 0,
