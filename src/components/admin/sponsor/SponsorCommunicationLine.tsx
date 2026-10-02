@@ -50,7 +50,7 @@ export function SponsorCommunicationLine({
           type="button"
           onClick={() => setExpanded((v) => !v)}
           aria-expanded={expanded}
-          aria-controls={recordId}
+          aria-controls={expanded ? recordId : undefined}
           className="min-w-[14rem] flex-1 cursor-pointer rounded-md text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
         >
           <p className="text-sm text-gray-700 dark:text-gray-200">
@@ -76,7 +76,7 @@ export function SponsorCommunicationLine({
             onClick={() => setExpanded((v) => !v)}
             aria-label={expanded ? 'Hide sent email' : 'Show sent email'}
             aria-expanded={expanded}
-            aria-controls={recordId}
+            aria-controls={expanded ? recordId : undefined}
             // The line itself is the keyboard control; this is a pointer
             // affordance, so it does not add a second tab stop per row.
             tabIndex={-1}

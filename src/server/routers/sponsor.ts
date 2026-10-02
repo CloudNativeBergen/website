@@ -3005,7 +3005,8 @@ export const sponsorRouter = router({
       .input(
         z.object({
           sponsorForConferenceId: z.string().min(1),
-          subject: z.string().trim().min(1).max(200),
+          // The OLD wire contract, unchanged for cnctl: any non-empty subject.
+          subject: z.string().min(1),
           body: z.string().min(1).max(50000),
         }),
       )
