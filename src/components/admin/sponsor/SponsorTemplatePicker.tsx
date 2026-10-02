@@ -42,6 +42,8 @@ interface SponsorTemplatePickerProps {
     body: PortableTextBlock[],
     template: SponsorEmailTemplate,
   ) => void
+  /** Categories to leave out of the picker (e.g. `contract` for an information send). */
+  excludeCategories?: readonly TemplateCategory[]
   crmContext?: {
     tags?: string[]
     status?: string
@@ -59,9 +61,17 @@ export function SponsorTemplatePicker({
   tierName,
   onApply,
   crmContext,
+  excludeCategories,
 }: SponsorTemplatePickerProps) {
-  const { data: templates, isLoading } =
+  const { data: allTemplates, isLoading } =
     api.sponsor.emailTemplates.list.useQuery()
+  const templates = useMemo(
+    () =>
+      excludeCategories?.length
+        ? allTemplates?.filter((t) => !excludeCategories.includes(t.category))
+        : allTemplates,
+    [allTemplates, excludeCategories],
+  )
 
   const variables = useMemo(
     () =>

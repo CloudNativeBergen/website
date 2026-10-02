@@ -33,6 +33,18 @@ const sponsor = mockSponsor({ contactPersons: contacts })
 
 const templates = [
   {
+    _id: 'tpl-contract-en',
+    _createdAt: '2026-01-01T00:00:00Z',
+    _updatedAt: '2026-01-01T00:00:00Z',
+    title: 'Contract (EN)',
+    slug: { current: 'contract-en' },
+    category: 'contract',
+    language: 'en',
+    subject: 'Your sponsorship contract',
+    isDefault: true,
+    body: [],
+  },
+  {
     _id: 'tpl-info-en',
     _createdAt: '2026-01-01T00:00:00Z',
     _updatedAt: '2026-01-01T00:00:00Z',
@@ -170,6 +182,15 @@ export const Default: Story = {
     ).toBeDisabled()
     const recipients = body.getByRole('group', { name: 'Recipients' })
     await expect(within(recipients).getByText('Default')).toBeInTheDocument()
+    // The kind's default template is applied on open, and the picker never
+    // offers a contract template for an information send.
+    await body.findByDisplayValue(
+      'Booth information for Cloud Native Days Norway 2026',
+    )
+    const picker = await body.findByRole('combobox')
+    await expect(
+      within(picker).queryByRole('option', { name: /Contract \(EN\)/ }),
+    ).not.toBeInTheDocument()
   },
 }
 

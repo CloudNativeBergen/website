@@ -41,6 +41,8 @@ export function defaultRecipientKey(
  * recovers from it by dropping the stale provenance and sending again).
  */
 export const TEMPLATE_NOT_FOUND_MESSAGE = 'Template not found'
+export const TEMPLATE_WRONG_KIND_MESSAGE =
+  'Template is for another kind of email'
 
 export class CommunicationRecipientError extends Error {
   constructor(message: string) {

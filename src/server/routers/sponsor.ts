@@ -125,7 +125,10 @@ import {
   listCommunicationsForSponsor,
 } from '@/lib/sponsor-crm/activities'
 import { sendSponsorCommunication } from '@/lib/sponsor-crm/communication-send'
-import { TEMPLATE_NOT_FOUND_MESSAGE } from '@/lib/sponsor-crm/communication'
+import {
+  TEMPLATE_NOT_FOUND_MESSAGE,
+  TEMPLATE_WRONG_KIND_MESSAGE,
+} from '@/lib/sponsor-crm/communication'
 import {
   bulkUpdateSponsors,
   bulkDeleteSponsors,
@@ -2931,7 +2934,7 @@ export const sponsorRouter = router({
           if (isContractTemplate !== isContractKind) {
             throw new TRPCError({
               code: 'BAD_REQUEST',
-              message: 'Template is for another kind of email',
+              message: TEMPLATE_WRONG_KIND_MESSAGE,
             })
           }
         }

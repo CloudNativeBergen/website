@@ -396,6 +396,36 @@ describe('provenance edge cases (round 2)', () => {
     )
   })
 
+  it('treats "Template is for another kind of email" the same way', async () => {
+    localStorage.setItem(
+      'sponsor-send-information-sfc-123',
+      JSON.stringify({ subject: 'Restored', message: [] }),
+    )
+    localStorage.setItem(
+      'sponsor-send-information-sfc-123:template',
+      JSON.stringify({ id: 'tpl-contract', subject: 'Restored', body: [] }),
+    )
+    h.mutateAsync
+      .mockRejectedValueOnce(new Error('Template is for another kind of email'))
+      .mockResolvedValueOnce({ success: true, recipientCount: 1 })
+    renderModal()
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+    await waitFor(() => expect(h.mutateAsync).toHaveBeenCalledTimes(2))
+    expect(h.mutateAsync.mock.calls[1][0].template).toBeUndefined()
+  })
+
+  it('a stored draft WITHOUT provenance never inherits the default template', async () => {
+    h.templates = [tpl({ _id: 'tpl-default', isDefault: true, language: 'no' })]
+    localStorage.setItem(
+      'sponsor-send-information-sfc-123',
+      JSON.stringify({ subject: 'Old scratch draft', message: [] }),
+    )
+    renderModal()
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+    await waitFor(() => expect(h.mutateAsync).toHaveBeenCalledTimes(1))
+    expect(h.mutateAsync.mock.calls[0][0].template).toBeUndefined()
+  })
+
   it('does not swallow other errors', async () => {
     h.mutateAsync.mockRejectedValueOnce(
       new Error('Resend: domain not verified'),

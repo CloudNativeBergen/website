@@ -30,6 +30,7 @@ import type {
 import {
   COMMUNICATION_KIND_LABELS,
   TEMPLATE_NOT_FOUND_MESSAGE,
+  TEMPLATE_WRONG_KIND_MESSAGE,
   defaultRecipientKey,
 } from '@/lib/sponsor-crm/communication'
 import { formatConferenceDateLong } from '@/lib/time'
@@ -333,7 +334,9 @@ export function SponsorSendModal({
   // Whether a draft was waiting when the modal OPENED — read once per open,
   // not per render, so a later re-render (a recipient toggle after "Clear
   // draft") cannot flip it and attach a default the editor never showed.
-  const [hasDraft, setHasDraft] = useState(false)
+  const [hasDraft, setHasDraft] = useState(
+    () => isOpen && !!readStorage(draftKey),
+  )
   useEffect(() => {
     if (isOpen) {
       // eslint-disable-next-line react-hooks/set-state-in-effect -- sampled once per open
@@ -431,7 +434,8 @@ export function SponsorSendModal({
       if (
         applied &&
         error instanceof Error &&
-        error.message === TEMPLATE_NOT_FOUND_MESSAGE
+        (error.message === TEMPLATE_NOT_FOUND_MESSAGE ||
+          error.message === TEMPLATE_WRONG_KIND_MESSAGE)
       ) {
         rememberApplied(null)
         result = await sendMutation.mutateAsync(base)
@@ -523,6 +527,7 @@ export function SponsorSendModal({
             setMessage(body)
           }}
           crmContext={crmContext}
+          excludeCategories={kind === 'contract' ? undefined : ['contract']}
         />
       )}
       initialValues={{
