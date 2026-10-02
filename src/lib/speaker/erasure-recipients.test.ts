@@ -164,6 +164,22 @@ describe('a sent-communication record loses the subject’s name and address', (
     )
   })
 
+  it('does not touch somebody else’s address whose local part merely ends with the subject’s', () => {
+    // Apostrophe and the other RFC 5322 atext characters are legal local-part
+    // characters, and zod accepts them on a contact.
+    const patch = planSponsorRecipientRedaction(
+      activity({
+        error:
+          "o'ada@example.com bounced; x+ada@example.com bounced; ada@example.com bounced",
+      }),
+      EMAILS,
+      [],
+    )!
+    expect(patch.set!.error).toBe(
+      `o'ada@example.com bounced; x+ada@example.com bounced; ${REDACTED_RECIPIENT_EMAIL} bounced`,
+    )
+  })
+
   it('does not touch somebody else’s address that merely ends with the subject’s', () => {
     const patch = planSponsorRecipientRedaction(
       activity({

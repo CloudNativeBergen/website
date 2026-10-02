@@ -593,6 +593,10 @@ describe('the swept set and the query that implements it cannot drift', () => {
     expect(RECIPIENTS_SOURCE).toContain(
       '_type == "sponsorActivity" && count(recipients[lower(email) in $emails]) > 0',
     )
+    // Release-aware like the asset and mention reads: `raw` at the version
+    // that sees `versions.**` copies, or a release copy of a record survives.
+    expect(RECIPIENTS_SOURCE).toContain('apiVersion: COUNT_API_VERSION')
+    expect(RECIPIENTS_SOURCE).toContain("perspective: 'raw'")
     // …and erasure.ts actually calls it, so the read cannot be orphaned.
     expect(ERASURE_SOURCE).toContain('fetchSponsorRecipientDocs(emails)')
     expect(ERASURE_SOURCE).toContain('planSponsorRecipientRedaction(')

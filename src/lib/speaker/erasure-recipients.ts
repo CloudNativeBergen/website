@@ -33,6 +33,7 @@
  */
 import { groq } from 'next-sanity'
 import { clientReadUncached } from '@/lib/sanity/client'
+import { COUNT_API_VERSION } from '@/lib/sanity/orphaned-asset'
 import { normalizeEmail } from './email'
 import type { ErasureDocumentPatch } from './erasure'
 
@@ -101,7 +102,10 @@ function redactAddresses(
       // A trailing dot or hyphen continues the address only when an address
       // character follows: "ada@x.com." ends a sentence, "ada@x.com.au" does
       // not.
-      `(?<![A-Za-z0-9._%+-])${escaped}(?![A-Za-z0-9]|[.-][A-Za-z0-9])`,
+      // The left boundary is the RFC 5322 local-part alphabet (`atext` plus
+      // the dot): `o'ada@x.com` is somebody else's address, and zod lets a
+      // contact be stored with it.
+      `(?<![A-Za-z0-9!#$%&'*+/=?^_\`{|}~.-])${escaped}(?![A-Za-z0-9]|[.-][A-Za-z0-9])`,
       'gi',
     )
     out = out.replace(pattern, REDACTED_RECIPIENT_EMAIL)
@@ -195,8 +199,16 @@ export async function fetchSponsorRecipientDocs(
   emails: readonly string[],
 ): Promise<SponsorActivityRecipientDoc[]> {
   if (emails.length === 0) return []
+  // `raw` at COUNT_API_VERSION, like `./erasure-assets.ts`: it sees drafts
+  // and, from that version on, Content Release `versions.**` copies, which
+  // the transaction (sent at the same version) then patches by their own id.
+  // A read blind to a release copy would report clean over a record that is
+  // one publish away from showing the name again.
+  const client = clientReadUncached.withConfig({
+    apiVersion: COUNT_API_VERSION,
+  })
   return (
-    (await clientReadUncached.fetch<SponsorActivityRecipientDoc[]>(
+    (await client.fetch<SponsorActivityRecipientDoc[]>(
       // groq-global: the sent-communication audit (#1261) snapshots a
       // recipient by ADDRESS and holds no reference to them, so the
       // `references()` read in erasure.ts is structurally blind to it. The
@@ -206,7 +218,7 @@ export async function fetchSponsorRecipientDocs(
         _id, _rev, description, error, recipients
       }`,
       { emails },
-      { cache: 'no-store' },
+      { cache: 'no-store', perspective: 'raw' },
     )) ?? []
   )
 }

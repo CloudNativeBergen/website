@@ -43,6 +43,8 @@ const transactionApi = {
 vi.mock('@/lib/sanity/client', () => ({
   clientReadUncached: {
     fetch: (...args: unknown[]) => fetchMock(...args),
+    // The recipient read is release-aware (`withConfig` at a newer version).
+    withConfig: () => ({ fetch: (...args: unknown[]) => fetchMock(...args) }),
   },
   clientWrite: {
     withConfig: () => ({ transaction: () => transactionApi }),
