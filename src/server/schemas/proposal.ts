@@ -88,7 +88,7 @@ const ProposalInputBaseSchema = z.object({
     .array(z.nativeEnum(Audience))
     .min(1, 'At least one audience must be specified'),
   outline: z.string().nullable().optional().transform(nullToUndefined),
-  topics: z.array(ReferenceSchema),
+  topics: z.array(ReferenceSchema).min(1, 'At least one topic is required'),
   tos: z.boolean().refine((val) => val === true, {
     message: 'Terms of Service must be accepted',
   }),
@@ -175,9 +175,11 @@ export const NewPrimarySpeakerSchema = z.strictObject({
 // organizer typing a proposal into the admin modal arrived through no campaign
 // link, and must not be able to assert one.
 export const ProposalAdminCreateSchema = ProposalInputBaseSchema.omit({
+  topics: true,
   utm: true,
 })
   .extend({
+    topics: z.array(ReferenceSchema),
     speakers: z
       .array(z.string())
       .max(MAX_SPEAKERS_PER_PROPOSAL, TOO_MANY_SPEAKERS_MESSAGE)
