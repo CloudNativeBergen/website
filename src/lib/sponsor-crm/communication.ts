@@ -46,8 +46,21 @@ export function defaultRecipientKey(
 export function withoutKeys(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(withoutKeys)
   if (value && typeof value === 'object') {
+    const obj = value as Record<string, unknown>
+    // A block with link annotations: `markDefs[]._key` is referenced from
+    // `children[].marks`. An editor may re-key both together, so the keys are
+    // renumbered BY POSITION and the references rewritten to match — then a
+    // re-keyed-but-identical block compares equal, while swapping which text
+    // carries which link still reads as a change.
+    const markDefs = Array.isArray(obj.markDefs)
+      ? (obj.markDefs as Array<Record<string, unknown>>)
+      : undefined
+    const keyMap = new Map<string, string>()
+    markDefs?.forEach((d, i) => {
+      if (typeof d._key === 'string') keyMap.set(d._key, `m${i}`)
+    })
     const out: Record<string, unknown> = {}
-    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+    for (const [k, v] of Object.entries(obj)) {
       if (k === '_key') continue
       if (
         (k === 'marks' || k === 'markDefs') &&
@@ -56,6 +69,30 @@ export function withoutKeys(value: unknown): unknown {
       )
         continue
       if (k === 'style' && v === 'normal') continue
+      if (k === 'markDefs' && markDefs) {
+        out[k] = markDefs.map((d, i) => ({
+          ...(withoutKeys(d) as object),
+          _key: `m${i}`,
+        }))
+        continue
+      }
+      if (k === 'marks' && Array.isArray(v) && keyMap.size > 0) {
+        out[k] = (v as string[]).map((m) => keyMap.get(m) ?? m)
+        continue
+      }
+      if (k === 'children' && Array.isArray(v) && keyMap.size > 0) {
+        out[k] = (v as Array<Record<string, unknown>>).map((child) => {
+          const c = withoutKeys(child) as Record<string, unknown>
+          if (Array.isArray(child.marks)) {
+            const marks = (child.marks as string[]).map(
+              (m) => keyMap.get(m) ?? m,
+            )
+            if (marks.length > 0) c.marks = marks
+          }
+          return c
+        })
+        continue
+      }
       out[k] = withoutKeys(v)
     }
     return out

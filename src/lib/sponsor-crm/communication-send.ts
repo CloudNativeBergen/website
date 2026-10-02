@@ -52,7 +52,7 @@ export interface SendSponsorCommunicationArgs {
    * Every name the composer may have merged into `SENDER_NAME` (the speaker
    * profile name and the sign-in profile name differ for some organizers).
    * The send counts as unedited if it matches the template merged with ANY
-   * of them; the first is used for the record.
+   * of them.
    */
   senderNames?: readonly (string | undefined)[]
   attachments?: CommunicationAttachment[]
