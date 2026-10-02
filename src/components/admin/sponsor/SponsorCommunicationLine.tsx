@@ -33,7 +33,9 @@ export function SponsorCommunicationLine({
 
   return (
     <div className="py-1.5">
-      <div className="group flex items-start gap-2.5">
+      {/* Wraps at phone width: the meta cluster (sender · time · chevron)
+          drops under the text instead of squeezing it to a word per line. */}
+      <div className="group flex flex-wrap items-start gap-x-2.5 gap-y-1">
         <div
           className={clsx(
             'mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full',
@@ -49,7 +51,7 @@ export function SponsorCommunicationLine({
           onClick={() => setExpanded((v) => !v)}
           aria-expanded={expanded}
           aria-controls={recordId}
-          className="min-w-0 flex-1 cursor-pointer rounded-md text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+          className="min-w-[14rem] flex-1 cursor-pointer rounded-md text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
         >
           <p className="text-sm text-gray-700 dark:text-gray-200">
             {activity.description}
@@ -60,7 +62,7 @@ export function SponsorCommunicationLine({
             </p>
           )}
         </button>
-        <div className="flex shrink-0 items-center gap-1.5">
+        <div className="ml-auto flex shrink-0 items-center gap-1.5">
           {trailing ?? (
             <span className="text-xs text-gray-400 dark:text-gray-500">
               <span className="hidden sm:inline">
