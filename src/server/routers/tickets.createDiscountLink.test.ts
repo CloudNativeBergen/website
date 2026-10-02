@@ -218,6 +218,24 @@ describe('tickets.admin.createDiscountCode for a sponsor row', () => {
     expect(assignLog()).toBeUndefined()
   })
 
+  it('refuses, before the provider, a code another sponsor already stores', async () => {
+    // A stale link: the code is gone at the provider but Globex still stores it.
+    h.links.push({
+      _id: 'sfc-globex',
+      sponsorId: 'sponsor-globex',
+      name: 'Globex',
+      linkedCodes: ['ACMECLOUD5678'],
+    })
+    await expect(
+      tickets().admin.createDiscountCode(INPUT),
+    ).rejects.toMatchObject({
+      code: 'CONFLICT',
+      message: 'Discount code "ACMECLOUD5678" is already linked to Globex',
+    })
+    expect(h.createDiscount).not.toHaveBeenCalled()
+    expect(h.inserts).toHaveLength(0)
+  })
+
   it('a standalone code links to nobody', async () => {
     await tickets().admin.createDiscountCode({
       eventId: EVENT,

@@ -40,6 +40,7 @@ import { buildTicketSummary, exportParticipants } from '@/lib/tickets/summary'
 import {
   calculateDiscountUsage,
   claimRefusal,
+  normalizeDiscountCode,
   sponsorOwningCode,
 } from '@/lib/discounts'
 import {
@@ -1045,11 +1046,38 @@ export const ticketsRouter = router({
         try {
           // OWNERSHIP of the sponsor the code will be linked to (#1262):
           // guarded before anything is read or minted.
+          // …and the code must not already be STORED on another sponsor (a
+          // stale link survives a provider-side delete, so the provider's own
+          // existence check below cannot see it). Same refusal as Assign and
+          // a discount send; read once and reused to link below.
+          let sponsorLinks: Awaited<ReturnType<typeof readSponsorCodeLinks>> =
+            []
           if (input.sponsorForConferenceId) {
             await requireDocumentInCurrentConference(
               input.sponsorForConferenceId,
               'sponsorForConference',
             )
+            const { conference: linkConference } =
+              await getConferenceForCurrentDomain()
+            if (!linkConference) {
+              throw new TRPCError({
+                code: 'INTERNAL_SERVER_ERROR',
+                message: 'Failed to fetch conference',
+              })
+            }
+            sponsorLinks = await readSponsorCodeLinks(linkConference._id)
+            const wanted = normalizeDiscountCode(discountCode)
+            const holder = sponsorLinks.find(
+              (l) =>
+                l.sponsorForConferenceId !== input.sponsorForConferenceId &&
+                l.linkedCodes.some((c) => normalizeDiscountCode(c) === wanted),
+            )
+            if (holder) {
+              throw new TRPCError({
+                code: 'CONFLICT',
+                message: `Discount code "${discountCode}" is already linked to ${holder.name || 'another sponsor'}`,
+              })
+            }
           }
 
           // OWNERSHIP (#730): this endpoint mints discount codes — up to 100%
@@ -1146,14 +1174,10 @@ export const ticketsRouter = router({
           let linked: { linkedCodes?: string[]; linkFailed?: true } = {}
           if (input.sponsorForConferenceId) {
             try {
-              const { conference } = await getConferenceForCurrentDomain()
-              const links = conference
-                ? await readSponsorCodeLinks(conference._id)
-                : []
               const added = await linkCodesToSponsor({
                 sponsorForConferenceId: input.sponsorForConferenceId,
                 alreadyLinked:
-                  links.find(
+                  sponsorLinks.find(
                     (l) =>
                       l.sponsorForConferenceId === input.sponsorForConferenceId,
                   )?.linkedCodes ?? [],

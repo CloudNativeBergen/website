@@ -650,9 +650,10 @@ describe('discount kind', () => {
     h.codeOptions = options
     h.codesFetching = true
     const { rerender } = renderModal({}, 'discount')
-    expect(
-      screen.getByRole('checkbox', { name: 'ACME-2026' }),
-    ).not.toBeChecked()
+    // Not interactive until seeded: a toggle now would be overwritten by the
+    // seed when the refetch settles.
+    expect(screen.queryByRole('checkbox', { name: 'ACME-2026' })).toBeNull()
+    expect(screen.getByText('Loading discount codes…')).toBeInTheDocument()
     // The refetch lands with a code assigned since.
     h.codeOptions = {
       ...options,

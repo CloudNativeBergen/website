@@ -630,18 +630,22 @@ export function SponsorSendModal({
   const [selectedCodes, setSelectedCodes] = useState<ReadonlySet<string>>(
     () => new Set(),
   )
-  const codesSeededForRef = useRef<string | null>(null)
+  // Which open the selection was seeded for. STATE, not a ref: the picker
+  // stays non-interactive until it is set, so a toggle can never be made in
+  // the window before the seed lands and then be overwritten by it.
+  const [codesSeededFor, setCodesSeededFor] = useState<string | null>(null)
+  const codesSeeded = codesSeededFor === sponsorForConference._id
   useEffect(() => {
     if (!isOpen) {
-      codesSeededForRef.current = null
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- reset per close
+      setCodesSeededFor(null)
       return
     }
     // From SETTLED data only: on a reopen the cache answers first and a
     // refetch follows; seeding from the cache would miss a code assigned
     // since (#1262 review).
-    if (!codesQuery.data || codesQuery.isFetching) return
-    if (codesSeededForRef.current === sponsorForConference._id) return
-    codesSeededForRef.current = sponsorForConference._id
+    if (!codesQuery.data || codesQuery.isFetching || codesSeeded) return
+    setCodesSeededFor(sponsorForConference._id)
     setSelectedCodes(
       new Set(
         codesQuery.data.codes
@@ -649,7 +653,13 @@ export function SponsorSendModal({
           .map((c) => c.code),
       ),
     )
-  }, [isOpen, codesQuery.data, codesQuery.isFetching, sponsorForConference._id])
+  }, [
+    isOpen,
+    codesQuery.data,
+    codesQuery.isFetching,
+    codesSeeded,
+    sponsorForConference._id,
+  ])
   const toggleCode = (code: string) =>
     setSelectedCodes((prev) => {
       const next = new Set(prev)
@@ -866,7 +876,7 @@ export function SponsorSendModal({
                   state={
                     codesQuery.isError
                       ? 'error'
-                      : codesQuery.data
+                      : codesSeeded
                         ? 'ready'
                         : 'loading'
                   }
