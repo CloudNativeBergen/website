@@ -28,6 +28,14 @@ export default defineType({
           { title: 'Meeting', value: 'meeting' },
           // A sponsor↔organizer thread message was posted (messaging G2b).
           { title: 'Message', value: 'message' },
+          // Already in the TS `ActivityType` union and written by the CRM; the
+          // schema list lagged behind, so Studio showed them as unknown values.
+          {
+            title: 'Signature Status Change',
+            value: 'signature_status_change',
+          },
+          { title: 'Registration Complete', value: 'registration_complete' },
+          { title: 'Contract Reminder Sent', value: 'contract_reminder_sent' },
         ],
         layout: 'dropdown',
       },
@@ -67,6 +75,134 @@ export default defineType({
           type: 'text',
         }),
       ],
+    }),
+    // ── Sent-communication audit (#1261) ─────────────────────────────────
+    // An `email` activity written by `crm.sendCommunication` carries the full
+    // record of what left the building: who it went to, the rendered content
+    // exactly as sent, which template it started from, and the provider id.
+    // `communicationKind` is the discriminator — present ⇒ this is an immutable
+    // audit record, and the edit/delete gating refuses it. The list projection
+    // deliberately leaves `body` and `attachments` out; they load on expand.
+    defineField({
+      name: 'communicationKind',
+      title: 'Communication Kind',
+      type: 'string',
+      options: {
+        list: [
+          { title: 'Information', value: 'information' },
+          { title: 'Contract', value: 'contract' },
+          { title: 'Registration', value: 'registration' },
+          { title: 'Discount codes', value: 'discount' },
+        ],
+        layout: 'dropdown',
+      },
+      readOnly: true,
+    }),
+    defineField({
+      name: 'recipients',
+      title: 'Recipients',
+      type: 'array',
+      readOnly: true,
+      of: [
+        {
+          type: 'object',
+          name: 'communicationRecipient',
+          fields: [
+            defineField({
+              name: 'contactKey',
+              title: 'Contact Key',
+              type: 'string',
+            }),
+            defineField({ name: 'name', title: 'Name', type: 'string' }),
+            defineField({ name: 'email', title: 'Email', type: 'string' }),
+            defineField({ name: 'role', title: 'Role', type: 'string' }),
+            defineField({
+              name: 'isDefault',
+              title: 'Default recipient',
+              type: 'boolean',
+              description:
+                'True when this contact was the sponsor’s primary contact at send time.',
+            }),
+          ],
+          preview: {
+            select: { name: 'name', email: 'email', role: 'role' },
+            prepare({ name, email, role }) {
+              return {
+                title: name || email,
+                subtitle: [role, email].filter(Boolean).join(' · '),
+              }
+            },
+          },
+        },
+      ],
+    }),
+    defineField({
+      name: 'subject',
+      title: 'Subject (as sent)',
+      type: 'string',
+      readOnly: true,
+    }),
+    defineField({
+      name: 'body',
+      title: 'Body (rendered HTML, as sent)',
+      type: 'text',
+      readOnly: true,
+      rows: 6,
+    }),
+    defineField({
+      name: 'template',
+      title: 'Template',
+      type: 'reference',
+      to: [{ type: 'sponsorEmailTemplate' }],
+      readOnly: true,
+      weak: true,
+    }),
+    defineField({
+      name: 'templateEdited',
+      title: 'Edited before sending',
+      type: 'boolean',
+      readOnly: true,
+    }),
+    defineField({
+      name: 'attachments',
+      title: 'Attachments and links',
+      type: 'array',
+      readOnly: true,
+      of: [
+        {
+          type: 'object',
+          name: 'communicationAttachment',
+          fields: [
+            defineField({ name: 'label', title: 'Label', type: 'string' }),
+            defineField({ name: 'url', title: 'URL', type: 'url' }),
+          ],
+        },
+      ],
+    }),
+    defineField({
+      name: 'providerMessageId',
+      title: 'Provider Message Id',
+      type: 'string',
+      readOnly: true,
+    }),
+    defineField({
+      name: 'deliveryStatus',
+      title: 'Delivery Status',
+      type: 'string',
+      options: {
+        list: [
+          { title: 'Sent', value: 'sent' },
+          { title: 'Failed', value: 'failed' },
+        ],
+      },
+      readOnly: true,
+    }),
+    defineField({
+      name: 'error',
+      title: 'Error',
+      type: 'text',
+      readOnly: true,
+      rows: 2,
     }),
     defineField({
       name: 'createdBy',

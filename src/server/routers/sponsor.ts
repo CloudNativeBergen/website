@@ -114,11 +114,17 @@ import {
   CreateSponsorActivitySchema,
   UpdateSponsorActivitySchema,
   SponsorCRMFilterSchema,
+  SendCommunicationSchema,
+  CommunicationRecordIdSchema,
+  ListCommunicationsSchema,
 } from '@/server/schemas/sponsorForConference'
 import {
   listActivitiesForSponsor,
   listActivitiesForConference,
+  getCommunicationRecord,
+  listCommunicationsForSponsor,
 } from '@/lib/sponsor-crm/activities'
+import { sendSponsorCommunication } from '@/lib/sponsor-crm/communication-send'
 import {
   bulkUpdateSponsors,
   bulkDeleteSponsors,
@@ -165,16 +171,11 @@ import {
   getSigningProvider,
   type SigningProviderType,
 } from '@/lib/contract-signing'
-import { resolveEmailSender, retryWithBackoff } from '@/lib/email/config'
 import { resolveConferenceFrom } from '@/lib/email/from'
 import { sendBroadcastEmail } from '@/lib/email/broadcast'
 import { sendIndividualEmail } from '@/lib/email/broadcast'
 import { syncSponsorAudience, type Contact } from '@/lib/email/audience'
-import { logEmailSent, logBulkEmailSent } from '@/lib/sponsor-crm/activity'
-import {
-  convertPortableTextToHTML,
-  renderEmailTemplate,
-} from '@/lib/email/route-helpers'
+import { logBulkEmailSent } from '@/lib/sponsor-crm/activity'
 import { emailBrandColor } from '@/lib/branding/theme'
 import { brandedOr, resolveEmailBrandPalette } from '@/lib/branding/email'
 import { isValidPortableText } from '@/lib/portabletext/validation'
@@ -2084,6 +2085,59 @@ export const sponsorRouter = router({
           return activities || []
         }),
 
+      /**
+       * One sent-communication record IN FULL — the rendered body and the
+       * attachments the list projection leaves out (#1261). The read itself
+       * is conference-scoped through the parent sponsor, so a foreign or
+       * missing id both read as nothing and refuse NOT_FOUND.
+       */
+      get: adminProcedure
+        .input(CommunicationRecordIdSchema)
+        .query(async ({ input }) => {
+          const conferenceId = await resolveConferenceId()
+          const { record, error } = await getCommunicationRecord(
+            input.id,
+            conferenceId,
+          )
+          if (error) {
+            throw new TRPCError({
+              code: 'INTERNAL_SERVER_ERROR',
+              message: 'Failed to load the sent email',
+              cause: error,
+            })
+          }
+          if (!record) {
+            throw new TRPCError({
+              code: 'NOT_FOUND',
+              message: 'Sent email not found',
+            })
+          }
+          return record
+        }),
+
+      /** The Communications tab: sends only, by kind, paged (#1261). */
+      listCommunications: adminProcedure
+        .input(ListCommunicationsSchema)
+        .query(async ({ input }) => {
+          const conferenceId = await requireDocumentInCurrentConference(
+            input.sponsorForConferenceId,
+            'sponsorForConference',
+          )
+          const { items, total, error } = await listCommunicationsForSponsor(
+            input.sponsorForConferenceId,
+            conferenceId,
+            { kind: input.kind, offset: input.offset, limit: input.limit },
+          )
+          if (error) {
+            throw new TRPCError({
+              code: 'INTERNAL_SERVER_ERROR',
+              message: 'Failed to list sent emails',
+              cause: error,
+            })
+          }
+          return { items: items ?? [], total: total ?? 0 }
+        }),
+
       create: adminProcedure
         .input(CreateSponsorActivitySchema)
         .mutation(async ({ input, ctx }) => {
@@ -2808,19 +2862,25 @@ export const sponsorRouter = router({
         }
       }),
 
-    sendEmail: adminProcedure
-      .input(
-        z.object({
-          sponsorId: z.string().min(1),
-          subject: z.string().min(1),
-          message: z.string().min(1),
-          ticketUrl: z.string().url().optional(),
-        }),
-      )
+    /**
+     * THE one sponsor email primitive (#1261, spec #1260). Recipients are
+     * contact keys resolved against the sponsor's own contacts — the client
+     * never supplies an address or a conference. Guarded BEFORE the sponsor
+     * is read, so a foreign id refuses identically to a missing one and the
+     * foreign document never enters the request. Every outcome, including a
+     * provider failure, is written to the activity timeline as the audit
+     * record; the record itself can never fail or roll back the send.
+     */
+    sendCommunication: adminProcedure
+      .input(SendCommunicationSchema)
       .mutation(async ({ input, ctx }) => {
+        await requireDocumentInCurrentConference(
+          input.sponsorForConferenceId,
+          'sponsorForConference',
+        )
+
         const { conference, error: conferenceError } =
           await getConferenceForCurrentDomain({ sponsors: true })
-
         if (conferenceError || !conference) {
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
@@ -2828,49 +2888,13 @@ export const sponsorRouter = router({
           })
         }
 
-        const sfc = await clientReadUncached.fetch<{
-          _id: string
-          status: string
-          contactInitiatedAt?: string
-          outreachCount?: number
-          contactPersons?: Array<{ name: string; email: string }>
-        }>(
-          `*[_type == "sponsorForConference" && sponsor._ref == $sponsorId && conference._ref == $conferenceId][0]{
-            _id,
-            status,
-            contactInitiatedAt,
-            outreachCount,
-            contactPersons[]{ name, email }
-          }`,
-          { sponsorId: input.sponsorId, conferenceId: conference._id },
-        )
-
-        if (!sfc) {
-          throw new TRPCError({
-            code: 'NOT_FOUND',
-            message: 'Sponsor not found in this conference',
-          })
-        }
-
-        const contacts = sfc.contactPersons || []
-        const recipients = contacts
-          .filter((c) => c.email)
-          .map((c) => ({ email: c.email, name: c.name }))
-
-        if (recipients.length === 0) {
-          throw new TRPCError({
-            code: 'BAD_REQUEST',
-            message: 'Sponsor has no contact persons with email addresses',
-          })
-        }
-
-        let messagePortableText: PortableTextBlock[]
+        let message: PortableTextBlock[]
         try {
           const parsed = JSON.parse(input.message)
           if (!isValidPortableText(parsed)) {
             throw new Error('Invalid PortableText format')
           }
-          messagePortableText = parsed
+          message = parsed
         } catch {
           throw new TRPCError({
             code: 'BAD_REQUEST',
@@ -2878,261 +2902,48 @@ export const sponsorRouter = router({
           })
         }
 
-        const { htmlContent, error: htmlError } =
-          await convertPortableTextToHTML(messagePortableText, conference)
-        if (htmlError) {
-          throw new TRPCError({
-            code: 'INTERNAL_SERVER_ERROR',
-            message: 'Failed to convert message to HTML',
-          })
-        }
-
-        let finalHtmlContent = htmlContent!
-        if (input.ticketUrl) {
-          const brand = resolveEmailBrandPalette(
-            emailBrandColor(conference.theme),
-          )
-          finalHtmlContent += `
-            <div style="background-color: ${brand.cardBackground}; padding: 20px; border-radius: 12px; margin: 24px 0; border: 1px solid ${brand.cardBorder};">
-              <h3 style="color: ${brandedOr(brand, '#1D4ED8')}; margin-top: 0; margin-bottom: 16px; font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 18px; font-weight: 600;">
-                Ticket Registration
-              </h3>
-              <ul style="margin: 0; padding-left: 20px; color: #334155; font-size: 15px; line-height: 1.6;">
-                <li style="margin-bottom: 0;"><a href="${input.ticketUrl}" style="color: ${brandedOr(brand, '#1D4ED8')}; text-decoration: none; font-weight: 500;">${input.ticketUrl}</a></li>
-              </ul>
-            </div>
-          `
-        }
-
-        const emailTemplate = renderEmailTemplate({
+        const result = await sendSponsorCommunication({
           conference,
+          orgId: ctx.orgId,
+          actorId: ctx.speaker._id ?? null,
+          sponsorForConferenceId: input.sponsorForConferenceId,
+          kind: input.kind,
+          recipientKeys: input.recipientKeys,
           subject: input.subject,
-          htmlContent: finalHtmlContent,
-          unsubscribeUrl: undefined,
+          message,
+          template: input.template,
         })
 
-        if (!conference.sponsorEmail) {
-          throw new TRPCError({
-            code: 'INTERNAL_SERVER_ERROR',
-            message: 'Missing sponsorEmail in conference configuration',
-          })
-        }
-
-        const { client } = await resolveEmailSender(ctx.orgId)
-
-        const result = await retryWithBackoff(async () => {
-          return await client.emails.send({
-            from: `${conference.organizer || PLATFORM_NAME} <${conference.sponsorEmail}>`,
-            to: recipients.map((r) => r.email),
-            subject: input.subject,
-            react: emailTemplate,
-          })
-        })
-
-        if (result.error) {
-          throw new TRPCError({
-            code: 'INTERNAL_SERVER_ERROR',
-            message: result.error.message,
-          })
-        }
-
-        try {
-          const userId = ctx.speaker._id
-          if (sfc && userId) {
-            try {
-              await logEmailSent(sfc._id, input.subject, userId)
-            } catch (logError) {
-              console.error(
-                '[sendEmail] Failed to log email activity:',
-                logError,
-              )
-            }
-
-            // Track outreach metrics
-            try {
-              const patch = clientWrite.patch(sfc._id)
-              if (!sfc.contactInitiatedAt) {
-                patch.set({ contactInitiatedAt: getCurrentDateTime() })
-              }
-              patch.set({ outreachCount: (sfc.outreachCount || 0) + 1 })
-
-              if (sfc.status === 'prospect') {
-                patch.set({ status: 'contacted' })
-              }
-              await patch.commit()
-
-              if (sfc.status === 'prospect') {
-                await logStageChange(sfc._id, 'prospect', 'contacted', userId)
-              }
-            } catch (statusError) {
-              console.error(
-                '[sendEmail] Failed to update sponsor tracking:',
-                statusError,
-              )
-            }
+        if (!result.ok) {
+          switch (result.reason) {
+            case 'not-found':
+              throw new TRPCError({
+                code: 'NOT_FOUND',
+                message: 'Sponsor not found in this conference',
+              })
+            case 'bad-recipients':
+              throw new TRPCError({
+                code: 'BAD_REQUEST',
+                message: result.message,
+              })
+            case 'render-failed':
+              throw new TRPCError({
+                code: 'INTERNAL_SERVER_ERROR',
+                message: result.message,
+              })
+            case 'send-failed':
+              throw new TRPCError({
+                code: 'INTERNAL_SERVER_ERROR',
+                message: result.message,
+              })
           }
-        } catch (crmError) {
-          console.warn('[sendEmail] CRM tracking failed:', crmError)
         }
 
         return {
-          success: true,
-          emailId: result.data?.id,
-          recipientCount: recipients.length,
-        }
-      }),
-
-    sendEmailBySfc: adminProcedure
-      .input(
-        z.object({
-          sponsorForConferenceId: z.string().min(1),
-          subject: z.string().min(1),
-          body: z.string().min(1).max(50000),
-        }),
-      )
-      .mutation(async ({ input, ctx }) => {
-        const { conference, error: conferenceError } =
-          await getConferenceForCurrentDomain({ sponsors: true })
-
-        if (conferenceError || !conference) {
-          throw new TRPCError({
-            code: 'INTERNAL_SERVER_ERROR',
-            message: 'Failed to fetch conference',
-          })
-        }
-
-        // Scope lookup to the current conference to prevent cross-conference access
-        const sfc = await clientReadUncached.fetch<{
-          _id: string
-          status: string
-          contactInitiatedAt?: string
-          outreachCount?: number
-          contactPersons?: Array<{ name: string; email: string }>
-        }>(
-          `*[_type == "sponsorForConference" && _id == $sfcId && conference._ref == $conferenceId][0]{
-            _id,
-            status,
-            contactInitiatedAt,
-            outreachCount,
-            contactPersons[]{ name, email }
-          }`,
-          {
-            sfcId: input.sponsorForConferenceId,
-            conferenceId: conference._id,
-          },
-        )
-
-        if (!sfc) {
-          throw new TRPCError({
-            code: 'NOT_FOUND',
-            message: 'Sponsor not found in this conference',
-          })
-        }
-
-        const recipients = (sfc.contactPersons || [])
-          .filter((c) => c.email)
-          .map((c) => ({ email: c.email, name: c.name }))
-
-        if (recipients.length === 0) {
-          throw new TRPCError({
-            code: 'BAD_REQUEST',
-            message: 'Sponsor has no contact persons with email addresses',
-          })
-        }
-
-        const { markdownToPortableTextBody } =
-          await import('@/lib/email/markdown')
-        const messagePortableText = markdownToPortableTextBody(input.body)
-        if (messagePortableText.length === 0) {
-          throw new TRPCError({
-            code: 'BAD_REQUEST',
-            message: 'Message body is empty after conversion',
-          })
-        }
-
-        const { htmlContent, error: htmlError } =
-          await convertPortableTextToHTML(messagePortableText, conference)
-        if (htmlError) {
-          throw new TRPCError({
-            code: 'INTERNAL_SERVER_ERROR',
-            message: 'Failed to convert message to HTML',
-          })
-        }
-
-        const emailTemplate = renderEmailTemplate({
-          conference,
-          subject: input.subject,
-          htmlContent: htmlContent!,
-          unsubscribeUrl: undefined,
-        })
-
-        if (!conference.sponsorEmail) {
-          throw new TRPCError({
-            code: 'INTERNAL_SERVER_ERROR',
-            message: 'Missing sponsorEmail in conference configuration',
-          })
-        }
-
-        const { client } = await resolveEmailSender(ctx.orgId)
-
-        const result = await retryWithBackoff(async () => {
-          return await client.emails.send({
-            from: `${conference.organizer || PLATFORM_NAME} <${conference.sponsorEmail}>`,
-            to: recipients.map((r) => r.email),
-            subject: input.subject,
-            react: emailTemplate,
-          })
-        })
-
-        if (result.error) {
-          throw new TRPCError({
-            code: 'INTERNAL_SERVER_ERROR',
-            message: result.error.message,
-          })
-        }
-
-        try {
-          const userId = ctx.speaker._id
-          if (userId) {
-            try {
-              await logEmailSent(sfc._id, input.subject, userId)
-            } catch (logError) {
-              console.error(
-                '[sendEmailBySfc] Failed to log email activity:',
-                logError,
-              )
-            }
-
-            try {
-              const patch = clientWrite.patch(sfc._id)
-              if (!sfc.contactInitiatedAt) {
-                patch.set({ contactInitiatedAt: getCurrentDateTime() })
-              }
-              patch.set({ outreachCount: (sfc.outreachCount || 0) + 1 })
-
-              if (sfc.status === 'prospect') {
-                patch.set({ status: 'contacted' })
-              }
-              await patch.commit()
-
-              if (sfc.status === 'prospect') {
-                await logStageChange(sfc._id, 'prospect', 'contacted', userId)
-              }
-            } catch (statusError) {
-              console.error(
-                '[sendEmailBySfc] Failed to update sponsor tracking:',
-                statusError,
-              )
-            }
-          }
-        } catch (crmError) {
-          console.warn('[sendEmailBySfc] CRM tracking failed:', crmError)
-        }
-
-        return {
-          success: true,
-          emailId: result.data?.id,
-          recipientCount: recipients.length,
+          success: true as const,
+          activityId: result.activityId,
+          providerMessageId: result.providerMessageId,
+          recipientCount: result.recipients.length,
         }
       }),
 

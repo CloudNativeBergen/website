@@ -32,6 +32,31 @@ export type ActivityType =
   // A sponsor↔organizer thread message (messaging G2b).
   | 'message'
 
+/**
+ * What kind of email a sent-communication record is (#1261). Slice 1 sends
+ * only `information`; the other kinds arrive with #1262–#1264 but the record
+ * shape is shared so the audit view never has to change.
+ */
+export type CommunicationKind =
+  'information' | 'contract' | 'registration' | 'discount'
+
+export type CommunicationDeliveryStatus = 'sent' | 'failed'
+
+/** A recipient AS SENT — a snapshot, not a reference into `contactPersons`. */
+export interface CommunicationRecipient {
+  contactKey: string
+  name: string
+  email: string
+  role?: string
+  /** The sponsor's primary contact at send time (the preselected default). */
+  isDefault: boolean
+}
+
+export interface CommunicationAttachment {
+  label: string
+  url?: string
+}
+
 export type SponsorTag =
   | 'warm-lead'
   | 'returning-sponsor'
@@ -224,6 +249,17 @@ export interface SponsorActivityExpanded {
     image?: string
   } | null
   createdAt: string
+  // Sent-communication SUMMARY (#1261): present only on records written by
+  // `crm.sendCommunication`. The rendered body and attachments are NOT in the
+  // list projection — `SponsorCommunicationRecord` carries them, on expand.
+  communicationKind?: CommunicationKind
+  recipients?: CommunicationRecipient[]
+  subject?: string
+  deliveryStatus?: CommunicationDeliveryStatus
+  error?: string
+  template?: { _id: string; title: string } | null
+  templateEdited?: boolean
+  providerMessageId?: string
 }
 
 export interface SponsorForConferenceInput {
@@ -258,6 +294,12 @@ export interface SponsorForConferenceInput {
   tags?: SponsorTag[]
   nextFollowUpAt?: string | null
   outreachCount?: number | null
+}
+
+/** The full audit record of one send, loaded on demand. */
+export interface SponsorCommunicationRecord extends SponsorActivityExpanded {
+  body?: string
+  attachments?: CommunicationAttachment[]
 }
 
 export interface SponsorActivityInput {
