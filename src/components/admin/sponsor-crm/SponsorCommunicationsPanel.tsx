@@ -152,8 +152,10 @@ export function SponsorCommunicationsPanel({
               : 'Nothing sent yet'}
           </p>
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            Every email sent to this sponsor is recorded here, with who received
-            it and exactly what it said.
+            Emails sent to this sponsor from the CRM&apos;s Send action are
+            recorded here, with who received them and exactly what they said.
+            Contract, registration and discount-code emails join this list as
+            they move onto the same path.
           </p>
           {onSend && (
             <button

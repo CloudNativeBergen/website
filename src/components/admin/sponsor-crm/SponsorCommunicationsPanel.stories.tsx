@@ -166,7 +166,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'The Communications tab in the sponsor drawer (#1261): only what was sent, newest first, filterable by kind. Each line expands in place to the full record — recipients with role and default marker, subject, template and whether it was edited, provider id, and the body exactly as sent in a sandboxed frame. Failed sends are kept and marked.',
+          "The Communications tab in the sponsor drawer (#1261): what the CRM's Send action sent, newest first, filterable by kind (contract, registration and discount sends join in #1262–#1264). Each line expands in place to the full record — recipients with role and default marker, subject, template and whether it was edited, provider id, and the body exactly as sent in a sandboxed frame. Failed sends are kept and marked.",
       },
     },
     msw: { handlers: handlersFor(all) },

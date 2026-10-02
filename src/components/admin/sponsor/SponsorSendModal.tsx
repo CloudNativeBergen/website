@@ -32,7 +32,6 @@ import {
   TEMPLATE_NOT_FOUND_MESSAGE,
   TEMPLATE_WRONG_KIND_MESSAGE,
   defaultRecipientKey,
-  isTemplateEdited,
 } from '@/lib/sponsor-crm/communication'
 import { formatConferenceDateLong } from '@/lib/time'
 import { conferenceBaseUrl } from '@/lib/conference/baseUrl'
@@ -88,8 +87,6 @@ interface AppliedTemplate {
  * preselected; the organizer picks or writes. `information` draws on every
  * non-contract category; the contract kind (slice #1264) on `contract`.
  */
-export { isTemplateEdited }
-
 export function pickDefaultTemplate(
   templates: readonly SponsorEmailTemplate[] | undefined,
   kind: CommunicationKind,
@@ -129,26 +126,12 @@ const NON_CONTRACT_CATEGORIES: readonly TemplateCategory[] = [
   'custom',
 ]
 
-/** Where the applied template's provenance rides alongside EmailModal's draft. */
-function provenanceKey(draftKey: string) {
-  return `${draftKey}:template`
-}
-
+/** Read-only probe of EmailModal's draft slot (never written from here). */
 function readStorage(key: string): string | null {
   try {
     return typeof window === 'undefined' ? null : localStorage.getItem(key)
   } catch {
     return null
-  }
-}
-
-function writeStorage(key: string, value: string | null) {
-  try {
-    if (typeof window === 'undefined') return
-    if (value === null) localStorage.removeItem(key)
-    else localStorage.setItem(key, value)
-  } catch {
-    // Storage is a convenience; a blocked store must not block sending.
   }
 }
 
@@ -290,8 +273,11 @@ export function SponsorSendModal({
 
   const draftKey = `sponsor-send-${kind}-${sponsorForConference._id}`
 
-  // The template a send started from. Persisted next to EmailModal's draft so
-  // a draft restored on reopen keeps its provenance (and its edited baseline).
+  // The template a send started from. It is PERSISTED THROUGH EmailModal's
+  // `additionalFields`, which the composer saves in the SAME debounced write
+  // as the subject and body — so a reopen can never restore one draft's text
+  // with another template's provenance (a separate key could: applying a
+  // template wrote its id at once while the text saved a second later).
   // The ref is what the send reads (always current, even mid-event); the
   // state mirror is what the RENDER reads (the picker's selected value, the
   // recipients-changed hint). Both are written only through rememberApplied.
@@ -301,30 +287,36 @@ export function SponsorSendModal({
   const rememberApplied = (applied: AppliedTemplate | null) => {
     appliedTemplateRef.current = applied
     setAppliedTemplate(applied)
-    writeStorage(
-      provenanceKey(draftKey),
-      applied ? JSON.stringify(applied) : null,
-    )
   }
   useEffect(() => {
     if (!isOpen) {
       appliedTemplateRef.current = null
       // eslint-disable-next-line react-hooks/set-state-in-effect -- reset per close
       setAppliedTemplate(null)
+    }
+  }, [isOpen])
+  const provenanceFields: Record<string, string> = appliedTemplate
+    ? {
+        templateId: appliedTemplate.id,
+        templateRecipientKeys: (appliedTemplate.recipientKeys ?? []).join(','),
+      }
+    : {}
+  /** EmailModal restored a draft: adopt the provenance saved WITH it. */
+  const restoreProvenance = (
+    fields: Record<string, string | number | boolean>,
+  ) => {
+    const id = typeof fields.templateId === 'string' ? fields.templateId : ''
+    if (!id) {
+      rememberApplied(null)
       return
     }
-    const stored = readStorage(provenanceKey(draftKey))
-    if (stored) {
-      try {
-        const parsed = JSON.parse(stored) as AppliedTemplate
-        appliedTemplateRef.current = parsed
-        setAppliedTemplate(parsed)
-      } catch {
-        appliedTemplateRef.current = null
-        setAppliedTemplate(null)
-      }
-    }
-  }, [isOpen, draftKey])
+    const keys =
+      typeof fields.templateRecipientKeys === 'string' &&
+      fields.templateRecipientKeys.length > 0
+        ? fields.templateRecipientKeys.split(',')
+        : []
+    rememberApplied({ id, subject: '', body: [], recipientKeys: keys })
+  }
 
   const crmContext = {
     tags: sponsorForConference.tags,
@@ -436,7 +428,6 @@ export function SponsorSendModal({
     if (isOpen && initialFromDefault && !appliedTemplateRef.current) {
       rememberApplied(initialFromDefault)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- rememberApplied is stable per draftKey
   }, [isOpen, initialFromDefault])
 
   const toggleRecipient = (key: string) =>
@@ -468,14 +459,9 @@ export function SponsorSendModal({
       subject,
       message: JSON.stringify(message as PortableTextBlockForHTML[]),
     }
+    // `edited` is computed on the server; only the id travels.
     const withProvenance = applied
-      ? {
-          ...base,
-          template: {
-            id: applied.id,
-            edited: isTemplateEdited(applied, { subject, message }),
-          },
-        }
+      ? { ...base, template: { id: applied.id } }
       : base
     // A failed send is RECORDED on the server before the mutation rejects, so
     // the timeline and the Communications tab must refresh on either outcome.
@@ -590,6 +576,8 @@ export function SponsorSendModal({
         selectedCount > 1 ? `Send to ${selectedCount} contacts` : 'Send'
       }
       storageKey={draftKey}
+      additionalFields={provenanceFields}
+      onAdditionalFieldsChange={restoreProvenance}
       onClearDraft={() => rememberApplied(initialFromDefault ?? null)}
       previewComponent={createPreview}
       brandColor={emailBrandColor(conference.theme)}

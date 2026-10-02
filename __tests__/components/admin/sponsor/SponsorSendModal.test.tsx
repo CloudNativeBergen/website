@@ -110,7 +110,15 @@ vi.mock('@/components/admin/EmailModal', () => ({
     initialValues,
     isOpen,
     onClearDraft,
+    additionalFields,
+    onAdditionalFieldsChange,
+    storageKey,
   }: {
+    additionalFields?: Record<string, string | number | boolean>
+    onAdditionalFieldsChange?: (
+      f: Record<string, string | number | boolean>,
+    ) => void
+    storageKey?: string
     onClearDraft?: () => void
     isOpen: boolean
     initialValues?: { subject?: string; message?: unknown }
@@ -129,14 +137,28 @@ vi.mock('@/components/admin/EmailModal', () => ({
     // eslint-disable-next-line react-hooks/rules-of-hooks -- test stub
     const [tick, setTick] = React.useState(0)
     if (!isOpen) return null
-    // Mirror EmailModal: the draft starts from initialValues.
-    if (initialValues && !draftSeeded) {
+    // Mirror EmailModal: a stored draft (with the additionalFields saved in
+    // the SAME write) wins over initialValues, and its fields are handed back.
+    if (!draftSeeded) {
       draftSeeded = true
-      draft = {
-        subject: initialValues.subject ?? '',
-        message: (initialValues.message as PortableTextBlock[]) ?? [],
+      const stored = storageKey ? localStorage.getItem(storageKey) : null
+      if (stored) {
+        const parsed = JSON.parse(stored) as {
+          subject?: string
+          message?: PortableTextBlock[]
+          additionalFields?: Record<string, string | number | boolean>
+        }
+        draft = { subject: parsed.subject ?? '', message: parsed.message ?? [] }
+        if (parsed.additionalFields)
+          onAdditionalFieldsChange?.(parsed.additionalFields)
+      } else if (initialValues) {
+        draft = {
+          subject: initialValues.subject ?? '',
+          message: (initialValues.message as PortableTextBlock[]) ?? [],
+        }
       }
     }
+    lastAdditionalFields = additionalFields ?? {}
     return (
       <div>
         <p data-testid="subject">{draft.subject}</p>
@@ -178,12 +200,13 @@ vi.mock('@/components/admin/EmailModal', () => ({
   },
 }))
 let draftSeeded = false
+let lastAdditionalFields: Record<string, string | number | boolean> = {}
 
 import {
   SponsorSendModal,
-  isTemplateEdited,
   pickDefaultTemplate,
 } from '@/components/admin/sponsor/SponsorSendModal'
+import { isTemplateEdited } from '@/lib/sponsor-crm/communication'
 import type { SponsorEmailTemplate } from '@/lib/sponsor/types'
 
 const tpl = (o: Partial<SponsorEmailTemplate>): SponsorEmailTemplate =>
@@ -245,6 +268,7 @@ beforeEach(() => {
   h.applied = null
   h.templates = []
   draftSeeded = false
+  lastAdditionalFields = {}
   draft = { subject: 'Hand-written subject', message: [] }
   h.mutateAsync.mockResolvedValue({ success: true, recipientCount: 1 })
 })
@@ -302,26 +326,21 @@ describe('recipients', () => {
 })
 
 describe('template provenance', () => {
-  it('records the template id and edited=false when sent as applied', async () => {
-    renderModal()
-    fireEvent.click(screen.getByRole('button', { name: 'apply template' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
-    await waitFor(() => expect(h.mutateAsync).toHaveBeenCalledTimes(1))
-    expect(h.mutateAsync.mock.calls[0][0].template).toEqual({
-      id: 'tpl-1',
-      edited: false,
-    })
-  })
-
-  it('records edited=true when the subject was changed after applying', async () => {
+  it("posts the applied template id only — `edited` is the server's to compute", async () => {
     renderModal()
     fireEvent.click(screen.getByRole('button', { name: 'apply template' }))
     draft = { ...draft, subject: 'Changed by hand' }
     fireEvent.click(screen.getByRole('button', { name: 'Send' }))
     await waitFor(() => expect(h.mutateAsync).toHaveBeenCalledTimes(1))
-    expect(h.mutateAsync.mock.calls[0][0].template).toEqual({
-      id: 'tpl-1',
-      edited: true,
+    expect(h.mutateAsync.mock.calls[0][0].template).toEqual({ id: 'tpl-1' })
+  })
+
+  it('hands the provenance to EmailModal as additionalFields, to be saved WITH the draft', () => {
+    renderModal()
+    fireEvent.click(screen.getByRole('button', { name: 'apply template' }))
+    expect(lastAdditionalFields).toEqual({
+      templateId: 'tpl-1',
+      templateRecipientKeys: 'c-primary',
     })
   })
 
@@ -353,29 +372,30 @@ describe('default template (AC4)', () => {
     await waitFor(() => expect(h.mutateAsync).toHaveBeenCalledTimes(1))
     expect(h.mutateAsync.mock.calls[0][0].template).toEqual({
       id: 'tpl-info-default',
-      edited: false,
     })
   })
 
   it('keeps the applied template across a reopen with a stored draft', async () => {
     localStorage.setItem(
       'sponsor-send-information-sfc-123',
-      JSON.stringify({ subject: 'Restored', message: [] }),
-    )
-    localStorage.setItem(
-      'sponsor-send-information-sfc-123:template',
-      JSON.stringify({ id: 'tpl-earlier', subject: 'Restored', body: [] }),
+      JSON.stringify({
+        subject: 'Restored',
+        message: [],
+        additionalFields: {
+          templateId: 'tpl-earlier',
+          templateRecipientKeys: 'c-primary',
+        },
+      }),
     )
     renderModal()
     fireEvent.click(screen.getByRole('button', { name: 'Send' }))
     await waitFor(() => expect(h.mutateAsync).toHaveBeenCalledTimes(1))
-    expect(h.mutateAsync.mock.calls[0][0].template).toMatchObject({
+    expect(h.mutateAsync.mock.calls[0][0].template).toEqual({
       id: 'tpl-earlier',
     })
-    // A successful send clears the stored provenance with the draft.
-    expect(
-      localStorage.getItem('sponsor-send-information-sfc-123:template'),
-    ).toBeNull()
+    // Provenance is offered to EmailModal as additionalFields, so it is saved
+    // in the SAME write as the text — and cleared with it after a send.
+    expect(lastAdditionalFields).toEqual({})
   })
 })
 
@@ -383,11 +403,11 @@ describe('provenance edge cases (round 2)', () => {
   it('drops the provenance and sends again when the template was deleted since', async () => {
     localStorage.setItem(
       'sponsor-send-information-sfc-123',
-      JSON.stringify({ subject: 'Restored', message: [] }),
-    )
-    localStorage.setItem(
-      'sponsor-send-information-sfc-123:template',
-      JSON.stringify({ id: 'tpl-gone', subject: 'Restored', body: [] }),
+      JSON.stringify({
+        subject: 'Restored',
+        message: [],
+        additionalFields: { templateId: 'tpl-gone' },
+      }),
     )
     h.mutateAsync
       .mockRejectedValueOnce(new Error('Template not found'))
@@ -407,11 +427,11 @@ describe('provenance edge cases (round 2)', () => {
   it('treats "Template is for another kind of email" the same way', async () => {
     localStorage.setItem(
       'sponsor-send-information-sfc-123',
-      JSON.stringify({ subject: 'Restored', message: [] }),
-    )
-    localStorage.setItem(
-      'sponsor-send-information-sfc-123:template',
-      JSON.stringify({ id: 'tpl-contract', subject: 'Restored', body: [] }),
+      JSON.stringify({
+        subject: 'Restored',
+        message: [],
+        additionalFields: { templateId: 'tpl-contract' },
+      }),
     )
     h.mutateAsync
       .mockRejectedValueOnce(new Error('Template is for another kind of email'))
@@ -451,11 +471,11 @@ describe('provenance edge cases (round 2)', () => {
   it('"Clear draft" resets provenance to the default template, or to none', async () => {
     localStorage.setItem(
       'sponsor-send-information-sfc-123',
-      JSON.stringify({ subject: 'Restored', message: [] }),
-    )
-    localStorage.setItem(
-      'sponsor-send-information-sfc-123:template',
-      JSON.stringify({ id: 'tpl-earlier', subject: 'Restored', body: [] }),
+      JSON.stringify({
+        subject: 'Restored',
+        message: [],
+        additionalFields: { templateId: 'tpl-earlier' },
+      }),
     )
     renderModal()
     fireEvent.click(screen.getByRole('button', { name: 'clear draft' }))

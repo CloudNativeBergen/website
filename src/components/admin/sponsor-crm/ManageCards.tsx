@@ -137,7 +137,7 @@ export function ManageCards({
       key: 'communications',
       label: 'Communications',
       icon: PaperAirplaneIcon,
-      status: 'Every email sent',
+      status: 'Emails sent from the CRM',
       dot: null,
       onSelect: () => onOpen('communications'),
     },
