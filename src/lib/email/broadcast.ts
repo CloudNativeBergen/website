@@ -1,8 +1,4 @@
-import {
-  retryWithBackoff,
-  delay,
-  EMAIL_CONFIG,
-} from '@/lib/email/config'
+import { retryWithBackoff, delay, EMAIL_CONFIG } from '@/lib/email/config'
 import { Conference } from '@/lib/conference/types'
 import { PortableTextBlock } from '@portabletext/types'
 import {

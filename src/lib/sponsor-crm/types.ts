@@ -70,7 +70,7 @@ export interface LinkedDiscountCode {
   /** The provider's identifier. Checkin keys codes by the code string itself. */
   providerCodeId?: string
   linkedAt?: string
-  linkedVia?: 'send' | 'assign'
+  linkedVia?: 'send' | 'assign' | 'create'
 }
 
 export type SponsorTag =

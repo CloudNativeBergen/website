@@ -26,6 +26,7 @@ const h = vi.hoisted(() => ({
   showNotification: vi.fn(),
   templates: [] as unknown[],
   codeOptions: undefined as unknown,
+  codesFetching: false,
   applied: null as null | {
     subject: string
     body: PortableTextBlock[]
@@ -52,7 +53,11 @@ vi.mock('@/lib/trpc/client', () => ({
           useMutation: () => ({ mutateAsync: h.mutateAsync }),
         },
         discountCodeOptions: {
-          useQuery: () => ({ data: h.codeOptions, isError: false }),
+          useQuery: () => ({
+            data: h.codeOptions,
+            isError: false,
+            isFetching: h.codesFetching,
+          }),
         },
       },
       emailTemplates: {
@@ -279,6 +284,7 @@ beforeEach(() => {
   h.applied = null
   h.templates = []
   h.codeOptions = undefined
+  h.codesFetching = false
   draftSeeded = false
   lastAdditionalFields = {}
   draft = { subject: 'Hand-written subject', message: [] }
@@ -638,6 +644,44 @@ describe('discount kind', () => {
         }),
       ),
     )
+  })
+
+  it('seeds the preselection from SETTLED data, not a cache answer that is being refetched', () => {
+    h.codeOptions = options
+    h.codesFetching = true
+    const { rerender } = renderModal({}, 'discount')
+    expect(
+      screen.getByRole('checkbox', { name: 'ACME-2026' }),
+    ).not.toBeChecked()
+    // The refetch lands with a code assigned since.
+    h.codeOptions = {
+      ...options,
+      codes: options.codes.map((c) =>
+        c.code === 'ACME-WORKSHOP' ? { ...c, selected: true } : c,
+      ),
+    }
+    h.codesFetching = false
+    rerender(
+      <SponsorSendModal
+        isOpen
+        kind="discount"
+        onClose={vi.fn()}
+        sponsorForConference={mockSponsor({ contactPersons: contacts })}
+        domain="example.test"
+        fromEmail="sponsors@example.test"
+        conference={{
+          title: 'Conf',
+          city: 'Bergen',
+          country: 'Norway',
+          startDate: '2026-10-28',
+          domains: ['example.test'],
+        }}
+      />,
+    )
+    expect(screen.getByRole('checkbox', { name: 'ACME-2026' })).toBeChecked()
+    expect(
+      screen.getByRole('checkbox', { name: 'ACME-WORKSHOP' }),
+    ).toBeChecked()
   })
 
   it('an information send carries no codes', async () => {

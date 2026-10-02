@@ -672,6 +672,28 @@ describe('sponsor.crm.discountCodeOptions', () => {
     ])
   })
 
+  it('says when a code is counted for ANOTHER sponsor by name, since sending it moves it', async () => {
+    const { conference } = await h.getConference()
+    h.getConference.mockResolvedValue({
+      conference: {
+        ...conference,
+        sponsors: [
+          { sponsor: { _id: 'sponsor-acme', name: 'Acme AS' } },
+          { sponsor: { _id: 'sponsor-workshop', name: 'Workshop' } },
+        ],
+      },
+      domain: 'localhost',
+      error: null,
+    })
+    const result = await sponsor().crm.discountCodeOptions(OPTIONS)
+    expect(result.codes.find((c) => c.code === 'ACME-WORKSHOP')).toEqual({
+      code: 'ACME-WORKSHOP',
+      selected: false,
+      linked: false,
+      attributedTo: 'Workshop',
+    })
+  })
+
   it('a CRM prospect that is not a conference sponsor never claims a code by name', async () => {
     // Same rule as the usage view and the entitlement count: the name
     // heuristic runs over the conference's sponsors only.

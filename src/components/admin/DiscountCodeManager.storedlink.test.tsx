@@ -16,6 +16,7 @@ import {
   fireEvent,
   within,
   waitFor,
+  act,
 } from '@testing-library/react'
 import type { inferRouterOutputs } from '@trpc/server'
 import type { AppRouter } from '@/server/_app'
@@ -42,6 +43,7 @@ const q = vi.hoisted(() => ({
   deleteMutate: vi.fn(),
   assign: vi.fn(),
   refresh: vi.fn(),
+  createOptions: undefined as unknown,
 }))
 
 vi.mock('next/navigation', () => ({
@@ -59,7 +61,10 @@ vi.mock('@/lib/trpc/client', () => ({
       admin: {
         getDiscountCodesWithUsage: { useQuery: q.useQuery },
         createDiscountCode: {
-          useMutation: () => ({ mutate: q.createMutate, isPending: false }),
+          useMutation: (opts: unknown) => {
+            q.createOptions = opts
+            return { mutate: q.createMutate, isPending: false }
+          },
         },
         deleteDiscountCode: {
           useMutation: () => ({ mutate: q.deleteMutate, isPending: false }),
@@ -220,5 +225,38 @@ describe('Assign to sponsor', () => {
       screen.getAllByRole('button', { name: 'Assign COMP-7Q2 to a sponsor' })
         .length,
     ).toBeGreaterThan(0)
+  })
+})
+
+describe('a code created from a sponsor row (#1262)', () => {
+  it('is created FOR the sponsor’s CRM record, and counts on its row once linked', () => {
+    // Acme stores only a code that no longer exists at the provider, so its
+    // row has no code and offers Create.
+    renderPanel(['GONE-CODE'])
+    fireEvent.click(
+      screen.getAllByRole('button', {
+        name: 'Create discount code for Acme Cloud',
+      })[0],
+    )
+    const sent = q.createMutate.mock.calls[0][0]
+    expect(sent).toMatchObject({
+      sponsorName: 'Acme Cloud',
+      sponsorForConferenceId: 'sfc-acme',
+    })
+
+    // The server links the code and says so: the row adopts it at once.
+    const { onSuccess } = q.createOptions as {
+      onSuccess: (data: unknown, variables: unknown) => void
+    }
+    act(() =>
+      onSuccess(
+        { discountCode: 'COMMUNITY2026', linkedCodes: ['COMMUNITY2026'] },
+        sent,
+      ),
+    )
+    expect(
+      within(sponsorTable()).queryAllByText('COMMUNITY2026').length,
+    ).toBeGreaterThan(0)
+    expect(within(codeTable()).queryAllByText('COMMUNITY2026')).toHaveLength(0)
   })
 })

@@ -99,6 +99,11 @@ export interface DiscountCodeOption {
   linked: boolean
   /** Stored on ANOTHER sponsor; the server refuses it, so it cannot be picked. */
   linkedTo?: string
+  /**
+   * Counted for ANOTHER sponsor by its name (nothing stored). Pickable — but
+   * sending it moves it to this sponsor, so the picker says so.
+   */
+  attributedTo?: string
 }
 
 /**
@@ -389,6 +394,11 @@ export function SponsorDiscountCodePicker({
                 {option.linkedTo}
               </span>
             )}
+            {!option.linkedTo && option.attributedTo && (
+              <span className="min-w-0 truncate text-xs text-amber-700 dark:text-amber-300">
+                now counted for {option.attributedTo}
+              </span>
+            )}
           </label>
         )
       })}
@@ -626,7 +636,10 @@ export function SponsorSendModal({
       codesSeededForRef.current = null
       return
     }
-    if (!codesQuery.data) return
+    // From SETTLED data only: on a reopen the cache answers first and a
+    // refetch follows; seeding from the cache would miss a code assigned
+    // since (#1262 review).
+    if (!codesQuery.data || codesQuery.isFetching) return
     if (codesSeededForRef.current === sponsorForConference._id) return
     codesSeededForRef.current = sponsorForConference._id
     setSelectedCodes(
@@ -636,7 +649,7 @@ export function SponsorSendModal({
           .map((c) => c.code),
       ),
     )
-  }, [isOpen, codesQuery.data, sponsorForConference._id])
+  }, [isOpen, codesQuery.data, codesQuery.isFetching, sponsorForConference._id])
   const toggleCode = (code: string) =>
     setSelectedCodes((prev) => {
       const next = new Set(prev)

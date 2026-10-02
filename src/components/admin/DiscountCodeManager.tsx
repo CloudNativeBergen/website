@@ -342,6 +342,22 @@ export function DiscountCodeManager({
     Record<string, string[]>
   >({})
 
+  // Codes linked in THIS session (a sponsor-row create, #1262), merged over
+  // the page's server props until the next render of the page brings them.
+  const [sessionLinks, setSessionLinks] = useState<Record<string, string[]>>({})
+  const claimants = useMemo(
+    () =>
+      sponsors.map((s) =>
+        sessionLinks[s.id]
+          ? {
+              ...s,
+              linkedCodes: [...(s.linkedCodes ?? []), ...sessionLinks[s.id]],
+            }
+          : s,
+      ),
+    [sponsors, sessionLinks],
+  )
+
   const getSponsorDiscounts = useCallback(
     (sponsor: SponsorWithTierInfo) => {
       // The SHARED rule (`sponsorOwningCode`), not a second copy of it: the
@@ -351,10 +367,11 @@ export function DiscountCodeManager({
       // on one sponsor (#1262) is never also claimed by another's name.
       return existingDiscounts.filter(
         (discount) =>
-          sponsorOwningCode(discount.triggerValue, sponsors)?.id === sponsor.id,
+          sponsorOwningCode(discount.triggerValue, claimants)?.id ===
+          sponsor.id,
       )
     },
-    [existingDiscounts, sponsors],
+    [existingDiscounts, claimants],
   )
 
   const getExistingTicketTypes = useCallback(
@@ -685,12 +702,31 @@ export function DiscountCodeManager({
 
   const createDiscountMutation =
     api.tickets.admin.createDiscountCode.useMutation({
-      onSuccess: (data) => {
+      onSuccess: (data, variables) => {
         showNotification({
           type: 'success',
           title: 'Discount code created',
           message: `Successfully created discount code: ${data.discountCode}`,
         })
+        const forSponsor = sponsors.find(
+          (s) =>
+            !!variables.sponsorForConferenceId &&
+            s.sponsorForConferenceId === variables.sponsorForConferenceId,
+        )
+        if (forSponsor && data.linkedCodes?.length) {
+          const added = data.linkedCodes
+          setSessionLinks((prev) => ({
+            ...prev,
+            [forSponsor.id]: [...(prev[forSponsor.id] ?? []), ...added],
+          }))
+        }
+        if (data.linkFailed) {
+          showNotification({
+            type: 'warning',
+            title: 'Code not linked to the sponsor',
+            message: `${data.discountCode} was created but could not be stored on the sponsor. Assign it to them from the code list.`,
+          })
+        }
         utils.tickets.admin.getDiscountCodesWithUsage.invalidate()
         setLoading(null)
         setShowCreateForm(false)
@@ -745,7 +781,11 @@ export function DiscountCodeManager({
    */
   const createCode = (
     loadingKey: string,
-    input: DiscountCodeDraft & { sponsorName?: string; tierTitle?: string },
+    input: DiscountCodeDraft & {
+      sponsorName?: string
+      tierTitle?: string
+      sponsorForConferenceId?: string
+    },
   ) => {
     setLoading(loadingKey)
     createDiscountMutation.mutate({ eventId, ...input })
@@ -768,6 +808,7 @@ export function DiscountCodeManager({
       discountPercentage: 100,
       sponsorName: sponsor.name,
       tierTitle: sponsor.tier.title,
+      sponsorForConferenceId: sponsor.sponsorForConferenceId,
       selectedTicketTypes: selectedTicketTypes[sponsor.id] || [],
     })
   }
@@ -1342,7 +1383,7 @@ export function DiscountCodeManager({
             {showCreateForm && (
               <DiscountCodeForm
                 ticketTypes={availableTicketTypes}
-                sponsors={sponsors}
+                sponsors={claimants}
                 busy={createDiscountMutation.isPending}
                 onCancel={() => setShowCreateForm(false)}
                 onCreate={(draft) => createCode(draft.discountCode, draft)}

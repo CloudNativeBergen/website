@@ -124,6 +124,7 @@ import { sendSponsorCommunication } from '@/lib/sponsor-crm/communication-send'
 import {
   appendLinkedCodes,
   DiscountCodeLinkError,
+  linkCodesToSponsor,
   listEventDiscounts,
   readSponsorCodeLinks,
   resolveChosenCodes,
@@ -3195,6 +3196,10 @@ export const sponsorRouter = router({
               ...(elsewhere && {
                 linkedTo: elsewhere.name || 'another sponsor',
               }),
+              // Counted for another sponsor by name: sending it moves it here.
+              ...(!elsewhere &&
+                owner &&
+                owner.id !== here?.sponsorId && { attributedTo: owner.name }),
             },
           ]
         })
@@ -3229,31 +3234,21 @@ export const sponsorRouter = router({
           input.sponsorForConferenceId,
           input.discountCodes,
         )
-        let added: Awaited<ReturnType<typeof appendLinkedCodes>>
+        let added: Awaited<ReturnType<typeof linkCodesToSponsor>>
         try {
-          added = await appendLinkedCodes(
-            input.sponsorForConferenceId,
+          added = await linkCodesToSponsor({
+            sponsorForConferenceId: input.sponsorForConferenceId,
             alreadyLinked,
             codes,
-            'assign',
-          )
+            via: 'assign',
+            actorId: ctx.speaker._id,
+          })
         } catch (error) {
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
             message: 'Could not assign the discount code',
             cause: error,
           })
-        }
-        if (added.length > 0) {
-          const list = added.map((c) => c.code)
-          // Best-effort, like every activity write: the link is stored.
-          await createSponsorActivity(
-            input.sponsorForConferenceId,
-            'discount_codes_assigned',
-            `Discount code${list.length === 1 ? '' : 's'} ${list.join(', ')} assigned`,
-            ctx.speaker._id ?? 'system',
-            { newValue: list.join(', ') },
-          )
         }
         return { success: true as const, linkedCodes: added.map((c) => c.code) }
       }),

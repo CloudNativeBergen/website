@@ -54,7 +54,8 @@ export function discountCodesCardHtml({
   const brand = resolveEmailBrandPalette(emailBrandColor(theme))
   const accent = brandedOr(brand, '#1D4ED8')
   const url = escapeHtml(ticketUrl)
-  const heading = codes.length === 1 ? 'Your discount code' : 'Your discount codes'
+  const heading =
+    codes.length === 1 ? 'Your discount code' : 'Your discount codes'
   const items = codes
     .map(
       (code) =>

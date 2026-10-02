@@ -43,9 +43,11 @@ import {
   sponsorOwningCode,
 } from '@/lib/discounts'
 import {
+  linkCodesToSponsor,
   readSponsorCodeLinks,
   withLinkedCodes,
 } from '@/lib/sponsor-crm/discount-codes'
+import { requireDocumentInCurrentConference } from '../tenancy'
 import {
   getTicketingProvider,
   resolveTicketingCredentials,
@@ -1030,7 +1032,7 @@ export const ticketsRouter = router({
 
     createDiscountCode: ticketingAdminProcedure
       .input(CreateDiscountCodeSchema)
-      .mutation(async ({ input }) => {
+      .mutation(async ({ input, ctx }) => {
         const {
           discountCode,
           numberOfTickets,
@@ -1041,6 +1043,15 @@ export const ticketsRouter = router({
         } = input
 
         try {
+          // OWNERSHIP of the sponsor the code will be linked to (#1262):
+          // guarded before anything is read or minted.
+          if (input.sponsorForConferenceId) {
+            await requireDocumentInCurrentConference(
+              input.sponsorForConferenceId,
+              'sponsorForConference',
+            )
+          }
+
           // OWNERSHIP (#730): this endpoint mints discount codes — up to 100%
           // off — so an unvalidated `eventId` wrote them onto ANOTHER tenant's
           // paid ticket sale against the shared platform credential.
@@ -1129,6 +1140,37 @@ export const ticketsRouter = router({
 
           revalidateTag('admin:tickets', 'default')
 
+          // Link the new code to the sponsor it was created for (#1262). The
+          // code exists at the provider now, so a failed link write is
+          // reported, never thrown: the organizer can Assign it afterwards.
+          let linked: { linkedCodes?: string[]; linkFailed?: true } = {}
+          if (input.sponsorForConferenceId) {
+            try {
+              const { conference } = await getConferenceForCurrentDomain()
+              const links = conference
+                ? await readSponsorCodeLinks(conference._id)
+                : []
+              const added = await linkCodesToSponsor({
+                sponsorForConferenceId: input.sponsorForConferenceId,
+                alreadyLinked:
+                  links.find(
+                    (l) =>
+                      l.sponsorForConferenceId === input.sponsorForConferenceId,
+                  )?.linkedCodes ?? [],
+                codes: [{ code: discountCode, providerCodeId: discountCode }],
+                via: 'create',
+                actorId: ctx.speaker._id,
+              })
+              linked = { linkedCodes: added.map((c) => c.code) }
+            } catch (linkError) {
+              console.error(
+                '[createDiscountCode] linking the code to the sponsor failed:',
+                linkError,
+              )
+              linked = { linkedCodes: [], linkFailed: true }
+            }
+          }
+
           // ONE message for both kinds. A sponsor code still reads exactly as
           // it did — `sponsorName` absent simply drops the "for …" clause, and
           // the percentage clause only appears when it is not the 100% every
@@ -1144,6 +1186,7 @@ export const ticketsRouter = router({
             discountCode,
             result,
             message: `Created discount code "${discountCode}"${issuedTo} with ${numberOfTickets} tickets${rate}`,
+            ...linked,
           }
         } catch (error) {
           if (error instanceof TRPCError) {

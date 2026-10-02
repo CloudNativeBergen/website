@@ -9,6 +9,7 @@ import {
   resolveTicketingCredentials,
 } from '@/lib/tickets/provider'
 import { getCurrentDateTime } from '@/lib/time'
+import { createSponsorActivity } from './activity'
 import type { LinkedDiscountCode } from './types'
 
 /**
@@ -213,7 +214,7 @@ export async function appendLinkedCodes(
   sponsorForConferenceId: string,
   alreadyLinked: readonly string[],
   codes: readonly ResolvedDiscountCode[],
-  via: 'send' | 'assign',
+  via: NonNullable<LinkedDiscountCode['linkedVia']>,
 ): Promise<ResolvedDiscountCode[]> {
   const have = new Set(alreadyLinked.map(normalizeDiscountCode))
   const fresh = codes.filter((c) => !have.has(normalizeDiscountCode(c.code)))
@@ -232,4 +233,42 @@ export async function appendLinkedCodes(
     .insert('after', 'discountCodes[-1]', items)
     .commit()
   return fresh
+}
+
+/**
+ * Link codes to a sponsor WITHOUT a send — the discount code manager's Assign,
+ * and a code created from a sponsor's row — and log it on the timeline. The
+ * link write throws (the caller decides what a failure means); the activity
+ * write is best-effort like every activity.
+ */
+export async function linkCodesToSponsor({
+  sponsorForConferenceId,
+  alreadyLinked,
+  codes,
+  via,
+  actorId,
+}: {
+  sponsorForConferenceId: string
+  alreadyLinked: readonly string[]
+  codes: readonly ResolvedDiscountCode[]
+  via: 'assign' | 'create'
+  actorId: string | null | undefined
+}): Promise<ResolvedDiscountCode[]> {
+  const added = await appendLinkedCodes(
+    sponsorForConferenceId,
+    alreadyLinked,
+    codes,
+    via,
+  )
+  if (added.length > 0) {
+    const list = added.map((c) => c.code)
+    await createSponsorActivity(
+      sponsorForConferenceId,
+      'discount_codes_assigned',
+      `Discount code${list.length === 1 ? '' : 's'} ${list.join(', ')} assigned`,
+      actorId ?? 'system',
+      { newValue: list.join(', ') },
+    )
+  }
+  return added
 }
