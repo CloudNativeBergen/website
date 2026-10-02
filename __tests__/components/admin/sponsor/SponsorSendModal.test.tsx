@@ -23,6 +23,7 @@ const h = vi.hoisted(() => ({
   invalidateList: vi.fn(),
   invalidateComms: vi.fn(),
   invalidateCodes: vi.fn(),
+  saveLink: vi.fn(),
   showNotification: vi.fn(),
   templates: [] as unknown[],
   codeOptions: undefined as unknown,
@@ -67,6 +68,11 @@ vi.mock('@/lib/trpc/client', () => ({
       },
       emailTemplates: {
         list: { useQuery: () => ({ data: h.templates, isLoading: false }) },
+      },
+    },
+    conference: {
+      updateSponsorRegistrationLink: {
+        useMutation: () => ({ mutateAsync: h.saveLink, isPending: false }),
       },
     },
   },
@@ -704,6 +710,37 @@ describe('discount kind', () => {
     renderModal({}, 'discount')
     expect(screen.getByRole('alert')).toHaveTextContent(
       /no sponsor ticket invite link.*https:\/\/example\.test\/tickets/,
+    )
+  })
+
+  it('lets the organizer paste the invite link and save it to the conference', async () => {
+    h.codeOptions = {
+      ...options,
+      ticketUrl: 'https://example.test/tickets',
+      hasSponsorInviteLink: false,
+    }
+    h.saveLink.mockResolvedValue({ success: true })
+    renderModal({}, 'discount')
+    const save = screen.getByRole('button', { name: 'Save to conference' })
+    expect(save).toBeDisabled()
+    const input = screen.getByLabelText('Sponsor ticket invite link')
+    fireEvent.change(input, { target: { value: 'not a url' } })
+    expect(save).toBeDisabled()
+    fireEvent.change(input, {
+      target: { value: 'https://checkin.no/invite/abc' },
+    })
+    expect(save).toBeEnabled()
+    fireEvent.click(save)
+    await waitFor(() =>
+      expect(h.saveLink).toHaveBeenCalledWith({
+        sponsorRegistrationLink: 'https://checkin.no/invite/abc',
+      }),
+    )
+    // The picker re-reads the options, so the warning goes and the send
+    // uses the saved link.
+    await waitFor(() => expect(h.invalidateCodes).toHaveBeenCalled())
+    expect(h.showNotification).toHaveBeenCalledWith(
+      expect.objectContaining({ title: 'Sponsor invite link saved' }),
     )
   })
 

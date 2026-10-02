@@ -29,6 +29,9 @@ const h = vi.hoisted(() => ({
   creates: [] as Array<Record<string, unknown>>,
   insertShouldThrow: false,
   linksShouldThrow: false,
+  /** `discountCodeClaim` documents by id, and every claim op in order. */
+  claims: new Map<string, Record<string, unknown>>(),
+  claimOps: [] as Array<{ op: string; id: string; sfc?: string }>,
   listDiscounts: vi.fn(),
   createDiscount: vi.fn(),
 }))
@@ -51,12 +54,18 @@ vi.mock('@/lib/tickets/provider', () => ({
   }),
 }))
 vi.mock('@/lib/sanity/client', () => {
-  const fetch = async (query: string) => {
+  const fetch = async (query: string, params?: Record<string, unknown>) => {
     if (query.includes('"memberOrgIds"')) return h.tenant
     if (query.includes('"linkedCodes"')) {
       if (h.linksShouldThrow)
         throw new Error('sanity transport: socket hang up')
       return h.links
+    }
+    if (query.includes('_type == "discountCodeClaim"')) {
+      const doc = h.claims.get(params?.id as string)
+      if (!doc) return null
+      const holder = doc.sponsorForConference as { _ref: string }
+      return { ...doc, sponsorForConferenceId: holder._ref }
     }
     return null
   }
@@ -78,8 +87,29 @@ vi.mock('@/lib/sanity/client', () => {
     fetch,
     patch,
     create: async (doc: Record<string, unknown>) => {
+      if (doc._type === 'discountCodeClaim') {
+        const id = doc._id as string
+        if (h.claims.has(id)) {
+          throw Object.assign(
+            new Error(`Document by ID "${id}" already exists`),
+            { statusCode: 409 },
+          )
+        }
+        h.claims.set(id, { ...doc, _rev: 'rev-1' })
+        h.claimOps.push({
+          op: 'create',
+          id,
+          sfc: (doc.sponsorForConference as { _ref: string })._ref,
+        })
+        return doc
+      }
       h.creates.push(doc)
       return { _id: `act-${h.creates.length}` }
+    },
+    delete: async (id: string) => {
+      h.claims.delete(id)
+      h.claimOps.push({ op: 'delete', id })
+      return {}
     },
   }
   return {
@@ -156,6 +186,8 @@ beforeEach(() => {
   h.creates = []
   h.insertShouldThrow = false
   h.linksShouldThrow = false
+  h.claims = new Map()
+  h.claimOps = []
   h.getConference.mockResolvedValue({
     conference: {
       _id: CONF,
@@ -316,5 +348,66 @@ describe('tickets.admin.createDiscountCode for a sponsor row', () => {
     })
     expect(h.createDiscount).toHaveBeenCalledTimes(1)
     expect(h.inserts).toHaveLength(0)
+  })
+})
+
+/** The ownership lock on the create path (PR #1272 review). */
+describe('the claim on a sponsor-row create', () => {
+  const claimFor = (code: string) =>
+    [...h.claims.values()].find((c) => c.code === code)
+
+  it('claims the code for the sponsor BEFORE the provider mints it', async () => {
+    await tickets().admin.createDiscountCode(INPUT)
+    expect(h.claimOps[0]).toMatchObject({ op: 'create', sfc: SFC })
+    expect(h.createDiscount).toHaveBeenCalledTimes(1)
+    expect(h.createDiscount.mock.invocationCallOrder[0]).toBeGreaterThan(0)
+    expect(
+      (claimFor('ACMECLOUD5678')?.sponsorForConference as { _ref: string })
+        ._ref,
+    ).toBe(SFC)
+  })
+
+  it('refuses a code another sponsor just claimed, before the provider is touched', async () => {
+    const id = `discountCodeClaim-${CONF}-ACMECLOUD5678`
+    h.claims.set(id, {
+      _id: id,
+      _rev: 'rev-foreign',
+      _type: 'discountCodeClaim',
+      code: 'ACMECLOUD5678',
+      sponsorForConference: { _ref: 'sfc-globex' },
+      claimedAt: new Date().toISOString(),
+    })
+    h.links.push({
+      _id: 'sfc-globex',
+      sponsorId: 'sponsor-globex',
+      name: 'Globex',
+      linkedCodes: null,
+    })
+    await expect(
+      tickets().admin.createDiscountCode(INPUT),
+    ).rejects.toMatchObject({
+      code: 'CONFLICT',
+      message: 'Discount code "ACMECLOUD5678" is already linked to Globex',
+    })
+    expect(h.createDiscount).not.toHaveBeenCalled()
+    expect(h.inserts).toHaveLength(0)
+  })
+
+  it('releases the claim when the provider refuses to mint the code', async () => {
+    h.createDiscount.mockRejectedValue(new Error('checkin: 500'))
+    await expect(tickets().admin.createDiscountCode(INPUT)).rejects.toThrow()
+    expect(h.claimOps.map((o) => o.op)).toEqual(['create', 'delete'])
+    expect(h.claims.size).toBe(0)
+  })
+
+  it('a standalone create claims nothing', async () => {
+    await tickets().admin.createDiscountCode({
+      eventId: EVENT,
+      discountCode: 'COMMUNITY2026',
+      numberOfTickets: 5,
+      discountPercentage: 20,
+      selectedTicketTypes: [],
+    })
+    expect(h.claimOps).toHaveLength(0)
   })
 })

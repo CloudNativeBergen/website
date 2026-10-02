@@ -45,10 +45,13 @@ import {
 } from '@/lib/discounts'
 import {
   codesToAdopt,
+  DiscountCodeLinkError,
   linkCodesToSponsor,
   readSponsorCodeLinks,
   withLinkedCodes,
 } from '@/lib/sponsor-crm/discount-codes'
+import { claimDiscountCodes } from '@/lib/sponsor-crm/discount-code-claims'
+import { getOrganizationRefViaParentConference } from '@/lib/organization/sanity'
 import type { Conference } from '@/lib/conference/types'
 import { requireDocumentInCurrentConference } from '../tenancy'
 import {
@@ -1058,6 +1061,8 @@ export const ticketsRouter = router({
           let sponsorLinks: Awaited<ReturnType<typeof readSponsorCodeLinks>> =
             []
           let linkSponsors: Conference['sponsors']
+          let linkConferenceId: string | undefined
+          let linkOrgRef: string | null = null
           if (input.sponsorForConferenceId) {
             await requireDocumentInCurrentConference(
               input.sponsorForConferenceId,
@@ -1072,6 +1077,10 @@ export const ticketsRouter = router({
               })
             }
             linkSponsors = linkConference.sponsors
+            linkConferenceId = linkConference._id
+            linkOrgRef = await getOrganizationRefViaParentConference(
+              input.sponsorForConferenceId,
+            )
             // FAILS CLOSED like the standalone guard below: without the read
             // the stored-elsewhere refusal cannot be made.
             try {
@@ -1185,14 +1194,46 @@ export const ticketsRouter = router({
             })
           }
 
-          const result = await provider.createDiscount({
-            eventId,
-            discountCode,
-            numberOfTickets,
-            ticketTypes: selectedTicketTypes || [],
-            discountType: 'percentage',
-            discountValue: discountPercentage,
-          })
+          // THE LOCK (PR #1272 review): claim the code for the sponsor BEFORE
+          // it exists at the provider, so a concurrent Assign cannot take it
+          // between the create and the link below. Released if the provider
+          // refuses — then there is no code to own.
+          let hold: Awaited<ReturnType<typeof claimDiscountCodes>> | undefined
+          if (input.sponsorForConferenceId) {
+            try {
+              hold = await claimDiscountCodes({
+                conferenceId: linkConferenceId!,
+                orgRef: linkOrgRef,
+                sponsorForConferenceId: input.sponsorForConferenceId,
+                codes: [{ code: discountCode, providerCodeId: discountCode }],
+                links: sponsorLinks,
+                onConflict: 'refuse',
+              })
+            } catch (claimError) {
+              if (claimError instanceof DiscountCodeLinkError) {
+                throw new TRPCError({
+                  code: claimError.code,
+                  message: claimError.message,
+                })
+              }
+              throw claimError
+            }
+          }
+
+          let result: Awaited<ReturnType<typeof provider.createDiscount>>
+          try {
+            result = await provider.createDiscount({
+              eventId,
+              discountCode,
+              numberOfTickets,
+              ticketTypes: selectedTicketTypes || [],
+              discountType: 'percentage',
+              discountValue: discountPercentage,
+            })
+          } catch (providerError) {
+            await hold?.release()
+            throw providerError
+          }
 
           revalidateTag('admin:tickets', 'default')
 
@@ -1213,12 +1254,22 @@ export const ticketsRouter = router({
                 codes: [{ code: discountCode, providerCodeId: discountCode }],
                 via: 'create',
                 actorId: ctx.speaker._id,
-                // The event's codes as listed BEFORE this create.
-                adopted: codesToAdopt(
-                  eventData.discounts,
-                  withLinkedCodes(linkSponsors, sponsorLinks),
-                  sponsorForConferenceId,
-                ),
+                // The event's codes as listed BEFORE this create — claimed
+                // like the new one; one another sponsor holds is not adopted.
+                adopted: (
+                  await claimDiscountCodes({
+                    conferenceId: linkConferenceId!,
+                    orgRef: linkOrgRef,
+                    sponsorForConferenceId,
+                    codes: codesToAdopt(
+                      eventData.discounts,
+                      withLinkedCodes(linkSponsors, sponsorLinks),
+                      sponsorForConferenceId,
+                    ),
+                    links: sponsorLinks,
+                    onConflict: 'drop',
+                  })
+                ).held,
               })
               linked = { linkedCodes: added.map((c) => c.code) }
             } catch (linkError) {

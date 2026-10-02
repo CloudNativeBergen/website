@@ -10,8 +10,14 @@
  */
 
 const links = vi.hoisted(() => ({ fetch: vi.fn() }))
+/** The CDN client answers STALE: a link assigned a moment ago is not there. */
+const stale = vi.hoisted(() => ({
+  fetch: vi.fn(async () => {
+    throw new Error('the CDN client must not be used for attribution')
+  }),
+}))
 vi.mock('@/lib/sanity/client', () => ({
-  clientReadCached: links,
+  clientReadCached: stale,
   clientReadUncached: links,
   clientWrite: links,
 }))

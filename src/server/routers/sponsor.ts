@@ -55,7 +55,10 @@ import {
   conferenceBaseUrl,
   hasConferenceDomain,
 } from '@/lib/conference/baseUrl'
-import { getOrganizationRefForCurrentConference } from '@/lib/organization/sanity'
+import {
+  getOrganizationRefForCurrentConference,
+  getOrganizationRefViaParentConference,
+} from '@/lib/organization/sanity'
 import type { Conference } from '@/lib/conference/types'
 import { clientWrite, clientReadUncached } from '@/lib/sanity/client'
 import { getCurrentDateTime } from '@/lib/time'
@@ -130,8 +133,10 @@ import {
   readSponsorCodeLinks,
   resolveChosenCodes,
   withLinkedCodes,
+  type ResolvedDiscountCode,
   type SponsorCodeLink,
 } from '@/lib/sponsor-crm/discount-codes'
+import { claimDiscountCodes } from '@/lib/sponsor-crm/discount-code-claims'
 import { normalizeDiscountCode, sponsorOwningCode } from '@/lib/discounts'
 import {
   discountCodeAttachments,
@@ -280,12 +285,48 @@ async function resolveSponsorDiscountCodes(
     const alreadyLinked =
       links.find((l) => l.sponsorForConferenceId === sponsorForConferenceId)
         ?.linkedCodes ?? []
-    const adopted = codesToAdopt(
+    const adoptable = codesToAdopt(
       discounts,
       withLinkedCodes(conference.sponsors, links),
       sponsorForConferenceId,
     )
-    return { codes, alreadyLinked, adopted }
+    // THE LOCK (PR #1272 review): the checks above read one snapshot; the
+    // claim is what makes two concurrent links of one code impossible. The
+    // chosen codes must all be won; an adopted code another sponsor holds is
+    // simply not adopted.
+    const orgRef = await getOrganizationRefViaParentConference(
+      sponsorForConferenceId,
+    )
+    const claim = (
+      list: readonly ResolvedDiscountCode[],
+      onConflict: 'refuse' | 'drop',
+    ) =>
+      claimDiscountCodes({
+        conferenceId: conference._id,
+        orgRef,
+        sponsorForConferenceId,
+        codes: list,
+        links,
+        onConflict,
+      })
+    const chosenHold = await claim(codes, 'refuse')
+    let adoptedHold: Awaited<ReturnType<typeof claim>>
+    try {
+      adoptedHold = await claim(adoptable, 'drop')
+    } catch (error) {
+      await chosenHold.release()
+      throw error
+    }
+    return {
+      codes: chosenHold.held,
+      alreadyLinked,
+      adopted: adoptedHold.held,
+      /** Give the claims back when nothing was linked after all. */
+      release: async () => {
+        await chosenHold.release()
+        await adoptedHold.release()
+      },
+    }
   } catch (error) {
     if (error instanceof DiscountCodeLinkError) {
       throw new TRPCError({ code: error.code, message: error.message })
@@ -3107,6 +3148,8 @@ export const sponsorRouter = router({
         })
 
         if (!result.ok) {
+          // Nothing went out, so the codes are nobody's again.
+          await discount?.release()
           switch (result.reason) {
             case 'not-found':
               throw new TRPCError({
@@ -3259,7 +3302,7 @@ export const sponsorRouter = router({
             message: 'Failed to fetch conference',
           })
         }
-        const { codes, alreadyLinked, adopted } =
+        const { codes, alreadyLinked, adopted, release } =
           await resolveSponsorDiscountCodes(
             conference,
             input.sponsorForConferenceId,
@@ -3276,6 +3319,8 @@ export const sponsorRouter = router({
             adopted,
           })
         } catch (error) {
+          // Nothing was linked: the claims go back so a retry can win them.
+          await release()
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
             message: 'Could not assign the discount code',

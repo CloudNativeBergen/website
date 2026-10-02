@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import clsx from 'clsx'
 import { CheckIcon } from '@heroicons/react/24/solid'
 import type { PortableTextBlock } from '@portabletext/editor'
@@ -288,6 +288,81 @@ export function SponsorRecipientPicker({
           </label>
         )
       })}
+    </div>
+  )
+}
+
+/**
+ * No sponsor ticket invite link on the conference (#1262 review): the email
+ * would point at a store where the sponsor ticket types are hidden. The
+ * organizer can paste Checkin's invite link here and save it to the
+ * conference — the affordance the old discount modal had — after which this
+ * send, and every later one, uses it.
+ */
+export function SponsorInviteLinkPrompt({
+  fallbackUrl,
+  onSaved,
+}: {
+  fallbackUrl: string
+  onSaved: () => void
+}) {
+  const inputId = useId()
+  const { showNotification } = useNotification()
+  const save = api.conference.updateSponsorRegistrationLink.useMutation()
+  // A `type="url"` input strips surrounding whitespace itself.
+  const [link, setLink] = useState('')
+  const valid = /^https:\/\/\S+$/i.test(link)
+  const handleSave = async () => {
+    try {
+      await save.mutateAsync({ sponsorRegistrationLink: link })
+      showNotification({
+        type: 'success',
+        title: 'Sponsor invite link saved',
+        message: 'This send and every later one now point sponsors to it.',
+      })
+      onSaved()
+    } catch (error) {
+      showNotification({
+        type: 'error',
+        title: 'Could not save the link',
+        message: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }
+  return (
+    <div
+      role="alert"
+      className="space-y-2 rounded-md border border-amber-300 bg-amber-50 p-3 dark:border-amber-700 dark:bg-amber-900/20"
+    >
+      <p className="font-inter text-sm text-amber-800 dark:text-amber-200">
+        This conference has no sponsor ticket invite link, so the email points
+        to {fallbackUrl} — where sponsor ticket types are hidden. Paste
+        Checkin&apos;s invite link for the sponsor ticket category to save it on
+        the conference.
+      </p>
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+        <label htmlFor={inputId} className="sr-only">
+          Sponsor ticket invite link
+        </label>
+        <input
+          id={inputId}
+          type="url"
+          inputMode="url"
+          value={link}
+          onChange={(e) => setLink(e.target.value)}
+          placeholder="https://…"
+          disabled={save.isPending}
+          className="font-inter min-h-9 min-w-0 flex-1 rounded-md border border-amber-300 bg-white px-2.5 text-sm text-gray-900 placeholder-gray-400 focus:border-brand-cloud-blue focus:ring-1 focus:ring-brand-cloud-blue focus:outline-none dark:border-amber-700 dark:bg-gray-900 dark:text-white"
+        />
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={!valid || save.isPending}
+          className="font-space-grotesk min-h-9 cursor-pointer rounded-md border border-amber-400 px-3 text-sm font-medium text-amber-900 hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-amber-600 dark:text-amber-100 dark:hover:bg-amber-900/40"
+        >
+          {save.isPending ? 'Saving…' : 'Save to conference'}
+        </button>
+      </div>
     </div>
   )
 }
@@ -856,14 +931,10 @@ export function SponsorSendModal({
     ) : null
   const noInviteLinkHint =
     isDiscount && codesQuery.data && !codesQuery.data.hasSponsorInviteLink ? (
-      <p
-        role="alert"
-        className="font-inter text-sm text-amber-700 dark:text-amber-300"
-      >
-        This conference has no sponsor ticket invite link, so the email points
-        to {codesQuery.data.ticketUrl} — where sponsor ticket types are hidden.
-        Set the sponsor registration link in the conference settings first.
-      </p>
+      <SponsorInviteLinkPrompt
+        fallbackUrl={codesQuery.data.ticketUrl}
+        onSaved={() => utils.sponsor.crm.discountCodeOptions.invalidate()}
+      />
     ) : null
   const noCodeHint =
     isDiscount && codeOptions.length > 0 && chosenCodes.length === 0 ? (

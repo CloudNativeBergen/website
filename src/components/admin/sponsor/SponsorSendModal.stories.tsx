@@ -407,12 +407,34 @@ export const DiscountCodesDark: Story = {
   parameters: { msw: { handlers: discountHandlers } },
 }
 
-/** No sponsor invite link on the conference: the email would point at a store that hides sponsor tickets, so the modal says so. */
+/** What the save posts, so the play function can assert on it. */
+const savedLinks: unknown[] = []
+
+/**
+ * No sponsor invite link on the conference: the email would point at a store
+ * that hides sponsor tickets, so the modal says so — and lets the organizer
+ * paste Checkin's invite link and save it to the conference right there.
+ */
 export const DiscountCodesNoInviteLink: Story = {
   args: { kind: 'discount' },
+  beforeEach: () => {
+    savedLinks.length = 0
+  },
   parameters: {
     msw: {
       handlers: [
+        http.post(
+          '/api/trpc/conference.updateSponsorRegistrationLink',
+          async ({ request }) => {
+            const body = (await request.json()) as { json?: unknown } | unknown
+            savedLinks.push(
+              body && typeof body === 'object' && 'json' in body
+                ? (body as { json: unknown }).json
+                : body,
+            )
+            return HttpResponse.json({ result: { data: { success: true } } })
+          },
+        ),
         http.get('/api/trpc/sponsor.crm.discountCodeOptions', () =>
           HttpResponse.json({
             result: {
@@ -433,5 +455,20 @@ export const DiscountCodesNoInviteLink: Story = {
     await expect(
       await body.findByText(/no sponsor ticket invite link/),
     ).toBeInTheDocument()
+    const save = body.getByRole('button', { name: 'Save to conference' })
+    await expect(save).toBeDisabled()
+    await userEvent.type(
+      body.getByLabelText('Sponsor ticket invite link'),
+      'https://app.checkin.no/invite/sponsor-abc',
+    )
+    await expect(save).toBeEnabled()
+    await userEvent.click(save)
+    await waitFor(() =>
+      expect(savedLinks).toEqual([
+        {
+          sponsorRegistrationLink: 'https://app.checkin.no/invite/sponsor-abc',
+        },
+      ]),
+    )
   },
 }

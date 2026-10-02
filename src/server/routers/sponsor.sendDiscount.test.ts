@@ -32,6 +32,11 @@ const h = vi.hoisted(() => ({
   inserts: [] as Array<{ id: string; at: string; items: unknown[] }>,
   insertShouldThrow: false,
   linksShouldThrow: false,
+  /** `discountCodeClaim` documents by id — the atomic ownership lock. */
+  claims: new Map<string, Record<string, unknown>>(),
+  /** Every claim op in order: create / takeover / delete, with the doc id. */
+  claimOps: [] as Array<{ op: string; id: string; sfc?: string; rev?: string }>,
+  takeoverShouldFail: false,
   send: vi.fn(),
   listDiscounts: vi.fn(),
   credentials: vi.fn(),
@@ -65,11 +70,27 @@ vi.mock('@/lib/sanity/client', () => {
       return h.links
     }
     if (query.includes('_type == "sponsorForConference"')) return h.sfc
+    if (query.includes('_type == "discountCodeClaim"')) {
+      // The projection the real query applies.
+      const doc = h.claims.get(params?.id as string)
+      if (!doc) return null
+      const holder = doc.sponsorForConference as { _ref: string }
+      return { ...doc, sponsorForConferenceId: holder._ref }
+    }
     return null
   }
   const patch = (id: string) => {
+    let rev: string | undefined
+    let sets: Record<string, unknown> = {}
     const chain = {
-      set: () => chain,
+      ifRevisionId: (r: string) => {
+        rev = r
+        return chain
+      },
+      set: (v: Record<string, unknown>) => {
+        sets = { ...sets, ...v }
+        return chain
+      },
       unset: () => chain,
       setIfMissing: () => chain,
       insert: (_pos: string, at: string, items: unknown[]) => {
@@ -77,6 +98,24 @@ vi.mock('@/lib/sanity/client', () => {
         return chain
       },
       commit: async () => {
+        if (id.startsWith('discountCodeClaim-')) {
+          const current = h.claims.get(id)
+          if (h.takeoverShouldFail || !current || current._rev !== rev) {
+            throw new Error(
+              'Mutation(s) failed with 1 error(s): revision mismatch',
+            )
+          }
+          const next = { ...current, ...sets, _rev: `${rev}-next` }
+          h.claims.set(id, next)
+          h.claimOps.push({
+            op: 'takeover',
+            id,
+            rev,
+            sfc: (sets.sponsorForConference as { _ref?: string } | undefined)
+              ?._ref,
+          })
+          return next
+        }
         if (h.insertShouldThrow) throw new Error('sanity down')
         return {}
       },
@@ -87,8 +126,31 @@ vi.mock('@/lib/sanity/client', () => {
     fetch,
     patch,
     create: async (doc: Record<string, unknown>) => {
+      if (doc._type === 'discountCodeClaim') {
+        const id = doc._id as string
+        if (h.claims.has(id)) {
+          // What the real client does for `create` on an existing id.
+          throw Object.assign(
+            new Error(`Document by ID "${id}" already exists`),
+            { statusCode: 409 },
+          )
+        }
+        const stored = { ...doc, _rev: `rev-${h.claimOps.length + 1}` }
+        h.claims.set(id, stored)
+        h.claimOps.push({
+          op: 'create',
+          id,
+          sfc: (doc.sponsorForConference as { _ref: string })._ref,
+        })
+        return stored
+      }
       h.creates.push(doc)
       return { _id: `act-${h.creates.length}` }
+    },
+    delete: async (id: string) => {
+      h.claims.delete(id)
+      h.claimOps.push({ op: 'delete', id })
+      return {}
     },
   }
   return {
@@ -184,6 +246,9 @@ beforeEach(() => {
   h.inserts = []
   h.insertShouldThrow = false
   h.linksShouldThrow = false
+  h.claims = new Map()
+  h.claimOps = []
+  h.takeoverShouldFail = false
   h.tenant = { _type: 'sponsorForConference', conferenceId: CONF }
   h.sfc = {
     _id: SFC,
@@ -862,5 +927,201 @@ describe('a failed links read', () => {
     await expect(
       sponsor().crm.discountCodeOptions({ sponsorForConferenceId: SFC }),
     ).rejects.toMatchObject({ message: READ_FAILED })
+  })
+})
+
+/**
+ * THE ATOMIC OWNERSHIP LOCK (PR #1272 review, three reviewers). A read-check
+ * followed by an append could let two concurrent links of one code to two
+ * sponsors both succeed. Every link now goes through a `discountCodeClaim`
+ * document per (conference, code) whose deterministic id makes Sanity's
+ * `create` the arbiter: the first request to create it owns the code, the
+ * loser's create fails and the loser refuses — before any email is sent.
+ */
+describe('the discount-code claim', () => {
+  const claimIdOf = (code: string) =>
+    [...h.claims.keys()].find((id) => h.claims.get(id)?.code === code)
+  const claimedBy = (code: string) =>
+    (
+      h.claims.get(claimIdOf(code) ?? '')?.sponsorForConference as
+        { _ref: string } | undefined
+    )?._ref
+  /** A claim another request made, `ageMin` minutes ago. */
+  const foreignClaim = (code: string, sfc: string, ageMin: number) => {
+    const id = `discountCodeClaim-${CONF}-${code}` // the id only has to be stable
+    h.claims.set(id, {
+      _id: id,
+      _rev: 'rev-foreign',
+      _type: 'discountCodeClaim',
+      code,
+      conference: { _ref: CONF },
+      sponsorForConference: { _ref: sfc },
+      claimedAt: new Date(Date.now() - ageMin * 60_000).toISOString(),
+    })
+    return id
+  }
+  const sendOrder = () => {
+    const firstSend = h.send.mock.invocationCallOrder[0]
+    return { firstSend }
+  }
+
+  it('claims every chosen code for this sponsor BEFORE the provider is called', async () => {
+    await sponsor().crm.sendCommunication({
+      ...INPUT,
+      discountCodes: ['ACME-2026', 'ACME-WORKSHOP'],
+    })
+    expect(claimedBy('ACME-2026')).toBe(SFC)
+    expect(claimedBy('ACME-WORKSHOP')).toBe(SFC)
+    const creates = h.claimOps.filter((o) => o.op === 'create')
+    expect(creates).toHaveLength(2)
+    // The claim documents are scoped like every tenant document.
+    const doc = h.claims.get(claimIdOf('ACME-2026')!)!
+    expect(doc).toMatchObject({
+      _type: 'discountCodeClaim',
+      conference: { _ref: CONF },
+      organization: { _ref: 'org-ref' },
+    })
+    // Created before the send went out — the whole point of a reservation.
+    expect(h.send).toHaveBeenCalledTimes(1)
+    expect(sendOrder().firstSend).toBeGreaterThan(0)
+  })
+
+  it('the loser of a race refuses with CONFLICT: nothing sent, nothing appended', async () => {
+    // Another request claimed the code a moment ago and has not appended yet
+    // (its link is not in `h.links`) — exactly the window the read-check missed.
+    foreignClaim('ACME-2026', 'sfc-globex', 0.1)
+    await expect(
+      sponsor().crm.sendCommunication({
+        ...INPUT,
+        discountCodes: ['ACME-WORKSHOP', 'ACME-2026'],
+      }),
+    ).rejects.toMatchObject({
+      code: 'CONFLICT',
+      message: 'Discount code "ACME-2026" is already linked to Globex',
+    })
+    expect(h.send).not.toHaveBeenCalled()
+    expect(linkInserts()).toHaveLength(0)
+    // The claim it DID win (ACME-WORKSHOP) is released again.
+    expect(claimIdOf('ACME-WORKSHOP')).toBeUndefined()
+    expect(h.claimOps.map((o) => o.op)).toEqual(['create', 'delete'])
+    // The foreign claim is untouched.
+    expect(claimedBy('ACME-2026')).toBe('sfc-globex')
+  })
+
+  it('a provider refusal releases the fresh claims, but never a claim this sponsor held before', async () => {
+    foreignClaim('ACME-WORKSHOP', SFC, 60) // ours from an earlier send
+    h.send.mockResolvedValue({ data: null, error: { message: 'rate limited' } })
+    await expect(
+      sponsor().crm.sendCommunication({
+        ...INPUT,
+        discountCodes: ['ACME-2026', 'ACME-WORKSHOP'],
+      }),
+    ).rejects.toMatchObject({ code: 'INTERNAL_SERVER_ERROR' })
+    expect(claimIdOf('ACME-2026')).toBeUndefined()
+    expect(claimedBy('ACME-WORKSHOP')).toBe(SFC)
+  })
+
+  it('a bad recipient releases the fresh claims too', async () => {
+    await expect(
+      sponsor().crm.sendCommunication({
+        ...INPUT,
+        recipientKeys: ['c-stranger'],
+      }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    expect(h.claimOps.map((o) => o.op)).toEqual(['create', 'delete'])
+    expect(h.claims.size).toBe(0)
+  })
+
+  it('takes over a STALE claim — holder no longer stores the code, and old enough that no request is in flight — atomically', async () => {
+    const id = foreignClaim('ACME-2026', 'sfc-globex', 20)
+    await sponsor().crm.sendCommunication(INPUT)
+    expect(h.claimOps).toContainEqual({
+      op: 'takeover',
+      id,
+      rev: 'rev-foreign',
+      sfc: SFC,
+    })
+    expect(claimedBy('ACME-2026')).toBe(SFC)
+    expect(h.send).toHaveBeenCalledTimes(1)
+  })
+
+  it('a claim younger than the settle window is never taken over, even with no link behind it', async () => {
+    foreignClaim('ACME-2026', 'sfc-globex', 5)
+    await expect(sponsor().crm.sendCommunication(INPUT)).rejects.toMatchObject({
+      code: 'CONFLICT',
+    })
+    expect(h.claimOps.filter((o) => o.op === 'takeover')).toHaveLength(0)
+    expect(h.send).not.toHaveBeenCalled()
+  })
+
+  it('a claim whose holder still STORES the code is never taken over, however old', async () => {
+    foreignClaim('GLOBEX-VIP', 'sfc-globex', 600)
+    await expect(
+      sponsor().crm.sendCommunication({
+        ...INPUT,
+        discountCodes: ['GLOBEX-VIP'],
+      }),
+    ).rejects.toMatchObject({ code: 'CONFLICT' })
+    expect(h.claimOps.filter((o) => o.op === 'takeover')).toHaveLength(0)
+  })
+
+  it('losing the takeover (the claim changed under us) refuses with CONFLICT', async () => {
+    foreignClaim('ACME-2026', 'sfc-globex', 20)
+    h.takeoverShouldFail = true
+    await expect(sponsor().crm.sendCommunication(INPUT)).rejects.toMatchObject({
+      code: 'CONFLICT',
+    })
+    expect(h.send).not.toHaveBeenCalled()
+    expect(claimedBy('ACME-2026')).toBe('sfc-globex')
+  })
+
+  it('a claim this sponsor already holds (link write failed last time) lets the send through', async () => {
+    foreignClaim('ACME-2026', SFC, 1)
+    await expect(sponsor().crm.sendCommunication(INPUT)).resolves.toMatchObject(
+      { success: true, linkedCodes: ['ACME-2026'] },
+    )
+    expect(h.claimOps.filter((o) => o.op !== 'create')).toHaveLength(0)
+  })
+
+  it('adopted codes are claimed too; one claimed elsewhere is dropped from adoption, not refused', async () => {
+    const { conference } = await h.getConference()
+    h.getConference.mockResolvedValue({
+      conference: {
+        ...conference,
+        sponsors: [{ sponsor: { _id: 'sponsor-acme', name: 'Acme' } }],
+      },
+      domain: 'localhost',
+      error: null,
+    })
+    foreignClaim('ACME-WORKSHOP', 'sfc-globex', 0.1)
+    await expect(sponsor().crm.sendCommunication(INPUT)).resolves.toMatchObject(
+      { success: true },
+    )
+    expect(claimedBy('ACME-2026')).toBe(SFC)
+    expect(linkInserts()[0].items).toEqual([
+      expect.objectContaining({ code: 'ACME-2026', linkedVia: 'send' }),
+    ])
+  })
+
+  it('an Assign claims before it appends, and releases if the append fails', async () => {
+    h.insertShouldThrow = true
+    await expect(
+      sponsor().crm.assignDiscountCodes({
+        sponsorForConferenceId: SFC,
+        discountCodes: ['ACME-2026'],
+      }),
+    ).rejects.toMatchObject({ code: 'INTERNAL_SERVER_ERROR' })
+    expect(h.claimOps.map((o) => o.op)).toEqual(['create', 'delete'])
+  })
+
+  it('an Assign of a code another sponsor just claimed refuses with CONFLICT', async () => {
+    foreignClaim('ACME-2026', 'sfc-globex', 0.1)
+    await expect(
+      sponsor().crm.assignDiscountCodes({
+        sponsorForConferenceId: SFC,
+        discountCodes: ['ACME-2026'],
+      }),
+    ).rejects.toMatchObject({ code: 'CONFLICT' })
+    expect(h.inserts).toHaveLength(0)
   })
 })
