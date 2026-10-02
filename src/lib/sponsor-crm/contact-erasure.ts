@@ -109,7 +109,7 @@ export async function eraseSponsorContactSendRecords(
   // CLI would otherwise search for the literal "--actor", find nothing and
   // report clean.
   const rejected = options.emails.filter(
-    (e) => !normalizeEmail(e).includes('@'),
+    (e) => normalizeEmail(e).length > 0 && !normalizeEmail(e).includes('@'),
   )
   if (rejected.length > 0) {
     return {
