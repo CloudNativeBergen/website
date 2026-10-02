@@ -88,7 +88,7 @@ const ProposalInputBaseSchema = z.object({
     .array(z.nativeEnum(Audience))
     .min(1, 'At least one audience must be specified'),
   outline: z.string().nullable().optional().transform(nullToUndefined),
-  topics: z.array(ReferenceSchema).min(1, 'At least one topic is required'),
+  topics: z.array(ReferenceSchema),
   tos: z.boolean().refine((val) => val === true, {
     message: 'Terms of Service must be accepted',
   }),
