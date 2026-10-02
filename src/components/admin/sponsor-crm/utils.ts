@@ -26,6 +26,7 @@ import {
   PencilIcon,
   ChatBubbleLeftIcon,
   ChatBubbleLeftRightIcon,
+  TicketIcon,
   PhoneIcon,
   CalendarIcon,
   FireIcon,
@@ -91,6 +92,8 @@ export function getActivityIcon(type: ActivityType) {
       return BellAlertIcon
     case 'message':
       return ChatBubbleLeftRightIcon
+    case 'discount_codes_assigned':
+      return TicketIcon
   }
 }
 
@@ -120,6 +123,8 @@ export function getActivityColor(type: ActivityType): string {
       return 'text-amber-600 bg-amber-100 dark:text-amber-400 dark:bg-amber-900/20'
     case 'message':
       return 'text-sky-600 bg-sky-100 dark:text-sky-400 dark:bg-sky-900/20'
+    case 'discount_codes_assigned':
+      return 'text-violet-600 bg-violet-100 dark:text-violet-400 dark:bg-violet-900/20'
   }
 }
 

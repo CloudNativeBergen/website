@@ -8,6 +8,13 @@
  * workshop-upgrade add-on counted as a participant, which is the exact bug the
  * classifier was written to remove.
  */
+
+const links = vi.hoisted(() => ({ fetch: vi.fn() }))
+vi.mock('@/lib/sanity/client', () => ({
+  clientReadCached: links,
+  clientReadUncached: links,
+  clientWrite: links,
+}))
 import { describe, expect, it, vi } from 'vitest'
 import type { Conference } from '@/lib/conference/types'
 import type { EventTicket } from '@/lib/tickets/types'
@@ -23,7 +30,7 @@ const conference = {
     { typeName: UPGRADE, admits: false },
     { typeName: 'Conference day', admits: true },
   ],
-  sponsors: [{ sponsor: { name: 'Acme Cloud' } }],
+  sponsors: [{ sponsor: { _id: 'sponsor-acme', name: 'Acme Cloud' } }],
 } as unknown as Conference
 
 /** Only the two members this module touches; everything else would be unused. */
@@ -143,6 +150,46 @@ describe('buildClassificationContext', () => {
     )
 
     expect(context.discounts).toBe(discounts)
-    expect(context.sponsorNames).toEqual(['Acme Cloud'])
+    expect(context.sponsors).toEqual([
+      { id: 'sponsor-acme', name: 'Acme Cloud', linkedCodes: [] },
+    ])
+  })
+
+  it("carries each sponsor's STORED codes (#1262), joined by sponsor id", async () => {
+    links.fetch.mockResolvedValueOnce([
+      {
+        _id: 'sfc-acme',
+        sponsorId: 'sponsor-acme',
+        name: 'Acme Cloud',
+        linkedCodes: ['COMP-7Q2'],
+      },
+      // A CRM prospect that is not a conference sponsor claims nothing.
+      { _id: 'sfc-x', sponsorId: 'sponsor-x', name: 'X', linkedCodes: ['X1'] },
+    ])
+    const context = await buildClassificationContext(
+      {
+        provider: providerWith(vi.fn().mockResolvedValue({ discounts: [] })),
+        eventRef: { provider: 'checkin', customerId: 1, eventId: 2 },
+      },
+      conference,
+    )
+    expect(context.sponsors).toEqual([
+      { id: 'sponsor-acme', name: 'Acme Cloud', linkedCodes: ['COMP-7Q2'] },
+    ])
+  })
+
+  it('falls back to name attribution when the links cannot be read', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    links.fetch.mockRejectedValueOnce(new Error('sanity down'))
+    const context = await buildClassificationContext(
+      {
+        provider: providerWith(vi.fn().mockResolvedValue({ discounts: [] })),
+        eventRef: { provider: 'checkin', customerId: 1, eventId: 2 },
+      },
+      conference,
+    )
+    expect(context.sponsors).toEqual([
+      { id: 'sponsor-acme', name: 'Acme Cloud', linkedCodes: [] },
+    ])
   })
 })

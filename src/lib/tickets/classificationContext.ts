@@ -18,6 +18,8 @@
  */
 import type { Conference } from '@/lib/conference/types'
 import type { EventDiscount, TicketType } from '@/lib/discounts/types'
+import { clientReadCached } from '@/lib/sanity/client'
+import { conferenceSponsorClaimants } from '@/lib/sponsor-crm/discount-codes'
 import type { TicketClassificationContext } from './classification'
 import { proposeTicketTypeRoles } from './discovery'
 import type { EventRef, TicketingProvider } from './provider'
@@ -112,7 +114,9 @@ export async function buildClassificationContext(
 
   return {
     discounts,
-    sponsorNames: conference.sponsors?.map((s) => s.sponsor.name) ?? [],
+    // CDN read: these are reports, and a just-assigned code showing up a
+    // moment late misnames a grantor at worst.
+    sponsors: await conferenceSponsorClaimants(conference, clientReadCached),
     speakerTicketTypeName: speakerType?.name,
     ticketTypeRoles: conference.ticketTypeRoles,
     ticketTypeProposals: proposeTicketTypeRoles({

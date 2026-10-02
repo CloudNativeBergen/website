@@ -431,6 +431,10 @@ async function buildFreeTicketAllocation({
       conference.sponsors?.map((s) => ({
         name: s.sponsor.name,
         tier: s.tier,
+        // The stored codes the classification context already read.
+        linkedCodes: classification.sponsors?.find(
+          (c) => c.id === s.sponsor._id,
+        )?.linkedCodes,
       })) ?? [],
     discounts,
     // A failed read answers 0 WITH an error; rendering that 0 as an allocation

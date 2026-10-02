@@ -490,6 +490,57 @@ export default defineType({
       description: 'When the sponsor completed registration',
       readOnly: true,
     }),
+    defineField({
+      // The sponsor↔discount-code link (#1262). The ticketing provider cannot
+      // hold it, so it lives here: appended when codes are SENT to the sponsor
+      // or ASSIGNED from the discount code manager, and read by every code
+      // attribution (`sponsorOwningCode`) in preference to the name heuristic.
+      name: 'discountCodes',
+      title: 'Discount Codes',
+      type: 'array',
+      description:
+        'Ticket discount codes given to this sponsor. Added by the CRM when codes are sent or assigned.',
+      readOnly: true,
+      of: [
+        {
+          type: 'object',
+          name: 'linkedDiscountCode',
+          fields: [
+            defineField({
+              name: 'code',
+              title: 'Code',
+              type: 'string',
+              description: 'The code as the sponsor types it at checkout',
+              validation: (Rule) => Rule.required(),
+            }),
+            defineField({
+              name: 'providerCodeId',
+              title: 'Provider Code ID',
+              type: 'string',
+              description:
+                'How the ticketing provider identifies the code (Checkin keys codes by the code itself)',
+            }),
+            defineField({
+              name: 'linkedAt',
+              title: 'Linked At',
+              type: 'datetime',
+            }),
+            defineField({
+              name: 'linkedVia',
+              title: 'Linked Via',
+              type: 'string',
+              options: {
+                list: [
+                  { title: 'Sent', value: 'send' },
+                  { title: 'Assigned', value: 'assign' },
+                ],
+              },
+            }),
+          ],
+          preview: { select: { title: 'code', subtitle: 'linkedVia' } },
+        },
+      ],
+    }),
   ],
   preview: {
     select: {

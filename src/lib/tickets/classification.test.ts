@@ -48,14 +48,14 @@ function discount(overrides: Partial<EventDiscount> = {}): EventDiscount {
   }
 }
 
-const SPONSORS = ['Acme Cloud', 'Globex']
+const SPONSORS = [{ name: 'Acme Cloud' }, { name: 'Globex' }]
 
 describe('classifyTicket', () => {
   it('reads a 100%-off sponsor redemption as a sponsor comp', () => {
     expect(
       classifyTicket(ticket({ coupon: 'ACMECLOUD1234', sum: '0.00' }), {
         discounts: [discount()],
-        sponsorNames: SPONSORS,
+        sponsors: SPONSORS,
       }),
     ).toEqual({
       admits: true,
@@ -72,7 +72,7 @@ describe('classifyTicket', () => {
     expect(
       classifyTicket(ticket({ coupon: 'acmecloud1234', sum: '1500.00' }), {
         discounts: [discount()],
-        sponsorNames: SPONSORS,
+        sponsors: SPONSORS,
       }).comp,
     ).toBe(true)
   })
@@ -90,7 +90,7 @@ describe('classifyTicket', () => {
             discount({ triggerValue: 'ACMECLOUD20', value: '20' }),
             discount(),
           ],
-          sponsorNames: SPONSORS,
+          sponsors: SPONSORS,
         },
       ),
     ).toEqual({
@@ -105,7 +105,7 @@ describe('classifyTicket', () => {
   it('does not seat a workshop upgrade its holder bought on top of a seat', () => {
     const context: TicketClassificationContext = {
       discounts: [discount({ triggerValue: 'ACMECLOUD20', value: '20' })],
-      sponsorNames: SPONSORS,
+      sponsors: SPONSORS,
       ticketTypeRoles: [
         { typeName: 'Sponsor discount (workshop upgrade)', admits: false },
       ],
@@ -191,7 +191,7 @@ describe('classifyTicket', () => {
       ticket({ coupon: 'ORGCREW2026', sum: '0.00' }),
       {
         discounts: [discount({ triggerValue: 'ORGCREW2026' })],
-        sponsorNames: SPONSORS,
+        sponsors: SPONSORS,
       },
     )
     expect(result.comp).toBe(true)
@@ -236,7 +236,7 @@ describe('classifyTicket', () => {
     expect(
       classifyTicket(ticket({ discount: 'ACMECLOUD1234', sum: '0.00' }), {
         discounts: [discount()],
-        sponsorNames: SPONSORS,
+        sponsors: SPONSORS,
       }).grantedBy,
     ).toBe('sponsor')
   })
@@ -284,7 +284,7 @@ describe('isPaidTicket', () => {
     expect(
       isPaidTicket(ticket({ coupon: 'ACMECLOUD1234', sum: '1500.00' }), {
         discounts: [discount()],
-        sponsorNames: SPONSORS,
+        sponsors: SPONSORS,
       }),
     ).toBe(false)
   })

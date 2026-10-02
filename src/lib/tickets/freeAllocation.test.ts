@@ -152,6 +152,45 @@ describe('sponsors — redemptions of their own 100%-off code', () => {
   })
 })
 
+describe('sponsors — the stored code link (#1262)', () => {
+  it("counts a stored code's redemptions for its sponsor, whatever the code is called", () => {
+    const { sponsors } = calculateFreeTicketAllocation(
+      input({
+        sponsors: [
+          {
+            name: 'Acme Cloud',
+            tier: { ticketEntitlement: 5 },
+            linkedCodes: ['COMP-7Q2'],
+          },
+        ],
+        discounts: [code('COMP-7Q2', redeemed(3))],
+      }),
+    )
+    expect(sponsors.claimed).toBe(3)
+    expect(sponsors.status).toBe('Redemptions of 100%-off sponsor codes.')
+  })
+
+  it('a sponsor with stored codes no longer claims a code by its name', () => {
+    const { sponsors } = calculateFreeTicketAllocation(
+      input({
+        sponsors: [
+          {
+            name: 'Acme Cloud',
+            tier: { ticketEntitlement: 5 },
+            linkedCodes: ['COMP-7Q2'],
+          },
+        ],
+        discounts: [
+          code('COMP-7Q2', redeemed(1)),
+          // Contains "acmecloud" — by name it used to be Acme's.
+          code('ACMECLOUD-COMMUNITY', redeemed(40)),
+        ],
+      }),
+    )
+    expect(sponsors.claimed).toBe(1)
+  })
+})
+
 describe('speakers — the redeemed / invited / not-invited split', () => {
   it('claims the redeemed count and surfaces the actionable remainder', () => {
     const { speakers } = calculateFreeTicketAllocation(

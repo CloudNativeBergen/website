@@ -39,6 +39,10 @@ import { fetchSpeakerTicketInputs } from '@/lib/speaker/ticketInputs'
 import { buildTicketSummary, exportParticipants } from '@/lib/tickets/summary'
 import { calculateDiscountUsage, sponsorOwningCode } from '@/lib/discounts'
 import {
+  readSponsorCodeLinks,
+  withLinkedCodes,
+} from '@/lib/sponsor-crm/discount-codes'
+import {
   getTicketingProvider,
   resolveTicketingCredentials,
   type TicketingProvider,
@@ -1070,10 +1074,30 @@ export const ticketsRouter = router({
                 cause: sponsorsError,
               })
             }
+            // The stored sponsor↔code links too (#1262): a sponsor that
+            // stores codes no longer claims by name, so a code containing its
+            // name is free to be standalone. Same fail-closed rule as above.
+            let links: Awaited<ReturnType<typeof readSponsorCodeLinks>>
+            try {
+              links = await readSponsorCodeLinks(conference._id)
+            } catch (linksError) {
+              throw new TRPCError({
+                code: 'INTERNAL_SERVER_ERROR',
+                message:
+                  'Could not read this conference’s sponsors, so a code cannot be checked against them. Try again.',
+                cause: linksError,
+              })
+            }
             const claimed = sponsorOwningCode(
               discountCode,
-              conference.sponsors?.map((s) => s.sponsor.name) ?? [],
-            )
+              withLinkedCodes(
+                (conference.sponsors ?? []).map((s) => ({
+                  id: s.sponsor._id,
+                  name: s.sponsor.name,
+                })),
+                links,
+              ),
+            )?.name
             if (claimed) {
               throw new TRPCError({
                 code: 'CONFLICT',

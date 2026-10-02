@@ -18,19 +18,39 @@
  * Standalone codes are therefore REFUSED when this returns a sponsor — in
  * `tickets.createDiscountCode`, with the form warning first as an affordance.
  *
- * ponytail: substring matching, not a stored relationship. Replacing it means
- * persisting the sponsor→code link on our side (the provider cannot hold it),
- * which is the real fix if collisions ever need to be ALLOWED rather than
- * refused.
+ * THE STORED LINK OUTRANKS THE GUESS (#1262). Codes an organizer sends or
+ * assigns are recorded on `sponsorForConference.discountCodes`, and a sponsor
+ * that stores any code is matched ONLY by what it stores — never by its name.
+ * The heuristic survives as the fallback for sponsors with nothing stored, so
+ * codes minted before the link existed keep their rows. Every consumer passes
+ * claimants (name AND stored codes) through this one function, so the panel,
+ * the create guard, the entitlement count and ticket classification agree.
  */
-export function sponsorOwningCode(
+export interface SponsorCodeClaimant {
+  name: string
+  /** The sponsor's stored codes. Non-empty ⇒ the name heuristic is off for it. */
+  linkedCodes?: readonly string[]
+}
+
+/** The comparison form of a code: provider codes are case-insensitive. */
+export function normalizeDiscountCode(code: string): string {
+  return code.trim().toUpperCase()
+}
+
+export function sponsorOwningCode<T extends SponsorCodeClaimant>(
   discountCode: string | null | undefined,
-  sponsorNames: readonly string[],
-): string | undefined {
+  sponsors: readonly T[],
+): T | undefined {
   if (!discountCode) return undefined
+  const wanted = normalizeDiscountCode(discountCode)
+  const stored = sponsors.find((s) =>
+    s.linkedCodes?.some((c) => normalizeDiscountCode(c) === wanted),
+  )
+  if (stored) return stored
   const haystack = discountCode.toLowerCase()
-  return sponsorNames.find((name) => {
-    const needle = name.toLowerCase().replace(/\s+/g, '')
+  return sponsors.find((s) => {
+    if (s.linkedCodes && s.linkedCodes.length > 0) return false
+    const needle = s.name.toLowerCase().replace(/\s+/g, '')
     // An empty or whitespace-only sponsor name would match EVERY code.
     return needle.length > 0 && haystack.includes(needle)
   })
