@@ -91,6 +91,8 @@ function renderClient(analysisData: {
       participantTally={{
         participants: 1,
         workshopParticipants: 0,
+        paidWorkshopParticipants: 0,
+        freeWorkshopParticipants: 0,
         addOnsWithSeat: 0,
         addOnsWithoutSeat: 0,
         repeatTickets: 0,

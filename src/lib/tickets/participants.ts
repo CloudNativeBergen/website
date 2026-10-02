@@ -30,6 +30,10 @@ export interface ParticipantTally {
   participants: number
   /** Unique emails across ALL tickets that grant workshop access. */
   workshopParticipants: number
+  /** Unique emails holding paid workshop access. */
+  paidWorkshopParticipants: number
+  /** Unique emails holding only free/comped workshop access. */
+  freeWorkshopParticipants: number
   /** Add-on tickets (admits: false) whose holder also holds a seat. */
   addOnsWithSeat: number
   /**
@@ -99,7 +103,34 @@ export function tallyParticipants(
     classified.map(([t, c]) => [t, c.grantsWorkshop]),
   )
   const workshopTickets = tickets.filter((t) => workshopGrants.get(t))
-  const workshopParticipants = deduplicateTicketsByEmail(workshopTickets).length
+  // Split workshop participants into paid vs free (comped)
+  let paidWorkshopParticipants = 0
+  let freeWorkshopParticipants = 0
+
+  const workshopByEmail = new Map<string, typeof tickets>()
+  for (const t of workshopTickets) {
+    const e = emailOf(t)
+    if (!e) {
+      const isComp = classified.find((x) => x[0] === t)?.[1].comp === true
+      if (!isComp) paidWorkshopParticipants++
+      else freeWorkshopParticipants++
+      continue
+    }
+    if (!workshopByEmail.has(e)) workshopByEmail.set(e, [])
+    workshopByEmail.get(e)!.push(t)
+  }
+
+  for (const group of workshopByEmail.values()) {
+    const hasPaid = group.some((t) => {
+      const isComp = classified.find((x) => x[0] === t)?.[1].comp === true
+      return !isComp
+    })
+    if (hasPaid) paidWorkshopParticipants++
+    else freeWorkshopParticipants++
+  }
+
+  const workshopParticipants =
+    paidWorkshopParticipants + freeWorkshopParticipants
 
   const addOns = tickets.filter((t) => !admits.get(t))
   const addOnsWithSeat = addOns.filter((t) =>
@@ -109,6 +140,8 @@ export function tallyParticipants(
   return {
     participants: participants.length,
     workshopParticipants,
+    paidWorkshopParticipants,
+    freeWorkshopParticipants,
     addOnsWithSeat,
     addOnsWithoutSeat: addOns.length - addOnsWithSeat,
     repeatTickets: seats.length - participants.length,
