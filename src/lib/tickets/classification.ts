@@ -88,7 +88,7 @@ import type { EventTicket } from '@/lib/tickets/types'
 export type ClassifiableTicket = Pick<
   EventTicket,
   'category' | 'sum' | 'coupon' | 'discount'
->
+> & { fields?: { key: string; value: string }[] }
 
 /** Who granted a ticket, when it was granted rather than bought. */
 export type TicketGrantedBy =
@@ -334,8 +334,24 @@ export function classifyTicket(
           ? 'proposed'
           : 'unknown',
     comp,
-    grantsWorkshop:
-      workshopAccessOf(ticket.category, context.ticketTypeRoles) === 'granted',
+    grantsWorkshop: (() => {
+      let granted =
+        workshopAccessOf(ticket.category, context.ticketTypeRoles) === 'granted'
+      if (isSpeakerType) {
+        const rsvpField = ticket.fields?.find(
+          (f) =>
+            f.key.toLowerCase().includes('monday') ||
+            f.key.toLowerCase().includes('workshop'),
+        )
+        if (rsvpField) {
+          const val = rsvpField.value.toLowerCase().trim()
+          granted = val.includes('yes') || val.includes('ja') || val === 'true'
+        } else {
+          granted = false // No explicitly declared intent means best-effort/no guaranteed seat
+        }
+      }
+      return granted
+    })(),
     grantedBy,
   }
 }
