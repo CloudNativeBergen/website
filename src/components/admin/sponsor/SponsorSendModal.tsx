@@ -116,6 +116,16 @@ export function pickDefaultTemplate(
   )[0]
 }
 
+/** Every template category except `contract` — what a contract send must NOT start from. */
+const NON_CONTRACT_CATEGORIES: readonly TemplateCategory[] = [
+  'cold-outreach',
+  'returning-sponsor',
+  'international',
+  'local-community',
+  'follow-up',
+  'custom',
+]
+
 /** Where the applied template's provenance rides alongside EmailModal's draft. */
 function provenanceKey(draftKey: string) {
   return `${draftKey}:template`
@@ -331,18 +341,23 @@ export function SponsorSendModal({
     enabled: isOpen,
   })
   const templatesSettled = !templatesQuery.isLoading
-  // Whether a draft was waiting when the modal OPENED — read once per open,
-  // not per render, so a later re-render (a recipient toggle after "Clear
-  // draft") cannot flip it and attach a default the editor never showed.
-  const [hasDraft, setHasDraft] = useState(
-    () => isOpen && !!readStorage(draftKey),
-  )
+  // Whether a draft was waiting when the modal OPENED — sampled once per
+  // open, not per render, so a later re-render (a recipient toggle after
+  // "Clear draft") cannot flip it and attach a default the editor never
+  // showed. `forOpen` ties the sample to THIS open, so a host that keeps the
+  // modal mounted across opens cannot see a stale sample on its first render.
+  const [draftProbe, setDraftProbe] = useState(() => ({
+    forOpen: isOpen,
+    hasDraft: isOpen && !!readStorage(draftKey),
+  }))
   useEffect(() => {
-    if (isOpen) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- sampled once per open
-      setHasDraft(!!readStorage(draftKey))
-    }
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- sampled once per open
+    setDraftProbe({
+      forOpen: isOpen,
+      hasDraft: isOpen && !!readStorage(draftKey),
+    })
   }, [isOpen, draftKey])
+  const hasDraft = !draftProbe.forOpen || draftProbe.hasDraft
   const defaultTemplate = useMemo(
     () =>
       hasDraft
@@ -527,7 +542,9 @@ export function SponsorSendModal({
             setMessage(body)
           }}
           crmContext={crmContext}
-          excludeCategories={kind === 'contract' ? undefined : ['contract']}
+          excludeCategories={
+            kind === 'contract' ? NON_CONTRACT_CATEGORIES : ['contract']
+          }
         />
       )}
       initialValues={{
