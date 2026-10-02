@@ -24,6 +24,11 @@ import {
   type MergeTrailDoc,
   type MergeTrailEntry,
 } from './erasure'
+import {
+  REDACTED_RECIPIENT_EMAIL,
+  REDACTED_RECIPIENT_NAME,
+  type SponsorActivityRecipientDoc,
+} from './erasure-recipients'
 
 const SPEAKER = 'abcd1234efgh5678ijkl90'
 const NOW = '2026-08-14T10:00:00.000Z'
@@ -91,6 +96,7 @@ function inputs(overrides: Partial<ErasureInputs> = {}): ErasureInputs {
     ticketTalks: [],
     emailKeyedDocs: [],
     mergeTrailDocs: [],
+    sponsorActivityDocs: [],
     slugConflictIds: [],
     assetFileIds: [],
     assets: {
@@ -404,6 +410,7 @@ describe('idempotency — the whole patch is a fixed point', () => {
       ticketTalks: ticketTalks as ErasureInputs['ticketTalks'],
       emailKeyedDocs: [],
       mergeTrailDocs: [],
+      sponsorActivityDocs: [],
       slugConflictIds: [SPEAKER],
       assetFileIds: [],
       assets: {
@@ -1266,6 +1273,143 @@ describe('a person merged away is still found and cleared', () => {
     const plan = buildErasurePlan(
       inputs({ mergeTrailDocs: [trailDoc({ _key: 'bad key"]' })] }),
     )
+    expect(plan.refusals.join(' ')).toContain('cannot be safely selected')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Sent-communication records (#1265)
+// ---------------------------------------------------------------------------
+
+const ACTIVITY = 'activity-send-1'
+
+/** A sponsor send record naming the subject and one other contact. */
+function sendRecord(
+  overrides: Partial<SponsorActivityRecipientDoc> = {},
+): SponsorActivityRecipientDoc {
+  return {
+    _id: ACTIVITY,
+    _rev: 'rev-activity',
+    description: 'Information sent to Ada Lovelace (+1)',
+    recipients: [
+      {
+        _key: 'c-ada',
+        contactKey: 'c-ada',
+        name: 'Ada Lovelace',
+        email: 'ADA.L@work.io',
+        role: 'Signer',
+        isDefault: true,
+      },
+      {
+        _key: 'c-bob',
+        contactKey: 'c-bob',
+        name: 'Bob Builder',
+        email: 'bob@example.com',
+        isDefault: false,
+      },
+    ],
+    ...overrides,
+  }
+}
+
+describe('a sponsor send record naming the subject is redacted, not deleted', () => {
+  it('stages a revision-guarded patch replacing the name and address, nothing else', () => {
+    const plan = buildErasurePlan(
+      inputs({ sponsorActivityDocs: [sendRecord()] }),
+    )
+    const patch = plan.documentPatches.find((p) => p.id === ACTIVITY)!
+
+    expect(plan.refusals).toEqual([])
+    expect(patch.type).toBe('sponsorActivity')
+    expect(patch.rev).toBe('rev-activity')
+    expect(patch.set).toEqual({
+      'recipients[_key=="c-ada"].name': REDACTED_RECIPIENT_NAME,
+      'recipients[_key=="c-ada"].email': REDACTED_RECIPIENT_EMAIL,
+      description: `Information sent to ${REDACTED_RECIPIENT_NAME} (+1)`,
+    })
+    // The body, subject and the rest of the business record are never
+    // touched, and the record itself is never deleted.
+    expect(patch.unset).toBeUndefined()
+    expect(plan.documentDeletes.find((d) => d.id === ACTIVITY)).toBeUndefined()
+  })
+
+  it('matches any address in the subject’s match set, case-insensitively', () => {
+    // `ADA.L@work.io` is a `knownEmails` entry, not the display email.
+    const plan = buildErasurePlan(
+      inputs({ sponsorActivityDocs: [sendRecord()] }),
+    )
+    expect(plan.documentPatches.some((p) => p.id === ACTIVITY)).toBe(true)
+  })
+
+  it('leaves a record addressed to somebody else alone', () => {
+    const plan = buildErasurePlan(
+      inputs({
+        sponsorActivityDocs: [
+          sendRecord({
+            recipients: [
+              {
+                _key: 'c-bob',
+                contactKey: 'c-bob',
+                name: 'Bob Builder',
+                email: 'bob@example.com',
+                isDefault: true,
+              },
+            ],
+          }),
+        ],
+      }),
+    )
+    expect(plan.documentPatches.some((p) => p.id === ACTIVITY)).toBe(false)
+  })
+
+  it('never fails on a missing or already-redacted record', () => {
+    // Missing: the read found nothing. The plan has no refusal and stages
+    // nothing against the activity type.
+    const none = buildErasurePlan(inputs({ sponsorActivityDocs: [] }))
+    expect(none.refusals).toEqual([])
+    expect(none.documentPatches.some((p) => p.type === 'sponsorActivity')).toBe(
+      false,
+    )
+
+    // Already redacted: the second run over the same record, matched again
+    // because a re-verify threads the prior addresses in.
+    const redacted = sendRecord({
+      description: `Information sent to ${REDACTED_RECIPIENT_NAME} (+1)`,
+      recipients: [
+        {
+          _key: 'c-ada',
+          contactKey: 'c-ada',
+          name: REDACTED_RECIPIENT_NAME,
+          email: REDACTED_RECIPIENT_EMAIL,
+          role: 'Signer',
+          isDefault: true,
+        },
+      ],
+    })
+    const again = buildErasurePlan(inputs({ sponsorActivityDocs: [redacted] }))
+    expect(again.refusals).toEqual([])
+    expect(again.documentPatches.some((p) => p.id === ACTIVITY)).toBe(false)
+  })
+
+  it('refuses an entry whose _key cannot be selected, rather than skipping it', () => {
+    const plan = buildErasurePlan(
+      inputs({
+        sponsorActivityDocs: [
+          sendRecord({
+            recipients: [
+              {
+                _key: 'c ada"]',
+                contactKey: 'c ada"]',
+                name: 'Ada Lovelace',
+                email: 'ada@example.com',
+                isDefault: true,
+              },
+            ],
+          }),
+        ],
+      }),
+    )
+    expect(plan.refusals.join(' ')).toContain(ACTIVITY)
     expect(plan.refusals.join(' ')).toContain('cannot be safely selected')
   })
 })

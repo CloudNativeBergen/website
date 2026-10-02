@@ -110,6 +110,7 @@ let world: {
   ticketTalks: Array<Record<string, unknown>>
   emailKeyedDocs: Array<{ _id: string; _type: string }>
   mergeTrailDocs: Array<Record<string, unknown>>
+  sponsorActivityDocs: Array<Record<string, unknown>>
   slugConflicts: Array<{ _id: string }>
   assetReferences: number
 }
@@ -131,6 +132,7 @@ function resetWorld() {
     ticketTalks: [],
     emailKeyedDocs: [],
     mergeTrailDocs: [],
+    sponsorActivityDocs: [],
     slugConflicts: [],
     assetReferences: 0,
   }
@@ -152,6 +154,19 @@ function routeFetch(query: string, params: Record<string, unknown> = {}) {
   }
   if (query.includes('slug.current == $targetSlug')) {
     return Promise.resolve(world.slugConflicts)
+  }
+  if (query.includes('_type == "sponsorActivity"')) {
+    // Honours `$emails` for the same reason the merge-trail route does: the
+    // match set is destroyed by the erasure, and a mock that ignored it would
+    // hide a verification that finds nothing.
+    const emails = (params.emails as string[]) ?? []
+    return Promise.resolve(
+      world.sponsorActivityDocs.filter((doc) =>
+        ((doc.recipients ?? []) as Array<{ email?: string }>).some(
+          (r) => r.email && emails.includes(r.email.toLowerCase()),
+        ),
+      ),
+    )
   }
   if (query.includes('mergedWith')) {
     // Honours `$emails` rather than returning the world wholesale: the merge
@@ -791,5 +806,100 @@ describe('verification sees a residual merge trail entry', () => {
     // a documented property rather than a surprise in an audit.
     const verification = await verifySpeakerErasure(SPEAKER)
     expect(verification?.residual.mergeTrailEntries).toBe(0)
+  })
+})
+
+/**
+ * The sent-communication record (#1265) is the merge trail's shape again: an
+ * array entry inside somebody else's live document, matched by the subject's
+ * address, which the erasure itself destroys. Same threading, same gate.
+ */
+describe('a sponsor send record is redacted in the transaction and verified', () => {
+  const ERASED_SPEAKER = {
+    _id: SPEAKER,
+    _type: 'speaker',
+    name: 'Deleted speaker',
+    slug: { _type: 'slug', current: 'deleted-abcd1234' },
+    email: 'deleted-abcd1234@anonymous.invalid',
+    erasedAt: '2026-08-14T10:00:00.000Z',
+  }
+
+  function sendRecord() {
+    return {
+      _id: 'activity-1',
+      _rev: 'rev-activity',
+      description: 'Information sent to Ada Lovelace',
+      recipients: [
+        {
+          _key: 'c-ada',
+          contactKey: 'c-ada',
+          name: 'Ada Lovelace',
+          email: 'Ada@Example.com',
+          isDefault: true,
+        },
+      ],
+    }
+  }
+
+  it('stages the redaction, revision-guarded, in the SAME transaction as the speaker patch', async () => {
+    world.sponsorActivityDocs = [sendRecord()]
+
+    const result = await eraseSpeakerInPlace({
+      speakerId: SPEAKER,
+      actor: 'op',
+    })
+    expect(result.err).toBeNull()
+    expect(commitMock).toHaveBeenCalledTimes(1)
+
+    const op = patchOps.find((p) => p.id === 'activity-1')!
+    expect(op.rev).toBe('rev-activity')
+    expect(op.set).toEqual({
+      'recipients[_key=="c-ada"].name': 'Erased contact',
+      'recipients[_key=="c-ada"].email': 'erased@anonymous.invalid',
+      description: 'Information sent to Erased contact',
+    })
+    expect(op.unset).toBeUndefined()
+    expect(deletedIds).not.toContain('activity-1')
+  })
+
+  it('counts a surviving entry after the erasure, using the match set read BEFORE the patch', async () => {
+    world.sponsorActivityDocs = [sendRecord()]
+    commitMock.mockImplementation(async () => {
+      world.speaker = { ...ERASED_SPEAKER }
+      return { transactionId: 'tx-1' }
+    })
+
+    const result = await eraseSpeakerInPlace({
+      speakerId: SPEAKER,
+      actor: 'op',
+    })
+    expect(result.err).toBeNull()
+    expect(result.verification?.residual.sentCommunicationRecipients).toBe(1)
+    expect(result.verification?.clean).toBe(false)
+  })
+
+  it('is clean once the entry is redacted', async () => {
+    world.speaker = { ...ERASED_SPEAKER }
+    const doc = sendRecord()
+    doc.recipients[0].name = 'Erased contact'
+    doc.recipients[0].email = 'erased@anonymous.invalid'
+    world.sponsorActivityDocs = [doc]
+
+    const verification = await verifySpeakerErasure(SPEAKER, [
+      'ada@example.com',
+    ])
+    expect(verification?.residual.sentCommunicationRecipients).toBe(0)
+    expect(verification?.clean).toBe(true)
+  })
+
+  it('a missing record is not a failure: no record, no patch, a clean run', async () => {
+    world.sponsorActivityDocs = []
+    const result = await eraseSpeakerInPlace({
+      speakerId: SPEAKER,
+      actor: 'op',
+    })
+    expect(result.err).toBeNull()
+    expect(result.committed).toBe(true)
+    expect(patchOps.some((p) => p.id === 'activity-1')).toBe(false)
   })
 })
