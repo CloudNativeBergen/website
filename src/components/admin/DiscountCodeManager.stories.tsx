@@ -665,3 +665,42 @@ export const ApplyTicketTypesToAllOpenDark: Story = {
     await userEvent.click(triggers[triggers.length - 1])
   },
 }
+
+/**
+ * A code STORED on a CRM record that is not a conference sponsor yet (still
+ * negotiating, #1262). It stays that record's: Acme's row does not claim it
+ * by name, the code list says whose it is, and it offers no Assign.
+ */
+export const CodeHeldOutsideTheSponsorList: Story = {
+  parameters: { msw: { handlers: handlersFor('resolved', ZERO_REDEMPTIONS) } },
+  args: {
+    otherCodeHolders: [
+      {
+        id: 'sponsor-acme-labs',
+        name: 'Acme Labs',
+        linkedCodes: ['ACMECLOUD1234'],
+      },
+    ],
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    // DataTable renders every row twice (phone card + desktop row).
+    await expect(
+      (await canvas.findAllByText('Linked to Acme Labs')).length,
+    ).toBeGreaterThan(0)
+    await expect(
+      canvas.queryAllByRole('button', {
+        name: 'Assign ACMECLOUD1234 to a sponsor',
+      }),
+    ).toHaveLength(0)
+  },
+}
+
+export const CodeHeldOutsideTheSponsorListDark: Story = {
+  ...CodeHeldOutsideTheSponsorList,
+  parameters: {
+    theme: 'dark',
+    backgrounds: { default: 'dark' },
+    msw: { handlers: handlersFor('resolved', ZERO_REDEMPTIONS) },
+  },
+}

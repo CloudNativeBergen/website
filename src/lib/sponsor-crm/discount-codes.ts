@@ -2,6 +2,7 @@ import 'server-only'
 import type { Conference } from '@/lib/conference/types'
 import type { EventDiscount } from '@/lib/discounts/types'
 import {
+  nameClaimants,
   normalizeDiscountCode,
   sponsorOwningCode,
 } from '@/lib/discounts/attribution'
@@ -43,25 +44,50 @@ export interface SponsorClaimant {
 }
 
 /**
- * THE claimant set for every attribution (#1262): the CONFERENCE's sponsors,
- * joined by sponsor id to their stored codes. The sponsor list is the
- * conference's, never the CRM's — so a prospect never starts claiming codes
- * by name — and the links only add codes. The usage view, the create guard,
- * the Send picker and the ticket reports all build it here, so they agree.
+ * THE claimant set for every attribution (#1262). Two kinds of member:
+ *
+ *  - the CONFERENCE's sponsors (the public, `closed-won` list), joined by
+ *    sponsor id to their stored codes — the only members that may claim a
+ *    code by NAME, so a prospect never starts claiming codes by name;
+ *  - every OTHER CRM row that stores codes. A code can be sent to a sponsor
+ *    at any stage, and a stored code stays its owner's on every surface; with
+ *    stored codes it is never matched by name, so it claims only those.
+ *
+ * Conference sponsors come first, in their own order. The usage view, the
+ * create guard, the Send picker, adoption and the ticket reports all build
+ * it here, so they agree.
  */
 export function withLinkedCodes(
   sponsors: Conference['sponsors'],
   links: readonly SponsorCodeLink[],
 ): SponsorClaimant[] {
-  return (sponsors ?? []).map(({ sponsor }) => {
-    const link = links.find((l) => l.sponsorId === sponsor._id)
+  const codesOf = (sponsorId: string) => {
+    // A sponsor with two CRM rows in one conference keeps the codes of both.
+    const rows = links.filter((l) => l.sponsorId === sponsorId)
+    return {
+      linkedCodes: rows.flatMap((l) => l.linkedCodes),
+      sponsorForConferenceId: rows[0]?.sponsorForConferenceId,
+    }
+  }
+  const publicIds = new Set((sponsors ?? []).map(({ sponsor }) => sponsor._id))
+  const conferenceSponsors = (sponsors ?? []).map(({ sponsor }) => {
+    const { linkedCodes, sponsorForConferenceId } = codesOf(sponsor._id)
     return {
       id: sponsor._id,
       name: sponsor.name,
-      linkedCodes: link?.linkedCodes ?? [],
-      ...(link && { sponsorForConferenceId: link.sponsorForConferenceId }),
+      linkedCodes,
+      ...(sponsorForConferenceId && { sponsorForConferenceId }),
     }
   })
+  const otherHolders = links
+    .filter((l) => !publicIds.has(l.sponsorId) && l.linkedCodes.length > 0)
+    .map((l) => ({
+      id: l.sponsorId,
+      name: l.name,
+      linkedCodes: l.linkedCodes,
+      sponsorForConferenceId: l.sponsorForConferenceId,
+    }))
+  return [...conferenceSponsors, ...otherHolders]
 }
 
 /**
@@ -215,20 +241,28 @@ export function resolveChosenCodes(
  * redemptions, drop off its row the moment one code is sent or assigned.
  * Nothing to adopt once the sponsor stores anything — it can never own a code
  * by name, and what it stores is deduped on append. `claimants` is the
- * conference's sponsor set (`withLinkedCodes`), so a prospect adopts nothing.
+ * `withLinkedCodes` set: a prospect adopts nothing, a code another CRM row
+ * stores is never adopted, and neither is an ambiguous name match.
  */
 export function codesToAdopt(
   discounts: readonly EventDiscount[],
   claimants: readonly SponsorClaimant[],
   sponsorForConferenceId: string,
 ): ResolvedDiscountCode[] {
-  return discounts.flatMap((d) =>
-    d.triggerValue &&
-    sponsorOwningCode(d.triggerValue, claimants)?.sponsorForConferenceId ===
-      sponsorForConferenceId
-      ? [{ code: d.triggerValue, providerCodeId: d.id ?? d.triggerValue }]
-      : [],
-  )
+  return discounts.flatMap((d) => {
+    const code = d.triggerValue
+    if (!code) return []
+    // Owned by name (no claimant stores it — `sponsorOwningCode` would return
+    // the storer first) and by THIS sponsor alone: an ambiguous match is an
+    // accident of list order, and storing it would lock the other sponsor out.
+    const byName = nameClaimants(code, claimants)
+    const owner = sponsorOwningCode(code, claimants)
+    return byName.length === 1 &&
+      owner === byName[0] &&
+      owner.sponsorForConferenceId === sponsorForConferenceId
+      ? [{ code, providerCodeId: d.id ?? code }]
+      : []
+  })
 }
 
 /**

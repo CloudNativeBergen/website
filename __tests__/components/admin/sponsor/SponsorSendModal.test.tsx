@@ -27,6 +27,8 @@ const h = vi.hoisted(() => ({
   templates: [] as unknown[],
   codeOptions: undefined as unknown,
   codesFetching: false,
+  codesError: false,
+  codesQueryOptions: undefined as unknown,
   applied: null as null | {
     subject: string
     body: PortableTextBlock[]
@@ -53,11 +55,14 @@ vi.mock('@/lib/trpc/client', () => ({
           useMutation: () => ({ mutateAsync: h.mutateAsync }),
         },
         discountCodeOptions: {
-          useQuery: () => ({
-            data: h.codeOptions,
-            isError: false,
-            isFetching: h.codesFetching,
-          }),
+          useQuery: (_input: unknown, opts: unknown) => {
+            h.codesQueryOptions = opts
+            return {
+              data: h.codeOptions,
+              isError: h.codesError,
+              isFetching: h.codesFetching,
+            }
+          },
         },
       },
       emailTemplates: {
@@ -285,6 +290,7 @@ beforeEach(() => {
   h.templates = []
   h.codeOptions = undefined
   h.codesFetching = false
+  h.codesError = false
   draftSeeded = false
   lastAdditionalFields = {}
   draft = { subject: 'Hand-written subject', message: [] }
@@ -563,6 +569,9 @@ describe('zero recipients', () => {
  * attribution and the chosen codes travel as `discountCodes` — the codes
  * block itself is the server's to build.
  */
+/** The linked chip's accessible name says it is linked (#7, review). */
+const ACME_LINKED = 'ACME-2026, already linked to this sponsor'
+
 describe('discount kind', () => {
   const options = {
     ticketUrl: 'https://tickets.example.test/sponsor',
@@ -582,7 +591,7 @@ describe('discount kind', () => {
   it("preselects the sponsor's codes and posts them with the send", async () => {
     h.codeOptions = options
     renderModal({}, 'discount')
-    expect(screen.getByRole('checkbox', { name: 'ACME-2026' })).toBeChecked()
+    expect(screen.getByRole('checkbox', { name: ACME_LINKED })).toBeChecked()
     expect(
       screen.getByRole('checkbox', { name: 'ACME-WORKSHOP' }),
     ).not.toBeChecked()
@@ -614,7 +623,7 @@ describe('discount kind', () => {
   it('refuses to post with no code ticked', async () => {
     h.codeOptions = options
     renderModal({}, 'discount')
-    fireEvent.click(screen.getByRole('checkbox', { name: 'ACME-2026' }))
+    fireEvent.click(screen.getByRole('checkbox', { name: ACME_LINKED }))
     expect(
       screen.getByText('Choose at least one discount code before sending.'),
     ).toBeInTheDocument()
@@ -653,7 +662,7 @@ describe('discount kind', () => {
     const { rerender } = renderModal({}, 'discount')
     // Not interactive until seeded: a toggle now would be overwritten by the
     // seed when the refetch settles.
-    expect(screen.queryByRole('checkbox', { name: 'ACME-2026' })).toBeNull()
+    expect(screen.queryByRole('checkbox', { name: ACME_LINKED })).toBeNull()
     expect(screen.getByText('Loading discount codes…')).toBeInTheDocument()
     // The refetch lands with a code assigned since.
     h.codeOptions = {
@@ -680,7 +689,7 @@ describe('discount kind', () => {
         }}
       />,
     )
-    expect(screen.getByRole('checkbox', { name: 'ACME-2026' })).toBeChecked()
+    expect(screen.getByRole('checkbox', { name: ACME_LINKED })).toBeChecked()
     expect(
       screen.getByRole('checkbox', { name: 'ACME-WORKSHOP' }),
     ).toBeChecked()
@@ -702,6 +711,138 @@ describe('discount kind', () => {
     h.codeOptions = options
     renderModal({}, 'discount')
     expect(screen.queryByText(/no sponsor ticket invite link/)).toBeNull()
+  })
+
+  it('never serves the picker from a cached answer (staleTime 0)', () => {
+    // A code assigned on the discount page a moment ago must be offered: the
+    // app-wide 60 s staleTime would otherwise skip the refetch on reopen.
+    h.codeOptions = options
+    renderModal({}, 'discount')
+    expect(h.codesQueryOptions).toMatchObject({ staleTime: 0 })
+  })
+
+  it('refuses to send while the code list is in error, even with a stale selection', async () => {
+    // A refetch that fails keeps the old data; the picker shows the error,
+    // so a selection the organizer can no longer see must not go out.
+    h.codeOptions = options
+    h.codesError = true
+    renderModal({}, 'discount')
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'The discount codes could not be loaded from the ticket provider.',
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+    await waitFor(() =>
+      expect(h.showNotification).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: 'The discount codes could not be loaded. Close and try again.',
+        }),
+      ),
+    )
+    expect(h.mutateAsync).not.toHaveBeenCalled()
+  })
+
+  it('starts every open with no codes chosen until the seed lands', async () => {
+    // Open, seed, close, reopen while the refetch runs: the previous open's
+    // selection must not be sendable before the new seed.
+    h.codeOptions = options
+    const props = {
+      kind: 'discount' as const,
+      onClose: vi.fn(),
+      sponsorForConference: mockSponsor({ contactPersons: contacts }),
+      domain: 'example.test',
+      fromEmail: 'sponsors@example.test',
+      conference: {
+        title: 'Conf',
+        city: 'Bergen',
+        country: 'Norway',
+        startDate: '2026-10-28',
+        domains: ['example.test'],
+      },
+    }
+    const { rerender } = render(<SponsorSendModal isOpen {...props} />)
+    expect(screen.getByRole('checkbox', { name: ACME_LINKED })).toBeChecked()
+    rerender(<SponsorSendModal isOpen={false} {...props} />)
+    draftSeeded = false
+    h.codesFetching = true
+    rerender(<SponsorSendModal isOpen {...props} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+    await waitFor(() =>
+      expect(h.showNotification).toHaveBeenCalledWith(
+        expect.objectContaining({ title: 'Choose at least one discount code' }),
+      ),
+    )
+    expect(h.mutateAsync).not.toHaveBeenCalled()
+  })
+
+  it('does not seed from the stale data a failed refetch leaves behind', () => {
+    // Stale list (Acme's code only) while the refetch is in error, then the
+    // retry succeeds with a code assigned since: the seed must be the fresh one.
+    h.codeOptions = options
+    h.codesError = true
+    const props = {
+      kind: 'discount' as const,
+      onClose: vi.fn(),
+      sponsorForConference: mockSponsor({ contactPersons: contacts }),
+      domain: 'example.test',
+      fromEmail: 'sponsors@example.test',
+      conference: {
+        title: 'Conf',
+        city: 'Bergen',
+        country: 'Norway',
+        startDate: '2026-10-28',
+        domains: ['example.test'],
+      },
+    }
+    const { rerender } = render(<SponsorSendModal isOpen {...props} />)
+    h.codesError = false
+    h.codeOptions = {
+      ...options,
+      codes: options.codes.map((c) =>
+        c.code === 'ACME-WORKSHOP' ? { ...c, selected: true } : c,
+      ),
+    }
+    rerender(<SponsorSendModal isOpen {...props} />)
+    expect(
+      screen.getByRole('checkbox', { name: 'ACME-WORKSHOP' }),
+    ).toBeChecked()
+  })
+
+  it('never preselects a code stored on another sponsor, whatever the server says', () => {
+    h.codeOptions = {
+      ...options,
+      codes: [
+        {
+          code: 'GLOBEX-VIP',
+          selected: true,
+          linked: false,
+          linkedTo: 'Globex',
+        },
+      ],
+    }
+    renderModal({}, 'discount')
+    expect(
+      screen.getByRole('checkbox', { name: 'GLOBEX-VIP (linked to Globex)' }),
+    ).not.toBeChecked()
+  })
+
+  it('says in the accessible name when sending would move a code from another sponsor', () => {
+    h.codeOptions = {
+      ...options,
+      codes: [
+        {
+          code: 'ACME-WORKSHOP',
+          selected: false,
+          linked: false,
+          attributedTo: 'Workshop AS',
+        },
+      ],
+    }
+    renderModal({}, 'discount')
+    expect(
+      screen.getByRole('checkbox', {
+        name: 'ACME-WORKSHOP, now counted for Workshop AS; sending moves it to this sponsor',
+      }),
+    ).toBeInTheDocument()
   })
 
   it('an information send carries no codes', async () => {

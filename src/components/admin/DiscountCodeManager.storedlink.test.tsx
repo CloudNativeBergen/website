@@ -134,12 +134,16 @@ const PAYLOAD: UsagePayload = {
   conferenceInfo: { customerId: 7, eventId: 4242, title: 'Konf 2026' },
 }
 
-function renderPanel(linkedCodes: string[]) {
+function renderPanel(
+  linkedCodes: string[],
+  otherCodeHolders: { id: string; name: string; linkedCodes: string[] }[] = [],
+) {
   q.useQuery.mockReturnValue({ data: PAYLOAD, isLoading: false, error: null })
   return render(
     <NotificationProvider>
       <DiscountCodeManager
         sponsors={[sponsor(linkedCodes)]}
+        otherCodeHolders={otherCodeHolders}
         eventId={4242}
         providerLabel="Checkin.no"
         conference={CONFERENCE}
@@ -258,5 +262,36 @@ describe('a code created from a sponsor row (#1262)', () => {
       within(sponsorTable()).queryAllByText('COMMUNITY2026').length,
     ).toBeGreaterThan(0)
     expect(within(codeTable()).queryAllByText('COMMUNITY2026')).toHaveLength(0)
+  })
+})
+
+/**
+ * A code stored on a CRM row that is not a conference sponsor (not yet
+ * closed-won) stays that row's (#1262 adversarial review): it is not counted
+ * on a sponsor row by name, says whose it is, and offers no Assign — the
+ * server would refuse it.
+ */
+describe('a code stored on a sponsor outside the conference list', () => {
+  const ACME_LABS = {
+    id: 'sponsor-acme-labs',
+    name: 'Acme Labs',
+    linkedCodes: ['ACMECLOUD1234'],
+  }
+
+  it('is not claimed by a sponsor row whose name it contains', () => {
+    renderPanel([], [ACME_LABS])
+    expect(within(sponsorTable()).queryAllByText('ACMECLOUD1234')).toHaveLength(
+      0,
+    )
+    expect(within(codeRow('ACMECLOUD1234')).getByText('Linked to Acme Labs'))
+  })
+
+  it('offers no Assign for it', () => {
+    renderPanel([], [ACME_LABS])
+    expect(
+      screen.queryAllByRole('button', {
+        name: 'Assign ACMECLOUD1234 to a sponsor',
+      }),
+    ).toHaveLength(0)
   })
 })

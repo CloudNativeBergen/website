@@ -19,7 +19,18 @@ const h = vi.hoisted(() => ({
   resolveSpeakerTicketType: vi.fn(),
   fetchEventTickets: vi.fn(),
   listDiscounts: vi.fn(),
+  /** The stored sponsor↔code links the classification context reads. */
+  links: [] as unknown[],
 }))
+
+vi.mock('@/lib/sanity/client', () => {
+  const client = { fetch: async () => h.links }
+  return {
+    clientReadCached: client,
+    clientReadUncached: client,
+    clientWrite: client,
+  }
+})
 
 vi.mock('@/lib/speaker/sanity', () => ({
   getSpeakers: h.getSpeakers,
@@ -60,7 +71,7 @@ const conference = {
   ticketTypeRoles: [{ typeName: 'Workshop upgrade', admits: false }],
   sponsors: [
     {
-      sponsor: { name: 'Acme' },
+      sponsor: { _id: 'sp-acme', name: 'Acme' },
       tier: { title: 'Gold', ticketEntitlement: 2 },
     },
   ],
@@ -112,6 +123,7 @@ async function ready(): Promise<TicketSummaryReady> {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  h.links = []
   h.fetchEventTickets.mockResolvedValue(TICKETS)
   h.listDiscounts.mockResolvedValue({
     discounts: [
@@ -316,5 +328,41 @@ describe('claimedCoverageNote in the payload', () => {
       'speakers',
     ])
     expect(summary.claimedCoverageNote).toBe('sponsors and speakers only')
+  })
+})
+
+/**
+ * A code STORED on a CRM row outside the conference's sponsors (not yet
+ * closed-won) is that row's, not the closed-won sponsor's whose name it
+ * happens to contain (#1262 adversarial review). Acme then has no code of its
+ * own, and the allocation must say so rather than count Acme as covered.
+ */
+describe('stored codes on sponsors outside the public list', () => {
+  it('does not hand a code another CRM row stores to a sponsor by name', async () => {
+    h.links = [
+      {
+        _id: 'sfc-acme',
+        sponsorId: 'sp-acme',
+        name: 'Acme',
+        linkedCodes: null,
+      },
+      {
+        _id: 'sfc-acme-labs',
+        sponsorId: 'sp-acme-labs',
+        name: 'Acme Labs',
+        linkedCodes: ['ACME100'],
+      },
+    ]
+    const { freeTicketAllocation } = await ready()
+    expect(freeTicketAllocation.sponsors.status).toBe(
+      'Redemptions of 100%-off sponsor codes; 1 sponsor with an allowance has no code yet.',
+    )
+  })
+
+  it('without that link, the name match still covers the sponsor', async () => {
+    const { freeTicketAllocation } = await ready()
+    expect(freeTicketAllocation.sponsors.status).toBe(
+      'Redemptions of 100%-off sponsor codes.',
+    )
   })
 })

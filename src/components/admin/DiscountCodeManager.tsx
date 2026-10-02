@@ -51,6 +51,12 @@ interface SponsorWithTierInfo {
   linkedCodes?: string[]
 }
 
+interface OtherCodeHolder {
+  id: string
+  name: string
+  linkedCodes: string[]
+}
+
 interface DiscountCodeManagerProps {
   sponsors: SponsorWithTierInfo[]
   eventId: number
@@ -83,6 +89,12 @@ interface DiscountCodeManagerProps {
     organizer?: string
   }
   defaultCustomDiscountsExpanded?: boolean
+  /**
+   * CRM records that STORE codes but are not conference sponsors (not yet
+   * closed-won, #1262). Not rows here — but their codes are theirs, so they
+   * take part in attribution and are never claimed by a sponsor row's name.
+   */
+  otherCodeHolders?: readonly OtherCodeHolder[]
 }
 
 /**
@@ -281,12 +293,15 @@ function DiscountSend({
   )
 }
 
+const NO_HOLDERS: readonly OtherCodeHolder[] = []
+
 export function DiscountCodeManager({
   sponsors,
   eventId,
   providerLabel,
   conference,
   defaultCustomDiscountsExpanded = false,
+  otherCodeHolders = NO_HOLDERS,
 }: DiscountCodeManagerProps) {
   const utils = api.useUtils()
   const { showNotification } = useNotification()
@@ -345,9 +360,10 @@ export function DiscountCodeManager({
   // Codes linked in THIS session (a sponsor-row create, #1262), merged over
   // the page's server props until the next render of the page brings them.
   const [sessionLinks, setSessionLinks] = useState<Record<string, string[]>>({})
+  // The `withLinkedCodes` set: sponsor rows, then the other code holders.
   const claimants = useMemo(
-    () =>
-      sponsors.map((s) =>
+    () => [
+      ...sponsors.map((s) =>
         sessionLinks[s.id]
           ? {
               ...s,
@@ -355,7 +371,19 @@ export function DiscountCodeManager({
             }
           : s,
       ),
-    [sponsors, sessionLinks],
+      ...otherCodeHolders,
+    ],
+    [sponsors, sessionLinks, otherCodeHolders],
+  )
+  /** The CRM record outside the sponsor rows that stores this code, if any. */
+  const otherHolderOf = useCallback(
+    (code: string | null | undefined) => {
+      const owner = sponsorOwningCode(code, claimants)
+      return owner && otherCodeHolders.some((h) => h.id === owner.id)
+        ? owner.name
+        : undefined
+    },
+    [claimants, otherCodeHolders],
   )
 
   const getSponsorDiscounts = useCallback(
@@ -868,6 +896,14 @@ export function DiscountCodeManager({
         const sponsor = discount.triggerValue
           ? sponsorForCode.get(discount.triggerValue)
           : undefined
+        const holder = otherHolderOf(discount.triggerValue)
+        if (holder) {
+          return (
+            <span className="text-sm text-gray-900 dark:text-white">
+              Linked to {holder}
+            </span>
+          )
+        }
         return sponsor ? (
           <span className="text-sm text-gray-900 dark:text-white">
             Sponsor: {sponsor}
@@ -974,17 +1010,19 @@ export function DiscountCodeManager({
         const deleting = loading === discount.triggerValue
         return (
           <div className="flex flex-col gap-2">
-            {discount.triggerValue && assignableSponsors.length > 0 && (
-              <button
-                type="button"
-                onClick={() => setAssignCode(discount.triggerValue)}
-                disabled={deleting}
-                className={CARD_ACTION_CLASS}
-              >
-                <LinkIcon className="size-5" aria-hidden="true" />
-                Assign to sponsor
-              </button>
-            )}
+            {discount.triggerValue &&
+              assignableSponsors.length > 0 &&
+              !otherHolderOf(discount.triggerValue) && (
+                <button
+                  type="button"
+                  onClick={() => setAssignCode(discount.triggerValue)}
+                  disabled={deleting}
+                  className={CARD_ACTION_CLASS}
+                >
+                  <LinkIcon className="size-5" aria-hidden="true" />
+                  Assign to sponsor
+                </button>
+              )}
             <button
               type="button"
               onClick={() => deleteDiscountCode(discount.triggerValue)}
@@ -999,17 +1037,19 @@ export function DiscountCodeManager({
       },
       render: (discount) => (
         <div className="flex items-center justify-end gap-2">
-          {discount.triggerValue && assignableSponsors.length > 0 && (
-            <button
-              type="button"
-              onClick={() => setAssignCode(discount.triggerValue)}
-              aria-label={`Assign ${discount.triggerValue} to a sponsor`}
-              title="Assign to sponsor"
-              className="inline-flex items-center rounded-md border border-gray-300 p-2 text-gray-700 shadow-xs hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-500 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800"
-            >
-              <LinkIcon className="size-4" />
-            </button>
-          )}
+          {discount.triggerValue &&
+            assignableSponsors.length > 0 &&
+            !otherHolderOf(discount.triggerValue) && (
+              <button
+                type="button"
+                onClick={() => setAssignCode(discount.triggerValue)}
+                aria-label={`Assign ${discount.triggerValue} to a sponsor`}
+                title="Assign to sponsor"
+                className="inline-flex items-center rounded-md border border-gray-300 p-2 text-gray-700 shadow-xs hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-500 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800"
+              >
+                <LinkIcon className="size-4" />
+              </button>
+            )}
           <button
             onClick={() => deleteDiscountCode(discount.triggerValue)}
             disabled={loading === discount.triggerValue}

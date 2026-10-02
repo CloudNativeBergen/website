@@ -220,6 +220,23 @@ async function refuseIfTicketingDenied(orgId: string | null | undefined) {
 const TICKETING_NOT_CONFIGURED =
   'Ticketing is not configured for this conference'
 
+/**
+ * The stored links, or an organizer-facing refusal — never the Sanity
+ * client's own error text (#1262 review). Every path that reads them fails
+ * closed: without the read neither ownership nor dedupe can be checked.
+ */
+async function readLinksOrThrow(conferenceId: string) {
+  try {
+    return await readSponsorCodeLinks(conferenceId)
+  } catch (error) {
+    throw new TRPCError({
+      code: 'INTERNAL_SERVER_ERROR',
+      message: 'Could not read this conference’s sponsors. Try again.',
+      cause: error,
+    })
+  }
+}
+
 /** The conference's provider codes, or the refusal a caller should surface. */
 async function readEventDiscountsOrThrow(conference: Conference) {
   let listed: Awaited<ReturnType<typeof listEventDiscounts>>
@@ -252,7 +269,7 @@ async function resolveSponsorDiscountCodes(
   chosen: readonly string[],
 ) {
   const discounts = await readEventDiscountsOrThrow(conference)
-  const links = await readSponsorCodeLinks(conference._id)
+  const links = await readLinksOrThrow(conference._id)
   try {
     const codes = resolveChosenCodes(
       chosen,
@@ -3176,7 +3193,7 @@ export const sponsorRouter = router({
           })
         }
         const discounts = await readEventDiscountsOrThrow(conference)
-        const links = await readSponsorCodeLinks(conference._id)
+        const links = await readLinksOrThrow(conference._id)
         const here = links.find(
           (l) => l.sponsorForConferenceId === input.sponsorForConferenceId,
         )

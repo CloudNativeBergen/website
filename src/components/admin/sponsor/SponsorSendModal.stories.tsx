@@ -110,6 +110,12 @@ const discountOptions = {
     { code: 'ACMECLOUD-WORKSHOP', selected: false, linked: false },
     { code: 'COMMUNITY2026', selected: false, linked: false },
     {
+      code: 'ACMECLOUD-SPEAKERS',
+      selected: false,
+      linked: false,
+      attributedTo: 'Acme Speakers AS',
+    },
+    {
       code: 'GLOBEX-VIP',
       selected: false,
       linked: false,
@@ -324,7 +330,9 @@ export const DiscountCodes: Story = {
     const body = within(canvasElement.ownerDocument.body)
     const codes = await body.findByRole('group', { name: 'Discount codes' })
     await expect(
-      within(codes).getByRole('checkbox', { name: 'ACMECLOUD-2026' }),
+      within(codes).getByRole('checkbox', {
+        name: 'ACMECLOUD-2026, already linked to this sponsor',
+      }),
     ).toBeChecked()
     await expect(
       within(codes).getByRole('checkbox', {
@@ -349,7 +357,9 @@ export const DiscountCodesNoneChosen: Story = {
   parameters: { msw: { handlers: discountHandlers } },
   play: async ({ canvasElement }) => {
     const body = within(canvasElement.ownerDocument.body)
-    const linked = await body.findByRole('checkbox', { name: 'ACMECLOUD-2026' })
+    const linked = await body.findByRole('checkbox', {
+      name: 'ACMECLOUD-2026, already linked to this sponsor',
+    })
     await userEvent.click(linked)
     await expect(linked).not.toBeChecked()
     await expect(
@@ -364,7 +374,9 @@ export const DiscountCodesPreview: Story = {
   parameters: { msw: { handlers: discountHandlers } },
   play: async ({ canvasElement }) => {
     const body = within(canvasElement.ownerDocument.body)
-    await body.findByRole('checkbox', { name: 'ACMECLOUD-2026' })
+    await body.findByRole('checkbox', {
+      name: 'ACMECLOUD-2026, already linked to this sponsor',
+    })
     await userEvent.click(body.getByRole('button', { name: /Preview/ }))
     await expect(
       await body.findByText('Your discount code'),
@@ -382,7 +394,9 @@ export const DiscountCodesMobile: Story = {
   play: async ({ canvasElement }) => {
     const body = within(canvasElement.ownerDocument.body)
     await expect(
-      await body.findByRole('checkbox', { name: 'ACMECLOUD-2026' }),
+      await body.findByRole('checkbox', {
+        name: 'ACMECLOUD-2026, already linked to this sponsor',
+      }),
     ).toBeChecked()
   },
 }

@@ -163,8 +163,11 @@ describe('buildClassificationContext', () => {
         name: 'Acme Cloud',
         linkedCodes: ['COMP-7Q2'],
       },
-      // A CRM prospect that is not a conference sponsor claims nothing.
+      // Not a conference sponsor (not closed-won) but it STORES a code: it
+      // owns that code — and only that, never anything by name.
       { _id: 'sfc-x', sponsorId: 'sponsor-x', name: 'X', linkedCodes: ['X1'] },
+      // Not a conference sponsor and stores nothing: claims nothing at all.
+      { _id: 'sfc-y', sponsorId: 'sponsor-y', name: 'Y', linkedCodes: null },
     ])
     const context = await buildClassificationContext(
       {
@@ -179,6 +182,12 @@ describe('buildClassificationContext', () => {
         name: 'Acme Cloud',
         linkedCodes: ['COMP-7Q2'],
         sponsorForConferenceId: 'sfc-acme',
+      },
+      {
+        id: 'sponsor-x',
+        name: 'X',
+        linkedCodes: ['X1'],
+        sponsorForConferenceId: 'sfc-x',
       },
     ])
   })

@@ -292,6 +292,15 @@ export function SponsorRecipientPicker({
   )
 }
 
+/** What a screen reader hears for a code chip: the code AND its state. */
+function codeChipLabel(option: DiscountCodeOption): string {
+  if (option.linkedTo) return `${option.code} (linked to ${option.linkedTo})`
+  if (option.attributedTo)
+    return `${option.code}, now counted for ${option.attributedTo}; sending moves it to this sponsor`
+  if (option.linked) return `${option.code}, already linked to this sponsor`
+  return option.code
+}
+
 /**
  * The Codes: line of a discount send (#1262) — the conference's discount
  * codes from the ticket provider as toggles, the sponsor's own preselected.
@@ -343,6 +352,9 @@ export function SponsorDiscountCodePicker({
       {options.map((option) => {
         const selectable = !option.linkedTo
         const selected = selectedCodes.has(option.code)
+        // The "counted for X" hint wraps onto its own line rather than
+        // truncating the code — the code is what the organizer must read.
+        const hinted = selectable && !!option.attributedTo
         return (
           <label
             key={option.code}
@@ -352,7 +364,8 @@ export function SponsorDiscountCodePicker({
                 : `${option.code} is linked to ${option.linkedTo}`
             }
             className={clsx(
-              'font-inter inline-flex min-h-8 max-w-full items-center gap-1.5 rounded-full border px-2.5 py-1 text-sm transition-colors select-none',
+              'font-inter inline-flex min-h-8 max-w-full items-center gap-1.5 border px-2.5 py-1 text-sm transition-colors select-none',
+              hinted ? 'flex-wrap rounded-2xl' : 'rounded-full',
               'has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-indigo-500 has-[:focus-visible]:ring-offset-1 dark:has-[:focus-visible]:ring-offset-gray-900',
               selectable && 'cursor-pointer',
               selected
@@ -368,7 +381,7 @@ export function SponsorDiscountCodePicker({
               checked={selected}
               disabled={!selectable}
               onChange={() => onToggle(option.code)}
-              aria-label={`${option.code}${selectable ? '' : ` (linked to ${option.linkedTo})`}`}
+              aria-label={codeChipLabel(option)}
             />
             <span
               aria-hidden="true"
@@ -394,9 +407,9 @@ export function SponsorDiscountCodePicker({
                 {option.linkedTo}
               </span>
             )}
-            {!option.linkedTo && option.attributedTo && (
-              <span className="min-w-0 truncate text-xs text-amber-700 dark:text-amber-300">
-                now counted for {option.attributedTo}
+            {hinted && (
+              <span className="basis-full pl-5.5 text-xs text-amber-700 dark:text-amber-300">
+                counted for {option.attributedTo} · sending moves it
               </span>
             )}
           </label>
@@ -621,7 +634,13 @@ export function SponsorSendModal({
   const isDiscount = kind === 'discount'
   const codesQuery = api.sponsor.crm.discountCodeOptions.useQuery(
     { sponsorForConferenceId: sponsorForConference._id },
-    { enabled: isOpen && isDiscount, refetchOnWindowFocus: false },
+    {
+      enabled: isOpen && isDiscount,
+      refetchOnWindowFocus: false,
+      // Never the app-wide 60 s cache: a code assigned on the discount page
+      // a moment ago must be offered — and preselected — on this open.
+      staleTime: 0,
+    },
   )
   const codeOptions = useMemo(
     () => codesQuery.data?.codes ?? [],
@@ -639,12 +658,20 @@ export function SponsorSendModal({
     if (!isOpen) {
       // eslint-disable-next-line react-hooks/set-state-in-effect -- reset per close
       setCodesSeededFor(null)
+      // Each open starts from its own seed; nothing chosen carries over.
+      setSelectedCodes(new Set())
       return
     }
     // From SETTLED data only: on a reopen the cache answers first and a
     // refetch follows; seeding from the cache would miss a code assigned
     // since (#1262 review).
-    if (!codesQuery.data || codesQuery.isFetching || codesSeeded) return
+    if (
+      !codesQuery.data ||
+      codesQuery.isFetching ||
+      codesQuery.isError ||
+      codesSeeded
+    )
+      return
     setCodesSeededFor(sponsorForConference._id)
     setSelectedCodes(
       new Set(
@@ -657,6 +684,7 @@ export function SponsorSendModal({
     isOpen,
     codesQuery.data,
     codesQuery.isFetching,
+    codesQuery.isError,
     codesSeeded,
     sponsorForConference._id,
   ])
@@ -685,7 +713,16 @@ export function SponsorSendModal({
     if (selectedCount === 0) {
       throw new Error('Choose at least one recipient')
     }
-    if (isDiscount && (!codesSeeded || chosenCodes.length === 0)) {
+    // The picker shows an error instead of the codes: whatever is still
+    // selected underneath is not something the organizer can see.
+    if (isDiscount && codesQuery.isError) {
+      throw new Error(
+        'The discount codes could not be loaded. Close and try again.',
+      )
+    }
+    // Empty until this open's seed lands (cleared on close), so this also
+    // refuses a send made before the code list is ready.
+    if (isDiscount && chosenCodes.length === 0) {
       throw new Error('Choose at least one discount code')
     }
     const applied = appliedTemplateRef.current

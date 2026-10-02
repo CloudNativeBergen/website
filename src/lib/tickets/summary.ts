@@ -427,15 +427,24 @@ async function buildFreeTicketAllocation({
     : null
 
   return calculateFreeTicketAllocation({
-    sponsors:
-      conference.sponsors?.map((s) => ({
+    sponsors: [
+      ...(conference.sponsors?.map((s) => ({
         name: s.sponsor.name,
         tier: s.tier,
         // The stored codes the classification context already read.
         linkedCodes: classification.sponsors?.find(
           (c) => c.id === s.sponsor._id,
         )?.linkedCodes,
-      })) ?? [],
+      })) ?? []),
+      // CRM rows outside the public list that STORE codes (`withLinkedCodes`):
+      // no tier, so no allowance — present only so their codes stay theirs
+      // instead of falling to a conference sponsor's name match.
+      ...(classification.sponsors ?? [])
+        .filter(
+          (c) => !conference.sponsors?.some((s) => s.sponsor._id === c.id),
+        )
+        .map((c) => ({ name: c.name, tier: null, linkedCodes: c.linkedCodes })),
+    ],
     discounts,
     // A failed read answers 0 WITH an error; rendering that 0 as an allocation
     // would state a fact the server never obtained.

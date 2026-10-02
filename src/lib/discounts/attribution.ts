@@ -47,8 +47,21 @@ export function sponsorOwningCode<T extends SponsorCodeClaimant>(
     s.linkedCodes?.some((c) => normalizeDiscountCode(c) === wanted),
   )
   if (stored) return stored
+  return nameClaimants(discountCode, sponsors)[0]
+}
+
+/**
+ * Every sponsor the NAME heuristic would give this code to — only sponsors
+ * that store nothing, in list order. More than one means the heuristic's
+ * answer is an accident of order (`AI` inside `AICORP1234`): fine to display,
+ * never a fact to store (see `codesToAdopt`).
+ */
+export function nameClaimants<T extends SponsorCodeClaimant>(
+  discountCode: string,
+  sponsors: readonly T[],
+): T[] {
   const haystack = discountCode.toLowerCase()
-  return sponsors.find((s) => {
+  return sponsors.filter((s) => {
     if (s.linkedCodes && s.linkedCodes.length > 0) return false
     const needle = s.name.toLowerCase().replace(/\s+/g, '')
     // An empty or whitespace-only sponsor name would match EVERY code.

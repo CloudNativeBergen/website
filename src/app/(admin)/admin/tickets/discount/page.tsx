@@ -158,6 +158,11 @@ export default async function DiscountCodesAdminPage() {
       <div>
         <DiscountCodeManager
           sponsors={sponsorsWithTierInfo}
+          // `withLinkedCodes` puts the conference's sponsors first; the rest
+          // are CRM records that store codes without being sponsors yet.
+          otherCodeHolders={claimants
+            .slice(sponsorsWithTierInfo.length)
+            .map(({ id, name, linkedCodes }) => ({ id, name, linkedCodes }))}
           eventId={checkinEventId}
           providerLabel={providerLabel}
           conference={{

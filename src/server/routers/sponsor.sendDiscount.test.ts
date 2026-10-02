@@ -31,6 +31,7 @@ const h = vi.hoisted(() => ({
   creates: [] as Array<Record<string, unknown>>,
   inserts: [] as Array<{ id: string; at: string; items: unknown[] }>,
   insertShouldThrow: false,
+  linksShouldThrow: false,
   send: vi.fn(),
   listDiscounts: vi.fn(),
   credentials: vi.fn(),
@@ -58,7 +59,11 @@ vi.mock('@/lib/sanity/client', () => {
   const fetch = async (query: string, params?: Record<string, unknown>) => {
     h.fetches.push({ query, params })
     if (query.includes('"memberOrgIds"')) return h.tenant
-    if (query.includes('"linkedCodes"')) return h.links
+    if (query.includes('"linkedCodes"')) {
+      if (h.linksShouldThrow)
+        throw new Error('ClientError: projectId abc123 socket hang up')
+      return h.links
+    }
     if (query.includes('_type == "sponsorForConference"')) return h.sfc
     return null
   }
@@ -178,6 +183,7 @@ beforeEach(() => {
   h.creates = []
   h.inserts = []
   h.insertShouldThrow = false
+  h.linksShouldThrow = false
   h.tenant = { _type: 'sponsorForConference', conferenceId: CONF }
   h.sfc = {
     _id: SFC,
@@ -820,5 +826,41 @@ describe('sponsor.crm.discountCodeOptions', () => {
       code: 'BAD_REQUEST',
       message: 'Ticketing is not configured for this conference',
     })
+  })
+})
+
+/**
+ * A failed links read reaches the organizer as a sentence, never as the
+ * Sanity client's own text (#1262 adversarial review) — on every path that
+ * reads the links.
+ */
+describe('a failed links read', () => {
+  const READ_FAILED = 'Could not read this conference’s sponsors. Try again.'
+  beforeEach(() => {
+    h.linksShouldThrow = true
+  })
+
+  it('refuses a discount send with the organizer-facing message, sending nothing', async () => {
+    await expect(sponsor().crm.sendCommunication(INPUT)).rejects.toMatchObject({
+      code: 'INTERNAL_SERVER_ERROR',
+      message: READ_FAILED,
+    })
+    expect(h.send).not.toHaveBeenCalled()
+  })
+
+  it('refuses an Assign the same way', async () => {
+    await expect(
+      sponsor().crm.assignDiscountCodes({
+        sponsorForConferenceId: SFC,
+        discountCodes: ['ACME-2026'],
+      }),
+    ).rejects.toMatchObject({ message: READ_FAILED })
+    expect(h.inserts).toHaveLength(0)
+  })
+
+  it('and the picker options', async () => {
+    await expect(
+      sponsor().crm.discountCodeOptions({ sponsorForConferenceId: SFC }),
+    ).rejects.toMatchObject({ message: READ_FAILED })
   })
 })
