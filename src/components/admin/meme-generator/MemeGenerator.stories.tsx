@@ -1970,8 +1970,8 @@ export const VideoExportRealEncoder: Story = {
       { timeout: 30_000 },
     )
     const blob = await (await fetch(link.getAttribute('href')!)).blob()
-      // @ts-ignore
-    const { ALL_FORMATS, BlobSource, Input } = await  import('mediabunny')
+    // @ts-ignore
+    const { ALL_FORMATS, BlobSource, Input } = await import('mediabunny')
     const input = new Input({
       source: new BlobSource(blob),
       formats: ALL_FORMATS,

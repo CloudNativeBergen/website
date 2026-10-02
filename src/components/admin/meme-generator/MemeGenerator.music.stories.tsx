@@ -234,7 +234,7 @@ export const MusicRealExport: Story = {
     const blob = await (await fetch(link.getAttribute('href')!)).blob()
     const { ALL_FORMATS, AudioBufferSink, BlobSource, Input } =
       // @ts-ignore
-      await  import('mediabunny')
+      await import('mediabunny')
     const input = new Input({
       source: new BlobSource(blob),
       formats: ALL_FORMATS,
