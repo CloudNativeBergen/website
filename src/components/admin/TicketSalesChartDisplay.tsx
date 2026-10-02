@@ -129,8 +129,8 @@ const getStatusIcon = (variance: number) => {
 const EMPTY_TALLY: ParticipantTally = {
   participants: 0,
   workshopParticipants: 0,
-      paidWorkshopParticipants: 0,
-      freeWorkshopParticipants: 0,
+  paidWorkshopParticipants: 0,
+  freeWorkshopParticipants: 0,
   addOnsWithSeat: 0,
   addOnsWithoutSeat: 0,
   repeatTickets: 0,

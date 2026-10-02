@@ -63,8 +63,8 @@ const tally = (
 ): ParticipantTally => ({
   participants: 44,
   workshopParticipants: 0,
-      paidWorkshopParticipants: 0,
-      freeWorkshopParticipants: 0,
+  paidWorkshopParticipants: 0,
+  freeWorkshopParticipants: 0,
   addOnsWithSeat: 6,
   addOnsWithoutSeat: 0,
   repeatTickets: 3,

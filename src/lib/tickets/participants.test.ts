@@ -156,7 +156,9 @@ describe('tallyParticipants', () => {
         // Declared: admits.
         withEmail('ada@example.com', { category: 'Conference day' }),
         // Undeclared: admits by assumption only.
-        withEmail('grace@example.com', { category: 'Workshop + Conference (2 days)' }),
+        withEmail('grace@example.com', {
+          category: 'Workshop + Conference (2 days)',
+        }),
       ],
       {
         ...context,
@@ -190,9 +192,15 @@ describe('tallyParticipants', () => {
   })
 
   it('splits paid and free workshop participants correctly', () => {
-    const paidWorkshop = withEmail('paid@x.test', { category: 'Workshop + Conference (2 days)' })
+    const paidWorkshop = withEmail('paid@x.test', {
+      category: 'Workshop + Conference (2 days)',
+    })
     // A free ticket uses 100% discount
-    const freeWorkshop = withEmail('free@x.test', { category: 'Speaker ticket', sum: '0.00', fields: [{ key: 'workshop', value: 'yes' }] })
+    const freeWorkshop = withEmail('free@x.test', {
+      category: 'Speaker ticket',
+      sum: '0.00',
+      fields: [{ key: 'workshop', value: 'yes' }],
+    })
 
     expect(
       tallyParticipants([paidWorkshop, freeWorkshop], {
@@ -204,7 +212,7 @@ describe('tallyParticipants', () => {
         workshopParticipants: 2,
         paidWorkshopParticipants: 1,
         freeWorkshopParticipants: 1,
-      })
+      }),
     )
   })
 
