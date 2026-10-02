@@ -265,6 +265,7 @@ beforeEach(() => {
       organizer: 'CNDN',
       organization: { _ref: ORG },
       sponsorEmail: 'sponsors@example.test',
+      sponsorRegistrationLink: 'https://tickets.example.test/sponsor',
       city: 'Bergen',
       country: 'Norway',
       startDate: '2026-10-28',
@@ -503,6 +504,25 @@ describe('the edited flag is computed, not trusted', () => {
       subject: 'From Admin Login',
       template: { id: 'tpl-info-en', edited: true },
     })
+    expect(sentCreate()).toMatchObject({ templateEdited: false })
+  })
+
+  it('asks the conference read for the sponsor registration link and merges SPONSOR_REGISTRATION_URL', async () => {
+    h.getTemplate.mockResolvedValue({
+      template: {
+        ...INFO_TEMPLATE,
+        subject: 'Register: {{{SPONSOR_REGISTRATION_URL}}}',
+      },
+    })
+    await sponsor().crm.sendCommunication({
+      ...INPUT,
+      ...MERGED_FOR_KARI,
+      subject: 'Register: https://tickets.example.test/sponsor',
+      template: { id: 'tpl-info-en' },
+    })
+    expect(h.getConference).toHaveBeenCalledWith(
+      expect.objectContaining({ includeSponsorRegistrationLink: true }),
+    )
     expect(sentCreate()).toMatchObject({ templateEdited: false })
   })
 

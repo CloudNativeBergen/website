@@ -154,7 +154,7 @@ Reusable email templates stored in Sanity for sponsor outreach. Global (not conf
 | `isDefault`   | Default template for its category                                                               |
 | `sortOrder`   | Ordering in the template picker                                                                 |
 
-**Available template variables:** `CONTACT_NAMES`, `SPONSOR_NAME`, `ORG_NAME`, `CONFERENCE_TITLE`, `CONFERENCE_DATE`, `CONFERENCE_YEAR`, `CONFERENCE_CITY`, `CONFERENCE_URL`, `SPONSOR_PAGE_URL`, `PROSPECTUS_URL`, `SENDER_NAME`, `TIER_NAME`.
+**Available template variables:** `CONTACT_NAMES`, `SPONSOR_NAME`, `ORG_NAME`, `CONFERENCE_TITLE`, `CONFERENCE_DATE`, `CONFERENCE_YEAR`, `CONFERENCE_CITY`, `CONFERENCE_URL`, `SPONSOR_PAGE_URL`, `PROSPECTUS_URL`, `SPONSOR_REGISTRATION_URL` (the conference's sponsor ticket-registration link; replaces the old composer's appended "Ticket Registration" box, #1261), `SENDER_NAME`, `TIER_NAME`.
 
 **Access paths:**
 

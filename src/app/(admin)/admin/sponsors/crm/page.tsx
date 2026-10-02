@@ -12,6 +12,10 @@ export default async function AdminSponsorsCRM() {
       sponsors: true,
       sponsorTiers: true,
       organizers: true,
+      // Organizer-only page: the Send modal exposes the link to templates as
+      // `SPONSOR_REGISTRATION_URL` (#1261), so the composer and the server
+      // must see the same value.
+      includeSponsorRegistrationLink: true,
     })
 
   if (conferenceError || !conference) {

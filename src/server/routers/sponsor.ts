@@ -2885,7 +2885,12 @@ export const sponsorRouter = router({
         )
 
         const { conference, error: conferenceError } =
-          await getConferenceForCurrentDomain({ sponsors: true })
+          await getConferenceForCurrentDomain({
+            sponsors: true,
+            // `SPONSOR_REGISTRATION_URL` is merged on the server to compute
+            // `templateEdited`; the composer sees the same link (#1261).
+            includeSponsorRegistrationLink: true,
+          })
         if (conferenceError || !conference) {
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
@@ -3010,7 +3015,12 @@ export const sponsorRouter = router({
           'sponsorForConference',
         )
         const { conference, error: conferenceError } =
-          await getConferenceForCurrentDomain({ sponsors: true })
+          await getConferenceForCurrentDomain({
+            sponsors: true,
+            // `SPONSOR_REGISTRATION_URL` is merged on the server to compute
+            // `templateEdited`; the composer sees the same link (#1261).
+            includeSponsorRegistrationLink: true,
+          })
         if (conferenceError || !conference) {
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
