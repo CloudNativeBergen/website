@@ -536,6 +536,7 @@ export default defineType({
                   { title: 'Sent', value: 'send' },
                   { title: 'Assigned', value: 'assign' },
                   { title: 'Created for the sponsor', value: 'create' },
+                  { title: 'Adopted (was matched by name)', value: 'adopt' },
                 ],
               },
             }),

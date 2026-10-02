@@ -104,6 +104,7 @@ const handlers = [
 /** What `crm.discountCodeOptions` answers for the Acme sponsor (#1262). */
 const discountOptions = {
   ticketUrl: 'https://tickets.example.test/sponsor-invite',
+  hasSponsorInviteLink: true,
   codes: [
     { code: 'ACMECLOUD-2026', selected: true, linked: true },
     { code: 'ACMECLOUD-WORKSHOP', selected: false, linked: false },
@@ -390,4 +391,33 @@ export const DiscountCodesDark: Story = {
   args: { kind: 'discount' },
   globals: { theme: 'dark' },
   parameters: { msw: { handlers: discountHandlers } },
+}
+
+/** No sponsor invite link on the conference: the email would point at a store that hides sponsor tickets, so the modal says so. */
+export const DiscountCodesNoInviteLink: Story = {
+  args: { kind: 'discount' },
+  parameters: {
+    msw: {
+      handlers: [
+        http.get('/api/trpc/sponsor.crm.discountCodeOptions', () =>
+          HttpResponse.json({
+            result: {
+              data: {
+                ...discountOptions,
+                ticketUrl: 'https://cloudnativebergen.dev/tickets',
+                hasSponsorInviteLink: false,
+              },
+            },
+          }),
+        ),
+        ...handlers,
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body)
+    await expect(
+      await body.findByText(/no sponsor ticket invite link/),
+    ).toBeInTheDocument()
+  },
 }

@@ -1,7 +1,10 @@
 import 'server-only'
 import type { Conference } from '@/lib/conference/types'
 import type { EventDiscount } from '@/lib/discounts/types'
-import { normalizeDiscountCode } from '@/lib/discounts/attribution'
+import {
+  normalizeDiscountCode,
+  sponsorOwningCode,
+} from '@/lib/discounts/attribution'
 import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
 import { generateKey } from '@/lib/sanity/helpers'
 import {
@@ -206,33 +209,73 @@ export function resolveChosenCodes(
 }
 
 /**
+ * THE SWITCH FROM NAME TO LINK. A sponsor that stores any code is matched by
+ * its stored codes alone, so its FIRST link must also store every event code
+ * the name heuristic currently gives it — otherwise those codes, and their
+ * redemptions, drop off its row the moment one code is sent or assigned.
+ * Nothing to adopt once the sponsor stores anything — it can never own a code
+ * by name, and what it stores is deduped on append. `claimants` is the
+ * conference's sponsor set (`withLinkedCodes`), so a prospect adopts nothing.
+ */
+export function codesToAdopt(
+  discounts: readonly EventDiscount[],
+  claimants: readonly SponsorClaimant[],
+  sponsorForConferenceId: string,
+): ResolvedDiscountCode[] {
+  return discounts.flatMap((d) =>
+    d.triggerValue &&
+    sponsorOwningCode(d.triggerValue, claimants)?.sponsorForConferenceId ===
+      sponsorForConferenceId
+      ? [{ code: d.triggerValue, providerCodeId: d.id ?? d.triggerValue }]
+      : [],
+  )
+}
+
+/**
  * Append the codes this sponsor does not store yet — append-only, never a
  * rewrite of the array, in ONE insert (a chained `.append()` keeps only the
- * last). Returns the codes actually added; an empty result writes nothing.
+ * last). `adopted` (see {@link codesToAdopt}) rides the same insert, marked
+ * `adopt`. Returns every code actually added; an empty result writes nothing.
  */
 export async function appendLinkedCodes(
   sponsorForConferenceId: string,
   alreadyLinked: readonly string[],
   codes: readonly ResolvedDiscountCode[],
   via: NonNullable<LinkedDiscountCode['linkedVia']>,
+  adopted: readonly ResolvedDiscountCode[] = [],
 ): Promise<ResolvedDiscountCode[]> {
   const have = new Set(alreadyLinked.map(normalizeDiscountCode))
-  const fresh = codes.filter((c) => !have.has(normalizeDiscountCode(c.code)))
-  if (fresh.length === 0) return []
+  const take = (list: readonly ResolvedDiscountCode[]) =>
+    list.filter((c) => {
+      const key = normalizeDiscountCode(c.code)
+      if (have.has(key)) return false
+      have.add(key)
+      return true
+    })
+  const fresh = take(codes)
+  const freshAdopted = take(adopted)
+  if (fresh.length + freshAdopted.length === 0) return []
   const linkedAt = getCurrentDateTime()
-  const items: LinkedDiscountCode[] = fresh.map((c) => ({
+  const item = (
+    c: ResolvedDiscountCode,
+    linkedVia: NonNullable<LinkedDiscountCode['linkedVia']>,
+  ): LinkedDiscountCode => ({
     _key: generateKey('code'),
     code: c.code,
     providerCodeId: c.providerCodeId,
     linkedAt,
-    linkedVia: via,
-  }))
+    linkedVia,
+  })
+  const items = [
+    ...fresh.map((c) => item(c, via)),
+    ...freshAdopted.map((c) => item(c, 'adopt')),
+  ]
   await clientWrite
     .patch(sponsorForConferenceId)
     .setIfMissing({ discountCodes: [] })
     .insert('after', 'discountCodes[-1]', items)
     .commit()
-  return fresh
+  return [...fresh, ...freshAdopted]
 }
 
 /**
@@ -247,18 +290,21 @@ export async function linkCodesToSponsor({
   codes,
   via,
   actorId,
+  adopted,
 }: {
   sponsorForConferenceId: string
   alreadyLinked: readonly string[]
   codes: readonly ResolvedDiscountCode[]
   via: 'assign' | 'create'
   actorId: string | null | undefined
+  adopted?: readonly ResolvedDiscountCode[]
 }): Promise<ResolvedDiscountCode[]> {
   const added = await appendLinkedCodes(
     sponsorForConferenceId,
     alreadyLinked,
     codes,
     via,
+    adopted,
   )
   if (added.length > 0) {
     const list = added.map((c) => c.code)

@@ -123,6 +123,7 @@ import {
 import { sendSponsorCommunication } from '@/lib/sponsor-crm/communication-send'
 import {
   appendLinkedCodes,
+  codesToAdopt,
   DiscountCodeLinkError,
   linkCodesToSponsor,
   listEventDiscounts,
@@ -262,7 +263,12 @@ async function resolveSponsorDiscountCodes(
     const alreadyLinked =
       links.find((l) => l.sponsorForConferenceId === sponsorForConferenceId)
         ?.linkedCodes ?? []
-    return { codes, alreadyLinked }
+    const adopted = codesToAdopt(
+      discounts,
+      withLinkedCodes(conference.sponsors, links),
+      sponsorForConferenceId,
+    )
+    return { codes, alreadyLinked, adopted }
   } catch (error) {
     if (error instanceof DiscountCodeLinkError) {
       throw new TRPCError({ code: error.code, message: error.message })
@@ -3119,6 +3125,7 @@ export const sponsorRouter = router({
               discount.alreadyLinked,
               discount.codes,
               'send',
+              discount.adopted,
             )
             linkedCodes = added.map((c) => c.code)
           } catch (error) {
@@ -3203,7 +3210,13 @@ export const sponsorRouter = router({
             },
           ]
         })
-        return { codes, ticketUrl: sponsorTicketUrl(conference) }
+        return {
+          codes,
+          ticketUrl: sponsorTicketUrl(conference),
+          // Sponsor ticket types are hidden on the public store: without the
+          // invite link the email points at a page with nothing to claim.
+          hasSponsorInviteLink: !!conference.sponsorRegistrationLink,
+        }
       }),
 
     /**
@@ -3222,18 +3235,19 @@ export const sponsorRouter = router({
           'sponsorForConference',
         )
         const { conference, error: conferenceError } =
-          await getConferenceForCurrentDomain()
+          await getConferenceForCurrentDomain({ sponsors: true })
         if (conferenceError || !conference) {
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
             message: 'Failed to fetch conference',
           })
         }
-        const { codes, alreadyLinked } = await resolveSponsorDiscountCodes(
-          conference,
-          input.sponsorForConferenceId,
-          input.discountCodes,
-        )
+        const { codes, alreadyLinked, adopted } =
+          await resolveSponsorDiscountCodes(
+            conference,
+            input.sponsorForConferenceId,
+            input.discountCodes,
+          )
         let added: Awaited<ReturnType<typeof linkCodesToSponsor>>
         try {
           added = await linkCodesToSponsor({
@@ -3242,6 +3256,7 @@ export const sponsorRouter = router({
             codes,
             via: 'assign',
             actorId: ctx.speaker._id,
+            adopted,
           })
         } catch (error) {
           throw new TRPCError({

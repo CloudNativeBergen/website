@@ -566,6 +566,7 @@ describe('zero recipients', () => {
 describe('discount kind', () => {
   const options = {
     ticketUrl: 'https://tickets.example.test/sponsor',
+    hasSponsorInviteLink: true,
     codes: [
       { code: 'ACME-2026', selected: true, linked: true },
       { code: 'ACME-WORKSHOP', selected: false, linked: false },
@@ -683,6 +684,24 @@ describe('discount kind', () => {
     expect(
       screen.getByRole('checkbox', { name: 'ACME-WORKSHOP' }),
     ).toBeChecked()
+  })
+
+  it('warns when the conference has no sponsor invite link', () => {
+    h.codeOptions = {
+      ...options,
+      ticketUrl: 'https://example.test/tickets',
+      hasSponsorInviteLink: false,
+    }
+    renderModal({}, 'discount')
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      /no sponsor ticket invite link.*https:\/\/example\.test\/tickets/,
+    )
+  })
+
+  it('does not warn when the invite link is set', () => {
+    h.codeOptions = options
+    renderModal({}, 'discount')
+    expect(screen.queryByText(/no sponsor ticket invite link/)).toBeNull()
   })
 
   it('an information send carries no codes', async () => {

@@ -319,6 +319,73 @@ describe('the stored sponsor↔code link', () => {
     ])
   })
 
+  /**
+   * THE SWITCH FROM NAME TO LINK (bot review): a sponsor that stores any code
+   * is matched by its stored codes alone, so its FIRST link must also store
+   * the codes the name heuristic was giving it — or they drop off its row.
+   */
+  it('a first link adopts the codes the sponsor already owned by name', async () => {
+    const { conference } = await h.getConference()
+    h.getConference.mockResolvedValue({
+      conference: {
+        ...conference,
+        sponsors: [
+          { sponsor: { _id: 'sponsor-acme', name: 'Acme' } },
+          { sponsor: { _id: 'sponsor-globex', name: 'Globex' } },
+        ],
+      },
+      domain: 'localhost',
+      error: null,
+    })
+    await sponsor().crm.sendCommunication(INPUT) // sends ACME-2026 only
+    expect(linkInserts()).toHaveLength(1)
+    expect(linkInserts()[0].items).toEqual([
+      expect.objectContaining({ code: 'ACME-2026', linkedVia: 'send' }),
+      expect.objectContaining({ code: 'ACME-WORKSHOP', linkedVia: 'adopt' }),
+    ])
+    // Only what was SENT is in the email and on the record.
+    expect(h.send.mock.calls[0][0].html).not.toContain('ACME-WORKSHOP')
+    expect(record()!.attachments).toHaveLength(1)
+  })
+
+  it('adopts nothing once the sponsor already stores codes', async () => {
+    const { conference } = await h.getConference()
+    h.getConference.mockResolvedValue({
+      conference: {
+        ...conference,
+        sponsors: [{ sponsor: { _id: 'sponsor-acme', name: 'Acme' } }],
+      },
+      domain: 'localhost',
+      error: null,
+    })
+    h.links[0].linkedCodes = ['SOMETHING-ELSE']
+    await sponsor().crm.sendCommunication(INPUT)
+    expect(linkInserts()[0].items).toEqual([
+      expect.objectContaining({ code: 'ACME-2026', linkedVia: 'send' }),
+    ])
+  })
+
+  it('an Assign adopts the same way', async () => {
+    const { conference } = await h.getConference()
+    h.getConference.mockResolvedValue({
+      conference: {
+        ...conference,
+        sponsors: [{ sponsor: { _id: 'sponsor-acme', name: 'Acme' } }],
+      },
+      domain: 'localhost',
+      error: null,
+    })
+    await sponsor().crm.assignDiscountCodes({
+      sponsorForConferenceId: SFC,
+      discountCodes: ['<b>X</b>'],
+    })
+    expect(linkInserts()[0].items).toEqual([
+      expect.objectContaining({ code: '<b>X</b>', linkedVia: 'assign' }),
+      expect.objectContaining({ code: 'ACME-2026', linkedVia: 'adopt' }),
+      expect.objectContaining({ code: 'ACME-WORKSHOP', linkedVia: 'adopt' }),
+    ])
+  })
+
   it('never stores a code twice', async () => {
     h.links[0].linkedCodes = ['acme-2026']
     const result = await sponsor().crm.sendCommunication({
@@ -650,6 +717,7 @@ describe('sponsor.crm.discountCodeOptions', () => {
     expect(result.ticketUrl).toBe(
       'https://tickets.example.test/sponsor?a=1&b=2',
     )
+    expect(result.hasSponsorInviteLink).toBe(true)
     expect(result.codes).toEqual([
       { code: 'ACME-2026', selected: true, linked: false },
       { code: 'ACME-WORKSHOP', selected: true, linked: false },
@@ -730,6 +798,18 @@ describe('sponsor.crm.discountCodeOptions', () => {
       message: expect.stringContaining('switched off'),
     })
     expect(h.fetches).toHaveLength(0)
+  })
+
+  it('flags a conference with no sponsor invite link, whose fallback hides sponsor tickets', async () => {
+    const { conference } = await h.getConference()
+    h.getConference.mockResolvedValue({
+      conference: { ...conference, sponsorRegistrationLink: undefined },
+      domain: 'localhost',
+      error: null,
+    })
+    const result = await sponsor().crm.discountCodeOptions(OPTIONS)
+    expect(result.hasSponsorInviteLink).toBe(false)
+    expect(result.ticketUrl).toBe('https://cloudnativebergen.dev/tickets')
   })
 
   it('says so when the conference has no ticketing event', async () => {

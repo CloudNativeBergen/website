@@ -44,10 +44,12 @@ import {
   sponsorOwningCode,
 } from '@/lib/discounts'
 import {
+  codesToAdopt,
   linkCodesToSponsor,
   readSponsorCodeLinks,
   withLinkedCodes,
 } from '@/lib/sponsor-crm/discount-codes'
+import type { Conference } from '@/lib/conference/types'
 import { requireDocumentInCurrentConference } from '../tenancy'
 import {
   getTicketingProvider,
@@ -1052,19 +1054,21 @@ export const ticketsRouter = router({
           // a discount send; read once and reused to link below.
           let sponsorLinks: Awaited<ReturnType<typeof readSponsorCodeLinks>> =
             []
+          let linkSponsors: Conference['sponsors']
           if (input.sponsorForConferenceId) {
             await requireDocumentInCurrentConference(
               input.sponsorForConferenceId,
               'sponsorForConference',
             )
             const { conference: linkConference } =
-              await getConferenceForCurrentDomain()
+              await getConferenceForCurrentDomain({ sponsors: true })
             if (!linkConference) {
               throw new TRPCError({
                 code: 'INTERNAL_SERVER_ERROR',
                 message: 'Failed to fetch conference',
               })
             }
+            linkSponsors = linkConference.sponsors
             // FAILS CLOSED like the standalone guard below: without the read
             // the stored-elsewhere refusal cannot be made.
             try {
@@ -1185,16 +1189,23 @@ export const ticketsRouter = router({
           let linked: { linkedCodes?: string[]; linkFailed?: true } = {}
           if (input.sponsorForConferenceId) {
             try {
+              const sponsorForConferenceId = input.sponsorForConferenceId
+              const alreadyLinked =
+                sponsorLinks.find(
+                  (l) => l.sponsorForConferenceId === sponsorForConferenceId,
+                )?.linkedCodes ?? []
               const added = await linkCodesToSponsor({
-                sponsorForConferenceId: input.sponsorForConferenceId,
-                alreadyLinked:
-                  sponsorLinks.find(
-                    (l) =>
-                      l.sponsorForConferenceId === input.sponsorForConferenceId,
-                  )?.linkedCodes ?? [],
+                sponsorForConferenceId,
+                alreadyLinked,
                 codes: [{ code: discountCode, providerCodeId: discountCode }],
                 via: 'create',
                 actorId: ctx.speaker._id,
+                // The event's codes as listed BEFORE this create.
+                adopted: codesToAdopt(
+                  eventData.discounts,
+                  withLinkedCodes(linkSponsors, sponsorLinks),
+                  sponsorForConferenceId,
+                ),
               })
               linked = { linkedCodes: added.map((c) => c.code) }
             } catch (linkError) {

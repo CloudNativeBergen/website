@@ -817,6 +817,17 @@ export function SponsorSendModal({
         Choose at least one recipient before sending.
       </p>
     ) : null
+  const noInviteLinkHint =
+    isDiscount && codesQuery.data && !codesQuery.data.hasSponsorInviteLink ? (
+      <p
+        role="alert"
+        className="font-inter text-sm text-amber-700 dark:text-amber-300"
+      >
+        This conference has no sponsor ticket invite link, so the email points
+        to {codesQuery.data.ticketUrl} — where sponsor ticket types are hidden.
+        Set the sponsor registration link in the conference settings first.
+      </p>
+    ) : null
   const noCodeHint =
     isDiscount && codeOptions.length > 0 && chosenCodes.length === 0 ? (
       <p className="font-inter text-sm text-amber-700 dark:text-amber-300">
@@ -853,12 +864,14 @@ export function SponsorSendModal({
         (localhostWarning ||
           noRecipientHint ||
           noCodeHint ||
+          noInviteLinkHint ||
           recipientsChangedHint ||
           templatesFailedNotice) && (
           <div className="space-y-3">
             {localhostWarning}
             {templatesFailedNotice}
             {noRecipientHint}
+            {noInviteLinkHint}
             {noCodeHint}
             {recipientsChangedHint}
           </div>

@@ -254,6 +254,33 @@ describe('tickets.admin.createDiscountCode for a sponsor row', () => {
     expect(h.createDiscount).not.toHaveBeenCalled()
   })
 
+  it('a first link from a sponsor-row create adopts the sponsor’s name-matched codes', async () => {
+    h.links[0].linkedCodes = null
+    h.listDiscounts.mockResolvedValue({
+      discounts: [
+        { triggerValue: 'ACMECLOUD1234' },
+        { triggerValue: 'COMMUNITY2026' },
+      ],
+      ticketTypes: [],
+    })
+    await tickets().admin.createDiscountCode(INPUT)
+    expect(h.inserts).toEqual([
+      {
+        id: SFC,
+        items: [
+          expect.objectContaining({
+            code: 'ACMECLOUD5678',
+            linkedVia: 'create',
+          }),
+          expect.objectContaining({
+            code: 'ACMECLOUD1234',
+            linkedVia: 'adopt',
+          }),
+        ],
+      },
+    ])
+  })
+
   it('a standalone code links to nobody', async () => {
     await tickets().admin.createDiscountCode({
       eventId: EVENT,

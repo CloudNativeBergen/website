@@ -72,12 +72,8 @@ export function AssignDiscountCodeDialog({
       onClose={onClose}
       size="sm"
       title="Assign to sponsor"
-      subtitle={
-        <>
-          Link <span className="font-mono font-medium">{code}</span> to a
-          sponsor without emailing it.
-        </>
-      }
+      // Just the code: ModalShell truncates its subtitle to one line.
+      subtitle={<span className="font-mono">{code}</span>}
       icon={<TicketIcon />}
     >
       <div className="space-y-4">
@@ -106,8 +102,9 @@ export function AssignDiscountCodeDialog({
             ))}
           </select>
           <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-            The sponsor&apos;s row then counts this code&apos;s redemptions, and
-            their next discount email preselects it.
+            Nothing is emailed. The sponsor&apos;s row then counts this
+            code&apos;s redemptions, and their next discount email preselects
+            it.
           </p>
         </div>
         <div className="flex justify-end gap-3">
