@@ -129,6 +129,14 @@ export function planSponsorRecipientRedaction(
   doc: SponsorActivityRecipientDoc,
   emails: readonly string[],
   refusals: string[],
+  /**
+   * How a stored address is folded before it is compared with `emails`.
+   * The speaker chain folds with NFKC (`normalizeEmail`): its match set is
+   * provider-verified, so the widening is safe. An operator-typed address
+   * (the sponsor-contact tool) must NOT widen — `ａda@x` and `ada@x` can be
+   * two mailboxes — so it passes `canonicalEmail` and a canonical set.
+   */
+  fold: (email: string) => string = normalizeEmail,
 ): ErasureDocumentPatch | null {
   const entries = Array.isArray(doc.recipients) ? doc.recipients : []
   const set: Record<string, unknown> = {}
@@ -136,10 +144,10 @@ export function planSponsorRecipientRedaction(
 
   entries.forEach((entry, index) => {
     const stored = typeof entry.email === 'string' ? entry.email : ''
-    if (!stored || !emails.includes(normalizeEmail(stored))) return
+    if (!stored || !emails.includes(fold(stored))) return
 
     const nameDone = entry.name === REDACTED_RECIPIENT_NAME
-    const emailDone = normalizeEmail(stored) === REDACTED_RECIPIENT_EMAIL
+    const emailDone = fold(stored) === REDACTED_RECIPIENT_EMAIL
 
     const key = entry._key
     if (typeof key !== 'string' || !SAFE_KEY.test(key)) {

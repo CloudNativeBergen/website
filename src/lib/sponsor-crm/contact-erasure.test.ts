@@ -209,17 +209,29 @@ describe('a sponsor contact with no speaker document is erased from send records
     expect(result.committed).toBe(false)
   })
 
-  it('selects by both the NFKC-folded and the plain lowercased form', () => {
-    // A fullwidth "ａ" folds to "a" under NFKC. The planner compares the
-    // folded form; the GROQ read can only lower(), so a record stored with
-    // the fullwidth character is selected only by the plain form.
+  it('matches the plain lowercased form only — never an NFKC-folded neighbour', async () => {
+    // A fullwidth "Ａ" folds to "a" under NFKC, but `ａda@` and `ada@` can be
+    // two mailboxes. The operator typed one of them; only that one goes.
     expect(sponsorContactMatchSet(['  ＡDA@Example.com '])).toEqual([
-      'ada@example.com',
       'ａda@example.com',
     ])
-    expect(sponsorContactMatchSet(['ada@example.com'])).toEqual([
-      'ada@example.com',
-    ])
+    world = [
+      record({
+        _id: 'fullwidth',
+        recipients: [{ _key: 'c-fw', name: 'Ａda', email: 'ａda@example.com' }],
+      }),
+      record({
+        _id: 'plain',
+        recipients: [{ _key: 'c-pl', name: 'Ada', email: 'ada@example.com' }],
+      }),
+    ]
+    const result = await eraseSponsorContactSendRecords({
+      emails: ['ＡDA@Example.com'],
+      actor: 'op',
+      dryRun: true,
+    })
+    expect(result.err).toBeNull()
+    expect(result.patches.map((p) => p.id)).toEqual(['fullwidth'])
   })
 
   it('a verification read that fails after the commit does not hide the commit', async () => {

@@ -12,12 +12,15 @@
 
 import { eraseSponsorContactSendRecords } from '@/lib/sponsor-crm/contact-erasure'
 
+const FLAGS = ['--email', '--actor', '--commit']
+
 function arg(name: string): string | undefined {
   const index = process.argv.indexOf(`--${name}`)
   if (index === -1) return undefined
   const value = process.argv[index + 1]
   // `--email --actor "x"`: the flag has no value, not the value "--actor".
-  return value === undefined || value.startsWith('--') ? undefined : value
+  // Only a KNOWN flag counts: `--ada@example.com` is a legal address.
+  return value === undefined || FLAGS.includes(value) ? undefined : value
 }
 
 function has(name: string): boolean {

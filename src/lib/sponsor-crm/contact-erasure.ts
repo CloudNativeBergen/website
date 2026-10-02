@@ -20,7 +20,7 @@
  */
 import { clientWrite } from '@/lib/sanity/client'
 import { COUNT_API_VERSION } from '@/lib/sanity/orphaned-asset'
-import { canonicalEmail, normalizeEmail } from '@/lib/speaker/email'
+import { canonicalEmail } from '@/lib/speaker/email'
 import type { ErasureDocumentPatch } from '@/lib/speaker/erasure'
 import {
   fetchSponsorRecipientDocs,
@@ -57,17 +57,19 @@ export interface EraseSponsorContactResult {
 }
 
 /**
- * The match set: each address in its NFKC-folded form (what the planner
- * compares against) AND its plain trimmed, lowercased form. The GROQ read
- * can only `lower()`, so a record whose stored address carries a
- * compatibility character — written before `resolveRecipients` canonicalised
- * it, or typed that way — is selected only by the second form. The planner
- * folds the stored value before comparing, so the first form still matches.
+ * The match set: each address trimmed and lowercased, and NOTHING wider.
+ * The operator types these, so NFKC folding would conflate two mailboxes
+ * that differ by a compatibility character (`ａda@x` and `ada@x`) and redact
+ * somebody else — the widening `@/lib/speaker/email` warns every new
+ * user-typed path about. The planner is told to fold the stored address the
+ * same way, so both sides compare on the plain form, which is also the only
+ * form the `lower()`-only GROQ read can select by. An address the person
+ * used in two compatibility spellings is given twice.
  */
 export function sponsorContactMatchSet(emails: readonly string[]): string[] {
-  return [
-    ...new Set(emails.flatMap((e) => [normalizeEmail(e), canonicalEmail(e)])),
-  ].filter((e) => e.includes('@'))
+  return [...new Set(emails.map((e) => canonicalEmail(e)))].filter((e) =>
+    e.includes('@'),
+  )
 }
 
 async function planAll(emails: string[]): Promise<{
@@ -79,7 +81,12 @@ async function planAll(emails: string[]): Promise<{
   const refusals: string[] = []
   const patches: ErasureDocumentPatch[] = []
   for (const doc of docs) {
-    const patch = planSponsorRecipientRedaction(doc, emails, refusals)
+    const patch = planSponsorRecipientRedaction(
+      doc,
+      emails,
+      refusals,
+      canonicalEmail,
+    )
     if (patch) patches.push(patch)
   }
   return { matched: docs.length, patches, refusals }
@@ -109,7 +116,7 @@ export async function eraseSponsorContactSendRecords(
   // CLI would otherwise search for the literal "--actor", find nothing and
   // report clean.
   const rejected = options.emails.filter(
-    (e) => normalizeEmail(e).length > 0 && !normalizeEmail(e).includes('@'),
+    (e) => canonicalEmail(e).length > 0 && !canonicalEmail(e).includes('@'),
   )
   if (rejected.length > 0) {
     return {
