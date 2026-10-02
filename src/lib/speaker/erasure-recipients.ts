@@ -104,8 +104,10 @@ function redactAddresses(
       // not.
       // The left boundary is the RFC 5322 local-part alphabet (`atext` plus
       // the dot): `o'ada@x.com` is somebody else's address, and zod lets a
-      // contact be stored with it.
-      `(?<![A-Za-z0-9!#$%&'*+/=?^_\`{|}~.-])${escaped}(?![A-Za-z0-9]|[.-][A-Za-z0-9])`,
+      // contact be stored with it. An apostrophe continues a local part only
+      // when a local-part character precedes it; standing alone it is the
+      // quote in `Mailbox 'ada@x.com' does not exist`, which must match.
+      `(?<![A-Za-z0-9!#$%&*+/=?^_\`{|}~.-])(?<![A-Za-z0-9!#$%&*+/=?^_\`{|}~.-]')${escaped}(?![A-Za-z0-9]|[.-][A-Za-z0-9])`,
       'gi',
     )
     out = out.replace(pattern, REDACTED_RECIPIENT_EMAIL)

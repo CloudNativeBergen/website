@@ -164,6 +164,20 @@ describe('a sent-communication record loses the subject’s name and address', (
     )
   })
 
+  it('redacts an address wrapped in quotes, the shape bounce messages use', () => {
+    const patch = planSponsorRecipientRedaction(
+      activity({
+        error:
+          "Mailbox 'ada@example.com' does not exist; \"ada@example.com\" rejected; ('ada@example.com')",
+      }),
+      EMAILS,
+      [],
+    )!
+    expect(patch.set!.error).toBe(
+      `Mailbox '${REDACTED_RECIPIENT_EMAIL}' does not exist; "${REDACTED_RECIPIENT_EMAIL}" rejected; ('${REDACTED_RECIPIENT_EMAIL}')`,
+    )
+  })
+
   it('does not touch somebody else’s address whose local part merely ends with the subject’s', () => {
     // Apostrophe and the other RFC 5322 atext characters are legal local-part
     // characters, and zod accepts them on a contact.
