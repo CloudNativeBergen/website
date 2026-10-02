@@ -1,6 +1,7 @@
 'use client'
 
 import {
+  PaperAirplaneIcon,
   DocumentTextIcon,
   UserGroupIcon,
   PhotoIcon,
@@ -71,9 +72,9 @@ interface ManageCardsProps {
   hasLogo: boolean
   onOpen: (view: SponsorSubView) => void
   /**
-   * Compose a one-off email to this sponsor's contacts — the SAME
-   * `SponsorIndividualEmailModal` the board card's "Send Email" overflow item
-   * opens, surfaced here so the detail modal isn't a dead end for the action.
+   * Send an email to a chosen contact of this sponsor — the SAME
+   * `SponsorSendModal` the board card's "Send Email" overflow item opens,
+   * surfaced here so the detail modal isn't a dead end for the action.
    * Omitted ⇒ no Email card (e.g. a host that can't supply the conference
    * sender identity the modal needs).
    */
@@ -131,20 +132,27 @@ export function ManageCards({
       dot: null,
       onSelect: () => onOpen('messages'),
     },
-    // Composed one-off email. Kept LAST so the existing four cards keep their
-    // positions, and always offered when the host wires it: the compose modal
-    // itself explains a missing recipient ("No contact persons found"), which
-    // is more useful than a card that silently vanishes.
+    // The send audit (#1261): emails sent to this sponsor from the CRM's Send
+    // action (the other senders join it in #1262–#1264).
+    {
+      key: 'communications',
+      label: 'Communications',
+      icon: PaperAirplaneIcon,
+      status: 'Emails sent from the CRM',
+      dot: null,
+      onSelect: () => onOpen('communications'),
+    },
+    // Send email. Kept LAST, and always offered when the host wires it: the
+    // modal itself explains a missing recipient, which is more useful than a
+    // card that silently vanishes.
     ...(onEmail
       ? [
           {
             key: 'email',
-            label: 'Email',
+            label: 'Send email',
             icon: EnvelopeIcon,
             status:
-              contactCount > 0
-                ? `Compose to ${contactCount} contact${contactCount === 1 ? '' : 's'}`
-                : 'Add a contact first',
+              contactCount > 0 ? 'To a chosen contact' : 'Add a contact first',
             dot: contactCount > 0 ? null : ('amber' as const),
             onSelect: onEmail,
           } satisfies ManageCard,

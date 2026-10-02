@@ -173,6 +173,9 @@ export function SponsorEmailTemplateEditor({
           organizer: conference.organizer,
           domains: conference.domains,
           prospectusUrl: conference.sponsorshipCustomization?.prospectusUrl,
+          // Present only when the page asked for it; otherwise the preview
+          // shows the placeholder, which is honest about the merge.
+          sponsorRegistrationLink: conference.sponsorRegistrationLink,
         },
         senderName: 'Hans Kristian',
         tierName: 'Community Partner',

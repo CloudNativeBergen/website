@@ -164,11 +164,12 @@ export const AddNew: Story = {
 }
 
 /**
- * The Manage grid with the "Email" action card (last cell): composing a one-off
- * sponsor email is reachable from the DETAIL modal, not just the board card's
+ * The Manage grid with the "Send email" action card (last cell): emailing a
+ * sponsor contact is reachable from the DETAIL modal, not just the board card's
  * overflow menu. Selecting it raises `onSendEmail` so the host opens the shared
- * `SponsorIndividualEmailModal` over this one — there is no second email path.
- * Inspect at 393px: six cards wrap 2-up without clipping.
+ * `SponsorSendModal` over this one — there is no second email path. The
+ * "Communications" card beside it opens the send audit (#1261).
+ * Inspect at 393px: seven cards wrap 2-up without clipping.
  */
 export const ManageGridWithEmail: Story = {
   args: {
@@ -188,8 +189,8 @@ export const ManageGridWithEmail: Story = {
   },
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement)
-    const emailCard = canvas.getByRole('button', { name: /Email/ })
-    expect(emailCard).toHaveTextContent('Compose to 2 contacts')
+    const emailCard = canvas.getByRole('button', { name: /Send email/ })
+    expect(emailCard).toHaveTextContent('To a chosen contact')
     await userEvent.click(emailCard)
     // The card RAISES the intent; it never swaps the modal body to a sub-view.
     expect(args.onSendEmail).toHaveBeenCalledTimes(1)
@@ -213,9 +214,9 @@ export const ManageGridEmailWithoutContacts: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
-    expect(canvas.getByRole('button', { name: /Email/ })).toHaveTextContent(
-      'Add a contact first',
-    )
+    expect(
+      canvas.getByRole('button', { name: /Send email/ }),
+    ).toHaveTextContent('Add a contact first')
   },
 }
 

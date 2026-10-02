@@ -288,7 +288,7 @@ export const DirtyCloseConfirmShown: Story = {
 /**
  * STACKED shells: a detail modal that opens a second, composed modal OVER
  * itself — the shape the sponsor CRM uses when "Email" in the detail modal's
- * Manage grid opens the shared `SponsorIndividualEmailModal` without unmounting
+ * Manage grid opens the shared `SponsorSendModal` without unmounting
  * the sponsor behind it. Proves the layering works: the second shell renders on
  * top with its own backdrop, and Escape / its own close dismisses only the top
  * one, returning to the first.

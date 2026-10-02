@@ -6,8 +6,10 @@
  * /admin is behind `src/proxy.ts`, which only requires that a request carry
  * SOME session — so the admin layout's organizer check is the only thing
  * between a self-registered speaker and an organizer-only page, and a layout
- * check is presentation. Two pages opt into reading the sponsor invite link, a
- * bearer token that buys hidden tickets, and both ask again for themselves.
+ * check is presentation. Three pages opt into reading the sponsor invite link,
+ * a bearer token that buys hidden tickets (settings, discount codes, and the
+ * sponsor CRM — the last pinned by its own page test), and all ask again for
+ * themselves.
  *
  * Tested here rather than through either page: /admin/settings pulls in some
  * forty modules, so a page-level test of it would be mostly mocks, and the

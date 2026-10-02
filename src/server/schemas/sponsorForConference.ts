@@ -203,6 +203,50 @@ export const ImportAllHistoricSponsorsSchema = z.object({
   targetConferenceId: z.string().min(1, 'Target conference ID is required'),
 })
 
+/**
+ * One sponsor email, through the one primitive (#1261). Recipients are contact
+ * KEYS — the server resolves addresses from the sponsor's own contacts and
+ * refuses anything else — and the body is PortableText JSON as the editor
+ * produces it. Slice 1 accepts the `information` kind; #1262–#1264 widen it.
+ */
+export const CommunicationKindSchema = z.enum([
+  'information',
+  'contract',
+  'registration',
+  'discount',
+])
+
+export const SendCommunicationSchema = z.object({
+  sponsorForConferenceId: z.string().min(1, 'Sponsor ID is required'),
+  kind: z.enum(['information']),
+  recipientKeys: z
+    .array(z.string().min(1))
+    .min(1, 'Choose at least one recipient')
+    .max(20),
+  subject: z.string().trim().min(1, 'Subject is required').max(200),
+  /** PortableText blocks, JSON-encoded (same wire shape as the old sendEmail). */
+  message: z.string().min(1).max(100_000),
+  /**
+   * The template the draft started from. `edited` is accepted for wire
+   * compatibility but IGNORED: the server computes it by re-merging the
+   * template and comparing with what is sent.
+   */
+  template: z
+    .object({ id: z.string().min(1), edited: z.boolean().optional() })
+    .optional(),
+})
+
+export const CommunicationRecordIdSchema = z.object({
+  id: z.string().min(1, 'Activity ID is required'),
+})
+
+export const ListCommunicationsSchema = z.object({
+  sponsorForConferenceId: z.string().min(1, 'Sponsor ID is required'),
+  kind: CommunicationKindSchema.optional(),
+  offset: z.number().int().min(0).optional(),
+  limit: z.number().int().min(1).max(100).optional(),
+})
+
 export const CreateSponsorActivitySchema = z.object({
   sponsorForConferenceId: z.string().min(1, 'Sponsor ID is required'),
   activityType: z.enum(['note', 'call', 'meeting', 'email']),

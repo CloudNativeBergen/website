@@ -75,9 +75,9 @@ export interface SponsorPipelineViewProps {
   /** Open one of the focused sub-views (contract / contacts / logo / history). */
   onOpenView: (view: SponsorSubView) => void
   /**
-   * Compose a one-off email to this sponsor (the shared
-   * `SponsorIndividualEmailModal`, opened OVER this modal by the host). Omitted
-   * ⇒ the Manage grid shows no Email card.
+   * Send an email to this sponsor (the shared `SponsorSendModal`, opened OVER
+   * this modal by the host). Omitted ⇒ the Manage grid shows no Send email
+   * card.
    */
   onSendEmail?: () => void
 }

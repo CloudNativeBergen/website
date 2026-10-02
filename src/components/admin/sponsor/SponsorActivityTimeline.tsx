@@ -21,6 +21,7 @@ import {
   getActivityColor,
 } from '@/components/admin/sponsor-crm/utils'
 import { SponsorActivityInput } from './SponsorActivityInput'
+import { SponsorCommunicationLine } from './SponsorCommunicationLine'
 import { useNotificationSafe } from '@/components/admin/NotificationProvider'
 
 interface SponsorActivityTimelineProps {
@@ -192,10 +193,37 @@ function ActivityLine({
   const [isEditing, setIsEditing] = useState(false)
   const [draft, setDraft] = useState(activity.description)
 
+  // A sent email (#1261) is an immutable audit record with its own compact
+  // line that expands to the full record. In compact (dashboard) mode it
+  // renders like any other line below — the body is never loaded there.
+  if (activity.communicationKind && !compact) {
+    return (
+      <SponsorCommunicationLine
+        activity={activity}
+        trailing={
+          <>
+            <UserAvatar
+              name={activity.createdBy?.name ?? 'Automatic'}
+              image={activity.createdBy?.image}
+              isSystem={!activity.createdBy}
+              size="sm"
+            />
+            <time className="text-xs text-gray-400 dark:text-gray-500">
+              {timeAgo}
+            </time>
+          </>
+        }
+      />
+    )
+  }
+
   // Editing is offered only for user-authored types (server re-checks type AND
   // creator; a non-owner's save is rejected there).
   const isEditable =
-    !compact && !!onSave && EDITABLE_ACTIVITY_TYPES.has(activity.activityType)
+    !compact &&
+    !!onSave &&
+    !activity.communicationKind &&
+    EDITABLE_ACTIVITY_TYPES.has(activity.activityType)
 
   const startEdit = () => {
     setDraft(activity.description)

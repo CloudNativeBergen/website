@@ -79,7 +79,7 @@ vi.mock('@/components/admin/sponsor-crm/SponsorCRMForm', () => ({
 
 vi.mock('@/components/admin', () => ({
   __esModule: true,
-  SponsorIndividualEmailModal: () => null,
+  SponsorSendModal: () => null,
 }))
 
 vi.mock('@/components/admin/sponsor-crm/SponsorBoardColumn', () => ({

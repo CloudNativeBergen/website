@@ -19,8 +19,8 @@ The Cloud Native Days Norway website features a comprehensive email system built
 │  └── AdminActionBar (email integration)                          │
 ├─────────────────────────────────────────────────────────────────┤
 │  API Routes / tRPC                                               │
-│  ├── sponsor.crm.sendEmailBySfc (CLI: Markdown body)            │
-│  ├── sponsor.crm.sendEmail (Web UI: PortableText body)          │
+│  ├── sponsor.crm.sendCommunication (the ONE sponsor send, #1261) │
+│  ├── sponsor.crm.sendEmailBySfc (DEPRECATED cnctl shim → above)  │
 │  ├── sponsor.emailTemplates.listForSponsor (CLI: template list) │
 │  ├── /admin/api/speakers/email/multi (multi-speaker emails)      │
 │  ├── /admin/api/speakers/email/broadcast (audience emails)       │
@@ -377,35 +377,45 @@ send; it can no longer make it invisible.
 
 ## API Endpoints
 
-### Sponsor Email via CLI
+### Sponsor Email (`sponsor.crm.sendCommunication`)
 
-**Endpoint**: `POST /api/trpc/sponsor.crm.sendEmailBySfc` (tRPC mutation)
+**Endpoint**: `POST /api/trpc/sponsor.crm.sendCommunication` (tRPC mutation)
 
-**Purpose**: Send an email to a sponsor's contact persons, with the body provided as Markdown. Used by the CLI (`cnctl admin sponsors email`).
+**Purpose**: The one way an email reaches a sponsor from the CRM (#1261, spec #1260). Recipients are **contact keys** on the sponsor — the server resolves them to addresses from `sponsorForConference.contactPersons` and refuses a key that is not on the sponsor or has no email, before anything is rendered or sent. The client never supplies an address or a conference id.
 
-**Authentication**: Requires organizer (admin) access.
+**Authentication**: Requires organizer (admin) access; the sponsor must belong to the current conference (guarded before it is read).
 
 **Input**:
 
 ```json
 {
   "sponsorForConferenceId": "string",
+  "kind": "information",
+  "recipientKeys": ["contact _key", "..."],
   "subject": "string",
-  "body": "string (Markdown)"
+  "message": "string (PortableText JSON)",
+  "template": { "id": "sponsorEmailTemplate _id" }
 }
 ```
 
-The server converts Markdown → PortableText → HTML, renders the conference-branded email template, and sends via Resend. It also logs the email as a CRM activity and auto-transitions sponsors from `prospect` → `contacted`.
+`template.id` must resolve through the org-scoped template reader (a foreign, deleted or wrong-kind template is refused before anything is sent). Whether the template was **edited** is computed on the server by re-merging the template with the same variables and comparing to what is sent; a client-supplied `edited` flag is accepted for wire compatibility and ignored.
+
+**Deprecated shim for `cnctl`:** `POST /api/trpc/sponsor.crm.sendEmailBySfc` with `{ sponsorForConferenceId, subject, body (Markdown) }` converts the Markdown to PortableText and calls the same primitive for every contact with an email (kind `information`). It exists only until `cnctl admin sponsors email` calls `sendCommunication` itself.
+
+The server renders the branded email ONCE to an HTML string, sends that string via the tenant's Resend sender, and writes a `sponsorActivity` audit record carrying the recipients as sent, the subject and body as sent, template provenance, the provider message id and `deliveryStatus`. A provider failure is recorded too (`deliveryStatus: "failed"`, `error`) and surfaces as `INTERNAL_SERVER_ERROR`; the record write itself can never fail or roll back the send. An `information` send also stamps first outreach and moves a `prospect` to `contacted`.
 
 **Response**:
 
 ```json
 {
   "success": true,
-  "emailId": "resend_email_id",
-  "recipientCount": 1
+  "activityId": "string | undefined",
+  "providerMessageId": "string | undefined",
+  "recipientCount": 2
 }
 ```
+
+Read the records back with `sponsor.crm.activities.get` (one record in full, conference-scoped) and `sponsor.crm.activities.listCommunications` (sends only, by kind, paged).
 
 ### Sponsor Email Templates for CLI
 

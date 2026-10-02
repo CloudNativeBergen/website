@@ -1,3 +1,3 @@
 export { SponsorDiscountEmailModal } from './SponsorDiscountEmailModal'
-export { SponsorIndividualEmailModal } from './SponsorIndividualEmailModal'
+export { SponsorSendModal } from './SponsorSendModal'
 export { SponsorTiersPageClient } from './SponsorTiersPageClient'

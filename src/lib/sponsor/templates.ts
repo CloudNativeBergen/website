@@ -40,6 +40,8 @@ export const TEMPLATE_VARIABLE_DESCRIPTIONS: Record<string, string> = {
   CONFERENCE_URL: 'Conference website URL',
   SPONSOR_PAGE_URL: 'Sponsor page URL',
   PROSPECTUS_URL: 'Sponsor prospectus/deck URL',
+  SPONSOR_REGISTRATION_URL:
+    'The sponsor ticket-registration link set on the conference',
   SENDER_NAME: 'Name of the person sending the email',
   TIER_NAME: 'Sponsor tier name (if assigned)',
   SIGNER_NAME: 'Name of the contract signer',
@@ -54,6 +56,7 @@ const URL_VARIABLE_KEYS = new Set([
   'CONFERENCE_URL',
   'SPONSOR_PAGE_URL',
   'PROSPECTUS_URL',
+  'SPONSOR_REGISTRATION_URL',
 ])
 
 /**
@@ -213,6 +216,8 @@ export function buildTemplateVariables(opts: {
     organizer?: string
     domains?: string[]
     prospectusUrl?: string
+    /** The conference's sponsor ticket-registration link, if one is set. */
+    sponsorRegistrationLink?: string
   }
   senderName?: string
   tierName?: string
@@ -253,6 +258,12 @@ export function buildTemplateVariables(opts: {
 
   if (conference.prospectusUrl) {
     vars.PROSPECTUS_URL = conference.prospectusUrl
+  }
+
+  // Replaces the old composer's appended "Ticket Registration" box (#1261):
+  // a template that wants the link now places it with this merge field.
+  if (conference.sponsorRegistrationLink) {
+    vars.SPONSOR_REGISTRATION_URL = conference.sponsorRegistrationLink
   }
 
   if (senderName) {

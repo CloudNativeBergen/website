@@ -1,0 +1,99 @@
+'use client'
+
+import { useId, useState } from 'react'
+import clsx from 'clsx'
+import {
+  ChevronDownIcon,
+  EnvelopeIcon,
+  ExclamationTriangleIcon,
+} from '@heroicons/react/24/outline'
+import { formatRelativeTime } from '@/lib/time'
+import type { SponsorActivityExpanded } from '@/lib/sponsor-crm/types'
+import { SponsorCommunicationRecord } from './SponsorCommunicationRecord'
+
+/**
+ * The compact feed line for a sent email (#1261): kind + recipients, the
+ * subject underneath, and a chevron that expands the full record in place.
+ * Keeps the timeline readable — the body never renders until asked for.
+ */
+export function SponsorCommunicationLine({
+  activity,
+  trailing,
+  defaultExpanded = false,
+}: {
+  activity: SponsorActivityExpanded
+  /** Avatar / timestamp cluster supplied by the host timeline. */
+  trailing?: React.ReactNode
+  defaultExpanded?: boolean
+}) {
+  const [expanded, setExpanded] = useState(defaultExpanded)
+  const recordId = useId()
+  const failed = activity.deliveryStatus === 'failed'
+  const Icon = failed ? ExclamationTriangleIcon : EnvelopeIcon
+
+  return (
+    <div className="py-1.5">
+      {/* Wraps at phone width: the meta cluster (sender · time · chevron)
+          drops under the text instead of squeezing it to a word per line. */}
+      <div className="group flex flex-wrap items-start gap-x-2.5 gap-y-1">
+        <div
+          className={clsx(
+            'mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full',
+            failed
+              ? 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400'
+              : 'bg-indigo-100 text-indigo-600 dark:bg-indigo-900/20 dark:text-indigo-400',
+          )}
+        >
+          <Icon className="h-3 w-3" />
+        </div>
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          aria-expanded={expanded}
+          aria-controls={expanded ? recordId : undefined}
+          className="min-w-[14rem] flex-1 cursor-pointer rounded-md text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+        >
+          <p className="text-sm text-gray-700 dark:text-gray-200">
+            {activity.description}
+          </p>
+          {activity.subject && (
+            <p className="truncate text-xs text-gray-500 dark:text-gray-400">
+              {activity.subject}
+            </p>
+          )}
+        </button>
+        <div className="ml-auto flex shrink-0 items-center gap-1.5">
+          {trailing ?? (
+            <span className="text-xs text-gray-400 dark:text-gray-500">
+              <span>{activity.createdBy?.name ?? 'Automatic'} · </span>
+              <time dateTime={activity.createdAt}>
+                {formatRelativeTime(activity.createdAt)}
+              </time>
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={() => setExpanded((v) => !v)}
+            aria-label={expanded ? 'Hide sent email' : 'Show sent email'}
+            aria-expanded={expanded}
+            aria-controls={expanded ? recordId : undefined}
+            // The line itself is the keyboard control; this is a pointer
+            // affordance, so it does not add a second tab stop per row.
+            tabIndex={-1}
+            className="flex h-7 w-7 items-center justify-center rounded-md text-gray-400 hover:bg-gray-100 hover:text-gray-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:hover:bg-gray-700 dark:hover:text-gray-200"
+          >
+            <ChevronDownIcon
+              className={clsx(
+                'h-4 w-4 transition-transform',
+                expanded && 'rotate-180',
+              )}
+            />
+          </button>
+        </div>
+      </div>
+      {expanded && (
+        <SponsorCommunicationRecord activity={activity} id={recordId} />
+      )}
+    </div>
+  )
+}

@@ -33,7 +33,19 @@ interface SponsorTemplatePickerProps {
   }
   senderName?: string
   tierName?: string
-  onApply: (subject: string, body: PortableTextBlock[]) => void
+  /**
+   * The chosen template, variables already merged. The third argument names
+   * the template so a caller can record which one a send started from (#1261).
+   */
+  onApply: (
+    subject: string,
+    body: PortableTextBlock[],
+    template: SponsorEmailTemplate,
+  ) => void
+  /** Categories to leave out of the picker (e.g. `contract` for an information send). */
+  excludeCategories?: readonly TemplateCategory[]
+  /** The template currently applied, so the select reflects it instead of the placeholder. */
+  selectedId?: string
   crmContext?: {
     tags?: string[]
     status?: string
@@ -51,9 +63,18 @@ export function SponsorTemplatePicker({
   tierName,
   onApply,
   crmContext,
+  excludeCategories,
+  selectedId,
 }: SponsorTemplatePickerProps) {
-  const { data: templates, isLoading } =
+  const { data: allTemplates, isLoading } =
     api.sponsor.emailTemplates.list.useQuery()
+  const templates = useMemo(
+    () =>
+      excludeCategories?.length
+        ? allTemplates?.filter((t) => !excludeCategories.includes(t.category))
+        : allTemplates,
+    [allTemplates, excludeCategories],
+  )
 
   const variables = useMemo(
     () =>
@@ -112,10 +133,14 @@ export function SponsorTemplatePicker({
         )
       : []
 
-    onApply(processedSubject, processedBody as unknown as PortableTextBlock[])
+    onApply(
+      processedSubject,
+      processedBody as unknown as PortableTextBlock[],
+      template,
+    )
 
-    // Reset the select so it can be re-selected
-    e.target.value = ''
+    // Uncontrolled use: reset so the same template can be re-selected.
+    if (selectedId === undefined) e.target.value = ''
   }
 
   if (isLoading) {
@@ -130,34 +155,77 @@ export function SponsorTemplatePicker({
     return null
   }
 
+  // Controlled: an id that is no longer in the list (deleted template) must
+  // show the placeholder, not whatever option React falls back to.
+  const controlledValue =
+    selectedId !== undefined && templates.some((t) => t._id === selectedId)
+      ? selectedId
+      : ''
+  const selectedTemplate =
+    controlledValue !== ''
+      ? templates.find((t) => t._id === controlledValue)
+      : undefined
+  const reapply = () => {
+    if (!selectedTemplate) return
+    onApply(
+      processTemplateVariables(selectedTemplate.subject, variables),
+      (selectedTemplate.body
+        ? processPortableTextVariables(
+            selectedTemplate.body as TemplateBlock[],
+            variables,
+          )
+        : []) as unknown as PortableTextBlock[],
+      selectedTemplate,
+    )
+  }
+
   return (
-    <select
-      onChange={handleSelect}
-      defaultValue=""
-      className="font-inter w-full border-none bg-transparent px-0 py-1 text-sm text-gray-600 focus:ring-0 focus:outline-none dark:text-gray-300"
-    >
-      <option value="" disabled>
-        Select a template...
-      </option>
-      {Object.entries(grouped).map(([category, categoryTemplates]) => (
-        <optgroup key={category} label={CATEGORY_LABELS[category] || category}>
-          {categoryTemplates.map((t) => (
-            <option
-              key={t._id}
-              value={t._id}
-              title={[t.description, `Subject: ${t.subject}`]
-                .filter(Boolean)
-                .join('\n')}
-            >
-              {LANGUAGE_FLAGS[t.language]
-                ? `${LANGUAGE_FLAGS[t.language]} `
-                : ''}
-              {t.title}
-              {recommendedTemplate?._id === t._id ? ' ✦' : ''}
-            </option>
-          ))}
-        </optgroup>
-      ))}
-    </select>
+    <div className="flex w-full items-center gap-2">
+      <select
+        onChange={handleSelect}
+        {...(selectedId === undefined
+          ? { defaultValue: '' }
+          : { value: controlledValue })}
+        className="font-inter w-full border-none bg-transparent px-0 py-1 text-sm text-gray-600 focus:ring-0 focus:outline-none dark:text-gray-300"
+      >
+        <option value="" disabled>
+          Select a template...
+        </option>
+        {Object.entries(grouped).map(([category, categoryTemplates]) => (
+          <optgroup
+            key={category}
+            label={CATEGORY_LABELS[category] || category}
+          >
+            {categoryTemplates.map((t) => (
+              <option
+                key={t._id}
+                value={t._id}
+                title={[t.description, `Subject: ${t.subject}`]
+                  .filter(Boolean)
+                  .join('\n')}
+              >
+                {LANGUAGE_FLAGS[t.language]
+                  ? `${LANGUAGE_FLAGS[t.language]} `
+                  : ''}
+                {t.title}
+                {recommendedTemplate?._id === t._id ? ' ✦' : ''}
+              </option>
+            ))}
+          </optgroup>
+        ))}
+      </select>
+      {/* Hidden with no recipient chosen (no `contactNames`): re-applying
+          would merge a bare `{{{CONTACT_NAMES}}}` into the body. */}
+      {selectedTemplate && contactNames && (
+        <button
+          type="button"
+          onClick={reapply}
+          title="Discard edits and apply this template again"
+          className="font-inter shrink-0 cursor-pointer text-xs text-gray-500 underline-offset-2 hover:text-gray-800 hover:underline dark:text-gray-400 dark:hover:text-gray-100"
+        >
+          Reset
+        </button>
+      )}
+    </div>
   )
 }

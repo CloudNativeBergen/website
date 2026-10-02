@@ -22,6 +22,7 @@ import { SponsorPipelineView } from './SponsorPipelineView'
 import { SponsorTier } from '@/lib/sponsor/types'
 import { useSponsorCRMFormMutations } from '@/hooks/useSponsorCRMFormMutations'
 import { SponsorMessagesPanel } from './SponsorMessagesPanel'
+import { SponsorCommunicationsPanel } from './SponsorCommunicationsPanel'
 
 type FormView =
   | 'pipeline'
@@ -31,6 +32,8 @@ type FormView =
   | 'contract'
   // The sponsor↔organizer message thread (messaging G2b).
   | 'messages'
+  // Everything SENT to this sponsor — the send audit (#1261).
+  | 'communications'
 
 interface SponsorCRMFormProps {
   conferenceId: string
@@ -42,10 +45,10 @@ interface SponsorCRMFormProps {
   initialView?: FormView
   onViewChange?: (view: FormView) => void
   /**
-   * Compose a one-off email to this sponsor. The host owns the composed-email
-   * modal (`SponsorIndividualEmailModal`) because it needs the conference
-   * sender identity, so the detail modal only RAISES the intent — it does not
-   * build a second email path. Omitted (or a brand-new sponsor with nothing
+   * Send an email to this sponsor. The host owns the Send modal
+   * (`SponsorSendModal`) because it needs the conference sender identity, so
+   * the detail modal only RAISES the intent — it does not build a second
+   * email path. Omitted (or a brand-new sponsor with nothing
    * saved yet) ⇒ no Email card in the Manage grid.
    */
   onSendEmail?: () => void
@@ -215,7 +218,7 @@ export function SponsorCRMForm({
   useEffect(() => {
     const isEditingContacts = view === 'contacts'
     const isEditingLogo = view === 'logo'
-    const isViewingHistory = view === 'history'
+    const isViewingHistory = view === 'history' || view === 'communications'
     if (!isOpen || isEditingContacts || isEditingLogo || isViewingHistory)
       return
 
@@ -306,6 +309,7 @@ export function SponsorCRMForm({
     logo: 'Logo',
     history: 'History',
     messages: 'Messages',
+    communications: 'Communications',
   }
 
   // ModalShell hosts the canonical header (title + subtitle + guarded 44px
@@ -420,6 +424,11 @@ export function SponsorCRMForm({
                 utils.sponsor.crm.list.invalidate()
                 utils.sponsor.crm.healthViolations.invalidate()
               }}
+            />
+          ) : view === 'communications' && sponsor ? (
+            <SponsorCommunicationsPanel
+              sponsorForConferenceId={sponsor._id}
+              onSend={onSendEmail}
             />
           ) : view === 'messages' && sponsor ? (
             // Sponsor↔organizer thread (messaging G2b): ensured on

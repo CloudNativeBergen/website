@@ -1,6 +1,14 @@
 import { clientWrite } from '@/lib/sanity/client'
 import { getCurrentDateTime } from '@/lib/time'
-import type { ActivityType, SponsorActivityInput } from './types'
+import type {
+  ActivityType,
+  CommunicationAttachment,
+  CommunicationDeliveryStatus,
+  CommunicationKind,
+  CommunicationRecipient,
+  SponsorActivityInput,
+} from './types'
+import { describeCommunication } from './communication'
 import { formatStatusName } from '@/components/admin/sponsor-crm/utils'
 import {
   getOrganizationRefForCurrentConference,
@@ -349,6 +357,90 @@ export async function logEmailSent(
   )
 }
 
+export interface LogCommunicationArgs {
+  sponsorForConferenceId: string
+  kind: CommunicationKind
+  recipients: CommunicationRecipient[]
+  subject: string
+  /** Rendered HTML exactly as handed to the provider. */
+  body: string
+  template?: { id: string; edited: boolean }
+  attachments?: CommunicationAttachment[]
+  deliveryStatus: CommunicationDeliveryStatus
+  providerMessageId?: string
+  error?: string
+  /** Organizer id, or `null` for an automated send. */
+  createdBy: string | null
+}
+
+/**
+ * The sent-communication audit record (#1261): an `email` activity carrying
+ * recipients, content as sent, template provenance and the provider id.
+ * NEVER throws — a failed write must not fail or roll back the send.
+ */
+export async function logCommunication(
+  args: LogCommunicationArgs,
+): Promise<{ activityId?: string; error?: Error }> {
+  try {
+    const orgRef = await getOrganizationRefViaParentConference(
+      args.sponsorForConferenceId,
+    )
+    const createdAt = getCurrentDateTime()
+    const doc = {
+      _type: 'sponsorActivity' as const,
+      sponsorForConference: {
+        _type: 'reference' as const,
+        _ref: args.sponsorForConferenceId,
+      },
+      activityType: 'email' as const,
+      description: describeCommunication(
+        args.kind,
+        args.recipients,
+        args.deliveryStatus,
+      ),
+      metadata: { additionalData: args.subject, timestamp: createdAt },
+      createdAt,
+      communicationKind: args.kind,
+      recipients: args.recipients.map((r) => ({
+        _type: 'communicationRecipient' as const,
+        _key: r.contactKey,
+        ...r,
+      })),
+      subject: args.subject,
+      body: args.body,
+      deliveryStatus: args.deliveryStatus,
+      ...(args.template && {
+        template: {
+          _type: 'reference' as const,
+          _ref: args.template.id,
+          _weak: true,
+        },
+        templateEdited: args.template.edited,
+      }),
+      ...(args.attachments?.length && {
+        attachments: args.attachments.map((a, i) => ({
+          _type: 'communicationAttachment' as const,
+          _key: `att-${i}`,
+          ...a,
+        })),
+      }),
+      ...(args.providerMessageId && {
+        providerMessageId: args.providerMessageId,
+      }),
+      ...(args.error && { error: args.error }),
+      ...organizationField(orgRef),
+      ...(args.createdBy && {
+        createdBy: { _type: 'reference' as const, _ref: args.createdBy },
+      }),
+    }
+    const created = await clientWrite.create(doc)
+    return { activityId: created._id }
+  } catch (error) {
+    console.error('Failed to log sponsor communication:', error)
+    return { error: error as Error }
+  }
+}
+
 export async function logSponsorCreated(
   sponsorForConferenceId: string,
   createdBy: string,
@@ -439,6 +531,10 @@ export async function logBulkEmailSent(
   }
 }
 
+/** Refusal for edits/deletes aimed at a sent-communication audit record. */
+export const AUDIT_IMMUTABLE_MESSAGE =
+  'Sent emails are an audit record and cannot be edited or deleted'
+
 /** Activity types a user authored by hand — the only ones editable/deletable. */
 const USER_AUTHORED_ACTIVITY_TYPES: ActivityType[] = [
   'note',
@@ -465,8 +561,9 @@ export async function updateSponsorActivity(
     const activity = await clientWrite.fetch<{
       activityType: ActivityType
       createdBy?: { _ref: string }
+      communicationKind?: string
     }>(
-      `*[_type == "sponsorActivity" && _id == $activityId][0]{ activityType, createdBy }`,
+      `*[_type == "sponsorActivity" && _id == $activityId][0]{ activityType, createdBy, communicationKind }`,
       {
         activityId,
       },
@@ -492,6 +589,13 @@ export async function updateSponsorActivity(
       }
     }
 
+    // A sent-communication record is an audit entry, whatever its type says —
+    // checked AFTER the creator check so a foreign id answers exactly as it
+    // did before this field existed.
+    if (activity.communicationKind) {
+      return { success: false, error: new Error(AUDIT_IMMUTABLE_MESSAGE) }
+    }
+
     let patch = clientWrite.patch(activityId).set({ description })
     if (metadata !== undefined) patch = patch.set({ metadata })
     await patch.commit()
@@ -512,8 +616,9 @@ export async function deleteSponsorActivity(
     const activity = await clientWrite.fetch<{
       activityType: ActivityType
       createdBy?: { _ref: string }
+      communicationKind?: string
     }>(
-      `*[_type == "sponsorActivity" && _id == $activityId][0]{ activityType, createdBy }`,
+      `*[_type == "sponsorActivity" && _id == $activityId][0]{ activityType, createdBy, communicationKind }`,
       {
         activityId,
       },
@@ -540,6 +645,10 @@ export async function deleteSponsorActivity(
         success: false,
         error: new Error('You can only delete your own activities'),
       }
+    }
+
+    if (activity.communicationKind) {
+      return { success: false, error: new Error(AUDIT_IMMUTABLE_MESSAGE) }
     }
 
     await clientWrite.delete(activityId)
