@@ -28,6 +28,7 @@ const h = vi.hoisted(() => ({
   inserts: [] as Array<{ id: string; items: unknown[] }>,
   creates: [] as Array<Record<string, unknown>>,
   insertShouldThrow: false,
+  linksShouldThrow: false,
   listDiscounts: vi.fn(),
   createDiscount: vi.fn(),
 }))
@@ -52,7 +53,11 @@ vi.mock('@/lib/tickets/provider', () => ({
 vi.mock('@/lib/sanity/client', () => {
   const fetch = async (query: string) => {
     if (query.includes('"memberOrgIds"')) return h.tenant
-    if (query.includes('"linkedCodes"')) return h.links
+    if (query.includes('"linkedCodes"')) {
+      if (h.linksShouldThrow)
+        throw new Error('sanity transport: socket hang up')
+      return h.links
+    }
     return null
   }
   const patch = (id: string) => {
@@ -150,6 +155,7 @@ beforeEach(() => {
   h.inserts = []
   h.creates = []
   h.insertShouldThrow = false
+  h.linksShouldThrow = false
   h.getConference.mockResolvedValue({
     conference: {
       _id: CONF,
@@ -234,6 +240,18 @@ describe('tickets.admin.createDiscountCode for a sponsor row', () => {
     })
     expect(h.createDiscount).not.toHaveBeenCalled()
     expect(h.inserts).toHaveLength(0)
+  })
+
+  it('fails closed when the links cannot be read — and mints nothing', async () => {
+    h.linksShouldThrow = true
+    await expect(
+      tickets().admin.createDiscountCode(INPUT),
+    ).rejects.toMatchObject({
+      code: 'INTERNAL_SERVER_ERROR',
+      message:
+        'Could not read this conference’s sponsors, so a code cannot be checked against them. Try again.',
+    })
+    expect(h.createDiscount).not.toHaveBeenCalled()
   })
 
   it('a standalone code links to nobody', async () => {

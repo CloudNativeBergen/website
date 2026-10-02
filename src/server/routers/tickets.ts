@@ -1065,7 +1065,18 @@ export const ticketsRouter = router({
                 message: 'Failed to fetch conference',
               })
             }
-            sponsorLinks = await readSponsorCodeLinks(linkConference._id)
+            // FAILS CLOSED like the standalone guard below: without the read
+            // the stored-elsewhere refusal cannot be made.
+            try {
+              sponsorLinks = await readSponsorCodeLinks(linkConference._id)
+            } catch (linksError) {
+              throw new TRPCError({
+                code: 'INTERNAL_SERVER_ERROR',
+                message:
+                  'Could not read this conference’s sponsors, so a code cannot be checked against them. Try again.',
+                cause: linksError,
+              })
+            }
             const wanted = normalizeDiscountCode(discountCode)
             const holder = sponsorLinks.find(
               (l) =>

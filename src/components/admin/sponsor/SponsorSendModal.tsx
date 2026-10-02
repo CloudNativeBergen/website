@@ -685,7 +685,7 @@ export function SponsorSendModal({
     if (selectedCount === 0) {
       throw new Error('Choose at least one recipient')
     }
-    if (isDiscount && chosenCodes.length === 0) {
+    if (isDiscount && (!codesSeeded || chosenCodes.length === 0)) {
       throw new Error('Choose at least one discount code')
     }
     const applied = appliedTemplateRef.current
