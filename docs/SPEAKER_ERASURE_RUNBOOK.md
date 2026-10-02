@@ -453,16 +453,34 @@ the read, and the sweep cannot know the name the line still shows.
 The verification counts `sentCommunicationRecipients` and needs the pre-erasure
 match set like the merge trail does — a standalone `--verify` cannot recount it.
 
-**What it does not reach.** A record is found only by an address on the
-speaker's own profile (`email` + `knownEmails`): a contact entry using an
-address they never had on their profile — a work address typed into the
-sponsor's contact list — is not found, and a sponsor contact with no speaker
-document has no erasure path at all (website#1265, open). The sponsor's own
-contact list (`sponsorForConference.contactPersons[]`) is the sponsor-contact
-rail and is not swept by a speaker erasure. A name typed by hand into the
-subject or body, the subject copied into `metadata.additionalData`, and a
-`description` an organizer has edited away from its generated form are free
-text, which Phase 1 does not erase.
+**What the speaker erasure does not reach.** A record is found only by an
+address on the speaker's own profile (`email` + `knownEmails`). A contact
+entry using an address they never had on their profile — a work address typed
+into the sponsor's contact list — and a sponsor contact with no speaker
+document at all are both reached by the sponsor-contact tool below instead.
+The sponsor's own contact list (`sponsorForConference.contactPersons[]`) is
+the organizer's to edit in the CRM and is not swept by either tool. A name
+typed by hand into the subject or body, the subject copied into
+`metadata.additionalData`, and a `description` an organizer has edited away
+from its generated form are free text, which Phase 1 does not erase.
+
+### A sponsor contact without a speaker document
+
+Most sponsor contacts never had a speaker document, so `erase-speaker` has
+nothing to run on. For them:
+
+```bash
+pnpm erase-sponsor-contact --email "<address>[,<other address>]" --actor "<you>"            # dry run
+pnpm erase-sponsor-contact --email "<address>[,<other address>]" --actor "<you>" --commit   # writes
+```
+
+It runs the same planner over every send record carrying one of the addresses,
+in any tenant, in one revision-guarded transaction, then re-reads and prints
+`CLEAN` or the residual count. Give it every address the person used as a
+contact; the match is by address only. Then remove their entry from the
+sponsor's contact list in the CRM (the tool does not), and answer the request
+naming the free text it leaves. A refusal writes nothing; a second run stages
+nothing.
 
 ### The limit: no live speaker document, no erasure
 
