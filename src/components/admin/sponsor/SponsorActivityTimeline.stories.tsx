@@ -464,7 +464,9 @@ export const EditActivityDark: Story = {
  * — recipients, template provenance, provider id and the body as sent.
  */
 export const SentEmailInFeed: Story = {
-  parameters: { msw: { handlers: sentEmailHandlers } },
+  // Padded, not centered: the wrapper must take the viewport width so a
+  // 393px shot exercises the mobile layout instead of sizing to content.
+  parameters: { layout: 'padded', msw: { handlers: sentEmailHandlers } },
   render: () => (
     <div className="w-full max-w-[40rem] rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
       <SponsorActivityTimeline

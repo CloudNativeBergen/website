@@ -129,13 +129,15 @@ const CONF = 'conf-cndn'
 const SFC = 'sfc-acme'
 
 function ctx(): Context {
+  // Deliberately DIFFERENT names: the speaker profile vs the sign-in profile.
+  // The composer may have merged either into SENDER_NAME.
   const speaker = {
     _id: 'sp-admin',
-    name: 'Admin',
+    name: 'Admin Speaker',
     isOrganizer: true,
     organizerOrgIds: [ORG],
   }
-  const user = { email: 'a@example.com', name: 'Admin', picture: '' }
+  const user = { email: 'a@example.com', name: 'Admin Login', picture: '' }
   return {
     req: {
       headers: new Headers(),
@@ -486,6 +488,45 @@ describe('the edited flag is computed, not trusted', () => {
       template: { _ref: 'tpl-info-en' },
       templateEdited: false,
     })
+  })
+
+  it('accepts a greeting merged with the SIGN-IN name as unedited (sender-name sources differ)', async () => {
+    h.getTemplate.mockResolvedValue({
+      template: {
+        ...INFO_TEMPLATE,
+        subject: 'From {{{SENDER_NAME}}}',
+      },
+    })
+    await sponsor().crm.sendCommunication({
+      ...INPUT,
+      ...MERGED_FOR_KARI,
+      subject: 'From Admin Login',
+      template: { id: 'tpl-info-en', edited: true },
+    })
+    expect(sentCreate()).toMatchObject({ templateEdited: false })
+  })
+
+  it('ignores editor defaults (empty marks/markDefs, style normal, new keys) when comparing', async () => {
+    const normalized = JSON.stringify([
+      {
+        _type: 'block',
+        _key: 'zz',
+        children: [
+          {
+            _type: 'span',
+            _key: 'zz1',
+            text: 'Hi Kari Nordmann, here is the booth information.',
+          },
+        ],
+      },
+    ])
+    await sponsor().crm.sendCommunication({
+      ...INPUT,
+      ...MERGED_FOR_KARI,
+      message: normalized,
+      template: { id: 'tpl-info-en', edited: true },
+    })
+    expect(sentCreate()).toMatchObject({ templateEdited: false })
   })
 
   it('records edited=true when a single character differs, whatever the client says', async () => {

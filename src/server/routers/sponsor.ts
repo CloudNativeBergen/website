@@ -2951,7 +2951,7 @@ export const sponsorRouter = router({
           subject: input.subject,
           message,
           template,
-          senderName: ctx.speaker.name || undefined,
+          senderNames: [ctx.speaker.name, ctx.user?.name],
         })
 
         if (!result.ok) {
@@ -3055,7 +3055,7 @@ export const sponsorRouter = router({
           recipientKeys,
           subject: input.subject,
           message,
-          senderName: ctx.speaker.name || undefined,
+          senderNames: [ctx.speaker.name, ctx.user?.name],
         })
         if (!result.ok) {
           throw new TRPCError({

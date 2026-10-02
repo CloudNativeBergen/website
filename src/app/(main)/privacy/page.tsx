@@ -1842,11 +1842,18 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                               Email Communications
                             </td>
                             <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
-                              Not stored by this site
+                              Not stored by this site, except emails sent to
+                              sponsor contacts from the sponsor CRM
                               <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                                We keep no copy of sent emails; the email
-                                provider listed in section 5 holds delivery
-                                records under its own terms
+                                Speaker and attendee emails: we keep no copy;
+                                the email provider listed in section 5 holds
+                                delivery records under its own terms. Sponsor
+                                CRM emails (see Messages above): the record of
+                                each send &mdash; recipient name, email and
+                                role, subject and body as sent, template,
+                                sender, time, provider message id and any failed
+                                attempt &mdash; is kept for the life of the
+                                sponsor record
                               </div>
                             </td>
                             <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">

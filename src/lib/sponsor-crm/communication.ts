@@ -37,9 +37,11 @@ export function defaultRecipientKey(
 }
 
 /**
- * Strip editor-assigned `_key`s so a re-keyed but otherwise identical body
- * compares equal. Shared by the composer (preview of the edited flag) and the
- * server (the flag that is actually STORED).
+ * Normalize PortableText for comparison: drop editor-assigned `_key`s and the
+ * defaults a rich-text editor adds to untouched content (`marks: []`,
+ * `markDefs: []`, `style: 'normal'`), so a template that merely passed
+ * through the editor is not mistaken for an edited one. Shared by the
+ * composer (preview of the flag) and the server (the flag that is STORED).
  */
 export function withoutKeys(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(withoutKeys)
@@ -47,6 +49,13 @@ export function withoutKeys(value: unknown): unknown {
     const out: Record<string, unknown> = {}
     for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
       if (k === '_key') continue
+      if (
+        (k === 'marks' || k === 'markDefs') &&
+        Array.isArray(v) &&
+        v.length === 0
+      )
+        continue
+      if (k === 'style' && v === 'normal') continue
       out[k] = withoutKeys(v)
     }
     return out

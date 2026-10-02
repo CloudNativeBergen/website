@@ -48,8 +48,13 @@ export interface SendSponsorCommunicationArgs {
    * composer used and compared to what is actually being sent.
    */
   template?: SponsorEmailTemplate
-  /** Who is sending, for the `SENDER_NAME` merge field. */
-  senderName?: string
+  /**
+   * Every name the composer may have merged into `SENDER_NAME` (the speaker
+   * profile name and the sign-in profile name differ for some organizers).
+   * The send counts as unedited if it matches the template merged with ANY
+   * of them; the first is used for the record.
+   */
+  senderNames?: readonly (string | undefined)[]
   attachments?: CommunicationAttachment[]
 }
 
@@ -88,6 +93,20 @@ interface SfcForSend {
  * differently — reads as EDITED, never as "sent as written".
  */
 function computeTemplateEdited(
+  template: SponsorEmailTemplate,
+  sfc: SfcForSend,
+  conference: Conference,
+  recipients: readonly CommunicationRecipient[],
+  senderNames: readonly (string | undefined)[],
+  sent: { subject: string; message: PortableTextBlock[] },
+): boolean {
+  const candidates = senderNames.length > 0 ? senderNames : [undefined]
+  return candidates.every((senderName) =>
+    mergedDiffers(template, sfc, conference, recipients, senderName, sent),
+  )
+}
+
+function mergedDiffers(
   template: SponsorEmailTemplate,
   sfc: SfcForSend,
   conference: Conference,
@@ -196,7 +215,7 @@ export async function sendSponsorCommunication(
             sfc,
             conference,
             recipients,
-            args.senderName,
+            args.senderNames ?? [],
             { subject: args.subject, message: args.message },
           ),
         }

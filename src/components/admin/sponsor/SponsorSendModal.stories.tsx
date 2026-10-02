@@ -244,6 +244,39 @@ export const NoContacts: Story = {
   },
 }
 
+/** Templates fail to load: the modal still opens, says so, and applies nothing. */
+export const TemplatesUnavailable: Story = {
+  parameters: {
+    msw: {
+      handlers: [
+        http.get('/api/trpc/sponsor.emailTemplates.list', () =>
+          HttpResponse.json(
+            {
+              error: {
+                message: 'Failed to list email templates',
+                code: -32603,
+              },
+            },
+            { status: 500 },
+          ),
+        ),
+        ...handlers.filter(
+          (h) => !String(h.info.header).includes('emailTemplates'),
+        ),
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body)
+    await body.findByText(/Templates could not be loaded/, undefined, {
+      timeout: 15_000,
+    })
+    await expect(
+      body.getByDisplayValue('Information: Cloud Native Days Norway 2026'),
+    ).toBeInTheDocument()
+  },
+}
+
 export const Mobile: Story = {
   parameters: {
     viewport: { value: 'mobile1', isRotated: false },

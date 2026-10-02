@@ -185,6 +185,7 @@ export function SponsorRecipientPicker({
             }
             className={clsx(
               'font-inter inline-flex min-h-8 max-w-full items-center gap-1.5 rounded-full border px-2.5 py-1 text-sm transition-colors select-none',
+              'has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-indigo-500 has-[:focus-visible]:ring-offset-1 dark:has-[:focus-visible]:ring-offset-gray-900',
               selectable && 'cursor-pointer',
               selected
                 ? 'border-brand-cloud-blue bg-brand-sky-mist text-brand-slate-gray dark:border-indigo-400 dark:bg-indigo-900/40 dark:text-indigo-100'
@@ -532,8 +533,10 @@ export function SponsorSendModal({
       and send.
     </p>
   ) : null
+  // Not offered with nobody selected: re-applying would merge a bare
+  // `{{{CONTACT_NAMES}}}` placeholder into the body.
   const recipientsChangedHint =
-    recipientsChangedSinceApply && appliedTemplateDoc ? (
+    recipientsChangedSinceApply && appliedTemplateDoc && selectedCount > 0 ? (
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <p className="font-inter text-sm text-amber-700 dark:text-amber-300">
           The recipients changed after the template was applied, so the greeting

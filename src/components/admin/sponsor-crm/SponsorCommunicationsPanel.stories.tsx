@@ -264,6 +264,33 @@ export const Empty: Story = {
   },
 }
 
+/** The first page fails: an alert with retry, never "Nothing sent yet". */
+export const LoadError: Story = {
+  parameters: {
+    msw: {
+      handlers: [
+        http.get('/api/trpc/sponsor.crm.activities.listCommunications', () =>
+          HttpResponse.json(
+            { error: { message: 'Failed to list sent emails', code: -32603 } },
+            { status: 500 },
+          ),
+        ),
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await canvas.findByRole('alert', undefined, { timeout: 10_000 })
+    await expect(
+      canvas.getByText('The sent emails could not be loaded.'),
+    ).toBeInTheDocument()
+    await expect(canvas.queryByText('Nothing sent yet')).not.toBeInTheDocument()
+    await expect(
+      canvas.getByRole('button', { name: 'Try again' }),
+    ).toBeInTheDocument()
+  },
+}
+
 export const Mobile: Story = {
   parameters: {
     layout: 'fullscreen',

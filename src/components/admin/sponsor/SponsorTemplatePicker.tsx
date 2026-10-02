@@ -155,36 +155,75 @@ export function SponsorTemplatePicker({
     return null
   }
 
+  // Controlled: an id that is no longer in the list (deleted template) must
+  // show the placeholder, not whatever option React falls back to.
+  const controlledValue =
+    selectedId !== undefined && templates.some((t) => t._id === selectedId)
+      ? selectedId
+      : ''
+  const selectedTemplate =
+    controlledValue !== ''
+      ? templates.find((t) => t._id === controlledValue)
+      : undefined
+  const reapply = () => {
+    if (!selectedTemplate) return
+    onApply(
+      processTemplateVariables(selectedTemplate.subject, variables),
+      (selectedTemplate.body
+        ? processPortableTextVariables(
+            selectedTemplate.body as TemplateBlock[],
+            variables,
+          )
+        : []) as unknown as PortableTextBlock[],
+      selectedTemplate,
+    )
+  }
+
   return (
-    <select
-      onChange={handleSelect}
-      {...(selectedId === undefined
-        ? { defaultValue: '' }
-        : { value: selectedId ?? '' })}
-      className="font-inter w-full border-none bg-transparent px-0 py-1 text-sm text-gray-600 focus:ring-0 focus:outline-none dark:text-gray-300"
-    >
-      <option value="" disabled>
-        Select a template...
-      </option>
-      {Object.entries(grouped).map(([category, categoryTemplates]) => (
-        <optgroup key={category} label={CATEGORY_LABELS[category] || category}>
-          {categoryTemplates.map((t) => (
-            <option
-              key={t._id}
-              value={t._id}
-              title={[t.description, `Subject: ${t.subject}`]
-                .filter(Boolean)
-                .join('\n')}
-            >
-              {LANGUAGE_FLAGS[t.language]
-                ? `${LANGUAGE_FLAGS[t.language]} `
-                : ''}
-              {t.title}
-              {recommendedTemplate?._id === t._id ? ' ✦' : ''}
-            </option>
-          ))}
-        </optgroup>
-      ))}
-    </select>
+    <div className="flex w-full items-center gap-2">
+      <select
+        onChange={handleSelect}
+        {...(selectedId === undefined
+          ? { defaultValue: '' }
+          : { value: controlledValue })}
+        className="font-inter w-full border-none bg-transparent px-0 py-1 text-sm text-gray-600 focus:ring-0 focus:outline-none dark:text-gray-300"
+      >
+        <option value="" disabled>
+          Select a template...
+        </option>
+        {Object.entries(grouped).map(([category, categoryTemplates]) => (
+          <optgroup
+            key={category}
+            label={CATEGORY_LABELS[category] || category}
+          >
+            {categoryTemplates.map((t) => (
+              <option
+                key={t._id}
+                value={t._id}
+                title={[t.description, `Subject: ${t.subject}`]
+                  .filter(Boolean)
+                  .join('\n')}
+              >
+                {LANGUAGE_FLAGS[t.language]
+                  ? `${LANGUAGE_FLAGS[t.language]} `
+                  : ''}
+                {t.title}
+                {recommendedTemplate?._id === t._id ? ' ✦' : ''}
+              </option>
+            ))}
+          </optgroup>
+        ))}
+      </select>
+      {selectedTemplate && (
+        <button
+          type="button"
+          onClick={reapply}
+          title="Discard edits and apply this template again"
+          className="font-inter shrink-0 cursor-pointer text-xs text-gray-500 underline-offset-2 hover:text-gray-800 hover:underline dark:text-gray-400 dark:hover:text-gray-100"
+        >
+          Reset
+        </button>
+      )}
+    </div>
   )
 }
