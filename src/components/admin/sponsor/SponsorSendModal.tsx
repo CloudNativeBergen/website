@@ -29,6 +29,7 @@ import type {
 } from '@/lib/sponsor-crm/types'
 import {
   COMMUNICATION_KIND_LABELS,
+  TEMPLATE_NOT_FOUND_MESSAGE,
   defaultRecipientKey,
 } from '@/lib/sponsor-crm/communication'
 import { formatConferenceDateLong } from '@/lib/time'
@@ -329,7 +330,16 @@ export function SponsorSendModal({
     enabled: isOpen,
   })
   const templatesSettled = !templatesQuery.isLoading
-  const hasDraft = isOpen && !!readStorage(draftKey)
+  // Whether a draft was waiting when the modal OPENED — read once per open,
+  // not per render, so a later re-render (a recipient toggle after "Clear
+  // draft") cannot flip it and attach a default the editor never showed.
+  const [hasDraft, setHasDraft] = useState(false)
+  useEffect(() => {
+    if (isOpen) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- sampled once per open
+      setHasDraft(!!readStorage(draftKey))
+    }
+  }, [isOpen, draftKey])
   const defaultTemplate = useMemo(
     () =>
       hasDraft
@@ -395,21 +405,40 @@ export function SponsorSendModal({
       throw new Error('Choose at least one recipient')
     }
     const applied = appliedTemplateRef.current
-    const result = await sendMutation.mutateAsync({
+    const base = {
       sponsorForConferenceId: sponsorForConference._id,
-      kind: 'information',
+      kind: 'information' as const,
       recipientKeys: Array.from(selectedKeys),
       subject,
       message: JSON.stringify(message as PortableTextBlockForHTML[]),
-      ...(applied
-        ? {
-            template: {
-              id: applied.id,
-              edited: isTemplateEdited(applied, { subject, message }),
-            },
-          }
-        : {}),
-    })
+    }
+    const withProvenance = applied
+      ? {
+          ...base,
+          template: {
+            id: applied.id,
+            edited: isTemplateEdited(applied, { subject, message }),
+          },
+        }
+      : base
+    let result: Awaited<ReturnType<typeof sendMutation.mutateAsync>>
+    try {
+      result = await sendMutation.mutateAsync(withProvenance)
+    } catch (error) {
+      // The template this draft started from has since been deleted: the
+      // content is still what the organizer wrote, so send it WITHOUT the
+      // stale provenance instead of blocking every future send.
+      if (
+        applied &&
+        error instanceof Error &&
+        error.message === TEMPLATE_NOT_FOUND_MESSAGE
+      ) {
+        rememberApplied(null)
+        result = await sendMutation.mutateAsync(base)
+      } else {
+        throw error
+      }
+    }
     rememberApplied(null)
     utils.sponsor.crm.activities.list.invalidate()
     utils.sponsor.crm.activities.listCommunications.invalidate()
@@ -467,6 +496,7 @@ export function SponsorSendModal({
         selectedCount > 1 ? `Send to ${selectedCount} contacts` : 'Send'
       }
       storageKey={draftKey}
+      onClearDraft={() => rememberApplied(initialFromDefault ?? null)}
       previewComponent={createPreview}
       brandColor={emailBrandColor(conference.theme)}
       fromAddress={fromEmail}

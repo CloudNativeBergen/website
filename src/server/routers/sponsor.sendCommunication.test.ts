@@ -227,7 +227,9 @@ beforeEach(() => {
     slug: 'cloud-native-days-norway',
   })
   h.send.mockResolvedValue({ data: { id: 'resend-msg-1' }, error: null })
-  h.getTemplate.mockResolvedValue({ template: { _id: 'tpl-info-en' } })
+  h.getTemplate.mockResolvedValue({
+    template: { _id: 'tpl-info-en', category: 'follow-up' },
+  })
   vi.spyOn(console, 'warn').mockImplementation(() => {})
   vi.spyOn(console, 'error').mockImplementation(() => {})
 })
@@ -388,6 +390,33 @@ describe('template provenance is validated, not trusted', () => {
     expect(h.getTemplate).toHaveBeenCalledWith('tpl-of-another-org')
     expect(h.send).not.toHaveBeenCalled()
     expect(h.creates).toHaveLength(0)
+  })
+
+  it('refuses a contract template as the start of an information email', async () => {
+    h.getTemplate.mockResolvedValue({
+      template: { _id: 'tpl-contract', category: 'contract' },
+    })
+    await expect(
+      sponsor().crm.sendCommunication({
+        ...INPUT,
+        template: { id: 'tpl-contract', edited: false },
+      }),
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: 'Template is for another kind of email',
+    })
+    expect(h.send).not.toHaveBeenCalled()
+  })
+
+  it('surfaces a template READ failure as a server error, not as "not found"', async () => {
+    h.getTemplate.mockResolvedValue({ error: new Error('sanity down') })
+    await expect(
+      sponsor().crm.sendCommunication({
+        ...INPUT,
+        template: { id: 'tpl-info-en', edited: false },
+      }),
+    ).rejects.toMatchObject({ code: 'INTERNAL_SERVER_ERROR' })
+    expect(h.send).not.toHaveBeenCalled()
   })
 
   it('does not touch the template reader when no template is claimed', async () => {

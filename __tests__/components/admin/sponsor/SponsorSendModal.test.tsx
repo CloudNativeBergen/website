@@ -104,7 +104,9 @@ vi.mock('@/components/admin/EmailModal', () => ({
     warningContent,
     initialValues,
     isOpen,
+    onClearDraft,
   }: {
+    onClearDraft?: () => void
     isOpen: boolean
     initialValues?: { subject?: string; message?: unknown }
     warningContent?: React.ReactNode
@@ -131,6 +133,18 @@ vi.mock('@/components/admin/EmailModal', () => ({
     return (
       <div>
         <p data-testid="subject">{draft.subject}</p>
+        <button
+          type="button"
+          onClick={() => {
+            draft = {
+              subject: initialValues?.subject ?? '',
+              message: (initialValues?.message as PortableTextBlock[]) ?? [],
+            }
+            onClearDraft?.()
+          }}
+        >
+          clear draft
+        </button>
         {warningContent}
         <div data-testid="to">{recipientInfo}</div>
         {templateSelector?.({
@@ -354,6 +368,64 @@ describe('default template (AC4)', () => {
     expect(
       localStorage.getItem('sponsor-send-information-sfc-123:template'),
     ).toBeNull()
+  })
+})
+
+describe('provenance edge cases (round 2)', () => {
+  it('drops the provenance and sends again when the template was deleted since', async () => {
+    localStorage.setItem(
+      'sponsor-send-information-sfc-123',
+      JSON.stringify({ subject: 'Restored', message: [] }),
+    )
+    localStorage.setItem(
+      'sponsor-send-information-sfc-123:template',
+      JSON.stringify({ id: 'tpl-gone', subject: 'Restored', body: [] }),
+    )
+    h.mutateAsync
+      .mockRejectedValueOnce(new Error('Template not found'))
+      .mockResolvedValueOnce({ success: true, recipientCount: 1 })
+    renderModal()
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+    await waitFor(() => expect(h.mutateAsync).toHaveBeenCalledTimes(2))
+    expect(h.mutateAsync.mock.calls[0][0].template).toMatchObject({
+      id: 'tpl-gone',
+    })
+    expect(h.mutateAsync.mock.calls[1][0].template).toBeUndefined()
+    expect(h.showNotification).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'success' }),
+    )
+  })
+
+  it('does not swallow other errors', async () => {
+    h.mutateAsync.mockRejectedValueOnce(
+      new Error('Resend: domain not verified'),
+    )
+    renderModal()
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+    await waitFor(() =>
+      expect(h.showNotification).toHaveBeenCalledWith(
+        expect.objectContaining({ title: 'Resend: domain not verified' }),
+      ),
+    )
+    expect(h.mutateAsync).toHaveBeenCalledTimes(1)
+  })
+
+  it('"Clear draft" resets provenance to the default template, or to none', async () => {
+    localStorage.setItem(
+      'sponsor-send-information-sfc-123',
+      JSON.stringify({ subject: 'Restored', message: [] }),
+    )
+    localStorage.setItem(
+      'sponsor-send-information-sfc-123:template',
+      JSON.stringify({ id: 'tpl-earlier', subject: 'Restored', body: [] }),
+    )
+    renderModal()
+    fireEvent.click(screen.getByRole('button', { name: 'clear draft' }))
+    draft = { ...draft, subject: 'Fresh scratch email' }
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+    await waitFor(() => expect(h.mutateAsync).toHaveBeenCalledTimes(1))
+    // No templates ⇒ a cleared draft is a scratch email with no provenance.
+    expect(h.mutateAsync.mock.calls[0][0].template).toBeUndefined()
   })
 })
 

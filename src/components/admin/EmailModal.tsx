@@ -66,6 +66,12 @@ export interface EmailModalProps {
   onTicketUrlChange?: (url: string) => void
   /** Rendered directly under the ticket URL field. */
   ticketUrlAction?: React.ReactNode
+  /**
+   * The organizer discarded the saved draft; the composer returns to
+   * `initialValues`. Lets a host drop state it keeps BESIDE the draft (#1261:
+   * the template a send started from).
+   */
+  onClearDraft?: () => void
 }
 
 export function EmailModal({
@@ -90,6 +96,7 @@ export function EmailModal({
   ticketUrl,
   onTicketUrlChange,
   ticketUrlAction,
+  onClearDraft,
 }: EmailModalProps) {
   const [subject, setSubject] = useState('')
   const [richTextValue, setRichTextValue] = useState<PortableTextBlock[]>([])
@@ -321,6 +328,7 @@ export function EmailModal({
       storage.clearStorage()
       setSubject('')
       setRichTextValue([])
+      onClearDraft?.()
       showNotification({
         type: 'success',
         title: 'Draft cleared',

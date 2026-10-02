@@ -125,6 +125,7 @@ import {
   listCommunicationsForSponsor,
 } from '@/lib/sponsor-crm/activities'
 import { sendSponsorCommunication } from '@/lib/sponsor-crm/communication-send'
+import { TEMPLATE_NOT_FOUND_MESSAGE } from '@/lib/sponsor-crm/communication'
 import {
   bulkUpdateSponsors,
   bulkDeleteSponsors,
@@ -2907,11 +2908,30 @@ export const sponsorRouter = router({
         // Resolve it through the org-scoped reader (fails closed), so a foreign
         // or wrong-typed id can never become provenance.
         if (input.template) {
-          const { template } = await getSponsorEmailTemplate(input.template.id)
+          const { template, error } = await getSponsorEmailTemplate(
+            input.template.id,
+          )
+          if (error) {
+            throw new TRPCError({
+              code: 'INTERNAL_SERVER_ERROR',
+              message: 'Could not verify the template',
+              cause: error,
+            })
+          }
           if (!template) {
             throw new TRPCError({
               code: 'BAD_REQUEST',
-              message: 'Template not found',
+              message: TEMPLATE_NOT_FOUND_MESSAGE,
+            })
+          }
+          // A contract template carries the signing-link copy; it is not a
+          // valid starting point for any other kind, and vice versa.
+          const isContractTemplate = template.category === 'contract'
+          const isContractKind = (input.kind as string) === 'contract'
+          if (isContractTemplate !== isContractKind) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: 'Template is for another kind of email',
             })
           }
         }

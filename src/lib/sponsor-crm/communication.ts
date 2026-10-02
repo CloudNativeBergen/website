@@ -36,6 +36,12 @@ export function defaultRecipientKey(
   return undefined
 }
 
+/**
+ * Shared between the router (which throws it) and the Send modal (which
+ * recovers from it by dropping the stale provenance and sending again).
+ */
+export const TEMPLATE_NOT_FOUND_MESSAGE = 'Template not found'
+
 export class CommunicationRecipientError extends Error {
   constructor(message: string) {
     super(message)

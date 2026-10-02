@@ -11,7 +11,7 @@ import type {
   SponsorActivityExpanded,
 } from '@/lib/sponsor-crm/types'
 import { COMMUNICATION_KIND_LABELS } from '@/lib/sponsor-crm/communication'
-import { format } from 'date-fns'
+import { formatDateTimeSafe } from '@/lib/time'
 
 function RecipientChip({ recipient }: { recipient: CommunicationRecipient }) {
   return (
@@ -121,7 +121,7 @@ export function SponsorCommunicationRecord({
           <span className="font-medium">{activity.subject}</span>
         </Field>
         <Field label="Sent">
-          {format(new Date(activity.createdAt), 'd MMM yyyy, HH:mm')}
+          {formatDateTimeSafe(activity.createdAt)}
           {activity.createdBy
             ? ` by ${activity.createdBy.name}`
             : ' automatically'}

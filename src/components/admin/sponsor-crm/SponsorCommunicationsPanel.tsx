@@ -1,13 +1,10 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import clsx from 'clsx'
 import { PaperAirplaneIcon } from '@heroicons/react/24/outline'
 import { api } from '@/lib/trpc/client'
-import type {
-  CommunicationKind,
-  SponsorActivityExpanded,
-} from '@/lib/sponsor-crm/types'
+import type { CommunicationKind } from '@/lib/sponsor-crm/types'
 import {
   COMMUNICATION_KINDS,
   COMMUNICATION_KIND_LABELS,
@@ -32,48 +29,43 @@ export function SponsorCommunicationsPanel({
   onSend?: () => void
 }) {
   const [kind, setKind] = useState<CommunicationKind | undefined>(undefined)
-  const [offset, setOffset] = useState(0)
-  const [pages, setPages] = useState<SponsorActivityExpanded[][]>([])
+  const [pageCount, setPageCount] = useState(1)
 
-  const { data, isLoading, isFetching, isError } =
-    api.sponsor.crm.activities.listCommunications.useQuery({
-      sponsorForConferenceId,
-      kind,
-      offset,
-      limit: PAGE_SIZE,
-    })
-
-  // Append each fetched page at its offset. A refetch of page 0 (after a new
-  // send invalidates the query) replaces the first page in place.
-  useEffect(() => {
-    if (!data) return
-    const pageIndex = offset / PAGE_SIZE
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- accumulate pages
-    setPages((prev) => {
-      const next = prev.slice(0, pageIndex)
-      next[pageIndex] = data.items
-      return next
-    })
-  }, [data, offset])
+  // One query PER LOADED PAGE, all mounted at once: a send that invalidates
+  // the list refetches every page (an inactive page would stay stale), and a
+  // page that is still loading leaves the earlier ones on screen.
+  const pages = api.useQueries((t) =>
+    Array.from({ length: pageCount }, (_, i) =>
+      t.sponsor.crm.activities.listCommunications({
+        sponsorForConferenceId,
+        kind,
+        offset: i * PAGE_SIZE,
+        limit: PAGE_SIZE,
+      }),
+    ),
+  )
 
   const items = useMemo(() => {
     const seen = new Set<string>()
-    return pages.flat().filter((a) => {
-      if (seen.has(a._id)) return false
-      seen.add(a._id)
-      return true
-    })
+    return pages
+      .flatMap((q) => q.data?.items ?? [])
+      .filter((a) => {
+        if (seen.has(a._id)) return false
+        seen.add(a._id)
+        return true
+      })
   }, [pages])
-  const total = data?.total ?? 0
-  const canLoadMore = !isError && items.length < total
+  const first = pages[0]
+  const total = first?.data?.total ?? 0
+  const firstLoad = !!first && first.isLoading
+  const isError = pages.some((q) => q.isError)
+  const isFetching = pages.some((q) => q.isFetching)
+  const canLoadMore = !isError && !firstLoad && items.length < total
 
   const pickKind = (next: CommunicationKind | undefined) => {
     setKind(next)
-    setOffset(0)
-    setPages([])
+    setPageCount(1)
   }
-
-  const firstLoad = isLoading && items.length === 0
 
   return (
     <div className="space-y-4 py-2" data-testid="communications-panel">
@@ -157,7 +149,7 @@ export function SponsorCommunicationsPanel({
         <div className="flex justify-center">
           <button
             type="button"
-            onClick={() => setOffset(pages.length * PAGE_SIZE)}
+            onClick={() => setPageCount((n) => n + 1)}
             disabled={isFetching}
             className="cursor-pointer rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-800"
           >
