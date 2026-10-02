@@ -51,7 +51,10 @@ vi.mock('@/lib/sanity/client', () => ({
   },
 }))
 
-import { eraseSponsorContactSendRecords } from './contact-erasure'
+import {
+  eraseSponsorContactSendRecords,
+  sponsorContactMatchSet,
+} from './contact-erasure'
 import {
   REDACTED_RECIPIENT_EMAIL,
   REDACTED_RECIPIENT_NAME,
@@ -194,6 +197,50 @@ describe('a sponsor contact with no speaker document is erased from send records
     expect(result.committed).toBe(true)
     expect(result.residual).toBe(0)
     expect(commitMock).not.toHaveBeenCalled()
+  })
+
+  it('refuses a value that is not an address, such as a flag swallowed by --email', async () => {
+    const result = await eraseSponsorContactSendRecords({
+      emails: ['--actor'],
+      actor: 'op',
+    })
+    expect(result.err?.message).toBe('Not an email address: "--actor"')
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(result.committed).toBe(false)
+  })
+
+  it('selects by both the NFKC-folded and the plain lowercased form', () => {
+    // A fullwidth "ａ" folds to "a" under NFKC. The planner compares the
+    // folded form; the GROQ read can only lower(), so a record stored with
+    // the fullwidth character is selected only by the plain form.
+    expect(sponsorContactMatchSet(['  ＡDA@Example.com '])).toEqual([
+      'ada@example.com',
+      'ａda@example.com',
+    ])
+    expect(sponsorContactMatchSet(['ada@example.com'])).toEqual([
+      'ada@example.com',
+    ])
+  })
+
+  it('a verification read that fails after the commit does not hide the commit', async () => {
+    world = [record()]
+    let reads = 0
+    fetchMock.mockImplementation(() => {
+      reads += 1
+      if (reads === 1) return Promise.resolve(world)
+      return Promise.reject(new Error('read timed out'))
+    })
+    const result = await eraseSponsorContactSendRecords({
+      emails: ['kari@sponsor.no'],
+      actor: 'op',
+    })
+    expect(commitMock).toHaveBeenCalledTimes(1)
+    expect(result.committed).toBe(true)
+    expect(result.patches).toHaveLength(1)
+    expect(result.residual).toBeNull()
+    expect(result.err?.message).toBe(
+      'Committed, but the verification read failed: read timed out. Re-run to verify.',
+    )
   })
 
   it('refuses an empty address list rather than matching everything', async () => {

@@ -20,7 +20,7 @@
  */
 import { clientWrite } from '@/lib/sanity/client'
 import { COUNT_API_VERSION } from '@/lib/sanity/orphaned-asset'
-import { normalizeEmail } from '@/lib/speaker/email'
+import { canonicalEmail, normalizeEmail } from '@/lib/speaker/email'
 import type { ErasureDocumentPatch } from '@/lib/speaker/erasure'
 import {
   fetchSponsorRecipientDocs,
@@ -49,10 +49,25 @@ export interface EraseSponsorContactResult {
   /**
    * Records still carrying an address after the run — re-read and re-planned
    * with the same match set, so it cannot drift from what the sweep does.
-   * `null` on a dry run.
+   * `null` on a dry run, or when the verification read itself failed after
+   * a successful commit (`err` says so; `committed` stays true).
    */
   residual: number | null
   err: Error | null
+}
+
+/**
+ * The match set: each address in its NFKC-folded form (what the planner
+ * compares against) AND its plain trimmed, lowercased form. The GROQ read
+ * can only `lower()`, so a record whose stored address carries a
+ * compatibility character — written before `resolveRecipients` canonicalised
+ * it, or typed that way — is selected only by the second form. The planner
+ * folds the stored value before comparing, so the first form still matches.
+ */
+export function sponsorContactMatchSet(emails: readonly string[]): string[] {
+  return [
+    ...new Set(emails.flatMap((e) => [normalizeEmail(e), canonicalEmail(e)])),
+  ].filter((e) => e.includes('@'))
 }
 
 async function planAll(emails: string[]): Promise<{
@@ -80,9 +95,7 @@ async function planAll(emails: string[]): Promise<{
 export async function eraseSponsorContactSendRecords(
   options: EraseSponsorContactOptions,
 ): Promise<EraseSponsorContactResult> {
-  const emails = [
-    ...new Set(options.emails.map((e) => normalizeEmail(e)).filter(Boolean)),
-  ]
+  const emails = sponsorContactMatchSet(options.emails)
   const base = {
     emails,
     matched: 0,
@@ -91,6 +104,20 @@ export async function eraseSponsorContactSendRecords(
     committed: false,
     residual: null as number | null,
     err: null as Error | null,
+  }
+  // An address without "@" is not an address: `--email --actor "x"` on the
+  // CLI would otherwise search for the literal "--actor", find nothing and
+  // report clean.
+  const rejected = options.emails.filter(
+    (e) => !normalizeEmail(e).includes('@'),
+  )
+  if (rejected.length > 0) {
+    return {
+      ...base,
+      err: new Error(
+        `Not an email address: ${rejected.map((e) => JSON.stringify(e)).join(', ')}`,
+      ),
+    }
   }
   if (emails.length === 0) {
     return { ...base, err: new Error('No email address given') }
@@ -124,11 +151,25 @@ export async function eraseSponsorContactSendRecords(
       await tx.commit()
     }
 
-    const after = await planAll(emails)
-    return {
-      ...result,
-      committed: true,
-      residual: after.patches.length + after.refusals.length,
+    // The commit is done: a failure from here on must not hide it, or the
+    // operator reads "nothing written" over a record that was.
+    try {
+      const after = await planAll(emails)
+      return {
+        ...result,
+        committed: true,
+        residual: after.patches.length + after.refusals.length,
+      }
+    } catch (error) {
+      return {
+        ...result,
+        committed: true,
+        err: new Error(
+          `Committed, but the verification read failed: ${
+            error instanceof Error ? error.message : String(error)
+          }. Re-run to verify.`,
+        ),
+      }
     }
   } catch (error) {
     return {
