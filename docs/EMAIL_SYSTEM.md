@@ -394,9 +394,13 @@ send; it can no longer make it invisible.
   "recipientKeys": ["contact _key", "..."],
   "subject": "string",
   "message": "string (PortableText JSON)",
-  "template": { "id": "sponsorEmailTemplate _id", "edited": true }
+  "template": { "id": "sponsorEmailTemplate _id" }
 }
 ```
+
+`template.id` must resolve through the org-scoped template reader (a foreign, deleted or wrong-kind template is refused before anything is sent). Whether the template was **edited** is computed on the server by re-merging the template with the same variables and comparing to what is sent; a client-supplied `edited` flag is accepted for wire compatibility and ignored.
+
+**Deprecated shim for `cnctl`:** `POST /api/trpc/sponsor.crm.sendEmailBySfc` with `{ sponsorForConferenceId, subject, body (Markdown) }` converts the Markdown to PortableText and calls the same primitive for every contact with an email (kind `information`). It exists only until `cnctl admin sponsors email` calls `sendCommunication` itself.
 
 The server renders the branded email ONCE to an HTML string, sends that string via the tenant's Resend sender, and writes a `sponsorActivity` audit record carrying the recipients as sent, the subject and body as sent, template provenance, the provider message id and `deliveryStatus`. A provider failure is recorded too (`deliveryStatus: "failed"`, `error`) and surfaces as `INTERNAL_SERVER_ERROR`; the record write itself can never fail or roll back the send. An `information` send also stamps first outreach and moves a `prospect` to `contacted`.
 

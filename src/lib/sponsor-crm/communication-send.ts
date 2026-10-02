@@ -124,6 +124,7 @@ function mergedDiffers(
       organizer: conference.organizer,
       domains: conference.domains,
       prospectusUrl: conference.sponsorshipCustomization?.prospectusUrl,
+      sponsorRegistrationLink: conference.sponsorRegistrationLink,
     },
     senderName,
     tierName: sfc.tier?.title,

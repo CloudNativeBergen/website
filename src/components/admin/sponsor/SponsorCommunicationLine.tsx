@@ -65,9 +65,7 @@ export function SponsorCommunicationLine({
         <div className="ml-auto flex shrink-0 items-center gap-1.5">
           {trailing ?? (
             <span className="text-xs text-gray-400 dark:text-gray-500">
-              <span className="hidden sm:inline">
-                {activity.createdBy?.name ?? 'Automatic'} ·{' '}
-              </span>
+              <span>{activity.createdBy?.name ?? 'Automatic'} · </span>
               <time dateTime={activity.createdAt}>
                 {formatRelativeTime(activity.createdAt)}
               </time>

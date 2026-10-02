@@ -620,7 +620,10 @@ export function SponsorCRMPipeline({
           domain={domain}
           // Mirrors the server's `resolveConferenceFrom(…, 'sponsorEmail')`
           // fallback so the From: line shows what will actually be used.
-          fromEmail={conference.sponsorEmail || `sponsors@${domain}`}
+          fromEmail={
+            conference.sponsorEmail ||
+            `sponsors@${conference.domains?.[0] || domain}`
+          }
           // The speaker profile name first (what the server merges into
           // SENDER_NAME when computing `templateEdited`), the sign-in name
           // as a fallback.
@@ -634,6 +637,7 @@ export function SponsorCRMPipeline({
             domains: conference.domains || [domain],
             socialLinks: conference.socialLinks,
             prospectusUrl: conference.sponsorshipCustomization?.prospectusUrl,
+            sponsorRegistrationLink: conference.sponsorRegistrationLink,
             theme: conference.theme,
           }}
         />

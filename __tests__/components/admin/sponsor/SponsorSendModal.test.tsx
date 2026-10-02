@@ -325,7 +325,7 @@ describe('template provenance', () => {
     })
   })
 
-  it('invalidates the timeline and the Sent emails tab after a send', async () => {
+  it('invalidates the timeline and the Communications tab after a send', async () => {
     renderModal()
     fireEvent.click(screen.getByRole('button', { name: 'Send' }))
     await waitFor(() => expect(h.invalidateList).toHaveBeenCalled())
@@ -496,6 +496,27 @@ describe('recipients changed after a template was applied', () => {
     expect(h.mutateAsync.mock.calls[0][0].subject).toBe(
       'For Ola Nordmann and Kari Nordmann',
     )
+  })
+})
+
+describe('zero recipients', () => {
+  it('offers no Re-apply when every recipient is unticked after a template was applied', () => {
+    h.templates = [
+      tpl({
+        _id: 'tpl-default',
+        isDefault: true,
+        language: 'no',
+        subject: 'For {{{CONTACT_NAMES}}}',
+      }),
+    ]
+    renderModal()
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Kari Nordmann' }))
+    expect(
+      screen.getByText('Choose at least one recipient before sending.'),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Re-apply template' }),
+    ).not.toBeInTheDocument()
   })
 })
 

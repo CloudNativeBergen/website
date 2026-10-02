@@ -59,6 +59,8 @@ export interface SponsorSendModalProps {
     domains: string[]
     socialLinks?: string[]
     prospectusUrl?: string
+    /** Sponsor ticket-registration link; exposed as `SPONSOR_REGISTRATION_URL`. */
+    sponsorRegistrationLink?: string
     theme?: ConferenceTheme | null
   }
 }
@@ -528,7 +530,10 @@ export function SponsorSendModal({
 
   const localhostWarning = createLocalhostWarning(domain, 'sponsors')
   const templatesFailedNotice = templatesQuery.isError ? (
-    <p className="font-inter text-sm text-amber-700 dark:text-amber-300">
+    <p
+      role="status"
+      className="font-inter text-sm text-amber-700 dark:text-amber-300"
+    >
       Templates could not be loaded, so none was applied. You can still write
       and send.
     </p>

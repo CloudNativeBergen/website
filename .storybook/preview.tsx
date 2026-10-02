@@ -137,11 +137,7 @@ const preview: Preview = {
                   'SponsorContactActions',
                 ],
                 'Email',
-                [
-                  'EmailModal',
-                  'SponsorIndividualEmailModal',
-                  'SponsorDiscountEmailModal',
-                ],
+                ['EmailModal', 'SponsorSendModal', 'SponsorDiscountEmailModal'],
                 'Form',
                 [
                   'SponsorLogoEditor',
