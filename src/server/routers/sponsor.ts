@@ -3015,12 +3015,7 @@ export const sponsorRouter = router({
           'sponsorForConference',
         )
         const { conference, error: conferenceError } =
-          await getConferenceForCurrentDomain({
-            sponsors: true,
-            // `SPONSOR_REGISTRATION_URL` is merged on the server to compute
-            // `templateEdited`; the composer sees the same link (#1261).
-            includeSponsorRegistrationLink: true,
-          })
+          await getConferenceForCurrentDomain({ sponsors: true })
         if (conferenceError || !conference) {
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
@@ -3409,7 +3404,12 @@ export const sponsorRouter = router({
         }
 
         const { conference, error: conferenceError } =
-          await getConferenceForCurrentDomain({ sponsors: true })
+          await getConferenceForCurrentDomain({
+            sponsors: true,
+            // Server-side only (adminProcedure): the link is merged into the
+            // Markdown templates served to the CLI, never into a page payload.
+            includeSponsorRegistrationLink: true,
+          })
         if (conferenceError || !conference) {
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
@@ -3481,6 +3481,7 @@ export const sponsorRouter = router({
             organizer: conference.organizer,
             domains: conference.domains,
             prospectusUrl: conference.sponsorshipCustomization?.prospectusUrl,
+            sponsorRegistrationLink: conference.sponsorRegistrationLink,
           },
           senderName: ctx.speaker.name || undefined,
           tierName,

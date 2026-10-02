@@ -217,7 +217,9 @@ export async function getConferenceForDomain(
      * That link carries Checkin's `pass`, a STABLE, reusable token that reveals
      * the hidden sponsor ticket types and lets the holder buy them. It is the
      * one field on this document whose leak is directly worth money, so it is
-     * opt-in and only the two admin surfaces that render it ask for it.
+     * opt-in: the admin surfaces that render it (settings, discount codes, the
+     * sponsor CRM — each behind `denyNonOrganizer`) and the organizer-only
+     * tRPC sends that merge it into sponsor email templates ask for it.
      *
      * (The document's other private fields — `checkinCustomerId`, `agentConfig`,
      * team Slack channels — ride the same `...` and are NOT redacted here. That
