@@ -93,6 +93,28 @@ describe('a sent-communication record loses the subject’s name and address', (
     )
   })
 
+  it('matches a single recipient whose own name ends in a count-looking tail', () => {
+    const patch = planSponsorRecipientRedaction(
+      activity({
+        description: 'Information sent to Ada (+1)',
+        recipients: [
+          {
+            _key: 'k1',
+            contactKey: 'k1',
+            name: 'Ada (+1)',
+            email: 'ada@example.com',
+            isDefault: true,
+          },
+        ],
+      }),
+      EMAILS,
+      [],
+    )!
+    expect(patch.set!.description).toBe(
+      `Information sent to ${REDACTED_RECIPIENT_NAME}`,
+    )
+  })
+
   it('leaves the description alone when the subject is not its first recipient', () => {
     // "Al" is inside "Alan": a substring replace would turn the line into
     // "Erased contactan (+1)". Only the first recipient is ever in the line.
@@ -122,6 +144,42 @@ describe('a sent-communication record loses the subject’s name and address', (
     expect(patch.set).toEqual({
       'recipients[_key=="k-al"].name': REDACTED_RECIPIENT_NAME,
       'recipients[_key=="k-al"].email': REDACTED_RECIPIENT_EMAIL,
+    })
+  })
+
+  it('does not touch somebody else’s address that merely ends with the subject’s', () => {
+    const patch = planSponsorRecipientRedaction(
+      activity({
+        error: 'nada@example.com bounced; ada@example.com bounced',
+      }),
+      EMAILS,
+      [],
+    )!
+    expect(patch.set!.error).toBe(
+      `nada@example.com bounced; ${REDACTED_RECIPIENT_EMAIL} bounced`,
+    )
+  })
+
+  it('redacts the error by the match set even when the entry already carries the markers', () => {
+    // A hand-redacted entry no longer says which address the error quotes.
+    const patch = planSponsorRecipientRedaction(
+      activity({
+        error: 'ada@example.com rejected',
+        recipients: [
+          {
+            _key: 'contact-ada',
+            contactKey: 'contact-ada',
+            name: REDACTED_RECIPIENT_NAME,
+            email: REDACTED_RECIPIENT_EMAIL,
+            isDefault: true,
+          },
+        ],
+      }),
+      EMAILS,
+      [],
+    )!
+    expect(patch.set).toEqual({
+      error: `${REDACTED_RECIPIENT_EMAIL} rejected`,
     })
   })
 
@@ -297,5 +355,28 @@ describe('the patch and the read work against the real engines, not this module�
       await evaluate(parse(query), { dataset, params: { emails: EMAILS } })
     ).get()
     expect(ids).toEqual([{ _id: 'activity-1' }])
+  })
+
+  it('the read finds the canonical form the sender writes, and NOT a raw whitespace form — the stated residual', async () => {
+    // GROQ cannot trim. The contract that closes the gap is at the write
+    // seam (`resolveRecipients` stores `canonicalEmail`), pinned in
+    // `communication.test.ts`; this pins the read's side of it, including
+    // the shape it cannot see, so the residual stays honest.
+    const query =
+      '*[_type == "sponsorActivity" && count(recipients[lower(email) in $emails]) > 0]._id'
+    const stored = (email: string, id: string) => ({
+      _id: id,
+      _type: 'sponsorActivity',
+      recipients: [{ _key: 'k', email }],
+    })
+    const dataset = [
+      stored('ada.l@work.io', 'canonical'),
+      stored('ADA.L@work.io', 'upper'),
+      stored('  ada.l@work.io ', 'raw-whitespace'),
+    ]
+    const ids = await (
+      await evaluate(parse(query), { dataset, params: { emails: EMAILS } })
+    ).get()
+    expect(ids).toEqual(['canonical', 'upper'])
   })
 })

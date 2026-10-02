@@ -853,9 +853,18 @@ export function buildErasurePlan(inputs: ErasureInputs): ErasurePlan {
 
   // The recipient snapshot on a sponsor send record. Name and address out, the
   // record of the send itself left standing. See `./erasure-recipients.ts`.
+  // Merged into an existing patch of the same document for the same reason
+  // the mentions branch is: one document, one revision guard.
   for (const doc of inputs.sponsorActivityDocs) {
     const patch = planSponsorRecipientRedaction(doc, emails, refusals)
-    if (patch) documentPatches.push(patch)
+    if (!patch) continue
+    const same = documentPatches.find((p) => p.id === patch.id)
+    if (!same) {
+      documentPatches.push(patch)
+      continue
+    }
+    same.set = { ...same.set, ...patch.set }
+    same.reason = `${same.reason}; ${patch.reason}`
   }
 
   const noop =
@@ -1266,9 +1275,11 @@ export interface ErasureVerification {
      */
     mergeTrailEntries: number
     /**
-     * Recipient entries on sponsor send records still carrying the subject's
-     * name or address (#1265). Counted by re-running the planner, so it
-     * cannot drift from what the sweep does; a refused entry counts too.
+     * Sponsor send records (documents, not entries) still carrying the
+     * subject's name or address in a recipient entry, the timeline line or
+     * a failed send's error text (#1265). Counted by re-running the planner,
+     * so it cannot drift from what the sweep does; a record with a refused
+     * entry counts too.
      */
     sentCommunicationRecipients: number
     galleryTags: number

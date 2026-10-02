@@ -112,6 +112,14 @@ describe('resolveRecipients / describeCommunication', () => {
     { _key: 'b', name: 'Billing', email: 'b@x', role: 'Billing Reference' },
     { _key: 'p', name: 'Primary', email: 'p@x', isPrimary: true },
   ]
+  it('stores the address in its canonical form, so the erasure read can find it', () => {
+    // GROQ can `lower()` but not trim: the erasure (#1265) matches a
+    // recipient snapshot with `lower(email) in $emails`, so stray whitespace
+    // or casing typed into a contact must never reach the record.
+    const typed = [{ ...contacts[1], email: '  Primary@Example.COM ' }]
+    expect(resolveRecipients(typed, ['p'])[0].email).toBe('primary@example.com')
+  })
+
   it('orders by contact order whatever order the keys arrive in', () => {
     expect(resolveRecipients(contacts, ['p', 'b']).map((r) => r.name)).toEqual([
       'Billing',

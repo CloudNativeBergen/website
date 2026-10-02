@@ -73,19 +73,37 @@ export interface SponsorActivityRecipientDoc {
  * a short name never rewrites a word that is not theirs.
  */
 function redactDescription(description: string, name: string): string | null {
-  const suffix = description.match(/ \(\+\d+\)$/)?.[0] ?? ''
+  // The whole line first: a name that itself ends in "(+1)" would otherwise
+  // lose its tail to the count and never match.
+  const suffix = description.endsWith(` ${name}`)
+    ? ''
+    : (description.match(/ \(\+\d+\)$/)?.[0] ?? '')
   const head = description.slice(0, description.length - suffix.length)
   if (!head.endsWith(` ${name}`)) return null
   return `${head.slice(0, -name.length)}${REDACTED_RECIPIENT_NAME}${suffix}`
 }
 
-/** Every occurrence of the address in a text, whatever its casing. */
-function redactAddress(text: string, email: string): string | null {
-  const escaped = email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  const pattern = new RegExp(escaped, 'gi')
-  return pattern.test(text)
-    ? text.replace(pattern, REDACTED_RECIPIENT_EMAIL)
-    : null
+/**
+ * Every whole occurrence of one of the addresses in a text, whatever its
+ * casing. Bounded on both sides by address characters, so `ada@x.com` never
+ * rewrites the tail of `nada@x.com` — that would be somebody else's address,
+ * and the result would not even be the marker.
+ */
+function redactAddresses(
+  text: string,
+  emails: readonly string[],
+): string | null {
+  let out = text
+  for (const email of emails) {
+    if (!email) continue
+    const escaped = email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const pattern = new RegExp(
+      `(?<![A-Za-z0-9._%+-])${escaped}(?![A-Za-z0-9.-])`,
+      'gi',
+    )
+    out = out.replace(pattern, REDACTED_RECIPIENT_EMAIL)
+  }
+  return out === text ? null : out
 }
 
 /**
@@ -113,7 +131,6 @@ export function planSponsorRecipientRedaction(
 
     const nameDone = entry.name === REDACTED_RECIPIENT_NAME
     const emailDone = normalizeEmail(stored) === REDACTED_RECIPIENT_EMAIL
-    if (nameDone && emailDone) return
 
     const key = entry._key
     if (typeof key !== 'string' || !SAFE_KEY.test(key)) {
@@ -126,22 +143,30 @@ export function planSponsorRecipientRedaction(
     const path = `recipients[_key=="${key}"]`
     if (!nameDone) set[`${path}.name`] = REDACTED_RECIPIENT_NAME
     if (!emailDone) set[`${path}.email`] = REDACTED_RECIPIENT_EMAIL
-    keys.push(key)
+    if (!nameDone || !emailDone) keys.push(key)
 
-    if (index === 0 && entry.name && typeof doc.description === 'string') {
+    if (
+      index === 0 &&
+      entry.name &&
+      !nameDone &&
+      typeof doc.description === 'string'
+    ) {
       const redacted = redactDescription(doc.description, entry.name)
       if (redacted !== null) set.description = redacted
     }
-    if (typeof doc.error === 'string' && !emailDone) {
-      const redacted = redactAddress(
-        typeof set.error === 'string' ? set.error : doc.error,
-        stored.trim(),
-      )
-      if (redacted !== null) set.error = redacted
-    }
   })
 
-  if (keys.length === 0) return null
+  // Keyed by the MATCH SET, not by the entry: an entry already carrying the
+  // marker (a hand redaction) no longer knows the address the error quotes.
+  if (typeof doc.error === 'string') {
+    const redacted = redactAddresses(doc.error, emails)
+    if (redacted !== null) {
+      set.error = redacted
+      keys.push('error')
+    }
+  }
+
+  if (Object.keys(set).length === 0) return null
   return {
     id: doc._id,
     type: 'sponsorActivity',
@@ -153,8 +178,15 @@ export function planSponsorRecipientRedaction(
 
 /**
  * Every send record carrying one of the subject's addresses, in any tenant.
- * `lower()` because the snapshot keeps the address as typed and the match
- * set is normalised. Pinned by `erasure.emailKeyed.test.ts`.
+ *
+ * `lower()` on the stored address against the normalised match set. GROQ
+ * cannot trim or NFKC-fold, so this read matches the planner only because
+ * the ONE writer of a recipient snapshot (`resolveRecipients`) stores the
+ * address in its canonical trimmed, lowercased form — pinned in
+ * `communication.test.ts`. A record written any other way (none exist: the
+ * audit shipped in #1261 with this write path) is the stated residual, the
+ * same one `talk.issuedSpeakerTickets[].email` carries. Pinned by
+ * `erasure.emailKeyed.test.ts`.
  */
 export async function fetchSponsorRecipientDocs(
   emails: readonly string[],

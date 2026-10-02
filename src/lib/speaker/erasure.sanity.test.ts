@@ -880,9 +880,11 @@ describe('a sponsor send record is redacted in the transaction and verified', ()
 
   it('is clean once the entry is redacted', async () => {
     world.speaker = { ...ERASED_SPEAKER }
+    // Exactly what the erasure's own patch leaves behind: entry AND line.
     const doc = sendRecord()
     doc.recipients[0].name = 'Erased contact'
     doc.recipients[0].email = 'erased@anonymous.invalid'
+    doc.description = 'Information sent to Erased contact'
     world.sponsorActivityDocs = [doc]
 
     const verification = await verifySpeakerErasure(SPEAKER, [

@@ -450,10 +450,16 @@ contact on the same record is left alone. A second run finds nothing to change.
 The verification counts `sentCommunicationRecipients` and needs the pre-erasure
 match set like the merge trail does — a standalone `--verify` cannot recount it.
 
-**What it does not reach.** The sponsor's own contact list
-(`sponsorForConference.contactPersons[]`) is the sponsor-contact rail and is not
-swept by a speaker erasure; and a name typed by hand into the subject or body is
-free text, which Phase 1 does not erase.
+**What it does not reach.** A record is found only by an address on the
+speaker's own profile (`email` + `knownEmails`): a contact entry using an
+address they never had on their profile — a work address typed into the
+sponsor's contact list — is not found, and a sponsor contact with no speaker
+document has no erasure path at all (website#1265, open). The sponsor's own
+contact list (`sponsorForConference.contactPersons[]`) is the sponsor-contact
+rail and is not swept by a speaker erasure. A name typed by hand into the
+subject or body, the subject copied into `metadata.additionalData`, and a
+`description` an organizer has edited away from its generated form are free
+text, which Phase 1 does not erase.
 
 ### The limit: no live speaker document, no erasure
 
