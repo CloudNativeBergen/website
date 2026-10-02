@@ -226,7 +226,14 @@ export const SendCommunicationSchema = z.object({
   subject: z.string().trim().min(1, 'Subject is required').max(200),
   /** PortableText blocks, JSON-encoded (same wire shape as the old sendEmail). */
   message: z.string().min(1).max(100_000),
-  template: z.object({ id: z.string().min(1), edited: z.boolean() }).optional(),
+  /**
+   * The template the draft started from. `edited` is accepted for wire
+   * compatibility but IGNORED: the server computes it by re-merging the
+   * template and comparing with what is sent.
+   */
+  template: z
+    .object({ id: z.string().min(1), edited: z.boolean().optional() })
+    .optional(),
 })
 
 export const CommunicationRecordIdSchema = z.object({

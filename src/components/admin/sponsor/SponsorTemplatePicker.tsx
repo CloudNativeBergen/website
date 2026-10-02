@@ -214,7 +214,9 @@ export function SponsorTemplatePicker({
           </optgroup>
         ))}
       </select>
-      {selectedTemplate && (
+      {/* Hidden with no recipient chosen (no `contactNames`): re-applying
+          would merge a bare `{{{CONTACT_NAMES}}}` into the body. */}
+      {selectedTemplate && contactNames && (
         <button
           type="button"
           onClick={reapply}
