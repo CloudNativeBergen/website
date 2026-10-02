@@ -174,7 +174,12 @@ describe('buildClassificationContext', () => {
       conference,
     )
     expect(context.sponsors).toEqual([
-      { id: 'sponsor-acme', name: 'Acme Cloud', linkedCodes: ['COMP-7Q2'] },
+      {
+        id: 'sponsor-acme',
+        name: 'Acme Cloud',
+        linkedCodes: ['COMP-7Q2'],
+        sponsorForConferenceId: 'sfc-acme',
+      },
     ])
   })
 

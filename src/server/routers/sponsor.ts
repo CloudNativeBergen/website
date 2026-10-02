@@ -127,6 +127,7 @@ import {
   listEventDiscounts,
   readSponsorCodeLinks,
   resolveChosenCodes,
+  withLinkedCodes,
   type SponsorCodeLink,
 } from '@/lib/sponsor-crm/discount-codes'
 import { normalizeDiscountCode, sponsorOwningCode } from '@/lib/discounts'
@@ -3109,6 +3110,7 @@ export const sponsorRouter = router({
         // Only AFTER the provider accepted the send, and never able to fail
         // it: the email is out, so a failed link write is logged, not thrown.
         let linkedCodes: string[] | undefined
+        let linkFailed = false
         if (discount) {
           try {
             const added = await appendLinkedCodes(
@@ -3124,6 +3126,7 @@ export const sponsorRouter = router({
               error,
             )
             linkedCodes = []
+            linkFailed = true
           }
         }
 
@@ -3133,6 +3136,9 @@ export const sponsorRouter = router({
           providerMessageId: result.providerMessageId,
           recipientCount: result.recipients.length,
           ...(linkedCodes && { linkedCodes }),
+          // The organizer is told, so the gap is fixed by an Assign rather than
+          // discovered when the next send falls back to the name guess.
+          ...(linkFailed && { linkFailed: true as const }),
         }
       }),
 
@@ -3152,6 +3158,7 @@ export const sponsorRouter = router({
         )
         const { conference, error: conferenceError } =
           await getConferenceForCurrentDomain({
+            sponsors: true,
             includeSponsorRegistrationLink: true,
           })
         if (conferenceError || !conference) {
@@ -3169,15 +3176,21 @@ export const sponsorRouter = router({
           !!l?.linkedCodes.some(
             (c) => normalizeDiscountCode(c) === normalizeDiscountCode(code),
           )
+        // The usage view's claimant set (conference sponsors + stored codes),
+        // so the picker preselects exactly what that view counts as theirs.
+        const claimants = withLinkedCodes(conference.sponsors, links)
         const codes = discounts.flatMap((d) => {
           const code = d.triggerValue
           if (!code) return []
-          const owner = sponsorOwningCode(code, links)
+          const owner = sponsorOwningCode(code, claimants)
           const elsewhere = links.find((l) => l !== here && stored(l, code))
           return [
             {
               code,
-              selected: !!here && owner === here,
+              // A CRM record that is not (yet) a conference sponsor claims
+              // only what it stores.
+              selected:
+                stored(here, code) || (!!here && owner?.id === here.sponsorId),
               linked: stored(here, code),
               ...(elsewhere && {
                 linkedTo: elsewhere.name || 'another sponsor',

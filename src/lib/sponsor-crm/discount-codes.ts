@@ -34,22 +34,30 @@ export interface SponsorClaimant {
   id: string
   name: string
   linkedCodes: string[]
+  /** Its CRM record, when it has one — the target of a send or an Assign. */
+  sponsorForConferenceId?: string
 }
 
 /**
- * Join sponsors (by sponsor id) to their stored codes. The SPONSOR list stays
- * the caller's — e.g. the conference's public sponsors, so a prospect in the
- * CRM never starts claiming codes by name — and the links only add codes.
+ * THE claimant set for every attribution (#1262): the CONFERENCE's sponsors,
+ * joined by sponsor id to their stored codes. The sponsor list is the
+ * conference's, never the CRM's — so a prospect never starts claiming codes
+ * by name — and the links only add codes. The usage view, the create guard,
+ * the Send picker and the ticket reports all build it here, so they agree.
  */
 export function withLinkedCodes(
-  sponsors: readonly { id: string; name: string }[],
+  sponsors: Conference['sponsors'],
   links: readonly SponsorCodeLink[],
 ): SponsorClaimant[] {
-  return sponsors.map((s) => ({
-    id: s.id,
-    name: s.name,
-    linkedCodes: links.find((l) => l.sponsorId === s.id)?.linkedCodes ?? [],
-  }))
+  return (sponsors ?? []).map(({ sponsor }) => {
+    const link = links.find((l) => l.sponsorId === sponsor._id)
+    return {
+      id: sponsor._id,
+      name: sponsor.name,
+      linkedCodes: link?.linkedCodes ?? [],
+      ...(link && { sponsorForConferenceId: link.sponsorForConferenceId }),
+    }
+  })
 }
 
 /**
@@ -62,11 +70,7 @@ export async function conferenceSponsorClaimants(
   conference: Pick<Conference, '_id' | 'sponsors'>,
   client?: Reader,
 ): Promise<SponsorClaimant[]> {
-  const sponsors = (conference.sponsors ?? []).map((s) => ({
-    id: s.sponsor._id,
-    name: s.sponsor.name,
-  }))
-  if (sponsors.length === 0) return []
+  if (!conference.sponsors?.length) return []
   let links: SponsorCodeLink[] = []
   try {
     links = await readSponsorCodeLinks(conference._id, client)
@@ -76,7 +80,7 @@ export async function conferenceSponsorClaimants(
       error,
     )
   }
-  return withLinkedCodes(sponsors, links)
+  return withLinkedCodes(conference.sponsors, links)
 }
 
 /**

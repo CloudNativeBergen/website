@@ -22,6 +22,7 @@ const h = vi.hoisted(() => ({
   mutateAsync: vi.fn(),
   invalidateList: vi.fn(),
   invalidateComms: vi.fn(),
+  invalidateCodes: vi.fn(),
   showNotification: vi.fn(),
   templates: [] as unknown[],
   codeOptions: undefined as unknown,
@@ -41,6 +42,7 @@ vi.mock('@/lib/trpc/client', () => ({
             list: { invalidate: h.invalidateList },
             listCommunications: { invalidate: h.invalidateComms },
           },
+          discountCodeOptions: { invalidate: h.invalidateCodes },
         },
       },
     }),
@@ -587,6 +589,11 @@ describe('discount kind', () => {
       discountCodes: ['ACME-2026', 'ACME-WORKSHOP'],
       subject: 'Discount codes: Conf',
     })
+    // The stored link changed: the picker must re-read it next open.
+    await waitFor(() => expect(h.invalidateCodes).toHaveBeenCalled())
+    expect(h.showNotification).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'success' }),
+    )
   })
 
   it('shows a code stored on another sponsor as unpickable, with whose it is', () => {
@@ -611,6 +618,26 @@ describe('discount kind', () => {
       ),
     )
     expect(h.mutateAsync).not.toHaveBeenCalled()
+  })
+
+  it('warns when the email went out but the codes could not be stored', async () => {
+    h.codeOptions = options
+    h.mutateAsync.mockResolvedValue({
+      success: true,
+      recipientCount: 1,
+      linkedCodes: [],
+      linkFailed: true,
+    })
+    renderModal({}, 'discount')
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+    await waitFor(() =>
+      expect(h.showNotification).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'warning',
+          title: 'Codes not linked to the sponsor',
+        }),
+      ),
+    )
   })
 
   it('an information send carries no codes', async () => {

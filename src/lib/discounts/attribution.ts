@@ -55,3 +55,17 @@ export function sponsorOwningCode<T extends SponsorCodeClaimant>(
     return needle.length > 0 && haystack.includes(needle)
   })
 }
+
+/**
+ * Why a standalone code is refused, for the create form and the server alike:
+ * the code is a sponsor's STORED code, or it contains a sponsor's name.
+ */
+export function claimRefusal(
+  discountCode: string,
+  claimant: SponsorCodeClaimant,
+): string {
+  const wanted = normalizeDiscountCode(discountCode)
+  return claimant.linkedCodes?.some((c) => normalizeDiscountCode(c) === wanted)
+    ? `"${discountCode}" is already linked to ${claimant.name}. Choose another code.`
+    : `"${discountCode}" contains the sponsor name "${claimant.name}", so it would be counted against that sponsor's tickets. Choose a code that does not contain a sponsor's name.`
+}

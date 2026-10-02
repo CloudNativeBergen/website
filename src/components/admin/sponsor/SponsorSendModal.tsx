@@ -70,6 +70,20 @@ export interface SponsorSendModalProps {
   }
 }
 
+/**
+ * The From: line the modal shows — mirrors the server's
+ * `resolveConferenceFrom(…, { field: 'sponsorEmail', localPart: 'sponsors' })`
+ * fallback, in ONE place for every host of the modal.
+ */
+export function sponsorFromAddress(
+  conference: { sponsorEmail?: string; domains?: string[] },
+  domain: string,
+): string {
+  return (
+    conference.sponsorEmail || `sponsors@${conference.domains?.[0] || domain}`
+  )
+}
+
 /** The kinds the Send mutation accepts — mirrors `SendCommunicationSchema.kind`. */
 export type SendableKind = Extract<
   CommunicationKind,
@@ -702,6 +716,14 @@ export function SponsorSendModal({
       title: `${kindLabel} sent`,
       message: `Sent to ${result.recipientCount} contact${result.recipientCount === 1 ? '' : 's'} at ${sponsorForConference.sponsor.name}.`,
     })
+    if ('linkFailed' in result && result.linkFailed) {
+      showNotification({
+        type: 'warning',
+        title: 'Codes not linked to the sponsor',
+        message:
+          'The email went out, but the codes could not be stored on the sponsor. Assign them from Discount Codes so their usage counts for this sponsor.',
+      })
+    }
     onSent?.()
   }
 

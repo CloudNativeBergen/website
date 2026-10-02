@@ -14,6 +14,7 @@ import {
 import { DiscountCodeManager } from '@/components/admin/DiscountCodeManager'
 import {
   readSponsorCodeLinks,
+  withLinkedCodes,
   type SponsorCodeLink,
 } from '@/lib/sponsor-crm/discount-codes'
 import {
@@ -119,9 +120,11 @@ export default async function DiscountCodesAdminPage() {
     )
   }
 
+  // The SAME claimant set every attribution uses (`withLinkedCodes`).
+  const claimants = withLinkedCodes(conference.sponsors, links)
   const sponsorsWithTierInfo: SponsorWithTierInfo[] =
-    conference.sponsors?.map((sponsorData) => {
-      const link = links.find((l) => l.sponsorId === sponsorData.sponsor._id)
+    conference.sponsors?.map((sponsorData, i) => {
+      const claimant = claimants[i]
       const tierTitle = sponsorData.tier?.title || 'Unknown'
       const ticketEntitlement = ticketEntitlementOf(sponsorData.tier)
 
@@ -137,8 +140,8 @@ export default async function DiscountCodesAdminPage() {
             'standard' | 'special',
         },
         ticketEntitlement,
-        sponsorForConferenceId: link?.sponsorForConferenceId,
-        linkedCodes: link?.linkedCodes ?? [],
+        sponsorForConferenceId: claimant.sponsorForConferenceId,
+        linkedCodes: claimant.linkedCodes,
       }
     }) || []
 

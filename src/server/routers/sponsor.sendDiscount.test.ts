@@ -214,6 +214,10 @@ beforeEach(() => {
       organizer: 'CNDN',
       organization: { _ref: ORG },
       checkinEventId: 4242,
+      sponsors: [
+        { sponsor: { _id: 'sponsor-acme', name: 'Acme AS' } },
+        { sponsor: { _id: 'sponsor-globex', name: 'Globex' } },
+      ],
       sponsorEmail: 'sponsors@example.test',
       sponsorRegistrationLink: 'https://tickets.example.test/sponsor?a=1&b=2',
       city: 'Bergen',
@@ -347,7 +351,7 @@ describe('the stored sponsor↔code link', () => {
   it('a failed link write never fails a send the provider accepted', async () => {
     h.insertShouldThrow = true
     await expect(sponsor().crm.sendCommunication(INPUT)).resolves.toMatchObject(
-      { success: true, linkedCodes: [] },
+      { success: true, linkedCodes: [], linkFailed: true },
     )
     expect(record()).toMatchObject({ deliveryStatus: 'sent' })
   })
@@ -625,25 +629,63 @@ describe('an operator deny of ticketing (#850)', () => {
 describe('sponsor.crm.discountCodeOptions', () => {
   const OPTIONS = { sponsorForConferenceId: SFC }
 
+  const renameAcme = async (name: string) => {
+    const { conference } = await h.getConference()
+    h.getConference.mockResolvedValue({
+      conference: {
+        ...conference,
+        sponsors: [
+          { sponsor: { _id: 'sponsor-acme', name } },
+          { sponsor: { _id: 'sponsor-globex', name: 'Globex' } },
+        ],
+      },
+      domain: 'localhost',
+      error: null,
+    })
+  }
+
   it('preselects by name for a sponsor that stores nothing, and marks codes stored elsewhere', async () => {
-    h.links[0].name = 'Acme'
+    await renameAcme('Acme')
     const result = await sponsor().crm.discountCodeOptions(OPTIONS)
-    expect(result.ticketUrl).toBe('https://tickets.example.test/sponsor?a=1&b=2')
+    expect(result.ticketUrl).toBe(
+      'https://tickets.example.test/sponsor?a=1&b=2',
+    )
     expect(result.codes).toEqual([
       { code: 'ACME-2026', selected: true, linked: false },
       { code: 'ACME-WORKSHOP', selected: true, linked: false },
-      { code: 'GLOBEX-VIP', selected: false, linked: false, linkedTo: 'Globex' },
+      {
+        code: 'GLOBEX-VIP',
+        selected: false,
+        linked: false,
+        linkedTo: 'Globex',
+      },
       { code: '<b>X</b>', selected: false, linked: false },
     ])
   })
 
   it('preselects ONLY the stored codes once the sponsor stores any', async () => {
-    h.links[0].name = 'Acme'
+    await renameAcme('Acme')
     h.links[0].linkedCodes = ['acme-workshop']
     const result = await sponsor().crm.discountCodeOptions(OPTIONS)
     expect(result.codes.filter((c) => c.selected)).toEqual([
       { code: 'ACME-WORKSHOP', selected: true, linked: true },
     ])
+  })
+
+  it('a CRM prospect that is not a conference sponsor never claims a code by name', async () => {
+    // Same rule as the usage view and the entitlement count: the name
+    // heuristic runs over the conference's sponsors only.
+    await renameAcme('Acme')
+    h.links.unshift({
+      _id: 'sfc-prospect',
+      sponsorId: 'sponsor-prospect',
+      name: 'Ac',
+      linkedCodes: null,
+    })
+    const result = await sponsor().crm.discountCodeOptions(OPTIONS)
+    expect(result.codes.find((c) => c.code === 'ACME-2026')).toMatchObject({
+      selected: true,
+    })
   })
 
   it("refuses another tenant's sponsor before the provider is read", async () => {

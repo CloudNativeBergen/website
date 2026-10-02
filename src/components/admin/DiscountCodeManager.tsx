@@ -22,6 +22,7 @@ import {
   SponsorSendModal,
 } from '@/components/admin'
 import { AssignDiscountCodeDialog } from './AssignDiscountCodeDialog'
+import { sponsorFromAddress } from './sponsor/SponsorSendModal'
 import {
   ActionMenu,
   ActionMenuItem,
@@ -262,11 +263,7 @@ function DiscountSend({
       sponsorForConference={record.data}
       kind="discount"
       domain={conference.domain}
-      // Mirrors the server's `resolveConferenceFrom(…, 'sponsorEmail')`.
-      fromEmail={
-        conference.sponsorEmail ||
-        `sponsors@${conference.domains[0] || conference.domain}`
-      }
+      fromEmail={sponsorFromAddress(conference, conference.domain)}
       senderName={session?.speaker?.name || session?.user?.name || ''}
       conference={{
         title: conference.title,
@@ -943,7 +940,7 @@ export function DiscountCodeManager({
                 disabled={deleting}
                 className={CARD_ACTION_CLASS}
               >
-                <LinkIcon className="h-5 w-5" aria-hidden="true" />
+                <LinkIcon className="size-5" aria-hidden="true" />
                 Assign to sponsor
               </button>
             )}
@@ -969,7 +966,7 @@ export function DiscountCodeManager({
               title="Assign to sponsor"
               className="inline-flex items-center rounded-md border border-gray-300 p-2 text-gray-700 shadow-xs hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-500 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800"
             >
-              <LinkIcon className="h-4 w-4" />
+              <LinkIcon className="size-4" />
             </button>
           )}
           <button

@@ -37,7 +37,11 @@ import {
 } from '@/lib/tickets/speakerStatus'
 import { fetchSpeakerTicketInputs } from '@/lib/speaker/ticketInputs'
 import { buildTicketSummary, exportParticipants } from '@/lib/tickets/summary'
-import { calculateDiscountUsage, sponsorOwningCode } from '@/lib/discounts'
+import {
+  calculateDiscountUsage,
+  claimRefusal,
+  sponsorOwningCode,
+} from '@/lib/discounts'
 import {
   readSponsorCodeLinks,
   withLinkedCodes,
@@ -1090,18 +1094,12 @@ export const ticketsRouter = router({
             }
             const claimed = sponsorOwningCode(
               discountCode,
-              withLinkedCodes(
-                (conference.sponsors ?? []).map((s) => ({
-                  id: s.sponsor._id,
-                  name: s.sponsor.name,
-                })),
-                links,
-              ),
-            )?.name
+              withLinkedCodes(conference.sponsors, links),
+            )
             if (claimed) {
               throw new TRPCError({
                 code: 'CONFLICT',
-                message: `"${discountCode}" contains the sponsor name "${claimed}", so it would be counted against that sponsor's tickets. Choose a code that does not contain a sponsor's name.`,
+                message: claimRefusal(discountCode, claimed),
               })
             }
           }

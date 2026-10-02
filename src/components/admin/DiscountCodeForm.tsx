@@ -5,7 +5,11 @@ import clsx from 'clsx'
 import { ArrowPathIcon, PlusIcon } from '@heroicons/react/24/outline'
 import { Input, ErrorText, HelpText } from '@/components/Form'
 import { FilterDropdown, FilterOption } from './FilterDropdown'
-import { sponsorOwningCode, type SponsorCodeClaimant } from '@/lib/discounts'
+import {
+  claimRefusal,
+  sponsorOwningCode,
+  type SponsorCodeClaimant,
+} from '@/lib/discounts'
 import type { TicketType } from '@/lib/discounts/types'
 
 export interface DiscountCodeDraft {
@@ -85,11 +89,8 @@ export function DiscountCodeForm({
 
     // The server refuses this too — it is the boundary, this is the affordance
     // that saves a round trip and explains the consequence in place.
-    const claimed = sponsorOwningCode(trimmed, sponsors)?.name
-    if (claimed)
-      return setError(
-        `This code contains the sponsor name "${claimed}", so it would be counted against that sponsor's tickets. Choose a code that does not contain a sponsor's name.`,
-      )
+    const claimed = sponsorOwningCode(trimmed, sponsors)
+    if (claimed) return setError(claimRefusal(trimmed, claimed))
 
     setError(null)
     onCreate({

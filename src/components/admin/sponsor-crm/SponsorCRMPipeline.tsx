@@ -10,7 +10,10 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import { SponsorCRMForm } from '@/components/admin/sponsor-crm/SponsorCRMForm'
 import { SponsorSendModal } from '@/components/admin'
-import type { SendableKind } from '@/components/admin/sponsor/SponsorSendModal'
+import {
+  sponsorFromAddress,
+  type SendableKind,
+} from '@/components/admin/sponsor/SponsorSendModal'
 import {
   BoardViewSwitcher,
   type BoardView,
@@ -645,10 +648,7 @@ export function SponsorCRMPipeline({
           domain={domain}
           // Mirrors the server's `resolveConferenceFrom(…, 'sponsorEmail')`
           // fallback so the From: line shows what will actually be used.
-          fromEmail={
-            conference.sponsorEmail ||
-            `sponsors@${conference.domains?.[0] || domain}`
-          }
+          fromEmail={sponsorFromAddress(conference, domain)}
           // The speaker profile name first (what the server merges into
           // SENDER_NAME when computing `templateEdited`), the sign-in name
           // as a fallback.

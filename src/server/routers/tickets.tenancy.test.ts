@@ -478,6 +478,28 @@ describe('standalone discount codes (no sponsor)', () => {
         )
       })
 
+      it('refuses a sponsor’s STORED code by saying whose it is, not by name', async () => {
+        linkedRows([
+          {
+            _id: 'sfc-ndc',
+            sponsorId: 'sponsor-ndc',
+            name: 'NDC',
+            linkedCodes: ['COMP-7Q2'],
+          },
+        ])
+        await expect(
+          tickets().admin.createDiscountCode({
+            eventId: OUR_EVENT,
+            discountCode: 'COMP-7Q2',
+            numberOfTickets: 1,
+            selectedTicketTypes: [],
+          }),
+        ).rejects.toThrow(
+          '"COMP-7Q2" is already linked to NDC. Choose another code.',
+        )
+        expect(h.createDiscount).not.toHaveBeenCalled()
+      })
+
       it('still refuses by name for a sponsor with nothing stored', async () => {
         linkedRows([
           {

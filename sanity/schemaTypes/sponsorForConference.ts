@@ -499,8 +499,10 @@ export default defineType({
       title: 'Discount Codes',
       type: 'array',
       description:
-        'Ticket discount codes given to this sponsor. Added by the CRM when codes are sent or assigned.',
-      readOnly: true,
+        'Ticket discount codes given to this sponsor. Added by the CRM when codes are sent or assigned; remove an entry here only to undo a mistaken assignment.',
+      // NOT readOnly on purpose: the app only ever appends, and a send or an
+      // Assign refuses a code stored on another sponsor — so without this,
+      // a code assigned to the wrong sponsor could never be moved.
       of: [
         {
           type: 'object',
