@@ -147,6 +147,23 @@ describe('a sent-communication record loses the subject’s name and address', (
     })
   })
 
+  it('redacts an address that ends a sentence, and not one that continues into a longer domain', () => {
+    // `ada@example.com.` ends a sentence; `ada@example.com.au` and
+    // `ada@example.com-two` are longer domains (a hyphen can continue a
+    // label), so they are somebody else's and stay.
+    const patch = planSponsorRecipientRedaction(
+      activity({
+        error:
+          'Mailbox ada@example.com. Not ada@example.com.au, not ada@example.com-two.',
+      }),
+      EMAILS,
+      [],
+    )!
+    expect(patch.set!.error).toBe(
+      `Mailbox ${REDACTED_RECIPIENT_EMAIL}. Not ada@example.com.au, not ada@example.com-two.`,
+    )
+  })
+
   it('does not touch somebody else’s address that merely ends with the subject’s', () => {
     const patch = planSponsorRecipientRedaction(
       activity({

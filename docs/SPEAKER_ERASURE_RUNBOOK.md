@@ -447,6 +447,9 @@ references the person.
 
 Only entries carrying one of the subject's addresses are touched; another
 contact on the same record is left alone. A second run finds nothing to change.
+**If you ever redact an entry by hand, redact the line and the error with it**:
+once the entry carries the marker address the record is no longer selected by
+the read, and the sweep cannot know the name the line still shows.
 The verification counts `sentCommunicationRecipients` and needs the pre-erasure
 match set like the merge trail does — a standalone `--verify` cannot recount it.
 

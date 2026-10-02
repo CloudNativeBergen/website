@@ -98,7 +98,10 @@ function redactAddresses(
     if (!email) continue
     const escaped = email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
     const pattern = new RegExp(
-      `(?<![A-Za-z0-9._%+-])${escaped}(?![A-Za-z0-9.-])`,
+      // A trailing dot or hyphen continues the address only when an address
+      // character follows: "ada@x.com." ends a sentence, "ada@x.com.au" does
+      // not.
+      `(?<![A-Za-z0-9._%+-])${escaped}(?![A-Za-z0-9]|[.-][A-Za-z0-9])`,
       'gi',
     )
     out = out.replace(pattern, REDACTED_RECIPIENT_EMAIL)
