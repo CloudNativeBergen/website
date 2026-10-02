@@ -439,10 +439,17 @@ export function SponsorSendModal({
           },
         }
       : base
+    // A failed send is RECORDED on the server before the mutation rejects, so
+    // the timeline and the Sent emails tab must refresh on either outcome.
+    const invalidateRecords = () => {
+      utils.sponsor.crm.activities.list.invalidate()
+      utils.sponsor.crm.activities.listCommunications.invalidate()
+    }
     let result: Awaited<ReturnType<typeof sendMutation.mutateAsync>>
     try {
       result = await sendMutation.mutateAsync(withProvenance)
     } catch (error) {
+      invalidateRecords()
       // The template this draft started from has since been deleted: the
       // content is still what the organizer wrote, so send it WITHOUT the
       // stale provenance instead of blocking every future send.
@@ -453,14 +460,17 @@ export function SponsorSendModal({
           error.message === TEMPLATE_WRONG_KIND_MESSAGE)
       ) {
         rememberApplied(null)
-        result = await sendMutation.mutateAsync(base)
+        try {
+          result = await sendMutation.mutateAsync(base)
+        } finally {
+          invalidateRecords()
+        }
       } else {
         throw error
       }
     }
     rememberApplied(null)
-    utils.sponsor.crm.activities.list.invalidate()
-    utils.sponsor.crm.activities.listCommunications.invalidate()
+    invalidateRecords()
     showNotification({
       type: 'success',
       title: `${kindLabel} sent`,

@@ -7,7 +7,7 @@ import {
   EnvelopeIcon,
   ExclamationTriangleIcon,
 } from '@heroicons/react/24/outline'
-import { formatDistanceToNow } from 'date-fns'
+import { formatRelativeTime } from '@/lib/time'
 import type { SponsorActivityExpanded } from '@/lib/sponsor-crm/types'
 import { SponsorCommunicationRecord } from './SponsorCommunicationRecord'
 
@@ -66,10 +66,8 @@ export function SponsorCommunicationLine({
               <span className="hidden sm:inline">
                 {activity.createdBy?.name ?? 'Automatic'} ·{' '}
               </span>
-              <time>
-                {formatDistanceToNow(new Date(activity.createdAt), {
-                  addSuffix: true,
-                })}
+              <time dateTime={activity.createdAt}>
+                {formatRelativeTime(activity.createdAt)}
               </time>
             </span>
           )}
