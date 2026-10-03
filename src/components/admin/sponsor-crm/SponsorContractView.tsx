@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { formatDate } from '@/lib/time'
 import { useSession } from 'next-auth/react'
 import { api } from '@/lib/trpc/client'
@@ -133,9 +133,22 @@ export function SponsorContractView({
       contractTemplateId: bestTemplate._id,
       organizerSignatureDataUrl: organizerSignatureDataUrl ?? undefined,
     })
+    // The reviewed PDF and the drawn counter-signature stay until the send
+    // actually happened (the record changes below) — a composer closed
+    // without sending returns to the same confirmation step.
+  }
+
+  // Back to the overview once an agreement went out: the record now carries
+  // a (new) agreement, so the reviewed PDF is spent.
+  const sentMarker = `${sponsor.contractStatus}:${sponsor.signatureId ?? ''}`
+  const sentMarkerRef = useRef(sentMarker)
+  useEffect(() => {
+    if (sentMarkerRef.current === sentMarker) return
+    sentMarkerRef.current = sentMarker
     setStep('overview')
     setPdfData(null)
-  }
+    setOrganizerSignatureDataUrl(null)
+  }, [sentMarker])
 
   const canSend = readiness?.canSend === true
   const primaryContact = getPrimaryContact(sponsor)
@@ -352,16 +365,21 @@ export function SponsorContractView({
                 ` on ${formatDate(sponsor.contractSignedAt)}`}
               .
             </p>
-            {onSendContract && sponsor.contractDocument?.asset?.url && (
-              <button
-                type="button"
-                onClick={() => onSendContract({})}
-                className="inline-flex cursor-pointer items-center gap-1 rounded-md bg-white px-2 py-1 text-xs font-medium text-gray-700 shadow-xs outline-1 -outline-offset-1 outline-gray-300 hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 dark:bg-white/5 dark:text-gray-300 dark:outline-white/10 dark:hover:bg-white/10"
-              >
-                <PaperAirplaneIcon className="size-3.5" />
-                Send signed copy
-              </button>
-            )}
+            {onSendContract &&
+              sponsor.contractDocument?.asset?.url &&
+              // Only the digital signing flow stores the signed document (and
+              // stamps contractSignedBy); a status set by hand leaves the
+              // unsigned original, and there is no signed copy to send.
+              sponsor.contractSignedBy && (
+                <button
+                  type="button"
+                  onClick={() => onSendContract({})}
+                  className="inline-flex cursor-pointer items-center gap-1 rounded-md bg-white px-2 py-1 text-xs font-medium text-gray-700 shadow-xs outline-1 -outline-offset-1 outline-gray-300 hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 dark:bg-white/5 dark:text-gray-300 dark:outline-white/10 dark:hover:bg-white/10"
+                >
+                  <PaperAirplaneIcon className="size-3.5" />
+                  Send signed copy
+                </button>
+              )}
           </div>
         ) : isSent ? (
           <p className="text-xs text-gray-500 dark:text-gray-400">

@@ -230,7 +230,9 @@ export async function sendSponsorCommunication(
     args.message,
     conference,
   )
-  if (htmlError || !htmlContent) {
+  // A body-less template is fine when the send appends its own card (a
+  // reminder's signing button, a signed copy's link): the card IS the email.
+  if (htmlError || (!htmlContent && !args.appendHtml)) {
     return {
       ok: false,
       reason: 'render-failed',
@@ -243,9 +245,7 @@ export async function sendSponsorCommunication(
     renderEmailTemplate({
       conference,
       subject: args.subject,
-      htmlContent: args.appendHtml
-        ? `${htmlContent}${args.appendHtml}`
-        : htmlContent,
+      htmlContent: `${htmlContent ?? ''}${args.appendHtml ?? ''}`,
       // A one-to-one transactional email: NO unsubscribe link. `undefined`
       // would select the template's default — Resend's `{{{RESEND_UNSUBSCRIBE_URL}}}`
       // merge tag, which only Broadcasts resolve — and the literal tag would

@@ -343,6 +343,13 @@ describe('sendContractReminderBySystem', () => {
     ])
   })
 
+  it('sends the signing card even from a subject-only template (no body)', async () => {
+    h.template = { ...h.template, body: undefined }
+    const outcome = await sendContractReminderBySystem('sfc-1')
+    expect(outcome).toEqual({ ok: true, recipient: 'kari@acme.test' })
+    expect(h.send.mock.calls[0][0].html).toContain(`href="${SIGNING_URL}"`)
+  })
+
   it('does not count a reminder the provider refused, and records the failure', async () => {
     h.send.mockResolvedValue({
       data: null,

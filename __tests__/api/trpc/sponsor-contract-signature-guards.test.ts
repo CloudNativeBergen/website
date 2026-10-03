@@ -348,6 +348,7 @@ describe('updateSignatureStatus — signature axis guards', () => {
 const CONTRACT_SEND = {
   sponsorForConferenceId: 'sfc-1',
   kind: 'contract' as const,
+  contractAction: 'send' as const,
   recipientKeys: ['c1'],
   subject: 'Sponsorship Agreement',
   message: JSON.stringify([

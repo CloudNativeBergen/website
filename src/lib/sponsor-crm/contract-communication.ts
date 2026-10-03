@@ -1,6 +1,7 @@
 import 'server-only'
 import { TRPCError } from '@trpc/server'
 import { canonicalEmail } from '@/lib/speaker/email'
+import { createHash } from 'node:crypto'
 import { preconditionFailed } from '@/server/errors'
 import type { Conference } from '@/lib/conference/types'
 import {
@@ -122,6 +123,67 @@ function formatContractValue(
   return sfc.contractValue
     ? `${formatNumber(sfc.contractValue)} ${sfc.contractCurrency || 'NOK'}`
     : undefined
+}
+
+/** Every input the contract PDF renders from — the one list, used for the PDF and its fingerprint. */
+function contractRenderInputs(
+  sfc: SponsorForConferenceExpanded,
+  signer: Pick<CommunicationRecipient, 'name' | 'email'>,
+) {
+  const primaryContact =
+    sfc.contactPersons?.find((c) => c.isPrimary) ?? sfc.contactPersons?.[0]
+  return {
+    sponsor: {
+      name: sfc.sponsor?.name ?? '',
+      orgNumber: sfc.sponsor?.orgNumber,
+      address: sfc.sponsor?.address,
+      website: sfc.sponsor?.website,
+    },
+    contactPerson: {
+      name: primaryContact?.name ?? signer.name,
+      email: primaryContact?.email ?? signer.email,
+    },
+    tier: sfc.tier
+      ? { title: sfc.tier.title, tagline: sfc.tier.tagline }
+      : undefined,
+    addons: sfc.addons?.map((a) => ({ title: a.title })),
+    contractValue: sfc.contractValue,
+    contractCurrency: sfc.contractCurrency,
+    conference: {
+      title: sfc.conference?.title ?? '',
+      startDate: sfc.conference?.startDate,
+      endDate: sfc.conference?.endDate,
+      city: sfc.conference?.city,
+      organizer: sfc.conference?.organizer,
+      organizerOrgNumber: sfc.conference?.organizerOrgNumber,
+      organizerAddress: sfc.conference?.organizerAddress,
+      venueName: sfc.conference?.venueName,
+      venueAddress: sfc.conference?.venueAddress,
+      sponsorEmail: sfc.conference?.sponsorEmail,
+      logoBright: sfc.conference?.logoBright,
+    },
+  }
+}
+
+/**
+ * A fingerprint of everything a reserved PDF was rendered from — the inputs
+ * above plus the template's identity and revision. A stale reservation is
+ * reused only while it still matches: a corrected org number, a renamed
+ * tier, an edited template all make it a different agreement.
+ */
+export function contractRenderFingerprint(
+  sfc: SponsorForConferenceExpanded,
+  signer: Pick<CommunicationRecipient, 'name' | 'email'>,
+  template: { _id: string; _updatedAt?: string },
+): string {
+  return createHash('sha256')
+    .update(
+      JSON.stringify({
+        template: { _id: template._id, _updatedAt: template._updatedAt },
+        inputs: contractRenderInputs(sfc, signer),
+      }),
+    )
+    .digest('hex')
 }
 
 /**
@@ -315,6 +377,28 @@ export async function prepareContractSend(
   const now = getCurrentDateTime()
   const organizerDisplayName =
     actor.name?.trim() || actor.email?.trim() || 'Organizer'
+  // The template, resolved up front: its identity and revision are part of
+  // the fingerprint a stale reservation is judged against.
+  let templateId = args.contractTemplateId
+  if (!templateId) {
+    const best = await findBestContractTemplate(conference._id, sfc.tier?._id)
+    if (best.error || !best.template) {
+      throw precondition(
+        `No contract template found for tier "${sfc.tier?.title ?? 'unknown'}". Create one in Settings first.`,
+      )
+    }
+    templateId = best.template._id
+  }
+  const { template, error: templateError } =
+    await getContractTemplate(templateId)
+  if (templateError || !template) {
+    throw new TRPCError({
+      code: 'NOT_FOUND',
+      message: 'Contract template not found. It may have been deleted.',
+      cause: templateError,
+    })
+  }
+  const renderInputs = contractRenderFingerprint(sfc, signer, template)
   // RESERVE the agreement before anything is mailed: the signing page resolves
   // the token through the stored `signatureId`, so a link that is emailed
   // before it is stored would be dead if the store failed — and two first
@@ -339,6 +423,7 @@ export async function prepareContractSend(
     signingUrl: string | null
     contractReservedAt: string | null
     contractReservedTerms: string | null
+    contractReservedInputs: string | null
     contractValue: number | null
     contractCurrency: string | null
     status: string | null
@@ -354,7 +439,7 @@ export async function prepareContractSend(
     tierId: string | null
     addonIds: string[] | null
   } | null>(
-    `*[_type == "sponsorForConference" && _id == $id && conference._ref == $conferenceId][0]{ _rev, contractStatus, signatureStatus, signatureId, signingUrl, contractReservedAt, contractReservedTerms, contractValue, contractCurrency, status, signerEmail, "assignedToId": assignedTo._ref, "templateId": contractTemplate._ref, contractSentAt, contractDocument, contractTemplate, signerName, organizerSignedAt, organizerSignedBy, "tierId": tier._ref, "addonIds": addons[]._ref }`,
+    `*[_type == "sponsorForConference" && _id == $id && conference._ref == $conferenceId][0]{ _rev, contractStatus, signatureStatus, signatureId, signingUrl, contractReservedAt, contractReservedTerms, contractReservedInputs, contractValue, contractCurrency, status, signerEmail, "assignedToId": assignedTo._ref, "templateId": contractTemplate._ref, contractSentAt, contractDocument, contractTemplate, signerName, organizerSignedAt, organizerSignedBy, "tierId": tier._ref, "addonIds": addons[]._ref }`,
     { id: sfc._id, conferenceId: conference._id },
   )
   if (!current || contractActionFor(current) !== 'send') {
@@ -422,6 +507,7 @@ export async function prepareContractSend(
     current.signatureStatus !== 'rejected' &&
     current.signatureStatus !== 'expired' &&
     current.contractReservedTerms === terms &&
+    current.contractReservedInputs === renderInputs &&
     !!current.signerEmail &&
     (!args.contractTemplateId || args.contractTemplateId === current.templateId)
   let signingUrl: string
@@ -437,6 +523,7 @@ export async function prepareContractSend(
     signingUrl: current.signingUrl,
     contractReservedAt: current.contractReservedAt,
     contractReservedTerms: current.contractReservedTerms,
+    contractReservedInputs: current.contractReservedInputs,
     contractSentAt: current.contractSentAt,
     contractDocument: current.contractDocument,
     contractTemplate: current.contractTemplate,
@@ -467,61 +554,12 @@ export async function prepareContractSend(
     agreementId = current.signatureId!
     reservation = { contractReservedAt: now }
   } else {
-    let templateId = args.contractTemplateId
-    if (!templateId) {
-      const best = await findBestContractTemplate(conference._id, sfc.tier?._id)
-      if (best.error || !best.template) {
-        throw precondition(
-          `No contract template found for tier "${sfc.tier?.title ?? 'unknown'}". Create one in Settings first.`,
-        )
-      }
-      templateId = best.template._id
-    }
-    const { template, error: templateError } =
-      await getContractTemplate(templateId)
-    if (templateError || !template) {
-      throw new TRPCError({
-        code: 'NOT_FOUND',
-        message: 'Contract template not found. It may have been deleted.',
-        cause: templateError,
-      })
-    }
-
-    const primaryContact =
-      sfc.contactPersons?.find((c) => c.isPrimary) ?? sfc.contactPersons?.[0]
     let pdfBuffer: Buffer
     try {
-      pdfBuffer = await generateContractPdf(template, {
-        sponsor: {
-          name: sfc.sponsor.name,
-          orgNumber: sfc.sponsor.orgNumber,
-          address: sfc.sponsor.address,
-          website: sfc.sponsor.website,
-        },
-        contactPerson: {
-          name: primaryContact?.name ?? signer.name,
-          email: primaryContact?.email ?? signer.email,
-        },
-        tier: sfc.tier
-          ? { title: sfc.tier.title, tagline: sfc.tier.tagline }
-          : undefined,
-        addons: sfc.addons?.map((a) => ({ title: a.title })),
-        contractValue: sfc.contractValue,
-        contractCurrency: sfc.contractCurrency,
-        conference: {
-          title: sfc.conference.title,
-          startDate: sfc.conference.startDate,
-          endDate: sfc.conference.endDate,
-          city: sfc.conference.city,
-          organizer: sfc.conference.organizer,
-          organizerOrgNumber: sfc.conference.organizerOrgNumber,
-          organizerAddress: sfc.conference.organizerAddress,
-          venueName: sfc.conference.venueName,
-          venueAddress: sfc.conference.venueAddress,
-          sponsorEmail: sfc.conference.sponsorEmail,
-          logoBright: sfc.conference.logoBright,
-        },
-      })
+      pdfBuffer = await generateContractPdf(
+        template,
+        contractRenderInputs(sfc, signer),
+      )
     } catch (error) {
       throw new TRPCError({
         code: 'INTERNAL_SERVER_ERROR',
@@ -618,6 +656,7 @@ export async function prepareContractSend(
       signerEmail: signer.email,
       contractReservedAt: now,
       contractReservedTerms: terms,
+      contractReservedInputs: renderInputs,
       // This agreement's own issuance time, from the moment it is signable:
       // the signing certificate embeds it, and the sponsor may sign before
       // the email lands (or before the flip, which stamps it again).
@@ -778,9 +817,22 @@ export async function prepareContractSend(
         })
         if (!gate.ok) {
           console.error(
-            '[contract-send] the deal no longer allows contract-sent; status left as is:',
+            '[contract-send] the deal no longer allows contract-sent; the mailed agreement is revoked:',
             gate.missing.map((m) => m.label),
           )
+          // The link is in an inbox but the deal cannot take a signature
+          // any more: the agreement is expired (the signing page refuses
+          // it), on the same revision the gate judged.
+          await clientWrite
+            .patch(sfc._id)
+            .ifRevisionId(latest._rev)
+            .set({ signatureStatus: 'expired' })
+            .unset([
+              'contractReservedAt',
+              'contractReservedTerms',
+              'contractReservedInputs',
+            ])
+            .commit()
           return { ok: false }
         }
         await clientWrite
@@ -793,7 +845,11 @@ export async function prepareContractSend(
             contractStatus: 'contract-sent',
             signatureStatus: 'pending',
           })
-          .unset(['contractReservedAt', 'contractReservedTerms'])
+          .unset([
+            'contractReservedAt',
+            'contractReservedTerms',
+            'contractReservedInputs',
+          ])
           .commit()
       } catch (error) {
         console.error('[contract-send] sponsor record update failed:', error)

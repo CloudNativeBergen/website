@@ -462,7 +462,9 @@ First send (contractActionFor → "send"):
    signingUrl }. A provider failure REFUSES the send — nothing is mailed.
 4. The agreement is RESERVED on the sponsor record with ifRevisionId:
    signatureId, signingUrl, contractDocument, contractTemplate, signer,
-   contractSentAt, contractReservedAt + contractReservedTerms,
+   contractSentAt, contractReservedAt + contractReservedTerms (value, currency,
+   tier, add-ons) + contractReservedInputs (a hash of every rendered input and
+   the template revision),
    signatureStatus "not-started" (signable from this moment).
 5. The branded email goes out with the signing link. A definitive provider
    refusal releases the reservation and restores whatever agreement it

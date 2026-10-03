@@ -650,6 +650,7 @@ describe('crm.activities.list is conference-scoped (#863 row 4)', () => {
 const CONTRACT_SEND = {
   sponsorForConferenceId: 'sfc-A',
   kind: 'contract' as const,
+  contractAction: 'send' as const,
   recipientKeys: ['c1'],
   subject: 'Sponsorship Agreement',
   message: JSON.stringify([

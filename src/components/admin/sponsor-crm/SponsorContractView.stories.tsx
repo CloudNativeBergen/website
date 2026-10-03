@@ -117,6 +117,9 @@ export const ContractSigned: Story = {
       contractStatus: 'contract-signed',
       signatureStatus: 'signed',
       contractSignedAt: '2026-02-05T15:30:00Z',
+      // Signed through the digital flow: only then is the stored document
+      // the signed one, and the copy offered.
+      contractSignedBy: 'Kari Nordmann',
       contractDocument: {
         asset: {
           _ref: 'file-1',

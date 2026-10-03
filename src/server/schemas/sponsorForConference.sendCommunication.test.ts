@@ -26,6 +26,18 @@ describe('SendCommunicationSchema recipients', () => {
     }
   })
 
+  it('requires a contract send to name the action it was composed for', () => {
+    const parsed = SendCommunicationSchema.safeParse({
+      ...base,
+      kind: 'contract',
+      recipientKeys: ['c1'],
+    })
+    expect(parsed.success).toBe(false)
+    expect(
+      parsed.error?.issues.some((i) => i.path[0] === 'contractAction'),
+    ).toBe(true)
+  })
+
   it('lets a contract send name no contact — the server addresses the signer on record', () => {
     expect(
       SendCommunicationSchema.safeParse({

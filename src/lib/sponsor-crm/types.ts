@@ -125,6 +125,7 @@ export interface SponsorForConference {
   contractReservedAt?: string
   /** Fingerprint of the terms the reserved PDF was rendered from. */
   contractReservedTerms?: string
+  contractReservedInputs?: string
   organizerSignedAt?: string
   organizerSignedBy?: string
   contractValue?: number
@@ -230,6 +231,7 @@ export interface SponsorForConferenceExpanded {
   contractReservedAt?: string
   /** Fingerprint of the terms the reserved PDF was rendered from. */
   contractReservedTerms?: string
+  contractReservedInputs?: string
   organizerSignedAt?: string
   organizerSignedBy?: string
   contractValue?: number

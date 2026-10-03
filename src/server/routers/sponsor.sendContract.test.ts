@@ -30,6 +30,8 @@ const h = vi.hoisted(() => ({
   sfc: null as Record<string, unknown> | null,
   /** A write lands between the reservation read and the reservation patch. */
   bumpRevAfterStateRead: false,
+  /** Revisions advance on every successful commit. */
+  revCounter: 1,
   /** Unsets, recorded apart from sets. */
   unsets: [] as Array<{ id: string; fields: string[] }>,
   /** Every boundary event in order: reserve / send / flip. */
@@ -138,6 +140,7 @@ vi.mock('@/lib/sanity/client', () => {
         signingUrl: h.sfc?.signingUrl ?? null,
         contractReservedAt: h.sfc?.contractReservedAt ?? null,
         contractReservedTerms: h.sfc?.contractReservedTerms ?? null,
+        contractReservedInputs: h.sfc?.contractReservedInputs ?? null,
         contractValue:
           h.termsAtFreshRead?.contractValue ?? h.sfc?.contractValue ?? null,
         contractCurrency: h.sfc?.contractCurrency ?? null,
@@ -220,6 +223,8 @@ vi.mock('@/lib/sanity/client', () => {
             : 'no-match'
           : (selection as unknown as string)
     let sets: Record<string, unknown> = {}
+    // Staged until commit succeeds — a rejected commit changes nothing.
+    let unsetFields: string[] = []
     let requiredRev: string | undefined
     const chain = {
       ifRevisionId: (rev: string) => {
@@ -233,7 +238,7 @@ vi.mock('@/lib/sanity/client', () => {
       setIfMissing: () => chain,
       unset: (fields: string[]) => {
         h.unsets.push({ id, fields })
-        for (const f of fields) if (h.sfc && id === h.sfc._id) delete h.sfc[f]
+        unsetFields = [...unsetFields, ...fields]
         return chain
       },
       inc: (v: Record<string, number>) => {
@@ -260,7 +265,12 @@ vi.mock('@/lib/sanity/client', () => {
           h.sequence.push('flip')
         }
         h.patches.push({ id, sets })
-        if (h.sfc && id === h.sfc._id) Object.assign(h.sfc, sets)
+        if (h.sfc && id === h.sfc._id) {
+          for (const f of unsetFields) delete h.sfc[f]
+          Object.assign(h.sfc, sets)
+          // Every successful write is a new revision, like Sanity's.
+          h.sfc._rev = `rev-${++h.revCounter}`
+        }
         return { ...sets }
       },
     }
@@ -299,6 +309,7 @@ vi.mock('@/lib/email/config', async (importOriginal) => ({
 }))
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { contractRenderFingerprint } from '@/lib/sponsor-crm/contract-communication'
 import { initTRPC } from '@trpc/server'
 import type { Context } from '@/server/trpc'
 import { sponsorRouter } from './sponsor'
@@ -341,6 +352,7 @@ const sponsor = () => t.createCallerFactory(sponsorRouter)(ctx())
 const INPUT = {
   sponsorForConferenceId: SFC,
   kind: 'contract' as const,
+  contractAction: 'send' as const,
   recipientKeys: ['c-primary'],
   subject: 'Sponsorship Agreement',
   message: JSON.stringify([
@@ -358,6 +370,13 @@ const record = () =>
 const activities = (type: string) =>
   h.creates.filter((d) => d.activityType === type)
 const sfcPatches = () => h.patches.filter((p) => p.id === SFC)
+/** The fingerprint a reservation made from the CURRENT fixture carries. */
+const inputsOf = () =>
+  contractRenderFingerprint(
+    h.sfc as never,
+    { name: 'Kari Nordmann', email: 'kari@acme.test' },
+    { _id: 'tpl-A' },
+  )
 const sentHtml = () => h.send.mock.calls[0][0].html as string
 
 const conference = () => ({
@@ -390,6 +409,7 @@ beforeEach(() => {
   h.signerEmailAtFreshRead = null
   h.contactEmailAtSend = null
   h.bumpRevAfterStateRead = false
+  h.revCounter = 1
   h.tenant = { _type: 'sponsorForConference', conferenceId: CONF }
   h.tenantById = { 'tpl-A': { _type: 'contractTemplate', conferenceId: CONF } }
   h.sfc = {
@@ -492,7 +512,11 @@ describe('first send', () => {
     })
     expect(h.unsets).toContainEqual({
       id: SFC,
-      fields: ['contractReservedAt', 'contractReservedTerms'],
+      fields: [
+        'contractReservedAt',
+        'contractReservedTerms',
+        'contractReservedInputs',
+      ],
     })
     expect(activities('contract_status_change')).toHaveLength(1)
     expect(activities('signature_status_change')).toHaveLength(1)
@@ -637,7 +661,7 @@ describe('first send', () => {
     expect(sfcPatches().some((p) => 'contractStatus' in p.sets)).toBe(false)
   })
 
-  it('does not move a deal that was closed-lost during the send, and tells the organizer', async () => {
+  it('does not move a deal that was closed-lost during the send, tells the organizer, and revokes the mailed link', async () => {
     h.send.mockImplementation(async () => {
       Object.assign(h.sfc!, { status: 'closed-lost' })
       return { data: { id: 'resend-msg-1' }, error: null }
@@ -646,6 +670,31 @@ describe('first send', () => {
     expect(result).toMatchObject({ success: true, contractStateFailed: true })
     expect(h.sfc!.contractStatus).toBe('none')
     expect(sfcPatches().some((p) => 'contractStatus' in p.sets)).toBe(false)
+    // The mailed link cannot take a signature for a lost deal: revoked.
+    expect(h.sfc!.signatureStatus).toBe('expired')
+    expect(h.sfc!.contractReservedAt).toBeUndefined()
+  })
+
+  it("does not reuse a stale reservation after the sponsor's legal details were corrected — the PDF is re-rendered", async () => {
+    Object.assign(h.sfc!, {
+      signatureId: 'agr-stale',
+      signingUrl: `https://${DOMAIN}/sponsor/contract/sign/agr-stale`,
+      contractReservedAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+      contractReservedTerms: '50000|NOK|tier-gold|',
+      contractReservedInputs: inputsOf(),
+      signerEmail: 'kari@acme.test',
+    })
+    ;(h.sfc!.sponsor as { orgNumber: string }).orgNumber = '999999999'
+    const result = await sponsor().crm.sendCommunication(INPUT)
+    expect(result).toMatchObject({ success: true })
+    expect(h.sendForSigning).toHaveBeenCalledTimes(1)
+    expect(h.generatePdf).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        sponsor: expect.objectContaining({ orgNumber: '999999999' }),
+      }),
+    )
+    expect(h.sfc!.signatureId).not.toBe('agr-stale')
   })
 
   it('a reused agreement survives a refused retry — the link already delivered stays valid', async () => {
@@ -655,6 +704,7 @@ describe('first send', () => {
       signingUrl: STALE_URL,
       contractReservedAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
       contractReservedTerms: '50000|NOK|tier-gold|',
+      contractReservedInputs: inputsOf(),
       signerEmail: 'kari@acme.test',
     })
     h.send.mockResolvedValue({
@@ -678,6 +728,7 @@ describe('first send', () => {
       signingUrl: `https://${DOMAIN}/sponsor/contract/sign/agr-stale`,
       contractReservedAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
       contractReservedTerms: '50000|NOK|tier-gold|',
+      contractReservedInputs: inputsOf(),
       signerEmail: 'kari@acme.test',
     })
     const result = await sponsor().crm.sendCommunication({
@@ -725,6 +776,7 @@ describe('first send', () => {
       signingUrl: `https://${DOMAIN}/sponsor/contract/sign/agr-stale`,
       contractReservedAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
       contractReservedTerms: '50000|NOK|tier-gold|',
+      contractReservedInputs: inputsOf(),
       signerName: 'Kari Nordmann',
       signerEmail: 'kari@acme.test',
     })
@@ -750,6 +802,7 @@ describe('first send', () => {
       contractReservedAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
       // Rendered with no add-ons.
       contractReservedTerms: '50000|NOK|tier-gold|',
+      contractReservedInputs: inputsOf(),
     })
     const result = await sponsor().crm.sendCommunication(INPUT)
     expect(result).toMatchObject({ success: true })
@@ -764,6 +817,7 @@ describe('first send', () => {
       signingUrl: `https://${DOMAIN}/sponsor/contract/sign/agr-stale`,
       contractReservedAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
       contractReservedTerms: '50000|NOK|tier-gold|',
+      contractReservedInputs: inputsOf(),
       signerName: 'Kari Nordmann',
       signerEmail: 'kari@acme.test',
     })
@@ -797,6 +851,7 @@ describe('first send', () => {
       signingUrl: STALE_URL,
       contractReservedAt: STALE_AT,
       contractReservedTerms: '50000|NOK|tier-gold|',
+      contractReservedInputs: inputsOf(),
       signerEmail: 'kari@acme.test',
     })
     h.send.mockResolvedValueOnce({
@@ -827,7 +882,6 @@ describe('first send', () => {
     h.sfc!.contractReservedAt = new Date(
       Date.now() - 60 * 60 * 1000,
     ).toISOString()
-    h.sfc!.contractReservedTerms = '50000|NOK|tier-gold|'
     h.flipShouldThrow = false
     const second = await sponsor().crm.sendCommunication(INPUT)
     expect(second).toMatchObject({ success: true })
@@ -891,6 +945,7 @@ describe('first send', () => {
       signatureStatus: 'rejected',
       contractReservedAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
       contractReservedTerms: '50000|NOK|tier-gold|',
+      contractReservedInputs: inputsOf(),
     })
     const result = await sponsor().crm.sendCommunication(INPUT)
     expect(result).toMatchObject({ success: true })
@@ -951,6 +1006,7 @@ describe('first send', () => {
       contractReservedAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
       // Rendered at 40 000; the deal is now 50 000.
       contractReservedTerms: '40000|NOK|tier-gold|',
+      contractReservedInputs: inputsOf(),
     })
     const result = await sponsor().crm.sendCommunication(INPUT)
     expect(result).toMatchObject({ success: true })
@@ -1043,6 +1099,7 @@ describe('first send', () => {
       contractReservedAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
       // Terms changed since: a replacement, not a reuse.
       contractReservedTerms: '40000|NOK|tier-gold|',
+      contractReservedInputs: inputsOf(),
       contractSentAt: '2026-10-01T08:00:00.000Z',
       contractDocument: OLD_DOC,
       contractTemplate: { _type: 'reference', _ref: 'tpl-A' },
@@ -1111,6 +1168,7 @@ describe('first send', () => {
       signingUrl: `https://${DOMAIN}/sponsor/contract/sign/agr-stale`,
       contractReservedAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
       contractReservedTerms: '50000|NOK|tier-gold|',
+      contractReservedInputs: inputsOf(),
       signerName: undefined,
       signerEmail: undefined,
     })
@@ -1136,6 +1194,7 @@ describe('first send', () => {
       signingUrl: `https://${DOMAIN}/sponsor/contract/sign/agr-stale`,
       contractReservedAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
       contractReservedTerms: '50000|NOK|tier-gold|',
+      contractReservedInputs: inputsOf(),
       contractTemplate: { _ref: 'tpl-A' },
       signerEmail: 'kari@acme.test',
     })
@@ -1157,6 +1216,7 @@ describe('first send', () => {
       signingUrl: `https://${DOMAIN}/sponsor/contract/sign/agr-stale`,
       contractReservedAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
       contractReservedTerms: '50000|NOK|tier-gold|',
+      contractReservedInputs: inputsOf(),
       contractTemplate: { _ref: 'tpl-A' },
       signerEmail: 'kari@acme.test',
     })
@@ -1176,6 +1236,7 @@ describe('first send', () => {
       signingUrl: `https://${DOMAIN}/sponsor/contract/sign/agr-stale`,
       contractReservedAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
       contractReservedTerms: '50000|NOK|tier-gold|',
+      contractReservedInputs: inputsOf(),
       signerName: 'Kari Nordmann',
       signerEmail: 'kari@acme.test',
     })
@@ -1237,6 +1298,7 @@ describe('first send', () => {
       signingUrl: STALE_URL,
       contractReservedAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
       contractReservedTerms: '50000|NOK|tier-gold|',
+      contractReservedInputs: inputsOf(),
       signerEmail: 'kari@acme.test',
     })
     const result = await sponsor().crm.sendCommunication(INPUT)
@@ -1255,6 +1317,7 @@ describe('first send', () => {
       signingUrl: `https://${DOMAIN}/sponsor/contract/sign/agr-stale`,
       contractReservedAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
       contractReservedTerms: '50000|NOK|tier-gold|',
+      contractReservedInputs: inputsOf(),
       contractSentAt: ORIG,
       signerEmail: 'kari@acme.test',
     })
@@ -1357,7 +1420,10 @@ describe('reminder', () => {
   })
 
   it('reuses the signing URL, creates no agreement and increments reminderCount', async () => {
-    await sponsor().crm.sendCommunication(INPUT)
+    await sponsor().crm.sendCommunication({
+      ...INPUT,
+      contractAction: 'remind' as const,
+    })
     expect(h.sendForSigning).not.toHaveBeenCalled()
     expect(h.generatePdf).not.toHaveBeenCalled()
     expect(sentHtml()).toContain(`href="${SIGNING_URL}"`)
@@ -1375,7 +1441,10 @@ describe('reminder', () => {
       signerEmail: 'ext@other.test',
       signerName: 'Eva Ekstern',
     })
-    await sponsor().crm.sendCommunication(INPUT)
+    await sponsor().crm.sendCommunication({
+      ...INPUT,
+      contractAction: 'remind' as const,
+    })
     expect(h.send.mock.calls[0][0].to).toEqual([
       'kari@acme.test',
       'ext@other.test',
@@ -1398,6 +1467,7 @@ describe('reminder', () => {
     })
     const result = await sponsor().crm.sendCommunication({
       ...INPUT,
+      contractAction: 'remind' as const,
       recipientKeys: [],
     })
     expect(result).toMatchObject({ success: true })
@@ -1409,7 +1479,10 @@ describe('reminder', () => {
 
   it('matches the signer on record to a contact whatever the stored casing — never mailed twice', async () => {
     h.sfc!.signerEmail = ' Kari@Acme.test '
-    await sponsor().crm.sendCommunication(INPUT)
+    await sponsor().crm.sendCommunication({
+      ...INPUT,
+      contractAction: 'remind' as const,
+    })
     expect(h.send.mock.calls[0][0].to).toEqual(['kari@acme.test'])
     expect(record()!.recipients).toHaveLength(1)
   })
@@ -1419,7 +1492,12 @@ describe('reminder', () => {
       data: null,
       error: { message: 'boom', statusCode: 500 },
     })
-    await expect(sponsor().crm.sendCommunication(INPUT)).rejects.toMatchObject({
+    await expect(
+      sponsor().crm.sendCommunication({
+        ...INPUT,
+        contractAction: 'remind' as const,
+      }),
+    ).rejects.toMatchObject({
       code: 'INTERNAL_SERVER_ERROR',
     })
     expect(sfcPatches()).toEqual([])
@@ -1441,7 +1519,12 @@ describe('signed copy', () => {
 
   it('refuses when the signed status was set by hand — the stored document is the unsigned original', async () => {
     h.sfc!.contractSignedBy = undefined
-    await expect(sponsor().crm.sendCommunication(INPUT)).rejects.toMatchObject({
+    await expect(
+      sponsor().crm.sendCommunication({
+        ...INPUT,
+        contractAction: 'signed-copy' as const,
+      }),
+    ).rejects.toMatchObject({
       code: 'PRECONDITION_FAILED',
       message: expect.stringMatching(/set manually/),
     })
@@ -1449,7 +1532,10 @@ describe('signed copy', () => {
   })
 
   it('links the stored signed document and changes nothing on the deal', async () => {
-    await sponsor().crm.sendCommunication(INPUT)
+    await sponsor().crm.sendCommunication({
+      ...INPUT,
+      contractAction: 'signed-copy' as const,
+    })
     expect(h.sendForSigning).not.toHaveBeenCalled()
     expect(sentHtml()).toContain(`href="${DOC_URL}"`)
     expect(sfcPatches()).toEqual([])
@@ -1462,7 +1548,12 @@ describe('signed copy', () => {
 
   it('refuses when no signed document is stored', async () => {
     h.sfc!.contractDocument = undefined
-    await expect(sponsor().crm.sendCommunication(INPUT)).rejects.toMatchObject({
+    await expect(
+      sponsor().crm.sendCommunication({
+        ...INPUT,
+        contractAction: 'signed-copy' as const,
+      }),
+    ).rejects.toMatchObject({
       code: 'PRECONDITION_FAILED',
       message: expect.stringMatching(/signed/i),
     })

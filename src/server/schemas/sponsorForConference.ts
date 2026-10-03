@@ -287,6 +287,13 @@ export const SendCommunicationSchema = z
         }
       }
     }
+    if (input.kind === 'contract' && !input.contractAction) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['contractAction'],
+        message: 'A contract send names the action it was composed for',
+      })
+    }
     if (input.kind !== 'contract' && input.recipientKeys.length === 0) {
       ctx.addIssue({
         code: 'custom',

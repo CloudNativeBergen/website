@@ -280,6 +280,13 @@ export default defineType({
         'Fingerprint of the terms (value, currency, tier) the reserved PDF was rendered from; a retry whose terms differ issues a fresh agreement.',
     }),
     defineField({
+      name: 'contractReservedInputs',
+      title: 'Contract Agreement Reserved Inputs',
+      type: 'string',
+      description:
+        'Hash of every input the reserved PDF was rendered from (sponsor, contact, tier, add-ons, conference, template revision); a retry after any of them changed issues a fresh agreement.',
+    }),
+    defineField({
       name: 'contractReservedAt',
       title: 'Contract Agreement Reserved At',
       type: 'datetime',

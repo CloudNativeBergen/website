@@ -106,6 +106,7 @@ const SPONSOR_FOR_CONFERENCE_FIELDS = `
   contractSignedBy,
   contractReservedAt,
   contractReservedTerms,
+  contractReservedInputs,
   organizerSignedAt,
   organizerSignedBy,
   contractValue,
