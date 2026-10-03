@@ -96,14 +96,15 @@ vi.mock('@/lib/sanity/client', () => {
         _rev: 'rev-1',
       }
     }
-    if (
-      query.includes('{ _rev, contractStatus, signatureStatus, signatureId }')
-    ) {
+    if (query.includes('signatureId, status, tier->{ _id }, contractValue }')) {
       return {
         _rev: (h.sfc?._rev as string) ?? 'rev-1',
         contractStatus: h.sfc?.contractStatus ?? null,
         signatureStatus: h.sfc?.signatureStatus ?? null,
         signatureId: h.sfc?.signatureId ?? null,
+        status: h.sfc?.status ?? null,
+        tier: h.sfc?.tier ?? null,
+        contractValue: h.sfc?.contractValue ?? null,
       }
     }
     if (query.includes('signingUrl, contractReservedAt }')) {
@@ -498,6 +499,64 @@ describe('first send', () => {
     expect(result).toMatchObject({ success: true, contractStateFailed: true })
     expect(h.sfc!.contractStatus).toBe('none')
     expect(sfcPatches().some((p) => 'contractStatus' in p.sets)).toBe(false)
+  })
+
+  it('does not move a deal that was closed-lost during the send, and tells the organizer', async () => {
+    h.send.mockImplementation(async () => {
+      Object.assign(h.sfc!, { status: 'closed-lost' })
+      return { data: { id: 'resend-msg-1' }, error: null }
+    })
+    const result = await sponsor().crm.sendCommunication(INPUT)
+    expect(result).toMatchObject({ success: true, contractStateFailed: true })
+    expect(h.sfc!.contractStatus).toBe('none')
+    expect(sfcPatches().some((p) => 'contractStatus' in p.sets)).toBe(false)
+  })
+
+  it('a reused agreement survives a refused retry — the link already delivered stays valid', async () => {
+    const STALE_URL = `https://${DOMAIN}/sponsor/contract/sign/agr-stale`
+    Object.assign(h.sfc!, {
+      signatureId: 'agr-stale',
+      signingUrl: STALE_URL,
+      contractReservedAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+    })
+    h.send.mockResolvedValue({
+      data: null,
+      error: { message: 'boom', statusCode: 500 },
+    })
+    await expect(sponsor().crm.sendCommunication(INPUT)).rejects.toMatchObject({
+      code: 'INTERNAL_SERVER_ERROR',
+    })
+    expect(h.sfc!.signatureId).toBe('agr-stale')
+    expect(h.sfc!.signingUrl).toBe(STALE_URL)
+    expect(h.sfc!.contractReservedAt).toBeUndefined()
+  })
+
+  it('never stamps a counter-signature on a reused agreement (the stored PDF was not re-embedded)', async () => {
+    h.sfc!.assignedTo = { _id: 'sp-admin', name: 'Admin', email: 'a@x' }
+    Object.assign(h.sfc!, {
+      signatureId: 'agr-stale',
+      signingUrl: `https://${DOMAIN}/sponsor/contract/sign/agr-stale`,
+      contractReservedAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+    })
+    const result = await sponsor().crm.sendCommunication({
+      ...INPUT,
+      organizerSignatureDataUrl: 'data:image/png;base64,iVBORw0KGgo=',
+    })
+    expect(result).toMatchObject({ success: true })
+    expect(h.sfc!.organizerSignedBy).toBeUndefined()
+    expect(h.sfc!.contractStatus).toBe('contract-sent')
+  })
+
+  it('refuses a counter-signature from anyone but the assigned organizer, before any PDF', async () => {
+    h.sfc!.assignedTo = { _id: 'sp-other', name: 'Other', email: 'o@x' }
+    await expect(
+      sponsor().crm.sendCommunication({
+        ...INPUT,
+        organizerSignatureDataUrl: 'data:image/png;base64,iVBORw0KGgo=',
+      }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' })
+    expect(h.generatePdf).not.toHaveBeenCalled()
+    expect(h.send).not.toHaveBeenCalled()
   })
 
   it('keeps the link working when only the post-send flip fails, and tells the organizer', async () => {

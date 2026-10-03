@@ -246,6 +246,16 @@ export async function prepareContractSend(
     )
   }
   const signer = pickSigner(sfc, recipients, args.signerKey)
+  // Counter-signing is the assigned organizer's alone — checked before any
+  // path, so a reused agreement can never be stamped by someone else.
+  if (args.organizerSignatureDataUrl) {
+    if (!actor.id || sfc.assignedTo?._id !== actor.id) {
+      throw new TRPCError({
+        code: 'FORBIDDEN',
+        message: 'Only the assigned organizer can counter-sign this contract.',
+      })
+    }
+  }
 
   const now = getCurrentDateTime()
   const organizerDisplayName =
@@ -287,6 +297,9 @@ export async function prepareContractSend(
   let signingUrl: string
   let agreementId: string
   let reservation: Record<string, unknown>
+  // Provenance follows the PDF that was actually embedded: a reused
+  // agreement keeps its stored document, so no counter-signature is stamped.
+  const countersigned = !reserved && !!args.organizerSignatureDataUrl
   if (reserved) {
     signingUrl = current.signingUrl!
     agreementId = current.signatureId!
@@ -368,13 +381,6 @@ export async function prepareContractSend(
     }
 
     if (args.organizerSignatureDataUrl) {
-      if (!actor.id || sfc.assignedTo?._id !== actor.id) {
-        throw new TRPCError({
-          code: 'FORBIDDEN',
-          message:
-            'Only the assigned organizer can counter-sign this contract.',
-        })
-      }
       try {
         pdfBuffer = await embedSignatureInPdfBuffer(
           pdfBuffer,
@@ -475,7 +481,8 @@ export async function prepareContractSend(
   const release = async () => {
     try {
       // Only this send's token: a slow failure must never clear a later
-      // send's reservation.
+      // send's reservation. A REUSED agreement was already delivered by an
+      // earlier email, so it stays; only the in-flight marker is cleared.
       await clientWrite
         .patch({
           query:
@@ -486,7 +493,11 @@ export async function prepareContractSend(
             ours: agreementId,
           },
         })
-        .unset(['signatureId', 'signingUrl', 'contractReservedAt'])
+        .unset(
+          reserved
+            ? ['contractReservedAt']
+            : ['signatureId', 'signingUrl', 'contractReservedAt'],
+        )
         .commit()
     } catch (error) {
       console.error('[contract-send] releasing the agreement failed:', error)
@@ -515,8 +526,11 @@ export async function prepareContractSend(
           contractStatus: string | null
           signatureStatus: string | null
           signatureId: string | null
+          status: string | null
+          tier: { _id: string } | null
+          contractValue: number | null
         } | null>(
-          `*[_type == "sponsorForConference" && _id == $id && conference._ref == $conferenceId][0]{ _rev, contractStatus, signatureStatus, signatureId }`,
+          `*[_type == "sponsorForConference" && _id == $id && conference._ref == $conferenceId][0]{ _rev, contractStatus, signatureStatus, signatureId, status, tier->{ _id }, contractValue }`,
           { id: sfc._id, conferenceId: conference._id },
         )
         if (!latest || latest.signatureId !== agreementId) {
@@ -538,6 +552,23 @@ export async function prepareContractSend(
             .commit()
           return { ok: true }
         }
+        // The state machine decides the transition on the CURRENT record: a
+        // deal moved to closed-lost, or stripped of its tier or value, while
+        // the provider was busy is not moved to contract-sent.
+        const gate = checkState('contract', 'contract-sent', {
+          status: latest.status ?? undefined,
+          contractStatus: latest.contractStatus ?? undefined,
+          signatureStatus: latest.signatureStatus ?? undefined,
+          tier: latest.tier ?? undefined,
+          contractValue: latest.contractValue ?? undefined,
+        })
+        if (!gate.ok) {
+          console.error(
+            '[contract-send] the deal no longer allows contract-sent; status left as is:',
+            gate.missing.map((m) => m.label),
+          )
+          return { ok: false }
+        }
         await clientWrite
           .patch(sfc._id)
           .ifRevisionId(latest._rev)
@@ -545,7 +576,7 @@ export async function prepareContractSend(
             contractStatus: 'contract-sent',
             contractSentAt: now,
             signatureStatus: 'pending',
-            ...(args.organizerSignatureDataUrl && {
+            ...(countersigned && {
               organizerSignedAt: now,
               organizerSignedBy: organizerDisplayName,
             }),
