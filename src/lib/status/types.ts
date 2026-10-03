@@ -33,6 +33,9 @@ export interface TicketSummary {
   paidTickets: number
   totalRevenue: number
   totalTickets: number
+  workshopParticipants: number
+  paidWorkshopParticipants: number
+  freeWorkshopParticipants: number
   /**
    * Confirmed speakers holding an allocation, or `'unknown'` when the roster
    * read failed — the same vocabulary `lib/tickets/freeAllocation` uses. An

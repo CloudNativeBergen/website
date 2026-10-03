@@ -28,6 +28,9 @@ async function sendWeeklyUpdateForConference(conference: Conference) {
     speakerTickets: summary.tickets?.speakerTickets ?? 'unknown',
     organizerTickets: summary.tickets?.organizerTickets ?? 'unknown',
     totalTickets: summary.tickets?.totalTickets ?? 0,
+    workshopParticipants: summary.tickets?.workshopParticipants ?? 0,
+    paidWorkshopParticipants: summary.tickets?.paidWorkshopParticipants ?? 0,
+    freeWorkshopParticipants: summary.tickets?.freeWorkshopParticipants ?? 0,
     totalRevenue: summary.tickets?.totalRevenue ?? 0,
     targetAnalysis: summary.targetProgress
       ? {

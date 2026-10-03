@@ -22,6 +22,7 @@ import { TicketSalesProcessor } from '@/lib/tickets/processor'
 import type { ProcessTicketSalesInput } from '@/lib/tickets/types'
 import { getSpeakers } from '@/lib/speaker/sanity'
 import { countOrUnknown } from '@/lib/tickets/freeAllocation'
+import { tallyParticipants } from '@/lib/tickets/participants'
 
 async function buildSponsorSection(
   conferenceId: string,
@@ -145,6 +146,7 @@ async function buildTicketSection(conference: Conference): Promise<{
     const paidTickets = allTickets.filter((t) =>
       isPaidTicket(t, classification),
     )
+    const tally = tallyParticipants(allTickets, classification)
 
     const organizerTickets = conference.organizers?.length || 0
 
@@ -174,6 +176,9 @@ async function buildTicketSection(conference: Conference): Promise<{
       paidTickets: basicStats.totalPaidTickets,
       totalRevenue: basicStats.totalRevenue,
       totalTickets: paidTickets.length,
+      workshopParticipants: tally.workshopParticipants,
+      paidWorkshopParticipants: tally.paidWorkshopParticipants,
+      freeWorkshopParticipants: tally.freeWorkshopParticipants,
       speakerTickets,
       organizerTickets,
       categoryBreakdown,

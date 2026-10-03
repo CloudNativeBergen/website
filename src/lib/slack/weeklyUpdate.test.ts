@@ -68,6 +68,9 @@ function data(overrides: Partial<WeeklyUpdateData> = {}): WeeklyUpdateData {
     speakerTickets: 37,
     organizerTickets: 8,
     totalTickets: 166,
+    workshopParticipants: 0,
+    paidWorkshopParticipants: 0,
+    freeWorkshopParticipants: 0,
     totalRevenue: 540000,
     targetAnalysis: null,
     sponsorPipeline: null,
@@ -147,5 +150,24 @@ describe('one on-track rule, the emoji and the words from the same helper', () =
 
     expect(text).toContain('✅')
     expect(text).toContain('on track (+6.0%)')
+  })
+})
+
+describe('workshop participants', () => {
+  it('does not print the workshop section if participants is 0', async () => {
+    const text = await postedText(data({ workshopParticipants: 0 }))
+    expect(text).not.toContain('Workshop Participants')
+  })
+
+  it('prints the workshop section and split if participants > 0', async () => {
+    const text = await postedText(
+      data({
+        workshopParticipants: 102,
+        paidWorkshopParticipants: 68,
+        freeWorkshopParticipants: 34,
+      }),
+    )
+    expect(text).toContain('Workshop Participants:*\n102')
+    expect(text).toContain('Workshop Split:*\n68 paid · 34 comps')
   })
 })
