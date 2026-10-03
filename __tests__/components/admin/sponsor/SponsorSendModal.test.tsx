@@ -151,7 +151,9 @@ vi.mock('@/components/admin/EmailModal', () => ({
     onAdditionalFieldsChange,
     storageKey,
     extraField,
+    allowEmptyBody,
   }: {
+    allowEmptyBody?: boolean
     extraField?: { label: string; content: React.ReactNode }
     additionalFields?: Record<string, string | number | boolean>
     onAdditionalFieldsChange?: (
@@ -202,6 +204,7 @@ vi.mock('@/components/admin/EmailModal', () => ({
       <div>
         <p data-testid="subject">{draft.subject}</p>
         <span hidden>{tick}</span>
+        {allowEmptyBody && <span data-testid="allow-empty-body" />}
         <button
           type="button"
           onClick={() => {
@@ -1279,6 +1282,23 @@ describe('contract kind (#1264)', () => {
       contractAction: 'remind',
       recipientKeys: [],
     })
+  })
+
+  it('reminder: lets a subject-only template send — the card is the body; a first send never does', () => {
+    renderModal(
+      {
+        contractStatus: 'contract-sent',
+        signatureStatus: 'pending',
+        signatureId: 'agr-1',
+        signingUrl: SIGNING_URL,
+        signerEmail: 'kari@acme.example',
+      },
+      'contract',
+    )
+    expect(screen.getByTestId('allow-empty-body')).toBeInTheDocument()
+    cleanup()
+    renderModal({}, 'contract')
+    expect(screen.queryByTestId('allow-empty-body')).not.toBeInTheDocument()
   })
 
   it('signed: the button says "Send signed copy"', async () => {

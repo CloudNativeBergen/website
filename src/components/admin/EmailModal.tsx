@@ -47,6 +47,11 @@ export interface EmailModalProps {
   }) => React.ReactNode
   fromAddress: string
   /**
+   * The send supplies its own content below the body (a contract's signing
+   * card, a signed copy's link): an empty editable body is sendable then.
+   */
+  allowEmptyBody?: boolean
+  /**
    * Tenant brand primary (THEMING L1), used to colour the PREVIEW body so it
    * matches what is actually sent. Without it a themed conference's preview
    * shows house-blue links and headings while the real email is branded.
@@ -89,6 +94,7 @@ export function EmailModal({
   initialValues = {},
   previewComponent,
   fromAddress,
+  allowEmptyBody = false,
   brandColor,
   storageKey,
   additionalFields = {},
@@ -270,7 +276,7 @@ export function EmailModal({
   const handleSend = async () => {
     const currentMessage = getCurrentMessage()
 
-    if (!subject.trim() || !currentMessage.trim()) {
+    if (!subject.trim() || (!currentMessage.trim() && !allowEmptyBody)) {
       showNotification({
         type: 'warning',
         title: 'Missing information',
@@ -553,7 +559,7 @@ export function EmailModal({
             disabled={
               isLoading ||
               !subject.trim() ||
-              !getCurrentMessage().trim() ||
+              (!getCurrentMessage().trim() && !allowEmptyBody) ||
               isLocalhost
             }
             title={isLocalhost ? 'Sending is disabled on localhost' : ''}

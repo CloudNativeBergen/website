@@ -1442,6 +1442,11 @@ export function SponsorSendModal({
       previewComponent={createPreview}
       brandColor={emailBrandColor(conference.theme)}
       fromAddress={fromEmail}
+      // A reminder or signed copy appends its card: a subject-only template
+      // (an empty body) is still a complete email.
+      allowEmptyBody={
+        isContract && contractAction !== 'send' && !!contractLinkUrl
+      }
       warningContent={
         (localhostWarning ||
           noRecipientHint ||
