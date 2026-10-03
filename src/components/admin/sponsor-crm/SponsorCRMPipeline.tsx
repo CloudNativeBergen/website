@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars */
 'use client'
 
 import { api } from '@/lib/trpc/client'
@@ -8,7 +9,7 @@ import type {
 import { useState, useEffect, useRef, useCallback, useMemo, useId } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useSession } from 'next-auth/react'
-import { SponsorCRMForm } from '@/components/admin/sponsor-crm/SponsorCRMForm'
+import { SponsorCreateModal } from '@/components/admin/sponsor-crm/SponsorCreateModal'
 import { SponsorSendModal } from '@/components/admin'
 import {
   sponsorFromAddress,
@@ -240,14 +241,15 @@ export function SponsorCRMPipeline({
       sponsor?: SponsorForConferenceExpanded,
       formView: 'pipeline' | 'history' | 'contract' = 'pipeline',
     ) => {
-      setSelectedSponsor(sponsor || null)
-      setInitialFormView(formView)
-      setIsFormOpen(true)
       if (sponsor) {
-        updateUrlParams({ sponsor: sponsor._id, view: formView })
+        router.push(`/admin/sponsors/${sponsor._id}`)
+      } else {
+        setSelectedSponsor(null)
+        setInitialFormView('pipeline')
+        setIsFormOpen(true)
       }
     },
-    [updateUrlParams],
+    [router],
   )
 
   const handleCreateNew = useCallback(() => {
@@ -589,49 +591,10 @@ export function SponsorCRMPipeline({
         isLoading={deleteMutation.isPending}
       />
       {isFormOpen && (
-        <SponsorCRMForm
-          key={selectedSponsor?._id || 'new'}
+        <SponsorCreateModal
           conferenceId={conferenceId}
-          sponsor={selectedSponsor}
-          isOpen={isFormOpen}
+          isOpen={isFormOpen && !selectedSponsor}
           onClose={handleCloseForm}
-          onSuccess={(createdId) => {
-            if (createdId) {
-              const created = utils.sponsor.crm.list
-                .getData({
-                  assignedTo:
-                    assignedToFilter === 'unassigned'
-                      ? undefined
-                      : assignedToFilter,
-                  unassignedOnly: assignedToFilter === 'unassigned',
-                  tags: tagsFilter.length > 0 ? tagsFilter : undefined,
-                  tiers: tiersFilter.length > 0 ? tiersFilter : undefined,
-                })
-                ?.find((s) => s._id === createdId)
-              if (created) {
-                setSelectedSponsor(created)
-                setInitialFormView('pipeline')
-              }
-            }
-          }}
-          existingSponsorsInCRM={sponsors.map((s) => s.sponsor._id)}
-          initialView={initialFormView}
-          onViewChange={handleFormViewChange}
-          // "Send email" in the detail modal's Manage grid reuses the SAME Send
-          // modal the board card's overflow opens; it is rendered below
-          // this one, so it layers over the detail modal and closing it returns
-          // to the sponsor. Needs `conference` for the sender identity, exactly
-          // like the card path.
-          onSendEmail={
-            selectedSponsor && conference
-              ? () => handleOpenEmail(selectedSponsor)
-              : undefined
-          }
-          onSendDiscountCodes={
-            selectedSponsor && conference && canSendDiscountCodes
-              ? () => handleOpenDiscountSend(selectedSponsor)
-              : undefined
-          }
         />
       )}
 

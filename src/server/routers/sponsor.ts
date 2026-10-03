@@ -75,6 +75,9 @@ import {
   updateSponsorForConference,
   deleteSponsorForConference,
   getSponsorForConference,
+  getSponsorOverview,
+  getSponsorContacts,
+  getSponsorContractDetails,
   listSponsorsForConference,
   countSponsorsForConference,
   copySponsorsFromPreviousYear,
@@ -1008,6 +1011,76 @@ export const sponsorRouter = router({
   }),
 
   crm: router({
+    getOverview: adminProcedure
+      .input(SponsorIdSchema)
+      .query(async ({ input }) => {
+        const conferenceId = await resolveConferenceId()
+        const { data, error } = await getSponsorOverview(input.id)
+
+        if (error) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to fetch sponsor overview',
+            cause: error,
+          })
+        }
+
+        if (data?.conference?._ref !== conferenceId) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Sponsor not found for this conference',
+          })
+        }
+
+        return data
+      }),
+
+    getContacts: adminProcedure
+      .input(SponsorIdSchema)
+      .query(async ({ input }) => {
+        const conferenceId = await resolveConferenceId()
+        const { data, error } = await getSponsorContacts(input.id)
+
+        if (error) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to fetch sponsor contacts',
+            cause: error,
+          })
+        }
+
+        if (data?.conference?._ref !== conferenceId) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Sponsor not found for this conference',
+          })
+        }
+        return data
+      }),
+
+    getContractDetails: adminProcedure
+      .input(SponsorIdSchema)
+      .query(async ({ input }) => {
+        const conferenceId = await resolveConferenceId()
+        const { data, error } = await getSponsorContractDetails(input.id)
+
+        if (error) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to fetch sponsor contract details',
+            cause: error,
+          })
+        }
+
+        if (data?.conference?._ref !== conferenceId) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Sponsor not found for this conference',
+          })
+        }
+        return data
+      }),
+
     listOrganizers: adminProcedure.query(async () => {
       const conferenceId = await resolveConferenceId()
       const { getOrganizersByConference } = await import('@/lib/speaker/sanity')

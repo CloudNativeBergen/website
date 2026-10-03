@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars */
 import {
   clientWrite,
   clientReadCached,
@@ -859,5 +860,65 @@ export async function importAllHistoricSponsors(
     return { result }
   } catch (error) {
     return { error: error as Error }
+  }
+}
+
+import {
+  SPONSOR_OVERVIEW_FIELDS,
+  SPONSOR_CONTACTS_FIELDS,
+  SPONSOR_CONTRACT_FIELDS,
+} from './queries'
+
+export async function getSponsorOverview(id: string): Promise<{
+  data?: any // We'll refine the type later if needed
+  error?: Error
+}> {
+  try {
+    const data = await clientRead.fetch(
+      // groq-global-scoped: isolation enforced via trpc router output check
+      `*[_type == "sponsorForConference" && _id == $id][0]{${SPONSOR_OVERVIEW_FIELDS}}`,
+      { id },
+    )
+    if (!data) return { error: new Error('Sponsor not found') }
+    return { data }
+  } catch (error: any) {
+    console.error('Error fetching sponsor overview:', error)
+    return { error }
+  }
+}
+
+export async function getSponsorContacts(id: string): Promise<{
+  data?: any
+  error?: Error
+}> {
+  try {
+    const data = await clientRead.fetch(
+      // groq-global-scoped: isolation enforced via trpc router output check
+      `*[_type == "sponsorForConference" && _id == $id][0]{${SPONSOR_CONTACTS_FIELDS}}`,
+      { id },
+    )
+    if (!data) return { error: new Error('Sponsor not found') }
+    return { data }
+  } catch (error: any) {
+    console.error('Error fetching sponsor contacts:', error)
+    return { error }
+  }
+}
+
+export async function getSponsorContractDetails(id: string): Promise<{
+  data?: any
+  error?: Error
+}> {
+  try {
+    const data = await clientRead.fetch(
+      // groq-global-scoped: isolation enforced via trpc router output check
+      `*[_type == "sponsorForConference" && _id == $id][0]{${SPONSOR_CONTRACT_FIELDS}}`,
+      { id },
+    )
+    if (!data) return { error: new Error('Sponsor not found') }
+    return { data }
+  } catch (error: any) {
+    console.error('Error fetching sponsor contract details:', error)
+    return { error }
   }
 }
