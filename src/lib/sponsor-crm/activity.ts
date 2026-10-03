@@ -234,13 +234,6 @@ export async function promoteToClosedWonOnContract(
         //     `randomUUID()`. The id patched here is the matched document's own
         //     `_id`, so it cannot name a document the bearer did not unlock.
         //
-        // NOT covered: `generateAndSendContract` in `contract-send.ts` also
-        // calls this function, resolving the id with the UNGATED
-        // `getSponsorForConference` and comparing no tenant at all. It is a
-        // PARKED feature wired to no live route, so it reaches nothing today —
-        // but it MUST grow its own tenant gate before it is wired up. A warning
-        // to that effect sits at its definition.
-        //
         // `$id` matches at most one document, and `status in $earlyStages`
         // narrows it further, so nothing outside that record can be touched.
         query: '*[_id == $id && status in $earlyStages]',

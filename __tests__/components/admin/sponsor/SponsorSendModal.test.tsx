@@ -1178,6 +1178,49 @@ describe('contract kind (#1264)', () => {
     expect(posted).not.toHaveProperty('contractTemplateId')
   })
 
+  it('reminder: starts with the signer on record ticked, not the primary contact', () => {
+    renderModal(
+      {
+        contractStatus: 'contract-sent',
+        signatureStatus: 'pending',
+        signatureId: 'agr-1',
+        signingUrl: SIGNING_URL,
+        signerEmail: 'Ola@Acme.example',
+      },
+      'contract',
+    )
+    expect(screen.getByRole('checkbox', { name: 'Ola Nordmann' })).toBeChecked()
+    expect(
+      screen.getByRole('checkbox', { name: 'Kari Nordmann' }),
+    ).not.toBeChecked()
+    expect(
+      screen.queryByText(/also goes to the signer on record/),
+    ).not.toBeInTheDocument()
+  })
+
+  it('reminder: says the signer on record is mailed too when they are not a contact', () => {
+    renderModal(
+      {
+        contractStatus: 'contract-sent',
+        signatureStatus: 'pending',
+        signatureId: 'agr-1',
+        signingUrl: SIGNING_URL,
+        signerName: 'Eva Ekstern',
+        signerEmail: 'eva@other.example',
+      },
+      'contract',
+    )
+    expect(
+      screen.getByText(/also goes to the signer on record/),
+    ).toHaveTextContent(
+      'The reminder also goes to the signer on record, Eva Ekstern (eva@other.example), who is not among the contacts.',
+    )
+    // Nobody else is ticked for them: the primary contact is the start.
+    expect(
+      screen.getByRole('checkbox', { name: 'Kari Nordmann' }),
+    ).toBeChecked()
+  })
+
   it('signed: the button says "Send signed copy"', async () => {
     renderModal(
       {

@@ -72,7 +72,7 @@ export async function GET(request: NextRequest) {
         } else {
           failed++
           console.warn(
-            `Skipped reminder for ${contract.sponsorName} (${contract._id}): ${outcome.reason}${outcome.message ? ` — ${outcome.message}` : ''}`,
+            `Reminder not completed for ${contract.sponsorName} (${contract._id}): ${outcome.reason}${outcome.message ? ` — ${outcome.message}` : ''}`,
           )
         }
       } catch (error) {

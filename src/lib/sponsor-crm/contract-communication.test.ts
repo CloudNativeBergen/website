@@ -18,6 +18,8 @@ const h = vi.hoisted(() => ({
   patches: [] as Array<{ id: string; sets: Record<string, unknown> }>,
   incs: [] as Array<{ id: string; field: string; by: number }>,
   creates: [] as Array<Record<string, unknown>>,
+  /** The reminderCount patch fails after the email went out. */
+  countShouldThrow: false,
 }))
 
 vi.mock('server-only', () => ({}))
@@ -74,6 +76,9 @@ vi.mock('@/lib/sanity/client', () => {
         return chain
       },
       commit: async () => {
+        if (h.countShouldThrow && 'reminderCount' in sets) {
+          throw new Error('sanity down')
+        }
         h.patches.push({ id, sets })
         return {}
       },
@@ -115,6 +120,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   h.fetches = []
   h.contactEmailAtSend = null
+  h.countShouldThrow = false
   h.patches = []
   h.incs = []
   h.creates = []
@@ -313,6 +319,28 @@ describe('sendContractReminderBySystem', () => {
       reason: 'template-missing',
     })
     expect(h.send).not.toHaveBeenCalled()
+  })
+
+  it('reports a mailed reminder whose count did not land — never as a success', async () => {
+    h.countShouldThrow = true
+    expect(await sendContractReminderBySystem('sfc-1')).toMatchObject({
+      ok: false,
+      reason: 'count-failed',
+      message: expect.stringMatching(/mailed to kari@acme.test/),
+    })
+    expect(h.send).toHaveBeenCalledTimes(1)
+    expect(h.patches).toEqual([])
+  })
+
+  it('matches the persisted signer to a contact whatever the stored casing, and records the canonical address', async () => {
+    h.sfc!.signerEmail = ' Kari@Acme.test '
+    const outcome = await sendContractReminderBySystem('sfc-1')
+    expect(outcome).toEqual({ ok: true, recipient: 'kari@acme.test' })
+    expect(h.send.mock.calls[0][0].to).toEqual(['kari@acme.test'])
+    const record = h.creates.find((d) => d.communicationKind === 'contract')
+    expect(record!.recipients).toEqual([
+      expect.objectContaining({ _key: 'c-primary', email: 'kari@acme.test' }),
+    ])
   })
 
   it('does not count a reminder the provider refused, and records the failure', async () => {

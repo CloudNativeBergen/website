@@ -151,6 +151,11 @@ vi.mock('@/lib/sanity/client', () => {
           (h.sfc?.contractTemplate as { _ref?: string } | undefined)?._ref ??
           null,
         contractSentAt: h.sfc?.contractSentAt ?? null,
+        contractDocument: h.sfc?.contractDocument ?? null,
+        contractTemplate: h.sfc?.contractTemplate ?? null,
+        signerName: h.sfc?.signerName ?? null,
+        organizerSignedAt: h.sfc?.organizerSignedAt ?? null,
+        organizerSignedBy: h.sfc?.organizerSignedBy ?? null,
         addonIds:
           (h.sfc?.addons as Array<{ _id: string }> | undefined)?.map(
             (a) => a._id,
@@ -499,6 +504,18 @@ describe('first send', () => {
       deliveryStatus: 'sent',
       attachments: [expect.objectContaining({ url: SIGNING_URL })],
     })
+  })
+
+  it('the stored signer is the default signer whatever casing it was stored in', async () => {
+    h.sfc!.signerEmail = ' Ola@Acme.test '
+    await sponsor().crm.sendCommunication({
+      ...INPUT,
+      recipientKeys: ['c-primary', 'c-billing'],
+    })
+    expect(h.sendForSigning).toHaveBeenCalledWith(
+      expect.objectContaining({ signerEmail: 'ola@acme.test' }),
+    )
+    expect(h.sfc!.signerEmail).toBe('ola@acme.test')
   })
 
   it('defaults the signer to the primary recipient when none is named', async () => {
@@ -1010,7 +1027,47 @@ describe('first send', () => {
       code: 'INTERNAL_SERVER_ERROR',
     })
     expect(h.sfc!.signatureStatus).toBe('rejected')
-    expect(h.sfc!.signatureId).toBeUndefined()
+    // The rejected agreement is back as it was, not half-cleared.
+    expect(h.sfc!.signatureId).toBe('agr-rejected')
+  })
+
+  it('a refused replacement of a stale reservation restores the agreement it superseded — the link already mailed stays valid', async () => {
+    const OLD_URL = `https://${DOMAIN}/sponsor/contract/sign/agr-stale`
+    const OLD_DOC = {
+      _type: 'file',
+      asset: { _type: 'reference', _ref: 'file-old' },
+    }
+    Object.assign(h.sfc!, {
+      signatureId: 'agr-stale',
+      signingUrl: OLD_URL,
+      contractReservedAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+      // Terms changed since: a replacement, not a reuse.
+      contractReservedTerms: '40000|NOK|tier-gold|',
+      contractSentAt: '2026-10-01T08:00:00.000Z',
+      contractDocument: OLD_DOC,
+      contractTemplate: { _type: 'reference', _ref: 'tpl-A' },
+      signerName: 'Kari Nordmann',
+      signerEmail: 'kari@acme.test',
+    })
+    h.send.mockResolvedValue({
+      data: null,
+      error: { message: 'boom', statusCode: 500 },
+    })
+    await expect(
+      sponsor().crm.sendCommunication({
+        ...INPUT,
+        recipientKeys: ['c-billing'],
+        signerKey: 'c-billing',
+      }),
+    ).rejects.toMatchObject({ code: 'INTERNAL_SERVER_ERROR' })
+    expect(h.sendForSigning).toHaveBeenCalledTimes(1)
+    expect(h.sfc!.signatureId).toBe('agr-stale')
+    expect(h.sfc!.signingUrl).toBe(OLD_URL)
+    expect(h.sfc!.contractReservedTerms).toBe('40000|NOK|tier-gold|')
+    expect(h.sfc!.contractSentAt).toBe('2026-10-01T08:00:00.000Z')
+    expect(h.sfc!.contractDocument).toEqual(OLD_DOC)
+    expect(h.sfc!.signerEmail).toBe('kari@acme.test')
+    expect(h.sfc!.signerName).toBe('Kari Nordmann')
   })
 
   it("mails the addresses the agreement was reserved for, even if a contact's email changed before the send", async () => {
@@ -1303,6 +1360,33 @@ describe('reminder', () => {
       communicationKind: 'contract',
       attachments: [expect.objectContaining({ url: SIGNING_URL })],
     })
+  })
+
+  it('mails the signer on record alongside the chosen contacts when they are not a contact', async () => {
+    Object.assign(h.sfc!, {
+      signerEmail: 'ext@other.test',
+      signerName: 'Eva Ekstern',
+    })
+    await sponsor().crm.sendCommunication(INPUT)
+    expect(h.send.mock.calls[0][0].to).toEqual([
+      'kari@acme.test',
+      'ext@other.test',
+    ])
+    expect(record()!.recipients).toEqual([
+      expect.objectContaining({ _key: 'c-primary' }),
+      expect.objectContaining({
+        _key: 'signer-external',
+        name: 'Eva Ekstern',
+        email: 'ext@other.test',
+      }),
+    ])
+  })
+
+  it('matches the signer on record to a contact whatever the stored casing — never mailed twice', async () => {
+    h.sfc!.signerEmail = ' Kari@Acme.test '
+    await sponsor().crm.sendCommunication(INPUT)
+    expect(h.send.mock.calls[0][0].to).toEqual(['kari@acme.test'])
+    expect(record()!.recipients).toHaveLength(1)
   })
 
   it('does not count a reminder the provider refused', async () => {

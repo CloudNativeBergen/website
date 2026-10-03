@@ -33,6 +33,7 @@ import {
   TEMPLATE_WRONG_KIND_MESSAGE,
   defaultRecipientKey,
 } from '@/lib/sponsor-crm/communication'
+import { canonicalEmail } from '@/lib/speaker/email'
 import { formatConferenceDateLong } from '@/lib/time'
 import { conferenceBaseUrl } from '@/lib/conference/baseUrl'
 import { emailBrandColor, type ConferenceTheme } from '@/lib/branding/theme'
@@ -662,7 +663,31 @@ export function SponsorSendModal({
     () => sponsorForConference.contactPersons ?? [],
     [sponsorForConference.contactPersons],
   )
-  const defaultKey = useMemo(() => defaultRecipientKey(contacts), [contacts])
+  // CONTRACT KIND (#1264): one action by state, decided here for the label,
+  // the template and the preview, and on the server for the effect.
+  const isContract = kind === 'contract'
+  const contractAction = contractActionFor(sponsorForConference)
+  // The contact the agreement was issued to, if they still are one.
+  const signerContactKey = useMemo(
+    () =>
+      contacts.find(
+        (c) =>
+          !!c.email &&
+          !!sponsorForConference.signerEmail &&
+          canonicalEmail(c.email) ===
+            canonicalEmail(sponsorForConference.signerEmail),
+      )?._key,
+    [contacts, sponsorForConference.signerEmail],
+  )
+  // The reminder and the signed copy start with the signer on record; any
+  // other send with the primary contact.
+  const defaultKey = useMemo(
+    () =>
+      (isContract && contractAction !== 'send'
+        ? signerContactKey
+        : undefined) ?? defaultRecipientKey(contacts),
+    [contacts, isContract, contractAction, signerContactKey],
+  )
 
   const [selectedKeys, setSelectedKeys] = useState<ReadonlySet<string>>(
     () => new Set(defaultKey ? [defaultKey] : []),
@@ -682,10 +707,6 @@ export function SponsorSendModal({
     if (!isOpen) seededForRef.current = null
   }, [isOpen, sponsorForConference._id, defaultKey])
 
-  // CONTRACT KIND (#1264): one action by state, decided here for the label,
-  // the template and the preview, and on the server for the effect.
-  const isContract = kind === 'contract'
-  const contractAction = contractActionFor(sponsorForConference)
   // A contract draft belongs to its action: a "send" draft must not reopen
   // as the reminder's starting text.
   const draftKey = `sponsor-send-${kind}${isContract ? `-${contractAction}` : ''}-${sponsorForConference._id}`
@@ -812,11 +833,7 @@ export function SponsorSendModal({
   // asked of the server, which refuses the same way at send.
   const selectedContacts = contacts.filter((c) => selectedKeys.has(c._key))
   const defaultSignerKey =
-    selectedContacts.find(
-      (c) =>
-        !!sponsorForConference.signerEmail &&
-        c.email === sponsorForConference.signerEmail,
-    )?._key ??
+    selectedContacts.find((c) => c._key === signerContactKey)?._key ??
     selectedContacts.find((c) => c._key === defaultKey)?._key ??
     selectedContacts[0]?._key
   const signerKey =
@@ -1339,6 +1356,25 @@ export function SponsorSendModal({
         </div>
       ) : null
     ) : null
+  // The signer on record is not a contact (an external signer, or one since
+  // removed): the server mails them too, and says so here.
+  const externalSignerNotice =
+    isContract &&
+    contractAction !== 'send' &&
+    !!sponsorForConference.signerEmail &&
+    !signerContactKey ? (
+      <p
+        role="status"
+        className="font-inter text-sm text-gray-600 dark:text-gray-300"
+      >
+        {contractAction === 'remind' ? 'The reminder' : 'The signed copy'} also
+        goes to the signer on record,{' '}
+        {sponsorForConference.signerName
+          ? `${sponsorForConference.signerName} (${sponsorForConference.signerEmail})`
+          : sponsorForConference.signerEmail}
+        , who is not among the contacts.
+      </p>
+    ) : null
   const contractLinkMissingHint =
     isContract && contractAction !== 'send' && !contractLinkUrl ? (
       <p
@@ -1404,6 +1440,7 @@ export function SponsorSendModal({
           portalLinkHint ||
           contractReadinessHint ||
           contractLinkMissingHint ||
+          externalSignerNotice ||
           recipientsChangedHint ||
           templatesFailedNotice) && (
           <div className="space-y-3">
@@ -1416,6 +1453,7 @@ export function SponsorSendModal({
             {portalLinkHint}
             {contractReadinessHint}
             {contractLinkMissingHint}
+            {externalSignerNotice}
             {recipientsChangedHint}
           </div>
         )

@@ -1,5 +1,6 @@
 import 'server-only'
 import { TRPCError } from '@trpc/server'
+import { canonicalEmail } from '@/lib/speaker/email'
 import { preconditionFailed } from '@/server/errors'
 import type { Conference } from '@/lib/conference/types'
 import {
@@ -123,6 +124,33 @@ function formatContractValue(
     : undefined
 }
 
+/**
+ * Same address, whatever form it was stored in: recipients are canonical
+ * (trimmed, lowercased), a `signerEmail` written by the removed sender may
+ * not be.
+ */
+function sameEmail(a: string | null | undefined, b: string | null | undefined) {
+  return !!a && !!b && canonicalEmail(a) === canonicalEmail(b)
+}
+
+/**
+ * The persisted signer as a server-built recipient, for when they are not
+ * among the sponsor's contacts (an external signer the old sender allowed, or
+ * a contact since removed): the reminder and the signed copy are theirs.
+ */
+function persistedSignerRecipient(
+  sfc: SponsorForConferenceExpanded,
+): CommunicationRecipient | null {
+  if (!sfc.signerEmail) return null
+  return {
+    contactKey: 'signer-external',
+    name:
+      sfc.signerName ?? sfc.sponsor?.name ?? canonicalEmail(sfc.signerEmail),
+    email: canonicalEmail(sfc.signerEmail),
+    isDefault: false,
+  }
+}
+
 function pickSigner(
   sfc: SponsorForConferenceExpanded,
   recipients: CommunicationRecipient[],
@@ -139,7 +167,7 @@ function pickSigner(
     return named
   }
   return (
-    recipients.find((r) => !!sfc.signerEmail && r.email === sfc.signerEmail) ??
+    recipients.find((r) => sameEmail(r.email, sfc.signerEmail)) ??
     recipients.find((r) => r.isDefault) ??
     recipients[0]
   )
@@ -178,6 +206,19 @@ export async function prepareContractSend(
   const theme = conference.theme
   const contractValue = formatContractValue(sfc)
 
+  // The reminder and the signed copy go to the signer on record. When they
+  // are not a contact, the server adds them — never silently dropped in
+  // favour of whoever is ticked.
+  if (action !== 'send') {
+    const external = persistedSignerRecipient(sfc)
+    if (
+      external &&
+      !recipients.some((r) => sameEmail(r.email, external.email))
+    ) {
+      recipients = [...recipients, external]
+    }
+  }
+
   if (action === 'signed-copy') {
     const url = sfc.contractDocument?.asset?.url
     // Only the digital signing flow replaces the stored document with the
@@ -194,7 +235,7 @@ export async function prepareContractSend(
       action,
       recipients,
       // The person who signed — merged as SIGNER_NAME in the confirmation.
-      signer: {
+      signer: recipients.find((r) => sameEmail(r.email, sfc.signerEmail)) ?? {
         contactKey: '',
         name: sfc.signerName ?? sfc.sponsor?.name ?? sfc.signerEmail ?? '',
         email: sfc.signerEmail ?? '',
@@ -210,7 +251,7 @@ export async function prepareContractSend(
   if (action === 'remind') {
     const url = sfc.signingUrl!
     const signer =
-      recipients.find((r) => r.email === sfc.signerEmail) ??
+      recipients.find((r) => sameEmail(r.email, sfc.signerEmail)) ??
       ({
         contactKey: '',
         name: sfc.signerName ?? sfc.sponsor?.name ?? sfc.signerEmail ?? '',
@@ -306,10 +347,15 @@ export async function prepareContractSend(
     assignedToId: string | null
     templateId: string | null
     contractSentAt: string | null
+    contractDocument: Record<string, unknown> | null
+    contractTemplate: Record<string, unknown> | null
+    signerName: string | null
+    organizerSignedAt: string | null
+    organizerSignedBy: string | null
     tierId: string | null
     addonIds: string[] | null
   } | null>(
-    `*[_type == "sponsorForConference" && _id == $id && conference._ref == $conferenceId][0]{ _rev, contractStatus, signatureStatus, signatureId, signingUrl, contractReservedAt, contractReservedTerms, contractValue, contractCurrency, status, signerEmail, "assignedToId": assignedTo._ref, "templateId": contractTemplate._ref, contractSentAt, "tierId": tier._ref, "addonIds": addons[]._ref }`,
+    `*[_type == "sponsorForConference" && _id == $id && conference._ref == $conferenceId][0]{ _rev, contractStatus, signatureStatus, signatureId, signingUrl, contractReservedAt, contractReservedTerms, contractValue, contractCurrency, status, signerEmail, "assignedToId": assignedTo._ref, "templateId": contractTemplate._ref, contractSentAt, contractDocument, contractTemplate, signerName, organizerSignedAt, organizerSignedBy, "tierId": tier._ref, "addonIds": addons[]._ref }`,
     { id: sfc._id, conferenceId: conference._id },
   )
   if (!current || contractActionFor(current) !== 'send') {
@@ -383,8 +429,25 @@ export async function prepareContractSend(
   let agreementId: string
   let reservation: Record<string, unknown>
   const priorReservedAt = current.contractReservedAt
-  const priorSignatureStatus = current.signatureStatus
-  const priorContractSentAt = current.contractSentAt
+  // The agreement a FRESH one replaces — everything it overwrites. A refused
+  // replacement puts it back whole: the link already in an inbox (a stale
+  // reservation whose terms changed, or a rejected one) must not die for a
+  // replacement that was never delivered.
+  const priorAgreement: Record<string, unknown> = {
+    signatureId: current.signatureId,
+    signingUrl: current.signingUrl,
+    contractReservedAt: current.contractReservedAt,
+    contractReservedTerms: current.contractReservedTerms,
+    contractSentAt: current.contractSentAt,
+    contractDocument: current.contractDocument,
+    contractTemplate: current.contractTemplate,
+    signerName: current.signerName,
+    signerEmail: current.signerEmail,
+    organizerSignedAt: current.organizerSignedAt,
+    organizerSignedBy: current.organizerSignedBy,
+    // The status the replacement superseded (rejected / expired / not-started).
+    signatureStatus: current.signatureStatus ?? 'not-started',
+  }
   // Provenance follows the PDF that was actually embedded: a reused
   // agreement keeps its stored document, so no counter-signature is stamped.
   const countersigned = !reserved && !!args.organizerSignatureDataUrl
@@ -394,8 +457,8 @@ export async function prepareContractSend(
     // recipients (never silently swapped in for someone the organizer chose).
     // The persisted signer is the one on the reservation's own revision.
     const issuedTo = current.signerEmail!
-    const persisted = recipients.find((r) => r.email === issuedTo)
-    if (!persisted || signer.email !== issuedTo) {
+    const persisted = recipients.find((r) => sameEmail(r.email, issuedTo))
+    if (!persisted || !sameEmail(signer.email, issuedTo)) {
       throw precondition(
         `This agreement was already issued to ${issuedTo}. Include them as a recipient and the signer to send it again.`,
       )
@@ -625,28 +688,16 @@ export async function prepareContractSend(
         .unset(
           reserved
             ? []
-            : [
-                'signatureId',
-                'signingUrl',
-                'contractReservedAt',
-                'contractReservedTerms',
-                'organizerSignedAt',
-                'organizerSignedBy',
-                ...(priorContractSentAt ? [] : ['contractSentAt']),
-              ],
+            : Object.keys(priorAgreement).filter(
+                (k) => priorAgreement[k] == null,
+              ),
         )
         .set(
           reserved
             ? { contractReservedAt: priorReservedAt }
-            : // The status the replacement superseded (rejected / expired /
-              // not-started) comes back, since nothing was delivered — and
-              // so does the predecessor's issuance time, if any.
-              {
-                signatureStatus: priorSignatureStatus ?? 'not-started',
-                ...(priorContractSentAt && {
-                  contractSentAt: priorContractSentAt,
-                }),
-              },
+            : Object.fromEntries(
+                Object.entries(priorAgreement).filter(([, v]) => v != null),
+              ),
         )
         .commit()
     } catch (error) {
@@ -801,6 +852,7 @@ type SystemReminderOutcome =
         | 'no-organization'
         | 'template-missing'
         | 'send-failed'
+        | 'count-failed'
       message?: string
     }
 
@@ -826,22 +878,18 @@ export async function sendContractReminderBySystem(
   // sent to. Usually a contact; when not (an external signer the old sender
   // allowed, or a contact since removed), the server adds them itself.
   if (!sfc.signerEmail) return { ok: false, reason: 'no-signer' }
-  const signerContact = sfc.contactPersons?.find(
-    (c) => !!c.email && c.email === sfc.signerEmail,
+  const signerContact = sfc.contactPersons?.find((c) =>
+    sameEmail(c.email, sfc.signerEmail),
   )
+  // Canonical either way: the one form the erasure read can match (#1265).
   const signer: CommunicationRecipient = signerContact?._key
     ? {
         contactKey: signerContact._key,
         name: signerContact.name,
-        email: signerContact.email,
+        email: canonicalEmail(signerContact.email),
         isDefault: !!signerContact.isPrimary,
       }
-    : {
-        contactKey: 'signer-external',
-        name: sfc.signerName ?? sfc.sponsor?.name ?? sfc.signerEmail,
-        email: sfc.signerEmail,
-        isDefault: false,
-      }
+    : persistedSignerRecipient(sfc)!
   // Always the persisted address, as a server-built recipient: a contact key
   // re-resolved by the primitive could point at an address changed since.
   const recipientKeys: string[] = []
@@ -914,6 +962,15 @@ export async function sendContractReminderBySystem(
       message: 'message' in result ? result.message : result.reason,
     }
   }
-  await plan.afterSend()
+  // The email is out either way; a count that did not land is reported, not
+  // hidden — an uncounted reminder is one the sweep will send again.
+  const after = await plan.afterSend()
+  if (!after.ok) {
+    return {
+      ok: false,
+      reason: 'count-failed',
+      message: `mailed to ${signer.email}, but reminderCount was not updated`,
+    }
+  }
   return { ok: true, recipient: signer.email }
 }

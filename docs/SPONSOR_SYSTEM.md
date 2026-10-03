@@ -440,32 +440,46 @@ No provider-specific imports appear in the router or CRM business logic.
 
 ### Contract Send Flow
 
-The `generateAndSendContract()` function in `src/lib/sponsor-crm/contract-send.ts` orchestrates the entire send process. It accepts a `ContractSigningProvider` instance (injected by the caller) and is used by both the admin manual send and the automated registration completion flow.
+Sending a contract is the `contract` kind of `crm.sendCommunication` (#1264): one **Send** action whose effect is decided by state in `contractActionFor()` (`src/lib/sponsor-crm/contract-send-state.ts`) — the signed copy when a digital signature is stored, a reminder while one is pending, otherwise the first send. `prepareContractSend()` in `src/lib/sponsor-crm/contract-communication.ts` does the server-side work; the email itself leaves through the same send primitive as every other sponsor email, so the audit record carries recipients, body as sent and provider id.
 
 ```text
-1. Load sponsorForConference record
-2. Find best contract template (by conference + tier + language)
-3. Generate PDF via React-PDF with variable substitution
-4. If organizer counter-signature provided:
-   a. Embed organizer signature image + date in the PDF via pdf-lib
-   b. Record organizerSignedBy + organizerSignedAt on the document
-5. Upload PDF to Sanity as a file asset (permanent storage)
-6. Call provider.sendForSigning(pdf, filename, signerEmail, agreementName)
-   → provider handles upload + agreement creation internally
-   → returns { agreementId, signingUrl? }
-7. Update sponsorForConference:
-   - contractStatus → "contract-sent"
-   - signatureStatus → "pending"
-   - signatureId → agreementId
-   - signingUrl → from provider result
-   - contractSentAt → now
-   - contractDocument → Sanity file reference
-   - signerEmail → determined by priority: explicit override > sfc.signerEmail > primary contact email
-8. Send branded signing email via Resend with signing URL
-9. Log sponsorActivity entries for contract status and signature status changes
-```
+First send (contractActionFor → "send"):
+1. Readiness (state machine, sponsor, conference title) and the signer:
+   pickSigner → the signer named by the organizer (must be a chosen recipient)
+   > the stored signerEmail if among the recipients > the default recipient
+   > the first recipient. Counter-signing is the assigned organizer's alone.
+2. A FRESH scoped read of the sponsor decides the reservation, before any PDF:
+   refused when a contract is already out, when the terms (value, currency,
+   tier, add-ons), the pipeline status or the assignment changed since the
+   request's read, or when another send reserved within the last 10 minutes.
+   A stale reservation (a send that crashed, or whose status flip failed
+   after mailing) is REUSED — same link, no second agreement — when it still
+   matches the terms, the template and the persisted signer and was not
+   revoked; otherwise it is replaced.
+3. Fresh agreement only: best contract template for the tier (or the one
+   chosen), PDF via React-PDF, organizer counter-signature embedded if given,
+   PDF uploaded to Sanity, provider.sendForSigning(...) → { agreementId,
+   signingUrl }. A provider failure REFUSES the send — nothing is mailed.
+4. The agreement is RESERVED on the sponsor record with ifRevisionId:
+   signatureId, signingUrl, contractDocument, contractTemplate, signer,
+   contractSentAt, contractReservedAt + contractReservedTerms,
+   signatureStatus "not-started" (signable from this moment).
+5. The branded email goes out with the signing link. A definitive provider
+   refusal releases the reservation and restores whatever agreement it
+   replaced; a lost provider answer keeps it (the retry reuses the link).
+6. Only after the provider accepted: contractStatus → contract-sent,
+   signatureStatus → pending, the reservation marker cleared — conditional
+   on the current record (a signature completed through the link meanwhile,
+   a revocation, or a deal closed since is never overwritten). The
+   organizer is warned if this last write fails; the link still works.
 
-If the signing provider is unavailable or fails, the contract PDF is still generated and stored — only the digital signing step is skipped. This graceful degradation ensures contracts can always be generated even without a signing provider configured.
+Reminder: the stored signing link is re-sent to the chosen contacts plus the
+signer on record (added by the server when they are not a contact);
+reminderCount is incremented atomically. The `contract-reminders` cron sends
+the same reminder through `sendContractReminderBySystem` with no actor.
+Signed copy: links the stored signed document; requires a digital signature
+(`contractSignedBy`), never a status set by hand.
+```
 
 Signature status changes are logged as `sponsorActivity` entries with `activityType: "signature_status_change"`. With self-hosted signing, status transitions happen synchronously when the sponsor submits their signature (see [Self-Hosted Signing Provider](#self-hosted-signing-provider)) — no external webhook is involved.
 

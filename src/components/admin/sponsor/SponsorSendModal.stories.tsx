@@ -626,6 +626,32 @@ export const ContractReminder: Story = {
   },
 }
 
+/** The signer on record is no longer a contact: the server mails them too, and the composer says so. */
+export const ContractReminderExternalSigner: Story = {
+  args: {
+    kind: 'contract',
+    sponsorForConference: mockSponsor({
+      contactPersons: contacts,
+      contractStatus: 'contract-sent',
+      signatureStatus: 'pending',
+      signatureId: 'agr-1',
+      signingUrl: SIGNING_URL,
+      signerName: 'Eva Ekstern',
+      signerEmail: 'eva@other.example',
+    }),
+  },
+  parameters: { msw: { handlers: contractHandlers } },
+  play: async ({ canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body)
+    await body.findByRole('checkbox', { name: 'Kari Nordmann' })
+    await expect(
+      body.getByText(/also goes to the signer on record/),
+    ).toHaveTextContent(
+      'The reminder also goes to the signer on record, Eva Ekstern (eva@other.example), who is not among the contacts.',
+    )
+  },
+}
+
 /** Signed: the same action sends the signed copy, linking the stored document. */
 export const ContractSignedCopy: Story = {
   args: {
