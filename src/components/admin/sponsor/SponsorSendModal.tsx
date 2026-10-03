@@ -830,11 +830,14 @@ export function SponsorSendModal({
   // the signer on record the server mails anyway, in the server's order.
   const selectedNames = [
     ...contacts.filter((c) => selectedKeys.has(c._key)).map((c) => c.name),
+    // The same fallback as the server's recipient for the signer on record
+    // (name → sponsor name → canonical address), so the merged greeting and
+    // the server's re-merge agree and the template is not recorded as edited.
     ...(signerOnRecordMailed
       ? [
           sponsorForConference.signerName ??
-            sponsorForConference.signerEmail ??
-            '',
+            sponsorForConference.sponsor.name ??
+            canonicalEmail(sponsorForConference.signerEmail),
         ]
       : []),
   ]

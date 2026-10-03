@@ -1326,6 +1326,31 @@ describe('contract kind (#1264)', () => {
     )
   })
 
+  it('reminder: a signer on record without a name is merged by the sponsor name, like the server does', () => {
+    h.templates = [
+      tpl({
+        _id: 'tpl-reminder',
+        category: 'contract',
+        slug: { current: 'contract-reminder' },
+        subject: 'For {{{CONTACT_NAMES}}}',
+      }),
+    ]
+    renderModal(
+      {
+        contractStatus: 'contract-sent',
+        signatureStatus: 'pending',
+        signatureId: 'agr-1',
+        signingUrl: SIGNING_URL,
+        signerName: undefined,
+        signerEmail: 'eva@other.example',
+      },
+      'contract',
+    )
+    expect(screen.getByTestId('subject')).toHaveTextContent(
+      `For Kari Nordmann and ${mockSponsor({}).sponsor.name}`,
+    )
+  })
+
   it('signed: the button says "Send signed copy"', async () => {
     renderModal(
       {
