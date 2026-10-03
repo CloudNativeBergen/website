@@ -24,6 +24,8 @@ const h = vi.hoisted(() => ({
   invalidateComms: vi.fn(),
   invalidateCodes: vi.fn(),
   saveLink: vi.fn(),
+  /** `registration.generateToken` — the registration kind's link on open (#1263). */
+  generateToken: vi.fn(),
   showNotification: vi.fn(),
   templates: [] as unknown[],
   codeOptions: undefined as unknown,
@@ -73,6 +75,11 @@ vi.mock('@/lib/trpc/client', () => ({
     conference: {
       updateSponsorRegistrationLink: {
         useMutation: () => ({ mutateAsync: h.saveLink, isPending: false }),
+      },
+    },
+    registration: {
+      generateToken: {
+        useMutation: () => ({ mutateAsync: h.generateToken }),
       },
     },
   },
@@ -265,7 +272,7 @@ const contacts = [
 
 function renderModal(
   overrides: Partial<Parameters<typeof mockSponsor>[0]> = {},
-  kind: 'information' | 'discount' = 'information',
+  kind: 'information' | 'discount' | 'registration' = 'information',
 ) {
   return render(
     <SponsorSendModal
@@ -301,6 +308,10 @@ beforeEach(() => {
   lastAdditionalFields = {}
   draft = { subject: 'Hand-written subject', message: [] }
   h.mutateAsync.mockResolvedValue({ success: true, recipientCount: 1 })
+  h.generateToken.mockResolvedValue({
+    token: 'tok-existing',
+    url: 'https://example.test/sponsor/portal/tok-existing',
+  })
 })
 afterEach(cleanup)
 
@@ -892,6 +903,120 @@ describe('discount kind', () => {
   })
 })
 
+describe('registration kind (#1263)', () => {
+  const PORTAL = 'https://example.test/sponsor/portal/tok-existing'
+
+  it('prepares the link on open from the EXISTING token and posts the registration kind', async () => {
+    renderModal({}, 'registration')
+    expect(screen.getByText('Preparing the registration link…')).toBeVisible()
+    await waitFor(() =>
+      expect(
+        screen.queryByText('Preparing the registration link…'),
+      ).not.toBeInTheDocument(),
+    )
+    expect(h.generateToken).toHaveBeenCalledTimes(1)
+    expect(h.generateToken).toHaveBeenCalledWith({
+      sponsorForConferenceId: expect.any(String),
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+    await waitFor(() => expect(h.mutateAsync).toHaveBeenCalledTimes(1))
+    const posted = h.mutateAsync.mock.calls[0][0]
+    expect(posted).toMatchObject({
+      kind: 'registration',
+      recipientKeys: ['c-primary'],
+      subject: 'Registration: Conf',
+    })
+    expect(posted).not.toHaveProperty('discountCodes')
+    // The built-in welcome is the starting body.
+    expect(JSON.parse(posted.message)[0].children[0].text).toMatch(
+      /^Welcome aboard, /,
+    )
+  })
+
+  it('never asks the information kind for a link', () => {
+    renderModal({}, 'information')
+    expect(h.generateToken).not.toHaveBeenCalled()
+    expect(
+      screen.queryByText('Preparing the registration link…'),
+    ).not.toBeInTheDocument()
+  })
+
+  it('shows the completed-registration notice, and still sends', async () => {
+    renderModal({ registrationComplete: true }, 'registration')
+    expect(
+      screen.getByText(/has already completed registration/),
+    ).toHaveAttribute('role', 'status')
+    await waitFor(() => expect(h.generateToken).toHaveBeenCalled())
+    await waitFor(() =>
+      expect(
+        screen.queryByText('Preparing the registration link…'),
+      ).not.toBeInTheDocument(),
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+    await waitFor(() => expect(h.mutateAsync).toHaveBeenCalledTimes(1))
+    expect(h.mutateAsync.mock.calls[0][0]).toMatchObject({
+      kind: 'registration',
+    })
+  })
+
+  it('shows no notice while registration is open', async () => {
+    renderModal({ registrationComplete: false }, 'registration')
+    expect(
+      screen.queryByText(/has already completed registration/),
+    ).not.toBeInTheDocument()
+    await waitFor(() => expect(h.generateToken).toHaveBeenCalled())
+  })
+
+  it('refuses to send until the link is ready — the preview showed none', async () => {
+    h.generateToken.mockReturnValue(new Promise(() => {}))
+    renderModal({}, 'registration')
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+    await waitFor(() =>
+      expect(h.showNotification).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: expect.stringMatching(/still being prepared/),
+        }),
+      ),
+    )
+    expect(h.mutateAsync).not.toHaveBeenCalled()
+  })
+
+  it('says why when the link could not be prepared, and refuses to send', async () => {
+    h.generateToken.mockRejectedValue(
+      new Error('Conference has no domain configured.'),
+    )
+    renderModal({}, 'registration')
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        'The registration link could not be prepared: Conference has no domain configured.',
+      ),
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+    await waitFor(() =>
+      expect(h.showNotification).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: expect.stringMatching(/no domain configured/),
+        }),
+      ),
+    )
+    expect(h.mutateAsync).not.toHaveBeenCalled()
+  })
+
+  it('asks for the link ONCE per open — a re-render does not mint again', async () => {
+    renderModal({}, 'registration')
+    await waitFor(() => expect(h.generateToken).toHaveBeenCalledTimes(1))
+    // A recipient toggle re-renders the modal.
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Ola Nordmann' }))
+    await waitFor(() =>
+      expect(
+        screen.getByRole('checkbox', { name: 'Ola Nordmann' }),
+      ).toBeChecked(),
+    )
+    expect(h.generateToken).toHaveBeenCalledTimes(1)
+    expect(PORTAL).toContain('tok-existing')
+  })
+})
+
 describe('pickDefaultTemplate', () => {
   const crm = { currency: 'NOK' }
   it('never picks a contract template for the information kind', () => {
@@ -914,6 +1039,11 @@ describe('pickDefaultTemplate', () => {
     )
     expect(picked?._id).toBe('no')
   })
+  it('never preselects a template for a registration send — the built-in welcome is the start', () => {
+    const t = tpl({ _id: 'a', isDefault: true, category: 'follow-up' })
+    expect(pickDefaultTemplate([t], 'registration', {})).toBeUndefined()
+  })
+
   it('never preselects a template for a discount send — none is for codes', () => {
     const info = tpl({ _id: 'info', category: 'follow-up', isDefault: true })
     expect(pickDefaultTemplate([info], 'discount', {})).toBeUndefined()

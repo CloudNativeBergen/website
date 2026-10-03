@@ -26,12 +26,15 @@ interface SponsorContractViewProps {
   conferenceId: string
   sponsor: SponsorForConferenceExpanded
   onSuccess?: () => void
+  /** Send → Registration (#1263): opens the host's Send modal for this sponsor. */
+  onSendRegistration?: () => void
 }
 
 export function SponsorContractView({
   conferenceId,
   sponsor,
   onSuccess,
+  onSendRegistration,
 }: SponsorContractViewProps) {
   const [step, setStep] = useState<Step>('overview')
   const [pdfData, setPdfData] = useState<string | null>(null)
@@ -342,6 +345,7 @@ export function SponsorContractView({
             onCheckStatus={
               sponsor.registrationToken ? () => onSuccess?.() : undefined
             }
+            onSendInvite={onSendRegistration}
           />
         )}
       </ContractFlowStep>

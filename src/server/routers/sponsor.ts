@@ -144,6 +144,14 @@ import {
   sponsorTicketUrl,
 } from '@/lib/sponsor-crm/discount-email'
 import {
+  registrationAttachments,
+  registrationCardHtml,
+} from '@/lib/sponsor-crm/registration-email'
+import {
+  buildPortalUrl,
+  generateRegistrationToken,
+} from '@/lib/sponsor-crm/registration'
+import {
   TEMPLATE_NOT_FOUND_MESSAGE,
   TEMPLATE_WRONG_KIND_MESSAGE,
 } from '@/lib/sponsor-crm/communication'
@@ -261,6 +269,82 @@ async function readEventDiscountsOrThrow(conference: Conference) {
     })
   }
   return listed.discounts
+}
+
+/**
+ * Contract statuses at or past `registration-sent`: a registration send never
+ * moves a deal BACK to it.
+ */
+const CONTRACT_STATUSES_PAST_REGISTRATION = new Set([
+  'registration-sent',
+  'contract-sent',
+  'contract-signed',
+])
+
+/**
+ * The registration kind (#1263): the sponsor's portal link, built from its
+ * EXISTING registration token. A sponsor without one gets a token created
+ * here, once; a later send finds it and never rotates it, so the link already
+ * in a colleague's inbox keeps working. The link rides in a server-built card
+ * (so an edited message cannot lose it) and is listed on the record.
+ */
+async function prepareRegistrationSend(
+  conference: Conference,
+  domain: string | undefined,
+  sponsorForConferenceId: string,
+) {
+  const sfc = await clientReadUncached.fetch<{
+    status: string | null
+    contractStatus: string | null
+    registrationToken: string | null
+    registrationComplete: boolean | null
+  } | null>(
+    `*[_type == "sponsorForConference" && _id == $id && conference._ref == $conferenceId][0]{
+      status, contractStatus, registrationToken, registrationComplete
+    }`,
+    { id: sponsorForConferenceId, conferenceId: conference._id },
+  )
+  if (!sfc) {
+    throw new TRPCError({
+      code: 'NOT_FOUND',
+      message: 'Sponsor not found in this conference',
+    })
+  }
+  if (sfc.status !== 'closed-won') {
+    throw new TRPCError({
+      code: 'PRECONDITION_FAILED',
+      message:
+        'Registration emails can only be sent to sponsors with a won deal. Move the sponsor to Closed Won first.',
+    })
+  }
+  if (!domain) {
+    throw new TRPCError({
+      code: 'PRECONDITION_FAILED',
+      message:
+        'Conference has no domain configured. Set a domain on the conference before sending a registration link.',
+    })
+  }
+  let token = sfc.registrationToken
+  if (!token) {
+    // Reads again and writes only when nothing is stored — the same rule
+    // `registration.generateToken` applies when the modal prepares the link.
+    const created = await generateRegistrationToken(sponsorForConferenceId)
+    if (created.error || !created.token) {
+      throw new TRPCError({
+        code: 'PRECONDITION_FAILED',
+        message:
+          created.error?.message ?? 'Failed to generate registration token',
+      })
+    }
+    token = created.token
+  }
+  const portalUrl = buildPortalUrl(`https://${domain}`, token)
+  return {
+    portalUrl,
+    html: registrationCardHtml({ portalUrl, theme: conference.theme }),
+    attachments: registrationAttachments(portalUrl),
+    contractStatus: sfc.contractStatus || 'none',
+  }
 }
 
 /**
@@ -3058,13 +3142,16 @@ export const sponsorRouter = router({
           'sponsorForConference',
         )
 
-        const { conference, error: conferenceError } =
-          await getConferenceForCurrentDomain({
-            sponsors: true,
-            // `SPONSOR_REGISTRATION_URL` is merged on the server to compute
-            // `templateEdited`; the composer sees the same link (#1261).
-            includeSponsorRegistrationLink: true,
-          })
+        const {
+          conference,
+          domain,
+          error: conferenceError,
+        } = await getConferenceForCurrentDomain({
+          sponsors: true,
+          // `SPONSOR_REGISTRATION_URL` is merged on the server to compute
+          // `templateEdited`; the composer sees the same link (#1261).
+          includeSponsorRegistrationLink: true,
+        })
         if (conferenceError || !conference) {
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
@@ -3132,6 +3219,17 @@ export const sponsorRouter = router({
               )
             : undefined
 
+        // Registration kind (#1263): the portal link from the sponsor's own
+        // token, created once when absent. Refuses before anything is sent.
+        const registration =
+          input.kind === 'registration'
+            ? await prepareRegistrationSend(
+                conference,
+                domain,
+                input.sponsorForConferenceId,
+              )
+            : undefined
+
         let result: Awaited<ReturnType<typeof sendSponsorCommunication>>
         try {
           result = await sendSponsorCommunication({
@@ -3148,6 +3246,11 @@ export const sponsorRouter = router({
             ...(discount && {
               appendHtml: discount.html,
               attachments: discount.attachments,
+            }),
+            ...(registration && {
+              appendHtml: registration.html,
+              attachments: registration.attachments,
+              portalUrl: registration.portalUrl,
             }),
           })
         } catch (error) {
@@ -3208,6 +3311,32 @@ export const sponsorRouter = router({
             await discount.releaseAdopted()
             linkedCodes = []
             linkFailed = true
+          }
+        }
+
+        // The old portal invite's rule: the first registration send moves the
+        // deal to registration-sent; never backwards, and never able to fail
+        // the send that already went out.
+        if (
+          registration &&
+          !CONTRACT_STATUSES_PAST_REGISTRATION.has(registration.contractStatus)
+        ) {
+          try {
+            await clientWrite
+              .patch(input.sponsorForConferenceId)
+              .set({ contractStatus: 'registration-sent' })
+              .commit()
+            await logContractStatusChange(
+              input.sponsorForConferenceId,
+              registration.contractStatus,
+              'registration-sent',
+              ctx.speaker._id,
+            )
+          } catch (error) {
+            console.error(
+              '[sendCommunication] moving the deal to registration-sent failed:',
+              error,
+            )
           }
         }
 

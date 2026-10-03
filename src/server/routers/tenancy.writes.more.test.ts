@@ -8,8 +8,8 @@
  *   for the sponsor portal from a client-supplied id, so an unguarded call gave
  *   an organizer of tenant A full read/write of tenant B's sponsor record
  *   through the public portal endpoints.
- * - `registration.sendPortalInvite` patched a foreign sponsor record and emailed
- *   that sponsor's contacts.
+ * - `registration.sendPortalInvite` (since replaced by `crm.sendCommunication`,
+ *   #1263) patched a foreign sponsor record and emailed that sponsor's contacts.
  * - the `workshop.admin.*` signup mutations passed `signupIds` to a helper that
  *   only constrains the conference when the filter is PASSED, and
  *   `deleteSignup` / `updateCapacity` did no lookup at all.
@@ -78,12 +78,10 @@ vi.mock('@/lib/sanity/client', () => {
 // --- registration -----------------------------------------------------------
 const reg = vi.hoisted(() => ({
   generateRegistrationToken: vi.fn(),
-  getSfcForPortalInvite: vi.fn(),
 }))
 vi.mock('@/lib/sponsor-crm/registration', async (importOriginal) => ({
   ...((await importOriginal()) as Record<string, unknown>),
   generateRegistrationToken: reg.generateRegistrationToken,
-  getSfcForPortalInvite: reg.getSfcForPortalInvite,
 }))
 vi.mock('@/lib/sponsor-crm/activity', () => ({
   logRegistrationComplete: vi.fn(),
@@ -217,11 +215,6 @@ beforeEach(() => {
     error: null,
   })
   reg.generateRegistrationToken.mockResolvedValue({ token: 'tok' })
-  reg.getSfcForPortalInvite.mockResolvedValue({
-    _id: 'sfc-B',
-    conference: { title: 'B' },
-    contactPersons: [],
-  })
   ws.getAllWorkshopSignups.mockResolvedValue([])
   ws.confirmWorkshopSignup.mockResolvedValue(undefined)
   ws.cancelWorkshopSignup.mockResolvedValue(undefined)
@@ -268,15 +261,6 @@ describe('registration: a sponsor-portal token is never minted for another tenan
       registration().generateToken({ sponsorForConferenceId: 'sfc-A' }),
     ).resolves.toMatchObject({ token: 'tok' })
     expect(reg.generateRegistrationToken).toHaveBeenCalledWith('sfc-A')
-  })
-
-  it('sendPortalInvite refuses a foreign record — nothing patched, nothing emailed', async () => {
-    foreign('sponsorForConference')
-    await expect(
-      registration().sendPortalInvite({ sponsorForConferenceId: 'sfc-B' }),
-    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
-    expect(reg.getSfcForPortalInvite).not.toHaveBeenCalled()
-    expect(h.writes).toEqual([])
   })
 })
 

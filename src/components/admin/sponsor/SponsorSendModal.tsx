@@ -38,6 +38,7 @@ import { conferenceBaseUrl } from '@/lib/conference/baseUrl'
 import { emailBrandColor, type ConferenceTheme } from '@/lib/branding/theme'
 import { createLocalhostWarning } from '@/lib/localhost-warning'
 import { discountCodesCardHtml } from '@/lib/sponsor-crm/discount-email'
+import { registrationCardHtml } from '@/lib/sponsor-crm/registration-email'
 import { SponsorTemplatePicker } from './SponsorTemplatePicker'
 
 export interface SponsorSendModalProps {
@@ -47,9 +48,9 @@ export interface SponsorSendModalProps {
   sponsorForConference: SponsorForConferenceExpanded
   /**
    * Which kind of email this is. Narrowed to what `sendCommunication`
-   * accepts today (`information`, and `discount` since #1262); #1263–#1264
-   * widen both this type and the Zod enum together, so a kind the server
-   * would refuse can never be posted.
+   * accepts today (`information`, `discount` since #1262, `registration`
+   * since #1263); #1264 widens both this type and the Zod enum together, so
+   * a kind the server would refuse can never be posted.
    */
   kind?: SendableKind
   domain: string
@@ -87,7 +88,7 @@ export function sponsorFromAddress(
 /** The kinds the Send mutation accepts — mirrors `SendCommunicationSchema.kind`. */
 export type SendableKind = Extract<
   CommunicationKind,
-  'information' | 'discount'
+  'information' | 'discount' | 'registration'
 >
 
 /** One row of `crm.discountCodeOptions` (#1262). */
@@ -123,7 +124,7 @@ interface AppliedTemplate {
  * suggested language and category wins. Nothing flagged default ⇒ nothing is
  * preselected; the organizer picks or writes. `information` draws on every
  * non-contract category; the contract kind (slice #1264) on `contract`;
- * `discount` preselects nothing.
+ * `discount` and `registration` preselect nothing.
  */
 export function pickDefaultTemplate(
   templates: readonly SponsorEmailTemplate[] | undefined,
@@ -141,6 +142,9 @@ export function pickDefaultTemplate(
   // outreach default would open a code send with the wrong copy (#1262). The
   // organizer can still pick one; the codes block is appended either way.
   if (kind === 'discount') return undefined
+  // Likewise no category is FOR the registration link (#1263): the built-in
+  // welcome is the starting point, and the link rides in the appended card.
+  if (kind === 'registration') return undefined
   const candidates = templates.filter(
     (t) =>
       t.isDefault &&
@@ -188,6 +192,37 @@ function discountGreeting(conferenceTitle: string): PortableTextBlock[] {
         },
       ],
     },
+  ]
+}
+
+/**
+ * The starting body of a registration send (#1263) — the old portal invite's
+ * welcome, as editable text. The link itself is appended by the server in a
+ * card, so editing this can never lose it.
+ */
+function registrationGreeting(
+  sponsorName: string,
+  conferenceTitle: string,
+  tierName?: string,
+): PortableTextBlock[] {
+  const paragraph = (key: string, text: string) => ({
+    _type: 'block' as const,
+    _key: key,
+    style: 'normal' as const,
+    markDefs: [],
+    children: [
+      { _type: 'span' as const, _key: `${key}-text`, text, marks: [] },
+    ],
+  })
+  return [
+    paragraph(
+      'registration-welcome',
+      `Welcome aboard, ${sponsorName}! Thank you for partnering with ${conferenceTitle}${tierName ? ` as our ${tierName} sponsor` : ''}.`,
+    ),
+    paragraph(
+      'registration-ask',
+      'To get everything in place, please complete your sponsor registration using the link below: company details, contact persons, billing information and your logo.',
+    ),
   ]
 }
 
@@ -628,6 +663,57 @@ export function SponsorSendModal({
   const selectedNames = contacts
     .filter((c) => selectedKeys.has(c._key))
     .map((c) => c.name)
+
+  // REGISTRATION KIND (#1263): the sponsor's portal link, prepared on open
+  // through `registration.generateToken` — which returns the EXISTING token
+  // and only creates one when there is none, so a re-send previews the same
+  // link that is already in a colleague's inbox. The server builds the link
+  // again from the stored token at send time; this one is for the preview.
+  const isRegistration = kind === 'registration'
+  const linkMutation = api.registration.generateToken.useMutation()
+  const [portalLink, setPortalLink] = useState<{
+    forSponsor: string
+    url?: string
+    error?: string
+  } | null>(null)
+  const linkRequestedFor = useRef<string | null>(null)
+  useEffect(() => {
+    if (!isOpen || !isRegistration) {
+      linkRequestedFor.current = null
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- reset per close
+      setPortalLink(null)
+      return
+    }
+    const id = sponsorForConference._id
+    if (linkRequestedFor.current === id) return
+    linkRequestedFor.current = id
+    let cancelled = false
+    linkMutation
+      .mutateAsync({ sponsorForConferenceId: id })
+      .then(({ url }) => {
+        if (!cancelled) setPortalLink({ forSponsor: id, url })
+      })
+      .catch((error: unknown) => {
+        if (!cancelled)
+          setPortalLink({
+            forSponsor: id,
+            error: error instanceof Error ? error.message : String(error),
+          })
+      })
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- one request per open per sponsor
+  }, [isOpen, isRegistration, sponsorForConference._id])
+  const portalUrl =
+    isRegistration && portalLink?.forSponsor === sponsorForConference._id
+      ? portalLink.url
+      : undefined
+  const portalLinkError =
+    isRegistration && portalLink?.forSponsor === sponsorForConference._id
+      ? portalLink.error
+      : undefined
+
   const templateVariables = buildTemplateVariables({
     sponsorName: sponsorForConference.sponsor.name,
     contactNames:
@@ -635,6 +721,7 @@ export function SponsorSendModal({
     conference,
     senderName,
     tierName: sponsorForConference.tier?.title,
+    portalUrl,
   })
   // EmailModal hands its setters to the template slot; keeping them lets the
   // greeting be re-merged when the recipients change AFTER a template was
@@ -800,6 +887,14 @@ export function SponsorSendModal({
     if (isDiscount && chosenCodes.length === 0) {
       throw new Error('Choose at least one discount code')
     }
+    // The preview showed no link, so nothing is sent until it does.
+    if (isRegistration && !portalUrl) {
+      throw new Error(
+        portalLinkError
+          ? `The registration link could not be prepared: ${portalLinkError}`
+          : 'The registration link is still being prepared. Try again in a moment.',
+      )
+    }
     const applied = appliedTemplateRef.current
     const base = {
       sponsorForConferenceId: sponsorForConference._id,
@@ -888,7 +983,12 @@ export function SponsorSendModal({
                     ticketUrl: codesQuery.data.ticketUrl,
                     theme: conference.theme,
                   })}`
-                : messageHTML,
+                : isRegistration && portalUrl
+                  ? `${messageHTML}${registrationCardHtml({
+                      portalUrl,
+                      theme: conference.theme,
+                    })}`
+                  : messageHTML,
           }}
         />
       }
@@ -942,6 +1042,34 @@ export function SponsorSendModal({
         Choose at least one discount code before sending.
       </p>
     ) : null
+  // Registration already complete (#1263): a warning, not a refusal — the
+  // organizer may still want a contact to have the link.
+  const registrationCompleteNotice =
+    isRegistration && sponsorForConference.registrationComplete ? (
+      <p
+        role="status"
+        className="font-inter rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-200"
+      >
+        {sponsorForConference.sponsor.name} has already completed registration.
+        You can still send the link — the sponsor will see their submitted
+        details.
+      </p>
+    ) : null
+  const portalLinkHint = !isRegistration ? null : portalLinkError ? (
+    <p
+      role="alert"
+      className="font-inter text-sm text-red-600 dark:text-red-400"
+    >
+      The registration link could not be prepared: {portalLinkError}
+    </p>
+  ) : !portalUrl ? (
+    <p
+      role="status"
+      className="font-inter text-sm text-gray-500 dark:text-gray-400"
+    >
+      Preparing the registration link…
+    </p>
+  ) : null
 
   return (
     <EmailModal
@@ -973,6 +1101,8 @@ export function SponsorSendModal({
           noRecipientHint ||
           noCodeHint ||
           noInviteLinkHint ||
+          registrationCompleteNotice ||
+          portalLinkHint ||
           recipientsChangedHint ||
           templatesFailedNotice) && (
           <div className="space-y-3">
@@ -981,6 +1111,8 @@ export function SponsorSendModal({
             {noRecipientHint}
             {noInviteLinkHint}
             {noCodeHint}
+            {registrationCompleteNotice}
+            {portalLinkHint}
             {recipientsChangedHint}
           </div>
         )
@@ -1017,6 +1149,7 @@ export function SponsorSendModal({
             conference={conference}
             senderName={senderName}
             tierName={sponsorForConference.tier?.title}
+            portalUrl={portalUrl}
             selectedId={appliedTemplate?.id ?? ''}
             onApply={(_subject, _body, template: SponsorEmailTemplate) =>
               applyTemplate(template)
@@ -1035,7 +1168,15 @@ export function SponsorSendModal({
           initialFromDefault?.subject ?? `${kindLabel}: ${conference.title}`,
         message:
           initialFromDefault?.body ??
-          (isDiscount ? discountGreeting(conference.title) : []),
+          (isDiscount
+            ? discountGreeting(conference.title)
+            : isRegistration
+              ? registrationGreeting(
+                  sponsorForConference.sponsor.name,
+                  conference.title,
+                  sponsorForConference.tier?.title,
+                )
+              : []),
       }}
       placeholder={{
         subject: 'Enter email subject...',

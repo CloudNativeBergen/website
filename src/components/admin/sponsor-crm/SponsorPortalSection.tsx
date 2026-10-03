@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import { api } from '@/lib/trpc/client'
-import { isLocalhostClient } from '@/lib/environment/localhost'
 import {
   ArrowPathIcon,
   CheckCircleIcon,
@@ -10,7 +9,6 @@ import {
   ClipboardDocumentIcon,
   CheckIcon,
   EnvelopeIcon,
-  ExclamationTriangleIcon,
 } from '@heroicons/react/24/outline'
 
 export interface SponsorPortalSectionProps {
@@ -19,6 +17,12 @@ export interface SponsorPortalSectionProps {
   portalComplete?: boolean
   registrationSent?: boolean
   onCheckStatus?: () => void
+  /**
+   * Send → Registration (#1263). The host owns the Send modal (it needs the
+   * conference sender identity), so this section only RAISES the intent.
+   * Omitted ⇒ no send button, only the link.
+   */
+  onSendInvite?: () => void
 }
 
 export function SponsorPortalSection({
@@ -27,6 +31,7 @@ export function SponsorPortalSection({
   portalComplete,
   registrationSent,
   onCheckStatus,
+  onSendInvite,
 }: SponsorPortalSectionProps) {
   const [generatedUrl, setGeneratedUrl] = useState<string | null>(() => {
     if (registrationSent && existingToken && typeof window !== 'undefined') {
@@ -35,17 +40,10 @@ export function SponsorPortalSection({
     return null
   })
   const [copied, setCopied] = useState(false)
-  const [emailSent, setEmailSent] = useState(registrationSent ?? false)
+  const emailSent = registrationSent ?? false
 
   const generateMutation = api.registration.generateToken.useMutation({
     onSuccess: (data) => setGeneratedUrl(data.url),
-  })
-
-  const sendInviteMutation = api.registration.sendPortalInvite.useMutation({
-    onSuccess: (data) => {
-      setGeneratedUrl(data.url)
-      setEmailSent(true)
-    },
   })
 
   const handleGenerate = () => {
@@ -55,10 +53,6 @@ export function SponsorPortalSection({
     } else {
       generateMutation.mutate({ sponsorForConferenceId })
     }
-  }
-
-  const handleSendEmail = () => {
-    sendInviteMutation.mutate({ sponsorForConferenceId })
   }
 
   const handleCopy = async () => {
@@ -79,8 +73,7 @@ export function SponsorPortalSection({
     }
   }
 
-  const isBusy = generateMutation.isPending || sendInviteMutation.isPending
-  const isLocalhost = isLocalhostClient()
+  const isBusy = generateMutation.isPending
 
   return (
     <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 dark:border-gray-800 dark:bg-white/5">
@@ -125,26 +118,21 @@ export function SponsorPortalSection({
               )}
               {copied ? 'Copied' : 'Copy'}
             </button>
-            <button
-              type="button"
-              onClick={handleSendEmail}
-              disabled={sendInviteMutation.isPending || isLocalhost}
-              className="inline-flex cursor-pointer items-center gap-1 rounded-md bg-indigo-600 px-2 py-1.5 text-xs font-medium text-white shadow-xs transition-colors hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:opacity-50 dark:bg-indigo-500 dark:hover:bg-indigo-400"
-              title={
-                isLocalhost
-                  ? 'Emails cannot be sent from localhost'
-                  : emailSent
+            {onSendInvite && (
+              <button
+                type="button"
+                onClick={onSendInvite}
+                className="inline-flex cursor-pointer items-center gap-1 rounded-md bg-indigo-600 px-2 py-1.5 text-xs font-medium text-white shadow-xs transition-colors hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 dark:bg-indigo-500 dark:hover:bg-indigo-400"
+                title={
+                  emailSent
                     ? 'Resend registration link via email'
                     : 'Send registration link via email'
-              }
-            >
-              <EnvelopeIcon className="size-3.5" />
-              {sendInviteMutation.isPending
-                ? 'Sending\u2026'
-                : emailSent
-                  ? 'Resend'
-                  : 'Send'}
-            </button>
+                }
+              >
+                <EnvelopeIcon className="size-3.5" />
+                {emailSent ? 'Resend' : 'Send'}
+              </button>
+            )}
           </div>
           {onCheckStatus && (
             <button
@@ -157,27 +145,26 @@ export function SponsorPortalSection({
               Check status
             </button>
           )}
-          {(sendInviteMutation.isError || generateMutation.isError) && (
+          {generateMutation.isError && (
             <p className="text-xs text-red-600 dark:text-red-400">
-              {sendInviteMutation.error?.message ||
-                generateMutation.error?.message}
+              {generateMutation.error.message}
             </p>
           )}
         </div>
       ) : (
         <div className="mt-3 space-y-2">
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={handleSendEmail}
-              disabled={isBusy || isLocalhost}
-              className="inline-flex cursor-pointer items-center gap-1.5 rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-xs transition-colors hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:opacity-50 dark:bg-indigo-500 dark:hover:bg-indigo-400"
-            >
-              <EnvelopeIcon className="size-4" />
-              {sendInviteMutation.isPending
-                ? 'Sending\u2026'
-                : 'Send registration email'}
-            </button>
+            {onSendInvite && (
+              <button
+                type="button"
+                onClick={onSendInvite}
+                disabled={isBusy}
+                className="inline-flex cursor-pointer items-center gap-1.5 rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-xs transition-colors hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:opacity-50 dark:bg-indigo-500 dark:hover:bg-indigo-400"
+              >
+                <EnvelopeIcon className="size-4" />
+                Send registration email
+              </button>
+            )}
             <button
               type="button"
               onClick={handleGenerate}
@@ -190,17 +177,9 @@ export function SponsorPortalSection({
                 : 'Copy link only'}
             </button>
           </div>
-          {isLocalhost && (
-            <div className="flex items-center gap-1.5 rounded-md bg-amber-50 px-2.5 py-1.5 text-xs text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
-              <ExclamationTriangleIcon className="size-3.5 shrink-0" />
-              Emails cannot be sent from localhost. Use &quot;Copy link
-              only&quot; for local testing.
-            </div>
-          )}
-          {(sendInviteMutation.isError || generateMutation.isError) && (
+          {generateMutation.isError && (
             <p className="text-xs text-red-600 dark:text-red-400">
-              {sendInviteMutation.error?.message ||
-                generateMutation.error?.message}
+              {generateMutation.error.message}
             </p>
           )}
         </div>

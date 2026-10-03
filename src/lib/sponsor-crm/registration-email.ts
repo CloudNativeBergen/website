@@ -1,0 +1,33 @@
+/**
+ * The registration-link block of a sponsor registration send (#1263). Pure
+ * and client-safe: the server appends exactly this HTML to the email it sends
+ * and records, and the Send modal's preview renders the same string — so the
+ * link the organizer previews is the link the sponsor receives, and editing
+ * the message can never lose it.
+ */
+import { brandedOr, resolveEmailBrandPalette } from '@/lib/branding/email'
+import { emailBrandColor, type ConferenceTheme } from '@/lib/branding/theme'
+import { escapeHtml } from '@/lib/html/escape'
+import type { CommunicationAttachment } from './types'
+
+export const REGISTRATION_LINK_LABEL = 'Sponsor registration link'
+
+/** The one attachment row of a registration send: the portal link itself. */
+export function registrationAttachments(
+  portalUrl: string,
+): CommunicationAttachment[] {
+  return [{ label: REGISTRATION_LINK_LABEL, url: portalUrl }]
+}
+
+export function registrationCardHtml({
+  portalUrl,
+  theme,
+}: {
+  portalUrl: string
+  theme?: ConferenceTheme | null
+}): string {
+  const brand = resolveEmailBrandPalette(emailBrandColor(theme))
+  const accent = brandedOr(brand, '#1D4ED8')
+  const url = escapeHtml(portalUrl)
+  return `<div style="background-color: ${brand.cardBackground}; padding: 20px; border-radius: 12px; margin: 24px 0; border: 1px solid ${brand.cardBorder};"><h3 style="color: ${accent}; margin-top: 0; margin-bottom: 12px; font-size: 18px; font-weight: 600;">Complete your sponsor registration</h3><p style="margin: 0 0 16px; color: #334155; font-size: 15px; line-height: 1.6;">Use the link below to add your company details, contact persons, billing information and logo. It is personal to your sponsorship and keeps working until registration is complete.</p><p style="margin: 0 0 16px;"><a href="${url}" style="display: inline-block; background-color: ${accent}; color: #FFFFFF; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 15px;">Complete registration</a></p><p style="margin: 0; color: #64748B; font-size: 13px; line-height: 1.6; word-break: break-all;">Or open: <a href="${url}" style="color: ${accent}; text-decoration: none;">${url}</a></p></div>`
+}

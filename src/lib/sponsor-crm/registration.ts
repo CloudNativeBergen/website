@@ -1,4 +1,3 @@
-import type { ConferenceTheme } from '@/lib/branding/theme'
 import { randomUUID } from 'crypto'
 import {
   clientWrite,
@@ -295,66 +294,6 @@ export async function getSfcForNotification(
       contractValue,
       contractCurrency,
       "conference": conference->{ ... }
-    }`,
-    { id: sfcId },
-  )
-}
-
-export interface SfcPortalInviteData {
-  _id: string
-  status: string | null
-  registrationToken: string | null
-  registrationComplete: boolean
-  contractStatus: string | null
-  sponsor: { name: string } | null
-  contactPersons: Array<{
-    name: string
-    email: string
-    isPrimary?: boolean
-  }> | null
-  tier: { title: string } | null
-  contractValue: number | null
-  contractCurrency: string | null
-  conference: {
-    title: string
-    city: string | null
-    startDate: string | null
-    organizer: string | null
-    sponsorEmail: string | null
-    socialLinks: string[] | null
-    /**
-     * Tenant brand theme. This projection omitted it, so the portal-invite
-     * email had no way to reach the tenant's colour at all — the sender was
-     * not "defaulting", it was blind.
-     */
-    theme: ConferenceTheme | null
-  } | null
-}
-
-export async function getSfcForPortalInvite(
-  sfcId: string,
-): Promise<SfcPortalInviteData | null> {
-  return clientRead.fetch<SfcPortalInviteData | null>(
-    `*[_type == "sponsorForConference" && _id == $id][0]{
-      _id,
-      status,
-      registrationToken,
-      registrationComplete,
-      contractStatus,
-      sponsor->{ name },
-      contactPersons[]{ name, email, isPrimary },
-      tier->{ title },
-      contractValue,
-      contractCurrency,
-      conference->{
-        title,
-        city,
-        startDate,
-        organizer,
-        sponsorEmail,
-        socialLinks,
-        theme
-      }
     }`,
     { id: sfcId },
   )

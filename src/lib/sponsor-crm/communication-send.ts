@@ -62,6 +62,11 @@ export interface SendSponsorCommunicationArgs {
    * not of the editable message, so it never reads as a template edit.
    */
   appendHtml?: string
+  /**
+   * The sponsor's registration (portal) link (#1263) — merged as
+   * `SPONSOR_PORTAL_URL` when the template is re-merged for `templateEdited`.
+   */
+  portalUrl?: string
 }
 
 export type SendSponsorCommunicationResult =
@@ -105,10 +110,19 @@ function computeTemplateEdited(
   recipients: readonly CommunicationRecipient[],
   senderNames: readonly (string | undefined)[],
   sent: { subject: string; message: PortableTextBlock[] },
+  portalUrl: string | undefined,
 ): boolean {
   const candidates = senderNames.length > 0 ? senderNames : [undefined]
   return candidates.every((senderName) =>
-    mergedDiffers(template, sfc, conference, recipients, senderName, sent),
+    mergedDiffers(
+      template,
+      sfc,
+      conference,
+      recipients,
+      senderName,
+      sent,
+      portalUrl,
+    ),
   )
 }
 
@@ -119,6 +133,7 @@ function mergedDiffers(
   recipients: readonly CommunicationRecipient[],
   senderName: string | undefined,
   sent: { subject: string; message: PortableTextBlock[] },
+  portalUrl: string | undefined,
 ): boolean {
   const variables = buildTemplateVariables({
     sponsorName: sfc.sponsor?.name ?? 'Unknown',
@@ -134,6 +149,7 @@ function mergedDiffers(
     },
     senderName,
     tierName: sfc.tier?.title,
+    portalUrl,
   })
   const applied = {
     subject: processTemplateVariables(template.subject, variables),
@@ -230,6 +246,7 @@ export async function sendSponsorCommunication(
             recipients,
             args.senderNames ?? [],
             { subject: args.subject, message: args.message },
+            args.portalUrl,
           ),
         }
       : undefined,
