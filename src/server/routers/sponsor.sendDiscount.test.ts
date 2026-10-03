@@ -1240,7 +1240,28 @@ describe('the discount-code claim', () => {
       await expect(
         sponsor().crm.sendCommunication(INPUT),
       ).rejects.toMatchObject({ message: 'invalid recipient' })
-      expect(h.claims.size).toBe(0)
+      expect(h.claimOps.map((o) => o.op)).toEqual(['create', 'delete'])
+      expect(claimIdOf('ACME-2026')).toBeUndefined()
+    })
+
+    it('the hold is the settle window, not forever: an unretried claim is taken over after it', async () => {
+      // KNOWN LIMIT, by the claim lock's stale rule: the kept claim has no
+      // stored link behind it, so once it is older than CLAIM_SETTLE_MS
+      // another sponsor may take the codes.
+      h.send.mockRejectedValueOnce(new Error('socket hang up'))
+      await expect(sponsor().crm.sendCommunication(INPUT)).rejects.toThrow()
+      const id = claimIdOf('ACME-2026')!
+      h.claims.set(id, {
+        ...h.claims.get(id),
+        claimedAt: new Date(Date.now() - 16 * 60_000).toISOString(),
+      })
+      await expect(
+        sponsor().crm.assignDiscountCodes({
+          sponsorForConferenceId: 'sfc-globex',
+          discountCodes: ['ACME-2026'],
+        }),
+      ).resolves.toMatchObject({ success: true })
+      expect(claimedBy('ACME-2026')).toBe('sfc-globex')
     })
   })
 

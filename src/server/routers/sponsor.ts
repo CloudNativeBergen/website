@@ -454,7 +454,7 @@ async function resolveSponsorDiscountCodes(
         await chosenHold.release()
         await adoptedHold.release()
       },
-      /** The send went out but the link did not: only adoption is undone. */
+      /** The send went out (or may have) but the link did not: only adoption is undone. */
       releaseAdopted: () => adoptedHold.release(),
     }
   } catch (error) {
