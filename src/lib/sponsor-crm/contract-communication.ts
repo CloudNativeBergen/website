@@ -285,7 +285,13 @@ export async function prepareContractSend(
       'A contract was just sent to this sponsor by someone else. Reload to see it.',
     )
   }
-  const reserved = !!current.signatureId && !!current.signingUrl
+  // A reservation is an agreement stored but never flipped: its in-flight
+  // marker is still set. A rejected or expired agreement went through the
+  // flip (no marker) and gets a FRESH agreement with the current terms.
+  const reserved =
+    !!current.signatureId &&
+    !!current.signingUrl &&
+    !!current.contractReservedAt
   if (
     reserved &&
     current.contractReservedAt &&
@@ -301,12 +307,19 @@ export async function prepareContractSend(
   // agreement keeps its stored document, so no counter-signature is stamped.
   const countersigned = !reserved && !!args.organizerSignatureDataUrl
   if (reserved) {
+    // The agreement was issued to the persisted signer; it cannot change
+    // hands without a new agreement.
+    if (args.signerKey && sfc.signerEmail && signer.email !== sfc.signerEmail) {
+      throw precondition(
+        `This agreement was already issued to ${sfc.signerEmail}. Choose them as the signer to send it again.`,
+      )
+    }
     signingUrl = current.signingUrl!
     agreementId = current.signatureId!
-    reservation = {
-      signerName: signer.name,
-      signerEmail: signer.email,
-      contractReservedAt: now,
+    reservation = { contractReservedAt: now }
+    if (sfc.signerEmail) {
+      signer.name = sfc.signerName ?? signer.name
+      signer.email = sfc.signerEmail
     }
   } else {
     let templateId = args.contractTemplateId
@@ -483,14 +496,17 @@ export async function prepareContractSend(
       // Only this send's token: a slow failure must never clear a later
       // send's reservation. A REUSED agreement was already delivered by an
       // earlier email, so it stays; only the in-flight marker is cleared.
+      // …and only THIS attempt's reservation (its marker value): a later
+      // attempt that reused the same agreement id has its own marker.
       await clientWrite
         .patch({
           query:
-            '*[_type == "sponsorForConference" && _id == $id && conference._ref == $conferenceId && signatureId == $ours]',
+            '*[_type == "sponsorForConference" && _id == $id && conference._ref == $conferenceId && signatureId == $ours && contractReservedAt == $reservedAt]',
           params: {
             id: sfc._id,
             conferenceId: conference._id,
             ours: agreementId,
+            reservedAt: now,
           },
         })
         .unset(

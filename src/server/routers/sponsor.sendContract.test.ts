@@ -139,7 +139,10 @@ vi.mock('@/lib/sanity/client', () => {
       typeof selection === 'string'
         ? selection
         : selection.query.includes('signatureId == $ours')
-          ? h.sfc && h.sfc.signatureId === selection.params.ours
+          ? h.sfc &&
+            h.sfc.signatureId === selection.params.ours &&
+            (!selection.query.includes('contractReservedAt == $reservedAt') ||
+              h.sfc.contractReservedAt === selection.params.reservedAt)
             ? (selection.params.id as string)
             : 'no-match'
           : (selection as unknown as string)
@@ -545,6 +548,66 @@ describe('first send', () => {
     expect(result).toMatchObject({ success: true })
     expect(h.sfc!.organizerSignedBy).toBeUndefined()
     expect(h.sfc!.contractStatus).toBe('contract-sent')
+  })
+
+  it('issues a FRESH agreement after a rejected or expired signature — never reuses the old token or PDF', async () => {
+    Object.assign(h.sfc!, {
+      contractStatus: 'contract-sent',
+      signatureStatus: 'rejected',
+      signatureId: 'agr-rejected',
+      signingUrl: `https://${DOMAIN}/sponsor/contract/sign/agr-rejected`,
+      // No in-flight marker: that agreement went through the flip.
+      contractReservedAt: undefined,
+    })
+    const result = await sponsor().crm.sendCommunication(INPUT)
+    expect(result).toMatchObject({ success: true })
+    expect(h.generatePdf).toHaveBeenCalledTimes(1)
+    expect(h.sendForSigning).toHaveBeenCalledTimes(1)
+    expect(h.sfc!.signatureId).toBe('agr-1')
+    expect(sentHtml()).toContain(`href="${SIGNING_URL}"`)
+  })
+
+  it('a late failure never clears a later attempt that reused the same agreement', async () => {
+    h.send.mockImplementation(async () => {
+      // Attempt B reused OUR agreement (same id) with its own marker and sent.
+      Object.assign(h.sfc!, { contractReservedAt: '2099-01-01T00:00:00.000Z' })
+      return { data: null, error: { message: 'boom', statusCode: 500 } }
+    })
+    await expect(sponsor().crm.sendCommunication(INPUT)).rejects.toMatchObject({
+      code: 'INTERNAL_SERVER_ERROR',
+    })
+    expect(h.sfc!.signatureId).toBe('agr-1')
+    expect(h.sfc!.signingUrl).toBe(SIGNING_URL)
+  })
+
+  it('a reused agreement keeps its persisted signer, and refuses a different one', async () => {
+    Object.assign(h.sfc!, {
+      signatureId: 'agr-stale',
+      signingUrl: `https://${DOMAIN}/sponsor/contract/sign/agr-stale`,
+      contractReservedAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+      signerName: 'Kari Nordmann',
+      signerEmail: 'kari@acme.test',
+    })
+    await expect(
+      sponsor().crm.sendCommunication({
+        ...INPUT,
+        recipientKeys: ['c-primary', 'c-billing'],
+        signerKey: 'c-billing',
+      }),
+    ).rejects.toMatchObject({
+      code: 'PRECONDITION_FAILED',
+      message: expect.stringMatching(/already issued to kari@acme.test/),
+    })
+    expect(h.send).not.toHaveBeenCalled()
+    expect(h.sfc!.signerEmail).toBe('kari@acme.test')
+
+    const result = await sponsor().crm.sendCommunication({
+      ...INPUT,
+      recipientKeys: ['c-primary', 'c-billing'],
+    })
+    expect(result).toMatchObject({ success: true })
+    expect(h.sfc!.signerEmail).toBe('kari@acme.test')
+    expect(h.sendForSigning).not.toHaveBeenCalled()
   })
 
   it('refuses a counter-signature from anyone but the assigned organizer, before any PDF', async () => {
