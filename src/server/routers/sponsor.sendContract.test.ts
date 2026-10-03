@@ -1191,6 +1191,22 @@ describe('first send', () => {
     expect(h.sfc!.contractStatus).toBe('contract-sent')
   })
 
+  it('a reused agreement keeps the issuance time it was first stored with — the retry does not re-date it', async () => {
+    const ORIG = '2026-10-01T08:00:00.000Z'
+    Object.assign(h.sfc!, {
+      signatureId: 'agr-stale',
+      signingUrl: `https://${DOMAIN}/sponsor/contract/sign/agr-stale`,
+      contractReservedAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+      contractReservedTerms: '50000|NOK|tier-gold|',
+      contractSentAt: ORIG,
+      signerEmail: 'kari@acme.test',
+    })
+    const result = await sponsor().crm.sendCommunication(INPUT)
+    expect(result).toMatchObject({ success: true })
+    expect(h.sfc!.contractStatus).toBe('contract-sent')
+    expect(h.sfc!.contractSentAt).toBe(ORIG)
+  })
+
   it("releases only its OWN token when the provider refused — never a later send's reservation", async () => {
     // Our provider call fails late; by then another send (after the settle
     // window) has reserved a different agreement.

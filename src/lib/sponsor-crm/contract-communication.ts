@@ -736,9 +736,11 @@ export async function prepareContractSend(
         await clientWrite
           .patch(sfc._id)
           .ifRevisionId(latest._rev)
+          // The issuance time was stamped with the reservation: a reused
+          // agreement keeps the date it was first issued on, the certificate
+          // reads it.
           .set({
             contractStatus: 'contract-sent',
-            contractSentAt: now,
             signatureStatus: 'pending',
           })
           .unset(['contractReservedAt', 'contractReservedTerms'])
