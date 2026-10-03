@@ -302,10 +302,12 @@ export async function prepareContractSend(
     contractValue: number | null
     contractCurrency: string | null
     status: string | null
+    signerEmail: string | null
+    assignedToId: string | null
     tierId: string | null
     addonIds: string[] | null
   } | null>(
-    `*[_type == "sponsorForConference" && _id == $id && conference._ref == $conferenceId][0]{ _rev, contractStatus, signatureStatus, signatureId, signingUrl, contractReservedAt, contractReservedTerms, contractValue, contractCurrency, status, "tierId": tier._ref, "addonIds": addons[]._ref }`,
+    `*[_type == "sponsorForConference" && _id == $id && conference._ref == $conferenceId][0]{ _rev, contractStatus, signatureStatus, signatureId, signingUrl, contractReservedAt, contractReservedTerms, contractValue, contractCurrency, status, signerEmail, "assignedToId": assignedTo._ref, "tierId": tier._ref, "addonIds": addons[]._ref }`,
     { id: sfc._id, conferenceId: conference._id },
   )
   if (!current || contractActionFor(current) !== 'send') {
@@ -337,6 +339,15 @@ export async function prepareContractSend(
     contractValue: current.contractValue ?? undefined,
   })
   if (!freshGate.ok) throw preconditionFailed(freshGate.missing)
+  // The assignment is re-checked on the revision the reservation binds to:
+  // a sponsor reassigned since the request's read must not be countersigned
+  // by the organizer it was taken from.
+  if (args.organizerSignatureDataUrl && current.assignedToId !== actor.id) {
+    throw new TRPCError({
+      code: 'FORBIDDEN',
+      message: 'Only the assigned organizer can counter-sign this contract.',
+    })
+  }
   // A reservation is an agreement stored but never flipped: its in-flight
   // marker is still set. A rejected or expired agreement went through the
   // flip (no marker) and gets a FRESH agreement with the current terms.
@@ -354,13 +365,15 @@ export async function prepareContractSend(
     throw precondition(IN_FLIGHT_MESSAGE)
   }
   // A stale reservation is REUSED only if it is still the agreement for these
-  // terms and was not revoked since.
+  // terms, was not revoked since, and still names who it was issued to — an
+  // agreement whose signer was cleared is replaced, never handed to someone.
   const reserved =
     stored &&
     !!current.contractReservedAt &&
     current.signatureStatus !== 'rejected' &&
     current.signatureStatus !== 'expired' &&
-    current.contractReservedTerms === terms
+    current.contractReservedTerms === terms &&
+    !!current.signerEmail
   let signingUrl: string
   let agreementId: string
   let reservation: Record<string, unknown>
@@ -373,15 +386,15 @@ export async function prepareContractSend(
     // The agreement was issued to the persisted signer; it cannot change
     // hands without a new agreement, and that signer must be among the
     // recipients (never silently swapped in for someone the organizer chose).
-    const persisted = recipients.find(
-      (r) => !!sfc.signerEmail && r.email === sfc.signerEmail,
-    )
-    if (sfc.signerEmail && (!persisted || signer.email !== sfc.signerEmail)) {
+    // The persisted signer is the one on the reservation's own revision.
+    const issuedTo = current.signerEmail!
+    const persisted = recipients.find((r) => r.email === issuedTo)
+    if (!persisted || signer.email !== issuedTo) {
       throw precondition(
-        `This agreement was already issued to ${sfc.signerEmail}. Include them as a recipient and the signer to send it again.`,
+        `This agreement was already issued to ${issuedTo}. Include them as a recipient and the signer to send it again.`,
       )
     }
-    if (persisted) signer = persisted
+    signer = persisted
     signingUrl = current.signingUrl!
     agreementId = current.signatureId!
     reservation = { contractReservedAt: now }

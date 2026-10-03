@@ -42,6 +42,10 @@ const h = vi.hoisted(() => ({
   termsAtFreshRead: null as { contractValue?: number; tierId?: string } | null,
   /** The pipeline status the fresh read reports (changed since). */
   statusAtFreshRead: null as string | null,
+  /** The assignee the fresh read reports (reassigned since). */
+  assignedToIdAtFreshRead: null as string | null,
+  /** The persisted signer the fresh read reports (changed since). */
+  signerEmailAtFreshRead: null as string | null,
   /** The contacts' email as the primitive's own read sees it (changed since). */
   contactEmailAtSend: null as string | null,
   fetches: [] as Array<{ query: string; params?: Record<string, unknown> }>,
@@ -138,6 +142,11 @@ vi.mock('@/lib/sanity/client', () => {
           h.termsAtFreshRead?.contractValue ?? h.sfc?.contractValue ?? null,
         contractCurrency: h.sfc?.contractCurrency ?? null,
         status: h.statusAtFreshRead ?? h.sfc?.status ?? null,
+        signerEmail: h.signerEmailAtFreshRead ?? h.sfc?.signerEmail ?? null,
+        assignedToId:
+          h.assignedToIdAtFreshRead ??
+          (h.sfc?.assignedTo as { _id?: string } | undefined)?._id ??
+          null,
         addonIds:
           (h.sfc?.addons as Array<{ _id: string }> | undefined)?.map(
             (a) => a._id,
@@ -368,6 +377,8 @@ beforeEach(() => {
   h.sentByOtherAtFreshRead = false
   h.termsAtFreshRead = null
   h.statusAtFreshRead = null
+  h.assignedToIdAtFreshRead = null
+  h.signerEmailAtFreshRead = null
   h.contactEmailAtSend = null
   h.bumpRevAfterStateRead = false
   h.tenant = { _type: 'sponsorForConference', conferenceId: CONF }
@@ -587,6 +598,7 @@ describe('first send', () => {
       signingUrl: STALE_URL,
       contractReservedAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
       contractReservedTerms: '50000|NOK|tier-gold|',
+      signerEmail: 'kari@acme.test',
     })
     h.send.mockResolvedValue({
       data: null,
@@ -609,6 +621,7 @@ describe('first send', () => {
       signingUrl: `https://${DOMAIN}/sponsor/contract/sign/agr-stale`,
       contractReservedAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
       contractReservedTerms: '50000|NOK|tier-gold|',
+      signerEmail: 'kari@acme.test',
     })
     const result = await sponsor().crm.sendCommunication({
       ...INPUT,
@@ -727,6 +740,7 @@ describe('first send', () => {
       signingUrl: STALE_URL,
       contractReservedAt: STALE_AT,
       contractReservedTerms: '50000|NOK|tier-gold|',
+      signerEmail: 'kari@acme.test',
     })
     h.send.mockResolvedValueOnce({
       data: null,
@@ -928,6 +942,64 @@ describe('first send', () => {
     expect(h.send).not.toHaveBeenCalled()
   })
 
+  it('refuses a counter-signature when the sponsor was reassigned between the request read and the reservation read', async () => {
+    h.sfc!.assignedTo = { _id: 'sp-admin', name: 'Admin', email: 'a@x' }
+    h.assignedToIdAtFreshRead = 'sp-other'
+    await expect(
+      sponsor().crm.sendCommunication({
+        ...INPUT,
+        organizerSignatureDataUrl: 'data:image/png;base64,iVBORw0KGgo=',
+      }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' })
+    expect(h.generatePdf).not.toHaveBeenCalled()
+    expect(h.sendForSigning).not.toHaveBeenCalled()
+    expect(h.send).not.toHaveBeenCalled()
+  })
+
+  it('replaces — never reuses — a stale reservation whose persisted signer was cleared', async () => {
+    Object.assign(h.sfc!, {
+      signatureId: 'agr-stale',
+      signingUrl: `https://${DOMAIN}/sponsor/contract/sign/agr-stale`,
+      contractReservedAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+      contractReservedTerms: '50000|NOK|tier-gold|',
+      signerName: undefined,
+      signerEmail: undefined,
+    })
+    const result = await sponsor().crm.sendCommunication({
+      ...INPUT,
+      recipientKeys: ['c-billing'],
+      signerKey: 'c-billing',
+    })
+    expect(result).toMatchObject({ success: true })
+    expect(h.sendForSigning).toHaveBeenCalledTimes(1)
+    expect(h.sfc!.signatureId).not.toBe('agr-stale')
+    expect(sentHtml()).not.toContain('agr-stale')
+    expect(h.sfc!.signerEmail).toBe('ola@acme.test')
+  })
+
+  it('judges the persisted signer on the reservation read, not the stale request read', async () => {
+    Object.assign(h.sfc!, {
+      signatureId: 'agr-stale',
+      signingUrl: `https://${DOMAIN}/sponsor/contract/sign/agr-stale`,
+      contractReservedAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+      contractReservedTerms: '50000|NOK|tier-gold|',
+      signerName: 'Kari Nordmann',
+      signerEmail: 'kari@acme.test',
+    })
+    h.signerEmailAtFreshRead = 'ola@acme.test'
+    await expect(
+      sponsor().crm.sendCommunication({
+        ...INPUT,
+        recipientKeys: ['c-primary', 'c-billing'],
+        signerKey: 'c-primary',
+      }),
+    ).rejects.toMatchObject({
+      code: 'PRECONDITION_FAILED',
+      message: expect.stringMatching(/already issued to ola@acme.test/),
+    })
+    expect(h.send).not.toHaveBeenCalled()
+  })
+
   it('refuses a counter-signature from anyone but the assigned organizer, before any PDF', async () => {
     h.sfc!.assignedTo = { _id: 'sp-other', name: 'Other', email: 'o@x' }
     await expect(
@@ -972,6 +1044,7 @@ describe('first send', () => {
       signingUrl: STALE_URL,
       contractReservedAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
       contractReservedTerms: '50000|NOK|tier-gold|',
+      signerEmail: 'kari@acme.test',
     })
     const result = await sponsor().crm.sendCommunication(INPUT)
     expect(result).toMatchObject({ success: true })
