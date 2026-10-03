@@ -178,7 +178,18 @@ describe('redeemedSpeakerEmails — the category narrowing', () => {
 })
 
 describe('joinSpeakerTicketStatus — the three states', () => {
-  const redeemed = new Set(['claimed@x.test'])
+  const redeemed = new Map([
+    [
+      'claimed@x.test',
+      {
+        ticketId: 1,
+        name: '',
+        email: 'claimed@x.test',
+        registeredEmail: '',
+        category: '',
+      },
+    ],
+  ])
 
   it('reports not-invited when no invitation was ever recorded', () => {
     expect(

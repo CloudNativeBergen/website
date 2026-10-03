@@ -495,6 +495,7 @@ export default function SpeakersPageClient({
             onClose={handleCloseModals}
             speaker={selectedSpeaker}
             talks={previewTalks}
+            ticketStatus={ticketStatuses?.[selectedSpeaker._id]}
           />
         )}
 
