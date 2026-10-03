@@ -91,7 +91,10 @@ import type { EventTicket } from '@/lib/tickets/types'
 export type ClassifiableTicket = Pick<
   EventTicket,
   'category' | 'sum' | 'coupon' | 'discount'
-> & { fields?: { key: string; value: string }[]; additionals?: { name: string; value: string }[] }
+> & {
+  fields?: { key: string; value: string }[]
+  additionals?: { name: string; value: string }[]
+}
 
 /** Who granted a ticket, when it was granted rather than bought. */
 export type TicketGrantedBy =
