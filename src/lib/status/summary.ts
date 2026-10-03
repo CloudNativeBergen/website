@@ -22,6 +22,7 @@ import { TicketSalesProcessor } from '@/lib/tickets/processor'
 import type { ProcessTicketSalesInput } from '@/lib/tickets/types'
 import { getSpeakers } from '@/lib/speaker/sanity'
 import { countOrUnknown } from '@/lib/tickets/freeAllocation'
+import { tallyParticipants } from '@/lib/tickets/participants'
 
 async function buildSponsorSection(
   conferenceId: string,
