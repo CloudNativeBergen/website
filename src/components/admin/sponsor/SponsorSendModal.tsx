@@ -817,9 +817,27 @@ export function SponsorSendModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- crmContext is derived from the sponsor
     [hasDraft, templatesQuery.data, kind, sponsorForConference._id],
   )
-  const selectedNames = contacts
-    .filter((c) => selectedKeys.has(c._key))
-    .map((c) => c.name)
+  // The signer on record is mailed by the server for a reminder or the
+  // signed copy whenever they are not among the ticked contacts — not a
+  // contact any more, or unticked. They count as a recipient here.
+  const signerOnRecordMailed =
+    isContract &&
+    contractAction !== 'send' &&
+    !!sponsorForConference.signerEmail &&
+    !(signerContactKey && selectedKeys.has(signerContactKey))
+  const selectedCount = selectedKeys.size + (signerOnRecordMailed ? 1 : 0)
+  // The names a template's CONTACT_NAMES merges — the ticked contacts plus
+  // the signer on record the server mails anyway, in the server's order.
+  const selectedNames = [
+    ...contacts.filter((c) => selectedKeys.has(c._key)).map((c) => c.name),
+    ...(signerOnRecordMailed
+      ? [
+          sponsorForConference.signerName ??
+            sponsorForConference.signerEmail ??
+            '',
+        ]
+      : []),
+  ]
 
   // REGISTRATION KIND (#1263): the sponsor's portal link, prepared on open
   // through `registration.generateToken` — which returns the EXISTING token
@@ -1080,15 +1098,6 @@ export function SponsorSendModal({
   const actionLabel = isContract
     ? CONTRACT_ACTION_LABELS[contractAction]
     : 'Send'
-  // The signer on record is mailed by the server for a reminder or the
-  // signed copy whenever they are not among the ticked contacts — not a
-  // contact any more, or unticked. They count as a recipient here.
-  const signerOnRecordMailed =
-    isContract &&
-    contractAction !== 'send' &&
-    !!sponsorForConference.signerEmail &&
-    !(signerContactKey && selectedKeys.has(signerContactKey))
-  const selectedCount = selectedKeys.size + (signerOnRecordMailed ? 1 : 0)
 
   const handleSend = async ({
     subject,

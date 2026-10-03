@@ -275,7 +275,7 @@ vi.mock('@/lib/sanity/client', () => {
           // Every successful write is a new revision, like Sanity's.
           h.sfc._rev = `rev-${++h.revCounter}`
         }
-        return { ...sets }
+        return { ...sets, _rev: h.sfc?._rev }
       },
     }
     return chain
@@ -663,6 +663,19 @@ describe('first send', () => {
     const result = await sponsor().crm.sendCommunication(INPUT)
     expect(result).toMatchObject({ success: true, contractStateFailed: true })
     expect(h.sfc!.contractStatus).toBe('none')
+    expect(sfcPatches().some((p) => 'contractStatus' in p.sets)).toBe(false)
+  })
+
+  it('revokes the mailed agreement when the sponsor changed while the provider was busy — the PDF no longer renders the record', async () => {
+    h.send.mockImplementation(async () => {
+      // A colleague corrected the value meanwhile.
+      Object.assign(h.sfc!, { contractValue: 60_000, _rev: 'rev-edited' })
+      return { data: { id: 'resend-msg-1' }, error: null }
+    })
+    const result = await sponsor().crm.sendCommunication(INPUT)
+    expect(result).toMatchObject({ success: true, contractStateFailed: true })
+    expect(h.sfc!.contractStatus).toBe('none')
+    expect(h.sfc!.signatureStatus).toBe('expired')
     expect(sfcPatches().some((p) => 'contractStatus' in p.sets)).toBe(false)
   })
 

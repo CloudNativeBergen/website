@@ -686,8 +686,12 @@ export async function prepareContractSend(
     }
   }
 
+  // The revision the reservation produced: the flip requires the record to
+  // still be exactly that — any write while the provider was busy (terms,
+  // contacts, legal details…) means the mailed PDF no longer matches.
+  let reservedRev: string | undefined
   try {
-    await clientWrite
+    const stored = await clientWrite
       .patch(sfc._id)
       .ifRevisionId(current._rev)
       .set(reservation)
@@ -706,6 +710,7 @@ export async function prepareContractSend(
             ],
       )
       .commit()
+    reservedRev = (stored as { _rev?: string } | null)?._rev
   } catch (error) {
     // A write landed between the read and this patch: another send, or an
     // unrelated edit. Either way nothing was mailed; the organizer retries.
@@ -827,15 +832,11 @@ export async function prepareContractSend(
           tier: latest.tier ?? undefined,
           contractValue: latest.contractValue ?? undefined,
         })
-        if (!gate.ok) {
-          console.error(
-            '[contract-send] the deal no longer allows contract-sent; the mailed agreement is revoked:',
-            gate.missing.map((m) => m.label),
-          )
-          // The link is in an inbox but the deal cannot take a signature
-          // any more: the agreement is expired (the signing page refuses
-          // it), on the same revision the gate judged.
-          await clientWrite
+        // The link is in an inbox but must not take a signature: the
+        // agreement is expired (the signing page refuses it), on the same
+        // revision that was judged.
+        const revoke = () =>
+          clientWrite
             .patch(sfc._id)
             .ifRevisionId(latest._rev)
             .set({ signatureStatus: 'expired' })
@@ -845,6 +846,22 @@ export async function prepareContractSend(
               'contractReservedInputs',
             ])
             .commit()
+        if (!gate.ok) {
+          console.error(
+            '[contract-send] the deal no longer allows contract-sent; the mailed agreement is revoked:',
+            gate.missing.map((m) => m.label),
+          )
+          await revoke()
+          return { ok: false }
+        }
+        // Anything else written since the reservation (terms, contacts,
+        // legal details, template…) means the mailed PDF no longer renders
+        // the record: it is not activated.
+        if (reservedRev && latest._rev !== reservedRev) {
+          console.error(
+            '[contract-send] the sponsor changed while the provider was busy; the mailed agreement is revoked',
+          )
+          await revoke()
           return { ok: false }
         }
         await clientWrite

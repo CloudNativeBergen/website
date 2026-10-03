@@ -1301,6 +1301,31 @@ describe('contract kind (#1264)', () => {
     expect(screen.queryByTestId('allow-empty-body')).not.toBeInTheDocument()
   })
 
+  it('reminder: merges the signer on record into CONTACT_NAMES when the server will mail them', () => {
+    h.templates = [
+      tpl({
+        _id: 'tpl-reminder',
+        category: 'contract',
+        slug: { current: 'contract-reminder' },
+        subject: 'For {{{CONTACT_NAMES}}}',
+      }),
+    ]
+    renderModal(
+      {
+        contractStatus: 'contract-sent',
+        signatureStatus: 'pending',
+        signatureId: 'agr-1',
+        signingUrl: SIGNING_URL,
+        signerName: 'Eva Ekstern',
+        signerEmail: 'eva@other.example',
+      },
+      'contract',
+    )
+    expect(screen.getByTestId('subject')).toHaveTextContent(
+      'For Kari Nordmann and Eva Ekstern',
+    )
+  })
+
   it('signed: the button says "Send signed copy"', async () => {
     renderModal(
       {

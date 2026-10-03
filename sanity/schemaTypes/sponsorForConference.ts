@@ -279,6 +279,7 @@ export default defineType({
       name: 'contractSignedBy',
       title: 'Contract Signed By',
       type: 'string',
+      readOnly: true,
       description:
         'Name entered by the signer in the digital signing flow. Set only by that flow — its presence proves the stored document is the signed one.',
     }),
