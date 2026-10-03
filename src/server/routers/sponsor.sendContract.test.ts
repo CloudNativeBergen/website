@@ -38,6 +38,8 @@ const h = vi.hoisted(() => ({
   flipShouldThrow: false,
   /** Someone else's contract send completes right before the fresh read. */
   sentByOtherAtFreshRead: false,
+  /** The terms the fresh read reports (changed since the request's own read). */
+  termsAtFreshRead: null as { contractValue?: number; tierId?: string } | null,
   fetches: [] as Array<{ query: string; params?: Record<string, unknown> }>,
   creates: [] as Array<Record<string, unknown>>,
   patches: [] as Array<{ id: string; sets: Record<string, unknown> }>,
@@ -110,6 +112,33 @@ vi.mock('@/lib/sanity/client', () => {
         tier: h.sfc?.tier ?? null,
         contractValue: h.sfc?.contractValue ?? null,
       }
+    }
+    if (query.includes('"tierId": tier._ref }')) {
+      if (h.sentByOtherAtFreshRead && h.sfc) {
+        Object.assign(h.sfc, {
+          contractStatus: 'contract-sent',
+          signatureStatus: 'pending',
+          signatureId: 'agr-other',
+          signingUrl: `https://${DOMAIN}/sponsor/contract/sign/agr-other`,
+        })
+      }
+      const snapshot = {
+        _rev: (h.sfc?._rev as string) ?? 'rev-1',
+        contractStatus: h.sfc?.contractStatus ?? null,
+        signatureStatus: h.sfc?.signatureStatus ?? null,
+        signatureId: h.sfc?.signatureId ?? null,
+        signingUrl: h.sfc?.signingUrl ?? null,
+        contractReservedAt: h.sfc?.contractReservedAt ?? null,
+        contractValue:
+          h.termsAtFreshRead?.contractValue ?? h.sfc?.contractValue ?? null,
+        contractCurrency: h.sfc?.contractCurrency ?? null,
+        tierId:
+          h.termsAtFreshRead?.tierId ??
+          (h.sfc?.tier as { _id?: string } | undefined)?._id ??
+          null,
+      }
+      if (h.bumpRevAfterStateRead && h.sfc) h.sfc._rev = 'rev-2'
+      return snapshot
     }
     if (query.includes('signingUrl, contractReservedAt }')) {
       if (h.sentByOtherAtFreshRead && h.sfc) {
@@ -315,6 +344,7 @@ beforeEach(() => {
   h.sequence = []
   h.flipShouldThrow = false
   h.sentByOtherAtFreshRead = false
+  h.termsAtFreshRead = null
   h.bumpRevAfterStateRead = false
   h.tenant = { _type: 'sponsorForConference', conferenceId: CONF }
   h.tenantById = { 'tpl-A': { _type: 'contractTemplate', conferenceId: CONF } }
@@ -741,6 +771,33 @@ describe('first send', () => {
     expect(result).toMatchObject({ success: true })
     expect(h.sfc!.organizerSignedBy).toBeUndefined()
     expect(h.sfc!.organizerSignedAt).toBeUndefined()
+    expect(h.sfc!.signatureId).toBe('agr-1')
+  })
+
+  it('refuses — before any PDF — when the contract value or tier changed between the request read and the reservation read', async () => {
+    h.termsAtFreshRead = { contractValue: 100_000 }
+    await expect(sponsor().crm.sendCommunication(INPUT)).rejects.toMatchObject({
+      code: 'PRECONDITION_FAILED',
+      message: expect.stringMatching(/tier or contract value changed/),
+    })
+    expect(h.generatePdf).not.toHaveBeenCalled()
+    expect(h.sendForSigning).not.toHaveBeenCalled()
+    expect(h.send).not.toHaveBeenCalled()
+  })
+
+  it("a fresh replacement PDF drops the previous agreement's sponsor-signature provenance too", async () => {
+    Object.assign(h.sfc!, {
+      contractStatus: 'contract-sent',
+      signatureStatus: 'rejected',
+      signatureId: 'agr-rejected',
+      signingUrl: `https://${DOMAIN}/sponsor/contract/sign/agr-rejected`,
+      contractReservedAt: undefined,
+      contractSignedAt: '2026-01-01T00:00:00Z',
+      contractSignedBy: 'Kari Nordmann',
+    })
+    await sponsor().crm.sendCommunication(INPUT)
+    expect(h.sfc!.contractSignedBy).toBeUndefined()
+    expect(h.sfc!.contractSignedAt).toBeUndefined()
     expect(h.sfc!.signatureId).toBe('agr-1')
   })
 

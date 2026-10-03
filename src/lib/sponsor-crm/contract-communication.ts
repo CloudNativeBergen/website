@@ -283,13 +283,28 @@ export async function prepareContractSend(
     signatureId: string | null
     signingUrl: string | null
     contractReservedAt: string | null
+    contractValue: number | null
+    contractCurrency: string | null
+    tierId: string | null
   } | null>(
-    `*[_type == "sponsorForConference" && _id == $id && conference._ref == $conferenceId][0]{ _rev, contractStatus, signatureStatus, signatureId, signingUrl, contractReservedAt }`,
+    `*[_type == "sponsorForConference" && _id == $id && conference._ref == $conferenceId][0]{ _rev, contractStatus, signatureStatus, signatureId, signingUrl, contractReservedAt, contractValue, contractCurrency, "tierId": tier._ref }`,
     { id: sfc._id, conferenceId: conference._id },
   )
   if (!current || contractActionFor(current) !== 'send') {
     throw precondition(
       'A contract was just sent to this sponsor by someone else. Reload to see it.',
+    )
+  }
+  // The PDF renders from the sponsor as it was read for this request; the
+  // revision that guards the reservation is this later read's. The two must
+  // agree on the terms, or a PDF with stale terms would be stored and sent.
+  if (
+    (current.contractValue ?? null) !== (sfc.contractValue ?? null) ||
+    (current.contractCurrency ?? null) !== (sfc.contractCurrency ?? null) ||
+    (current.tierId ?? null) !== (sfc.tier?._id ?? null)
+  ) {
+    throw precondition(
+      'The sponsor’s tier or contract value changed since this email was composed. Close it, reload the sponsor and send again.',
     )
   }
   // A reservation is an agreement stored but never flipped: its in-flight
@@ -502,12 +517,19 @@ export async function prepareContractSend(
       .patch(sfc._id)
       .ifRevisionId(current._rev)
       .set(reservation)
-      // A fresh PDF without a counter-signature embedded NOW must not inherit
-      // the previous agreement's organizer provenance.
+      // A fresh, unsigned PDF carries no sponsor signature, and no organizer
+      // counter-signature unless one was embedded NOW: the previous
+      // agreement's provenance must not survive onto it.
       .unset(
-        !reserved && !countersigned
-          ? ['organizerSignedAt', 'organizerSignedBy']
-          : [],
+        reserved
+          ? []
+          : [
+              'contractSignedAt',
+              'contractSignedBy',
+              ...(countersigned
+                ? []
+                : ['organizerSignedAt', 'organizerSignedBy']),
+            ],
       )
       .commit()
   } catch (error) {

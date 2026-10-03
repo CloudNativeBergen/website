@@ -47,7 +47,7 @@ vi.mock('@/lib/sanity/client', () => {
   const fetch = async (query: string, params?: Record<string, unknown>) => {
     // The contract send's fresh state read before any costly work (#1264):
     // nothing out, nothing reserved.
-    if (query.includes('signingUrl, contractReservedAt }')) {
+    if (query.includes('"tierId": tier._ref }')) {
       return {
         _rev: 'rev-1',
         contractStatus: 'verbal-agreement',
@@ -55,6 +55,10 @@ vi.mock('@/lib/sanity/client', () => {
         signatureId: null,
         signingUrl: null,
         contractReservedAt: null,
+        // The same terms the request's own read saw (CONTRACT_READY_SFC).
+        contractValue: 50000,
+        contractCurrency: 'NOK',
+        tierId: 'tier-A',
       }
     }
     if (query.includes('"memberOrgIds"')) {
