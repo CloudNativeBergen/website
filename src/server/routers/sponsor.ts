@@ -326,6 +326,8 @@ async function resolveSponsorDiscountCodes(
         await chosenHold.release()
         await adoptedHold.release()
       },
+      /** The send went out but the link did not: only adoption is undone. */
+      releaseAdopted: () => adoptedHold.release(),
     }
   } catch (error) {
     if (error instanceof DiscountCodeLinkError) {
@@ -3193,6 +3195,9 @@ export const sponsorRouter = router({
               '[sendCommunication] storing the sponsor discount-code link failed:',
               error,
             )
+            // The sent codes stay the sponsor's (they have the email); the
+            // codes that were only going to be adopted were never linked.
+            await discount.releaseAdopted()
             linkedCodes = []
             linkFailed = true
           }

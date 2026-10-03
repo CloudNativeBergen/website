@@ -400,6 +400,20 @@ describe('the claim on a sponsor-row create', () => {
     expect(h.claims.size).toBe(0)
   })
 
+  it('a failed link write frees the adopted claims and keeps only the minted code’s', async () => {
+    h.links[0].linkedCodes = null
+    h.listDiscounts.mockResolvedValue({
+      discounts: [{ triggerValue: 'ACMECLOUD1234' }],
+      ticketTypes: [],
+    })
+    h.insertShouldThrow = true
+    await expect(
+      tickets().admin.createDiscountCode(INPUT),
+    ).resolves.toMatchObject({ success: true, linkFailed: true })
+    const held = [...h.claims.values()].map((c) => c.code)
+    expect(held).toEqual(['ACMECLOUD5678'])
+  })
+
   it('a standalone create claims nothing', async () => {
     await tickets().admin.createDiscountCode({
       eventId: EVENT,

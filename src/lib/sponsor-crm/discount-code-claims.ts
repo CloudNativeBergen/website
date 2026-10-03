@@ -113,7 +113,20 @@ export async function claimDiscountCodes({
     )
   }
 
-  for (const code of codes) {
+  try {
+    for (const code of codes) {
+      await claimOne(code)
+    }
+  } catch (error) {
+    // A CONFLICT already released; anything else (a write or read that
+    // failed outright) must not leave the codes won so far reserved by a
+    // sponsor that never got them.
+    if (!(error instanceof DiscountCodeLinkError)) await release()
+    throw error
+  }
+  return { held, dropped, release }
+
+  async function claimOne(code: ResolvedDiscountCode) {
     const _id = discountCodeClaimId(conferenceId, code.code)
     const claimedAt = getCurrentDateTime()
     const ours = {
@@ -135,7 +148,7 @@ export async function claimDiscountCodes({
       })
       fresh.push(_id)
       held.push(code)
-      continue
+      return
     } catch (error) {
       const existing = await clientReadUncached.fetch<ClaimDoc | null>(
         `*[_type == "discountCodeClaim" && conference._ref == $conferenceId && _id == $id][0]{
@@ -147,7 +160,7 @@ export async function claimDiscountCodes({
       if (!existing) throw error
       if (existing.sponsorForConferenceId === sponsorForConferenceId) {
         held.push(code)
-        continue
+        return
       }
       const wanted = normalizeDiscountCode(code.code)
       const holderStores = links.some(
@@ -160,7 +173,7 @@ export async function claimDiscountCodes({
         : 0
       if (holderStores || !(age >= CLAIM_SETTLE_MS)) {
         await conflict(code, existing.sponsorForConferenceId)
-        continue
+        return
       }
       try {
         await clientWrite
@@ -175,5 +188,4 @@ export async function claimDiscountCodes({
       }
     }
   }
-  return { held, dropped, release }
 }

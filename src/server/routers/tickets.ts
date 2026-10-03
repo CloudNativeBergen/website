@@ -1241,6 +1241,8 @@ export const ticketsRouter = router({
           // code exists at the provider now, so a failed link write is
           // reported, never thrown: the organizer can Assign it afterwards.
           let linked: { linkedCodes?: string[]; linkFailed?: true } = {}
+          let adoptedHold:
+            Awaited<ReturnType<typeof claimDiscountCodes>> | undefined
           if (input.sponsorForConferenceId) {
             try {
               const sponsorForConferenceId = input.sponsorForConferenceId
@@ -1256,20 +1258,18 @@ export const ticketsRouter = router({
                 actorId: ctx.speaker._id,
                 // The event's codes as listed BEFORE this create — claimed
                 // like the new one; one another sponsor holds is not adopted.
-                adopted: (
-                  await claimDiscountCodes({
-                    conferenceId: linkConferenceId!,
-                    orgRef: linkOrgRef,
+                adopted: (adoptedHold = await claimDiscountCodes({
+                  conferenceId: linkConferenceId!,
+                  orgRef: linkOrgRef,
+                  sponsorForConferenceId,
+                  codes: codesToAdopt(
+                    eventData.discounts,
+                    withLinkedCodes(linkSponsors, sponsorLinks),
                     sponsorForConferenceId,
-                    codes: codesToAdopt(
-                      eventData.discounts,
-                      withLinkedCodes(linkSponsors, sponsorLinks),
-                      sponsorForConferenceId,
-                    ),
-                    links: sponsorLinks,
-                    onConflict: 'drop',
-                  })
-                ).held,
+                  ),
+                  links: sponsorLinks,
+                  onConflict: 'drop',
+                })).held,
               })
               linked = { linkedCodes: added.map((c) => c.code) }
             } catch (linkError) {
@@ -1277,6 +1277,9 @@ export const ticketsRouter = router({
                 '[createDiscountCode] linking the code to the sponsor failed:',
                 linkError,
               )
+              // The minted code stays claimed for the sponsor it was made
+              // for; the codes that were only going to be adopted do not.
+              await adoptedHold?.release()
               linked = { linkedCodes: [], linkFailed: true }
             }
           }

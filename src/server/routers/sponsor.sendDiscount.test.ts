@@ -37,6 +37,8 @@ const h = vi.hoisted(() => ({
   /** Every claim op in order: create / takeover / delete, with the doc id. */
   claimOps: [] as Array<{ op: string; id: string; sfc?: string; rev?: string }>,
   takeoverShouldFail: false,
+  /** The follow-up read of an existing claim fails (transport error). */
+  claimReadShouldThrow: false,
   send: vi.fn(),
   listDiscounts: vi.fn(),
   credentials: vi.fn(),
@@ -71,6 +73,7 @@ vi.mock('@/lib/sanity/client', () => {
     }
     if (query.includes('_type == "sponsorForConference"')) return h.sfc
     if (query.includes('_type == "discountCodeClaim"')) {
+      if (h.claimReadShouldThrow) throw new Error('socket hang up')
       // The projection the real query applies.
       const doc = h.claims.get(params?.id as string)
       if (!doc) return null
@@ -249,6 +252,7 @@ beforeEach(() => {
   h.claims = new Map()
   h.claimOps = []
   h.takeoverShouldFail = false
+  h.claimReadShouldThrow = false
   h.tenant = { _type: 'sponsorForConference', conferenceId: CONF }
   h.sfc = {
     _id: SFC,
@@ -1101,6 +1105,42 @@ describe('the discount-code claim', () => {
     expect(linkInserts()[0].items).toEqual([
       expect.objectContaining({ code: 'ACME-2026', linkedVia: 'send' }),
     ])
+  })
+
+  it('an unexpected error on a LATER code releases the claims won earlier', async () => {
+    // Code 1 is won; code 2 exists already and its follow-up read fails with a
+    // transport error — the request fails, and code 1 must not stay reserved.
+    foreignClaim('ACME-WORKSHOP', 'sfc-globex', 0.1)
+    h.claimReadShouldThrow = true
+    await expect(
+      sponsor().crm.sendCommunication({
+        ...INPUT,
+        discountCodes: ['ACME-2026', 'ACME-WORKSHOP'],
+      }),
+    ).rejects.toMatchObject({ code: 'INTERNAL_SERVER_ERROR' })
+    expect(h.send).not.toHaveBeenCalled()
+    expect(h.claimOps.map((o) => o.op)).toEqual(['create', 'delete'])
+    expect(claimIdOf('ACME-2026')).toBeUndefined()
+  })
+
+  it('a link write that fails AFTER a successful send keeps the sent codes claimed but frees the adopted ones', async () => {
+    const { conference } = await h.getConference()
+    h.getConference.mockResolvedValue({
+      conference: {
+        ...conference,
+        sponsors: [{ sponsor: { _id: 'sponsor-acme', name: 'Acme' } }],
+      },
+      domain: 'localhost',
+      error: null,
+    })
+    h.insertShouldThrow = true
+    await expect(sponsor().crm.sendCommunication(INPUT)).resolves.toMatchObject(
+      { success: true, linkFailed: true },
+    )
+    // The email with ACME-2026 went out: that claim is rightly the sponsor's.
+    expect(claimedBy('ACME-2026')).toBe(SFC)
+    // ACME-WORKSHOP was only ever going to be adopted; it was not linked.
+    expect(claimIdOf('ACME-WORKSHOP')).toBeUndefined()
   })
 
   it('an Assign claims before it appends, and releases if the append fails', async () => {
