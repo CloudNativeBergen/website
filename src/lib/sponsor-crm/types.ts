@@ -108,6 +108,7 @@ export interface SponsorForConference {
     asset: { _ref: string }
   }
   reminderCount?: number
+  reminderClaims?: string[]
   contractTemplate?: {
     _ref: string
   }
@@ -214,6 +215,7 @@ export interface SponsorForConferenceExpanded {
     }
   }
   reminderCount?: number
+  reminderClaims?: string[]
   contractTemplate?: {
     _id: string
     title: string

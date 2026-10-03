@@ -28,6 +28,10 @@ const h = vi.hoisted(() => ({
   releaseThrows: false,
   /** The first release decrement LANDS but its answer is lost. */
   releaseAnswerLost: false,
+  /** …and another sweep claims a slot before the retry. */
+  claimInterposedOnLostRelease: false,
+  /** Another sweep claims a slot while this one's email is with the provider. */
+  claimDuringSend: false,
   /** Boundary events in order: claim / send / release. */
   sequence: [] as string[],
 }))
@@ -72,24 +76,53 @@ vi.mock('@/lib/sanity/client', () => {
   const patch = (
     selection: string | { query: string; params: Record<string, unknown> },
   ) => {
-    // A query selection matches only while the count is the claimed one.
+    // A query selection matches only while THIS claim is still recorded.
     const id =
       typeof selection === 'string'
         ? selection
-        : selection.query.includes('reminderCount == $claimed') &&
+        : selection.query.includes('$claimId in reminderClaims') &&
             h.sfc &&
-            h.sfc.reminderCount === selection.params.claimed
+            ((h.sfc.reminderClaims as string[] | undefined) ?? []).includes(
+              selection.params.claimId as string,
+            )
           ? (selection.params.id as string)
           : 'no-match'
     let sets: Record<string, unknown> = {}
+    let appends: Array<{ path: string; items: unknown[] }> = []
+    let unsets: string[] = []
     let requiredRev: string | undefined
+    // Staged until commit succeeds.
+    const apply = () => {
+      if (!h.sfc || id !== h.sfc._id) return
+      Object.assign(h.sfc, sets)
+      for (const a of appends) {
+        const arr = ((h.sfc[a.path] as unknown[] | undefined) ?? []).slice()
+        arr.push(...a.items)
+        h.sfc[a.path] = arr
+      }
+      for (const u of unsets) {
+        const m = /^reminderClaims\[@ == "(.+)"\]$/.exec(u)
+        if (m) {
+          h.sfc.reminderClaims = (
+            (h.sfc.reminderClaims as string[] | undefined) ?? []
+          ).filter((c) => c !== m[1])
+        }
+      }
+    }
     const chain = {
       set: (v: Record<string, unknown>) => {
         sets = { ...sets, ...v }
         return chain
       },
       setIfMissing: () => chain,
-      unset: () => chain,
+      append: (path: string, items: unknown[]) => {
+        appends = [...appends, { path, items }]
+        return chain
+      },
+      unset: (paths: string[]) => {
+        unsets = [...unsets, ...paths]
+        return chain
+      },
       ifRevisionId: (rev: string) => {
         requiredRev = rev
         return chain
@@ -121,7 +154,15 @@ vi.mock('@/lib/sanity/client', () => {
           // Applied, then the connection broke.
           h.releaseAnswerLost = false
           h.sequence.push('release')
-          if (h.sfc) Object.assign(h.sfc, sets)
+          apply()
+          if (h.claimInterposedOnLostRelease && h.sfc) {
+            // Another sweep claims before the retry.
+            h.sfc.reminderCount = (h.sfc.reminderCount as number) + 1
+            h.sfc.reminderClaims = [
+              ...((h.sfc.reminderClaims as string[] | undefined) ?? []),
+              'claim-B',
+            ]
+          }
           throw new Error('socket hang up')
         }
         if ('reminderCount' in sets) {
@@ -133,7 +174,7 @@ vi.mock('@/lib/sanity/client', () => {
           )
         }
         h.patches.push({ id, sets })
-        if (h.sfc && id === h.sfc._id) Object.assign(h.sfc, sets)
+        apply()
         return {}
       },
     }
@@ -163,6 +204,14 @@ vi.mock('@/lib/email/config', async (importOriginal) => ({
         emails: {
           send: async (...args: unknown[]) => {
             h.sequence.push('send')
+            if (h.claimDuringSend && h.sfc) {
+              h.sfc.reminderCount = (h.sfc.reminderCount as number) + 1
+              h.sfc.reminderClaims = [
+                ...((h.sfc.reminderClaims as string[] | undefined) ?? []),
+                'claim-B',
+              ]
+              h.sfc._rev = 'rev-3'
+            }
             return h.send(...args)
           },
         },
@@ -191,6 +240,8 @@ beforeEach(() => {
   h.senderUnavailable = false
   h.releaseThrows = false
   h.releaseAnswerLost = false
+  h.claimInterposedOnLostRelease = false
+  h.claimDuringSend = false
   h.sequence = []
   h.patches = []
   h.incs = []
@@ -316,7 +367,9 @@ describe('sendContractReminderBySystem', () => {
     expect(record).not.toHaveProperty('createdBy')
     expect(h.sendForSigning).not.toHaveBeenCalled()
     expect(h.incs).toEqual([{ id: 'sfc-1', field: 'reminderCount', by: 1 }])
-    expect(h.patches).toEqual([{ id: 'sfc-1', sets: { reminderCount: 2 } }])
+    expect(h.patches[0]).toEqual({ id: 'sfc-1', sets: { reminderCount: 2 } })
+    // The claim is settled: its id is gone, the count stays.
+    expect(h.sfc!.reminderClaims).toEqual([])
   })
 
   it('skips a contract whose signature is no longer pending', async () => {
@@ -486,6 +539,35 @@ describe('sendContractReminderBySystem', () => {
     )
     // 1 → claim 2 → release 1; the retry matched nothing.
     expect(h.sfc!.reminderCount).toBe(1)
+  })
+
+  it("takes back ITS OWN claim, never another sweep's, when a later claim landed on top", async () => {
+    h.send.mockResolvedValue({
+      data: null,
+      error: { message: 'boom', statusCode: 500 },
+    })
+    h.claimDuringSend = true
+    await sendContractReminderBySystem('sfc-1', { maxReminders: 2 })
+    // 1 → A claims 2 → B claims 3 → A refused → A releases: 2, B's claim stands.
+    expect(h.sfc!.reminderCount).toBe(2)
+    expect(h.sfc!.reminderClaims).toEqual(['claim-B'])
+  })
+
+  it("a release whose answer was lost is never re-applied against a later sweep's claim", async () => {
+    h.send.mockResolvedValue({
+      data: null,
+      error: { message: 'boom', statusCode: 500 },
+    })
+    h.releaseAnswerLost = true
+    h.claimInterposedOnLostRelease = true
+    const outcome = await sendContractReminderBySystem('sfc-1', {
+      maxReminders: 2,
+    })
+    expect(outcome).toMatchObject({ ok: false, reason: 'send-failed' })
+    // 1 → A claims 2 → A releases 1 (answer lost) → B claims 2 → A's retry
+    // finds no claim of its own: B's slot stands.
+    expect(h.sfc!.reminderCount).toBe(2)
+    expect(h.sfc!.reminderClaims).toEqual(['claim-B'])
   })
 
   it("gives the slot back when the tenant's sender cannot be resolved — the provider was never asked", async () => {

@@ -208,6 +208,16 @@ export default defineType({
       validation: (Rule) => Rule.min(0),
     }),
     defineField({
+      name: 'reminderClaims',
+      title: 'Reminder Claims (in flight)',
+      type: 'array',
+      of: [{ type: 'string' }],
+      description:
+        'Ids of reminder slots claimed by the reminder cron and not yet settled; a claim is removed when its reminder went out or its slot was given back.',
+      readOnly: true,
+      hidden: true,
+    }),
+    defineField({
       name: 'contractTemplate',
       title: 'Contract Template',
       type: 'reference',

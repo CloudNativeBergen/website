@@ -1,7 +1,7 @@
 import 'server-only'
 import { TRPCError } from '@trpc/server'
 import { canonicalEmail } from '@/lib/speaker/email'
-import { createHash } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { preconditionFailed } from '@/server/errors'
 import type { Conference } from '@/lib/conference/types'
 import {
@@ -1015,37 +1015,44 @@ export async function sendContractReminderBySystem(
   // two overlapping sweeps that both selected this sponsor cannot both send
   // — the second's claim fails on the revision and it skips. (The organizer
   // path counts after the send instead; its sends are not concurrent sweeps.)
+  // Each claim has its OWN id, stored with the count: a release takes back
+  // exactly this claim (never another sweep's) and only while it exists.
   const claimedCount = (sfc.reminderCount ?? 0) + 1
+  const claimId = randomUUID()
   try {
     await clientWrite
       .patch(sfc._id)
       .ifRevisionId(sfc._rev ?? '')
-      .setIfMissing({ reminderCount: 0 })
+      .setIfMissing({ reminderCount: 0, reminderClaims: [] })
       .inc({ reminderCount: 1 })
+      .append('reminderClaims', [claimId])
       .commit()
   } catch {
     return { ok: false, reason: 'claimed-elsewhere' }
   }
+  const thisClaim = {
+    query:
+      '*[_type == "sponsorForConference" && _id == $id && conference._ref == $conferenceId && $claimId in reminderClaims]',
+    params: {
+      id: sfc._id,
+      conferenceId: sfc.conference._id,
+      claimId,
+    },
+  }
+  const claimPath = `reminderClaims[@ == "${claimId}"]`
   // Gives the claimed slot back; tried twice, and a slot that still could
   // not be released is REPORTED (the sweep would otherwise skip this
   // contract for a reminder that never went out).
-  // IDEMPOTENT: conditioned on the count still being the claimed one, so a
-  // retry after a decrement whose answer was lost matches nothing instead
-  // of taking the slot below where it started.
+  // IDEMPOTENT: conditioned on this claim still being recorded, so a retry
+  // after a decrement whose answer was lost matches nothing instead of
+  // taking the slot below where it started — or another sweep's slot.
   const releaseClaim = async (): Promise<string> => {
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
         await clientWrite
-          .patch({
-            query:
-              '*[_type == "sponsorForConference" && _id == $id && conference._ref == $conferenceId && reminderCount == $claimed]',
-            params: {
-              id: sfc._id,
-              conferenceId: sfc.conference._id,
-              claimed: claimedCount,
-            },
-          })
+          .patch(thisClaim)
           .inc({ reminderCount: -1 })
+          .unset([claimPath])
           .commit()
         return ''
       } catch (error) {
@@ -1098,6 +1105,11 @@ export async function sendContractReminderBySystem(
     }
   }
   // The slot was claimed above; the plan's own count step is the organizer
-  // path's, not this one's.
+  // path's, not this one's. The claim is settled: its id goes, the count stays.
+  try {
+    await clientWrite.patch(thisClaim).unset([claimPath]).commit()
+  } catch (error) {
+    console.error('[contract-reminders] settling the claim failed:', error)
+  }
   return { ok: true, recipient: signer.email }
 }

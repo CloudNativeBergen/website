@@ -92,6 +92,7 @@ const SPONSOR_FOR_CONFERENCE_FIELDS = `
     }
   },
   reminderCount,
+  reminderClaims,
   contractTemplate->{
     _id,
     title
