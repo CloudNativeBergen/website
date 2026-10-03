@@ -47,7 +47,7 @@ vi.mock('@/lib/sanity/client', () => {
   const fetch = async (query: string, params?: Record<string, unknown>) => {
     // The contract send's fresh state read before any costly work (#1264):
     // nothing out, nothing reserved.
-    if (query.includes('"tierId": tier._ref }')) {
+    if (query.includes('"addonIds": addons[]._ref }')) {
       return {
         _rev: 'rev-1',
         contractStatus: 'verbal-agreement',
@@ -60,6 +60,7 @@ vi.mock('@/lib/sanity/client', () => {
         contractCurrency: 'NOK',
         status: 'negotiating',
         tierId: 'tier-A',
+        addonIds: [],
       }
     }
     if (query.includes('"memberOrgIds"')) {

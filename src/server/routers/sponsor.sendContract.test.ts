@@ -117,7 +117,7 @@ vi.mock('@/lib/sanity/client', () => {
         contractValue: h.sfc?.contractValue ?? null,
       }
     }
-    if (query.includes('"tierId": tier._ref }')) {
+    if (query.includes('"addonIds": addons[]._ref }')) {
       if (h.sentByOtherAtFreshRead && h.sfc) {
         Object.assign(h.sfc, {
           contractStatus: 'contract-sent',
@@ -138,6 +138,10 @@ vi.mock('@/lib/sanity/client', () => {
           h.termsAtFreshRead?.contractValue ?? h.sfc?.contractValue ?? null,
         contractCurrency: h.sfc?.contractCurrency ?? null,
         status: h.statusAtFreshRead ?? h.sfc?.status ?? null,
+        addonIds:
+          (h.sfc?.addons as Array<{ _id: string }> | undefined)?.map(
+            (a) => a._id,
+          ) ?? [],
         tierId:
           h.termsAtFreshRead?.tierId ??
           (h.sfc?.tier as { _id?: string } | undefined)?._id ??
@@ -582,7 +586,7 @@ describe('first send', () => {
       signatureId: 'agr-stale',
       signingUrl: STALE_URL,
       contractReservedAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
-      contractReservedTerms: '50000|NOK|tier-gold',
+      contractReservedTerms: '50000|NOK|tier-gold|',
     })
     h.send.mockResolvedValue({
       data: null,
@@ -604,7 +608,7 @@ describe('first send', () => {
       signatureId: 'agr-stale',
       signingUrl: `https://${DOMAIN}/sponsor/contract/sign/agr-stale`,
       contractReservedAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
-      contractReservedTerms: '50000|NOK|tier-gold',
+      contractReservedTerms: '50000|NOK|tier-gold|',
     })
     const result = await sponsor().crm.sendCommunication({
       ...INPUT,
@@ -645,12 +649,51 @@ describe('first send', () => {
     expect(h.sfc!.signingUrl).toBe(SIGNING_URL)
   })
 
+  it('a reused agreement refuses recipients that leave out the persisted signer — nobody is swapped in silently', async () => {
+    Object.assign(h.sfc!, {
+      signatureId: 'agr-stale',
+      signingUrl: `https://${DOMAIN}/sponsor/contract/sign/agr-stale`,
+      contractReservedAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+      contractReservedTerms: '50000|NOK|tier-gold|',
+      signerName: 'Kari Nordmann',
+      signerEmail: 'kari@acme.test',
+    })
+    await expect(
+      sponsor().crm.sendCommunication({
+        ...INPUT,
+        recipientKeys: ['c-billing'],
+      }),
+    ).rejects.toMatchObject({
+      code: 'PRECONDITION_FAILED',
+      message: expect.stringMatching(/already issued to kari@acme.test/),
+    })
+    expect(h.send).not.toHaveBeenCalled()
+  })
+
+  it('does not reuse a stale reservation when the add-ons changed — the package in the PDF differs', async () => {
+    h.sfc!.addons = [
+      { _id: 'addon-workshop', title: 'Workshop', tierType: 'addon' },
+    ]
+    Object.assign(h.sfc!, {
+      signatureId: 'agr-stale',
+      signingUrl: `https://${DOMAIN}/sponsor/contract/sign/agr-stale`,
+      contractReservedAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+      // Rendered with no add-ons.
+      contractReservedTerms: '50000|NOK|tier-gold|',
+    })
+    const result = await sponsor().crm.sendCommunication(INPUT)
+    expect(result).toMatchObject({ success: true })
+    expect(h.generatePdf).toHaveBeenCalledTimes(1)
+    expect(h.sendForSigning).toHaveBeenCalledTimes(1)
+    expect(h.sfc!.signatureId).toBe('agr-1')
+  })
+
   it('a reused agreement keeps its persisted signer, and refuses a different one', async () => {
     Object.assign(h.sfc!, {
       signatureId: 'agr-stale',
       signingUrl: `https://${DOMAIN}/sponsor/contract/sign/agr-stale`,
       contractReservedAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
-      contractReservedTerms: '50000|NOK|tier-gold',
+      contractReservedTerms: '50000|NOK|tier-gold|',
       signerName: 'Kari Nordmann',
       signerEmail: 'kari@acme.test',
     })
@@ -683,7 +726,7 @@ describe('first send', () => {
       signatureId: 'agr-stale',
       signingUrl: STALE_URL,
       contractReservedAt: STALE_AT,
-      contractReservedTerms: '50000|NOK|tier-gold',
+      contractReservedTerms: '50000|NOK|tier-gold|',
     })
     h.send.mockResolvedValueOnce({
       data: null,
@@ -713,7 +756,7 @@ describe('first send', () => {
     h.sfc!.contractReservedAt = new Date(
       Date.now() - 60 * 60 * 1000,
     ).toISOString()
-    h.sfc!.contractReservedTerms = '50000|NOK|tier-gold'
+    h.sfc!.contractReservedTerms = '50000|NOK|tier-gold|'
     h.flipShouldThrow = false
     const second = await sponsor().crm.sendCommunication(INPUT)
     expect(second).toMatchObject({ success: true })
@@ -776,7 +819,7 @@ describe('first send', () => {
       signingUrl: `https://${DOMAIN}/sponsor/contract/sign/agr-revoked`,
       signatureStatus: 'rejected',
       contractReservedAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
-      contractReservedTerms: '50000|NOK|tier-gold',
+      contractReservedTerms: '50000|NOK|tier-gold|',
     })
     const result = await sponsor().crm.sendCommunication(INPUT)
     expect(result).toMatchObject({ success: true })
@@ -807,7 +850,7 @@ describe('first send', () => {
     h.termsAtFreshRead = { contractValue: 100_000 }
     await expect(sponsor().crm.sendCommunication(INPUT)).rejects.toMatchObject({
       code: 'PRECONDITION_FAILED',
-      message: expect.stringMatching(/tier or contract value changed/),
+      message: expect.stringMatching(/tier, add-ons or contract value changed/),
     })
     expect(h.generatePdf).not.toHaveBeenCalled()
     expect(h.sendForSigning).not.toHaveBeenCalled()
@@ -836,7 +879,7 @@ describe('first send', () => {
       signingUrl: `https://${DOMAIN}/sponsor/contract/sign/agr-stale`,
       contractReservedAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
       // Rendered at 40 000; the deal is now 50 000.
-      contractReservedTerms: '40000|NOK|tier-gold',
+      contractReservedTerms: '40000|NOK|tier-gold|',
     })
     const result = await sponsor().crm.sendCommunication(INPUT)
     expect(result).toMatchObject({ success: true })
@@ -928,7 +971,7 @@ describe('first send', () => {
       signatureId: 'agr-stale',
       signingUrl: STALE_URL,
       contractReservedAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
-      contractReservedTerms: '50000|NOK|tier-gold',
+      contractReservedTerms: '50000|NOK|tier-gold|',
     })
     const result = await sponsor().crm.sendCommunication(INPUT)
     expect(result).toMatchObject({ success: true })

@@ -260,7 +260,7 @@ export async function prepareContractSend(
       'Conference title is required for contract generation. Update the conference settings.',
     )
   }
-  const signer = pickSigner(sfc, recipients, args.signerKey)
+  let signer = pickSigner(sfc, recipients, args.signerKey)
   // Counter-signing is the assigned organizer's alone — checked before any
   // path, so a reused agreement can never be stamped by someone else.
   if (args.organizerSignatureDataUrl) {
@@ -284,6 +284,13 @@ export async function prepareContractSend(
   // reservation older than the window (a send that crashed or whose status
   // flip failed after mailing) is REUSED, so the link already in an inbox
   // stays the stored one and no second agreement is minted.
+  // The terms the PDF renders from, as a fingerprint stored with the
+  // reservation: a reserved PDF whose terms have since changed is not reused.
+  const addonIds = (sfc.addons ?? [])
+    .map((a) => a._id)
+    .sort()
+    .join(',')
+  const terms = `${sfc.contractValue ?? ''}|${sfc.contractCurrency ?? ''}|${sfc.tier?._id ?? ''}|${addonIds}`
   const current = await clientReadUncached.fetch<{
     _rev: string
     contractStatus: string | null
@@ -296,8 +303,9 @@ export async function prepareContractSend(
     contractCurrency: string | null
     status: string | null
     tierId: string | null
+    addonIds: string[] | null
   } | null>(
-    `*[_type == "sponsorForConference" && _id == $id && conference._ref == $conferenceId][0]{ _rev, contractStatus, signatureStatus, signatureId, signingUrl, contractReservedAt, contractReservedTerms, contractValue, contractCurrency, status, "tierId": tier._ref }`,
+    `*[_type == "sponsorForConference" && _id == $id && conference._ref == $conferenceId][0]{ _rev, contractStatus, signatureStatus, signatureId, signingUrl, contractReservedAt, contractReservedTerms, contractValue, contractCurrency, status, "tierId": tier._ref, "addonIds": addons[]._ref }`,
     { id: sfc._id, conferenceId: conference._id },
   )
   if (!current || contractActionFor(current) !== 'send') {
@@ -311,10 +319,11 @@ export async function prepareContractSend(
   if (
     (current.contractValue ?? null) !== (sfc.contractValue ?? null) ||
     (current.contractCurrency ?? null) !== (sfc.contractCurrency ?? null) ||
-    (current.tierId ?? null) !== (sfc.tier?._id ?? null)
+    (current.tierId ?? null) !== (sfc.tier?._id ?? null) ||
+    [...(current.addonIds ?? [])].sort().join(',') !== addonIds
   ) {
     throw precondition(
-      'The sponsor’s tier or contract value changed since this email was composed. Close it, reload the sponsor and send again.',
+      'The sponsor’s tier, add-ons or contract value changed since this email was composed. Close it, reload the sponsor and send again.',
     )
   }
   // The state machine decides on the CURRENT record too (a deal closed since
@@ -333,9 +342,6 @@ export async function prepareContractSend(
   // flip (no marker) and gets a FRESH agreement with the current terms.
   // …and a revoked one (rejected/expired since it was stored) is never
   // reused either: the next explicit send issues a fresh agreement.
-  // The terms the PDF renders from, as a fingerprint stored with the
-  // reservation: a reserved PDF whose terms have since changed is not reused.
-  const terms = `${sfc.contractValue ?? ''}|${sfc.contractCurrency ?? ''}|${sfc.tier?._id ?? ''}`
   // Another send is IN FLIGHT (a reservation younger than the settle window):
   // refused outright, whatever its terms or status.
   const stored = !!current.signatureId && !!current.signingUrl
@@ -365,19 +371,20 @@ export async function prepareContractSend(
   const countersigned = !reserved && !!args.organizerSignatureDataUrl
   if (reserved) {
     // The agreement was issued to the persisted signer; it cannot change
-    // hands without a new agreement.
-    if (args.signerKey && sfc.signerEmail && signer.email !== sfc.signerEmail) {
+    // hands without a new agreement, and that signer must be among the
+    // recipients (never silently swapped in for someone the organizer chose).
+    const persisted = recipients.find(
+      (r) => !!sfc.signerEmail && r.email === sfc.signerEmail,
+    )
+    if (sfc.signerEmail && (!persisted || signer.email !== sfc.signerEmail)) {
       throw precondition(
-        `This agreement was already issued to ${sfc.signerEmail}. Choose them as the signer to send it again.`,
+        `This agreement was already issued to ${sfc.signerEmail}. Include them as a recipient and the signer to send it again.`,
       )
     }
+    if (persisted) signer = persisted
     signingUrl = current.signingUrl!
     agreementId = current.signatureId!
     reservation = { contractReservedAt: now }
-    if (sfc.signerEmail) {
-      signer.name = sfc.signerName ?? signer.name
-      signer.email = sfc.signerEmail
-    }
   } else {
     let templateId = args.contractTemplateId
     if (!templateId) {
