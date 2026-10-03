@@ -96,6 +96,13 @@ export type SendSponsorCommunicationResult =
       ok: false
       reason: 'send-failed'
       message: string
+      /**
+       * The provider ANSWERED and did not accept the email (an HTTP status
+       * came back). `false` when its answer was lost — a network error, a
+       * broken response — and the email MAY have gone out: a caller that
+       * reserved something for this send must not undo it on that basis.
+       */
+      definitive: boolean
       activityId?: string
       recipients: CommunicationRecipient[]
     }
@@ -300,12 +307,21 @@ export async function sendSponsorCommunication(
     providerMessageId = result.data?.id
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
+    const definitive =
+      typeof (error as { status?: unknown })?.status === 'number'
     const { activityId } = await logCommunication({
       ...record,
       deliveryStatus: 'failed',
       error: message,
     })
-    return { ok: false, reason: 'send-failed', message, activityId, recipients }
+    return {
+      ok: false,
+      reason: 'send-failed',
+      message,
+      definitive,
+      activityId,
+      recipients,
+    }
   }
 
   const { activityId } = await logCommunication({

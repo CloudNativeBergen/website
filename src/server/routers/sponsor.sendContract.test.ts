@@ -547,6 +547,38 @@ describe('first send', () => {
     })
   })
 
+  it("keeps the reservation when the provider's answer is lost — the link that may be in an inbox stays valid, and the retry resends it", async () => {
+    h.send.mockRejectedValueOnce(new Error('socket hang up'))
+    await expect(sponsor().crm.sendCommunication(INPUT)).rejects.toMatchObject({
+      code: 'INTERNAL_SERVER_ERROR',
+      message: expect.stringMatching(/did not confirm delivery/),
+    })
+    expect(sfcPatches().some((p) => 'contractStatus' in p.sets)).toBe(false)
+    // Not released: the token and the in-flight marker stay.
+    expect(h.unsets.some((u) => u.fields.includes('signatureId'))).toBe(false)
+    const reservedId = h.sfc!.signatureId as string
+    const reservedUrl = h.sfc!.signingUrl as string
+    expect(reservedId).toBeTruthy()
+    expect(h.sfc!.contractReservedAt).toBeTruthy()
+    expect(record()).toMatchObject({ deliveryStatus: 'failed' })
+
+    // Within the settle window a retry is refused as in flight.
+    await expect(sponsor().crm.sendCommunication(INPUT)).rejects.toMatchObject({
+      code: 'PRECONDITION_FAILED',
+    })
+    // After it, the SAME agreement is resent: no new token, no new PDF.
+    h.sfc!.contractReservedAt = new Date(
+      Date.now() - 11 * 60 * 1000,
+    ).toISOString()
+    const result = await sponsor().crm.sendCommunication(INPUT)
+    expect(result).toMatchObject({ success: true })
+    expect(h.sendForSigning).toHaveBeenCalledTimes(1)
+    expect(h.generatePdf).toHaveBeenCalledTimes(1)
+    expect(h.sfc!.signatureId).toBe(reservedId)
+    expect(h.send.mock.calls[1][0].html).toContain(`href="${reservedUrl}"`)
+    expect(h.sfc!.contractStatus).toBe('contract-sent')
+  })
+
   it('never flips back a signature completed through the reserved link while the provider was busy', async () => {
     h.send.mockImplementation(async () => {
       // The sponsor opened the stored link and signed before the email even landed.

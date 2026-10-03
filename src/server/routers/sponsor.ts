@@ -2794,9 +2794,14 @@ export const sponsorRouter = router({
 
         if (!result.ok) {
           // Nothing went out, so the codes are nobody's again — and the
-          // reserved agreement is undone.
+          // reserved agreement is undone. Unless the provider's ANSWER was
+          // lost: the email may be in an inbox, so the agreement it links to
+          // is kept (the next send after the settle window reuses it, so the
+          // same link stays valid and no second agreement is minted).
+          const answerLost =
+            result.reason === 'send-failed' && !result.definitive
           await discount?.release()
-          await contract?.release?.()
+          if (!answerLost) await contract?.release?.()
           switch (result.reason) {
             case 'not-found':
               throw new TRPCError({
@@ -2816,7 +2821,10 @@ export const sponsorRouter = router({
             case 'send-failed':
               throw new TRPCError({
                 code: 'INTERNAL_SERVER_ERROR',
-                message: result.message,
+                message:
+                  answerLost && contract
+                    ? `${result.message}. The email provider did not confirm delivery, so the agreement was kept: sending again in 10 minutes resends the same signing link.`
+                    : result.message,
               })
           }
         }
