@@ -12,6 +12,8 @@ const h = vi.hoisted(() => ({
   template: null as Record<string, unknown> | null,
   send: vi.fn(),
   sendForSigning: vi.fn(),
+  /** The contact's email as the primitive's own read sees it (changed since). */
+  contactEmailAtSend: null as string | null,
   fetches: [] as string[],
   patches: [] as Array<{ id: string; sets: Record<string, unknown> }>,
   incs: [] as Array<{ id: string; field: string; by: number }>,
@@ -41,7 +43,17 @@ vi.mock('@/lib/organization/sanity', () => ({
 vi.mock('@/lib/sanity/client', () => {
   const fetch = async (query: string) => {
     h.fetches.push(query)
-    if (query.includes('_type == "sponsorForConference"')) return h.sfc
+    if (query.includes('_type == "sponsorForConference"')) {
+      if (h.contactEmailAtSend && h.sfc) {
+        return {
+          ...h.sfc,
+          contactPersons: (
+            h.sfc.contactPersons as Array<Record<string, unknown>>
+          ).map((c) => ({ ...c, email: h.contactEmailAtSend })),
+        }
+      }
+      return h.sfc
+    }
     return null
   }
   const patch = (id: string) => {
@@ -102,6 +114,7 @@ const SIGNING_URL = 'https://cloudnativebergen.dev/sponsor/contract/sign/agr-1'
 beforeEach(() => {
   vi.clearAllMocks()
   h.fetches = []
+  h.contactEmailAtSend = null
   h.patches = []
   h.incs = []
   h.creates = []
@@ -206,6 +219,10 @@ describe('sendContractReminderBySystem', () => {
     expect(sent.html).toContain(`href="${SIGNING_URL}"`)
 
     const record = h.creates.find((d) => d.communicationKind === 'contract')
+    // The persisted signer, as a server-built recipient keyed by their contact.
+    expect(record!.recipients).toEqual([
+      expect.objectContaining({ _key: 'c-primary', email: 'kari@acme.test' }),
+    ])
     expect(record).toMatchObject({
       deliveryStatus: 'sent',
       providerMessageId: 'resend-msg-9',
@@ -255,6 +272,26 @@ describe('sendContractReminderBySystem', () => {
         email: 'cfo@acme-holding.test',
       }),
     ])
+  })
+
+  it('addresses a reminder to the sponsor name when the persisted signer has no name and is not a contact', async () => {
+    h.sfc!.signerEmail = 'cfo@acme-holding.test'
+    h.sfc!.signerName = undefined
+    expect(await sendContractReminderBySystem('sfc-1')).toMatchObject({
+      ok: true,
+    })
+    expect(h.send.mock.calls[0][0].html).toContain('Dear Acme AS,')
+    expect(h.send.mock.calls[0][0].html).not.toContain('{{{SIGNER_NAME}}}')
+  })
+
+  it("mails the PERSISTED signer address even if that contact's email changed between the two reads", async () => {
+    // The primitive re-reads the sponsor; by then the contact's address differs.
+    h.contactEmailAtSend = 'kari-new@acme.test'
+    expect(await sendContractReminderBySystem('sfc-1')).toEqual({
+      ok: true,
+      recipient: 'kari@acme.test',
+    })
+    expect(h.send.mock.calls[0][0].to).toEqual(['kari@acme.test'])
   })
 
   it('skips when no signer is stored at all', async () => {

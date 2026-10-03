@@ -839,7 +839,9 @@ export function SponsorSendModal({
     contractAction === 'send'
       ? { name: signerContact?.name, email: signerContact?.email }
       : {
-          name: sponsorForConference.signerName,
+          name:
+            sponsorForConference.signerName ??
+            sponsorForConference.sponsor.name,
           email: sponsorForConference.signerEmail,
         }
   const contractValue = sponsorForConference.contractValue

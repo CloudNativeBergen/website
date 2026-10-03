@@ -123,6 +123,8 @@ export interface SponsorForConference {
   contractSignedBy?: string
   /** Set while a contract send is in flight; cleared on contract-sent or failure. */
   contractReservedAt?: string
+  /** Fingerprint of the terms the reserved PDF was rendered from. */
+  contractReservedTerms?: string
   organizerSignedAt?: string
   organizerSignedBy?: string
   contractValue?: number
@@ -225,6 +227,8 @@ export interface SponsorForConferenceExpanded {
   contractSignedBy?: string
   /** Set while a contract send is in flight; cleared on contract-sent or failure. */
   contractReservedAt?: string
+  /** Fingerprint of the terms the reserved PDF was rendered from. */
+  contractReservedTerms?: string
   organizerSignedAt?: string
   organizerSignedBy?: string
   contractValue?: number

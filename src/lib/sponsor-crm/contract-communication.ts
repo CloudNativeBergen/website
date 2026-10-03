@@ -189,7 +189,7 @@ export async function prepareContractSend(
       // The person who signed — merged as SIGNER_NAME in the confirmation.
       signer: {
         contactKey: '',
-        name: sfc.signerName ?? sfc.signerEmail ?? '',
+        name: sfc.signerName ?? sfc.sponsor?.name ?? sfc.signerEmail ?? '',
         email: sfc.signerEmail ?? '',
         isDefault: false,
       },
@@ -206,7 +206,7 @@ export async function prepareContractSend(
       recipients.find((r) => r.email === sfc.signerEmail) ??
       ({
         contactKey: '',
-        name: sfc.signerName ?? sfc.signerEmail ?? '',
+        name: sfc.signerName ?? sfc.sponsor?.name ?? sfc.signerEmail ?? '',
         email: sfc.signerEmail ?? '',
         isDefault: false,
       } satisfies CommunicationRecipient)
@@ -283,11 +283,12 @@ export async function prepareContractSend(
     signatureId: string | null
     signingUrl: string | null
     contractReservedAt: string | null
+    contractReservedTerms: string | null
     contractValue: number | null
     contractCurrency: string | null
     tierId: string | null
   } | null>(
-    `*[_type == "sponsorForConference" && _id == $id && conference._ref == $conferenceId][0]{ _rev, contractStatus, signatureStatus, signatureId, signingUrl, contractReservedAt, contractValue, contractCurrency, "tierId": tier._ref }`,
+    `*[_type == "sponsorForConference" && _id == $id && conference._ref == $conferenceId][0]{ _rev, contractStatus, signatureStatus, signatureId, signingUrl, contractReservedAt, contractReservedTerms, contractValue, contractCurrency, "tierId": tier._ref }`,
     { id: sfc._id, conferenceId: conference._id },
   )
   if (!current || contractActionFor(current) !== 'send') {
@@ -312,24 +313,33 @@ export async function prepareContractSend(
   // flip (no marker) and gets a FRESH agreement with the current terms.
   // …and a revoked one (rejected/expired since it was stored) is never
   // reused either: the next explicit send issues a fresh agreement.
-  const reserved =
-    !!current.signatureId &&
-    !!current.signingUrl &&
-    !!current.contractReservedAt &&
-    current.signatureStatus !== 'rejected' &&
-    current.signatureStatus !== 'expired'
+  // The terms the PDF renders from, as a fingerprint stored with the
+  // reservation: a reserved PDF whose terms have since changed is not reused.
+  const terms = `${sfc.contractValue ?? ''}|${sfc.contractCurrency ?? ''}|${sfc.tier?._id ?? ''}`
+  // Another send is IN FLIGHT (a reservation younger than the settle window):
+  // refused outright, whatever its terms or status.
+  const stored = !!current.signatureId && !!current.signingUrl
   if (
-    reserved &&
+    stored &&
     current.contractReservedAt &&
     Date.now() - new Date(current.contractReservedAt).getTime() <
       RESERVATION_SETTLE_MS
   ) {
     throw precondition(IN_FLIGHT_MESSAGE)
   }
+  // A stale reservation is REUSED only if it is still the agreement for these
+  // terms and was not revoked since.
+  const reserved =
+    stored &&
+    !!current.contractReservedAt &&
+    current.signatureStatus !== 'rejected' &&
+    current.signatureStatus !== 'expired' &&
+    current.contractReservedTerms === terms
   let signingUrl: string
   let agreementId: string
   let reservation: Record<string, unknown>
   const priorReservedAt = current.contractReservedAt
+  const priorSignatureStatus = current.signatureStatus
   // Provenance follows the PDF that was actually embedded: a reused
   // agreement keeps its stored document, so no counter-signature is stamped.
   const countersigned = !reserved && !!args.organizerSignatureDataUrl
@@ -499,6 +509,7 @@ export async function prepareContractSend(
       signerName: signer.name,
       signerEmail: signer.email,
       contractReservedAt: now,
+      contractReservedTerms: terms,
       // A replacement for a rejected or expired agreement is signable from
       // the moment it is stored, like an initial send — the signing page
       // refuses rejected/expired, and the flip may still fail after mailing.
@@ -544,15 +555,16 @@ export async function prepareContractSend(
 
   const release = async () => {
     try {
-      // Only this send's token: a slow failure must never clear a later
-      // send's reservation. A REUSED agreement was already delivered by an
-      // earlier email, so it stays; only the in-flight marker is cleared.
-      // …and only THIS attempt's reservation (its marker value): a later
-      // attempt that reused the same agreement id has its own marker.
+      // Only this send's token, this attempt's reservation, and — for a
+      // fresh agreement — only while nothing happened to it since (a
+      // signature or a revocation through the link must stand). A REUSED
+      // agreement was already delivered by an earlier email, so it stays;
+      // only its in-flight marker goes back to what it was.
       await clientWrite
         .patch({
-          query:
-            '*[_type == "sponsorForConference" && _id == $id && conference._ref == $conferenceId && signatureId == $ours && contractReservedAt == $reservedAt]',
+          query: reserved
+            ? '*[_type == "sponsorForConference" && _id == $id && conference._ref == $conferenceId && signatureId == $ours && contractReservedAt == $reservedAt]'
+            : '*[_type == "sponsorForConference" && _id == $id && conference._ref == $conferenceId && signatureId == $ours && contractReservedAt == $reservedAt && signatureStatus == "not-started"]',
           params: {
             id: sfc._id,
             conferenceId: conference._id,
@@ -567,13 +579,18 @@ export async function prepareContractSend(
                 'signatureId',
                 'signingUrl',
                 'contractReservedAt',
+                'contractReservedTerms',
                 'organizerSignedAt',
                 'organizerSignedBy',
               ],
         )
-        // A reused agreement keeps looking like the unflipped reservation it
-        // is: its ORIGINAL marker comes back, so the next retry reuses again.
-        .set(reserved ? { contractReservedAt: priorReservedAt } : {})
+        .set(
+          reserved
+            ? { contractReservedAt: priorReservedAt }
+            : // The status the replacement superseded (rejected / expired /
+              // not-started) comes back, since nothing was delivered.
+              { signatureStatus: priorSignatureStatus ?? 'not-started' },
+        )
         .commit()
     } catch (error) {
       console.error('[contract-send] releasing the agreement failed:', error)
@@ -666,7 +683,7 @@ export async function prepareContractSend(
             contractSentAt: now,
             signatureStatus: 'pending',
           })
-          .unset(['contractReservedAt'])
+          .unset(['contractReservedAt', 'contractReservedTerms'])
           .commit()
       } catch (error) {
         console.error('[contract-send] sponsor record update failed:', error)
@@ -761,12 +778,14 @@ export async function sendContractReminderBySystem(
       }
     : {
         contactKey: 'signer-external',
-        name: sfc.signerName ?? sfc.signerEmail,
+        name: sfc.signerName ?? sfc.sponsor?.name ?? sfc.signerEmail,
         email: sfc.signerEmail,
         isDefault: false,
       }
-  const recipientKeys = signerContact?._key ? [signerContact._key] : []
-  const serverRecipients = signerContact?._key ? undefined : [signer]
+  // Always the persisted address, as a server-built recipient: a contact key
+  // re-resolved by the primitive could point at an address changed since.
+  const recipientKeys: string[] = []
+  const serverRecipients = [signer]
   const orgId = (sfc.conference as { organization?: { _ref?: string } })
     .organization?._ref
   if (!orgId) return { ok: false, reason: 'no-organization' }

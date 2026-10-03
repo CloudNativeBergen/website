@@ -273,6 +273,13 @@ export default defineType({
         'Name entered by the signer in the digital signing flow. Set only by that flow — its presence proves the stored document is the signed one.',
     }),
     defineField({
+      name: 'contractReservedTerms',
+      title: 'Contract Agreement Reserved Terms',
+      type: 'string',
+      description:
+        'Fingerprint of the terms (value, currency, tier) the reserved PDF was rendered from; a retry whose terms differ issues a fresh agreement.',
+    }),
+    defineField({
       name: 'contractReservedAt',
       title: 'Contract Agreement Reserved At',
       type: 'datetime',

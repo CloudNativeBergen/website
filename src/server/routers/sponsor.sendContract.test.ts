@@ -129,6 +129,7 @@ vi.mock('@/lib/sanity/client', () => {
         signatureId: h.sfc?.signatureId ?? null,
         signingUrl: h.sfc?.signingUrl ?? null,
         contractReservedAt: h.sfc?.contractReservedAt ?? null,
+        contractReservedTerms: h.sfc?.contractReservedTerms ?? null,
         contractValue:
           h.termsAtFreshRead?.contractValue ?? h.sfc?.contractValue ?? null,
         contractCurrency: h.sfc?.contractCurrency ?? null,
@@ -175,7 +176,9 @@ vi.mock('@/lib/sanity/client', () => {
           ? h.sfc &&
             h.sfc.signatureId === selection.params.ours &&
             (!selection.query.includes('contractReservedAt == $reservedAt') ||
-              h.sfc.contractReservedAt === selection.params.reservedAt)
+              h.sfc.contractReservedAt === selection.params.reservedAt) &&
+            (!selection.query.includes('signatureStatus == "not-started"') ||
+              h.sfc.signatureStatus === 'not-started')
             ? (selection.params.id as string)
             : 'no-match'
           : (selection as unknown as string)
@@ -446,7 +449,10 @@ describe('first send', () => {
       contractStatus: 'contract-sent',
       signatureStatus: 'pending',
     })
-    expect(h.unsets).toContainEqual({ id: SFC, fields: ['contractReservedAt'] })
+    expect(h.unsets).toContainEqual({
+      id: SFC,
+      fields: ['contractReservedAt', 'contractReservedTerms'],
+    })
     expect(activities('contract_status_change')).toHaveLength(1)
     expect(activities('signature_status_change')).toHaveLength(1)
     // Sending a contract advances the deal to Won (a query-conditional patch).
@@ -559,6 +565,7 @@ describe('first send', () => {
       signatureId: 'agr-stale',
       signingUrl: STALE_URL,
       contractReservedAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+      contractReservedTerms: '50000|NOK|tier-gold',
     })
     h.send.mockResolvedValue({
       data: null,
@@ -580,6 +587,7 @@ describe('first send', () => {
       signatureId: 'agr-stale',
       signingUrl: `https://${DOMAIN}/sponsor/contract/sign/agr-stale`,
       contractReservedAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+      contractReservedTerms: '50000|NOK|tier-gold',
     })
     const result = await sponsor().crm.sendCommunication({
       ...INPUT,
@@ -625,6 +633,7 @@ describe('first send', () => {
       signatureId: 'agr-stale',
       signingUrl: `https://${DOMAIN}/sponsor/contract/sign/agr-stale`,
       contractReservedAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+      contractReservedTerms: '50000|NOK|tier-gold',
       signerName: 'Kari Nordmann',
       signerEmail: 'kari@acme.test',
     })
@@ -657,6 +666,7 @@ describe('first send', () => {
       signatureId: 'agr-stale',
       signingUrl: STALE_URL,
       contractReservedAt: STALE_AT,
+      contractReservedTerms: '50000|NOK|tier-gold',
     })
     h.send.mockResolvedValueOnce({
       data: null,
@@ -686,6 +696,7 @@ describe('first send', () => {
     h.sfc!.contractReservedAt = new Date(
       Date.now() - 60 * 60 * 1000,
     ).toISOString()
+    h.sfc!.contractReservedTerms = '50000|NOK|tier-gold'
     h.flipShouldThrow = false
     const second = await sponsor().crm.sendCommunication(INPUT)
     expect(second).toMatchObject({ success: true })
@@ -748,6 +759,7 @@ describe('first send', () => {
       signingUrl: `https://${DOMAIN}/sponsor/contract/sign/agr-revoked`,
       signatureStatus: 'rejected',
       contractReservedAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+      contractReservedTerms: '50000|NOK|tier-gold',
     })
     const result = await sponsor().crm.sendCommunication(INPUT)
     expect(result).toMatchObject({ success: true })
@@ -801,6 +813,40 @@ describe('first send', () => {
     expect(h.sfc!.signatureId).toBe('agr-1')
   })
 
+  it('does not reuse a stale reservation whose terms have changed since the PDF was rendered — a fresh agreement instead', async () => {
+    Object.assign(h.sfc!, {
+      signatureId: 'agr-stale',
+      signingUrl: `https://${DOMAIN}/sponsor/contract/sign/agr-stale`,
+      contractReservedAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+      // Rendered at 40 000; the deal is now 50 000.
+      contractReservedTerms: '40000|NOK|tier-gold',
+    })
+    const result = await sponsor().crm.sendCommunication(INPUT)
+    expect(result).toMatchObject({ success: true })
+    expect(h.generatePdf).toHaveBeenCalledTimes(1)
+    expect(h.sendForSigning).toHaveBeenCalledTimes(1)
+    expect(h.sfc!.signatureId).toBe('agr-1')
+  })
+
+  it('a refused replacement restores the status it superseded (rejected), since nothing was delivered', async () => {
+    Object.assign(h.sfc!, {
+      contractStatus: 'contract-sent',
+      signatureStatus: 'rejected',
+      signatureId: 'agr-rejected',
+      signingUrl: `https://${DOMAIN}/sponsor/contract/sign/agr-rejected`,
+      contractReservedAt: undefined,
+    })
+    h.send.mockResolvedValue({
+      data: null,
+      error: { message: 'boom', statusCode: 500 },
+    })
+    await expect(sponsor().crm.sendCommunication(INPUT)).rejects.toMatchObject({
+      code: 'INTERNAL_SERVER_ERROR',
+    })
+    expect(h.sfc!.signatureStatus).toBe('rejected')
+    expect(h.sfc!.signatureId).toBeUndefined()
+  })
+
   it('refuses a counter-signature from anyone but the assigned organizer, before any PDF', async () => {
     h.sfc!.assignedTo = { _id: 'sp-other', name: 'Other', email: 'o@x' }
     await expect(
@@ -844,6 +890,7 @@ describe('first send', () => {
       signatureId: 'agr-stale',
       signingUrl: STALE_URL,
       contractReservedAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+      contractReservedTerms: '50000|NOK|tier-gold',
     })
     const result = await sponsor().crm.sendCommunication(INPUT)
     expect(result).toMatchObject({ success: true })
