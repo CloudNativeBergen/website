@@ -22,6 +22,8 @@ const h = vi.hoisted(() => ({
   claimedElsewhere: false,
   /** The primitive's own sponsor read rejects (before the provider). */
   sendReadThrows: false,
+  /** The tenant's sender credentials cannot be resolved. */
+  senderUnavailable: false,
   /** Boundary events in order: claim / send / release. */
   sequence: [] as string[],
 }))
@@ -126,16 +128,19 @@ vi.mock('@/lib/sanity/client', () => {
 })
 vi.mock('@/lib/email/config', async (importOriginal) => ({
   ...((await importOriginal()) as Record<string, unknown>),
-  resolveEmailSender: async () => ({
-    client: {
-      emails: {
-        send: async (...args: unknown[]) => {
-          h.sequence.push('send')
-          return h.send(...args)
+  resolveEmailSender: async () => {
+    if (h.senderUnavailable) throw new Error('no RESEND key for tenant')
+    return {
+      client: {
+        emails: {
+          send: async (...args: unknown[]) => {
+            h.sequence.push('send')
+            return h.send(...args)
+          },
         },
       },
-    },
-  }),
+    }
+  },
   retryWithBackoff: async <T>(fn: () => Promise<T>) => fn(),
 }))
 
@@ -155,6 +160,7 @@ beforeEach(() => {
   h.contactEmailAtSend = null
   h.claimedElsewhere = false
   h.sendReadThrows = false
+  h.senderUnavailable = false
   h.sequence = []
   h.patches = []
   h.incs = []
@@ -410,6 +416,16 @@ describe('sendContractReminderBySystem', () => {
       reason: 'send-failed',
       message: 'sanity read failed',
     })
+    expect(h.send).not.toHaveBeenCalled()
+    expect(h.sequence).toEqual(['claim', 'release'])
+    expect(h.sfc!.reminderCount).toBe(1)
+  })
+
+  it("gives the slot back when the tenant's sender cannot be resolved — the provider was never asked", async () => {
+    h.senderUnavailable = true
+    expect(
+      await sendContractReminderBySystem('sfc-1', { maxReminders: 2 }),
+    ).toMatchObject({ ok: false, reason: 'send-failed' })
     expect(h.send).not.toHaveBeenCalled()
     expect(h.sequence).toEqual(['claim', 'release'])
     expect(h.sfc!.reminderCount).toBe(1)

@@ -285,12 +285,17 @@ export async function sendSponsorCommunication(
   }
 
   let providerMessageId: string | undefined
+  // Set the moment the provider is asked: a failure before that (no tenant
+  // credentials, a resolver outage) is DEFINITIVE — nothing could have gone
+  // out — whatever shape the error has.
+  let providerAsked = false
   try {
     const { client } = await resolveEmailSender(args.orgId)
     // Resend reports failures as a RESOLVED `{ error }` (including 429), so the
     // throw has to happen INSIDE the callback or `retryWithBackoff` never sees
     // a retryable failure and every send gets exactly one attempt.
     const result = await retryWithBackoff(async () => {
+      providerAsked = true
       const r = await client.emails.send({
         from,
         to: recipients.map((r) => r.email),
@@ -308,6 +313,7 @@ export async function sendSponsorCommunication(
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     const definitive =
+      !providerAsked ||
       typeof (error as { status?: unknown })?.status === 'number'
     const { activityId } = await logCommunication({
       ...record,
