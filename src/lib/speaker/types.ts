@@ -57,10 +57,10 @@ interface SpeakerBase {
   gender?: Gender | null
   genderSelfDescribe?: string | null
   country?: string | null
-  consent?: SpeakerConsent
-  galleryImages?: GalleryImageWithSpeakers[]
   mondayWorkshopRsvp?: boolean | null
   speakerDinnerRsvp?: boolean | null
+  consent?: SpeakerConsent
+  galleryImages?: GalleryImageWithSpeakers[]
 }
 
 /**

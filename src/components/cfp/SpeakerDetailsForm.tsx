@@ -106,8 +106,12 @@ export function SpeakerDetailsForm({
     speaker?.genderSelfDescribe ?? '',
   )
   const [speakerCountry, setSpeakerCountry] = useState(speaker?.country ?? '')
-  const [mondayWorkshopRsvp, setMondayWorkshopRsvp] = useState<boolean | null>(speaker?.mondayWorkshopRsvp ?? null)
-  const [speakerDinnerRsvp, setSpeakerDinnerRsvp] = useState<boolean | null>(speaker?.speakerDinnerRsvp ?? null)
+  const [mondayWorkshopRsvp, setMondayWorkshopRsvp] = useState<boolean | null>(
+    speaker?.mondayWorkshopRsvp ?? null,
+  )
+  const [speakerDinnerRsvp, setSpeakerDinnerRsvp] = useState<boolean | null>(
+    speaker?.speakerDinnerRsvp ?? null,
+  )
   const [speakerLinks, setSpeakerLinks] = useState(
     speaker?.links?.length ? speaker.links : [''],
   )
@@ -475,30 +479,61 @@ export function SpeakerDetailsForm({
           </HelpText>
         </div>
 
+        <div className="mt-6 border-t border-gray-100 pt-6 sm:col-span-4 dark:border-gray-800">
+          <h3 className="mb-4 text-lg font-medium text-gray-900 dark:text-gray-100">
+            Event Attendance
+          </h3>
 
-        <div className="sm:col-span-4 mt-6 border-t border-gray-100 pt-6 dark:border-gray-800">
-          <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-4">Event Attendance</h3>
-          
           <div className="space-y-4">
             <div>
               <Dropdown
                 name="monday_workshop_rsvp"
                 label="Will you attend the Monday Workshops?"
-                value={mondayWorkshopRsvp === true ? 'Yes' : mondayWorkshopRsvp === false ? 'No' : ''}
-                setValue={(val) => setMondayWorkshopRsvp(val === 'Yes' ? true : val === 'No' ? false : null)}
-                options={new Map([['Yes', 'Yes'], ['No', 'No']])}
+                value={
+                  mondayWorkshopRsvp === true
+                    ? 'Yes'
+                    : mondayWorkshopRsvp === false
+                      ? 'No'
+                      : ''
+                }
+                setValue={(val) =>
+                  setMondayWorkshopRsvp(
+                    val === 'Yes' ? true : val === 'No' ? false : null,
+                  )
+                }
+                options={
+                  new Map([
+                    ['Yes', 'Yes'],
+                    ['No', 'No'],
+                  ])
+                }
                 placeholder="Unanswered"
                 clearable
               />
             </div>
-            
+
             <div>
               <Dropdown
                 name="speaker_dinner_rsvp"
                 label="Will you attend the Speaker Dinner?"
-                value={speakerDinnerRsvp === true ? 'Yes' : speakerDinnerRsvp === false ? 'No' : ''}
-                setValue={(val) => setSpeakerDinnerRsvp(val === 'Yes' ? true : val === 'No' ? false : null)}
-                options={new Map([['Yes', 'Yes'], ['No', 'No']])}
+                value={
+                  speakerDinnerRsvp === true
+                    ? 'Yes'
+                    : speakerDinnerRsvp === false
+                      ? 'No'
+                      : ''
+                }
+                setValue={(val) =>
+                  setSpeakerDinnerRsvp(
+                    val === 'Yes' ? true : val === 'No' ? false : null,
+                  )
+                }
+                options={
+                  new Map([
+                    ['Yes', 'Yes'],
+                    ['No', 'No'],
+                  ])
+                }
                 placeholder="Unanswered"
                 clearable
               />
@@ -506,7 +541,7 @@ export function SpeakerDetailsForm({
           </div>
         </div>
 
-        <div className="sm:col-span-4 mt-6 border-t border-gray-100 pt-6 dark:border-gray-800">
+        <div className="mt-6 border-t border-gray-100 pt-6 sm:col-span-4 dark:border-gray-800">
           <Dropdown
             name="speaker_gender"
             label="Gender (optional)"

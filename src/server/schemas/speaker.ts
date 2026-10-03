@@ -63,8 +63,16 @@ export const SpeakerInputSchema = z
       .optional()
       .transform(nullToUndefined),
     country: z.string().nullable().optional().transform(nullToUndefined),
-    mondayWorkshopRsvp: z.boolean().nullable().optional().transform((val) => (val === null ? undefined : val)),
-    speakerDinnerRsvp: z.boolean().nullable().optional().transform((val) => (val === null ? undefined : val)),
+    mondayWorkshopRsvp: z
+      .boolean()
+      .nullable()
+      .optional()
+      .transform((val) => (val === null ? undefined : val)),
+    speakerDinnerRsvp: z
+      .boolean()
+      .nullable()
+      .optional()
+      .transform((val) => (val === null ? undefined : val)),
 
     consent: SpeakerConsentSchema.optional(),
     company: z.string().nullable().optional().transform(nullToUndefined),

@@ -627,13 +627,15 @@ export default defineType({
       name: 'mondayWorkshopRsvp',
       title: 'Monday Workshop RSVP',
       type: 'boolean',
-      description: 'Whether the speaker plans to attend the Monday workshops. Usually captured via ticket registration, but can be overridden here.',
+      description:
+        'Whether the speaker plans to attend the Monday workshops. Usually captured via ticket registration, but can be overridden here.',
     }),
     defineField({
       name: 'speakerDinnerRsvp',
       title: 'Speaker Dinner RSVP',
       type: 'boolean',
-      description: 'Whether the speaker plans to attend the speaker dinner. Usually captured via ticket registration, but can be overridden here.',
+      description:
+        'Whether the speaker plans to attend the speaker dinner. Usually captured via ticket registration, but can be overridden here.',
     }),
 
     // Right to erasure, Phase 1 (RunKonf/platform#52). Set by
