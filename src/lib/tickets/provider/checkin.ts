@@ -328,6 +328,10 @@ export class CheckinProvider implements TicketingProvider {
         sum_left
         coupon
         discount
+        additionals {
+          name
+          value
+        }
         fields {
           key
           value
