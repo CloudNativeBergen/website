@@ -681,6 +681,37 @@ describe('first send', () => {
     expect(h.send).not.toHaveBeenCalled()
   })
 
+  it('never reactivates an agreement an organizer rejected while the provider was busy', async () => {
+    h.send.mockImplementation(async () => {
+      Object.assign(h.sfc!, { signatureStatus: 'rejected' })
+      return { data: { id: 'resend-msg-1' }, error: null }
+    })
+    const result = await sponsor().crm.sendCommunication(INPUT)
+    expect(result).toMatchObject({ success: true, contractStateFailed: true })
+    expect(h.sfc!.signatureStatus).toBe('rejected')
+    expect(h.sfc!.contractStatus).toBe('none')
+  })
+
+  it('a replacement for a rejected agreement is signable from the moment it is stored, even if the flip fails', async () => {
+    Object.assign(h.sfc!, {
+      contractStatus: 'contract-sent',
+      signatureStatus: 'rejected',
+      signatureId: 'agr-rejected',
+      signingUrl: `https://${DOMAIN}/sponsor/contract/sign/agr-rejected`,
+      contractReservedAt: undefined,
+    })
+    h.flipShouldThrow = true
+    const result = await sponsor().crm.sendCommunication(INPUT)
+    expect(result).toMatchObject({ success: true, contractStateFailed: true })
+    const reserve = sfcPatches().find((p) => 'signatureId' in p.sets)
+    expect(reserve?.sets).toMatchObject({
+      signatureId: 'agr-1',
+      signatureStatus: 'not-started',
+    })
+    expect(h.sfc!.signatureStatus).toBe('not-started')
+    expect(h.sfc!.signatureId).toBe('agr-1')
+  })
+
   it('refuses a counter-signature from anyone but the assigned organizer, before any PDF', async () => {
     h.sfc!.assignedTo = { _id: 'sp-other', name: 'Other', email: 'o@x' }
     await expect(

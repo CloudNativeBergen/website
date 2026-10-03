@@ -480,6 +480,10 @@ export async function prepareContractSend(
       signerName: signer.name,
       signerEmail: signer.email,
       contractReservedAt: now,
+      // A replacement for a rejected or expired agreement is signable from
+      // the moment it is stored, like an initial send — the signing page
+      // refuses rejected/expired, and the flip may still fail after mailing.
+      signatureStatus: 'not-started',
       // Provenance travels WITH the PDF it was embedded in, so a reuse after
       // a failed flip keeps it.
       ...(countersigned && {
@@ -575,6 +579,19 @@ export async function prepareContractSend(
         if (!latest || latest.signatureId !== agreementId) {
           console.error(
             '[contract-send] the stored agreement is no longer this send’s; status left as is:',
+            agreementId,
+          )
+          return { ok: false }
+        }
+        // The reservation stored this agreement as not-started; a rejected or
+        // expired status now is a REVOCATION made since (an organizer acting
+        // during the send), which the flip must never undo.
+        if (
+          latest.signatureStatus === 'rejected' ||
+          latest.signatureStatus === 'expired'
+        ) {
+          console.error(
+            '[contract-send] the agreement was revoked during the send; status left as is:',
             agreementId,
           )
           return { ok: false }
