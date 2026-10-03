@@ -1015,6 +1015,7 @@ export async function sendContractReminderBySystem(
   // two overlapping sweeps that both selected this sponsor cannot both send
   // — the second's claim fails on the revision and it skips. (The organizer
   // path counts after the send instead; its sends are not concurrent sweeps.)
+  const claimedCount = (sfc.reminderCount ?? 0) + 1
   try {
     await clientWrite
       .patch(sfc._id)
@@ -1025,12 +1026,19 @@ export async function sendContractReminderBySystem(
   } catch {
     return { ok: false, reason: 'claimed-elsewhere' }
   }
-  const releaseClaim = async () => {
-    try {
-      await clientWrite.patch(sfc._id).inc({ reminderCount: -1 }).commit()
-    } catch (error) {
-      console.error('[contract-reminders] releasing the claim failed:', error)
+  // Gives the claimed slot back; tried twice, and a slot that still could
+  // not be released is REPORTED (the sweep would otherwise skip this
+  // contract for a reminder that never went out).
+  const releaseClaim = async (): Promise<string> => {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        await clientWrite.patch(sfc._id).inc({ reminderCount: -1 }).commit()
+        return ''
+      } catch (error) {
+        console.error('[contract-reminders] releasing the claim failed:', error)
+      }
     }
+    return `; the reminder slot could not be released (reminderCount stays ${claimedCount}) — lower it by hand`
   }
   let result: Awaited<ReturnType<typeof sendSponsorCommunication>>
   try {
@@ -1056,11 +1064,11 @@ export async function sendContractReminderBySystem(
   } catch (error) {
     // The primitive THREW (a read rejected before the provider was reached):
     // nothing went out, the slot goes back.
-    await releaseClaim()
+    const stuck = await releaseClaim()
     return {
       ok: false,
       reason: 'send-failed',
-      message: error instanceof Error ? error.message : String(error),
+      message: (error instanceof Error ? error.message : String(error)) + stuck,
     }
   }
   if (!result.ok) {
@@ -1068,11 +1076,11 @@ export async function sendContractReminderBySystem(
     // ANSWER was lost: the reminder may be in an inbox, and a slot given back
     // then would let the sweep send it again.
     const answerLost = result.reason === 'send-failed' && !result.definitive
-    if (!answerLost) await releaseClaim()
+    const stuck = answerLost ? '' : await releaseClaim()
     return {
       ok: false,
       reason: 'send-failed',
-      message: 'message' in result ? result.message : result.reason,
+      message: ('message' in result ? result.message : result.reason) + stuck,
     }
   }
   // The slot was claimed above; the plan's own count step is the organizer

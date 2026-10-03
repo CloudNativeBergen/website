@@ -24,6 +24,8 @@ const h = vi.hoisted(() => ({
   sendReadThrows: false,
   /** The tenant's sender credentials cannot be resolved. */
   senderUnavailable: false,
+  /** The decrement that releases a claimed slot fails. */
+  releaseThrows: false,
   /** Boundary events in order: claim / send / release. */
   sequence: [] as string[],
 }))
@@ -96,6 +98,14 @@ vi.mock('@/lib/sanity/client', () => {
             'Mutation(s) failed with 1 error(s): revision mismatch',
           )
         }
+        if (
+          h.releaseThrows &&
+          'reminderCount' in sets &&
+          (sets.reminderCount as number) <
+            ((h.sfc?.reminderCount as number | undefined) ?? 0)
+        ) {
+          throw new Error('sanity down')
+        }
         if ('reminderCount' in sets) {
           h.sequence.push(
             (sets.reminderCount as number) >
@@ -161,6 +171,7 @@ beforeEach(() => {
   h.claimedElsewhere = false
   h.sendReadThrows = false
   h.senderUnavailable = false
+  h.releaseThrows = false
   h.sequence = []
   h.patches = []
   h.incs = []
@@ -419,6 +430,26 @@ describe('sendContractReminderBySystem', () => {
     expect(h.send).not.toHaveBeenCalled()
     expect(h.sequence).toEqual(['claim', 'release'])
     expect(h.sfc!.reminderCount).toBe(1)
+  })
+
+  it('reports a slot that could not be released after a refused send — never silently consumed', async () => {
+    h.send.mockResolvedValue({
+      data: null,
+      error: { message: 'boom', statusCode: 500 },
+    })
+    h.releaseThrows = true
+    expect(
+      await sendContractReminderBySystem('sfc-1', { maxReminders: 2 }),
+    ).toMatchObject({
+      ok: false,
+      reason: 'send-failed',
+      message: expect.stringMatching(
+        /boom; the reminder slot could not be released \(reminderCount stays 2\)/,
+      ),
+    })
+    // Tried twice before giving up.
+    expect(h.incs.filter((i) => i.by === -1)).toHaveLength(2)
+    expect(h.sfc!.reminderCount).toBe(2)
   })
 
   it("gives the slot back when the tenant's sender cannot be resolved — the provider was never asked", async () => {
