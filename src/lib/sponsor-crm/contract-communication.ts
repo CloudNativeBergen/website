@@ -436,10 +436,12 @@ export async function prepareContractSend(
     signerName: string | null
     organizerSignedAt: string | null
     organizerSignedBy: string | null
+    contractSignedAt: string | null
+    contractSignedBy: string | null
     tierId: string | null
     addonIds: string[] | null
   } | null>(
-    `*[_type == "sponsorForConference" && _id == $id && conference._ref == $conferenceId][0]{ _rev, contractStatus, signatureStatus, signatureId, signingUrl, contractReservedAt, contractReservedTerms, contractReservedInputs, contractValue, contractCurrency, status, signerEmail, "assignedToId": assignedTo._ref, "templateId": contractTemplate._ref, contractSentAt, contractDocument, contractTemplate, signerName, organizerSignedAt, organizerSignedBy, "tierId": tier._ref, "addonIds": addons[]._ref }`,
+    `*[_type == "sponsorForConference" && _id == $id && conference._ref == $conferenceId][0]{ _rev, contractStatus, signatureStatus, signatureId, signingUrl, contractReservedAt, contractReservedTerms, contractReservedInputs, contractValue, contractCurrency, status, signerEmail, "assignedToId": assignedTo._ref, "templateId": contractTemplate._ref, contractSentAt, contractDocument, contractTemplate, signerName, organizerSignedAt, organizerSignedBy, contractSignedAt, contractSignedBy, "tierId": tier._ref, "addonIds": addons[]._ref }`,
     { id: sfc._id, conferenceId: conference._id },
   )
   if (!current || contractActionFor(current) !== 'send') {
@@ -447,9 +449,17 @@ export async function prepareContractSend(
       'A contract was just sent to this sponsor by someone else. Reload to see it.',
     )
   }
-  // The PDF renders from the sponsor as it was read for this request; the
-  // revision that guards the reservation is this later read's. The two must
-  // agree on the terms, or a PDF with stale terms would be stored and sent.
+  // The PDF, the recipients and the readiness were all judged on the sponsor
+  // as read for this request; the revision that guards the reservation is
+  // this later read's. The two must be the SAME revision — any write since
+  // (a contact removed, a field cleared) means those judgements are stale.
+  if (sfc._rev && current._rev !== sfc._rev) {
+    throw precondition(
+      'The sponsor changed since this email was composed. Close it, reload the sponsor and send again.',
+    )
+  }
+  // The terms are checked field by field too, for a request read that
+  // carries no revision.
   if (
     (current.contractValue ?? null) !== (sfc.contractValue ?? null) ||
     (current.contractCurrency ?? null) !== (sfc.contractCurrency ?? null) ||
@@ -531,6 +541,8 @@ export async function prepareContractSend(
     signerEmail: current.signerEmail,
     organizerSignedAt: current.organizerSignedAt,
     organizerSignedBy: current.organizerSignedBy,
+    contractSignedAt: current.contractSignedAt,
+    contractSignedBy: current.contractSignedBy,
     // The status the replacement superseded (rejected / expired / not-started).
     signatureStatus: current.signatureStatus ?? 'not-started',
   }

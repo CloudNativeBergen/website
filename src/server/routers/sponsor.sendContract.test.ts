@@ -48,6 +48,8 @@ const h = vi.hoisted(() => ({
   assignedToIdAtFreshRead: null as string | null,
   /** The persisted signer the fresh read reports (changed since). */
   signerEmailAtFreshRead: null as string | null,
+  /** The revision the fresh read reports (a write landed since the request read). */
+  revAtFreshRead: null as string | null,
   /** The contacts' email as the primitive's own read sees it (changed since). */
   contactEmailAtSend: null as string | null,
   fetches: [] as Array<{ query: string; params?: Record<string, unknown> }>,
@@ -133,7 +135,7 @@ vi.mock('@/lib/sanity/client', () => {
         })
       }
       const snapshot = {
-        _rev: (h.sfc?._rev as string) ?? 'rev-1',
+        _rev: h.revAtFreshRead ?? (h.sfc?._rev as string) ?? 'rev-1',
         contractStatus: h.sfc?.contractStatus ?? null,
         signatureStatus: h.sfc?.signatureStatus ?? null,
         signatureId: h.sfc?.signatureId ?? null,
@@ -159,6 +161,8 @@ vi.mock('@/lib/sanity/client', () => {
         signerName: h.sfc?.signerName ?? null,
         organizerSignedAt: h.sfc?.organizerSignedAt ?? null,
         organizerSignedBy: h.sfc?.organizerSignedBy ?? null,
+        contractSignedAt: h.sfc?.contractSignedAt ?? null,
+        contractSignedBy: h.sfc?.contractSignedBy ?? null,
         addonIds:
           (h.sfc?.addons as Array<{ _id: string }> | undefined)?.map(
             (a) => a._id,
@@ -407,6 +411,7 @@ beforeEach(() => {
   h.statusAtFreshRead = null
   h.assignedToIdAtFreshRead = null
   h.signerEmailAtFreshRead = null
+  h.revAtFreshRead = null
   h.contactEmailAtSend = null
   h.bumpRevAfterStateRead = false
   h.revCounter = 1
@@ -1136,6 +1141,42 @@ describe('first send', () => {
     )
     expect(h.send.mock.calls[0][0].to).toEqual(['kari@acme.test'])
     expect(h.sfc!.signerEmail).toBe('kari@acme.test')
+  })
+
+  it('refuses — before any PDF — when ANY write landed on the sponsor between the request read and the reservation read', async () => {
+    // A colleague removed the primary contact meanwhile: the recipients and
+    // readiness judged on the request read are stale.
+    h.sfc!._rev = 'rev-1'
+    h.revAtFreshRead = 'rev-2'
+    await expect(sponsor().crm.sendCommunication(INPUT)).rejects.toMatchObject({
+      code: 'PRECONDITION_FAILED',
+      message: expect.stringMatching(/changed since this email was composed/),
+    })
+    expect(h.generatePdf).not.toHaveBeenCalled()
+    expect(h.sendForSigning).not.toHaveBeenCalled()
+    expect(h.send).not.toHaveBeenCalled()
+  })
+
+  it("a refused replacement restores the predecessor's sponsor-signature provenance too", async () => {
+    Object.assign(h.sfc!, {
+      contractStatus: 'contract-sent',
+      signatureStatus: 'rejected',
+      signatureId: 'agr-old',
+      signingUrl: `https://${DOMAIN}/sponsor/contract/sign/agr-old`,
+      contractSignedAt: '2026-01-05T09:00:00.000Z',
+      contractSignedBy: 'Kari Nordmann',
+      signerEmail: 'kari@acme.test',
+    })
+    h.send.mockResolvedValue({
+      data: null,
+      error: { message: 'boom', statusCode: 500 },
+    })
+    await expect(sponsor().crm.sendCommunication(INPUT)).rejects.toMatchObject({
+      code: 'INTERNAL_SERVER_ERROR',
+    })
+    expect(h.sfc!.signatureId).toBe('agr-old')
+    expect(h.sfc!.contractSignedAt).toBe('2026-01-05T09:00:00.000Z')
+    expect(h.sfc!.contractSignedBy).toBe('Kari Nordmann')
   })
 
   it('refuses — before any PDF — a deal closed between the request read and the reservation read', async () => {
