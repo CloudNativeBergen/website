@@ -133,7 +133,10 @@ import {
   type ResolvedDiscountCode,
   type SponsorCodeLink,
 } from '@/lib/sponsor-crm/discount-codes'
-import { claimDiscountCodes } from '@/lib/sponsor-crm/discount-code-claims'
+import {
+  CLAIM_SETTLE_MS,
+  claimDiscountCodes,
+} from '@/lib/sponsor-crm/discount-code-claims'
 import { normalizeDiscountCode, sponsorOwningCode } from '@/lib/discounts'
 import {
   discountCodeAttachments,
@@ -2797,11 +2800,22 @@ export const sponsorRouter = router({
           // reserved agreement is undone. Unless the provider's ANSWER was
           // lost: the email may be in an inbox, so the agreement it links to
           // is kept (the next send after the settle window reuses it, so the
-          // same link stays valid and no second agreement is minted).
+          // same link stays valid and no second agreement is minted), and so
+          // is the claim on the codes it carried (#1281) — a retry to this
+          // sponsor finds the claim already theirs. Adopted codes were never
+          // in the email, so they are freed either way.
           const answerLost =
             result.reason === 'send-failed' && !result.definitive
-          await discount?.release()
-          if (!answerLost) await contract?.release?.()
+          const kept = contract
+            ? 'the agreement was kept: sending again in 10 minutes resends the same signing link'
+            : discount &&
+              `the codes are held for this sponsor for ${CLAIM_SETTLE_MS / 60_000} minutes: sending again delivers the same codes`
+          if (answerLost) {
+            await discount?.releaseAdopted()
+          } else {
+            await discount?.release()
+            await contract?.release?.()
+          }
           switch (result.reason) {
             case 'not-found':
               throw new TRPCError({
@@ -2822,8 +2836,8 @@ export const sponsorRouter = router({
               throw new TRPCError({
                 code: 'INTERNAL_SERVER_ERROR',
                 message:
-                  answerLost && contract
-                    ? `${result.message}. The email provider did not confirm delivery, so the agreement was kept: sending again in 10 minutes resends the same signing link.`
+                  answerLost && kept
+                    ? `${result.message}. The email provider did not confirm delivery, so ${kept}.`
                     : result.message,
               })
           }
