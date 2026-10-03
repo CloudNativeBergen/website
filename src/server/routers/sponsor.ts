@@ -363,14 +363,22 @@ async function markRegistrationSent(
   actorId: string,
 ) {
   try {
-    const current = await clientReadUncached.fetch<string | null>(
-      `*[_type == "sponsorForConference" && _id == $id && conference._ref == $conferenceId][0].contractStatus`,
+    const current = await clientReadUncached.fetch<{
+      contractStatus: string | null
+      _rev: string
+    } | null>(
+      `*[_type == "sponsorForConference" && _id == $id && conference._ref == $conferenceId][0]{ contractStatus, _rev }`,
       { id: sponsorForConferenceId, conferenceId: conference._id },
     )
-    const from = current || 'none'
+    if (!current) return
+    const from = current.contractStatus || 'none'
     if (CONTRACT_STATUSES_PAST_REGISTRATION.has(from)) return
+    // Revision-conditional: a write that lands between this read and the
+    // patch (a contract send on another tab) makes Sanity reject the patch,
+    // and the deal is left where that write put it.
     await clientWrite
       .patch(sponsorForConferenceId)
+      .ifRevisionId(current._rev)
       .set({ contractStatus: 'registration-sent' })
       .commit()
     await logContractStatusChange(

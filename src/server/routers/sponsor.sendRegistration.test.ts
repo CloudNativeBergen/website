@@ -31,6 +31,8 @@ const h = vi.hoisted(() => ({
   tokenWriteShouldThrow: false,
   /** Another writer stores this token between our read and our write. */
   raceToken: null as string | null,
+  /** A write lands between the status re-read and the flip patch. */
+  bumpRevAfterStatusRead: false,
   send: vi.fn(),
 }))
 
@@ -52,8 +54,14 @@ vi.mock('@/lib/sanity/client', () => {
   const fetch = async (query: string, params?: Record<string, unknown>) => {
     h.fetches.push({ query, params })
     if (query.includes('"memberOrgIds"')) return h.tenant
-    if (query.includes('[0].contractStatus')) {
-      return (h.sfc?.contractStatus as string | null | undefined) ?? null
+    if (query.includes('{ contractStatus, _rev }')) {
+      const snapshot = {
+        contractStatus:
+          (h.sfc?.contractStatus as string | null | undefined) ?? null,
+        _rev: (h.sfc?._rev as string) ?? 'rev-1',
+      }
+      if (h.bumpRevAfterStatusRead && h.sfc) h.sfc._rev = 'rev-2'
+      return snapshot
     }
     if (query.includes('_type == "sponsorForConference"')) return h.sfc
     return null
@@ -61,7 +69,12 @@ vi.mock('@/lib/sanity/client', () => {
   const patch = (id: string) => {
     let sets: Record<string, unknown> = {}
     let ifMissing: Record<string, unknown> = {}
+    let requiredRev: string | undefined
     const chain = {
+      ifRevisionId: (rev: string) => {
+        requiredRev = rev
+        return chain
+      },
       set: (v: Record<string, unknown>) => {
         sets = { ...sets, ...v }
         return chain
@@ -76,6 +89,11 @@ vi.mock('@/lib/sanity/client', () => {
           throw new Error('sanity down')
         }
         const doc = h.sfc && id === h.sfc._id ? h.sfc : {}
+        if (requiredRev && (doc._rev ?? 'rev-1') !== requiredRev) {
+          throw new Error(
+            'Mutation(s) failed with 1 error(s): revision mismatch',
+          )
+        }
         // A concurrent writer landed first: Sanity keeps THEIR value.
         if ('registrationToken' in ifMissing && h.raceToken) {
           doc.registrationToken = h.raceToken
@@ -187,6 +205,7 @@ beforeEach(() => {
   h.patches = []
   h.tokenWriteShouldThrow = false
   h.raceToken = null
+  h.bumpRevAfterStatusRead = false
   h.tenant = { _type: 'sponsorForConference', conferenceId: CONF }
   h.sfc = {
     _id: SFC,
@@ -421,6 +440,17 @@ describe('the contract status', () => {
       return { data: { id: 'resend-msg-1' }, error: null }
     })
     await sponsor().crm.sendCommunication(INPUT)
+    expect(statusPatches()).toEqual([])
+    expect(
+      h.creates.find((d) => d.activityType === 'contract_status_change'),
+    ).toBeUndefined()
+  })
+
+  it('is left alone when a write lands between the status re-read and the flip — the patch is revision-conditional', async () => {
+    h.bumpRevAfterStatusRead = true
+    const result = await sponsor().crm.sendCommunication(INPUT)
+    // The send itself is unaffected.
+    expect(result).toMatchObject({ success: true })
     expect(statusPatches()).toEqual([])
     expect(
       h.creates.find((d) => d.activityType === 'contract_status_change'),

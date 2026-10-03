@@ -224,7 +224,7 @@ function registrationGreeting(
     ),
     paragraph(
       'registration-ask',
-      'To get everything in place, please complete your sponsor registration using the link below: company details, contact persons, billing information and your logo. Once submitted, we will prepare the sponsorship agreement for digital signing.',
+      'To get everything in place, please complete your sponsor registration using the link below: company details, contact persons, billing information and your logo. Once submitted, we will prepare your sponsorship agreement for signing.',
     ),
   ]
 }
