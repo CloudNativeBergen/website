@@ -2771,6 +2771,10 @@ export const sponsorRouter = router({
               portalUrl: registration.portalUrl,
             }),
             ...(contract && {
+              // The recipients the plan resolved and reserved the agreement
+              // for — never re-resolved from keys at send time.
+              recipientKeys: [],
+              serverRecipients: contract.recipients,
               appendHtml: contract.appendHtml,
               attachments: contract.attachments,
               contractVariables: {

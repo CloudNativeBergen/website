@@ -58,6 +58,7 @@ vi.mock('@/lib/sanity/client', () => {
         // The same terms the request's own read saw (CONTRACT_READY_SFC).
         contractValue: 50000,
         contractCurrency: 'NOK',
+        status: 'negotiating',
         tierId: 'tier-A',
       }
     }

@@ -85,6 +85,12 @@ export interface PrepareContractSendArgs {
  */
 export interface ContractSendPlan {
   action: ContractAction
+  /**
+   * The recipients as resolved HERE, against the sponsor the plan read. The
+   * send must use these rather than re-resolve the keys: a contact's address
+   * changed in between would receive a bearer link issued to someone else.
+   */
+  recipients: CommunicationRecipient[]
   /** First send: undo the stored agreement when nothing went out. Best-effort. */
   release?: () => Promise<void>
   /** The signer (first send and reminder) — merged as SIGNER_NAME / SIGNER_EMAIL. */
@@ -186,6 +192,7 @@ export async function prepareContractSend(
     }
     return {
       action,
+      recipients,
       // The person who signed — merged as SIGNER_NAME in the confirmation.
       signer: {
         contactKey: '',
@@ -212,6 +219,7 @@ export async function prepareContractSend(
       } satisfies CommunicationRecipient)
     return {
       action,
+      recipients,
       signer,
       contractValue,
       appendHtml: contractCardHtml({ action, url, theme }),
@@ -286,9 +294,10 @@ export async function prepareContractSend(
     contractReservedTerms: string | null
     contractValue: number | null
     contractCurrency: string | null
+    status: string | null
     tierId: string | null
   } | null>(
-    `*[_type == "sponsorForConference" && _id == $id && conference._ref == $conferenceId][0]{ _rev, contractStatus, signatureStatus, signatureId, signingUrl, contractReservedAt, contractReservedTerms, contractValue, contractCurrency, "tierId": tier._ref }`,
+    `*[_type == "sponsorForConference" && _id == $id && conference._ref == $conferenceId][0]{ _rev, contractStatus, signatureStatus, signatureId, signingUrl, contractReservedAt, contractReservedTerms, contractValue, contractCurrency, status, "tierId": tier._ref }`,
     { id: sfc._id, conferenceId: conference._id },
   )
   if (!current || contractActionFor(current) !== 'send') {
@@ -308,6 +317,17 @@ export async function prepareContractSend(
       'The sponsor’s tier or contract value changed since this email was composed. Close it, reload the sponsor and send again.',
     )
   }
+  // The state machine decides on the CURRENT record too (a deal closed since
+  // the request's read must not receive a live agreement), bound to the
+  // revision the reservation will be conditioned on.
+  const freshGate = checkState('contract', 'contract-sent', {
+    status: current.status ?? undefined,
+    contractStatus: current.contractStatus ?? undefined,
+    signatureStatus: current.signatureStatus ?? undefined,
+    tier: current.tierId ? { _id: current.tierId } : null,
+    contractValue: current.contractValue ?? undefined,
+  })
+  if (!freshGate.ok) throw preconditionFailed(freshGate.missing)
   // A reservation is an agreement stored but never flipped: its in-flight
   // marker is still set. A rejected or expired agreement went through the
   // flip (no marker) and gets a FRESH agreement with the current terms.
@@ -599,6 +619,7 @@ export async function prepareContractSend(
 
   return {
     action,
+    recipients,
     release,
     signer,
     contractValue,

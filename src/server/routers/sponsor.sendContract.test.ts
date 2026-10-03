@@ -40,6 +40,10 @@ const h = vi.hoisted(() => ({
   sentByOtherAtFreshRead: false,
   /** The terms the fresh read reports (changed since the request's own read). */
   termsAtFreshRead: null as { contractValue?: number; tierId?: string } | null,
+  /** The pipeline status the fresh read reports (changed since). */
+  statusAtFreshRead: null as string | null,
+  /** The contacts' email as the primitive's own read sees it (changed since). */
+  contactEmailAtSend: null as string | null,
   fetches: [] as Array<{ query: string; params?: Record<string, unknown> }>,
   creates: [] as Array<Record<string, unknown>>,
   patches: [] as Array<{ id: string; sets: Record<string, unknown> }>,
@@ -133,6 +137,7 @@ vi.mock('@/lib/sanity/client', () => {
         contractValue:
           h.termsAtFreshRead?.contractValue ?? h.sfc?.contractValue ?? null,
         contractCurrency: h.sfc?.contractCurrency ?? null,
+        status: h.statusAtFreshRead ?? h.sfc?.status ?? null,
         tierId:
           h.termsAtFreshRead?.tierId ??
           (h.sfc?.tier as { _id?: string } | undefined)?._id ??
@@ -161,7 +166,17 @@ vi.mock('@/lib/sanity/client', () => {
       if (h.bumpRevAfterStateRead && h.sfc) h.sfc._rev = 'rev-2'
       return snapshot
     }
-    if (query.includes('_type == "sponsorForConference"')) return h.sfc
+    if (query.includes('_type == "sponsorForConference"')) {
+      if (h.contactEmailAtSend && h.sfc) {
+        return {
+          ...h.sfc,
+          contactPersons: (
+            h.sfc.contactPersons as Array<Record<string, unknown>>
+          ).map((c) => ({ ...c, email: h.contactEmailAtSend })),
+        }
+      }
+      return h.sfc
+    }
     return null
   }
   const patch = (
@@ -348,6 +363,8 @@ beforeEach(() => {
   h.flipShouldThrow = false
   h.sentByOtherAtFreshRead = false
   h.termsAtFreshRead = null
+  h.statusAtFreshRead = null
+  h.contactEmailAtSend = null
   h.bumpRevAfterStateRead = false
   h.tenant = { _type: 'sponsorForConference', conferenceId: CONF }
   h.tenantById = { 'tpl-A': { _type: 'contractTemplate', conferenceId: CONF } }
@@ -845,6 +862,27 @@ describe('first send', () => {
     })
     expect(h.sfc!.signatureStatus).toBe('rejected')
     expect(h.sfc!.signatureId).toBeUndefined()
+  })
+
+  it("mails the addresses the agreement was reserved for, even if a contact's email changed before the send", async () => {
+    h.contactEmailAtSend = 'kari-new@acme.test'
+    const result = await sponsor().crm.sendCommunication(INPUT)
+    expect(result).toMatchObject({ success: true })
+    expect(h.sendForSigning).toHaveBeenCalledWith(
+      expect.objectContaining({ signerEmail: 'kari@acme.test' }),
+    )
+    expect(h.send.mock.calls[0][0].to).toEqual(['kari@acme.test'])
+    expect(h.sfc!.signerEmail).toBe('kari@acme.test')
+  })
+
+  it('refuses — before any PDF — a deal closed between the request read and the reservation read', async () => {
+    h.statusAtFreshRead = 'closed-lost'
+    await expect(sponsor().crm.sendCommunication(INPUT)).rejects.toMatchObject({
+      code: 'PRECONDITION_FAILED',
+    })
+    expect(h.generatePdf).not.toHaveBeenCalled()
+    expect(h.sendForSigning).not.toHaveBeenCalled()
+    expect(h.send).not.toHaveBeenCalled()
   })
 
   it('refuses a counter-signature from anyone but the assigned organizer, before any PDF', async () => {
