@@ -652,6 +652,33 @@ export const ContractReminderExternalSigner: Story = {
   },
 }
 
+/** Every contact was removed after issuance: the reminder still reaches the signer on record. */
+export const ContractReminderNoContacts: Story = {
+  args: {
+    kind: 'contract',
+    sponsorForConference: mockSponsor({
+      contactPersons: [],
+      contractStatus: 'contract-sent',
+      signatureStatus: 'pending',
+      signatureId: 'agr-1',
+      signingUrl: SIGNING_URL,
+      signerName: 'Eva Ekstern',
+      signerEmail: 'eva@other.example',
+    }),
+  },
+  parameters: { msw: { handlers: contractHandlers } },
+  play: async ({ canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body)
+    await body.findByText('No contact persons on this sponsor.')
+    await expect(
+      body.getByText(/also goes to the signer on record/),
+    ).toBeInTheDocument()
+    await expect(
+      body.queryByText('Choose at least one recipient before sending.'),
+    ).not.toBeInTheDocument()
+  },
+}
+
 /** Signed: the same action sends the signed copy, linking the stored document. */
 export const ContractSignedCopy: Story = {
   args: {

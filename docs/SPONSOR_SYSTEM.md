@@ -474,7 +474,8 @@ First send (contractActionFor → "send"):
    organizer is warned if this last write fails; the link still works.
 
 Reminder: the stored signing link is re-sent to the chosen contacts plus the
-signer on record (added by the server when they are not a contact);
+signer on record (added by the server whenever they are not ticked — or no
+longer a contact; no contact need be ticked at all);
 reminderCount is incremented atomically. The `contract-reminders` cron sends
 the same reminder through `sendContractReminderBySystem` with no actor.
 Signed copy: links the stored signed document; requires a digital signature

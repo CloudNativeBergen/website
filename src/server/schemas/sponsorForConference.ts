@@ -221,10 +221,12 @@ export const SendCommunicationSchema = z
   .object({
     sponsorForConferenceId: z.string().min(1, 'Sponsor ID is required'),
     kind: z.enum(['information', 'discount', 'registration', 'contract']),
-    recipientKeys: z
-      .array(z.string().min(1))
-      .min(1, 'Choose at least one recipient')
-      .max(20),
+    /**
+     * At least one — except for a contract reminder or signed copy, which
+     * the server addresses to the signer on record even with no contact
+     * ticked (they may no longer be a contact at all).
+     */
+    recipientKeys: z.array(z.string().min(1)).max(20),
     subject: z.string().trim().min(1, 'Subject is required').max(200),
     /** PortableText blocks, JSON-encoded (same wire shape as the old sendEmail). */
     message: z.string().min(1).max(100_000),
@@ -284,6 +286,13 @@ export const SendCommunicationSchema = z
           })
         }
       }
+    }
+    if (input.kind !== 'contract' && input.recipientKeys.length === 0) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['recipientKeys'],
+        message: 'Choose at least one recipient',
+      })
     }
     if (input.signerKey && !input.recipientKeys.includes(input.signerKey)) {
       ctx.addIssue({

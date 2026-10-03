@@ -349,7 +349,9 @@ describe('recipients', () => {
   it('posts contact KEYS only — never an address — for every ticked contact', async () => {
     renderModal()
     fireEvent.click(screen.getByRole('checkbox', { name: 'Ola Nordmann' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Send to 2 contacts' }))
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Send to 2 recipients' }),
+    )
     await waitFor(() => expect(h.mutateAsync).toHaveBeenCalledTimes(1))
     const posted = h.mutateAsync.mock.calls[0][0]
     expect(posted).toMatchObject({
@@ -564,7 +566,9 @@ describe('recipients changed after a template was applied', () => {
     expect(
       screen.queryByText(/recipients changed after the template was applied/i),
     ).not.toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Send to 2 contacts' }))
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Send to 2 recipients' }),
+    )
     await waitFor(() => expect(h.mutateAsync).toHaveBeenCalledTimes(1))
     // Contact order (Ola is listed first on this sponsor), matching the server.
     expect(h.mutateAsync.mock.calls[0][0].subject).toBe(
@@ -1079,7 +1083,7 @@ describe('contract kind (#1264)', () => {
       screen.getByRole('radio', { name: 'Ola Nordmann signs' }),
     ).toBeChecked()
     fireEvent.click(
-      screen.getByRole('button', { name: 'Send contract to 2 contacts' }),
+      screen.getByRole('button', { name: 'Send contract to 2 recipients' }),
     )
     await waitFor(() => expect(h.mutateAsync).toHaveBeenCalledTimes(1))
     expect(h.mutateAsync.mock.calls[0][0]).toMatchObject({
@@ -1219,6 +1223,62 @@ describe('contract kind (#1264)', () => {
     expect(
       screen.getByRole('checkbox', { name: 'Kari Nordmann' }),
     ).toBeChecked()
+  })
+
+  it('reminder: unticking the signer on record keeps them mailed, says so, and counts them', async () => {
+    renderModal(
+      {
+        contractStatus: 'contract-sent',
+        signatureStatus: 'pending',
+        signatureId: 'agr-1',
+        signingUrl: SIGNING_URL,
+        signerName: 'Ola Nordmann',
+        signerEmail: 'ola@acme.example',
+      },
+      'contract',
+    )
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Ola Nordmann' }))
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Kari Nordmann' }))
+    expect(
+      screen.getByText(/also goes to the signer on record/),
+    ).toHaveTextContent(
+      'The reminder also goes to the signer on record, Ola Nordmann (ola@acme.example), who is not ticked above.',
+    )
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Send reminder to 2 recipients' }),
+    )
+    await waitFor(() => expect(h.mutateAsync).toHaveBeenCalledTimes(1))
+    expect(h.mutateAsync.mock.calls[0][0]).toMatchObject({
+      recipientKeys: ['c-primary'],
+    })
+  })
+
+  it('reminder: with no contacts at all, sends to the signer on record alone', async () => {
+    renderModal(
+      {
+        contactPersons: [],
+        contractStatus: 'contract-sent',
+        signatureStatus: 'pending',
+        signatureId: 'agr-1',
+        signingUrl: SIGNING_URL,
+        signerName: 'Eva Ekstern',
+        signerEmail: 'eva@other.example',
+      },
+      'contract',
+    )
+    expect(
+      screen.getByText('No contact persons on this sponsor.'),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByText('Choose at least one recipient before sending.'),
+    ).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Send reminder' }))
+    await waitFor(() => expect(h.mutateAsync).toHaveBeenCalledTimes(1))
+    expect(h.mutateAsync.mock.calls[0][0]).toMatchObject({
+      kind: 'contract',
+      contractAction: 'remind',
+      recipientKeys: [],
+    })
   })
 
   it('signed: the button says "Send signed copy"', async () => {

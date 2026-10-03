@@ -1080,7 +1080,15 @@ export function SponsorSendModal({
   const actionLabel = isContract
     ? CONTRACT_ACTION_LABELS[contractAction]
     : 'Send'
-  const selectedCount = selectedKeys.size
+  // The signer on record is mailed by the server for a reminder or the
+  // signed copy whenever they are not among the ticked contacts — not a
+  // contact any more, or unticked. They count as a recipient here.
+  const signerOnRecordMailed =
+    isContract &&
+    contractAction !== 'send' &&
+    !!sponsorForConference.signerEmail &&
+    !(signerContactKey && selectedKeys.has(signerContactKey))
+  const selectedCount = selectedKeys.size + (signerOnRecordMailed ? 1 : 0)
 
   const handleSend = async ({
     subject,
@@ -1300,7 +1308,7 @@ export function SponsorSendModal({
       </div>
     ) : null
   const noRecipientHint =
-    contacts.length > 0 && selectedCount === 0 ? (
+    (contacts.length > 0 || signerOnRecordMailed) && selectedCount === 0 ? (
       <p className="font-inter text-sm text-amber-700 dark:text-amber-300">
         Choose at least one recipient before sending.
       </p>
@@ -1358,23 +1366,20 @@ export function SponsorSendModal({
     ) : null
   // The signer on record is not a contact (an external signer, or one since
   // removed): the server mails them too, and says so here.
-  const externalSignerNotice =
-    isContract &&
-    contractAction !== 'send' &&
-    !!sponsorForConference.signerEmail &&
-    !signerContactKey ? (
-      <p
-        role="status"
-        className="font-inter text-sm text-gray-600 dark:text-gray-300"
-      >
-        {contractAction === 'remind' ? 'The reminder' : 'The signed copy'} also
-        goes to the signer on record,{' '}
-        {sponsorForConference.signerName
-          ? `${sponsorForConference.signerName} (${sponsorForConference.signerEmail})`
-          : sponsorForConference.signerEmail}
-        , who is not among the contacts.
-      </p>
-    ) : null
+  const externalSignerNotice = signerOnRecordMailed ? (
+    <p
+      role="status"
+      className="font-inter text-sm text-gray-600 dark:text-gray-300"
+    >
+      {contractAction === 'remind' ? 'The reminder' : 'The signed copy'} also
+      goes to the signer on record,{' '}
+      {sponsorForConference.signerName
+        ? `${sponsorForConference.signerName} (${sponsorForConference.signerEmail})`
+        : sponsorForConference.signerEmail}
+      , who is{' '}
+      {signerContactKey ? 'not ticked above' : 'not among the contacts'}.
+    </p>
+  ) : null
   const contractLinkMissingHint =
     isContract && contractAction !== 'send' && !contractLinkUrl ? (
       <p
@@ -1410,18 +1415,24 @@ export function SponsorSendModal({
       onClose={onClose}
       title={isContract ? actionLabel : `Send ${kindLabel.toLowerCase()}`}
       recipientInfo={
-        <SponsorRecipientPicker
-          contacts={contacts}
-          selectedKeys={selectedKeys}
-          defaultKey={defaultKey}
-          onToggle={toggleRecipient}
-        />
+        contacts.length === 0 && signerOnRecordMailed ? (
+          <span className="font-inter text-sm text-gray-600 dark:text-gray-300">
+            No contact persons on this sponsor.
+          </span>
+        ) : (
+          <SponsorRecipientPicker
+            contacts={contacts}
+            selectedKeys={selectedKeys}
+            defaultKey={defaultKey}
+            onToggle={toggleRecipient}
+          />
+        )
       }
       contextInfo={`Sponsor: ${sponsorForConference.sponsor.name}`}
       onSend={handleSend}
       submitButtonText={
         selectedCount > 1
-          ? `${actionLabel} to ${selectedCount} contacts`
+          ? `${actionLabel} to ${selectedCount} recipients`
           : actionLabel
       }
       storageKey={draftKey}

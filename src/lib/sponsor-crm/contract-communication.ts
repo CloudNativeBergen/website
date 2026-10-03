@@ -183,10 +183,22 @@ export async function prepareContractSend(
   args: PrepareContractSendArgs,
 ): Promise<ContractSendPlan> {
   const { conference, sfc, actor } = args
+  const action = contractActionFor(sfc)
+  if (args.expectedAction && args.expectedAction !== action) {
+    throw precondition(
+      'The contract state changed since this email was composed. Close it, reload the sponsor and send again.',
+    )
+  }
+  // The reminder and the signed copy go to the signer on record, whether
+  // or not they are (still) a contact and whether or not they were ticked:
+  // the server adds them, never silently drops them for whoever is chosen.
+  const signerOnRecord =
+    action !== 'send' ? persistedSignerRecipient(sfc) : null
   let recipients: CommunicationRecipient[]
   try {
     recipients = [
-      ...(args.recipientKeys.length > 0 || !args.serverRecipients?.length
+      ...(args.recipientKeys.length > 0 ||
+      (!args.serverRecipients?.length && !signerOnRecord)
         ? resolveRecipients(sfc.contactPersons, args.recipientKeys)
         : []),
       ...(args.serverRecipients ?? []),
@@ -197,27 +209,14 @@ export async function prepareContractSend(
     }
     throw error
   }
-  const action = contractActionFor(sfc)
-  if (args.expectedAction && args.expectedAction !== action) {
-    throw precondition(
-      'The contract state changed since this email was composed. Close it, reload the sponsor and send again.',
-    )
+  if (
+    signerOnRecord &&
+    !recipients.some((r) => sameEmail(r.email, signerOnRecord.email))
+  ) {
+    recipients = [...recipients, signerOnRecord]
   }
   const theme = conference.theme
   const contractValue = formatContractValue(sfc)
-
-  // The reminder and the signed copy go to the signer on record. When they
-  // are not a contact, the server adds them — never silently dropped in
-  // favour of whoever is ticked.
-  if (action !== 'send') {
-    const external = persistedSignerRecipient(sfc)
-    if (
-      external &&
-      !recipients.some((r) => sameEmail(r.email, external.email))
-    ) {
-      recipients = [...recipients, external]
-    }
-  }
 
   if (action === 'signed-copy') {
     const url = sfc.contractDocument?.asset?.url

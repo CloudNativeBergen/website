@@ -1326,6 +1326,14 @@ describe('first send', () => {
     expect(h.getContractTemplate).toHaveBeenCalledWith('tpl-A')
   })
 
+  it('a first send with no recipient is refused before any PDF', async () => {
+    await expect(
+      sponsor().crm.sendCommunication({ ...INPUT, recipientKeys: [] }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    expect(h.generatePdf).not.toHaveBeenCalled()
+    expect(h.send).not.toHaveBeenCalled()
+  })
+
   it('refuses a signer who is not among the recipients', async () => {
     await expect(
       sponsor().crm.sendCommunication({ ...INPUT, signerKey: 'c-billing' }),
@@ -1379,6 +1387,23 @@ describe('reminder', () => {
         name: 'Eva Ekstern',
         email: 'ext@other.test',
       }),
+    ])
+  })
+
+  it('goes to the signer on record alone when no contact is ticked — even with no contacts left', async () => {
+    Object.assign(h.sfc!, {
+      contactPersons: [],
+      signerEmail: 'ext@other.test',
+      signerName: 'Eva Ekstern',
+    })
+    const result = await sponsor().crm.sendCommunication({
+      ...INPUT,
+      recipientKeys: [],
+    })
+    expect(result).toMatchObject({ success: true })
+    expect(h.send.mock.calls[0][0].to).toEqual(['ext@other.test'])
+    expect(record()!.recipients).toEqual([
+      expect.objectContaining({ _key: 'signer-external' }),
     ])
   })
 
