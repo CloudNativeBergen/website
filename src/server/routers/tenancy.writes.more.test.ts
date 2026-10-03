@@ -264,6 +264,12 @@ describe('registration: a sponsor-portal token is never minted for another tenan
   })
 })
 
+describe('registration.sendPortalInvite is gone (#1263)', () => {
+  it('is no longer a procedure — the registration link goes through crm.sendCommunication', () => {
+    expect(registration()).not.toHaveProperty('sendPortalInvite')
+  })
+})
+
 describe('workshop admin signup mutations are conference-scoped (#730)', () => {
   it('confirmSignup passes the conference to the lookup, so a foreign id is NOT_FOUND', async () => {
     await expect(

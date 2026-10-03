@@ -10,13 +10,11 @@ import { emailBrandColor, type ConferenceTheme } from '@/lib/branding/theme'
 import { escapeHtml } from '@/lib/html/escape'
 import type { CommunicationAttachment } from './types'
 
-export const REGISTRATION_LINK_LABEL = 'Sponsor registration link'
-
 /** The one attachment row of a registration send: the portal link itself. */
 export function registrationAttachments(
   portalUrl: string,
 ): CommunicationAttachment[] {
-  return [{ label: REGISTRATION_LINK_LABEL, url: portalUrl }]
+  return [{ label: 'Sponsor registration link', url: portalUrl }]
 }
 
 export function registrationCardHtml({

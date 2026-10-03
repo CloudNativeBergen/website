@@ -296,11 +296,9 @@ async function prepareRegistrationSend(
   const sfc = await clientReadUncached.fetch<{
     status: string | null
     contractStatus: string | null
-    registrationToken: string | null
-    registrationComplete: boolean | null
   } | null>(
     `*[_type == "sponsorForConference" && _id == $id && conference._ref == $conferenceId][0]{
-      status, contractStatus, registrationToken, registrationComplete
+      status, contractStatus
     }`,
     { id: sponsorForConferenceId, conferenceId: conference._id },
   )
@@ -324,19 +322,17 @@ async function prepareRegistrationSend(
         'Conference has no domain configured. Set a domain on the conference before sending a registration link.',
     })
   }
-  let token = sfc.registrationToken
-  if (!token) {
-    // Reads again and writes only when nothing is stored — the same rule
-    // `registration.generateToken` applies when the modal prepares the link.
-    const created = await generateRegistrationToken(sponsorForConferenceId)
-    if (created.error || !created.token) {
-      throw new TRPCError({
-        code: 'PRECONDITION_FAILED',
-        message:
-          created.error?.message ?? 'Failed to generate registration token',
-      })
-    }
-    token = created.token
+  // ONE owner of "reuse, never rotate": the same function the modal's
+  // `registration.generateToken` calls — it returns the stored token and
+  // writes only when there is none.
+  const { token, error } = await generateRegistrationToken(
+    sponsorForConferenceId,
+  )
+  if (error || !token) {
+    throw new TRPCError({
+      code: 'PRECONDITION_FAILED',
+      message: error?.message ?? 'Failed to generate registration token',
+    })
   }
   const portalUrl = buildPortalUrl(`https://${domain}`, token)
   return {
