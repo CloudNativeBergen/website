@@ -38,6 +38,7 @@ import { conferenceBaseUrl } from '@/lib/conference/baseUrl'
 import { emailBrandColor, type ConferenceTheme } from '@/lib/branding/theme'
 import { createLocalhostWarning } from '@/lib/localhost-warning'
 import { discountCodesCardHtml } from '@/lib/sponsor-crm/discount-email'
+import { portableTextToHTML } from '@/lib/email/portableTextToHTML'
 import {
   mergePortalUrl,
   registrationCardHtml,
@@ -962,21 +963,28 @@ export function SponsorSendModal({
 
   const createPreview = ({
     subject: rawSubject,
+    message,
     messageHTML: rawMessageHTML,
   }: {
     subject: string
+    message: PortableTextBlock[]
     messageHTML: string
   }) => {
     // A template applied before the link was known kept the merge field as
-    // text; the server merges it at send, and the preview shows the same.
-    const subject =
-      isRegistration && portalUrl
-        ? mergePortalUrl(rawSubject, portalUrl)
-        : rawSubject
-    const messageHTML =
-      isRegistration && portalUrl
-        ? mergePortalUrl(rawMessageHTML, portalUrl)
-        : rawMessageHTML
+    // text — or as a link annotation's href. The server merges the BLOCKS
+    // before rendering; the preview does exactly the same (merging the
+    // rendered HTML instead would be too late: an unresolved href has
+    // already been sanitised to "#").
+    const merge = isRegistration && !!portalUrl
+    const subject = merge ? mergePortalUrl(rawSubject, portalUrl) : rawSubject
+    const messageHTML = merge
+      ? portableTextToHTML(
+          processPortableTextVariables(message as unknown as TemplateBlock[], {
+            SPONSOR_PORTAL_URL: portalUrl,
+          }) as unknown as PortableTextBlockForHTML[],
+          emailBrandColor(conference.theme),
+        )
+      : rawMessageHTML
     return (
       <BroadcastTemplate
         subject={subject}

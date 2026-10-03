@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test'
-import { http, HttpResponse } from 'msw'
+import { delay, http, HttpResponse } from 'msw'
 import { SponsorSendModal } from './SponsorSendModal'
 import { NotificationProvider } from '@/components/admin/NotificationProvider'
 import { withPortalTheme } from '@/lib/storybook'
@@ -595,6 +595,115 @@ export const RegistrationLinkFailed: Story = {
     await expect(
       await body.findByRole('alert', undefined, { timeout: 15_000 }),
     ).toHaveTextContent(/could not be prepared/)
+  },
+}
+
+/**
+ * A template with a link annotation on the merge field, applied BEFORE the
+ * link was prepared (the token request is slow here): the preview merges the
+ * blocks the way the server does, so the link points at the portal — never at
+ * a sanitised "#".
+ */
+export const RegistrationTemplateAppliedBeforeLink: Story = {
+  args: { kind: 'registration' },
+  parameters: {
+    msw: {
+      handlers: [
+        http.post('/api/trpc/registration.generateToken', async () => {
+          await delay(2500)
+          return HttpResponse.json({
+            result: {
+              data: {
+                token: 'tok-acme-existing',
+                url: 'https://cloudnativebergen.dev/sponsor/portal/tok-acme-existing',
+              },
+            },
+          })
+        }),
+        http.get('/api/trpc/sponsor.emailTemplates.list', () =>
+          HttpResponse.json({
+            result: {
+              data: [
+                {
+                  _id: 'tpl-registration-link',
+                  _createdAt: '2026-01-01T00:00:00Z',
+                  _updatedAt: '2026-01-01T00:00:00Z',
+                  title: 'Registration (link annotation)',
+                  slug: { current: 'registration-link' },
+                  category: 'custom',
+                  language: 'en',
+                  subject: 'Please register for {{{CONFERENCE_TITLE}}}',
+                  isDefault: false,
+                  body: [
+                    {
+                      _type: 'block',
+                      _key: 'b1',
+                      style: 'normal',
+                      markDefs: [
+                        {
+                          _key: 'l1',
+                          _type: 'link',
+                          href: '{{{SPONSOR_PORTAL_URL}}}',
+                        },
+                      ],
+                      children: [
+                        {
+                          _type: 'span',
+                          _key: 's1',
+                          text: 'Open the ',
+                          marks: [],
+                        },
+                        {
+                          _type: 'span',
+                          _key: 's2',
+                          text: 'registration form',
+                          marks: ['l1'],
+                        },
+                        { _type: 'span', _key: 's3', text: '.', marks: [] },
+                      ],
+                    },
+                  ],
+                },
+              ],
+            },
+          }),
+        ),
+        ...handlers.filter(
+          (h) => !String(h.info.header).includes('emailTemplates'),
+        ),
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body)
+    await body.findByRole('checkbox', { name: 'Kari Nordmann' })
+    // Still preparing: apply the template now.
+    await expect(
+      body.getByText('Preparing the registration link…'),
+    ).toBeInTheDocument()
+    const picker = await body.findByRole('combobox')
+    await userEvent.selectOptions(picker, 'tpl-registration-link')
+    await waitFor(() =>
+      expect(
+        body.getByDisplayValue(
+          'Please register for Cloud Native Days Norway 2026',
+        ),
+      ).toBeInTheDocument(),
+    )
+    await waitFor(
+      () =>
+        expect(
+          body.queryByText('Preparing the registration link…'),
+        ).not.toBeInTheDocument(),
+      { timeout: 10_000 },
+    )
+    await userEvent.click(body.getByRole('button', { name: /Preview/ }))
+    await expect(
+      await body.findByRole('link', { name: 'registration form' }),
+    ).toHaveAttribute(
+      'href',
+      'https://cloudnativebergen.dev/sponsor/portal/tok-acme-existing',
+    )
   },
 }
 
