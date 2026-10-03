@@ -65,8 +65,8 @@ describe('api/cron/contract-reminders', () => {
       sent: 2,
       failed: 0,
     })
-    expect(h.remind).toHaveBeenCalledWith('sfc-1')
-    expect(h.remind).toHaveBeenCalledWith('sfc-2')
+    expect(h.remind).toHaveBeenCalledWith('sfc-1', { maxReminders: 2 })
+    expect(h.remind).toHaveBeenCalledWith('sfc-2', { maxReminders: 2 })
     const [query, params] = h.fetch.mock.calls[0]
     expect(query).toMatch(/signatureStatus == "pending"/)
     expect(query).toMatch(/reminderCount < \$maxReminders/)

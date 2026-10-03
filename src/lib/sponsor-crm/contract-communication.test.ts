@@ -20,6 +20,8 @@ const h = vi.hoisted(() => ({
   creates: [] as Array<Record<string, unknown>>,
   /** Another sweep claimed the slot first: the revision moved. */
   claimedElsewhere: false,
+  /** The primitive's own sponsor read rejects (before the provider). */
+  sendReadThrows: false,
   /** Boundary events in order: claim / send / release. */
   sequence: [] as string[],
 }))
@@ -48,6 +50,7 @@ vi.mock('@/lib/sanity/client', () => {
   const fetch = async (query: string) => {
     h.fetches.push(query)
     if (query.includes('_type == "sponsorForConference"')) {
+      if (h.sendReadThrows) throw new Error('sanity read failed')
       if (h.contactEmailAtSend && h.sfc) {
         return {
           ...h.sfc,
@@ -151,6 +154,7 @@ beforeEach(() => {
   h.fetches = []
   h.contactEmailAtSend = null
   h.claimedElsewhere = false
+  h.sendReadThrows = false
   h.sequence = []
   h.patches = []
   h.incs = []
@@ -246,7 +250,9 @@ describe('prepareContractSend', () => {
 
 describe('sendContractReminderBySystem', () => {
   it('merges the org template with signer and value, mails the signing link to the signer, records with no actor, and counts the reminder', async () => {
-    const outcome = await sendContractReminderBySystem('sfc-1')
+    const outcome = await sendContractReminderBySystem('sfc-1', {
+      maxReminders: 2,
+    })
     expect(outcome).toEqual({ ok: true, recipient: 'kari@acme.test' })
 
     const sent = h.send.mock.calls[0][0]
@@ -280,7 +286,9 @@ describe('sendContractReminderBySystem', () => {
   it('skips a contract whose signature is no longer pending', async () => {
     h.sfc!.signatureStatus = 'signed'
     h.sfc!.contractStatus = 'contract-signed'
-    expect(await sendContractReminderBySystem('sfc-1')).toEqual({
+    expect(
+      await sendContractReminderBySystem('sfc-1', { maxReminders: 2 }),
+    ).toEqual({
       ok: false,
       reason: 'not-pending',
     })
@@ -289,7 +297,9 @@ describe('sendContractReminderBySystem', () => {
 
   it('skips a pending signature with no stored signing link — never a first send from the cron', async () => {
     h.sfc!.signingUrl = undefined
-    expect(await sendContractReminderBySystem('sfc-1')).toEqual({
+    expect(
+      await sendContractReminderBySystem('sfc-1', { maxReminders: 2 }),
+    ).toEqual({
       ok: false,
       reason: 'not-pending',
     })
@@ -300,7 +310,9 @@ describe('sendContractReminderBySystem', () => {
   it('still reminds a persisted signer who is not a contact (an external signer, or one since removed)', async () => {
     h.sfc!.signerEmail = 'cfo@acme-holding.test'
     h.sfc!.signerName = 'Finance CFO'
-    expect(await sendContractReminderBySystem('sfc-1')).toEqual({
+    expect(
+      await sendContractReminderBySystem('sfc-1', { maxReminders: 2 }),
+    ).toEqual({
       ok: true,
       recipient: 'cfo@acme-holding.test',
     })
@@ -318,7 +330,9 @@ describe('sendContractReminderBySystem', () => {
   it('addresses a reminder to the sponsor name when the persisted signer has no name and is not a contact', async () => {
     h.sfc!.signerEmail = 'cfo@acme-holding.test'
     h.sfc!.signerName = undefined
-    expect(await sendContractReminderBySystem('sfc-1')).toMatchObject({
+    expect(
+      await sendContractReminderBySystem('sfc-1', { maxReminders: 2 }),
+    ).toMatchObject({
       ok: true,
     })
     expect(h.send.mock.calls[0][0].html).toContain('Dear Acme AS,')
@@ -328,7 +342,9 @@ describe('sendContractReminderBySystem', () => {
   it("mails the PERSISTED signer address even if that contact's email changed between the two reads", async () => {
     // The primitive re-reads the sponsor; by then the contact's address differs.
     h.contactEmailAtSend = 'kari-new@acme.test'
-    expect(await sendContractReminderBySystem('sfc-1')).toEqual({
+    expect(
+      await sendContractReminderBySystem('sfc-1', { maxReminders: 2 }),
+    ).toEqual({
       ok: true,
       recipient: 'kari@acme.test',
     })
@@ -337,7 +353,9 @@ describe('sendContractReminderBySystem', () => {
 
   it('skips when no signer is stored at all', async () => {
     h.sfc!.signerEmail = undefined
-    expect(await sendContractReminderBySystem('sfc-1')).toEqual({
+    expect(
+      await sendContractReminderBySystem('sfc-1', { maxReminders: 2 }),
+    ).toEqual({
       ok: false,
       reason: 'no-signer',
     })
@@ -346,7 +364,9 @@ describe('sendContractReminderBySystem', () => {
 
   it('skips when the org has no contract-reminder template', async () => {
     h.template = null
-    expect(await sendContractReminderBySystem('sfc-1')).toEqual({
+    expect(
+      await sendContractReminderBySystem('sfc-1', { maxReminders: 2 }),
+    ).toEqual({
       ok: false,
       reason: 'template-missing',
     })
@@ -354,15 +374,52 @@ describe('sendContractReminderBySystem', () => {
   })
 
   it('claims the reminder slot BEFORE mailing, so two overlapping sweeps cannot both send', async () => {
-    const outcome = await sendContractReminderBySystem('sfc-1')
+    const outcome = await sendContractReminderBySystem('sfc-1', {
+      maxReminders: 2,
+    })
     expect(outcome).toEqual({ ok: true, recipient: 'kari@acme.test' })
     expect(h.sequence).toEqual(['claim', 'send'])
     expect(h.incs).toEqual([{ id: 'sfc-1', field: 'reminderCount', by: 1 }])
   })
 
+  it("stops at the limit it reads itself — a sweep that reads after another sweep's claim sends nothing", async () => {
+    // Selected at reminderCount 1 by the sweep; another sweep claimed since.
+    h.sfc!.reminderCount = 2
+    expect(
+      await sendContractReminderBySystem('sfc-1', { maxReminders: 2 }),
+    ).toEqual({ ok: false, reason: 'limit-reached' })
+    expect(h.send).not.toHaveBeenCalled()
+    expect(h.patches).toEqual([])
+  })
+
+  it("keeps the claimed slot when the provider's answer is lost — the reminder may be in an inbox", async () => {
+    h.send.mockRejectedValue(new Error('socket hang up'))
+    expect(
+      await sendContractReminderBySystem('sfc-1', { maxReminders: 2 }),
+    ).toMatchObject({ ok: false, reason: 'send-failed' })
+    expect(h.sequence).toEqual(['claim', 'send'])
+    expect(h.sfc!.reminderCount).toBe(2)
+  })
+
+  it('gives the slot back when the primitive throws before the provider is reached', async () => {
+    h.sendReadThrows = true
+    expect(
+      await sendContractReminderBySystem('sfc-1', { maxReminders: 2 }),
+    ).toMatchObject({
+      ok: false,
+      reason: 'send-failed',
+      message: 'sanity read failed',
+    })
+    expect(h.send).not.toHaveBeenCalled()
+    expect(h.sequence).toEqual(['claim', 'release'])
+    expect(h.sfc!.reminderCount).toBe(1)
+  })
+
   it('skips — mailing nothing — when another sweep claimed the slot first', async () => {
     h.claimedElsewhere = true
-    expect(await sendContractReminderBySystem('sfc-1')).toEqual({
+    expect(
+      await sendContractReminderBySystem('sfc-1', { maxReminders: 2 }),
+    ).toEqual({
       ok: false,
       reason: 'claimed-elsewhere',
     })
@@ -372,7 +429,9 @@ describe('sendContractReminderBySystem', () => {
 
   it('matches the persisted signer to a contact whatever the stored casing, and records the canonical address', async () => {
     h.sfc!.signerEmail = ' Kari@Acme.test '
-    const outcome = await sendContractReminderBySystem('sfc-1')
+    const outcome = await sendContractReminderBySystem('sfc-1', {
+      maxReminders: 2,
+    })
     expect(outcome).toEqual({ ok: true, recipient: 'kari@acme.test' })
     expect(h.send.mock.calls[0][0].to).toEqual(['kari@acme.test'])
     const record = h.creates.find((d) => d.communicationKind === 'contract')
@@ -383,7 +442,9 @@ describe('sendContractReminderBySystem', () => {
 
   it('sends the signing card even from a subject-only template (no body)', async () => {
     h.template = { ...h.template, body: undefined }
-    const outcome = await sendContractReminderBySystem('sfc-1')
+    const outcome = await sendContractReminderBySystem('sfc-1', {
+      maxReminders: 2,
+    })
     expect(outcome).toEqual({ ok: true, recipient: 'kari@acme.test' })
     expect(h.send.mock.calls[0][0].html).toContain(`href="${SIGNING_URL}"`)
   })
@@ -393,7 +454,9 @@ describe('sendContractReminderBySystem', () => {
       data: null,
       error: { message: 'boom', statusCode: 500 },
     })
-    expect(await sendContractReminderBySystem('sfc-1')).toMatchObject({
+    expect(
+      await sendContractReminderBySystem('sfc-1', { maxReminders: 2 }),
+    ).toMatchObject({
       ok: false,
       reason: 'send-failed',
     })

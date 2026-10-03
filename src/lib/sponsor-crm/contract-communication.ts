@@ -908,6 +908,7 @@ type SystemReminderOutcome =
         | 'template-missing'
         | 'send-failed'
         | 'claimed-elsewhere'
+        | 'limit-reached'
       message?: string
     }
 
@@ -921,6 +922,7 @@ type SystemReminderOutcome =
  */
 export async function sendContractReminderBySystem(
   sponsorForConferenceId: string,
+  options: { maxReminders: number },
 ): Promise<SystemReminderOutcome> {
   const { sponsorForConference: sfc } = await getSponsorForConference(
     sponsorForConferenceId,
@@ -928,6 +930,12 @@ export async function sendContractReminderBySystem(
   if (!sfc) return { ok: false, reason: 'not-found' }
   if (contractActionFor(sfc) !== 'remind') {
     return { ok: false, reason: 'not-pending' }
+  }
+  // Eligibility is judged on THIS read, the one the claim below is
+  // conditioned on — not on the sweep's earlier selection: a sweep that
+  // reads after another sweep's claim sees the new count and stops here.
+  if ((sfc.reminderCount ?? 0) >= options.maxReminders) {
+    return { ok: false, reason: 'limit-reached' }
   }
   // The reminder goes to the PERSISTED signer: the address the agreement was
   // sent to. Usually a contact; when not (an external signer the old sender
@@ -1005,32 +1013,50 @@ export async function sendContractReminderBySystem(
   } catch {
     return { ok: false, reason: 'claimed-elsewhere' }
   }
-  const result = await sendSponsorCommunication({
-    conference,
-    orgId,
-    actorId: null,
-    sponsorForConferenceId,
-    kind: 'contract',
-    recipientKeys,
-    serverRecipients,
-    subject,
-    message,
-    template,
-    appendHtml: plan.appendHtml,
-    attachments: plan.attachments,
-    contractVariables: {
-      signerName: signer.name,
-      signerEmail: signer.email,
-      contractValue,
-    },
-  })
-  if (!result.ok) {
-    // Nothing went out: the claimed slot goes back.
+  const releaseClaim = async () => {
     try {
       await clientWrite.patch(sfc._id).inc({ reminderCount: -1 }).commit()
     } catch (error) {
       console.error('[contract-reminders] releasing the claim failed:', error)
     }
+  }
+  let result: Awaited<ReturnType<typeof sendSponsorCommunication>>
+  try {
+    result = await sendSponsorCommunication({
+      conference,
+      orgId,
+      actorId: null,
+      sponsorForConferenceId,
+      kind: 'contract',
+      recipientKeys,
+      serverRecipients,
+      subject,
+      message,
+      template,
+      appendHtml: plan.appendHtml,
+      attachments: plan.attachments,
+      contractVariables: {
+        signerName: signer.name,
+        signerEmail: signer.email,
+        contractValue,
+      },
+    })
+  } catch (error) {
+    // The primitive THREW (a read rejected before the provider was reached):
+    // nothing went out, the slot goes back.
+    await releaseClaim()
+    return {
+      ok: false,
+      reason: 'send-failed',
+      message: error instanceof Error ? error.message : String(error),
+    }
+  }
+  if (!result.ok) {
+    // Nothing went out, so the claimed slot goes back — unless the provider's
+    // ANSWER was lost: the reminder may be in an inbox, and a slot given back
+    // then would let the sweep send it again.
+    const answerLost = result.reason === 'send-failed' && !result.definitive
+    if (!answerLost) await releaseClaim()
     return {
       ok: false,
       reason: 'send-failed',

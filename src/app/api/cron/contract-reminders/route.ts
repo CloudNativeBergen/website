@@ -63,7 +63,9 @@ export async function GET(request: NextRequest) {
 
     for (const contract of pendingContracts) {
       try {
-        const outcome = await sendContractReminderBySystem(contract._id)
+        const outcome = await sendContractReminderBySystem(contract._id, {
+          maxReminders: MAX_REMINDERS,
+        })
         if (outcome.ok) {
           sent++
           console.log(
