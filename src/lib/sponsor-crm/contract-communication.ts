@@ -478,11 +478,13 @@ export async function prepareContractSend(
       // send's reservation.
       await clientWrite
         .patch({
-          // groq-global-scoped: ONE id, already proven to belong to this
-          // conference by the caller, further narrowed to our own token.
           query:
-            '*[_type == "sponsorForConference" && _id == $id && signatureId == $ours]',
-          params: { id: sfc._id, ours: agreementId },
+            '*[_type == "sponsorForConference" && _id == $id && conference._ref == $conferenceId && signatureId == $ours]',
+          params: {
+            id: sfc._id,
+            conferenceId: conference._id,
+            ours: agreementId,
+          },
         })
         .unset(['signatureId', 'signingUrl', 'contractReservedAt'])
         .commit()
