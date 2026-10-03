@@ -551,6 +551,10 @@ export const Contract: Story = {
     await expect(
       body.getByRole('radio', { name: 'Ola Nordmann signs' }),
     ).toBeChecked()
+    // Two recipients, one signer: only the signer gets the link.
+    await expect(body.getByText(/receives the signing link/)).toHaveTextContent(
+      'Only Ola Nordmann receives the signing link; the other recipients get a copy without it.',
+    )
     // The greeting was merged for Kari; re-applying names the new signer.
     await userEvent.click(
       body.getByRole('button', { name: 'Re-apply template' }),

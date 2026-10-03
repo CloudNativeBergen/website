@@ -95,6 +95,26 @@ const CARD_COPY: Record<
  * send the link does not exist until the agreement is created, so the preview
  * passes `url: undefined` and the card says so instead of showing a fake.
  */
+/**
+ * The card the OTHER recipients get: the signing link itself goes to the
+ * signer alone (possession of the link is authorization to sign), everyone
+ * else is told who has it.
+ */
+export function contractCopyCardHtml({
+  action,
+  signerName,
+  theme,
+}: {
+  action: ContractAction
+  signerName: string
+  theme?: ConferenceTheme | null
+}): string {
+  const brand = resolveEmailBrandPalette(emailBrandColor(theme))
+  const accent = brandedOr(brand, '#1D4ED8')
+  const copy = CARD_COPY[action]
+  return `<div style="background-color: ${brand.cardBackground}; padding: 20px; border-radius: 12px; margin: 24px 0; border: 1px solid ${brand.cardBorder};"><h3 style="color: ${accent}; margin-top: 0; margin-bottom: 12px; font-size: 18px; font-weight: 600;">${copy.heading}</h3><p style="margin: 0; color: #334155; font-size: 15px; line-height: 1.6;">The signing link was sent to ${escapeHtml(signerName)}. This is a copy for your records.</p></div>`
+}
+
 export function contractCardHtml({
   action,
   url,

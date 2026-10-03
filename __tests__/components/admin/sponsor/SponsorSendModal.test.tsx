@@ -1369,6 +1369,33 @@ describe('contract kind (#1264)', () => {
     expect(screen.getByRole('alert')).toHaveTextContent(/No signed agreement/)
   })
 
+  it('says only the signer gets the link once a second recipient is ticked', () => {
+    renderModal({}, 'contract')
+    expect(
+      screen.queryByText(/receives the signing link/),
+    ).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Ola Nordmann' }))
+    expect(screen.getByText(/receives the signing link/)).toHaveTextContent(
+      'Only Kari Nordmann receives the signing link; the other recipients get a copy without it.',
+    )
+  })
+
+  it('warns when the signer got the link but the copy to the others could not be sent', async () => {
+    h.mutateAsync.mockResolvedValue({
+      success: true,
+      recipientCount: 1,
+      contractAction: 'send',
+      contractCopyFailed: true,
+    })
+    renderModal({}, 'contract')
+    fireEvent.click(screen.getByRole('button', { name: 'Send contract' }))
+    await waitFor(() =>
+      expect(h.showNotification).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'warning', title: 'Copy not sent' }),
+      ),
+    )
+  })
+
   it('warns when the email went out but the deal could not be updated', async () => {
     h.mutateAsync.mockResolvedValue({
       success: true,

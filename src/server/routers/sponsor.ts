@@ -2869,18 +2869,56 @@ export const sponsorRouter = router({
         const contractStateFailed = contract
           ? !(await contract.afterSend()).ok
           : false
+        // The other chosen recipients get their copy (no signing link) only
+        // after the signer's email is out; a failure here never fails the
+        // send and is reported.
+        let contractCopyFailed = false
+        let copyCount = 0
+        if (contract?.copy) {
+          try {
+            const copy = await sendSponsorCommunication({
+              conference,
+              orgId: ctx.orgId,
+              actorId: ctx.speaker._id ?? null,
+              sponsorForConferenceId: input.sponsorForConferenceId,
+              kind: input.kind,
+              recipientKeys: [],
+              serverRecipients: contract.copy.recipients,
+              subject,
+              message,
+              template,
+              senderNames: [ctx.speaker.name, ctx.user?.name],
+              appendHtml: contract.copy.appendHtml,
+              attachments: [],
+              contractVariables: {
+                signerName: contract.signer?.name,
+                signerEmail: contract.signer?.email,
+                contractValue: contract.contractValue,
+              },
+            })
+            if (copy.ok) copyCount = copy.recipients.length
+            else contractCopyFailed = true
+          } catch (error) {
+            console.error(
+              '[contract-send] the copy to the other recipients failed:',
+              error,
+            )
+            contractCopyFailed = true
+          }
+        }
 
         return {
           success: true as const,
           activityId: result.activityId,
           providerMessageId: result.providerMessageId,
-          recipientCount: result.recipients.length,
+          recipientCount: result.recipients.length + copyCount,
           ...(linkedCodes && { linkedCodes }),
           // The organizer is told, so the gap is fixed by an Assign rather than
           // discovered when the next send falls back to the name guess.
           ...(linkFailed && { linkFailed: true as const }),
           ...(contract && { contractAction: contract.action }),
           ...(contractStateFailed && { contractStateFailed: true as const }),
+          ...(contractCopyFailed && { contractCopyFailed: true as const }),
         }
       }),
 

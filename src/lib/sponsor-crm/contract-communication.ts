@@ -47,6 +47,7 @@ import {
   contractAttachments,
   contractCardHtml,
   type ContractAction,
+  contractCopyCardHtml,
 } from './contract-send-state'
 import type {
   CommunicationAttachment,
@@ -100,8 +101,36 @@ export interface ContractSendPlan {
   contractValue?: string
   appendHtml: string
   attachments: CommunicationAttachment[]
+  /**
+   * First send and reminder: the signing link goes to the SIGNER alone (the
+   * link is authorization to sign); the other chosen recipients get this
+   * copy — same body, a card naming the signer, no link. Best-effort.
+   */
+  copy?: { recipients: CommunicationRecipient[]; appendHtml: string }
   /** Applied after the provider accepted the send; never throws. */
   afterSend: () => Promise<{ ok: boolean }>
+}
+
+function splitForSigner(
+  recipients: CommunicationRecipient[],
+  signer: CommunicationRecipient,
+  action: ContractAction,
+  theme: Conference['theme'],
+): { recipients: CommunicationRecipient[]; copy?: ContractSendPlan['copy'] } {
+  const others = recipients.filter((r) => !sameEmail(r.email, signer.email))
+  return {
+    recipients: [signer],
+    ...(others.length > 0 && {
+      copy: {
+        recipients: others,
+        appendHtml: contractCopyCardHtml({
+          action,
+          signerName: signer.name || signer.email,
+          theme,
+        }),
+      },
+    }),
+  }
 }
 
 /**
@@ -321,7 +350,7 @@ export async function prepareContractSend(
       } satisfies CommunicationRecipient)
     return {
       action,
-      recipients,
+      ...splitForSigner(recipients, signer, action, theme),
       signer,
       contractValue,
       appendHtml: contractCardHtml({ action, url, theme }),
@@ -762,7 +791,7 @@ export async function prepareContractSend(
 
   return {
     action,
-    recipients,
+    ...splitForSigner(recipients, signer, action, theme),
     release,
     signer,
     contractValue,

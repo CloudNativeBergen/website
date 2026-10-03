@@ -4,16 +4,17 @@ import { at, defineMigration, patch, set } from 'sanity/migrate'
  * The seeded `contract-signed` sponsor email template (migration 036) says
  * "A copy of the signed agreement is attached to this email for your
  * records." Since #1264 the organizer's "Send signed copy" LINKS the stored
- * document (the card under the body) and attaches nothing; only the
- * confirmation the signing flow itself sends still attaches the PDF. This
- * rewrites that one sentence, in every org's copy of the template, when it
- * is still EXACTLY the seeded text; an edited body is left alone.
+ * document (the card under the body) and attaches nothing, while the
+ * confirmation the signing flow sends from the SAME template attaches the
+ * PDF. The rewritten sentence is true for both. This rewrites that one
+ * sentence, in every org's copy of the template, when it is still EXACTLY
+ * the seeded text; an edited body is left alone.
  * Idempotent: a rewritten block no longer matches. Not run automatically.
  */
 export const SEEDED =
   'A copy of the signed agreement is attached to this email for your records.'
 export const LINKED =
-  'A copy of the signed agreement is available at the link below for your records.'
+  'You will find a copy of the signed agreement with this email for your records.'
 
 type Block = {
   _key?: string

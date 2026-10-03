@@ -466,18 +466,23 @@ First send (contractActionFor → "send"):
    tier, add-ons) + contractReservedInputs (a hash of every rendered input and
    the template revision),
    signatureStatus "not-started" (signable from this moment).
-5. The branded email goes out with the signing link. A definitive provider
-   refusal releases the reservation and restores whatever agreement it
-   replaced; a lost provider answer keeps it (the retry reuses the link).
+5. The branded email with the signing link goes to the SIGNER alone
+   (possession of the link is authorization to sign); the other chosen
+   recipients get the same email with a card naming the signer and no link,
+   sent only after the signer's, best-effort, its failure reported. A
+   definitive provider refusal (a 4xx, or the provider never asked) releases
+   the reservation and restores whatever agreement it replaced; an unknown
+   outcome (network error, 5xx) keeps it (the retry reuses the link).
 6. Only after the provider accepted: contractStatus → contract-sent,
    signatureStatus → pending, the reservation marker cleared — conditional
    on the current record (a signature completed through the link meanwhile,
    a revocation, or a deal closed since is never overwritten). The
    organizer is warned if this last write fails; the link still works.
 
-Reminder: the stored signing link is re-sent to the chosen contacts plus the
-signer on record (added by the server whenever they are not ticked — or no
-longer a contact; no contact need be ticked at all);
+Reminder: the stored signing link is re-sent to the signer on record (added
+by the server whenever they are not ticked — or no longer a contact; no
+contact need be ticked at all); the other chosen contacts get the copy
+without the link;
 reminderCount is incremented atomically. The `contract-reminders` cron sends
 the same reminder through `sendContractReminderBySystem` with no actor.
 Signed copy: links the stored signed document; requires a digital signature

@@ -1207,6 +1207,13 @@ export function SponsorSendModal({
       title: `${kindLabel} sent`,
       message: `Sent to ${result.recipientCount} contact${result.recipientCount === 1 ? '' : 's'} at ${sponsorForConference.sponsor.name}.`,
     })
+    if ('contractCopyFailed' in result && result.contractCopyFailed) {
+      showNotification({
+        type: 'warning',
+        title: 'Copy not sent',
+        message: `The signing link went to ${contractSigner?.name ?? 'the signer'}, but the copy to the other recipients could not be sent.`,
+      })
+    }
     if ('contractStateFailed' in result && result.contractStateFailed) {
       showNotification({
         type: 'warning',
@@ -1375,6 +1382,21 @@ export function SponsorSendModal({
     ) : null
   // The signer on record is not a contact (an external signer, or one since
   // removed): the server mails them too, and says so here.
+  // Only the signer receives the link (possession is authorization to sign);
+  // the other recipients get the same email with a card naming the signer.
+  const signingLinkNotice =
+    isContract &&
+    contractAction !== 'signed-copy' &&
+    selectedCount > 1 &&
+    contractSigner?.name ? (
+      <p
+        role="status"
+        className="font-inter text-sm text-gray-600 dark:text-gray-300"
+      >
+        Only {contractSigner.name} receives the signing link; the other
+        recipients get a copy without it.
+      </p>
+    ) : null
   const externalSignerNotice = signerOnRecordMailed ? (
     <p
       role="status"
@@ -1465,6 +1487,7 @@ export function SponsorSendModal({
           portalLinkHint ||
           contractReadinessHint ||
           contractLinkMissingHint ||
+          signingLinkNotice ||
           externalSignerNotice ||
           recipientsChangedHint ||
           templatesFailedNotice) && (
@@ -1478,6 +1501,7 @@ export function SponsorSendModal({
             {portalLinkHint}
             {contractReadinessHint}
             {contractLinkMissingHint}
+            {signingLinkNotice}
             {externalSignerNotice}
             {recipientsChangedHint}
           </div>

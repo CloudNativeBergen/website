@@ -522,7 +522,7 @@ describe('sendContractReminderBySystem', () => {
   it('reports a slot that could not be released after a refused send — never silently consumed', async () => {
     h.send.mockResolvedValue({
       data: null,
-      error: { message: 'boom', statusCode: 500 },
+      error: { message: 'boom', statusCode: 422 },
     })
     h.releaseThrows = true
     expect(
@@ -542,7 +542,7 @@ describe('sendContractReminderBySystem', () => {
   it('never takes the count below where it started: a release whose answer was lost is not applied twice', async () => {
     h.send.mockResolvedValue({
       data: null,
-      error: { message: 'boom', statusCode: 500 },
+      error: { message: 'boom', statusCode: 422 },
     })
     h.releaseAnswerLost = true
     const outcome = await sendContractReminderBySystem('sfc-1', {
@@ -570,7 +570,7 @@ describe('sendContractReminderBySystem', () => {
   it("takes back ITS OWN claim, never another sweep's, when a later claim landed on top", async () => {
     h.send.mockResolvedValue({
       data: null,
-      error: { message: 'boom', statusCode: 500 },
+      error: { message: 'boom', statusCode: 422 },
     })
     h.claimDuringSend = true
     await sendContractReminderBySystem('sfc-1', { maxReminders: 2 })
@@ -582,7 +582,7 @@ describe('sendContractReminderBySystem', () => {
   it("a release whose answer was lost is never re-applied against a later sweep's claim", async () => {
     h.send.mockResolvedValue({
       data: null,
-      error: { message: 'boom', statusCode: 500 },
+      error: { message: 'boom', statusCode: 422 },
     })
     h.releaseAnswerLost = true
     h.claimInterposedOnLostRelease = true
@@ -645,7 +645,7 @@ describe('sendContractReminderBySystem', () => {
   it('does not count a reminder the provider refused, and records the failure', async () => {
     h.send.mockResolvedValue({
       data: null,
-      error: { message: 'boom', statusCode: 500 },
+      error: { message: 'boom', statusCode: 422 },
     })
     expect(
       await sendContractReminderBySystem('sfc-1', { maxReminders: 2 }),

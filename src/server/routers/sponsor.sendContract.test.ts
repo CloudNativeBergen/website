@@ -491,15 +491,21 @@ describe('first send', () => {
         baseUrl: `https://${DOMAIN}`,
       }),
     )
-    expect(h.send.mock.calls[0][0].to).toEqual([
-      'kari@acme.test',
-      'ola@acme.test',
-    ])
+    // The signing link goes to the SIGNER alone; the other recipient gets a
+    // copy that names the signer and carries no link.
+    expect(h.send.mock.calls[0][0].to).toEqual(['ola@acme.test'])
     expect(sentHtml()).toContain(`href="${SIGNING_URL}"`)
+    expect(h.send.mock.calls[1][0].to).toEqual(['kari@acme.test'])
+    expect(h.send.mock.calls[1][0].html).not.toContain(SIGNING_URL)
+    expect(h.send.mock.calls[1][0].html).toContain(
+      'The signing link was sent to Ola Nordmann',
+    )
+    expect(result).toMatchObject({ recipientCount: 2 })
 
     // The agreement is STORED before the email goes out (the signing page
     // resolves the token through it); the deal flips only after.
-    expect(h.sequence).toEqual(['reserve', 'send', 'flip'])
+    // The copy to the other recipient goes only after the flip.
+    expect(h.sequence).toEqual(['reserve', 'send', 'flip', 'send'])
     const reserve = sfcPatches().find((p) => 'signatureId' in p.sets)
     expect(reserve?.sets).toMatchObject({
       signatureId: 'agr-1',
@@ -570,7 +576,7 @@ describe('first send', () => {
   it('leaves the status unchanged, releases the reserved agreement and writes a failed record when the provider refuses', async () => {
     h.send.mockResolvedValue({
       data: null,
-      error: { message: 'boom', statusCode: 500 },
+      error: { message: 'boom', statusCode: 422 },
     })
     await expect(sponsor().crm.sendCommunication(INPUT)).rejects.toMatchObject({
       code: 'INTERNAL_SERVER_ERROR',
@@ -624,6 +630,41 @@ describe('first send', () => {
     expect(h.sfc!.signatureId).toBe(reservedId)
     expect(h.send.mock.calls[1][0].html).toContain(`href="${reservedUrl}"`)
     expect(h.sfc!.contractStatus).toBe('contract-sent')
+  })
+
+  it('keeps the reservation when the provider answers 5xx (a gateway timeout is not proof nothing went out)', async () => {
+    h.send.mockResolvedValueOnce({
+      data: null,
+      error: { message: 'gateway timeout', statusCode: 504 },
+    })
+    await expect(sponsor().crm.sendCommunication(INPUT)).rejects.toMatchObject({
+      code: 'INTERNAL_SERVER_ERROR',
+      message: expect.stringMatching(/did not confirm delivery/),
+    })
+    expect(h.unsets.some((u) => u.fields.includes('signatureId'))).toBe(false)
+    expect(h.sfc!.signatureId).toBeTruthy()
+    expect(h.sfc!.contractReservedAt).toBeTruthy()
+  })
+
+  it('a failed copy to the other recipients never fails the send — the signer has the link, and the organizer is told', async () => {
+    h.send
+      .mockResolvedValueOnce({ data: { id: 'resend-msg-1' }, error: null })
+      .mockResolvedValueOnce({
+        data: null,
+        error: { message: 'boom', statusCode: 422 },
+      })
+    const result = await sponsor().crm.sendCommunication({
+      ...INPUT,
+      recipientKeys: ['c-primary', 'c-billing'],
+      signerKey: 'c-primary',
+    })
+    expect(result).toMatchObject({
+      success: true,
+      contractCopyFailed: true,
+      recipientCount: 1,
+    })
+    expect(h.sfc!.contractStatus).toBe('contract-sent')
+    expect(h.sfc!.signatureStatus).toBe('pending')
   })
 
   it('never flips back a signature completed through the reserved link while the provider was busy', async () => {
@@ -727,7 +768,7 @@ describe('first send', () => {
     })
     h.send.mockResolvedValue({
       data: null,
-      error: { message: 'boom', statusCode: 500 },
+      error: { message: 'boom', statusCode: 422 },
     })
     await expect(sponsor().crm.sendCommunication(INPUT)).rejects.toMatchObject({
       code: 'INTERNAL_SERVER_ERROR',
@@ -779,7 +820,7 @@ describe('first send', () => {
     h.send.mockImplementation(async () => {
       // Attempt B reused OUR agreement (same id) with its own marker and sent.
       Object.assign(h.sfc!, { contractReservedAt: '2099-01-01T00:00:00.000Z' })
-      return { data: null, error: { message: 'boom', statusCode: 500 } }
+      return { data: null, error: { message: 'boom', statusCode: 422 } }
     })
     await expect(sponsor().crm.sendCommunication(INPUT)).rejects.toMatchObject({
       code: 'INTERNAL_SERVER_ERROR',
@@ -874,7 +915,7 @@ describe('first send', () => {
     })
     h.send.mockResolvedValueOnce({
       data: null,
-      error: { message: 'boom', statusCode: 500 },
+      error: { message: 'boom', statusCode: 422 },
     })
     await expect(sponsor().crm.sendCommunication(INPUT)).rejects.toMatchObject({
       code: 'INTERNAL_SERVER_ERROR',
@@ -1065,7 +1106,7 @@ describe('first send', () => {
     })
     h.send.mockResolvedValue({
       data: null,
-      error: { message: 'boom', statusCode: 500 },
+      error: { message: 'boom', statusCode: 422 },
     })
     await expect(sponsor().crm.sendCommunication(INPUT)).rejects.toMatchObject({
       code: 'INTERNAL_SERVER_ERROR',
@@ -1095,7 +1136,7 @@ describe('first send', () => {
     })
     h.send.mockResolvedValue({
       data: null,
-      error: { message: 'boom', statusCode: 500 },
+      error: { message: 'boom', statusCode: 422 },
     })
     await expect(sponsor().crm.sendCommunication(INPUT)).rejects.toMatchObject({
       code: 'INTERNAL_SERVER_ERROR',
@@ -1126,7 +1167,7 @@ describe('first send', () => {
     })
     h.send.mockResolvedValue({
       data: null,
-      error: { message: 'boom', statusCode: 500 },
+      error: { message: 'boom', statusCode: 422 },
     })
     await expect(
       sponsor().crm.sendCommunication({
@@ -1182,7 +1223,7 @@ describe('first send', () => {
     })
     h.send.mockResolvedValue({
       data: null,
-      error: { message: 'boom', statusCode: 500 },
+      error: { message: 'boom', statusCode: 422 },
     })
     await expect(sponsor().crm.sendCommunication(INPUT)).rejects.toMatchObject({
       code: 'INTERNAL_SERVER_ERROR',
@@ -1390,7 +1431,7 @@ describe('first send', () => {
         signingUrl: `https://${DOMAIN}/sponsor/contract/sign/agr-later`,
         contractReservedAt: new Date().toISOString(),
       })
-      return { data: null, error: { message: 'boom', statusCode: 500 } }
+      return { data: null, error: { message: 'boom', statusCode: 422 } }
     })
     await expect(sponsor().crm.sendCommunication(INPUT)).rejects.toMatchObject({
       code: 'INTERNAL_SERVER_ERROR',
@@ -1499,17 +1540,20 @@ describe('reminder', () => {
       ...INPUT,
       contractAction: 'remind' as const,
     })
-    expect(h.send.mock.calls[0][0].to).toEqual([
-      'kari@acme.test',
-      'ext@other.test',
-    ])
-    expect(record()!.recipients).toEqual([
-      expect.objectContaining({ _key: 'c-primary' }),
+    // The signer on record gets the link; the chosen contact gets the copy.
+    expect(h.send.mock.calls[0][0].to).toEqual(['ext@other.test'])
+    expect(h.send.mock.calls[1][0].to).toEqual(['kari@acme.test'])
+    expect(h.send.mock.calls[1][0].html).not.toContain(SIGNING_URL)
+    const records = h.creates.filter((d) => d.communicationKind === 'contract')
+    expect(records[0].recipients).toEqual([
       expect.objectContaining({
         _key: 'signer-external',
         name: 'Eva Ekstern',
         email: 'ext@other.test',
       }),
+    ])
+    expect(records[1].recipients).toEqual([
+      expect.objectContaining({ _key: 'c-primary' }),
     ])
   })
 
@@ -1544,7 +1588,7 @@ describe('reminder', () => {
   it('does not count a reminder the provider refused', async () => {
     h.send.mockResolvedValue({
       data: null,
-      error: { message: 'boom', statusCode: 500 },
+      error: { message: 'boom', statusCode: 422 },
     })
     await expect(
       sponsor().crm.sendCommunication({
