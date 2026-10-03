@@ -1019,17 +1019,6 @@ export async function sendContractReminderBySystem(
   // exactly this claim (never another sweep's) and only while it exists.
   const claimedCount = (sfc.reminderCount ?? 0) + 1
   const claimId = randomUUID()
-  try {
-    await clientWrite
-      .patch(sfc._id)
-      .ifRevisionId(sfc._rev ?? '')
-      .setIfMissing({ reminderCount: 0, reminderClaims: [] })
-      .inc({ reminderCount: 1 })
-      .append('reminderClaims', [claimId])
-      .commit()
-  } catch {
-    return { ok: false, reason: 'claimed-elsewhere' }
-  }
   const thisClaim = {
     query:
       '*[_type == "sponsorForConference" && _id == $id && conference._ref == $conferenceId && $claimId in reminderClaims]',
@@ -1060,6 +1049,26 @@ export async function sendContractReminderBySystem(
       }
     }
     return `; the reminder slot could not be released (reminderCount stays ${claimedCount}) — lower it by hand`
+  }
+  try {
+    await clientWrite
+      .patch(sfc._id)
+      .ifRevisionId(sfc._rev ?? '')
+      .setIfMissing({ reminderCount: 0, reminderClaims: [] })
+      .inc({ reminderCount: 1 })
+      .append('reminderClaims', [claimId])
+      .commit()
+  } catch {
+    // Either a genuine revision conflict (another sweep claimed first — then
+    // no claim of ours is recorded and the release below matches nothing),
+    // or the claim LANDED and its answer was lost — then the release takes
+    // it back. Both end the same way: nothing mailed by this sweep.
+    const stuck = await releaseClaim()
+    return {
+      ok: false,
+      reason: 'claimed-elsewhere',
+      ...(stuck && { message: stuck.slice(2) }),
+    }
   }
   let result: Awaited<ReturnType<typeof sendSponsorCommunication>>
   try {

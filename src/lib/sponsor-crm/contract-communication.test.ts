@@ -32,6 +32,8 @@ const h = vi.hoisted(() => ({
   claimInterposedOnLostRelease: false,
   /** Another sweep claims a slot while this one's email is with the provider. */
   claimDuringSend: false,
+  /** The claim LANDS but its answer is lost. */
+  claimAnswerLost: false,
   /** Boundary events in order: claim / send / release. */
   sequence: [] as string[],
 }))
@@ -150,6 +152,18 @@ vi.mock('@/lib/sanity/client', () => {
           (sets.reminderCount as number) <
             ((h.sfc?.reminderCount as number | undefined) ?? 0)
         if (h.releaseThrows && isRelease) throw new Error('sanity down')
+        const isClaim =
+          'reminderCount' in sets &&
+          id === h.sfc?._id &&
+          (sets.reminderCount as number) >
+            ((h.sfc?.reminderCount as number | undefined) ?? 0)
+        if (h.claimAnswerLost && isClaim) {
+          // Applied, then the connection broke.
+          h.claimAnswerLost = false
+          h.sequence.push('claim')
+          apply()
+          throw new Error('socket hang up')
+        }
         if (h.releaseAnswerLost && isRelease) {
           // Applied, then the connection broke.
           h.releaseAnswerLost = false
@@ -242,6 +256,7 @@ beforeEach(() => {
   h.releaseAnswerLost = false
   h.claimInterposedOnLostRelease = false
   h.claimDuringSend = false
+  h.claimAnswerLost = false
   h.sequence = []
   h.patches = []
   h.incs = []
@@ -541,6 +556,17 @@ describe('sendContractReminderBySystem', () => {
     expect(h.sfc!.reminderCount).toBe(1)
   })
 
+  it('gives back a claim that landed but whose answer was lost — the slot is not consumed for a reminder never attempted', async () => {
+    h.claimAnswerLost = true
+    expect(
+      await sendContractReminderBySystem('sfc-1', { maxReminders: 2 }),
+    ).toEqual({ ok: false, reason: 'claimed-elsewhere' })
+    expect(h.send).not.toHaveBeenCalled()
+    expect(h.sequence).toEqual(['claim', 'release'])
+    expect(h.sfc!.reminderCount).toBe(1)
+    expect(h.sfc!.reminderClaims).toEqual([])
+  })
+
   it("takes back ITS OWN claim, never another sweep's, when a later claim landed on top", async () => {
     h.send.mockResolvedValue({
       data: null,
@@ -589,7 +615,9 @@ describe('sendContractReminderBySystem', () => {
       reason: 'claimed-elsewhere',
     })
     expect(h.send).not.toHaveBeenCalled()
-    expect(h.patches).toEqual([])
+    // Nothing of ours to release: the compensation matched no document.
+    expect(h.patches.filter((p) => p.id === 'sfc-1')).toEqual([])
+    expect(h.sfc!.reminderCount).toBe(1)
   })
 
   it('matches the persisted signer to a contact whatever the stored casing, and records the canonical address', async () => {
