@@ -220,8 +220,9 @@ export async function promoteToClosedWonOnContract(
         // id. Both LIVE callers resolve that id through a tenant check rather
         // than taking it from client input:
         //
-        //   • `sponsor.sendContract` (src/server/routers/sponsor.ts) →
-        //     `getSponsorForCurrentConference`, the ROUTER-side wrapper that
+        //   • `sponsor.crm.sendCommunication` (contract kind, #1264; the
+        //     orchestration lives in src/lib/sponsor-crm/contract-communication.ts)
+        //     → `getSponsorForCurrentConference`, the ROUTER-side wrapper that
         //     compares the record's `conference._id` against
         //     `resolveConferenceId()` and rejects a mismatch. Note the name:
         //     the lib-level `getSponsorForConference` it wraps is a plain
@@ -232,13 +233,6 @@ export async function promoteToClosedWonOnContract(
         //     `signatureId == $signingToken` where the token is a server-minted
         //     `randomUUID()`. The id patched here is the matched document's own
         //     `_id`, so it cannot name a document the bearer did not unlock.
-        //
-        // NOT covered: `generateAndSendContract` in `contract-send.ts` also
-        // calls this function, resolving the id with the UNGATED
-        // `getSponsorForConference` and comparing no tenant at all. It is a
-        // PARKED feature wired to no live route, so it reaches nothing today —
-        // but it MUST grow its own tenant gate before it is wired up. A warning
-        // to that effect sits at its definition.
         //
         // `$id` matches at most one document, and `status in $earlyStages`
         // narrows it further, so nothing outside that record can be touched.
@@ -335,23 +329,6 @@ export async function logAssignmentChange(
     createdBy,
     {
       additionalData: assigneeName || '',
-      timestamp: getCurrentDateTime(),
-    },
-  )
-}
-
-export async function logEmailSent(
-  sponsorForConferenceId: string,
-  subject: string,
-  createdBy: string,
-): Promise<{ activityId?: string; error?: Error }> {
-  return createSponsorActivity(
-    sponsorForConferenceId,
-    'email',
-    `Email sent: ${subject}`,
-    createdBy,
-    {
-      additionalData: subject,
       timestamp: getCurrentDateTime(),
     },
   )

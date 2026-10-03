@@ -8,6 +8,7 @@ import {
   conferenceBaseUrl,
   hasConferenceDomain,
 } from '@/lib/conference/baseUrl'
+import { formatConferenceDateLong } from '@/lib/time'
 
 export const CATEGORY_LABELS: Record<string, string> = {
   'cold-outreach': 'Cold Outreach',
@@ -243,6 +244,10 @@ export function buildTemplateVariables(opts: {
    * token (#1263). Only a registration send has one.
    */
   portalUrl?: string
+  /** Contract sends (#1264): the signer and the formatted contract total. */
+  signerName?: string
+  signerEmail?: string
+  contractValue?: string
 }): Record<string, string> {
   const {
     sponsorName,
@@ -251,6 +256,9 @@ export function buildTemplateVariables(opts: {
     senderName,
     tierName,
     portalUrl,
+    signerName,
+    signerEmail,
+    contractValue,
   } = opts
 
   const vars: Record<string, string> = {
@@ -274,16 +282,24 @@ export function buildTemplateVariables(opts: {
     }
     const year = conference.startDate.slice(0, 4)
     if (year) vars.CONFERENCE_YEAR = year
+    // The contract templates' long form (the old contract-email renderer).
+    vars.EVENT_DATE = formatConferenceDateLong(conference.startDate)
   }
 
   if (conference.city) {
     vars.CONFERENCE_CITY = conference.city
+    vars.EVENT_LOCATION = conference.city
   }
 
   if (hasConferenceDomain(conference)) {
     vars.CONFERENCE_URL = conferenceBaseUrl(conference)
     vars.SPONSOR_PAGE_URL = `${vars.CONFERENCE_URL}/sponsor`
+    vars.EVENT_URL = vars.CONFERENCE_URL
   }
+
+  if (signerName) vars.SIGNER_NAME = signerName
+  if (signerEmail) vars.SIGNER_EMAIL = signerEmail
+  if (contractValue) vars.CONTRACT_VALUE = contractValue
 
   if (conference.prospectusUrl) {
     vars.PROSPECTUS_URL = conference.prospectusUrl

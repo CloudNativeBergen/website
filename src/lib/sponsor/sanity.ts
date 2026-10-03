@@ -626,6 +626,28 @@ export async function getSponsorEmailTemplateBySlug(
 }
 
 /**
+ * The same read for a KNOWN org — for a system job that sweeps every tenant
+ * and has no request domain to resolve one from (#1264, the contract reminder
+ * cron). The org comes off the sponsor's own conference, never from input.
+ */
+export async function getSponsorEmailTemplateBySlugForOrg(
+  orgId: string,
+  slug: string,
+): Promise<{ template?: SponsorEmailTemplate; error?: Error }> {
+  try {
+    const template = await scopedFetch<SponsorEmailTemplate | null>(
+      clientWrite,
+      { orgId },
+      `*[_type == "sponsorEmailTemplate" && slug.current == $slug][0] ${EMAIL_TEMPLATE_PROJECTION}`,
+      { slug },
+    )
+    return { template: template ?? undefined }
+  } catch (error) {
+    return { error: error as Error }
+  }
+}
+
+/**
  * True when `id` names a sponsorEmailTemplate owned by the current-domain org.
  * The mutation guard (#19): a scoped existence probe that returns false for a
  * FOREIGN org's template, so update/delete/set-default reject rather than

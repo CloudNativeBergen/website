@@ -21,6 +21,7 @@ import type {
 
 const SPONSOR_FOR_CONFERENCE_FIELDS = `
   _id,
+  _rev,
   _createdAt,
   _updatedAt,
   sponsor->{
@@ -42,6 +43,7 @@ const SPONSOR_FOR_CONFERENCE_FIELDS = `
     organizerAddress,
     signingProvider,
     city,
+    country,
     venueName,
     venueAddress,
     startDate,
@@ -90,6 +92,7 @@ const SPONSOR_FOR_CONFERENCE_FIELDS = `
     }
   },
   reminderCount,
+  reminderClaims,
   contractTemplate->{
     _id,
     title
@@ -102,6 +105,10 @@ const SPONSOR_FOR_CONFERENCE_FIELDS = `
   },
   contactInitiatedAt,
   contractSignedAt,
+  contractSignedBy,
+  contractReservedAt,
+  contractReservedTerms,
+  contractReservedInputs,
   organizerSignedAt,
   organizerSignedBy,
   contractValue,

@@ -39,6 +39,13 @@ export interface SendSponsorCommunicationArgs {
   sponsorForConferenceId: string
   kind: CommunicationKind
   recipientKeys: readonly string[]
+  /**
+   * Recipients the SERVER adds (never client input): the cron's signing
+   * reminder goes to the persisted signer even when that address is no
+   * longer one of the sponsor's contacts (#1264). Keys must not collide with
+   * contact keys.
+   */
+  serverRecipients?: readonly CommunicationRecipient[]
   subject: string
   message: PortableTextBlock[]
   /**
@@ -67,6 +74,12 @@ export interface SendSponsorCommunicationArgs {
    * `SPONSOR_PORTAL_URL` when the template is re-merged for `templateEdited`.
    */
   portalUrl?: string
+  /** Contract sends (#1264): merged as SIGNER_NAME / SIGNER_EMAIL / CONTRACT_VALUE. */
+  contractVariables?: {
+    signerName?: string
+    signerEmail?: string
+    contractValue?: string
+  }
 }
 
 export type SendSponsorCommunicationResult =
@@ -83,6 +96,14 @@ export type SendSponsorCommunicationResult =
       ok: false
       reason: 'send-failed'
       message: string
+      /**
+       * The provider REFUSED the email (a 4xx came back, or the provider was
+       * never asked). `false` when the outcome is unknown — a network error,
+       * a broken response, a 5xx such as a gateway timeout — and the email
+       * MAY have gone out: a caller that reserved something for this send
+       * must not undo it on that basis.
+       */
+      definitive: boolean
       activityId?: string
       recipients: CommunicationRecipient[]
     }
@@ -111,6 +132,7 @@ function computeTemplateEdited(
   senderNames: readonly (string | undefined)[],
   sent: { subject: string; message: PortableTextBlock[] },
   portalUrl: string | undefined,
+  contractVariables: SendSponsorCommunicationArgs['contractVariables'],
 ): boolean {
   const candidates = senderNames.length > 0 ? senderNames : [undefined]
   return candidates.every((senderName) =>
@@ -122,6 +144,7 @@ function computeTemplateEdited(
       senderName,
       sent,
       portalUrl,
+      contractVariables,
     ),
   )
 }
@@ -134,6 +157,7 @@ function mergedDiffers(
   senderName: string | undefined,
   sent: { subject: string; message: PortableTextBlock[] },
   portalUrl: string | undefined,
+  contractVariables: SendSponsorCommunicationArgs['contractVariables'],
 ): boolean {
   const variables = buildTemplateVariables({
     sponsorName: sfc.sponsor?.name ?? 'Unknown',
@@ -150,6 +174,7 @@ function mergedDiffers(
     senderName,
     tierName: sfc.tier?.title,
     portalUrl,
+    ...contractVariables,
   })
   const applied = {
     subject: processTemplateVariables(template.subject, variables),
@@ -189,7 +214,12 @@ export async function sendSponsorCommunication(
 
   let recipients: CommunicationRecipient[]
   try {
-    recipients = resolveRecipients(sfc.contactPersons, args.recipientKeys)
+    recipients = [
+      ...(args.recipientKeys.length > 0 || !args.serverRecipients?.length
+        ? resolveRecipients(sfc.contactPersons, args.recipientKeys)
+        : []),
+      ...(args.serverRecipients ?? []),
+    ]
   } catch (error) {
     if (error instanceof CommunicationRecipientError) {
       return { ok: false, reason: 'bad-recipients', message: error.message }
@@ -201,7 +231,9 @@ export async function sendSponsorCommunication(
     args.message,
     conference,
   )
-  if (htmlError || !htmlContent) {
+  // A body-less template is fine when the send appends its own card (a
+  // reminder's signing button, a signed copy's link): the card IS the email.
+  if (htmlError || (!htmlContent && !args.appendHtml)) {
     return {
       ok: false,
       reason: 'render-failed',
@@ -214,9 +246,7 @@ export async function sendSponsorCommunication(
     renderEmailTemplate({
       conference,
       subject: args.subject,
-      htmlContent: args.appendHtml
-        ? `${htmlContent}${args.appendHtml}`
-        : htmlContent,
+      htmlContent: `${htmlContent ?? ''}${args.appendHtml ?? ''}`,
       // A one-to-one transactional email: NO unsubscribe link. `undefined`
       // would select the template's default — Resend's `{{{RESEND_UNSUBSCRIBE_URL}}}`
       // merge tag, which only Broadcasts resolve — and the literal tag would
@@ -247,6 +277,7 @@ export async function sendSponsorCommunication(
             args.senderNames ?? [],
             { subject: args.subject, message: args.message },
             args.portalUrl,
+            args.contractVariables,
           ),
         }
       : undefined,
@@ -255,12 +286,17 @@ export async function sendSponsorCommunication(
   }
 
   let providerMessageId: string | undefined
+  // Set the moment the provider is asked: a failure before that (no tenant
+  // credentials, a resolver outage) is DEFINITIVE — nothing could have gone
+  // out — whatever shape the error has.
+  let providerAsked = false
   try {
     const { client } = await resolveEmailSender(args.orgId)
     // Resend reports failures as a RESOLVED `{ error }` (including 429), so the
     // throw has to happen INSIDE the callback or `retryWithBackoff` never sees
     // a retryable failure and every send gets exactly one attempt.
     const result = await retryWithBackoff(async () => {
+      providerAsked = true
       const r = await client.emails.send({
         from,
         to: recipients.map((r) => r.email),
@@ -277,12 +313,23 @@ export async function sendSponsorCommunication(
     providerMessageId = result.data?.id
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
+    const status = (error as { status?: unknown })?.status
+    const definitive =
+      !providerAsked ||
+      (typeof status === 'number' && status >= 400 && status < 500)
     const { activityId } = await logCommunication({
       ...record,
       deliveryStatus: 'failed',
       error: message,
     })
-    return { ok: false, reason: 'send-failed', message, activityId, recipients }
+    return {
+      ok: false,
+      reason: 'send-failed',
+      message,
+      definitive,
+      activityId,
+      recipients,
+    }
   }
 
   const { activityId } = await logCommunication({

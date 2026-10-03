@@ -85,7 +85,6 @@ vi.mock('@/lib/sponsor-crm/registration', async (importOriginal) => ({
 }))
 vi.mock('@/lib/sponsor-crm/activity', () => ({
   logRegistrationComplete: vi.fn(),
-  logEmailSent: vi.fn(),
   logContractStatusChange: vi.fn(),
 }))
 

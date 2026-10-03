@@ -1,7 +1,7 @@
 /**
  * @vitest-environment jsdom
  */
-import { render, screen } from '@testing-library/react'
+import { render, screen, fireEvent } from '@testing-library/react'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 
@@ -21,8 +21,7 @@ vi.mock('next-auth/react', () => ({
 // Mock tRPC hooks
 const mockReadinessData = vi.fn<() => any>()
 const mockBestTemplateData = vi.fn<() => any>()
-const mockGeneratePdf = vi.fn<() => any>()
-const mockSendContract = vi.fn<() => any>()
+const mockGeneratePdf = vi.fn<(opts?: any) => any>()
 const mockCheckStatus = vi.fn<() => any>()
 
 vi.mock('@/lib/trpc/client', () => ({
@@ -36,16 +35,10 @@ vi.mock('@/lib/trpc/client', () => ({
           useQuery: () => mockBestTemplateData(),
         },
         generatePdf: {
-          useMutation: (opts: any) => mockGeneratePdf(),
+          useMutation: (opts: any) => mockGeneratePdf(opts),
         },
       },
       crm: {
-        sendContract: {
-          useMutation: (opts: any) => mockSendContract(),
-        },
-        sendContractInvite: {
-          useMutation: (opts: any) => ({ mutate: vi.fn(), isLoading: false }),
-        },
         checkSignatureStatus: {
           useMutation: (opts: any) => mockCheckStatus(),
         },
@@ -108,10 +101,6 @@ describe('SponsorContractView', () => {
       },
     })
     mockGeneratePdf.mockReturnValue({
-      mutate: vi.fn(),
-      isPending: false,
-    })
-    mockSendContract.mockReturnValue({
       mutate: vi.fn(),
       isPending: false,
     })
@@ -272,7 +261,88 @@ describe('SponsorContractView', () => {
     })
   })
 
+  describe('confirmation step survives the handoff (#1264)', () => {
+    const toConfirm = () => {
+      mockGeneratePdf.mockImplementation((opts: any) => ({
+        mutate: () => opts.onSuccess({ pdf: 'QUJD', filename: 'c.pdf' }),
+        isPending: false,
+      }))
+      const onSendContract = vi.fn()
+      const view = render(
+        <SponsorContractView
+          conferenceId="conf-2026"
+          sponsor={mockSponsor({ registrationComplete: true })}
+          onSendContract={onSendContract}
+        />,
+      )
+      fireEvent.click(screen.getByText('Generate contract PDF'))
+      fireEvent.click(screen.getByText('Looks good, continue'))
+      return { ...view, onSendContract }
+    }
+
+    it('keeps the reviewed PDF and the confirmation step after handing off to the composer', () => {
+      const { onSendContract } = toConfirm()
+      fireEvent.click(screen.getByText('Continue to send'))
+      expect(onSendContract).toHaveBeenCalledWith(
+        expect.objectContaining({ contractTemplateId: 'tmpl-1' }),
+      )
+      // Still on the confirmation step: a composer closed without sending
+      // comes back here, not to a regenerate.
+      expect(screen.getByText('Continue to send')).toBeInTheDocument()
+    })
+
+    it('returns to the overview once the record carries the sent agreement', () => {
+      const { rerender, onSendContract } = toConfirm()
+      fireEvent.click(screen.getByText('Continue to send'))
+      rerender(
+        <SponsorContractView
+          conferenceId="conf-2026"
+          sponsor={mockSponsor({
+            registrationComplete: true,
+            contractStatus: 'contract-sent',
+            signatureStatus: 'pending',
+            signatureId: 'agr-1',
+          })}
+          onSendContract={onSendContract}
+        />,
+      )
+      expect(screen.queryByText('Continue to send')).not.toBeInTheDocument()
+      expect(screen.getByText(/Contract sent/)).toBeInTheDocument()
+    })
+  })
+
   describe('contract signed state', () => {
+    it('offers "Send signed copy" only for a digitally signed document', () => {
+      const signed = {
+        contractStatus: 'contract-signed' as const,
+        signatureStatus: 'signed' as const,
+        contractDocument: {
+          asset: { url: 'https://cdn.example.com/signed.pdf' },
+        } as any,
+      }
+      const { unmount } = render(
+        <SponsorContractView
+          conferenceId="conf-2026"
+          sponsor={mockSponsor(signed)}
+          onSendContract={vi.fn()}
+        />,
+      )
+      // Signed by hand: the stored document is the unsigned original.
+      expect(screen.queryByText('Send signed copy')).not.toBeInTheDocument()
+      unmount()
+      render(
+        <SponsorContractView
+          conferenceId="conf-2026"
+          sponsor={mockSponsor({
+            ...signed,
+            contractSignedBy: 'Kari Nordmann',
+          })}
+          onSendContract={vi.fn()}
+        />,
+      )
+      expect(screen.getByText('Send signed copy')).toBeInTheDocument()
+    })
+
     it('shows signed confirmation', () => {
       renderView({
         contractStatus: 'contract-signed',

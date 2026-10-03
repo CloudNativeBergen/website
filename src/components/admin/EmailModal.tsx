@@ -47,6 +47,11 @@ export interface EmailModalProps {
   }) => React.ReactNode
   fromAddress: string
   /**
+   * The send supplies its own content below the body (a contract's signing
+   * card, a signed copy's link): an empty editable body is sendable then.
+   */
+  allowEmptyBody?: boolean
+  /**
    * Tenant brand primary (THEMING L1), used to colour the PREVIEW body so it
    * matches what is actually sent. Without it a themed conference's preview
    * shows house-blue links and headings while the real email is branded.
@@ -89,6 +94,7 @@ export function EmailModal({
   initialValues = {},
   previewComponent,
   fromAddress,
+  allowEmptyBody = false,
   brandColor,
   storageKey,
   additionalFields = {},
@@ -270,7 +276,7 @@ export function EmailModal({
   const handleSend = async () => {
     const currentMessage = getCurrentMessage()
 
-    if (!subject.trim() || !currentMessage.trim()) {
+    if (!subject.trim() || (!currentMessage.trim() && !allowEmptyBody)) {
       showNotification({
         type: 'warning',
         title: 'Missing information',
@@ -524,7 +530,9 @@ export function EmailModal({
               type="button"
               onClick={() => setShowPreview(!showPreview)}
               disabled={
-                isLoading || !subject.trim() || !getCurrentMessage().trim()
+                isLoading ||
+                !subject.trim() ||
+                (!getCurrentMessage().trim() && !allowEmptyBody)
               }
               className={`inline-flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold text-gray-900 shadow-xs hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-500 disabled:opacity-50 dark:text-white dark:hover:bg-gray-800 dark:focus-visible:outline-gray-400 ${showPreview ? 'border border-indigo-500 bg-indigo-100 text-indigo-700 dark:border-indigo-500 dark:bg-indigo-900/30 dark:text-indigo-300' : 'border border-gray-300 dark:border-gray-600'}`}
             >
@@ -553,7 +561,7 @@ export function EmailModal({
             disabled={
               isLoading ||
               !subject.trim() ||
-              !getCurrentMessage().trim() ||
+              (!getCurrentMessage().trim() && !allowEmptyBody) ||
               isLocalhost
             }
             title={isLocalhost ? 'Sending is disabled on localhost' : ''}

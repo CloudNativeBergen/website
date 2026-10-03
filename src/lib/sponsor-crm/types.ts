@@ -108,6 +108,7 @@ export interface SponsorForConference {
     asset: { _ref: string }
   }
   reminderCount?: number
+  reminderClaims?: string[]
   contractTemplate?: {
     _ref: string
   }
@@ -119,6 +120,13 @@ export interface SponsorForConference {
   billing?: BillingInfo
   contactInitiatedAt?: string
   contractSignedAt?: string
+  /** Set by the digital signing flow only — proves the stored document is signed. */
+  contractSignedBy?: string
+  /** Set while a contract send is in flight; cleared on contract-sent or failure. */
+  contractReservedAt?: string
+  /** Fingerprint of the terms the reserved PDF was rendered from. */
+  contractReservedTerms?: string
+  contractReservedInputs?: string
   organizerSignedAt?: string
   organizerSignedBy?: string
   contractValue?: number
@@ -137,6 +145,8 @@ export interface SponsorForConference {
 
 export interface SponsorForConferenceExpanded {
   _id: string
+  /** Revision of the read; a cron claim is conditioned on it. */
+  _rev?: string
   _createdAt: string
   _updatedAt: string
   sponsor: {
@@ -158,6 +168,7 @@ export interface SponsorForConferenceExpanded {
     organizerAddress?: string
     signingProvider?: 'self-hosted'
     city?: string
+    country?: string
     venueName?: string
     venueAddress?: string
     startDate?: string
@@ -204,6 +215,7 @@ export interface SponsorForConferenceExpanded {
     }
   }
   reminderCount?: number
+  reminderClaims?: string[]
   contractTemplate?: {
     _id: string
     title: string
@@ -217,6 +229,13 @@ export interface SponsorForConferenceExpanded {
   }
   contactInitiatedAt?: string
   contractSignedAt?: string
+  /** Set by the digital signing flow only — proves the stored document is signed. */
+  contractSignedBy?: string
+  /** Set while a contract send is in flight; cleared on contract-sent or failure. */
+  contractReservedAt?: string
+  /** Fingerprint of the terms the reserved PDF was rendered from. */
+  contractReservedTerms?: string
+  contractReservedInputs?: string
   organizerSignedAt?: string
   organizerSignedBy?: string
   contractValue?: number

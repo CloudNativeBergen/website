@@ -208,7 +208,7 @@ export const ImportAllHistoricSponsorsSchema = z.object({
  * KEYS — the server resolves addresses from the sponsor's own contacts and
  * refuses anything else — and the body is PortableText JSON as the editor
  * produces it. Slice 1 accepted `information`; #1262 added `discount`, #1263
- * `registration`; #1264 widens it to `contract`.
+ * `registration`, #1264 `contract`.
  */
 export const CommunicationKindSchema = z.enum([
   'information',
@@ -220,11 +220,13 @@ export const CommunicationKindSchema = z.enum([
 export const SendCommunicationSchema = z
   .object({
     sponsorForConferenceId: z.string().min(1, 'Sponsor ID is required'),
-    kind: z.enum(['information', 'discount', 'registration']),
-    recipientKeys: z
-      .array(z.string().min(1))
-      .min(1, 'Choose at least one recipient')
-      .max(20),
+    kind: z.enum(['information', 'discount', 'registration', 'contract']),
+    /**
+     * At least one — except for a contract reminder or signed copy, which
+     * the server addresses to the signer on record even with no contact
+     * ticked (they may no longer be a contact at all).
+     */
+    recipientKeys: z.array(z.string().min(1)).max(20),
     subject: z.string().trim().min(1, 'Subject is required').max(200),
     /** PortableText blocks, JSON-encoded (same wire shape as the old sendEmail). */
     message: z.string().min(1).max(100_000),
@@ -244,8 +246,68 @@ export const SendCommunicationSchema = z
       .array(z.string().trim().min(1).max(100))
       .max(20)
       .optional(),
+    /**
+     * Contract kind only (#1264), first send: which recipient signs (a key
+     * among `recipientKeys`), which contract template renders the PDF
+     * (tenancy-guarded on the server; the best template for the tier when
+     * absent), and the assigned organizer's counter-signature.
+     */
+    signerKey: z.string().min(1).optional(),
+    /**
+     * The action the composer was opened for (label, template, preview). The
+     * server decides the real action from the current state and REFUSES a
+     * stale composer rather than performing a different action with its text.
+     */
+    contractAction: z.enum(['send', 'remind', 'signed-copy']).optional(),
+    contractTemplateId: z.string().min(1).optional(),
+    organizerSignatureDataUrl: z
+      .string()
+      .max(500_000, 'Organizer signature image is too large')
+      .startsWith(
+        'data:image/png;base64,',
+        'Organizer signature must be a PNG data URL',
+      )
+      .optional(),
   })
   .superRefine((input, ctx) => {
+    const contractFields = [
+      'signerKey',
+      'contractAction',
+      'contractTemplateId',
+      'organizerSignatureDataUrl',
+    ] as const
+    if (input.kind !== 'contract') {
+      for (const field of contractFields) {
+        if (input[field] !== undefined) {
+          ctx.addIssue({
+            code: 'custom',
+            path: [field],
+            message: 'Only a contract send carries this field',
+          })
+        }
+      }
+    }
+    if (input.kind === 'contract' && !input.contractAction) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['contractAction'],
+        message: 'A contract send names the action it was composed for',
+      })
+    }
+    if (input.kind !== 'contract' && input.recipientKeys.length === 0) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['recipientKeys'],
+        message: 'Choose at least one recipient',
+      })
+    }
+    if (input.signerKey && !input.recipientKeys.includes(input.signerKey)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['signerKey'],
+        message: 'The signer must be one of the chosen recipients',
+      })
+    }
     const codes = input.discountCodes ?? []
     if (input.kind === 'discount' && codes.length === 0) {
       ctx.addIssue({

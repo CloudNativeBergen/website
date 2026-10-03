@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { formatDate } from '@/lib/time'
 import { useSession } from 'next-auth/react'
 import { api } from '@/lib/trpc/client'
@@ -28,6 +28,18 @@ interface SponsorContractViewProps {
   onSuccess?: () => void
   /** Send → Registration (#1263): opens the host's Send modal for this sponsor. */
   onSendRegistration?: () => void
+  /**
+   * Send → Contract (#1264): opens the host's Send modal with the contract
+   * kind. The first send carries the previewed template and the assigned
+   * organizer's counter-signature; a reminder or the signed copy carry
+   * nothing — the server decides the action from the contract state.
+   */
+  onSendContract?: (options: ContractSendOptions) => void
+}
+
+export interface ContractSendOptions {
+  contractTemplateId?: string
+  organizerSignatureDataUrl?: string
 }
 
 export function SponsorContractView({
@@ -35,13 +47,11 @@ export function SponsorContractView({
   sponsor,
   onSuccess,
   onSendRegistration,
+  onSendContract,
 }: SponsorContractViewProps) {
   const [step, setStep] = useState<Step>('overview')
   const [pdfData, setPdfData] = useState<string | null>(null)
   const [pdfFilename, setPdfFilename] = useState<string>('')
-  const [signerEmail, setSignerEmail] = useState(
-    sponsor.signerEmail || getPrimaryContactEmail(sponsor) || '',
-  )
   const [error, setError] = useState<string | null>(null)
   const [organizerSignatureDataUrl, setOrganizerSignatureDataUrl] = useState<
     string | null
@@ -82,16 +92,6 @@ export function SponsorContractView({
     onError: (err) => setError(friendlyError(err.message)),
   })
 
-  const sendContract = api.sponsor.crm.sendContract.useMutation({
-    onSuccess: () => {
-      onSuccess?.()
-      setStep('overview')
-      setPdfData(null)
-      setError(null)
-    },
-    onError: (err) => setError(friendlyError(err.message)),
-  })
-
   const [statusMessage, setStatusMessage] = useState<string | null>(null)
 
   const checkStatus = api.sponsor.crm.checkSignatureStatus.useMutation({
@@ -104,15 +104,6 @@ export function SponsorContractView({
       }
       setError(null)
       setTimeout(() => setStatusMessage(null), 5000)
-    },
-    onError: (err) => setError(friendlyError(err.message)),
-  })
-
-  const resendSignatureEmail = api.sponsor.crm.sendContractInvite.useMutation({
-    onSuccess: () => {
-      setStatusMessage('Contract signing email sent to sponsor.')
-      setTimeout(() => setStatusMessage(null), 5000)
-      setError(null)
     },
     onError: (err) => setError(friendlyError(err.message)),
   })
@@ -132,22 +123,36 @@ export function SponsorContractView({
     })
   }
 
+  // Hands off to the host's Send modal (#1264): recipients, signer and the
+  // email itself are composed there; the server generates the agreement.
   const handleSend = () => {
-    if (!pdfData || !bestTemplate) return
+    if (!pdfData || !bestTemplate || !onSendContract) return
     setError(null)
     setStatusMessage(null)
-    sendContract.mutate({
-      sponsorForConferenceId: sponsor._id,
-      templateId: bestTemplate._id,
-      signerEmail: signerEmail.trim() || undefined,
+    onSendContract({
+      contractTemplateId: bestTemplate._id,
       organizerSignatureDataUrl: organizerSignatureDataUrl ?? undefined,
-      organizerName: organizerSignatureDataUrl ? organizerName : undefined,
     })
+    // The reviewed PDF and the drawn counter-signature stay until the send
+    // actually happened (the record changes below) — a composer closed
+    // without sending returns to the same confirmation step.
   }
+
+  // Back to the overview once an agreement went out: the record now carries
+  // a (new) agreement, so the reviewed PDF is spent.
+  const sentMarker = `${sponsor.contractStatus}:${sponsor.signatureId ?? ''}`
+  const sentMarkerRef = useRef(sentMarker)
+  useEffect(() => {
+    if (sentMarkerRef.current === sentMarker) return
+    sentMarkerRef.current = sentMarker
+    setStep('overview')
+    setPdfData(null)
+    setOrganizerSignatureDataUrl(null)
+  }, [sentMarker])
 
   const canSend = readiness?.canSend === true
   const primaryContact = getPrimaryContact(sponsor)
-  const isBusy = generatePdf.isPending || sendContract.isPending
+  const isBusy = generatePdf.isPending
   const isSigned = sponsor.contractStatus === 'contract-signed'
   const isSent = sponsor.contractStatus === 'contract-sent'
   const isPendingSignature =
@@ -237,44 +242,15 @@ export function SponsorContractView({
           />
         )}
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-            Signer email (for digital signing)
-          </label>
-          <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
-            The person who should receive and sign the contract. Leave empty to
-            skip digital signing for now.
-          </p>
-          <input
-            type="email"
-            value={signerEmail}
-            onChange={(e) => setSignerEmail(e.target.value)}
-            placeholder={primaryContact?.email || 'signer@company.com'}
-            className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-white"
-          />
+        <div className="rounded-md border border-blue-200 bg-blue-50 p-3 dark:border-blue-800 dark:bg-blue-900/20">
+          <div className="flex items-center gap-2">
+            <DocumentTextIcon className="h-5 w-5 shrink-0 text-blue-500" />
+            <p className="text-sm text-blue-700 dark:text-blue-300">
+              Next, choose who receives the agreement and who signs it, review
+              the email, and send. The signing link is created when you send.
+            </p>
+          </div>
         </div>
-
-        {signerEmail.trim() ? (
-          <div className="rounded-md border border-blue-200 bg-blue-50 p-3 dark:border-blue-800 dark:bg-blue-900/20">
-            <div className="flex items-center gap-2">
-              <DocumentTextIcon className="h-5 w-5 shrink-0 text-blue-500" />
-              <p className="text-sm text-blue-700 dark:text-blue-300">
-                The contract will be sent to{' '}
-                <strong>{signerEmail.trim()}</strong> for digital signing.
-              </p>
-            </div>
-          </div>
-        ) : (
-          <div className="rounded-md border border-amber-200 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-900/20">
-            <div className="flex items-center gap-2">
-              <ExclamationTriangleIcon className="h-5 w-5 shrink-0 text-amber-500" />
-              <p className="text-sm text-amber-700 dark:text-amber-300">
-                No signer email provided. The contract will be generated and
-                status updated, but digital signing will not be initiated.
-              </p>
-            </div>
-          </div>
-        )}
 
         {error && <ErrorBanner message={error} />}
 
@@ -282,16 +258,16 @@ export function SponsorContractView({
           <button
             type="button"
             onClick={handleSend}
-            disabled={isBusy}
+            disabled={isBusy || !onSendContract}
             className={clsx(
               'inline-flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold text-white shadow-sm',
-              isBusy
+              isBusy || !onSendContract
                 ? 'bg-gray-400 dark:bg-gray-600'
                 : 'bg-green-600 hover:bg-green-500 dark:bg-green-500 dark:hover:bg-green-400',
             )}
           >
             <PaperAirplaneIcon className="h-4 w-4" />
-            {sendContract.isPending ? 'Sending\u2026' : 'Send Contract'}
+            Continue to send
           </button>
           <button
             type="button"
@@ -382,12 +358,29 @@ export function SponsorContractView({
         }
       >
         {isSigned ? (
-          <p className="text-xs text-gray-500 dark:text-gray-400">
-            Contract signed
-            {sponsor.contractSignedAt &&
-              ` on ${formatDate(sponsor.contractSignedAt)}`}
-            .
-          </p>
+          <div className="space-y-2">
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              Contract signed
+              {sponsor.contractSignedAt &&
+                ` on ${formatDate(sponsor.contractSignedAt)}`}
+              .
+            </p>
+            {onSendContract &&
+              sponsor.contractDocument?.asset?.url &&
+              // Only the digital signing flow stores the signed document (and
+              // stamps contractSignedBy); a status set by hand leaves the
+              // unsigned original, and there is no signed copy to send.
+              sponsor.contractSignedBy && (
+                <button
+                  type="button"
+                  onClick={() => onSendContract({})}
+                  className="inline-flex cursor-pointer items-center gap-1 rounded-md bg-white px-2 py-1 text-xs font-medium text-gray-700 shadow-xs outline-1 -outline-offset-1 outline-gray-300 hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 dark:bg-white/5 dark:text-gray-300 dark:outline-white/10 dark:hover:bg-white/10"
+                >
+                  <PaperAirplaneIcon className="size-3.5" />
+                  Send signed copy
+                </button>
+              )}
+          </div>
         ) : isSent ? (
           <p className="text-xs text-gray-500 dark:text-gray-400">
             Contract sent
@@ -511,19 +504,16 @@ export function SponsorContractView({
                 >
                   Copy
                 </button>
-                <button
-                  type="button"
-                  onClick={() =>
-                    resendSignatureEmail.mutate({
-                      sponsorForConferenceId: sponsor._id,
-                    })
-                  }
-                  disabled={resendSignatureEmail.isPending}
-                  className="inline-flex cursor-pointer items-center gap-1 rounded-md bg-indigo-600 px-2 py-1.5 text-xs font-medium text-white shadow-xs transition-colors hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:opacity-50 dark:bg-indigo-500 dark:hover:bg-indigo-400"
-                  title="Resend signing link via email"
-                >
-                  {resendSignatureEmail.isPending ? 'Sending\u2026' : 'Resend'}
-                </button>
+                {onSendContract && (
+                  <button
+                    type="button"
+                    onClick={() => onSendContract({})}
+                    className="inline-flex cursor-pointer items-center gap-1 rounded-md bg-indigo-600 px-2 py-1.5 text-xs font-medium text-white shadow-xs transition-colors hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 dark:bg-indigo-500 dark:hover:bg-indigo-400"
+                    title="Send a signing reminder via email"
+                  >
+                    Send reminder
+                  </button>
+                )}
               </div>
             )}
 
@@ -532,19 +522,15 @@ export function SponsorContractView({
                 {statusMessage}
               </p>
             )}
-            {resendSignatureEmail.isError && (
-              <p className="text-xs text-red-600 dark:text-red-400">
-                {resendSignatureEmail.error?.message}
-              </p>
-            )}
           </div>
         ) : isSent ? (
           <p className="text-xs text-gray-400 dark:text-gray-500">
-            Contract sent without digital signing.
+            Sent without a digital signing agreement (an older record).
           </p>
         ) : (
           <p className="text-xs text-gray-400 dark:text-gray-500">
-            Contract will be sent for digital signing after generation.
+            The agreement is sent for digital signing when you send the
+            contract.
           </p>
         )}
       </ContractFlowStep>
@@ -638,10 +624,6 @@ function getPrimaryContact(sponsor: SponsorForConferenceExpanded) {
     sponsor.contactPersons?.[0] ||
     null
   )
-}
-
-function getPrimaryContactEmail(sponsor: SponsorForConferenceExpanded) {
-  return getPrimaryContact(sponsor)?.email || null
 }
 
 const ERROR_PATTERNS: Array<[RegExp, string]> = [

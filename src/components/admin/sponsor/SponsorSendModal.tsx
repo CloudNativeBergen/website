@@ -33,6 +33,7 @@ import {
   TEMPLATE_WRONG_KIND_MESSAGE,
   defaultRecipientKey,
 } from '@/lib/sponsor-crm/communication'
+import { canonicalEmail } from '@/lib/speaker/email'
 import { formatConferenceDateLong } from '@/lib/time'
 import { conferenceBaseUrl } from '@/lib/conference/baseUrl'
 import { emailBrandColor, type ConferenceTheme } from '@/lib/branding/theme'
@@ -46,6 +47,13 @@ import {
   registrationCardHtml,
 } from '@/lib/sponsor-crm/registration-email'
 import { SponsorTemplatePicker } from './SponsorTemplatePicker'
+import {
+  CONTRACT_ACTION_LABELS,
+  CONTRACT_ACTION_SLUGS,
+  contractActionFor,
+  contractCardHtml,
+} from '@/lib/sponsor-crm/contract-send-state'
+import { formatNumber } from '@/lib/format'
 
 export interface SponsorSendModalProps {
   isOpen: boolean
@@ -59,6 +67,16 @@ export interface SponsorSendModalProps {
    * a kind the server would refuse can never be posted.
    */
   kind?: SendableKind
+  /**
+   * Contract kind, first send (#1264): what the contract view previewed —
+   * the contract template and the assigned organizer's counter-signature.
+   * A reminder or the signed copy carry nothing; the server decides the
+   * action from the contract state, as this modal does for its label.
+   */
+  contractSend?: {
+    contractTemplateId?: string
+    organizerSignatureDataUrl?: string
+  }
   domain: string
   fromEmail: string
   senderName?: string
@@ -92,10 +110,7 @@ export function sponsorFromAddress(
 }
 
 /** The kinds the Send mutation accepts — mirrors `SendCommunicationSchema.kind`. */
-export type SendableKind = Extract<
-  CommunicationKind,
-  'information' | 'discount' | 'registration'
->
+export type SendableKind = CommunicationKind
 
 /** One row of `crm.discountCodeOptions` (#1262). */
 export interface DiscountCodeOption {
@@ -122,6 +137,8 @@ export interface DiscountCodeOption {
 interface AppliedTemplate {
   id: string
   recipientKeys?: string[]
+  /** Contract kind: who was the signer when the template was merged. */
+  signerKey?: string
 }
 
 /**
@@ -142,8 +159,20 @@ export function pickDefaultTemplate(
     orgNumber?: string
     website?: string
   },
+  /**
+   * Contract kind (#1264): the slug for the action — `contract-sent`,
+   * `contract-reminder` or `contract-signed`. A contract template with that
+   * slug wins outright; otherwise the default contract template.
+   */
+  preferSlug?: string,
 ): SponsorEmailTemplate | undefined {
   if (!templates?.length) return undefined
+  if (preferSlug) {
+    const bySlug = templates.find(
+      (t) => t.category === 'contract' && t.slug?.current === preferSlug,
+    )
+    if (bySlug) return bySlug
+  }
   // No template category is FOR discount codes, so no default is: a booth or
   // outreach default would open a code send with the wrong copy (#1262). The
   // organizer can still pick one; the codes block is appended either way.
@@ -230,6 +259,80 @@ function registrationGreeting(
       'To get everything in place, please complete your sponsor registration using the link below: company details, contact persons, billing information and your logo. Once submitted, we will prepare your sponsorship agreement for signing.',
     ),
   ]
+}
+
+/**
+ * The Signer: line of a contract's first send (#1264) — which of the chosen
+ * recipients signs the agreement. Radios over the SELECTED recipients only:
+ * someone who will not receive the email cannot be asked to sign it.
+ */
+export function SponsorSignerPicker({
+  contacts,
+  signerKey,
+  onChoose,
+}: {
+  contacts: ContactPerson[]
+  signerKey?: string
+  onChoose: (key: string) => void
+}) {
+  if (contacts.length === 0) {
+    return (
+      <span className="font-inter text-sm text-red-600 dark:text-red-400">
+        Choose a recipient first — the signer must receive the email.
+      </span>
+    )
+  }
+  return (
+    <div
+      role="radiogroup"
+      aria-label="Signer"
+      className="flex flex-wrap items-center gap-2"
+    >
+      {contacts.map((contact) => {
+        const chosen = contact._key === signerKey
+        return (
+          <label
+            key={contact._key}
+            className={clsx(
+              'font-inter inline-flex min-h-8 max-w-full cursor-pointer items-center gap-1.5 rounded-full border px-2.5 py-1 text-sm transition-colors select-none',
+              'has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-indigo-500 has-[:focus-visible]:ring-offset-1 dark:has-[:focus-visible]:ring-offset-gray-900',
+              chosen
+                ? 'border-brand-cloud-blue bg-brand-sky-mist text-brand-slate-gray dark:border-indigo-400 dark:bg-indigo-900/40 dark:text-indigo-100'
+                : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:border-gray-500',
+            )}
+          >
+            <input
+              type="radio"
+              name="contract-signer"
+              className="sr-only"
+              checked={chosen}
+              onChange={() => onChoose(contact._key)}
+              aria-label={`${contact.name} signs`}
+            />
+            <span
+              aria-hidden="true"
+              className={clsx(
+                'flex size-4 shrink-0 items-center justify-center rounded-full border',
+                chosen
+                  ? 'border-brand-cloud-blue bg-brand-cloud-blue text-white dark:border-indigo-400 dark:bg-indigo-500'
+                  : 'border-gray-300 dark:border-gray-500',
+              )}
+            >
+              {chosen && <CheckIcon className="size-3" />}
+            </span>
+            <span className="font-medium whitespace-nowrap">
+              {contact.name}
+            </span>
+            {contact.role && (
+              <span className="min-w-0 truncate text-xs text-gray-500 dark:text-gray-400">
+                {contact.role}
+              </span>
+            )}
+          </label>
+        )
+      })}
+    </div>
+  )
 }
 
 /** Read-only probe of EmailModal's draft slot (never written from here). */
@@ -546,6 +649,7 @@ export function SponsorSendModal({
   onSent,
   sponsorForConference,
   kind = 'information',
+  contractSend,
   domain,
   fromEmail,
   senderName,
@@ -559,7 +663,31 @@ export function SponsorSendModal({
     () => sponsorForConference.contactPersons ?? [],
     [sponsorForConference.contactPersons],
   )
-  const defaultKey = useMemo(() => defaultRecipientKey(contacts), [contacts])
+  // CONTRACT KIND (#1264): one action by state, decided here for the label,
+  // the template and the preview, and on the server for the effect.
+  const isContract = kind === 'contract'
+  const contractAction = contractActionFor(sponsorForConference)
+  // The contact the agreement was issued to, if they still are one.
+  const signerContactKey = useMemo(
+    () =>
+      contacts.find(
+        (c) =>
+          !!c.email &&
+          !!sponsorForConference.signerEmail &&
+          canonicalEmail(c.email) ===
+            canonicalEmail(sponsorForConference.signerEmail),
+      )?._key,
+    [contacts, sponsorForConference.signerEmail],
+  )
+  // The reminder and the signed copy start with the signer on record; any
+  // other send with the primary contact.
+  const defaultKey = useMemo(
+    () =>
+      (isContract && contractAction !== 'send'
+        ? signerContactKey
+        : undefined) ?? defaultRecipientKey(contacts),
+    [contacts, isContract, contractAction, signerContactKey],
+  )
 
   const [selectedKeys, setSelectedKeys] = useState<ReadonlySet<string>>(
     () => new Set(defaultKey ? [defaultKey] : []),
@@ -579,7 +707,9 @@ export function SponsorSendModal({
     if (!isOpen) seededForRef.current = null
   }, [isOpen, sponsorForConference._id, defaultKey])
 
-  const draftKey = `sponsor-send-${kind}-${sponsorForConference._id}`
+  // A contract draft belongs to its action: a "send" draft must not reopen
+  // as the reminder's starting text.
+  const draftKey = `sponsor-send-${kind}${isContract ? `-${contractAction}` : ''}-${sponsorForConference._id}`
 
   // The template a send started from. It is PERSISTED THROUGH EmailModal's
   // `additionalFields`, which the composer saves in the SAME debounced write
@@ -589,6 +719,8 @@ export function SponsorSendModal({
   // The ref is what the send reads (always current, even mid-event); the
   // state mirror is what the RENDER reads (the picker's selected value, the
   // recipients-changed hint). Both are written only through rememberApplied.
+  // Contract kind: the chosen signer (first send), reset per close.
+  const [signerChoice, setSignerChoice] = useState<string | null>(null)
   const appliedTemplateRef = useRef<AppliedTemplate | null>(null)
   const [appliedTemplate, setAppliedTemplate] =
     useState<AppliedTemplate | null>(null)
@@ -601,12 +733,18 @@ export function SponsorSendModal({
       appliedTemplateRef.current = null
       // eslint-disable-next-line react-hooks/set-state-in-effect -- reset per close
       setAppliedTemplate(null)
+      // A signer chosen for one sponsor must not survive to the next open
+      // (contact keys copied from a previous year CAN collide).
+      setSignerChoice(null)
     }
   }, [isOpen])
   const provenanceFields: Record<string, string> = appliedTemplate
     ? {
         templateId: appliedTemplate.id,
         templateRecipientKeys: (appliedTemplate.recipientKeys ?? []).join(','),
+        ...(appliedTemplate.signerKey !== undefined && {
+          templateSignerKey: appliedTemplate.signerKey,
+        }),
       }
     : {}
   /** EmailModal restored a draft: adopt the provenance saved WITH it. */
@@ -623,7 +761,15 @@ export function SponsorSendModal({
       fields.templateRecipientKeys.length > 0
         ? fields.templateRecipientKeys.split(',')
         : []
-    rememberApplied({ id, recipientKeys: keys })
+    rememberApplied({
+      id,
+      recipientKeys: keys,
+      signerKey:
+        typeof fields.templateSignerKey === 'string' &&
+        fields.templateSignerKey.length > 0
+          ? fields.templateSignerKey
+          : undefined,
+    })
   }
 
   const crmContext = {
@@ -662,13 +808,39 @@ export function SponsorSendModal({
     () =>
       hasDraft
         ? undefined
-        : pickDefaultTemplate(templatesQuery.data, kind, crmContext),
+        : pickDefaultTemplate(
+            templatesQuery.data,
+            kind,
+            crmContext,
+            isContract ? CONTRACT_ACTION_SLUGS[contractAction] : undefined,
+          ),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- crmContext is derived from the sponsor
     [hasDraft, templatesQuery.data, kind, sponsorForConference._id],
   )
-  const selectedNames = contacts
-    .filter((c) => selectedKeys.has(c._key))
-    .map((c) => c.name)
+  // The signer on record is mailed by the server for a reminder or the
+  // signed copy whenever they are not among the ticked contacts — not a
+  // contact any more, or unticked. They count as a recipient here.
+  const signerOnRecordMailed =
+    isContract &&
+    contractAction !== 'send' &&
+    !!sponsorForConference.signerEmail &&
+    !(signerContactKey && selectedKeys.has(signerContactKey))
+  const selectedCount = selectedKeys.size + (signerOnRecordMailed ? 1 : 0)
+  // The names a template's CONTACT_NAMES merges — the ticked contacts plus
+  // the signer on record the server mails anyway, in the server's order.
+  const selectedNames = [
+    ...contacts.filter((c) => selectedKeys.has(c._key)).map((c) => c.name),
+    // The same fallback as the server's recipient for the signer on record
+    // (name → sponsor name → canonical address), so the merged greeting and
+    // the server's re-merge agree and the template is not recorded as edited.
+    ...(signerOnRecordMailed
+      ? [
+          sponsorForConference.signerName ??
+            sponsorForConference.sponsor.name ??
+            canonicalEmail(sponsorForConference.signerEmail),
+        ]
+      : []),
+  ]
 
   // REGISTRATION KIND (#1263): the sponsor's portal link, prepared on open
   // through `registration.generateToken` — which returns the EXISTING token
@@ -676,6 +848,50 @@ export function SponsorSendModal({
   // link that is already in a colleague's inbox. The server builds the link
   // again from the stored token at send time; this one is for the preview.
   const isRegistration = kind === 'registration'
+
+  // Contract kind: the signer is one of the chosen recipients (first send),
+  // defaulting to the stored signer, then the primary contact. Readiness is
+  // asked of the server, which refuses the same way at send.
+  const selectedContacts = contacts.filter((c) => selectedKeys.has(c._key))
+  const defaultSignerKey =
+    selectedContacts.find((c) => c._key === signerContactKey)?._key ??
+    selectedContacts.find((c) => c._key === defaultKey)?._key ??
+    selectedContacts[0]?._key
+  const signerKey =
+    signerChoice && selectedKeys.has(signerChoice)
+      ? signerChoice
+      : defaultSignerKey
+  const signerContact = contacts.find((c) => c._key === signerKey)
+  const readinessQuery =
+    api.sponsor.contractTemplates.contractReadiness.useQuery(
+      { id: sponsorForConference._id },
+      { enabled: isOpen && isContract && contractAction === 'send' },
+    )
+  const readinessMissing =
+    isContract && contractAction === 'send' && readinessQuery.data
+      ? readinessQuery.data.missing.filter((m) => m.severity === 'required')
+      : []
+  // The reminder and the signed copy address the stored signer; the first
+  // send, whoever is chosen above.
+  const contractSigner =
+    contractAction === 'send'
+      ? { name: signerContact?.name, email: signerContact?.email }
+      : {
+          name:
+            sponsorForConference.signerName ??
+            sponsorForConference.sponsor.name,
+          email: sponsorForConference.signerEmail,
+        }
+  const contractValue = sponsorForConference.contractValue
+    ? `${formatNumber(sponsorForConference.contractValue)} ${sponsorForConference.contractCurrency || 'NOK'}`
+    : undefined
+  const contractLinkUrl =
+    contractAction === 'remind'
+      ? sponsorForConference.signingUrl
+      : contractAction === 'signed-copy' &&
+          sponsorForConference.contractSignedBy
+        ? sponsorForConference.contractDocument?.asset?.url
+        : undefined
   const linkMutation = api.registration.generateToken.useMutation()
   const [portalLink, setPortalLink] = useState<{
     forSponsor: string
@@ -728,6 +944,11 @@ export function SponsorSendModal({
     senderName,
     tierName: sponsorForConference.tier?.title,
     portalUrl,
+    ...(isContract && {
+      signerName: contractSigner?.name,
+      signerEmail: contractSigner?.email,
+      contractValue,
+    }),
   })
   // EmailModal hands its setters to the template slot; keeping them lets the
   // greeting be re-merged when the recipients change AFTER a template was
@@ -750,6 +971,7 @@ export function SponsorSendModal({
     rememberApplied({
       id: template._id,
       recipientKeys: Array.from(selectedKeys),
+      signerKey: isContract ? signerKey : undefined,
     })
     editorRef.current?.setSubject(subject)
     editorRef.current?.setMessage(body)
@@ -762,13 +984,19 @@ export function SponsorSendModal({
     !!appliedTemplateDoc &&
     !!appliedKeys &&
     (appliedKeys.length !== selectedKeys.size ||
-      appliedKeys.some((k) => !selectedKeys.has(k)))
+      appliedKeys.some((k) => !selectedKeys.has(k)) ||
+      // Contract kind: SIGNER_NAME was merged for a different signer.
+      (isContract &&
+        contractAction === 'send' &&
+        appliedTemplate?.signerKey !== undefined &&
+        appliedTemplate.signerKey !== signerKey))
 
   const initialFromDefault = useMemo(() => {
     if (!defaultTemplate) return undefined
     return {
       id: defaultTemplate._id,
       recipientKeys: Array.from(selectedKeys),
+      signerKey: isContract ? signerKey : undefined,
       subject: processTemplateVariables(
         defaultTemplate.subject,
         templateVariables,
@@ -869,7 +1097,10 @@ export function SponsorSendModal({
     .filter((code) => selectedCodes.has(code))
 
   const kindLabel = COMMUNICATION_KIND_LABELS[kind]
-  const selectedCount = selectedKeys.size
+  // The button says what will happen (story 14).
+  const actionLabel = isContract
+    ? CONTRACT_ACTION_LABELS[contractAction]
+    : 'Send'
 
   const handleSend = async ({
     subject,
@@ -898,6 +1129,22 @@ export function SponsorSendModal({
       throw new Error(PORTAL_URL_WRONG_KIND_MESSAGE)
     }
     // The preview showed no link, so nothing is sent until it does.
+    if (isContract && contractAction === 'send') {
+      if (readinessQuery.isError) {
+        throw new Error(
+          'The contract readiness check could not be loaded. Close and try again.',
+        )
+      }
+      if (!readinessQuery.data) {
+        throw new Error('Checking whether the contract can be sent…')
+      }
+      if (readinessMissing.length > 0) {
+        throw new Error(
+          `The contract cannot be sent yet. Missing: ${readinessMissing.map((m) => m.label).join(', ')}.`,
+        )
+      }
+      if (!signerKey) throw new Error('Choose who signs the agreement')
+    }
     if (isRegistration && !portalUrl) {
       throw new Error(
         portalLinkError
@@ -913,6 +1160,13 @@ export function SponsorSendModal({
       subject,
       message: JSON.stringify(message as PortableTextBlockForHTML[]),
       ...(isDiscount && { discountCodes: chosenCodes }),
+      ...(isContract && { contractAction }),
+      ...(isContract &&
+        contractAction === 'send' && {
+          signerKey,
+          contractTemplateId: contractSend?.contractTemplateId,
+          organizerSignatureDataUrl: contractSend?.organizerSignatureDataUrl,
+        }),
     }
     // `edited` is computed on the server; only the id travels.
     const withProvenance = applied
@@ -956,6 +1210,21 @@ export function SponsorSendModal({
       title: `${kindLabel} sent`,
       message: `Sent to ${result.recipientCount} contact${result.recipientCount === 1 ? '' : 's'} at ${sponsorForConference.sponsor.name}.`,
     })
+    if ('contractCopyFailed' in result && result.contractCopyFailed) {
+      showNotification({
+        type: 'warning',
+        title: 'Copy not sent',
+        message: `The signing link went to ${contractSigner?.name ?? 'the signer'}, but the copy to the other recipients could not be sent.`,
+      })
+    }
+    if ('contractStateFailed' in result && result.contractStateFailed) {
+      showNotification({
+        type: 'warning',
+        title: 'Deal not updated',
+        message:
+          'The email went out, but the sponsor record could not be updated. Check the contract status and the signing link on the sponsor.',
+      })
+    }
     if ('linkFailed' in result && result.linkFailed) {
       showNotification({
         type: 'warning',
@@ -1016,7 +1285,13 @@ export function SponsorSendModal({
                         portalUrl,
                         theme: conference.theme,
                       })}`
-                    : messageHTML,
+                    : isContract
+                      ? `${messageHTML}${contractCardHtml({
+                          action: contractAction,
+                          url: contractLinkUrl,
+                          theme: conference.theme,
+                        })}`
+                      : messageHTML,
             }}
           />
         }
@@ -1040,8 +1315,7 @@ export function SponsorSendModal({
     recipientsChangedSinceApply && appliedTemplateDoc && selectedCount > 0 ? (
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <p className="font-inter text-sm text-amber-700 dark:text-amber-300">
-          The recipients changed after the template was applied, so the greeting
-          may name the wrong person.
+          {`The recipients${isContract ? ' or the signer' : ''} changed after the template was applied, so the greeting may name the wrong person.`}
         </p>
         <button
           type="button"
@@ -1053,7 +1327,7 @@ export function SponsorSendModal({
       </div>
     ) : null
   const noRecipientHint =
-    contacts.length > 0 && selectedCount === 0 ? (
+    (contacts.length > 0 || signerOnRecordMailed) && selectedCount === 0 ? (
       <p className="font-inter text-sm text-amber-700 dark:text-amber-300">
         Choose at least one recipient before sending.
       </p>
@@ -1084,6 +1358,75 @@ export function SponsorSendModal({
         (package, contract and signing status), not the registration form.
       </p>
     ) : null
+  // Contract kind (#1264): the readiness refusal names what is missing
+  // (story 11); the server refuses identically at send.
+  const contractReadinessHint =
+    isContract && contractAction === 'send' ? (
+      readinessQuery.isError ? (
+        <p
+          role="alert"
+          className="font-inter text-sm text-red-600 dark:text-red-400"
+        >
+          The contract readiness check could not be loaded.
+        </p>
+      ) : readinessMissing.length > 0 ? (
+        <div
+          role="alert"
+          className="font-inter rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-800 dark:border-red-700 dark:bg-red-900/20 dark:text-red-200"
+        >
+          <p className="font-medium">The contract cannot be sent yet.</p>
+          <ul className="mt-1 list-disc pl-5">
+            {readinessMissing.map((m) => (
+              <li key={m.field}>{m.label}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null
+    ) : null
+  // The signer on record is not a contact (an external signer, or one since
+  // removed): the server mails them too, and says so here.
+  // Only the signer receives the link (possession is authorization to sign);
+  // the other recipients get the same email with a card naming the signer.
+  const signingLinkNotice =
+    isContract &&
+    contractAction !== 'signed-copy' &&
+    selectedCount > 1 &&
+    contractSigner?.name ? (
+      <p
+        role="status"
+        className="font-inter text-sm text-gray-600 dark:text-gray-300"
+      >
+        Only {contractSigner.name} receives the signing link; the other
+        recipients get a copy without it.
+      </p>
+    ) : null
+  const externalSignerNotice = signerOnRecordMailed ? (
+    <p
+      role="status"
+      className="font-inter text-sm text-gray-600 dark:text-gray-300"
+    >
+      {contractAction === 'remind' ? 'The reminder' : 'The signed copy'} also
+      goes to the signer on record,{' '}
+      {sponsorForConference.signerName
+        ? `${sponsorForConference.signerName} (${sponsorForConference.signerEmail})`
+        : sponsorForConference.signerEmail}
+      , who is{' '}
+      {signerContactKey ? 'not ticked above' : 'not among the contacts'}.
+    </p>
+  ) : null
+  const contractLinkMissingHint =
+    isContract && contractAction !== 'send' && !contractLinkUrl ? (
+      <p
+        role="alert"
+        className="font-inter text-sm text-red-600 dark:text-red-400"
+      >
+        {contractAction === 'remind'
+          ? 'No signing link is stored for this sponsor; the reminder cannot be sent.'
+          : sponsorForConference.contractSignedBy
+            ? 'No signed agreement is stored for this sponsor yet.'
+            : 'The signed status was set manually; no digitally signed document is stored, so there is no signed copy to send.'}
+      </p>
+    ) : null
   const portalLinkHint = !isRegistration ? null : portalLinkError ? (
     <p
       role="alert"
@@ -1104,19 +1447,27 @@ export function SponsorSendModal({
     <EmailModal
       isOpen={isOpen && templatesSettled}
       onClose={onClose}
-      title={`Send ${kindLabel.toLowerCase()}`}
+      title={isContract ? actionLabel : `Send ${kindLabel.toLowerCase()}`}
       recipientInfo={
-        <SponsorRecipientPicker
-          contacts={contacts}
-          selectedKeys={selectedKeys}
-          defaultKey={defaultKey}
-          onToggle={toggleRecipient}
-        />
+        contacts.length === 0 && signerOnRecordMailed ? (
+          <span className="font-inter text-sm text-gray-600 dark:text-gray-300">
+            No contact persons on this sponsor.
+          </span>
+        ) : (
+          <SponsorRecipientPicker
+            contacts={contacts}
+            selectedKeys={selectedKeys}
+            defaultKey={defaultKey}
+            onToggle={toggleRecipient}
+          />
+        )
       }
       contextInfo={`Sponsor: ${sponsorForConference.sponsor.name}`}
       onSend={handleSend}
       submitButtonText={
-        selectedCount > 1 ? `Send to ${selectedCount} contacts` : 'Send'
+        selectedCount > 1
+          ? `${actionLabel} to ${selectedCount} recipients`
+          : actionLabel
       }
       storageKey={draftKey}
       additionalFields={provenanceFields}
@@ -1125,6 +1476,11 @@ export function SponsorSendModal({
       previewComponent={createPreview}
       brandColor={emailBrandColor(conference.theme)}
       fromAddress={fromEmail}
+      // A reminder or signed copy appends its card: a subject-only template
+      // (an empty body) is still a complete email.
+      allowEmptyBody={
+        isContract && contractAction !== 'send' && !!contractLinkUrl
+      }
       warningContent={
         (localhostWarning ||
           noRecipientHint ||
@@ -1132,6 +1488,10 @@ export function SponsorSendModal({
           noInviteLinkHint ||
           registrationCompleteNotice ||
           portalLinkHint ||
+          contractReadinessHint ||
+          contractLinkMissingHint ||
+          signingLinkNotice ||
+          externalSignerNotice ||
           recipientsChangedHint ||
           templatesFailedNotice) && (
           <div className="space-y-3">
@@ -1142,30 +1502,45 @@ export function SponsorSendModal({
             {noCodeHint}
             {registrationCompleteNotice}
             {portalLinkHint}
+            {contractReadinessHint}
+            {contractLinkMissingHint}
+            {signingLinkNotice}
+            {externalSignerNotice}
             {recipientsChangedHint}
           </div>
         )
       }
       extraField={
-        isDiscount
+        isContract && contractAction === 'send'
           ? {
-              label: 'Codes:',
+              label: 'Signer:',
               content: (
-                <SponsorDiscountCodePicker
-                  options={codeOptions}
-                  selectedCodes={selectedCodes}
-                  onToggle={toggleCode}
-                  state={
-                    codesQuery.isError
-                      ? 'error'
-                      : codesSeeded
-                        ? 'ready'
-                        : 'loading'
-                  }
+                <SponsorSignerPicker
+                  contacts={selectedContacts}
+                  signerKey={signerKey}
+                  onChoose={setSignerChoice}
                 />
               ),
             }
-          : undefined
+          : isDiscount
+            ? {
+                label: 'Codes:',
+                content: (
+                  <SponsorDiscountCodePicker
+                    options={codeOptions}
+                    selectedCodes={selectedCodes}
+                    onToggle={toggleCode}
+                    state={
+                      codesQuery.isError
+                        ? 'error'
+                        : codesSeeded
+                          ? 'ready'
+                          : 'loading'
+                    }
+                  />
+                ),
+              }
+            : undefined
       }
       templateSelector={({ setSubject, setMessage }) => {
         editorRef.current = { setSubject, setMessage }
@@ -1179,22 +1554,26 @@ export function SponsorSendModal({
             senderName={senderName}
             tierName={sponsorForConference.tier?.title}
             portalUrl={portalUrl}
+            signerName={isContract ? contractSigner?.name : undefined}
+            signerEmail={isContract ? contractSigner?.email : undefined}
+            contractValue={isContract ? contractValue : undefined}
             selectedId={appliedTemplate?.id ?? ''}
             onApply={(_subject, _body, template: SponsorEmailTemplate) =>
               applyTemplate(template)
             }
             crmContext={crmContext}
             excludeCategories={
-              (kind as CommunicationKind) === 'contract'
-                ? NON_CONTRACT_CATEGORIES
-                : ['contract']
+              isContract ? NON_CONTRACT_CATEGORIES : ['contract']
             }
           />
         )
       }}
       initialValues={{
         subject:
-          initialFromDefault?.subject ?? `${kindLabel}: ${conference.title}`,
+          initialFromDefault?.subject ??
+          (isContract
+            ? `Sponsorship Agreement — ${conference.title}`
+            : `${kindLabel}: ${conference.title}`),
         message:
           initialFromDefault?.body ??
           (isDiscount

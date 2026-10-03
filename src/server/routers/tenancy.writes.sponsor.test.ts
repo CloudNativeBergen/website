@@ -45,6 +45,24 @@ vi.mock('@/lib/conference/sanity', () => ({
 
 vi.mock('@/lib/sanity/client', () => {
   const fetch = async (query: string, params?: Record<string, unknown>) => {
+    // The contract send's fresh state read before any costly work (#1264):
+    // nothing out, nothing reserved.
+    if (query.includes('"addonIds": addons[]._ref }')) {
+      return {
+        _rev: 'rev-1',
+        contractStatus: 'verbal-agreement',
+        signatureStatus: 'not-started',
+        signatureId: null,
+        signingUrl: null,
+        contractReservedAt: null,
+        // The same terms the request's own read saw (CONTRACT_READY_SFC).
+        contractValue: 50000,
+        contractCurrency: 'NOK',
+        status: 'negotiating',
+        tierId: 'tier-A',
+        addonIds: [],
+      }
+    }
     if (query.includes('"memberOrgIds"')) {
       const id = params?.id as string | undefined
       if (id && id in h.tenantById) return h.tenantById[id]
@@ -622,12 +640,28 @@ describe('crm.activities.list is conference-scoped (#863 row 4)', () => {
 })
 
 /**
- * #863 rows 5-6. Both procedures take a `templateId` straight from the client
- * and read it with the GLOBAL `getContractTemplate`. `sendContract` renders the
- * result into the PDF this conference signs and mails; `generatePdf` hands it
- * back to the caller as base64, so a foreign template's full terms were readable
- * without sending anything.
+ * #863 rows 5-6. Both procedures take a template id straight from the client
+ * and read it with the GLOBAL `getContractTemplate`. The contract send
+ * (`crm.sendCommunication`, kind `contract`, #1264) renders the result into the
+ * PDF this conference signs and mails; `generatePdf` hands it back to the
+ * caller as base64, so a foreign template's full terms were readable without
+ * sending anything.
  */
+const CONTRACT_SEND = {
+  sponsorForConferenceId: 'sfc-A',
+  kind: 'contract' as const,
+  contractAction: 'send' as const,
+  recipientKeys: ['c1'],
+  subject: 'Sponsorship Agreement',
+  message: JSON.stringify([
+    {
+      _type: 'block',
+      _key: 'b1',
+      style: 'normal',
+      children: [{ _type: 'span', _key: 's1', text: 'Please sign.' }],
+    },
+  ]),
+}
 describe('contract rendering refuses a foreign template (#863 rows 5-6)', () => {
   async function settle<T>(p: Promise<T>) {
     try {
@@ -637,16 +671,21 @@ describe('contract rendering refuses a foreign template (#863 rows 5-6)', () => 
     }
   }
 
-  it('sendContract does not render another tenant’s terms', async () => {
+  it('a contract send does not render another tenant’s terms', async () => {
     // The sponsor half is OURS and contract-ready, so nothing but the template
     // guard can stop this. Unguarded, `rendered()` holds the other tenant's
     // template — which is what would have been signed and mailed.
-    h.tenantById = { 'tpl-B': tenantOf('theirs', 'contractTemplate') }
+    // The sponsor half is OURS (the send guards it first, #1261), so only the
+    // template guard can refuse.
+    h.tenantById = {
+      'sfc-A': tenantOf('ours', 'sponsorForConference'),
+      'tpl-B': tenantOf('theirs', 'contractTemplate'),
+    }
 
     const outcome = await settle(
-      sponsor().crm.sendContract({
-        sponsorForConferenceId: 'sfc-A',
-        templateId: 'tpl-B',
+      sponsor().crm.sendCommunication({
+        ...CONTRACT_SEND,
+        contractTemplateId: 'tpl-B',
       }),
     )
 
@@ -686,15 +725,24 @@ describe('contract rendering refuses a foreign template (#863 rows 5-6)', () => 
     expect(rendered()).toEqual(['Our terms'])
   })
 
-  it('sendContract still reaches OUR OWN template', async () => {
+  it('a contract send still reaches OUR OWN template', async () => {
     // Delivery itself (asset upload, mail) is out of scope here; getting past
     // the guard to the template read is the positive result.
-    h.tenantById = { 'tpl-A': tenantOf('ours', 'contractTemplate') }
+    h.tenantById = {
+      'sfc-A': tenantOf('ours', 'sponsorForConference'),
+      'tpl-A': tenantOf('ours', 'contractTemplate'),
+    }
+    // Past the guards, the contract kind also refuses a localhost domain
+    // before reading the template; this row is about reaching the template.
+    h.getConference.mockResolvedValue({
+      ...(await h.getConference()),
+      domain: 'ours.example',
+    })
 
     await settle(
-      sponsor().crm.sendContract({
-        sponsorForConferenceId: 'sfc-A',
-        templateId: 'tpl-A',
+      sponsor().crm.sendCommunication({
+        ...CONTRACT_SEND,
+        contractTemplateId: 'tpl-A',
       }),
     )
 
