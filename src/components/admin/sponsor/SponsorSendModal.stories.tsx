@@ -534,6 +534,10 @@ export const Contract: Story = {
   play: async ({ canvasElement }) => {
     const body = within(canvasElement.ownerDocument.body)
     await body.findByRole('checkbox', { name: 'Kari Nordmann' })
+    // The action label (the send button itself reads "Disabled in Dev" locally).
+    await expect(
+      body.getByRole('heading', { name: 'Send contract' }),
+    ).toBeInTheDocument()
     await expect(
       body.getByRole('radio', { name: 'Kari Nordmann signs' }),
     ).toBeChecked()
@@ -612,6 +616,9 @@ export const ContractReminder: Story = {
   play: async ({ canvasElement }) => {
     const body = within(canvasElement.ownerDocument.body)
     await body.findByRole('checkbox', { name: 'Kari Nordmann' })
+    await expect(
+      body.getByRole('heading', { name: 'Send reminder' }),
+    ).toBeInTheDocument()
     await expect(body.queryByRole('radiogroup')).not.toBeInTheDocument()
     await userEvent.click(body.getByRole('button', { name: /Preview/ }))
     const button = await body.findByText('Review & sign agreement')
@@ -642,6 +649,9 @@ export const ContractSignedCopy: Story = {
   play: async ({ canvasElement }) => {
     const body = within(canvasElement.ownerDocument.body)
     await body.findByRole('checkbox', { name: 'Kari Nordmann' })
+    await expect(
+      body.getByRole('heading', { name: 'Send signed copy' }),
+    ).toBeInTheDocument()
     await userEvent.click(body.getByRole('button', { name: /Preview/ }))
     const button = await body.findByText('Download signed agreement')
     await expect(button.closest('a')).toHaveAttribute(

@@ -11,12 +11,17 @@ const h = vi.hoisted(() => ({
   sfc: null as Record<string, unknown> | null,
   template: null as Record<string, unknown> | null,
   send: vi.fn(),
+  sendForSigning: vi.fn(),
   fetches: [] as string[],
   patches: [] as Array<{ id: string; sets: Record<string, unknown> }>,
+  incs: [] as Array<{ id: string; field: string; by: number }>,
   creates: [] as Array<Record<string, unknown>>,
 }))
 
 vi.mock('server-only', () => ({}))
+vi.mock('@/lib/contract-signing', () => ({
+  getSigningProvider: () => ({ sendForSigning: h.sendForSigning }),
+}))
 vi.mock('@/lib/sponsor-crm/sanity', () => ({
   getSponsorForConference: async () => ({ sponsorForConference: h.sfc }),
 }))
@@ -49,6 +54,13 @@ vi.mock('@/lib/sanity/client', () => {
       setIfMissing: () => chain,
       unset: () => chain,
       ifRevisionId: () => chain,
+      inc: (v: Record<string, number>) => {
+        for (const [k, by] of Object.entries(v)) {
+          h.incs.push({ id, field: k, by })
+          sets[k] = ((h.sfc?.[k] as number | undefined) ?? 0) + by
+        }
+        return chain
+      },
       commit: async () => {
         h.patches.push({ id, sets })
         return {}
@@ -91,6 +103,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   h.fetches = []
   h.patches = []
+  h.incs = []
   h.creates = []
   h.sfc = {
     _id: 'sfc-1',
@@ -199,7 +212,10 @@ describe('sendContractReminderBySystem', () => {
       templateEdited: false,
       attachments: [expect.objectContaining({ url: SIGNING_URL })],
     })
-    expect(record!.createdBy).toBeUndefined()
+    // A system actor: no author reference at all on the record it wrote.
+    expect(record).not.toHaveProperty('createdBy')
+    expect(h.sendForSigning).not.toHaveBeenCalled()
+    expect(h.incs).toEqual([{ id: 'sfc-1', field: 'reminderCount', by: 1 }])
     expect(h.patches).toEqual([{ id: 'sfc-1', sets: { reminderCount: 2 } }])
   })
 
@@ -210,6 +226,16 @@ describe('sendContractReminderBySystem', () => {
       ok: false,
       reason: 'not-pending',
     })
+    expect(h.send).not.toHaveBeenCalled()
+  })
+
+  it('skips a pending signature with no stored signing link — never a first send from the cron', async () => {
+    h.sfc!.signingUrl = undefined
+    expect(await sendContractReminderBySystem('sfc-1')).toEqual({
+      ok: false,
+      reason: 'not-pending',
+    })
+    expect(h.sendForSigning).not.toHaveBeenCalled()
     expect(h.send).not.toHaveBeenCalled()
   })
 

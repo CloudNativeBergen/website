@@ -698,6 +698,8 @@ export function SponsorSendModal({
   // The ref is what the send reads (always current, even mid-event); the
   // state mirror is what the RENDER reads (the picker's selected value, the
   // recipients-changed hint). Both are written only through rememberApplied.
+  // Contract kind: the chosen signer (first send), reset per close.
+  const [signerChoice, setSignerChoice] = useState<string | null>(null)
   const appliedTemplateRef = useRef<AppliedTemplate | null>(null)
   const [appliedTemplate, setAppliedTemplate] =
     useState<AppliedTemplate | null>(null)
@@ -710,6 +712,9 @@ export function SponsorSendModal({
       appliedTemplateRef.current = null
       // eslint-disable-next-line react-hooks/set-state-in-effect -- reset per close
       setAppliedTemplate(null)
+      // A signer chosen for one sponsor must not survive to the next open
+      // (contact keys copied from a previous year CAN collide).
+      setSignerChoice(null)
     }
   }, [isOpen])
   const provenanceFields: Record<string, string> = appliedTemplate
@@ -806,7 +811,6 @@ export function SponsorSendModal({
   // defaulting to the stored signer, then the primary contact. Readiness is
   // asked of the server, which refuses the same way at send.
   const selectedContacts = contacts.filter((c) => selectedKeys.has(c._key))
-  const [signerChoice, setSignerChoice] = useState<string | null>(null)
   const defaultSignerKey =
     selectedContacts.find(
       (c) =>

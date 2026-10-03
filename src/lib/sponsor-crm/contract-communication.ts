@@ -6,7 +6,7 @@ import {
   conferenceBaseUrl,
   hasConferenceDomain,
 } from '@/lib/conference/baseUrl'
-import { clientWrite } from '@/lib/sanity/client'
+import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
 import { getCurrentDateTime } from '@/lib/time'
 import { formatNumber } from '@/lib/format'
 import { getSigningProvider } from '@/lib/contract-signing'
@@ -190,7 +190,9 @@ export async function prepareContractSend(
         try {
           await clientWrite
             .patch(sfc._id)
-            .set({ reminderCount: (sfc.reminderCount || 0) + 1 })
+            // Atomic: an organizer's reminder and the cron's may land together.
+            .setIfMissing({ reminderCount: 0 })
+            .inc({ reminderCount: 1 })
             .commit()
           return { ok: true }
         } catch (error) {
@@ -379,11 +381,33 @@ export async function prepareContractSend(
     appendHtml: contractCardHtml({ action, url: signingUrl, theme }),
     attachments: contractAttachments(action, signingUrl),
     // The email is out: the deal is contract-sent with a pending signature.
+    // Revision-conditional on a FRESH read: two organizers sending at once
+    // both created an agreement and both mailed; only the first write may
+    // store its token, or the other email's link would be dead against the
+    // stored signatureId. The loser is told (`contractStateFailed`).
     afterSend: async () => {
       const actorId = actor.id ?? 'system'
       try {
+        const current = await clientReadUncached.fetch<{
+          contractStatus: string | null
+          signatureStatus: string | null
+          signatureId: string | null
+          signingUrl: string | null
+          _rev: string
+        } | null>(
+          `*[_type == "sponsorForConference" && _id == $id && conference._ref == $conferenceId][0]{ contractStatus, signatureStatus, signatureId, signingUrl, _rev }`,
+          { id: sfc._id, conferenceId: conference._id },
+        )
+        if (!current || contractActionFor(current) !== 'send') {
+          console.error(
+            '[contract-send] another contract was sent first; this agreement is not stored:',
+            agreementId,
+          )
+          return { ok: false }
+        }
         await clientWrite
           .patch(sfc._id)
+          .ifRevisionId(current._rev)
           .set({
             contractStatus: 'contract-sent',
             contractSentAt: now,

@@ -2683,6 +2683,15 @@ export const sponsorRouter = router({
         // client-supplied contract template id is guarded FIRST (#863).
         let contract: ContractSendPlan | undefined
         if (input.kind === 'contract') {
+          // The removed senders' rule, kept: a dev send would create a real
+          // agreement and mail a real signer.
+          if (domain && isLocalhostDomain(domain)) {
+            throw new TRPCError({
+              code: 'PRECONDITION_FAILED',
+              message:
+                'Contract emails cannot be sent from localhost. Deploy to a production domain first.',
+            })
+          }
           if (input.contractTemplateId) {
             await requireDocumentInCurrentConference(
               input.contractTemplateId,

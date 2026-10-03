@@ -28,9 +28,13 @@ const h = vi.hoisted(() => ({
   tenantById: {} as Record<string, Record<string, unknown> | null>,
   /** The expanded sponsor the scoped read returns. */
   sfc: null as Record<string, unknown> | null,
+  /** A write lands between the post-send re-read and the flip patch. */
+  bumpRevAfterStateRead: false,
   fetches: [] as Array<{ query: string; params?: Record<string, unknown> }>,
   creates: [] as Array<Record<string, unknown>>,
   patches: [] as Array<{ id: string; sets: Record<string, unknown> }>,
+  /** Atomic increments, recorded apart from plain sets. */
+  incs: [] as Array<{ id: string; field: string; by: number }>,
   uploads: [] as Array<{ filename: string; bytes: number }>,
   send: vi.fn(),
   generatePdf: vi.fn(),
@@ -84,13 +88,28 @@ vi.mock('@/lib/sanity/client', () => {
         _rev: 'rev-1',
       }
     }
+    if (query.includes('signatureId, signingUrl, _rev }')) {
+      const snapshot = {
+        contractStatus: h.sfc?.contractStatus ?? null,
+        signatureStatus: h.sfc?.signatureStatus ?? null,
+        signatureId: h.sfc?.signatureId ?? null,
+        signingUrl: h.sfc?.signingUrl ?? null,
+        _rev: (h.sfc?._rev as string) ?? 'rev-1',
+      }
+      if (h.bumpRevAfterStateRead && h.sfc) h.sfc._rev = 'rev-2'
+      return snapshot
+    }
     if (query.includes('_type == "sponsorForConference"')) return h.sfc
     return null
   }
   const patch = (id: string) => {
     let sets: Record<string, unknown> = {}
+    let requiredRev: string | undefined
     const chain = {
-      ifRevisionId: () => chain,
+      ifRevisionId: (rev: string) => {
+        requiredRev = rev
+        return chain
+      },
       set: (v: Record<string, unknown>) => {
         sets = { ...sets, ...v }
         return chain
@@ -99,11 +118,22 @@ vi.mock('@/lib/sanity/client', () => {
       unset: () => chain,
       inc: (v: Record<string, number>) => {
         for (const [k, by] of Object.entries(v)) {
+          h.incs.push({ id, field: k, by })
           sets[k] = ((h.sfc?.[k] as number | undefined) ?? 0) + by
         }
         return chain
       },
       commit: async () => {
+        if (
+          requiredRev &&
+          h.sfc &&
+          id === h.sfc._id &&
+          ((h.sfc._rev as string) ?? 'rev-1') !== requiredRev
+        ) {
+          throw new Error(
+            'Mutation(s) failed with 1 error(s): revision mismatch',
+          )
+        }
         h.patches.push({ id, sets })
         if (h.sfc && id === h.sfc._id) Object.assign(h.sfc, sets)
         return { ...sets }
@@ -224,6 +254,8 @@ beforeEach(() => {
   h.creates = []
   h.patches = []
   h.uploads = []
+  h.incs = []
+  h.bumpRevAfterStateRead = false
   h.tenant = { _type: 'sponsorForConference', conferenceId: CONF }
   h.tenantById = { 'tpl-A': { _type: 'contractTemplate', conferenceId: CONF } }
   h.sfc = {
@@ -363,6 +395,45 @@ describe('first send', () => {
     })
   })
 
+  it('loses to a first send that landed during the email round-trip: the email is out, nothing is stored, and the organizer is told', async () => {
+    h.send.mockImplementation(async () => {
+      // Another organizer's contract send completed while the provider was busy.
+      Object.assign(h.sfc!, {
+        contractStatus: 'contract-sent',
+        signatureStatus: 'pending',
+        signatureId: 'agr-other',
+        signingUrl: `https://${DOMAIN}/sponsor/contract/sign/agr-other`,
+      })
+      return { data: { id: 'resend-msg-1' }, error: null }
+    })
+    const result = await sponsor().crm.sendCommunication(INPUT)
+    expect(result).toMatchObject({ success: true, contractStateFailed: true })
+    // The stored agreement is still the other one.
+    expect(h.sfc!.signatureId).toBe('agr-other')
+    expect(sfcPatches().some((p) => 'signatureId' in p.sets)).toBe(false)
+    expect(activities('contract_status_change')).toEqual([])
+  })
+
+  it('does not store its agreement when a write lands between the re-read and the patch', async () => {
+    h.bumpRevAfterStateRead = true
+    const result = await sponsor().crm.sendCommunication(INPUT)
+    expect(result).toMatchObject({ success: true, contractStateFailed: true })
+    expect(sfcPatches().some((p) => 'signatureId' in p.sets)).toBe(false)
+  })
+
+  it('refuses to send from localhost — a real agreement would be created for a real signer', async () => {
+    h.getConference.mockResolvedValue({
+      ...(await h.getConference()),
+      domain: 'localhost:3000',
+    })
+    await expect(sponsor().crm.sendCommunication(INPUT)).rejects.toMatchObject({
+      code: 'PRECONDITION_FAILED',
+      message: expect.stringMatching(/localhost/),
+    })
+    expect(h.generatePdf).not.toHaveBeenCalled()
+    expect(h.send).not.toHaveBeenCalled()
+  })
+
   it('refuses a foreign contract template before it is read', async () => {
     h.tenantById['tpl-B'] = {
       _type: 'contractTemplate',
@@ -412,6 +483,8 @@ describe('reminder', () => {
     expect(h.sendForSigning).not.toHaveBeenCalled()
     expect(h.generatePdf).not.toHaveBeenCalled()
     expect(sentHtml()).toContain(`href="${SIGNING_URL}"`)
+    // An atomic increment, not a value computed from the pre-send read.
+    expect(h.incs).toEqual([{ id: SFC, field: 'reminderCount', by: 1 }])
     expect(sfcPatches()).toEqual([{ id: SFC, sets: { reminderCount: 2 } }])
     expect(record()).toMatchObject({
       communicationKind: 'contract',

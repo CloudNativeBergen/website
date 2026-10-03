@@ -1086,7 +1086,7 @@ describe('contract kind (#1264)', () => {
     })
   })
 
-  it('first send: changing the signer after a template was applied warns, and Re-apply re-merges', async () => {
+  it('first send: changing the signer after a template was applied warns, and Re-apply records the new signer in the provenance', async () => {
     // The hint needs the applied template to exist in the list (it offers Re-apply).
     h.templates = [tpl({ _id: 'tpl-1', category: 'contract' })]
     renderModal({}, 'contract')
@@ -1099,12 +1099,20 @@ describe('contract kind (#1264)', () => {
     expect(
       screen.getByText(/or the signer changed after the template was applied/),
     ).toBeInTheDocument()
+    expect(lastAdditionalFields).toMatchObject({
+      templateSignerKey: 'c-primary',
+    })
     fireEvent.click(screen.getByRole('button', { name: 'Re-apply template' }))
     await waitFor(() =>
       expect(
         screen.queryByText(/changed after the template was applied/),
       ).not.toBeInTheDocument(),
     )
+    // The provenance now names the signer the greeting was merged for (the
+    // merged text itself is pinned in the Contract story).
+    expect(lastAdditionalFields).toMatchObject({
+      templateSignerKey: 'c-billing',
+    })
   })
 
   it('first send: the stored signer is preselected when they are among the recipients', () => {
