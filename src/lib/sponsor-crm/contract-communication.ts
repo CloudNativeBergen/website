@@ -240,162 +240,18 @@ export async function prepareContractSend(
   }
   const signer = pickSigner(sfc, recipients, args.signerKey)
 
-  let templateId = args.contractTemplateId
-  if (!templateId) {
-    const best = await findBestContractTemplate(conference._id, sfc.tier?._id)
-    if (best.error || !best.template) {
-      throw precondition(
-        `No contract template found for tier "${sfc.tier?.title ?? 'unknown'}". Create one in Settings first.`,
-      )
-    }
-    templateId = best.template._id
-  }
-  const { template, error: templateError } =
-    await getContractTemplate(templateId)
-  if (templateError || !template) {
-    throw new TRPCError({
-      code: 'NOT_FOUND',
-      message: 'Contract template not found. It may have been deleted.',
-      cause: templateError,
-    })
-  }
-
-  const primaryContact =
-    sfc.contactPersons?.find((c) => c.isPrimary) ?? sfc.contactPersons?.[0]
-  let pdfBuffer: Buffer
-  try {
-    pdfBuffer = await generateContractPdf(template, {
-      sponsor: {
-        name: sfc.sponsor.name,
-        orgNumber: sfc.sponsor.orgNumber,
-        address: sfc.sponsor.address,
-        website: sfc.sponsor.website,
-      },
-      contactPerson: {
-        name: primaryContact?.name ?? signer.name,
-        email: primaryContact?.email ?? signer.email,
-      },
-      tier: sfc.tier
-        ? { title: sfc.tier.title, tagline: sfc.tier.tagline }
-        : undefined,
-      addons: sfc.addons?.map((a) => ({ title: a.title })),
-      contractValue: sfc.contractValue,
-      contractCurrency: sfc.contractCurrency,
-      conference: {
-        title: sfc.conference.title,
-        startDate: sfc.conference.startDate,
-        endDate: sfc.conference.endDate,
-        city: sfc.conference.city,
-        organizer: sfc.conference.organizer,
-        organizerOrgNumber: sfc.conference.organizerOrgNumber,
-        organizerAddress: sfc.conference.organizerAddress,
-        venueName: sfc.conference.venueName,
-        venueAddress: sfc.conference.venueAddress,
-        sponsorEmail: sfc.conference.sponsorEmail,
-        logoBright: sfc.conference.logoBright,
-      },
-    })
-  } catch (error) {
-    throw new TRPCError({
-      code: 'INTERNAL_SERVER_ERROR',
-      message:
-        'Failed to generate contract PDF. Check that the template is valid.',
-      cause: error,
-    })
-  }
-  if (!pdfBuffer?.length) {
-    throw new TRPCError({
-      code: 'INTERNAL_SERVER_ERROR',
-      message:
-        'Contract PDF generation produced an empty document. Check the template configuration.',
-    })
-  }
-
   const now = getCurrentDateTime()
   const organizerDisplayName =
     actor.name?.trim() || actor.email?.trim() || 'Organizer'
-  if (args.organizerSignatureDataUrl) {
-    if (!actor.id || sfc.assignedTo?._id !== actor.id) {
-      throw new TRPCError({
-        code: 'FORBIDDEN',
-        message: 'Only the assigned organizer can counter-sign this contract.',
-      })
-    }
-    try {
-      pdfBuffer = await embedSignatureInPdfBuffer(
-        pdfBuffer,
-        args.organizerSignatureDataUrl,
-        organizerDisplayName,
-        {
-          signatureMarker: ORGANIZER_SIGNATURE_MARKER,
-          dateMarker: ORGANIZER_DATE_MARKER,
-        },
-      )
-    } catch (error) {
-      throw new TRPCError({
-        code: 'INTERNAL_SERVER_ERROR',
-        message: 'Failed to embed organizer signature into the contract PDF.',
-        cause: error,
-      })
-    }
-  }
-
-  const filename = `contract-${sanitizeSponsorName(sfc.sponsor.name)}.pdf`
-  let asset: { _id: string }
-  try {
-    asset = await clientWrite.assets.upload('file', pdfBuffer, {
-      filename,
-      contentType: 'application/pdf',
-    })
-  } catch (error) {
-    throw new TRPCError({
-      code: 'INTERNAL_SERVER_ERROR',
-      message: 'Failed to upload contract PDF. Please try again.',
-      cause: error,
-    })
-  }
-  if (!asset?._id) {
-    throw new TRPCError({
-      code: 'INTERNAL_SERVER_ERROR',
-      message: 'Contract PDF upload failed — no asset reference returned.',
-    })
-  }
-
-  let signingUrl: string
-  let agreementId: string
-  try {
-    const provider = getSigningProvider(sfc.conference.signingProvider)
-    const result = await provider.sendForSigning({
-      pdf: pdfBuffer,
-      filename,
-      signerEmail: signer.email,
-      agreementName: `Sponsorship Agreement - ${sfc.sponsor.name}`,
-      message: `Please sign the sponsorship agreement for ${sfc.conference.title}.`,
-      baseUrl: hasConferenceDomain(sfc.conference)
-        ? conferenceBaseUrl(sfc.conference)
-        : undefined,
-    })
-    agreementId = result.agreementId
-    if (!result.signingUrl) {
-      throw new Error('The signing provider returned no signing URL')
-    }
-    signingUrl = result.signingUrl
-  } catch (error) {
-    if (error instanceof TRPCError) throw error
-    throw new TRPCError({
-      code: 'INTERNAL_SERVER_ERROR',
-      message:
-        'Failed to create the digital signing agreement. Nothing was sent. Please try again.',
-      cause: error,
-    })
-  }
-
   // RESERVE the agreement before anything is mailed: the signing page resolves
   // the token through the stored `signatureId`, so a link that is emailed
   // before it is stored would be dead if the store failed — and two first
-  // sends racing would overwrite each other's token. Conditional on a fresh
-  // read: refused (nothing mailed) when a contract is already out, or when
-  // another send reserved within the settle window.
+  // sends racing would overwrite each other's token. Decided on a fresh read,
+  // BEFORE any costly work: refused (nothing mailed) when a contract is
+  // already out, or when another send reserved within the settle window; a
+  // reservation older than the window (a send that crashed or whose status
+  // flip failed after mailing) is REUSED, so the link already in an inbox
+  // stays the stored one and no second agreement is minted.
   const current = await clientReadUncached.fetch<{
     _rev: string
     contractStatus: string | null
@@ -412,30 +268,192 @@ export async function prepareContractSend(
       'A contract was just sent to this sponsor by someone else. Reload to see it.',
     )
   }
+  const reserved = !!current.signatureId && !!current.signingUrl
   if (
-    current.signatureId &&
+    reserved &&
     current.contractReservedAt &&
     Date.now() - new Date(current.contractReservedAt).getTime() <
       RESERVATION_SETTLE_MS
   ) {
     throw precondition(IN_FLIGHT_MESSAGE)
   }
+  let signingUrl: string
+  let agreementId: string
+  let reservation: Record<string, unknown>
+  if (reserved) {
+    signingUrl = current.signingUrl!
+    agreementId = current.signatureId!
+    reservation = {
+      signerName: signer.name,
+      signerEmail: signer.email,
+      contractReservedAt: now,
+    }
+  } else {
+    let templateId = args.contractTemplateId
+    if (!templateId) {
+      const best = await findBestContractTemplate(conference._id, sfc.tier?._id)
+      if (best.error || !best.template) {
+        throw precondition(
+          `No contract template found for tier "${sfc.tier?.title ?? 'unknown'}". Create one in Settings first.`,
+        )
+      }
+      templateId = best.template._id
+    }
+    const { template, error: templateError } =
+      await getContractTemplate(templateId)
+    if (templateError || !template) {
+      throw new TRPCError({
+        code: 'NOT_FOUND',
+        message: 'Contract template not found. It may have been deleted.',
+        cause: templateError,
+      })
+    }
+
+    const primaryContact =
+      sfc.contactPersons?.find((c) => c.isPrimary) ?? sfc.contactPersons?.[0]
+    let pdfBuffer: Buffer
+    try {
+      pdfBuffer = await generateContractPdf(template, {
+        sponsor: {
+          name: sfc.sponsor.name,
+          orgNumber: sfc.sponsor.orgNumber,
+          address: sfc.sponsor.address,
+          website: sfc.sponsor.website,
+        },
+        contactPerson: {
+          name: primaryContact?.name ?? signer.name,
+          email: primaryContact?.email ?? signer.email,
+        },
+        tier: sfc.tier
+          ? { title: sfc.tier.title, tagline: sfc.tier.tagline }
+          : undefined,
+        addons: sfc.addons?.map((a) => ({ title: a.title })),
+        contractValue: sfc.contractValue,
+        contractCurrency: sfc.contractCurrency,
+        conference: {
+          title: sfc.conference.title,
+          startDate: sfc.conference.startDate,
+          endDate: sfc.conference.endDate,
+          city: sfc.conference.city,
+          organizer: sfc.conference.organizer,
+          organizerOrgNumber: sfc.conference.organizerOrgNumber,
+          organizerAddress: sfc.conference.organizerAddress,
+          venueName: sfc.conference.venueName,
+          venueAddress: sfc.conference.venueAddress,
+          sponsorEmail: sfc.conference.sponsorEmail,
+          logoBright: sfc.conference.logoBright,
+        },
+      })
+    } catch (error) {
+      throw new TRPCError({
+        code: 'INTERNAL_SERVER_ERROR',
+        message:
+          'Failed to generate contract PDF. Check that the template is valid.',
+        cause: error,
+      })
+    }
+    if (!pdfBuffer?.length) {
+      throw new TRPCError({
+        code: 'INTERNAL_SERVER_ERROR',
+        message:
+          'Contract PDF generation produced an empty document. Check the template configuration.',
+      })
+    }
+
+    if (args.organizerSignatureDataUrl) {
+      if (!actor.id || sfc.assignedTo?._id !== actor.id) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message:
+            'Only the assigned organizer can counter-sign this contract.',
+        })
+      }
+      try {
+        pdfBuffer = await embedSignatureInPdfBuffer(
+          pdfBuffer,
+          args.organizerSignatureDataUrl,
+          organizerDisplayName,
+          {
+            signatureMarker: ORGANIZER_SIGNATURE_MARKER,
+            dateMarker: ORGANIZER_DATE_MARKER,
+          },
+        )
+      } catch (error) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to embed organizer signature into the contract PDF.',
+          cause: error,
+        })
+      }
+    }
+
+    const filename = `contract-${sanitizeSponsorName(sfc.sponsor.name)}.pdf`
+    let asset: { _id: string }
+    try {
+      asset = await clientWrite.assets.upload('file', pdfBuffer, {
+        filename,
+        contentType: 'application/pdf',
+      })
+    } catch (error) {
+      throw new TRPCError({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'Failed to upload contract PDF. Please try again.',
+        cause: error,
+      })
+    }
+    if (!asset?._id) {
+      throw new TRPCError({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'Contract PDF upload failed — no asset reference returned.',
+      })
+    }
+
+    try {
+      const provider = getSigningProvider(sfc.conference.signingProvider)
+      const result = await provider.sendForSigning({
+        pdf: pdfBuffer,
+        filename,
+        signerEmail: signer.email,
+        agreementName: `Sponsorship Agreement - ${sfc.sponsor.name}`,
+        message: `Please sign the sponsorship agreement for ${sfc.conference.title}.`,
+        baseUrl: hasConferenceDomain(sfc.conference)
+          ? conferenceBaseUrl(sfc.conference)
+          : undefined,
+      })
+      agreementId = result.agreementId
+      if (!result.signingUrl) {
+        throw new Error('The signing provider returned no signing URL')
+      }
+      signingUrl = result.signingUrl
+    } catch (error) {
+      if (error instanceof TRPCError) throw error
+      throw new TRPCError({
+        code: 'INTERNAL_SERVER_ERROR',
+        message:
+          'Failed to create the digital signing agreement. Nothing was sent. Please try again.',
+        cause: error,
+      })
+    }
+
+    reservation = {
+      signatureId: agreementId,
+      signingUrl,
+      contractTemplate: { _type: 'reference', _ref: templateId },
+      contractDocument: {
+        _type: 'file',
+        asset: { _type: 'reference', _ref: asset._id },
+      },
+      signerName: signer.name,
+      signerEmail: signer.email,
+      contractReservedAt: now,
+    }
+  }
+
   try {
     await clientWrite
       .patch(sfc._id)
       .ifRevisionId(current._rev)
-      .set({
-        signatureId: agreementId,
-        signingUrl,
-        contractTemplate: { _type: 'reference', _ref: templateId },
-        contractDocument: {
-          _type: 'file',
-          asset: { _type: 'reference', _ref: asset._id },
-        },
-        signerName: signer.name,
-        signerEmail: signer.email,
-        contractReservedAt: now,
-      })
+      .set(reservation)
       .commit()
   } catch (error) {
     // A write landed between the read and this patch: another send, or an
@@ -449,8 +467,16 @@ export async function prepareContractSend(
 
   const release = async () => {
     try {
+      // Only this send's token: a slow failure must never clear a later
+      // send's reservation.
       await clientWrite
-        .patch(sfc._id)
+        .patch({
+          // groq-global-scoped: ONE id, already proven to belong to this
+          // conference by the caller, further narrowed to our own token.
+          query:
+            '*[_type == "sponsorForConference" && _id == $id && signatureId == $ours]',
+          params: { id: sfc._id, ours: agreementId },
+        })
         .unset(['signatureId', 'signingUrl', 'contractReservedAt'])
         .commit()
     } catch (error) {

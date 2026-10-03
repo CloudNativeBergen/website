@@ -36,6 +36,8 @@ const h = vi.hoisted(() => ({
   sequence: [] as string[],
   /** The flip patch (contractStatus) fails. */
   flipShouldThrow: false,
+  /** Someone else's contract send completes right before the fresh read. */
+  sentByOtherAtFreshRead: false,
   fetches: [] as Array<{ query: string; params?: Record<string, unknown> }>,
   creates: [] as Array<Record<string, unknown>>,
   patches: [] as Array<{ id: string; sets: Record<string, unknown> }>,
@@ -95,6 +97,14 @@ vi.mock('@/lib/sanity/client', () => {
       }
     }
     if (query.includes('signingUrl, contractReservedAt }')) {
+      if (h.sentByOtherAtFreshRead && h.sfc) {
+        Object.assign(h.sfc, {
+          contractStatus: 'contract-sent',
+          signatureStatus: 'pending',
+          signatureId: 'agr-other',
+          signingUrl: `https://${DOMAIN}/sponsor/contract/sign/agr-other`,
+        })
+      }
       const snapshot = {
         _rev: (h.sfc?._rev as string) ?? 'rev-1',
         contractStatus: h.sfc?.contractStatus ?? null,
@@ -109,7 +119,19 @@ vi.mock('@/lib/sanity/client', () => {
     if (query.includes('_type == "sponsorForConference"')) return h.sfc
     return null
   }
-  const patch = (id: string) => {
+  const patch = (
+    selection: string | { query: string; params: Record<string, unknown> },
+  ) => {
+    // A query-based patch (the release, the closed-won promotion) applies to
+    // the sponsor only when its predicate holds against the current document.
+    const id =
+      typeof selection === 'string'
+        ? selection
+        : selection.query.includes('signatureId == $ours')
+          ? h.sfc && h.sfc.signatureId === selection.params.ours
+            ? (selection.params.id as string)
+            : 'no-match'
+          : (selection as unknown as string)
     let sets: Record<string, unknown> = {}
     let requiredRev: string | undefined
     const chain = {
@@ -274,6 +296,7 @@ beforeEach(() => {
   h.unsets = []
   h.sequence = []
   h.flipShouldThrow = false
+  h.sentByOtherAtFreshRead = false
   h.bumpRevAfterStateRead = false
   h.tenant = { _type: 'sponsorForConference', conferenceId: CONF }
   h.tenantById = { 'tpl-A': { _type: 'contractTemplate', conferenceId: CONF } }
@@ -456,16 +479,37 @@ describe('first send', () => {
     expect(record()).toBeUndefined()
   })
 
-  it('reserves again over a stale reservation (a send that crashed before mailing)', async () => {
+  it('REUSES a stale reservation (a send whose flip failed after mailing): same link, no second agreement, no new PDF', async () => {
+    const STALE_URL = `https://${DOMAIN}/sponsor/contract/sign/agr-stale`
     Object.assign(h.sfc!, {
       signatureId: 'agr-stale',
-      signingUrl: `https://${DOMAIN}/sponsor/contract/sign/agr-stale`,
+      signingUrl: STALE_URL,
       contractReservedAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
     })
     const result = await sponsor().crm.sendCommunication(INPUT)
     expect(result).toMatchObject({ success: true })
-    expect(h.sfc!.signatureId).toBe('agr-1')
-    expect(sentHtml()).toContain(`href="${SIGNING_URL}"`)
+    expect(h.sendForSigning).not.toHaveBeenCalled()
+    expect(h.generatePdf).not.toHaveBeenCalled()
+    expect(h.sfc!.signatureId).toBe('agr-stale')
+    expect(sentHtml()).toContain(`href="${STALE_URL}"`)
+    expect(h.sfc!.contractStatus).toBe('contract-sent')
+  })
+
+  it("releases only its OWN token when the provider refused — never a later send's reservation", async () => {
+    // Our provider call fails late; by then another send (after the settle
+    // window) has reserved a different agreement.
+    h.send.mockImplementation(async () => {
+      Object.assign(h.sfc!, {
+        signatureId: 'agr-later',
+        signingUrl: `https://${DOMAIN}/sponsor/contract/sign/agr-later`,
+        contractReservedAt: new Date().toISOString(),
+      })
+      return { data: null, error: { message: 'boom', statusCode: 500 } }
+    })
+    await expect(sponsor().crm.sendCommunication(INPUT)).rejects.toMatchObject({
+      code: 'INTERNAL_SERVER_ERROR',
+    })
+    expect(h.sfc!.signatureId).toBe('agr-later')
   })
 
   it('refuses — before mailing — when a write lands between the reservation read and the reservation patch', async () => {
@@ -477,25 +521,16 @@ describe('first send', () => {
     expect(sfcPatches().some((p) => 'signatureId' in p.sets)).toBe(false)
   })
 
-  it('refuses — before mailing — when the contract was sent by someone else since the modal opened', async () => {
-    // The plan's own read said "send"; the fresh read before the reservation
-    // finds a signature already pending.
-    let reads = 0
-    h.getContractTemplate.mockImplementation(async () => {
-      if (reads++ === 0) {
-        Object.assign(h.sfc!, {
-          contractStatus: 'contract-sent',
-          signatureStatus: 'pending',
-          signatureId: 'agr-other',
-          signingUrl: `https://${DOMAIN}/sponsor/contract/sign/agr-other`,
-        })
-      }
-      return { template: { _id: 'tpl-A', title: 'Standard', language: 'en' } }
-    })
+  it('refuses — before any PDF or agreement — when the contract was sent by someone else since the modal opened', async () => {
+    // The plan's own read said "send"; the fresh read finds a signature
+    // already pending.
+    h.sentByOtherAtFreshRead = true
     await expect(sponsor().crm.sendCommunication(INPUT)).rejects.toMatchObject({
       code: 'PRECONDITION_FAILED',
       message: expect.stringMatching(/just sent to this sponsor/),
     })
+    expect(h.generatePdf).not.toHaveBeenCalled()
+    expect(h.sendForSigning).not.toHaveBeenCalled()
     expect(h.send).not.toHaveBeenCalled()
     expect(h.sfc!.signatureId).toBe('agr-other')
   })

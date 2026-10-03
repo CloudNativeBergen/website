@@ -45,6 +45,18 @@ vi.mock('@/lib/conference/sanity', () => ({
 
 vi.mock('@/lib/sanity/client', () => {
   const fetch = async (query: string, params?: Record<string, unknown>) => {
+    // The contract send's fresh state read before any costly work (#1264):
+    // nothing out, nothing reserved.
+    if (query.includes('signingUrl, contractReservedAt }')) {
+      return {
+        _rev: 'rev-1',
+        contractStatus: 'verbal-agreement',
+        signatureStatus: 'not-started',
+        signatureId: null,
+        signingUrl: null,
+        contractReservedAt: null,
+      }
+    }
     if (query.includes('"memberOrgIds"')) {
       const id = params?.id as string | undefined
       if (id && id in h.tenantById) return h.tenantById[id]
