@@ -54,6 +54,8 @@ interface SponsorCRMFormProps {
   onSendEmail?: () => void
   /** Send → Discount codes (#1262). Omitted when ticketing is off. */
   onSendDiscountCodes?: () => void
+  /** Send → Registration (#1263), raised from the contract view's portal step. */
+  onSendRegistration?: () => void
 }
 
 export function SponsorCRMForm({
@@ -67,6 +69,7 @@ export function SponsorCRMForm({
   onViewChange,
   onSendEmail,
   onSendDiscountCodes,
+  onSendRegistration,
 }: SponsorCRMFormProps) {
   const [view, setViewState] = useState<FormView>(initialView)
   const setView = useCallback(
@@ -427,6 +430,7 @@ export function SponsorCRMForm({
                 utils.sponsor.crm.list.invalidate()
                 utils.sponsor.crm.healthViolations.invalidate()
               }}
+              onSendRegistration={onSendRegistration}
             />
           ) : view === 'communications' && sponsor ? (
             <SponsorCommunicationsPanel

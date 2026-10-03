@@ -203,6 +203,47 @@ describe('processPortableTextVariables', () => {
   })
 })
 
+describe('processPortableTextVariables, merged twice', () => {
+  it('never re-issues a link key a previous pass created — the second URL keeps its own href (#1263)', () => {
+    const once = processPortableTextVariables(
+      [
+        {
+          _type: 'block',
+          _key: 'b1',
+          style: 'normal',
+          markDefs: [],
+          children: [
+            {
+              _type: 'span',
+              _key: 's1',
+              text: 'Site {{{CONFERENCE_URL}}} and portal {{{SPONSOR_PORTAL_URL}}}',
+              marks: [],
+            },
+          ],
+        },
+      ] as never,
+      { CONFERENCE_URL: 'https://conf.example' },
+    )
+    const twice = processPortableTextVariables(once, {
+      SPONSOR_PORTAL_URL: 'https://conf.example/sponsor/portal/tok',
+    })
+    const block = twice[0] as unknown as {
+      markDefs: Array<{ _key: string; href: string }>
+      children: Array<{ text: string; marks: string[] }>
+    }
+    const keys = block.markDefs.map((m) => m._key)
+    expect(new Set(keys).size).toBe(keys.length)
+    const hrefOf = (text: string) => {
+      const span = block.children.find((c) => c.text === text)!
+      return block.markDefs.find((m) => span.marks.includes(m._key))!.href
+    }
+    expect(hrefOf('https://conf.example')).toBe('https://conf.example')
+    expect(hrefOf('https://conf.example/sponsor/portal/tok')).toBe(
+      'https://conf.example/sponsor/portal/tok',
+    )
+  })
+})
+
 describe('buildTemplateVariables', () => {
   it('builds basic variables', () => {
     const vars = buildTemplateVariables({

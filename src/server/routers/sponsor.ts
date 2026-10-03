@@ -47,9 +47,11 @@ import {
 import { sanitizeSvgFieldOrThrow, SvgSanitizeError } from '@/lib/svg/upload'
 import {
   buildTemplateVariables,
+  processPortableTextVariables,
   suggestTemplateCategory,
   suggestTemplateLanguage,
 } from '@/lib/sponsor/templates'
+import type { PortableTextBlock as TemplateBlock } from '@/lib/sponsor/types'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import {
   conferenceBaseUrl,
@@ -143,6 +145,18 @@ import {
   discountCodesCardHtml,
   sponsorTicketUrl,
 } from '@/lib/sponsor-crm/discount-email'
+import {
+  carriesPortalPlaceholder,
+  mergePortalUrl,
+  PORTAL_URL_WRONG_KIND_MESSAGE,
+  registrationAttachments,
+  registrationCardHtml,
+} from '@/lib/sponsor-crm/registration-email'
+import {
+  buildPortalUrl,
+  generateRegistrationToken,
+} from '@/lib/sponsor-crm/registration'
+import { isLocalhostDomain } from '@/lib/environment/localhost'
 import {
   TEMPLATE_NOT_FOUND_MESSAGE,
   TEMPLATE_WRONG_KIND_MESSAGE,
@@ -261,6 +275,126 @@ async function readEventDiscountsOrThrow(conference: Conference) {
     })
   }
   return listed.discounts
+}
+
+/**
+ * Contract statuses at or past `registration-sent`: a registration send never
+ * moves a deal BACK to it.
+ */
+const CONTRACT_STATUSES_PAST_REGISTRATION = new Set([
+  'registration-sent',
+  'contract-sent',
+  'contract-signed',
+])
+
+/**
+ * The registration kind (#1263): the sponsor's portal link, built from its
+ * EXISTING registration token. A sponsor without one gets a token created
+ * here, once; a later send finds it and never rotates it, so the link already
+ * in a colleague's inbox keeps working. The link rides in a server-built card
+ * (so an edited message cannot lose it) and is listed on the record.
+ */
+async function prepareRegistrationSend(
+  conference: Conference,
+  domain: string | undefined,
+  sponsorForConferenceId: string,
+) {
+  const sfc = await clientReadUncached.fetch<{ status: string | null } | null>(
+    `*[_type == "sponsorForConference" && _id == $id && conference._ref == $conferenceId][0]{ status }`,
+    { id: sponsorForConferenceId, conferenceId: conference._id },
+  )
+  if (!sfc) {
+    throw new TRPCError({
+      code: 'NOT_FOUND',
+      message: 'Sponsor not found in this conference',
+    })
+  }
+  if (sfc.status !== 'closed-won') {
+    throw new TRPCError({
+      code: 'PRECONDITION_FAILED',
+      message:
+        'Registration emails can only be sent to sponsors with a won deal. Move the sponsor to Closed Won first.',
+    })
+  }
+  if (!domain) {
+    throw new TRPCError({
+      code: 'PRECONDITION_FAILED',
+      message:
+        'Conference has no domain configured. Set a domain on the conference before sending a registration link.',
+    })
+  }
+  // The old sender's rule, kept on the SERVER: the link is built from the
+  // request domain, so a dev send would mail a real contact a localhost
+  // bearer link. The modal disables its button locally; this is the backstop.
+  if (isLocalhostDomain(domain)) {
+    throw new TRPCError({
+      code: 'PRECONDITION_FAILED',
+      message:
+        'Registration emails cannot be sent from localhost. Deploy to a production domain first.',
+    })
+  }
+  // ONE owner of "reuse, never rotate": the same function the modal's
+  // `registration.generateToken` calls — it returns the stored token and
+  // writes only when there is none.
+  const { token, error } = await generateRegistrationToken(
+    sponsorForConferenceId,
+  )
+  if (error || !token) {
+    throw new TRPCError({
+      code: 'PRECONDITION_FAILED',
+      message: error?.message ?? 'Failed to generate registration token',
+    })
+  }
+  const portalUrl = buildPortalUrl(`https://${domain}`, token)
+  return {
+    portalUrl,
+    html: registrationCardHtml({ portalUrl, theme: conference.theme }),
+    attachments: registrationAttachments(portalUrl),
+  }
+}
+
+/**
+ * After a registration send went out (#1263): the first one moves the deal
+ * to registration-sent. Decided on the status read NOW — not before the
+ * email round-trip — so a contract send that landed in between is never
+ * moved backwards. Best-effort: can neither fail nor undo the send.
+ */
+async function markRegistrationSent(
+  conference: Conference,
+  sponsorForConferenceId: string,
+  actorId: string,
+) {
+  try {
+    const current = await clientReadUncached.fetch<{
+      contractStatus: string | null
+      _rev: string
+    } | null>(
+      `*[_type == "sponsorForConference" && _id == $id && conference._ref == $conferenceId][0]{ contractStatus, _rev }`,
+      { id: sponsorForConferenceId, conferenceId: conference._id },
+    )
+    if (!current) return
+    const from = current.contractStatus || 'none'
+    if (CONTRACT_STATUSES_PAST_REGISTRATION.has(from)) return
+    // Revision-conditional: a write that lands between this read and the
+    // patch (a contract send on another tab) makes Sanity reject the patch,
+    // and the deal is left where that write put it.
+    await clientWrite
+      .patch(sponsorForConferenceId)
+      .ifRevisionId(current._rev)
+      .set({ contractStatus: 'registration-sent' })
+      .commit()
+    await logContractStatusChange(
+      sponsorForConferenceId,
+      from,
+      'registration-sent',
+      actorId,
+    )
+  } catch (error) {
+    console.error(
+      '[sendCommunication] moving the deal to registration-sent failed:',
+      error,
+    )
+  }
 }
 
 /**
@@ -3058,13 +3192,16 @@ export const sponsorRouter = router({
           'sponsorForConference',
         )
 
-        const { conference, error: conferenceError } =
-          await getConferenceForCurrentDomain({
-            sponsors: true,
-            // `SPONSOR_REGISTRATION_URL` is merged on the server to compute
-            // `templateEdited`; the composer sees the same link (#1261).
-            includeSponsorRegistrationLink: true,
-          })
+        const {
+          conference,
+          domain,
+          error: conferenceError,
+        } = await getConferenceForCurrentDomain({
+          sponsors: true,
+          // `SPONSOR_REGISTRATION_URL` is merged on the server to compute
+          // `templateEdited`; the composer sees the same link (#1261).
+          includeSponsorRegistrationLink: true,
+        })
         if (conferenceError || !conference) {
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
@@ -3132,6 +3269,44 @@ export const sponsorRouter = router({
               )
             : undefined
 
+        // The registration merge field is exposed to every template, but only
+        // a registration send can fill it: any other kind would mail the
+        // literal placeholder (or an unresolved href). Refused before any
+        // read of the sponsor's own data.
+        if (
+          input.kind !== 'registration' &&
+          carriesPortalPlaceholder(input.subject, message)
+        ) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: PORTAL_URL_WRONG_KIND_MESSAGE,
+          })
+        }
+
+        // Registration kind (#1263): the portal link from the sponsor's own
+        // token, created once when absent. Refuses before anything is sent.
+        const registration =
+          input.kind === 'registration'
+            ? await prepareRegistrationSend(
+                conference,
+                domain,
+                input.sponsorForConferenceId,
+              )
+            : undefined
+
+        // A template applied in the composer before the link was known keeps
+        // the merge field as text; the final merge happens here, so no
+        // sponsor ever receives the placeholder.
+        const subject = registration
+          ? mergePortalUrl(input.subject, registration.portalUrl)
+          : input.subject
+        if (registration) {
+          message = processPortableTextVariables(
+            message as unknown as TemplateBlock[],
+            { SPONSOR_PORTAL_URL: registration.portalUrl },
+          ) as unknown as PortableTextBlock[]
+        }
+
         let result: Awaited<ReturnType<typeof sendSponsorCommunication>>
         try {
           result = await sendSponsorCommunication({
@@ -3141,13 +3316,18 @@ export const sponsorRouter = router({
             sponsorForConferenceId: input.sponsorForConferenceId,
             kind: input.kind,
             recipientKeys: input.recipientKeys,
-            subject: input.subject,
+            subject,
             message,
             template,
             senderNames: [ctx.speaker.name, ctx.user?.name],
             ...(discount && {
               appendHtml: discount.html,
               attachments: discount.attachments,
+            }),
+            ...(registration && {
+              appendHtml: registration.html,
+              attachments: registration.attachments,
+              portalUrl: registration.portalUrl,
             }),
           })
         } catch (error) {
@@ -3209,6 +3389,14 @@ export const sponsorRouter = router({
             linkedCodes = []
             linkFailed = true
           }
+        }
+
+        if (registration) {
+          await markRegistrationSent(
+            conference,
+            input.sponsorForConferenceId,
+            ctx.speaker._id,
+          )
         }
 
         return {

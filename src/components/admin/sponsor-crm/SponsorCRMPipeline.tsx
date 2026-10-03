@@ -304,6 +304,14 @@ export function SponsorCRMPipeline({
     },
     [],
   )
+  const handleOpenRegistrationSend = useCallback(
+    (sponsor: SponsorForConferenceExpanded) => {
+      setEmailKind('registration')
+      setEmailSponsor(sponsor)
+      setIsEmailModalOpen(true)
+    },
+    [],
+  )
 
   const handleCloseEmail = useCallback(() => {
     setEmailSponsor(null)
@@ -630,6 +638,11 @@ export function SponsorCRMPipeline({
           onSendDiscountCodes={
             selectedSponsor && conference && canSendDiscountCodes
               ? () => handleOpenDiscountSend(selectedSponsor)
+              : undefined
+          }
+          onSendRegistration={
+            selectedSponsor && conference
+              ? () => handleOpenRegistrationSend(selectedSponsor)
               : undefined
           }
         />

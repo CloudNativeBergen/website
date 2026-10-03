@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { http, HttpResponse } from 'msw'
+import { expect, fn, userEvent, within } from 'storybook/test'
 import { SponsorContractView } from './SponsorContractView'
 import {
   mockSponsor,
@@ -57,18 +58,28 @@ export const Default: Story = {
   },
 }
 
+/** A completed registration can still be re-sent to a new contact (#1263) — while the deal is won. */
 export const PortalComplete: Story = {
   args: {
     conferenceId: 'conf-2026',
     sponsor: mockSponsor({
+      status: 'closed-won',
       contractStatus: 'contract-sent',
       signatureStatus: 'pending',
       registrationComplete: true,
       registrationToken: 'abc-123',
     }),
+    onSendRegistration: fn(),
   },
   parameters: {
     msw: { handlers: defaultHandlers },
+  },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(
+      await canvas.findByRole('button', { name: 'Resend registration link' }),
+    )
+    await expect(args.onSendRegistration).toHaveBeenCalledTimes(1)
   },
 }
 

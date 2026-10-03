@@ -207,7 +207,8 @@ export const ImportAllHistoricSponsorsSchema = z.object({
  * One sponsor email, through the one primitive (#1261). Recipients are contact
  * KEYS — the server resolves addresses from the sponsor's own contacts and
  * refuses anything else — and the body is PortableText JSON as the editor
- * produces it. Slice 1 accepted `information`; #1262 adds `discount`, #1263–#1264 widen it further.
+ * produces it. Slice 1 accepted `information`; #1262 added `discount`, #1263
+ * `registration`; #1264 widens it to `contract`.
  */
 export const CommunicationKindSchema = z.enum([
   'information',
@@ -219,7 +220,7 @@ export const CommunicationKindSchema = z.enum([
 export const SendCommunicationSchema = z
   .object({
     sponsorForConferenceId: z.string().min(1, 'Sponsor ID is required'),
-    kind: z.enum(['information', 'discount']),
+    kind: z.enum(['information', 'discount', 'registration']),
     recipientKeys: z
       .array(z.string().min(1))
       .min(1, 'Choose at least one recipient')

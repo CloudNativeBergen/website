@@ -42,6 +42,8 @@ export const TEMPLATE_VARIABLE_DESCRIPTIONS: Record<string, string> = {
   PROSPECTUS_URL: 'Sponsor prospectus/deck URL',
   SPONSOR_REGISTRATION_URL:
     'The sponsor ticket-registration link set on the conference',
+  SPONSOR_PORTAL_URL:
+    "The sponsor's own registration (portal) link — registration sends only",
   SENDER_NAME: 'Name of the person sending the email',
   TIER_NAME: 'Sponsor tier name (if assigned)',
   SIGNER_NAME: 'Name of the contract signer',
@@ -57,6 +59,7 @@ const URL_VARIABLE_KEYS = new Set([
   'SPONSOR_PAGE_URL',
   'PROSPECTUS_URL',
   'SPONSOR_REGISTRATION_URL',
+  'SPONSOR_PORTAL_URL',
 ])
 
 /**
@@ -123,7 +126,21 @@ export function processPortableTextVariables(
     }
   }
 
-  let keySeq = 0
+  // Keys continue past any `tpl-N` already present (a block merged once in
+  // the composer and once more on the server, #1263): a restarted counter
+  // would re-issue a key an existing link annotation holds, and the span
+  // would then resolve to the WRONG href.
+  let keySeq = blocks.reduce((max, block) => {
+    const keys = [
+      ...((block.markDefs as Array<{ _key?: unknown }> | undefined) ?? []),
+      ...((block.children as Array<{ _key?: unknown }> | undefined) ?? []),
+    ].map((k) => k._key)
+    for (const key of keys) {
+      const m = typeof key === 'string' && /^tpl-(\d+)$/.exec(key)
+      if (m) max = Math.max(max, Number(m[1]))
+    }
+    return max
+  }, 0)
   const genKey = () => `tpl-${++keySeq}`
 
   return blocks.map((block) => {
@@ -221,8 +238,20 @@ export function buildTemplateVariables(opts: {
   }
   senderName?: string
   tierName?: string
+  /**
+   * The sponsor's own registration (portal) link, built from its registration
+   * token (#1263). Only a registration send has one.
+   */
+  portalUrl?: string
 }): Record<string, string> {
-  const { sponsorName, contactNames, conference, senderName, tierName } = opts
+  const {
+    sponsorName,
+    contactNames,
+    conference,
+    senderName,
+    tierName,
+    portalUrl,
+  } = opts
 
   const vars: Record<string, string> = {
     SPONSOR_NAME: sponsorName,
@@ -264,6 +293,10 @@ export function buildTemplateVariables(opts: {
   // a template that wants the link now places it with this merge field.
   if (conference.sponsorRegistrationLink) {
     vars.SPONSOR_REGISTRATION_URL = conference.sponsorRegistrationLink
+  }
+
+  if (portalUrl) {
+    vars.SPONSOR_PORTAL_URL = portalUrl
   }
 
   if (senderName) {

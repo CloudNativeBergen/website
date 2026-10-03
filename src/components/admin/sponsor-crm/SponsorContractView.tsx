@@ -26,12 +26,15 @@ interface SponsorContractViewProps {
   conferenceId: string
   sponsor: SponsorForConferenceExpanded
   onSuccess?: () => void
+  /** Send → Registration (#1263): opens the host's Send modal for this sponsor. */
+  onSendRegistration?: () => void
 }
 
 export function SponsorContractView({
   conferenceId,
   sponsor,
   onSuccess,
+  onSendRegistration,
 }: SponsorContractViewProps) {
   const [step, setStep] = useState<Step>('overview')
   const [pdfData, setPdfData] = useState<string | null>(null)
@@ -320,11 +323,28 @@ export function SponsorContractView({
         }
       >
         {isPortalComplete ? (
-          <p className="text-xs text-gray-500 dark:text-gray-400">
-            Company details, contacts, billing, and logo collected.
-            {sponsor.registrationCompletedAt &&
-              ` Completed ${formatDate(sponsor.registrationCompletedAt)}.`}
-          </p>
+          <div className="space-y-2">
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              Company details, contacts, billing, and logo collected.
+              {sponsor.registrationCompletedAt &&
+                ` Completed ${formatDate(sponsor.registrationCompletedAt)}.`}
+            </p>
+            {onSendRegistration &&
+              sponsor.registrationToken &&
+              // Still offered after completion (#1263): a new contact may
+              // need the link; the Send modal warns that registration is done.
+              // Not for a deal that is no longer won — the server refuses it.
+              isSponsorWon && (
+                <button
+                  type="button"
+                  onClick={onSendRegistration}
+                  className="inline-flex cursor-pointer items-center gap-1 rounded-md bg-white px-2 py-1 text-xs font-medium text-gray-700 shadow-xs outline-1 -outline-offset-1 outline-gray-300 hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 dark:bg-white/5 dark:text-gray-300 dark:outline-white/10 dark:hover:bg-white/10"
+                >
+                  <PaperAirplaneIcon className="size-3.5" />
+                  Resend registration link
+                </button>
+              )}
+          </div>
         ) : !isSponsorWon ? (
           <p className="text-xs text-amber-600 dark:text-amber-400">
             Move the sponsor to Closed Won before sending registration.
@@ -342,6 +362,7 @@ export function SponsorContractView({
             onCheckStatus={
               sponsor.registrationToken ? () => onSuccess?.() : undefined
             }
+            onSendInvite={onSendRegistration}
           />
         )}
       </ContractFlowStep>

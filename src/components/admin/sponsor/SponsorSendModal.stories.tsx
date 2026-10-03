@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test'
-import { http, HttpResponse } from 'msw'
+import { delay, http, HttpResponse } from 'msw'
 import { SponsorSendModal } from './SponsorSendModal'
 import { NotificationProvider } from '@/components/admin/NotificationProvider'
 import { withPortalTheme } from '@/lib/storybook'
@@ -127,6 +127,24 @@ const discountOptions = {
 const discountHandlers = [
   http.get('/api/trpc/sponsor.crm.discountCodeOptions', () =>
     HttpResponse.json({ result: { data: discountOptions } }),
+  ),
+  ...handlers,
+]
+
+/**
+ * What `registration.generateToken` answers for the Acme sponsor (#1263): the
+ * EXISTING token, so a re-send previews the link already in an inbox.
+ */
+const registrationHandlers = [
+  http.post('/api/trpc/registration.generateToken', () =>
+    HttpResponse.json({
+      result: {
+        data: {
+          token: 'tok-acme-existing',
+          url: 'https://cloudnativebergen.dev/sponsor/portal/tok-acme-existing',
+        },
+      },
+    }),
   ),
   ...handlers,
 ]
@@ -471,4 +489,246 @@ export const DiscountCodesNoInviteLink: Story = {
       ]),
     )
   },
+}
+
+/**
+ * Send → Registration (#1263). The link is prepared on open from the sponsor's
+ * existing token; the built-in welcome is the starting body, and the preview
+ * carries the same "Complete your sponsor registration" card the server
+ * appends — so editing the message can never lose the link.
+ */
+export const Registration: Story = {
+  args: { kind: 'registration' },
+  parameters: { msw: { handlers: registrationHandlers } },
+  play: async ({ canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body)
+    await body.findByRole('checkbox', { name: 'Kari Nordmann' })
+    await waitFor(() =>
+      expect(
+        body.queryByText('Preparing the registration link…'),
+      ).not.toBeInTheDocument(),
+    )
+    await expect(
+      body.getByDisplayValue('Registration: Cloud Native Days Norway 2026'),
+    ).toBeInTheDocument()
+    await expect(body.getByText(/Welcome aboard, /)).toBeInTheDocument()
+    await expect(
+      body.queryByText(/has already completed registration/),
+    ).not.toBeInTheDocument()
+  },
+}
+
+/** Registration already complete: a notice, not a refusal — the send button stays. */
+export const RegistrationComplete: Story = {
+  args: {
+    kind: 'registration',
+    sponsorForConference: mockSponsor({
+      contactPersons: contacts,
+      registrationComplete: true,
+      registrationToken: 'tok-acme-existing',
+    }),
+  },
+  parameters: { msw: { handlers: registrationHandlers } },
+  play: async ({ canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body)
+    const notice = await body.findByText(/has already completed registration/)
+    await expect(notice).toHaveAttribute('role', 'status')
+    await expect(notice).toHaveTextContent(
+      'opens their sponsorship status page',
+    )
+    // The composer is intact beneath the notice (the send button itself reads
+    // "Disabled in Dev" on localhost, so it is not asserted by name).
+    await expect(
+      body.getByDisplayValue('Registration: Cloud Native Days Norway 2026'),
+    ).toBeInTheDocument()
+  },
+}
+
+/** The preview shows the registration card the server appends, with the portal link. */
+export const RegistrationPreview: Story = {
+  args: { kind: 'registration' },
+  parameters: { msw: { handlers: registrationHandlers } },
+  play: async ({ canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body)
+    await body.findByRole('checkbox', { name: 'Kari Nordmann' })
+    await waitFor(() =>
+      expect(
+        body.queryByText('Preparing the registration link…'),
+      ).not.toBeInTheDocument(),
+    )
+    await userEvent.click(body.getByRole('button', { name: /Preview/ }))
+    await expect(
+      await body.findByText('Complete your sponsor registration'),
+    ).toBeInTheDocument()
+    await expect(
+      body.getByRole('link', { name: 'Complete registration' }),
+    ).toHaveAttribute(
+      'href',
+      'https://cloudnativebergen.dev/sponsor/portal/tok-acme-existing',
+    )
+  },
+}
+
+/** The link could not be prepared: the modal says why and refuses to send. */
+export const RegistrationLinkFailed: Story = {
+  args: { kind: 'registration' },
+  parameters: {
+    msw: {
+      handlers: [
+        http.post('/api/trpc/registration.generateToken', () =>
+          HttpResponse.json(
+            {
+              error: {
+                message: 'Conference has no domain configured.',
+                code: -32603,
+              },
+            },
+            { status: 500 },
+          ),
+        ),
+        ...handlers,
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body)
+    await expect(
+      await body.findByRole('alert', undefined, { timeout: 15_000 }),
+    ).toHaveTextContent(/could not be prepared/)
+  },
+}
+
+/**
+ * A template with a link annotation on the merge field, applied BEFORE the
+ * link was prepared (the token request is slow here): the preview merges the
+ * blocks the way the server does, so the link points at the portal — never at
+ * a sanitised "#".
+ */
+export const RegistrationTemplateAppliedBeforeLink: Story = {
+  args: { kind: 'registration' },
+  parameters: {
+    msw: {
+      handlers: [
+        http.post('/api/trpc/registration.generateToken', async () => {
+          await delay(2500)
+          return HttpResponse.json({
+            result: {
+              data: {
+                token: 'tok-acme-existing',
+                url: 'https://cloudnativebergen.dev/sponsor/portal/tok-acme-existing',
+              },
+            },
+          })
+        }),
+        http.get('/api/trpc/sponsor.emailTemplates.list', () =>
+          HttpResponse.json({
+            result: {
+              data: [
+                {
+                  _id: 'tpl-registration-link',
+                  _createdAt: '2026-01-01T00:00:00Z',
+                  _updatedAt: '2026-01-01T00:00:00Z',
+                  title: 'Registration (link annotation)',
+                  slug: { current: 'registration-link' },
+                  category: 'custom',
+                  language: 'en',
+                  subject: 'Please register for {{{CONFERENCE_TITLE}}}',
+                  isDefault: false,
+                  body: [
+                    {
+                      _type: 'block',
+                      _key: 'b1',
+                      style: 'normal',
+                      markDefs: [
+                        {
+                          _key: 'l1',
+                          _type: 'link',
+                          href: '{{{SPONSOR_PORTAL_URL}}}',
+                        },
+                      ],
+                      children: [
+                        {
+                          _type: 'span',
+                          _key: 's1',
+                          text: 'Open the ',
+                          marks: [],
+                        },
+                        {
+                          _type: 'span',
+                          _key: 's2',
+                          text: 'registration form',
+                          marks: ['l1'],
+                        },
+                        { _type: 'span', _key: 's3', text: '.', marks: [] },
+                      ],
+                    },
+                  ],
+                },
+              ],
+            },
+          }),
+        ),
+        ...handlers.filter(
+          (h) => !String(h.info.header).includes('emailTemplates'),
+        ),
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body)
+    await body.findByRole('checkbox', { name: 'Kari Nordmann' })
+    // Still preparing: apply the template now.
+    await expect(
+      body.getByText('Preparing the registration link…'),
+    ).toBeInTheDocument()
+    const picker = await body.findByRole('combobox')
+    await userEvent.selectOptions(picker, 'tpl-registration-link')
+    await waitFor(() =>
+      expect(
+        body.getByDisplayValue(
+          'Please register for Cloud Native Days Norway 2026',
+        ),
+      ).toBeInTheDocument(),
+    )
+    await waitFor(
+      () =>
+        expect(
+          body.queryByText('Preparing the registration link…'),
+        ).not.toBeInTheDocument(),
+      { timeout: 10_000 },
+    )
+    await userEvent.click(body.getByRole('button', { name: /Preview/ }))
+    await expect(
+      await body.findByRole('link', { name: 'registration form' }),
+    ).toHaveAttribute(
+      'href',
+      'https://cloudnativebergen.dev/sponsor/portal/tok-acme-existing',
+    )
+  },
+}
+
+export const RegistrationMobile: Story = {
+  args: {
+    kind: 'registration',
+    sponsorForConference: mockSponsor({
+      contactPersons: contacts,
+      registrationComplete: true,
+    }),
+  },
+  parameters: {
+    msw: { handlers: registrationHandlers },
+    viewport: { value: 'mobile1', isRotated: false },
+  },
+}
+
+export const RegistrationDark: Story = {
+  args: {
+    kind: 'registration',
+    sponsorForConference: mockSponsor({
+      contactPersons: contacts,
+      registrationComplete: true,
+    }),
+  },
+  globals: { theme: 'dark' },
+  parameters: { msw: { handlers: registrationHandlers } },
 }
