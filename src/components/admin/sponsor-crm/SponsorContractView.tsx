@@ -507,11 +507,12 @@ export function SponsorContractView({
           </div>
         ) : isSent ? (
           <p className="text-xs text-gray-400 dark:text-gray-500">
-            Contract sent without digital signing.
+            Sent without a digital signing agreement (an older record).
           </p>
         ) : (
           <p className="text-xs text-gray-400 dark:text-gray-500">
-            Contract will be sent for digital signing after generation.
+            The agreement is sent for digital signing when you send the
+            contract.
           </p>
         )}
       </ContractFlowStep>

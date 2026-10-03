@@ -2683,15 +2683,6 @@ export const sponsorRouter = router({
         // client-supplied contract template id is guarded FIRST (#863).
         let contract: ContractSendPlan | undefined
         if (input.kind === 'contract') {
-          // The removed senders' rule, kept: a dev send would create a real
-          // agreement and mail a real signer.
-          if (domain && isLocalhostDomain(domain)) {
-            throw new TRPCError({
-              code: 'PRECONDITION_FAILED',
-              message:
-                'Contract emails cannot be sent from localhost. Deploy to a production domain first.',
-            })
-          }
           if (input.contractTemplateId) {
             await requireDocumentInCurrentConference(
               input.contractTemplateId,
@@ -2705,6 +2696,16 @@ export const sponsorRouter = router({
               code: 'NOT_FOUND',
               message: 'Sponsor not found in this conference',
               cause: sfcError,
+            })
+          }
+          // The removed senders' rule, kept (after the ownership guards, so a
+          // foreign id refuses identically everywhere): a dev send would
+          // create a real agreement and mail a real signer.
+          if (domain && isLocalhostDomain(domain)) {
+            throw new TRPCError({
+              code: 'PRECONDITION_FAILED',
+              message:
+                'Contract emails cannot be sent from localhost. Deploy to a production domain first.',
             })
           }
           contract = await prepareContractSend({
@@ -2782,12 +2783,15 @@ export const sponsorRouter = router({
           // The primitive THREW (a read rejected before the provider was
           // reached) rather than refusing: nothing went out either way.
           await discount?.release()
+          await contract?.release?.()
           throw error
         }
 
         if (!result.ok) {
-          // Nothing went out, so the codes are nobody's again.
+          // Nothing went out, so the codes are nobody's again — and the
+          // reserved agreement is undone.
           await discount?.release()
+          await contract?.release?.()
           switch (result.reason) {
             case 'not-found':
               throw new TRPCError({

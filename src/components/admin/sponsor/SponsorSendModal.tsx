@@ -848,7 +848,8 @@ export function SponsorSendModal({
   const contractLinkUrl =
     contractAction === 'remind'
       ? sponsorForConference.signingUrl
-      : contractAction === 'signed-copy'
+      : contractAction === 'signed-copy' &&
+          sponsorForConference.contractSignedBy
         ? sponsorForConference.contractDocument?.asset?.url
         : undefined
   const linkMutation = api.registration.generateToken.useMutation()
@@ -1343,7 +1344,9 @@ export function SponsorSendModal({
       >
         {contractAction === 'remind'
           ? 'No signing link is stored for this sponsor; the reminder cannot be sent.'
-          : 'No signed agreement is stored for this sponsor yet.'}
+          : sponsorForConference.contractSignedBy
+            ? 'No signed agreement is stored for this sponsor yet.'
+            : 'The signed status was set manually; no digitally signed document is stored, so there is no signed copy to send.'}
       </p>
     ) : null
   const portalLinkHint = !isRegistration ? null : portalLinkError ? (

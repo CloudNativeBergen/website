@@ -713,6 +713,12 @@ describe('contract rendering refuses a foreign template (#863 rows 5-6)', () => 
       'sfc-A': tenantOf('ours', 'sponsorForConference'),
       'tpl-A': tenantOf('ours', 'contractTemplate'),
     }
+    // Past the guards, the contract kind also refuses a localhost domain
+    // before reading the template; this row is about reaching the template.
+    h.getConference.mockResolvedValue({
+      ...(await h.getConference()),
+      domain: 'ours.example',
+    })
 
     await settle(
       sponsor().crm.sendCommunication({

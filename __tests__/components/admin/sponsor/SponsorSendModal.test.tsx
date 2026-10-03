@@ -1182,6 +1182,7 @@ describe('contract kind (#1264)', () => {
       {
         contractStatus: 'contract-signed',
         signatureStatus: 'signed',
+        contractSignedBy: 'Kari Nordmann',
         contractDocument: {
           asset: { _ref: 'f1', url: 'https://cdn/signed.pdf' },
         },
@@ -1193,9 +1194,27 @@ describe('contract kind (#1264)', () => {
     ).toBeInTheDocument()
   })
 
+  it('signed by hand (no digital signature): says there is no signed copy', () => {
+    renderModal(
+      {
+        contractStatus: 'contract-signed',
+        signatureStatus: 'signed',
+        contractDocument: {
+          asset: { _ref: 'f1', url: 'https://cdn/unsigned.pdf' },
+        },
+      },
+      'contract',
+    )
+    expect(screen.getByRole('alert')).toHaveTextContent(/set manually/)
+  })
+
   it('signed with no stored document: says so', () => {
     renderModal(
-      { contractStatus: 'contract-signed', signatureStatus: 'signed' },
+      {
+        contractStatus: 'contract-signed',
+        signatureStatus: 'signed',
+        contractSignedBy: 'Kari Nordmann',
+      },
       'contract',
     )
     expect(screen.getByRole('alert')).toHaveTextContent(/No signed agreement/)

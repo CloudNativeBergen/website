@@ -637,6 +637,7 @@ export const ContractSignedCopy: Story = {
       signatureStatus: 'signed',
       signerName: 'Kari Nordmann',
       signerEmail: 'kari@acme.example',
+      contractSignedBy: 'Kari Nordmann',
       contractDocument: {
         asset: {
           _ref: 'file-1',

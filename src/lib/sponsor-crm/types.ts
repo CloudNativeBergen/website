@@ -119,6 +119,10 @@ export interface SponsorForConference {
   billing?: BillingInfo
   contactInitiatedAt?: string
   contractSignedAt?: string
+  /** Set by the digital signing flow only — proves the stored document is signed. */
+  contractSignedBy?: string
+  /** Set while a contract send is in flight; cleared on contract-sent or failure. */
+  contractReservedAt?: string
   organizerSignedAt?: string
   organizerSignedBy?: string
   contractValue?: number
@@ -217,6 +221,10 @@ export interface SponsorForConferenceExpanded {
   }
   contactInitiatedAt?: string
   contractSignedAt?: string
+  /** Set by the digital signing flow only — proves the stored document is signed. */
+  contractSignedBy?: string
+  /** Set while a contract send is in flight; cleared on contract-sent or failure. */
+  contractReservedAt?: string
   organizerSignedAt?: string
   organizerSignedBy?: string
   contractValue?: number

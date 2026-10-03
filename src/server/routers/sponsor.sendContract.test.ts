@@ -28,8 +28,14 @@ const h = vi.hoisted(() => ({
   tenantById: {} as Record<string, Record<string, unknown> | null>,
   /** The expanded sponsor the scoped read returns. */
   sfc: null as Record<string, unknown> | null,
-  /** A write lands between the post-send re-read and the flip patch. */
+  /** A write lands between the reservation read and the reservation patch. */
   bumpRevAfterStateRead: false,
+  /** Unsets, recorded apart from sets. */
+  unsets: [] as Array<{ id: string; fields: string[] }>,
+  /** Every boundary event in order: reserve / send / flip. */
+  sequence: [] as string[],
+  /** The flip patch (contractStatus) fails. */
+  flipShouldThrow: false,
   fetches: [] as Array<{ query: string; params?: Record<string, unknown> }>,
   creates: [] as Array<Record<string, unknown>>,
   patches: [] as Array<{ id: string; sets: Record<string, unknown> }>,
@@ -88,13 +94,14 @@ vi.mock('@/lib/sanity/client', () => {
         _rev: 'rev-1',
       }
     }
-    if (query.includes('signatureId, signingUrl, _rev }')) {
+    if (query.includes('signingUrl, contractReservedAt }')) {
       const snapshot = {
+        _rev: (h.sfc?._rev as string) ?? 'rev-1',
         contractStatus: h.sfc?.contractStatus ?? null,
         signatureStatus: h.sfc?.signatureStatus ?? null,
         signatureId: h.sfc?.signatureId ?? null,
         signingUrl: h.sfc?.signingUrl ?? null,
-        _rev: (h.sfc?._rev as string) ?? 'rev-1',
+        contractReservedAt: h.sfc?.contractReservedAt ?? null,
       }
       if (h.bumpRevAfterStateRead && h.sfc) h.sfc._rev = 'rev-2'
       return snapshot
@@ -115,7 +122,11 @@ vi.mock('@/lib/sanity/client', () => {
         return chain
       },
       setIfMissing: () => chain,
-      unset: () => chain,
+      unset: (fields: string[]) => {
+        h.unsets.push({ id, fields })
+        for (const f of fields) if (h.sfc && id === h.sfc._id) delete h.sfc[f]
+        return chain
+      },
       inc: (v: Record<string, number>) => {
         for (const [k, by] of Object.entries(v)) {
           h.incs.push({ id, field: k, by })
@@ -133,6 +144,11 @@ vi.mock('@/lib/sanity/client', () => {
           throw new Error(
             'Mutation(s) failed with 1 error(s): revision mismatch',
           )
+        }
+        if ('signatureId' in sets) h.sequence.push('reserve')
+        if ('contractStatus' in sets) {
+          if (h.flipShouldThrow) throw new Error('sanity down')
+          h.sequence.push('flip')
         }
         h.patches.push({ id, sets })
         if (h.sfc && id === h.sfc._id) Object.assign(h.sfc, sets)
@@ -255,6 +271,9 @@ beforeEach(() => {
   h.patches = []
   h.uploads = []
   h.incs = []
+  h.unsets = []
+  h.sequence = []
+  h.flipShouldThrow = false
   h.bumpRevAfterStateRead = false
   h.tenant = { _type: 'sponsorForConference', conferenceId: CONF }
   h.tenantById = { 'tpl-A': { _type: 'contractTemplate', conferenceId: CONF } }
@@ -304,7 +323,10 @@ beforeEach(() => {
     agreementId: 'agr-1',
     signingUrl: SIGNING_URL,
   })
-  h.send.mockResolvedValue({ data: { id: 'resend-msg-1' }, error: null })
+  h.send.mockImplementation(async () => {
+    h.sequence.push('send')
+    return { data: { id: 'resend-msg-1' }, error: null }
+  })
   vi.spyOn(console, 'warn').mockImplementation(() => {})
   vi.spyOn(console, 'error').mockImplementation(() => {})
 })
@@ -335,17 +357,25 @@ describe('first send', () => {
     ])
     expect(sentHtml()).toContain(`href="${SIGNING_URL}"`)
 
-    const flip = sfcPatches().find((p) => 'contractStatus' in p.sets)
-    expect(flip?.sets).toMatchObject({
-      contractStatus: 'contract-sent',
-      signatureStatus: 'pending',
+    // The agreement is STORED before the email goes out (the signing page
+    // resolves the token through it); the deal flips only after.
+    expect(h.sequence).toEqual(['reserve', 'send', 'flip'])
+    const reserve = sfcPatches().find((p) => 'signatureId' in p.sets)
+    expect(reserve?.sets).toMatchObject({
       signatureId: 'agr-1',
       signingUrl: SIGNING_URL,
       signerEmail: 'ola@acme.test',
       signerName: 'Ola Nordmann',
       contractTemplate: { _ref: 'tpl-A' },
       contractDocument: { asset: { _ref: 'file-asset-1' } },
+      contractReservedAt: expect.any(String),
     })
+    const flip = sfcPatches().find((p) => 'contractStatus' in p.sets)
+    expect(flip?.sets).toMatchObject({
+      contractStatus: 'contract-sent',
+      signatureStatus: 'pending',
+    })
+    expect(h.unsets).toContainEqual({ id: SFC, fields: ['contractReservedAt'] })
     expect(activities('contract_status_change')).toHaveLength(1)
     expect(activities('signature_status_change')).toHaveLength(1)
     // Sending a contract advances the deal to Won (a query-conditional patch).
@@ -378,7 +408,7 @@ describe('first send', () => {
     expect(record()).toBeUndefined()
   })
 
-  it('leaves the status unchanged and writes a failed record when the provider refuses', async () => {
+  it('leaves the status unchanged, releases the reserved agreement and writes a failed record when the provider refuses', async () => {
     h.send.mockResolvedValue({
       data: null,
       error: { message: 'boom', statusCode: 500 },
@@ -388,6 +418,12 @@ describe('first send', () => {
     })
     expect(sfcPatches().some((p) => 'contractStatus' in p.sets)).toBe(false)
     expect(activities('contract_status_change')).toEqual([])
+    // Nothing went out: the token that was never mailed is gone again.
+    expect(h.unsets).toContainEqual({
+      id: SFC,
+      fields: ['signatureId', 'signingUrl', 'contractReservedAt'],
+    })
+    expect(h.sfc!.signatureId).toBeUndefined()
     expect(record()).toMatchObject({
       communicationKind: 'contract',
       deliveryStatus: 'failed',
@@ -395,43 +431,73 @@ describe('first send', () => {
     })
   })
 
-  it('loses to a first send that landed during the email round-trip: the email is out, nothing is stored, and the organizer is told', async () => {
-    h.send.mockImplementation(async () => {
-      // Another organizer's contract send completed while the provider was busy.
-      Object.assign(h.sfc!, {
-        contractStatus: 'contract-sent',
-        signatureStatus: 'pending',
-        signatureId: 'agr-other',
-        signingUrl: `https://${DOMAIN}/sponsor/contract/sign/agr-other`,
-      })
-      return { data: { id: 'resend-msg-1' }, error: null }
-    })
+  it('keeps the link working when only the post-send flip fails, and tells the organizer', async () => {
+    h.flipShouldThrow = true
     const result = await sponsor().crm.sendCommunication(INPUT)
     expect(result).toMatchObject({ success: true, contractStateFailed: true })
-    // The stored agreement is still the other one.
-    expect(h.sfc!.signatureId).toBe('agr-other')
-    expect(sfcPatches().some((p) => 'signatureId' in p.sets)).toBe(false)
+    // The agreement the email carries IS the stored one.
+    expect(h.sfc!.signatureId).toBe('agr-1')
+    expect(h.sfc!.contractStatus).toBe('none')
     expect(activities('contract_status_change')).toEqual([])
   })
 
-  it('does not store its agreement when a write lands between the re-read and the patch', async () => {
-    h.bumpRevAfterStateRead = true
-    const result = await sponsor().crm.sendCommunication(INPUT)
-    expect(result).toMatchObject({ success: true, contractStateFailed: true })
-    expect(sfcPatches().some((p) => 'signatureId' in p.sets)).toBe(false)
-  })
-
-  it('refuses to send from localhost — a real agreement would be created for a real signer', async () => {
-    h.getConference.mockResolvedValue({
-      ...(await h.getConference()),
-      domain: 'localhost:3000',
+  it('refuses — before mailing — when another organizer reserved an agreement moments ago', async () => {
+    Object.assign(h.sfc!, {
+      signatureId: 'agr-other',
+      signingUrl: `https://${DOMAIN}/sponsor/contract/sign/agr-other`,
+      contractReservedAt: new Date().toISOString(),
     })
     await expect(sponsor().crm.sendCommunication(INPUT)).rejects.toMatchObject({
       code: 'PRECONDITION_FAILED',
-      message: expect.stringMatching(/localhost/),
+      message: expect.stringMatching(/sending this contract right now/),
     })
-    expect(h.generatePdf).not.toHaveBeenCalled()
     expect(h.send).not.toHaveBeenCalled()
+    expect(h.sfc!.signatureId).toBe('agr-other')
+    expect(record()).toBeUndefined()
+  })
+
+  it('reserves again over a stale reservation (a send that crashed before mailing)', async () => {
+    Object.assign(h.sfc!, {
+      signatureId: 'agr-stale',
+      signingUrl: `https://${DOMAIN}/sponsor/contract/sign/agr-stale`,
+      contractReservedAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+    })
+    const result = await sponsor().crm.sendCommunication(INPUT)
+    expect(result).toMatchObject({ success: true })
+    expect(h.sfc!.signatureId).toBe('agr-1')
+    expect(sentHtml()).toContain(`href="${SIGNING_URL}"`)
+  })
+
+  it('refuses — before mailing — when a write lands between the reservation read and the reservation patch', async () => {
+    h.bumpRevAfterStateRead = true
+    await expect(sponsor().crm.sendCommunication(INPUT)).rejects.toMatchObject({
+      code: 'PRECONDITION_FAILED',
+    })
+    expect(h.send).not.toHaveBeenCalled()
+    expect(sfcPatches().some((p) => 'signatureId' in p.sets)).toBe(false)
+  })
+
+  it('refuses — before mailing — when the contract was sent by someone else since the modal opened', async () => {
+    // The plan's own read said "send"; the fresh read before the reservation
+    // finds a signature already pending.
+    let reads = 0
+    h.getContractTemplate.mockImplementation(async () => {
+      if (reads++ === 0) {
+        Object.assign(h.sfc!, {
+          contractStatus: 'contract-sent',
+          signatureStatus: 'pending',
+          signatureId: 'agr-other',
+          signingUrl: `https://${DOMAIN}/sponsor/contract/sign/agr-other`,
+        })
+      }
+      return { template: { _id: 'tpl-A', title: 'Standard', language: 'en' } }
+    })
+    await expect(sponsor().crm.sendCommunication(INPUT)).rejects.toMatchObject({
+      code: 'PRECONDITION_FAILED',
+      message: expect.stringMatching(/just sent to this sponsor/),
+    })
+    expect(h.send).not.toHaveBeenCalled()
+    expect(h.sfc!.signatureId).toBe('agr-other')
   })
 
   it('refuses a foreign contract template before it is read', async () => {
@@ -512,8 +578,18 @@ describe('signed copy', () => {
       status: 'closed-won',
       contractStatus: 'contract-signed',
       signatureStatus: 'signed',
+      contractSignedBy: 'Kari Nordmann',
       contractDocument: { asset: { _ref: 'file-1', url: DOC_URL } },
     })
+  })
+
+  it('refuses when the signed status was set by hand — the stored document is the unsigned original', async () => {
+    h.sfc!.contractSignedBy = undefined
+    await expect(sponsor().crm.sendCommunication(INPUT)).rejects.toMatchObject({
+      code: 'PRECONDITION_FAILED',
+      message: expect.stringMatching(/set manually/),
+    })
+    expect(h.send).not.toHaveBeenCalled()
   })
 
   it('links the stored signed document and changes nothing on the deal', async () => {

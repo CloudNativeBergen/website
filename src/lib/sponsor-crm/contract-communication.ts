@@ -81,6 +81,8 @@ export interface PrepareContractSendArgs {
  */
 export interface ContractSendPlan {
   action: ContractAction
+  /** First send: undo the stored agreement when nothing went out. Best-effort. */
+  release?: () => Promise<void>
   /** The signer (first send and reminder) — merged as SIGNER_NAME / SIGNER_EMAIL. */
   signer?: CommunicationRecipient
   contractValue?: string
@@ -89,6 +91,15 @@ export interface ContractSendPlan {
   /** Applied after the provider accepted the send; never throws. */
   afterSend: () => Promise<{ ok: boolean }>
 }
+
+/**
+ * How long a stored-but-unsent agreement blocks another first send. A crash
+ * between reserving and mailing leaves `contractReservedAt` set; after this
+ * window the next send may reserve again (the old token was never mailed).
+ */
+const RESERVATION_SETTLE_MS = 10 * 60 * 1000
+const IN_FLIGHT_MESSAGE =
+  'Another organizer is sending this contract right now. Wait a moment and reload before trying again.'
 
 function precondition(message: string): TRPCError {
   return new TRPCError({ code: 'PRECONDITION_FAILED', message })
@@ -149,9 +160,14 @@ export async function prepareContractSend(
 
   if (action === 'signed-copy') {
     const url = sfc.contractDocument?.asset?.url
-    if (!url) {
+    // Only the digital signing flow replaces the stored document with the
+    // signed one (and stamps `contractSignedBy`); a status set by hand leaves
+    // the unsigned original in place, which must never go out as "signed".
+    if (!url || !sfc.contractSignedBy) {
       throw precondition(
-        'No signed agreement is stored for this sponsor yet. Check the signing status first.',
+        sfc.contractSignedBy
+          ? 'No signed agreement is stored for this sponsor yet. Check the signing status first.'
+          : 'The signed status was set manually; no digitally signed document is stored, so there is no signed copy to send.',
       )
     }
     return {
@@ -374,58 +390,99 @@ export async function prepareContractSend(
     })
   }
 
+  // RESERVE the agreement before anything is mailed: the signing page resolves
+  // the token through the stored `signatureId`, so a link that is emailed
+  // before it is stored would be dead if the store failed — and two first
+  // sends racing would overwrite each other's token. Conditional on a fresh
+  // read: refused (nothing mailed) when a contract is already out, or when
+  // another send reserved within the settle window.
+  const current = await clientReadUncached.fetch<{
+    _rev: string
+    contractStatus: string | null
+    signatureStatus: string | null
+    signatureId: string | null
+    signingUrl: string | null
+    contractReservedAt: string | null
+  } | null>(
+    `*[_type == "sponsorForConference" && _id == $id && conference._ref == $conferenceId][0]{ _rev, contractStatus, signatureStatus, signatureId, signingUrl, contractReservedAt }`,
+    { id: sfc._id, conferenceId: conference._id },
+  )
+  if (!current || contractActionFor(current) !== 'send') {
+    throw precondition(
+      'A contract was just sent to this sponsor by someone else. Reload to see it.',
+    )
+  }
+  if (
+    current.signatureId &&
+    current.contractReservedAt &&
+    Date.now() - new Date(current.contractReservedAt).getTime() <
+      RESERVATION_SETTLE_MS
+  ) {
+    throw precondition(IN_FLIGHT_MESSAGE)
+  }
+  try {
+    await clientWrite
+      .patch(sfc._id)
+      .ifRevisionId(current._rev)
+      .set({
+        signatureId: agreementId,
+        signingUrl,
+        contractTemplate: { _type: 'reference', _ref: templateId },
+        contractDocument: {
+          _type: 'file',
+          asset: { _type: 'reference', _ref: asset._id },
+        },
+        signerName: signer.name,
+        signerEmail: signer.email,
+        contractReservedAt: now,
+      })
+      .commit()
+  } catch (error) {
+    // A write landed between the read and this patch: another send, or an
+    // unrelated edit. Either way nothing was mailed; the organizer retries.
+    throw new TRPCError({
+      code: 'PRECONDITION_FAILED',
+      message: IN_FLIGHT_MESSAGE,
+      cause: error,
+    })
+  }
+
+  const release = async () => {
+    try {
+      await clientWrite
+        .patch(sfc._id)
+        .unset(['signatureId', 'signingUrl', 'contractReservedAt'])
+        .commit()
+    } catch (error) {
+      console.error('[contract-send] releasing the agreement failed:', error)
+    }
+  }
+
   return {
     action,
+    release,
     signer,
     contractValue,
     appendHtml: contractCardHtml({ action, url: signingUrl, theme }),
     attachments: contractAttachments(action, signingUrl),
-    // The email is out: the deal is contract-sent with a pending signature.
-    // Revision-conditional on a FRESH read: two organizers sending at once
-    // both created an agreement and both mailed; only the first write may
-    // store its token, or the other email's link would be dead against the
-    // stored signatureId. The loser is told (`contractStateFailed`).
+    // The email is out and the agreement is already stored: the deal moves
+    // to contract-sent with a pending signature. If this write fails the link
+    // still works; only the status is stale, and the organizer is told.
     afterSend: async () => {
       const actorId = actor.id ?? 'system'
       try {
-        const current = await clientReadUncached.fetch<{
-          contractStatus: string | null
-          signatureStatus: string | null
-          signatureId: string | null
-          signingUrl: string | null
-          _rev: string
-        } | null>(
-          `*[_type == "sponsorForConference" && _id == $id && conference._ref == $conferenceId][0]{ contractStatus, signatureStatus, signatureId, signingUrl, _rev }`,
-          { id: sfc._id, conferenceId: conference._id },
-        )
-        if (!current || contractActionFor(current) !== 'send') {
-          console.error(
-            '[contract-send] another contract was sent first; this agreement is not stored:',
-            agreementId,
-          )
-          return { ok: false }
-        }
         await clientWrite
           .patch(sfc._id)
-          .ifRevisionId(current._rev)
           .set({
             contractStatus: 'contract-sent',
             contractSentAt: now,
-            contractTemplate: { _type: 'reference', _ref: templateId },
-            contractDocument: {
-              _type: 'file',
-              asset: { _type: 'reference', _ref: asset._id },
-            },
-            signerName: signer.name,
-            signerEmail: signer.email,
             signatureStatus: 'pending',
-            signatureId: agreementId,
-            signingUrl,
             ...(args.organizerSignatureDataUrl && {
               organizerSignedAt: now,
               organizerSignedBy: organizerDisplayName,
             }),
           })
+          .unset(['contractReservedAt'])
           .commit()
       } catch (error) {
         console.error('[contract-send] sponsor record update failed:', error)

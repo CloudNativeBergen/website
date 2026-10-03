@@ -478,7 +478,7 @@ A Vercel cron job at `/api/cron/contract-reminders` runs daily (configured in `v
 - Were sent more than **5 days** ago (`contractSentAt < threshold`)
 - Have fewer than **2 reminders** already sent
 
-For each matching contract, it sends a reminder email via Resend (using `ContractReminderTemplate` with the stored `signingUrl`), increments `reminderCount`, and logs a `contract_reminder_sent` activity.
+For each matching contract, it calls `sendContractReminderBySystem` (`src/lib/sponsor-crm/contract-communication.ts`) — the same send an organizer's "Send reminder" performs, with a system actor: the org's `contract-reminder` email template merged with the signer and contract value, the stored `signingUrl` in the appended card, sent through `sendSponsorCommunication`. Every reminder is therefore a full `sponsorActivity` email record (`communicationKind: "contract"`, recipients, body as sent, provider id); `reminderCount` is incremented atomically after the provider accepted. The older `contract_reminder_sent` activity type is no longer written (legacy entries still render).
 
 The cron endpoint is protected by a `CRON_SECRET` bearer token.
 

@@ -266,6 +266,20 @@ export default defineType({
       description: 'When the sponsorship contract was signed',
     }),
     defineField({
+      name: 'contractSignedBy',
+      title: 'Contract Signed By',
+      type: 'string',
+      description:
+        'Name entered by the signer in the digital signing flow. Set only by that flow — its presence proves the stored document is the signed one.',
+    }),
+    defineField({
+      name: 'contractReservedAt',
+      title: 'Contract Agreement Reserved At',
+      type: 'datetime',
+      description:
+        'Set while a contract send is in flight (the agreement is stored before the email goes out); cleared once the deal is contract-sent or the send failed.',
+    }),
+    defineField({
       name: 'contractValue',
       title: 'Contract Value',
       type: 'number',
