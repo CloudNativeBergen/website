@@ -106,6 +106,8 @@ export function SpeakerDetailsForm({
     speaker?.genderSelfDescribe ?? '',
   )
   const [speakerCountry, setSpeakerCountry] = useState(speaker?.country ?? '')
+  const [mondayWorkshopRsvp, setMondayWorkshopRsvp] = useState<boolean | null>(speaker?.mondayWorkshopRsvp ?? null)
+  const [speakerDinnerRsvp, setSpeakerDinnerRsvp] = useState<boolean | null>(speaker?.speakerDinnerRsvp ?? null)
   const [speakerLinks, setSpeakerLinks] = useState(
     speaker?.links?.length ? speaker.links : [''],
   )
@@ -227,6 +229,8 @@ export function SpeakerDetailsForm({
     setSpeakerGender(speaker?.gender ?? '')
     setSpeakerGenderSelfDescribe(speaker?.genderSelfDescribe ?? '')
     setSpeakerCountry(speaker?.country ?? '')
+    setMondayWorkshopRsvp(speaker?.mondayWorkshopRsvp ?? null)
+    setSpeakerDinnerRsvp(speaker?.speakerDinnerRsvp ?? null)
     setSpeakerLinks(speaker?.links?.length ? speaker.links : [''])
     setDataProcessingConsent(speaker?.consent?.dataProcessing?.granted ?? false)
     setMarketingConsent(speaker?.consent?.marketing?.granted ?? false)
@@ -352,6 +356,8 @@ export function SpeakerDetailsForm({
           ? speakerGenderSelfDescribe
           : null,
       country: speakerCountry || null,
+      mondayWorkshopRsvp,
+      speakerDinnerRsvp,
       // The SELF path autosaves this field and never puts it here, so a Save
       // Draft that writes only the proposal cannot lose it. The ORGANIZER path
       // sends it only after a real toggle, so an untouched (possibly stale)
@@ -469,7 +475,38 @@ export function SpeakerDetailsForm({
           </HelpText>
         </div>
 
-        <div className="sm:col-span-4">
+
+        <div className="sm:col-span-4 mt-6 border-t border-gray-100 pt-6 dark:border-gray-800">
+          <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-4">Event Attendance</h3>
+          
+          <div className="space-y-4">
+            <div>
+              <Dropdown
+                name="monday_workshop_rsvp"
+                label="Will you attend the Monday Workshops?"
+                value={mondayWorkshopRsvp === true ? 'Yes' : mondayWorkshopRsvp === false ? 'No' : ''}
+                setValue={(val) => setMondayWorkshopRsvp(val === 'Yes' ? true : val === 'No' ? false : null)}
+                options={new Map([['Yes', 'Yes'], ['No', 'No']])}
+                placeholder="Unanswered"
+                clearable
+              />
+            </div>
+            
+            <div>
+              <Dropdown
+                name="speaker_dinner_rsvp"
+                label="Will you attend the Speaker Dinner?"
+                value={speakerDinnerRsvp === true ? 'Yes' : speakerDinnerRsvp === false ? 'No' : ''}
+                setValue={(val) => setSpeakerDinnerRsvp(val === 'Yes' ? true : val === 'No' ? false : null)}
+                options={new Map([['Yes', 'Yes'], ['No', 'No']])}
+                placeholder="Unanswered"
+                clearable
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="sm:col-span-4 mt-6 border-t border-gray-100 pt-6 dark:border-gray-800">
           <Dropdown
             name="speaker_gender"
             label="Gender (optional)"

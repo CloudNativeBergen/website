@@ -406,7 +406,7 @@ export async function main() {
   )
   console.log(`Confirmed talks: ${talks.length}`)
 
-  const plan = planSpeakerTicketBackfill(talks, redeemed)
+  const plan = planSpeakerTicketBackfill(talks, new Set(redeemed.keys()))
 
   console.log('')
   for (const marker of plan.planned) {

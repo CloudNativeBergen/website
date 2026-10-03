@@ -108,6 +108,8 @@ const CLEARABLE_SPEAKER_FIELDS = [
   'bio',
   'gender',
   'genderSelfDescribe',
+  'mondayWorkshopRsvp',
+  'speakerDinnerRsvp',
   'country',
 ] as const
 export function providerAccount(
@@ -1104,6 +1106,8 @@ export async function getSpeakerAdminDetail(
       flags,
       gender,
       genderSelfDescribe,
+      mondayWorkshopRsvp,
+      speakerDinnerRsvp,
       country,
       consent,
       socialTagOptOut,

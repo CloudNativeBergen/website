@@ -59,6 +59,8 @@ interface SpeakerBase {
   country?: string | null
   consent?: SpeakerConsent
   galleryImages?: GalleryImageWithSpeakers[]
+  mondayWorkshopRsvp?: boolean | null
+  speakerDinnerRsvp?: boolean | null
 }
 
 /**

@@ -623,6 +623,19 @@ export default defineType({
       description:
         'When the opt-out above was set, stamped by the server. Cleared together with the opt-out.',
     }),
+    defineField({
+      name: 'mondayWorkshopRsvp',
+      title: 'Monday Workshop RSVP',
+      type: 'boolean',
+      description: 'Whether the speaker plans to attend the Monday workshops. Usually captured via ticket registration, but can be overridden here.',
+    }),
+    defineField({
+      name: 'speakerDinnerRsvp',
+      title: 'Speaker Dinner RSVP',
+      type: 'boolean',
+      description: 'Whether the speaker plans to attend the speaker dinner. Usually captured via ticket registration, but can be overridden here.',
+    }),
+
     // Right to erasure, Phase 1 (RunKonf/platform#52). Set by
     // `eraseSpeakerInPlace` with `setIfMissing`, so a repeated erasure PRESERVES
     // the original timestamp — the date a request was answered is itself a

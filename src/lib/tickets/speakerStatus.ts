@@ -139,6 +139,7 @@ export interface SpeakerTicketStatus {
   state: SpeakerTicketState
   /** ISO timestamp of the invitation, when there was one. */
   invitedAt?: string
+  additionals?: { name: string; value: string }[]
 }
 
 /**
@@ -163,6 +164,7 @@ export interface TicketCandidate {
   /** The address EXACTLY as registered, before normalization. */
   registeredEmail: string
   category: string
+  additionals?: { name: string; value: string }[]
 }
 
 /**
@@ -191,6 +193,7 @@ export function toTicketCandidates(tickets: EventTicket[]): TicketCandidate[] {
       email,
       registeredEmail: ticket.crm?.email ?? '',
       category: ticket.category,
+      additionals: ticket.additionals,
     })
   }
   return candidates
@@ -233,12 +236,12 @@ export function searchTicketCandidates(
 export function redeemedSpeakerEmails(
   candidates: TicketCandidate[],
   categories: Iterable<string> = [SPEAKER_TICKET_CATEGORY],
-): Set<string> {
+): Map<string, TicketCandidate> {
   const wanted = new Set([...categories].map(categoryKey))
-  const emails = new Set<string>()
+  const emails = new Map<string, TicketCandidate>()
   for (const candidate of candidates) {
     if (!wanted.has(categoryKey(candidate.category))) continue
-    emails.add(candidate.email)
+    emails.set(candidate.email, candidate)
   }
   return emails
 }
@@ -250,21 +253,27 @@ export function redeemedSpeakerEmails(
  */
 export function joinSpeakerTicketStatus(
   speakers: SpeakerTicketInput[],
-  redeemed: Set<string> | null,
+  redeemed: Map<string, TicketCandidate> | null,
 ): SpeakerTicketStatus[] {
   return speakers.map((speaker) => {
     const invitedAt = speaker.invitedAt ?? undefined
     if (!redeemed) {
       return { speakerId: speaker.speakerId, state: 'unknown', invitedAt }
     }
+    let foundTicket: TicketCandidate | undefined
     const hasTicket = speaker.emails.some((email) => {
       const normalized = normalizeEmail(email)
-      return normalized !== '' && redeemed.has(normalized)
+      if (normalized !== '' && redeemed.has(normalized)) {
+        foundTicket = redeemed.get(normalized)
+        return true
+      }
+      return false
     })
     return {
       speakerId: speaker.speakerId,
       state: hasTicket ? 'redeemed' : invitedAt ? 'invited' : 'not-invited',
       invitedAt,
+      additionals: foundTicket?.additionals,
     }
   })
 }
@@ -354,7 +363,7 @@ export async function fetchEventTicketCandidates(
  */
 export async function fetchRedeemedSpeakerEmails(
   conference: ConferenceTicketingBinding,
-): Promise<Set<string> | null> {
+): Promise<Map<string, TicketCandidate> | null> {
   const orgId = conference.organization?._ref
   // Fail closed: without an owning org there is no account to key the memo on,
   // and `resolveTicketingCredentials` would decline anyway.

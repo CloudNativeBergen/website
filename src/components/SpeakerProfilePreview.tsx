@@ -22,12 +22,14 @@ import { BlueskyFeed } from '@/components/BlueskyFeed'
 import { ScrollFadeBlueskyFeed } from '@/components/ScrollFadeBlueskyFeed'
 import { iconForLink, titleForLink } from '@/components/SocialIcons'
 import { ModalShell } from '@/components/ModalShell'
+import type { SpeakerTicketStatus } from '@/lib/tickets/speakerStatus'
 
 export interface SpeakerProfilePreviewProps {
   isOpen: boolean
   onClose: () => void
   speaker: Speaker
   talks: ProposalExisting[]
+  ticketStatus?: SpeakerTicketStatus
 }
 
 export default function SpeakerProfilePreview({
@@ -35,6 +37,7 @@ export default function SpeakerProfilePreview({
   onClose,
   speaker,
   talks,
+  ticketStatus,
 }: SpeakerProfilePreviewProps) {
   const blueskyHandle = hasBlueskySocial(speaker.links || [])
 
