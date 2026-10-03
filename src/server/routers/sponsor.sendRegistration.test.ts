@@ -362,6 +362,18 @@ describe('refusals', () => {
     expect(h.send).not.toHaveBeenCalled()
   })
 
+  it('refuses to send from localhost — the link would be a localhost bearer URL', async () => {
+    h.getConference.mockResolvedValue({
+      ...(await h.getConference()),
+      domain: 'localhost:3000',
+    })
+    await expect(sponsor().crm.sendCommunication(INPUT)).rejects.toMatchObject({
+      code: 'PRECONDITION_FAILED',
+    })
+    expect(tokenPatches()).toEqual([])
+    expect(h.send).not.toHaveBeenCalled()
+  })
+
   it('refuses a foreign sponsor before reading it', async () => {
     h.tenant = { _type: 'sponsorForConference', conferenceId: 'conf-other' }
     await expect(sponsor().crm.sendCommunication(INPUT)).rejects.toMatchObject({

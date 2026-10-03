@@ -154,6 +154,7 @@ import {
   buildPortalUrl,
   generateRegistrationToken,
 } from '@/lib/sponsor-crm/registration'
+import { isLocalhostDomain } from '@/lib/environment/localhost'
 import {
   TEMPLATE_NOT_FOUND_MESSAGE,
   TEMPLATE_WRONG_KIND_MESSAGE,
@@ -323,6 +324,16 @@ async function prepareRegistrationSend(
       code: 'PRECONDITION_FAILED',
       message:
         'Conference has no domain configured. Set a domain on the conference before sending a registration link.',
+    })
+  }
+  // The old sender's rule, kept on the SERVER: the link is built from the
+  // request domain, so a dev send would mail a real contact a localhost
+  // bearer link. The modal disables its button locally; this is the backstop.
+  if (isLocalhostDomain(domain)) {
+    throw new TRPCError({
+      code: 'PRECONDITION_FAILED',
+      message:
+        'Registration emails cannot be sent from localhost. Deploy to a production domain first.',
     })
   }
   // ONE owner of "reuse, never rotate": the same function the modal's
