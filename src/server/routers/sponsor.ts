@@ -3132,22 +3132,30 @@ export const sponsorRouter = router({
               )
             : undefined
 
-        const result = await sendSponsorCommunication({
-          conference,
-          orgId: ctx.orgId,
-          actorId: ctx.speaker._id ?? null,
-          sponsorForConferenceId: input.sponsorForConferenceId,
-          kind: input.kind,
-          recipientKeys: input.recipientKeys,
-          subject: input.subject,
-          message,
-          template,
-          senderNames: [ctx.speaker.name, ctx.user?.name],
-          ...(discount && {
-            appendHtml: discount.html,
-            attachments: discount.attachments,
-          }),
-        })
+        let result: Awaited<ReturnType<typeof sendSponsorCommunication>>
+        try {
+          result = await sendSponsorCommunication({
+            conference,
+            orgId: ctx.orgId,
+            actorId: ctx.speaker._id ?? null,
+            sponsorForConferenceId: input.sponsorForConferenceId,
+            kind: input.kind,
+            recipientKeys: input.recipientKeys,
+            subject: input.subject,
+            message,
+            template,
+            senderNames: [ctx.speaker.name, ctx.user?.name],
+            ...(discount && {
+              appendHtml: discount.html,
+              attachments: discount.attachments,
+            }),
+          })
+        } catch (error) {
+          // The primitive THREW (a read rejected before the provider was
+          // reached) rather than refusing: nothing went out either way.
+          await discount?.release()
+          throw error
+        }
 
         if (!result.ok) {
           // Nothing went out, so the codes are nobody's again.

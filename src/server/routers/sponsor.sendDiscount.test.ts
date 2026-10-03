@@ -39,6 +39,8 @@ const h = vi.hoisted(() => ({
   takeoverShouldFail: false,
   /** The follow-up read of an existing claim fails (transport error). */
   claimReadShouldThrow: false,
+  /** The send primitive's own sponsor read rejects (it THROWS, not `!ok`). */
+  sfcReadShouldThrow: false,
   send: vi.fn(),
   listDiscounts: vi.fn(),
   credentials: vi.fn(),
@@ -71,7 +73,10 @@ vi.mock('@/lib/sanity/client', () => {
         throw new Error('ClientError: projectId abc123 socket hang up')
       return h.links
     }
-    if (query.includes('_type == "sponsorForConference"')) return h.sfc
+    if (query.includes('_type == "sponsorForConference"')) {
+      if (h.sfcReadShouldThrow) throw new Error('socket hang up')
+      return h.sfc
+    }
     if (query.includes('_type == "discountCodeClaim"')) {
       if (h.claimReadShouldThrow) throw new Error('socket hang up')
       // The projection the real query applies.
@@ -253,6 +258,7 @@ beforeEach(() => {
   h.claimOps = []
   h.takeoverShouldFail = false
   h.claimReadShouldThrow = false
+  h.sfcReadShouldThrow = false
   h.tenant = { _type: 'sponsorForConference', conferenceId: CONF }
   h.sfc = {
     _id: SFC,
@@ -1141,6 +1147,14 @@ describe('the discount-code claim', () => {
     expect(claimedBy('ACME-2026')).toBe(SFC)
     // ACME-WORKSHOP was only ever going to be adopted; it was not linked.
     expect(claimIdOf('ACME-WORKSHOP')).toBeUndefined()
+  })
+
+  it('releases the claims when the send primitive THROWS instead of refusing', async () => {
+    h.sfcReadShouldThrow = true
+    await expect(sponsor().crm.sendCommunication(INPUT)).rejects.toThrow()
+    expect(h.send).not.toHaveBeenCalled()
+    expect(h.claimOps.map((o) => o.op)).toEqual(['create', 'delete'])
+    expect(h.claims.size).toBe(0)
   })
 
   it('an Assign claims before it appends, and releases if the append fails', async () => {
