@@ -91,7 +91,10 @@ import type { EventTicket } from '@/lib/tickets/types'
 export type ClassifiableTicket = Pick<
   EventTicket,
   'category' | 'sum' | 'coupon' | 'discount'
-> & { fields?: { key: string; value: string }[] }
+> & {
+  fields?: { key: string; value: string }[]
+  additionals?: { name: string; value: string }[]
+}
 
 /** Who granted a ticket, when it was granted rather than bought. */
 export type TicketGrantedBy =
@@ -341,14 +344,35 @@ export function classifyTicket(
       let granted =
         workshopAccessOf(ticket.category, context.ticketTypeRoles) === 'granted'
       if (isSpeakerType) {
-        const rsvpField = ticket.fields?.find(
+        const fieldMatch = ticket.fields?.find(
           (f) =>
             f.key.toLowerCase().includes('monday') ||
             f.key.toLowerCase().includes('workshop'),
         )
-        if (rsvpField) {
-          const val = rsvpField.value.toLowerCase().trim()
-          granted = val.includes('yes') || val.includes('ja') || val === 'true'
+        const additionalMatch = ticket.additionals?.find(
+          (a) =>
+            a.name.toLowerCase().includes('monday') ||
+            a.name.toLowerCase().includes('workshop'),
+        )
+        const matched = fieldMatch?.value || additionalMatch?.value
+
+        if (matched) {
+          const val = matched.toLowerCase().trim()
+          // Additionals store the multiple choice answer *in the name*, and the value is "1".
+          // Example: name: "Will you attend the Monday workshops? - Yes", value: "1"
+          if (
+            additionalMatch &&
+            (additionalMatch.name.toLowerCase().includes('yes') ||
+              additionalMatch.name.toLowerCase().includes('ja')) &&
+            val === '1'
+          ) {
+            granted = true
+          } else {
+            granted =
+              val.includes('yes') ||
+              val.includes('ja') ||
+              ['true', '1', 'on', 'checked', 'ok', 'y'].some((t) => val === t)
+          }
         } else {
           granted = false // No explicitly declared intent means best-effort/no guaranteed seat
         }

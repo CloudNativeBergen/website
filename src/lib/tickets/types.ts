@@ -143,6 +143,7 @@ export interface EventTicketWithoutDate {
   coupon?: string
   discount?: string
   fields: { key: string; value: string }[]
+  additionals?: { name: string; value: string }[]
   crm: {
     first_name: string
     last_name: string
@@ -208,6 +209,7 @@ export interface GroupedOrder {
   amountLeft: number
   categories: string[]
   fields: { key: string; value: string }[]
+  additionals?: { name: string; value: string }[]
 }
 
 export interface EventTicketsResponse {
