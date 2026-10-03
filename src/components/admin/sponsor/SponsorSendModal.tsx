@@ -38,7 +38,10 @@ import { conferenceBaseUrl } from '@/lib/conference/baseUrl'
 import { emailBrandColor, type ConferenceTheme } from '@/lib/branding/theme'
 import { createLocalhostWarning } from '@/lib/localhost-warning'
 import { discountCodesCardHtml } from '@/lib/sponsor-crm/discount-email'
-import { registrationCardHtml } from '@/lib/sponsor-crm/registration-email'
+import {
+  mergePortalUrl,
+  registrationCardHtml,
+} from '@/lib/sponsor-crm/registration-email'
 import { SponsorTemplatePicker } from './SponsorTemplatePicker'
 
 export interface SponsorSendModalProps {
@@ -958,42 +961,54 @@ export function SponsorSendModal({
   }
 
   const createPreview = ({
-    subject,
-    messageHTML,
+    subject: rawSubject,
+    messageHTML: rawMessageHTML,
   }: {
     subject: string
     messageHTML: string
-  }) => (
-    <BroadcastTemplate
-      subject={subject}
-      eventName={conference.title}
-      eventLocation={`${conference.city}, ${conference.country}`}
-      eventDate={formatConferenceDateLong(conference.startDate)}
-      eventUrl={conferenceBaseUrl(conference)}
-      socialLinks={conference.socialLinks || []}
-      brandColor={emailBrandColor(conference.theme)}
-      content={
-        <div
-          dangerouslySetInnerHTML={{
-            // The SAME block the server appends, so the preview is the send.
-            __html:
-              isDiscount && codesQuery.data && chosenCodes.length > 0
-                ? `${messageHTML}${discountCodesCardHtml({
-                    codes: chosenCodes,
-                    ticketUrl: codesQuery.data.ticketUrl,
-                    theme: conference.theme,
-                  })}`
-                : isRegistration && portalUrl
-                  ? `${messageHTML}${registrationCardHtml({
-                      portalUrl,
+  }) => {
+    // A template applied before the link was known kept the merge field as
+    // text; the server merges it at send, and the preview shows the same.
+    const subject =
+      isRegistration && portalUrl
+        ? mergePortalUrl(rawSubject, portalUrl)
+        : rawSubject
+    const messageHTML =
+      isRegistration && portalUrl
+        ? mergePortalUrl(rawMessageHTML, portalUrl)
+        : rawMessageHTML
+    return (
+      <BroadcastTemplate
+        subject={subject}
+        eventName={conference.title}
+        eventLocation={`${conference.city}, ${conference.country}`}
+        eventDate={formatConferenceDateLong(conference.startDate)}
+        eventUrl={conferenceBaseUrl(conference)}
+        socialLinks={conference.socialLinks || []}
+        brandColor={emailBrandColor(conference.theme)}
+        content={
+          <div
+            dangerouslySetInnerHTML={{
+              // The SAME block the server appends, so the preview is the send.
+              __html:
+                isDiscount && codesQuery.data && chosenCodes.length > 0
+                  ? `${messageHTML}${discountCodesCardHtml({
+                      codes: chosenCodes,
+                      ticketUrl: codesQuery.data.ticketUrl,
                       theme: conference.theme,
                     })}`
-                  : messageHTML,
-          }}
-        />
-      }
-    />
-  )
+                  : isRegistration && portalUrl
+                    ? `${messageHTML}${registrationCardHtml({
+                        portalUrl,
+                        theme: conference.theme,
+                      })}`
+                    : messageHTML,
+            }}
+          />
+        }
+      />
+    )
+  }
 
   const localhostWarning = createLocalhostWarning(domain, 'sponsors')
   const templatesFailedNotice = templatesQuery.isError ? (

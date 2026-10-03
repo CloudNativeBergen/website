@@ -10,6 +10,17 @@ import { emailBrandColor, type ConferenceTheme } from '@/lib/branding/theme'
 import { escapeHtml } from '@/lib/html/escape'
 import type { CommunicationAttachment } from './types'
 
+export const PORTAL_URL_PLACEHOLDER = '{{{SPONSOR_PORTAL_URL}}}'
+
+/**
+ * Replace a `{{{SPONSOR_PORTAL_URL}}}` left in text — a template applied
+ * before the link was known (#1263 review). The server runs this on the
+ * subject and body it sends; the preview runs it on what it shows.
+ */
+export function mergePortalUrl(text: string, portalUrl: string): string {
+  return text.split(PORTAL_URL_PLACEHOLDER).join(portalUrl)
+}
+
 /** The one attachment row of a registration send: the portal link itself. */
 export function registrationAttachments(
   portalUrl: string,

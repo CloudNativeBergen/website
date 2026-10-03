@@ -47,9 +47,11 @@ import {
 import { sanitizeSvgFieldOrThrow, SvgSanitizeError } from '@/lib/svg/upload'
 import {
   buildTemplateVariables,
+  processPortableTextVariables,
   suggestTemplateCategory,
   suggestTemplateLanguage,
 } from '@/lib/sponsor/templates'
+import type { PortableTextBlock as TemplateBlock } from '@/lib/sponsor/types'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import {
   conferenceBaseUrl,
@@ -144,6 +146,7 @@ import {
   sponsorTicketUrl,
 } from '@/lib/sponsor-crm/discount-email'
 import {
+  mergePortalUrl,
   registrationAttachments,
   registrationCardHtml,
 } from '@/lib/sponsor-crm/registration-email'
@@ -3226,6 +3229,19 @@ export const sponsorRouter = router({
               )
             : undefined
 
+        // A template applied in the composer before the link was known keeps
+        // the merge field as text; the final merge happens here, so no
+        // sponsor ever receives the placeholder.
+        const subject = registration
+          ? mergePortalUrl(input.subject, registration.portalUrl)
+          : input.subject
+        if (registration) {
+          message = processPortableTextVariables(
+            message as unknown as TemplateBlock[],
+            { SPONSOR_PORTAL_URL: registration.portalUrl },
+          ) as unknown as PortableTextBlock[]
+        }
+
         let result: Awaited<ReturnType<typeof sendSponsorCommunication>>
         try {
           result = await sendSponsorCommunication({
@@ -3235,7 +3251,7 @@ export const sponsorRouter = router({
             sponsorForConferenceId: input.sponsorForConferenceId,
             kind: input.kind,
             recipientKeys: input.recipientKeys,
-            subject: input.subject,
+            subject,
             message,
             template,
             senderNames: [ctx.speaker.name, ctx.user?.name],

@@ -33,23 +33,24 @@ export function SponsorPortalSection({
   onCheckStatus,
   onSendInvite,
 }: SponsorPortalSectionProps) {
-  const [generatedUrl, setGeneratedUrl] = useState<string | null>(() => {
-    if (registrationSent && existingToken && typeof window !== 'undefined') {
-      return `${window.location.origin}/sponsor/portal/${existingToken}`
-    }
-    return null
-  })
+  const [revealed, setRevealed] = useState(false)
   const [copied, setCopied] = useState(false)
   const emailSent = registrationSent ?? false
 
-  const generateMutation = api.registration.generateToken.useMutation({
-    onSuccess: (data) => setGeneratedUrl(data.url),
-  })
+  const generateMutation = api.registration.generateToken.useMutation()
+
+  // Derived from the PROPS, not sampled at mount: a send through the Send
+  // modal refreshes the sponsor (token + sent status), and the link, the sent
+  // confirmation and Resend must appear without a remount.
+  const generatedUrl =
+    generateMutation.data?.url ??
+    (existingToken && (emailSent || revealed) && typeof window !== 'undefined'
+      ? `${window.location.origin}/sponsor/portal/${existingToken}`
+      : null)
 
   const handleGenerate = () => {
     if (existingToken) {
-      const baseUrl = window.location.origin
-      setGeneratedUrl(`${baseUrl}/sponsor/portal/${existingToken}`)
+      setRevealed(true)
     } else {
       generateMutation.mutate({ sponsorForConferenceId })
     }

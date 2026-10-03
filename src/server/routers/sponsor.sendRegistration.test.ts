@@ -249,6 +249,36 @@ describe('the registration token', () => {
   })
 })
 
+describe('a portal placeholder left by the composer', () => {
+  it('is merged on the server — subject and body — so no sponsor receives it', async () => {
+    h.sfc!.registrationToken = 'tok-existing'
+    await sponsor().crm.sendCommunication({
+      ...INPUT,
+      subject: 'Register at {{{SPONSOR_PORTAL_URL}}}',
+      message: JSON.stringify([
+        {
+          _type: 'block',
+          _key: 'b1',
+          style: 'normal',
+          children: [
+            {
+              _type: 'span',
+              _key: 's1',
+              text: 'Your link: {{{SPONSOR_PORTAL_URL}}} today',
+            },
+          ],
+        },
+      ]),
+    })
+    const sent = h.send.mock.calls[0][0]
+    expect(sent.subject).toBe(`Register at ${portalUrl('tok-existing')}`)
+    expect(sent.html).not.toContain('{{{SPONSOR_PORTAL_URL}}}')
+    expect(sent.html).toContain(`Your link: `)
+    expect(record()!.subject).toBe(`Register at ${portalUrl('tok-existing')}`)
+    expect(record()!.body).not.toContain('{{{SPONSOR_PORTAL_URL}}}')
+  })
+})
+
 describe('the record', () => {
   it('lists the portal link under attachments', async () => {
     h.sfc!.registrationToken = 'tok-existing'
