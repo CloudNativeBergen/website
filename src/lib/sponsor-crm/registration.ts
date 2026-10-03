@@ -82,17 +82,21 @@ export async function generateRegistrationToken(
       return { token: existing.registrationToken }
     }
 
-    // No token yet — generate a fresh one
+    // No token yet — mint one ATOMICALLY: two concurrent first sends (or an
+    // open of the Send modal racing a "Copy link") both read null here;
+    // `setIfMissing` lets the first writer win and the committed document
+    // tells the loser which token is actually stored, so no email ever
+    // carries a token that was overwritten a moment later.
     const token = randomUUID()
-    await clientWrite
+    const stored = await clientWrite
       .patch(sponsorForConferenceId)
-      .set({
+      .setIfMissing({
         registrationToken: token,
         registrationComplete: false,
       })
-      .commit()
+      .commit<{ registrationToken?: string | null }>()
 
-    return { token }
+    return { token: stored?.registrationToken || token }
   } catch (error) {
     console.error(
       `[registration] Failed to generate token for sfc=${sponsorForConferenceId}:`,

@@ -126,7 +126,21 @@ export function processPortableTextVariables(
     }
   }
 
-  let keySeq = 0
+  // Keys continue past any `tpl-N` already present (a block merged once in
+  // the composer and once more on the server, #1263): a restarted counter
+  // would re-issue a key an existing link annotation holds, and the span
+  // would then resolve to the WRONG href.
+  let keySeq = blocks.reduce((max, block) => {
+    const keys = [
+      ...((block.markDefs as Array<{ _key?: unknown }> | undefined) ?? []),
+      ...((block.children as Array<{ _key?: unknown }> | undefined) ?? []),
+    ].map((k) => k._key)
+    for (const key of keys) {
+      const m = typeof key === 'string' && /^tpl-(\d+)$/.exec(key)
+      if (m) max = Math.max(max, Number(m[1]))
+    }
+    return max
+  }, 0)
   const genKey = () => `tpl-${++keySeq}`
 
   return blocks.map((block) => {

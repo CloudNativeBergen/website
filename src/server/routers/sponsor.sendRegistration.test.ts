@@ -29,6 +29,8 @@ const h = vi.hoisted(() => ({
   patches: [] as Array<{ id: string; sets: Record<string, unknown> }>,
   /** The token write (the `registrationToken` patch) fails. */
   tokenWriteShouldThrow: false,
+  /** Another writer stores this token between our read and our write. */
+  raceToken: null as string | null,
   send: vi.fn(),
 }))
 
@@ -50,26 +52,45 @@ vi.mock('@/lib/sanity/client', () => {
   const fetch = async (query: string, params?: Record<string, unknown>) => {
     h.fetches.push({ query, params })
     if (query.includes('"memberOrgIds"')) return h.tenant
+    if (query.includes('[0].contractStatus')) {
+      return (h.sfc?.contractStatus as string | null | undefined) ?? null
+    }
     if (query.includes('_type == "sponsorForConference"')) return h.sfc
     return null
   }
   const patch = (id: string) => {
     let sets: Record<string, unknown> = {}
+    let ifMissing: Record<string, unknown> = {}
     const chain = {
       set: (v: Record<string, unknown>) => {
         sets = { ...sets, ...v }
         return chain
       },
       unset: () => chain,
-      setIfMissing: () => chain,
+      setIfMissing: (v: Record<string, unknown>) => {
+        ifMissing = { ...ifMissing, ...v }
+        return chain
+      },
       commit: async () => {
-        if ('registrationToken' in sets && h.tokenWriteShouldThrow) {
+        if ('registrationToken' in ifMissing && h.tokenWriteShouldThrow) {
           throw new Error('sanity down')
         }
-        h.patches.push({ id, sets })
-        // The store the next read sees, as Sanity would.
-        if (h.sfc && id === h.sfc._id) Object.assign(h.sfc, sets)
-        return {}
+        const doc = h.sfc && id === h.sfc._id ? h.sfc : {}
+        // A concurrent writer landed first: Sanity keeps THEIR value.
+        if ('registrationToken' in ifMissing && h.raceToken) {
+          doc.registrationToken = h.raceToken
+        }
+        // `setIfMissing` only fills fields that are null/absent.
+        const applied: Record<string, unknown> = {}
+        for (const [k, v] of Object.entries(ifMissing)) {
+          if (doc[k] == null) applied[k] = v
+        }
+        const all = { ...applied, ...sets }
+        h.patches.push({ id, sets: all })
+        // The store the next read sees, as Sanity would — and the committed
+        // document the client returns.
+        Object.assign(doc, all)
+        return { ...doc }
       },
     }
     return chain
@@ -165,6 +186,7 @@ beforeEach(() => {
   h.creates = []
   h.patches = []
   h.tokenWriteShouldThrow = false
+  h.raceToken = null
   h.tenant = { _type: 'sponsorForConference', conferenceId: CONF }
   h.sfc = {
     _id: SFC,
@@ -239,10 +261,21 @@ describe('the registration token', () => {
     expect(sentHtml()).toContain(portalUrl('tok-existing'))
   })
 
+  it('loses a first-mint race gracefully — the email carries the token that is STORED, not the one we minted', async () => {
+    h.raceToken = 'tok-raced'
+    await sponsor().crm.sendCommunication(INPUT)
+
+    // Our own uuid was never stored; the racing writer's token is.
+    expect(h.sfc!.registrationToken).toBe('tok-raced')
+    expect(sentHtml()).toContain(portalUrl('tok-raced'))
+    expect(sentHtml()).not.toMatch(/portal\/[0-9a-f-]{36}/)
+  })
+
   it('refuses before the provider when the token cannot be written', async () => {
     h.tokenWriteShouldThrow = true
     await expect(sponsor().crm.sendCommunication(INPUT)).rejects.toMatchObject({
       code: 'PRECONDITION_FAILED',
+      message: 'sanity down',
     })
     expect(h.send).not.toHaveBeenCalled()
     expect(record()).toBeUndefined()
@@ -273,9 +306,56 @@ describe('a portal placeholder left by the composer', () => {
     const sent = h.send.mock.calls[0][0]
     expect(sent.subject).toBe(`Register at ${portalUrl('tok-existing')}`)
     expect(sent.html).not.toContain('{{{SPONSOR_PORTAL_URL}}}')
-    expect(sent.html).toContain(`Your link: `)
+    // Merged AND linked, with the surrounding text intact.
+    expect(sent.html).toContain(`href="${portalUrl('tok-existing')}"`)
+    expect(sent.html).toMatch(/Your link: .*tok-existing.* today/)
     expect(record()!.subject).toBe(`Register at ${portalUrl('tok-existing')}`)
     expect(record()!.body).not.toContain('{{{SPONSOR_PORTAL_URL}}}')
+  })
+})
+
+describe('a message already merged once in the composer', () => {
+  // The key-collision guard itself is pinned in __tests__/lib/sponsor/templates.test.ts;
+  // this is the end-to-end shape through the real renderer.
+  it('keeps the existing link AND links the portal URL', async () => {
+    h.sfc!.registrationToken = 'tok-existing'
+    await sponsor().crm.sendCommunication({
+      ...INPUT,
+      message: JSON.stringify([
+        {
+          _type: 'block',
+          _key: 'b1',
+          style: 'normal',
+          markDefs: [
+            { _key: 'tpl-1', _type: 'link', href: 'https://conf.example' },
+          ],
+          children: [
+            { _type: 'span', _key: 'tpl-2', text: 'Site ', marks: [] },
+            {
+              _type: 'span',
+              _key: 'tpl-3',
+              text: 'https://conf.example',
+              marks: ['tpl-1'],
+            },
+            {
+              _type: 'span',
+              _key: 'tpl-4',
+              text: ' and portal {{{SPONSOR_PORTAL_URL}}}',
+              marks: [],
+            },
+          ],
+        },
+      ]),
+    })
+    const html = sentHtml()
+    expect(html).toContain('href="https://conf.example"')
+    expect(html).toContain(`href="${portalUrl('tok-existing')}"`)
+    // The portal text is linked to the portal, not to the first link.
+    expect(html).toMatch(
+      new RegExp(
+        `<a[^>]*href="${portalUrl('tok-existing')}"[^>]*>${portalUrl('tok-existing')}</a>`,
+      ),
+    )
   })
 })
 
@@ -313,6 +393,7 @@ describe('completed registration', () => {
     h.sfc!.registrationComplete = true
     await expect(sponsor().crm.sendCommunication(INPUT)).rejects.toMatchObject({
       code: 'PRECONDITION_FAILED',
+      message: expect.stringMatching(/already complete/),
     })
     expect(tokenPatches()).toEqual([])
     expect(h.send).not.toHaveBeenCalled()
@@ -331,6 +412,19 @@ describe('the contract status', () => {
     ).toMatchObject({
       createdBy: { _ref: 'sp-admin' },
     })
+  })
+
+  it('is never moved backwards by a contract send that landed during the email round-trip', async () => {
+    h.send.mockImplementation(async () => {
+      // Another tab sent the contract while the provider was busy.
+      h.sfc!.contractStatus = 'contract-sent'
+      return { data: { id: 'resend-msg-1' }, error: null }
+    })
+    await sponsor().crm.sendCommunication(INPUT)
+    expect(statusPatches()).toEqual([])
+    expect(
+      h.creates.find((d) => d.activityType === 'contract_status_change'),
+    ).toBeUndefined()
   })
 
   it('is left alone when the deal is already further along', async () => {
@@ -357,6 +451,7 @@ describe('refusals', () => {
     h.sfc!.status = 'negotiation'
     await expect(sponsor().crm.sendCommunication(INPUT)).rejects.toMatchObject({
       code: 'PRECONDITION_FAILED',
+      message: expect.stringMatching(/Closed Won/),
     })
     expect(tokenPatches()).toEqual([])
     expect(h.send).not.toHaveBeenCalled()
@@ -369,6 +464,7 @@ describe('refusals', () => {
     })
     await expect(sponsor().crm.sendCommunication(INPUT)).rejects.toMatchObject({
       code: 'PRECONDITION_FAILED',
+      message: expect.stringMatching(/localhost/),
     })
     expect(tokenPatches()).toEqual([])
     expect(h.send).not.toHaveBeenCalled()

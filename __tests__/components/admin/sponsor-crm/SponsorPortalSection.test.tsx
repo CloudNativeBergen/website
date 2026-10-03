@@ -52,7 +52,9 @@ describe('SponsorPortalSection', () => {
         onSendInvite={onSendInvite}
       />,
     )
-    expect(screen.getByDisplayValue(/\/sponsor\/portal\/tok-1$/)).toBeVisible()
+    expect(
+      screen.getByDisplayValue('http://localhost:3000/sponsor/portal/tok-1'),
+    ).toBeVisible()
     expect(
       screen.getByText('Registration email sent to sponsor contacts'),
     ).toBeVisible()
@@ -69,7 +71,9 @@ describe('SponsorPortalSection', () => {
       />,
     )
     fireEvent.click(screen.getByRole('button', { name: 'Copy link only' }))
-    expect(screen.getByDisplayValue(/\/sponsor\/portal\/tok-1$/)).toBeVisible()
+    expect(
+      screen.getByDisplayValue('http://localhost:3000/sponsor/portal/tok-1'),
+    ).toBeVisible()
     expect(h.mutate).not.toHaveBeenCalled()
   })
 

@@ -533,7 +533,9 @@ export const RegistrationComplete: Story = {
     const body = within(canvasElement.ownerDocument.body)
     const notice = await body.findByText(/has already completed registration/)
     await expect(notice).toHaveAttribute('role', 'status')
-    await expect(notice).toHaveTextContent('You can still send the link')
+    await expect(notice).toHaveTextContent(
+      'opens their sponsorship status page',
+    )
     // The composer is intact beneath the notice (the send button itself reads
     // "Disabled in Dev" on localhost, so it is not asserted by name).
     await expect(

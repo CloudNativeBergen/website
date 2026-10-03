@@ -297,13 +297,8 @@ async function prepareRegistrationSend(
   domain: string | undefined,
   sponsorForConferenceId: string,
 ) {
-  const sfc = await clientReadUncached.fetch<{
-    status: string | null
-    contractStatus: string | null
-  } | null>(
-    `*[_type == "sponsorForConference" && _id == $id && conference._ref == $conferenceId][0]{
-      status, contractStatus
-    }`,
+  const sfc = await clientReadUncached.fetch<{ status: string | null } | null>(
+    `*[_type == "sponsorForConference" && _id == $id && conference._ref == $conferenceId][0]{ status }`,
     { id: sponsorForConferenceId, conferenceId: conference._id },
   )
   if (!sfc) {
@@ -353,7 +348,42 @@ async function prepareRegistrationSend(
     portalUrl,
     html: registrationCardHtml({ portalUrl, theme: conference.theme }),
     attachments: registrationAttachments(portalUrl),
-    contractStatus: sfc.contractStatus || 'none',
+  }
+}
+
+/**
+ * After a registration send went out (#1263): the first one moves the deal
+ * to registration-sent. Decided on the status read NOW — not before the
+ * email round-trip — so a contract send that landed in between is never
+ * moved backwards. Best-effort: can neither fail nor undo the send.
+ */
+async function markRegistrationSent(
+  conference: Conference,
+  sponsorForConferenceId: string,
+  actorId: string,
+) {
+  try {
+    const current = await clientReadUncached.fetch<string | null>(
+      `*[_type == "sponsorForConference" && _id == $id && conference._ref == $conferenceId][0].contractStatus`,
+      { id: sponsorForConferenceId, conferenceId: conference._id },
+    )
+    const from = current || 'none'
+    if (CONTRACT_STATUSES_PAST_REGISTRATION.has(from)) return
+    await clientWrite
+      .patch(sponsorForConferenceId)
+      .set({ contractStatus: 'registration-sent' })
+      .commit()
+    await logContractStatusChange(
+      sponsorForConferenceId,
+      from,
+      'registration-sent',
+      actorId,
+    )
+  } catch (error) {
+    console.error(
+      '[sendCommunication] moving the deal to registration-sent failed:',
+      error,
+    )
   }
 }
 
@@ -3337,30 +3367,12 @@ export const sponsorRouter = router({
           }
         }
 
-        // The old portal invite's rule: the first registration send moves the
-        // deal to registration-sent; never backwards, and never able to fail
-        // the send that already went out.
-        if (
-          registration &&
-          !CONTRACT_STATUSES_PAST_REGISTRATION.has(registration.contractStatus)
-        ) {
-          try {
-            await clientWrite
-              .patch(input.sponsorForConferenceId)
-              .set({ contractStatus: 'registration-sent' })
-              .commit()
-            await logContractStatusChange(
-              input.sponsorForConferenceId,
-              registration.contractStatus,
-              'registration-sent',
-              ctx.speaker._id,
-            )
-          } catch (error) {
-            console.error(
-              '[sendCommunication] moving the deal to registration-sent failed:',
-              error,
-            )
-          }
+        if (registration) {
+          await markRegistrationSent(
+            conference,
+            input.sponsorForConferenceId,
+            ctx.speaker._id,
+          )
         }
 
         return {

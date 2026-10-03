@@ -266,7 +266,14 @@ describe('registration: a sponsor-portal token is never minted for another tenan
 
 describe('registration.sendPortalInvite is gone (#1263)', () => {
   it('is no longer a procedure — the registration link goes through crm.sendCommunication', () => {
-    expect(registration()).not.toHaveProperty('sendPortalInvite')
+    // The caller is a Proxy, so a property assertion on it proves nothing;
+    // the router's procedure registry is the real surface.
+    const procedures = Object.keys(
+      (registrationRouter as unknown as { _def: { procedures: object } })._def
+        .procedures,
+    )
+    expect(procedures).toContain('generateToken')
+    expect(procedures).not.toContain('sendPortalInvite')
   })
 })
 

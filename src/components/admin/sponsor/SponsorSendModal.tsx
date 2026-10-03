@@ -224,7 +224,7 @@ function registrationGreeting(
     ),
     paragraph(
       'registration-ask',
-      'To get everything in place, please complete your sponsor registration using the link below: company details, contact persons, billing information and your logo.',
+      'To get everything in place, please complete your sponsor registration using the link below: company details, contact persons, billing information and your logo. Once submitted, we will prepare the sponsorship agreement for digital signing.',
     ),
   ]
 }
@@ -1066,8 +1066,8 @@ export function SponsorSendModal({
         className="font-inter rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-200"
       >
         {sponsorForConference.sponsor.name} has already completed registration.
-        You can still send the link — the sponsor will see their submitted
-        details.
+        You can still send the link; it now opens their sponsorship status page
+        (package, contract and signing status), not the registration form.
       </p>
     ) : null
   const portalLinkHint = !isRegistration ? null : portalLinkError ? (

@@ -904,8 +904,6 @@ describe('discount kind', () => {
 })
 
 describe('registration kind (#1263)', () => {
-  const PORTAL = 'https://example.test/sponsor/portal/tok-existing'
-
   it('prepares the link on open from the EXISTING token and posts the registration kind', async () => {
     renderModal({}, 'registration')
     expect(screen.getByText('Preparing the registration link…')).toBeVisible()
@@ -1013,7 +1011,6 @@ describe('registration kind (#1263)', () => {
       ).toBeChecked(),
     )
     expect(h.generateToken).toHaveBeenCalledTimes(1)
-    expect(PORTAL).toContain('tok-existing')
   })
 })
 
