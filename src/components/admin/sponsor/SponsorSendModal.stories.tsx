@@ -38,12 +38,27 @@ const templates = [
     _createdAt: '2026-01-01T00:00:00Z',
     _updatedAt: '2026-01-01T00:00:00Z',
     title: 'Contract (EN)',
-    slug: { current: 'contract-en' },
+    slug: { current: 'contract-sent' },
     category: 'contract',
     language: 'en',
     subject: 'Your sponsorship contract',
     isDefault: true,
-    body: [],
+    body: [
+      {
+        _type: 'block',
+        _key: 'cb1',
+        style: 'normal',
+        markDefs: [],
+        children: [
+          {
+            _type: 'span',
+            _key: 'cs1',
+            text: 'Dear {{{SIGNER_NAME}}}, your sponsorship agreement for {{{CONFERENCE_TITLE}}} ({{{CONTRACT_VALUE}}}) is ready for review and digital signing.',
+            marks: [],
+          },
+        ],
+      },
+    ],
   },
   {
     _id: 'tpl-info-en',
@@ -489,6 +504,159 @@ export const DiscountCodesNoInviteLink: Story = {
       ]),
     )
   },
+}
+
+/** What `contractTemplates.contractReadiness` answers (#1264). */
+const readinessHandler = (missing: Array<Record<string, string>> = []) =>
+  http.get('/api/trpc/sponsor.contractTemplates.contractReadiness', () =>
+    HttpResponse.json({
+      result: {
+        data: {
+          ready: missing.length === 0,
+          canSend: !missing.some((m) => m.severity === 'required'),
+          missing,
+        },
+      },
+    }),
+  )
+const contractHandlers = [readinessHandler(), ...handlers]
+const SIGNING_URL = 'https://cloudnativebergen.dev/sponsor/contract/sign/agr-1'
+
+/**
+ * Send → Contract, first send (#1264). The button says what will happen; the
+ * default contract template is applied; the signer is chosen among the
+ * recipients (the primary contact by default); the preview carries the card
+ * whose link is created when sending.
+ */
+export const Contract: Story = {
+  args: { kind: 'contract', contractSend: { contractTemplateId: 'tpl-A' } },
+  parameters: { msw: { handlers: contractHandlers } },
+  play: async ({ canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body)
+    await body.findByRole('checkbox', { name: 'Kari Nordmann' })
+    await expect(
+      body.getByRole('radio', { name: 'Kari Nordmann signs' }),
+    ).toBeChecked()
+    await expect(
+      body.getByDisplayValue('Your sponsorship contract'),
+    ).toBeInTheDocument()
+    await userEvent.click(body.getByRole('checkbox', { name: 'Ola Nordmann' }))
+    await userEvent.click(
+      body.getByRole('radio', { name: 'Ola Nordmann signs' }),
+    )
+    await expect(
+      body.getByRole('radio', { name: 'Ola Nordmann signs' }),
+    ).toBeChecked()
+    // The greeting was merged for Kari; re-applying names the new signer.
+    await userEvent.click(
+      body.getByRole('button', { name: 'Re-apply template' }),
+    )
+    await expect(await body.findByText(/Dear Ola Nordmann/)).toBeInTheDocument()
+  },
+}
+
+/** Readiness fails: the modal lists what is missing and refuses (story 11). */
+export const ContractNotReady: Story = {
+  args: { kind: 'contract' },
+  parameters: {
+    msw: {
+      handlers: [
+        readinessHandler([
+          {
+            field: 'tier',
+            label: 'Sponsor tier',
+            source: 'pipeline',
+            severity: 'required',
+          },
+          {
+            field: 'contractValue',
+            label: 'Contract value',
+            source: 'pipeline',
+            severity: 'required',
+          },
+          {
+            field: 'conference.venueName',
+            label: 'Venue',
+            source: 'organizer',
+            severity: 'recommended',
+          },
+        ]),
+        ...handlers,
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body)
+    const alert = await body.findByRole('alert')
+    await expect(alert).toHaveTextContent('Sponsor tier')
+    await expect(alert).toHaveTextContent('Contract value')
+    await expect(alert).not.toHaveTextContent('Venue')
+  },
+}
+
+/** A signature is pending: the same action is a reminder with the same signing link. */
+export const ContractReminder: Story = {
+  args: {
+    kind: 'contract',
+    sponsorForConference: mockSponsor({
+      contactPersons: contacts,
+      contractStatus: 'contract-sent',
+      signatureStatus: 'pending',
+      signatureId: 'agr-1',
+      signingUrl: SIGNING_URL,
+      signerName: 'Kari Nordmann',
+      signerEmail: 'kari@acme.example',
+    }),
+  },
+  parameters: { msw: { handlers: contractHandlers } },
+  play: async ({ canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body)
+    await body.findByRole('checkbox', { name: 'Kari Nordmann' })
+    await expect(body.queryByRole('radiogroup')).not.toBeInTheDocument()
+    await userEvent.click(body.getByRole('button', { name: /Preview/ }))
+    const button = await body.findByText('Review & sign agreement')
+    await expect(button.closest('a')).toHaveAttribute('href', SIGNING_URL)
+  },
+}
+
+/** Signed: the same action sends the signed copy, linking the stored document. */
+export const ContractSignedCopy: Story = {
+  args: {
+    kind: 'contract',
+    sponsorForConference: mockSponsor({
+      contactPersons: contacts,
+      status: 'closed-won',
+      contractStatus: 'contract-signed',
+      signatureStatus: 'signed',
+      signerName: 'Kari Nordmann',
+      signerEmail: 'kari@acme.example',
+      contractDocument: {
+        asset: {
+          _ref: 'file-1',
+          url: 'https://cdn.sanity.io/files/x/signed.pdf',
+        },
+      },
+    }),
+  },
+  parameters: { msw: { handlers: contractHandlers } },
+  play: async ({ canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body)
+    await body.findByRole('checkbox', { name: 'Kari Nordmann' })
+    await userEvent.click(body.getByRole('button', { name: /Preview/ }))
+    const button = await body.findByText('Download signed agreement')
+    await expect(button.closest('a')).toHaveAttribute(
+      'href',
+      'https://cdn.sanity.io/files/x/signed.pdf',
+    )
+    // Addressed to the person who signed.
+    await expect(body.getByText(/Dear Kari Nordmann/)).toBeInTheDocument()
+  },
+}
+
+export const ContractDark: Story = {
+  args: { kind: 'contract', contractSend: { contractTemplateId: 'tpl-A' } },
+  globals: { theme: 'dark' },
+  parameters: { msw: { handlers: contractHandlers } },
 }
 
 /**

@@ -54,10 +54,6 @@ import {
 import type { PortableTextBlock as TemplateBlock } from '@/lib/sponsor/types'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import {
-  conferenceBaseUrl,
-  hasConferenceDomain,
-} from '@/lib/conference/baseUrl'
-import {
   getOrganizationRefForCurrentConference,
   getOrganizationRefViaParentConference,
 } from '@/lib/organization/sanity'
@@ -93,7 +89,6 @@ import {
   createSponsorActivity,
   updateSponsorActivity,
   deleteSponsorActivity,
-  promoteToClosedWonOnContract,
 } from '@/lib/sponsor-crm/activity'
 import { createNotifications } from '@/lib/notification/sanity'
 import { resolveRoutedOrganizerIds } from '@/lib/teams'
@@ -158,6 +153,10 @@ import {
 } from '@/lib/sponsor-crm/registration'
 import { isLocalhostDomain } from '@/lib/environment/localhost'
 import {
+  prepareContractSend,
+  type ContractSendPlan,
+} from '@/lib/sponsor-crm/contract-communication'
+import {
   TEMPLATE_NOT_FOUND_MESSAGE,
   TEMPLATE_WRONG_KIND_MESSAGE,
 } from '@/lib/sponsor-crm/communication'
@@ -182,15 +181,9 @@ import {
   ContractTemplateListSchema,
   GenerateContractPdfSchema,
   FindBestContractTemplateSchema,
-  SendContractSchema,
   PreviewContractPdfSchema,
 } from '@/server/schemas/contractTemplate'
 import { generateContractPdf } from '@/lib/sponsor-crm/contract-pdf'
-import { embedSignatureInPdfBuffer } from '@/lib/pdf/signature-embed'
-import {
-  ORGANIZER_SIGNATURE_MARKER,
-  ORGANIZER_DATE_MARKER,
-} from '@/lib/pdf/constants'
 import { checkContractReadiness } from '@/lib/sponsor-crm/contract-readiness'
 import { auditSponsorHealth } from '@/lib/sponsor-crm/health'
 import { isBillingComplete } from '@/lib/sponsor-crm/billing'
@@ -198,7 +191,6 @@ import { evaluateInvoiceReadiness } from '@/lib/sponsor-crm/invoice'
 import {
   canTransition,
   checkPipelineState,
-  checkState,
   type TransitionResult,
 } from '@/lib/sponsor-crm/state-machine'
 import { preconditionFailed } from '@/server/errors'
@@ -207,7 +199,6 @@ import {
   getSigningProvider,
   type SigningProviderType,
 } from '@/lib/contract-signing'
-import { resolveConferenceFrom } from '@/lib/email/from'
 import { sendBroadcastEmail } from '@/lib/email/broadcast'
 import { syncSponsorAudience, type Contact } from '@/lib/email/audience'
 import { logBulkEmailSent } from '@/lib/sponsor-crm/activity'
@@ -1832,166 +1823,6 @@ export const sponsorRouter = router({
         return sponsorForConference
       }),
 
-    sendContractInvite: adminProcedure
-      .input(
-        z.object({
-          sponsorForConferenceId: z.string().min(1),
-        }),
-      )
-      .mutation(async ({ input, ctx }) => {
-        await requireDocumentInCurrentConference(
-          input.sponsorForConferenceId,
-          'sponsorForConference',
-        )
-
-        const { sponsorForConference: sfc, error } =
-          await getSponsorForCurrentConference(input.sponsorForConferenceId)
-
-        if (error || !sfc) {
-          throw new TRPCError({
-            code: 'NOT_FOUND',
-            message: 'Sponsor relationship not found',
-            cause: error,
-          })
-        }
-
-        if (!sfc.conference) {
-          throw new TRPCError({
-            code: 'PRECONDITION_FAILED',
-            message: 'Conference not found',
-          })
-        }
-
-        if (!sfc.sponsor?.name) {
-          throw new TRPCError({
-            code: 'PRECONDITION_FAILED',
-            message: 'Sponsor information is missing.',
-          })
-        }
-
-        if (sfc.signatureStatus !== 'pending' || !sfc.signatureId) {
-          throw new TRPCError({
-            code: 'PRECONDITION_FAILED',
-            message: 'Contract is not currently pending signature.',
-          })
-        }
-
-        if (!sfc.signingUrl) {
-          throw new TRPCError({
-            code: 'PRECONDITION_FAILED',
-            message:
-              'No signing URL found. Generate and send the contract first.',
-          })
-        }
-
-        const signerEmail = sfc.signerEmail
-        if (!signerEmail) {
-          throw new TRPCError({
-            code: 'PRECONDITION_FAILED',
-            message: 'No signer email defined. Cannot send email.',
-          })
-        }
-
-        const { domain: currentDomain } = await getConferenceForCurrentDomain()
-        if (!currentDomain) {
-          throw new TRPCError({
-            code: 'PRECONDITION_FAILED',
-            message: 'Conference has no domain configured.',
-          })
-        }
-
-        const { isLocalhostDomain } =
-          await import('@/lib/environment/localhost')
-        if (isLocalhostDomain(currentDomain)) {
-          throw new TRPCError({
-            code: 'PRECONDITION_FAILED',
-            message:
-              'Contract signing emails cannot be sent from localhost. Deploy to a production domain first.',
-          })
-        }
-
-        const { renderContractEmail, CONTRACT_EMAIL_SLUGS } =
-          await import('@/lib/email/contract-email')
-        const { resolveEmailSender, retryWithBackoff } =
-          await import('@/lib/email/config')
-        const { formatNumber } = await import('@/lib/format')
-        const { resolveConferenceFrom } = await import('@/lib/email/from')
-
-        const contractValueStr = sfc.contractValue
-          ? `${formatNumber(sfc.contractValue)} ${sfc.contractCurrency || 'NOK'}`
-          : undefined
-
-        const result = await renderContractEmail(
-          CONTRACT_EMAIL_SLUGS.SENT,
-          {
-            sponsorName: sfc.sponsor.name,
-            signerName: sfc.signerName || sfc.sponsor.name,
-            signerEmail: signerEmail,
-            tierName: sfc.tier?.title,
-            contractValue: contractValueStr,
-            conference: {
-              title: sfc.conference.title,
-              city: sfc.conference.city,
-              startDate: sfc.conference.startDate,
-              domains: sfc.conference.domains,
-              organizer: sfc.conference.organizer,
-              sponsorEmail: sfc.conference.sponsorEmail,
-              socialLinks: sfc.conference.socialLinks,
-              theme: sfc.conference.theme,
-            },
-          },
-          {
-            button: {
-              text: 'Review &amp; Sign Agreement',
-              href: sfc.signingUrl,
-            },
-          },
-        )
-
-        if (!result) {
-          throw new TRPCError({
-            code: 'INTERNAL_SERVER_ERROR',
-            message: 'Contract email template not found',
-          })
-        }
-
-        const from = resolveConferenceFrom(sfc.conference, {
-          field: 'sponsorEmail',
-          localPart: 'sponsors',
-        })
-
-        const { client } = await resolveEmailSender(ctx.orgId)
-
-        const sendResult = await retryWithBackoff(async () => {
-          return client.emails.send({
-            from,
-            to: [signerEmail],
-            subject: result.subject,
-            react: result.react,
-          })
-        })
-
-        if (sendResult.error) {
-          throw new TRPCError({
-            code: 'INTERNAL_SERVER_ERROR',
-            message: `Failed to send email: ${sendResult.error.message}`,
-          })
-        }
-
-        try {
-          const { logEmailSent } = await import('@/lib/sponsor-crm/activity')
-          await logEmailSent(
-            input.sponsorForConferenceId,
-            `Sponsorship Agreement — ${sfc.conference!.title}`,
-            ctx.speaker._id,
-          )
-        } catch (logError) {
-          console.error('Failed to log email activity:', logError)
-        }
-
-        return { success: true }
-      }),
-
     updateContractStatus: adminProcedure
       .input(UpdateContractStatusSchema)
       .mutation(async ({ input, ctx }) => {
@@ -2732,442 +2563,6 @@ export const sponsorRouter = router({
         return sponsorForConference
       }),
 
-    sendContract: adminProcedure
-      .input(SendContractSchema)
-      .mutation(async ({ input, ctx }) => {
-        const logCtx = `[sendContract] sfc=${input.sponsorForConferenceId}`
-
-        // OWNERSHIP (#863). The `sponsorForConferenceId` half is scoped by
-        // `getSponsorForCurrentConference`, but `templateId` is a SECOND piece
-        // of client input and `getContractTemplate` is a global by-id read — so
-        // an organizer could render ANOTHER tenant's contract terms into the PDF
-        // this conference then signs and mails out. Guarded FIRST, before any
-        // lookup, so no foreign document enters the request at all; the sibling
-        // `contractTemplates.get/update/delete` guard the same way.
-        await requireDocumentInCurrentConference(
-          input.templateId,
-          'contractTemplate',
-        )
-
-        const { sponsorForConference: sfc, error: sfcError } =
-          await getSponsorForCurrentConference(input.sponsorForConferenceId)
-        if (sfcError || !sfc) {
-          console.error(`${logCtx} Sponsor lookup failed:`, sfcError)
-          throw new TRPCError({
-            code: 'NOT_FOUND',
-            message: 'Sponsor relationship not found.',
-            cause: sfcError,
-          })
-        }
-
-        const sponsorName = sfc.sponsor?.name || 'Unknown'
-        const logCtxFull = `${logCtx} sponsor="${sponsorName}"`
-
-        if (!sfc.sponsor?.name) {
-          console.error(`${logCtxFull} Missing sponsor record/name`)
-          throw new TRPCError({
-            code: 'PRECONDITION_FAILED',
-            message:
-              'Sponsor information is missing. Please ensure the sponsor is linked before sending a contract.',
-          })
-        }
-
-        // Contract-sent invariants: tier + positive value, and not a dead deal.
-        // Checked path-independently (re-sends included) before any costly work
-        // (template fetch, PDF generation, asset upload). The contact / title /
-        // template / signing-provider runtime guards below remain in force.
-        assertGuard(checkState('contract', 'contract-sent', sfc))
-
-        const { template, error: templateError } = await getContractTemplate(
-          input.templateId,
-        )
-        if (templateError || !template) {
-          console.error(
-            `${logCtxFull} Template ${input.templateId} not found:`,
-            templateError,
-          )
-          throw new TRPCError({
-            code: 'NOT_FOUND',
-            message: 'Contract template not found. It may have been deleted.',
-            cause: templateError,
-          })
-        }
-
-        if (!sfc.conference?.title) {
-          console.error(`${logCtxFull} Conference missing title`)
-          throw new TRPCError({
-            code: 'PRECONDITION_FAILED',
-            message:
-              'Conference title is required for contract generation. Update the conference settings.',
-          })
-        }
-
-        const primaryContact =
-          sfc.contactPersons?.find(
-            (c: { isPrimary?: boolean }) => c.isPrimary,
-          ) || sfc.contactPersons?.[0]
-        if (!primaryContact?.name || !primaryContact?.email) {
-          console.error(`${logCtxFull} Missing contact person`)
-          throw new TRPCError({
-            code: 'PRECONDITION_FAILED',
-            message:
-              'A contact person with name and email is required. Complete sponsor registration first.',
-          })
-        }
-
-        // Generate the PDF
-        let pdfBuffer: Buffer
-        try {
-          pdfBuffer = await generateContractPdf(template, {
-            sponsor: {
-              name: sfc.sponsor.name,
-              orgNumber: sfc.sponsor.orgNumber,
-              address: sfc.sponsor.address,
-              website: sfc.sponsor.website,
-            },
-            contactPerson: {
-              name: primaryContact.name,
-              email: primaryContact.email,
-            },
-            tier: sfc.tier
-              ? { title: sfc.tier.title, tagline: sfc.tier.tagline }
-              : undefined,
-            addons: sfc.addons?.map((a) => ({ title: a.title })),
-            contractValue: sfc.contractValue,
-            contractCurrency: sfc.contractCurrency,
-            conference: {
-              title: sfc.conference.title,
-              startDate: sfc.conference.startDate,
-              endDate: sfc.conference.endDate,
-              city: sfc.conference.city,
-              organizer: sfc.conference.organizer,
-              organizerOrgNumber: sfc.conference.organizerOrgNumber,
-              organizerAddress: sfc.conference.organizerAddress,
-              venueName: sfc.conference.venueName,
-              venueAddress: sfc.conference.venueAddress,
-              sponsorEmail: sfc.conference.sponsorEmail,
-              logoBright: sfc.conference.logoBright,
-            },
-          })
-        } catch (pdfError) {
-          console.error(`${logCtxFull} PDF generation failed:`, pdfError)
-          throw new TRPCError({
-            code: 'INTERNAL_SERVER_ERROR',
-            message:
-              'Failed to generate contract PDF. Check that the template is valid.',
-            cause: pdfError,
-          })
-        }
-
-        if (!pdfBuffer || pdfBuffer.length === 0) {
-          console.error(`${logCtxFull} PDF generation returned empty buffer`)
-          throw new TRPCError({
-            code: 'INTERNAL_SERVER_ERROR',
-            message:
-              'Contract PDF generation produced an empty document. Check the template configuration.',
-          })
-        }
-
-        // Embed organizer counter-signature if provided
-        if (input.organizerSignatureDataUrl) {
-          const assignedToId = sfc.assignedTo?._id
-          if (!assignedToId || assignedToId !== ctx.speaker._id) {
-            throw new TRPCError({
-              code: 'FORBIDDEN',
-              message:
-                'Only the assigned organizer can counter-sign this contract.',
-            })
-          }
-
-          const organizerDisplayName =
-            ctx.speaker.name?.trim() || ctx.speaker.email?.trim() || 'Organizer'
-
-          try {
-            pdfBuffer = await embedSignatureInPdfBuffer(
-              pdfBuffer,
-              input.organizerSignatureDataUrl,
-              organizerDisplayName,
-              {
-                signatureMarker: ORGANIZER_SIGNATURE_MARKER,
-                dateMarker: ORGANIZER_DATE_MARKER,
-              },
-            )
-          } catch (sigError) {
-            console.error(
-              `${logCtxFull} Organizer signature embedding failed:`,
-              sigError,
-            )
-            throw new TRPCError({
-              code: 'INTERNAL_SERVER_ERROR',
-              message:
-                'Failed to embed organizer signature into the contract PDF.',
-              cause: sigError,
-            })
-          }
-        }
-
-        const safeName = sfc.sponsor.name
-          .toLowerCase()
-          .replace(/[^a-z0-9]+/g, '-')
-          .replace(/^-+|-+$/g, '')
-        const filename = `contract-${safeName}.pdf`
-
-        // Upload PDF to Sanity as a file asset
-        let asset: { _id: string }
-        try {
-          asset = await clientWrite.assets.upload('file', pdfBuffer, {
-            filename,
-            contentType: 'application/pdf',
-          })
-        } catch (uploadError) {
-          console.error(
-            `${logCtxFull} Sanity asset upload failed:`,
-            uploadError,
-          )
-          throw new TRPCError({
-            code: 'INTERNAL_SERVER_ERROR',
-            message: 'Failed to upload contract PDF. Please try again.',
-            cause: uploadError,
-          })
-        }
-
-        if (!asset?._id) {
-          console.error(`${logCtxFull} Asset upload returned no ID`)
-          throw new TRPCError({
-            code: 'INTERNAL_SERVER_ERROR',
-            message:
-              'Contract PDF upload failed — no asset reference returned.',
-          })
-        }
-
-        // Update CRM record: contract status, signer email, sent timestamp, document
-        const now = getCurrentDateTime()
-        const updateFields: Record<string, unknown> = {
-          contractStatus: 'contract-sent',
-          contractSentAt: now,
-          contractTemplate: { _type: 'reference', _ref: input.templateId },
-          contractDocument: {
-            _type: 'file',
-            asset: { _type: 'reference', _ref: asset._id },
-          },
-        }
-        if (input.signerEmail) {
-          const signerContact = sfc.contactPersons?.find(
-            (c: { email?: string }) => c.email === input.signerEmail,
-          )
-          updateFields.signerName = signerContact?.name || primaryContact.name
-          updateFields.signerEmail = input.signerEmail
-          updateFields.signatureStatus = 'pending'
-        }
-
-        if (input.organizerSignatureDataUrl) {
-          updateFields.organizerSignedAt = now
-          updateFields.organizerSignedBy =
-            ctx.speaker.name?.trim() || ctx.speaker.email?.trim() || 'Organizer'
-        }
-
-        // Send for digital signing if signer email is provided
-        let agreementId: string | undefined
-        let signingUrl: string | undefined
-        if (input.signerEmail) {
-          try {
-            const provider = getSigningProvider(sfc.conference.signingProvider)
-            const signingResult = await provider.sendForSigning({
-              pdf: pdfBuffer,
-              filename,
-              signerEmail: input.signerEmail,
-              agreementName: `Sponsorship Agreement - ${sfc.sponsor.name}`,
-              message: `Please sign the sponsorship agreement for ${sfc.conference.title}.`,
-              // Tenant-derived signing origin; the provider still applies its
-              // own env fallback if a conference somehow has no domain.
-              baseUrl: hasConferenceDomain(sfc.conference)
-                ? conferenceBaseUrl(sfc.conference)
-                : undefined,
-            })
-
-            agreementId = signingResult.agreementId
-            updateFields.signatureId = agreementId
-
-            if (signingResult.signingUrl) {
-              signingUrl = signingResult.signingUrl
-              updateFields.signingUrl = signingUrl
-            }
-          } catch (signError) {
-            if (signError instanceof TRPCError) throw signError
-            console.error(
-              `${logCtxFull} Contract signing agreement creation failed:`,
-              signError,
-            )
-            throw new TRPCError({
-              code: 'INTERNAL_SERVER_ERROR',
-              message:
-                'Failed to create digital signing agreement. The contract PDF was generated but not sent for signing. Please try again.',
-              cause: signError,
-            })
-          }
-        }
-
-        try {
-          await clientWrite
-            .patch(input.sponsorForConferenceId)
-            .set(updateFields)
-            .commit()
-        } catch (patchError) {
-          console.error(
-            `${logCtxFull} Failed to update sponsor record:`,
-            patchError,
-          )
-          throw new TRPCError({
-            code: 'INTERNAL_SERVER_ERROR',
-            message:
-              'Contract was generated but failed to update the sponsor record. Please try again.',
-            cause: patchError,
-          })
-        }
-
-        // Log activity (non-critical)
-        const userId = ctx.speaker._id
-        if (userId) {
-          const oldContractStatus = sfc.contractStatus
-          try {
-            await logContractStatusChange(
-              input.sponsorForConferenceId,
-              oldContractStatus,
-              'contract-sent',
-              userId,
-            )
-          } catch (logError) {
-            console.error(
-              `${logCtxFull} Failed to log contract send activity:`,
-              logError,
-            )
-          }
-
-          if (input.signerEmail) {
-            const oldSignatureStatus = sfc.signatureStatus ?? 'not-started'
-            try {
-              await logSignatureStatusChange(
-                input.sponsorForConferenceId,
-                oldSignatureStatus,
-                'pending',
-                userId,
-              )
-            } catch (logError) {
-              console.error(
-                `${logCtxFull} Failed to log signature status change:`,
-                logError,
-              )
-            }
-          }
-        }
-
-        // Sending a contract advances the deal to Won (forward-only,
-        // tier-guarded). Best-effort: never fail the send over this.
-        try {
-          const promotion = await promoteToClosedWonOnContract(
-            input.sponsorForConferenceId,
-            { status: sfc.status, tier: sfc.tier },
-            ctx.speaker._id,
-          )
-          if (promotion.promoted) {
-            await publishSponsorStatusChange({
-              conferenceId: sfc.conference._id,
-              sponsorForConferenceId: input.sponsorForConferenceId,
-              previous: sfc,
-              next: { status: 'closed-won' },
-              source: 'crm.sendContract',
-              triggeredBy: ctx.speaker._id,
-            })
-          }
-        } catch (promoteError) {
-          console.error(
-            `${logCtxFull} Failed to auto-promote pipeline to closed-won:`,
-            promoteError,
-          )
-        }
-
-        // Send branded signing email if we have a signing URL (non-critical)
-        if (signingUrl && input.signerEmail && sfc.conference) {
-          try {
-            const { renderContractEmail, CONTRACT_EMAIL_SLUGS } =
-              await import('@/lib/email/contract-email')
-            const { resolveEmailSender, retryWithBackoff } =
-              await import('@/lib/email/config')
-
-            const { formatNumber } = await import('@/lib/format')
-            const contractValueStr = sfc.contractValue
-              ? `${formatNumber(sfc.contractValue)} ${sfc.contractCurrency || 'NOK'}`
-              : undefined
-
-            const signerContact = sfc.contactPersons?.find(
-              (c: { email?: string }) => c.email === input.signerEmail,
-            )
-            const resolvedSignerName =
-              signerContact?.name || primaryContact.name
-
-            const result = await renderContractEmail(
-              CONTRACT_EMAIL_SLUGS.SENT,
-              {
-                sponsorName: sfc.sponsor.name,
-                signerName: resolvedSignerName,
-                signerEmail: input.signerEmail,
-                tierName: sfc.tier?.title,
-                contractValue: contractValueStr,
-                conference: {
-                  title: sfc.conference.title,
-                  city: sfc.conference.city,
-                  startDate: sfc.conference.startDate,
-                  domains: sfc.conference.domains,
-                  organizer: sfc.conference.organizer,
-                  sponsorEmail: sfc.conference.sponsorEmail,
-                  socialLinks: sfc.conference.socialLinks,
-                  theme: sfc.conference.theme,
-                },
-              },
-              {
-                button: {
-                  text: 'Review &amp; Sign Agreement',
-                  href: signingUrl,
-                },
-              },
-            )
-
-            if (!result) {
-              console.error(`${logCtxFull} Contract email template not found`)
-            } else {
-              const from = resolveConferenceFrom(sfc.conference, {
-                field: 'sponsorEmail',
-                localPart: 'sponsors',
-              })
-
-              const { client } = await resolveEmailSender(ctx.orgId)
-
-              await retryWithBackoff(async () => {
-                return client.emails.send({
-                  from,
-                  to: [input.signerEmail!],
-                  subject: result.subject,
-                  react: result.react,
-                })
-              })
-            }
-          } catch (emailError) {
-            console.error(
-              `${logCtxFull} Failed to send signing notification email (non-fatal):`,
-              emailError,
-            )
-          }
-        }
-
-        return {
-          success: true,
-          pdf: pdfBuffer.toString('base64'),
-          filename,
-          agreementId,
-          signingUrl,
-        }
-      }),
-
     /**
      * THE one sponsor email primitive (#1261, spec #1260). Recipients are
      * contact keys resolved against the sponsor's own contacts — the client
@@ -3283,6 +2678,41 @@ export const sponsorRouter = router({
           })
         }
 
+        // Contract kind (#1264): one action by state — first send, reminder
+        // or signed copy — decided and prepared before anything is sent. A
+        // client-supplied contract template id is guarded FIRST (#863).
+        let contract: ContractSendPlan | undefined
+        if (input.kind === 'contract') {
+          if (input.contractTemplateId) {
+            await requireDocumentInCurrentConference(
+              input.contractTemplateId,
+              'contractTemplate',
+            )
+          }
+          const { sponsorForConference: sfc, error: sfcError } =
+            await getSponsorForCurrentConference(input.sponsorForConferenceId)
+          if (sfcError || !sfc) {
+            throw new TRPCError({
+              code: 'NOT_FOUND',
+              message: 'Sponsor not found in this conference',
+              cause: sfcError,
+            })
+          }
+          contract = await prepareContractSend({
+            conference,
+            sfc,
+            recipientKeys: input.recipientKeys,
+            signerKey: input.signerKey,
+            contractTemplateId: input.contractTemplateId,
+            organizerSignatureDataUrl: input.organizerSignatureDataUrl,
+            actor: {
+              id: ctx.speaker._id ?? null,
+              name: ctx.speaker.name,
+              email: ctx.speaker.email,
+            },
+          })
+        }
+
         // Registration kind (#1263): the portal link from the sponsor's own
         // token, created once when absent. Refuses before anything is sent.
         const registration =
@@ -3328,6 +2758,15 @@ export const sponsorRouter = router({
               appendHtml: registration.html,
               attachments: registration.attachments,
               portalUrl: registration.portalUrl,
+            }),
+            ...(contract && {
+              appendHtml: contract.appendHtml,
+              attachments: contract.attachments,
+              contractVariables: {
+                signerName: contract.signer?.name,
+                signerEmail: contract.signer?.email,
+                contractValue: contract.contractValue,
+              },
             }),
           })
         } catch (error) {
@@ -3398,6 +2837,12 @@ export const sponsorRouter = router({
             ctx.speaker._id,
           )
         }
+        // The email is out: apply the contract state (contract-sent + pending
+        // signature, or reminderCount). Never fails the send; the organizer is
+        // told when the record could not be updated.
+        const contractStateFailed = contract
+          ? !(await contract.afterSend()).ok
+          : false
 
         return {
           success: true as const,
@@ -3408,6 +2853,8 @@ export const sponsorRouter = router({
           // The organizer is told, so the gap is fixed by an Assign rather than
           // discovered when the next send falls back to the name guess.
           ...(linkFailed && { linkFailed: true as const }),
+          ...(contract && { contractAction: contract.action }),
+          ...(contractStateFailed && { contractStateFailed: true as const }),
         }
       }),
 
@@ -4161,7 +3608,7 @@ export const sponsorRouter = router({
     generatePdf: adminProcedure
       .input(GenerateContractPdfSchema)
       .mutation(async ({ input }) => {
-        // OWNERSHIP (#863). Same defect as `crm.sendContract`, and worse in one
+        // OWNERSHIP (#863). Same defect the contract send had, and worse in one
         // respect: the rendered template comes straight back to the caller as a
         // base64 PDF, so a foreign template's full terms were readable without
         // sending anything. Guard first — the document must not be fetched at

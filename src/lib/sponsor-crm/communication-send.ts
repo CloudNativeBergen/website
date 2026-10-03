@@ -67,6 +67,12 @@ export interface SendSponsorCommunicationArgs {
    * `SPONSOR_PORTAL_URL` when the template is re-merged for `templateEdited`.
    */
   portalUrl?: string
+  /** Contract sends (#1264): merged as SIGNER_NAME / SIGNER_EMAIL / CONTRACT_VALUE. */
+  contractVariables?: {
+    signerName?: string
+    signerEmail?: string
+    contractValue?: string
+  }
 }
 
 export type SendSponsorCommunicationResult =
@@ -111,6 +117,7 @@ function computeTemplateEdited(
   senderNames: readonly (string | undefined)[],
   sent: { subject: string; message: PortableTextBlock[] },
   portalUrl: string | undefined,
+  contractVariables: SendSponsorCommunicationArgs['contractVariables'],
 ): boolean {
   const candidates = senderNames.length > 0 ? senderNames : [undefined]
   return candidates.every((senderName) =>
@@ -122,6 +129,7 @@ function computeTemplateEdited(
       senderName,
       sent,
       portalUrl,
+      contractVariables,
     ),
   )
 }
@@ -134,6 +142,7 @@ function mergedDiffers(
   senderName: string | undefined,
   sent: { subject: string; message: PortableTextBlock[] },
   portalUrl: string | undefined,
+  contractVariables: SendSponsorCommunicationArgs['contractVariables'],
 ): boolean {
   const variables = buildTemplateVariables({
     sponsorName: sfc.sponsor?.name ?? 'Unknown',
@@ -150,6 +159,7 @@ function mergedDiffers(
     senderName,
     tierName: sfc.tier?.title,
     portalUrl,
+    ...contractVariables,
   })
   const applied = {
     subject: processTemplateVariables(template.subject, variables),
@@ -247,6 +257,7 @@ export async function sendSponsorCommunication(
             args.senderNames ?? [],
             { subject: args.subject, message: args.message },
             args.portalUrl,
+            args.contractVariables,
           ),
         }
       : undefined,

@@ -10,6 +10,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import { SponsorCRMForm } from '@/components/admin/sponsor-crm/SponsorCRMForm'
 import { SponsorSendModal } from '@/components/admin'
+import type { ContractSendOptions } from './SponsorContractView'
 import {
   sponsorFromAddress,
   type SendableKind,
@@ -307,6 +308,19 @@ export function SponsorCRMPipeline({
   const handleOpenRegistrationSend = useCallback(
     (sponsor: SponsorForConferenceExpanded) => {
       setEmailKind('registration')
+      setEmailSponsor(sponsor)
+      setIsEmailModalOpen(true)
+    },
+    [],
+  )
+  // Send → Contract (#1264): what the contract view previewed (template +
+  // counter-signature) rides along to the modal; a reminder or signed copy
+  // carries nothing and the server decides the action from the state.
+  const [contractSend, setContractSend] = useState<ContractSendOptions>({})
+  const handleOpenContractSend = useCallback(
+    (sponsor: SponsorForConferenceExpanded, options: ContractSendOptions) => {
+      setContractSend(options)
+      setEmailKind('contract')
       setEmailSponsor(sponsor)
       setIsEmailModalOpen(true)
     },
@@ -645,6 +659,11 @@ export function SponsorCRMPipeline({
               ? () => handleOpenRegistrationSend(selectedSponsor)
               : undefined
           }
+          onSendContract={
+            selectedSponsor && conference
+              ? (options) => handleOpenContractSend(selectedSponsor, options)
+              : undefined
+          }
         />
       )}
 
@@ -658,6 +677,7 @@ export function SponsorCRMPipeline({
           onSent={() => utils.sponsor.crm.list.invalidate()}
           sponsorForConference={emailSponsor}
           kind={emailKind}
+          contractSend={emailKind === 'contract' ? contractSend : undefined}
           domain={domain}
           // Mirrors the server's `resolveConferenceFrom(…, 'sponsorEmail')`
           // fallback so the From: line shows what will actually be used.

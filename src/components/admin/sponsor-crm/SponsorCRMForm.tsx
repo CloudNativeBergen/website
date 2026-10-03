@@ -17,7 +17,10 @@ import clsx from 'clsx'
 import { SponsorContactEditor } from '../sponsor/SponsorContactEditor'
 import { SponsorLogoEditor } from '../sponsor/SponsorLogoEditor'
 import { SponsorActivityTimeline } from '../sponsor/SponsorActivityTimeline'
-import { SponsorContractView } from './SponsorContractView'
+import {
+  SponsorContractView,
+  type ContractSendOptions,
+} from './SponsorContractView'
 import { SponsorPipelineView } from './SponsorPipelineView'
 import { SponsorTier } from '@/lib/sponsor/types'
 import { useSponsorCRMFormMutations } from '@/hooks/useSponsorCRMFormMutations'
@@ -56,6 +59,8 @@ interface SponsorCRMFormProps {
   onSendDiscountCodes?: () => void
   /** Send → Registration (#1263), raised from the contract view's portal step. */
   onSendRegistration?: () => void
+  /** Send → Contract (#1264), raised from the contract view's contract and signing steps. */
+  onSendContract?: (options: ContractSendOptions) => void
 }
 
 export function SponsorCRMForm({
@@ -70,6 +75,7 @@ export function SponsorCRMForm({
   onSendEmail,
   onSendDiscountCodes,
   onSendRegistration,
+  onSendContract,
 }: SponsorCRMFormProps) {
   const [view, setViewState] = useState<FormView>(initialView)
   const setView = useCallback(
@@ -431,6 +437,7 @@ export function SponsorCRMForm({
                 utils.sponsor.crm.healthViolations.invalidate()
               }}
               onSendRegistration={onSendRegistration}
+              onSendContract={onSendContract}
             />
           ) : view === 'communications' && sponsor ? (
             <SponsorCommunicationsPanel

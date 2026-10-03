@@ -208,7 +208,7 @@ export const ImportAllHistoricSponsorsSchema = z.object({
  * KEYS — the server resolves addresses from the sponsor's own contacts and
  * refuses anything else — and the body is PortableText JSON as the editor
  * produces it. Slice 1 accepted `information`; #1262 added `discount`, #1263
- * `registration`; #1264 widens it to `contract`.
+ * `registration`, #1264 `contract`.
  */
 export const CommunicationKindSchema = z.enum([
   'information',
@@ -220,7 +220,7 @@ export const CommunicationKindSchema = z.enum([
 export const SendCommunicationSchema = z
   .object({
     sponsorForConferenceId: z.string().min(1, 'Sponsor ID is required'),
-    kind: z.enum(['information', 'discount', 'registration']),
+    kind: z.enum(['information', 'discount', 'registration', 'contract']),
     recipientKeys: z
       .array(z.string().min(1))
       .min(1, 'Choose at least one recipient')
@@ -244,8 +244,47 @@ export const SendCommunicationSchema = z
       .array(z.string().trim().min(1).max(100))
       .max(20)
       .optional(),
+    /**
+     * Contract kind only (#1264), first send: which recipient signs (a key
+     * among `recipientKeys`), which contract template renders the PDF
+     * (tenancy-guarded on the server; the best template for the tier when
+     * absent), and the assigned organizer's counter-signature.
+     */
+    signerKey: z.string().min(1).optional(),
+    contractTemplateId: z.string().min(1).optional(),
+    organizerSignatureDataUrl: z
+      .string()
+      .max(500_000, 'Organizer signature image is too large')
+      .startsWith(
+        'data:image/png;base64,',
+        'Organizer signature must be a PNG data URL',
+      )
+      .optional(),
   })
   .superRefine((input, ctx) => {
+    const contractFields = [
+      'signerKey',
+      'contractTemplateId',
+      'organizerSignatureDataUrl',
+    ] as const
+    if (input.kind !== 'contract') {
+      for (const field of contractFields) {
+        if (input[field] !== undefined) {
+          ctx.addIssue({
+            code: 'custom',
+            path: [field],
+            message: 'Only a contract send carries this field',
+          })
+        }
+      }
+    }
+    if (input.signerKey && !input.recipientKeys.includes(input.signerKey)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['signerKey'],
+        message: 'The signer must be one of the chosen recipients',
+      })
+    }
     const codes = input.discountCodes ?? []
     if (input.kind === 'discount' && codes.length === 0) {
       ctx.addIssue({

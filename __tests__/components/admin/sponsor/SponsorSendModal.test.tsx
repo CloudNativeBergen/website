@@ -26,6 +26,9 @@ const h = vi.hoisted(() => ({
   saveLink: vi.fn(),
   /** `registration.generateToken` — the registration kind's link on open (#1263). */
   generateToken: vi.fn(),
+  /** `contractTemplates.contractReadiness` for the contract kind (#1264). */
+  readiness: undefined as unknown,
+  readinessError: false,
   showNotification: vi.fn(),
   templates: [] as unknown[],
   codeOptions: undefined as unknown,
@@ -70,6 +73,11 @@ vi.mock('@/lib/trpc/client', () => ({
       },
       emailTemplates: {
         list: { useQuery: () => ({ data: h.templates, isLoading: false }) },
+      },
+      contractTemplates: {
+        contractReadiness: {
+          useQuery: () => ({ data: h.readiness, isError: h.readinessError }),
+        },
       },
     },
     conference: {
@@ -272,12 +280,15 @@ const contacts = [
 
 function renderModal(
   overrides: Partial<Parameters<typeof mockSponsor>[0]> = {},
-  kind: 'information' | 'discount' | 'registration' = 'information',
+  kind:
+    'information' | 'discount' | 'registration' | 'contract' = 'information',
+  extra: { contractSend?: { contractTemplateId?: string } } = {},
 ) {
   return render(
     <SponsorSendModal
       isOpen
       kind={kind}
+      contractSend={extra.contractSend}
       onClose={vi.fn()}
       sponsorForConference={mockSponsor({
         contactPersons: contacts,
@@ -304,6 +315,8 @@ beforeEach(() => {
   h.codeOptions = undefined
   h.codesFetching = false
   h.codesError = false
+  h.readiness = { ready: true, canSend: true, missing: [] }
+  h.readinessError = false
   draftSeeded = false
   lastAdditionalFields = {}
   draft = { subject: 'Hand-written subject', message: [] }
@@ -1032,6 +1045,171 @@ describe('registration kind (#1263)', () => {
   })
 })
 
+describe('contract kind (#1264)', () => {
+  const SIGNING_URL = 'https://example.test/sponsor/contract/sign/agr-1'
+
+  it('first send: the button says "Send contract", the primary recipient signs by default, and the previewed template rides along', async () => {
+    renderModal({}, 'contract', {
+      contractSend: { contractTemplateId: 'tpl-A' },
+    })
+    expect(
+      screen.getByRole('radio', { name: 'Kari Nordmann signs' }),
+    ).toBeChecked()
+    fireEvent.click(screen.getByRole('button', { name: 'Send contract' }))
+    await waitFor(() => expect(h.mutateAsync).toHaveBeenCalledTimes(1))
+    expect(h.mutateAsync.mock.calls[0][0]).toMatchObject({
+      kind: 'contract',
+      recipientKeys: ['c-primary'],
+      signerKey: 'c-primary',
+      contractTemplateId: 'tpl-A',
+      subject: 'Sponsorship Agreement — Conf',
+    })
+  })
+
+  it('first send: the signer must be a chosen recipient, and a second recipient can be made the signer', async () => {
+    renderModal({}, 'contract')
+    // Only selected recipients are offered as signer.
+    expect(
+      screen.queryByRole('radio', { name: 'Ola Nordmann signs' }),
+    ).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Ola Nordmann' }))
+    fireEvent.click(screen.getByRole('radio', { name: 'Ola Nordmann signs' }))
+    expect(
+      screen.getByRole('radio', { name: 'Ola Nordmann signs' }),
+    ).toBeChecked()
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Send contract to 2 contacts' }),
+    )
+    await waitFor(() => expect(h.mutateAsync).toHaveBeenCalledTimes(1))
+    expect(h.mutateAsync.mock.calls[0][0]).toMatchObject({
+      signerKey: 'c-billing',
+    })
+  })
+
+  it('first send: changing the signer after a template was applied warns, and Re-apply re-merges', async () => {
+    // The hint needs the applied template to exist in the list (it offers Re-apply).
+    h.templates = [tpl({ _id: 'tpl-1', category: 'contract' })]
+    renderModal({}, 'contract')
+    fireEvent.click(screen.getByRole('button', { name: 'apply template' }))
+    expect(
+      screen.queryByText(/changed after the template was applied/),
+    ).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Ola Nordmann' }))
+    fireEvent.click(screen.getByRole('radio', { name: 'Ola Nordmann signs' }))
+    expect(
+      screen.getByText(/or the signer changed after the template was applied/),
+    ).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Re-apply template' }))
+    await waitFor(() =>
+      expect(
+        screen.queryByText(/changed after the template was applied/),
+      ).not.toBeInTheDocument(),
+    )
+  })
+
+  it('first send: the stored signer is preselected when they are among the recipients', () => {
+    renderModal({ signerEmail: 'ola@acme.example' }, 'contract')
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Ola Nordmann' }))
+    expect(
+      screen.getByRole('radio', { name: 'Ola Nordmann signs' }),
+    ).toBeChecked()
+  })
+
+  it('first send: refuses, naming the missing fields, when readiness fails', async () => {
+    h.readiness = {
+      ready: false,
+      canSend: false,
+      missing: [
+        {
+          field: 'tier',
+          label: 'Sponsor tier',
+          source: 'pipeline',
+          severity: 'required',
+        },
+        {
+          field: 'conference.venueName',
+          label: 'Venue',
+          source: 'organizer',
+          severity: 'recommended',
+        },
+      ],
+    }
+    renderModal({}, 'contract')
+    const alert = screen.getByRole('alert')
+    expect(alert).toHaveTextContent('Sponsor tier')
+    expect(alert).not.toHaveTextContent('Venue')
+    fireEvent.click(screen.getByRole('button', { name: 'Send contract' }))
+    await waitFor(() =>
+      expect(h.showNotification).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: expect.stringMatching(/Sponsor tier/),
+        }),
+      ),
+    )
+    expect(h.mutateAsync).not.toHaveBeenCalled()
+  })
+
+  it('reminder: the button says "Send reminder", no signer is asked, nothing contract-specific is posted', async () => {
+    renderModal(
+      {
+        contractStatus: 'contract-sent',
+        signatureStatus: 'pending',
+        signatureId: 'agr-1',
+        signingUrl: SIGNING_URL,
+        signerEmail: 'kari@acme.example',
+      },
+      'contract',
+    )
+    expect(screen.queryByRole('radiogroup')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Send reminder' }))
+    await waitFor(() => expect(h.mutateAsync).toHaveBeenCalledTimes(1))
+    const posted = h.mutateAsync.mock.calls[0][0]
+    expect(posted).toMatchObject({ kind: 'contract' })
+    expect(posted).not.toHaveProperty('signerKey')
+    expect(posted).not.toHaveProperty('contractTemplateId')
+  })
+
+  it('signed: the button says "Send signed copy"', async () => {
+    renderModal(
+      {
+        contractStatus: 'contract-signed',
+        signatureStatus: 'signed',
+        contractDocument: {
+          asset: { _ref: 'f1', url: 'https://cdn/signed.pdf' },
+        },
+      },
+      'contract',
+    )
+    expect(
+      screen.getByRole('button', { name: 'Send signed copy' }),
+    ).toBeInTheDocument()
+  })
+
+  it('signed with no stored document: says so', () => {
+    renderModal(
+      { contractStatus: 'contract-signed', signatureStatus: 'signed' },
+      'contract',
+    )
+    expect(screen.getByRole('alert')).toHaveTextContent(/No signed agreement/)
+  })
+
+  it('warns when the email went out but the deal could not be updated', async () => {
+    h.mutateAsync.mockResolvedValue({
+      success: true,
+      recipientCount: 1,
+      contractAction: 'send',
+      contractStateFailed: true,
+    })
+    renderModal({}, 'contract')
+    fireEvent.click(screen.getByRole('button', { name: 'Send contract' }))
+    await waitFor(() =>
+      expect(h.showNotification).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'warning', title: 'Deal not updated' }),
+      ),
+    )
+  })
+})
+
 describe('pickDefaultTemplate', () => {
   const crm = { currency: 'NOK' }
   it('never picks a contract template for the information kind', () => {
@@ -1054,6 +1232,39 @@ describe('pickDefaultTemplate', () => {
     )
     expect(picked?._id).toBe('no')
   })
+  it('contract: a contract template with the action slug wins over the default contract template', () => {
+    const def = tpl({
+      _id: 'def',
+      isDefault: true,
+      category: 'contract',
+      slug: { current: 'contract-sent' },
+    })
+    const reminder = tpl({
+      _id: 'rem',
+      isDefault: false,
+      category: 'contract',
+      slug: { current: 'contract-reminder' },
+    })
+    const other = tpl({
+      _id: 'oth',
+      isDefault: true,
+      category: 'follow-up',
+      slug: { current: 'contract-reminder' },
+    })
+    expect(
+      pickDefaultTemplate(
+        [def, reminder, other],
+        'contract',
+        {},
+        'contract-reminder',
+      )?._id,
+    ).toBe('rem')
+    expect(
+      pickDefaultTemplate([def, other], 'contract', {}, 'contract-reminder')
+        ?._id,
+    ).toBe('def')
+  })
+
   it('never preselects a template for a registration send — the built-in welcome is the start', () => {
     const t = tpl({ _id: 'a', isDefault: true, category: 'follow-up' })
     expect(pickDefaultTemplate([t], 'registration', {})).toBeUndefined()

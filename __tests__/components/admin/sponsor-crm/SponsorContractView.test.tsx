@@ -22,7 +22,6 @@ vi.mock('next-auth/react', () => ({
 const mockReadinessData = vi.fn<() => any>()
 const mockBestTemplateData = vi.fn<() => any>()
 const mockGeneratePdf = vi.fn<() => any>()
-const mockSendContract = vi.fn<() => any>()
 const mockCheckStatus = vi.fn<() => any>()
 
 vi.mock('@/lib/trpc/client', () => ({
@@ -40,12 +39,6 @@ vi.mock('@/lib/trpc/client', () => ({
         },
       },
       crm: {
-        sendContract: {
-          useMutation: (opts: any) => mockSendContract(),
-        },
-        sendContractInvite: {
-          useMutation: (opts: any) => ({ mutate: vi.fn(), isLoading: false }),
-        },
         checkSignatureStatus: {
           useMutation: (opts: any) => mockCheckStatus(),
         },
@@ -108,10 +101,6 @@ describe('SponsorContractView', () => {
       },
     })
     mockGeneratePdf.mockReturnValue({
-      mutate: vi.fn(),
-      isPending: false,
-    })
-    mockSendContract.mockReturnValue({
       mutate: vi.fn(),
       isPending: false,
     })

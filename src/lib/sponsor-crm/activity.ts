@@ -220,8 +220,9 @@ export async function promoteToClosedWonOnContract(
         // id. Both LIVE callers resolve that id through a tenant check rather
         // than taking it from client input:
         //
-        //   • `sponsor.sendContract` (src/server/routers/sponsor.ts) →
-        //     `getSponsorForCurrentConference`, the ROUTER-side wrapper that
+        //   • `sponsor.crm.sendCommunication` (contract kind, #1264; the
+        //     orchestration lives in src/lib/sponsor-crm/contract-communication.ts)
+        //     → `getSponsorForCurrentConference`, the ROUTER-side wrapper that
         //     compares the record's `conference._id` against
         //     `resolveConferenceId()` and rejects a mismatch. Note the name:
         //     the lib-level `getSponsorForConference` it wraps is a plain
@@ -335,23 +336,6 @@ export async function logAssignmentChange(
     createdBy,
     {
       additionalData: assigneeName || '',
-      timestamp: getCurrentDateTime(),
-    },
-  )
-}
-
-export async function logEmailSent(
-  sponsorForConferenceId: string,
-  subject: string,
-  createdBy: string,
-): Promise<{ activityId?: string; error?: Error }> {
-  return createSponsorActivity(
-    sponsorForConferenceId,
-    'email',
-    `Email sent: ${subject}`,
-    createdBy,
-    {
-      additionalData: subject,
       timestamp: getCurrentDateTime(),
     },
   )

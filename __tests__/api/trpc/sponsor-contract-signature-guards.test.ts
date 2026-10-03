@@ -98,19 +98,23 @@ beforeEach(() => {
     sponsorForConference: makeSfc(),
     error: undefined,
   })
-  // OWNERSHIP PROBE (#863). `crm.sendContract` now proves the client-supplied
-  // `templateId` belongs to this conference BEFORE anything else — a foreign
+  // OWNERSHIP PROBE (#863). The contract send proves the client-supplied
+  // `contractTemplateId` belongs to this conference BEFORE anything else — a foreign
   // template used to render straight into the PDF this conference signs. These
   // cases are about the READINESS guards, so answer "ours" for the template id
   // they pass; the cross-tenant refusal lives in
   // `src/server/routers/tenancy.writes.sponsor.test.ts`.
   vi.mocked(
     clientReadUncached.fetch as never as ReturnType<typeof vi.fn>,
-  ).mockImplementation(async (query: string, params: { id?: string } = {}) =>
-    query.includes('"memberOrgIds"') && params.id === 'tmpl-1'
-      ? { _type: 'contractTemplate', conferenceId: 'conf-1' }
-      : null,
-  )
+  ).mockImplementation(async (query: string, params: { id?: string } = {}) => {
+    if (!query.includes('"memberOrgIds"')) return null
+    if (params.id === 'tmpl-1')
+      return { _type: 'contractTemplate', conferenceId: 'conf-1' }
+    // The send primitive guards the sponsor id before anything else (#1261).
+    if (params.id === 'sfc-1')
+      return { _type: 'sponsorForConference', conferenceId: 'conf-1' }
+    return null
+  })
 })
 
 afterEach(() => {
@@ -341,7 +345,23 @@ describe('updateSignatureStatus — signature axis guards', () => {
   })
 })
 
-describe('sendContract — contract-sent readiness guard', () => {
+const CONTRACT_SEND = {
+  sponsorForConferenceId: 'sfc-1',
+  kind: 'contract' as const,
+  recipientKeys: ['c1'],
+  subject: 'Sponsorship Agreement',
+  message: JSON.stringify([
+    {
+      _type: 'block',
+      _key: 'b1',
+      style: 'normal',
+      children: [{ _type: 'span', _key: 's1', text: 'Please sign.' }],
+    },
+  ]),
+  contractTemplateId: 'tmpl-1',
+}
+
+describe('sendCommunication (contract kind) — contract-sent readiness guard (#1264)', () => {
   it('rejects sending a contract when the sponsor has no tier', async () => {
     vi.mocked(getSponsorForConference).mockResolvedValue({
       sponsorForConference: makeSfc({
@@ -352,10 +372,7 @@ describe('sendContract — contract-sent readiness guard', () => {
       error: undefined,
     })
     await expect(
-      createCaller(mockOrganizer).sponsor.crm.sendContract({
-        sponsorForConferenceId: 'sfc-1',
-        templateId: 'tmpl-1',
-      }),
+      createCaller(mockOrganizer).sponsor.crm.sendCommunication(CONTRACT_SEND),
     ).rejects.toThrow(/tier/i)
     expect(getContractTemplate).not.toHaveBeenCalled()
   })
@@ -370,10 +387,7 @@ describe('sendContract — contract-sent readiness guard', () => {
       error: undefined,
     })
     await expect(
-      createCaller(mockOrganizer).sponsor.crm.sendContract({
-        sponsorForConferenceId: 'sfc-1',
-        templateId: 'tmpl-1',
-      }),
+      createCaller(mockOrganizer).sponsor.crm.sendCommunication(CONTRACT_SEND),
     ).rejects.toThrow(/value/i)
     expect(getContractTemplate).not.toHaveBeenCalled()
   })
@@ -389,10 +403,7 @@ describe('sendContract — contract-sent readiness guard', () => {
       error: undefined,
     })
     await expect(
-      createCaller(mockOrganizer).sponsor.crm.sendContract({
-        sponsorForConferenceId: 'sfc-1',
-        templateId: 'tmpl-1',
-      }),
+      createCaller(mockOrganizer).sponsor.crm.sendCommunication(CONTRACT_SEND),
     ).rejects.toThrow(/closed-lost|lost/i)
     expect(getContractTemplate).not.toHaveBeenCalled()
   })
