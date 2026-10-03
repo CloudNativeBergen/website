@@ -26,6 +26,8 @@ const h = vi.hoisted(() => ({
   senderUnavailable: false,
   /** The decrement that releases a claimed slot fails. */
   releaseThrows: false,
+  /** The first release decrement LANDS but its answer is lost. */
+  releaseAnswerLost: false,
   /** Boundary events in order: claim / send / release. */
   sequence: [] as string[],
 }))
@@ -67,7 +69,18 @@ vi.mock('@/lib/sanity/client', () => {
     }
     return null
   }
-  const patch = (id: string) => {
+  const patch = (
+    selection: string | { query: string; params: Record<string, unknown> },
+  ) => {
+    // A query selection matches only while the count is the claimed one.
+    const id =
+      typeof selection === 'string'
+        ? selection
+        : selection.query.includes('reminderCount == $claimed') &&
+            h.sfc &&
+            h.sfc.reminderCount === selection.params.claimed
+          ? (selection.params.id as string)
+          : 'no-match'
     let sets: Record<string, unknown> = {}
     let requiredRev: string | undefined
     const chain = {
@@ -98,13 +111,18 @@ vi.mock('@/lib/sanity/client', () => {
             'Mutation(s) failed with 1 error(s): revision mismatch',
           )
         }
-        if (
-          h.releaseThrows &&
+        const isRelease =
           'reminderCount' in sets &&
+          id === h.sfc?._id &&
           (sets.reminderCount as number) <
             ((h.sfc?.reminderCount as number | undefined) ?? 0)
-        ) {
-          throw new Error('sanity down')
+        if (h.releaseThrows && isRelease) throw new Error('sanity down')
+        if (h.releaseAnswerLost && isRelease) {
+          // Applied, then the connection broke.
+          h.releaseAnswerLost = false
+          h.sequence.push('release')
+          if (h.sfc) Object.assign(h.sfc, sets)
+          throw new Error('socket hang up')
         }
         if ('reminderCount' in sets) {
           h.sequence.push(
@@ -172,6 +190,7 @@ beforeEach(() => {
   h.sendReadThrows = false
   h.senderUnavailable = false
   h.releaseThrows = false
+  h.releaseAnswerLost = false
   h.sequence = []
   h.patches = []
   h.incs = []
@@ -450,6 +469,23 @@ describe('sendContractReminderBySystem', () => {
     // Tried twice before giving up.
     expect(h.incs.filter((i) => i.by === -1)).toHaveLength(2)
     expect(h.sfc!.reminderCount).toBe(2)
+  })
+
+  it('never takes the count below where it started: a release whose answer was lost is not applied twice', async () => {
+    h.send.mockResolvedValue({
+      data: null,
+      error: { message: 'boom', statusCode: 500 },
+    })
+    h.releaseAnswerLost = true
+    const outcome = await sendContractReminderBySystem('sfc-1', {
+      maxReminders: 2,
+    })
+    expect(outcome).toMatchObject({ ok: false, reason: 'send-failed' })
+    expect((outcome as { message?: string }).message).not.toMatch(
+      /could not be released/,
+    )
+    // 1 → claim 2 → release 1; the retry matched nothing.
+    expect(h.sfc!.reminderCount).toBe(1)
   })
 
   it("gives the slot back when the tenant's sender cannot be resolved — the provider was never asked", async () => {

@@ -1029,10 +1029,24 @@ export async function sendContractReminderBySystem(
   // Gives the claimed slot back; tried twice, and a slot that still could
   // not be released is REPORTED (the sweep would otherwise skip this
   // contract for a reminder that never went out).
+  // IDEMPOTENT: conditioned on the count still being the claimed one, so a
+  // retry after a decrement whose answer was lost matches nothing instead
+  // of taking the slot below where it started.
   const releaseClaim = async (): Promise<string> => {
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
-        await clientWrite.patch(sfc._id).inc({ reminderCount: -1 }).commit()
+        await clientWrite
+          .patch({
+            query:
+              '*[_type == "sponsorForConference" && _id == $id && conference._ref == $conferenceId && reminderCount == $claimed]',
+            params: {
+              id: sfc._id,
+              conferenceId: sfc.conference._id,
+              claimed: claimedCount,
+            },
+          })
+          .inc({ reminderCount: -1 })
+          .commit()
         return ''
       } catch (error) {
         console.error('[contract-reminders] releasing the claim failed:', error)
