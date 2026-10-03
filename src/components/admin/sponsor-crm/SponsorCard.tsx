@@ -40,6 +40,8 @@ interface SponsorCardProps {
   onEdit: () => void
   onDelete: () => void
   onEmail?: () => void
+  /** Send → Discount codes (#1262). Omitted when ticketing is off. */
+  onSendDiscountCodes?: () => void
   onContract?: () => void
   onOpenHistory?: () => void
   onAdvanceStage?: (targetStage: string) => void
@@ -87,6 +89,7 @@ export function SponsorCard({
   onEdit,
   onDelete,
   onEmail,
+  onSendDiscountCodes,
   onContract,
   onOpenHistory,
   onAdvanceStage,
@@ -342,6 +345,19 @@ export function SponsorCard({
                         className="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 data-[focus]:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700 dark:data-[focus]:bg-gray-700"
                       >
                         Send Email
+                      </button>
+                    </MenuItem>
+                  )}
+                  {onSendDiscountCodes && (
+                    <MenuItem>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          onSendDiscountCodes()
+                        }}
+                        className="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 data-[focus]:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700 dark:data-[focus]:bg-gray-700"
+                      >
+                        Send discount codes
                       </button>
                     </MenuItem>
                   )}

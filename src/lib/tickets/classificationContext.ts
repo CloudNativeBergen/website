@@ -18,6 +18,8 @@
  */
 import type { Conference } from '@/lib/conference/types'
 import type { EventDiscount, TicketType } from '@/lib/discounts/types'
+import { clientReadUncached } from '@/lib/sanity/client'
+import { conferenceSponsorClaimants } from '@/lib/sponsor-crm/discount-codes'
 import type { TicketClassificationContext } from './classification'
 import { proposeTicketTypeRoles } from './discovery'
 import type { EventRef, TicketingProvider } from './provider'
@@ -112,7 +114,9 @@ export async function buildClassificationContext(
 
   return {
     discounts,
-    sponsorNames: conference.sponsors?.map((s) => s.sponsor.name) ?? [],
+    // Uncached: an Assign made a moment ago must already count here, or the
+    // code falls back to the name heuristic and lands on the wrong sponsor.
+    sponsors: await conferenceSponsorClaimants(conference, clientReadUncached),
     speakerTicketTypeName: speakerType?.name,
     ticketTypeRoles: conference.ticketTypeRoles,
     ticketTypeProposals: proposeTicketTypeRoles({

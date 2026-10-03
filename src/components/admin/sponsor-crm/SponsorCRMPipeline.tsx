@@ -11,6 +11,10 @@ import { useSession } from 'next-auth/react'
 import { SponsorCRMForm } from '@/components/admin/sponsor-crm/SponsorCRMForm'
 import { SponsorSendModal } from '@/components/admin'
 import {
+  sponsorFromAddress,
+  type SendableKind,
+} from '@/components/admin/sponsor/SponsorSendModal'
+import {
   BoardViewSwitcher,
   type BoardView,
 } from '@/components/admin/sponsor-crm/BoardViewSwitcher'
@@ -51,6 +55,11 @@ interface SponsorCRMPipelineProps {
   conference: Conference
   domain: string
   externalNewTrigger?: number
+  /**
+   * Whether this conference can send discount codes (#1262): ticketing on for
+   * the org AND a Checkin event to read codes from. False hides the kind.
+   */
+  canSendDiscountCodes?: boolean
 }
 
 import { useDebounce } from '@/hooks/useDebounce'
@@ -60,6 +69,7 @@ export function SponsorCRMPipeline({
   conference,
   domain,
   externalNewTrigger = 0,
+  canSendDiscountCodes = false,
 }: SponsorCRMPipelineProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -77,6 +87,7 @@ export function SponsorCRMPipeline({
     'pipeline' | 'history' | 'contract'
   >('pipeline')
   const [isEmailModalOpen, setIsEmailModalOpen] = useState(false)
+  const [emailKind, setEmailKind] = useState<SendableKind>('information')
   const [deleteConfirmSponsor, setDeleteConfirmSponsor] =
     useState<SponsorForConferenceExpanded | null>(null)
   const [currentView, setCurrentView] = useState<BoardView>(
@@ -279,6 +290,15 @@ export function SponsorCRMPipeline({
 
   const handleOpenEmail = useCallback(
     (sponsor: SponsorForConferenceExpanded) => {
+      setEmailKind('information')
+      setEmailSponsor(sponsor)
+      setIsEmailModalOpen(true)
+    },
+    [],
+  )
+  const handleOpenDiscountSend = useCallback(
+    (sponsor: SponsorForConferenceExpanded) => {
+      setEmailKind('discount')
       setEmailSponsor(sponsor)
       setIsEmailModalOpen(true)
     },
@@ -607,23 +627,28 @@ export function SponsorCRMPipeline({
               ? () => handleOpenEmail(selectedSponsor)
               : undefined
           }
+          onSendDiscountCodes={
+            selectedSponsor && conference && canSendDiscountCodes
+              ? () => handleOpenDiscountSend(selectedSponsor)
+              : undefined
+          }
         />
       )}
 
       {emailSponsor && conference && (
         <SponsorSendModal
+          // One mount per kind: the composer reads its initial values once
+          // per open, and each kind has its own draft.
+          key={emailKind}
           isOpen={isEmailModalOpen}
           onClose={handleCloseEmail}
           onSent={() => utils.sponsor.crm.list.invalidate()}
           sponsorForConference={emailSponsor}
-          kind="information"
+          kind={emailKind}
           domain={domain}
           // Mirrors the server's `resolveConferenceFrom(…, 'sponsorEmail')`
           // fallback so the From: line shows what will actually be used.
-          fromEmail={
-            conference.sponsorEmail ||
-            `sponsors@${conference.domains?.[0] || domain}`
-          }
+          fromEmail={sponsorFromAddress(conference, domain)}
           // The speaker profile name first (what the server merges into
           // SENDER_NAME when computing `templateEdited`), the sign-in name
           // as a fallback.
@@ -1094,6 +1119,11 @@ export function SponsorCRMPipeline({
                 onSponsorDelete={handleDelete}
                 onSponsorEmail={
                   currentView !== 'contract' ? handleOpenEmail : undefined
+                }
+                onSponsorSendDiscountCodes={
+                  currentView !== 'contract' && canSendDiscountCodes
+                    ? handleOpenDiscountSend
+                    : undefined
                 }
                 onSponsorContract={
                   currentView === 'contract' ? handleOpenContract : undefined

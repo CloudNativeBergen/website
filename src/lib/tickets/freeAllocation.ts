@@ -93,6 +93,8 @@ export interface FreeTicketAllocationInput {
   sponsors: readonly {
     name: string
     tier?: (TierWithEntitlement & { title?: string }) | null
+    /** Stored codes (#1262); a sponsor with any is never matched by name. */
+    linkedCodes?: readonly string[]
   }[]
   /**
    * The event's discount codes with usage attached, or `null` when the list
@@ -147,7 +149,7 @@ function sponsorRow(
     (total, s) => total + ticketEntitlementOf(s.tier),
     0,
   )
-  const names = sponsors.map((s) => s.name).filter(Boolean)
+  const claimants = sponsors.filter((s) => s.name)
 
   if (!discounts) {
     return {
@@ -164,10 +166,10 @@ function sponsorRow(
   // A code we cannot value (a fixed-amount code — see `removesFullPrice`) could
   // be a comp or a discount on a sale. One of those poisons the whole count.
   let unvalued = 0
-  const covered = new Set<string>()
+  const covered = new Set<(typeof sponsors)[number]>()
 
   for (const discount of discounts) {
-    const owner = sponsorOwningCode(discount.triggerValue, names)
+    const owner = sponsorOwningCode(discount.triggerValue, claimants)
     if (!owner) continue
     const full = removesFullPrice(discount)
     if (full === 'unknown') {
@@ -183,7 +185,7 @@ function sponsorRow(
   }
 
   const entitled = sponsors.filter((s) => ticketEntitlementOf(s.tier) > 0)
-  const withoutCode = entitled.filter((s) => !covered.has(s.name)).length
+  const withoutCode = entitled.filter((s) => !covered.has(s)).length
 
   if (unvalued > 0) {
     return {

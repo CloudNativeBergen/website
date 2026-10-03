@@ -302,11 +302,6 @@ export const Overview: Story = {
               path="@/components/admin/sponsor/SponsorEmailTemplateEditor"
               description="Full editor for creating/editing email templates."
             />
-            <ComponentCard
-              name="SponsorDiscountEmailModal"
-              path="@/components/admin/sponsor/SponsorDiscountEmailModal"
-              description="Specialized modal for sending discount code emails."
-            />
           </div>
         </section>
 

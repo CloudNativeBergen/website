@@ -56,6 +56,12 @@ export interface SendSponsorCommunicationArgs {
    */
   senderNames?: readonly (string | undefined)[]
   attachments?: CommunicationAttachment[]
+  /**
+   * Server-built HTML appended after the organizer's message (the discount
+   * codes block, #1262) — part of what is sent AND of the recorded body, but
+   * not of the editable message, so it never reads as a template edit.
+   */
+  appendHtml?: string
 }
 
 export type SendSponsorCommunicationResult =
@@ -192,7 +198,9 @@ export async function sendSponsorCommunication(
     renderEmailTemplate({
       conference,
       subject: args.subject,
-      htmlContent,
+      htmlContent: args.appendHtml
+        ? `${htmlContent}${args.appendHtml}`
+        : htmlContent,
       // A one-to-one transactional email: NO unsubscribe link. `undefined`
       // would select the template's default — Resend's `{{{RESEND_UNSUBSCRIBE_URL}}}`
       // merge tag, which only Broadcasts resolve — and the literal tag would

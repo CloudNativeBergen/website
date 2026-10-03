@@ -490,6 +490,61 @@ export default defineType({
       description: 'When the sponsor completed registration',
       readOnly: true,
     }),
+    defineField({
+      // The sponsor↔discount-code link (#1262). The ticketing provider cannot
+      // hold it, so it lives here: appended when codes are SENT to the sponsor
+      // or ASSIGNED from the discount code manager, and read by every code
+      // attribution (`sponsorOwningCode`) in preference to the name heuristic.
+      name: 'discountCodes',
+      title: 'Discount Codes',
+      type: 'array',
+      description:
+        'Ticket discount codes given to this sponsor. Added by the CRM when codes are sent or assigned; remove an entry here only to undo a mistaken assignment.',
+      // NOT readOnly on purpose: the app only ever appends, and a send or an
+      // Assign refuses a code stored on another sponsor — so without this,
+      // a code assigned to the wrong sponsor could never be moved.
+      of: [
+        {
+          type: 'object',
+          name: 'linkedDiscountCode',
+          fields: [
+            defineField({
+              name: 'code',
+              title: 'Code',
+              type: 'string',
+              description: 'The code as the sponsor types it at checkout',
+              validation: (Rule) => Rule.required(),
+            }),
+            defineField({
+              name: 'providerCodeId',
+              title: 'Provider Code ID',
+              type: 'string',
+              description:
+                'How the ticketing provider identifies the code (Checkin keys codes by the code itself)',
+            }),
+            defineField({
+              name: 'linkedAt',
+              title: 'Linked At',
+              type: 'datetime',
+            }),
+            defineField({
+              name: 'linkedVia',
+              title: 'Linked Via',
+              type: 'string',
+              options: {
+                list: [
+                  { title: 'Sent', value: 'send' },
+                  { title: 'Assigned', value: 'assign' },
+                  { title: 'Created for the sponsor', value: 'create' },
+                  { title: 'Adopted (was matched by name)', value: 'adopt' },
+                ],
+              },
+            }),
+          ],
+          preview: { select: { title: 'code', subtitle: 'linkedVia' } },
+        },
+      ],
+    }),
   ],
   preview: {
     select: {

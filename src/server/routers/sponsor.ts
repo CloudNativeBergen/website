@@ -2,13 +2,7 @@ import { TRPCError } from '@trpc/server'
 import { z } from 'zod'
 import { revalidateTag } from 'next/cache'
 import { conferenceTag } from '@/lib/cache/tags'
-import { PLATFORM_NAME } from '@/lib/branding/platform'
-import {
-  router,
-  adminProcedure,
-  requireFeatureNotDenied,
-  resolveConferenceId,
-} from '../trpc'
+import { router, adminProcedure, resolveConferenceId } from '../trpc'
 import {
   requireDocumentInCurrentConference,
   requireDocumentInCurrentOrg,
@@ -61,7 +55,10 @@ import {
   conferenceBaseUrl,
   hasConferenceDomain,
 } from '@/lib/conference/baseUrl'
-import { getOrganizationRefForCurrentConference } from '@/lib/organization/sanity'
+import {
+  getOrganizationRefForCurrentConference,
+  getOrganizationRefViaParentConference,
+} from '@/lib/organization/sanity'
 import type { Conference } from '@/lib/conference/types'
 import { clientWrite, clientReadUncached } from '@/lib/sanity/client'
 import { getCurrentDateTime } from '@/lib/time'
@@ -115,6 +112,8 @@ import {
   UpdateSponsorActivitySchema,
   SponsorCRMFilterSchema,
   SendCommunicationSchema,
+  AssignDiscountCodesSchema,
+  SponsorDiscountCodeOptionsSchema,
   CommunicationRecordIdSchema,
   ListCommunicationsSchema,
 } from '@/server/schemas/sponsorForConference'
@@ -125,6 +124,25 @@ import {
   listCommunicationsForSponsor,
 } from '@/lib/sponsor-crm/activities'
 import { sendSponsorCommunication } from '@/lib/sponsor-crm/communication-send'
+import {
+  appendLinkedCodes,
+  codesToAdopt,
+  DiscountCodeLinkError,
+  linkCodesToSponsor,
+  listEventDiscounts,
+  readSponsorCodeLinks,
+  resolveChosenCodes,
+  withLinkedCodes,
+  type ResolvedDiscountCode,
+  type SponsorCodeLink,
+} from '@/lib/sponsor-crm/discount-codes'
+import { claimDiscountCodes } from '@/lib/sponsor-crm/discount-code-claims'
+import { normalizeDiscountCode, sponsorOwningCode } from '@/lib/discounts'
+import {
+  discountCodeAttachments,
+  discountCodesCardHtml,
+  sponsorTicketUrl,
+} from '@/lib/sponsor-crm/discount-email'
 import {
   TEMPLATE_NOT_FOUND_MESSAGE,
   TEMPLATE_WRONG_KIND_MESSAGE,
@@ -177,17 +195,166 @@ import {
 } from '@/lib/contract-signing'
 import { resolveConferenceFrom } from '@/lib/email/from'
 import { sendBroadcastEmail } from '@/lib/email/broadcast'
-import { sendIndividualEmail } from '@/lib/email/broadcast'
 import { syncSponsorAudience, type Contact } from '@/lib/email/audience'
 import { logBulkEmailSent } from '@/lib/sponsor-crm/activity'
-import { emailBrandColor } from '@/lib/branding/theme'
-import { brandedOr, resolveEmailBrandPalette } from '@/lib/branding/email'
 import { isValidPortableText } from '@/lib/portabletext/validation'
 import type { PortableTextBlock } from '@portabletext/types'
 import type { SponsorForConferenceExpanded } from '@/lib/sponsor-crm/types'
 import type { SponsorEmailTemplate } from '@/lib/sponsor/types'
 import { publishSponsorStatusChange } from '@/lib/sponsor-crm/events'
 import '@/lib/events/registry'
+
+/**
+ * The ticketing kill switch (#850) for the discount kind of a send — the
+ * `requireFeatureNotDenied('ticketing')` rule applied to ONE kind of a shared
+ * procedure, with the middleware's exact message.
+ */
+async function refuseIfTicketingDenied(orgId: string | null | undefined) {
+  const { isFeatureExplicitlyDeniedForOrg } =
+    await import('@/lib/features/platform-default')
+  if (await isFeatureExplicitlyDeniedForOrg(orgId ?? null, 'ticketing')) {
+    throw new TRPCError({
+      code: 'FORBIDDEN',
+      message:
+        'The "ticketing" feature has been switched off for this organization',
+    })
+  }
+}
+
+/** Provider codes the conference cannot read are refused as one message. */
+const TICKETING_NOT_CONFIGURED =
+  'Ticketing is not configured for this conference'
+
+/**
+ * The stored links, or an organizer-facing refusal — never the Sanity
+ * client's own error text (#1262 review). Every path that reads them fails
+ * closed: without the read neither ownership nor dedupe can be checked.
+ */
+async function readLinksOrThrow(conferenceId: string) {
+  try {
+    return await readSponsorCodeLinks(conferenceId)
+  } catch (error) {
+    throw new TRPCError({
+      code: 'INTERNAL_SERVER_ERROR',
+      message: 'Could not read this conference’s sponsors. Try again.',
+      cause: error,
+    })
+  }
+}
+
+/** The conference's provider codes, or the refusal a caller should surface. */
+async function readEventDiscountsOrThrow(conference: Conference) {
+  let listed: Awaited<ReturnType<typeof listEventDiscounts>>
+  try {
+    listed = await listEventDiscounts(conference)
+  } catch (error) {
+    throw new TRPCError({
+      code: 'INTERNAL_SERVER_ERROR',
+      message: 'Could not read the discount codes from the ticketing provider',
+      cause: error,
+    })
+  }
+  if (!listed.ok) {
+    throw new TRPCError({
+      code: 'BAD_REQUEST',
+      message: TICKETING_NOT_CONFIGURED,
+    })
+  }
+  return listed.discounts
+}
+
+/**
+ * Check organizer-chosen codes against the conference's OWN provider event
+ * and every sponsor's stored link (#1262). Shared by the discount send and the
+ * discount code manager's Assign; nothing is written here.
+ */
+async function resolveSponsorDiscountCodes(
+  conference: Conference,
+  sponsorForConferenceId: string,
+  chosen: readonly string[],
+) {
+  const discounts = await readEventDiscountsOrThrow(conference)
+  const links = await readLinksOrThrow(conference._id)
+  try {
+    const codes = resolveChosenCodes(
+      chosen,
+      discounts,
+      links,
+      sponsorForConferenceId,
+    )
+    const alreadyLinked =
+      links.find((l) => l.sponsorForConferenceId === sponsorForConferenceId)
+        ?.linkedCodes ?? []
+    const adoptable = codesToAdopt(
+      discounts,
+      withLinkedCodes(conference.sponsors, links),
+      sponsorForConferenceId,
+    )
+    // THE LOCK (PR #1272 review): the checks above read one snapshot; the
+    // claim is what makes two concurrent links of one code impossible. The
+    // chosen codes must all be won; an adopted code another sponsor holds is
+    // simply not adopted.
+    const orgRef = await getOrganizationRefViaParentConference(
+      sponsorForConferenceId,
+    )
+    const claim = (
+      list: readonly ResolvedDiscountCode[],
+      onConflict: 'refuse' | 'drop',
+    ) =>
+      claimDiscountCodes({
+        conferenceId: conference._id,
+        orgRef,
+        sponsorForConferenceId,
+        codes: list,
+        links,
+        onConflict,
+      })
+    const chosenHold = await claim(codes, 'refuse')
+    let adoptedHold: Awaited<ReturnType<typeof claim>>
+    try {
+      adoptedHold = await claim(adoptable, 'drop')
+    } catch (error) {
+      await chosenHold.release()
+      throw error
+    }
+    return {
+      codes: chosenHold.held,
+      alreadyLinked,
+      adopted: adoptedHold.held,
+      /** Give the claims back when nothing was linked after all. */
+      release: async () => {
+        await chosenHold.release()
+        await adoptedHold.release()
+      },
+      /** The send went out but the link did not: only adoption is undone. */
+      releaseAdopted: () => adoptedHold.release(),
+    }
+  } catch (error) {
+    if (error instanceof DiscountCodeLinkError) {
+      throw new TRPCError({ code: error.code, message: error.message })
+    }
+    throw error
+  }
+}
+
+async function prepareDiscountSend(
+  conference: Conference,
+  sponsorForConferenceId: string,
+  chosen: readonly string[],
+) {
+  const resolved = await resolveSponsorDiscountCodes(
+    conference,
+    sponsorForConferenceId,
+    chosen,
+  )
+  const ticketUrl = sponsorTicketUrl(conference)
+  const codes = resolved.codes.map((c) => c.code)
+  return {
+    ...resolved,
+    html: discountCodesCardHtml({ codes, ticketUrl, theme: conference.theme }),
+    attachments: discountCodeAttachments(codes, ticketUrl),
+  }
+}
 
 async function getSponsorForCurrentConference(id: string) {
   const conferenceId = await resolveConferenceId()
@@ -2879,6 +3046,13 @@ export const sponsorRouter = router({
     sendCommunication: adminProcedure
       .input(SendCommunicationSchema)
       .mutation(async ({ input, ctx }) => {
+        // KILL-SWITCHED for the discount kind only (#850, carried over from
+        // the removed `sendDiscountEmail`): a ticketing deny switches off
+        // ticketing, not sponsor contact. Asked FIRST, so a denied org reads
+        // nothing — not even the sponsor's tenancy probe.
+        if (input.kind === 'discount') {
+          await refuseIfTicketingDenied(ctx.orgId)
+        }
         await requireDocumentInCurrentConference(
           input.sponsorForConferenceId,
           'sponsorForConference',
@@ -2946,20 +3120,46 @@ export const sponsorRouter = router({
           }
         }
 
-        const result = await sendSponsorCommunication({
-          conference,
-          orgId: ctx.orgId,
-          actorId: ctx.speaker._id ?? null,
-          sponsorForConferenceId: input.sponsorForConferenceId,
-          kind: input.kind,
-          recipientKeys: input.recipientKeys,
-          subject: input.subject,
-          message,
-          template,
-          senderNames: [ctx.speaker.name, ctx.user?.name],
-        })
+        // Discount kind (#1262): the chosen codes must be on THIS
+        // conference's provider event and not stored on another sponsor;
+        // they ride in a server-built block and are listed on the record.
+        const discount =
+          input.kind === 'discount'
+            ? await prepareDiscountSend(
+                conference,
+                input.sponsorForConferenceId,
+                input.discountCodes ?? [],
+              )
+            : undefined
+
+        let result: Awaited<ReturnType<typeof sendSponsorCommunication>>
+        try {
+          result = await sendSponsorCommunication({
+            conference,
+            orgId: ctx.orgId,
+            actorId: ctx.speaker._id ?? null,
+            sponsorForConferenceId: input.sponsorForConferenceId,
+            kind: input.kind,
+            recipientKeys: input.recipientKeys,
+            subject: input.subject,
+            message,
+            template,
+            senderNames: [ctx.speaker.name, ctx.user?.name],
+            ...(discount && {
+              appendHtml: discount.html,
+              attachments: discount.attachments,
+            }),
+          })
+        } catch (error) {
+          // The primitive THREW (a read rejected before the provider was
+          // reached) rather than refusing: nothing went out either way.
+          await discount?.release()
+          throw error
+        }
 
         if (!result.ok) {
+          // Nothing went out, so the codes are nobody's again.
+          await discount?.release()
           switch (result.reason) {
             case 'not-found':
               throw new TRPCError({
@@ -2984,12 +3184,163 @@ export const sponsorRouter = router({
           }
         }
 
+        // Only AFTER the provider accepted the send, and never able to fail
+        // it: the email is out, so a failed link write is logged, not thrown.
+        let linkedCodes: string[] | undefined
+        let linkFailed = false
+        if (discount) {
+          try {
+            const added = await appendLinkedCodes(
+              input.sponsorForConferenceId,
+              discount.alreadyLinked,
+              discount.codes,
+              'send',
+              discount.adopted,
+            )
+            linkedCodes = added.map((c) => c.code)
+          } catch (error) {
+            console.error(
+              '[sendCommunication] storing the sponsor discount-code link failed:',
+              error,
+            )
+            // The sent codes stay the sponsor's (they have the email); the
+            // codes that were only going to be adopted were never linked.
+            await discount.releaseAdopted()
+            linkedCodes = []
+            linkFailed = true
+          }
+        }
+
         return {
           success: true as const,
           activityId: result.activityId,
           providerMessageId: result.providerMessageId,
           recipientCount: result.recipients.length,
+          ...(linkedCodes && { linkedCodes }),
+          // The organizer is told, so the gap is fixed by an Assign rather than
+          // discovered when the next send falls back to the name guess.
+          ...(linkFailed && { linkFailed: true as const }),
         }
+      }),
+
+    /**
+     * The Send modal's code picker (#1262): every code on the conference's
+     * provider event, with the ones attributed to THIS sponsor preselected —
+     * its stored codes, or by name only while it stores none — and the ones
+     * stored on another sponsor named, since a send would refuse them.
+     */
+    discountCodeOptions: adminProcedure
+      .input(SponsorDiscountCodeOptionsSchema)
+      .query(async ({ input, ctx }) => {
+        await refuseIfTicketingDenied(ctx.orgId)
+        await requireDocumentInCurrentConference(
+          input.sponsorForConferenceId,
+          'sponsorForConference',
+        )
+        const { conference, error: conferenceError } =
+          await getConferenceForCurrentDomain({
+            sponsors: true,
+            includeSponsorRegistrationLink: true,
+          })
+        if (conferenceError || !conference) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to fetch conference',
+          })
+        }
+        const discounts = await readEventDiscountsOrThrow(conference)
+        const links = await readLinksOrThrow(conference._id)
+        const here = links.find(
+          (l) => l.sponsorForConferenceId === input.sponsorForConferenceId,
+        )
+        const stored = (l: SponsorCodeLink | undefined, code: string) =>
+          !!l?.linkedCodes.some(
+            (c) => normalizeDiscountCode(c) === normalizeDiscountCode(code),
+          )
+        // The usage view's claimant set (conference sponsors + stored codes),
+        // so the picker preselects exactly what that view counts as theirs.
+        const claimants = withLinkedCodes(conference.sponsors, links)
+        const codes = discounts.flatMap((d) => {
+          const code = d.triggerValue
+          if (!code) return []
+          const owner = sponsorOwningCode(code, claimants)
+          const elsewhere = links.find((l) => l !== here && stored(l, code))
+          return [
+            {
+              code,
+              // A CRM record that is not (yet) a conference sponsor claims
+              // only what it stores.
+              selected:
+                stored(here, code) || (!!here && owner?.id === here.sponsorId),
+              linked: stored(here, code),
+              ...(elsewhere && {
+                linkedTo: elsewhere.name || 'another sponsor',
+              }),
+              // Counted for another sponsor by name: sending it moves it here.
+              ...(!elsewhere &&
+                owner &&
+                owner.id !== here?.sponsorId && { attributedTo: owner.name }),
+            },
+          ]
+        })
+        return {
+          codes,
+          ticketUrl: sponsorTicketUrl(conference),
+          // Sponsor ticket types are hidden on the public store: without the
+          // invite link the email points at a page with nothing to claim.
+          hasSponsorInviteLink: !!conference.sponsorRegistrationLink,
+        }
+      }),
+
+    /**
+     * Discount code manager → Assign to sponsor (#1262): link codes created
+     * in advance WITHOUT sending them. Same checks as a discount send (on the
+     * conference's own event, not stored on another sponsor), same kill
+     * switch, and the assignment is logged on the sponsor's timeline. Unlike
+     * the send, a failed write is the whole action, so it is reported.
+     */
+    assignDiscountCodes: adminProcedure
+      .input(AssignDiscountCodesSchema)
+      .mutation(async ({ input, ctx }) => {
+        await refuseIfTicketingDenied(ctx.orgId)
+        await requireDocumentInCurrentConference(
+          input.sponsorForConferenceId,
+          'sponsorForConference',
+        )
+        const { conference, error: conferenceError } =
+          await getConferenceForCurrentDomain({ sponsors: true })
+        if (conferenceError || !conference) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to fetch conference',
+          })
+        }
+        const { codes, alreadyLinked, adopted, release } =
+          await resolveSponsorDiscountCodes(
+            conference,
+            input.sponsorForConferenceId,
+            input.discountCodes,
+          )
+        let added: Awaited<ReturnType<typeof linkCodesToSponsor>>
+        try {
+          added = await linkCodesToSponsor({
+            sponsorForConferenceId: input.sponsorForConferenceId,
+            alreadyLinked,
+            codes,
+            via: 'assign',
+            actorId: ctx.speaker._id,
+            adopted,
+          })
+        } catch (error) {
+          // Nothing was linked: the claims go back so a retry can win them.
+          await release()
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Could not assign the discount code',
+            cause: error,
+          })
+        }
+        return { success: true as const, linkedCodes: added.map((c) => c.code) }
       }),
 
     /**
@@ -3161,142 +3512,6 @@ export const sponsorRouter = router({
         }
 
         return await response.json()
-      }),
-
-    /**
-     * KILL-SWITCHED (#850). The only procedure in this router that carries
-     * `requireFeatureNotDenied('ticketing')`: it mails a client-supplied code
-     * and never touches the provider, so the #847 sweep — which enumerated
-     * provider call sites — could not see it, and a switched-off org kept
-     * sending sponsors discount codes on its own behalf.
-     *
-     * Not a claim about whether those codes work. A deny is platform-side and
-     * revokes nothing in the vendor account, so a code minted before it still
-     * redeems. The point is narrower: this is a ticketing surface the operator
-     * turned off. The neighbouring sponsor mail (`sendCommunication`,
-     * `broadcastEmail`) stays ungated — a ticketing deny switches off
-     * ticketing, not sponsor contact.
-     */
-    sendDiscountEmail: adminProcedure
-      .use(requireFeatureNotDenied('ticketing'))
-      .input(
-        z.object({
-          sponsorId: z.string().min(1),
-          discountCode: z.string().min(1),
-          subject: z.string().min(1),
-          message: z.string().min(1),
-          ticketUrl: z.string().url(),
-        }),
-      )
-      .mutation(async ({ input }) => {
-        const { conference, error: conferenceError } =
-          await getConferenceForCurrentDomain()
-
-        if (conferenceError || !conference) {
-          throw new TRPCError({
-            code: 'INTERNAL_SERVER_ERROR',
-            message: 'Failed to fetch conference',
-          })
-        }
-
-        let messagePortableText: PortableTextBlock[]
-        try {
-          const parsed = JSON.parse(input.message)
-          if (!isValidPortableText(parsed)) {
-            throw new Error('Invalid PortableText format')
-          }
-          messagePortableText = parsed
-        } catch {
-          throw new TRPCError({
-            code: 'BAD_REQUEST',
-            message: 'Invalid message format. Expected PortableText JSON.',
-          })
-        }
-
-        const sfc = await clientReadUncached.fetch<{
-          _id: string
-          sponsor: { name: string }
-          contactPersons?: Array<{
-            _key: string
-            name: string
-            email: string
-            phone?: string
-            role?: string
-          }>
-        }>(
-          `*[_type == "sponsorForConference" && sponsor._ref == $sponsorId && conference._ref == $conferenceId][0]{
-            _id,
-            sponsor->{ name },
-            contactPersons[]{ _key, name, email, phone, role }
-          }`,
-          { sponsorId: input.sponsorId, conferenceId: conference._id },
-        )
-
-        if (!sfc) {
-          throw new TRPCError({
-            code: 'NOT_FOUND',
-            message: 'Sponsor not found in this conference',
-          })
-        }
-
-        const ccEmails: string[] = []
-        if (sfc.contactPersons) {
-          sfc.contactPersons.forEach((contact) => {
-            if (contact.email && contact.email.trim().length > 0) {
-              ccEmails.push(contact.email.trim())
-            }
-          })
-        }
-
-        if (ccEmails.length === 0) {
-          throw new TRPCError({
-            code: 'BAD_REQUEST',
-            message: `No valid contact person email addresses found for sponsor ${sfc.sponsor.name}. Please add contact persons with valid email addresses in the sponsor CRM.`,
-          })
-        }
-
-        const discountBrand = resolveEmailBrandPalette(
-          emailBrandColor(conference.theme),
-        )
-        const discountInfo = `
-          <div style="background-color: ${discountBrand.cardBackground}; padding: 20px; border-radius: 12px; margin: 24px 0; border: 1px solid ${discountBrand.cardBorder};">
-            <h3 style="color: ${brandedOr(discountBrand, '#1D4ED8')}; margin-top: 0; margin-bottom: 16px; font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 18px; font-weight: 600;">
-              Your Discount Code
-            </h3>
-            <ul style="margin: 0; padding-left: 20px; color: #334155; font-size: 15px; line-height: 1.6;">
-              <li style="margin-bottom: 8px;"><strong>Discount Code:</strong> <code style="background-color: #F1F5F9; padding: 4px 8px; border-radius: 4px; font-family: Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;">${input.discountCode}</code></li>
-              <li style="margin-bottom: 8px;"><strong>Ticket Registration:</strong> <a href="${input.ticketUrl}" style="color: ${brandedOr(discountBrand, '#1D4ED8')}; text-decoration: none; font-weight: 500;">${input.ticketUrl}</a></li>
-              <li style="margin-bottom: 0;"><strong>Instructions:</strong> Enter the discount code during checkout to receive your sponsor tickets</li>
-            </ul>
-          </div>
-        `
-
-        const emailResponse = await sendIndividualEmail({
-          conference,
-          subject: input.subject,
-          messagePortableText,
-          primaryRecipient: ccEmails[0],
-          ccRecipients: ccEmails.slice(1),
-          additionalContent: discountInfo,
-          fromEmail: conference.sponsorEmail
-            ? `${conference.organizer || PLATFORM_NAME} <${conference.sponsorEmail}>`
-            : undefined,
-        })
-
-        if (!emailResponse.ok) {
-          const errorData = await emailResponse.json()
-          throw new TRPCError({
-            code: 'INTERNAL_SERVER_ERROR',
-            message: errorData.error || 'Failed to send discount email',
-          })
-        }
-
-        const responseData = await emailResponse.json()
-        return {
-          ...responseData,
-          sponsorName: sfc.sponsor.name,
-          discountCode: input.discountCode,
-        }
       }),
 
     syncAudience: adminProcedure.mutation(async () => {

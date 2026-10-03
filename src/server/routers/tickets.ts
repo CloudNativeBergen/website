@@ -37,7 +37,23 @@ import {
 } from '@/lib/tickets/speakerStatus'
 import { fetchSpeakerTicketInputs } from '@/lib/speaker/ticketInputs'
 import { buildTicketSummary, exportParticipants } from '@/lib/tickets/summary'
-import { calculateDiscountUsage, sponsorOwningCode } from '@/lib/discounts'
+import {
+  calculateDiscountUsage,
+  claimRefusal,
+  normalizeDiscountCode,
+  sponsorOwningCode,
+} from '@/lib/discounts'
+import {
+  codesToAdopt,
+  DiscountCodeLinkError,
+  linkCodesToSponsor,
+  readSponsorCodeLinks,
+  withLinkedCodes,
+} from '@/lib/sponsor-crm/discount-codes'
+import { claimDiscountCodes } from '@/lib/sponsor-crm/discount-code-claims'
+import { getOrganizationRefViaParentConference } from '@/lib/organization/sanity'
+import type { Conference } from '@/lib/conference/types'
+import { requireDocumentInCurrentConference } from '../tenancy'
 import {
   getTicketingProvider,
   resolveTicketingCredentials,
@@ -1022,17 +1038,85 @@ export const ticketsRouter = router({
 
     createDiscountCode: ticketingAdminProcedure
       .input(CreateDiscountCodeSchema)
-      .mutation(async ({ input }) => {
+      .mutation(async ({ input, ctx }) => {
         const {
           discountCode,
           numberOfTickets,
-          sponsorName,
           tierTitle,
           discountPercentage,
           selectedTicketTypes,
         } = input
+        // With a CRM record the SPONSOR is that record — the tenancy guard
+        // below proves it is this conference's, and its name replaces any
+        // client-supplied `sponsorName`, which is only a label.
+        let sponsorName = input.sponsorName
 
         try {
+          // OWNERSHIP of the sponsor the code will be linked to (#1262):
+          // guarded before anything is read or minted.
+          // …and the code must not already be STORED on another sponsor (a
+          // stale link survives a provider-side delete, so the provider's own
+          // existence check below cannot see it). Same refusal as Assign and
+          // a discount send; read once and reused to link below.
+          let sponsorLinks: Awaited<ReturnType<typeof readSponsorCodeLinks>> =
+            []
+          let linkSponsors: Conference['sponsors']
+          let linkConferenceId: string | undefined
+          let linkOrgRef: string | null = null
+          if (input.sponsorForConferenceId) {
+            await requireDocumentInCurrentConference(
+              input.sponsorForConferenceId,
+              'sponsorForConference',
+            )
+            const { conference: linkConference } =
+              await getConferenceForCurrentDomain({ sponsors: true })
+            if (!linkConference) {
+              throw new TRPCError({
+                code: 'INTERNAL_SERVER_ERROR',
+                message: 'Failed to fetch conference',
+              })
+            }
+            linkSponsors = linkConference.sponsors
+            linkConferenceId = linkConference._id
+            linkOrgRef = await getOrganizationRefViaParentConference(
+              input.sponsorForConferenceId,
+            )
+            // FAILS CLOSED like the standalone guard below: without the read
+            // the stored-elsewhere refusal cannot be made.
+            try {
+              sponsorLinks = await readSponsorCodeLinks(linkConference._id)
+            } catch (linksError) {
+              throw new TRPCError({
+                code: 'INTERNAL_SERVER_ERROR',
+                message:
+                  'Could not read this conference’s sponsors, so a code cannot be checked against them. Try again.',
+                cause: linksError,
+              })
+            }
+            const target = sponsorLinks.find(
+              (l) => l.sponsorForConferenceId === input.sponsorForConferenceId,
+            )
+            if (!target) {
+              throw new TRPCError({
+                code: 'NOT_FOUND',
+                message: 'Sponsor not found in this conference',
+              })
+            }
+            sponsorName = target.name || sponsorName
+            const wanted = normalizeDiscountCode(discountCode)
+            const holder = sponsorLinks.find(
+              (l) =>
+                l.sponsorForConferenceId !== input.sponsorForConferenceId &&
+                l.linkedCodes.some((c) => normalizeDiscountCode(c) === wanted),
+            )
+            if (holder) {
+              throw new TRPCError({
+                code: 'CONFLICT',
+                message: `Discount code "${discountCode}" is already linked to ${holder.name || 'another sponsor'}`,
+              })
+            }
+          }
+
           // OWNERSHIP (#730): this endpoint mints discount codes — up to 100%
           // off — so an unvalidated `eventId` wrote them onto ANOTHER tenant's
           // paid ticket sale against the shared platform credential.
@@ -1070,14 +1154,28 @@ export const ticketsRouter = router({
                 cause: sponsorsError,
               })
             }
+            // The stored sponsor↔code links too (#1262): a sponsor that
+            // stores codes no longer claims by name, so a code containing its
+            // name is free to be standalone. Same fail-closed rule as above.
+            let links: Awaited<ReturnType<typeof readSponsorCodeLinks>>
+            try {
+              links = await readSponsorCodeLinks(conference._id)
+            } catch (linksError) {
+              throw new TRPCError({
+                code: 'INTERNAL_SERVER_ERROR',
+                message:
+                  'Could not read this conference’s sponsors, so a code cannot be checked against them. Try again.',
+                cause: linksError,
+              })
+            }
             const claimed = sponsorOwningCode(
               discountCode,
-              conference.sponsors?.map((s) => s.sponsor.name) ?? [],
+              withLinkedCodes(conference.sponsors, links),
             )
             if (claimed) {
               throw new TRPCError({
                 code: 'CONFLICT',
-                message: `"${discountCode}" contains the sponsor name "${claimed}", so it would be counted against that sponsor's tickets. Choose a code that does not contain a sponsor's name.`,
+                message: claimRefusal(discountCode, claimed),
               })
             }
           }
@@ -1096,16 +1194,95 @@ export const ticketsRouter = router({
             })
           }
 
-          const result = await provider.createDiscount({
-            eventId,
-            discountCode,
-            numberOfTickets,
-            ticketTypes: selectedTicketTypes || [],
-            discountType: 'percentage',
-            discountValue: discountPercentage,
-          })
+          // THE LOCK (PR #1272 review): claim the code for the sponsor BEFORE
+          // it exists at the provider, so a concurrent Assign cannot take it
+          // between the create and the link below. Released if the provider
+          // refuses — then there is no code to own.
+          let hold: Awaited<ReturnType<typeof claimDiscountCodes>> | undefined
+          if (input.sponsorForConferenceId) {
+            try {
+              hold = await claimDiscountCodes({
+                conferenceId: linkConferenceId!,
+                orgRef: linkOrgRef,
+                sponsorForConferenceId: input.sponsorForConferenceId,
+                codes: [{ code: discountCode, providerCodeId: discountCode }],
+                links: sponsorLinks,
+                onConflict: 'refuse',
+              })
+            } catch (claimError) {
+              if (claimError instanceof DiscountCodeLinkError) {
+                throw new TRPCError({
+                  code: claimError.code,
+                  message: claimError.message,
+                })
+              }
+              throw claimError
+            }
+          }
+
+          let result: Awaited<ReturnType<typeof provider.createDiscount>>
+          try {
+            result = await provider.createDiscount({
+              eventId,
+              discountCode,
+              numberOfTickets,
+              ticketTypes: selectedTicketTypes || [],
+              discountType: 'percentage',
+              discountValue: discountPercentage,
+            })
+          } catch (providerError) {
+            await hold?.release()
+            throw providerError
+          }
 
           revalidateTag('admin:tickets', 'default')
+
+          // Link the new code to the sponsor it was created for (#1262). The
+          // code exists at the provider now, so a failed link write is
+          // reported, never thrown: the organizer can Assign it afterwards.
+          let linked: { linkedCodes?: string[]; linkFailed?: true } = {}
+          let adoptedHold:
+            Awaited<ReturnType<typeof claimDiscountCodes>> | undefined
+          if (input.sponsorForConferenceId) {
+            try {
+              const sponsorForConferenceId = input.sponsorForConferenceId
+              const alreadyLinked =
+                sponsorLinks.find(
+                  (l) => l.sponsorForConferenceId === sponsorForConferenceId,
+                )?.linkedCodes ?? []
+              const added = await linkCodesToSponsor({
+                sponsorForConferenceId,
+                alreadyLinked,
+                codes: [{ code: discountCode, providerCodeId: discountCode }],
+                via: 'create',
+                actorId: ctx.speaker._id,
+                // The event's codes as listed BEFORE this create — claimed
+                // like the new one; one another sponsor holds is not adopted.
+                adopted: (adoptedHold = await claimDiscountCodes({
+                  conferenceId: linkConferenceId!,
+                  orgRef: linkOrgRef,
+                  sponsorForConferenceId,
+                  codes: codesToAdopt(
+                    eventData.discounts,
+                    withLinkedCodes(linkSponsors, sponsorLinks),
+                    sponsorForConferenceId,
+                  ),
+                  links: sponsorLinks,
+                  onConflict: 'drop',
+                })).held,
+              })
+              linked = { linkedCodes: added.map((c) => c.code) }
+            } catch (linkError) {
+              console.error(
+                '[createDiscountCode] linking the code to the sponsor failed:',
+                linkError,
+              )
+              // The minted code stays claimed for the sponsor it was made
+              // for; the codes that were only going to be adopted do not.
+              await adoptedHold?.release()
+              linked = { linkedCodes: [], linkFailed: true }
+            }
+          }
 
           // ONE message for both kinds. A sponsor code still reads exactly as
           // it did — `sponsorName` absent simply drops the "for …" clause, and
@@ -1122,6 +1299,7 @@ export const ticketsRouter = router({
             discountCode,
             result,
             message: `Created discount code "${discountCode}"${issuedTo} with ${numberOfTickets} tickets${rate}`,
+            ...linked,
           }
         } catch (error) {
           if (error instanceof TRPCError) {

@@ -63,10 +63,10 @@ vi.mock('@/lib/tickets/provider', () => ({
   }),
 }))
 
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { initTRPC } from '@trpc/server'
 import type { Context } from '@/server/trpc'
-import { clientWrite } from '@/lib/sanity/client'
+import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
 import { ticketsRouter, __resetOrderIdCache } from './tickets'
 
 const t = initTRPC.context<Context>().create()
@@ -426,6 +426,117 @@ describe('standalone discount codes (no sponsor)', () => {
         // fails unless THIS refusal produced it.
       ).rejects.toThrow(/Could not read this conference.s sponsors/)
       expect(h.createDiscount).not.toHaveBeenCalled()
+    })
+
+    /**
+     * THE STORED LINK (#1262). A sponsor that stores its codes is matched by
+     * them alone, so a code merely CONTAINING its name no longer takes its
+     * row over — and so it is no longer refused.
+     */
+    describe('with stored sponsor↔code links', () => {
+      afterEach(() => vi.mocked(clientReadUncached.fetch).mockReset())
+      const linkedRows = (rows: unknown) =>
+        vi
+          .mocked(clientReadUncached.fetch)
+          .mockImplementation((async (query: string) =>
+            query.includes('"linkedCodes"') ? rows : null) as never)
+
+      beforeEach(() => {
+        h.getConference.mockResolvedValue({
+          conference: {
+            _id: CONF_A,
+            organization: { _ref: ORG_A },
+            checkinEventId: OUR_EVENT,
+            checkinCustomerId: 7,
+            sponsors: [
+              { sponsor: { _id: 'sponsor-ndc', name: 'NDC' } },
+              { sponsor: { _id: 'sponsor-acme', name: 'Acme Cloud' } },
+            ],
+          },
+          domain: 'localhost',
+          error: null,
+        })
+      })
+
+      it('accepts a code containing the name of a sponsor that stores its codes', async () => {
+        linkedRows([
+          {
+            _id: 'sfc-ndc',
+            sponsorId: 'sponsor-ndc',
+            name: 'NDC',
+            linkedCodes: ['NDC-COMP'],
+          },
+        ])
+        await tickets().admin.createDiscountCode({
+          eventId: OUR_EVENT,
+          discountCode: 'PARTNER-NDC',
+          numberOfTickets: 1,
+          selectedTicketTypes: [],
+        })
+        expect(h.createDiscount).toHaveBeenCalledWith(
+          expect.objectContaining({ discountCode: 'PARTNER-NDC' }),
+        )
+      })
+
+      it('refuses a sponsor’s STORED code by saying whose it is, not by name', async () => {
+        linkedRows([
+          {
+            _id: 'sfc-ndc',
+            sponsorId: 'sponsor-ndc',
+            name: 'NDC',
+            linkedCodes: ['COMP-7Q2'],
+          },
+        ])
+        await expect(
+          tickets().admin.createDiscountCode({
+            eventId: OUR_EVENT,
+            discountCode: 'COMP-7Q2',
+            numberOfTickets: 1,
+            selectedTicketTypes: [],
+          }),
+        ).rejects.toThrow(
+          '"COMP-7Q2" is already linked to NDC. Choose another code.',
+        )
+        expect(h.createDiscount).not.toHaveBeenCalled()
+      })
+
+      it('still refuses by name for a sponsor with nothing stored', async () => {
+        linkedRows([
+          {
+            _id: 'sfc-ndc',
+            sponsorId: 'sponsor-ndc',
+            name: 'NDC',
+            linkedCodes: ['NDC-COMP'],
+          },
+        ])
+        await expect(
+          tickets().admin.createDiscountCode({
+            eventId: OUR_EVENT,
+            discountCode: 'SUMMER-ACMECLOUD-25',
+            numberOfTickets: 1,
+            selectedTicketTypes: [],
+          }),
+        ).rejects.toThrow(/sponsor name "Acme Cloud"/)
+        expect(h.createDiscount).not.toHaveBeenCalled()
+      })
+
+      it('refuses when the links read FAILED rather than assuming none', async () => {
+        vi.mocked(clientReadUncached.fetch).mockImplementation((async (
+          query: string,
+        ) => {
+          if (query.includes('"linkedCodes"')) throw new Error('sanity down')
+          return null
+        }) as never)
+        await expect(
+          tickets().admin.createDiscountCode({
+            eventId: OUR_EVENT,
+            discountCode: 'COMMUNITY2026',
+            numberOfTickets: 1,
+            selectedTicketTypes: [],
+          }),
+        ).rejects.toThrow(/Could not read this conference.s sponsors/)
+        expect(h.createDiscount).not.toHaveBeenCalled()
+      })
     })
 
     it('accepts everything when the conference has no sponsors', async () => {

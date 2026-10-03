@@ -54,7 +54,7 @@ const comp: EventDiscount = {
 
 const context: TicketClassificationContext = {
   discounts: [comp],
-  sponsorNames: ['Acme Cloud'],
+  sponsors: [{ name: 'Acme Cloud' }],
   ticketTypeRoles: [{ typeName: UPGRADE, admits: false }],
 }
 
@@ -128,7 +128,7 @@ describe('tallyParticipants', () => {
     // add-on admitted again. The roles come from the CONFERENCE and survive any
     // provider failure.
     const withoutDiscounts: TicketClassificationContext = {
-      sponsorNames: context.sponsorNames,
+      sponsors: context.sponsors,
       ticketTypeRoles: [
         { typeName: UPGRADE, admits: false },
         { typeName: 'Conference day', admits: true },

@@ -40,6 +40,7 @@ const h = vi.hoisted(() => ({
 vi.mock('@/lib/sanity/client', () => ({
   clientRead: { fetch: h.fetch },
   clientReadUncached: { fetch: h.fetch },
+  clientReadCached: { fetch: h.fetch },
   clientWrite: { fetch: h.fetch },
 }))
 

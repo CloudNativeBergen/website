@@ -8,6 +8,7 @@ import {
   ClockIcon,
   ChatBubbleLeftRightIcon,
   EnvelopeIcon,
+  TicketIcon,
 } from '@heroicons/react/24/outline'
 import clsx from 'clsx'
 import type { SponsorForConferenceExpanded } from '@/lib/sponsor-crm/types'
@@ -79,6 +80,8 @@ interface ManageCardsProps {
    * sender identity the modal needs).
    */
   onEmail?: () => void
+  /** Send → Discount codes (#1262). Omitted when ticketing is off. */
+  onSendDiscountCodes?: () => void
 }
 
 /**
@@ -93,6 +96,7 @@ export function ManageCards({
   hasLogo,
   onOpen,
   onEmail,
+  onSendDiscountCodes,
 }: ManageCardsProps) {
   const contactCount = sponsor.contactPersons?.length ?? 0
   const activityCount = sponsor.activityCount ?? 0
@@ -155,6 +159,21 @@ export function ManageCards({
               contactCount > 0 ? 'To a chosen contact' : 'Add a contact first',
             dot: contactCount > 0 ? null : ('amber' as const),
             onSelect: onEmail,
+          } satisfies ManageCard,
+        ]
+      : []),
+    ...(onSendDiscountCodes
+      ? [
+          {
+            key: 'discount-codes',
+            label: 'Send codes',
+            icon: TicketIcon,
+            status:
+              contactCount > 0
+                ? 'Ticket discount codes'
+                : 'Add a contact first',
+            dot: contactCount > 0 ? null : ('amber' as const),
+            onSelect: onSendDiscountCodes,
           } satisfies ManageCard,
         ]
       : []),

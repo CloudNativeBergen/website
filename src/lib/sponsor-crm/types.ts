@@ -31,6 +31,8 @@ export type ActivityType =
   | 'contract_reminder_sent'
   // A sponsor↔organizer thread message (messaging G2b).
   | 'message'
+  // Discount codes linked to the sponsor without a send (#1262).
+  | 'discount_codes_assigned'
 
 /**
  * What kind of email a sent-communication record is (#1261). Slice 1 sends
@@ -55,6 +57,21 @@ export interface CommunicationRecipient {
 export interface CommunicationAttachment {
   label: string
   url?: string
+}
+
+/**
+ * One entry of `sponsorForConference.discountCodes` (#1262): a ticket discount
+ * code given to this sponsor. Append-only; written by a discount send and by
+ * the discount code manager's Assign action.
+ */
+export interface LinkedDiscountCode {
+  _key: string
+  code: string
+  /** The provider's identifier. Checkin keys codes by the code string itself. */
+  providerCodeId?: string
+  linkedAt?: string
+  /** `adopt`: owned by name until the sponsor's first link stored it. */
+  linkedVia?: 'send' | 'assign' | 'create' | 'adopt'
 }
 
 export type SponsorTag =
@@ -113,6 +130,7 @@ export interface SponsorForConference {
   registrationToken?: string
   registrationComplete?: boolean
   registrationCompletedAt?: string
+  discountCodes?: LinkedDiscountCode[]
   nextFollowUpAt?: string
   outreachCount?: number
 }

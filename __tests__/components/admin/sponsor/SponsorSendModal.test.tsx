@@ -22,8 +22,14 @@ const h = vi.hoisted(() => ({
   mutateAsync: vi.fn(),
   invalidateList: vi.fn(),
   invalidateComms: vi.fn(),
+  invalidateCodes: vi.fn(),
+  saveLink: vi.fn(),
   showNotification: vi.fn(),
   templates: [] as unknown[],
+  codeOptions: undefined as unknown,
+  codesFetching: false,
+  codesError: false,
+  codesQueryOptions: undefined as unknown,
   applied: null as null | {
     subject: string
     body: PortableTextBlock[]
@@ -40,6 +46,7 @@ vi.mock('@/lib/trpc/client', () => ({
             list: { invalidate: h.invalidateList },
             listCommunications: { invalidate: h.invalidateComms },
           },
+          discountCodeOptions: { invalidate: h.invalidateCodes },
         },
       },
     }),
@@ -48,9 +55,24 @@ vi.mock('@/lib/trpc/client', () => ({
         sendCommunication: {
           useMutation: () => ({ mutateAsync: h.mutateAsync }),
         },
+        discountCodeOptions: {
+          useQuery: (_input: unknown, opts: unknown) => {
+            h.codesQueryOptions = opts
+            return {
+              data: h.codeOptions,
+              isError: h.codesError,
+              isFetching: h.codesFetching,
+            }
+          },
+        },
       },
       emailTemplates: {
         list: { useQuery: () => ({ data: h.templates, isLoading: false }) },
+      },
+    },
+    conference: {
+      updateSponsorRegistrationLink: {
+        useMutation: () => ({ mutateAsync: h.saveLink, isPending: false }),
       },
     },
   },
@@ -113,7 +135,9 @@ vi.mock('@/components/admin/EmailModal', () => ({
     additionalFields,
     onAdditionalFieldsChange,
     storageKey,
+    extraField,
   }: {
+    extraField?: { label: string; content: React.ReactNode }
     additionalFields?: Record<string, string | number | boolean>
     onAdditionalFieldsChange?: (
       f: Record<string, string | number | boolean>,
@@ -177,6 +201,7 @@ vi.mock('@/components/admin/EmailModal', () => ({
         </button>
         {warningContent}
         <div data-testid="to">{recipientInfo}</div>
+        {extraField && <div data-testid="extra">{extraField.content}</div>}
         {templateSelector?.({
           setSubject: (s) => {
             draft = { ...draft, subject: s }
@@ -240,10 +265,12 @@ const contacts = [
 
 function renderModal(
   overrides: Partial<Parameters<typeof mockSponsor>[0]> = {},
+  kind: 'information' | 'discount' = 'information',
 ) {
   return render(
     <SponsorSendModal
       isOpen
+      kind={kind}
       onClose={vi.fn()}
       sponsorForConference={mockSponsor({
         contactPersons: contacts,
@@ -267,6 +294,9 @@ beforeEach(() => {
   localStorage.clear()
   h.applied = null
   h.templates = []
+  h.codeOptions = undefined
+  h.codesFetching = false
+  h.codesError = false
   draftSeeded = false
   lastAdditionalFields = {}
   draft = { subject: 'Hand-written subject', message: [] }
@@ -540,6 +570,328 @@ describe('zero recipients', () => {
   })
 })
 
+/**
+ * Send → Discount codes (#1262): the picker is seeded from the server's
+ * attribution and the chosen codes travel as `discountCodes` — the codes
+ * block itself is the server's to build.
+ */
+/** The linked chip's accessible name says it is linked (#7, review). */
+const ACME_LINKED = 'ACME-2026, already linked to this sponsor'
+
+describe('discount kind', () => {
+  const options = {
+    ticketUrl: 'https://tickets.example.test/sponsor',
+    hasSponsorInviteLink: true,
+    codes: [
+      { code: 'ACME-2026', selected: true, linked: true },
+      { code: 'ACME-WORKSHOP', selected: false, linked: false },
+      {
+        code: 'GLOBEX-VIP',
+        selected: false,
+        linked: false,
+        linkedTo: 'Globex',
+      },
+    ],
+  }
+
+  it("preselects the sponsor's codes and posts them with the send", async () => {
+    h.codeOptions = options
+    renderModal({}, 'discount')
+    expect(screen.getByRole('checkbox', { name: ACME_LINKED })).toBeChecked()
+    expect(
+      screen.getByRole('checkbox', { name: 'ACME-WORKSHOP' }),
+    ).not.toBeChecked()
+    fireEvent.click(screen.getByRole('checkbox', { name: 'ACME-WORKSHOP' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+    await waitFor(() => expect(h.mutateAsync).toHaveBeenCalledTimes(1))
+    expect(h.mutateAsync.mock.calls[0][0]).toMatchObject({
+      kind: 'discount',
+      recipientKeys: ['c-primary'],
+      // Picker order, not click order.
+      discountCodes: ['ACME-2026', 'ACME-WORKSHOP'],
+      subject: 'Discount codes: Conf',
+    })
+    // The stored link changed: the picker must re-read it next open.
+    await waitFor(() => expect(h.invalidateCodes).toHaveBeenCalled())
+    expect(h.showNotification).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'success' }),
+    )
+  })
+
+  it('shows a code stored on another sponsor as unpickable, with whose it is', () => {
+    h.codeOptions = options
+    renderModal({}, 'discount')
+    expect(
+      screen.getByRole('checkbox', { name: 'GLOBEX-VIP (linked to Globex)' }),
+    ).toBeDisabled()
+  })
+
+  it('refuses to post with no code ticked', async () => {
+    h.codeOptions = options
+    renderModal({}, 'discount')
+    fireEvent.click(screen.getByRole('checkbox', { name: ACME_LINKED }))
+    expect(
+      screen.getByText('Choose at least one discount code before sending.'),
+    ).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+    await waitFor(() =>
+      expect(h.showNotification).toHaveBeenCalledWith(
+        expect.objectContaining({ title: 'Choose at least one discount code' }),
+      ),
+    )
+    expect(h.mutateAsync).not.toHaveBeenCalled()
+  })
+
+  it('warns when the email went out but the codes could not be stored', async () => {
+    h.codeOptions = options
+    h.mutateAsync.mockResolvedValue({
+      success: true,
+      recipientCount: 1,
+      linkedCodes: [],
+      linkFailed: true,
+    })
+    renderModal({}, 'discount')
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+    await waitFor(() =>
+      expect(h.showNotification).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'warning',
+          title: 'Codes not linked to the sponsor',
+        }),
+      ),
+    )
+  })
+
+  it('seeds the preselection from SETTLED data, not a cache answer that is being refetched', () => {
+    h.codeOptions = options
+    h.codesFetching = true
+    const { rerender } = renderModal({}, 'discount')
+    // Not interactive until seeded: a toggle now would be overwritten by the
+    // seed when the refetch settles.
+    expect(screen.queryByRole('checkbox', { name: ACME_LINKED })).toBeNull()
+    expect(screen.getByText('Loading discount codes…')).toBeInTheDocument()
+    // The refetch lands with a code assigned since.
+    h.codeOptions = {
+      ...options,
+      codes: options.codes.map((c) =>
+        c.code === 'ACME-WORKSHOP' ? { ...c, selected: true } : c,
+      ),
+    }
+    h.codesFetching = false
+    rerender(
+      <SponsorSendModal
+        isOpen
+        kind="discount"
+        onClose={vi.fn()}
+        sponsorForConference={mockSponsor({ contactPersons: contacts })}
+        domain="example.test"
+        fromEmail="sponsors@example.test"
+        conference={{
+          title: 'Conf',
+          city: 'Bergen',
+          country: 'Norway',
+          startDate: '2026-10-28',
+          domains: ['example.test'],
+        }}
+      />,
+    )
+    expect(screen.getByRole('checkbox', { name: ACME_LINKED })).toBeChecked()
+    expect(
+      screen.getByRole('checkbox', { name: 'ACME-WORKSHOP' }),
+    ).toBeChecked()
+  })
+
+  it('warns when the conference has no sponsor invite link', () => {
+    h.codeOptions = {
+      ...options,
+      ticketUrl: 'https://example.test/tickets',
+      hasSponsorInviteLink: false,
+    }
+    renderModal({}, 'discount')
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      /no sponsor ticket invite link.*https:\/\/example\.test\/tickets/,
+    )
+  })
+
+  it('lets the organizer paste the invite link and save it to the conference', async () => {
+    h.codeOptions = {
+      ...options,
+      ticketUrl: 'https://example.test/tickets',
+      hasSponsorInviteLink: false,
+    }
+    h.saveLink.mockResolvedValue({ success: true })
+    renderModal({}, 'discount')
+    const save = screen.getByRole('button', { name: 'Save to conference' })
+    expect(save).toBeDisabled()
+    const input = screen.getByLabelText('Sponsor ticket invite link')
+    fireEvent.change(input, { target: { value: 'not a url' } })
+    expect(save).toBeDisabled()
+    fireEvent.change(input, {
+      target: { value: 'https://checkin.no/invite/abc' },
+    })
+    expect(save).toBeEnabled()
+    fireEvent.click(save)
+    await waitFor(() =>
+      expect(h.saveLink).toHaveBeenCalledWith({
+        sponsorRegistrationLink: 'https://checkin.no/invite/abc',
+      }),
+    )
+    // The picker re-reads the options, so the warning goes and the send
+    // uses the saved link.
+    await waitFor(() => expect(h.invalidateCodes).toHaveBeenCalled())
+    expect(h.showNotification).toHaveBeenCalledWith(
+      expect.objectContaining({ title: 'Sponsor invite link saved' }),
+    )
+  })
+
+  it('does not warn when the invite link is set', () => {
+    h.codeOptions = options
+    renderModal({}, 'discount')
+    expect(screen.queryByText(/no sponsor ticket invite link/)).toBeNull()
+  })
+
+  it('never serves the picker from a cached answer (staleTime 0)', () => {
+    // A code assigned on the discount page a moment ago must be offered: the
+    // app-wide 60 s staleTime would otherwise skip the refetch on reopen.
+    h.codeOptions = options
+    renderModal({}, 'discount')
+    expect(h.codesQueryOptions).toMatchObject({ staleTime: 0 })
+  })
+
+  it('refuses to send while the code list is in error, even with a stale selection', async () => {
+    // A refetch that fails keeps the old data; the picker shows the error,
+    // so a selection the organizer can no longer see must not go out.
+    h.codeOptions = options
+    h.codesError = true
+    renderModal({}, 'discount')
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'The discount codes could not be loaded from the ticket provider.',
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+    await waitFor(() =>
+      expect(h.showNotification).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: 'The discount codes could not be loaded. Close and try again.',
+        }),
+      ),
+    )
+    expect(h.mutateAsync).not.toHaveBeenCalled()
+  })
+
+  it('starts every open with no codes chosen until the seed lands', async () => {
+    // Open, seed, close, reopen while the refetch runs: the previous open's
+    // selection must not be sendable before the new seed.
+    h.codeOptions = options
+    const props = {
+      kind: 'discount' as const,
+      onClose: vi.fn(),
+      sponsorForConference: mockSponsor({ contactPersons: contacts }),
+      domain: 'example.test',
+      fromEmail: 'sponsors@example.test',
+      conference: {
+        title: 'Conf',
+        city: 'Bergen',
+        country: 'Norway',
+        startDate: '2026-10-28',
+        domains: ['example.test'],
+      },
+    }
+    const { rerender } = render(<SponsorSendModal isOpen {...props} />)
+    expect(screen.getByRole('checkbox', { name: ACME_LINKED })).toBeChecked()
+    rerender(<SponsorSendModal isOpen={false} {...props} />)
+    draftSeeded = false
+    h.codesFetching = true
+    rerender(<SponsorSendModal isOpen {...props} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+    await waitFor(() =>
+      expect(h.showNotification).toHaveBeenCalledWith(
+        expect.objectContaining({ title: 'Choose at least one discount code' }),
+      ),
+    )
+    expect(h.mutateAsync).not.toHaveBeenCalled()
+  })
+
+  it('does not seed from the stale data a failed refetch leaves behind', () => {
+    // Stale list (Acme's code only) while the refetch is in error, then the
+    // retry succeeds with a code assigned since: the seed must be the fresh one.
+    h.codeOptions = options
+    h.codesError = true
+    const props = {
+      kind: 'discount' as const,
+      onClose: vi.fn(),
+      sponsorForConference: mockSponsor({ contactPersons: contacts }),
+      domain: 'example.test',
+      fromEmail: 'sponsors@example.test',
+      conference: {
+        title: 'Conf',
+        city: 'Bergen',
+        country: 'Norway',
+        startDate: '2026-10-28',
+        domains: ['example.test'],
+      },
+    }
+    const { rerender } = render(<SponsorSendModal isOpen {...props} />)
+    h.codesError = false
+    h.codeOptions = {
+      ...options,
+      codes: options.codes.map((c) =>
+        c.code === 'ACME-WORKSHOP' ? { ...c, selected: true } : c,
+      ),
+    }
+    rerender(<SponsorSendModal isOpen {...props} />)
+    expect(
+      screen.getByRole('checkbox', { name: 'ACME-WORKSHOP' }),
+    ).toBeChecked()
+  })
+
+  it('never preselects a code stored on another sponsor, whatever the server says', () => {
+    h.codeOptions = {
+      ...options,
+      codes: [
+        {
+          code: 'GLOBEX-VIP',
+          selected: true,
+          linked: false,
+          linkedTo: 'Globex',
+        },
+      ],
+    }
+    renderModal({}, 'discount')
+    expect(
+      screen.getByRole('checkbox', { name: 'GLOBEX-VIP (linked to Globex)' }),
+    ).not.toBeChecked()
+  })
+
+  it('says in the accessible name when sending would move a code from another sponsor', () => {
+    h.codeOptions = {
+      ...options,
+      codes: [
+        {
+          code: 'ACME-WORKSHOP',
+          selected: false,
+          linked: false,
+          attributedTo: 'Workshop AS',
+        },
+      ],
+    }
+    renderModal({}, 'discount')
+    expect(
+      screen.getByRole('checkbox', {
+        name: 'ACME-WORKSHOP, now counted for Workshop AS; sending moves it to this sponsor',
+      }),
+    ).toBeInTheDocument()
+  })
+
+  it('an information send carries no codes', async () => {
+    h.codeOptions = options
+    renderModal()
+    expect(screen.queryByRole('group', { name: 'Discount codes' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+    await waitFor(() => expect(h.mutateAsync).toHaveBeenCalledTimes(1))
+    expect(h.mutateAsync.mock.calls[0][0].discountCodes).toBeUndefined()
+  })
+})
+
 describe('pickDefaultTemplate', () => {
   const crm = { currency: 'NOK' }
   it('never picks a contract template for the information kind', () => {
@@ -562,6 +914,11 @@ describe('pickDefaultTemplate', () => {
     )
     expect(picked?._id).toBe('no')
   })
+  it('never preselects a template for a discount send — none is for codes', () => {
+    const info = tpl({ _id: 'info', category: 'follow-up', isDefault: true })
+    expect(pickDefaultTemplate([info], 'discount', {})).toBeUndefined()
+  })
+
   it('preselects nothing when no template is flagged default (spec AC4)', () => {
     expect(
       pickDefaultTemplate([tpl({ _id: 'only' })], 'information', crm),

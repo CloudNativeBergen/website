@@ -3,6 +3,7 @@ import { expect, fn, userEvent, waitFor, within } from 'storybook/test'
 import { http, HttpResponse } from 'msw'
 import { SponsorSendModal } from './SponsorSendModal'
 import { NotificationProvider } from '@/components/admin/NotificationProvider'
+import { withPortalTheme } from '@/lib/storybook'
 import { mockContactPerson, mockSponsor } from '@/__mocks__/sponsor-data'
 
 const FIXED_NOW = new Date('2026-02-15T12:00:00Z')
@@ -100,6 +101,36 @@ const handlers = [
   }),
 ]
 
+/** What `crm.discountCodeOptions` answers for the Acme sponsor (#1262). */
+const discountOptions = {
+  ticketUrl: 'https://tickets.example.test/sponsor-invite',
+  hasSponsorInviteLink: true,
+  codes: [
+    { code: 'ACMECLOUD-2026', selected: true, linked: true },
+    { code: 'ACMECLOUD-WORKSHOP', selected: false, linked: false },
+    { code: 'COMMUNITY2026', selected: false, linked: false },
+    {
+      code: 'ACMECLOUD-SPEAKERS',
+      selected: false,
+      linked: false,
+      attributedTo: 'Acme Speakers AS',
+    },
+    {
+      code: 'GLOBEX-VIP',
+      selected: false,
+      linked: false,
+      linkedTo: 'Globex Corporation',
+    },
+  ],
+}
+
+const discountHandlers = [
+  http.get('/api/trpc/sponsor.crm.discountCodeOptions', () =>
+    HttpResponse.json({ result: { data: discountOptions } }),
+  ),
+  ...handlers,
+]
+
 const meta = {
   title: 'Systems/Sponsors/Admin/Email/SponsorSendModal',
   component: SponsorSendModal,
@@ -157,6 +188,9 @@ const meta = {
     },
   },
   decorators: [
+    // The modal portals to <body>, outside the global decorator's `dark`
+    // wrapper — without this a dark capture renders light.
+    withPortalTheme,
     (Story) => (
       <NotificationProvider>
         <Story />
@@ -280,5 +314,161 @@ export const TemplatesUnavailable: Story = {
 export const Mobile: Story = {
   parameters: {
     viewport: { value: 'mobile1', isRotated: false },
+  },
+}
+
+/**
+ * Send → Discount codes (#1262). The Codes: line lists the event's codes from
+ * the ticket provider: the sponsor's stored code is preselected and marked
+ * Linked, and a code stored on another sponsor is shown but cannot be picked.
+ * The preview carries the same codes block the server appends.
+ */
+export const DiscountCodes: Story = {
+  args: { kind: 'discount' },
+  parameters: { msw: { handlers: discountHandlers } },
+  play: async ({ canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body)
+    const codes = await body.findByRole('group', { name: 'Discount codes' })
+    await expect(
+      within(codes).getByRole('checkbox', {
+        name: 'ACMECLOUD-2026, already linked to this sponsor',
+      }),
+    ).toBeChecked()
+    await expect(
+      within(codes).getByRole('checkbox', {
+        name: 'GLOBEX-VIP (linked to Globex Corporation)',
+      }),
+    ).toBeDisabled()
+    await userEvent.click(
+      within(codes).getByRole('checkbox', { name: 'ACMECLOUD-WORKSHOP' }),
+    )
+    await expect(
+      within(codes).getByRole('checkbox', { name: 'ACMECLOUD-WORKSHOP' }),
+    ).toBeChecked()
+    await expect(
+      body.getByDisplayValue('Discount codes: Cloud Native Days Norway 2026'),
+    ).toBeInTheDocument()
+  },
+}
+
+/** Unticking every code surfaces the hint; the refusal itself is pinned in vitest. */
+export const DiscountCodesNoneChosen: Story = {
+  args: { kind: 'discount' },
+  parameters: { msw: { handlers: discountHandlers } },
+  play: async ({ canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body)
+    const linked = await body.findByRole('checkbox', {
+      name: 'ACMECLOUD-2026, already linked to this sponsor',
+    })
+    await userEvent.click(linked)
+    await expect(linked).not.toBeChecked()
+    await expect(
+      body.getByText('Choose at least one discount code before sending.'),
+    ).toBeInTheDocument()
+  },
+}
+
+/** The preview shows the codes block the server appends to the email. */
+export const DiscountCodesPreview: Story = {
+  args: { kind: 'discount' },
+  parameters: { msw: { handlers: discountHandlers } },
+  play: async ({ canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body)
+    await body.findByRole('checkbox', {
+      name: 'ACMECLOUD-2026, already linked to this sponsor',
+    })
+    await userEvent.click(body.getByRole('button', { name: /Preview/ }))
+    await expect(
+      await body.findByText('Your discount code'),
+    ).toBeInTheDocument()
+    await expect(body.getByText('ACMECLOUD-2026')).toBeInTheDocument()
+  },
+}
+
+export const DiscountCodesMobile: Story = {
+  args: { kind: 'discount' },
+  parameters: {
+    msw: { handlers: discountHandlers },
+    viewport: { value: 'mobile1', isRotated: false },
+  },
+  play: async ({ canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body)
+    await expect(
+      await body.findByRole('checkbox', {
+        name: 'ACMECLOUD-2026, already linked to this sponsor',
+      }),
+    ).toBeChecked()
+  },
+}
+
+export const DiscountCodesDark: Story = {
+  args: { kind: 'discount' },
+  globals: { theme: 'dark' },
+  parameters: { msw: { handlers: discountHandlers } },
+}
+
+/** What the save posts, so the play function can assert on it. */
+const savedLinks: unknown[] = []
+
+/**
+ * No sponsor invite link on the conference: the email would point at a store
+ * that hides sponsor tickets, so the modal says so — and lets the organizer
+ * paste Checkin's invite link and save it to the conference right there.
+ */
+export const DiscountCodesNoInviteLink: Story = {
+  args: { kind: 'discount' },
+  beforeEach: () => {
+    savedLinks.length = 0
+  },
+  parameters: {
+    msw: {
+      handlers: [
+        http.post(
+          '/api/trpc/conference.updateSponsorRegistrationLink',
+          async ({ request }) => {
+            const body = (await request.json()) as { json?: unknown } | unknown
+            savedLinks.push(
+              body && typeof body === 'object' && 'json' in body
+                ? (body as { json: unknown }).json
+                : body,
+            )
+            return HttpResponse.json({ result: { data: { success: true } } })
+          },
+        ),
+        http.get('/api/trpc/sponsor.crm.discountCodeOptions', () =>
+          HttpResponse.json({
+            result: {
+              data: {
+                ...discountOptions,
+                ticketUrl: 'https://cloudnativebergen.dev/tickets',
+                hasSponsorInviteLink: false,
+              },
+            },
+          }),
+        ),
+        ...handlers,
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body)
+    await expect(
+      await body.findByText(/no sponsor ticket invite link/),
+    ).toBeInTheDocument()
+    const save = body.getByRole('button', { name: 'Save to conference' })
+    await expect(save).toBeDisabled()
+    await userEvent.type(
+      body.getByLabelText('Sponsor ticket invite link'),
+      'https://app.checkin.no/invite/sponsor-abc',
+    )
+    await expect(save).toBeEnabled()
+    await userEvent.click(save)
+    await waitFor(() =>
+      expect(savedLinks).toEqual([
+        {
+          sponsorRegistrationLink: 'https://app.checkin.no/invite/sponsor-abc',
+        },
+      ]),
+    )
   },
 }

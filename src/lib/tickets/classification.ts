@@ -69,7 +69,10 @@
  *
  * Pure: no fetching, no I/O. Callers assemble the context.
  */
-import { sponsorOwningCode } from '@/lib/discounts/attribution'
+import {
+  sponsorOwningCode,
+  type SponsorCodeClaimant,
+} from '@/lib/discounts/attribution'
 import type { EventDiscount } from '@/lib/discounts/types'
 import { parseTicketAmount } from '@/lib/tickets/amount'
 // TYPE-ONLY on purpose: `./discovery` imports `removesFullPrice` and `typeKey`
@@ -168,15 +171,15 @@ export interface TicketClassificationContext {
    */
   discounts?: readonly EventDiscount[]
   /**
-   * Sponsor names for `sponsorOwningCode`. ABSENT ⇒ no ticket is attributed to
-   * a sponsor; attribution is substring matching, and its header documents how
-   * an accidental match TAKES OVER the wrong sponsor's row. So it is used here
-   * only to name a grantor — never to decide that a ticket is a comp,
-    grantsWorkshop: role?.grantsWorkshop ?? false, and never
-   * to decide `admits`. A wrong match mislabels a grantor; it cannot move the
-   * headcount.
+   * Sponsors (name + stored codes) for `sponsorOwningCode`. ABSENT ⇒ no ticket
+   * is attributed to a sponsor. A sponsor's stored codes are a fact; for a
+   * sponsor without any, attribution falls back to substring matching, whose
+   * header documents how an accidental match TAKES OVER the wrong sponsor's
+   * row. So it is used here only to name a grantor — never to decide that a
+   * ticket is a comp, and never to decide `admits`. A wrong match mislabels a
+   * grantor; it cannot move the headcount.
    */
-  sponsorNames?: readonly string[]
+  sponsors?: readonly (SponsorCodeClaimant & { id?: string })[]
   /**
    * The name of the invitation-gated speaker type, from `findSpeakerTicketType`
    * over the event's ticket types. Absent falls back to the historical literal
@@ -305,8 +308,8 @@ export function classifyTicket(
     comp = removesFullPrice(discount)
     grantedBy =
       comp === true &&
-      context.sponsorNames &&
-      sponsorOwningCode(code, context.sponsorNames)
+      context.sponsors &&
+      sponsorOwningCode(code, context.sponsors)
         ? 'sponsor'
         : null
   } else if (code) {

@@ -8,6 +8,19 @@
  * workshop-upgrade add-on counted as a participant, which is the exact bug the
  * classifier was written to remove.
  */
+
+const links = vi.hoisted(() => ({ fetch: vi.fn() }))
+/** The CDN client answers STALE: a link assigned a moment ago is not there. */
+const stale = vi.hoisted(() => ({
+  fetch: vi.fn(async () => {
+    throw new Error('the CDN client must not be used for attribution')
+  }),
+}))
+vi.mock('@/lib/sanity/client', () => ({
+  clientReadCached: stale,
+  clientReadUncached: links,
+  clientWrite: links,
+}))
 import { describe, expect, it, vi } from 'vitest'
 import type { Conference } from '@/lib/conference/types'
 import type { EventTicket } from '@/lib/tickets/types'
@@ -23,7 +36,7 @@ const conference = {
     { typeName: UPGRADE, admits: false },
     { typeName: 'Conference day', admits: true },
   ],
-  sponsors: [{ sponsor: { name: 'Acme Cloud' } }],
+  sponsors: [{ sponsor: { _id: 'sponsor-acme', name: 'Acme Cloud' } }],
 } as unknown as Conference
 
 /** Only the two members this module touches; everything else would be unused. */
@@ -143,6 +156,60 @@ describe('buildClassificationContext', () => {
     )
 
     expect(context.discounts).toBe(discounts)
-    expect(context.sponsorNames).toEqual(['Acme Cloud'])
+    expect(context.sponsors).toEqual([
+      { id: 'sponsor-acme', name: 'Acme Cloud', linkedCodes: [] },
+    ])
+  })
+
+  it("carries each sponsor's STORED codes (#1262), joined by sponsor id", async () => {
+    links.fetch.mockResolvedValueOnce([
+      {
+        _id: 'sfc-acme',
+        sponsorId: 'sponsor-acme',
+        name: 'Acme Cloud',
+        linkedCodes: ['COMP-7Q2'],
+      },
+      // Not a conference sponsor (not closed-won) but it STORES a code: it
+      // owns that code — and only that, never anything by name.
+      { _id: 'sfc-x', sponsorId: 'sponsor-x', name: 'X', linkedCodes: ['X1'] },
+      // Not a conference sponsor and stores nothing: claims nothing at all.
+      { _id: 'sfc-y', sponsorId: 'sponsor-y', name: 'Y', linkedCodes: null },
+    ])
+    const context = await buildClassificationContext(
+      {
+        provider: providerWith(vi.fn().mockResolvedValue({ discounts: [] })),
+        eventRef: { provider: 'checkin', customerId: 1, eventId: 2 },
+      },
+      conference,
+    )
+    expect(context.sponsors).toEqual([
+      {
+        id: 'sponsor-acme',
+        name: 'Acme Cloud',
+        linkedCodes: ['COMP-7Q2'],
+        sponsorForConferenceId: 'sfc-acme',
+      },
+      {
+        id: 'sponsor-x',
+        name: 'X',
+        linkedCodes: ['X1'],
+        sponsorForConferenceId: 'sfc-x',
+      },
+    ])
+  })
+
+  it('falls back to name attribution when the links cannot be read', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    links.fetch.mockRejectedValueOnce(new Error('sanity down'))
+    const context = await buildClassificationContext(
+      {
+        provider: providerWith(vi.fn().mockResolvedValue({ discounts: [] })),
+        eventRef: { provider: 'checkin', customerId: 1, eventId: 2 },
+      },
+      conference,
+    )
+    expect(context.sponsors).toEqual([
+      { id: 'sponsor-acme', name: 'Acme Cloud', linkedCodes: [] },
+    ])
   })
 })

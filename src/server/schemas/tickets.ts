@@ -68,6 +68,12 @@ export const CreateDiscountCodeSchema = z.object({
   sponsorName: z.string().min(1).optional(),
   tierTitle: z.string().optional(),
   /**
+   * The sponsor's CRM record, for a code created from its row (#1262): the
+   * new code is linked to it, since a sponsor that stores codes is no longer
+   * matched by name. Proven to be this conference's before the provider call.
+   */
+  sponsorForConferenceId: z.string().min(1).optional(),
+  /**
    * Percent off. Defaults to 100 because that is what a sponsor comp is, and
    * what this procedure hardcoded before standalone codes existed.
    */

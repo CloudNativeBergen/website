@@ -3,6 +3,7 @@ import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { ErrorDisplay } from '@/components/admin'
 import { SponsorCRMPageClient } from '@/components/admin/sponsor-crm'
 import { headers } from 'next/headers'
+import { isTicketingEnabledForConference } from '@/lib/features/ticketing'
 
 export default async function AdminSponsorsCRM() {
   const headerList = await headers()
@@ -36,5 +37,18 @@ export default async function AdminSponsorsCRM() {
     )
   }
 
-  return <SponsorCRMPageClient conference={conference} domain={domain} />
+  // The discount kind needs ticketing switched on for the org (a deny is a
+  // kill switch, #850) AND a Checkin event to read codes from; otherwise the
+  // kind is hidden rather than offered and refused (#1262).
+  const canSendDiscountCodes =
+    !!conference.checkinEventId &&
+    (await isTicketingEnabledForConference(conference))
+
+  return (
+    <SponsorCRMPageClient
+      conference={conference}
+      domain={domain}
+      canSendDiscountCodes={canSendDiscountCodes}
+    />
+  )
 }

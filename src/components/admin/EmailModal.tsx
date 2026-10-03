@@ -62,10 +62,11 @@ export interface EmailModalProps {
     setMessage: (blocks: PortableTextBlock[]) => void
   }) => React.ReactNode
 
-  ticketUrl?: string
-  onTicketUrlChange?: (url: string) => void
-  /** Rendered directly under the ticket URL field. */
-  ticketUrlAction?: React.ReactNode
+  /**
+   * One extra labelled row under the subject, for a host-specific field (the
+   * discount send's code picker, #1262).
+   */
+  extraField?: { label: string; content: React.ReactNode }
   /**
    * The organizer discarded the saved draft; the composer returns to
    * `initialValues`. Lets a host drop state it keeps BESIDE the draft (#1261:
@@ -93,9 +94,7 @@ export function EmailModal({
   additionalFields = {},
   onAdditionalFieldsChange,
   templateSelector,
-  ticketUrl,
-  onTicketUrlChange,
-  ticketUrlAction,
+  extraField,
   onClearDraft,
 }: EmailModalProps) {
   const [subject, setSubject] = useState('')
@@ -494,30 +493,12 @@ export function EmailModal({
                 </div>
               </div>
 
-              {ticketUrl !== undefined && onTicketUrlChange && (
-                <div className="px-6 py-3">
-                  <div className="flex items-center">
-                    <label
-                      htmlFor="ticketUrl"
-                      className="font-space-grotesk w-16 text-sm font-medium text-gray-600 dark:text-gray-300"
-                    >
-                      Tickets:
-                    </label>
-                    <div className="flex-1">
-                      <input
-                        id="ticketUrl"
-                        type="url"
-                        value={ticketUrl}
-                        onChange={(e) => onTicketUrlChange(e.target.value)}
-                        className="font-inter w-full border-none bg-transparent px-0 py-1 text-sm placeholder-gray-400 focus:ring-0 focus:outline-none dark:text-white dark:placeholder-gray-500"
-                        placeholder="https://tickets.example.com"
-                        disabled={isLoading}
-                      />
-                    </div>
-                  </div>
-                  {ticketUrlAction && (
-                    <div className="mt-2 sm:ml-16">{ticketUrlAction}</div>
-                  )}
+              {extraField && (
+                <div className="flex items-start px-6 py-3">
+                  <span className="font-space-grotesk w-16 shrink-0 pt-1 text-sm font-medium text-gray-600 dark:text-gray-300">
+                    {extraField.label}
+                  </span>
+                  <div className="min-w-0 flex-1">{extraField.content}</div>
                 </div>
               )}
             </div>

@@ -36,6 +36,10 @@ export default defineType({
           },
           { title: 'Registration Complete', value: 'registration_complete' },
           { title: 'Contract Reminder Sent', value: 'contract_reminder_sent' },
+          {
+            title: 'Discount Codes Assigned',
+            value: 'discount_codes_assigned',
+          },
         ],
         layout: 'dropdown',
       },

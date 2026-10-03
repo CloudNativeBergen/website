@@ -8,7 +8,10 @@ import {
   ArrowPathIcon,
   EnvelopeIcon,
   ClipboardIcon,
+  LinkIcon,
 } from '@heroicons/react/24/outline'
+import { useRouter } from 'next/navigation'
+import { useSession } from 'next-auth/react'
 import { api } from '@/lib/trpc/client'
 import { useNotification } from './NotificationProvider'
 import type { ConferenceTheme } from '@/lib/branding/theme'
@@ -16,8 +19,10 @@ import {
   FilterAction,
   FilterDropdown,
   FilterOption,
-  SponsorDiscountEmailModal,
+  SponsorSendModal,
 } from '@/components/admin'
+import { AssignDiscountCodeDialog } from './AssignDiscountCodeDialog'
+import { sponsorFromAddress } from './sponsor/SponsorSendModal'
 import {
   ActionMenu,
   ActionMenuItem,
@@ -40,6 +45,16 @@ interface SponsorWithTierInfo {
     tierType: 'standard' | 'special'
   }
   ticketEntitlement: number
+  /** The CRM record — the target of a send and of Assign (#1262). */
+  sponsorForConferenceId?: string
+  /** Codes stored on the sponsor; non-empty ⇒ matched by these alone. */
+  linkedCodes?: string[]
+}
+
+interface OtherCodeHolder {
+  id: string
+  name: string
+  linkedCodes: string[]
 }
 
 interface DiscountCodeManagerProps {
@@ -69,8 +84,17 @@ interface DiscountCodeManagerProps {
     registrationLink?: string | null
     /** Checkin invite link that reveals the hidden sponsor ticket types. */
     sponsorRegistrationLink?: string | null
+    /** The From: of a sponsor send — mirrors the server's `resolveConferenceFrom`. */
+    sponsorEmail?: string
+    organizer?: string
   }
   defaultCustomDiscountsExpanded?: boolean
+  /**
+   * CRM records that STORE codes but are not conference sponsors (not yet
+   * closed-won, #1262). Not rows here — but their codes are theirs, so they
+   * take part in attribution and are never claimed by a sponsor row's name.
+   */
+  otherCodeHolders?: readonly OtherCodeHolder[]
 }
 
 /**
@@ -211,12 +235,73 @@ function CreateDiscountCodeAction({
   )
 }
 
+/**
+ * A discount send started from this page (#1262): the ONE send modal, which
+ * needs the CRM record (contacts, tier) this page does not hold — so the
+ * record is fetched when the send starts, and the page's server props (the
+ * stored codes) are refreshed after it.
+ */
+function DiscountSend({
+  sponsorForConferenceId,
+  conference,
+  onClose,
+}: {
+  sponsorForConferenceId: string
+  conference: DiscountCodeManagerProps['conference']
+  onClose: () => void
+}) {
+  const router = useRouter()
+  const { data: session } = useSession()
+  const { showNotification } = useNotification()
+  const record = api.sponsor.crm.getById.useQuery({
+    id: sponsorForConferenceId,
+  })
+  useEffect(() => {
+    if (!record.error) return
+    showNotification({
+      type: 'error',
+      title: 'Could not open the sponsor',
+      message: record.error.message,
+    })
+    onClose()
+  }, [record.error, showNotification, onClose])
+
+  if (!record.data) return null
+  return (
+    <SponsorSendModal
+      isOpen
+      onClose={onClose}
+      onSent={() => router.refresh()}
+      sponsorForConference={record.data}
+      kind="discount"
+      domain={conference.domain}
+      fromEmail={sponsorFromAddress(conference, conference.domain)}
+      senderName={session?.speaker?.name || session?.user?.name || ''}
+      conference={{
+        title: conference.title,
+        city: conference.city,
+        country: conference.country,
+        startDate: conference.startDate,
+        organizer: conference.organizer,
+        domains: conference.domains,
+        socialLinks: conference.socialLinks,
+        sponsorRegistrationLink:
+          conference.sponsorRegistrationLink ?? undefined,
+        theme: conference.theme,
+      }}
+    />
+  )
+}
+
+const NO_HOLDERS: readonly OtherCodeHolder[] = []
+
 export function DiscountCodeManager({
   sponsors,
   eventId,
   providerLabel,
   conference,
   defaultCustomDiscountsExpanded = false,
+  otherCodeHolders = NO_HOLDERS,
 }: DiscountCodeManagerProps) {
   const utils = api.useUtils()
   const { showNotification } = useNotification()
@@ -272,21 +357,49 @@ export function DiscountCodeManager({
     Record<string, string[]>
   >({})
 
-  const sponsorNames = useMemo(() => sponsors.map((s) => s.name), [sponsors])
+  // Codes linked in THIS session (a sponsor-row create, #1262), merged over
+  // the page's server props until the next render of the page brings them.
+  const [sessionLinks, setSessionLinks] = useState<Record<string, string[]>>({})
+  // The `withLinkedCodes` set: sponsor rows, then the other code holders.
+  const claimants = useMemo(
+    () => [
+      ...sponsors.map((s) =>
+        sessionLinks[s.id]
+          ? {
+              ...s,
+              linkedCodes: [...(s.linkedCodes ?? []), ...sessionLinks[s.id]],
+            }
+          : s,
+      ),
+      ...otherCodeHolders,
+    ],
+    [sponsors, sessionLinks, otherCodeHolders],
+  )
+  /** The CRM record outside the sponsor rows that stores this code, if any. */
+  const otherHolderOf = useCallback(
+    (code: string | null | undefined) => {
+      const owner = sponsorOwningCode(code, claimants)
+      return owner && otherCodeHolders.some((h) => h.id === owner.id)
+        ? owner.name
+        : undefined
+    },
+    [claimants, otherCodeHolders],
+  )
 
   const getSponsorDiscounts = useCallback(
     (sponsor: SponsorWithTierInfo) => {
       // The SHARED rule (`sponsorOwningCode`), not a second copy of it: the
       // server refuses a standalone code by exactly this predicate, and a
       // client that matched differently would either block a code the server
-      // accepts or admit one it rejects.
+      // accepts or admit one it rejects. Over ALL sponsors, so a code stored
+      // on one sponsor (#1262) is never also claimed by another's name.
       return existingDiscounts.filter(
         (discount) =>
-          sponsorOwningCode(discount.triggerValue, [sponsor.name]) !==
-          undefined,
+          sponsorOwningCode(discount.triggerValue, claimants)?.id ===
+          sponsor.id,
       )
     },
-    [existingDiscounts],
+    [existingDiscounts, claimants],
   )
 
   const getExistingTicketTypes = useCallback(
@@ -570,34 +683,33 @@ export function DiscountCodeManager({
   )
   const [showCreateForm, setShowCreateForm] = useState(false)
 
-  const [emailModal, setEmailModal] = useState<{
-    isOpen: boolean
-    sponsor: SponsorWithTierInfo | null
-    discountCode: string
-  }>({
-    isOpen: false,
-    sponsor: null,
-    discountCode: '',
-  })
+  // Send → Discount codes through the ONE send modal (#1262).
+  const [sendFor, setSendFor] = useState<SponsorWithTierInfo | null>(null)
 
-  const openEmailModal = (
-    sponsor: SponsorWithTierInfo,
-    discountCode: string,
-  ) => {
-    setEmailModal({
-      isOpen: true,
-      sponsor,
-      discountCode,
-    })
+  const openEmailModal = (sponsor: SponsorWithTierInfo) => {
+    if (!sponsor.sponsorForConferenceId) {
+      showNotification({
+        type: 'error',
+        title: 'Sponsor not in the CRM',
+        message: `${sponsor.name} has no CRM record to send from.`,
+      })
+      return
+    }
+    setSendFor(sponsor)
   }
+  const closeEmailModal = () => setSendFor(null)
 
-  const closeEmailModal = () => {
-    setEmailModal({
-      isOpen: false,
-      sponsor: null,
-      discountCode: '',
-    })
-  }
+  // Assign to sponsor (#1262): the code a standalone row is about.
+  const [assignCode, setAssignCode] = useState<string | null>(null)
+  const assignableSponsors = useMemo(
+    () =>
+      sponsors.flatMap((s) =>
+        s.sponsorForConferenceId
+          ? [{ sponsorForConferenceId: s.sponsorForConferenceId, name: s.name }]
+          : [],
+      ),
+    [sponsors],
+  )
 
   const { copyToClipboard } = useCopyToClipboard({
     onSuccess: () => {
@@ -618,12 +730,31 @@ export function DiscountCodeManager({
 
   const createDiscountMutation =
     api.tickets.admin.createDiscountCode.useMutation({
-      onSuccess: (data) => {
+      onSuccess: (data, variables) => {
         showNotification({
           type: 'success',
           title: 'Discount code created',
           message: `Successfully created discount code: ${data.discountCode}`,
         })
+        const forSponsor = sponsors.find(
+          (s) =>
+            !!variables.sponsorForConferenceId &&
+            s.sponsorForConferenceId === variables.sponsorForConferenceId,
+        )
+        if (forSponsor && data.linkedCodes?.length) {
+          const added = data.linkedCodes
+          setSessionLinks((prev) => ({
+            ...prev,
+            [forSponsor.id]: [...(prev[forSponsor.id] ?? []), ...added],
+          }))
+        }
+        if (data.linkFailed) {
+          showNotification({
+            type: 'warning',
+            title: 'Code not linked to the sponsor',
+            message: `${data.discountCode} was created but could not be stored on the sponsor. Assign it to them from the code list.`,
+          })
+        }
         utils.tickets.admin.getDiscountCodesWithUsage.invalidate()
         setLoading(null)
         setShowCreateForm(false)
@@ -678,7 +809,11 @@ export function DiscountCodeManager({
    */
   const createCode = (
     loadingKey: string,
-    input: DiscountCodeDraft & { sponsorName?: string; tierTitle?: string },
+    input: DiscountCodeDraft & {
+      sponsorName?: string
+      tierTitle?: string
+      sponsorForConferenceId?: string
+    },
   ) => {
     setLoading(loadingKey)
     createDiscountMutation.mutate({ eventId, ...input })
@@ -701,6 +836,7 @@ export function DiscountCodeManager({
       discountPercentage: 100,
       sponsorName: sponsor.name,
       tierTitle: sponsor.tier.title,
+      sponsorForConferenceId: sponsor.sponsorForConferenceId,
       selectedTicketTypes: selectedTicketTypes[sponsor.id] || [],
     })
   }
@@ -760,6 +896,14 @@ export function DiscountCodeManager({
         const sponsor = discount.triggerValue
           ? sponsorForCode.get(discount.triggerValue)
           : undefined
+        const holder = otherHolderOf(discount.triggerValue)
+        if (holder) {
+          return (
+            <span className="text-sm text-gray-900 dark:text-white">
+              Linked to {holder}
+            </span>
+          )
+        }
         return sponsor ? (
           <span className="text-sm text-gray-900 dark:text-white">
             Sponsor: {sponsor}
@@ -865,30 +1009,60 @@ export function DiscountCodeManager({
       renderCard: (discount) => {
         const deleting = loading === discount.triggerValue
         return (
-          <button
-            type="button"
-            onClick={() => deleteDiscountCode(discount.triggerValue)}
-            disabled={deleting}
-            className={CARD_ACTION_DANGER_CLASS}
-          >
-            <TrashIcon className="h-5 w-5" aria-hidden="true" />
-            {deleting ? 'Deleting...' : 'Delete code'}
-          </button>
+          <div className="flex flex-col gap-2">
+            {discount.triggerValue &&
+              assignableSponsors.length > 0 &&
+              !otherHolderOf(discount.triggerValue) && (
+                <button
+                  type="button"
+                  onClick={() => setAssignCode(discount.triggerValue)}
+                  disabled={deleting}
+                  className={CARD_ACTION_CLASS}
+                >
+                  <LinkIcon className="size-5" aria-hidden="true" />
+                  Assign to sponsor
+                </button>
+              )}
+            <button
+              type="button"
+              onClick={() => deleteDiscountCode(discount.triggerValue)}
+              disabled={deleting}
+              className={CARD_ACTION_DANGER_CLASS}
+            >
+              <TrashIcon className="h-5 w-5" aria-hidden="true" />
+              {deleting ? 'Deleting...' : 'Delete code'}
+            </button>
+          </div>
         )
       },
       render: (discount) => (
-        <button
-          onClick={() => deleteDiscountCode(discount.triggerValue)}
-          disabled={loading === discount.triggerValue}
-          className="inline-flex items-center rounded-md border border-rose-300 bg-rose-50 p-2 text-rose-700 shadow-xs hover:border-rose-400 hover:bg-rose-100 hover:text-rose-800 disabled:cursor-not-allowed disabled:opacity-50 dark:border-rose-500 dark:bg-rose-900/50 dark:text-rose-300 dark:hover:border-rose-400 dark:hover:bg-rose-800/60 dark:hover:text-rose-200"
-          title="Delete Code"
-        >
-          {loading === discount.triggerValue ? (
-            <ArrowPathIcon className="h-4 w-4 animate-spin" />
-          ) : (
-            <TrashIcon className="h-4 w-4" />
-          )}
-        </button>
+        <div className="flex items-center justify-end gap-2">
+          {discount.triggerValue &&
+            assignableSponsors.length > 0 &&
+            !otherHolderOf(discount.triggerValue) && (
+              <button
+                type="button"
+                onClick={() => setAssignCode(discount.triggerValue)}
+                aria-label={`Assign ${discount.triggerValue} to a sponsor`}
+                title="Assign to sponsor"
+                className="inline-flex items-center rounded-md border border-gray-300 p-2 text-gray-700 shadow-xs hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-500 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800"
+              >
+                <LinkIcon className="size-4" />
+              </button>
+            )}
+          <button
+            onClick={() => deleteDiscountCode(discount.triggerValue)}
+            disabled={loading === discount.triggerValue}
+            className="inline-flex items-center rounded-md border border-rose-300 bg-rose-50 p-2 text-rose-700 shadow-xs hover:border-rose-400 hover:bg-rose-100 hover:text-rose-800 disabled:cursor-not-allowed disabled:opacity-50 dark:border-rose-500 dark:bg-rose-900/50 dark:text-rose-300 dark:hover:border-rose-400 dark:hover:bg-rose-800/60 dark:hover:text-rose-200"
+            title="Delete Code"
+          >
+            {loading === discount.triggerValue ? (
+              <ArrowPathIcon className="h-4 w-4 animate-spin" />
+            ) : (
+              <TrashIcon className="h-4 w-4" />
+            )}
+          </button>
+        </div>
       ),
     },
   ]
@@ -1047,7 +1221,7 @@ export function DiscountCodeManager({
             <div className="flex flex-col gap-2">
               <button
                 type="button"
-                onClick={() => openEmailModal(sponsor, code || '')}
+                onClick={() => openEmailModal(sponsor)}
                 disabled={loading !== null}
                 className={CARD_ACTION_CLASS}
               >
@@ -1080,15 +1254,7 @@ export function DiscountCodeManager({
         getSponsorDiscounts(sponsor).length > 0 ? (
           <ActionMenu ariaLabel={`Actions for ${sponsor.name}`}>
             <ActionMenuItem
-              onClick={() => {
-                const sponsorDiscounts = getSponsorDiscounts(sponsor)
-                if (sponsorDiscounts.length > 0) {
-                  openEmailModal(
-                    sponsor,
-                    sponsorDiscounts[0].triggerValue || '',
-                  )
-                }
-              }}
+              onClick={() => openEmailModal(sponsor)}
               icon={EnvelopeIcon}
               disabled={loading !== null}
             >
@@ -1257,7 +1423,7 @@ export function DiscountCodeManager({
             {showCreateForm && (
               <DiscountCodeForm
                 ticketTypes={availableTicketTypes}
-                sponsorNames={sponsorNames}
+                sponsors={claimants}
                 busy={createDiscountMutation.isPending}
                 onCancel={() => setShowCreateForm(false)}
                 onCreate={(draft) => createCode(draft.discountCode, draft)}
@@ -1305,15 +1471,20 @@ export function DiscountCodeManager({
         </div>
       </div>
 
-      {emailModal.sponsor && (
-        <SponsorDiscountEmailModal
-          isOpen={emailModal.isOpen}
-          onClose={closeEmailModal}
-          sponsor={emailModal.sponsor}
-          discountCode={emailModal.discountCode}
-          domain={conference.domain}
-          fromEmail={conference.contactEmail}
+      {sendFor?.sponsorForConferenceId && (
+        <DiscountSend
+          sponsorForConferenceId={sendFor.sponsorForConferenceId}
           conference={conference}
+          onClose={closeEmailModal}
+        />
+      )}
+
+      {assignCode && (
+        <AssignDiscountCodeDialog
+          isOpen
+          onClose={() => setAssignCode(null)}
+          code={assignCode}
+          sponsors={assignableSponsors}
         />
       )}
     </div>

@@ -1,9 +1,4 @@
-import {
-  resolveEmailSender,
-  retryWithBackoff,
-  delay,
-  EMAIL_CONFIG,
-} from '@/lib/email/config'
+import { retryWithBackoff, delay, EMAIL_CONFIG } from '@/lib/email/config'
 import { Conference } from '@/lib/conference/types'
 import { PortableTextBlock } from '@portabletext/types'
 import {
@@ -164,87 +159,6 @@ export async function sendBroadcastEmail({
       audienceType,
       conferenceName: conference.title,
     })
-    return createEmailErrorResponse('Internal server error')
-  }
-}
-
-export interface IndividualEmailRequest {
-  conference: Conference
-  subject: string
-  messagePortableText: PortableTextBlock[]
-  primaryRecipient: string
-  ccRecipients?: string[]
-  additionalContent?: string
-  fromEmail?: string
-}
-
-export async function sendIndividualEmail({
-  conference,
-  subject,
-  messagePortableText,
-  primaryRecipient,
-  ccRecipients = [],
-  additionalContent = '',
-  fromEmail,
-}: IndividualEmailRequest): Promise<Response> {
-  try {
-    const { htmlContent, error: htmlError } = await convertPortableTextToHTML(
-      messagePortableText,
-      conference,
-    )
-    if (htmlError) {
-      return htmlError
-    }
-
-    const finalHtmlContent = htmlContent! + additionalContent
-
-    const resolvedFromEmail =
-      fromEmail ||
-      (conference.contactEmail
-        ? `${conference.organizer} <${conference.contactEmail}>`
-        : undefined)
-
-    if (!resolvedFromEmail) {
-      return createEmailErrorResponse(
-        'Conference contact email is not configured',
-        400,
-      )
-    }
-
-    const emailReact = renderEmailTemplate({
-      conference,
-      subject,
-      htmlContent: finalHtmlContent,
-      unsubscribeUrl: undefined,
-    })
-
-    const { client } = await resolveEmailSender(conference.organization?._ref)
-
-    const emailResponse = await retryWithBackoff(async () => {
-      return await client.emails.send({
-        from: resolvedFromEmail,
-        to: [primaryRecipient],
-        ...(ccRecipients.length > 0 && { cc: ccRecipients }),
-        subject,
-        react: emailReact,
-      })
-    })
-
-    if (emailResponse.error) {
-      console.error('Email sending failed:', emailResponse.error)
-      return createEmailErrorResponse('Failed to send email')
-    }
-
-    await delay(EMAIL_CONFIG.RATE_LIMIT_DELAY)
-
-    return createEmailSuccessResponse({
-      emailId: emailResponse.data!.id,
-      recipientCount: 1 + ccRecipients.length,
-      primaryRecipient,
-      ccRecipients,
-    })
-  } catch (error) {
-    console.error('Individual email error:', error)
     return createEmailErrorResponse('Internal server error')
   }
 }

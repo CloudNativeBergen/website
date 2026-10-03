@@ -207,7 +207,7 @@ export const ImportAllHistoricSponsorsSchema = z.object({
  * One sponsor email, through the one primitive (#1261). Recipients are contact
  * KEYS — the server resolves addresses from the sponsor's own contacts and
  * refuses anything else — and the body is PortableText JSON as the editor
- * produces it. Slice 1 accepts the `information` kind; #1262–#1264 widen it.
+ * produces it. Slice 1 accepted `information`; #1262 adds `discount`, #1263–#1264 widen it further.
  */
 export const CommunicationKindSchema = z.enum([
   'information',
@@ -216,24 +216,61 @@ export const CommunicationKindSchema = z.enum([
   'discount',
 ])
 
-export const SendCommunicationSchema = z.object({
+export const SendCommunicationSchema = z
+  .object({
+    sponsorForConferenceId: z.string().min(1, 'Sponsor ID is required'),
+    kind: z.enum(['information', 'discount']),
+    recipientKeys: z
+      .array(z.string().min(1))
+      .min(1, 'Choose at least one recipient')
+      .max(20),
+    subject: z.string().trim().min(1, 'Subject is required').max(200),
+    /** PortableText blocks, JSON-encoded (same wire shape as the old sendEmail). */
+    message: z.string().min(1).max(100_000),
+    /**
+     * The template the draft started from. `edited` is accepted for wire
+     * compatibility but IGNORED: the server computes it by re-merging the
+     * template and comparing with what is sent.
+     */
+    template: z
+      .object({ id: z.string().min(1), edited: z.boolean().optional() })
+      .optional(),
+    /**
+     * Discount kind only (#1262): the codes to send, as the provider spells
+     * them. Checked on the server against the conference's own event.
+     */
+    discountCodes: z
+      .array(z.string().trim().min(1).max(100))
+      .max(20)
+      .optional(),
+  })
+  .superRefine((input, ctx) => {
+    const codes = input.discountCodes ?? []
+    if (input.kind === 'discount' && codes.length === 0) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['discountCodes'],
+        message: 'Choose at least one discount code',
+      })
+    }
+    if (input.kind !== 'discount' && codes.length > 0) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['discountCodes'],
+        message: 'Only a discount send carries codes',
+      })
+    }
+  })
+
+/** The Send modal's discount-code picker for one sponsor (#1262). */
+export const SponsorDiscountCodeOptionsSchema = z.object({
   sponsorForConferenceId: z.string().min(1, 'Sponsor ID is required'),
-  kind: z.enum(['information']),
-  recipientKeys: z
-    .array(z.string().min(1))
-    .min(1, 'Choose at least one recipient')
-    .max(20),
-  subject: z.string().trim().min(1, 'Subject is required').max(200),
-  /** PortableText blocks, JSON-encoded (same wire shape as the old sendEmail). */
-  message: z.string().min(1).max(100_000),
-  /**
-   * The template the draft started from. `edited` is accepted for wire
-   * compatibility but IGNORED: the server computes it by re-merging the
-   * template and comparing with what is sent.
-   */
-  template: z
-    .object({ id: z.string().min(1), edited: z.boolean().optional() })
-    .optional(),
+})
+
+/** Discount code manager → Assign to sponsor (#1262): link without sending. */
+export const AssignDiscountCodesSchema = z.object({
+  sponsorForConferenceId: z.string().min(1, 'Sponsor ID is required'),
+  discountCodes: z.array(z.string().trim().min(1).max(100)).min(1).max(20),
 })
 
 export const CommunicationRecordIdSchema = z.object({

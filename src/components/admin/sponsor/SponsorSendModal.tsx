@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import clsx from 'clsx'
 import { CheckIcon } from '@heroicons/react/24/solid'
 import type { PortableTextBlock } from '@portabletext/editor'
@@ -37,6 +37,7 @@ import { formatConferenceDateLong } from '@/lib/time'
 import { conferenceBaseUrl } from '@/lib/conference/baseUrl'
 import { emailBrandColor, type ConferenceTheme } from '@/lib/branding/theme'
 import { createLocalhostWarning } from '@/lib/localhost-warning'
+import { discountCodesCardHtml } from '@/lib/sponsor-crm/discount-email'
 import { SponsorTemplatePicker } from './SponsorTemplatePicker'
 
 export interface SponsorSendModalProps {
@@ -46,9 +47,9 @@ export interface SponsorSendModalProps {
   sponsorForConference: SponsorForConferenceExpanded
   /**
    * Which kind of email this is. Narrowed to what `sendCommunication`
-   * accepts today (slice 1, #1261, sends `information`); #1262–#1264 widen
-   * both this type and the Zod enum together, so a kind the server would
-   * refuse can never be posted.
+   * accepts today (`information`, and `discount` since #1262); #1263–#1264
+   * widen both this type and the Zod enum together, so a kind the server
+   * would refuse can never be posted.
    */
   kind?: SendableKind
   domain: string
@@ -69,8 +70,41 @@ export interface SponsorSendModalProps {
   }
 }
 
+/**
+ * The From: line the modal shows — mirrors the server's
+ * `resolveConferenceFrom(…, { field: 'sponsorEmail', localPart: 'sponsors' })`
+ * fallback, in ONE place for every host of the modal.
+ */
+export function sponsorFromAddress(
+  conference: { sponsorEmail?: string; domains?: string[] },
+  domain: string,
+): string {
+  return (
+    conference.sponsorEmail || `sponsors@${conference.domains?.[0] || domain}`
+  )
+}
+
 /** The kinds the Send mutation accepts — mirrors `SendCommunicationSchema.kind`. */
-export type SendableKind = Extract<CommunicationKind, 'information'>
+export type SendableKind = Extract<
+  CommunicationKind,
+  'information' | 'discount'
+>
+
+/** One row of `crm.discountCodeOptions` (#1262). */
+export interface DiscountCodeOption {
+  code: string
+  /** Attributed to this sponsor — preselected. */
+  selected: boolean
+  /** Already stored on this sponsor. */
+  linked: boolean
+  /** Stored on ANOTHER sponsor; the server refuses it, so it cannot be picked. */
+  linkedTo?: string
+  /**
+   * Counted for ANOTHER sponsor by its name (nothing stored). Pickable — but
+   * sending it moves it to this sponsor, so the picker says so.
+   */
+  attributedTo?: string
+}
 
 /**
  * Provenance of the template a draft started from — only what is persisted
@@ -88,7 +122,8 @@ interface AppliedTemplate {
  * templates flagged `isDefault` for the kind, the one in the sponsor's
  * suggested language and category wins. Nothing flagged default ⇒ nothing is
  * preselected; the organizer picks or writes. `information` draws on every
- * non-contract category; the contract kind (slice #1264) on `contract`.
+ * non-contract category; the contract kind (slice #1264) on `contract`;
+ * `discount` preselects nothing.
  */
 export function pickDefaultTemplate(
   templates: readonly SponsorEmailTemplate[] | undefined,
@@ -102,6 +137,10 @@ export function pickDefaultTemplate(
   },
 ): SponsorEmailTemplate | undefined {
   if (!templates?.length) return undefined
+  // No template category is FOR discount codes, so no default is: a booth or
+  // outreach default would open a code send with the wrong copy (#1262). The
+  // organizer can still pick one; the codes block is appended either way.
+  if (kind === 'discount') return undefined
   const candidates = templates.filter(
     (t) =>
       t.isDefault &&
@@ -128,6 +167,29 @@ const NON_CONTRACT_CATEGORIES: readonly TemplateCategory[] = [
   'follow-up',
   'custom',
 ]
+
+/**
+ * The starting body of a discount send with no default template: the codes
+ * themselves are appended by the server, so the message only introduces them.
+ */
+function discountGreeting(conferenceTitle: string): PortableTextBlock[] {
+  return [
+    {
+      _type: 'block',
+      _key: 'discount-greeting',
+      style: 'normal',
+      markDefs: [],
+      children: [
+        {
+          _type: 'span',
+          _key: 'discount-greeting-text',
+          text: `Here are your sponsor discount codes for ${conferenceTitle}.`,
+          marks: [],
+        },
+      ],
+    },
+  ]
+}
 
 /** Read-only probe of EmailModal's draft slot (never written from here). */
 function readStorage(key: string): string | null {
@@ -223,6 +285,208 @@ export function SponsorRecipientPicker({
               </span>
             )}
             {!selectable && <span className="text-xs italic">no email</span>}
+          </label>
+        )
+      })}
+    </div>
+  )
+}
+
+/**
+ * No sponsor ticket invite link on the conference (#1262 review): the email
+ * would point at a store where the sponsor ticket types are hidden. The
+ * organizer can paste Checkin's invite link here and save it to the
+ * conference — the affordance the old discount modal had — after which this
+ * send, and every later one, uses it.
+ */
+export function SponsorInviteLinkPrompt({
+  fallbackUrl,
+  onSaved,
+}: {
+  fallbackUrl: string
+  onSaved: () => void
+}) {
+  const inputId = useId()
+  const { showNotification } = useNotification()
+  const save = api.conference.updateSponsorRegistrationLink.useMutation()
+  // A `type="url"` input strips surrounding whitespace itself.
+  const [link, setLink] = useState('')
+  const valid = /^https:\/\/\S+$/i.test(link)
+  const handleSave = async () => {
+    try {
+      await save.mutateAsync({ sponsorRegistrationLink: link })
+      showNotification({
+        type: 'success',
+        title: 'Sponsor invite link saved',
+        message: 'This send and every later one now point sponsors to it.',
+      })
+      onSaved()
+    } catch (error) {
+      showNotification({
+        type: 'error',
+        title: 'Could not save the link',
+        message: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }
+  return (
+    <div
+      role="alert"
+      className="space-y-2 rounded-md border border-amber-300 bg-amber-50 p-3 dark:border-amber-700 dark:bg-amber-900/20"
+    >
+      <p className="font-inter text-sm text-amber-800 dark:text-amber-200">
+        This conference has no sponsor ticket invite link, so the email points
+        to {fallbackUrl} — where sponsor ticket types are hidden. Paste
+        Checkin&apos;s invite link for the sponsor ticket category to save it on
+        the conference.
+      </p>
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+        <label htmlFor={inputId} className="sr-only">
+          Sponsor ticket invite link
+        </label>
+        <input
+          id={inputId}
+          type="url"
+          inputMode="url"
+          value={link}
+          onChange={(e) => setLink(e.target.value)}
+          placeholder="https://…"
+          disabled={save.isPending}
+          className="font-inter min-h-9 min-w-0 flex-1 rounded-md border border-amber-300 bg-white px-2.5 text-sm text-gray-900 placeholder-gray-400 focus:border-brand-cloud-blue focus:ring-1 focus:ring-brand-cloud-blue focus:outline-none dark:border-amber-700 dark:bg-gray-900 dark:text-white"
+        />
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={!valid || save.isPending}
+          className="font-space-grotesk min-h-9 cursor-pointer rounded-md border border-amber-400 px-3 text-sm font-medium text-amber-900 hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-amber-600 dark:text-amber-100 dark:hover:bg-amber-900/40"
+        >
+          {save.isPending ? 'Saving…' : 'Save to conference'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+/** What a screen reader hears for a code chip: the code AND its state. */
+function codeChipLabel(option: DiscountCodeOption): string {
+  if (option.linkedTo) return `${option.code} (linked to ${option.linkedTo})`
+  if (option.attributedTo)
+    return `${option.code}, now counted for ${option.attributedTo}; sending moves it to this sponsor`
+  if (option.linked) return `${option.code}, already linked to this sponsor`
+  return option.code
+}
+
+/**
+ * The Codes: line of a discount send (#1262) — the conference's discount
+ * codes from the ticket provider as toggles, the sponsor's own preselected.
+ * A code stored on another sponsor is shown but cannot be chosen, with the
+ * reason, so the organizer is not left wondering where it went.
+ */
+export function SponsorDiscountCodePicker({
+  options,
+  selectedCodes,
+  onToggle,
+  state = 'ready',
+}: {
+  options: readonly DiscountCodeOption[]
+  selectedCodes: ReadonlySet<string>
+  onToggle: (code: string) => void
+  state?: 'loading' | 'error' | 'ready'
+}) {
+  if (state === 'loading') {
+    return (
+      <span className="font-inter text-sm text-gray-500 dark:text-gray-400">
+        Loading discount codes…
+      </span>
+    )
+  }
+  if (state === 'error') {
+    return (
+      <span
+        role="alert"
+        className="font-inter text-sm text-red-600 dark:text-red-400"
+      >
+        The discount codes could not be loaded from the ticket provider.
+      </span>
+    )
+  }
+  if (options.length === 0) {
+    return (
+      <span className="font-inter text-sm text-red-600 dark:text-red-400">
+        This event has no discount codes yet — create one in Discount Codes
+        first.
+      </span>
+    )
+  }
+  return (
+    <div
+      role="group"
+      aria-label="Discount codes"
+      className="flex flex-wrap items-center gap-2"
+    >
+      {options.map((option) => {
+        const selectable = !option.linkedTo
+        const selected = selectedCodes.has(option.code)
+        // The "counted for X" hint wraps onto its own line rather than
+        // truncating the code — the code is what the organizer must read.
+        const hinted = selectable && !!option.attributedTo
+        return (
+          <label
+            key={option.code}
+            title={
+              selectable
+                ? option.code
+                : `${option.code} is linked to ${option.linkedTo}`
+            }
+            className={clsx(
+              'font-inter inline-flex min-h-8 max-w-full items-center gap-1.5 border px-2.5 py-1 text-sm transition-colors select-none',
+              hinted ? 'flex-wrap rounded-2xl' : 'rounded-full',
+              'has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-indigo-500 has-[:focus-visible]:ring-offset-1 dark:has-[:focus-visible]:ring-offset-gray-900',
+              selectable && 'cursor-pointer',
+              selected
+                ? 'border-brand-cloud-blue bg-brand-sky-mist text-brand-slate-gray dark:border-indigo-400 dark:bg-indigo-900/40 dark:text-indigo-100'
+                : selectable
+                  ? 'border-gray-300 bg-white text-gray-700 hover:border-gray-400 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:border-gray-500'
+                  : 'cursor-not-allowed border-dashed border-gray-300 text-gray-400 dark:border-gray-600 dark:text-gray-500',
+            )}
+          >
+            <input
+              type="checkbox"
+              className="sr-only"
+              checked={selected}
+              disabled={!selectable}
+              onChange={() => onToggle(option.code)}
+              aria-label={codeChipLabel(option)}
+            />
+            <span
+              aria-hidden="true"
+              className={clsx(
+                'flex size-4 shrink-0 items-center justify-center rounded-full border',
+                selected
+                  ? 'border-brand-cloud-blue bg-brand-cloud-blue text-white dark:border-indigo-400 dark:bg-indigo-500'
+                  : 'border-gray-300 dark:border-gray-500',
+              )}
+            >
+              {selected && <CheckIcon className="size-3" />}
+            </span>
+            <span className="truncate font-mono text-[13px] font-medium">
+              {option.code}
+            </span>
+            {option.linked && (
+              <span className="rounded-sm bg-white/70 px-1 text-[10px] font-semibold tracking-wide text-brand-cloud-blue uppercase dark:bg-indigo-950/60 dark:text-indigo-300">
+                Linked
+              </span>
+            )}
+            {option.linkedTo && (
+              <span className="min-w-0 truncate text-xs italic">
+                {option.linkedTo}
+              </span>
+            )}
+            {hinted && (
+              <span className="basis-full pl-5.5 text-xs text-amber-700 dark:text-amber-300">
+                counted for {option.attributedTo} · sending moves it
+              </span>
+            )}
           </label>
         )
       })}
@@ -439,6 +703,78 @@ export function SponsorSendModal({
       return next
     })
 
+  // DISCOUNT KIND (#1262): which codes go out. Seeded once per open from
+  // the server's attribution (the sponsor's stored codes, or by name while it
+  // stores none), then the organizer's to change.
+  const isDiscount = kind === 'discount'
+  const codesQuery = api.sponsor.crm.discountCodeOptions.useQuery(
+    { sponsorForConferenceId: sponsorForConference._id },
+    {
+      enabled: isOpen && isDiscount,
+      refetchOnWindowFocus: false,
+      // Never the app-wide 60 s cache: a code assigned on the discount page
+      // a moment ago must be offered — and preselected — on this open.
+      staleTime: 0,
+    },
+  )
+  const codeOptions = useMemo(
+    () => codesQuery.data?.codes ?? [],
+    [codesQuery.data],
+  )
+  const [selectedCodes, setSelectedCodes] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  )
+  // Which open the selection was seeded for. STATE, not a ref: the picker
+  // stays non-interactive until it is set, so a toggle can never be made in
+  // the window before the seed lands and then be overwritten by it.
+  const [codesSeededFor, setCodesSeededFor] = useState<string | null>(null)
+  const codesSeeded = codesSeededFor === sponsorForConference._id
+  useEffect(() => {
+    if (!isOpen) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- reset per close
+      setCodesSeededFor(null)
+      // Each open starts from its own seed; nothing chosen carries over.
+      setSelectedCodes(new Set())
+      return
+    }
+    // From SETTLED data only: on a reopen the cache answers first and a
+    // refetch follows; seeding from the cache would miss a code assigned
+    // since (#1262 review).
+    if (
+      !codesQuery.data ||
+      codesQuery.isFetching ||
+      codesQuery.isError ||
+      codesSeeded
+    )
+      return
+    setCodesSeededFor(sponsorForConference._id)
+    setSelectedCodes(
+      new Set(
+        codesQuery.data.codes
+          .filter((c) => c.selected && !c.linkedTo)
+          .map((c) => c.code),
+      ),
+    )
+  }, [
+    isOpen,
+    codesQuery.data,
+    codesQuery.isFetching,
+    codesQuery.isError,
+    codesSeeded,
+    sponsorForConference._id,
+  ])
+  const toggleCode = (code: string) =>
+    setSelectedCodes((prev) => {
+      const next = new Set(prev)
+      if (next.has(code)) next.delete(code)
+      else next.add(code)
+      return next
+    })
+  // Option order, not click order: the email lists codes as the picker does.
+  const chosenCodes = codeOptions
+    .map((c) => c.code)
+    .filter((code) => selectedCodes.has(code))
+
   const kindLabel = COMMUNICATION_KIND_LABELS[kind]
   const selectedCount = selectedKeys.size
 
@@ -452,6 +788,18 @@ export function SponsorSendModal({
     if (selectedCount === 0) {
       throw new Error('Choose at least one recipient')
     }
+    // The picker shows an error instead of the codes: whatever is still
+    // selected underneath is not something the organizer can see.
+    if (isDiscount && codesQuery.isError) {
+      throw new Error(
+        'The discount codes could not be loaded. Close and try again.',
+      )
+    }
+    // Empty until this open's seed lands (cleared on close), so this also
+    // refuses a send made before the code list is ready.
+    if (isDiscount && chosenCodes.length === 0) {
+      throw new Error('Choose at least one discount code')
+    }
     const applied = appliedTemplateRef.current
     const base = {
       sponsorForConferenceId: sponsorForConference._id,
@@ -459,6 +807,7 @@ export function SponsorSendModal({
       recipientKeys: Array.from(selectedKeys),
       subject,
       message: JSON.stringify(message as PortableTextBlockForHTML[]),
+      ...(isDiscount && { discountCodes: chosenCodes }),
     }
     // `edited` is computed on the server; only the id travels.
     const withProvenance = applied
@@ -469,6 +818,7 @@ export function SponsorSendModal({
     const invalidateRecords = () => {
       utils.sponsor.crm.activities.list.invalidate()
       utils.sponsor.crm.activities.listCommunications.invalidate()
+      if (isDiscount) utils.sponsor.crm.discountCodeOptions.invalidate()
     }
     let result: Awaited<ReturnType<typeof sendMutation.mutateAsync>>
     try {
@@ -501,6 +851,14 @@ export function SponsorSendModal({
       title: `${kindLabel} sent`,
       message: `Sent to ${result.recipientCount} contact${result.recipientCount === 1 ? '' : 's'} at ${sponsorForConference.sponsor.name}.`,
     })
+    if ('linkFailed' in result && result.linkFailed) {
+      showNotification({
+        type: 'warning',
+        title: 'Codes not linked to the sponsor',
+        message:
+          'The email went out, but the codes could not be stored on the sponsor. A code that still matches the sponsor by name keeps counting for them and is stored on the next send; one that now shows as standalone in Discount Codes can be assigned there.',
+      })
+    }
     onSent?.()
   }
 
@@ -519,7 +877,21 @@ export function SponsorSendModal({
       eventUrl={conferenceBaseUrl(conference)}
       socialLinks={conference.socialLinks || []}
       brandColor={emailBrandColor(conference.theme)}
-      content={<div dangerouslySetInnerHTML={{ __html: messageHTML }} />}
+      content={
+        <div
+          dangerouslySetInnerHTML={{
+            // The SAME block the server appends, so the preview is the send.
+            __html:
+              isDiscount && codesQuery.data && chosenCodes.length > 0
+                ? `${messageHTML}${discountCodesCardHtml({
+                    codes: chosenCodes,
+                    ticketUrl: codesQuery.data.ticketUrl,
+                    theme: conference.theme,
+                  })}`
+                : messageHTML,
+          }}
+        />
+      }
     />
   )
 
@@ -557,6 +929,19 @@ export function SponsorSendModal({
         Choose at least one recipient before sending.
       </p>
     ) : null
+  const noInviteLinkHint =
+    isDiscount && codesQuery.data && !codesQuery.data.hasSponsorInviteLink ? (
+      <SponsorInviteLinkPrompt
+        fallbackUrl={codesQuery.data.ticketUrl}
+        onSaved={() => utils.sponsor.crm.discountCodeOptions.invalidate()}
+      />
+    ) : null
+  const noCodeHint =
+    isDiscount && codeOptions.length > 0 && chosenCodes.length === 0 ? (
+      <p className="font-inter text-sm text-amber-700 dark:text-amber-300">
+        Choose at least one discount code before sending.
+      </p>
+    ) : null
 
   return (
     <EmailModal
@@ -586,15 +971,40 @@ export function SponsorSendModal({
       warningContent={
         (localhostWarning ||
           noRecipientHint ||
+          noCodeHint ||
+          noInviteLinkHint ||
           recipientsChangedHint ||
           templatesFailedNotice) && (
           <div className="space-y-3">
             {localhostWarning}
             {templatesFailedNotice}
             {noRecipientHint}
+            {noInviteLinkHint}
+            {noCodeHint}
             {recipientsChangedHint}
           </div>
         )
+      }
+      extraField={
+        isDiscount
+          ? {
+              label: 'Codes:',
+              content: (
+                <SponsorDiscountCodePicker
+                  options={codeOptions}
+                  selectedCodes={selectedCodes}
+                  onToggle={toggleCode}
+                  state={
+                    codesQuery.isError
+                      ? 'error'
+                      : codesSeeded
+                        ? 'ready'
+                        : 'loading'
+                  }
+                />
+              ),
+            }
+          : undefined
       }
       templateSelector={({ setSubject, setMessage }) => {
         editorRef.current = { setSubject, setMessage }
@@ -623,7 +1033,9 @@ export function SponsorSendModal({
       initialValues={{
         subject:
           initialFromDefault?.subject ?? `${kindLabel}: ${conference.title}`,
-        message: initialFromDefault?.body ?? [],
+        message:
+          initialFromDefault?.body ??
+          (isDiscount ? discountGreeting(conference.title) : []),
       }}
       placeholder={{
         subject: 'Enter email subject...',
