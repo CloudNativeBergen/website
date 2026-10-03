@@ -96,6 +96,16 @@ vi.mock('@/lib/sanity/client', () => {
         _rev: 'rev-1',
       }
     }
+    if (
+      query.includes('{ _rev, contractStatus, signatureStatus, signatureId }')
+    ) {
+      return {
+        _rev: (h.sfc?._rev as string) ?? 'rev-1',
+        contractStatus: h.sfc?.contractStatus ?? null,
+        signatureStatus: h.sfc?.signatureStatus ?? null,
+        signatureId: h.sfc?.signatureId ?? null,
+      }
+    }
     if (query.includes('signingUrl, contractReservedAt }')) {
       if (h.sentByOtherAtFreshRead && h.sfc) {
         Object.assign(h.sfc, {
@@ -452,6 +462,42 @@ describe('first send', () => {
       deliveryStatus: 'failed',
       error: 'boom',
     })
+  })
+
+  it('never flips back a signature completed through the reserved link while the provider was busy', async () => {
+    h.send.mockImplementation(async () => {
+      // The sponsor opened the stored link and signed before the email even landed.
+      Object.assign(h.sfc!, {
+        contractStatus: 'contract-signed',
+        signatureStatus: 'signed',
+        contractSignedBy: 'Kari Nordmann',
+      })
+      return { data: { id: 'resend-msg-1' }, error: null }
+    })
+    const result = await sponsor().crm.sendCommunication(INPUT)
+    expect(result).toMatchObject({ success: true })
+    expect(result).not.toHaveProperty('contractStateFailed')
+    expect(h.sfc!.signatureStatus).toBe('signed')
+    expect(h.sfc!.contractStatus).toBe('contract-signed')
+    expect(sfcPatches().some((p) => p.sets.signatureStatus === 'pending')).toBe(
+      false,
+    )
+    expect(activities('contract_status_change')).toEqual([])
+  })
+
+  it('does not flip when a later send has replaced the stored agreement meanwhile, and tells the organizer', async () => {
+    h.send.mockImplementation(async () => {
+      // A very slow provider call: another send reserved after the settle window.
+      Object.assign(h.sfc!, {
+        signatureId: 'agr-later',
+        signingUrl: `https://${DOMAIN}/sponsor/contract/sign/agr-later`,
+      })
+      return { data: { id: 'resend-msg-1' }, error: null }
+    })
+    const result = await sponsor().crm.sendCommunication(INPUT)
+    expect(result).toMatchObject({ success: true, contractStateFailed: true })
+    expect(h.sfc!.contractStatus).toBe('none')
+    expect(sfcPatches().some((p) => 'contractStatus' in p.sets)).toBe(false)
   })
 
   it('keeps the link working when only the post-send flip fails, and tells the organizer', async () => {

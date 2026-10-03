@@ -64,6 +64,8 @@ export interface PrepareContractSendArgs {
   /** Already proven to belong to the current conference by the caller. */
   sfc: SponsorForConferenceExpanded
   recipientKeys: readonly string[]
+  /** Reminder from the cron: the persisted signer when they are no longer a contact. */
+  serverRecipients?: readonly CommunicationRecipient[]
   /** First send only: which recipient signs. Defaults to the stored signer, then the primary contact. */
   signerKey?: string
   /** First send only, already tenancy-guarded by the caller. Defaults to the best template for the tier. */
@@ -147,7 +149,12 @@ export async function prepareContractSend(
   const { conference, sfc, actor } = args
   let recipients: CommunicationRecipient[]
   try {
-    recipients = resolveRecipients(sfc.contactPersons, args.recipientKeys)
+    recipients = [
+      ...(args.recipientKeys.length > 0 || !args.serverRecipients?.length
+        ? resolveRecipients(sfc.contactPersons, args.recipientKeys)
+        : []),
+      ...(args.serverRecipients ?? []),
+    ]
   } catch (error) {
     if (error instanceof CommunicationRecipientError) {
       throw new TRPCError({ code: 'BAD_REQUEST', message: error.message })
@@ -497,8 +504,41 @@ export async function prepareContractSend(
     afterSend: async () => {
       const actorId = actor.id ?? 'system'
       try {
+        // Conditional on the CURRENT state: the reserved link is live from
+        // the moment it is stored, so the sponsor may already have signed
+        // through it while the provider was busy — that signature must never
+        // be flipped back to pending. And only our own agreement is flipped.
+        const latest = await clientReadUncached.fetch<{
+          _rev: string
+          contractStatus: string | null
+          signatureStatus: string | null
+          signatureId: string | null
+        } | null>(
+          `*[_type == "sponsorForConference" && _id == $id && conference._ref == $conferenceId][0]{ _rev, contractStatus, signatureStatus, signatureId }`,
+          { id: sfc._id, conferenceId: conference._id },
+        )
+        if (!latest || latest.signatureId !== agreementId) {
+          console.error(
+            '[contract-send] the stored agreement is no longer this send’s; status left as is:',
+            agreementId,
+          )
+          return { ok: false }
+        }
+        if (
+          latest.signatureStatus === 'signed' ||
+          latest.contractStatus === 'contract-signed'
+        ) {
+          // Signed already — through the link this send mailed. Nothing to
+          // flip; the signing flow recorded it.
+          await clientWrite
+            .patch(sfc._id)
+            .unset(['contractReservedAt'])
+            .commit()
+          return { ok: true }
+        }
         await clientWrite
           .patch(sfc._id)
+          .ifRevisionId(latest._rev)
           .set({
             contractStatus: 'contract-sent',
             contractSentAt: now,
@@ -562,7 +602,7 @@ type SystemReminderOutcome =
       reason:
         | 'not-found'
         | 'not-pending'
-        | 'signer-not-a-contact'
+        | 'no-signer'
         | 'no-organization'
         | 'template-missing'
         | 'send-failed'
@@ -587,10 +627,28 @@ export async function sendContractReminderBySystem(
   if (contractActionFor(sfc) !== 'remind') {
     return { ok: false, reason: 'not-pending' }
   }
-  const signer = sfc.contactPersons?.find(
+  // The reminder goes to the PERSISTED signer: the address the agreement was
+  // sent to. Usually a contact; when not (an external signer the old sender
+  // allowed, or a contact since removed), the server adds them itself.
+  if (!sfc.signerEmail) return { ok: false, reason: 'no-signer' }
+  const signerContact = sfc.contactPersons?.find(
     (c) => !!c.email && c.email === sfc.signerEmail,
   )
-  if (!signer?._key) return { ok: false, reason: 'signer-not-a-contact' }
+  const signer: CommunicationRecipient = signerContact?._key
+    ? {
+        contactKey: signerContact._key,
+        name: signerContact.name,
+        email: signerContact.email,
+        isDefault: !!signerContact.isPrimary,
+      }
+    : {
+        contactKey: 'signer-external',
+        name: sfc.signerName ?? sfc.signerEmail,
+        email: sfc.signerEmail,
+        isDefault: false,
+      }
+  const recipientKeys = signerContact?._key ? [signerContact._key] : []
+  const serverRecipients = signerContact?._key ? undefined : [signer]
   const orgId = (sfc.conference as { organization?: { _ref?: string } })
     .organization?._ref
   if (!orgId) return { ok: false, reason: 'no-organization' }
@@ -629,7 +687,8 @@ export async function sendContractReminderBySystem(
   const plan = await prepareContractSend({
     conference,
     sfc,
-    recipientKeys: [signer._key],
+    recipientKeys,
+    serverRecipients,
     actor: { id: null },
   })
   const result = await sendSponsorCommunication({
@@ -638,7 +697,8 @@ export async function sendContractReminderBySystem(
     actorId: null,
     sponsorForConferenceId,
     kind: 'contract',
-    recipientKeys: [signer._key],
+    recipientKeys,
+    serverRecipients,
     subject,
     message,
     template,

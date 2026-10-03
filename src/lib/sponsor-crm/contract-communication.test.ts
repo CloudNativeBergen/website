@@ -239,11 +239,29 @@ describe('sendContractReminderBySystem', () => {
     expect(h.send).not.toHaveBeenCalled()
   })
 
-  it('skips when the signer is not one of the sponsor contacts', async () => {
-    h.sfc!.signerEmail = 'someone-else@acme.test'
+  it('still reminds a persisted signer who is not a contact (an external signer, or one since removed)', async () => {
+    h.sfc!.signerEmail = 'cfo@acme-holding.test'
+    h.sfc!.signerName = 'Finance CFO'
+    expect(await sendContractReminderBySystem('sfc-1')).toEqual({
+      ok: true,
+      recipient: 'cfo@acme-holding.test',
+    })
+    expect(h.send.mock.calls[0][0].to).toEqual(['cfo@acme-holding.test'])
+    const record = h.creates.find((d) => d.communicationKind === 'contract')
+    expect(record!.recipients).toEqual([
+      expect.objectContaining({
+        _key: 'signer-external',
+        name: 'Finance CFO',
+        email: 'cfo@acme-holding.test',
+      }),
+    ])
+  })
+
+  it('skips when no signer is stored at all', async () => {
+    h.sfc!.signerEmail = undefined
     expect(await sendContractReminderBySystem('sfc-1')).toEqual({
       ok: false,
-      reason: 'signer-not-a-contact',
+      reason: 'no-signer',
     })
     expect(h.send).not.toHaveBeenCalled()
   })

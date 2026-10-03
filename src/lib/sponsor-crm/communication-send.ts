@@ -39,6 +39,13 @@ export interface SendSponsorCommunicationArgs {
   sponsorForConferenceId: string
   kind: CommunicationKind
   recipientKeys: readonly string[]
+  /**
+   * Recipients the SERVER adds (never client input): the cron's signing
+   * reminder goes to the persisted signer even when that address is no
+   * longer one of the sponsor's contacts (#1264). Keys must not collide with
+   * contact keys.
+   */
+  serverRecipients?: readonly CommunicationRecipient[]
   subject: string
   message: PortableTextBlock[]
   /**
@@ -199,7 +206,12 @@ export async function sendSponsorCommunication(
 
   let recipients: CommunicationRecipient[]
   try {
-    recipients = resolveRecipients(sfc.contactPersons, args.recipientKeys)
+    recipients = [
+      ...(args.recipientKeys.length > 0 || !args.serverRecipients?.length
+        ? resolveRecipients(sfc.contactPersons, args.recipientKeys)
+        : []),
+      ...(args.serverRecipients ?? []),
+    ]
   } catch (error) {
     if (error instanceof CommunicationRecipientError) {
       return { ok: false, reason: 'bad-recipients', message: error.message }

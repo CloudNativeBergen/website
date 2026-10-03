@@ -83,7 +83,7 @@ describe('api/cron/contract-reminders', () => {
       { _id: 'sfc-3', sponsorName: 'Initech' },
     ])
     h.remind
-      .mockResolvedValueOnce({ ok: false, reason: 'signer-not-a-contact' })
+      .mockResolvedValueOnce({ ok: false, reason: 'no-signer' })
       .mockRejectedValueOnce(new Error('provider down'))
       .mockResolvedValueOnce({ ok: true, recipient: 'c@initech.test' })
 
