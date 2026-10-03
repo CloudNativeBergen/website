@@ -150,6 +150,7 @@ vi.mock('@/lib/sanity/client', () => {
         templateId:
           (h.sfc?.contractTemplate as { _ref?: string } | undefined)?._ref ??
           null,
+        contractSentAt: h.sfc?.contractSentAt ?? null,
         addonIds:
           (h.sfc?.addons as Array<{ _id: string }> | undefined)?.map(
             (a) => a._id,
@@ -580,8 +581,11 @@ describe('first send', () => {
   })
 
   it('never flips back a signature completed through the reserved link while the provider was busy', async () => {
+    let sentAtWhenSigned: unknown
     h.send.mockImplementation(async () => {
       // The sponsor opened the stored link and signed before the email even landed.
+      // The certificate embeds the issuance time: it is already there.
+      sentAtWhenSigned = h.sfc!.contractSentAt
       Object.assign(h.sfc!, {
         contractStatus: 'contract-signed',
         signatureStatus: 'signed',
@@ -592,6 +596,7 @@ describe('first send', () => {
     const result = await sponsor().crm.sendCommunication(INPUT)
     expect(result).toMatchObject({ success: true })
     expect(result).not.toHaveProperty('contractStateFailed')
+    expect(sentAtWhenSigned).toEqual(expect.any(String))
     expect(h.sfc!.signatureStatus).toBe('signed')
     expect(h.sfc!.contractStatus).toBe('contract-signed')
     expect(sfcPatches().some((p) => p.sets.signatureStatus === 'pending')).toBe(
@@ -935,6 +940,58 @@ describe('first send', () => {
     expect(h.generatePdf).toHaveBeenCalledTimes(1)
     expect(h.sendForSigning).toHaveBeenCalledTimes(1)
     expect(h.sfc!.signatureId).toBe('agr-1')
+  })
+
+  it("a replacement carries its OWN issuance time from the moment it is signable — never the predecessor's", async () => {
+    const PRED = '2026-01-05T09:00:00.000Z'
+    Object.assign(h.sfc!, {
+      contractStatus: 'contract-sent',
+      signatureStatus: 'rejected',
+      signatureId: 'agr-old',
+      signingUrl: `https://${DOMAIN}/sponsor/contract/sign/agr-old`,
+      contractSentAt: PRED,
+      signerEmail: 'kari@acme.test',
+    })
+    let sentAtWhenMailed: unknown
+    h.send.mockImplementation(async () => {
+      sentAtWhenMailed = h.sfc!.contractSentAt
+      return { data: { id: 'resend-msg-1' }, error: null }
+    })
+    await sponsor().crm.sendCommunication(INPUT)
+    expect(sentAtWhenMailed).toEqual(expect.any(String))
+    expect(sentAtWhenMailed).not.toBe(PRED)
+  })
+
+  it("a refused replacement restores the predecessor's issuance time; a refused first send leaves none", async () => {
+    const PRED = '2026-01-05T09:00:00.000Z'
+    Object.assign(h.sfc!, {
+      contractStatus: 'contract-sent',
+      signatureStatus: 'rejected',
+      signatureId: 'agr-old',
+      signingUrl: `https://${DOMAIN}/sponsor/contract/sign/agr-old`,
+      contractSentAt: PRED,
+      signerEmail: 'kari@acme.test',
+    })
+    h.send.mockResolvedValue({
+      data: null,
+      error: { message: 'boom', statusCode: 500 },
+    })
+    await expect(sponsor().crm.sendCommunication(INPUT)).rejects.toMatchObject({
+      code: 'INTERNAL_SERVER_ERROR',
+    })
+    expect(h.sfc!.contractSentAt).toBe(PRED)
+
+    Object.assign(h.sfc!, {
+      contractStatus: 'verbal-agreement',
+      signatureStatus: 'not-started',
+      signatureId: undefined,
+      signingUrl: undefined,
+      contractSentAt: undefined,
+    })
+    await expect(sponsor().crm.sendCommunication(INPUT)).rejects.toMatchObject({
+      code: 'INTERNAL_SERVER_ERROR',
+    })
+    expect(h.sfc!.contractSentAt).toBeUndefined()
   })
 
   it('a refused replacement restores the status it superseded (rejected), since nothing was delivered', async () => {

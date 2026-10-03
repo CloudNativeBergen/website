@@ -305,10 +305,11 @@ export async function prepareContractSend(
     signerEmail: string | null
     assignedToId: string | null
     templateId: string | null
+    contractSentAt: string | null
     tierId: string | null
     addonIds: string[] | null
   } | null>(
-    `*[_type == "sponsorForConference" && _id == $id && conference._ref == $conferenceId][0]{ _rev, contractStatus, signatureStatus, signatureId, signingUrl, contractReservedAt, contractReservedTerms, contractValue, contractCurrency, status, signerEmail, "assignedToId": assignedTo._ref, "templateId": contractTemplate._ref, "tierId": tier._ref, "addonIds": addons[]._ref }`,
+    `*[_type == "sponsorForConference" && _id == $id && conference._ref == $conferenceId][0]{ _rev, contractStatus, signatureStatus, signatureId, signingUrl, contractReservedAt, contractReservedTerms, contractValue, contractCurrency, status, signerEmail, "assignedToId": assignedTo._ref, "templateId": contractTemplate._ref, contractSentAt, "tierId": tier._ref, "addonIds": addons[]._ref }`,
     { id: sfc._id, conferenceId: conference._id },
   )
   if (!current || contractActionFor(current) !== 'send') {
@@ -383,6 +384,7 @@ export async function prepareContractSend(
   let reservation: Record<string, unknown>
   const priorReservedAt = current.contractReservedAt
   const priorSignatureStatus = current.signatureStatus
+  const priorContractSentAt = current.contractSentAt
   // Provenance follows the PDF that was actually embedded: a reused
   // agreement keeps its stored document, so no counter-signature is stamped.
   const countersigned = !reserved && !!args.organizerSignatureDataUrl
@@ -554,6 +556,10 @@ export async function prepareContractSend(
       signerEmail: signer.email,
       contractReservedAt: now,
       contractReservedTerms: terms,
+      // This agreement's own issuance time, from the moment it is signable:
+      // the signing certificate embeds it, and the sponsor may sign before
+      // the email lands (or before the flip, which stamps it again).
+      contractSentAt: now,
       // A replacement for a rejected or expired agreement is signable from
       // the moment it is stored, like an initial send — the signing page
       // refuses rejected/expired, and the flip may still fail after mailing.
@@ -626,14 +632,21 @@ export async function prepareContractSend(
                 'contractReservedTerms',
                 'organizerSignedAt',
                 'organizerSignedBy',
+                ...(priorContractSentAt ? [] : ['contractSentAt']),
               ],
         )
         .set(
           reserved
             ? { contractReservedAt: priorReservedAt }
             : // The status the replacement superseded (rejected / expired /
-              // not-started) comes back, since nothing was delivered.
-              { signatureStatus: priorSignatureStatus ?? 'not-started' },
+              // not-started) comes back, since nothing was delivered — and
+              // so does the predecessor's issuance time, if any.
+              {
+                signatureStatus: priorSignatureStatus ?? 'not-started',
+                ...(priorContractSentAt && {
+                  contractSentAt: priorContractSentAt,
+                }),
+              },
         )
         .commit()
     } catch (error) {
