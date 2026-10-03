@@ -21,6 +21,7 @@ import type {
 
 const SPONSOR_FOR_CONFERENCE_FIELDS = `
   _id,
+  _rev,
   _createdAt,
   _updatedAt,
   sponsor->{

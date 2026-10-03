@@ -89,6 +89,17 @@ describe('EmailModal with an empty body', () => {
     )
   })
 
+  it('lets the organizer preview the appended card when the body may be empty', async () => {
+    renderModal({
+      allowEmptyBody: true,
+      previewComponent: () => <div data-testid="preview">card</div>,
+    })
+    const preview = await screen.findByRole('button', { name: /Preview/ })
+    expect(preview).toBeEnabled()
+    fireEvent.click(preview)
+    expect(await screen.findByTestId('preview')).toBeInTheDocument()
+  })
+
   it('still needs a subject even when the body may be empty', async () => {
     renderModal({
       allowEmptyBody: true,

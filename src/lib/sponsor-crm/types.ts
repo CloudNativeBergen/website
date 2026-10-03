@@ -144,6 +144,8 @@ export interface SponsorForConference {
 
 export interface SponsorForConferenceExpanded {
   _id: string
+  /** Revision of the read; a cron claim is conditioned on it. */
+  _rev?: string
   _createdAt: string
   _updatedAt: string
   sponsor: {

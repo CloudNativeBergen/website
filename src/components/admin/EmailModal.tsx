@@ -530,7 +530,9 @@ export function EmailModal({
               type="button"
               onClick={() => setShowPreview(!showPreview)}
               disabled={
-                isLoading || !subject.trim() || !getCurrentMessage().trim()
+                isLoading ||
+                !subject.trim() ||
+                (!getCurrentMessage().trim() && !allowEmptyBody)
               }
               className={`inline-flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold text-gray-900 shadow-xs hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-500 disabled:opacity-50 dark:text-white dark:hover:bg-gray-800 dark:focus-visible:outline-gray-400 ${showPreview ? 'border border-indigo-500 bg-indigo-100 text-indigo-700 dark:border-indigo-500 dark:bg-indigo-900/30 dark:text-indigo-300' : 'border border-gray-300 dark:border-gray-600'}`}
             >

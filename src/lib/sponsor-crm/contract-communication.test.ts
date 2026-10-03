@@ -18,8 +18,10 @@ const h = vi.hoisted(() => ({
   patches: [] as Array<{ id: string; sets: Record<string, unknown> }>,
   incs: [] as Array<{ id: string; field: string; by: number }>,
   creates: [] as Array<Record<string, unknown>>,
-  /** The reminderCount patch fails after the email went out. */
-  countShouldThrow: false,
+  /** Another sweep claimed the slot first: the revision moved. */
+  claimedElsewhere: false,
+  /** Boundary events in order: claim / send / release. */
+  sequence: [] as string[],
 }))
 
 vi.mock('server-only', () => ({}))
@@ -60,6 +62,7 @@ vi.mock('@/lib/sanity/client', () => {
   }
   const patch = (id: string) => {
     let sets: Record<string, unknown> = {}
+    let requiredRev: string | undefined
     const chain = {
       set: (v: Record<string, unknown>) => {
         sets = { ...sets, ...v }
@@ -67,7 +70,10 @@ vi.mock('@/lib/sanity/client', () => {
       },
       setIfMissing: () => chain,
       unset: () => chain,
-      ifRevisionId: () => chain,
+      ifRevisionId: (rev: string) => {
+        requiredRev = rev
+        return chain
+      },
       inc: (v: Record<string, number>) => {
         for (const [k, by] of Object.entries(v)) {
           h.incs.push({ id, field: k, by })
@@ -76,10 +82,25 @@ vi.mock('@/lib/sanity/client', () => {
         return chain
       },
       commit: async () => {
-        if (h.countShouldThrow && 'reminderCount' in sets) {
-          throw new Error('sanity down')
+        const currentRev = (h.sfc?._rev as string | undefined) ?? 'rev-1'
+        if (
+          requiredRev !== undefined &&
+          (h.claimedElsewhere || requiredRev !== currentRev)
+        ) {
+          throw new Error(
+            'Mutation(s) failed with 1 error(s): revision mismatch',
+          )
+        }
+        if ('reminderCount' in sets) {
+          h.sequence.push(
+            (sets.reminderCount as number) >
+              ((h.sfc?.reminderCount as number | undefined) ?? 0)
+              ? 'claim'
+              : 'release',
+          )
         }
         h.patches.push({ id, sets })
+        if (h.sfc && id === h.sfc._id) Object.assign(h.sfc, sets)
         return {}
       },
     }
@@ -102,7 +123,16 @@ vi.mock('@/lib/sanity/client', () => {
 })
 vi.mock('@/lib/email/config', async (importOriginal) => ({
   ...((await importOriginal()) as Record<string, unknown>),
-  resolveEmailSender: async () => ({ client: { emails: { send: h.send } } }),
+  resolveEmailSender: async () => ({
+    client: {
+      emails: {
+        send: async (...args: unknown[]) => {
+          h.sequence.push('send')
+          return h.send(...args)
+        },
+      },
+    },
+  }),
   retryWithBackoff: async <T>(fn: () => Promise<T>) => fn(),
 }))
 
@@ -120,12 +150,14 @@ beforeEach(() => {
   vi.clearAllMocks()
   h.fetches = []
   h.contactEmailAtSend = null
-  h.countShouldThrow = false
+  h.claimedElsewhere = false
+  h.sequence = []
   h.patches = []
   h.incs = []
   h.creates = []
   h.sfc = {
     _id: 'sfc-1',
+    _rev: 'rev-1',
     status: 'closed-won',
     contractStatus: 'contract-sent',
     signatureStatus: 'pending',
@@ -321,14 +353,20 @@ describe('sendContractReminderBySystem', () => {
     expect(h.send).not.toHaveBeenCalled()
   })
 
-  it('reports a mailed reminder whose count did not land — never as a success', async () => {
-    h.countShouldThrow = true
-    expect(await sendContractReminderBySystem('sfc-1')).toMatchObject({
+  it('claims the reminder slot BEFORE mailing, so two overlapping sweeps cannot both send', async () => {
+    const outcome = await sendContractReminderBySystem('sfc-1')
+    expect(outcome).toEqual({ ok: true, recipient: 'kari@acme.test' })
+    expect(h.sequence).toEqual(['claim', 'send'])
+    expect(h.incs).toEqual([{ id: 'sfc-1', field: 'reminderCount', by: 1 }])
+  })
+
+  it('skips — mailing nothing — when another sweep claimed the slot first', async () => {
+    h.claimedElsewhere = true
+    expect(await sendContractReminderBySystem('sfc-1')).toEqual({
       ok: false,
-      reason: 'count-failed',
-      message: expect.stringMatching(/mailed to kari@acme.test/),
+      reason: 'claimed-elsewhere',
     })
-    expect(h.send).toHaveBeenCalledTimes(1)
+    expect(h.send).not.toHaveBeenCalled()
     expect(h.patches).toEqual([])
   })
 
@@ -359,7 +397,9 @@ describe('sendContractReminderBySystem', () => {
       ok: false,
       reason: 'send-failed',
     })
-    expect(h.patches).toEqual([])
+    // The claimed slot went back: the count is where it started.
+    expect(h.sequence).toEqual(['claim', 'send', 'release'])
+    expect(h.sfc!.reminderCount).toBe(1)
     expect(
       h.creates.find((d) => d.communicationKind === 'contract'),
     ).toMatchObject({ deliveryStatus: 'failed', error: 'boom' })

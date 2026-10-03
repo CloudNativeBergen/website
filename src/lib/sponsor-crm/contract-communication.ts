@@ -907,7 +907,7 @@ type SystemReminderOutcome =
         | 'no-organization'
         | 'template-missing'
         | 'send-failed'
-        | 'count-failed'
+        | 'claimed-elsewhere'
       message?: string
     }
 
@@ -991,6 +991,20 @@ export async function sendContractReminderBySystem(
     serverRecipients,
     actor: { id: null },
   })
+  // CLAIM the reminder slot before mailing, on the revision this sweep read:
+  // two overlapping sweeps that both selected this sponsor cannot both send
+  // — the second's claim fails on the revision and it skips. (The organizer
+  // path counts after the send instead; its sends are not concurrent sweeps.)
+  try {
+    await clientWrite
+      .patch(sfc._id)
+      .ifRevisionId(sfc._rev ?? '')
+      .setIfMissing({ reminderCount: 0 })
+      .inc({ reminderCount: 1 })
+      .commit()
+  } catch {
+    return { ok: false, reason: 'claimed-elsewhere' }
+  }
   const result = await sendSponsorCommunication({
     conference,
     orgId,
@@ -1011,21 +1025,19 @@ export async function sendContractReminderBySystem(
     },
   })
   if (!result.ok) {
+    // Nothing went out: the claimed slot goes back.
+    try {
+      await clientWrite.patch(sfc._id).inc({ reminderCount: -1 }).commit()
+    } catch (error) {
+      console.error('[contract-reminders] releasing the claim failed:', error)
+    }
     return {
       ok: false,
       reason: 'send-failed',
       message: 'message' in result ? result.message : result.reason,
     }
   }
-  // The email is out either way; a count that did not land is reported, not
-  // hidden — an uncounted reminder is one the sweep will send again.
-  const after = await plan.afterSend()
-  if (!after.ok) {
-    return {
-      ok: false,
-      reason: 'count-failed',
-      message: `mailed to ${signer.email}, but reminderCount was not updated`,
-    }
-  }
+  // The slot was claimed above; the plan's own count step is the organizer
+  // path's, not this one's.
   return { ok: true, recipient: signer.email }
 }
