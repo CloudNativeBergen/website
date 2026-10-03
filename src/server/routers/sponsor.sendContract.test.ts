@@ -82,6 +82,10 @@ vi.mock('@/lib/sponsor-crm/contract-pdf', () => ({
 vi.mock('@/lib/contract-signing', () => ({
   getSigningProvider: () => ({ sendForSigning: h.sendForSigning }),
 }))
+vi.mock('@/lib/pdf/signature-embed', () => ({
+  // The real embedder needs a real PDF; the provenance it stamps is what is tested.
+  embedSignatureInPdfBuffer: async (buf: Buffer) => buf,
+}))
 vi.mock('@/lib/sanity/client', () => {
   const fetch = async (query: string, params?: Record<string, unknown>) => {
     h.fetches.push({ query, params })
@@ -458,7 +462,11 @@ describe('first send', () => {
     // Nothing went out: the token that was never mailed is gone again.
     expect(h.unsets).toContainEqual({
       id: SFC,
-      fields: ['signatureId', 'signingUrl', 'contractReservedAt'],
+      fields: expect.arrayContaining([
+        'signatureId',
+        'signingUrl',
+        'contractReservedAt',
+      ]),
     })
     expect(h.sfc!.signatureId).toBeUndefined()
     expect(record()).toMatchObject({
@@ -531,7 +539,9 @@ describe('first send', () => {
     })
     expect(h.sfc!.signatureId).toBe('agr-stale')
     expect(h.sfc!.signingUrl).toBe(STALE_URL)
-    expect(h.sfc!.contractReservedAt).toBeUndefined()
+    // The reservation still looks unflipped (its original marker), so the
+    // next retry reuses it instead of minting over it.
+    expect(typeof h.sfc!.contractReservedAt).toBe('string')
   })
 
   it('never stamps a counter-signature on a reused agreement (the stored PDF was not re-embedded)', async () => {
@@ -608,6 +618,67 @@ describe('first send', () => {
     expect(result).toMatchObject({ success: true })
     expect(h.sfc!.signerEmail).toBe('kari@acme.test')
     expect(h.sendForSigning).not.toHaveBeenCalled()
+  })
+
+  it('a refused reuse-retry leaves the reservation reusable — the next retry still sends the same link', async () => {
+    const STALE_URL = `https://${DOMAIN}/sponsor/contract/sign/agr-stale`
+    const STALE_AT = new Date(Date.now() - 60 * 60 * 1000).toISOString()
+    Object.assign(h.sfc!, {
+      signatureId: 'agr-stale',
+      signingUrl: STALE_URL,
+      contractReservedAt: STALE_AT,
+    })
+    h.send.mockResolvedValueOnce({
+      data: null,
+      error: { message: 'boom', statusCode: 500 },
+    })
+    await expect(sponsor().crm.sendCommunication(INPUT)).rejects.toMatchObject({
+      code: 'INTERNAL_SERVER_ERROR',
+    })
+    expect(h.sfc!.contractReservedAt).toBe(STALE_AT)
+    const result = await sponsor().crm.sendCommunication(INPUT)
+    expect(result).toMatchObject({ success: true })
+    expect(h.sendForSigning).not.toHaveBeenCalled()
+    expect(h.sfc!.signatureId).toBe('agr-stale')
+    expect(h.send.mock.calls[1][0].html).toContain(`href="${STALE_URL}"`)
+  })
+
+  it('keeps the counter-signature provenance with the reserved PDF, so a reuse after a failed flip still carries it', async () => {
+    h.sfc!.assignedTo = { _id: 'sp-admin', name: 'Admin', email: 'a@x' }
+    h.flipShouldThrow = true
+    const first = await sponsor().crm.sendCommunication({
+      ...INPUT,
+      organizerSignatureDataUrl: 'data:image/png;base64,iVBORw0KGgo=',
+    })
+    expect(first).toMatchObject({ success: true, contractStateFailed: true })
+    expect(h.sfc!.organizerSignedBy).toBe('Admin')
+    // Past the settle window, the retry reuses the counter-signed PDF.
+    h.sfc!.contractReservedAt = new Date(
+      Date.now() - 60 * 60 * 1000,
+    ).toISOString()
+    h.flipShouldThrow = false
+    const second = await sponsor().crm.sendCommunication(INPUT)
+    expect(second).toMatchObject({ success: true })
+    expect(h.generatePdf).toHaveBeenCalledTimes(1)
+    expect(h.sfc!.organizerSignedBy).toBe('Admin')
+    expect(h.sfc!.contractStatus).toBe('contract-sent')
+  })
+
+  it('refuses a stale composer: opened for a reminder, submitted after the sponsor signed', async () => {
+    Object.assign(h.sfc!, {
+      status: 'closed-won',
+      contractStatus: 'contract-signed',
+      signatureStatus: 'signed',
+      contractSignedBy: 'Kari Nordmann',
+      contractDocument: { asset: { _ref: 'file-1', url: 'https://cdn/x.pdf' } },
+    })
+    await expect(
+      sponsor().crm.sendCommunication({ ...INPUT, contractAction: 'remind' }),
+    ).rejects.toMatchObject({
+      code: 'PRECONDITION_FAILED',
+      message: expect.stringMatching(/state changed since/),
+    })
+    expect(h.send).not.toHaveBeenCalled()
   })
 
   it('refuses a counter-signature from anyone but the assigned organizer, before any PDF', async () => {

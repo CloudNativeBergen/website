@@ -1059,6 +1059,7 @@ describe('contract kind (#1264)', () => {
     await waitFor(() => expect(h.mutateAsync).toHaveBeenCalledTimes(1))
     expect(h.mutateAsync.mock.calls[0][0]).toMatchObject({
       kind: 'contract',
+      contractAction: 'send',
       recipientKeys: ['c-primary'],
       signerKey: 'c-primary',
       contractTemplateId: 'tpl-A',
@@ -1172,7 +1173,7 @@ describe('contract kind (#1264)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Send reminder' }))
     await waitFor(() => expect(h.mutateAsync).toHaveBeenCalledTimes(1))
     const posted = h.mutateAsync.mock.calls[0][0]
-    expect(posted).toMatchObject({ kind: 'contract' })
+    expect(posted).toMatchObject({ kind: 'contract', contractAction: 'remind' })
     expect(posted).not.toHaveProperty('signerKey')
     expect(posted).not.toHaveProperty('contractTemplateId')
   })

@@ -1121,6 +1121,7 @@ export function SponsorSendModal({
       subject,
       message: JSON.stringify(message as PortableTextBlockForHTML[]),
       ...(isDiscount && { discountCodes: chosenCodes }),
+      ...(isContract && { contractAction }),
       ...(isContract &&
         contractAction === 'send' && {
           signerKey,

@@ -251,6 +251,12 @@ export const SendCommunicationSchema = z
      * absent), and the assigned organizer's counter-signature.
      */
     signerKey: z.string().min(1).optional(),
+    /**
+     * The action the composer was opened for (label, template, preview). The
+     * server decides the real action from the current state and REFUSES a
+     * stale composer rather than performing a different action with its text.
+     */
+    contractAction: z.enum(['send', 'remind', 'signed-copy']).optional(),
     contractTemplateId: z.string().min(1).optional(),
     organizerSignatureDataUrl: z
       .string()
@@ -264,6 +270,7 @@ export const SendCommunicationSchema = z
   .superRefine((input, ctx) => {
     const contractFields = [
       'signerKey',
+      'contractAction',
       'contractTemplateId',
       'organizerSignatureDataUrl',
     ] as const

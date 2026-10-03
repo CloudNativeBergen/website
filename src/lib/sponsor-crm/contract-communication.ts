@@ -68,6 +68,8 @@ export interface PrepareContractSendArgs {
   serverRecipients?: readonly CommunicationRecipient[]
   /** First send only: which recipient signs. Defaults to the stored signer, then the primary contact. */
   signerKey?: string
+  /** The action the composer was opened for; a mismatch with the current state is refused. */
+  expectedAction?: ContractAction
   /** First send only, already tenancy-guarded by the caller. Defaults to the best template for the tier. */
   contractTemplateId?: string
   /** First send only: the assigned organizer's counter-signature. */
@@ -162,6 +164,11 @@ export async function prepareContractSend(
     throw error
   }
   const action = contractActionFor(sfc)
+  if (args.expectedAction && args.expectedAction !== action) {
+    throw precondition(
+      'The contract state changed since this email was composed. Close it, reload the sponsor and send again.',
+    )
+  }
   const theme = conference.theme
   const contractValue = formatContractValue(sfc)
 
@@ -303,6 +310,7 @@ export async function prepareContractSend(
   let signingUrl: string
   let agreementId: string
   let reservation: Record<string, unknown>
+  const priorReservedAt = current.contractReservedAt
   // Provenance follows the PDF that was actually embedded: a reused
   // agreement keeps its stored document, so no counter-signature is stamped.
   const countersigned = !reserved && !!args.organizerSignatureDataUrl
@@ -472,6 +480,12 @@ export async function prepareContractSend(
       signerName: signer.name,
       signerEmail: signer.email,
       contractReservedAt: now,
+      // Provenance travels WITH the PDF it was embedded in, so a reuse after
+      // a failed flip keeps it.
+      ...(countersigned && {
+        organizerSignedAt: now,
+        organizerSignedBy: organizerDisplayName,
+      }),
     }
   }
 
@@ -511,9 +525,18 @@ export async function prepareContractSend(
         })
         .unset(
           reserved
-            ? ['contractReservedAt']
-            : ['signatureId', 'signingUrl', 'contractReservedAt'],
+            ? []
+            : [
+                'signatureId',
+                'signingUrl',
+                'contractReservedAt',
+                'organizerSignedAt',
+                'organizerSignedBy',
+              ],
         )
+        // A reused agreement keeps looking like the unflipped reservation it
+        // is: its ORIGINAL marker comes back, so the next retry reuses again.
+        .set(reserved ? { contractReservedAt: priorReservedAt } : {})
         .commit()
     } catch (error) {
       console.error('[contract-send] releasing the agreement failed:', error)
@@ -592,10 +615,6 @@ export async function prepareContractSend(
             contractStatus: 'contract-sent',
             contractSentAt: now,
             signatureStatus: 'pending',
-            ...(countersigned && {
-              organizerSignedAt: now,
-              organizerSignedBy: organizerDisplayName,
-            }),
           })
           .unset(['contractReservedAt'])
           .commit()

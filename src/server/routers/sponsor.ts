@@ -2713,6 +2713,7 @@ export const sponsorRouter = router({
             sfc,
             recipientKeys: input.recipientKeys,
             signerKey: input.signerKey,
+            expectedAction: input.contractAction,
             contractTemplateId: input.contractTemplateId,
             organizerSignatureDataUrl: input.organizerSignatureDataUrl,
             actor: {
