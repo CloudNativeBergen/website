@@ -304,10 +304,11 @@ export async function prepareContractSend(
     status: string | null
     signerEmail: string | null
     assignedToId: string | null
+    templateId: string | null
     tierId: string | null
     addonIds: string[] | null
   } | null>(
-    `*[_type == "sponsorForConference" && _id == $id && conference._ref == $conferenceId][0]{ _rev, contractStatus, signatureStatus, signatureId, signingUrl, contractReservedAt, contractReservedTerms, contractValue, contractCurrency, status, signerEmail, "assignedToId": assignedTo._ref, "tierId": tier._ref, "addonIds": addons[]._ref }`,
+    `*[_type == "sponsorForConference" && _id == $id && conference._ref == $conferenceId][0]{ _rev, contractStatus, signatureStatus, signatureId, signingUrl, contractReservedAt, contractReservedTerms, contractValue, contractCurrency, status, signerEmail, "assignedToId": assignedTo._ref, "templateId": contractTemplate._ref, "tierId": tier._ref, "addonIds": addons[]._ref }`,
     { id: sfc._id, conferenceId: conference._id },
   )
   if (!current || contractActionFor(current) !== 'send') {
@@ -365,15 +366,18 @@ export async function prepareContractSend(
     throw precondition(IN_FLIGHT_MESSAGE)
   }
   // A stale reservation is REUSED only if it is still the agreement for these
-  // terms, was not revoked since, and still names who it was issued to — an
-  // agreement whose signer was cleared is replaced, never handed to someone.
+  // terms, was not revoked since, still names who it was issued to — an
+  // agreement whose signer was cleared is replaced, never handed to someone —
+  // and was rendered from the template the organizer asks for now (a
+  // different template chosen on retry is a different agreement).
   const reserved =
     stored &&
     !!current.contractReservedAt &&
     current.signatureStatus !== 'rejected' &&
     current.signatureStatus !== 'expired' &&
     current.contractReservedTerms === terms &&
-    !!current.signerEmail
+    !!current.signerEmail &&
+    (!args.contractTemplateId || args.contractTemplateId === current.templateId)
   let signingUrl: string
   let agreementId: string
   let reservation: Record<string, unknown>

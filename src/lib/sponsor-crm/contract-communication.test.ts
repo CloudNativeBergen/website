@@ -148,6 +148,7 @@ beforeEach(() => {
       domains: ['cloudnativebergen.dev'],
       startDate: '2026-10-28',
       city: 'Bergen',
+      country: 'Norway',
       organization: { _ref: 'org-acme' },
     },
   }
@@ -217,6 +218,8 @@ describe('sendContractReminderBySystem', () => {
     )
     expect(sent.html).toMatch(/Dear Kari Nordmann, 50\s000 NOK awaits/)
     expect(sent.html).toContain(`href="${SIGNING_URL}"`)
+    // Nothing the shared renderer prints is missing from the expanded conference.
+    expect(sent.html).not.toContain('undefined')
 
     const record = h.creates.find((d) => d.communicationKind === 'contract')
     // The persisted signer, as a server-built recipient keyed by their contact.

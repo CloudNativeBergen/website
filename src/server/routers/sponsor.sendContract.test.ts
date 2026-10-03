@@ -147,6 +147,9 @@ vi.mock('@/lib/sanity/client', () => {
           h.assignedToIdAtFreshRead ??
           (h.sfc?.assignedTo as { _id?: string } | undefined)?._id ??
           null,
+        templateId:
+          (h.sfc?.contractTemplate as { _ref?: string } | undefined)?._ref ??
+          null,
         addonIds:
           (h.sfc?.addons as Array<{ _id: string }> | undefined)?.map(
             (a) => a._id,
@@ -975,6 +978,50 @@ describe('first send', () => {
     expect(h.sfc!.signatureId).not.toBe('agr-stale')
     expect(sentHtml()).not.toContain('agr-stale')
     expect(h.sfc!.signerEmail).toBe('ola@acme.test')
+  })
+
+  it('replaces — never reuses — a stale reservation when the retry names a different contract template', async () => {
+    h.tenantById['tpl-B'] = { _type: 'contractTemplate', conferenceId: CONF }
+    h.getContractTemplate.mockResolvedValue({
+      template: { _id: 'tpl-B', title: 'Alternate', language: 'en' },
+    })
+    Object.assign(h.sfc!, {
+      signatureId: 'agr-stale',
+      signingUrl: `https://${DOMAIN}/sponsor/contract/sign/agr-stale`,
+      contractReservedAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+      contractReservedTerms: '50000|NOK|tier-gold|',
+      contractTemplate: { _ref: 'tpl-A' },
+      signerEmail: 'kari@acme.test',
+    })
+    const result = await sponsor().crm.sendCommunication({
+      ...INPUT,
+      contractTemplateId: 'tpl-B',
+    })
+    expect(result).toMatchObject({ success: true })
+    expect(h.getContractTemplate).toHaveBeenCalledWith('tpl-B')
+    expect(h.generatePdf).toHaveBeenCalledTimes(1)
+    expect(h.sendForSigning).toHaveBeenCalledTimes(1)
+    expect(h.sfc!.signatureId).not.toBe('agr-stale')
+    expect(sentHtml()).not.toContain('agr-stale')
+  })
+
+  it('reuses a stale reservation when the retry names the SAME template it was rendered from', async () => {
+    Object.assign(h.sfc!, {
+      signatureId: 'agr-stale',
+      signingUrl: `https://${DOMAIN}/sponsor/contract/sign/agr-stale`,
+      contractReservedAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+      contractReservedTerms: '50000|NOK|tier-gold|',
+      contractTemplate: { _ref: 'tpl-A' },
+      signerEmail: 'kari@acme.test',
+    })
+    const result = await sponsor().crm.sendCommunication({
+      ...INPUT,
+      contractTemplateId: 'tpl-A',
+    })
+    expect(result).toMatchObject({ success: true })
+    expect(h.generatePdf).not.toHaveBeenCalled()
+    expect(h.sendForSigning).not.toHaveBeenCalled()
+    expect(h.sfc!.signatureId).toBe('agr-stale')
   })
 
   it('judges the persisted signer on the reservation read, not the stale request read', async () => {

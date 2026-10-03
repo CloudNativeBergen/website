@@ -164,6 +164,7 @@ export interface SponsorForConferenceExpanded {
     organizerAddress?: string
     signingProvider?: 'self-hosted'
     city?: string
+    country?: string
     venueName?: string
     venueAddress?: string
     startDate?: string
