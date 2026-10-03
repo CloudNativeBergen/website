@@ -712,6 +712,38 @@ describe('first send', () => {
     expect(h.sfc!.signatureId).toBe('agr-1')
   })
 
+  it('never reuses an agreement revoked during its send — the next send issues a fresh one', async () => {
+    Object.assign(h.sfc!, {
+      signatureId: 'agr-revoked',
+      signingUrl: `https://${DOMAIN}/sponsor/contract/sign/agr-revoked`,
+      signatureStatus: 'rejected',
+      contractReservedAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+    })
+    const result = await sponsor().crm.sendCommunication(INPUT)
+    expect(result).toMatchObject({ success: true })
+    expect(h.sendForSigning).toHaveBeenCalledTimes(1)
+    expect(h.sfc!.signatureId).toBe('agr-1')
+    expect(h.sfc!.signatureStatus).toBe('pending')
+    expect(sentHtml()).toContain(`href="${SIGNING_URL}"`)
+  })
+
+  it("a fresh replacement PDF drops the previous agreement's counter-signature provenance", async () => {
+    Object.assign(h.sfc!, {
+      contractStatus: 'contract-sent',
+      signatureStatus: 'rejected',
+      signatureId: 'agr-rejected',
+      signingUrl: `https://${DOMAIN}/sponsor/contract/sign/agr-rejected`,
+      contractReservedAt: undefined,
+      organizerSignedAt: '2026-01-01T00:00:00Z',
+      organizerSignedBy: 'Old Organizer',
+    })
+    const result = await sponsor().crm.sendCommunication(INPUT)
+    expect(result).toMatchObject({ success: true })
+    expect(h.sfc!.organizerSignedBy).toBeUndefined()
+    expect(h.sfc!.organizerSignedAt).toBeUndefined()
+    expect(h.sfc!.signatureId).toBe('agr-1')
+  })
+
   it('refuses a counter-signature from anyone but the assigned organizer, before any PDF', async () => {
     h.sfc!.assignedTo = { _id: 'sp-other', name: 'Other', email: 'o@x' }
     await expect(

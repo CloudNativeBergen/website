@@ -295,10 +295,14 @@ export async function prepareContractSend(
   // A reservation is an agreement stored but never flipped: its in-flight
   // marker is still set. A rejected or expired agreement went through the
   // flip (no marker) and gets a FRESH agreement with the current terms.
+  // …and a revoked one (rejected/expired since it was stored) is never
+  // reused either: the next explicit send issues a fresh agreement.
   const reserved =
     !!current.signatureId &&
     !!current.signingUrl &&
-    !!current.contractReservedAt
+    !!current.contractReservedAt &&
+    current.signatureStatus !== 'rejected' &&
+    current.signatureStatus !== 'expired'
   if (
     reserved &&
     current.contractReservedAt &&
@@ -498,6 +502,13 @@ export async function prepareContractSend(
       .patch(sfc._id)
       .ifRevisionId(current._rev)
       .set(reservation)
+      // A fresh PDF without a counter-signature embedded NOW must not inherit
+      // the previous agreement's organizer provenance.
+      .unset(
+        !reserved && !countersigned
+          ? ['organizerSignedAt', 'organizerSignedBy']
+          : [],
+      )
       .commit()
   } catch (error) {
     // A write landed between the read and this patch: another send, or an
