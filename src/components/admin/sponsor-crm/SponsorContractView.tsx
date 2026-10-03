@@ -329,18 +329,21 @@ export function SponsorContractView({
               {sponsor.registrationCompletedAt &&
                 ` Completed ${formatDate(sponsor.registrationCompletedAt)}.`}
             </p>
-            {onSendRegistration && sponsor.registrationToken && (
+            {onSendRegistration &&
+              sponsor.registrationToken &&
               // Still offered after completion (#1263): a new contact may
               // need the link; the Send modal warns that registration is done.
-              <button
-                type="button"
-                onClick={onSendRegistration}
-                className="inline-flex cursor-pointer items-center gap-1 rounded-md bg-white px-2 py-1 text-xs font-medium text-gray-700 shadow-xs outline-1 -outline-offset-1 outline-gray-300 hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 dark:bg-white/5 dark:text-gray-300 dark:outline-white/10 dark:hover:bg-white/10"
-              >
-                <PaperAirplaneIcon className="size-3.5" />
-                Resend registration link
-              </button>
-            )}
+              // Not for a deal that is no longer won — the server refuses it.
+              isSponsorWon && (
+                <button
+                  type="button"
+                  onClick={onSendRegistration}
+                  className="inline-flex cursor-pointer items-center gap-1 rounded-md bg-white px-2 py-1 text-xs font-medium text-gray-700 shadow-xs outline-1 -outline-offset-1 outline-gray-300 hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 dark:bg-white/5 dark:text-gray-300 dark:outline-white/10 dark:hover:bg-white/10"
+                >
+                  <PaperAirplaneIcon className="size-3.5" />
+                  Resend registration link
+                </button>
+              )}
           </div>
         ) : !isSponsorWon ? (
           <p className="text-xs text-amber-600 dark:text-amber-400">

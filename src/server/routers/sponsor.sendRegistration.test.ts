@@ -511,6 +511,50 @@ describe('refusals', () => {
     expect(h.send).not.toHaveBeenCalled()
   })
 
+  it('refuses the portal merge field on an INFORMATION send — only a registration send can fill it', async () => {
+    await expect(
+      sponsor().crm.sendCommunication({
+        ...INPUT,
+        kind: 'information',
+        message: JSON.stringify([
+          {
+            _type: 'block',
+            _key: 'b1',
+            style: 'normal',
+            markDefs: [
+              { _key: 'l1', _type: 'link', href: '{{{SPONSOR_PORTAL_URL}}}' },
+            ],
+            children: [
+              { _type: 'span', _key: 's1', text: 'Register', marks: ['l1'] },
+            ],
+          },
+        ]),
+      }),
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: expect.stringMatching(/registration send/),
+    })
+    expect(h.send).not.toHaveBeenCalled()
+    // Refused before the sponsor was read.
+    expect(h.fetches.filter((f) => f.query.includes('contactPersons'))).toEqual(
+      [],
+    )
+  })
+
+  it('refuses the portal merge field in the SUBJECT alone, with a clean body', async () => {
+    await expect(
+      sponsor().crm.sendCommunication({
+        ...INPUT,
+        kind: 'information',
+        subject: 'Register at {{{SPONSOR_PORTAL_URL}}}',
+      }),
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: expect.stringMatching(/registration send/),
+    })
+    expect(h.send).not.toHaveBeenCalled()
+  })
+
   it('refuses discount codes on a registration send', async () => {
     await expect(
       sponsor().crm.sendCommunication({

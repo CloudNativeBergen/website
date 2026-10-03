@@ -40,7 +40,9 @@ import { createLocalhostWarning } from '@/lib/localhost-warning'
 import { discountCodesCardHtml } from '@/lib/sponsor-crm/discount-email'
 import { portableTextToHTML } from '@/lib/email/portableTextToHTML'
 import {
+  carriesPortalPlaceholder,
   mergePortalUrl,
+  PORTAL_URL_WRONG_KIND_MESSAGE,
   registrationCardHtml,
 } from '@/lib/sponsor-crm/registration-email'
 import { SponsorTemplatePicker } from './SponsorTemplatePicker'
@@ -890,6 +892,10 @@ export function SponsorSendModal({
     // refuses a send made before the code list is ready.
     if (isDiscount && chosenCodes.length === 0) {
       throw new Error('Choose at least one discount code')
+    }
+    // Same rule as the server: only a registration send fills the field.
+    if (!isRegistration && carriesPortalPlaceholder(subject, message)) {
+      throw new Error(PORTAL_URL_WRONG_KIND_MESSAGE)
     }
     // The preview showed no link, so nothing is sent until it does.
     if (isRegistration && !portalUrl) {

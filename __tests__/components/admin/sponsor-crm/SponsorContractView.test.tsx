@@ -142,6 +142,23 @@ describe('SponsorContractView', () => {
     expect(onSendRegistration).toHaveBeenCalledTimes(1)
   })
 
+  it('offers no resend once the deal is no longer won, even with registration complete', () => {
+    render(
+      <SponsorContractView
+        conferenceId="conf-2026"
+        sponsor={mockSponsor({
+          status: 'closed-lost',
+          registrationComplete: true,
+          registrationToken: 'tok-1',
+        })}
+        onSendRegistration={vi.fn()}
+      />,
+    )
+    expect(
+      screen.queryByRole('button', { name: 'Resend registration link' }),
+    ).not.toBeInTheDocument()
+  })
+
   it('offers no resend when the host cannot open the Send modal', () => {
     render(
       <SponsorContractView

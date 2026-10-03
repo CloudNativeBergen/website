@@ -50,11 +50,23 @@ export function withoutKeys(value: unknown): unknown {
     const obj = value as Record<string, unknown>
     // A block with link annotations: `markDefs[]._key` is referenced from
     // `children[].marks`. An editor may re-key both together, so the keys are
-    // renumbered BY POSITION and the references rewritten to match — then a
+    // renumbered and the references rewritten to match — then a
     // re-keyed-but-identical block compares equal, while swapping which text
-    // carries which link still reads as a change.
-    const markDefs = Array.isArray(obj.markDefs)
+    // carries which link still reads as a change. Renumbered in CANONICAL
+    // order (by the annotation's own content), not array position: a message
+    // merged in two passes (the composer before the portal link was known,
+    // the server after, #1263) appends its annotations in a different order
+    // than a single merge, and that order is not an edit.
+    const rawMarkDefs = Array.isArray(obj.markDefs)
       ? (obj.markDefs as Array<Record<string, unknown>>)
+      : undefined
+    const markDefs = rawMarkDefs
+      ? [...rawMarkDefs]
+          .map((d) => ({ d, canonical: JSON.stringify(withoutKeys(d)) }))
+          .sort((a, b) =>
+            a.canonical < b.canonical ? -1 : a.canonical > b.canonical ? 1 : 0,
+          )
+          .map(({ d }) => d)
       : undefined
     const keyMap = new Map<string, string>()
     markDefs?.forEach((d, i) => {

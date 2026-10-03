@@ -58,11 +58,12 @@ export const Default: Story = {
   },
 }
 
-/** A completed registration can still be re-sent to a new contact (#1263). */
+/** A completed registration can still be re-sent to a new contact (#1263) — while the deal is won. */
 export const PortalComplete: Story = {
   args: {
     conferenceId: 'conf-2026',
     sponsor: mockSponsor({
+      status: 'closed-won',
       contractStatus: 'contract-sent',
       signatureStatus: 'pending',
       registrationComplete: true,

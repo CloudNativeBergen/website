@@ -931,6 +931,24 @@ describe('registration kind (#1263)', () => {
     )
   })
 
+  it('refuses an information send that still carries the portal merge field', async () => {
+    renderModal({}, 'information')
+    // Typed after open (the stub seeds the draft from initialValues on mount).
+    draft = {
+      subject: 'Register at {{{SPONSOR_PORTAL_URL}}}',
+      message: [],
+    }
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+    await waitFor(() =>
+      expect(h.showNotification).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: expect.stringMatching(/only a registration send can fill in/),
+        }),
+      ),
+    )
+    expect(h.mutateAsync).not.toHaveBeenCalled()
+  })
+
   it('never asks the information kind for a link', () => {
     renderModal({}, 'information')
     expect(h.generateToken).not.toHaveBeenCalled()

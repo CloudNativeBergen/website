@@ -21,6 +21,24 @@ export function mergePortalUrl(text: string, portalUrl: string): string {
   return text.split(PORTAL_URL_PLACEHOLDER).join(portalUrl)
 }
 
+export const PORTAL_URL_WRONG_KIND_MESSAGE =
+  'This message uses the sponsor registration link ({{{SPONSOR_PORTAL_URL}}}), which only a registration send can fill in. Send it as a registration, or remove the merge field.'
+
+/**
+ * Whether a subject or body still carries the registration merge field —
+ * as text or as a link's href (#1263 review). Only a registration send can
+ * fill it; any other kind must refuse rather than mail the placeholder.
+ */
+export function carriesPortalPlaceholder(
+  subject: string,
+  message: unknown,
+): boolean {
+  return (
+    subject.includes(PORTAL_URL_PLACEHOLDER) ||
+    JSON.stringify(message).includes(PORTAL_URL_PLACEHOLDER)
+  )
+}
+
 /** The one attachment row of a registration send: the portal link itself. */
 export function registrationAttachments(
   portalUrl: string,

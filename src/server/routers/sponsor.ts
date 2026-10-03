@@ -146,7 +146,9 @@ import {
   sponsorTicketUrl,
 } from '@/lib/sponsor-crm/discount-email'
 import {
+  carriesPortalPlaceholder,
   mergePortalUrl,
+  PORTAL_URL_WRONG_KIND_MESSAGE,
   registrationAttachments,
   registrationCardHtml,
 } from '@/lib/sponsor-crm/registration-email'
@@ -3266,6 +3268,20 @@ export const sponsorRouter = router({
                 input.discountCodes ?? [],
               )
             : undefined
+
+        // The registration merge field is exposed to every template, but only
+        // a registration send can fill it: any other kind would mail the
+        // literal placeholder (or an unresolved href). Refused before any
+        // read of the sponsor's own data.
+        if (
+          input.kind !== 'registration' &&
+          carriesPortalPlaceholder(input.subject, message)
+        ) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: PORTAL_URL_WRONG_KIND_MESSAGE,
+          })
+        }
 
         // Registration kind (#1263): the portal link from the sponsor's own
         // token, created once when absent. Refuses before anything is sent.
