@@ -31,6 +31,9 @@ export interface WeeklyUpdateData {
   speakerTickets: number | 'unknown'
   organizerTickets: number | 'unknown'
   totalTickets: number
+  workshopParticipants: number
+  paidWorkshopParticipants: number
+  freeWorkshopParticipants: number
   totalRevenue: number
   targetAnalysis?: TicketAnalysisResult | null
   sponsorPipeline?: SponsorPipelineData | null
@@ -246,6 +249,9 @@ export async function sendWeeklyUpdateToSlack(
     speakerTickets,
     organizerTickets,
     totalTickets,
+    workshopParticipants,
+    paidWorkshopParticipants,
+    freeWorkshopParticipants,
     totalRevenue,
     targetAnalysis,
     sponsorPipeline,
@@ -324,11 +330,6 @@ export async function sendWeeklyUpdateToSlack(
         },
         {
           type: 'mrkdwn',
-          // ALLOCATED, not claimed, and it names whose allocations it counts.
-          // The claimed count here used to be every zero-priced ticket, which
-          // reported a different number than /admin/tickets for the same event
-          // (see `lib/status/types`). Sponsor allowances and claims live on the
-          // admin page, which reads the sources that can establish them.
           text: `*Complimentary allocated:*\n${
             typeof speakerTickets === 'number' &&
             typeof organizerTickets === 'number'
@@ -339,6 +340,22 @@ export async function sendWeeklyUpdateToSlack(
       ],
     },
   )
+
+  if (workshopParticipants > 0) {
+    blocks.push({
+      type: 'section',
+      fields: [
+        {
+          type: 'mrkdwn',
+          text: `*Workshop Participants:*\n${workshopParticipants}`,
+        },
+        {
+          type: 'mrkdwn',
+          text: `*Workshop Split:*\n${paidWorkshopParticipants} paid · ${freeWorkshopParticipants} comps`,
+        },
+      ],
+    })
+  }
 
   if (targetAnalysis && targetAnalysis.performance) {
     const { performance } = targetAnalysis

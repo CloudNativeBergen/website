@@ -145,6 +145,7 @@ async function buildTicketSection(conference: Conference): Promise<{
     const paidTickets = allTickets.filter((t) =>
       isPaidTicket(t, classification),
     )
+    const tally = tallyParticipants(allTickets, classification)
 
     const organizerTickets = conference.organizers?.length || 0
 
@@ -174,6 +175,9 @@ async function buildTicketSection(conference: Conference): Promise<{
       paidTickets: basicStats.totalPaidTickets,
       totalRevenue: basicStats.totalRevenue,
       totalTickets: paidTickets.length,
+      workshopParticipants: tally.workshopParticipants,
+      paidWorkshopParticipants: tally.paidWorkshopParticipants,
+      freeWorkshopParticipants: tally.freeWorkshopParticipants,
       speakerTickets,
       organizerTickets,
       categoryBreakdown,
