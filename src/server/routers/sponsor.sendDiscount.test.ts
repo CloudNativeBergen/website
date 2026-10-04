@@ -488,7 +488,10 @@ describe('the stored sponsor↔code link', () => {
   })
 
   it('is not written when the provider refuses the send', async () => {
-    h.send.mockResolvedValue({ data: null, error: { message: 'rate limited' } })
+    h.send.mockResolvedValue({
+      data: null,
+      error: { message: 'invalid recipient', statusCode: 422 },
+    })
     await expect(sponsor().crm.sendCommunication(INPUT)).rejects.toMatchObject({
       code: 'INTERNAL_SERVER_ERROR',
     })
@@ -1020,7 +1023,10 @@ describe('the discount-code claim', () => {
 
   it('a provider refusal releases the fresh claims, but never a claim this sponsor held before', async () => {
     foreignClaim('ACME-WORKSHOP', SFC, 60) // ours from an earlier send
-    h.send.mockResolvedValue({ data: null, error: { message: 'rate limited' } })
+    h.send.mockResolvedValue({
+      data: null,
+      error: { message: 'invalid recipient', statusCode: 422 },
+    })
     await expect(
       sponsor().crm.sendCommunication({
         ...INPUT,
@@ -1155,6 +1161,108 @@ describe('the discount-code claim', () => {
     expect(h.send).not.toHaveBeenCalled()
     expect(h.claimOps.map((o) => o.op)).toEqual(['create', 'delete'])
     expect(h.claims.size).toBe(0)
+  })
+
+  describe("when the provider's answer is lost (#1281)", () => {
+    // The email MAY be in the sponsor's inbox: the codes in it must not go
+    // back to the pool, or another sponsor can be sent the same codes.
+    const withNameAdoption = async () => {
+      const { conference } = await h.getConference()
+      h.getConference.mockResolvedValue({
+        conference: {
+          ...conference,
+          sponsors: [{ sponsor: { _id: 'sponsor-acme', name: 'Acme' } }],
+        },
+        domain: 'localhost',
+        error: null,
+      })
+    }
+
+    it('keeps the sent codes claimed, frees the adopted ones, links nothing, and says why', async () => {
+      await withNameAdoption()
+      h.send.mockRejectedValueOnce(new Error('socket hang up'))
+      await expect(
+        sponsor().crm.sendCommunication(INPUT),
+      ).rejects.toMatchObject({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: expect.stringMatching(
+          /did not confirm delivery, so the codes stay held for this sponsor: send again soon .* lapses 15 minutes after the codes were first reserved/,
+        ),
+      })
+      expect(claimedBy('ACME-2026')).toBe(SFC)
+      // ACME-WORKSHOP was only going to be adopted; it was not in the email.
+      expect(claimIdOf('ACME-WORKSHOP')).toBeUndefined()
+      expect(linkInserts()).toHaveLength(0)
+      expect(record()).toMatchObject({ deliveryStatus: 'failed' })
+    })
+
+    it('keeps the claim on a 5xx too — a gateway timeout is not proof nothing went out', async () => {
+      h.send.mockResolvedValueOnce({
+        data: null,
+        error: { message: 'gateway timeout', statusCode: 504 },
+      })
+      await expect(
+        sponsor().crm.sendCommunication(INPUT),
+      ).rejects.toMatchObject({
+        message: expect.stringMatching(/did not confirm delivery/),
+      })
+      expect(claimedBy('ACME-2026')).toBe(SFC)
+    })
+
+    it('the codes cannot be given to another sponsor', async () => {
+      h.send.mockRejectedValueOnce(new Error('socket hang up'))
+      await expect(sponsor().crm.sendCommunication(INPUT)).rejects.toThrow()
+      await expect(
+        sponsor().crm.assignDiscountCodes({
+          sponsorForConferenceId: 'sfc-globex',
+          discountCodes: ['ACME-2026'],
+        }),
+      ).rejects.toMatchObject({ code: 'CONFLICT' })
+      expect(claimedBy('ACME-2026')).toBe(SFC)
+      expect(h.inserts).toHaveLength(0)
+    })
+
+    it('a retry to the same sponsor goes through on the claim it kept, and links the codes', async () => {
+      h.send.mockRejectedValueOnce(new Error('socket hang up'))
+      await expect(sponsor().crm.sendCommunication(INPUT)).rejects.toThrow()
+      await expect(
+        sponsor().crm.sendCommunication(INPUT),
+      ).resolves.toMatchObject({ success: true, linkedCodes: ['ACME-2026'] })
+      expect(h.claimOps.map((o) => o.op)).toEqual(['create'])
+      expect(claimedBy('ACME-2026')).toBe(SFC)
+    })
+
+    it('a definitive refusal (4xx) still releases the claims', async () => {
+      h.send.mockResolvedValueOnce({
+        data: null,
+        error: { message: 'invalid recipient', statusCode: 422 },
+      })
+      await expect(
+        sponsor().crm.sendCommunication(INPUT),
+      ).rejects.toMatchObject({ message: 'invalid recipient' })
+      expect(h.claimOps.map((o) => o.op)).toEqual(['create', 'delete'])
+      expect(claimIdOf('ACME-2026')).toBeUndefined()
+    })
+
+    it('the hold is the settle window, not forever: an unretried claim is taken over after it', async () => {
+      // KNOWN LIMIT, by the claim lock's stale rule: the kept claim has no
+      // stored link behind it, so once it is older than CLAIM_SETTLE_MS
+      // another sponsor may take the codes.
+      h.send.mockRejectedValueOnce(new Error('socket hang up'))
+      await expect(sponsor().crm.sendCommunication(INPUT)).rejects.toThrow()
+      const id = claimIdOf('ACME-2026')!
+      h.claims.set(id, {
+        ...h.claims.get(id),
+        claimedAt: new Date(Date.now() - 16 * 60_000).toISOString(),
+      })
+      await expect(
+        sponsor().crm.assignDiscountCodes({
+          sponsorForConferenceId: 'sfc-globex',
+          discountCodes: ['ACME-2026'],
+        }),
+      ).resolves.toMatchObject({ success: true })
+      expect(claimedBy('ACME-2026')).toBe('sfc-globex')
+    })
   })
 
   it('an Assign claims before it appends, and releases if the append fails', async () => {
