@@ -450,7 +450,7 @@ async function buildFreeTicketAllocation({
     // would state a fact the server never obtained.
     speakerCount: speakers,
     speakerStatuses: speakerTicketInputs
-      ? joinSpeakerTicketStatus(speakerTicketInputs, redeemedEmails)
+      ? joinSpeakerTicketStatus(speakerTicketInputs, redeemedEmails, conference)
       : null,
     organizerCount: organizers,
   })

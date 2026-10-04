@@ -178,13 +178,25 @@ describe('redeemedSpeakerEmails — the category narrowing', () => {
 })
 
 describe('joinSpeakerTicketStatus — the three states', () => {
-  const redeemed = new Map([['claimed@x.test', { ticketId: 1, name: '', email: 'claimed@x.test', registeredEmail: '', category: '' }]])
+  const redeemed = new Map([
+    [
+      'claimed@x.test',
+      {
+        ticketId: 1, orderId: 1,
+        name: '',
+        email: 'claimed@x.test',
+        registeredEmail: '',
+        category: '',
+      },
+    ],
+  ])
 
   it('reports not-invited when no invitation was ever recorded', () => {
     expect(
       joinSpeakerTicketStatus(
         [{ speakerId: 's1', emails: ['nobody@x.test'], invitedAt: null }],
         redeemed,
+        { checkinCustomerId: 15509, checkinEventId: 218308 },
       ),
     ).toEqual([{ speakerId: 's1', state: 'not-invited', invitedAt: undefined }])
   })
@@ -373,7 +385,7 @@ describe('toTicketCandidates / searchTicketCandidates — the organizer search',
   it('keeps the ticket id, name, address and category — and DROPS order ids, sums and payment state', () => {
     const [first] = toTicketCandidates(raw)
     expect(first).toEqual({
-      ticketId: 1,
+      ticketId: 1, orderId: 1,
       name: 'Ada Lovelace',
       email: 'ada@work.example',
       registeredEmail: 'Ada@Work.Example',
@@ -410,6 +422,7 @@ describe('toTicketCandidates / searchTicketCandidates — the organizer search',
     expect(searchTicketCandidates(toTicketCandidates(raw), 'a')).toEqual([])
     const many = Array.from({ length: 50 }, (_, i) => ({
       ticketId: i,
+      orderId: i,
       name: `Person ${i}`,
       email: `p${i}@example.test`,
       registeredEmail: `p${i}@example.test`,

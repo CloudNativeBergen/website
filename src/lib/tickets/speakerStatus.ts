@@ -140,6 +140,7 @@ export interface SpeakerTicketStatus {
   /** ISO timestamp of the invitation, when there was one. */
   invitedAt?: string
   additionals?: { name: string; value: string }[]
+  manageUrl?: string
 }
 
 /**
@@ -157,6 +158,7 @@ export interface SpeakerTicketStatus {
 export interface TicketCandidate {
   /** The provider's ticket id — the provenance trail's anchor. */
   ticketId: number
+  orderId: number
   /** The name on the ticket, as the provider holds it. May be empty. */
   name: string
   /** Normalized (NFKC + trimmed + lowercased) contact address. Never empty. */
@@ -189,6 +191,7 @@ export function toTicketCandidates(tickets: EventTicket[]): TicketCandidate[] {
       ''
     candidates.push({
       ticketId: ticket.id,
+      orderId: ticket.order_id,
       name,
       email,
       registeredEmail: ticket.crm?.email ?? '',
@@ -254,6 +257,7 @@ export function redeemedSpeakerEmails(
 export function joinSpeakerTicketStatus(
   speakers: SpeakerTicketInput[],
   redeemed: Map<string, TicketCandidate> | null,
+  conference?: ConferenceTicketingBinding,
 ): SpeakerTicketStatus[] {
   return speakers.map((speaker) => {
     const invitedAt = speaker.invitedAt ?? undefined
@@ -274,6 +278,10 @@ export function joinSpeakerTicketStatus(
       state: hasTicket ? 'redeemed' : invitedAt ? 'invited' : 'not-invited',
       invitedAt,
       additionals: foundTicket?.additionals,
+      manageUrl:
+        foundTicket && conference?.checkinCustomerId && conference?.checkinEventId
+          ? `https://app.checkin.no/customer/${conference?.checkinCustomerId}/event/${conference?.checkinEventId}/orders/order?id=${foundTicket.orderId}`
+          : undefined,
     }
   })
 }
