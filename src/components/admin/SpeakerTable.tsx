@@ -431,22 +431,29 @@ export function SpeakerTable({
 
   const renderTicketQuestions = (speaker: SpeakerWithProposals) => {
     const status = ticketStatuses?.[speaker._id]
-    if (!status) return <span className="text-sm text-gray-400 dark:text-gray-500">—</span>
+    if (!status)
+      return <span className="text-sm text-gray-400 dark:text-gray-500">—</span>
 
-    const hasQuestions = (status.fields?.length ?? 0) > 0 || (status.additionals?.length ?? 0) > 0
-    if (!hasQuestions) return <span className="text-sm text-gray-400 dark:text-gray-500">—</span>
+    const hasQuestions =
+      (status.fields?.length ?? 0) > 0 || (status.additionals?.length ?? 0) > 0
+    if (!hasQuestions)
+      return <span className="text-sm text-gray-400 dark:text-gray-500">—</span>
 
     return (
       <div className="space-y-1">
         {status.fields?.map((f, i) => (
           <div key={`f-${i}`} className="text-xs">
-            <span className="font-medium text-gray-900 dark:text-white">{f.key}:</span>{' '}
+            <span className="font-medium text-gray-900 dark:text-white">
+              {f.key}:
+            </span>{' '}
             <span className="text-gray-700 dark:text-gray-300">{f.value}</span>
           </div>
         ))}
         {status.additionals?.map((a, i) => (
           <div key={`a-${i}`} className="text-xs">
-            <span className="font-medium text-gray-900 dark:text-white">{a.name}:</span>{' '}
+            <span className="font-medium text-gray-900 dark:text-white">
+              {a.name}:
+            </span>{' '}
             <span className="text-gray-700 dark:text-gray-300">{a.value}</span>
           </div>
         ))}
@@ -862,7 +869,9 @@ export function SpeakerTable({
               {columnVisibility.linkedin && <Th width="8rem">LinkedIn</Th>}
               {columnVisibility.bluesky && <Th width="8rem">Bluesky</Th>}
               {columnVisibility.talks && <Th>Talks</Th>}
-              {columnVisibility.questions && <Th width="12rem">Ticket Questions</Th>}
+              {columnVisibility.questions && (
+                <Th width="12rem">Ticket Questions</Th>
+              )}
               <Th width="7rem" align="right">
                 Actions
               </Th>
@@ -991,8 +1000,12 @@ export function SpeakerTable({
                       )}
                     </Td>
                   )}
-                  {columnVisibility.talks && <Td>{renderSpeakerTalks(speaker)}</Td>}
-                  {columnVisibility.questions && <Td>{renderTicketQuestions(speaker)}</Td>}
+                  {columnVisibility.talks && (
+                    <Td>{renderSpeakerTalks(speaker)}</Td>
+                  )}
+                  {columnVisibility.questions && (
+                    <Td>{renderTicketQuestions(speaker)}</Td>
+                  )}
                   <Td align="right" className="whitespace-nowrap">
                     <div className="flex items-center justify-end">
                       {renderSpeakerActions(speaker)}
