@@ -641,7 +641,7 @@ export const ticketsRouter = router({
       }
 
       const redeemed = await fetchRedeemedSpeakerEmails(conference)
-      return { statuses: joinSpeakerTicketStatus(inputs, redeemed) }
+      return { statuses: joinSpeakerTicketStatus(inputs, redeemed, conference) }
     }),
 
     /**

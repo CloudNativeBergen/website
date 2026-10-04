@@ -22,12 +22,14 @@ import { BlueskyFeed } from '@/components/BlueskyFeed'
 import { ScrollFadeBlueskyFeed } from '@/components/ScrollFadeBlueskyFeed'
 import { iconForLink, titleForLink } from '@/components/SocialIcons'
 import { ModalShell } from '@/components/ModalShell'
+import type { SpeakerTicketStatus } from '@/lib/tickets/speakerStatus'
 
 export interface SpeakerProfilePreviewProps {
   isOpen: boolean
   onClose: () => void
   speaker: Speaker
   talks: ProposalExisting[]
+  ticketStatus?: SpeakerTicketStatus
 }
 
 export default function SpeakerProfilePreview({
@@ -35,6 +37,7 @@ export default function SpeakerProfilePreview({
   onClose,
   speaker,
   talks,
+  ticketStatus,
 }: SpeakerProfilePreviewProps) {
   const blueskyHandle = hasBlueskySocial(speaker.links || [])
 
@@ -256,6 +259,39 @@ export default function SpeakerProfilePreview({
                 </div>
               </div>
             )}
+
+            {ticketStatus?.additionals &&
+              ticketStatus.additionals.length > 0 && (
+                <div className="mt-8 border-t border-gray-100 pt-6 dark:border-gray-800">
+                  <div className="mb-4 flex items-center justify-between">
+                    <h3 className="text-sm font-semibold tracking-wider text-gray-500 uppercase dark:text-gray-400">
+                      Ticket Questions
+                    </h3>
+                    {ticketStatus.manageUrl && (
+                      <a
+                        href={ticketStatus.manageUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-sm font-medium text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300"
+                      >
+                        Edit in Checkin &rarr;
+                      </a>
+                    )}
+                  </div>
+                  <ul className="space-y-3">
+                    {ticketStatus.additionals.map((answer, i) => (
+                      <li key={i} className="text-sm">
+                        <div className="font-medium text-gray-900 dark:text-gray-100">
+                          {answer.name}
+                        </div>
+                        <div className="text-gray-600 dark:text-gray-300">
+                          {answer.value}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
           </div>
         </div>
       </div>
