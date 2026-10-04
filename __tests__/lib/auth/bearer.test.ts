@@ -129,7 +129,7 @@ describe('getSessionFromBearerToken', () => {
     expect(session).toBeNull()
   })
 
-  it('should return null when token is missing account', async () => {
+  it('should return a valid session when token is missing account (magic link login)', async () => {
     const payload = { ...validPayload() } as Record<string, unknown>
     delete payload.account
     const token = await encode({
@@ -140,7 +140,9 @@ describe('getSessionFromBearerToken', () => {
     })
     const session = await getSessionFromBearerToken(token)
 
-    expect(session).toBeNull()
+    expect(session).not.toBeNull()
+    expect(session?.user.sub).toBe(payload.sub)
+    expect(session?.account).toBeUndefined()
   })
 
   it('should return null when token is missing sub', async () => {
