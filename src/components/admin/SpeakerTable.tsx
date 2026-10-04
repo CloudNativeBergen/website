@@ -111,6 +111,18 @@ interface ColumnVisibility {
   linkedin: boolean
   indicators: boolean
   ticket: boolean
+  talks: boolean
+  questions: boolean
+}
+
+const COLUMN_LABELS: Record<keyof ColumnVisibility, string> = {
+  email: 'Email',
+  bluesky: 'Bluesky',
+  linkedin: 'LinkedIn',
+  indicators: 'Indicators',
+  ticket: 'Ticket',
+  talks: 'Talks',
+  questions: 'Ticket Questions',
 }
 
 interface FilterOptions {
@@ -247,6 +259,8 @@ export function SpeakerTable({
     linkedin: false,
     indicators: true,
     ticket: true,
+    talks: true,
+    questions: false,
   })
 
   const router = useRouter()
@@ -414,6 +428,38 @@ export function SpeakerTable({
         ))}
     </div>
   )
+
+  const renderTicketQuestions = (speaker: SpeakerWithProposals) => {
+    const status = ticketStatuses?.[speaker._id]
+    if (!status)
+      return <span className="text-sm text-gray-400 dark:text-gray-500">—</span>
+
+    const hasQuestions =
+      (status.fields?.length ?? 0) > 0 || (status.additionals?.length ?? 0) > 0
+    if (!hasQuestions)
+      return <span className="text-sm text-gray-400 dark:text-gray-500">—</span>
+
+    return (
+      <div className="space-y-1">
+        {status.fields?.map((f, i) => (
+          <div key={`f-${i}`} className="text-xs">
+            <span className="font-medium text-gray-900 dark:text-white">
+              {f.key}:
+            </span>{' '}
+            <span className="text-gray-700 dark:text-gray-300">{f.value}</span>
+          </div>
+        ))}
+        {status.additionals?.map((a, i) => (
+          <div key={`a-${i}`} className="text-xs">
+            <span className="font-medium text-gray-900 dark:text-white">
+              {a.name}:
+            </span>{' '}
+            <span className="text-gray-700 dark:text-gray-300">{a.value}</span>
+          </div>
+        ))}
+      </div>
+    )
+  }
 
   const renderSpeakerActions = (speaker: SpeakerWithProposals) => (
     <ActionMenu ariaLabel={`Actions for ${speaker.name}`}>
@@ -666,7 +712,7 @@ export function SpeakerTable({
               }
               keepOpen
             >
-              {column.charAt(0).toUpperCase() + column.slice(1)}
+              {COLUMN_LABELS[column as keyof ColumnVisibility]}
             </FilterOption>
           ))}
         </FilterDropdown>
@@ -797,7 +843,12 @@ export function SpeakerTable({
                 </div>
               )}
 
-              <div className="mt-3">{renderSpeakerTalks(speaker)}</div>
+              {columnVisibility.talks && (
+                <div className="mt-3">{renderSpeakerTalks(speaker)}</div>
+              )}
+              {columnVisibility.questions && (
+                <div className="mt-3">{renderTicketQuestions(speaker)}</div>
+              )}
             </div>
           )
         })}
@@ -817,7 +868,10 @@ export function SpeakerTable({
               {columnVisibility.email && <Th width="12rem">Email</Th>}
               {columnVisibility.linkedin && <Th width="8rem">LinkedIn</Th>}
               {columnVisibility.bluesky && <Th width="8rem">Bluesky</Th>}
-              <Th>Talks</Th>
+              {columnVisibility.talks && <Th>Talks</Th>}
+              {columnVisibility.questions && (
+                <Th width="12rem">Ticket Questions</Th>
+              )}
               <Th width="7rem" align="right">
                 Actions
               </Th>
@@ -946,7 +1000,12 @@ export function SpeakerTable({
                       )}
                     </Td>
                   )}
-                  <Td>{renderSpeakerTalks(speaker)}</Td>
+                  {columnVisibility.talks && (
+                    <Td>{renderSpeakerTalks(speaker)}</Td>
+                  )}
+                  {columnVisibility.questions && (
+                    <Td>{renderTicketQuestions(speaker)}</Td>
+                  )}
                   <Td align="right" className="whitespace-nowrap">
                     <div className="flex items-center justify-end">
                       {renderSpeakerActions(speaker)}
