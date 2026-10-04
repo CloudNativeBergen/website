@@ -279,7 +279,9 @@ export function joinSpeakerTicketStatus(
       invitedAt,
       additionals: foundTicket?.additionals,
       manageUrl:
-        foundTicket && conference?.checkinCustomerId && conference?.checkinEventId
+        foundTicket &&
+        conference?.checkinCustomerId &&
+        conference?.checkinEventId
           ? `https://app.checkin.no/customer/${conference?.checkinCustomerId}/event/${conference?.checkinEventId}/orders/order?id=${foundTicket.orderId}`
           : undefined,
     }

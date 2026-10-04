@@ -182,7 +182,8 @@ describe('joinSpeakerTicketStatus — the three states', () => {
     [
       'claimed@x.test',
       {
-        ticketId: 1, orderId: 1,
+        ticketId: 1,
+        orderId: 1,
         name: '',
         email: 'claimed@x.test',
         registeredEmail: '',
@@ -385,7 +386,8 @@ describe('toTicketCandidates / searchTicketCandidates — the organizer search',
   it('keeps the ticket id, name, address and category — and DROPS order ids, sums and payment state', () => {
     const [first] = toTicketCandidates(raw)
     expect(first).toEqual({
-      ticketId: 1, orderId: 1,
+      ticketId: 1,
+      orderId: 1,
       name: 'Ada Lovelace',
       email: 'ada@work.example',
       registeredEmail: 'Ada@Work.Example',
