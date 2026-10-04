@@ -140,6 +140,7 @@ export interface SpeakerTicketStatus {
   /** ISO timestamp of the invitation, when there was one. */
   invitedAt?: string
   additionals?: { name: string; value: string }[]
+  fields?: { key: string; value: string }[]
   manageUrl?: string
 }
 
@@ -167,6 +168,7 @@ export interface TicketCandidate {
   registeredEmail: string
   category: string
   additionals?: { name: string; value: string }[]
+  fields?: { key: string; value: string }[]
 }
 
 /**
@@ -197,6 +199,7 @@ export function toTicketCandidates(tickets: EventTicket[]): TicketCandidate[] {
       registeredEmail: ticket.crm?.email ?? '',
       category: ticket.category,
       additionals: ticket.additionals,
+      fields: ticket.fields,
     })
   }
   return candidates
@@ -278,6 +281,7 @@ export function joinSpeakerTicketStatus(
       state: hasTicket ? 'redeemed' : invitedAt ? 'invited' : 'not-invited',
       invitedAt,
       additionals: foundTicket?.additionals,
+      fields: foundTicket?.fields,
       manageUrl:
         foundTicket &&
         conference?.checkinCustomerId &&
