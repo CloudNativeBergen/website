@@ -2809,7 +2809,7 @@ export const sponsorRouter = router({
           const kept = contract
             ? 'the agreement was kept: sending again in 10 minutes resends the same signing link'
             : discount &&
-              `the codes are held for this sponsor for ${CLAIM_SETTLE_MS / 60_000} minutes: sending again delivers the same codes`
+              `the codes stay held for this sponsor: send again soon to deliver the same codes (an unconfirmed hold lapses ${CLAIM_SETTLE_MS / 60_000} minutes after the codes were first reserved)`
           if (answerLost) {
             await discount?.releaseAdopted()
           } else {

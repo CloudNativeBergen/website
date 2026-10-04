@@ -1186,7 +1186,7 @@ describe('the discount-code claim', () => {
       ).rejects.toMatchObject({
         code: 'INTERNAL_SERVER_ERROR',
         message: expect.stringMatching(
-          /did not confirm delivery, so the codes are held for this sponsor for 15 minutes/,
+          /did not confirm delivery, so the codes stay held for this sponsor: send again soon .* lapses 15 minutes after the codes were first reserved/,
         ),
       })
       expect(claimedBy('ACME-2026')).toBe(SFC)
