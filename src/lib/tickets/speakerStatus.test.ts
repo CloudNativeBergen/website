@@ -95,7 +95,7 @@ describe('the speaker ticket CATEGORY is derived from the provider, not assumed'
       tickets: [ticket('claimed@x.test', 'Speaker')],
     })
     const redeemed = await fetchRedeemedSpeakerEmails(CONF)
-    expect([...redeemed!]).toEqual(['claimed@x.test'])
+    expect([...redeemed!.keys()]).toEqual(['claimed@x.test'])
 
     const [status] = joinSpeakerTicketStatus(
       [
@@ -115,7 +115,7 @@ describe('the speaker ticket CATEGORY is derived from the provider, not assumed'
       types: [{ id: 9, name: 'Speaker', requiresInvitation: true }],
       tickets: [ticket('old@x.test', 'Speaker ticket')],
     })
-    expect([...(await fetchRedeemedSpeakerEmails(CONF))!]).toEqual([
+    expect([...(await fetchRedeemedSpeakerEmails(CONF))!.keys()]).toEqual([
       'old@x.test',
     ])
   })
@@ -150,7 +150,7 @@ describe('redeemedSpeakerEmails — the category narrowing', () => {
       ticket('bought@x.test', 'Workshop + Conference (2 days)'),
       ticket('regular@x.test', 'Conference (1 day)'),
     ])
-    expect([...emails]).toEqual(['claimed@x.test'])
+    expect([...emails.keys()]).toEqual(['claimed@x.test'])
     // The load-bearing half: an ordinary ticket leaves the comp unclaimed,
     // which is the thing being chased.
     expect(emails.has('bought@x.test')).toBe(false)
@@ -159,7 +159,7 @@ describe('redeemedSpeakerEmails — the category narrowing', () => {
 
   it('normalizes case and whitespace on the ticket side', () => {
     const emails = redeemedFrom([ticket('  Claimed@X.Test ', 'Speaker ticket')])
-    expect([...emails]).toEqual(['claimed@x.test'])
+    expect([...emails.keys()]).toEqual(['claimed@x.test'])
   })
 
   it('does not throw on a null or blank contact email, and never matches one', () => {
@@ -168,7 +168,7 @@ describe('redeemedSpeakerEmails — the category narrowing', () => {
       ticket('   ', 'Speaker ticket'),
       ticket('real@x.test', 'Speaker ticket'),
     ])
-    expect([...emails]).toEqual(['real@x.test'])
+    expect([...emails.keys()]).toEqual(['real@x.test'])
     const [status] = joinSpeakerTicketStatus(
       [{ speakerId: 's1', emails: [null, '', undefined], invitedAt: null }],
       emails,
@@ -344,7 +344,7 @@ describe('the 30s memo', () => {
     })
 
     expect(await fetchRedeemedSpeakerEmails(CONF)).toBeNull()
-    expect([...(await fetchRedeemedSpeakerEmails(CONF))!]).toEqual([
+    expect([...(await fetchRedeemedSpeakerEmails(CONF))!.keys()]).toEqual([
       'claimed@x.test',
     ])
   })
@@ -387,18 +387,21 @@ describe('toTicketCandidates / searchTicketCandidates — the organizer search',
     const [first] = toTicketCandidates(raw)
     expect(first).toEqual({
       ticketId: 1,
-      orderId: 1,
+      orderId: 500,
       name: 'Ada Lovelace',
       email: 'ada@work.example',
       registeredEmail: 'Ada@Work.Example',
       category: 'Speaker ticket',
+      additionals: undefined,
     })
     // The narrowing is the PII control: the order id, the sum and the payment
     // state must not survive the fetch.
     expect(Object.keys(first).sort()).toEqual([
+      'additionals',
       'category',
       'email',
       'name',
+      'orderId',
       'registeredEmail',
       'ticketId',
     ])
