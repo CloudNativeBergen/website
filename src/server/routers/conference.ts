@@ -376,6 +376,13 @@ export const conferenceRouter = router({
       return applyConferencePatch(conferenceId, input)
     }),
 
+  updateSpeakerRegistrationLink: adminProcedure
+    .input(UpdateRegistrationSchema.pick({ speakerRegistrationLink: true }))
+    .mutation(async ({ input }) => {
+      const conferenceId = await resolveConferenceId()
+      return applyConferencePatch(conferenceId, input)
+    }),
+
   updateCommunication: adminProcedure
     .input(UpdateCommunicationSchema)
     .mutation(async ({ input }) => {
