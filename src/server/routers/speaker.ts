@@ -142,6 +142,7 @@ async function ticketSweepContext(): Promise<{
   const { conference, error: conferenceError } =
     await getConferenceForCurrentDomain({
       includeSpeakerRegistrationLink: true,
+      uncached: true,
     })
 
   if (conferenceError || !conference) {
@@ -1586,6 +1587,7 @@ export const speakerRouter = router({
     ticketInvitationConfig: adminProcedure.query(async () => {
       const { conference, error } = await getConferenceForCurrentDomain({
         includeSpeakerRegistrationLink: true,
+        uncached: true,
       })
       // A FAILED READ IS NOT "NO LINK". The read returns a normalized empty
       // conference alongside its error, which would answer `false` and tell
