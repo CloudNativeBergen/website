@@ -119,6 +119,7 @@ export async function getConferenceForCurrentDomain({
   gallery = false,
   includeSponsorRegistrationLink = false,
   includeSpeakerRegistrationLink = false,
+  uncached = false,
 }: {
   organizers?: boolean
   schedule?: boolean
@@ -139,6 +140,8 @@ export async function getConferenceForCurrentDomain({
   includeSponsorRegistrationLink?: boolean
   /** See {@link getConferenceForDomain}. Admin/server surfaces only. */
   includeSpeakerRegistrationLink?: boolean
+  /** Fetch directly from the origin API instead of the CDN. Admin surfaces only. */
+  uncached?: boolean
 } = {}): Promise<{
   conference: Conference
   domain: string
@@ -160,6 +163,7 @@ export async function getConferenceForCurrentDomain({
       gallery,
       includeSponsorRegistrationLink,
       includeSpeakerRegistrationLink,
+      uncached,
     })
   } catch (err) {
     const error = err as Error
