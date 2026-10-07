@@ -5,7 +5,7 @@ import WorkshopList from '@/components/workshop/WorkshopList'
 import { Container } from '@/components/Container'
 import { BackgroundImage } from '@/components/BackgroundImage'
 import { Button } from '@/components/Button'
-import { checkWorkshopEligibility } from '@/lib/workshop/eligibility'
+import { decideWorkshopPortalAccess } from '@/lib/workshop/access'
 import { isWorkshopsEnabledForConference } from '@/lib/features/workshops'
 import { resolveConferenceContact } from '@/lib/email/from'
 import { EnvelopeIcon } from '@heroicons/react/24/outline'
@@ -108,14 +108,19 @@ export default async function WorkshopPage() {
     )
   }
 
-  if (conference.checkinCustomerId && conference.checkinEventId) {
-    const eligibility = await checkWorkshopEligibility({
-      userEmail: user.email,
-      conference,
-      contactEmail: conference.contactEmail,
-    })
+  // THE ONE ACCESS DECISION (#1294) — the same call the attendee procedures
+  // make, so this page can never show a signup form the API would refuse (or
+  // the reverse). It no longer skips the ticket check for a conference without
+  // ticketing ids: no ticketing means nobody can be shown to hold a ticket.
+  {
+    const access = await decideWorkshopPortalAccess({ conference, user })
 
-    if (!eligibility.isEligible) {
+    // Unreachable after the gate above, but the decision is the authority.
+    if (!access.allowed && access.denial === 'feature-disabled') {
+      notFound()
+    }
+
+    if (!access.allowed) {
       return (
         <div className="relative py-20 sm:pt-36 sm:pb-24">
           <BackgroundImage className="-top-36 -bottom-14" />
@@ -147,15 +152,17 @@ export default async function WorkshopPage() {
                   </div>
                   <div className="ml-3">
                     <h3 className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
-                      Workshop Ticket Required
+                      {access.denial === 'email-unverified'
+                        ? 'Email Address Not Verified'
+                        : 'Workshop Ticket Required'}
                     </h3>
                     <div className="mt-2 text-sm text-yellow-700 dark:text-yellow-300">
-                      <p>{eligibility.reason}</p>
-                      {eligibility.tickets.length > 0 && (
+                      <p>{access.reason}</p>
+                      {access.tickets.length > 0 && (
                         <div className="mt-4">
                           <p className="font-medium">Your current ticket(s):</p>
                           <ul className="mt-2 list-inside list-disc">
-                            {eligibility.tickets.map((ticket, i) => (
+                            {access.tickets.map((ticket, i) => (
                               <li key={i}>{ticket.category}</li>
                             ))}
                           </ul>

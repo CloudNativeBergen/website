@@ -55,6 +55,7 @@ vi.mock('@/lib/sanity/client', () => ({
 }))
 
 import { checkWorkshopEligibility } from '@/lib/workshop/eligibility'
+import { __resetRedeemedCache } from '@/lib/tickets/speakerStatus'
 import type { EventTicket } from '@/lib/tickets/types'
 
 const SECRET = 'checkin-webhook-test-secret'
@@ -171,6 +172,9 @@ async function gateAdmits(
   category: string,
   ticketTypeRoles?: Role[],
 ): Promise<boolean> {
+  // Each call is a different vendor state under the same event key, so it must
+  // not be served the previous call's memoized ticket list.
+  __resetRedeemedCache()
   // THE LIVE DOCUMENT — the same state the webhook's uncached read sees.
   h.fetch.mockResolvedValue({ ticketTypeRoles } as never)
   mockResolveTicketingProvider.mockResolvedValue({
@@ -216,6 +220,8 @@ describe('workshop access — the gate and the webhook cannot drift', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    // The gate reads tickets through the process-global 30s memo.
+    __resetRedeemedCache()
     process.env.CHECKIN_WEBHOOK_SECRET = SECRET
     vi.stubEnv('PLATFORM_ORG_ID', 'org-platform')
     mockGetOrganizationById.mockResolvedValue({

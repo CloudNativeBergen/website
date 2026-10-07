@@ -45,6 +45,7 @@ export function createWorkshopCaller(
     workosUser: {
       id: workosUser?.id ?? 'workos-user-1',
       email: workosUser?.email ?? 'attendee@example.com',
+      emailVerified: workosUser?.emailVerified ?? true,
       firstName: workosUser?.firstName ?? 'Test',
       lastName: workosUser?.lastName ?? 'Attendee',
     },

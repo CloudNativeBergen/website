@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import type { EventTicket } from '@/lib/tickets/types'
 
 // B7: eligibility must route through the request-boundary resolver (so a
@@ -11,8 +11,17 @@ vi.mock('@/lib/tickets/provider', () => ({
 vi.mock('@/lib/email/from', () => ({
   platformFallbackContact: () => 'fallback@example.test',
 }))
+// The live `ticketTypeRoles` re-read. Only a conference WITH an `_id` reaches
+// it, so most cases here never touch this mock.
+const sanityFetchMock = vi.fn()
+vi.mock('@/lib/sanity/client', () => ({
+  clientReadUncached: {
+    fetch: (...a: unknown[]) => sanityFetchMock(...a),
+  },
+}))
 
 import { checkWorkshopEligibility, workshopAccessOf } from './eligibility'
+import { __resetRedeemedCache } from '@/lib/tickets/speakerStatus'
 
 /** The historical hardcoded name — the one the bridge still honours. */
 const LEGACY = 'Workshop + Conference (2 days)'
@@ -33,7 +42,12 @@ const CONF = {
   organization: { _ref: 'org-xyz' },
 }
 
-beforeEach(() => vi.clearAllMocks())
+beforeEach(() => {
+  vi.clearAllMocks()
+  // Eligibility reads tickets through the process-global 30s memo; without this
+  // a case is served the previous case's ticket list.
+  __resetRedeemedCache()
+})
 
 describe('checkWorkshopEligibility — resolver routing (B7)', () => {
   it('resolves the provider from the conference (per-org creds seam) and honors eligible tickets', async () => {
@@ -71,13 +85,28 @@ describe('checkWorkshopEligibility — resolver routing (B7)', () => {
 
     const result = await checkWorkshopEligibility({
       userEmail: 'speaker@x.test',
-      conference: {},
+      // WITH an owning org: without one the read stops before the resolver is
+      // ever asked, and this case would pass without touching the mock above.
+      conference: CONF,
       contactEmail: 'help@x.test',
     })
 
+    expect(resolveTicketingProviderMock).toHaveBeenCalledWith(CONF)
     expect(result.isEligible).toBe(false)
+    expect(result.reason).toContain('Unable to verify')
     expect(result.reason).toContain('help@x.test')
     expect(result.tickets).toEqual([])
+  })
+
+  it('soft-fails without asking the provider when the conference has no owning org', async () => {
+    const result = await checkWorkshopEligibility({
+      userEmail: 'speaker@x.test',
+      conference: { checkinCustomerId: 42, checkinEventId: 7 },
+    })
+
+    expect(resolveTicketingProviderMock).not.toHaveBeenCalled()
+    expect(result.isEligible).toBe(false)
+    expect(result.reason).toContain('Unable to verify')
   })
 
   it('soft-fails (never throws) when the provider fetch errors', async () => {
@@ -96,6 +125,144 @@ describe('checkWorkshopEligibility — resolver routing (B7)', () => {
 
     expect(result.isEligible).toBe(false)
     expect(result.reason).toContain('Unable to verify')
+  })
+})
+
+describe('checkWorkshopEligibility — whose ticket it is', () => {
+  function holderOf(registeredEmail: string) {
+    resolveTicketingProviderMock.mockResolvedValue({
+      configured: true,
+      provider: {
+        fetchEventTickets: vi
+          .fn()
+          .mockResolvedValue([ticket(registeredEmail, LEGACY)]),
+      },
+      eventRef: { customerId: 42, eventId: 7 },
+    })
+  }
+
+  it('never folds two different mailboxes together (no NFKC on the match)', async () => {
+    // `o\uFB03ce` carries the ffi ligature, which NFKC rewrites to `office`.
+    // They are different mailboxes. The shared ticket memo also exposes an
+    // NFKC-normalized `email`; matching on it would hand the ligature account
+    // the other holder's workshop access.
+    holderOf('office@x.test')
+
+    const result = await checkWorkshopEligibility({
+      userEmail: 'o\uFB03ce@x.test',
+      conference: CONF,
+    })
+
+    expect(result.isEligible).toBe(false)
+    expect(result.tickets).toEqual([])
+    // And the refusal names the address that was checked.
+    expect(result.reason).toContain('No ticket found for o\uFB03ce@x.test')
+  })
+
+  it('refuses a caller with no ticket WITHOUT the live roles read', async () => {
+    // That read is an uncached Sanity request. A free account with no ticket
+    // must not be able to spend one per call.
+    const conference = { ...CONF, _id: 'conf-1' }
+    sanityFetchMock.mockResolvedValue({ ticketTypeRoles: null })
+    holderOf('someone-else@x.test')
+
+    const refused = await checkWorkshopEligibility({
+      userEmail: 'ada@x.test',
+      conference,
+    })
+
+    expect(refused.isEligible).toBe(false)
+    expect(refused.reason).toContain('No ticket found for ada@x.test')
+    expect(sanityFetchMock).not.toHaveBeenCalled()
+
+    // The control: the same conference DOES make that read for a holder, so
+    // the silence above is the short-circuit and not a mock that is never hit.
+    const admitted = await checkWorkshopEligibility({
+      userEmail: 'someone-else@x.test',
+      conference,
+    })
+
+    expect(admitted.isEligible).toBe(true)
+    expect(sanityFetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('matches the registered address regardless of case and padding', async () => {
+    holderOf('  Ada@X.test ')
+
+    const result = await checkWorkshopEligibility({
+      userEmail: 'ada@x.test',
+      conference: CONF,
+    })
+
+    expect(result.isEligible).toBe(true)
+    expect(result.eligibleTickets).toHaveLength(1)
+  })
+})
+
+describe('checkWorkshopEligibility — a provider that stops answering', () => {
+  const T0 = new Date('2026-10-20T08:00:00Z').getTime()
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(T0)
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('keeps admitting a ticket holder from the last list that arrived', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const fetchEventTickets = vi
+      .fn()
+      .mockResolvedValueOnce([ticket('ada@x.test', LEGACY)])
+      .mockRejectedValue(new Error('checkin down'))
+    resolveTicketingProviderMock.mockResolvedValue({
+      configured: true,
+      provider: { fetchEventTickets },
+      eventRef: { customerId: 42, eventId: 7 },
+    })
+    const gate = () =>
+      checkWorkshopEligibility({ userEmail: 'ada@x.test', conference: CONF })
+
+    expect((await gate()).isEligible).toBe(true)
+
+    // The 30-second window lapses and the provider starts failing: once while
+    // the failing refresh is in flight, once after it has failed.
+    vi.setSystemTime(T0 + 31_000)
+    expect((await gate()).isEligible).toBe(true)
+    for (let i = 0; i < 10; i++) await Promise.resolve()
+    expect((await gate()).isEligible).toBe(true)
+
+    // The provider WAS asked again, and failed; the holder was not refused.
+    expect(fetchEventTickets).toHaveBeenCalledTimes(2)
+  })
+
+  it('never refuses a recent buyer from a list that predates the purchase', async () => {
+    // The ticket-sold email sends a buyer here a minute after paying. The last
+    // list this instance holds was read before that.
+    const fetchEventTickets = vi
+      .fn()
+      .mockResolvedValueOnce([ticket('someone-else@x.test', LEGACY)])
+      .mockResolvedValue([
+        ticket('someone-else@x.test', LEGACY),
+        ticket('ada@x.test', LEGACY),
+      ])
+    resolveTicketingProviderMock.mockResolvedValue({
+      configured: true,
+      provider: { fetchEventTickets },
+      eventRef: { customerId: 42, eventId: 7 },
+    })
+    const gate = (userEmail: string) =>
+      checkWorkshopEligibility({ userEmail, conference: CONF })
+
+    const before = await gate('ada@x.test')
+    expect(before.isEligible).toBe(false)
+    expect(before.reason).toContain('No ticket found for ada@x.test')
+
+    // "Wait a minute and reload this page": the FIRST reload must do it.
+    vi.setSystemTime(T0 + 60_000)
+    expect((await gate('ada@x.test')).isEligible).toBe(true)
+    expect(fetchEventTickets).toHaveBeenCalledTimes(2)
   })
 })
 
@@ -167,6 +334,9 @@ describe('checkWorkshopEligibility — what the attendee is told', () => {
       grantsWorkshop?: boolean
     }[],
   ) {
+    // Each call is a different vendor state under the same event key, so it
+    // must not be served the previous call's memoized ticket list.
+    __resetRedeemedCache()
     resolveTicketingProviderMock.mockResolvedValue({
       configured: true,
       provider: {

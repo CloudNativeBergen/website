@@ -15,6 +15,7 @@ import {
 import { hasConfirmedSignup } from '@/lib/workshop/status'
 import { ExclamationTriangleIcon } from '@heroicons/react/24/outline'
 import { api } from '@/lib/trpc/client'
+import { Button } from '@/components/Button'
 
 interface WorkshopListProps {
   userWorkOSId?: string
@@ -42,13 +43,18 @@ export default function WorkshopList({
     includeCapacity: true,
   })
 
-  const { data: signupsData, refetch: refetchSignups } =
-    api.workshop.getMySignups.useQuery(undefined, {
-      // Identity is resolved server-side from the WorkOS session; this gate is
-      // purely a client-side UX guard so the query doesn't fire before the page
-      // has established the signed-in user.
-      enabled: !!userWorkOSId,
-    })
+  const {
+    data: signupsData,
+    refetch: refetchSignups,
+    isError: signupsFailed,
+    error: signupsError,
+    isFetching: signupsFetching,
+  } = api.workshop.getMySignups.useQuery(undefined, {
+    // Identity is resolved server-side from the WorkOS session; this gate is
+    // purely a client-side UX guard so the query doesn't fire before the page
+    // has established the signed-in user.
+    enabled: !!userWorkOSId,
+  })
 
   const signupMutation = api.workshop.signup.useMutation({
     onSuccess: (data) => {
@@ -207,6 +213,35 @@ export default function WorkshopList({
       {errorMessage && (
         <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-red-800 dark:border-red-800 dark:bg-red-900/20 dark:text-red-200">
           {errorMessage}
+        </div>
+      )}
+
+      {/* Without this a failed read is indistinguishable from "no signups":
+          a registered attendee would see their own workshops offered as
+          available, with nothing to say why. */}
+      {signupsFailed && (
+        <div
+          role="alert"
+          className="flex flex-col gap-4 rounded-xl border border-yellow-200 bg-yellow-50 p-4 text-yellow-800 sm:flex-row sm:items-center sm:justify-between dark:border-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-200"
+        >
+          {/* A refusal carries the server's own reason (no ticket, wrong
+              ticket type, ticket check unavailable); anything else is a
+              failed read, and "try again" is all there is to say. */}
+          <p>
+            {signupsError?.data?.code === 'FORBIDDEN'
+              ? signupsError.message
+              : 'We could not load your workshop registrations. Workshops you are already registered for may be listed as available below.'}
+          </p>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="min-h-11 shrink-0"
+            onClick={() => refetchSignups()}
+            disabled={signupsFetching}
+          >
+            Try again
+          </Button>
         </div>
       )}
 
