@@ -31,13 +31,14 @@ import { clientReadUncached } from '@/lib/sanity/client'
  * So the gate re-reads THIS ONE FIELD, uncached, at decision time. Both paths
  * then evaluate the live document.
  *
- * WHAT IT COSTS: one extra Sanity request per `/workshop` request that gets as
- * far as the eligibility check — a single-document, single-field projection,
- * behind AuthKit, on a page that already spends an uncached ticketing-vendor
- * round trip (`fetchEventTickets`) in the same function. The vendor call
- * dominates it. A short-TTL cache was considered and rejected: any TTL is a
- * window in which an access decision is knowably wrong, and there is nothing to
- * invalidate it with while Studio is a writer.
+ * WHAT IT COSTS: one extra Sanity request — a single-document, single-field
+ * projection — per page render AND per attendee procedure call (#1294), but
+ * only for a caller who HOLDS A TICKET. A caller with none is refused before
+ * this read (see {@link checkWorkshopEligibility}), so a free account cannot
+ * spend the live-API quota by calling the procedures in a loop. A short-TTL
+ * cache was considered and rejected: any TTL is a window in which an access
+ * decision is knowably wrong, and there is nothing to invalidate it with while
+ * Studio is a writer.
  *
  * (`conference.ticketTypeRoles` stays the fallback: an unreadable document or a
  * failed read keeps today's answer rather than locking out every attendee
@@ -138,6 +139,18 @@ export async function checkWorkshopEligibility(params: {
         )
       : []
 
+    // NO TICKET: refused here, before the roles read below. The answer cannot
+    // depend on the roles, and that read is an uncached Sanity request — a
+    // caller without a ticket must not be able to make us spend one per call.
+    if (userTickets.length === 0) {
+      return {
+        isEligible: false,
+        tickets: [],
+        eligibleTickets: [],
+        reason: `No ticket found for ${params.userEmail}. If you bought your ticket in the last few minutes, wait a minute and reload this page. If it was bought with a different email address, contact us at ${contactEmail}. Otherwise please purchase a workshop ticket to access workshops.`,
+      }
+    }
+
     // LIVE, not the cached copy on the conference the page resolved — see
     // {@link liveTicketTypeRoles}. The webhook reads the same document uncached,
     // so the two paths decide from the same state.
@@ -146,7 +159,7 @@ export async function checkWorkshopEligibility(params: {
       (ticket) => workshopAccessOf(ticket.category, roles) === 'granted',
     )
 
-    if (eligibleTickets.length === 0 && userTickets.length > 0) {
+    if (eligibleTickets.length === 0) {
       // TWO DIFFERENT DENIALS, because they need two different actions.
       // "Upgrade your ticket" is wrong — and insulting to someone who already
       // paid — when the real cause is that this conference has a ticket type
@@ -162,15 +175,6 @@ export async function checkWorkshopEligibility(params: {
         reason: unclassified
           ? `Your ticket type “${unclassified.category}” has not been set up for workshop access yet. This is a configuration gap on our side, not a problem with your ticket — please contact us at ${contactEmail} so an organizer can mark which ticket types include workshop access.`
           : `No valid workshop ticket found. Please upgrade your ticket to include workshop access, or contact us at ${contactEmail} if you believe this is an error.`,
-      }
-    }
-
-    if (eligibleTickets.length === 0 && userTickets.length === 0) {
-      return {
-        isEligible: false,
-        tickets: [],
-        eligibleTickets: [],
-        reason: `No ticket found for your email address. If you bought your ticket in the last few minutes, wait a minute and reload this page. Otherwise please purchase a workshop ticket to access workshops, or contact us at ${contactEmail} if you have any questions.`,
       }
     }
 

@@ -535,7 +535,7 @@ describe('the memo — stale readers', () => {
     expect(emails(await waiting)).toEqual(['second@x.test'])
   })
 
-  it('keeps answering from the last arrived list when the refresh fails, and retries', async () => {
+  it('keeps answering from the last arrived list when the refresh fails, and retries after a pause', async () => {
     const fetchEventTickets = vi
       .fn()
       .mockResolvedValueOnce(FIRST)
@@ -553,8 +553,18 @@ describe('the memo — stale readers', () => {
     await Promise.resolve()
     await Promise.resolve()
 
-    // The failure is not held for the window: the next caller retries, and a
-    // DEFAULT reader gets what that retry returns.
+    // The failure holds the key briefly: callers in that pause do not each ask
+    // the failing provider again. A stale reader still has the last list…
+    vi.setSystemTime(T0 + 34 * SECOND)
+    expect(
+      emails(await fetchEventTicketCandidates(CONF, { allowStale: true })),
+    ).toEqual(['first@x.test'])
+    // …and a default reader is told the provider could not answer.
+    expect(await fetchEventTicketCandidates(CONF)).toBeNull()
+    expect(fetchEventTickets).toHaveBeenCalledTimes(2)
+
+    // After the pause the next caller retries.
+    vi.setSystemTime(T0 + 37 * SECOND)
     expect(emails(await fetchEventTicketCandidates(CONF))).toEqual([
       'second@x.test',
     ])
@@ -671,6 +681,80 @@ describe('the memo — stale readers', () => {
       emails(await fetchEventTicketCandidates(CONF, { allowStale: true })),
     ).toEqual(['second@x.test'])
     expect(fetchEventTickets).toHaveBeenCalledTimes(3)
+  })
+
+  it('does not let a late answer from an abandoned refresh replace a newer list', async () => {
+    const stuck = deferred<EventTicket[]>()
+    const NEWER = [
+      ticket('first@x.test', 'Workshop'),
+      ticket('bought@x.test', 'Workshop'),
+    ]
+    const fetchEventTickets = vi
+      .fn()
+      .mockResolvedValueOnce(FIRST)
+      .mockReturnValueOnce(stuck.promise)
+      .mockResolvedValueOnce(NEWER)
+      .mockReturnValue(new Promise<EventTicket[]>(() => {}))
+    providerWith(fetchEventTickets)
+
+    await fetchEventTicketCandidates(CONF, { allowStale: true })
+    vi.setSystemTime(T0 + 31 * SECOND)
+    await fetchEventTicketCandidates(CONF, { allowStale: true })
+
+    // The stuck refresh is given up on; its replacement answers with a list
+    // that includes a ticket bought after the stuck one began.
+    vi.setSystemTime(T0 + 31 * SECOND + 121 * SECOND)
+    expect(emails(await fetchEventTicketCandidates(CONF))).toEqual([
+      'first@x.test',
+      'bought@x.test',
+    ])
+
+    // Now the abandoned refresh answers — with its older snapshot.
+    stuck.resolve(FIRST)
+    await stuck.promise
+    await Promise.resolve()
+
+    // Window lapsed, next refresh in flight: a stale reader takes the last
+    // list. It must be the NEWER one.
+    vi.setSystemTime(T0 + 31 * SECOND + 121 * SECOND + 31 * SECOND)
+    expect(
+      emails(await fetchEventTicketCandidates(CONF, { allowStale: true })),
+    ).toEqual(['first@x.test', 'bought@x.test'])
+    expect(fetchEventTickets).toHaveBeenCalledTimes(4)
+  })
+
+  it('counts the cap from when the read started, not from when it answered', async () => {
+    const slow = deferred<EventTicket[]>()
+    const fetchEventTickets = vi
+      .fn()
+      .mockReturnValueOnce(slow.promise)
+      .mockReturnValue(new Promise<EventTicket[]>(() => {}))
+    providerWith(fetchEventTickets)
+
+    // A read that starts at T0 and takes 90 seconds to answer.
+    const first = fetchEventTicketCandidates(CONF, { allowStale: true })
+    // Let the read reach the provider before the clock moves.
+    for (let i = 0; i < 10; i++) await Promise.resolve()
+    expect(fetchEventTickets).toHaveBeenCalledTimes(1)
+    vi.setSystemTime(T0 + 90 * SECOND)
+    slow.resolve(FIRST)
+    await first
+
+    // 9.5 minutes after it STARTED: still inside the cap.
+    vi.setSystemTime(T0 + 9 * MINUTE + 30 * SECOND)
+    expect(
+      emails(await fetchEventTicketCandidates(CONF, { allowStale: true })),
+    ).toEqual(['first@x.test'])
+
+    // 10.5 minutes after it started, 9 after it answered: past the cap. The
+    // reader waits on the provider instead of taking the list.
+    vi.setSystemTime(T0 + 10 * MINUTE + 30 * SECOND)
+    let answered = false
+    void fetchEventTicketCandidates(CONF, { allowStale: true }).then(() => {
+      answered = true
+    })
+    for (let i = 0; i < 50; i++) await Promise.resolve()
+    expect(answered).toBe(false)
   })
 
   it('keeps the instance alive for a refresh nobody is waiting on', async () => {

@@ -69,7 +69,7 @@ export async function decideWorkshopPortalAccess(params: {
     return {
       allowed: false,
       denial: 'email-unverified',
-      reason: `Your email address has not been verified yet. Sign out, sign in again and complete the email verification step, or contact us at ${contactEmail} for assistance.`,
+      reason: `Your email address ${user.email} has not been verified, so we cannot match it to a ticket. Please contact us at ${contactEmail} for assistance.`,
       tickets: [],
     }
   }

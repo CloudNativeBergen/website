@@ -391,7 +391,9 @@ describe('attendee procedures enforce the portal access decision', () => {
 
       await expect(call(createWorkshopCaller())).rejects.toMatchObject({
         code: 'FORBIDDEN',
-        message: expect.stringContaining('No ticket found for your email'),
+        message: expect.stringContaining(
+          'No ticket found for attendee@example.com',
+        ),
       })
       expect(ticketing.fetchEventTickets).toHaveBeenCalledTimes(1)
       expectNoSignupIO()
@@ -423,7 +425,7 @@ describe('attendee procedures enforce the portal access decision', () => {
       expectNoSignupIO()
     })
 
-    it('refuses when the provider read fails (fail closed)', async () => {
+    it('refuses when the provider read fails and no list has arrived yet (fail closed)', async () => {
       vi.spyOn(console, 'error').mockImplementation(() => {})
       ticketing.fetchEventTickets.mockRejectedValue(new Error('vendor down'))
 

@@ -311,8 +311,9 @@ const TICKETS_TTL_MS = 30_000
 /**
  * How long a reader that opted into {@link TicketCandidateReadOptions.allowStale}
  * may be served the last list that ARRIVED while a refresh is in flight or
- * failing. Past this the reader waits on the provider like everyone else, and
- * fails closed if it cannot answer.
+ * failing, counted from when the read that produced it started. Past this the
+ * reader waits on the provider like everyone else, and fails closed if it
+ * cannot answer.
  */
 const TICKETS_MAX_STALE_MS = 10 * 60_000
 
@@ -325,6 +326,15 @@ const TICKETS_MAX_STALE_MS = 10 * 60_000
  */
 const TICKETS_REFRESH_PATIENCE_MS = 2 * 60_000
 
+/**
+ * How long a FAILED refresh holds the key before a caller may ask the provider
+ * again, when there is an arrived list to fall back on. Without it every caller
+ * during an outage issues its own request, one after the other, at whatever
+ * rate attendees click. During the pause a stale reader keeps the last list
+ * and any other reader is told the provider could not answer (`null`).
+ */
+const TICKETS_RETRY_AFTER_FAILURE_MS = 5_000
+
 interface TicketsEntry {
   startedAt: number
   expiresAt: number
@@ -333,8 +343,14 @@ interface TicketsEntry {
   settled: Promise<void>
   /** True until `candidates` settles. */
   pending: boolean
-  /** The last list that actually arrived under this key, and when. */
-  arrived?: { at: number; value: TicketCandidate[] }
+  /** True once `candidates` has rejected. */
+  failed: boolean
+  /**
+   * The newest list that actually arrived under this key, and when the read
+   * that produced it STARTED — which is how recent the data is, however long
+   * the read took.
+   */
+  arrived?: { startedAt: number; value: TicketCandidate[] }
 }
 
 const ticketsCache = new Map<string, TicketsEntry>()
@@ -388,7 +404,7 @@ export async function fetchEventTicketCandidates(
     const now = Date.now()
     const withinStaleCap = (entry: TicketsEntry) =>
       entry.arrived !== undefined &&
-      now - entry.arrived.at <= TICKETS_MAX_STALE_MS
+      now - entry.arrived.startedAt <= TICKETS_MAX_STALE_MS
 
     // A refresh still in flight past its window is shared, not restarted.
     const stillRefreshing = (entry: TicketsEntry) =>
@@ -405,21 +421,31 @@ export async function fetchEventTicketCandidates(
         candidates,
         settled: Promise.resolve(),
         pending: true,
+        failed: false,
         // Carried over so a stale reader has something to take meanwhile.
         arrived: entry?.arrived,
       }
       refresh.settled = candidates.then(
         (value) => {
           refresh.pending = false
-          refresh.arrived = { at: Date.now(), value }
+          refresh.arrived = { startedAt: now, value }
           // This refresh was given up on and replaced, but it did answer: a
           // list that arrived must not be lost to whichever entry holds the
-          // key now.
+          // key now — UNLESS that entry already holds a list from a read that
+          // started later. A late answer is an older snapshot, and must not
+          // replace a newer one (a ticket bought in between would vanish).
           const current = ticketsCache.get(key)
-          if (current && current !== refresh) current.arrived = refresh.arrived
+          if (
+            current &&
+            current !== refresh &&
+            (!current.arrived || current.arrived.startedAt < now)
+          ) {
+            current.arrived = refresh.arrived
+          }
         },
         (error) => {
           refresh.pending = false
+          refresh.failed = true
           // A failed fetch must not be served for the rest of the window — but
           // act only if THIS refresh is still the entry. A rejection arriving
           // after the TTL lapsed would otherwise undo a newer in-flight fetch
@@ -427,9 +453,9 @@ export async function fetchEventTicketCandidates(
           // issue its own.
           if (ticketsCache.get(key) !== refresh) return
           if (refresh.arrived) {
-            // Keep the last arrived list for stale readers; lapse the window
-            // so the next caller retries the provider.
-            refresh.expiresAt = 0
+            // Keep the last arrived list for stale readers, and hold the key
+            // briefly so an outage is retried at a bounded rate.
+            refresh.expiresAt = Date.now() + TICKETS_RETRY_AFTER_FAILURE_MS
             console.error(
               '[speakerTicketStatus] refresh failed; stale readers keep the last list',
               error,
@@ -454,13 +480,19 @@ export async function fetchEventTicketCandidates(
       entry = refresh
     }
 
-    if (options?.allowStale && entry.pending && withinStaleCap(entry)) {
-      // Nobody is waiting on this refresh any more, and a serverless instance
-      // may be frozen the moment the response flushes — the list would then
-      // never arrive, and stale readers would be served the old one until the
-      // cap. Keep the instance alive until the refresh settles.
-      const { settled } = entry
-      runAfterResponse(() => settled)
+    if (
+      options?.allowStale &&
+      (entry.pending || entry.failed) &&
+      withinStaleCap(entry)
+    ) {
+      if (entry.pending) {
+        // Nobody is waiting on this refresh any more, and a serverless instance
+        // may be frozen the moment the response flushes — the list would then
+        // never arrive, and stale readers would be served the old one until
+        // the cap. Keep the instance alive until the refresh settles.
+        const { settled } = entry
+        runAfterResponse(() => settled)
+      }
       return entry.arrived!.value
     }
     return await entry.candidates

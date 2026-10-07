@@ -266,7 +266,7 @@ describe('workshop portal — signed-in attendee', () => {
     const text = textOf(await WorkshopPage())
 
     expect(text).toContain('Workshop Access Required')
-    expect(text).toContain('No ticket found for your email address')
+    expect(text).toContain(`No ticket found for ${ADA.email}`)
   })
 
   it('refuses, with a retry message, when the provider cannot answer', async () => {

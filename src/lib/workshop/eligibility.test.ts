@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import type { EventTicket } from '@/lib/tickets/types'
 
 // B7: eligibility must route through the request-boundary resolver (so a
@@ -10,6 +10,14 @@ vi.mock('@/lib/tickets/provider', () => ({
 }))
 vi.mock('@/lib/email/from', () => ({
   platformFallbackContact: () => 'fallback@example.test',
+}))
+// The live `ticketTypeRoles` re-read. Only a conference WITH an `_id` reaches
+// it, so most cases here never touch this mock.
+const sanityFetchMock = vi.fn()
+vi.mock('@/lib/sanity/client', () => ({
+  clientReadUncached: {
+    fetch: (...a: unknown[]) => sanityFetchMock(...a),
+  },
 }))
 
 import { checkWorkshopEligibility, workshopAccessOf } from './eligibility'
@@ -147,7 +155,35 @@ describe('checkWorkshopEligibility — whose ticket it is', () => {
 
     expect(result.isEligible).toBe(false)
     expect(result.tickets).toEqual([])
-    expect(result.reason).toContain('No ticket found for your email address')
+    // And the refusal names the address that was checked.
+    expect(result.reason).toContain('No ticket found for o\uFB03ce@x.test')
+  })
+
+  it('refuses a caller with no ticket WITHOUT the live roles read', async () => {
+    // That read is an uncached Sanity request. A free account with no ticket
+    // must not be able to spend one per call.
+    const conference = { ...CONF, _id: 'conf-1' }
+    sanityFetchMock.mockResolvedValue({ ticketTypeRoles: null })
+    holderOf('someone-else@x.test')
+
+    const refused = await checkWorkshopEligibility({
+      userEmail: 'ada@x.test',
+      conference,
+    })
+
+    expect(refused.isEligible).toBe(false)
+    expect(refused.reason).toContain('No ticket found for ada@x.test')
+    expect(sanityFetchMock).not.toHaveBeenCalled()
+
+    // The control: the same conference DOES make that read for a holder, so
+    // the silence above is the short-circuit and not a mock that is never hit.
+    const admitted = await checkWorkshopEligibility({
+      userEmail: 'someone-else@x.test',
+      conference,
+    })
+
+    expect(admitted.isEligible).toBe(true)
+    expect(sanityFetchMock).toHaveBeenCalledTimes(1)
   })
 
   it('matches the registered address regardless of case and padding', async () => {
@@ -160,6 +196,45 @@ describe('checkWorkshopEligibility — whose ticket it is', () => {
 
     expect(result.isEligible).toBe(true)
     expect(result.eligibleTickets).toHaveLength(1)
+  })
+})
+
+describe('checkWorkshopEligibility — a provider that stops answering', () => {
+  const T0 = new Date('2026-10-20T08:00:00Z').getTime()
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(T0)
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('keeps admitting a ticket holder from the last list that arrived', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const fetchEventTickets = vi
+      .fn()
+      .mockResolvedValueOnce([ticket('ada@x.test', LEGACY)])
+      .mockRejectedValue(new Error('checkin down'))
+    resolveTicketingProviderMock.mockResolvedValue({
+      configured: true,
+      provider: { fetchEventTickets },
+      eventRef: { customerId: 42, eventId: 7 },
+    })
+    const gate = () =>
+      checkWorkshopEligibility({ userEmail: 'ada@x.test', conference: CONF })
+
+    expect((await gate()).isEligible).toBe(true)
+
+    // The 30-second window lapses and the provider starts failing: once while
+    // the failing refresh is in flight, once after it has failed.
+    vi.setSystemTime(T0 + 31_000)
+    expect((await gate()).isEligible).toBe(true)
+    for (let i = 0; i < 10; i++) await Promise.resolve()
+    expect((await gate()).isEligible).toBe(true)
+
+    // The provider WAS asked again, and failed; the holder was not refused.
+    expect(fetchEventTickets).toHaveBeenCalledTimes(2)
   })
 })
 
