@@ -68,6 +68,9 @@ export function ProposalDetailsForm({
   )
   const [outline, setOutline] = useState(proposal?.outline ?? '')
   const [tos, setTos] = useState(proposal?.tos ?? false)
+  const [capacity, setCapacity] = useState<number | undefined>(
+    proposal?.capacity ?? undefined,
+  )
   const [prerequisites, setPrerequisites] = useState(
     proposal?.prerequisites ?? '',
   )
@@ -93,6 +96,7 @@ export function ProposalDetailsForm({
       outline,
       tos,
       prerequisites: prerequisites.trim() || undefined,
+      capacity,
     })
   }, [
     title,
@@ -105,6 +109,7 @@ export function ProposalDetailsForm({
     outline,
     tos,
     prerequisites,
+    capacity,
     setProposal,
   ])
 
@@ -355,6 +360,23 @@ export function ProposalDetailsForm({
               to the organizers and not displayed on the website.
             </HelpText>
           </div>
+
+          {isWorkshopFormat(format) && (
+            <div className="col-span-full">
+              <Input
+                name="capacity"
+                label="Workshop Capacity"
+                type="number"
+                value={capacity?.toString() ?? ''}
+                setValue={(val) =>
+                  setCapacity(val ? parseInt(val, 10) : undefined)
+                }
+              />
+              <HelpText>
+                Maximum number of participants for the workshop (1-200)
+              </HelpText>
+            </div>
+          )}
 
           {isWorkshopFormat(format) && (
             <div className="col-span-full">
