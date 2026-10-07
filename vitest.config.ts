@@ -75,7 +75,10 @@ export default defineConfig({
         // same one the Studio bundle uses. Needed by
         // `__tests__/sanity/realSchema.ts`, which takes the real `inlineSvg`
         // type off the plugin instead of stubbing it.
-        inline: ['@starefossen/sanity-plugin-inline-svg-input'],
+        inline: [
+          '@starefossen/sanity-plugin-inline-svg-input',
+          '@workos-inc/authkit-nextjs',
+        ],
       },
     },
     // Vitest 5 flipped this default to `true`. Auto-clearing before every test
