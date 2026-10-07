@@ -30,7 +30,9 @@ import {
  * `resolveConferenceSlackToken` swallows the rejection inside
  * `isSlackMirrorEnabledForOrg` and answers `undefined`, and
  * `isWorkshopsEnabledForConference` runs through `resolveRegistryVerdict`
- * (and the ticketing gate), which classify a rejected read as `'denied'`. That is the correct posture for
+ * (and the ticketing gate), which classify a rejected read as `'denied'` — and
+ * since #1295 it also swallows a refused per-org SECRET lookup into `false`,
+ * which this file re-probes separately (see the `workshops` signal below). That is the correct posture for
  * handing out a bot token, and exactly the wrong one for a legal disclosure: a
  * transient read failure would silently publish a SHORTER subprocessor list.
  *
@@ -87,7 +89,19 @@ async function resolveProcessingFacts(
         // Coerced to a boolean IMMEDIATELY: this is the token resolver, and the
         // token itself must never travel further than this expression.
         resolveConferenceSlackToken(conference).then(Boolean),
-        isWorkshopsEnabledForConference(conference),
+        // The workshop gate (#1295) also consults the per-org ticketing secret
+        // stores and swallows a REFUSED lookup into `false` — correct for a
+        // gate, wrong for this page (a healthy org document plus a refused
+        // slug lookup would silently drop WorkOS from the disclosure). So a
+        // `false` is re-asked of the same stores the gate used: a throw there
+        // is "could not find out" → `null` = UNKNOWN, which discloses.
+        isWorkshopsEnabledForConference(conference).then((enabled) =>
+          enabled
+            ? true
+            : resolveTenantSecrets(orgRef, 'ticketing', PER_ORG_SECRETS_STORES)
+                .then(() => false)
+                .catch(() => null),
+        ),
         // EVERY per-org source, not just the JSON blob: since
         // RunKonf/platform#57 a tenant's own Resend key may equally live in
         // `TENANT_<SLUG>_EMAIL_API_KEY`, and a tenant sending on its own account

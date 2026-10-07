@@ -60,8 +60,8 @@ import { isPlatformOrganization } from './platform'
  * `conference.updateTicketingIds` and `sponsor.crm.sendDiscountEmail` (#850),
  * plus `conference.updatePublicFreeTickets` (#860). See `./ticketing.ts` for the authoritative
  * list; this paragraph exists only to keep the mirror honest. It deliberately
- * does NOT reach the ATTENDEE-facing paths (public
- * ticket sales, workshop eligibility), the admin status probes, or
+ * does NOT reach the ATTENDEE-facing public ticket sale, the admin status
+ * probes, or
  * speaker-ticket issuance — which still writes a discount code into a denied
  * org's vendor account (borderline, low-harm, left knowingly). None of that makes
  * either gate a security boundary: credential isolation is

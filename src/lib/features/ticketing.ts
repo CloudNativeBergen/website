@@ -143,7 +143,7 @@ const TICKETING_FEATURE = 'ticketing' as const
  * "unconfigured" empty state rather than a hidden nav entry.
  */
 async function hasOwnTicketingCredentials(orgId: string): Promise<boolean> {
-  return (await ownTicketingSecret(orgId)) !== null
+  return (await ownTicketingSecret(orgId, 'ticketing')) !== null
 }
 
 /**
@@ -152,6 +152,8 @@ async function hasOwnTicketingCredentials(orgId: string): Promise<boolean> {
  */
 async function ownTicketingSecret(
   orgId: string,
+  /** The feature a failure switches off, for the log line. */
+  disables: 'ticketing' | 'workshops',
 ): Promise<TicketingCredentials | null> {
   try {
     for (const store of PER_ORG_SECRETS_STORES) {
@@ -169,7 +171,7 @@ async function ownTicketingSecret(
     // must stay loud, and both are deliberate: withholding a nav entry is
     // recoverable, sending on the wrong account is not.
     console.error(
-      `[features] per-org ticketing secret lookup failed for ${orgId}; treating "ticketing" as DISABLED`,
+      `[features] per-org ticketing secret lookup failed for ${orgId}; treating "${disables}" as DISABLED`,
       error,
     )
     return null
@@ -210,7 +212,7 @@ export async function hasTicketingCredentialsForOrg(
 ): Promise<boolean> {
   if (!orgId) return false
   if (await isPlatformOrganization(orgId)) return true
-  const bag = await ownTicketingSecret(orgId)
+  const bag = await ownTicketingSecret(orgId, 'workshops')
   return typeof bag?.apiKey === 'string' && bag.apiKey.trim().length > 0
 }
 
