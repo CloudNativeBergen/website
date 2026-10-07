@@ -264,7 +264,13 @@ describe('workshop portal — signed-in attendee', () => {
   })
 
   it('shows the signup page to a verified ticket holder', async () => {
+    h.fetch.mockClear()
     const text = textOf(await WorkshopPage())
+
+    // READ BUDGET (#1296): the page itself spends ONE live Sanity read — the
+    // `ticketTypeRoles` lookup from #1294. The sign-in host decision is taken
+    // by the proxy, not here; see `sign-in-read-budget.test.ts`.
+    expect(h.fetch).toHaveBeenCalledTimes(1)
 
     expect(text).toContain('Workshop Signup')
     expect(text).toContain('Ada Lovelace')
