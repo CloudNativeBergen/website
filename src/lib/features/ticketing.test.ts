@@ -47,6 +47,7 @@ vi.mock('@/lib/sanity/client', () => ({
 }))
 
 import {
+  hasTicketingCredentialsForOrg,
   isTicketingDeniedForOrg,
   isTicketingEnabledForOrg,
   isTicketingEnabledForConference,
@@ -310,6 +311,46 @@ describe('isTicketingEnabledForOrg — grants', () => {
 
     vi.stubEnv('TENANT_CNDN_CHECKIN_WEBHOOK_SECRET', 'cndn-webhook')
     await expect(isTicketingEnabledForOrg(CNDN)).resolves.toBe(true)
+  })
+})
+
+/**
+ * The CAPABILITY question (#1295, consumed by `./workshops.ts`): credentials to
+ * read ticket data with, mirroring `resolveTicketingCredentials` — the platform
+ * org by identity (never by the document's slug), anyone else by its own secret.
+ */
+describe('hasTicketingCredentialsForOrg', () => {
+  it('is FALSE for a nullish org and reads nothing', async () => {
+    await expect(hasTicketingCredentialsForOrg(null)).resolves.toBe(false)
+    await expect(hasTicketingCredentialsForOrg(undefined)).resolves.toBe(false)
+    await expect(hasTicketingCredentialsForOrg('')).resolves.toBe(false)
+    expect(h.fetch).not.toHaveBeenCalled()
+  })
+
+  it('is TRUE for the platform org by id — the env account — with no per-org secret', async () => {
+    await expect(hasTicketingCredentialsForOrg(PLATFORM_ORG_ID)).resolves.toBe(
+      true,
+    )
+    expect(h.fetch).not.toHaveBeenCalled()
+  })
+
+  it('is FALSE for a non-platform org with no secret, whatever its slug looks like', async () => {
+    // Identity is the configured id, never the customer-writable slug — this
+    // helper never even reads the document.
+    await expect(hasTicketingCredentialsForOrg('org-A')).resolves.toBe(false)
+    expect(getOrganizationById).not.toHaveBeenCalled()
+  })
+
+  it('is TRUE for a non-platform org with its own per-org secret', async () => {
+    stubOwnTicketingSecret('org-A')
+    await expect(hasTicketingCredentialsForOrg('org-A')).resolves.toBe(true)
+  })
+
+  it('is FALSE for the platform org when PLATFORM_ORG_ID is unset — same as the resolver', async () => {
+    vi.stubEnv('PLATFORM_ORG_ID', '')
+    await expect(hasTicketingCredentialsForOrg(PLATFORM_ORG_ID)).resolves.toBe(
+      false,
+    )
   })
 })
 

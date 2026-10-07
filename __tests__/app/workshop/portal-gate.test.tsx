@@ -12,6 +12,7 @@
  * way Next.js does, which is how these assertions detect the 404.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { stubOwnTicketingSecret } from '../../helpers/ticketingSecrets'
 
 const mockGetConference = vi.fn()
 const mockGetOrganizationById = vi.fn()
@@ -181,6 +182,57 @@ describe('workshop portal — feature OFF (paid plan, no ticketing credentials)'
   it('404s the portal page WITHOUT starting a WorkOS session round-trip', async () => {
     expect(await is404(() => WorkshopPage())).toBe(true)
     expect(mockWithAuth).not.toHaveBeenCalled()
+  })
+})
+
+describe('workshop portal — feature OFF (community plan, even with ticketing)', () => {
+  it('404s the layout and the page for a community tenant with its own ticketing account', async () => {
+    stubOwnTicketingSecret('org-tenant2')
+    mockGetConference.mockResolvedValue({
+      conference: conference('org-tenant2'),
+      error: null,
+    })
+    mockGetOrganizationById.mockResolvedValue({
+      _id: 'org-tenant2',
+      name: 'Tenant Two',
+      slug: 'tenant-two',
+      plan: 'community',
+    })
+
+    expect(await is404(() => WorkshopLayout({ children: null }))).toBe(true)
+    expect(await is404(() => WorkshopPage())).toBe(true)
+    expect(mockWithAuth).not.toHaveBeenCalled()
+  })
+})
+
+/**
+ * #1295: a NON-PLATFORM pro tenant with its own ticketing account is let in by
+ * plan — the case the old platform-org rule could never produce. The platform
+ * org id points elsewhere throughout, so nothing here is identity-granted.
+ */
+describe('workshop portal — feature ON (non-platform pro tenant with its own ticketing)', () => {
+  beforeEach(() => {
+    stubOwnTicketingSecret('org-tenant2')
+    mockGetConference.mockResolvedValue({
+      conference: conference('org-tenant2'),
+      error: null,
+    })
+    mockGetOrganizationById.mockResolvedValue({
+      _id: 'org-tenant2',
+      name: 'Tenant Two',
+      slug: 'tenant-two',
+      plan: 'pro',
+    })
+  })
+
+  it('renders the segment layout', async () => {
+    expect(await is404(() => WorkshopLayout({ children: null }))).toBe(false)
+  })
+
+  it('renders the portal page and authenticates the attendee', async () => {
+    expect(await is404(() => WorkshopPage())).toBe(false)
+    expect(mockWithAuth).toHaveBeenCalledOnce()
+    expect(h.fetch).not.toHaveBeenCalled()
   })
 })
 

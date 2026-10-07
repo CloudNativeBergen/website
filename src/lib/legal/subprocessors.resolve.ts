@@ -29,8 +29,8 @@ import {
  * The Slack and workshop gates both fail CLOSED on a rejected Sanity read:
  * `resolveConferenceSlackToken` swallows the rejection inside
  * `isSlackMirrorEnabledForOrg` and answers `undefined`, and
- * `isWorkshopsEnabledForConference` runs through `resolveRegistryEntitlement`,
- * which classifies a rejected read as `'denied'`. That is the correct posture for
+ * `isWorkshopsEnabledForConference` runs through `resolveRegistryVerdict`
+ * (and the ticketing gate), which classify a rejected read as `'denied'`. That is the correct posture for
  * handing out a bot token, and exactly the wrong one for a legal disclosure: a
  * transient read failure would silently publish a SHORTER subprocessor list.
  *

@@ -18,6 +18,7 @@
  * real. Callers are built with the WorkOS-attendee / anonymous / admin helpers.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { stubOwnTicketingSecret } from '../../helpers/ticketingSecrets'
 import {
   createWorkshopCaller,
   createAnonymousCaller,
@@ -447,6 +448,21 @@ describe('attendee procedures enforce the portal access decision', () => {
       expect(ticketing.fetchEventTickets).toHaveBeenCalledTimes(1)
       expectNoSignupIO()
     })
+  })
+
+  /**
+   * #1295: the same attendee at a NON-PLATFORM pro tenant with its own
+   * ticketing account. The platform org id points elsewhere, so the feature is
+   * on by plan + credentials and by nothing else.
+   */
+  it('lets a verified ticket holder through at a non-platform pro tenant with its own ticketing', async () => {
+    vi.stubEnv('PLATFORM_ORG_ID', 'some-other-org')
+    stubOwnTicketingSecret('org-test')
+
+    const result = await createWorkshopCaller().workshop.signup(baseSignupInput)
+
+    expect(result.success).toBe(true)
+    expect(createSignupMock).toHaveBeenCalledTimes(1)
   })
 
   it('lets a verified ticket holder through to the signup write', async () => {

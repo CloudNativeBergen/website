@@ -121,6 +121,24 @@ describe('workshop.admin — feature gate', () => {
     expect(mockGetAllWorkshopSignups).not.toHaveBeenCalled()
   })
 
+  /** #1295: ticketing must be ENABLED, not just credentialed — a deny on it reaches here. */
+  it('FORBIDs a credentialed pro tenant whose ticketing an operator has denied', async () => {
+    stubOwnTicketingSecret(ORG_ID)
+    mockGetOrganizationById.mockResolvedValue({
+      _id: ORG_ID,
+      name: 'Tenant A',
+      slug: 'tenant-a',
+      plan: 'pro',
+      featureOverrides: [{ feature: 'ticketing', enabled: false }],
+    })
+
+    await expect(caller().admin.getAllSignups({})).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+      message: expect.stringContaining('workshops'),
+    })
+    expect(mockGetAllWorkshopSignups).not.toHaveBeenCalled()
+  })
+
   /** #1295: a non-platform pro tenant with working ticketing is let through. */
   it('allows a pro tenant with its own ticketing credentials', async () => {
     stubOwnTicketingSecret(ORG_ID)

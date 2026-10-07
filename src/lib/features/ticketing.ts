@@ -88,16 +88,21 @@ import { isPlatformOrganization } from './platform'
  *
  * WHAT IT STILL DOES NOT REACH, deliberately: the ATTENDEE-facing ticket sale
  * (`src/lib/tickets/public.ts` and the public ticket page — a deny must never
- * break a sale mid-conference) and the admin status PROBES. It DOES reach the
- * workshop feature since #1295: `./workshops.ts` requires ticketing to be
- * enabled, so a ticketing deny switches workshops off for an org that holds
- * no `workshops` override of its own. Nor speaker-ticket issuance, which keeps reaching a denied org's
+ * break a sale mid-conference) and the admin status PROBES. Nor
+ * speaker-ticket issuance, which keeps reaching a denied org's
  * vendor account: borderline, low-harm, and left alone knowingly rather than
  * by omission. Note that this exclusion is wider than "a side effect of
  * accepting a proposal" — `speaker.sendTicketInvitations` is a standing
  * organizer mutation that an organizer of a denied org can trigger at will,
  * which is a sharper asymmetry with the now-gated `sendDiscountEmail` than the
  * word "issuance" suggests.
+ *
+ * WHAT IT NEWLY REACHES (#1295): the workshop feature. `./workshops.ts`
+ * requires ticketing to be ENABLED (not merely not-denied) on top of the plan,
+ * so a ticketing deny switches workshops off for an org that holds no
+ * `workshops` override of its own — stricter than `requireFeatureNotDenied`,
+ * deliberately: a portal that decides from ticket data has nothing to decide
+ * from once the integration is off.
  *
  * NOT A SECURITY BOUNDARY, still, however far it reaches. Credential isolation
  * is enforced in `resolveTicketingCredentials` and the tRPC tenancy guards; a
@@ -168,6 +173,15 @@ async function hasOwnTicketingCredentials(orgId: string): Promise<boolean> {
  * false until it has. `./workshops.ts` needs both: a portal that decides from
  * ticket data is worthless to an org that cannot read any (#1295). Fail closed
  * on a nullish org and on a secret-store failure.
+ *
+ * MIRRORS `resolveTicketingCredentials` (`@/lib/tickets/provider`) exactly, by
+ * the module rule above (never stricter than the resolver it fronts): the
+ * platform org is handed the env account by identity, WITHOUT checking the
+ * variables are set (the resolver does the same and fails at provider call
+ * time), and with `PLATFORM_ORG_ID` unset nobody is the platform org, so nobody
+ * gets it (the resolver's `isPlatformOrganization` check, same answer). It does
+ * not know which vendor a conference uses, so it asks the vendor-agnostic
+ * per-org stores and not the Checkin-shaped env store.
  */
 export async function hasTicketingCredentialsForOrg(
   orgId: string | null | undefined,

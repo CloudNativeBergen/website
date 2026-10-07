@@ -21,6 +21,12 @@ export interface PlanFeatureRow {
   readiness: FeatureReadiness
   /** Entitled through an explicit override rather than the plan. */
   viaOverride: boolean
+  /**
+   * Set when the plan lists the feature but its own resolver says OFF (today
+   * only `workshops`, which needs working ticketing — see `./planFeatureRows`).
+   * The row stays visible, muted, with this reason under the description.
+   */
+  inactiveReason?: string
 }
 
 export interface PlanFeaturesCardProps {
@@ -81,10 +87,19 @@ export function PlanFeaturesCard({ plan, features }: PlanFeaturesCardProps) {
                     full card width below so a wide badge stack cannot squeeze
                     it into a one-word-per-line column. */}
                 <div className="flex items-center justify-between gap-3">
-                  <p className="min-w-0 text-sm font-medium text-gray-900 dark:text-white">
+                  <p
+                    className={
+                      feature.inactiveReason
+                        ? 'min-w-0 text-sm font-medium text-gray-500 dark:text-gray-400'
+                        : 'min-w-0 text-sm font-medium text-gray-900 dark:text-white'
+                    }
+                  >
                     {feature.title}
                   </p>
                   <div className="flex shrink-0 items-center gap-1.5">
+                    {feature.inactiveReason ? (
+                      <StatusBadge label="Inactive" color="gray" />
+                    ) : null}
                     {feature.viaOverride ? (
                       <StatusBadge label="Override" color="orange" />
                     ) : null}
@@ -97,6 +112,11 @@ export function PlanFeaturesCard({ plan, features }: PlanFeaturesCardProps) {
                 <p className="mt-0.5 text-sm text-gray-500 dark:text-gray-400">
                   {feature.description}
                 </p>
+                {feature.inactiveReason ? (
+                  <p className="mt-1 text-sm text-amber-700 dark:text-amber-400">
+                    {feature.inactiveReason}
+                  </p>
+                ) : null}
               </li>
             )
           })}
