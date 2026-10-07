@@ -1,7 +1,9 @@
+import type { ConferenceTicketingBinding } from '@/lib/tickets/provider'
 import {
-  resolveTicketingProvider,
-  type ConferenceTicketingBinding,
-} from '@/lib/tickets/provider'
+  fetchEventTicketCandidates,
+  type TicketCandidate,
+} from '@/lib/tickets/speakerStatus'
+import { canonicalEmail } from '@/lib/speaker/email'
 import {
   type TicketTypeRole,
   workshopAccessOf,
@@ -10,7 +12,6 @@ export {
   workshopAccessOf,
   type WorkshopAccess,
 } from '@/lib/tickets/classification'
-import type { EventTicket } from '@/lib/tickets/types'
 import { platformFallbackContact } from '@/lib/email/from'
 import { clientReadUncached } from '@/lib/sanity/client'
 
@@ -72,8 +73,8 @@ async function liveTicketTypeRoles(conference: {
 
 export interface WorkshopEligibilityResult {
   isEligible: boolean
-  tickets: EventTicket[]
-  eligibleTickets: EventTicket[]
+  tickets: TicketCandidate[]
+  eligibleTickets: TicketCandidate[]
   reason?: string
 }
 
@@ -94,11 +95,20 @@ export async function checkWorkshopEligibility(params: {
   const contactEmail = params.contactEmail || platformFallbackContact()
 
   try {
-    // Route through the resolver (B7) so this tenant's per-org Checkin key is
-    // honored instead of the platform env creds. An unconfigured conference
-    // soft-fails to the same "unable to verify" result as a provider error.
-    const ticketing = await resolveTicketingProvider(params.conference)
-    if (!ticketing.configured) {
+    // THE SHARED 30-SECOND MEMO, not a fetch of our own. The whole-event read is
+    // one slow uncached provider request, and this check now runs on every
+    // attendee action (#1294), not only on page render — so a registration
+    // opening would otherwise issue one per click. The memo holds the in-flight
+    // promise, so a burst shares a single read. What the window costs: a ticket
+    // bought inside it is refused until it lapses (retry), and a ticket
+    // refunded inside it is honoured until it lapses.
+    //
+    // It still routes through the resolver (B7), so this tenant's per-org
+    // provider key is honored instead of the platform env creds. `null` is an
+    // unconfigured conference, a conference with no owning org, or a provider
+    // error — all the same "unable to verify" refusal.
+    const tickets = await fetchEventTicketCandidates(params.conference)
+    if (!tickets) {
       return {
         isEligible: false,
         tickets: [],
@@ -106,14 +116,17 @@ export async function checkWorkshopEligibility(params: {
         reason: `Unable to verify workshop ticket at this time. Please try again later or contact us at ${contactEmail} for assistance.`,
       }
     }
-    const tickets = await ticketing.provider.fetchEventTickets(
-      ticketing.eventRef,
-    )
 
-    const userTickets = tickets.filter(
-      (ticket) =>
-        ticket.crm.email.toLowerCase() === params.userEmail.toLowerCase(),
-    )
+    // Matched on the address EXACTLY as registered, case-folded — never the
+    // NFKC-normalized `email`. NFKC folds distinct mailboxes together
+    // (`oﬃce@x.test` → `office@x.test`), which is fine for finding a speaker's
+    // ticket and wrong for deciding whose ticket this is.
+    const userEmail = canonicalEmail(params.userEmail)
+    const userTickets = userEmail
+      ? tickets.filter(
+          (ticket) => canonicalEmail(ticket.registeredEmail) === userEmail,
+        )
+      : []
 
     // LIVE, not the cached copy on the conference the page resolved — see
     // {@link liveTicketTypeRoles}. The webhook reads the same document uncached,

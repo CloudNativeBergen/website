@@ -10,7 +10,9 @@
  * - `cancelSignup` may only cancel the caller's OWN signup (ownership check);
  * - `getMySignups` is scoped to the session identity, never client input;
  * - admin procedures remain gated by the NextAuth organizer session and are not
- *   reachable via a WorkOS attendee session.
+ *   reachable via a WorkOS attendee session;
+ * - every attendee procedure enforces the portal access decision (#1294): a
+ *   WorkOS session alone is not enough.
  *
  * The workshop data layer is mocked (IO only); the router's authz logic runs for
  * real. Callers are built with the WorkOS-attendee / anonymous / admin helpers.
@@ -68,6 +70,20 @@ vi.mock('@/lib/sanity/client', () => ({
   clientReadUncached: { fetch: h.fetch },
 }))
 
+/**
+ * The ticketing PROVIDER is the boundary: the real resolver chain, memo,
+ * eligibility rule and access decision all run. Only the vendor read is faked.
+ */
+const ticketing = vi.hoisted(() => ({
+  fetchEventTickets: vi.fn(),
+  resolve: vi.fn(),
+}))
+
+vi.mock('@/lib/tickets/provider', async (importActual) => ({
+  ...(await importActual<typeof import('@/lib/tickets/provider')>()),
+  resolveTicketingProvider: ticketing.resolve,
+}))
+
 vi.mock('@/lib/email/workshop', () => ({
   sendBasicWorkshopConfirmation: vi.fn(async () => {}),
 }))
@@ -117,13 +133,36 @@ import {
   createWorkshopSignup,
   getAllWorkshopSignups,
   cancelWorkshopSignup,
+  checkWorkshopCapacity,
+  verifyWorkshopBelongsToConference,
 } from '@/lib/workshop/sanity'
+import { __resetRedeemedCache } from '@/lib/tickets/speakerStatus'
 
 type LooseMock = ReturnType<typeof vi.fn>
 const getSignupsMock = getWorkshopSignups as unknown as LooseMock
 const createSignupMock = createWorkshopSignup as unknown as LooseMock
 const getAllMock = getAllWorkshopSignups as unknown as LooseMock
 const cancelMock = cancelWorkshopSignup as unknown as LooseMock
+const capacityMock = checkWorkshopCapacity as unknown as LooseMock
+const belongsMock = verifyWorkshopBelongsToConference as unknown as LooseMock
+
+/** A legacy-bridge category that grants workshop access (no declared roles). */
+const WORKSHOP_TICKET = 'Workshop + Conference (2 days)'
+const ORDINARY_TICKET = 'Conference only'
+
+function ticket(email: string, category = WORKSHOP_TICKET) {
+  return { id: 1, order_id: 1, category, crm: { email } }
+}
+
+/** Every signup read and write an attendee procedure could reach. */
+function expectNoSignupIO() {
+  expect(getSignupsMock).not.toHaveBeenCalled()
+  expect(getAllMock).not.toHaveBeenCalled()
+  expect(belongsMock).not.toHaveBeenCalled()
+  expect(capacityMock).not.toHaveBeenCalled()
+  expect(createSignupMock).not.toHaveBeenCalled()
+  expect(cancelMock).not.toHaveBeenCalled()
+}
 
 const workshopRef = { _type: 'reference' as const, _ref: 'workshop-1' }
 
@@ -137,6 +176,19 @@ const baseSignupInput = {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  // The ticket memo is process-global: without this a case inherits the
+  // previous case's ticket list for 30 seconds.
+  __resetRedeemedCache()
+  // The default attendee of every case below holds a workshop ticket.
+  ticketing.fetchEventTickets.mockResolvedValue([
+    ticket('attendee@example.com'),
+    ticket('real@example.com'),
+  ])
+  ticketing.resolve.mockResolvedValue({
+    configured: true,
+    provider: { fetchEventTickets: ticketing.fetchEventTickets },
+    eventRef: { customerId: 1, eventId: 2 },
+  })
   // Names the org above (`org-test`) as the platform org by its document id,
   // which is what grants `workshops` — a pure env comparison, no Sanity read.
   vi.stubEnv('PLATFORM_ORG_ID', 'org-test')
@@ -218,9 +270,12 @@ describe('workshop.cancelSignup ownership', () => {
   it('returns NOT_FOUND when the signup does not exist', async () => {
     getAllMock.mockResolvedValueOnce([])
     const caller = createWorkshopCaller({ id: 'workos-real' })
+    // The exact message: the access guard has its own NOT_FOUND ("Conference
+    // not found"), which a looser match would accept in place of this one.
     await expect(
       caller.workshop.cancelSignup({ signupId: 'missing' }),
-    ).rejects.toThrow(/NOT_FOUND|not found/)
+    ).rejects.toMatchObject({ code: 'NOT_FOUND', message: 'Signup not found' })
+    expect(getAllMock).toHaveBeenCalledTimes(1)
     expect(cancelMock).not.toHaveBeenCalled()
   })
 
@@ -229,9 +284,15 @@ describe('workshop.cancelSignup ownership', () => {
       { _id: 'signup-1', userWorkOSId: 'someone-else' },
     ])
     const caller = createWorkshopCaller({ id: 'workos-real' })
+    // The exact message, and proof the ownership read ran: the access guard
+    // also refuses with FORBIDDEN, so the code alone would prove nothing.
     await expect(
       caller.workshop.cancelSignup({ signupId: 'signup-1' }),
-    ).rejects.toThrow(/FORBIDDEN|your own/)
+    ).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+      message: 'You can only cancel your own workshop signup',
+    })
+    expect(getAllMock).toHaveBeenCalledTimes(1)
     expect(cancelMock).not.toHaveBeenCalled()
   })
 
@@ -264,6 +325,131 @@ describe('workshop.getMySignups scoping', () => {
     const result = await caller.workshop.getMySignups()
     expect(result.data).toEqual([])
     expect(getSignupsMock).not.toHaveBeenCalled()
+  })
+})
+
+/**
+ * #1294. Each refusal is exercised with the OTHER two conditions satisfied, and
+ * asserted on its own message, so no case can pass because a different
+ * condition refused first. Every case also proves guard-before-fetch: a refused
+ * caller triggers no signup read or write.
+ */
+describe('attendee procedures enforce the portal access decision', () => {
+  const procedures = [
+    [
+      'signup',
+      (c: ReturnType<typeof createWorkshopCaller>) =>
+        c.workshop.signup(baseSignupInput),
+    ],
+    [
+      'cancelSignup',
+      (c: ReturnType<typeof createWorkshopCaller>) =>
+        c.workshop.cancelSignup({ signupId: 'signup-1' }),
+    ],
+    [
+      'getMySignups',
+      (c: ReturnType<typeof createWorkshopCaller>) => c.workshop.getMySignups(),
+    ],
+  ] as const
+
+  describe.each(procedures)('%s', (_name, call) => {
+    it('refuses when workshops are not enabled for the org', async () => {
+      // Verified email + a workshop ticket; only the feature is missing.
+      vi.stubEnv('PLATFORM_ORG_ID', 'some-other-org')
+
+      await expect(call(createWorkshopCaller())).rejects.toMatchObject({
+        code: 'FORBIDDEN',
+        message: 'Workshop signup is not available for this conference.',
+      })
+      // Cheapest condition first: the vendor was never asked.
+      expect(ticketing.fetchEventTickets).not.toHaveBeenCalled()
+      expectNoSignupIO()
+    })
+
+    it('refuses an unverified email even when it matches a workshop ticket', async () => {
+      // Feature on + a workshop ticket for this address; only verification
+      // is missing.
+      await expect(
+        call(createWorkshopCaller({ emailVerified: false })),
+      ).rejects.toMatchObject({
+        code: 'FORBIDDEN',
+        message: expect.stringContaining('has not been verified'),
+      })
+      expect(ticketing.fetchEventTickets).not.toHaveBeenCalled()
+      expectNoSignupIO()
+    })
+
+    it('refuses a verified attendee with no ticket', async () => {
+      ticketing.fetchEventTickets.mockResolvedValue([
+        ticket('someone-else@example.com'),
+      ])
+
+      await expect(call(createWorkshopCaller())).rejects.toMatchObject({
+        code: 'FORBIDDEN',
+        message: expect.stringContaining('No ticket found for your email'),
+      })
+      expect(ticketing.fetchEventTickets).toHaveBeenCalledTimes(1)
+      expectNoSignupIO()
+    })
+
+    it('refuses a verified attendee whose ticket does not grant workshops', async () => {
+      ticketing.fetchEventTickets.mockResolvedValue([
+        ticket('attendee@example.com', ORDINARY_TICKET),
+      ])
+
+      await expect(call(createWorkshopCaller())).rejects.toMatchObject({
+        code: 'FORBIDDEN',
+        message: expect.stringContaining('No valid workshop ticket found'),
+      })
+      expectNoSignupIO()
+    })
+
+    it('refuses when the conference has no ticketing configured (fail closed)', async () => {
+      ticketing.resolve.mockResolvedValue({
+        configured: false,
+        provider: null,
+        eventRef: null,
+      })
+
+      await expect(call(createWorkshopCaller())).rejects.toMatchObject({
+        code: 'FORBIDDEN',
+        message: expect.stringContaining('Unable to verify workshop ticket'),
+      })
+      expectNoSignupIO()
+    })
+
+    it('refuses when the provider read fails (fail closed)', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {})
+      ticketing.fetchEventTickets.mockRejectedValue(new Error('vendor down'))
+
+      await expect(call(createWorkshopCaller())).rejects.toMatchObject({
+        code: 'FORBIDDEN',
+        message: expect.stringContaining('Unable to verify workshop ticket'),
+      })
+      expectNoSignupIO()
+    })
+  })
+
+  it('lets a verified ticket holder through to the signup write', async () => {
+    const result = await createWorkshopCaller().workshop.signup(baseSignupInput)
+
+    expect(result.success).toBe(true)
+    expect(createSignupMock).toHaveBeenCalledTimes(1)
+    expect(createSignupMock.mock.calls[0][0].userEmail).toBe(
+      'attendee@example.com',
+    )
+  })
+
+  it('shares one provider read across a burst of attendee actions', async () => {
+    const caller = createWorkshopCaller()
+
+    await Promise.all([
+      caller.workshop.getMySignups(),
+      caller.workshop.signup(baseSignupInput),
+      caller.workshop.getMySignups(),
+    ])
+
+    expect(ticketing.fetchEventTickets).toHaveBeenCalledTimes(1)
   })
 })
 

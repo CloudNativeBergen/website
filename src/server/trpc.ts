@@ -17,6 +17,11 @@ import { structuredErrorData, type StructuredErrorData } from './errors'
 export interface WorkshopUserIdentity {
   id: string
   email: string
+  /**
+   * Whether WorkOS has verified this address. The email is what a ticket is
+   * matched on, so an unverified one proves nothing about who holds the ticket.
+   */
+  emailVerified: boolean
   firstName?: string | null
   lastName?: string | null
 }
@@ -53,6 +58,7 @@ async function resolveWorkshopUser(
     return {
       id: user.id,
       email: user.email,
+      emailVerified: user.emailVerified === true,
       firstName: user.firstName,
       lastName: user.lastName,
     }

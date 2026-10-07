@@ -48,6 +48,7 @@ import { Status } from '@/lib/proposal/types'
 import { sendBasicWorkshopConfirmation } from '@/lib/email/workshop'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { isWorkshopsEnabledForOrg } from '@/lib/features/workshops'
+import { decideWorkshopPortalAccess } from '@/lib/workshop/access'
 import { WorkshopSignupStatus } from '@/lib/workshop/types'
 import {
   isOrganizerForCurrentOrg,
@@ -82,6 +83,36 @@ function requireWorkshopUser(ctx: Context): WorkshopUserIdentity {
     })
   }
   return user
+}
+
+/**
+ * The gate for every attendee self-service procedure (#1294): a WorkOS session
+ * AND the portal access decision for the domain-resolved conference. Returns the
+ * attendee and that conference, or throws.
+ *
+ * A session alone is not enough — a WorkOS account is free to create. The
+ * decision is the same one `/workshop` renders from
+ * (`decideWorkshopPortalAccess`), so the API cannot be more permissive than the
+ * page. It runs BEFORE any signup read or write, so a refused caller learns
+ * nothing about what exists.
+ */
+async function requireWorkshopAttendee(ctx: Context) {
+  const actor = requireWorkshopUser(ctx)
+
+  const { conference, error } = await getConferenceForCurrentDomain({})
+  // The helper NEVER returns null — on failure it returns `{} as Conference`
+  // plus `error`, so a bare `!conference` check can never fire. Check the error
+  // AND a usable _id instead.
+  if (error || !conference?._id) {
+    throw new TRPCError({ code: 'NOT_FOUND', message: 'Conference not found' })
+  }
+
+  const access = await decideWorkshopPortalAccess({ conference, user: actor })
+  if (!access.allowed) {
+    throw new TRPCError({ code: 'FORBIDDEN', message: access.reason })
+  }
+
+  return { actor, conference }
 }
 
 /**
@@ -425,9 +456,7 @@ export const workshopRouter = router({
       // input — so a caller cannot read another attendee's signups. No session
       // → no signups (rather than an error, since the workshop page renders
       // this list optimistically).
-      const userWorkOSId = ctx.workosUser?.id
-
-      if (!userWorkOSId) {
+      if (!ctx.workosUser?.id) {
         return {
           success: true,
           data: [],
@@ -435,11 +464,11 @@ export const workshopRouter = router({
         }
       }
 
-      const conferenceId = await resolveConferenceId()
+      const { actor, conference } = await requireWorkshopAttendee(ctx)
 
       const signups = await getWorkshopSignups(
-        userWorkOSId,
-        conferenceId,
+        actor.id,
+        conference._id,
         undefined,
       )
 
@@ -466,23 +495,10 @@ export const workshopRouter = router({
         // Bind the signup to the authenticated WorkOS session. The id/email come
         // from the sealed session cookie (authoritative); the client no longer
         // sends — and cannot spoof — any identity.
-        const actor = requireWorkshopUser(ctx)
+        const { actor, conference } = await requireWorkshopAttendee(ctx)
         const userWorkOSId = actor.id
         const userEmail = actor.email
         const userName = workshopUserName(actor)
-
-        const { conference, error: conferenceError } =
-          await getConferenceForCurrentDomain({})
-
-        // The helper NEVER returns null — on failure it returns `{} as
-        // Conference` plus `error`, so a bare `!conference` check can never
-        // fire. Check the error AND a usable _id instead.
-        if (conferenceError || !conference?._id) {
-          throw new TRPCError({
-            code: 'NOT_FOUND',
-            message: 'Conference not found',
-          })
-        }
 
         const now = new Date()
         if (
@@ -589,12 +605,12 @@ export const workshopRouter = router({
     .input(cancelWorkshopSignupSchema)
     .mutation(async ({ input, ctx }) => {
       try {
-        const actor = requireWorkshopUser(ctx)
+        const { actor, conference } = await requireWorkshopAttendee(ctx)
 
         // TENANCY: resolve the signup INSIDE the request's conference. Without
         // the predicate this was a by-id lookup across every tenant.
         const signups = await getAllWorkshopSignups({
-          conferenceId: await resolveConferenceId(),
+          conferenceId: conference._id,
           signupIds: [input.signupId],
         })
 

@@ -13,6 +13,7 @@ vi.mock('@/lib/email/from', () => ({
 }))
 
 import { checkWorkshopEligibility, workshopAccessOf } from './eligibility'
+import { __resetRedeemedCache } from '@/lib/tickets/speakerStatus'
 
 /** The historical hardcoded name — the one the bridge still honours. */
 const LEGACY = 'Workshop + Conference (2 days)'
@@ -33,7 +34,12 @@ const CONF = {
   organization: { _ref: 'org-xyz' },
 }
 
-beforeEach(() => vi.clearAllMocks())
+beforeEach(() => {
+  vi.clearAllMocks()
+  // Eligibility reads tickets through the process-global 30s memo; without this
+  // a case is served the previous case's ticket list.
+  __resetRedeemedCache()
+})
 
 describe('checkWorkshopEligibility — resolver routing (B7)', () => {
   it('resolves the provider from the conference (per-org creds seam) and honors eligible tickets', async () => {
@@ -96,6 +102,49 @@ describe('checkWorkshopEligibility — resolver routing (B7)', () => {
 
     expect(result.isEligible).toBe(false)
     expect(result.reason).toContain('Unable to verify')
+  })
+})
+
+describe('checkWorkshopEligibility — whose ticket it is', () => {
+  function holderOf(registeredEmail: string) {
+    resolveTicketingProviderMock.mockResolvedValue({
+      configured: true,
+      provider: {
+        fetchEventTickets: vi
+          .fn()
+          .mockResolvedValue([ticket(registeredEmail, LEGACY)]),
+      },
+      eventRef: { customerId: 42, eventId: 7 },
+    })
+  }
+
+  it('never folds two different mailboxes together (no NFKC on the match)', async () => {
+    // `o\uFB03ce` carries the ffi ligature, which NFKC rewrites to `office`.
+    // They are different mailboxes. The shared ticket memo also exposes an
+    // NFKC-normalized `email`; matching on it would hand the ligature account
+    // the other holder's workshop access.
+    holderOf('office@x.test')
+
+    const result = await checkWorkshopEligibility({
+      userEmail: 'o\uFB03ce@x.test',
+      conference: CONF,
+    })
+
+    expect(result.isEligible).toBe(false)
+    expect(result.tickets).toEqual([])
+    expect(result.reason).toContain('No ticket found for your email address')
+  })
+
+  it('matches the registered address regardless of case and padding', async () => {
+    holderOf('  Ada@X.test ')
+
+    const result = await checkWorkshopEligibility({
+      userEmail: 'ada@x.test',
+      conference: CONF,
+    })
+
+    expect(result.isEligible).toBe(true)
+    expect(result.eligibleTickets).toHaveLength(1)
   })
 })
 
@@ -167,6 +216,9 @@ describe('checkWorkshopEligibility — what the attendee is told', () => {
       grantsWorkshop?: boolean
     }[],
   ) {
+    // Each call is a different vendor state under the same event key, so it
+    // must not be served the previous call's memoized ticket list.
+    __resetRedeemedCache()
     resolveTicketingProviderMock.mockResolvedValue({
       configured: true,
       provider: {
