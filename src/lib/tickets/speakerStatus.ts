@@ -327,11 +327,14 @@ const TICKETS_MAX_STALE_MS = 10 * 60_000
 const TICKETS_REFRESH_PATIENCE_MS = 2 * 60_000
 
 /**
- * How long a FAILED refresh holds the key before a caller may ask the provider
- * again, when there is an arrived list to fall back on. Without it every caller
- * during an outage issues its own request, one after the other, at whatever
- * rate attendees click. During the pause a stale reader keeps the last list
- * and any other reader is told the provider could not answer (`null`).
+ * How long a FAILED read holds the key against readers that opted into
+ * {@link TicketCandidateReadOptions.allowStale}. Without it every attendee
+ * action during an outage issues its own request, one after the other, at
+ * whatever rate attendees click. During the pause such a reader keeps the last
+ * list, or is told the provider could not answer (`null`) if none ever arrived.
+ *
+ * A reader that did NOT opt in is not held: it retries the provider at once, as
+ * it always has. Those are a handful of organizers, not a registration opening.
  */
 const TICKETS_RETRY_AFTER_FAILURE_MS = 5_000
 
@@ -411,7 +414,11 @@ export async function fetchEventTicketCandidates(
       entry.pending && now - entry.startedAt < TICKETS_REFRESH_PATIENCE_MS
 
     let entry = ticketsCache.get(key)
-    if (!entry || (entry.expiresAt <= now && !stillRefreshing(entry))) {
+    if (
+      !entry ||
+      (entry.expiresAt <= now && !stillRefreshing(entry)) ||
+      (entry.failed && !options?.allowStale)
+    ) {
       const candidates = ticketing.provider
         .fetchEventTickets(ticketing.eventRef)
         .then(toTicketCandidates)
@@ -452,26 +459,25 @@ export async function fetchEventTicketCandidates(
           // installed under the same key, and every concurrent caller would
           // issue its own.
           if (ticketsCache.get(key) !== refresh) return
+          // Hold the key briefly so stale readers retry an outage at a bounded
+          // rate, whether or not there is an arrived list for them to keep.
+          refresh.expiresAt = Date.now() + TICKETS_RETRY_AFTER_FAILURE_MS
           if (refresh.arrived) {
-            // Keep the last arrived list for stale readers, and hold the key
-            // briefly so an outage is retried at a bounded rate.
-            refresh.expiresAt = Date.now() + TICKETS_RETRY_AFTER_FAILURE_MS
             console.error(
               '[speakerTicketStatus] refresh failed; stale readers keep the last list',
               error,
             )
-          } else {
-            ticketsCache.delete(key)
           }
         },
       )
       ticketsCache.set(key, refresh)
       // Keep a long-lived warm instance from growing an entry per event
-      // forever — but not at the cost of a list a stale reader may still take.
+      // forever — but not at the cost of a list a stale reader may still take,
+      // nor of a read still in flight, whose answer would have nowhere to land.
       for (const [k, other] of ticketsCache) {
         if (
           other.expiresAt <= now &&
-          !stillRefreshing(other) &&
+          !other.pending &&
           !withinStaleCap(other)
         ) {
           ticketsCache.delete(k)

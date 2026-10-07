@@ -10,8 +10,9 @@ import { checkWorkshopEligibility } from './eligibility'
 /**
  * THE ONE DECISION for "may this attendee use the workshop portal for this
  * conference" (#1294). The `/workshop` page and every attendee procedure
- * (`workshop.signup`, `workshop.cancelSignup`, `workshop.getMySignups`) call
- * this and nothing else, so the page and the API cannot disagree.
+ * (`workshop.signup`, `workshop.cancelSignup`, `workshop.getMySignups`) take
+ * their answer from this, so the page and the API cannot disagree. (The page
+ * also runs the feature check on its own first, before it reads a session.)
  *
  * It used to be decided on the page only. The procedures accepted any signed-in
  * WorkOS session, and a WorkOS account is free to create — it proves an email

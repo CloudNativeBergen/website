@@ -303,7 +303,22 @@ const signupsUnavailable = () =>
   HttpResponse.json(
     {
       error: {
-        message: 'Unable to verify workshop ticket at this time.',
+        message: 'fetch failed',
+        code: -32603,
+        data: { code: 'INTERNAL_SERVER_ERROR', httpStatus: 500 },
+      },
+    },
+    { status: 500 },
+  )
+
+const REFUSAL =
+  'No valid workshop ticket found. Please upgrade your ticket to include workshop access, or contact us at hello@example.com if you believe this is an error.'
+
+const signupsRefused = () =>
+  HttpResponse.json(
+    {
+      error: {
+        message: REFUSAL,
         code: -32003,
         data: { code: 'FORBIDDEN', httpStatus: 403 },
       },
@@ -320,9 +335,9 @@ const signupsFailedHandlers = [
 ]
 
 /**
- * The attendee's own signups could not be read (the ticket check behind
- * `getMySignups` could not answer). The list still renders, but it says so:
- * without the notice a registered attendee sees their workshops as available.
+ * The attendee's own signups could not be read. The list still renders, but it
+ * says so: without the notice a registered attendee sees their workshops as
+ * available.
  */
 export const SignupsUnavailable: Story = {
   args: signedInArgs,
@@ -347,6 +362,46 @@ export const SignupsUnavailable: Story = {
 export const SignupsUnavailableDark: Story = {
   ...SignupsUnavailable,
   parameters: { ...SignupsUnavailable.parameters, dark: true },
+}
+
+/**
+ * The server REFUSED the read (the access rule behind `getMySignups`: no
+ * ticket, wrong ticket type, ticket check unavailable). The notice carries the
+ * server's reason instead of the generic copy — "try again" alone would never
+ * tell a refunded attendee why nothing loads.
+ */
+export const SignupsRefused: Story = {
+  args: signedInArgs,
+  parameters: {
+    msw: {
+      handlers: [
+        http.get('/api/trpc/workshop.list', () =>
+          listResponse([wsAvailableA, wsAvailableB, wsFull]),
+        ),
+        http.get('/api/trpc/workshop.getMySignups', signupsRefused),
+        announcementsHandler,
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const notice = await canvas.findByRole('alert', {}, { timeout: 5000 })
+    await expect(notice).toHaveTextContent(REFUSAL)
+    await expect(notice).not.toHaveTextContent(
+      /could not load your workshop registrations/i,
+    )
+    await expect(
+      within(notice).getByRole('button', { name: /try again/i }),
+    ).toBeEnabled()
+  },
+}
+
+export const SignupsRefusedMobile: Story = {
+  ...SignupsRefused,
+  parameters: {
+    ...SignupsRefused.parameters,
+    viewport: { defaultViewport: 'mobile1' },
+  },
 }
 
 /** The same notice on a phone: the button drops below the text. */

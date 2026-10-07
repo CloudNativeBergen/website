@@ -32,13 +32,14 @@ import { clientReadUncached } from '@/lib/sanity/client'
  * then evaluate the live document.
  *
  * WHAT IT COSTS: one extra Sanity request — a single-document, single-field
- * projection — per page render AND per attendee procedure call (#1294), but
- * only for a caller who HOLDS A TICKET. A caller with none is refused before
- * this read (see {@link checkWorkshopEligibility}), so a free account cannot
- * spend the live-API quota by calling the procedures in a loop. A short-TTL
- * cache was considered and rejected: any TTL is a window in which an access
- * decision is knowably wrong, and there is nothing to invalidate it with while
- * Studio is a writer.
+ * projection — per page render AND per attendee procedure call (#1294), for a
+ * caller who holds a ticket OF ANY TYPE for this event. A caller with no ticket
+ * at all is refused before this read (see {@link checkWorkshopEligibility}),
+ * so an account alone cannot spend the live-API quota by calling the
+ * procedures in a loop; it takes an order at the ticketing provider under the
+ * same address. A short-TTL cache was considered and rejected: any TTL is a
+ * window in which an access decision is knowably wrong, and there is nothing to
+ * invalidate it with while Studio is a writer.
  *
  * (`conference.ticketTypeRoles` stays the fallback: an unreadable document or a
  * failed read keeps today's answer rather than locking out every attendee

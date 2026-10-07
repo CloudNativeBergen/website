@@ -47,6 +47,7 @@ export default function WorkshopList({
     data: signupsData,
     refetch: refetchSignups,
     isError: signupsFailed,
+    error: signupsError,
     isFetching: signupsFetching,
   } = api.workshop.getMySignups.useQuery(undefined, {
     // Identity is resolved server-side from the WorkOS session; this gate is
@@ -223,9 +224,13 @@ export default function WorkshopList({
           role="alert"
           className="flex flex-col gap-4 rounded-xl border border-yellow-200 bg-yellow-50 p-4 text-yellow-800 sm:flex-row sm:items-center sm:justify-between dark:border-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-200"
         >
+          {/* A refusal carries the server's own reason (no ticket, wrong
+              ticket type, ticket check unavailable); anything else is a
+              failed read, and "try again" is all there is to say. */}
           <p>
-            We could not load your workshop registrations. Workshops you are
-            already registered for may be listed as available below.
+            {signupsError?.data?.code === 'FORBIDDEN'
+              ? signupsError.message
+              : 'We could not load your workshop registrations. Workshops you are already registered for may be listed as available below.'}
           </p>
           <Button
             type="button"

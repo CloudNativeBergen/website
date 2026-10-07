@@ -433,6 +433,9 @@ describe('attendee procedures enforce the portal access decision', () => {
         code: 'FORBIDDEN',
         message: expect.stringContaining('Unable to verify workshop ticket'),
       })
+      // The provider WAS asked — this is not the unconfigured refusal above,
+      // which carries the same message.
+      expect(ticketing.fetchEventTickets).toHaveBeenCalledTimes(1)
       expectNoSignupIO()
     })
   })

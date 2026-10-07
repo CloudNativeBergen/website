@@ -529,10 +529,20 @@ describe('the memo — stale readers', () => {
     await fetchEventTicketCandidates(CONF)
     vi.setSystemTime(T0 + 31 * SECOND)
 
-    const waiting = fetchEventTicketCandidates(CONF)
-    refresh.resolve(SECOND_LIST)
+    let answer: string[] | null | undefined
+    const waiting = fetchEventTicketCandidates(CONF).then((list) => {
+      answer = emails(list)
+    })
+    // The reader has reached the provider and is still waiting on it — it was
+    // not handed the first list.
+    for (let i = 0; i < 50; i++) await Promise.resolve()
+    expect(fetchEventTickets).toHaveBeenCalledTimes(2)
+    expect(answer).toBeUndefined()
 
-    expect(emails(await waiting)).toEqual(['second@x.test'])
+    refresh.resolve(SECOND_LIST)
+    await waiting
+
+    expect(answer).toEqual(['second@x.test'])
   })
 
   it('keeps answering from the last arrived list when the refresh fails, and retries after a pause', async () => {
@@ -553,22 +563,76 @@ describe('the memo — stale readers', () => {
     await Promise.resolve()
     await Promise.resolve()
 
-    // The failure holds the key briefly: callers in that pause do not each ask
-    // the failing provider again. A stale reader still has the last list…
+    // The failure holds the key briefly: stale readers in that pause keep the
+    // last list and do not each ask the failing provider again.
     vi.setSystemTime(T0 + 34 * SECOND)
+    for (let i = 0; i < 3; i++) {
+      expect(
+        emails(await fetchEventTicketCandidates(CONF, { allowStale: true })),
+      ).toEqual(['first@x.test'])
+    }
+    expect(fetchEventTickets).toHaveBeenCalledTimes(2)
+
+    // After the pause the next one retries, and waits for nothing: it still
+    // takes the last list while that retry is out.
+    vi.setSystemTime(T0 + 37 * SECOND)
     expect(
       emails(await fetchEventTicketCandidates(CONF, { allowStale: true })),
     ).toEqual(['first@x.test'])
-    // …and a default reader is told the provider could not answer.
-    expect(await fetchEventTicketCandidates(CONF)).toBeNull()
+    expect(fetchEventTickets).toHaveBeenCalledTimes(3)
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(
+      emails(await fetchEventTicketCandidates(CONF, { allowStale: true })),
+    ).toEqual(['second@x.test'])
+  })
+
+  it('does not hold a default reader in that pause: it retries the provider at once', async () => {
+    const fetchEventTickets = vi
+      .fn()
+      .mockResolvedValueOnce(FIRST)
+      .mockRejectedValueOnce(new Error('upstream 503'))
+      .mockResolvedValueOnce(SECOND_LIST)
+    providerWith(fetchEventTickets)
+
+    await fetchEventTicketCandidates(CONF, { allowStale: true })
+    vi.setSystemTime(T0 + 31 * SECOND)
+    await fetchEventTicketCandidates(CONF, { allowStale: true })
+    await Promise.resolve()
+    await Promise.resolve()
     expect(fetchEventTickets).toHaveBeenCalledTimes(2)
 
-    // After the pause the next caller retries.
-    vi.setSystemTime(T0 + 37 * SECOND)
+    // Same instant as the failure — well inside the pause.
     expect(emails(await fetchEventTicketCandidates(CONF))).toEqual([
       'second@x.test',
     ])
     expect(fetchEventTickets).toHaveBeenCalledTimes(3)
+  })
+
+  it('bounds stale readers on a provider that has never answered', async () => {
+    // A cold instance during an outage: there is no list to fall back on, so
+    // every reader is refused — but they must not each ask the provider.
+    const fetchEventTickets = vi
+      .fn()
+      .mockRejectedValue(new Error('upstream 429'))
+    providerWith(fetchEventTickets)
+
+    for (let i = 0; i < 5; i++) {
+      vi.setSystemTime(T0 + i * 100)
+      expect(
+        await fetchEventTicketCandidates(CONF, { allowStale: true }),
+      ).toBeNull()
+      await Promise.resolve()
+      await Promise.resolve()
+    }
+    expect(fetchEventTickets).toHaveBeenCalledTimes(1)
+
+    // After the pause the next reader asks again.
+    vi.setSystemTime(T0 + 6 * SECOND)
+    expect(
+      await fetchEventTicketCandidates(CONF, { allowStale: true }),
+    ).toBeNull()
+    expect(fetchEventTickets).toHaveBeenCalledTimes(2)
   })
 
   it('never hands a default reader the stale list when the provider is failing', async () => {
@@ -840,6 +904,44 @@ describe('the memo — stale readers', () => {
     slow.resolve(FIRST)
     expect(emails(await first)).toEqual(['first@x.test'])
     expect(emails(await second)).toEqual(['first@x.test'])
+  })
+
+  it('keeps the answer of a slow first read that another event’s read outlasted', async () => {
+    const OTHER = { ...CONF, checkinEventId: 8 }
+    const slow = deferred<EventTicket[]>()
+    const fetchEventTickets = vi
+      .fn()
+      .mockReturnValueOnce(slow.promise)
+      .mockResolvedValueOnce(SECOND_LIST)
+      .mockReturnValue(new Promise<EventTicket[]>(() => {}))
+    resolveTicketingProviderMock.mockImplementation(
+      async (conference: typeof CONF) => ({
+        configured: true,
+        provider: { fetchEventTickets },
+        eventRef: { customerId: 42, eventId: conference.checkinEventId },
+      }),
+    )
+
+    // CONF's very first read is slow — slower than the patience for one.
+    const first = fetchEventTicketCandidates(CONF)
+    for (let i = 0; i < 10; i++) await Promise.resolve()
+    vi.setSystemTime(T0 + 125 * SECOND)
+
+    // Another event's read sweeps lapsed entries. CONF's is still in flight.
+    await fetchEventTicketCandidates(OTHER)
+
+    slow.resolve(FIRST)
+    expect(emails(await first)).toEqual(['first@x.test'])
+
+    // The list it brought back is there for a stale reader to take while the
+    // next refresh (which never answers here) is out.
+    vi.setSystemTime(T0 + 126 * SECOND)
+    let answer: string[] | null | undefined
+    void fetchEventTicketCandidates(CONF, { allowStale: true }).then((list) => {
+      answer = emails(list)
+    })
+    for (let i = 0; i < 50; i++) await Promise.resolve()
+    expect(answer).toEqual(['first@x.test'])
   })
 
   it('keeps one event’s last list when another event refreshes', async () => {
