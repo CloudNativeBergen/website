@@ -152,7 +152,7 @@ describe('/privacy Buffer disclosure, two tenants', () => {
     const healthy = await resolveSubprocessorDisclosure(
       conference('conf-b', ORG_B),
     )
-    expect(workos(healthy)?.certainty).not.toBe('possible')
+    expect(workos(healthy)).toBeUndefined()
 
     // The REAL discrete store refusing: B and a third org claim one slug, and
     // a complete TENANT_ACME_CHECKIN_* set exists on the deployment.

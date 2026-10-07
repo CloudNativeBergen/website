@@ -93,8 +93,11 @@ async function resolveProcessingFacts(
         // stores and swallows a REFUSED lookup into `false` — correct for a
         // gate, wrong for this page (a healthy org document plus a refused
         // slug lookup would silently drop WorkOS from the disclosure). So a
-        // `false` is re-asked of the same stores the gate used: a throw there
-        // is "could not find out" → `null` = UNKNOWN, which discloses.
+        // `false` is re-asked of the stores the gate MAY have consulted (it
+        // does so only on the plan path; for a community org or an explicit
+        // deny the re-probe is redundant but harmless): a throw there is
+        // "could not find out" → `null` = UNKNOWN, which discloses — the
+        // over-report direction this page is allowed to err in.
         isWorkshopsEnabledForConference(conference).then((enabled) =>
           enabled
             ? true

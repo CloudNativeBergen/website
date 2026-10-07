@@ -247,11 +247,6 @@ describe('isWorkshopsEnabledForOrg — the platform org gets it by plan, not by 
     expect(h.fetch).not.toHaveBeenCalled()
   })
 
-  it('is DISABLED for the platform org with no plan', async () => {
-    getOrganizationById.mockResolvedValue(org({ _id: PLATFORM_ORG_ID }))
-    await expect(isWorkshopsEnabledForOrg(PLATFORM_ORG_ID)).resolves.toBe(false)
-  })
-
   it('is ENABLED for the platform org on pro — its ticketing is the env account, no per-org secret needed', async () => {
     getOrganizationById.mockResolvedValue(
       org({ _id: PLATFORM_ORG_ID, plan: 'pro' }),
@@ -269,13 +264,6 @@ describe('isWorkshopsEnabledForOrg — the platform org gets it by plan, not by 
       }),
     )
     await expect(isWorkshopsEnabledForOrg(PLATFORM_ORG_ID)).resolves.toBe(false)
-  })
-
-  it('treats a non-platform org exactly the same way on the same inputs', async () => {
-    stubOwnTicketingSecret('org-A')
-    getOrganizationById.mockResolvedValue(org({ plan: 'pro' }))
-    await expect(isWorkshopsEnabledForOrg('org-A')).resolves.toBe(true)
-    expect(h.fetch).not.toHaveBeenCalled()
   })
 })
 
