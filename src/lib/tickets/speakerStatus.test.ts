@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import type { EventTicket } from '@/lib/tickets/types'
 
 const resolveTicketingProviderMock = vi.fn()
@@ -12,6 +12,7 @@ import {
   findSpeakerTicketType,
   joinSpeakerTicketStatus,
   fetchRedeemedSpeakerEmails,
+  fetchEventTicketCandidates,
   toTicketCandidates,
   searchTicketCandidates,
   __resetRedeemedCache,
@@ -435,5 +436,191 @@ describe('toTicketCandidates / searchTicketCandidates — the organizer search',
       category: 'Conference (1 day)',
     }))
     expect(searchTicketCandidates(many, 'person')).toHaveLength(20)
+  })
+})
+
+/**
+ * `allowStale` (#1294): the workshop gate runs on every signup click, so it
+ * takes the last list that ARRIVED instead of blocking on a refresh or being
+ * refused by a provider blip. Every other reader keeps waiting for the
+ * provider's current answer.
+ */
+describe('the memo — stale readers', () => {
+  const T0 = new Date('2026-10-20T08:00:00Z').getTime()
+  const SECOND = 1_000
+  const MINUTE = 60 * SECOND
+
+  const FIRST = [ticket('first@x.test', 'Workshop')]
+  const SECOND_LIST = [ticket('second@x.test', 'Workshop')]
+
+  const emails = (list: { email: string }[] | null) =>
+    list?.map((c) => c.email) ?? null
+
+  function providerWith(fetchEventTickets: ReturnType<typeof vi.fn>) {
+    resolveTicketingProviderMock.mockResolvedValue({
+      configured: true,
+      provider: { fetchEventTickets },
+      eventRef: { customerId: 42, eventId: 7 },
+    })
+  }
+
+  function deferred<T>() {
+    let resolve!: (value: T) => void
+    let reject!: (reason: unknown) => void
+    const promise = new Promise<T>((res, rej) => {
+      resolve = res
+      reject = rej
+    })
+    return { promise, resolve, reject }
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(T0)
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.restoreAllMocks()
+  })
+
+  it('takes the last arrived list while a refresh is in flight, then the new one', async () => {
+    const refresh = deferred<EventTicket[]>()
+    const fetchEventTickets = vi
+      .fn()
+      .mockResolvedValueOnce(FIRST)
+      .mockReturnValueOnce(refresh.promise)
+    providerWith(fetchEventTickets)
+
+    await fetchEventTicketCandidates(CONF, { allowStale: true })
+    vi.setSystemTime(T0 + 31 * SECOND)
+
+    // The window lapsed: this call STARTS the refresh and does not wait on it.
+    expect(
+      emails(await fetchEventTicketCandidates(CONF, { allowStale: true })),
+    ).toEqual(['first@x.test'])
+    expect(fetchEventTickets).toHaveBeenCalledTimes(2)
+
+    refresh.resolve(SECOND_LIST)
+    await refresh.promise
+
+    expect(
+      emails(await fetchEventTicketCandidates(CONF, { allowStale: true })),
+    ).toEqual(['second@x.test'])
+    expect(fetchEventTickets).toHaveBeenCalledTimes(2)
+  })
+
+  it('makes a default reader wait for the refresh instead', async () => {
+    const refresh = deferred<EventTicket[]>()
+    const fetchEventTickets = vi
+      .fn()
+      .mockResolvedValueOnce(FIRST)
+      .mockReturnValueOnce(refresh.promise)
+    providerWith(fetchEventTickets)
+
+    await fetchEventTicketCandidates(CONF)
+    vi.setSystemTime(T0 + 31 * SECOND)
+
+    const waiting = fetchEventTicketCandidates(CONF)
+    refresh.resolve(SECOND_LIST)
+
+    expect(emails(await waiting)).toEqual(['second@x.test'])
+  })
+
+  it('keeps answering from the last arrived list when the refresh fails, and retries', async () => {
+    const fetchEventTickets = vi
+      .fn()
+      .mockResolvedValueOnce(FIRST)
+      .mockRejectedValueOnce(new Error('upstream 503'))
+      .mockResolvedValueOnce(SECOND_LIST)
+    providerWith(fetchEventTickets)
+
+    await fetchEventTicketCandidates(CONF, { allowStale: true })
+    vi.setSystemTime(T0 + 31 * SECOND)
+
+    expect(
+      emails(await fetchEventTicketCandidates(CONF, { allowStale: true })),
+    ).toEqual(['first@x.test'])
+    // Let the rejection land.
+    await Promise.resolve()
+    await Promise.resolve()
+
+    // The failure is not held for the window: the next caller retries, and a
+    // DEFAULT reader gets what that retry returns.
+    expect(emails(await fetchEventTicketCandidates(CONF))).toEqual([
+      'second@x.test',
+    ])
+    expect(fetchEventTickets).toHaveBeenCalledTimes(3)
+  })
+
+  it('never hands a default reader the stale list when the provider is failing', async () => {
+    const fetchEventTickets = vi
+      .fn()
+      .mockResolvedValueOnce(FIRST)
+      .mockRejectedValue(new Error('upstream 503'))
+    providerWith(fetchEventTickets)
+
+    await fetchEventTicketCandidates(CONF)
+    vi.setSystemTime(T0 + 31 * SECOND)
+
+    expect(await fetchEventTicketCandidates(CONF)).toBeNull()
+  })
+
+  it('stops answering from a list older than the cap (fails closed)', async () => {
+    const fetchEventTickets = vi
+      .fn()
+      .mockResolvedValueOnce(FIRST)
+      .mockRejectedValue(new Error('upstream 503'))
+    providerWith(fetchEventTickets)
+
+    await fetchEventTicketCandidates(CONF, { allowStale: true })
+
+    // Inside the cap: still the last list.
+    vi.setSystemTime(T0 + 9 * MINUTE)
+    expect(
+      emails(await fetchEventTicketCandidates(CONF, { allowStale: true })),
+    ).toEqual(['first@x.test'])
+    await Promise.resolve()
+    await Promise.resolve()
+
+    // Past it: the reader waits on the provider, which cannot answer.
+    vi.setSystemTime(T0 + 11 * MINUTE)
+    expect(
+      await fetchEventTicketCandidates(CONF, { allowStale: true }),
+    ).toBeNull()
+  })
+
+  it('has nothing stale to take on a first read', async () => {
+    providerWith(vi.fn().mockRejectedValue(new Error('upstream 503')))
+
+    expect(
+      await fetchEventTicketCandidates(CONF, { allowStale: true }),
+    ).toBeNull()
+  })
+
+  it('keeps one event’s last list when another event refreshes', async () => {
+    const OTHER = { ...CONF, checkinEventId: 8 }
+    const fetchEventTickets = vi
+      .fn()
+      .mockResolvedValueOnce(FIRST)
+      .mockResolvedValueOnce(SECOND_LIST)
+      .mockRejectedValue(new Error('upstream 503'))
+    resolveTicketingProviderMock.mockImplementation(
+      async (conference: typeof CONF) => ({
+        configured: true,
+        provider: { fetchEventTickets },
+        eventRef: { customerId: 42, eventId: conference.checkinEventId },
+      }),
+    )
+
+    await fetchEventTicketCandidates(CONF, { allowStale: true })
+    vi.setSystemTime(T0 + 31 * SECOND)
+    // A different event's read installs a fresh entry and sweeps lapsed ones.
+    await fetchEventTicketCandidates(OTHER, { allowStale: true })
+
+    expect(
+      emails(await fetchEventTicketCandidates(CONF, { allowStale: true })),
+    ).toEqual(['first@x.test'])
   })
 })

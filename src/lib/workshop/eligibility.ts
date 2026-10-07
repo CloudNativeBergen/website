@@ -99,15 +99,22 @@ export async function checkWorkshopEligibility(params: {
     // one slow uncached provider request, and this check now runs on every
     // attendee action (#1294), not only on page render — so a registration
     // opening would otherwise issue one per click. The memo holds the in-flight
-    // promise, so a burst shares a single read. What the window costs: a ticket
-    // bought inside it is refused until it lapses (retry), and a ticket
-    // refunded inside it is honoured until it lapses.
+    // promise, so a burst shares a single read.
+    //
+    // `allowStale`: while that read is refreshing, or failing, the gate decides
+    // from the last list that arrived (capped; see the option). Seats are
+    // first-come, so nobody should lose one to a refresh they happened to land
+    // on, and a provider blip must not refuse every ticket holder. What it
+    // costs: a ticket bought just now is refused until the next refresh lands,
+    // and a refunded one is honoured until then.
     //
     // It still routes through the resolver (B7), so this tenant's per-org
     // provider key is honored instead of the platform env creds. `null` is an
     // unconfigured conference, a conference with no owning org, or a provider
     // error — all the same "unable to verify" refusal.
-    const tickets = await fetchEventTicketCandidates(params.conference)
+    const tickets = await fetchEventTicketCandidates(params.conference, {
+      allowStale: true,
+    })
     if (!tickets) {
       return {
         isEligible: false,
@@ -117,10 +124,13 @@ export async function checkWorkshopEligibility(params: {
       }
     }
 
-    // Matched on the address EXACTLY as registered, case-folded — never the
-    // NFKC-normalized `email`. NFKC folds distinct mailboxes together
-    // (`oﬃce@x.test` → `office@x.test`), which is fine for finding a speaker's
-    // ticket and wrong for deciding whose ticket this is.
+    // Matched on the address as registered, trimmed and lowercased — the same
+    // comparison as before, and never the NFKC-normalized `email`. NFKC folds
+    // distinct mailboxes together (`oﬃce@x.test` → `office@x.test`), which is
+    // fine for finding a speaker's ticket and wrong for deciding whose ticket
+    // this is. `toLowerCase()` is Unicode-aware, so it is not a pure ASCII fold
+    // (U+212A KELVIN SIGN → `k`); that is kept deliberately, because an
+    // ASCII-only fold would stop `Øyvind@` matching `øyvind@`.
     const userEmail = canonicalEmail(params.userEmail)
     const userTickets = userEmail
       ? tickets.filter(
@@ -160,7 +170,7 @@ export async function checkWorkshopEligibility(params: {
         isEligible: false,
         tickets: [],
         eligibleTickets: [],
-        reason: `No ticket found for your email address. Please purchase a workshop ticket to access workshops, or contact us at ${contactEmail} if you have any questions.`,
+        reason: `No ticket found for your email address. If you bought your ticket in the last few minutes, wait a minute and reload this page. Otherwise please purchase a workshop ticket to access workshops, or contact us at ${contactEmail} if you have any questions.`,
       }
     }
 

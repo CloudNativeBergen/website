@@ -306,10 +306,44 @@ export function joinSpeakerTicketStatus(
  * pair; the org id is the account discriminator and is not a secret.
  */
 const TICKETS_TTL_MS = 30_000
-const ticketsCache = new Map<
-  string,
-  { expiresAt: number; candidates: Promise<TicketCandidate[] | null> }
->()
+
+/**
+ * How long a reader that opted into {@link TicketCandidateReadOptions.allowStale}
+ * may be served the last list that ARRIVED while a refresh is in flight or
+ * failing. Past this the reader waits on the provider like everyone else, and
+ * fails closed if it cannot answer.
+ */
+const TICKETS_MAX_STALE_MS = 10 * 60_000
+
+interface TicketsEntry {
+  expiresAt: number
+  candidates: Promise<TicketCandidate[]>
+  /** True until `candidates` settles. */
+  pending: boolean
+  /** The last list that actually arrived under this key, and when. */
+  arrived?: { at: number; value: TicketCandidate[] }
+}
+
+const ticketsCache = new Map<string, TicketsEntry>()
+
+/** Options for {@link fetchEventTicketCandidates}. */
+export interface TicketCandidateReadOptions {
+  /**
+   * Take the last list that arrived instead of waiting, while a refresh is in
+   * flight or after it failed — for at most {@link TICKETS_MAX_STALE_MS}.
+   *
+   * FOR READERS ON AN ATTENDEE'S CRITICAL PATH. The workshop gate runs on every
+   * signup click, and seats are first-come: without this, every caller blocks
+   * on one slow whole-event fetch each time the window lapses, and a provider
+   * outage refuses every ticket holder at once. The price is that a change at
+   * the provider is seen one refresh later, and during an outage a refunded
+   * ticket keeps answering for up to the cap.
+   *
+   * Off by default: the organizer surfaces want the answer the provider gives
+   * now, and can afford to wait for it.
+   */
+  allowStale?: boolean
+}
 
 /** Test seam: drop the memo so a case cannot inherit another's fetch. */
 export function __resetRedeemedCache() {
@@ -326,6 +360,7 @@ export function __resetRedeemedCache() {
  */
 export async function fetchEventTicketCandidates(
   conference: ConferenceTicketingBinding,
+  options?: TicketCandidateReadOptions,
 ): Promise<TicketCandidate[] | null> {
   const orgId = conference.organization?._ref
   // Fail closed: without an owning org there is no account to key the memo on,
@@ -338,27 +373,63 @@ export async function fetchEventTicketCandidates(
 
     const key = `${orgId}:${JSON.stringify(ticketing.eventRef)}`
     const now = Date.now()
-    const cached = ticketsCache.get(key)
-    if (cached && cached.expiresAt > now) return await cached.candidates
+    const withinStaleCap = (entry: TicketsEntry) =>
+      entry.arrived !== undefined &&
+      now - entry.arrived.at <= TICKETS_MAX_STALE_MS
 
-    const candidates = ticketing.provider
-      .fetchEventTickets(ticketing.eventRef)
-      .then(toTicketCandidates)
-    // A failed fetch must not be served for the rest of the window — but evict
-    // only if THIS promise is still the entry. A rejection arriving after the
-    // TTL lapsed would otherwise delete a newer in-flight fetch installed under
-    // the same key, and every concurrent caller would issue its own.
-    candidates.catch(() => {
-      if (ticketsCache.get(key)?.candidates === candidates) {
-        ticketsCache.delete(key)
+    let entry = ticketsCache.get(key)
+    if (!entry || entry.expiresAt <= now) {
+      const candidates = ticketing.provider
+        .fetchEventTickets(ticketing.eventRef)
+        .then(toTicketCandidates)
+      const refresh: TicketsEntry = {
+        expiresAt: now + TICKETS_TTL_MS,
+        candidates,
+        pending: true,
+        // Carried over so a stale reader has something to take meanwhile.
+        arrived: entry?.arrived,
       }
-    })
-    ticketsCache.set(key, { expiresAt: now + TICKETS_TTL_MS, candidates })
-    // Keep a long-lived warm instance from growing an entry per event forever.
-    for (const [k, entry] of ticketsCache) {
-      if (entry.expiresAt <= now) ticketsCache.delete(k)
+      candidates.then(
+        (value) => {
+          refresh.pending = false
+          refresh.arrived = { at: Date.now(), value }
+        },
+        (error) => {
+          refresh.pending = false
+          // A failed fetch must not be served for the rest of the window — but
+          // act only if THIS refresh is still the entry. A rejection arriving
+          // after the TTL lapsed would otherwise undo a newer in-flight fetch
+          // installed under the same key, and every concurrent caller would
+          // issue its own.
+          if (ticketsCache.get(key) !== refresh) return
+          if (refresh.arrived) {
+            // Keep the last arrived list for stale readers; lapse the window
+            // so the next caller retries the provider.
+            refresh.expiresAt = 0
+            console.error(
+              '[speakerTicketStatus] refresh failed; stale readers keep the last list',
+              error,
+            )
+          } else {
+            ticketsCache.delete(key)
+          }
+        },
+      )
+      ticketsCache.set(key, refresh)
+      // Keep a long-lived warm instance from growing an entry per event
+      // forever — but not at the cost of a list a stale reader may still take.
+      for (const [k, other] of ticketsCache) {
+        if (other.expiresAt <= now && !withinStaleCap(other)) {
+          ticketsCache.delete(k)
+        }
+      }
+      entry = refresh
     }
-    return await candidates
+
+    if (options?.allowStale && entry.pending && withinStaleCap(entry)) {
+      return entry.arrived!.value
+    }
+    return await entry.candidates
   } catch (error) {
     console.error('[speakerTicketStatus] provider read failed', error)
     return null
