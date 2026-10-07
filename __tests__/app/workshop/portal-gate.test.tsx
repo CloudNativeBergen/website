@@ -62,8 +62,24 @@ vi.mock('@workos-inc/authkit-nextjs/components', () => ({
   AuthKitProvider: ({ children }: { children: React.ReactNode }) => children,
 }))
 
+/**
+ * The ticketing PROVIDER is an external boundary too. The real resolver chain,
+ * ticket memo, eligibility rule and access decision all run (#1294).
+ */
+const ticketing = vi.hoisted(() => ({
+  fetchEventTickets: vi.fn(),
+  resolve: vi.fn(),
+}))
+
+vi.mock('@/lib/tickets/provider', async (importActual) => ({
+  ...(await importActual<typeof import('@/lib/tickets/provider')>()),
+  resolveTicketingProvider: ticketing.resolve,
+}))
+
+import { isValidElement, type ReactNode } from 'react'
 import WorkshopLayout from '@/app/(workshop)/layout'
 import WorkshopPage from '@/app/(workshop)/workshop/page'
+import { __resetRedeemedCache } from '@/lib/tickets/speakerStatus'
 
 const PLATFORM_SLUG = 'platform-org'
 
@@ -73,6 +89,19 @@ function conference(orgId: string | null) {
     title: 'CNDN',
     ...(orgId ? { organization: { _ref: orgId, _type: 'reference' } } : {}),
   }
+}
+
+/**
+ * Every string in the element tree the page RETURNED, without rendering any
+ * component — enough to tell which of the page's states it chose.
+ */
+function textOf(node: ReactNode): string {
+  if (typeof node === 'string' || typeof node === 'number') return String(node)
+  if (Array.isArray(node)) return node.map(textOf).join(' ')
+  if (isValidElement<{ children?: ReactNode }>(node)) {
+    return textOf(node.props.children)
+  }
+  return ''
 }
 
 /** Did rendering this server component 404? */
@@ -88,10 +117,24 @@ async function is404(render: () => Promise<unknown>): Promise<boolean> {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  __resetRedeemedCache()
   // A configured platform org that matches none of the tenants below, so a case
   // is platform ONLY when it points the contract at its own org id.
   vi.stubEnv('PLATFORM_ORG_ID', 'org-none')
   mockWithAuth.mockResolvedValue({ user: null })
+  ticketing.fetchEventTickets.mockResolvedValue([
+    {
+      id: 1,
+      order_id: 1,
+      category: 'Workshop + Conference (2 days)',
+      crm: { email: 'ada@example.com' },
+    },
+  ])
+  ticketing.resolve.mockResolvedValue({
+    configured: true,
+    provider: { fetchEventTickets: ticketing.fetchEventTickets },
+    eventRef: { customerId: 1, eventId: 2 },
+  })
 })
 
 afterEach(() => {
@@ -166,5 +209,78 @@ describe('workshop portal — feature ON (platform org)', () => {
   it('renders the portal page and authenticates the attendee as before', async () => {
     expect(await is404(() => WorkshopPage())).toBe(false)
     expect(mockWithAuth).toHaveBeenCalledOnce()
+  })
+})
+
+/**
+ * #1294. The page renders from the SAME access decision the attendee procedures
+ * enforce (`decideWorkshopPortalAccess`), so it cannot show a signup form the
+ * API would refuse. Each refusal is exercised with the other conditions
+ * satisfied and asserted on its own text.
+ */
+describe('workshop portal — signed-in attendee', () => {
+  const ADA = {
+    id: 'workos-ada',
+    email: 'ada@example.com',
+    emailVerified: true,
+    firstName: 'Ada',
+    lastName: 'Lovelace',
+  }
+
+  beforeEach(() => {
+    vi.stubEnv('PLATFORM_ORG_ID', 'org-platform')
+    mockGetConference.mockResolvedValue({
+      conference: conference('org-platform'),
+      error: null,
+    })
+    mockGetOrganizationById.mockResolvedValue({
+      _id: 'org-platform',
+      name: 'Platform',
+      slug: PLATFORM_SLUG,
+    })
+    mockWithAuth.mockResolvedValue({ user: ADA })
+  })
+
+  it('shows the signup page to a verified ticket holder', async () => {
+    const text = textOf(await WorkshopPage())
+
+    expect(text).toContain('Workshop Signup')
+    expect(text).toContain('Ada Lovelace')
+    expect(text).not.toContain('Workshop Access Required')
+  })
+
+  it('refuses an unverified email even when it matches a workshop ticket', async () => {
+    mockWithAuth.mockResolvedValue({ user: { ...ADA, emailVerified: false } })
+
+    const text = textOf(await WorkshopPage())
+
+    expect(text).toContain('Workshop Access Required')
+    expect(text).toContain('has not been verified')
+    expect(ticketing.fetchEventTickets).not.toHaveBeenCalled()
+  })
+
+  it('refuses a verified attendee with no ticket', async () => {
+    ticketing.fetchEventTickets.mockResolvedValue([])
+
+    const text = textOf(await WorkshopPage())
+
+    expect(text).toContain('Workshop Access Required')
+    expect(text).toContain('No ticket found for your email address')
+  })
+
+  it('refuses when the conference has no ticketing configured — no skipped check', async () => {
+    // The page used to skip the ticket check entirely for a conference without
+    // ticketing ids, and showed the signup form to anyone signed in.
+    ticketing.resolve.mockResolvedValue({
+      configured: false,
+      provider: null,
+      eventRef: null,
+    })
+
+    const text = textOf(await WorkshopPage())
+
+    expect(text).toContain('Workshop Access Required')
+    expect(text).toContain('Unable to verify workshop ticket')
+    expect(text).not.toContain('Welcome,')
   })
 })
