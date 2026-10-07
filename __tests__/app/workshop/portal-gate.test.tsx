@@ -63,8 +63,9 @@ vi.mock('@workos-inc/authkit-nextjs/components', () => ({
 }))
 
 /**
- * The ticketing PROVIDER is an external boundary too. The real resolver chain,
- * ticket memo, eligibility rule and access decision all run (#1294).
+ * `resolveTicketingProvider` is the mocked boundary (#1294), so credential and
+ * binding resolution do NOT run here. Everything above it is real: the ticket
+ * memo, the eligibility rule and the access decision.
  */
 const ticketing = vi.hoisted(() => ({
   fetchEventTickets: vi.fn(),
@@ -266,6 +267,17 @@ describe('workshop portal — signed-in attendee', () => {
 
     expect(text).toContain('Workshop Access Required')
     expect(text).toContain('No ticket found for your email address')
+  })
+
+  it('refuses, with a retry message, when the provider cannot answer', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    ticketing.fetchEventTickets.mockRejectedValue(new Error('vendor down'))
+
+    const text = textOf(await WorkshopPage())
+
+    expect(text).toContain('Workshop Access Required')
+    expect(text).toContain('Unable to verify workshop ticket at this time')
+    expect(text).not.toContain('Welcome,')
   })
 
   it('refuses when the conference has no ticketing configured — no skipped check', async () => {

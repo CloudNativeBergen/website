@@ -77,13 +77,28 @@ describe('checkWorkshopEligibility — resolver routing (B7)', () => {
 
     const result = await checkWorkshopEligibility({
       userEmail: 'speaker@x.test',
-      conference: {},
+      // WITH an owning org: without one the read stops before the resolver is
+      // ever asked, and this case would pass without touching the mock above.
+      conference: CONF,
       contactEmail: 'help@x.test',
     })
 
+    expect(resolveTicketingProviderMock).toHaveBeenCalledWith(CONF)
     expect(result.isEligible).toBe(false)
+    expect(result.reason).toContain('Unable to verify')
     expect(result.reason).toContain('help@x.test')
     expect(result.tickets).toEqual([])
+  })
+
+  it('soft-fails without asking the provider when the conference has no owning org', async () => {
+    const result = await checkWorkshopEligibility({
+      userEmail: 'speaker@x.test',
+      conference: { checkinCustomerId: 42, checkinEventId: 7 },
+    })
+
+    expect(resolveTicketingProviderMock).not.toHaveBeenCalled()
+    expect(result.isEligible).toBe(false)
+    expect(result.reason).toContain('Unable to verify')
   })
 
   it('soft-fails (never throws) when the provider fetch errors', async () => {

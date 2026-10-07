@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { useEffect } from 'react'
 import { http, HttpResponse, delay } from 'msw'
 import type { Decorator } from '@storybook/nextjs-vite'
-import { userEvent, within } from 'storybook/test'
+import { expect, userEvent, within } from 'storybook/test'
 import WorkshopList from './WorkshopList'
 import type { ProposalWithWorkshopData } from '@/lib/workshop/types'
 import { mockDateBeforeEach } from '@/lib/storybook'
@@ -296,5 +296,64 @@ export const SignupError: Story = {
     // The failure text shows both in the modal and in the page-level banner, so
     // assert on all matches rather than a single one.
     await body.findAllByText(/this workshop is now full/i)
+  },
+}
+
+const signupsUnavailable = () =>
+  HttpResponse.json(
+    {
+      error: {
+        message: 'Unable to verify workshop ticket at this time.',
+        code: -32003,
+        data: { code: 'FORBIDDEN', httpStatus: 403 },
+      },
+    },
+    { status: 403 },
+  )
+
+const signupsFailedHandlers = [
+  http.get('/api/trpc/workshop.list', () =>
+    listResponse([wsAvailableA, wsAvailableB, wsFull]),
+  ),
+  http.get('/api/trpc/workshop.getMySignups', signupsUnavailable),
+  announcementsHandler,
+]
+
+/**
+ * The attendee's own signups could not be read (the ticket check behind
+ * `getMySignups` could not answer). The list still renders, but it says so:
+ * without the notice a registered attendee sees their workshops as available.
+ */
+export const SignupsUnavailable: Story = {
+  args: signedInArgs,
+  parameters: { msw: { handlers: signupsFailedHandlers } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const notice = await canvas.findByRole(
+      'alert',
+      {},
+      // The query retries once before it reports the failure.
+      { timeout: 5000 },
+    )
+    await expect(notice).toHaveTextContent(
+      /could not load your workshop registrations/i,
+    )
+    await expect(
+      within(notice).getByRole('button', { name: /try again/i }),
+    ).toBeEnabled()
+  },
+}
+
+export const SignupsUnavailableDark: Story = {
+  ...SignupsUnavailable,
+  parameters: { ...SignupsUnavailable.parameters, dark: true },
+}
+
+/** The same notice on a phone: the button drops below the text. */
+export const SignupsUnavailableMobile: Story = {
+  ...SignupsUnavailable,
+  parameters: {
+    ...SignupsUnavailable.parameters,
+    viewport: { defaultViewport: 'mobile1' },
   },
 }

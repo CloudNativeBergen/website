@@ -71,8 +71,10 @@ vi.mock('@/lib/sanity/client', () => ({
 }))
 
 /**
- * The ticketing PROVIDER is the boundary: the real resolver chain, memo,
- * eligibility rule and access decision all run. Only the vendor read is faked.
+ * `resolveTicketingProvider` is the mocked boundary, so credential and binding
+ * resolution do NOT run here (a fixture conference needs no ticketing ids to be
+ * "configured"). Everything above it is real: the ticket memo, the eligibility
+ * rule and the access decision.
  */
 const ticketing = vi.hoisted(() => ({
   fetchEventTickets: vi.fn(),
@@ -179,6 +181,9 @@ beforeEach(() => {
   // The ticket memo is process-global: without this a case inherits the
   // previous case's ticket list for 30 seconds.
   __resetRedeemedCache()
+  // No live conference document unless a case supplies one (`clearAllMocks`
+  // keeps implementations, so a case's override would otherwise leak).
+  h.fetch.mockResolvedValue(null)
   // The default attendee of every case below holds a workshop ticket.
   ticketing.fetchEventTickets.mockResolvedValue([
     ticket('attendee@example.com'),
@@ -438,6 +443,38 @@ describe('attendee procedures enforce the portal access decision', () => {
     expect(createSignupMock.mock.calls[0][0].userEmail).toBe(
       'attendee@example.com',
     )
+  })
+
+  it('decides from the LIVE ticket-type roles, not the cached conference', async () => {
+    // The domain conference fixture carries no roles (the legacy bridge would
+    // grant WORKSHOP_TICKET). The live document declares its own type instead,
+    // which makes the declared set the whole answer.
+    h.fetch.mockResolvedValue({
+      ticketTypeRoles: [
+        { typeName: 'Workshopdag 2026', admits: true, grantsWorkshop: true },
+      ],
+    } as never)
+    ticketing.fetchEventTickets.mockResolvedValue([
+      ticket('attendee@example.com', 'Workshopdag 2026'),
+      ticket('real@example.com', WORKSHOP_TICKET),
+    ])
+
+    // Holder of the DECLARED type: through to the write.
+    await createWorkshopCaller().workshop.signup(baseSignupInput)
+    expect(createSignupMock).toHaveBeenCalledTimes(1)
+
+    // Holder of the legacy name, which this conference never declared.
+    await expect(
+      createWorkshopCaller({ email: 'real@example.com' }).workshop.signup(
+        baseSignupInput,
+      ),
+    ).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+      message: expect.stringContaining(
+        'has not been set up for workshop access',
+      ),
+    })
+    expect(createSignupMock).toHaveBeenCalledTimes(1)
   })
 
   it('shares one provider read across a burst of attendee actions', async () => {
