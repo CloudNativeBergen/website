@@ -35,6 +35,7 @@ import {
   type ResolvedTicketing,
 } from '@/lib/tickets/provider'
 import type { EventTicket } from '@/lib/tickets/types'
+import { runAfterResponse } from '@/server/runAfterResponse'
 import { SPEAKER_TICKET_CATEGORY } from './speakerTicketCategory'
 
 export { SPEAKER_TICKET_CATEGORY } from './speakerTicketCategory'
@@ -315,9 +316,21 @@ const TICKETS_TTL_MS = 30_000
  */
 const TICKETS_MAX_STALE_MS = 10 * 60_000
 
+/**
+ * How long a refresh that has outlived its window stays THE refresh for its
+ * key. A paginated whole-event read can take longer than the window; starting a
+ * second one each time it lapses would run them in parallel and lose the first
+ * one's result. Past this, the refresh is presumed stuck and a caller may start
+ * another.
+ */
+const TICKETS_REFRESH_PATIENCE_MS = 2 * 60_000
+
 interface TicketsEntry {
+  startedAt: number
   expiresAt: number
   candidates: Promise<TicketCandidate[]>
+  /** `candidates`, settled either way. Never rejects. */
+  settled: Promise<void>
   /** True until `candidates` settles. */
   pending: boolean
   /** The last list that actually arrived under this key, and when. */
@@ -377,22 +390,33 @@ export async function fetchEventTicketCandidates(
       entry.arrived !== undefined &&
       now - entry.arrived.at <= TICKETS_MAX_STALE_MS
 
+    // A refresh still in flight past its window is shared, not restarted.
+    const stillRefreshing = (entry: TicketsEntry) =>
+      entry.pending && now - entry.startedAt < TICKETS_REFRESH_PATIENCE_MS
+
     let entry = ticketsCache.get(key)
-    if (!entry || entry.expiresAt <= now) {
+    if (!entry || (entry.expiresAt <= now && !stillRefreshing(entry))) {
       const candidates = ticketing.provider
         .fetchEventTickets(ticketing.eventRef)
         .then(toTicketCandidates)
       const refresh: TicketsEntry = {
+        startedAt: now,
         expiresAt: now + TICKETS_TTL_MS,
         candidates,
+        settled: Promise.resolve(),
         pending: true,
         // Carried over so a stale reader has something to take meanwhile.
         arrived: entry?.arrived,
       }
-      candidates.then(
+      refresh.settled = candidates.then(
         (value) => {
           refresh.pending = false
           refresh.arrived = { at: Date.now(), value }
+          // This refresh was given up on and replaced, but it did answer: a
+          // list that arrived must not be lost to whichever entry holds the
+          // key now.
+          const current = ticketsCache.get(key)
+          if (current && current !== refresh) current.arrived = refresh.arrived
         },
         (error) => {
           refresh.pending = false
@@ -419,7 +443,11 @@ export async function fetchEventTicketCandidates(
       // Keep a long-lived warm instance from growing an entry per event
       // forever — but not at the cost of a list a stale reader may still take.
       for (const [k, other] of ticketsCache) {
-        if (other.expiresAt <= now && !withinStaleCap(other)) {
+        if (
+          other.expiresAt <= now &&
+          !stillRefreshing(other) &&
+          !withinStaleCap(other)
+        ) {
           ticketsCache.delete(k)
         }
       }
@@ -427,6 +455,12 @@ export async function fetchEventTicketCandidates(
     }
 
     if (options?.allowStale && entry.pending && withinStaleCap(entry)) {
+      // Nobody is waiting on this refresh any more, and a serverless instance
+      // may be frozen the moment the response flushes — the list would then
+      // never arrive, and stale readers would be served the old one until the
+      // cap. Keep the instance alive until the refresh settles.
+      const { settled } = entry
+      runAfterResponse(() => settled)
       return entry.arrived!.value
     }
     return await entry.candidates

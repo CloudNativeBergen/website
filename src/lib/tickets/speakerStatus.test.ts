@@ -7,6 +7,13 @@ vi.mock('@/lib/tickets/provider', () => ({
     resolveTicketingProviderMock(...a),
 }))
 
+// The after-response hook is a platform boundary (Next's `after`). Recorded so
+// a case can see WHAT was handed to it; the task is not run here.
+const runAfterResponseMock = vi.fn()
+vi.mock('@/server/runAfterResponse', () => ({
+  runAfterResponse: (task: () => Promise<void>) => runAfterResponseMock(task),
+}))
+
 import {
   redeemedSpeakerEmails,
   findSpeakerTicketType,
@@ -602,6 +609,153 @@ describe('the memo — stale readers', () => {
     ).toBeNull()
     // The provider was asked and failed — not a read that stopped earlier.
     expect(fetchEventTickets).toHaveBeenCalledTimes(1)
+  })
+
+  it('shares a refresh that outlives its window instead of starting another', async () => {
+    const slow = deferred<EventTicket[]>()
+    const fetchEventTickets = vi
+      .fn()
+      .mockResolvedValueOnce(FIRST)
+      .mockReturnValueOnce(slow.promise)
+      .mockResolvedValue([ticket('third@x.test', 'Workshop')])
+    providerWith(fetchEventTickets)
+
+    await fetchEventTicketCandidates(CONF, { allowStale: true })
+    vi.setSystemTime(T0 + 31 * SECOND)
+    await fetchEventTicketCandidates(CONF, { allowStale: true })
+    expect(fetchEventTickets).toHaveBeenCalledTimes(2)
+
+    // The refresh has now been running for longer than the window itself.
+    vi.setSystemTime(T0 + 75 * SECOND)
+    expect(
+      emails(await fetchEventTicketCandidates(CONF, { allowStale: true })),
+    ).toEqual(['first@x.test'])
+    const waiting = fetchEventTicketCandidates(CONF)
+    expect(fetchEventTickets).toHaveBeenCalledTimes(2)
+
+    slow.resolve(SECOND_LIST)
+
+    // The default reader was waiting on THAT refresh, and its list is now the
+    // one every reader gets.
+    expect(emails(await waiting)).toEqual(['second@x.test'])
+    expect(
+      emails(await fetchEventTicketCandidates(CONF, { allowStale: true })),
+    ).toEqual(['second@x.test'])
+  })
+
+  it('gives up on a refresh that never settles, and still keeps its late answer', async () => {
+    const stuck = deferred<EventTicket[]>()
+    const retry = deferred<EventTicket[]>()
+    const fetchEventTickets = vi
+      .fn()
+      .mockResolvedValueOnce(FIRST)
+      .mockReturnValueOnce(stuck.promise)
+      .mockReturnValueOnce(retry.promise)
+    providerWith(fetchEventTickets)
+
+    await fetchEventTicketCandidates(CONF, { allowStale: true })
+    vi.setSystemTime(T0 + 31 * SECOND)
+    await fetchEventTicketCandidates(CONF, { allowStale: true })
+
+    // Past the patience for one refresh: a caller starts another.
+    vi.setSystemTime(T0 + 31 * SECOND + 121 * SECOND)
+    await fetchEventTicketCandidates(CONF, { allowStale: true })
+    expect(fetchEventTickets).toHaveBeenCalledTimes(3)
+
+    // The abandoned refresh answers after all, while the retry is still out.
+    stuck.resolve(SECOND_LIST)
+    await stuck.promise
+    await Promise.resolve()
+
+    expect(
+      emails(await fetchEventTicketCandidates(CONF, { allowStale: true })),
+    ).toEqual(['second@x.test'])
+    expect(fetchEventTickets).toHaveBeenCalledTimes(3)
+  })
+
+  it('keeps the instance alive for a refresh nobody is waiting on', async () => {
+    const refresh = deferred<EventTicket[]>()
+    const fetchEventTickets = vi
+      .fn()
+      .mockResolvedValueOnce(FIRST)
+      .mockReturnValueOnce(refresh.promise)
+    providerWith(fetchEventTickets)
+
+    // A reader that WAITS needs no after-response work: its own request holds
+    // the instance until the list arrives.
+    await fetchEventTicketCandidates(CONF, { allowStale: true })
+    expect(runAfterResponseMock).not.toHaveBeenCalled()
+
+    vi.setSystemTime(T0 + 31 * SECOND)
+    await fetchEventTicketCandidates(CONF, { allowStale: true })
+
+    expect(runAfterResponseMock).toHaveBeenCalledTimes(1)
+    const task = runAfterResponseMock.mock.calls[0][0] as () => Promise<void>
+    let settled = false
+    const held = task().then(() => {
+      settled = true
+    })
+    await Promise.resolve()
+    // The task is the refresh itself: still open while the provider is.
+    expect(settled).toBe(false)
+
+    refresh.resolve(SECOND_LIST)
+    await held
+    expect(settled).toBe(true)
+  })
+
+  it('hands the after-response hook a task that cannot reject', async () => {
+    const refresh = deferred<EventTicket[]>()
+    const fetchEventTickets = vi
+      .fn()
+      .mockResolvedValueOnce(FIRST)
+      .mockReturnValueOnce(refresh.promise)
+    providerWith(fetchEventTickets)
+
+    await fetchEventTicketCandidates(CONF, { allowStale: true })
+    vi.setSystemTime(T0 + 31 * SECOND)
+    await fetchEventTicketCandidates(CONF, { allowStale: true })
+    const task = runAfterResponseMock.mock.calls[0][0] as () => Promise<void>
+
+    refresh.reject(new Error('upstream 503'))
+
+    await expect(task()).resolves.toBeUndefined()
+  })
+
+  it('does not sweep away another event’s refresh that is still in flight', async () => {
+    const OTHER = { ...CONF, checkinEventId: 8 }
+    const slow = deferred<EventTicket[]>()
+    const fetchEventTickets = vi
+      .fn()
+      .mockReturnValueOnce(slow.promise)
+      .mockResolvedValue(SECOND_LIST)
+    resolveTicketingProviderMock.mockImplementation(
+      async (conference: typeof CONF) => ({
+        configured: true,
+        provider: { fetchEventTickets },
+        eventRef: { customerId: 42, eventId: conference.checkinEventId },
+      }),
+    )
+
+    // CONF's very first read is slow and outlives its window.
+    const first = fetchEventTicketCandidates(CONF)
+    await Promise.resolve()
+    await Promise.resolve()
+    vi.setSystemTime(T0 + 45 * SECOND)
+
+    // Another event's read installs its own entry and sweeps lapsed ones.
+    await fetchEventTicketCandidates(OTHER)
+    expect(fetchEventTickets).toHaveBeenCalledTimes(2)
+
+    // CONF's refresh is still THE refresh: a new reader joins it.
+    const second = fetchEventTicketCandidates(CONF)
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(fetchEventTickets).toHaveBeenCalledTimes(2)
+
+    slow.resolve(FIRST)
+    expect(emails(await first)).toEqual(['first@x.test'])
+    expect(emails(await second)).toEqual(['first@x.test'])
   })
 
   it('keeps one event’s last list when another event refreshes', async () => {
