@@ -1,5 +1,4 @@
 import { withAuth } from '@workos-inc/authkit-nextjs'
-import Link from 'next/link'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import WorkshopList from '@/components/workshop/WorkshopList'
 import { Container } from '@/components/Container'
@@ -10,19 +9,22 @@ import { isWorkshopsEnabledForConference } from '@/lib/features/workshops'
 import { resolveConferenceContact } from '@/lib/email/from'
 import { EnvelopeIcon } from '@heroicons/react/24/outline'
 import { notFound } from 'next/navigation'
+import { WorkshopSignedOut } from '@/components/workshop/WorkshopSignedOut'
+import { WorkshopSignOutButton } from '@/components/workshop/WorkshopSignOutButton'
+import { signOutOfWorkshop } from './actions'
 
 export default async function WorkshopPage() {
   const { conference, error } = await getConferenceForCurrentDomain()
 
   // FEATURE GATE (#689) — BEFORE `withAuth()`: the segment layout gates too,
   // but ordering it first means a disabled tenant never reads a WorkOS session
-  // at all (`withAuth` also throws when the AuthKit middleware did not run,
-  // which is exactly the foreign-host case `isWorkOSAuthHost` short-circuits in
-  // `src/proxy.ts`). NOTE the middleware still runs FIRST on the accepted
-  // WorkOS host, so a signed-out visitor there is bounced to AuthKit before any
-  // of this executes and only sees the 404 on return — an ordering this gate
-  // cannot change, because the feature decision needs a Sanity read that edge
-  // middleware cannot do. Fail-closed on an unresolvable org.
+  // at all. (`withAuth` throws when the AuthKit middleware did not run; that
+  // cannot happen here, because `src/proxy.ts` answers 404 itself on a host
+  // that may not sign in — #1296.) NOTE the proxy still runs FIRST on such a
+  // host, so a signed-out visitor is bounced to AuthKit before any of this
+  // executes and only sees the 404 on return: the proxy decides from the HOST
+  // alone and does not resolve the conference. Fail-closed on an unresolvable
+  // org.
   if (!(await isWorkshopsEnabledForConference(conference))) {
     notFound()
   }
@@ -45,67 +47,7 @@ export default async function WorkshopPage() {
   }
 
   if (!user) {
-    const clientId = process.env.WORKOS_CLIENT_ID!
-    const baseUrl = 'https://api.workos.com/user_management/authorize'
-    const redirectUri = `${process.env.NEXT_PUBLIC_URL}/api/auth/callback`
-
-    const buildAuthUrl = (screenHint: 'sign-in' | 'sign-up') => {
-      const params = new URLSearchParams({
-        client_id: clientId,
-        redirect_uri: redirectUri,
-        response_type: 'code',
-        provider: 'authkit',
-        screen_hint: screenHint,
-        state: Buffer.from(
-          JSON.stringify({ returnPathname: '/workshop' }),
-        ).toString('base64'),
-      })
-      return `${baseUrl}?${params.toString()}`
-    }
-
-    const signInUrl = buildAuthUrl('sign-in')
-    const signUpUrl = buildAuthUrl('sign-up')
-
-    return (
-      <div className="relative py-20 sm:pt-36 sm:pb-24">
-        <BackgroundImage className="-top-36 -bottom-14" />
-        <Container className="relative">
-          <div className="mx-auto max-w-2xl lg:max-w-4xl lg:px-12">
-            <h1 className="font-display text-5xl font-bold tracking-tighter text-blue-600 sm:text-7xl dark:text-blue-400">
-              Workshop Signup
-            </h1>
-            <div className="font-display mt-6 space-y-6 text-2xl tracking-tight text-blue-900 dark:text-blue-100">
-              <p>Sign in to register for workshops at {conference.title}.</p>
-            </div>
-
-            <div className="mt-10 flex gap-4">
-              <Button href={signInUrl}>Sign In</Button>
-              <Button href={signUpUrl} variant="outline">
-                Create Account
-              </Button>
-            </div>
-
-            <p className="mt-8 text-sm text-gray-600 dark:text-gray-400">
-              By signing in, you agree to our{' '}
-              <Link
-                href="/terms"
-                className="underline hover:text-blue-600 dark:hover:text-blue-400"
-              >
-                Terms of Service
-              </Link>{' '}
-              and{' '}
-              <Link
-                href="/privacy"
-                className="underline hover:text-blue-600 dark:hover:text-blue-400"
-              >
-                Privacy Policy
-              </Link>
-              .
-            </p>
-          </div>
-        </Container>
-      </div>
-    )
+    return <WorkshopSignedOut conferenceTitle={conference.title} />
   }
 
   // THE ONE ACCESS DECISION (#1294) — the same call the attendee procedures
@@ -130,9 +72,7 @@ export default async function WorkshopPage() {
                 <h1 className="font-display text-5xl font-bold tracking-tighter text-blue-600 sm:text-7xl dark:text-blue-400">
                   Workshop Access Required
                 </h1>
-                <Link href="/api/auth/signout?callbackUrl=/" prefetch={false}>
-                  <Button variant="outline">Sign Out</Button>
-                </Link>
+                <WorkshopSignOutButton action={signOutOfWorkshop} />
               </div>
 
               <div className="mt-8 rounded-lg bg-yellow-50 p-6 dark:bg-yellow-900/20">
@@ -206,11 +146,7 @@ export default async function WorkshopPage() {
             <h1 className="font-display text-4xl font-bold tracking-tighter text-blue-600 sm:text-5xl lg:text-7xl dark:text-blue-400">
               Workshop Signup
             </h1>
-            <Link href="/api/auth/signout?callbackUrl=/" prefetch={false}>
-              <Button variant="outline" className="shrink-0 whitespace-nowrap">
-                Sign Out
-              </Button>
-            </Link>
+            <WorkshopSignOutButton action={signOutOfWorkshop} />
           </div>
 
           <div className="font-display mt-6 space-y-6 text-2xl tracking-tight text-blue-900 dark:text-blue-100">

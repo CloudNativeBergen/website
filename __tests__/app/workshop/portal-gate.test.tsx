@@ -52,6 +52,8 @@ vi.mock('@/lib/sanity/client', () => ({
 
 vi.mock('@workos-inc/authkit-nextjs', () => ({
   withAuth: (...args: unknown[]) => mockWithAuth(...args),
+  // Imported by the page's sign-out action; never called here.
+  signOut: vi.fn(),
 }))
 
 // External boundary too: the AuthKit client provider cannot be imported under
@@ -80,6 +82,9 @@ vi.mock('@/lib/tickets/provider', async (importActual) => ({
 import { isValidElement, type ReactNode } from 'react'
 import WorkshopLayout from '@/app/(workshop)/layout'
 import WorkshopPage from '@/app/(workshop)/workshop/page'
+import { signOutOfWorkshop } from '@/app/(workshop)/workshop/actions'
+import { WorkshopSignedOut } from '@/components/workshop/WorkshopSignedOut'
+import { WorkshopSignOutButton } from '@/components/workshop/WorkshopSignOutButton'
 import { __resetRedeemedCache } from '@/lib/tickets/speakerStatus'
 
 const PLATFORM_SLUG = 'platform-org'
@@ -90,6 +95,22 @@ function conference(orgId: string | null) {
     title: 'CNDN',
     ...(orgId ? { organization: { _ref: orgId, _type: 'reference' } } : {}),
   }
+}
+
+/** Every element in the tree the page RETURNED, without rendering components. */
+function elementsOf(
+  node: ReactNode,
+): React.ReactElement<Record<string, unknown>>[] {
+  if (Array.isArray(node)) return node.flatMap(elementsOf)
+  if (!isValidElement<Record<string, unknown>>(node)) return []
+  return [node, ...elementsOf(node.props.children as ReactNode)]
+}
+
+/** Every `href` anywhere in that tree. */
+function hrefsOf(node: ReactNode): string[] {
+  return elementsOf(node)
+    .map((element) => element.props.href)
+    .filter((href): href is string => typeof href === 'string')
 }
 
 /**
@@ -303,5 +324,68 @@ describe('workshop portal — signed-in attendee', () => {
     // carries the same message.
     expect(ticketing.fetchEventTickets).not.toHaveBeenCalled()
     expect(text).not.toContain('Welcome,')
+  })
+})
+
+/**
+ * #1296. Sign-in and sign-out go through the SDK. The page used to assemble a
+ * WorkOS authorize URL by hand (no PKCE, callback on the single
+ * `NEXT_PUBLIC_URL` host) and to link "Sign Out" at NextAuth's route, which
+ * belongs to a different auth system and left the WorkOS session alive.
+ */
+describe('workshop portal — sign-in and sign-out go through the SDK', () => {
+  beforeEach(() => {
+    vi.stubEnv('PLATFORM_ORG_ID', 'org-platform')
+    vi.stubEnv('NEXT_PUBLIC_URL', 'https://single-host.example.org')
+    vi.stubEnv('WORKOS_CLIENT_ID', 'client_test')
+    mockGetConference.mockResolvedValue({
+      conference: conference('org-platform'),
+      error: null,
+    })
+    mockGetOrganizationById.mockResolvedValue({
+      _id: 'org-platform',
+      name: 'Platform',
+      slug: PLATFORM_SLUG,
+    })
+  })
+
+  it('signed out: renders the SDK-backed entry points and no authorize URL', async () => {
+    mockWithAuth.mockResolvedValue({ user: null })
+
+    const page = await WorkshopPage()
+
+    const signedOut = elementsOf(page).filter(
+      (element) => element.type === WorkshopSignedOut,
+    )
+    expect(signedOut).toHaveLength(1)
+    expect(signedOut[0].props.conferenceTitle).toBe('CNDN')
+    for (const href of hrefsOf(page)) {
+      expect(href).not.toContain('api.workos.com')
+      expect(href).not.toContain('single-host.example.org')
+    }
+  })
+
+  it.each([
+    ['the signup page', { emailVerified: true }],
+    ['a refusal', { emailVerified: false }],
+  ])('signed in, on %s: Sign Out is the SDK action', async (_label, user) => {
+    mockWithAuth.mockResolvedValue({
+      user: {
+        id: 'workos-ada',
+        email: 'ada@example.com',
+        firstName: 'Ada',
+        lastName: 'Lovelace',
+        ...user,
+      },
+    })
+
+    const page = await WorkshopPage()
+
+    const buttons = elementsOf(page).filter(
+      (element) => element.type === WorkshopSignOutButton,
+    )
+    expect(buttons).toHaveLength(1)
+    expect(buttons[0].props.action).toBe(signOutOfWorkshop)
+    expect(hrefsOf(page).filter((href) => href.includes('signout'))).toEqual([])
   })
 })

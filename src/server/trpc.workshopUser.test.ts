@@ -217,5 +217,6 @@ describe('the prefilter’s premise', () => {
         'workshop.getMySignups',
       ]),
     )
-  })
+    // Importing every router takes seconds on a loaded machine.
+  }, 30_000)
 })
