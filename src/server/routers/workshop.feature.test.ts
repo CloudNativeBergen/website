@@ -11,6 +11,7 @@
  * plan + working ticketing (#1295), overrides, fail-closed.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { stubOwnTicketingSecret } from '../../../__tests__/helpers/ticketingSecrets'
 
 const mockGetOrganizationById = vi.fn()
 const mockGetConference = vi.fn()
@@ -88,14 +89,6 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllEnvs()
 })
-
-/** A tenant with its OWN ticketing account in the per-org secret store. */
-function stubOwnTicketingSecret(orgId: string) {
-  vi.stubEnv(
-    'TENANT_SECRETS_JSON',
-    JSON.stringify({ [orgId]: { ticketing: { apiKey: 'tenant-key' } } }),
-  )
-}
 
 describe('workshop.admin — feature gate', () => {
   it('FORBIDs an organizer of a paid tenant whose ticketing has no credentials', async () => {

@@ -444,7 +444,7 @@ describe('api/webhooks/checkin/ticket-sold — workshop feature gate', () => {
    * runs (401, #886). `src/lib/features/workshops.test.ts` proves the gate
    * itself resolves OFF for this org; this pins the webhook's end state.
    */
-  it('sends NO workshop email to a pro org with no ticketing credentials', async () => {
+  it('401s a pro org with no ticketing credentials before the gate runs — no workshop email either way', async () => {
     bindConferenceTo('org-pro-no-tickets')
     mockGetOrganizationById.mockResolvedValue({
       _id: 'org-pro-no-tickets',

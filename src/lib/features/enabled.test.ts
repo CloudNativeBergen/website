@@ -10,6 +10,7 @@
  * secret env are supplied.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { stubOwnTicketingSecret } from '../../../__tests__/helpers/ticketingSecrets'
 import type { Organization } from '@/lib/organization/types'
 
 const getOrganizationById = vi.fn()
@@ -123,10 +124,7 @@ describe('resolveEnabledFeaturesForOrg', () => {
       'ticketing',
     ])
 
-    vi.stubEnv(
-      'TENANT_SECRETS_JSON',
-      JSON.stringify({ 'org-A': { ticketing: { apiKey: 'tenant-key' } } }),
-    )
+    stubOwnTicketingSecret('org-A')
     await expect(resolveEnabledFeaturesForOrg('org-A')).resolves.toEqual([
       'dedicated-email',
       'workshops',

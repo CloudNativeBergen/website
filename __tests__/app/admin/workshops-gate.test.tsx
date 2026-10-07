@@ -9,6 +9,7 @@
  * boundary is mocked — the page's real component composition renders.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { stubOwnTicketingSecret } from '../../helpers/ticketingSecrets'
 
 const mockGetConference = vi.fn()
 const mockGetOrganizationById = vi.fn()
@@ -74,14 +75,6 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllEnvs()
 })
-
-/** A tenant with its OWN ticketing account in the per-org secret store. */
-function stubOwnTicketingSecret(orgId: string) {
-  vi.stubEnv(
-    'TENANT_SECRETS_JSON',
-    JSON.stringify({ [orgId]: { ticketing: { apiKey: 'tenant-key' } } }),
-  )
-}
 
 describe('/admin/workshops — feature gate', () => {
   it('404s for a paid tenant whose ticketing has no credentials (#1295)', async () => {

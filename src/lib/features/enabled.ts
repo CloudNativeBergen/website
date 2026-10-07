@@ -4,7 +4,6 @@ import {
   conferenceOrgId,
   PLATFORM_DEFAULT_FEATURES,
   type ConferenceTenant,
-  type PlatformDefaultFeature,
 } from './platform-default'
 import { isBadgesEnabledForOrg } from './badges'
 import { isTicketingEnabledForOrg } from './ticketing'
@@ -39,6 +38,8 @@ const GATED_FEATURES = [
   ...PLATFORM_DEFAULT_FEATURES,
 ] as const satisfies readonly FeatureId[]
 
+type GatedFeature = (typeof GATED_FEATURES)[number]
+
 export async function resolveEnabledFeaturesForOrg(
   orgId: string | null | undefined,
 ): Promise<FeatureId[]> {
@@ -66,7 +67,7 @@ export async function resolveEnabledFeaturesForOrg(
   // deny it honours must not be re-added by the baseline above. The record is
   // keyed by the union, so adding a platform-default feature without wiring its
   // resolver here is a COMPILE error, not a silently missing gate.
-  const gated: Record<PlatformDefaultFeature | 'workshops', boolean> = {
+  const gated: Record<GatedFeature, boolean> = {
     workshops,
     ticketing,
     badges,

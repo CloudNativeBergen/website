@@ -2,8 +2,7 @@ import 'server-only'
 import { resolveCurrentOrgId } from '@/lib/authz/organizer'
 import {
   conferenceOrgId,
-  isFeatureExplicitlyGrantedForOrg,
-  resolveRegistryEntitlement,
+  resolveRegistryVerdict,
   type ConferenceTenant,
 } from './platform-default'
 import {
@@ -43,9 +42,10 @@ import {
  *     workshops off too — the portal has nothing to decide from.
  *  4. Anything else → DISABLED.
  *
- * ONE DOCUMENT READ: every input but the per-org secret comes from
- * `getOrganizationById`, cached and tagged `organizationTag(orgId)`, so a plan
- * or override change takes effect by INVALIDATION. Platform standing (for the
+ * ONE DOCUMENT: every input but the per-org secret comes from
+ * `getOrganizationById`, cached and tagged `organizationTag(orgId)` (this gate
+ * and the ticketing gate it consults each read it once, through that cache), so
+ * a plan or override change takes effect by INVALIDATION. Platform standing (for the
  * ticketing half) is a pure `PLATFORM_ORG_ID` comparison — no Sanity read.
  * Override expiry is evaluated per call against a fresh `now`.
  */
@@ -60,15 +60,13 @@ const WORKSHOPS_FEATURE = 'workshops' as const
 export async function isWorkshopsEnabledForOrg(
   orgId: string | null | undefined,
 ): Promise<boolean> {
-  const decision = await resolveRegistryEntitlement(orgId, WORKSHOPS_FEATURE)
+  const verdict = await resolveRegistryVerdict(orgId, WORKSHOPS_FEATURE)
+  // Rule 2: the operator's word is final.
+  if (verdict === 'granted-by-override') return true
   // `'denied'` is an operator's deny or an unresolvable org; `'unset'` is a
   // plan below `pro` with no override. Both are OFF.
-  if (decision !== 'granted' || !orgId) return false
-  // Granted by override: the operator's word is final (rule 2).
-  if (await isFeatureExplicitlyGrantedForOrg(orgId, WORKSHOPS_FEATURE)) {
-    return true
-  }
-  // Granted by plan: only worth anything with ticketing that works (rule 3).
+  if (verdict !== 'granted-by-plan') return false
+  // Rule 3: a plan grant is only worth anything with ticketing that works.
   if (!(await isTicketingEnabledForOrg(orgId))) return false
   return hasTicketingCredentialsForOrg(orgId)
 }

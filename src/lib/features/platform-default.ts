@@ -13,11 +13,13 @@ import type { FeatureId } from './registry'
  * each began as ONE global credential the platform deployment owns — one
  * provider account, one badge signing key pair — neither of which works for a
  * second tenant on its own. So the honest default for both is "the platform
- * org, and whoever an operator explicitly grants"; this module is that logic,
- * factored out so the gates cannot drift. (`workshops` shared the shape until
- * #1295, when attendee sign-in stopped being bound to one host; it is now a
- * plain plan-gated feature in `./workshops.ts` and uses only the generic
- * registry helpers below.)
+ * org, and whoever an operator explicitly grants". This module holds the
+ * registry half of that rule — the one read, the fail-closed posture and the
+ * override semantics — so `./ticketing.ts` and `./badges.ts` only add their
+ * own default on top and cannot drift on the shared part. (`workshops` shared
+ * the shape until #1295, when attendee sign-in stopped being bound to one
+ * host; it is now a plain plan-gated feature in `./workshops.ts` and uses only
+ * the generic registry helpers below.)
  *
  * The implicit grant OUTLIVES the internal readiness that motivated it:
  * `ticketing` is now `readiness: 'ga'` with `minPlan: 'pro'` (a tenant brings
@@ -56,8 +58,6 @@ export const PLATFORM_DEFAULT_FEATURES = [
   'badges',
 ] as const satisfies readonly FeatureId[]
 
-export type PlatformDefaultFeature = (typeof PLATFORM_DEFAULT_FEATURES)[number]
-
 /**
  * What the REGISTRY (plan + overrides) decides for a feature. `'unset'` means
  * neither granted nor explicitly denied — the caller's implicit default applies.
@@ -65,19 +65,40 @@ export type PlatformDefaultFeature = (typeof PLATFORM_DEFAULT_FEATURES)[number]
 export type RegistryDecision = 'granted' | 'denied' | 'unset'
 
 /**
- * The registry's decision for `feature` on `orgId`. A nullish org, an unknown
- * organization document, and a rejected read all resolve to `'denied'` (fail
- * closed) rather than `'unset'` — an unresolvable tenant must not inherit a
- * default grant.
+ * {@link RegistryDecision} with the GRANT split by its source. Most gates do
+ * not care (`resolveRegistryEntitlement` folds both back into `'granted'`);
+ * `./workshops.ts` does, because it attaches an extra condition to a grant by
+ * PLAN only — an operator's grant is final.
  */
-export async function resolveRegistryEntitlement(
+export type RegistryVerdict =
+  'granted-by-override' | 'granted-by-plan' | 'denied' | 'unset'
+
+/**
+ * The registry's verdict for `feature` on `orgId`, in ONE org-document read. A
+ * nullish org, an unknown organization document, and a rejected read all
+ * resolve to `'denied'` (fail closed) rather than `'unset'` — an unresolvable
+ * tenant must not inherit a default grant.
+ */
+export async function resolveRegistryVerdict(
   orgId: string | null | undefined,
   feature: FeatureId,
-): Promise<RegistryDecision> {
+): Promise<RegistryVerdict> {
   if (!orgId) return 'denied'
   const org = await readOrganizationFor(orgId, feature)
   if (!org) return 'denied'
   return decideFromDocument(org, feature)
+}
+
+/** {@link resolveRegistryVerdict} with both grants folded into `'granted'`. */
+export async function resolveRegistryEntitlement(
+  orgId: string | null | undefined,
+  feature: FeatureId,
+): Promise<RegistryDecision> {
+  const verdict = await resolveRegistryVerdict(orgId, feature)
+  if (verdict === 'granted-by-override' || verdict === 'granted-by-plan') {
+    return 'granted'
+  }
+  return verdict
 }
 
 /**
@@ -105,29 +126,6 @@ export async function isFeatureExplicitlyDeniedForOrg(
 }
 
 /**
- * Whether an OPERATOR has explicitly granted `feature` to this org — an active
- * `featureOverrides` entry with `enabled: true`. The mirror of
- * {@link isFeatureExplicitlyDeniedForOrg}, for a gate that must tell a grant BY
- * OVERRIDE apart from a grant BY PLAN: `resolveRegistryEntitlement` folds both
- * into `'granted'`, but `./workshops.ts` attaches an extra condition to the
- * plan path only — an operator's grant is final. Same cached read, so this
- * costs nothing extra beside it; a nullish org, a missing document and a
- * rejected read are all `false`.
- */
-export async function isFeatureExplicitlyGrantedForOrg(
-  orgId: string | null | undefined,
-  feature: FeatureId,
-): Promise<boolean> {
-  if (!orgId) return false
-  const org = await readOrganizationFor(orgId, feature)
-  if (!org) return false
-  return (
-    hasActiveOverride(org.featureOverrides, feature, new Date()) &&
-    computeEntitlements(org.plan, org.featureOverrides, new Date()).has(feature)
-  )
-}
-
-/**
  * The org document, or `null` when it cannot be resolved. A REJECTED read
  * (transient Sanity failure) resolves to `null` like an unknown org — never
  * propagate, or one flaky read would 500 the whole admin dashboard through the
@@ -145,19 +143,23 @@ async function readOrganizationFor(orgId: string, feature: FeatureId) {
   }
 }
 
-/** The registry decision for a RESOLVED org document (see the module doc). */
+/** The registry verdict for a RESOLVED org document (see the module doc). */
 function decideFromDocument(
   org: { plan?: string; featureOverrides?: OrganizationFeatureOverride[] },
   feature: FeatureId,
-): RegistryDecision {
+): RegistryVerdict {
   const now = new Date()
+  // `computeEntitlements` applies overrides in array order and they always win,
+  // so an entitled feature WITH an active override is granted by that override
+  // (its last active entry is `enabled: true`); without one, by the plan.
+  const overridden = hasActiveOverride(org.featureOverrides, feature, now)
   if (computeEntitlements(org.plan, org.featureOverrides, now).has(feature)) {
-    return 'granted'
+    return overridden ? 'granted-by-override' : 'granted-by-plan'
   }
 
   // Not entitled by plan/override. An ACTIVE override at this point can only be
   // an explicit `enabled: false`, which must beat any caller-side default.
-  if (hasActiveOverride(org.featureOverrides, feature, now)) return 'denied'
+  if (overridden) return 'denied'
 
   return 'unset'
 }

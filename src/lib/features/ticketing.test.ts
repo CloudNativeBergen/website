@@ -13,6 +13,7 @@
  * comparison and must read nothing.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { stubOwnTicketingSecret } from '../../../__tests__/helpers/ticketingSecrets'
 import type { Organization } from '@/lib/organization/types'
 
 const getOrganizationById = vi.fn()
@@ -55,14 +56,6 @@ const PLATFORM_ORG_ID = 'org-platform'
 
 function org(overrides: Partial<Organization> = {}): Organization {
   return { _id: 'org-A', name: 'Tenant A', slug: 'tenant-a', ...overrides }
-}
-
-/** A tenant with its OWN Checkin account in the per-org secret store. */
-function stubOwnTicketingSecret(orgId: string) {
-  vi.stubEnv(
-    'TENANT_SECRETS_JSON',
-    JSON.stringify({ [orgId]: { ticketing: { apiKey: 'tenant-key' } } }),
-  )
 }
 
 beforeEach(() => {
