@@ -124,7 +124,9 @@ export async function checkWorkshopEligibility(params: {
     // a refresh they happened to land on, and a provider blip must not refuse
     // them all. A caller that list has NO ticket for waits for the refresh
     // instead: a stale list may admit, but it must not refuse someone who
-    // bought their ticket a minute ago and was told to reload. What it costs: a
+    // bought their ticket a minute ago and was told to reload. (In the few
+    // seconds after a FAILED refresh there is nothing to wait for, and that
+    // caller is told the ticket could not be verified.) What it costs: a
     // refunded ticket is honoured until the next refresh lands, and a holder
     // who just upgraded their ticket type is refused until then.
     //

@@ -332,7 +332,8 @@ const TICKETS_REFRESH_PATIENCE_MS = 2 * 60_000
  * {@link TicketCandidateReadOptions.allowStale}. Without it every attendee
  * action during an outage issues its own request, one after the other, at
  * whatever rate attendees click. During the pause such a reader keeps the last
- * list, or is told the provider could not answer (`null`) if none ever arrived.
+ * list, or is told the provider could not answer (`null`) if none ever
+ * arrived, it is past the cap, or it will not do for that reader.
  *
  * A reader that did NOT opt in is not held: it retries the provider at once, as
  * it always has. Those are a handful of organizers, not a registration opening.

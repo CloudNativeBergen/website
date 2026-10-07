@@ -299,6 +299,9 @@ describe('workshop portal — signed-in attendee', () => {
 
     expect(text).toContain('Workshop Access Required')
     expect(text).toContain('Unable to verify workshop ticket')
+    // No provider to ask — not the provider-failure refusal above, which
+    // carries the same message.
+    expect(ticketing.fetchEventTickets).not.toHaveBeenCalled()
     expect(text).not.toContain('Welcome,')
   })
 })
