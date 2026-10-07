@@ -347,7 +347,7 @@ export const SignupsUnavailable: Story = {
     const notice = await canvas.findByRole(
       'alert',
       {},
-      // The query retries once before it reports the failure.
+      // Generous: the mocked failure and the render both have to land.
       { timeout: 5000 },
     )
     await expect(notice).toHaveTextContent(

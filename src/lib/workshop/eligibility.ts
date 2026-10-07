@@ -97,25 +97,43 @@ export async function checkWorkshopEligibility(params: {
   const contactEmail = params.contactEmail || platformFallbackContact()
 
   try {
+    // Matched on the address as registered, trimmed and lowercased — the same
+    // comparison as before, and never the NFKC-normalized `email`. NFKC folds
+    // distinct mailboxes together (`oﬃce@x.test` → `office@x.test`), which is
+    // fine for finding a speaker's ticket and wrong for deciding whose ticket
+    // this is. `toLowerCase()` is Unicode-aware, so it is not a pure ASCII fold
+    // (U+212A KELVIN SIGN → `k`); that is kept deliberately, because an
+    // ASCII-only fold would stop `Øyvind@` matching `øyvind@`.
+    const userEmail = canonicalEmail(params.userEmail)
+    const ticketsOf = (tickets: TicketCandidate[]) =>
+      userEmail
+        ? tickets.filter(
+            (ticket) => canonicalEmail(ticket.registeredEmail) === userEmail,
+          )
+        : []
+
     // THE SHARED 30-SECOND MEMO, not a fetch of our own. The whole-event read is
     // one slow uncached provider request, and this check now runs on every
     // attendee action (#1294), not only on page render — so a registration
     // opening would otherwise issue one per click. The memo holds the in-flight
     // promise, so a burst shares a single read.
     //
-    // `allowStale`: while that read is refreshing, or failing, the gate decides
-    // from the last list that arrived (capped; see the option). Seats are
-    // first-come, so nobody should lose one to a refresh they happened to land
-    // on, and a provider blip must not refuse every ticket holder. What it
-    // costs: a ticket bought just now is refused until the next refresh lands,
-    // and a refunded one is honoured until then.
+    // `allowStale`: while that read is refreshing, or failing, a caller the
+    // last arrived list HAS a ticket for is decided from that list (capped; see
+    // the option). Seats are first-come, so no ticket holder should lose one to
+    // a refresh they happened to land on, and a provider blip must not refuse
+    // them all. A caller that list has NO ticket for waits for the refresh
+    // instead: a stale list may admit, but it must not refuse someone who
+    // bought their ticket a minute ago and was told to reload. What it costs: a
+    // refunded ticket is honoured until the next refresh lands, and a holder
+    // who just upgraded their ticket type is refused until then.
     //
     // It still routes through the resolver (B7), so this tenant's per-org
     // provider key is honored instead of the platform env creds. `null` is an
     // unconfigured conference, a conference with no owning org, or a provider
     // error — all the same "unable to verify" refusal.
     const tickets = await fetchEventTicketCandidates(params.conference, {
-      allowStale: true,
+      allowStale: (arrived) => ticketsOf(arrived).length > 0,
     })
     if (!tickets) {
       return {
@@ -126,19 +144,7 @@ export async function checkWorkshopEligibility(params: {
       }
     }
 
-    // Matched on the address as registered, trimmed and lowercased — the same
-    // comparison as before, and never the NFKC-normalized `email`. NFKC folds
-    // distinct mailboxes together (`oﬃce@x.test` → `office@x.test`), which is
-    // fine for finding a speaker's ticket and wrong for deciding whose ticket
-    // this is. `toLowerCase()` is Unicode-aware, so it is not a pure ASCII fold
-    // (U+212A KELVIN SIGN → `k`); that is kept deliberately, because an
-    // ASCII-only fold would stop `Øyvind@` matching `øyvind@`.
-    const userEmail = canonicalEmail(params.userEmail)
-    const userTickets = userEmail
-      ? tickets.filter(
-          (ticket) => canonicalEmail(ticket.registeredEmail) === userEmail,
-        )
-      : []
+    const userTickets = ticketsOf(tickets)
 
     // NO TICKET: refused here, before the roles read below. The answer cannot
     // depend on the roles, and that read is an uncached Sanity request — a

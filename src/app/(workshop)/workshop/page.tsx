@@ -152,7 +152,9 @@ export default async function WorkshopPage() {
                   </div>
                   <div className="ml-3">
                     <h3 className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
-                      Workshop Ticket Required
+                      {access.denial === 'email-unverified'
+                        ? 'Email Address Not Verified'
+                        : 'Workshop Ticket Required'}
                     </h3>
                     <div className="mt-2 text-sm text-yellow-700 dark:text-yellow-300">
                       <p>{access.reason}</p>

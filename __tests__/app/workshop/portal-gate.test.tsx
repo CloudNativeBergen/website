@@ -256,6 +256,8 @@ describe('workshop portal — signed-in attendee', () => {
     const text = textOf(await WorkshopPage())
 
     expect(text).toContain('Workshop Access Required')
+    expect(text).toContain('Email Address Not Verified')
+    expect(text).not.toContain('Workshop Ticket Required')
     expect(text).toContain('has not been verified')
     expect(ticketing.fetchEventTickets).not.toHaveBeenCalled()
   })
@@ -266,6 +268,7 @@ describe('workshop portal — signed-in attendee', () => {
     const text = textOf(await WorkshopPage())
 
     expect(text).toContain('Workshop Access Required')
+    expect(text).toContain('Workshop Ticket Required')
     expect(text).toContain(`No ticket found for ${ADA.email}`)
   })
 

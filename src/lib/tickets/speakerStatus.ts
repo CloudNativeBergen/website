@@ -312,8 +312,9 @@ const TICKETS_TTL_MS = 30_000
  * How long a reader that opted into {@link TicketCandidateReadOptions.allowStale}
  * may be served the last list that ARRIVED while a refresh is in flight or
  * failing, counted from when the read that produced it started. Past this the
- * reader waits on the provider like everyone else, and fails closed if it
- * cannot answer.
+ * reader waits on the refresh in flight, and fails closed if the provider
+ * cannot answer — at once, without asking it again, inside the pause that
+ * follows a failure ({@link TICKETS_RETRY_AFTER_FAILURE_MS}).
  */
 const TICKETS_MAX_STALE_MS = 10 * 60_000
 
@@ -371,10 +372,16 @@ export interface TicketCandidateReadOptions {
    * the provider is seen one refresh later, and during an outage a refunded
    * ticket keeps answering for up to the cap.
    *
+   * A FUNCTION decides per list: it is handed the last arrived list and takes
+   * it only when it returns true; otherwise the reader waits for the refresh
+   * in flight like a reader that did not opt in (but never starts a retry
+   * inside the pause after a failure). The gate uses this so that a stale list
+   * can ADMIT a ticket holder and can never REFUSE one who bought since.
+   *
    * Off by default: the organizer surfaces want the answer the provider gives
    * now, and can afford to wait for it.
    */
-  allowStale?: boolean
+  allowStale?: boolean | ((arrived: TicketCandidate[]) => boolean)
 }
 
 /** Test seam: drop the memo so a case cannot inherit another's fetch. */
@@ -386,9 +393,9 @@ export function __resetRedeemedCache() {
  * The event's tickets, narrowed to {@link TicketCandidate}, or `null` when the
  * provider is unconfigured, uncredentialed or failing. Never throws.
  *
- * ONE MEMO SERVES BOTH READERS. The claim-status join and the organizer's
- * ticket search ask the same question of the same provider, so the search adds
- * no fetch of its own: it filters the list this already holds.
+ * ONE MEMO SERVES EVERY READER. The claim-status join, the organizer's ticket
+ * search and the workshop gate ask the same question of the same provider, so
+ * none adds a fetch of its own: each filters the list this already holds.
  */
 export async function fetchEventTicketCandidates(
   conference: ConferenceTicketingBinding,
@@ -453,14 +460,14 @@ export async function fetchEventTicketCandidates(
         (error) => {
           refresh.pending = false
           refresh.failed = true
-          // A failed fetch must not be served for the rest of the window — but
-          // act only if THIS refresh is still the entry. A rejection arriving
-          // after the TTL lapsed would otherwise undo a newer in-flight fetch
-          // installed under the same key, and every concurrent caller would
-          // issue its own.
+          // Act only if THIS refresh is still the entry: a rejection arriving
+          // after it was replaced must not touch the newer fetch installed
+          // under the same key.
           if (ticketsCache.get(key) !== refresh) return
-          // Hold the key briefly so stale readers retry an outage at a bounded
-          // rate, whether or not there is an arrived list for them to keep.
+          // A failure is not held for the rest of the window. It holds the key
+          // for a short pause, against stale readers only, so they retry an
+          // outage at a bounded rate — whether or not there is an arrived list
+          // for them to keep meanwhile.
           refresh.expiresAt = Date.now() + TICKETS_RETRY_AFTER_FAILURE_MS
           if (refresh.arrived) {
             console.error(
@@ -486,20 +493,20 @@ export async function fetchEventTicketCandidates(
       entry = refresh
     }
 
-    if (
-      options?.allowStale &&
-      (entry.pending || entry.failed) &&
-      withinStaleCap(entry)
-    ) {
-      if (entry.pending) {
-        // Nobody is waiting on this refresh any more, and a serverless instance
-        // may be frozen the moment the response flushes — the list would then
-        // never arrive, and stale readers would be served the old one until
-        // the cap. Keep the instance alive until the refresh settles.
-        const { settled } = entry
-        runAfterResponse(() => settled)
+    const stale = options?.allowStale
+    if (stale && (entry.pending || entry.failed) && withinStaleCap(entry)) {
+      const arrived = entry.arrived!.value
+      if (stale === true || stale(arrived)) {
+        if (entry.pending) {
+          // Nobody is waiting on this refresh any more, and a serverless
+          // instance may be frozen the moment the response flushes — the list
+          // would then never arrive, and stale readers would be served the old
+          // one until the cap. Keep the instance alive until it settles.
+          const { settled } = entry
+          runAfterResponse(() => settled)
+        }
+        return arrived
       }
-      return entry.arrived!.value
     }
     return await entry.candidates
   } catch (error) {

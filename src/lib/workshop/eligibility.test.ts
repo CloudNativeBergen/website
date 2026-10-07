@@ -236,6 +236,34 @@ describe('checkWorkshopEligibility — a provider that stops answering', () => {
     // The provider WAS asked again, and failed; the holder was not refused.
     expect(fetchEventTickets).toHaveBeenCalledTimes(2)
   })
+
+  it('never refuses a recent buyer from a list that predates the purchase', async () => {
+    // The ticket-sold email sends a buyer here a minute after paying. The last
+    // list this instance holds was read before that.
+    const fetchEventTickets = vi
+      .fn()
+      .mockResolvedValueOnce([ticket('someone-else@x.test', LEGACY)])
+      .mockResolvedValue([
+        ticket('someone-else@x.test', LEGACY),
+        ticket('ada@x.test', LEGACY),
+      ])
+    resolveTicketingProviderMock.mockResolvedValue({
+      configured: true,
+      provider: { fetchEventTickets },
+      eventRef: { customerId: 42, eventId: 7 },
+    })
+    const gate = (userEmail: string) =>
+      checkWorkshopEligibility({ userEmail, conference: CONF })
+
+    const before = await gate('ada@x.test')
+    expect(before.isEligible).toBe(false)
+    expect(before.reason).toContain('No ticket found for ada@x.test')
+
+    // "Wait a minute and reload this page": the FIRST reload must do it.
+    vi.setSystemTime(T0 + 60_000)
+    expect((await gate('ada@x.test')).isEligible).toBe(true)
+    expect(fetchEventTickets).toHaveBeenCalledTimes(2)
+  })
 })
 
 /**
