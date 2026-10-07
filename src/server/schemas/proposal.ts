@@ -213,19 +213,9 @@ export const ProposalAdminCreateSchema = ProposalInputBaseSchema.omit({
       MAX_SPEAKERS_PER_PROPOSAL,
     { message: TOO_MANY_SPEAKERS_MESSAGE, path: ['speakers'] },
   )
-  .refine(
-    (data) => {
-      // Workshop formats require capacity
-      if (isWorkshopFormat(data.format) && !data.capacity) {
-        return false
-      }
-      return true
-    },
-    {
-      message: 'Workshop capacity is required for workshop formats',
-      path: ['capacity'],
-    },
-  )
+// No capacity rule for workshop formats: the admin modal has no capacity input,
+// so requiring one made a workshop impossible to create. Capacity is set from
+// /admin/workshops, and reads fall back to 30 until it is.
 
 // Draft proposal schema — derived from base with relaxed validation for drafts.
 // Fields that have strict validators in the base (description, audiences, topics,

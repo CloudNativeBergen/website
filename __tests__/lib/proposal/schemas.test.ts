@@ -331,13 +331,27 @@ describe('ProposalAdminCreateSchema', () => {
     expect(result.success).toBe(false)
   })
 
-  it('requires capacity for workshop format', () => {
+  // The admin modal has no capacity input, so requiring one here made a
+  // workshop impossible to create. Capacity is set from /admin/workshops.
+  it('accepts workshop format without capacity', () => {
     const result = ProposalAdminCreateSchema.safeParse({
       ...fullProposal,
       format: Format.workshop_240,
       speakers: ['s1'],
     })
-    expect(result.success).toBe(false)
+    expect(result.error?.issues).toBeUndefined()
+    expect(result.data?.format).toBe(Format.workshop_240)
+    expect(result.data?.capacity).toBeUndefined()
+  })
+
+  it('keeps a capacity supplied for a workshop format', () => {
+    const result = ProposalAdminCreateSchema.safeParse({
+      ...fullProposal,
+      format: Format.workshop_240,
+      capacity: 25,
+      speakers: ['s1'],
+    })
+    expect(result.data?.capacity).toBe(25)
   })
 })
 
