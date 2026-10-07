@@ -275,6 +275,9 @@ describe('workshop portal — signed-in attendee', () => {
 
     const text = textOf(await WorkshopPage())
 
+    // The provider WAS asked: an unconfigured or org-less conference produces
+    // the same message without ever reaching it.
+    expect(ticketing.fetchEventTickets).toHaveBeenCalledTimes(1)
     expect(text).toContain('Workshop Access Required')
     expect(text).toContain('Unable to verify workshop ticket at this time')
     expect(text).not.toContain('Welcome,')

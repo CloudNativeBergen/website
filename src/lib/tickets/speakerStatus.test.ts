@@ -592,11 +592,16 @@ describe('the memo — stale readers', () => {
   })
 
   it('has nothing stale to take on a first read', async () => {
-    providerWith(vi.fn().mockRejectedValue(new Error('upstream 503')))
+    const fetchEventTickets = vi
+      .fn()
+      .mockRejectedValue(new Error('upstream 503'))
+    providerWith(fetchEventTickets)
 
     expect(
       await fetchEventTicketCandidates(CONF, { allowStale: true }),
     ).toBeNull()
+    // The provider was asked and failed — not a read that stopped earlier.
+    expect(fetchEventTickets).toHaveBeenCalledTimes(1)
   })
 
   it('keeps one event’s last list when another event refreshes', async () => {
