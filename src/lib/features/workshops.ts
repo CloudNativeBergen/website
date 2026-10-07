@@ -2,60 +2,51 @@ import 'server-only'
 import { resolveCurrentOrgId } from '@/lib/authz/organizer'
 import {
   conferenceOrgId,
-  isPlatformDefaultFeatureEnabledForOrg,
+  isFeatureExplicitlyGrantedForOrg,
+  resolveRegistryEntitlement,
   type ConferenceTenant,
 } from './platform-default'
+import {
+  hasTicketingCredentialsForOrg,
+  isTicketingEnabledForOrg,
+} from './ticketing'
 
 /**
- * THE single gate for the workshop feature (#689) — the portal, the organizer
- * workshop surfaces, and (most importantly) the workshop instructions email the
- * ticket-sold webhook sends automatically.
+ * THE single gate for the workshop feature (#689, #1295) — the portal, the
+ * organizer workshop surfaces, and (most importantly) the workshop instructions
+ * email the ticket-sold webhook sends automatically.
  *
- * WHY IT IS GATED. Workshops authenticate ticket-holding ATTENDEES through
- * WorkOS AuthKit, in ONE environment shared by every tenant. Until #1296 that
- * environment was bound to one `redirect_uri` on the platform host, so on any
- * other tenant domain the sign-in could never complete and the webhook emailed
- * buyers a link into a loop — which is why the feature is `readiness:
- * 'internal'` (override-only, never offered in upsell surfaces).
+ * WHAT IT IS. A plain registry feature: `readiness: 'ga'`, `minPlan: 'pro'`
+ * (see `./registry`), with ONE condition the registry cannot express. The
+ * portal admits an attendee by looking their ticket up with the organization's
+ * ticketing integration, so workshops are only ON when the org's ticketing is
+ * enabled AND can actually read ticket data. A paid plan whose ticketing has
+ * no credentials is sold a portal that would refuse every attendee and a
+ * webhook that would mail them into it, so it resolves OFF.
  *
- * SIGN-IN IS NO LONGER HOST-BOUND (#1296): the redirect URI is chosen per
- * request, for any host on the verified-redirect allowlist
- * (`@/lib/workshop/sign-in`). WHICH tenants get the feature is still decided
- * here and still the platform-default rule below; #1295 replaces it with a
- * plan gate. The two are separate questions: this gate says a tenant has
- * workshops, the allowlist says one of its hosts can sign in.
+ * There is NO platform-org rule here (#1295). The implicit grant to
+ * `PLATFORM_ORG_ID` existed because attendee sign-in ran through one WorkOS
+ * client bound to one redirect host; with the redirect URI derived per verified
+ * host (#1296) the platform org qualifies by plan like any other tenant. What
+ * it still holds by identity is TICKETING — the platform env account — which
+ * is why it satisfies the second half of the rule with no per-org secret.
  *
- * RESOLUTION ORDER — the shared PLATFORM-DEFAULT shape (`./platform-default.ts`,
- * which also carries the caching and fail-closed notes), fail-CLOSED at every
- * step:
+ * RESOLUTION ORDER — fail-CLOSED at every step:
  *
  *  1. No resolvable org (unknown domain, missing org document, or a REJECTED
- *     org read) → DISABLED. An unresolvable tenant must never degrade into
- *     "serve it anyway"; this mirrors the org-scoped authz waist's posture.
+ *     org read) → DISABLED.
  *  2. An ACTIVE `featureOverrides` entry for `workshops` wins, in BOTH
- *     directions — `enabled: true` grants it to a pilot org, `enabled: false`
- *     revokes it even from the platform org (rule 3). NOTE: a grant does not
- *     make a host able to sign in. The portal still answers 404 on a host that
- *     is not ownership-verified (`resolveWorkshopSignInHost`), and the webhook
- *     does not yet check that before it emails the link (#1298).
- *  3. The org whose id is `PLATFORM_ORG_ID` keeps workshops by default — the
- *     one tenant the feature was built for, kept until #1295 lands so nothing
- *     changes without a data migration.
+ *     directions — `enabled: true` grants it whatever the plan and ticketing
+ *     state, `enabled: false` revokes it from an org the plan would grant.
+ *  3. Otherwise: the plan satisfies `pro` AND `isTicketingEnabledForOrg` AND
+ *     `hasTicketingCredentialsForOrg` (`./ticketing`). A ticketing deny switches
+ *     workshops off too — the portal has nothing to decide from.
  *  4. Anything else → DISABLED.
  *
- * ONE READ ONLY (RunKonf/platform#36, #43):
- *
- *  - `plan` and `featureOverrides` come from `getOrganizationById`, cached and
- *    tagged `organizationTag(orgId)`. The platform manager revalidates that tag
- *    when it flips an override, and an external writer can now do the same
- *    through `POST /api/provisioning/cache/invalidate`, so a change takes
- *    effect immediately by INVALIDATION.
- *  - Rule 3's platform-org identity comes from `isPlatformOrganization`, a pure
- *    id comparison against the configured `PLATFORM_ORG_ID` — no Sanity read and
- *    no cache, so no staleness window and nothing to invalidate. (Before #43 it
- *    resolved a customer-writable slug uncached; binding to the immutable id
- *    removed both the read and the mutable-field hazard.)
- *
+ * ONE DOCUMENT READ: every input but the per-org secret comes from
+ * `getOrganizationById`, cached and tagged `organizationTag(orgId)`, so a plan
+ * or override change takes effect by INVALIDATION. Platform standing (for the
+ * ticketing half) is a pure `PLATFORM_ORG_ID` comparison — no Sanity read.
  * Override expiry is evaluated per call against a fresh `now`.
  */
 
@@ -69,7 +60,17 @@ const WORKSHOPS_FEATURE = 'workshops' as const
 export async function isWorkshopsEnabledForOrg(
   orgId: string | null | undefined,
 ): Promise<boolean> {
-  return isPlatformDefaultFeatureEnabledForOrg(orgId, WORKSHOPS_FEATURE)
+  const decision = await resolveRegistryEntitlement(orgId, WORKSHOPS_FEATURE)
+  // `'denied'` is an operator's deny or an unresolvable org; `'unset'` is a
+  // plan below `pro` with no override. Both are OFF.
+  if (decision !== 'granted' || !orgId) return false
+  // Granted by override: the operator's word is final (rule 2).
+  if (await isFeatureExplicitlyGrantedForOrg(orgId, WORKSHOPS_FEATURE)) {
+    return true
+  }
+  // Granted by plan: only worth anything with ticketing that works (rule 3).
+  if (!(await isTicketingEnabledForOrg(orgId))) return false
+  return hasTicketingCredentialsForOrg(orgId)
 }
 
 /**

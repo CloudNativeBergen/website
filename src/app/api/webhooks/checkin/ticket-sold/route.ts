@@ -261,13 +261,13 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // FEATURE GATE (#689) — THE SAFETY-CRITICAL ONE. These instructions link an
-    // attendee into the workshop portal. For any tenant the portal is not
-    // enabled for, that link cannot work (the AuthKit round-trip is sealed to
-    // the platform host), so the attendee would be emailed an infinite sign-in
-    // loop, automatically, on every workshop ticket sale. Emailing a link that
-    // cannot work is worse than silence: send NOTHING. Fail-closed — an
-    // unresolvable organization suppresses the email too.
+    // FEATURE GATE (#689, #1295) — THE SAFETY-CRITICAL ONE. These instructions
+    // link an attendee into the workshop portal. For any tenant the portal is
+    // not enabled for (plan below pro, ticketing off or without credentials, or
+    // an operator's deny) that link lands on a portal that will refuse them,
+    // automatically, on every workshop ticket sale. Emailing a link that cannot
+    // work is worse than silence: send NOTHING. Fail-closed — an unresolvable
+    // organization suppresses the email too.
     if (!(await isWorkshopsEnabledForConference(conference))) {
       console.warn(
         'Checkin webhook: workshops not enabled for conference',

@@ -88,8 +88,10 @@ import { isPlatformOrganization } from './platform'
  *
  * WHAT IT STILL DOES NOT REACH, deliberately: the ATTENDEE-facing ticket sale
  * (`src/lib/tickets/public.ts` and the public ticket page — a deny must never
- * break a sale mid-conference), workshop eligibility, and the admin status
- * PROBES. Nor speaker-ticket issuance, which keeps reaching a denied org's
+ * break a sale mid-conference) and the admin status PROBES. It DOES reach the
+ * workshop feature since #1295: `./workshops.ts` requires ticketing to be
+ * enabled, so a ticketing deny switches workshops off for an org that holds
+ * no `workshops` override of its own. Nor speaker-ticket issuance, which keeps reaching a denied org's
  * vendor account: borderline, low-harm, and left alone knowingly rather than
  * by omission. Note that this exclusion is wider than "a side effect of
  * accepting a proposal" — `speaker.sendTicketInvitations` is a standing
@@ -155,6 +157,24 @@ async function hasOwnTicketingCredentials(orgId: string): Promise<boolean> {
     )
     return false
   }
+}
+
+/**
+ * Whether the organization has ticketing CREDENTIALS to read ticket data with —
+ * the platform org (the `CHECKIN_*` / `TITO_*` env account) or any org with its
+ * own per-org secret. This is the capability question, separate from the
+ * entitlement one: `isTicketingEnabledForOrg` is true for a bare `pro` plan so
+ * the pages can walk the tenant through connecting an account, while this stays
+ * false until it has. `./workshops.ts` needs both: a portal that decides from
+ * ticket data is worthless to an org that cannot read any (#1295). Fail closed
+ * on a nullish org and on a secret-store failure.
+ */
+export async function hasTicketingCredentialsForOrg(
+  orgId: string | null | undefined,
+): Promise<boolean> {
+  if (!orgId) return false
+  if (await isPlatformOrganization(orgId)) return true
+  return hasOwnTicketingCredentials(orgId)
 }
 
 /**

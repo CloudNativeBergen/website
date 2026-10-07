@@ -6,8 +6,9 @@
  * feature must not be able to read or mutate workshop signups by calling the
  * tRPC procedures directly.
  *
- * Only the Sanity boundary is mocked (conference + organization documents), so
- * the real resolver decides — platform-org default, overrides, fail-closed.
+ * Only the Sanity boundary is mocked (conference + organization documents) and
+ * the per-org secret store reads real env, so the real resolver decides — pro
+ * plan + working ticketing (#1295), overrides, fail-closed.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
@@ -88,8 +89,16 @@ afterEach(() => {
   vi.unstubAllEnvs()
 })
 
+/** A tenant with its OWN ticketing account in the per-org secret store. */
+function stubOwnTicketingSecret(orgId: string) {
+  vi.stubEnv(
+    'TENANT_SECRETS_JSON',
+    JSON.stringify({ [orgId]: { ticketing: { apiKey: 'tenant-key' } } }),
+  )
+}
+
 describe('workshop.admin — feature gate', () => {
-  it('FORBIDs an organizer of a tenant without the feature', async () => {
+  it('FORBIDs an organizer of a paid tenant whose ticketing has no credentials', async () => {
     mockGetOrganizationById.mockResolvedValue({
       _id: ORG_ID,
       name: 'Tenant A',
@@ -104,6 +113,37 @@ describe('workshop.admin — feature gate', () => {
     expect(mockGetAllWorkshopSignups).not.toHaveBeenCalled()
   })
 
+  it('FORBIDs an organizer of a community tenant even with ticketing credentials', async () => {
+    stubOwnTicketingSecret(ORG_ID)
+    mockGetOrganizationById.mockResolvedValue({
+      _id: ORG_ID,
+      name: 'Tenant A',
+      slug: 'tenant-a',
+      plan: 'community',
+    })
+
+    await expect(caller().admin.getAllSignups({})).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    })
+    expect(mockGetAllWorkshopSignups).not.toHaveBeenCalled()
+  })
+
+  /** #1295: a non-platform pro tenant with working ticketing is let through. */
+  it('allows a pro tenant with its own ticketing credentials', async () => {
+    stubOwnTicketingSecret(ORG_ID)
+    mockGetOrganizationById.mockResolvedValue({
+      _id: ORG_ID,
+      name: 'Tenant A',
+      slug: 'tenant-a',
+      plan: 'pro',
+    })
+
+    await expect(caller().admin.getAllSignups({})).resolves.toMatchObject({
+      success: true,
+    })
+    expect(mockGetAllWorkshopSignups).toHaveBeenCalled()
+  })
+
   it('FORBIDs when the org document read rejects (fail closed)', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
     mockGetOrganizationById.mockRejectedValue(new Error('sanity down'))
@@ -114,13 +154,15 @@ describe('workshop.admin — feature gate', () => {
     expect(mockGetAllWorkshopSignups).not.toHaveBeenCalled()
   })
 
-  it('allows the platform org through — unchanged for CND', async () => {
-    // The request org IS the configured platform org (by id, #43).
+  it('allows the platform org through on the pro plan — production’s configuration', async () => {
+    // The request org IS the configured platform org (by id, #43), which gives
+    // it the env ticketing account; the pro plan does the rest (#1295).
     vi.stubEnv('PLATFORM_ORG_ID', ORG_ID)
     mockGetOrganizationById.mockResolvedValue({
       _id: ORG_ID,
       name: 'Platform',
       slug: PLATFORM_SLUG,
+      plan: 'pro',
     })
 
     await expect(caller().admin.getAllSignups({})).resolves.toMatchObject({

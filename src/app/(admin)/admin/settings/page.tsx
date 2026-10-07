@@ -161,7 +161,7 @@ export default async function AdminSettings() {
   // entirely when the conference has no organization ref (pre-backfill data).
   const orgId = conference.organization?._ref ?? null
   const organization = orgId ? await getOrganizationById(orgId) : null
-  const entitledFeatureRows = organization
+  let entitledFeatureRows = organization
     ? listEntitledFeatures(
         organization.plan,
         organization.featureOverrides,
@@ -175,16 +175,21 @@ export default async function AdminSettings() {
       }))
     : []
 
-  // The workshop gate (#689) layers a platform-org DEFAULT on top of the
-  // generic override-based resolver, so an org can be entitled to `workshops`
-  // without any override this list can see. Ask the resolver that owns that
-  // decision, or this card would tell the platform org its workshop portal is
-  // off while the portal, the admin page and the ticket-sold email all treat it
-  // as on.
-  if (
-    !entitledFeatureRows.some((row) => row.id === 'workshops') &&
-    (await isWorkshopsEnabledForOrg(orgId))
-  ) {
+  // The workshop gate (#1295) adds a condition the generic resolver cannot
+  // see: a plan-granted `workshops` is OFF until the org's ticketing is enabled
+  // and credentialed. Ask the resolver that owns the decision and make this
+  // card agree with it in both directions, or it would tell a pro org with no
+  // ticketing account that its portal is on while the portal, the admin page
+  // and the ticket-sold email all treat it as off.
+  const workshopsEnabled = await isWorkshopsEnabledForOrg(orgId)
+  const workshopsListed = entitledFeatureRows.some(
+    (row) => row.id === 'workshops',
+  )
+  if (workshopsListed && !workshopsEnabled) {
+    entitledFeatureRows = entitledFeatureRows.filter(
+      (row) => row.id !== 'workshops',
+    )
+  } else if (!workshopsListed && workshopsEnabled) {
     const workshops = FEATURES.workshops
     entitledFeatureRows.push({
       id: workshops.id,

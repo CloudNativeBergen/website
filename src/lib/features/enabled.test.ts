@@ -17,6 +17,8 @@ const getOrganizationById = vi.fn()
 vi.mock('@/lib/organization/sanity', () => ({
   getOrganizationById: (...args: unknown[]) => getOrganizationById(...args),
   getOrganizationRefForCurrentConference: () => null,
+  getOrganizationSecretEnvSlugs: async () => [],
+  readOrganizationSecretEnvSlugs: async () => [],
 }))
 
 const h = vi.hoisted(() => ({
@@ -58,10 +60,11 @@ afterEach(() => {
  * `minPlan`", because no tier had been decided for any of them. The owner
  * decided ticketing's tier on 2026-08-06 — a tenant brings its OWN Checkin/Tito
  * account, so the integration works for whoever buys it and costs the platform
- * nothing per tenant — so the guard is narrowed to what it was actually
- * protecting: `workshops` and `badges`, whose single global credential (one
- * WorkOS client, one badge signing key pair) still cannot serve a second
- * tenant. Attaching a tier to either would sell a surface that cannot work.
+ * nothing per tenant. #1295 moved `workshops` out of the platform-default shape
+ * altogether (attendee sign-in follows the verified host, and the portal needs
+ * only the org's ticket data), so the guard is narrowed to `badges`, whose
+ * single global signing key still cannot serve a second tenant. Attaching a
+ * tier there would sell a surface that cannot work.
  */
 describe('platform-default feature tiers track the capability', () => {
   it('sells ticketing at the ENTRY PAID tier', () => {
@@ -71,6 +74,12 @@ describe('platform-default feature tiers track the capability', () => {
     // so the lowest tier a customer can BUY is the second one.
     expect(ORGANIZATION_PLANS[0]).toBe('community')
     expect(FEATURES.ticketing.minPlan).toBe(ORGANIZATION_PLANS[1])
+  })
+
+  it('sells workshops at the same tier, outside the platform-default shape (#1295)', () => {
+    expect(FEATURES.workshops.readiness).toBe('ga')
+    expect(FEATURES.workshops.minPlan).toBe('pro')
+    expect(PLATFORM_DEFAULT_FEATURES).not.toContain('workshops')
   })
 
   const tierless = PLATFORM_DEFAULT_FEATURES.filter((id) => id !== 'ticketing')
@@ -87,11 +96,42 @@ describe('resolveEnabledFeaturesForOrg', () => {
     await expect(resolveEnabledFeaturesForOrg('org-A')).resolves.toEqual([])
   })
 
-  it('gives the platform org every platform-default feature', async () => {
+  it('gives the platform org every platform-default feature — and NOT workshops without a plan', async () => {
     getOrganizationById.mockResolvedValue(org({ _id: PLATFORM_ORG_ID }))
     await expect(
       resolveEnabledFeaturesForOrg(PLATFORM_ORG_ID),
-    ).resolves.toEqual(['workshops', 'ticketing', 'badges'])
+    ).resolves.toEqual(['ticketing', 'badges'])
+  })
+
+  /**
+   * #1295: the platform org earns workshops BY PLAN. Its ticketing is the env
+   * account, so pro is all it takes — the same rule as any other tenant.
+   */
+  it('gives the platform org workshops on the pro plan, by plan', async () => {
+    getOrganizationById.mockResolvedValue(
+      org({ _id: PLATFORM_ORG_ID, plan: 'pro' }),
+    )
+    await expect(
+      resolveEnabledFeaturesForOrg(PLATFORM_ORG_ID),
+    ).resolves.toEqual(['dedicated-email', 'workshops', 'ticketing', 'badges'])
+  })
+
+  it('gives a pro tenant workshops only once its ticketing has credentials', async () => {
+    getOrganizationById.mockResolvedValue(org({ plan: 'pro' }))
+    await expect(resolveEnabledFeaturesForOrg('org-A')).resolves.toEqual([
+      'dedicated-email',
+      'ticketing',
+    ])
+
+    vi.stubEnv(
+      'TENANT_SECRETS_JSON',
+      JSON.stringify({ 'org-A': { ticketing: { apiKey: 'tenant-key' } } }),
+    )
+    await expect(resolveEnabledFeaturesForOrg('org-A')).resolves.toEqual([
+      'dedicated-email',
+      'workshops',
+      'ticketing',
+    ])
   })
 
   /**
@@ -126,7 +166,7 @@ describe('resolveEnabledFeaturesForOrg', () => {
     )
     await expect(
       resolveEnabledFeaturesForOrg(PLATFORM_ORG_ID),
-    ).resolves.toEqual(['workshops', 'ticketing', 'badges'])
+    ).resolves.toEqual(['ticketing', 'badges'])
   })
 
   it('honours a single override without granting its siblings', async () => {
@@ -147,7 +187,7 @@ describe('resolveEnabledFeaturesForOrg', () => {
     )
     await expect(
       resolveEnabledFeaturesForOrg(PLATFORM_ORG_ID),
-    ).resolves.toEqual(['workshops', 'ticketing'])
+    ).resolves.toEqual(['ticketing'])
   })
 
   it('is EMPTY for an unresolvable org, and reads nothing (fail closed)', async () => {

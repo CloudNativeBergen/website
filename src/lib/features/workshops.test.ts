@@ -1,35 +1,44 @@
 /**
  * @vitest-environment node
  *
- * The workshop feature gate (#689) — the ONE resolver the portal, the admin
- * surfaces and (critically) the ticket-sold email all consult.
+ * The workshop feature gate (#689, #1295) — the ONE resolver the portal, the
+ * admin surfaces and (critically) the ticket-sold email all consult.
  *
- * ONE boundary carries the entitlement inputs; the platform-org identity is
- * pure env (RunKonf/platform#43):
+ * Since #1295 `workshops` is a plain registry feature (`ga`, `minPlan: 'pro'`)
+ * with one extra condition: the org's ticketing must be enabled AND able to
+ * read ticket data, because workshop access is decided from tickets. There is
+ * no implicit grant to the platform org any more — it qualifies by plan like
+ * everyone else (its ticketing credentials are the platform env account).
  *
- *  - `@/lib/organization/sanity` — the CACHED org document, carrying `plan` and
- *    `featureOverrides`. The real entitlement resolution runs on top of it.
- *  - Rule 3's platform-org identity is `isPlatformOrganization`, a pure id
- *    comparison against the configured `PLATFORM_ORG_ID`. No Sanity read is
- *    involved, so the `@/lib/sanity/client` mock below is a TRIPWIRE: if a slug
- *    (or any other) lookup is reintroduced it will call `h.fetch`, and the
- *    `not.toHaveBeenCalled()` guards will fail. The grant keys on the immutable
- *    id, never the document's customer-writable `slug`.
+ * Two boundaries carry the inputs; both are real env/document reads:
+ *
+ *  - `@/lib/organization/sanity` — the CACHED org document (`plan` +
+ *    `featureOverrides`), plus the tenant→env-slug map the per-org secret
+ *    store needs. Real entitlement resolution runs on top of it.
+ *  - `TENANT_SECRETS_JSON` — the per-org secret store, read through the REAL
+ *    store so "has ticketing credentials" cannot drift from what
+ *    `resolveTicketingCredentials` would resolve.
+ *
+ * The `@/lib/sanity/client` mock is a TRIPWIRE: platform standing is a pure
+ * `PLATFORM_ORG_ID` comparison and must read nothing.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import type { Organization } from '@/lib/organization/types'
 
 const getOrganizationById = vi.fn()
 const getOrganizationRefForCurrentConference = vi.fn()
+const secretEnvSlugs = vi.fn(async () => [
+  { _id: 'org-A', secretEnvSlug: 'TENANT_A' },
+])
 
 vi.mock('@/lib/organization/sanity', () => ({
   getOrganizationById: (...args: unknown[]) => getOrganizationById(...args),
   getOrganizationRefForCurrentConference: () =>
     getOrganizationRefForCurrentConference(),
+  getOrganizationSecretEnvSlugs: () => secretEnvSlugs(),
+  readOrganizationSecretEnvSlugs: () => secretEnvSlugs(),
 }))
 
-// TRIPWIRE only — the platform-org check must read NO Sanity. A reintroduced
-// slug→id lookup would call this and trip the no-fetch guards below.
 const h = vi.hoisted(() => ({
   fetch: vi.fn<(query: string, params?: unknown) => Promise<unknown>>(),
 }))
@@ -48,10 +57,6 @@ import {
  * tenant `org-A`, so ordinary-tenant tests are never accidentally platform. */
 const PLATFORM_ORG_ID = 'org-platform'
 
-/** A slug a pre-#43 slug-based gate would have matched — used to prove the
- * grant now ignores the document's slug entirely. */
-const FORMER_PLATFORM_SLUG = 'platform-org'
-
 function org(overrides: Partial<Organization> = {}): Organization {
   return {
     _id: 'org-A',
@@ -61,12 +66,21 @@ function org(overrides: Partial<Organization> = {}): Organization {
   }
 }
 
+/** A tenant with its OWN Checkin account in the per-org secret store. */
+function stubOwnTicketingSecret(orgId: string) {
+  vi.stubEnv(
+    'TENANT_SECRETS_JSON',
+    JSON.stringify({ [orgId]: { ticketing: { apiKey: 'tenant-key' } } }),
+  )
+}
+
 const PAST = '2020-01-01T00:00:00.000Z'
 const FUTURE = '2999-01-01T00:00:00.000Z'
 
 beforeEach(() => {
   vi.clearAllMocks()
   vi.stubEnv('PLATFORM_ORG_ID', PLATFORM_ORG_ID)
+  vi.stubEnv('TENANT_SECRETS_JSON', '')
 })
 
 afterEach(() => {
@@ -95,16 +109,73 @@ describe('isWorkshopsEnabledForOrg — fail closed', () => {
     logged.mockRestore()
   })
 
-  it('is DISABLED for an ordinary tenant on every plan', async () => {
-    for (const plan of ['community', 'pro', 'enterprise'] as const) {
-      getOrganizationById.mockResolvedValue(org({ plan }))
-      await expect(isWorkshopsEnabledForOrg('org-A')).resolves.toBe(false)
-    }
+  it('is DISABLED on the free community plan, even with ticketing credentials', async () => {
+    stubOwnTicketingSecret('org-A')
+    getOrganizationById.mockResolvedValue(org({ plan: 'community' }))
+    await expect(isWorkshopsEnabledForOrg('org-A')).resolves.toBe(false)
+  })
+
+  it('is DISABLED for an org with no plan at all (absent → community)', async () => {
+    stubOwnTicketingSecret('org-A')
+    getOrganizationById.mockResolvedValue(org())
+    await expect(isWorkshopsEnabledForOrg('org-A')).resolves.toBe(false)
   })
 })
 
-describe('isWorkshopsEnabledForOrg — overrides', () => {
-  it('is ENABLED by an explicit grant, regardless of plan', async () => {
+/**
+ * THE TIER (#1295). `workshops` is `ga` with `minPlan: 'pro'`, but the plan
+ * alone is not enough: the portal decides access from ticket data, so an org
+ * whose ticketing cannot read any is sold nothing it can use.
+ */
+describe('isWorkshopsEnabledForOrg — pro plan AND working ticketing', () => {
+  it('is ENABLED on the entry paid plan for an org with its own ticketing credentials', async () => {
+    stubOwnTicketingSecret('org-A')
+    getOrganizationById.mockResolvedValue(org({ plan: 'pro' }))
+    await expect(isWorkshopsEnabledForOrg('org-A')).resolves.toBe(true)
+  })
+
+  it('is ENABLED on every plan above the entry paid one', async () => {
+    stubOwnTicketingSecret('org-A')
+    getOrganizationById.mockResolvedValue(org({ plan: 'enterprise' }))
+    await expect(isWorkshopsEnabledForOrg('org-A')).resolves.toBe(true)
+  })
+
+  /** THE #1295 CASE: a paid plan with nothing to read tickets from. */
+  it('is DISABLED for a pro org with NO ticketing credentials', async () => {
+    getOrganizationById.mockResolvedValue(org({ plan: 'pro' }))
+    await expect(isWorkshopsEnabledForOrg('org-A')).resolves.toBe(false)
+  })
+
+  it('is DISABLED for a pro org whose ticketing an operator has switched OFF', async () => {
+    stubOwnTicketingSecret('org-A')
+    getOrganizationById.mockResolvedValue(
+      org({
+        plan: 'pro',
+        featureOverrides: [{ feature: 'ticketing', enabled: false }],
+      }),
+    )
+    await expect(isWorkshopsEnabledForOrg('org-A')).resolves.toBe(false)
+  })
+
+  it('is DISABLED — not thrown — when the per-org secret store cannot resolve the tenant', async () => {
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
+    // Some tenant holds a COMPLETE set of discrete env credentials, so the env
+    // store must know whose they are — and the slug map it needs is down.
+    vi.stubEnv('TENANT_SOMEONE_CHECKIN_API_KEY', 'k')
+    vi.stubEnv('TENANT_SOMEONE_CHECKIN_API_SECRET', 's')
+    vi.stubEnv('TENANT_SOMEONE_CHECKIN_WEBHOOK_SECRET', 'w')
+    secretEnvSlugs.mockRejectedValue(new Error('slug map unavailable'))
+    stubOwnTicketingSecret('org-A')
+    getOrganizationById.mockResolvedValue(org({ plan: 'pro' }))
+
+    await expect(isWorkshopsEnabledForOrg('org-A')).resolves.toBe(false)
+    expect(logged).toHaveBeenCalled()
+    logged.mockRestore()
+  })
+})
+
+describe('isWorkshopsEnabledForOrg — overrides win in both directions', () => {
+  it('is ENABLED by an explicit grant, regardless of plan and ticketing', async () => {
     getOrganizationById.mockResolvedValue(
       org({
         plan: 'community',
@@ -112,6 +183,17 @@ describe('isWorkshopsEnabledForOrg — overrides', () => {
       }),
     )
     await expect(isWorkshopsEnabledForOrg('org-A')).resolves.toBe(true)
+  })
+
+  it('is DISABLED by an explicit deny on an org the plan and ticketing would grant', async () => {
+    stubOwnTicketingSecret('org-A')
+    getOrganizationById.mockResolvedValue(
+      org({
+        plan: 'pro',
+        featureOverrides: [{ feature: 'workshops', enabled: false }],
+      }),
+    )
+    await expect(isWorkshopsEnabledForOrg('org-A')).resolves.toBe(false)
   })
 
   it('ignores an EXPIRED grant', async () => {
@@ -123,6 +205,19 @@ describe('isWorkshopsEnabledForOrg — overrides', () => {
       }),
     )
     await expect(isWorkshopsEnabledForOrg('org-A')).resolves.toBe(false)
+  })
+
+  it('ignores an EXPIRED deny and falls back to plan + ticketing', async () => {
+    stubOwnTicketingSecret('org-A')
+    getOrganizationById.mockResolvedValue(
+      org({
+        plan: 'pro',
+        featureOverrides: [
+          { feature: 'workshops', enabled: false, expiresAt: PAST },
+        ],
+      }),
+    )
+    await expect(isWorkshopsEnabledForOrg('org-A')).resolves.toBe(true)
   })
 
   it('honours a grant that has not expired yet', async () => {
@@ -144,72 +239,58 @@ describe('isWorkshopsEnabledForOrg — overrides', () => {
   })
 })
 
-describe('isWorkshopsEnabledForOrg — the platform org keeps working', () => {
-  it('is ENABLED for the org whose id is PLATFORM_ORG_ID, with no override', async () => {
-    getOrganizationById.mockResolvedValue(org({ _id: PLATFORM_ORG_ID }))
-    await expect(isWorkshopsEnabledForOrg(PLATFORM_ORG_ID)).resolves.toBe(true)
+/**
+ * NO PLATFORM-ORG RULE (#1295). The platform org used to keep workshops
+ * implicitly because it owned the one WorkOS client. It now qualifies by plan
+ * like any other org; what it still has by right is TICKETING (the platform
+ * env account), which is the second half of the rule.
+ */
+describe('isWorkshopsEnabledForOrg — the platform org gets it by plan, not by identity', () => {
+  it('is DISABLED for the platform org on the community plan', async () => {
+    getOrganizationById.mockResolvedValue(
+      org({ _id: PLATFORM_ORG_ID, plan: 'community' }),
+    )
+    await expect(isWorkshopsEnabledForOrg(PLATFORM_ORG_ID)).resolves.toBe(false)
     expect(h.fetch).not.toHaveBeenCalled()
   })
 
-  it('is DISABLED for that same org when the contract is unset', async () => {
-    vi.stubEnv('PLATFORM_ORG_ID', '')
+  it('is DISABLED for the platform org with no plan', async () => {
     getOrganizationById.mockResolvedValue(org({ _id: PLATFORM_ORG_ID }))
     await expect(isWorkshopsEnabledForOrg(PLATFORM_ORG_ID)).resolves.toBe(false)
+  })
+
+  it('is ENABLED for the platform org on pro — its ticketing is the env account, no per-org secret needed', async () => {
+    getOrganizationById.mockResolvedValue(
+      org({ _id: PLATFORM_ORG_ID, plan: 'pro' }),
+    )
+    await expect(isWorkshopsEnabledForOrg(PLATFORM_ORG_ID)).resolves.toBe(true)
+    expect(h.fetch).not.toHaveBeenCalled()
   })
 
   it('lets an explicit DENY override revoke it from the platform org', async () => {
     getOrganizationById.mockResolvedValue(
       org({
         _id: PLATFORM_ORG_ID,
+        plan: 'pro',
         featureOverrides: [{ feature: 'workshops', enabled: false }],
       }),
     )
     await expect(isWorkshopsEnabledForOrg(PLATFORM_ORG_ID)).resolves.toBe(false)
   })
 
-  it('ignores an EXPIRED deny override on the platform org', async () => {
-    getOrganizationById.mockResolvedValue(
-      org({
-        _id: PLATFORM_ORG_ID,
-        featureOverrides: [
-          { feature: 'workshops', enabled: false, expiresAt: PAST },
-        ],
-      }),
-    )
-    await expect(isWorkshopsEnabledForOrg(PLATFORM_ORG_ID)).resolves.toBe(true)
-  })
-})
-
-/**
- * THE SLUG-INDEPENDENCE NET (RunKonf/platform#43).
- *
- * The grant used to be decided by `org.slug` — a customer-writable field. It now
- * keys on the immutable document id (`PLATFORM_ORG_ID`). These tests make the
- * cached document's slug LIE about platform standing, in both directions, and
- * pin the gate to the id. Restoring a slug comparison flips both. No Sanity read
- * happens either way.
- */
-describe('isWorkshopsEnabledForOrg — the grant follows PLATFORM_ORG_ID, not the slug', () => {
-  it('DENIES an org whose cached slug looks like the platform but whose id is not PLATFORM_ORG_ID', async () => {
-    getOrganizationById.mockResolvedValue(
-      org({ _id: 'org-A', slug: FORMER_PLATFORM_SLUG }),
-    )
-    await expect(isWorkshopsEnabledForOrg('org-A')).resolves.toBe(false)
-    expect(h.fetch).not.toHaveBeenCalled()
-  })
-
-  it('GRANTS the org whose id IS PLATFORM_ORG_ID even when its cached slug is something else', async () => {
-    getOrganizationById.mockResolvedValue(
-      org({ _id: PLATFORM_ORG_ID, slug: 'stale-old-slug' }),
-    )
-    await expect(isWorkshopsEnabledForOrg(PLATFORM_ORG_ID)).resolves.toBe(true)
+  it('treats a non-platform org exactly the same way on the same inputs', async () => {
+    stubOwnTicketingSecret('org-A')
+    getOrganizationById.mockResolvedValue(org({ plan: 'pro' }))
+    await expect(isWorkshopsEnabledForOrg('org-A')).resolves.toBe(true)
     expect(h.fetch).not.toHaveBeenCalled()
   })
 })
 
 describe('isWorkshopsEnabledForConference', () => {
   it('keys on the conference OWNER, not the request host', async () => {
-    getOrganizationById.mockResolvedValue(org({ _id: PLATFORM_ORG_ID }))
+    getOrganizationById.mockResolvedValue(
+      org({ _id: PLATFORM_ORG_ID, plan: 'pro' }),
+    )
     await expect(
       isWorkshopsEnabledForConference({
         organization: { _ref: PLATFORM_ORG_ID, _type: 'reference' },

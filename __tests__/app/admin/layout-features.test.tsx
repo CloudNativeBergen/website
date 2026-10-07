@@ -107,7 +107,27 @@ describe('admin layout — enabled features', () => {
       name: 'Platform',
       slug: 'platform-org',
     })
+    // No `workshops` without a plan: since #1295 it is earned by plan.
+    await expect(enabledFeatures()).resolves.toEqual(['ticketing', 'badges'])
+  })
+
+  it('hands the platform org workshops on the pro plan — by plan, like any tenant', async () => {
+    mockGetConference.mockResolvedValue({
+      conference: {
+        _id: 'conf-1',
+        title: 'Platform Conf',
+        organization: { _ref: PLATFORM_ORG_ID, _type: 'reference' },
+      },
+      error: null,
+    })
+    mockGetOrganizationById.mockResolvedValue({
+      _id: PLATFORM_ORG_ID,
+      name: 'Platform',
+      slug: 'platform-org',
+      plan: 'pro',
+    })
     await expect(enabledFeatures()).resolves.toEqual([
+      'dedicated-email',
       'workshops',
       'ticketing',
       'badges',

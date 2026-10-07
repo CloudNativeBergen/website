@@ -224,10 +224,13 @@ describe('workshop access — the gate and the webhook cannot drift', () => {
     __resetRedeemedCache()
     process.env.CHECKIN_WEBHOOK_SECRET = SECRET
     vi.stubEnv('PLATFORM_ORG_ID', 'org-platform')
+    // Pro plan: since #1295 the platform org holds workshops by plan (its
+    // ticketing is the env account), not by identity.
     mockGetOrganizationById.mockResolvedValue({
       _id: 'org-platform',
       name: 'Platform',
       slug: 'platform-org',
+      plan: 'pro',
     })
   })
 

@@ -179,10 +179,10 @@ function workshopUserName(user: WorkshopUserIdentity): string {
  * `adminProcedure` has already resolved the request org from the domain
  * conference and gated on organizer membership, so this only adds the feature
  * decision — and it asks `isWorkshopsEnabledForOrg` rather than the generic
- * `requireFeature` middleware, because the workshop gate layers a platform-org
- * default on top of the raw entitlement set: the API must not disagree with the
- * `/admin/workshops` page, the portal and the ticket-sold email, which all go
- * through that one resolver. An unresolvable org is DISABLED (the resolver
+ * `requireFeature` middleware, because the workshop gate requires working
+ * ticketing on top of the raw entitlement set (#1295): the API must not
+ * disagree with the `/admin/workshops` page, the portal and the ticket-sold
+ * email, which all go through that one resolver. An unresolvable org is DISABLED (the resolver
  * fails closed), matching the waist's posture.
  */
 const workshopAdminProcedure = adminProcedure.use(async ({ ctx, next }) => {

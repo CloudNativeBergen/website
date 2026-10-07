@@ -158,8 +158,10 @@ afterEach(() => {
   vi.unstubAllEnvs()
 })
 
-describe('workshop portal — feature OFF', () => {
+describe('workshop portal — feature OFF (paid plan, no ticketing credentials)', () => {
   beforeEach(() => {
+    // #1295: a paid plan alone does not open the portal — the org's ticketing
+    // must have credentials to decide access from, and Tenant Two has none.
     mockGetConference.mockResolvedValue({
       conference: conference('org-tenant2'),
       error: null,
@@ -205,7 +207,7 @@ describe('workshop portal — unresolvable org fails CLOSED', () => {
   })
 })
 
-describe('workshop portal — feature ON (platform org)', () => {
+describe('workshop portal — feature ON (platform org on the pro plan)', () => {
   beforeEach(() => {
     vi.stubEnv('PLATFORM_ORG_ID', 'org-platform')
     mockGetConference.mockResolvedValue({
@@ -216,6 +218,7 @@ describe('workshop portal — feature ON (platform org)', () => {
       _id: 'org-platform',
       name: 'Platform',
       slug: PLATFORM_SLUG,
+      plan: 'pro',
     })
   })
 
@@ -254,6 +257,7 @@ describe('workshop portal — signed-in attendee', () => {
       _id: 'org-platform',
       name: 'Platform',
       slug: PLATFORM_SLUG,
+      plan: 'pro',
     })
     mockWithAuth.mockResolvedValue({ user: ADA })
   })

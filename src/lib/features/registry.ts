@@ -40,18 +40,21 @@ import {
  * `resolveConferenceSlackToken`). Enforcement is wired per-feature via that
  * pattern or the `requireFeature` tRPC middleware.
  *
- * `workshops`, `ticketing` and `badges` share the PLATFORM-DEFAULT shape
+ * `ticketing` and `badges` share the PLATFORM-DEFAULT shape
  * (`./platform-default.ts`): an implicit grant to the organization configured as
  * `PLATFORM_ORG_ID`, because each started as a single global credential the
- * platform deployment owns (one WorkOS client, one provider account, one badge
- * signing key pair).
+ * platform deployment owns (one provider account, one badge signing key pair).
  *
- * A TIER IS ATTACHED ONLY WHEN THE CAPABILITY IS PER-TENANT. `ticketing` now
- * carries `readiness: 'ga'` + `minPlan: 'pro'` — the entry PAID tier — because a
- * tenant supplies its own provider account, so the feature genuinely works for a
- * customer who buys it. `workshops` and `badges` stay `internal` with NO
- * `minPlan`: their single global credential still cannot serve a second tenant,
- * and encoding a tier there would sell a surface that cannot work.
+ * A TIER IS ATTACHED ONLY WHEN THE CAPABILITY IS PER-TENANT. `ticketing` carries
+ * `readiness: 'ga'` + `minPlan: 'pro'` — the entry PAID tier — because a tenant
+ * supplies its own provider account, so the feature genuinely works for a
+ * customer who buys it. `workshops` is `ga` at `pro` too (#1295): attendee
+ * sign-in follows the verified host, and the one thing the portal needs — the
+ * org's ticket data — is exactly what `ticketing` provides, so `./workshops.ts`
+ * requires ticketing to be enabled alongside the plan. `badges` stays
+ * `internal` with NO `minPlan`: its single global signing key still cannot
+ * serve a second tenant, and encoding a tier there would sell a surface that
+ * cannot work.
  */
 
 export const FEATURE_IDS = [
@@ -109,8 +112,14 @@ export const FEATURES: Record<FeatureId, FeatureDefinition> = {
     id: 'workshops',
     title: 'Workshop portal',
     description:
-      'Attendee workshop sign-up portal, organizer workshop management, and the automatic workshop instructions email sent on every workshop ticket sale.',
-    readiness: 'internal',
+      'Attendee workshop sign-up portal, organizer workshop management, and the automatic workshop instructions email sent on every workshop ticket sale. Requires the ticketing integration, which decides who holds a workshop ticket.',
+    // SOLD AT THE ENTRY PAID TIER (#1295, parent #1293 decision 2), on the
+    // same reasoning as ticketing below: nothing per-tenant costs the platform
+    // anything here. `./workshops.ts` adds the one condition a tier cannot
+    // express — the org's ticketing must be enabled and credentialed — because
+    // the portal admits attendees from ticket data and nothing else.
+    readiness: 'ga',
+    minPlan: 'pro',
   },
   ticketing: {
     id: 'ticketing',
