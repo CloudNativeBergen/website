@@ -5,6 +5,10 @@ import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { isOrganizerForOrg } from '@/lib/authz/organizer'
 import type { FeatureId } from '@/lib/features/registry'
 import { AppEnvironment } from '@/lib/environment/config'
+import {
+  resolveWorkshopSignInHost,
+  workshopRequestHost,
+} from '@/lib/workshop/sign-in'
 import { structuredErrorData, type StructuredErrorData } from './errors'
 
 /**
@@ -43,6 +47,18 @@ export interface WorkshopUserIdentity {
  * calls (NextAuth admin/cfp/sponsor/message traffic, which carries no WorkOS
  * cookie) skip AuthKit entirely. Any failure resolves to `null` (never throws),
  * so a procedure's own guard decides (UNAUTHORIZED for workshop signup/cancel).
+ *
+ * THE SAME HOST DECISION AS THE PAGE (#1296). The proxy serves `/workshop` only
+ * on a host the verified-redirect allowlist admits, and reads the session with
+ * that host's own callback as `redirectUri`. This does both too — the API must
+ * never be more permissive than the page, and `authkit()` without an explicit
+ * `redirectUri` falls back to the single-host env URI (or, worse, to a
+ * client-sent `x-redirect-uri` header, since nothing strips it on `/api/trpc`).
+ * A host that is not allowlisted resolves no attendee and never enters the SDK.
+ *
+ * ONLY FOR `workshop.*` (see {@link namesWorkshopProcedure}): the decision is a
+ * live Sanity read, and the cookie rides on every tRPC request this browser
+ * makes for 400 days.
  */
 async function resolveWorkshopUser(
   req: NextRequest,
@@ -50,9 +66,14 @@ async function resolveWorkshopUser(
   if (AppEnvironment.isTestMode) return null
   const cookieName = process.env.WORKOS_COOKIE_NAME || 'wos-session'
   if (!req.cookies.get(cookieName)) return null
+  if (!namesWorkshopProcedure(req)) return null
   try {
+    const signIn = await resolveWorkshopSignInHost(
+      workshopRequestHost(req.headers),
+    )
+    if (!signIn) return null
     const { authkit } = await import('@workos-inc/authkit-nextjs')
-    const { session } = await authkit(req)
+    const { session } = await authkit(req, { redirectUri: signIn.redirectUri })
     const user = session.user
     if (!user?.id) return null
     return {
@@ -65,6 +86,36 @@ async function resolveWorkshopUser(
   } catch {
     return null
   }
+}
+
+/** The app-router key the attendee procedures are mounted under. */
+const WORKSHOP_ROUTER_PREFIX = 'workshop.'
+
+/**
+ * Whether this HTTP request names a `workshop.*` procedure — the only
+ * procedures that consume the attendee identity. tRPC puts the procedure path
+ * in the URL (comma-joined for a batch), so this is known before any work.
+ *
+ * WHY IT EXISTS. `wos-session` is host-wide and long-lived, so without this a
+ * browser that once signed in to the portal would spend one live allowlist read
+ * (and an AuthKit session check) on every tRPC request it ever makes on that
+ * host — an organizer's entire admin session included. Fail closed: a request
+ * that names none gets no attendee, and a workshop procedure would refuse it.
+ */
+function namesWorkshopProcedure(req: NextRequest): boolean {
+  const marker = '/api/trpc/'
+  const { pathname } = req.nextUrl
+  const at = pathname.indexOf(marker)
+  if (at === -1) return false
+  let procedures: string
+  try {
+    procedures = decodeURIComponent(pathname.slice(at + marker.length))
+  } catch {
+    return false
+  }
+  return procedures
+    .split(',')
+    .some((procedure) => procedure.startsWith(WORKSHOP_ROUTER_PREFIX))
 }
 
 export async function createTRPCContext(opts: { req: NextRequest }) {

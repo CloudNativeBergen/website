@@ -1,3 +1,35 @@
 import { handleAuth } from '@workos-inc/authkit-nextjs'
+import { NextResponse, type NextRequest } from 'next/server'
+import {
+  WORKSHOP_PORTAL_PATH,
+  resolveWorkshopSignInHost,
+  workshopRequestHost,
+} from '@/lib/workshop/sign-in'
 
-export const GET = handleAuth()
+/**
+ * Where WorkOS sends the workshop attendee back with an authorization code
+ * (#1296). Every verified host has this same path as its own redirect URI.
+ *
+ * THE ALLOWLIST DECIDES FIRST, exactly as it does in the proxy
+ * (`resolveWorkshopSignInHost`). This route is outside the proxy's matcher, so
+ * without its own check a host delisted between the start of a sign-in and its
+ * return would still trade the code for a session. A refusal is a 404 before
+ * the SDK is entered: no code is exchanged and no cookie is written.
+ *
+ * `baseURL` is the origin that MATCHED the allowlist, so the post-sign-in
+ * redirect goes there and never to a host taken from the request URL alone.
+ * The path the attendee asked for travels inside the SDK's sealed state.
+ */
+export async function GET(request: NextRequest) {
+  const signIn = await resolveWorkshopSignInHost(
+    workshopRequestHost(request.headers),
+  )
+  if (!signIn) {
+    return new NextResponse('Not Found', { status: 404 })
+  }
+
+  return handleAuth({
+    baseURL: signIn.origin,
+    returnPathname: WORKSHOP_PORTAL_PATH,
+  })(request)
+}

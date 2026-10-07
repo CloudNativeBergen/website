@@ -14,22 +14,14 @@
  * verified by that stub. Everything below is therefore about the SIGNED-OUT
  * path, which never reaches `jose`.
  */
+import {
+  WORKOS_ENV_FALLBACK_REDIRECT_URI as ENV_FALLBACK,
+  WORKOS_TEST_CLIENT_ID,
+} from '../../helpers/workosEnv'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { NextRequest, type NextFetchEvent } from 'next/server'
 import type { DomainVerificationRecord } from '@/lib/domain-verification/types'
-
-/** A decoy the SDK would fall back to if a caller forgot `redirectUri`. */
-const ENV_FALLBACK = 'https://decoy.example.org/api/auth/callback'
-
-// The SDK captures its configuration at module load.
-vi.hoisted(() => {
-  process.env.WORKOS_CLIENT_ID = 'client_test'
-  process.env.WORKOS_API_KEY = 'sk_test_key'
-  process.env.WORKOS_COOKIE_PASSWORD = 'p'.repeat(48)
-  process.env.NEXT_PUBLIC_WORKOS_REDIRECT_URI =
-    'https://decoy.example.org/api/auth/callback'
-  delete process.env.WORKOS_COOKIE_DOMAIN
-})
+import { verifiedHost as verified } from '../../helpers/workshopSignIn'
 
 const listAllowlistCandidates =
   vi.fn<() => Promise<DomainVerificationRecord[]>>()
@@ -40,26 +32,6 @@ vi.mock('@/lib/domain-verification/sanity', () => ({
 
 import middleware from '@/proxy'
 import { getWorkOS } from '@workos-inc/authkit-nextjs'
-
-function verified(hostname: string): DomainVerificationRecord {
-  const yesterday = new Date(Date.now() - 86_400_000).toISOString()
-  return {
-    _id: `domainVerification.${hostname}`,
-    hostname,
-    conferenceId: 'conference-1',
-    token: 'tok',
-    status: 'verified',
-    method: 'dns-txt',
-    graceUntil: null,
-    verifiedAt: yesterday,
-    lastSuccessAt: yesterday,
-    lastCheckedAt: yesterday,
-    firstFailureAt: null,
-    consecutiveFailures: 0,
-    consecutiveSoftFailures: 0,
-    lastError: null,
-  }
-}
 
 const TENANT_A = 'a.example.org'
 const TENANT_B = 'b.example.org'
@@ -118,7 +90,7 @@ describe('workshop proxy — a signed-out visitor on an allowlisted host', () =>
     expect(url.searchParams.get('redirect_uri')).toBe(
       `https://${TENANT_A}/api/auth/callback`,
     )
-    expect(url.searchParams.get('client_id')).toBe('client_test')
+    expect(url.searchParams.get('client_id')).toBe(WORKOS_TEST_CLIENT_ID)
   })
 
   it('uses PKCE — a challenge in the URL and its verifier in a cookie', async () => {

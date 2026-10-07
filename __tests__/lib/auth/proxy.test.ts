@@ -45,23 +45,8 @@ vi.mock('@workos-inc/authkit-nextjs', () => ({
 
 vi.mock('@/lib/domain-verification/sanity', () => ({
   listAllowlistCandidates: async () => {
-    const yesterday = new Date(Date.now() - 86_400_000).toISOString()
-    return h.verifiedHosts.map((hostname) => ({
-      _id: `domainVerification.${hostname}`,
-      hostname,
-      conferenceId: 'conference-1',
-      token: 'tok',
-      status: 'verified',
-      method: 'dns-txt',
-      graceUntil: null,
-      verifiedAt: yesterday,
-      lastSuccessAt: yesterday,
-      lastCheckedAt: yesterday,
-      firstFailureAt: null,
-      consecutiveFailures: 0,
-      consecutiveSoftFailures: 0,
-      lastError: null,
-    }))
+    const { verifiedHost } = await import('../../helpers/workshopSignIn')
+    return h.verifiedHosts.map((hostname) => verifiedHost(hostname))
   },
 }))
 

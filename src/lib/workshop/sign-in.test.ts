@@ -10,6 +10,7 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import type { DomainVerificationRecord } from '@/lib/domain-verification/types'
+import { verifiedHost } from '../../../__tests__/helpers/workshopSignIn'
 
 const listAllowlistCandidates =
   vi.fn<() => Promise<DomainVerificationRecord[]>>()
@@ -20,28 +21,11 @@ vi.mock('@/lib/domain-verification/sanity', () => ({
 
 import { resolveWorkshopSignInHost } from './sign-in'
 
-/** A host proven yesterday — eligible under the real policy, whenever this runs. */
+/** A record for `conf.example.org`, proven yesterday unless overridden. */
 function record(
   overrides: Partial<DomainVerificationRecord> = {},
 ): DomainVerificationRecord {
-  const yesterday = new Date(Date.now() - 86_400_000).toISOString()
-  return {
-    _id: 'domainVerification.x',
-    hostname: 'conf.example.org',
-    conferenceId: 'conference-1',
-    token: 'tok',
-    status: 'verified',
-    method: 'dns-txt',
-    graceUntil: null,
-    verifiedAt: yesterday,
-    lastSuccessAt: yesterday,
-    lastCheckedAt: yesterday,
-    firstFailureAt: null,
-    consecutiveFailures: 0,
-    consecutiveSoftFailures: 0,
-    lastError: null,
-    ...overrides,
-  }
+  return verifiedHost(overrides.hostname ?? 'conf.example.org', overrides)
 }
 
 beforeEach(() => {
