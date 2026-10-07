@@ -7,7 +7,7 @@ import type { PlanFeatureRow } from './PlanFeaturesCard'
  * ticket data; this is the one sentence the org that has the gap gets to read.
  */
 export const WORKSHOPS_INACTIVE_REASON =
-  'Inactive until the ticketing integration is enabled and connected to this organization’s own account — the portal admits attendees from ticket data.'
+  'Inactive until a ticketing account with API access is connected for this organization (and ticketing is switched on) — the portal admits attendees from ticket data.'
 
 /**
  * Make the Plan & Features rows agree with the workshop resolver. The rows come

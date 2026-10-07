@@ -334,11 +334,26 @@ describe('hasTicketingCredentialsForOrg', () => {
     expect(h.fetch).not.toHaveBeenCalled()
   })
 
-  it('is FALSE for a non-platform org with no secret, whatever its slug looks like', async () => {
-    // Identity is the configured id, never the customer-writable slug — this
-    // helper never even reads the document.
+  it('is FALSE for a non-platform org with no secret — and never reads the document', async () => {
+    // Identity is the configured id, never the customer-writable slug: the
+    // document (where a slug would live) is not even read.
     await expect(hasTicketingCredentialsForOrg('org-A')).resolves.toBe(false)
     expect(getOrganizationById).not.toHaveBeenCalled()
+  })
+
+  /**
+   * A bag with only a webhook secret can authenticate an inbound delivery but
+   * cannot READ a ticket (both providers need an API key), so it does not count
+   * here — while the ticketing surfaces still show for it (honest "unconfigured").
+   */
+  it('is FALSE for a per-org bag holding only a webhookSecret, which cannot read tickets', async () => {
+    vi.stubEnv(
+      'TENANT_SECRETS_JSON',
+      JSON.stringify({ 'org-A': { ticketing: { webhookSecret: 'hook' } } }),
+    )
+    await expect(hasTicketingCredentialsForOrg('org-A')).resolves.toBe(false)
+    getOrganizationById.mockResolvedValue(org({ plan: 'community' }))
+    await expect(isTicketingEnabledForOrg('org-A')).resolves.toBe(true)
   })
 
   it('is TRUE for a non-platform org with its own per-org secret', async () => {

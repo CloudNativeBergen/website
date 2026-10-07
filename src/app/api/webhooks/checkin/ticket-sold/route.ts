@@ -265,10 +265,11 @@ export async function POST(request: NextRequest) {
     // link an attendee into the workshop portal. For any tenant the portal is
     // not enabled for (plan below pro, ticketing off or without credentials, or
     // an operator's deny) that link lands on a portal that will refuse them,
-    // automatically, on every workshop ticket sale — and until #1296 lands, on
-    // any non-platform host the sign-in round-trip itself cannot complete, so
-    // the gate's answer for such an org must stay OFF (see `./workshops.ts`).
-    // Emailing a link that cannot work is worse than silence: send NOTHING.
+    // automatically, on every workshop ticket sale. (The gate turns a
+    // non-platform org ON by plan; until #1296 lands the sign-in round-trip
+    // cannot complete on such a host, which is why this change must not ship
+    // ahead of it — see `src/lib/features/workshops.ts`.) Emailing a link that
+    // cannot work is worse than silence: send NOTHING.
     // Fail-closed — an unresolvable organization suppresses the email too.
     if (!(await isWorkshopsEnabledForConference(conference))) {
       console.warn(

@@ -1,5 +1,6 @@
 import 'server-only'
 import { PER_ORG_SECRETS_STORES } from '@/lib/secrets/store'
+import type { TicketingCredentials } from '@/lib/secrets/types'
 import {
   conferenceOrgId,
   isFeatureExplicitlyDeniedForOrg,
@@ -142,11 +143,22 @@ const TICKETING_FEATURE = 'ticketing' as const
  * "unconfigured" empty state rather than a hidden nav entry.
  */
 async function hasOwnTicketingCredentials(orgId: string): Promise<boolean> {
+  return (await ownTicketingSecret(orgId)) !== null
+}
+
+/**
+ * The org's own per-org ticketing bag from the first store that has one, or
+ * `null` — a miss, or a store failure (logged, fail closed: see the note inside).
+ */
+async function ownTicketingSecret(
+  orgId: string,
+): Promise<TicketingCredentials | null> {
   try {
     for (const store of PER_ORG_SECRETS_STORES) {
-      if ((await store.get(orgId, 'ticketing')) !== null) return true
+      const bag = await store.get(orgId, 'ticketing')
+      if (bag !== null) return bag
     }
-    return false
+    return null
   } catch (error) {
     // A miss is `null`; a THROW means the store could not determine the
     // tenant's env-var slug (`TenantEnvSlugUnavailableError`,
@@ -160,35 +172,46 @@ async function hasOwnTicketingCredentials(orgId: string): Promise<boolean> {
       `[features] per-org ticketing secret lookup failed for ${orgId}; treating "ticketing" as DISABLED`,
       error,
     )
-    return false
+    return null
   }
 }
 
 /**
- * Whether the organization has ticketing CREDENTIALS to read ticket data with —
- * the platform org (the `CHECKIN_*` / `TITO_*` env account) or any org with its
- * own per-org secret. This is the capability question, separate from the
- * entitlement one: `isTicketingEnabledForOrg` is true for a bare `pro` plan so
- * the pages can walk the tenant through connecting an account, while this stays
- * false until it has. `./workshops.ts` needs both: a portal that decides from
- * ticket data is worthless to an org that cannot read any (#1295). Fail closed
- * on a nullish org and on a secret-store failure.
+ * Whether the organization has ticketing credentials it can READ TICKETS with —
+ * the platform org (the `CHECKIN_*` / `TITO_*` env account) or any org whose
+ * own per-org secret carries an API key. This is the capability question,
+ * separate from the entitlement one: `isTicketingEnabledForOrg` is true for a
+ * bare `pro` plan so the pages can walk the tenant through connecting an
+ * account, while this stays false until it has. `./workshops.ts` needs both: a
+ * portal that decides from ticket data is worthless to an org that cannot read
+ * any (#1295). Fail closed on a nullish org and on a secret-store failure.
  *
- * MIRRORS `resolveTicketingCredentials` (`@/lib/tickets/provider`) exactly, by
- * the module rule above (never stricter than the resolver it fronts): the
- * platform org is handed the env account by identity, WITHOUT checking the
- * variables are set (the resolver does the same and fails at provider call
- * time), and with `PLATFORM_ORG_ID` unset nobody is the platform org, so nobody
- * gets it (the resolver's `isPlatformOrganization` check, same answer). It does
- * not know which vendor a conference uses, so it asks the vendor-agnostic
- * per-org stores and not the Checkin-shaped env store.
+ * WHY AN API KEY, not just "a bag exists". A per-org bag holding only a
+ * `webhookSecret` can authenticate an inbound ticket-sold delivery, so the
+ * webhook would mail workshop instructions — but neither provider can read a
+ * ticket with it (`CheckinProvider.isConfigured` wants `apiKey` + `apiSecret`,
+ * `TitoProvider.isConfigured` wants `apiKey`), so the portal would refuse every
+ * attendee. `apiKey` is the field both vendors require; it is what this gate
+ * can check without knowing which vendor a conference selected. This makes the
+ * workshop gate slightly STRICTER than `hasOwnTicketingCredentials` above, on
+ * purpose and only here — the ticketing surfaces still show for a bag the
+ * provider will then report as unconfigured, which is the honest state for
+ * them, while a workshop portal has no such state to fall back on.
+ *
+ * The platform branch MIRRORS `resolveTicketingCredentials`
+ * (`@/lib/tickets/provider`): the platform org is handed the env account by
+ * identity, WITHOUT checking the variables are set (the resolver does the same
+ * and fails at provider call time), and with `PLATFORM_ORG_ID` unset nobody is
+ * the platform org, so nobody gets it (the resolver's `isPlatformOrganization`
+ * check, same answer).
  */
 export async function hasTicketingCredentialsForOrg(
   orgId: string | null | undefined,
 ): Promise<boolean> {
   if (!orgId) return false
   if (await isPlatformOrganization(orgId)) return true
-  return hasOwnTicketingCredentials(orgId)
+  const bag = await ownTicketingSecret(orgId)
+  return typeof bag?.apiKey === 'string' && bag.apiKey.trim().length > 0
 }
 
 /**

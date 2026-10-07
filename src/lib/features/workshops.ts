@@ -19,9 +19,11 @@ import {
  * (see `./registry`), with ONE condition the registry cannot express. The
  * portal admits an attendee by looking their ticket up with the organization's
  * ticketing integration, so workshops are only ON when the org's ticketing is
- * enabled AND can actually read ticket data. A paid plan whose ticketing has
- * no credentials is sold a portal that would refuse every attendee and a
- * webhook that would mail them into it, so it resolves OFF.
+ * enabled AND holds read-capable credentials (an API key — see
+ * `hasTicketingCredentialsForOrg` for what that does and does not prove). A
+ * paid plan whose ticketing cannot read tickets is sold a portal that would
+ * refuse every attendee and a webhook that would mail them into it, so it
+ * resolves OFF.
  *
  * There is NO platform-org rule here (#1295). The implicit grant to
  * `PLATFORM_ORG_ID` existed because attendee sign-in ran through one WorkOS

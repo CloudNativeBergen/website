@@ -17,9 +17,9 @@ import type { FeatureId } from './registry'
  * registry half of that rule — the one read, the fail-closed posture and the
  * override semantics — so `./ticketing.ts` and `./badges.ts` only add their
  * own default on top and cannot drift on the shared part. (`workshops` shared
- * the shape until #1295, when attendee sign-in stopped being bound to one
- * host; it is now a plain plan-gated feature in `./workshops.ts` and uses only
- * the generic registry helpers below.)
+ * the shape until #1295, which assumes attendee sign-in is no longer bound to
+ * one host (#1296); it is now a plain plan-gated feature in `./workshops.ts`
+ * and uses only the generic registry helpers below.)
  *
  * The implicit grant OUTLIVES the internal readiness that motivated it:
  * `ticketing` is now `readiness: 'ga'` with `minPlan: 'pro'` (a tenant brings

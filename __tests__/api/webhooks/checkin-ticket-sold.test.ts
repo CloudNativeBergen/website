@@ -69,7 +69,15 @@ const TENANT_SECRET = 'tenant-two-owns-this-checkin-account'
 
 /** `TENANT_SECRETS_JSON` giving the non-platform tenants their own account. */
 const TENANT_SECRETS_JSON = JSON.stringify({
-  'org-tenant2': { ticketing: { webhookSecret: TENANT_SECRET } },
+  // Full accounts: an API key too, so the workshop gate's "can read tickets"
+  // half (#1295) is satisfied and the plan is the deciding input below.
+  'org-tenant2': {
+    ticketing: {
+      apiKey: 't2-key',
+      apiSecret: 't2-secret',
+      webhookSecret: TENANT_SECRET,
+    },
+  },
   'org-ghost': { ticketing: { webhookSecret: TENANT_SECRET } },
   'org-pilot': { ticketing: { webhookSecret: TENANT_SECRET } },
 })
