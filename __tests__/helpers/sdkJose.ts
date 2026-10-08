@@ -26,7 +26,6 @@ const sdkRequire = createRequire(
   ),
 )
 
-// eslint-disable-next-line @typescript-eslint/no-require-imports
 const jose = sdkRequire('jose') as typeof import('jose')
 
 export const {
