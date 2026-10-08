@@ -46,7 +46,10 @@ vi.mock('next/headers', () => import('../../helpers/nextHeadersJar'))
 
 import { http, HttpResponse } from 'msw'
 import { server } from '../../mocks/msw/server'
-import { SDK_JOSE_VERSION } from '../../helpers/sdkJose'
+import {
+  SDK_JOSE_VERSION,
+  decodeJwt as sdkDecodeJwt,
+} from '../../helpers/sdkJose'
 import { GET as signIn } from '@/app/(workshop)/workshop/sign-in/route'
 import { GET as signUp } from '@/app/(workshop)/workshop/sign-up/route'
 import { GET as callback } from '@/app/api/auth/callback/route'
@@ -372,8 +375,16 @@ describe('createTRPCContext on the real SDK — a refresh is persisted', () => {
     })
   }
 
-  it('runs the SDK’s own jose, not the suite stub', () => {
-    expect(SDK_JOSE_VERSION).toMatch(/^\d+\.\d+\.\d+$/)
+  it('runs the SDK’s own jose, not the suite stub', async () => {
+    // What `jose` resolves to in this file's module graph — the SDK's included
+    // — is the helper's real package. The suite stub has no `decodeJwt` at all.
+    const resolved = await import('jose')
+    expect(resolved.decodeJwt).toBe(sdkDecodeJwt)
+    expect(
+      resolved.decodeJwt(accessToken({ sid: 'session_x', sub: 'user_x' })),
+    ).toEqual({ sid: 'session_x', sub: 'user_x' })
+    // The SDK's dependency, not the app's own newer major.
+    expect(SDK_JOSE_VERSION.split('.')[0]).toBe('5')
   })
 
   it('spends the refresh token once and hands the browser the re-sealed session', async () => {

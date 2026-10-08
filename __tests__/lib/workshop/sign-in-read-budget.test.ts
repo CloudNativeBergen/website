@@ -17,8 +17,8 @@
  *
  * What this does NOT count: the reads the portal already made before #1296
  * (the page's and each attendee procedure's live `ticketTypeRoles` read from
- * #1294). Those are pinned in `__tests__/app/workshop/portal-gate.test.tsx` and
- * `__tests__/api/trpc/workshop.test.ts`.
+ * #1294). The page's is pinned in `__tests__/app/workshop/portal-gate.test.tsx`;
+ * the procedures' are not counted by any test.
  */
 import '../../helpers/workosEnv'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
@@ -148,13 +148,21 @@ describe('live Sanity reads per entry point', () => {
     expect(liveReads).toHaveBeenCalledTimes(2)
   })
 
-  it('signing out: 1 in the action', async () => {
+  it('signing out: 2 (the proxy for the POST, then the action)', async () => {
+    // The sign-out form posts a server action to the page's own URL.
+    const post = new NextRequest(`https://${HOST}/workshop`, {
+      method: 'POST',
+      headers: new Headers({ host: HOST, 'next-action': 'action-id' }),
+    })
+    await middleware(post, event)
+    expect(liveReads).toHaveBeenCalledTimes(1)
+
     request('/workshop')
     // No session to end: the SDK falls through to a plain redirect, which is
     // all this case needs — the read happens before the SDK is entered.
     await signOutOfWorkshop().catch(() => {})
 
-    expect(liveReads).toHaveBeenCalledTimes(1)
+    expect(liveReads).toHaveBeenCalledTimes(2)
   })
 })
 
