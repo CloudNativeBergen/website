@@ -292,40 +292,59 @@ hold:
   redirect allowlist above, and either platform-allocated or owned by the
   platform organization (`PLATFORM_ORG_ID`). Proof that a tenant controls a
   domain's DNS is enough for routing, but a redirect URI in a shared WorkOS
-  client has to be on a host the platform itself serves (#1306). A tenant on its
-  own domain uses its platform host for the portal;
+  client has to be on a host the platform itself serves (#1306);
 - the conference claiming it has workshops enabled.
 
 Exact host only. A wildcard claim registers nothing.
 
-**When it runs.** After the response of any mutation that wrote a verification
-record (a claim, a release, a platform allocation), after an admin re-check, and
-at the end of the daily sweep, which also retries whatever failed earlier. A
-WorkOS failure never fails the mutation that triggered it. Without
-`WORKOS_API_KEY` nothing runs.
+> **Not yet consistent with sign-in.** The sign-in decision
+> (`resolveWorkshopSignInHost`) still admits any host on the redirect allowlist.
+> A tenant's own verified domain can therefore start a sign-in that WorkOS
+> refuses, because no redirect URI is registered for it. #1306 makes the sign-in
+> decision call the same rule and points portal links at the tenant's platform
+> host.
+
+**When it runs.** Only on the production deployment (`VERCEL_ENV=production`),
+with `WORKOS_API_KEY` set:
+
+- after the response of a mutation that wrote a verification record (a claim, a
+  release, a platform allocation);
+- after an admin re-check;
+- after an organization's plan or feature overrides change;
+- at the end of the daily sweep, which also retries whatever failed earlier.
+
+Anything else that changes the answer (ticketing credentials, a conference
+moving to another organization) is picked up by the daily sweep. A WorkOS
+failure never fails the mutation that triggered it.
+
+Local development and previews read the production dataset, and the outcome is
+stored in that dataset, so a run against a staging WorkOS environment would
+overwrite production's ids. To exercise the API against staging, use
+`pnpm tsx scripts/probe-workos-redirect-uris.ts`, which touches WorkOS only.
 
 **What it will delete.** Only a URI it created itself, addressed by the id
-WorkOS returned for that create. The environment's default URI and anything
-added by hand in the dashboard are recorded as `external` and left alone, even
-after their host is released. Remove those by hand.
+WorkOS returned for that create. Everything else is recorded as `external` and
+left alone, even after its host is released: the environment's default URI,
+anything added by hand in the dashboard, and one of our own creates whose answer
+never arrived. Ownership is never inferred from a URI's text or age. Callback
+URIs that no wanted host accounts for are listed as `unaccounted` in the sweep's
+summary; removing them is a person's decision.
 
 **What is recorded** on the host's `domainVerification` document (fields added,
 nothing changed):
 
-| Field                    | Meaning                                                            |
-| ------------------------ | ------------------------------------------------------------------ |
-| `redirectUriStatus`      | `registering`, `registered` (ours) or `external` (found, not ours) |
-| `redirectUriId`          | WorkOS's id for a URI this system created                          |
-| `redirectUriRequestedAt` | when a registration was asked for, while its answer is outstanding |
-| `redirectUriError`       | why the last attempt failed; cleared by the next success           |
-
-`redirectUriRequestedAt` exists for one case: a create whose answer never
-arrived. The URI may exist with nobody holding its id, so the request is written
-before the call, and a URI that later appears, created no earlier than that, is
-recognised as ours. A create WorkOS refused outright withdraws the request.
+| Field               | Meaning                                                  |
+| ------------------- | -------------------------------------------------------- |
+| `redirectUriStatus` | `registered` (ours) or `external` (found, no id held)    |
+| `redirectUriId`     | WorkOS's id for a URI this system created                |
+| `redirectUriError`  | why the last attempt failed; cleared by the next success |
 
 Every write to these fields is conditional on the document revision the run
-read, so two overlapping runs cannot both act on one host.
+read. When a record moved on while WorkOS was answering (released, re-claimed,
+re-checked, or handled by an overlapping run), the record is read again before
+anything else is decided: a URI just created for a host that is no longer wanted
+is deleted again, and a URI just deleted for a host that is wanted again is put
+back.
 
 ## Moving parts
 

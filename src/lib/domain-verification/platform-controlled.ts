@@ -13,8 +13,13 @@
  *    (`PLATFORM_ORG_ID`).
  *
  * ONE FUNCTION. The WorkOS redirect-URI sync (`@/lib/workshop/redirect-uris`)
- * registers nothing this refuses; any other place that decides where a sign-in
- * may run must call it too rather than restate it.
+ * registers nothing this refuses.
+ *
+ * NOT YET APPLIED TO THE SIGN-IN DECISION. `resolveWorkshopSignInHost`
+ * (`@/lib/workshop/sign-in`) still admits any host on the verified-redirect
+ * allowlist, so a tenant's own verified domain can start a sign-in that WorkOS
+ * then refuses, because its redirect URI is not registered. Making that
+ * decision call this function is #1306.
  *
  * Fail closed: an unset `PLATFORM_ORG_ID`, a missing owner, and everything the
  * allowlist refuses (wildcard, dev-only, revoked, unproven, stale) are `false`.

@@ -32,7 +32,8 @@ vi.mock('@/lib/sanity/client', () => ({
   },
 }))
 
-const { ensureDomainVerification } = await import('./sanity')
+const { ensureDomainVerification, revokeDomainVerification } =
+  await import('./sanity')
 
 const CONFERENCE = 'conference-1'
 
@@ -222,6 +223,93 @@ describe('ensureDomainVerification', () => {
     )
     await ensureDomainVerification('cloudnativedays.no', CONFERENCE)
     expect(createIfNotExists).not.toHaveBeenCalled()
+    expect(commit).not.toHaveBeenCalled()
+  })
+})
+
+/**
+ * WHETHER A RECORD WAS WRITTEN is what `syncDomainVerifications` decides on:
+ * a write means the hosts that may sign in could have changed, so the WorkOS
+ * redirect URIs are reconciled (#1297). `false` for a write, and a host that
+ * became eligible keeps no URI until the daily sweep.
+ */
+describe('reporting whether a record was written', () => {
+  it('a new claim', async () => {
+    expect(
+      await ensureDomainVerification('cloudnativedays.no', CONFERENCE),
+    ).toBe(true)
+    expect(createIfNotExists).toHaveBeenCalledTimes(1)
+  })
+
+  it('an allocation of a host this conference already claims', async () => {
+    fetchMock.mockResolvedValue(
+      existing({
+        method: 'dns-txt',
+        status: 'pending',
+        conferenceId: CONFERENCE,
+      }),
+    )
+
+    expect(
+      await ensureDomainVerification('kubeday.konf.run', CONFERENCE, {
+        allocatePlatformHost: true,
+      }),
+    ).toBe(true)
+    expect(commit).toHaveBeenCalledTimes(1)
+  })
+
+  it('a host taken over from another conference', async () => {
+    fetchMock.mockResolvedValue(
+      existing({
+        hostname: 'cloudnativedays.no',
+        method: 'dns-txt',
+        conferenceId: 'conference-other',
+      }),
+    )
+
+    expect(
+      await ensureDomainVerification('cloudnativedays.no', CONFERENCE),
+    ).toBe(true)
+    expect(commit).toHaveBeenCalledTimes(1)
+  })
+
+  it('not a claim that already has its record', async () => {
+    fetchMock.mockResolvedValue(
+      existing({
+        hostname: 'cloudnativedays.no',
+        method: 'dns-txt',
+        conferenceId: CONFERENCE,
+      }),
+    )
+
+    expect(
+      await ensureDomainVerification('cloudnativedays.no', CONFERENCE),
+    ).toBe(false)
+    expect(commit).not.toHaveBeenCalled()
+  })
+
+  it('not an in-zone host the caller may not allocate', async () => {
+    expect(
+      await ensureDomainVerification('some-other-tenant.konf.run', CONFERENCE),
+    ).toBe(false)
+    expect(createIfNotExists).not.toHaveBeenCalled()
+  })
+
+  it('a release by the holder', async () => {
+    fetchMock.mockResolvedValue(existing({ conferenceId: CONFERENCE }))
+
+    expect(await revokeDomainVerification('kubeday.konf.run', CONFERENCE)).toBe(
+      true,
+    )
+    expect(set).toHaveBeenCalledWith({ status: 'revoked' })
+  })
+
+  it('not a release of a host another conference now holds', async () => {
+    fetchMock.mockResolvedValue(existing({ conferenceId: 'conference-other' }))
+
+    expect(await revokeDomainVerification('kubeday.konf.run', CONFERENCE)).toBe(
+      false,
+    )
     expect(commit).not.toHaveBeenCalled()
   })
 })

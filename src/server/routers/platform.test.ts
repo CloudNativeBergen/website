@@ -78,6 +78,11 @@ vi.mock('@/lib/conference/sanity', () => ({
     getConferenceMock(...args),
 }))
 
+const scheduleRedirectUriReconcile = vi.fn()
+vi.mock('@/lib/workshop/redirect-uris', () => ({
+  scheduleRedirectUriReconcile: () => scheduleRedirectUriReconcile(),
+}))
+
 import { revalidateTag } from 'next/cache'
 import { platformRouter } from './platform'
 import type { Context } from '../trpc'
@@ -203,6 +208,7 @@ describe('updateEntitlements', () => {
       }),
     ).rejects.toMatchObject({ code: 'NOT_FOUND' })
     expect(patchMock).not.toHaveBeenCalled()
+    expect(scheduleRedirectUriReconcile).not.toHaveBeenCalled()
   })
 
   it('rejects an override for a feature outside the closed registry', async () => {
@@ -254,6 +260,22 @@ describe('updateEntitlements', () => {
     expect(revalidateTag).toHaveBeenCalledWith(
       'sanity:organization-org-B',
       'default',
+    )
+  })
+
+  it('reconciles the WorkOS redirect URIs once the new entitlements are readable', async () => {
+    // A plan or an override can switch workshops on or off (#1297). The
+    // reconcile reads the organization through the cache, so it has to be
+    // queued AFTER the tag is busted.
+    await callerFor(['org-A']).updateEntitlements({
+      organizationId: 'org-B',
+      plan: 'pro',
+      overrides: [],
+    })
+
+    expect(scheduleRedirectUriReconcile).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(revalidateTag).mock.invocationCallOrder[0]).toBeLessThan(
+      scheduleRedirectUriReconcile.mock.invocationCallOrder[0],
     )
   })
 })
