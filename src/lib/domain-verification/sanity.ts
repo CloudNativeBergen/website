@@ -17,9 +17,11 @@ import type {
   DomainVerificationMethod,
   DomainVerificationPatch,
   DomainVerificationRecord,
+  RedirectUriState,
+  RedirectUriSyncRow,
 } from './types'
 
-const PROJECTION = `{
+const FIELDS = `
   _id,
   hostname,
   "conferenceId": conference._ref,
@@ -33,8 +35,9 @@ const PROJECTION = `{
   "firstFailureAt": firstFailureAt,
   "consecutiveFailures": coalesce(consecutiveFailures, 0),
   "consecutiveSoftFailures": coalesce(consecutiveSoftFailures, 0),
-  "lastError": lastError
-}`
+  "lastError": lastError`
+
+const PROJECTION = `{${FIELDS}}`
 
 type RawRecord = Omit<
   DomainVerificationRecord,
@@ -342,4 +345,91 @@ export async function patchDomainVerification(
   if (Object.keys(set).length > 0) tx = tx.set(set)
   if (unset.length > 0) tx = tx.unset(unset)
   await tx.commit()
+}
+
+/** The stored field behind each part of a host's redirect-URI state. */
+const REDIRECT_URI_FIELDS = {
+  status: 'redirectUriStatus',
+  id: 'redirectUriId',
+  requestedAt: 'redirectUriRequestedAt',
+  error: 'redirectUriError',
+} as const satisfies Record<keyof RedirectUriState, string>
+
+type RawSyncRow = RawRecord & {
+  _rev: string
+  redirectUriStatus?: RedirectUriState['status']
+  redirectUriId?: string | null
+  redirectUriRequestedAt?: string | null
+  redirectUriError?: string | null
+  conference?: RedirectUriSyncRow['conference']
+}
+
+/**
+ * Everything the WorkOS redirect-URI reconcile decides from (#1297), in ONE
+ * read: every record that could be on the redirect allowlist, plus every record
+ * that still carries redirect-URI state — a revoked host among them, since that
+ * is exactly the one whose URI has to be deleted. The claiming conference's
+ * owner and ticketing vendor ride along so the reconcile needs no second read.
+ */
+export async function listRedirectUriSyncRows(): Promise<RedirectUriSyncRow[]> {
+  const rows = await clientReadUncached.fetch<RawSyncRow[] | null>(
+    // groq-global: the WorkOS redirect-URI list is one per environment and spans every tenant by design.
+    `*[_type == "domainVerification" && (status == "verified" || method in ["grandfathered", "platform-owned"] || defined(redirectUriStatus) || defined(redirectUriId))] | order(hostname asc) {${FIELDS},
+      _rev,
+      redirectUriStatus,
+      redirectUriId,
+      redirectUriRequestedAt,
+      redirectUriError,
+      "conference": conference->{ organization, ticketingProvider }
+    }`,
+  )
+  return (rows ?? []).map(
+    ({
+      _rev,
+      redirectUriStatus,
+      redirectUriId,
+      redirectUriRequestedAt,
+      redirectUriError,
+      conference,
+      ...raw
+    }) => ({
+      record: hydrate(raw),
+      rev: _rev,
+      redirectUri: {
+        status: redirectUriStatus ?? null,
+        id: redirectUriId ?? null,
+        requestedAt: redirectUriRequestedAt ?? null,
+        error: redirectUriError ?? null,
+      },
+      conference: conference ?? null,
+    }),
+  )
+}
+
+/**
+ * Write part of a host's redirect-URI state, ONLY IF the record is still at
+ * `ifRevisionId`. `null` clears a field. Returns the record's new revision.
+ *
+ * The condition is what keeps two reconciles (a mutation's and the sweep's)
+ * from both acting on one host: the second writer's patch is rejected by
+ * Sanity, and it stops.
+ */
+export async function patchRedirectUriState(
+  id: string,
+  ifRevisionId: string,
+  patch: Partial<RedirectUriState>,
+): Promise<string> {
+  const set: Record<string, string> = {}
+  const unset: string[] = []
+  for (const key of Object.keys(patch) as (keyof RedirectUriState)[]) {
+    const value = patch[key]
+    if (value === undefined) continue
+    if (value === null) unset.push(REDIRECT_URI_FIELDS[key])
+    else set[REDIRECT_URI_FIELDS[key]] = value
+  }
+  let tx = clientWrite.patch(id).ifRevisionId(ifRevisionId)
+  if (Object.keys(set).length > 0) tx = tx.set(set)
+  if (unset.length > 0) tx = tx.unset(unset)
+  const written = await tx.commit()
+  return written._rev
 }
