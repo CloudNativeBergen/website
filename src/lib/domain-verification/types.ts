@@ -96,21 +96,17 @@ export type DomainVerificationPatch = Partial<
 /**
  * Where a host's WorkOS redirect URI stands (#1297).
  *
- * - `registering` — this system is about to ask, or asked and never saw the
- *   answer. Paired with `requestedAt`, so a URI that later turns up in WorkOS
- *   can be told from one a person added by hand.
  * - `registered` — this system created it; `id` is WorkOS's id for it, and the
  *   only thing a delete is ever addressed to.
- * - `external` — the URI exists in WorkOS and this system did not create it.
+ * - `external` — the URI exists in WorkOS and this system holds no id for it.
  *   It is never deleted from here.
  */
-export type RedirectUriStatus = 'registering' | 'registered' | 'external'
+export type RedirectUriStatus = 'registered' | 'external'
 
 /** The redirect-URI fields of a `domainVerification` document. */
 export interface RedirectUriState {
   status: RedirectUriStatus | null
   id: string | null
-  requestedAt: string | null
   /** The last failure, cleared by the next success. */
   error: string | null
 }

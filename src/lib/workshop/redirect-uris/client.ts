@@ -30,10 +30,9 @@ export interface WorkOSRedirectUri {
 /**
  * A request that did not do what was asked.
  *
- * `status` is the HTTP status WorkOS answered with, and `null` when there is NO
- * ANSWER TO GO ON — the request never completed, or it succeeded with a body
- * this could not read. The two are different facts for a create: a status means
- * nothing was registered, `null` means something may have been.
+ * `status` is the HTTP status WorkOS answered with, and `null` when there was
+ * no answer to go on — the request never completed, or it succeeded with a body
+ * this could not read.
  */
 export class WorkOSRedirectUriError extends Error {
   constructor(
@@ -73,11 +72,6 @@ const createdSchema = z.union([
     .transform((v) => v.redirect_uri),
 ])
 
-/** Whether there is a key to call WorkOS with at all. */
-export function isRedirectUriApiConfigured(): boolean {
-  return Boolean(process.env.WORKOS_API_KEY?.trim())
-}
-
 async function request(
   method: 'GET' | 'POST' | 'DELETE',
   url: string,
@@ -111,15 +105,11 @@ async function refusal(
   method: string,
   response: Response,
 ): Promise<WorkOSRedirectUriError> {
-  let detail = ''
-  try {
-    const parsed = z
-      .object({ message: z.string() })
-      .safeParse(JSON.parse(await response.text()))
-    if (parsed.success) detail = `: ${parsed.data.message.slice(0, 200)}`
-  } catch {
-    // An unreadable error body adds nothing; the status is the fact.
-  }
+  // An unreadable error body adds nothing; the status is the fact.
+  const parsed = z
+    .object({ message: z.string() })
+    .safeParse(await response.json().catch(() => undefined))
+  const detail = parsed.success ? `: ${parsed.data.message.slice(0, 200)}` : ''
   return new WorkOSRedirectUriError(
     `${method} was refused by WorkOS with HTTP ${response.status}${detail}`,
     response.status,
@@ -132,12 +122,7 @@ async function readBody<T>(
   response: Response,
   schema: z.ZodType<T>,
 ): Promise<T> {
-  let parsed: ReturnType<typeof schema.safeParse>
-  try {
-    parsed = schema.safeParse(await response.json())
-  } catch {
-    parsed = schema.safeParse(undefined)
-  }
+  const parsed = schema.safeParse(await response.json().catch(() => undefined))
   if (!parsed.success) {
     throw new WorkOSRedirectUriError(
       `${method} succeeded but WorkOS answered in a shape this does not know`,
@@ -149,7 +134,7 @@ async function readBody<T>(
 
 /** Every redirect URI in the environment, following the cursor to the end. */
 export async function listRedirectUris(): Promise<WorkOSRedirectUri[]> {
-  const byId = new Map<string, WorkOSRedirectUri>()
+  const all: WorkOSRedirectUri[] = []
   let after: string | null = null
   for (let page = 0; page < MAX_PAGES; page++) {
     const url = new URL(ENDPOINT)
@@ -161,9 +146,9 @@ export async function listRedirectUris(): Promise<WorkOSRedirectUri[]> {
     if (!response.ok) throw await refusal('GET', response)
     const body = await readBody('GET', response, listSchema)
 
-    for (const entry of body.data) byId.set(entry.id, entry)
+    all.push(...body.data)
     const next = body.list_metadata?.after ?? null
-    if (!next || body.data.length === 0) return [...byId.values()]
+    if (!next || body.data.length === 0) return all
     if (next === after) break
     after = next
   }
@@ -181,13 +166,17 @@ export async function createRedirectUri(
   return readBody('POST', response, createdSchema)
 }
 
-/** Delete by id. A URI that is already gone is a success. */
+/**
+ * Delete by id. A 404 is an ERROR, not "already gone": until this has run
+ * against the real API, a 404 could as well mean the path or the id is wrong,
+ * and counting that as a delete would leave the URI in place unnoticed. The
+ * caller only deletes ids it has just listed, and clears one that is gone on
+ * its next listing.
+ */
 export async function deleteRedirectUri(id: string): Promise<void> {
   const response = await request(
     'DELETE',
     `${ENDPOINT}/${encodeURIComponent(id)}`,
   )
-  if (!response.ok && response.status !== 404) {
-    throw await refusal('DELETE', response)
-  }
+  if (!response.ok) throw await refusal('DELETE', response)
 }

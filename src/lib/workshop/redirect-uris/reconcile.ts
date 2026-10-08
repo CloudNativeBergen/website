@@ -8,22 +8,29 @@
  * wanted and missing, deletes what it created and no longer wants, and leaves
  * everything else in WorkOS alone.
  *
- * WHAT "IT CREATED" MEANS. A delete is only ever addressed to an id this system
- * was handed by WorkOS for a create it made itself — recorded on the host's
- * `domainVerification` document. A URI that is simply found in WorkOS (the
- * environment's default, one a person added in the dashboard) is recorded as
- * `external` and never deleted, even for a host that is released later.
+ * WHAT "IT CREATED" MEANS. A delete is only ever addressed to an id WorkOS
+ * handed back for a create this system made, recorded on the host's
+ * `domainVerification` document. NOTHING ELSE COUNTS: a URI that is simply
+ * found in WorkOS — the environment's default, one a person added in the
+ * dashboard, or one of our own creates whose answer never arrived — is recorded
+ * as `external` and never deleted. Ownership is never inferred from a URI's
+ * text or age. The price is that a create whose answer was lost outlives its
+ * host; `unaccounted` in the summary is where that shows.
  *
- * The one case that needs care is a create whose answer never arrived: the URI
- * may exist with nobody holding its id. So the intent is written BEFORE the
- * request (`registering` + `requestedAt`), and a URI that later turns up,
- * created no earlier than that, is recognised as ours. A create WorkOS refused
- * outright withdraws the intent, so a URI a person adds afterwards stays theirs.
+ * A CREATE THAT CANNOT BE RECORDED IS UNDONE. Every write to the record is
+ * conditional on the revision this run read, so a record that moved on while
+ * WorkOS was answering (released, re-claimed, re-checked, or handled by an
+ * overlapping run) rejects the write. The record is then read again: if the
+ * host is still wanted and nothing else registered it, the id is recorded;
+ * otherwise the URI just created is deleted. The same happens in reverse for a
+ * delete: a host that became wanted again while its URI was being removed gets
+ * it back.
  *
- * EVERY WRITE TO THE RECORD IS CONDITIONAL on the revision this run read. Two
- * runs can overlap (a domain mutation's and the daily sweep's); the second to
- * write is rejected by Sanity and does nothing more for that host — in
- * particular it does not go on to call WorkOS.
+ * ONLY THE PRODUCTION DEPLOYMENT RUNS IT. The outcome is stored in the dataset,
+ * and local development and previews read the same dataset as production. A
+ * run against another WorkOS environment would overwrite production's ids with
+ * its own. To exercise the API against staging use
+ * `scripts/probe-workos-redirect-uris.ts`, which writes nothing here.
  *
  * NEVER THROWS, and is never awaited by the mutation that triggered it. A
  * failure is recorded on the host (`redirectUriError`) and in the summary, and
@@ -45,33 +52,23 @@ import type {
   RedirectUriSyncRow,
 } from '@/lib/domain-verification/types'
 import { resolveWorkshopsForConference } from '@/lib/features/workshops'
-import { WORKSHOP_AUTH_CALLBACK_PATH } from '../sign-in-paths'
+import { getOrganizationById } from '@/lib/organization/sanity'
+import {
+  WORKSHOP_AUTH_CALLBACK_PATH,
+  workshopCallbackUri,
+} from '../sign-in-paths'
 import {
   createRedirectUri,
   deleteRedirectUri,
-  isRedirectUriApiConfigured,
   listRedirectUris,
-  WorkOSRedirectUriError,
   type WorkOSRedirectUri,
 } from './client'
 
-/**
- * How far WorkOS's clock may run behind ours and a URI still count as created
- * after our request. Anything older was already in the list this run read
- * before it wrote the request, so the margin cannot reach a hand-added URI.
- */
-const CLOCK_SKEW_MS = 5 * 60 * 1000
-
-const CLEARED: RedirectUriState = {
-  status: null,
-  id: null,
-  requestedAt: null,
-  error: null,
-}
+const CLEARED: RedirectUriState = { status: null, id: null, error: null }
 
 export interface RedirectUriReconcileSummary {
-  /** `false` when `WORKOS_API_KEY` is unset: nothing was attempted. */
-  configured: boolean
+  /** Why nothing was attempted, or `null` when the reconcile ran. */
+  skipped: 'no-api-key' | 'not-production' | null
   /** Hosts whose callback should be registered. */
   wanted: number
   /** Hosts whose callback this run created. */
@@ -80,20 +77,42 @@ export interface RedirectUriReconcileSummary {
   removed: string[]
   /** Hosts this run could not bring into step. */
   errored: string[]
+  /**
+   * Callback URIs in WorkOS that no wanted host accounts for and this system
+   * holds no id for. Never deleted from here; a person has to decide.
+   */
+  unaccounted: string[]
   /** A failure that stopped the whole run, before any host was acted on. */
   error: string | null
 }
 
-/** The AuthKit callback of a host — the redirect URI registered for it. */
-export function workshopRedirectUri(hostname: string): string {
-  return `https://${normalizeDomain(hostname)}${WORKSHOP_AUTH_CALLBACK_PATH}`
+function whySkipped(): RedirectUriReconcileSummary['skipped'] {
+  if (!process.env.WORKOS_API_KEY?.trim()) return 'no-api-key'
+  if (process.env.VERCEL_ENV !== 'production') return 'not-production'
+  return null
 }
 
-function sameUri(a: string, b: string): boolean {
+/**
+ * The AuthKit callback of a host — the redirect URI registered for it — or
+ * `null` for a hostname that does not name itself as a URL. The parser rewrites
+ * some (`127.1` is `127.0.0.1`), and a URI on any host but the one the record
+ * names must never be registered.
+ */
+export function workshopRedirectUri(hostname: string): string | null {
+  const host = normalizeDomain(hostname)
   try {
-    return new URL(a).href === new URL(b).href
+    const url = new URL(`https://${host}`)
+    return url.host === host ? workshopCallbackUri(url.origin) : null
   } catch {
-    return a === b
+    return null
+  }
+}
+
+function href(uri: string): string {
+  try {
+    return new URL(uri).href
+  } catch {
+    return uri
   }
 }
 
@@ -102,9 +121,9 @@ function describe(error: unknown): string {
 }
 
 /**
- * Should this host's callback be registered? `null` when the workshops gate
- * could not say — the host is then left exactly as it is, neither registered
- * nor removed, so a failed read can never take a working sign-in away.
+ * Should this host's callback be registered? `null` when that could not be
+ * established — the host is then left exactly as it is, neither registered nor
+ * removed, so a failed read can never take a working sign-in away.
  */
 async function wantsRedirectUri(
   row: RedirectUriSyncRow,
@@ -112,7 +131,11 @@ async function wantsRedirectUri(
 ): Promise<boolean | null> {
   const ownerOrgId = row.conference?.organization?._ref
   if (!isPlatformControlledHost(row.record, ownerOrgId, now)) return false
+  if (!workshopRedirectUri(row.record.hostname)) return false
   try {
+    // The gate answers "off" when it cannot READ the organization. Read it
+    // here first, so that failure is an unknown and not a reason to delete.
+    if (ownerOrgId) await getOrganizationById(ownerOrgId)
     return await resolveWorkshopsForConference(row.conference)
   } catch (error) {
     console.error(
@@ -139,17 +162,64 @@ async function save(
   row.redirectUri = { ...row.redirectUri, ...changed }
 }
 
-/** Was this URI created by the request the record still has on file? */
-function answersOurRequest(
-  entry: WorkOSRedirectUri,
-  state: RedirectUriState,
-): boolean {
-  if (state.status !== 'registering' || !state.requestedAt) return false
-  if (!entry.createdAt) return false
-  const requestedAt = Date.parse(state.requestedAt)
-  return (
-    !Number.isNaN(requestedAt) &&
-    entry.createdAt.getTime() >= requestedAt - CLOCK_SKEW_MS
+/** The record as it stands now, or `undefined` when it no longer qualifies to be read. */
+async function readAgain(
+  row: RedirectUriSyncRow,
+): Promise<RedirectUriSyncRow | undefined> {
+  const rows = await listRedirectUriSyncRows()
+  return rows.find((fresh) => fresh.record._id === row.record._id)
+}
+
+/**
+ * Create the host's URI and record its id — or, when the record cannot take
+ * the id, delete the URI again. See "A create that cannot be recorded is
+ * undone" in the module doc.
+ */
+async function register(
+  row: RedirectUriSyncRow,
+  uri: string,
+  now: Date,
+  summary: RedirectUriReconcileSummary,
+): Promise<void> {
+  let created: WorkOSRedirectUri
+  try {
+    created = await createRedirectUri(uri)
+  } catch (error) {
+    await save(row, { ...CLEARED, error: describe(error) }).catch(() => {})
+    throw error
+  }
+  const registered = {
+    status: 'registered',
+    id: created.id,
+    error: null,
+  } as const
+
+  let recorded = false
+  try {
+    await save(row, registered)
+    recorded = true
+  } catch {
+    try {
+      const fresh = await readAgain(row)
+      if (
+        fresh &&
+        fresh.redirectUri.id === null &&
+        (await wantsRedirectUri(fresh, now)) !== false
+      ) {
+        await save(fresh, registered)
+        recorded = true
+      }
+    } catch {
+      // Still not recorded: undone below.
+    }
+  }
+  if (recorded) {
+    summary.registered.push(row.record.hostname)
+    return
+  }
+  await deleteRedirectUri(created.id)
+  throw new Error(
+    `the record for ${row.record.hostname} moved on while its redirect URI was being created; the URI was removed again`,
   )
 }
 
@@ -162,62 +232,35 @@ async function reconcileHost(
 ): Promise<void> {
   const { hostname } = row.record
   const uri = workshopRedirectUri(hostname)
-  const state = row.redirectUri
-  const atWorkOS = listed.find((entry) => sameUri(entry.uri, uri))
-  const ours =
-    (state.id ? listed.find((entry) => entry.id === state.id) : undefined) ??
-    (atWorkOS && answersOurRequest(atWorkOS, state) ? atWorkOS : undefined)
+  const { id } = row.redirectUri
+  const ours = id ? listed.find((entry) => entry.id === id) : undefined
 
-  if (!wanted) {
-    if (ours) {
-      try {
-        await deleteRedirectUri(ours.id)
-      } catch (error) {
-        await save(row, { error: describe(error) })
-        throw error
-      }
-      summary.removed.push(hostname)
-    } else if (atWorkOS) {
-      console.warn(
-        `[workshop] ${uri} is no longer wanted but was not created by this system; it is left in WorkOS. Remove it by hand.`,
-      )
+  if (!wanted || !uri) {
+    if (!ours) return save(row, CLEARED)
+    try {
+      await deleteRedirectUri(ours.id)
+    } catch (error) {
+      await save(row, { error: describe(error) })
+      throw error
     }
-    await save(row, CLEARED)
-    return
+    summary.removed.push(hostname)
+    try {
+      return await save(row, CLEARED)
+    } catch (error) {
+      // The record moved on while the URI was being deleted. If the host is
+      // wanted again, put the URI back; otherwise the next run clears the id.
+      const fresh = await readAgain(row)
+      if (!fresh || (await wantsRedirectUri(fresh, now)) !== true) throw error
+      const remaining = listed.filter((entry) => entry.id !== ours.id)
+      return reconcileHost(fresh, true, remaining, now, summary)
+    }
   }
 
-  if (ours) {
-    await save(row, { ...CLEARED, status: 'registered', id: ours.id })
-    return
+  if (ours) return save(row, { status: 'registered', error: null })
+  if (listed.some((entry) => href(entry.uri) === href(uri))) {
+    return save(row, { ...CLEARED, status: 'external' })
   }
-  if (atWorkOS) {
-    await save(row, { ...CLEARED, status: 'external' })
-    return
-  }
-
-  // The request goes on record first: this write is also what a concurrent run
-  // loses on, so only one of them reaches WorkOS.
-  await save(row, {
-    status: 'registering',
-    id: null,
-    requestedAt: now.toISOString(),
-  })
-  try {
-    const created = await createRedirectUri(uri)
-    await save(row, { ...CLEARED, status: 'registered', id: created.id })
-    summary.registered.push(hostname)
-  } catch (error) {
-    // A status is WorkOS saying no: nothing was registered, so the request is
-    // withdrawn. Without one something may have been, and the request stays on
-    // record for the next run to recognise it by.
-    const refused =
-      error instanceof WorkOSRedirectUriError && error.status !== null
-    await save(row, {
-      ...(refused ? { status: null, requestedAt: null } : {}),
-      error: describe(error),
-    })
-    throw error
-  }
+  return register(row, uri, now, summary)
 }
 
 /**
@@ -228,19 +271,25 @@ export async function reconcileWorkshopRedirectUris(
   now: Date = new Date(),
 ): Promise<RedirectUriReconcileSummary> {
   const summary: RedirectUriReconcileSummary = {
-    configured: isRedirectUriApiConfigured(),
+    skipped: whySkipped(),
     wanted: 0,
     registered: [],
     removed: [],
     errored: [],
+    unaccounted: [],
     error: null,
   }
-  if (!summary.configured) return summary
+  if (summary.skipped) return summary
 
   try {
     const work: { row: RedirectUriSyncRow; wanted: boolean }[] = []
+    /** URIs and ids some host answers for; everything else is unaccounted. */
+    const accounted = new Set<string>()
     for (const row of await listRedirectUriSyncRows()) {
       const wanted = await wantsRedirectUri(row, now)
+      const uri = workshopRedirectUri(row.record.hostname)
+      if (uri && wanted !== false) accounted.add(href(uri))
+      if (row.redirectUri.id) accounted.add(row.redirectUri.id)
       if (wanted === null) continue
       if (wanted) summary.wanted += 1
       const hasState = Object.values(row.redirectUri).some((v) => v !== null)
@@ -255,15 +304,21 @@ export async function reconcileWorkshopRedirectUris(
       summary.error = describe(error)
       console.error('[workshop] could not list WorkOS redirect URIs', error)
       for (const { row, wanted } of work) {
-        const { status } = row.redirectUri
-        if (wanted && (status === 'registered' || status === 'external')) {
-          continue
-        }
+        if (wanted && row.redirectUri.status !== null) continue
         summary.errored.push(row.record.hostname)
         await save(row, { error: summary.error }).catch(() => {})
       }
       return summary
     }
+
+    summary.unaccounted = listed
+      .filter(
+        (entry) =>
+          href(entry.uri).endsWith(WORKSHOP_AUTH_CALLBACK_PATH) &&
+          !accounted.has(href(entry.uri)) &&
+          !accounted.has(entry.id),
+      )
+      .map((entry) => entry.uri)
 
     for (const { row, wanted } of work) {
       try {

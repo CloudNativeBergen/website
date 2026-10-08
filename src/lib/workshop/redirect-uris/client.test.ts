@@ -150,8 +150,13 @@ describe('deleteRedirectUri', () => {
     expect(workos.uris).toEqual([keep])
   })
 
-  it('treats a URI that is already gone as deleted', async () => {
-    await expect(deleteRedirectUri('redir_missing')).resolves.toBeUndefined()
+  it('reports an id WorkOS does not know as a failure, not as deleted', async () => {
+    const keep = workos.seed('https://keep.example.org/cb')
+
+    await expect(deleteRedirectUri('redir_missing')).rejects.toMatchObject({
+      status: 404,
+    })
+    expect(workos.uris).toEqual([keep])
   })
 
   it('reports any other refusal', async () => {

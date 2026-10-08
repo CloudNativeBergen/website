@@ -23,11 +23,12 @@ const SUMMARY = {
   delisted: ['lapsed-conf.no'],
   errored: [],
   redirectUris: {
-    configured: true,
+    skipped: null,
     wanted: 2,
     registered: ['new-conf.konf.run'],
     removed: ['lapsed-conf.no'],
     errored: [],
+    unaccounted: [],
     error: null,
   },
 }

@@ -42,6 +42,10 @@ export async function GET(request: NextRequest) {
         ` redirectUris.registered=${summary.redirectUris.registered.length}` +
         ` redirectUris.removed=${summary.redirectUris.removed.length}` +
         ` redirectUris.errored=${summary.redirectUris.errored.length}` +
+        ` redirectUris.unaccounted=${summary.redirectUris.unaccounted.length}` +
+        (summary.redirectUris.skipped
+          ? ` redirectUris.skipped=${summary.redirectUris.skipped}`
+          : '') +
         (summary.redirectUris.error
           ? ` redirectUris.error=${summary.redirectUris.error}`
           : ''),

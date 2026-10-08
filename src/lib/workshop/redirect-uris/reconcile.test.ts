@@ -12,25 +12,21 @@ import type {
 
 /**
  * The reconcile end to end: the REAL host rule, the REAL allowlist policy and
- * the REAL WorkOS client, with the two boundaries faked — WorkOS behind `fetch`
- * (see the fake's header for what that does and does not prove) and the
+ * the REAL WorkOS client, with the boundaries faked — WorkOS behind `fetch`
+ * (see the fake's header for what that does and does not prove), the
  * `domainVerification` store, which enforces the revision condition as Sanity
- * does.
+ * does, and the two reads the workshops gate rests on.
  */
 
 const rows = new Map<string, RedirectUriSyncRow>()
 /** Every state write that was accepted, in order. */
 const stateWrites: { id: string; patch: Partial<RedirectUriState> }[] = []
-let listFails = false
-/** Simulates another writer: the records move on right after they are read. */
-let recordsMoveAfterRead = false
+let storeReadFails = false
 
 vi.mock('@/lib/domain-verification/sanity', () => ({
   listRedirectUriSyncRows: async () => {
-    if (listFails) throw new Error('sanity is down')
-    const read = [...rows.values()].map((row) => structuredClone(row))
-    if (recordsMoveAfterRead) for (const row of rows.values()) row.rev += '+'
-    return read
+    if (storeReadFails) throw new Error('sanity is down')
+    return [...rows.values()].map((row) => structuredClone(row))
   },
   patchRedirectUriState: async (
     id: string,
@@ -49,16 +45,26 @@ vi.mock('@/lib/domain-verification/sanity', () => ({
 }))
 
 /** The workshops gate's answer per owning organization; absent means ON. */
-const workshops = new Map<string, boolean | null | Error>()
+const workshops = new Map<string, boolean | null>()
+/** Organizations whose document cannot be read right now. */
+const unreadableOrgs = new Set<string>()
+
+vi.mock('@/lib/organization/sanity', () => ({
+  getOrganizationById: async (orgId: string) => {
+    if (unreadableOrgs.has(orgId)) throw new Error('organization read failed')
+    return { _id: orgId }
+  },
+}))
 
 vi.mock('@/lib/features/workshops', () => ({
+  // As the real gate: no owner is OFF, and so is an organization it cannot
+  // read — it swallows that failure rather than report it.
   resolveWorkshopsForConference: async (
     conference: RedirectUriSyncRow['conference'],
   ) => {
-    if (!conference?.organization) return false
-    const answer = workshops.get(conference.organization._ref) ?? true
-    if (answer instanceof Error) throw answer
-    return answer
+    const orgId = conference?.organization?._ref
+    if (!orgId || unreadableOrgs.has(orgId)) return false
+    return workshops.has(orgId) ? workshops.get(orgId) : true
   },
 }))
 
@@ -67,6 +73,9 @@ const { reconcileWorkshopRedirectUris } = await import('./reconcile')
 const NOW = new Date('2026-10-09T12:00:00.000Z')
 const PLATFORM_ORG = 'org-platform'
 const TENANT_ORG = 'org-tenant'
+const OTHER_TENANT_ORG = 'org-other-tenant'
+/** A host that always qualifies, so "registers nothing for X" can be asserted on a value. */
+const CONTROL = 'control.konf.run'
 
 let workos: FakeWorkOSRedirectUris
 
@@ -105,7 +114,6 @@ function seedHost(
     redirectUri: {
       status: null,
       id: null,
-      requestedAt: null,
       error: null,
       ...options.redirectUri,
     },
@@ -129,19 +137,26 @@ function stateOf(id: string): RedirectUriState {
   return rows.get(id)!.redirectUri
 }
 
+/** Another writer touched the record: its revision is no longer the one read. */
+function moveOn(id: string, change?: (row: RedirectUriSyncRow) => void): void {
+  const row = rows.get(id)!
+  change?.(row)
+  row.rev = `${row.rev}~`
+}
+
 beforeEach(() => {
   rows.clear()
   workshops.clear()
+  unreadableOrgs.clear()
   stateWrites.length = 0
-  listFails = false
-  recordsMoveAfterRead = false
+  storeReadFails = false
   vi.stubEnv('WORKOS_API_KEY', FAKE_WORKOS_API_KEY)
+  vi.stubEnv('VERCEL_ENV', 'production')
   vi.stubEnv('PLATFORM_ORG_ID', PLATFORM_ORG)
   vi.stubEnv('PLATFORM_DOMAIN_SUFFIX', 'konf.run')
   workos = installFakeWorkOSRedirectUris()
   workos.now = () => NOW
   vi.spyOn(console, 'error').mockImplementation(() => {})
-  vi.spyOn(console, 'warn').mockImplementation(() => {})
 })
 
 afterEach(() => {
@@ -162,10 +177,13 @@ describe('registering', () => {
     expect(stateOf(id)).toEqual({
       status: 'registered',
       id: workos.uris[0].id,
-      requestedAt: null,
       error: null,
     })
-    expect(summary.registered).toEqual(['kontainerkonf.konf.run'])
+    expect(summary).toMatchObject({
+      skipped: null,
+      wanted: 1,
+      registered: ['kontainerkonf.konf.run'],
+    })
   })
 
   it('registers a verified custom domain of the platform organization', async () => {
@@ -179,52 +197,66 @@ describe('registering', () => {
     expect(stateOf(id).status).toBe('registered')
   })
 
-  it("never registers a tenant's own verified domain", async () => {
-    const id = seedHost('conf.tenant.example.org', { org: TENANT_ORG })
+  it.each<[string, () => void]>([
+    [
+      "a tenant's own verified domain",
+      () => seedHost('conf.tenant.example.org', { org: TENANT_ORG }),
+    ],
+    [
+      'a wildcard claim',
+      () => seedHost('*.cloudnativedays.no', { org: PLATFORM_ORG }),
+    ],
+    [
+      'a host whose proof stopped resolving',
+      () =>
+        seedHost('2026.cloudnativedays.no', {
+          org: PLATFORM_ORG,
+          record: { status: 'failing' },
+        }),
+    ],
+    [
+      'a conference without workshops',
+      () => {
+        workshops.set(OTHER_TENANT_ORG, false)
+        seedAllocated('quiet.konf.run', { org: OTHER_TENANT_ORG })
+      },
+    ],
+    [
+      'a hostname that names a different host as a URL',
+      () => seedHost('127.1', { org: PLATFORM_ORG }),
+    ],
+  ])('registers nothing for %s', async (_, seedIt) => {
+    seedAllocated(CONTROL)
+    seedIt()
 
     const summary = await reconcileWorkshopRedirectUris(NOW)
 
-    expect(workos.requests).toEqual([])
-    expect(stateOf(id).status).toBeNull()
-    expect(summary.wanted).toBe(0)
+    expect(workos.uris.map((u) => u.uri)).toEqual([callback(CONTROL)])
+    expect(summary.wanted).toBe(1)
   })
 
-  it('registers nothing for a wildcard claim', async () => {
-    seedHost('*.cloudnativedays.no', { org: PLATFORM_ORG })
+  it('does not call WorkOS when no host qualifies and nothing is on record', async () => {
+    seedHost('conf.tenant.example.org', { org: TENANT_ORG })
 
-    await reconcileWorkshopRedirectUris(NOW)
+    const summary = await reconcileWorkshopRedirectUris(NOW)
 
-    expect(workos.requests).toEqual([])
-  })
-
-  it('registers nothing for a host whose proof has not resolved', async () => {
-    seedHost('2026.cloudnativedays.no', {
-      org: PLATFORM_ORG,
-      record: { status: 'failing', lastSuccessAt: null },
-    })
-
-    await reconcileWorkshopRedirectUris(NOW)
-
+    expect(summary).toMatchObject({ skipped: null, wanted: 0 })
     expect(workos.requests).toEqual([])
   })
 
-  it('registers nothing for a conference without workshops', async () => {
-    workshops.set(TENANT_ORG, false)
-    seedAllocated('kontainerkonf.konf.run')
-
-    await reconcileWorkshopRedirectUris(NOW)
-
-    expect(workos.requests).toEqual([])
-  })
-
-  it('does nothing at all without WORKOS_API_KEY', async () => {
-    vi.stubEnv('WORKOS_API_KEY', '')
-    listFails = true
+  it.each([
+    ['without WORKOS_API_KEY', 'WORKOS_API_KEY', '', 'no-api-key'],
+    ['on a preview deployment', 'VERCEL_ENV', 'preview', 'not-production'],
+    ['in local development', 'VERCEL_ENV', '', 'not-production'],
+  ])('does not run %s', async (_, name, value, skipped) => {
+    vi.stubEnv(name, value)
+    storeReadFails = true
     seedAllocated('kontainerkonf.konf.run')
 
     const summary = await reconcileWorkshopRedirectUris(NOW)
 
-    expect(summary).toMatchObject({ configured: false, error: null })
+    // `error: null` with a failing store shows the records were never read.
+    expect(summary).toMatchObject({ skipped, error: null })
     expect(workos.requests).toEqual([])
   })
 })
@@ -246,38 +278,39 @@ describe('a second run with nothing changed', () => {
   })
 
   it('finds its own URI beyond the first page of the list', async () => {
-    for (let i = 0; i < 120; i++)
+    for (let i = 0; i < 120; i++) {
       workos.seed(`https://other${i}.example.org/cb`)
-    seedAllocated('kontainerkonf.konf.run')
+    }
+    const id = seedAllocated('kontainerkonf.konf.run')
     await reconcileWorkshopRedirectUris(NOW)
     expect(workos.uris).toHaveLength(121)
     workos.requests.length = 0
 
     await reconcileWorkshopRedirectUris(NOW)
 
-    expect(workos.writes()).toEqual([])
-    expect(workos.requests.length).toBeGreaterThan(1)
+    expect(workos.uris).toHaveLength(121)
+    expect(stateOf(id)).toMatchObject({ status: 'registered', error: null })
+    expect(workos.requests.map((r) => r.method)).toEqual(['GET', 'GET'])
   })
 })
 
 describe('URIs this system did not create', () => {
   it('survive a reconcile that registers and removes others', async () => {
-    const byDefault = workos.seed(
-      'https://2025.cloudnativebergen.dev/api/auth/callback',
-    )
-    const byHand = workos.seed('https://staging.example.org/api/auth/callback')
+    const byDefault = workos.seed(callback('2025.cloudnativebergen.dev'))
+    const byHand = workos.seed(callback('staging.example.org'))
     seedAllocated('kontainerkonf.konf.run')
     const gone = seedAllocated('old.konf.run')
     await reconcileWorkshopRedirectUris(NOW)
     rows.get(gone)!.record.status = 'revoked'
 
-    await reconcileWorkshopRedirectUris(NOW)
+    const summary = await reconcileWorkshopRedirectUris(NOW)
 
-    expect(workos.uris).toContainEqual(byDefault)
-    expect(workos.uris).toContainEqual(byHand)
-    expect(workos.uris.map((u) => u.uri)).not.toContain(
-      callback('old.konf.run'),
-    )
+    expect(summary.removed).toEqual(['old.konf.run'])
+    expect(workos.uris.map((u) => u.uri)).toEqual([
+      byDefault.uri,
+      byHand.uri,
+      callback('kontainerkonf.konf.run'),
+    ])
   })
 
   it('are recorded as external, not registered again', async () => {
@@ -286,21 +319,60 @@ describe('URIs this system did not create', () => {
 
     await reconcileWorkshopRedirectUris(NOW)
 
-    expect(workos.writes()).toEqual([])
-    expect(stateOf(id)).toMatchObject({ status: 'external', id: null })
+    expect(workos.uris).toHaveLength(1)
+    expect(stateOf(id)).toEqual({ status: 'external', id: null, error: null })
   })
 
-  it('are left in WorkOS when their host is released', async () => {
+  it('are left in WorkOS when their host is released, and reported', async () => {
     const byHand = workos.seed(callback('kontainerkonf.konf.run'))
     const id = seedAllocated('kontainerkonf.konf.run')
     await reconcileWorkshopRedirectUris(NOW)
     rows.get(id)!.record.status = 'revoked'
 
+    const summary = await reconcileWorkshopRedirectUris(NOW)
+
+    expect(workos.uris).toEqual([byHand])
+    expect(stateOf(id)).toEqual({ status: null, id: null, error: null })
+    expect(summary.unaccounted).toEqual([byHand.uri])
+  })
+
+  it('include one added by hand after a create that got no answer', async () => {
+    const id = seedAllocated('kontainerkonf.konf.run')
+    workos.failNext('POST', 'network')
+    await reconcileWorkshopRedirectUris(NOW)
+    expect(workos.uris).toEqual([])
+    const byHand = workos.seed(callback('kontainerkonf.konf.run'))
+
+    await reconcileWorkshopRedirectUris(NOW)
+    expect(stateOf(id)).toMatchObject({ status: 'external', id: null })
+    rows.get(id)!.record.status = 'revoked'
     await reconcileWorkshopRedirectUris(NOW)
 
     expect(workos.uris).toEqual([byHand])
-    expect(workos.writes()).toEqual([])
-    expect(stateOf(id).status).toBeNull()
+  })
+
+  it('include its own create when the answer was lost: never claimed without an id', async () => {
+    const id = seedAllocated('kontainerkonf.konf.run')
+    workos.loseNextCreateResponse()
+    await reconcileWorkshopRedirectUris(NOW)
+    expect(workos.uris).toHaveLength(1)
+
+    await reconcileWorkshopRedirectUris(NOW)
+
+    expect(workos.uris).toHaveLength(1)
+    expect(stateOf(id)).toEqual({ status: 'external', id: null, error: null })
+  })
+
+  it('are reported as unaccounted only when they are callbacks nobody answers for', async () => {
+    const stray = workos.seed(callback('left-behind.example.org'))
+    workos.seed('https://app.example.org/some/other/redirect')
+    workos.seed(callback('external.konf.run'))
+    seedAllocated('external.konf.run')
+    seedAllocated('kontainerkonf.konf.run')
+
+    const summary = await reconcileWorkshopRedirectUris(NOW)
+
+    expect(summary.unaccounted).toEqual([stray.uri])
   })
 })
 
@@ -312,6 +384,7 @@ describe('removing', () => {
         : seedAllocated(hostname)
     await reconcileWorkshopRedirectUris(NOW)
     expect(stateOf(id).status).toBe('registered')
+    workos.requests.length = 0
     return id
   }
 
@@ -322,55 +395,58 @@ describe('removing', () => {
     const summary = await reconcileWorkshopRedirectUris(NOW)
 
     expect(workos.uris).toEqual([])
-    expect(stateOf(id)).toEqual({
-      status: null,
-      id: null,
-      requestedAt: null,
-      error: null,
-    })
+    expect(stateOf(id)).toEqual({ status: null, id: null, error: null })
     expect(summary.removed).toEqual(['kontainerkonf.konf.run'])
   })
 
-  it('deletes the URI of a host whose proof stopped resolving', async () => {
+  it.each<[string, (id: string) => void]>([
+    [
+      'whose proof stopped resolving',
+      (id) => {
+        rows.get(id)!.record.status = 'failing'
+      },
+    ],
+    [
+      'whose conference lost workshops',
+      () => {
+        workshops.set(PLATFORM_ORG, false)
+      },
+    ],
+    [
+      'that left the platform organization',
+      (id) => {
+        rows.get(id)!.conference = { organization: { _ref: TENANT_ORG } }
+      },
+    ],
+  ])('deletes the URI of a host %s', async (_, change) => {
     const id = await registered('2026.cloudnativedays.no', PLATFORM_ORG)
-    rows.get(id)!.record.status = 'failing'
+    change(id)
 
-    await reconcileWorkshopRedirectUris(NOW)
+    const summary = await reconcileWorkshopRedirectUris(NOW)
 
+    expect(summary.removed).toEqual(['2026.cloudnativedays.no'])
     expect(workos.uris).toEqual([])
   })
 
-  it('deletes the URI when the conference loses workshops', async () => {
-    await registered('kontainerkonf.konf.run')
-    workshops.set(TENANT_ORG, false)
-
-    await reconcileWorkshopRedirectUris(NOW)
-
-    expect(workos.uris).toEqual([])
-  })
-
-  it('deletes the URI of a custom domain that left the platform organization', async () => {
-    const id = await registered('2026.cloudnativedays.no', PLATFORM_ORG)
-    rows.get(id)!.conference = { organization: { _ref: TENANT_ORG } }
-
-    await reconcileWorkshopRedirectUris(NOW)
-
-    expect(workos.uris).toEqual([])
-  })
-
-  it.each([
-    ['could not say', null],
-    ['failed', new Error('organization read failed')],
-  ])('keeps the URI when the workshops gate %s', async (_, answer) => {
+  it.each<[string, () => void]>([
+    ['the workshops gate could not say', () => workshops.set(TENANT_ORG, null)],
+    [
+      'the organization could not be read',
+      () => unreadableOrgs.add(TENANT_ORG),
+    ],
+  ])('keeps the URI when %s', async (_, breakIt) => {
     const id = await registered('kontainerkonf.konf.run')
-    workshops.set(TENANT_ORG, answer)
-    workos.requests.length = 0
+    const before = structuredClone(workos.uris)
+    breakIt()
 
-    await reconcileWorkshopRedirectUris(NOW)
+    const summary = await reconcileWorkshopRedirectUris(NOW)
 
-    expect(workos.uris).toHaveLength(1)
-    expect(workos.writes()).toEqual([])
-    expect(stateOf(id).status).toBe('registered')
+    expect(workos.uris).toEqual(before)
+    expect(stateOf(id)).toMatchObject({
+      status: 'registered',
+      id: before[0].id,
+    })
+    expect(summary.removed).toEqual([])
   })
 
   it('registers again when its URI was deleted in the dashboard', async () => {
@@ -387,16 +463,15 @@ describe('removing', () => {
     expect(stateOf(id).id).not.toBe(first)
   })
 
-  it('forgets a URI that is already gone without calling WorkOS to delete it', async () => {
+  it('forgets a URI that is already gone without a delete', async () => {
     const id = await registered('kontainerkonf.konf.run')
     workos.uris.length = 0
     rows.get(id)!.record.status = 'revoked'
-    workos.requests.length = 0
 
     await reconcileWorkshopRedirectUris(NOW)
 
-    expect(workos.writes()).toEqual([])
-    expect(stateOf(id).id).toBeNull()
+    expect(stateOf(id)).toEqual({ status: null, id: null, error: null })
+    expect(workos.requests.map((r) => r.method)).toEqual(['GET'])
   })
 })
 
@@ -410,7 +485,6 @@ describe('when WorkOS fails', () => {
     expect(summary.error).toContain('503')
     expect(summary.errored).toEqual(['kontainerkonf.konf.run'])
     expect(stateOf(id).error).toContain('503')
-    expect(workos.writes()).toEqual([])
   })
 
   it('records a refused create and registers on the next run', async () => {
@@ -420,9 +494,9 @@ describe('when WorkOS fails', () => {
     const first = await reconcileWorkshopRedirectUris(NOW)
 
     expect(first.errored).toEqual(['kontainerkonf.konf.run'])
-    expect(stateOf(id)).toMatchObject({
+    expect(stateOf(id)).toEqual({
       status: null,
-      requestedAt: null,
+      id: null,
       error: expect.stringContaining('500'),
     })
 
@@ -430,61 +504,6 @@ describe('when WorkOS fails', () => {
 
     expect(second.registered).toEqual(['kontainerkonf.konf.run'])
     expect(stateOf(id)).toMatchObject({ status: 'registered', error: null })
-  })
-
-  it('recognises its own URI after a create whose answer was lost', async () => {
-    const id = seedAllocated('kontainerkonf.konf.run')
-    workos.loseNextCreateResponse()
-
-    await reconcileWorkshopRedirectUris(NOW)
-
-    expect(workos.uris).toHaveLength(1)
-    expect(stateOf(id)).toMatchObject({ status: 'registering', id: null })
-    workos.requests.length = 0
-
-    await reconcileWorkshopRedirectUris(new Date(NOW.getTime() + 86_400_000))
-
-    expect(workos.writes()).toEqual([])
-    expect(stateOf(id)).toEqual({
-      status: 'registered',
-      id: workos.uris[0].id,
-      requestedAt: null,
-      error: null,
-    })
-  })
-
-  it('does not claim a URI added by hand after a refused create', async () => {
-    const id = seedAllocated('kontainerkonf.konf.run')
-    workos.failNext('POST', { status: 500 })
-    await reconcileWorkshopRedirectUris(NOW)
-    const byHand = workos.seed(callback('kontainerkonf.konf.run'))
-
-    await reconcileWorkshopRedirectUris(NOW)
-    expect(stateOf(id)).toMatchObject({ status: 'external', id: null })
-    rows.get(id)!.record.status = 'revoked'
-    await reconcileWorkshopRedirectUris(NOW)
-
-    expect(workos.uris).toEqual([byHand])
-  })
-
-  it('does not claim a URI that is older than its own request', async () => {
-    const byHand = workos.seed(
-      callback('kontainerkonf.konf.run'),
-      '2026-10-09T10:00:00.000Z',
-    )
-    const id = seedAllocated('kontainerkonf.konf.run', {
-      redirectUri: {
-        status: 'registering',
-        requestedAt: '2026-10-09T11:00:00.000Z',
-      },
-    })
-
-    await reconcileWorkshopRedirectUris(NOW)
-    expect(stateOf(id)).toMatchObject({ status: 'external', id: null })
-    rows.get(id)!.record.status = 'revoked'
-    await reconcileWorkshopRedirectUris(NOW)
-
-    expect(workos.uris).toEqual([byHand])
   })
 
   it('records a refused delete, keeps the id and deletes on the next run', async () => {
@@ -497,35 +516,110 @@ describe('when WorkOS fails', () => {
     const first = await reconcileWorkshopRedirectUris(NOW)
 
     expect(first.errored).toEqual(['kontainerkonf.konf.run'])
+    expect(first.removed).toEqual([])
     expect(stateOf(id)).toMatchObject({
       id: registeredId,
       error: expect.stringContaining('500'),
     })
 
-    await reconcileWorkshopRedirectUris(NOW)
+    const second = await reconcileWorkshopRedirectUris(NOW)
 
+    expect(second.removed).toEqual(['kontainerkonf.konf.run'])
     expect(workos.uris).toEqual([])
     expect(stateOf(id).id).toBeNull()
   })
 })
 
-describe('when the records cannot be read or have moved on', () => {
+describe('when the records cannot be read or move on under the run', () => {
   it('does not throw when the read fails', async () => {
-    listFails = true
+    storeReadFails = true
 
     const summary = await reconcileWorkshopRedirectUris(NOW)
 
     expect(summary.error).toContain('sanity is down')
-    expect(workos.requests).toEqual([])
   })
 
-  it('does not call WorkOS for a record another writer changed first', async () => {
-    seedAllocated('kontainerkonf.konf.run')
-    recordsMoveAfterRead = true
+  it('removes the URI again when the host was released while it was being created', async () => {
+    const id = seedAllocated('kontainerkonf.konf.run')
+    let created = 0
+    workos.beforeAnswer = (method) => {
+      if (method !== 'POST') return
+      created = workos.uris.length
+      moveOn(id, (row) => {
+        row.record.status = 'revoked'
+      })
+    }
 
     const summary = await reconcileWorkshopRedirectUris(NOW)
 
-    expect(workos.writes()).toEqual([])
-    expect(summary.errored).toEqual(['kontainerkonf.konf.run'])
+    expect(created).toBe(1)
+    expect(workos.uris).toEqual([])
+    expect(stateOf(id).id).toBeNull()
+    expect(summary).toMatchObject({
+      registered: [],
+      errored: ['kontainerkonf.konf.run'],
+    })
+  })
+
+  it('records the id when the record was only re-checked while the URI was being created', async () => {
+    const id = seedAllocated('kontainerkonf.konf.run')
+    workos.beforeAnswer = (method) => {
+      if (method === 'POST') moveOn(id)
+    }
+
+    const summary = await reconcileWorkshopRedirectUris(NOW)
+
+    expect(workos.uris).toHaveLength(1)
+    expect(stateOf(id)).toEqual({
+      status: 'registered',
+      id: workos.uris[0].id,
+      error: null,
+    })
+    expect(summary.registered).toEqual(['kontainerkonf.konf.run'])
+  })
+
+  it('removes its own URI when an overlapping run registered the host first', async () => {
+    const id = seedAllocated('kontainerkonf.konf.run')
+    workos.beforeAnswer = (method) => {
+      if (method !== 'POST') return
+      moveOn(id, (row) => {
+        row.redirectUri = {
+          status: 'registered',
+          id: 'redir_theirs',
+          error: null,
+        }
+      })
+    }
+
+    await reconcileWorkshopRedirectUris(NOW)
+
+    expect(workos.uris).toEqual([])
+    expect(stateOf(id).id).toBe('redir_theirs')
+  })
+
+  it('puts the URI back when the host was wanted again while it was being deleted', async () => {
+    const id = seedHost('2026.cloudnativedays.no', { org: PLATFORM_ORG })
+    await reconcileWorkshopRedirectUris(NOW)
+    const first = stateOf(id).id
+    rows.get(id)!.record.status = 'failing'
+    workos.beforeAnswer = (method) => {
+      if (method !== 'DELETE') return
+      moveOn(id, (row) => {
+        row.record.status = 'verified'
+      })
+    }
+
+    const summary = await reconcileWorkshopRedirectUris(NOW)
+
+    expect(workos.uris.map((u) => u.uri)).toEqual([
+      callback('2026.cloudnativedays.no'),
+    ])
+    expect(stateOf(id)).toEqual({
+      status: 'registered',
+      id: workos.uris[0].id,
+      error: null,
+    })
+    expect(stateOf(id).id).not.toBe(first)
+    expect(summary.errored).toEqual([])
   })
 })

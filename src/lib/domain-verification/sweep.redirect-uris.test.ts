@@ -59,6 +59,10 @@ vi.mock('@/lib/features/workshops', () => ({
   resolveWorkshopsForConference: async () => true,
 }))
 
+vi.mock('@/lib/organization/sanity', () => ({
+  getOrganizationById: async (orgId: string) => ({ _id: orgId }),
+}))
+
 const { runDomainVerificationSweep } = await import('./sweep')
 
 let workos: FakeWorkOSRedirectUris
@@ -83,10 +87,11 @@ beforeEach(() => {
       lastError: null,
     },
     rev: 'rev-1',
-    redirectUri: { status: null, id: null, requestedAt: null, error: null },
+    redirectUri: { status: null, id: null, error: null },
     conference: { organization: { _ref: 'org-platform' } },
   }
   vi.stubEnv('WORKOS_API_KEY', FAKE_WORKOS_API_KEY)
+  vi.stubEnv('VERCEL_ENV', 'production')
   vi.stubEnv('PLATFORM_ORG_ID', 'org-platform')
   workos = installFakeWorkOSRedirectUris()
   workos.now = () => NOW

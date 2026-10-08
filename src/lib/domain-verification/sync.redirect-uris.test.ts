@@ -40,6 +40,10 @@ vi.mock('@/lib/features/workshops', () => ({
   resolveWorkshopsForConference: async () => true,
 }))
 
+vi.mock('@/lib/organization/sanity', () => ({
+  getOrganizationById: async (orgId: string) => ({ _id: orgId }),
+}))
+
 /** Work handed to `runAfterResponse`, held until the test runs it. */
 const afterResponse: (() => Promise<void>)[] = []
 vi.mock('@/server/runAfterResponse', () => ({
@@ -74,16 +78,19 @@ beforeEach(() => {
       lastError: null,
     },
     rev: 'rev-1',
-    redirectUri: { status: null, id: null, requestedAt: null, error: null },
+    redirectUri: { status: null, id: null, error: null },
     conference: { organization: { _ref: 'org-tenant' } },
   }
   vi.stubEnv('WORKOS_API_KEY', FAKE_WORKOS_API_KEY)
+  vi.stubEnv('VERCEL_ENV', 'production')
   vi.stubEnv('PLATFORM_DOMAIN_SUFFIX', 'konf.run')
   workos = installFakeWorkOSRedirectUris()
   vi.spyOn(console, 'error').mockImplementation(() => {})
 })
 
-afterEach(() => {
+afterEach(async () => {
+  // A queued reconcile that never starts would swallow the next test's.
+  for (const task of afterResponse) await task()
   vi.unstubAllEnvs()
   vi.unstubAllGlobals()
   vi.restoreAllMocks()
@@ -143,12 +150,19 @@ describe('syncDomainVerifications and the WorkOS redirect URIs', () => {
     expect(row.redirectUri.error).toContain('no answer from WorkOS')
   })
 
-  it('schedules nothing without WORKOS_API_KEY', async () => {
-    vi.stubEnv('WORKOS_API_KEY', '')
+  it('queues one reconcile for a mutation that writes twice', async () => {
     claimWrites = true
 
+    await syncDomainVerifications('conference-1', ['first.example.org'])
+    await syncDomainVerifications('conference-1', [HOST], [], {
+      allocatePlatformHosts: true,
+    })
+
+    expect(afterResponse).toHaveLength(1)
+
+    await afterResponse[0]()
     await syncDomainVerifications('conference-1', [HOST])
 
-    expect(afterResponse).toEqual([])
+    expect(afterResponse).toHaveLength(2)
   })
 })

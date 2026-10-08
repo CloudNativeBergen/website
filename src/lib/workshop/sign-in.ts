@@ -1,6 +1,6 @@
 import { isValidDomainEntry } from '@/lib/conference/domains'
 import { isVerifiedRedirectOrigin } from '@/lib/domain-verification/allowlist'
-import { WORKSHOP_AUTH_CALLBACK_PATH } from './sign-in-paths'
+import { workshopCallbackUri } from './sign-in-paths'
 
 /**
  * WHERE THE WORKSHOP PORTAL MAY SIGN IN (#1296, parent #1293 decisions 3 + 8).
@@ -59,7 +59,7 @@ function parseHost(host: string | null | undefined): URL | null {
 }
 
 function signInHost(origin: string): WorkshopSignInHost {
-  return { origin, redirectUri: `${origin}${WORKSHOP_AUTH_CALLBACK_PATH}` }
+  return { origin, redirectUri: workshopCallbackUri(origin) }
 }
 
 /**

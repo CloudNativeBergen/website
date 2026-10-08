@@ -44,6 +44,8 @@ export interface FakeWorkOSRedirectUris {
   loseNextCreateResponse(): void
   /** Answer creates with the object wrapped in `redirect_uri` (the docs show both). */
   wrapCreateResponse: boolean
+  /** Runs after a POST or DELETE took effect, before its answer is returned. */
+  beforeAnswer?: (method: Method) => void
   /** The clock `created_at` is stamped from. */
   now: () => Date
 }
@@ -144,6 +146,7 @@ export function installFakeWorkOSRedirectUris(): FakeWorkOSRedirectUris {
         loseCreateResponse = false
         throw new TypeError('fetch failed')
       }
+      fake.beforeAnswer?.(method)
       return json(fake.wrapCreateResponse ? { redirect_uri: created } : created)
     }
 
@@ -152,6 +155,7 @@ export function installFakeWorkOSRedirectUris(): FakeWorkOSRedirectUris {
       const index = fake.uris.findIndex((u) => u.id === id)
       if (index === -1) return json({ message: 'Not found' }, 404)
       fake.uris.splice(index, 1)
+      fake.beforeAnswer?.(method)
       return new Response(null, { status: 204 })
     }
 

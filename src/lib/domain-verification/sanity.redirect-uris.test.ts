@@ -80,20 +80,14 @@ describe('listRedirectUriSyncRows', () => {
       organization: { _type: 'reference', _ref: 'org-platform' },
       ticketingProvider: 'tito',
     })
-    expect(row.redirectUri).toEqual({
-      status: null,
-      id: null,
-      requestedAt: null,
-      error: null,
-    })
+    expect(row.redirectUri).toEqual({ status: null, id: null, error: null })
   })
 
   it('reads the stored redirect-URI state', async () => {
     dataset.push(
       verification('a.example.org', {
-        redirectUriStatus: 'registering',
+        redirectUriStatus: 'registered',
         redirectUriId: 'redir_1',
-        redirectUriRequestedAt: '2026-10-09T12:00:00.000Z',
         redirectUriError: 'HTTP 500',
       }),
     )
@@ -101,27 +95,29 @@ describe('listRedirectUriSyncRows', () => {
     const [row] = await listRedirectUriSyncRows()
 
     expect(row.redirectUri).toEqual({
-      status: 'registering',
+      status: 'registered',
       id: 'redir_1',
-      requestedAt: '2026-10-09T12:00:00.000Z',
       error: 'HTTP 500',
     })
   })
 
-  it('includes a released host that still has a URI on record', async () => {
-    dataset.push(
-      verification('gone.example.org', {
-        status: 'revoked',
-        redirectUriStatus: 'registered',
-        redirectUriId: 'redir_1',
-      }),
-    )
+  it.each([
+    ['a status', { redirectUriStatus: 'external' }],
+    ['an id', { redirectUriId: 'redir_1' }],
+    ['an error', { redirectUriError: 'HTTP 500' }],
+  ])(
+    'includes a released host that still has %s on record',
+    async (_, state) => {
+      dataset.push(
+        verification('gone.example.org', { status: 'revoked', ...state }),
+      )
 
-    const rows = await listRedirectUriSyncRows()
+      const rows = await listRedirectUriSyncRows()
 
-    expect(rows.map((r) => r.record.hostname)).toEqual(['gone.example.org'])
-    expect(rows[0].record.status).toBe('revoked')
-  })
+      expect(rows.map((r) => r.record.hostname)).toEqual(['gone.example.org'])
+      expect(rows[0].record.status).toBe('revoked')
+    },
+  )
 
   it('leaves out a host that was never proven and has nothing on record', async () => {
     dataset.push(verification('pending.example.org', { status: 'pending' }))
@@ -148,7 +144,6 @@ describe('patchRedirectUriState', () => {
     const rev = await patchRedirectUriState('domainVerification.a', 'rev-1', {
       status: 'registered',
       id: 'redir_1',
-      requestedAt: null,
       error: null,
     })
 
@@ -157,7 +152,7 @@ describe('patchRedirectUriState', () => {
         id: 'domainVerification.a',
         ifRevisionID: 'rev-1',
         set: { redirectUriStatus: 'registered', redirectUriId: 'redir_1' },
-        unset: ['redirectUriRequestedAt', 'redirectUriError'],
+        unset: ['redirectUriError'],
       },
     })
     expect(rev).toBe('rev-after')

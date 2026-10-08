@@ -358,7 +358,6 @@ export async function patchDomainVerification(
 const REDIRECT_URI_FIELDS = {
   status: 'redirectUriStatus',
   id: 'redirectUriId',
-  requestedAt: 'redirectUriRequestedAt',
   error: 'redirectUriError',
 } as const satisfies Record<keyof RedirectUriState, string>
 
@@ -366,7 +365,6 @@ type RawSyncRow = RawRecord & {
   _rev: string
   redirectUriStatus?: RedirectUriState['status']
   redirectUriId?: string | null
-  redirectUriRequestedAt?: string | null
   redirectUriError?: string | null
   conference?: RedirectUriSyncRow['conference']
 }
@@ -381,11 +379,10 @@ type RawSyncRow = RawRecord & {
 export async function listRedirectUriSyncRows(): Promise<RedirectUriSyncRow[]> {
   const rows = await clientReadUncached.fetch<RawSyncRow[] | null>(
     // groq-global: the WorkOS redirect-URI list is one per environment and spans every tenant by design.
-    `*[_type == "domainVerification" && (status == "verified" || method in ["grandfathered", "platform-owned"] || defined(redirectUriStatus) || defined(redirectUriId))] | order(hostname asc) {${FIELDS},
+    `*[_type == "domainVerification" && (status == "verified" || method in ["grandfathered", "platform-owned"] || defined(redirectUriStatus) || defined(redirectUriId) || defined(redirectUriError))] | order(hostname asc) {${FIELDS},
       _rev,
       redirectUriStatus,
       redirectUriId,
-      redirectUriRequestedAt,
       redirectUriError,
       "conference": conference->{ organization, ticketingProvider }
     }`,
@@ -395,7 +392,6 @@ export async function listRedirectUriSyncRows(): Promise<RedirectUriSyncRow[]> {
       _rev,
       redirectUriStatus,
       redirectUriId,
-      redirectUriRequestedAt,
       redirectUriError,
       conference,
       ...raw
@@ -405,7 +401,6 @@ export async function listRedirectUriSyncRows(): Promise<RedirectUriSyncRow[]> {
       redirectUri: {
         status: redirectUriStatus ?? null,
         id: redirectUriId ?? null,
-        requestedAt: redirectUriRequestedAt ?? null,
         error: redirectUriError ?? null,
       },
       conference: conference ?? null,
@@ -417,9 +412,9 @@ export async function listRedirectUriSyncRows(): Promise<RedirectUriSyncRow[]> {
  * Write part of a host's redirect-URI state, ONLY IF the record is still at
  * `ifRevisionId`. `null` clears a field. Returns the record's new revision.
  *
- * The condition is what keeps two reconciles (a mutation's and the sweep's)
- * from both acting on one host: the second writer's patch is rejected by
- * Sanity, and it stops.
+ * The condition is how a reconcile learns the record moved on under it (a
+ * release, a re-claim, a re-check, an overlapping run): Sanity rejects the
+ * patch, and the caller reads the record again before deciding anything.
  */
 export async function patchRedirectUriState(
   id: string,
