@@ -339,3 +339,53 @@ describe('workshop proxy — localhost', () => {
     expect(buildAuthorizationUrl).not.toHaveBeenCalled()
   })
 })
+
+/**
+ * ONLY A NAVIGATION IS BOUNCED INTO A SIGN-IN. A POST under `/workshop` is a
+ * server action (today: Sign Out). Redirecting it to WorkOS helps nobody — the
+ * action client cannot follow a cross-origin redirect, so the attendee gets an
+ * error, and the POST is lost either way. So a signed-out POST is let through
+ * and the action decides for itself, as an action must anyway: it can be
+ * posted to paths this proxy never sees.
+ */
+describe('workshop proxy — a POST is never redirected to WorkOS', () => {
+  function post(host: string, headers: Record<string, string> = {}) {
+    return new NextRequest(`https://${host}/workshop`, {
+      method: 'POST',
+      headers: new Headers({ host, accept: 'text/x-component', ...headers }),
+    })
+  }
+
+  it.each([
+    ['a server-action POST', { 'next-action': 'a1b2c3' }],
+    ['a plain form POST (no JavaScript)', {}],
+  ])(
+    'lets %s through, signed out, with no redirect and no cookie',
+    async (_label, headers) => {
+      const response = await run(post(TENANT_A, headers))
+
+      expect(response.headers.get('x-middleware-next')).toBe('1')
+      expect(response.headers.get('location')).toBeNull()
+      expect(response.headers.getSetCookie()).toEqual([])
+    },
+  )
+
+  it('still refuses a POST on a host that may not sign in', async () => {
+    const response = await run(post(UNVERIFIED, { 'next-action': 'a1b2c3' }))
+
+    expect(response.status).toBe(404)
+    expect(buildAuthorizationUrl).not.toHaveBeenCalled()
+  })
+
+  it('still redirects a GET and a HEAD on the same path', async () => {
+    for (const method of ['GET', 'HEAD']) {
+      const response = await run(
+        new NextRequest(`https://${TENANT_A}/workshop`, {
+          method,
+          headers: new Headers({ host: TENANT_A, accept: 'text/html' }),
+        }),
+      )
+      expect(response.status).toBe(307)
+    }
+  })
+})

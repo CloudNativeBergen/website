@@ -304,6 +304,21 @@ describe('signOutOfWorkshop', () => {
     expect(setCookies()).toEqual([])
   })
 
+  /**
+   * The session ended elsewhere (another tab, a revocation). The proxy lets the
+   * POST through with no session; the action must finish cleanly — not throw —
+   * and leave the attendee on this host, signed out.
+   */
+  it('with no session left, lands on this host’s home page without going to WorkOS', async () => {
+    onHost(TENANT_A, { 'x-workos-middleware': 'true' })
+    const buildLogoutUrl = vi.spyOn(getWorkOS().userManagement, 'getLogoutUrl')
+
+    const target = await redirectTarget(() => signOutOfWorkshop())
+
+    expect(target).toBe(`https://${TENANT_A}/`)
+    expect(buildLogoutUrl).not.toHaveBeenCalled()
+  })
+
   it('removes the session cookie on this host', async () => {
     await signedInOn(TENANT_A)
     await redirectTarget(() => signOutOfWorkshop())
