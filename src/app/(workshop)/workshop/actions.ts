@@ -2,6 +2,7 @@
 
 import { signOut } from '@workos-inc/authkit-nextjs'
 import { headers } from 'next/headers'
+import { notFound } from 'next/navigation'
 import {
   resolveWorkshopSignInHost,
   workshopRequestHost,
@@ -19,10 +20,17 @@ import {
  * origin that matched the allowlist. WorkOS only honours a `return_to` that is
  * registered as a Sign-out redirect for the environment; what it does with one
  * that is not is undocumented (see the PR for #1296).
+ *
+ * THE HOST DECISION COMES FIRST HERE TOO. A server action is not bound to the
+ * page that rendered it: its id can be POSTed to any path, including ones the
+ * proxy never sees. So this takes the decision itself, and a host that may not
+ * sign in gets the same 404 as everywhere else — the SDK is not entered.
  */
 export async function signOutOfWorkshop(): Promise<void> {
   const signIn = await resolveWorkshopSignInHost(
     workshopRequestHost(await headers()),
   )
-  await signOut(signIn ? { returnTo: `${signIn.origin}/` } : undefined)
+  if (!signIn) notFound()
+
+  await signOut({ returnTo: `${signIn.origin}/` })
 }

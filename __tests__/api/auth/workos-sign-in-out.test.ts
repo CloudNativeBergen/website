@@ -10,15 +10,21 @@
  *    which never ended the WorkOS session at all.
  *
  * Boundaries supplied: the Sanity read behind the allowlist, WorkOS's token
- * endpoint, and `next/headers` (backed by a real `NextResponse`, so cookies are
- * serialized by Next). `next/navigation` is the real one: `redirect()` throws,
- * and the destination is read off the error the way Next itself does.
+ * endpoint, and `next/headers` (backed by a real `NextResponse`, see
+ * `nextHeadersJar.ts`, so cookies are serialized by Next). `next/navigation` is
+ * the real one: `redirect()` and `notFound()` throw, and the outcome is read
+ * off the error's digest the way Next itself does.
  */
 import '../../helpers/workosEnv'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import type { DomainVerificationRecord } from '@/lib/domain-verification/types'
 import { verifiedHost } from '../../helpers/workshopSignIn'
+import {
+  beginRequest,
+  presentCookie,
+  writtenCookies,
+} from '../../helpers/nextHeadersJar'
 
 // The suite-wide `jose` alias is a stub without `decodeJwt`. Sign-out reads the
 // session id out of the access token, so this file runs the real package (the
@@ -37,16 +43,7 @@ vi.mock('@/lib/domain-verification/sanity', () => ({
   listAllowlistCandidates: () => listAllowlistCandidates(),
 }))
 
-/** What `next/headers` hands the code under test for the current "request". */
-const io = vi.hoisted(() => ({
-  response: null as unknown,
-  requestHeaders: new Headers(),
-}))
-
-vi.mock('next/headers', () => ({
-  cookies: async () => (io.response as NextResponse).cookies,
-  headers: async () => io.requestHeaders,
-}))
+vi.mock('next/headers', () => import('../../helpers/nextHeadersJar'))
 
 import { GET as signIn } from '@/app/(workshop)/workshop/sign-in/route'
 import { GET as signUp } from '@/app/(workshop)/workshop/sign-up/route'
@@ -77,16 +74,14 @@ function accessToken(claims: Record<string, unknown>): string {
 
 /** Begin a "request" on `host`: fresh cookie jar, these request headers. */
 function onHost(host: string, headers: Record<string, string> = {}) {
-  io.response = NextResponse.next()
-  io.requestHeaders = new Headers({ host, ...headers })
+  const requestHeaders = new Headers({ host, ...headers })
+  beginRequest(requestHeaders)
   return new NextRequest(`https://${host}/workshop/sign-in`, {
-    headers: io.requestHeaders,
+    headers: requestHeaders,
   })
 }
 
-function setCookies(): string[] {
-  return (io.response as NextResponse).headers.getSetCookie()
-}
+const setCookies = writtenCookies
 
 /** Where a thrown `redirect()` points, read the way Next reads it. */
 async function redirectTarget(run: () => Promise<unknown>): Promise<string> {
@@ -236,8 +231,7 @@ async function signedInOn(host: string) {
     'x-workos-middleware': 'true',
     'x-workos-session': sealed,
   })
-  ;(io.response as NextResponse).cookies.set('wos-session', sealed)
-  ;(io.response as NextResponse).headers.delete('set-cookie')
+  presentCookie('wos-session', sealed)
 }
 
 describe('signOutOfWorkshop', () => {
@@ -274,9 +268,30 @@ describe('signOutOfWorkshop', () => {
     expect(cleared).not.toMatch(/;\s*domain=/i)
   })
 
-  it('never points at NextAuth’s sign-out route', async () => {
+  /**
+   * A server action can be POSTed to any path, so the action takes the host
+   * decision itself. On a host that may not sign in it answers 404 and the SDK
+   * is not entered: the session cookie is left alone and nobody is sent to
+   * WorkOS.
+   */
+  it('refuses on a host that is not allowlisted — a 404, and the SDK is never entered', async () => {
     await signedInOn(TENANT_A)
-    const target = await redirectTarget(() => signOutOfWorkshop())
-    expect(target).not.toContain('/api/auth/signout')
+    // The same signed-in request, but the host has since been delisted.
+    listAllowlistCandidates.mockResolvedValue([verifiedHost(TENANT_B)])
+    const buildLogoutUrl = vi.spyOn(getWorkOS().userManagement, 'getLogoutUrl')
+
+    const digest = await signOutOfWorkshop().then(
+      () => 'resolved',
+      (error: { digest?: string }) => error.digest ?? String(error),
+    )
+
+    expect(digest).toBe('NEXT_HTTP_ERROR_FALLBACK;404')
+    expect(buildLogoutUrl).not.toHaveBeenCalled()
+    expect(setCookies()).toEqual([])
+
+    // CONTROL: on the allowlisted host the same call does build it.
+    listAllowlistCandidates.mockResolvedValue([verifiedHost(TENANT_A)])
+    await redirectTarget(() => signOutOfWorkshop())
+    expect(buildLogoutUrl).toHaveBeenCalledOnce()
   })
 })

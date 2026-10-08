@@ -1,11 +1,8 @@
 import 'server-only'
 import { getSignInUrl, getSignUpUrl } from '@workos-inc/authkit-nextjs'
 import { NextResponse, type NextRequest } from 'next/server'
-import {
-  WORKSHOP_PORTAL_PATH,
-  resolveWorkshopSignInHost,
-  workshopRequestHost,
-} from './sign-in'
+import { resolveWorkshopSignInHost, workshopRequestHost } from './sign-in'
+import { WORKSHOP_PORTAL_PATH } from './sign-in-paths'
 
 /**
  * Start a WorkOS sign-in or sign-up for the workshop portal (#1296) — the route

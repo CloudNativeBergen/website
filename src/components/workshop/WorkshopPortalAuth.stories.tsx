@@ -53,6 +53,18 @@ export const SignedOutLongTitleMobile: Story = {
       'KubeCon + CloudNativeCon Europe Community Co-located Workshop Days 2026',
   },
   parameters: { viewport: { defaultViewport: 'mobile1' } },
+  play: async ({ canvasElement }) => {
+    // The claim above, asserted: nothing is wider than the viewport, and both
+    // buttons sit inside it.
+    const page = canvasElement.ownerDocument.documentElement
+    await expect(page.scrollWidth).toBeLessThanOrEqual(page.clientWidth)
+    for (const name of ['Sign In', 'Create Account']) {
+      const { right } = within(canvasElement)
+        .getByRole('link', { name })
+        .getBoundingClientRect()
+      await expect(right).toBeLessThanOrEqual(page.clientWidth)
+    }
+  },
 }
 
 /**

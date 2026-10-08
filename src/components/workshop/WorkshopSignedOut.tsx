@@ -5,7 +5,7 @@ import { BackgroundImage } from '@/components/BackgroundImage'
 import {
   WORKSHOP_SIGN_IN_PATH,
   WORKSHOP_SIGN_UP_PATH,
-} from '@/lib/workshop/sign-in'
+} from '@/lib/workshop/sign-in-paths'
 
 /**
  * The workshop portal for a visitor with no session (#1296).

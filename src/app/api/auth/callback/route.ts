@@ -1,10 +1,10 @@
 import { handleAuth } from '@workos-inc/authkit-nextjs'
 import { NextResponse, type NextRequest } from 'next/server'
 import {
-  WORKSHOP_PORTAL_PATH,
   resolveWorkshopSignInHost,
   workshopRequestHost,
 } from '@/lib/workshop/sign-in'
+import { WORKSHOP_PORTAL_PATH } from '@/lib/workshop/sign-in-paths'
 
 /**
  * Where WorkOS sends the workshop attendee back with an authorization code

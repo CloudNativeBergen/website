@@ -17,8 +17,9 @@
  */
 import '../../helpers/workosEnv'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { NextRequest, NextResponse, type NextFetchEvent } from 'next/server'
+import { NextRequest, type NextFetchEvent } from 'next/server'
 import { verifiedHost } from '../../helpers/workshopSignIn'
+import { beginRequest } from '../../helpers/nextHeadersJar'
 
 const HOST = 'conf.example.org'
 
@@ -36,15 +37,7 @@ vi.mock('@/lib/sanity/client', async (importOriginal) => ({
   clientReadUncached: { fetch: (query: string) => liveReads(query) },
 }))
 
-const io = vi.hoisted(() => ({
-  response: null as unknown,
-  requestHeaders: new Headers(),
-}))
-
-vi.mock('next/headers', () => ({
-  cookies: async () => (io.response as NextResponse).cookies,
-  headers: async () => io.requestHeaders,
-}))
+vi.mock('next/headers', () => import('../../helpers/nextHeadersJar'))
 
 vi.mock('@/lib/auth', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/auth')>()),
@@ -68,15 +61,13 @@ function request(
   init: { host?: string; cookie?: string } = {},
 ): NextRequest {
   const host = init.host ?? HOST
-  io.response = NextResponse.next()
-  io.requestHeaders = new Headers({
+  const headers = new Headers({
     host,
     accept: 'text/html',
     ...(init.cookie ? { cookie: init.cookie } : {}),
   })
-  return new NextRequest(`https://${host}${path}`, {
-    headers: io.requestHeaders,
-  })
+  beginRequest(headers)
+  return new NextRequest(`https://${host}${path}`, { headers })
 }
 
 const event = {} as NextFetchEvent

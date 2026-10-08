@@ -10,14 +10,19 @@
  *  - the Sanity read behind the verified-redirect allowlist;
  *  - WorkOS's token endpoint (`authenticateWithCode`), the one network call.
  *
- * `next/headers` is backed by a real `NextResponse`, so the session cookie
- * asserted below is serialized by Next's own cookie code, not by a fake.
+ * `next/headers` is backed by a real `NextResponse` (see `nextHeadersJar.ts`),
+ * so the session cookie asserted below is serialized by Next's own cookie code.
+ *
+ * The suite-wide `jose` stub is in force here and does not matter: the callback
+ * handler never touches `jose` (it seals whatever tokens WorkOS returns), which
+ * is why a non-JWT access token is enough for these cases.
  */
 import '../../helpers/workosEnv'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { NextRequest, NextResponse, type NextFetchEvent } from 'next/server'
+import { NextRequest, type NextFetchEvent } from 'next/server'
 import type { DomainVerificationRecord } from '@/lib/domain-verification/types'
 import { verifiedHost } from '../../helpers/workshopSignIn'
+import { beginRequest, writtenCookies } from '../../helpers/nextHeadersJar'
 
 const listAllowlistCandidates =
   vi.fn<() => Promise<DomainVerificationRecord[]>>()
@@ -26,13 +31,7 @@ vi.mock('@/lib/domain-verification/sanity', () => ({
   listAllowlistCandidates: () => listAllowlistCandidates(),
 }))
 
-/** The response whose cookie jar stands in for the route handler's. */
-const jar = vi.hoisted(() => ({ response: null as unknown }))
-
-vi.mock('next/headers', () => ({
-  cookies: async () => (jar.response as NextResponse).cookies,
-  headers: async () => new Headers(),
-}))
+vi.mock('next/headers', () => import('../../helpers/nextHeadersJar'))
 
 import middleware from '@/proxy'
 import { GET } from '@/app/api/auth/callback/route'
@@ -90,14 +89,12 @@ function callback(
 
 /** The session cookie the handler wrote, as Next serializes it. */
 function sessionCookie(): string | undefined {
-  return (jar.response as NextResponse).headers
-    .getSetCookie()
-    .find((c) => c.startsWith('wos-session='))
+  return writtenCookies().find((c) => c.startsWith('wos-session='))
 }
 
 beforeEach(() => {
   vi.clearAllMocks()
-  jar.response = NextResponse.next()
+  beginRequest()
   listAllowlistCandidates.mockResolvedValue([
     verifiedHost(TENANT_A),
     verifiedHost(TENANT_B),

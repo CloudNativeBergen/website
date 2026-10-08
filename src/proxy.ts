@@ -7,11 +7,13 @@ import {
 import { AppEnvironment } from '@/lib/environment/config'
 import { authkitMiddleware } from '@workos-inc/authkit-nextjs'
 import {
-  WORKSHOP_SIGN_IN_PATH,
-  WORKSHOP_SIGN_UP_PATH,
   resolveWorkshopSignInHost,
   workshopRequestHost,
 } from '@/lib/workshop/sign-in'
+import {
+  WORKSHOP_SIGN_IN_PATH,
+  WORKSHOP_SIGN_UP_PATH,
+} from '@/lib/workshop/sign-in-paths'
 
 // The session cookie's `Domain` is rewritten PER REQUEST for every response
 // this produces: `auth` itself applies it to its handler-wrapper form (see

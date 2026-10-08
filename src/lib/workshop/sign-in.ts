@@ -1,5 +1,6 @@
 import { isValidDomainEntry } from '@/lib/conference/domains'
 import { isVerifiedRedirectOrigin } from '@/lib/domain-verification/allowlist'
+import { WORKSHOP_AUTH_CALLBACK_PATH } from './sign-in-paths'
 
 /**
  * WHERE THE WORKSHOP PORTAL MAY SIGN IN (#1296, parent #1293 decisions 3 + 8).
@@ -12,8 +13,8 @@ import { isVerifiedRedirectOrigin } from '@/lib/domain-verification/allowlist'
  * {@link resolveWorkshopSignInHost} is the one decision every WorkOS entry point
  * takes BEFORE it touches the SDK — the proxy on `/workshop*`, the
  * `/api/auth/callback` route, the tRPC attendee identity, the sign-in and
- * sign-up routes and the sign-out action. A `null` means: no authorize URL is
- * built, no code is exchanged, no session is read.
+ * sign-up routes and the sign-out action. A `null` means the caller stops: no
+ * authorize URL is built, no code is exchanged, no session is read.
  *
  * THE HOST HEADER IS NEVER TRUSTED ON ITS OWN. The value is first held to the
  * shape of a host (`hostname[:port]`, nothing a URL parser could read as
@@ -31,16 +32,6 @@ import { isVerifiedRedirectOrigin } from '@/lib/domain-verification/allowlist'
  * FAIL CLOSED: an absent or malformed host, an unverified host, a failed
  * allowlist read and a configured `WORKOS_COOKIE_DOMAIN` all answer `null`.
  */
-
-/** The AuthKit callback route, the same path on every host. */
-export const WORKSHOP_AUTH_CALLBACK_PATH = '/api/auth/callback'
-
-/** SDK-backed entry points that start a sign-in or a sign-up (#1296). */
-export const WORKSHOP_SIGN_IN_PATH = '/workshop/sign-in'
-export const WORKSHOP_SIGN_UP_PATH = '/workshop/sign-up'
-
-/** Where a completed sign-in lands. */
-export const WORKSHOP_PORTAL_PATH = '/workshop'
 
 export interface WorkshopSignInHost {
   /** `scheme://host[:port]` of the host the attendee is on. */

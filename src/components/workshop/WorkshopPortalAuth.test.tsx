@@ -14,23 +14,27 @@ describe('WorkshopSignedOut', () => {
     <WorkshopSignedOut conferenceTitle="Cloud Native Days Norway 2026" />,
   )
 
-  it('links to the SDK-backed sign-in and sign-up routes on THIS host', () => {
-    expect(markup).toContain('href="/workshop/sign-in"')
-    expect(markup).toContain('href="/workshop/sign-up"')
+  /** Every link target in the markup, in order. */
+  const hrefs = [...markup.matchAll(/href="([^"]*)"/g)].map(([, href]) => href)
+
+  it('links to the SDK-backed sign-in and sign-up routes, and to nothing off this host', () => {
+    // The WHOLE set of link targets: two first-party routes that start the
+    // flow through the SDK, and the two legal pages. A hand-built
+    // `api.workos.com` authorize URL would be a fifth entry and fail this.
+    expect(hrefs).toEqual([
+      '/workshop/sign-in',
+      '/workshop/sign-up',
+      '/terms',
+      '/privacy',
+    ])
     expect(markup).toContain('Sign In')
     expect(markup).toContain('Create Account')
   })
 
-  it('carries no hand-built authorize URL', () => {
-    expect(markup).not.toContain('api.workos.com')
-    expect(markup).not.toContain('client_id')
-    expect(markup).not.toContain('redirect_uri')
-  })
-
-  it('names the conference and keeps the legal links', () => {
-    expect(markup).toContain('Cloud Native Days Norway 2026')
-    expect(markup).toContain('href="/terms"')
-    expect(markup).toContain('href="/privacy"')
+  it('names the conference', () => {
+    expect(markup).toContain(
+      'Sign in to register for workshops at Cloud Native Days Norway 2026.',
+    )
   })
 })
 
@@ -39,14 +43,12 @@ describe('WorkshopSignOutButton', () => {
     <WorkshopSignOutButton action={async () => {}} />,
   )
 
-  it('is a form that POSTS — a submit button, not a link', () => {
+  it('is a form with one submit button and no link at all', () => {
     expect(markup).toMatch(/^<form/)
-    expect(markup).toMatch(/<button[^>]*type="submit"/)
-    expect(markup).toContain('Sign Out')
-    expect(markup).not.toContain('<a ')
-  })
-
-  it('does not point at NextAuth’s sign-out route', () => {
-    expect(markup).not.toContain('/api/auth/signout')
+    expect(
+      markup.match(/<button[^>]*type="submit"[^>]*>Sign Out<\/button>/),
+    ).not.toBeNull()
+    // Nothing navigates: the old control was an `<a href="/api/auth/signout…">`.
+    expect([...markup.matchAll(/<a\b|href=/g)]).toHaveLength(0)
   })
 })

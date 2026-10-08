@@ -32,7 +32,8 @@ import {
   repoRelative,
 } from '../../helpers/serverModuleGraph'
 
-const CLIENT_ENTRY = '@workos-inc/authkit-nextjs/components'
+const SDK_PACKAGE = '@workos-inc/authkit-nextjs'
+const CLIENT_ENTRY = `${SDK_PACKAGE}/components`
 
 describe('the AuthKit client entry', () => {
   it('is imported by no application module', () => {
@@ -44,12 +45,35 @@ describe('the AuthKit client entry', () => {
     expect(sources.length).toBeGreaterThan(500)
     expect(sources.map(repoRelative)).toContain('src/app/(workshop)/layout.tsx')
 
-    const importers = sources.filter((file) =>
-      findRuntimeModuleImports(readFileSync(file, 'utf8'), file).some(
-        ({ specifier }) => specifier.startsWith(CLIENT_ENTRY),
-      ),
-    )
+    // Only a file whose TEXT mentions the package can import it, so only those
+    // are handed to the compiler. Parsing all ~3,000 sources takes over ten
+    // seconds under CI's coverage instrumentation.
+    const importers = sources.filter((file) => {
+      const source = readFileSync(file, 'utf8')
+      return (
+        source.includes(SDK_PACKAGE) &&
+        findRuntimeModuleImports(source, file).some(({ specifier }) =>
+          specifier.startsWith(CLIENT_ENTRY),
+        )
+      )
+    })
 
     expect(importers.map(repoRelative)).toEqual([])
+  })
+
+  it('would be caught: the guard sees every way a module can reach it', () => {
+    // CONTROL for the empty result above — the same finder, on the shapes an
+    // import can take, so "no importers" is not a blind finder.
+    for (const source of [
+      `import { AuthKitProvider } from '${CLIENT_ENTRY}'`,
+      `export { AuthKitProvider } from "${CLIENT_ENTRY}"`,
+      `export * from '${CLIENT_ENTRY}'`,
+      `const m = await import('${CLIENT_ENTRY}')`,
+      `import '${CLIENT_ENTRY}'`,
+    ]) {
+      expect(
+        findRuntimeModuleImports(source).map(({ specifier }) => specifier),
+      ).toEqual([CLIENT_ENTRY])
+    }
   })
 })
