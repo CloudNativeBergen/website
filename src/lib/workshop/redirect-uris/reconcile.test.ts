@@ -397,6 +397,8 @@ describe('removing', () => {
     expect(workos.uris).toEqual([])
     expect(stateOf(id)).toEqual({ status: null, id: null, error: null })
     expect(summary.removed).toEqual(['kontainerkonf.konf.run'])
+    // It is ours and is being removed: not something for a person to decide.
+    expect(summary.unaccounted).toEqual([])
   })
 
   it.each<[string, (id: string) => void]>([
