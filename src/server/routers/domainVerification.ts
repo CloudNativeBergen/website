@@ -10,6 +10,7 @@ import {
   syncDomainVerifications,
   toDomainVerificationView,
 } from '@/lib/domain-verification'
+import { scheduleRedirectUriReconcile } from '@/lib/workshop/redirect-uris'
 
 /**
  * Domain ownership verification, admin side (#683).
@@ -86,6 +87,9 @@ export const domainVerificationRouter = router({
       }
 
       const { record: updated } = await recheckDomainRecord(record)
+      // A proof that just resolved, or just stopped, changes whether this host
+      // may sign in to the workshop portal (#1297).
+      scheduleRedirectUriReconcile()
       return { domain: toDomainVerificationView(hostname, updated) }
     }),
 })

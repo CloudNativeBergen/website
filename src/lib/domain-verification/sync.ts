@@ -10,6 +10,7 @@
  */
 
 import { normalizeDomain } from '@/lib/conference/domains'
+import { scheduleRedirectUriReconcile } from '@/lib/workshop/redirect-uris'
 import { isPlatformZoneHost } from './platform'
 import {
   ensureDomainVerification,
@@ -34,6 +35,11 @@ import { toDomainVerificationView, type DomainVerificationView } from './view'
  * fails CLOSED downstream (unrouted under enforcement, never allowlisted) and is
  * repaired by the next admin re-check or backfill run, so swallowing the error
  * cannot silently grant anything.
+ *
+ * A claim or a release can change which hosts may sign in to the workshop
+ * portal, so whenever a record was actually WRITTEN the WorkOS redirect URIs are
+ * reconciled after the response (#1297). Never when nothing changed: the admin
+ * card calls this on every load to self-heal.
  */
 export async function syncDomainVerifications(
   conferenceId: string,
@@ -42,15 +48,18 @@ export async function syncDomainVerifications(
   options: { allocatePlatformHosts?: boolean } = {},
 ): Promise<void> {
   const claimed = new Set(domains.map(normalizeDomain).filter(Boolean))
+  let changed = false
   try {
     for (const hostname of claimed) {
-      await ensureDomainVerification(hostname, conferenceId, {
+      const wrote = await ensureDomainVerification(hostname, conferenceId, {
         allocatePlatformHost: options.allocatePlatformHosts === true,
       })
+      changed ||= wrote
     }
     for (const hostname of removed.map(normalizeDomain).filter(Boolean)) {
       if (claimed.has(hostname)) continue
-      await revokeDomainVerification(hostname, conferenceId)
+      const revoked = await revokeDomainVerification(hostname, conferenceId)
+      changed ||= revoked
     }
   } catch (error) {
     console.error(
@@ -58,6 +67,7 @@ export async function syncDomainVerifications(
       error,
     )
   }
+  if (changed) scheduleRedirectUriReconcile()
 }
 
 /**

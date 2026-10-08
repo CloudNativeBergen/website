@@ -16,6 +16,10 @@
  */
 
 import { createNotifications } from '@/lib/notification/sanity'
+import {
+  reconcileWorkshopRedirectUris,
+  type RedirectUriReconcileSummary,
+} from '@/lib/workshop/redirect-uris'
 import { checkDomainChallenge } from './dns'
 import { isPlatformAllocated } from './platform'
 import { applyCheckOutcome, isAllowlistEligible } from './policy'
@@ -41,6 +45,8 @@ export interface DomainVerificationSweepSummary {
   delisted: string[]
   /** Records whose write-back or alert threw. The sweep continues regardless. */
   errored: string[]
+  /** The WorkOS redirect-URI reconcile that follows the re-checks (#1297). */
+  redirectUris: RedirectUriReconcileSummary
 }
 
 async function mapWithConcurrency<T, R>(
@@ -136,12 +142,17 @@ export async function recheckDomainRecord(
  * Re-check every non-revoked claim. Never throws: a single record's failure is
  * recorded in the summary and the sweep moves on, so one broken tenant cannot
  * stop the platform-wide re-verification.
+ *
+ * THEN reconcile WorkOS's redirect URIs (#1297), once, against what the
+ * re-checks just wrote: a host delisted by this sweep loses its URI in this
+ * sweep, and anything an earlier attempt failed to register or remove is
+ * retried here.
  */
 export async function runDomainVerificationSweep(
   now: Date = new Date(),
 ): Promise<DomainVerificationSweepSummary> {
   const records = await listAllDomainVerifications()
-  const summary: DomainVerificationSweepSummary = {
+  const summary: Omit<DomainVerificationSweepSummary, 'redirectUris'> = {
     checked: 0,
     verified: 0,
     platformOwned: 0,
@@ -171,5 +182,5 @@ export async function runDomainVerificationSweep(
     }
   })
 
-  return summary
+  return { ...summary, redirectUris: await reconcileWorkshopRedirectUris(now) }
 }

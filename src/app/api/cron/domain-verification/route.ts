@@ -38,7 +38,13 @@ export async function GET(request: NextRequest) {
         ` softFailures=${summary.softFailures}` +
         ` unverifiable=${summary.unverifiable}` +
         ` delisted=${summary.delisted.length}` +
-        ` errored=${summary.errored.length}`,
+        ` errored=${summary.errored.length}` +
+        ` redirectUris.registered=${summary.redirectUris.registered.length}` +
+        ` redirectUris.removed=${summary.redirectUris.removed.length}` +
+        ` redirectUris.errored=${summary.redirectUris.errored.length}` +
+        (summary.redirectUris.error
+          ? ` redirectUris.error=${summary.redirectUris.error}`
+          : ''),
     )
 
     return NextResponse.json({ success: true, ...summary })
