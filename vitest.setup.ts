@@ -7,6 +7,17 @@ dotenv.config({ path: ['.env', '.env.local', '.env.test'] })
 
 process.env.INVITATION_TOKEN_SECRET ??= 'test-invitation-token-secret'
 
+// WorkOS configuration never comes from the developer's shell or a `.env`
+// file in tests. The AuthKit SDK captures these at import and several change
+// outcomes loudly (`WORKOS_COOKIE_DOMAIN`, `WORKOS_COOKIE_NAME`) or quietly
+// (`WORKOS_CLAIM_TOKEN` makes it POST to WorkOS for real). Suites that run the
+// SDK set what they need through `__tests__/helpers/workosEnv.ts`.
+for (const name of Object.keys(process.env)) {
+  if (name.startsWith('WORKOS_') || name.startsWith('NEXT_PUBLIC_WORKOS_')) {
+    delete process.env[name]
+  }
+}
+
 // MSW node server for HTTP interception (GitHub /user/emails, Checkin.no
 // GraphQL, …). `onUnhandledRequest: 'bypass'` so the many existing tests that
 // make no outbound requests are unaffected — only the explicitly-handled hosts

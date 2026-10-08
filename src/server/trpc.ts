@@ -5,6 +5,10 @@ import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { isOrganizerForOrg } from '@/lib/authz/organizer'
 import type { FeatureId } from '@/lib/features/registry'
 import { AppEnvironment } from '@/lib/environment/config'
+import {
+  resolveWorkshopSignInHost,
+  workshopRequestHost,
+} from '@/lib/workshop/sign-in'
 import { structuredErrorData, type StructuredErrorData } from './errors'
 
 /**
@@ -43,18 +47,43 @@ export interface WorkshopUserIdentity {
  * calls (NextAuth admin/cfp/sponsor/message traffic, which carries no WorkOS
  * cookie) skip AuthKit entirely. Any failure resolves to `null` (never throws),
  * so a procedure's own guard decides (UNAUTHORIZED for workshop signup/cancel).
+ *
+ * THE SAME HOST DECISION AS THE PAGE (#1296). The proxy serves `/workshop` only
+ * on a host the verified-redirect allowlist admits, and reads the session with
+ * that host's own callback as `redirectUri`. This does both too — the API must
+ * never be more permissive than the page, and `authkit()` without an explicit
+ * `redirectUri` falls back to the single-host env URI (or, worse, to a
+ * client-sent `x-redirect-uri` header, since nothing strips it on `/api/trpc`).
+ * A host that is not allowlisted resolves no attendee and never enters the SDK.
+ *
+ * ONLY FOR `workshop.*` (see {@link namesWorkshopProcedure}): the decision is a
+ * live Sanity read, and the cookie rides on every tRPC request this browser
+ * makes for 400 days.
+ *
+ * A REFRESH IS PERSISTED (see {@link persistRefreshedSession}): when `authkit`
+ * had to refresh the session it returns the re-sealed cookie, which is written
+ * to `resHeaders` so the browser keeps a usable session.
  */
 async function resolveWorkshopUser(
   req: NextRequest,
+  resHeaders?: Headers,
 ): Promise<WorkshopUserIdentity | null> {
   if (AppEnvironment.isTestMode) return null
-  const cookieName = process.env.WORKOS_COOKIE_NAME || 'wos-session'
+  const cookieName = workosSessionCookieName()
   if (!req.cookies.get(cookieName)) return null
+  if (!namesWorkshopProcedure(req)) return null
   try {
+    const signIn = await resolveWorkshopSignInHost(
+      workshopRequestHost(req.headers),
+    )
+    if (!signIn) return null
     const { authkit } = await import('@workos-inc/authkit-nextjs')
-    const { session } = await authkit(req)
+    const { session, headers } = await authkit(req, {
+      redirectUri: signIn.redirectUri,
+    })
     const user = session.user
     if (!user?.id) return null
+    persistRefreshedSession(headers, resHeaders)
     return {
       id: user.id,
       email: user.email,
@@ -67,13 +96,84 @@ async function resolveWorkshopUser(
   }
 }
 
-export async function createTRPCContext(opts: { req: NextRequest }) {
+/** The name of the sealed WorkOS session cookie, as the SDK resolves it. */
+function workosSessionCookieName(): string {
+  return process.env.WORKOS_COOKIE_NAME || 'wos-session'
+}
+
+/**
+ * Hand the browser the session `authkit()` re-sealed while refreshing.
+ *
+ * WorkOS access tokens are short-lived and refresh tokens are SINGLE-USE. On
+ * `/workshop*` the proxy does the refresh and sets the cookie; an attendee who
+ * leaves the page open and then clicks "Register" refreshes HERE instead. If
+ * the new cookie is dropped, the browser keeps one whose refresh token is
+ * already spent: this request succeeds, the next cannot refresh, and they are
+ * signed out in the middle of registering.
+ *
+ * ONLY A SUCCESSFUL REFRESH IS WRITTEN (the caller returns before this when
+ * there is no user). Two requests can race for the same single-use token; the
+ * loser gets a cookie DELETION from the SDK, and forwarding that would let it
+ * sign out the winner. A session that is really dead is cleared by the proxy
+ * on the next page request.
+ */
+function persistRefreshedSession(
+  from: Headers | undefined,
+  to: Headers | undefined,
+): void {
+  // The session cookie and nothing else: what the SDK puts in these headers is
+  // its own business (and includes the sealed session as a request header).
+  const prefix = `${workosSessionCookieName()}=`
+  const cookies = (from?.getSetCookie() ?? []).filter((cookie) =>
+    cookie.startsWith(prefix),
+  )
+  if (!to || cookies.length === 0) return
+  for (const cookie of cookies) to.append('Set-Cookie', cookie)
+  // A response that sets a session cookie must never be stored by a cache.
+  to.set('Cache-Control', 'no-store')
+}
+
+/** The app-router key the attendee procedures are mounted under. */
+const WORKSHOP_ROUTER_PREFIX = 'workshop.'
+
+/**
+ * Whether this HTTP request names a `workshop.*` procedure — the only
+ * procedures that consume the attendee identity. tRPC puts the procedure path
+ * in the URL (comma-joined for a batch), so this is known before any work.
+ *
+ * WHY IT EXISTS. `wos-session` is host-wide and long-lived, so without this a
+ * browser that once signed in to the portal would spend one live allowlist read
+ * (and an AuthKit session check) on every tRPC request it ever makes on that
+ * host — an organizer's entire admin session included. Fail closed: a request
+ * that names none gets no attendee, and a workshop procedure would refuse it.
+ */
+function namesWorkshopProcedure(req: NextRequest): boolean {
+  const marker = '/api/trpc/'
+  const { pathname } = req.nextUrl
+  const at = pathname.indexOf(marker)
+  if (at === -1) return false
+  let procedures: string
+  try {
+    procedures = decodeURIComponent(pathname.slice(at + marker.length))
+  } catch {
+    return false
+  }
+  return procedures
+    .split(',')
+    .some((procedure) => procedure.startsWith(WORKSHOP_ROUTER_PREFIX))
+}
+
+export async function createTRPCContext(opts: {
+  req: NextRequest
+  /** The response's headers (tRPC's fetch adapter supplies them). */
+  resHeaders?: Headers
+}) {
   const session = await getAuthSession({
     url: opts.req.url,
     headers: opts.req.headers,
   })
 
-  const workosUser = await resolveWorkshopUser(opts.req)
+  const workosUser = await resolveWorkshopUser(opts.req, opts.resHeaders)
 
   // Extract IP address from headers
   const forwardedFor = opts.req.headers.get('x-forwarded-for')

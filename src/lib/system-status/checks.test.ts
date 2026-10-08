@@ -94,6 +94,35 @@ describe('collectStaticChecks — status semantics', () => {
   })
 })
 
+/**
+ * #1296. The workshop portal refuses to sign anyone in while
+ * `WORKOS_COOKIE_DOMAIN` is set (the SDK would then scope its session cookie
+ * to a whole domain instead of one host). That refusal is a bare 404 for the
+ * attendee, so the reason has to be visible to an operator here.
+ */
+describe('collectStaticChecks — WorkOS cookie scope', () => {
+  it('is ok while the session cookie stays host-only', () => {
+    vi.stubEnv('WORKOS_COOKIE_DOMAIN', '')
+    const check = byId(
+      collectStaticChecks(CONFERENCE),
+      'misc.workosCookieDomain',
+    )
+    expect(check.status).toBe('ok')
+    expect(check.value).toBe('not set')
+  })
+
+  it('is an ERROR, naming the consequence, when a cookie domain is configured', () => {
+    vi.stubEnv('WORKOS_COOKIE_DOMAIN', '.example.org')
+    const check = byId(
+      collectStaticChecks(CONFERENCE),
+      'misc.workosCookieDomain',
+    )
+    expect(check.status).toBe('error')
+    expect(check.value).toBe('.example.org')
+    expect(check.detail).toMatch(/sign-in is refused/i)
+  })
+})
+
 describe('collectStaticChecks — organizer teams', () => {
   it('is off with a helpful detail when no teams are configured', () => {
     const check = byId(collectStaticChecks(CONFERENCE), 'conference.teams')

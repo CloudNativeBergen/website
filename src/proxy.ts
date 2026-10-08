@@ -6,14 +6,14 @@ import {
 } from 'next/server'
 import { AppEnvironment } from '@/lib/environment/config'
 import { authkitMiddleware } from '@workos-inc/authkit-nextjs'
-
-const workOSMiddleware = authkitMiddleware({
-  middlewareAuth: {
-    enabled: true,
-    unauthenticatedPaths: [],
-  },
-  debug: process.env.NODE_ENV === 'development',
-})
+import {
+  resolveWorkshopSignInHost,
+  workshopRequestHost,
+} from '@/lib/workshop/sign-in'
+import {
+  WORKSHOP_SIGN_IN_PATH,
+  WORKSHOP_SIGN_UP_PATH,
+} from '@/lib/workshop/sign-in-paths'
 
 // The session cookie's `Domain` is rewritten PER REQUEST for every response
 // this produces: `auth` itself applies it to its handler-wrapper form (see
@@ -72,53 +72,63 @@ const nextAuthMiddleware = auth((req) => {
 })
 
 /**
- * CAPABILITY check (NOT the feature gate) for the workshop portal: the AuthKit
- * round-trip can only complete on the ONE host the global WorkOS client is
- * configured for — `wos-session` is sealed host-only on the redirect origin, so
- * on any other tenant domain the attendee bounces back to the sign-in button
- * forever (#689). Starting that round-trip from a foreign host is therefore
- * never useful, and it would happen BEFORE the request ever reaches the
- * portal's feature gate (middleware auth redirects unauthenticated users away).
+ * The workshop portal's WorkOS gate (#1296): AuthKit, with the redirect URI
+ * chosen for THIS request's host.
  *
- * Returns false ONLY when the request host is positively known not to be the
- * WorkOS host. Both env vars the workshop flow uses are accepted
- * (`WORKOS_REDIRECT_URI` — the middleware's own callback — and
- * `NEXT_PUBLIC_URL`, from which the portal builds its authorize URL), and an
- * unset/unparsable configuration falls back to TRUE so a missing env var can
- * never take the portal down on the host where it works today.
+ * ORDER IS THE CONTROL. `resolveWorkshopSignInHost` decides first — the host
+ * must be on the verified-redirect allowlist — and only a match reaches the
+ * SDK. A host that is not allowlisted gets a 404 and nothing else: no authorize
+ * URL is built, no PKCE pair is generated, no session cookie is read. The
+ * decision is one live Sanity read per `/workshop*` request, deliberately
+ * uncached (see `@/lib/workshop/sign-in`).
  *
- * The feature gate proper (`isWorkshopsEnabledForConference`) lives in the
- * portal layout/page and the ticket-sold webhook, where a Sanity read is
- * possible; this only avoids an auth bounce that provably cannot succeed.
+ * THE MIDDLEWARE IS BUILT PER REQUEST because `authkitMiddleware` captures its
+ * options — `redirectUri` included — when the factory is called. A module-level
+ * instance is exactly the single-host binding this replaces. The factory is a
+ * closure over its arguments and nothing more, so building it here costs
+ * nothing; it also keeps the SDK's in-place edits to `unauthenticatedPaths`
+ * from leaking between requests.
+ *
+ * NOT THE FEATURE GATE. Whether this tenant has workshops at all
+ * (`isWorkshopsEnabledForConference`) is decided in the portal layout and page,
+ * where the conference is in hand. A signed-out visitor on an allowlisted host
+ * of a tenant without workshops is therefore sent to WorkOS first and sees the
+ * 404 on return, as before.
  */
-function isWorkOSAuthHost(req: NextRequest): boolean {
-  const host = req.headers.get('host')?.toLowerCase()
-  if (!host) return true
+async function workshopMiddleware(req: NextRequest, event: NextFetchEvent) {
+  const signIn = await resolveWorkshopSignInHost(
+    workshopRequestHost(req.headers),
+  )
+  if (!signIn) {
+    return new NextResponse('Not Found', { status: 404 })
+  }
 
-  const configuredHosts = [
-    process.env.WORKOS_REDIRECT_URI,
-    process.env.NEXT_PUBLIC_URL,
-  ].flatMap((value) => {
-    if (!value) return []
-    try {
-      return [new URL(value).host.toLowerCase()]
-    } catch {
-      return []
-    }
-  })
+  // ONLY A NAVIGATION IS BOUNCED INTO A SIGN-IN. Anything else under
+  // `/workshop` is a server action (today: Sign Out), and redirecting that POST
+  // to WorkOS helps nobody: the action client cannot follow a cross-origin
+  // redirect, so a tab whose session ended elsewhere would show an error
+  // instead of signing out. The session is still read and refreshed for it;
+  // it is the action's own job to decide — as it must anyway, since an action
+  // can be posted to paths this proxy never sees.
+  const isNavigation = req.method === 'GET' || req.method === 'HEAD'
 
-  if (configuredHosts.length === 0) return true
-  return configuredHosts.includes(host)
+  return authkitMiddleware({
+    redirectUri: signIn.redirectUri,
+    middlewareAuth: {
+      enabled: isNavigation,
+      // These two START a sign-in (their route handlers call the SDK), so a
+      // signed-out visitor must reach them rather than be bounced into one.
+      unauthenticatedPaths: [WORKSHOP_SIGN_IN_PATH, WORKSHOP_SIGN_UP_PATH],
+    },
+    debug: process.env.NODE_ENV === 'development',
+  })(req, event)
 }
 
 export default function middleware(req: NextRequest, event: NextFetchEvent) {
   const { pathname } = req.nextUrl
 
   if (pathname.startsWith('/workshop')) {
-    if (!isWorkOSAuthHost(req)) {
-      return new NextResponse('Not Found', { status: 404 })
-    }
-    return workOSMiddleware(req, event)
+    return workshopMiddleware(req, event)
   }
 
   if (

@@ -12,14 +12,18 @@ import {
  * ticket-sold webhook sends automatically.
  *
  * WHY IT IS GATED. Workshops authenticate ticket-holding ATTENDEES through
- * WorkOS AuthKit, configured with ONE global `WORKOS_CLIENT_ID` and ONE global
- * `redirect_uri` on the platform host. On any other tenant domain the sign-in
- * round-trip seals its `wos-session` cookie on the platform host, which the
- * tenant's own host can never read — the attendee bounces back to a sign-in
- * button forever. The webhook then emails every workshop ticket buyer a link
- * straight into that loop. Emailing a link that cannot work is worse than
- * silence, so the feature is `readiness: 'internal'` (override-only, never
- * offered in upsell surfaces) and OFF for everyone it does not work for.
+ * WorkOS AuthKit, in ONE environment shared by every tenant. Until #1296 that
+ * environment was bound to one `redirect_uri` on the platform host, so on any
+ * other tenant domain the sign-in could never complete and the webhook emailed
+ * buyers a link into a loop — which is why the feature is `readiness:
+ * 'internal'` (override-only, never offered in upsell surfaces).
+ *
+ * SIGN-IN IS NO LONGER HOST-BOUND (#1296): the redirect URI is chosen per
+ * request, for any host on the verified-redirect allowlist
+ * (`@/lib/workshop/sign-in`). WHICH tenants get the feature is still decided
+ * here and still the platform-default rule below; #1295 replaces it with a
+ * plan gate. The two are separate questions: this gate says a tenant has
+ * workshops, the allowlist says one of its hosts can sign in.
  *
  * RESOLUTION ORDER — the shared PLATFORM-DEFAULT shape (`./platform-default.ts`,
  * which also carries the caching and fail-closed notes), fail-CLOSED at every
@@ -30,17 +34,13 @@ import {
  *     "serve it anyway"; this mirrors the org-scoped authz waist's posture.
  *  2. An ACTIVE `featureOverrides` entry for `workshops` wins, in BOTH
  *     directions — `enabled: true` grants it to a pilot org, `enabled: false`
- *     revokes it even from the platform org (rule 3). NOTE: a grant asserts
- *     that the org is served ON the WorkOS host — the AuthKit round-trip is
- *     still host-bound (see `isWorkOSAuthHost` in `src/proxy.ts`), so granting
- *     it to an org on its own domain re-opens the very link this gate closes.
- *     Until attendee auth is tenant-aware, the override is for pilots on the
- *     platform deployment.
- *  3. The org whose id is `PLATFORM_ORG_ID` keeps workshops by default. The
- *     single WorkOS client and its redirect URI belong to the platform
- *     deployment, so the platform org is the one tenant the feature is known to
- *     work for — this is what keeps today's behaviour byte-identical without a
- *     data migration.
+ *     revokes it even from the platform org (rule 3). NOTE: a grant does not
+ *     make a host able to sign in. The portal still answers 404 on a host that
+ *     is not ownership-verified (`resolveWorkshopSignInHost`), and the webhook
+ *     does not yet check that before it emails the link (#1298).
+ *  3. The org whose id is `PLATFORM_ORG_ID` keeps workshops by default — the
+ *     one tenant the feature was built for, kept until #1295 lands so nothing
+ *     changes without a data migration.
  *  4. Anything else → DISABLED.
  *
  * ONE READ ONLY (RunKonf/platform#36, #43):
@@ -57,11 +57,6 @@ import {
  *    removed both the read and the mutable-field hazard.)
  *
  * Override expiry is evaluated per call against a fresh `now`.
- *
- * LONGER TERM (out of scope, see #689): if workshops become sellable, WorkOS
- * has no `redirectProxyUrl` equivalent and should be replaced by a signed
- * magic-link issued from the ticket-sold webhook (which already holds the
- * payment-verified email) rather than hand-rolling a central-origin bounce.
  */
 
 /** The registry id this module gates. */

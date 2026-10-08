@@ -112,6 +112,31 @@ function presenceCheck(
       }
 }
 
+/**
+ * `WORKOS_COOKIE_DOMAIN` must stay UNSET (#1296). With it set the AuthKit SDK
+ * scopes its session cookie to a whole domain, so one host's workshop session
+ * would be presented to its sibling hosts; `resolveWorkshopSignInHost` refuses
+ * every sign-in instead. The attendee only sees a 404, so this is where the
+ * reason shows. The value is a domain name, not a secret.
+ */
+function workosCookieDomainCheck(): SystemCheck {
+  const meta: CheckMeta = {
+    id: 'misc.workosCookieDomain',
+    group: 'misc',
+    label: 'WORKOS_COOKIE_DOMAIN',
+  }
+  const value = process.env.WORKOS_COOKIE_DOMAIN
+  return value
+    ? {
+        ...meta,
+        status: 'error',
+        value,
+        detail:
+          'Workshop sign-in is refused on every host while this is set: the session cookie must stay host-only. Unset it.',
+      }
+    : { ...meta, status: 'ok', value: 'not set' }
+}
+
 /** Plain (non-secret) env value. Absent → `missingStatus`. */
 function plainCheck(
   meta: CheckMeta,
@@ -769,6 +794,7 @@ function buildChecks(conference: ConferenceForSystemChecks): SystemCheck[] {
       'off',
       { missing: 'Workshop (WorkOS) login unavailable' },
     ),
+    workosCookieDomainCheck(),
   )
 
   return checks

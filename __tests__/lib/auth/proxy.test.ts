@@ -5,8 +5,9 @@
  * (its scoped threshold was gated at 0 to keep the gap visible). The middleware
  * is the app's first auth gate, so its routing and production guards are
  * security-relevant:
- *   - path routing: /workshop → WorkOS, protected /cfp|/admin|/cli → NextAuth,
- *     everything else (incl. bare /cfp) → pass-through.
+ *   - path routing: /workshop → WorkOS (on a verified host, #1296), protected
+ *     /cfp|/admin|/cli → NextAuth, everything else (incl. bare /cfp) →
+ *     pass-through.
  *   - production hard guards: dev-tools 404 gate + impersonation-param strip.
  *   - unauthenticated → sign-in redirect (preserving callbackUrl).
  *   - authenticated → forward with the x-url request header.
@@ -17,6 +18,11 @@
  * "carry a header naming a known test speaker". `@workos-inc/authkit-nextjs`
  * and `@/lib/environment/config` are mocked so the routing and dev/test gates
  * are controllable without a real WorkOS client or a fixed NODE_ENV.
+ *
+ * The workshop branch is exercised against the REAL SDK in
+ * `proxy.workshop.test.ts`; here the SDK is a sentinel, so these cases pin only
+ * WHICH requests reach it and with what options. The Sanity boundary behind the
+ * verified-redirect allowlist is supplied so the real decision runs.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { NextRequest, type NextFetchEvent } from 'next/server'
@@ -27,10 +33,21 @@ const h = vi.hoisted(() => ({
   // Sentinel returned by the mocked WorkOS middleware so we can assert routing.
   workOSResult: { __workos: true },
   workOSMiddleware: vi.fn(),
+  // The factory, so the per-request options can be asserted.
+  authkitMiddleware: vi.fn(),
+  // Hostnames currently on the verified-redirect allowlist.
+  verifiedHosts: [] as string[],
 }))
 
 vi.mock('@workos-inc/authkit-nextjs', () => ({
-  authkitMiddleware: vi.fn(() => h.workOSMiddleware),
+  authkitMiddleware: h.authkitMiddleware,
+}))
+
+vi.mock('@/lib/domain-verification/sanity', () => ({
+  listAllowlistCandidates: async () => {
+    const { verifiedHost } = await import('../../helpers/workshopSignIn')
+    return h.verifiedHosts.map((hostname) => verifiedHost(hostname))
+  },
 }))
 
 vi.mock('@/lib/environment/config', () => ({
@@ -61,12 +78,24 @@ function req(path: string, opts: { authUser?: string } = {}): NextRequest {
 
 const event = {} as NextFetchEvent
 
+/** A host on the verified-redirect allowlist for these tests. */
+const VERIFIED_HOST = 'conf.example.org'
+
+/** Request `path` on `host`, as a browser would: URL and Host header agree. */
+function reqOnHost(path: string, host: string): NextRequest {
+  return new NextRequest(`https://${host}${path}`, {
+    headers: new Headers({ host }),
+  })
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
   h.env.isTestMode = false
   h.env.isDevelopment = false
   h.env.isProduction = false
   h.workOSMiddleware.mockReturnValue(h.workOSResult)
+  h.authkitMiddleware.mockReturnValue(h.workOSMiddleware)
+  h.verifiedHosts = [VERIFIED_HOST]
   vi.spyOn(console, 'error').mockImplementation(() => {})
 })
 
@@ -76,14 +105,20 @@ afterEach(() => {
 })
 
 describe('middleware — path routing', () => {
-  it('routes /workshop to the WorkOS middleware', () => {
-    const result = middleware(req('/workshop'), event)
+  it('routes /workshop to the WorkOS middleware', async () => {
+    const result = await middleware(
+      reqOnHost('/workshop', VERIFIED_HOST),
+      event,
+    )
     expect(h.workOSMiddleware).toHaveBeenCalledOnce()
     expect(result).toBe(h.workOSResult)
   })
 
-  it('routes nested /workshop/* to the WorkOS middleware', () => {
-    const result = middleware(req('/workshop/agenda'), event)
+  it('routes nested /workshop/* to the WorkOS middleware', async () => {
+    const result = await middleware(
+      reqOnHost('/workshop/agenda', VERIFIED_HOST),
+      event,
+    )
     expect(h.workOSMiddleware).toHaveBeenCalledOnce()
     expect(result).toBe(h.workOSResult)
   })
@@ -101,67 +136,114 @@ describe('middleware — path routing', () => {
 })
 
 /**
- * The workshop portal's AuthKit round-trip can only complete on the ONE host
- * the global WorkOS client is configured for — on any other tenant domain the
- * session cookie is sealed where that tenant can never read it, so the attendee
- * loops forever (#689). Starting that bounce from a foreign host is never
- * useful, and it would happen BEFORE the request reaches the portal's own
- * feature gate, so the middleware refuses it outright.
+ * The workshop portal signs in on the host the attendee is on, and only when
+ * that host is on the verified-redirect allowlist (#1296). The single-host
+ * check this replaces (`isWorkOSAuthHost`, fed by `WORKOS_REDIRECT_URI` and
+ * `NEXT_PUBLIC_URL`) is gone: neither variable grants or refuses anything.
  */
-describe('middleware — /workshop host guard', () => {
-  const CALLBACK = 'https://platform.test/api/auth/callback'
+describe('middleware — /workshop host decision', () => {
+  it('builds the WorkOS middleware for THIS request, with this host’s callback', async () => {
+    await middleware(reqOnHost('/workshop', VERIFIED_HOST), event)
 
-  /** Request `path` with an explicit Host header. */
-  function reqOnHost(path: string, host: string): NextRequest {
-    return new NextRequest(`https://${host}${path}`, {
-      headers: new Headers({ host }),
-    })
-  }
+    expect(h.authkitMiddleware).toHaveBeenCalledOnce()
+    expect(h.authkitMiddleware).toHaveBeenCalledWith(
+      expect.objectContaining({
+        redirectUri: `https://${VERIFIED_HOST}/api/auth/callback`,
+        middlewareAuth: {
+          enabled: true,
+          unauthenticatedPaths: ['/workshop/sign-in', '/workshop/sign-up'],
+        },
+      }),
+    )
+  })
 
-  it('404s /workshop on a host that is not the WorkOS callback host', () => {
-    vi.stubEnv('WORKOS_REDIRECT_URI', CALLBACK)
-    const res = middleware(
-      reqOnHost('/workshop', 'tenant2.no'),
+  it('builds it again for the next request — no instance is shared between hosts', async () => {
+    h.verifiedHosts = [VERIFIED_HOST, 'other.example.org']
+
+    await middleware(reqOnHost('/workshop', VERIFIED_HOST), event)
+    await middleware(reqOnHost('/workshop', 'other.example.org'), event)
+
+    expect(
+      h.authkitMiddleware.mock.calls.map(([options]) => options.redirectUri),
+    ).toEqual([
+      `https://${VERIFIED_HOST}/api/auth/callback`,
+      'https://other.example.org/api/auth/callback',
+    ])
+    // The SDK edits `unauthenticatedPaths` in place; each request gets its own.
+    const [first, second] = h.authkitMiddleware.mock.calls.map(
+      ([options]) => options.middlewareAuth.unauthenticatedPaths,
+    )
+    expect(first).not.toBe(second)
+  })
+
+  it('404s /workshop on a host that is not on the allowlist, without building it', async () => {
+    const res = (await middleware(
+      reqOnHost('/workshop', 'tenant2.example.org'),
       event,
-    ) as Response
+    )) as Response
+
     expect(res.status).toBe(404)
+    expect(h.authkitMiddleware).not.toHaveBeenCalled()
     expect(h.workOSMiddleware).not.toHaveBeenCalled()
   })
 
-  it('404s nested /workshop/* on a foreign host too', () => {
-    vi.stubEnv('WORKOS_REDIRECT_URI', CALLBACK)
-    const res = middleware(
-      reqOnHost('/workshop/agenda', 'tenant2.no'),
+  it('404s nested /workshop/* on such a host too', async () => {
+    const res = (await middleware(
+      reqOnHost('/workshop/sign-in', 'tenant2.example.org'),
       event,
-    ) as Response
+    )) as Response
+
     expect(res.status).toBe(404)
-    expect(h.workOSMiddleware).not.toHaveBeenCalled()
+    expect(h.authkitMiddleware).not.toHaveBeenCalled()
   })
 
-  it('still routes the WorkOS host itself to the WorkOS middleware', () => {
-    vi.stubEnv('WORKOS_REDIRECT_URI', CALLBACK)
-    const result = middleware(reqOnHost('/workshop', 'platform.test'), event)
-    expect(h.workOSMiddleware).toHaveBeenCalledOnce()
-    expect(result).toBe(h.workOSResult)
+  it('no longer lets WORKOS_REDIRECT_URI or NEXT_PUBLIC_URL admit a host', async () => {
+    vi.stubEnv(
+      'WORKOS_REDIRECT_URI',
+      'https://env.example.org/api/auth/callback',
+    )
+    vi.stubEnv('NEXT_PUBLIC_URL', 'https://public.example.org')
+
+    for (const host of ['env.example.org', 'public.example.org']) {
+      const res = (await middleware(
+        reqOnHost('/workshop', host),
+        event,
+      )) as Response
+      expect(res.status).toBe(404)
+    }
+    expect(h.authkitMiddleware).not.toHaveBeenCalled()
   })
 
-  it('accepts the host from NEXT_PUBLIC_URL as well', () => {
-    vi.stubEnv('WORKOS_REDIRECT_URI', CALLBACK)
-    vi.stubEnv('NEXT_PUBLIC_URL', 'https://portal.example.org')
-    const result = middleware(
-      reqOnHost('/workshop', 'portal.example.org'),
+  it('no longer lets them refuse a verified host, nor steer its callback', async () => {
+    vi.stubEnv(
+      'WORKOS_REDIRECT_URI',
+      'https://env.example.org/api/auth/callback',
+    )
+    vi.stubEnv('NEXT_PUBLIC_URL', 'https://public.example.org')
+
+    const result = await middleware(
+      reqOnHost('/workshop', VERIFIED_HOST),
       event,
     )
-    expect(h.workOSMiddleware).toHaveBeenCalledOnce()
+
     expect(result).toBe(h.workOSResult)
+    expect(h.authkitMiddleware.mock.calls[0][0].redirectUri).toBe(
+      `https://${VERIFIED_HOST}/api/auth/callback`,
+    )
   })
 
-  it('falls back to the existing routing when nothing usable is configured', () => {
+  it('404s when nothing at all is verified (the fallback-to-open is gone)', async () => {
+    h.verifiedHosts = []
     vi.stubEnv('WORKOS_REDIRECT_URI', '')
     vi.stubEnv('NEXT_PUBLIC_URL', 'not a url')
-    const result = middleware(reqOnHost('/workshop', 'anything.test'), event)
-    expect(h.workOSMiddleware).toHaveBeenCalledOnce()
-    expect(result).toBe(h.workOSResult)
+
+    const res = (await middleware(
+      reqOnHost('/workshop', 'anything.example.org'),
+      event,
+    )) as Response
+
+    expect(res.status).toBe(404)
+    expect(h.workOSMiddleware).not.toHaveBeenCalled()
   })
 })
 
