@@ -88,9 +88,7 @@ beforeEach(() => {
   vi.spyOn(console, 'error').mockImplementation(() => {})
 })
 
-afterEach(async () => {
-  // A queued reconcile that never starts would swallow the next test's.
-  for (const task of afterResponse) await task()
+afterEach(() => {
   vi.unstubAllEnvs()
   vi.unstubAllGlobals()
   vi.restoreAllMocks()
@@ -148,21 +146,5 @@ describe('syncDomainVerifications and the WorkOS redirect URIs', () => {
 
     expect(workos.requests).toHaveLength(1)
     expect(row.redirectUri.error).toContain('no answer from WorkOS')
-  })
-
-  it('queues one reconcile for a mutation that writes twice', async () => {
-    claimWrites = true
-
-    await syncDomainVerifications('conference-1', ['first.example.org'])
-    await syncDomainVerifications('conference-1', [HOST], [], {
-      allocatePlatformHosts: true,
-    })
-
-    expect(afterResponse).toHaveLength(1)
-
-    await afterResponse[0]()
-    await syncDomainVerifications('conference-1', [HOST])
-
-    expect(afterResponse).toHaveLength(2)
   })
 })

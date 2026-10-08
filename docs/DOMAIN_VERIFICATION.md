@@ -313,8 +313,10 @@ with `WORKOS_API_KEY` set:
 - after an organization's plan or feature overrides change;
 - at the end of the daily sweep, which also retries whatever failed earlier.
 
-Anything else that changes the answer (ticketing credentials, a conference
-moving to another organization) is picked up by the daily sweep. A WorkOS
+Anything else that changes the answer is picked up by the daily sweep: ticketing
+credentials, a conference moving to another organization, and a plan changed
+from outside this app (the control panel writes `organization` documents
+directly). A WorkOS
 failure never fails the mutation that triggered it.
 
 Local development and previews read the production dataset, and the outcome is
@@ -344,7 +346,8 @@ read. When a record moved on while WorkOS was answering (released, re-claimed,
 re-checked, or handled by an overlapping run), the record is read again before
 anything else is decided: a URI just created for a host that is no longer wanted
 is deleted again, and a URI just deleted for a host that is wanted again is put
-back.
+back. If deleting it again fails too, its id is put on the record so the next
+run removes it; if the record will not take it, the id is in the error log only.
 
 ## Moving parts
 

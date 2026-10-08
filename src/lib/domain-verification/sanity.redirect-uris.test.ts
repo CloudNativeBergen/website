@@ -37,8 +37,11 @@ vi.mock('@/lib/sanity/client', () => ({
   },
 }))
 
-const { listRedirectUriSyncRows, patchRedirectUriState } =
-  await import('./sanity')
+const {
+  getRedirectUriSyncRow,
+  listRedirectUriSyncRows,
+  patchRedirectUriState,
+} = await import('./sanity')
 
 function verification(hostname: string, fields: Doc = {}): Doc {
   return {
@@ -136,6 +139,37 @@ describe('listRedirectUriSyncRows', () => {
     const [row] = await listRedirectUriSyncRows()
 
     expect(row.conference).toBeNull()
+  })
+})
+
+describe('getRedirectUriSyncRow', () => {
+  it('reads a record the listing leaves out: released, with nothing on it', async () => {
+    dataset.push(verification('released.example.org', { status: 'revoked' }))
+    expect(await listRedirectUriSyncRows()).toEqual([])
+
+    const row = await getRedirectUriSyncRow(
+      'domainVerification.released.example.org',
+    )
+
+    expect(row).toMatchObject({
+      record: { hostname: 'released.example.org', status: 'revoked' },
+      rev: 'rev-released.example.org',
+      redirectUri: { status: null, id: null, error: null },
+      conference: { organization: { _ref: 'org-platform' } },
+    })
+  })
+
+  it('reads only the record asked for', async () => {
+    dataset.push(verification('a.example.org'))
+    dataset.push(verification('b.example.org'))
+
+    const row = await getRedirectUriSyncRow('domainVerification.b.example.org')
+
+    expect(row?.record.hostname).toBe('b.example.org')
+  })
+
+  it('answers null for a record that does not exist', async () => {
+    expect(await getRedirectUriSyncRow('domainVerification.nope')).toBeNull()
   })
 })
 

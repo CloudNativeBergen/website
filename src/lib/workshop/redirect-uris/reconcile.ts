@@ -24,8 +24,10 @@
  * host is still wanted and nothing else registered it, the id is recorded;
  * otherwise the URI just created is deleted. The same happens in reverse for a
  * delete: a host that became wanted again while its URI was being removed gets
- * it back. If that undo itself fails, the id is in the error log and nowhere
- * else, and the URI shows up as `unaccounted` from then on.
+ * it back. If the undo itself fails, the id is put on the record when the
+ * record will take it, so the next run deletes it; when it will not, the id is
+ * in the error log only, and the URI is listed as `unaccounted` by every later
+ * run that has reason to list WorkOS.
  *
  * ONLY THE PRODUCTION DEPLOYMENT RUNS IT. The outcome is stored in the dataset,
  * and local development and previews read the same dataset as production. A
@@ -34,8 +36,9 @@
  * `scripts/probe-workos-redirect-uris.ts`, which writes nothing here.
  *
  * NEVER THROWS, and is never awaited by the mutation that triggered it. A
- * failure is recorded on the host (`redirectUriError`) and in the summary, and
- * the next run — at the latest the daily sweep — tries again.
+ * failed WorkOS call is recorded on the host (`redirectUriError`) and in the
+ * summary; a host that could not be decided on is in the summary only, with
+ * nothing written. The next run — at the latest the daily sweep — tries again.
  *
  * IDEMPOTENT. With nothing to change it reads (one Sanity query, the WorkOS
  * list) and writes nothing, to WorkOS or to Sanity. With no qualifying host and
@@ -45,6 +48,7 @@
 import { normalizeDomain } from '@/lib/conference/domains'
 import { isPlatformControlledHost } from '@/lib/domain-verification/platform-controlled'
 import {
+  getRedirectUriSyncRow,
   listRedirectUriSyncRows,
   patchRedirectUriState,
 } from '@/lib/domain-verification/sanity'
@@ -76,7 +80,7 @@ export interface RedirectUriReconcileSummary {
   registered: string[]
   /** Hosts whose callback this run deleted. */
   removed: string[]
-  /** Hosts this run could not bring into step. */
+  /** Hosts this run could not decide on, or could not bring into step. */
   errored: string[]
   /**
    * Callback URIs in WorkOS that no wanted host accounts for and this system
@@ -124,7 +128,7 @@ function describe(error: unknown): string {
 /**
  * Should this host's callback be registered? `null` when that could not be
  * established — the host is then left exactly as it is, neither registered nor
- * removed, so a failed read can never take a working sign-in away.
+ * removed, so that a failed read does not take a working sign-in away.
  */
 async function wantsRedirectUri(
   row: RedirectUriSyncRow,
@@ -136,6 +140,9 @@ async function wantsRedirectUri(
   try {
     // The gate answers "off" when it cannot READ the organization. Read it
     // here first, so that failure is an unknown and not a reason to delete.
+    // This holds because the gate's own read is then served by the cache entry
+    // this one filled; the gate reporting a rejected read itself would hold
+    // without that.
     if (ownerOrgId) await getOrganizationById(ownerOrgId)
     return await resolveWorkshopsForConference(row.conference)
   } catch (error) {
@@ -163,14 +170,6 @@ async function save(
   row.redirectUri = { ...row.redirectUri, ...changed }
 }
 
-/** The record as it stands now, or `undefined` when it no longer qualifies to be read. */
-async function readAgain(
-  row: RedirectUriSyncRow,
-): Promise<RedirectUriSyncRow | undefined> {
-  const rows = await listRedirectUriSyncRows()
-  return rows.find((fresh) => fresh.record._id === row.record._id)
-}
-
 /**
  * Create the host's URI and record its id — or, when the record cannot take
  * the id, delete the URI again. See "A create that cannot be recorded is
@@ -186,7 +185,9 @@ async function register(
   try {
     created = await createRedirectUri(uri)
   } catch (error) {
-    await save(row, { ...CLEARED, error: describe(error) }).catch(() => {})
+    // The error only. An id already on the record stays: it is only ever
+    // acted on when a listing shows it, so keeping it costs nothing.
+    await save(row, { error: describe(error) }).catch(() => {})
     throw error
   }
   const registered = {
@@ -196,15 +197,18 @@ async function register(
   } as const
 
   let recorded = false
+  let fresh: RedirectUriSyncRow | null = null
   try {
     await save(row, registered)
     recorded = true
   } catch {
     try {
-      const fresh = await readAgain(row)
-      if (
-        fresh &&
-        fresh.redirectUri.id === null &&
+      fresh = await getRedirectUriSyncRow(row.record._id)
+      if (fresh?.redirectUri.id === created.id) {
+        // The write landed; only its answer was lost.
+        recorded = true
+      } else if (
+        fresh?.redirectUri.id === null &&
         (await wantsRedirectUri(fresh, now)) !== false
       ) {
         await save(fresh, registered)
@@ -221,11 +225,14 @@ async function register(
   try {
     await deleteRedirectUri(created.id)
   } catch (error) {
-    // Neither recorded nor undone: nothing holds this id from here on, so the
-    // log is the only place it is written down.
-    throw new Error(
-      `redirect URI ${created.id} (${uri}) was created, could not be recorded and could not be removed again (${describe(error)}). Remove it in WorkOS by hand.`,
-    )
+    // Neither recorded nor undone. Put the id on the record if it will take
+    // it, so the next run deletes it; failing that the log is the only place
+    // the id is written down.
+    const leftover = `redirect URI ${created.id} (${uri}) was created, could not be recorded and could not be removed again (${describe(error)})`
+    if (fresh?.redirectUri.id === null) {
+      await save(fresh, { ...registered, error: leftover }).catch(() => {})
+    }
+    throw new Error(`${leftover}. Remove it in WorkOS by hand if it remains.`)
   }
   throw new Error(
     `the record for ${row.record.hostname} moved on while its redirect URI was being created; the URI was removed again`,
@@ -261,7 +268,7 @@ async function reconcileHost(
       // Anything else — still unwanted, or another run has registered it
       // since, which the list this run holds knows nothing about — is left to
       // the next run.
-      const fresh = await readAgain(row)
+      const fresh = await getRedirectUriSyncRow(row.record._id)
       if (
         !fresh ||
         fresh.redirectUri.id !== ours.id ||
@@ -308,7 +315,10 @@ export async function reconcileWorkshopRedirectUris(
       const uri = workshopRedirectUri(row.record.hostname)
       if (uri && wanted !== false) accounted.add(href(uri))
       if (row.redirectUri.id) accounted.add(row.redirectUri.id)
-      if (wanted === null) continue
+      if (wanted === null) {
+        summary.errored.push(row.record.hostname)
+        continue
+      }
       if (wanted) summary.wanted += 1
       const hasState = Object.values(row.redirectUri).some((v) => v !== null)
       if (wanted || hasState) work.push({ row, wanted })

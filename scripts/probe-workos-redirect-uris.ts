@@ -66,6 +66,7 @@ function idOf(body: unknown): string | undefined {
 async function main(): Promise<void> {
   const uri = `https://redirect-uri-probe-${Date.now()}.example.org/api/auth/callback`
   let createdId: string | undefined
+  let duplicateId: string | undefined
 
   try {
     const firstPage = (await call(
@@ -85,12 +86,20 @@ async function main(): Promise<void> {
     }
 
     createdId = idOf(await call('Create', 'POST', ENDPOINT, { uri }))
-    await call('Create the same URI again', 'POST', ENDPOINT, { uri })
+    // If WorkOS accepts a duplicate, that is a second URI to remove.
+    duplicateId = idOf(
+      await call('Create the same URI again', 'POST', ENDPOINT, { uri }),
+    )
+    if (duplicateId === createdId) duplicateId = undefined
 
     if (createdId) {
       await call('Delete', 'DELETE', `${ENDPOINT}/${createdId}`)
       await call('Delete it again', 'DELETE', `${ENDPOINT}/${createdId}`)
       createdId = undefined
+    }
+    if (duplicateId) {
+      await call('Delete the duplicate', 'DELETE', `${ENDPOINT}/${duplicateId}`)
+      duplicateId = undefined
     }
 
     console.log('\n### The same round trip through the client')
@@ -102,14 +111,13 @@ async function main(): Promise<void> {
     const listed = (await listRedirectUris()).find((u) => u.id === created.id)
     console.log('…as the list returns it:', listed)
     await deleteRedirectUri(created.id)
-    await deleteRedirectUri(created.id)
     createdId = undefined
-    console.log('deleteRedirectUri() twice: ok')
+    console.log('deleteRedirectUri(): ok')
     const gone = !(await listRedirectUris()).some((u) => u.id === created.id)
     console.log(`gone from the list: ${gone}`)
   } finally {
-    if (createdId) {
-      await call('Clean up', 'DELETE', `${ENDPOINT}/${createdId}`)
+    for (const id of [createdId, duplicateId]) {
+      if (id) await call('Clean up', 'DELETE', `${ENDPOINT}/${id}`)
     }
   }
 }

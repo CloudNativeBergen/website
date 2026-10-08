@@ -22,11 +22,18 @@ const rows = new Map<string, RedirectUriSyncRow>()
 /** Every state write that was accepted, in order. */
 const stateWrites: { id: string; patch: Partial<RedirectUriState> }[] = []
 let storeReadFails = false
+/** The next state write lands, but its answer never arrives. */
+let loseNextWriteAnswer = false
 
 vi.mock('@/lib/domain-verification/sanity', () => ({
   listRedirectUriSyncRows: async () => {
     if (storeReadFails) throw new Error('sanity is down')
     return [...rows.values()].map((row) => structuredClone(row))
+  },
+  getRedirectUriSyncRow: async (id: string) => {
+    if (storeReadFails) throw new Error('sanity is down')
+    const row = rows.get(id)
+    return row ? structuredClone(row) : null
   },
   patchRedirectUriState: async (
     id: string,
@@ -40,6 +47,10 @@ vi.mock('@/lib/domain-verification/sanity', () => ({
     row.redirectUri = { ...row.redirectUri, ...patch }
     row.rev = `${row.rev}+`
     stateWrites.push({ id, patch })
+    if (loseNextWriteAnswer) {
+      loseNextWriteAnswer = false
+      throw new Error('socket hang up')
+    }
     return row.rev
   },
 }))
@@ -150,6 +161,7 @@ beforeEach(() => {
   unreadableOrgs.clear()
   stateWrites.length = 0
   storeReadFails = false
+  loseNextWriteAnswer = false
   vi.stubEnv('WORKOS_API_KEY', FAKE_WORKOS_API_KEY)
   vi.stubEnv('VERCEL_ENV', 'production')
   vi.stubEnv('PLATFORM_ORG_ID', PLATFORM_ORG)
@@ -448,7 +460,10 @@ describe('removing', () => {
       status: 'registered',
       id: before[0].id,
     })
-    expect(summary.removed).toEqual([])
+    expect(summary).toMatchObject({
+      removed: [],
+      errored: ['kontainerkonf.konf.run'],
+    })
   })
 
   it('does not register a host while the workshops gate cannot say', async () => {
@@ -460,7 +475,10 @@ describe('removing', () => {
 
     expect(workos.uris.map((u) => u.uri)).toEqual([callback(CONTROL)])
     expect(stateOf(id)).toEqual({ status: null, id: null, error: null })
-    expect(summary.wanted).toBe(1)
+    expect(summary).toMatchObject({
+      wanted: 1,
+      errored: ['undecided.konf.run'],
+    })
   })
 
   it('registers again when its URI was deleted in the dashboard', async () => {
@@ -518,6 +536,29 @@ describe('when WorkOS fails', () => {
 
     expect(second.registered).toEqual(['kontainerkonf.konf.run'])
     expect(stateOf(id)).toMatchObject({ status: 'registered', error: null })
+  })
+
+  it('keeps the id on record when a create is refused for a host it had registered', async () => {
+    const id = seedAllocated('kontainerkonf.konf.run')
+    await reconcileWorkshopRedirectUris(NOW)
+    const registeredId = stateOf(id).id
+    // The listing does not show the URI, and the create that follows fails.
+    const [hidden] = workos.uris.splice(0, 1)
+    workos.failNext('POST', { status: 422, message: 'already exists' })
+
+    await reconcileWorkshopRedirectUris(NOW)
+
+    expect(stateOf(id)).toMatchObject({
+      id: registeredId,
+      error: expect.stringContaining('422'),
+    })
+
+    // Once the listing shows it again it is still ours, and still removable.
+    workos.uris.push(hidden)
+    rows.get(id)!.record.status = 'revoked'
+    await reconcileWorkshopRedirectUris(NOW)
+
+    expect(workos.uris).toEqual([])
   })
 
   it('records a refused delete, keeps the id and deletes on the next run', async () => {
@@ -629,7 +670,7 @@ describe('when the records cannot be read or move on under the run', () => {
     },
   )
 
-  it('says which URI is left behind when it can neither record nor remove it', async () => {
+  it('keeps the id of a URI it could neither record nor remove, and removes it on the next run', async () => {
     const id = seedAllocated('kontainerkonf.konf.run')
     const logged = vi.mocked(console.error)
     workos.beforeAnswer = (method) => {
@@ -640,15 +681,44 @@ describe('when the records cannot be read or move on under the run', () => {
       workos.failNext('DELETE', { status: 500 })
     }
 
+    const first = await reconcileWorkshopRedirectUris(NOW)
+
+    const leftover = workos.uris[0].id
+    expect(first.errored).toEqual(['kontainerkonf.konf.run'])
+    expect(stateOf(id)).toEqual({
+      status: 'registered',
+      id: leftover,
+      error: expect.stringContaining('could not be removed again'),
+    })
+    expect(
+      logged.mock.calls.some((call) => String(call[1]).includes(leftover)),
+    ).toBe(true)
+    workos.beforeAnswer = undefined
+
+    const second = await reconcileWorkshopRedirectUris(NOW)
+
+    expect(second.removed).toEqual(['kontainerkonf.konf.run'])
+    expect(workos.uris).toEqual([])
+    expect(stateOf(id)).toEqual({ status: null, id: null, error: null })
+  })
+
+  it('keeps the URI when recording its id succeeded and only the answer was lost', async () => {
+    const id = seedAllocated('kontainerkonf.konf.run')
+    workos.beforeAnswer = (method) => {
+      if (method === 'POST') loseNextWriteAnswer = true
+    }
+
     const summary = await reconcileWorkshopRedirectUris(NOW)
 
-    expect(summary.errored).toEqual(['kontainerkonf.konf.run'])
     expect(workos.uris).toHaveLength(1)
-    expect(
-      logged.mock.calls.some((call) =>
-        String(call[1]).includes(workos.uris[0].id),
-      ),
-    ).toBe(true)
+    expect(stateOf(id)).toMatchObject({
+      status: 'registered',
+      id: workos.uris[0].id,
+    })
+    expect(summary).toMatchObject({
+      registered: ['kontainerkonf.konf.run'],
+      errored: [],
+    })
   })
 
   it('puts the URI back when the host was wanted again while it was being deleted', async () => {

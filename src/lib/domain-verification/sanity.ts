@@ -369,6 +369,34 @@ type RawSyncRow = RawRecord & {
   conference?: RedirectUriSyncRow['conference']
 }
 
+const SYNC_PROJECTION = `{${FIELDS},
+  _rev,
+  redirectUriStatus,
+  redirectUriId,
+  redirectUriError,
+  "conference": conference->{ organization, ticketingProvider }
+}`
+
+function toSyncRow({
+  _rev,
+  redirectUriStatus,
+  redirectUriId,
+  redirectUriError,
+  conference,
+  ...raw
+}: RawSyncRow): RedirectUriSyncRow {
+  return {
+    record: hydrate(raw),
+    rev: _rev,
+    redirectUri: {
+      status: redirectUriStatus ?? null,
+      id: redirectUriId ?? null,
+      error: redirectUriError ?? null,
+    },
+    conference: conference ?? null,
+  }
+}
+
 /**
  * Everything the WorkOS redirect-URI reconcile decides from (#1297), in ONE
  * read: every record that could be on the redirect allowlist, plus every record
@@ -379,33 +407,25 @@ type RawSyncRow = RawRecord & {
 export async function listRedirectUriSyncRows(): Promise<RedirectUriSyncRow[]> {
   const rows = await clientReadUncached.fetch<RawSyncRow[] | null>(
     // groq-global: the WorkOS redirect-URI list is one per environment and spans every tenant by design.
-    `*[_type == "domainVerification" && (status == "verified" || method in ["grandfathered", "platform-owned"] || defined(redirectUriStatus) || defined(redirectUriId) || defined(redirectUriError))] | order(hostname asc) {${FIELDS},
-      _rev,
-      redirectUriStatus,
-      redirectUriId,
-      redirectUriError,
-      "conference": conference->{ organization, ticketingProvider }
-    }`,
+    `*[_type == "domainVerification" && (status == "verified" || method in ["grandfathered", "platform-owned"] || defined(redirectUriStatus) || defined(redirectUriId) || defined(redirectUriError))] | order(hostname asc) ${SYNC_PROJECTION}`,
   )
-  return (rows ?? []).map(
-    ({
-      _rev,
-      redirectUriStatus,
-      redirectUriId,
-      redirectUriError,
-      conference,
-      ...raw
-    }) => ({
-      record: hydrate(raw),
-      rev: _rev,
-      redirectUri: {
-        status: redirectUriStatus ?? null,
-        id: redirectUriId ?? null,
-        error: redirectUriError ?? null,
-      },
-      conference: conference ?? null,
-    }),
+  return (rows ?? []).map(toSyncRow)
+}
+
+/**
+ * One record as the reconcile reads it, WHATEVER its standing — for looking
+ * again at a record that moved on mid-run, which may by now be revoked with
+ * nothing on it and so absent from {@link listRedirectUriSyncRows}.
+ */
+export async function getRedirectUriSyncRow(
+  id: string,
+): Promise<RedirectUriSyncRow | null> {
+  const raw = await clientReadUncached.fetch<RawSyncRow | null>(
+    // groq-global: keyed by the id of a record the cross-tenant reconcile already holds, never by client input.
+    `*[_type == "domainVerification" && _id == $id][0] ${SYNC_PROJECTION}`,
+    { id },
   )
+  return raw ? toSyncRow(raw) : null
 }
 
 /**
