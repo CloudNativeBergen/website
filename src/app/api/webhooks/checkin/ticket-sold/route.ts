@@ -265,12 +265,15 @@ export async function POST(request: NextRequest) {
     // link an attendee into the workshop portal. For any tenant the portal is
     // not enabled for (plan below pro, ticketing off or without credentials, or
     // an operator's deny) that link lands on a portal that will refuse them,
-    // automatically, on every workshop ticket sale. (The gate turns a
-    // non-platform org ON by plan; until #1296 lands the sign-in round-trip
-    // cannot complete on such a host, which is why this change must not ship
-    // ahead of it — see `src/lib/features/workshops.ts`.) Emailing a link that
-    // cannot work is worse than silence: send NOTHING.
-    // Fail-closed — an unresolvable organization suppresses the email too.
+    // automatically, on every workshop ticket sale. Emailing a link that
+    // cannot work is worse than silence: send NOTHING. Fail-closed — an
+    // unresolvable organization suppresses the email too.
+    //
+    // NOT COVERED HERE: whether the conference's HOST can sign in. That is a
+    // separate question since #1296 (`resolveWorkshopSignInHost` — the host
+    // must be ownership-verified), and this route does not ask it yet, so an
+    // enabled tenant on an unverified host is still mailed a link that answers
+    // 404. #1298 holds the link back in that case.
     if (!(await isWorkshopsEnabledForConference(conference))) {
       console.warn(
         'Checkin webhook: workshops not enabled for conference',

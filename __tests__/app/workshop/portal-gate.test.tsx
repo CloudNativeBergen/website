@@ -399,10 +399,13 @@ describe('workshop portal — sign-in and sign-out go through the SDK', () => {
       conference: conference('org-platform'),
       error: null,
     })
+    // Pro plan: since #1295 the platform org holds workshops by plan (its
+    // ticketing is the env account), not by identity.
     mockGetOrganizationById.mockResolvedValue({
       _id: 'org-platform',
       name: 'Platform',
       slug: PLATFORM_SLUG,
+      plan: 'pro',
     })
   })
 

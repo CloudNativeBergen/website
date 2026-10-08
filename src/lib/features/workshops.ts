@@ -27,13 +27,17 @@ import {
  *
  * There is NO platform-org rule here (#1295). The implicit grant to
  * `PLATFORM_ORG_ID` existed because attendee sign-in ran through one WorkOS
- * client bound to one redirect host. That binding is what #1296 removes (the
- * redirect URI derived per verified host); this gate assumes it is gone and
- * MUST NOT ship ahead of it — until then a non-platform org this gate turns on
- * would be mailed a portal link whose sign-in cannot complete on its host. The
- * platform org qualifies by plan like any other tenant. What it still holds by
- * identity is TICKETING — the platform env account — which is why it satisfies
- * the second half of the rule with no per-org secret.
+ * client bound to one redirect host. #1296 removed that binding: the redirect
+ * URI is chosen per request, for any ownership-verified host
+ * (`@/lib/workshop/sign-in`). So the platform org qualifies by plan like any
+ * other tenant. THIS GATE AND THAT ONE ARE SEPARATE QUESTIONS: this says a
+ * tenant has workshops, the other says one of its hosts can sign in. A tenant
+ * this gate turns on, whose host is not verified, has a portal that answers
+ * 404 (#1298 owns that case).
+ *
+ * What the platform org still holds by identity is TICKETING — the platform
+ * env account — which is why it satisfies the second half of the rule with no
+ * per-org secret.
  *
  * RESOLUTION ORDER — fail-CLOSED at every step:
  *

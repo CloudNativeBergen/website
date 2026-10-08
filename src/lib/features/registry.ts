@@ -48,11 +48,11 @@ import {
  * A TIER IS ATTACHED ONLY WHEN THE CAPABILITY IS PER-TENANT. `ticketing` carries
  * `readiness: 'ga'` + `minPlan: 'pro'` — the entry PAID tier — because a tenant
  * supplies its own provider account, so the feature genuinely works for a
- * customer who buys it. `workshops` is `ga` at `pro` too (#1295): once
- * attendee sign-in follows the verified host (#1296, which this depends on),
- * the one thing the portal needs — the org's ticket data — is exactly what
- * `ticketing` provides, so `./workshops.ts` requires ticketing to be enabled
- * alongside the plan. `badges` stays
+ * customer who buys it. `workshops` is `ga` at `pro` too (#1295): attendee
+ * sign-in follows the verified host since #1296, so the one thing the portal
+ * still needs — the org's ticket data — is exactly what `ticketing` provides,
+ * and `./workshops.ts` requires ticketing to be enabled alongside the plan.
+ * `badges` stays
  * `internal` with NO `minPlan`: its single global signing key still cannot
  * serve a second tenant, and encoding a tier there would sell a surface that
  * cannot work.
