@@ -104,7 +104,7 @@ const ws = vi.hoisted(() => ({
 // about TENANCY, so grant it — otherwise every case below would stop at
 // FORBIDDEN and assert nothing about scoping.
 vi.mock('@/lib/features/workshops', () => ({
-  isWorkshopsEnabledForOrg: vi.fn().mockResolvedValue(true),
+  isWorkshopsEnabledForConference: vi.fn().mockResolvedValue(true),
 }))
 vi.mock('@/lib/workshop/sanity', async (importOriginal) => ({
   ...((await importOriginal()) as Record<string, unknown>),

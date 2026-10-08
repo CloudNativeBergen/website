@@ -6,7 +6,7 @@ import {
 } from '@/lib/secrets/store'
 import { resolveConferenceSlackToken } from '@/lib/slack/token'
 import { resolveSocialConnections } from '@/lib/social/provider'
-import { isWorkshopsEnabledForConference } from '@/lib/features/workshops'
+import { resolveWorkshopsForConference } from '@/lib/features/workshops'
 import {
   conferenceProviderType,
   hasTicketingBinding,
@@ -29,8 +29,10 @@ import {
  * The Slack and workshop gates both fail CLOSED on a rejected Sanity read:
  * `resolveConferenceSlackToken` swallows the rejection inside
  * `isSlackMirrorEnabledForOrg` and answers `undefined`, and
- * `isWorkshopsEnabledForConference` runs through `resolveRegistryEntitlement`,
- * which classifies a rejected read as `'denied'`. That is the correct posture for
+ * `resolveWorkshopsForConference` runs through `resolveRegistryVerdict`
+ * (and the ticketing gate), which classify a rejected read as `'denied'` — a
+ * refused per-org SECRET lookup it reports apart, as `null` (see the
+ * `workshops` signal below). That is the correct posture for
  * handing out a bot token, and exactly the wrong one for a legal disclosure: a
  * transient read failure would silently publish a SHORTER subprocessor list.
  *
@@ -87,7 +89,16 @@ async function resolveProcessingFacts(
         // Coerced to a boolean IMMEDIATELY: this is the token resolver, and the
         // token itself must never travel further than this expression.
         resolveConferenceSlackToken(conference).then(Boolean),
-        isWorkshopsEnabledForConference(conference),
+        // The workshop gate (#1295) also consults the per-org ticketing secret
+        // stores, and a REFUSED lookup there switches the gate off — correct
+        // for a gate, wrong for this page (a healthy org document plus a
+        // refused slug lookup would silently drop WorkOS from the disclosure).
+        // So this asks for the gate's OWN answer with that case kept apart:
+        // `null` = "could not find out" = UNKNOWN, which discloses — the
+        // over-report direction this page is allowed to err in. The gate's own
+        // lookup, not a second one: a retry that happens to succeed says
+        // nothing about the lookup the decision was made from.
+        resolveWorkshopsForConference(conference),
         // EVERY per-org source, not just the JSON blob: since
         // RunKonf/platform#57 a tenant's own Resend key may equally live in
         // `TENANT_<SLUG>_EMAIL_API_KEY`, and a tenant sending on its own account

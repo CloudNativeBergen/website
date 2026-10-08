@@ -1,7 +1,6 @@
 import 'server-only'
 import { getOrganizationById } from '@/lib/organization/sanity'
 import { computeEntitlements, hasActiveOverride } from './entitlements'
-import { isPlatformOrganization } from './platform'
 import type { OrganizationFeatureOverride } from '@/lib/organization/types'
 import type { FeatureId } from './registry'
 
@@ -10,13 +9,17 @@ import type { FeatureId } from './registry'
  * features that carry an implicit grant to the organization configured as
  * `PLATFORM_ORG_ID` on top of whatever the registry decides.
  *
- * WHY THE SHAPE EXISTS. `workshops` (#689), `ticketing` (#820) and `badges`
- * (RunKonf/platform#46) each began as ONE global credential the platform
- * deployment owns — one WorkOS client, one provider account, one badge signing
- * key pair — none of which works for a second tenant on its own. So the honest
- * default for all three is "the platform org, and whoever an operator
- * explicitly grants", which is exactly what `./workshops.ts` worked out first;
- * this module is that logic, factored out so the three gates cannot drift.
+ * WHY THE SHAPE EXISTS. `ticketing` (#820) and `badges` (RunKonf/platform#46)
+ * each began as ONE global credential the platform deployment owns — one
+ * provider account, one badge signing key pair — neither of which works for a
+ * second tenant on its own. So the honest default for both is "the platform
+ * org, and whoever an operator explicitly grants". This module holds the
+ * registry half of that rule — the one read, the fail-closed posture and the
+ * override semantics — so `./ticketing.ts` and `./badges.ts` only add their
+ * own default on top and cannot drift on the shared part. (`workshops` shared
+ * the shape until #1295: attendee sign-in stopped being bound to one host in
+ * #1296, so it is now a plain plan-gated feature in `./workshops.ts` and uses
+ * only the generic registry helpers below.)
  *
  * The implicit grant OUTLIVES the internal readiness that motivated it:
  * `ticketing` is now `readiness: 'ga'` with `minPlan: 'pro'` (a tenant brings
@@ -35,10 +38,11 @@ import type { FeatureId } from './registry'
  *     deliberate decision and is honoured EVERYWHERE, including by surfaces that
  *     would otherwise resolve their own capability first; see
  *     {@link isFeatureExplicitlyDeniedForOrg} and `../tickets/admin-access`.
- *  3. Otherwise the decision is UNSET and the caller applies its own default.
- *     {@link isPlatformDefaultFeatureEnabledForOrg} applies the shared one: the
- *     org whose id is `PLATFORM_ORG_ID` keeps the feature. `./ticketing.ts`
- *     layers one extra grant on top (an org with its OWN provider credentials).
+ *  3. Otherwise the decision is UNSET and the caller applies its own default:
+ *     the org whose id is `PLATFORM_ORG_ID` keeps the feature (a pure id
+ *     comparison through `isPlatformOrganization`, see `./platform`).
+ *     `./ticketing.ts` layers one extra grant on top (an org with its OWN
+ *     provider credentials); `./badges.ts` grants the platform org only.
  *
  * ONE READ ONLY: `plan` and `featureOverrides` come from `getOrganizationById`,
  * cached and tagged `organizationTag(orgId)`, so an override flip takes effect
@@ -50,12 +54,9 @@ import type { FeatureId } from './registry'
 
 /** The features that default to the platform organization (see the module doc). */
 export const PLATFORM_DEFAULT_FEATURES = [
-  'workshops',
   'ticketing',
   'badges',
 ] as const satisfies readonly FeatureId[]
-
-export type PlatformDefaultFeature = (typeof PLATFORM_DEFAULT_FEATURES)[number]
 
 /**
  * What the REGISTRY (plan + overrides) decides for a feature. `'unset'` means
@@ -64,19 +65,40 @@ export type PlatformDefaultFeature = (typeof PLATFORM_DEFAULT_FEATURES)[number]
 export type RegistryDecision = 'granted' | 'denied' | 'unset'
 
 /**
- * The registry's decision for `feature` on `orgId`. A nullish org, an unknown
- * organization document, and a rejected read all resolve to `'denied'` (fail
- * closed) rather than `'unset'` — an unresolvable tenant must not inherit a
- * default grant.
+ * {@link RegistryDecision} with the GRANT split by its source. Most gates do
+ * not care (`resolveRegistryEntitlement` folds both back into `'granted'`);
+ * `./workshops.ts` does, because it attaches an extra condition to a grant by
+ * PLAN only — an operator's grant is final.
  */
-export async function resolveRegistryEntitlement(
+export type RegistryVerdict =
+  'granted-by-override' | 'granted-by-plan' | 'denied' | 'unset'
+
+/**
+ * The registry's verdict for `feature` on `orgId`, in ONE org-document read. A
+ * nullish org, an unknown organization document, and a rejected read all
+ * resolve to `'denied'` (fail closed) rather than `'unset'` — an unresolvable
+ * tenant must not inherit a default grant.
+ */
+export async function resolveRegistryVerdict(
   orgId: string | null | undefined,
   feature: FeatureId,
-): Promise<RegistryDecision> {
+): Promise<RegistryVerdict> {
   if (!orgId) return 'denied'
   const org = await readOrganizationFor(orgId, feature)
   if (!org) return 'denied'
   return decideFromDocument(org, feature)
+}
+
+/** {@link resolveRegistryVerdict} with both grants folded into `'granted'`. */
+export async function resolveRegistryEntitlement(
+  orgId: string | null | undefined,
+  feature: FeatureId,
+): Promise<RegistryDecision> {
+  const verdict = await resolveRegistryVerdict(orgId, feature)
+  if (verdict === 'granted-by-override' || verdict === 'granted-by-plan') {
+    return 'granted'
+  }
+  return verdict
 }
 
 /**
@@ -121,38 +143,25 @@ async function readOrganizationFor(orgId: string, feature: FeatureId) {
   }
 }
 
-/** The registry decision for a RESOLVED org document (see the module doc). */
+/** The registry verdict for a RESOLVED org document (see the module doc). */
 function decideFromDocument(
   org: { plan?: string; featureOverrides?: OrganizationFeatureOverride[] },
   feature: FeatureId,
-): RegistryDecision {
+): RegistryVerdict {
   const now = new Date()
+  // `computeEntitlements` applies overrides in array order and they always win,
+  // so an entitled feature WITH an active override is granted by that override
+  // (its last active entry is `enabled: true`); without one, by the plan.
+  const overridden = hasActiveOverride(org.featureOverrides, feature, now)
   if (computeEntitlements(org.plan, org.featureOverrides, now).has(feature)) {
-    return 'granted'
+    return overridden ? 'granted-by-override' : 'granted-by-plan'
   }
 
   // Not entitled by plan/override. An ACTIVE override at this point can only be
   // an explicit `enabled: false`, which must beat any caller-side default.
-  if (hasActiveOverride(org.featureOverrides, feature, now)) return 'denied'
+  if (overridden) return 'denied'
 
   return 'unset'
-}
-
-/**
- * Whether a platform-default feature is enabled for `orgId`: the registry
- * decision, falling back to "is this the platform org?" when it is unset.
- */
-export async function isPlatformDefaultFeatureEnabledForOrg(
-  orgId: string | null | undefined,
-  feature: PlatformDefaultFeature,
-): Promise<boolean> {
-  const decision = await resolveRegistryEntitlement(orgId, feature)
-  if (decision !== 'unset') return decision === 'granted'
-  // ID comparison against the ONE uncached resolver, never the cached document's
-  // `slug` — see `./platform`. This is a grant, and this deployment has an org
-  // that is both the platform org and a tenant, so a slug edit that revokes it
-  // must revoke it NOW rather than whenever the cached document expires.
-  return isPlatformOrganization(orgId)
 }
 
 /** The minimum conference shape these gates read — its owning tenant. */

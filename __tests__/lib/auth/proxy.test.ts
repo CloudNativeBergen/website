@@ -146,15 +146,14 @@ describe('middleware — /workshop host decision', () => {
     await middleware(reqOnHost('/workshop', VERIFIED_HOST), event)
 
     expect(h.authkitMiddleware).toHaveBeenCalledOnce()
-    expect(h.authkitMiddleware).toHaveBeenCalledWith(
-      expect.objectContaining({
-        redirectUri: `https://${VERIFIED_HOST}/api/auth/callback`,
-        middlewareAuth: {
-          enabled: true,
-          unauthenticatedPaths: ['/workshop/sign-in', '/workshop/sign-up'],
-        },
-      }),
+    const [options] = h.authkitMiddleware.mock.calls[0]
+    expect(options.redirectUri).toBe(
+      `https://${VERIFIED_HOST}/api/auth/callback`,
     )
+    // THE WHOLE OPTION SET, by equality: no `middlewareAuth`. With it the SDK
+    // redirects a signed-out visitor to WorkOS from here, before anything has
+    // asked whether the tenant has workshops (review of #1304).
+    expect(Object.keys(options).sort()).toEqual(['debug', 'redirectUri'])
   })
 
   it('builds it again for the next request — no instance is shared between hosts', async () => {
@@ -169,11 +168,6 @@ describe('middleware — /workshop host decision', () => {
       `https://${VERIFIED_HOST}/api/auth/callback`,
       'https://other.example.org/api/auth/callback',
     ])
-    // The SDK edits `unauthenticatedPaths` in place; each request gets its own.
-    const [first, second] = h.authkitMiddleware.mock.calls.map(
-      ([options]) => options.middlewareAuth.unauthenticatedPaths,
-    )
-    expect(first).not.toBe(second)
   })
 
   it('404s /workshop on a host that is not on the allowlist, without building it', async () => {

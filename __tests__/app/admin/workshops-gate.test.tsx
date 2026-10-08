@@ -9,6 +9,10 @@
  * boundary is mocked — the page's real component composition renders.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import {
+  stubOwnTicketingSecret,
+  stubPlatformTicketingAccount,
+} from '../../helpers/ticketingSecrets'
 
 const mockGetConference = vi.fn()
 const mockGetOrganizationById = vi.fn()
@@ -61,6 +65,7 @@ const OTHER_PLATFORM_ORG_ID = 'org-platform'
 beforeEach(() => {
   vi.clearAllMocks()
   vi.stubEnv('PLATFORM_ORG_ID', OTHER_PLATFORM_ORG_ID)
+  stubPlatformTicketingAccount()
   mockGetWorkshops.mockResolvedValue([])
   mockGetConference.mockResolvedValue({
     conference: {
@@ -76,7 +81,7 @@ afterEach(() => {
 })
 
 describe('/admin/workshops — feature gate', () => {
-  it('404s for a tenant without the workshop feature', async () => {
+  it('404s for a paid tenant whose ticketing has no credentials (#1295)', async () => {
     mockGetOrganizationById.mockResolvedValue({
       _id: 'org-A',
       name: 'Tenant A',
@@ -98,12 +103,26 @@ describe('/admin/workshops — feature gate', () => {
     expect(mockGetOrganizationById).not.toHaveBeenCalled()
   })
 
-  it('renders for the platform org — today’s behaviour is unchanged', async () => {
+  it('renders for a pro tenant with its own ticketing credentials (#1295)', async () => {
+    stubOwnTicketingSecret('org-A')
+    mockGetOrganizationById.mockResolvedValue({
+      _id: 'org-A',
+      name: 'Tenant A',
+      slug: 'tenant-a',
+      plan: 'pro',
+    })
+
+    await expect(WorkshopAdminPage()).resolves.toBeTruthy()
+    expect(mockGetWorkshops).toHaveBeenCalledWith('conf-1')
+  })
+
+  it('renders for the platform org on the pro plan — production’s configuration', async () => {
     vi.stubEnv('PLATFORM_ORG_ID', 'org-A')
     mockGetOrganizationById.mockResolvedValue({
       _id: 'org-A',
       name: 'Platform',
       slug: PLATFORM_SLUG,
+      plan: 'pro',
     })
 
     await expect(WorkshopAdminPage()).resolves.toBeTruthy()

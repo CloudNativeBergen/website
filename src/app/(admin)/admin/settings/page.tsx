@@ -29,11 +29,12 @@ import {
   getAllOrganizations,
   getOrganizationById,
 } from '@/lib/organization/sanity'
-import { effectivePlan, FEATURES } from '@/lib/features/registry'
+import { effectivePlan } from '@/lib/features/registry'
 import { listEntitledFeatures } from '@/lib/features/entitlements'
 import { isPlatformOrgRequest } from '@/lib/features/platform'
-import { isWorkshopsEnabledForOrg } from '@/lib/features/workshops'
+import { isWorkshopsEnabledForConference } from '@/lib/features/workshops'
 import { PlanFeaturesCard } from './PlanFeaturesCard'
+import { applyWorkshopGate } from './planFeatureRows'
 import { PlatformOrgManager } from './PlatformOrgManager'
 import {
   InfoCard,
@@ -161,7 +162,7 @@ export default async function AdminSettings() {
   // entirely when the conference has no organization ref (pre-backfill data).
   const orgId = conference.organization?._ref ?? null
   const organization = orgId ? await getOrganizationById(orgId) : null
-  const entitledFeatureRows = organization
+  const listedFeatureRows = organization
     ? listEntitledFeatures(
         organization.plan,
         organization.featureOverrides,
@@ -175,25 +176,16 @@ export default async function AdminSettings() {
       }))
     : []
 
-  // The workshop gate (#689) layers a platform-org DEFAULT on top of the
-  // generic override-based resolver, so an org can be entitled to `workshops`
-  // without any override this list can see. Ask the resolver that owns that
-  // decision, or this card would tell the platform org its workshop portal is
-  // off while the portal, the admin page and the ticket-sold email all treat it
-  // as on.
-  if (
-    !entitledFeatureRows.some((row) => row.id === 'workshops') &&
-    (await isWorkshopsEnabledForOrg(orgId))
-  ) {
-    const workshops = FEATURES.workshops
-    entitledFeatureRows.push({
-      id: workshops.id,
-      title: workshops.title,
-      description: workshops.description,
-      readiness: workshops.readiness,
-      viaOverride: false,
-    })
-  }
+  // The workshop gate (#1295) adds a condition the generic list cannot see: a
+  // plan-granted `workshops` is OFF until the org's ticketing is enabled and
+  // connected. Ask the resolver that owns the decision and show the row as
+  // inactive, with the reason — or the card would tell a pro org with no
+  // ticketing account that its portal is on while the portal, the admin page
+  // and the ticket-sold email all treat it as off.
+  const entitledFeatureRows = applyWorkshopGate(
+    listedFeatureRows,
+    await isWorkshopsEnabledForConference(conference),
+  )
 
   // Cross-tenant list, fetched ONLY when this request's org is the platform
   // org (PLATFORM_ORG_ID contract, src/lib/features/platform.ts).

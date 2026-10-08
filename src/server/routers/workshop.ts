@@ -47,7 +47,7 @@ import { getWorkshops } from '@/lib/proposal/data/sanity'
 import { Status } from '@/lib/proposal/types'
 import { sendBasicWorkshopConfirmation } from '@/lib/email/workshop'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
-import { isWorkshopsEnabledForOrg } from '@/lib/features/workshops'
+import { isWorkshopsEnabledForConference } from '@/lib/features/workshops'
 import { decideWorkshopPortalAccess } from '@/lib/workshop/access'
 import { WorkshopSignupStatus } from '@/lib/workshop/types'
 import {
@@ -178,15 +178,18 @@ function workshopUserName(user: WorkshopUserIdentity): string {
  * The ORGANIZER workshop surface, gated on the `workshops` feature (#689).
  * `adminProcedure` has already resolved the request org from the domain
  * conference and gated on organizer membership, so this only adds the feature
- * decision — and it asks `isWorkshopsEnabledForOrg` rather than the generic
- * `requireFeature` middleware, because the workshop gate layers a platform-org
- * default on top of the raw entitlement set: the API must not disagree with the
- * `/admin/workshops` page, the portal and the ticket-sold email, which all go
- * through that one resolver. An unresolvable org is DISABLED (the resolver
- * fails closed), matching the waist's posture.
+ * decision — and it asks `isWorkshopsEnabledForConference` rather than the
+ * generic `requireFeature` middleware, because the workshop gate requires
+ * working ticketing on top of the raw entitlement set (#1295): the API must not
+ * disagree with the `/admin/workshops` page, the portal and the ticket-sold
+ * email, which all go through that one resolver. It is asked with the domain
+ * conference — the same one `ctx.orgId` was resolved from — because the answer
+ * depends on that conference's ticketing vendor. An unresolvable conference or
+ * org is DISABLED (the resolver fails closed), matching the waist's posture.
  */
-const workshopAdminProcedure = adminProcedure.use(async ({ ctx, next }) => {
-  if (!(await isWorkshopsEnabledForOrg(ctx.orgId))) {
+const workshopAdminProcedure = adminProcedure.use(async ({ next }) => {
+  const { conference, error } = await getConferenceForCurrentDomain()
+  if (!(await isWorkshopsEnabledForConference(error ? null : conference))) {
     throw new TRPCError({
       code: 'FORBIDDEN',
       message: 'The "workshops" feature is not enabled for this organization',

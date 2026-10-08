@@ -13,7 +13,11 @@
  *
  * Boundaries supplied: the Sanity read behind the allowlist, WorkOS's token
  * endpoint, and `next/headers` (backed by a real `NextResponse`, see
- * `nextHeadersJar.ts`, so cookies are serialized by Next). `next/navigation` is
+ * `nextHeadersJar.ts`, so cookies are serialized by Next). The workshop
+ * FEATURE GATE is supplied too (`isWorkshopsEnabledForConference`, with the
+ * conference the host resolves to): these routes are where it is ordered
+ * against the SDK; what it decides is proven in `workshops.test.ts` and, on
+ * the page, in `portal-gate.test.tsx`. `next/navigation` is
  * the real one: `redirect()` and `notFound()` throw, and the outcome is read
  * off the error's digest the way Next itself does.
  */
@@ -43,6 +47,25 @@ vi.mock('@/lib/domain-verification/sanity', () => ({
 }))
 
 vi.mock('next/headers', () => import('../../helpers/nextHeadersJar'))
+
+/** The conference each host serves, and whether its tenant has workshops. */
+const gate = vi.hoisted(() => ({
+  conferenceForHost: vi.fn(),
+  workshopsEnabled: vi.fn(),
+}))
+
+vi.mock('@/lib/conference/sanity', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/conference/sanity')>()),
+  getConferenceForCurrentDomain: async () => {
+    const { headers } = await import('next/headers')
+    return gate.conferenceForHost((await headers()).get('host'))
+  },
+}))
+
+vi.mock('@/lib/features/workshops', () => ({
+  isWorkshopsEnabledForConference: (conference: unknown) =>
+    gate.workshopsEnabled(conference),
+}))
 
 import { http, HttpResponse } from 'msw'
 import { server } from '../../mocks/msw/server'
@@ -109,6 +132,11 @@ beforeEach(() => {
   ])
   vi.stubEnv('NODE_ENV', 'production')
   vi.spyOn(console, 'error').mockImplementation(() => {})
+  gate.conferenceForHost.mockImplementation(async (host: string) => ({
+    conference: { _id: `conf-on-${host}`, organization: { _ref: 'org' } },
+    error: null,
+  }))
+  gate.workshopsEnabled.mockResolvedValue(true)
 })
 
 afterEach(() => {
@@ -145,9 +173,18 @@ describe.each([
     expect(decodeURIComponent(cookie)).toContain(
       `=${url.searchParams.get('state')};`,
     )
-    expect(cookie).not.toMatch(/;\s*domain=/i)
-    expect(cookie).toMatch(/;\s*HttpOnly/i)
-    expect(cookie).toMatch(/;\s*Secure/i)
+    // The COMPLETE attribute list, by equality. A `Domain=…` entry — which is
+    // what the SDK adds when `WORKOS_COOKIE_DOMAIN` is set, shown against the
+    // real SDK in `sdk-cookie-domain.test.ts` — would make this fail.
+    // (`Expires` is the same lifetime as `Max-Age`, as a date.)
+    const attributes = cookie.split('; ').slice(1)
+    expect(attributes.filter((a) => !a.startsWith('Expires='))).toEqual([
+      'Path=/',
+      'Max-Age=600',
+      'Secure',
+      'HttpOnly',
+      'SameSite=lax',
+    ])
   })
 
   it('ignores a client-sent x-redirect-uri and the single-host env URI', async () => {
@@ -219,6 +256,87 @@ describe.each([
     expect(response.headers.get('location')).toBeNull()
     expect(buildAuthorizationUrl).not.toHaveBeenCalled()
     expect(setCookies()).toEqual([])
+  })
+
+  /**
+   * THE FEATURE GATE COMES BEFORE WORKOS (review of #1304). These two routes
+   * are the only place a signed-out visitor is sent to WorkOS, so a tenant
+   * without workshops must stop here: an allowlisted host is not enough.
+   */
+  it('starts nothing for a tenant without workshops, though its host is allowlisted', async () => {
+    gate.workshopsEnabled.mockResolvedValue(false)
+
+    const response = await handler(onHost(TENANT_A))
+
+    expect(response.status).toBe(404)
+    expect(response.headers.get('location')).toBeNull()
+    expect(buildAuthorizationUrl).not.toHaveBeenCalled()
+    expect(setCookies()).toEqual([])
+    // The gate was asked about the conference resolved for THIS request. (The
+    // resolver is supplied here; that it maps a host to the right conference
+    // is its own tests' business.)
+    expect(gate.workshopsEnabled).toHaveBeenCalledWith(
+      expect.objectContaining({ _id: `conf-on-${TENANT_A}` }),
+    )
+  })
+
+  it('starts nothing when the host resolves to no conference (fail closed)', async () => {
+    gate.conferenceForHost.mockResolvedValue({
+      conference: null,
+      error: new Error('no conference for this domain'),
+    })
+
+    const response = await handler(onHost(TENANT_A))
+
+    expect(response.status).toBe(404)
+    expect(buildAuthorizationUrl).not.toHaveBeenCalled()
+    // The gate is not asked to bless a conference that did not resolve.
+    expect(gate.workshopsEnabled).not.toHaveBeenCalledWith(
+      expect.objectContaining({ _id: expect.any(String) }),
+    )
+  })
+})
+
+describe('GET /api/auth/callback — the feature gate', () => {
+  /** A sign-in started while the tenant had workshops, returning now. */
+  async function returningFromWorkOS(host: string) {
+    const started = await signIn(onHost(host))
+    const state = new URL(started.headers.get('location')!).searchParams.get(
+      'state',
+    )!
+    const verifier = decodeURIComponent(setCookies()[0].split(';')[0])
+    exchangeCode.mockResolvedValue({
+      accessToken: accessToken({ sid: SESSION_ID, sub: 'user_01' }),
+      refreshToken: 'refresh_token_value',
+      user: { id: 'user_01', email: 'ada@example.com' },
+    } as never)
+    onHost(host)
+    const url = new URL(`https://${host}/api/auth/callback`)
+    url.searchParams.set('code', 'code_from_workos')
+    url.searchParams.set('state', state)
+    return new NextRequest(url, {
+      headers: new Headers({ host, cookie: verifier }),
+    })
+  }
+
+  it('exchanges no code and sets no session for a tenant without workshops', async () => {
+    const request = await returningFromWorkOS(TENANT_A)
+    gate.workshopsEnabled.mockResolvedValue(false)
+
+    const response = await callback(request)
+
+    expect(response.status).toBe(404)
+    expect(exchangeCode).not.toHaveBeenCalled()
+    expect(setCookies()).toEqual([])
+  })
+
+  it('CONTROL: the same return completes when the tenant has workshops', async () => {
+    const response = await callback(await returningFromWorkOS(TENANT_A))
+
+    expect(exchangeCode).toHaveBeenCalledOnce()
+    expect(response.headers.get('location')).toBe(
+      `https://${TENANT_A}/workshop`,
+    )
   })
 })
 

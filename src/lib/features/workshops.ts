@@ -1,61 +1,68 @@
 import 'server-only'
-import { resolveCurrentOrgId } from '@/lib/authz/organizer'
+import {
+  conferenceProviderType,
+  type ConferenceTicketingBinding,
+} from '@/lib/tickets/provider'
 import {
   conferenceOrgId,
-  isPlatformDefaultFeatureEnabledForOrg,
+  resolveRegistryVerdict,
   type ConferenceTenant,
 } from './platform-default'
+import { canReadTicketsForOrg, isTicketingEnabledForOrg } from './ticketing'
 
 /**
- * THE single gate for the workshop feature (#689) — the portal, the organizer
- * workshop surfaces, and (most importantly) the workshop instructions email the
- * ticket-sold webhook sends automatically.
+ * THE single gate for the workshop feature (#689, #1295) — the portal, the
+ * organizer workshop surfaces, and (most importantly) the workshop instructions
+ * email the ticket-sold webhook sends automatically.
  *
- * WHY IT IS GATED. Workshops authenticate ticket-holding ATTENDEES through
- * WorkOS AuthKit, in ONE environment shared by every tenant. Until #1296 that
- * environment was bound to one `redirect_uri` on the platform host, so on any
- * other tenant domain the sign-in could never complete and the webhook emailed
- * buyers a link into a loop — which is why the feature is `readiness:
- * 'internal'` (override-only, never offered in upsell surfaces).
+ * WHAT IT IS. A plain registry feature: `readiness: 'ga'`, `minPlan: 'pro'`
+ * (see `./registry`), with ONE condition the registry cannot express. The
+ * portal admits an attendee by looking their ticket up with the organization's
+ * ticketing integration, so workshops are only ON when the org's ticketing is
+ * enabled AND can read tickets for the vendor THIS CONFERENCE selected (see
+ * `canReadTicketsForOrg`: the portal's own credential resolver and provider
+ * are asked, per vendor). A paid plan whose ticketing cannot read tickets is
+ * sold a portal that would refuse every attendee and a webhook that would mail
+ * them into it, so it resolves OFF.
  *
- * SIGN-IN IS NO LONGER HOST-BOUND (#1296): the redirect URI is chosen per
- * request, for any host on the verified-redirect allowlist
- * (`@/lib/workshop/sign-in`). WHICH tenants get the feature is still decided
- * here and still the platform-default rule below; #1295 replaces it with a
- * plan gate. The two are separate questions: this gate says a tenant has
- * workshops, the allowlist says one of its hosts can sign in.
+ * So the decision is PER CONFERENCE, not per organization: two conferences of
+ * one org on different vendors can differ, and every surface asks with the
+ * conference in hand (`isWorkshopsEnabledForConference`) so they agree.
  *
- * RESOLUTION ORDER — the shared PLATFORM-DEFAULT shape (`./platform-default.ts`,
- * which also carries the caching and fail-closed notes), fail-CLOSED at every
- * step:
+ * There is NO platform-org rule here (#1295). The implicit grant to
+ * `PLATFORM_ORG_ID` existed because attendee sign-in ran through one WorkOS
+ * client bound to one redirect host. #1296 removed that binding: the redirect
+ * URI is chosen per request, for any ownership-verified host
+ * (`@/lib/workshop/sign-in`). So the platform org qualifies by plan like any
+ * other tenant. THIS GATE AND THAT ONE ARE SEPARATE QUESTIONS: this says a
+ * tenant has workshops, the other says one of its hosts can sign in. A tenant
+ * this gate turns on, whose host is not verified, has a portal that answers
+ * 404 (#1298 owns that case).
+ *
+ * What the platform org still holds by identity is TICKETING — the platform
+ * env account — which is why it satisfies the second half of the rule with no
+ * per-org secret, as long as that account's variables are set.
+ *
+ * RESOLUTION ORDER — fail-CLOSED at every step:
  *
  *  1. No resolvable org (unknown domain, missing org document, or a REJECTED
- *     org read) → DISABLED. An unresolvable tenant must never degrade into
- *     "serve it anyway"; this mirrors the org-scoped authz waist's posture.
+ *     org read) → DISABLED.
  *  2. An ACTIVE `featureOverrides` entry for `workshops` wins, in BOTH
- *     directions — `enabled: true` grants it to a pilot org, `enabled: false`
- *     revokes it even from the platform org (rule 3). NOTE: a grant does not
- *     make a host able to sign in. The portal still answers 404 on a host that
- *     is not ownership-verified (`resolveWorkshopSignInHost`), and the webhook
- *     does not yet check that before it emails the link (#1298).
- *  3. The org whose id is `PLATFORM_ORG_ID` keeps workshops by default — the
- *     one tenant the feature was built for, kept until #1295 lands so nothing
- *     changes without a data migration.
+ *     directions — `enabled: true` grants it whatever the plan and ticketing
+ *     state, `enabled: false` revokes it from an org the plan would grant.
+ *  3. Otherwise: the plan satisfies `pro` AND `isTicketingEnabledForOrg` AND
+ *     `canReadTicketsForOrg` for the conference's vendor (`./ticketing`). A
+ *     ticketing deny switches workshops off too — the portal has nothing to
+ *     decide from.
  *  4. Anything else → DISABLED.
  *
- * ONE READ ONLY (RunKonf/platform#36, #43):
- *
- *  - `plan` and `featureOverrides` come from `getOrganizationById`, cached and
- *    tagged `organizationTag(orgId)`. The platform manager revalidates that tag
- *    when it flips an override, and an external writer can now do the same
- *    through `POST /api/provisioning/cache/invalidate`, so a change takes
- *    effect immediately by INVALIDATION.
- *  - Rule 3's platform-org identity comes from `isPlatformOrganization`, a pure
- *    id comparison against the configured `PLATFORM_ORG_ID` — no Sanity read and
- *    no cache, so no staleness window and nothing to invalidate. (Before #43 it
- *    resolved a customer-writable slug uncached; binding to the immutable id
- *    removed both the read and the mutable-field hazard.)
- *
+ * ONE DOCUMENT of the organization: the plan and the overrides come from
+ * `getOrganizationById`, cached and tagged `organizationTag(orgId)` (this gate
+ * and the ticketing gate it consults each read it once, through that cache), so
+ * a plan or override change takes effect by INVALIDATION. The vendor comes off
+ * the conference the caller already holds, and the credentials from the secret
+ * stores. Platform standing (for the ticketing half) is a pure
+ * `PLATFORM_ORG_ID` comparison — no Sanity read.
  * Override expiry is evaluated per call against a fresh `now`.
  */
 
@@ -63,31 +70,47 @@ import {
 const WORKSHOPS_FEATURE = 'workshops' as const
 
 /**
- * Whether the organization may use workshops. See the module doc for the exact
- * resolution order; a nullish org id is DISABLED (fail closed).
+ * What the gate reads off a conference: its OWNER and the ticketing vendor it
+ * SELECTED (absent ⇒ Checkin, as everywhere). Pass the same conference the
+ * portal's ticket lookup gets, so the two cannot be decided for different
+ * vendors.
  */
-export async function isWorkshopsEnabledForOrg(
-  orgId: string | null | undefined,
-): Promise<boolean> {
-  return isPlatformDefaultFeatureEnabledForOrg(orgId, WORKSHOPS_FEATURE)
+export type WorkshopConference = ConferenceTenant &
+  Pick<ConferenceTicketingBinding, 'ticketingProvider'>
+
+/**
+ * The gate's answer with "could not find out" kept apart from "no": `null` when
+ * rule 3 was reached and the ticketing credential lookup was REFUSED. Every
+ * gate collapses that to OFF; only the legal disclosure reads it
+ * (`@/lib/legal/subprocessors.resolve`, which resolves an unknown by
+ * disclosing). A missing conference or owner is OFF. Not a gate.
+ */
+export async function resolveWorkshopsForConference(
+  conference: WorkshopConference | null | undefined,
+): Promise<boolean | null> {
+  const orgId = conferenceOrgId(conference)
+  const verdict = await resolveRegistryVerdict(orgId, WORKSHOPS_FEATURE)
+  // Rule 2: the operator's word is final.
+  if (verdict === 'granted-by-override') return true
+  // `'denied'` is an operator's deny or an unresolvable org; `'unset'` is a
+  // plan below `pro` with no override. Both are OFF.
+  if (verdict !== 'granted-by-plan' || !conference) return false
+  // Rule 3: a plan grant is only worth anything with ticketing that works.
+  if (!(await isTicketingEnabledForOrg(orgId))) return false
+  return canReadTicketsForOrg(orgId, conferenceProviderType(conference))
 }
 
 /**
- * Whether workshops are enabled for the tenant that OWNS this conference. Use
- * this wherever a conference is already in hand (the workshop portal layout,
- * the ticket-sold webhook) so the decision keys on the conference's real owner
- * rather than on whatever host the request happens to carry.
+ * Whether workshops are enabled for this conference. See the module doc for the
+ * exact resolution order. Fail closed: a missing conference, a conference with
+ * no owner and a refused credential lookup are all DISABLED.
+ *
+ * KEYED ON THE CONFERENCE, never on a bare org id: the decision needs the
+ * conference's owner (not whatever host the request happens to carry) and its
+ * selected ticketing vendor.
  */
 export async function isWorkshopsEnabledForConference(
-  conference: ConferenceTenant | null | undefined,
+  conference: WorkshopConference | null | undefined,
 ): Promise<boolean> {
-  return isWorkshopsEnabledForOrg(conferenceOrgId(conference))
-}
-
-/**
- * Whether workshops are enabled for the CURRENT request's domain-resolved org.
- * For surfaces that have no conference in hand; an unresolvable org is DISABLED.
- */
-export async function isWorkshopsEnabledForCurrentOrg(): Promise<boolean> {
-  return isWorkshopsEnabledForOrg(await resolveCurrentOrgId())
+  return (await resolveWorkshopsForConference(conference)) === true
 }

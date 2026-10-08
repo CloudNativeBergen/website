@@ -22,6 +22,7 @@
  * the worst possible surface.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { stubPlatformTicketingAccount } from '../helpers/ticketingSecrets'
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { ReactElement } from 'react'
 
@@ -159,6 +160,7 @@ const renderTerms = () => render(TermsPage)
 beforeEach(() => {
   vi.clearAllMocks()
   vi.stubEnv('PLATFORM_ORG_ID', PLATFORM_ORG)
+  stubPlatformTicketingAccount()
   vi.stubEnv('SLACK_BOT_TOKEN', 'xoxb-platform-token')
   vi.stubEnv('TENANT_SECRETS_JSON', '')
   vi.spyOn(console, 'error').mockImplementation(() => {})

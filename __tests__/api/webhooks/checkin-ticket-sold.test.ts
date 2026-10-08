@@ -18,6 +18,7 @@
  * thing mocked is the Sanity lookup that names the tenant — so a regression that
  * reintroduced the platform secret would have to survive the real resolver.
  */
+import { stubPlatformTicketingAccount } from '../../helpers/ticketingSecrets'
 import { NextRequest } from 'next/server'
 import crypto from 'crypto'
 
@@ -69,7 +70,20 @@ const TENANT_SECRET = 'tenant-two-owns-this-checkin-account'
 
 /** `TENANT_SECRETS_JSON` giving the non-platform tenants their own account. */
 const TENANT_SECRETS_JSON = JSON.stringify({
-  'org-tenant2': { ticketing: { webhookSecret: TENANT_SECRET } },
+  // Full accounts: an API key too, so the workshop gate's "can read tickets"
+  // half (#1295) is satisfied and the plan is the deciding input below.
+  'org-tenant2': {
+    ticketing: {
+      apiKey: 't2-key',
+      apiSecret: 't2-secret',
+      webhookSecret: TENANT_SECRET,
+    },
+  },
+  // A Checkin account someone half-filled: it can verify a delivery (webhook
+  // secret) but cannot read a ticket (no API secret).
+  'org-halfbag': {
+    ticketing: { apiKey: 'half-key', webhookSecret: TENANT_SECRET },
+  },
   'org-ghost': { ticketing: { webhookSecret: TENANT_SECRET } },
   'org-pilot': { ticketing: { webhookSecret: TENANT_SECRET } },
 })
@@ -176,13 +190,16 @@ describe('api/webhooks/checkin/ticket-sold — HMAC signature', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     process.env.CHECKIN_WEBHOOK_SECRET = SECRET
-    // Default: the conference belongs to the platform org, which keeps the
-    // workshop feature (the behaviour these signature tests predate).
+    // Default: the conference belongs to the platform org on the pro plan,
+    // which has the workshop feature (#1295: by plan, with the platform env
+    // ticketing account — the behaviour these signature tests predate).
     vi.stubEnv('PLATFORM_ORG_ID', 'org-platform')
+    stubPlatformTicketingAccount()
     mockGetOrganizationById.mockResolvedValue({
       _id: 'org-platform',
       name: 'Platform',
       slug: PLATFORM_SLUG,
+      plan: 'pro',
     })
     // Since #886 the tenant is resolved BEFORE verification, so every case here
     // needs an owner for the credentials to come from. The platform org's
@@ -339,6 +356,7 @@ describe('api/webhooks/checkin/ticket-sold — workshop feature gate', () => {
     // A configured platform org that matches none of the tenants below, so a
     // case is platform ONLY when it points the contract at its own org id.
     vi.stubEnv('PLATFORM_ORG_ID', 'org-none')
+    stubPlatformTicketingAccount()
     // Since #886 a non-platform tenant authenticates on its OWN webhook secret,
     // so the tenants below carry one — and it is DIFFERENT from the platform's,
     // which is what makes every 200 in this suite evidence that the tenant's own
@@ -363,13 +381,15 @@ describe('api/webhooks/checkin/ticket-sold — workshop feature gate', () => {
     return POST(postRequest(makePayload(data), sign(data, secret)))
   }
 
-  it('does NOT email the attendee when workshops are disabled for the tenant', async () => {
+  it('does NOT email the attendee when workshops are disabled for the tenant (community plan)', async () => {
+    // Tenant Two has its OWN ticketing account (it signs this delivery with
+    // it), so the only thing standing between it and the email is the plan.
     bindConferenceTo('org-tenant2')
     mockGetOrganizationById.mockResolvedValue({
       _id: 'org-tenant2',
       name: 'Tenant Two',
       slug: 'tenant-two',
-      plan: 'enterprise',
+      plan: 'community',
     })
 
     const response = await postWorkshopTicket()
@@ -410,13 +430,105 @@ describe('api/webhooks/checkin/ticket-sold — workshop feature gate', () => {
     expect(mockSendWorkshop).not.toHaveBeenCalled()
   })
 
-  it('DOES email for the platform org — today’s behaviour is unchanged', async () => {
+  /**
+   * #1295: a paid plan BUYS the email, provided the tenant's ticketing works.
+   * Tenant Two's own Checkin account verified this very delivery, so its
+   * ticketing credentials exist — the plan is the deciding input here.
+   */
+  it('DOES email a pro tenant whose own ticketing account signed the delivery', async () => {
+    bindConferenceTo('org-tenant2')
+    mockGetOrganizationById.mockResolvedValue({
+      _id: 'org-tenant2',
+      name: 'Tenant Two',
+      slug: 'tenant-two',
+      plan: 'pro',
+    })
+
+    const response = await postWorkshopTicket()
+
+    expect(response.status).toBe(200)
+    expect(mockSendWorkshop).toHaveBeenCalledTimes(1)
+    expect(mockSendWorkshop).toHaveBeenCalledWith(
+      expect.objectContaining({ userEmail: 'ada@example.com' }),
+    )
+  })
+
+  /**
+   * Review of #1304. The delivery AUTHENTICATES (the bag's webhook secret
+   * signed it), so the gate is what decides here — and Checkin cannot read a
+   * ticket without the API secret, so the portal this email links into would
+   * refuse every attendee. No email. The same bag at a Tito conference is a
+   * complete account; `workshops.test.ts` holds that half.
+   */
+  it('does NOT email a pro tenant whose Checkin account has a key but no secret, though its delivery verifies', async () => {
+    bindConferenceTo('org-halfbag')
+    mockGetOrganizationById.mockResolvedValue({
+      _id: 'org-halfbag',
+      name: 'Half Bag',
+      slug: 'half-bag',
+      plan: 'pro',
+    })
+
+    const response = await postWorkshopTicket()
+    const body = await response.json()
+
+    // 200 with "workshops not enabled", not the 401 of a refused delivery.
+    expect(response.status).toBe(200)
+    expect(body.message).toMatch(/not enabled/i)
+    expect(mockSendWorkshop).not.toHaveBeenCalled()
+  })
+
+  /**
+   * #1295: a pro org with NO ticketing credentials gets no workshop email.
+   * At the webhook this is over-determined — with no account of its own there
+   * is nothing to verify a delivery against, so it is refused before the gate
+   * runs (401, #886). `src/lib/features/workshops.test.ts` proves the gate
+   * itself resolves OFF for this org; this pins the webhook's end state.
+   */
+  it('401s a pro org with no ticketing credentials before the gate runs — no workshop email either way', async () => {
+    bindConferenceTo('org-pro-no-tickets')
+    mockGetOrganizationById.mockResolvedValue({
+      _id: 'org-pro-no-tickets',
+      name: 'Pro, unconfigured',
+      slug: 'pro-unconfigured',
+      plan: 'pro',
+    })
+
+    // Neither the tenant's (it has none) nor the platform's secret can verify.
+    for (const secret of [TENANT_SECRET, SECRET]) {
+      const response = await postWorkshopTicket(secret)
+      expect(response.status).toBe(401)
+    }
+    expect(mockSendWorkshop).not.toHaveBeenCalled()
+  })
+
+  it('does NOT email for the platform org on the community plan — no implicit grant (#1295)', async () => {
     vi.stubEnv('PLATFORM_ORG_ID', 'org-platform')
     bindConferenceTo('org-platform')
     mockGetOrganizationById.mockResolvedValue({
       _id: 'org-platform',
       name: 'Platform',
       slug: PLATFORM_SLUG,
+      plan: 'community',
+    })
+
+    const response = await postWorkshopTicket(SECRET)
+
+    // Authenticated on the platform secret, then suppressed by the gate.
+    expect(response.status).toBe(200)
+    expect(mockSendWorkshop).not.toHaveBeenCalled()
+    const body = await response.json()
+    expect(body.message).toMatch(/sent 0 email\(s\)/)
+  })
+
+  it('DOES email for the platform org on the pro plan — production’s configuration', async () => {
+    vi.stubEnv('PLATFORM_ORG_ID', 'org-platform')
+    bindConferenceTo('org-platform')
+    mockGetOrganizationById.mockResolvedValue({
+      _id: 'org-platform',
+      name: 'Platform',
+      slug: PLATFORM_SLUG,
+      plan: 'pro',
     })
 
     // Signed with the PLATFORM env secret — the platform org has no per-org

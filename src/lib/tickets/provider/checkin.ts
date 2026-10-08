@@ -126,8 +126,21 @@ export class CheckinProvider implements TicketingProvider {
     }
   }
 
+  /**
+   * THE rule {@link isConfigured} applies, askable WITHOUT constructing a
+   * provider. The constructor warns — once per process — about missing
+   * credentials, so a gate that only wants to know whether some tenant's bag is
+   * usable must not build one and spend that warning on it.
+   */
+  static canCallApi(credentials: TicketingProviderCredentials): boolean {
+    return !!(credentials.apiKey && credentials.apiSecret)
+  }
+
   isConfigured(): boolean {
-    return !!(this.apiKey && this.apiSecret)
+    return CheckinProvider.canCallApi({
+      apiKey: this.apiKey,
+      apiSecret: this.apiSecret,
+    })
   }
 
   // ── GraphQL transport (formerly CheckinGraphQLClient) ─────────────

@@ -64,6 +64,8 @@ function serverOnly(name: string): never {
 
 export const getTicketingProvider: typeof Provider.getTicketingProvider = () =>
   serverOnly('getTicketingProvider')
+export const ticketingCredentialsConfigured: typeof Provider.ticketingCredentialsConfigured =
+  () => serverOnly('ticketingCredentialsConfigured')
 export const platformCheckinCredentials: typeof Provider.platformCheckinCredentials =
   () => serverOnly('platformCheckinCredentials')
 export const platformTitoCredentials: typeof Provider.platformTitoCredentials =
@@ -84,6 +86,7 @@ export const parseCheckinOrderCreated: typeof Provider.parseCheckinOrderCreated 
 // Compile-time parity guard against the real barrel.
 const _parity = {
   getTicketingProvider,
+  ticketingCredentialsConfigured,
   platformCheckinCredentials,
   platformTitoCredentials,
   resolveTicketingCredentials,

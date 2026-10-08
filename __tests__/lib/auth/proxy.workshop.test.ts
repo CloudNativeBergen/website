@@ -3,8 +3,14 @@
  *
  * The workshop branch of `src/proxy.ts` against the REAL
  * `@workos-inc/authkit-nextjs` (#1296). Nothing of the SDK is mocked: the
- * `Location`, the PKCE parameters and the `Set-Cookie` values asserted here are
- * what the installed package produces.
+ * responses asserted here are what the installed package produces.
+ *
+ * THE PROXY NEVER SENDS ANYONE TO WORKOS (review of #1304). It decides from the
+ * host alone and cannot know whether the tenant has workshops, so a signed-out
+ * visitor is let through to the page, which checks the feature gate and only
+ * then offers the sign-in routes. Those routes are where the authorize
+ * redirect, the PKCE pair and the verifier cookie are proven
+ * (`workos-sign-in-out.test.ts`).
  *
  * Only the Sanity persistence boundary is supplied (`listAllowlistCandidates`),
  * so the real allowlist policy decides which hosts may sign in.
@@ -14,10 +20,7 @@
  * verified by that stub. Everything below is therefore about the SIGNED-OUT
  * path, which never reaches `jose`.
  */
-import {
-  WORKOS_ENV_FALLBACK_REDIRECT_URI as ENV_FALLBACK,
-  WORKOS_TEST_CLIENT_ID,
-} from '../../helpers/workosEnv'
+import { WORKOS_ENV_FALLBACK_REDIRECT_URI as ENV_FALLBACK } from '../../helpers/workosEnv'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { NextRequest, type NextFetchEvent } from 'next/server'
 import type { DomainVerificationRecord } from '@/lib/domain-verification/types'
@@ -54,9 +57,19 @@ async function run(request: NextRequest): Promise<Response> {
   return (await middleware(request, event)) as Response
 }
 
-/** The authorize URL the response redirects to, parsed. */
-function authorizeUrl(response: Response): URL {
-  return new URL(response.headers.get('location')!)
+/**
+ * The callback the proxy handed the page for this request: the `x-redirect-uri`
+ * REQUEST header the SDK sets, as Next carries it on a pass-through response.
+ */
+function callbackForPage(response: Response): string | null {
+  return response.headers.get('x-middleware-request-x-redirect-uri')
+}
+
+/** Passed through to the app: no redirect anywhere, nothing set on the browser. */
+function expectPassedThrough(response: Response) {
+  expect(response.headers.get('x-middleware-next')).toBe('1')
+  expect(response.headers.get('location')).toBeNull()
+  expect(response.headers.getSetCookie()).toEqual([])
 }
 
 const buildAuthorizationUrl = vi.spyOn(
@@ -79,46 +92,29 @@ afterEach(() => {
 })
 
 describe('workshop proxy — a signed-out visitor on an allowlisted host', () => {
-  it('is redirected to WorkOS with THAT host’s callback as redirect_uri', async () => {
-    const response = await run(navigate(TENANT_A))
-
-    expect(response.status).toBe(307)
-    const url = authorizeUrl(response)
-    expect(url.origin + url.pathname).toBe(
-      'https://api.workos.com/user_management/authorize',
-    )
-    expect(url.searchParams.get('redirect_uri')).toBe(
-      `https://${TENANT_A}/api/auth/callback`,
-    )
-    expect(url.searchParams.get('client_id')).toBe(WORKOS_TEST_CLIENT_ID)
+  it('is let through to the page: no redirect to WorkOS and no cookie', async () => {
+    expectPassedThrough(await run(navigate(TENANT_A)))
   })
 
-  it('uses PKCE — a challenge in the URL and its verifier in a cookie', async () => {
-    const response = await run(navigate(TENANT_A))
-
-    const url = authorizeUrl(response)
-    expect(url.searchParams.get('code_challenge_method')).toBe('S256')
-    expect(url.searchParams.get('code_challenge')).toMatch(/^[\w-]{43}$/)
-
-    const cookies = response.headers.getSetCookie()
-    expect(cookies).toHaveLength(1)
-    expect(cookies[0]).toMatch(/^wos-auth-verifier-[0-9a-f]{8}=/)
-    // The sealed state travels in BOTH channels; the callback compares them.
-    expect(cookies[0]).toContain(`=${url.searchParams.get('state')};`)
+  it.each([
+    '/workshop/sign-in',
+    '/workshop/sign-up',
+    '/workshop/sign-in/x',
+    '/workshop/agenda',
+  ])('lets %s through the same way', async (path) => {
+    expectPassedThrough(await run(navigate(TENANT_A, path)))
   })
 
-  it('never falls back to the single-host env URI, nor to a client-sent x-redirect-uri', async () => {
+  it('hands the page THAT host’s callback — never the env URI, never a client-sent x-redirect-uri', async () => {
     const response = await run(
       navigate(TENANT_A, '/workshop', {
         headers: { 'x-redirect-uri': 'https://evil.example.org/steal' },
       }),
     )
 
-    const location = response.headers.get('location')!
-    expect(location).not.toContain(encodeURIComponent(ENV_FALLBACK))
-    expect(location).not.toContain('decoy')
-    expect(location).not.toContain('evil')
-    expect(authorizeUrl(response).searchParams.get('redirect_uri')).toBe(
+    // The fixture's env URI is a different host, so equality rules it out.
+    expect(ENV_FALLBACK).not.toContain(TENANT_A)
+    expect(callbackForPage(response)).toBe(
       `https://${TENANT_A}/api/auth/callback`,
     )
   })
@@ -126,8 +122,7 @@ describe('workshop proxy — a signed-out visitor on an allowlisted host', () =>
   it('serves each host its own callback, request by request (nothing is captured)', async () => {
     const seen: (string | null)[] = []
     for (const host of [TENANT_A, TENANT_B, TENANT_A]) {
-      const response = await run(navigate(host))
-      seen.push(authorizeUrl(response).searchParams.get('redirect_uri'))
+      seen.push(callbackForPage(await run(navigate(host))))
     }
     expect(seen).toEqual([
       `https://${TENANT_A}/api/auth/callback`,
@@ -169,8 +164,8 @@ describe('workshop proxy — the host is the Host header, and nothing else', () 
       request({ host: TENANT_A, forwarded: UNVERIFIED, url: TENANT_B }),
     )
 
-    expect(response.status).toBe(307)
-    expect(authorizeUrl(response).searchParams.get('redirect_uri')).toBe(
+    expectPassedThrough(response)
+    expect(callbackForPage(response)).toBe(
       `https://${TENANT_A}/api/auth/callback`,
     )
   })
@@ -182,22 +177,8 @@ describe('workshop proxy — the host is the Host header, and nothing else', () 
  * sign-in) on one tenant's host is never presented on another's.
  */
 describe('workshop proxy — cookies are host-only', () => {
-  it('issues its cookie with exactly these attributes — and no Domain among them', async () => {
-    const response = await run(navigate(TENANT_A))
-    const [cookie] = response.headers.getSetCookie()
-
-    // The COMPLETE attribute list, by equality. A `Domain=…` entry — which is
-    // what the SDK adds when `WORKOS_COOKIE_DOMAIN` is set, shown against the
-    // real SDK in `sdk-cookie-domain.test.ts` — would make this fail.
-    expect(cookie.split('; ').slice(1)).toEqual([
-      'Path=/',
-      'HttpOnly',
-      'SameSite=Lax',
-      'Max-Age=600',
-      'Secure',
-    ])
-  })
-
+  // The verifier cookie's own attributes are pinned where it is issued now:
+  // `workos-sign-in-out.test.ts`, on the sign-in and sign-up routes.
   it('refuses every host when WORKOS_COOKIE_DOMAIN would widen the cookie', async () => {
     const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
     vi.stubEnv('WORKOS_COOKIE_DOMAIN', '.example.org')
@@ -212,10 +193,11 @@ describe('workshop proxy — cookies are host-only', () => {
 })
 
 describe('workshop proxy — any other host', () => {
-  it('issues NO authorize redirect and sets no cookie', async () => {
+  it('is a 404, not a pass-through — the app never sees the request', async () => {
     const response = await run(navigate(UNVERIFIED))
 
     expect(response.status).toBe(404)
+    expect(response.headers.get('x-middleware-next')).toBeNull()
     expect(response.headers.get('location')).toBeNull()
     expect(response.headers.getSetCookie()).toEqual([])
   })
@@ -280,43 +262,17 @@ describe('workshop proxy — any other host', () => {
 })
 
 /**
- * `/workshop/sign-in` and `/workshop/sign-up` START a sign-in themselves (their
- * route handlers call the SDK), so the proxy lets a signed-out visitor through
- * to them instead of bouncing them into a sign-in of its own.
- */
-describe('workshop proxy — the sign-in and sign-up entry points', () => {
-  it.each(['/workshop/sign-in', '/workshop/sign-up'])(
-    'passes %s through, signed out, on an allowlisted host',
-    async (path) => {
-      const response = await run(navigate(TENANT_A, path))
-
-      expect(response.headers.get('x-middleware-next')).toBe('1')
-      expect(response.headers.get('location')).toBeNull()
-      // No sign-in was started by the proxy, so no verifier cookie either.
-      expect(response.headers.getSetCookie()).toEqual([])
-    },
-  )
-
-  it('still redirects every other path under /workshop', async () => {
-    expect((await run(navigate(TENANT_A, '/workshop/sign-in/x'))).status).toBe(
-      307,
-    )
-    expect((await run(navigate(TENANT_A, '/workshop/agenda'))).status).toBe(307)
-  })
-})
-
-/**
  * The development-only `localhost` exception (parent #1293, decision 8).
  */
 describe('workshop proxy — localhost', () => {
-  it('signs in over http in development', async () => {
+  it('is admitted over http in development, with its own callback', async () => {
     vi.stubEnv('NODE_ENV', 'development')
     const response = await run(
       navigate('localhost:3000', '/workshop', { scheme: 'http' }),
     )
 
-    expect(response.status).toBe(307)
-    expect(authorizeUrl(response).searchParams.get('redirect_uri')).toBe(
+    expectPassedThrough(response)
+    expect(callbackForPage(response)).toBe(
       'http://localhost:3000/api/auth/callback',
     )
     expect(listAllowlistCandidates).not.toHaveBeenCalled()
@@ -341,14 +297,12 @@ describe('workshop proxy — localhost', () => {
 })
 
 /**
- * ONLY A NAVIGATION IS BOUNCED INTO A SIGN-IN. A POST under `/workshop` is a
- * server action (today: Sign Out). Redirecting it to WorkOS helps nobody — the
- * action client cannot follow a cross-origin redirect, so the attendee gets an
- * error, and the POST is lost either way. So a signed-out POST is let through
- * and the action decides for itself, as an action must anyway: it can be
- * posted to paths this proxy never sees.
+ * A POST under `/workshop` is a server action (today: Sign Out). It is treated
+ * like every other request: let through on a host that may sign in, refused on
+ * one that may not. The action decides for itself, as an action must anyway —
+ * it can be posted to paths this proxy never sees.
  */
-describe('workshop proxy — a POST is never redirected to WorkOS', () => {
+describe('workshop proxy — a POST', () => {
   function post(host: string, headers: Record<string, string> = {}) {
     return new NextRequest(`https://${host}/workshop`, {
       method: 'POST',
@@ -359,33 +313,14 @@ describe('workshop proxy — a POST is never redirected to WorkOS', () => {
   it.each([
     ['a server-action POST', { 'next-action': 'a1b2c3' }],
     ['a plain form POST (no JavaScript)', {}],
-  ])(
-    'lets %s through, signed out, with no redirect and no cookie',
-    async (_label, headers) => {
-      const response = await run(post(TENANT_A, headers))
+  ])('lets %s through, signed out', async (_label, headers) => {
+    expectPassedThrough(await run(post(TENANT_A, headers)))
+  })
 
-      expect(response.headers.get('x-middleware-next')).toBe('1')
-      expect(response.headers.get('location')).toBeNull()
-      expect(response.headers.getSetCookie()).toEqual([])
-    },
-  )
-
-  it('still refuses a POST on a host that may not sign in', async () => {
+  it('refuses a POST on a host that may not sign in', async () => {
     const response = await run(post(UNVERIFIED, { 'next-action': 'a1b2c3' }))
 
     expect(response.status).toBe(404)
     expect(buildAuthorizationUrl).not.toHaveBeenCalled()
-  })
-
-  it('still redirects a GET and a HEAD on the same path', async () => {
-    for (const method of ['GET', 'HEAD']) {
-      const response = await run(
-        new NextRequest(`https://${TENANT_A}/workshop`, {
-          method,
-          headers: new Headers({ host: TENANT_A, accept: 'text/html' }),
-        }),
-      )
-      expect(response.status).toBe(307)
-    }
   })
 })

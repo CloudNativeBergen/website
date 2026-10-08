@@ -19,6 +19,10 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import {
+  stubOwnTicketingSecret,
+  stubPlatformTicketingAccount,
+} from '../../helpers/ticketingSecrets'
+import {
   createWorkshopCaller,
   createAnonymousCaller,
   createAdminCaller,
@@ -47,22 +51,25 @@ vi.mock('@/lib/conference/sanity', () => ({
   })),
 }))
 
-// The org that owns the conference IS the platform org, so it keeps the
-// `workshops` feature — the state the admin procedures ran in before the gate.
+// The org that owns the conference is the platform org ON THE PRO PLAN: since
+// #1295 that is what holds the `workshops` feature (pro + the platform's env
+// ticketing account) — production's configuration.
 vi.mock('@/lib/organization/sanity', () => ({
   getOrganizationById: vi.fn(async () => ({
     _id: 'org-test',
     name: 'Platform',
     slug: 'platform-org',
+    plan: 'pro',
   })),
   getOrganizationRefForCurrentConference: vi.fn(async () => 'org-test'),
 }))
 
 /**
- * The platform-org grant is an ID comparison against the configured
- * `PLATFORM_ORG_ID` (RunKonf/platform#43) — pure env, no Sanity read and never
- * the cached org document's `slug`. This mock is a TRIPWIRE: a reintroduced slug
- * lookup would call it and trip the no-fetch guard.
+ * Platform standing (which gives the org the env ticketing account the workshop
+ * gate requires) is an ID comparison against the configured `PLATFORM_ORG_ID`
+ * (RunKonf/platform#43) — pure env, no Sanity read and never the cached org
+ * document's `slug`. This mock is a TRIPWIRE: a reintroduced slug lookup would
+ * call it and trip the no-fetch guard.
  */
 const h = vi.hoisted(() => ({ fetch: vi.fn(async () => null) }))
 
@@ -195,8 +202,10 @@ beforeEach(() => {
     eventRef: { customerId: 1, eventId: 2 },
   })
   // Names the org above (`org-test`) as the platform org by its document id,
-  // which is what grants `workshops` — a pure env comparison, no Sanity read.
+  // which gives its pro plan the ticketing credentials `workshops` requires
+  // (#1295) — a pure env comparison, no Sanity read.
   vi.stubEnv('PLATFORM_ORG_ID', 'org-test')
+  stubPlatformTicketingAccount()
 })
 
 afterEach(() => {
@@ -359,7 +368,9 @@ describe('attendee procedures enforce the portal access decision', () => {
 
   describe.each(procedures)('%s', (_name, call) => {
     it('refuses when workshops are not enabled for the org', async () => {
-      // Verified email + a workshop ticket; only the feature is missing.
+      // Verified email + a workshop ticket; only the feature is missing: the
+      // org is no longer the platform org, so its pro plan has no ticketing
+      // credentials behind it and `workshops` resolves OFF (#1295).
       vi.stubEnv('PLATFORM_ORG_ID', 'some-other-org')
 
       await expect(call(createWorkshopCaller())).rejects.toMatchObject({
@@ -441,6 +452,21 @@ describe('attendee procedures enforce the portal access decision', () => {
       expect(ticketing.fetchEventTickets).toHaveBeenCalledTimes(1)
       expectNoSignupIO()
     })
+  })
+
+  /**
+   * #1295: the same attendee at a NON-PLATFORM pro tenant with its own
+   * ticketing account. The platform org id points elsewhere, so the feature is
+   * on by plan + credentials and by nothing else.
+   */
+  it('lets a verified ticket holder through at a non-platform pro tenant with its own ticketing', async () => {
+    vi.stubEnv('PLATFORM_ORG_ID', 'some-other-org')
+    stubOwnTicketingSecret('org-test')
+
+    const result = await createWorkshopCaller().workshop.signup(baseSignupInput)
+
+    expect(result.success).toBe(true)
+    expect(createSignupMock).toHaveBeenCalledTimes(1)
   })
 
   it('lets a verified ticket holder through to the signup write', async () => {
