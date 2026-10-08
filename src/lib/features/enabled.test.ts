@@ -30,10 +30,7 @@ vi.mock('@/lib/sanity/client', () => ({
   clientReadUncached: { fetch: h.fetch },
 }))
 
-import {
-  resolveEnabledFeaturesForOrg,
-  resolveEnabledFeaturesForConference,
-} from './enabled'
+import { resolveEnabledFeaturesForConference } from './enabled'
 import { PLATFORM_DEFAULT_FEATURES } from './platform-default'
 import { FEATURES } from './registry'
 import { ORGANIZATION_PLANS } from '@/lib/organization/types'
@@ -48,6 +45,10 @@ beforeEach(() => {
   vi.clearAllMocks()
   vi.stubEnv('PLATFORM_ORG_ID', PLATFORM_ORG_ID)
   vi.stubEnv('TENANT_SECRETS_JSON', '')
+  // The platform env account exists, as in production; only the platform org
+  // is ever handed it.
+  vi.stubEnv('CHECKIN_API_KEY', 'platform-key')
+  vi.stubEnv('CHECKIN_API_SECRET', 'platform-secret')
 })
 
 afterEach(() => {
@@ -91,7 +92,13 @@ describe('platform-default feature tiers track the capability', () => {
   })
 })
 
-describe('resolveEnabledFeaturesForOrg', () => {
+/** The feature set of a Checkin conference owned by `orgId`. */
+const resolveEnabledFeaturesForOrg = (orgId: string | null | undefined) =>
+  resolveEnabledFeaturesForConference(
+    orgId ? { organization: { _ref: orgId } } : null,
+  )
+
+describe('resolveEnabledFeaturesForConference, by owner', () => {
   it('gives a brand-new community tenant NOTHING — the day-one demo org', async () => {
     getOrganizationById.mockResolvedValue(org({ plan: 'community' }))
     await expect(resolveEnabledFeaturesForOrg('org-A')).resolves.toEqual([])

@@ -11,7 +11,10 @@
  * probe that records the feature list it was handed.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { stubOwnTicketingSecret } from '../../helpers/ticketingSecrets'
+import {
+  stubOwnTicketingSecret,
+  stubPlatformTicketingAccount,
+} from '../../helpers/ticketingSecrets'
 import { renderToStaticMarkup } from 'react-dom/server'
 
 const mockGetConference = vi.fn()
@@ -67,6 +70,7 @@ async function enabledFeatures(): Promise<string[]> {
 beforeEach(() => {
   vi.clearAllMocks()
   vi.stubEnv('PLATFORM_ORG_ID', PLATFORM_ORG_ID)
+  stubPlatformTicketingAccount()
   vi.stubEnv('TENANT_SECRETS_JSON', '')
   mockIsOrganizer.mockResolvedValue(true)
   mockGetConference.mockResolvedValue({

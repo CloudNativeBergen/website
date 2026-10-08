@@ -49,11 +49,15 @@ vi.mock('@/lib/sanity/client', () => ({
 }))
 
 import {
-  isWorkshopsEnabledForOrg,
   isWorkshopsEnabledForConference,
-  isWorkshopsEnabledForCurrentOrg,
   resolveWorkshopsForConference,
 } from './workshops'
+
+/** The gate for a Checkin conference owned by `orgId` — the common fixture. */
+const isWorkshopsEnabledForOrg = (orgId: string | null | undefined) =>
+  isWorkshopsEnabledForConference(
+    orgId ? { organization: { _ref: orgId } } : null,
+  )
 
 /** The configured platform org's document id — distinct from the default
  * tenant `org-A`, so ordinary-tenant tests are never accidentally platform. */
@@ -75,13 +79,17 @@ beforeEach(() => {
   vi.clearAllMocks()
   vi.stubEnv('PLATFORM_ORG_ID', PLATFORM_ORG_ID)
   vi.stubEnv('TENANT_SECRETS_JSON', '')
+  // The platform env account exists, as in production. It is the PLATFORM
+  // org's alone: every "no credentials" test below is a tenant not getting it.
+  vi.stubEnv('CHECKIN_API_KEY', 'platform-key')
+  vi.stubEnv('CHECKIN_API_SECRET', 'platform-secret')
 })
 
 afterEach(() => {
   vi.unstubAllEnvs()
 })
 
-describe('isWorkshopsEnabledForOrg — fail closed', () => {
+describe('isWorkshopsEnabledForConference — fail closed', () => {
   it('is DISABLED and reads nothing when the org cannot be resolved', async () => {
     await expect(isWorkshopsEnabledForOrg(null)).resolves.toBe(false)
     await expect(isWorkshopsEnabledForOrg(undefined)).resolves.toBe(false)
@@ -121,7 +129,7 @@ describe('isWorkshopsEnabledForOrg — fail closed', () => {
  * alone is not enough: the portal decides access from ticket data, so an org
  * whose ticketing cannot read any is sold nothing it can use.
  */
-describe('isWorkshopsEnabledForOrg — pro plan AND working ticketing', () => {
+describe('isWorkshopsEnabledForConference — pro plan AND working ticketing', () => {
   it('is ENABLED on the entry paid plan for an org with its own ticketing credentials', async () => {
     stubOwnTicketingSecret('org-A')
     getOrganizationById.mockResolvedValue(org({ plan: 'pro' }))
@@ -205,7 +213,7 @@ describe('isWorkshopsEnabledForOrg — pro plan AND working ticketing', () => {
   })
 })
 
-describe('isWorkshopsEnabledForOrg — overrides win in both directions', () => {
+describe('isWorkshopsEnabledForConference — overrides win in both directions', () => {
   it('is ENABLED by an explicit grant, regardless of plan and ticketing', async () => {
     getOrganizationById.mockResolvedValue(
       org({
@@ -276,7 +284,7 @@ describe('isWorkshopsEnabledForOrg — overrides win in both directions', () => 
  * like any other org; what it still has by right is TICKETING (the platform
  * env account), which is the second half of the rule.
  */
-describe('isWorkshopsEnabledForOrg — the platform org gets it by plan, not by identity', () => {
+describe('isWorkshopsEnabledForConference — the platform org gets it by plan, not by identity', () => {
   it('is DISABLED for the platform org on the community plan', async () => {
     getOrganizationById.mockResolvedValue(
       org({ _id: PLATFORM_ORG_ID, plan: 'community' }),
@@ -325,18 +333,100 @@ describe('isWorkshopsEnabledForConference', () => {
   })
 })
 
-describe('isWorkshopsEnabledForCurrentOrg', () => {
-  it('resolves the org from the request domain', async () => {
-    getOrganizationRefForCurrentConference.mockResolvedValue('org-A')
-    getOrganizationById.mockResolvedValue(
-      org({ featureOverrides: [{ feature: 'workshops', enabled: true }] }),
+/**
+ * THE VENDOR (review of #1304). "Can read tickets" is asked of the provider the
+ * conference SELECTED, through the resolver and the provider class the portal
+ * itself uses — so the gate cannot say yes to credentials the portal's own
+ * ticket lookup would then find unusable.
+ */
+describe('isWorkshopsEnabledForConference — credentials for the selected provider', () => {
+  const conference = (ticketingProvider?: 'checkin' | 'tito') => ({
+    organization: { _ref: 'org-A' },
+    ticketingProvider,
+  })
+  const ownBag = (bag: Record<string, string>) =>
+    vi.stubEnv(
+      'TENANT_SECRETS_JSON',
+      JSON.stringify({ 'org-A': { ticketing: bag } }),
     )
-    await expect(isWorkshopsEnabledForCurrentOrg()).resolves.toBe(true)
+  /** A COMPLETE discrete Checkin set, which only a Checkin conference may use. */
+  const ownDiscreteCheckinSet = () => {
+    secretEnvSlugs.mockResolvedValue([{ _id: 'org-A', secretEnvSlug: 'ORGA' }])
+    vi.stubEnv('TENANT_ORGA_CHECKIN_API_KEY', 'k')
+    vi.stubEnv('TENANT_ORGA_CHECKIN_API_SECRET', 's')
+    vi.stubEnv('TENANT_ORGA_CHECKIN_WEBHOOK_SECRET', 'w')
+  }
+
+  beforeEach(() => {
+    getOrganizationById.mockResolvedValue(org({ plan: 'pro' }))
   })
 
-  it('is DISABLED when the request domain resolves to no org', async () => {
-    getOrganizationRefForCurrentConference.mockResolvedValue(null)
-    await expect(isWorkshopsEnabledForCurrentOrg()).resolves.toBe(false)
-    expect(getOrganizationById).not.toHaveBeenCalled()
+  it('Checkin needs a key AND a secret: a key alone is OFF', async () => {
+    ownBag({ apiKey: 'k', webhookSecret: 'w' })
+    await expect(
+      isWorkshopsEnabledForConference(conference('checkin')),
+    ).resolves.toBe(false)
+    // Absent provider ⇒ Checkin, the historical default.
+    await expect(isWorkshopsEnabledForConference(conference())).resolves.toBe(
+      false,
+    )
+
+    ownBag({ apiKey: 'k', apiSecret: 's' })
+    await expect(
+      isWorkshopsEnabledForConference(conference('checkin')),
+    ).resolves.toBe(true)
+    await expect(isWorkshopsEnabledForConference(conference())).resolves.toBe(
+      true,
+    )
+  })
+
+  it('Tito needs only a key: the same key-only bag is ON for a Tito conference', async () => {
+    ownBag({ apiKey: 'k' })
+    await expect(
+      isWorkshopsEnabledForConference(conference('tito')),
+    ).resolves.toBe(true)
+    await expect(
+      isWorkshopsEnabledForConference(conference('checkin')),
+    ).resolves.toBe(false)
+  })
+
+  it('discrete Checkin credentials count for a Checkin conference and NOT for a Tito one', async () => {
+    ownDiscreteCheckinSet()
+    await expect(
+      isWorkshopsEnabledForConference(conference('checkin')),
+    ).resolves.toBe(true)
+    await expect(
+      isWorkshopsEnabledForConference(conference('tito')),
+    ).resolves.toBe(false)
+  })
+
+  it('the platform org reads tickets with the env account of the selected provider, when it is set', async () => {
+    const platform = (ticketingProvider: 'checkin' | 'tito') => ({
+      organization: { _ref: PLATFORM_ORG_ID },
+      ticketingProvider,
+    })
+    getOrganizationById.mockResolvedValue(
+      org({ _id: PLATFORM_ORG_ID, plan: 'pro' }),
+    )
+    vi.stubEnv('CHECKIN_API_KEY', '')
+    vi.stubEnv('CHECKIN_API_SECRET', '')
+    vi.stubEnv('TITO_API_KEY', '')
+    await expect(
+      isWorkshopsEnabledForConference(platform('checkin')),
+    ).resolves.toBe(false)
+
+    vi.stubEnv('CHECKIN_API_KEY', 'k')
+    vi.stubEnv('CHECKIN_API_SECRET', 's')
+    await expect(
+      isWorkshopsEnabledForConference(platform('checkin')),
+    ).resolves.toBe(true)
+    await expect(
+      isWorkshopsEnabledForConference(platform('tito')),
+    ).resolves.toBe(false)
+
+    vi.stubEnv('TITO_API_KEY', 't')
+    await expect(
+      isWorkshopsEnabledForConference(platform('tito')),
+    ).resolves.toBe(true)
   })
 })

@@ -9,7 +9,10 @@
  * boundary is mocked — the page's real component composition renders.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { stubOwnTicketingSecret } from '../../helpers/ticketingSecrets'
+import {
+  stubOwnTicketingSecret,
+  stubPlatformTicketingAccount,
+} from '../../helpers/ticketingSecrets'
 
 const mockGetConference = vi.fn()
 const mockGetOrganizationById = vi.fn()
@@ -62,6 +65,7 @@ const OTHER_PLATFORM_ORG_ID = 'org-platform'
 beforeEach(() => {
   vi.clearAllMocks()
   vi.stubEnv('PLATFORM_ORG_ID', OTHER_PLATFORM_ORG_ID)
+  stubPlatformTicketingAccount()
   mockGetWorkshops.mockResolvedValue([])
   mockGetConference.mockResolvedValue({
     conference: {

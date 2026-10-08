@@ -18,6 +18,7 @@
  * thing mocked is the Sanity lookup that names the tenant — so a regression that
  * reintroduced the platform secret would have to survive the real resolver.
  */
+import { stubPlatformTicketingAccount } from '../../helpers/ticketingSecrets'
 import { NextRequest } from 'next/server'
 import crypto from 'crypto'
 
@@ -77,6 +78,11 @@ const TENANT_SECRETS_JSON = JSON.stringify({
       apiSecret: 't2-secret',
       webhookSecret: TENANT_SECRET,
     },
+  },
+  // A Checkin account someone half-filled: it can verify a delivery (webhook
+  // secret) but cannot read a ticket (no API secret).
+  'org-halfbag': {
+    ticketing: { apiKey: 'half-key', webhookSecret: TENANT_SECRET },
   },
   'org-ghost': { ticketing: { webhookSecret: TENANT_SECRET } },
   'org-pilot': { ticketing: { webhookSecret: TENANT_SECRET } },
@@ -188,6 +194,7 @@ describe('api/webhooks/checkin/ticket-sold — HMAC signature', () => {
     // which has the workshop feature (#1295: by plan, with the platform env
     // ticketing account — the behaviour these signature tests predate).
     vi.stubEnv('PLATFORM_ORG_ID', 'org-platform')
+    stubPlatformTicketingAccount()
     mockGetOrganizationById.mockResolvedValue({
       _id: 'org-platform',
       name: 'Platform',
@@ -349,6 +356,7 @@ describe('api/webhooks/checkin/ticket-sold — workshop feature gate', () => {
     // A configured platform org that matches none of the tenants below, so a
     // case is platform ONLY when it points the contract at its own org id.
     vi.stubEnv('PLATFORM_ORG_ID', 'org-none')
+    stubPlatformTicketingAccount()
     // Since #886 a non-platform tenant authenticates on its OWN webhook secret,
     // so the tenants below carry one — and it is DIFFERENT from the platform's,
     // which is what makes every 200 in this suite evidence that the tenant's own
@@ -443,6 +451,31 @@ describe('api/webhooks/checkin/ticket-sold — workshop feature gate', () => {
     expect(mockSendWorkshop).toHaveBeenCalledWith(
       expect.objectContaining({ userEmail: 'ada@example.com' }),
     )
+  })
+
+  /**
+   * Review of #1304. The delivery AUTHENTICATES (the bag's webhook secret
+   * signed it), so the gate is what decides here — and Checkin cannot read a
+   * ticket without the API secret, so the portal this email links into would
+   * refuse every attendee. No email. The same bag at a Tito conference is a
+   * complete account; `workshops.test.ts` holds that half.
+   */
+  it('does NOT email a pro tenant whose Checkin account has a key but no secret, though its delivery verifies', async () => {
+    bindConferenceTo('org-halfbag')
+    mockGetOrganizationById.mockResolvedValue({
+      _id: 'org-halfbag',
+      name: 'Half Bag',
+      slug: 'half-bag',
+      plan: 'pro',
+    })
+
+    const response = await postWorkshopTicket()
+    const body = await response.json()
+
+    // 200 with "workshops not enabled", not the 401 of a refused delivery.
+    expect(response.status).toBe(200)
+    expect(body.message).toMatch(/not enabled/i)
+    expect(mockSendWorkshop).not.toHaveBeenCalled()
   })
 
   /**

@@ -11,7 +11,10 @@
  * plan + working ticketing (#1295), overrides, fail-closed.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { stubOwnTicketingSecret } from '../../../__tests__/helpers/ticketingSecrets'
+import {
+  stubOwnTicketingSecret,
+  stubPlatformTicketingAccount,
+} from '../../../__tests__/helpers/ticketingSecrets'
 
 const mockGetOrganizationById = vi.fn()
 const mockGetConference = vi.fn()
@@ -76,6 +79,7 @@ function caller() {
 beforeEach(() => {
   vi.clearAllMocks()
   vi.stubEnv('PLATFORM_ORG_ID', PLATFORM_ORG_ID)
+  stubPlatformTicketingAccount()
   mockGetConference.mockResolvedValue({
     conference: {
       _id: 'conf-1',

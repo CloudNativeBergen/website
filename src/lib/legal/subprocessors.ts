@@ -23,7 +23,7 @@
  * 2. A FAILED READ MUST NOT SHORTEN THE LIST. This is the #855/#848 class
  *    applied to the worst possible surface. Almost every feature gate in this
  *    codebase fails CLOSED on a rejected Sanity read — `resolveRegistryEntitlement`
- *    answers `'denied'`, `resolveEnabledFeaturesForOrg` logs "treating every
+ *    answers `'denied'`, `resolveEnabledFeaturesForConference` logs "treating every
  *    feature as DISABLED" — which is the right posture for handing out a
  *    credential and exactly the WRONG one for a disclosure. Deriving this list
  *    straight from those gates would mean a flaky read silently publishes a

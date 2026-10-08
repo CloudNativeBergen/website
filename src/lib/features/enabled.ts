@@ -1,18 +1,19 @@
 import 'server-only'
 import { getEntitlementsForOrganization } from './entitlements'
-import {
-  conferenceOrgId,
-  PLATFORM_DEFAULT_FEATURES,
-  type ConferenceTenant,
-} from './platform-default'
+import { conferenceOrgId, PLATFORM_DEFAULT_FEATURES } from './platform-default'
 import { isBadgesEnabledForOrg } from './badges'
 import { isTicketingEnabledForOrg } from './ticketing'
-import { isWorkshopsEnabledForOrg } from './workshops'
+import {
+  isWorkshopsEnabledForConference,
+  type WorkshopConference,
+} from './workshops'
 import { FEATURE_IDS, type FeatureId } from './registry'
 
 /**
- * The org's EFFECTIVE feature set — what the admin shell filters its nav and ⌘K
- * destinations by (`visibleNavSections` / `visibleDestinations`).
+ * The EFFECTIVE feature set of the tenant that OWNS a conference — what the
+ * admin shell filters its nav and ⌘K destinations by (`visibleNavSections` /
+ * `visibleDestinations`). It takes the conference, not a bare org id, because
+ * `workshops` is decided per conference (its selected ticketing vendor).
  *
  * WHY THIS EXISTS. `computeEntitlements` alone is not the whole truth: the
  * platform-default features (`ticketing`, `badges`) carry implicit grants their
@@ -40,9 +41,10 @@ const GATED_FEATURES = [
 
 type GatedFeature = (typeof GATED_FEATURES)[number]
 
-export async function resolveEnabledFeaturesForOrg(
-  orgId: string | null | undefined,
+export async function resolveEnabledFeaturesForConference(
+  conference: WorkshopConference | null | undefined,
 ): Promise<FeatureId[]> {
+  const orgId = conferenceOrgId(conference)
   if (!orgId) return []
 
   const [entitled, workshops, ticketing, badges] = await Promise.all([
@@ -55,7 +57,7 @@ export async function resolveEnabledFeaturesForOrg(
       )
       return new Set<FeatureId>()
     }),
-    isWorkshopsEnabledForOrg(orgId),
+    isWorkshopsEnabledForConference(conference),
     isTicketingEnabledForOrg(orgId),
     isBadgesEnabledForOrg(orgId),
   ])
@@ -79,11 +81,4 @@ export async function resolveEnabledFeaturesForOrg(
 
   // Registry declaration order, so the list is stable for tests and snapshots.
   return FEATURE_IDS.filter((id) => enabled.has(id))
-}
-
-/** {@link resolveEnabledFeaturesForOrg} for the tenant that OWNS a conference. */
-export async function resolveEnabledFeaturesForConference(
-  conference: ConferenceTenant | null | undefined,
-): Promise<FeatureId[]> {
-  return resolveEnabledFeaturesForOrg(conferenceOrgId(conference))
 }

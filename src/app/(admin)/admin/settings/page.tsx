@@ -32,7 +32,7 @@ import {
 import { effectivePlan } from '@/lib/features/registry'
 import { listEntitledFeatures } from '@/lib/features/entitlements'
 import { isPlatformOrgRequest } from '@/lib/features/platform'
-import { isWorkshopsEnabledForOrg } from '@/lib/features/workshops'
+import { isWorkshopsEnabledForConference } from '@/lib/features/workshops'
 import { PlanFeaturesCard } from './PlanFeaturesCard'
 import { applyWorkshopGate } from './planFeatureRows'
 import { PlatformOrgManager } from './PlatformOrgManager'
@@ -184,7 +184,7 @@ export default async function AdminSettings() {
   // and the ticket-sold email all treat it as off.
   const entitledFeatureRows = applyWorkshopGate(
     listedFeatureRows,
-    await isWorkshopsEnabledForOrg(orgId),
+    await isWorkshopsEnabledForConference(conference),
   )
 
   // Cross-tenant list, fetched ONLY when this request's org is the platform

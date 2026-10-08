@@ -1,6 +1,10 @@
 import 'server-only'
 import { PER_ORG_SECRETS_STORES } from '@/lib/secrets/store'
-import type { TicketingCredentials } from '@/lib/secrets/types'
+import {
+  getTicketingProvider,
+  resolveTicketingCredentials,
+  type TicketingProviderType,
+} from '@/lib/tickets/provider'
 import {
   conferenceOrgId,
   isFeatureExplicitlyDeniedForOrg,
@@ -143,29 +147,11 @@ const TICKETING_FEATURE = 'ticketing' as const
  * "unconfigured" empty state rather than a hidden nav entry.
  */
 async function hasOwnTicketingCredentials(orgId: string): Promise<boolean> {
-  const bag = await ownTicketingSecret(orgId, 'ticketing')
-  return bag !== null && bag !== LOOKUP_REFUSED
-}
-
-/** {@link ownTicketingSecret}'s answer when a store could not find out. */
-const LOOKUP_REFUSED = 'lookup-refused' as const
-
-/**
- * The org's own per-org ticketing bag from the first store that has one, `null`
- * on a miss, or {@link LOOKUP_REFUSED} on a store failure (logged; every gate
- * here fails closed on it: see the note inside).
- */
-async function ownTicketingSecret(
-  orgId: string,
-  /** The feature a failure switches off, for the log line. */
-  disables: 'ticketing' | 'workshops',
-): Promise<TicketingCredentials | null | typeof LOOKUP_REFUSED> {
   try {
     for (const store of PER_ORG_SECRETS_STORES) {
-      const bag = await store.get(orgId, 'ticketing')
-      if (bag !== null) return bag
+      if ((await store.get(orgId, 'ticketing')) !== null) return true
     }
-    return null
+    return false
   } catch (error) {
     // A miss is `null`; a THROW means the store could not determine the
     // tenant's env-var slug (`TenantEnvSlugUnavailableError`,
@@ -176,55 +162,66 @@ async function ownTicketingSecret(
     // must stay loud, and both are deliberate: withholding a nav entry is
     // recoverable, sending on the wrong account is not.
     console.error(
-      `[features] per-org ticketing secret lookup failed for ${orgId}; treating "${disables}" as DISABLED`,
+      `[features] per-org ticketing secret lookup failed for ${orgId}; treating "ticketing" as DISABLED`,
       error,
     )
-    return LOOKUP_REFUSED
+    return false
   }
 }
 
 /**
- * Whether the organization has ticketing credentials it can READ TICKETS with —
- * the platform org (the `CHECKIN_*` / `TITO_*` env account) or any org whose
- * own per-org secret carries an API key. This is the capability question,
- * separate from the entitlement one: `isTicketingEnabledForOrg` is true for a
- * bare `pro` plan so the pages can walk the tenant through connecting an
- * account, while this stays false until it has. `./workshops.ts` needs both: a
- * portal that decides from ticket data is worthless to an org that cannot read
- * any (#1295). A nullish org is a plain `false`.
+ * Whether the organization can READ TICKETS for a conference on `providerType`
+ * — the capability question, separate from the entitlement one:
+ * `isTicketingEnabledForOrg` is true for a bare `pro` plan so the pages can
+ * walk the tenant through connecting an account, while this stays false until
+ * it has. `./workshops.ts` needs both: a portal that decides from ticket data
+ * is worthless to an org that cannot read any (#1295).
  *
- * `null` IS "COULD NOT FIND OUT": the per-org secret lookup was refused (see
- * `ownTicketingSecret`). It is falsy, so a gate that tests it fails closed; it
- * is kept apart from `false` for the one caller that must not read a refused
- * lookup as a confirmed "no" — the legal disclosure, via `./workshops.ts`.
+ * ASKED OF THE REAL THING, not re-derived: the credentials come from
+ * `resolveTicketingCredentials` and the verdict from the provider's own
+ * `isConfigured()` — the resolver and the class the portal's ticket lookup
+ * runs on (`@/lib/tickets/provider`). So this cannot say yes to credentials
+ * that lookup would find unusable, and it inherits every rule they hold:
  *
- * WHY AN API KEY, not just "a bag exists". A per-org bag holding only a
- * `webhookSecret` can authenticate an inbound ticket-sold delivery, so the
- * webhook would mail workshop instructions — but neither provider can read a
- * ticket with it (`CheckinProvider.isConfigured` wants `apiKey` + `apiSecret`,
- * `TitoProvider.isConfigured` wants `apiKey`), so the portal would refuse every
- * attendee. `apiKey` is the field both vendors require; it is what this gate
- * can check without knowing which vendor a conference selected. This makes the
- * workshop gate slightly STRICTER than `hasOwnTicketingCredentials` above, on
- * purpose and only here — the ticketing surfaces still show for a bag the
- * provider will then report as unconfigured, which is the honest state for
+ *  - PER VENDOR. Checkin needs a key and a secret, Tito a key. A bag holding
+ *    only a `webhookSecret` (which can authenticate an inbound ticket-sold
+ *    delivery, so the webhook would mail workshop instructions) reads nothing.
+ *  - PER STORE. The discrete `TENANT_<SLUG>_CHECKIN_*` set is Checkin's; a
+ *    Tito conference in an org that holds only that set has no credentials.
+ *  - THE PLATFORM ORG reads with the env account of the selected vendor, and
+ *    only when its variables are set. With `PLATFORM_ORG_ID` unset nobody is
+ *    the platform org.
+ *
+ * That makes the workshop gate STRICTER than `hasOwnTicketingCredentials`
+ * above, on purpose and only here: the ticketing surfaces still show for a bag
+ * the provider will then report as unconfigured, which is the honest state for
  * them, while a workshop portal has no such state to fall back on.
  *
- * The platform branch MIRRORS `resolveTicketingCredentials`
- * (`@/lib/tickets/provider`): the platform org is handed the env account by
- * identity, WITHOUT checking the variables are set (the resolver does the same
- * and fails at provider call time), and with `PLATFORM_ORG_ID` unset nobody is
- * the platform org, so nobody gets it (the resolver's `isPlatformOrganization`
- * check, same answer).
+ * A nullish org is a plain `false`. `null` IS "COULD NOT FIND OUT": the
+ * credential lookup was refused (`TenantEnvSlugUnavailableError`, loud on the
+ * credential path by design). It is falsy, so a gate that tests it fails
+ * closed; it is kept apart from `false` for the one caller that must not read
+ * a refused lookup as a confirmed "no" — the legal disclosure, via
+ * `./workshops.ts`.
  */
-export async function hasTicketingCredentialsForOrg(
+export async function canReadTicketsForOrg(
   orgId: string | null | undefined,
+  providerType: TicketingProviderType,
 ): Promise<boolean | null> {
   if (!orgId) return false
-  if (await isPlatformOrganization(orgId)) return true
-  const bag = await ownTicketingSecret(orgId, 'workshops')
-  if (bag === LOOKUP_REFUSED) return null
-  return typeof bag?.apiKey === 'string' && bag.apiKey.trim().length > 0
+  try {
+    const credentials = await resolveTicketingCredentials(orgId, providerType)
+    return (
+      credentials !== null &&
+      getTicketingProvider(providerType, credentials).isConfigured()
+    )
+  } catch (error) {
+    console.error(
+      `[features] ticketing credential lookup failed for ${orgId}; treating "workshops" as DISABLED`,
+      error,
+    )
+    return null
+  }
 }
 
 /**

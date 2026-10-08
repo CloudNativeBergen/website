@@ -18,7 +18,10 @@
  * real. Callers are built with the WorkOS-attendee / anonymous / admin helpers.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { stubOwnTicketingSecret } from '../../helpers/ticketingSecrets'
+import {
+  stubOwnTicketingSecret,
+  stubPlatformTicketingAccount,
+} from '../../helpers/ticketingSecrets'
 import {
   createWorkshopCaller,
   createAnonymousCaller,
@@ -202,6 +205,7 @@ beforeEach(() => {
   // which gives its pro plan the ticketing credentials `workshops` requires
   // (#1295) — a pure env comparison, no Sanity read.
   vi.stubEnv('PLATFORM_ORG_ID', 'org-test')
+  stubPlatformTicketingAccount()
 })
 
 afterEach(() => {

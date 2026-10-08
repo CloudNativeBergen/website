@@ -12,7 +12,10 @@
  * way Next.js does, which is how these assertions detect the 404.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { stubOwnTicketingSecret } from '../../helpers/ticketingSecrets'
+import {
+  stubOwnTicketingSecret,
+  stubPlatformTicketingAccount,
+} from '../../helpers/ticketingSecrets'
 
 const mockGetConference = vi.fn()
 const mockGetOrganizationById = vi.fn()
@@ -139,6 +142,7 @@ beforeEach(() => {
   // A configured platform org that matches none of the tenants below, so a case
   // is platform ONLY when it points the contract at its own org id.
   vi.stubEnv('PLATFORM_ORG_ID', 'org-none')
+  stubPlatformTicketingAccount()
   mockWithAuth.mockResolvedValue({ user: null })
   ticketing.fetchEventTickets.mockResolvedValue([
     {

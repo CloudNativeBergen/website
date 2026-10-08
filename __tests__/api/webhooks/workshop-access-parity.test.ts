@@ -14,6 +14,7 @@
  * So every case below drives BOTH from ONE fixture and asserts they agree. A
  * future edit that changes one path's rule without the other fails here.
  */
+import { stubPlatformTicketingAccount } from '../../helpers/ticketingSecrets'
 import { NextRequest } from 'next/server'
 import crypto from 'crypto'
 
@@ -224,6 +225,7 @@ describe('workshop access — the gate and the webhook cannot drift', () => {
     __resetRedeemedCache()
     process.env.CHECKIN_WEBHOOK_SECRET = SECRET
     vi.stubEnv('PLATFORM_ORG_ID', 'org-platform')
+    stubPlatformTicketingAccount()
     // Pro plan: since #1295 the platform org holds workshops by plan (its
     // ticketing is the env account), not by identity.
     mockGetOrganizationById.mockResolvedValue({
