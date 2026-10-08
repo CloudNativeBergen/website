@@ -366,6 +366,21 @@ describe('canReadTicketsForOrg', () => {
     await expect(canReadTicketsForOrg('org-A', 'checkin')).resolves.toBe(true)
   })
 
+  it('does not count a whitespace-only or non-string key, which the providers’ truthiness check would pass', async () => {
+    ownBag({ apiKey: '   ', apiSecret: 's' })
+    await expect(canReadTicketsForOrg('org-A', 'checkin')).resolves.toBe(false)
+    await expect(canReadTicketsForOrg('org-A', 'tito')).resolves.toBe(false)
+
+    vi.stubEnv(
+      'TENANT_SECRETS_JSON',
+      JSON.stringify({
+        'org-A': { ticketing: { apiKey: 42, apiSecret: 's' } },
+      }),
+    )
+    await expect(canReadTicketsForOrg('org-A', 'checkin')).resolves.toBe(false)
+    await expect(canReadTicketsForOrg('org-A', 'tito')).resolves.toBe(false)
+  })
+
   it('hands the platform org the env account of the vendor asked for, and only when it is set', async () => {
     vi.stubEnv('CHECKIN_API_KEY', '')
     vi.stubEnv('CHECKIN_API_SECRET', '')

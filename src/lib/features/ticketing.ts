@@ -1,8 +1,8 @@
 import 'server-only'
 import { PER_ORG_SECRETS_STORES } from '@/lib/secrets/store'
 import {
-  getTicketingProvider,
   resolveTicketingCredentials,
+  ticketingCredentialsConfigured,
   type TicketingProviderType,
 } from '@/lib/tickets/provider'
 import {
@@ -179,9 +179,10 @@ async function hasOwnTicketingCredentials(orgId: string): Promise<boolean> {
  *
  * ASKED OF THE REAL THING, not re-derived: the credentials come from
  * `resolveTicketingCredentials` and the verdict from the provider's own
- * `isConfigured()` — the resolver and the class the portal's ticket lookup
- * runs on (`@/lib/tickets/provider`). So this cannot say yes to credentials
- * that lookup would find unusable, and it inherits every rule they hold:
+ * `isConfigured()` rule — the resolver and the class the portal's ticket
+ * lookup runs on (`@/lib/tickets/provider`). So this cannot say yes to
+ * credentials that lookup would report as UNCONFIGURED, and it inherits every
+ * rule they hold:
  *
  *  - PER VENDOR. Checkin needs a key and a secret, Tito a key. A bag holding
  *    only a `webhookSecret` (which can authenticate an inbound ticket-sold
@@ -191,6 +192,16 @@ async function hasOwnTicketingCredentials(orgId: string): Promise<boolean> {
  *  - THE PLATFORM ORG reads with the env account of the selected vendor, and
  *    only when its variables are set. With `PLATFORM_ORG_ID` unset nobody is
  *    the platform org.
+ *
+ * WHAT IT DOES NOT PROVE: that the vendor ACCEPTS the credentials (a Checkin
+ * key pasted into the bag of a Tito conference is "configured" and fails at
+ * Tito), nor that the conference is bound to an event. The portal refuses
+ * attendees with its own message in both cases; neither is knowable here
+ * without calling the vendor.
+ *
+ * NEVER LOOSER THAN A REAL KEY: the providers test truthiness, so a
+ * whitespace-only or non-string `apiKey` would pass them. It reads nothing, so
+ * it does not count here.
  *
  * That makes the workshop gate STRICTER than `hasOwnTicketingCredentials`
  * above, on purpose and only here: the ticketing surfaces still show for a bag
@@ -211,10 +222,11 @@ export async function canReadTicketsForOrg(
   if (!orgId) return false
   try {
     const credentials = await resolveTicketingCredentials(orgId, providerType)
-    return (
-      credentials !== null &&
-      getTicketingProvider(providerType, credentials).isConfigured()
-    )
+    if (!credentials) return false
+    const hasKey =
+      typeof credentials.apiKey === 'string' &&
+      credentials.apiKey.trim().length > 0
+    return hasKey && ticketingCredentialsConfigured(providerType, credentials)
   } catch (error) {
     console.error(
       `[features] ticketing credential lookup failed for ${orgId}; treating "workshops" as DISABLED`,

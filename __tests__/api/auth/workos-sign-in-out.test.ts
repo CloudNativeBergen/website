@@ -272,7 +272,9 @@ describe.each([
     expect(response.headers.get('location')).toBeNull()
     expect(buildAuthorizationUrl).not.toHaveBeenCalled()
     expect(setCookies()).toEqual([])
-    // It was THIS host's conference the gate was asked about.
+    // The gate was asked about the conference resolved for THIS request. (The
+    // resolver is supplied here; that it maps a host to the right conference
+    // is its own tests' business.)
     expect(gate.workshopsEnabled).toHaveBeenCalledWith(
       expect.objectContaining({ _id: `conf-on-${TENANT_A}` }),
     )

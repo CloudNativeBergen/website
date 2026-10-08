@@ -99,9 +99,12 @@ const nextAuthMiddleware = auth((req) => {
  * SDK sets no cookie for a signed-out request either: it only issues the PKCE
  * verifier alongside a redirect it makes itself.
  *
- * STILL REACHES WORKOS: a request that already carries a session cookie, when
- * its access token needs refreshing. That session was started while the tenant
- * had workshops.
+ * STILL REACHES WORKOS FROM HERE: a request that already carries a session
+ * cookie, when its access token needs refreshing. That session was started
+ * while the tenant had workshops. (And, with `WORKOS_CLAIM_TOKEN` set — an
+ * unclaimed development environment, never production — the SDK exchanges
+ * that token server-to-server on a signed-out request. No visitor data is in
+ * that call.)
  */
 async function workshopMiddleware(req: NextRequest, event: NextFetchEvent) {
   const signIn = await resolveWorkshopSignInHost(

@@ -140,8 +140,13 @@ export class TitoProvider implements TicketingProvider {
     this.webhookSecret = credentials.webhookSecret
   }
 
+  /** THE rule {@link isConfigured} applies, askable without an instance. */
+  static canCallApi(credentials: TicketingProviderCredentials): boolean {
+    return !!credentials.apiKey
+  }
+
   isConfigured(): boolean {
-    return !!this.apiKey
+    return TitoProvider.canCallApi({ apiKey: this.apiKey })
   }
 
   // ── Transport ─────────────────────────────────────────────────────

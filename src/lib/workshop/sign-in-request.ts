@@ -9,9 +9,9 @@ import {
 
 /**
  * MAY THIS REQUEST START OR FINISH A WORKOS SIGN-IN? Two questions, both asked
- * before the SDK is touched, by the only routes that send a visitor to WorkOS
- * or trade a code with it (`/workshop/sign-in`, `/workshop/sign-up`,
- * `/api/auth/callback`):
+ * before the SDK is touched, by the routes that send a signed-out visitor to
+ * WorkOS (`/workshop/sign-in`, `/workshop/sign-up`) and the one that trades the
+ * code they come back with (`/api/auth/callback`):
  *
  *  1. THE HOST — `resolveWorkshopSignInHost`: ownership-verified, read live.
  *  2. THE FEATURE — `isWorkshopsEnabledForConference`, for the conference this
@@ -25,6 +25,12 @@ import {
  * sends anyone to WorkOS at all; a signed-out visitor reaches the page, the
  * layout answers 404 for a tenant without workshops, and only these routes —
  * behind this check — start a round-trip.
+ *
+ * NOT ASKED OF A SESSION THAT ALREADY EXISTS. The proxy and the `workshop.*`
+ * tRPC identity still read — and, when the token has expired, refresh with
+ * WorkOS — a session cookie the browser already holds, and Sign Out ends that
+ * session at WorkOS. All three are decided on the host alone. They only ever
+ * concern someone who signed in while the tenant had workshops.
  *
  * `null` refuses: the caller answers 404 and stops. Fail closed on an
  * unresolvable conference.

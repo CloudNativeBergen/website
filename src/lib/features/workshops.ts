@@ -56,11 +56,13 @@ import { canReadTicketsForOrg, isTicketingEnabledForOrg } from './ticketing'
  *     decide from.
  *  4. Anything else → DISABLED.
  *
- * ONE DOCUMENT: every input but the credentials comes from
+ * ONE DOCUMENT of the organization: the plan and the overrides come from
  * `getOrganizationById`, cached and tagged `organizationTag(orgId)` (this gate
  * and the ticketing gate it consults each read it once, through that cache), so
- * a plan or override change takes effect by INVALIDATION. Platform standing (for
- * the ticketing half) is a pure `PLATFORM_ORG_ID` comparison — no Sanity read.
+ * a plan or override change takes effect by INVALIDATION. The vendor comes off
+ * the conference the caller already holds, and the credentials from the secret
+ * stores. Platform standing (for the ticketing half) is a pure
+ * `PLATFORM_ORG_ID` comparison — no Sanity read.
  * Override expiry is evaluated per call against a fresh `now`.
  */
 
