@@ -59,9 +59,14 @@ export interface WorkshopUserIdentity {
  * ONLY FOR `workshop.*` (see {@link namesWorkshopProcedure}): the decision is a
  * live Sanity read, and the cookie rides on every tRPC request this browser
  * makes for 400 days.
+ *
+ * A REFRESH IS PERSISTED (see {@link persistRefreshedSession}): when `authkit`
+ * had to refresh the session it returns the re-sealed cookie, which is written
+ * to `resHeaders` so the browser keeps a usable session.
  */
 async function resolveWorkshopUser(
   req: NextRequest,
+  resHeaders?: Headers,
 ): Promise<WorkshopUserIdentity | null> {
   if (AppEnvironment.isTestMode) return null
   const cookieName = process.env.WORKOS_COOKIE_NAME || 'wos-session'
@@ -73,9 +78,12 @@ async function resolveWorkshopUser(
     )
     if (!signIn) return null
     const { authkit } = await import('@workos-inc/authkit-nextjs')
-    const { session } = await authkit(req, { redirectUri: signIn.redirectUri })
+    const { session, headers } = await authkit(req, {
+      redirectUri: signIn.redirectUri,
+    })
     const user = session.user
     if (!user?.id) return null
+    persistRefreshedSession(headers, resHeaders)
     return {
       id: user.id,
       email: user.email,
@@ -86,6 +94,33 @@ async function resolveWorkshopUser(
   } catch {
     return null
   }
+}
+
+/**
+ * Hand the browser the session `authkit()` re-sealed while refreshing.
+ *
+ * WorkOS access tokens are short-lived and refresh tokens are SINGLE-USE. On
+ * `/workshop*` the proxy does the refresh and sets the cookie; an attendee who
+ * leaves the page open and then clicks "Register" refreshes HERE instead. If
+ * the new cookie is dropped, the browser keeps one whose refresh token is
+ * already spent: this request succeeds, the next cannot refresh, and they are
+ * signed out in the middle of registering.
+ *
+ * ONLY A SUCCESSFUL REFRESH IS WRITTEN (the caller returns before this when
+ * there is no user). Two requests can race for the same single-use token; the
+ * loser gets a cookie DELETION from the SDK, and forwarding that would let it
+ * sign out the winner. A session that is really dead is cleared by the proxy
+ * on the next page request.
+ */
+function persistRefreshedSession(
+  from: Headers | undefined,
+  to: Headers | undefined,
+): void {
+  const cookies = from?.getSetCookie() ?? []
+  if (!to || cookies.length === 0) return
+  for (const cookie of cookies) to.append('Set-Cookie', cookie)
+  // A response that sets a session cookie must never be stored by a cache.
+  to.set('Cache-Control', 'no-store')
 }
 
 /** The app-router key the attendee procedures are mounted under. */
@@ -118,13 +153,17 @@ function namesWorkshopProcedure(req: NextRequest): boolean {
     .some((procedure) => procedure.startsWith(WORKSHOP_ROUTER_PREFIX))
 }
 
-export async function createTRPCContext(opts: { req: NextRequest }) {
+export async function createTRPCContext(opts: {
+  req: NextRequest
+  /** The response's headers (tRPC's fetch adapter supplies them). */
+  resHeaders?: Headers
+}) {
   const session = await getAuthSession({
     url: opts.req.url,
     headers: opts.req.headers,
   })
 
-  const workosUser = await resolveWorkshopUser(opts.req)
+  const workosUser = await resolveWorkshopUser(opts.req, opts.resHeaders)
 
   // Extract IP address from headers
   const forwardedFor = opts.req.headers.get('x-forwarded-for')

@@ -59,9 +59,9 @@ const exchangeCode = vi.spyOn(
  * would carry to the callback: the `state` WorkOS echoes back, and the PKCE
  * verifier cookie the proxy set on that host.
  */
-async function startSignIn(host: string) {
+async function startSignIn(host: string, path = '/workshop') {
   const response = (await middleware(
-    new NextRequest(`https://${host}/workshop`, {
+    new NextRequest(`https://${host}${path}`, {
       headers: new Headers({ host, accept: 'text/html' }),
     }),
     {} as NextFetchEvent,
@@ -135,12 +135,31 @@ describe('WorkOS callback — on an allowlisted host', () => {
     const flow = await startSignIn(TENANT_A)
     await GET(callback(TENANT_A, flow))
 
-    const cookie = sessionCookie()
-    expect(cookie).toBeDefined()
-    expect(cookie).not.toMatch(/;\s*domain=/i)
-    expect(cookie).toMatch(/;\s*Path=\//)
-    expect(cookie).toMatch(/;\s*HttpOnly/i)
-    expect(cookie).toMatch(/;\s*Secure/i)
+    // The COMPLETE set of attribute names, by equality: a `Domain` among them
+    // is what `WORKOS_COOKIE_DOMAIN` produces (`sdk-cookie-domain.test.ts`).
+    const names = sessionCookie()!
+      .split('; ')
+      .slice(1)
+      .map((attribute) => attribute.split('=')[0])
+    expect(names).toEqual([
+      'Path',
+      'Expires',
+      'Max-Age',
+      'Secure',
+      'HttpOnly',
+      'SameSite',
+    ])
+  })
+
+  it('returns the attendee to the exact path and query they first asked for', async () => {
+    // The proxy seals the requested URL into the state; nothing else carries it.
+    const flow = await startSignIn(TENANT_A, '/workshop?from=email&x=1')
+
+    const response = await GET(callback(TENANT_A, flow))
+
+    expect(response.headers.get('location')).toBe(
+      `https://${TENANT_A}/workshop?from=email&x=1`,
+    )
   })
 
   it('sends the browser to the ALLOWLISTED origin, whatever the request URL claims', async () => {
@@ -183,6 +202,39 @@ describe('WorkOS callback — on any other host', () => {
     expect(exchangeCode).not.toHaveBeenCalled()
     expect(sessionCookie()).toBeUndefined()
     expect(response.headers.get('location')).toBeNull()
+  })
+
+  it('answers 404 — not the SDK’s error page — when the request carries no code at all', async () => {
+    // Without a code the SDK would answer 500 by itself; the guard must not
+    // depend on the request looking like a real callback.
+    const response = await GET(
+      new NextRequest(`https://${UNVERIFIED}/api/auth/callback`, {
+        headers: new Headers({ host: UNVERIFIED }),
+      }),
+    )
+
+    expect(response.status).toBe(404)
+    expect(await response.text()).toBe('Not Found')
+  })
+
+  it('takes the host from the Host header: a verified x-forwarded-host or URL does not admit it', async () => {
+    const flow = await startSignIn(TENANT_A)
+    const url = new URL(`https://${TENANT_A}/api/auth/callback`)
+    url.searchParams.set('code', 'code_from_workos')
+    url.searchParams.set('state', flow.state)
+
+    const response = await GET(
+      new NextRequest(url, {
+        headers: new Headers({
+          host: UNVERIFIED,
+          'x-forwarded-host': TENANT_A,
+          cookie: flow.cookie,
+        }),
+      }),
+    )
+
+    expect(response.status).toBe(404)
+    expect(exchangeCode).not.toHaveBeenCalled()
   })
 
   it('decides from the allowlist BEFORE calling WorkOS', async () => {

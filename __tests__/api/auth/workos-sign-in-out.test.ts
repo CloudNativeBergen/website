@@ -2,12 +2,14 @@
  * @vitest-environment node
  *
  * The SDK-backed entry points of the workshop portal (#1296), against the REAL
- * `@workos-inc/authkit-nextjs` AND the real `jose`:
+ * `@workos-inc/authkit-nextjs` AND the real `jose` it depends on:
  *
  *  - `GET /workshop/sign-in` and `/workshop/sign-up` — the links on the
  *    signed-out page. They replace a hand-built authorize URL that had no PKCE.
  *  - the sign-out action — it replaces a link to NextAuth's sign-out route,
  *    which never ended the WorkOS session at all.
+ *  - `authkit(req, { redirectUri })` as tRPC calls it, UNMOCKED, through a
+ *    token refresh — the one place the SDK's session path runs for real.
  *
  * Boundaries supplied: the Sanity read behind the allowlist, WorkOS's token
  * endpoint, and `next/headers` (backed by a real `NextResponse`, see
@@ -27,14 +29,11 @@ import {
 } from '../../helpers/nextHeadersJar'
 
 // The suite-wide `jose` alias is a stub without `decodeJwt`. Sign-out reads the
-// session id out of the access token, so this file runs the real package (the
-// same alias-defeating factory as `jwt-real-crypto.test.ts`).
-vi.mock('jose', async () => {
-  const { createRequire } = await import('node:module')
-  const { pathToFileURL } = await import('node:url')
-  const require = createRequire(import.meta.url)
-  return import(pathToFileURL(require.resolve('jose')).href)
-})
+// session id out of the access token and a refresh verifies it, so this file
+// runs the real package — the SDK's OWN copy (see `sdkJose.ts`).
+vi.mock('jose', () => import('../../helpers/sdkJose'))
+
+vi.mock('@/lib/auth', () => ({ getAuthSession: vi.fn(async () => null) }))
 
 const listAllowlistCandidates =
   vi.fn<() => Promise<DomainVerificationRecord[]>>()
@@ -45,10 +44,14 @@ vi.mock('@/lib/domain-verification/sanity', () => ({
 
 vi.mock('next/headers', () => import('../../helpers/nextHeadersJar'))
 
+import { http, HttpResponse } from 'msw'
+import { server } from '../../mocks/msw/server'
+import { SDK_JOSE_VERSION } from '../../helpers/sdkJose'
 import { GET as signIn } from '@/app/(workshop)/workshop/sign-in/route'
 import { GET as signUp } from '@/app/(workshop)/workshop/sign-up/route'
 import { GET as callback } from '@/app/api/auth/callback/route'
 import { signOutOfWorkshop } from '@/app/(workshop)/workshop/actions'
+import { createTRPCContext } from '@/server/trpc'
 import { getWorkOS } from '@workos-inc/authkit-nextjs'
 
 const TENANT_A = 'a.example.org'
@@ -184,6 +187,28 @@ describe.each([
     )
   })
 
+  it('marks the redirect uncacheable — it carries a one-time verifier cookie', async () => {
+    const response = await handler(onHost(TENANT_A))
+    expect(response.headers.get('cache-control')).toBe('no-store')
+  })
+
+  it('takes the host from the Host header: a verified x-forwarded-host does not admit it', async () => {
+    const response = await handler(
+      onHost(UNVERIFIED, { 'x-forwarded-host': TENANT_A }),
+    )
+
+    expect(response.status).toBe(404)
+    expect(buildAuthorizationUrl).not.toHaveBeenCalled()
+
+    // …and an unverified one does not divert a verified host's callback.
+    const honest = await handler(
+      onHost(TENANT_A, { 'x-forwarded-host': UNVERIFIED }),
+    )
+    expect(
+      new URL(honest.headers.get('location')!).searchParams.get('redirect_uri'),
+    ).toBe(`https://${TENANT_A}/api/auth/callback`)
+  })
+
   it('starts nothing on a host that is not allowlisted', async () => {
     const response = await handler(onHost(UNVERIFIED))
 
@@ -232,6 +257,7 @@ async function signedInOn(host: string) {
     'x-workos-session': sealed,
   })
   presentCookie('wos-session', sealed)
+  return sealed
 }
 
 describe('signOutOfWorkshop', () => {
@@ -255,6 +281,24 @@ describe('signOutOfWorkshop', () => {
 
     expect(a.searchParams.get('return_to')).toBe(`https://${TENANT_A}/`)
     expect(b.searchParams.get('return_to')).toBe(`https://${TENANT_B}/`)
+  })
+
+  it('takes the host from the Host header: a verified x-forwarded-host does not admit it', async () => {
+    const sealed = await signedInOn(TENANT_A)
+    onHost(UNVERIFIED, {
+      'x-forwarded-host': TENANT_A,
+      'x-workos-middleware': 'true',
+      'x-workos-session': sealed,
+    })
+    presentCookie('wos-session', sealed)
+
+    const digest = await signOutOfWorkshop().then(
+      () => 'resolved',
+      (error: { digest?: string }) => error.digest ?? String(error),
+    )
+
+    expect(digest).toBe('NEXT_HTTP_ERROR_FALLBACK;404')
+    expect(setCookies()).toEqual([])
   })
 
   it('removes the session cookie on this host', async () => {
@@ -293,5 +337,90 @@ describe('signOutOfWorkshop', () => {
     listAllowlistCandidates.mockResolvedValue([verifiedHost(TENANT_A)])
     await redirectTarget(() => signOutOfWorkshop())
     expect(buildLogoutUrl).toHaveBeenCalledOnce()
+  })
+})
+
+/**
+ * `authkit(req, { redirectUri })` UNMOCKED, the way `createTRPCContext` calls
+ * it, on a session whose access token no longer verifies — so the SDK takes
+ * its refresh path for real: it unseals the cookie, fails verification against
+ * WorkOS's key set (served here by MSW, empty), spends the refresh token at
+ * WorkOS (the one boundary supplied) and re-seals the session.
+ */
+describe('createTRPCContext on the real SDK — a refresh is persisted', () => {
+  const refresh = vi.spyOn(
+    getWorkOS().userManagement,
+    'authenticateWithRefreshToken',
+  )
+
+  beforeEach(() => {
+    server.use(
+      http.get('https://api.workos.com/sso/jwks/:clientId', () =>
+        HttpResponse.json({ keys: [] }),
+      ),
+    )
+    refresh.mockResolvedValue({
+      accessToken: accessToken({ sid: 'session_ROTATED', sub: 'user_01' }),
+      refreshToken: 'refresh_token_ROTATED',
+      user: { id: 'user_01', email: 'ada@example.com', emailVerified: true },
+    } as never)
+  })
+
+  function trpcRequest(host: string, sealed: string) {
+    return new NextRequest(`https://${host}/api/trpc/workshop.getMySignups`, {
+      headers: new Headers({ host, cookie: `wos-session=${sealed}` }),
+    })
+  }
+
+  it('runs the SDK’s own jose, not the suite stub', () => {
+    expect(SDK_JOSE_VERSION).toMatch(/^\d+\.\d+\.\d+$/)
+  })
+
+  it('spends the refresh token once and hands the browser the re-sealed session', async () => {
+    const sealed = await signedInOn(TENANT_A)
+    const resHeaders = new Headers()
+
+    const ctx = await createTRPCContext({
+      req: trpcRequest(TENANT_A, sealed),
+      resHeaders,
+    })
+
+    expect(refresh).toHaveBeenCalledOnce()
+    expect(refresh).toHaveBeenCalledWith(
+      expect.objectContaining({ refreshToken: 'refresh_token_value' }),
+    )
+    expect(ctx.workosUser).toMatchObject({
+      id: 'user_01',
+      emailVerified: true,
+    })
+
+    // The browser gets a NEW sealed session, host-only like the first one.
+    const [cookie, ...rest] = resHeaders.getSetCookie()
+    expect(rest).toEqual([])
+    const [pair, ...attributes] = cookie.split('; ')
+    expect(pair.startsWith('wos-session=Fe26.2')).toBe(true)
+    expect(pair).not.toBe(`wos-session=${sealed}`)
+    expect(attributes.map((a) => a.split('=')[0])).toEqual([
+      'Path',
+      'HttpOnly',
+      'SameSite',
+      'Max-Age',
+      'Secure',
+    ])
+    expect(resHeaders.get('cache-control')).toBe('no-store')
+  })
+
+  it('refreshes nothing on a host that is not allowlisted', async () => {
+    const sealed = await signedInOn(TENANT_A)
+    const resHeaders = new Headers()
+
+    const ctx = await createTRPCContext({
+      req: trpcRequest(UNVERIFIED, sealed),
+      resHeaders,
+    })
+
+    expect(ctx.workosUser).toBeNull()
+    expect(refresh).not.toHaveBeenCalled()
+    expect([...resHeaders.keys()]).toEqual([])
   })
 })

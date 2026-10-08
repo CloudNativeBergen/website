@@ -14,21 +14,28 @@ describe('WorkshopSignedOut', () => {
     <WorkshopSignedOut conferenceTitle="Cloud Native Days Norway 2026" />,
   )
 
-  /** Every link target in the markup, in order. */
+  /** Every navigation target in the markup, in order. */
   const hrefs = [...markup.matchAll(/href="([^"]*)"/g)].map(([, href]) => href)
+  const forms = [...markup.matchAll(/<form\b([^>]*)>([\s\S]*?)<\/form>/g)].map(
+    ([, attributes, body]) => ({
+      action: /action="([^"]*)"/.exec(attributes)?.[1],
+      method: /method="([^"]*)"/.exec(attributes)?.[1],
+      label: body.replace(/<[^>]+>/g, ''),
+    }),
+  )
 
-  it('links to the SDK-backed sign-in and sign-up routes, and to nothing off this host', () => {
-    // The WHOLE set of link targets: two first-party routes that start the
-    // flow through the SDK, and the two legal pages. A hand-built
-    // `api.workos.com` authorize URL would be a fifth entry and fail this.
-    expect(hrefs).toEqual([
-      '/workshop/sign-in',
-      '/workshop/sign-up',
-      '/terms',
-      '/privacy',
+  it('starts sign-in and sign-up with GET forms to the SDK-backed routes on THIS host', () => {
+    // Forms, so the click is one real browser navigation (see the component).
+    expect(forms).toEqual([
+      { action: '/workshop/sign-in', method: 'get', label: 'Sign In' },
+      { action: '/workshop/sign-up', method: 'get', label: 'Create Account' },
     ])
-    expect(markup).toContain('Sign In')
-    expect(markup).toContain('Create Account')
+  })
+
+  it('links to the legal pages and to nothing else', () => {
+    // The WHOLE set of link targets. A hand-built `api.workos.com` authorize
+    // URL, or a `next/link` to either route above, would be an extra entry.
+    expect(hrefs).toEqual(['/terms', '/privacy'])
   })
 
   it('names the conference', () => {

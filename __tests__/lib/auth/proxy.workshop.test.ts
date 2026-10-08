@@ -135,12 +135,44 @@ describe('workshop proxy — a signed-out visitor on an allowlisted host', () =>
       `https://${TENANT_A}/api/auth/callback`,
     ])
   })
+})
 
-  it('returns the visitor to the path they asked for', async () => {
-    const response = await run(navigate(TENANT_A, '/workshop?from=email'))
-    // The return path rides inside the sealed state, never in the open.
-    expect(response.headers.get('location')).not.toContain('from%3Demail')
+/**
+ * WHICH VALUE IS "THE HOST". The `Host` header alone — the same one that
+ * resolves the conference for the page. `x-forwarded-host` is client-supplied
+ * wherever an edge does not overwrite it, and the request URL is whatever the
+ * framework reconstructed. Neither may admit a host or name its callback.
+ */
+describe('workshop proxy — the host is the Host header, and nothing else', () => {
+  /** A request whose three host-ish values are set independently. */
+  function request(hosts: { host: string; forwarded: string; url: string }) {
+    return new NextRequest(`https://${hosts.url}/workshop`, {
+      headers: new Headers({
+        host: hosts.host,
+        'x-forwarded-host': hosts.forwarded,
+        accept: 'text/html',
+      }),
+    })
+  }
+
+  it('refuses an unverified Host even when x-forwarded-host and the URL name a verified one', async () => {
+    const response = await run(
+      request({ host: UNVERIFIED, forwarded: TENANT_A, url: TENANT_A }),
+    )
+
+    expect(response.status).toBe(404)
+    expect(buildAuthorizationUrl).not.toHaveBeenCalled()
+  })
+
+  it('serves a verified Host its own callback whatever x-forwarded-host and the URL say', async () => {
+    const response = await run(
+      request({ host: TENANT_A, forwarded: UNVERIFIED, url: TENANT_B }),
+    )
+
     expect(response.status).toBe(307)
+    expect(authorizeUrl(response).searchParams.get('redirect_uri')).toBe(
+      `https://${TENANT_A}/api/auth/callback`,
+    )
   })
 })
 
@@ -150,16 +182,20 @@ describe('workshop proxy — a signed-out visitor on an allowlisted host', () =>
  * sign-in) on one tenant's host is never presented on another's.
  */
 describe('workshop proxy — cookies are host-only', () => {
-  it('sets no Domain attribute on the cookie it issues', async () => {
+  it('issues its cookie with exactly these attributes — and no Domain among them', async () => {
     const response = await run(navigate(TENANT_A))
     const [cookie] = response.headers.getSetCookie()
 
-    expect(cookie).toBeDefined()
-    expect(cookie).not.toMatch(/;\s*domain=/i)
-    expect(cookie).toMatch(/;\s*Path=\//)
-    expect(cookie).toMatch(/;\s*HttpOnly/)
-    expect(cookie).toMatch(/;\s*Secure/)
-    expect(cookie).toMatch(/;\s*SameSite=Lax/)
+    // The COMPLETE attribute list, by equality. A `Domain=…` entry — which is
+    // what the SDK adds when `WORKOS_COOKIE_DOMAIN` is set, shown against the
+    // real SDK in `sdk-cookie-domain.test.ts` — would make this fail.
+    expect(cookie.split('; ').slice(1)).toEqual([
+      'Path=/',
+      'HttpOnly',
+      'SameSite=Lax',
+      'Max-Age=600',
+      'Secure',
+    ])
   })
 
   it('refuses every host when WORKOS_COOKIE_DOMAIN would widen the cookie', async () => {

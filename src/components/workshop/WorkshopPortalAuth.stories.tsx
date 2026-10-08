@@ -34,13 +34,12 @@ type Story = StoryObj<typeof meta>
 export const SignedOut: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
-    await expect(canvas.getByRole('link', { name: 'Sign In' })).toHaveAttribute(
-      'href',
-      '/workshop/sign-in',
-    )
     await expect(
-      canvas.getByRole('link', { name: 'Create Account' }),
-    ).toHaveAttribute('href', '/workshop/sign-up')
+      canvas.getByRole('button', { name: 'Sign In' }).closest('form'),
+    ).toHaveAttribute('action', '/workshop/sign-in')
+    await expect(
+      canvas.getByRole('button', { name: 'Create Account' }).closest('form'),
+    ).toHaveAttribute('action', '/workshop/sign-up')
   },
 }
 
@@ -60,7 +59,7 @@ export const SignedOutLongTitleMobile: Story = {
     await expect(page.scrollWidth).toBeLessThanOrEqual(page.clientWidth)
     for (const name of ['Sign In', 'Create Account']) {
       const { right } = within(canvasElement)
-        .getByRole('link', { name })
+        .getByRole('button', { name })
         .getBoundingClientRect()
       await expect(right).toBeLessThanOrEqual(page.clientWidth)
     }

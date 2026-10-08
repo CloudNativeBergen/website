@@ -6,6 +6,12 @@
  * `NEXT_PUBLIC_WORKOS_REDIRECT_URI` is a DECOY: it is the single-host fallback
  * the SDK reaches for whenever a caller forgets to pass `redirectUri`. No
  * assertion in #1296 may ever see it in a redirect.
+ *
+ * It is NOT inert, though. Where the SDK has no request URL to judge by
+ * (`getSignInUrl`, `getSignUpUrl`, `signOut`) it takes the cookie's `Secure`
+ * flag from this variable's scheme, and defaults to `Secure` when it is unset.
+ * The decoy is `https`, so those cookies are `Secure` in these suites for that
+ * reason and not because of the request.
  */
 export const WORKOS_ENV_FALLBACK_REDIRECT_URI =
   'https://decoy.example.org/api/auth/callback'

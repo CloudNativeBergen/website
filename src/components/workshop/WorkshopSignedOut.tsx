@@ -13,6 +13,11 @@ import {
  * Both buttons go to first-party routes on THIS host, whose handlers start the
  * WorkOS flow through the SDK (PKCE, and this host's own callback). The page
  * used to put a hand-assembled `api.workos.com` authorize URL in the markup.
+ *
+ * NOTE: the proxy redirects a signed-out visitor on `/workshop` straight to
+ * WorkOS, so today this view only renders when a session reached the page but
+ * was rejected there. Whether `/workshop` should show it instead of redirecting
+ * is an open product decision (see the PR for #1296).
  */
 export function WorkshopSignedOut({
   conferenceTitle,
@@ -31,19 +36,20 @@ export function WorkshopSignedOut({
             <p>Sign in to register for workshops at {conferenceTitle}.</p>
           </div>
 
-          {/* `prefetch={false}`: these are route handlers that start a sign-in
-              (and set a cookie), not pages to warm up. */}
+          {/* FORMS, NOT LINKS. These targets are route handlers that set a
+              cookie and redirect to another origin. `next/link` would fetch
+              them as an RSC payload first — the handler runs, the cross-origin
+              redirect fails — and only then navigate, so every click would
+              start TWO sign-ins. A GET form is a plain browser navigation. */}
           <div className="mt-10 flex gap-4">
-            <Button href={WORKSHOP_SIGN_IN_PATH} prefetch={false}>
-              Sign In
-            </Button>
-            <Button
-              href={WORKSHOP_SIGN_UP_PATH}
-              prefetch={false}
-              variant="outline"
-            >
-              Create Account
-            </Button>
+            <form action={WORKSHOP_SIGN_IN_PATH} method="get">
+              <Button type="submit">Sign In</Button>
+            </form>
+            <form action={WORKSHOP_SIGN_UP_PATH} method="get">
+              <Button type="submit" variant="outline">
+                Create Account
+              </Button>
+            </form>
           </div>
 
           <p className="mt-8 text-sm text-gray-600 dark:text-gray-400">

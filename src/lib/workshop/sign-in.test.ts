@@ -19,7 +19,7 @@ vi.mock('@/lib/domain-verification/sanity', () => ({
   listAllowlistCandidates: () => listAllowlistCandidates(),
 }))
 
-import { resolveWorkshopSignInHost } from './sign-in'
+import { resolveWorkshopSignInHost, workshopRequestHost } from './sign-in'
 
 /** A record for `conf.example.org`, proven yesterday unless overridden. */
 function record(
@@ -154,6 +154,8 @@ describe('resolveWorkshopSignInHost — a malformed Host is refused before any r
     ['a comma-joined chain', 'conf.example.org, evil.example.org'],
     ['a backslash', 'conf.example.org\\evil.example.org'],
     ['an IPv6 literal', '[::1]:3000'],
+    ['a trailing dot on a verified host', 'conf.example.org.'],
+    ['an out-of-range port', 'conf.example.org:65536'],
   ])('%s', async (_label, host) => {
     await expect(resolveWorkshopSignInHost(host)).resolves.toBeNull()
     expect(listAllowlistCandidates).not.toHaveBeenCalled()
@@ -175,10 +177,11 @@ describe('resolveWorkshopSignInHost — localhost', () => {
     expect(listAllowlistCandidates).not.toHaveBeenCalled()
   })
 
-  it.each(['production', 'test', ''])(
-    'is refused when NODE_ENV is "%s" — even with a "verified" localhost record',
+  it.each([['production'], ['test'], [''], [undefined]])(
+    'is refused when NODE_ENV is %j — even with a "verified" localhost record',
     async (nodeEnv) => {
       vi.stubEnv('NODE_ENV', nodeEnv)
+      expect(process.env.NODE_ENV).toBe(nodeEnv)
       // Production really carries such a record (a dev entry in `domains[]`);
       // the allowlist policy excludes it, and the exception does not apply.
       listAllowlistCandidates.mockResolvedValue([
@@ -240,5 +243,36 @@ describe('resolveWorkshopSignInHost — WORKOS_COOKIE_DOMAIN', () => {
     await expect(
       resolveWorkshopSignInHost('localhost:3000'),
     ).resolves.toBeNull()
+  })
+})
+
+/**
+ * WHICH header is "the host". One source, the `Host` header — the same one that
+ * resolves the conference for the page. A forwarding header is client-supplied
+ * wherever the edge does not overwrite it, and must never pick the host.
+ */
+describe('workshopRequestHost', () => {
+  it('is the Host header', () => {
+    expect(workshopRequestHost(new Headers({ host: 'conf.example.org' }))).toBe(
+      'conf.example.org',
+    )
+  })
+
+  it('ignores x-forwarded-host, forwarded and origin entirely', () => {
+    const headers = new Headers({
+      host: 'conf.example.org',
+      'x-forwarded-host': 'evil.example.org',
+      forwarded: 'host=evil.example.org',
+      origin: 'https://evil.example.org',
+    })
+    expect(workshopRequestHost(headers)).toBe('conf.example.org')
+  })
+
+  it('is null without a Host header, whatever else is sent', () => {
+    expect(
+      workshopRequestHost(
+        new Headers({ 'x-forwarded-host': 'conf.example.org' }),
+      ),
+    ).toBeNull()
   })
 })

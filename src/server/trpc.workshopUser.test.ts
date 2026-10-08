@@ -134,6 +134,39 @@ describe('createTRPCContext — the WorkOS session follows the verified host', (
     expect(h.authkit).not.toHaveBeenCalled()
   })
 
+  it('takes the host from the Host header — not x-forwarded-host, not the URL', async () => {
+    const hostile = new NextRequest(
+      `https://${HOST}/api/trpc/workshop.signup`,
+      {
+        headers: new Headers({
+          host: 'unverified.example.org',
+          'x-forwarded-host': HOST,
+          cookie: 'wos-session=sealed',
+        }),
+      },
+    )
+    const honest = new NextRequest(
+      'https://unverified.example.org/api/trpc/workshop.signup',
+      {
+        headers: new Headers({
+          host: HOST,
+          'x-forwarded-host': 'unverified.example.org',
+          cookie: 'wos-session=sealed',
+        }),
+      },
+    )
+
+    expect((await createTRPCContext({ req: hostile })).workosUser).toBeNull()
+    expect(h.authkit).not.toHaveBeenCalled()
+
+    expect((await createTRPCContext({ req: honest })).workosUser).toMatchObject(
+      { id: 'user_01' },
+    )
+    expect(h.authkit).toHaveBeenCalledWith(honest, {
+      redirectUri: `https://${HOST}/api/auth/callback`,
+    })
+  })
+
   it('decides from the allowlist BEFORE AuthKit is called', async () => {
     await createTRPCContext({ req: request('wos-session=sealed') })
 
@@ -152,6 +185,98 @@ describe('createTRPCContext — the WorkOS session follows the verified host', (
     expect(ctx.workosUser).toBeNull()
     expect(h.authkit).not.toHaveBeenCalled()
   })
+})
+
+/**
+ * A REFRESHED SESSION MUST REACH THE BROWSER. WorkOS access tokens are
+ * short-lived and refresh tokens are single-use. When `authkit()` refreshes
+ * here it hands back the re-sealed session as a `Set-Cookie`; dropping it (as
+ * this code used to) leaves the browser holding a cookie whose refresh token
+ * has already been spent, so the NEXT request cannot refresh and the attendee
+ * is signed out mid-registration.
+ */
+describe('createTRPCContext — a refreshed WorkOS session is persisted', () => {
+  const REFRESHED =
+    'wos-session=RESEALED; Path=/; HttpOnly; SameSite=Lax; Secure'
+
+  it('forwards the re-sealed cookie to the response, uncacheable', async () => {
+    h.authkit.mockResolvedValue({
+      session: { user: { ...WORKOS_USER, emailVerified: true } },
+      headers: new Headers([['Set-Cookie', REFRESHED]]),
+    })
+    const resHeaders = new Headers()
+
+    const ctx = await createTRPCContext({
+      req: request('wos-session=sealed'),
+      resHeaders,
+    })
+
+    expect(ctx.workosUser).toMatchObject({ id: 'user_01' })
+    expect(resHeaders.getSetCookie()).toEqual([REFRESHED])
+    expect(resHeaders.get('cache-control')).toBe('no-store')
+  })
+
+  it('writes nothing when the session did not need refreshing', async () => {
+    h.authkit.mockResolvedValue({
+      session: { user: { ...WORKOS_USER, emailVerified: true } },
+      headers: new Headers([['x-workos-session', 'sealed']]),
+    })
+    const resHeaders = new Headers()
+
+    await createTRPCContext({ req: request('wos-session=sealed'), resHeaders })
+
+    expect([...resHeaders.keys()]).toEqual([])
+  })
+
+  /**
+   * Two requests can race to refresh the same single-use token; the loser gets
+   * no user and a cookie DELETION from the SDK. Forwarding that would let the
+   * loser sign out the winner, so only a successful refresh is ever written.
+   */
+  it('never forwards a cookie deletion from a failed refresh', async () => {
+    h.authkit.mockResolvedValue({
+      session: { user: null },
+      headers: new Headers([
+        ['Set-Cookie', 'wos-session=; Expires=Thu, 01 Jan 1970 00:00:00 GMT'],
+      ]),
+    })
+    const resHeaders = new Headers()
+
+    const ctx = await createTRPCContext({
+      req: request('wos-session=sealed'),
+      resHeaders,
+    })
+
+    expect(ctx.workosUser).toBeNull()
+    expect([...resHeaders.keys()]).toEqual([])
+  })
+})
+
+/**
+ * The context can only persist a refresh if the ROUTE hands it the response
+ * headers. This goes through the real `/api/trpc` handler and tRPC's fetch
+ * adapter, so it is the wiring — not `createTRPCContext` — that is under test.
+ */
+describe('/api/trpc — the route lets the context write response headers', () => {
+  it('returns the re-sealed session cookie on the HTTP response', async () => {
+    vi.stubEnv('RESEND_API_KEY', 're_test_key')
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const refreshed = 'wos-session=RESEALED; Path=/; HttpOnly; Secure'
+    h.authkit.mockResolvedValue({
+      session: { user: { ...WORKOS_USER, emailVerified: true } },
+      headers: new Headers([['Set-Cookie', refreshed]]),
+    })
+    const { GET } = await import('@/app/api/trpc/[trpc]/route')
+
+    const response = await GET(
+      request('wos-session=sealed', { procedures: 'workshop.getMySignups' }),
+    )
+
+    // Whatever the procedure itself answers, the cookie is on the response.
+    expect(response.headers.getSetCookie()).toEqual([refreshed])
+    expect(response.headers.get('cache-control')).toBe('no-store')
+    // Importing every router takes seconds on a loaded machine.
+  }, 30_000)
 })
 
 /**

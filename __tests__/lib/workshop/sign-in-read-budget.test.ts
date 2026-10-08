@@ -7,8 +7,13 @@
  * a cached answer is a delisting that has not taken effect — and the project
  * has 250k live API requests a month. So the number of reads each entry point
  * spends is a contract, counted here at the live client
- * (`clientReadUncached.fetch`) with the REAL allowlist query and policy, the
- * REAL proxy and the REAL AuthKit SDK in between.
+ * (`clientReadUncached.fetch`) with the REAL allowlist query and policy and the
+ * REAL proxy, callback, sign-in route and sign-out action in between, on the
+ * real AuthKit SDK. The tRPC cases stub `authkit()` — they count the reads
+ * taken BEFORE it, which is all this feature adds there.
+ *
+ * These are per-REQUEST counts. How many requests a page view makes is not
+ * executed anywhere in this suite.
  *
  * What this does NOT count: the reads the portal already made before #1296
  * (the page's and each attendee procedure's live `ticketTypeRoles` read from

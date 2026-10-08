@@ -350,7 +350,7 @@ describe('workshop portal — sign-in and sign-out go through the SDK', () => {
     })
   })
 
-  it('signed out: renders the SDK-backed entry points and no authorize URL', async () => {
+  it('signed out: renders the signed-out component and no link of its own', async () => {
     mockWithAuth.mockResolvedValue({ user: null })
 
     const page = await WorkshopPage()
@@ -358,12 +358,12 @@ describe('workshop portal — sign-in and sign-out go through the SDK', () => {
     const signedOut = elementsOf(page).filter(
       (element) => element.type === WorkshopSignedOut,
     )
+    // The page hands the whole signed-out state to the component and adds no
+    // link of its own. (What the component renders — and that it carries no
+    // authorize URL — is pinned in `WorkshopPortalAuth.test.tsx`.)
     expect(signedOut).toHaveLength(1)
     expect(signedOut[0].props.conferenceTitle).toBe('CNDN')
-    for (const href of hrefsOf(page)) {
-      expect(href).not.toContain('api.workos.com')
-      expect(href).not.toContain('single-host.example.org')
-    }
+    expect(hrefsOf(page)).toEqual([])
   })
 
   it.each([

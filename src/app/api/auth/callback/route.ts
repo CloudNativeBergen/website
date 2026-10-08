@@ -4,7 +4,6 @@ import {
   resolveWorkshopSignInHost,
   workshopRequestHost,
 } from '@/lib/workshop/sign-in'
-import { WORKSHOP_PORTAL_PATH } from '@/lib/workshop/sign-in-paths'
 
 /**
  * Where WorkOS sends the workshop attendee back with an authorization code
@@ -18,7 +17,9 @@ import { WORKSHOP_PORTAL_PATH } from '@/lib/workshop/sign-in-paths'
  *
  * `baseURL` is the origin that MATCHED the allowlist, so the post-sign-in
  * redirect goes there and never to a host taken from the request URL alone.
- * The path the attendee asked for travels inside the SDK's sealed state.
+ * The path the attendee asked for travels inside the SDK's sealed state: every
+ * flow this app starts puts one there (the proxy the requested URL, the
+ * sign-in routes `/workshop`), so no fallback path is configured here.
  */
 export async function GET(request: NextRequest) {
   const signIn = await resolveWorkshopSignInHost(
@@ -28,8 +29,5 @@ export async function GET(request: NextRequest) {
     return new NextResponse('Not Found', { status: 404 })
   }
 
-  return handleAuth({
-    baseURL: signIn.origin,
-    returnPathname: WORKSHOP_PORTAL_PATH,
-  })(request)
+  return handleAuth({ baseURL: signIn.origin })(request)
 }
