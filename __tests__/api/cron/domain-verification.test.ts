@@ -22,6 +22,14 @@ const SUMMARY = {
   unverifiable: 0,
   delisted: ['lapsed-conf.no'],
   errored: [],
+  redirectUris: {
+    configured: true,
+    wanted: 2,
+    registered: ['new-conf.konf.run'],
+    removed: ['lapsed-conf.no'],
+    errored: [],
+    error: null,
+  },
 }
 
 describe('api/cron/domain-verification', () => {
@@ -56,6 +64,10 @@ describe('api/cron/domain-verification', () => {
     await expect(response.json()).resolves.toMatchObject({
       success: true,
       delisted: ['lapsed-conf.no'],
+      redirectUris: {
+        registered: ['new-conf.konf.run'],
+        removed: ['lapsed-conf.no'],
+      },
     })
     expect(mockSweep).toHaveBeenCalledTimes(1)
   })
