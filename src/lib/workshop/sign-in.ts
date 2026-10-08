@@ -25,9 +25,11 @@ import { WORKSHOP_AUTH_CALLBACK_PATH } from './sign-in-paths'
  *
  * READ LIVE, EVERY TIME. The allowlist is not cached here either: a cached
  * answer is a delisting that has not taken effect. That costs one Sanity read
- * per decision, so the callers are arranged to decide once per request and only
- * on requests that reach WorkOS code (see `src/server/trpc.ts` for the prefilter
- * that keeps unrelated tRPC traffic out).
+ * per decision, so the decision is taken only on requests that reach WorkOS
+ * code (see `src/server/trpc.ts` for the prefilter that keeps unrelated tRPC
+ * traffic out). A page or API request decides once; starting a sign-in and
+ * signing out decide twice — in the proxy and again in the route or action,
+ * which cannot assume the proxy ran. `sign-in-read-budget.test.ts` pins it.
  *
  * FAIL CLOSED: an absent or malformed host, an unverified host, a failed
  * allowlist read and a configured `WORKOS_COOKIE_DOMAIN` all answer `null`.

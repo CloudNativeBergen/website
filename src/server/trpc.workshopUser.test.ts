@@ -216,6 +216,44 @@ describe('createTRPCContext — a refreshed WorkOS session is persisted', () => 
     expect(resHeaders.get('cache-control')).toBe('no-store')
   })
 
+  it('forwards the session cookie only — nothing else the SDK may have set', async () => {
+    h.authkit.mockResolvedValue({
+      session: { user: { ...WORKOS_USER, emailVerified: true } },
+      headers: new Headers([
+        ['Set-Cookie', 'workos-access-token=JWT; SameSite=Lax'],
+        ['Set-Cookie', REFRESHED],
+        ['Set-Cookie', 'wos-auth-verifier-0a1b2c3d=STATE; Path=/'],
+        ['x-workos-session', 'the-sealed-session'],
+      ]),
+    })
+    const resHeaders = new Headers()
+
+    await createTRPCContext({ req: request('wos-session=sealed'), resHeaders })
+
+    expect(resHeaders.getSetCookie()).toEqual([REFRESHED])
+    expect([...resHeaders.keys()].sort()).toEqual([
+      'cache-control',
+      'set-cookie',
+    ])
+  })
+
+  it('follows a custom cookie name', async () => {
+    vi.stubEnv('WORKOS_COOKIE_NAME', 'attendee')
+    const renamed = 'attendee=RESEALED; Path=/; HttpOnly'
+    h.authkit.mockResolvedValue({
+      session: { user: { ...WORKOS_USER, emailVerified: true } },
+      headers: new Headers([
+        ['Set-Cookie', REFRESHED],
+        ['Set-Cookie', renamed],
+      ]),
+    })
+    const resHeaders = new Headers()
+
+    await createTRPCContext({ req: request('attendee=sealed'), resHeaders })
+
+    expect(resHeaders.getSetCookie()).toEqual([renamed])
+  })
+
   it('writes nothing when the session did not need refreshing', async () => {
     h.authkit.mockResolvedValue({
       session: { user: { ...WORKOS_USER, emailVerified: true } },

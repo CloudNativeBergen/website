@@ -6,7 +6,7 @@ import { WORKSHOP_PORTAL_PATH } from './sign-in-paths'
 
 /**
  * Start a WorkOS sign-in or sign-up for the workshop portal (#1296) — the route
- * handlers behind the links on the signed-out page.
+ * handlers behind the two buttons (GET forms) on the signed-out page.
  *
  * The authorize URL comes from the SDK (`getSignInUrl` / `getSignUpUrl`), which
  * generates the PKCE pair, seals the state and sets the verifier cookie. It

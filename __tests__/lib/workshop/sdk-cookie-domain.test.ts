@@ -93,5 +93,18 @@ describe('this app with WORKOS_COOKIE_DOMAIN set', () => {
     expect(response.status).toBe(404)
     expect(response.headers.getSetCookie()).toEqual([])
     expect(buildAuthorizationUrl).not.toHaveBeenCalled()
+
+    // CONTROL: it is the GUARD that refused, not the allowlist or the fixture.
+    // Hide the variable from the guard (which reads it per call; the SDK
+    // captured it at load) and the very same request goes through — carrying
+    // exactly the widened cookie the guard exists to prevent.
+    vi.stubEnv('WORKOS_COOKIE_DOMAIN', '')
+    const through = (await proxy(navigate(), {} as NextFetchEvent)) as Response
+    vi.stubEnv('WORKOS_COOKIE_DOMAIN', COOKIE_DOMAIN)
+
+    expect(through.status).toBe(307)
+    expect(through.headers.getSetCookie()[0].split('; ')).toContain(
+      `Domain=${COOKIE_DOMAIN}`,
+    )
   })
 })

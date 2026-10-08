@@ -4,8 +4,8 @@
  * The SDK-backed entry points of the workshop portal (#1296), against the REAL
  * `@workos-inc/authkit-nextjs` AND the real `jose` it depends on:
  *
- *  - `GET /workshop/sign-in` and `/workshop/sign-up` — the links on the
- *    signed-out page. They replace a hand-built authorize URL that had no PKCE.
+ *  - `GET /workshop/sign-in` and `/workshop/sign-up` — behind the two buttons
+ *    (GET forms) on the signed-out page. They replace a hand-built authorize URL that had no PKCE.
  *  - the sign-out action — it replaces a link to NextAuth's sign-out route,
  *    which never ended the WorkOS session at all.
  *  - `authkit(req, { redirectUri })` as tRPC calls it, UNMOCKED, through a

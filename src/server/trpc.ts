@@ -69,7 +69,7 @@ async function resolveWorkshopUser(
   resHeaders?: Headers,
 ): Promise<WorkshopUserIdentity | null> {
   if (AppEnvironment.isTestMode) return null
-  const cookieName = process.env.WORKOS_COOKIE_NAME || 'wos-session'
+  const cookieName = workosSessionCookieName()
   if (!req.cookies.get(cookieName)) return null
   if (!namesWorkshopProcedure(req)) return null
   try {
@@ -96,6 +96,11 @@ async function resolveWorkshopUser(
   }
 }
 
+/** The name of the sealed WorkOS session cookie, as the SDK resolves it. */
+function workosSessionCookieName(): string {
+  return process.env.WORKOS_COOKIE_NAME || 'wos-session'
+}
+
 /**
  * Hand the browser the session `authkit()` re-sealed while refreshing.
  *
@@ -116,7 +121,12 @@ function persistRefreshedSession(
   from: Headers | undefined,
   to: Headers | undefined,
 ): void {
-  const cookies = from?.getSetCookie() ?? []
+  // The session cookie and nothing else: what the SDK puts in these headers is
+  // its own business (and includes the sealed session as a request header).
+  const prefix = `${workosSessionCookieName()}=`
+  const cookies = (from?.getSetCookie() ?? []).filter((cookie) =>
+    cookie.startsWith(prefix),
+  )
   if (!to || cookies.length === 0) return
   for (const cookie of cookies) to.append('Set-Cookie', cookie)
   // A response that sets a session cookie must never be stored by a cache.
