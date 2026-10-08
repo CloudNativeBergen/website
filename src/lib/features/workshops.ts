@@ -63,12 +63,13 @@ import {
 const WORKSHOPS_FEATURE = 'workshops' as const
 
 /**
- * Whether the organization may use workshops. See the module doc for the exact
- * resolution order; a nullish org id is DISABLED (fail closed).
+ * The gate's answer with "could not find out" kept apart from "no": `null` when
+ * rule 3 was reached and the per-org ticketing secret lookup was REFUSED. Every
+ * gate below collapses that to OFF; only the legal disclosure reads it.
  */
-export async function isWorkshopsEnabledForOrg(
+async function resolveWorkshopsForOrg(
   orgId: string | null | undefined,
-): Promise<boolean> {
+): Promise<boolean | null> {
   const verdict = await resolveRegistryVerdict(orgId, WORKSHOPS_FEATURE)
   // Rule 2: the operator's word is final.
   if (verdict === 'granted-by-override') return true
@@ -78,6 +79,29 @@ export async function isWorkshopsEnabledForOrg(
   // Rule 3: a plan grant is only worth anything with ticketing that works.
   if (!(await isTicketingEnabledForOrg(orgId))) return false
   return hasTicketingCredentialsForOrg(orgId)
+}
+
+/**
+ * Whether the organization may use workshops. See the module doc for the exact
+ * resolution order; a nullish org id is DISABLED (fail closed), and so is a
+ * refused secret lookup.
+ */
+export async function isWorkshopsEnabledForOrg(
+  orgId: string | null | undefined,
+): Promise<boolean> {
+  return (await resolveWorkshopsForOrg(orgId)) === true
+}
+
+/**
+ * {@link isWorkshopsEnabledForConference} for the ONE caller that must not turn
+ * "could not find out" into "no": the subprocessor disclosure
+ * (`@/lib/legal/subprocessors.resolve`), which resolves an unknown by
+ * disclosing. `null` = the ticketing secret lookup was refused. Not a gate.
+ */
+export async function resolveWorkshopsForConference(
+  conference: ConferenceTenant | null | undefined,
+): Promise<boolean | null> {
+  return resolveWorkshopsForOrg(conferenceOrgId(conference))
 }
 
 /**

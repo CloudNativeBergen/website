@@ -143,18 +143,23 @@ const TICKETING_FEATURE = 'ticketing' as const
  * "unconfigured" empty state rather than a hidden nav entry.
  */
 async function hasOwnTicketingCredentials(orgId: string): Promise<boolean> {
-  return (await ownTicketingSecret(orgId, 'ticketing')) !== null
+  const bag = await ownTicketingSecret(orgId, 'ticketing')
+  return bag !== null && bag !== LOOKUP_REFUSED
 }
 
+/** {@link ownTicketingSecret}'s answer when a store could not find out. */
+const LOOKUP_REFUSED = 'lookup-refused' as const
+
 /**
- * The org's own per-org ticketing bag from the first store that has one, or
- * `null` — a miss, or a store failure (logged, fail closed: see the note inside).
+ * The org's own per-org ticketing bag from the first store that has one, `null`
+ * on a miss, or {@link LOOKUP_REFUSED} on a store failure (logged; every gate
+ * here fails closed on it: see the note inside).
  */
 async function ownTicketingSecret(
   orgId: string,
   /** The feature a failure switches off, for the log line. */
   disables: 'ticketing' | 'workshops',
-): Promise<TicketingCredentials | null> {
+): Promise<TicketingCredentials | null | typeof LOOKUP_REFUSED> {
   try {
     for (const store of PER_ORG_SECRETS_STORES) {
       const bag = await store.get(orgId, 'ticketing')
@@ -174,7 +179,7 @@ async function ownTicketingSecret(
       `[features] per-org ticketing secret lookup failed for ${orgId}; treating "${disables}" as DISABLED`,
       error,
     )
-    return null
+    return LOOKUP_REFUSED
   }
 }
 
@@ -186,7 +191,12 @@ async function ownTicketingSecret(
  * bare `pro` plan so the pages can walk the tenant through connecting an
  * account, while this stays false until it has. `./workshops.ts` needs both: a
  * portal that decides from ticket data is worthless to an org that cannot read
- * any (#1295). Fail closed on a nullish org and on a secret-store failure.
+ * any (#1295). A nullish org is a plain `false`.
+ *
+ * `null` IS "COULD NOT FIND OUT": the per-org secret lookup was refused (see
+ * `ownTicketingSecret`). It is falsy, so a gate that tests it fails closed; it
+ * is kept apart from `false` for the one caller that must not read a refused
+ * lookup as a confirmed "no" — the legal disclosure, via `./workshops.ts`.
  *
  * WHY AN API KEY, not just "a bag exists". A per-org bag holding only a
  * `webhookSecret` can authenticate an inbound ticket-sold delivery, so the
@@ -209,10 +219,11 @@ async function ownTicketingSecret(
  */
 export async function hasTicketingCredentialsForOrg(
   orgId: string | null | undefined,
-): Promise<boolean> {
+): Promise<boolean | null> {
   if (!orgId) return false
   if (await isPlatformOrganization(orgId)) return true
   const bag = await ownTicketingSecret(orgId, 'workshops')
+  if (bag === LOOKUP_REFUSED) return null
   return typeof bag?.apiKey === 'string' && bag.apiKey.trim().length > 0
 }
 

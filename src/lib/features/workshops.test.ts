@@ -52,6 +52,7 @@ import {
   isWorkshopsEnabledForOrg,
   isWorkshopsEnabledForConference,
   isWorkshopsEnabledForCurrentOrg,
+  resolveWorkshopsForConference,
 } from './workshops'
 
 /** The configured platform org's document id — distinct from the default
@@ -163,6 +164,43 @@ describe('isWorkshopsEnabledForOrg — pro plan AND working ticketing', () => {
 
     await expect(isWorkshopsEnabledForOrg('org-A')).resolves.toBe(false)
     expect(logged).toHaveBeenCalled()
+    logged.mockRestore()
+  })
+
+  /**
+   * The legal disclosure's view of the same decision: a refused lookup is
+   * "could not find out" (`null`), never a "no" — but only where the lookup is
+   * what decided. A healthy miss and an operator's deny are real answers.
+   */
+  it('reports a refused secret lookup as UNKNOWN to the disclosure, and every real answer as itself', async () => {
+    const owner = { organization: { _ref: 'org-A' } }
+    getOrganizationById.mockResolvedValue(org({ plan: 'pro' }))
+    await expect(resolveWorkshopsForConference(owner)).resolves.toBe(false)
+    stubOwnTicketingSecret('org-A')
+    await expect(resolveWorkshopsForConference(owner)).resolves.toBe(true)
+
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.stubEnv('TENANT_SOMEONE_CHECKIN_API_KEY', 'k')
+    vi.stubEnv('TENANT_SOMEONE_CHECKIN_API_SECRET', 's')
+    vi.stubEnv('TENANT_SOMEONE_CHECKIN_WEBHOOK_SECRET', 'w')
+    secretEnvSlugs.mockRejectedValue(new Error('slug map unavailable'))
+    await expect(resolveWorkshopsForConference(owner)).resolves.toBeNull()
+
+    // The store is still down, but it is not what decides these two.
+    getOrganizationById.mockResolvedValue(
+      org({
+        plan: 'pro',
+        featureOverrides: [{ feature: 'workshops', enabled: false }],
+      }),
+    )
+    await expect(resolveWorkshopsForConference(owner)).resolves.toBe(false)
+    getOrganizationById.mockResolvedValue(
+      org({
+        plan: 'community',
+        featureOverrides: [{ feature: 'workshops', enabled: true }],
+      }),
+    )
+    await expect(resolveWorkshopsForConference(owner)).resolves.toBe(true)
     logged.mockRestore()
   })
 })
