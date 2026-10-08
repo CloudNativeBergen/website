@@ -1,5 +1,4 @@
 import type { Metadata } from 'next'
-import { AuthKitProvider } from '@workos-inc/authkit-nextjs/components'
 import { Layout } from '@/components/Layout'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { isWorkshopsEnabledForConference } from '@/lib/features/workshops'
@@ -27,9 +26,12 @@ export default async function WorkshopLayout({
     notFound()
   }
 
-  return (
-    <Layout conference={conference}>
-      <AuthKitProvider>{children}</AuthKitProvider>
-    </Layout>
-  )
+  // NO `AuthKitProvider` (#1296). Nothing here reads its client context, and
+  // mounting it does two things this portal must not do: it POSTs an SDK server
+  // action on every page load and on every window focus (each a pass through
+  // the proxy, so one live allowlist read), and importing it registers the
+  // SDK's own server actions as endpoints a browser can call on paths the
+  // proxy never sees. The session is read on the server, by the page
+  // (`withAuth`) and by tRPC. Guarded by `authkit-client-actions.test.ts`.
+  return <Layout conference={conference}>{children}</Layout>
 }

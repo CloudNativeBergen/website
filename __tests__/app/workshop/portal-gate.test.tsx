@@ -56,13 +56,8 @@ vi.mock('@workos-inc/authkit-nextjs', () => ({
   signOut: vi.fn(),
 }))
 
-// External boundary too: the AuthKit client provider cannot be imported under
-// vitest (its ESM build resolves `next/cache` extensionless). Everything the
-// app owns — the real Layout, WorkshopList and eligibility modules — is left
-// alone so this exercises the page's actual composition.
-vi.mock('@workos-inc/authkit-nextjs/components', () => ({
-  AuthKitProvider: ({ children }: { children: React.ReactNode }) => children,
-}))
+// Everything the app owns — the real Layout, WorkshopList and eligibility
+// modules — is left alone so this exercises the page's actual composition.
 
 /**
  * `resolveTicketingProvider` is the mocked boundary (#1294), so credential and
