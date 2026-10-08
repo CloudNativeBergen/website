@@ -14,10 +14,11 @@ import {
  * WorkOS flow through the SDK (PKCE, and this host's own callback). The page
  * used to put a hand-assembled `api.workos.com` authorize URL in the markup.
  *
- * NOTE: the proxy redirects a signed-out visitor on `/workshop` straight to
- * WorkOS, so today this view only renders when a session reached the page but
- * was rejected there. Whether `/workshop` should show it instead of redirecting
- * is an open product decision (see the PR for #1296).
+ * THIS IS WHAT A SIGNED-OUT VISITOR OF `/workshop` SEES (review of #1304). The
+ * proxy used to redirect them straight to WorkOS, before anything had asked
+ * whether the tenant has workshops; it no longer redirects anyone. The portal
+ * layout answers 404 for a tenant without workshops, and for one with them the
+ * two buttons here are the only way into a sign-in.
  */
 export function WorkshopSignedOut({
   conferenceTitle,

@@ -20,10 +20,10 @@ export default async function WorkshopPage() {
   // but ordering it first means a disabled tenant never reads a WorkOS session
   // at all. (`withAuth` throws when the AuthKit middleware did not run; that
   // cannot happen here, because `src/proxy.ts` answers 404 itself on a host
-  // that may not sign in — #1296.) NOTE the proxy still runs FIRST on such a
-  // host, so a signed-out visitor is bounced to AuthKit before any of this
-  // executes and only sees the 404 on return: the proxy decides from the HOST
-  // alone and does not resolve the conference. Fail-closed on an unresolvable
+  // that may not sign in — #1296.) The proxy runs first but sends nobody to
+  // WorkOS: a signed-out visitor arrives here, gets this 404 for a tenant
+  // without workshops, and otherwise the signed-out view below, whose two
+  // buttons are the only way into a sign-in. Fail-closed on an unresolvable
   // org.
   if (!(await isWorkshopsEnabledForConference(conference))) {
     notFound()

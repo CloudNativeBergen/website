@@ -24,7 +24,7 @@ import '../../helpers/workosEnv'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { NextRequest, type NextFetchEvent } from 'next/server'
 import { verifiedHost } from '../../helpers/workshopSignIn'
-import { beginRequest } from '../../helpers/nextHeadersJar'
+import { beginRequest, writtenCookies } from '../../helpers/nextHeadersJar'
 
 const HOST = 'conf.example.org'
 
@@ -43,6 +43,23 @@ vi.mock('@/lib/sanity/client', async (importOriginal) => ({
 }))
 
 vi.mock('next/headers', () => import('../../helpers/nextHeadersJar'))
+
+// The sign-in routes and the callback also ask the workshop FEATURE gate. It
+// is supplied here, ON, so ITS READS ARE NOT COUNTED BY THIS FILE. They are
+// the ones every page already makes to resolve the domain conference and its
+// organization, through `'use cache'` readers — plus, when
+// `DOMAIN_VERIFICATION_ENFORCE_ROUTING` is on, that resolution's own live
+// ownership check.
+vi.mock('@/lib/conference/sanity', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/conference/sanity')>()),
+  getConferenceForCurrentDomain: async () => ({
+    conference: { _id: 'conf-1', organization: { _ref: 'org-1' } },
+    error: null,
+  }),
+}))
+vi.mock('@/lib/features/workshops', () => ({
+  isWorkshopsEnabledForConference: async () => true,
+}))
 
 vi.mock('@/lib/auth', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/auth')>()),
@@ -91,7 +108,10 @@ describe('live Sanity reads per entry point', () => {
   it('a /workshop request through the proxy: 1', async () => {
     const response = (await middleware(request('/workshop'), event)) as Response
 
-    expect(response.status).toBe(307) // it really did reach the SDK
+    // It really did reach the SDK, which hands the page this host's callback.
+    expect(response.headers.get('x-middleware-request-x-redirect-uri')).toBe(
+      `https://${HOST}/api/auth/callback`,
+    )
     expect(liveReads).toHaveBeenCalledTimes(1)
   })
 
@@ -115,11 +135,11 @@ describe('live Sanity reads per entry point', () => {
   })
 
   it('the callback: 1', async () => {
-    const started = (await middleware(request('/workshop'), event)) as Response
+    const started = await signIn(request('/workshop/sign-in'))
     const state = new URL(started.headers.get('location')!).searchParams.get(
       'state',
     )!
-    const verifier = started.headers.getSetCookie()[0].split(';')[0]
+    const verifier = decodeURIComponent(writtenCookies()[0].split(';')[0])
     exchangeCode.mockResolvedValue({
       accessToken: 'a.b.c',
       refreshToken: 'r',

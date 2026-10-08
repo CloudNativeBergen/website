@@ -27,9 +27,22 @@ vi.mock('@/lib/domain-verification/sanity', () => ({
   listAllowlistCandidates: async () => [verifiedHost(HOST)],
 }))
 vi.mock('next/headers', () => import('../../helpers/nextHeadersJar'))
+// The sign-in route also asks the feature gate; it is ON, so the cookie-domain
+// guard is the only thing that can refuse below.
+vi.mock('@/lib/conference/sanity', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/conference/sanity')>()),
+  getConferenceForCurrentDomain: async () => ({
+    conference: { _id: 'conf-1', organization: { _ref: 'org-1' } },
+    error: null,
+  }),
+}))
+vi.mock('@/lib/features/workshops', () => ({
+  isWorkshopsEnabledForConference: async () => true,
+}))
 
 let sdk: typeof import('@workos-inc/authkit-nextjs')
 let proxy: typeof import('@/proxy').default
+let signIn: typeof import('@/app/(workshop)/workshop/sign-in/route').GET
 
 beforeAll(async () => {
   // Before the SDK is imported for the first time in this file's module graph.
@@ -40,6 +53,7 @@ beforeAll(async () => {
   vi.stubEnv('NODE_ENV', 'production')
   sdk = await import('@workos-inc/authkit-nextjs')
   proxy = (await import('@/proxy')).default
+  signIn = (await import('@/app/(workshop)/workshop/sign-in/route')).GET
   vi.spyOn(console, 'error').mockImplementation(() => {})
 })
 
@@ -82,29 +96,36 @@ describe('the SDK with WORKOS_COOKIE_DOMAIN set', () => {
 })
 
 describe('this app with WORKOS_COOKIE_DOMAIN set', () => {
-  it('never lets the SDK run: the proxy answers 404 and sets no cookie', async () => {
+  it('never lets the SDK run: the proxy and the sign-in route answer 404 and set no cookie', async () => {
     const buildAuthorizationUrl = vi.spyOn(
       sdk.getWorkOS().userManagement,
       'getAuthorizationUrl',
     )
+    const startSignIn = () => {
+      beginRequest(new Headers({ host: HOST }))
+      return signIn(navigate())
+    }
 
     const response = (await proxy(navigate(), {} as NextFetchEvent)) as Response
+    const started = await startSignIn()
 
     expect(response.status).toBe(404)
     expect(response.headers.getSetCookie()).toEqual([])
+    expect(started.status).toBe(404)
+    expect(writtenCookies()).toEqual([])
     expect(buildAuthorizationUrl).not.toHaveBeenCalled()
 
     // CONTROL: it is the GUARD that refused, not the allowlist or the fixture.
     // Hide the variable from the guard (which reads it per call; the SDK
-    // captured it at load) and the very same request goes through — carrying
-    // exactly the widened cookie the guard exists to prevent.
+    // captured it at load) and the very same requests go through — the sign-in
+    // carrying exactly the widened cookie the guard exists to prevent.
     vi.stubEnv('WORKOS_COOKIE_DOMAIN', '')
     const through = (await proxy(navigate(), {} as NextFetchEvent)) as Response
+    const startedThrough = await startSignIn()
     vi.stubEnv('WORKOS_COOKIE_DOMAIN', COOKIE_DOMAIN)
 
-    expect(through.status).toBe(307)
-    expect(through.headers.getSetCookie()[0].split('; ')).toContain(
-      `Domain=${COOKIE_DOMAIN}`,
-    )
+    expect(through.headers.get('x-middleware-next')).toBe('1')
+    expect(startedThrough.status).toBe(307)
+    expect(writtenCookies()[0].split('; ')).toContain(`Domain=${COOKIE_DOMAIN}`)
   })
 })

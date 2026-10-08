@@ -3,12 +3,14 @@
  *
  * `GET /api/auth/callback` — where WorkOS sends the authorization code back
  * (#1296). Run against the REAL `@workos-inc/authkit-nextjs`: the sign-in is
- * STARTED by the real proxy (so the state and the PKCE cookie are the SDK's
- * own) and FINISHED by the real callback handler.
+ * STARTED by the real `/workshop/sign-in` route (so the state and the PKCE
+ * cookie are the SDK's own) and FINISHED by the real callback handler.
  *
- * Two boundaries are supplied:
+ * Boundaries supplied:
  *  - the Sanity read behind the verified-redirect allowlist;
- *  - WorkOS's token endpoint (`authenticateWithCode`), the one network call.
+ *  - WorkOS's token endpoint (`authenticateWithCode`), the one network call;
+ *  - the workshop feature gate and the conference the host serves — ON here;
+ *    the route's handling of OFF is in `workos-sign-in-out.test.ts`.
  *
  * `next/headers` is backed by a real `NextResponse` (see `nextHeadersJar.ts`),
  * so the session cookie asserted below is serialized by Next's own cookie code.
@@ -19,7 +21,7 @@
  */
 import '../../helpers/workosEnv'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { NextRequest, type NextFetchEvent } from 'next/server'
+import { NextRequest } from 'next/server'
 import type { DomainVerificationRecord } from '@/lib/domain-verification/types'
 import { verifiedHost } from '../../helpers/workshopSignIn'
 import { beginRequest, writtenCookies } from '../../helpers/nextHeadersJar'
@@ -33,7 +35,19 @@ vi.mock('@/lib/domain-verification/sanity', () => ({
 
 vi.mock('next/headers', () => import('../../helpers/nextHeadersJar'))
 
-import middleware from '@/proxy'
+vi.mock('@/lib/conference/sanity', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/conference/sanity')>()),
+  getConferenceForCurrentDomain: async () => ({
+    conference: { _id: 'conf-1', organization: { _ref: 'org-1' } },
+    error: null,
+  }),
+}))
+
+vi.mock('@/lib/features/workshops', () => ({
+  isWorkshopsEnabledForConference: async () => true,
+}))
+
+import { GET as signIn } from '@/app/(workshop)/workshop/sign-in/route'
 import { GET } from '@/app/api/auth/callback/route'
 import { getWorkOS } from '@workos-inc/authkit-nextjs'
 
@@ -55,21 +69,22 @@ const exchangeCode = vi.spyOn(
 )
 
 /**
- * Start a real sign-in on `host` through the proxy and return what the browser
- * would carry to the callback: the `state` WorkOS echoes back, and the PKCE
- * verifier cookie the proxy set on that host.
+ * Start a real sign-in on `host` through `/workshop/sign-in` and return what
+ * the browser would carry to the callback: the `state` WorkOS echoes back, and
+ * the PKCE verifier cookie the route set on that host.
  */
-async function startSignIn(host: string, path = '/workshop') {
-  const response = (await middleware(
-    new NextRequest(`https://${host}${path}`, {
-      headers: new Headers({ host, accept: 'text/html' }),
-    }),
-    {} as NextFetchEvent,
-  )) as Response
+async function startSignIn(host: string) {
+  const headers = new Headers({ host, accept: 'text/html' })
+  beginRequest(headers)
+  const response = await signIn(
+    new NextRequest(`https://${host}/workshop/sign-in`, { headers }),
+  )
   const state = new URL(response.headers.get('location')!).searchParams.get(
     'state',
   )!
-  const cookie = response.headers.getSetCookie()[0].split(';')[0]
+  const cookie = decodeURIComponent(writtenCookies()[0].split(';')[0])
+  // A fresh jar: what the callback writes is all the tests read afterwards.
+  beginRequest()
   return { state, cookie }
 }
 
@@ -149,17 +164,6 @@ describe('WorkOS callback — on an allowlisted host', () => {
       'HttpOnly',
       'SameSite',
     ])
-  })
-
-  it('returns the attendee to the exact path and query they first asked for', async () => {
-    // The proxy seals the requested URL into the state; nothing else carries it.
-    const flow = await startSignIn(TENANT_A, '/workshop?from=email&x=1')
-
-    const response = await GET(callback(TENANT_A, flow))
-
-    expect(response.headers.get('location')).toBe(
-      `https://${TENANT_A}/workshop?from=email&x=1`,
-    )
   })
 
   it('sends the browser to the ALLOWLISTED origin, whatever the request URL claims', async () => {

@@ -10,10 +10,6 @@ import {
   resolveWorkshopSignInHost,
   workshopRequestHost,
 } from '@/lib/workshop/sign-in'
-import {
-  WORKSHOP_SIGN_IN_PATH,
-  WORKSHOP_SIGN_UP_PATH,
-} from '@/lib/workshop/sign-in-paths'
 
 // The session cookie's `Domain` is rewritten PER REQUEST for every response
 // this produces: `auth` itself applies it to its handler-wrapper form (see
@@ -72,8 +68,10 @@ const nextAuthMiddleware = auth((req) => {
 })
 
 /**
- * The workshop portal's WorkOS gate (#1296): AuthKit, with the redirect URI
- * chosen for THIS request's host.
+ * The workshop portal's WorkOS SESSION layer (#1296): AuthKit, with the
+ * redirect URI chosen for THIS request's host. It reads (and refreshes) a
+ * session the attendee already has, and hands the page the headers `withAuth`
+ * needs. It starts nothing.
  *
  * ORDER IS THE CONTROL. `resolveWorkshopSignInHost` decides first — the host
  * must be on the verified-redirect allowlist — and only a match reaches the
@@ -89,11 +87,21 @@ const nextAuthMiddleware = auth((req) => {
  * nothing; it also keeps the SDK's in-place edits to `unauthenticatedPaths`
  * from leaking between requests.
  *
- * NOT THE FEATURE GATE. Whether this tenant has workshops at all
- * (`isWorkshopsEnabledForConference`) is decided in the portal layout and page,
- * where the conference is in hand. A signed-out visitor on an allowlisted host
- * of a tenant without workshops is therefore sent to WorkOS first and sees the
- * 404 on return, as before.
+ * NOBODY IS SENT TO WORKOS FROM HERE (`middlewareAuth` stays off). This runs
+ * on the host alone and cannot ask whether the tenant has workshops at all
+ * (`isWorkshopsEnabledForConference` needs the conference, and there is no
+ * cache here to read one through). So a signed-out visitor is let through: the
+ * portal layout answers 404 for a tenant without workshops, the page shows the
+ * signed-out view for one with them, and only `/workshop/sign-in` and
+ * `/workshop/sign-up` — which check the feature first — redirect to WorkOS.
+ * Bouncing from here sent visitors of a tenant WITHOUT workshops through a
+ * processor its `/privacy` page says it does not use. With the bounce off the
+ * SDK sets no cookie for a signed-out request either: it only issues the PKCE
+ * verifier alongside a redirect it makes itself.
+ *
+ * STILL REACHES WORKOS: a request that already carries a session cookie, when
+ * its access token needs refreshing. That session was started while the tenant
+ * had workshops.
  */
 async function workshopMiddleware(req: NextRequest, event: NextFetchEvent) {
   const signIn = await resolveWorkshopSignInHost(
@@ -103,23 +111,8 @@ async function workshopMiddleware(req: NextRequest, event: NextFetchEvent) {
     return new NextResponse('Not Found', { status: 404 })
   }
 
-  // ONLY A NAVIGATION IS BOUNCED INTO A SIGN-IN. Anything else under
-  // `/workshop` is a server action (today: Sign Out), and redirecting that POST
-  // to WorkOS helps nobody: the action client cannot follow a cross-origin
-  // redirect, so a tab whose session ended elsewhere would show an error
-  // instead of signing out. The session is still read and refreshed for it;
-  // it is the action's own job to decide — as it must anyway, since an action
-  // can be posted to paths this proxy never sees.
-  const isNavigation = req.method === 'GET' || req.method === 'HEAD'
-
   return authkitMiddleware({
     redirectUri: signIn.redirectUri,
-    middlewareAuth: {
-      enabled: isNavigation,
-      // These two START a sign-in (their route handlers call the SDK), so a
-      // signed-out visitor must reach them rather than be bounced into one.
-      unauthenticatedPaths: [WORKSHOP_SIGN_IN_PATH, WORKSHOP_SIGN_UP_PATH],
-    },
     debug: process.env.NODE_ENV === 'development',
   })(req, event)
 }
