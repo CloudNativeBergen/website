@@ -451,6 +451,18 @@ describe('removing', () => {
     expect(summary.removed).toEqual([])
   })
 
+  it('does not register a host while the workshops gate cannot say', async () => {
+    workshops.set(OTHER_TENANT_ORG, null)
+    seedAllocated(CONTROL)
+    const id = seedAllocated('undecided.konf.run', { org: OTHER_TENANT_ORG })
+
+    const summary = await reconcileWorkshopRedirectUris(NOW)
+
+    expect(workos.uris.map((u) => u.uri)).toEqual([callback(CONTROL)])
+    expect(stateOf(id)).toEqual({ status: null, id: null, error: null })
+    expect(summary.wanted).toBe(1)
+  })
+
   it('registers again when its URI was deleted in the dashboard', async () => {
     const id = await registered('kontainerkonf.konf.run')
     const first = stateOf(id).id
@@ -580,23 +592,63 @@ describe('when the records cannot be read or move on under the run', () => {
     expect(summary.registered).toEqual(['kontainerkonf.konf.run'])
   })
 
-  it('removes its own URI when an overlapping run registered the host first', async () => {
+  /** Another run registers the host: its URI exists in WorkOS and its id is on the record. */
+  function anotherRunRegisters(id: string, hostname: string): string {
+    const theirs = workos.seed(callback(hostname))
+    moveOn(id, (row) => {
+      row.record.status = 'verified'
+      row.redirectUri = { status: 'registered', id: theirs.id, error: null }
+    })
+    return theirs.id
+  }
+
+  it.each([
+    ['WorkOS refuses the duplicate', false],
+    ['WorkOS accepts the duplicate', true],
+  ])(
+    'leaves an overlapping run in charge of the host it registered first, when %s',
+    async (_, allowDuplicates) => {
+      const id = seedAllocated('kontainerkonf.konf.run')
+      workos.allowDuplicates = allowDuplicates
+      let theirs = ''
+      // The other run acts after this one has listed WorkOS and found nothing.
+      workos.beforeAnswer = (method) => {
+        if (method !== 'GET') return
+        workos.beforeAnswer = undefined
+        theirs = anotherRunRegisters(id, 'kontainerkonf.konf.run')
+      }
+
+      await reconcileWorkshopRedirectUris(NOW)
+
+      expect(workos.uris.map((u) => u.id)).toEqual([theirs])
+      expect(stateOf(id)).toEqual({
+        status: 'registered',
+        id: theirs,
+        error: null,
+      })
+    },
+  )
+
+  it('says which URI is left behind when it can neither record nor remove it', async () => {
     const id = seedAllocated('kontainerkonf.konf.run')
+    const logged = vi.mocked(console.error)
     workos.beforeAnswer = (method) => {
       if (method !== 'POST') return
       moveOn(id, (row) => {
-        row.redirectUri = {
-          status: 'registered',
-          id: 'redir_theirs',
-          error: null,
-        }
+        row.record.status = 'revoked'
       })
+      workos.failNext('DELETE', { status: 500 })
     }
 
-    await reconcileWorkshopRedirectUris(NOW)
+    const summary = await reconcileWorkshopRedirectUris(NOW)
 
-    expect(workos.uris).toEqual([])
-    expect(stateOf(id).id).toBe('redir_theirs')
+    expect(summary.errored).toEqual(['kontainerkonf.konf.run'])
+    expect(workos.uris).toHaveLength(1)
+    expect(
+      logged.mock.calls.some((call) =>
+        String(call[1]).includes(workos.uris[0].id),
+      ),
+    ).toBe(true)
   })
 
   it('puts the URI back when the host was wanted again while it was being deleted', async () => {
@@ -623,5 +675,26 @@ describe('when the records cannot be read or move on under the run', () => {
     })
     expect(stateOf(id).id).not.toBe(first)
     expect(summary.errored).toEqual([])
+  })
+
+  it('does not put the URI back over one an overlapping run registered meanwhile', async () => {
+    const id = seedHost('2026.cloudnativedays.no', { org: PLATFORM_ORG })
+    await reconcileWorkshopRedirectUris(NOW)
+    rows.get(id)!.record.status = 'failing'
+    let theirs = ''
+    workos.beforeAnswer = (method) => {
+      if (method !== 'DELETE') return
+      workos.beforeAnswer = undefined
+      theirs = anotherRunRegisters(id, '2026.cloudnativedays.no')
+    }
+
+    await reconcileWorkshopRedirectUris(NOW)
+
+    expect(workos.uris.map((u) => u.id)).toEqual([theirs])
+    expect(stateOf(id)).toEqual({
+      status: 'registered',
+      id: theirs,
+      error: null,
+    })
   })
 })

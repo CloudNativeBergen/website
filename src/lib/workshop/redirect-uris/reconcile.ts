@@ -24,7 +24,8 @@
  * host is still wanted and nothing else registered it, the id is recorded;
  * otherwise the URI just created is deleted. The same happens in reverse for a
  * delete: a host that became wanted again while its URI was being removed gets
- * it back.
+ * it back. If that undo itself fails, the id is in the error log and nowhere
+ * else, and the URI shows up as `unaccounted` from then on.
  *
  * ONLY THE PRODUCTION DEPLOYMENT RUNS IT. The outcome is stored in the dataset,
  * and local development and previews read the same dataset as production. A
@@ -217,7 +218,15 @@ async function register(
     summary.registered.push(row.record.hostname)
     return
   }
-  await deleteRedirectUri(created.id)
+  try {
+    await deleteRedirectUri(created.id)
+  } catch (error) {
+    // Neither recorded nor undone: nothing holds this id from here on, so the
+    // log is the only place it is written down.
+    throw new Error(
+      `redirect URI ${created.id} (${uri}) was created, could not be recorded and could not be removed again (${describe(error)}). Remove it in WorkOS by hand.`,
+    )
+  }
   throw new Error(
     `the record for ${row.record.hostname} moved on while its redirect URI was being created; the URI was removed again`,
   )
@@ -248,9 +257,18 @@ async function reconcileHost(
       return await save(row, CLEARED)
     } catch (error) {
       // The record moved on while the URI was being deleted. If the host is
-      // wanted again, put the URI back; otherwise the next run clears the id.
+      // wanted again and still points at the URI just deleted, put it back.
+      // Anything else — still unwanted, or another run has registered it
+      // since, which the list this run holds knows nothing about — is left to
+      // the next run.
       const fresh = await readAgain(row)
-      if (!fresh || (await wantsRedirectUri(fresh, now)) !== true) throw error
+      if (
+        !fresh ||
+        fresh.redirectUri.id !== ours.id ||
+        (await wantsRedirectUri(fresh, now)) !== true
+      ) {
+        throw error
+      }
       const remaining = listed.filter((entry) => entry.id !== ours.id)
       return reconcileHost(fresh, true, remaining, now, summary)
     }

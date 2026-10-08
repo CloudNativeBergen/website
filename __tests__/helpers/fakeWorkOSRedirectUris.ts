@@ -44,8 +44,10 @@ export interface FakeWorkOSRedirectUris {
   loseNextCreateResponse(): void
   /** Answer creates with the object wrapped in `redirect_uri` (the docs show both). */
   wrapCreateResponse: boolean
-  /** Runs after a POST or DELETE took effect, before its answer is returned. */
+  /** Runs after a request took effect, before its answer is returned. */
   beforeAnswer?: (method: Method) => void
+  /** Accept a create for a URI that already exists (the docs do not say). */
+  allowDuplicates: boolean
   /** The clock `created_at` is stamped from. */
   now: () => Date
 }
@@ -91,6 +93,7 @@ export function installFakeWorkOSRedirectUris(): FakeWorkOSRedirectUris {
       loseCreateResponse = true
     },
     wrapCreateResponse: false,
+    allowDuplicates: false,
     now: () => new Date(),
   }
 
@@ -126,6 +129,7 @@ export function installFakeWorkOSRedirectUris(): FakeWorkOSRedirectUris {
       const start = after ? ordered.findIndex((u) => u.id === after) + 1 : 0
       const page = ordered.slice(start, start + limit)
       const more = start + limit < ordered.length
+      fake.beforeAnswer?.(method)
       return json({
         object: 'list',
         data: page,
@@ -138,7 +142,7 @@ export function installFakeWorkOSRedirectUris(): FakeWorkOSRedirectUris {
 
     if (method === 'POST' && url.href === ENDPOINT) {
       const { uri } = JSON.parse(String(init?.body)) as { uri: string }
-      if (fake.uris.some((u) => u.uri === uri)) {
+      if (!fake.allowDuplicates && fake.uris.some((u) => u.uri === uri)) {
         return json({ message: 'Redirect URI already exists' }, 422)
       }
       const created = fake.seed(uri)
