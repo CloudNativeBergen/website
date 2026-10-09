@@ -495,6 +495,9 @@ describe('URIs this system did not create', () => {
 
     expect(workos.uris).toHaveLength(1)
     expect(stateOf(id)).toEqual({ status: 'external', id: null, error: null })
+    // Seen in the run's one listing: no second look, which is only for a
+    // create about to be sent.
+    expect(workos.requests.map((r) => r.method)).toEqual(['GET'])
   })
 
   it.each<[string, Partial<DomainVerificationRecord>, string[]]>([
