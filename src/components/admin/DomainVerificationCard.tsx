@@ -15,6 +15,10 @@ import { useNotification } from './NotificationProvider'
 import { api } from '@/lib/trpc/client'
 import type { DomainVerificationView } from '@/lib/domain-verification'
 import type { WorkshopSignInStanding } from '@/lib/domain-verification/sign-in-standing'
+import {
+  workshopSignInLabel,
+  type WorkshopSignInLabel,
+} from '@/lib/domain-verification/sign-in-labels'
 
 /**
  * Domain ownership verification, admin surface (#683).
@@ -82,6 +86,13 @@ function statusLabel(domain: DomainVerificationView): {
   }
 }
 
+const SIGN_IN_TONE: Record<WorkshopSignInLabel['status'], Tone> = {
+  ok: 'green',
+  warn: 'amber',
+  error: 'red',
+  off: 'gray',
+}
+
 const SIGN_IN_TEXT: Record<Tone, string> = {
   green: 'text-green-700 dark:text-green-300',
   amber: 'text-amber-700 dark:text-amber-300',
@@ -89,51 +100,13 @@ const SIGN_IN_TEXT: Record<Tone, string> = {
   gray: 'text-gray-900 dark:text-gray-200',
 }
 
-const NOT_YET =
-  'Until then attendees see that workshop sign-up is not available yet, and ticket emails go out without the portal link.'
-
-function workshopSignInLabel(standing: WorkshopSignInStanding): {
-  tone: Tone
-  label: string
-  detail: string | null
-} {
-  switch (standing.state) {
-    case 'ready':
-      return { tone: 'green', label: 'available', detail: null }
-    case 'unverified':
-      return {
-        tone: 'amber',
-        label: 'domain not verified',
-        detail: `Sign-in is set up once the domain is verified. ${NOT_YET}`,
-      }
-    case 'pending':
-      return {
-        tone: 'amber',
-        label: 'registration pending',
-        detail: `The domain is verified and sign-in is being registered. This happens automatically, at the latest with the next daily check. ${NOT_YET}`,
-      }
-    case 'failed':
-      return {
-        tone: 'red',
-        label: 'registration failed',
-        detail: `It is retried automatically with the next daily check. ${NOT_YET}`,
-      }
-    case 'not-offered':
-      return {
-        tone: 'gray',
-        label: 'not offered on this host',
-        detail:
-          'Workshop sign-in runs only on hosts the platform controls, such as a host the platform provided for this conference.',
-      }
-  }
-}
-
 function WorkshopSignInLine({
   standing,
 }: {
   standing: WorkshopSignInStanding
 }) {
-  const { tone, label, detail } = workshopSignInLabel(standing)
+  const { status, label, detail } = workshopSignInLabel(standing)
+  const tone = SIGN_IN_TONE[status]
   return (
     <div className="mt-1 text-xs text-gray-600 dark:text-gray-400">
       <p>
@@ -141,7 +114,7 @@ function WorkshopSignInLine({
         <span className={clsx('font-medium', SIGN_IN_TEXT[tone])}>{label}</span>
       </p>
       {standing.state === 'failed' && (
-        <p className="mt-1 font-mono break-all text-red-700 dark:text-red-300">
+        <p className="mt-1 font-mono break-words text-red-700 dark:text-red-300">
           {standing.error}
         </p>
       )}
