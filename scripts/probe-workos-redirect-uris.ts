@@ -83,13 +83,14 @@ function firstIdOf(body: unknown): string | undefined {
  * depend on having read an id out of a create answer. Returns what is left.
  */
 async function removeProbeUris(uri: string): Promise<string[]> {
-  const mine = (await listRedirectUris()).filter((entry) => entry.uri === uri)
-  for (const entry of mine) {
+  // By host, which is unique to this run: WorkOS may spell the URI its own way.
+  const { host } = new URL(uri)
+  const isMine = (entry: { uri: string }) =>
+    URL.canParse(entry.uri) && new URL(entry.uri).host === host
+  for (const entry of (await listRedirectUris()).filter(isMine)) {
     await call('Clean up', 'DELETE', `${ENDPOINT}/${entry.id}`)
   }
-  return (await listRedirectUris())
-    .filter((entry) => entry.uri === uri)
-    .map((entry) => entry.id)
+  return (await listRedirectUris()).filter(isMine).map((entry) => entry.id)
 }
 
 async function main(): Promise<void> {

@@ -115,6 +115,23 @@ describe('domainVerification.recheck', () => {
     expect(scheduleRedirectUriReconcile).toHaveBeenCalledTimes(1)
   })
 
+  it('queues a reconcile when a first real proof replaces a grandfathered standing', async () => {
+    // On the allowlist before and after, so that alone would miss it — but a
+    // grandfathered host does not get a redirect URI, and a proven one does.
+    record = {
+      ...record!,
+      status: 'verified',
+      method: 'grandfathered',
+      graceUntil: new Date(Date.now() + 86_400_000).toISOString(),
+      lastSuccessAt: new Date().toISOString(),
+    }
+    found = { method: 'dns-txt', graceUntil: null }
+
+    await caller().recheck({ hostname: HOST })
+
+    expect(scheduleRedirectUriReconcile).toHaveBeenCalledTimes(1)
+  })
+
   it('queues nothing for a re-check it refused', async () => {
     record = { ...record!, conferenceId: 'conference-2' }
 

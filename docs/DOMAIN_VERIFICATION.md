@@ -311,7 +311,8 @@ with `WORKOS_API_KEY` set:
 
 - after the response of a mutation that wrote a verification record (a claim, a
   release, a platform allocation);
-- after an admin re-check that changed whether the host is on the allowlist;
+- after an admin re-check that changed whether the host is on the allowlist, or
+  replaced a grandfathered standing with a real proof;
 - after an organization's plan or feature overrides change;
 - at the end of the daily sweep, which also retries whatever failed earlier.
 
@@ -327,8 +328,8 @@ overwrite production's ids. To exercise the API against staging, use
 `pnpm tsx scripts/probe-workos-redirect-uris.ts`, which touches WorkOS only.
 
 **What it will delete.** Only a URI it created itself: the id WorkOS returned
-for that create is on the host's record, and WorkOS lists that id on that host's
-own callback. Everything else is recorded as `external` and left alone, even
+for that create is on the host's record, and WorkOS lists that id on a URI of
+that host. Everything else is recorded as `external` and left alone, even
 after its host is released: the environment's default URI, anything added by
 hand in the dashboard, and one of our own creates whose answer never arrived.
 Ownership is never inferred from a URI's text or age. The record is the ledger,

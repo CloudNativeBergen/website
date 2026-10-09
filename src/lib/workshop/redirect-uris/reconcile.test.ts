@@ -273,6 +273,40 @@ describe('registering', () => {
   })
 })
 
+describe('when WorkOS spells a URI its own way', () => {
+  it.each<[string, (uri: string) => string, boolean]>([
+    ['a trailing slash, duplicates refused', (uri) => `${uri}/`, false],
+    ['a trailing slash, duplicates accepted', (uri) => `${uri}/`, true],
+    ['an upper-cased path', (uri) => uri.replace('/api/', '/API/'), false],
+  ])(
+    'still knows its own URI by its id: %s',
+    async (_, respell, allowDuplicates) => {
+      workos.respell = respell
+      workos.allowDuplicates = allowDuplicates
+      const id = seedAllocated('kontainerkonf.konf.run')
+
+      await reconcileWorkshopRedirectUris(NOW)
+      const registered = stateOf(id).id
+      await reconcileWorkshopRedirectUris(NOW)
+      const third = await reconcileWorkshopRedirectUris(NOW)
+
+      expect(workos.uris).toHaveLength(1)
+      expect(stateOf(id)).toEqual({
+        status: 'registered',
+        id: registered,
+        error: null,
+      })
+      expect(third).toMatchObject({ registered: [], errored: [] })
+
+      rows.get(id)!.record.status = 'revoked'
+      const released = await reconcileWorkshopRedirectUris(NOW)
+
+      expect(released.removed).toEqual(['kontainerkonf.konf.run'])
+      expect(workos.uris).toEqual([])
+    },
+  )
+})
+
 describe('a second run with nothing changed', () => {
   it('writes nothing to WorkOS and nothing to the records', async () => {
     seedAllocated('kontainerkonf.konf.run')
@@ -333,6 +367,19 @@ describe('URIs this system did not create', () => {
 
     expect(workos.uris).toHaveLength(1)
     expect(stateOf(id)).toEqual({ status: 'external', id: null, error: null })
+  })
+
+  it('replace a dead id on the record: external, the id dropped, nothing reported', async () => {
+    const byHand = workos.seed(callback('kontainerkonf.konf.run'))
+    const id = seedAllocated('kontainerkonf.konf.run', {
+      redirectUri: { status: 'registered', id: 'redir_gone' },
+    })
+
+    const summary = await reconcileWorkshopRedirectUris(NOW)
+
+    expect(workos.uris).toEqual([byHand])
+    expect(stateOf(id)).toEqual({ status: 'external', id: null, error: null })
+    expect(summary.unaccounted).toEqual([])
   })
 
   it('are recognised however WorkOS spells them', async () => {
@@ -725,6 +772,24 @@ describe('when the records cannot be read or move on under the run', () => {
     expect(summary.errored).toEqual([])
   })
 
+  it('removes the URI again when the record moved on and it can no longer tell that the host is wanted', async () => {
+    const id = seedAllocated('kontainerkonf.konf.run')
+    workos.beforeAnswer = (method) => {
+      if (method !== 'POST') return
+      moveOn(id)
+      workshops.set(TENANT_ORG, null)
+    }
+
+    const summary = await reconcileWorkshopRedirectUris(NOW)
+
+    expect(workos.uris).toEqual([])
+    expect(stateOf(id).id).toBeNull()
+    expect(summary).toMatchObject({
+      registered: [],
+      errored: ['kontainerkonf.konf.run'],
+    })
+  })
+
   it('removes the URI again when the host was released while it was being created', async () => {
     const id = seedAllocated('kontainerkonf.konf.run')
     let created = 0
@@ -964,6 +1029,24 @@ describe('when the records cannot be read or move on under the run', () => {
     })
     expect(stateOf(id).id).not.toBe(first)
     expect(summary.errored).toEqual([])
+  })
+
+  it('does not put the URI back while it cannot tell that the host is wanted again', async () => {
+    const id = seedHost('2026.cloudnativedays.no', { org: PLATFORM_ORG })
+    await reconcileWorkshopRedirectUris(NOW)
+    rows.get(id)!.record.status = 'failing'
+    workos.beforeAnswer = (method) => {
+      if (method !== 'DELETE') return
+      moveOn(id, (row) => {
+        row.record.status = 'verified'
+      })
+      unreadableOrgs.add(PLATFORM_ORG)
+    }
+
+    const summary = await reconcileWorkshopRedirectUris(NOW)
+
+    expect(workos.uris).toEqual([])
+    expect(summary.errored).toEqual(['2026.cloudnativedays.no'])
   })
 
   it('does not put the URI back over one an overlapping run registered meanwhile', async () => {

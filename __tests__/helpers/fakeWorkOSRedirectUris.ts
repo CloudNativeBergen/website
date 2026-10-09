@@ -59,6 +59,8 @@ export interface FakeWorkOSRedirectUris {
   beforeAnswer?: (method: Method) => void
   /** Accept a create for a URI that already exists (the docs do not say). */
   allowDuplicates: boolean
+  /** How WorkOS stores a URI it is asked to create; the identity by default. */
+  respell: (uri: string) => string
   /** The clock `created_at` is stamped from. */
   now: () => Date
 }
@@ -105,6 +107,7 @@ export function installFakeWorkOSRedirectUris(): FakeWorkOSRedirectUris {
     },
     wrapCreateResponse: false,
     allowDuplicates: false,
+    respell: (uri) => uri,
     now: () => new Date(),
   }
 
@@ -152,7 +155,8 @@ export function installFakeWorkOSRedirectUris(): FakeWorkOSRedirectUris {
     }
 
     if (method === 'POST' && url.href === ENDPOINT) {
-      const { uri } = JSON.parse(String(init?.body)) as { uri: string }
+      const sent = JSON.parse(String(init?.body)) as { uri: string }
+      const uri = fake.respell(sent.uri)
       if (!fake.allowDuplicates && fake.uris.some((u) => u.uri === uri)) {
         return json({ message: 'Redirect URI already exists' }, 422)
       }

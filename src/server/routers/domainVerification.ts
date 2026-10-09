@@ -88,12 +88,16 @@ export const domainVerificationRouter = router({
       }
 
       const { record: updated } = await recheckDomainRecord(record)
-      // A proof that just resolved, or just stopped, changes whether this host
-      // may sign in to the workshop portal (#1297). Only then: the reconcile
-      // reads every tenant's records, and this button is one click away.
+      // A re-check can change whether this host may sign in to the workshop
+      // portal (#1297): it joins or leaves the allowlist, or its first real
+      // proof replaces a grandfathered standing that was not enough. Only
+      // then: the reconcile reads every tenant's records, and this button is
+      // one click away.
       const now = new Date()
       if (
-        isAllowlistEligible(record, now) !== isAllowlistEligible(updated, now)
+        isAllowlistEligible(record, now) !==
+          isAllowlistEligible(updated, now) ||
+        record.method !== updated.method
       ) {
         scheduleRedirectUriReconcile()
       }

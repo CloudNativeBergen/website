@@ -10,9 +10,9 @@
  *
  * WHAT "IT CREATED" MEANS. A delete is only ever addressed to an id WorkOS
  * handed back for a create this system made, recorded on the host's
- * `domainVerification` document, and only while WorkOS lists that id on that
- * host's own callback. The record is the ledger: whoever can write the dataset
- * can write the ledger, and the URI check is what keeps an id copied onto the
+ * `domainVerification` document, and only while WorkOS lists that id on a URI
+ * of that host. The record is the ledger: whoever can write the dataset can
+ * write the ledger, and the host check is what keeps an id copied onto the
  * wrong record from deleting someone else's URI. NOTHING ELSE COUNTS: a URI that is simply
  * found in WorkOS — the environment's default, one a person added in the
  * dashboard, or one of our own creates whose answer never arrived — is recorded
@@ -24,8 +24,8 @@
  * conditional on the revision this run read, so a record that moved on while
  * WorkOS was answering (released, re-claimed, re-checked, or handled by an
  * overlapping run) rejects the write. The record is then read again: if the
- * host is still wanted and nothing else registered it, the id is recorded;
- * otherwise the URI just created is deleted. The same happens in reverse for a
+ * host is established as still wanted and nothing else registered it, the id
+ * is recorded; otherwise the URI just created is deleted. The same happens in reverse for a
  * delete: a host that became wanted again while its URI was being removed gets
  * it back. If the undo itself fails, the id is put on the record when the
  * record holds no live id, so the next run deletes it. When the record holds
@@ -124,6 +124,14 @@ function href(uri: string): string {
   }
 }
 
+function sameHost(a: string, b: string): boolean {
+  try {
+    return new URL(a).host === new URL(b).host
+  } catch {
+    return false
+  }
+}
+
 function describe(error: unknown): string {
   return (error instanceof Error ? error.message : String(error)).slice(0, 300)
 }
@@ -201,9 +209,10 @@ async function register(
 
   // Put the id on the record. A write that fails is followed by a fresh read,
   // which either shows the id there after all (the write landed and only its
-  // answer was lost), shows the host should not keep the URI (another run has
-  // registered it, or it is no longer wanted), or leaves one more attempt on
-  // the revision just read.
+  // answer was lost), does not show that the host should keep the URI (another
+  // run has registered it, it is no longer wanted, or that cannot be told for
+  // the record as it now stands), or leaves one more attempt on the revision
+  // just read.
   /** What the record held going in: nothing, or an id the listing did not show. */
   const heldBefore = row.redirectUri.id
   /** Does the record hold no live id — nothing, or still only that dead one? */
@@ -221,7 +230,7 @@ async function register(
       if (fresh.redirectUri.id === created.id) recorded = true
       else if (
         !isFree(fresh) ||
-        (await wantsRedirectUri(fresh, now)) === false
+        (await wantsRedirectUri(fresh, now)) !== true
       ) {
         break
       }
@@ -258,12 +267,13 @@ async function reconcileHost(
   const { hostname } = row.record
   const uri = workshopRedirectUri(hostname)
   const { id } = row.redirectUri
-  // Ours is the entry with the recorded id ON THIS HOST'S URI. An id that names
-  // some other URI was not put on the record by a create for this host, and is
-  // never acted on.
+  // Ours is the entry with the recorded id, ON THIS HOST. An id that names a
+  // URI on some other host was not put on the record by a create for this one,
+  // and is never acted on. The host is compared, not the whole URI: the id is
+  // what identifies the entry, and WorkOS may spell the path its own way.
   const ours =
     id && uri
-      ? listed.find((entry) => entry.id === id && href(entry.uri) === href(uri))
+      ? listed.find((entry) => entry.id === id && sameHost(entry.uri, uri))
       : undefined
 
   if (!wanted || !uri) {
