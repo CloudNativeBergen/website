@@ -524,18 +524,22 @@ describe('api/webhooks/checkin/ticket-sold — workshop feature gate', () => {
       await import('@/app/api/webhooks/checkin/ticket-sold/route')
     const second = workshopBuyer()
     second.crm = { ...second.crm, email: { email: 'grace@example.com' } }
-    const data = makeData({ users: [workshopBuyer(), second] })
 
-    const response = await POST(
-      postRequest(makePayload(data), sign(data, TENANT_SECRET)),
-    )
+    // A single-ticket order — the common case — and a two-ticket one.
+    for (const users of [[workshopBuyer()], [workshopBuyer(), second]]) {
+      mockSendWorkshop.mockClear()
+      const data = makeData({ users })
+      const response = await POST(
+        postRequest(makePayload(data), sign(data, TENANT_SECRET)),
+      )
 
-    expect(response.status).toBe(200)
-    expect(mockSendWorkshop).toHaveBeenCalledTimes(2)
-    for (const [request] of mockSendWorkshop.mock.calls) {
-      expect(request).toMatchObject({
-        portalUrl: 'https://conf.example.org/workshop',
-      })
+      expect(response.status).toBe(200)
+      expect(mockSendWorkshop).toHaveBeenCalledTimes(users.length)
+      for (const [request] of mockSendWorkshop.mock.calls) {
+        expect(request).toMatchObject({
+          portalUrl: 'https://conf.example.org/workshop',
+        })
+      }
     }
   })
 

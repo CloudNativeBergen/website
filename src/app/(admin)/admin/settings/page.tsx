@@ -134,7 +134,8 @@ export default async function AdminSettings() {
   const editUrl = studioEditUrl(conference._id)
   const visibility = resolveConferenceVisibility(conference)
   // Ownership-verification state per claimed domain (#683). Read here so the
-  // card server-renders its real state; the client island refetches on mount.
+  // card server-renders its real state; the client island refetches once its
+  // query goes stale (the provider's staleTime), not on mount.
   // With workshops, each host also shows whether the portal can sign in on
   // it, and if not why (#1298).
   const domainVerifications = conference._id

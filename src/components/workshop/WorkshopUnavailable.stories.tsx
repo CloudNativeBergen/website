@@ -35,7 +35,11 @@ type Story = StoryObj<typeof meta>
 export const Unavailable: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
-    await expect(canvas.getByText(/is not available yet/)).toBeInTheDocument()
+    await expect(
+      canvas.getByText(
+        'Workshop sign-up for Cloud Native Days Norway 2026 is not available yet.',
+      ),
+    ).toBeInTheDocument()
     await expect(
       canvas.getByText(/Please check back later/),
     ).toBeInTheDocument()
@@ -47,7 +51,15 @@ export const Unavailable: Story = {
       canvas.getByRole('link', { name: 'Contact the organizers' }),
     ).toHaveAttribute('href', 'mailto:hello@cloudnativedays.no')
     // Nothing to start a sign-in with.
-    await expect(canvas.queryByRole('button', { name: 'Sign In' })).toBeNull()
+    await expect(
+      canvas.queryByRole('button', { name: /sign in|sign up/i }),
+    ).toBeNull()
+    await expect(
+      canvas.queryByRole('link', { name: /sign in|sign up/i }),
+    ).toBeNull()
+    for (const link of canvas.getAllByRole('link')) {
+      await expect(link.getAttribute('href')).toMatch(/^mailto:/)
+    }
   },
 }
 

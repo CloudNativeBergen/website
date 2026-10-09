@@ -143,6 +143,42 @@ describe('resolveWorkshopSignInHost — everything else is refused', () => {
     ).resolves.toBeNull()
   })
 
+  it('refuses a registered host whose last proof is older than 30 days', async () => {
+    const fortyDaysAgo = new Date(Date.now() - 40 * 86_400_000).toISOString()
+    hosts(record({ lastSuccessAt: fortyDaysAgo, verifiedAt: fortyDaysAgo }))
+    await expect(
+      resolveWorkshopSignInHost('conf.example.org'),
+    ).resolves.toBeNull()
+  })
+
+  it('refuses a registered grandfathered host once its grace has ended', async () => {
+    hosts(
+      record({
+        method: 'grandfathered',
+        status: 'pending',
+        lastSuccessAt: null,
+        graceUntil: new Date(Date.now() - 86_400_000).toISOString(),
+      }),
+    )
+    await expect(
+      resolveWorkshopSignInHost('conf.example.org'),
+    ).resolves.toBeNull()
+  })
+
+  it('CONTROL: admits that grandfathered host while its grace lasts', async () => {
+    hosts(
+      record({
+        method: 'grandfathered',
+        status: 'pending',
+        lastSuccessAt: null,
+        graceUntil: new Date(Date.now() + 86_400_000).toISOString(),
+      }),
+    )
+    await expect(
+      resolveWorkshopSignInHost('conf.example.org'),
+    ).resolves.toMatchObject({ origin: 'https://conf.example.org' })
+  })
+
   it('refuses a verified host whose callback WorkOS does not have yet', async () => {
     hosts(record({}, { status: null, id: null }))
     await expect(

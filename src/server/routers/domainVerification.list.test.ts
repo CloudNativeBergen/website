@@ -39,13 +39,17 @@ vi.mock('@/lib/conference/sanity', () => ({
   }),
 }))
 
+const syncDomainVerifications = vi.fn<(...args: unknown[]) => Promise<void>>(
+  async () => {},
+)
 const listConferenceDomainViews = vi.fn<
   (conference: unknown) => Promise<unknown[]>
 >(async () => [])
 vi.mock('@/lib/domain-verification', () => ({
   listConferenceDomainViews: (conference: unknown) =>
     listConferenceDomainViews(conference),
-  syncDomainVerifications: vi.fn(),
+  syncDomainVerifications: (...args: unknown[]) =>
+    syncDomainVerifications(...args),
   getDomainVerification: vi.fn(),
   recheckDomainRecord: vi.fn(),
   toDomainVerificationView: vi.fn(),
@@ -73,11 +77,18 @@ beforeEach(() => {
 })
 
 describe('domainVerification.list', () => {
-  it('lists the views for the conference as the query selects it: id, normalised domains, owner and vendor', async () => {
+  it('syncs, then lists the views for the conference as the query selects it: id, domains, owner and vendor', async () => {
     await caller().list()
 
     // The gate inside `listConferenceDomainViews` reads owner and vendor; a
     // projection that dropped them would switch workshops off for everyone.
+    // Self-heal first: every claimed domain has a record before it is listed.
+    expect(syncDomainVerifications).toHaveBeenCalledWith('conference-1', [
+      '2026.cloudnativedays.no',
+    ])
+    expect(syncDomainVerifications.mock.invocationCallOrder[0]).toBeLessThan(
+      listConferenceDomainViews.mock.invocationCallOrder[0],
+    )
     expect(listConferenceDomainViews).toHaveBeenCalledWith({
       _id: 'conference-1',
       domains: ['2026.cloudnativedays.no'],
