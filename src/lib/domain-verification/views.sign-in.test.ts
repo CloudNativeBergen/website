@@ -299,6 +299,15 @@ describe('listConferenceDomainViews', () => {
     expect(views[0].workshopSignIn).toEqual({ state: 'not-offered' })
   })
 
+  it('asks the platform organization to verify a claimed host with no record', async () => {
+    workshopsEnabled.mockResolvedValue(true)
+    const views = await listConferenceDomainViews({
+      ...CONFERENCE,
+      domains: ['new.example.org'],
+    })
+    expect(views[0].workshopSignIn).toEqual({ state: 'unverified' })
+  })
+
   it('shows no standing when the gate is off', async () => {
     workshopsEnabled.mockResolvedValue(false)
     rows.push(owned(signInHost('conf.example.org')))
