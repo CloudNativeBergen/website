@@ -132,6 +132,21 @@ describe('domainVerification.recheck', () => {
     expect(scheduleRedirectUriReconcile).toHaveBeenCalledTimes(1)
   })
 
+  it('queues a reconcile when the re-check renews a proof that had gone stale', async () => {
+    // Guard a mutation pass found unpinned (#1297 review). `verified` before
+    // and after, same method: only the allowlist, judged NOW, sees the change.
+    record = {
+      ...record!,
+      status: 'verified',
+      lastSuccessAt: new Date(Date.now() - 40 * 86_400_000).toISOString(),
+    }
+    found = { lastSuccessAt: new Date().toISOString() }
+
+    await caller().recheck({ hostname: HOST })
+
+    expect(scheduleRedirectUriReconcile).toHaveBeenCalledTimes(1)
+  })
+
   it('queues nothing for a re-check it refused', async () => {
     record = { ...record!, conferenceId: 'conference-2' }
 

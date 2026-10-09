@@ -111,6 +111,27 @@ describe('api/cron/domain-verification', () => {
     expect(logged.mock.calls[0][0]).toContain(named)
   })
 
+  it('says in the summary line that the reconcile was skipped, and why', async () => {
+    // Guard a mutation pass found unpinned (#1297 review): a skipped reconcile
+    // is no error, so this line is the only place the logs show it.
+    const { GET } = await import('@/app/api/cron/domain-verification/route')
+    const logged = vi.mocked(console.log)
+
+    await GET(request('Bearer test-cron-secret'))
+    expect(logged.mock.calls[0][0]).not.toContain('redirectUris.skipped')
+
+    logged.mockClear()
+    mockSweep.mockResolvedValue({
+      ...SUMMARY,
+      redirectUris: { ...SUMMARY.redirectUris, skipped: 'no-api-key' },
+    })
+    await GET(request('Bearer test-cron-secret'))
+
+    expect(logged).toHaveBeenCalledTimes(1)
+    expect(logged.mock.calls[0][0]).toContain('redirectUris.skipped=no-api-key')
+    expect(vi.mocked(console.error)).not.toHaveBeenCalled()
+  })
+
   it('refuses an unauthenticated call and does NOT sweep', async () => {
     const { GET } = await import('@/app/api/cron/domain-verification/route')
     expect((await GET(request())).status).toBe(401)

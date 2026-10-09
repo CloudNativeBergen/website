@@ -206,3 +206,129 @@ describe('patchRedirectUriState', () => {
     })
   })
 })
+
+/**
+ * Guards a mutation pass found unpinned (#1297 review). The record's fields are
+ * ONE list shared by every reader of a verification record, so a field lost
+ * from it is lost to the sweep and the allowlist as well as to the reconcile.
+ */
+describe('the record fields every reader shares', () => {
+  const stored = {
+    method: 'grandfathered',
+    graceUntil: '2026-11-01T00:00:00.000Z',
+    verifiedAt: '2026-09-01T00:00:00.000Z',
+    lastSuccessAt: '2026-10-08T05:00:00.000Z',
+    lastCheckedAt: '2026-10-09T05:00:00.000Z',
+    firstFailureAt: '2026-10-09T05:00:00.000Z',
+    consecutiveFailures: 2,
+    consecutiveSoftFailures: 3,
+    lastError: 'NXDOMAIN',
+  }
+  const whole = {
+    _id: 'domainVerification.a.example.org',
+    hostname: 'a.example.org',
+    conferenceId: 'conference-1',
+    token: 'tok',
+    status: 'verified',
+    ...stored,
+  }
+  /** A record written before `status`, `method` and the counters existed. */
+  const legacy = {
+    _id: 'domainVerification.old.example.org',
+    _rev: 'rev-old',
+    _type: 'domainVerification',
+    hostname: 'old.example.org',
+    conference: { _type: 'reference', _ref: 'conference-1' },
+    token: 'tok',
+  }
+  const legacyRead = {
+    _id: 'domainVerification.old.example.org',
+    hostname: 'old.example.org',
+    conferenceId: 'conference-1',
+    token: 'tok',
+    status: 'pending',
+    method: 'dns-txt',
+    graceUntil: null,
+    verifiedAt: null,
+    lastSuccessAt: null,
+    lastCheckedAt: null,
+    firstFailureAt: null,
+    consecutiveFailures: 0,
+    consecutiveSoftFailures: 0,
+    lastError: null,
+  }
+
+  it('hands the reconcile the whole record, not only its hostname', async () => {
+    dataset.push(verification('a.example.org', stored))
+
+    const [row] = await listRedirectUriSyncRows()
+
+    expect(row.record).toEqual(whole)
+  })
+
+  it('gives the reconcile the same defaults for a record that predates them', async () => {
+    dataset.push({ ...legacy, redirectUriId: 'redir_1' })
+
+    const [row] = await listRedirectUriSyncRows()
+
+    expect(row.record).toEqual(legacyRead)
+  })
+
+  it('still reads the whole record for everything else that reads one', async () => {
+    const { getDomainVerification } = await import('./sanity')
+    dataset.push(verification('a.example.org', stored))
+    dataset.push(legacy)
+
+    expect(await getDomainVerification('a.example.org')).toEqual(whole)
+    expect(await getDomainVerification('old.example.org')).toEqual(legacyRead)
+  })
+})
+
+describe('which records the reconcile is shown', () => {
+  it('includes a platform-allocated host whatever its stored status: the allowlist admits it', async () => {
+    dataset.push(
+      verification('tenant.konf.run', {
+        method: 'platform-owned',
+        status: 'failing',
+      }),
+    )
+
+    const rows = await listRedirectUriSyncRows()
+
+    expect(rows.map((r) => r.record.hostname)).toEqual(['tenant.konf.run'])
+  })
+
+  it('never lists a document of another type, whatever fields it carries', async () => {
+    dataset.push({
+      _id: 'sponsor-1',
+      _rev: 'rev-sponsor',
+      _type: 'sponsor',
+      hostname: 'sponsor.example.org',
+      status: 'verified',
+      method: 'platform-owned',
+      redirectUriStatus: 'registered',
+      redirectUriId: 'redir_1',
+      redirectUriError: 'HTTP 500',
+    })
+
+    expect(await listRedirectUriSyncRows()).toEqual([])
+  })
+})
+
+describe('patchRedirectUriState and a field that is present but undefined', () => {
+  it('leaves it alone: only null clears', async () => {
+    await patchRedirectUriState('domainVerification.a', 'rev-1', {
+      id: undefined,
+      status: 'external',
+      error: undefined,
+    })
+
+    expect(committed).toEqual({
+      patch: {
+        id: 'domainVerification.a',
+        ifRevisionID: 'rev-1',
+        set: { redirectUriStatus: 'external' },
+      },
+    })
+  })
+})

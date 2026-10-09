@@ -82,6 +82,21 @@ describe('isPlatformControlledHost', () => {
     expect(isPlatformControlledHost(stale, PLATFORM_ORG, NOW)).toBe(false)
   })
 
+  it('refuses a platform-organization host whose proof has gone stale', () => {
+    // Guard a mutation pass found unpinned (#1297 review): the answer depends
+    // on `now`. Proven once, last confirmed 61 days before NOW.
+    const stale = record({ lastSuccessAt: '2026-05-01T00:00:00.000Z' })
+    expect(isPlatformControlledHost(stale, PLATFORM_ORG, NOW)).toBe(false)
+    // The same record, asked while the proof was fresh.
+    expect(
+      isPlatformControlledHost(
+        stale,
+        PLATFORM_ORG,
+        new Date('2026-05-15T00:00:00.000Z'),
+      ),
+    ).toBe(true)
+  })
+
   it('refuses a released allocation', () => {
     const released = record({
       hostname: 'tenant.konf.run',

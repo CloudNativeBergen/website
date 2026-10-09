@@ -230,3 +230,153 @@ describe('without WORKOS_API_KEY', () => {
     expect(workos.requests).toHaveLength(0)
   })
 })
+
+/**
+ * Guards a mutation pass found unpinned (#1297 review): each of these fails
+ * when the line it names is removed or loosened.
+ */
+describe('what is sent', () => {
+  it('sends the URI as a JSON body, declared as JSON', async () => {
+    await createRedirectUri('https://a.example.org/cb')
+
+    const init = vi.mocked(globalThis.fetch).mock.calls[0][1]
+    expect(new Headers(init?.headers).get('content-type')).toBe(
+      'application/json',
+    )
+    expect(JSON.parse(String(init?.body))).toEqual({
+      uri: 'https://a.example.org/cb',
+    })
+  })
+
+  it('never lets a request be answered from a cache', async () => {
+    const entry = workos.seed('https://old.example.org/cb')
+
+    await listRedirectUris()
+    await createRedirectUri('https://a.example.org/cb')
+    await deleteRedirectUri(entry.id)
+
+    const sent = vi.mocked(globalThis.fetch).mock.calls
+    expect(sent.map(([, init]) => init?.method)).toEqual([
+      'GET',
+      'POST',
+      'DELETE',
+    ])
+    expect(sent.map(([, init]) => init?.cache)).toEqual([
+      'no-store',
+      'no-store',
+      'no-store',
+    ])
+  })
+
+  it('uses the key without the whitespace an environment variable picks up', async () => {
+    vi.stubEnv('WORKOS_API_KEY', ` ${FAKE_WORKOS_API_KEY}\n`)
+
+    await expect(listRedirectUris()).resolves.toEqual([])
+
+    const init = vi.mocked(globalThis.fetch).mock.calls[0][1]
+    expect(new Headers(init?.headers).get('authorization')).toBe(
+      `Bearer ${FAKE_WORKOS_API_KEY}`,
+    )
+  })
+
+  it('treats a key that is only whitespace as unset: no request, no status', async () => {
+    vi.stubEnv('WORKOS_API_KEY', '  \n')
+
+    await expect(listRedirectUris()).rejects.toMatchObject({
+      name: 'WorkOSRedirectUriError',
+      status: null,
+    })
+    expect(workos.requests).toHaveLength(0)
+  })
+})
+
+describe('an answer this cannot read', () => {
+  const unreadableEntries: [string, Record<string, unknown>][] = [
+    ['no id', { uri: 'https://a.example.org/cb' }],
+    ['an empty id', { id: '', uri: 'https://a.example.org/cb' }],
+    ['no uri', { id: 'redir_1' }],
+    ['an empty uri', { id: 'redir_1', uri: '' }],
+  ]
+
+  it.each(unreadableEntries)(
+    'fails a listing that holds an entry with %s, rather than guess',
+    async (_, entry) => {
+      vi.stubGlobal(
+        'fetch',
+        async () => new Response(JSON.stringify({ data: [entry] })),
+      )
+
+      await expect(listRedirectUris()).rejects.toMatchObject({
+        name: 'WorkOSRedirectUriError',
+        status: null,
+      })
+    },
+  )
+
+  it.each(unreadableEntries)(
+    'fails a create answered with %s, rather than record a URI it cannot name',
+    async (_, entry) => {
+      vi.stubGlobal('fetch', async () => new Response(JSON.stringify(entry)))
+
+      await expect(
+        createRedirectUri('https://a.example.org/cb'),
+      ).rejects.toMatchObject({
+        name: 'WorkOSRedirectUriError',
+        status: null,
+      })
+    },
+  )
+
+  it.each([
+    ['an empty object', {}],
+    ['an error-shaped body', { message: 'Something went wrong' }],
+    ['a list under another name', { redirect_uris: [] }],
+  ])(
+    'fails a listing answered 200 with %s: no data is not an empty list',
+    async (_, body) => {
+      vi.stubGlobal('fetch', async () => new Response(JSON.stringify(body)))
+
+      await expect(listRedirectUris()).rejects.toMatchObject({
+        name: 'WorkOSRedirectUriError',
+        status: null,
+      })
+    },
+  )
+
+  it('reports a refusal whose body is not JSON by its status', async () => {
+    vi.stubGlobal(
+      'fetch',
+      async () => new Response('<html>Bad gateway</html>', { status: 502 }),
+    )
+
+    await expect(listRedirectUris()).rejects.toMatchObject({
+      name: 'WorkOSRedirectUriError',
+      status: 502,
+      message: expect.stringContaining('HTTP 502'),
+    })
+  })
+})
+
+describe('an answer that leaves out what is optional', () => {
+  const entry = { id: 'redir_1', uri: 'https://a.example.org/cb' }
+
+  it.each([
+    ['null list_metadata', { data: [entry], list_metadata: null }],
+    ['list_metadata without a cursor', { data: [entry], list_metadata: {} }],
+    [
+      'a null creation time',
+      {
+        data: [{ ...entry, created_at: null }],
+        list_metadata: { after: null },
+      },
+    ],
+  ])('reads a last page with %s', async (_, body) => {
+    const answered = vi.fn(async () => new Response(JSON.stringify(body)))
+    vi.stubGlobal('fetch', answered)
+
+    await expect(listRedirectUris()).resolves.toEqual([
+      { ...entry, createdAt: null },
+    ])
+    expect(answered).toHaveBeenCalledTimes(1)
+  })
+})

@@ -195,3 +195,35 @@ describe('syncDomainVerifications and the WorkOS redirect URIs', () => {
     expect(row.redirectUri.error).toContain('no answer from WorkOS')
   })
 })
+
+/** Guards a mutation pass found unpinned (#1297 review). */
+describe('syncDomainVerifications queues one reconcile per call', () => {
+  it('reconciles once when two hosts were written', async () => {
+    perHost.set(HOST, true)
+    perHost.set('second.example.org', true)
+
+    await syncDomainVerifications('conference-1', [HOST, 'second.example.org'])
+
+    expect(afterResponse).toHaveLength(1)
+  })
+
+  it('reconciles once when a claim and a release were both written', async () => {
+    perHost.set(HOST, true)
+    perHost.set('gone.example.org', true)
+
+    await syncDomainVerifications('conference-1', [HOST], ['gone.example.org'])
+
+    expect(afterResponse).toHaveLength(1)
+  })
+
+  it('does not reconcile when the store failed before anything was written', async () => {
+    perHost.set(HOST, new Error('sanity is down'))
+
+    await expect(
+      syncDomainVerifications('conference-1', [HOST], ['gone.example.org']),
+    ).resolves.toBeUndefined()
+
+    expect(afterResponse).toEqual([])
+    expect(workos.requests).toEqual([])
+  })
+})
