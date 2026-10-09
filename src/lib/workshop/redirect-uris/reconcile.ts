@@ -196,26 +196,25 @@ async function register(
     error: null,
   } as const
 
+  // Put the id on the record. A write that fails is followed by a fresh read,
+  // which either shows the id there after all (the write landed and only its
+  // answer was lost), shows the host should not keep the URI, or leaves one
+  // more attempt on the revision just read.
   let recorded = false
-  let fresh: RedirectUriSyncRow | null = null
-  try {
-    await save(row, registered)
-    recorded = true
-  } catch {
+  let fresh: RedirectUriSyncRow | null = row
+  for (let attempt = 0; attempt < 2 && fresh && !recorded; attempt++) {
     try {
-      fresh = await getRedirectUriSyncRow(row.record._id)
-      if (fresh?.redirectUri.id === created.id) {
-        // The write landed; only its answer was lost.
-        recorded = true
-      } else if (
-        fresh?.redirectUri.id === null &&
-        (await wantsRedirectUri(fresh, now)) !== false
-      ) {
-        await save(fresh, registered)
-        recorded = true
-      }
+      await save(fresh, registered)
+      recorded = true
     } catch {
-      // Still not recorded: undone below.
+      fresh = await getRedirectUriSyncRow(row.record._id).catch(() => null)
+      if (fresh?.redirectUri.id === created.id) recorded = true
+      else if (
+        fresh?.redirectUri.id !== null ||
+        (await wantsRedirectUri(fresh, now)) === false
+      ) {
+        break
+      }
     }
   }
   if (recorded) {

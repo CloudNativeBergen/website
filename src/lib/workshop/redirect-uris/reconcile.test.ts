@@ -702,24 +702,32 @@ describe('when the records cannot be read or move on under the run', () => {
     expect(stateOf(id)).toEqual({ status: null, id: null, error: null })
   })
 
-  it('keeps the URI when recording its id succeeded and only the answer was lost', async () => {
-    const id = seedAllocated('kontainerkonf.konf.run')
-    workos.beforeAnswer = (method) => {
-      if (method === 'POST') loseNextWriteAnswer = true
-    }
+  it.each([
+    ['on the first write', false],
+    ['on the write that follows a re-check of the record', true],
+  ])(
+    'keeps the URI when recording its id succeeded and only the answer was lost, %s',
+    async (_, recordMoves) => {
+      const id = seedAllocated('kontainerkonf.konf.run')
+      workos.beforeAnswer = (method) => {
+        if (method !== 'POST') return
+        if (recordMoves) moveOn(id)
+        loseNextWriteAnswer = true
+      }
 
-    const summary = await reconcileWorkshopRedirectUris(NOW)
+      const summary = await reconcileWorkshopRedirectUris(NOW)
 
-    expect(workos.uris).toHaveLength(1)
-    expect(stateOf(id)).toMatchObject({
-      status: 'registered',
-      id: workos.uris[0].id,
-    })
-    expect(summary).toMatchObject({
-      registered: ['kontainerkonf.konf.run'],
-      errored: [],
-    })
-  })
+      expect(workos.uris).toHaveLength(1)
+      expect(stateOf(id)).toMatchObject({
+        status: 'registered',
+        id: workos.uris[0].id,
+      })
+      expect(summary).toMatchObject({
+        registered: ['kontainerkonf.konf.run'],
+        errored: [],
+      })
+    },
+  )
 
   it('puts the URI back when the host was wanted again while it was being deleted', async () => {
     const id = seedHost('2026.cloudnativedays.no', { org: PLATFORM_ORG })
