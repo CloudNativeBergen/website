@@ -26,24 +26,31 @@ import {
   signInHostsById,
 } from '../../../__tests__/helpers/workshopSignIn'
 import { sendWorkshopSignupInstructions } from './workshop'
+import { workshopPortalUrl } from '@/lib/workshop/sign-in'
 
 const DAY = 24 * 60 * 60 * 1000
 
-function send(window: {
+/**
+ * Send as the ticket-sold webhook does: the portal link decided by the real
+ * rule (`workshopPortalUrl`, only its Sanity read supplied), then the email.
+ */
+async function send(window: {
   workshopRegistrationStart?: string
   workshopRegistrationEnd?: string
 }) {
+  const conference = {
+    title: 'Cloud Native Day',
+    organizer: 'Cloud Native Bergen',
+    contactEmail: 'hello@cnb.no',
+    domains: ['cloudnativebergen.no'],
+    ...window,
+  } as never
   return sendWorkshopSignupInstructions({
     userEmail: 'attendee@example.com',
     userName: 'Ada',
     ticketCategory: 'Workshop + Conference (2 days)',
-    conference: {
-      title: 'Cloud Native Day',
-      organizer: 'Cloud Native Bergen',
-      contactEmail: 'hello@cnb.no',
-      domains: ['cloudnativebergen.no'],
-      ...window,
-    } as never,
+    conference,
+    portalUrl: await workshopPortalUrl(conference),
   })
 }
 
@@ -147,8 +154,13 @@ describe('sendWorkshopSignupInstructions portal link', () => {
 
       expect(hrefs().filter((href) => href.includes('/workshop'))).toEqual([])
       expect(html()).not.toContain('cloudnativebergen.no/workshop')
-      // The rest of the email still goes out, with the contact address.
+      // The rest of the email still goes out, with the contact address —
+      // and without claiming the attendee can sign up now (review of #1298).
       expect(html()).toContain('mailto:hello@cnb.no')
+      expect(subject()).not.toContain('Workshop Signup Available')
+      expect(html()).not.toContain('You can now sign up')
+      expect(html()).not.toContain('How to register for workshops')
+      expect(html()).toContain('Online workshop sign-up is not available yet')
     },
   )
 
@@ -159,5 +171,39 @@ describe('sendWorkshopSignupInstructions portal link', () => {
 
     expect(hrefs().filter((href) => href.includes('/workshop'))).toEqual([])
     expect(sendMock).toHaveBeenCalledOnce()
+  })
+})
+
+describe('sendWorkshopSignupInstructions without a portal link', () => {
+  it('does not announce registration as open, and points to the organizers', async () => {
+    getRedirectUriSyncRow.mockResolvedValue(null)
+    await send({
+      workshopRegistrationStart: new Date(Date.now() - DAY).toISOString(),
+    })
+
+    expect(subject()).toBe('Workshop Signup Coming Soon - Cloud Native Day')
+    expect(html()).toContain('Workshop Registration Coming Soon')
+    expect(html()).toContain('Online workshop sign-up is not available yet')
+    expect(html()).not.toContain('first-come, first-served')
+    expect(html()).toContain('mailto:hello@cnb.no')
+  })
+
+  it('still says when registration opens, if that is later', async () => {
+    getRedirectUriSyncRow.mockResolvedValue(null)
+    const start = new Date(Date.now() + 30 * DAY).toISOString()
+    await send({ workshopRegistrationStart: start })
+
+    expect(html()).toContain('Online workshop sign-up is not available yet')
+    expect(html()).toContain('Registration opens on')
+  })
+
+  it('keeps the closed copy when registration has closed', async () => {
+    getRedirectUriSyncRow.mockResolvedValue(null)
+    await send({
+      workshopRegistrationEnd: new Date(Date.now() - DAY).toISOString(),
+    })
+
+    expect(subject()).toContain('Workshop Signup Has Closed')
+    expect(html()).not.toContain('Online workshop sign-up is not available yet')
   })
 })

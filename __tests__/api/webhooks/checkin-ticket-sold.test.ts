@@ -454,6 +454,42 @@ describe('api/webhooks/checkin/ticket-sold — workshop feature gate', () => {
   })
 
   /**
+   * #1298 (review): the portal link is decided ONCE per delivery — one live
+   * read of the main host's record — and the same answer goes to every
+   * attendee in the order, not one read per ticket.
+   */
+  it('decides the portal link once per delivery, for every attendee in the order', async () => {
+    bindConferenceTo('org-tenant2', { domains: ['conf.example.org'] })
+    mockGetOrganizationById.mockResolvedValue({
+      _id: 'org-tenant2',
+      name: 'Tenant Two',
+      slug: 'tenant-two',
+      plan: 'pro',
+    })
+    const { POST } =
+      await import('@/app/api/webhooks/checkin/ticket-sold/route')
+    const second = workshopBuyer()
+    second.crm = { ...second.crm, email: { email: 'grace@example.com' } }
+    const data = makeData({ users: [workshopBuyer(), second] })
+
+    const response = await POST(
+      postRequest(makePayload(data), sign(data, TENANT_SECRET)),
+    )
+
+    expect(response.status).toBe(200)
+    expect(mockSendWorkshop).toHaveBeenCalledTimes(2)
+    // The host has no record (the read answers null), so: no link, for both.
+    for (const [request] of mockSendWorkshop.mock.calls) {
+      expect(request).toMatchObject({ portalUrl: null })
+    }
+    const queries = h.fetch.mock.calls as unknown as Array<[string]>
+    const signInReads = queries.filter(([query]) =>
+      String(query).includes('_type == "domainVerification"'),
+    )
+    expect(signInReads).toHaveLength(1)
+  })
+
+  /**
    * Review of #1304. The delivery AUTHENTICATES (the bag's webhook secret
    * signed it), so the gate is what decides here — and Checkin cannot read a
    * ticket without the API secret, so the portal this email links into would

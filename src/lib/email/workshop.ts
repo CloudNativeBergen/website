@@ -8,7 +8,6 @@ import {
 } from './config'
 import type { Conference } from '@/lib/conference/types'
 import { resolveConferenceFrom, resolveConferenceContact } from './from'
-import { workshopPortalUrl } from '@/lib/workshop/sign-in'
 import { emailBrandColor } from '@/lib/branding/theme'
 import { resolveEmailBrandPalette } from '@/lib/branding/email'
 
@@ -33,6 +32,12 @@ export interface WorkshopSignupInstructionsRequest {
   userName: string
   conference: Conference
   ticketCategory: string
+  /**
+   * The portal link, decided once per delivery by `workshopPortalUrl` (#1298):
+   * `null` while the main host cannot sign in, and for a conference with no
+   * domain. The email then says online sign-up is not available yet.
+   */
+  portalUrl: string | null
 }
 
 export async function sendBasicWorkshopConfirmation({
@@ -155,6 +160,7 @@ export async function sendWorkshopSignupInstructions({
   userName,
   conference,
   ticketCategory,
+  portalUrl,
 }: WorkshopSignupInstructionsRequest): Promise<
   EmailResult<{ emailId: string }>
 > {
@@ -165,9 +171,7 @@ export async function sendWorkshopSignupInstructions({
 
     const brand = resolveEmailBrandPalette(emailBrandColor(conference?.theme))
 
-    // Only a link that can work (#1298): none while the main host cannot sign
-    // in, as for a conference with no domain at all.
-    const workshopUrl = (await workshopPortalUrl(conference)) ?? ''
+    const workshopUrl = portalUrl ?? ''
 
     // GATE THE CLAIM ON THE ACTUAL WINDOW. This email fires on ticket SALE,
     // which is routinely months before `workshopRegistrationStart` and can also
@@ -185,6 +189,9 @@ export async function sendWorkshopSignupInstructions({
         : endsAt && new Date(endsAt).getTime() < now
           ? 'closed'
           : 'open'
+    // NO LINK, NO CLAIM (#1298): without a portal that can sign in, the email
+    // must not tell the attendee to sign up now or list steps that cannot work.
+    const unavailable = !workshopUrl && registration !== 'closed'
 
     // en-US to match what the same attendee reads on the /workshop page.
     const when = (value: string) =>
@@ -193,29 +200,32 @@ export async function sendWorkshopSignupInstructions({
         timeStyle: 'short',
       })
 
-    const subject =
-      registration === 'open'
+    const subject = unavailable
+      ? `Workshop Signup Coming Soon - ${conference.title}`
+      : registration === 'open'
         ? `Workshop Signup Available - ${conference.title}`
         : registration === 'pending'
           ? `Workshop Signup Opens ${when(startsAt!)} - ${conference.title}`
           : `Workshop Signup Has Closed - ${conference.title}`
 
-    const heading =
-      registration === 'open'
+    const heading = unavailable
+      ? 'Workshop Registration Coming Soon'
+      : registration === 'open'
         ? 'Workshop Registration Now Available'
         : registration === 'pending'
           ? 'Workshop Registration Opens Soon'
           : 'Workshop Registration Has Closed'
 
-    const lede =
-      registration === 'open'
+    const lede = unavailable
+      ? `Your ticket includes access to workshops. Online workshop sign-up is not available yet.${registration === 'pending' ? ` Registration opens on <strong>${when(startsAt!)}</strong>.` : ''} If you have any questions, get in touch with us.`
+      : registration === 'open'
         ? 'Your ticket includes access to workshops. You can now sign up for available workshop sessions.'
         : registration === 'pending'
           ? `Your ticket includes access to workshops. Registration is not open yet — it opens on <strong>${when(startsAt!)}</strong>, and you can sign up from then on.`
           : `Your ticket includes access to workshops, but registration closed on <strong>${when(endsAt!)}</strong>. Get in touch with us and we will see what we can do.`
 
     const steps =
-      registration === 'closed'
+      registration === 'closed' || unavailable
         ? ''
         : `
                     <p style="margin: 0 0 8px 0; font-size: 16px; font-weight: 600; color: #334155;">How to register for workshops:</p>

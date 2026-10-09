@@ -6,6 +6,7 @@ import {
 } from '@/lib/conference/sanity'
 import { isWorkshopsEnabledForConference } from '@/lib/features/workshops'
 import { workshopAccessOf } from '@/lib/workshop/eligibility'
+import { workshopPortalUrl } from '@/lib/workshop/sign-in'
 import {
   conferenceProviderType,
   getTicketingProvider,
@@ -269,9 +270,9 @@ export async function POST(request: NextRequest) {
     // cannot work is worse than silence: send NOTHING. Fail-closed — an
     // unresolvable organization suppresses the email too.
     //
-    // NOT DECIDED HERE: whether the conference's HOST can sign in. The email
-    // itself asks (`workshopPortalUrl`) and leaves the portal link out while
-    // it cannot (#1298); the rest of the instructions still go out.
+    // NOT A REASON TO SEND NOTHING: a host that cannot sign in yet. The
+    // portal link is decided below and left out while it cannot (#1298); the
+    // email then says online sign-up is not available yet.
     if (!(await isWorkshopsEnabledForConference(conference))) {
       console.warn(
         'Checkin webhook: workshops not enabled for conference',
@@ -289,6 +290,10 @@ export async function POST(request: NextRequest) {
         { status: 200 },
       )
     }
+
+    // ONE DECISION PER DELIVERY (#1298): whether the main host can sign in is
+    // a live read, and the answer is the same for every attendee in the order.
+    const portalUrl = await workshopPortalUrl(conference)
 
     const emailResults: Array<{
       email: string
@@ -318,6 +323,7 @@ export async function POST(request: NextRequest) {
         userName,
         conference,
         ticketCategory: user.ticket.name,
+        portalUrl,
       })
 
       if (emailResult.error) {
