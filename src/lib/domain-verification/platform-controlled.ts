@@ -19,11 +19,12 @@
  * ONE FUNCTION. The WorkOS redirect-URI sync (`@/lib/workshop/redirect-uris`)
  * registers nothing this refuses.
  *
- * NOT YET APPLIED TO THE SIGN-IN DECISION. `resolveWorkshopSignInHost`
- * (`@/lib/workshop/sign-in`) still admits any host on the verified-redirect
- * allowlist, so a tenant's own verified domain can start a sign-in that WorkOS
- * then refuses, because its redirect URI is not registered. Making that
- * decision call this function is #1306.
+ * APPLIED TO THE SIGN-IN DECISION ONLY THROUGH THE SYNC. Since #1298
+ * `resolveWorkshopSignInHost` (`@/lib/workshop/sign-in`) also requires the
+ * host's redirect URI to be in WorkOS, and the sync registers nothing this
+ * refuses, so a tenant's own verified domain is refused in practice. A URI
+ * found in WorkOS without an id of ours (`external`) is the exception the
+ * decision does not re-check here; calling this function there is #1306.
  *
  * Fail closed: everything the allowlist refuses (wildcard, dev-only, revoked,
  * unproven, stale) is `false`, and so, for a host the platform did not allocate,

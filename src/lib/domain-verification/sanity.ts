@@ -437,7 +437,7 @@ export async function getRedirectUriSyncRow(
   id: string,
 ): Promise<RedirectUriSyncRow | null> {
   const raw = await clientReadUncached.fetch<RawSyncRow | null>(
-    // groq-global: keyed by the id of a record the cross-tenant reconcile already holds, never by client input.
+    // groq-global: one record by deterministic id — a record the cross-tenant reconcile already holds, or the sign-in decision's own host (shape-checked, passed as a parameter; hostnames are a global namespace).
     `*[_type == "domainVerification" && _id == $id][0] ${SYNC_PROJECTION}`,
     { id },
   )

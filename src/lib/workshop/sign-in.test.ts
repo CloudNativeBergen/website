@@ -54,6 +54,10 @@ beforeEach(() => {
   hosts(record())
   vi.stubEnv('NODE_ENV', 'production')
   vi.stubEnv('WORKOS_COOKIE_DOMAIN', '')
+  // The fixtures' owner is the platform, so a host short of `ready` is
+  // pending or failed — the states the cases are named after — and not
+  // `not-offered`.
+  vi.stubEnv('PLATFORM_ORG_ID', 'org-1')
 })
 
 afterEach(() => {

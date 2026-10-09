@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 const sendMock = vi.fn()
 vi.mock('./config', () => ({
@@ -59,6 +59,13 @@ beforeEach(() => {
   getRedirectUriSyncRow.mockImplementation(
     signInHostsById([signInHost('cloudnativebergen.no')]),
   )
+  // The fixture's owner is the platform, so each "cannot" case is the state it
+  // is named after (pending, failed), not `not-offered`.
+  vi.stubEnv('PLATFORM_ORG_ID', 'org-1')
+})
+
+afterEach(() => {
+  vi.unstubAllEnvs()
 })
 
 describe('sendWorkshopSignupInstructions registration gating', () => {
