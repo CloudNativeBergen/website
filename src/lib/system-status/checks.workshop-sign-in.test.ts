@@ -185,6 +185,7 @@ describe('buildSystemChecks — workshop sign-in per host', () => {
         id: 'auth.workshopSignIn',
         status: 'warn',
         value: 'unknown',
+        detail: expect.stringContaining('sanity unavailable'),
       }),
     ])
   })

@@ -41,6 +41,14 @@ export const Unavailable: Story = {
       ),
     ).toBeInTheDocument()
     await expect(
+      canvas.getByRole('heading', { level: 1, name: 'Workshop Signup' }),
+    ).toBeInTheDocument()
+    await expect(
+      canvas.getByText(
+        /If you have a workshop ticket and need help, contact the organizers at/,
+      ),
+    ).toBeInTheDocument()
+    await expect(
       canvas.getByText(/Please check back later/),
     ).toBeInTheDocument()
     // Both ways to reach the organizers: the address in the text and the button.

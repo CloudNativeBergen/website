@@ -227,6 +227,22 @@ describe('listDomainVerificationViews — hosts that can never sign in', () => {
     },
   )
 
+  it('keeps the real reason for an unverified host while WORKOS_COOKIE_DOMAIN is set', async () => {
+    vi.stubEnv('WORKOS_COOKIE_DOMAIN', '.example.org')
+    rows.push(
+      owned(
+        signInHost(
+          'conf.example.org',
+          { status: 'pending', lastSuccessAt: null },
+          { status: null, id: null },
+        ),
+      ),
+    )
+    await expect(
+      signInOf('conf.example.org', ['conf.example.org']),
+    ).resolves.toEqual({ state: 'unverified' })
+  })
+
   it('is blocked, not available, on a ready host while WORKOS_COOKIE_DOMAIN is set', async () => {
     vi.stubEnv('WORKOS_COOKIE_DOMAIN', '.example.org')
     rows.push(owned(signInHost('conf.example.org')))

@@ -200,6 +200,15 @@ describe('resolveWorkshopSignInHost — everything else is refused', () => {
     ).resolves.toBeNull()
   })
 
+  it('refuses when the record found under the id names a host that merely ends in it', async () => {
+    getRedirectUriSyncRow.mockResolvedValue(
+      record({ hostname: 'sub.conf.example.org' }),
+    )
+    await expect(
+      resolveWorkshopSignInHost('conf.example.org'),
+    ).resolves.toBeNull()
+  })
+
   it('refuses when the record found under the id names another host', async () => {
     getRedirectUriSyncRow.mockResolvedValue(
       record({ hostname: 'other.example.org' }),
