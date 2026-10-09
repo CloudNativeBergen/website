@@ -465,6 +465,24 @@ describe('URIs this system did not create', () => {
     },
   )
 
+  it('are not created again when added after the run listed WorkOS and spelled their own way', async () => {
+    workos.allowDuplicates = true
+    const id = seedAllocated('kontainerkonf.konf.run')
+    let byHand: FakeRedirectUri | undefined
+    workos.beforeAnswer = (method) => {
+      if (method !== 'GET' || byHand) return
+      byHand = workos.seed(
+        'https://KontainerKonf.konf.run:443/api/auth/callback',
+      )
+    }
+
+    await reconcileWorkshopRedirectUris(NOW)
+
+    expect(workos.writes()).toEqual([])
+    expect(workos.uris).toEqual([byHand])
+    expect(stateOf(id)).toEqual({ status: 'external', id: null, error: null })
+  })
+
   it('KNOWN LIMIT: one added between the last listing and the create is taken for its own, if WorkOS hands it back', async () => {
     // Nothing WorkOS returns tells an entry it just made from one that was
     // there. The listing made right before the create keeps this moment
