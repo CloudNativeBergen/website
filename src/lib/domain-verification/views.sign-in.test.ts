@@ -195,6 +195,38 @@ describe('listDomainVerificationViews — hosts that can never sign in', () => {
     ).resolves.toEqual({ state: 'unverified' })
   })
 
+  it('is not offered on a claimed host with no record, for a tenant that is not the platform', async () => {
+    const views = await listDomainVerificationViews(
+      'conference-1',
+      ['tenant.example.org'],
+      { workshops: true, ownerOrgId: 'org-tenant' },
+    )
+    expect(views[0].workshopSignIn).toEqual({ state: 'not-offered' })
+  })
+
+  it('asks for proof on a claimed host with no record, for the platform organization', async () => {
+    const views = await listDomainVerificationViews(
+      'conference-1',
+      ['new.example.org'],
+      { workshops: true, ownerOrgId: PLATFORM_ORG },
+    )
+    expect(views[0].workshopSignIn).toEqual({ state: 'unverified' })
+  })
+
+  it.each([
+    ['pending', { status: null, id: null }],
+    ['failed', { status: null, id: null, error: 'WorkOS 422' }],
+  ])(
+    'is blocked, not %s, while WORKOS_COOKIE_DOMAIN is set — nothing will register its way out of it',
+    async (_label, redirectUri) => {
+      vi.stubEnv('WORKOS_COOKIE_DOMAIN', '.example.org')
+      rows.push(owned(signInHost('conf.example.org', {}, redirectUri)))
+      await expect(
+        signInOf('conf.example.org', ['conf.example.org']),
+      ).resolves.toEqual({ state: 'blocked' })
+    },
+  )
+
   it('is blocked, not available, on a ready host while WORKOS_COOKIE_DOMAIN is set', async () => {
     vi.stubEnv('WORKOS_COOKIE_DOMAIN', '.example.org')
     rows.push(owned(signInHost('conf.example.org')))
@@ -239,6 +271,16 @@ describe('listConferenceDomainViews', () => {
     expect(workshopsEnabled).toHaveBeenCalledWith(CONFERENCE)
     expect(view.hostname).toBe('conf.example.org')
     expect(view.workshopSignIn).toEqual({ state: 'ready' })
+  })
+
+  it('judges a claimed host with no record by the conference’s owner', async () => {
+    workshopsEnabled.mockResolvedValue(true)
+    const views = await listConferenceDomainViews({
+      ...CONFERENCE,
+      organization: { _ref: 'org-tenant' },
+      domains: ['tenant.example.org'],
+    })
+    expect(views[0].workshopSignIn).toEqual({ state: 'not-offered' })
   })
 
   it('shows no standing when the gate is off', async () => {

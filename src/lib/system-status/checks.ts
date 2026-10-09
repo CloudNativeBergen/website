@@ -968,7 +968,7 @@ async function workshopSignInChecks(
     const views = await listDomainVerificationViews(
       conference._id,
       conference.domains ?? [],
-      { workshops: true },
+      { workshops: true, ownerOrgId: conference.organization._ref },
     )
     return views.flatMap(({ hostname, workshopSignIn }) => {
       if (!workshopSignIn) return []

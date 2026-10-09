@@ -53,7 +53,18 @@ export function isPlatformControlCandidate(
   record: DomainVerificationRecord,
   ownerOrgId: string | null | undefined,
 ): boolean {
-  if (isPlatformAllocated(record)) return true
+  return isPlatformAllocated(record) || isPlatformOwner(ownerOrgId)
+}
+
+/**
+ * Is this the platform organization (`PLATFORM_ORG_ID`)? Its conferences' own
+ * domains may qualify once proven; nobody else's ever do. Also the whole
+ * answer for a claimed host that has no record yet: an allocation always has
+ * one.
+ */
+export function isPlatformOwner(
+  ownerOrgId: string | null | undefined,
+): boolean {
   const platformOrgId = resolvePlatformOrgId()
   return platformOrgId !== null && ownerOrgId === platformOrgId
 }

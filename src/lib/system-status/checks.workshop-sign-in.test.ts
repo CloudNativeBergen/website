@@ -84,7 +84,7 @@ afterEach(() => {
 })
 
 describe('buildSystemChecks — workshop sign-in per host', () => {
-  it('reports each claimed host with its reason', async () => {
+  it('reports each claimed host with its reason (the platform owns this conference)', async () => {
     const checks = signInChecks(await buildSystemChecks(CONFERENCE))
 
     expect(
@@ -131,6 +131,22 @@ describe('buildSystemChecks — workshop sign-in per host', () => {
         group: 'auth',
         label: 'Workshop sign-in: tenant-domain.example.org',
         status: 'warn',
+        value: 'not offered on this host',
+      },
+    ])
+  })
+
+  it('tells a tenant that is not the platform its new domain is not offered, not "not verified"', async () => {
+    const checks = signInChecks(
+      await buildSystemChecks({
+        _id: 'conf-2',
+        organization: { _ref: 'org-tenant' },
+        domains: ['new.tenant.example.org'],
+      }),
+    )
+    expect(checks.map(({ id, value }) => ({ id, value }))).toEqual([
+      {
+        id: 'auth.workshopSignIn.new.tenant.example.org',
         value: 'not offered on this host',
       },
     ])

@@ -16,8 +16,9 @@
  *   refuses it until the TXT record resolves.
  * - `not-offered` — a host the sync will never register: not a platform
  *   candidate at all (`isPlatformControlCandidate`), whatever its proof.
- * - `blocked` — would be `ready`, but `WORKOS_COOKIE_DOMAIN` is set, which
- *   refuses sign-in on every host (`resolveWorkshopSignInHost`).
+ * - `blocked` — would be `ready`, `pending` or `failed`, but
+ *   `WORKOS_COOKIE_DOMAIN` is set, which refuses sign-in on every host
+ *   (`resolveWorkshopSignInHost`).
  * - `failed` — the sync tried and WorkOS refused; `error` is what it recorded.
  * - `pending` — waiting for the sync.
  *
@@ -27,6 +28,7 @@
 import {
   isPlatformControlCandidate,
   isPlatformControlledHost,
+  isPlatformOwner,
 } from './platform-controlled'
 import { isAllowlistEligible } from './policy'
 import type {
@@ -79,26 +81,38 @@ export function workshopSignInStanding({
   return { state: 'pending' }
 }
 
-/** {@link workshopSignInStanding} of a host as the redirect-URI read returns it. */
+/**
+ * {@link workshopSignInStanding} of a host as the redirect-URI read returns it.
+ * `ownerOrgId` is the claiming conference's owner, for a host with no record
+ * of its own (`null` row); without it such a host reads `unverified`.
+ */
 export function workshopSignInStandingOfRow(
   row: RedirectUriSyncRow | null,
   now: Date,
+  ownerOrgId?: string | null,
 ): WorkshopSignInStanding {
-  const ownerOrgId = row?.conference?.organization?._ref
-  const standing = workshopSignInStanding({
-    record: row?.record ?? null,
-    redirectUri: row?.redirectUri ?? null,
-    platformControlled: row
-      ? isPlatformControlledHost(row.record, ownerOrgId, now)
-      : false,
-    platformCandidate: row
-      ? isPlatformControlCandidate(row.record, ownerOrgId)
-      : false,
-    now,
-  })
-  // The sign-in decision refuses every host while this is set; say so rather
-  // than "available" (the decision itself never reaches here then).
-  return standing.state === 'ready' && process.env.WORKOS_COOKIE_DOMAIN
+  const owner = row ? row.conference?.organization?._ref : ownerOrgId
+  const standing = row
+    ? workshopSignInStanding({
+        record: row.record,
+        redirectUri: row.redirectUri,
+        platformControlled: isPlatformControlledHost(row.record, owner, now),
+        platformCandidate: isPlatformControlCandidate(row.record, owner),
+        now,
+      })
+    : // No record: nothing is proven, and only the owner can say whether
+      // proving it would ever help.
+      ownerOrgId !== undefined && !isPlatformOwner(ownerOrgId)
+      ? { state: 'not-offered' as const }
+      : { state: 'unverified' as const }
+  // The sign-in decision refuses every host while this is set (it never
+  // reaches here then), so nothing the sync does will make the host work:
+  // say so rather than "available", "pending" or "failed".
+  const waitsOnlyForWorkOS =
+    standing.state === 'ready' ||
+    standing.state === 'pending' ||
+    standing.state === 'failed'
+  return waitsOnlyForWorkOS && process.env.WORKOS_COOKIE_DOMAIN
     ? { state: 'blocked' }
     : standing
 }

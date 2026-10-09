@@ -136,8 +136,14 @@ export async function listDomainVerificationViews(
   domains: readonly string[],
   {
     workshops = false,
+    ownerOrgId,
     now = new Date(),
-  }: { workshops?: boolean; now?: Date } = {},
+  }: {
+    workshops?: boolean
+    /** The conference's owner, for a claimed host with no record yet. */
+    ownerOrgId?: string | null
+    now?: Date
+  } = {},
 ): Promise<DomainVerificationView[]> {
   const syncRows = workshops
     ? await listRedirectUriSyncRowsForConference(conferenceId)
@@ -155,7 +161,11 @@ export async function listDomainVerificationViews(
     .map((hostname) => {
       const signIn =
         syncRows && !isDevOnlyHost(hostname) && !isWildcardEntry(hostname)
-          ? workshopSignInStandingOfRow(rowByHost.get(hostname) ?? null, now)
+          ? workshopSignInStandingOfRow(
+              rowByHost.get(hostname) ?? null,
+              now,
+              ownerOrgId,
+            )
           : null
       return toDomainVerificationView(
         hostname,
@@ -179,5 +189,6 @@ export async function listConferenceDomainViews(
 ): Promise<DomainVerificationView[]> {
   return listDomainVerificationViews(conference._id, conference.domains ?? [], {
     workshops: await isWorkshopsEnabledForConference(conference),
+    ownerOrgId: conference.organization?._ref ?? null,
   })
 }
