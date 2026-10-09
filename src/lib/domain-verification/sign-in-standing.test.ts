@@ -76,16 +76,35 @@ describe('workshopSignInStanding', () => {
     ).toEqual({ state: 'failed', error: 'WorkOS POST 500: recreation failed' })
   })
 
-  it('is not offered on a verified host that is not platform-controlled and not registered', () => {
+  it('is not offered on a verified host that can never be platform-controlled', () => {
     expect(
       workshopSignInStanding({
         record: verifiedHost(HOST),
         redirectUri: redirectUri({ error: 'stale error' }),
         platformControlled: false,
-        platformCandidate: true,
+        platformCandidate: false,
         now,
       }),
     ).toEqual({ state: 'not-offered' })
+  })
+
+  it('is unverified — not "not offered" — for a candidate admitted only by grandfathering', () => {
+    // On the allowlist during its grace, but never proven: publishing the TXT
+    // record makes it `dns-txt`, and the sync then registers it.
+    expect(
+      workshopSignInStanding({
+        record: verifiedHost(HOST, {
+          method: 'grandfathered',
+          status: 'pending',
+          lastSuccessAt: null,
+          graceUntil: new Date(Date.now() + 86_400_000).toISOString(),
+        }),
+        redirectUri: redirectUri(),
+        platformControlled: false,
+        platformCandidate: true,
+        now,
+      }),
+    ).toEqual({ state: 'unverified' })
   })
 
   it.each([

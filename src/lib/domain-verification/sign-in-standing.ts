@@ -11,10 +11,11 @@
  * - `ready` — verified, and WorkOS has the URI (`registered` by the sync, or
  *   `external`: found there without an id of ours), with no failure recorded
  *   since.
- * - `unverified` — no record, or the allowlist refuses it.
+ * - `unverified` — no record, or a platform candidate without a real proof
+ *   (unproven, stale, or only grandfathered), so `isPlatformControlledHost`
+ *   refuses it until the TXT record resolves.
  * - `not-offered` — a host the sync will never register: not a platform
- *   candidate at all (`isPlatformControlCandidate` — told before any DNS work),
- *   or verified but not platform-controlled (`isPlatformControlledHost`).
+ *   candidate at all (`isPlatformControlCandidate`), whatever its proof.
  * - `blocked` — would be `ready`, but `WORKOS_COOKIE_DOMAIN` is set, which
  *   refuses sign-in on every host (`resolveWorkshopSignInHost`).
  * - `failed` — the sync tried and WorkOS refused; `error` is what it recorded.
@@ -71,8 +72,9 @@ export function workshopSignInStanding({
   // Before "unverified": verifying a host that can never qualify would not
   // help, and the organizer should not be told it would.
   if (record && !platformCandidate) return { state: 'not-offered' }
-  if (!eligible) return { state: 'unverified' }
-  if (!platformControlled) return { state: 'not-offered' }
+  // A candidate that is not controlled lacks a real proof: unproven, stale,
+  // or admitted only by grandfathering. Publishing the record fixes it.
+  if (!eligible || !platformControlled) return { state: 'unverified' }
   if (redirectUri?.error) return { state: 'failed', error: redirectUri.error }
   return { state: 'pending' }
 }

@@ -175,6 +175,26 @@ describe('listDomainVerificationViews — hosts that can never sign in', () => {
     ).resolves.toEqual({ state: 'not-offered' })
   })
 
+  it('asks for proof on the platform org’s grandfathered custom domain', async () => {
+    rows.push(
+      owned(
+        signInHost(
+          'cloudnativedays.example.org',
+          {
+            method: 'grandfathered',
+            status: 'pending',
+            lastSuccessAt: null,
+            graceUntil: new Date(Date.now() + 86_400_000).toISOString(),
+          },
+          { status: null, id: null },
+        ),
+      ),
+    )
+    await expect(
+      signInOf('cloudnativedays.example.org', ['cloudnativedays.example.org']),
+    ).resolves.toEqual({ state: 'unverified' })
+  })
+
   it('is blocked, not available, on a ready host while WORKOS_COOKIE_DOMAIN is set', async () => {
     vi.stubEnv('WORKOS_COOKIE_DOMAIN', '.example.org')
     rows.push(owned(signInHost('conf.example.org')))
