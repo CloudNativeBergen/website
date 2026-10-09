@@ -20,9 +20,19 @@ let row: RedirectUriSyncRow
 let claimWrites = false
 let releaseWrites = false
 
+/** A per-host answer, where one mutation's hosts have to differ. */
+const perHost = new Map<string, boolean | Error>()
+function answerFor(hostname: string, otherwise: boolean): boolean {
+  const answer = perHost.get(hostname) ?? otherwise
+  if (answer instanceof Error) throw answer
+  return answer
+}
+
 vi.mock('./sanity', () => ({
-  ensureDomainVerification: async () => claimWrites,
-  revokeDomainVerification: async () => releaseWrites,
+  ensureDomainVerification: async (hostname: string) =>
+    answerFor(hostname, claimWrites),
+  revokeDomainVerification: async (hostname: string) =>
+    answerFor(hostname, releaseWrites),
   getDomainVerification: async () => null,
   listDomainVerificationsForConference: async () => [],
   listRedirectUriSyncRows: async () => [structuredClone(row)],
@@ -60,6 +70,7 @@ beforeEach(() => {
   afterResponse.length = 0
   claimWrites = false
   releaseWrites = false
+  perHost.clear()
   row = {
     record: {
       _id: ID,
@@ -126,6 +137,42 @@ describe('syncDomainVerifications and the WorkOS redirect URIs', () => {
     await afterResponse[0]()
 
     expect(workos.uris).toEqual([])
+  })
+
+  it.each<[string, string[], string[], [string, boolean | Error][]]>([
+    [
+      'the host written is not the last one claimed',
+      [HOST, 'already.example.org'],
+      [],
+      [
+        [HOST, true],
+        ['already.example.org', false],
+      ],
+    ],
+    [
+      'a claim was written and a release was left alone',
+      [HOST],
+      ['held-by-another.example.org'],
+      [
+        [HOST, true],
+        ['held-by-another.example.org', false],
+      ],
+    ],
+    [
+      'a claim was written and the store then failed on the next host',
+      [HOST, 'next.example.org'],
+      [],
+      [
+        [HOST, true],
+        ['next.example.org', new Error('sanity is down')],
+      ],
+    ],
+  ])('reconciles once when %s', async (_, domains, removed, answers) => {
+    for (const [hostname, answer] of answers) perHost.set(hostname, answer)
+
+    await syncDomainVerifications('conference-1', domains, removed)
+
+    expect(afterResponse).toHaveLength(1)
   })
 
   it('does not reconcile when no record was written', async () => {

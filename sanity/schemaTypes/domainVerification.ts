@@ -135,7 +135,7 @@ export default defineType({
       title: 'WorkOS Redirect URI',
       type: 'string',
       description:
-        'Where this host’s workshop sign-in callback stands in WorkOS. Written by the redirect-URI reconcile (#1297); empty means none is registered. Editing it by hand changes what the reconcile will delete.',
+        'Where this host’s workshop sign-in callback stands in WorkOS. Written by the redirect-URI reconcile (#1297); empty means none is registered. A label only: what the reconcile deletes is decided by the id below.',
       options: {
         list: [
           { title: 'Registered by this system', value: 'registered' },
@@ -150,7 +150,7 @@ export default defineType({
       title: 'WorkOS Redirect URI Id',
       type: 'string',
       description:
-        'WorkOS’s id for the URI this system created. The only thing a delete is ever addressed to.',
+        'WorkOS’s id for the URI this system created. The only thing a delete is ever addressed to, so editing it by hand changes what the reconcile will delete; marking the status “external” does not protect a URI while its id is here.',
       readOnly: true,
     }),
     defineField({
