@@ -14,6 +14,7 @@ import { AdminButton } from '@/components/admin/AdminButton'
 import { useNotification } from './NotificationProvider'
 import { api } from '@/lib/trpc/client'
 import type { DomainVerificationView } from '@/lib/domain-verification'
+import type { WorkshopSignInStanding } from '@/lib/domain-verification/sign-in-standing'
 
 /**
  * Domain ownership verification, admin surface (#683).
@@ -26,6 +27,10 @@ import type { DomainVerificationView } from '@/lib/domain-verification'
  * state whose failure mode is completely silent — a domain that quietly drops
  * off the allowlist produces no error anywhere a human would see it — so the
  * card states it explicitly rather than leaving it to be inferred from `status`.
+ *
+ * For a conference with workshops, each row also says whether the workshop
+ * portal can sign in on that host and, if not, why (#1298). Attendees only see
+ * "not available yet"; this is where the reason shows.
  */
 
 export interface DomainVerificationCardProps {
@@ -75,6 +80,74 @@ function statusLabel(domain: DomainVerificationView): {
     default:
       return { tone: 'amber', label: 'Awaiting DNS' }
   }
+}
+
+const SIGN_IN_TEXT: Record<Tone, string> = {
+  green: 'text-green-700 dark:text-green-300',
+  amber: 'text-amber-700 dark:text-amber-300',
+  red: 'text-red-700 dark:text-red-300',
+  gray: 'text-gray-900 dark:text-gray-200',
+}
+
+const NOT_YET =
+  'Until then attendees see that workshop sign-up is not available yet, and ticket emails go out without the portal link.'
+
+function workshopSignInLabel(standing: WorkshopSignInStanding): {
+  tone: Tone
+  label: string
+  detail: string | null
+} {
+  switch (standing.state) {
+    case 'ready':
+      return { tone: 'green', label: 'available', detail: null }
+    case 'unverified':
+      return {
+        tone: 'amber',
+        label: 'domain not verified',
+        detail: `Sign-in is set up once the domain is verified. ${NOT_YET}`,
+      }
+    case 'pending':
+      return {
+        tone: 'amber',
+        label: 'registration pending',
+        detail: `The domain is verified and sign-in is being registered. This happens automatically, at the latest with the next daily check. ${NOT_YET}`,
+      }
+    case 'failed':
+      return {
+        tone: 'red',
+        label: 'registration failed',
+        detail: `It is retried automatically with the next daily check. ${NOT_YET}`,
+      }
+    case 'not-offered':
+      return {
+        tone: 'gray',
+        label: 'not offered on this host',
+        detail:
+          'Workshop sign-in runs only on hosts the platform controls, such as a host the platform provided for this conference.',
+      }
+  }
+}
+
+function WorkshopSignInLine({
+  standing,
+}: {
+  standing: WorkshopSignInStanding
+}) {
+  const { tone, label, detail } = workshopSignInLabel(standing)
+  return (
+    <div className="mt-1 text-xs text-gray-600 dark:text-gray-400">
+      <p>
+        Workshop sign-in:{' '}
+        <span className={clsx('font-medium', SIGN_IN_TEXT[tone])}>{label}</span>
+      </p>
+      {standing.state === 'failed' && (
+        <p className="mt-1 font-mono break-all text-red-700 dark:text-red-300">
+          {standing.error}
+        </p>
+      )}
+      {detail && <p className="mt-1">{detail}</p>}
+    </div>
+  )
 }
 
 function formatDay(iso: string | null): string | null {
@@ -221,6 +294,10 @@ export function DomainVerificationCard({
                 </>
               )}
             </p>
+
+            {domain.workshopSignIn && (
+              <WorkshopSignInLine standing={domain.workshopSignIn} />
+            )}
 
             {domain.platformOwned && (
               <p className="mt-1 text-xs text-gray-600 dark:text-gray-400">

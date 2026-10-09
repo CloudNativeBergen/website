@@ -7,7 +7,8 @@
  * cookie are the SDK's own) and FINISHED by the real callback handler.
  *
  * Boundaries supplied:
- *  - the Sanity read behind the verified-redirect allowlist;
+ *  - the host's own Sanity sign-in-standing row (`getRedirectUriSyncRow`);
+ *    the real policy requires verified proof and a registered WorkOS callback;
  *  - WorkOS's token endpoint (`authenticateWithCode`), the one network call;
  *  - the workshop feature gate and the conference the host serves — ON here;
  *    the route's handling of OFF is in `workos-sign-in-out.test.ts`.
@@ -22,15 +23,15 @@
 import '../../helpers/workosEnv'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { NextRequest } from 'next/server'
-import type { DomainVerificationRecord } from '@/lib/domain-verification/types'
-import { verifiedHost } from '../../helpers/workshopSignIn'
+import type { RedirectUriSyncRow } from '@/lib/domain-verification/types'
+import { signInHost, signInHostsById } from '../../helpers/workshopSignIn'
 import { beginRequest, writtenCookies } from '../../helpers/nextHeadersJar'
 
-const listAllowlistCandidates =
-  vi.fn<() => Promise<DomainVerificationRecord[]>>()
+const getRedirectUriSyncRow =
+  vi.fn<(id: string) => Promise<RedirectUriSyncRow | null>>()
 
 vi.mock('@/lib/domain-verification/sanity', () => ({
-  listAllowlistCandidates: () => listAllowlistCandidates(),
+  getRedirectUriSyncRow: (id: string) => getRedirectUriSyncRow(id),
 }))
 
 vi.mock('next/headers', () => import('../../helpers/nextHeadersJar'))
@@ -110,10 +111,9 @@ function sessionCookie(): string | undefined {
 beforeEach(() => {
   vi.clearAllMocks()
   beginRequest()
-  listAllowlistCandidates.mockResolvedValue([
-    verifiedHost(TENANT_A),
-    verifiedHost(TENANT_B),
-  ])
+  getRedirectUriSyncRow.mockImplementation(
+    signInHostsById([signInHost(TENANT_A), signInHost(TENANT_B)]),
+  )
   exchangeCode.mockResolvedValue({
     accessToken: 'access.token.value',
     refreshToken: 'refresh_token_value',
@@ -127,7 +127,7 @@ afterEach(() => {
   vi.unstubAllEnvs()
 })
 
-describe('WorkOS callback — on an allowlisted host', () => {
+describe('WorkOS callback — on a host that can sign in', () => {
   it('exchanges the code with the PKCE verifier and lands on that host’s portal', async () => {
     const flow = await startSignIn(TENANT_A)
 
@@ -166,7 +166,7 @@ describe('WorkOS callback — on an allowlisted host', () => {
     ])
   })
 
-  it('sends the browser to the ALLOWLISTED origin, whatever the request URL claims', async () => {
+  it('sends the browser to the admitted origin, whatever the request URL claims', async () => {
     const flow = await startSignIn(TENANT_A)
 
     // Host header says the verified host; the URL the framework reconstructed
@@ -194,12 +194,16 @@ describe('WorkOS callback — on an allowlisted host', () => {
 
 describe('WorkOS callback — on any other host', () => {
   it('exchanges NOTHING, even with a valid state and verifier cookie', async () => {
-    // A complete, genuine flow — started while the host WAS verified.
-    listAllowlistCandidates.mockResolvedValue([verifiedHost(UNVERIFIED)])
+    // A complete, genuine flow — started while the host WAS verified and registered.
+    getRedirectUriSyncRow.mockImplementation(
+      signInHostsById([signInHost(UNVERIFIED)]),
+    )
     const flow = await startSignIn(UNVERIFIED)
 
     // The host is delisted before the code comes back.
-    listAllowlistCandidates.mockResolvedValue([verifiedHost(TENANT_A)])
+    getRedirectUriSyncRow.mockImplementation(
+      signInHostsById([signInHost(TENANT_A)]),
+    )
     const response = await GET(callback(UNVERIFIED, flow))
 
     expect(response.status).toBe(404)
@@ -241,21 +245,21 @@ describe('WorkOS callback — on any other host', () => {
     expect(exchangeCode).not.toHaveBeenCalled()
   })
 
-  it('decides from the allowlist BEFORE calling WorkOS', async () => {
+  it('reads the host’s sign-in standing BEFORE calling WorkOS', async () => {
     const flow = await startSignIn(TENANT_A)
-    listAllowlistCandidates.mockClear()
+    getRedirectUriSyncRow.mockClear()
 
     await GET(callback(TENANT_A, flow))
 
-    expect(listAllowlistCandidates).toHaveBeenCalledOnce()
-    expect(listAllowlistCandidates.mock.invocationCallOrder[0]).toBeLessThan(
+    expect(getRedirectUriSyncRow).toHaveBeenCalledOnce()
+    expect(getRedirectUriSyncRow.mock.invocationCallOrder[0]).toBeLessThan(
       exchangeCode.mock.invocationCallOrder[0],
     )
   })
 
-  it('refuses when the allowlist cannot be read (fail closed)', async () => {
+  it('refuses when the host’s sign-in standing cannot be read (fail closed)', async () => {
     const flow = await startSignIn(TENANT_A)
-    listAllowlistCandidates.mockRejectedValue(new Error('sanity unavailable'))
+    getRedirectUriSyncRow.mockRejectedValue(new Error('sanity unavailable'))
 
     const response = await GET(callback(TENANT_A, flow))
 

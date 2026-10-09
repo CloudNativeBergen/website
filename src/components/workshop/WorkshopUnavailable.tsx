@@ -35,7 +35,7 @@ export function WorkshopUnavailable({
             help, contact the organizers at{' '}
             <a
               href={`mailto:${contactEmail}`}
-              className="font-medium break-all text-blue-600 underline hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300"
+              className="font-medium break-words text-blue-600 underline hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300"
             >
               {contactEmail}
             </a>

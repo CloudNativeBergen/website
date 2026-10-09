@@ -413,6 +413,22 @@ export async function listRedirectUriSyncRows(): Promise<RedirectUriSyncRow[]> {
 }
 
 /**
+ * One conference's records with their redirect-URI state, for the organizer's
+ * view of where each host stands for workshop sign-in (#1298). Same shape as
+ * the reconcile reads, so both are decided by the same standing.
+ */
+export async function listRedirectUriSyncRowsForConference(
+  conferenceId: string,
+): Promise<RedirectUriSyncRow[]> {
+  const rows = await clientReadUncached.fetch<RawSyncRow[] | null>(
+    // groq-global: keyed by an explicit, server-resolved conference id (the document type carries no organization field).
+    `*[_type == "domainVerification" && conference._ref == $conferenceId] | order(hostname asc) ${SYNC_PROJECTION}`,
+    { conferenceId },
+  )
+  return (rows ?? []).map(toSyncRow)
+}
+
+/**
  * One record as the reconcile reads it, WHATEVER its standing — for looking
  * again at a record that moved on mid-run, which may by now be revoked with
  * nothing on it and so absent from {@link listRedirectUriSyncRows}.

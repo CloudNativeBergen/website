@@ -135,10 +135,15 @@ export default async function AdminSettings() {
   const visibility = resolveConferenceVisibility(conference)
   // Ownership-verification state per claimed domain (#683). Read here so the
   // card server-renders its real state; the client island refetches on mount.
+  // Also asked by the feature card below; one answer for both.
+  const workshopsEnabled = await isWorkshopsEnabledForConference(conference)
   const domainVerifications = conference._id
     ? await listDomainVerificationViews(
         conference._id,
         conference.domains ?? [],
+        // With workshops, each host also shows whether the portal can sign
+        // in on it, and if not why (#1298).
+        { workshops: workshopsEnabled },
       )
     : []
   const systemChecks = await buildSystemChecks(conference)
@@ -184,7 +189,7 @@ export default async function AdminSettings() {
   // and the ticket-sold email all treat it as off.
   const entitledFeatureRows = applyWorkshopGate(
     listedFeatureRows,
-    await isWorkshopsEnabledForConference(conference),
+    workshopsEnabled,
   )
 
   // Cross-tenant list, fetched ONLY when this request's org is the platform

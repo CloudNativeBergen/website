@@ -12,26 +12,29 @@
  * by the type checker.
  *
  * It also pins WHEN the session is read at all (#1296): only for a request that
- * names a `workshop.*` procedure, only on a host the verified-redirect
- * allowlist admits, and with that host's own callback as `redirectUri` — the
+ * names a `workshop.*` procedure, only on a host whose live sign-in standing
+ * is ready, and with that host's own callback as `redirectUri` — the
  * same decision the proxy takes for the page, so the API cannot be more
- * permissive than the page. The Sanity boundary behind the allowlist is
- * supplied; the real decision runs.
+ * permissive than the page. The by-id Sanity boundary for the sign-in standing
+ * is supplied; the real decision runs.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { NextRequest } from 'next/server'
-import type { DomainVerificationRecord } from '@/lib/domain-verification/types'
-import { verifiedHost } from '../../__tests__/helpers/workshopSignIn'
+import type { RedirectUriSyncRow } from '@/lib/domain-verification/types'
+import {
+  signInHost,
+  signInHostsById,
+} from '../../__tests__/helpers/workshopSignIn'
 
 const h = vi.hoisted(() => ({ authkit: vi.fn() }))
 
-const listAllowlistCandidates =
-  vi.fn<() => Promise<DomainVerificationRecord[]>>()
+const getRedirectUriSyncRow =
+  vi.fn<(id: string) => Promise<RedirectUriSyncRow | null>>()
 
 vi.mock('@/lib/auth', () => ({ getAuthSession: vi.fn(async () => null) }))
 vi.mock('@workos-inc/authkit-nextjs', () => ({ authkit: h.authkit }))
 vi.mock('@/lib/domain-verification/sanity', () => ({
-  listAllowlistCandidates: () => listAllowlistCandidates(),
+  getRedirectUriSyncRow: (id: string) => getRedirectUriSyncRow(id),
 }))
 
 import { createTRPCContext } from './trpc'
@@ -58,7 +61,7 @@ const WORKOS_USER = {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  listAllowlistCandidates.mockResolvedValue([verifiedHost(HOST)])
+  getRedirectUriSyncRow.mockImplementation(signInHostsById([signInHost(HOST)]))
   h.authkit.mockResolvedValue({
     session: { user: { ...WORKOS_USER, emailVerified: true } },
   })
@@ -103,14 +106,14 @@ describe('createTRPCContext — WorkOS attendee identity', () => {
 
     expect(ctx.workosUser).toBeNull()
     expect(h.authkit).not.toHaveBeenCalled()
-    // Nor is the allowlist read: NextAuth-only traffic costs nothing here.
-    expect(listAllowlistCandidates).not.toHaveBeenCalled()
+    // Nor is the sign-in standing read: NextAuth-only traffic costs nothing here.
+    expect(getRedirectUriSyncRow).not.toHaveBeenCalled()
   })
 })
 
 /**
  * The page and the API must take the SAME host decision (#1296). The proxy
- * refuses `/workshop` on a host that is not allowlisted; a session cookie
+ * refuses `/workshop/sign-in` on a host that cannot sign in; a session cookie
  * presented to the API on such a host is not read either.
  */
 describe('createTRPCContext — the WorkOS session follows the verified host', () => {
@@ -125,7 +128,7 @@ describe('createTRPCContext — the WorkOS session follows the verified host', (
     })
   })
 
-  it('resolves no attendee on a host that is not allowlisted, and never enters AuthKit', async () => {
+  it('resolves no attendee on a host that cannot sign in, and never enters AuthKit', async () => {
     const ctx = await createTRPCContext({
       req: request('wos-session=sealed', { host: 'unverified.example.org' }),
     })
@@ -167,18 +170,18 @@ describe('createTRPCContext — the WorkOS session follows the verified host', (
     })
   })
 
-  it('decides from the allowlist BEFORE AuthKit is called', async () => {
+  it('decides from the sign-in standing BEFORE AuthKit is called', async () => {
     await createTRPCContext({ req: request('wos-session=sealed') })
 
-    expect(listAllowlistCandidates).toHaveBeenCalledOnce()
-    expect(listAllowlistCandidates.mock.invocationCallOrder[0]).toBeLessThan(
+    expect(getRedirectUriSyncRow).toHaveBeenCalledOnce()
+    expect(getRedirectUriSyncRow.mock.invocationCallOrder[0]).toBeLessThan(
       h.authkit.mock.invocationCallOrder[0],
     )
   })
 
-  it('resolves no attendee when the allowlist cannot be read (fail closed)', async () => {
+  it('resolves no attendee when the sign-in standing cannot be read (fail closed)', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
-    listAllowlistCandidates.mockRejectedValue(new Error('sanity unavailable'))
+    getRedirectUriSyncRow.mockRejectedValue(new Error('sanity unavailable'))
 
     const ctx = await createTRPCContext({ req: request('wos-session=sealed') })
 
@@ -322,7 +325,7 @@ describe('/api/trpc — the route lets the context write response headers', () =
  * days, so it rides on EVERY tRPC request from a browser that once signed in to
  * the portal — an organizer's whole admin session included. Only the
  * `workshop.*` procedures consume the attendee identity, so only a request that
- * names one may spend an allowlist read (and an AuthKit session check) on it.
+ * names one may spend a sign-in standing read (and an AuthKit session check) on it.
  */
 describe('createTRPCContext — only workshop procedures resolve the attendee', () => {
   it.each([
@@ -346,14 +349,14 @@ describe('createTRPCContext — only workshop procedures resolve the attendee', 
     ['a procedure that merely mentions it', 'admin.workshop.list'],
     ['an empty path', ''],
   ])(
-    'spends nothing on %s — no allowlist read, no AuthKit call',
+    'spends nothing on %s — no sign-in standing read, no AuthKit call',
     async (_label, procedures) => {
       const ctx = await createTRPCContext({
         req: request('wos-session=sealed', { procedures }),
       })
 
       expect(ctx.workosUser).toBeNull()
-      expect(listAllowlistCandidates).not.toHaveBeenCalled()
+      expect(getRedirectUriSyncRow).not.toHaveBeenCalled()
       expect(h.authkit).not.toHaveBeenCalled()
     },
   )

@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { http, HttpResponse } from 'msw'
+import { expect, within } from 'storybook/test'
 import { DomainVerificationCard } from './DomainVerificationCard'
 import { NotificationProvider } from './NotificationProvider'
 import type { DomainVerificationView } from '@/lib/domain-verification'
@@ -33,6 +34,7 @@ function view(
     lastCheckedAt: '2026-07-28T05:00:00.000Z',
     lastSuccessAt: '2026-07-28T05:00:00.000Z',
     lastError: null,
+    workshopSignIn: null,
     ...overrides,
   }
 }
@@ -181,6 +183,82 @@ export const AllStates: Story = {
         lastSuccessAt: null,
       }),
     ],
+  },
+}
+
+/**
+ * A conference WITH workshops (#1298): each host also says whether the
+ * workshop portal can sign in on it, and why not. One host per state the
+ * organizer can land in.
+ */
+const workshopSignInStates: DomainVerificationView[] = [
+  view({
+    hostname: '2026.cloudnativedays.no',
+    workshopSignIn: { state: 'ready' },
+  }),
+  view({
+    hostname: 'oslo.cloudnativedays.no',
+    status: 'pending',
+    redirectAllowlisted: false,
+    routable: false,
+    lastCheckedAt: null,
+    lastSuccessAt: null,
+    workshopSignIn: { state: 'unverified' },
+  }),
+  view({
+    hostname: 'kubeday.konf.run',
+    platformOwned: true,
+    recordName: null,
+    recordValue: null,
+    workshopSignIn: { state: 'pending' },
+  }),
+  view({
+    hostname: 'bergen.konf.run',
+    platformOwned: true,
+    recordName: null,
+    recordValue: null,
+    workshopSignIn: {
+      state: 'failed',
+      error:
+        'WorkOS 422: redirect_uri https://bergen.konf.run/api/auth/callback is not a valid URI for this environment',
+    },
+  }),
+  view({
+    hostname: 'kubeday.example.no',
+    workshopSignIn: { state: 'not-offered' },
+  }),
+]
+
+export const WorkshopSignIn: Story = {
+  args: { initialDomains: workshopSignInStates },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    for (const label of [
+      'available',
+      'domain not verified',
+      'registration pending',
+      'registration failed',
+      'not offered on this host',
+    ]) {
+      await expect(canvas.getByText(label)).toBeInTheDocument()
+    }
+    // The recorded error is shown verbatim, to the organizer only.
+    await expect(canvas.getByText(/WorkOS 422/)).toBeInTheDocument()
+  },
+}
+
+export const WorkshopSignInDark: Story = {
+  args: { initialDomains: workshopSignInStates },
+  globals: { theme: 'dark' },
+}
+
+export const WorkshopSignInMobile: Story = {
+  args: { initialDomains: workshopSignInStates },
+  parameters: { viewport: { defaultViewport: 'mobile1' } },
+  play: async ({ canvasElement }) => {
+    // The long error must wrap, not widen the page.
+    const page = canvasElement.ownerDocument.documentElement
+    await expect(page.scrollWidth).toBeLessThanOrEqual(page.clientWidth)
   },
 }
 

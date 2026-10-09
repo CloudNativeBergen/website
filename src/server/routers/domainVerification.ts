@@ -12,6 +12,10 @@ import {
 } from '@/lib/domain-verification'
 import { isAllowlistEligible } from '@/lib/domain-verification/policy'
 import { scheduleRedirectUriReconcile } from '@/lib/workshop/redirect-uris'
+import {
+  isWorkshopsEnabledForConference,
+  type WorkshopConference,
+} from '@/lib/features/workshops'
 
 /**
  * Domain ownership verification, admin side (#683).
@@ -36,6 +40,26 @@ async function claimedDomains(conferenceId: string): Promise<string[]> {
   return (domains ?? []).map(normalizeDomain).filter(Boolean)
 }
 
+/**
+ * {@link claimedDomains} plus what the workshop gate reads (owner and
+ * ticketing vendor), in one fresh read.
+ */
+async function claimingConference(
+  conferenceId: string,
+): Promise<WorkshopConference & { domains: string[] }> {
+  const conference = await clientReadUncached.fetch<
+    (WorkshopConference & { domains?: string[] | null }) | null
+  >(
+    // groq-global: keyed by the SERVER-resolved conference id, never client input.
+    `*[_type == "conference" && _id == $id][0]{ domains, organization, ticketingProvider }`,
+    { id: conferenceId },
+  )
+  return {
+    ...conference,
+    domains: (conference?.domains ?? []).map(normalizeDomain).filter(Boolean),
+  }
+}
+
 export const domainVerificationRouter = router({
   /**
    * Verification state for every domain this conference claims, including the
@@ -46,9 +70,14 @@ export const domainVerificationRouter = router({
     // Self-heal: a claim made before this feature existed (or whose best-effort
     // sync failed) has no record, so it would have no token to show. Minting it
     // here is safe — a fresh record starts `pending`, which grants nothing.
-    const domains = await claimedDomains(conferenceId)
+    const conference = await claimingConference(conferenceId)
+    const { domains } = conference
     await syncDomainVerifications(conferenceId, domains)
-    return { domains: await listDomainVerificationViews(conferenceId, domains) }
+    return {
+      domains: await listDomainVerificationViews(conferenceId, domains, {
+        workshops: await isWorkshopsEnabledForConference(conference),
+      }),
+    }
   }),
 
   /**

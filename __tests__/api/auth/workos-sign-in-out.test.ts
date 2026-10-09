@@ -11,8 +11,9 @@
  *  - `authkit(req, { redirectUri })` as tRPC calls it, UNMOCKED, through a
  *    token refresh — the one place the SDK's session path runs for real.
  *
- * Boundaries supplied: the Sanity read behind the allowlist, WorkOS's token
- * endpoint, and `next/headers` (backed by a real `NextResponse`, see
+ * Boundaries supplied: the host's own Sanity sign-in-standing row
+ * (`getRedirectUriSyncRow`, verified and registered), WorkOS's token endpoint,
+ * and `next/headers` (backed by a real `NextResponse`, see
  * `nextHeadersJar.ts`, so cookies are serialized by Next). The workshop
  * FEATURE GATE is supplied too (`isWorkshopsEnabledForConference`, with the
  * conference the host resolves to): these routes are where it is ordered
@@ -24,8 +25,8 @@
 import '../../helpers/workosEnv'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { NextRequest } from 'next/server'
-import type { DomainVerificationRecord } from '@/lib/domain-verification/types'
-import { verifiedHost } from '../../helpers/workshopSignIn'
+import type { RedirectUriSyncRow } from '@/lib/domain-verification/types'
+import { signInHost, signInHostsById } from '../../helpers/workshopSignIn'
 import {
   beginRequest,
   presentCookie,
@@ -39,11 +40,11 @@ vi.mock('jose', () => import('../../helpers/sdkJose'))
 
 vi.mock('@/lib/auth', () => ({ getAuthSession: vi.fn(async () => null) }))
 
-const listAllowlistCandidates =
-  vi.fn<() => Promise<DomainVerificationRecord[]>>()
+const getRedirectUriSyncRow =
+  vi.fn<(id: string) => Promise<RedirectUriSyncRow | null>>()
 
 vi.mock('@/lib/domain-verification/sanity', () => ({
-  listAllowlistCandidates: () => listAllowlistCandidates(),
+  getRedirectUriSyncRow: (id: string) => getRedirectUriSyncRow(id),
 }))
 
 vi.mock('next/headers', () => import('../../helpers/nextHeadersJar'))
@@ -126,10 +127,9 @@ async function redirectTarget(run: () => Promise<unknown>): Promise<string> {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  listAllowlistCandidates.mockResolvedValue([
-    verifiedHost(TENANT_A),
-    verifiedHost(TENANT_B),
-  ])
+  getRedirectUriSyncRow.mockImplementation(
+    signInHostsById([signInHost(TENANT_A), signInHost(TENANT_B)]),
+  )
   vi.stubEnv('NODE_ENV', 'production')
   vi.spyOn(console, 'error').mockImplementation(() => {})
   gate.conferenceForHost.mockImplementation(async (host: string) => ({
@@ -261,9 +261,9 @@ describe.each([
   /**
    * THE FEATURE GATE COMES BEFORE WORKOS (review of #1304). These two routes
    * are the only place a signed-out visitor is sent to WorkOS, so a tenant
-   * without workshops must stop here: an allowlisted host is not enough.
+   * without workshops must stop here: a host that can sign in is not enough.
    */
-  it('starts nothing for a tenant without workshops, though its host is allowlisted', async () => {
+  it('starts nothing for a tenant without workshops, though its host can sign in', async () => {
     gate.workshopsEnabled.mockResolvedValue(false)
 
     const response = await handler(onHost(TENANT_A))
@@ -457,7 +457,9 @@ describe('signOutOfWorkshop', () => {
   it('refuses on a host that is not allowlisted — a 404, and the SDK is never entered', async () => {
     await signedInOn(TENANT_A)
     // The same signed-in request, but the host has since been delisted.
-    listAllowlistCandidates.mockResolvedValue([verifiedHost(TENANT_B)])
+    getRedirectUriSyncRow.mockImplementation(
+      signInHostsById([signInHost(TENANT_B)]),
+    )
     const buildLogoutUrl = vi.spyOn(getWorkOS().userManagement, 'getLogoutUrl')
 
     const digest = await signOutOfWorkshop().then(
@@ -469,8 +471,10 @@ describe('signOutOfWorkshop', () => {
     expect(buildLogoutUrl).not.toHaveBeenCalled()
     expect(setCookies()).toEqual([])
 
-    // CONTROL: on the allowlisted host the same call does build it.
-    listAllowlistCandidates.mockResolvedValue([verifiedHost(TENANT_A)])
+    // CONTROL: on the admitted host the same call does build it.
+    getRedirectUriSyncRow.mockImplementation(
+      signInHostsById([signInHost(TENANT_A)]),
+    )
     await redirectTarget(() => signOutOfWorkshop())
     expect(buildLogoutUrl).toHaveBeenCalledOnce()
   })

@@ -1,9 +1,5 @@
 import { auth } from '@/lib/auth'
-import {
-  NextResponse,
-  type NextRequest,
-  type NextFetchEvent,
-} from 'next/server'
+import { NextRequest, NextResponse, type NextFetchEvent } from 'next/server'
 import { AppEnvironment } from '@/lib/environment/config'
 import { authkitMiddleware } from '@workos-inc/authkit-nextjs'
 import {
@@ -111,6 +107,17 @@ const nextAuthMiddleware = auth((req) => {
  * that token server-to-server on a signed-out request. No visitor data is in
  * that call.)
  */
+/**
+ * The request without a client-sent unavailable mark: the SDK forwards every
+ * request header to the page, and the mark is the proxy's to set.
+ */
+function withoutUnavailableMark(req: NextRequest): NextRequest {
+  if (!req.headers.has(WORKSHOP_SIGN_IN_UNAVAILABLE_HEADER)) return req
+  const headers = new Headers(req.headers)
+  headers.delete(WORKSHOP_SIGN_IN_UNAVAILABLE_HEADER)
+  return new NextRequest(req, { headers })
+}
+
 function isWorkshopPortalView(req: NextRequest): boolean {
   return (
     req.nextUrl.pathname === WORKSHOP_PORTAL_PATH &&
@@ -127,10 +134,10 @@ async function workshopMiddleware(req: NextRequest, event: NextFetchEvent) {
     // SDK, so an attendee of a tenant with workshops learns that sign-up is not
     // available yet instead of meeting a bare 404. The page reads the mark and
     // never calls `withAuth`; the layout still answers 404 for a tenant
-    // without workshops. The mark is set here on every such request, so a
-    // client cannot remove it; sending it on a host that CAN sign in only shows
-    // the sender the unavailable view. Every other path, and any other method,
-    // is refused as before.
+    // without workshops. The mark is set here on every such request and
+    // stripped from every request the SDK handles, so a client can neither
+    // remove nor forge it. Every other path, and any other method, is refused
+    // as before.
     if (isWorkshopPortalView(req)) {
       const headers = new Headers(req.headers)
       headers.set(WORKSHOP_SIGN_IN_UNAVAILABLE_HEADER, '1')
@@ -142,7 +149,7 @@ async function workshopMiddleware(req: NextRequest, event: NextFetchEvent) {
   return authkitMiddleware({
     redirectUri: signIn.redirectUri,
     debug: process.env.NODE_ENV === 'development',
-  })(req, event)
+  })(withoutUnavailableMark(req), event)
 }
 
 export default function middleware(req: NextRequest, event: NextFetchEvent) {
