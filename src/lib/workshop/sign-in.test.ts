@@ -32,7 +32,11 @@ function hosts(...rows: RedirectUriSyncRow[]) {
   getRedirectUriSyncRow.mockImplementation(signInHostsById(rows))
 }
 
-import { resolveWorkshopSignInHost, workshopRequestHost } from './sign-in'
+import {
+  resolveWorkshopSignInHost,
+  workshopPortalUrl,
+  workshopRequestHost,
+} from './sign-in'
 
 /**
  * `conf.example.org` as read: proven yesterday and registered in WorkOS unless
@@ -342,5 +346,38 @@ describe('workshopRequestHost', () => {
         new Headers({ 'x-forwarded-host': 'conf.example.org' }),
       ),
     ).toBeNull()
+  })
+})
+
+/**
+ * The link an attendee is mailed (#1298): the portal on the conference's main
+ * host, only while that host can sign in.
+ */
+describe('workshopPortalUrl', () => {
+  it('is the portal on the main host when it can sign in', async () => {
+    await expect(
+      workshopPortalUrl({ domains: ['conf.example.org', 'other.example.org'] }),
+    ).resolves.toBe('https://conf.example.org/workshop')
+  })
+
+  it('is null when the main host cannot sign in, even if another can', async () => {
+    hosts(record({ hostname: 'other.example.org' }))
+    await expect(
+      workshopPortalUrl({ domains: ['conf.example.org', 'other.example.org'] }),
+    ).resolves.toBeNull()
+  })
+
+  it('is null for a conference with no domain — never the platform fallback host — and reads nothing', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    // Even if the platform's own base host could sign in.
+    getRedirectUriSyncRow.mockImplementation(async () =>
+      record({ hostname: 'localhost' }),
+    )
+    for (const domains of [[], undefined, null, ['']]) {
+      await expect(
+        workshopPortalUrl({ title: 'No Domain', domains }),
+      ).resolves.toBeNull()
+    }
+    expect(getRedirectUriSyncRow).not.toHaveBeenCalled()
   })
 })

@@ -40,11 +40,13 @@ export function workshopSignInLabel(
         detail: `${standing.error.replace(/\.*$/, '')}. It is retried automatically with the next daily check. ${NOT_YET}`,
       }
     case 'not-offered':
+      // A warning, not "off": workshops are on, and attendees on this host
+      // are told sign-up is not available.
       return {
-        status: 'off',
+        status: 'warn',
         label: 'not offered on this host',
         detail:
-          'Workshop sign-in runs only on hosts the platform controls, such as a host the platform provided for this conference.',
+          'Workshop sign-in runs only on hosts the platform controls, such as a host the platform provided for this conference. Attendees on this host see that workshop sign-up is not available.',
       }
   }
 }

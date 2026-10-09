@@ -489,6 +489,84 @@ describe('api/webhooks/checkin/ticket-sold — workshop feature gate', () => {
     expect(signInReads).toHaveLength(1)
   })
 
+  it('mails the portal on the main host to every attendee when that host can sign in', async () => {
+    bindConferenceTo('org-tenant2', { domains: ['conf.example.org'] })
+    mockGetOrganizationById.mockResolvedValue({
+      _id: 'org-tenant2',
+      name: 'Tenant Two',
+      slug: 'tenant-two',
+      plan: 'pro',
+    })
+    // The main host's record as Sanity stores it: verified yesterday, its
+    // callback registered in WorkOS.
+    const yesterday = new Date(Date.now() - 86_400_000).toISOString()
+    h.fetch.mockImplementation((async (query: string) =>
+      query.includes('_type == "domainVerification"')
+        ? {
+            _id: 'domainVerification.conf.example.org',
+            _rev: 'rev-1',
+            hostname: 'conf.example.org',
+            conferenceId: 'conf-1',
+            token: 'tok',
+            status: 'verified',
+            method: 'dns-txt',
+            verifiedAt: yesterday,
+            lastSuccessAt: yesterday,
+            lastCheckedAt: yesterday,
+            consecutiveFailures: 0,
+            consecutiveSoftFailures: 0,
+            redirectUriStatus: 'registered',
+            redirectUriId: 'ru_1',
+            conference: { organization: { _ref: 'org-tenant2' } },
+          }
+        : null) as unknown as () => Promise<null>)
+    const { POST } =
+      await import('@/app/api/webhooks/checkin/ticket-sold/route')
+    const second = workshopBuyer()
+    second.crm = { ...second.crm, email: { email: 'grace@example.com' } }
+    const data = makeData({ users: [workshopBuyer(), second] })
+
+    const response = await POST(
+      postRequest(makePayload(data), sign(data, TENANT_SECRET)),
+    )
+
+    expect(response.status).toBe(200)
+    expect(mockSendWorkshop).toHaveBeenCalledTimes(2)
+    for (const [request] of mockSendWorkshop.mock.calls) {
+      expect(request).toMatchObject({
+        portalUrl: 'https://conf.example.org/workshop',
+      })
+    }
+  })
+
+  it('spends no sign-in read on an order without a workshop ticket', async () => {
+    bindConferenceTo('org-tenant2', { domains: ['conf.example.org'] })
+    mockGetOrganizationById.mockResolvedValue({
+      _id: 'org-tenant2',
+      name: 'Tenant Two',
+      slug: 'tenant-two',
+      plan: 'pro',
+    })
+    const { POST } =
+      await import('@/app/api/webhooks/checkin/ticket-sold/route')
+    const buyer = workshopBuyer()
+    buyer.ticket = { ...buyer.ticket, name: 'Conference only', type: 'paid' }
+    const data = makeData({ users: [buyer] })
+
+    const response = await POST(
+      postRequest(makePayload(data), sign(data, TENANT_SECRET)),
+    )
+
+    expect(response.status).toBe(200)
+    expect(mockSendWorkshop).not.toHaveBeenCalled()
+    const queries = h.fetch.mock.calls as unknown as Array<[string]>
+    expect(
+      queries.filter(([query]) =>
+        String(query).includes('_type == "domainVerification"'),
+      ),
+    ).toEqual([])
+  })
+
   /**
    * Review of #1304. The delivery AUTHENTICATES (the bag's webhook secret
    * signed it), so the gate is what decides here — and Checkin cannot read a

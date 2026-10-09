@@ -37,6 +37,7 @@ const CONFERENCE = {
     'pending.example.org',
     'failed.example.org',
     'unclaimed-record.example.org',
+    'tenant-domain.example.org',
   ],
 }
 
@@ -60,6 +61,15 @@ beforeEach(() => {
         { status: null, id: null, error: 'WorkOS 422: invalid redirect URI' },
       ),
     ),
+    // A verified host the platform does not control: never signs in.
+    {
+      ...signInHost(
+        'tenant-domain.example.org',
+        {},
+        { status: null, id: null },
+      ),
+      conference: { organization: { _ref: 'org-tenant' } },
+    },
   )
   workshopsEnabled.mockResolvedValue(true)
   vi.stubEnv('PLATFORM_ORG_ID', PLATFORM_ORG)
@@ -104,6 +114,14 @@ describe('buildSystemChecks — workshop sign-in per host', () => {
         group: 'auth',
         status: 'warn',
         value: 'domain not verified',
+      },
+      // A WARNING, not "off": workshops are on, and attendees on this host
+      // are told sign-up is not available.
+      {
+        id: 'auth.workshopSignIn.tenant-domain.example.org',
+        group: 'auth',
+        status: 'warn',
+        value: 'not offered on this host',
       },
     ])
   })

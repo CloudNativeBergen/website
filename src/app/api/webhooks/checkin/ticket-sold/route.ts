@@ -291,9 +291,24 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // THE SAME RULE THE `/workshop` GATE USES, from the same function. This
+    // used to be a second verbatim copy of the literal list, so a renamed
+    // ticket type stopped the mail here and barred the door there — two
+    // silent failures from one vendor-side rename, each invisible to the
+    // other. `conference` is the full document, so it carries the tenant's
+    // `ticketTypeRoles`; a conference that declares none keeps today's
+    // behaviour via the bridge inside `workshopAccessOf`.
+    const workshopBuyers = orderData.users.filter(
+      (user) =>
+        workshopAccessOf(user.ticket.name, conference.ticketTypeRoles) ===
+        'granted',
+    )
+
     // ONE DECISION PER DELIVERY (#1298): whether the main host can sign in is
-    // a live read, and the answer is the same for every attendee in the order.
-    const portalUrl = await workshopPortalUrl(conference)
+    // a live read, the same answer for every attendee in the order, and not
+    // spent at all on an order without a workshop ticket.
+    const portalUrl =
+      workshopBuyers.length > 0 ? await workshopPortalUrl(conference) : null
 
     const emailResults: Array<{
       email: string
@@ -301,21 +316,7 @@ export async function POST(request: NextRequest) {
       emailId?: string
     }> = []
 
-    for (const user of orderData.users) {
-      // THE SAME RULE THE `/workshop` GATE USES, from the same function. This
-      // used to be a second verbatim copy of the literal list, so a renamed
-      // ticket type stopped the mail here and barred the door there — two
-      // silent failures from one vendor-side rename, each invisible to the
-      // other. `conference` is the full document, so it carries the tenant's
-      // `ticketTypeRoles`; a conference that declares none keeps today's
-      // behaviour via the bridge inside `workshopAccessOf`.
-      if (
-        workshopAccessOf(user.ticket.name, conference.ticketTypeRoles) !==
-        'granted'
-      ) {
-        continue
-      }
-
+    for (const user of workshopBuyers) {
       const userName = `${user.crm.firstName} ${user.crm.lastName}`.trim()
 
       const emailResult = await sendWorkshopSignupInstructions({

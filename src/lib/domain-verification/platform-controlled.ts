@@ -21,10 +21,12 @@
  *
  * APPLIED TO THE SIGN-IN DECISION ONLY THROUGH THE SYNC. Since #1298
  * `resolveWorkshopSignInHost` (`@/lib/workshop/sign-in`) also requires the
- * host's redirect URI to be in WorkOS, and the sync registers nothing this
- * refuses, so a tenant's own verified domain is refused in practice. A URI
- * found in WorkOS without an id of ours (`external`) is the exception the
- * decision does not re-check here; calling this function there is #1306.
+ * host's redirect URI to be in WorkOS, and the sync records a URI (as
+ * `registered` or `external`) only for a host this admits, so a tenant's own
+ * verified domain is refused in practice. The decision does not re-check this
+ * function itself: a host that STOPS qualifying (its conference changes owner,
+ * `PLATFORM_ORG_ID` changes) keeps signing in until the next sync clears its
+ * URI — at the latest the daily sweep. Calling it there is #1306.
  *
  * Fail closed: everything the allowlist refuses (wildcard, dev-only, revoked,
  * unproven, stale) is `false`, and so, for a host the platform did not allocate,

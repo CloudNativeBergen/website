@@ -8,14 +8,29 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-const CONFERENCE = {
+/**
+ * The conference document as Sanity stores it. The router's query is RUN
+ * against it with the real `groq-js` engine, so what the gate receives is what
+ * the projection actually selects — not a fixture handed back whatever the
+ * query says.
+ */
+const CONFERENCE_DOC = {
+  _id: 'conference-1',
+  _type: 'conference',
+  title: 'CNDN 2026',
   domains: ['2026.cloudnativedays.no'],
   organization: { _ref: 'org-A', _type: 'reference' },
   ticketingProvider: 'checkin',
 }
-const fetch = vi.fn(async () => CONFERENCE)
 vi.mock('@/lib/sanity/client', () => ({
-  clientReadUncached: { fetch: () => fetch() },
+  clientReadUncached: {
+    fetch: async (query: string, params: Record<string, unknown>) => {
+      const { parse, evaluate } = await import('groq-js')
+      return (
+        await evaluate(parse(query), { dataset: [CONFERENCE_DOC], params })
+      ).get()
+    },
+  },
 }))
 
 vi.mock('@/lib/conference/sanity', () => ({
@@ -73,10 +88,11 @@ describe('domainVerification.list', () => {
       workshopsEnabled.mockResolvedValue(enabled)
       await caller().list()
 
-      // The gate is asked about the conference as read: owner and vendor.
+      // The gate is asked about the conference as the query selects it:
+      // owner and vendor.
       expect(workshopsEnabled).toHaveBeenCalledWith(
         expect.objectContaining({
-          organization: CONFERENCE.organization,
+          organization: CONFERENCE_DOC.organization,
           ticketingProvider: 'checkin',
         }),
       )
