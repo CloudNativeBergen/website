@@ -20,6 +20,14 @@
  * text or age. The price is that a create whose answer was lost outlives its
  * host; `unaccounted` in the summary is where that shows.
  *
+ * ONE WAY AN ENTRY THAT IS NOT OURS COULD STILL BE TAKEN FOR OURS, and only if
+ * WorkOS answers a create for a URI it already has with that existing entry
+ * (not known; `scripts/probe-workos-redirect-uris.ts` prints it): someone adds
+ * exactly the URI this run is about to create, in the moment between the
+ * listing made just before the create and the create itself. Nothing WorkOS
+ * returns tells a new entry from an old one, so that moment cannot be closed
+ * from here, only kept short.
+ *
  * A CREATE THAT CANNOT BE RECORDED IS UNDONE. Every write to the record is
  * conditional on the revision this run read, so a record that moved on while
  * WorkOS was answering (released, re-claimed, re-checked, or handled by an
@@ -211,23 +219,32 @@ async function save(
 async function register(
   row: RedirectUriSyncRow,
   uri: string,
-  listed: readonly WorkOSRedirectUri[],
   now: Date,
   summary: RedirectUriReconcileSummary,
 ): Promise<void> {
-  let created: WorkOSRedirectUri
+  // LOOK AGAIN JUST BEFORE ASKING. The run's own listing was taken before any
+  // host was handled and may be seconds old by now. An entry that has turned
+  // up since — added by a person, or by an overlapping run — must neither be
+  // created a second time nor, if WorkOS answers the create with it, be taken
+  // for this run's own. What this cannot see is an entry added in the moment
+  // between this listing and the create; see the module doc.
+  let current: WorkOSRedirectUri[]
+  let created: WorkOSRedirectUri | undefined
   try {
-    created = await createRedirectUri(uri)
+    current = await listRedirectUris()
+    if (!current.some((entry) => href(entry.uri) === href(uri))) {
+      created = await createRedirectUri(uri)
+    }
   } catch (error) {
     // The error only. An id already on the record stays: it is only ever
     // acted on when a listing shows it, so keeping it costs nothing.
     await save(row, { error: describe(error) }).catch(() => {})
     throw error
   }
-  if (listed.some((entry) => entry.id === created.id)) {
-    // WorkOS answered the create with an entry that was already there (spelled
-    // differently, or it would have been seen). It made nothing, so the entry
-    // is not ours: neither recorded as such nor undone.
+  if (!created || current.some((entry) => entry.id === created.id)) {
+    // The URI is already there, or WorkOS answered the create with an entry
+    // that was (spelled differently, or it would have been seen). Nothing was
+    // made, so nothing is ours: neither recorded as such nor undone.
     return save(row, { ...CLEARED, status: 'external' })
   }
   const registered = {
@@ -348,7 +365,7 @@ async function reconcileHost(
   if (listed.some((entry) => href(entry.uri) === href(uri))) {
     return save(row, { ...CLEARED, status: 'external' })
   }
-  return register(row, uri, listed, now, summary)
+  return register(row, uri, now, summary)
 }
 
 /**

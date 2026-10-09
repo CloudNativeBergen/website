@@ -314,7 +314,8 @@ with `WORKOS_API_KEY` set:
   release, a platform allocation);
 - after an admin re-check that changed whether the host is on the allowlist, or
   replaced a grandfathered standing with a real proof;
-- after an organization's plan or feature overrides change;
+- after an organization's plan or feature overrides change (the cached
+  organization is expired at once, so the reconcile reads the new plan);
 - at the end of the daily sweep, which also retries whatever failed earlier.
 
 Anything else that changes the answer is picked up by the daily sweep: ticketing
@@ -334,6 +335,13 @@ Ownership is never inferred from a URI's text or age. The record is the ledger,
 so this holds against everything except someone who can write the dataset; an id
 copied onto another host's record is ignored, because its URI is not that
 host's.
+
+Before each create it lists WorkOS again, so a URI that someone added since the
+run started is found and recorded as `external` rather than created twice. One
+case is left, and only if WorkOS answers a create for a URI it already has with
+the existing entry (not known; the probe script prints it): a URI added in the
+moment between that listing and the create would be taken for this system's
+own. Nothing WorkOS returns tells a new entry from an old one.
 
 Callback URIs that no host accounts for are named in the sweep's error log as
 `unaccounted` (a URI nobody wants any more, or a duplicate of one this system

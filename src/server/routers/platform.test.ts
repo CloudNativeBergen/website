@@ -257,16 +257,18 @@ describe('updateEntitlements', () => {
     expect(typeof patched.featureOverrides[1]._key).toBe('string')
     expect(patched.featureOverrides[1]._key).toBeTruthy()
 
-    expect(revalidateTag).toHaveBeenCalledWith(
-      'sanity:organization-org-B',
-      'default',
-    )
+    // Expired at once, not marked stale under a profile: with a profile the
+    // next read is still served the old plan while it revalidates.
+    expect(revalidateTag).toHaveBeenCalledWith('sanity:organization-org-B', {
+      expire: 0,
+    })
   })
 
   it('queues a WorkOS redirect-URI reconcile after busting the organization tag', async () => {
     // A plan or an override can switch workshops on or off (#1297). The
-    // reconcile reads the organization through the cache, so the tag is busted
-    // first. This pins the ORDER of the two calls, nothing about the cache.
+    // reconcile reads the organization through the cache, so the entry is
+    // expired first. This pins the ORDER of the two calls; that the entry is
+    // expired rather than left stale is pinned by the test above.
     await callerFor(['org-A']).updateEntitlements({
       organizationId: 'org-B',
       plan: 'pro',

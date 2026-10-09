@@ -9,11 +9,12 @@
  * STAGING environment, and then runs the same calls through the client to show
  * it reads them. Paste the output into the PR as the evidence #1297 asks for.
  *
- * It touches WorkOS only — no Sanity read or write. It creates one URI on a
- * host nobody will ever sign in on (`redirect-uri-probe-<time>.example.org`)
- * and, at the end, lists the environment and deletes every entry with that
- * URI, whatever happened in between. If any is still there it says so and
- * exits non-zero. It refuses a key that is not `sk_test_…` unless
+ * It touches WorkOS only — no Sanity read or write. It creates URIs on two
+ * hosts nobody will ever sign in on (`redirect-uri-probe-<time>-a.example.org`
+ * and `…-b…`), two so that the list has a second page to ask for even in an
+ * empty environment. At the end it lists the environment and deletes every
+ * entry on those hosts, whatever happened in between. If any is still there it
+ * says so and exits non-zero. It refuses a key that is not `sk_test_…` unless
  * `--allow-live`.
  */
 import {
@@ -79,14 +80,14 @@ function firstIdOf(body: unknown): string | undefined {
 }
 
 /**
- * Delete every entry with the probe's URI, found by LISTING — so it does not
+ * Delete every entry on the probe's hosts, found by LISTING — so it does not
  * depend on having read an id out of a create answer. Returns what is left.
  */
-async function removeProbeUris(uri: string): Promise<string[]> {
-  // By host, which is unique to this run: WorkOS may spell the URI its own way.
-  const { host } = new URL(uri)
+async function removeProbeUris(uris: string[]): Promise<string[]> {
+  // By host, which is unique to this run: WorkOS may spell a URI its own way.
+  const hosts = new Set(uris.map((uri) => new URL(uri).host))
   const isMine = (entry: { uri: string }) =>
-    URL.canParse(entry.uri) && new URL(entry.uri).host === host
+    URL.canParse(entry.uri) && hosts.has(new URL(entry.uri).host)
   for (const entry of (await listRedirectUris()).filter(isMine)) {
     await call('Clean up', 'DELETE', `${ENDPOINT}/${entry.id}`)
   }
@@ -94,10 +95,24 @@ async function removeProbeUris(uri: string): Promise<string[]> {
 }
 
 async function main(): Promise<void> {
-  const uri = `https://redirect-uri-probe-${Date.now()}.example.org/api/auth/callback`
+  const stamp = Date.now()
+  const uri = `https://redirect-uri-probe-${stamp}-a.example.org/api/auth/callback`
+  const second = `https://redirect-uri-probe-${stamp}-b.example.org/api/auth/callback`
+  const probes = [uri, second]
   let failure: unknown
 
   try {
+    const created = await call('Create', 'POST', ENDPOINT, { uri })
+    const createdId = idOf(created.body)
+    const again = await call('Create the same URI again', 'POST', ENDPOINT, {
+      uri,
+    })
+    console.log(
+      `\nThe second create answered with the first entry's id: ${createdId !== undefined && idOf(again.body) === createdId}`,
+    )
+    await call('Create a second URI', 'POST', ENDPOINT, { uri: second })
+
+    // Two entries exist now at the least, so there is a second page to ask for.
     const first = await call(
       'List, one per page, oldest first',
       'GET',
@@ -107,34 +122,29 @@ async function main(): Promise<void> {
       first.body as { list_metadata?: { after?: string | null } } | null
     )?.list_metadata?.after
     if (after) {
-      const second = await call(
+      const next = await call(
         'List, the page after that cursor',
         'GET',
         `${ENDPOINT}?limit=1&order=asc&after=${encodeURIComponent(after)}`,
       )
       console.log(
-        `\nThe second page starts with a different entry: ${firstIdOf(second.body) !== firstIdOf(first.body)}`,
+        `\nThe second page starts with a different entry: ${firstIdOf(next.body) !== undefined && firstIdOf(next.body) !== firstIdOf(first.body)}`,
       )
     } else {
-      console.log('\n(no `after` cursor: the environment has at most one URI)')
+      console.log(
+        "\nNO `after` CURSOR on a one-entry page of a list that holds at least two entries: the client's pagination would stop early.",
+      )
+      process.exitCode = 1
     }
 
-    const created = await call('Create', 'POST', ENDPOINT, { uri })
-    const createdId = idOf(created.body)
-    const again = await call('Create the same URI again', 'POST', ENDPOINT, {
-      uri,
-    })
-    console.log(
-      `\nThe second create answered with the first entry's id: ${createdId !== undefined && idOf(again.body) === createdId}`,
-    )
     if (createdId) {
       await call('Delete', 'DELETE', `${ENDPOINT}/${createdId}`)
       await call('Delete it again', 'DELETE', `${ENDPOINT}/${createdId}`)
     } else {
       console.log('\n(no id could be read from the create answer)')
     }
-    // A duplicate WorkOS accepted, or a delete it refused, is still there.
-    await removeProbeUris(uri)
+    // A duplicate WorkOS accepted, a delete it refused, and the second URI.
+    await removeProbeUris(probes)
 
     console.log('\n### The same round trip through the client')
     const before = await listRedirectUris()
@@ -147,15 +157,18 @@ async function main(): Promise<void> {
     console.log('deleteRedirectUri(): ok')
     const gone = !(await listRedirectUris()).some((u) => u.id === viaClient.id)
     console.log(`gone from the list: ${gone}`)
+    console.log(
+      '(The client asks for 100 per page, so its own cursor loop only runs in an environment holding more than 100 URIs. The raw calls above are the check of the cursor.)',
+    )
   } catch (error) {
     failure = error
   }
 
   try {
-    const left = await removeProbeUris(uri)
+    const left = await removeProbeUris(probes)
     if (left.length > 0) {
       console.error(
-        `\nSTILL REGISTERED: ${uri} (${left.join(', ')}). Remove it in the WorkOS dashboard.`,
+        `\nSTILL REGISTERED on the probe's hosts: ${left.join(', ')}. Remove them in the WorkOS dashboard (${probes.map((probe) => new URL(probe).host).join(', ')}).`,
       )
       process.exitCode = 1
     } else {
@@ -164,7 +177,7 @@ async function main(): Promise<void> {
   } catch (error) {
     // The listing itself could not be read, so nothing is known.
     console.error(
-      `\nCOULD NOT CHECK what is left (${error instanceof Error ? error.message : String(error)}). Look for ${new URL(uri).host} in the WorkOS dashboard and remove it.`,
+      `\nCOULD NOT CHECK what is left (${error instanceof Error ? error.message : String(error)}). Look for ${probes.map((probe) => new URL(probe).host).join(' and ')} in the WorkOS dashboard and remove them.`,
     )
     process.exitCode = 1
   }

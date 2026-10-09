@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import {
   FAKE_WORKOS_API_KEY,
   installFakeWorkOSRedirectUris,
+  type FakeRedirectUri,
   type FakeWorkOSRedirectUris,
 } from '../../../../__tests__/helpers/fakeWorkOSRedirectUris'
 import type {
@@ -435,6 +436,57 @@ describe('URIs this system did not create', () => {
     })
   })
 
+  it.each([
+    ['WorkOS would refuse the duplicate', false],
+    ['WorkOS would hand the existing entry back', true],
+  ])(
+    'are not created again, nor taken for its own, when added after the run listed WorkOS and %s',
+    async (_, duplicateReturnsExisting) => {
+      // The run lists once, before any host. By the time this host is handled
+      // someone has added its callback by hand.
+      workos.duplicateReturnsExisting = duplicateReturnsExisting
+      const id = seedAllocated('kontainerkonf.konf.run')
+      let byHand: FakeRedirectUri | undefined
+      workos.beforeAnswer = (method) => {
+        if (method !== 'GET' || byHand) return
+        byHand = workos.seed(callback('kontainerkonf.konf.run'))
+      }
+
+      const summary = await reconcileWorkshopRedirectUris(NOW)
+
+      expect(workos.writes()).toEqual([])
+      expect(stateOf(id)).toEqual({ status: 'external', id: null, error: null })
+      expect(summary.registered).toEqual([])
+
+      rows.get(id)!.record.status = 'revoked'
+      await reconcileWorkshopRedirectUris(NOW)
+
+      expect(workos.uris).toEqual([byHand])
+    },
+  )
+
+  it('KNOWN LIMIT: one added between the last listing and the create is taken for its own, if WorkOS hands it back', async () => {
+    // Nothing WorkOS returns tells an entry it just made from one that was
+    // there. The listing made right before the create keeps this moment
+    // short; it cannot close it. Stated in the module doc of reconcile.ts.
+    workos.duplicateReturnsExisting = true
+    const id = seedAllocated('kontainerkonf.konf.run')
+    let listings = 0
+    let byHand: FakeRedirectUri | undefined
+    workos.beforeAnswer = (method) => {
+      if (method !== 'GET' || ++listings !== 2) return
+      byHand = workos.seed(callback('kontainerkonf.konf.run'))
+    }
+
+    await reconcileWorkshopRedirectUris(NOW)
+
+    expect(stateOf(id)).toEqual({
+      status: 'registered',
+      id: byHand!.id,
+      error: null,
+    })
+  })
+
   it('are recognised however WorkOS spells them', async () => {
     workos.seed('https://KontainerKonf.konf.run:443/api/auth/callback')
     const id = seedAllocated('kontainerkonf.konf.run')
@@ -744,6 +796,31 @@ describe('when WorkOS fails', () => {
     expect(workos.writes()).toEqual([])
   })
 
+  it('creates nothing when it cannot look again just before the create', async () => {
+    const id = seedAllocated('kontainerkonf.konf.run')
+    let listings = 0
+    workos.beforeAnswer = (method) => {
+      if (method === 'GET' && ++listings === 1) {
+        workos.failNext('GET', { status: 503 })
+      }
+    }
+
+    const first = await reconcileWorkshopRedirectUris(NOW)
+
+    expect(workos.writes()).toEqual([])
+    expect(first.errored).toEqual(['kontainerkonf.konf.run'])
+    expect(stateOf(id)).toEqual({
+      status: null,
+      id: null,
+      error: expect.stringContaining('503'),
+    })
+
+    const second = await reconcileWorkshopRedirectUris(NOW)
+
+    expect(second.registered).toEqual(['kontainerkonf.konf.run'])
+    expect(stateOf(id)).toMatchObject({ status: 'registered', error: null })
+  })
+
   it('records a refused create and registers on the next run', async () => {
     const id = seedAllocated('kontainerkonf.konf.run')
     workos.failNext('POST', { status: 500, message: 'Internal error' })
@@ -942,6 +1019,37 @@ describe('when the records cannot be read or move on under the run', () => {
     return theirs.id
   }
 
+  /**
+   * Do `act` once, as the run makes its Nth listing of WorkOS. It lists at the
+   * start (1), and again just before each create (2).
+   */
+  function atListing(n: number, act: () => void): void {
+    const others = workos.beforeAnswer
+    let listings = 0
+    workos.beforeAnswer = (method) => {
+      others?.(method)
+      if (method === 'GET' && ++listings === n) act()
+    }
+  }
+
+  it('creates nothing when an overlapping run registered the host after this run listed WorkOS', async () => {
+    const id = seedAllocated('kontainerkonf.konf.run')
+    let theirs = ''
+    atListing(1, () => {
+      theirs = anotherRunRegisters(id, 'kontainerkonf.konf.run')
+    })
+
+    await reconcileWorkshopRedirectUris(NOW)
+
+    expect(workos.writes()).toEqual([])
+    expect(workos.uris.map((u) => u.id)).toEqual([theirs])
+    expect(stateOf(id)).toEqual({
+      status: 'registered',
+      id: theirs,
+      error: null,
+    })
+  })
+
   it.each([
     ['WorkOS refuses the duplicate', false],
     ['WorkOS accepts the duplicate', true],
@@ -951,15 +1059,15 @@ describe('when the records cannot be read or move on under the run', () => {
       const id = seedAllocated('kontainerkonf.konf.run')
       workos.allowDuplicates = allowDuplicates
       let theirs = ''
-      // The other run acts after this one has listed WorkOS and found nothing.
-      workos.beforeAnswer = (method) => {
-        if (method !== 'GET') return
-        workos.beforeAnswer = undefined
+      // The other run acts after this one has looked for the last time and
+      // found nothing, so this one goes on to ask for the create.
+      atListing(2, () => {
         theirs = anotherRunRegisters(id, 'kontainerkonf.konf.run')
-      }
+      })
 
       await reconcileWorkshopRedirectUris(NOW)
 
+      expect(workos.writes().map((r) => r.method)).toContain('POST')
       expect(workos.uris.map((u) => u.id)).toEqual([theirs])
       expect(stateOf(id)).toEqual({
         status: 'registered',
@@ -974,15 +1082,17 @@ describe('when the records cannot be read or move on under the run', () => {
     workos.allowDuplicates = true
     let theirs = ''
     workos.beforeAnswer = (method) => {
-      if (method === 'GET') {
-        theirs = anotherRunRegisters(id, 'kontainerkonf.konf.run')
-      }
       if (method === 'POST') workos.failNext('DELETE', { status: 500 })
     }
+    atListing(2, () => {
+      theirs = anotherRunRegisters(id, 'kontainerkonf.konf.run')
+    })
 
     const summary = await reconcileWorkshopRedirectUris(NOW)
 
+    // Theirs, and the duplicate this run made and could not remove again.
     expect(workos.uris).toHaveLength(2)
+    expect(workos.writes().map((r) => r.method)).toEqual(['POST', 'DELETE'])
     expect(stateOf(id)).toEqual({
       status: 'registered',
       id: theirs,

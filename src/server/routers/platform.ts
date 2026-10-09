@@ -87,7 +87,11 @@ export const platformRouter = router({
         })
       }
 
-      revalidateTag(organizationTag(input.organizationId), 'default')
+      // EXPIRE NOW, not a cache-life profile. A profile only marks the entry
+      // stale, and the next read is still served the old organization while it
+      // revalidates. Entitlements are not something to serve stale, and the
+      // reconcile queued below is that next read: it has to see this write.
+      revalidateTag(organizationTag(input.organizationId), { expire: 0 })
       // A plan or an override can switch workshops on or off, and with them
       // the organization's hosts' place in WorkOS (#1297).
       scheduleRedirectUriReconcile()
