@@ -122,9 +122,8 @@ describe('listRedirectUris', () => {
   })
 
   it('gives every request a deadline', async () => {
-    const answered = vi.fn(
-      async (_url: string, _init?: RequestInit) =>
-        new Response(JSON.stringify({ data: [] })),
+    const answered = vi.fn<typeof fetch>(
+      async () => new Response(JSON.stringify({ data: [] })),
     )
     vi.stubGlobal('fetch', answered)
 
