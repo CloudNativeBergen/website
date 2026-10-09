@@ -286,6 +286,23 @@ async function register(
   )
 }
 
+/**
+ * The entry this system created for the host: the one with the recorded id, ON
+ * THIS HOST. An id that names a URI on some other host was not put on the
+ * record by a create for this one, and is never acted on or answered for. The
+ * host is compared, not the whole URI: the id is what identifies the entry, and
+ * WorkOS may spell the path its own way.
+ */
+function ownEntry(
+  row: RedirectUriSyncRow,
+  listed: readonly WorkOSRedirectUri[],
+): WorkOSRedirectUri | undefined {
+  const { id } = row.redirectUri
+  const uri = workshopRedirectUri(row.record.hostname)
+  if (!id || !uri) return undefined
+  return listed.find((entry) => entry.id === id && sameHost(entry.uri, uri))
+}
+
 async function reconcileHost(
   row: RedirectUriSyncRow,
   wanted: boolean,
@@ -295,15 +312,7 @@ async function reconcileHost(
 ): Promise<void> {
   const { hostname } = row.record
   const uri = workshopRedirectUri(hostname)
-  const { id } = row.redirectUri
-  // Ours is the entry with the recorded id, ON THIS HOST. An id that names a
-  // URI on some other host was not put on the record by a create for this one,
-  // and is never acted on. The host is compared, not the whole URI: the id is
-  // what identifies the entry, and WorkOS may spell the path its own way.
-  const ours =
-    id && uri
-      ? listed.find((entry) => entry.id === id && sameHost(entry.uri, uri))
-      : undefined
+  const ours = ownEntry(row, listed)
 
   if (!wanted || !uri) {
     if (!ours) return save(row, CLEARED)
@@ -390,13 +399,13 @@ export async function reconcileWorkshopRedirectUris(
       return summary
     }
 
-    // What some host answers for: the entry whose id it holds, or, for a host
-    // that should have a URI and holds no listed id, any entry with its URI.
+    // What some host answers for: its own entry, or, for a host that should
+    // have a URI and has none of its own listed, any entry with its URI.
     const accounted = new Set<string>()
     for (const { row, wanted } of decided) {
-      const { id } = row.redirectUri
+      const own = ownEntry(row, listed)
       const uri = workshopRedirectUri(row.record.hostname)
-      if (id && listed.some((entry) => entry.id === id)) accounted.add(id)
+      if (own) accounted.add(own.id)
       else if (uri && wanted !== false) accounted.add(loosely(uri))
     }
     summary.unaccounted = listed

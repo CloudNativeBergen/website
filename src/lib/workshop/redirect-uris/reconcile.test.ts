@@ -530,6 +530,22 @@ describe('URIs this system did not create', () => {
     expect(summary.registered).toEqual([CONTROL])
   })
 
+  it("are reported as unaccounted even when their id sits on another host's record", async () => {
+    // The same host check that decides what may be deleted decides what a
+    // host answers for.
+    const stray = workos.seed(callback('left-behind.example.org'))
+    const own = workos.seed(callback('kontainerkonf.konf.run'))
+    const id = seedAllocated('kontainerkonf.konf.run', {
+      redirectUri: { status: 'registered', id: stray.id },
+    })
+
+    const summary = await reconcileWorkshopRedirectUris(NOW)
+
+    expect(summary.unaccounted).toEqual([stray.uri])
+    expect(stateOf(id)).toEqual({ status: 'external', id: null, error: null })
+    expect(workos.uris).toEqual([stray, own])
+  })
+
   it('are reported as unaccounted only when they are callbacks nobody answers for', async () => {
     const stray = workos.seed(callback('left-behind.example.org'))
     workos.seed('https://app.example.org/some/other/redirect')
@@ -1183,5 +1199,558 @@ describe('when the records cannot be read or move on under the run', () => {
       id: theirs,
       error: null,
     })
+  })
+})
+
+/**
+ * Guards an exhaustive mutation pass over `reconcile.ts` found unpinned: with
+ * the guard named in each test removed or inverted, every other test still
+ * passed.
+ */
+describe('guards a mutation pass found unpinned', () => {
+  it('does not run with a WORKOS_API_KEY that is only whitespace', async () => {
+    vi.stubEnv('WORKOS_API_KEY', '   ')
+    storeReadFails = true
+    seedAllocated('kontainerkonf.konf.run')
+
+    const summary = await reconcileWorkshopRedirectUris(NOW)
+
+    // `error: null` with a failing store shows the records were never read.
+    expect(summary).toMatchObject({ skipped: 'no-api-key', error: null })
+    expect(workos.requests).toEqual([])
+  })
+
+  it('carries on past a record whose hostname no URL can carry', async () => {
+    // Passes the stored-hostname pattern (`:\d{1,5}`), but no URL has that port.
+    seedHost('conf.tenant.example.org:99999')
+    const id = seedAllocated(CONTROL)
+
+    const summary = await reconcileWorkshopRedirectUris(NOW)
+
+    expect(stateOf(id).status).toBe('registered')
+    expect(summary).toMatchObject({
+      error: null,
+      wanted: 1,
+      registered: [CONTROL],
+      errored: [],
+    })
+  })
+
+  it('registers nothing for an allocated host whose name no URL can carry', async () => {
+    seedAllocated(CONTROL)
+    seedAllocated('bad host.konf.run')
+
+    const summary = await reconcileWorkshopRedirectUris(NOW)
+
+    expect(workos.uris.map((u) => u.uri)).toEqual([callback(CONTROL)])
+    expect(summary).toMatchObject({ error: null, wanted: 1, errored: [] })
+  })
+
+  it('works around an entry in WorkOS that is not a URL, and reports it when it reads as a callback', async () => {
+    // A wildcard port: WorkOS can hold it, `new URL` refuses it.
+    const odd = workos.seed('http://localhost:*/api/auth/callback')
+    const id = seedAllocated('kontainerkonf.konf.run')
+
+    const summary = await reconcileWorkshopRedirectUris(NOW)
+
+    expect(stateOf(id).status).toBe('registered')
+    expect(summary).toMatchObject({
+      error: null,
+      registered: ['kontainerkonf.konf.run'],
+      errored: [],
+      unaccounted: [odd.uri],
+    })
+  })
+
+  it('reports stray callbacks whatever the case or trailing slashes of their path, and on another scheme or port of a wanted host', async () => {
+    const hostname = 'kontainerkonf.konf.run'
+    const strays = [
+      workos.seed('https://left-behind.example.org/API/Auth/Callback'),
+      workos.seed('https://left-behind.example.org/api/auth/callback//'),
+      workos.seed(`http://${hostname}/api/auth/callback`),
+      workos.seed(`https://${hostname}:8443/api/auth/callback`),
+    ]
+    seedAllocated(hostname)
+
+    const summary = await reconcileWorkshopRedirectUris(NOW)
+
+    expect(summary.registered).toEqual([hostname])
+    expect(summary.unaccounted).toEqual(strays.map((stray) => stray.uri))
+  })
+
+  it.each<[string, (hostname: string) => string]>([
+    [
+      'on another port of the same hostname',
+      (hostname) => `https://${hostname}:8443/api/auth/callback`,
+    ],
+    ['that is not a URL', () => 'http://localhost:*/api/auth/callback'],
+  ])(
+    'never deletes a URI %s because its id is on a released record',
+    async (_, uriFor) => {
+      const foreign = workos.seed(uriFor('kontainerkonf.konf.run'))
+      const id = seedAllocated('kontainerkonf.konf.run', {
+        record: { status: 'revoked' },
+        redirectUri: { status: 'registered', id: foreign.id },
+      })
+
+      const summary = await reconcileWorkshopRedirectUris(NOW)
+
+      expect(workos.uris).toEqual([foreign])
+      expect(stateOf(id)).toEqual({ status: null, id: null, error: null })
+      expect(summary).toMatchObject({ removed: [], errored: [] })
+    },
+  )
+
+  it('does not throw when a read rejects with something that is not an Error', async () => {
+    const store = await import('@/lib/domain-verification/sanity')
+    vi.spyOn(store, 'listRedirectUriSyncRows').mockRejectedValueOnce(
+      'sanity is down',
+    )
+
+    const summary = await reconcileWorkshopRedirectUris(NOW)
+
+    expect(summary.error).toBe('sanity is down')
+  })
+
+  it('registers nothing for a platform-organization host whose proof is too old at the time of the run', async () => {
+    seedAllocated(CONTROL)
+    seedHost('2026.cloudnativedays.no', {
+      org: PLATFORM_ORG,
+      // Verified, but not re-proven inside the allowlist's 30 days before NOW.
+      record: {
+        lastSuccessAt: '2026-08-01T05:00:00.000Z',
+        lastCheckedAt: '2026-08-01T05:00:00.000Z',
+      },
+    })
+
+    const summary = await reconcileWorkshopRedirectUris(NOW)
+
+    expect(workos.uris.map((u) => u.uri)).toEqual([callback(CONTROL)])
+    expect(summary.wanted).toBe(1)
+  })
+
+  it('decides against a hostname that names a different host as a URL, rather than leaving it undecided', async () => {
+    seedAllocated(CONTROL)
+    const id = seedHost('127.1', {
+      org: PLATFORM_ORG,
+      redirectUri: { error: 'POST was refused by WorkOS with HTTP 500' },
+    })
+
+    const summary = await reconcileWorkshopRedirectUris(NOW)
+
+    expect(stateOf(id)).toEqual({ status: null, id: null, error: null })
+    expect(summary).toMatchObject({ wanted: 1, errored: [] })
+  })
+
+  it('leaves a host as it is when the workshops gate throws, and still brings the others into step', async () => {
+    const id = seedAllocated('kontainerkonf.konf.run')
+    await reconcileWorkshopRedirectUris(NOW)
+    const kept = structuredClone(workos.uris[0])
+    seedAllocated(CONTROL, { org: OTHER_TENANT_ORG })
+    const gate = await import('@/lib/features/workshops')
+    vi.spyOn(gate, 'resolveWorkshopsForConference').mockImplementation(
+      async (conference) => {
+        if (conference?.organization?._ref === TENANT_ORG) {
+          throw new Error('the ticketing credentials could not be read')
+        }
+        return true
+      },
+    )
+
+    const summary = await reconcileWorkshopRedirectUris(NOW)
+
+    expect(workos.uris.map((u) => u.uri)).toEqual([kept.uri, callback(CONTROL)])
+    expect(stateOf(id)).toMatchObject({ status: 'registered', id: kept.id })
+    expect(summary).toMatchObject({
+      error: null,
+      registered: [CONTROL],
+      removed: [],
+      errored: ['kontainerkonf.konf.run'],
+    })
+  })
+
+  it('reads no organization for a host whose conference is gone, and decides against it', async () => {
+    const organizations = await import('@/lib/organization/sanity')
+    const read = vi.spyOn(organizations, 'getOrganizationById')
+    seedAllocated(CONTROL)
+    const id = seedAllocated('ownerless.konf.run', {
+      redirectUri: { error: 'POST was refused by WorkOS with HTTP 500' },
+    })
+    rows.get(id)!.conference = null
+
+    const summary = await reconcileWorkshopRedirectUris(NOW)
+
+    // One read, for the host that has an owner; never one for `undefined`.
+    expect(read.mock.calls).toEqual([[TENANT_ORG]])
+    expect(stateOf(id)).toEqual({ status: null, id: null, error: null })
+    expect(summary).toMatchObject({ wanted: 1, errored: [] })
+  })
+  it('takes a duplicate WorkOS made of a re-spelled entry for its own, by its id and not by its text', async () => {
+    // Added by hand and stored re-spelled, so the listing does not match the
+    // exact callback; WorkOS then ACCEPTS the create and stores a second entry
+    // with the very same text. The id it answered with is new: it is ours.
+    workos.respell = (uri) => `${uri}/`
+    workos.allowDuplicates = true
+    const byHand = workos.seed(`${callback('kontainerkonf.konf.run')}/`)
+    const id = seedAllocated('kontainerkonf.konf.run')
+
+    const summary = await reconcileWorkshopRedirectUris(NOW)
+
+    expect(workos.uris).toHaveLength(2)
+    expect(workos.uris[1].uri).toBe(byHand.uri)
+    expect(stateOf(id)).toEqual({
+      status: 'registered',
+      id: workos.uris[1].id,
+      error: null,
+    })
+    expect(summary.registered).toEqual(['kontainerkonf.konf.run'])
+
+    // Recorded, so it does not create a third on the next run, and it is the
+    // one removed when the host is released.
+    await reconcileWorkshopRedirectUris(NOW)
+    expect(workos.uris).toHaveLength(2)
+    rows.get(id)!.record.status = 'revoked'
+    await reconcileWorkshopRedirectUris(NOW)
+
+    expect(workos.uris).toEqual([byHand])
+  })
+
+  it('drops a dead id and an old error when WorkOS answers a create with an entry that was already there', async () => {
+    workos.respell = (uri) => `${uri}/`
+    workos.duplicateReturnsExisting = true
+    const byHand = workos.seed(`${callback('kontainerkonf.konf.run')}/`)
+    const id = seedAllocated('kontainerkonf.konf.run', {
+      redirectUri: {
+        status: 'registered',
+        id: 'redir_gone',
+        error: 'POST was refused by WorkOS with HTTP 500',
+      },
+    })
+
+    await reconcileWorkshopRedirectUris(NOW)
+
+    expect(workos.uris).toEqual([byHand])
+    expect(stateOf(id)).toEqual({ status: 'external', id: null, error: null })
+  })
+
+  it('does not record a refused list on a wanted host whose URI is external', async () => {
+    workos.seed(callback('external.konf.run'))
+    const external = seedAllocated('external.konf.run')
+    await reconcileWorkshopRedirectUris(NOW)
+    expect(stateOf(external).status).toBe('external')
+    const pending = seedAllocated('new.konf.run')
+    stateWrites.length = 0
+    workos.failAll('GET', { status: 503 })
+
+    const summary = await reconcileWorkshopRedirectUris(NOW)
+
+    expect(summary.errored).toEqual(['new.konf.run'])
+    expect(stateWrites.map((w) => w.id)).toEqual([pending])
+    expect(stateOf(external)).toEqual({
+      status: 'external',
+      id: null,
+      error: null,
+    })
+  })
+  it('still knows its own URI by its id when WorkOS spells the path in a way no comparison would match', async () => {
+    workos.respell = (uri) => `${uri}/index`
+    const id = seedAllocated('kontainerkonf.konf.run')
+
+    await reconcileWorkshopRedirectUris(NOW)
+    const registered = stateOf(id).id
+    const second = await reconcileWorkshopRedirectUris(NOW)
+
+    expect(workos.uris).toHaveLength(1)
+    expect(stateOf(id)).toEqual({
+      status: 'registered',
+      id: registered,
+      error: null,
+    })
+    expect(second).toMatchObject({ registered: [], errored: [] })
+
+    rows.get(id)!.record.status = 'revoked'
+    const released = await reconcileWorkshopRedirectUris(NOW)
+
+    expect(released.removed).toEqual(['kontainerkonf.konf.run'])
+    expect(workos.uris).toEqual([])
+  })
+
+  it('reports no error when there is nothing to do', async () => {
+    seedHost('conf.tenant.example.org', { org: TENANT_ORG })
+
+    const summary = await reconcileWorkshopRedirectUris(NOW)
+
+    expect(summary).toEqual({
+      skipped: null,
+      wanted: 0,
+      registered: [],
+      removed: [],
+      errored: [],
+      unaccounted: [],
+      error: null,
+    })
+  })
+
+  it('reports a refused list on every host it leaves out of step, also when one of their records has moved on', async () => {
+    const moved = seedAllocated('moved.konf.run')
+    const pending = seedAllocated('new.konf.run')
+    workos.failAll('GET', { status: 503 })
+    const served = globalThis.fetch
+    vi.stubGlobal('fetch', (...args: Parameters<typeof fetch>) => {
+      moveOn(moved)
+      return served(...args)
+    })
+
+    const summary = await reconcileWorkshopRedirectUris(NOW)
+
+    expect(summary.error).toContain('503')
+    expect(summary.errored).toEqual(['moved.konf.run', 'new.konf.run'])
+    expect(stateOf(moved).error).toBeNull()
+    expect(stateOf(pending).error).toContain('503')
+  })
+
+  it('keeps the id on record when the list is refused', async () => {
+    // Forgetting it here would leave the URI in WorkOS with nothing to say it
+    // is ours.
+    const leaving = seedAllocated('old.konf.run', {
+      record: { status: 'revoked' },
+      redirectUri: { status: 'registered', id: 'redir_old' },
+    })
+    workos.failAll('GET', { status: 503 })
+
+    await reconcileWorkshopRedirectUris(NOW)
+
+    expect(stateOf(leaving)).toEqual({
+      status: 'registered',
+      id: 'redir_old',
+      error: expect.stringContaining('503'),
+    })
+  })
+
+  it('writes nothing for a host it could not decide on when the list is refused, and names it once', async () => {
+    workshops.set(OTHER_TENANT_ORG, null)
+    const undecided = seedAllocated('undecided.konf.run', {
+      org: OTHER_TENANT_ORG,
+    })
+    const pending = seedAllocated('new.konf.run')
+    workos.failAll('GET', { status: 503 })
+
+    const summary = await reconcileWorkshopRedirectUris(NOW)
+
+    expect(summary.errored).toEqual(['undecided.konf.run', 'new.konf.run'])
+    expect(stateWrites.map((w) => w.id)).toEqual([pending])
+    expect(stateOf(undecided)).toEqual({ status: null, id: null, error: null })
+  })
+
+  it('does not report a URI whose path only starts with the callback path', async () => {
+    const stray = workos.seed(callback('left-behind.example.org'))
+    workos.seed('https://app.example.org/api/auth/callback/other')
+    seedAllocated('kontainerkonf.konf.run')
+
+    const summary = await reconcileWorkshopRedirectUris(NOW)
+
+    expect(summary.unaccounted).toEqual([stray.uri])
+  })
+  it('undoes its own create, never the URI whose id the record held going in', async () => {
+    // The record names a URI on another host, so it is not ours and a create
+    // follows; the host is released while that create is being answered.
+    const byDefault = workos.seed(callback('2025.cloudnativebergen.dev'))
+    const id = seedAllocated('kontainerkonf.konf.run', {
+      redirectUri: { status: 'registered', id: byDefault.id },
+    })
+    let created = 0
+    workos.beforeAnswer = (method) => {
+      if (method !== 'POST') return
+      created = workos.uris.length
+      moveOn(id, (row) => {
+        row.record.status = 'revoked'
+      })
+    }
+
+    const summary = await reconcileWorkshopRedirectUris(NOW)
+
+    expect(created).toBe(2)
+    expect(workos.uris).toEqual([byDefault])
+    expect(summary).toMatchObject({
+      registered: [],
+      errored: ['kontainerkonf.konf.run'],
+    })
+  })
+
+  it('logs the id of a URI it could neither record nor remove when the record cannot be read again', async () => {
+    const id = seedAllocated('kontainerkonf.konf.run')
+    const logged = vi.mocked(console.error)
+    workos.beforeAnswer = (method) => {
+      if (method !== 'POST') return
+      moveOn(id)
+      storeReadFails = true
+      workos.failNext('DELETE', { status: 500 })
+    }
+
+    const summary = await reconcileWorkshopRedirectUris(NOW)
+
+    const leftover = workos.uris[0].id
+    expect(summary.errored).toEqual(['kontainerkonf.konf.run'])
+    expect(
+      logged.mock.calls.some((call) => String(call[1]).includes(leftover)),
+    ).toBe(true)
+  })
+
+  it('does not put the URI back beside one someone added by hand, and says so on the record it read again', async () => {
+    const id = seedHost('2026.cloudnativedays.no', { org: PLATFORM_ORG })
+    await reconcileWorkshopRedirectUris(NOW)
+    workos.allowDuplicates = true
+    const byHand = workos.seed(callback('2026.cloudnativedays.no'))
+    rows.get(id)!.record.status = 'failing'
+    workos.beforeAnswer = (method) => {
+      if (method !== 'DELETE') return
+      moveOn(id, (row) => {
+        row.record.status = 'verified'
+      })
+    }
+
+    const summary = await reconcileWorkshopRedirectUris(NOW)
+
+    expect(workos.uris).toEqual([byHand])
+    expect(stateOf(id)).toEqual({ status: 'external', id: null, error: null })
+    expect(summary).toMatchObject({
+      removed: ['2026.cloudnativedays.no'],
+      registered: [],
+      errored: [],
+    })
+  })
+
+  it('brings the remaining hosts into step after one of them fails', async () => {
+    const failing = seedAllocated('first.konf.run')
+    const next = seedAllocated('second.konf.run')
+    workos.failNext('POST', { status: 500 })
+
+    const summary = await reconcileWorkshopRedirectUris(NOW)
+
+    expect(stateOf(failing).error).toContain('500')
+    expect(stateOf(next).status).toBe('registered')
+    expect(summary).toMatchObject({
+      error: null,
+      errored: ['first.konf.run'],
+      registered: ['second.konf.run'],
+    })
+  })
+
+  it('keeps the URI of a host it cannot decide on while it brings another host into step', async () => {
+    const id = seedAllocated('undecided.konf.run', { org: OTHER_TENANT_ORG })
+    await reconcileWorkshopRedirectUris(NOW)
+    const [kept] = structuredClone(workos.uris)
+    workshops.set(OTHER_TENANT_ORG, null)
+    seedAllocated(CONTROL)
+
+    const summary = await reconcileWorkshopRedirectUris(NOW)
+
+    expect(workos.uris.map((u) => u.uri)).toEqual([kept.uri, callback(CONTROL)])
+    expect(stateOf(id)).toMatchObject({ status: 'registered', id: kept.id })
+    expect(summary).toMatchObject({
+      registered: [CONTROL],
+      removed: [],
+      errored: ['undecided.konf.run'],
+    })
+  })
+
+  it('reads the clock itself when it is not handed one', async () => {
+    seedAllocated(CONTROL)
+    seedHost('2026.cloudnativedays.no', {
+      org: PLATFORM_ORG,
+      // Too old on any day this test can run.
+      record: { lastSuccessAt: '2020-01-01T00:00:00.000Z' },
+    })
+
+    const summary = await reconcileWorkshopRedirectUris()
+
+    expect(workos.uris.map((u) => u.uri)).toEqual([callback(CONTROL)])
+    expect(summary.wanted).toBe(1)
+  })
+
+  describe('a proof that is too old at the time of the run, found when a record is read again', () => {
+    const HOST = '2026.cloudnativedays.no'
+    const goStale = (row: RedirectUriSyncRow) => {
+      row.record.status = 'verified'
+      row.record.lastSuccessAt = '2026-08-01T05:00:00.000Z'
+    }
+
+    it('removes the URI again when the record moved on to one while it was being created', async () => {
+      const id = seedHost(HOST, { org: PLATFORM_ORG })
+      let created = 0
+      workos.beforeAnswer = (method) => {
+        if (method !== 'POST') return
+        created = workos.uris.length
+        moveOn(id, goStale)
+      }
+
+      const summary = await reconcileWorkshopRedirectUris(NOW)
+
+      expect(created).toBe(1)
+      expect(workos.uris).toEqual([])
+      expect(stateOf(id).id).toBeNull()
+      expect(summary).toMatchObject({ registered: [], errored: [HOST] })
+    })
+
+    it('does not put the URI back for one', async () => {
+      const id = seedHost(HOST, { org: PLATFORM_ORG })
+      await reconcileWorkshopRedirectUris(NOW)
+      rows.get(id)!.record.status = 'failing'
+      workos.beforeAnswer = (method) => {
+        if (method === 'DELETE') moveOn(id, goStale)
+      }
+
+      const summary = await reconcileWorkshopRedirectUris(NOW)
+
+      expect(workos.uris).toEqual([])
+      expect(summary).toMatchObject({
+        removed: [HOST],
+        registered: [],
+        errored: [HOST],
+      })
+    })
+
+    it('removes the URI it was putting back when the record moved on to one meanwhile', async () => {
+      const id = seedHost(HOST, { org: PLATFORM_ORG })
+      await reconcileWorkshopRedirectUris(NOW)
+      rows.get(id)!.record.status = 'failing'
+      let created = 0
+      workos.beforeAnswer = (method) => {
+        if (method === 'DELETE') {
+          moveOn(id, (row) => {
+            row.record.status = 'verified'
+          })
+        }
+        if (method === 'POST') {
+          created = workos.uris.length
+          moveOn(id, goStale)
+        }
+      }
+
+      const summary = await reconcileWorkshopRedirectUris(NOW)
+
+      expect(created).toBe(1)
+      expect(workos.uris).toEqual([])
+      expect(summary).toMatchObject({ registered: [], errored: [HOST] })
+    })
+  })
+  it('logs why a host could not be decided on, which the summary does not carry', async () => {
+    const logged = vi.mocked(console.error)
+    unreadableOrgs.add(TENANT_ORG)
+    seedAllocated('kontainerkonf.konf.run')
+
+    const summary = await reconcileWorkshopRedirectUris(NOW)
+
+    expect(summary).toMatchObject({
+      errored: ['kontainerkonf.konf.run'],
+      error: null,
+    })
+    expect(
+      logged.mock.calls.some(
+        (call) =>
+          String(call[0]).includes('kontainerkonf.konf.run') &&
+          String(call[1]).includes('organization read failed'),
+      ),
+    ).toBe(true)
   })
 })
