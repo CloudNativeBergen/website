@@ -39,6 +39,12 @@ export function workshopSignInLabel(
         label: 'registration failed',
         detail: `${standing.error.replace(/\.*$/, '')}. It is retried automatically with the next daily check. ${NOT_YET}`,
       }
+    case 'blocked':
+      return {
+        status: 'error',
+        label: 'switched off on every host',
+        detail: `WORKOS_COOKIE_DOMAIN is set in the deployment, so workshop sign-in is refused on every host; the platform operator has to unset it. ${NOT_YET}`,
+      }
     case 'not-offered':
       // A warning, not "off": workshops are on, and attendees on this host
       // are told sign-up is not available.

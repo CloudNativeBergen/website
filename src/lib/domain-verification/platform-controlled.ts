@@ -41,6 +41,24 @@ import { isAllowlistEligible } from './policy'
 import type { DomainVerificationRecord } from './types'
 
 /**
+ * Could this host EVER qualify, whatever its proof says today? A host the
+ * platform allocated, or one whose conference the platform organization owns.
+ * A tenant's own domain is neither, and verifying it does not change that
+ * (#1298 uses this to tell the organizer so before they publish a record).
+ *
+ * @param ownerOrgId the organization that owns the conference claiming the
+ *   host, resolved server-side from the record's conference.
+ */
+export function isPlatformControlCandidate(
+  record: DomainVerificationRecord,
+  ownerOrgId: string | null | undefined,
+): boolean {
+  if (isPlatformAllocated(record)) return true
+  const platformOrgId = resolvePlatformOrgId()
+  return platformOrgId !== null && ownerOrgId === platformOrgId
+}
+
+/**
  * @param ownerOrgId the organization that owns the conference claiming the
  *   host, resolved server-side from the record's conference.
  */
@@ -51,7 +69,8 @@ export function isPlatformControlledHost(
 ): boolean {
   if (!isAllowlistEligible(record, now)) return false
   if (isPlatformAllocated(record)) return true
-  if (record.method !== 'dns-txt') return false
-  const platformOrgId = resolvePlatformOrgId()
-  return platformOrgId !== null && ownerOrgId === platformOrgId
+  return (
+    record.method === 'dns-txt' &&
+    isPlatformControlCandidate(record, ownerOrgId)
+  )
 }

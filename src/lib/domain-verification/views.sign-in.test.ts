@@ -158,6 +158,32 @@ describe('listDomainVerificationViews — workshop sign-in per host', () => {
   })
 })
 
+describe('listDomainVerificationViews — hosts that can never sign in', () => {
+  it('is not offered on a tenant’s own domain even before it is verified', async () => {
+    rows.push(
+      owned(
+        signInHost(
+          'tenant.example.org',
+          { status: 'pending', lastSuccessAt: null },
+          { status: null, id: null },
+        ),
+        'org-tenant',
+      ),
+    )
+    await expect(
+      signInOf('tenant.example.org', ['tenant.example.org']),
+    ).resolves.toEqual({ state: 'not-offered' })
+  })
+
+  it('is blocked, not available, on a ready host while WORKOS_COOKIE_DOMAIN is set', async () => {
+    vi.stubEnv('WORKOS_COOKIE_DOMAIN', '.example.org')
+    rows.push(owned(signInHost('conf.example.org')))
+    await expect(
+      signInOf('conf.example.org', ['conf.example.org']),
+    ).resolves.toEqual({ state: 'blocked' })
+  })
+})
+
 describe('listDomainVerificationViews — workshops off', () => {
   it('shows no sign-in state and reads no redirect-URI fields', async () => {
     rows.push(owned(signInHost('conf.example.org')))

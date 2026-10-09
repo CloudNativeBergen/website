@@ -228,6 +228,10 @@ const workshopSignInStates: DomainVerificationView[] = [
     hostname: 'kubeday.example.no',
     workshopSignIn: { state: 'not-offered' },
   }),
+  view({
+    hostname: 'cloudnativedays.no',
+    workshopSignIn: { state: 'blocked' },
+  }),
 ]
 
 export const WorkshopSignIn: Story = {
@@ -240,12 +244,16 @@ export const WorkshopSignIn: Story = {
       'registration pending',
       'registration failed',
       'not offered on this host',
+      'switched off on every host',
     ]) {
       await expect(canvas.getByText(label)).toBeInTheDocument()
     }
     // The recorded error is shown verbatim, to the organizer only.
     await expect(canvas.getByText(/WorkOS 422/)).toBeInTheDocument()
-    await expect(canvas.getAllByText(/Workshop sign-in:/)).toHaveLength(5)
+    await expect(canvas.getAllByText(/Workshop sign-in:/)).toHaveLength(6)
+    await expect(canvas.getByText('switched off on every host')).toHaveClass(
+      'text-red-700',
+    )
     // The tone carries the meaning: green works, amber waits, red failed.
     await expect(canvas.getByText('available')).toHaveClass('text-green-700')
     await expect(canvas.getByText('registration pending')).toHaveClass(

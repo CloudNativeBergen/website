@@ -53,6 +53,7 @@ function owned(row: RedirectUriSyncRow): RedirectUriSyncRow {
 }
 
 beforeEach(() => {
+  vi.clearAllMocks()
   rows.length = 0
   rows.push(
     owned(signInHost('ready.example.org')),
@@ -142,9 +143,18 @@ describe('buildSystemChecks — workshop sign-in per host', () => {
     expect(failed?.detail).toContain('WorkOS 422: invalid redirect URI')
   })
 
-  it('reports nothing for a conference without workshops', async () => {
+  it('reports nothing, and reads no host, for a conference without workshops', async () => {
     workshopsEnabled.mockResolvedValue(false)
+    const sanity = await import('@/lib/domain-verification/sanity')
+    // Even a failing read must not put a row in front of a tenant that has
+    // no workshops: it must not be made at all.
+    vi.mocked(
+      sanity.listDomainVerificationsForConference,
+    ).mockRejectedValueOnce(new Error('sanity unavailable'))
+
     expect(signInChecks(await buildSystemChecks(CONFERENCE))).toEqual([])
+    expect(sanity.listDomainVerificationsForConference).not.toHaveBeenCalled()
+    expect(sanity.listRedirectUriSyncRowsForConference).not.toHaveBeenCalled()
   })
 
   it('warns, without throwing, when the hosts cannot be read', async () => {

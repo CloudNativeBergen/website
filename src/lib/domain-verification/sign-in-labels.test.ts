@@ -55,4 +55,12 @@ describe('workshopSignInLabel', () => {
         'Workshop sign-in runs only on hosts the platform controls, such as a host the platform provided for this conference. Attendees on this host see that workshop sign-up is not available.',
     })
   })
+
+  it('blocked', () => {
+    expect(workshopSignInLabel({ state: 'blocked' })).toEqual({
+      status: 'error',
+      label: 'switched off on every host',
+      detail: `WORKOS_COOKIE_DOMAIN is set in the deployment, so workshop sign-in is refused on every host; the platform operator has to unset it. ${NOT_YET}`,
+    })
+  })
 })

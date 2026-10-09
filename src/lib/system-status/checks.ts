@@ -15,7 +15,8 @@ import {
 } from '@/lib/tickets/provider'
 import { providerMap } from '@/lib/auth'
 import { BADGE_GENERATOR_VERSION } from '@/lib/badge/version'
-import { listConferenceDomainViews } from '@/lib/domain-verification'
+import { listDomainVerificationViews } from '@/lib/domain-verification'
+import { isWorkshopsEnabledForConference } from '@/lib/features/workshops'
 import { workshopSignInLabel } from '@/lib/domain-verification/sign-in-labels'
 import { conferenceSenders } from '@/lib/email/from'
 import { describeSenderPolicy } from '@/lib/email/sender-policy'
@@ -962,10 +963,13 @@ async function workshopSignInChecks(
 ): Promise<SystemCheck[]> {
   if (!conference._id || !conference.organization?._ref) return []
   try {
-    const views = await listConferenceDomainViews({
-      ...conference,
-      _id: conference._id,
-    })
+    // The gate first: a tenant without workshops gets no row and no read.
+    if (!(await isWorkshopsEnabledForConference(conference))) return []
+    const views = await listDomainVerificationViews(
+      conference._id,
+      conference.domains ?? [],
+      { workshops: true },
+    )
     return views.flatMap(({ hostname, workshopSignIn }) => {
       if (!workshopSignIn) return []
       const { status, label, detail } = workshopSignInLabel(workshopSignIn)

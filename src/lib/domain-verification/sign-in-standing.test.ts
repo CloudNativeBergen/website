@@ -27,6 +27,7 @@ describe('workshopSignInStanding', () => {
           record: verifiedHost(HOST),
           redirectUri: state,
           platformControlled: true,
+          platformCandidate: true,
           now,
         }),
       ).toEqual({ state: 'ready' })
@@ -39,6 +40,7 @@ describe('workshopSignInStanding', () => {
         record: verifiedHost(HOST),
         redirectUri: redirectUri(),
         platformControlled: true,
+        platformCandidate: true,
         now,
       }),
     ).toEqual({ state: 'pending' })
@@ -50,6 +52,7 @@ describe('workshopSignInStanding', () => {
         record: verifiedHost(HOST),
         redirectUri: redirectUri({ error: 'WorkOS 422: invalid uri' }),
         platformControlled: true,
+        platformCandidate: true,
         now,
       }),
     ).toEqual({ state: 'failed', error: 'WorkOS 422: invalid uri' })
@@ -67,6 +70,7 @@ describe('workshopSignInStanding', () => {
           error: 'WorkOS POST 500: recreation failed',
         }),
         platformControlled: true,
+        platformCandidate: true,
         now,
       }),
     ).toEqual({ state: 'failed', error: 'WorkOS POST 500: recreation failed' })
@@ -78,6 +82,7 @@ describe('workshopSignInStanding', () => {
         record: verifiedHost(HOST),
         redirectUri: redirectUri({ error: 'stale error' }),
         platformControlled: false,
+        platformCandidate: true,
         now,
       }),
     ).toEqual({ state: 'not-offered' })
@@ -100,6 +105,7 @@ describe('workshopSignInStanding', () => {
         record,
         redirectUri: redirectUri({ status: 'registered', id: 'ru_1' }),
         platformControlled: true,
+        platformCandidate: true,
         now,
       }),
     ).toEqual({ state: 'unverified' })
@@ -111,6 +117,45 @@ describe('workshopSignInStanding', () => {
         record: null,
         redirectUri: null,
         platformControlled: false,
+        platformCandidate: true,
+        now,
+      }),
+    ).toEqual({ state: 'unverified' })
+  })
+})
+
+/**
+ * A host that can NEVER carry sign-in — not allocated by the platform, and its
+ * conference not the platform organization's — is `not-offered` whatever its
+ * proof says, so the organizer is not told that verifying it would help.
+ */
+describe('workshopSignInStanding — a host the platform will never control', () => {
+  it.each([
+    [
+      'unproven',
+      verifiedHost(HOST, { status: 'pending', lastSuccessAt: null }),
+    ],
+    ['failing', verifiedHost(HOST, { status: 'failing' })],
+    ['verified', verifiedHost(HOST)],
+  ])('is not offered when %s', (_label, record) => {
+    expect(
+      workshopSignInStanding({
+        record,
+        redirectUri: redirectUri(),
+        platformControlled: false,
+        platformCandidate: false,
+        now,
+      }),
+    ).toEqual({ state: 'not-offered' })
+  })
+
+  it('is still unverified for an unproven host that could be controlled', () => {
+    expect(
+      workshopSignInStanding({
+        record: verifiedHost(HOST, { status: 'pending', lastSuccessAt: null }),
+        redirectUri: redirectUri(),
+        platformControlled: false,
+        platformCandidate: true,
         now,
       }),
     ).toEqual({ state: 'unverified' })
