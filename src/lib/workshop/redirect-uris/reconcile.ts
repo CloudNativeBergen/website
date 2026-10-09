@@ -46,6 +46,13 @@
  * IDEMPOTENT. With nothing to change it reads (one Sanity query, the WorkOS
  * list) and writes nothing, to WorkOS or to Sanity. With no qualifying host and
  * no recorded state it does not call WorkOS at all.
+ *
+ * One exception, if WorkOS turns out to behave this way: it stores a URI
+ * spelled differently from what it was sent, AND answers a create for a URI it
+ * already has with that entry. A host whose URI someone else added is then
+ * `external`, and because the listing never shows the exact URI, the create is
+ * sent again on every run. It changes nothing in WorkOS and nothing is written
+ * to the record.
  */
 
 import { normalizeDomain } from '@/lib/conference/domains'

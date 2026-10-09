@@ -321,7 +321,18 @@ describe('when WorkOS spells a URI its own way', () => {
     const summary = await reconcileWorkshopRedirectUris(NOW)
 
     expect(stateOf(id)).toEqual({ status: 'external', id: null, error: null })
-    expect(summary.registered).toEqual([])
+    expect(summary).toMatchObject({ registered: [], unaccounted: [] })
+
+    // The documented exception to "a second run writes nothing": the listing
+    // never shows the exact URI, so the create is asked again. It makes
+    // nothing, and nothing is written to the record.
+    workos.requests.length = 0
+    stateWrites.length = 0
+    await reconcileWorkshopRedirectUris(NOW)
+
+    expect(workos.writes().map((r) => r.method)).toEqual(['POST'])
+    expect(workos.uris).toEqual([byHand])
+    expect(stateWrites).toEqual([])
     rows.get(id)!.record.status = 'revoked'
 
     const released = await reconcileWorkshopRedirectUris(NOW)
@@ -404,6 +415,24 @@ describe('URIs this system did not create', () => {
     expect(workos.uris).toEqual([byHand])
     expect(stateOf(id)).toEqual({ status: 'external', id: null, error: null })
     expect(summary.unaccounted).toEqual([])
+  })
+
+  it('do not stand in for the exact callback when they only resemble it', async () => {
+    // A trailing slash is a different redirect URI: WorkOS would not accept a
+    // sign-in's exact callback on the strength of it.
+    const lookalike = workos.seed(`${callback('kontainerkonf.konf.run')}/`)
+    const id = seedAllocated('kontainerkonf.konf.run')
+
+    await reconcileWorkshopRedirectUris(NOW)
+
+    expect(workos.uris.map((u) => u.uri)).toEqual([
+      lookalike.uri,
+      callback('kontainerkonf.konf.run'),
+    ])
+    expect(stateOf(id)).toMatchObject({
+      status: 'registered',
+      id: workos.uris[1].id,
+    })
   })
 
   it('are recognised however WorkOS spells them', async () => {
