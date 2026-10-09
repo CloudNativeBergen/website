@@ -7,11 +7,8 @@ import {
   type EmailResult,
 } from './config'
 import type { Conference } from '@/lib/conference/types'
-import {
-  conferenceBaseUrl,
-  hasConferenceDomain,
-} from '@/lib/conference/baseUrl'
 import { resolveConferenceFrom, resolveConferenceContact } from './from'
+import { workshopPortalUrl } from '@/lib/workshop/sign-in'
 import { emailBrandColor } from '@/lib/branding/theme'
 import { resolveEmailBrandPalette } from '@/lib/branding/email'
 
@@ -168,9 +165,9 @@ export async function sendWorkshopSignupInstructions({
 
     const brand = resolveEmailBrandPalette(emailBrandColor(conference?.theme))
 
-    const workshopUrl = hasConferenceDomain(conference)
-      ? `${conferenceBaseUrl(conference)}/workshop`
-      : ''
+    // Only a link that can work (#1298): none while the main host cannot sign
+    // in, as for a conference with no domain at all.
+    const workshopUrl = (await workshopPortalUrl(conference)) ?? ''
 
     // GATE THE CLAIM ON THE ACTUAL WINDOW. This email fires on ticket SALE,
     // which is routinely months before `workshopRegistrationStart` and can also

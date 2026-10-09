@@ -10,6 +10,10 @@ import {
   resolveWorkshopSignInHost,
   workshopRequestHost,
 } from '@/lib/workshop/sign-in'
+import {
+  WORKSHOP_PORTAL_PATH,
+  WORKSHOP_SIGN_IN_UNAVAILABLE_HEADER,
+} from '@/lib/workshop/sign-in-paths'
 
 // The session cookie's `Domain` is rewritten PER REQUEST for every response
 // this produces: `auth` itself applies it to its handler-wrapper form (see
@@ -75,7 +79,8 @@ const nextAuthMiddleware = auth((req) => {
  *
  * ORDER IS THE CONTROL. `resolveWorkshopSignInHost` decides first — the host
  * must be on the verified-redirect allowlist — and only a match reaches the
- * SDK. A host that is not allowlisted gets a 404 and nothing else: no authorize
+ * SDK. A host that may not sign in gets a 404 (or, for the portal page alone,
+ * the page without the SDK — see below) and nothing else: no authorize
  * URL is built, no PKCE pair is generated, no session cookie is read. The
  * decision is one live Sanity read per `/workshop*` request, deliberately
  * uncached (see `@/lib/workshop/sign-in`).
@@ -106,11 +111,31 @@ const nextAuthMiddleware = auth((req) => {
  * that token server-to-server on a signed-out request. No visitor data is in
  * that call.)
  */
+function isWorkshopPortalView(req: NextRequest): boolean {
+  return (
+    req.nextUrl.pathname === WORKSHOP_PORTAL_PATH &&
+    (req.method === 'GET' || req.method === 'HEAD')
+  )
+}
+
 async function workshopMiddleware(req: NextRequest, event: NextFetchEvent) {
   const signIn = await resolveWorkshopSignInHost(
     workshopRequestHost(req.headers),
   )
   if (!signIn) {
+    // THE PORTAL PAGE ITSELF IS LET THROUGH (#1298), marked and WITHOUT the
+    // SDK, so an attendee of a tenant with workshops learns that sign-up is not
+    // available yet instead of meeting a bare 404. The page reads the mark and
+    // never calls `withAuth`; the layout still answers 404 for a tenant
+    // without workshops. The mark is set here on every such request, so a
+    // client cannot remove it; sending it on a host that CAN sign in only shows
+    // the sender the unavailable view. Every other path, and any other method,
+    // is refused as before.
+    if (isWorkshopPortalView(req)) {
+      const headers = new Headers(req.headers)
+      headers.set(WORKSHOP_SIGN_IN_UNAVAILABLE_HEADER, '1')
+      return NextResponse.next({ request: { headers } })
+    }
     return new NextResponse('Not Found', { status: 404 })
   }
 

@@ -1,12 +1,18 @@
-import type { DomainVerificationRecord } from '@/lib/domain-verification/types'
+import { domainVerificationId } from '@/lib/domain-verification/challenge'
+import type {
+  DomainVerificationRecord,
+  RedirectUriState,
+  RedirectUriSyncRow,
+} from '@/lib/domain-verification/types'
 
 /**
  * Fixtures for the workshop portal's WorkOS sign-in (#1296).
  *
  * `verifiedHost` is a `domainVerification` record the REAL allowlist policy
- * accepts whenever the test runs (proven yesterday), so a suite that supplies
- * it at the Sanity boundary (`listAllowlistCandidates`) is exercising
- * `isVerifiedRedirectOrigin` and `isAllowlistEligible` themselves.
+ * accepts whenever the test runs (proven yesterday). `signInHost` is that
+ * record as the sign-in decision reads it (`getRedirectUriSyncRow`), with its
+ * callback registered in WorkOS — a host that can sign in (#1298). A suite
+ * that supplies either at the Sanity boundary exercises the real policy.
  *
  * Hostnames must look public: the policy treats `.example`, `.test`,
  * `.localhost` and friends as dev-only and never allowlists them.
@@ -33,4 +39,37 @@ export function verifiedHost(
     lastError: null,
     ...overrides,
   }
+}
+
+/**
+ * A host that CAN sign in, as `getRedirectUriSyncRow` returns it: verified, and
+ * its callback registered in WorkOS. Override the record or the redirect-URI
+ * state to make it one that cannot.
+ */
+export function signInHost(
+  hostname: string,
+  overrides: Partial<DomainVerificationRecord> = {},
+  redirectUri: Partial<RedirectUriState> = {},
+): RedirectUriSyncRow {
+  return {
+    record: verifiedHost(hostname, overrides),
+    rev: 'rev-1',
+    redirectUri: {
+      status: 'registered',
+      id: `ru_${hostname}`,
+      error: null,
+      ...redirectUri,
+    },
+    conference: { organization: { _ref: 'org-1' } },
+  }
+}
+
+/** A `getRedirectUriSyncRow` stand-in that knows exactly these hosts. */
+export function signInHostsById(
+  rows: RedirectUriSyncRow[],
+): (id: string) => Promise<RedirectUriSyncRow | null> {
+  const byId = new Map(
+    rows.map((row) => [domainVerificationId(row.record.hostname), row]),
+  )
+  return async (id) => byId.get(id) ?? null
 }

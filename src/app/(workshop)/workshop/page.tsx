@@ -9,6 +9,9 @@ import { isWorkshopsEnabledForConference } from '@/lib/features/workshops'
 import { resolveConferenceContact } from '@/lib/email/from'
 import { EnvelopeIcon } from '@heroicons/react/24/outline'
 import { notFound } from 'next/navigation'
+import { headers } from 'next/headers'
+import { WORKSHOP_SIGN_IN_UNAVAILABLE_HEADER } from '@/lib/workshop/sign-in-paths'
+import { WorkshopUnavailable } from '@/components/workshop/WorkshopUnavailable'
 import { WorkshopSignedOut } from '@/components/workshop/WorkshopSignedOut'
 import { WorkshopSignOutButton } from '@/components/workshop/WorkshopSignOutButton'
 import { signOutOfWorkshop } from './actions'
@@ -19,9 +22,10 @@ export default async function WorkshopPage() {
   // FEATURE GATE (#689) — BEFORE `withAuth()`: the segment layout gates too,
   // but ordering it first means this page reads no WorkOS session for a
   // disabled tenant. (The proxy has already unsealed one if the browser sent
-  // it: it decides from the host alone.) (`withAuth` throws when the AuthKit middleware did not run; that
-  // cannot happen here, because `src/proxy.ts` answers 404 itself on a host
-  // that may not sign in — #1296.) The proxy runs first but sends nobody to
+  // it: it decides from the host alone.) (`withAuth` throws when the AuthKit
+  // middleware did not run. On a host that may not sign in, `src/proxy.ts`
+  // lets only this page through, marked, and the page stops at the mark
+  // before `withAuth` — #1298.) The proxy runs first but sends nobody to
   // WorkOS: a signed-out visitor arrives here, gets this 404 for a tenant
   // without workshops, and otherwise the signed-out view below, whose two
   // buttons are the only way into a sign-in. Fail-closed on an unresolvable
@@ -29,8 +33,6 @@ export default async function WorkshopPage() {
   if (!(await isWorkshopsEnabledForConference(conference))) {
     notFound()
   }
-
-  const { user } = await withAuth()
 
   if (error || !conference?._id) {
     return (
@@ -46,6 +48,20 @@ export default async function WorkshopPage() {
       </div>
     )
   }
+
+  // A HOST THAT CANNOT SIGN IN (#1298): the proxy let this request through
+  // without the SDK and marked it, so `withAuth()` must not be reached. The view
+  // says sign-up is not available and nothing about why.
+  if ((await headers()).has(WORKSHOP_SIGN_IN_UNAVAILABLE_HEADER)) {
+    return (
+      <WorkshopUnavailable
+        conferenceTitle={conference.title}
+        contactEmail={resolveConferenceContact(conference)}
+      />
+    )
+  }
+
+  const { user } = await withAuth()
 
   if (!user) {
     return <WorkshopSignedOut conferenceTitle={conference.title} />

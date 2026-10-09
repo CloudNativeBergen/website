@@ -4,33 +4,54 @@
  * THE decision behind every WorkOS entry point of the workshop portal (#1296):
  * may a sign-in round-trip run on this host, and if so, what is its callback?
  *
- * The real allowlist and its eligibility policy run. Only the Sanity
- * persistence boundary (`listAllowlistCandidates`) is supplied, so "allowlisted"
- * here means exactly what `isVerifiedRedirectOrigin` means in production.
+ * The real allowlist policy and sign-in standing run. Only the Sanity
+ * persistence boundary (`getRedirectUriSyncRow`, the host's own record read by
+ * id) is supplied, so "can sign in" here means exactly what it means in
+ * production: verified AND registered in WorkOS (#1298).
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import type { DomainVerificationRecord } from '@/lib/domain-verification/types'
-import { verifiedHost } from '../../../__tests__/helpers/workshopSignIn'
+import type {
+  DomainVerificationRecord,
+  RedirectUriState,
+  RedirectUriSyncRow,
+} from '@/lib/domain-verification/types'
+import {
+  signInHost,
+  signInHostsById,
+} from '../../../__tests__/helpers/workshopSignIn'
 
-const listAllowlistCandidates =
-  vi.fn<() => Promise<DomainVerificationRecord[]>>()
+const getRedirectUriSyncRow =
+  vi.fn<(id: string) => Promise<RedirectUriSyncRow | null>>()
 
 vi.mock('@/lib/domain-verification/sanity', () => ({
-  listAllowlistCandidates: () => listAllowlistCandidates(),
+  getRedirectUriSyncRow: (id: string) => getRedirectUriSyncRow(id),
 }))
+
+/** Make exactly these hosts known to the read. */
+function hosts(...rows: RedirectUriSyncRow[]) {
+  getRedirectUriSyncRow.mockImplementation(signInHostsById(rows))
+}
 
 import { resolveWorkshopSignInHost, workshopRequestHost } from './sign-in'
 
-/** A record for `conf.example.org`, proven yesterday unless overridden. */
+/**
+ * `conf.example.org` as read: proven yesterday and registered in WorkOS unless
+ * overridden.
+ */
 function record(
   overrides: Partial<DomainVerificationRecord> = {},
-): DomainVerificationRecord {
-  return verifiedHost(overrides.hostname ?? 'conf.example.org', overrides)
+  redirectUri: Partial<RedirectUriState> = {},
+): RedirectUriSyncRow {
+  return signInHost(
+    overrides.hostname ?? 'conf.example.org',
+    overrides,
+    redirectUri,
+  )
 }
 
 beforeEach(() => {
-  listAllowlistCandidates.mockReset()
-  listAllowlistCandidates.mockResolvedValue([record()])
+  getRedirectUriSyncRow.mockReset()
+  hosts(record())
   vi.stubEnv('NODE_ENV', 'production')
   vi.stubEnv('WORKOS_COOKIE_DOMAIN', '')
 })
@@ -40,7 +61,7 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-describe('resolveWorkshopSignInHost — an allowlisted host', () => {
+describe('resolveWorkshopSignInHost — a host that can sign in', () => {
   it('yields that host’s own origin and callback', async () => {
     await expect(
       resolveWorkshopSignInHost('conf.example.org'),
@@ -65,11 +86,26 @@ describe('resolveWorkshopSignInHost — an allowlisted host', () => {
     ).resolves.toMatchObject({ origin: 'https://conf.example.org' })
   })
 
+  it('accepts a callback WorkOS holds without an id of ours (external)', async () => {
+    hosts(record({}, { status: 'external', id: null }))
+    await expect(
+      resolveWorkshopSignInHost('conf.example.org'),
+    ).resolves.toMatchObject({ origin: 'https://conf.example.org' })
+  })
+
+  it('reads only that host’s own record', async () => {
+    await resolveWorkshopSignInHost('Conf.Example.ORG')
+    expect(getRedirectUriSyncRow).toHaveBeenCalledTimes(1)
+    expect(getRedirectUriSyncRow).toHaveBeenCalledWith(
+      'domainVerification.conf.example.org',
+    )
+  })
+
   it('serves a second verified host independently, each with its own callback', async () => {
-    listAllowlistCandidates.mockResolvedValue([
+    hosts(
       record(),
       record({ _id: 'domainVerification.y', hostname: 'other.example.org' }),
-    ])
+    )
     await expect(
       resolveWorkshopSignInHost('other.example.org'),
     ).resolves.toMatchObject({
@@ -86,26 +122,47 @@ describe('resolveWorkshopSignInHost — everything else is refused', () => {
   })
 
   it('refuses a host that is claimed but not proven', async () => {
-    listAllowlistCandidates.mockResolvedValue([
-      record({ status: 'pending', lastSuccessAt: null }),
-    ])
+    hosts(record({ status: 'pending', lastSuccessAt: null }))
     await expect(
       resolveWorkshopSignInHost('conf.example.org'),
     ).resolves.toBeNull()
   })
 
   it('refuses a host whose proof has stopped resolving', async () => {
-    listAllowlistCandidates.mockResolvedValue([record({ status: 'failing' })])
+    hosts(record({ status: 'failing' }))
+    await expect(
+      resolveWorkshopSignInHost('conf.example.org'),
+    ).resolves.toBeNull()
+  })
+
+  it('refuses a verified host whose callback WorkOS does not have yet', async () => {
+    hosts(record({}, { status: null, id: null }))
+    await expect(
+      resolveWorkshopSignInHost('conf.example.org'),
+    ).resolves.toBeNull()
+  })
+
+  it('refuses a verified host whose registration WorkOS rejected', async () => {
+    hosts(record({}, { status: null, id: null, error: 'WorkOS 422' }))
+    await expect(
+      resolveWorkshopSignInHost('conf.example.org'),
+    ).resolves.toBeNull()
+  })
+
+  it('refuses when the record found under the id names another host', async () => {
+    getRedirectUriSyncRow.mockResolvedValue(
+      record({ hostname: 'other.example.org' }),
+    )
     await expect(
       resolveWorkshopSignInHost('conf.example.org'),
     ).resolves.toBeNull()
   })
 
   it('refuses a subdomain of a verified host and a host under a verified wildcard', async () => {
-    listAllowlistCandidates.mockResolvedValue([
+    hosts(
       record(),
       record({ _id: 'domainVerification.w', hostname: '*.wild.example.org' }),
-    ])
+    )
     await expect(
       resolveWorkshopSignInHost('sub.conf.example.org'),
     ).resolves.toBeNull()
@@ -122,7 +179,7 @@ describe('resolveWorkshopSignInHost — everything else is refused', () => {
 
   it('refuses — without throwing — when the allowlist cannot be read', async () => {
     const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
-    listAllowlistCandidates.mockRejectedValue(new Error('sanity unavailable'))
+    getRedirectUriSyncRow.mockRejectedValue(new Error('sanity unavailable'))
 
     await expect(
       resolveWorkshopSignInHost('conf.example.org'),
@@ -158,7 +215,7 @@ describe('resolveWorkshopSignInHost — a malformed Host is refused before any r
     ['an out-of-range port', 'conf.example.org:65536'],
   ])('%s', async (_label, host) => {
     await expect(resolveWorkshopSignInHost(host)).resolves.toBeNull()
-    expect(listAllowlistCandidates).not.toHaveBeenCalled()
+    expect(getRedirectUriSyncRow).not.toHaveBeenCalled()
   })
 })
 
@@ -174,7 +231,7 @@ describe('resolveWorkshopSignInHost — localhost', () => {
       origin: 'http://localhost:3000',
       redirectUri: 'http://localhost:3000/api/auth/callback',
     })
-    expect(listAllowlistCandidates).not.toHaveBeenCalled()
+    expect(getRedirectUriSyncRow).not.toHaveBeenCalled()
   })
 
   it.each([['production'], ['test'], [''], [undefined]])(
@@ -184,10 +241,10 @@ describe('resolveWorkshopSignInHost — localhost', () => {
       expect(process.env.NODE_ENV).toBe(nodeEnv)
       // Production really carries such a record (a dev entry in `domains[]`);
       // the allowlist policy excludes it, and the exception does not apply.
-      listAllowlistCandidates.mockResolvedValue([
+      hosts(
         record({ hostname: 'localhost:3000', method: 'grandfathered' }),
         record({ _id: 'domainVerification.l', hostname: 'localhost' }),
-      ])
+      )
       await expect(
         resolveWorkshopSignInHost('localhost:3000'),
       ).resolves.toBeNull()
@@ -197,7 +254,7 @@ describe('resolveWorkshopSignInHost — localhost', () => {
 
   it('does not widen to other hosts in development', async () => {
     vi.stubEnv('NODE_ENV', 'development')
-    listAllowlistCandidates.mockResolvedValue([])
+    hosts()
     for (const host of [
       'evil.example.org',
       'localhost.evil.example.org',
@@ -232,7 +289,7 @@ describe('resolveWorkshopSignInHost — WORKOS_COOKIE_DOMAIN', () => {
     await expect(
       resolveWorkshopSignInHost('conf.example.org'),
     ).resolves.toBeNull()
-    expect(listAllowlistCandidates).not.toHaveBeenCalled()
+    expect(getRedirectUriSyncRow).not.toHaveBeenCalled()
     expect(logged).toHaveBeenCalled()
   })
 

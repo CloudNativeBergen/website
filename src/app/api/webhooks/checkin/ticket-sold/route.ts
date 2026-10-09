@@ -269,11 +269,9 @@ export async function POST(request: NextRequest) {
     // cannot work is worse than silence: send NOTHING. Fail-closed — an
     // unresolvable organization suppresses the email too.
     //
-    // NOT COVERED HERE: whether the conference's HOST can sign in. That is a
-    // separate question since #1296 (`resolveWorkshopSignInHost` — the host
-    // must be ownership-verified), and this route does not ask it yet, so an
-    // enabled tenant on an unverified host is still mailed a link that answers
-    // 404. #1298 holds the link back in that case.
+    // NOT DECIDED HERE: whether the conference's HOST can sign in. The email
+    // itself asks (`workshopPortalUrl`) and leaves the portal link out while
+    // it cannot (#1298); the rest of the instructions still go out.
     if (!(await isWorkshopsEnabledForConference(conference))) {
       console.warn(
         'Checkin webhook: workshops not enabled for conference',
