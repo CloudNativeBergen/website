@@ -217,7 +217,7 @@ export async function sendWorkshopSignupInstructions({
           : 'Workshop Registration Has Closed'
 
     const lede = unavailable
-      ? `Your ticket includes access to workshops. Online workshop sign-up is not available yet.${registration === 'pending' ? ` Registration opens on <strong>${when(startsAt!)}</strong>.` : ''} If you have any questions, get in touch with us.`
+      ? `Your ticket includes access to workshops. Online workshop sign-up is not available yet.${registration === 'pending' ? ` Registration opens on <strong>${when(startsAt!)}</strong>.` : ''}`
       : registration === 'open'
         ? 'Your ticket includes access to workshops. You can now sign up for available workshop sessions.'
         : registration === 'pending'

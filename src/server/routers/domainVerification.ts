@@ -5,17 +5,14 @@ import { clientReadUncached } from '@/lib/sanity/client'
 import { normalizeDomain } from '@/lib/conference/domains'
 import {
   getDomainVerification,
-  listDomainVerificationViews,
+  listConferenceDomainViews,
   recheckDomainRecord,
   syncDomainVerifications,
   toDomainVerificationView,
 } from '@/lib/domain-verification'
 import { isAllowlistEligible } from '@/lib/domain-verification/policy'
 import { scheduleRedirectUriReconcile } from '@/lib/workshop/redirect-uris'
-import {
-  isWorkshopsEnabledForConference,
-  type WorkshopConference,
-} from '@/lib/features/workshops'
+import type { WorkshopConference } from '@/lib/features/workshops'
 
 /**
  * Domain ownership verification, admin side (#683).
@@ -46,7 +43,7 @@ async function claimedDomains(conferenceId: string): Promise<string[]> {
  */
 async function claimingConference(
   conferenceId: string,
-): Promise<WorkshopConference & { domains: string[] }> {
+): Promise<WorkshopConference & { _id: string; domains: string[] }> {
   const conference = await clientReadUncached.fetch<
     (WorkshopConference & { domains?: string[] | null }) | null
   >(
@@ -56,6 +53,7 @@ async function claimingConference(
   )
   return {
     ...conference,
+    _id: conferenceId,
     domains: (conference?.domains ?? []).map(normalizeDomain).filter(Boolean),
   }
 }
@@ -71,13 +69,8 @@ export const domainVerificationRouter = router({
     // sync failed) has no record, so it would have no token to show. Minting it
     // here is safe — a fresh record starts `pending`, which grants nothing.
     const conference = await claimingConference(conferenceId)
-    const { domains } = conference
-    await syncDomainVerifications(conferenceId, domains)
-    return {
-      domains: await listDomainVerificationViews(conferenceId, domains, {
-        workshops: await isWorkshopsEnabledForConference(conference),
-      }),
-    }
+    await syncDomainVerifications(conferenceId, conference.domains)
+    return { domains: await listConferenceDomainViews(conference) }
   }),
 
   /**

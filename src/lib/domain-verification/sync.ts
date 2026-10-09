@@ -21,6 +21,10 @@ import {
   revokeDomainVerification,
 } from './sanity'
 import { workshopSignInStandingOfRow } from './sign-in-standing'
+import {
+  isWorkshopsEnabledForConference,
+  type WorkshopConference,
+} from '@/lib/features/workshops'
 import { toDomainVerificationView, type DomainVerificationView } from './view'
 
 /**
@@ -160,4 +164,20 @@ export async function listDomainVerificationViews(
         signIn,
       )
     })
+}
+
+/**
+ * {@link listDomainVerificationViews} for a conference, with workshops decided
+ * by its own gate (#1298): the one call the settings page, the domain router
+ * and system status make, so all three show the same hosts the same way.
+ */
+export async function listConferenceDomainViews(
+  conference: WorkshopConference & {
+    _id: string
+    domains?: readonly string[] | null
+  },
+): Promise<DomainVerificationView[]> {
+  return listDomainVerificationViews(conference._id, conference.domains ?? [], {
+    workshops: await isWorkshopsEnabledForConference(conference),
+  })
 }

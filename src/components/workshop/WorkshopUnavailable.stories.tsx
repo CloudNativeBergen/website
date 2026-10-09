@@ -37,6 +37,13 @@ export const Unavailable: Story = {
     const canvas = within(canvasElement)
     await expect(canvas.getByText(/is not available yet/)).toBeInTheDocument()
     await expect(
+      canvas.getByText(/Please check back later/),
+    ).toBeInTheDocument()
+    // Both ways to reach the organizers: the address in the text and the button.
+    await expect(
+      canvas.getByRole('link', { name: 'hello@cloudnativedays.no' }),
+    ).toHaveAttribute('href', 'mailto:hello@cloudnativedays.no')
+    await expect(
       canvas.getByRole('link', { name: 'Contact the organizers' }),
     ).toHaveAttribute('href', 'mailto:hello@cloudnativedays.no')
     // Nothing to start a sign-in with.
@@ -51,8 +58,10 @@ export const UnavailableLongTitleMobile: Story = {
   args: {
     conferenceTitle:
       'KubeCon + CloudNativeCon Europe Community Co-located Workshop Days 2026',
+    // ONE unbroken token, wider than the phone: only `break-words` keeps it
+    // inside the viewport, so the play below fails if that is removed.
     contactEmail:
-      'workshop-registration-help@kubecon-community-days.example.org',
+      'workshopregistrationhelpdesk@kubeconcommunityworkshopdays.example.org',
   },
   parameters: { viewport: { defaultViewport: 'mobile1' } },
   play: async ({ canvasElement }) => {

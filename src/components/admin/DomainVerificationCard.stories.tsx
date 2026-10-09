@@ -220,7 +220,8 @@ const workshopSignInStates: DomainVerificationView[] = [
     workshopSignIn: {
       state: 'failed',
       error:
-        'WorkOS 422: redirect_uri https://bergen.konf.run/api/auth/callback is not a valid URI for this environment',
+        // One unbroken token wider than a phone, as WorkOS errors can carry.
+        'WorkOS 422: redirect_uri https://bergen.konf.run/api/auth/callback?request=0123456789abcdef0123456789abcdef0123456789abcdef is not valid',
     },
   }),
   view({
@@ -244,6 +245,18 @@ export const WorkshopSignIn: Story = {
     }
     // The recorded error is shown verbatim, to the organizer only.
     await expect(canvas.getByText(/WorkOS 422/)).toBeInTheDocument()
+    await expect(canvas.getAllByText(/Workshop sign-in:/)).toHaveLength(5)
+    // The tone carries the meaning: green works, amber waits, red failed.
+    await expect(canvas.getByText('available')).toHaveClass('text-green-700')
+    await expect(canvas.getByText('registration pending')).toHaveClass(
+      'text-amber-700',
+    )
+    await expect(canvas.getByText('registration failed')).toHaveClass(
+      'text-red-700',
+    )
+    await expect(canvas.getByText('not offered on this host')).toHaveClass(
+      'text-amber-700',
+    )
   },
 }
 

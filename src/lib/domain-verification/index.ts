@@ -22,6 +22,7 @@ export {
 export type { PlatformHostRefusal } from './platform'
 export {
   findUnallocatedPlatformDomains,
+  listConferenceDomainViews,
   listDomainVerificationViews,
   syncDomainVerifications,
 } from './sync'

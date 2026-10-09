@@ -38,6 +38,9 @@ const CONFERENCE = {
     'failed.example.org',
     'unclaimed-record.example.org',
     'tenant-domain.example.org',
+    // Real production data carries these; they never sign in, so no row.
+    'localhost:3000',
+    '*.example.org',
   ],
 }
 
@@ -84,9 +87,10 @@ describe('buildSystemChecks — workshop sign-in per host', () => {
     const checks = signInChecks(await buildSystemChecks(CONFERENCE))
 
     expect(
-      checks.map(({ id, group, status, value }) => ({
+      checks.map(({ id, group, label, status, value }) => ({
         id,
         group,
+        label,
         status,
         value,
       })),
@@ -94,24 +98,28 @@ describe('buildSystemChecks — workshop sign-in per host', () => {
       {
         id: 'auth.workshopSignIn.ready.example.org',
         group: 'auth',
+        label: 'Workshop sign-in: ready.example.org',
         status: 'ok',
         value: 'available',
       },
       {
         id: 'auth.workshopSignIn.pending.example.org',
         group: 'auth',
+        label: 'Workshop sign-in: pending.example.org',
         status: 'warn',
         value: 'registration pending',
       },
       {
         id: 'auth.workshopSignIn.failed.example.org',
         group: 'auth',
+        label: 'Workshop sign-in: failed.example.org',
         status: 'error',
         value: 'registration failed',
       },
       {
         id: 'auth.workshopSignIn.unclaimed-record.example.org',
         group: 'auth',
+        label: 'Workshop sign-in: unclaimed-record.example.org',
         status: 'warn',
         value: 'domain not verified',
       },
@@ -120,6 +128,7 @@ describe('buildSystemChecks — workshop sign-in per host', () => {
       {
         id: 'auth.workshopSignIn.tenant-domain.example.org',
         group: 'auth',
+        label: 'Workshop sign-in: tenant-domain.example.org',
         status: 'warn',
         value: 'not offered on this host',
       },

@@ -21,7 +21,16 @@ vi.mock('./sanity', () => ({
     listDomainVerificationsForConference(),
 }))
 
-const { listDomainVerificationViews } = await import('./sync')
+const workshopsEnabled = vi.fn<(conference: unknown) => Promise<boolean>>(
+  async () => true,
+)
+vi.mock('@/lib/features/workshops', () => ({
+  isWorkshopsEnabledForConference: (conference: unknown) =>
+    workshopsEnabled(conference),
+}))
+
+const { listConferenceDomainViews, listDomainVerificationViews } =
+  await import('./sync')
 
 const PLATFORM_ORG = 'org-platform'
 
@@ -55,6 +64,19 @@ describe('listDomainVerificationViews — workshop sign-in per host', () => {
     ).resolves.toEqual({ state: 'ready' })
   })
 
+  it('reads the records and their sign-in state in ONE query', async () => {
+    rows.push(owned(signInHost('conf.example.org')))
+    const [view] = await listDomainVerificationViews(
+      'conference-1',
+      ['conf.example.org'],
+      { workshops: true },
+    )
+
+    expect(view.status).toBe('verified')
+    expect(view.recordValue).not.toBeNull()
+    expect(listRedirectUriSyncRowsForConference).toHaveBeenCalledTimes(1)
+    expect(listDomainVerificationsForConference).not.toHaveBeenCalled()
+  })
   it('is pending for a platform-controlled host the sync has not registered yet', async () => {
     rows.push(
       owned(signInHost('conf.example.org', {}, { status: null, id: null })),
@@ -146,5 +168,40 @@ describe('listDomainVerificationViews — workshops off', () => {
     expect(view.workshopSignIn).toBeNull()
     expect(view.status).toBe('verified')
     expect(listRedirectUriSyncRowsForConference).not.toHaveBeenCalled()
+  })
+})
+
+/**
+ * The one entry point the settings page, the router and system status use:
+ * the conference's workshop gate decides whether each host carries its
+ * sign-in standing.
+ */
+describe('listConferenceDomainViews', () => {
+  const CONFERENCE = {
+    _id: 'conference-1',
+    domains: ['conf.example.org'],
+    organization: { _ref: PLATFORM_ORG },
+    ticketingProvider: 'checkin' as const,
+  }
+
+  it('asks the gate about this conference and shows the standing when it is on', async () => {
+    workshopsEnabled.mockResolvedValue(true)
+    rows.push(owned(signInHost('conf.example.org')))
+
+    const [view] = await listConferenceDomainViews(CONFERENCE)
+
+    expect(workshopsEnabled).toHaveBeenCalledWith(CONFERENCE)
+    expect(view.hostname).toBe('conf.example.org')
+    expect(view.workshopSignIn).toEqual({ state: 'ready' })
+  })
+
+  it('shows no standing when the gate is off', async () => {
+    workshopsEnabled.mockResolvedValue(false)
+    rows.push(owned(signInHost('conf.example.org')))
+
+    const [view] = await listConferenceDomainViews(CONFERENCE)
+
+    expect(view.status).toBe('verified')
+    expect(view.workshopSignIn).toBeNull()
   })
 })

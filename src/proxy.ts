@@ -68,6 +68,24 @@ const nextAuthMiddleware = auth((req) => {
 })
 
 /**
+ * The request without a client-sent unavailable mark: the SDK forwards every
+ * request header to the page, and the mark is the proxy's to set.
+ */
+function withoutUnavailableMark(req: NextRequest): NextRequest {
+  if (!req.headers.has(WORKSHOP_SIGN_IN_UNAVAILABLE_HEADER)) return req
+  const headers = new Headers(req.headers)
+  headers.delete(WORKSHOP_SIGN_IN_UNAVAILABLE_HEADER)
+  return new NextRequest(req, { headers })
+}
+
+function isWorkshopPortalView(req: NextRequest): boolean {
+  return (
+    req.nextUrl.pathname === WORKSHOP_PORTAL_PATH &&
+    (req.method === 'GET' || req.method === 'HEAD')
+  )
+}
+
+/**
  * The workshop portal's WorkOS SESSION layer (#1296): AuthKit, with the
  * redirect URI chosen for THIS request's host. It reads (and refreshes) a
  * session the attendee already has, and hands the page the headers `withAuth`
@@ -107,24 +125,6 @@ const nextAuthMiddleware = auth((req) => {
  * that token server-to-server on a signed-out request. No visitor data is in
  * that call.)
  */
-/**
- * The request without a client-sent unavailable mark: the SDK forwards every
- * request header to the page, and the mark is the proxy's to set.
- */
-function withoutUnavailableMark(req: NextRequest): NextRequest {
-  if (!req.headers.has(WORKSHOP_SIGN_IN_UNAVAILABLE_HEADER)) return req
-  const headers = new Headers(req.headers)
-  headers.delete(WORKSHOP_SIGN_IN_UNAVAILABLE_HEADER)
-  return new NextRequest(req, { headers })
-}
-
-function isWorkshopPortalView(req: NextRequest): boolean {
-  return (
-    req.nextUrl.pathname === WORKSHOP_PORTAL_PATH &&
-    (req.method === 'GET' || req.method === 'HEAD')
-  )
-}
-
 async function workshopMiddleware(req: NextRequest, event: NextFetchEvent) {
   const signIn = await resolveWorkshopSignInHost(
     workshopRequestHost(req.headers),

@@ -15,9 +15,8 @@ import {
 } from '@/lib/tickets/provider'
 import { providerMap } from '@/lib/auth'
 import { BADGE_GENERATOR_VERSION } from '@/lib/badge/version'
-import { listDomainVerificationViews } from '@/lib/domain-verification'
+import { listConferenceDomainViews } from '@/lib/domain-verification'
 import { workshopSignInLabel } from '@/lib/domain-verification/sign-in-labels'
-import { isWorkshopsEnabledForConference } from '@/lib/features/workshops'
 import { conferenceSenders } from '@/lib/email/from'
 import { describeSenderPolicy } from '@/lib/email/sender-policy'
 import type {
@@ -963,12 +962,10 @@ async function workshopSignInChecks(
 ): Promise<SystemCheck[]> {
   if (!conference._id || !conference.organization?._ref) return []
   try {
-    if (!(await isWorkshopsEnabledForConference(conference))) return []
-    const views = await listDomainVerificationViews(
-      conference._id,
-      conference.domains ?? [],
-      { workshops: true },
-    )
+    const views = await listConferenceDomainViews({
+      ...conference,
+      _id: conference._id,
+    })
     return views.flatMap(({ hostname, workshopSignIn }) => {
       if (!workshopSignIn) return []
       const { status, label, detail } = workshopSignInLabel(workshopSignIn)

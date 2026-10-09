@@ -1,10 +1,9 @@
 /**
  * @vitest-environment node
  *
- * `domainVerification.list` asks the workshop gate about the conference it
- * read, and only then lists each host's workshop sign-in standing (#1298). The
- * router and its tenancy run for real; the Sanity client, the gate and the
- * verification module are the boundaries.
+ * `domainVerification.list` hands `listConferenceDomainViews` the conference
+ * it read, with what the workshop gate needs (#1298). The router, its tenancy
+ * and its GROQ run for real; the verification module is the boundary.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
@@ -40,20 +39,12 @@ vi.mock('@/lib/conference/sanity', () => ({
   }),
 }))
 
-const workshopsEnabled = vi.fn<(conference: unknown) => Promise<boolean>>(
-  async () => true,
-)
-vi.mock('@/lib/features/workshops', () => ({
-  isWorkshopsEnabledForConference: (conference: unknown) =>
-    workshopsEnabled(conference),
-}))
-
-const listDomainVerificationViews = vi.fn<
-  (...args: unknown[]) => Promise<unknown[]>
+const listConferenceDomainViews = vi.fn<
+  (conference: unknown) => Promise<unknown[]>
 >(async () => [])
 vi.mock('@/lib/domain-verification', () => ({
-  listDomainVerificationViews: (...args: unknown[]) =>
-    listDomainVerificationViews(...args),
+  listConferenceDomainViews: (conference: unknown) =>
+    listConferenceDomainViews(conference),
   syncDomainVerifications: vi.fn(),
   getDomainVerification: vi.fn(),
   recheckDomainRecord: vi.fn(),
@@ -82,25 +73,16 @@ beforeEach(() => {
 })
 
 describe('domainVerification.list', () => {
-  it.each([[true], [false]])(
-    'lists the sign-in standing exactly when the gate says workshops are %s',
-    async (enabled) => {
-      workshopsEnabled.mockResolvedValue(enabled)
-      await caller().list()
+  it('lists the views for the conference as the query selects it: id, normalised domains, owner and vendor', async () => {
+    await caller().list()
 
-      // The gate is asked about the conference as the query selects it:
-      // owner and vendor.
-      expect(workshopsEnabled).toHaveBeenCalledWith(
-        expect.objectContaining({
-          organization: CONFERENCE_DOC.organization,
-          ticketingProvider: 'checkin',
-        }),
-      )
-      expect(listDomainVerificationViews).toHaveBeenCalledWith(
-        'conference-1',
-        ['2026.cloudnativedays.no'],
-        { workshops: enabled },
-      )
-    },
-  )
+    // The gate inside `listConferenceDomainViews` reads owner and vendor; a
+    // projection that dropped them would switch workshops off for everyone.
+    expect(listConferenceDomainViews).toHaveBeenCalledWith({
+      _id: 'conference-1',
+      domains: ['2026.cloudnativedays.no'],
+      organization: CONFERENCE_DOC.organization,
+      ticketingProvider: 'checkin',
+    })
+  })
 })
