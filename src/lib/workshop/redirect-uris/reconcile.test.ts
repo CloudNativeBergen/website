@@ -594,6 +594,28 @@ describe('when the records cannot be read or move on under the run', () => {
     expect(summary.error).toContain('sanity is down')
   })
 
+  it('records the new id over one whose URI is gone, when the record was only re-checked meanwhile', async () => {
+    const id = seedAllocated('kontainerkonf.konf.run')
+    await reconcileWorkshopRedirectUris(NOW)
+    const gone = stateOf(id).id
+    // Deleted in the dashboard: the record still names it, the listing does not.
+    workos.uris.length = 0
+    workos.beforeAnswer = (method) => {
+      if (method === 'POST') moveOn(id)
+    }
+
+    const summary = await reconcileWorkshopRedirectUris(NOW)
+
+    expect(workos.uris).toHaveLength(1)
+    expect(stateOf(id)).toEqual({
+      status: 'registered',
+      id: workos.uris[0].id,
+      error: null,
+    })
+    expect(stateOf(id).id).not.toBe(gone)
+    expect(summary.errored).toEqual([])
+  })
+
   it('removes the URI again when the host was released while it was being created', async () => {
     const id = seedAllocated('kontainerkonf.konf.run')
     let created = 0

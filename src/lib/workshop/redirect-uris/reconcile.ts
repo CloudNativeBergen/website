@@ -198,8 +198,11 @@ async function register(
 
   // Put the id on the record. A write that fails is followed by a fresh read,
   // which either shows the id there after all (the write landed and only its
-  // answer was lost), shows the host should not keep the URI, or leaves one
-  // more attempt on the revision just read.
+  // answer was lost), shows the host should not keep the URI (another run has
+  // registered it, or it is no longer wanted), or leaves one more attempt on
+  // the revision just read.
+  /** What the record held going in: nothing, or an id the listing did not show. */
+  const heldBefore = row.redirectUri.id
   let recorded = false
   let fresh: RedirectUriSyncRow | null = row
   for (let attempt = 0; attempt < 2 && fresh && !recorded; attempt++) {
@@ -208,9 +211,10 @@ async function register(
       recorded = true
     } catch {
       fresh = await getRedirectUriSyncRow(row.record._id).catch(() => null)
-      if (fresh?.redirectUri.id === created.id) recorded = true
+      if (!fresh) break
+      if (fresh.redirectUri.id === created.id) recorded = true
       else if (
-        fresh?.redirectUri.id !== null ||
+        fresh.redirectUri.id !== heldBefore ||
         (await wantsRedirectUri(fresh, now)) === false
       ) {
         break
@@ -228,7 +232,7 @@ async function register(
     // it, so the next run deletes it; failing that the log is the only place
     // the id is written down.
     const leftover = `redirect URI ${created.id} (${uri}) was created, could not be recorded and could not be removed again (${describe(error)})`
-    if (fresh?.redirectUri.id === null) {
+    if (fresh && fresh.redirectUri.id === heldBefore) {
       await save(fresh, { ...registered, error: leftover }).catch(() => {})
     }
     throw new Error(`${leftover}. Remove it in WorkOS by hand if it remains.`)
