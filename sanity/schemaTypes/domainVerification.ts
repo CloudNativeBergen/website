@@ -135,7 +135,7 @@ export default defineType({
       title: 'WorkOS Redirect URI',
       type: 'string',
       description:
-        'Where this host’s workshop sign-in callback stands in WorkOS. Written by the redirect-URI reconcile (#1297); empty means none is registered. A label only: what the reconcile deletes is decided by the id below.',
+        'Where this host’s workshop sign-in callback stands in WorkOS. Written by the redirect-URI reconcile (#1297); empty means this system holds none for the host. A URI may still exist in WorkOS that it did not create: those are named as “unaccounted” in the daily sweep’s error log. A label only: what the reconcile deletes is decided by the id below.',
       options: {
         list: [
           { title: 'Registered by this system', value: 'registered' },

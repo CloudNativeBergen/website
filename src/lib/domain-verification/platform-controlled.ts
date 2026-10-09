@@ -25,8 +25,11 @@
  * then refuses, because its redirect URI is not registered. Making that
  * decision call this function is #1306.
  *
- * Fail closed: an unset `PLATFORM_ORG_ID`, a missing owner, and everything the
- * allowlist refuses (wildcard, dev-only, revoked, unproven, stale) are `false`.
+ * Fail closed: everything the allowlist refuses (wildcard, dev-only, revoked,
+ * unproven, stale) is `false`, and so, for a host the platform did not allocate,
+ * are an unset `PLATFORM_ORG_ID` and a missing owner. An allocated host
+ * qualifies whoever owns the conference, or if nobody does: the owner is not
+ * read for it here.
  */
 
 import { resolvePlatformOrgId } from '@/lib/authz/platform'

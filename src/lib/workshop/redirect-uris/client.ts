@@ -170,8 +170,8 @@ export async function createRedirectUri(
  * Delete by id. A 404 is an ERROR, not "already gone": until this has run
  * against the real API, a 404 could as well mean the path or the id is wrong,
  * and counting that as a delete would leave the URI in place unnoticed. The
- * caller only deletes ids it has just listed, and clears one that is gone on
- * its next listing.
+ * caller only deletes ids it has just listed or just created, and clears one
+ * that is gone on its next listing.
  */
 export async function deleteRedirectUri(id: string): Promise<void> {
   const response = await request(

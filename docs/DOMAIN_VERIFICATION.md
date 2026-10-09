@@ -318,9 +318,7 @@ with `WORKOS_API_KEY` set:
 - at the end of the daily sweep, which also retries whatever failed earlier.
 
 Anything else that changes the answer is picked up by the daily sweep: ticketing
-credentials, a conference moving to another organization, and a plan changed
-from outside this app (the control panel writes `organization` documents
-directly). A WorkOS
+credentials, a conference moving to another organization, and a plan changed from outside this app (the control panel writes `organization` documents directly; the organization is cached for hours here, so that one can take a second sweep). A WorkOS
 failure never fails the mutation that triggered it.
 
 Local development and previews read the production dataset, and the outcome is
@@ -330,8 +328,7 @@ overwrite production's ids. To exercise the API against staging, use
 
 **What it will delete.** Only a URI it created itself: the id WorkOS returned
 for that create is on the host's record, and WorkOS lists that id on a URI of
-that host. Everything else is recorded as `external` and left alone, even
-after its host is released: the environment's default URI, anything added by
+that host. Everything else is recorded as `external` and left alone. When its host is released the record is cleared and the URI stays in WorkOS: the environment's default URI, anything added by
 hand in the dashboard, and one of our own creates whose answer never arrived.
 Ownership is never inferred from a URI's text or age. The record is the ledger,
 so this holds against everything except someone who can write the dataset; an id
