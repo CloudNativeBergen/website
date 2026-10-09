@@ -10,6 +10,7 @@ import {
   syncDomainVerifications,
   toDomainVerificationView,
 } from '@/lib/domain-verification'
+import { isAllowlistEligible } from '@/lib/domain-verification/policy'
 import { scheduleRedirectUriReconcile } from '@/lib/workshop/redirect-uris'
 
 /**
@@ -88,8 +89,14 @@ export const domainVerificationRouter = router({
 
       const { record: updated } = await recheckDomainRecord(record)
       // A proof that just resolved, or just stopped, changes whether this host
-      // may sign in to the workshop portal (#1297).
-      scheduleRedirectUriReconcile()
+      // may sign in to the workshop portal (#1297). Only then: the reconcile
+      // reads every tenant's records, and this button is one click away.
+      const now = new Date()
+      if (
+        isAllowlistEligible(record, now) !== isAllowlistEligible(updated, now)
+      ) {
+        scheduleRedirectUriReconcile()
+      }
       return { domain: toDomainVerificationView(hostname, updated) }
     }),
 })

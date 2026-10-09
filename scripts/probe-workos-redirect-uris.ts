@@ -9,8 +9,12 @@
  * STAGING environment, and then runs the same calls through the client to show
  * it reads them. Paste the output into the PR as the evidence #1297 asks for.
  *
- * It touches WorkOS only — no Sanity read or write — and removes the one URI it
- * creates. It refuses a key that is not `sk_test_…` unless `--allow-live`.
+ * It touches WorkOS only — no Sanity read or write. It creates one URI on a
+ * host nobody will ever sign in on (`redirect-uri-probe-<time>.example.org`)
+ * and, at the end, lists the environment and deletes every entry with that
+ * URI, whatever happened in between. If any is still there it says so and
+ * exits non-zero. It refuses a key that is not `sk_test_…` unless
+ * `--allow-live`.
  */
 import {
   createRedirectUri,
@@ -32,12 +36,17 @@ if (!apiKey.startsWith('sk_test_') && !process.argv.includes('--allow-live')) {
   process.exit(1)
 }
 
+interface Answer {
+  status: number
+  body: unknown
+}
+
 async function call(
   label: string,
   method: 'GET' | 'POST' | 'DELETE',
   url: string,
   body?: unknown,
-): Promise<unknown> {
+): Promise<Answer> {
   const response = await fetch(url, {
     method,
     headers: {
@@ -51,75 +60,101 @@ async function call(
   console.log(`${method} ${url.replace(ENDPOINT, '…/redirect_uris')}`)
   console.log(`HTTP ${response.status}`)
   console.log(text || '(empty body)')
+  let parsed: unknown
   try {
-    return JSON.parse(text)
+    parsed = JSON.parse(text)
   } catch {
-    return undefined
+    parsed = undefined
   }
+  return { status: response.status, body: parsed }
 }
 
 function idOf(body: unknown): string | undefined {
-  const top = body as { id?: string; redirect_uri?: { id?: string } }
+  const top = body as { id?: string; redirect_uri?: { id?: string } } | null
   return top?.id ?? top?.redirect_uri?.id
+}
+
+function firstIdOf(body: unknown): string | undefined {
+  return (body as { data?: { id?: string }[] } | null)?.data?.[0]?.id
+}
+
+/**
+ * Delete every entry with the probe's URI, found by LISTING — so it does not
+ * depend on having read an id out of a create answer. Returns what is left.
+ */
+async function removeProbeUris(uri: string): Promise<string[]> {
+  const mine = (await listRedirectUris()).filter((entry) => entry.uri === uri)
+  for (const entry of mine) {
+    await call('Clean up', 'DELETE', `${ENDPOINT}/${entry.id}`)
+  }
+  return (await listRedirectUris())
+    .filter((entry) => entry.uri === uri)
+    .map((entry) => entry.id)
 }
 
 async function main(): Promise<void> {
   const uri = `https://redirect-uri-probe-${Date.now()}.example.org/api/auth/callback`
-  let createdId: string | undefined
-  let duplicateId: string | undefined
+  let failure: unknown
 
   try {
-    const firstPage = (await call(
+    const first = await call(
       'List, one per page, oldest first',
       'GET',
       `${ENDPOINT}?limit=1&order=asc`,
-    )) as { list_metadata?: { after?: string | null } } | undefined
-    const after = firstPage?.list_metadata?.after
+    )
+    const after = (
+      first.body as { list_metadata?: { after?: string | null } } | null
+    )?.list_metadata?.after
     if (after) {
-      await call(
+      const second = await call(
         'List, the page after that cursor',
         'GET',
         `${ENDPOINT}?limit=1&order=asc&after=${encodeURIComponent(after)}`,
+      )
+      console.log(
+        `\nThe second page starts with a different entry: ${firstIdOf(second.body) !== firstIdOf(first.body)}`,
       )
     } else {
       console.log('\n(no `after` cursor: the environment has at most one URI)')
     }
 
-    createdId = idOf(await call('Create', 'POST', ENDPOINT, { uri }))
-    // If WorkOS accepts a duplicate, that is a second URI to remove.
-    duplicateId = idOf(
-      await call('Create the same URI again', 'POST', ENDPOINT, { uri }),
-    )
-    if (duplicateId === createdId) duplicateId = undefined
-
+    const created = await call('Create', 'POST', ENDPOINT, { uri })
+    const createdId = idOf(created.body)
+    await call('Create the same URI again', 'POST', ENDPOINT, { uri })
     if (createdId) {
       await call('Delete', 'DELETE', `${ENDPOINT}/${createdId}`)
       await call('Delete it again', 'DELETE', `${ENDPOINT}/${createdId}`)
-      createdId = undefined
+    } else {
+      console.log('\n(no id could be read from the create answer)')
     }
-    if (duplicateId) {
-      await call('Delete the duplicate', 'DELETE', `${ENDPOINT}/${duplicateId}`)
-      duplicateId = undefined
-    }
+    // A duplicate WorkOS accepted, or a delete it refused, is still there.
+    await removeProbeUris(uri)
 
     console.log('\n### The same round trip through the client')
     const before = await listRedirectUris()
     console.log(`listRedirectUris(): ${before.length} URIs`)
-    const created = await createRedirectUri(uri)
-    createdId = created.id
-    console.log('createRedirectUri():', created)
-    const listed = (await listRedirectUris()).find((u) => u.id === created.id)
+    const viaClient = await createRedirectUri(uri)
+    console.log('createRedirectUri():', viaClient)
+    const listed = (await listRedirectUris()).find((u) => u.id === viaClient.id)
     console.log('…as the list returns it:', listed)
-    await deleteRedirectUri(created.id)
-    createdId = undefined
+    await deleteRedirectUri(viaClient.id)
     console.log('deleteRedirectUri(): ok')
-    const gone = !(await listRedirectUris()).some((u) => u.id === created.id)
+    const gone = !(await listRedirectUris()).some((u) => u.id === viaClient.id)
     console.log(`gone from the list: ${gone}`)
-  } finally {
-    for (const id of [createdId, duplicateId]) {
-      if (id) await call('Clean up', 'DELETE', `${ENDPOINT}/${id}`)
-    }
+  } catch (error) {
+    failure = error
   }
+
+  const left = await removeProbeUris(uri)
+  if (left.length > 0) {
+    console.error(
+      `\nSTILL REGISTERED: ${uri} (${left.join(', ')}). Remove it in the WorkOS dashboard.`,
+    )
+    process.exitCode = 1
+  } else {
+    console.log('\nNothing of the probe is left in WorkOS.')
+  }
+  if (failure) throw failure
 }
 
 main().catch((error) => {

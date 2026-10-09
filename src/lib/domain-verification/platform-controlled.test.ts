@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { isPlatformControlledHost } from './platform-controlled'
+import { isAllowlistEligible } from './policy'
 import type { DomainVerificationRecord } from './types'
 
 const NOW = new Date('2026-07-01T12:00:00.000Z')
@@ -57,6 +58,18 @@ describe('isPlatformControlledHost', () => {
   it('refuses a platform-organization host whose proof never resolved', () => {
     const pending = record({ status: 'pending', lastSuccessAt: null })
     expect(isPlatformControlledHost(pending, PLATFORM_ORG, NOW)).toBe(false)
+  })
+
+  it('refuses a platform-organization host that is only grandfathered, never proven', () => {
+    const grandfathered = record({
+      method: 'grandfathered',
+      graceUntil: '2026-07-15T00:00:00.000Z',
+    })
+    // On the redirect allowlist for the grace period, which is the trap.
+    expect(isAllowlistEligible(grandfathered, NOW)).toBe(true)
+    expect(isPlatformControlledHost(grandfathered, PLATFORM_ORG, NOW)).toBe(
+      false,
+    )
   })
 
   it('refuses a released allocation', () => {

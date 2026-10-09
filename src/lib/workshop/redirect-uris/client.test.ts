@@ -90,6 +90,49 @@ describe('listRedirectUris', () => {
     )
   })
 
+  it('stops at once when the cursor repeats, rather than asking again and again', async () => {
+    const answered = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            data: [{ id: 'redir_1', uri: 'https://a.example.org/cb' }],
+            list_metadata: { after: 'redir_1' },
+          }),
+        ),
+    )
+    vi.stubGlobal('fetch', answered)
+
+    await expect(listRedirectUris()).rejects.toBeInstanceOf(
+      WorkOSRedirectUriError,
+    )
+    expect(answered).toHaveBeenCalledTimes(2)
+  })
+
+  it('ends on an empty page even when WorkOS still offers a cursor', async () => {
+    const answered = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({ data: [], list_metadata: { after: 'redir_9' } }),
+        ),
+    )
+    vi.stubGlobal('fetch', answered)
+
+    await expect(listRedirectUris()).resolves.toEqual([])
+    expect(answered).toHaveBeenCalledTimes(1)
+  })
+
+  it('gives every request a deadline', async () => {
+    const answered = vi.fn(
+      async (_url: string, _init?: RequestInit) =>
+        new Response(JSON.stringify({ data: [] })),
+    )
+    vi.stubGlobal('fetch', answered)
+
+    await listRedirectUris()
+
+    expect(answered.mock.calls[0][1]?.signal).toBeInstanceOf(AbortSignal)
+  })
+
   it('never sends the key anywhere but the Authorization header', async () => {
     await listRedirectUris()
 
@@ -157,6 +200,14 @@ describe('deleteRedirectUri', () => {
       status: 404,
     })
     expect(workos.uris).toEqual([keep])
+  })
+
+  it('sends the id as one path segment', async () => {
+    await deleteRedirectUri('redir_1/../redir_2').catch(() => {})
+
+    expect(workos.requests[0].url).toBe(
+      'https://api.workos.com/user_management/redirect_uris/redir_1%2F..%2Fredir_2',
+    )
   })
 
   it('reports any other refusal', async () => {

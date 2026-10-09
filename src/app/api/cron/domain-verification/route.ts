@@ -51,6 +51,21 @@ export async function GET(request: NextRequest) {
           : ''),
     )
 
+    // Counts above; the names here, where an operator has to act on them.
+    const { redirectUris } = summary
+    if (
+      redirectUris.error ||
+      redirectUris.errored.length > 0 ||
+      redirectUris.unaccounted.length > 0
+    ) {
+      console.error(
+        '[workshop] WorkOS redirect URIs need attention:' +
+          ` errored hosts=[${redirectUris.errored.join(', ')}]` +
+          ` unaccounted URIs=[${redirectUris.unaccounted.join(', ')}]` +
+          (redirectUris.error ? ` error=${redirectUris.error}` : ''),
+      )
+    }
+
     return NextResponse.json({ success: true, ...summary })
   } catch (error) {
     console.error('Error in domain verification cron job:', error)

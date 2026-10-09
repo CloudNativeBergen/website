@@ -10,7 +10,10 @@
  *
  * WHAT "IT CREATED" MEANS. A delete is only ever addressed to an id WorkOS
  * handed back for a create this system made, recorded on the host's
- * `domainVerification` document. NOTHING ELSE COUNTS: a URI that is simply
+ * `domainVerification` document, and only while WorkOS lists that id on that
+ * host's own callback. The record is the ledger: whoever can write the dataset
+ * can write the ledger, and the URI check is what keeps an id copied onto the
+ * wrong record from deleting someone else's URI. NOTHING ELSE COUNTS: a URI that is simply
  * found in WorkOS — the environment's default, one a person added in the
  * dashboard, or one of our own creates whose answer never arrived — is recorded
  * as `external` and never deleted. Ownership is never inferred from a URI's
@@ -25,9 +28,9 @@
  * otherwise the URI just created is deleted. The same happens in reverse for a
  * delete: a host that became wanted again while its URI was being removed gets
  * it back. If the undo itself fails, the id is put on the record when the
- * record will take it, so the next run deletes it; when it will not, the id is
- * in the error log only, and the URI is listed as `unaccounted` by every later
- * run that has reason to list WorkOS.
+ * record holds no live id, so the next run deletes it. When the record holds
+ * another run's id, ours is in the error log only; the URI is then listed as
+ * `unaccounted` by later runs that list WorkOS.
  *
  * ONLY THE PRODUCTION DEPLOYMENT RUNS IT. The outcome is stored in the dataset,
  * and local development and previews read the same dataset as production. A
@@ -203,6 +206,9 @@ async function register(
   // the revision just read.
   /** What the record held going in: nothing, or an id the listing did not show. */
   const heldBefore = row.redirectUri.id
+  /** Does the record hold no live id — nothing, or still only that dead one? */
+  const isFree = (current: RedirectUriSyncRow) =>
+    current.redirectUri.id === null || current.redirectUri.id === heldBefore
   let recorded = false
   let fresh: RedirectUriSyncRow | null = row
   for (let attempt = 0; attempt < 2 && fresh && !recorded; attempt++) {
@@ -214,7 +220,7 @@ async function register(
       if (!fresh) break
       if (fresh.redirectUri.id === created.id) recorded = true
       else if (
-        fresh.redirectUri.id !== heldBefore ||
+        !isFree(fresh) ||
         (await wantsRedirectUri(fresh, now)) === false
       ) {
         break
@@ -232,7 +238,7 @@ async function register(
     // it, so the next run deletes it; failing that the log is the only place
     // the id is written down.
     const leftover = `redirect URI ${created.id} (${uri}) was created, could not be recorded and could not be removed again (${describe(error)})`
-    if (fresh && fresh.redirectUri.id === heldBefore) {
+    if (fresh && isFree(fresh)) {
       await save(fresh, { ...registered, error: leftover }).catch(() => {})
     }
     throw new Error(`${leftover}. Remove it in WorkOS by hand if it remains.`)
@@ -252,7 +258,13 @@ async function reconcileHost(
   const { hostname } = row.record
   const uri = workshopRedirectUri(hostname)
   const { id } = row.redirectUri
-  const ours = id ? listed.find((entry) => entry.id === id) : undefined
+  // Ours is the entry with the recorded id ON THIS HOST'S URI. An id that names
+  // some other URI was not put on the record by a create for this host, and is
+  // never acted on.
+  const ours =
+    id && uri
+      ? listed.find((entry) => entry.id === id && href(entry.uri) === href(uri))
+      : undefined
 
   if (!wanted || !uri) {
     if (!ours) return save(row, CLEARED)
@@ -311,13 +323,10 @@ export async function reconcileWorkshopRedirectUris(
 
   try {
     const work: { row: RedirectUriSyncRow; wanted: boolean }[] = []
-    /** URIs and ids some host answers for; everything else is unaccounted. */
-    const accounted = new Set<string>()
+    const decided: { row: RedirectUriSyncRow; wanted: boolean | null }[] = []
     for (const row of await listRedirectUriSyncRows()) {
       const wanted = await wantsRedirectUri(row, now)
-      const uri = workshopRedirectUri(row.record.hostname)
-      if (uri && wanted !== false) accounted.add(href(uri))
-      if (row.redirectUri.id) accounted.add(row.redirectUri.id)
+      decided.push({ row, wanted })
       if (wanted === null) {
         summary.errored.push(row.record.hostname)
         continue
@@ -342,6 +351,15 @@ export async function reconcileWorkshopRedirectUris(
       return summary
     }
 
+    // What some host answers for: the entry whose id it holds, or, for a host
+    // that should have a URI and holds no listed id, any entry with its URI.
+    const accounted = new Set<string>()
+    for (const { row, wanted } of decided) {
+      const { id } = row.redirectUri
+      const uri = workshopRedirectUri(row.record.hostname)
+      if (id && listed.some((entry) => entry.id === id)) accounted.add(id)
+      else if (uri && wanted !== false) accounted.add(href(uri))
+    }
     summary.unaccounted = listed
       .filter(
         (entry) =>

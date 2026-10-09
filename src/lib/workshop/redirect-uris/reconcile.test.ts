@@ -335,6 +335,37 @@ describe('URIs this system did not create', () => {
     expect(stateOf(id)).toEqual({ status: 'external', id: null, error: null })
   })
 
+  it('are recognised however WorkOS spells them', async () => {
+    workos.seed('https://KontainerKonf.konf.run:443/api/auth/callback')
+    const id = seedAllocated('kontainerkonf.konf.run')
+
+    await reconcileWorkshopRedirectUris(NOW)
+
+    expect(workos.uris).toHaveLength(1)
+    expect(stateOf(id)).toEqual({ status: 'external', id: null, error: null })
+  })
+
+  it.each<[string, Partial<DomainVerificationRecord>, string[]]>([
+    ['a released host', { status: 'revoked' }, []],
+    ['a wanted host', {}, [callback('kontainerkonf.konf.run')]],
+  ])(
+    'are not touched when their id has been put on the record of %s',
+    async (_, record, ownUris) => {
+      // The record is the ledger, and whoever can write the dataset can write
+      // it. An id that names some other host's URI is never acted on.
+      const byDefault = workos.seed(callback('2025.cloudnativebergen.dev'))
+      const id = seedAllocated('kontainerkonf.konf.run', {
+        record,
+        redirectUri: { status: 'registered', id: byDefault.id },
+      })
+
+      await reconcileWorkshopRedirectUris(NOW)
+
+      expect(workos.uris.map((u) => u.uri)).toEqual([byDefault.uri, ...ownUris])
+      expect(stateOf(id).id).not.toBe(byDefault.id)
+    },
+  )
+
   it('are left in WorkOS when their host is released, and reported', async () => {
     const byHand = workos.seed(callback('kontainerkonf.konf.run'))
     const id = seedAllocated('kontainerkonf.konf.run')
@@ -373,6 +404,30 @@ describe('URIs this system did not create', () => {
 
     expect(workos.uris).toHaveLength(1)
     expect(stateOf(id)).toEqual({ status: 'external', id: null, error: null })
+  })
+
+  it('are reported as unaccounted when they duplicate a URI this system registered', async () => {
+    seedAllocated('kontainerkonf.konf.run')
+    await reconcileWorkshopRedirectUris(NOW)
+    workos.allowDuplicates = true
+    const duplicate = workos.seed(callback('kontainerkonf.konf.run'))
+
+    const summary = await reconcileWorkshopRedirectUris(NOW)
+
+    expect(workos.uris).toHaveLength(2)
+    expect(summary.unaccounted).toEqual([duplicate.uri])
+  })
+
+  it('are not reported for a host the workshops gate cannot decide on', async () => {
+    workshops.set(OTHER_TENANT_ORG, null)
+    workos.seed(callback('undecided.konf.run'))
+    seedAllocated('undecided.konf.run', { org: OTHER_TENANT_ORG })
+    seedAllocated(CONTROL)
+
+    const summary = await reconcileWorkshopRedirectUris(NOW)
+
+    expect(summary.unaccounted).toEqual([])
+    expect(summary.registered).toEqual([CONTROL])
   })
 
   it('are reported as unaccounted only when they are callbacks nobody answers for', async () => {
@@ -466,6 +521,18 @@ describe('removing', () => {
     })
   })
 
+  it('clears an error left on the record of a host that is no longer wanted', async () => {
+    seedAllocated(CONTROL)
+    const id = seedAllocated('old.konf.run', {
+      record: { status: 'revoked' },
+      redirectUri: { error: 'POST was refused by WorkOS with HTTP 500' },
+    })
+
+    await reconcileWorkshopRedirectUris(NOW)
+
+    expect(stateOf(id)).toEqual({ status: null, id: null, error: null })
+  })
+
   it('does not register a host while the workshops gate cannot say', async () => {
     workshops.set(OTHER_TENANT_ORG, null)
     seedAllocated(CONTROL)
@@ -517,6 +584,48 @@ describe('when WorkOS fails', () => {
     expect(summary.error).toContain('503')
     expect(summary.errored).toEqual(['kontainerkonf.konf.run'])
     expect(stateOf(id).error).toContain('503')
+  })
+
+  it('records a refused list only on the hosts it leaves out of step', async () => {
+    const settled = seedAllocated('kontainerkonf.konf.run')
+    await reconcileWorkshopRedirectUris(NOW)
+    const pending = seedAllocated('new.konf.run')
+    const leaving = seedAllocated('old.konf.run', {
+      record: { status: 'revoked' },
+      redirectUri: { status: 'registered', id: 'redir_old' },
+    })
+    stateWrites.length = 0
+    workos.failAll('GET', { status: 503 })
+
+    const summary = await reconcileWorkshopRedirectUris(NOW)
+
+    expect(summary.errored).toEqual(['new.konf.run', 'old.konf.run'])
+    expect(stateOf(settled).error).toBeNull()
+    expect(stateOf(pending).error).toContain('503')
+    expect(stateOf(leaving).error).toContain('503')
+    expect(stateWrites.map((w) => w.id).sort()).toEqual(
+      [leaving, pending].sort(),
+    )
+  })
+
+  it('clears the error once the host is in step again', async () => {
+    const registered = workos.seed(callback('kontainerkonf.konf.run'))
+    const id = seedAllocated('kontainerkonf.konf.run', {
+      redirectUri: {
+        status: 'registered',
+        id: registered.id,
+        error: 'GET was refused by WorkOS with HTTP 503',
+      },
+    })
+
+    await reconcileWorkshopRedirectUris(NOW)
+
+    expect(stateOf(id)).toEqual({
+      status: 'registered',
+      id: registered.id,
+      error: null,
+    })
+    expect(workos.writes()).toEqual([])
   })
 
   it('records a refused create and registers on the next run', async () => {
@@ -691,6 +800,86 @@ describe('when the records cannot be read or move on under the run', () => {
       })
     },
   )
+
+  it("does not replace an overlapping run's id with its own when the undo fails", async () => {
+    const id = seedAllocated('kontainerkonf.konf.run')
+    workos.allowDuplicates = true
+    let theirs = ''
+    workos.beforeAnswer = (method) => {
+      if (method === 'GET') {
+        theirs = anotherRunRegisters(id, 'kontainerkonf.konf.run')
+      }
+      if (method === 'POST') workos.failNext('DELETE', { status: 500 })
+    }
+
+    const summary = await reconcileWorkshopRedirectUris(NOW)
+
+    expect(workos.uris).toHaveLength(2)
+    expect(stateOf(id)).toEqual({
+      status: 'registered',
+      id: theirs,
+      error: null,
+    })
+    expect(summary.errored).toEqual(['kontainerkonf.konf.run'])
+  })
+
+  it('keeps the id of a URI it could not remove after another run cleared the record', async () => {
+    const id = seedAllocated('kontainerkonf.konf.run')
+    await reconcileWorkshopRedirectUris(NOW)
+    // Its URI is deleted in the dashboard; the record still names the old id.
+    workos.uris.length = 0
+    workos.beforeAnswer = (method) => {
+      if (method !== 'POST') return
+      // The host is released and the reconcile that release queued has
+      // already cleared the record.
+      moveOn(id, (row) => {
+        row.record.status = 'revoked'
+        row.redirectUri = { status: null, id: null, error: null }
+      })
+      workos.failNext('DELETE', { status: 500 })
+    }
+
+    await reconcileWorkshopRedirectUris(NOW)
+
+    expect(workos.uris).toHaveLength(1)
+    expect(stateOf(id).id).toBe(workos.uris[0].id)
+    workos.beforeAnswer = undefined
+
+    await reconcileWorkshopRedirectUris(NOW)
+
+    expect(workos.uris).toEqual([])
+  })
+
+  it('keeps the URI it put back when an overlapping run saw it first and called it external', async () => {
+    const id = seedHost('2026.cloudnativedays.no', { org: PLATFORM_ORG })
+    await reconcileWorkshopRedirectUris(NOW)
+    rows.get(id)!.record.status = 'failing'
+    workos.beforeAnswer = (method) => {
+      // Re-checked to verified while the old URI is being deleted…
+      if (method === 'DELETE') {
+        moveOn(id, (row) => {
+          row.record.status = 'verified'
+        })
+      }
+      // …and the reconcile that re-check queued lists the new URI before this
+      // run has recorded its id.
+      if (method === 'POST') {
+        moveOn(id, (row) => {
+          row.redirectUri = { status: 'external', id: null, error: null }
+        })
+      }
+    }
+
+    const summary = await reconcileWorkshopRedirectUris(NOW)
+
+    expect(workos.uris).toHaveLength(1)
+    expect(stateOf(id)).toEqual({
+      status: 'registered',
+      id: workos.uris[0].id,
+      error: null,
+    })
+    expect(summary.errored).toEqual([])
+  })
 
   it('keeps the id of a URI it could neither record nor remove, and removes it on the next run', async () => {
     const id = seedAllocated('kontainerkonf.konf.run')

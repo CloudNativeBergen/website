@@ -263,10 +263,10 @@ describe('updateEntitlements', () => {
     )
   })
 
-  it('reconciles the WorkOS redirect URIs once the new entitlements are readable', async () => {
+  it('queues a WorkOS redirect-URI reconcile after busting the organization tag', async () => {
     // A plan or an override can switch workshops on or off (#1297). The
-    // reconcile reads the organization through the cache, so it has to be
-    // queued AFTER the tag is busted.
+    // reconcile reads the organization through the cache, so the tag is busted
+    // first. This pins the ORDER of the two calls, nothing about the cache.
     await callerFor(['org-A']).updateEntitlements({
       organizationId: 'org-B',
       plan: 'pro',

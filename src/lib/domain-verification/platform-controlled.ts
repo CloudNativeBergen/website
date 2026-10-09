@@ -9,8 +9,10 @@
  * of allowlist eligibility, a host qualifies only when it is
  *
  *  - a subdomain the platform ALLOCATED (`isPlatformAllocated`), or
- *  - a verified host of a conference owned by the platform organization
- *    (`PLATFORM_ORG_ID`).
+ *  - a host of a conference owned by the platform organization
+ *    (`PLATFORM_ORG_ID`) whose DNS proof has actually resolved. A
+ *    `grandfathered` record is on the allowlist during its grace period
+ *    without ever having been proven, and that is not enough here.
  *
  * ONE FUNCTION. The WorkOS redirect-URI sync (`@/lib/workshop/redirect-uris`)
  * registers nothing this refuses.
@@ -41,6 +43,7 @@ export function isPlatformControlledHost(
 ): boolean {
   if (!isAllowlistEligible(record, now)) return false
   if (isPlatformAllocated(record)) return true
+  if (record.method === 'grandfathered') return false
   const platformOrgId = resolvePlatformOrgId()
   return platformOrgId !== null && ownerOrgId === platformOrgId
 }

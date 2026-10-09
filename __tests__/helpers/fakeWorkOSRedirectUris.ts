@@ -5,10 +5,21 @@ import { vi } from 'vitest'
  * as `fetch`.
  *
  * BUILT FROM THE DOCUMENTATION, NOT FROM THE API. The shapes here are the ones
- * https://workos.com/docs/reference/user-management/redirect-uri documents; the
- * status codes and the duplicate-URI refusal are ASSUMPTIONS the docs do not
- * state. A test that passes against this proves the client and the reconcile
- * agree with this file — never that WorkOS behaves this way.
+ * https://workos.com/docs/reference/user-management/redirect-uri documents.
+ * What the docs do not state, and this file therefore GUESSES:
+ *
+ *  - every status code (200 on a list and a create, 204 on a delete, 404 for an
+ *    unknown id, 401 without the key);
+ *  - that a create for a URI that already exists is refused, and with 422
+ *    (`allowDuplicates` models the other answer);
+ *  - pagination: that with `order=asc`, `after=<id>` returns the entries created
+ *    after that one, and that `list_metadata.after` is `null` on the last page.
+ *    Both pagination tests rest on this. If WorkOS differs, a listing of more
+ *    than 100 URIs would come back short or fail outright.
+ *
+ * A test that passes against this proves the client and the reconcile agree
+ * with this file — never that WorkOS behaves this way. The check against the
+ * real thing is `scripts/probe-workos-redirect-uris.ts`.
  */
 
 export const FAKE_WORKOS_API_KEY = 'sk_test_fake'

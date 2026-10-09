@@ -73,6 +73,30 @@ describe('api/cron/domain-verification', () => {
     expect(mockSweep).toHaveBeenCalledTimes(1)
   })
 
+  it('names the hosts and URIs that need an operator, and stays quiet otherwise', async () => {
+    const { GET } = await import('@/app/api/cron/domain-verification/route')
+    const logged = vi.mocked(console.error)
+
+    await GET(request('Bearer test-cron-secret'))
+    expect(logged).not.toHaveBeenCalled()
+
+    mockSweep.mockResolvedValue({
+      ...SUMMARY,
+      redirectUris: {
+        ...SUMMARY.redirectUris,
+        errored: ['stuck.konf.run'],
+        unaccounted: ['https://left-behind.example.org/api/auth/callback'],
+      },
+    })
+    await GET(request('Bearer test-cron-secret'))
+
+    expect(logged).toHaveBeenCalledTimes(1)
+    expect(logged.mock.calls[0][0]).toContain('stuck.konf.run')
+    expect(logged.mock.calls[0][0]).toContain(
+      'https://left-behind.example.org/api/auth/callback',
+    )
+  })
+
   it('refuses an unauthenticated call and does NOT sweep', async () => {
     const { GET } = await import('@/app/api/cron/domain-verification/route')
     expect((await GET(request())).status).toBe(401)

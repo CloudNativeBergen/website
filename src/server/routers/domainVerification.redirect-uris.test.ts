@@ -3,8 +3,8 @@
  *
  * `domainVerification.recheck` and the WorkOS redirect URIs (#1297): a proof
  * that just resolved, or just stopped, changes whether the host may sign in to
- * the workshop portal, so a re-check that RAN queues a reconcile — and one that
- * was refused does not. The router and its tenancy checks run for real; the
+ * the workshop portal, so a re-check that CHANGED the host's standing queues a
+ * reconcile — and one that changed nothing, or was refused, does not. The router and its tenancy checks run for real; the
  * boundaries are the Sanity client, the verification module and the queue.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
@@ -24,9 +24,11 @@ vi.mock('@/lib/conference/sanity', () => ({
 }))
 
 let record: DomainVerificationRecord | null
+/** What the re-check finds; the record comes back with it written in. */
+let found: Partial<DomainVerificationRecord>
 const recheckDomainRecord = vi.fn(
   async (current: DomainVerificationRecord) => ({
-    record: { ...current, status: 'verified' as const },
+    record: { ...current, ...found },
     outcome: { kind: 'verified' as const },
     delisted: false,
   }),
@@ -60,6 +62,8 @@ function caller() {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  // The proof resolves: the host goes from unproven to on the allowlist.
+  found = { status: 'verified', lastSuccessAt: new Date().toISOString() }
   record = {
     _id: `domainVerification.${HOST}`,
     hostname: HOST,
@@ -87,6 +91,28 @@ describe('domainVerification.recheck', () => {
     expect(recheckDomainRecord.mock.invocationCallOrder[0]).toBeLessThan(
       scheduleRedirectUriReconcile.mock.invocationCallOrder[0],
     )
+  })
+
+  it('queues nothing when the re-check left the host where it was', async () => {
+    found = { lastCheckedAt: new Date().toISOString() }
+
+    await caller().recheck({ hostname: HOST })
+
+    expect(recheckDomainRecord).toHaveBeenCalledTimes(1)
+    expect(scheduleRedirectUriReconcile).not.toHaveBeenCalled()
+  })
+
+  it('queues a reconcile when the re-check took the host OFF the allowlist', async () => {
+    record = {
+      ...record!,
+      status: 'verified',
+      lastSuccessAt: new Date().toISOString(),
+    }
+    found = { status: 'failing' }
+
+    await caller().recheck({ hostname: HOST })
+
+    expect(scheduleRedirectUriReconcile).toHaveBeenCalledTimes(1)
   })
 
   it('queues nothing for a re-check it refused', async () => {

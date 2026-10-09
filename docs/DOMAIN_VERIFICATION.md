@@ -289,8 +289,10 @@ own records by a reconcile (`src/lib/workshop/redirect-uris`, #1297).
 hold:
 
 - the host is **platform-controlled** (`isPlatformControlledHost`): on the
-  redirect allowlist above, and either platform-allocated or owned by the
-  platform organization (`PLATFORM_ORG_ID`). Proof that a tenant controls a
+  redirect allowlist above, and either platform-allocated or a host of the
+  platform organization (`PLATFORM_ORG_ID`) whose DNS proof has actually
+  resolved. A `grandfathered` record is on the allowlist for its grace period
+  without proof; that is not enough here. Proof that a tenant controls a
   domain's DNS is enough for routing, but a redirect URI in a shared WorkOS
   client has to be on a host the platform itself serves (#1306);
 - the conference claiming it has workshops enabled.
@@ -309,7 +311,7 @@ with `WORKOS_API_KEY` set:
 
 - after the response of a mutation that wrote a verification record (a claim, a
   release, a platform allocation);
-- after an admin re-check;
+- after an admin re-check that changed whether the host is on the allowlist;
 - after an organization's plan or feature overrides change;
 - at the end of the daily sweep, which also retries whatever failed earlier.
 
@@ -324,13 +326,35 @@ stored in that dataset, so a run against a staging WorkOS environment would
 overwrite production's ids. To exercise the API against staging, use
 `pnpm tsx scripts/probe-workos-redirect-uris.ts`, which touches WorkOS only.
 
-**What it will delete.** Only a URI it created itself, addressed by the id
-WorkOS returned for that create. Everything else is recorded as `external` and
-left alone, even after its host is released: the environment's default URI,
-anything added by hand in the dashboard, and one of our own creates whose answer
-never arrived. Ownership is never inferred from a URI's text or age. Callback
-URIs that no wanted host accounts for are listed as `unaccounted` in the sweep's
-summary; removing them is a person's decision.
+**What it will delete.** Only a URI it created itself: the id WorkOS returned
+for that create is on the host's record, and WorkOS lists that id on that host's
+own callback. Everything else is recorded as `external` and left alone, even
+after its host is released: the environment's default URI, anything added by
+hand in the dashboard, and one of our own creates whose answer never arrived.
+Ownership is never inferred from a URI's text or age. The record is the ledger,
+so this holds against everything except someone who can write the dataset; an id
+copied onto another host's record is ignored, because its URI is not that
+host's.
+
+Callback URIs that no host accounts for are named in the sweep's error log as
+`unaccounted` (a URI nobody wants any more, or a duplicate of one this system
+registered). Removing them is a person's decision. A host the run could not
+bring into step is named there too.
+
+**How fast a URI goes away.** A release, a re-check and a plan change remove it
+after the response. Everything else waits for the daily sweep:
+
+| What happened                                         | URI removed within                       |
+| ----------------------------------------------------- | ---------------------------------------- |
+| The proof is gone (NXDOMAIN, no TXT)                  | about 24 hours                           |
+| The zone's nameservers stopped answering              | about 5 days (`SOFT_FAILURE_ESCALATION`) |
+| WorkOS refuses the delete                             | 24 hours per retry, until it succeeds    |
+| The sweep does not run                                | never, until some reconcile runs         |
+| The host's A or CNAME dangles while the TXT is intact | not detected (as for the allowlist)      |
+
+The first two match the redirect allowlist. The next two do not: the allowlist
+expires on its own after 30 days without a successful check, while a redirect
+URI is only ever removed by a reconcile that runs.
 
 **What is recorded** on the host's `domainVerification` document (fields added,
 nothing changed):
