@@ -121,7 +121,12 @@ async function main(): Promise<void> {
 
     const created = await call('Create', 'POST', ENDPOINT, { uri })
     const createdId = idOf(created.body)
-    await call('Create the same URI again', 'POST', ENDPOINT, { uri })
+    const again = await call('Create the same URI again', 'POST', ENDPOINT, {
+      uri,
+    })
+    console.log(
+      `\nThe second create answered with the first entry's id: ${createdId !== undefined && idOf(again.body) === createdId}`,
+    )
     if (createdId) {
       await call('Delete', 'DELETE', `${ENDPOINT}/${createdId}`)
       await call('Delete it again', 'DELETE', `${ENDPOINT}/${createdId}`)
@@ -146,14 +151,22 @@ async function main(): Promise<void> {
     failure = error
   }
 
-  const left = await removeProbeUris(uri)
-  if (left.length > 0) {
+  try {
+    const left = await removeProbeUris(uri)
+    if (left.length > 0) {
+      console.error(
+        `\nSTILL REGISTERED: ${uri} (${left.join(', ')}). Remove it in the WorkOS dashboard.`,
+      )
+      process.exitCode = 1
+    } else {
+      console.log('\nNothing of the probe is left in WorkOS.')
+    }
+  } catch (error) {
+    // The listing itself could not be read, so nothing is known.
     console.error(
-      `\nSTILL REGISTERED: ${uri} (${left.join(', ')}). Remove it in the WorkOS dashboard.`,
+      `\nCOULD NOT CHECK what is left (${error instanceof Error ? error.message : String(error)}). Look for ${new URL(uri).host} in the WorkOS dashboard and remove it.`,
     )
     process.exitCode = 1
-  } else {
-    console.log('\nNothing of the probe is left in WorkOS.')
   }
   if (failure) throw failure
 }

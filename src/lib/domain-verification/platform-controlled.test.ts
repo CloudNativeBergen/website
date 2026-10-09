@@ -72,6 +72,16 @@ describe('isPlatformControlledHost', () => {
     )
   })
 
+  it('refuses a platform-organization allocation from a suffix the platform no longer has', () => {
+    const stale = record({
+      hostname: 'old.former-suffix.org',
+      method: 'platform-owned',
+    })
+    // Recently "verified" by the allocation itself, so the allowlist admits it.
+    expect(isAllowlistEligible(stale, NOW)).toBe(true)
+    expect(isPlatformControlledHost(stale, PLATFORM_ORG, NOW)).toBe(false)
+  })
+
   it('refuses a released allocation', () => {
     const released = record({
       hostname: 'tenant.konf.run',

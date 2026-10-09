@@ -291,8 +291,9 @@ hold:
 - the host is **platform-controlled** (`isPlatformControlledHost`): on the
   redirect allowlist above, and either platform-allocated or a host of the
   platform organization (`PLATFORM_ORG_ID`) whose DNS proof has actually
-  resolved. A `grandfathered` record is on the allowlist for its grace period
-  without proof; that is not enough here. Proof that a tenant controls a
+  resolved (`method: dns-txt`). A `grandfathered` record is on the allowlist
+  for its grace period without proof, and so is a platform allocation whose
+  suffix has since changed; neither is enough here. Proof that a tenant controls a
   domain's DNS is enough for routing, but a redirect URI in a shared WorkOS
   client has to be on a host the platform itself serves (#1306);
 - the conference claiming it has workshops enabled.

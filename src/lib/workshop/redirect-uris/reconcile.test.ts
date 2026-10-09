@@ -296,7 +296,11 @@ describe('when WorkOS spells a URI its own way', () => {
         id: registered,
         error: null,
       })
-      expect(third).toMatchObject({ registered: [], errored: [] })
+      expect(third).toMatchObject({
+        registered: [],
+        errored: [],
+        unaccounted: [],
+      })
 
       rows.get(id)!.record.status = 'revoked'
       const released = await reconcileWorkshopRedirectUris(NOW)
@@ -305,6 +309,26 @@ describe('when WorkOS spells a URI its own way', () => {
       expect(workos.uris).toEqual([])
     },
   )
+
+  it('does not take for its own an entry WorkOS hands back for a create it did not need', async () => {
+    // Added by hand, stored re-spelled, so the listing does not match it; and
+    // WorkOS answers the create with that same entry instead of refusing.
+    workos.respell = (uri) => `${uri}/`
+    workos.duplicateReturnsExisting = true
+    const byHand = workos.seed(`${callback('kontainerkonf.konf.run')}/`)
+    const id = seedAllocated('kontainerkonf.konf.run')
+
+    const summary = await reconcileWorkshopRedirectUris(NOW)
+
+    expect(stateOf(id)).toEqual({ status: 'external', id: null, error: null })
+    expect(summary.registered).toEqual([])
+    rows.get(id)!.record.status = 'revoked'
+
+    const released = await reconcileWorkshopRedirectUris(NOW)
+
+    expect(workos.uris).toEqual([byHand])
+    expect(released.unaccounted).toEqual([byHand.uri])
+  })
 })
 
 describe('a second run with nothing changed', () => {

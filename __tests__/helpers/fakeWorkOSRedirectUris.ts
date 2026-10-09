@@ -10,8 +10,12 @@ import { vi } from 'vitest'
  *
  *  - every status code (200 on a list and a create, 204 on a delete, 404 for an
  *    unknown id, 401 without the key);
- *  - that a create for a URI that already exists is refused, and with 422
- *    (`allowDuplicates` models the other answer);
+ *  - that a create for a URI that already exists is refused, and with 422.
+ *    The two other answers it could give are modelled as switches:
+ *    `allowDuplicates` (a second entry) and `duplicateReturnsExisting` (the
+ *    entry that was already there, as if the create were idempotent);
+ *  - that a created URI is stored exactly as sent (`respell` models WorkOS
+ *    normalising it);
  *  - pagination: that with `order=asc`, `after=<id>` returns the entries created
  *    after that one, and that `list_metadata.after` is `null` on the last page.
  *    Both pagination tests rest on this. If WorkOS differs, a listing of more
@@ -59,6 +63,8 @@ export interface FakeWorkOSRedirectUris {
   beforeAnswer?: (method: Method) => void
   /** Accept a create for a URI that already exists (the docs do not say). */
   allowDuplicates: boolean
+  /** Answer a create for a URI that already exists with that existing entry. */
+  duplicateReturnsExisting: boolean
   /** How WorkOS stores a URI it is asked to create; the identity by default. */
   respell: (uri: string) => string
   /** The clock `created_at` is stamped from. */
@@ -107,6 +113,7 @@ export function installFakeWorkOSRedirectUris(): FakeWorkOSRedirectUris {
     },
     wrapCreateResponse: false,
     allowDuplicates: false,
+    duplicateReturnsExisting: false,
     respell: (uri) => uri,
     now: () => new Date(),
   }
@@ -157,7 +164,12 @@ export function installFakeWorkOSRedirectUris(): FakeWorkOSRedirectUris {
     if (method === 'POST' && url.href === ENDPOINT) {
       const sent = JSON.parse(String(init?.body)) as { uri: string }
       const uri = fake.respell(sent.uri)
-      if (!fake.allowDuplicates && fake.uris.some((u) => u.uri === uri)) {
+      const existing = fake.uris.find((u) => u.uri === uri)
+      if (existing && fake.duplicateReturnsExisting) {
+        fake.beforeAnswer?.(method)
+        return json(existing)
+      }
+      if (!fake.allowDuplicates && existing) {
         return json({ message: 'Redirect URI already exists' }, 422)
       }
       const created = fake.seed(uri)

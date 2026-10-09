@@ -124,6 +124,21 @@ function href(uri: string): string {
   }
 }
 
+/**
+ * A URI for REPORTING only, with the spelling of its path set aside (case, a
+ * trailing slash), since WorkOS may store one its own way. Never used to decide
+ * what exists or what is ours.
+ */
+function loosely(uri: string): string {
+  try {
+    const url = new URL(uri)
+    const path = url.pathname.replace(/\/+$/, '').toLowerCase()
+    return `${url.protocol}//${url.host}${path}`
+  } catch {
+    return uri
+  }
+}
+
 function sameHost(a: string, b: string): boolean {
   try {
     return new URL(a).host === new URL(b).host
@@ -189,6 +204,7 @@ async function save(
 async function register(
   row: RedirectUriSyncRow,
   uri: string,
+  listed: readonly WorkOSRedirectUri[],
   now: Date,
   summary: RedirectUriReconcileSummary,
 ): Promise<void> {
@@ -200,6 +216,12 @@ async function register(
     // acted on when a listing shows it, so keeping it costs nothing.
     await save(row, { error: describe(error) }).catch(() => {})
     throw error
+  }
+  if (listed.some((entry) => entry.id === created.id)) {
+    // WorkOS answered the create with an entry that was already there (spelled
+    // differently, or it would have been seen). It made nothing, so the entry
+    // is not ours: neither recorded as such nor undone.
+    return save(row, { ...CLEARED, status: 'external' })
   }
   const registered = {
     status: 'registered',
@@ -310,7 +332,7 @@ async function reconcileHost(
   if (listed.some((entry) => href(entry.uri) === href(uri))) {
     return save(row, { ...CLEARED, status: 'external' })
   }
-  return register(row, uri, now, summary)
+  return register(row, uri, listed, now, summary)
 }
 
 /**
@@ -368,13 +390,13 @@ export async function reconcileWorkshopRedirectUris(
       const { id } = row.redirectUri
       const uri = workshopRedirectUri(row.record.hostname)
       if (id && listed.some((entry) => entry.id === id)) accounted.add(id)
-      else if (uri && wanted !== false) accounted.add(href(uri))
+      else if (uri && wanted !== false) accounted.add(loosely(uri))
     }
     summary.unaccounted = listed
       .filter(
         (entry) =>
-          href(entry.uri).endsWith(WORKSHOP_AUTH_CALLBACK_PATH) &&
-          !accounted.has(href(entry.uri)) &&
+          loosely(entry.uri).endsWith(WORKSHOP_AUTH_CALLBACK_PATH) &&
+          !accounted.has(loosely(entry.uri)) &&
           !accounted.has(entry.id),
       )
       .map((entry) => entry.uri)
