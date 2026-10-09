@@ -367,7 +367,7 @@ nothing changed):
 | `redirectUriId`     | WorkOS's id for a URI this system created                |
 | `redirectUriError`  | why the last attempt failed; cleared by the next success |
 
-A run with nothing to change reads and writes nothing. One exception depends on
+A run with nothing to change only reads; it writes nothing. One exception depends on
 behaviour of WorkOS that has not been observed: if it stores a URI spelled
 differently from what it was sent and answers a repeated create with the entry
 it already has, a host whose URI someone else added gets that create asked again

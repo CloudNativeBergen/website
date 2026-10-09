@@ -73,28 +73,42 @@ describe('api/cron/domain-verification', () => {
     expect(mockSweep).toHaveBeenCalledTimes(1)
   })
 
-  it('names the hosts and URIs that need an operator, and stays quiet otherwise', async () => {
+  it('stays quiet about the redirect URIs when nothing needs an operator', async () => {
     const { GET } = await import('@/app/api/cron/domain-verification/route')
-    const logged = vi.mocked(console.error)
 
     await GET(request('Bearer test-cron-secret'))
-    expect(logged).not.toHaveBeenCalled()
 
+    expect(vi.mocked(console.error)).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    [
+      'a host it could not bring into step',
+      { errored: ['stuck.konf.run'] },
+      'stuck.konf.run',
+    ],
+    [
+      'a callback URI nobody answers for',
+      { unaccounted: ['https://left-behind.example.org/api/auth/callback'] },
+      'https://left-behind.example.org/api/auth/callback',
+    ],
+    [
+      'a run that stopped before any host',
+      { error: 'GET was refused by WorkOS with HTTP 503' },
+      'HTTP 503',
+    ],
+  ])('names %s in the error log', async (_, redirectUris, named) => {
+    const { GET } = await import('@/app/api/cron/domain-verification/route')
+    const logged = vi.mocked(console.error)
     mockSweep.mockResolvedValue({
       ...SUMMARY,
-      redirectUris: {
-        ...SUMMARY.redirectUris,
-        errored: ['stuck.konf.run'],
-        unaccounted: ['https://left-behind.example.org/api/auth/callback'],
-      },
+      redirectUris: { ...SUMMARY.redirectUris, ...redirectUris },
     })
+
     await GET(request('Bearer test-cron-secret'))
 
     expect(logged).toHaveBeenCalledTimes(1)
-    expect(logged.mock.calls[0][0]).toContain('stuck.konf.run')
-    expect(logged.mock.calls[0][0]).toContain(
-      'https://left-behind.example.org/api/auth/callback',
-    )
+    expect(logged.mock.calls[0][0]).toContain(named)
   })
 
   it('refuses an unauthenticated call and does NOT sweep', async () => {

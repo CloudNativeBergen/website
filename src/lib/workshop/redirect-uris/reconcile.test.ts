@@ -1033,6 +1033,34 @@ describe('when the records cannot be read or move on under the run', () => {
     expect(summary.errored).toEqual([])
   })
 
+  it('logs the id of a URI it could neither record, remove, nor leave on the record', async () => {
+    // Released during the create, the delete refused, and the record moved
+    // again before the id could be left on it: the log is all that is left.
+    const id = seedAllocated('kontainerkonf.konf.run')
+    const logged = vi.mocked(console.error)
+    workos.beforeAnswer = (method) => {
+      if (method !== 'POST') return
+      moveOn(id, (row) => {
+        row.record.status = 'revoked'
+      })
+      workos.failNext('DELETE', { status: 500 })
+    }
+    const served = globalThis.fetch
+    vi.stubGlobal('fetch', (...args: Parameters<typeof fetch>) => {
+      if (args[1]?.method === 'DELETE') moveOn(id)
+      return served(...args)
+    })
+
+    const summary = await reconcileWorkshopRedirectUris(NOW)
+
+    const leftover = workos.uris[0].id
+    expect(summary.errored).toEqual(['kontainerkonf.konf.run'])
+    expect(stateOf(id).id).toBeNull()
+    expect(
+      logged.mock.calls.some((call) => String(call[1]).includes(leftover)),
+    ).toBe(true)
+  })
+
   it('keeps the id of a URI it could neither record nor remove, and removes it on the next run', async () => {
     const id = seedAllocated('kontainerkonf.konf.run')
     const logged = vi.mocked(console.error)
