@@ -843,6 +843,40 @@ describe('when the records cannot be read or move on under the run', () => {
     })
   })
 
+  it.each<[string, (id: string) => void]>([
+    [
+      'the record cannot be read again',
+      (id) => {
+        moveOn(id)
+        storeReadFails = true
+      },
+    ],
+    ['the record is gone', (id) => rows.delete(id)],
+  ])(
+    'removes the URI again when its id cannot be recorded and %s',
+    async (_, afterCreate) => {
+      // A Sanity outage right after WorkOS created the URI: nothing can hold
+      // its id, so it must not be left behind.
+      const id = seedAllocated('kontainerkonf.konf.run')
+      let created = 0
+      workos.beforeAnswer = (method) => {
+        if (method !== 'POST') return
+        created = workos.uris.length
+        afterCreate(id)
+      }
+
+      const summary = await reconcileWorkshopRedirectUris(NOW)
+
+      expect(created).toBe(1)
+      expect(workos.uris).toEqual([])
+      expect(rows.get(id)?.redirectUri.id ?? null).toBeNull()
+      expect(summary).toMatchObject({
+        registered: [],
+        errored: ['kontainerkonf.konf.run'],
+      })
+    },
+  )
+
   it('removes the URI again when the host was released while it was being created', async () => {
     const id = seedAllocated('kontainerkonf.konf.run')
     let created = 0
