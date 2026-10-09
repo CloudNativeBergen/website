@@ -10,6 +10,8 @@ import {
   syncDomainVerifications,
   toDomainVerificationView,
 } from '@/lib/domain-verification'
+import { isAllowlistEligible } from '@/lib/domain-verification/policy'
+import { scheduleRedirectUriReconcile } from '@/lib/workshop/redirect-uris'
 
 /**
  * Domain ownership verification, admin side (#683).
@@ -86,6 +88,19 @@ export const domainVerificationRouter = router({
       }
 
       const { record: updated } = await recheckDomainRecord(record)
+      // A re-check can change whether this host may sign in to the workshop
+      // portal (#1297): it joins or leaves the allowlist, or its first real
+      // proof replaces a grandfathered standing that was not enough. Only
+      // then: the reconcile reads every tenant's records, and this button is
+      // one click away.
+      const now = new Date()
+      if (
+        isAllowlistEligible(record, now) !==
+          isAllowlistEligible(updated, now) ||
+        record.method !== updated.method
+      ) {
+        scheduleRedirectUriReconcile()
+      }
       return { domain: toDomainVerificationView(hostname, updated) }
     }),
 })

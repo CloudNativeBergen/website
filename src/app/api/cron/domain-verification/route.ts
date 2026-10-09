@@ -38,8 +38,33 @@ export async function GET(request: NextRequest) {
         ` softFailures=${summary.softFailures}` +
         ` unverifiable=${summary.unverifiable}` +
         ` delisted=${summary.delisted.length}` +
-        ` errored=${summary.errored.length}`,
+        ` errored=${summary.errored.length}` +
+        ` redirectUris.registered=${summary.redirectUris.registered.length}` +
+        ` redirectUris.removed=${summary.redirectUris.removed.length}` +
+        ` redirectUris.errored=${summary.redirectUris.errored.length}` +
+        ` redirectUris.unaccounted=${summary.redirectUris.unaccounted.length}` +
+        (summary.redirectUris.skipped
+          ? ` redirectUris.skipped=${summary.redirectUris.skipped}`
+          : '') +
+        (summary.redirectUris.error
+          ? ` redirectUris.error=${summary.redirectUris.error}`
+          : ''),
     )
+
+    // Counts above; the names here, where an operator has to act on them.
+    const { redirectUris } = summary
+    if (
+      redirectUris.error ||
+      redirectUris.errored.length > 0 ||
+      redirectUris.unaccounted.length > 0
+    ) {
+      console.error(
+        '[workshop] WorkOS redirect URIs need attention:' +
+          ` errored hosts=[${redirectUris.errored.join(', ')}]` +
+          ` unaccounted URIs=[${redirectUris.unaccounted.join(', ')}]` +
+          (redirectUris.error ? ` error=${redirectUris.error}` : ''),
+      )
+    }
 
     return NextResponse.json({ success: true, ...summary })
   } catch (error) {

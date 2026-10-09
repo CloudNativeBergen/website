@@ -78,6 +78,11 @@ vi.mock('@/lib/conference/sanity', () => ({
     getConferenceMock(...args),
 }))
 
+const scheduleRedirectUriReconcile = vi.fn()
+vi.mock('@/lib/workshop/redirect-uris', () => ({
+  scheduleRedirectUriReconcile: () => scheduleRedirectUriReconcile(),
+}))
+
 import { revalidateTag } from 'next/cache'
 import { platformRouter } from './platform'
 import type { Context } from '../trpc'
@@ -203,6 +208,7 @@ describe('updateEntitlements', () => {
       }),
     ).rejects.toMatchObject({ code: 'NOT_FOUND' })
     expect(patchMock).not.toHaveBeenCalled()
+    expect(scheduleRedirectUriReconcile).not.toHaveBeenCalled()
   })
 
   it('rejects an override for a feature outside the closed registry', async () => {
@@ -251,9 +257,27 @@ describe('updateEntitlements', () => {
     expect(typeof patched.featureOverrides[1]._key).toBe('string')
     expect(patched.featureOverrides[1]._key).toBeTruthy()
 
-    expect(revalidateTag).toHaveBeenCalledWith(
-      'sanity:organization-org-B',
-      'default',
+    // Expired at once, not marked stale under a profile: with a profile the
+    // next read is still served the old plan while it revalidates.
+    expect(revalidateTag).toHaveBeenCalledWith('sanity:organization-org-B', {
+      expire: 0,
+    })
+  })
+
+  it('queues a WorkOS redirect-URI reconcile after busting the organization tag', async () => {
+    // A plan or an override can switch workshops on or off (#1297). The
+    // reconcile reads the organization through the cache, so the entry is
+    // expired first. This pins the ORDER of the two calls; that the entry is
+    // expired rather than left stale is pinned by the test above.
+    await callerFor(['org-A']).updateEntitlements({
+      organizationId: 'org-B',
+      plan: 'pro',
+      overrides: [],
+    })
+
+    expect(scheduleRedirectUriReconcile).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(revalidateTag).mock.invocationCallOrder[0]).toBeLessThan(
+      scheduleRedirectUriReconcile.mock.invocationCallOrder[0],
     )
   })
 })

@@ -17,9 +17,11 @@ import type {
   DomainVerificationMethod,
   DomainVerificationPatch,
   DomainVerificationRecord,
+  RedirectUriState,
+  RedirectUriSyncRow,
 } from './types'
 
-const PROJECTION = `{
+const FIELDS = `
   _id,
   hostname,
   "conferenceId": conference._ref,
@@ -33,8 +35,9 @@ const PROJECTION = `{
   "firstFailureAt": firstFailureAt,
   "consecutiveFailures": coalesce(consecutiveFailures, 0),
   "consecutiveSoftFailures": coalesce(consecutiveSoftFailures, 0),
-  "lastError": lastError
-}`
+  "lastError": lastError`
+
+const PROJECTION = `{${FIELDS}}`
 
 type RawRecord = Omit<
   DomainVerificationRecord,
@@ -166,6 +169,8 @@ export async function listAllowlistCandidates(): Promise<
  * Leaving the record absent fails closed — unrouted under enforcement, never
  * allowlisted — and the mutations reject such a payload outright, so this is
  * defence in depth rather than the only line.
+ *
+ * Resolves `true` when it WROTE the record, `false` when it left things alone.
  */
 export async function ensureDomainVerification(
   hostname: string,
@@ -176,7 +181,7 @@ export async function ensureDomainVerification(
     allocatePlatformHost?: boolean
     now?: Date
   } = {},
-): Promise<void> {
+): Promise<boolean> {
   const host = normalizeDomain(hostname)
   const _id = domainVerificationId(host)
   const inPlatformZone = isPlatformZoneHost(host)
@@ -202,7 +207,7 @@ export async function ensureDomainVerification(
     // NO IMPLICIT ALLOCATION. Write nothing at all: a record here would either
     // grant the standing outright or promise the tenant a DNS challenge they
     // cannot answer.
-    return
+    return false
   }
 
   const method: DomainVerificationMethod = platformOwned
@@ -240,7 +245,7 @@ export async function ensureDomainVerification(
       ...grandfatherFields,
       ...platformFields,
     })
-    return
+    return true
   }
 
   const sameHolder = existing.conferenceId === conferenceId
@@ -263,8 +268,9 @@ export async function ensureDomainVerification(
         })
         .unset(['graceUntil', 'firstFailureAt', 'lastError'])
         .commit()
+      return true
     }
-    return
+    return false
   }
 
   // Different holder, or the same holder re-claiming a released hostname:
@@ -298,6 +304,7 @@ export async function ensureDomainVerification(
             ],
     )
     .commit()
+  return true
 }
 
 /**
@@ -307,19 +314,22 @@ export async function ensureDomainVerification(
  *
  * Guarded on the holder: a hostname some OTHER conference has since claimed is
  * left alone, so a late/duplicated release can never knock out the new holder.
+ *
+ * Resolves `true` when it revoked the record, `false` when it left it alone.
  */
 export async function revokeDomainVerification(
   hostname: string,
   conferenceId: string,
-): Promise<void> {
+): Promise<boolean> {
   const _id = domainVerificationId(normalizeDomain(hostname))
   const existing = await clientReadUncached.fetch<RawRecord | null>(
     // groq-global: hostnames are a GLOBAL namespace — one record per hostname, addressed by deterministic id.
     `*[_type == "domainVerification" && _id == $id][0] ${PROJECTION}`,
     { id: _id },
   )
-  if (!existing || existing.conferenceId !== conferenceId) return
+  if (!existing || existing.conferenceId !== conferenceId) return false
   await clientWrite.patch(_id).set({ status: 'revoked' }).commit()
+  return true
 }
 
 /**
@@ -342,4 +352,106 @@ export async function patchDomainVerification(
   if (Object.keys(set).length > 0) tx = tx.set(set)
   if (unset.length > 0) tx = tx.unset(unset)
   await tx.commit()
+}
+
+/** The stored field behind each part of a host's redirect-URI state. */
+const REDIRECT_URI_FIELDS = {
+  status: 'redirectUriStatus',
+  id: 'redirectUriId',
+  error: 'redirectUriError',
+} as const satisfies Record<keyof RedirectUriState, string>
+
+type RawSyncRow = RawRecord & {
+  _rev: string
+  redirectUriStatus?: RedirectUriState['status']
+  redirectUriId?: string | null
+  redirectUriError?: string | null
+  conference?: RedirectUriSyncRow['conference']
+}
+
+const SYNC_PROJECTION = `{${FIELDS},
+  _rev,
+  redirectUriStatus,
+  redirectUriId,
+  redirectUriError,
+  "conference": conference->{ organization, ticketingProvider }
+}`
+
+function toSyncRow({
+  _rev,
+  redirectUriStatus,
+  redirectUriId,
+  redirectUriError,
+  conference,
+  ...raw
+}: RawSyncRow): RedirectUriSyncRow {
+  return {
+    record: hydrate(raw),
+    rev: _rev,
+    redirectUri: {
+      status: redirectUriStatus ?? null,
+      id: redirectUriId ?? null,
+      error: redirectUriError ?? null,
+    },
+    conference: conference ?? null,
+  }
+}
+
+/**
+ * Everything the WorkOS redirect-URI reconcile decides from (#1297), in ONE
+ * read: every record that could be on the redirect allowlist, plus every record
+ * that still carries redirect-URI state — a revoked host among them, since that
+ * is exactly the one whose URI has to be deleted. The claiming conference's
+ * owner and ticketing vendor ride along so the reconcile needs no second read.
+ */
+export async function listRedirectUriSyncRows(): Promise<RedirectUriSyncRow[]> {
+  const rows = await clientReadUncached.fetch<RawSyncRow[] | null>(
+    // groq-global: the WorkOS redirect-URI list is one per environment and spans every tenant by design.
+    `*[_type == "domainVerification" && (status == "verified" || method in ["grandfathered", "platform-owned"] || defined(redirectUriStatus) || defined(redirectUriId) || defined(redirectUriError))] | order(hostname asc) ${SYNC_PROJECTION}`,
+  )
+  return (rows ?? []).map(toSyncRow)
+}
+
+/**
+ * One record as the reconcile reads it, WHATEVER its standing — for looking
+ * again at a record that moved on mid-run, which may by now be revoked with
+ * nothing on it and so absent from {@link listRedirectUriSyncRows}.
+ */
+export async function getRedirectUriSyncRow(
+  id: string,
+): Promise<RedirectUriSyncRow | null> {
+  const raw = await clientReadUncached.fetch<RawSyncRow | null>(
+    // groq-global: keyed by the id of a record the cross-tenant reconcile already holds, never by client input.
+    `*[_type == "domainVerification" && _id == $id][0] ${SYNC_PROJECTION}`,
+    { id },
+  )
+  return raw ? toSyncRow(raw) : null
+}
+
+/**
+ * Write part of a host's redirect-URI state, ONLY IF the record is still at
+ * `ifRevisionId`. `null` clears a field. Returns the record's new revision.
+ *
+ * The condition is how a reconcile learns the record moved on under it (a
+ * release, a re-claim, a re-check, an overlapping run): Sanity rejects the
+ * patch, and the caller reads the record again before deciding anything.
+ */
+export async function patchRedirectUriState(
+  id: string,
+  ifRevisionId: string,
+  patch: Partial<RedirectUriState>,
+): Promise<string> {
+  const set: Record<string, string> = {}
+  const unset: string[] = []
+  for (const key of Object.keys(patch) as (keyof RedirectUriState)[]) {
+    const value = patch[key]
+    if (value === undefined) continue
+    if (value === null) unset.push(REDIRECT_URI_FIELDS[key])
+    else set[REDIRECT_URI_FIELDS[key]] = value
+  }
+  let tx = clientWrite.patch(id).ifRevisionId(ifRevisionId)
+  if (Object.keys(set).length > 0) tx = tx.set(set)
+  if (unset.length > 0) tx = tx.unset(unset)
+  const written = await tx.commit()
+  return written._rev
 }

@@ -130,6 +130,37 @@ export default defineType({
       title: 'Last Error',
       type: 'string',
     }),
+    defineField({
+      name: 'redirectUriStatus',
+      title: 'WorkOS Redirect URI',
+      type: 'string',
+      description:
+        'Where this host’s workshop sign-in callback stands in WorkOS. Written by the redirect-URI reconcile (#1297); empty means this system holds none for the host. A URI may still exist in WorkOS that it did not create: those are named as “unaccounted” in the daily sweep’s error log. A label only: what the reconcile deletes is decided by the id below.',
+      options: {
+        list: [
+          { title: 'Registered by this system', value: 'registered' },
+          { title: 'Present, not created by this system', value: 'external' },
+        ],
+        layout: 'radio',
+      },
+      readOnly: true,
+    }),
+    defineField({
+      name: 'redirectUriId',
+      title: 'WorkOS Redirect URI Id',
+      type: 'string',
+      description:
+        'WorkOS’s id for the URI this system created. The only thing a delete is ever addressed to, so editing it by hand changes what the reconcile will delete; marking the status “external” does not protect a URI while its id is here.',
+      readOnly: true,
+    }),
+    defineField({
+      name: 'redirectUriError',
+      title: 'WorkOS Redirect URI Last Error',
+      type: 'string',
+      description:
+        'Why the last attempt to register or remove the URI failed. Cleared by the next success; retried by the daily sweep.',
+      readOnly: true,
+    }),
   ],
   preview: {
     select: { title: 'hostname', subtitle: 'status' },

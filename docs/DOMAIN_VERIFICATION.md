@@ -278,21 +278,131 @@ immediately.
 The redirect allowlist is **not** flag-gated. It is a new surface with no
 existing consumers, so it fails closed from day one.
 
+## WorkOS redirect URIs (workshop sign-in)
+
+The attendee workshop portal signs in through one WorkOS environment shared by
+every tenant, with the redirect URI chosen per request (#1296). WorkOS only
+sends a code to a URI it has on file, so the list there is kept in step with our
+own records by a reconcile (`src/lib/workshop/redirect-uris`, #1297).
+
+**Which hosts get one.** A host's `/api/auth/callback` is registered when both
+hold:
+
+- the host is **platform-controlled** (`isPlatformControlledHost`): on the
+  redirect allowlist above, and either platform-allocated or a host of the
+  platform organization (`PLATFORM_ORG_ID`) whose DNS proof has actually
+  resolved (`method: dns-txt`). A `grandfathered` record is on the allowlist
+  for its grace period without proof, and so is a platform allocation whose
+  suffix has since changed; neither is enough here. Proof that a tenant controls a
+  domain's DNS is enough for routing, but a redirect URI in a shared WorkOS
+  client has to be on a host the platform itself serves (#1306);
+- the conference claiming it has workshops enabled.
+
+Exact host only. A wildcard claim registers nothing.
+
+> **Not yet consistent with sign-in.** The sign-in decision
+> (`resolveWorkshopSignInHost`) still admits any host on the redirect allowlist.
+> A tenant's own verified domain can therefore start a sign-in that WorkOS
+> refuses, because no redirect URI is registered for it. #1306 makes the sign-in
+> decision call the same rule and points portal links at the tenant's platform
+> host.
+
+**When it runs.** Only on the production deployment (`VERCEL_ENV=production`),
+with `WORKOS_API_KEY` set:
+
+- after the response of a mutation that wrote a verification record (a claim, a
+  release, a platform allocation);
+- after an admin re-check that changed whether the host is on the allowlist, or
+  replaced a grandfathered standing with a real proof;
+- after an organization's plan or feature overrides change (the cached
+  organization is expired at once, so the reconcile reads the new plan);
+- at the end of the daily sweep, which also retries whatever failed earlier.
+
+Anything else that changes the answer is picked up by the daily sweep: ticketing
+credentials, a conference moving to another organization, and a plan changed from outside this app (the control panel writes `organization` documents directly; the organization is cached for hours here, so that one can take a second sweep). A WorkOS
+failure never fails the mutation that triggered it.
+
+Local development and previews read the production dataset, and the outcome is
+stored in that dataset, so a run against a staging WorkOS environment would
+overwrite production's ids. To exercise the API against staging, use
+`pnpm tsx scripts/probe-workos-redirect-uris.ts`, which touches WorkOS only.
+
+**What it will delete.** Only a URI it created itself: the id WorkOS returned
+for that create is on the host's record, and WorkOS lists that id on a URI of
+that host. Everything else is recorded as `external` and left alone. When its host is released the record is cleared and the URI stays in WorkOS: the environment's default URI, anything added by
+hand in the dashboard, and one of our own creates whose answer never arrived.
+Ownership is never inferred from a URI's text or age. The record is the ledger,
+so this holds against everything except someone who can write the dataset; an id
+copied onto another host's record is ignored, because its URI is not that
+host's.
+
+Before each create it lists WorkOS again, so a URI that someone added since the
+run started is found and recorded as `external` rather than created twice. One
+case is left, and only if WorkOS answers a create for a URI it already has with
+the existing entry (not known; the probe script prints it): a URI added in the
+moment between that listing and the create would be taken for this system's
+own. Nothing WorkOS returns tells a new entry from an old one.
+
+Callback URIs that no host accounts for are named in the sweep's error log as
+`unaccounted` (a URI nobody wants any more, or a duplicate of one this system
+registered). Removing them is a person's decision. A host the run could not
+bring into step is named there too.
+
+**How fast a URI goes away.** A release, a re-check and a plan change remove it
+after the response. Everything else waits for the daily sweep:
+
+| What happened                                         | URI removed within                       |
+| ----------------------------------------------------- | ---------------------------------------- |
+| The proof is gone (NXDOMAIN, no TXT)                  | about 24 hours                           |
+| The zone's nameservers stopped answering              | about 5 days (`SOFT_FAILURE_ESCALATION`) |
+| WorkOS refuses the delete                             | 24 hours per retry, until it succeeds    |
+| The sweep does not run                                | never, until some reconcile runs         |
+| The host's A or CNAME dangles while the TXT is intact | not detected (as for the allowlist)      |
+
+The first two match the redirect allowlist. The next two do not: the allowlist
+expires on its own after 30 days without a successful check, while a redirect
+URI is only ever removed by a reconcile that runs.
+
+**What is recorded** on the host's `domainVerification` document (fields added,
+nothing changed):
+
+| Field               | Meaning                                                  |
+| ------------------- | -------------------------------------------------------- |
+| `redirectUriStatus` | `registered` (ours) or `external` (found, no id held)    |
+| `redirectUriId`     | WorkOS's id for a URI this system created                |
+| `redirectUriError`  | why the last attempt failed; cleared by the next success |
+
+A run with nothing to change only reads; it writes nothing. One exception depends on
+behaviour of WorkOS that has not been observed: if it stores a URI spelled
+differently from what it was sent and answers a repeated create with the entry
+it already has, a host whose URI someone else added gets that create asked again
+on every run. Nothing changes in WorkOS and nothing is written here.
+
+Every write to these fields is conditional on the document revision the run
+read. When a record moved on while WorkOS was answering (released, re-claimed,
+re-checked, or handled by an overlapping run), the record is read again before
+anything else is decided: a URI just created for a host that is no longer wanted
+is deleted again, and a URI just deleted for a host that is wanted again is put
+back. If deleting it again fails too, its id is put on the record so the next
+run removes it; if the record will not take it, the id is in the error log only.
+
 ## Moving parts
 
-| Path                                              | Role                                                                    |
-| ------------------------------------------------- | ----------------------------------------------------------------------- |
-| `src/lib/domain-verification/challenge.ts`        | record names, tokens, host classification                               |
-| `src/lib/domain-verification/platform.ts`         | the `PLATFORM_DOMAIN_SUFFIX` contract, label-wise matcher, host minting |
-| `src/lib/onboarding/provision.ts`                 | claims + allocates the minted host in the tenant transaction            |
-| `src/lib/domain-verification/dns.ts`              | bounded, uncached TXT resolution + hard/soft classification             |
-| `src/lib/domain-verification/policy.ts`           | the delisting policy (pure)                                             |
-| `src/lib/domain-verification/allowlist.ts`        | exact-host OAuth redirect allowlist (#688 consumes this)                |
-| `src/lib/domain-verification/routing.ts`          | the flag-gated routing gate                                             |
-| `src/lib/domain-verification/sweep.ts`            | continuous re-verification + organizer alerts                           |
-| `src/app/api/cron/domain-verification/route.ts`   | daily cron (05:00 UTC)                                                  |
-| `src/server/routers/domainVerification.ts`        | admin list + re-check                                                   |
-| `src/components/admin/DomainVerificationCard.tsx` | `/admin/settings#domain-verification`                                   |
+| Path                                                 | Role                                                                     |
+| ---------------------------------------------------- | ------------------------------------------------------------------------ |
+| `src/lib/domain-verification/challenge.ts`           | record names, tokens, host classification                                |
+| `src/lib/domain-verification/platform.ts`            | the `PLATFORM_DOMAIN_SUFFIX` contract, label-wise matcher, host minting  |
+| `src/lib/onboarding/provision.ts`                    | claims + allocates the minted host in the tenant transaction             |
+| `src/lib/domain-verification/dns.ts`                 | bounded, uncached TXT resolution + hard/soft classification              |
+| `src/lib/domain-verification/policy.ts`              | the delisting policy (pure)                                              |
+| `src/lib/domain-verification/allowlist.ts`           | exact-host OAuth redirect allowlist (#688 consumes this)                 |
+| `src/lib/domain-verification/routing.ts`             | the flag-gated routing gate                                              |
+| `src/lib/domain-verification/sweep.ts`               | continuous re-verification + organizer alerts, then the WorkOS reconcile |
+| `src/lib/domain-verification/platform-controlled.ts` | which hosts may carry a WorkOS sign-in (one rule)                        |
+| `src/lib/workshop/redirect-uris/`                    | WorkOS redirect-URI client and reconcile                                 |
+| `src/app/api/cron/domain-verification/route.ts`      | daily cron (05:00 UTC)                                                   |
+| `src/server/routers/domainVerification.ts`           | admin list + re-check                                                    |
+| `src/components/admin/DomainVerificationCard.tsx`    | `/admin/settings#domain-verification`                                    |
 
 DNS resolution uses a dedicated `node:dns` `Resolver` with an explicit timeout
 and a fixed `tries`, plus an outer wall-clock race. Nothing about verification is
