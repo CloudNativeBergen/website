@@ -37,7 +37,7 @@ export function workshopSignInLabel(
       return {
         status: 'error',
         label: 'registration failed',
-        detail: `It is retried automatically with the next daily check. ${NOT_YET}`,
+        detail: `${standing.error.replace(/\.*$/, '')}. It is retried automatically with the next daily check. ${NOT_YET}`,
       }
     case 'not-offered':
       return {

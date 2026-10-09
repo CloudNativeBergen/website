@@ -9,7 +9,8 @@
  * same answer.
  *
  * - `ready` — verified, and WorkOS has the URI (`registered` by the sync, or
- *   `external`: found there without an id of ours).
+ *   `external`: found there without an id of ours), with no failure recorded
+ *   since.
  * - `unverified` — no record, or the allowlist refuses it.
  * - `not-offered` — verified, but not a host the sync registers
  *   (`isPlatformControlledHost`, #1306), so it will never become ready.
@@ -48,9 +49,12 @@ export function workshopSignInStanding({
   if (!record || !isAllowlistEligible(record, now)) {
     return { state: 'unverified' }
   }
+  // A recorded error rules `ready` out: a failed create keeps an earlier
+  // `registered` id on the record (it is still what a delete addresses), so
+  // the status alone does not say WorkOS has the URI now.
   if (
-    redirectUri?.status === 'registered' ||
-    redirectUri?.status === 'external'
+    !redirectUri?.error &&
+    (redirectUri?.status === 'registered' || redirectUri?.status === 'external')
   ) {
     return { state: 'ready' }
   }

@@ -113,12 +113,7 @@ function WorkshopSignInLine({
         Workshop sign-in:{' '}
         <span className={clsx('font-medium', SIGN_IN_TEXT[tone])}>{label}</span>
       </p>
-      {standing.state === 'failed' && (
-        <p className="mt-1 font-mono break-words text-red-700 dark:text-red-300">
-          {standing.error}
-        </p>
-      )}
-      {detail && <p className="mt-1">{detail}</p>}
+      {detail && <p className="mt-1 break-words">{detail}</p>}
     </div>
   )
 }

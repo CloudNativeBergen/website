@@ -979,11 +979,7 @@ async function workshopSignInChecks(
           label: `Workshop sign-in: ${hostname}`,
           status,
           value: label,
-          ...(workshopSignIn.state === 'failed'
-            ? { detail: `${workshopSignIn.error}. ${detail}` }
-            : detail
-              ? { detail }
-              : {}),
+          ...(detail ? { detail } : {}),
         },
       ]
     })

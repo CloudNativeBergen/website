@@ -149,6 +149,13 @@ describe('resolveWorkshopSignInHost — everything else is refused', () => {
     ).resolves.toBeNull()
   })
 
+  it('refuses a registered host whose recreation WorkOS rejected', async () => {
+    hosts(record({}, { status: 'registered', error: 'WorkOS POST 500' }))
+    await expect(
+      resolveWorkshopSignInHost('conf.example.org'),
+    ).resolves.toBeNull()
+  })
+
   it('refuses when the record found under the id names another host', async () => {
     getRedirectUriSyncRow.mockResolvedValue(
       record({ hostname: 'other.example.org' }),

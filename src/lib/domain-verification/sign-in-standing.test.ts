@@ -55,6 +55,23 @@ describe('workshopSignInStanding', () => {
     ).toEqual({ state: 'failed', error: 'WorkOS 422: invalid uri' })
   })
 
+  it('is failed, not ready, when a URI it once registered could not be recreated', () => {
+    // `register()` keeps the old id on a failed create and records only the
+    // error, so `registered` alone does not mean WorkOS still has the URI.
+    expect(
+      workshopSignInStanding({
+        record: verifiedHost(HOST),
+        redirectUri: redirectUri({
+          status: 'registered',
+          id: 'ru_1',
+          error: 'WorkOS POST 500: recreation failed',
+        }),
+        platformControlled: true,
+        now,
+      }),
+    ).toEqual({ state: 'failed', error: 'WorkOS POST 500: recreation failed' })
+  })
+
   it('is not offered on a verified host that is not platform-controlled and not registered', () => {
     expect(
       workshopSignInStanding({
