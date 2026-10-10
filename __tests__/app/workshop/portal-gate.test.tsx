@@ -404,15 +404,14 @@ describe('workshop portal — signed-in attendee', () => {
 })
 
 /**
- * #1296. Sign-in and sign-out go through the SDK. The page used to assemble a
- * WorkOS authorize URL by hand (no PKCE, callback on the single
- * `NEXT_PUBLIC_URL` host) and to link "Sign Out" at NextAuth's route, which
- * belongs to a different auth system and left the WorkOS session alive.
+ * #1296. Sign-in and sign-out go through the SDK: the page builds no WorkOS
+ * URL of its own, and "Sign Out" is the SDK action — not NextAuth's route,
+ * which belongs to a different auth system and leaves the WorkOS session
+ * alive.
  */
 describe('workshop portal — sign-in and sign-out go through the SDK', () => {
   beforeEach(() => {
     vi.stubEnv('PLATFORM_ORG_ID', 'org-platform')
-    vi.stubEnv('NEXT_PUBLIC_URL', 'https://single-host.example.org')
     vi.stubEnv('WORKOS_CLIENT_ID', 'client_test')
     mockGetConference.mockResolvedValue({
       conference: conference('org-platform'),

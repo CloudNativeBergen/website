@@ -187,7 +187,7 @@ describe.each([
     ])
   })
 
-  it('ignores a client-sent x-redirect-uri and the single-host env URI', async () => {
+  it('ignores a client-sent x-redirect-uri and the SDK’s env fallback', async () => {
     const response = await handler(
       onHost(TENANT_B, { 'x-redirect-uri': 'https://evil.example.org/steal' }),
     )

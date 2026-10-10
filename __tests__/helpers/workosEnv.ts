@@ -3,9 +3,10 @@
  * needs, set before it loads. The SDK captures its configuration in module
  * scope, so a suite that runs it unmocked must import this file FIRST.
  *
- * `NEXT_PUBLIC_WORKOS_REDIRECT_URI` is a DECOY: it is the single-host fallback
- * the SDK reaches for whenever a caller forgets to pass `redirectUri`. No
- * assertion in #1296 may ever see it in a redirect.
+ * `NEXT_PUBLIC_WORKOS_REDIRECT_URI` is a DECOY: it is the fallback the SDK
+ * reaches for whenever a caller forgets to pass `redirectUri`. No assertion may
+ * ever see it in a redirect. The deployment leaves the variable unset (#1299);
+ * `workosEnvWithoutRedirectUri.ts` is that shape.
  *
  * It is NOT inert, though. Where the SDK has no request URL to judge by
  * (`getSignInUrl`, `getSignUpUrl`, `signOut`) it takes the cookie's `Secure`

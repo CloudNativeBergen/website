@@ -119,7 +119,7 @@ function isWorkshopPortalView(req: NextRequest): boolean {
  *
  * THE MIDDLEWARE IS BUILT PER REQUEST because `authkitMiddleware` captures its
  * options — `redirectUri` included — when the factory is called. A module-level
- * instance is exactly the single-host binding this replaces. The factory is a
+ * instance could name only one callback for every host. The factory is a
  * closure over its arguments and nothing more, so building it here costs
  * nothing; it also keeps the SDK's in-place edits to `unauthenticatedPaths`
  * from leaking between requests.
