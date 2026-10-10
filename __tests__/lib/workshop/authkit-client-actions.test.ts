@@ -14,7 +14,7 @@
  *     path OUTSIDE the proxy's `/workshop*` matcher it runs with no host
  *     decision at all, and `getAuthAction({ ensureSignedIn: true })` then builds
  *     an authorize URL from a client-controlled `x-redirect-uri` header or the
- *     single-host env URI — WorkOS code reached without the allowlist.
+ *     SDK's env fallback — WorkOS code reached without the allowlist.
  *  2. `AuthKitProvider` calls one on every mount and another on every window
  *     focus. Each is a POST through the proxy, i.e. one live Sanity read.
  *

@@ -9,18 +9,17 @@ import { WORKSHOP_PORTAL_PATH } from './sign-in-paths'
  * handlers behind the two buttons (GET forms) on the signed-out page.
  *
  * The authorize URL comes from the SDK (`getSignInUrl` / `getSignUpUrl`), which
- * generates the PKCE pair, seals the state and sets the verifier cookie. It
- * replaces a URL the page used to assemble by hand, with no PKCE and with the
- * single `NEXT_PUBLIC_URL` host as its callback.
+ * generates the PKCE pair, seals the state and sets the verifier cookie.
  *
  * THE DECISION COMES FIRST (`resolveWorkshopSignInForRequest`: the host is
  * verified AND its tenant has workshops) and its `redirectUri` is passed
  * EXPLICITLY. Left to itself the SDK takes the callback from an
  * `x-redirect-uri` request header — set by the proxy on `/workshop*`, but a
  * client-controlled value on any path the proxy does not cover — and then from
- * the single-host env URI. Deciding again here costs one more allowlist read on
- * a path that is only hit when someone actually starts a sign-in, and means
- * this stays correct even if the proxy's matcher is ever changed.
+ * `NEXT_PUBLIC_WORKOS_REDIRECT_URI`, its own fallback, which nothing here
+ * relies on (#1299). Deciding again here costs one more allowlist read on a
+ * path that is only hit when someone actually starts a sign-in, and means this
+ * stays correct even if the proxy's matcher is ever changed.
  *
  * THIS IS THE ONLY PLACE A SIGNED-OUT VISITOR IS SENT TO WORKOS — the proxy
  * does not bounce anyone — which is why the feature gate is checked here: a
