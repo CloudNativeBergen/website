@@ -5,8 +5,8 @@
  *
  * `NEXT_PUBLIC_WORKOS_REDIRECT_URI` is a DECOY: it is the fallback the SDK
  * reaches for whenever a caller forgets to pass `redirectUri`. No assertion may
- * ever see it in a redirect. The deployment leaves the variable unset (#1299);
- * `workosEnvWithoutRedirectUri.ts` is that shape.
+ * ever see it in a redirect. A deployment is meant to leave the variable unset
+ * (#1299); `workosEnvWithoutRedirectUri.ts` is that shape.
  *
  * It is NOT inert, though. Where the SDK has no request URL to judge by
  * (`getSignInUrl`, `getSignUpUrl`, `signOut`) it takes the cookie's `Secure`

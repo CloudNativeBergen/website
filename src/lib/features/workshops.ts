@@ -35,8 +35,9 @@ import { canReadTicketsForOrg, isTicketingEnabledForOrg } from './ticketing'
  * deployment and the platform org qualifies by plan like any other tenant.
  * THIS GATE AND THAT ONE ARE SEPARATE QUESTIONS: this says a tenant has
  * workshops, the other says one of its hosts can sign in. A tenant this gate
- * turns on, whose host cannot sign in, has a portal that shows the unavailable
- * view (`WorkshopUnavailable`, #1298).
+ * turns on, on a host that cannot sign in, gets the unavailable view
+ * (`WorkshopUnavailable`, #1298) or is sent to its first domain's portal when
+ * that one can.
  *
  * What the platform org still holds by identity is TICKETING — the platform
  * env account — which is why it satisfies the second half of the rule with no

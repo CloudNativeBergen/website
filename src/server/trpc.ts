@@ -52,9 +52,9 @@ export interface WorkshopUserIdentity {
  * on a host the verified-redirect allowlist admits, and reads the session with
  * that host's own callback as `redirectUri`. This does both too — the API must
  * never be more permissive than the page, and `authkit()` without an explicit
- * `redirectUri` falls back to `NEXT_PUBLIC_WORKOS_REDIRECT_URI` (not set in
- * this deployment) and then to a client-sent `x-redirect-uri` header, since
- * nothing strips it on `/api/trpc`.
+ * `redirectUri` falls back to `NEXT_PUBLIC_WORKOS_REDIRECT_URI` (which nothing
+ * here relies on, #1299) and then to a client-sent `x-redirect-uri` header,
+ * since nothing strips it on `/api/trpc`.
  * A host that is not allowlisted resolves no attendee and never enters the SDK.
  *
  * ONLY FOR `workshop.*` (see {@link namesWorkshopProcedure}): the decision is a

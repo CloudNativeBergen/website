@@ -17,7 +17,7 @@ export function SharedWorkshopLoginNotice() {
         of another conference hosted here, the login you already have is
         recognised, and the same WorkOS User ID is stored with your
         registrations there. Organizers see only the workshop registrations for
-        their own conference.
+        their own organization&apos;s conferences.
       </p>
     </div>
   )

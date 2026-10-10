@@ -16,10 +16,10 @@ import { WORKSHOP_PORTAL_PATH } from './sign-in-paths'
  * EXPLICITLY. Left to itself the SDK takes the callback from an
  * `x-redirect-uri` request header — set by the proxy on `/workshop*`, but a
  * client-controlled value on any path the proxy does not cover — and then from
- * `NEXT_PUBLIC_WORKOS_REDIRECT_URI`, which this deployment does not set.
- * Deciding again here costs one more allowlist read on a path that is only hit
- * when someone actually starts a sign-in, and means this stays correct even if
- * the proxy's matcher is ever changed.
+ * `NEXT_PUBLIC_WORKOS_REDIRECT_URI`, its own fallback, which nothing here
+ * relies on (#1299). Deciding again here costs one more allowlist read on a
+ * path that is only hit when someone actually starts a sign-in, and means this
+ * stays correct even if the proxy's matcher is ever changed.
  *
  * THIS IS THE ONLY PLACE A SIGNED-OUT VISITOR IS SENT TO WORKOS — the proxy
  * does not bounce anyone — which is why the feature gate is checked here: a
