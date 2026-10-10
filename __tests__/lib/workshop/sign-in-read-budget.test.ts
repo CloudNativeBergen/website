@@ -3,11 +3,12 @@
  *
  * THE READ BUDGET of the workshop sign-in (#1296).
  *
- * The verified-redirect allowlist is read LIVE from Sanity on every decision —
+ * The host's verification and redirect-URI state are read LIVE from Sanity on
+ * every decision —
  * a cached answer is a delisting that has not taken effect — and the project
  * has 250k live API requests a month. So the number of reads each entry point
  * spends is a contract, counted here at the live client
- * (`clientReadUncached.fetch`) with the REAL allowlist query and policy and the
+ * (`clientReadUncached.fetch`) with the REAL by-id query and sign-in policy and the
  * REAL proxy, callback, sign-in route and sign-out action in between, on the
  * real AuthKit SDK. The tRPC cases stub `authkit()` — they count the reads
  * taken BEFORE it, which is all this feature adds there.
@@ -23,23 +24,37 @@
 import '../../helpers/workosEnv'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { NextRequest, type NextFetchEvent } from 'next/server'
-import { verifiedHost } from '../../helpers/workshopSignIn'
+import { signInHost, isPortalRedirect } from '../../helpers/workshopSignIn'
 import { beginRequest, writtenCookies } from '../../helpers/nextHeadersJar'
 
 const HOST = 'conf.example.org'
 
 /** Every live read, by GROQ query. */
-const liveReads = vi.fn(async (query: string) => {
-  // The one query this feature may issue: the allowlist candidates.
-  if (query.includes('_type == "domainVerification"')) {
-    return [verifiedHost(HOST)]
+const liveReads = vi.fn(async (query: string, params?: { id: string }) => {
+  // The one query this feature may issue: this host's own sign-in state.
+  if (
+    query.includes('*[_type == "domainVerification" && _id == $id][0]') &&
+    query.includes('redirectUriStatus')
+  ) {
+    const row = signInHost(HOST)
+    if (params?.id !== row.record._id) return null
+    return {
+      ...row.record,
+      _rev: row.rev,
+      redirectUriStatus: row.redirectUri.status,
+      redirectUriId: row.redirectUri.id,
+      redirectUriError: row.redirectUri.error,
+      conference: row.conference,
+    }
   }
   throw new Error(`unexpected live read: ${query}`)
 })
 
 vi.mock('@/lib/sanity/client', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/sanity/client')>()),
-  clientReadUncached: { fetch: (query: string) => liveReads(query) },
+  clientReadUncached: {
+    fetch: (query: string, params?: { id: string }) => liveReads(query, params),
+  },
 }))
 
 vi.mock('next/headers', () => import('../../helpers/nextHeadersJar'))
@@ -77,6 +92,11 @@ const exchangeCode = vi.spyOn(
   sdk.getWorkOS().userManagement,
   'authenticateWithCode',
 )
+const buildAuthorizationUrl = vi.spyOn(
+  sdk.getWorkOS().userManagement,
+  'getAuthorizationUrl',
+)
+const generatePkce = vi.spyOn(sdk.getWorkOS().pkce, 'generate')
 
 function request(
   path: string,
@@ -115,22 +135,57 @@ describe('live Sanity reads per entry point', () => {
     expect(liveReads).toHaveBeenCalledTimes(1)
   })
 
-  it('a /workshop request on a host that may not sign in: 1, and nothing after it', async () => {
+  it('the /workshop page on a host that may not sign in: 1 in the proxy — marked, no SDK', async () => {
     const response = (await middleware(
       request('/workshop', { host: 'unverified.example.org' }),
       event,
     )) as Response
 
-    expect(response.status).toBe(404)
+    // Let through to the unavailable view (#1298), without the SDK. The page
+    // then reads the main host's record once (is there a working portal to
+    // send the attendee to?) — pinned in `portal-gate.test.tsx`.
+    expect(
+      response.headers.get(
+        'x-middleware-request-x-workshop-sign-in-unavailable',
+      ),
+    ).toBe('1')
+    expect(liveReads).toHaveBeenCalledTimes(1)
+  })
+
+  it('a /workshop/sign-in request on a host that may not sign in: 1, and nothing after it', async () => {
+    // /workshop itself is now let through marked (#1298), covered in the proxy tests.
+    const response = (await middleware(
+      request('/workshop/sign-in', { host: 'unverified.example.org' }),
+      event,
+    )) as Response
+
+    expect(response.status).toBe(307)
+    expect(isPortalRedirect(response.headers.get('location'))).toBe(true)
+    expect(response.headers.getSetCookie()).toEqual([])
+    expect(
+      response.headers.get('x-middleware-request-x-redirect-uri'),
+    ).toBeNull()
+    expect(buildAuthorizationUrl).not.toHaveBeenCalled()
+    expect(generatePkce).not.toHaveBeenCalled()
     expect(liveReads).toHaveBeenCalledTimes(1)
   })
 
   it('a request with a malformed Host: 0', async () => {
-    const malformed = new NextRequest(`https://${HOST}/workshop`, {
+    // /workshop itself is now let through marked (#1298), covered in the proxy tests.
+    const malformed = new NextRequest(`https://${HOST}/workshop/sign-in`, {
       headers: new Headers({ host: `attacker@${HOST}` }),
     })
 
-    expect(((await middleware(malformed, event)) as Response).status).toBe(404)
+    const response = (await middleware(malformed, event)) as Response
+
+    expect(response.status).toBe(307)
+    expect(isPortalRedirect(response.headers.get('location'))).toBe(true)
+    expect(response.headers.getSetCookie()).toEqual([])
+    expect(
+      response.headers.get('x-middleware-request-x-redirect-uri'),
+    ).toBeNull()
+    expect(buildAuthorizationUrl).not.toHaveBeenCalled()
+    expect(generatePkce).not.toHaveBeenCalled()
     expect(liveReads).not.toHaveBeenCalled()
   })
 

@@ -6,6 +6,7 @@ import {
 } from '@/lib/conference/sanity'
 import { isWorkshopsEnabledForConference } from '@/lib/features/workshops'
 import { workshopAccessOf } from '@/lib/workshop/eligibility'
+import { workshopPortalUrl } from '@/lib/workshop/sign-in'
 import {
   conferenceProviderType,
   getTicketingProvider,
@@ -269,11 +270,9 @@ export async function POST(request: NextRequest) {
     // cannot work is worse than silence: send NOTHING. Fail-closed — an
     // unresolvable organization suppresses the email too.
     //
-    // NOT COVERED HERE: whether the conference's HOST can sign in. That is a
-    // separate question since #1296 (`resolveWorkshopSignInHost` — the host
-    // must be ownership-verified), and this route does not ask it yet, so an
-    // enabled tenant on an unverified host is still mailed a link that answers
-    // 404. #1298 holds the link back in that case.
+    // NOT A REASON TO SEND NOTHING: a host that cannot sign in yet. The
+    // portal link is decided below and left out while it cannot (#1298); the
+    // email then says online sign-up is not available yet.
     if (!(await isWorkshopsEnabledForConference(conference))) {
       console.warn(
         'Checkin webhook: workshops not enabled for conference',
@@ -292,27 +291,32 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // THE SAME RULE THE `/workshop` GATE USES, from the same function. This
+    // used to be a second verbatim copy of the literal list, so a renamed
+    // ticket type stopped the mail here and barred the door there — two
+    // silent failures from one vendor-side rename, each invisible to the
+    // other. `conference` is the full document, so it carries the tenant's
+    // `ticketTypeRoles`; a conference that declares none keeps today's
+    // behaviour via the bridge inside `workshopAccessOf`.
+    const workshopBuyers = orderData.users.filter(
+      (user) =>
+        workshopAccessOf(user.ticket.name, conference.ticketTypeRoles) ===
+        'granted',
+    )
+
+    // ONE DECISION PER DELIVERY (#1298): whether the main host can sign in is
+    // a live read, the same answer for every attendee in the order, and not
+    // spent at all on an order without a workshop ticket.
+    const portalUrl =
+      workshopBuyers.length > 0 ? await workshopPortalUrl(conference) : null
+
     const emailResults: Array<{
       email: string
       success: boolean
       emailId?: string
     }> = []
 
-    for (const user of orderData.users) {
-      // THE SAME RULE THE `/workshop` GATE USES, from the same function. This
-      // used to be a second verbatim copy of the literal list, so a renamed
-      // ticket type stopped the mail here and barred the door there — two
-      // silent failures from one vendor-side rename, each invisible to the
-      // other. `conference` is the full document, so it carries the tenant's
-      // `ticketTypeRoles`; a conference that declares none keeps today's
-      // behaviour via the bridge inside `workshopAccessOf`.
-      if (
-        workshopAccessOf(user.ticket.name, conference.ticketTypeRoles) !==
-        'granted'
-      ) {
-        continue
-      }
-
+    for (const user of workshopBuyers) {
       const userName = `${user.crm.firstName} ${user.crm.lastName}`.trim()
 
       const emailResult = await sendWorkshopSignupInstructions({
@@ -320,6 +324,7 @@ export async function POST(request: NextRequest) {
         userName,
         conference,
         ticketCategory: user.ticket.name,
+        portalUrl,
       })
 
       if (emailResult.error) {

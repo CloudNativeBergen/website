@@ -5,8 +5,8 @@
  * (its scoped threshold was gated at 0 to keep the gap visible). The middleware
  * is the app's first auth gate, so its routing and production guards are
  * security-relevant:
- *   - path routing: /workshop → WorkOS (on a verified host, #1296), protected
- *     /cfp|/admin|/cli → NextAuth, everything else (incl. bare /cfp) →
+ *   - path routing: /workshop → WorkOS (on a verified and registered host,
+ *     #1298), protected /cfp|/admin|/cli → NextAuth, everything else (incl. bare /cfp) →
  *     pass-through.
  *   - production hard guards: dev-tools 404 gate + impersonation-param strip.
  *   - unauthenticated → sign-in redirect (preserving callbackUrl).
@@ -22,8 +22,9 @@
  * The workshop branch is exercised against the REAL SDK in
  * `proxy.workshop.test.ts`; here the SDK is a sentinel, so these cases pin only
  * WHICH requests reach it and with what options. The Sanity boundary behind the
- * verified-redirect allowlist is supplied so the real decision runs.
+ * host’s own redirect-URI sync row is supplied so the real decision runs.
  */
+import { isPortalRedirect } from '../../helpers/workshopSignIn'
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { NextRequest, type NextFetchEvent } from 'next/server'
 
@@ -35,7 +36,7 @@ const h = vi.hoisted(() => ({
   workOSMiddleware: vi.fn(),
   // The factory, so the per-request options can be asserted.
   authkitMiddleware: vi.fn(),
-  // Hostnames currently on the verified-redirect allowlist.
+  // Hostnames currently verified and registered in WorkOS.
   verifiedHosts: [] as string[],
 }))
 
@@ -44,9 +45,12 @@ vi.mock('@workos-inc/authkit-nextjs', () => ({
 }))
 
 vi.mock('@/lib/domain-verification/sanity', () => ({
-  listAllowlistCandidates: async () => {
-    const { verifiedHost } = await import('../../helpers/workshopSignIn')
-    return h.verifiedHosts.map((hostname) => verifiedHost(hostname))
+  getRedirectUriSyncRow: async (id: string) => {
+    const { signInHost, signInHostsById } =
+      await import('../../helpers/workshopSignIn')
+    return signInHostsById(
+      h.verifiedHosts.map((hostname) => signInHost(hostname)),
+    )(id)
   },
 }))
 
@@ -78,7 +82,7 @@ function req(path: string, opts: { authUser?: string } = {}): NextRequest {
 
 const event = {} as NextFetchEvent
 
-/** A host on the verified-redirect allowlist for these tests. */
+/** A host verified and registered in WorkOS for these tests. */
 const VERIFIED_HOST = 'conf.example.org'
 
 /** Request `path` on `host`, as a browser would: URL and Host header agree. */
@@ -137,7 +141,7 @@ describe('middleware — path routing', () => {
 
 /**
  * The workshop portal signs in on the host the attendee is on, and only when
- * that host is on the verified-redirect allowlist (#1296). The single-host
+ * that host is verified and registered in WorkOS (#1298). The single-host
  * check this replaces (`isWorkOSAuthHost`, fed by `WORKOS_REDIRECT_URI` and
  * `NEXT_PUBLIC_URL`) is gone: neither variable grants or refuses anything.
  */
@@ -170,20 +174,24 @@ describe('middleware — /workshop host decision', () => {
     ])
   })
 
-  it('404s /workshop on a host that is not on the allowlist, without building it', async () => {
+  it('sends /workshop/sign-in to the portal page on a host that cannot sign in, without building it', async () => {
+    // /workshop itself now passes through marked (#1298), covered in proxy tests.
     const res = (await middleware(
-      reqOnHost('/workshop', 'tenant2.example.org'),
+      reqOnHost('/workshop/sign-in', 'tenant2.example.org'),
       event,
     )) as Response
 
-    expect(res.status).toBe(404)
+    expect(res.status).toBe(307)
+    expect(isPortalRedirect(res.headers.get('location'))).toBe(true)
+    expect(res.headers.getSetCookie()).toEqual([])
+    expect(res.headers.get('x-middleware-request-x-redirect-uri')).toBeNull()
     expect(h.authkitMiddleware).not.toHaveBeenCalled()
     expect(h.workOSMiddleware).not.toHaveBeenCalled()
   })
 
   it('404s nested /workshop/* on such a host too', async () => {
     const res = (await middleware(
-      reqOnHost('/workshop/sign-in', 'tenant2.example.org'),
+      reqOnHost('/workshop/sign-in/x', 'tenant2.example.org'),
       event,
     )) as Response
 
@@ -198,12 +206,16 @@ describe('middleware — /workshop host decision', () => {
     )
     vi.stubEnv('NEXT_PUBLIC_URL', 'https://public.example.org')
 
+    // /workshop itself now passes through marked (#1298), covered in proxy tests.
     for (const host of ['env.example.org', 'public.example.org']) {
       const res = (await middleware(
-        reqOnHost('/workshop', host),
+        reqOnHost('/workshop/sign-in', host),
         event,
       )) as Response
-      expect(res.status).toBe(404)
+      expect(res.status).toBe(307)
+      expect(isPortalRedirect(res.headers.get('location'))).toBe(true)
+      expect(res.headers.getSetCookie()).toEqual([])
+      expect(res.headers.get('x-middleware-request-x-redirect-uri')).toBeNull()
     }
     expect(h.authkitMiddleware).not.toHaveBeenCalled()
   })
@@ -226,17 +238,22 @@ describe('middleware — /workshop host decision', () => {
     )
   })
 
-  it('404s when nothing at all is verified (the fallback-to-open is gone)', async () => {
+  it('sends /workshop/sign-in to the portal page when nothing at all is verified (the fallback-to-open is gone)', async () => {
+    // /workshop itself now passes through marked (#1298), covered in proxy tests.
     h.verifiedHosts = []
     vi.stubEnv('WORKOS_REDIRECT_URI', '')
     vi.stubEnv('NEXT_PUBLIC_URL', 'not a url')
 
     const res = (await middleware(
-      reqOnHost('/workshop', 'anything.example.org'),
+      reqOnHost('/workshop/sign-in', 'anything.example.org'),
       event,
     )) as Response
 
-    expect(res.status).toBe(404)
+    expect(res.status).toBe(307)
+    expect(isPortalRedirect(res.headers.get('location'))).toBe(true)
+    expect(res.headers.getSetCookie()).toEqual([])
+    expect(res.headers.get('x-middleware-request-x-redirect-uri')).toBeNull()
+    expect(h.authkitMiddleware).not.toHaveBeenCalled()
     expect(h.workOSMiddleware).not.toHaveBeenCalled()
   })
 })

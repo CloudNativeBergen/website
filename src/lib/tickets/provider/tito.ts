@@ -237,6 +237,10 @@ export class TitoProvider implements TicketingProvider {
         `/${accountSlug}/${eventSlug}/tickets?page[number]=${page}`,
       )
       for (const t of data.tickets ?? []) {
+        // A VOID ticket is nobody's ticket. Tito's list leaves them out unless
+        // asked, but that is its default, not ours to rely on: this list
+        // decides who holds workshop access and who is mailed about it.
+        if (t.state === 'void') continue
         tickets.push(this.mapTicket(t))
       }
       page = data.meta?.next_page ?? undefined

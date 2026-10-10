@@ -55,6 +55,16 @@ vi.mock('@/lib/sanity/client', () => ({
   clientReadUncached: { fetch: h.fetch },
 }))
 
+/** The sign-in decision (`sign-in.test.ts`) — the page only forwards it. */
+const mockWorkshopPortalUrl = vi.fn<() => Promise<string | null>>()
+vi.mock('@/lib/workshop/sign-in', async (importOriginal) => ({
+  // `workshopMainHost` is pure and runs for real.
+  workshopMainHost: (
+    await importOriginal<typeof import('@/lib/workshop/sign-in')>()
+  ).workshopMainHost,
+  workshopPortalUrl: () => mockWorkshopPortalUrl(),
+}))
+
 import WorkshopAdminPage from '@/app/(admin)/admin/workshops/page'
 
 const PLATFORM_SLUG = 'platform-org'
@@ -67,6 +77,7 @@ beforeEach(() => {
   vi.stubEnv('PLATFORM_ORG_ID', OTHER_PLATFORM_ORG_ID)
   stubPlatformTicketingAccount()
   mockGetWorkshops.mockResolvedValue([])
+  mockWorkshopPortalUrl.mockResolvedValue(null)
   mockGetConference.mockResolvedValue({
     conference: {
       _id: 'conf-1',
@@ -128,5 +139,83 @@ describe('/admin/workshops — feature gate', () => {
     await expect(WorkshopAdminPage()).resolves.toBeTruthy()
     expect(mockGetWorkshops).toHaveBeenCalledWith('conf-1')
     expect(h.fetch).not.toHaveBeenCalled()
+  })
+})
+
+describe('/admin/workshops — resend sign-up instructions (#1298)', () => {
+  beforeEach(() => {
+    stubOwnTicketingSecret('org-A')
+    mockGetOrganizationById.mockResolvedValue({
+      _id: 'org-A',
+      name: 'Tenant A',
+      slug: 'tenant-a',
+      plan: 'pro',
+    })
+  })
+
+  async function resendDisabledReason() {
+    const page = (await WorkshopAdminPage()) as {
+      props: { resendDisabledReason: string | null }
+    }
+    return page.props.resendDisabledReason
+  }
+
+  it('offers the resend once the portal link works and registration is open', async () => {
+    mockWorkshopPortalUrl.mockResolvedValue('https://2026.example.org/workshop')
+    await expect(resendDisabledReason()).resolves.toBeNull()
+  })
+
+  it('names the main host while its portal link does not work', async () => {
+    mockWorkshopPortalUrl.mockResolvedValue(null)
+    mockGetConference.mockResolvedValue({
+      conference: {
+        _id: 'conf-1',
+        organization: { _ref: 'org-A', _type: 'reference' },
+        domains: ['2026.example.org', 'conf.konf.app'],
+      },
+      error: null,
+    })
+    await expect(resendDisabledReason()).resolves.toBe(
+      'Available once attendees can sign in on 2026.example.org, the conference’s first domain.',
+    )
+  })
+
+  it('says the conference needs a domain when it has none', async () => {
+    mockWorkshopPortalUrl.mockResolvedValue(null)
+    await expect(resendDisabledReason()).resolves.toBe(
+      'Available once the conference has a domain attendees can sign in on.',
+    )
+  })
+
+  it('says why once registration has closed', async () => {
+    mockWorkshopPortalUrl.mockResolvedValue('https://2026.example.org/workshop')
+    mockGetConference.mockResolvedValue({
+      conference: {
+        _id: 'conf-1',
+        organization: { _ref: 'org-A', _type: 'reference' },
+        workshopRegistrationEnd: new Date(Date.now() - 60_000).toISOString(),
+      },
+      error: null,
+    })
+    await expect(resendDisabledReason()).resolves.toMatch(/has closed/)
+  })
+
+  // Fixing the host would not bring the resend back, so the reason must not
+  // say it would — and the closed check needs no sign-in lookup.
+  it('says registration has closed even when the main host cannot sign in', async () => {
+    mockWorkshopPortalUrl.mockResolvedValue(null)
+    mockGetConference.mockResolvedValue({
+      conference: {
+        _id: 'conf-1',
+        organization: { _ref: 'org-A', _type: 'reference' },
+        domains: ['2026.example.org'],
+        workshopRegistrationEnd: new Date(Date.now() - 60_000).toISOString(),
+      },
+      error: null,
+    })
+    await expect(resendDisabledReason()).resolves.toBe(
+      'Workshop registration has closed.',
+    )
+    expect(mockWorkshopPortalUrl).not.toHaveBeenCalled()
   })
 })

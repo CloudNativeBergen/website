@@ -1,4 +1,5 @@
 import { escapeHtml } from '@/lib/html/escape'
+import { formatRegistrationInstant } from '@/lib/time'
 import { PLATFORM_NAME } from '@/lib/branding/platform'
 import {
   resolveEmailSender,
@@ -7,10 +8,6 @@ import {
   type EmailResult,
 } from './config'
 import type { Conference } from '@/lib/conference/types'
-import {
-  conferenceBaseUrl,
-  hasConferenceDomain,
-} from '@/lib/conference/baseUrl'
 import { resolveConferenceFrom, resolveConferenceContact } from './from'
 import { emailBrandColor } from '@/lib/branding/theme'
 import { resolveEmailBrandPalette } from '@/lib/branding/email'
@@ -36,6 +33,17 @@ export interface WorkshopSignupInstructionsRequest {
   userName: string
   conference: Conference
   ticketCategory: string
+  /**
+   * The portal link, decided once per delivery by `workshopPortalUrl` (#1298):
+   * `null` while the main host cannot sign in, and for a conference with no
+   * domain. The email then says online sign-up is not available yet.
+   */
+  portalUrl: string | null
+  /**
+   * The organizer's resend (#1298), not the ticket-sold email: no purchase
+   * thank-you, and it says the sign-up page is now ready.
+   */
+  resent?: boolean
 }
 
 export async function sendBasicWorkshopConfirmation({
@@ -153,145 +161,162 @@ export async function sendBasicWorkshopConfirmation({
   }
 }
 
-export async function sendWorkshopSignupInstructions({
+/**
+ * The sign-up instructions email, rendered: shared by the ticket-sold
+ * delivery and the organizer's batch resend so both say the same thing.
+ */
+export function renderWorkshopSignupInstructions({
   userEmail,
   userName,
   conference,
   ticketCategory,
-}: WorkshopSignupInstructionsRequest): Promise<
-  EmailResult<{ emailId: string }>
-> {
-  try {
-    const fromEmail = resolveConferenceFrom(conference)
+  portalUrl,
+  resent = false,
+}: WorkshopSignupInstructionsRequest): {
+  from: string
+  to: string[]
+  subject: string
+  html: string
+} {
+  const fromEmail = resolveConferenceFrom(conference)
+  // The ticket provider supplies these; the HTML gets them escaped.
+  const safeName = escapeHtml(userName)
+  const safeCategory = escapeHtml(ticketCategory)
+  const safeEmail = escapeHtml(userEmail)
 
-    const contactEmail = resolveConferenceContact(conference)
+  const contactEmail = resolveConferenceContact(conference)
 
-    const brand = resolveEmailBrandPalette(emailBrandColor(conference?.theme))
+  const brand = resolveEmailBrandPalette(emailBrandColor(conference?.theme))
 
-    const workshopUrl = hasConferenceDomain(conference)
-      ? `${conferenceBaseUrl(conference)}/workshop`
-      : ''
+  const workshopUrl = portalUrl ?? ''
 
-    // GATE THE CLAIM ON THE ACTUAL WINDOW. This email fires on ticket SALE,
-    // which is routinely months before `workshopRegistrationStart` and can also
-    // land after `workshopRegistrationEnd`. The old copy said "Registration Now
-    // Available … first-come, first-served, sign up as soon as possible"
-    // unconditionally, so the most common delivery told the attendee to do
-    // something the server (workshop.signup) refuses with "Workshop registration
-    // opens on …". Same window as the portal page and the signup mutation.
-    const now = Date.now()
-    const startsAt = conference.workshopRegistrationStart
-    const endsAt = conference.workshopRegistrationEnd
-    const registration: 'pending' | 'closed' | 'open' =
-      startsAt && new Date(startsAt).getTime() > now
-        ? 'pending'
-        : endsAt && new Date(endsAt).getTime() < now
-          ? 'closed'
-          : 'open'
+  // GATE THE CLAIM ON THE ACTUAL WINDOW. This email fires on ticket SALE,
+  // which is routinely months before `workshopRegistrationStart` and can also
+  // land after `workshopRegistrationEnd`. The old copy said "Registration Now
+  // Available … first-come, first-served, sign up as soon as possible"
+  // unconditionally, so the most common delivery told the attendee to do
+  // something the server (workshop.signup) refuses with "Workshop registration
+  // opens on …". Same window as the portal page and the signup mutation.
+  const now = Date.now()
+  const startsAt = conference.workshopRegistrationStart
+  const endsAt = conference.workshopRegistrationEnd
+  const registration: 'pending' | 'closed' | 'open' =
+    startsAt && new Date(startsAt).getTime() > now
+      ? 'pending'
+      : endsAt && new Date(endsAt).getTime() < now
+        ? 'closed'
+        : 'open'
+  // NO LINK, NO CLAIM (#1298): without a portal that can sign in, the email
+  // must not tell the attendee to sign up now or list steps that cannot work.
+  const unavailable = !workshopUrl && registration !== 'closed'
 
-    // en-US to match what the same attendee reads on the /workshop page.
-    const when = (value: string) =>
-      new Date(value).toLocaleString('en-US', {
-        dateStyle: 'full',
-        timeStyle: 'short',
-      })
+  // The same wording and zone the /workshop page shows this attendee.
+  const when = formatRegistrationInstant
 
-    const subject =
-      registration === 'open'
-        ? `Workshop Signup Available - ${conference.title}`
-        : registration === 'pending'
-          ? `Workshop Signup Opens ${when(startsAt!)} - ${conference.title}`
-          : `Workshop Signup Has Closed - ${conference.title}`
+  const subject = unavailable
+    ? `Workshop Signup Coming Soon - ${conference.title}`
+    : registration === 'open'
+      ? `Workshop Signup Available - ${conference.title}`
+      : registration === 'pending'
+        ? `Workshop Signup Opens ${when(startsAt!)} - ${conference.title}`
+        : `Workshop Signup Has Closed - ${conference.title}`
 
-    const heading =
-      registration === 'open'
-        ? 'Workshop Registration Now Available'
-        : registration === 'pending'
-          ? 'Workshop Registration Opens Soon'
-          : 'Workshop Registration Has Closed'
+  const heading = unavailable
+    ? 'Workshop Registration Coming Soon'
+    : registration === 'open'
+      ? 'Workshop Registration Now Available'
+      : registration === 'pending'
+        ? 'Workshop Registration Opens Soon'
+        : 'Workshop Registration Has Closed'
 
-    const lede =
-      registration === 'open'
-        ? 'Your ticket includes access to workshops. You can now sign up for available workshop sessions.'
-        : registration === 'pending'
-          ? `Your ticket includes access to workshops. Registration is not open yet — it opens on <strong>${when(startsAt!)}</strong>, and you can sign up from then on.`
-          : `Your ticket includes access to workshops, but registration closed on <strong>${when(endsAt!)}</strong>. Get in touch with us and we will see what we can do.`
+  const lede = unavailable
+    ? `Your ticket includes access to workshops. Online workshop sign-up is not available yet.${registration === 'pending' ? ` Registration opens on <strong>${when(startsAt!)}</strong>.` : ''}`
+    : registration === 'open'
+      ? 'Your ticket includes access to workshops. You can now sign up for available workshop sessions.'
+      : registration === 'pending'
+        ? `Your ticket includes access to workshops. Registration is not open yet — it opens on <strong>${when(startsAt!)}</strong>, and you can sign up from then on.`
+        : `Your ticket includes access to workshops, but registration closed on <strong>${when(endsAt!)}</strong>. Get in touch with us and we will see what we can do.`
 
-    const steps =
-      registration === 'closed'
-        ? ''
-        : `
-                    <p style="margin: 0 0 8px 0; font-size: 16px; font-weight: 600; color: #334155;">How to register for workshops:</p>
-                    <ol style="margin: 0 0 24px 0; padding-left: 24px;">
-                      ${workshopUrl ? `<li style="margin: 0 0 8px 0; font-size: 16px; line-height: 24px; color: #334155;">${registration === 'pending' ? `When registration opens, visit` : `Visit`} the workshop signup page: <a href="${workshopUrl}" style="color: ${brand.accent}; text-decoration: none;">${workshopUrl}</a></li>` : ''}
-                      <li style="margin: 0 0 8px 0; font-size: 16px; line-height: 24px; color: #334155;">Sign in with the email address associated with your ticket: <strong>${userEmail}</strong></li>
-                      <li style="margin: 0 0 8px 0; font-size: 16px; line-height: 24px; color: #334155;">Browse available workshops and select the ones you&apos;d like to attend</li>
-                      <li style="margin: 0 0 8px 0; font-size: 16px; line-height: 24px; color: #334155;">Complete your registration</li>
-                    </ol>
+  const steps =
+    registration === 'closed' || unavailable
+      ? ''
+      : `
+                  <p style="margin: 0 0 8px 0; font-size: 16px; font-weight: 600; color: #334155;">How to register for workshops:</p>
+                  <ol style="margin: 0 0 24px 0; padding-left: 24px;">
+                    ${workshopUrl ? `<li style="margin: 0 0 8px 0; font-size: 16px; line-height: 24px; color: #334155;">${registration === 'pending' ? `When registration opens, visit` : `Visit`} the workshop signup page: <a href="${workshopUrl}" style="color: ${brand.accent}; text-decoration: none;">${workshopUrl}</a></li>` : ''}
+                    <li style="margin: 0 0 8px 0; font-size: 16px; line-height: 24px; color: #334155;">Sign in with the email address associated with your ticket: <strong>${safeEmail}</strong></li>
+                    <li style="margin: 0 0 8px 0; font-size: 16px; line-height: 24px; color: #334155;">Browse available workshops and select the ones you&apos;d like to attend</li>
+                    <li style="margin: 0 0 8px 0; font-size: 16px; line-height: 24px; color: #334155;">Complete your registration</li>
+                  </ol>
 
-                    <div style="background-color: ${brand.cardBackground}; border-left: 4px solid ${brand.accent}; padding: 16px; margin: 0 0 24px 0;">
-                      <p style="margin: 0; font-size: 16px; line-height: 24px; color: #334155;"><strong>Important:</strong> Workshops have limited capacity and are first-come, first-served.${registration === 'pending' ? ` Be ready when registration opens on ${when(startsAt!)} to secure your spot!` : ` We recommend signing up as soon as possible to secure your spot!`}</p>
-                    </div>
+                  <div style="background-color: ${brand.cardBackground}; border-left: 4px solid ${brand.accent}; padding: 16px; margin: 0 0 24px 0;">
+                    <p style="margin: 0; font-size: 16px; line-height: 24px; color: #334155;"><strong>Important:</strong> Workshops have limited capacity and are first-come, first-served.${registration === 'pending' ? ` Be ready when registration opens on ${when(startsAt!)} to secure your spot!` : ` We recommend signing up as soon as possible to secure your spot!`}</p>
+                  </div>
 
-                    <table width="100%" cellpadding="0" cellspacing="0" style="margin: 32px 0;">
-                      <tr>
-                        <td align="center">
-                          ${workshopUrl ? `<a href="${workshopUrl}" style="display: inline-block; background-color: ${brand.accent}; color: #FFFFFF; font-size: 16px; font-weight: 600; text-decoration: none; padding: 14px 32px; border-radius: 6px;">${registration === 'pending' ? 'View Workshop Signup Page' : 'Sign Up for Workshops'}</a>` : ''}
-                        </td>
-                      </tr>
-                    </table>
+                  <table width="100%" cellpadding="0" cellspacing="0" style="margin: 32px 0;">
+                    <tr>
+                      <td align="center">
+                        ${workshopUrl ? `<a href="${workshopUrl}" style="display: inline-block; background-color: ${brand.accent}; color: #FFFFFF; font-size: 16px; font-weight: 600; text-decoration: none; padding: 14px 32px; border-radius: 6px;">${registration === 'pending' ? 'View Workshop Signup Page' : 'Sign Up for Workshops'}</a>` : ''}
+                      </td>
+                    </tr>
+                  </table>
 `
 
-    const html = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      </head>
-      <body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #F9FAFB; color: #334155;">
-        <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #F9FAFB; padding: 40px 20px;">
-          <tr>
-            <td align="center">
-              <table width="600" cellpadding="0" cellspacing="0" style="background-color: #FFFFFF; border-radius: 8px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);">
-                <tr>
-                  <td style="padding: 40px;">
-                    <h2 style="margin: 0 0 20px 0; font-size: 28px; font-weight: 700; color: ${brand.accent};">Welcome to ${conference.title}!</h2>
-                    <p style="margin: 0 0 16px 0; font-size: 16px; line-height: 24px; color: #334155;">Hi ${userName},</p>
-                    <p style="margin: 0 0 24px 0; font-size: 16px; line-height: 24px; color: #334155;">Thank you for purchasing your <strong>${ticketCategory}</strong> ticket!</p>
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    </head>
+    <body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #F9FAFB; color: #334155;">
+      <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #F9FAFB; padding: 40px 20px;">
+        <tr>
+          <td align="center">
+            <table width="600" cellpadding="0" cellspacing="0" style="background-color: #FFFFFF; border-radius: 8px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);">
+              <tr>
+                <td style="padding: 40px;">
+                  <h2 style="margin: 0 0 20px 0; font-size: 28px; font-weight: 700; color: ${brand.accent};">${resent ? `Workshop sign-up for ${conference.title}` : `Welcome to ${conference.title}!`}</h2>
+                  <p style="margin: 0 0 16px 0; font-size: 16px; line-height: 24px; color: #334155;">Hi ${safeName},</p>
+                  <p style="margin: 0 0 24px 0; font-size: 16px; line-height: 24px; color: #334155;">${resent ? `Here are the sign-up instructions for the workshops your <strong>${safeCategory}</strong> ticket includes, with the link to the workshop sign-up page.` : `Thank you for purchasing your <strong>${safeCategory}</strong> ticket!`}</p>
 
-                    <h3 style="margin: 0 0 16px 0; font-size: 20px; font-weight: 600; color: ${brand.accent};">${heading}</h3>
-                    <p style="margin: 0 0 24px 0; font-size: 16px; line-height: 24px; color: #334155;">${lede}</p>
+                  <h3 style="margin: 0 0 16px 0; font-size: 20px; font-weight: 600; color: ${brand.accent};">${heading}</h3>
+                  <p style="margin: 0 0 24px 0; font-size: 16px; line-height: 24px; color: #334155;">${lede}</p>
 ${steps}
 
-                    <p style="margin: 32px 0 16px 0; font-size: 14px; line-height: 20px; color: #334155;">If you have any questions or need assistance, please contact us at <a href="mailto:${contactEmail}" style="color: ${brand.accent}; text-decoration: none;">${contactEmail}</a>.</p>
+                  <p style="margin: 32px 0 16px 0; font-size: 14px; line-height: 20px; color: #334155;">If you have any questions or need assistance, please contact us at <a href="mailto:${contactEmail}" style="color: ${brand.accent}; text-decoration: none;">${contactEmail}</a>.</p>
 
-                    <p style="margin: 24px 0 0 0; font-size: 16px; line-height: 24px; color: #334155;">See you at the conference!</p>
-                    <p style="margin: 8px 0 0 0; font-size: 16px; line-height: 24px; color: #334155;">Best regards,<br><strong>${conference.organizer}</strong></p>
-                  </td>
-                </tr>
-                <tr>
-                  <td style="padding: 24px 40px; background-color: #F9FAFB; border-bottom-left-radius: 8px; border-bottom-right-radius: 8px;">
-                    <p style="margin: 0; font-size: 12px; line-height: 18px; color: #64748B; text-align: center;">© ${new Date().getFullYear()} ${conference.organizer}. All rights reserved.</p>
-                  </td>
-                </tr>
-              </table>
-            </td>
-          </tr>
-        </table>
-      </body>
-      </html>
-    `
+                  <p style="margin: 24px 0 0 0; font-size: 16px; line-height: 24px; color: #334155;">See you at the conference!</p>
+                  <p style="margin: 8px 0 0 0; font-size: 16px; line-height: 24px; color: #334155;">Best regards,<br><strong>${conference.organizer}</strong></p>
+                </td>
+              </tr>
+              <tr>
+                <td style="padding: 24px 40px; background-color: #F9FAFB; border-bottom-left-radius: 8px; border-bottom-right-radius: 8px;">
+                  <p style="margin: 0; font-size: 12px; line-height: 18px; color: #64748B; text-align: center;">© ${new Date().getFullYear()} ${conference.organizer}. All rights reserved.</p>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+    </body>
+    </html>
+  `
 
-    const { client } = await resolveEmailSender(conference?.organization?._ref)
+  return { from: fromEmail, to: [userEmail], subject, html }
+}
+
+export async function sendWorkshopSignupInstructions(
+  request: WorkshopSignupInstructionsRequest,
+): Promise<EmailResult<{ emailId: string }>> {
+  try {
+    const email = renderWorkshopSignupInstructions(request)
+    const { client } = await resolveEmailSender(
+      request.conference?.organization?._ref,
+    )
 
     const emailResult = await retryWithBackoff(async () => {
-      const result = await client.emails.send({
-        from: fromEmail,
-        to: [userEmail],
-        subject,
-        html,
-      })
+      const result = await client.emails.send(email)
 
       if (result.error) {
         throw new Error(`Failed to send email: ${result.error.message}`)

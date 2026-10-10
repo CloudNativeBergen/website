@@ -117,6 +117,9 @@ export interface RedirectUriSyncRow {
   /** The document revision this row was read at; every write is conditional on it. */
   rev: string
   redirectUri: RedirectUriState
-  /** The claiming conference's owner and ticketing vendor; `null` when it is gone. */
-  conference: WorkshopConference | null
+  /**
+   * The claiming conference's owner, ticketing vendor and claimed domains;
+   * `null` when it is gone.
+   */
+  conference: (WorkshopConference & { domains?: string[] | null }) | null
 }

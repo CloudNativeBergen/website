@@ -12,6 +12,7 @@
  * way Next.js does, which is how these assertions detect the 404.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { beginRequest } from '../../helpers/nextHeadersJar'
 import {
   stubOwnTicketingSecret,
   stubPlatformTicketingAccount,
@@ -25,11 +26,23 @@ class NotFoundError extends Error {
   digest = 'NEXT_NOT_FOUND'
 }
 
+class RedirectError extends Error {
+  digest = 'NEXT_REDIRECT'
+  constructor(readonly url: string) {
+    super('NEXT_REDIRECT')
+  }
+}
+
 vi.mock('next/navigation', () => ({
   notFound: () => {
     throw new NotFoundError('NEXT_NOT_FOUND')
   },
+  redirect: (url: string) => {
+    throw new RedirectError(url)
+  },
 }))
+
+vi.mock('next/headers', () => import('../../helpers/nextHeadersJar'))
 
 vi.mock('@/lib/conference/sanity', () => ({
   getConferenceForCurrentDomain: (...args: unknown[]) =>
@@ -83,6 +96,7 @@ import WorkshopLayout from '@/app/(workshop)/layout'
 import WorkshopPage from '@/app/(workshop)/workshop/page'
 import { signOutOfWorkshop } from '@/app/(workshop)/workshop/actions'
 import { WorkshopSignedOut } from '@/components/workshop/WorkshopSignedOut'
+import { WorkshopUnavailable } from '@/components/workshop/WorkshopUnavailable'
 import { WorkshopSignOutButton } from '@/components/workshop/WorkshopSignOutButton'
 import { __resetRedeemedCache } from '@/lib/tickets/speakerStatus'
 
@@ -138,6 +152,7 @@ async function is404(render: () => Promise<unknown>): Promise<boolean> {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  beginRequest()
   __resetRedeemedCache()
   // A configured platform org that matches none of the tenants below, so a case
   // is platform ONLY when it points the contract at its own org id.
@@ -451,5 +466,220 @@ describe('workshop portal — sign-in and sign-out go through the SDK', () => {
     expect(buttons).toHaveLength(1)
     expect(buttons[0].props.action).toBe(signOutOfWorkshop)
     expect(hrefsOf(page).filter((href) => href.includes('signout'))).toEqual([])
+  })
+})
+
+/**
+ * A HOST THAT CANNOT SIGN IN (#1298). The proxy let the page through without
+ * the SDK and marked the request. The page must stop at the mark, before
+ * `withAuth` (which throws when the SDK did not run), and say that sign-up is
+ * not available, with the organizer's address and nothing about why.
+ */
+describe('workshop portal — on a host that cannot sign in', () => {
+  const MARKED = () =>
+    beginRequest(new Headers({ 'x-workshop-sign-in-unavailable': '1' }))
+
+  beforeEach(() => {
+    stubOwnTicketingSecret('org-tenant2')
+    mockGetConference.mockResolvedValue({
+      conference: {
+        ...conference('org-tenant2'),
+        contactEmail: 'hello@cndn.example.org',
+        domains: ['unregistered.example.org'],
+      },
+      error: null,
+    })
+    mockGetOrganizationById.mockResolvedValue({
+      _id: 'org-tenant2',
+      name: 'Tenant Two',
+      slug: 'tenant-two',
+      plan: 'pro',
+    })
+  })
+
+  it('shows that sign-up is not available, with the contact address, and never enters the SDK', async () => {
+    MARKED()
+    const page = await WorkshopPage()
+
+    expect(mockWithAuth).not.toHaveBeenCalled()
+    expect(elementsOf(page)[0].type).toBe(WorkshopUnavailable)
+    expect(elementsOf(page)[0].props).toEqual({
+      conferenceTitle: 'CNDN',
+      contactEmail: 'hello@cndn.example.org',
+      registrationClosed: false,
+    })
+    // Nothing that starts a sign-in.
+    expect(elementsOf(page).some((el) => el.type === WorkshopSignedOut)).toBe(
+      false,
+    )
+  })
+
+  it('passes the view nothing about why — no host, state or error', async () => {
+    MARKED()
+    const page = await WorkshopPage()
+    // The view's props are its whole input, so this is everything it can say.
+    expect(Object.keys(elementsOf(page)[0].props).sort()).toEqual([
+      'conferenceTitle',
+      'contactEmail',
+      'registrationClosed',
+    ])
+  })
+
+  it('says registration has closed, not "not available yet", once it has', async () => {
+    mockGetConference.mockResolvedValue({
+      conference: {
+        ...conference('org-tenant2'),
+        contactEmail: 'hello@cndn.example.org',
+        domains: ['unregistered.example.org'],
+        workshopRegistrationEnd: new Date(Date.now() - 60_000).toISOString(),
+      },
+      error: null,
+    })
+    MARKED()
+    const page = await WorkshopPage()
+
+    expect(elementsOf(page)[0].type).toBe(WorkshopUnavailable)
+    expect(elementsOf(page)[0].props.registrationClosed).toBe(true)
+  })
+
+  it('CONTROL: without the mark the same tenant gets the SDK and the signed-out view', async () => {
+    const page = await WorkshopPage()
+    expect(mockWithAuth).toHaveBeenCalledOnce()
+    expect(elementsOf(page)[0].type).toBe(WorkshopSignedOut)
+  })
+
+  it('keeps the plain 404 for a tenant without workshops, marked or not', async () => {
+    mockGetOrganizationById.mockResolvedValue({
+      _id: 'org-tenant2',
+      name: 'Tenant Two',
+      slug: 'tenant-two',
+      plan: 'community',
+    })
+    MARKED()
+    expect(await is404(() => WorkshopLayout({ children: null }))).toBe(true)
+    expect(await is404(() => WorkshopPage())).toBe(true)
+    expect(mockWithAuth).not.toHaveBeenCalled()
+  })
+})
+
+/**
+ * A SECONDARY HOST THAT CANNOT SIGN IN, while the conference's main host can
+ * (#1298 review): the attendee is sent to the working portal instead of being
+ * told sign-up is unavailable. The main host is decided by the same rule as
+ * the email link (`workshopPortalUrl`), its record read live.
+ */
+describe('workshop portal — a refused secondary host', () => {
+  const yesterday = new Date(Date.now() - 86_400_000).toISOString()
+  /** `main.example.org` as Sanity stores it: verified and registered. */
+  const mainRecord = {
+    _id: 'domainVerification.main.example.org',
+    _rev: 'rev-1',
+    hostname: 'main.example.org',
+    conferenceId: 'conf-1',
+    token: 'tok',
+    status: 'verified',
+    method: 'dns-txt',
+    verifiedAt: yesterday,
+    lastSuccessAt: yesterday,
+    lastCheckedAt: yesterday,
+    consecutiveFailures: 0,
+    consecutiveSoftFailures: 0,
+    redirectUriStatus: 'registered',
+    redirectUriId: 'ru_1',
+    conference: {
+      organization: { _ref: 'org-tenant2' },
+      domains: ['main.example.org', 'secondary.example.org'],
+    },
+  }
+
+  beforeEach(() => {
+    stubOwnTicketingSecret('org-tenant2')
+    mockGetConference.mockResolvedValue({
+      conference: {
+        ...conference('org-tenant2'),
+        contactEmail: 'hello@cndn.example.org',
+        domains: ['main.example.org', 'secondary.example.org'],
+      },
+      error: null,
+    })
+    mockGetOrganizationById.mockResolvedValue({
+      _id: 'org-tenant2',
+      name: 'Tenant Two',
+      slug: 'tenant-two',
+      plan: 'pro',
+    })
+  })
+
+  function markedOn(host: string) {
+    beginRequest(new Headers({ host, 'x-workshop-sign-in-unavailable': '1' }))
+  }
+
+  async function redirectOf(render: () => Promise<unknown>) {
+    try {
+      await render()
+      return null
+    } catch (error) {
+      if (error instanceof RedirectError) return error.url
+      throw error
+    }
+  }
+
+  it('sends the attendee to the main host’s portal when that one can sign in', async () => {
+    h.fetch.mockImplementation((async (query: string) =>
+      String(query).includes('_type == "domainVerification"')
+        ? mainRecord
+        : null) as unknown as () => Promise<null>)
+    markedOn('secondary.example.org')
+
+    await expect(redirectOf(() => WorkshopPage())).resolves.toBe(
+      'https://main.example.org/workshop',
+    )
+    expect(mockWithAuth).not.toHaveBeenCalled()
+  })
+
+  it('shows the unavailable view when the main host cannot sign in either — after ONE read', async () => {
+    h.fetch.mockImplementation(async () => null)
+    markedOn('secondary.example.org')
+
+    const page = await WorkshopPage()
+    expect(elementsOf(page)[0].type).toBe(WorkshopUnavailable)
+    const queries = h.fetch.mock.calls as unknown as Array<[string]>
+    expect(
+      queries.filter(([query]) =>
+        String(query).includes('_type == "domainVerification"'),
+      ),
+    ).toHaveLength(1)
+  })
+
+  // The proxy already read this host's standing to set the mark.
+  it('spends no read of its own on the main host', async () => {
+    h.fetch.mockImplementation(async () => null)
+    markedOn('main.example.org')
+
+    const page = await WorkshopPage()
+    expect(elementsOf(page)[0].type).toBe(WorkshopUnavailable)
+    const queries = h.fetch.mock.calls as unknown as Array<[string]>
+    expect(
+      queries.filter(([query]) =>
+        String(query).includes('_type == "domainVerification"'),
+      ),
+    ).toHaveLength(0)
+  })
+
+  it('never redirects to the host the attendee is already on', async () => {
+    h.fetch.mockImplementation((async (query: string) =>
+      String(query).includes('_type == "domainVerification"')
+        ? mainRecord
+        : null) as unknown as () => Promise<null>)
+    // In any spelling the browser may send.
+    for (const host of [
+      'main.example.org',
+      'Main.Example.ORG',
+      'main.example.org:443',
+    ]) {
+      markedOn(host)
+      const page = await WorkshopPage()
+      expect(elementsOf(page)[0].type).toBe(WorkshopUnavailable)
+    }
   })
 })

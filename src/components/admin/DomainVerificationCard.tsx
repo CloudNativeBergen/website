@@ -14,6 +14,11 @@ import { AdminButton } from '@/components/admin/AdminButton'
 import { useNotification } from './NotificationProvider'
 import { api } from '@/lib/trpc/client'
 import type { DomainVerificationView } from '@/lib/domain-verification'
+import type { WorkshopSignInStanding } from '@/lib/domain-verification/sign-in-standing'
+import {
+  workshopSignInLabel,
+  type WorkshopSignInLabel,
+} from '@/lib/domain-verification/sign-in-labels'
 
 /**
  * Domain ownership verification, admin surface (#683).
@@ -26,6 +31,10 @@ import type { DomainVerificationView } from '@/lib/domain-verification'
  * state whose failure mode is completely silent — a domain that quietly drops
  * off the allowlist produces no error anywhere a human would see it — so the
  * card states it explicitly rather than leaving it to be inferred from `status`.
+ *
+ * For a conference with workshops, each row also says whether the workshop
+ * portal can sign in on that host and, if not, why (#1298). Attendees only see
+ * "not available yet"; this is where the reason shows.
  */
 
 export interface DomainVerificationCardProps {
@@ -75,6 +84,38 @@ function statusLabel(domain: DomainVerificationView): {
     default:
       return { tone: 'amber', label: 'Awaiting DNS' }
   }
+}
+
+const SIGN_IN_TONE: Record<WorkshopSignInLabel['status'], Tone> = {
+  ok: 'green',
+  warn: 'amber',
+  error: 'red',
+  off: 'gray',
+}
+
+const SIGN_IN_TEXT: Record<Tone, string> = {
+  green: 'text-green-700 dark:text-green-300',
+  amber: 'text-amber-700 dark:text-amber-300',
+  red: 'text-red-700 dark:text-red-300',
+  gray: 'text-gray-900 dark:text-gray-200',
+}
+
+function WorkshopSignInLine({
+  standing,
+}: {
+  standing: WorkshopSignInStanding
+}) {
+  const { status, label, detail } = workshopSignInLabel(standing)
+  const tone = SIGN_IN_TONE[status]
+  return (
+    <div className="mt-1 text-xs text-gray-600 dark:text-gray-400">
+      <p>
+        Workshop sign-in:{' '}
+        <span className={clsx('font-medium', SIGN_IN_TEXT[tone])}>{label}</span>
+      </p>
+      {detail && <p className="mt-1 break-words">{detail}</p>}
+    </div>
+  )
 }
 
 function formatDay(iso: string | null): string | null {
@@ -221,6 +262,10 @@ export function DomainVerificationCard({
                 </>
               )}
             </p>
+
+            {domain.workshopSignIn && (
+              <WorkshopSignInLine standing={domain.workshopSignIn} />
+            )}
 
             {domain.platformOwned && (
               <p className="mt-1 text-xs text-gray-600 dark:text-gray-400">

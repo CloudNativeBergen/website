@@ -212,6 +212,21 @@ export function formatDateRangeLocalized(
   }).formatRange(from, to)
 }
 
+/**
+ * A workshop registration opening or closing instant, in English and in the
+ * conference's time zone (e.g. "Thursday, October 1, 2026 at 10:00 AM"). The
+ * /workshop page and the sign-up instructions email both use it, so an
+ * attendee reads the same time in each, and the server's own zone never
+ * leaks in.
+ */
+export function formatRegistrationInstant(value: string): string {
+  return new Date(value).toLocaleString('en-US', {
+    dateStyle: 'full',
+    timeStyle: 'short',
+    timeZone: CONFERENCE_TIME_ZONE,
+  })
+}
+
 /** Formats a timestamp with time, house locale (e.g. "27. oktober 2025, 14:30"). */
 export function formatDateTimeSafe(dateString: string): string {
   if (!dateString) return 'TBD'

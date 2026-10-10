@@ -40,6 +40,7 @@ vi.mock('@/lib/sanity/client', () => ({
 const {
   getRedirectUriSyncRow,
   listRedirectUriSyncRows,
+  listRedirectUriSyncRowsForConference,
   patchRedirectUriState,
 } = await import('./sanity')
 
@@ -65,9 +66,59 @@ beforeEach(() => {
       _type: 'conference',
       organization: { _type: 'reference', _ref: 'org-platform' },
       ticketingProvider: 'tito',
+      // Every claimed domain, not only the main one: a secondary host must
+      // still find itself claimed.
+      domains: ['a.example.org', 'b.example.org'],
       title: 'Not read',
     },
   ]
+})
+
+/**
+ * The organizer's read (#1298): ONE conference's records, with their
+ * redirect-URI state. TENANT-SCOPED — another conference's record for a host
+ * (its token, its status, its WorkOS error) must never come back.
+ */
+describe('listRedirectUriSyncRowsForConference', () => {
+  it('reads only the records the given conference holds, with their state', async () => {
+    dataset.push(
+      verification('ours.example.org', {
+        redirectUriStatus: 'registered',
+        redirectUriId: 'redir_1',
+      }),
+      verification('pending.example.org', { status: 'pending' }),
+      verification('theirs.example.org', {
+        conference: { _type: 'reference', _ref: 'conference-2' },
+        token: 'their-token',
+        redirectUriError: 'their WorkOS error',
+      }),
+    )
+
+    const rows = await listRedirectUriSyncRowsForConference('conference-1')
+
+    expect(rows.map((row) => row.record.hostname)).toEqual([
+      'ours.example.org',
+      'pending.example.org',
+    ])
+    expect(rows[0].redirectUri).toEqual({
+      status: 'registered',
+      id: 'redir_1',
+      error: null,
+    })
+    expect(rows[0].conference).toEqual({
+      organization: { _type: 'reference', _ref: 'org-platform' },
+      ticketingProvider: 'tito',
+      domains: ['a.example.org', 'b.example.org'],
+    })
+  })
+
+  it('reads nothing for an empty or unknown conference id', async () => {
+    dataset.push(verification('ours.example.org'))
+    await expect(listRedirectUriSyncRowsForConference('')).resolves.toEqual([])
+    await expect(
+      listRedirectUriSyncRowsForConference('conference-9'),
+    ).resolves.toEqual([])
+  })
 })
 
 describe('listRedirectUriSyncRows', () => {
@@ -82,6 +133,7 @@ describe('listRedirectUriSyncRows', () => {
     expect(row.conference).toEqual({
       organization: { _type: 'reference', _ref: 'org-platform' },
       ticketingProvider: 'tito',
+      domains: ['a.example.org', 'b.example.org'],
     })
     expect(row.redirectUri).toEqual({ status: null, id: null, error: null })
   })

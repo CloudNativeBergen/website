@@ -23,3 +23,11 @@ export const WORKSHOP_SIGN_UP_PATH = '/workshop/sign-up'
 
 /** Where a completed sign-in lands. */
 export const WORKSHOP_PORTAL_PATH = '/workshop'
+
+/**
+ * Request header the proxy puts on the portal page when the host cannot sign
+ * in (#1298). The page then shows the unavailable view and never enters the
+ * SDK, which did not run for that request.
+ */
+export const WORKSHOP_SIGN_IN_UNAVAILABLE_HEADER =
+  'x-workshop-sign-in-unavailable'

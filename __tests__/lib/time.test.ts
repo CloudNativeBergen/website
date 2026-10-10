@@ -8,6 +8,7 @@ import {
   formatDatesSafe,
   formatDateRangeLocalized,
   formatDateTimeSafe,
+  formatRegistrationInstant,
   formatConferenceDate,
   formatConferenceDateShort,
   formatConferenceDateLong,
@@ -338,5 +339,17 @@ describe('isCalendarDate', () => {
     '',
   ])('rejects %s', (d) => {
     expect(isCalendarDate(d)).toBe(false)
+  })
+})
+
+describe('formatRegistrationInstant', () => {
+  // The conference's wall clock, whatever the server's own zone: a server on
+  // UTC printed 08:00 for a 10:00 Oslo opening (#1298 review). Run under
+  // TZ=UTC to see the difference.
+  it.each([
+    ['2026-10-01T08:00:00Z', 'Thursday, October 1, 2026 at 10:00 AM'], // CEST
+    ['2026-12-01T08:00:00Z', 'Tuesday, December 1, 2026 at 9:00 AM'], // CET
+  ])('shows %s in Oslo time', (instant, expected) => {
+    expect(formatRegistrationInstant(instant)).toBe(expected)
   })
 })

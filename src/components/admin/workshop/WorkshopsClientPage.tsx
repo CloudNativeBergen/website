@@ -16,6 +16,7 @@ import {
 import type { ParticipantFormData } from '@/components/admin/workshop'
 import { api } from '@/lib/trpc/client'
 import { useNotification } from '@/components/admin/NotificationProvider'
+import { ResendInstructionsButton } from './ResendInstructionsButton'
 import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
 import type {
   WorkshopSignupStatus,
@@ -58,6 +59,8 @@ interface WorkshopsClientPageProps {
   initialWorkshops: ProposalWithWorkshopData[]
   workshopRegistrationStart?: string
   workshopRegistrationEnd?: string
+  /** Why the resend action is unavailable, or null when it can be used. */
+  resendDisabledReason: string | null
 }
 
 export function WorkshopsClientPage({
@@ -65,6 +68,7 @@ export function WorkshopsClientPage({
   initialWorkshops,
   workshopRegistrationStart,
   workshopRegistrationEnd,
+  resendDisabledReason,
 }: WorkshopsClientPageProps) {
   const queryClient = useQueryClient()
   const utils = api.useUtils()
@@ -359,7 +363,13 @@ export function WorkshopsClientPage({
               ]
             : []
         }
-      />
+      >
+        {/* Below the stats, not beside the title: the title row cannot wrap,
+            and on a phone the reason text would push the page sideways. */}
+        <div className="mt-4 flex justify-end">
+          <ResendInstructionsButton disabledReason={resendDisabledReason} />
+        </div>
+      </AdminPageHeader>
 
       <WorkshopRegistrationSettings
         workshopRegistrationStart={workshopRegistrationStart}

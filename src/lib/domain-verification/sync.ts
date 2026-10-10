@@ -11,13 +11,20 @@
 
 import { normalizeDomain } from '@/lib/conference/domains'
 import { scheduleRedirectUriReconcile } from '@/lib/workshop/redirect-uris'
+import { isDevOnlyHost, isWildcardEntry } from './challenge'
 import { isPlatformZoneHost } from './platform'
 import {
   ensureDomainVerification,
   getDomainVerification,
   listDomainVerificationsForConference,
+  listRedirectUriSyncRowsForConference,
   revokeDomainVerification,
 } from './sanity'
+import { workshopSignInStandingOfRow } from './sign-in-standing'
+import {
+  isWorkshopsEnabledForConference,
+  type WorkshopConference,
+} from '@/lib/features/workshops'
 import { toDomainVerificationView, type DomainVerificationView } from './view'
 
 /**
@@ -119,18 +126,69 @@ export async function findUnallocatedPlatformDomains(
  * A record whose holder is a different conference is treated as absent, so a
  * hostname another tenant now owns can never leak its token into this tenant's
  * settings page.
+ *
+ * With `workshops` on, each host also carries where it stands for the workshop
+ * portal's sign-in (#1298), from the same single read; a local dev entry and a
+ * wildcard never sign in and carry nothing.
  */
 export async function listDomainVerificationViews(
   conferenceId: string,
   domains: readonly string[],
-  now: Date = new Date(),
+  {
+    workshops = false,
+    ownerOrgId,
+    now = new Date(),
+  }: {
+    workshops?: boolean
+    /** The conference's owner, for a claimed host with no record yet. */
+    ownerOrgId?: string | null
+    now?: Date
+  } = {},
 ): Promise<DomainVerificationView[]> {
-  const records = await listDomainVerificationsForConference(conferenceId)
+  const syncRows = workshops
+    ? await listRedirectUriSyncRowsForConference(conferenceId)
+    : null
+  const records =
+    syncRows?.map((row) => row.record) ??
+    (await listDomainVerificationsForConference(conferenceId))
   const byHost = new Map(records.map((r) => [normalizeDomain(r.hostname), r]))
+  const rowByHost = new Map(
+    (syncRows ?? []).map((row) => [normalizeDomain(row.record.hostname), row]),
+  )
   return domains
     .map(normalizeDomain)
     .filter(Boolean)
-    .map((hostname) =>
-      toDomainVerificationView(hostname, byHost.get(hostname) ?? null, now),
-    )
+    .map((hostname) => {
+      const signIn =
+        syncRows && !isDevOnlyHost(hostname) && !isWildcardEntry(hostname)
+          ? workshopSignInStandingOfRow(
+              rowByHost.get(hostname) ?? null,
+              now,
+              ownerOrgId,
+            )
+          : null
+      return toDomainVerificationView(
+        hostname,
+        byHost.get(hostname) ?? null,
+        now,
+        signIn,
+      )
+    })
+}
+
+/**
+ * {@link listDomainVerificationViews} for a conference, with workshops decided
+ * by its own gate (#1298): the one call the settings page, the domain router
+ * and system status make, so all three show the same hosts the same way.
+ */
+export async function listConferenceDomainViews(
+  conference: WorkshopConference & {
+    _id: string
+    domains?: readonly string[] | null
+  },
+): Promise<DomainVerificationView[]> {
+  return listDomainVerificationViews(conference._id, conference.domains ?? [], {
+    workshops: await isWorkshopsEnabledForConference(conference),
+    ownerOrgId: conference.organization?._ref ?? null,
+  })
 }

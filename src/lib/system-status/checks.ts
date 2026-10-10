@@ -15,6 +15,9 @@ import {
 } from '@/lib/tickets/provider'
 import { providerMap } from '@/lib/auth'
 import { BADGE_GENERATOR_VERSION } from '@/lib/badge/version'
+import { listDomainVerificationViews } from '@/lib/domain-verification'
+import { isWorkshopsEnabledForConference } from '@/lib/features/workshops'
+import { workshopSignInLabel } from '@/lib/domain-verification/sign-in-labels'
 import { conferenceSenders } from '@/lib/email/from'
 import { describeSenderPolicy } from '@/lib/email/sender-policy'
 import type {
@@ -950,6 +953,52 @@ async function badgesOutdatedProbe(
 }
 
 /**
+ * Where each claimed host stands for the workshop portal's WorkOS sign-in
+ * (#1298), for a conference with workshops: attendees on a host that cannot
+ * sign in only see "not available yet", so this is where the reason shows.
+ * One row per host; none for a conference without workshops.
+ */
+async function workshopSignInChecks(
+  conference: ConferenceForSystemChecks,
+): Promise<SystemCheck[]> {
+  if (!conference._id || !conference.organization?._ref) return []
+  try {
+    // The gate first: a tenant without workshops gets no row and no read.
+    if (!(await isWorkshopsEnabledForConference(conference))) return []
+    const views = await listDomainVerificationViews(
+      conference._id,
+      conference.domains ?? [],
+      { workshops: true, ownerOrgId: conference.organization._ref },
+    )
+    return views.flatMap(({ hostname, workshopSignIn }) => {
+      if (!workshopSignIn) return []
+      const { status, label, detail } = workshopSignInLabel(workshopSignIn)
+      return [
+        {
+          id: `auth.workshopSignIn.${hostname}`,
+          group: 'auth' as const,
+          label: `Workshop sign-in: ${hostname}`,
+          status,
+          value: label,
+          ...(detail ? { detail } : {}),
+        },
+      ]
+    })
+  } catch (err) {
+    return [
+      {
+        id: 'auth.workshopSignIn',
+        group: 'auth',
+        label: 'Workshop sign-in',
+        status: 'warn',
+        value: 'unknown',
+        detail: errMsg(err),
+      },
+    ]
+  }
+}
+
+/**
  * Full registry: synchronous env/file/conference checks PLUS the live Sanity
  * read probe and the push-subscription count. The live probes are appended into
  * their groups so the UI renders them alongside the static rows.
@@ -958,12 +1007,20 @@ export async function buildSystemChecks(
   conference: ConferenceForSystemChecks,
 ): Promise<SystemCheck[]> {
   const staticChecks = buildChecks(conference)
-  const [readProbe, pushCount, badgesOutdated] = await Promise.all([
-    sanityReadProbe(),
-    pushSubscriptionCount(),
-    badgesOutdatedProbe(conference._id),
-  ])
-  return [...staticChecks, readProbe, pushCount, badgesOutdated]
+  const [readProbe, pushCount, badgesOutdated, workshopSignIn] =
+    await Promise.all([
+      sanityReadProbe(),
+      pushSubscriptionCount(),
+      badgesOutdatedProbe(conference._id),
+      workshopSignInChecks(conference),
+    ])
+  return [
+    ...staticChecks,
+    readProbe,
+    pushCount,
+    badgesOutdated,
+    ...workshopSignIn,
+  ]
 }
 
 /** Exposed for unit tests: the synchronous, side-effect-light checks only. */

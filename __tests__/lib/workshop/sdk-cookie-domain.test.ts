@@ -16,7 +16,11 @@
  */
 import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest'
 import { NextRequest, type NextFetchEvent } from 'next/server'
-import { verifiedHost } from '../../helpers/workshopSignIn'
+import {
+  signInHost,
+  signInHostsById,
+  isPortalRedirect,
+} from '../../helpers/workshopSignIn'
 import { beginRequest, writtenCookies } from '../../helpers/nextHeadersJar'
 
 const HOST = 'conf.example.org'
@@ -24,7 +28,8 @@ const COOKIE_DOMAIN = '.example.org'
 const CALLBACK = `https://${HOST}/api/auth/callback`
 
 vi.mock('@/lib/domain-verification/sanity', () => ({
-  listAllowlistCandidates: async () => [verifiedHost(HOST)],
+  getRedirectUriSyncRow: (id: string) =>
+    signInHostsById([signInHost(HOST)])(id),
 }))
 vi.mock('next/headers', () => import('../../helpers/nextHeadersJar'))
 // The sign-in route also asks the feature gate; it is ON, so the cookie-domain
@@ -61,8 +66,8 @@ afterAll(() => {
   vi.unstubAllEnvs()
 })
 
-function navigate(): NextRequest {
-  return new NextRequest(`https://${HOST}/workshop`, {
+function navigate(path = '/workshop'): NextRequest {
+  return new NextRequest(`https://${HOST}${path}`, {
     headers: new Headers({ host: HOST, accept: 'text/html' }),
   })
 }
@@ -96,31 +101,44 @@ describe('the SDK with WORKOS_COOKIE_DOMAIN set', () => {
 })
 
 describe('this app with WORKOS_COOKIE_DOMAIN set', () => {
-  it('never lets the SDK run: the proxy and the sign-in route answer 404 and set no cookie', async () => {
+  it('never lets the SDK run: the proxy sends sign-in to the portal page and the sign-in route answers 404, with no cookie', async () => {
     const buildAuthorizationUrl = vi.spyOn(
       sdk.getWorkOS().userManagement,
       'getAuthorizationUrl',
     )
+    const generatePkce = vi.spyOn(sdk.getWorkOS().pkce, 'generate')
     const startSignIn = () => {
       beginRequest(new Headers({ host: HOST }))
-      return signIn(navigate())
+      return signIn(navigate('/workshop/sign-in'))
     }
 
-    const response = (await proxy(navigate(), {} as NextFetchEvent)) as Response
+    // `/workshop` itself is now let through marked (#1298), covered in proxy tests.
+    const response = (await proxy(
+      navigate('/workshop/sign-in'),
+      {} as NextFetchEvent,
+    )) as Response
     const started = await startSignIn()
 
-    expect(response.status).toBe(404)
+    expect(response.status).toBe(307)
+    expect(isPortalRedirect(response.headers.get('location'))).toBe(true)
     expect(response.headers.getSetCookie()).toEqual([])
+    expect(
+      response.headers.get('x-middleware-request-x-redirect-uri'),
+    ).toBeNull()
     expect(started.status).toBe(404)
     expect(writtenCookies()).toEqual([])
     expect(buildAuthorizationUrl).not.toHaveBeenCalled()
+    expect(generatePkce).not.toHaveBeenCalled()
 
-    // CONTROL: it is the GUARD that refused, not the allowlist or the fixture.
+    // CONTROL: it is the GUARD that refused, not the sign-in standing or the fixture.
     // Hide the variable from the guard (which reads it per call; the SDK
     // captured it at load) and the very same requests go through — the sign-in
     // carrying exactly the widened cookie the guard exists to prevent.
     vi.stubEnv('WORKOS_COOKIE_DOMAIN', '')
-    const through = (await proxy(navigate(), {} as NextFetchEvent)) as Response
+    const through = (await proxy(
+      navigate('/workshop/sign-in'),
+      {} as NextFetchEvent,
+    )) as Response
     const startedThrough = await startSignIn()
     vi.stubEnv('WORKOS_COOKIE_DOMAIN', COOKIE_DOMAIN)
 

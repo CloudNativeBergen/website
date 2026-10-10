@@ -14,7 +14,7 @@ import { EditConferenceCard } from '@/components/admin/EditConferenceCard'
 import { EditOrganizationAnalyticsCard } from '@/components/admin/EditOrganizationAnalyticsCard'
 import { ThemeSwatchRow } from '@/components/admin/ThemeEditor'
 import { DomainVerificationCard } from '@/components/admin/DomainVerificationCard'
-import { listDomainVerificationViews } from '@/lib/domain-verification'
+import { listConferenceDomainViews } from '@/lib/domain-verification'
 import { OrganizersEditor } from '@/components/admin/OrganizersEditor'
 import { OrganizerInvitesEditor } from '@/components/organizer-invite'
 import { TopicsEditor } from '@/components/admin/TopicsEditor'
@@ -134,12 +134,15 @@ export default async function AdminSettings() {
   const editUrl = studioEditUrl(conference._id)
   const visibility = resolveConferenceVisibility(conference)
   // Ownership-verification state per claimed domain (#683). Read here so the
-  // card server-renders its real state; the client island refetches on mount.
+  // card server-renders its real state; the client island refetches once its
+  // query goes stale (the provider's staleTime), not on mount.
+  // With workshops, each host also shows whether the portal can sign in on
+  // it, and if not why (#1298).
   const domainVerifications = conference._id
-    ? await listDomainVerificationViews(
-        conference._id,
-        conference.domains ?? [],
-      )
+    ? await listConferenceDomainViews({
+        ...conference,
+        _id: conference._id,
+      })
     : []
   const systemChecks = await buildSystemChecks(conference)
   // "Get started" activation checklist — derived from the conference and the

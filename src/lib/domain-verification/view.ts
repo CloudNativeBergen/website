@@ -12,6 +12,7 @@ import {
 } from './challenge'
 import { isPlatformAllocated } from './platform'
 import { isAllowlistEligible, isRoutingEligible } from './policy'
+import type { WorkshopSignInStanding } from './sign-in-standing'
 import type {
   DomainVerificationRecord,
   DomainVerificationStatus,
@@ -46,6 +47,12 @@ export interface DomainVerificationView {
   lastCheckedAt: string | null
   lastSuccessAt: string | null
   lastError: string | null
+  /**
+   * Where the host stands for the workshop portal's sign-in (#1298). `null`
+   * when the conference has no workshops, and for a local dev entry or a
+   * wildcard, which never sign in.
+   */
+  workshopSignIn: WorkshopSignInStanding | null
 }
 
 /**
@@ -57,6 +64,7 @@ export function toDomainVerificationView(
   hostname: string,
   record: DomainVerificationRecord | null,
   now: Date = new Date(),
+  workshopSignIn: WorkshopSignInStanding | null = null,
 ): DomainVerificationView {
   const devOnly = isDevOnlyHost(hostname)
   // RECORD-DRIVEN, and revoked never counts. Deriving this from the hostname's
@@ -85,5 +93,6 @@ export function toDomainVerificationView(
     lastCheckedAt: record?.lastCheckedAt ?? null,
     lastSuccessAt: record?.lastSuccessAt ?? null,
     lastError: record?.lastError ?? null,
+    workshopSignIn,
   }
 }

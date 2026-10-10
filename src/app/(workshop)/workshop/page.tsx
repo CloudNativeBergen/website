@@ -1,4 +1,5 @@
 import { withAuth } from '@workos-inc/authkit-nextjs'
+import { formatRegistrationInstant } from '@/lib/time'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import WorkshopList from '@/components/workshop/WorkshopList'
 import { Container } from '@/components/Container'
@@ -8,10 +9,27 @@ import { decideWorkshopPortalAccess } from '@/lib/workshop/access'
 import { isWorkshopsEnabledForConference } from '@/lib/features/workshops'
 import { resolveConferenceContact } from '@/lib/email/from'
 import { EnvelopeIcon } from '@heroicons/react/24/outline'
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
+import { headers } from 'next/headers'
+import { WORKSHOP_SIGN_IN_UNAVAILABLE_HEADER } from '@/lib/workshop/sign-in-paths'
+import {
+  workshopMainHost,
+  workshopPortalUrl,
+  workshopRequestHost,
+} from '@/lib/workshop/sign-in'
+import { WorkshopUnavailable } from '@/components/workshop/WorkshopUnavailable'
 import { WorkshopSignedOut } from '@/components/workshop/WorkshopSignedOut'
 import { WorkshopSignOutButton } from '@/components/workshop/WorkshopSignOutButton'
 import { signOutOfWorkshop } from './actions'
+
+/** Is `url` on `host` (a Host header value), compared as URLs compare hosts? */
+function isSameHost(url: string, host: string | null): boolean {
+  try {
+    return new URL(url).host === new URL(`https://${host}`).host
+  } catch {
+    return false
+  }
+}
 
 export default async function WorkshopPage() {
   const { conference, error } = await getConferenceForCurrentDomain()
@@ -19,9 +37,10 @@ export default async function WorkshopPage() {
   // FEATURE GATE (#689) — BEFORE `withAuth()`: the segment layout gates too,
   // but ordering it first means this page reads no WorkOS session for a
   // disabled tenant. (The proxy has already unsealed one if the browser sent
-  // it: it decides from the host alone.) (`withAuth` throws when the AuthKit middleware did not run; that
-  // cannot happen here, because `src/proxy.ts` answers 404 itself on a host
-  // that may not sign in — #1296.) The proxy runs first but sends nobody to
+  // it: it decides from the host alone.) (`withAuth` throws when the AuthKit
+  // middleware did not run. On a host that may not sign in, `src/proxy.ts`
+  // lets only this page through, marked, and the page stops at the mark
+  // before `withAuth` — #1298.) The proxy runs first but sends nobody to
   // WorkOS: a signed-out visitor arrives here, gets this 404 for a tenant
   // without workshops, and otherwise the signed-out view below, whose two
   // buttons are the only way into a sign-in. Fail-closed on an unresolvable
@@ -29,8 +48,6 @@ export default async function WorkshopPage() {
   if (!(await isWorkshopsEnabledForConference(conference))) {
     notFound()
   }
-
-  const { user } = await withAuth()
 
   if (error || !conference?._id) {
     return (
@@ -46,6 +63,37 @@ export default async function WorkshopPage() {
       </div>
     )
   }
+
+  // A HOST THAT CANNOT SIGN IN (#1298): the proxy let this request through
+  // without the SDK and marked it, so `withAuth()` must not be reached. The view
+  // says sign-up is not available and nothing about why.
+  const requestHeaders = await headers()
+  if (requestHeaders.has(WORKSHOP_SIGN_IN_UNAVAILABLE_HEADER)) {
+    // A SECONDARY host that cannot sign in, while the main host can: send the
+    // attendee to the working portal (the same link the email carries). Never
+    // to the host they are already on — that would loop. On the main host
+    // itself nothing is read: the proxy already decided it cannot sign in.
+    const requestHost = workshopRequestHost(requestHeaders)
+    const mainHost = workshopMainHost(conference)
+    if (mainHost && !isSameHost(`https://${mainHost}`, requestHost)) {
+      const portal = await workshopPortalUrl(conference)
+      if (portal && !isSameHost(portal, requestHost)) {
+        redirect(portal)
+      }
+    }
+    const registrationEnd = conference.workshopRegistrationEnd
+    return (
+      <WorkshopUnavailable
+        conferenceTitle={conference.title}
+        contactEmail={resolveConferenceContact(conference)}
+        registrationClosed={
+          Boolean(registrationEnd) && new Date(registrationEnd!) < new Date()
+        }
+      />
+    )
+  }
+
+  const { user } = await withAuth()
 
   if (!user) {
     return <WorkshopSignedOut conferenceTitle={conference.title} />
@@ -183,12 +231,9 @@ export default async function WorkshopPage() {
                   <div className="mt-2 text-sm text-yellow-700 dark:text-yellow-300">
                     <p>
                       Registration will open on{' '}
-                      {new Date(
+                      {formatRegistrationInstant(
                         conference.workshopRegistrationStart!,
-                      ).toLocaleString('en-US', {
-                        dateStyle: 'full',
-                        timeStyle: 'short',
-                      })}
+                      )}
                     </p>
                   </div>
                 </div>
@@ -219,12 +264,9 @@ export default async function WorkshopPage() {
                   <div className="mt-2 text-sm text-red-700 dark:text-red-300">
                     <p>
                       Registration closed on{' '}
-                      {new Date(
+                      {formatRegistrationInstant(
                         conference.workshopRegistrationEnd!,
-                      ).toLocaleString('en-US', {
-                        dateStyle: 'full',
-                        timeStyle: 'short',
-                      })}
+                      )}
                     </p>
                   </div>
                 </div>

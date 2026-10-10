@@ -374,7 +374,7 @@ const SYNC_PROJECTION = `{${FIELDS},
   redirectUriStatus,
   redirectUriId,
   redirectUriError,
-  "conference": conference->{ organization, ticketingProvider }
+  "conference": conference->{ organization, ticketingProvider, domains }
 }`
 
 function toSyncRow({
@@ -402,12 +402,29 @@ function toSyncRow({
  * read: every record that could be on the redirect allowlist, plus every record
  * that still carries redirect-URI state — a revoked host among them, since that
  * is exactly the one whose URI has to be deleted. The claiming conference's
- * owner and ticketing vendor ride along so the reconcile needs no second read.
+ * owner, ticketing vendor and claimed domains ride along so neither the
+ * reconcile nor the sign-in decision needs a second read.
  */
 export async function listRedirectUriSyncRows(): Promise<RedirectUriSyncRow[]> {
   const rows = await clientReadUncached.fetch<RawSyncRow[] | null>(
     // groq-global: the WorkOS redirect-URI list is one per environment and spans every tenant by design.
     `*[_type == "domainVerification" && (status == "verified" || method in ["grandfathered", "platform-owned"] || defined(redirectUriStatus) || defined(redirectUriId) || defined(redirectUriError))] | order(hostname asc) ${SYNC_PROJECTION}`,
+  )
+  return (rows ?? []).map(toSyncRow)
+}
+
+/**
+ * One conference's records with their redirect-URI state, for the organizer's
+ * view of where each host stands for workshop sign-in (#1298). Same shape as
+ * the reconcile reads, so both are decided by the same standing.
+ */
+export async function listRedirectUriSyncRowsForConference(
+  conferenceId: string,
+): Promise<RedirectUriSyncRow[]> {
+  const rows = await clientReadUncached.fetch<RawSyncRow[] | null>(
+    // groq-global: keyed by an explicit, server-resolved conference id (the document type carries no organization field).
+    `*[_type == "domainVerification" && conference._ref == $conferenceId] | order(hostname asc) ${SYNC_PROJECTION}`,
+    { conferenceId },
   )
   return (rows ?? []).map(toSyncRow)
 }
@@ -421,7 +438,7 @@ export async function getRedirectUriSyncRow(
   id: string,
 ): Promise<RedirectUriSyncRow | null> {
   const raw = await clientReadUncached.fetch<RawSyncRow | null>(
-    // groq-global: keyed by the id of a record the cross-tenant reconcile already holds, never by client input.
+    // groq-global: one record by deterministic id — a record the cross-tenant reconcile already holds, or the sign-in decision's own host (shape-checked, passed as a parameter; hostnames are a global namespace).
     `*[_type == "domainVerification" && _id == $id][0] ${SYNC_PROJECTION}`,
     { id },
   )

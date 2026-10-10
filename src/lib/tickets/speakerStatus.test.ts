@@ -446,6 +446,50 @@ describe('toTicketCandidates / searchTicketCandidates — the organizer search',
   })
 })
 
+describe('the memo — a fresh read', () => {
+  const emails = (list: { email: string }[] | null) =>
+    list?.map((c) => c.email) ?? null
+
+  // For a one-shot that must not miss a ticket sold seconds ago (the workshop
+  // instructions resend): the list must come from a read that starts NOW.
+  it('starts a new provider read inside the window, and leaves it for the next reader', async () => {
+    const fetchEventTickets = vi
+      .fn()
+      .mockResolvedValueOnce([ticket('first@x.test', 'Workshop')])
+      .mockResolvedValueOnce([
+        ticket('first@x.test', 'Workshop'),
+        ticket('just-bought@x.test', 'Workshop'),
+      ])
+    resolveTicketingProviderMock.mockResolvedValue({
+      configured: true,
+      provider: { fetchEventTickets },
+      eventRef: { customerId: 42, eventId: 7 },
+    })
+
+    expect(emails(await fetchEventTicketCandidates(CONF))).toEqual([
+      'first@x.test',
+    ])
+    // Inside the 30s window an ordinary reader is served the memo …
+    expect(emails(await fetchEventTicketCandidates(CONF))).toEqual([
+      'first@x.test',
+    ])
+    expect(fetchEventTickets).toHaveBeenCalledTimes(1)
+
+    // … a fresh reader is not.
+    expect(
+      emails(await fetchEventTicketCandidates(CONF, { fresh: true })),
+    ).toEqual(['first@x.test', 'just-bought@x.test'])
+    expect(fetchEventTickets).toHaveBeenCalledTimes(2)
+
+    // And what it fetched is the memo now: no third read.
+    expect(emails(await fetchEventTicketCandidates(CONF))).toEqual([
+      'first@x.test',
+      'just-bought@x.test',
+    ])
+    expect(fetchEventTickets).toHaveBeenCalledTimes(2)
+  })
+})
+
 /**
  * `allowStale` (#1294): the workshop gate runs on every signup click, so it
  * takes the last list that ARRIVED instead of blocking on a refresh or being

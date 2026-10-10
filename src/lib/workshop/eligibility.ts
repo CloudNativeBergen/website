@@ -47,7 +47,7 @@ import { clientReadUncached } from '@/lib/sanity/client'
  * revalidates `conferenceTag`, so the cached copy is also correct for the
  * admin-driven edit; this read exists for the Studio-driven one.)
  */
-async function liveTicketTypeRoles(conference: {
+export async function liveTicketTypeRoles(conference: {
   _id?: string
   ticketTypeRoles?: readonly TicketTypeRole[] | null
 }): Promise<readonly TicketTypeRole[] | null | undefined> {

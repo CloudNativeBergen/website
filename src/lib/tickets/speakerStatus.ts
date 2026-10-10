@@ -383,6 +383,16 @@ export interface TicketCandidateReadOptions {
    * now, and can afford to wait for it.
    */
   allowStale?: boolean | ((arrived: TicketCandidate[]) => boolean)
+  /**
+   * Answer from a provider read that STARTS NOW, never from the memo or from a
+   * refresh already in flight. The read becomes the memo, so the next reader
+   * pays nothing for it.
+   *
+   * FOR A ONE-SHOT THAT MUST NOT MISS A TICKET SOLD SECONDS AGO — the workshop
+   * instructions resend, which mails every holder once and then locks for an
+   * hour. Not for anything on a request path: it is a whole-event fetch.
+   */
+  fresh?: boolean
 }
 
 /** Test seam: drop the memo so a case cannot inherit another's fetch. */
@@ -424,6 +434,7 @@ export async function fetchEventTicketCandidates(
     let entry = ticketsCache.get(key)
     if (
       !entry ||
+      options?.fresh ||
       (entry.expiresAt <= now && !stillRefreshing(entry)) ||
       (entry.failed && !options?.allowStale)
     ) {

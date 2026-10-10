@@ -19,11 +19,14 @@
  * ONE FUNCTION. The WorkOS redirect-URI sync (`@/lib/workshop/redirect-uris`)
  * registers nothing this refuses.
  *
- * NOT YET APPLIED TO THE SIGN-IN DECISION. `resolveWorkshopSignInHost`
- * (`@/lib/workshop/sign-in`) still admits any host on the verified-redirect
- * allowlist, so a tenant's own verified domain can start a sign-in that WorkOS
- * then refuses, because its redirect URI is not registered. Making that
- * decision call this function is #1306.
+ * APPLIED TO THE SIGN-IN DECISION ONLY THROUGH THE SYNC. Since #1298
+ * `resolveWorkshopSignInHost` (`@/lib/workshop/sign-in`) also requires the
+ * host's redirect URI to be in WorkOS, and the sync records a URI (as
+ * `registered` or `external`) only for a host this admits, so a tenant's own
+ * verified domain is refused in practice. The decision does not re-check this
+ * function itself: a host that STOPS qualifying (its conference changes owner,
+ * `PLATFORM_ORG_ID` changes) keeps signing in until the next sync clears its
+ * URI — at the latest the daily sweep. Calling it there is #1306.
  *
  * Fail closed: everything the allowlist refuses (wildcard, dev-only, revoked,
  * unproven, stale) is `false`, and so, for a host the platform did not allocate,
@@ -38,6 +41,35 @@ import { isAllowlistEligible } from './policy'
 import type { DomainVerificationRecord } from './types'
 
 /**
+ * Could this host EVER qualify, whatever its proof says today? A host the
+ * platform allocated, or one whose conference the platform organization owns.
+ * A tenant's own domain is neither, and verifying it does not change that
+ * (#1298 uses this to tell the organizer so before they publish a record).
+ *
+ * @param ownerOrgId the organization that owns the conference claiming the
+ *   host, resolved server-side from the record's conference.
+ */
+export function isPlatformControlCandidate(
+  record: DomainVerificationRecord,
+  ownerOrgId: string | null | undefined,
+): boolean {
+  return isPlatformAllocated(record) || isPlatformOwner(ownerOrgId)
+}
+
+/**
+ * Is this the platform organization (`PLATFORM_ORG_ID`)? Its conferences' own
+ * domains may qualify once proven; nobody else's ever do. Also the whole
+ * answer for a claimed host that has no record yet: an allocation always has
+ * one.
+ */
+export function isPlatformOwner(
+  ownerOrgId: string | null | undefined,
+): boolean {
+  const platformOrgId = resolvePlatformOrgId()
+  return platformOrgId !== null && ownerOrgId === platformOrgId
+}
+
+/**
  * @param ownerOrgId the organization that owns the conference claiming the
  *   host, resolved server-side from the record's conference.
  */
@@ -48,7 +80,8 @@ export function isPlatformControlledHost(
 ): boolean {
   if (!isAllowlistEligible(record, now)) return false
   if (isPlatformAllocated(record)) return true
-  if (record.method !== 'dns-txt') return false
-  const platformOrgId = resolvePlatformOrgId()
-  return platformOrgId !== null && ownerOrgId === platformOrgId
+  return (
+    record.method === 'dns-txt' &&
+    isPlatformControlCandidate(record, ownerOrgId)
+  )
 }
