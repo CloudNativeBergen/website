@@ -47,22 +47,24 @@ Unchanged:
 
 1. **Tenant host, `/workshop/sign-in` or `/workshop/sign-up`.** The host must pass §4 and its
    conference must have workshops. The route sets a short-lived cookie holding a random value
-   (`__Host-` prefix, HttpOnly, `Secure`, `SameSite=Lax`, `Path=/`), and redirects to the auth host's start route with the host name, a hash of that
-   value, and the screen.
+   (`__Host-` prefix, HttpOnly, `Secure`, `SameSite=Lax`, `Path=/`), and redirects to the auth
+   host's start route with the host name, a hash of that value, and the screen.
 2. **Auth host, start.** It checks the named host against §4 and that its conference has workshops,
    so a tenant without workshops is never sent to WorkOS. It builds the authorize URL with PKCE and
-   carries the host and the hash in sealed state. Nothing from the query string is trusted later. It
-   also sets a cookie on the auth host that the callback requires, so a callback URL completes
-   nothing outside the browser that started.
-3. **Auth host, callback.** It verifies state and the cookie from step 2, checks §4 again, and only then exchanges the code. It
-   stores **no session and no WorkOS token**: the SDK's `handleAuth` always saves a session cookie on
-   the callback host, so the callback does not use it. It redirects to the tenant host's redeem route
-   with a hand-off token.
+   carries the host, the conference that claims it and the hash in sealed state. Nothing from the
+   query string is trusted later. It also sets a cookie on the auth host that the callback requires,
+   so a callback URL completes nothing outside the browser that started.
+3. **Auth host, callback.** It verifies state and the cookie from step 2. It then checks again that
+   the host passes §4, that the conference claiming it is still the one in state, and that this
+   conference still has workshops. Only then does it exchange the code. It stores **no session and no
+   WorkOS token**: the SDK's `handleAuth` always saves a session cookie on the callback host, so the
+   callback does not use it. It redirects to the tenant host's redeem route with a hand-off token.
 4. **Tenant host, redeem.** It accepts the token only when all of these hold: it unseals, it has not
-   expired, it names this host, and the cookie from step 1 hashes to the value inside it. It checks
-   §4 once more, sets the session cookie, clears the step 1 cookie and redirects to `/workshop`. The
-   return path is fixed; nothing in the request chooses it. The response is `no-store` and sends no
-   referrer, because the token is in the URL.
+   expired, it names this host and the conference this host resolves to, and the cookie from step 1
+   hashes to the value inside it. It checks §4 and that the conference has workshops once more, sets
+   the session cookie, clears the step 1 cookie and redirects to `/workshop`. The return path is
+   fixed; nothing in the request chooses it. The response is `no-store` and sends no referrer,
+   because the token is in the URL.
 
 A refusal on the auth host is a 404. A refusal at redeem sends the attendee to `/workshop` signed
 out, with one neutral line that sign-in did not complete. The reason is never shown. A sign-in
@@ -90,7 +92,9 @@ are both gone.
 
 - Sealed (authenticated encryption), nothing stored. The key comes from `WORKOS_COOKIE_PASSWORD`
   with a purpose label, so a hand-off token is never accepted as a session and the reverse.
-- Valid for about 60 seconds. It names one host and carries the hash from step 1.
+- Valid for about 60 seconds. It names one host and the conference that claimed it when the sign-in
+  started, and carries the hash from step 1. A host released and claimed by another conference in
+  between is refused.
 - It holds what the session needs: WorkOS user ID, email, whether WorkOS reports the email verified,
   name, and the WorkOS session ID.
 - It is not single use. Inside its lifetime the same browser could redeem it twice; no other browser
@@ -115,8 +119,11 @@ are both gone.
 
 Sign-out ends our cookie and the WorkOS login. The tenant host clears its cookie and sends the
 browser to the auth host with a sealed request, valid for about 60 seconds, naming the host and the
-WorkOS session ID. The auth host sends it on to WorkOS's logout and, on the way back, to the front page of that
-host, after checking it against §4.
+WorkOS session ID. The auth host checks the request and the host against §4, keeps the host in a
+short-lived cookie of its own (`__Host-` prefix), and sends the browser to WorkOS's logout with one
+fixed return address. The return route reads the cookie, clears it, checks the host against §4 again
+and redirects to that host's front page. With no valid host it shows a plain signed-out page. Nothing
+about the tenant has to pass through WorkOS.
 
 ## 8. What is removed
 
@@ -171,7 +178,7 @@ through `workshopPortalUrl`. `AUTH.md` and `DOMAIN_VERIFICATION.md` are rewritte
 Not verified when this was written:
 
 - whether WorkOS accepts a sign-out return address with a query string, or only an exact registered
-  one. §7 does not depend on it;
+  one. §7 does not depend on it: the host travels in a cookie on the auth host;
 - whether a second sign-in within the WorkOS login's lifetime is silent or shows the form again;
 - that WorkOS staging accepts `http://127.0.0.1:<port>` as a redirect URI next to `localhost`. Its
   documentation allows HTTP and loopback addresses in sandbox environments.
