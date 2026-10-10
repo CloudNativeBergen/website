@@ -316,10 +316,8 @@ portal on the conference's first domain when that one can sign in, and
 otherwise says sign-up is not available. The domain card says "not offered on
 this host".
 
-One gap is left (#1306): the decision reads the registration, not
-`isPlatformControlledHost` itself. A host that stops qualifying (its conference
-changes owner, `PLATFORM_ORG_ID` changes) keeps signing in until a reconcile
-clears its URI, at the latest with the daily sweep.
+One gap is left (#1306): a host that stops qualifying keeps its sign-in until
+a reconcile clears its registration, at the latest with the daily sweep.
 
 What an organizer and an operator do with all this is in
 [WORKSHOP_SIGN_IN_RUNBOOK.md](WORKSHOP_SIGN_IN_RUNBOOK.md).

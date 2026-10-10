@@ -2099,6 +2099,11 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                               </td>
                               <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
                                 Not deleted automatically
+                                <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                  Removing your registrations at one conference
+                                  does not delete this login or your
+                                  registrations at other conferences
+                                </div>
                               </td>
                               <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
                                 <span className="font-medium text-blue-600 dark:text-blue-400">

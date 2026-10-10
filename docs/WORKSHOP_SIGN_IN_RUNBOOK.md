@@ -112,8 +112,12 @@ override change, and at the end of the daily check (cron
   `curl -H "Authorization: Bearer $CRON_SECRET" https://<production host>/api/cron/domain-verification`.
   It is the same job as the scheduled one: it re-checks every claimed domain
   and sends organizers the same alerts.
-- Previews and local development never run it. They read the production
-  dataset, so they show the registrations production made and add none.
+- Previews and local development never run the reconcile. They read the
+  production dataset, so they show the registrations production made and add
+  none.
+- Run the daily check on the production host only. The check itself is not
+  limited to production, and from any deployment it writes to the production
+  dataset and alerts organizers.
 
 ### The row says available
 
@@ -144,11 +148,9 @@ run `pnpm tsx scripts/probe-workos-redirect-uris.ts` with a staging key.
 
 ## Known gaps
 
-- The sign-in decision reads the registration, not the platform-control rule
-  itself. A host that stops qualifying keeps signing in until a reconcile
-  clears its registration, at the latest with the daily check (#1306). Only a
-  URI the application created is deleted from WorkOS; one it merely found
-  there stays.
+- A host that stops qualifying keeps its sign-in until a reconcile clears its
+  registration, at the latest with the daily check (#1306). Only a URI the
+  application created is deleted from WorkOS; one it merely found there stays.
 - A tenant whose first domain is its own has no emailed portal link (#1306).
 - Sign-out redirects are registered by hand.
 - Nothing expires by itself. A redirect URI stays until a reconcile runs and

@@ -412,6 +412,10 @@ describe('workshop portal — signed-in attendee', () => {
 describe('workshop portal — sign-in and sign-out go through the SDK', () => {
   beforeEach(() => {
     vi.stubEnv('PLATFORM_ORG_ID', 'org-platform')
+    // Set in every deployment, for branding and other consumers. The page must
+    // build nothing from it: a link that only appears when it is set would
+    // pass these tests with it unset.
+    vi.stubEnv('NEXT_PUBLIC_URL', 'https://public.example.org')
     vi.stubEnv('WORKOS_CLIENT_ID', 'client_test')
     mockGetConference.mockResolvedValue({
       conference: conference('org-platform'),

@@ -313,6 +313,10 @@ describe('the workshop login is shared across conferences (#1299)', () => {
     // Said where the identifier is listed, and where its retention is.
     expect(html.split(SHARED_LOGIN)).toHaveLength(2)
     expect(html).toContain('one login for every conference on this platform')
+    // …and what removing a registration does not reach.
+    expect(html).toContain(
+      'does not delete this login or your registrations at other conferences',
+    )
   })
 
   it('says nothing about a login to a tenant that has no workshop sign-in', async () => {
@@ -446,6 +450,8 @@ describe('a failed read must NOT shorten the disclosure', () => {
     expect(html).toContain(WORKOS)
     expect(html).toContain(UNCERTAIN)
     expect(html).toContain('could not be read just now')
+    // What follows from WorkOS is disclosed with it, not held back (#1299).
+    expect(html).toContain(SHARED_LOGIN)
   })
 
   it('renders NO uncertainty notice when every signal resolved', async () => {
