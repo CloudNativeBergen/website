@@ -249,18 +249,30 @@ describe('resolveWorkshopSignInHost — everything else is refused', () => {
   })
 
   it('refuses when the record found under the id names a host that merely ends in it', async () => {
-    getRedirectUriSyncRow.mockResolvedValue(
-      record({ hostname: 'sub.conf.example.org' }),
-    )
+    // Its conference DOES claim the asked-for host, so only the record's own
+    // hostname can refuse here.
+    getRedirectUriSyncRow.mockResolvedValue({
+      ...record({ hostname: 'sub.conf.example.org' }),
+      conference: {
+        organization: { _ref: 'org-1' },
+        domains: ['conf.example.org', 'sub.conf.example.org'],
+      },
+    })
     await expect(
       resolveWorkshopSignInHost('conf.example.org'),
     ).resolves.toBeNull()
   })
 
   it('refuses when the record found under the id names another host', async () => {
-    getRedirectUriSyncRow.mockResolvedValue(
-      record({ hostname: 'other.example.org' }),
-    )
+    // Its conference DOES claim the asked-for host, so only the record's own
+    // hostname can refuse here.
+    getRedirectUriSyncRow.mockResolvedValue({
+      ...record({ hostname: 'other.example.org' }),
+      conference: {
+        organization: { _ref: 'org-1' },
+        domains: ['conf.example.org', 'other.example.org'],
+      },
+    })
     await expect(
       resolveWorkshopSignInHost('conf.example.org'),
     ).resolves.toBeNull()
