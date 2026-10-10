@@ -57,7 +57,11 @@ vi.mock('@/lib/sanity/client', () => ({
 
 /** The sign-in decision (`sign-in.test.ts`) — the page only forwards it. */
 const mockWorkshopPortalUrl = vi.fn<() => Promise<string | null>>()
-vi.mock('@/lib/workshop/sign-in', () => ({
+vi.mock('@/lib/workshop/sign-in', async (importOriginal) => ({
+  // `workshopMainHost` is pure and runs for real.
+  workshopMainHost: (
+    await importOriginal<typeof import('@/lib/workshop/sign-in')>()
+  ).workshopMainHost,
   workshopPortalUrl: () => mockWorkshopPortalUrl(),
 }))
 
@@ -161,9 +165,26 @@ describe('/admin/workshops — resend sign-up instructions (#1298)', () => {
     await expect(resendDisabledReason()).resolves.toBeNull()
   })
 
-  it('says why while the portal link does not work', async () => {
+  it('names the main host while its portal link does not work', async () => {
     mockWorkshopPortalUrl.mockResolvedValue(null)
-    await expect(resendDisabledReason()).resolves.toMatch(/can sign in/)
+    mockGetConference.mockResolvedValue({
+      conference: {
+        _id: 'conf-1',
+        organization: { _ref: 'org-A', _type: 'reference' },
+        domains: ['2026.example.org', 'conf.konf.app'],
+      },
+      error: null,
+    })
+    await expect(resendDisabledReason()).resolves.toBe(
+      'Available once attendees can sign in on 2026.example.org, the conference’s first domain.',
+    )
+  })
+
+  it('says the conference needs a domain when it has none', async () => {
+    mockWorkshopPortalUrl.mockResolvedValue(null)
+    await expect(resendDisabledReason()).resolves.toBe(
+      'Available once the conference has a domain attendees can sign in on.',
+    )
   })
 
   it('says why once registration has closed', async () => {

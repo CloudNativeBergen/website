@@ -425,6 +425,23 @@ describe('workshop proxy — the portal page on a host that cannot sign in', () 
     expect(generatePkce).not.toHaveBeenCalled()
   })
 
+  // `skipTrailingSlashRedirect` is on, so Next leaves the slash in place.
+  it('treats a trailing slash as the same page — the view, or the redirect', async () => {
+    const portal = await run(navigate(UNREGISTERED, '/workshop/'))
+    expectPassedThrough(portal)
+    expect(portal.headers.get(MARK)).toBe('1')
+
+    for (const path of ['/workshop/sign-in/', '/workshop/sign-up//']) {
+      const response = await run(navigate(UNREGISTERED, path))
+      expect(response.status).toBe(307)
+      // Exactly the portal path — not `/workshop/` carried over from the slash.
+      expect(response.headers.get('location')).toBe(
+        `https://${UNREGISTERED}/workshop`,
+      )
+    }
+    expect(buildAuthorizationUrl).not.toHaveBeenCalled()
+  })
+
   it('still 404s anything else under /workshop there, and any POST', async () => {
     expect(
       (await run(navigate(UNREGISTERED, '/workshop/sign-in/x'))).status,

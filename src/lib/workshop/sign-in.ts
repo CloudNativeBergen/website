@@ -140,17 +140,29 @@ export function workshopRequestHost(headers: {
 }
 
 /**
- * The portal on the conference's MAIN host (the first of `domains[]`, the one
- * every outbound link uses), or `null` when there is none or it cannot sign in
- * (#1298). For a link sent to an attendee: one that cannot sign in only leads
- * to the unavailable view, so it is left out.
+ * The conference's MAIN host: the first of `domains[]`, the one every outbound
+ * link uses. `null` for a conference with no domain.
+ */
+export function workshopMainHost(conference: {
+  title?: string | null
+  domains?: readonly string[] | null
+}): string | null {
+  if (!hasConferenceDomain(conference)) return null
+  return new URL(conferenceBaseUrl(conference)).host
+}
+
+/**
+ * The portal on the conference's main host ({@link workshopMainHost}), or
+ * `null` when there is none or it cannot sign in (#1298). For a link sent to
+ * an attendee: one that cannot sign in only leads to the unavailable view, so
+ * it is left out.
  */
 export async function workshopPortalUrl(conference: {
   title?: string | null
   domains?: readonly string[] | null
 }): Promise<string | null> {
-  if (!hasConferenceDomain(conference)) return null
-  const host = new URL(conferenceBaseUrl(conference)).host
+  const host = workshopMainHost(conference)
+  if (!host) return null
   const signIn = await resolveWorkshopSignInHost(host)
   return signIn ? `${signIn.origin}${WORKSHOP_PORTAL_PATH}` : null
 }

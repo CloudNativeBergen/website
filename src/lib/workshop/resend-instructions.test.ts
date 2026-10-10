@@ -132,6 +132,22 @@ describe('resendWorkshopSignupInstructions', () => {
     expect(grace.html).toContain('Hi grace@example.org,')
   })
 
+  it('escapes what the ticket provider supplies before it goes into the HTML', async () => {
+    fetchEventTicketCandidates.mockResolvedValue([
+      ticket(
+        'mallory@example.org',
+        'Workshop + Conference',
+        '<a href="x">Mal</a>',
+      ),
+    ])
+
+    await resendWorkshopSignupInstructions(conference, 0)
+
+    const { html } = emails()[0]
+    expect(html).toContain('Hi &lt;a href=&quot;x&quot;&gt;Mal&lt;/a&gt;,')
+    expect(html).not.toContain('<a href="x">')
+  })
+
   it('says it is the sign-up link now ready — not a second purchase thank-you', async () => {
     await resendWorkshopSignupInstructions(conference, 0)
 

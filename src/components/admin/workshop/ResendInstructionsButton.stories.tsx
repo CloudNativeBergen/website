@@ -62,7 +62,7 @@ export const Available: Story = {
 }
 
 const NO_LINK =
-  'Available once attendees can sign in on the conference’s main host.'
+  'Available once attendees can sign in on 2026.cloudnativedays.no, the conference’s first domain.'
 
 /**
  * The portal link does not work yet: nothing to resend, and it says why in

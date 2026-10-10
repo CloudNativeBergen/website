@@ -80,17 +80,25 @@ function withoutUnavailableMark(req: NextRequest): NextRequest {
   return new NextRequest(req, { headers })
 }
 
+/**
+ * The path without trailing slashes: `skipTrailingSlashRedirect` is on, so
+ * Next hands `/workshop/` over as written, and it is the same page.
+ */
+function workshopPath(req: NextRequest): string {
+  return req.nextUrl.pathname.replace(/\/+$/, '')
+}
+
 function isWorkshopSignInEntry(req: NextRequest): boolean {
+  const path = workshopPath(req)
   return (
-    (req.nextUrl.pathname === WORKSHOP_SIGN_IN_PATH ||
-      req.nextUrl.pathname === WORKSHOP_SIGN_UP_PATH) &&
+    (path === WORKSHOP_SIGN_IN_PATH || path === WORKSHOP_SIGN_UP_PATH) &&
     (req.method === 'GET' || req.method === 'HEAD')
   )
 }
 
 function isWorkshopPortalView(req: NextRequest): boolean {
   return (
-    req.nextUrl.pathname === WORKSHOP_PORTAL_PATH &&
+    workshopPath(req) === WORKSHOP_PORTAL_PATH &&
     (req.method === 'GET' || req.method === 'HEAD')
   )
 }
@@ -150,15 +158,17 @@ async function workshopMiddleware(req: NextRequest, event: NextFetchEvent) {
     // as before.
     // A sign-in or sign-up link (a bookmark, a page rendered before the host
     // stopped qualifying) goes to the portal page too, which says why not —
-    // not to a bare 404 (#1298). The target is this request's own URL with
-    // the path replaced and the query dropped: same origin, so Next's adapter
+    // not to a bare 404 (#1298). The target is this request's own origin with
+    // the portal path and no query: same origin, so Next's adapter
     // sends the browser a relative `Location: /workshop`. (A relative Location
     // returned from here throws in that adapter — "Invalid URL".)
     if (isWorkshopSignInEntry(req)) {
-      const portal = req.nextUrl.clone()
-      portal.pathname = WORKSHOP_PORTAL_PATH
-      portal.search = ''
-      return NextResponse.redirect(portal, 307)
+      // Built from the origin, not `nextUrl.clone()`: a clone keeps a trailing
+      // slash from `/workshop/sign-in/` and would send the browser there.
+      return NextResponse.redirect(
+        new URL(WORKSHOP_PORTAL_PATH, req.nextUrl.origin),
+        307,
+      )
     }
     if (isWorkshopPortalView(req)) {
       const headers = new Headers(req.headers)

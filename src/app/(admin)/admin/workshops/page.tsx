@@ -4,7 +4,7 @@ import { ErrorDisplay } from '@/components/admin'
 import { WorkshopsClientPage } from '@/components/admin/workshop/WorkshopsClientPage'
 import { getWorkshopsByConference } from '@/lib/workshop/sanity'
 import { isWorkshopsEnabledForConference } from '@/lib/features/workshops'
-import { workshopPortalUrl } from '@/lib/workshop/sign-in'
+import { workshopMainHost, workshopPortalUrl } from '@/lib/workshop/sign-in'
 import { resendBlocker } from '@/lib/workshop/resend-instructions'
 
 export default async function WorkshopAdminPage() {
@@ -29,10 +29,13 @@ export default async function WorkshopAdminPage() {
 
   const workshops = await getWorkshopsByConference(conference._id)
   // The resend action (#1298), refused for the reasons the server refuses it.
+  const mainHost = workshopMainHost(conference)
   const blocker = resendBlocker(conference, await workshopPortalUrl(conference))
   const resendDisabledReason =
     blocker === 'portal-unavailable'
-      ? 'Available once attendees can sign in on the conference’s main host.'
+      ? mainHost
+        ? `Available once attendees can sign in on ${mainHost}, the conference’s first domain.`
+        : 'Available once the conference has a domain attendees can sign in on.'
       : blocker === 'registration-closed'
         ? 'Workshop registration has closed.'
         : null

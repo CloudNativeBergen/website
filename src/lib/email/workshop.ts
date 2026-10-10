@@ -178,6 +178,10 @@ export function renderWorkshopSignupInstructions({
   html: string
 } {
   const fromEmail = resolveConferenceFrom(conference)
+  // The ticket provider supplies these; the HTML gets them escaped.
+  const safeName = escapeHtml(userName)
+  const safeCategory = escapeHtml(ticketCategory)
+  const safeEmail = escapeHtml(userEmail)
 
   const contactEmail = resolveConferenceContact(conference)
 
@@ -243,7 +247,7 @@ export function renderWorkshopSignupInstructions({
                   <p style="margin: 0 0 8px 0; font-size: 16px; font-weight: 600; color: #334155;">How to register for workshops:</p>
                   <ol style="margin: 0 0 24px 0; padding-left: 24px;">
                     ${workshopUrl ? `<li style="margin: 0 0 8px 0; font-size: 16px; line-height: 24px; color: #334155;">${registration === 'pending' ? `When registration opens, visit` : `Visit`} the workshop signup page: <a href="${workshopUrl}" style="color: ${brand.accent}; text-decoration: none;">${workshopUrl}</a></li>` : ''}
-                    <li style="margin: 0 0 8px 0; font-size: 16px; line-height: 24px; color: #334155;">Sign in with the email address associated with your ticket: <strong>${userEmail}</strong></li>
+                    <li style="margin: 0 0 8px 0; font-size: 16px; line-height: 24px; color: #334155;">Sign in with the email address associated with your ticket: <strong>${safeEmail}</strong></li>
                     <li style="margin: 0 0 8px 0; font-size: 16px; line-height: 24px; color: #334155;">Browse available workshops and select the ones you&apos;d like to attend</li>
                     <li style="margin: 0 0 8px 0; font-size: 16px; line-height: 24px; color: #334155;">Complete your registration</li>
                   </ol>
@@ -276,8 +280,8 @@ export function renderWorkshopSignupInstructions({
               <tr>
                 <td style="padding: 40px;">
                   <h2 style="margin: 0 0 20px 0; font-size: 28px; font-weight: 700; color: ${brand.accent};">${resent ? `Workshop sign-up for ${conference.title}` : `Welcome to ${conference.title}!`}</h2>
-                  <p style="margin: 0 0 16px 0; font-size: 16px; line-height: 24px; color: #334155;">Hi ${userName},</p>
-                  <p style="margin: 0 0 24px 0; font-size: 16px; line-height: 24px; color: #334155;">${resent ? `Here are the sign-up instructions for the workshops your <strong>${ticketCategory}</strong> ticket includes, with the link to the workshop sign-up page.` : `Thank you for purchasing your <strong>${ticketCategory}</strong> ticket!`}</p>
+                  <p style="margin: 0 0 16px 0; font-size: 16px; line-height: 24px; color: #334155;">Hi ${safeName},</p>
+                  <p style="margin: 0 0 24px 0; font-size: 16px; line-height: 24px; color: #334155;">${resent ? `Here are the sign-up instructions for the workshops your <strong>${safeCategory}</strong> ticket includes, with the link to the workshop sign-up page.` : `Thank you for purchasing your <strong>${safeCategory}</strong> ticket!`}</p>
 
                   <h3 style="margin: 0 0 16px 0; font-size: 20px; font-weight: 600; color: ${brand.accent};">${heading}</h3>
                   <p style="margin: 0 0 24px 0; font-size: 16px; line-height: 24px; color: #334155;">${lede}</p>
