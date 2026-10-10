@@ -100,17 +100,24 @@ depends on who owns the conference, on the platform's current domain suffix and
 on today's date, so do not derive the row from the fields. Read them for what
 they say, and ask an organizer of that organization for the row itself:
 
-- `conference` is the conference that holds the claim. A record held by
-  another conference says nothing about this one.
-- `status`, `lastSuccessAt` and `lastError` are the state of the proof. For a
-  domain proven by DNS: whether the last check found the TXT record, when a
-  check last did, and what the last check found otherwise.
-- `method` is how the host was admitted: `platform-owned` for a host the
-  platform allocated, `dns-txt` for a proven domain, `grandfathered` for a
-  claim that was never proven.
-- `redirectUriStatus` and `redirectUriError` are the callback: `registered`
-  (created by the application) or `external` (found in WorkOS), and the error
-  of the last attempt when one failed.
+- `conference` is the conference currently claiming the hostname. A record
+  held by another conference says nothing about this one.
+- `status` is the state the verification policy keeps for the claim: `pending`
+  (never proven), `verified`, `failing` (the proof stopped resolving) or
+  `revoked` (the claim was released). It is not the result of the latest
+  check: a verified domain can stay `verified` through failed lookups.
+- `lastSuccessAt` is when a check last succeeded. `lastError` is what the
+  last failed check reported; a successful check clears it.
+- `method` is the kind of proof the record is held to, not whether it has been
+  given: `dns-txt` (the DNS TXT challenge, also on a new claim that is still
+  `pending`), `grandfathered` (a claim from before verification existed,
+  trusted for a grace period only) or `platform-owned` (a subdomain the
+  platform allocated).
+- `redirectUriStatus` is where the host's callback stands in WorkOS as the
+  application recorded it: `registered` (created by the application),
+  `external` (present in WorkOS, not created by the application), or empty
+  (the application holds none). `redirectUriError` is why the last attempt to
+  register or remove it failed; the next success clears it.
 
 An empty answer means the host has no record, or the CLI is not signed in. The
 record does not show `WORKOS_COOKIE_DOMAIN` or whether the conference has
