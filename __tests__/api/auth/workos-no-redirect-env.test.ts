@@ -20,7 +20,12 @@
 import '../../helpers/workosEnvWithoutRedirectUri'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { NextRequest, type NextFetchEvent } from 'next/server'
-import { signInHost, signInHostsById } from '../../helpers/workshopSignIn'
+import {
+  accessToken,
+  redirectTarget,
+  signInHost,
+  signInHostsById,
+} from '../../helpers/workshopSignIn'
 import {
   beginRequest,
   presentCookie,
@@ -85,13 +90,6 @@ const buildAuthorizationUrl = vi.spyOn(
 
 const event = {} as NextFetchEvent
 
-/** An unsigned JWT-shaped access token carrying the claims the SDK reads. */
-function accessToken(claims: Record<string, unknown>): string {
-  const part = (value: unknown) =>
-    Buffer.from(JSON.stringify(value)).toString('base64url')
-  return `${part({ alg: 'RS256', typ: 'JWT' })}.${part(claims)}.signature`
-}
-
 /** Begin a "request" on the host: fresh cookie jar, these request headers. */
 function request(path: string, headers: Record<string, string> = {}) {
   const requestHeaders = new Headers({ host: HOST, ...headers })
@@ -135,18 +133,6 @@ async function completeSignIn() {
     sessionCookie.split(';')[0].slice('wos-session='.length),
   )
   return { finished, sessionCookie, sealed }
-}
-
-/** Where a thrown `redirect()` points, read the way Next reads it. */
-async function redirectTarget(run: () => Promise<unknown>): Promise<string> {
-  try {
-    await run()
-  } catch (error) {
-    const digest = (error as { digest?: string }).digest ?? ''
-    if (digest.startsWith('NEXT_REDIRECT')) return digest.split(';')[2]
-    throw error
-  }
-  throw new Error('expected a redirect')
 }
 
 beforeEach(() => {

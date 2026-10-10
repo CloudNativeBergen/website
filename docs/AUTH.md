@@ -595,20 +595,24 @@ decision, with no cache.
 
 Every entry point takes the decision before it calls the SDK:
 
-| Entry point                     | File                                     | On a host that cannot sign in              |
-| ------------------------------- | ---------------------------------------- | ------------------------------------------ |
-| `GET`/`HEAD` `/workshop`        | `src/proxy.ts`, the portal page          | the page says sign-up is not available yet |
-| `/workshop/sign-in`, `/sign-up` | `src/proxy.ts`                           | 307 to `/workshop` on the same host        |
-| any other `/workshop*` request  | `src/proxy.ts`                           | 404                                        |
-| starting a sign-in or sign-up   | `src/lib/workshop/sign-in-start.ts`      | 404, no authorize URL is built             |
-| the callback                    | `src/app/api/auth/callback/route.ts`     | 404, no code is exchanged                  |
-| the attendee identity in tRPC   | `src/server/trpc.ts` (`workshop.*` only) | no attendee is resolved                    |
-| sign-out                        | `src/app/(workshop)/workshop/actions.ts` | 404, the session cookie is left alone      |
+| Entry point                                  | File                                     | On a host that cannot sign in                                                                                |
+| -------------------------------------------- | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `GET`/`HEAD` `/workshop`                     | `src/proxy.ts`, the portal page          | the unavailable view, or a redirect to the first domain's portal (below); 404 for a tenant without workshops |
+| `GET`/`HEAD` `/workshop/sign-in`, `/sign-up` | `src/proxy.ts`                           | 307 to `/workshop` on the same host                                                                          |
+| any other `/workshop*` request or method     | `src/proxy.ts`                           | 404                                                                                                          |
+| starting a sign-in or sign-up                | `src/lib/workshop/sign-in-start.ts`      | 404, no authorize URL is built                                                                               |
+| the callback                                 | `src/app/api/auth/callback/route.ts`     | 404, no code is exchanged                                                                                    |
+| the attendee identity in tRPC                | `src/server/trpc.ts` (`workshop.*` only) | no attendee is resolved                                                                                      |
+| sign-out                                     | `src/app/(workshop)/workshop/actions.ts` | 404, the session cookie is left alone                                                                        |
 
 The routes that start a sign-in and the callback also check that the tenant has workshops
-(`isWorkshopsEnabledForConference`), so a tenant without them never reaches WorkOS. A
-secondary host that cannot sign in sends the attendee to the portal on the conference's
-first domain when that one can.
+(`isWorkshopsEnabledForConference`), so a tenant without them can neither start nor
+complete a sign-in. A session that already exists is not ended by that: the proxy still
+refreshes it at WorkOS, and it can still sign out.
+
+The unavailable view says sign-up is not available yet, or that it has closed once
+workshop registration has ended. A secondary host that cannot sign in redirects to the
+portal on the conference's first domain when that one can.
 
 ### Sessions and the shared login
 
@@ -656,18 +660,22 @@ Only needed when a tenant on the deployment has workshops.
 | `WORKOS_COOKIE_PASSWORD` | Seals the session cookie. At least 32 characters                                                                                                      |
 | `WORKOS_COOKIE_DOMAIN`   | **Must stay unset.** It would widen the session cookie to sibling hosts, so sign-in is refused on every host while it is set (system status shows it) |
 
-Not read, and to be removed where they are still set: `WORKOS_REDIRECT_URI` and
-`NEXT_PUBLIC_WORKOS_REDIRECT_URI`. The first is read by nothing. The second is the SDK's
-own fallback for a caller that passes no redirect URI; every caller here passes one, and
-`__tests__/api/auth/workos-no-redirect-env.test.ts` runs every entry point with both
+Not needed, and to be removed where they are still set: `WORKOS_REDIRECT_URI` and
+`NEXT_PUBLIC_WORKOS_REDIRECT_URI`. The first is read by nothing: not the application, not
+the SDK. The application does not read the second either, but the SDK does, for two
+things. It is the redirect URI for a caller that passes none; every caller here passes
+one. And where the SDK has no request URL to judge by (starting a sign-in, signing out) it
+takes the cookie's `Secure` flag from that variable's scheme, and sets `Secure` when the
+variable is unset, which is what an `https` deployment wants.
+`__tests__/api/auth/workos-no-redirect-env.test.ts` runs every SDK entry point with both
 variables unset. The portal does not read `NEXT_PUBLIC_URL` either.
 
 Local development: `localhost` can sign in when `NODE_ENV` is `development`, with
 `http://localhost:<port>/api/auth/callback` registered in a WorkOS **staging** environment.
-Where the SDK has no request URL to judge by (starting a sign-in, signing out) it marks
-its cookies `Secure` unless `NEXT_PUBLIC_WORKOS_REDIRECT_URI` is an `http:` URL. Chrome
-and Firefox accept `Secure` cookies from `http://localhost`. For a browser that does not,
-set the variable to the localhost callback in `.env.local`, and nowhere else.
+With the variable unset those two cookies are `Secure` on `http://localhost` too. Chrome
+and Firefox are documented to accept that from localhost (not re-tested for this change).
+For a browser that does not, set `NEXT_PUBLIC_WORKOS_REDIRECT_URI` to the localhost
+callback in `.env.local`, and nowhere else.
 
 ### GitHub OAuth App Setup
 

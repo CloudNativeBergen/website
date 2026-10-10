@@ -1,7 +1,10 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { SharedWorkshopLoginNotice } from './SharedWorkshopLoginNotice'
 
-/** The amber "Workshop Registration" card of /privacy, which the note sits in. */
+/**
+ * The decorator is a STAND-IN for the amber "Workshop Registration" card the
+ * note sits in on /privacy, not that card.
+ */
 const meta = {
   title: 'Components/SharedWorkshopLoginNotice',
   component: SharedWorkshopLoginNotice,
@@ -34,8 +37,4 @@ export const Default: Story = {}
 
 export const Dark: Story = {
   globals: { theme: 'dark' },
-}
-
-export const Mobile: Story = {
-  parameters: { viewport: { defaultViewport: 'mobile1' } },
 }

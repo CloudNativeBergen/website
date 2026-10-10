@@ -7,23 +7,25 @@ to check when it does not. The design is in
 
 ## What has to be true
 
-Attendees can sign in on a host when all three hold:
+Attendees can sign in on a host when all of these hold:
 
 1. **The conference has workshops.** The organization's plan includes them and
-   its ticketing can read tickets for this conference.
+   its ticketing can read tickets for this conference, or an operator has
+   switched them on with a feature override.
 2. **The platform controls the host.** It is either a host the platform
    allocated (for example `<name>.konf.run`), or a verified domain of a
    conference owned by the platform organization (`PLATFORM_ORG_ID`).
 3. **WorkOS has the host's callback**, `https://<host>/api/auth/callback`, as a
    redirect URI. The application registers it; nobody adds it by hand.
+4. **`WORKOS_COOKIE_DOMAIN` is not set** in the deployment.
 
-A tenant's own domain does not carry the portal. Every tenant shares one WorkOS
-client, so a sign-in callback may only be on a host that the platform serves and
-whose DNS the platform controls. Proving control of a domain's DNS is enough for
-routing, not for this (#1306).
+A tenant's own domain does not carry the portal: every tenant shares one WorkOS
+client, so a sign-in callback may only be on a host that the platform itself
+serves and whose DNS the platform controls (#1306).
 
 The conference's **first domain** decides the most. Ticket emails link to the
-portal on it, and the conference's other hosts send attendees there.
+portal on it, and another host of the conference that cannot sign in sends
+attendees there.
 
 ## Organizer: the portal on a new domain
 
@@ -60,13 +62,16 @@ yourself.
 
 Tickets sold before that moment got an email without the portal link. On
 **Admin → Workshops**, press **Resend sign-up instructions** once. Every
-workshop ticket holder gets the instructions with the link. The action is
-limited to once an hour and is refused once workshop registration has closed.
+workshop ticket holder gets the instructions with the link. A second press
+within the hour is normally refused; that is a guard against a double click,
+kept per running instance, not a strict limit. The action is refused once
+workshop registration has closed.
 
 ### What attendees see until then
 
 "Workshop sign-up for (conference) is not available yet", with the conference's
-contact address. The reason is never shown to them.
+contact address, or "has closed" once workshop registration has ended. The
+reason is never shown to them.
 
 ## Operator: a host cannot sign in
 
@@ -74,15 +79,16 @@ Start at **Admin → Settings → System status** on the affected conference. Th
 is one row per host, named `Workshop sign-in: <host>`. The domain card shows the
 same wording.
 
-| The row says                   | It means                                                                                        | What to do                                                                                                                                                                 |
-| ------------------------------ | ----------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| (no row)                       | The conference does not have workshops.                                                         | Check the organization's plan and feature overrides, and that its ticketing is connected for this conference.                                                              |
-| **domain not verified**        | No verification record, or its proof has not resolved, has gone stale or is only grandfathered. | `dig +short TXT _konf-challenge.<host>` must return the value on the domain card. Then press **Check now**.                                                                |
-| **not offered on this host**   | The host is not platform-allocated and its conference is not owned by `PLATFORM_ORG_ID`.        | Nothing to fix for a tenant's own domain: point the tenant at its platform host. For a conference of the platform organization, check `PLATFORM_ORG_ID` in the deployment. |
-| **registration pending**       | The host is verified and the reconcile has not registered it yet.                               | See "The reconcile did not run" below.                                                                                                                                     |
-| **registration failed**        | WorkOS refused the create. The detail is what WorkOS answered.                                  | It is retried with every daily check. Check that `WORKOS_API_KEY` belongs to the environment of `WORKOS_CLIENT_ID`, and the Redirects page in the WorkOS dashboard.        |
-| **switched off on every host** | `WORKOS_COOKIE_DOMAIN` is set in the deployment.                                                | Unset it and redeploy. No host can sign in while it is set.                                                                                                                |
-| **available**                  | The application will start a sign-in on this host.                                              | See "The row says available" below.                                                                                                                                        |
+| The row says                   | It means                                                                                                                           | What to do                                                                                                                                                                 |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| (no row)                       | The conference does not have workshops, or has no host to report: no domain, or only wildcard and development entries.             | Check the organization's plan and feature overrides, that its ticketing is connected for this conference, and the conference's domains.                                    |
+| **unknown** (one row, no host) | The standing could not be read. The detail is the error.                                                                           | Reload. If it stays, look at the Sanity read errors in the logs.                                                                                                           |
+| **domain not verified**        | No verification record, or its proof has not resolved, has gone stale or is only grandfathered.                                    | `dig +short TXT _konf-challenge.<host>` must return the value on the domain card. Then press **Check now**.                                                                |
+| **not offered on this host**   | The host is not platform-allocated and its conference is not owned by `PLATFORM_ORG_ID`.                                           | Nothing to fix for a tenant's own domain: point the tenant at its platform host. For a conference of the platform organization, check `PLATFORM_ORG_ID` in the deployment. |
+| **registration pending**       | The host is verified and the reconcile has not registered it yet.                                                                  | See "The reconcile did not run" below.                                                                                                                                     |
+| **registration failed**        | The last attempt to register the callback failed. The detail is the recorded error: WorkOS's answer, or a failure to reach WorkOS. | It is retried with every daily check. Check that `WORKOS_API_KEY` belongs to the environment of `WORKOS_CLIENT_ID`, and the Redirects page in the WorkOS dashboard.        |
+| **switched off on every host** | `WORKOS_COOKIE_DOMAIN` is set in the deployment.                                                                                   | Unset it and redeploy. No host can sign in while it is set.                                                                                                                |
+| **available**                  | The application will start a sign-in on this host.                                                                                 | See "The row says available" below.                                                                                                                                        |
 
 ### The reconcile did not run
 
@@ -99,8 +105,8 @@ override change, and at the end of the daily check (cron
   `curl -H "Authorization: Bearer $CRON_SECRET" https://<production host>/api/cron/domain-verification`.
   It is the same job as the scheduled one: it re-checks every claimed domain
   and sends organizers the same alerts.
-- Previews and local development never run it, so a host does not become
-  available there.
+- Previews and local development never run it. They read the production
+  dataset, so they show the registrations production made and add none.
 
 ### The row says available
 
@@ -114,14 +120,14 @@ override change, and at the end of the daily check (cron
 
 ### Environment
 
-| Variable                                                 | State                                         |
-| -------------------------------------------------------- | --------------------------------------------- |
-| `WORKOS_CLIENT_ID`, `WORKOS_API_KEY`                     | set, both from the same WorkOS environment    |
-| `WORKOS_COOKIE_PASSWORD`                                 | set, at least 32 characters                   |
-| `WORKOS_COOKIE_DOMAIN`                                   | **not set**                                   |
-| `WORKOS_REDIRECT_URI`, `NEXT_PUBLIC_WORKOS_REDIRECT_URI` | not read; remove them and redeploy (#1299)    |
-| `PLATFORM_ORG_ID`                                        | the platform organization's Sanity `_id`      |
-| `CRON_SECRET`                                            | set, or the daily check answers 500 and stops |
+| Variable                                                 | State                                                                                                                                  |
+| -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `WORKOS_CLIENT_ID`, `WORKOS_API_KEY`                     | set, both from the same WorkOS environment                                                                                             |
+| `WORKOS_COOKIE_PASSWORD`                                 | set, at least 32 characters                                                                                                            |
+| `WORKOS_COOKIE_DOMAIN`                                   | **not set**                                                                                                                            |
+| `WORKOS_REDIRECT_URI`, `NEXT_PUBLIC_WORKOS_REDIRECT_URI` | not needed; remove them and redeploy (#1299). See [AUTH.md](AUTH.md#workos-workshops-only) for what the SDK still does with the second |
+| `PLATFORM_ORG_ID`                                        | the platform organization's Sanity `_id`                                                                                               |
+| `CRON_SECRET`                                            | set, or the daily check answers 500 and stops                                                                                          |
 
 System status reports `WORKOS_CLIENT_ID` and `WORKOS_COOKIE_DOMAIN`. It does not
 report the API key or the cookie password; check those in the hosting provider.

@@ -329,6 +329,8 @@ describe('the workshop login is shared across conferences (#1299)', () => {
 
     const html = await renderPrivacy()
 
+    // The real policy rendered, with this tenant's own vendor on it.
+    expect(html).toContain(CHECKIN)
     expect(html).not.toContain(SHARED_LOGIN)
     expect(html.toLowerCase()).not.toContain('one login for every conference')
   })
