@@ -30,7 +30,7 @@ const meta = {
       </NotificationProvider>
     ),
   ],
-  args: { portalAvailable: true },
+  args: { disabledReason: null },
 } satisfies Meta<typeof ResendInstructionsButton>
 
 export default meta
@@ -56,25 +56,63 @@ export const Available: Story = {
   },
 }
 
-/** The portal link does not work yet: nothing to resend, and it says why. */
+const NO_LINK =
+  'Available once attendees can sign in on the conference’s main host.'
+
+/**
+ * The portal link does not work yet: nothing to resend, and it says why in
+ * visible text tied to the button — a disabled button cannot be focused to
+ * show a tooltip.
+ */
 export const Unavailable: Story = {
-  args: { portalAvailable: false },
+  args: { disabledReason: NO_LINK },
   play: async ({ canvasElement }) => {
     const button = within(canvasElement).getByRole('button', {
       name: /Resend sign-up instructions/,
     })
     await expect(button).toBeDisabled()
-    await expect(button).toHaveAttribute(
-      'title',
-      'Available once attendees can sign in on the conference’s main host',
+    await expect(button).toHaveAccessibleDescription(NO_LINK)
+  },
+}
+
+/** Registration has closed: the email would only say so. */
+export const RegistrationClosed: Story = {
+  args: { disabledReason: 'Workshop registration has closed.' },
+}
+
+/**
+ * The request never finished (a timeout, a dropped connection): some emails
+ * may have gone, so it must not say "Nothing was sent".
+ */
+export const Interrupted: Story = {
+  parameters: {
+    msw: {
+      handlers: [
+        http.post('/api/trpc/workshop.admin.resendSignupInstructions', () =>
+          HttpResponse.error(),
+        ),
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const page = within(canvasElement.ownerDocument.body)
+    await userEvent.click(
+      page.getByRole('button', { name: /Resend sign-up instructions/ }),
     )
+    await userEvent.click(
+      await page.findByRole('button', { name: 'Send to all holders' }),
+    )
+    await expect(
+      await page.findByText('The resend did not finish'),
+    ).toBeInTheDocument()
+    await expect(page.queryByText('Nothing was sent')).not.toBeInTheDocument()
   },
 }
 
 export const AvailableDark: Story = { globals: { theme: 'dark' } }
 
 export const UnavailableDark: Story = {
-  args: { portalAvailable: false },
+  args: { disabledReason: NO_LINK },
   globals: { theme: 'dark' },
 }
 

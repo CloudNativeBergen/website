@@ -59,8 +59,8 @@ interface WorkshopsClientPageProps {
   initialWorkshops: ProposalWithWorkshopData[]
   workshopRegistrationStart?: string
   workshopRegistrationEnd?: string
-  /** Does the portal link work on the main host? Gates the resend action. */
-  portalAvailable: boolean
+  /** Why the resend action is unavailable, or null when it can be used. */
+  resendDisabledReason: string | null
 }
 
 export function WorkshopsClientPage({
@@ -68,7 +68,7 @@ export function WorkshopsClientPage({
   initialWorkshops,
   workshopRegistrationStart,
   workshopRegistrationEnd,
-  portalAvailable,
+  resendDisabledReason,
 }: WorkshopsClientPageProps) {
   const queryClient = useQueryClient()
   const utils = api.useUtils()
@@ -332,7 +332,9 @@ export function WorkshopsClientPage({
         title="Workshop Management"
         description="Manage workshop signups and capacity"
         icon={<AcademicCapIcon className="h-6 w-6" />}
-        actions={<ResendInstructionsButton portalAvailable={portalAvailable} />}
+        actions={
+          <ResendInstructionsButton disabledReason={resendDisabledReason} />
+        }
         stats={
           statsData
             ? [

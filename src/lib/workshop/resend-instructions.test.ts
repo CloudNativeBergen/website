@@ -8,8 +8,9 @@
  * hour per conference.
  *
  * Boundaries supplied: the sign-in decision (`workshopPortalUrl`, tested in
- * `sign-in.test.ts`), the ticket list, the live ticket-type roles read, and the
- * email sender. The recipient rule and the rate limit run for real.
+ * `sign-in.test.ts`), the ticket list, the live ticket-type roles read, and
+ * Resend's batch endpoint. The recipient rule, the rate limit and the email
+ * rendering run for real.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type { TicketCandidate } from '@/lib/tickets/speakerStatus'
@@ -34,18 +35,41 @@ vi.mock('@/lib/sanity/client', () => ({
   },
 }))
 
-const send = vi.fn<
-  (
-    request: Record<string, unknown>,
-  ) => Promise<{ data: { emailId: string }; error: unknown }>
->(async () => ({
-  data: { emailId: 'em' },
-  error: undefined as unknown,
+type BatchEmail = { from: string; to: string[]; subject: string; html: string }
+type BatchOptions = { batchValidation?: string; idempotencyKey?: string }
+type BatchResponse = {
+  data: {
+    data: { id: string }[]
+    errors?: { index: number; message: string }[]
+  } | null
+  error: { message: string } | null
+}
+const batchSend = vi.fn<
+  (emails: BatchEmail[], options: BatchOptions) => Promise<BatchResponse>
+>(async (emails) => ({
+  data: { data: emails.map((_, i) => ({ id: `em-${i}` })), errors: [] },
+  error: null,
 }))
-vi.mock('@/lib/email/workshop', () => ({
-  sendWorkshopSignupInstructions: (request: Record<string, unknown>) =>
-    send(request),
+const pause = vi.fn<(ms: number) => Promise<void>>(async () => {})
+vi.mock('@/lib/email/config', () => ({
+  resolveEmailSender: async () => ({
+    client: {
+      batch: {
+        send: (emails: BatchEmail[], options: BatchOptions) =>
+          batchSend(emails, options),
+      },
+    },
+  }),
+  retryWithBackoff: (fn: () => Promise<unknown>) => fn(),
+  createEmailError: (message: string) => ({ error: message }),
+  delay: (ms: number) => pause(ms),
+  EMAIL_CONFIG: { RATE_LIMIT_DELAY: 500 },
 }))
+
+/** Every email handed to Resend, across batches. */
+const emails = () => batchSend.mock.calls.flatMap(([batch]) => batch)
+/** Recipients, across batches. */
+const recipients = () => emails().map((email) => email.to[0])
 
 const { resendWorkshopSignupInstructions, __resetResendRateLimit } =
   await import('./resend-instructions')
@@ -92,23 +116,41 @@ describe('resendWorkshopSignupInstructions', () => {
     const outcome = await resendWorkshopSignupInstructions(conference, 0)
 
     expect(outcome).toEqual({ kind: 'sent', sent: 2, failed: 0 })
-    expect(send.mock.calls.map(([request]) => request)).toEqual([
-      {
-        userEmail: 'ada@example.org',
-        userName: 'Ada Lovelace',
-        conference,
-        ticketCategory: 'Workshop + Conference',
-        portalUrl: PORTAL,
-      },
-      {
-        // No name on the ticket: the address stands in.
-        userEmail: 'grace@example.org',
-        userName: 'grace@example.org',
-        conference,
-        ticketCategory: 'Workshop + Conference',
-        portalUrl: PORTAL,
-      },
+    expect(recipients()).toEqual(['ada@example.org', 'grace@example.org'])
+    const [ada, grace] = emails()
+    expect(ada.html).toContain(`href="${PORTAL}"`)
+    expect(ada.html).toContain('Hi Ada Lovelace,')
+    // No name on the ticket: the address stands in.
+    expect(grace.html).toContain('Hi grace@example.org,')
+  })
+
+  it('says it is the sign-up link now ready — not a second purchase thank-you', async () => {
+    await resendWorkshopSignupInstructions(conference, 0)
+
+    const { html } = emails()[0]
+    expect(html).toContain('sign-up page for your')
+    expect(html).not.toContain('Thank you for purchasing')
+    expect(html).not.toContain('Welcome to')
+  })
+
+  it('sends in batches of 100, paced, each with its own idempotency key', async () => {
+    fetchEventTicketCandidates.mockResolvedValue(
+      Array.from({ length: 250 }, (_, n) =>
+        ticket(`holder-${n}@example.org`, 'Workshop + Conference'),
+      ),
+    )
+
+    await expect(
+      resendWorkshopSignupInstructions(conference, 0),
+    ).resolves.toEqual({ kind: 'sent', sent: 250, failed: 0 })
+    expect(batchSend.mock.calls.map(([batch]) => batch.length)).toEqual([
+      100, 100, 50,
     ])
+    expect(new Set(recipients()).size).toBe(250)
+    const options = batchSend.mock.calls.map(([, opts]) => opts)
+    expect(options.every((o) => o.batchValidation === 'permissive')).toBe(true)
+    expect(new Set(options.map((o) => o.idempotencyKey)).size).toBe(3)
+    expect(pause.mock.calls).toEqual([[500], [500]])
   })
 
   it('refuses while the main host cannot sign in — before reading any ticket', async () => {
@@ -118,7 +160,7 @@ describe('resendWorkshopSignupInstructions', () => {
       resendWorkshopSignupInstructions(conference, 0),
     ).resolves.toEqual({ kind: 'portal-unavailable' })
     expect(fetchEventTicketCandidates).not.toHaveBeenCalled()
-    expect(send).not.toHaveBeenCalled()
+    expect(batchSend).not.toHaveBeenCalled()
   })
 
   it('refuses when the ticket list cannot be read, and sends nothing', async () => {
@@ -127,26 +169,61 @@ describe('resendWorkshopSignupInstructions', () => {
     await expect(
       resendWorkshopSignupInstructions(conference, 0),
     ).resolves.toEqual({ kind: 'ticketing-unavailable' })
-    expect(send).not.toHaveBeenCalled()
+    expect(batchSend).not.toHaveBeenCalled()
   })
 
-  it('counts a failed send and carries on with the rest', async () => {
-    send.mockResolvedValueOnce({ data: { emailId: '' }, error: 'bounced' })
+  it('counts a rejected address and a failed batch, and carries on', async () => {
+    fetchEventTicketCandidates.mockResolvedValue(
+      Array.from({ length: 150 }, (_, n) =>
+        ticket(`holder-${n}@example.org`, 'Workshop + Conference'),
+      ),
+    )
+    batchSend
+      .mockResolvedValueOnce({
+        data: { data: [], errors: [{ index: 3, message: 'invalid to' }] },
+        error: null,
+      })
+      .mockResolvedValueOnce({ data: null, error: { message: 'down' } })
 
     await expect(
       resendWorkshopSignupInstructions(conference, 0),
-    ).resolves.toEqual({ kind: 'sent', sent: 1, failed: 1 })
-    expect(send).toHaveBeenCalledTimes(2)
+    ).resolves.toEqual({ kind: 'sent', sent: 99, failed: 51 })
+  })
+
+  it('refuses once registration has closed, before reading any ticket', async () => {
+    const closed = {
+      ...(conference as object),
+      workshopRegistrationEnd: new Date(-1).toISOString(),
+    } as never
+
+    await expect(resendWorkshopSignupInstructions(closed, 0)).resolves.toEqual({
+      kind: 'registration-closed',
+    })
+    expect(fetchEventTicketCandidates).not.toHaveBeenCalled()
+  })
+
+  it('sends nothing, and spends no quota, when nobody holds a workshop ticket', async () => {
+    fetchEventTicketCandidates.mockResolvedValueOnce([
+      ticket('linus@example.org', 'Conference only'),
+    ])
+
+    await expect(
+      resendWorkshopSignupInstructions(conference, 0),
+    ).resolves.toEqual({ kind: 'sent', sent: 0, failed: 0 })
+    expect(batchSend).not.toHaveBeenCalled()
+    await expect(
+      resendWorkshopSignupInstructions(conference, 1),
+    ).resolves.toMatchObject({ kind: 'sent', sent: 2 })
   })
 
   it('sends at most once an hour per conference — a double click sends nothing twice', async () => {
     await resendWorkshopSignupInstructions(conference, 0)
-    send.mockClear()
+    batchSend.mockClear()
 
     await expect(
       resendWorkshopSignupInstructions(conference, HOUR - 1),
     ).resolves.toEqual({ kind: 'rate-limited', retryAfterMs: 1 })
-    expect(send).not.toHaveBeenCalled()
+    expect(batchSend).not.toHaveBeenCalled()
 
     await expect(
       resendWorkshopSignupInstructions(conference, HOUR),
@@ -164,7 +241,7 @@ describe('resendWorkshopSignupInstructions', () => {
       kind: 'rate-limited',
       retryAfterMs: HOUR,
     })
-    expect(send).toHaveBeenCalledTimes(2)
+    expect(recipients()).toEqual(['ada@example.org', 'grace@example.org'])
   })
 
   it('spends no hourly quota on a refusal', async () => {
@@ -187,8 +264,6 @@ describe('resendWorkshopSignupInstructions', () => {
     await expect(
       resendWorkshopSignupInstructions(conference, 0),
     ).resolves.toEqual({ kind: 'sent', sent: 1, failed: 0 })
-    expect(send.mock.calls[0][0]).toMatchObject({
-      userEmail: 'linus@example.org',
-    })
+    expect(recipients()).toEqual(['linus@example.org'])
   })
 })

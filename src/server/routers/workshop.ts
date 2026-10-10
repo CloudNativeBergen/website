@@ -1095,6 +1095,12 @@ export const workshopRouter = router({
             message:
               'Attendees cannot sign in yet on the conference’s main host, so there is no working link to send. Check the domain card in Settings.',
           })
+        case 'registration-closed':
+          throw new TRPCError({
+            code: 'PRECONDITION_FAILED',
+            message:
+              'Workshop registration has closed, so there is nothing to sign up for. Nothing was sent.',
+          })
         case 'ticketing-unavailable':
           throw new TRPCError({
             code: 'PRECONDITION_FAILED',

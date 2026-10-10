@@ -97,6 +97,12 @@ describe('workshop.admin.resendSignupInstructions', () => {
       /cannot sign in yet/,
     ],
     [
+      'registration-closed',
+      { kind: 'registration-closed' },
+      'PRECONDITION_FAILED',
+      /registration has closed/,
+    ],
+    [
       'ticketing-unavailable',
       { kind: 'ticketing-unavailable' },
       'PRECONDITION_FAILED',

@@ -149,18 +149,33 @@ describe('/admin/workshops — resend sign-up instructions (#1298)', () => {
     })
   })
 
-  it.each([
-    ['https://2026.example.org/workshop', true],
-    [null, false],
-  ])(
-    'offers the resend only when the portal link works (%s → %s)',
-    async (portalUrl, portalAvailable) => {
-      mockWorkshopPortalUrl.mockResolvedValue(portalUrl)
+  async function resendDisabledReason() {
+    const page = (await WorkshopAdminPage()) as {
+      props: { resendDisabledReason: string | null }
+    }
+    return page.props.resendDisabledReason
+  }
 
-      const page = (await WorkshopAdminPage()) as {
-        props: { portalAvailable: boolean }
-      }
-      expect(page.props.portalAvailable).toBe(portalAvailable)
-    },
-  )
+  it('offers the resend once the portal link works and registration is open', async () => {
+    mockWorkshopPortalUrl.mockResolvedValue('https://2026.example.org/workshop')
+    await expect(resendDisabledReason()).resolves.toBeNull()
+  })
+
+  it('says why while the portal link does not work', async () => {
+    mockWorkshopPortalUrl.mockResolvedValue(null)
+    await expect(resendDisabledReason()).resolves.toMatch(/can sign in/)
+  })
+
+  it('says why once registration has closed', async () => {
+    mockWorkshopPortalUrl.mockResolvedValue('https://2026.example.org/workshop')
+    mockGetConference.mockResolvedValue({
+      conference: {
+        _id: 'conf-1',
+        organization: { _ref: 'org-A', _type: 'reference' },
+        workshopRegistrationEnd: new Date(Date.now() - 60_000).toISOString(),
+      },
+      error: null,
+    })
+    await expect(resendDisabledReason()).resolves.toMatch(/has closed/)
+  })
 })
