@@ -1,6 +1,6 @@
 # Workshop sign-in through one central callback
 
-Decided in a design interview on 2026-10-10 and checked against the code before writing. Replaces
+Decided in a design interview on 2026-10-10 (issue #1311) and checked against the code before writing. Replaces
 decisions 3 and 4 of #1293 (a redirect URI per host, kept in step with WorkOS by a reconcile) and
 changes decision 6 where it names registration as a reason a host cannot sign in. The current design
 is described in [`AUTH.md`](./AUTH.md#workos-authkit-workshops) and
@@ -159,9 +159,9 @@ half old and half new. Each is its own pull request into the integration branch,
 on its own tree, including the unused-code check, so a slice exports only what one of its routes
 reaches.
 
-1. **Auth host: start, callback, hand-off.** The sealing module, the destination check of §4, the
+1. **Auth host: start, callback, hand-off (#1313).** The sealing module, the destination check of §4, the
    start route and the callback, with `WORKSHOP_AUTH_ORIGIN`.
-2. **Tenant host: redeem and the session.** The sign-in and sign-up routes start at the auth host;
+2. **Tenant host: redeem and the session (#1314).** The sign-in and sign-up routes start at the auth host;
    the redeem route; the proxy, the page, tRPC and the client components read our session.
-3. **Sign-out** through the auth host (§7).
-4. **Removal and documents** (§8), the status rows and labels, the runbook and `/privacy`.
+3. **Sign-out (#1315)** through the auth host (§7).
+4. **Removal and documents (#1316)** (§8), the status rows and labels, the runbook and `/privacy`.
