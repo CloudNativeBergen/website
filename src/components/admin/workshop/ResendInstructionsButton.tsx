@@ -29,26 +29,38 @@ export function ResendInstructionsButton({
   const [confirming, setConfirming] = useState(false)
 
   const resend = api.workshop.admin.resendSignupInstructions.useMutation({
-    onSuccess: ({ sent, failed }) => {
+    onSuccess: ({ sent, failed, unconfirmed }) => {
       setConfirming(false)
       showNotification(
-        sent + failed === 0
+        sent + failed + unconfirmed === 0
           ? {
               type: 'info',
               title: 'Nothing to send',
               message: 'No one holds a workshop ticket yet.',
             }
-          : failed === 0
+          : unconfirmed > 0
             ? {
-                type: 'success',
-                title: 'Instructions sent',
-                message: `Sent to ${sent} workshop ticket holder${sent === 1 ? '' : 's'}.`,
-              }
-            : {
                 type: 'warning',
-                title: 'Instructions partly sent',
-                message: `Sent to ${sent}; ${failed} could not be sent.`,
-              },
+                title: 'Some emails could not be confirmed',
+                message: `Sent to ${sent}. The email provider did not answer for ${unconfirmed}; they may have arrived${failed > 0 ? `, and ${failed} failed` : ''}. Wait an hour before resending.`,
+              }
+            : sent === 0
+              ? {
+                  type: 'error',
+                  title: 'Nothing was sent',
+                  message: `All ${failed} emails were rejected. Try again in a few minutes.`,
+                }
+              : failed === 0
+                ? {
+                    type: 'success',
+                    title: 'Instructions sent',
+                    message: `Sent to ${sent} workshop ticket holder${sent === 1 ? '' : 's'}.`,
+                  }
+                : {
+                    type: 'warning',
+                    title: 'Instructions partly sent',
+                    message: `Sent to ${sent}; ${failed} could not be sent.`,
+                  },
       )
     },
     onError: (error) => {

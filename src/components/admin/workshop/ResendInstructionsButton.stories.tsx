@@ -3,6 +3,8 @@ import { http, HttpResponse } from 'msw'
 import { expect, userEvent, within, waitFor } from 'storybook/test'
 import { ResendInstructionsButton } from './ResendInstructionsButton'
 import { NotificationProvider } from '@/components/admin/NotificationProvider'
+import { AdminPageHeader } from '@/components/admin/AdminPageHeader'
+import { AcademicCapIcon } from '@heroicons/react/24/outline'
 
 /**
  * The organizer's "Resend sign-up instructions" (#1298) in the /admin/workshops
@@ -14,7 +16,10 @@ import { NotificationProvider } from '@/components/admin/NotificationProvider'
  */
 const sent = http.post(
   '/api/trpc/workshop.admin.resendSignupInstructions',
-  () => HttpResponse.json({ result: { data: { sent: 42, failed: 0 } } }),
+  () =>
+    HttpResponse.json({
+      result: { data: { sent: 42, failed: 0, unconfirmed: 0 } },
+    }),
 )
 
 const meta = {
@@ -106,6 +111,69 @@ export const Interrupted: Story = {
       await page.findByText('The resend did not finish'),
     ).toBeInTheDocument()
     await expect(page.queryByText('Nothing was sent')).not.toBeInTheDocument()
+  },
+}
+
+/** The provider never answered for some: they may have arrived, so wait. */
+export const Unconfirmed: Story = {
+  parameters: {
+    msw: {
+      handlers: [
+        http.post('/api/trpc/workshop.admin.resendSignupInstructions', () =>
+          HttpResponse.json({
+            result: { data: { sent: 100, failed: 0, unconfirmed: 50 } },
+          }),
+        ),
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const page = within(canvasElement.ownerDocument.body)
+    await userEvent.click(
+      page.getByRole('button', { name: /Resend sign-up instructions/ }),
+    )
+    await userEvent.click(
+      await page.findByRole('button', { name: 'Send to all holders' }),
+    )
+    await expect(
+      await page.findByText('Some emails could not be confirmed'),
+    ).toBeInTheDocument()
+    await expect(page.getByText(/they may have arrived/)).toBeInTheDocument()
+  },
+}
+
+/**
+ * In the /admin/workshops header on a phone, with the disabled reason showing:
+ * the action sits below the stats, so nothing pushes the page sideways.
+ */
+export const InHeaderMobile: Story = {
+  args: { disabledReason: NO_LINK },
+  parameters: {
+    layout: 'fullscreen',
+    viewport: { defaultViewport: 'mobile1' },
+  },
+  render: (args) => (
+    <div className="p-4">
+      <AdminPageHeader
+        title="Workshop Management"
+        description="Manage workshop signups and capacity"
+        icon={<AcademicCapIcon className="h-6 w-6" />}
+        stats={[
+          { value: 6, label: 'Total Workshops', color: 'blue' },
+          { value: 112, label: 'Unique Participants', color: 'purple' },
+          { value: 180, label: 'Total Signups', color: 'slate' },
+        ]}
+      >
+        <div className="mt-4 flex justify-end">
+          <ResendInstructionsButton {...args} />
+        </div>
+      </AdminPageHeader>
+    </div>
+  ),
+  play: async ({ canvasElement }) => {
+    const root = canvasElement.ownerDocument.documentElement
+    await expect(root.scrollWidth).toBeLessThanOrEqual(root.clientWidth)
+    await expect(within(canvasElement).getByText(NO_LINK)).toBeVisible()
   },
 }
 

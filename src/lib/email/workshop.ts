@@ -277,7 +277,7 @@ export function renderWorkshopSignupInstructions({
                 <td style="padding: 40px;">
                   <h2 style="margin: 0 0 20px 0; font-size: 28px; font-weight: 700; color: ${brand.accent};">${resent ? `Workshop sign-up for ${conference.title}` : `Welcome to ${conference.title}!`}</h2>
                   <p style="margin: 0 0 16px 0; font-size: 16px; line-height: 24px; color: #334155;">Hi ${userName},</p>
-                  <p style="margin: 0 0 24px 0; font-size: 16px; line-height: 24px; color: #334155;">${resent ? `The workshop sign-up page for your <strong>${ticketCategory}</strong> ticket is now ready. Here are the sign-up instructions, with the link.` : `Thank you for purchasing your <strong>${ticketCategory}</strong> ticket!`}</p>
+                  <p style="margin: 0 0 24px 0; font-size: 16px; line-height: 24px; color: #334155;">${resent ? `Here are the sign-up instructions for the workshops your <strong>${ticketCategory}</strong> ticket includes, with the link to the workshop sign-up page.` : `Thank you for purchasing your <strong>${ticketCategory}</strong> ticket!`}</p>
 
                   <h3 style="margin: 0 0 16px 0; font-size: 20px; font-weight: 600; color: ${brand.accent};">${heading}</h3>
                   <p style="margin: 0 0 24px 0; font-size: 16px; line-height: 24px; color: #334155;">${lede}</p>

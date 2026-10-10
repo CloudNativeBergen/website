@@ -16,19 +16,20 @@
  * - AT MOST ONCE AN HOUR PER CONFERENCE, best effort per instance (the
  *   announcement rail's pattern): a misfire guard against a double click, not
  *   a security control. The hour is reserved before the first ticket read, so
- *   two concurrent presses send once; a refusal, or nobody to send to, spends
- *   no quota.
+ *   two concurrent presses send once; a refusal, nobody to send to, or a send
+ *   confirmed to have reached nobody spends no quota.
  * - RESEND'S BATCH API, {@link BATCH_SIZE} emails per request, paced at the
  *   account's 2 requests/second: a list of thousands finishes in seconds, well
  *   inside the function timeout. Permissive validation, so one bad address
- *   fails only itself; an idempotency key per batch, so a retried batch is
- *   not delivered twice.
+ *   fails only itself; an idempotency key per batch, so a batch retried after
+ *   a transient failure is not delivered twice.
  */
 
 import type { Conference } from '@/lib/conference/types'
 import {
   delay,
   EMAIL_CONFIG,
+  isTransientError,
   resolveEmailSender,
   retryWithBackoff,
 } from '@/lib/email/config'
@@ -43,7 +44,13 @@ export const RESEND_WINDOW_MS = 60 * 60 * 1000
 export const BATCH_SIZE = 100
 
 export type ResendOutcome =
-  | { kind: 'sent'; sent: number; failed: number }
+  /**
+   * `failed`: confirmed not sent (the address or batch was rejected).
+   * `unconfirmed`: the provider never answered after retries — those may or
+   * may not have been delivered.
+   */
+  | { kind: 'sent'; sent: number; failed: number; unconfirmed: number }
+  | { kind: 'email-unavailable' }
   | { kind: 'portal-unavailable' }
   | { kind: 'registration-closed' }
   | { kind: 'ticketing-unavailable' }
@@ -114,12 +121,20 @@ export async function resendWorkshopSignupInstructions(
   const recipients = [...holders.values()]
   if (recipients.length === 0) {
     release()
-    return { kind: 'sent', sent: 0, failed: 0 }
+    return { kind: 'sent', sent: 0, failed: 0, unconfirmed: 0 }
   }
 
-  const { client } = await resolveEmailSender(conference.organization?._ref)
+  let client: Awaited<ReturnType<typeof resolveEmailSender>>['client']
+  try {
+    ;({ client } = await resolveEmailSender(conference.organization?._ref))
+  } catch (error) {
+    console.error('Workshop instructions resend: no email sender:', error)
+    release()
+    return { kind: 'email-unavailable' }
+  }
   let sent = 0
   let failed = 0
+  let unconfirmed = 0
   for (let i = 0; i < recipients.length; i += BATCH_SIZE) {
     if (i > 0) await delay(EMAIL_CONFIG.RATE_LIMIT_DELAY)
     const batch = recipients.slice(i, i + BATCH_SIZE)
@@ -135,23 +150,42 @@ export async function resendWorkshopSignupInstructions(
       })
     })
     try {
-      const result = await retryWithBackoff(async () => {
-        const response = await client.batch.send(emails, {
-          batchValidation: 'permissive',
-          idempotencyKey: `workshop-resend/${conference._id}/${now}/${i}`,
-        })
-        if (response.error) {
-          throw new Error(`Failed to send batch: ${response.error.message}`)
-        }
-        return response.data
-      })
+      const result = await retryWithBackoff(
+        async () => {
+          const response = await client.batch.send(emails, {
+            batchValidation: 'permissive',
+            idempotencyKey: `workshop-resend/${conference._id}/${now}/${i}`,
+          })
+          if (response.error) {
+            // Keep the provider's name/status so a transient failure is retried
+            // (safe: the idempotency key makes a repeat a no-op) and a
+            // rejection is not.
+            const wrapped = new Error(
+              `Failed to send batch: ${response.error.message}`,
+            ) as Error & { status?: number; resendErrorName?: string }
+            const status = response.error.statusCode
+            if (typeof status === 'number') wrapped.status = status
+            wrapped.resendErrorName = response.error.name
+            throw wrapped
+          }
+          return response.data
+        },
+        undefined,
+        isTransientError,
+      )
       const rejected = result?.errors?.length ?? 0
       sent += batch.length - rejected
       failed += rejected
     } catch (error) {
       console.error('Workshop instructions resend: batch failed:', error)
-      failed += batch.length
+      // Still transient after the retries: the provider may have accepted it.
+      if (isTransientError(error)) unconfirmed += batch.length
+      else failed += batch.length
     }
   }
-  return { kind: 'sent', sent, failed }
+  // Confirmed to have reached nobody: the organizer may try again without
+  // waiting the hour. Anything unconfirmed keeps the hour, so a second press
+  // cannot double-send what may have gone.
+  if (sent === 0 && unconfirmed === 0) release()
+  return { kind: 'sent', sent, failed, unconfirmed }
 }

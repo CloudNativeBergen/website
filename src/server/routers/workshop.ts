@@ -1088,7 +1088,17 @@ export const workshopRouter = router({
       })
       switch (outcome.kind) {
         case 'sent':
-          return { sent: outcome.sent, failed: outcome.failed }
+          return {
+            sent: outcome.sent,
+            failed: outcome.failed,
+            unconfirmed: outcome.unconfirmed,
+          }
+        case 'email-unavailable':
+          throw new TRPCError({
+            code: 'PRECONDITION_FAILED',
+            message:
+              'Email sending is not available right now, so nothing was sent. Try again in a few minutes.',
+          })
         case 'portal-unavailable':
           throw new TRPCError({
             code: 'PRECONDITION_FAILED',

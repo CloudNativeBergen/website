@@ -42,7 +42,7 @@ type BatchResponse = {
     data: { id: string }[]
     errors?: { index: number; message: string }[]
   } | null
-  error: { message: string } | null
+  error: { name?: string; message: string; statusCode?: number | null } | null
 }
 const batchSend = vi.fn<
   (emails: BatchEmail[], options: BatchOptions) => Promise<BatchResponse>
@@ -50,20 +50,23 @@ const batchSend = vi.fn<
   data: { data: emails.map((_, i) => ({ id: `em-${i}` })), errors: [] },
   error: null,
 }))
+const senderAvailable = vi.fn<() => true>(() => true)
 const pause = vi.fn<(ms: number) => Promise<void>>(async () => {})
-vi.mock('@/lib/email/config', () => ({
-  resolveEmailSender: async () => ({
-    client: {
-      batch: {
-        send: (emails: BatchEmail[], options: BatchOptions) =>
-          batchSend(emails, options),
+// The retry policy runs for real; only the client and the pacing are supplied.
+vi.mock('@/lib/email/config', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/email/config')>()),
+  resolveEmailSender: async () => (
+    senderAvailable(),
+    {
+      client: {
+        batch: {
+          send: (emails: BatchEmail[], options: BatchOptions) =>
+            batchSend(emails, options),
+        },
       },
-    },
-  }),
-  retryWithBackoff: (fn: () => Promise<unknown>) => fn(),
-  createEmailError: (message: string) => ({ error: message }),
+    }
+  ),
   delay: (ms: number) => pause(ms),
-  EMAIL_CONFIG: { RATE_LIMIT_DELAY: 500 },
 }))
 
 /** Every email handed to Resend, across batches. */
@@ -115,7 +118,12 @@ describe('resendWorkshopSignupInstructions', () => {
   it('mails every workshop ticket holder once, with the working portal link', async () => {
     const outcome = await resendWorkshopSignupInstructions(conference, 0)
 
-    expect(outcome).toEqual({ kind: 'sent', sent: 2, failed: 0 })
+    expect(outcome).toEqual({
+      kind: 'sent',
+      sent: 2,
+      failed: 0,
+      unconfirmed: 0,
+    })
     expect(recipients()).toEqual(['ada@example.org', 'grace@example.org'])
     const [ada, grace] = emails()
     expect(ada.html).toContain(`href="${PORTAL}"`)
@@ -128,7 +136,9 @@ describe('resendWorkshopSignupInstructions', () => {
     await resendWorkshopSignupInstructions(conference, 0)
 
     const { html } = emails()[0]
-    expect(html).toContain('sign-up page for your')
+    expect(html).toContain(
+      'Here are the sign-up instructions for the workshops',
+    )
     expect(html).not.toContain('Thank you for purchasing')
     expect(html).not.toContain('Welcome to')
   })
@@ -142,7 +152,7 @@ describe('resendWorkshopSignupInstructions', () => {
 
     await expect(
       resendWorkshopSignupInstructions(conference, 0),
-    ).resolves.toEqual({ kind: 'sent', sent: 250, failed: 0 })
+    ).resolves.toEqual({ kind: 'sent', sent: 250, failed: 0, unconfirmed: 0 })
     expect(batchSend.mock.calls.map(([batch]) => batch.length)).toEqual([
       100, 100, 50,
     ])
@@ -187,7 +197,81 @@ describe('resendWorkshopSignupInstructions', () => {
 
     await expect(
       resendWorkshopSignupInstructions(conference, 0),
-    ).resolves.toEqual({ kind: 'sent', sent: 99, failed: 51 })
+    ).resolves.toEqual({ kind: 'sent', sent: 99, failed: 51, unconfirmed: 0 })
+  })
+
+  it('retries a batch after a network blip, under the same idempotency key', async () => {
+    batchSend.mockResolvedValueOnce({
+      data: null,
+      error: {
+        name: 'application_error',
+        message: 'Unable to fetch data. The request could not be resolved.',
+        statusCode: null,
+      },
+    })
+
+    await expect(
+      resendWorkshopSignupInstructions(conference, 0),
+    ).resolves.toEqual({ kind: 'sent', sent: 2, failed: 0, unconfirmed: 0 })
+    const keys = batchSend.mock.calls.map(([, opts]) => opts.idempotencyKey)
+    expect(keys).toHaveLength(2)
+    expect(keys[0]).toBe(keys[1])
+  })
+
+  it('does not retry a rejected batch, and a send that reached nobody spends no quota', async () => {
+    batchSend.mockResolvedValueOnce({
+      data: null,
+      error: {
+        name: 'validation_error',
+        message: 'Invalid from',
+        statusCode: 422,
+      },
+    })
+
+    await expect(
+      resendWorkshopSignupInstructions(conference, 0),
+    ).resolves.toEqual({ kind: 'sent', sent: 0, failed: 2, unconfirmed: 0 })
+    expect(batchSend).toHaveBeenCalledTimes(1)
+    await expect(
+      resendWorkshopSignupInstructions(conference, 1),
+    ).resolves.toMatchObject({ kind: 'sent', sent: 2 })
+  })
+
+  it('keeps the hour when the provider never answered — those emails may have gone', async () => {
+    const unanswered: BatchResponse = {
+      data: null,
+      error: {
+        name: 'application_error',
+        message: 'Unable to fetch data.',
+        statusCode: null,
+      },
+    }
+    // Every retry attempt (EMAIL_CONFIG.MAX_RETRIES) goes unanswered.
+    batchSend
+      .mockResolvedValueOnce(unanswered)
+      .mockResolvedValueOnce(unanswered)
+      .mockResolvedValueOnce(unanswered)
+
+    await expect(
+      resendWorkshopSignupInstructions(conference, 0),
+    ).resolves.toEqual({ kind: 'sent', sent: 0, failed: 0, unconfirmed: 2 })
+    await expect(
+      resendWorkshopSignupInstructions(conference, 1),
+    ).resolves.toMatchObject({ kind: 'rate-limited' })
+  })
+
+  it('refuses, and spends no quota, when no email sender can be resolved', async () => {
+    senderAvailable.mockImplementationOnce(() => {
+      throw new Error('credentials lookup failed')
+    })
+
+    await expect(
+      resendWorkshopSignupInstructions(conference, 0),
+    ).resolves.toEqual({ kind: 'email-unavailable' })
+    expect(batchSend).not.toHaveBeenCalled()
+    await expect(
+      resendWorkshopSignupInstructions(conference, 1),
+    ).resolves.toMatchObject({ kind: 'sent', sent: 2 })
   })
 
   it('refuses once registration has closed, before reading any ticket', async () => {
@@ -209,7 +293,7 @@ describe('resendWorkshopSignupInstructions', () => {
 
     await expect(
       resendWorkshopSignupInstructions(conference, 0),
-    ).resolves.toEqual({ kind: 'sent', sent: 0, failed: 0 })
+    ).resolves.toEqual({ kind: 'sent', sent: 0, failed: 0, unconfirmed: 0 })
     expect(batchSend).not.toHaveBeenCalled()
     await expect(
       resendWorkshopSignupInstructions(conference, 1),
@@ -236,7 +320,12 @@ describe('resendWorkshopSignupInstructions', () => {
       resendWorkshopSignupInstructions(conference, 0),
     ])
 
-    expect(outcomes).toContainEqual({ kind: 'sent', sent: 2, failed: 0 })
+    expect(outcomes).toContainEqual({
+      kind: 'sent',
+      sent: 2,
+      failed: 0,
+      unconfirmed: 0,
+    })
     expect(outcomes).toContainEqual({
       kind: 'rate-limited',
       retryAfterMs: HOUR,
@@ -263,7 +352,7 @@ describe('resendWorkshopSignupInstructions', () => {
 
     await expect(
       resendWorkshopSignupInstructions(conference, 0),
-    ).resolves.toEqual({ kind: 'sent', sent: 1, failed: 0 })
+    ).resolves.toEqual({ kind: 'sent', sent: 1, failed: 0, unconfirmed: 0 })
     expect(recipients()).toEqual(['linus@example.org'])
   })
 })

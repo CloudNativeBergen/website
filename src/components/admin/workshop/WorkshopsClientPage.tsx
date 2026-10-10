@@ -332,9 +332,6 @@ export function WorkshopsClientPage({
         title="Workshop Management"
         description="Manage workshop signups and capacity"
         icon={<AcademicCapIcon className="h-6 w-6" />}
-        actions={
-          <ResendInstructionsButton disabledReason={resendDisabledReason} />
-        }
         stats={
           statsData
             ? [
@@ -366,7 +363,13 @@ export function WorkshopsClientPage({
               ]
             : []
         }
-      />
+      >
+        {/* Below the stats, not beside the title: the title row cannot wrap,
+            and on a phone the reason text would push the page sideways. */}
+        <div className="mt-4 flex justify-end">
+          <ResendInstructionsButton disabledReason={resendDisabledReason} />
+        </div>
+      </AdminPageHeader>
 
       <WorkshopRegistrationSettings
         workshopRegistrationStart={workshopRegistrationStart}

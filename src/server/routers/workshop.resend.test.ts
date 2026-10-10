@@ -78,11 +78,17 @@ afterEach(() => {
 
 describe('workshop.admin.resendSignupInstructions', () => {
   it('resends for the domain conference and reports the counts', async () => {
-    resend.mockResolvedValue({ kind: 'sent', sent: 12, failed: 1 })
+    resend.mockResolvedValue({
+      kind: 'sent',
+      sent: 12,
+      failed: 1,
+      unconfirmed: 3,
+    })
 
     await expect(caller().admin.resendSignupInstructions()).resolves.toEqual({
       sent: 12,
       failed: 1,
+      unconfirmed: 3,
     })
     expect(resend).toHaveBeenCalledWith(
       expect.objectContaining({ _id: 'conf-1' }),
@@ -95,6 +101,12 @@ describe('workshop.admin.resendSignupInstructions', () => {
       { kind: 'portal-unavailable' },
       'PRECONDITION_FAILED',
       /cannot sign in yet/,
+    ],
+    [
+      'email-unavailable',
+      { kind: 'email-unavailable' },
+      'PRECONDITION_FAILED',
+      /nothing was sent/,
     ],
     [
       'registration-closed',
