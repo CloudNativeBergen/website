@@ -123,8 +123,10 @@ fields are defined in `sanity/schemaTypes/domainVerification.ts`:
   id for it), or empty (the application holds none). `redirectUriError` is why the last attempt to
   register or remove it failed; the next success clears it.
 
-An empty answer means the host has no record, or the CLI is not signed in. The
-record does not show `WORKOS_COOKIE_DOMAIN` or whether the conference has
+The error `Query returned no results` means the host has no record. A CLI
+that is not signed in is reported to answer the same way instead of naming the
+missing login (see `AGENTS.md`), so check the login before concluding that.
+The record does not show `WORKOS_COOKIE_DOMAIN` or whether the conference has
 workshops; check those in the deployment and on the organization.
 
 | The row says                   | It means                                                                                                                           | What to do                                                                                                                                                                 |
