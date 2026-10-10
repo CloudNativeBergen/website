@@ -191,7 +191,11 @@ run `pnpm tsx scripts/probe-workos-redirect-uris.ts` with a staging key.
 
 ## Known gaps
 
-- A host that stops qualifying keeps its sign-in until a reconcile clears its
+- A host whose record is no longer verified, or that its conference no longer
+  claims, is refused sign-in from that moment, before any reconcile. Its
+  callback stays registered in WorkOS until one runs. A host that stays
+  verified and claimed but stops being platform-controlled (its conference
+  changes owner, for example) keeps its sign-in until a reconcile clears its
   registration, at the latest with the daily check (#1306). Only a URI the
   application created is deleted from WorkOS; one it merely found there stays.
 - A tenant whose first domain is its own has no emailed portal link (#1306).

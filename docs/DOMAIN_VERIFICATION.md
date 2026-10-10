@@ -316,8 +316,10 @@ portal on the conference's first domain when that one can sign in, and
 otherwise says sign-up is not available. The domain card says "not offered on
 this host".
 
-One gap is left (#1306): a host that stops qualifying keeps its sign-in until
-a reconcile clears its registration, at the latest with the daily sweep.
+A host whose record is no longer verified, or that its conference no longer
+claims, is refused from that moment, whatever WorkOS still has registered. One gap is left (#1306): a host that stays
+verified and claimed but stops being platform-controlled keeps its sign-in
+until a reconcile clears its registration, at the latest with the daily sweep.
 
 What an organizer and an operator do with all this is in
 [WORKSHOP_SIGN_IN_RUNBOOK.md](WORKSHOP_SIGN_IN_RUNBOOK.md).
