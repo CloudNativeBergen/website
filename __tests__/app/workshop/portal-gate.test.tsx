@@ -157,6 +157,10 @@ beforeEach(() => {
   // A configured platform org that matches none of the tenants below, so a case
   // is platform ONLY when it points the contract at its own org id.
   vi.stubEnv('PLATFORM_ORG_ID', 'org-none')
+  // Set in every deployment, for branding and other consumers. The portal must
+  // build nothing from it — no link, no redirect target, no contact address —
+  // and a use that only shows when it is set would pass with it unset.
+  vi.stubEnv('NEXT_PUBLIC_URL', 'https://public.example.org')
   stubPlatformTicketingAccount()
   mockWithAuth.mockResolvedValue({ user: null })
   ticketing.fetchEventTickets.mockResolvedValue([
@@ -412,10 +416,6 @@ describe('workshop portal — signed-in attendee', () => {
 describe('workshop portal — sign-in and sign-out go through the SDK', () => {
   beforeEach(() => {
     vi.stubEnv('PLATFORM_ORG_ID', 'org-platform')
-    // Set in every deployment, for branding and other consumers. The page must
-    // build nothing from it: a link that only appears when it is set would
-    // pass these tests with it unset.
-    vi.stubEnv('NEXT_PUBLIC_URL', 'https://public.example.org')
     vi.stubEnv('WORKOS_CLIENT_ID', 'client_test')
     mockGetConference.mockResolvedValue({
       conference: conference('org-platform'),

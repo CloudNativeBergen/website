@@ -148,7 +148,9 @@ beforeEach(() => {
     refreshToken: 'refresh_token_ROTATED',
     user: { id: 'user_01', email: 'ada@example.com', emailVerified: true },
   } as never)
-  // No key verifies the access token, so a session read takes the refresh path.
+  // The access token above is unsigned, so a session read cannot verify it and
+  // takes the refresh path. The key set is served so the SDK's fetch of it has
+  // an answer; its contents do not decide anything here.
   server.use(
     http.get('https://api.workos.com/sso/jwks/:clientId', () =>
       HttpResponse.json({ keys: [] }),

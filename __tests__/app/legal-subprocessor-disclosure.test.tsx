@@ -313,6 +313,11 @@ describe('the workshop login is shared across conferences (#1299)', () => {
     // Said where the identifier is listed, and where its retention is.
     expect(html.split(SHARED_LOGIN)).toHaveLength(2)
     expect(html).toContain('one login for every conference on this platform')
+    // Who sees the registrations: the organization, not every organizer on
+    // the platform. (This sentence was wrong once, as "their own conference".)
+    expect(html).toContain(
+      'only the workshop registrations for their own organization',
+    )
     // …and what removing a registration does not reach.
     expect(html).toContain(
       'does not delete this login or your registrations at other conferences',
