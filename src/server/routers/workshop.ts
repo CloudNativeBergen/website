@@ -10,6 +10,7 @@ import {
   type WorkshopUserIdentity,
 } from '@/server/trpc'
 import { TRPCError } from '@trpc/server'
+import { resendWorkshopSignupInstructions } from '@/lib/workshop/resend-instructions'
 import { revalidateTag } from 'next/cache'
 import { conferenceTag } from '@/lib/cache/tags'
 import { clientWrite } from '@/lib/sanity/client'
@@ -1064,6 +1065,49 @@ export const workshopRouter = router({
           message: 'Failed to generate workshop summary',
           cause: error,
         })
+      }
+    }),
+
+    /**
+     * Mail every workshop ticket holder the sign-up instructions WITH the
+     * portal link (#1298) — for tickets sold while the main host could not
+     * sign in, whose email went out without it. Refused until the link works;
+     * at most once an hour per conference. See `resend-instructions.ts`.
+     */
+    resendSignupInstructions: workshopAdminProcedure.mutation(async () => {
+      const { conference, error } = await getConferenceForCurrentDomain()
+      if (error || !conference?._id) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Conference not found',
+        })
+      }
+      const outcome = await resendWorkshopSignupInstructions({
+        ...conference,
+        _id: conference._id,
+      })
+      switch (outcome.kind) {
+        case 'sent':
+          return { sent: outcome.sent, failed: outcome.failed }
+        case 'portal-unavailable':
+          throw new TRPCError({
+            code: 'PRECONDITION_FAILED',
+            message:
+              'Attendees cannot sign in yet on the conference’s main host, so there is no working link to send. Check the domain card in Settings.',
+          })
+        case 'ticketing-unavailable':
+          throw new TRPCError({
+            code: 'PRECONDITION_FAILED',
+            message:
+              'The ticket list could not be read, so nothing was sent. Try again in a few minutes.',
+          })
+        case 'rate-limited': {
+          const minutes = Math.max(1, Math.ceil(outcome.retryAfterMs / 60_000))
+          throw new TRPCError({
+            code: 'TOO_MANY_REQUESTS',
+            message: `The instructions were resent less than an hour ago. Try again in ${minutes} minutes.`,
+          })
+        }
       }
     }),
 
