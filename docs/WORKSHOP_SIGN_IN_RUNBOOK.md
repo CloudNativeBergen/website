@@ -88,29 +88,32 @@ same wording.
 
 That page is open only to organizers of the conference's organization. A
 platform operator who is not one of them cannot open it. Without that access,
-read the host's record from a checkout of this repository, with the Sanity CLI
-signed in (read-only):
+read the host's record from a checkout of this repository, with a Sanity CLI
+login that can read the dataset (the query reads and writes nothing):
 
 ```
-npx sanity documents query '*[_type == "domainVerification" && hostname == "<host>"][0]{hostname, status, method, lastSuccessAt, lastError, redirectUriStatus, redirectUriError}'
+npx sanity documents query '*[_type == "domainVerification" && hostname == "<host>"][0]{hostname, "conference": conference._ref, status, method, lastSuccessAt, lastError, redirectUriStatus, redirectUriError}'
 ```
 
-This is the record the row is computed from, not the row itself. An empty
-answer means the host has no record, or the CLI is not signed in. The first of
-these that applies is what the row says:
+The row is built from this record, but the record is not the row. The row also
+depends on who owns the conference, on the platform's current domain suffix and
+on today's date, so do not derive the row from the fields. Read them for what
+they say, and ask an organizer of that organization for the row itself:
 
-1. `status` is `verified`, `redirectUriStatus` is `registered` or `external`,
-   and `redirectUriError` is empty: **available**. For a `dns-txt` record
-   `lastSuccessAt` also has to be within 30 days.
-2. `method` is not `platform-owned` and the conference does not belong to the
-   platform organization: **not offered on this host**.
-3. No record, `status` is not `verified`, the proof is older than 30 days, or
-   `method` is `grandfathered`: **domain not verified**. `lastError` says what
-   the last check found.
-4. `redirectUriError` is set: **registration failed**, with that error.
-5. Otherwise: **registration pending**.
+- `conference` is the conference that holds the claim. A record held by
+  another conference says nothing about this one.
+- `status`, `lastSuccessAt` and `lastError` are the state of the proof. For a
+  domain proven by DNS: whether the last check found the TXT record, when a
+  check last did, and what the last check found otherwise.
+- `method` is how the host was admitted: `platform-owned` for a host the
+  platform allocated, `dns-txt` for a proven domain, `grandfathered` for a
+  claim that was never proven.
+- `redirectUriStatus` and `redirectUriError` are the callback: `registered`
+  (created by the application) or `external` (found in WorkOS), and the error
+  of the last attempt when one failed.
 
-The record does not show `WORKOS_COOKIE_DOMAIN` or whether the conference has
+An empty answer means the host has no record, or the CLI is not signed in. The
+record does not show `WORKOS_COOKIE_DOMAIN` or whether the conference has
 workshops; check those in the deployment and on the organization.
 
 | The row says                   | It means                                                                                                                           | What to do                                                                                                                                                                 |
@@ -182,3 +185,6 @@ run `pnpm tsx scripts/probe-workos-redirect-uris.ts` with a staging key.
 - Sign-out redirects are registered by hand.
 - Nothing expires by itself. A redirect URI stays until a reconcile runs and
   removes it.
+- The row and the record say what the application recorded, not what WorkOS
+  holds now. A URI deleted by hand in WorkOS reads **available** until the
+  next reconcile puts it back.
