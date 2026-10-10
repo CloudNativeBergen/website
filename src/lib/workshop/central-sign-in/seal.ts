@@ -1,3 +1,4 @@
+import 'server-only'
 import { hkdfSync } from 'node:crypto'
 import { EncryptJWT, jwtDecrypt } from 'jose'
 import type { z } from 'zod'

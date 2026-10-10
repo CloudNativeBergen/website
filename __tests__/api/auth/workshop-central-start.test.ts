@@ -31,8 +31,9 @@ vi.mock('@/lib/domain-verification/sanity', () => ({
   getDomainClaim: (id: string) => getDomainClaim(id),
 }))
 
+const getConferenceForDomain = vi.fn()
 vi.mock('@/lib/conference/sanity', () => ({
-  getConferenceForDomain: vi.fn(),
+  getConferenceForDomain: (domain: string) => getConferenceForDomain(domain),
 }))
 
 const isWorkshopsEnabledForConference =
@@ -267,8 +268,9 @@ describe('start: refused with 404, and no authorize URL is built', () => {
     ['a path', `${TENANT}/workshop`],
     ['a scheme', `https://${TENANT}`],
     ['nothing', null],
-  ])('a malformed host: %s', async (_, host) => {
+  ])('a malformed host: %s, without reading anything', async (_, host) => {
     await expectRefused(await start({ host }))
+    expect(getDomainClaim).not.toHaveBeenCalled()
   })
 
   it('a request that arrives on a host other than the auth host, without reading its record', async () => {
@@ -325,6 +327,34 @@ describe('start: WORKSHOP_AUTH_ORIGIN', () => {
     vi.stubEnv('WORKSHOP_AUTH_ORIGIN', value)
 
     await expectRefused(await start())
+  })
+
+  it('development: two local origins over plain http, with a cookie a browser will store', async () => {
+    vi.stubEnv('NODE_ENV', 'development')
+    vi.stubEnv('WORKSHOP_AUTH_ORIGIN', 'http://127.0.0.1:3000')
+    getConferenceForDomain.mockResolvedValue({
+      conference: { _id: 'conference-local', domains: ['localhost:3000'] },
+      error: null,
+    })
+
+    const response = await start({
+      on: '127.0.0.1:3000',
+      host: 'localhost:3000',
+    })
+
+    expect(
+      new URL(response.headers.get('location')!).searchParams.get(
+        'redirect_uri',
+      ),
+    ).toBe('http://127.0.0.1:3000/api/auth/callback')
+    const [pair, ...attributes] = response.headers.getSetCookie()[0].split('; ')
+    expect(pair.split('=')[0]).toBe('workshop-auth-start')
+    expect(attributes.filter((a) => !a.startsWith('Expires='))).toEqual([
+      'Path=/',
+      'Max-Age=600',
+      'HttpOnly',
+      'SameSite=lax',
+    ])
   })
 
   it('tolerates a trailing slash', async () => {

@@ -36,8 +36,9 @@ vi.mock('@/lib/domain-verification/sanity', () => ({
   getRedirectUriSyncRow: async () => null,
 }))
 
+const getConferenceForDomain = vi.fn()
 vi.mock('@/lib/conference/sanity', () => ({
-  getConferenceForDomain: vi.fn(),
+  getConferenceForDomain: (domain: string) => getConferenceForDomain(domain),
   getConferenceForCurrentDomain: vi.fn(),
 }))
 
@@ -417,6 +418,28 @@ describe('callback: WorkOS does not answer as expected', () => {
 
     expect(response.status).toBe(404)
     expect(response.headers.get('location')).toBeNull()
+  })
+})
+
+describe('callback: development, two local origins over plain http', () => {
+  it('hands off from 127.0.0.1 to localhost', async () => {
+    vi.stubEnv('NODE_ENV', 'development')
+    vi.stubEnv('WORKSHOP_AUTH_ORIGIN', 'http://127.0.0.1:3000')
+    getConferenceForDomain.mockResolvedValue({
+      conference: { _id: 'conference-local', domains: ['localhost:3000'] },
+      error: null,
+    })
+    const flow = await startFlow('localhost:3000', '127.0.0.1:3000')
+
+    const response = await callback(flow, { on: '127.0.0.1:3000' })
+
+    const location = new URL(response.headers.get('location')!)
+    expect(location.origin + location.pathname).toBe(
+      'http://localhost:3000/workshop/redeem',
+    )
+    expect(response.headers.getSetCookie()).toEqual([
+      'workshop-auth-start=; Path=/; Max-Age=0; HttpOnly; SameSite=lax',
+    ])
   })
 })
 
