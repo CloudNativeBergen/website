@@ -213,6 +213,23 @@ describe('resolveWorkshopSignInHost — everything else is refused', () => {
     ).resolves.toBeNull()
   })
 
+  it.each([
+    ['only a parent of it', ['example.org']],
+    ['only a wildcard over it', ['*.example.org']],
+    ['a host that merely ends in it', ['xconf.example.org']],
+  ])(
+    'refuses a host whose conference claims %s — the claim must be exact',
+    async (_label, domains) => {
+      hosts({
+        ...record(),
+        conference: { organization: { _ref: 'org-1' }, domains },
+      })
+      await expect(
+        resolveWorkshopSignInHost('conf.example.org'),
+      ).resolves.toBeNull()
+    },
+  )
+
   it('refuses when the record’s conference is gone', async () => {
     hosts({ ...record(), conference: null })
     await expect(

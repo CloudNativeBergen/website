@@ -66,7 +66,9 @@ beforeEach(() => {
       _type: 'conference',
       organization: { _type: 'reference', _ref: 'org-platform' },
       ticketingProvider: 'tito',
-      domains: ['a.example.org'],
+      // Every claimed domain, not only the main one: a secondary host must
+      // still find itself claimed.
+      domains: ['a.example.org', 'b.example.org'],
       title: 'Not read',
     },
   ]
@@ -106,7 +108,7 @@ describe('listRedirectUriSyncRowsForConference', () => {
     expect(rows[0].conference).toEqual({
       organization: { _type: 'reference', _ref: 'org-platform' },
       ticketingProvider: 'tito',
-      domains: ['a.example.org'],
+      domains: ['a.example.org', 'b.example.org'],
     })
   })
 
@@ -131,7 +133,7 @@ describe('listRedirectUriSyncRows', () => {
     expect(row.conference).toEqual({
       organization: { _type: 'reference', _ref: 'org-platform' },
       ticketingProvider: 'tito',
-      domains: ['a.example.org'],
+      domains: ['a.example.org', 'b.example.org'],
     })
     expect(row.redirectUri).toEqual({ status: null, id: null, error: null })
   })
