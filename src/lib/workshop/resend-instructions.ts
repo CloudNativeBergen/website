@@ -117,7 +117,9 @@ export async function resendWorkshopSignupInstructions(
       lastResend.delete(conference._id)
   }
 
-  const tickets = await fetchEventTicketCandidates(conference)
+  // Fresh, not the shared 30 s memo: this mails every holder once and then
+  // locks for an hour, so a ticket sold seconds ago must be on the list.
+  const tickets = await fetchEventTicketCandidates(conference, { fresh: true })
   if (!tickets) {
     release()
     return { kind: 'ticketing-unavailable' }

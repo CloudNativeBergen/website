@@ -258,6 +258,37 @@ describe('TitoProvider — fetchEventTickets', () => {
     expect(fetchSpy).toHaveBeenCalledTimes(2)
   })
 
+  // Tito's list excludes void tickets unless asked for them; this must not
+  // depend on that default, because a void ticket would otherwise count as a
+  // holder for the workshop gate and the instructions resend.
+  it('never returns a void ticket, whatever the API hands back', async () => {
+    vi.stubGlobal(
+      'fetch',
+      stubTitoFetch({
+        ticketPages: [
+          {
+            tickets: [
+              { id: 1, email: 'held@example.com', state: 'complete' },
+              { id: 2, email: 'voided@example.com', state: 'void' },
+              // Details not finished, but a valid ticket: kept.
+              { id: 3, email: 'partial@example.com', state: 'incomplete' },
+            ],
+            nextPage: null,
+          },
+        ],
+      }),
+    )
+
+    const tickets = await getTicketingProvider('tito', CREDS).fetchEventTickets(
+      TITO_REF,
+    )
+
+    expect(tickets.map((t) => t.crm.email)).toEqual([
+      'held@example.com',
+      'partial@example.com',
+    ])
+  })
+
   it('throws instead of returning partial data when pagination never ends', async () => {
     // Every page reports another next_page — a looping/pathological cursor.
     const fetchSpy = vi.fn(

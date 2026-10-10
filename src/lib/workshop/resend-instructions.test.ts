@@ -19,9 +19,17 @@ const workshopPortalUrl = vi.fn<() => Promise<string | null>>()
 vi.mock('./sign-in', () => ({ workshopPortalUrl: () => workshopPortalUrl() }))
 
 const fetchEventTicketCandidates =
-  vi.fn<() => Promise<TicketCandidate[] | null>>()
+  vi.fn<
+    (
+      conference: unknown,
+      options?: { fresh?: boolean },
+    ) => Promise<TicketCandidate[] | null>
+  >()
 vi.mock('@/lib/tickets/speakerStatus', () => ({
-  fetchEventTicketCandidates: () => fetchEventTicketCandidates(),
+  fetchEventTicketCandidates: (
+    conference: unknown,
+    options?: { fresh?: boolean },
+  ) => fetchEventTicketCandidates(conference, options),
 }))
 
 const ROLES = [
@@ -183,6 +191,14 @@ describe('resendWorkshopSignupInstructions', () => {
     } finally {
       logged.mockRestore()
     }
+  })
+
+  it('reads the ticket list fresh — a ticket sold seconds ago must not be missed', async () => {
+    await resendWorkshopSignupInstructions(conference, 0)
+
+    expect(fetchEventTicketCandidates).toHaveBeenCalledWith(conference, {
+      fresh: true,
+    })
   })
 
   it('says it is the sign-up link now ready — not a second purchase thank-you', async () => {
