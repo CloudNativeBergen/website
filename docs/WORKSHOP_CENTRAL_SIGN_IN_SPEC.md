@@ -54,7 +54,7 @@ Unchanged:
    carries the host and the hash in sealed state. Nothing from the query string is trusted later. It
    also sets a cookie on the auth host that the callback requires, so a callback URL completes
    nothing outside the browser that started.
-3. **Auth host, callback.** It verifies state and PKCE, exchanges the code, and checks §4 again. It
+3. **Auth host, callback.** It verifies state and the cookie from step 2, checks §4 again, and only then exchanges the code. It
    stores **no session and no WorkOS token**: the SDK's `handleAuth` always saves a session cookie on
    the callback host, so the callback does not use it. It redirects to the tenant host's redeem route
    with a hand-off token.
