@@ -78,6 +78,10 @@ const refresh = vi.spyOn(
   getWorkOS().userManagement,
   'authenticateWithRefreshToken',
 )
+const buildAuthorizationUrl = vi.spyOn(
+  getWorkOS().userManagement,
+  'getAuthorizationUrl',
+)
 
 const event = {} as NextFetchEvent
 
@@ -103,7 +107,11 @@ function attributes(cookie: string): string[] {
     .filter((attribute) => !attribute.startsWith('Expires='))
 }
 
-/** Start on `/workshop/sign-in`, return through the callback. */
+/**
+ * Start on `/workshop/sign-in`, return through the callback. The callback's
+ * request URL names another host than its `Host` header, as a reconstructed
+ * URL can: where the attendee lands must not come from it.
+ */
 async function completeSignIn() {
   const started = await signIn(request('/workshop/sign-in'))
   const state = new URL(started.headers.get('location')!).searchParams.get(
@@ -112,7 +120,7 @@ async function completeSignIn() {
   const verifier = decodeURIComponent(writtenCookies()[0].split(';')[0])
 
   beginRequest(new Headers({ host: HOST }))
-  const url = new URL(CALLBACK)
+  const url = new URL('https://internal-7f3a.example.org/api/auth/callback')
   url.searchParams.set('code', 'code_from_workos')
   url.searchParams.set('state', state)
   const finished = await callback(
@@ -285,6 +293,30 @@ describe('workshop sign-in with no redirect URI in the environment', () => {
       'Max-Age=34560000',
       'Secure',
     ])
+  })
+
+  /**
+   * tRPC never sends anyone to WorkOS, but when a session cannot be refreshed
+   * the SDK still prepares a sign-in URL. It is the only place the callback
+   * tRPC names can be seen, so it is read here.
+   */
+  it('tRPC resolves nobody from a session that cannot be refreshed, and the URL the SDK prepares names this host', async () => {
+    const { sealed } = await completeSignIn()
+    refresh.mockRejectedValue(new Error('invalid_grant'))
+    buildAuthorizationUrl.mockClear()
+
+    const ctx = await createTRPCContext({
+      req: new NextRequest(`https://${HOST}/api/trpc/workshop.getMySignups`, {
+        headers: new Headers({ host: HOST, cookie: `wos-session=${sealed}` }),
+      }),
+      resHeaders: new Headers(),
+    })
+
+    expect(ctx.workosUser).toBeNull()
+    expect(buildAuthorizationUrl).toHaveBeenCalledOnce()
+    expect(buildAuthorizationUrl).toHaveBeenCalledWith(
+      expect.objectContaining({ redirectUri: CALLBACK }),
+    )
   })
 
   it('sign-out ends this session at WorkOS, returns to this host and clears the cookie', async () => {
