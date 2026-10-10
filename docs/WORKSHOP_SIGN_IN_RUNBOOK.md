@@ -89,7 +89,7 @@ same wording.
 That page is open only to organizers of the conference's organization. A
 platform operator who is not one of them cannot open it. Without that access,
 read the host's record from a checkout of this repository, with a Sanity CLI
-login that can read the dataset (the query reads and writes nothing):
+login that can read the dataset (a read; it writes nothing):
 
 ```
 npx sanity documents query '*[_type == "domainVerification" && hostname == "<host>"][0]{hostname, "conference": conference._ref, status, method, lastSuccessAt, lastError, redirectUriStatus, redirectUriError}'
@@ -98,16 +98,20 @@ npx sanity documents query '*[_type == "domainVerification" && hostname == "<hos
 The row is built from this record, but the record is not the row. The row also
 depends on who owns the conference, on the platform's current domain suffix and
 on today's date, so do not derive the row from the fields. Read them for what
-they say, and ask an organizer of that organization for the row itself:
+they say, and ask an organizer of that organization for the row itself. The
+fields are defined in `sanity/schemaTypes/domainVerification.ts`:
 
 - `conference` is the conference currently claiming the hostname. A record
   held by another conference says nothing about this one.
 - `status` is the state the verification policy keeps for the claim: `pending`
-  (never proven), `verified`, `failing` (the proof stopped resolving) or
+  (never proven), `verified`, `failing` (a check found no proof) or
   `revoked` (the claim was released). It is not the result of the latest
   check: a verified domain can stay `verified` through failed lookups.
-- `lastSuccessAt` is when a check last succeeded. `lastError` is what the
-  last failed check reported; a successful check clears it.
+- `lastSuccessAt` is when the claim was last counted as proven. For a
+  `dns-txt` record that is a DNS check that found the TXT record. A
+  `grandfathered` or `platform-owned` record gets it without any lookup, and
+  starts out `verified` the same way. `lastError` is what the last failed
+  check reported; a successful check clears it.
 - `method` is the kind of proof the record is held to, not whether it has been
   given: `dns-txt` (the DNS TXT challenge, also on a new claim that is still
   `pending`), `grandfathered` (a claim from before verification existed,
