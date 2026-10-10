@@ -111,7 +111,8 @@ export async function resolveWorkshopSignInHost(
       row &&
       normalizeDomain(row.record.hostname) === hostname &&
       (row.conference?.domains ?? []).some(
-        (domain) => normalizeDomain(domain) === hostname,
+        (domain) =>
+          typeof domain === 'string' && normalizeDomain(domain) === hostname,
       )
     const standing = workshopSignInStandingOfRow(own ? row : null, new Date())
     if (standing.state !== 'ready') return null

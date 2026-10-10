@@ -220,6 +220,21 @@ describe('resolveWorkshopSignInHost — everything else is refused', () => {
     ).resolves.toBeNull()
   })
 
+  it('reads past a malformed claim entry instead of failing the read', async () => {
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
+    hosts({
+      ...record(),
+      conference: {
+        organization: { _ref: 'org-1' },
+        domains: [null, 42, 'conf.example.org'] as unknown as string[],
+      },
+    })
+    await expect(
+      resolveWorkshopSignInHost('conf.example.org'),
+    ).resolves.toMatchObject({ origin: 'https://conf.example.org' })
+    expect(logged).not.toHaveBeenCalled()
+  })
+
   it('CONTROL: admits it while the conference claims it, in any spelling', async () => {
     hosts({
       ...record(),
