@@ -1,0 +1,121 @@
+import 'server-only'
+import { decodeJwt } from 'jose'
+import { NextResponse, type NextRequest } from 'next/server'
+import { z } from 'zod'
+import { WORKSHOP_REDEEM_PATH } from '../sign-in-paths'
+import { notFound, resolveCentralSignIn } from './decision'
+import { seal, unseal } from './seal'
+import { startCookie, startCookieSchema, startStateSchema } from './start-seals'
+import { workshopWorkOS } from './workos'
+
+/** How long the tenant host has to redeem a hand-off (spec §5). */
+const HANDOFF_TTL_SECONDS = 60
+
+const accessTokenClaims = z.object({ sid: z.string().min(1) })
+
+/** The WorkOS session an access token belongs to (its `sid`), or `null`. */
+/**
+ * Is this a `state` of this flow? Every seal here is a compact JWE: five
+ * segments. The per-host sign-in's state is an iron seal, which has no such
+ * shape. Told apart by shape so that a state of this flow which no longer
+ * unseals (expired, changed) is refused here and never tried as the other.
+ */
+function isSeal(value: string | null): value is string {
+  return value?.split('.').length === 5
+}
+
+function sessionIdOf(accessToken: string): string | null {
+  try {
+    return accessTokenClaims.parse(decodeJwt(accessToken)).sid
+  } catch {
+    return null
+  }
+}
+
+/**
+ * FINISH A WORKSHOP SIGN-IN ON THE AUTH HOST (#1311, spec §3 step 3): WorkOS
+ * sends the browser back with a code.
+ *
+ * `null` when `state` is not a seal at all: the request belongs to the
+ * per-host sign-in. Otherwise every check below passes BEFORE the code is
+ * exchanged, and a refusal is a 404:
+ *
+ *  - the state unseals as one the start route sealed, and has not expired;
+ *  - the host and the hash come from the sealed state, never the query string;
+ *  - the browser carries the cookie the start route set for this very state.
+ *    Decided from the request alone, so a callback URL without its cookie
+ *    reads nothing;
+ *  - the decision is taken again (`resolveCentralSignIn`): the request is on
+ *    the auth host, the host may still receive a hand-off, and its conference
+ *    still has workshops;
+ *  - the conference that claims the host is still the one in state.
+ *
+ * NOTHING IS KEPT HERE: no session and no WorkOS token. The answer is a
+ * redirect to the tenant host's redeem route with a sealed hand-off token
+ * (§5), valid for about a minute, and the start cookie is cleared.
+ */
+export async function finishCentralSignIn(
+  request: NextRequest,
+): Promise<NextResponse | null> {
+  const params = request.nextUrl.searchParams
+  const sealedState = params.get('state')
+  if (!isSeal(sealedState)) return null
+  const state = await unseal('auth-state', sealedState, startStateSchema)
+  if (!state) return notFound()
+
+  const code = params.get('code')
+  if (!code) return notFound()
+
+  const cookie = startCookie()
+  const started = await unseal(
+    'auth-start',
+    request.cookies.get(cookie.name)?.value,
+    startCookieSchema,
+  )
+  if (!started || started.nonce !== state.nonce) return notFound()
+
+  const signIn = await resolveCentralSignIn(request.headers, state.host)
+  if (!signIn) return notFound()
+  const { destination } = signIn
+  if (destination.conference._id !== state.conferenceId) return notFound()
+
+  let token: string
+  try {
+    const { user, accessToken } =
+      await workshopWorkOS().userManagement.authenticateWithCode({
+        code,
+        codeVerifier: started.codeVerifier,
+      })
+    const sessionId = sessionIdOf(accessToken)
+    if (!sessionId) throw new Error('the access token names no session')
+    token = await seal(
+      'handoff',
+      {
+        userId: user.id,
+        email: user.email,
+        emailVerified: user.emailVerified,
+        name: [user.firstName, user.lastName].filter(Boolean).join(' ') || null,
+        sessionId,
+        host: destination.host,
+        conferenceId: state.conferenceId,
+        challenge: state.challenge,
+      },
+      HANDOFF_TTL_SECONDS,
+    )
+  } catch (error) {
+    console.error(
+      '[workshop] the code exchange failed; nothing handed off',
+      error,
+    )
+    return notFound()
+  }
+
+  const redeem = new URL(WORKSHOP_REDEEM_PATH, destination.origin)
+  redeem.searchParams.set('token', token)
+  // The token is in the URL: not to be cached, and not to leak as a referrer.
+  const response = NextResponse.redirect(redeem, {
+    headers: { 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer' },
+  })
+  response.cookies.set(cookie.name, '', { ...cookie.options, maxAge: 0 })
+  return response
+}
