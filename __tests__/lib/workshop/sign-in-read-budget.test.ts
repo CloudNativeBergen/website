@@ -92,6 +92,11 @@ const exchangeCode = vi.spyOn(
   sdk.getWorkOS().userManagement,
   'authenticateWithCode',
 )
+const buildAuthorizationUrl = vi.spyOn(
+  sdk.getWorkOS().userManagement,
+  'getAuthorizationUrl',
+)
+const generatePkce = vi.spyOn(sdk.getWorkOS().pkce, 'generate')
 
 function request(
   path: string,
@@ -153,7 +158,14 @@ describe('live Sanity reads per entry point', () => {
       event,
     )) as Response
 
-    expect(response.status).toBe(404)
+    expect(response.status).toBe(307)
+    expect(response.headers.get('location')).toBe('/workshop')
+    expect(response.headers.getSetCookie()).toEqual([])
+    expect(
+      response.headers.get('x-middleware-request-x-redirect-uri'),
+    ).toBeNull()
+    expect(buildAuthorizationUrl).not.toHaveBeenCalled()
+    expect(generatePkce).not.toHaveBeenCalled()
     expect(liveReads).toHaveBeenCalledTimes(1)
   })
 
@@ -163,7 +175,16 @@ describe('live Sanity reads per entry point', () => {
       headers: new Headers({ host: `attacker@${HOST}` }),
     })
 
-    expect(((await middleware(malformed, event)) as Response).status).toBe(404)
+    const response = (await middleware(malformed, event)) as Response
+
+    expect(response.status).toBe(307)
+    expect(response.headers.get('location')).toBe('/workshop')
+    expect(response.headers.getSetCookie()).toEqual([])
+    expect(
+      response.headers.get('x-middleware-request-x-redirect-uri'),
+    ).toBeNull()
+    expect(buildAuthorizationUrl).not.toHaveBeenCalled()
+    expect(generatePkce).not.toHaveBeenCalled()
     expect(liveReads).not.toHaveBeenCalled()
   })
 

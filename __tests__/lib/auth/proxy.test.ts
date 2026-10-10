@@ -173,21 +173,24 @@ describe('middleware — /workshop host decision', () => {
     ])
   })
 
-  it('404s /workshop/sign-in on a host that cannot sign in, without building it', async () => {
+  it('sends /workshop/sign-in to the portal page on a host that cannot sign in, without building it', async () => {
     // /workshop itself now passes through marked (#1298), covered in proxy tests.
     const res = (await middleware(
       reqOnHost('/workshop/sign-in', 'tenant2.example.org'),
       event,
     )) as Response
 
-    expect(res.status).toBe(404)
+    expect(res.status).toBe(307)
+    expect(res.headers.get('location')).toBe('/workshop')
+    expect(res.headers.getSetCookie()).toEqual([])
+    expect(res.headers.get('x-middleware-request-x-redirect-uri')).toBeNull()
     expect(h.authkitMiddleware).not.toHaveBeenCalled()
     expect(h.workOSMiddleware).not.toHaveBeenCalled()
   })
 
   it('404s nested /workshop/* on such a host too', async () => {
     const res = (await middleware(
-      reqOnHost('/workshop/sign-in', 'tenant2.example.org'),
+      reqOnHost('/workshop/sign-in/x', 'tenant2.example.org'),
       event,
     )) as Response
 
@@ -208,7 +211,10 @@ describe('middleware — /workshop host decision', () => {
         reqOnHost('/workshop/sign-in', host),
         event,
       )) as Response
-      expect(res.status).toBe(404)
+      expect(res.status).toBe(307)
+      expect(res.headers.get('location')).toBe('/workshop')
+      expect(res.headers.getSetCookie()).toEqual([])
+      expect(res.headers.get('x-middleware-request-x-redirect-uri')).toBeNull()
     }
     expect(h.authkitMiddleware).not.toHaveBeenCalled()
   })
@@ -231,7 +237,7 @@ describe('middleware — /workshop host decision', () => {
     )
   })
 
-  it('404s when nothing at all is verified (the fallback-to-open is gone)', async () => {
+  it('sends /workshop/sign-in to the portal page when nothing at all is verified (the fallback-to-open is gone)', async () => {
     // /workshop itself now passes through marked (#1298), covered in proxy tests.
     h.verifiedHosts = []
     vi.stubEnv('WORKOS_REDIRECT_URI', '')
@@ -242,7 +248,11 @@ describe('middleware — /workshop host decision', () => {
       event,
     )) as Response
 
-    expect(res.status).toBe(404)
+    expect(res.status).toBe(307)
+    expect(res.headers.get('location')).toBe('/workshop')
+    expect(res.headers.getSetCookie()).toEqual([])
+    expect(res.headers.get('x-middleware-request-x-redirect-uri')).toBeNull()
+    expect(h.authkitMiddleware).not.toHaveBeenCalled()
     expect(h.workOSMiddleware).not.toHaveBeenCalled()
   })
 })

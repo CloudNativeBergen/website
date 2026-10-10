@@ -97,11 +97,12 @@ describe('the SDK with WORKOS_COOKIE_DOMAIN set', () => {
 })
 
 describe('this app with WORKOS_COOKIE_DOMAIN set', () => {
-  it('never lets the SDK run: the proxy and the sign-in route answer 404 and set no cookie', async () => {
+  it('never lets the SDK run: the proxy sends sign-in to the portal page and the sign-in route answers 404, with no cookie', async () => {
     const buildAuthorizationUrl = vi.spyOn(
       sdk.getWorkOS().userManagement,
       'getAuthorizationUrl',
     )
+    const generatePkce = vi.spyOn(sdk.getWorkOS().pkce, 'generate')
     const startSignIn = () => {
       beginRequest(new Headers({ host: HOST }))
       return signIn(navigate('/workshop/sign-in'))
@@ -114,11 +115,16 @@ describe('this app with WORKOS_COOKIE_DOMAIN set', () => {
     )) as Response
     const started = await startSignIn()
 
-    expect(response.status).toBe(404)
+    expect(response.status).toBe(307)
+    expect(response.headers.get('location')).toBe('/workshop')
     expect(response.headers.getSetCookie()).toEqual([])
+    expect(
+      response.headers.get('x-middleware-request-x-redirect-uri'),
+    ).toBeNull()
     expect(started.status).toBe(404)
     expect(writtenCookies()).toEqual([])
     expect(buildAuthorizationUrl).not.toHaveBeenCalled()
+    expect(generatePkce).not.toHaveBeenCalled()
 
     // CONTROL: it is the GUARD that refused, not the sign-in standing or the fixture.
     // Hide the variable from the guard (which reads it per call; the SDK

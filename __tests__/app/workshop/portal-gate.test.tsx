@@ -26,9 +26,19 @@ class NotFoundError extends Error {
   digest = 'NEXT_NOT_FOUND'
 }
 
+class RedirectError extends Error {
+  digest = 'NEXT_REDIRECT'
+  constructor(readonly url: string) {
+    super('NEXT_REDIRECT')
+  }
+}
+
 vi.mock('next/navigation', () => ({
   notFound: () => {
     throw new NotFoundError('NEXT_NOT_FOUND')
+  },
+  redirect: (url: string) => {
+    throw new RedirectError(url)
   },
 }))
 
@@ -530,5 +540,106 @@ describe('workshop portal — on a host that cannot sign in', () => {
     expect(await is404(() => WorkshopLayout({ children: null }))).toBe(true)
     expect(await is404(() => WorkshopPage())).toBe(true)
     expect(mockWithAuth).not.toHaveBeenCalled()
+  })
+})
+
+/**
+ * A SECONDARY HOST THAT CANNOT SIGN IN, while the conference's main host can
+ * (#1298 review): the attendee is sent to the working portal instead of being
+ * told sign-up is unavailable. The main host is decided by the same rule as
+ * the email link (`workshopPortalUrl`), its record read live.
+ */
+describe('workshop portal — a refused secondary host', () => {
+  const yesterday = new Date(Date.now() - 86_400_000).toISOString()
+  /** `main.example.org` as Sanity stores it: verified and registered. */
+  const mainRecord = {
+    _id: 'domainVerification.main.example.org',
+    _rev: 'rev-1',
+    hostname: 'main.example.org',
+    conferenceId: 'conf-1',
+    token: 'tok',
+    status: 'verified',
+    method: 'dns-txt',
+    verifiedAt: yesterday,
+    lastSuccessAt: yesterday,
+    lastCheckedAt: yesterday,
+    consecutiveFailures: 0,
+    consecutiveSoftFailures: 0,
+    redirectUriStatus: 'registered',
+    redirectUriId: 'ru_1',
+    conference: {
+      organization: { _ref: 'org-tenant2' },
+      domains: ['main.example.org', 'secondary.example.org'],
+    },
+  }
+
+  beforeEach(() => {
+    stubOwnTicketingSecret('org-tenant2')
+    mockGetConference.mockResolvedValue({
+      conference: {
+        ...conference('org-tenant2'),
+        contactEmail: 'hello@cndn.example.org',
+        domains: ['main.example.org', 'secondary.example.org'],
+      },
+      error: null,
+    })
+    mockGetOrganizationById.mockResolvedValue({
+      _id: 'org-tenant2',
+      name: 'Tenant Two',
+      slug: 'tenant-two',
+      plan: 'pro',
+    })
+  })
+
+  function markedOn(host: string) {
+    beginRequest(new Headers({ host, 'x-workshop-sign-in-unavailable': '1' }))
+  }
+
+  async function redirectOf(render: () => Promise<unknown>) {
+    try {
+      await render()
+      return null
+    } catch (error) {
+      if (error instanceof RedirectError) return error.url
+      throw error
+    }
+  }
+
+  it('sends the attendee to the main host’s portal when that one can sign in', async () => {
+    h.fetch.mockImplementation((async (query: string) =>
+      String(query).includes('_type == "domainVerification"')
+        ? mainRecord
+        : null) as unknown as () => Promise<null>)
+    markedOn('secondary.example.org')
+
+    await expect(redirectOf(() => WorkshopPage())).resolves.toBe(
+      'https://main.example.org/workshop',
+    )
+    expect(mockWithAuth).not.toHaveBeenCalled()
+  })
+
+  it('shows the unavailable view when the main host cannot sign in either', async () => {
+    h.fetch.mockImplementation(async () => null)
+    markedOn('secondary.example.org')
+
+    const page = await WorkshopPage()
+    expect(elementsOf(page)[0].type).toBe(WorkshopUnavailable)
+  })
+
+  it('never redirects to the host the attendee is already on', async () => {
+    h.fetch.mockImplementation((async (query: string) =>
+      String(query).includes('_type == "domainVerification"')
+        ? mainRecord
+        : null) as unknown as () => Promise<null>)
+    // In any spelling the browser may send.
+    for (const host of [
+      'main.example.org',
+      'Main.Example.ORG',
+      'main.example.org:443',
+    ]) {
+      markedOn(host)
+      const page = await WorkshopPage()
+      expect(elementsOf(page)[0].type).toBe(WorkshopUnavailable)
+    }
   })
 })

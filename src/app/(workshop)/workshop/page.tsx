@@ -8,13 +8,23 @@ import { decideWorkshopPortalAccess } from '@/lib/workshop/access'
 import { isWorkshopsEnabledForConference } from '@/lib/features/workshops'
 import { resolveConferenceContact } from '@/lib/email/from'
 import { EnvelopeIcon } from '@heroicons/react/24/outline'
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 import { headers } from 'next/headers'
 import { WORKSHOP_SIGN_IN_UNAVAILABLE_HEADER } from '@/lib/workshop/sign-in-paths'
+import { workshopPortalUrl, workshopRequestHost } from '@/lib/workshop/sign-in'
 import { WorkshopUnavailable } from '@/components/workshop/WorkshopUnavailable'
 import { WorkshopSignedOut } from '@/components/workshop/WorkshopSignedOut'
 import { WorkshopSignOutButton } from '@/components/workshop/WorkshopSignOutButton'
 import { signOutOfWorkshop } from './actions'
+
+/** Is `url` on `host` (a Host header value), compared as URLs compare hosts? */
+function isSameHost(url: string, host: string | null): boolean {
+  try {
+    return new URL(url).host === new URL(`https://${host}`).host
+  } catch {
+    return false
+  }
+}
 
 export default async function WorkshopPage() {
   const { conference, error } = await getConferenceForCurrentDomain()
@@ -52,7 +62,15 @@ export default async function WorkshopPage() {
   // A HOST THAT CANNOT SIGN IN (#1298): the proxy let this request through
   // without the SDK and marked it, so `withAuth()` must not be reached. The view
   // says sign-up is not available and nothing about why.
-  if ((await headers()).has(WORKSHOP_SIGN_IN_UNAVAILABLE_HEADER)) {
+  const requestHeaders = await headers()
+  if (requestHeaders.has(WORKSHOP_SIGN_IN_UNAVAILABLE_HEADER)) {
+    // A SECONDARY host that cannot sign in, while the main host can: send the
+    // attendee to the working portal (the same link the email carries). Never
+    // to the host they are already on — that would loop.
+    const portal = await workshopPortalUrl(conference)
+    if (portal && !isSameHost(portal, workshopRequestHost(requestHeaders))) {
+      redirect(portal)
+    }
     return (
       <WorkshopUnavailable
         conferenceTitle={conference.title}

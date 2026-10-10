@@ -162,8 +162,12 @@ describe('workshop proxy — the host is the Host header, and nothing else', () 
       ),
     )
 
-    expect(response.status).toBe(404)
+    expect(response.status).toBe(307)
+    expect(response.headers.get('location')).toBe('/workshop')
+    expect(response.headers.getSetCookie()).toEqual([])
+    expect(callbackForPage(response)).toBeNull()
     expect(buildAuthorizationUrl).not.toHaveBeenCalled()
+    expect(generatePkce).not.toHaveBeenCalled()
   })
 
   it('serves a verified Host its own callback whatever x-forwarded-host and the URL say', async () => {
@@ -193,22 +197,28 @@ describe('workshop proxy — cookies are host-only', () => {
     // /workshop itself now passes through marked (#1298), covered in proxy tests.
     const response = await run(navigate(TENANT_A, '/workshop/sign-in'))
 
-    expect(response.status).toBe(404)
-    expect(response.headers.get('location')).toBeNull()
+    expect(response.status).toBe(307)
+    expect(response.headers.get('location')).toBe('/workshop')
+    expect(response.headers.getSetCookie()).toEqual([])
+    expect(callbackForPage(response)).toBeNull()
     expect(buildAuthorizationUrl).not.toHaveBeenCalled()
+    expect(generatePkce).not.toHaveBeenCalled()
     logged.mockRestore()
   })
 })
 
 describe('workshop proxy — any other host', () => {
-  it('404s /workshop/sign-in — the app never sees the request', async () => {
+  it('sends /workshop/sign-in to the portal page — the app never sees the request', async () => {
     // /workshop itself now passes through marked (#1298), covered in proxy tests.
     const response = await run(navigate(UNVERIFIED, '/workshop/sign-in'))
 
-    expect(response.status).toBe(404)
+    expect(response.status).toBe(307)
     expect(response.headers.get('x-middleware-next')).toBeNull()
-    expect(response.headers.get('location')).toBeNull()
+    expect(response.headers.get('location')).toBe('/workshop')
     expect(response.headers.getSetCookie()).toEqual([])
+    expect(callbackForPage(response)).toBeNull()
+    expect(buildAuthorizationUrl).not.toHaveBeenCalled()
+    expect(generatePkce).not.toHaveBeenCalled()
   })
 
   it('builds no authorize URL and no PKCE pair — the SDK is never entered', async () => {
@@ -244,8 +254,12 @@ describe('workshop proxy — any other host', () => {
     // /workshop itself now passes through marked (#1298), covered in proxy tests.
     const response = await run(navigate(TENANT_A, '/workshop/sign-in'))
 
-    expect(response.status).toBe(404)
+    expect(response.status).toBe(307)
+    expect(response.headers.get('location')).toBe('/workshop')
+    expect(response.headers.getSetCookie()).toEqual([])
+    expect(callbackForPage(response)).toBeNull()
     expect(buildAuthorizationUrl).not.toHaveBeenCalled()
+    expect(generatePkce).not.toHaveBeenCalled()
     logged.mockRestore()
   })
 
@@ -256,8 +270,12 @@ describe('workshop proxy — any other host', () => {
     })
     const response = await run(request)
 
-    expect(response.status).toBe(404)
+    expect(response.status).toBe(307)
+    expect(response.headers.get('location')).toBe('/workshop')
+    expect(response.headers.getSetCookie()).toEqual([])
+    expect(callbackForPage(response)).toBeNull()
     expect(buildAuthorizationUrl).not.toHaveBeenCalled()
+    expect(generatePkce).not.toHaveBeenCalled()
   })
 
   it('does not let a subdomain or a look-alike borrow a verified host', async () => {
@@ -267,9 +285,14 @@ describe('workshop proxy — any other host', () => {
       `${TENANT_A}.evil.example.org`,
       `evil-${TENANT_A}`,
     ]) {
-      expect((await run(navigate(host, '/workshop/sign-in'))).status).toBe(404)
+      const response = await run(navigate(host, '/workshop/sign-in'))
+      expect(response.status).toBe(307)
+      expect(response.headers.get('location')).toBe('/workshop')
+      expect(response.headers.getSetCookie()).toEqual([])
+      expect(callbackForPage(response)).toBeNull()
     }
     expect(buildAuthorizationUrl).not.toHaveBeenCalled()
+    expect(generatePkce).not.toHaveBeenCalled()
   })
 })
 
@@ -302,9 +325,12 @@ describe('workshop proxy — localhost', () => {
       navigate('localhost:3000', '/workshop/sign-in', { scheme: 'http' }),
     )
 
-    expect(response.status).toBe(404)
-    expect(response.headers.get('location')).toBeNull()
+    expect(response.status).toBe(307)
+    expect(response.headers.get('location')).toBe('/workshop')
+    expect(response.headers.getSetCookie()).toEqual([])
+    expect(callbackForPage(response)).toBeNull()
     expect(buildAuthorizationUrl).not.toHaveBeenCalled()
+    expect(generatePkce).not.toHaveBeenCalled()
   })
 })
 
@@ -382,11 +408,28 @@ describe('workshop proxy — the portal page on a host that cannot sign in', () 
     expect(response.headers.get(MARK)).toBe('1')
   })
 
-  it('still 404s the sign-in routes there', async () => {
+  it('sends the sign-in routes there to the portal page — no bare 404, no SDK', async () => {
     for (const path of ['/workshop/sign-in', '/workshop/sign-up']) {
-      expect((await run(navigate(UNREGISTERED, path))).status).toBe(404)
+      const response = await run(navigate(UNREGISTERED, `${path}?x=1`))
+      expect(response.status).toBe(307)
+      // Relative: the browser stays on this host; nothing from the request
+      // (Host, query) shapes the target.
+      expect(response.headers.get('location')).toBe('/workshop')
+      expect(response.headers.getSetCookie()).toEqual([])
     }
     expect(buildAuthorizationUrl).not.toHaveBeenCalled()
+    expect(generatePkce).not.toHaveBeenCalled()
+  })
+
+  it('still 404s anything else under /workshop there, and any POST', async () => {
+    expect(
+      (await run(navigate(UNREGISTERED, '/workshop/sign-in/x'))).status,
+    ).toBe(404)
+    const post = new NextRequest(`https://${UNREGISTERED}/workshop/sign-in`, {
+      method: 'POST',
+      headers: new Headers({ host: UNREGISTERED }),
+    })
+    expect((await run(post)).status).toBe(404)
   })
 
   it('does not mark a host that CAN sign in, even when the client sends the mark', async () => {

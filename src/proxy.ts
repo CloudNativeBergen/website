@@ -8,7 +8,9 @@ import {
 } from '@/lib/workshop/sign-in'
 import {
   WORKSHOP_PORTAL_PATH,
+  WORKSHOP_SIGN_IN_PATH,
   WORKSHOP_SIGN_IN_UNAVAILABLE_HEADER,
+  WORKSHOP_SIGN_UP_PATH,
 } from '@/lib/workshop/sign-in-paths'
 
 // The session cookie's `Domain` is rewritten PER REQUEST for every response
@@ -78,6 +80,14 @@ function withoutUnavailableMark(req: NextRequest): NextRequest {
   return new NextRequest(req, { headers })
 }
 
+function isWorkshopSignInEntry(req: NextRequest): boolean {
+  return (
+    (req.nextUrl.pathname === WORKSHOP_SIGN_IN_PATH ||
+      req.nextUrl.pathname === WORKSHOP_SIGN_UP_PATH) &&
+    (req.method === 'GET' || req.method === 'HEAD')
+  )
+}
+
 function isWorkshopPortalView(req: NextRequest): boolean {
   return (
     req.nextUrl.pathname === WORKSHOP_PORTAL_PATH &&
@@ -138,6 +148,16 @@ async function workshopMiddleware(req: NextRequest, event: NextFetchEvent) {
     // stripped from every request the SDK handles, so a client can neither
     // remove nor forge it. Every other path, and any other method, is refused
     // as before.
+    // A sign-in or sign-up link (a bookmark, a page rendered before the host
+    // stopped qualifying) goes to the portal page too, which says why not —
+    // not to a bare 404 (#1298). A RELATIVE Location: the browser stays on the
+    // host it is on, and no Host header, however malformed, shapes the target.
+    if (isWorkshopSignInEntry(req)) {
+      return new NextResponse(null, {
+        status: 307,
+        headers: { location: WORKSHOP_PORTAL_PATH },
+      })
+    }
     if (isWorkshopPortalView(req)) {
       const headers = new Headers(req.headers)
       headers.set(WORKSHOP_SIGN_IN_UNAVAILABLE_HEADER, '1')
