@@ -86,6 +86,33 @@ Start at **Admin → Settings → System status** on the affected conference. Th
 is one row per host, named `Workshop sign-in: <host>`. The domain card shows the
 same wording.
 
+That page is open only to organizers of the conference's organization. A
+platform operator who is not one of them cannot open it. Without that access,
+read the host's record from a checkout of this repository, with the Sanity CLI
+signed in (read-only):
+
+```
+npx sanity documents query '*[_type == "domainVerification" && hostname == "<host>"][0]{hostname, status, method, lastSuccessAt, lastError, redirectUriStatus, redirectUriError}'
+```
+
+This is the record the row is computed from, not the row itself. An empty
+answer means the host has no record, or the CLI is not signed in. The first of
+these that applies is what the row says:
+
+1. `status` is `verified`, `redirectUriStatus` is `registered` or `external`,
+   and `redirectUriError` is empty: **available**. For a `dns-txt` record
+   `lastSuccessAt` also has to be within 30 days.
+2. `method` is not `platform-owned` and the conference does not belong to the
+   platform organization: **not offered on this host**.
+3. No record, `status` is not `verified`, the proof is older than 30 days, or
+   `method` is `grandfathered`: **domain not verified**. `lastError` says what
+   the last check found.
+4. `redirectUriError` is set: **registration failed**, with that error.
+5. Otherwise: **registration pending**.
+
+The record does not show `WORKOS_COOKIE_DOMAIN` or whether the conference has
+workshops; check those in the deployment and on the organization.
+
 | The row says                   | It means                                                                                                                           | What to do                                                                                                                                                                 |
 | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | (no row)                       | The conference does not have workshops, or has no host to report: no domain, or only wildcard and development entries.             | Check the organization's plan and feature overrides, that its ticketing is connected for this conference, and the conference's domains.                                    |
