@@ -71,6 +71,27 @@ export const Unavailable: Story = {
   },
 }
 
+/**
+ * Registration has closed: say so, and do not send the attendee back to
+ * "check later".
+ */
+export const RegistrationClosed: Story = {
+  args: { registrationClosed: true },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(
+      canvas.getByText(
+        'Workshop sign-up for Cloud Native Days Norway 2026 has closed.',
+      ),
+    ).toBeInTheDocument()
+    await expect(canvas.queryByText(/not available yet/)).toBeNull()
+    await expect(canvas.queryByText(/check back later/)).toBeNull()
+    await expect(
+      canvas.getByRole('link', { name: 'hello@cloudnativedays.no' }),
+    ).toHaveAttribute('href', 'mailto:hello@cloudnativedays.no')
+  },
+}
+
 export const UnavailableDark: Story = { parameters: { dark: true } }
 
 /** A long conference name and address, on a phone: nothing may overflow. */

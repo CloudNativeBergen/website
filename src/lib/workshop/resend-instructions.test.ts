@@ -148,6 +148,43 @@ describe('resendWorkshopSignupInstructions', () => {
     expect(html).not.toContain('<a href="x">')
   })
 
+  it('sends to the registered address trimmed — Resend rejects padding', async () => {
+    fetchEventTicketCandidates.mockResolvedValue([
+      ticket('  Ada@Example.org ', 'Workshop + Conference'),
+    ])
+
+    await resendWorkshopSignupInstructions(conference, 0)
+
+    expect(recipients()).toEqual(['Ada@Example.org'])
+  })
+
+  it('logs which recipients a batch rejected, by index and reason — no address', async () => {
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
+    batchSend.mockResolvedValueOnce({
+      data: {
+        data: [],
+        errors: [{ index: 1, message: 'Invalid `to` field.' }],
+      },
+      error: null,
+    })
+
+    try {
+      await resendWorkshopSignupInstructions(conference, 0)
+
+      expect(logged).toHaveBeenCalledWith(
+        'Workshop instructions resend: recipients rejected:',
+        {
+          conferenceId: 'conference-1',
+          batchStart: 0,
+          errors: [{ index: 1, message: 'Invalid `to` field.' }],
+        },
+      )
+      expect(JSON.stringify(logged.mock.calls)).not.toContain('example.org')
+    } finally {
+      logged.mockRestore()
+    }
+  })
+
   it('says it is the sign-up link now ready — not a second purchase thank-you', async () => {
     await resendWorkshopSignupInstructions(conference, 0)
 

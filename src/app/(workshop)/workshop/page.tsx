@@ -12,7 +12,11 @@ import { EnvelopeIcon } from '@heroicons/react/24/outline'
 import { notFound, redirect } from 'next/navigation'
 import { headers } from 'next/headers'
 import { WORKSHOP_SIGN_IN_UNAVAILABLE_HEADER } from '@/lib/workshop/sign-in-paths'
-import { workshopPortalUrl, workshopRequestHost } from '@/lib/workshop/sign-in'
+import {
+  workshopMainHost,
+  workshopPortalUrl,
+  workshopRequestHost,
+} from '@/lib/workshop/sign-in'
 import { WorkshopUnavailable } from '@/components/workshop/WorkshopUnavailable'
 import { WorkshopSignedOut } from '@/components/workshop/WorkshopSignedOut'
 import { WorkshopSignOutButton } from '@/components/workshop/WorkshopSignOutButton'
@@ -67,15 +71,24 @@ export default async function WorkshopPage() {
   if (requestHeaders.has(WORKSHOP_SIGN_IN_UNAVAILABLE_HEADER)) {
     // A SECONDARY host that cannot sign in, while the main host can: send the
     // attendee to the working portal (the same link the email carries). Never
-    // to the host they are already on — that would loop.
-    const portal = await workshopPortalUrl(conference)
-    if (portal && !isSameHost(portal, workshopRequestHost(requestHeaders))) {
-      redirect(portal)
+    // to the host they are already on — that would loop. On the main host
+    // itself nothing is read: the proxy already decided it cannot sign in.
+    const requestHost = workshopRequestHost(requestHeaders)
+    const mainHost = workshopMainHost(conference)
+    if (mainHost && !isSameHost(`https://${mainHost}`, requestHost)) {
+      const portal = await workshopPortalUrl(conference)
+      if (portal && !isSameHost(portal, requestHost)) {
+        redirect(portal)
+      }
     }
+    const registrationEnd = conference.workshopRegistrationEnd
     return (
       <WorkshopUnavailable
         conferenceTitle={conference.title}
         contactEmail={resolveConferenceContact(conference)}
+        registrationClosed={
+          Boolean(registrationEnd) && new Date(registrationEnd!) < new Date()
+        }
       />
     )
   }

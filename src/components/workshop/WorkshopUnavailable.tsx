@@ -8,6 +8,9 @@ import { BackgroundImage } from '@/components/BackgroundImage'
  * workshops whose host is unverified, not yet registered with WorkOS, or
  * refused by it.
  *
+ * Once registration has closed it says that instead: "not available yet,
+ * check back later" would send the attendee back for nothing.
+ *
  * SAYS NOTHING ABOUT WHY. No host, verification state or WorkOS error reaches
  * this view; the organizer sees the reason in `/admin/settings`. The attendee
  * gets one thing to do: write to the organizer.
@@ -15,9 +18,11 @@ import { BackgroundImage } from '@/components/BackgroundImage'
 export function WorkshopUnavailable({
   conferenceTitle,
   contactEmail,
+  registrationClosed = false,
 }: {
   conferenceTitle: string
   contactEmail: string
+  registrationClosed?: boolean
 }) {
   return (
     <div className="relative py-20 sm:pt-36 sm:pb-24">
@@ -28,11 +33,14 @@ export function WorkshopUnavailable({
             Workshop Signup
           </h1>
           <div className="font-display mt-6 space-y-6 text-2xl tracking-tight text-blue-900 dark:text-blue-100">
-            <p>Workshop sign-up for {conferenceTitle} is not available yet.</p>
+            <p>
+              Workshop sign-up for {conferenceTitle}{' '}
+              {registrationClosed ? 'has closed.' : 'is not available yet.'}
+            </p>
           </div>
           <p className="mt-6 text-base text-gray-700 dark:text-gray-300">
-            Please check back later. If you have a workshop ticket and need
-            help, contact the organizers at{' '}
+            {registrationClosed ? '' : 'Please check back later. '}If you have a
+            workshop ticket and need help, contact the organizers at{' '}
             <a
               href={`mailto:${contactEmail}`}
               className="font-medium break-words text-blue-600 underline hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300"

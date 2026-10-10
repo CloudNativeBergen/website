@@ -506,6 +506,7 @@ describe('workshop portal — on a host that cannot sign in', () => {
     expect(elementsOf(page)[0].props).toEqual({
       conferenceTitle: 'CNDN',
       contactEmail: 'hello@cndn.example.org',
+      registrationClosed: false,
     })
     // Nothing that starts a sign-in.
     expect(elementsOf(page).some((el) => el.type === WorkshopSignedOut)).toBe(
@@ -520,7 +521,25 @@ describe('workshop portal — on a host that cannot sign in', () => {
     expect(Object.keys(elementsOf(page)[0].props).sort()).toEqual([
       'conferenceTitle',
       'contactEmail',
+      'registrationClosed',
     ])
+  })
+
+  it('says registration has closed, not "not available yet", once it has', async () => {
+    mockGetConference.mockResolvedValue({
+      conference: {
+        ...conference('org-tenant2'),
+        contactEmail: 'hello@cndn.example.org',
+        domains: ['unregistered.example.org'],
+        workshopRegistrationEnd: new Date(Date.now() - 60_000).toISOString(),
+      },
+      error: null,
+    })
+    MARKED()
+    const page = await WorkshopPage()
+
+    expect(elementsOf(page)[0].type).toBe(WorkshopUnavailable)
+    expect(elementsOf(page)[0].props.registrationClosed).toBe(true)
   })
 
   it('CONTROL: without the mark the same tenant gets the SDK and the signed-out view', async () => {
@@ -630,6 +649,21 @@ describe('workshop portal — a refused secondary host', () => {
         String(query).includes('_type == "domainVerification"'),
       ),
     ).toHaveLength(1)
+  })
+
+  // The proxy already read this host's standing to set the mark.
+  it('spends no read of its own on the main host', async () => {
+    h.fetch.mockImplementation(async () => null)
+    markedOn('main.example.org')
+
+    const page = await WorkshopPage()
+    expect(elementsOf(page)[0].type).toBe(WorkshopUnavailable)
+    const queries = h.fetch.mock.calls as unknown as Array<[string]>
+    expect(
+      queries.filter(([query]) =>
+        String(query).includes('_type == "domainVerification"'),
+      ),
+    ).toHaveLength(0)
   })
 
   it('never redirects to the host the attendee is already on', async () => {

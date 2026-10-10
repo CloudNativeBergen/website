@@ -11,7 +11,7 @@
  * - THE SAME RULE AS THE PORTAL. Holders are the event's tickets whose type
  *   grants workshops by the LIVE ticket-type roles (`liveTicketTypeRoles`,
  *   `workshopAccessOf`), one email per person (`canonicalEmail` of the address
- *   the ticket was bought under), sent to that address as registered.
+ *   the ticket was bought under), sent to that address as registered, trimmed.
  * - NOT AFTER REGISTRATION HAS CLOSED: the email would only say so.
  * - AT MOST ONCE AN HOUR PER CONFERENCE, best effort per instance (the
  *   announcement rail's pattern): a misfire guard against a double click, not
@@ -152,7 +152,9 @@ export async function resendWorkshopSignupInstructions(
     if (i > 0) await delay(EMAIL_CONFIG.RATE_LIMIT_DELAY)
     const batch = recipients.slice(i, i + BATCH_SIZE)
     const emails = batch.map((ticket) => {
-      const userEmail = ticket.registeredEmail || ticket.email
+      // As registered, minus padding: the provider can hand back an address
+      // with whitespace around it, which Resend rejects.
+      const userEmail = ticket.registeredEmail.trim() || ticket.email
       return renderWorkshopSignupInstructions({
         userEmail,
         userName: ticket.name || userEmail,
@@ -187,6 +189,17 @@ export async function resendWorkshopSignupInstructions(
         mayStillDeliver,
       )
       const rejected = result?.errors?.length ?? 0
+      if (rejected > 0) {
+        // Index within the batch and the provider's reason; no address.
+        console.error('Workshop instructions resend: recipients rejected:', {
+          conferenceId: conference._id,
+          batchStart: i,
+          errors: result?.errors?.map(({ index, message }) => ({
+            index,
+            message,
+          })),
+        })
+      }
       sent += batch.length - rejected
       failed += rejected
     } catch (error) {

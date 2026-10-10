@@ -6,8 +6,11 @@
 
 import type { WorkshopSignInStanding } from './sign-in-standing'
 
+// Scoped to THIS host: a secondary host that cannot sign in redirects to the
+// main host's portal when that works, and only the first domain decides
+// whether ticket emails carry the link.
 const NOT_YET =
-  'Until then attendees see that workshop sign-up is not available yet, and ticket emails go out without the portal link.'
+  'Until then workshop sign-up is not available on this host. If it is the conference’s first domain, ticket emails also go out without the portal link.'
 
 export interface WorkshopSignInLabel {
   status: 'ok' | 'warn' | 'error' | 'off'
@@ -46,13 +49,13 @@ export function workshopSignInLabel(
         detail: `WORKOS_COOKIE_DOMAIN is set in the deployment, so workshop sign-in is refused on every host; the platform operator has to unset it. ${NOT_YET}`,
       }
     case 'not-offered':
-      // A warning, not "off": workshops are on, and attendees on this host
-      // are told sign-up is not available.
+      // A warning, not "off": workshops are on, and sign-up does not work on
+      // this host.
       return {
         status: 'warn',
         label: 'not offered on this host',
         detail:
-          'Workshop sign-in runs only on hosts the platform controls, such as a host the platform provided for this conference. Attendees on this host see that workshop sign-up is not available.',
+          'Workshop sign-in runs only on hosts the platform controls, such as a host the platform provided for this conference. Workshop sign-up is not available on this host.',
       }
   }
 }

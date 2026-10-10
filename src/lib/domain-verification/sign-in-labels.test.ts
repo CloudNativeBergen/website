@@ -7,7 +7,7 @@ import { describe, it, expect } from 'vitest'
 import { workshopSignInLabel } from './sign-in-labels'
 
 const NOT_YET =
-  'Until then attendees see that workshop sign-up is not available yet, and ticket emails go out without the portal link.'
+  'Until then workshop sign-up is not available on this host. If it is the conference’s first domain, ticket emails also go out without the portal link.'
 
 describe('workshopSignInLabel', () => {
   it('ready', () => {
@@ -52,7 +52,7 @@ describe('workshopSignInLabel', () => {
       status: 'warn',
       label: 'not offered on this host',
       detail:
-        'Workshop sign-in runs only on hosts the platform controls, such as a host the platform provided for this conference. Attendees on this host see that workshop sign-up is not available.',
+        'Workshop sign-in runs only on hosts the platform controls, such as a host the platform provided for this conference. Workshop sign-up is not available on this host.',
     })
   })
 
