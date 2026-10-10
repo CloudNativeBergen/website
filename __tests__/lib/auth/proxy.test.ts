@@ -24,6 +24,7 @@
  * WHICH requests reach it and with what options. The Sanity boundary behind the
  * host’s own redirect-URI sync row is supplied so the real decision runs.
  */
+import { isPortalRedirect } from '../../helpers/workshopSignIn'
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { NextRequest, type NextFetchEvent } from 'next/server'
 
@@ -181,7 +182,7 @@ describe('middleware — /workshop host decision', () => {
     )) as Response
 
     expect(res.status).toBe(307)
-    expect(res.headers.get('location')).toBe('/workshop')
+    expect(isPortalRedirect(res.headers.get('location'))).toBe(true)
     expect(res.headers.getSetCookie()).toEqual([])
     expect(res.headers.get('x-middleware-request-x-redirect-uri')).toBeNull()
     expect(h.authkitMiddleware).not.toHaveBeenCalled()
@@ -212,7 +213,7 @@ describe('middleware — /workshop host decision', () => {
         event,
       )) as Response
       expect(res.status).toBe(307)
-      expect(res.headers.get('location')).toBe('/workshop')
+      expect(isPortalRedirect(res.headers.get('location'))).toBe(true)
       expect(res.headers.getSetCookie()).toEqual([])
       expect(res.headers.get('x-middleware-request-x-redirect-uri')).toBeNull()
     }
@@ -249,7 +250,7 @@ describe('middleware — /workshop host decision', () => {
     )) as Response
 
     expect(res.status).toBe(307)
-    expect(res.headers.get('location')).toBe('/workshop')
+    expect(isPortalRedirect(res.headers.get('location'))).toBe(true)
     expect(res.headers.getSetCookie()).toEqual([])
     expect(res.headers.get('x-middleware-request-x-redirect-uri')).toBeNull()
     expect(h.authkitMiddleware).not.toHaveBeenCalled()

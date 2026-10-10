@@ -74,3 +74,15 @@ export function signInHostsById(
   )
   return async (id) => byId.get(id) ?? null
 }
+
+/**
+ * The proxy's answer to a sign-in route on a refused host (#1298): the portal
+ * page, query dropped. The proxy returns it ABSOLUTE (same origin); Next's
+ * adapter relativises it for the browser — pinned through the real adapter in
+ * `proxy.workshop.adapter.test.ts`.
+ */
+export function isPortalRedirect(location: string | null): boolean {
+  if (!location) return false
+  const url = new URL(location)
+  return url.pathname === '/workshop' && url.search === '' && url.hash === ''
+}

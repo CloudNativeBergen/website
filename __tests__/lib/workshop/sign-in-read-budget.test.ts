@@ -24,7 +24,7 @@
 import '../../helpers/workosEnv'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { NextRequest, type NextFetchEvent } from 'next/server'
-import { signInHost } from '../../helpers/workshopSignIn'
+import { signInHost, isPortalRedirect } from '../../helpers/workshopSignIn'
 import { beginRequest, writtenCookies } from '../../helpers/nextHeadersJar'
 
 const HOST = 'conf.example.org'
@@ -160,7 +160,7 @@ describe('live Sanity reads per entry point', () => {
     )) as Response
 
     expect(response.status).toBe(307)
-    expect(response.headers.get('location')).toBe('/workshop')
+    expect(isPortalRedirect(response.headers.get('location'))).toBe(true)
     expect(response.headers.getSetCookie()).toEqual([])
     expect(
       response.headers.get('x-middleware-request-x-redirect-uri'),
@@ -179,7 +179,7 @@ describe('live Sanity reads per entry point', () => {
     const response = (await middleware(malformed, event)) as Response
 
     expect(response.status).toBe(307)
-    expect(response.headers.get('location')).toBe('/workshop')
+    expect(isPortalRedirect(response.headers.get('location'))).toBe(true)
     expect(response.headers.getSetCookie()).toEqual([])
     expect(
       response.headers.get('x-middleware-request-x-redirect-uri'),

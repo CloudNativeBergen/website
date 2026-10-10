@@ -25,7 +25,11 @@ import { WORKOS_ENV_FALLBACK_REDIRECT_URI as ENV_FALLBACK } from '../../helpers/
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { NextRequest, type NextFetchEvent } from 'next/server'
 import type { RedirectUriSyncRow } from '@/lib/domain-verification/types'
-import { signInHost, signInHostsById } from '../../helpers/workshopSignIn'
+import {
+  signInHost,
+  signInHostsById,
+  isPortalRedirect,
+} from '../../helpers/workshopSignIn'
 
 const getRedirectUriSyncRow =
   vi.fn<(id: string) => Promise<RedirectUriSyncRow | null>>()
@@ -163,7 +167,7 @@ describe('workshop proxy — the host is the Host header, and nothing else', () 
     )
 
     expect(response.status).toBe(307)
-    expect(response.headers.get('location')).toBe('/workshop')
+    expect(isPortalRedirect(response.headers.get('location'))).toBe(true)
     expect(response.headers.getSetCookie()).toEqual([])
     expect(callbackForPage(response)).toBeNull()
     expect(buildAuthorizationUrl).not.toHaveBeenCalled()
@@ -198,7 +202,7 @@ describe('workshop proxy — cookies are host-only', () => {
     const response = await run(navigate(TENANT_A, '/workshop/sign-in'))
 
     expect(response.status).toBe(307)
-    expect(response.headers.get('location')).toBe('/workshop')
+    expect(isPortalRedirect(response.headers.get('location'))).toBe(true)
     expect(response.headers.getSetCookie()).toEqual([])
     expect(callbackForPage(response)).toBeNull()
     expect(buildAuthorizationUrl).not.toHaveBeenCalled()
@@ -214,7 +218,7 @@ describe('workshop proxy — any other host', () => {
 
     expect(response.status).toBe(307)
     expect(response.headers.get('x-middleware-next')).toBeNull()
-    expect(response.headers.get('location')).toBe('/workshop')
+    expect(isPortalRedirect(response.headers.get('location'))).toBe(true)
     expect(response.headers.getSetCookie()).toEqual([])
     expect(callbackForPage(response)).toBeNull()
     expect(buildAuthorizationUrl).not.toHaveBeenCalled()
@@ -255,7 +259,7 @@ describe('workshop proxy — any other host', () => {
     const response = await run(navigate(TENANT_A, '/workshop/sign-in'))
 
     expect(response.status).toBe(307)
-    expect(response.headers.get('location')).toBe('/workshop')
+    expect(isPortalRedirect(response.headers.get('location'))).toBe(true)
     expect(response.headers.getSetCookie()).toEqual([])
     expect(callbackForPage(response)).toBeNull()
     expect(buildAuthorizationUrl).not.toHaveBeenCalled()
@@ -271,7 +275,7 @@ describe('workshop proxy — any other host', () => {
     const response = await run(request)
 
     expect(response.status).toBe(307)
-    expect(response.headers.get('location')).toBe('/workshop')
+    expect(isPortalRedirect(response.headers.get('location'))).toBe(true)
     expect(response.headers.getSetCookie()).toEqual([])
     expect(callbackForPage(response)).toBeNull()
     expect(buildAuthorizationUrl).not.toHaveBeenCalled()
@@ -287,7 +291,7 @@ describe('workshop proxy — any other host', () => {
     ]) {
       const response = await run(navigate(host, '/workshop/sign-in'))
       expect(response.status).toBe(307)
-      expect(response.headers.get('location')).toBe('/workshop')
+      expect(isPortalRedirect(response.headers.get('location'))).toBe(true)
       expect(response.headers.getSetCookie()).toEqual([])
       expect(callbackForPage(response)).toBeNull()
     }
@@ -326,7 +330,7 @@ describe('workshop proxy — localhost', () => {
     )
 
     expect(response.status).toBe(307)
-    expect(response.headers.get('location')).toBe('/workshop')
+    expect(isPortalRedirect(response.headers.get('location'))).toBe(true)
     expect(response.headers.getSetCookie()).toEqual([])
     expect(callbackForPage(response)).toBeNull()
     expect(buildAuthorizationUrl).not.toHaveBeenCalled()
@@ -412,9 +416,9 @@ describe('workshop proxy — the portal page on a host that cannot sign in', () 
     for (const path of ['/workshop/sign-in', '/workshop/sign-up']) {
       const response = await run(navigate(UNREGISTERED, `${path}?x=1`))
       expect(response.status).toBe(307)
-      // Relative: the browser stays on this host; nothing from the request
-      // (Host, query) shapes the target.
-      expect(response.headers.get('location')).toBe('/workshop')
+      // The portal page, query dropped; same origin (what the browser gets
+      // is pinned through Next's adapter in proxy.workshop.adapter.test.ts).
+      expect(isPortalRedirect(response.headers.get('location'))).toBe(true)
       expect(response.headers.getSetCookie()).toEqual([])
     }
     expect(buildAuthorizationUrl).not.toHaveBeenCalled()

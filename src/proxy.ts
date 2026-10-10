@@ -150,13 +150,15 @@ async function workshopMiddleware(req: NextRequest, event: NextFetchEvent) {
     // as before.
     // A sign-in or sign-up link (a bookmark, a page rendered before the host
     // stopped qualifying) goes to the portal page too, which says why not —
-    // not to a bare 404 (#1298). A RELATIVE Location: the browser stays on the
-    // host it is on, and no Host header, however malformed, shapes the target.
+    // not to a bare 404 (#1298). The target is this request's own URL with
+    // the path replaced and the query dropped: same origin, so Next's adapter
+    // sends the browser a relative `Location: /workshop`. (A relative Location
+    // returned from here throws in that adapter — "Invalid URL".)
     if (isWorkshopSignInEntry(req)) {
-      return new NextResponse(null, {
-        status: 307,
-        headers: { location: WORKSHOP_PORTAL_PATH },
-      })
+      const portal = req.nextUrl.clone()
+      portal.pathname = WORKSHOP_PORTAL_PATH
+      portal.search = ''
+      return NextResponse.redirect(portal, 307)
     }
     if (isWorkshopPortalView(req)) {
       const headers = new Headers(req.headers)

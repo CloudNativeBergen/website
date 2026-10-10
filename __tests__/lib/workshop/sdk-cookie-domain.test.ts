@@ -16,7 +16,11 @@
  */
 import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest'
 import { NextRequest, type NextFetchEvent } from 'next/server'
-import { signInHost, signInHostsById } from '../../helpers/workshopSignIn'
+import {
+  signInHost,
+  signInHostsById,
+  isPortalRedirect,
+} from '../../helpers/workshopSignIn'
 import { beginRequest, writtenCookies } from '../../helpers/nextHeadersJar'
 
 const HOST = 'conf.example.org'
@@ -116,7 +120,7 @@ describe('this app with WORKOS_COOKIE_DOMAIN set', () => {
     const started = await startSignIn()
 
     expect(response.status).toBe(307)
-    expect(response.headers.get('location')).toBe('/workshop')
+    expect(isPortalRedirect(response.headers.get('location'))).toBe(true)
     expect(response.headers.getSetCookie()).toEqual([])
     expect(
       response.headers.get('x-middleware-request-x-redirect-uri'),
