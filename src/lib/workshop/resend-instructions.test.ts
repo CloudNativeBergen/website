@@ -379,6 +379,21 @@ describe('resendWorkshopSignupInstructions', () => {
     expect(fetchEventTicketCandidates).not.toHaveBeenCalled()
   })
 
+  // Closed wins over an unavailable host: fixing the host would not help, so
+  // the organizer must not be told it would. Decided before the portal lookup.
+  it('says registration has closed even when the main host cannot sign in — without asking', async () => {
+    workshopPortalUrl.mockResolvedValue(null)
+    const closed = {
+      ...(conference as object),
+      workshopRegistrationEnd: new Date(-1).toISOString(),
+    } as never
+
+    await expect(resendWorkshopSignupInstructions(closed, 0)).resolves.toEqual({
+      kind: 'registration-closed',
+    })
+    expect(workshopPortalUrl).not.toHaveBeenCalled()
+  })
+
   it('sends nothing, and spends no quota, when nobody holds a workshop ticket', async () => {
     fetchEventTicketCandidates.mockResolvedValueOnce([
       ticket('linus@example.org', 'Conference only'),

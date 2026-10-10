@@ -6,13 +6,14 @@
  * organizer presses "Resend sign-up instructions" and every workshop ticket
  * holder gets the instructions with the link.
  *
- * - THE LINK FIRST. Nothing is read or sent while `workshopPortalUrl` has no
- *   link: the resend exists to deliver it.
+ * - NO LINK, NO RESEND. No ticket is read and nothing is sent while
+ *   `workshopPortalUrl` has no link: the resend exists to deliver it.
  * - THE SAME RULE AS THE PORTAL. Holders are the event's tickets whose type
  *   grants workshops by the LIVE ticket-type roles (`liveTicketTypeRoles`,
  *   `workshopAccessOf`), one email per person (`canonicalEmail` of the address
  *   the ticket was bought under), sent to that address as registered, trimmed.
- * - NOT AFTER REGISTRATION HAS CLOSED: the email would only say so.
+ * - NOT AFTER REGISTRATION HAS CLOSED: the email would only say so. Checked
+ *   before the link, so a closed conference is never told to fix its host.
  * - AT MOST ONCE AN HOUR PER CONFERENCE, best effort per instance (the
  *   announcement rail's pattern): a misfire guard against a double click, not
  *   a security control. The hour is reserved before the first ticket read, so
@@ -77,28 +78,38 @@ export function __resetResendRateLimit(): void {
 }
 
 /**
- * Why a resend cannot run, or null: no working portal link, or registration
- * has closed. The /admin/workshops page asks this too, so the button and the
- * server refuse for the same reasons.
+ * Can a resend run? Either the reason it cannot, or the portal link to send.
+ * The /admin/workshops page asks this too, so the button and the server
+ * refuse for the same reasons.
+ *
+ * CLOSED IS CHECKED FIRST, and without the portal lookup: once registration
+ * has closed, fixing the host would not bring the resend back, so the
+ * organizer must not be told it would.
  */
-export function resendBlocker(
-  conference: Pick<Conference, 'workshopRegistrationEnd'>,
-  portalUrl: string | null,
+export async function resendPortal(
+  conference: Pick<Conference, 'title' | 'domains' | 'workshopRegistrationEnd'>,
   now: number = Date.now(),
-): 'portal-unavailable' | 'registration-closed' | null {
-  if (!portalUrl) return 'portal-unavailable'
+): Promise<
+  | { blocker: 'registration-closed' | 'portal-unavailable' }
+  | { blocker: null; portalUrl: string }
+> {
   const endsAt = conference.workshopRegistrationEnd
-  if (endsAt && new Date(endsAt).getTime() < now) return 'registration-closed'
-  return null
+  if (endsAt && new Date(endsAt).getTime() < now) {
+    return { blocker: 'registration-closed' }
+  }
+  const portalUrl = await workshopPortalUrl(conference)
+  return portalUrl
+    ? { blocker: null, portalUrl }
+    : { blocker: 'portal-unavailable' }
 }
 
 export async function resendWorkshopSignupInstructions(
   conference: Conference & { _id: string },
   now: number = Date.now(),
 ): Promise<ResendOutcome> {
-  const portalUrl = await workshopPortalUrl(conference)
-  const blocker = resendBlocker(conference, portalUrl, now)
-  if (blocker || !portalUrl) return { kind: blocker ?? 'portal-unavailable' }
+  const portal = await resendPortal(conference, now)
+  if (portal.blocker) return { kind: portal.blocker }
+  const { portalUrl } = portal
 
   const previous = lastResend.get(conference._id)
   if (previous !== undefined && now - previous < RESEND_WINDOW_MS) {

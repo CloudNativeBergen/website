@@ -199,4 +199,23 @@ describe('/admin/workshops — resend sign-up instructions (#1298)', () => {
     })
     await expect(resendDisabledReason()).resolves.toMatch(/has closed/)
   })
+
+  // Fixing the host would not bring the resend back, so the reason must not
+  // say it would — and the closed check needs no sign-in lookup.
+  it('says registration has closed even when the main host cannot sign in', async () => {
+    mockWorkshopPortalUrl.mockResolvedValue(null)
+    mockGetConference.mockResolvedValue({
+      conference: {
+        _id: 'conf-1',
+        organization: { _ref: 'org-A', _type: 'reference' },
+        domains: ['2026.example.org'],
+        workshopRegistrationEnd: new Date(Date.now() - 60_000).toISOString(),
+      },
+      error: null,
+    })
+    await expect(resendDisabledReason()).resolves.toBe(
+      'Workshop registration has closed.',
+    )
+    expect(mockWorkshopPortalUrl).not.toHaveBeenCalled()
+  })
 })
