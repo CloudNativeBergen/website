@@ -517,7 +517,10 @@ describe('api/webhooks/checkin/ticket-sold — workshop feature gate', () => {
             consecutiveSoftFailures: 0,
             redirectUriStatus: 'registered',
             redirectUriId: 'ru_1',
-            conference: { organization: { _ref: 'org-tenant2' } },
+            conference: {
+              organization: { _ref: 'org-tenant2' },
+              domains: ['conf.example.org'],
+            },
           }
         : null) as unknown as () => Promise<null>)
     const { POST } =

@@ -103,8 +103,16 @@ export async function resolveWorkshopSignInHost(
   const hostname = normalizeDomain(url.host)
   try {
     const row = await getRedirectUriSyncRow(domainVerificationId(hostname))
-    // The id is derived from the hostname, but the record must also SAY it.
-    const own = row && normalizeDomain(row.record.hostname) === hostname
+    // The id is derived from the hostname, but the record must also SAY it,
+    // and its conference must still CLAIM it: a release whose revoke never
+    // landed leaves a verified, registered record behind for a host that
+    // conference no longer serves (#1298 review).
+    const own =
+      row &&
+      normalizeDomain(row.record.hostname) === hostname &&
+      (row.conference?.domains ?? []).some(
+        (domain) => normalizeDomain(domain) === hostname,
+      )
     const standing = workshopSignInStandingOfRow(own ? row : null, new Date())
     if (standing.state !== 'ready') return null
   } catch (error) {

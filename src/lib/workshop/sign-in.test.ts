@@ -200,6 +200,39 @@ describe('resolveWorkshopSignInHost — everything else is refused', () => {
     ).resolves.toBeNull()
   })
 
+  it('refuses a host its record’s conference no longer claims — a release whose revoke never landed', async () => {
+    hosts({
+      ...record(),
+      conference: {
+        organization: { _ref: 'org-1' },
+        domains: ['other.example.org'],
+      },
+    })
+    await expect(
+      resolveWorkshopSignInHost('conf.example.org'),
+    ).resolves.toBeNull()
+  })
+
+  it('refuses when the record’s conference is gone', async () => {
+    hosts({ ...record(), conference: null })
+    await expect(
+      resolveWorkshopSignInHost('conf.example.org'),
+    ).resolves.toBeNull()
+  })
+
+  it('CONTROL: admits it while the conference claims it, in any spelling', async () => {
+    hosts({
+      ...record(),
+      conference: {
+        organization: { _ref: 'org-1' },
+        domains: [' Conf.Example.ORG '],
+      },
+    })
+    await expect(
+      resolveWorkshopSignInHost('conf.example.org'),
+    ).resolves.toMatchObject({ origin: 'https://conf.example.org' })
+  })
+
   it('refuses when the record found under the id names a host that merely ends in it', async () => {
     getRedirectUriSyncRow.mockResolvedValue(
       record({ hostname: 'sub.conf.example.org' }),

@@ -66,6 +66,7 @@ beforeEach(() => {
       _type: 'conference',
       organization: { _type: 'reference', _ref: 'org-platform' },
       ticketingProvider: 'tito',
+      domains: ['a.example.org'],
       title: 'Not read',
     },
   ]
@@ -105,6 +106,7 @@ describe('listRedirectUriSyncRowsForConference', () => {
     expect(rows[0].conference).toEqual({
       organization: { _type: 'reference', _ref: 'org-platform' },
       ticketingProvider: 'tito',
+      domains: ['a.example.org'],
     })
   })
 
@@ -129,6 +131,7 @@ describe('listRedirectUriSyncRows', () => {
     expect(row.conference).toEqual({
       organization: { _type: 'reference', _ref: 'org-platform' },
       ticketingProvider: 'tito',
+      domains: ['a.example.org'],
     })
     expect(row.redirectUri).toEqual({ status: null, id: null, error: null })
   })

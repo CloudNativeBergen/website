@@ -374,7 +374,7 @@ const SYNC_PROJECTION = `{${FIELDS},
   redirectUriStatus,
   redirectUriId,
   redirectUriError,
-  "conference": conference->{ organization, ticketingProvider }
+  "conference": conference->{ organization, ticketingProvider, domains }
 }`
 
 function toSyncRow({
@@ -402,7 +402,8 @@ function toSyncRow({
  * read: every record that could be on the redirect allowlist, plus every record
  * that still carries redirect-URI state — a revoked host among them, since that
  * is exactly the one whose URI has to be deleted. The claiming conference's
- * owner and ticketing vendor ride along so the reconcile needs no second read.
+ * owner, ticketing vendor and claimed domains ride along so neither the
+ * reconcile nor the sign-in decision needs a second read.
  */
 export async function listRedirectUriSyncRows(): Promise<RedirectUriSyncRow[]> {
   const rows = await clientReadUncached.fetch<RawSyncRow[] | null>(

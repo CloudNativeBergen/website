@@ -60,7 +60,8 @@ export function signInHost(
       error: null,
       ...redirectUri,
     },
-    conference: { organization: { _ref: 'org-1' } },
+    // The claiming conference still lists the host, as a synced claim does.
+    conference: { organization: { _ref: 'org-1' }, domains: [hostname] },
   }
 }
 
