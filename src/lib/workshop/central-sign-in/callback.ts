@@ -14,6 +14,16 @@ const HANDOFF_TTL_SECONDS = 60
 const accessTokenClaims = z.object({ sid: z.string().min(1) })
 
 /** The WorkOS session an access token belongs to (its `sid`), or `null`. */
+/**
+ * Is this a `state` of this flow? Every seal here is a compact JWE: five
+ * segments. The per-host sign-in's state is an iron seal, which has no such
+ * shape. Told apart by shape so that a state of this flow which no longer
+ * unseals (expired, changed) is refused here and never tried as the other.
+ */
+function isSeal(value: string | null): value is string {
+  return value?.split('.').length === 5
+}
+
 function sessionIdOf(accessToken: string): string | null {
   try {
     return accessTokenClaims.parse(decodeJwt(accessToken)).sid
@@ -26,10 +36,11 @@ function sessionIdOf(accessToken: string): string | null {
  * FINISH A WORKSHOP SIGN-IN ON THE AUTH HOST (#1311, spec §3 step 3): WorkOS
  * sends the browser back with a code.
  *
- * `null` when `state` is not one the start route sealed: the request is not
- * this flow's. Otherwise every check below passes BEFORE the code is exchanged,
- * and a refusal is a 404:
+ * `null` when `state` is not a seal at all: the request belongs to the
+ * per-host sign-in. Otherwise every check below passes BEFORE the code is
+ * exchanged, and a refusal is a 404:
  *
+ *  - the state unseals as one the start route sealed, and has not expired;
  *  - the host and the hash come from the sealed state, never the query string;
  *  - the browser carries the cookie the start route set for this very state.
  *    Decided from the request alone, so a callback URL without its cookie
@@ -47,12 +58,10 @@ export async function finishCentralSignIn(
   request: NextRequest,
 ): Promise<NextResponse | null> {
   const params = request.nextUrl.searchParams
-  const state = await unseal(
-    'auth-state',
-    params.get('state'),
-    startStateSchema,
-  )
-  if (!state) return null
+  const sealedState = params.get('state')
+  if (!isSeal(sealedState)) return null
+  const state = await unseal('auth-state', sealedState, startStateSchema)
+  if (!state) return notFound()
 
   const code = params.get('code')
   if (!code) return notFound()

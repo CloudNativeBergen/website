@@ -36,7 +36,7 @@ function configuredAuthOrigin(): URL | 'unset' | 'invalid' {
       (url.protocol === 'http:' && process.env.NODE_ENV === 'development'))
   if (!usable) {
     console.error(
-      '[workshop] WORKSHOP_AUTH_ORIGIN is not an https origin; workshop sign-in is refused on every host.',
+      '[workshop] WORKSHOP_AUTH_ORIGIN is not a bare https origin of a hostname; workshop sign-in is refused on every host.',
     )
     return 'invalid'
   }

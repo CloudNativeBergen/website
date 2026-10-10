@@ -66,7 +66,6 @@ export async function unseal<T>(
     const { payload } = await jwtDecrypt(sealed, keyFor(purpose), {
       keyManagementAlgorithms: ['dir'],
       contentEncryptionAlgorithms: ['A256GCM'],
-      requiredClaims: ['exp'],
     })
     const parsed = schema.safeParse(payload)
     return parsed.success ? parsed.data : null

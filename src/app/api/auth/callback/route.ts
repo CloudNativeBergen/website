@@ -7,11 +7,11 @@ import { resolveWorkshopSignInForRequest } from '@/lib/workshop/sign-in-request'
  * Where WorkOS sends the workshop attendee back with an authorization code.
  *
  * TWO SIGN-INS SHARE THIS PATH while the central sign-in is being built
- * (#1311). A `state` the auth host's start route sealed is finished by
- * `finishCentralSignIn`: it keeps no session and hands off to the tenant host
- * (#1313). Any other `state` is the per-host sign-in below (#1296), where
- * every verified host has this path as its own redirect URI. The tenant-host
- * slice (#1314) removes it.
+ * (#1311). A `state` shaped like the auth host's seal is finished, or
+ * refused, by `finishCentralSignIn`: it keeps no session and hands off to the
+ * tenant host (#1313). Any other `state` is the per-host sign-in below
+ * (#1296), where every verified host has this path as its own redirect URI.
+ * The tenant-host slice (#1314) removes it.
  *
  * THE DECISION COMES FIRST (`resolveWorkshopSignInForRequest`): the host is on
  * the allowlist, exactly as in the proxy, AND its tenant has workshops, exactly

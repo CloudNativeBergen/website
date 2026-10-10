@@ -150,6 +150,7 @@ function callback(
 function expectRefused(response: Response) {
   expect(response.status).toBe(404)
   expect(response.headers.get('location')).toBeNull()
+  expect(response.headers.getSetCookie()).toEqual([])
   expect(exchangeCode).not.toHaveBeenCalled()
   expect(exchangeCodePerHost).not.toHaveBeenCalled()
   // A decision, not a crash that happened to answer the same.
@@ -466,6 +467,18 @@ describe('callback: WORKSHOP_AUTH_ORIGIN unset', () => {
       `https://${TENANT}/workshop/redeem`,
     )
     expect(exchangeCode).toHaveBeenCalledOnce()
+  })
+
+  it('a state older than ten minutes is refused here, not tried as the per-host sign-in', async () => {
+    const now = new Date('2026-10-10T12:00:00Z')
+    vi.useFakeTimers({ toFake: ['Date'], now })
+    const flow = await startFlow(TENANT, TENANT)
+
+    vi.setSystemTime(now.getTime() + 601_000)
+    const response = await callback(flow, { on: TENANT })
+
+    expectRefused(response)
+    expect(await response.text()).toBe('Not Found')
   })
 
   it('a callback on any other host than the one in state is refused', async () => {
