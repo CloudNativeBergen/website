@@ -82,12 +82,18 @@ function start({
   return GET(new NextRequest(url, { headers: new Headers({ host: on }) }))
 }
 
-async function expectRefused(response: Response) {
+function expectNothingStarted(response: Response) {
   expect(response.status).toBe(404)
   expect(response.headers.get('location')).toBeNull()
   expect(response.headers.getSetCookie()).toEqual([])
   expect(buildAuthorizeUrl).not.toHaveBeenCalled()
   expect(generatePkce).not.toHaveBeenCalled()
+}
+
+function expectRefused(response: Response) {
+  expectNothingStarted(response)
+  // A decision, not a crash that happened to answer the same.
+  expect(console.error).not.toHaveBeenCalled()
 }
 
 const anything = z.looseObject({})
@@ -108,6 +114,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  vi.useRealTimers()
   vi.unstubAllEnvs()
 })
 
@@ -148,6 +155,8 @@ describe('start: a proven host', () => {
   })
 
   it('carries the host, the conference that claims it and the hash in sealed state, tied to the cookie', async () => {
+    const now = Date.parse('2026-10-10T12:00:00Z')
+    vi.useFakeTimers({ toFake: ['Date'], now })
     const response = await start()
 
     const state = new URL(response.headers.get('location')!).searchParams.get(
@@ -157,15 +166,17 @@ describe('start: a proven host', () => {
     const kept = await unseal(
       'auth-start',
       decodeURIComponent(cookie.split(';')[0].split('=')[1]),
-      z.object({ nonce: z.string() }),
+      z.object({ nonce: z.string(), iat: z.number(), exp: z.number() }),
     )
+    // Each seal lasts ten minutes, on its own.
+    expect([kept!.iat, kept!.exp]).toEqual([now / 1000, now / 1000 + 600])
     expect(await unseal('auth-state', state, anything)).toEqual({
       host: TENANT,
       conferenceId: CLAIMING_CONFERENCE_ID,
       challenge: CHALLENGE,
       nonce: kept!.nonce,
-      iat: expect.any(Number),
-      exp: expect.any(Number),
+      iat: now / 1000,
+      exp: now / 1000 + 600,
     })
     // The verifier never travels in the URL.
     expect(await unseal('auth-start', state, anything)).toBeNull()
@@ -280,6 +291,18 @@ describe('start: refused with 404, and no authorize URL is built', () => {
   })
 
   it.each([
+    ['a subdomain of the auth host', `sub.${AUTH}`],
+    ['a host that ends with the auth host', `evil-${AUTH}`],
+    ['a host that starts with the auth host', `${AUTH}.evil.net`],
+  ])(
+    'a request that arrives on %s, without reading a record',
+    async (_, on) => {
+      await expectRefused(await start({ on }))
+      expect(getDomainClaim).not.toHaveBeenCalled()
+    },
+  )
+
+  it.each([
     ['missing', null],
     ['too short', CHALLENGE.slice(1)],
     ['not base64url', CHALLENGE.replace(/.$/, '+')],
@@ -328,7 +351,7 @@ describe('start: WORKSHOP_AUTH_ORIGIN', () => {
   ])('refuses every start, and says so, when it is %s', async (_, value) => {
     vi.stubEnv('WORKSHOP_AUTH_ORIGIN', value)
 
-    await expectRefused(await start())
+    expectNothingStarted(await start())
     expect(console.error).toHaveBeenCalledWith(
       expect.stringContaining('WORKSHOP_AUTH_ORIGIN'),
     )

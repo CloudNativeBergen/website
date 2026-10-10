@@ -75,6 +75,11 @@ describe('resolveProvenDestination: admitted', () => {
 })
 
 describe('resolveProvenDestination: refused', () => {
+  // Each refusal below is a decision, not a caught crash: nothing is logged.
+  afterEach(() => {
+    expect(console.error).not.toHaveBeenCalled()
+  })
+
   it('a host with no record', async () => {
     store()
 
@@ -183,11 +188,17 @@ describe('resolveProvenDestination: refused', () => {
     expect(await resolveProvenDestination(host)).toBeNull()
     expect(getDomainClaim).not.toHaveBeenCalled()
   })
+})
 
-  it('every host when the record cannot be read', async () => {
+describe('resolveProvenDestination: a read that fails', () => {
+  it('refuses the host, and says so', async () => {
     getDomainClaim.mockRejectedValue(new Error('sanity unavailable'))
 
     expect(await resolveProvenDestination(HOST)).toBeNull()
+    expect(console.error).toHaveBeenCalledWith(
+      expect.stringContaining('destination read failed'),
+      expect.any(Error),
+    )
   })
 })
 

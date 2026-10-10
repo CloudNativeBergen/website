@@ -232,7 +232,8 @@ describe('callback: a sign-in the auth host started', () => {
     expect(response.headers.getSetCookie()).toEqual([
       `${START_COOKIE}=; Path=/; Max-Age=0; Secure; HttpOnly; SameSite=lax`,
     ])
-    // Nor through the request's cookie store, where the SDK's handler writes.
+    // The line above carries the claim. This one only shows the per-host
+    // handler, which writes through the request's cookie store, did not run.
     expect(writtenCookies()).toEqual([])
   })
 
