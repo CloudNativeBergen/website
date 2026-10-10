@@ -25,14 +25,19 @@ import { adapter } from 'next/dist/server/web/adapter'
 
 const REFUSED = 'unregistered.example.org'
 
-function run(method: string, path: string, host = REFUSED) {
+function run(
+  method: string,
+  path: string,
+  host = REFUSED,
+  extraHeaders: Record<string, string> = {},
+) {
   return adapter({
     page: '/proxy',
     handler: middleware as never,
     request: {
       url: `https://${host}${path}`,
       method,
-      headers: { host },
+      headers: { host, ...extraHeaders },
       nextConfig: {},
       body: undefined,
     },
@@ -62,6 +67,19 @@ describe('workshop proxy — the sign-in redirect, through the Next adapter', ()
       expect(response.headers.getSetCookie()).toEqual([])
     },
   )
+
+  it('stays on the request’s own origin whatever forwarding headers say', async () => {
+    const { response } = await run('GET', '/workshop/sign-in', REFUSED, {
+      'x-forwarded-host': 'evil.example.org',
+      forwarded: 'host=evil.example.org',
+      origin: 'https://evil.example.org',
+    })
+
+    expect(response.status).toBe(307)
+    // Relative only when Next found the target on the request's own origin;
+    // anything else would come out absolute.
+    expect(response.headers.get('location')).toBe('/workshop')
+  })
 
   it('lets the refused portal page through, marked, as Next runs it', async () => {
     const { response } = await run('GET', '/workshop')

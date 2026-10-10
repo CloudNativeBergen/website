@@ -77,9 +77,9 @@ export function signInHostsById(
 
 /**
  * The proxy's answer to a sign-in route on a refused host (#1298): the portal
- * page, query dropped. The proxy returns it ABSOLUTE (same origin); Next's
- * adapter relativises it for the browser — pinned through the real adapter in
- * `proxy.workshop.adapter.test.ts`.
+ * page, query dropped. Path only — the ORIGIN is pinned where it matters,
+ * through Next's real adapter in `proxy.workshop.adapter.test.ts`, which only
+ * relativises a same-origin target (forged forwarding headers included).
  */
 export function isPortalRedirect(location: string | null): boolean {
   if (!location) return false
