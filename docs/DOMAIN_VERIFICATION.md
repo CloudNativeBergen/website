@@ -311,8 +311,10 @@ Exact host only. A wildcard claim registers nothing.
 when its record is on the redirect allowlist, carries `redirectUriStatus`
 `registered` or `external` with no `redirectUriError`, and its conference still
 lists the host in `domains[]` (#1298). A tenant's own verified domain is never
-registered, so it cannot start a sign-in: its portal says sign-up is not
-available yet, and the domain card says "not offered on this host".
+registered, so it cannot start a sign-in: its portal sends the attendee to the
+portal on the conference's first domain when that one can sign in, and
+otherwise says sign-up is not available. The domain card says "not offered on
+this host".
 
 One gap is left (#1306): the decision reads the registration, not
 `isPlatformControlledHost` itself. A host that stops qualifying (its conference
