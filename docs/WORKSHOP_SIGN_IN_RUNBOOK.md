@@ -92,7 +92,7 @@ read the host's record from a checkout of this repository, with a Sanity CLI
 login that can read the dataset (a read; it writes nothing):
 
 ```
-npx sanity documents query '*[_type == "domainVerification" && hostname == "<host>"][0]{hostname, "conference": conference._ref, status, method, lastSuccessAt, lastError, redirectUriStatus, redirectUriError}'
+npx sanity documents query '*[_type == "domainVerification" && hostname == "<host>"][0]{hostname, "conference": conference._ref, status, method, graceUntil, lastSuccessAt, lastError, redirectUriStatus, redirectUriError}'
 ```
 
 The row is built from this record, but the record is not the row. The row also
@@ -115,12 +115,12 @@ fields are defined in `sanity/schemaTypes/domainVerification.ts`:
 - `method` is the kind of proof the record is held to, not whether it has been
   given: `dns-txt` (the DNS TXT challenge, also on a new claim that is still
   `pending`), `grandfathered` (a claim from before verification existed,
-  trusted for a grace period only) or `platform-owned` (a subdomain the
+  trusted only until `graceUntil`) or `platform-owned` (a subdomain the
   platform allocated).
 - `redirectUriStatus` is where the host's callback stands in WorkOS as the
-  application recorded it: `registered` (created by the application),
-  `external` (present in WorkOS, not created by the application), or empty
-  (the application holds none). `redirectUriError` is why the last attempt to
+  application recorded it: `registered` (created by the application, which
+  holds its id), `external` (present in WorkOS, and the application holds no
+  id for it), or empty (the application holds none). `redirectUriError` is why the last attempt to
   register or remove it failed; the next success clears it.
 
 An empty answer means the host has no record, or the CLI is not signed in. The
