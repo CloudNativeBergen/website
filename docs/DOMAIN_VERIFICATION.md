@@ -276,8 +276,9 @@ and the record to publish; the daily sweep starts reporting the missing TXT
 immediately.
 
 The redirect allowlist is **not** flag-gated, and it fails closed. Its rule
-(`isAllowlistEligible` in `policy.ts`) has one consumer today: the workshop
-portal's WorkOS sign-in, described next. A host that is not on the allowlist
+(`isAllowlistEligible` in `policy.ts`) gates one thing in production today: the
+workshop portal's WorkOS sign-in, described next. (The domain card and the
+sweep's delisting alerts report the same rule.) A host that is not on the allowlist
 gets no redirect URI and cannot start, finish or keep a sign-in. The
 list-building helpers in `allowlist.ts` (`getVerifiedRedirectHosts`,
 `isVerifiedRedirectOrigin`) have no production caller yet; they wait for the

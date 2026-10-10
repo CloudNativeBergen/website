@@ -25,7 +25,7 @@ serves and whose DNS the platform controls (#1306).
 
 The conference's **first domain** decides the most. Ticket emails link to the
 portal on it, and another host of the conference that cannot sign in sends
-attendees there.
+attendees there when the first domain can.
 
 ## Organizer: the portal on a new domain
 
@@ -60,7 +60,8 @@ yourself.
 
 ### After the line turns available
 
-Tickets sold before that moment got an email without the portal link. On
+Tickets sold before that moment got an email without the portal link, or no
+workshop email at all if workshops were off at the time. On
 **Admin → Workshops**, press **Resend sign-up instructions** once. Every
 workshop ticket holder gets the instructions with the link. A second press
 within the hour is normally refused; that is a guard against a double click,
@@ -139,8 +140,10 @@ run `pnpm tsx scripts/probe-workos-redirect-uris.ts` with a staging key.
 
 - The sign-in decision reads the registration, not the platform-control rule
   itself. A host that stops qualifying keeps signing in until a reconcile
-  removes its URI, at the latest with the daily check (#1306).
+  clears its registration, at the latest with the daily check (#1306). Only a
+  URI the application created is deleted from WorkOS; one it merely found
+  there stays.
 - A tenant whose first domain is its own has no emailed portal link (#1306).
 - Sign-out redirects are registered by hand.
-- A redirect URI is only removed by a reconcile that runs. If the daily check
-  stops, nothing is removed.
+- Nothing expires by itself. A redirect URI stays until a reconcile runs and
+  removes it.

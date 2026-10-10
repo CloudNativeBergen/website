@@ -620,10 +620,11 @@ The session is a sealed `wos-session` cookie with no `Domain` attribute, so a se
 one host is never presented on another. The login behind it is not per host: a WorkOS
 account is one account for every conference on the platform, and `/privacy` says so to
 workshop participants. Organizers only see the workshop registrations of their own
-conference.
+organization's conferences.
 
 Sign-out removes the cookie on the current host and sends the browser to WorkOS's logout
-endpoint with `return_to` set to that host's home page. WorkOS only honours a `return_to`
+endpoint with `return_to` set to that host's home page. With no session left to end it
+goes straight to that home page. WorkOS only honours a `return_to`
 that is registered as a Sign-out redirect in the environment. That registration is done
 by hand in the WorkOS dashboard; the reconcile only manages redirect URIs.
 
