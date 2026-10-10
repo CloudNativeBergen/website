@@ -18,28 +18,35 @@ import { createHash } from 'node:crypto'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { NextRequest } from 'next/server'
 import { z } from 'zod'
-import type { DomainClaim } from '@/lib/domain-verification/types'
+import type {
+  DomainClaim,
+  RedirectUriSyncRow,
+} from '@/lib/domain-verification/types'
 import {
   CLAIMING_CONFERENCE_ID,
   claimsById,
   provenClaim,
 } from '../../helpers/domainClaims'
 import { beginRequest, writtenCookies } from '../../helpers/nextHeadersJar'
+import { signInHost, signInHostsById } from '../../helpers/workshopSignIn'
 
 vi.mock('jose', async () => (await import('../../helpers/realJose')).realJose())
 
 const getDomainClaim = vi.fn<(id: string) => Promise<DomainClaim | null>>()
+// The per-host sign-in of today, which a state that is not a seal falls
+// through to. It knows no host unless a test says so.
+const getRedirectUriSyncRow =
+  vi.fn<(id: string) => Promise<RedirectUriSyncRow | null>>()
 vi.mock('@/lib/domain-verification/sanity', () => ({
   getDomainClaim: (id: string) => getDomainClaim(id),
-  // The per-host sign-in of today, which a state this flow did not seal falls
-  // through to, knows no host here.
-  getRedirectUriSyncRow: async () => null,
+  getRedirectUriSyncRow: (id: string) => getRedirectUriSyncRow(id),
 }))
 
 const getConferenceForDomain = vi.fn()
+const getConferenceForCurrentDomain = vi.fn()
 vi.mock('@/lib/conference/sanity', () => ({
   getConferenceForDomain: (domain: string) => getConferenceForDomain(domain),
-  getConferenceForCurrentDomain: vi.fn(),
+  getConferenceForCurrentDomain: () => getConferenceForCurrentDomain(),
 }))
 
 vi.mock('next/headers', () => import('../../helpers/nextHeadersJar'))
@@ -177,6 +184,7 @@ beforeEach(() => {
     ),
   )
   isWorkshopsEnabledForConference.mockResolvedValue(true)
+  getRedirectUriSyncRow.mockResolvedValue(null)
   exchangeCode.mockResolvedValue(AUTHENTICATED as never)
   exchangeCodePerHost.mockResolvedValue(AUTHENTICATED as never)
 })
@@ -470,6 +478,15 @@ describe('callback: WORKSHOP_AUTH_ORIGIN unset', () => {
   })
 
   it('a state older than ten minutes is refused here, not tried as the per-host sign-in', async () => {
+    // The host is one the per-host sign-in admits, so that handler would
+    // answer for itself (the SDK's error page) if the request reached it.
+    getRedirectUriSyncRow.mockImplementation(
+      signInHostsById([signInHost(TENANT)]),
+    )
+    getConferenceForCurrentDomain.mockResolvedValue({
+      conference: { _id: 'conf-1', organization: { _ref: 'org-1' } },
+      error: null,
+    })
     const now = new Date('2026-10-10T12:00:00Z')
     vi.useFakeTimers({ toFake: ['Date'], now })
     const flow = await startFlow(TENANT, TENANT)
