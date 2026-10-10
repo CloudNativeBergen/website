@@ -4,3 +4,4 @@
  * tenant host. See `docs/WORKSHOP_CENTRAL_SIGN_IN_SPEC.md`.
  */
 export { startCentralSignIn } from './start'
+export { finishCentralSignIn } from './callback'

@@ -1,10 +1,16 @@
 import 'server-only'
 import { randomUUID } from 'node:crypto'
 import { NextResponse, type NextRequest } from 'next/server'
+import type { z } from 'zod'
 import { workshopCallbackUri } from '../sign-in-paths'
 import { resolveCentralSignIn } from './decision'
 import { seal } from './seal'
-import { START_TTL_SECONDS, startCookie } from './start-cookie'
+import {
+  START_TTL_SECONDS,
+  startCookie,
+  startCookieSchema,
+  startStateSchema,
+} from './start-seals'
 import { workshopWorkOS } from './workos'
 
 /** Base64url SHA-256: what the tenant host sends of its browser value. */
@@ -56,7 +62,7 @@ export async function startCentralSignIn(
       conferenceId: destination.conference._id,
       challenge,
       nonce,
-    },
+    } satisfies z.infer<typeof startStateSchema>,
     START_TTL_SECONDS,
   )
   const authorizeUrl = workos.userManagement.getAuthorizationUrl({
@@ -76,7 +82,9 @@ export async function startCentralSignIn(
     cookie.name,
     await seal(
       'auth-start',
-      { nonce, codeVerifier: pkce.codeVerifier },
+      { nonce, codeVerifier: pkce.codeVerifier } satisfies z.infer<
+        typeof startCookieSchema
+      >,
       START_TTL_SECONDS,
     ),
     { ...cookie.options, maxAge: START_TTL_SECONDS },

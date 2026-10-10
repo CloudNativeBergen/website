@@ -25,6 +25,12 @@ export const WORKSHOP_SIGN_UP_PATH = '/workshop/sign-up'
 export const WORKSHOP_PORTAL_PATH = '/workshop'
 
 /**
+ * Where the auth host hands a finished sign-in to the tenant host (#1311):
+ * the tenant host's route that turns a hand-off token into its own session.
+ */
+export const WORKSHOP_REDEEM_PATH = '/workshop/redeem'
+
+/**
  * Request header the proxy puts on the portal page when the host cannot sign
  * in (#1298). The page then shows the unavailable view and never enters the
  * SDK, which did not run for that request.
