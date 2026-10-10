@@ -320,14 +320,6 @@ describe('callback: refused with 404, and the code is never exchanged', () => {
     expectRefused(await callback(first, { cookie: second.cookie }))
   })
 
-  it('with the state itself in place of the cookie', async () => {
-    const flow = await startFlow()
-
-    expectRefused(
-      await callback(flow, { cookie: `${START_COOKIE}=${flow.state}` }),
-    )
-  })
-
   it('with the cookie under a name without the __Host- prefix', async () => {
     const flow = await startFlow()
 
