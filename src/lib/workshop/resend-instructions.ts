@@ -14,7 +14,8 @@
  *   the ticket was bought under), sent to that address as registered.
  * - AT MOST ONCE AN HOUR PER CONFERENCE, best effort per instance (the
  *   announcement rail's pattern): a misfire guard against a double click, not
- *   a security control. A refusal spends no quota.
+ *   a security control. The hour is reserved before the first ticket read, so
+ *   two concurrent presses send once; a refusal spends no quota.
  */
 
 import type { Conference } from '@/lib/conference/types'
@@ -56,8 +57,16 @@ export async function resendWorkshopSignupInstructions(
     }
   }
 
+  // Reserve the hour NOW, before the next await, so a concurrent resend sees
+  // it; released if the ticket list cannot be read.
+  lastResend.set(conference._id, now)
+
   const tickets = await fetchEventTicketCandidates(conference)
-  if (!tickets) return { kind: 'ticketing-unavailable' }
+  if (!tickets) {
+    if (lastResend.get(conference._id) === now)
+      lastResend.delete(conference._id)
+    return { kind: 'ticketing-unavailable' }
+  }
   const roles = await liveTicketTypeRoles(conference)
 
   const holders = new Map<string, (typeof tickets)[number]>()
@@ -66,8 +75,6 @@ export async function resendWorkshopSignupInstructions(
     const key = canonicalEmail(ticket.registeredEmail || ticket.email)
     if (key && !holders.has(key)) holders.set(key, ticket)
   }
-
-  lastResend.set(conference._id, now)
 
   const recipients = [...holders.values()]
   let sent = 0

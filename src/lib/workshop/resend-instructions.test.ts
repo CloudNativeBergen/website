@@ -153,6 +153,20 @@ describe('resendWorkshopSignupInstructions', () => {
     ).resolves.toMatchObject({ kind: 'sent', sent: 2 })
   })
 
+  it('lets only one of two concurrent resends send', async () => {
+    const outcomes = await Promise.all([
+      resendWorkshopSignupInstructions(conference, 0),
+      resendWorkshopSignupInstructions(conference, 0),
+    ])
+
+    expect(outcomes).toContainEqual({ kind: 'sent', sent: 2, failed: 0 })
+    expect(outcomes).toContainEqual({
+      kind: 'rate-limited',
+      retryAfterMs: HOUR,
+    })
+    expect(send).toHaveBeenCalledTimes(2)
+  })
+
   it('spends no hourly quota on a refusal', async () => {
     workshopPortalUrl.mockResolvedValueOnce(null)
     await resendWorkshopSignupInstructions(conference, 0)
