@@ -1,4 +1,5 @@
 import { escapeHtml } from '@/lib/html/escape'
+import { formatRegistrationInstant } from '@/lib/time'
 import { PLATFORM_NAME } from '@/lib/branding/platform'
 import {
   resolveEmailSender,
@@ -209,12 +210,8 @@ export function renderWorkshopSignupInstructions({
   // must not tell the attendee to sign up now or list steps that cannot work.
   const unavailable = !workshopUrl && registration !== 'closed'
 
-  // en-US to match what the same attendee reads on the /workshop page.
-  const when = (value: string) =>
-    new Date(value).toLocaleString('en-US', {
-      dateStyle: 'full',
-      timeStyle: 'short',
-    })
+  // The same wording and zone the /workshop page shows this attendee.
+  const when = formatRegistrationInstant
 
   const subject = unavailable
     ? `Workshop Signup Coming Soon - ${conference.title}`

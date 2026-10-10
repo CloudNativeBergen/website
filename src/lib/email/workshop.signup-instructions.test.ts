@@ -105,6 +105,14 @@ describe('sendWorkshopSignupInstructions registration gating', () => {
     expect(html()).toContain('https://cloudnativebergen.no/workshop')
   })
 
+  it('says when registration opens in Oslo time, whatever the server’s zone', async () => {
+    await send({ workshopRegistrationStart: '2099-06-01T08:00:00Z' })
+
+    // 08:00 UTC is 10:00 in Oslo (CEST).
+    expect(subject()).toContain('Monday, June 1, 2099 at 10:00 AM')
+    expect(html()).toContain('Monday, June 1, 2099 at 10:00 AM')
+  })
+
   it('does NOT invite signup after registration has closed', async () => {
     await send({
       workshopRegistrationEnd: new Date(Date.now() - DAY).toISOString(),

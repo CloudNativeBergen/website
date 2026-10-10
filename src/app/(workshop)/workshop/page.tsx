@@ -1,4 +1,5 @@
 import { withAuth } from '@workos-inc/authkit-nextjs'
+import { formatRegistrationInstant } from '@/lib/time'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import WorkshopList from '@/components/workshop/WorkshopList'
 import { Container } from '@/components/Container'
@@ -217,12 +218,9 @@ export default async function WorkshopPage() {
                   <div className="mt-2 text-sm text-yellow-700 dark:text-yellow-300">
                     <p>
                       Registration will open on{' '}
-                      {new Date(
+                      {formatRegistrationInstant(
                         conference.workshopRegistrationStart!,
-                      ).toLocaleString('en-US', {
-                        dateStyle: 'full',
-                        timeStyle: 'short',
-                      })}
+                      )}
                     </p>
                   </div>
                 </div>
@@ -253,12 +251,9 @@ export default async function WorkshopPage() {
                   <div className="mt-2 text-sm text-red-700 dark:text-red-300">
                     <p>
                       Registration closed on{' '}
-                      {new Date(
+                      {formatRegistrationInstant(
                         conference.workshopRegistrationEnd!,
-                      ).toLocaleString('en-US', {
-                        dateStyle: 'full',
-                        timeStyle: 'short',
-                      })}
+                      )}
                     </p>
                   </div>
                 </div>
