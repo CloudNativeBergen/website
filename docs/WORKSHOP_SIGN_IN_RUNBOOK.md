@@ -23,6 +23,12 @@ A tenant's own domain does not carry the portal: every tenant shares one WorkOS
 client, so a sign-in callback may only be on a host that the platform itself
 serves and whose DNS the platform controls (#1306).
 
+Local development is the one exception to 2 and 3. With
+`NODE_ENV=development`, `localhost` needs no verification record and the
+application registers nothing for it: it signs in on
+`http://localhost:<port>/api/auth/callback`, which is added by hand to a WorkOS
+staging environment. See [AUTH.md](AUTH.md#workos-workshops-only).
+
 The conference's **first domain** decides the most. Ticket emails link to the
 portal on it, and another host of the conference that cannot sign in sends
 attendees there when the first domain can.
