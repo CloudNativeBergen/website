@@ -117,7 +117,7 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
     )
   }
 
-  const lastUpdated = 'October 2, 2026'
+  const lastUpdated = 'October 10, 2026'
   const legal = await resolveLegalConfig(conference)
   const contactEmail = legal.contactEmail
   // EMPTY when no legal entity could be resolved. `legal.controllerResolved`
@@ -421,6 +421,29 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                           </ul>
                         </div>
                       </div>
+                      {/*
+                        The workshop login lives in ONE WorkOS environment for
+                        every tenant (#1293), so it is not this event's alone.
+                        Gated like the identifier above.
+                      */}
+                      {usesWorkOS ? (
+                        <div className="mt-4 rounded-lg bg-amber-100 p-3 dark:bg-amber-800/30">
+                          <p className="text-sm text-amber-800 dark:text-amber-200">
+                            <strong>
+                              One login for every conference on this platform.
+                            </strong>{' '}
+                            Workshop sign-in is provided by WorkOS, and your
+                            login there is a single account shared by all
+                            conferences hosted on this platform. It is not
+                            created separately for this event. If you sign in to
+                            the workshop portal of another conference hosted
+                            here, the login you already have is recognised, and
+                            the same WorkOS User ID is stored with your
+                            registrations there. Organizers see only the
+                            workshop registrations for their own conference.
+                          </p>
+                        </div>
+                      ) : null}
                     </div>
 
                     {/* Communication Data */}
@@ -2087,7 +2110,8 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                                 WorkOS Authentication Data
                                 <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                                   (User ID, email, name, authentication
-                                  sessions)
+                                  sessions; one login for every conference on
+                                  this platform)
                                 </div>
                               </td>
                               <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
