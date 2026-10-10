@@ -4,6 +4,7 @@ import { ErrorDisplay } from '@/components/admin'
 import { WorkshopsClientPage } from '@/components/admin/workshop/WorkshopsClientPage'
 import { getWorkshopsByConference } from '@/lib/workshop/sanity'
 import { isWorkshopsEnabledForConference } from '@/lib/features/workshops'
+import { workshopPortalUrl } from '@/lib/workshop/sign-in'
 
 export default async function WorkshopAdminPage() {
   const { conference, error: conferenceError } =
@@ -26,6 +27,8 @@ export default async function WorkshopAdminPage() {
   }
 
   const workshops = await getWorkshopsByConference(conference._id)
+  // The resend action is only offered once the portal link works (#1298).
+  const portalAvailable = (await workshopPortalUrl(conference)) !== null
 
   return (
     <WorkshopsClientPage
@@ -35,6 +38,7 @@ export default async function WorkshopAdminPage() {
         conference.workshopRegistrationStart ?? undefined
       }
       workshopRegistrationEnd={conference.workshopRegistrationEnd ?? undefined}
+      portalAvailable={portalAvailable}
     />
   )
 }

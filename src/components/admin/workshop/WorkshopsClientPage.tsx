@@ -16,6 +16,7 @@ import {
 import type { ParticipantFormData } from '@/components/admin/workshop'
 import { api } from '@/lib/trpc/client'
 import { useNotification } from '@/components/admin/NotificationProvider'
+import { ResendInstructionsButton } from './ResendInstructionsButton'
 import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
 import type {
   WorkshopSignupStatus,
@@ -58,6 +59,8 @@ interface WorkshopsClientPageProps {
   initialWorkshops: ProposalWithWorkshopData[]
   workshopRegistrationStart?: string
   workshopRegistrationEnd?: string
+  /** Does the portal link work on the main host? Gates the resend action. */
+  portalAvailable: boolean
 }
 
 export function WorkshopsClientPage({
@@ -65,6 +68,7 @@ export function WorkshopsClientPage({
   initialWorkshops,
   workshopRegistrationStart,
   workshopRegistrationEnd,
+  portalAvailable,
 }: WorkshopsClientPageProps) {
   const queryClient = useQueryClient()
   const utils = api.useUtils()
@@ -328,6 +332,7 @@ export function WorkshopsClientPage({
         title="Workshop Management"
         description="Manage workshop signups and capacity"
         icon={<AcademicCapIcon className="h-6 w-6" />}
+        actions={<ResendInstructionsButton portalAvailable={portalAvailable} />}
         stats={
           statsData
             ? [

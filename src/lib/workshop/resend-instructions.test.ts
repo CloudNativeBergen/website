@@ -34,7 +34,11 @@ vi.mock('@/lib/sanity/client', () => ({
   },
 }))
 
-const send = vi.fn(async (_request: Record<string, unknown>) => ({
+const send = vi.fn<
+  (
+    request: Record<string, unknown>,
+  ) => Promise<{ data: { emailId: string }; error: unknown }>
+>(async () => ({
   data: { emailId: 'em' },
   error: undefined as unknown,
 }))

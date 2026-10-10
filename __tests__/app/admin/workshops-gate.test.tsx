@@ -55,6 +55,12 @@ vi.mock('@/lib/sanity/client', () => ({
   clientReadUncached: { fetch: h.fetch },
 }))
 
+/** The sign-in decision (`sign-in.test.ts`) — the page only forwards it. */
+const mockWorkshopPortalUrl = vi.fn<() => Promise<string | null>>()
+vi.mock('@/lib/workshop/sign-in', () => ({
+  workshopPortalUrl: () => mockWorkshopPortalUrl(),
+}))
+
 import WorkshopAdminPage from '@/app/(admin)/admin/workshops/page'
 
 const PLATFORM_SLUG = 'platform-org'
@@ -67,6 +73,7 @@ beforeEach(() => {
   vi.stubEnv('PLATFORM_ORG_ID', OTHER_PLATFORM_ORG_ID)
   stubPlatformTicketingAccount()
   mockGetWorkshops.mockResolvedValue([])
+  mockWorkshopPortalUrl.mockResolvedValue(null)
   mockGetConference.mockResolvedValue({
     conference: {
       _id: 'conf-1',
@@ -129,4 +136,31 @@ describe('/admin/workshops — feature gate', () => {
     expect(mockGetWorkshops).toHaveBeenCalledWith('conf-1')
     expect(h.fetch).not.toHaveBeenCalled()
   })
+})
+
+describe('/admin/workshops — resend sign-up instructions (#1298)', () => {
+  beforeEach(() => {
+    stubOwnTicketingSecret('org-A')
+    mockGetOrganizationById.mockResolvedValue({
+      _id: 'org-A',
+      name: 'Tenant A',
+      slug: 'tenant-a',
+      plan: 'pro',
+    })
+  })
+
+  it.each([
+    ['https://2026.example.org/workshop', true],
+    [null, false],
+  ])(
+    'offers the resend only when the portal link works (%s → %s)',
+    async (portalUrl, portalAvailable) => {
+      mockWorkshopPortalUrl.mockResolvedValue(portalUrl)
+
+      const page = (await WorkshopAdminPage()) as {
+        props: { portalAvailable: boolean }
+      }
+      expect(page.props.portalAvailable).toBe(portalAvailable)
+    },
+  )
 })
