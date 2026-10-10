@@ -9,7 +9,7 @@ import {
   resolveLegalConfig,
   resolveSubprocessorDisclosure,
 } from '@/lib/legal'
-import { SubprocessorList } from '@/components/legal'
+import { SharedWorkshopLoginNotice, SubprocessorList } from '@/components/legal'
 import { AnalyticsChoice } from '@/components/analytics'
 import { resolveMetadataBrand } from '@/lib/seo/brand'
 import { ErrorDisplay } from '@/components/admin'
@@ -426,24 +426,7 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                         every tenant (#1293), so it is not this event's alone.
                         Gated like the identifier above.
                       */}
-                      {usesWorkOS ? (
-                        <div className="mt-4 rounded-lg bg-amber-100 p-3 dark:bg-amber-800/30">
-                          <p className="text-sm text-amber-800 dark:text-amber-200">
-                            <strong>
-                              One login for every conference on this platform.
-                            </strong>{' '}
-                            Workshop sign-in is provided by WorkOS, and your
-                            login there is a single account shared by all
-                            conferences hosted on this platform. It is not
-                            created separately for this event. If you sign in to
-                            the workshop portal of another conference hosted
-                            here, the login you already have is recognised, and
-                            the same WorkOS User ID is stored with your
-                            registrations there. Organizers see only the
-                            workshop registrations for their own conference.
-                          </p>
-                        </div>
-                      ) : null}
+                      {usesWorkOS ? <SharedWorkshopLoginNotice /> : null}
                     </div>
 
                     {/* Communication Data */}
