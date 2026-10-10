@@ -7,7 +7,11 @@
  * Every refusal is the admitted case with ONE condition changed.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import type { DomainClaim, DomainVerificationRecord } from './types'
+import {
+  claimsById,
+  provenClaim,
+} from '../../../__tests__/helpers/domainClaims'
+import type { DomainClaim } from './types'
 
 const getDomainClaim = vi.fn<(id: string) => Promise<DomainClaim | null>>()
 const getConferenceForDomain = vi.fn()
@@ -22,47 +26,13 @@ vi.mock('@/lib/conference/sanity', () => ({
 
 import { resolveProvenDestination } from './destination'
 
-const NOW = new Date('2026-10-10T12:00:00.000Z')
+const DAY_MS = 86_400_000
 const HOST = 'conf.example.org'
 const ALLOCATED = 'tenant.konf.run'
 
-function claim(
-  hostname: string,
-  record: Partial<DomainVerificationRecord> = {},
-  domains: string[] = [hostname],
-): DomainClaim {
-  return {
-    record: {
-      _id: `domainVerification.${hostname}`,
-      hostname,
-      conferenceId: 'conference-1',
-      token: 'tok',
-      status: 'verified',
-      method: 'dns-txt',
-      graceUntil: null,
-      verifiedAt: '2026-09-01T00:00:00.000Z',
-      lastSuccessAt: '2026-10-09T12:00:00.000Z',
-      lastCheckedAt: '2026-10-09T12:00:00.000Z',
-      firstFailureAt: null,
-      consecutiveFailures: 0,
-      consecutiveSoftFailures: 0,
-      lastError: null,
-      ...record,
-    },
-    conference: {
-      _id: 'conference-1',
-      organization: { _ref: 'org-1' },
-      ticketingProvider: 'tito',
-      domains,
-    },
-  }
-}
-
 /** A store that knows exactly these claims, by the id of their hostname. */
 function store(...claims: DomainClaim[]) {
-  getDomainClaim.mockImplementation(
-    async (id) => claims.find((c) => c.record._id === id) ?? null,
-  )
+  getDomainClaim.mockImplementation(claimsById(...claims))
 }
 
 beforeEach(() => {
@@ -70,7 +40,7 @@ beforeEach(() => {
   vi.stubEnv('NODE_ENV', 'production')
   vi.stubEnv('PLATFORM_DOMAIN_SUFFIX', 'konf.run')
   vi.spyOn(console, 'error').mockImplementation(() => {})
-  store(claim(HOST), claim(ALLOCATED, { method: 'platform-owned' }))
+  store(provenClaim(HOST), provenClaim(ALLOCATED, { method: 'platform-owned' }))
 })
 
 afterEach(() => {
@@ -79,7 +49,7 @@ afterEach(() => {
 
 describe('resolveProvenDestination: admitted', () => {
   it('a host whose DNS proof resolved, with its origin and the conference that claims it', async () => {
-    expect(await resolveProvenDestination(HOST, NOW)).toEqual({
+    expect(await resolveProvenDestination(HOST)).toEqual({
       host: HOST,
       origin: `https://${HOST}`,
       conference: {
@@ -92,16 +62,13 @@ describe('resolveProvenDestination: admitted', () => {
   })
 
   it('a host the platform allocated', async () => {
-    const destination = await resolveProvenDestination(ALLOCATED, NOW)
+    const destination = await resolveProvenDestination(ALLOCATED)
 
     expect(destination?.origin).toBe(`https://${ALLOCATED}`)
   })
 
   it('a host written in another case, as its canonical form', async () => {
-    const destination = await resolveProvenDestination(
-      ' Conf.Example.ORG ',
-      NOW,
-    )
+    const destination = await resolveProvenDestination(' Conf.Example.ORG ')
 
     expect(destination?.host).toBe(HOST)
   })
@@ -111,18 +78,18 @@ describe('resolveProvenDestination: refused', () => {
   it('a host with no record', async () => {
     store()
 
-    expect(await resolveProvenDestination(HOST, NOW)).toBeNull()
+    expect(await resolveProvenDestination(HOST)).toBeNull()
   })
 
   it('a grandfathered record inside its grace period', async () => {
     store(
-      claim(HOST, {
+      provenClaim(HOST, {
         method: 'grandfathered',
-        graceUntil: '2026-11-01T00:00:00.000Z',
+        graceUntil: new Date(Date.now() + DAY_MS).toISOString(),
       }),
     )
 
-    expect(await resolveProvenDestination(HOST, NOW)).toBeNull()
+    expect(await resolveProvenDestination(HOST)).toBeNull()
   })
 
   it('a platform-owned record that is no longer an allocation', async () => {
@@ -130,50 +97,68 @@ describe('resolveProvenDestination: refused', () => {
     // platform operates today.
     vi.stubEnv('PLATFORM_DOMAIN_SUFFIX', 'konf.app')
 
-    expect(await resolveProvenDestination(ALLOCATED, NOW)).toBeNull()
+    expect(await resolveProvenDestination(ALLOCATED)).toBeNull()
   })
 
   it('a proof that stopped resolving', async () => {
-    store(claim(HOST, { status: 'failing' }))
+    store(provenClaim(HOST, { status: 'failing' }))
 
-    expect(await resolveProvenDestination(HOST, NOW)).toBeNull()
+    expect(await resolveProvenDestination(HOST)).toBeNull()
+  })
+
+  it('a proof last confirmed 29 days ago is still admitted', async () => {
+    store(
+      provenClaim(HOST, {
+        lastSuccessAt: new Date(Date.now() - 29 * DAY_MS).toISOString(),
+      }),
+    )
+
+    expect((await resolveProvenDestination(HOST))?.host).toBe(HOST)
   })
 
   it('a proof last confirmed more than 30 days ago', async () => {
-    store(claim(HOST, { lastSuccessAt: '2026-09-01T00:00:00.000Z' }))
+    store(
+      provenClaim(HOST, {
+        lastSuccessAt: new Date(Date.now() - 31 * DAY_MS).toISOString(),
+      }),
+    )
 
-    expect(await resolveProvenDestination(HOST, NOW)).toBeNull()
+    expect(await resolveProvenDestination(HOST)).toBeNull()
   })
 
   it('a released claim, even for an allocated host', async () => {
-    store(claim(ALLOCATED, { method: 'platform-owned', status: 'revoked' }))
+    store(
+      provenClaim(ALLOCATED, { method: 'platform-owned', status: 'revoked' }),
+    )
 
-    expect(await resolveProvenDestination(ALLOCATED, NOW)).toBeNull()
+    expect(await resolveProvenDestination(ALLOCATED)).toBeNull()
   })
 
   it('a record whose conference no longer claims the host', async () => {
-    store(claim(HOST, {}, ['other.example.org']))
+    store(provenClaim(HOST, {}, { domains: ['other.example.org'] }))
 
-    expect(await resolveProvenDestination(HOST, NOW)).toBeNull()
+    expect(await resolveProvenDestination(HOST)).toBeNull()
   })
 
   it('a record whose conference is gone', async () => {
-    store({ ...claim(HOST), conference: null })
+    store({ ...provenClaim(HOST), conference: null })
 
-    expect(await resolveProvenDestination(HOST, NOW)).toBeNull()
+    expect(await resolveProvenDestination(HOST)).toBeNull()
   })
 
   it('a host its conference claims only through a wildcard', async () => {
-    store(claim(HOST, {}, ['*.example.org']))
+    store(provenClaim(HOST, {}, { domains: ['*.example.org'] }))
 
-    expect(await resolveProvenDestination(HOST, NOW)).toBeNull()
+    expect(await resolveProvenDestination(HOST)).toBeNull()
   })
 
   it('a record that names another host than the one asked for', async () => {
     // Whatever is asked, the proven record of HOST comes back.
-    getDomainClaim.mockResolvedValue(claim(HOST, {}, [HOST, 'sub.' + HOST]))
+    getDomainClaim.mockResolvedValue(
+      provenClaim(HOST, {}, { domains: [HOST, 'sub.' + HOST] }),
+    )
 
-    expect(await resolveProvenDestination('sub.' + HOST, NOW)).toBeNull()
+    expect(await resolveProvenDestination('sub.' + HOST)).toBeNull()
   })
 
   it.each([
@@ -182,7 +167,7 @@ describe('resolveProvenDestination: refused', () => {
     ['a proven host as a suffix', `evil-${HOST}`],
     ['a proven host with a port', `${HOST}:8443`],
   ])('%s', async (_, host) => {
-    expect(await resolveProvenDestination(host, NOW)).toBeNull()
+    expect(await resolveProvenDestination(host)).toBeNull()
   })
 
   it.each([
@@ -195,14 +180,14 @@ describe('resolveProvenDestination: refused', () => {
     ['an empty value', ''],
     ['no value', null],
   ])('%s, without reading anything', async (_, host) => {
-    expect(await resolveProvenDestination(host, NOW)).toBeNull()
+    expect(await resolveProvenDestination(host)).toBeNull()
     expect(getDomainClaim).not.toHaveBeenCalled()
   })
 
   it('every host when the record cannot be read', async () => {
     getDomainClaim.mockRejectedValue(new Error('sanity unavailable'))
 
-    expect(await resolveProvenDestination(HOST, NOW)).toBeNull()
+    expect(await resolveProvenDestination(HOST)).toBeNull()
   })
 })
 
@@ -222,7 +207,7 @@ describe('resolveProvenDestination: localhost', () => {
   it('qualifies in development, over http, with the conference that serves it', async () => {
     vi.stubEnv('NODE_ENV', 'development')
 
-    expect(await resolveProvenDestination('localhost:3000', NOW)).toEqual({
+    expect(await resolveProvenDestination('localhost:3000')).toEqual({
       host: 'localhost:3000',
       origin: 'http://localhost:3000',
       conference: {
@@ -236,7 +221,7 @@ describe('resolveProvenDestination: localhost', () => {
   })
 
   it('does not qualify in a deployed build', async () => {
-    expect(await resolveProvenDestination('localhost:3000', NOW)).toBeNull()
+    expect(await resolveProvenDestination('localhost:3000')).toBeNull()
   })
 
   it.each(['localhost.example.org', 'evil-localhost', '127.0.0.1:3000'])(
@@ -244,7 +229,7 @@ describe('resolveProvenDestination: localhost', () => {
     async (host) => {
       vi.stubEnv('NODE_ENV', 'development')
 
-      expect(await resolveProvenDestination(host, NOW)).toBeNull()
+      expect(await resolveProvenDestination(host)).toBeNull()
     },
   )
 
@@ -255,6 +240,6 @@ describe('resolveProvenDestination: localhost', () => {
       error: new Error('no conference'),
     })
 
-    expect(await resolveProvenDestination('localhost:3000', NOW)).toBeNull()
+    expect(await resolveProvenDestination('localhost:3000')).toBeNull()
   })
 })

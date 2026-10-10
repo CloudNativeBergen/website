@@ -29,11 +29,12 @@ export const startCookieSchema = z.object({
 /**
  * The auth host's cookie between start and callback. `__Host-` makes the
  * browser refuse a `Domain`, so no sibling host under a shared suffix can set
- * or replace it. The prefix needs `Secure`, so a plain-HTTP auth origin
- * (development only, see `./decision`) gets neither.
+ * or replace it. The prefix needs `Secure`, which a browser may not store over
+ * plain HTTP, so a development server gets neither. `NODE_ENV` is `production`
+ * in every deployed build, previews included.
  */
-export function startCookie(authOrigin: string) {
-  const secure = authOrigin.startsWith('https://')
+export function startCookie() {
+  const secure = process.env.NODE_ENV !== 'development'
   return {
     name: secure ? '__Host-workshop-auth-start' : 'workshop-auth-start',
     options: {

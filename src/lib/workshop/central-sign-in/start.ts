@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto'
 import { NextResponse, type NextRequest } from 'next/server'
 import type { z } from 'zod'
 import { workshopCallbackUri } from '../sign-in-paths'
-import { resolveCentralSignIn } from './decision'
+import { notFound, resolveCentralSignIn } from './decision'
 import { seal } from './seal'
 import {
   START_TTL_SECONDS,
@@ -43,13 +43,11 @@ export async function startCentralSignIn(
   const challenge = params.get('challenge')
   const screen = params.get('screen')
   if (!challenge || !CHALLENGE.test(challenge) || !isScreen(screen)) {
-    return new NextResponse('Not Found', { status: 404 })
+    return notFound()
   }
 
   const signIn = await resolveCentralSignIn(request.headers, params.get('host'))
-  if (!signIn) {
-    return new NextResponse('Not Found', { status: 404 })
-  }
+  if (!signIn) return notFound()
   const { authOrigin, destination } = signIn
 
   const workos = workshopWorkOS()
@@ -77,7 +75,7 @@ export async function startCentralSignIn(
   const response = NextResponse.redirect(authorizeUrl, {
     headers: { 'Cache-Control': 'no-store' },
   })
-  const cookie = startCookie(authOrigin)
+  const cookie = startCookie()
   response.cookies.set(
     cookie.name,
     await seal(

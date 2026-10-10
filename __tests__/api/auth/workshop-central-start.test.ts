@@ -323,10 +323,15 @@ describe('start: WORKSHOP_AUTH_ORIGIN', () => {
     ['plain http outside development', `http://${AUTH}`],
     ['a path', `https://${AUTH}/api/auth`],
     ['not a URL', AUTH],
-  ])('refuses every start when it is %s', async (_, value) => {
+    ['a host with a trailing dot', `https://${AUTH}.`],
+    ['an IPv6 literal', 'https://[::1]:3000'],
+  ])('refuses every start, and says so, when it is %s', async (_, value) => {
     vi.stubEnv('WORKSHOP_AUTH_ORIGIN', value)
 
     await expectRefused(await start())
+    expect(console.error).toHaveBeenCalledWith(
+      expect.stringContaining('WORKSHOP_AUTH_ORIGIN'),
+    )
   })
 
   it('development: two local origins over plain http, with a cookie a browser will store', async () => {

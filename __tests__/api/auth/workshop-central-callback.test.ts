@@ -152,6 +152,8 @@ function expectRefused(response: Response) {
   expect(response.headers.get('location')).toBeNull()
   expect(exchangeCode).not.toHaveBeenCalled()
   expect(exchangeCodePerHost).not.toHaveBeenCalled()
+  // A decision, not a crash that happened to answer the same.
+  expect(console.error).not.toHaveBeenCalled()
 }
 
 const anything = z.looseObject({})
@@ -310,15 +312,21 @@ describe('callback: a sign-in the auth host started', () => {
 })
 
 describe('callback: refused with 404, and the code is never exchanged', () => {
-  it('without the cookie the start route set', async () => {
-    expectRefused(await callback(await startFlow(), { cookie: null }))
+  it('without the cookie the start route set, without reading a record', async () => {
+    const flow = await startFlow()
+    getDomainClaim.mockClear()
+
+    expectRefused(await callback(flow, { cookie: null }))
+    expect(getDomainClaim).not.toHaveBeenCalled()
   })
 
-  it('with the cookie of another started sign-in', async () => {
+  it('with the cookie of another started sign-in, without reading a record', async () => {
     const first = await startFlow()
     const second = await startFlow()
+    getDomainClaim.mockClear()
 
     expectRefused(await callback(first, { cookie: second.cookie }))
+    expect(getDomainClaim).not.toHaveBeenCalled()
   })
 
   it('with the cookie under a name without the __Host- prefix', async () => {

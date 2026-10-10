@@ -1,10 +1,47 @@
 import 'server-only'
-import { normalizeDomain } from '@/lib/conference/domains'
+import { NextResponse } from 'next/server'
+import { isValidDomainEntry, normalizeDomain } from '@/lib/conference/domains'
 import {
   resolveProvenDestination,
   type ProvenDestination,
 } from '@/lib/domain-verification/destination'
 import { isWorkshopsEnabledForConference } from '@/lib/features/workshops'
+
+export interface CentralSignIn {
+  /** `scheme://host[:port]` of the auth host: where WorkOS calls back. */
+  authOrigin: string
+  destination: ProvenDestination
+}
+
+/** A refusal on the auth host is a 404, whatever the reason. */
+export function notFound(): NextResponse {
+  return new NextResponse('Not Found', { status: 404 })
+}
+
+/**
+ * `WORKSHOP_AUTH_ORIGIN` as an origin. `'unset'`: a host is its own auth host.
+ * `'invalid'`: the value cannot be used (not a bare origin of a hostname, or
+ * plain HTTP outside development), and every sign-in is refused.
+ */
+function configuredAuthOrigin(): URL | 'unset' | 'invalid' {
+  const raw = process.env.WORKSHOP_AUTH_ORIGIN?.trim()
+  if (!raw) return 'unset'
+  const url = URL.parse(raw)
+  const usable =
+    url !== null &&
+    `${url.origin}/` === url.href &&
+    // The shape a `Host` header is compared in: no trailing dot, no IPv6.
+    isValidDomainEntry(url.host) &&
+    (url.protocol === 'https:' ||
+      (url.protocol === 'http:' && process.env.NODE_ENV === 'development'))
+  if (!usable) {
+    console.error(
+      '[workshop] WORKSHOP_AUTH_ORIGIN is not an https origin; workshop sign-in is refused on every host.',
+    )
+    return 'invalid'
+  }
+  return url
+}
 
 /**
  * MAY THIS REQUEST, ON THE AUTH HOST, RUN A SIGN-IN FOR `host`? (#1311, spec
@@ -20,42 +57,15 @@ import { isWorkshopsEnabledForConference } from '@/lib/features/workshops'
  * The first is decided from the request alone, before anything is read.
  * `null` refuses; the caller answers 404.
  */
-export interface CentralSignIn {
-  /** `scheme://host[:port]` of the auth host: where WorkOS calls back. */
-  authOrigin: string
-  destination: ProvenDestination
-}
-
-/**
- * The configured auth origin; `undefined` when unset, `null` when the value
- * cannot be used: not an origin, or plain HTTP outside development.
- */
-function configuredAuthOrigin(): URL | null | undefined {
-  const raw = process.env.WORKSHOP_AUTH_ORIGIN?.trim()
-  if (!raw) return undefined
-  const url = URL.parse(raw)
-  const usable =
-    url !== null &&
-    `${url.origin}/` === url.href &&
-    (url.protocol === 'https:' ||
-      (url.protocol === 'http:' && process.env.NODE_ENV === 'development'))
-  if (!usable) {
-    console.error(
-      '[workshop] WORKSHOP_AUTH_ORIGIN is not an https origin; workshop sign-in is refused on every host.',
-    )
-    return null
-  }
-  return url
-}
-
 export async function resolveCentralSignIn(
   headers: { get(name: string): string | null },
   host: string | null | undefined,
 ): Promise<CentralSignIn | null> {
-  const requestHost = normalizeDomain(headers.get('host') ?? '')
   const configured = configuredAuthOrigin()
-  if (configured === null) return null
-  const authHost = configured ? configured.host : normalizeDomain(host ?? '')
+  if (configured === 'invalid') return null
+  const authHost =
+    configured === 'unset' ? normalizeDomain(host ?? '') : configured.host
+  const requestHost = normalizeDomain(headers.get('host') ?? '')
   if (!requestHost || requestHost !== authHost) return null
 
   const destination = await resolveProvenDestination(host)
@@ -63,5 +73,8 @@ export async function resolveCentralSignIn(
   if (!(await isWorkshopsEnabledForConference(destination.conference))) {
     return null
   }
-  return { authOrigin: configured?.origin ?? destination.origin, destination }
+  return {
+    authOrigin: configured === 'unset' ? destination.origin : configured.origin,
+    destination,
+  }
 }
