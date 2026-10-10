@@ -15,7 +15,9 @@ The site uses three distinct authentication systems:
 
 NextAuth.js is the primary system. Speaker identities live in Sanity and are linked to
 OAuth provider accounts. WorkOS is isolated to workshop signup flows and does not share
-identity with NextAuth. CLI tokens are NextAuth-compatible JWTs issued via browser login.
+identity with NextAuth. It runs on whichever host the attendee is on: there is no
+configured sign-in host (see [WorkOS AuthKit](#workos-authkit-workshops)). CLI tokens are
+NextAuth-compatible JWTs issued via browser login.
 
 ## NextAuth.js
 
@@ -415,7 +417,9 @@ Three layers of protection are used depending on the route type:
 
 The top-level middleware routes requests to the correct auth system:
 
-- `/workshop*` &rarr; WorkOS AuthKit middleware
+- `/workshop*` &rarr; the workshop sign-in decision for the request's host, then WorkOS
+  AuthKit's session middleware when that host can sign in
+  (see [WorkOS AuthKit](#workos-authkit-workshops))
 - `/cfp/*` (except `/cfp`), `/admin/*`, and `/cli/*` &rarr; NextAuth middleware
 - Everything else &rarr; passes through
 
@@ -557,16 +561,69 @@ only difference is the `maxAge` (30 days vs the default session duration).
 
 ## WorkOS AuthKit (Workshops)
 
-A separate auth system used exclusively for workshop signup flows:
+A separate auth system used only by the attendee workshop portal. It proves an email
+address. Whether that address may sign up for workshops is decided afterwards, from the
+conference's tickets (`decideWorkshopPortalAccess` in `src/lib/workshop/access.ts`).
 
-- **Package**: `@workos-inc/authkit-nextjs@^3.0.0`
-- **Routes**: `/workshop`, `/workshop/*`
-- **Middleware**: Configured in `src/proxy.ts` via `authkitMiddleware()`
-- **Callback**: `src/app/api/auth/callback/route.ts` handles `GET` via `handleAuth()`
-- **Identity**: Stored as `userWorkOSId` on `workshopSignup` documents in Sanity
+- **Package**: `@workos-inc/authkit-nextjs@^4.3.1`
+- **Routes**: `/workshop`, `/workshop/sign-in`, `/workshop/sign-up`
+- **Callback**: `/api/auth/callback` on the host the sign-in started on
+- **Identity**: stored as `userWorkOSId` on `workshopSignup` documents in Sanity
 
 WorkOS sessions are completely independent from NextAuth sessions. A user signed in via
 GitHub for CFP has no automatic session for workshops, and vice versa.
+
+### One environment, one redirect URI per request
+
+Every tenant signs in through the same WorkOS environment. No variable names a sign-in
+host. The redirect URI is the callback of the host the attendee is on,
+`https://<host>/api/auth/callback`, chosen for each request and passed to the SDK
+explicitly.
+
+`resolveWorkshopSignInHost` (`src/lib/workshop/sign-in.ts`) is the one decision. A host
+can sign in when all of these hold:
+
+- its own `domainVerification` record is on the verified-redirect allowlist
+  (see [DOMAIN_VERIFICATION.md](DOMAIN_VERIFICATION.md));
+- WorkOS has the host's callback as a redirect URI, which the reconcile registers only
+  for hosts the platform controls, for conferences with workshops enabled;
+- the conference that owns the record still lists the host in `domains[]`;
+- `WORKOS_COOKIE_DOMAIN` is not set.
+
+The host is the `Host` header and nothing else. The record is read live on every
+decision, with no cache.
+
+Every entry point takes the decision before it calls the SDK:
+
+| Entry point                     | File                                     | On a host that cannot sign in              |
+| ------------------------------- | ---------------------------------------- | ------------------------------------------ |
+| `GET`/`HEAD` `/workshop`        | `src/proxy.ts`, the portal page          | the page says sign-up is not available yet |
+| `/workshop/sign-in`, `/sign-up` | `src/proxy.ts`                           | 307 to `/workshop` on the same host        |
+| any other `/workshop*` request  | `src/proxy.ts`                           | 404                                        |
+| starting a sign-in or sign-up   | `src/lib/workshop/sign-in-start.ts`      | 404, no authorize URL is built             |
+| the callback                    | `src/app/api/auth/callback/route.ts`     | 404, no code is exchanged                  |
+| the attendee identity in tRPC   | `src/server/trpc.ts` (`workshop.*` only) | no attendee is resolved                    |
+| sign-out                        | `src/app/(workshop)/workshop/actions.ts` | 404, the session cookie is left alone      |
+
+The routes that start a sign-in and the callback also check that the tenant has workshops
+(`isWorkshopsEnabledForConference`), so a tenant without them never reaches WorkOS. A
+secondary host that cannot sign in sends the attendee to the portal on the conference's
+first domain when that one can.
+
+### Sessions and the shared login
+
+The session is a sealed `wos-session` cookie with no `Domain` attribute, so a session on
+one host is never presented on another. The login behind it is not per host: a WorkOS
+account is one account for every conference on the platform, and `/privacy` says so to
+workshop participants. Organizers only see the workshop registrations of their own
+conference.
+
+Sign-out removes the cookie on the current host and sends the browser to WorkOS's logout
+endpoint with `return_to` set to that host's home page. WorkOS only honours a `return_to`
+that is registered as a Sign-out redirect in the environment. That registration is done
+by hand in the WorkOS dashboard; the reconcile only manages redirect URIs.
+
+Operations are in [WORKSHOP_SIGN_IN_RUNBOOK.md](WORKSHOP_SIGN_IN_RUNBOOK.md).
 
 ## Environment Variables
 
@@ -590,8 +647,27 @@ GitHub for CFP has no automatic session for workshops, and vice versa.
 
 ### WorkOS (Workshops Only)
 
-WorkOS environment variables are managed by `@workos-inc/authkit-nextjs` and documented
-in its package. They are only needed if workshop signup is enabled.
+Only needed when a tenant on the deployment has workshops.
+
+| Variable                 | Description                                                                                                                                           |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `WORKOS_CLIENT_ID`       | Client ID of the one WorkOS environment every tenant shares                                                                                           |
+| `WORKOS_API_KEY`         | API key of that environment. Used by the SDK and by the redirect-URI reconcile, which does nothing without it                                         |
+| `WORKOS_COOKIE_PASSWORD` | Seals the session cookie. At least 32 characters                                                                                                      |
+| `WORKOS_COOKIE_DOMAIN`   | **Must stay unset.** It would widen the session cookie to sibling hosts, so sign-in is refused on every host while it is set (system status shows it) |
+
+Not read, and to be removed where they are still set: `WORKOS_REDIRECT_URI` and
+`NEXT_PUBLIC_WORKOS_REDIRECT_URI`. The first is read by nothing. The second is the SDK's
+own fallback for a caller that passes no redirect URI; every caller here passes one, and
+`__tests__/api/auth/workos-no-redirect-env.test.ts` runs every entry point with both
+variables unset. The portal does not read `NEXT_PUBLIC_URL` either.
+
+Local development: `localhost` can sign in when `NODE_ENV` is `development`, with
+`http://localhost:<port>/api/auth/callback` registered in a WorkOS **staging** environment.
+Where the SDK has no request URL to judge by (starting a sign-in, signing out) it marks
+its cookies `Secure` unless `NEXT_PUBLIC_WORKOS_REDIRECT_URI` is an `http:` URL. Chrome
+and Firefox accept `Secure` cookies from `http://localhost`. For a browser that does not,
+set the variable to the localhost callback in `.env.local`, and nowhere else.
 
 ### GitHub OAuth App Setup
 
@@ -622,6 +698,7 @@ in its package. They are only needed if workshop signup is enabled.
 | `src/app/(main)/signin/confirm/`                | Login-CSRF interstitial for an unproven redemption                               |
 | `src/app/(main)/signin/actions.ts`              | "Email me a link" server action (uniform response)                               |
 | `src/proxy.ts`                                  | Route-level middleware (NextAuth + WorkOS)                                       |
+| `src/lib/workshop/sign-in.ts`                   | Which host may run a WorkOS sign-in, and with which callback                     |
 | `src/server/trpc.ts`                            | tRPC context creation, auth middleware                                           |
 | `src/app/api/auth/[...nextauth]/route.ts`       | NextAuth route handler                                                           |
 | `src/app/api/auth/callback/route.ts`            | WorkOS callback handler                                                          |
