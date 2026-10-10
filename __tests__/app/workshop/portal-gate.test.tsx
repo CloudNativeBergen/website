@@ -618,12 +618,18 @@ describe('workshop portal — a refused secondary host', () => {
     expect(mockWithAuth).not.toHaveBeenCalled()
   })
 
-  it('shows the unavailable view when the main host cannot sign in either', async () => {
+  it('shows the unavailable view when the main host cannot sign in either — after ONE read', async () => {
     h.fetch.mockImplementation(async () => null)
     markedOn('secondary.example.org')
 
     const page = await WorkshopPage()
     expect(elementsOf(page)[0].type).toBe(WorkshopUnavailable)
+    const queries = h.fetch.mock.calls as unknown as Array<[string]>
+    expect(
+      queries.filter(([query]) =>
+        String(query).includes('_type == "domainVerification"'),
+      ),
+    ).toHaveLength(1)
   })
 
   it('never redirects to the host the attendee is already on', async () => {

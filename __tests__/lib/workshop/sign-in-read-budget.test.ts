@@ -135,14 +135,15 @@ describe('live Sanity reads per entry point', () => {
     expect(liveReads).toHaveBeenCalledTimes(1)
   })
 
-  it('the /workshop page on a host that may not sign in: 1 — marked, and the page reads nothing more', async () => {
+  it('the /workshop page on a host that may not sign in: 1 in the proxy — marked, no SDK', async () => {
     const response = (await middleware(
       request('/workshop', { host: 'unverified.example.org' }),
       event,
     )) as Response
 
-    // Let through to the unavailable view (#1298), without the SDK; the page
-    // stops at the mark, so this proxy read is the whole cost.
+    // Let through to the unavailable view (#1298), without the SDK. The page
+    // then reads the main host's record once (is there a working portal to
+    // send the attendee to?) — pinned in `portal-gate.test.tsx`.
     expect(
       response.headers.get(
         'x-middleware-request-x-workshop-sign-in-unavailable',
