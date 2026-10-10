@@ -43,6 +43,19 @@ export const RESEND_WINDOW_MS = 60 * 60 * 1000
 /** Resend's batch API limit. */
 export const BATCH_SIZE = 100
 
+/**
+ * Worth retrying, and — if still failing after the retries — of unknown
+ * outcome rather than rejected: a transient failure, or Resend still
+ * processing an earlier attempt under the same idempotency key (409).
+ */
+function mayStillDeliver(error: unknown): boolean {
+  return (
+    isTransientError(error) ||
+    (error as { resendErrorName?: string } | null)?.resendErrorName ===
+      'concurrent_idempotent_requests'
+  )
+}
+
 export type ResendOutcome =
   /**
    * `failed`: confirmed not sent (the address or batch was rejected).
@@ -171,15 +184,15 @@ export async function resendWorkshopSignupInstructions(
           return response.data
         },
         undefined,
-        isTransientError,
+        mayStillDeliver,
       )
       const rejected = result?.errors?.length ?? 0
       sent += batch.length - rejected
       failed += rejected
     } catch (error) {
       console.error('Workshop instructions resend: batch failed:', error)
-      // Still transient after the retries: the provider may have accepted it.
-      if (isTransientError(error)) unconfirmed += batch.length
+      // Unresolved after the retries: the provider may have accepted it.
+      if (mayStillDeliver(error)) unconfirmed += batch.length
       else failed += batch.length
     }
   }

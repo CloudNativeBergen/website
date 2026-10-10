@@ -260,6 +260,30 @@ describe('resendWorkshopSignupInstructions', () => {
     ).resolves.toMatchObject({ kind: 'rate-limited' })
   })
 
+  it('treats a batch Resend is still processing as unconfirmed, never rejected', async () => {
+    const inFlight: BatchResponse = {
+      data: null,
+      error: {
+        name: 'concurrent_idempotent_requests',
+        message:
+          'Same idempotency key used while original request is in progress',
+        statusCode: 409,
+      },
+    }
+    batchSend
+      .mockResolvedValueOnce(inFlight)
+      .mockResolvedValueOnce(inFlight)
+      .mockResolvedValueOnce(inFlight)
+
+    await expect(
+      resendWorkshopSignupInstructions(conference, 0),
+    ).resolves.toEqual({ kind: 'sent', sent: 0, failed: 0, unconfirmed: 2 })
+    expect(batchSend).toHaveBeenCalledTimes(3)
+    await expect(
+      resendWorkshopSignupInstructions(conference, 1),
+    ).resolves.toMatchObject({ kind: 'rate-limited' })
+  })
+
   it('refuses, and spends no quota, when no email sender can be resolved', async () => {
     senderAvailable.mockImplementationOnce(() => {
       throw new Error('credentials lookup failed')
