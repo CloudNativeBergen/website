@@ -64,6 +64,9 @@ const POSTHOG_TOKEN = 'phc_AtRfmihK9AhZtiupD4mFCukbYiUEwQystESTSQvbq5gh'
 const SLACK = 'Slack'
 const WORKOS = 'WorkOS (AuthKit)'
 const UNCERTAIN = 'May not apply to this event'
+// The workshop login is ONE WorkOS account across every conference on the
+// platform (#1299), which the participant has to be told where it is used.
+const SHARED_LOGIN = 'One login for every conference on this platform'
 
 /**
  * The Cloud Native Days Norway shape, verified against the production dataset:
@@ -300,6 +303,48 @@ describe('Slack and WorkOS follow the tenant, not the platform', () => {
   })
 })
 
+describe('the workshop login is shared across conferences (#1299)', () => {
+  it('tells a workshop participant the login is one account for every conference', async () => {
+    world()
+
+    const html = await renderPrivacy()
+
+    expect(html).toContain(SHARED_LOGIN)
+    // Said where the identifier is listed, and where its retention is.
+    expect(html.split(SHARED_LOGIN)).toHaveLength(2)
+    expect(html).toContain('one login for every conference on this platform')
+    // Who sees the registrations: the organization, not every organizer on
+    // the platform. (This sentence was wrong once, as "their own conference".)
+    expect(html).toContain(
+      'only the workshop registrations for their own organization',
+    )
+    // …and what removing a registration does not reach.
+    expect(html).toContain(
+      'does not delete this login or your registrations at other conferences',
+    )
+  })
+
+  it('says nothing about a login to a tenant that has no workshop sign-in', async () => {
+    world({
+      conference: conference({
+        organization: { _ref: OTHER_ORG, _type: 'reference' },
+      }),
+      organization: organization({
+        _id: OTHER_ORG,
+        name: 'Acme Events',
+        plan: 'community',
+      }),
+    })
+
+    const html = await renderPrivacy()
+
+    // The real policy rendered, with this tenant's own vendor on it.
+    expect(html).toContain(CHECKIN)
+    expect(html).not.toContain(SHARED_LOGIN)
+    expect(html.toLowerCase()).not.toContain('one login for every conference')
+  })
+})
+
 describe('the email account the organizer sends through', () => {
   it('names the shared platform account by default', async () => {
     world()
@@ -410,6 +455,8 @@ describe('a failed read must NOT shorten the disclosure', () => {
     expect(html).toContain(WORKOS)
     expect(html).toContain(UNCERTAIN)
     expect(html).toContain('could not be read just now')
+    // What follows from WorkOS is disclosed with it, not held back (#1299).
+    expect(html).toContain(SHARED_LOGIN)
   })
 
   it('renders NO uncertainty notice when every signal resolved', async () => {

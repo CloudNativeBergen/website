@@ -279,10 +279,9 @@ describe('isWorkshopsEnabledForConference — overrides win in both directions',
 })
 
 /**
- * NO PLATFORM-ORG RULE (#1295). The platform org used to keep workshops
- * implicitly because it owned the one WorkOS client. It now qualifies by plan
- * like any other org; what it still has by right is TICKETING (the platform
- * env account), which is the second half of the rule.
+ * NO PLATFORM-ORG RULE (#1295). The platform org qualifies by plan like any
+ * other org; what it has by right is TICKETING (the platform env account),
+ * which is the second half of the rule.
  */
 describe('isWorkshopsEnabledForConference — the platform org gets it by plan, not by identity', () => {
   it('is DISABLED for the platform org on the community plan', async () => {
