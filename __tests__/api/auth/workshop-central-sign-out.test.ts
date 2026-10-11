@@ -737,14 +737,14 @@ describe('the auth host: the return from WorkOS', () => {
   })
 
   it('shows the plain page without a cookie, whatever the address says, and reads nothing', async () => {
-    await sentToWorkOS()
+    // A genuine return cookie's value, offered in the address instead.
+    const sealed = (await sentToWorkOS()).split('=')[1]
+    const url = new URL(`https://${AUTH}/api/auth/workshop/signed-out`)
+    for (const name of ['state', 'host', 'request', 'token', 'return_to']) {
+      url.searchParams.set(name, sealed)
+    }
 
-    const response = await signedOutRoute(
-      get(
-        `https://${AUTH}/api/auth/workshop/signed-out?host=${TENANT}&state=${TENANT}&return_to=https://${TENANT}/`,
-        AUTH,
-      ),
-    )
+    const response = await signedOutRoute(get(url, AUTH))
 
     await expectPlainPage(response, 'no-cookie')
     expect(getDomainClaim).not.toHaveBeenCalled()
