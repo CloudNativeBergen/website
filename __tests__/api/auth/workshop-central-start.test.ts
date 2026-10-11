@@ -302,9 +302,24 @@ describe('start: refused with 404, and no authorize URL is built', () => {
     ['a subdomain of a proven host', `sub.${TENANT}`],
     ['a proven host as a prefix', `${TENANT}.evil.net`],
     ['a proven host as a suffix', `evil-${TENANT}`],
-    ['the wildcard over a proven host', '*.example.org'],
   ])('%s', async (_, host) => {
     await expectRefused(await start({ host }))
+  })
+
+  it('the wildcard over a proven host, without reading a record', async () => {
+    // A record under the wildcard's own id would otherwise be found.
+    getDomainClaim.mockImplementation(
+      claimsById(provenClaim(TENANT), {
+        ...provenClaim('*.example.org'),
+        record: {
+          ...provenClaim('*.example.org').record,
+          _id: 'domainVerification.wildcard.example.org',
+        },
+      }),
+    )
+
+    await expectRefused(await start({ host: '*.example.org' }))
+    expect(getDomainClaim).not.toHaveBeenCalled()
   })
 
   it('a record whose conference no longer claims the host', async () => {
