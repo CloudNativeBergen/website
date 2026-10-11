@@ -101,8 +101,12 @@ describe('collectStaticChecks — workshop auth origin', () => {
       collectStaticChecks(CONFERENCE),
       'auth.workshopAuthOrigin',
     )
-    expect(check.status).toBe('ok')
-    expect(check.value).toBe('https://auth.example.org')
+    expect(check).toMatchObject({
+      group: 'auth',
+      label: 'WORKSHOP_AUTH_ORIGIN',
+      status: 'ok',
+      value: 'https://auth.example.org',
+    })
   })
 
   it('is an error when the origin is one of the conference’s own domains', () => {

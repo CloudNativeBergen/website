@@ -52,6 +52,20 @@ describe('listDomainVerificationViews — workshop sign-in per host', () => {
     ).resolves.toEqual({ state: 'available' })
   })
 
+  it('finds the record of a claim that is not written in its canonical form', async () => {
+    records.push(verifiedHost('tenant.example.org'))
+    const [view] = await listDomainVerificationViews(
+      'conference-1',
+      [' Tenant.Example.ORG '],
+      { workshops: true },
+    )
+    expect(view).toMatchObject({
+      hostname: 'tenant.example.org',
+      status: 'verified',
+      workshopSignIn: { state: 'available' },
+    })
+  })
+
   it('derives verification and sign-in from ONE read for this conference', async () => {
     records.push(verifiedHost('conf.example.org'))
     const [view] = await listDomainVerificationViews(

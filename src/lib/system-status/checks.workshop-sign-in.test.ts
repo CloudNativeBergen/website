@@ -23,6 +23,7 @@ vi.mock('@/lib/domain-verification/sanity', () => ({
 }))
 
 import { buildSystemChecks } from './checks'
+import { workshopSignInLabel } from '@/lib/domain-verification/sign-in-labels'
 
 const CONFERENCE = {
   _id: 'conference-1',
@@ -128,10 +129,15 @@ describe('buildSystemChecks — workshop sign-in per host', () => {
         domains: ['new.tenant.example.org'],
       }),
     )
-    expect(checks.map(({ id, value }) => ({ id, value }))).toEqual([
+    // The whole row: where it shows, what it is called and what it advises.
+    expect(checks).toEqual([
       {
         id: 'auth.workshopSignIn.new.tenant.example.org',
+        group: 'auth',
+        label: 'Workshop sign-in: new.tenant.example.org',
+        status: 'warn',
         value: 'domain not verified',
+        detail: workshopSignInLabel({ state: 'unverified' }).detail,
       },
     ])
   })

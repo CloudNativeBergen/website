@@ -286,6 +286,15 @@ describe('which calls write', () => {
     expect(set).toHaveBeenCalledWith({ status: 'revoked' })
   })
 
+  it('not a release of a host that has no record', async () => {
+    fetchMock.mockResolvedValue(null)
+
+    await expect(
+      revokeDomainVerification('kubeday.konf.run', CONFERENCE),
+    ).resolves.toBeUndefined()
+    expect(commit).not.toHaveBeenCalled()
+  })
+
   it('not a release of a host another conference now holds', async () => {
     fetchMock.mockResolvedValue(existing({ conferenceId: 'conference-other' }))
 

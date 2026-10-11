@@ -152,7 +152,7 @@ describe('syncDomainVerifications', () => {
     await syncDomainVerifications(
       OURS,
       [' Conf.Example.ORG ', 'conf.example.org', 'second.example.org'],
-      ['conf.example.org', 'gone.example.org'],
+      ['conf.example.org', ' Gone.Example.ORG '],
       { allocatePlatformHosts: true },
     )
     expect(ensureDomainVerification.mock.calls).toEqual([
