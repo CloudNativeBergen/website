@@ -198,6 +198,7 @@ reaches.
 1. **Auth host: start, callback, hand-off (#1313).** The sealing module, the destination check of §4, the
    start route and the callback, with `WORKSHOP_AUTH_ORIGIN`.
 2. **Tenant host: redeem and the session (#1314).** The sign-in and sign-up routes start at the auth host;
-   the redeem route; the proxy, the page, tRPC and the client components read our session.
+   the redeem route; the page, tRPC and the client components read our session, and the proxy
+   leaves `/workshop` alone.
 3. **Sign-out (#1315)** through the auth host (§7).
 4. **Removal and documents (#1316)** (§8), the status rows and labels, the runbook and `/privacy`.

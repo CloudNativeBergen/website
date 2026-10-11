@@ -17,7 +17,10 @@
  * The workshop data layer is mocked (IO only); the router's authz logic runs for
  * real. Callers are built with the WorkOS-attendee / anonymous / admin helpers.
  */
+import '../../helpers/workosEnv'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { NextRequest } from 'next/server'
+import { provenClaim } from '../../helpers/domainClaims'
 import {
   stubOwnTicketingSecret,
   stubPlatformTicketingAccount,
@@ -31,6 +34,9 @@ import {
 vi.mock('next/cache', () => ({
   revalidateTag: vi.fn(),
 }))
+
+// The one case that starts from the browser's cookie seals a real session.
+vi.mock('jose', async () => (await import('../../helpers/realJose')).realJose())
 
 vi.mock('@/lib/conference/sanity', () => ({
   getConferenceForCurrentDomain: vi.fn(async () => ({
@@ -146,6 +152,9 @@ import {
   verifyWorkshopBelongsToConference,
 } from '@/lib/workshop/sanity'
 import { __resetRedeemedCache } from '@/lib/tickets/speakerStatus'
+import { appRouter } from '@/server/_app'
+import { createTRPCContext } from '@/server/trpc'
+import { seal } from '@/lib/workshop/central-sign-in/seal'
 
 type LooseMock = ReturnType<typeof vi.fn>
 const getSignupsMock = getWorkshopSignups as unknown as LooseMock
@@ -241,6 +250,60 @@ describe('workshop.signup identity binding', () => {
       'conf-1',
       undefined,
     )
+  })
+
+  it('stores the signup under the WorkOS user ID of the session the browser holds (#1314)', async () => {
+    // FROM THE COOKIE TO THE STORED VALUE, nothing injected in between: the
+    // real context reads the portal's session (the real seal, the real
+    // destination policy over the host's record), and the real router stores
+    // under what it resolved. That the redeem route issues exactly this
+    // session is proven in `redeem.test.ts`.
+    const HOST = 'conf.example.org'
+    vi.stubEnv('NODE_ENV', 'production')
+    const { record, conference } = provenClaim(
+      HOST,
+      { conferenceId: 'conf-1' },
+      { _id: 'conf-1' },
+    )
+    ;(h.fetch as unknown as LooseMock).mockImplementation(
+      async (query: string) =>
+        query.includes('_type == "domainVerification"')
+          ? { ...record, conference }
+          : null,
+    )
+    const session = await seal(
+      'session',
+      {
+        userId: 'user_from_the_session',
+        email: 'real@example.com',
+        emailVerified: true,
+        name: 'Real User',
+        sessionId: 'session_01',
+        host: HOST,
+        conferenceId: 'conf-1',
+      },
+      7 * 24 * 60 * 60,
+    )
+
+    const ctx = await createTRPCContext({
+      req: new NextRequest(`https://${HOST}/api/trpc/workshop.signup`, {
+        headers: new Headers({
+          host: HOST,
+          cookie: `__Host-workshop-session=${session}`,
+        }),
+      }),
+    })
+    await appRouter.createCaller(ctx).workshop.signup({
+      ...baseSignupInput,
+      userWorkOSId: 'victim-id',
+    } as unknown as typeof baseSignupInput)
+
+    expect(createSignupMock).toHaveBeenCalledTimes(1)
+    expect(createSignupMock.mock.calls[0][0]).toMatchObject({
+      userWorkOSId: 'user_from_the_session',
+      userEmail: 'real@example.com',
+      userName: 'Real User',
+    })
   })
 
   it('binds the signup to the DOMAIN conference, ignoring a smuggled conference ref', async () => {

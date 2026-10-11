@@ -1,17 +1,17 @@
 /**
- * The fixed paths of the workshop portal's WorkOS sign-in (#1296).
+ * The fixed paths of the workshop portal's sign-in (#1296, #1311).
  *
- * Kept apart from `./sign-in` on purpose: that module reaches the Sanity-backed
- * redirect allowlist, and these constants are also needed by presentational
- * components that must not drag a data read into their module graph.
+ * Kept apart from `./sign-in` on purpose: that module reaches a Sanity read,
+ * and these constants are also needed by presentational components that must
+ * not drag a data read into their module graph.
  */
 
-/** The AuthKit callback route, the same path on every host. */
+/** Where WorkOS sends the browser back: one callback, on the auth host. */
 export const WORKSHOP_AUTH_CALLBACK_PATH = '/api/auth/callback'
 
 /**
- * An origin's AuthKit callback. ONE builder: the `redirect_uri` a sign-in sends
- * and the URI registered with WorkOS (#1297) have to be the same string.
+ * An origin's callback. ONE builder: the `redirect_uri` a sign-in sends and
+ * the URI registered with WorkOS have to be the same string.
  */
 export function workshopCallbackUri(origin: string): string {
   return `${origin}${WORKSHOP_AUTH_CALLBACK_PATH}`

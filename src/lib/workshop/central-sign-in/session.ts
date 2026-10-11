@@ -1,7 +1,7 @@
 import 'server-only'
 import { z } from 'zod'
 import { hostCookie } from './cookies'
-import { resolveTenantHost, type TenantHost } from './decision'
+import { resolveTenantHost, type SignInHost } from './decision'
 import { unseal } from './seal'
 
 /**
@@ -40,7 +40,7 @@ export type WorkshopSession = z.infer<typeof sessionSchema>
 /** Was `session` issued for this host, as the conference claims it now? */
 export function isSessionFor(
   session: Pick<WorkshopSession, 'host' | 'conferenceId'>,
-  tenant: TenantHost,
+  tenant: SignInHost,
 ): boolean {
   return (
     session.host === tenant.destination.host &&
@@ -77,15 +77,16 @@ export async function readWorkshopPortal(
 }
 
 /**
- * Who is signed in on this request's host, or `null`. The rule is
- * {@link readWorkshopPortal}'s; this one reads nothing for a request that
- * carries no session of ours, so it can sit in front of unrelated traffic.
+ * Who is signed in on this request's host, or `null`: the rule of
+ * {@link readWorkshopPortal}, seal first. A request that carries no session
+ * of ours reads nothing, so this can sit in front of unrelated traffic.
  */
 export async function readWorkshopSession(
   headers: { get(name: string): string | null },
   sealed: string | null | undefined,
 ): Promise<WorkshopSession | null> {
-  if (!(await unseal('session', sealed, sessionSchema))) return null
-  const portal = await readWorkshopPortal(headers, sealed)
-  return portal.available ? portal.session : null
+  const session = await unseal('session', sealed, sessionSchema)
+  if (!session) return null
+  const tenant = await resolveTenantHost(headers)
+  return tenant && isSessionFor(session, tenant) ? session : null
 }

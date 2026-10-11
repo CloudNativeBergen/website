@@ -3,7 +3,13 @@ import { decodeJwt } from 'jose'
 import { NextResponse, type NextRequest } from 'next/server'
 import { z } from 'zod'
 import { WORKSHOP_REDEEM_PATH } from '../sign-in-paths'
-import { logRefusal, notFound, resolveCentralSignIn } from './decision'
+import { clearCookie } from './cookies'
+import {
+  logRefusal,
+  notFound,
+  resolveCentralSignIn,
+  type CallbackRefusal,
+} from './decision'
 import { HANDOFF_TTL_SECONDS, type HandOff } from './handoff'
 import { seal, unseal } from './seal'
 import { startCookie, startCookieSchema, startStateSchema } from './start-seals'
@@ -11,12 +17,12 @@ import { workshopWorkOS } from './workos'
 
 const accessTokenClaims = z.object({ sid: z.string().min(1) })
 
-/** The WorkOS session an access token belongs to (its `sid`), or `null`. */
-function refused(reason: string): NextResponse {
+function refused(reason: CallbackRefusal): NextResponse {
   logRefusal('callback', reason)
   return notFound()
 }
 
+/** The WorkOS session an access token belongs to (its `sid`), or `null`. */
 function sessionIdOf(accessToken: string): string | null {
   try {
     return accessTokenClaims.parse(decodeJwt(accessToken)).sid
@@ -114,6 +120,6 @@ export async function finishCentralSignIn(
   const response = NextResponse.redirect(redeem, {
     headers: { 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer' },
   })
-  response.cookies.set(cookie.name, '', { ...cookie.options, maxAge: 0 })
+  clearCookie(response.cookies, cookie)
   return response
 }

@@ -30,9 +30,9 @@ export function createAnonymousCaller() {
 }
 
 /**
- * A caller authenticated as a WorkOS AuthKit workshop attendee (NOT a NextAuth
- * speaker). Mirrors what `createTRPCContext` derives from the sealed
- * `wos-session` cookie, so workshop-router authz can be exercised directly.
+ * A caller signed in as a workshop attendee (NOT a NextAuth speaker). Mirrors
+ * what `createTRPCContext` derives from the portal's sealed session cookie, so
+ * workshop-router authz can be exercised directly.
  */
 export function createWorkshopCaller(
   workosUser?: Partial<import('@/server/trpc').WorkshopUserIdentity>,

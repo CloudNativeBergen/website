@@ -541,6 +541,12 @@ describe('workshop portal — signed-in attendee', () => {
 
     it('with a session copied from another proven host', async () => {
       proven('other.example.org')
+      // CONTROL: on that host, the session it was issued for counts.
+      on('other.example.org')
+      await signedInAs(ADA, { host: 'other.example.org' })
+      expect(await isSignedOut()).toBe(false)
+
+      on(HOST)
       await signedInAs(ADA, { host: 'other.example.org' })
 
       expect(await isSignedOut()).toBe(true)

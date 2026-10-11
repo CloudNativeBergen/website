@@ -9,7 +9,9 @@ import {
   notFound,
   resolveTenantHost,
   toPortal,
+  type RedeemRefusal,
 } from './decision'
+import { clearCookie } from './cookies'
 import { handOffSchema } from './handoff'
 import { seal, unseal } from './seal'
 import {
@@ -48,7 +50,7 @@ export async function redeemWorkshopHandOff(
   request: NextRequest,
 ): Promise<NextResponse> {
   if (isAuthHost(request.headers)) return notFound()
-  const refused = (reason: string) => {
+  const refused = (reason: RedeemRefusal) => {
     logRefusal('redeem', reason)
     return toPortal(WORKSHOP_SIGN_IN_INCOMPLETE_QUERY)
   }
@@ -87,6 +89,6 @@ export async function redeemWorkshopHandOff(
     ),
     { ...session.options, maxAge: SESSION_TTL_SECONDS },
   )
-  response.cookies.set(signIn.name, '', { ...signIn.options, maxAge: 0 })
+  clearCookie(response.cookies, signIn)
   return response
 }

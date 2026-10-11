@@ -28,7 +28,7 @@ export interface WorkshopUserIdentity {
    * matched on, so an unverified one proves nothing about who holds the ticket.
    */
   emailVerified: boolean
-  name?: string | null
+  name: string | null
 }
 
 /**

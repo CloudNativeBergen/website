@@ -97,11 +97,24 @@ describe('seal', () => {
     expect(await unseal('handoff', value, payload)).toBeNull()
   })
 
-  it('does not seal without a password of at least 32 characters', async () => {
-    vi.stubEnv('WORKOS_COOKIE_PASSWORD', 'too short')
+  it.each([
+    ['too short', 'too short'],
+    ['missing', ''],
+  ])(
+    'neither seals nor unseals with a password that is %s, and says which variable',
+    async (_label, password) => {
+      const sealed = await seal('handoff', { host: 'a.example.org' }, 60)
+      vi.stubEnv('WORKOS_COOKIE_PASSWORD', password)
 
-    await expect(
-      seal('handoff', { host: 'a.example.org' }, 60),
-    ).rejects.toThrow(/WORKOS_COOKIE_PASSWORD/)
-  })
+      await expect(
+        seal('handoff', { host: 'a.example.org' }, 60),
+      ).rejects.toThrow(/WORKOS_COOKIE_PASSWORD/)
+      // Not `null`: that would read as a seal someone tampered with.
+      await expect(unseal('handoff', sealed, payload)).rejects.toThrow(
+        /WORKOS_COOKIE_PASSWORD/,
+      )
+      // Nothing to unseal is still nothing, whatever the configuration.
+      expect(await unseal('handoff', null, payload)).toBeNull()
+    },
+  )
 })

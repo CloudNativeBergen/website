@@ -8,13 +8,25 @@ import {
 import { isWorkshopsEnabledForConference } from '@/lib/features/workshops'
 import { WORKSHOP_PORTAL_PATH } from '../sign-in-paths'
 
-export interface CentralSignIn {
+/** A host that may sign in, and the auth host it signs in through. */
+export interface SignInHost {
   /** `scheme://host[:port]` of the auth host: where WorkOS calls back. */
   authOrigin: string
   destination: ProvenDestination
 }
 
-/** A refusal on the auth host is a 404, whatever the reason. */
+/** `destination` with its auth host: itself when the variable is unset. */
+function signInHost(
+  configured: URL | 'unset',
+  destination: ProvenDestination,
+): SignInHost {
+  return {
+    authOrigin: configured === 'unset' ? destination.origin : configured.origin,
+    destination,
+  }
+}
+
+/** A refusal that shows nothing: a 404, whatever the reason. */
 export function notFound(): NextResponse {
   return new NextResponse('Not Found', { status: 404 })
 }
@@ -22,11 +34,28 @@ export function notFound(): NextResponse {
 /**
  * Say in the log why a step of a sign-in refused. The attendee is never told
  * (a 404, or one neutral line), so this is the only place the reason exists.
- * `reason` is one of a fixed set of words, never a value from the request.
+ * The reason is one of a fixed set of words, never a value from the request.
  */
-export function logRefusal(step: 'callback' | 'redeem', reason: string): void {
+export function logRefusal(
+  ...[step, reason]:
+    | [step: 'callback', reason: CallbackRefusal]
+    | [step: 'redeem', reason: RedeemRefusal]
+): void {
   console.warn(`[workshop] ${step} refused: ${reason}`)
 }
+
+/** Why the callback refuses: the words `logRefusal` writes. */
+export type CallbackRefusal =
+  'no-state' | 'no-code' | 'no-cookie' | 'host-refused' | 'conference-changed'
+
+/** Why redeem refuses. */
+export type RedeemRefusal =
+  | 'no-hand-off'
+  | 'no-cookie'
+  | 'other-host'
+  | 'host-refused'
+  | 'conference-changed'
+  | 'no-workshops'
 
 /**
  * To the portal page, by a path nothing in the request chooses. `suffix` is a
@@ -105,7 +134,7 @@ export function isAuthHost(headers: {
 export async function resolveCentralSignIn(
   headers: { get(name: string): string | null },
   host: string | null | undefined,
-): Promise<CentralSignIn | null> {
+): Promise<SignInHost | null> {
   const configured = configuredAuthOrigin()
   if (configured === 'invalid') return null
   const authHost =
@@ -118,16 +147,7 @@ export async function resolveCentralSignIn(
   if (!(await isWorkshopsEnabledForConference(destination.conference))) {
     return null
   }
-  return {
-    authOrigin: configured === 'unset' ? destination.origin : configured.origin,
-    destination,
-  }
-}
-
-export interface TenantHost {
-  /** `scheme://host[:port]` of the auth host this host signs in through. */
-  authOrigin: string
-  destination: ProvenDestination
+  return signInHost(configured, destination)
 }
 
 /**
@@ -147,16 +167,12 @@ export interface TenantHost {
  */
 export async function resolveTenantHost(headers: {
   get(name: string): string | null
-}): Promise<TenantHost | null> {
+}): Promise<SignInHost | null> {
   const configured = configuredAuthOrigin()
   if (configured === 'invalid') return null
   const requestHost = normalizeDomain(headers.get('host') ?? '')
   if (configured !== 'unset' && requestHost === configured.host) return null
 
   const destination = await resolveProvenDestination(requestHost)
-  if (!destination) return null
-  return {
-    authOrigin: configured === 'unset' ? destination.origin : configured.origin,
-    destination,
-  }
+  return destination && signInHost(configured, destination)
 }

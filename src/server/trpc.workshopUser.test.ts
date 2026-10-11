@@ -217,6 +217,12 @@ describe('createTRPCContext: no attendee', () => {
 
   it('with a session copied to another proven host', async () => {
     const cookie = await signedIn(HOST)
+    // CONTROL: that host admits a session of its own.
+    const own = await signedIn(OTHER)
+    expect(
+      (await createTRPCContext({ req: request(own, { host: OTHER }) }))
+        .workosUser,
+    ).toMatchObject({ id: 'user_01' })
 
     const ctx = await createTRPCContext({
       req: request(cookie, { host: OTHER }),

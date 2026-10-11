@@ -9,8 +9,9 @@ import { GET as redeemRoute } from '@/app/(workshop)/workshop/redeem/route'
 /**
  * A workshop sign-in as a browser carries it through the REAL routes (#1311):
  * the tenant host's sign-in route, the auth host's start route and its
- * callback, and the tenant host's redeem route. A suite that imports this mocks the boundaries itself (the record
- * read, the feature gate, WorkOS's token endpoint); nothing here is a stand-in.
+ * callback, and the tenant host's redeem route. A suite that imports this
+ * mocks the boundaries itself (the record read, the feature gate, WorkOS's
+ * token endpoint); nothing here is a stand-in.
  */
 
 function get(url: string | URL, host: string, cookie?: string | null) {
