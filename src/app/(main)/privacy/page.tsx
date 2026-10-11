@@ -419,7 +419,7 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                               The portal's session is the platform's own cookie
                               (#1311): what it holds and how long it lasts come
                               from `src/lib/workshop/central-sign-in/session.ts`,
-                              and `__tests__/app/privacy-workshop-session.test.ts`
+                              and `__tests__/app/legal-subprocessor-disclosure.test.tsx`
                               pins this wording to that module. Gated like the
                               identifier above: no WorkOS, no sign-in cookie.
                             */}

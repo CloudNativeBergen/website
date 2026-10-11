@@ -50,6 +50,12 @@ vi.mock('@/lib/sponsor-crm/sanity', () => ({
 }))
 
 import PrivacyPage from '@/app/(main)/privacy/page'
+import {
+  SESSION_TTL_SECONDS,
+  sessionSchema,
+  type WorkshopSession,
+} from '@/lib/workshop/central-sign-in/session'
+import { START_TTL_SECONDS } from '@/lib/workshop/central-sign-in/start-seals'
 import TermsPage from '@/app/(main)/terms/page'
 
 const PLATFORM_ORG = 'organization-platform'
@@ -342,6 +348,87 @@ describe('the workshop login is shared across conferences (#1299)', () => {
     expect(html).toContain(CHECKIN)
     expect(html).not.toContain(SHARED_LOGIN)
     expect(html.toLowerCase()).not.toContain('one login for every conference')
+  })
+})
+
+describe('the workshop portal’s own sign-in cookie (#1316)', () => {
+  /** The plain words /privacy uses for each field the session seals. */
+  const DISCLOSED: Record<keyof WorkshopSession, RegExp> = {
+    userId: /WorkOS User ID/,
+    email: /email address/,
+    emailVerified: /whether (?:WorkOS reports that address as|it is) verified/,
+    name: /your name/,
+    sessionId: /WorkOS session ID/,
+    host: /the site and conference it was issued for/,
+    conferenceId: /site and conference it was issued for/,
+  }
+  const days = SESSION_TTL_SECONDS / 86_400
+
+  /** The two places the page describes the cookies, as rendered text. */
+  function passages(html: string): Record<string, string | undefined> {
+    return {
+      'the data list': html.match(/A sign-in cookie on this site[^<]*/)?.[0],
+      'the cookies section': html.match(
+        /<strong>Workshop sign-in:<\/strong>[^<]*/,
+      )?.[0],
+    }
+  }
+
+  it('tells a workshop participant how long it lasts and every field it holds, in both places', async () => {
+    world()
+
+    const html = await renderPrivacy()
+
+    for (const [where, passage] of Object.entries(passages(html))) {
+      expect(passage, where).toContain(`kept for ${days} days`)
+      for (const field of Object.keys(sessionSchema.shape)) {
+        expect(passage, `${where} names ${field}`).toMatch(
+          DISCLOSED[field as keyof WorkshopSession],
+        )
+      }
+    }
+    expect(html).toContain(
+      `The sign-in cookie on this site expires ${days} days after you sign in, or when you sign out.`,
+    )
+  })
+
+  it('promises no shorter a life for the cookies of a sign-in in progress than the code gives them', async () => {
+    world()
+
+    const html = await renderPrivacy()
+
+    const words: Record<string, number> = { five: 5, ten: 10, fifteen: 15 }
+    for (const [where, passage] of Object.entries(passages(html))) {
+      const promised = passage?.match(/expire within (\w+) minutes/)?.[1]
+      // The longest of them is the sign-in's own; the sign-out's five minutes
+      // are pinned on its `Set-Cookie` line in the sign-out suite.
+      expect(words[promised ?? ''] * 60, where).toBeGreaterThanOrEqual(
+        START_TTL_SECONDS,
+      )
+    }
+  })
+
+  it('says nothing about it to a tenant that has no workshop sign-in', async () => {
+    world({
+      conference: conference({
+        organization: { _ref: OTHER_ORG, _type: 'reference' },
+      }),
+      organization: organization({
+        _id: OTHER_ORG,
+        name: 'Acme Events',
+        plan: 'community',
+      }),
+    })
+
+    const html = await renderPrivacy()
+
+    // The real policy rendered, with this tenant's own vendor on it.
+    expect(html).toContain(CHECKIN)
+    expect(passages(html)).toEqual({
+      'the data list': undefined,
+      'the cookies section': undefined,
+    })
+    expect(html).not.toContain('sign-in cookie')
   })
 })
 

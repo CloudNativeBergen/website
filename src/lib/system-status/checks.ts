@@ -18,6 +18,7 @@ import { BADGE_GENERATOR_VERSION } from '@/lib/badge/version'
 import { listDomainVerificationViews } from '@/lib/domain-verification'
 import { isWorkshopsEnabledForConference } from '@/lib/features/workshops'
 import { workshopSignInLabel } from '@/lib/domain-verification/sign-in-labels'
+import { normalizeDomain } from '@/lib/conference/domains'
 import { authOrigin } from '@/lib/workshop/central-sign-in/decision'
 import { conferenceSenders } from '@/lib/email/from'
 import { describeSenderPolicy } from '@/lib/email/sender-policy'
@@ -125,7 +126,9 @@ function presenceCheck(
  * redirect. That is right only for a single-domain installation. In
  * development it is the normal setup and stays `ok`.
  */
-function workshopAuthOriginCheck(): SystemCheck {
+function workshopAuthOriginCheck(
+  domains: readonly string[] | null | undefined,
+): SystemCheck {
   const meta: CheckMeta = {
     id: 'auth.workshopAuthOrigin',
     group: 'auth',
@@ -157,6 +160,17 @@ function workshopAuthOriginCheck(): SystemCheck {
           detail:
             'Each host signs attendees in on itself, which is the normal local development setup.',
         }
+  }
+  // The sign-in decision refuses the auth host as a tenant host
+  // (`resolveTenantHost`): a conference served on it has no portal there.
+  if ((domains ?? []).some((d) => normalizeDomain(d) === configured.host)) {
+    return {
+      ...meta,
+      status: 'error',
+      value: configured.origin,
+      detail:
+        'This is one of this conference’s own domains. The sign-in host serves no conference, so the workshop portal is not available on it. Use a host of its own.',
+    }
   }
   return {
     ...meta,
@@ -537,7 +551,7 @@ function buildChecks(conference: ConferenceForSystemChecks): SystemCheck[] {
       : 'Optional central OAuth origin (#619) for serving multiple domains from one OAuth app',
   })
 
-  checks.push(workshopAuthOriginCheck())
+  checks.push(workshopAuthOriginCheck(conference.domains))
 
   // ---- EMAIL ----------------------------------------------------------------
   checks.push(

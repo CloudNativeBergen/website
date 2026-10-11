@@ -105,6 +105,27 @@ describe('collectStaticChecks — workshop auth origin', () => {
     expect(check.value).toBe('https://auth.example.org')
   })
 
+  it('is an error when the origin is one of the conference’s own domains', () => {
+    vi.stubEnv('WORKSHOP_AUTH_ORIGIN', 'https://auth.example.org')
+    const own = {
+      ...CONFERENCE,
+      domains: ['conf.example.org', 'Auth.Example.org'],
+    }
+    // Another conference on the same deployment is not affected.
+    expect(
+      byId(
+        collectStaticChecks({ ...CONFERENCE, domains: ['conf.example.org'] }),
+        'auth.workshopAuthOrigin',
+      ).status,
+    ).toBe('ok')
+
+    const check = byId(collectStaticChecks(own), 'auth.workshopAuthOrigin')
+
+    expect(check.status).toBe('error')
+    expect(check.value).toBe('https://auth.example.org')
+    expect(check.detail).toContain('one of this conference’s own domains')
+  })
+
   it('reports unset as the normal setup in development', () => {
     vi.stubEnv('NODE_ENV', 'development')
     vi.stubEnv('WORKSHOP_AUTH_ORIGIN', undefined)
