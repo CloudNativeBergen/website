@@ -20,6 +20,13 @@ Failed to compile.
 Type error: Object literal may only specify known properties, and 'uncached' does not exist in type
 `
 
+/** The nearest miss: the same error, for a module of the application's own. */
+const MODULE_NOT_FOUND = `
+> Build error occurred
+Error: Turbopack build failed with 1 errors:
+Error: Module not found: Can't resolve '@/lib/workshop/missing'
+`
+
 describe('isFontFetchFailure', () => {
   it('recognises a Google Font that could not be downloaded', () => {
     expect(isFontFetchFailure(FONT_FETCH_FAILED)).toBe(true)
@@ -27,6 +34,7 @@ describe('isFontFetchFailure', () => {
 
   it('does not take any other build failure for one', () => {
     expect(isFontFetchFailure(TYPE_ERROR)).toBe(false)
+    expect(isFontFetchFailure(MODULE_NOT_FOUND)).toBe(false)
     expect(isFontFetchFailure('')).toBe(false)
   })
 })
@@ -47,5 +55,6 @@ describe('afterAttempt', () => {
 
   it('never builds again after a real failure', () => {
     expect(afterAttempt(1, 1, TYPE_ERROR)).toBe('fail')
+    expect(afterAttempt(1, 1, MODULE_NOT_FOUND)).toBe('fail')
   })
 })
