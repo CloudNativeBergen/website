@@ -79,8 +79,15 @@ export function SignupDetailsModal({
       header: 'Signup Date',
       render: (signup) => {
         const dateStr = signup.signedUpAt || signup._createdAt
-        if (!dateStr || typeof dateStr !== 'string') return 'N/A'
-        return formatDateSafe(dateStr)
+        // An explicit colour: the cell otherwise inherits the page's, which is
+        // black on this dark surface when the theme is dark and the OS is not.
+        return (
+          <span className="text-gray-900 dark:text-gray-200">
+            {!dateStr || typeof dateStr !== 'string'
+              ? 'N/A'
+              : formatDateSafe(dateStr)}
+          </span>
+        )
       },
     },
     {
