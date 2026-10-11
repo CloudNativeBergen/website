@@ -50,8 +50,8 @@ Holders, confirmed, waitlist only and not signed up always satisfy
 `holders = confirmed + waitlist only + not signed up`. Flagged people are outside all four.
 
 **The rule and the control disagree on one case today, and this work closes it.** For a type whose
-entry carries only the seating answer (`admits`), `workshopAccessOf` answers `denied`, while the
-control shows "Not set". Such a holder is told to upgrade their ticket when the real cause is a
+entry carries only the seating answer (`admits`), `workshopAccessOf` answers `denied` on a conference that has marked a type, while the control
+shows "Not set". Such a holder is told to upgrade their ticket when the real cause is a
 decision nobody made. After this work `workshopAccessOf` answers `unclassified` for an entry with
 no workshop answer, as it does for a type with no entry. Nobody gains or loses access by it: both
 answers refuse. The refusal text changes to the one that names the missing decision, and the type
@@ -93,7 +93,7 @@ press sends cannot be computed two ways.
   people by WorkOS id across confirmed and waitlisted sign-ups; the new numbers count people by
   email.
 - **Flagged opens a list**: name, email and workshops, with the remove action the page already
-  has ("Delete signup"). People an organizer added by hand are in it like anyone else; a
+  has (the "Delete participant" button and its "Delete signup" confirmation). People an organizer added by hand are in it like anyone else; a
   sign-up does not record how it was made.
 - **Nothing is cancelled automatically.** A sign-up whose owner no longer holds a workshop ticket
   (the type was unmarked, the ticket refunded or changed) stays, and its owner is flagged.
@@ -140,8 +140,8 @@ earliest waitlisted sign-ups and emails them, so a person who backed out can be 
 - **Recipients** are the not-signed-up group of §2, read fresh at the moment of sending. Waitlist
   only is not in it.
 - **Refusals stay**: no portal link, registration closed, the ticket provider or the email sender
-  unavailable, and at most one send an hour per conference. As today, a press that sent nothing
-  does not use up the hour.
+  unavailable, and at most one send an hour per conference. As today, a press confirmed to have
+  reached nobody does not use up the hour; one whose sends went unanswered keeps it.
 - **Wording.** The email says that the ticket includes workshops and that the recipient has no
   seat yet, a statement about the ticket that stays true for someone who signs up between the
   press and the read. The instructions email has three registration states today (before the
@@ -180,7 +180,7 @@ A new notification tells organizers that a ticket type has no decision and links
 - **Sign-ups cancelled before §6 ships** stay on the waitlist; they cannot be told from people
   waiting, and a capacity increase can still confirm them.
 - **`workshop.admin.batchCancelSignups` keeps a name that says cancel and a behaviour that
-  waitlists.** Nothing in this repository calls it. Whether it is removed or renamed is open; a
+  waitlists.** No production code in this repository calls it; two tenancy tests exercise it. Whether it is removed or renamed is open; a
   caller outside the repository was not ruled out.
 - **Organizer-added sign-ups are flagged** when their email holds no workshop ticket. This is by
   decision: the flagged number does not separate deliberate additions.
