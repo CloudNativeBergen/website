@@ -29,6 +29,8 @@ import type { SanityStore } from '../../../__tests__/helpers/sanityStore'
 const h = vi.hoisted(() => ({
   store: null as unknown as SanityStore,
   tasks: [] as (() => Promise<void>)[],
+  /** Make scheduling the after-response work itself throw. */
+  schedulingFails: false,
   resolveTicketingProvider: vi.fn(),
 }))
 vi.mock('@/lib/sanity/client', async () => {
@@ -48,6 +50,7 @@ vi.mock('@/lib/push/send', () => ({
 }))
 vi.mock('@/server/runAfterResponse', () => ({
   runAfterResponse: (task: () => Promise<void>) => {
+    if (h.schedulingFails) throw new Error('nothing can be scheduled')
     h.tasks.push(task)
   },
 }))
@@ -137,6 +140,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   vi.spyOn(console, 'error').mockImplementation(() => {})
   h.tasks.length = 0
+  h.schedulingFails = false
   h.store.reset(DATASET)
   __resetNotSetNoticeMemo()
   __resetRedeemedCache()
@@ -317,6 +321,16 @@ describe('when the notification cannot be written', () => {
 
     // And the next request is refused the same way.
     expect((await refuse('ada@x.test')).reason).toBe(NOT_SET_REFUSAL)
+  })
+
+  it('gives the attendee the same refusal when raising it throws outright', async () => {
+    holding(['ada@x.test', 'Early Bird'])
+    h.schedulingFails = true
+
+    const result = await refuse('ada@x.test')
+
+    expect(result.reason).toBe(NOT_SET_REFUSAL)
+    expect(result.tickets).toHaveLength(1)
   })
 
   it('does not try again on every refused request, and does try again later', async () => {

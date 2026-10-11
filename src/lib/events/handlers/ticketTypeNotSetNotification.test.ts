@@ -164,13 +164,14 @@ describe('handleTicketTypeNotSetNotification', () => {
 
   it('gives the same type name on another conference its own notifications', async () => {
     await handleTicketTypeNotSetNotification(event('Early Bird'))
-    await handleTicketTypeNotSetNotification(event('Early Bird', 'conf-b'))
+    // `sp-anna` organizes both editions: she gets one for each.
+    await handleTicketTypeNotSetNotification(event('Early Bird', 'conf-a-2025'))
 
-    const forB = notifications().filter(
-      (doc) => (doc.conference as { _ref: string })._ref === 'conf-b',
+    const forEarlier = notifications().filter(
+      (doc) => (doc.conference as { _ref: string })._ref === 'conf-a-2025',
     )
-    expect(recipientsOf(forB)).toEqual(['sp-bea'])
-    expect(notifications()).toHaveLength(3)
+    expect(recipientsOf(forEarlier)).toEqual(['sp-anna', 'sp-former'])
+    expect(notifications()).toHaveLength(4)
   })
 
   it('pushes to the organizers it wrote a notification for, and to nobody on a repeat', async () => {

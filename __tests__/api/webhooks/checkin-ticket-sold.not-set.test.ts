@@ -23,6 +23,8 @@ import type { SanityStore } from '../../helpers/sanityStore'
 const h = vi.hoisted(() => ({
   store: null as unknown as SanityStore,
   tasks: [] as (() => Promise<void>)[],
+  /** Make scheduling the after-response work itself throw. */
+  schedulingFails: false,
   getConference: vi.fn(),
   getTenant: vi.fn(),
   getOrganizationById: vi.fn(),
@@ -49,6 +51,7 @@ vi.mock('@/lib/push/send', () => ({
 }))
 vi.mock('@/server/runAfterResponse', () => ({
   runAfterResponse: (task: () => Promise<void>) => {
+    if (h.schedulingFails) throw new Error('nothing can be scheduled')
     h.tasks.push(task)
   },
 }))
@@ -170,6 +173,7 @@ beforeEach(() => {
   vi.spyOn(console, 'error').mockImplementation(() => {})
   vi.spyOn(console, 'warn').mockImplementation(() => {})
   h.tasks.length = 0
+  h.schedulingFails = false
   h.store.reset(Object.values(CONFERENCES))
   __resetNotSetNoticeMemo()
 
@@ -375,5 +379,15 @@ describe('the answer to Checkin', () => {
     const next = await sale(['Workshop day', 'Early Bird'])
     expect(next.status).toBe(200)
     expect(await next.json()).toEqual(ANSWER)
+  })
+
+  it('is the same when raising the notification throws outright', async () => {
+    h.schedulingFails = true
+
+    const response = await sale(['Workshop day', 'Early Bird'])
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual(ANSWER)
+    expect(h.sendWorkshop).toHaveBeenCalledTimes(1)
   })
 })
