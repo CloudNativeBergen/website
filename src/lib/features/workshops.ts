@@ -29,15 +29,15 @@ import { canReadTicketsForOrg, isTicketingEnabledForOrg } from './ticketing'
  * one org on different vendors can differ, and every surface asks with the
  * conference in hand (`isWorkshopsEnabledForConference`) so they agree.
  *
- * There is NO platform-org rule here (#1295). The redirect URI of an attendee
- * sign-in is chosen per request, for the host the attendee is on
- * (`@/lib/workshop/sign-in`), so nothing about workshops belongs to one
- * deployment and the platform org qualifies by plan like any other tenant.
- * THIS GATE AND THAT ONE ARE SEPARATE QUESTIONS: this says a tenant has
- * workshops, the other says one of its hosts can sign in. A tenant this gate
- * turns on, on a host that cannot sign in, gets the unavailable view
- * (`WorkshopUnavailable`, #1298) or is sent to its first domain's portal when
- * that one can.
+ * There is NO platform-org rule here (#1295). An attendee signs in through the
+ * platform's one auth host, which hands the result to whichever host has a
+ * proven verification record (`@/lib/domain-verification/destination`, #1311),
+ * so nothing about workshops belongs to one deployment and the platform org
+ * qualifies by plan like any other tenant. THIS GATE AND THAT ONE ARE SEPARATE
+ * QUESTIONS: this says a tenant has workshops, the other says one of its hosts
+ * can sign in. A tenant this gate turns on, on a host that cannot sign in,
+ * gets the unavailable view (`WorkshopUnavailable`, #1298) or is sent to its
+ * first domain's portal when that one can.
  *
  * What the platform org still holds by identity is TICKETING — the platform
  * env account — which is why it satisfies the second half of the rule with no

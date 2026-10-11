@@ -16,7 +16,7 @@ describe('workshopSignInLabel', () => {
       status: 'warn',
       label: 'domain not verified',
       detail:
-        'Verify the domain before attendees can sign in to workshops on this host.',
+        'Attendees cannot sign in to workshops on this host until the domain is verified. Publish the TXT record shown on the domain card in Settings, then press Check now.',
     })
   })
 })
