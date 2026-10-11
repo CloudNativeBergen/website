@@ -1,0 +1,154 @@
+/**
+ * THE WORKSHOP-TICKET LIST AS AN ORGANIZER SEES IT (#1332).
+ *
+ * Every answer here is decided by `workshopAccessOf`, the rule the portal runs,
+ * so the page cannot show one thing while the gate decides another. The
+ * expected values are written out by hand from the spec's terms (§2), never
+ * recomputed with the rule.
+ */
+import { describe, expect, it } from 'vitest'
+import { buildWorkshopTicketList } from './ticket-list'
+
+const TWO_DAY = 'Workshop + Conference (2 days)'
+const SPEAKER = 'Speaker ticket'
+
+describe('a conference that has marked nothing', () => {
+  it('is not configured, and names what the built-in list grants', () => {
+    const list = buildWorkshopTicketList(['Early Bird', SPEAKER, TWO_DAY], [])
+
+    expect(list.configured).toBe(false)
+    expect(list.builtInGranted).toEqual([SPEAKER, TWO_DAY])
+    expect(list.types).toEqual([
+      { typeName: 'Early Bird', access: 'denied', lastGranting: false },
+      { typeName: SPEAKER, access: 'granted', lastGranting: false },
+      { typeName: TWO_DAY, access: 'granted', lastGranting: false },
+    ])
+    expect(list.orphaned).toEqual([])
+  })
+
+  it('stays not configured on a lone no, and keeps that stored answer', () => {
+    const list = buildWorkshopTicketList(
+      [SPEAKER],
+      [{ typeName: SPEAKER, grantsWorkshop: false }],
+    )
+
+    expect(list.configured).toBe(false)
+    // The built-in list still decides, whatever the stored no says.
+    expect(list.types).toEqual([
+      {
+        typeName: SPEAKER,
+        access: 'granted',
+        stored: false,
+        lastGranting: false,
+      },
+    ])
+  })
+
+  it('has no types to list when the provider returns none', () => {
+    const list = buildWorkshopTicketList([], undefined)
+
+    expect(list).toEqual({
+      configured: false,
+      types: [],
+      builtInGranted: [],
+      orphaned: [],
+    })
+  })
+})
+
+describe('a conference that has marked a type', () => {
+  const roles = [
+    { typeName: 'Workshop dag', grantsWorkshop: true },
+    { typeName: 'Conference only', admits: true, grantsWorkshop: false },
+    { typeName: 'Seating only', admits: true },
+    { typeName: 'Workshop 2025', admits: true, grantsWorkshop: true },
+    { typeName: 'Gone add-on', admits: false },
+  ]
+
+  it('gives each provider type the answer the rule gives its holders', () => {
+    const list = buildWorkshopTicketList(
+      ['  WORKSHOP DAG', 'Conference only', 'Seating only', 'New type', SPEAKER],
+      roles,
+    )
+
+    expect(list.configured).toBe(true)
+    expect(list.types).toEqual([
+      // Matched ignoring case and surrounding space, shown as the provider
+      // spells it.
+      {
+        typeName: '  WORKSHOP DAG',
+        access: 'granted',
+        stored: true,
+        lastGranting: false,
+      },
+      {
+        typeName: 'Conference only',
+        access: 'denied',
+        stored: false,
+        lastGranting: false,
+      },
+      // An entry with only a seating answer, and a type with no entry at all:
+      // both not set.
+      { typeName: 'Seating only', access: 'unclassified', lastGranting: false },
+      { typeName: 'New type', access: 'unclassified', lastGranting: false },
+      // The built-in list is off: its name no longer grants.
+      { typeName: SPEAKER, access: 'unclassified', lastGranting: false },
+    ])
+    // ...but it is still what comes back if the last marked type goes.
+    expect(list.builtInGranted).toEqual([SPEAKER])
+  })
+
+  it('lists an entry no provider type matches, only when it answers the workshop question', () => {
+    const list = buildWorkshopTicketList(['Workshop dag'], roles)
+
+    expect(list.orphaned).toEqual([
+      { typeName: 'Conference only', grantsWorkshop: false, lastGranting: false },
+      { typeName: 'Workshop 2025', grantsWorkshop: true, lastGranting: false },
+    ])
+  })
+
+  it('flags the one type whose answer keeps the conference configured', () => {
+    const list = buildWorkshopTicketList(
+      ['Workshop dag', 'Conference only'],
+      [
+        { typeName: 'workshop dag ', grantsWorkshop: true },
+        { typeName: 'Conference only', grantsWorkshop: false },
+      ],
+    )
+
+    expect(list.types.map((t) => [t.typeName, t.lastGranting])).toEqual([
+      ['Workshop dag', true],
+      ['Conference only', false],
+    ])
+  })
+
+  it('flags an orphaned entry that is the last one granting', () => {
+    const list = buildWorkshopTicketList(
+      ['Workshop 2026'],
+      [
+        { typeName: 'Workshop 2025', grantsWorkshop: true },
+        { typeName: 'Workshop 2026', grantsWorkshop: false },
+      ],
+    )
+
+    expect(list.orphaned).toEqual([
+      { typeName: 'Workshop 2025', grantsWorkshop: true, lastGranting: true },
+    ])
+    expect(list.types[0].lastGranting).toBe(false)
+  })
+
+  it('lists a twice-stored name once, with the answer the rule reads', () => {
+    const list = buildWorkshopTicketList(
+      ['Workshop dag'],
+      [
+        { typeName: 'Workshop dag', grantsWorkshop: true },
+        { typeName: 'Old', grantsWorkshop: false },
+        { typeName: ' old ', grantsWorkshop: true },
+      ],
+    )
+
+    expect(list.orphaned).toEqual([
+      { typeName: 'Old', grantsWorkshop: false, lastGranting: false },
+    ])
+  })
+})

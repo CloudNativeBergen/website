@@ -137,7 +137,10 @@ export const SetWorkshopAccessSchema = z.object({
     .array(
       z.object({
         typeName: z.string().trim().min(1).max(200),
-        grantsWorkshop: z.boolean(),
+        // `null` REMOVES the stored answer, for an entry whose ticket type the
+        // provider no longer lists. The entry stays when it also carries a
+        // seating answer (`admits`), and goes when this was all it held.
+        grantsWorkshop: z.boolean().nullable(),
       }),
     )
     .min(1)
@@ -148,4 +151,10 @@ export const SetWorkshopAccessSchema = z.object({
         updates.length,
       { message: 'Each ticket type may appear only once.' },
     ),
+  /**
+   * The organizer confirmed a save that leaves NO type granting workshop
+   * access, which hands the decision back to the built-in list. Without it
+   * such a save is refused (see `setWorkshopAccess`).
+   */
+  allowBuiltInList: z.boolean().optional(),
 })

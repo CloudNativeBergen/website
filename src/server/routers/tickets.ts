@@ -362,8 +362,15 @@ async function setTicketTypeRoles(
   updates: ReadonlyArray<{
     typeName: string
     admits?: boolean
-    grantsWorkshop?: boolean
+    /** `null` removes the stored answer; `undefined` carries it forward. */
+    grantsWorkshop?: boolean | null
   }>,
+  /**
+   * Refuse a write that takes the LAST granting entry away, unless the
+   * organizer confirmed it. Decided from the same read the patch is
+   * conditioned on, so it holds for the revision that is written.
+   */
+  builtInList: 'allow' | 'refuse' = 'allow',
 ) {
   // PRESERVE THE FIELD THIS CALL IS NOT CHANGING. Each write replaces a whole
   // entry, so a bare `{ typeName, admits }` would silently drop the
@@ -441,6 +448,45 @@ async function setTicketTypeRoles(
         (role) => typeKey(role.typeName) === typeKey(typeName),
       )
 
+    // Each update's whole entry. Absent stays ABSENT: defaulting either field
+    // would turn a question nobody answered into a declaration — the count
+    // would then report itself as blessed by a human who never saw it.
+    const entries = updates.map((u) => {
+      const prior = priorOf(u.typeName)
+      const admits = u.admits ?? prior?.admits
+      const grantsWorkshop =
+        u.grantsWorkshop === null
+          ? undefined
+          : (u.grantsWorkshop ?? prior?.grantsWorkshop)
+      return {
+        typeName: u.typeName,
+        ...(typeof admits === 'boolean' && { admits }),
+        ...(typeof grantsWorkshop === 'boolean' && { grantsWorkshop }),
+      }
+    })
+
+    // THE CLIFF IN THE OTHER DIRECTION. The built-in list decides whenever no
+    // entry grants, so taking the last granting entry away changes who gets in
+    // for every type at once. The page asks before it sends such a save, but
+    // its view can be stale (two organizers each unmarking one of two granting
+    // types), so the question is settled here, against the document itself.
+    const grants = (role: { grantsWorkshop?: boolean }) =>
+      role.grantsWorkshop === true
+    if (
+      builtInList === 'refuse' &&
+      (existing.roles ?? []).some(grants) &&
+      !entries.some(grants) &&
+      !(existing.roles ?? []).some(
+        (role) => grants(role) && !wantedKeys.has(typeKey(role.typeName)),
+      )
+    ) {
+      throw new TRPCError({
+        code: 'PRECONDITION_FAILED',
+        message:
+          'This would leave no ticket type granting workshop access, and the built-in list would decide again. Reload the page and confirm the change.',
+      })
+    }
+
     // Every spelling that has to go: the one being written, plus every stored
     // entry that `typeKey` calls the same type. Without the stored spellings a
     // case variant survives the unset, the insert appends a second entry, and
@@ -452,8 +498,14 @@ async function setTicketTypeRoles(
       if (wantedKeys.has(typeKey(role.typeName))) unsetNames.add(role.typeName)
     }
 
+    // An entry left with NO answer is not written back: a removed workshop
+    // answer on an entry that held nothing else removes the entry.
+    const kept = entries.filter(
+      (entry) => 'admits' in entry || 'grantsWorkshop' in entry,
+    )
+
     try {
-      return await clientWrite
+      const patch = clientWrite
         .patch(conferenceId)
         .ifRevisionId(existing._rev)
         .setIfMissing({ ticketTypeRoles: [] })
@@ -462,25 +514,14 @@ async function setTicketTypeRoles(
             (name) => `ticketTypeRoles[typeName == ${JSON.stringify(name)}]`,
           ),
         )
-        .insert(
+      if (kept.length > 0) {
+        patch.insert(
           'after',
           'ticketTypeRoles[-1]',
-          updates.map((u) => {
-            const prior = priorOf(u.typeName)
-            const admits = u.admits ?? prior?.admits
-            const grantsWorkshop = u.grantsWorkshop ?? prior?.grantsWorkshop
-            return {
-              _key: generateKey('role'),
-              typeName: u.typeName,
-              // Absent stays ABSENT. Defaulting either field would turn a
-              // question nobody answered into a declaration — the count would
-              // then report itself as blessed by a human who never saw it.
-              ...(typeof admits === 'boolean' && { admits }),
-              ...(typeof grantsWorkshop === 'boolean' && { grantsWorkshop }),
-            }
-          }),
+          kept.map((entry) => ({ _key: generateKey('role'), ...entry })),
         )
-        .commit()
+      }
+      return await patch.commit()
     } catch (error) {
       lastError = error
     }
@@ -852,6 +893,12 @@ export const ticketsRouter = router({
      * types over in the same action, and that offer is only honest if the
      * whole set lands together — one patch, one revision, all or nothing.
      *
+     * `grantsWorkshop: null` REMOVES a stored answer (an entry whose ticket
+     * type the provider no longer lists), keeping the entry when it also
+     * carries `admits`. A save that leaves no granting type hands the decision
+     * back to the legacy list, and is refused unless `allowBuiltInList` says
+     * the organizer was asked.
+     *
      * `admits` is never touched here (and never invented): the seating question
      * belongs to `setTicketTypeRole`, and the entry carries whatever it already
      * said. TENANCY is its neighbour's, unchanged — the conference comes from
@@ -861,7 +908,11 @@ export const ticketsRouter = router({
       .input(SetWorkshopAccessSchema)
       .mutation(async ({ input }) => {
         const conferenceId = await resolveConferenceId()
-        const result = await setTicketTypeRoles(conferenceId, input.updates)
+        const result = await setTicketTypeRoles(
+          conferenceId,
+          input.updates,
+          input.allowBuiltInList ? 'allow' : 'refuse',
+        )
 
         revalidateTag('admin:tickets', 'default')
         // The /workshop gate re-reads this field live, but the cached
