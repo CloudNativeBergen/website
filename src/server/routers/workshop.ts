@@ -60,6 +60,7 @@ import {
   getConfirmedAnnouncementRecipients,
   createWorkshopAnnouncement,
   getWorkshopAnnouncements,
+  getAnnouncementsByWorkshop,
   getWorkshopAnnouncementForAuthz,
   updateWorkshopAnnouncementBody,
   deleteWorkshopAnnouncement,
@@ -257,6 +258,25 @@ export const workshopRouter = router({
         })
       }
     }),
+
+  // Every workshop's announcements for the conference of the request, in ONE
+  // read through the CDN host: what the attendee portal shows under its cards.
+  // (`announcements` above reads one workshop, live, for the organizer's view.)
+  announcementsByWorkshop: publicProcedure.query(async () => {
+    const conferenceId = await resolveConferenceId()
+    try {
+      return {
+        success: true,
+        data: await getAnnouncementsByWorkshop(conferenceId),
+      }
+    } catch (error) {
+      throw new TRPCError({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'Failed to fetch workshop announcements',
+        cause: error,
+      })
+    }
+  }),
 
   // Compose + broadcast an announcement to a workshop's CONFIRMED participants.
   // One-way only (no threads/replies): recipients are WorkOS attendees, not

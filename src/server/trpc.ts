@@ -47,9 +47,9 @@ export interface WorkshopUserIdentity {
  * the page. No session resolves to `null`, and a procedure's own guard decides
  * (UNAUTHORIZED for workshop signup/cancel).
  *
- * ONLY FOR `workshop.*` (see {@link namesWorkshopProcedure}): the decision is a
- * live Sanity read, and the cookie rides on every tRPC request this browser
- * makes for a week.
+ * ONLY FOR THE ATTENDEE PROCEDURES (see {@link namesAttendeeProcedure}): the
+ * decision is a live Sanity read, and the cookie rides on every tRPC request
+ * this browser makes for a week.
  */
 async function resolveWorkshopUser(
   req: NextRequest,
@@ -57,7 +57,7 @@ async function resolveWorkshopUser(
   if (AppEnvironment.isTestMode) return null
   const sealed = req.cookies.get(sessionCookie().name)?.value
   if (!sealed) return null
-  if (!namesWorkshopProcedure(req)) return null
+  if (!namesAttendeeProcedure(req)) return null
   const session = await readWorkshopSession(req.headers, sealed)
   if (!session) return null
   return {
@@ -69,21 +69,37 @@ async function resolveWorkshopUser(
   }
 }
 
-/** The app-router key the attendee procedures are mounted under. */
-const WORKSHOP_ROUTER_PREFIX = 'workshop.'
+/**
+ * The procedures that read the attendee identity (`ctx.workosUser`), by the
+ * path tRPC puts in the URL. Everything else under `workshop.*` (the list, the
+ * announcements, availability, the organizer's `admin.*`) answers without it.
+ *
+ * A procedure that starts reading the identity MUST be added here, or it sees
+ * `null` and refuses every attendee: closed, but silently. This is a
+ * convention, not something the types enforce. `trpc.workshopUser.test.ts`
+ * checks it against the router's source (every mention of the identity or of
+ * the two helpers that read it), which catches the ways of forgetting it that
+ * were thought of, not every way.
+ */
+const ATTENDEE_PROCEDURES: ReadonlySet<string> = new Set([
+  'workshop.signup',
+  'workshop.cancelSignup',
+  'workshop.getMySignups',
+])
 
 /**
- * Whether this HTTP request names a `workshop.*` procedure — the only
+ * Whether this HTTP request names one of {@link ATTENDEE_PROCEDURES}, the only
  * procedures that consume the attendee identity. tRPC puts the procedure path
  * in the URL (comma-joined for a batch), so this is known before any work.
  *
  * WHY IT EXISTS. The session cookie is host-wide and lasts a week, so without
  * this a browser that once signed in to the portal would spend one live record
  * read on every tRPC request it makes on that host — an organizer's entire
- * admin session included. Fail closed: a request
- * that names none gets no attendee, and a workshop procedure would refuse it.
+ * admin session included, and every view of the portal's own public lists.
+ * Fail closed: a request that names none gets no attendee, and an attendee
+ * procedure would refuse it.
  */
-function namesWorkshopProcedure(req: NextRequest): boolean {
+function namesAttendeeProcedure(req: NextRequest): boolean {
   const marker = '/api/trpc/'
   const { pathname } = req.nextUrl
   const at = pathname.indexOf(marker)
@@ -96,7 +112,7 @@ function namesWorkshopProcedure(req: NextRequest): boolean {
   }
   return procedures
     .split(',')
-    .some((procedure) => procedure.startsWith(WORKSHOP_ROUTER_PREFIX))
+    .some((procedure) => ATTENDEE_PROCEDURES.has(procedure))
 }
 
 export async function createTRPCContext(opts: { req: NextRequest }) {
