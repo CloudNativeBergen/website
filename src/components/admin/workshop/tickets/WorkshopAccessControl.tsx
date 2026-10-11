@@ -188,6 +188,7 @@ export function WorkshopAccessControl({
         disabled={mutation.isPending}
         label="Grants workshop access"
         typeName={typeName}
+        inRow={!!row}
       />
       <AccessButton
         onClick={() => click(false)}
@@ -195,6 +196,7 @@ export function WorkshopAccessControl({
         disabled={mutation.isPending}
         label="No workshop access"
         typeName={typeName}
+        inRow={!!row}
       />
     </>
   )
@@ -372,12 +374,15 @@ function AccessButton({
   disabled,
   label,
   typeName,
+  inRow,
 }: {
   onClick: () => void
   selected: boolean
   disabled: boolean
   label: string
   typeName: string
+  /** In a list row the pair sits beside the name and keeps to one line. */
+  inRow: boolean
 }) {
   return (
     <button
@@ -390,6 +395,8 @@ function AccessButton({
       // it: at phone width both labels wrap, and a centred wrap next to a
       // one-line neighbour reads as two unrelated controls.
       className={`min-h-11 flex-1 basis-40 rounded-md px-3 py-2 text-left text-sm font-medium ring-1 transition-colors disabled:opacity-50 sm:max-w-60 ${
+        inRow ? 'sm:flex-none sm:basis-auto sm:whitespace-nowrap' : ''
+      } ${
         selected
           ? 'bg-blue-600 text-white ring-blue-600'
           : 'bg-white text-gray-700 ring-gray-300 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-200 dark:ring-gray-600 dark:hover:bg-gray-700'
