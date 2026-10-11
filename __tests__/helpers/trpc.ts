@@ -46,8 +46,7 @@ export function createWorkshopCaller(
       id: workosUser?.id ?? 'workos-user-1',
       email: workosUser?.email ?? 'attendee@example.com',
       emailVerified: workosUser?.emailVerified ?? true,
-      firstName: workosUser?.firstName ?? 'Test',
-      lastName: workosUser?.lastName ?? 'Attendee',
+      name: workosUser?.name ?? 'Test Attendee',
     },
     ipAddress: '127.0.0.1',
   })

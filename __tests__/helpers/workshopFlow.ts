@@ -4,11 +4,12 @@ import { expect } from 'vitest'
 import { GET as signInRoute } from '@/app/(workshop)/workshop/sign-in/route'
 import { GET as startRoute } from '@/app/api/auth/workshop/start/route'
 import { GET as callbackRoute } from '@/app/api/auth/callback/route'
+import { GET as redeemRoute } from '@/app/(workshop)/workshop/redeem/route'
 
 /**
  * A workshop sign-in as a browser carries it through the REAL routes (#1311):
  * the tenant host's sign-in route, the auth host's start route and its
- * callback. A suite that imports this mocks the boundaries itself (the record
+ * callback, and the tenant host's redeem route. A suite that imports this mocks the boundaries itself (the record
  * read, the feature gate, WorkOS's token endpoint); nothing here is a stand-in.
  */
 
@@ -110,4 +111,15 @@ export async function handOff(host: string, on: string): Promise<HandOff> {
     token: redeemUrl.searchParams.get('token')!,
     browser: flow.browser,
   }
+}
+
+/**
+ * A whole sign-in on `host` through the auth host `on`. Answers the session
+ * cookie as the browser then sends it: `name=value`.
+ */
+export async function signIn(host: string, on: string): Promise<string> {
+  const { redeemUrl, browser } = await handOff(host, on)
+  const response = await redeemRoute(get(redeemUrl, host, browser))
+  expect(response.headers.get('location')).toBe('/workshop')
+  return firstCookie(response)
 }

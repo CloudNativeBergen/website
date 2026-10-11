@@ -217,8 +217,7 @@ describe('workshop.signup identity binding', () => {
     const caller = createWorkshopCaller({
       id: 'workos-real',
       email: 'real@example.com',
-      firstName: 'Real',
-      lastName: 'User',
+      name: 'Real User',
     })
 
     // A malicious client tries to smuggle another person's identity in. The
