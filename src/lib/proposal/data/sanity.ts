@@ -1,5 +1,6 @@
 import { ProposalExisting, ProposalInput, Status } from '@/lib/proposal/types'
 import {
+  clientReadCached,
   clientReadUncached as clientRead,
   clientWrite,
 } from '@/lib/sanity/client'
@@ -1100,7 +1101,10 @@ export async function getWorkshops({
     } | order(date asc)`
 
     try {
-      const schedules = await clientRead.fetch(
+      // Through the CDN host: when and where a workshop takes place changes
+      // rarely, and a view may be some seconds behind an edit. Capacity and
+      // signups, read above, stay live.
+      const schedules = await clientReadCached.fetch(
         scheduleQuery,
         { conferenceId },
         { cache: 'no-store' },

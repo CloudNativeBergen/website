@@ -19,6 +19,8 @@
  * is supplied; the real decision runs.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { readFileSync, readdirSync } from 'node:fs'
+import { join } from 'node:path'
 import { NextRequest } from 'next/server'
 import type { RedirectUriSyncRow } from '@/lib/domain-verification/types'
 import {
@@ -323,16 +325,18 @@ describe('/api/trpc — the route lets the context write response headers', () =
 /**
  * THE READ BUDGET. The `wos-session` cookie is host-wide and lives for 400
  * days, so it rides on EVERY tRPC request from a browser that once signed in to
- * the portal — an organizer's whole admin session included. Only the
- * `workshop.*` procedures consume the attendee identity, so only a request that
- * names one may spend a sign-in standing read (and an AuthKit session check) on it.
+ * the portal — an organizer's whole admin session included. Only three
+ * procedures consume the attendee identity, so only a request that names one
+ * of them may spend a sign-in standing read (and an AuthKit session check) on
+ * it. The portal's public lists (workshops, announcements) are not among them.
  */
-describe('createTRPCContext — only workshop procedures resolve the attendee', () => {
+describe('createTRPCContext — only the attendee procedures resolve the attendee', () => {
   it.each([
-    ['a single workshop procedure', 'workshop.getMySignups'],
-    ['a batch that includes one', 'conference.getCurrent,workshop.list'],
-    ['a batch of several', 'workshop.list,workshop.getMySignups'],
-    ['a nested workshop procedure', 'workshop.admin.getAllSignups'],
+    ['the attendee’s own signups', 'workshop.getMySignups'],
+    ['a signup', 'workshop.signup'],
+    ['a cancellation', 'workshop.cancelSignup'],
+    ['the portal’s first batch', 'workshop.list,workshop.getMySignups'],
+    ['a batch that ends with one', 'conference.getCurrent,workshop.signup'],
     ['a percent-encoded batch', 'conference.getCurrent%2Cworkshop.signup'],
   ])('resolves it for %s', async (_label, procedures) => {
     const ctx = await createTRPCContext({
@@ -345,8 +349,20 @@ describe('createTRPCContext — only workshop procedures resolve the attendee', 
   it.each([
     ['an unrelated procedure', 'sponsor.crm.list'],
     ['an unrelated batch', 'notification.list,conference.getCurrent'],
-    ['a router that merely starts with the same letters', 'workshopping.list'],
-    ['a procedure that merely mentions it', 'admin.workshop.list'],
+    ['the workshop list', 'workshop.list'],
+    ['the portal’s announcements', 'workshop.announcementsByWorkshop'],
+    ['one workshop’s announcements', 'workshop.announcements'],
+    [
+      'a batch of public workshop reads',
+      'workshop.list,workshop.getAvailability',
+    ],
+    ['the organizer’s workshop procedures', 'workshop.admin.getAllSignups'],
+    ['a procedure whose name only starts like one', 'workshop.signupStats'],
+    ['a procedure whose name only ends like one', 'admin.workshop.signup'],
+    [
+      'a router that merely starts with the same letters',
+      'workshopping.signup',
+    ],
     ['an empty path', ''],
   ])(
     'spends nothing on %s — no sign-in standing read, no AuthKit call',
@@ -363,26 +379,146 @@ describe('createTRPCContext — only workshop procedures resolve the attendee', 
 })
 
 /**
- * The prefilter above is only sound while the attendee procedures live under
- * the `workshop` key of the app router. If that router is ever mounted
- * elsewhere, every attendee would be refused at the API (fail closed, but
- * silently). A NEW consumer of `ctx.workosUser` outside `workshop.*` is not
- * caught here; it would see `null` and refuse.
+ * The prefilter above names the attendee procedures one by one. A procedure
+ * that starts reading `ctx.workosUser` without being named there would see
+ * `null` and refuse every attendee (fail closed, but silently), so the list
+ * is held to the source: every reader, and nothing else.
  */
 describe('the prefilter’s premise', () => {
-  it('holds: every attendee procedure is named `workshop.*`', async () => {
+  const SRC = join(process.cwd(), 'src')
+  const ROUTER = join(SRC, 'server/routers/workshop.ts')
+  /** Any mention of the identity, or a call of a helper that reads it. */
+  const MENTION =
+    /\bworkosUser\b|\brequireWorkshopUser\(|\brequireWorkshopAttendee\(/g
+
+  interface Region {
+    name: string
+    from: number
+    to: number
+  }
+
+  /** The source of the workshop router, cut into the regions that matter. */
+  function regions(source: string): Region[] {
+    const routerAt = source.indexOf('export const workshopRouter = router({')
+    // The two helpers: from their declaration to the next closing brace at
+    // column zero.
+    const helpers = ['requireWorkshopUser', 'requireWorkshopAttendee'].map(
+      (name) => {
+        const from = source.search(
+          new RegExp(`^(async )?function ${name}\\(`, 'm'),
+        )
+        return { name, from, to: source.indexOf('\n}\n', from) }
+      },
+    )
+    // The router's top-level keys: two spaces of indentation (Prettier's).
+    const keys = [...source.slice(routerAt).matchAll(/^ {2}(\w+)[:,]/gm)]
+    const procedures = keys.map((key, i) => ({
+      name: `workshop.${key[1]}`,
+      from: routerAt + key.index,
+      to: routerAt + (keys[i + 1]?.index ?? source.length - routerAt),
+    }))
+    return [...helpers, ...procedures]
+  }
+
+  /** Where each mention of the identity in `source` sits. */
+  function readers(source: string): string[] {
+    const all = regions(source)
+    return [...source.matchAll(MENTION)].map(
+      (mention) =>
+        all.find(
+          (region) => region.from <= mention.index && mention.index < region.to,
+        )?.name ?? `outside every procedure (offset ${mention.index})`,
+    )
+  }
+
+  const NAMED = [
+    'workshop.cancelSignup',
+    'workshop.getMySignups',
+    'workshop.signup',
+  ]
+  const HELPERS = ['requireWorkshopAttendee', 'requireWorkshopUser']
+
+  it('holds: every mention of the attendee in the router is in a named procedure or in a helper only they call', () => {
+    const found = [...new Set(readers(readFileSync(ROUTER, 'utf8')))].sort()
+
+    expect(found).toEqual([...HELPERS, ...NAMED].sort())
+  })
+
+  it.each([
+    [
+      'reads it by destructuring',
+      (source: string) =>
+        source.replace(
+          '  list: publicProcedure',
+          '  whoAmI: publicProcedure.query(({ ctx }) => {\n    const { workosUser } = ctx\n    return workosUser\n  }),\n\n  list: publicProcedure',
+        ),
+      'workshop.whoAmI',
+    ],
+    [
+      'is defined above the router and mounted by name',
+      (source: string) =>
+        source.replace(
+          'export const workshopRouter = router({',
+          'const whoAmI = publicProcedure.query(({ ctx }) => ctx.workosUser)\n\nexport const workshopRouter = router({\n  whoAmI,',
+        ),
+      'outside every procedure',
+    ],
+    [
+      'reaches it through a helper of another name',
+      (source: string) =>
+        source.replace(
+          'export const workshopRouter = router({',
+          'const who = (ctx: Context) => requireWorkshopUser(ctx)\n\nexport const workshopRouter = router({',
+        ),
+      'outside every procedure',
+    ],
+    [
+      'calls the gate from a public list',
+      (source: string) =>
+        source.replace(
+          '  announcementsByWorkshop: publicProcedure.query(async () => {',
+          '  announcementsByWorkshop: publicProcedure.query(async ({ ctx }) => {\n    await requireWorkshopAttendee(ctx)',
+        ),
+      'workshop.announcementsByWorkshop',
+    ],
+  ])(
+    'would be caught: a procedure that %s',
+    (_label, withAnUnnamedReader, where) => {
+      const source = readFileSync(ROUTER, 'utf8')
+      const changed = withAnUnnamedReader(source)
+      // The edit really landed, and the scan names where.
+      expect(changed).not.toBe(source)
+      expect(readers(changed).some((name) => name.startsWith(where))).toBe(true)
+    },
+  )
+
+  it('holds: nothing else in the application mentions the attendee', () => {
+    const others = readdirSync(SRC, { recursive: true })
+      .map(String)
+      .filter((file) => /\.tsx?$/.test(file) && !/\.test\./.test(file))
+      .filter(
+        (file) =>
+          !['server/trpc.ts', 'server/routers/workshop.ts'].includes(file),
+      )
+      .filter((file) =>
+        /\bworkosUser\b/.test(readFileSync(join(SRC, file), 'utf8')),
+      )
+
+    expect(others).toEqual([])
+  })
+
+  it('holds: each of them resolves the attendee, as mounted in the app router', async () => {
     // The full router graph asserts on its mail configuration at import.
     vi.stubEnv('RESEND_API_KEY', 're_test_key')
     const { appRouter } = await import('./_app')
 
-    // The three that consume `ctx.workosUser` (see routers/workshop.ts).
-    expect(Object.keys(appRouter._def.procedures)).toEqual(
-      expect.arrayContaining([
-        'workshop.signup',
-        'workshop.cancelSignup',
-        'workshop.getMySignups',
-      ]),
-    )
+    for (const procedure of NAMED) {
+      expect(Object.keys(appRouter._def.procedures)).toContain(procedure)
+      const ctx = await createTRPCContext({
+        req: request('wos-session=sealed', { procedures: procedure }),
+      })
+      expect(ctx.workosUser).toMatchObject({ id: 'user_01' })
+    }
     // Importing every router takes seconds on a loaded machine.
   }, 30_000)
 })
