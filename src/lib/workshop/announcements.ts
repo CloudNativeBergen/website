@@ -180,16 +180,12 @@ export async function getWorkshopAnnouncements(
   return announcements ?? []
 }
 
-/** How many announcements the portal shows under one workshop, newest first. */
-const PORTAL_ANNOUNCEMENTS_PER_WORKSHOP = 50
-
 /**
  * The announcements of every CONFIRMED workshop of one conference, in ONE
  * read: what the attendee portal shows under each workshop card. Keyed by
- * workshop id; each workshop keeps its own newest
- * {@link PORTAL_ANNOUNCEMENTS_PER_WORKSHOP}, whatever the others have. A
- * workshop that is not confirmed has no card on the portal and is left out,
- * as is one with nothing to say.
+ * workshop id; each workshop keeps its own newest 50, whatever the others
+ * have. A workshop that is not confirmed has no card on the portal and is
+ * left out, as is one with nothing to say.
  *
  * One request for the page instead of one per card, and through the CDN host:
  * an announcement may reach the portal some seconds after it is posted, which
@@ -206,14 +202,15 @@ export async function getAnnouncementsByWorkshop(
     { conferenceId },
     // The root (the conference's confirmed workshops) is scoped by
     // `scopedFetch`; the announcements under each are held to the same
-    // conference by hand, since only the root is rewritten.
+    // conference by hand, since only the root is rewritten. The slice is a
+    // literal: nothing is interpolated into this query.
     `*[_type == "talk" && status == "confirmed" && format in $formats]{
       _id,
       "announcements": *[
         _type == "workshopAnnouncement" &&
         conference._ref == $conferenceId &&
         workshop._ref == ^._id
-      ] | order(createdAt desc)[0...${PORTAL_ANNOUNCEMENTS_PER_WORKSHOP}]{
+      ] | order(createdAt desc)[0...50]{
         _id,
         body,
         createdAt,
