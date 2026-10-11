@@ -86,18 +86,9 @@ function statusLabel(domain: DomainVerificationView): {
   }
 }
 
-const SIGN_IN_TONE: Record<WorkshopSignInLabel['status'], Tone> = {
-  ok: 'green',
-  warn: 'amber',
-  error: 'red',
-  off: 'gray',
-}
-
-const SIGN_IN_TEXT: Record<Tone, string> = {
-  green: 'text-green-700 dark:text-green-300',
-  amber: 'text-amber-700 dark:text-amber-300',
-  red: 'text-red-700 dark:text-red-300',
-  gray: 'text-gray-900 dark:text-gray-200',
+const SIGN_IN_TEXT: Record<WorkshopSignInLabel['status'], string> = {
+  ok: 'text-green-700 dark:text-green-300',
+  warn: 'text-amber-700 dark:text-amber-300',
 }
 
 function WorkshopSignInLine({
@@ -106,12 +97,13 @@ function WorkshopSignInLine({
   standing: WorkshopSignInStanding
 }) {
   const { status, label, detail } = workshopSignInLabel(standing)
-  const tone = SIGN_IN_TONE[status]
   return (
     <div className="mt-1 text-xs text-gray-600 dark:text-gray-400">
       <p>
         Workshop sign-in:{' '}
-        <span className={clsx('font-medium', SIGN_IN_TEXT[tone])}>{label}</span>
+        <span className={clsx('font-medium', SIGN_IN_TEXT[status])}>
+          {label}
+        </span>
       </p>
       {detail && <p className="mt-1 break-words">{detail}</p>}
     </div>

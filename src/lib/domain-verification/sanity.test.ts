@@ -227,12 +227,7 @@ describe('ensureDomainVerification', () => {
   })
 })
 
-/**
- * WHETHER A RECORD WAS WRITTEN is what `syncDomainVerifications` decides on:
- * a write means the hosts that may sign in could have changed, so the WorkOS
- * redirect URIs are reconciled (#1297). `false` for a write, and a host that
- * became eligible keeps no URI until the daily sweep.
- */
+/** The result distinguishes a stored change from an unchanged record. */
 describe('reporting whether a record was written', () => {
   it('a new claim', async () => {
     expect(

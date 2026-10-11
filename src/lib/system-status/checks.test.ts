@@ -94,32 +94,61 @@ describe('collectStaticChecks — status semantics', () => {
   })
 })
 
-/**
- * #1296. The workshop portal refuses to sign anyone in while
- * `WORKOS_COOKIE_DOMAIN` is set (the SDK would then scope its session cookie
- * to a whole domain instead of one host). That refusal is a bare 404 for the
- * attendee, so the reason has to be visible to an operator here.
- */
-describe('collectStaticChecks — WorkOS cookie scope', () => {
-  it('is ok while the session cookie stays host-only', () => {
-    vi.stubEnv('WORKOS_COOKIE_DOMAIN', '')
+describe('collectStaticChecks — workshop auth origin', () => {
+  it('shows the configured origin', () => {
+    vi.stubEnv('WORKSHOP_AUTH_ORIGIN', 'https://auth.example.org')
     const check = byId(
       collectStaticChecks(CONFERENCE),
-      'misc.workosCookieDomain',
+      'auth.workshopAuthOrigin',
     )
     expect(check.status).toBe('ok')
-    expect(check.value).toBe('not set')
+    expect(check.value).toBe('https://auth.example.org')
   })
 
-  it('is an ERROR, naming the consequence, when a cookie domain is configured', () => {
-    vi.stubEnv('WORKOS_COOKIE_DOMAIN', '.example.org')
+  it('reports unset as a supported local or single-domain configuration', () => {
+    vi.stubEnv('WORKSHOP_AUTH_ORIGIN', undefined)
     const check = byId(
       collectStaticChecks(CONFERENCE),
-      'misc.workosCookieDomain',
+      'auth.workshopAuthOrigin',
     )
-    expect(check.status).toBe('error')
-    expect(check.value).toBe('.example.org')
-    expect(check.detail).toMatch(/sign-in is refused/i)
+    expect(check.status).toBe('ok')
+    expect(check.value).toBe('unset')
+    expect(check.detail).toContain('Each host is its own auth host')
+    expect(check.detail).toContain('local development')
+    expect(check.detail).toContain('single-domain installation')
+  })
+
+  it.each([
+    'https://auth.example.org/callback',
+    'https://auth.example.org?query=1',
+    'https://user:password@auth.example.org',
+    'https://[::1]',
+    'http://auth.example.org',
+    'not an origin',
+  ])(
+    'reports invalid configuration and its sign-in consequence: %s',
+    (origin) => {
+      vi.stubEnv('NODE_ENV', 'production')
+      vi.stubEnv('WORKSHOP_AUTH_ORIGIN', origin)
+      const check = byId(
+        collectStaticChecks(CONFERENCE),
+        'auth.workshopAuthOrigin',
+      )
+      expect(check.status).toBe('error')
+      expect(check.value).toBe('invalid')
+      expect(check.detail).toContain('sign-in is refused on every host')
+    },
+  )
+
+  it('uses the sign-in parser’s HTTP exception in development', () => {
+    vi.stubEnv('NODE_ENV', 'development')
+    vi.stubEnv('WORKSHOP_AUTH_ORIGIN', 'http://localhost:3000')
+    const check = byId(
+      collectStaticChecks(CONFERENCE),
+      'auth.workshopAuthOrigin',
+    )
+    expect(check.status).toBe('ok')
+    expect(check.value).toBe('http://localhost:3000')
   })
 })
 

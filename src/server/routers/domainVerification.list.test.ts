@@ -55,10 +55,6 @@ vi.mock('@/lib/domain-verification', () => ({
   toDomainVerificationView: vi.fn(),
 }))
 
-vi.mock('@/lib/workshop/redirect-uris', () => ({
-  scheduleRedirectUriReconcile: vi.fn(),
-}))
-
 import { domainVerificationRouter } from './domainVerification'
 import type { Context } from '../trpc'
 

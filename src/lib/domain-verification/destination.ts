@@ -48,7 +48,7 @@ function exactHost(host: string | null | undefined): string | null {
   return candidate
 }
 
-function isProven(record: DomainVerificationRecord, now: Date): boolean {
+export function isProven(record: DomainVerificationRecord, now: Date): boolean {
   return (
     isAllowlistEligible(record, now) &&
     (isPlatformAllocated(record) || record.method === 'dns-txt')

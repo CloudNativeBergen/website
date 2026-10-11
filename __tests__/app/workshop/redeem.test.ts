@@ -43,7 +43,6 @@ vi.mock('@/lib/features/workshops', () => ({
 }))
 
 import { GET } from '@/app/(workshop)/workshop/redeem/route'
-import { isPlatformControlledHost } from '@/lib/domain-verification/platform-controlled'
 import { seal, unseal } from '@/lib/workshop/central-sign-in/seal'
 import { workshopWorkOS } from '@/lib/workshop/central-sign-in/workos'
 import { handOff as handOffOn, type HandOff } from '../../helpers/workshopFlow'
@@ -250,9 +249,7 @@ describe('redeem: a hand-off for this host, in the browser that began', () => {
     ])
   })
 
-  it('WORKOS_COOKIE_DOMAIN adds no Domain to either cookie', async () => {
-    vi.stubEnv('WORKOS_COOKIE_DOMAIN', 'example.org')
-
+  it('keeps both cookies scoped to their host', async () => {
     const response = await redeem(await handOff())
 
     expect(sessionOf(response)).toBeDefined()
@@ -266,11 +263,6 @@ describe('redeem: a hand-off for this host, in the browser that began', () => {
       { organization: { _ref: 'org-of-the-tenant' } },
     )
     getDomainClaim.mockImplementation(claimsById(own))
-    // The rule this replaces refused exactly this host.
-    expect(
-      isPlatformControlledHost(own.record, 'org-of-the-tenant', new Date()),
-    ).toBe(false)
-
     const response = await redeem(await handOff())
 
     expect(response.headers.get('location')).toBe('/workshop')

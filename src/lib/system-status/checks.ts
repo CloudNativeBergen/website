@@ -18,6 +18,7 @@ import { BADGE_GENERATOR_VERSION } from '@/lib/badge/version'
 import { listDomainVerificationViews } from '@/lib/domain-verification'
 import { isWorkshopsEnabledForConference } from '@/lib/features/workshops'
 import { workshopSignInLabel } from '@/lib/domain-verification/sign-in-labels'
+import { authOrigin } from '@/lib/workshop/central-sign-in/decision'
 import { conferenceSenders } from '@/lib/email/from'
 import { describeSenderPolicy } from '@/lib/email/sender-policy'
 import type {
@@ -115,29 +116,32 @@ function presenceCheck(
       }
 }
 
-/**
- * `WORKOS_COOKIE_DOMAIN` must stay UNSET (#1296). With it set the AuthKit SDK
- * scopes its session cookie to a whole domain, so one host's workshop session
- * would be presented to its sibling hosts; `resolveWorkshopSignInHost` refuses
- * every sign-in instead. The attendee only sees a 404, so this is where the
- * reason shows. The value is a domain name, not a secret.
- */
-function workosCookieDomainCheck(): SystemCheck {
+/** The same auth-origin verdict that the sign-in routes enforce. */
+function workshopAuthOriginCheck(): SystemCheck {
   const meta: CheckMeta = {
-    id: 'misc.workosCookieDomain',
-    group: 'misc',
-    label: 'WORKOS_COOKIE_DOMAIN',
+    id: 'auth.workshopAuthOrigin',
+    group: 'auth',
+    label: 'WORKSHOP_AUTH_ORIGIN',
   }
-  const value = process.env.WORKOS_COOKIE_DOMAIN
-  return value
+  const configured = authOrigin()
+  if (configured === 'invalid') {
+    return {
+      ...meta,
+      status: 'error',
+      value: 'invalid',
+      detail:
+        'Not a bare https origin of a hostname. Workshop sign-in is refused on every host.',
+    }
+  }
+  return configured === 'unset'
     ? {
         ...meta,
-        status: 'error',
-        value,
+        status: 'ok',
+        value: 'unset',
         detail:
-          'Workshop sign-in is refused on every host while this is set: the session cookie must stay host-only. Unset it.',
+          'Each host is its own auth host. This is suitable for local development and a single-domain installation.',
       }
-    : { ...meta, status: 'ok', value: 'not set' }
+    : { ...meta, status: 'ok', value: configured.origin }
 }
 
 /** Plain (non-secret) env value. Absent → `missingStatus`. */
@@ -511,6 +515,8 @@ function buildChecks(conference: ConferenceForSystemChecks): SystemCheck[] {
       : 'Optional central OAuth origin (#619) for serving multiple domains from one OAuth app',
   })
 
+  checks.push(workshopAuthOriginCheck())
+
   // ---- EMAIL ----------------------------------------------------------------
   checks.push(
     secretCheck(
@@ -797,7 +803,6 @@ function buildChecks(conference: ConferenceForSystemChecks): SystemCheck[] {
       'off',
       { missing: 'Workshop (WorkOS) login unavailable' },
     ),
-    workosCookieDomainCheck(),
   )
 
   return checks
@@ -953,7 +958,7 @@ async function badgesOutdatedProbe(
 }
 
 /**
- * Where each claimed host stands for the workshop portal's WorkOS sign-in
+ * Where each claimed host stands for the workshop portal's sign-in
  * (#1298), for a conference with workshops: attendees on a host that cannot
  * sign in only see "not available yet", so this is where the reason shows.
  * One row per host; none for a conference without workshops.
@@ -968,7 +973,7 @@ async function workshopSignInChecks(
     const views = await listDomainVerificationViews(
       conference._id,
       conference.domains ?? [],
-      { workshops: true, ownerOrgId: conference.organization._ref },
+      { workshops: true },
     )
     return views.flatMap(({ hostname, workshopSignIn }) => {
       if (!workshopSignIn) return []

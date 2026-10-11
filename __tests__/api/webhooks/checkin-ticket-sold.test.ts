@@ -497,8 +497,7 @@ describe('api/webhooks/checkin/ticket-sold — workshop feature gate', () => {
       slug: 'tenant-two',
       plan: 'pro',
     })
-    // The main host's record as Sanity stores it: verified yesterday, its
-    // callback registered in WorkOS.
+    // The main host's record as Sanity stores it: DNS proof verified yesterday.
     const yesterday = new Date(Date.now() - 86_400_000).toISOString()
     h.fetch.mockImplementation((async (query: string) =>
       query.includes('_type == "domainVerification"')
@@ -515,8 +514,6 @@ describe('api/webhooks/checkin/ticket-sold — workshop feature gate', () => {
             lastCheckedAt: yesterday,
             consecutiveFailures: 0,
             consecutiveSoftFailures: 0,
-            redirectUriStatus: 'registered',
-            redirectUriId: 'ru_1',
             conference: {
               organization: { _ref: 'org-tenant2' },
               domains: ['conf.example.org'],
