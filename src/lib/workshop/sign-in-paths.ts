@@ -42,11 +42,3 @@ export const WORKSHOP_SIGN_IN_INCOMPLETE = {
   value: 'incomplete',
 } as const
 export const WORKSHOP_SIGN_IN_INCOMPLETE_QUERY = `?${WORKSHOP_SIGN_IN_INCOMPLETE.param}=${WORKSHOP_SIGN_IN_INCOMPLETE.value}`
-
-/**
- * Request header the proxy puts on the portal page when the host cannot sign
- * in (#1298). The page then shows the unavailable view and never enters the
- * SDK, which did not run for that request.
- */
-export const WORKSHOP_SIGN_IN_UNAVAILABLE_HEADER =
-  'x-workshop-sign-in-unavailable'

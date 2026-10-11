@@ -1,4 +1,3 @@
-import { withAuth } from '@workos-inc/authkit-nextjs'
 import { formatRegistrationInstant } from '@/lib/time'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import WorkshopList from '@/components/workshop/WorkshopList'
@@ -10,8 +9,12 @@ import { isWorkshopsEnabledForConference } from '@/lib/features/workshops'
 import { resolveConferenceContact } from '@/lib/email/from'
 import { EnvelopeIcon } from '@heroicons/react/24/outline'
 import { notFound, redirect } from 'next/navigation'
-import { headers } from 'next/headers'
-import { WORKSHOP_SIGN_IN_UNAVAILABLE_HEADER } from '@/lib/workshop/sign-in-paths'
+import { cookies, headers } from 'next/headers'
+import { WORKSHOP_SIGN_IN_INCOMPLETE } from '@/lib/workshop/sign-in-paths'
+import {
+  readWorkshopPortal,
+  sessionCookie,
+} from '@/lib/workshop/central-sign-in'
 import {
   workshopMainHost,
   workshopPortalUrl,
@@ -31,20 +34,18 @@ function isSameHost(url: string, host: string | null): boolean {
   }
 }
 
-export default async function WorkshopPage() {
+export default async function WorkshopPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>
+}) {
   const { conference, error } = await getConferenceForCurrentDomain()
 
-  // FEATURE GATE (#689) — BEFORE `withAuth()`: the segment layout gates too,
-  // but ordering it first means this page reads no WorkOS session for a
-  // disabled tenant. (The proxy has already unsealed one if the browser sent
-  // it: it decides from the host alone.) (`withAuth` throws when the AuthKit
-  // middleware did not run. On a host that may not sign in, `src/proxy.ts`
-  // lets only this page through, marked, and the page stops at the mark
-  // before `withAuth` — #1298.) The proxy runs first but sends nobody to
-  // WorkOS: a signed-out visitor arrives here, gets this 404 for a tenant
-  // without workshops, and otherwise the signed-out view below, whose two
-  // buttons are the only way into a sign-in. Fail-closed on an unresolvable
-  // org.
+  // FEATURE GATE (#689), BEFORE THE SESSION IS READ: the segment layout gates
+  // too, but ordering it first means this page spends no record read on a
+  // tenant without workshops. A signed-out visitor of one with them gets the
+  // signed-out view below, whose two buttons are the only way into a sign-in.
+  // Fail-closed on an unresolvable org.
   if (!(await isWorkshopsEnabledForConference(conference))) {
     notFound()
   }
@@ -64,15 +65,22 @@ export default async function WorkshopPage() {
     )
   }
 
-  // A HOST THAT CANNOT SIGN IN (#1298): the proxy let this request through
-  // without the SDK and marked it, so `withAuth()` must not be reached. The view
-  // says sign-up is not available and nothing about why.
+  // THE ONE READ OF THE SESSION (#1311, spec §6): whether this host can carry
+  // a sign-in at all, and who is signed in, from one live record read. WorkOS
+  // is not called and nothing is written.
   const requestHeaders = await headers()
-  if (requestHeaders.has(WORKSHOP_SIGN_IN_UNAVAILABLE_HEADER)) {
+  const portal = await readWorkshopPortal(
+    requestHeaders,
+    (await cookies()).get(sessionCookie().name)?.value,
+  )
+
+  // A HOST THAT CANNOT SIGN IN (#1298). The view says sign-up is not available
+  // and nothing about why.
+  if (!portal.available) {
     // A SECONDARY host that cannot sign in, while the main host can: send the
     // attendee to the working portal (the same link the email carries). Never
     // to the host they are already on — that would loop. On the main host
-    // itself nothing is read: the proxy already decided it cannot sign in.
+    // itself nothing more is read: it was just decided that it cannot sign in.
     const requestHost = workshopRequestHost(requestHeaders)
     const mainHost = workshopMainHost(conference)
     if (mainHost && !isSameHost(`https://${mainHost}`, requestHost)) {
@@ -93,11 +101,18 @@ export default async function WorkshopPage() {
     )
   }
 
-  const { user } = await withAuth()
-
+  const user = portal.session
   if (!user) {
-    return <WorkshopSignedOut conferenceTitle={conference.title} />
+    // A refused redeem lands here with one fixed marker, whatever refused it.
+    const { [WORKSHOP_SIGN_IN_INCOMPLETE.param]: marker } = await searchParams
+    return (
+      <WorkshopSignedOut
+        conferenceTitle={conference.title}
+        signInIncomplete={marker === WORKSHOP_SIGN_IN_INCOMPLETE.value}
+      />
+    )
   }
+  const userName = user.name || user.email
 
   // THE ONE ACCESS DECISION (#1294) — the same call the attendee procedures
   // make, so this page can never show a signup form the API would refuse (or
@@ -199,12 +214,7 @@ export default async function WorkshopPage() {
           </div>
 
           <div className="font-display mt-6 space-y-6 text-2xl tracking-tight text-blue-900 dark:text-blue-100">
-            <p>
-              Welcome,{' '}
-              {user.firstName && user.lastName
-                ? `${user.firstName} ${user.lastName}`
-                : user.firstName || user.lastName || user.email}
-            </p>
+            <p>Welcome, {userName}</p>
             <p>Register for workshops at {conference.title}.</p>
           </div>
 
@@ -276,13 +286,9 @@ export default async function WorkshopPage() {
 
           <div className="mt-12">
             <WorkshopList
-              userWorkOSId={user.id}
+              userWorkOSId={user.userId}
               userEmail={user.email}
-              userName={
-                user.firstName && user.lastName
-                  ? `${user.firstName} ${user.lastName}`
-                  : user.email
-              }
+              userName={userName}
               workshopRegistrationStart={conference.workshopRegistrationStart}
               workshopRegistrationEnd={conference.workshopRegistrationEnd}
             />

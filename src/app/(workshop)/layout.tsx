@@ -26,12 +26,9 @@ export default async function WorkshopLayout({
     notFound()
   }
 
-  // NO `AuthKitProvider` (#1296). Nothing here reads its client context, and
-  // mounting it does two things this portal must not do: it POSTs an SDK server
-  // action on every page load and on every window focus (each a pass through
-  // the proxy, so one live allowlist read), and importing it registers the
-  // SDK's own server actions as endpoints a browser can call on paths the
-  // proxy never sees. The session is read on the server, by the page
-  // (`withAuth`) and by tRPC. Guarded by `authkit-client-actions.test.ts`.
+  // NO SESSION PROVIDER (#1296, #1311). The portal's session is its own sealed
+  // cookie, read on the server by the page and by tRPC; nothing here needs a
+  // client context, and no WorkOS SDK is imported by the application at all.
+  // Guarded by `no-authkit-sdk.test.ts`.
   return <Layout conference={conference}>{children}</Layout>
 }

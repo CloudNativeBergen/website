@@ -7,12 +7,25 @@
  * into a WorkOS round-trip its own host can never complete.
  *
  * Only EXTERNAL boundaries are mocked — the Sanity documents (conference +
- * organization) and WorkOS AuthKit — so the real entitlement resolution and the
- * page's real component composition decide. `notFound()` is mocked to throw the
- * way Next.js does, which is how these assertions detect the 404.
+ * organization) and the live client every record read goes through — so the
+ * real entitlement resolution, the real session read (#1314: the seal, the
+ * destination policy) and the page's real component composition decide.
+ * `notFound()` is mocked to throw the way Next.js does, which is how these
+ * assertions detect the 404.
+ *
+ * A signed-in attendee is a session sealed here with the real seal, in the
+ * cookie the page reads. That the redeem route issues exactly such a session is
+ * proven in `redeem.test.ts`, and that a reader accepts the one it issued in
+ * `trpc.workshopUser.test.ts`.
  */
+import '../../helpers/workosEnv'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { beginRequest } from '../../helpers/nextHeadersJar'
+import {
+  beginRequest,
+  presentCookie,
+  writtenCookies,
+} from '../../helpers/nextHeadersJar'
+import { provenClaim } from '../../helpers/domainClaims'
 import {
   stubOwnTicketingSecret,
   stubPlatformTicketingAccount,
@@ -20,7 +33,8 @@ import {
 
 const mockGetConference = vi.fn()
 const mockGetOrganizationById = vi.fn()
-const mockWithAuth = vi.fn()
+
+vi.mock('jose', async () => (await import('../../helpers/realJose')).realJose())
 
 class NotFoundError extends Error {
   digest = 'NEXT_NOT_FOUND'
@@ -47,6 +61,7 @@ vi.mock('next/headers', () => import('../../helpers/nextHeadersJar'))
 vi.mock('@/lib/conference/sanity', () => ({
   getConferenceForCurrentDomain: (...args: unknown[]) =>
     mockGetConference(...args),
+  getConferenceForDomain: vi.fn(),
 }))
 
 vi.mock('@/lib/organization/sanity', () => ({
@@ -59,18 +74,19 @@ vi.mock('@/lib/organization/sanity', () => ({
  * `PLATFORM_ORG_ID` (RunKonf/platform#43) — pure env, no Sanity read and never
  * the cached org document's `slug`. A case OPTS IN to being the platform org by
  * pointing `PLATFORM_ORG_ID` at the request org's id. This mock is a TRIPWIRE:
- * a reintroduced slug lookup would call it and trip the no-fetch guard.
+ * a reintroduced slug lookup would call it and trip the read counts below.
+ *
+ * It is also THE LIVE CLIENT: the host's record (`getDomainClaim`, the real
+ * query) is read through it, from `claims`, and every read is counted.
  */
-const h = vi.hoisted(() => ({ fetch: vi.fn(async () => null) }))
+const h = vi.hoisted(() => ({
+  fetch: vi.fn<(query: string, params?: { id?: string }) => Promise<unknown>>(),
+  /** The records the live client knows, by id, as Sanity returns them. */
+  claims: new Map<string, unknown>(),
+}))
 
 vi.mock('@/lib/sanity/client', () => ({
   clientReadUncached: { fetch: h.fetch },
-}))
-
-vi.mock('@workos-inc/authkit-nextjs', () => ({
-  withAuth: (...args: unknown[]) => mockWithAuth(...args),
-  // Imported by the page's sign-out action; never called here.
-  signOut: vi.fn(),
 }))
 
 // Everything the app owns — the real Layout, WorkshopList and eligibility
@@ -99,8 +115,71 @@ import { WorkshopSignedOut } from '@/components/workshop/WorkshopSignedOut'
 import { WorkshopUnavailable } from '@/components/workshop/WorkshopUnavailable'
 import { WorkshopSignOutButton } from '@/components/workshop/WorkshopSignOutButton'
 import { __resetRedeemedCache } from '@/lib/tickets/speakerStatus'
+import { seal } from '@/lib/workshop/central-sign-in/seal'
 
 const PLATFORM_SLUG = 'platform-org'
+/** The host every request is on unless a case says otherwise. */
+const HOST = 'conf.example.org'
+const SESSION_COOKIE = '__Host-workshop-session'
+const WEEK = 7 * 24 * 60 * 60
+
+const isRecordRead = (query: unknown) =>
+  String(query).includes('_type == "domainVerification"')
+
+/** How many live reads of a host's record the page has spent. */
+function recordReads(): number {
+  return h.fetch.mock.calls.filter(([query]) => isRecordRead(query)).length
+}
+
+/** Make `host` one that may carry the portal's sign-in, for `conferenceId`. */
+function proven(host: string, conferenceId = 'conf-1', domains = [host]) {
+  const { record, conference } = provenClaim(
+    host,
+    { conferenceId },
+    { _id: conferenceId, domains },
+  )
+  h.claims.set(record._id, { ...record, conference })
+}
+
+/** A request on `host`, as the browser sends it. */
+function on(host: string) {
+  beginRequest(new Headers({ host }))
+}
+
+interface Attendee {
+  id: string
+  email: string
+  emailVerified: boolean
+  name: string | null
+}
+
+/** The browser holds the session of a completed sign-in as `attendee`. */
+async function signedInAs(
+  attendee: Attendee,
+  issuedFor: { host?: string; conferenceId?: string; ttl?: number } = {},
+) {
+  presentCookie(
+    SESSION_COOKIE,
+    await seal(
+      'session',
+      {
+        userId: attendee.id,
+        email: attendee.email,
+        emailVerified: attendee.emailVerified,
+        name: attendee.name,
+        sessionId: 'session_01',
+        host: issuedFor.host ?? HOST,
+        conferenceId: issuedFor.conferenceId ?? 'conf-1',
+      },
+      issuedFor.ttl ?? WEEK,
+    ),
+  )
+}
+
+/** Render the portal page, with this query string. */
+function renderPage(query: Record<string, string> = {}) {
+  return WorkshopPage({ searchParams: Promise.resolve(query) })
+}
 
 function conference(orgId: string | null) {
   return {
@@ -152,7 +231,13 @@ async function is404(render: () => Promise<unknown>): Promise<boolean> {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  beginRequest()
+  h.claims.clear()
+  h.fetch.mockImplementation(async (query, params) =>
+    isRecordRead(query) ? (h.claims.get(params?.id ?? '') ?? null) : null,
+  )
+  proven(HOST)
+  on(HOST)
+  vi.stubEnv('NODE_ENV', 'production')
   __resetRedeemedCache()
   // A configured platform org that matches none of the tenants below, so a case
   // is platform ONLY when it points the contract at its own org id.
@@ -162,7 +247,6 @@ beforeEach(() => {
   // and a use that only shows when it is set would pass with it unset.
   vi.stubEnv('NEXT_PUBLIC_URL', 'https://public.example.org')
   stubPlatformTicketingAccount()
-  mockWithAuth.mockResolvedValue({ user: null })
   ticketing.fetchEventTickets.mockResolvedValue([
     {
       id: 1,
@@ -179,6 +263,9 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  // A page view never writes a cookie: the session is not renewed (spec §6).
+  expect(writtenCookies()).toEqual([])
+  vi.useRealTimers()
   vi.unstubAllEnvs()
 })
 
@@ -202,9 +289,9 @@ describe('workshop portal — feature OFF (paid plan, no ticketing credentials)'
     expect(await is404(() => WorkshopLayout({ children: null }))).toBe(true)
   })
 
-  it('404s the portal page WITHOUT starting a WorkOS session round-trip', async () => {
-    expect(await is404(() => WorkshopPage())).toBe(true)
-    expect(mockWithAuth).not.toHaveBeenCalled()
+  it('404s the portal page WITHOUT reading the host’s record or a session', async () => {
+    expect(await is404(() => renderPage())).toBe(true)
+    expect(h.fetch).not.toHaveBeenCalled()
   })
 })
 
@@ -223,8 +310,8 @@ describe('workshop portal — feature OFF (community plan, even with ticketing)'
     })
 
     expect(await is404(() => WorkshopLayout({ children: null }))).toBe(true)
-    expect(await is404(() => WorkshopPage())).toBe(true)
-    expect(mockWithAuth).not.toHaveBeenCalled()
+    expect(await is404(() => renderPage())).toBe(true)
+    expect(h.fetch).not.toHaveBeenCalled()
   })
 })
 
@@ -252,10 +339,10 @@ describe('workshop portal — feature ON (non-platform pro tenant with its own t
     expect(await is404(() => WorkshopLayout({ children: null }))).toBe(false)
   })
 
-  it('renders the portal page and authenticates the attendee', async () => {
-    expect(await is404(() => WorkshopPage())).toBe(false)
-    expect(mockWithAuth).toHaveBeenCalledOnce()
-    expect(h.fetch).not.toHaveBeenCalled()
+  it('renders the portal page from ONE live read: the host’s record', async () => {
+    expect(await is404(() => renderPage())).toBe(false)
+    expect(recordReads()).toBe(1)
+    expect(h.fetch).toHaveBeenCalledTimes(1)
   })
 })
 
@@ -266,7 +353,7 @@ describe('workshop portal — unresolvable org fails CLOSED', () => {
       error: null,
     })
 
-    expect(await is404(() => WorkshopPage())).toBe(true)
+    expect(await is404(() => renderPage())).toBe(true)
     expect(await is404(() => WorkshopLayout({ children: null }))).toBe(true)
     expect(mockGetOrganizationById).not.toHaveBeenCalled()
   })
@@ -278,7 +365,7 @@ describe('workshop portal — unresolvable org fails CLOSED', () => {
     })
     mockGetOrganizationById.mockResolvedValue(null)
 
-    expect(await is404(() => WorkshopPage())).toBe(true)
+    expect(await is404(() => renderPage())).toBe(true)
   })
 })
 
@@ -301,9 +388,9 @@ describe('workshop portal — feature ON (platform org on the pro plan)', () => 
     expect(await is404(() => WorkshopLayout({ children: null }))).toBe(false)
   })
 
-  it('renders the portal page and authenticates the attendee as before', async () => {
-    expect(await is404(() => WorkshopPage())).toBe(false)
-    expect(mockWithAuth).toHaveBeenCalledOnce()
+  it('renders the portal page as before', async () => {
+    expect(await is404(() => renderPage())).toBe(false)
+    expect(recordReads()).toBe(1)
   })
 })
 
@@ -314,15 +401,19 @@ describe('workshop portal — feature ON (platform org on the pro plan)', () => 
  * satisfied and asserted on its own text.
  */
 describe('workshop portal — signed-in attendee', () => {
-  const ADA = {
+  /** What tells the signed-out view apart from every signed-in one. */
+  async function isSignedOut(query?: Record<string, string>) {
+    return elementsOf(await renderPage(query))[0].type === WorkshopSignedOut
+  }
+
+  const ADA: Attendee = {
     id: 'workos-ada',
     email: 'ada@example.com',
     emailVerified: true,
-    firstName: 'Ada',
-    lastName: 'Lovelace',
+    name: 'Ada Lovelace',
   }
 
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.stubEnv('PLATFORM_ORG_ID', 'org-platform')
     mockGetConference.mockResolvedValue({
       conference: conference('org-platform'),
@@ -334,17 +425,26 @@ describe('workshop portal — signed-in attendee', () => {
       slug: PLATFORM_SLUG,
       plan: 'pro',
     })
-    mockWithAuth.mockResolvedValue({ user: ADA })
+    await signedInAs(ADA)
   })
 
   it('shows the signup page to a verified ticket holder', async () => {
-    h.fetch.mockClear()
-    const text = textOf(await WorkshopPage())
+    const page = await renderPage()
+    const text = textOf(page)
 
-    // READ BUDGET (#1296): the page itself spends ONE live Sanity read — the
-    // `ticketTypeRoles` lookup from #1294. The sign-in host decision is taken
-    // by the proxy, not here; see `sign-in-read-budget.test.ts`.
-    expect(h.fetch).toHaveBeenCalledTimes(1)
+    // READ BUDGET: the page spends TWO live Sanity reads. ONE for the session
+    // decision (the host's record, #1314) and the `ticketTypeRoles` lookup
+    // from #1294.
+    expect(recordReads()).toBe(1)
+    expect(h.fetch).toHaveBeenCalledTimes(2)
+    // The signups are listed, and stored, under the WorkOS user ID.
+    expect(
+      elementsOf(page).find((el) => 'userWorkOSId' in el.props)?.props,
+    ).toMatchObject({
+      userWorkOSId: 'workos-ada',
+      userEmail: 'ada@example.com',
+      userName: 'Ada Lovelace',
+    })
 
     expect(text).toContain('Workshop Signup')
     expect(text).toContain('Ada Lovelace')
@@ -352,9 +452,9 @@ describe('workshop portal — signed-in attendee', () => {
   })
 
   it('refuses an unverified email even when it matches a workshop ticket', async () => {
-    mockWithAuth.mockResolvedValue({ user: { ...ADA, emailVerified: false } })
+    await signedInAs({ ...ADA, emailVerified: false })
 
-    const text = textOf(await WorkshopPage())
+    const text = textOf(await renderPage())
 
     expect(text).toContain('Workshop Access Required')
     expect(text).toContain('Email Address Not Verified')
@@ -366,7 +466,7 @@ describe('workshop portal — signed-in attendee', () => {
   it('refuses a verified attendee with no ticket', async () => {
     ticketing.fetchEventTickets.mockResolvedValue([])
 
-    const text = textOf(await WorkshopPage())
+    const text = textOf(await renderPage())
 
     expect(text).toContain('Workshop Access Required')
     expect(text).toContain('Workshop Ticket Required')
@@ -377,7 +477,7 @@ describe('workshop portal — signed-in attendee', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
     ticketing.fetchEventTickets.mockRejectedValue(new Error('vendor down'))
 
-    const text = textOf(await WorkshopPage())
+    const text = textOf(await renderPage())
 
     // The provider WAS asked: an unconfigured or org-less conference produces
     // the same message without ever reaching it.
@@ -396,7 +496,7 @@ describe('workshop portal — signed-in attendee', () => {
       eventRef: null,
     })
 
-    const text = textOf(await WorkshopPage())
+    const text = textOf(await renderPage())
 
     expect(text).toContain('Workshop Access Required')
     expect(text).toContain('Unable to verify workshop ticket')
@@ -405,18 +505,116 @@ describe('workshop portal — signed-in attendee', () => {
     expect(ticketing.fetchEventTickets).not.toHaveBeenCalled()
     expect(text).not.toContain('Welcome,')
   })
+  it('greets by email when the session carries no name', async () => {
+    await signedInAs({ ...ADA, name: null })
+
+    const page = await renderPage()
+
+    expect(textOf(page)).toMatch(/Welcome,\s+ada@example\.com/)
+    expect(
+      elementsOf(page).find((el) => 'userWorkOSId' in el.props)?.props.userName,
+    ).toBe('ada@example.com')
+  })
+
+  /**
+   * THE SESSION READ (#1314, spec §6). Each case is the session above with one
+   * condition changed, and ends at the signed-out view. The same rule is proven
+   * for the API, on sessions the real routes issued, in
+   * `trpc.workshopUser.test.ts`.
+   */
+  describe('is signed out', () => {
+    it('CONTROL: not with the session as it is', async () => {
+      expect(await isSignedOut()).toBe(false)
+    })
+
+    it('once 7 days have passed, with the cookie still present', async () => {
+      const now = new Date('2026-10-12T10:00:00Z')
+      vi.useFakeTimers({ toFake: ['Date'], now })
+      proven(HOST)
+      await signedInAs(ADA)
+
+      vi.setSystemTime(now.getTime() + (WEEK - 1) * 1000)
+      expect(await isSignedOut()).toBe(false)
+      vi.setSystemTime(now.getTime() + (WEEK + 1) * 1000)
+      expect(await isSignedOut()).toBe(true)
+    })
+
+    it('with a session copied from another proven host', async () => {
+      proven('other.example.org')
+      await signedInAs(ADA, { host: 'other.example.org' })
+
+      expect(await isSignedOut()).toBe(true)
+    })
+
+    it('with a session issued while another conference claimed the host', async () => {
+      await signedInAs(ADA, { conferenceId: 'conf-2' })
+
+      expect(await isSignedOut()).toBe(true)
+    })
+
+    it('with a hand-off token presented as a session', async () => {
+      presentCookie(
+        SESSION_COOKIE,
+        await seal(
+          'handoff',
+          {
+            userId: ADA.id,
+            email: ADA.email,
+            emailVerified: true,
+            name: ADA.name,
+            sessionId: 'session_01',
+            host: HOST,
+            conferenceId: 'conf-1',
+            challenge: 'x'.repeat(43),
+          },
+          60,
+        ),
+      )
+
+      expect(await isSignedOut()).toBe(true)
+    })
+
+    it('with the cookie under a name without the __Host- prefix', async () => {
+      beginRequest(new Headers({ host: HOST }))
+      presentCookie(
+        'workshop-session',
+        await seal(
+          'session',
+          {
+            userId: ADA.id,
+            email: ADA.email,
+            emailVerified: true,
+            name: ADA.name,
+            sessionId: 'session_01',
+            host: HOST,
+            conferenceId: 'conf-1',
+          },
+          WEEK,
+        ),
+      )
+
+      expect(await isSignedOut()).toBe(true)
+    })
+  })
+
+  it('does not show the sign-in line to someone who is signed in', async () => {
+    const page = await renderPage({ 'sign-in': 'incomplete' })
+
+    expect(elementsOf(page).some((el) => el.type === WorkshopSignedOut)).toBe(
+      false,
+    )
+    expect(textOf(page)).not.toContain('did not complete')
+  })
 })
 
 /**
- * #1296. Sign-in and sign-out go through the SDK: the page builds no WorkOS
- * URL of its own, and "Sign Out" is the SDK action — not NextAuth's route,
- * which belongs to a different auth system and leaves the WorkOS session
- * alive.
+ * #1296, #1314. The page builds no sign-in URL of its own, and "Sign Out" is
+ * the portal's own action, not NextAuth's route, which belongs to a different
+ * auth system.
  */
-describe('workshop portal — sign-in and sign-out go through the SDK', () => {
+describe('workshop portal — sign-in and sign-out', () => {
   beforeEach(() => {
     vi.stubEnv('PLATFORM_ORG_ID', 'org-platform')
-    vi.stubEnv('WORKOS_CLIENT_ID', 'client_test')
     mockGetConference.mockResolvedValue({
       conference: conference('org-platform'),
       error: null,
@@ -432,9 +630,7 @@ describe('workshop portal — sign-in and sign-out go through the SDK', () => {
   })
 
   it('signed out: renders the signed-out component and no link of its own', async () => {
-    mockWithAuth.mockResolvedValue({ user: null })
-
-    const page = await WorkshopPage()
+    const page = await renderPage()
 
     const signedOut = elementsOf(page).filter(
       (element) => element.type === WorkshopSignedOut,
@@ -443,44 +639,63 @@ describe('workshop portal — sign-in and sign-out go through the SDK', () => {
     // link of its own. (What the component renders — and that it carries no
     // authorize URL — is pinned in `WorkshopPortalAuth.test.tsx`.)
     expect(signedOut).toHaveLength(1)
-    expect(signedOut[0].props.conferenceTitle).toBe('CNDN')
+    expect(signedOut[0].props).toEqual({
+      conferenceTitle: 'CNDN',
+      signInIncomplete: false,
+    })
     expect(hrefsOf(page)).toEqual([])
+  })
+
+  it('signed out after a refused redeem: tells the view sign-in did not complete', async () => {
+    const page = await renderPage({ 'sign-in': 'incomplete' })
+
+    expect(elementsOf(page)[0].type).toBe(WorkshopSignedOut)
+    expect(elementsOf(page)[0].props.signInIncomplete).toBe(true)
+  })
+
+  it.each([
+    ['another value', { 'sign-in': 'expired' }],
+    ['another parameter', { error: 'incomplete' }],
+  ])('signed out with %s: says nothing', async (_label, query) => {
+    const page = await renderPage(query as Record<string, string>)
+
+    expect(elementsOf(page)[0].props.signInIncomplete).toBe(false)
   })
 
   it.each([
     ['the signup page', { emailVerified: true }],
     ['a refusal', { emailVerified: false }],
-  ])('signed in, on %s: Sign Out is the SDK action', async (_label, user) => {
-    mockWithAuth.mockResolvedValue({
-      user: {
+  ])(
+    'signed in, on %s: Sign Out is the portal’s action',
+    async (_label, user) => {
+      await signedInAs({
         id: 'workos-ada',
         email: 'ada@example.com',
-        firstName: 'Ada',
-        lastName: 'Lovelace',
+        name: 'Ada Lovelace',
         ...user,
-      },
-    })
+      })
 
-    const page = await WorkshopPage()
+      const page = await renderPage()
 
-    const buttons = elementsOf(page).filter(
-      (element) => element.type === WorkshopSignOutButton,
-    )
-    expect(buttons).toHaveLength(1)
-    expect(buttons[0].props.action).toBe(signOutOfWorkshop)
-    expect(hrefsOf(page).filter((href) => href.includes('signout'))).toEqual([])
-  })
+      const buttons = elementsOf(page).filter(
+        (element) => element.type === WorkshopSignOutButton,
+      )
+      expect(buttons).toHaveLength(1)
+      expect(buttons[0].props.action).toBe(signOutOfWorkshop)
+      expect(hrefsOf(page).filter((href) => href.includes('signout'))).toEqual(
+        [],
+      )
+    },
+  )
 })
 
 /**
- * A HOST THAT CANNOT SIGN IN (#1298). The proxy let the page through without
- * the SDK and marked the request. The page must stop at the mark, before
- * `withAuth` (which throws when the SDK did not run), and say that sign-up is
- * not available, with the organizer's address and nothing about why.
+ * A HOST THAT CANNOT SIGN IN (#1298): it may not receive a hand-off. The page
+ * says that sign-up is not available, with the organizer's address and nothing
+ * about why, and offers no way into a sign-in.
  */
 describe('workshop portal — on a host that cannot sign in', () => {
-  const MARKED = () =>
-    beginRequest(new Headers({ 'x-workshop-sign-in-unavailable': '1' }))
+  const MARKED = () => on('unregistered.example.org')
 
   beforeEach(() => {
     stubOwnTicketingSecret('org-tenant2')
@@ -500,11 +715,11 @@ describe('workshop portal — on a host that cannot sign in', () => {
     })
   })
 
-  it('shows that sign-up is not available, with the contact address, and never enters the SDK', async () => {
+  it('shows that sign-up is not available, with the contact address', async () => {
     MARKED()
-    const page = await WorkshopPage()
+    const page = await renderPage()
 
-    expect(mockWithAuth).not.toHaveBeenCalled()
+    expect(recordReads()).toBe(1)
     expect(elementsOf(page)[0].type).toBe(WorkshopUnavailable)
     expect(elementsOf(page)[0].props).toEqual({
       conferenceTitle: 'CNDN',
@@ -519,7 +734,7 @@ describe('workshop portal — on a host that cannot sign in', () => {
 
   it('passes the view nothing about why — no host, state or error', async () => {
     MARKED()
-    const page = await WorkshopPage()
+    const page = await renderPage()
     // The view's props are its whole input, so this is everything it can say.
     expect(Object.keys(elementsOf(page)[0].props).sort()).toEqual([
       'conferenceTitle',
@@ -539,16 +754,43 @@ describe('workshop portal — on a host that cannot sign in', () => {
       error: null,
     })
     MARKED()
-    const page = await WorkshopPage()
+    const page = await renderPage()
 
     expect(elementsOf(page)[0].type).toBe(WorkshopUnavailable)
     expect(elementsOf(page)[0].props.registrationClosed).toBe(true)
   })
 
-  it('CONTROL: without the mark the same tenant gets the SDK and the signed-out view', async () => {
-    const page = await WorkshopPage()
-    expect(mockWithAuth).toHaveBeenCalledOnce()
+  it('CONTROL: on a proven host the same tenant gets the signed-out view', async () => {
+    const page = await renderPage()
     expect(elementsOf(page)[0].type).toBe(WorkshopSignedOut)
+  })
+
+  it('shows it to someone who holds a session too: no session counts on such a host', async () => {
+    MARKED()
+    await signedInAs(
+      {
+        id: 'workos-ada',
+        email: 'ada@example.com',
+        emailVerified: true,
+        name: 'Ada Lovelace',
+      },
+      { host: 'unregistered.example.org' },
+    )
+
+    expect(elementsOf(await renderPage())[0].type).toBe(WorkshopUnavailable)
+  })
+
+  it('shows it on every host when WORKSHOP_AUTH_ORIGIN cannot be used, and reads nothing', async () => {
+    // The conference's main host, proven: only the variable stands in the way.
+    proven('unregistered.example.org')
+    MARKED()
+    expect(elementsOf(await renderPage())[0].type).toBe(WorkshopSignedOut)
+    h.fetch.mockClear()
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.stubEnv('WORKSHOP_AUTH_ORIGIN', 'http://auth.example.org')
+
+    expect(elementsOf(await renderPage())[0].type).toBe(WorkshopUnavailable)
+    expect(recordReads()).toBe(0)
   })
 
   it('keeps the plain 404 for a tenant without workshops, marked or not', async () => {
@@ -560,8 +802,8 @@ describe('workshop portal — on a host that cannot sign in', () => {
     })
     MARKED()
     expect(await is404(() => WorkshopLayout({ children: null }))).toBe(true)
-    expect(await is404(() => WorkshopPage())).toBe(true)
-    expect(mockWithAuth).not.toHaveBeenCalled()
+    expect(await is404(() => renderPage())).toBe(true)
+    expect(h.fetch).not.toHaveBeenCalled()
   })
 })
 
@@ -572,28 +814,12 @@ describe('workshop portal — on a host that cannot sign in', () => {
  * the email link (`workshopPortalUrl`), its record read live.
  */
 describe('workshop portal — a refused secondary host', () => {
-  const yesterday = new Date(Date.now() - 86_400_000).toISOString()
-  /** `main.example.org` as Sanity stores it: verified and registered. */
-  const mainRecord = {
-    _id: 'domainVerification.main.example.org',
-    _rev: 'rev-1',
-    hostname: 'main.example.org',
-    conferenceId: 'conf-1',
-    token: 'tok',
-    status: 'verified',
-    method: 'dns-txt',
-    verifiedAt: yesterday,
-    lastSuccessAt: yesterday,
-    lastCheckedAt: yesterday,
-    consecutiveFailures: 0,
-    consecutiveSoftFailures: 0,
-    redirectUriStatus: 'registered',
-    redirectUriId: 'ru_1',
-    conference: {
-      organization: { _ref: 'org-tenant2' },
-      domains: ['main.example.org', 'secondary.example.org'],
-    },
-  }
+  /** `main.example.org` proven, for the conference that claims both hosts. */
+  const mainCanSignIn = () =>
+    proven('main.example.org', 'conf-1', [
+      'main.example.org',
+      'secondary.example.org',
+    ])
 
   beforeEach(() => {
     stubOwnTicketingSecret('org-tenant2')
@@ -613,9 +839,8 @@ describe('workshop portal — a refused secondary host', () => {
     })
   })
 
-  function markedOn(host: string) {
-    beginRequest(new Headers({ host, 'x-workshop-sign-in-unavailable': '1' }))
-  }
+  /** A request on `host`, which is not proven itself. */
+  const markedOn = on
 
   async function redirectOf(render: () => Promise<unknown>) {
     try {
@@ -628,60 +853,42 @@ describe('workshop portal — a refused secondary host', () => {
   }
 
   it('sends the attendee to the main host’s portal when that one can sign in', async () => {
-    h.fetch.mockImplementation((async (query: string) =>
-      String(query).includes('_type == "domainVerification"')
-        ? mainRecord
-        : null) as unknown as () => Promise<null>)
+    mainCanSignIn()
     markedOn('secondary.example.org')
 
-    await expect(redirectOf(() => WorkshopPage())).resolves.toBe(
+    await expect(redirectOf(() => renderPage())).resolves.toBe(
       'https://main.example.org/workshop',
     )
-    expect(mockWithAuth).not.toHaveBeenCalled()
   })
 
-  it('shows the unavailable view when the main host cannot sign in either — after ONE read', async () => {
-    h.fetch.mockImplementation(async () => null)
+  it('shows the unavailable view when the main host cannot sign in either, after ONE more read', async () => {
     markedOn('secondary.example.org')
 
-    const page = await WorkshopPage()
+    const page = await renderPage()
     expect(elementsOf(page)[0].type).toBe(WorkshopUnavailable)
-    const queries = h.fetch.mock.calls as unknown as Array<[string]>
-    expect(
-      queries.filter(([query]) =>
-        String(query).includes('_type == "domainVerification"'),
-      ),
-    ).toHaveLength(1)
+    // This host's own record, then the main host's.
+    expect(recordReads()).toBe(2)
   })
 
-  // The proxy already read this host's standing to set the mark.
-  it('spends no read of its own on the main host', async () => {
-    h.fetch.mockImplementation(async () => null)
+  // The decision for this host was just taken from its own record.
+  it('spends no second read on the main host itself', async () => {
     markedOn('main.example.org')
 
-    const page = await WorkshopPage()
+    const page = await renderPage()
     expect(elementsOf(page)[0].type).toBe(WorkshopUnavailable)
-    const queries = h.fetch.mock.calls as unknown as Array<[string]>
-    expect(
-      queries.filter(([query]) =>
-        String(query).includes('_type == "domainVerification"'),
-      ),
-    ).toHaveLength(0)
+    expect(recordReads()).toBe(1)
   })
 
   it('never redirects to the host the attendee is already on', async () => {
-    h.fetch.mockImplementation((async (query: string) =>
-      String(query).includes('_type == "domainVerification"')
-        ? mainRecord
-        : null) as unknown as () => Promise<null>)
-    // In any spelling the browser may send.
+    // The main host as an unproven record: it cannot sign in, in any spelling
+    // the browser may send.
     for (const host of [
       'main.example.org',
       'Main.Example.ORG',
       'main.example.org:443',
     ]) {
       markedOn(host)
-      const page = await WorkshopPage()
+      const page = await renderPage()
       expect(elementsOf(page)[0].type).toBe(WorkshopUnavailable)
     }
   })

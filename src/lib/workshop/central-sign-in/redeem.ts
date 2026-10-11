@@ -10,6 +10,7 @@ import {
   SESSION_TTL_SECONDS,
   isSessionFor,
   sessionCookie,
+  sessionSchema,
   type WorkshopSession,
 } from './session'
 import { challengeOf, signInCookie } from './start-seals'
@@ -60,14 +61,15 @@ export async function redeemWorkshopHandOff(
     return refused()
   }
 
-  const { challenge: _challenge, ...identity } = handOff
   const response = toPortal()
   const session = sessionCookie()
   response.cookies.set(
     session.name,
     await seal(
       'session',
-      identity satisfies WorkshopSession,
+      // What the hand-off carries, without the hash: the schema keeps its own
+      // fields and drops the rest.
+      sessionSchema.parse(handOff) satisfies WorkshopSession,
       SESSION_TTL_SECONDS,
     ),
     { ...session.options, maxAge: SESSION_TTL_SECONDS },
