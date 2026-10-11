@@ -16,9 +16,7 @@ export interface WorkshopStats {
   capacity: number
   totalSignups: number
   confirmedSignups: number
-  pendingSignups: number
   waitlistSignups: number
-  cancelledSignups: number
   utilization: number
 }
 
@@ -29,9 +27,7 @@ export interface WorkshopStatsTotals {
   totalSignups: number
   uniqueParticipants: number
   totalConfirmed: number
-  totalPending: number
   totalWaitlist: number
-  totalCancelled: number
   averageUtilization: number
 }
 

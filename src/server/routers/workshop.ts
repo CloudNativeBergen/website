@@ -37,7 +37,8 @@ import {
   verifyWorkshopBelongsToConference,
   getWorkshopSignups,
   createWorkshopSignup,
-  cancelWorkshopSignup,
+  deleteWorkshopSignup,
+  moveWorkshopSignupToWaitlist,
   confirmWorkshopSignup,
   updateWorkshopCapacity,
   getWorkshopSignupsByWorkshop,
@@ -661,7 +662,10 @@ export const workshopRouter = router({
           })
         }
 
-        await cancelWorkshopSignup(input.signupId)
+        // A cancel REMOVES the sign-up (#1331). It used to set `waitlist`, so
+        // a person who backed out sat among the people waiting for a seat and
+        // could be confirmed, and emailed, by a capacity increase.
+        await deleteWorkshopSignup(input.signupId)
 
         revalidateTag('content:workshops', 'default')
 
@@ -992,13 +996,18 @@ export const workshopRouter = router({
         }
       }),
 
+    /**
+     * "Move to waitlist" (#1331). The name says cancel and is kept: a caller
+     * outside this repository was not ruled out. It sets `waitlist` and frees
+     * the seat; it does not delete, and it emails nobody.
+     */
     batchCancelSignups: workshopAdminProcedure
       .input(batchCancelSignupsSchema)
       .mutation(async ({ input }) => {
         try {
           // OWNERSHIP (#730): resolve which of the supplied ids actually belong
           // to the request's conference and refuse the WHOLE batch if any does
-          // not — a silent partial cancel would hide the attempt.
+          // not — a silent partial move would hide the attempt.
           const uniqueIds = Array.from(new Set(input.signupIds))
           const owned = await getAllWorkshopSignups({
             conferenceId: await resolveConferenceId(),
@@ -1012,7 +1021,7 @@ export const workshopRouter = router({
             })
           }
           const results = await Promise.allSettled(
-            owned.map((signup) => cancelWorkshopSignup(signup._id)),
+            owned.map((signup) => moveWorkshopSignupToWaitlist(signup._id)),
           )
 
           const succeeded = results.filter(
@@ -1025,7 +1034,7 @@ export const workshopRouter = router({
 
           return {
             success: true,
-            message: `Cancelled ${succeeded} signups${failed > 0 ? `, ${failed} failed` : ''}`,
+            message: `Moved ${succeeded} signup${succeeded === 1 ? '' : 's'} to the waitlist${failed > 0 ? `, ${failed} failed` : ''}`,
             results: {
               succeeded,
               failed,
@@ -1037,7 +1046,7 @@ export const workshopRouter = router({
           if (error instanceof TRPCError) throw error
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
-            message: 'Failed to batch cancel signups',
+            message: 'Failed to move signups to the waitlist',
             cause: error,
           })
         }
@@ -1047,8 +1056,6 @@ export const workshopRouter = router({
       .input(WorkshopSignupIdSchema)
       .mutation(async ({ input }) => {
         try {
-          const { deleteWorkshopSignup } = await import('@/lib/workshop/sanity')
-
           // OWNERSHIP (#730): `input.signupId` is client input and the delete
           // was completely unguarded — it removed any document in the dataset.
           await requireDocumentInCurrentConference(

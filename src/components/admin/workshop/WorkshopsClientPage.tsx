@@ -24,6 +24,7 @@ import type {
 } from '@/lib/workshop/types'
 import type { WorkshopAnnouncementView } from '@/lib/workshop/announcements'
 import { useRefreshAnnouncements } from './useRefreshAnnouncements'
+import { useMoveToWaitlist } from './useMoveToWaitlist'
 import { useQueryClient } from '@tanstack/react-query'
 import { EmptyState } from '@/components/EmptyState'
 
@@ -141,6 +142,12 @@ export function WorkshopsClientPage({
       refetchWorkshopSignups()
       refetchStats()
     },
+  })
+
+  const { moveToWaitlist, isMoving } = useMoveToWaitlist(() => {
+    refetchSignups()
+    refetchWorkshopSignups()
+    refetchStats()
   })
 
   const manualSignupMutation = api.workshop.admin.manualSignup.useMutation({
@@ -450,8 +457,10 @@ export function WorkshopsClientPage({
         status={signupModal.status}
         signups={filteredSignups}
         onConfirmSignup={handleConfirmSignup}
+        onMoveToWaitlist={moveToWaitlist}
         onDeleteSignup={handleDeleteSignup}
         isConfirming={confirmMutation.isPending}
+        isMoving={isMoving}
         isDeleting={deleteMutation.isPending}
       />
 

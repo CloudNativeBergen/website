@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { useEffect } from 'react'
 import { http, HttpResponse, delay } from 'msw'
 import type { Decorator } from '@storybook/nextjs-vite'
-import { expect, userEvent, within } from 'storybook/test'
+import { expect, userEvent, waitFor, within } from 'storybook/test'
 import WorkshopList from './WorkshopList'
 import type { ProposalWithWorkshopData } from '@/lib/workshop/types'
 import { mockDateBeforeEach } from '@/lib/storybook'
@@ -241,6 +241,83 @@ export const RegistrationClosed: Story = {
         [signup('su-1', 'ws-1', 'confirmed')],
       ),
     },
+  },
+}
+
+/**
+ * The server after #1331: a cancel REMOVES the sign-up, so the attendee's next
+ * read of their sign-ups comes back without it. (Before, the sign-up came back
+ * as `waitlist`.) Reset per story in `beforeEach`.
+ */
+const cancelled = { done: false }
+const cancelHandlers = [
+  http.get('/api/trpc/workshop.list', () =>
+    listResponse([wsAvailableA, wsAvailableB]),
+  ),
+  http.get('/api/trpc/workshop.getMySignups', () =>
+    signupsResponse(
+      cancelled.done ? [] : [signup('su-1', 'ws-1', 'confirmed')],
+    ),
+  ),
+  announcementsHandler,
+  http.post('/api/trpc/workshop.cancelSignup', () => {
+    cancelled.done = true
+    return trpc({
+      success: true,
+      message: 'Workshop signup cancelled successfully',
+    })
+  }),
+]
+
+/**
+ * After "Cancel Registration" the workshop is one the attendee has NOT signed
+ * up for: it is back under "Available Workshops" with its register button, and
+ * nothing says waitlist.
+ */
+export const AfterCancel: Story = {
+  args: signedInArgs,
+  beforeEach: () => {
+    cancelled.done = false
+  },
+  parameters: { msw: { handlers: cancelHandlers } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(
+      await canvas.findByRole('heading', { name: 'Your Workshops' }),
+    ).toBeVisible()
+
+    await userEvent.click(
+      await canvas.findByRole('button', { name: 'Cancel Registration' }),
+    )
+
+    await canvas.findByText('Successfully cancelled workshop signup')
+    await waitFor(() =>
+      expect(
+        canvas.queryByRole('heading', { name: 'Your Workshops' }),
+      ).not.toBeInTheDocument(),
+    )
+    await expect(
+      canvas.getAllByRole('button', { name: 'Register for Workshop' }),
+    ).toHaveLength(2)
+    await expect(
+      canvas.queryByText(/on the waitlist for this workshop/i),
+    ).not.toBeInTheDocument()
+    await expect(
+      canvas.queryByRole('button', { name: 'Leave Waitlist' }),
+    ).not.toBeInTheDocument()
+  },
+}
+
+export const AfterCancelDark: Story = {
+  ...AfterCancel,
+  parameters: { ...AfterCancel.parameters, dark: true },
+}
+
+export const AfterCancelMobile: Story = {
+  ...AfterCancel,
+  parameters: {
+    ...AfterCancel.parameters,
+    viewport: { defaultViewport: 'phone' },
   },
 }
 

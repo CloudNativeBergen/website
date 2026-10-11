@@ -19,8 +19,11 @@ interface SignupDetailsModalProps {
   status: WorkshopSignupStatus | null
   signups: WorkshopSignupExisting[]
   onConfirmSignup: (signupId: string, userName: string) => void
+  /** Runs after the organizer has answered the question this modal asks. */
+  onMoveToWaitlist: (signupId: string, userName: string) => void
   onDeleteSignup: (signupId: string, userName: string) => void
   isConfirming?: boolean
+  isMoving?: boolean
   isDeleting?: boolean
 }
 
@@ -31,14 +34,21 @@ export function SignupDetailsModal({
   status,
   signups,
   onConfirmSignup,
+  onMoveToWaitlist,
   onDeleteSignup,
   isConfirming = false,
+  isMoving = false,
   isDeleting = false,
 }: SignupDetailsModalProps) {
   const [deleteTarget, setDeleteTarget] = useState<{
     signupId: string
     userName: string
   } | null>(null)
+  const [moveTarget, setMoveTarget] = useState<{
+    signupId: string
+    userName: string
+  } | null>(null)
+  const isBusy = isConfirming || isMoving || isDeleting
 
   const statusLabel = status
     ? status.charAt(0).toUpperCase() + status.slice(1)
@@ -81,10 +91,24 @@ export function SignupDetailsModal({
           {signup.status === 'waitlist' && (
             <button
               onClick={() => onConfirmSignup(signup._id, signup.userName)}
-              disabled={isConfirming || isDeleting}
+              disabled={isBusy}
               className="text-green-600 hover:text-green-900 disabled:cursor-not-allowed disabled:opacity-50 dark:text-green-400 dark:hover:text-green-300"
             >
               Move to Confirmed
+            </button>
+          )}
+          {signup.status === 'confirmed' && (
+            <button
+              onClick={() =>
+                setMoveTarget({
+                  signupId: signup._id,
+                  userName: signup.userName,
+                })
+              }
+              disabled={isBusy}
+              className="min-h-11 text-blue-600 hover:text-blue-900 disabled:cursor-not-allowed disabled:opacity-50 dark:text-blue-400 dark:hover:text-blue-300"
+            >
+              Move to waitlist
             </button>
           )}
           <button
@@ -94,7 +118,7 @@ export function SignupDetailsModal({
                 userName: signup.userName,
               })
             }
-            disabled={isConfirming || isDeleting}
+            disabled={isBusy}
             className="flex h-11 w-11 items-center justify-center rounded-md text-gray-600 hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-50 dark:text-gray-400 dark:hover:bg-red-900/20 dark:hover:text-red-400"
             title="Delete participant"
           >
@@ -119,6 +143,29 @@ export function SignupDetailsModal({
         emptyState={{
           title: `No ${status ?? ''} signups for this workshop`,
         }}
+      />
+
+      {/* The attendee is told nothing and the waitlist is not moved up, so the
+          organizer is told both before the seat is taken away. */}
+      <ConfirmationModal
+        isOpen={moveTarget !== null}
+        onClose={() => setMoveTarget(null)}
+        onConfirm={() => {
+          if (moveTarget) {
+            onMoveToWaitlist(moveTarget.signupId, moveTarget.userName)
+          }
+          setMoveTarget(null)
+        }}
+        title="Move to waitlist"
+        message={
+          moveTarget
+            ? `Move ${moveTarget.userName} to the waitlist for ${workshopTitle}? They lose their seat and get no email about it. The seat is then open to whoever signs up next.`
+            : ''
+        }
+        confirmButtonText="Move to waitlist"
+        cancelButtonText="Keep confirmed"
+        variant="warning"
+        isLoading={isMoving}
       />
 
       <ConfirmationModal

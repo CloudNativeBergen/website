@@ -92,7 +92,7 @@ vi.mock('@/lib/sponsor-crm/activity', () => ({
 const ws = vi.hoisted(() => ({
   getAllWorkshopSignups: vi.fn(),
   confirmWorkshopSignup: vi.fn(),
-  cancelWorkshopSignup: vi.fn(),
+  moveWorkshopSignupToWaitlist: vi.fn(),
   deleteWorkshopSignup: vi.fn(),
   updateWorkshopCapacity: vi.fn(),
   verifyWorkshopBelongsToConference: vi.fn(),
@@ -110,7 +110,7 @@ vi.mock('@/lib/workshop/sanity', async (importOriginal) => ({
   ...((await importOriginal()) as Record<string, unknown>),
   getAllWorkshopSignups: ws.getAllWorkshopSignups,
   confirmWorkshopSignup: ws.confirmWorkshopSignup,
-  cancelWorkshopSignup: ws.cancelWorkshopSignup,
+  moveWorkshopSignupToWaitlist: ws.moveWorkshopSignupToWaitlist,
   deleteWorkshopSignup: ws.deleteWorkshopSignup,
   updateWorkshopCapacity: ws.updateWorkshopCapacity,
   verifyWorkshopBelongsToConference: ws.verifyWorkshopBelongsToConference,
@@ -216,7 +216,7 @@ beforeEach(() => {
   reg.generateRegistrationToken.mockResolvedValue({ token: 'tok' })
   ws.getAllWorkshopSignups.mockResolvedValue([])
   ws.confirmWorkshopSignup.mockResolvedValue(undefined)
-  ws.cancelWorkshopSignup.mockResolvedValue(undefined)
+  ws.moveWorkshopSignupToWaitlist.mockResolvedValue(undefined)
   ws.deleteWorkshopSignup.mockResolvedValue(undefined)
   ws.updateWorkshopCapacity.mockResolvedValue({ _id: 'w-1' })
   ws.verifyWorkshopBelongsToConference.mockResolvedValue(false)
@@ -349,16 +349,22 @@ describe('workshop admin signup mutations are conference-scoped (#730)', () => {
     await expect(
       workshop().admin.batchCancelSignups({ signupIds: ['sg-A', 'sg-B'] }),
     ).rejects.toMatchObject({ code: 'NOT_FOUND' })
-    expect(ws.cancelWorkshopSignup).not.toHaveBeenCalled()
+    expect(ws.moveWorkshopSignupToWaitlist).not.toHaveBeenCalled()
   })
 
-  it('batchCancelSignups cancels when every id is ours', async () => {
+  // #1331: the name says cancel, the behaviour is "Move to waitlist". It never
+  // deletes; an attendee's own cancel does (`workshop.cancelSignup`).
+  it('batchCancelSignups moves to the waitlist when every id is ours', async () => {
     ws.getAllWorkshopSignups.mockResolvedValue([
       { _id: 'sg-A' },
       { _id: 'sg-B' },
     ])
     await workshop().admin.batchCancelSignups({ signupIds: ['sg-A', 'sg-B'] })
-    expect(ws.cancelWorkshopSignup).toHaveBeenCalledTimes(2)
+    expect(ws.moveWorkshopSignupToWaitlist.mock.calls).toEqual([
+      ['sg-A'],
+      ['sg-B'],
+    ])
+    expect(ws.deleteWorkshopSignup).not.toHaveBeenCalled()
   })
 
   it('deleteSignup refuses a foreign signup id', async () => {

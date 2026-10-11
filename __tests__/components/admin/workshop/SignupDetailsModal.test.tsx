@@ -2,7 +2,13 @@
  * @vitest-environment jsdom
  */
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { render, screen, fireEvent, cleanup } from '@testing-library/react'
+import {
+  render,
+  screen,
+  fireEvent,
+  cleanup,
+  within,
+} from '@testing-library/react'
 import { SignupDetailsModal } from '@/components/admin/workshop/SignupDetailsModal'
 import {
   WorkshopSignupStatus,
@@ -25,6 +31,8 @@ function renderModal(
   overrides: Partial<React.ComponentProps<typeof SignupDetailsModal>> = {},
 ) {
   const onDeleteSignup = vi.fn()
+  const onMoveToWaitlist = vi.fn()
+  const onConfirmSignup = vi.fn()
   render(
     <SignupDetailsModal
       isOpen
@@ -32,13 +40,23 @@ function renderModal(
       workshopTitle="Kubernetes 101"
       status={WorkshopSignupStatus.CONFIRMED}
       signups={signups}
-      onConfirmSignup={vi.fn()}
+      onConfirmSignup={onConfirmSignup}
+      onMoveToWaitlist={onMoveToWaitlist}
       onDeleteSignup={onDeleteSignup}
       {...overrides}
     />,
   )
-  return { onDeleteSignup }
+  return { onDeleteSignup, onMoveToWaitlist, onConfirmSignup }
 }
+
+const waitlisted = [
+  { ...signups[0], _id: 'signup-2', status: WorkshopSignupStatus.WAITLIST },
+] as unknown as WorkshopSignupExisting[]
+
+// The list renders every row twice (a card below `md`, a table row above), so
+// each action is in the document twice.
+const moveToWaitlist = () =>
+  screen.queryAllByRole('button', { name: 'Move to waitlist' })
 
 afterEach(() => cleanup())
 
@@ -70,5 +88,69 @@ describe('SignupDetailsModal delete confirmation (C6)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
 
     expect(onDeleteSignup).not.toHaveBeenCalled()
+  })
+})
+
+describe('SignupDetailsModal "Move to waitlist" (#1331)', () => {
+  it('is offered on a confirmed sign-up, where "Move to Confirmed" is not', () => {
+    renderModal()
+
+    expect(moveToWaitlist()).toHaveLength(2)
+    expect(
+      screen.queryAllByRole('button', { name: 'Move to Confirmed' }),
+    ).toHaveLength(0)
+  })
+
+  it('is not offered on a waitlisted sign-up, where "Move to Confirmed" is', () => {
+    renderModal({ status: WorkshopSignupStatus.WAITLIST, signups: waitlisted })
+
+    expect(moveToWaitlist()).toHaveLength(0)
+    expect(
+      screen.queryAllByRole('button', { name: 'Move to Confirmed' }),
+    ).toHaveLength(2)
+  })
+
+  it('asks first, naming the participant and saying they are not emailed', () => {
+    const { onMoveToWaitlist } = renderModal()
+
+    fireEvent.click(moveToWaitlist()[0])
+
+    expect(onMoveToWaitlist).not.toHaveBeenCalled()
+    const dialog = screen.getByRole('dialog', { name: 'Move to waitlist' })
+    expect(dialog).toHaveTextContent(
+      'Move Ada Lovelace to the waitlist for Kubernetes 101?',
+    )
+    expect(dialog).toHaveTextContent('get no email')
+  })
+
+  it('moves that sign-up once the organizer confirms', () => {
+    const { onMoveToWaitlist, onDeleteSignup } = renderModal()
+
+    fireEvent.click(moveToWaitlist()[0])
+    fireEvent.click(
+      within(
+        screen.getByRole('dialog', { name: 'Move to waitlist' }),
+      ).getByRole('button', { name: 'Move to waitlist' }),
+    )
+
+    expect(onMoveToWaitlist).toHaveBeenCalledTimes(1)
+    expect(onMoveToWaitlist).toHaveBeenCalledWith('signup-1', 'Ada Lovelace')
+    expect(onDeleteSignup).not.toHaveBeenCalled()
+  })
+
+  it('backing out of the question leaves the sign-up confirmed', () => {
+    const { onMoveToWaitlist } = renderModal()
+
+    fireEvent.click(moveToWaitlist()[0])
+    fireEvent.click(screen.getByRole('button', { name: 'Keep confirmed' }))
+
+    expect(onMoveToWaitlist).not.toHaveBeenCalled()
+  })
+
+  it('never calls the action "cancel"', () => {
+    renderModal()
+    fireEvent.click(moveToWaitlist()[0])
+
+    expect(document.body).not.toHaveTextContent(/cancel/i)
   })
 })
