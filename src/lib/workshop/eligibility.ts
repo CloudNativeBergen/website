@@ -14,6 +14,7 @@ export {
 } from '@/lib/tickets/classification'
 import { platformFallbackContact } from '@/lib/email/from'
 import { clientReadUncached } from '@/lib/sanity/client'
+import { reportNotSetTicketTypes } from './not-set-notice'
 
 /**
  * THE ACCESS FIELD, READ LIVE — the other half of "one rule".
@@ -176,6 +177,16 @@ export async function checkWorkshopEligibility(params: {
       const unclassified = userTickets.find(
         (ticket) => workshopAccessOf(ticket.category, roles) === 'unclassified',
       )
+
+      // Tell the organizers, once per type (spec §8). This runs on every
+      // request of a refused attendee: for a type this process has already
+      // handled it is a map lookup, and it never changes the answer below.
+      reportNotSetTicketTypes({
+        conferenceId: params.conference._id,
+        typeNames: userTickets.map((ticket) => ticket.category),
+        ticketTypeRoles: roles,
+        source: 'portal-refusal',
+      })
 
       return {
         isEligible: false,

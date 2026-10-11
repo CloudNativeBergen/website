@@ -25,7 +25,45 @@ import type {
   MessageNotificationInput,
   NotificationInput,
   NotificationItem,
+  OnceNotificationInput,
 } from './types'
+
+/** The stored `notification` document for one input. */
+function notificationDocument(
+  item: NotificationInput,
+  createdAt: string,
+): { _type: 'notification'; [key: string]: unknown } {
+  const doc: { _type: 'notification'; [key: string]: unknown } = {
+    _type: 'notification',
+    // WEAK (#851): a strong ref here blocks GDPR erasure of the speaker.
+    // `weak: true` in the schema governs Studio writes only — an API write
+    // is strong unless the stored ref object itself carries `_weak`.
+    recipient: { ...createReference(item.recipientId), _weak: true },
+    conference: createReference(item.conferenceId),
+    notificationType: item.notificationType,
+    title: item.title,
+    createdAt,
+  }
+  if (item.message) {
+    doc.message = item.message
+  }
+  if (item.link) {
+    doc.link = item.link
+  }
+  if (item.actorId) {
+    // WEAK (#851): see `recipient` above — speaker erasure must not be
+    // blocked by a notification the speaker happened to trigger.
+    doc.actor = { ...createReference(item.actorId), _weak: true }
+  }
+  if (item.relatedProposalId) {
+    // Weak reference so a later proposal deletion doesn't orphan-block.
+    doc.relatedProposal = {
+      ...createReference(item.relatedProposalId),
+      _weak: true,
+    }
+  }
+  return doc
+}
 
 /**
  * Persist one `notification` document per input, all in a SINGLE
@@ -67,36 +105,7 @@ export async function createNotifications(
     const tx = clientWrite.transaction()
 
     for (const item of items) {
-      const doc: { _type: string; [key: string]: unknown } = {
-        _type: 'notification',
-        // WEAK (#851): a strong ref here blocks GDPR erasure of the speaker.
-        // `weak: true` in the schema governs Studio writes only — an API write
-        // is strong unless the stored ref object itself carries `_weak`.
-        recipient: { ...createReference(item.recipientId), _weak: true },
-        conference: createReference(item.conferenceId),
-        notificationType: item.notificationType,
-        title: item.title,
-        createdAt,
-      }
-      if (item.message) {
-        doc.message = item.message
-      }
-      if (item.link) {
-        doc.link = item.link
-      }
-      if (item.actorId) {
-        // WEAK (#851): see `recipient` above — speaker erasure must not be
-        // blocked by a notification the speaker happened to trigger.
-        doc.actor = { ...createReference(item.actorId), _weak: true }
-      }
-      if (item.relatedProposalId) {
-        // Weak reference so a later proposal deletion doesn't orphan-block.
-        doc.relatedProposal = {
-          ...createReference(item.relatedProposalId),
-          _weak: true,
-        }
-      }
-      tx.create(doc)
+      tx.create(notificationDocument(item, createdAt))
     }
 
     await tx.commit()
@@ -125,6 +134,65 @@ export async function createNotifications(
     // nothing, so report 0 (the caller may retry / skip a success marker).
     console.error('Failed to create notifications:', error)
     return 0
+  }
+}
+
+/**
+ * {@link createNotifications} for notifications that may exist AT MOST ONCE:
+ * each item carries its own document id and is written with
+ * `createIfNotExists`, all in ONE transaction. Writing an id that already
+ * exists changes nothing, including its read state, so a caller may repeat the
+ * write from any server instance without a prior read.
+ *
+ * CONTRACT: NEVER throws into the caller's flow, like `createNotifications`.
+ *
+ * RETURN: `committed` says whether the transaction went through, `created` how
+ * many of the documents did not exist before. The two are separate because a
+ * committed write that created nothing is a success (the notifications were
+ * already there), and a caller deciding whether to try again must be able to
+ * tell it from a failure.
+ *
+ * WEB PUSH goes to the recipients whose document this call CREATED, read from
+ * the per-mutation `operation` in the commit answer. A repeat therefore pushes
+ * nothing. Anything but an explicit `create` is treated as not created.
+ */
+export async function createNotificationsOnce(
+  items: OnceNotificationInput[],
+): Promise<{ committed: boolean; created: number }> {
+  if (items.length === 0) {
+    return { committed: true, created: 0 }
+  }
+
+  try {
+    const createdAt = new Date().toISOString()
+    const tx = clientWrite.transaction()
+    for (const item of items) {
+      tx.createIfNotExists({
+        _id: item.id,
+        ...notificationDocument(item, createdAt),
+      })
+    }
+    const answer = await tx.commit()
+
+    const createdIds = new Set(
+      (answer?.results ?? [])
+        .filter((result) => result.operation === 'create')
+        .map((result) => result.id),
+    )
+    const created = items.filter((item) => createdIds.has(item.id))
+
+    if (created.length > 0) {
+      try {
+        await sendPushForNotifications(created)
+      } catch (pushError) {
+        console.error('Failed to send web push for notifications:', pushError)
+      }
+    }
+
+    return { committed: true, created: created.length }
+  } catch (error) {
+    console.error('Failed to create once-only notifications:', error)
+    return { committed: false, created: 0 }
   }
 }
 

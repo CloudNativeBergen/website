@@ -79,6 +79,12 @@ export default defineType({
             title: 'Marketing Task Posted Without a Tag',
             value: 'marketing_task_tag_withheld',
           },
+          // A ticket type with no workshop decision was sold or refused at
+          // the portal (#1335); once per type per conference.
+          {
+            title: 'Workshop Ticket Type Not Set',
+            value: 'workshop_ticket_type_not_set',
+          },
           { title: 'System', value: 'system' },
         ],
         layout: 'dropdown',
