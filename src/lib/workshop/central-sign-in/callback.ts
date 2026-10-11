@@ -3,7 +3,7 @@ import { decodeJwt } from 'jose'
 import { NextResponse, type NextRequest } from 'next/server'
 import { z } from 'zod'
 import { WORKSHOP_REDEEM_PATH } from '../sign-in-paths'
-import { notFound, resolveCentralSignIn } from './decision'
+import { logRefusal, notFound, resolveCentralSignIn } from './decision'
 import { HANDOFF_TTL_SECONDS, type HandOff } from './handoff'
 import { seal, unseal } from './seal'
 import { startCookie, startCookieSchema, startStateSchema } from './start-seals'
@@ -12,6 +12,11 @@ import { workshopWorkOS } from './workos'
 const accessTokenClaims = z.object({ sid: z.string().min(1) })
 
 /** The WorkOS session an access token belongs to (its `sid`), or `null`. */
+function refused(reason: string): NextResponse {
+  logRefusal('callback', reason)
+  return notFound()
+}
+
 function sessionIdOf(accessToken: string): string | null {
   try {
     return accessTokenClaims.parse(decodeJwt(accessToken)).sid
@@ -37,6 +42,8 @@ function sessionIdOf(accessToken: string): string | null {
  *    still has workshops;
  *  - the conference that claims the host is still the one in state.
  *
+ * Each refusal leaves one line in the log with its reason (`logRefusal`).
+ *
  * NOTHING IS KEPT HERE: no session and no WorkOS token. The answer is a
  * redirect to the tenant host's redeem route with a sealed hand-off token
  * (§5), valid for about a minute, and the start cookie is cleared.
@@ -50,10 +57,10 @@ export async function finishCentralSignIn(
     params.get('state'),
     startStateSchema,
   )
-  if (!state) return notFound()
+  if (!state) return refused('no-state')
 
   const code = params.get('code')
-  if (!code) return notFound()
+  if (!code) return refused('no-code')
 
   const cookie = startCookie()
   const started = await unseal(
@@ -61,12 +68,14 @@ export async function finishCentralSignIn(
     request.cookies.get(cookie.name)?.value,
     startCookieSchema,
   )
-  if (!started || started.nonce !== state.nonce) return notFound()
+  if (!started || started.nonce !== state.nonce) return refused('no-cookie')
 
   const signIn = await resolveCentralSignIn(request.headers, state.host)
-  if (!signIn) return notFound()
+  if (!signIn) return refused('host-refused')
   const { destination } = signIn
-  if (destination.conference._id !== state.conferenceId) return notFound()
+  if (destination.conference._id !== state.conferenceId) {
+    return refused('conference-changed')
+  }
 
   let token: string
   try {

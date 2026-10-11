@@ -3,7 +3,13 @@ import type { NextRequest, NextResponse } from 'next/server'
 import { normalizeDomain } from '@/lib/conference/domains'
 import { isWorkshopsEnabledForConference } from '@/lib/features/workshops'
 import { WORKSHOP_SIGN_IN_INCOMPLETE_QUERY } from '../sign-in-paths'
-import { isAuthHost, notFound, resolveTenantHost, toPortal } from './decision'
+import {
+  isAuthHost,
+  logRefusal,
+  notFound,
+  resolveTenantHost,
+  toPortal,
+} from './decision'
 import { handOffSchema } from './handoff'
 import { seal, unseal } from './seal'
 import {
@@ -31,7 +37,8 @@ import { challengeOf, signInCookie } from './start-seals'
  *
  * WHERE THE BROWSER GOES NEXT IS FIXED: the portal page, and nothing in the
  * request chooses it. A refusal goes there too, signed out, with one neutral
- * line; the reason is never shown and no cookie is touched. The token is in
+ * line; the reason is never shown (it goes to the log, `logRefusal`) and no
+ * cookie is touched. The token is in
  * the URL, so every answer is `no-store` and sends no referrer.
  *
  * NOT SINGLE USE (spec §5): inside its minute the same browser could redeem a
@@ -41,24 +48,30 @@ export async function redeemWorkshopHandOff(
   request: NextRequest,
 ): Promise<NextResponse> {
   if (isAuthHost(request.headers)) return notFound()
-  const refused = () => toPortal(WORKSHOP_SIGN_IN_INCOMPLETE_QUERY)
+  const refused = (reason: string) => {
+    logRefusal('redeem', reason)
+    return toPortal(WORKSHOP_SIGN_IN_INCOMPLETE_QUERY)
+  }
 
   const handOff = await unseal(
     'handoff',
     request.nextUrl.searchParams.get('token'),
     handOffSchema,
   )
-  if (!handOff) return refused()
+  if (!handOff) return refused('no-hand-off')
   const signIn = signInCookie()
   const value = request.cookies.get(signIn.name)?.value
-  if (!value || challengeOf(value) !== handOff.challenge) return refused()
+  if (!value || challengeOf(value) !== handOff.challenge) {
+    return refused('no-cookie')
+  }
   const requestHost = normalizeDomain(request.headers.get('host') ?? '')
-  if (handOff.host !== requestHost) return refused()
+  if (handOff.host !== requestHost) return refused('other-host')
 
   const tenant = await resolveTenantHost(request.headers)
-  if (!tenant || !isSessionFor(handOff, tenant)) return refused()
+  if (!tenant) return refused('host-refused')
+  if (!isSessionFor(handOff, tenant)) return refused('conference-changed')
   if (!(await isWorkshopsEnabledForConference(tenant.destination.conference))) {
-    return refused()
+    return refused('no-workshops')
   }
 
   const response = toPortal()

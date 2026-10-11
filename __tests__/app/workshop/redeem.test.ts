@@ -138,7 +138,11 @@ async function resealed(
   return seal(purpose, { ...payload, ...change }, 60)
 }
 
-function expectRefused(response: Response) {
+/** Refused, for exactly this reason: the one line the log gets. */
+function expectRefused(response: Response, reason: string) {
+  expect(console.warn).toHaveBeenCalledExactlyOnceWith(
+    `[workshop] redeem refused: ${reason}`,
+  )
   expect(response.status).toBe(307)
   expect(response.headers.get('location')).toBe(REFUSED)
   expect(response.headers.getSetCookie()).toEqual([])
@@ -155,6 +159,7 @@ beforeEach(() => {
   vi.stubEnv('PLATFORM_ORG_ID', 'org-platform')
   vi.stubEnv('WORKSHOP_AUTH_ORIGIN', `https://${AUTH}`)
   vi.spyOn(console, 'error').mockImplementation(() => {})
+  vi.spyOn(console, 'warn').mockImplementation(() => {})
   getDomainClaim.mockImplementation(
     claimsById(
       provenClaim(TENANT),
@@ -282,7 +287,7 @@ describe('redeem: refused, no session, back to /workshop signed out', () => {
     const handedOff = await handOff()
     getDomainClaim.mockClear()
 
-    expectRefused(await redeem(handedOff, { cookie: null }))
+    expectRefused(await redeem(handedOff, { cookie: null }), 'no-cookie')
     expect(getDomainClaim).not.toHaveBeenCalled()
   })
 
@@ -291,7 +296,7 @@ describe('redeem: refused, no session, back to /workshop signed out', () => {
     const second = await handOff()
     getDomainClaim.mockClear()
 
-    expectRefused(await redeem(first, { cookie: second.browser }))
+    expectRefused(await redeem(first, { cookie: second.browser }), 'no-cookie')
     expect(getDomainClaim).not.toHaveBeenCalled()
   })
 
@@ -302,6 +307,7 @@ describe('redeem: refused, no session, back to /workshop signed out', () => {
       await redeem(handedOff, {
         cookie: handedOff.browser.replace(SIGN_IN_COOKIE, 'workshop-sign-in'),
       }),
+      'no-cookie',
     )
   })
 
@@ -310,7 +316,7 @@ describe('redeem: refused, no session, back to /workshop signed out', () => {
     const token = await resealed(handedOff, { host: ALLOCATED })
     getDomainClaim.mockClear()
 
-    expectRefused(await redeem(handedOff, { token }))
+    expectRefused(await redeem(handedOff, { token }), 'other-host')
     expect(getDomainClaim).not.toHaveBeenCalled()
   })
 
@@ -326,7 +332,7 @@ describe('redeem: refused, no session, back to /workshop signed out', () => {
       ),
     )
 
-    expectRefused(await redeem(handedOff))
+    expectRefused(await redeem(handedOff), 'conference-changed')
   })
 
   it('a token older than 60 seconds', async () => {
@@ -336,8 +342,9 @@ describe('redeem: refused, no session, back to /workshop signed out', () => {
 
     vi.setSystemTime(now.getTime() + 59_000)
     expect((await redeem(handedOff)).headers.get('location')).toBe('/workshop')
+    expect(console.warn).not.toHaveBeenCalled()
     vi.setSystemTime(now.getTime() + 61_000)
-    expectRefused(await redeem(handedOff))
+    expectRefused(await redeem(handedOff), 'no-hand-off')
   })
 
   it('a token that was changed on the way', async () => {
@@ -346,18 +353,21 @@ describe('redeem: refused, no session, back to /workshop signed out', () => {
     const parts = handedOff.token.split('.')
     parts[3] = (parts[3][0] === 'A' ? 'B' : 'A') + parts[3].slice(1)
 
-    expectRefused(await redeem(handedOff, { token: parts.join('.') }))
+    expectRefused(
+      await redeem(handedOff, { token: parts.join('.') }),
+      'no-hand-off',
+    )
   })
 
   it('a sealed session presented as a token', async () => {
     const handedOff = await handOff()
     const token = await resealed(handedOff, {}, 'session')
 
-    expectRefused(await redeem(handedOff, { token }))
+    expectRefused(await redeem(handedOff, { token }), 'no-hand-off')
   })
 
   it('without a token', async () => {
-    expectRefused(await redeem(await handOff(), { token: null }))
+    expectRefused(await redeem(await handOff(), { token: null }), 'no-hand-off')
   })
 
   it('a host that no longer passes the destination check', async () => {
@@ -366,14 +376,14 @@ describe('redeem: refused, no session, back to /workshop signed out', () => {
       claimsById(provenClaim(TENANT, { status: 'failing' })),
     )
 
-    expectRefused(await redeem(handedOff))
+    expectRefused(await redeem(handedOff), 'host-refused')
   })
 
   it('a conference whose workshops were switched off since the hand-off', async () => {
     const handedOff = await handOff()
     isWorkshopsEnabledForConference.mockResolvedValue(false)
 
-    expectRefused(await redeem(handedOff))
+    expectRefused(await redeem(handedOff), 'no-workshops')
   })
 
   it('on the auth host: a 404, without reading a record', async () => {

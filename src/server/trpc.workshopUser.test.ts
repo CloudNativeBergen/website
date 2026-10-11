@@ -253,6 +253,17 @@ describe('createTRPCContext: no attendee', () => {
     expect(ctx.workosUser).toBeNull()
   })
 
+  it('on the auth host, which serves no conference, without reading a record', async () => {
+    const cookie = await signedIn()
+
+    const ctx = await createTRPCContext({
+      req: request(cookie, { host: AUTH }),
+    })
+
+    expect(ctx.workosUser).toBeNull()
+    expect(getDomainClaim).not.toHaveBeenCalled()
+  })
+
   it('with a hand-off token presented as a session, without reading a record', async () => {
     const { token } = await handOff(HOST, AUTH)
     getDomainClaim.mockClear()

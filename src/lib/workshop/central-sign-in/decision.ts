@@ -20,6 +20,15 @@ export function notFound(): NextResponse {
 }
 
 /**
+ * Say in the log why a step of a sign-in refused. The attendee is never told
+ * (a 404, or one neutral line), so this is the only place the reason exists.
+ * `reason` is one of a fixed set of words, never a value from the request.
+ */
+export function logRefusal(step: 'callback' | 'redeem', reason: string): void {
+  console.warn(`[workshop] ${step} refused: ${reason}`)
+}
+
+/**
  * To the portal page, by a path nothing in the request chooses. `suffix` is a
  * fixed query of ours, never the request's.
  */

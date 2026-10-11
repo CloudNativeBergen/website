@@ -90,7 +90,11 @@ const callback = (
   options: Partial<CallbackOptions> = {},
 ) => callbackOn(flow, { on: AUTH, ...options })
 
-function expectRefused(response: Response) {
+/** Refused, for exactly this reason: the one line the log gets. */
+function expectRefused(response: Response, reason: string) {
+  expect(console.warn).toHaveBeenCalledExactlyOnceWith(
+    `[workshop] callback refused: ${reason}`,
+  )
   expect(response.status).toBe(404)
   expect(response.headers.get('location')).toBeNull()
   expect(response.headers.getSetCookie()).toEqual([])
@@ -111,6 +115,7 @@ beforeEach(() => {
   vi.stubEnv('PLATFORM_DOMAIN_SUFFIX', 'konf.run')
   vi.stubEnv('WORKSHOP_AUTH_ORIGIN', `https://${AUTH}`)
   vi.spyOn(console, 'error').mockImplementation(() => {})
+  vi.spyOn(console, 'warn').mockImplementation(() => {})
   getDomainClaim.mockImplementation(
     claimsById(
       provenClaim(TENANT),
@@ -257,7 +262,7 @@ describe('callback: refused with 404, and the code is never exchanged', () => {
     const flow = await startFlow()
     getDomainClaim.mockClear()
 
-    expectRefused(await callback(flow, { cookie: null }))
+    expectRefused(await callback(flow, { cookie: null }), 'no-cookie')
     expect(getDomainClaim).not.toHaveBeenCalled()
   })
 
@@ -266,7 +271,7 @@ describe('callback: refused with 404, and the code is never exchanged', () => {
     const second = await startFlow()
     getDomainClaim.mockClear()
 
-    expectRefused(await callback(first, { cookie: second.cookie }))
+    expectRefused(await callback(first, { cookie: second.cookie }), 'no-cookie')
     expect(getDomainClaim).not.toHaveBeenCalled()
   })
 
@@ -277,11 +282,12 @@ describe('callback: refused with 404, and the code is never exchanged', () => {
       await callback(flow, {
         cookie: flow.cookie.replace(START_COOKIE, 'workshop-auth-start'),
       }),
+      'no-cookie',
     )
   })
 
   it('without a code', async () => {
-    expectRefused(await callback(await startFlow(), { code: null }))
+    expectRefused(await callback(await startFlow(), { code: null }), 'no-code')
   })
 
   it('a host delisted between start and callback', async () => {
@@ -290,7 +296,7 @@ describe('callback: refused with 404, and the code is never exchanged', () => {
       claimsById(provenClaim(TENANT, { status: 'failing' })),
     )
 
-    expectRefused(await callback(flow))
+    expectRefused(await callback(flow), 'host-refused')
   })
 
   it('a host that another conference has claimed since the start', async () => {
@@ -305,21 +311,21 @@ describe('callback: refused with 404, and the code is never exchanged', () => {
       ),
     )
 
-    expectRefused(await callback(flow))
+    expectRefused(await callback(flow), 'conference-changed')
   })
 
   it('a conference whose workshops were switched off since the start', async () => {
     const flow = await startFlow()
     isWorkshopsEnabledForConference.mockResolvedValue(false)
 
-    expectRefused(await callback(flow))
+    expectRefused(await callback(flow), 'host-refused')
   })
 
   it('a callback that arrives on a host other than the auth host, without reading a record', async () => {
     const flow = await startFlow()
     getDomainClaim.mockClear()
 
-    expectRefused(await callback(flow, { on: TENANT }))
+    expectRefused(await callback(flow, { on: TENANT }), 'host-refused')
     expect(getDomainClaim).not.toHaveBeenCalled()
   })
 
@@ -331,8 +337,9 @@ describe('callback: refused with 404, and the code is never exchanged', () => {
     vi.setSystemTime(now.getTime() + 599_000)
     expect((await callback(flow)).status).toBe(307)
     exchangeCode.mockClear()
+    expect(console.warn).not.toHaveBeenCalled()
     vi.setSystemTime(now.getTime() + 601_000)
-    expectRefused(await callback(flow))
+    expectRefused(await callback(flow), 'no-state')
   })
 
   it.each([
@@ -346,7 +353,10 @@ describe('callback: refused with 404, and the code is never exchanged', () => {
     const flow = await startFlow()
     getDomainClaim.mockClear()
 
-    expectRefused(await callback({ ...flow, state: state as string }))
+    expectRefused(
+      await callback({ ...flow, state: state as string }),
+      'no-state',
+    )
     expect(getDomainClaim).not.toHaveBeenCalled()
   })
 
@@ -358,7 +368,7 @@ describe('callback: refused with 404, and the code is never exchanged', () => {
       600,
     )
 
-    expectRefused(await callback({ ...flow, state: forged }))
+    expectRefused(await callback({ ...flow, state: forged }), 'no-state')
   })
 })
 
@@ -427,6 +437,6 @@ describe('callback: WORKSHOP_AUTH_ORIGIN unset', () => {
   it('a callback on any other host than the one in state is refused', async () => {
     const flow = await startFlow(TENANT, TENANT)
 
-    expectRefused(await callback(flow, { on: ALLOCATED }))
+    expectRefused(await callback(flow, { on: ALLOCATED }), 'host-refused')
   })
 })

@@ -13,18 +13,20 @@ vi.mock('./config', () => ({
   }),
 }))
 
-// The sign-in host decision runs for real; only its Sanity read is supplied.
-const getRedirectUriSyncRow =
-  vi.fn<(id: string) => Promise<RedirectUriSyncRow | null>>()
+// The destination check runs for real; only its Sanity read is supplied.
+const getDomainClaim = vi.fn<(id: string) => Promise<DomainClaim | null>>()
 vi.mock('@/lib/domain-verification/sanity', () => ({
-  getRedirectUriSyncRow: (id: string) => getRedirectUriSyncRow(id),
+  getDomainClaim: (id: string) => getDomainClaim(id),
+}))
+vi.mock('@/lib/conference/sanity', () => ({
+  getConferenceForDomain: vi.fn(),
 }))
 
-import type { RedirectUriSyncRow } from '@/lib/domain-verification/types'
+import type { DomainClaim } from '@/lib/domain-verification/types'
 import {
-  signInHost,
-  signInHostsById,
-} from '../../../__tests__/helpers/workshopSignIn'
+  claimsById,
+  provenClaim,
+} from '../../../__tests__/helpers/domainClaims'
 import { sendWorkshopSignupInstructions } from './workshop'
 import { workshopPortalUrl } from '@/lib/workshop/sign-in'
 
@@ -63,12 +65,10 @@ const subject = () => sendMock.mock.calls[0][0].subject as string
 beforeEach(() => {
   vi.clearAllMocks()
   sendMock.mockResolvedValue({ data: { id: 'email-1' }, error: null })
-  getRedirectUriSyncRow.mockImplementation(
-    signInHostsById([signInHost('cloudnativebergen.no')]),
+  getDomainClaim.mockImplementation(
+    claimsById(provenClaim('cloudnativebergen.no')),
   )
-  // The fixture's owner is the platform, so each "cannot" case is the state it
-  // is named after (pending, failed), not `not-offered`.
-  vi.stubEnv('PLATFORM_ORG_ID', 'org-1')
+  vi.stubEnv('NODE_ENV', 'production')
 })
 
 afterEach(() => {
@@ -141,22 +141,27 @@ describe('sendWorkshopSignupInstructions portal link', () => {
       'https://cloudnativebergen.no/workshop',
       'https://cloudnativebergen.no/workshop',
     ])
-    expect(getRedirectUriSyncRow).toHaveBeenCalledWith(
+    expect(getDomainClaim).toHaveBeenCalledWith(
       'domainVerification.cloudnativebergen.no',
     )
   })
 
   it.each([
-    ['not registered with WorkOS yet', { status: null, id: null }, {}],
-    ['refused by WorkOS', { status: null, id: null, error: 'WorkOS 422' }, {}],
-    ['not verified', {}, { status: 'failing' as const }],
+    ['not verified', { status: 'failing' as const }, {}],
+    [
+      'only grandfathered',
+      {
+        method: 'grandfathered' as const,
+        graceUntil: new Date(Date.now() + DAY).toISOString(),
+      },
+      {},
+    ],
+    ['no longer claimed by its conference', {}, { domains: [] }],
   ])(
     'leaves the link out when the main host is %s',
-    async (_label, redirectUri, record) => {
-      getRedirectUriSyncRow.mockImplementation(
-        signInHostsById([
-          signInHost('cloudnativebergen.no', record, redirectUri),
-        ]),
+    async (_label, record, conference) => {
+      getDomainClaim.mockImplementation(
+        claimsById(provenClaim('cloudnativebergen.no', record, conference)),
       )
       await send({})
 
@@ -174,7 +179,7 @@ describe('sendWorkshopSignupInstructions portal link', () => {
 
   it('leaves the link out when the sign-in read fails', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
-    getRedirectUriSyncRow.mockRejectedValue(new Error('sanity unavailable'))
+    getDomainClaim.mockRejectedValue(new Error('sanity unavailable'))
     await send({})
 
     expect(hrefs().filter((href) => href.includes('/workshop'))).toEqual([])
@@ -184,7 +189,7 @@ describe('sendWorkshopSignupInstructions portal link', () => {
 
 describe('sendWorkshopSignupInstructions without a portal link', () => {
   it('does not announce registration as open, and points to the organizers', async () => {
-    getRedirectUriSyncRow.mockResolvedValue(null)
+    getDomainClaim.mockResolvedValue(null)
     await send({
       workshopRegistrationStart: new Date(Date.now() - DAY).toISOString(),
     })
@@ -197,7 +202,7 @@ describe('sendWorkshopSignupInstructions without a portal link', () => {
   })
 
   it('still says when registration opens, if that is later', async () => {
-    getRedirectUriSyncRow.mockResolvedValue(null)
+    getDomainClaim.mockResolvedValue(null)
     const start = new Date(Date.now() + 30 * DAY).toISOString()
     await send({ workshopRegistrationStart: start })
 
@@ -206,7 +211,7 @@ describe('sendWorkshopSignupInstructions without a portal link', () => {
   })
 
   it('keeps the closed copy when registration has closed', async () => {
-    getRedirectUriSyncRow.mockResolvedValue(null)
+    getDomainClaim.mockResolvedValue(null)
     await send({
       workshopRegistrationEnd: new Date(Date.now() - DAY).toISOString(),
     })

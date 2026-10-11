@@ -48,9 +48,12 @@ Unchanged:
 1. **Tenant host, `/workshop/sign-in` or `/workshop/sign-up`.** The host must pass §4 and its
    conference must have workshops. The route sets a short-lived cookie holding a random value
    (`__Host-` prefix, HttpOnly, `Secure`, `SameSite=Lax`, `Path=/`), and redirects to the auth
-   host's start route with the host name, a hash of that value, and the screen.
-2. **Auth host, start.** It checks the named host against §4 and that its conference has workshops,
-   so a tenant without workshops is never sent to WorkOS. It builds the authorize URL with PKCE and
+   host's start route with one sealed request, valid for about 60 seconds, that names the host, a
+   hash of that value, and the screen.
+2. **Auth host, start.** It starts nothing without a request a tenant host sealed, and reads
+   nothing for one, so it starts only what a tenant host asked for. It then checks the named host
+   against §4 and that its conference has workshops, so a tenant without workshops is never sent to
+   WorkOS. It builds the authorize URL with PKCE and
    carries the host, the conference that claims it and the hash in sealed state. Nothing from the
    query string is trusted later. It also sets a cookie on the auth host that the callback requires,
    so a callback URL completes nothing outside the browser that started.
@@ -112,8 +115,10 @@ are both gone.
 - Every read checks: it unseals as a session, it has not expired, the host is the request's host, the
   conference is the one the host resolves to, and the host still passes §4. One live record read per
   decision, as today.
-- The proxy, the portal page, the tRPC attendee identity and the sign-out action read this session.
-  None of them calls the WorkOS SDK. Changing `WORKOS_COOKIE_PASSWORD` signs everyone out.
+- The portal page and the tRPC attendee identity read this session, and the sign-out action ends
+  it. None of them calls the WorkOS SDK, and the proxy no longer handles `/workshop`: nothing on
+  that path needs a redirect or a header from it. Changing `WORKOS_COOKIE_PASSWORD` signs everyone
+  out.
 
 ## 7. Sign-out
 
