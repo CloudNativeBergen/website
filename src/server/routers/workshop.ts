@@ -60,6 +60,7 @@ import {
   getConfirmedAnnouncementRecipients,
   createWorkshopAnnouncement,
   getWorkshopAnnouncements,
+  getAnnouncementsByWorkshop,
   getWorkshopAnnouncementForAuthz,
   updateWorkshopAnnouncementBody,
   deleteWorkshopAnnouncement,
@@ -70,10 +71,10 @@ import { consumeAnnouncementRateLimit } from '@/lib/workshop/announcementRateLim
 import { requireDocumentInCurrentConference } from '@/server/tenancy'
 
 /**
- * Return the authenticated WorkOS attendee for a self-service workshop action,
- * or throw UNAUTHORIZED. The identity comes exclusively from the sealed WorkOS
- * session cookie (see `resolveWorkshopUser` in trpc.ts) — it is NEVER taken from
- * client input, which is what an attacker previously spoofed.
+ * Return the signed-in attendee for a self-service workshop action, or throw
+ * UNAUTHORIZED. The identity comes exclusively from the portal's sealed session
+ * cookie (see `resolveWorkshopUser` in trpc.ts) — it is NEVER taken from client
+ * input, which is what an attacker previously spoofed.
  */
 function requireWorkshopUser(ctx: Context): WorkshopUserIdentity {
   const user = ctx.workosUser
@@ -106,6 +107,15 @@ async function requireWorkshopAttendee(ctx: Context) {
   // AND a usable _id instead.
   if (error || !conference?._id) {
     throw new TRPCError({ code: 'NOT_FOUND', message: 'Conference not found' })
+  }
+  // The session is for one conference: the one that claims this host, read
+  // live. `conference` is resolved through a cache, so right after a host
+  // changes hands the two can differ. Then nobody is signed in to this one.
+  if (actor.conferenceId !== conference._id) {
+    throw new TRPCError({
+      code: 'UNAUTHORIZED',
+      message: 'You must be signed in to manage workshop signups',
+    })
   }
 
   const access = await decideWorkshopPortalAccess({ conference, user: actor })
@@ -167,12 +177,9 @@ async function authorizeAnnouncementMutation(
   }
 }
 
-/** Display name for a signup doc, mirroring the workshop page's fallback order. */
+/** Display name for a signup doc: the name they signed in with, or the email. */
 function workshopUserName(user: WorkshopUserIdentity): string {
-  if (user.firstName && user.lastName) {
-    return `${user.firstName} ${user.lastName}`
-  }
-  return user.firstName || user.lastName || user.email
+  return user.name || user.email
 }
 
 /**
@@ -251,6 +258,25 @@ export const workshopRouter = router({
         })
       }
     }),
+
+  // Every workshop's announcements for the conference of the request, in ONE
+  // read through the CDN host: what the attendee portal shows under its cards.
+  // (`announcements` above reads one workshop, live, for the organizer's view.)
+  announcementsByWorkshop: publicProcedure.query(async () => {
+    const conferenceId = await resolveConferenceId()
+    try {
+      return {
+        success: true,
+        data: await getAnnouncementsByWorkshop(conferenceId),
+      }
+    } catch (error) {
+      throw new TRPCError({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'Failed to fetch workshop announcements',
+        cause: error,
+      })
+    }
+  }),
 
   // Compose + broadcast an announcement to a workshop's CONFIRMED participants.
   // One-way only (no threads/replies): recipients are WorkOS attendees, not

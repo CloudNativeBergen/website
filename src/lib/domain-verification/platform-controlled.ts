@@ -19,6 +19,11 @@
  * ONE FUNCTION. The WorkOS redirect-URI sync (`@/lib/workshop/redirect-uris`)
  * registers nothing this refuses.
  *
+ * NO LONGER PART OF A SIGN-IN (#1314): the portal signs in on any host
+ * `resolveProvenDestination` (`./destination`) admits, a tenant's own proven
+ * domain included. The next paragraph describes the decision this replaced;
+ * the sync and the organizer labels still use this function until #1316.
+ *
  * APPLIED TO THE SIGN-IN DECISION ONLY THROUGH THE SYNC. Since #1298
  * `resolveWorkshopSignInHost` (`@/lib/workshop/sign-in`) also requires the
  * host's redirect URI to be in WorkOS, and the sync records a URI (as

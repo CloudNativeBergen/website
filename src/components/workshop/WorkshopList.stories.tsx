@@ -91,8 +91,9 @@ const signup = (
 const signupsResponse = (signups: unknown[]) =>
   trpc({ success: true, data: signups, count: signups.length })
 
-const announcementsHandler = http.get('/api/trpc/workshop.announcements', () =>
-  trpc({ success: true, data: [], count: 0 }),
+const announcementsHandler = http.get(
+  '/api/trpc/workshop.announcementsByWorkshop',
+  () => trpc({ success: true, data: {} }),
 )
 
 /** Base handlers: everything resolves; individual stories override `workshop.list`. */

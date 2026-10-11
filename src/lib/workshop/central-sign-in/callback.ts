@@ -3,27 +3,26 @@ import { decodeJwt } from 'jose'
 import { NextResponse, type NextRequest } from 'next/server'
 import { z } from 'zod'
 import { WORKSHOP_REDEEM_PATH } from '../sign-in-paths'
-import { notFound, resolveCentralSignIn } from './decision'
+import { clearCookie } from './cookies'
+import {
+  logRefusal,
+  notFound,
+  resolveCentralSignIn,
+  type CallbackRefusal,
+} from './decision'
+import { HANDOFF_TTL_SECONDS, type HandOff } from './handoff'
 import { seal, unseal } from './seal'
 import { startCookie, startCookieSchema, startStateSchema } from './start-seals'
 import { workshopWorkOS } from './workos'
 
-/** How long the tenant host has to redeem a hand-off (spec §5). */
-const HANDOFF_TTL_SECONDS = 60
-
 const accessTokenClaims = z.object({ sid: z.string().min(1) })
 
-/** The WorkOS session an access token belongs to (its `sid`), or `null`. */
-/**
- * Is this a `state` of this flow? Every seal here is a compact JWE: five
- * segments. The per-host sign-in's state is an iron seal, which has no such
- * shape. Told apart by shape so that a state of this flow which no longer
- * unseals (expired, changed) is refused here and never tried as the other.
- */
-function isSeal(value: string | null): value is string {
-  return value?.split('.').length === 5
+function refused(reason: CallbackRefusal): NextResponse {
+  logRefusal('callback', reason)
+  return notFound()
 }
 
+/** The WorkOS session an access token belongs to (its `sid`), or `null`. */
 function sessionIdOf(accessToken: string): string | null {
   try {
     return accessTokenClaims.parse(decodeJwt(accessToken)).sid
@@ -36,9 +35,8 @@ function sessionIdOf(accessToken: string): string | null {
  * FINISH A WORKSHOP SIGN-IN ON THE AUTH HOST (#1311, spec §3 step 3): WorkOS
  * sends the browser back with a code.
  *
- * `null` when `state` is not a seal at all: the request belongs to the
- * per-host sign-in. Otherwise every check below passes BEFORE the code is
- * exchanged, and a refusal is a 404:
+ * Every check below passes BEFORE the code is exchanged, and a refusal is a
+ * 404:
  *
  *  - the state unseals as one the start route sealed, and has not expired;
  *  - the host and the hash come from the sealed state, never the query string;
@@ -50,21 +48,25 @@ function sessionIdOf(accessToken: string): string | null {
  *    still has workshops;
  *  - the conference that claims the host is still the one in state.
  *
+ * Each refusal leaves one line in the log with its reason (`logRefusal`).
+ *
  * NOTHING IS KEPT HERE: no session and no WorkOS token. The answer is a
  * redirect to the tenant host's redeem route with a sealed hand-off token
  * (§5), valid for about a minute, and the start cookie is cleared.
  */
 export async function finishCentralSignIn(
   request: NextRequest,
-): Promise<NextResponse | null> {
+): Promise<NextResponse> {
   const params = request.nextUrl.searchParams
-  const sealedState = params.get('state')
-  if (!isSeal(sealedState)) return null
-  const state = await unseal('auth-state', sealedState, startStateSchema)
-  if (!state) return notFound()
+  const state = await unseal(
+    'auth-state',
+    params.get('state'),
+    startStateSchema,
+  )
+  if (!state) return refused('no-state')
 
   const code = params.get('code')
-  if (!code) return notFound()
+  if (!code) return refused('no-code')
 
   const cookie = startCookie()
   const started = await unseal(
@@ -72,12 +74,14 @@ export async function finishCentralSignIn(
     request.cookies.get(cookie.name)?.value,
     startCookieSchema,
   )
-  if (!started || started.nonce !== state.nonce) return notFound()
+  if (!started || started.nonce !== state.nonce) return refused('no-cookie')
 
   const signIn = await resolveCentralSignIn(request.headers, state.host)
-  if (!signIn) return notFound()
+  if (!signIn) return refused('host-refused')
   const { destination } = signIn
-  if (destination.conference._id !== state.conferenceId) return notFound()
+  if (destination.conference._id !== state.conferenceId) {
+    return refused('conference-changed')
+  }
 
   let token: string
   try {
@@ -99,7 +103,7 @@ export async function finishCentralSignIn(
         host: destination.host,
         conferenceId: state.conferenceId,
         challenge: state.challenge,
-      },
+      } satisfies HandOff,
       HANDOFF_TTL_SECONDS,
     )
   } catch (error) {
@@ -116,6 +120,6 @@ export async function finishCentralSignIn(
   const response = NextResponse.redirect(redeem, {
     headers: { 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer' },
   })
-  response.cookies.set(cookie.name, '', { ...cookie.options, maxAge: 0 })
+  clearCookie(response.cookies, cookie)
   return response
 }

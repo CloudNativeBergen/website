@@ -4,10 +4,10 @@ import { WorkshopSignedOut } from './WorkshopSignedOut'
 import { WorkshopSignOutButton } from './WorkshopSignOutButton'
 
 /**
- * The two pieces of the attendee workshop portal that start and end a WorkOS
- * session (#1296): the signed-out view, whose buttons go to the SDK-backed
- * `/workshop/sign-in` and `/workshop/sign-up` routes, and the "Sign Out" form
- * that posts to the sign-out action.
+ * The two pieces of the attendee workshop portal that start and end a sign-in
+ * (#1296): the signed-out view, whose buttons go to the `/workshop/sign-in`
+ * and `/workshop/sign-up` routes, and the "Sign Out" form that posts to the
+ * sign-out action.
  *
  * Dark mode is resolved by the LOCAL decorator below from `parameters.dark`,
  * so the `*Dark` stories are dark regardless of the toolbar.
@@ -44,6 +44,35 @@ export const SignedOut: Story = {
 }
 
 export const SignedOutDark: Story = { parameters: { dark: true } }
+
+/** Back from a sign-in that was not accepted (#1314): one neutral line. */
+export const SignInIncomplete: Story = {
+  args: { signInIncomplete: true },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(canvas.getByRole('status')).toHaveTextContent(
+      'Sign-in did not complete. Please try again.',
+    )
+    await expect(
+      canvas.getByRole('button', { name: 'Sign In' }),
+    ).toBeInTheDocument()
+  },
+}
+
+export const SignInIncompleteDark: Story = {
+  args: { signInIncomplete: true },
+  parameters: { dark: true },
+}
+
+/** The line on a phone: it wraps inside the viewport. */
+export const SignInIncompleteMobile: Story = {
+  args: { signInIncomplete: true },
+  parameters: { viewport: { defaultViewport: 'mobile1' } },
+  play: async ({ canvasElement }) => {
+    const page = canvasElement.ownerDocument.documentElement
+    await expect(page.scrollWidth).toBeLessThanOrEqual(page.clientWidth)
+  },
+}
 
 /** A long conference name, on a phone: the buttons must not overflow. */
 export const SignedOutLongTitleMobile: Story = {

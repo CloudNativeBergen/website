@@ -16,6 +16,8 @@ import type { z } from 'zod'
  * must differ in every environment.
  */
 export type SealPurpose =
+  /** What the tenant host asks the auth host to start. */
+  | 'start-request'
   /** The OAuth `state` the auth host sends to WorkOS and gets back. */
   | 'auth-state'
   /** The auth host's cookie that binds a callback to the browser that started. */
@@ -55,6 +57,7 @@ export async function seal(
 /**
  * What was sealed for `purpose`, or `null`: not a seal, another purpose,
  * another password, changed, expired, or not the shape `schema` describes.
+ * Throws, as `seal` does, when there is no usable password to unseal with.
  */
 export async function unseal<T>(
   purpose: SealPurpose,
@@ -62,8 +65,11 @@ export async function unseal<T>(
   schema: z.ZodType<T>,
 ): Promise<T | null> {
   if (!sealed) return null
+  // Outside the `try`: a missing password is a deployment that cannot sign
+  // anyone in, and must not read as a seal that was merely refused.
+  const key = keyFor(purpose)
   try {
-    const { payload } = await jwtDecrypt(sealed, keyFor(purpose), {
+    const { payload } = await jwtDecrypt(sealed, key, {
       keyManagementAlgorithms: ['dir'],
       contentEncryptionAlgorithms: ['A256GCM'],
     })

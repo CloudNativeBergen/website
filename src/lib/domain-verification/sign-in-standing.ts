@@ -1,6 +1,12 @@
 /**
  * WHERE ONE HOST STANDS FOR THE WORKSHOP PORTAL'S SIGN-IN (#1298).
  *
+ * NO LONGER WHAT DECIDES A SIGN-IN (#1314). The portal signs in on any host
+ * `resolveProvenDestination` (`./destination`) admits; WorkOS registration,
+ * who owns the conference and `WORKOS_COOKIE_DOMAIN` take no part. The
+ * standing below is what the organizer surfaces and the redirect-URI sync
+ * still show, and `resolveWorkshopSignInHost` is gone. #1316 removes it.
+ *
  * A host can carry a WorkOS sign-in only when it is on the verified-redirect
  * allowlist AND WorkOS holds its callback as a redirect URI. Anything short of
  * both ends at a WorkOS error page, so the sign-in decision

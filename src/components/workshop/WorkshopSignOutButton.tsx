@@ -3,7 +3,7 @@ import { Button } from '@/components/Button'
 
 /**
  * "Sign Out" for the workshop portal (#1296): a form that POSTS to the sign-out
- * server action, which ends the WorkOS session through the SDK.
+ * server action, which ends the portal's session on this host.
  *
  * A form and not a link on purpose. A GET sign-out can be triggered by a
  * prefetch or by any page that embeds the URL; a server action is a POST that
