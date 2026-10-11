@@ -552,6 +552,16 @@ describe('workshop portal — signed-in attendee', () => {
       expect(await isSignedOut()).toBe(true)
     })
 
+    it('with a session for a host whose name this host merely starts with', async () => {
+      // Same conference, both proven: only the exact host tells them apart.
+      const LONGER = `${HOST}.example.net`
+      proven(LONGER)
+      on(LONGER)
+      await signedInAs(ADA, { host: HOST })
+
+      expect(await isSignedOut()).toBe(true)
+    })
+
     it('with a session for this conference once another conference claims the host', async () => {
       // The live record says conf-2; the session, and the page's cached
       // routing, still say conf-1. Only the live read can tell.
@@ -731,6 +741,18 @@ describe('workshop portal — on a host that cannot sign in', () => {
       slug: 'tenant-two',
       plan: 'pro',
     })
+  })
+
+  it('decides from the Host header, whatever x-forwarded-host names', async () => {
+    // A proven host named only by a header a client can send.
+    beginRequest(
+      new Headers({
+        host: 'unregistered.example.org',
+        'x-forwarded-host': HOST,
+      }),
+    )
+
+    expect(elementsOf(await renderPage())[0].type).toBe(WorkshopUnavailable)
   })
 
   it('shows that sign-up is not available, with the contact address', async () => {

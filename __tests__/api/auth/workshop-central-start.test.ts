@@ -206,6 +206,29 @@ describe('start: a proven host', () => {
     expect(await unseal('auth-start', state, anything)).toBeNull()
   })
 
+  it('takes the host, the hash and the screen from the sealed request only, whatever the query string names', async () => {
+    const response = await start({
+      query: {
+        host: ALLOCATED,
+        challenge: 'x'.repeat(43),
+        screen: 'sign-up',
+      },
+    })
+
+    const location = new URL(response.headers.get('location')!)
+    expect(location.searchParams.get('screen_hint')).toBe('sign-in')
+    expect(
+      await unseal('auth-state', location.searchParams.get('state'), anything),
+    ).toMatchObject({
+      host: TENANT,
+      conferenceId: CLAIMING_CONFERENCE_ID,
+      challenge: CHALLENGE,
+    })
+    expect(getDomainClaim.mock.calls).toEqual([
+      [`domainVerification.${TENANT}`],
+    ])
+  })
+
   it('sets exactly one cookie: host-only, with the __Host- prefix', async () => {
     const response = await start()
 

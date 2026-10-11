@@ -238,10 +238,16 @@ describe('redeem: a hand-off for this host, in the browser that began', () => {
     getDomainClaim.mockClear()
     exchangeCode.mockClear()
 
+    isWorkshopsEnabledForConference.mockClear()
+
     await redeem(handedOff)
 
     expect(getDomainClaim).toHaveBeenCalledOnce()
     expect(exchangeCode).not.toHaveBeenCalled()
+    // The feature gate is asked about the conference that claims the host.
+    expect(isWorkshopsEnabledForConference.mock.calls).toEqual([
+      [provenClaim(TENANT).conference],
+    ])
   })
 
   it('WORKOS_COOKIE_DOMAIN adds no Domain to either cookie', async () => {
@@ -305,6 +311,35 @@ describe('redeem: refused, no session, back to /workshop signed out', () => {
 
     expectRefused(await redeem(first, { cookie: second.browser }), 'no-cookie')
     expect(getDomainClaim).not.toHaveBeenCalled()
+  })
+
+  it('with the hash itself as the cookie: the cookie must hash to it, not equal it', async () => {
+    const handedOff = await handOff()
+    const { challenge } = (await unseal(
+      'handoff',
+      handedOff.token,
+      z.object({ challenge: z.string() }),
+    ))!
+
+    expectRefused(
+      await redeem(handedOff, { cookie: `${SIGN_IN_COOKIE}=${challenge}` }),
+      'no-cookie',
+    )
+  })
+
+  it('with a cookie whose hash only begins like the one in the token', async () => {
+    const handedOff = await handOff()
+    const { challenge } = (await unseal(
+      'handoff',
+      handedOff.token,
+      z.object({ challenge: z.string() }),
+    ))!
+    // The genuine cookie, against a token whose hash shares its first half.
+    const token = await resealed(handedOff, {
+      challenge: challenge.slice(0, 21) + 'x'.repeat(22),
+    })
+
+    expectRefused(await redeem(handedOff, { token }), 'no-cookie')
   })
 
   it('with the cookie under a name without the __Host- prefix', async () => {

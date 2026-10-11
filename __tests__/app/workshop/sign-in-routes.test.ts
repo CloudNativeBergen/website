@@ -193,6 +193,16 @@ describe('sign-in: nothing is begun', () => {
     },
   )
 
+  it('a proven host whose name only ends with the auth host’s is a tenant host', async () => {
+    const LOOKALIKE = `my-${AUTH}`
+    getDomainClaim.mockImplementation(claimsById(provenClaim(LOOKALIKE)))
+
+    const response = await begin(LOOKALIKE)
+
+    expect(response.status).toBe(307)
+    expect(await sentRequest(response)).toMatchObject({ host: LOOKALIKE })
+  })
+
   it('the auth host in another case is still the auth host', async () => {
     const response = await begin('AUTH.Example.org')
 
