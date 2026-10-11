@@ -385,50 +385,123 @@ describe('createTRPCContext — only the attendee procedures resolve the attende
  * is held to the source: every reader, and nothing else.
  */
 describe('the prefilter’s premise', () => {
-  const ROUTERS = join(process.cwd(), 'src/server/routers')
-  const READS_THE_ATTENDEE =
-    /requireWorkshopAttendee\(|requireWorkshopUser\(|ctx\.workosUser/
+  const SRC = join(process.cwd(), 'src')
+  const ROUTER = join(SRC, 'server/routers/workshop.ts')
+  /** Any mention of the identity, or a call of a helper that reads it. */
+  const MENTION =
+    /\bworkosUser\b|\brequireWorkshopUser\(|\brequireWorkshopAttendee\(/g
 
-  /** The top-level procedures of the workshop router that read the attendee. */
-  function attendeeProcedures(): string[] {
-    const source = readFileSync(join(ROUTERS, 'workshop.ts'), 'utf8')
-    const body = source.slice(
-      source.indexOf('export const workshopRouter = router({'),
-    )
-    // A top-level key of the router: two spaces of indentation (Prettier's).
-    const keys = [...body.matchAll(/^ {2}(\w+): /gm)]
-    return keys
-      .filter((key, i) =>
-        READS_THE_ATTENDEE.test(
-          body.slice(key.index, keys[i + 1]?.index ?? body.length),
-        ),
-      )
-      .map((key) => `workshop.${key[1]}`)
+  interface Region {
+    name: string
+    from: number
+    to: number
   }
 
-  it('holds: the procedures that read the attendee are exactly the three it names', () => {
-    expect(attendeeProcedures().sort()).toEqual([
-      'workshop.cancelSignup',
-      'workshop.getMySignups',
-      'workshop.signup',
-    ])
+  /** The source of the workshop router, cut into the regions that matter. */
+  function regions(source: string): Region[] {
+    const routerAt = source.indexOf('export const workshopRouter = router({')
+    // The two helpers: from their declaration to the next closing brace at
+    // column zero.
+    const helpers = ['requireWorkshopUser', 'requireWorkshopAttendee'].map(
+      (name) => {
+        const from = source.search(
+          new RegExp(`^(async )?function ${name}\\(`, 'm'),
+        )
+        return { name, from, to: source.indexOf('\n}\n', from) }
+      },
+    )
+    // The router's top-level keys: two spaces of indentation (Prettier's).
+    const keys = [...source.slice(routerAt).matchAll(/^ {2}(\w+)[:,]/gm)]
+    const procedures = keys.map((key, i) => ({
+      name: `workshop.${key[1]}`,
+      from: routerAt + key.index,
+      to: routerAt + (keys[i + 1]?.index ?? source.length - routerAt),
+    }))
+    return [...helpers, ...procedures]
+  }
+
+  /** Where each mention of the identity in `source` sits. */
+  function readers(source: string): string[] {
+    const all = regions(source)
+    return [...source.matchAll(MENTION)].map(
+      (mention) =>
+        all.find(
+          (region) => region.from <= mention.index && mention.index < region.to,
+        )?.name ?? `outside every procedure (offset ${mention.index})`,
+    )
+  }
+
+  const NAMED = [
+    'workshop.cancelSignup',
+    'workshop.getMySignups',
+    'workshop.signup',
+  ]
+  const HELPERS = ['requireWorkshopAttendee', 'requireWorkshopUser']
+
+  it('holds: every mention of the attendee in the router is in a named procedure or in a helper only they call', () => {
+    const found = [...new Set(readers(readFileSync(ROUTER, 'utf8')))].sort()
+
+    expect(found).toEqual([...HELPERS, ...NAMED].sort())
   })
 
-  it('holds: the scan sees the router (control)', () => {
-    const source = readFileSync(join(ROUTERS, 'workshop.ts'), 'utf8')
-    // The names the scan must be able to tell apart are all really there.
-    for (const name of ['list', 'announcementsByWorkshop', 'signup', 'admin']) {
-      expect(source).toMatch(new RegExp(`^ {2}${name}: `, 'm'))
-    }
-  })
+  it.each([
+    [
+      'reads it by destructuring',
+      (source: string) =>
+        source.replace(
+          '  list: publicProcedure',
+          '  whoAmI: publicProcedure.query(({ ctx }) => {\n    const { workosUser } = ctx\n    return workosUser\n  }),\n\n  list: publicProcedure',
+        ),
+      'workshop.whoAmI',
+    ],
+    [
+      'is defined above the router and mounted by name',
+      (source: string) =>
+        source.replace(
+          'export const workshopRouter = router({',
+          'const whoAmI = publicProcedure.query(({ ctx }) => ctx.workosUser)\n\nexport const workshopRouter = router({\n  whoAmI,',
+        ),
+      'outside every procedure',
+    ],
+    [
+      'reaches it through a helper of another name',
+      (source: string) =>
+        source.replace(
+          'export const workshopRouter = router({',
+          'const who = (ctx: Context) => requireWorkshopUser(ctx)\n\nexport const workshopRouter = router({',
+        ),
+      'outside every procedure',
+    ],
+    [
+      'calls the gate from a public list',
+      (source: string) =>
+        source.replace(
+          '  announcementsByWorkshop: publicProcedure.query(async () => {',
+          '  announcementsByWorkshop: publicProcedure.query(async ({ ctx }) => {\n    await requireWorkshopAttendee(ctx)',
+        ),
+      'workshop.announcementsByWorkshop',
+    ],
+  ])(
+    'would be caught: a procedure that %s',
+    (_label, withAnUnnamedReader, where) => {
+      const source = readFileSync(ROUTER, 'utf8')
+      const changed = withAnUnnamedReader(source)
+      // The edit really landed, and the scan names where.
+      expect(changed).not.toBe(source)
+      expect(readers(changed).some((name) => name.startsWith(where))).toBe(true)
+    },
+  )
 
-  it('holds: no other router reads the attendee', () => {
-    const others = readdirSync(ROUTERS, { recursive: true })
+  it('holds: nothing else in the application mentions the attendee', () => {
+    const others = readdirSync(SRC, { recursive: true })
       .map(String)
       .filter((file) => /\.tsx?$/.test(file) && !/\.test\./.test(file))
-      .filter((file) => file !== 'workshop.ts')
+      .filter(
+        (file) =>
+          !['server/trpc.ts', 'server/routers/workshop.ts'].includes(file),
+      )
       .filter((file) =>
-        /workosUser/.test(readFileSync(join(ROUTERS, file), 'utf8')),
+        /\bworkosUser\b/.test(readFileSync(join(SRC, file), 'utf8')),
       )
 
     expect(others).toEqual([])
@@ -439,7 +512,7 @@ describe('the prefilter’s premise', () => {
     vi.stubEnv('RESEND_API_KEY', 're_test_key')
     const { appRouter } = await import('./_app')
 
-    for (const procedure of attendeeProcedures()) {
+    for (const procedure of NAMED) {
       expect(Object.keys(appRouter._def.procedures)).toContain(procedure)
       const ctx = await createTRPCContext({
         req: request('wos-session=sealed', { procedures: procedure }),

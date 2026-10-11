@@ -140,8 +140,11 @@ function persistRefreshedSession(
  * announcements, availability, the organizer's `admin.*`) answers without it.
  *
  * A procedure that starts reading the identity MUST be added here, or it sees
- * `null` and refuses every attendee. `trpc.workshopUser.test.ts` holds this set
- * to the router's source.
+ * `null` and refuses every attendee: closed, but silently. This is a
+ * convention, not something the types enforce. `trpc.workshopUser.test.ts`
+ * checks it against the router's source (every mention of the identity or of
+ * the two helpers that read it), which catches the ways of forgetting it that
+ * were thought of, not every way.
  */
 const ATTENDEE_PROCEDURES: ReadonlySet<string> = new Set([
   'workshop.signup',

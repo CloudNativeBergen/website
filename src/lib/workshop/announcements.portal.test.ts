@@ -58,10 +58,17 @@ function announcement(
   }
 }
 
+function workshop(id: string, conference = 'conf-1', status = 'confirmed') {
+  return { _id: id, _type: 'talk', status, conference: ref(conference) }
+}
+
 beforeEach(() => {
   h.reads.length = 0
   h.dataset = [
     { _id: 'speaker-ada', _type: 'speaker', name: 'Ada Lovelace' },
+    workshop('ws-1'),
+    workshop('ws-2'),
+    workshop('ws-9', 'conf-2'),
     announcement('a1', 'ws-1', '2026-10-01T10:00:00Z'),
     announcement('a2', 'ws-1', '2026-10-03T10:00:00Z'),
     announcement('a3', 'ws-1', '2026-10-02T10:00:00Z'),
@@ -150,6 +157,55 @@ describe('getAnnouncementsByWorkshop', () => {
     )
     expect(h.reads).toEqual([])
   })
+
+  it.each(['withdrawn', 'rejected', 'accepted', 'submitted'])(
+    'leaves out the announcements of a workshop that is %s: it has no card on the portal',
+    async (status) => {
+      h.dataset.push(
+        workshop('ws-3', 'conf-1', status),
+        announcement('c1', 'ws-3', '2026-10-06T10:00:00Z'),
+      )
+
+      const mine = await getAnnouncementsByWorkshop('conf-1', 50)
+
+      expect(Object.keys(mine).sort()).toEqual(['ws-1', 'ws-2'])
+    },
+  )
+
+  it('returns at most 500 for the conference, dropping its oldest first', async () => {
+    h.dataset.push(workshop('ws-busy'))
+    for (let i = 0; i < 500; i++) {
+      h.dataset.push(
+        announcement(
+          `busy-${i}`,
+          'ws-busy',
+          new Date(Date.UTC(2026, 10, 1, 0, 0, i)).toISOString(),
+        ),
+      )
+    }
+
+    const mine = await getAnnouncementsByWorkshop('conf-1', 1000)
+
+    // All 500 newer ones, and none of the four older ones of ws-1 and ws-2.
+    expect(mine['ws-busy']).toHaveLength(500)
+    expect(Object.keys(mine)).toEqual(['ws-busy'])
+  })
+
+  it.each(['constructor', '__proto__', 'toString'])(
+    'keeps a workshop whose id is %s apart from what every object has',
+    async (id) => {
+      h.dataset.push(
+        workshop(id),
+        announcement('odd-1', id, '2026-10-06T10:00:00Z'),
+      )
+
+      const mine = await getAnnouncementsByWorkshop('conf-1', 50)
+
+      expect(Object.hasOwn(mine, id)).toBe(true)
+      expect(mine[id]).toEqual([expect.objectContaining({ _id: 'odd-1' })])
+      expect(Object.keys(mine).sort()).toEqual([id, 'ws-1', 'ws-2'].sort())
+    },
+  )
 
   it('leaves out an announcement whose workshop reference is gone', async () => {
     h.dataset.push({

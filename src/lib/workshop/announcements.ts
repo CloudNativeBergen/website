@@ -184,9 +184,15 @@ export async function getWorkshopAnnouncements(
 const PORTAL_ANNOUNCEMENTS_CAP = 500
 
 /**
- * EVERY workshop's announcements for one conference, in ONE read: what the
- * attendee portal shows under each workshop card. Keyed by workshop id, newest
- * first, at most `limitPerWorkshop` each.
+ * The announcements of every CONFIRMED workshop of one conference, in ONE
+ * read: what the attendee portal shows under each workshop card. Keyed by
+ * workshop id, newest first, at most `limitPerWorkshop` each. A workshop that
+ * is not confirmed has no card on the portal, so its announcements are left
+ * out here.
+ *
+ * The cap is on the whole conference, applied before the per-workshop limit:
+ * past it, the oldest announcements of the conference drop out first, whichever
+ * workshop they belong to.
  *
  * One request for the page instead of one per card, and through the CDN host:
  * an announcement may reach the portal some seconds after it is posted, which
@@ -202,7 +208,7 @@ export async function getAnnouncementsByWorkshop(
   >(
     clientReadCached,
     { conferenceId },
-    `*[_type == "workshopAnnouncement"] | order(createdAt desc)[0...${PORTAL_ANNOUNCEMENTS_CAP}]{
+    `*[_type == "workshopAnnouncement" && workshop->status == "confirmed"] | order(createdAt desc)[0...${PORTAL_ANNOUNCEMENTS_CAP}]{
       _id,
       body,
       createdAt,
@@ -211,13 +217,16 @@ export async function getAnnouncementsByWorkshop(
     }`,
   )
 
-  const byWorkshop: Record<string, WorkshopAnnouncementView[]> = {}
+  // A Map, not an object: a workshop id is data, and must not meet a key the
+  // object already has.
+  const byWorkshop = new Map<string, WorkshopAnnouncementView[]>()
   for (const { workshopId, ...announcement } of rows ?? []) {
     if (!workshopId) continue
-    const list = (byWorkshop[workshopId] ??= [])
+    const list = byWorkshop.get(workshopId) ?? []
     if (list.length < limitPerWorkshop) list.push(announcement)
+    byWorkshop.set(workshopId, list)
   }
-  return byWorkshop
+  return Object.fromEntries(byWorkshop)
 }
 
 /** Upper bound on simultaneous announcement emails in flight. */

@@ -544,6 +544,8 @@ describe('schedule resolution — official documents only', () => {
     expect(mockCdnFetch).toHaveBeenCalledOnce()
     expect(mockCdnFetch.mock.calls[0][0]).toContain('_type == "schedule"')
     expect(mockCdnFetch.mock.calls[0][1]).toEqual({ conferenceId: 'conf-1' })
+    // The CDN host is the only cache: nothing is kept in Next's as well.
+    expect(mockCdnFetch.mock.calls[0][2]).toEqual({ cache: 'no-store' })
 
     const workshop = workshops[0] as unknown as {
       room?: string

@@ -107,4 +107,25 @@ describe('WorkshopAnnouncementsSection', () => {
     // ONE request, naming the procedure ONCE: not once per card.
     expect(requests).toEqual([['workshop.announcementsByWorkshop']])
   })
+
+  it.each(['constructor', 'toString', '__proto__'])(
+    'renders nothing for a workshop whose id is %s and has no announcements',
+    async (workshopId) => {
+      render(
+        <Providers>
+          <section data-testid="odd">
+            <WorkshopAnnouncementsSection workshopId={workshopId} />
+          </section>
+          <section data-testid="ws-1">
+            <WorkshopAnnouncementsSection workshopId="ws-1" />
+          </section>
+        </Providers>,
+      )
+
+      await waitFor(() =>
+        expect(screen.getByTestId('ws-1').textContent).toContain('Docker'),
+      )
+      expect(screen.getByTestId('odd').textContent).toBe('')
+    },
+  )
 })

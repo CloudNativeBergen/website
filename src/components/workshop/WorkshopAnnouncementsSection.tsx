@@ -21,5 +21,12 @@ export default function WorkshopAnnouncementsSection({
   workshopId,
 }: WorkshopAnnouncementsSectionProps) {
   const { data } = api.workshop.announcementsByWorkshop.useQuery()
-  return <WorkshopAnnouncements announcements={data?.data[workshopId] ?? []} />
+  const byWorkshop = data?.data ?? {}
+  return (
+    <WorkshopAnnouncements
+      announcements={
+        Object.hasOwn(byWorkshop, workshopId) ? byWorkshop[workshopId] : []
+      }
+    />
+  )
 }
