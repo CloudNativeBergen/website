@@ -237,6 +237,31 @@ describe('the tenant host: pressing "Sign Out"', () => {
     expect(writtenCookies()).toEqual([SESSION_CLEARED])
   })
 
+  it('with a session of a host this one only ends like: ends on the front page', async () => {
+    const session = await signIn(TENANT, AUTH)
+
+    expect(await pressSignOut(session, `evil-${TENANT}`)).toBe('/')
+  })
+
+  it('decides the host from Host, not from a forwarded header', async () => {
+    const session = await signIn(TENANT, AUTH)
+    beginRequest(
+      new Headers({
+        host: OTHER,
+        'x-forwarded-host': TENANT,
+        forwarded: `host=${TENANT}`,
+      }),
+    )
+    presentCookie(SESSION_COOKIE, session.slice(session.indexOf('=') + 1))
+
+    const thrown = await signOutOfWorkshop().then(
+      () => null,
+      (error: { url?: string }) => error,
+    )
+
+    expect(thrown?.url).toBe('/')
+  })
+
   it('with a hand-off token in place of a session: ends on the front page', async () => {
     const { token } = await handOff(TENANT, AUTH)
 
@@ -382,6 +407,46 @@ describe('the auth host: ending the WorkOS login', () => {
     ).toBe(WORKOS_SESSION)
   })
 
+  it('takes the session and the return address from the sealed request, not from the address', async () => {
+    const target = new URL(await signedInThenOut())
+    target.searchParams.set('session_id', 'session_of_someone_else')
+    target.searchParams.set('sessionId', 'session_of_someone_else')
+    target.searchParams.set('return_to', `https://${OTHER}/`)
+    target.searchParams.set('host', OTHER)
+
+    const response = await signOutRoute(get(target, AUTH))
+
+    expect(
+      Object.fromEntries(
+        new URL(response.headers.get('location')!).searchParams,
+      ),
+    ).toEqual({ session_id: WORKOS_SESSION, return_to: RETURN_ADDRESS })
+    expect(
+      await unseal(
+        'sign-out-return',
+        firstCookie(response).split('=')[1],
+        z.object({ host: z.string() }),
+      ),
+    ).toEqual({ host: TENANT })
+  })
+
+  it('answers 404 on another host that only claims, in a forwarded header, to be the auth host', async () => {
+    const target = new URL(await signedInThenOut())
+
+    const response = await signOutRoute(
+      new NextRequest(`https://${TENANT}${target.pathname}${target.search}`, {
+        headers: new Headers({
+          host: TENANT,
+          'x-forwarded-host': AUTH,
+          forwarded: `host=${AUTH}`,
+        }),
+      }),
+    )
+
+    expectNotSignedOutAtWorkOS(response, 'host-refused')
+    expect(getDomainClaim).not.toHaveBeenCalled()
+  })
+
   it('refuses without a request, and reads nothing', async () => {
     const response = await arriveToSignOut({ request: null })
 
@@ -418,22 +483,26 @@ describe('the auth host: ending the WorkOS login', () => {
     expectNotSignedOutAtWorkOS(response, 'no-request')
   })
 
-  it.each(['session', 'handoff', 'start-request', 'sign-out-return'] as const)(
-    'refuses a request sealed as %s',
-    async (purpose) => {
-      // The same fields sealed as a sign-out request are carried on.
-      expect(
-        (await arriveToSignOut({ request: await resealed({}) })).status,
-      ).toBe(307)
-      vi.clearAllMocks()
+  it.each([
+    'session',
+    'handoff',
+    'start-request',
+    'auth-state',
+    'auth-start',
+    'sign-out-return',
+  ] as const)('refuses a request sealed as %s', async (purpose) => {
+    // The same fields sealed as a sign-out request are carried on.
+    expect(
+      (await arriveToSignOut({ request: await resealed({}) })).status,
+    ).toBe(307)
+    vi.clearAllMocks()
 
-      const response = await arriveToSignOut({
-        request: await resealed({}, purpose),
-      })
+    const response = await arriveToSignOut({
+      request: await resealed({}, purpose),
+    })
 
-      expectNotSignedOutAtWorkOS(response, 'no-request')
-    },
-  )
+    expectNotSignedOutAtWorkOS(response, 'no-request')
+  })
 
   it('refuses the genuine session cookie in place of a request', async () => {
     const session = await signIn(TENANT, AUTH)
@@ -635,6 +704,24 @@ describe('the auth host: the return from WorkOS', () => {
     expect(console.warn).not.toHaveBeenCalled()
   })
 
+  it('goes back to whichever host signed out, not to a fixed one', async () => {
+    const response = await comeBack(await sentToWorkOS(OTHER))
+
+    expect(response.headers.get('location')).toBe(`https://${OTHER}/`)
+    expect(getDomainClaim).toHaveBeenCalledExactlyOnceWith(
+      `domainVerification.${OTHER}`,
+    )
+  })
+
+  it('still goes back for a conference that has turned workshops off', async () => {
+    const cookie = await sentToWorkOS()
+    isWorkshopsEnabledForConference.mockResolvedValue(false)
+
+    const response = await comeBack(cookie)
+
+    expect(response.headers.get('location')).toBe(`https://${TENANT}/`)
+  })
+
   it('takes the host from its cookie and from nothing in the address', async () => {
     const cookie = await sentToWorkOS()
 
@@ -649,10 +736,15 @@ describe('the auth host: the return from WorkOS', () => {
     expect(response.headers.get('location')).toBe(`https://${TENANT}/`)
   })
 
-  it('shows the plain page without a cookie, and reads nothing', async () => {
+  it('shows the plain page without a cookie, whatever the address says, and reads nothing', async () => {
     await sentToWorkOS()
 
-    const response = await comeBack(null)
+    const response = await signedOutRoute(
+      get(
+        `https://${AUTH}/api/auth/workshop/signed-out?host=${TENANT}&state=${TENANT}&return_to=https://${TENANT}/`,
+        AUTH,
+      ),
+    )
 
     await expectPlainPage(response, 'no-cookie')
     expect(getDomainClaim).not.toHaveBeenCalled()
@@ -686,7 +778,14 @@ describe('the auth host: the return from WorkOS', () => {
     await expectPlainPage(response, 'no-cookie')
   })
 
-  it.each(['sign-out-request', 'session', 'handoff'] as const)(
+  it.each([
+    'sign-out-request',
+    'session',
+    'handoff',
+    'start-request',
+    'auth-state',
+    'auth-start',
+  ] as const)(
     'shows the plain page for a cookie sealed as %s',
     async (purpose) => {
       // The same host sealed as a return cookie is gone back to.
@@ -767,6 +866,25 @@ describe('the auth host: the return from WorkOS', () => {
 
     expect(response.status).toBe(404)
     expect(response.headers.get('location')).toBeNull()
+    expect(response.headers.getSetCookie()).toEqual([])
+    expect(getDomainClaim).not.toHaveBeenCalled()
+  })
+
+  it('answers 404 on another host that only claims, in a forwarded header, to be the auth host', async () => {
+    const cookie = await sentToWorkOS()
+
+    const response = await signedOutRoute(
+      new NextRequest(`https://${TENANT}/api/auth/workshop/signed-out`, {
+        headers: new Headers({
+          host: TENANT,
+          cookie,
+          'x-forwarded-host': AUTH,
+          forwarded: `host=${AUTH}`,
+        }),
+      }),
+    )
+
+    expect(response.status).toBe(404)
     expect(response.headers.getSetCookie()).toEqual([])
     expect(getDomainClaim).not.toHaveBeenCalled()
   })
