@@ -4,7 +4,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import type { z } from 'zod'
 import { isWorkshopsEnabledForConference } from '@/lib/features/workshops'
 import { WORKSHOP_AUTH_START_PATH } from '../sign-in-paths'
-import { notFound, resolveTenantHost, toPortal } from './decision'
+import { isAuthHost, notFound, resolveTenantHost, toPortal } from './decision'
 import { seal } from './seal'
 import {
   START_REQUEST_TTL_SECONDS,
@@ -34,8 +34,8 @@ export async function beginWorkshopSignIn(
   request: NextRequest,
   screen: 'sign-in' | 'sign-up',
 ): Promise<NextResponse> {
+  if (isAuthHost(request.headers)) return notFound()
   const tenant = await resolveTenantHost(request.headers)
-  if (tenant === 'auth-host') return notFound()
   // The portal page says sign-in is unavailable on this host.
   if (!tenant) return toPortal()
   const { authOrigin, destination } = tenant

@@ -34,6 +34,16 @@ export const WORKSHOP_PORTAL_PATH = '/workshop'
 export const WORKSHOP_REDEEM_PATH = '/workshop/redeem'
 
 /**
+ * What the redeem route adds to the portal path when it refuses, whatever the
+ * reason: the signed-out page then says sign-in did not complete.
+ */
+export const WORKSHOP_SIGN_IN_INCOMPLETE = {
+  param: 'sign-in',
+  value: 'incomplete',
+} as const
+export const WORKSHOP_SIGN_IN_INCOMPLETE_QUERY = `?${WORKSHOP_SIGN_IN_INCOMPLETE.param}=${WORKSHOP_SIGN_IN_INCOMPLETE.value}`
+
+/**
  * Request header the proxy puts on the portal page when the host cannot sign
  * in (#1298). The page then shows the unavailable view and never enters the
  * SDK, which did not run for that request.

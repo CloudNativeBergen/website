@@ -4,12 +4,10 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { z } from 'zod'
 import { WORKSHOP_REDEEM_PATH } from '../sign-in-paths'
 import { notFound, resolveCentralSignIn } from './decision'
+import { HANDOFF_TTL_SECONDS, type HandOff } from './handoff'
 import { seal, unseal } from './seal'
 import { startCookie, startCookieSchema, startStateSchema } from './start-seals'
 import { workshopWorkOS } from './workos'
-
-/** How long the tenant host has to redeem a hand-off (spec §5). */
-const HANDOFF_TTL_SECONDS = 60
 
 const accessTokenClaims = z.object({ sid: z.string().min(1) })
 
@@ -90,7 +88,7 @@ export async function finishCentralSignIn(
         host: destination.host,
         conferenceId: state.conferenceId,
         challenge: state.challenge,
-      },
+      } satisfies HandOff,
       HANDOFF_TTL_SECONDS,
     )
   } catch (error) {

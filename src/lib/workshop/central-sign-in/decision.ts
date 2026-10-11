@@ -37,9 +37,9 @@ export function toPortal(suffix = ''): NextResponse {
 /**
  * `WORKSHOP_AUTH_ORIGIN` as an origin. `'unset'`: a host is its own auth host.
  * `'invalid'`: the value cannot be used (not a bare origin of a hostname, or
- * plain HTTP outside development), and every sign-in is refused.
+ * plain HTTP outside development).
  */
-function configuredAuthOrigin(): URL | 'unset' | 'invalid' {
+function authOrigin(): URL | 'unset' | 'invalid' {
   const raw = process.env.WORKSHOP_AUTH_ORIGIN?.trim()
   if (!raw) return 'unset'
   const url = URL.parse(raw)
@@ -50,13 +50,33 @@ function configuredAuthOrigin(): URL | 'unset' | 'invalid' {
     isValidDomainEntry(url.host) &&
     (url.protocol === 'https:' ||
       (url.protocol === 'http:' && process.env.NODE_ENV === 'development'))
-  if (!usable) {
+  return usable ? url : 'invalid'
+}
+
+/** {@link authOrigin} for a decision: an unusable value refuses every sign-in, and says so. */
+function configuredAuthOrigin(): URL | 'unset' | 'invalid' {
+  const configured = authOrigin()
+  if (configured === 'invalid') {
     console.error(
       '[workshop] WORKSHOP_AUTH_ORIGIN is not a bare https origin of a hostname; workshop sign-in is refused on every host.',
     )
-    return 'invalid'
   }
-  return url
+  return configured
+}
+
+/**
+ * With `WORKSHOP_AUTH_ORIGIN` set: is this request on the host it names? That
+ * host serves no conference, so the tenant-host routes answer 404 there.
+ * Decided from the request alone.
+ */
+export function isAuthHost(headers: {
+  get(name: string): string | null
+}): boolean {
+  const configured = authOrigin()
+  return (
+    typeof configured === 'object' &&
+    normalizeDomain(headers.get('host') ?? '') === configured.host
+  )
 }
 
 /**
@@ -104,28 +124,25 @@ export interface TenantHost {
 /**
  * MAY THIS REQUEST'S HOST CARRY THE WORKSHOP PORTAL'S SIGN-IN? (#1311, spec §2
  * and §4.) Asked on the tenant host by the routes that begin and redeem a
- * sign-in and by every read of the session:
+ * sign-in and by every read of the session. `null` refuses:
  *
- *  - `'auth-host'`: `WORKSHOP_AUTH_ORIGIN` names this very host. It serves no
- *    conference, so the tenant-host routes answer 404 there. Decided from the
- *    request alone;
- *  - `null`: the host may not receive a hand-off (`resolveProvenDestination`),
- *    or the variable cannot be used;
- *  - otherwise the host as proven, with the conference that claims it, and the
- *    auth host it signs in through (itself when the variable is unset).
+ *  - `WORKSHOP_AUTH_ORIGIN` cannot be used, or names this very host (it serves
+ *    no conference). Both decided before anything is read;
+ *  - the host may not receive a hand-off (`resolveProvenDestination`).
  *
- * ONE LIVE RECORD READ, and none for the first answer. It does not ask whether
- * the conference has workshops: the caller does, from `destination.conference`.
+ * Otherwise the host as proven, with the conference that claims it, and the
+ * auth host it signs in through (itself when the variable is unset).
+ *
+ * ONE LIVE RECORD READ. It does not ask whether the conference has workshops:
+ * the caller does, from `destination.conference`.
  */
 export async function resolveTenantHost(headers: {
   get(name: string): string | null
-}): Promise<TenantHost | 'auth-host' | null> {
+}): Promise<TenantHost | null> {
   const configured = configuredAuthOrigin()
   if (configured === 'invalid') return null
   const requestHost = normalizeDomain(headers.get('host') ?? '')
-  if (configured !== 'unset' && requestHost === configured.host) {
-    return 'auth-host'
-  }
+  if (configured !== 'unset' && requestHost === configured.host) return null
 
   const destination = await resolveProvenDestination(requestHost)
   if (!destination) return null

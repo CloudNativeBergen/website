@@ -6,3 +6,4 @@
 export { beginWorkshopSignIn } from './tenant-start'
 export { startCentralSignIn } from './start'
 export { finishCentralSignIn } from './callback'
+export { redeemWorkshopHandOff } from './redeem'
