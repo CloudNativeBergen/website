@@ -139,7 +139,9 @@ export const Configured: Story = {
   args: { list: buildWorkshopTicketList(TYPES, CONFIGURED) },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
-    await expect(canvas.queryByRole('status')).not.toBeInTheDocument()
+    await expect(
+      canvas.queryByRole('status', { name: 'Needs a decision' }),
+    ).not.toBeInTheDocument()
     await expect(
       canvas.getByRole('button', {
         name: 'Grants workshop access — "Speaker ticket"',
@@ -206,9 +208,9 @@ export const NotSetType: Story = {
     ),
   },
   play: async ({ canvasElement }) => {
-    await expect(within(canvasElement).getByRole('status')).toHaveTextContent(
-      '“Student” and “Late Bird” are not set.',
-    )
+    await expect(
+      within(canvasElement).getByRole('status', { name: 'Needs a decision' }),
+    ).toHaveTextContent('“Student” and “Late Bird” are not set.')
   },
 }
 export const NotSetTypeDark: Story = {
@@ -248,7 +250,9 @@ export const OrphanedEntry: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
-    await expect(canvas.getByRole('status')).toHaveTextContent(
+    await expect(
+      canvas.getByRole('status', { name: 'Needs a decision' }),
+    ).toHaveTextContent(
       '“Workshop + Conference 2025” is saved as granting workshop access, but Checkin.no lists no ticket type with that name.',
     )
     await expect(

@@ -362,7 +362,9 @@ describe('a type whose entry carries only a seating answer', () => {
       ['Student', 'Not set'],
       ['Day pass', 'No workshop access'],
     ])
-    expect(screen.getByRole('status')).toHaveTextContent(
+    expect(
+      screen.getByRole('status', { name: 'Needs a decision' }),
+    ).toHaveTextContent(
       '“Student” is not set. Its holders cannot sign up for workshops until you choose an answer below.',
     )
 
@@ -530,7 +532,9 @@ describe('losing the last granting type', () => {
       { typeName: 'Workshop 2025', admits: true },
     ])
     await openSection()
-    expect(screen.queryByRole('status')).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('status', { name: 'Needs a decision' }),
+    ).not.toBeInTheDocument()
   })
 })
 

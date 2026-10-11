@@ -184,7 +184,9 @@ describe('a configured list', () => {
   it('names the not-set types in the banner', () => {
     section(types, roles)
 
-    expect(screen.getByRole('status')).toHaveTextContent(
+    expect(
+      screen.getByRole('status', { name: 'Needs a decision' }),
+    ).toHaveTextContent(
       'Needs a decision“Student” and “Late Bird” are not set. Their holders cannot sign up for workshops until you choose an answer below.',
     )
   })
@@ -192,7 +194,9 @@ describe('a configured list', () => {
   it('shows no banner when every type has an answer', () => {
     section(['Two-day pass', 'Day pass'], roles.slice(0, 2))
 
-    expect(screen.queryByRole('status')).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('status', { name: 'Needs a decision' }),
+    ).not.toBeInTheDocument()
   })
 
   it('saves an answer straight away while another type still grants', () => {
@@ -240,7 +244,9 @@ describe('an entry no ticket type matches', () => {
   it('is named in the banner, with what it says and why it is listed', () => {
     section(['Two-day pass'], roles)
 
-    expect(screen.getByRole('status')).toHaveTextContent(
+    expect(
+      screen.getByRole('status', { name: 'Needs a decision' }),
+    ).toHaveTextContent(
       '“Workshop 2025” is saved as granting workshop access, but Checkin.no lists no ticket type with that name. It may have been renamed there.',
     )
   })

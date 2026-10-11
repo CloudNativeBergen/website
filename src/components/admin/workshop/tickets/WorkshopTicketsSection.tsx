@@ -113,9 +113,13 @@ export function WorkshopTicketsSection({
       {(notSet.length > 0 || list.orphaned.length > 0) && (
         <div
           role="status"
+          aria-labelledby="workshop-tickets-attention"
           className="mt-4 rounded-md bg-amber-50 p-3 ring-1 ring-amber-200 dark:bg-amber-950/40 dark:ring-amber-900"
         >
-          <p className="flex items-center gap-1.5 text-sm font-medium text-amber-900 dark:text-amber-200">
+          <p
+            id="workshop-tickets-attention"
+            className="flex items-center gap-1.5 text-sm font-medium text-amber-900 dark:text-amber-200"
+          >
             <ExclamationTriangleIcon className="size-4 shrink-0" />
             Needs a decision
           </p>
