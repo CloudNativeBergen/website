@@ -1,5 +1,6 @@
 import { groq } from 'next-sanity'
-import { clientWrite } from '@/lib/sanity/client'
+import { clientReadCached, clientWrite } from '@/lib/sanity/client'
+import { scopedFetch } from '@/lib/sanity/scoped'
 import type { Conference } from '@/lib/conference/types'
 import { sendWorkshopAnnouncementEmail } from '@/lib/email/workshop'
 
@@ -177,6 +178,46 @@ export async function getWorkshopAnnouncements(
     { workshopId, limit },
   )
   return announcements ?? []
+}
+
+/** The most announcements one conference's portal read returns in all. */
+const PORTAL_ANNOUNCEMENTS_CAP = 500
+
+/**
+ * EVERY workshop's announcements for one conference, in ONE read: what the
+ * attendee portal shows under each workshop card. Keyed by workshop id, newest
+ * first, at most `limitPerWorkshop` each.
+ *
+ * One request for the page instead of one per card, and through the CDN host:
+ * an announcement may reach the portal some seconds after it is posted, which
+ * a broadcast that is also emailed can afford. The organizer's own view reads
+ * {@link getWorkshopAnnouncements}, live, so it shows what was just written.
+ */
+export async function getAnnouncementsByWorkshop(
+  conferenceId: string,
+  limitPerWorkshop: number,
+): Promise<Record<string, WorkshopAnnouncementView[]>> {
+  const rows = await scopedFetch<
+    Array<WorkshopAnnouncementView & { workshopId: string | null }>
+  >(
+    clientReadCached,
+    { conferenceId },
+    groq`*[_type == "workshopAnnouncement"] | order(createdAt desc)[0...${PORTAL_ANNOUNCEMENTS_CAP}]{
+      _id,
+      body,
+      createdAt,
+      "authorName": author->name,
+      "workshopId": workshop._ref
+    }`,
+  )
+
+  const byWorkshop: Record<string, WorkshopAnnouncementView[]> = {}
+  for (const { workshopId, ...announcement } of rows ?? []) {
+    if (!workshopId) continue
+    const list = (byWorkshop[workshopId] ??= [])
+    if (list.length < limitPerWorkshop) list.push(announcement)
+  }
+  return byWorkshop
 }
 
 /** Upper bound on simultaneous announcement emails in flight. */
