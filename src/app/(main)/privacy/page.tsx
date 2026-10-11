@@ -117,7 +117,7 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
     )
   }
 
-  const lastUpdated = 'October 10, 2026'
+  const lastUpdated = 'October 11, 2026'
   const legal = await resolveLegalConfig(conference)
   const contactEmail = legal.contactEmail
   // EMPTY when no legal entity could be resolved. `legal.controllerResolved`
@@ -415,9 +415,25 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                             <li>• Signup date and confirmation details</li>
                             <li>• Workshop attendance tracking</li>
                             <li>• Capacity and waitlist management</li>
-                            <li>
-                              • Authentication session data for workshop access
-                            </li>
+                            {/*
+                              The portal's session is the platform's own cookie
+                              (#1311): what it holds and how long it lasts come
+                              from `src/lib/workshop/central-sign-in/session.ts`,
+                              and `__tests__/app/privacy-workshop-session.test.ts`
+                              pins this wording to that module. Gated like the
+                              identifier above: no WorkOS, no sign-in cookie.
+                            */}
+                            {usesWorkOS ? (
+                              <li>
+                                • A sign-in cookie on this site, kept for 7 days
+                                from the moment you sign in, holding your WorkOS
+                                User ID, email address, whether WorkOS reports
+                                that address as verified, your name and the
+                                WorkOS session ID. Short-lived cookies also
+                                exist on this site and on the platform&apos;s
+                                sign-in host while you sign in or sign out.
+                              </li>
+                            ) : null}
                           </ul>
                         </div>
                       </div>
@@ -2102,7 +2118,9 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                                 <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                                   Removing your registrations at one conference
                                   does not delete this login or your
-                                  registrations at other conferences
+                                  registrations at other conferences. The
+                                  sign-in cookie on this site expires 7 days
+                                  after you sign in, or when you sign out.
                                 </div>
                               </td>
                               <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
@@ -2445,6 +2463,18 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                         ? ' Our analytics are aggregated and, unless you accept the cookie above, anonymous.'
                         : ' Our analytics are cookie-less and aggregated.'}
                     </p>
+                    {usesWorkOS ? (
+                      <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+                        <strong>Workshop sign-in:</strong> When you sign in to
+                        the workshop portal, this site sets one sign-in cookie
+                        of its own, kept for 7 days, holding your WorkOS User
+                        ID, email address, whether it is verified, your name and
+                        the WorkOS session ID. While a sign-in or sign-out is in
+                        progress, short-lived cookies exist on this site and on
+                        the platform&apos;s sign-in host; they last minutes and
+                        are removed when the step completes.
+                      </p>
+                    ) : null}
                     <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
                       <strong>localStorage:</strong> We use your browser’s
                       localStorage to save personal bookmarks on your device.
