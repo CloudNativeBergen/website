@@ -8,8 +8,8 @@ comments are the reference for how a ticket type grants workshop access.
 
 Which ticket types let their holders sign up for workshops is already configurable per conference,
 but the setting sits on each card at `/admin/tickets/types`, and `/admin/workshops` neither shows
-it nor links to it. The workshops page counts sign-ups only: nothing says how many of the people
-who hold a workshop ticket have signed up.
+it nor links to it. The workshops page reads sign-ups only and no ticket: nothing says how many of
+the people who hold a workshop ticket have signed up.
 
 After this work:
 
@@ -35,19 +35,27 @@ Unchanged:
 
 ## 2. Terms
 
-| Term                 | Meaning                                                                                                                                                            |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Workshop ticket type | A ticket type for which `workshopAccessOf` answers `granted` for this conference.                                                                                  |
-| Not-set type         | A ticket type for which it answers `unclassified`: the conference has marked at least one type, and this one has no entry. Its holders are refused at the portal.  |
-| Orphaned entry       | An entry in `ticketTypeRoles` whose `typeName` matches no ticket type the provider lists. The list is keyed on the name, so a rename at the provider leaves one.   |
-| Holder               | A person holding at least one ticket of a workshop ticket type. People are told apart by `canonicalEmail` of the address on the ticket, as the gate and resend do. |
-| Confirmed            | A holder with at least one sign-up in status `confirmed`.                                                                                                          |
-| Waitlist only        | A holder with at least one sign-up, none of them `confirmed`.                                                                                                      |
-| Not signed up        | A holder with no sign-up of any kind.                                                                                                                              |
-| Flagged              | A person with at least one sign-up who is not a holder: `canonicalEmail` of the sign-up's `userEmail` matches no holder.                                           |
+| Term                 | Meaning                                                                                                                                                                                                               |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Workshop ticket type | A ticket type for which `workshopAccessOf` answers `granted` for this conference.                                                                                                                                     |
+| Not-set type         | A ticket type with no stored workshop answer (`grantsWorkshop` is neither `true` nor `false`) on a conference that has marked at least one type. Its holders are refused at the portal. See the note below the table. |
+| Orphaned entry       | An entry in `ticketTypeRoles` whose `typeName` matches no ticket type the provider lists. The list is keyed on the name, so a rename at the provider leaves one.                                                      |
+| Holder               | A person holding at least one ticket of a workshop ticket type. People are told apart by `canonicalEmail` of the address on the ticket, as the gate and resend do.                                                    |
+| Confirmed            | A holder with at least one sign-up in status `confirmed`.                                                                                                                                                             |
+| Waitlist only        | A holder with at least one sign-up, none of them `confirmed`.                                                                                                                                                         |
+| Not signed up        | A holder with no sign-up of any kind.                                                                                                                                                                                 |
+| Flagged              | A person with at least one sign-up who is not a holder: `canonicalEmail` of the sign-up's `userEmail` matches no holder.                                                                                              |
 
 Holders, confirmed, waitlist only and not signed up always satisfy
 `holders = confirmed + waitlist only + not signed up`. Flagged people are outside all four.
+
+**The rule and the control disagree on one case today, and this work closes it.** For a type whose
+entry carries only the seating answer (`admits`), `workshopAccessOf` answers `denied`, while the
+control shows "Not set". Such a holder is told to upgrade their ticket when the real cause is a
+decision nobody made. After this work `workshopAccessOf` answers `unclassified` for an entry with
+no workshop answer, as it does for a type with no entry. Nobody gains or loses access by it: both
+answers refuse. The refusal text changes to the one that names the missing decision, and the type
+counts as not set in §3, §4 and §8.
 
 ## 3. The list under `/admin/workshops`
 
@@ -74,14 +82,18 @@ press sends cannot be computed two ways.
 
 - **Roles are read live**, as the gate reads them (`liveTicketTypeRoles`), so the statistics follow
   an edit immediately.
-- **Tickets** come through the shared memo (`fetchEventTicketCandidates`). A ticket read is slow
-  when it is not memoised, so the ticket-side numbers load after the page.
+- **Tickets** come through the shared memo (`fetchEventTicketCandidates`) for the page, and are
+  read fresh for a send (§7), as the resend reads them today. The join takes that choice as an
+  option. A ticket read is slow when it is not memoised, so the ticket-side numbers load after the
+  page.
 - **When the provider cannot be read** the sign-up numbers the page shows today still render, and
   the ticket side says it is unavailable. It never shows zero for a read that failed.
 - **The page shows** holders, confirmed, waitlist only, not signed up, and flagged. The sign-up
-  totals the page has today stay; they count sign-ups, and the new numbers count people.
-- **Flagged opens a list**: name, email and workshops, with the remove and move-to-waitlist
-  actions the page already has. People an organizer added by hand are in it like anyone else; a
+  totals the page has today stay. They count sign-ups, except "Unique Participants", which counts
+  people by WorkOS id across confirmed and waitlisted sign-ups; the new numbers count people by
+  email.
+- **Flagged opens a list**: name, email and workshops, with the remove action the page already
+  has ("Delete signup"). People an organizer added by hand are in it like anyone else; a
   sign-up does not record how it was made.
 - **Nothing is cancelled automatically.** A sign-up whose owner no longer holds a workshop ticket
   (the type was unmarked, the ticket refunded or changed) stays, and its owner is flagged.
@@ -97,21 +109,29 @@ The override goes. `grantsWorkshop` becomes exactly `workshopAccessOf(...) === '
 changes, in the same direction:
 
 - "Workshop Participants" on `/admin/tickets`, with its paid and free split,
-- the same number in the weekly Slack update,
-- the `grantsWorkshop` column and the workshop-only filter of the participant export.
+- the same number and its paid and comps split in the weekly Slack update,
+- the `grantsWorkshop` column and the workshop-only filter of the participant export,
+- the same tally where it is returned by `tickets.admin.summary` and `status.admin.summary`.
+
+These surfaces tell people apart by a lowercased address, with or without trimming. They move to
+`canonicalEmail`, so a padded address is one person on every page.
 
 On a conference where the speaker type grants workshops, built-in list included, each of these
 rises by the speakers who gave no workshop answer.
 
 ## 6. Cancel
 
-Today an attendee's cancel (`workshop.cancelSignup`) and the organizer's batch cancel both set the
-sign-up to `waitlist` (`cancelWorkshopSignup` in `src/lib/workshop/sanity.ts`). A waitlist then
-holds people waiting for a seat and people who backed out, and nothing tells them apart.
+Today an attendee's cancel (`workshop.cancelSignup`) sets the sign-up to `waitlist`
+(`cancelWorkshopSignup` in `src/lib/workshop/sanity.ts`). A waitlist then holds people waiting for
+a seat and people who backed out, and nothing tells them apart. It is not only a counting problem:
+when an organizer raises a workshop's capacity, `workshop.admin.updateCapacity` confirms the
+earliest waitlisted sign-ups and emails them, so a person who backed out can be given a seat.
 
 - **An attendee's cancel deletes the sign-up.** The ownership and tenancy checks before it stay.
-- **The organizer's batch action keeps its behaviour** and is relabelled "Move to waitlist".
 - No `cancelled` status is added.
+- `workshop.admin.batchCancelSignups` also sets `waitlist`. No component calls it, so organizers
+  have no such action today and nothing is relabelled. This work leaves the procedure as it is
+  (§9).
 
 ## 7. The reminder
 
@@ -119,13 +139,15 @@ holds people waiting for a seat and people who backed out, and nothing tells the
 
 - **Recipients** are the not-signed-up group of §2, read fresh at the moment of sending. Waitlist
   only is not in it.
-- **Refusals stay**: no portal link, registration closed, and at most one send an hour per
-  conference.
+- **Refusals stay**: no portal link, registration closed, the ticket provider or the email sender
+  unavailable, and at most one send an hour per conference. As today, a press that sent nothing
+  does not use up the hour.
 - **Wording.** The email says that the ticket includes workshops and that the recipient has no
   seat yet, a statement about the ticket that stays true for someone who signs up between the
-  press and the read. It keeps the three registration states the instructions email has today:
-  before the window it says when sign-up opens, during it when sign-up closes, and it is not sent
-  after.
+  press and the read. The instructions email has three registration states today (before the
+  window, open, closed). The reminder uses the first two: before the window it says when sign-up
+  opens, as today; while it is open it says when sign-up closes, which the email does not say
+  today. It is never sent after the window, because the send is refused then.
 - **The organizer's note** is optional plain text, at most 1,000 characters, escaped, shown above
   the standard text.
 - **The dialog** shows how many people will receive it and when the last reminder went out and to
@@ -153,10 +175,13 @@ A new notification tells organizers that a ticket type has no decision and links
 
 ## 9. Known gaps
 
-- **A ticket with no email address** belongs to no holder and is not counted. Such a ticket cannot
-  sign in either.
+- **A ticket with no email address** belongs to no holder and is not counted. Its owner can sign
+  in but is refused at the portal as having no ticket, since the ticket cannot be matched to them.
 - **Sign-ups cancelled before §6 ships** stay on the waitlist; they cannot be told from people
-  waiting.
+  waiting, and a capacity increase can still confirm them.
+- **`workshop.admin.batchCancelSignups` keeps a name that says cancel and a behaviour that
+  waitlists.** Nothing in this repository calls it. Whether it is removed or renamed is open; a
+  caller outside the repository was not ruled out.
 - **Organizer-added sign-ups are flagged** when their email holds no workshop ticket. This is by
   decision: the flagged number does not separate deliberate additions.
 - **A rename at the provider** still locks holders out until an organizer marks the new name. §3
@@ -170,8 +195,9 @@ A new notification tells organizers that a ticket type has no decision and links
 
 ## 10. Slices
 
-1. Cancel deletes the sign-up; the organizer action is relabelled (§6).
-2. The list under `/admin/workshops`, the badge and the banner (§3).
+1. An attendee's cancel deletes the sign-up (§6).
+2. The list under `/admin/workshops`, the badge and the banner, and the rule's answer for an entry
+   with no workshop answer (§2, §3).
 3. The statistics, the flagged list and the one definition (§4, §5).
 4. The reminder (§7).
 5. The notification for not-set types (§8).
