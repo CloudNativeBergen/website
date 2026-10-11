@@ -428,10 +428,12 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                                 • A sign-in cookie on this site, kept for 7 days
                                 from the moment you sign in, holding your WorkOS
                                 User ID, email address, whether WorkOS reports
-                                that address as verified, your name and the
-                                WorkOS session ID. Short-lived cookies also
-                                exist on this site and on the platform&apos;s
-                                sign-in host while you sign in or sign out.
+                                that address as verified, your name, the WorkOS
+                                session ID, and the site and conference it was
+                                issued for. Short-lived cookies also exist on
+                                this site and on the platform&apos;s sign-in
+                                host while you sign in or sign out; they expire
+                                within ten minutes.
                               </li>
                             ) : null}
                           </ul>
@@ -2468,11 +2470,12 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                         <strong>Workshop sign-in:</strong> When you sign in to
                         the workshop portal, this site sets one sign-in cookie
                         of its own, kept for 7 days, holding your WorkOS User
-                        ID, email address, whether it is verified, your name and
-                        the WorkOS session ID. While a sign-in or sign-out is in
+                        ID, email address, whether it is verified, your name,
+                        the WorkOS session ID, and the site and conference it
+                        was issued for. While a sign-in or sign-out is in
                         progress, short-lived cookies exist on this site and on
-                        the platform&apos;s sign-in host; they last minutes and
-                        are removed when the step completes.
+                        the platform&apos;s sign-in host; they expire within ten
+                        minutes, and sooner when the step completes.
                       </p>
                     ) : null}
                     <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">

@@ -588,7 +588,8 @@ two addresses for the application, added by hand once per environment: the redir
 `<auth origin>/api/auth/callback` and the sign-out redirect
 `<auth origin>/api/auth/workshop/signed-out` (`src/lib/workshop/sign-in-paths.ts`).
 
-`WORKSHOP_AUTH_ORIGIN` names the auth host (in production `https://auth.konf.app`). It
+`WORKSHOP_AUTH_ORIGIN` names the auth host (this platform's production deployment is
+configured with `https://auth.konf.app`; the code fixes no value). It
 serves no conference: it starts a sign-in, takes the callback from WorkOS, hands the
 result to the conference's host, and takes the return from a sign-out. A tenant host is
 never a WorkOS callback: the WorkOS environment is shared by every tenant, so its
@@ -597,7 +598,9 @@ registered addresses stay on a host the platform operates.
 `authOrigin()` (`src/lib/workshop/central-sign-in/decision.ts`) reads the variable:
 
 - **set** to a bare `https` origin of a hostname: the auth-host routes answer 404 on
-  every other host, and the tenant-host routes answer 404 on the auth host;
+  every other host, and `/workshop/sign-in`, `/workshop/sign-up` and `/workshop/redeem`
+  answer 404 on the auth host (`isAuthHost`). The `/workshop` page is a 404 there only
+  because no conference claims that host;
 - **unset**: a host is its own auth host. The start route then accepts only a request
   naming the host it arrived on. This is local development and a single-domain
   installation, and system status warns about it in a deployed build;
@@ -678,7 +681,9 @@ neither calls WorkOS.
 
 The login behind it is not per host: a WorkOS account is one account for every conference
 on the platform, and `/privacy` says so to workshop participants. Organizers only see
-the workshop registrations of their own organization's conferences.
+the workshop registrations of their own organization's conferences: the organizer
+procedures are `adminProcedure` (org-scoped, `src/lib/authz/organizer.ts`) and every
+signup read in `src/lib/workshop/sanity.ts` filters on `conference._ref`.
 
 ### Sign-out
 
@@ -712,8 +717,9 @@ purpose as its label, so a hand-off token is never accepted as a session and the
 must be at least 32 characters, a different value in every environment, and the
 production value must not be available to preview deployments. Changing it signs everyone
 out: no existing session, hand-off or request unseals under the new key. With no usable
-password both `seal` and `unseal` throw, so a deployment without one cannot sign anyone
-in and does not read as a merely refused seal.
+password `seal` throws, and so does `unseal` once it has a value to unseal (an absent
+value answers `null` before the key is derived), so a deployment without one cannot sign
+anyone in and does not read as a merely refused seal.
 
 ### Cookies in development
 
@@ -747,12 +753,12 @@ Operations are in [WORKSHOP_SIGN_IN_RUNBOOK.md](WORKSHOP_SIGN_IN_RUNBOOK.md).
 
 Only needed when a tenant on the deployment has workshops.
 
-| Variable                 | Description                                                                                                                                                                                                                                                                                  |
-| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `WORKOS_CLIENT_ID`       | Client ID of the one WorkOS environment every tenant shares. System status reports whether it is set                                                                                                                                                                                         |
-| `WORKOS_API_KEY`         | API key of that environment, used by the server SDK on the auth host                                                                                                                                                                                                                         |
-| `WORKOS_COOKIE_PASSWORD` | **Seals identity** (see [The seal](#the-seal)): whoever holds it can issue a session. At least 32 characters. A different value in every environment, and the production value must not be available to preview deployments. Changing it signs everyone out                                  |
-| `WORKSHOP_AUTH_ORIGIN`   | The auth host, as a bare `https` origin (`https://auth.konf.app` in production). Unset: each host is its own auth host and must be registered at WorkOS itself, which is right only for a single-domain installation; system status warns. Invalid: sign-in is refused on every host (error) |
+| Variable                 | Description                                                                                                                                                                                                                                                                                                             |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `WORKOS_CLIENT_ID`       | Client ID of the one WorkOS environment every tenant shares. System status reports whether it is set                                                                                                                                                                                                                    |
+| `WORKOS_API_KEY`         | API key of that environment, used by the server SDK on the auth host                                                                                                                                                                                                                                                    |
+| `WORKOS_COOKIE_PASSWORD` | **Seals identity** (see [The seal](#the-seal)): whoever holds it can issue a session. At least 32 characters. A different value in every environment, and the production value must not be available to preview deployments. Changing it signs everyone out                                                             |
+| `WORKSHOP_AUTH_ORIGIN`   | The auth host, as a bare `https` origin (`https://auth.konf.app` on this platform's production deployment). Unset: each host is its own auth host and must be registered at WorkOS itself, which is right only for a single-domain installation; system status warns. Invalid: sign-in is refused on every host (error) |
 
 `WORKOS_REDIRECT_URI` and `NEXT_PUBLIC_WORKOS_REDIRECT_URI` are not needed and should be
 removed where they are still set: the redirect URI is passed to the SDK explicitly

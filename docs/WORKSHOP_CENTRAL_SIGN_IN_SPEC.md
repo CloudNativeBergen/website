@@ -34,7 +34,8 @@ Unchanged:
   takes the callback, hands off, and takes the return from a sign-out.
 - **Unset**, a host is its own auth host and the hand-off stays on one origin: the start route then
   accepts only its own host as the destination. This is local development and a single-domain
-  installation. System status reports the variable.
+  installation. System status reports the variable: unset is a warning in a deployed build and ok in
+  development (`workshopAuthOriginCheck`).
 - WorkOS holds exactly two addresses for the application, added by hand once per environment: the
   redirect URI `<auth origin>/api/auth/callback` and one sign-out redirect on the auth host,
   `<auth origin>/api/auth/workshop/signed-out` (`src/lib/workshop/sign-in-paths.ts`).
@@ -61,9 +62,10 @@ Unchanged:
 3. **Auth host, callback.** It verifies state and the cookie from step 2. It then checks again that
    the host passes §4, that the conference claiming it is still the one in state, and that this
    conference still has workshops. Only then does it exchange the code. It stores **no session and no
-   WorkOS token**: the AuthKit SDK's `handleAuth` always saves a session cookie on the callback host, so
-   the callback does not use it, and the auth host talks to WorkOS through the plain `@workos-inc/node`
-   client. It redirects to the tenant host's redeem route with a hand-off token.
+   WorkOS token**: the AuthKit SDK that was removed (`@workos-inc/authkit-nextjs`) always saved a
+   session cookie on the callback host from its `handleAuth`, so the callback did not use it, and the
+   auth host talks to WorkOS through the plain `@workos-inc/node` client. It redirects to the tenant
+   host's redeem route with a hand-off token.
 4. **Tenant host, redeem.** It accepts the token only when all of these hold: it unseals, it has not
    expired, it names this host and the conference this host resolves to, and the cookie from step 1
    hashes to the value inside it. It checks §4 and that the conference has workshops once more, sets
@@ -83,7 +85,7 @@ One small shared module answers this, and it is the only place the rule lives:
   (`src/lib/domain-verification/policy.ts`) and it is either a host the platform allocated
   (`isPlatformAllocated`) or a record with `method: 'dns-txt'`. `isAllowlistEligible` alone also
   admits a grandfathered record inside its grace period; that is not enough here. This is the proof
-  half of today's `isPlatformControlledHost`, without the test of who owns the conference;
+  half of the former `isPlatformControlledHost`, without the test of who owns the conference;
 - the match is on the **exact hostname**. No wildcard and no suffix match, and the routing matcher is
   not reused;
 - the record names the host, and its conference **still claims** it;
@@ -161,7 +163,9 @@ through `workshopPortalUrl`. `AUTH.md` and `DOMAIN_VERIFICATION.md` are rewritte
 - Signing out on one host does not end a session the same attendee holds on another conference's
   host. It lasts until its 7 days are over.
 - A login deleted or an email changed at WorkOS takes effect on a tenant host only when its session
-  ends. Ticket access is not affected: it is decided each time the page or a signup procedure runs.
+  ends. Ticket access is decided each time the page or a signup procedure runs, against the tickets as
+  they are now but with the email and verified flag sealed at sign-in: a change to the tickets is seen
+  at once, a change at WorkOS is not.
 - The hand-off token is not single use (§5).
 - A proven host receives the hand-off for itself, whoever serves it. Whether the auth host asks the
   visitor to confirm before handing off to a host the platform did not allocate is an open decision
