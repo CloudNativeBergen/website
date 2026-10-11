@@ -11,16 +11,19 @@ import type { DomainVerificationRecord } from './types'
  */
 
 const records = new Map<string, DomainVerificationRecord>()
+const ensureDomainVerification = vi.fn(async () => {})
+const revokeDomainVerification = vi.fn(async () => {})
 
 vi.mock('./sanity', () => ({
-  ensureDomainVerification: vi.fn(),
+  ensureDomainVerification,
   getDomainVerification: async (hostname: string) =>
     records.get(hostname) ?? null,
   listDomainVerificationsForConference: vi.fn(async () => []),
-  revokeDomainVerification: vi.fn(),
+  revokeDomainVerification,
 }))
 
-const { findUnallocatedPlatformDomains } = await import('./sync')
+const { findUnallocatedPlatformDomains, syncDomainVerifications } =
+  await import('./sync')
 
 const OURS = 'conference-1'
 const THEIRS = 'conference-2'
@@ -49,6 +52,7 @@ function seed(
 }
 
 beforeEach(() => {
+  vi.clearAllMocks()
   records.clear()
   vi.stubEnv('PLATFORM_DOMAIN_SUFFIX', 'konf.run')
 })
@@ -140,5 +144,40 @@ describe('findUnallocatedPlatformDomains', () => {
     expect(
       await findUnallocatedPlatformDomains(OURS, ['anything.konf.run']),
     ).toEqual([])
+  })
+})
+
+describe('syncDomainVerifications', () => {
+  it('ensures every normalized claim and revokes only released hosts', async () => {
+    await syncDomainVerifications(
+      OURS,
+      [' Conf.Example.ORG ', 'conf.example.org', 'second.example.org'],
+      ['conf.example.org', ' Gone.Example.ORG '],
+      { allocatePlatformHosts: true },
+    )
+    expect(ensureDomainVerification.mock.calls).toEqual([
+      ['conf.example.org', OURS, { allocatePlatformHost: true }],
+      ['second.example.org', OURS, { allocatePlatformHost: true }],
+    ])
+    expect(revokeDomainVerification.mock.calls).toEqual([
+      ['gone.example.org', OURS],
+    ])
+  })
+
+  it('keeps a domain mutation successful when verification storage fails', async () => {
+    ensureDomainVerification.mockRejectedValueOnce(
+      new Error('Sanity unavailable'),
+    )
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
+    await expect(
+      syncDomainVerifications(OURS, ['conf.example.org']),
+    ).resolves.toBeUndefined()
+    expect(ensureDomainVerification.mock.calls).toEqual([
+      ['conf.example.org', OURS, { allocatePlatformHost: false }],
+    ])
+    expect(logged.mock.calls[0][0]).toContain(
+      `failed to sync records for conference ${OURS}`,
+    )
+    logged.mockRestore()
   })
 })

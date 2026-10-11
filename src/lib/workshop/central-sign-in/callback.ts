@@ -1,0 +1,146 @@
+import 'server-only'
+import { decodeJwt } from 'jose'
+import { NextResponse, type NextRequest } from 'next/server'
+import { z } from 'zod'
+import { WORKSHOP_REDEEM_PATH } from '../sign-in-paths'
+import { clearCookie } from './cookies'
+import {
+  logRefusal,
+  notFound,
+  resolveCentralSignIn,
+  type CallbackRefusal,
+} from './decision'
+import { HANDOFF_TTL_SECONDS, type HandOff } from './handoff'
+import { seal, unseal } from './seal'
+import { startCookie, startCookieSchema, startStateSchema } from './start-seals'
+import { workshopWorkOS } from './workos'
+
+const accessTokenClaims = z.object({ sid: z.string().min(1) })
+
+function refused(reason: CallbackRefusal): NextResponse {
+  logRefusal('callback', reason)
+  return notFound()
+}
+
+/**
+ * What a failed exchange says about itself, for the log. An answer from WorkOS
+ * (it carries a request ID) is described by its codes only: its message and
+ * body can hold the attendee's address and a token that continues the
+ * authentication.
+ */
+function failureOf(error: unknown): Record<string, unknown> {
+  if (!(error instanceof Error)) return { name: typeof error }
+  const { name, message } = error
+  const {
+    code,
+    error: oauthError,
+    status,
+    requestID,
+  } = error as Error &
+    Record<'code' | 'error' | 'status' | 'requestID', unknown>
+  return requestID === undefined
+    ? { name, message }
+    : { name, code, error: oauthError, status, requestID }
+}
+
+/** The WorkOS session an access token belongs to (its `sid`), or `null`. */
+function sessionIdOf(accessToken: string): string | null {
+  try {
+    return accessTokenClaims.parse(decodeJwt(accessToken)).sid
+  } catch {
+    return null
+  }
+}
+
+/**
+ * FINISH A WORKSHOP SIGN-IN ON THE AUTH HOST (#1311, spec §3 step 3): WorkOS
+ * sends the browser back with a code.
+ *
+ * Every check below passes BEFORE the code is exchanged, and a refusal is a
+ * 404:
+ *
+ *  - the state unseals as one the start route sealed, and has not expired;
+ *  - the host and the hash come from the sealed state, never the query string;
+ *  - the browser carries the cookie the start route set for this very state.
+ *    Decided from the request alone, so a callback URL without its cookie
+ *    reads nothing;
+ *  - the decision is taken again (`resolveCentralSignIn`): the request is on
+ *    the auth host, the host may still receive a hand-off, and its conference
+ *    still has workshops;
+ *  - the conference that claims the host is still the one in state.
+ *
+ * Each refusal leaves one line in the log with its reason (`logRefusal`).
+ *
+ * NOTHING IS KEPT HERE: no session and no WorkOS token. The answer is a
+ * redirect to the tenant host's redeem route with a sealed hand-off token
+ * (§5), valid for about a minute, and the start cookie is cleared.
+ */
+export async function finishCentralSignIn(
+  request: NextRequest,
+): Promise<NextResponse> {
+  const params = request.nextUrl.searchParams
+  const state = await unseal(
+    'auth-state',
+    params.get('state'),
+    startStateSchema,
+  )
+  if (!state) return refused('no-state')
+
+  const code = params.get('code')
+  if (!code) return refused('no-code')
+
+  const cookie = startCookie()
+  const started = await unseal(
+    'auth-start',
+    request.cookies.get(cookie.name)?.value,
+    startCookieSchema,
+  )
+  if (!started || started.nonce !== state.nonce) return refused('no-cookie')
+
+  const signIn = await resolveCentralSignIn(request.headers, state.host)
+  if (!signIn) return refused('host-refused')
+  const { destination } = signIn
+  if (destination.conference._id !== state.conferenceId) {
+    return refused('conference-changed')
+  }
+
+  let token: string
+  try {
+    const { user, accessToken } =
+      await workshopWorkOS().userManagement.authenticateWithCode({
+        code,
+        codeVerifier: started.codeVerifier,
+      })
+    const sessionId = sessionIdOf(accessToken)
+    if (!sessionId) throw new Error('the access token names no session')
+    token = await seal(
+      'handoff',
+      {
+        userId: user.id,
+        email: user.email,
+        emailVerified: user.emailVerified,
+        name: [user.firstName, user.lastName].filter(Boolean).join(' ') || null,
+        sessionId,
+        host: destination.host,
+        conferenceId: state.conferenceId,
+        challenge: state.challenge,
+      } satisfies HandOff,
+      HANDOFF_TTL_SECONDS,
+    )
+  } catch (error) {
+    console.error(
+      '[workshop] the code exchange failed; nothing handed off',
+      failureOf(error),
+    )
+    return notFound()
+  }
+
+  const redeem = new URL(WORKSHOP_REDEEM_PATH, destination.origin)
+  redeem.searchParams.set('token', token)
+  // The token is in the URL: not to be cached, and not to leak as a referrer.
+  const response = NextResponse.redirect(redeem, {
+    headers: { 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer' },
+  })
+  clearCookie(response.cookies, cookie)
+  return response
+}

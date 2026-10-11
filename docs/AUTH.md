@@ -7,17 +7,19 @@ system (CFP, admin), the WorkOS AuthKit integration (workshops), and the CLI tok
 
 The site uses three distinct authentication systems:
 
-| System             | Purpose                      | Routes               | Strategy         |
-| ------------------ | ---------------------------- | -------------------- | ---------------- |
-| NextAuth.js        | CFP, admin, speaker profiles | `/cfp/*`, `/admin/*` | JWT (cookie)     |
-| WorkOS AuthKit     | Workshop signups             | `/workshop/*`        | Session (WorkOS) |
-| CLI Token Exchange | CLI tooling                  | Bearer token via API | JWT (header)     |
+| System             | Purpose                      | Routes               | Strategy      |
+| ------------------ | ---------------------------- | -------------------- | ------------- |
+| NextAuth.js        | CFP, admin, speaker profiles | `/cfp/*`, `/admin/*` | JWT (cookie)  |
+| WorkOS AuthKit     | Workshop signups             | `/workshop/*`        | Sealed cookie |
+| CLI Token Exchange | CLI tooling                  | Bearer token via API | JWT (header)  |
 
 NextAuth.js is the primary system. Speaker identities live in Sanity and are linked to
 OAuth provider accounts. WorkOS is isolated to workshop signup flows and does not share
-identity with NextAuth. It runs on whichever host the attendee is on: there is no
-configured sign-in host (see [WorkOS AuthKit](#workos-authkit-workshops)). CLI tokens are
-NextAuth-compatible JWTs issued via browser login.
+identity with NextAuth. The sign-in runs through one central auth host
+(`WORKSHOP_AUTH_ORIGIN`), which hands the result to the conference's host; the session on
+that host is the platform's own cookie, not WorkOS's (see
+[WorkOS AuthKit](#workos-authkit-workshops)). CLI tokens are NextAuth-compatible JWTs
+issued via browser login.
 
 ## NextAuth.js
 
@@ -417,11 +419,10 @@ Three layers of protection are used depending on the route type:
 
 The top-level middleware routes requests to the correct auth system:
 
-- `/workshop*` &rarr; the workshop sign-in decision for the request's host, then WorkOS
-  AuthKit's session middleware when that host can sign in
-  (see [WorkOS AuthKit](#workos-authkit-workshops))
 - `/cfp/*` (except `/cfp`), `/admin/*`, and `/cli/*` &rarr; NextAuth middleware
-- Everything else &rarr; passes through
+- Everything else &rarr; passes through, `/workshop*` included: the workshop portal keeps
+  a session of its own, which its page and the `workshop.*` procedures read for
+  themselves (see [WorkOS AuthKit](#workos-authkit-workshops))
 
 The NextAuth middleware (`auth()` wrapper) checks `req.auth`. If absent, redirects to
 `/api/auth/signin?callbackUrl={original_url}`.
@@ -565,68 +566,166 @@ A separate auth system used only by the attendee workshop portal. It proves an e
 address. Whether that address may sign up for workshops is decided afterwards, from the
 conference's tickets (`decideWorkshopPortalAccess` in `src/lib/workshop/access.ts`).
 
-- **Package**: `@workos-inc/authkit-nextjs@^4.3.1`
-- **Routes**: `/workshop`, `/workshop/sign-in`, `/workshop/sign-up`
-- **Callback**: `/api/auth/callback` on the host the sign-in started on
-- **Identity**: stored as `userWorkOSId` on `workshopSignup` documents in Sanity
+- **Package**: `@workos-inc/node` (the plain server SDK), built once per process in
+  `src/lib/workshop/central-sign-in/workos.ts`. No AuthKit Next.js middleware and no SDK
+  session; `__tests__/lib/workshop/no-authkit-sdk.test.ts` keeps it that way.
+- **Tenant-host routes**: `/workshop` (the portal page), `/workshop/sign-in`,
+  `/workshop/sign-up`, `/workshop/redeem`, and the sign-out server action in
+  `src/app/(workshop)/workshop/actions.ts`.
+- **Auth-host routes**: `/api/auth/workshop/start`, `/api/auth/callback`,
+  `/api/auth/workshop/sign-out`, `/api/auth/workshop/signed-out`.
+- **Identity**: stored as `userWorkOSId` on `workshopSignup` documents in Sanity.
 
-WorkOS sessions are completely independent from NextAuth sessions. A user signed in via
-GitHub for CFP has no automatic session for workshops, and vice versa.
+Workshop sessions are completely independent from NextAuth sessions. A user signed in
+via GitHub for CFP has no automatic session for workshops, and vice versa. The design
+record is [WORKSHOP_CENTRAL_SIGN_IN_SPEC.md](WORKSHOP_CENTRAL_SIGN_IN_SPEC.md) (#1311);
+the code is `src/lib/workshop/central-sign-in/`.
 
-### One environment, one redirect URI per request
+### The auth host
 
-Every tenant signs in through the same WorkOS environment. No variable names a sign-in
-host. The redirect URI is the callback of the host the attendee is on,
-`https://<host>/api/auth/callback`, chosen for each request and passed to the SDK
-explicitly.
+Every tenant signs in through the same WorkOS environment, and that environment holds
+two addresses for the application, added by hand once per environment: the redirect URI
+`<auth origin>/api/auth/callback` and the sign-out redirect
+`<auth origin>/api/auth/workshop/signed-out` (`src/lib/workshop/sign-in-paths.ts`).
 
-`resolveWorkshopSignInHost` (`src/lib/workshop/sign-in.ts`) is the one decision. A host
-can sign in when all of these hold:
+`WORKSHOP_AUTH_ORIGIN` names the auth host (this platform's production deployment is
+configured with `https://auth.konf.app`; the code fixes no value). It
+serves no conference: it starts a sign-in, takes the callback from WorkOS, hands the
+result to the conference's host, and takes the return from a sign-out. A tenant host is
+never a WorkOS callback: the WorkOS environment is shared by every tenant, so its
+registered addresses stay on a host the platform operates.
 
-- its own `domainVerification` record is on the verified-redirect allowlist
-  (see [DOMAIN_VERIFICATION.md](DOMAIN_VERIFICATION.md));
-- WorkOS has the host's callback as a redirect URI, which the reconcile registers only
-  for hosts the platform controls, for conferences with workshops enabled;
-- the conference that owns the record still lists the host in `domains[]`;
-- `WORKOS_COOKIE_DOMAIN` is not set.
+`authOrigin()` (`src/lib/workshop/central-sign-in/decision.ts`) reads the variable:
 
-The host is the `Host` header and nothing else. The record is read live on every
-decision, with no cache.
+- **set** to a bare `https` origin of a hostname: the auth-host routes answer 404 on
+  every other host, and `/workshop/sign-in`, `/workshop/sign-up` and `/workshop/redeem`
+  answer 404 on the auth host (`isAuthHost`). The `/workshop` page is a 404 there only
+  because no conference claims that host;
+- **unset**: a host is its own auth host. The start route then accepts only a request
+  naming the host it arrived on. This is local development and a single-domain
+  installation, and system status warns about it in a deployed build;
+- **anything else** (a path, a query, userinfo, an IPv6 literal, plain `http` outside
+  development): every decision refuses. Sign-in is unavailable on every host, the
+  auth-host routes answer 404, and the server log and system status say why.
 
-Every entry point takes the decision before it calls the SDK:
+### Which hosts may carry the portal
 
-| Entry point                                  | File                                     | On a host that cannot sign in                                                                                |
-| -------------------------------------------- | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `GET`/`HEAD` `/workshop`                     | `src/proxy.ts`, the portal page          | the unavailable view, or a redirect to the first domain's portal (below); 404 for a tenant without workshops |
-| `GET`/`HEAD` `/workshop/sign-in`, `/sign-up` | `src/proxy.ts`                           | 307 to `/workshop` on the same host                                                                          |
-| any other `/workshop*` request or method     | `src/proxy.ts`                           | 404                                                                                                          |
-| starting a sign-in or sign-up                | `src/lib/workshop/sign-in-start.ts`      | 404, no authorize URL is built                                                                               |
-| the callback                                 | `src/app/api/auth/callback/route.ts`     | 404, no code is exchanged                                                                                    |
-| the attendee identity in tRPC                | `src/server/trpc.ts` (`workshop.*` only) | no attendee is resolved                                                                                      |
-| sign-out                                     | `src/app/(workshop)/workshop/actions.ts` | 404, the session cookie is left alone                                                                        |
+`resolveProvenDestination` (`src/lib/domain-verification/destination.ts`) is the one
+rule, asked on the tenant host by every route that begins or redeems a sign-in and by
+every read of the session, and on the auth host by start, callback and sign-out. A host
+qualifies when its `domainVerification` record is **proven** — it passes
+`isAllowlistEligible` and is either a host the platform allocated or a record with
+`method: 'dns-txt'` — the record names that exact host, and the conference holding the
+record still lists it in `domains[]`. A grandfathered record inside its grace period is
+not enough. `localhost` qualifies only with `NODE_ENV=development`. The record is read
+live on every decision, with no cache, and a read error refuses. Details are in
+[DOMAIN_VERIFICATION.md](DOMAIN_VERIFICATION.md#workshop-sign-in-which-hosts-receive-a-hand-off).
 
-The routes that start a sign-in and the callback also check that the tenant has workshops
-(`isWorkshopsEnabledForConference`), so a tenant without them can neither start nor
-complete a sign-in. A session that already exists is not ended by that: the proxy still
-refreshes it at WorkOS, and it can still sign out.
+The routes that begin a sign-in, the auth host's start and callback, and the redeem route
+also check that the tenant has workshops (`isWorkshopsEnabledForConference`), so a tenant
+without them is never sent to WorkOS. Sign-out does not: a conference that has turned
+workshops off still lets its attendees out.
 
-The unavailable view says sign-up is not available yet, or that it has closed once
-workshop registration has ended. A secondary host that cannot sign in redirects to the
-portal on the conference's first domain when that one can.
+### The four steps
 
-### Sessions and the shared login
+1. **Tenant host, `/workshop/sign-in` or `/workshop/sign-up`**
+   (`central-sign-in/tenant-start.ts`). After the decision above, a random value goes
+   into a cookie on this host (`__Host-workshop-sign-in`, 10 minutes) and the browser is
+   sent to the auth host's start route with one sealed request, valid for 60 seconds,
+   naming this host, the SHA-256 of that value and the screen to show. No WorkOS URL is
+   built here.
+2. **Auth host, start** (`central-sign-in/start.ts`). Without a request a tenant host
+   sealed, nothing is read and the answer is 404. It takes the decision for the named
+   host, generates a PKCE pair, seals the host, the conference that claims it, the hash
+   and a nonce as the OAuth `state` (10 minutes), puts the nonce and the PKCE verifier in
+   a cookie on the auth host (`__Host-workshop-auth-start`, 10 minutes), and redirects to
+   WorkOS's authorize URL with `redirect_uri` `<auth origin>/api/auth/callback`.
+3. **Auth host, callback** (`central-sign-in/callback.ts`). Before the code is
+   exchanged: the state unseals and has not expired, a code is present, the cookie from
+   step 2 carries the state's nonce, the decision holds again for the host in state, and
+   the conference claiming it is still the one in state. Only then does it exchange the
+   code with the PKCE verifier. It keeps **no session and no WorkOS token**: it seals a
+   hand-off (60 seconds) holding the WorkOS user ID, email, whether WorkOS reports the
+   email verified, name, the WorkOS session ID (the access token's `sid`), the host, the
+   conference and the hash, clears the step 2 cookie, and redirects to
+   `https://<host>/workshop/redeem?token=…` with `Cache-Control: no-store` and
+   `Referrer-Policy: no-referrer`. Every refusal is a 404 with one line in the log
+   (`logRefusal`), and a failed exchange is a 404 too.
+4. **Tenant host, redeem** (`central-sign-in/redeem.ts`). The token must unseal and not
+   have expired, the browser must hold the step 1 cookie and its value must hash to what
+   the token carries, and the token must name this host; so far from the request alone.
+   Then the decision is taken live, the conference claiming the host must be the one in
+   the token, and it must have workshops. The session cookie is set, the step 1 cookie is
+   cleared and the browser goes to `/workshop`; that path is fixed. A refusal goes to
+   `/workshop?sign-in=incomplete`, signed out, with one neutral line on the page and the
+   reason in the log only; no cookie is touched.
 
-The session is a sealed `wos-session` cookie with no `Domain` attribute, so a session on
-one host is never presented on another. The login behind it is not per host: a WorkOS
-account is one account for every conference on the platform, and `/privacy` says so to
-workshop participants. Organizers only see the workshop registrations of their own
-organization's conferences.
+The hand-off is not single use: nothing records a redeemed token. Only the browser that
+began can redeem it, and a redeem clears the cookie that makes it that browser.
 
-Sign-out removes the cookie on the current host and sends the browser to WorkOS's logout
-endpoint with `return_to` set to that host's home page. With no session left to end it
-goes straight to that home page. WorkOS only honours a `return_to`
-that is registered as a Sign-out redirect in the environment. That registration is done
-by hand in the WorkOS dashboard; the reconcile only manages redirect URIs.
+### The session on the tenant host
+
+`__Host-workshop-session` (`central-sign-in/session.ts`): HttpOnly, `Secure`,
+`SameSite=Lax`, `Path=/`, sealed by the platform. The `__Host-` prefix makes the browser
+refuse a `Domain`, so no sibling host can set or replace it. It holds the WorkOS user
+ID, email, whether the email is verified, name, the WorkOS session ID, the host it was
+issued for and the conference that claimed the host then.
+
+**Fixed 7 days from sign-in, no renewal.** The expiry inside the seal decides; the
+cookie's own `Max-Age` only tells the browser when to drop it, and a read never writes a
+cookie. A session counts only when it unseals, has not expired, was issued for the
+request's host, the host still passes the decision above (read live), and the conference
+claiming the host is the one it was issued for. The portal page (`readWorkshopPortal`)
+and the tRPC attendee identity (`readWorkshopSession`, `src/server/trpc.ts`) read it;
+neither calls WorkOS.
+
+The login behind it is not per host: a WorkOS account is one account for every conference
+on the platform, and `/privacy` says so to workshop participants. Organizers only see
+the workshop registrations of their own organization's conferences: the organizer
+procedures are `adminProcedure`, which is org-scoped (`src/lib/authz/organizer.ts`).
+
+### Sign-out
+
+`signOutOfWorkshop` (`src/app/(workshop)/workshop/actions.ts`) clears the session cookie
+on the tenant host and redirects to where `workshopSignOutTarget`
+(`central-sign-in/sign-out.ts`) says: with a session of this host, the auth host's
+`/api/auth/workshop/sign-out` with one sealed request (60 seconds) naming the host and the
+WorkOS session ID; with none, or with an unusable `WORKSHOP_AUTH_ORIGIN`, the front page.
+
+The auth host answers only a browser's navigation (a request carrying the `RSC` header
+is a 404, so Next's own prefetch of a same-host redirect ends nothing). Without a sealed
+request nothing is read. It checks that the request is on the auth host and that the
+named host may be returned to, keeps the host in a cookie of its own
+(`__Host-workshop-sign-out`, 5 minutes), and sends the browser to WorkOS's logout with
+the session ID and the one fixed return address, with no referrer. The return route
+(`/api/auth/workshop/signed-out`) reads that cookie, clears it, checks the host again and
+redirects to `https://<host>/`; with no valid host it shows a plain signed-out page.
+
+Signing out on one host does not end a session the same attendee holds on another
+conference's host; that one lasts until its 7 days are over.
+
+### The seal
+
+`central-sign-in/seal.ts`: `jose` `EncryptJWT`, `alg: dir`, `enc: A256GCM`, with the
+expiry inside the token and checked with no tolerance. One key per purpose
+(`start-request`, `auth-state`, `auth-start`, `handoff`, `session`, `sign-out-request`,
+`sign-out-return`), each derived from `WORKOS_COOKIE_PASSWORD` with HKDF-SHA256 and the
+purpose as its label, so a hand-off token is never accepted as a session and the reverse.
+
+**`WORKOS_COOKIE_PASSWORD` seals identity: whoever holds it can issue a session.** It
+must be at least 32 characters, a different value in every environment, and the
+production value must not be available to preview deployments. Changing it signs everyone
+out: no existing session, hand-off or request unseals under the new key. With no usable
+password `seal` throws, and so does `unseal` once it has a value to unseal (an absent
+value answers `null` before the key is derived), so a deployment without one cannot sign
+anyone in and does not read as a merely refused seal.
+
+### Cookies in development
+
+`hostCookie` (`central-sign-in/cookies.ts`) drops the `__Host-` prefix and the `Secure`
+flag when `NODE_ENV` is `development`, because a browser may not store a `Secure` cookie
+over plain HTTP. `NODE_ENV` is `production` in every deployed build, previews included, unless a deployment
+overrides it; it must not.
 
 Operations are in [WORKSHOP_SIGN_IN_RUNBOOK.md](WORKSHOP_SIGN_IN_RUNBOOK.md).
 
@@ -654,29 +753,28 @@ Operations are in [WORKSHOP_SIGN_IN_RUNBOOK.md](WORKSHOP_SIGN_IN_RUNBOOK.md).
 
 Only needed when a tenant on the deployment has workshops.
 
-| Variable                 | Description                                                                                                                                           |
-| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `WORKOS_CLIENT_ID`       | Client ID of the one WorkOS environment every tenant shares                                                                                           |
-| `WORKOS_API_KEY`         | API key of that environment. Used by the SDK and by the redirect-URI reconcile, which does nothing without it                                         |
-| `WORKOS_COOKIE_PASSWORD` | Seals the session cookie. At least 32 characters                                                                                                      |
-| `WORKOS_COOKIE_DOMAIN`   | **Must stay unset.** It would widen the session cookie to sibling hosts, so sign-in is refused on every host while it is set (system status shows it) |
+| Variable                 | Description                                                                                                                                                                                                                                                                                                             |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `WORKOS_CLIENT_ID`       | Client ID of the one WorkOS environment every tenant shares. System status reports whether it is set                                                                                                                                                                                                                    |
+| `WORKOS_API_KEY`         | API key of that environment, used by the server SDK on the auth host                                                                                                                                                                                                                                                    |
+| `WORKOS_COOKIE_PASSWORD` | **Seals identity** (see [The seal](#the-seal)): whoever holds it can issue a session. At least 32 characters. A different value in every environment, and the production value must not be available to preview deployments. Changing it signs everyone out                                                             |
+| `WORKSHOP_AUTH_ORIGIN`   | The auth host, as a bare `https` origin (`https://auth.konf.app` on this platform's production deployment). Unset: each host is its own auth host and must be registered at WorkOS itself, which is right only for a single-domain installation; system status warns. Invalid: sign-in is refused on every host (error) |
 
-Not needed, and to be removed where they are still set: `WORKOS_REDIRECT_URI` and
-`NEXT_PUBLIC_WORKOS_REDIRECT_URI`. The first is read by nothing: not the application, not
-the SDK. The application does not read the second either, but the SDK does, for two
-things. It is the redirect URI for a caller that passes none; every caller here passes
-one. And where the SDK has no request URL to judge by (starting a sign-in, signing out) it
-takes the cookie's `Secure` flag from that variable's scheme, and sets `Secure` when the
-variable is unset, which is what an `https` deployment wants.
-`__tests__/api/auth/workos-no-redirect-env.test.ts` runs every SDK entry point with both
-variables unset. The portal does not read `NEXT_PUBLIC_URL` either.
+`WORKOS_REDIRECT_URI` and `NEXT_PUBLIC_WORKOS_REDIRECT_URI` are not needed and should be
+removed where they are still set: the redirect URI is passed to the SDK explicitly
+(`workshopCallbackUri`), and nothing in this repository reads either variable. The test
+setup (`vitest.setup.ts`) deletes every `WORKOS_*` and `NEXT_PUBLIC_WORKOS_*` variable
+from the test environment; suites set the three `WORKOS_*` values through
+`__tests__/helpers/workosEnv.ts`.
 
-Local development: `localhost` can sign in when `NODE_ENV` is `development`, with
-`http://localhost:<port>/api/auth/callback` registered in a WorkOS **staging** environment.
-With the variable unset those two cookies are `Secure` on `http://localhost` too. Chrome
-and Firefox are documented to accept that from localhost (not re-tested for this change).
-For a browser that does not, set `NEXT_PUBLIC_WORKOS_REDIRECT_URI` to the localhost
-callback in `.env.local`, and nowhere else.
+Local development (`NODE_ENV=development`): `localhost` carries the portal without a
+verification record, and `WORKSHOP_AUTH_ORIGIN` may be unset (one origin) or a plain
+`http` origin such as `http://127.0.0.1:<port>` (two origins: `127.0.0.1` is then the auth
+host and `localhost` the tenant host). Register that auth origin's
+`/api/auth/callback` and `/api/auth/workshop/signed-out` in a WorkOS **staging**
+environment. Cookies are set without `__Host-` and `Secure` in development. That WorkOS
+staging accepts `http://127.0.0.1:<port>` next to `localhost` is documented, not
+verified here.
 
 ### GitHub OAuth App Setup
 
@@ -706,11 +804,14 @@ callback in `.env.local`, and nowhere else.
 | `src/app/api/auth/email-link/callback/route.ts` | Magic-link redemption (GET → server-side `signIn`)                               |
 | `src/app/(main)/signin/confirm/`                | Login-CSRF interstitial for an unproven redemption                               |
 | `src/app/(main)/signin/actions.ts`              | "Email me a link" server action (uniform response)                               |
-| `src/proxy.ts`                                  | Route-level middleware (NextAuth + WorkOS)                                       |
-| `src/lib/workshop/sign-in.ts`                   | Which host may run a WorkOS sign-in, and with which callback                     |
-| `src/server/trpc.ts`                            | tRPC context creation, auth middleware                                           |
+| `src/proxy.ts`                                  | Route-level middleware (NextAuth; `/workshop*` is not handled there)             |
+| `src/lib/workshop/central-sign-in/`             | Workshop sign-in: start, callback, hand-off, redeem, session, sign-out, the seal |
+| `src/lib/domain-verification/destination.ts`    | Which hosts may receive a workshop sign-in hand-off                              |
+| `src/lib/workshop/sign-in.ts`                   | Where the workshop portal is for a link that leaves the request (the main host)  |
+| `src/server/trpc.ts`                            | tRPC context creation, auth middleware, the workshop attendee identity           |
 | `src/app/api/auth/[...nextauth]/route.ts`       | NextAuth route handler                                                           |
-| `src/app/api/auth/callback/route.ts`            | WorkOS callback handler                                                          |
+| `src/app/api/auth/callback/route.ts`            | The one WorkOS callback, on the auth host                                        |
+| `src/app/api/auth/workshop/`                    | The auth host's start, sign-out and signed-out routes                            |
 | `src/server/routers/speaker.ts`                 | `generateCliToken` mutation and auth procedures                                  |
 | `src/app/(main)/signin/page.tsx`                | Custom sign-in page                                                              |
 
@@ -734,3 +835,10 @@ callback in `.env.local`, and nowhere else.
 - **Provider token storage**: The full OAuth `Account` object (including provider
   `access_token`) is stored in the JWT. The provider token is not actively used after
   sign-in but is available for future provider API calls.
+- **Workshop sign-in**: `WORKOS_COOKIE_PASSWORD` seals every token and cookie of the
+  workshop sign-in, the session included, so holding it is holding the ability to issue a
+  session. It differs per environment, is kept out of previews in its production value,
+  and rotating it signs every workshop attendee out. No WorkOS access or refresh token is stored anywhere (the session keeps the WorkOS session ID,
+  which names the login to end at sign-out);
+  the hand-off token travels in a URL once, under `no-store` and `no-referrer`, and lives
+  60 seconds.

@@ -9,7 +9,12 @@ import {
   resolveLegalConfig,
   resolveSubprocessorDisclosure,
 } from '@/lib/legal'
-import { SharedWorkshopLoginNotice, SubprocessorList } from '@/components/legal'
+import {
+  SharedWorkshopLoginNotice,
+  SubprocessorList,
+  WorkshopSessionCookieItem,
+  WorkshopSignInCookieNote,
+} from '@/components/legal'
 import { AnalyticsChoice } from '@/components/analytics'
 import { resolveMetadataBrand } from '@/lib/seo/brand'
 import { ErrorDisplay } from '@/components/admin'
@@ -54,6 +59,7 @@ import { conferenceTag, organizationTag } from '@/lib/cache/tags'
 import { headers } from 'next/headers'
 import type { Metadata } from 'next'
 import { canonicalAlternates } from '@/lib/seo/canonical'
+import { authOrigin } from '@/lib/workshop/central-sign-in/decision'
 
 export async function generateMetadata(): Promise<Metadata> {
   const brand = await resolveMetadataBrand()
@@ -117,7 +123,7 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
     )
   }
 
-  const lastUpdated = 'October 10, 2026'
+  const lastUpdated = 'October 11, 2026'
   const legal = await resolveLegalConfig(conference)
   const contactEmail = legal.contactEmail
   // EMPTY when no legal entity could be resolved. `legal.controllerResolved`
@@ -133,6 +139,11 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
   // `@/lib/legal/subprocessors` for the two rules.
   const subprocessors = await resolveSubprocessorDisclosure(conference)
   const usesWorkOS = discloses(subprocessors, 'workos')
+  // Where the sign-in's own short-lived cookies are set besides this site:
+  // the host `WORKSHOP_AUTH_ORIGIN` names. Unset, there is no other host.
+  const configuredAuthOrigin = authOrigin()
+  const signInHost =
+    typeof configuredAuthOrigin === 'object' ? configuredAuthOrigin.host : null
   const overseasProcessors = internationalTransferProcessors(subprocessors)
   // The analytics wording follows the organization's cutover (#1008, #1034):
   // PostHog is anonymous by default with ONE optional cookie, so the old
@@ -415,9 +426,16 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                             <li>• Signup date and confirmation details</li>
                             <li>• Workshop attendance tracking</li>
                             <li>• Capacity and waitlist management</li>
-                            <li>
-                              • Authentication session data for workshop access
-                            </li>
+                            {/*
+                              The portal's session is the platform's own cookie
+                              (#1311). Gated like the identifier above: this
+                              line names WorkOS.
+                            */}
+                            {usesWorkOS ? (
+                              <WorkshopSessionCookieItem
+                                signInHost={signInHost}
+                              />
+                            ) : null}
                           </ul>
                         </div>
                       </div>
@@ -2102,7 +2120,9 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                                 <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                                   Removing your registrations at one conference
                                   does not delete this login or your
-                                  registrations at other conferences
+                                  registrations at other conferences. The
+                                  sign-in cookie on this site expires 7 days
+                                  after you sign in, or when you sign out.
                                 </div>
                               </td>
                               <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
@@ -2445,6 +2465,11 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                         ? ' Our analytics are aggregated and, unless you accept the cookie above, anonymous.'
                         : ' Our analytics are cookie-less and aggregated.'}
                     </p>
+                    {/*
+                      NOT gated on `usesWorkOS`: the cookie can outlive a
+                      switch-off of workshops by up to its 7 days.
+                    */}
+                    <WorkshopSignInCookieNote signInHost={signInHost} />
                     <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
                       <strong>localStorage:</strong> We use your browser’s
                       localStorage to save personal bookmarks on your device.

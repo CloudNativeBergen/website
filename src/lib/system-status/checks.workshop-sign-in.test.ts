@@ -1,11 +1,11 @@
 /**
  * System status: where each claimed host stands for the workshop portal's
- * sign-in (#1298), for a conference with workshops. The feature gate and the
- * Sanity reads are supplied; the standing and its wording are real.
+ * sign-in, for a conference with workshops. The feature gate and the Sanity
+ * reads are supplied; the standing and its wording are real.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { signInHost } from '../../../__tests__/helpers/workshopSignIn'
-import type { RedirectUriSyncRow } from '@/lib/domain-verification/types'
+import { verifiedHost } from '../../../__tests__/helpers/domainClaims'
+import type { DomainVerificationRecord } from '@/lib/domain-verification/types'
 import type { SystemCheck } from './types'
 
 vi.mock('@/lib/sanity/client', () => ({
@@ -17,27 +17,23 @@ vi.mock('@/lib/features/workshops', () => ({
   isWorkshopsEnabledForConference: () => workshopsEnabled(),
 }))
 
-const rows: RedirectUriSyncRow[] = []
+const records: DomainVerificationRecord[] = []
 vi.mock('@/lib/domain-verification/sanity', () => ({
-  listRedirectUriSyncRowsForConference: vi.fn(async () => rows),
-  listDomainVerificationsForConference: vi.fn(async () =>
-    rows.map((row) => row.record),
-  ),
+  listDomainVerificationsForConference: vi.fn(async () => records),
 }))
 
 import { buildSystemChecks } from './checks'
-
-const PLATFORM_ORG = 'org-platform'
+import { workshopSignInLabel } from '@/lib/domain-verification/sign-in-labels'
 
 const CONFERENCE = {
-  _id: 'conf-1',
-  organization: { _ref: PLATFORM_ORG },
+  _id: 'conference-1',
+  organization: { _ref: 'org-tenant' },
   domains: [
     'ready.example.org',
-    'pending.example.org',
+    'allocated.konf.run',
+    'grace.example.org',
     'failed.example.org',
-    'unclaimed-record.example.org',
-    'tenant-domain.example.org',
+    'missing-record.example.org',
     // Real production data carries these; they never sign in, so no row.
     'localhost:3000',
     '*.example.org',
@@ -48,35 +44,26 @@ function signInChecks(checks: SystemCheck[]): SystemCheck[] {
   return checks.filter((check) => check.id.startsWith('auth.workshopSignIn'))
 }
 
-function owned(row: RedirectUriSyncRow): RedirectUriSyncRow {
-  return { ...row, conference: { organization: { _ref: PLATFORM_ORG } } }
-}
-
 beforeEach(() => {
   vi.clearAllMocks()
-  rows.length = 0
-  rows.push(
-    owned(signInHost('ready.example.org')),
-    owned(signInHost('pending.example.org', {}, { status: null, id: null })),
-    owned(
-      signInHost(
-        'failed.example.org',
-        {},
-        { status: null, id: null, error: 'WorkOS 422: invalid redirect URI' },
-      ),
-    ),
-    // A verified host the platform does not control: never signs in.
-    {
-      ...signInHost(
-        'tenant-domain.example.org',
-        {},
-        { status: null, id: null },
-      ),
-      conference: { organization: { _ref: 'org-tenant' } },
-    },
+  records.length = 0
+  records.push(
+    verifiedHost('ready.example.org'),
+    verifiedHost('allocated.konf.run', {
+      method: 'platform-owned',
+      lastSuccessAt: null,
+    }),
+    verifiedHost('grace.example.org', {
+      method: 'grandfathered',
+      graceUntil: new Date(Date.now() + 86_400_000).toISOString(),
+    }),
+    verifiedHost('failed.example.org', {
+      status: 'failing',
+      lastError: 'TXT record no longer matches',
+    }),
   )
   workshopsEnabled.mockResolvedValue(true)
-  vi.stubEnv('PLATFORM_ORG_ID', PLATFORM_ORG)
+  vi.stubEnv('PLATFORM_DOMAIN_SUFFIX', 'konf.run')
 })
 
 afterEach(() => {
@@ -84,7 +71,7 @@ afterEach(() => {
 })
 
 describe('buildSystemChecks — workshop sign-in per host', () => {
-  it('reports each claimed host with its reason (the platform owns this conference)', async () => {
+  it('reports proven DNS and allocated hosts as available, and every unproven host as not verified', async () => {
     const checks = signInChecks(await buildSystemChecks(CONFERENCE))
 
     expect(
@@ -104,59 +91,73 @@ describe('buildSystemChecks — workshop sign-in per host', () => {
         value: 'available',
       },
       {
-        id: 'auth.workshopSignIn.pending.example.org',
+        id: 'auth.workshopSignIn.allocated.konf.run',
         group: 'auth',
-        label: 'Workshop sign-in: pending.example.org',
+        label: 'Workshop sign-in: allocated.konf.run',
+        status: 'ok',
+        value: 'available',
+      },
+      {
+        id: 'auth.workshopSignIn.grace.example.org',
+        group: 'auth',
+        label: 'Workshop sign-in: grace.example.org',
         status: 'warn',
-        value: 'registration pending',
+        value: 'domain not verified',
       },
       {
         id: 'auth.workshopSignIn.failed.example.org',
         group: 'auth',
         label: 'Workshop sign-in: failed.example.org',
-        status: 'error',
-        value: 'registration failed',
-      },
-      {
-        id: 'auth.workshopSignIn.unclaimed-record.example.org',
-        group: 'auth',
-        label: 'Workshop sign-in: unclaimed-record.example.org',
         status: 'warn',
         value: 'domain not verified',
       },
-      // A WARNING, not "off": workshops are on, and attendees on this host
-      // are told sign-up is not available.
       {
-        id: 'auth.workshopSignIn.tenant-domain.example.org',
+        id: 'auth.workshopSignIn.missing-record.example.org',
         group: 'auth',
-        label: 'Workshop sign-in: tenant-domain.example.org',
+        label: 'Workshop sign-in: missing-record.example.org',
         status: 'warn',
-        value: 'not offered on this host',
+        value: 'domain not verified',
       },
     ])
   })
 
-  it('tells a tenant that is not the platform its new domain is not offered, not "not verified"', async () => {
+  it('reports a proven host as switched off while WORKSHOP_AUTH_ORIGIN cannot be used', async () => {
+    vi.stubEnv('WORKSHOP_AUTH_ORIGIN', 'https://auth.example.org/path')
+
+    const checks = signInChecks(await buildSystemChecks(CONFERENCE))
+
+    expect(
+      checks.find(({ id }) => id === 'auth.workshopSignIn.ready.example.org'),
+    ).toEqual({
+      id: 'auth.workshopSignIn.ready.example.org',
+      group: 'auth',
+      label: 'Workshop sign-in: ready.example.org',
+      status: 'error',
+      value: 'switched off on every host',
+      detail: workshopSignInLabel({ state: 'blocked', by: 'origin-unusable' })
+        .detail,
+    })
+  })
+
+  it('reports a new domain without a proof as not verified for any owner', async () => {
     const checks = signInChecks(
       await buildSystemChecks({
         _id: 'conf-2',
-        organization: { _ref: 'org-tenant' },
+        organization: { _ref: 'org-other-tenant' },
         domains: ['new.tenant.example.org'],
       }),
     )
-    expect(checks.map(({ id, value }) => ({ id, value }))).toEqual([
+    // The whole row: where it shows, what it is called and what it advises.
+    expect(checks).toEqual([
       {
         id: 'auth.workshopSignIn.new.tenant.example.org',
-        value: 'not offered on this host',
+        group: 'auth',
+        label: 'Workshop sign-in: new.tenant.example.org',
+        status: 'warn',
+        value: 'domain not verified',
+        detail: workshopSignInLabel({ state: 'unverified' }).detail,
       },
     ])
-  })
-
-  it('carries the recorded error in the failed host’s detail', async () => {
-    const failed = signInChecks(await buildSystemChecks(CONFERENCE)).find(
-      (check) => check.id === 'auth.workshopSignIn.failed.example.org',
-    )
-    expect(failed?.detail).toContain('WorkOS 422: invalid redirect URI')
   })
 
   it('reports nothing, and reads no host, for a conference without workshops', async () => {
@@ -170,13 +171,12 @@ describe('buildSystemChecks — workshop sign-in per host', () => {
 
     expect(signInChecks(await buildSystemChecks(CONFERENCE))).toEqual([])
     expect(sanity.listDomainVerificationsForConference).not.toHaveBeenCalled()
-    expect(sanity.listRedirectUriSyncRowsForConference).not.toHaveBeenCalled()
   })
 
   it('warns, without throwing, when the hosts cannot be read', async () => {
-    const { listRedirectUriSyncRowsForConference } =
+    const { listDomainVerificationsForConference } =
       await import('@/lib/domain-verification/sanity')
-    vi.mocked(listRedirectUriSyncRowsForConference).mockRejectedValueOnce(
+    vi.mocked(listDomainVerificationsForConference).mockRejectedValueOnce(
       new Error('sanity unavailable'),
     )
     const checks = signInChecks(await buildSystemChecks(CONFERENCE))

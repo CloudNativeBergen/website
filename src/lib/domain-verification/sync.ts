@@ -10,17 +10,15 @@
  */
 
 import { normalizeDomain } from '@/lib/conference/domains'
-import { scheduleRedirectUriReconcile } from '@/lib/workshop/redirect-uris'
 import { isDevOnlyHost, isWildcardEntry } from './challenge'
 import { isPlatformZoneHost } from './platform'
 import {
   ensureDomainVerification,
   getDomainVerification,
   listDomainVerificationsForConference,
-  listRedirectUriSyncRowsForConference,
   revokeDomainVerification,
 } from './sanity'
-import { workshopSignInStandingOfRow } from './sign-in-standing'
+import { workshopSignInStanding } from './sign-in-standing'
 import {
   isWorkshopsEnabledForConference,
   type WorkshopConference,
@@ -42,11 +40,6 @@ import { toDomainVerificationView, type DomainVerificationView } from './view'
  * fails CLOSED downstream (unrouted under enforcement, never allowlisted) and is
  * repaired by the next admin re-check or backfill run, so swallowing the error
  * cannot silently grant anything.
- *
- * A claim or a release can change which hosts may sign in to the workshop
- * portal, so whenever a record was actually WRITTEN the WorkOS redirect URIs are
- * reconciled after the response (#1297). Never when nothing changed: the admin
- * card calls this on every load to self-heal.
  */
 export async function syncDomainVerifications(
   conferenceId: string,
@@ -55,18 +48,15 @@ export async function syncDomainVerifications(
   options: { allocatePlatformHosts?: boolean } = {},
 ): Promise<void> {
   const claimed = new Set(domains.map(normalizeDomain).filter(Boolean))
-  let changed = false
   try {
     for (const hostname of claimed) {
-      const wrote = await ensureDomainVerification(hostname, conferenceId, {
+      await ensureDomainVerification(hostname, conferenceId, {
         allocatePlatformHost: options.allocatePlatformHosts === true,
       })
-      changed ||= wrote
     }
     for (const hostname of removed.map(normalizeDomain).filter(Boolean)) {
       if (claimed.has(hostname)) continue
-      const revoked = await revokeDomainVerification(hostname, conferenceId)
-      changed ||= revoked
+      await revokeDomainVerification(hostname, conferenceId)
     }
   } catch (error) {
     console.error(
@@ -74,7 +64,6 @@ export async function syncDomainVerifications(
       error,
     )
   }
-  if (changed) scheduleRedirectUriReconcile()
 }
 
 /**
@@ -136,43 +125,24 @@ export async function listDomainVerificationViews(
   domains: readonly string[],
   {
     workshops = false,
-    ownerOrgId,
     now = new Date(),
   }: {
     workshops?: boolean
-    /** The conference's owner, for a claimed host with no record yet. */
-    ownerOrgId?: string | null
     now?: Date
   } = {},
 ): Promise<DomainVerificationView[]> {
-  const syncRows = workshops
-    ? await listRedirectUriSyncRowsForConference(conferenceId)
-    : null
-  const records =
-    syncRows?.map((row) => row.record) ??
-    (await listDomainVerificationsForConference(conferenceId))
+  const records = await listDomainVerificationsForConference(conferenceId)
   const byHost = new Map(records.map((r) => [normalizeDomain(r.hostname), r]))
-  const rowByHost = new Map(
-    (syncRows ?? []).map((row) => [normalizeDomain(row.record.hostname), row]),
-  )
   return domains
     .map(normalizeDomain)
     .filter(Boolean)
     .map((hostname) => {
+      const record = byHost.get(hostname) ?? null
       const signIn =
-        syncRows && !isDevOnlyHost(hostname) && !isWildcardEntry(hostname)
-          ? workshopSignInStandingOfRow(
-              rowByHost.get(hostname) ?? null,
-              now,
-              ownerOrgId,
-            )
+        workshops && !isDevOnlyHost(hostname) && !isWildcardEntry(hostname)
+          ? workshopSignInStanding(record, now)
           : null
-      return toDomainVerificationView(
-        hostname,
-        byHost.get(hostname) ?? null,
-        now,
-        signIn,
-      )
+      return toDomainVerificationView(hostname, record, now, signIn)
     })
 }
 
@@ -189,6 +159,5 @@ export async function listConferenceDomainViews(
 ): Promise<DomainVerificationView[]> {
   return listDomainVerificationViews(conference._id, conference.domains ?? [], {
     workshops: await isWorkshopsEnabledForConference(conference),
-    ownerOrgId: conference.organization?._ref ?? null,
   })
 }

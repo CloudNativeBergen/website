@@ -10,20 +10,20 @@ import {
 /**
  * The workshop portal for a visitor with no session (#1296).
  *
- * Both buttons go to first-party routes on THIS host, whose handlers start the
- * WorkOS flow through the SDK (PKCE, and this host's own callback). The page
- * used to put a hand-assembled `api.workos.com` authorize URL in the markup.
+ * Both buttons go to first-party routes on THIS host, which send the browser
+ * to the platform's sign-in (#1311). They are the only way into a sign-in: the
+ * portal layout answers 404 for a tenant without workshops, and nothing
+ * redirects a visitor on its own.
  *
- * THIS IS WHAT A SIGNED-OUT VISITOR OF `/workshop` SEES (review of #1304). The
- * proxy used to redirect them straight to WorkOS, before anything had asked
- * whether the tenant has workshops; it no longer redirects anyone. The portal
- * layout answers 404 for a tenant without workshops, and for one with them the
- * two buttons here are the only way into a sign-in.
+ * `signInIncomplete`: the visitor came back from a sign-in that was not
+ * accepted. One neutral line, the same whatever the reason.
  */
 export function WorkshopSignedOut({
   conferenceTitle,
+  signInIncomplete = false,
 }: {
   conferenceTitle: string
+  signInIncomplete?: boolean
 }) {
   return (
     <div className="relative py-20 sm:pt-36 sm:pb-24">
@@ -36,6 +36,15 @@ export function WorkshopSignedOut({
           <div className="font-display mt-6 space-y-6 text-2xl tracking-tight text-blue-900 dark:text-blue-100">
             <p>Sign in to register for workshops at {conferenceTitle}.</p>
           </div>
+
+          {signInIncomplete && (
+            <p
+              role="status"
+              className="mt-8 rounded-lg bg-yellow-50 p-4 text-sm text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-200"
+            >
+              Sign-in did not complete. Please try again.
+            </p>
+          )}
 
           {/* FORMS, NOT LINKS. These targets are route handlers that set a
               cookie and redirect to another origin. `next/link` would fetch

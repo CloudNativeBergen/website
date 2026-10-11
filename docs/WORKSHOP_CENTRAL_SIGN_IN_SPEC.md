@@ -34,9 +34,11 @@ Unchanged:
   takes the callback, hands off, and takes the return from a sign-out.
 - **Unset**, a host is its own auth host and the hand-off stays on one origin: the start route then
   accepts only its own host as the destination. This is local development and a single-domain
-  installation. System status reports the variable.
+  installation. System status reports the variable: unset is a warning in a deployed build and ok in
+  development (`workshopAuthOriginCheck`).
 - WorkOS holds exactly two addresses for the application, added by hand once per environment: the
-  redirect URI `<auth origin>/api/auth/callback` and one sign-out redirect on the auth host.
+  redirect URI `<auth origin>/api/auth/callback` and one sign-out redirect on the auth host,
+  `<auth origin>/api/auth/workshop/signed-out` (`src/lib/workshop/sign-in-paths.ts`).
 - With the variable set, the auth-host routes answer 404 on every other host, and the tenant-host
   routes answer 404 on the auth host. A tenant host exchanges no code.
 - **`WORKOS_COOKIE_PASSWORD` now seals identity** (§5, §6): whoever holds it can issue a session. It
@@ -48,17 +50,22 @@ Unchanged:
 1. **Tenant host, `/workshop/sign-in` or `/workshop/sign-up`.** The host must pass §4 and its
    conference must have workshops. The route sets a short-lived cookie holding a random value
    (`__Host-` prefix, HttpOnly, `Secure`, `SameSite=Lax`, `Path=/`), and redirects to the auth
-   host's start route with the host name, a hash of that value, and the screen.
-2. **Auth host, start.** It checks the named host against §4 and that its conference has workshops,
-   so a tenant without workshops is never sent to WorkOS. It builds the authorize URL with PKCE and
+   host's start route with one sealed request, valid for about 60 seconds, that names the host, a
+   hash of that value, and the screen.
+2. **Auth host, start.** It starts nothing without a request a tenant host sealed, and reads
+   nothing for one, so it starts only what a tenant host asked for. It then checks the named host
+   against §4 and that its conference has workshops, so a tenant without workshops is never sent to
+   WorkOS. It builds the authorize URL with PKCE and
    carries the host, the conference that claims it and the hash in sealed state. Nothing from the
    query string is trusted later. It also sets a cookie on the auth host that the callback requires,
    so a callback URL completes nothing outside the browser that started.
 3. **Auth host, callback.** It verifies state and the cookie from step 2. It then checks again that
    the host passes §4, that the conference claiming it is still the one in state, and that this
    conference still has workshops. Only then does it exchange the code. It stores **no session and no
-   WorkOS token**: the SDK's `handleAuth` always saves a session cookie on the callback host, so the
-   callback does not use it. It redirects to the tenant host's redeem route with a hand-off token.
+   WorkOS token**: the AuthKit SDK that was removed (`@workos-inc/authkit-nextjs`) always saved a
+   session cookie on the callback host from its `handleAuth`, so the callback did not use it, and the
+   auth host talks to WorkOS through the plain `@workos-inc/node` client. It redirects to the tenant
+   host's redeem route with a hand-off token.
 4. **Tenant host, redeem.** It accepts the token only when all of these hold: it unseals, it has not
    expired, it names this host and the conference this host resolves to, and the cookie from step 1
    hashes to the value inside it. It checks §4 and that the conference has workshops once more, sets
@@ -78,13 +85,13 @@ One small shared module answers this, and it is the only place the rule lives:
   (`src/lib/domain-verification/policy.ts`) and it is either a host the platform allocated
   (`isPlatformAllocated`) or a record with `method: 'dns-txt'`. `isAllowlistEligible` alone also
   admits a grandfathered record inside its grace period; that is not enough here. This is the proof
-  half of today's `isPlatformControlledHost`, without the test of who owns the conference;
+  half of the former `isPlatformControlledHost`, without the test of who owns the conference;
 - the match is on the **exact hostname**. No wildcard and no suffix match, and the routing matcher is
   not reused;
 - the record names the host, and its conference **still claims** it;
 - `localhost` qualifies only with `NODE_ENV=development`.
 
-It reads the record live and fails closed on a read error, as `resolveWorkshopSignInHost` does today.
+It reads the record live and fails closed on a read error, as the sign-in decision did before this work.
 The rule that a host must be platform-controlled, and the requirement that WorkOS holds its callback,
 are both gone.
 
@@ -97,23 +104,26 @@ are both gone.
   between is refused.
 - It holds what the session needs: WorkOS user ID, email, whether WorkOS reports the email verified,
   name, and the WorkOS session ID.
-- It is not single use. Inside its lifetime the same browser could redeem it twice; no other browser
-  can, because no other host and no script can set or read the step 1 cookie.
+- It is not single use: nothing remembers a redeemed token. A completed redeem clears the step 1
+  cookie, so the same browser redeems it again only before that; no other browser can, because no
+  other host and no script can set or read that cookie.
 
 ## 6. The session on the tenant host
 
 - Our own sealed cookie: `__Host-` prefix, HttpOnly, `Secure`, `SameSite=Lax`, `Path=/`. The prefix
   makes the browser refuse a `Domain`, so no sibling host under a shared suffix can set or replace
-  it, and `WORKOS_COOKIE_DOMAIN` has nothing to widen. Plain-HTTP local development may drop the
-  prefix where a browser will not store it.
-- It holds the fields of §5 plus the host and the conference it was issued for, and its expiry.
+  it, and `WORKOS_COOKIE_DOMAIN` has nothing to widen. With `NODE_ENV=development` the prefix and
+  `Secure` are dropped, because a browser may not store a `Secure` cookie over plain HTTP.
+- It holds what the hand-off token holds (§5), without the hash, and its expiry.
 - **Fixed 7 days from sign-in, no renewal.** The expiry inside the seal decides, not the cookie's
   own lifetime.
 - Every read checks: it unseals as a session, it has not expired, the host is the request's host, the
   conference is the one the host resolves to, and the host still passes §4. One live record read per
   decision, as today.
-- The proxy, the portal page, the tRPC attendee identity and the sign-out action read this session.
-  None of them calls the WorkOS SDK. Changing `WORKOS_COOKIE_PASSWORD` signs everyone out.
+- The portal page and the tRPC attendee identity read this session, and the sign-out action ends
+  it. None of them calls the WorkOS SDK, and the proxy no longer handles `/workshop`: nothing on
+  that path needs a redirect or a header from it. Changing `WORKOS_COOKIE_PASSWORD` signs everyone
+  out.
 
 ## 7. Sign-out
 
@@ -140,9 +150,11 @@ records, none with a `redirectUri*` value), so there is nothing to migrate.
   types and adapters.
 - The states of `sign-in-standing.ts` and `sign-in-labels.ts` that describe registration. The
   "Workshop sign-in" line on the domain card and the system-status row keep two outcomes: available,
-  or domain not verified.
+  or domain not verified. (A third was added before the merge to `main`: a proven host that the
+  deployment's configuration refuses, because `WORKSHOP_AUTH_ORIGIN` cannot be used or names that
+  host, reads as switched off, and no portal link is sent to it.)
 - The `WORKOS_COOKIE_DOMAIN` guard and its status row, once nothing sets a cookie it could widen.
-- `@workos-inc/authkit-nextjs`, if the auth host ends up using only `@workos-inc/node`.
+- `@workos-inc/authkit-nextjs`: the auth host uses only `@workos-inc/node`.
 
 The emailed portal link (the ticket-sold webhook and the resend action) follows the new decision
 through `workshopPortalUrl`. `AUTH.md` and `DOMAIN_VERIFICATION.md` are rewritten to match, and so is
@@ -153,8 +165,13 @@ through `workshopPortalUrl`. `AUTH.md` and `DOMAIN_VERIFICATION.md` are rewritte
 
 - Signing out on one host does not end a session the same attendee holds on another conference's
   host. It lasts until its 7 days are over.
+- Sign-out removes the session cookie from the browser that signs out. The sealed value is not
+  revoked and stays valid until its 7 days are over. With no session left (the cookie ran out),
+  signing out ends nothing at WorkOS.
 - A login deleted or an email changed at WorkOS takes effect on a tenant host only when its session
-  ends. Ticket access is not affected: it is decided each time the page or a signup procedure runs.
+  ends. Ticket access is decided each time the page or a signup procedure runs, against the tickets as
+  they are now but with the email and verified flag sealed at sign-in: a change to the tickets is seen
+  at once, a change at WorkOS is not.
 - The hand-off token is not single use (§5).
 - A proven host receives the hand-off for itself, whoever serves it. Whether the auth host asks the
   visitor to confirm before handing off to a host the platform did not allocate is an open decision
@@ -168,8 +185,9 @@ through `workshopPortalUrl`. `AUTH.md` and `DOMAIN_VERIFICATION.md` are rewritte
    sign-out in a real browser.
 2. **HTTPS rehearsal.** A preview deployment with two real hostnames, the staging keys and a sealing
    key of its own, so `Secure` cookies and cross-site redirects are exercised before the merge. The
-   rehearsal hostname needs a proven record in the production dataset, which previews read. That
-   record is revoked when the rehearsal ends: while it stands, production would hand off to it.
+   rehearsal hostname needs a proven record in the dataset the preview reads
+   (`NEXT_PUBLIC_SANITY_DATASET`). Where that is the production dataset, the record is revoked when
+   the rehearsal ends: while it stands, production would hand off to it.
 3. **Tests.** Every guard is sabotage-proven, with the real sealing library and the real SDK where
    one is claimed to behave some way.
 4. **Production.** One sign-in and sign-out on `2026.cloudnativedays.no` after the merge. Workshop
@@ -193,6 +211,7 @@ reaches.
 1. **Auth host: start, callback, hand-off (#1313).** The sealing module, the destination check of §4, the
    start route and the callback, with `WORKSHOP_AUTH_ORIGIN`.
 2. **Tenant host: redeem and the session (#1314).** The sign-in and sign-up routes start at the auth host;
-   the redeem route; the proxy, the page, tRPC and the client components read our session.
+   the redeem route; the page, tRPC and the client components read our session, and the proxy
+   leaves `/workshop` alone.
 3. **Sign-out (#1315)** through the auth host (§7).
 4. **Removal and documents (#1316)** (§8), the status rows and labels, the runbook and `/privacy`.

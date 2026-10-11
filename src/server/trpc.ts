@@ -6,19 +6,21 @@ import { isOrganizerForOrg } from '@/lib/authz/organizer'
 import type { FeatureId } from '@/lib/features/registry'
 import { AppEnvironment } from '@/lib/environment/config'
 import {
-  resolveWorkshopSignInHost,
-  workshopRequestHost,
-} from '@/lib/workshop/sign-in'
+  readWorkshopSession,
+  sessionCookie,
+} from '@/lib/workshop/central-sign-in'
 import { structuredErrorData, type StructuredErrorData } from './errors'
 
 /**
- * Identity of an authenticated WorkOS AuthKit user, projected from the sealed
- * `wos-session` cookie. This is a SEPARATE auth system from the NextAuth
+ * Who is signed in to the workshop portal, projected from the portal's own
+ * sealed session (#1311). This is a SEPARATE auth system from the NextAuth
  * (GitHub/LinkedIn) `session` above: NextAuth backs speakers/organizers on
- * `/cfp` and `/admin`, whereas WorkOS backs workshop attendees on `/workshop`.
- * Workshop signup authorization keys on this, never on client-supplied input.
+ * `/cfp` and `/admin`, whereas attendees prove an email address through WorkOS
+ * on `/workshop`. Workshop signup authorization keys on this, never on
+ * client-supplied input.
  */
 export interface WorkshopUserIdentity {
+  /** The WorkOS user ID: what a signup is stored under. */
   id: string
   email: string
   /**
@@ -26,112 +28,45 @@ export interface WorkshopUserIdentity {
    * matched on, so an unverified one proves nothing about who holds the ticket.
    */
   emailVerified: boolean
-  firstName?: string | null
-  lastName?: string | null
+  name: string | null
+  /**
+   * The conference the session was issued for, which claimed the host when
+   * this request was read. A procedure compares it with the conference it
+   * resolved for the request, which may come from a cache.
+   */
+  conferenceId: string
 }
 
 /**
- * Resolve the WorkOS attendee identity for a tRPC request from the sealed
- * `wos-session` cookie.
+ * Resolve the attendee identity for a tRPC request from the portal's session
+ * cookie (`readWorkshopSession`): sealed for this host and the conference that
+ * claims it, checked against the host's record read live. WorkOS is not
+ * called, and nothing is written: the session is never renewed.
  *
- * Why not `withAuth()`: `withAuth()` reads the session out of a request header
- * that the AuthKit MIDDLEWARE injects, and the middleware matcher only covers
- * `/workshop*` — it does NOT run for `/api/trpc`, so `withAuth()` throws there.
- * Instead we call `authkit(req)`, a public AuthKit helper that reads and unseals
- * the `wos-session` cookie directly (via `getSessionFromCookie`). That cookie is
- * encrypted+signed server-side with `WORKOS_COOKIE_PASSWORD`, so a client cannot
- * forge it — it is a trustworthy, cookie-based server session, exactly the
- * source authorization should bind to.
+ * THE SAME DECISION AS THE PAGE, so the API cannot be more permissive than
+ * the page. No session resolves to `null`, and a procedure's own guard decides
+ * (UNAUTHORIZED for workshop signup/cancel).
  *
- * We first cheaply check the cookie is present so the vast majority of tRPC
- * calls (NextAuth admin/cfp/sponsor/message traffic, which carries no WorkOS
- * cookie) skip AuthKit entirely. Any failure resolves to `null` (never throws),
- * so a procedure's own guard decides (UNAUTHORIZED for workshop signup/cancel).
- *
- * THE SAME HOST DECISION AS THE PAGE (#1296). The proxy serves `/workshop` only
- * on a host the verified-redirect allowlist admits, and reads the session with
- * that host's own callback as `redirectUri`. This does both too — the API must
- * never be more permissive than the page, and `authkit()` without an explicit
- * `redirectUri` falls back to `NEXT_PUBLIC_WORKOS_REDIRECT_URI` (which nothing
- * here relies on, #1299) and then to a client-sent `x-redirect-uri` header,
- * since nothing strips it on `/api/trpc`.
- * A host that is not allowlisted resolves no attendee and never enters the SDK.
- *
- * ONLY FOR THE ATTENDEE PROCEDURES (see {@link namesAttendeeProcedure}): the decision is a
- * live Sanity read, and the cookie rides on every tRPC request this browser
- * makes for 400 days.
- *
- * A REFRESH IS PERSISTED (see {@link persistRefreshedSession}): when `authkit`
- * had to refresh the session it returns the re-sealed cookie, which is written
- * to `resHeaders` so the browser keeps a usable session.
+ * ONLY FOR THE ATTENDEE PROCEDURES (see {@link namesAttendeeProcedure}): the
+ * decision is a live Sanity read, and the cookie rides on every tRPC request
+ * this browser makes for a week.
  */
 async function resolveWorkshopUser(
   req: NextRequest,
-  resHeaders?: Headers,
 ): Promise<WorkshopUserIdentity | null> {
   if (AppEnvironment.isTestMode) return null
-  const cookieName = workosSessionCookieName()
-  if (!req.cookies.get(cookieName)) return null
+  const sealed = req.cookies.get(sessionCookie().name)?.value
+  if (!sealed) return null
   if (!namesAttendeeProcedure(req)) return null
-  try {
-    const signIn = await resolveWorkshopSignInHost(
-      workshopRequestHost(req.headers),
-    )
-    if (!signIn) return null
-    const { authkit } = await import('@workos-inc/authkit-nextjs')
-    const { session, headers } = await authkit(req, {
-      redirectUri: signIn.redirectUri,
-    })
-    const user = session.user
-    if (!user?.id) return null
-    persistRefreshedSession(headers, resHeaders)
-    return {
-      id: user.id,
-      email: user.email,
-      emailVerified: user.emailVerified === true,
-      firstName: user.firstName,
-      lastName: user.lastName,
-    }
-  } catch {
-    return null
+  const session = await readWorkshopSession(req.headers, sealed)
+  if (!session) return null
+  return {
+    id: session.userId,
+    email: session.email,
+    emailVerified: session.emailVerified,
+    name: session.name,
+    conferenceId: session.conferenceId,
   }
-}
-
-/** The name of the sealed WorkOS session cookie, as the SDK resolves it. */
-function workosSessionCookieName(): string {
-  return process.env.WORKOS_COOKIE_NAME || 'wos-session'
-}
-
-/**
- * Hand the browser the session `authkit()` re-sealed while refreshing.
- *
- * WorkOS access tokens are short-lived and refresh tokens are SINGLE-USE. On
- * `/workshop*` the proxy does the refresh and sets the cookie; an attendee who
- * leaves the page open and then clicks "Register" refreshes HERE instead. If
- * the new cookie is dropped, the browser keeps one whose refresh token is
- * already spent: this request succeeds, the next cannot refresh, and they are
- * signed out in the middle of registering.
- *
- * ONLY A SUCCESSFUL REFRESH IS WRITTEN (the caller returns before this when
- * there is no user). Two requests can race for the same single-use token; the
- * loser gets a cookie DELETION from the SDK, and forwarding that would let it
- * sign out the winner. A session that is really dead is cleared by the proxy
- * on the next page request.
- */
-function persistRefreshedSession(
-  from: Headers | undefined,
-  to: Headers | undefined,
-): void {
-  // The session cookie and nothing else: what the SDK puts in these headers is
-  // its own business (and includes the sealed session as a request header).
-  const prefix = `${workosSessionCookieName()}=`
-  const cookies = (from?.getSetCookie() ?? []).filter((cookie) =>
-    cookie.startsWith(prefix),
-  )
-  if (!to || cookies.length === 0) return
-  for (const cookie of cookies) to.append('Set-Cookie', cookie)
-  // A response that sets a session cookie must never be stored by a cache.
-  to.set('Cache-Control', 'no-store')
 }
 
 /**
@@ -157,12 +92,12 @@ const ATTENDEE_PROCEDURES: ReadonlySet<string> = new Set([
  * procedures that consume the attendee identity. tRPC puts the procedure path
  * in the URL (comma-joined for a batch), so this is known before any work.
  *
- * WHY IT EXISTS. `wos-session` is host-wide and long-lived, so without this a
- * browser that once signed in to the portal would spend one live allowlist read
- * (and an AuthKit session check) on every tRPC request it ever makes on that
- * host — an organizer's entire admin session included, and every view of the
- * portal's own public lists. Fail closed: a request that names none gets no
- * attendee, and an attendee procedure would refuse it.
+ * WHY IT EXISTS. The session cookie is host-wide and lasts a week, so without
+ * this a browser that once signed in to the portal would spend one live record
+ * read on every tRPC request it makes on that host — an organizer's entire
+ * admin session included, and every view of the portal's own public lists.
+ * Fail closed: a request that names none gets no attendee, and an attendee
+ * procedure would refuse it.
  */
 function namesAttendeeProcedure(req: NextRequest): boolean {
   const marker = '/api/trpc/'
@@ -180,17 +115,13 @@ function namesAttendeeProcedure(req: NextRequest): boolean {
     .some((procedure) => ATTENDEE_PROCEDURES.has(procedure))
 }
 
-export async function createTRPCContext(opts: {
-  req: NextRequest
-  /** The response's headers (tRPC's fetch adapter supplies them). */
-  resHeaders?: Headers
-}) {
+export async function createTRPCContext(opts: { req: NextRequest }) {
   const session = await getAuthSession({
     url: opts.req.url,
     headers: opts.req.headers,
   })
 
-  const workosUser = await resolveWorkshopUser(opts.req, opts.resHeaders)
+  const workosUser = await resolveWorkshopUser(opts.req)
 
   // Extract IP address from headers
   const forwardedFor = opts.req.headers.get('x-forwarded-for')

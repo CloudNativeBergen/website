@@ -50,6 +50,12 @@ vi.mock('@/lib/sponsor-crm/sanity', () => ({
 }))
 
 import PrivacyPage from '@/app/(main)/privacy/page'
+import {
+  SESSION_TTL_SECONDS,
+  sessionSchema,
+  type WorkshopSession,
+} from '@/lib/workshop/central-sign-in/session'
+import { START_TTL_SECONDS } from '@/lib/workshop/central-sign-in/start-seals'
 import TermsPage from '@/app/(main)/terms/page'
 
 const PLATFORM_ORG = 'organization-platform'
@@ -342,6 +348,143 @@ describe('the workshop login is shared across conferences (#1299)', () => {
     expect(html).toContain(CHECKIN)
     expect(html).not.toContain(SHARED_LOGIN)
     expect(html.toLowerCase()).not.toContain('one login for every conference')
+  })
+})
+
+describe('the workshop portal’s own sign-in cookie (#1316)', () => {
+  /**
+   * The plain words /privacy uses for each field the session seals, in each of
+   * the two places. The data list names WorkOS; the cookies section is shown
+   * to every tenant and names no processor.
+   */
+  const DISCLOSED: Record<string, Record<keyof WorkshopSession, RegExp>> = {
+    'the data list': {
+      userId: /your WorkOS User ID/,
+      email: /email address/,
+      emailVerified: /whether WorkOS reports that address as verified/,
+      name: /your name/,
+      sessionId: /the WorkOS session ID/,
+      host: /the site and conference it was issued for/,
+      conferenceId: /site and conference it was issued for/,
+    },
+    'the cookies section': {
+      userId: /the ID of your sign-in account/,
+      email: /your email address/,
+      emailVerified: /whether it is verified/,
+      name: /your name/,
+      sessionId: /the ID of the sign-in session/,
+      host: /the site and conference it was issued for/,
+      conferenceId: /site and conference it was issued for/,
+    },
+  }
+  const days = SESSION_TTL_SECONDS / 86_400
+
+  /** The two places the page describes the cookies, as rendered text. */
+  function passages(html: string): Record<string, string | undefined> {
+    return {
+      'the data list': html.match(/A sign-in cookie on this site[^<]*/)?.[0],
+      'the cookies section': html.match(
+        /<strong>Workshop sign-in:<\/strong>[^<]*/,
+      )?.[0],
+    }
+  }
+
+  /** A tenant whose organization has no workshop sign-in. */
+  function withoutWorkshops() {
+    world({
+      conference: conference({
+        organization: { _ref: OTHER_ORG, _type: 'reference' },
+      }),
+      organization: organization({
+        _id: OTHER_ORG,
+        name: 'Acme Events',
+        plan: 'community',
+      }),
+    })
+  }
+
+  it('tells a workshop participant how long it lasts and every field it holds, in both places', async () => {
+    world()
+
+    const html = await renderPrivacy()
+
+    for (const [where, passage] of Object.entries(passages(html))) {
+      expect(passage, where).toContain(`kept for ${days} days`)
+      for (const field of Object.keys(sessionSchema.shape)) {
+        expect(passage, `${where} names ${field}`).toMatch(
+          DISCLOSED[where][field as keyof WorkshopSession],
+        )
+      }
+    }
+    expect(html).toContain(
+      `The sign-in cookie on this site expires ${days} days after you sign in, or when you sign out.`,
+    )
+  })
+
+  it('promises no shorter a life for the cookies of a sign-in in progress than the code gives them', async () => {
+    world()
+
+    const html = await renderPrivacy()
+
+    const words: Record<string, number> = { five: 5, ten: 10, fifteen: 15 }
+    for (const [where, passage] of Object.entries(passages(html))) {
+      const promised = passage?.match(/expire within (\w+) minutes/)?.[1]
+      // The longest of them is the sign-in's own; the sign-out's five minutes
+      // are pinned on its `Set-Cookie` line in the sign-out suite.
+      expect(words[promised ?? ''] * 60, where).toBeGreaterThanOrEqual(
+        START_TTL_SECONDS,
+      )
+    }
+  })
+
+  it('names the sign-in host as the other place the short-lived cookies are set', async () => {
+    vi.stubEnv('WORKSHOP_AUTH_ORIGIN', 'https://auth.example.org')
+    world()
+
+    const found = passages(await renderPrivacy())
+
+    expect(found['the data list']).toContain(
+      'on this site and on the platform&#x27;s sign-in host (auth.example.org) while you sign in or sign out',
+    )
+    expect(found['the cookies section']).toContain(
+      'on this site and on the platform&#x27;s sign-in host (auth.example.org); they expire',
+    )
+  })
+
+  it('names no other host where every host signs attendees in on itself', async () => {
+    vi.stubEnv('WORKSHOP_AUTH_ORIGIN', '')
+    world()
+
+    const found = passages(await renderPrivacy())
+
+    expect(found['the data list']).toContain(
+      'on this site while you sign in or sign out',
+    )
+    expect(found['the cookies section']).toContain('on this site; they expire')
+  })
+
+  it('describes the cookie to a tenant without workshop sign-in too, naming no processor', async () => {
+    // A session cookie can outlive a switch-off of workshops by its lifetime,
+    // so the cookies section does not follow the tenant's present entitlement.
+    withoutWorkshops()
+
+    const html = await renderPrivacy()
+
+    // The real policy rendered, with this tenant's own vendor on it.
+    expect(html).toContain(CHECKIN)
+    const found = passages(html)
+    expect(found['the cookies section']).toContain(`kept for ${days} days`)
+    for (const field of Object.keys(sessionSchema.shape)) {
+      expect(found['the cookies section'], field).toMatch(
+        DISCLOSED['the cookies section'][field as keyof WorkshopSession],
+      )
+    }
+    expect(found['the cookies section']).toContain(
+      'If workshop registration is switched off for the event while you are signed in, the cookie stays in your browser until it expires or you clear this site&#x27;s cookies.',
+    )
+    // What names WorkOS stays with the tenants that use it.
+    expect(found['the data list']).toBeUndefined()
+    expect(html).not.toContain('WorkOS')
   })
 })
 

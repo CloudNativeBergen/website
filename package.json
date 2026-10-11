@@ -76,7 +76,6 @@
     "@vercel/analytics": "^2.0.1",
     "@vercel/blob": "^2.8.0",
     "@vercel/speed-insights": "^2.0.0",
-    "@workos-inc/authkit-nextjs": "^4.3.1",
     "@workos-inc/node": "^10.13.0",
     "@xmldom/xmldom": "^0.9.12",
     "apexcharts": "^7.1.0",

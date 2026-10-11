@@ -8,9 +8,7 @@ const handler = (req: NextRequest) =>
     endpoint: '/api/trpc',
     req,
     router: appRouter,
-    // `resHeaders` lets the context persist a WorkOS session it had to
-    // refresh (#1296); without it the re-sealed cookie never leaves the server.
-    createContext: ({ resHeaders }) => createTRPCContext({ req, resHeaders }),
+    createContext: () => createTRPCContext({ req }),
     onError: ({ path, error }) => {
       if (isClientError(error.code)) return
       console.error(`tRPC failed on ${path ?? '<no-path>'}:`, error)

@@ -194,7 +194,7 @@ export const AllStates: Story = {
 const workshopSignInStates: DomainVerificationView[] = [
   view({
     hostname: '2026.cloudnativedays.no',
-    workshopSignIn: { state: 'ready' },
+    workshopSignIn: { state: 'available' },
   }),
   view({
     hostname: 'oslo.cloudnativedays.no',
@@ -206,31 +206,8 @@ const workshopSignInStates: DomainVerificationView[] = [
     workshopSignIn: { state: 'unverified' },
   }),
   view({
-    hostname: 'kubeday.konf.run',
-    platformOwned: true,
-    recordName: null,
-    recordValue: null,
-    workshopSignIn: { state: 'pending' },
-  }),
-  view({
-    hostname: 'bergen.konf.run',
-    platformOwned: true,
-    recordName: null,
-    recordValue: null,
-    workshopSignIn: {
-      state: 'failed',
-      error:
-        // One unbroken token wider than a phone, as WorkOS errors can carry.
-        'WorkOS 422: redirect_uri https://bergen.konf.run/api/auth/callback?request=0123456789abcdef0123456789abcdef0123456789abcdef is not valid',
-    },
-  }),
-  view({
-    hostname: 'kubeday.example.no',
-    workshopSignIn: { state: 'not-offered' },
-  }),
-  view({
-    hostname: 'cloudnativedays.no',
-    workshopSignIn: { state: 'blocked' },
+    hostname: 'bergen.cloudnativedays.no',
+    workshopSignIn: { state: 'blocked', by: 'origin-unusable' },
   }),
 ]
 
@@ -238,32 +215,13 @@ export const WorkshopSignIn: Story = {
   args: { initialDomains: workshopSignInStates },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
-    for (const label of [
-      'available',
-      'domain not verified',
-      'registration pending',
-      'registration failed',
-      'not offered on this host',
-      'switched off on every host',
-    ]) {
-      await expect(canvas.getByText(label)).toBeInTheDocument()
-    }
-    // The recorded error is shown verbatim, to the organizer only.
-    await expect(canvas.getByText(/WorkOS 422/)).toBeInTheDocument()
-    await expect(canvas.getAllByText(/Workshop sign-in:/)).toHaveLength(6)
+    await expect(canvas.getAllByText(/Workshop sign-in:/)).toHaveLength(3)
+    await expect(canvas.getByText('available')).toHaveClass('text-green-700')
+    await expect(canvas.getByText('domain not verified')).toHaveClass(
+      'text-amber-700',
+    )
     await expect(canvas.getByText('switched off on every host')).toHaveClass(
       'text-red-700',
-    )
-    // The tone carries the meaning: green works, amber waits, red failed.
-    await expect(canvas.getByText('available')).toHaveClass('text-green-700')
-    await expect(canvas.getByText('registration pending')).toHaveClass(
-      'text-amber-700',
-    )
-    await expect(canvas.getByText('registration failed')).toHaveClass(
-      'text-red-700',
-    )
-    await expect(canvas.getByText('not offered on this host')).toHaveClass(
-      'text-amber-700',
     )
   },
 }
@@ -277,7 +235,7 @@ export const WorkshopSignInMobile: Story = {
   args: { initialDomains: workshopSignInStates },
   parameters: { viewport: { defaultViewport: 'mobile1' } },
   play: async ({ canvasElement }) => {
-    // The long error must wrap, not widen the page.
+    // Every standing must fit the mobile viewport.
     const page = canvasElement.ownerDocument.documentElement
     await expect(page.scrollWidth).toBeLessThanOrEqual(page.clientWidth)
   },

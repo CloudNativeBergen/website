@@ -1,8 +1,8 @@
 /**
  * @vitest-environment node
  *
- * The two pieces of the workshop portal that start and end a WorkOS session
- * (#1296), rendered to markup.
+ * The two pieces of the workshop portal that start and end a sign-in (#1296),
+ * rendered to markup.
  */
 import { describe, it, expect } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
@@ -24,7 +24,7 @@ describe('WorkshopSignedOut', () => {
     }),
   )
 
-  it('starts sign-in and sign-up with GET forms to the SDK-backed routes on THIS host', () => {
+  it('starts sign-in and sign-up with GET forms to the routes on THIS host', () => {
     // Forms, so the click is one real browser navigation (see the component).
     expect(forms).toEqual([
       { action: '/workshop/sign-in', method: 'get', label: 'Sign In' },
@@ -42,6 +42,27 @@ describe('WorkshopSignedOut', () => {
     expect(markup).toContain(
       'Sign in to register for workshops at Cloud Native Days Norway 2026.',
     )
+  })
+
+  it('says nothing about a sign-in unless told one did not complete', () => {
+    expect(markup).not.toContain('did not complete')
+    expect(markup).not.toContain('role="status"')
+  })
+
+  it('says, in one neutral line, that sign-in did not complete, and still offers both buttons', () => {
+    const after = renderToStaticMarkup(
+      <WorkshopSignedOut
+        conferenceTitle="Cloud Native Days Norway 2026"
+        signInIncomplete
+      />,
+    )
+
+    expect(
+      [...after.matchAll(/<p role="status"[^>]*>([^<]*)<\/p>/g)].map(
+        ([, text]) => text,
+      ),
+    ).toEqual(['Sign-in did not complete. Please try again.'])
+    expect(after.match(/<form\b/g)).toHaveLength(2)
   })
 })
 
