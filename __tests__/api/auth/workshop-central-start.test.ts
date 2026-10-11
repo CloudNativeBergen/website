@@ -114,8 +114,15 @@ function expectNothingStarted(response: Response) {
   expect(generatePkce).not.toHaveBeenCalled()
 }
 
-function expectRefused(response: Response) {
+/** Refused, for exactly this reason: the one line the log gets. */
+function expectRefused(
+  response: Response,
+  reason: 'no-request' | 'host-refused',
+) {
   expectNothingStarted(response)
+  expect(console.warn).toHaveBeenCalledExactlyOnceWith(
+    `[workshop] start refused: ${reason}`,
+  )
   // A decision, not a crash that happened to answer the same.
   expect(console.error).not.toHaveBeenCalled()
 }
@@ -128,6 +135,7 @@ beforeEach(() => {
   vi.stubEnv('PLATFORM_DOMAIN_SUFFIX', 'konf.run')
   vi.stubEnv('WORKSHOP_AUTH_ORIGIN', `https://${AUTH}`)
   vi.spyOn(console, 'error').mockImplementation(() => {})
+  vi.spyOn(console, 'warn').mockImplementation(() => {})
   getDomainClaim.mockImplementation(
     claimsById(
       provenClaim(TENANT),
@@ -159,6 +167,9 @@ describe('start: a proven host', () => {
     expect(location.searchParams.get('response_type')).toBe('code')
     expect(location.searchParams.get('screen_hint')).toBe('sign-in')
     expect(response.headers.get('cache-control')).toBe('no-store')
+    // WorkOS is not told which tenant host the browser came from.
+    expect(response.headers.get('referrer-policy')).toBe('no-referrer')
+    expect(console.warn).not.toHaveBeenCalled()
   })
 
   it('sends a PKCE challenge that is the SHA-256 of the verifier it keeps in its cookie', async () => {
@@ -274,7 +285,7 @@ describe('start: refused with 404, and no authorize URL is built', () => {
   it('a host with no record', async () => {
     getDomainClaim.mockImplementation(claimsById())
 
-    await expectRefused(await start())
+    await expectRefused(await start(), 'host-refused')
   })
 
   it('a grandfathered record inside its grace period', async () => {
@@ -287,7 +298,7 @@ describe('start: refused with 404, and no authorize URL is built', () => {
       ),
     )
 
-    await expectRefused(await start())
+    await expectRefused(await start(), 'host-refused')
   })
 
   it('a platform-owned record that is no longer an allocation', async () => {
@@ -295,7 +306,7 @@ describe('start: refused with 404, and no authorize URL is built', () => {
     vi.clearAllMocks()
     vi.stubEnv('PLATFORM_DOMAIN_SUFFIX', 'konf.app')
 
-    await expectRefused(await start({ host: ALLOCATED }))
+    await expectRefused(await start({ host: ALLOCATED }), 'host-refused')
   })
 
   it.each([
@@ -303,7 +314,7 @@ describe('start: refused with 404, and no authorize URL is built', () => {
     ['a proven host as a prefix', `${TENANT}.evil.net`],
     ['a proven host as a suffix', `evil-${TENANT}`],
   ])('%s', async (_, host) => {
-    await expectRefused(await start({ host }))
+    await expectRefused(await start({ host }), 'host-refused')
   })
 
   it('the wildcard over a proven host, without reading a record', async () => {
@@ -318,7 +329,7 @@ describe('start: refused with 404, and no authorize URL is built', () => {
       }),
     )
 
-    await expectRefused(await start({ host: '*.example.org' }))
+    await expectRefused(await start({ host: '*.example.org' }), 'host-refused')
     expect(getDomainClaim).not.toHaveBeenCalled()
   })
 
@@ -327,28 +338,32 @@ describe('start: refused with 404, and no authorize URL is built', () => {
       claimsById(provenClaim(TENANT, {}, { domains: ['other.example.org'] })),
     )
 
-    await expectRefused(await start())
+    await expectRefused(await start(), 'host-refused')
   })
 
   it('a conference without workshops', async () => {
     isWorkshopsEnabledForConference.mockResolvedValue(false)
 
-    await expectRefused(await start())
+    await expectRefused(await start(), 'host-refused')
   })
 
   it.each([
-    ['userinfo', `attacker@${TENANT}`],
-    ['a path', `${TENANT}/workshop`],
-    ['a scheme', `https://${TENANT}`],
-    ['nothing', null],
-  ])('a malformed host: %s, without reading anything', async (_, host) => {
-    await expectRefused(await start({ host }))
-    expect(getDomainClaim).not.toHaveBeenCalled()
-  })
+    ['userinfo', `attacker@${TENANT}`, 'host-refused'],
+    ['a path', `${TENANT}/workshop`, 'host-refused'],
+    ['a scheme', `https://${TENANT}`, 'host-refused'],
+    // A request that names no host is not one a tenant host seals.
+    ['nothing', null, 'no-request'],
+  ] as const)(
+    'a malformed host: %s, without reading anything',
+    async (_, host, reason) => {
+      await expectRefused(await start({ host }), reason)
+      expect(getDomainClaim).not.toHaveBeenCalled()
+    },
+  )
 
   it('a request that arrives on a host other than the auth host, without reading its record', async () => {
     // The tenant host is itself proven: only where the request arrived differs.
-    await expectRefused(await start({ on: TENANT }))
+    await expectRefused(await start({ on: TENANT }), 'host-refused')
     expect(getDomainClaim).not.toHaveBeenCalled()
   })
 
@@ -359,7 +374,7 @@ describe('start: refused with 404, and no authorize URL is built', () => {
   ])(
     'a request that arrives on %s, without reading a record',
     async (_, on) => {
-      await expectRefused(await start({ on }))
+      await expectRefused(await start({ on }), 'host-refused')
       expect(getDomainClaim).not.toHaveBeenCalled()
     },
   )
@@ -369,20 +384,20 @@ describe('start: refused with 404, and no authorize URL is built', () => {
     ['too short', CHALLENGE.slice(1)],
     ['not base64url', CHALLENGE.replace(/.$/, '+')],
   ])('a hash that is %s', async (_, challenge) => {
-    await expectRefused(await start({ challenge }))
+    await expectRefused(await start({ challenge }), 'no-request')
   })
 
   it.each([
     ['missing', null],
     ['unknown', 'reset-password'],
   ])('a screen that is %s', async (_, screen) => {
-    await expectRefused(await start({ screen }))
+    await expectRefused(await start({ screen }), 'no-request')
   })
 })
 
 describe('start: only on a request a tenant host sealed', () => {
   it('no request at all: refused, without reading a record', async () => {
-    await expectRefused(await start({ request: null }))
+    await expectRefused(await start({ request: null }), 'no-request')
     expect(getDomainClaim).not.toHaveBeenCalled()
   })
 
@@ -392,6 +407,7 @@ describe('start: only on a request a tenant host sealed', () => {
         request: null,
         query: { host: TENANT, challenge: CHALLENGE, screen: 'sign-in' },
       }),
+      'no-request',
     )
     expect(getDomainClaim).not.toHaveBeenCalled()
   })
@@ -403,7 +419,7 @@ describe('start: only on a request a tenant host sealed', () => {
       60,
     )
 
-    await expectRefused(await start({ request: asState }))
+    await expectRefused(await start({ request: asState }), 'no-request')
     expect(getDomainClaim).not.toHaveBeenCalled()
   })
 
@@ -418,7 +434,7 @@ describe('start: only on a request a tenant host sealed', () => {
     parts[3] = (parts[3][0] === 'A' ? 'B' : 'A') + parts[3].slice(1)
     const changed = parts.join('.')
 
-    await expectRefused(await start({ request: changed }))
+    await expectRefused(await start({ request: changed }), 'no-request')
   })
 
   it('a request is good for 60 seconds and no longer', async () => {
@@ -434,7 +450,7 @@ describe('start: only on a request a tenant host sealed', () => {
 
     vi.clearAllMocks()
     vi.setSystemTime(new Date('2026-10-12T10:01:01Z'))
-    await expectRefused(await start({ request: sealed }))
+    await expectRefused(await start({ request: sealed }), 'no-request')
     expect(getDomainClaim).not.toHaveBeenCalled()
   })
 })
@@ -459,7 +475,7 @@ describe('start: WORKSHOP_AUTH_ORIGIN', () => {
   ])('unset: a start that names %s is refused', async (_, host) => {
     vi.stubEnv('WORKSHOP_AUTH_ORIGIN', '')
 
-    await expectRefused(await start({ on: TENANT, host }))
+    await expectRefused(await start({ on: TENANT, host }), 'host-refused')
     expect(getDomainClaim).not.toHaveBeenCalled()
   })
 

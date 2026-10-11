@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto'
 import { NextResponse, type NextRequest } from 'next/server'
 import type { z } from 'zod'
 import { workshopCallbackUri } from '../sign-in-paths'
-import { notFound, resolveCentralSignIn } from './decision'
+import { logRefusal, notFound, resolveCentralSignIn } from './decision'
 import { seal, unseal } from './seal'
 import {
   START_TTL_SECONDS,
@@ -29,7 +29,9 @@ import { workshopWorkOS } from './workos'
  *  - a cookie on this host carries the PKCE verifier, so a callback URL
  *    completes nothing outside the browser that started.
  *
- * A refusal is a 404.
+ * A refusal is a 404, with one line in the log that says which (`logRefusal`).
+ * WorkOS is sent no referrer: which tenant host the browser came from travels
+ * in the sealed state and nowhere else.
  */
 export async function startCentralSignIn(
   request: NextRequest,
@@ -39,11 +41,15 @@ export async function startCentralSignIn(
     request.nextUrl.searchParams.get('request'),
     startRequestSchema,
   )
-  if (!sent) return notFound()
+  const refused = (reason: 'no-request' | 'host-refused') => {
+    logRefusal('start', reason)
+    return notFound()
+  }
+  if (!sent) return refused('no-request')
   const { challenge, screen } = sent
 
   const signIn = await resolveCentralSignIn(request.headers, sent.host)
-  if (!signIn) return notFound()
+  if (!signIn) return refused('host-refused')
   const { authOrigin, destination } = signIn
 
   const workos = workshopWorkOS()
@@ -69,7 +75,7 @@ export async function startCentralSignIn(
   })
 
   const response = NextResponse.redirect(authorizeUrl, {
-    headers: { 'Cache-Control': 'no-store' },
+    headers: { 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer' },
   })
   const cookie = startCookie()
   response.cookies.set(

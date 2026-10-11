@@ -38,6 +38,7 @@ export function notFound(): NextResponse {
  */
 export function logRefusal(
   ...[step, reason]:
+    | [step: 'start', reason: 'no-request' | 'host-refused']
     | [step: 'callback', reason: CallbackRefusal]
     | [step: 'redeem', reason: RedeemRefusal]
     | [step: 'sign-out', reason: 'no-request' | 'host-refused']
