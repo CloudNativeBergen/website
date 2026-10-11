@@ -23,6 +23,7 @@ import type {
   ProposalWithWorkshopData,
 } from '@/lib/workshop/types'
 import type { WorkshopAnnouncementView } from '@/lib/workshop/announcements'
+import { useRefreshAnnouncements } from './useRefreshAnnouncements'
 import { useQueryClient } from '@tanstack/react-query'
 import { EmptyState } from '@/components/EmptyState'
 
@@ -178,6 +179,8 @@ export function WorkshopsClientPage({
     },
   })
 
+  const refreshAnnouncements = useRefreshAnnouncements()
+
   const { data: announcementsData } = api.workshop.announcements.useQuery(
     { workshopId: announceModal.workshopId },
     { enabled: announceModal.isOpen && !!announceModal.workshopId },
@@ -185,9 +188,7 @@ export function WorkshopsClientPage({
 
   const announceMutation = api.workshop.announce.useMutation({
     onSuccess: (result) => {
-      utils.workshop.announcements.invalidate({
-        workshopId: announceModal.workshopId,
-      })
+      refreshAnnouncements(announceModal.workshopId)
       showNotification({
         type: result.failed > 0 ? 'warning' : 'success',
         title: 'Announcement sent',
@@ -209,9 +210,7 @@ export function WorkshopsClientPage({
   const updateAnnouncementMutation =
     api.workshop.updateAnnouncement.useMutation({
       onSuccess: () => {
-        utils.workshop.announcements.invalidate({
-          workshopId: announceModal.workshopId,
-        })
+        refreshAnnouncements(announceModal.workshopId)
         showNotification({
           type: 'success',
           title: 'Announcement updated',
@@ -231,9 +230,7 @@ export function WorkshopsClientPage({
     api.workshop.deleteAnnouncement.useMutation({
       onSuccess: () => {
         setDeleteAnnouncementTarget(null)
-        utils.workshop.announcements.invalidate({
-          workshopId: announceModal.workshopId,
-        })
+        refreshAnnouncements(announceModal.workshopId)
         showNotification({
           type: 'success',
           title: 'Announcement deleted',
