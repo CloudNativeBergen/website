@@ -105,18 +105,38 @@ describe('collectStaticChecks — workshop auth origin', () => {
     expect(check.value).toBe('https://auth.example.org')
   })
 
-  it('reports unset as a supported local or single-domain configuration', () => {
+  it('reports unset as the normal setup in development', () => {
+    vi.stubEnv('NODE_ENV', 'development')
     vi.stubEnv('WORKSHOP_AUTH_ORIGIN', undefined)
     const check = byId(
       collectStaticChecks(CONFERENCE),
       'auth.workshopAuthOrigin',
     )
     expect(check.status).toBe('ok')
-    expect(check.value).toBe('unset')
-    expect(check.detail).toContain('Each host is its own auth host')
+    expect(check.value).toBe('not set')
     expect(check.detail).toContain('local development')
-    expect(check.detail).toContain('single-domain installation')
   })
+
+  it.each(['', '   ', undefined])(
+    'warns when unset in a deployed build, and says what to register: %j',
+    (raw) => {
+      // `production` is what every deployed build runs as, previews included.
+      vi.stubEnv('NODE_ENV', 'production')
+      vi.stubEnv('WORKSHOP_AUTH_ORIGIN', raw)
+      const check = byId(
+        collectStaticChecks(CONFERENCE),
+        'auth.workshopAuthOrigin',
+      )
+      expect(check.status).toBe('warn')
+      expect(check.value).toBe('not set')
+      expect(check.detail).toContain('registered at WorkOS by hand')
+      expect(check.detail).toContain('https://<host>/api/auth/callback')
+      expect(check.detail).toContain(
+        'https://<host>/api/auth/workshop/signed-out',
+      )
+      expect(check.detail).toContain('single-domain installation')
+    },
+  )
 
   it.each([
     'https://auth.example.org/callback',

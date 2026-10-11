@@ -116,7 +116,15 @@ function presenceCheck(
       }
 }
 
-/** The same auth-origin verdict that the sign-in routes enforce. */
+/**
+ * The same auth-origin verdict that the sign-in routes enforce.
+ *
+ * UNSET IS A WARNING IN A DEPLOYED BUILD (`NODE_ENV === 'production'`, which
+ * previews are too): every host then signs attendees in on itself, so each one
+ * has to be registered at WorkOS by hand, as redirect URI and as sign-out
+ * redirect. That is right only for a single-domain installation. In
+ * development it is the normal setup and stays `ok`.
+ */
 function workshopAuthOriginCheck(): SystemCheck {
   const meta: CheckMeta = {
     id: 'auth.workshopAuthOrigin',
@@ -130,18 +138,32 @@ function workshopAuthOriginCheck(): SystemCheck {
       status: 'error',
       value: 'invalid',
       detail:
-        'Not a bare https origin of a hostname. Workshop sign-in is refused on every host.',
+        'Not a bare https origin such as https://auth.example.com, so workshop sign-in is refused on every host. Correct the value and redeploy.',
     }
   }
-  return configured === 'unset'
-    ? {
-        ...meta,
-        status: 'ok',
-        value: 'unset',
-        detail:
-          'Each host is its own auth host. This is suitable for local development and a single-domain installation.',
-      }
-    : { ...meta, status: 'ok', value: configured.origin }
+  if (configured === 'unset') {
+    return process.env.NODE_ENV === 'production'
+      ? {
+          ...meta,
+          status: 'warn',
+          value: 'not set',
+          detail:
+            'Every host signs attendees in on itself, so each host must be registered at WorkOS by hand: https://<host>/api/auth/callback as a redirect URI and https://<host>/api/auth/workshop/signed-out as a sign-out redirect. Right only for a single-domain installation. Otherwise set it to the origin of the platform’s sign-in host and register that host’s two addresses instead.',
+        }
+      : {
+          ...meta,
+          status: 'ok',
+          value: 'not set',
+          detail:
+            'Each host signs attendees in on itself, which is the normal local development setup.',
+        }
+  }
+  return {
+    ...meta,
+    status: 'ok',
+    value: configured.origin,
+    detail: 'Attendees of every host sign in to workshops through this host.',
+  }
 }
 
 /** Plain (non-secret) env value. Absent → `missingStatus`. */
