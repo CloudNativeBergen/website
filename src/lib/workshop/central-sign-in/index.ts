@@ -9,6 +9,11 @@ export { startCentralSignIn } from './start'
 export { finishCentralSignIn } from './callback'
 export { redeemWorkshopHandOff } from './redeem'
 export {
+  finishCentralSignOut,
+  startCentralSignOut,
+  workshopSignOutTarget,
+} from './sign-out'
+export {
   readWorkshopPortal,
   readWorkshopSession,
   sessionCookie,

@@ -22,6 +22,27 @@ function refused(reason: CallbackRefusal): NextResponse {
   return notFound()
 }
 
+/**
+ * What a failed exchange says about itself, for the log. An answer from WorkOS
+ * (it carries a request ID) is described by its codes only: its message and
+ * body can hold the attendee's address and a token that continues the
+ * authentication.
+ */
+function failureOf(error: unknown): Record<string, unknown> {
+  if (!(error instanceof Error)) return { name: typeof error }
+  const { name, message } = error
+  const {
+    code,
+    error: oauthError,
+    status,
+    requestID,
+  } = error as Error &
+    Record<'code' | 'error' | 'status' | 'requestID', unknown>
+  return requestID === undefined
+    ? { name, message }
+    : { name, code, error: oauthError, status, requestID }
+}
+
 /** The WorkOS session an access token belongs to (its `sid`), or `null`. */
 function sessionIdOf(accessToken: string): string | null {
   try {
@@ -109,7 +130,7 @@ export async function finishCentralSignIn(
   } catch (error) {
     console.error(
       '[workshop] the code exchange failed; nothing handed off',
-      error,
+      failureOf(error),
     )
     return notFound()
   }

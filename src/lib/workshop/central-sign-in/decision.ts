@@ -38,8 +38,11 @@ export function notFound(): NextResponse {
  */
 export function logRefusal(
   ...[step, reason]:
+    | [step: 'start', reason: 'no-request' | 'host-refused']
     | [step: 'callback', reason: CallbackRefusal]
     | [step: 'redeem', reason: RedeemRefusal]
+    | [step: 'sign-out', reason: 'no-request' | 'host-refused']
+    | [step: 'signed-out', reason: 'no-cookie' | 'host-refused']
 ): void {
   console.warn(`[workshop] ${step} refused: ${reason}`)
 }
@@ -92,7 +95,7 @@ function authOrigin(): URL | 'unset' | 'invalid' {
 }
 
 /** {@link authOrigin} for a decision: an unusable value refuses every sign-in, and says so. */
-function configuredAuthOrigin(): URL | 'unset' | 'invalid' {
+export function configuredAuthOrigin(): URL | 'unset' | 'invalid' {
   const configured = authOrigin()
   if (configured === 'invalid') {
     console.error(
@@ -118,20 +121,28 @@ export function isAuthHost(headers: {
 }
 
 /**
- * MAY THIS REQUEST, ON THE AUTH HOST, RUN A SIGN-IN FOR `host`? (#1311, spec
- * §2 and §3.) Asked by the start route and again by the callback, before
- * either touches WorkOS:
+ * COULD THIS REQUEST BE ON THE AUTH HOST? With `WORKSHOP_AUTH_ORIGIN` set,
+ * only on the host it names; unset, every host is its own. For an auth-host
+ * route that has to answer before it knows which tenant host it serves.
+ */
+export function mayBeAuthHost(headers: {
+  get(name: string): string | null
+}): boolean {
+  return authOrigin() === 'unset' || isAuthHost(headers)
+}
+
+/**
+ * MAY THIS REQUEST, ON THE AUTH HOST, ACT FOR `host`? (#1311, spec §2 and §4.)
  *
  *  1. THE REQUEST IS ON THE AUTH HOST. `WORKSHOP_AUTH_ORIGIN` names it. Unset,
  *     a host is its own auth host: the request must then be on `host` itself.
  *  2. `host` MAY RECEIVE A HAND-OFF (`resolveProvenDestination`).
- *  3. THE CONFERENCE THAT CLAIMS IT HAS WORKSHOPS, so a tenant without them is
- *     never sent to WorkOS.
  *
  * The first is decided from the request alone, before anything is read.
- * `null` refuses; the caller answers 404.
+ * `null` refuses. This is all a sign-out asks: a conference that has turned
+ * workshops off still lets its attendees out.
  */
-export async function resolveCentralSignIn(
+export async function resolveAuthHostDestination(
   headers: { get(name: string): string | null },
   host: string | null | undefined,
 ): Promise<SignInHost | null> {
@@ -143,11 +154,26 @@ export async function resolveCentralSignIn(
   if (!requestHost || requestHost !== authHost) return null
 
   const destination = await resolveProvenDestination(host)
-  if (!destination) return null
-  if (!(await isWorkshopsEnabledForConference(destination.conference))) {
+  return destination && signInHost(configured, destination)
+}
+
+/**
+ * MAY THIS REQUEST, ON THE AUTH HOST, RUN A SIGN-IN FOR `host`? (Spec §3.)
+ * Asked by the start route and again by the callback, before either touches
+ * WorkOS: {@link resolveAuthHostDestination}, and THE CONFERENCE THAT CLAIMS
+ * THE HOST HAS WORKSHOPS, so a tenant without them is never sent to WorkOS.
+ * `null` refuses; the caller answers 404.
+ */
+export async function resolveCentralSignIn(
+  headers: { get(name: string): string | null },
+  host: string | null | undefined,
+): Promise<SignInHost | null> {
+  const signIn = await resolveAuthHostDestination(headers, host)
+  if (!signIn) return null
+  if (!(await isWorkshopsEnabledForConference(signIn.destination.conference))) {
     return null
   }
-  return signInHost(configured, destination)
+  return signIn
 }
 
 /**

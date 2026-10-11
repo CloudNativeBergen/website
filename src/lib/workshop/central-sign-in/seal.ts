@@ -8,7 +8,8 @@ import type { z } from 'zod'
  * encryption, nothing stored. One password (`WORKOS_COOKIE_PASSWORD`), ONE KEY
  * PER PURPOSE: the key is derived with the purpose as its label, so a value
  * sealed for one purpose does not decrypt as another. A hand-off token is
- * never a session, and the reverse.
+ * never a session, and the reverse. The key is the ONLY thing that keeps the
+ * purposes apart: their fields overlap, so a schema alone would not.
  *
  * The lifetime is inside the seal (`exp`) and is checked with no tolerance.
  *
@@ -26,6 +27,10 @@ export type SealPurpose =
   | 'handoff'
   /** The tenant host's own session. */
   | 'session'
+  /** What the tenant host asks the auth host to end. */
+  | 'sign-out-request'
+  /** The auth host's cookie that names where a sign-out returns to. */
+  | 'sign-out-return'
 
 const MIN_PASSWORD_LENGTH = 32
 

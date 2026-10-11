@@ -87,9 +87,22 @@ export async function readWorkshopSession(
   headers: { get(name: string): string | null },
   sealed: string | null | undefined,
 ): Promise<WorkshopSession | null> {
-  const session = await unseal('session', sealed, sessionSchema)
-  const requestHost = normalizeDomain(headers.get('host') ?? '')
-  if (!session || session.host !== requestHost) return null
+  const session = await sessionOfThisHost(headers, sealed)
+  if (!session) return null
   const tenant = await resolveTenantHost(headers)
   return tenant && isSessionFor(session, tenant) ? session : null
+}
+
+/**
+ * The session `sealed` holds, when it unseals, has not run out and was issued
+ * for this request's host. FROM THE REQUEST ALONE: nothing is read, so it does
+ * not say the host may still sign anyone in.
+ */
+export async function sessionOfThisHost(
+  headers: { get(name: string): string | null },
+  sealed: string | null | undefined,
+): Promise<WorkshopSession | null> {
+  const session = await unseal('session', sealed, sessionSchema)
+  const requestHost = normalizeDomain(headers.get('host') ?? '')
+  return session && session.host === requestHost ? session : null
 }
