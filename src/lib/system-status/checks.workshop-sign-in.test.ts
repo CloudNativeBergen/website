@@ -121,6 +121,24 @@ describe('buildSystemChecks — workshop sign-in per host', () => {
     ])
   })
 
+  it('reports a proven host as switched off while WORKSHOP_AUTH_ORIGIN cannot be used', async () => {
+    vi.stubEnv('WORKSHOP_AUTH_ORIGIN', 'https://auth.example.org/path')
+
+    const checks = signInChecks(await buildSystemChecks(CONFERENCE))
+
+    expect(
+      checks.find(({ id }) => id === 'auth.workshopSignIn.ready.example.org'),
+    ).toEqual({
+      id: 'auth.workshopSignIn.ready.example.org',
+      group: 'auth',
+      label: 'Workshop sign-in: ready.example.org',
+      status: 'error',
+      value: 'switched off on every host',
+      detail: workshopSignInLabel({ state: 'blocked', by: 'origin-unusable' })
+        .detail,
+    })
+  })
+
   it('reports a new domain without a proof as not verified for any owner', async () => {
     const checks = signInChecks(
       await buildSystemChecks({

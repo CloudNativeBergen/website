@@ -315,10 +315,14 @@ qualifies when all of these hold:
   record.
 
 The record is read live on every decision, never cached, and a read error
-refuses. The same `isProven` rule gives the "Workshop sign-in" line on the
-domain card and the system-status row their two outcomes
-(`sign-in-standing.ts`, `sign-in-labels.ts`): **available**, or **domain not
-verified**. The rule says where a sign-in may be handed to; whether the
+refuses. The same `isProven` rule decides the "Workshop sign-in" line on the
+domain card and the system-status row (`sign-in-standing.ts`,
+`sign-in-labels.ts`): **available**, or **domain not verified**. A host that is
+proven but that the deployment's configuration refuses reads **switched off on
+every host** (`WORKSHOP_AUTH_ORIGIN` cannot be used) or **not available on the
+sign-in host** (the variable names this host), from the same check the sign-in
+makes (`configurationRefuses` in
+`src/lib/workshop/central-sign-in/decision.ts`). The rule says where a sign-in may be handed to; whether the
 conference has workshops is a separate gate (`isWorkshopsEnabledForConference`)
 that the same routes ask next.
 
@@ -352,7 +356,7 @@ What an organizer and an operator do with all this is in
 | `src/lib/domain-verification/allowlist.ts`        | exact-host OAuth redirect allowlist as a list (no caller until #688)      |
 | `src/lib/domain-verification/destination.ts`      | which hosts may receive a workshop sign-in hand-off (one rule)            |
 | `src/lib/domain-verification/sign-in-standing.ts` | where one host stands for the workshop sign-in (the same rule, for a row) |
-| `src/lib/domain-verification/sign-in-labels.ts`   | the two outcomes as the organizer reads them                              |
+| `src/lib/domain-verification/sign-in-labels.ts`   | the outcomes as the organizer reads them                                  |
 | `src/lib/workshop/sign-in.ts`                     | where the portal is for a link that leaves the request (the main host)    |
 | `src/lib/domain-verification/routing.ts`          | the flag-gated routing gate                                               |
 | `src/lib/domain-verification/sweep.ts`            | continuous re-verification + organizer alerts                             |

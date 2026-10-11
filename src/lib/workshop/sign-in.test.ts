@@ -99,6 +99,36 @@ describe('workshopPortalUrl', () => {
     )
   })
 
+  it('is the portal on the main host with a sign-in host configured', async () => {
+    vi.stubEnv('WORKSHOP_AUTH_ORIGIN', 'https://auth.example.org')
+
+    await expect(workshopPortalUrl(conference)).resolves.toBe(
+      'https://conf.example.org/workshop',
+    )
+  })
+
+  it('is null while WORKSHOP_AUTH_ORIGIN cannot be used, and reads nothing', async () => {
+    // The sign-in is refused on every host then: a link would lead nowhere.
+    vi.stubEnv('WORKSHOP_AUTH_ORIGIN', 'https://auth.example.org/path')
+    vi.mocked(console.error).mockImplementation(() => {})
+
+    await expect(workshopPortalUrl(conference)).resolves.toBeNull()
+
+    expect(getDomainClaim).not.toHaveBeenCalled()
+    expect(console.error).toHaveBeenCalledExactlyOnceWith(
+      '[workshop] WORKSHOP_AUTH_ORIGIN is not a bare https origin of a hostname; workshop sign-in is refused on every host.',
+    )
+    vi.mocked(console.error).mockClear()
+  })
+
+  it('is null when the main host is the sign-in host itself, and reads nothing', async () => {
+    vi.stubEnv('WORKSHOP_AUTH_ORIGIN', 'https://conf.example.org')
+
+    await expect(workshopPortalUrl(conference)).resolves.toBeNull()
+
+    expect(getDomainClaim).not.toHaveBeenCalled()
+  })
+
   it('is null when the main host cannot sign in, even if another can', async () => {
     getDomainClaim.mockImplementation(
       claimsById(provenClaim('other.example.org')),

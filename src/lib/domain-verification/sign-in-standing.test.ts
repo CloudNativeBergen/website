@@ -81,4 +81,42 @@ describe('workshopSignInStanding', () => {
       state: 'unverified',
     })
   })
+
+  describe('a proven host this deployment’s configuration refuses', () => {
+    it('is blocked on every host while WORKSHOP_AUTH_ORIGIN cannot be used', () => {
+      // The same record is available with the variable usable or unset.
+      vi.stubEnv('WORKSHOP_AUTH_ORIGIN', 'https://auth.example.org')
+      expect(workshopSignInStanding(verifiedHost(HOST), now)).toEqual({
+        state: 'available',
+      })
+
+      vi.stubEnv('WORKSHOP_AUTH_ORIGIN', 'https://auth.example.org/path')
+
+      expect(workshopSignInStanding(verifiedHost(HOST), now)).toEqual({
+        state: 'blocked',
+        by: 'origin-unusable',
+      })
+    })
+
+    it('is blocked on the host WORKSHOP_AUTH_ORIGIN names, and on no other', () => {
+      vi.stubEnv('WORKSHOP_AUTH_ORIGIN', `https://${HOST}`)
+
+      expect(workshopSignInStanding(verifiedHost(HOST), now)).toEqual({
+        state: 'blocked',
+        by: 'auth-host',
+      })
+      expect(
+        workshopSignInStanding(verifiedHost('other.example.org'), now),
+      ).toEqual({ state: 'available' })
+    })
+
+    it('names the missing proof first: that is what the organizer can act on', () => {
+      vi.stubEnv('WORKSHOP_AUTH_ORIGIN', 'not a url')
+
+      expect(
+        workshopSignInStanding(verifiedHost(HOST, { status: 'failing' }), now),
+      ).toEqual({ state: 'unverified' })
+      expect(workshopSignInStanding(null, now)).toEqual({ state: 'unverified' })
+    })
+  })
 })

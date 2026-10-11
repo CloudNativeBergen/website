@@ -150,7 +150,9 @@ records, none with a `redirectUri*` value), so there is nothing to migrate.
   types and adapters.
 - The states of `sign-in-standing.ts` and `sign-in-labels.ts` that describe registration. The
   "Workshop sign-in" line on the domain card and the system-status row keep two outcomes: available,
-  or domain not verified.
+  or domain not verified. (A third was added before the merge to `main`: a proven host that the
+  deployment's configuration refuses, because `WORKSHOP_AUTH_ORIGIN` cannot be used or names that
+  host, reads as switched off, and no portal link is sent to it.)
 - The `WORKOS_COOKIE_DOMAIN` guard and its status row, once nothing sets a cookie it could widen.
 - `@workos-inc/authkit-nextjs`: the auth host uses only `@workos-inc/node`.
 

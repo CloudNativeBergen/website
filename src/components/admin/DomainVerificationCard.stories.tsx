@@ -205,16 +205,23 @@ const workshopSignInStates: DomainVerificationView[] = [
     lastSuccessAt: null,
     workshopSignIn: { state: 'unverified' },
   }),
+  view({
+    hostname: 'bergen.cloudnativedays.no',
+    workshopSignIn: { state: 'blocked', by: 'origin-unusable' },
+  }),
 ]
 
 export const WorkshopSignIn: Story = {
   args: { initialDomains: workshopSignInStates },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
-    await expect(canvas.getAllByText(/Workshop sign-in:/)).toHaveLength(2)
+    await expect(canvas.getAllByText(/Workshop sign-in:/)).toHaveLength(3)
     await expect(canvas.getByText('available')).toHaveClass('text-green-700')
     await expect(canvas.getByText('domain not verified')).toHaveClass(
       'text-amber-700',
+    )
+    await expect(canvas.getByText('switched off on every host')).toHaveClass(
+      'text-red-700',
     )
   },
 }
@@ -228,7 +235,7 @@ export const WorkshopSignInMobile: Story = {
   args: { initialDomains: workshopSignInStates },
   parameters: { viewport: { defaultViewport: 'mobile1' } },
   play: async ({ canvasElement }) => {
-    // Both standings must fit the mobile viewport.
+    // Every standing must fit the mobile viewport.
     const page = canvasElement.ownerDocument.documentElement
     await expect(page.scrollWidth).toBeLessThanOrEqual(page.clientWidth)
   },

@@ -1,4 +1,4 @@
-import { resolveProvenDestination } from '@/lib/domain-verification/destination'
+import { resolveSignInHost } from './central-sign-in/decision'
 import {
   conferenceBaseUrl,
   hasConferenceDomain,
@@ -9,9 +9,10 @@ import { WORKSHOP_PORTAL_PATH } from './sign-in-paths'
  * WHERE THE WORKSHOP PORTAL IS, for a link that leaves the request: the page's
  * redirect from a secondary host and the link an email carries.
  *
- * A host carries the portal's sign-in when it may receive a hand-off from the
- * auth host (#1311): `resolveProvenDestination`, read live. Registration at
- * WorkOS and who owns the conference no longer take part.
+ * A host carries the portal's sign-in when the sign-in itself would accept it
+ * (#1311): `resolveSignInHost`, the decision the portal's routes take, read
+ * live. So a link is never sent to a host the deployment's configuration
+ * refuses. Registration at WorkOS and who owns the conference take no part.
  */
 
 /**
@@ -49,6 +50,6 @@ export async function workshopPortalUrl(conference: {
 }): Promise<string | null> {
   const host = workshopMainHost(conference)
   if (!host) return null
-  const destination = await resolveProvenDestination(host)
-  return destination ? `${destination.origin}${WORKSHOP_PORTAL_PATH}` : null
+  const signIn = await resolveSignInHost(host)
+  return signIn ? `${signIn.destination.origin}${WORKSHOP_PORTAL_PATH}` : null
 }

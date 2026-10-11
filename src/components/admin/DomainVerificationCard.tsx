@@ -89,6 +89,7 @@ function statusLabel(domain: DomainVerificationView): {
 const SIGN_IN_TEXT: Record<WorkshopSignInLabel['status'], string> = {
   ok: 'text-green-700 dark:text-green-300',
   warn: 'text-amber-700 dark:text-amber-300',
+  error: 'text-red-700 dark:text-red-300',
 }
 
 function WorkshopSignInLine({

@@ -191,14 +191,49 @@ export async function resolveCentralSignIn(
  * ONE LIVE RECORD READ. It does not ask whether the conference has workshops:
  * the caller does, from `destination.conference`.
  */
-export async function resolveTenantHost(headers: {
+export function resolveTenantHost(headers: {
   get(name: string): string | null
 }): Promise<SignInHost | null> {
-  const configured = configuredAuthOrigin()
-  if (configured === 'invalid') return null
-  const requestHost = normalizeDomain(headers.get('host') ?? '')
-  if (configured !== 'unset' && requestHost === configured.host) return null
+  return resolveSignInHost(headers.get('host'))
+}
 
-  const destination = await resolveProvenDestination(requestHost)
+/**
+ * {@link resolveTenantHost} for a host by NAME: also asked for a link that
+ * leaves the request (an emailed portal link) and never for one a request did
+ * not arrive on or a conference does not claim.
+ */
+export async function resolveSignInHost(
+  host: string | null | undefined,
+): Promise<SignInHost | null> {
+  const configured = configuredAuthOrigin()
+  const name = normalizeDomain(host ?? '')
+  if (configured === 'invalid' || refusal(configured, name)) return null
+
+  const destination = await resolveProvenDestination(name)
   return destination && signInHost(configured, destination)
+}
+
+/** Why the configuration alone rules a host out, or `null`. */
+export type ConfigurationRefusal = 'origin-unusable' | 'auth-host'
+
+function refusal(
+  configured: URL | 'unset' | 'invalid',
+  host: string,
+): ConfigurationRefusal | null {
+  if (configured === 'invalid') return 'origin-unusable'
+  return configured !== 'unset' && host === configured.host ? 'auth-host' : null
+}
+
+/**
+ * DOES THIS DEPLOYMENT'S CONFIGURATION RULE `host` OUT as a host that signs
+ * attendees in, whatever its record says? The half of {@link resolveSignInHost}
+ * that needs no read, for the surfaces that tell an organizer where a host
+ * stands. `'origin-unusable'`: `WORKSHOP_AUTH_ORIGIN` cannot be used, so no
+ * host signs anyone in. `'auth-host'`: the variable names this very host,
+ * which serves no conference.
+ */
+export function configurationRefuses(
+  host: string,
+): ConfigurationRefusal | null {
+  return refusal(authOrigin(), normalizeDomain(host))
 }
