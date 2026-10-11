@@ -141,9 +141,9 @@ describe('middleware — path routing', () => {
 
 /**
  * The workshop portal signs in on the host the attendee is on, and only when
- * that host is verified and registered in WorkOS (#1298). The single-host
- * check this replaces (`isWorkOSAuthHost`, fed by `WORKOS_REDIRECT_URI` and
- * `NEXT_PUBLIC_URL`) is gone: neither variable grants or refuses anything.
+ * that host is verified and registered in WorkOS (#1298). No environment
+ * variable names a host: setting `WORKOS_REDIRECT_URI` or `NEXT_PUBLIC_URL`
+ * grants and refuses nothing.
  */
 describe('middleware — /workshop host decision', () => {
   it('builds the WorkOS middleware for THIS request, with this host’s callback', async () => {
@@ -199,7 +199,7 @@ describe('middleware — /workshop host decision', () => {
     expect(h.authkitMiddleware).not.toHaveBeenCalled()
   })
 
-  it('no longer lets WORKOS_REDIRECT_URI or NEXT_PUBLIC_URL admit a host', async () => {
+  it('does not let WORKOS_REDIRECT_URI or NEXT_PUBLIC_URL admit a host', async () => {
     vi.stubEnv(
       'WORKOS_REDIRECT_URI',
       'https://env.example.org/api/auth/callback',
@@ -220,7 +220,7 @@ describe('middleware — /workshop host decision', () => {
     expect(h.authkitMiddleware).not.toHaveBeenCalled()
   })
 
-  it('no longer lets them refuse a verified host, nor steer its callback', async () => {
+  it('does not let them refuse a verified host, nor steer its callback', async () => {
     vi.stubEnv(
       'WORKOS_REDIRECT_URI',
       'https://env.example.org/api/auth/callback',
@@ -238,7 +238,7 @@ describe('middleware — /workshop host decision', () => {
     )
   })
 
-  it('sends /workshop/sign-in to the portal page when nothing at all is verified (the fallback-to-open is gone)', async () => {
+  it('sends /workshop/sign-in to the portal page when nothing at all is verified', async () => {
     // /workshop itself now passes through marked (#1298), covered in proxy tests.
     h.verifiedHosts = []
     vi.stubEnv('WORKOS_REDIRECT_URI', '')

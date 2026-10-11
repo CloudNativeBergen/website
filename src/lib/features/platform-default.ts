@@ -16,10 +16,10 @@ import type { FeatureId } from './registry'
  * org, and whoever an operator explicitly grants". This module holds the
  * registry half of that rule — the one read, the fail-closed posture and the
  * override semantics — so `./ticketing.ts` and `./badges.ts` only add their
- * own default on top and cannot drift on the shared part. (`workshops` shared
- * the shape until #1295: attendee sign-in stopped being bound to one host in
- * #1296, so it is now a plain plan-gated feature in `./workshops.ts` and uses
- * only the generic registry helpers below.)
+ * own default on top and cannot drift on the shared part. (`workshops` is NOT
+ * one of them: its sign-in runs on every host the platform controls, so it is
+ * a plain plan-gated feature in `./workshops.ts` and uses only the generic
+ * registry helpers below.)
  *
  * The implicit grant OUTLIVES the internal readiness that motivated it:
  * `ticketing` is now `readiness: 'ga'` with `minPlan: 'pro'` (a tenant brings
