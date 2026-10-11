@@ -1,7 +1,7 @@
 import type { NextRequest } from 'next/server'
-import { startWorkshopSignIn } from '@/lib/workshop/sign-in-start'
+import { beginWorkshopSignIn } from '@/lib/workshop/central-sign-in'
 
-/** `GET /workshop/sign-up` — start a WorkOS sign-up on this host (#1296). */
+/** `GET /workshop/sign-up`: begin a workshop sign-up for this host (#1311). */
 export function GET(request: NextRequest) {
-  return startWorkshopSignIn(request, 'sign-up')
+  return beginWorkshopSignIn(request, 'sign-up')
 }

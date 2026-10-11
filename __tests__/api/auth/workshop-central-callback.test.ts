@@ -4,9 +4,9 @@
  * `GET /api/auth/callback` on the auth host: where WorkOS sends the code back
  * for a sign-in the auth host started (#1313, spec §3 step 3, §5).
  *
- * REAL: both routes (every flow is STARTED by the real start route, so the
- * state and the cookie are its own), the destination policy, the seal (`jose`,
- * alias defeated) and `@workos-inc/node`.
+ * REAL: all three routes (every flow is BEGUN on the tenant host and STARTED
+ * by the real start route, so the state and the cookies are their own), the
+ * destination policy, the seal (`jose`, alias defeated) and `@workos-inc/node`.
  * SUPPLIED: the host's record with its conference (`getDomainClaim`), the
  * workshop feature gate, and WorkOS's token endpoint (`authenticateWithCode`),
  * the one network call.
@@ -14,42 +14,27 @@
  * Every refusal is a genuine, complete flow with ONE condition changed.
  */
 import '../../helpers/workosEnv'
-import { createHash } from 'node:crypto'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { NextRequest } from 'next/server'
 import { z } from 'zod'
-import type {
-  DomainClaim,
-  RedirectUriSyncRow,
-} from '@/lib/domain-verification/types'
+import type { DomainClaim } from '@/lib/domain-verification/types'
 import {
   CLAIMING_CONFERENCE_ID,
   claimsById,
   provenClaim,
 } from '../../helpers/domainClaims'
-import { beginRequest, writtenCookies } from '../../helpers/nextHeadersJar'
-import { signInHost, signInHostsById } from '../../helpers/workshopSignIn'
 
 vi.mock('jose', async () => (await import('../../helpers/realJose')).realJose())
 
 const getDomainClaim = vi.fn<(id: string) => Promise<DomainClaim | null>>()
-// The per-host sign-in of today, which a state that is not a seal falls
-// through to. It knows no host unless a test says so.
-const getRedirectUriSyncRow =
-  vi.fn<(id: string) => Promise<RedirectUriSyncRow | null>>()
 vi.mock('@/lib/domain-verification/sanity', () => ({
   getDomainClaim: (id: string) => getDomainClaim(id),
-  getRedirectUriSyncRow: (id: string) => getRedirectUriSyncRow(id),
 }))
 
 const getConferenceForDomain = vi.fn()
-const getConferenceForCurrentDomain = vi.fn()
 vi.mock('@/lib/conference/sanity', () => ({
   getConferenceForDomain: (domain: string) => getConferenceForDomain(domain),
-  getConferenceForCurrentDomain: () => getConferenceForCurrentDomain(),
 }))
-
-vi.mock('next/headers', () => import('../../helpers/nextHeadersJar'))
 
 const isWorkshopsEnabledForConference =
   vi.fn<(c: unknown) => Promise<boolean>>()
@@ -58,18 +43,18 @@ vi.mock('@/lib/features/workshops', () => ({
     isWorkshopsEnabledForConference(c),
 }))
 
-import { getWorkOS } from '@workos-inc/authkit-nextjs'
-import { GET as startRoute } from '@/app/api/auth/workshop/start/route'
-import { GET } from '@/app/api/auth/callback/route'
 import { seal, unseal } from '@/lib/workshop/central-sign-in/seal'
+import {
+  callback as callbackOn,
+  startFlow as startFlowOn,
+  type CallbackOptions,
+  type StartedFlow,
+} from '../../helpers/workshopFlow'
 import { workshopWorkOS } from '@/lib/workshop/central-sign-in/workos'
 
 const AUTH = 'auth.example.org'
 const TENANT = 'conf.example.org'
 const ALLOCATED = 'tenant.konf.run'
-const CHALLENGE = createHash('sha256')
-  .update('browser-value')
-  .digest('base64url')
 const START_COOKIE = '__Host-workshop-auth-start'
 
 /** An access token as WorkOS issues it: a JWT whose `sid` is the session. */
@@ -95,71 +80,21 @@ const exchangeCode = vi.spyOn(
   workshopWorkOS().userManagement,
   'authenticateWithCode',
 )
-/** The exchange of today's per-host sign-in: another client, never to be called either. */
-const exchangeCodePerHost = vi.spyOn(
-  getWorkOS().userManagement,
-  'authenticateWithCode',
-)
 
-interface Flow {
-  state: string
-  /** The start cookie as the browser sends it back: `name=value`. */
-  cookie: string
-}
-
-/** Start a real sign-in for `host` on `on`, as the browser would carry it. */
-async function startFlow(host = TENANT, on = AUTH): Promise<Flow> {
-  const url = new URL(`https://${on}/api/auth/workshop/start`)
-  url.searchParams.set('host', host)
-  url.searchParams.set('challenge', CHALLENGE)
-  url.searchParams.set('screen', 'sign-in')
-  const response = await startRoute(
-    new NextRequest(url, { headers: new Headers({ host: on }) }),
-  )
-  expect(response.status).toBe(307)
-  return {
-    state: new URL(response.headers.get('location')!).searchParams.get(
-      'state',
-    )!,
-    cookie: response.headers.getSetCookie()[0].split(';')[0],
-  }
-}
-
-interface Callback {
-  on?: string
-  code?: string | null
-  cookie?: string | null
-  /** Extra query parameters, as an attacker or a bug might add them. */
-  query?: Record<string, string>
-}
+/** A sign-in begun on `host` and started on the auth host `on`. */
+const startFlow = (host = TENANT, on = AUTH) => startFlowOn(host, on)
 
 /** WorkOS redirecting the browser back with a code. */
-function callback(
-  flow: Flow,
-  {
-    on = AUTH,
-    code = 'code_from_workos',
-    cookie = flow.cookie,
-    query,
-  }: Callback = {},
-) {
-  const url = new URL(`https://${on}/api/auth/callback`)
-  if (code !== null) url.searchParams.set('code', code)
-  url.searchParams.set('state', flow.state)
-  for (const [name, value] of Object.entries(query ?? {})) {
-    url.searchParams.set(name, value)
-  }
-  const headers = new Headers({ host: on })
-  if (cookie !== null) headers.set('cookie', cookie)
-  return GET(new NextRequest(url, { headers }))
-}
+const callback = (
+  flow: Pick<StartedFlow, 'state' | 'cookie'>,
+  options: Partial<CallbackOptions> = {},
+) => callbackOn(flow, { on: AUTH, ...options })
 
 function expectRefused(response: Response) {
   expect(response.status).toBe(404)
   expect(response.headers.get('location')).toBeNull()
   expect(response.headers.getSetCookie()).toEqual([])
   expect(exchangeCode).not.toHaveBeenCalled()
-  expect(exchangeCodePerHost).not.toHaveBeenCalled()
   // A decision, not a crash that happened to answer the same.
   expect(console.error).not.toHaveBeenCalled()
 }
@@ -172,7 +107,6 @@ function handoffToken(response: Response): string {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  beginRequest()
   vi.stubEnv('NODE_ENV', 'production')
   vi.stubEnv('PLATFORM_DOMAIN_SUFFIX', 'konf.run')
   vi.stubEnv('WORKSHOP_AUTH_ORIGIN', `https://${AUTH}`)
@@ -184,9 +118,7 @@ beforeEach(() => {
     ),
   )
   isWorkshopsEnabledForConference.mockResolvedValue(true)
-  getRedirectUriSyncRow.mockResolvedValue(null)
   exchangeCode.mockResolvedValue(AUTHENTICATED as never)
-  exchangeCodePerHost.mockResolvedValue(AUTHENTICATED as never)
 })
 
 afterEach(() => {
@@ -232,9 +164,6 @@ describe('callback: a sign-in the auth host started', () => {
     expect(response.headers.getSetCookie()).toEqual([
       `${START_COOKIE}=; Path=/; Max-Age=0; Secure; HttpOnly; SameSite=lax`,
     ])
-    // The line above carries the claim. This one only shows the per-host
-    // handler, which writes through the request's cookie store, did not run.
-    expect(writtenCookies()).toEqual([])
   })
 
   it('hands off who signed in, for which host and conference, bound to the tenant’s hash', async () => {
@@ -242,7 +171,8 @@ describe('callback: a sign-in the auth host started', () => {
       toFake: ['Date'],
       now: new Date('2026-10-10T12:00:00Z'),
     })
-    const token = handoffToken(await callback(await startFlow()))
+    const flow = await startFlow()
+    const token = handoffToken(await callback(flow))
 
     expect(await unseal('session', token, anything)).toBeNull()
     expect(await unseal('handoff', token, anything)).toEqual({
@@ -253,7 +183,7 @@ describe('callback: a sign-in the auth host started', () => {
       sessionId: 'session_01',
       host: TENANT,
       conferenceId: CLAIMING_CONFERENCE_ID,
-      challenge: CHALLENGE,
+      challenge: flow.challenge,
       iat: Date.parse('2026-10-10T12:00:00Z') / 1000,
       exp: Date.parse('2026-10-10T12:01:00Z') / 1000,
     })
@@ -290,7 +220,8 @@ describe('callback: a sign-in the auth host started', () => {
   })
 
   it('takes the host and the hash from sealed state only, whatever the query string names', async () => {
-    const response = await callback(await startFlow(), {
+    const flow = await startFlow()
+    const response = await callback(flow, {
       query: {
         host: ALLOCATED,
         challenge: 'x'.repeat(43),
@@ -308,7 +239,7 @@ describe('callback: a sign-in the auth host started', () => {
     ).toMatchObject({
       host: TENANT,
       conferenceId: CLAIMING_CONFERENCE_ID,
-      challenge: CHALLENGE,
+      challenge: flow.challenge,
     })
   })
 
@@ -404,6 +335,21 @@ describe('callback: refused with 404, and the code is never exchanged', () => {
     expectRefused(await callback(flow))
   })
 
+  it.each([
+    ['no state', null],
+    ['a state that is not a seal', 'not-a-seal'],
+    [
+      'a state of the per-host sign-in this replaces',
+      'Fe26.2*1*abc*def*ghi*jkl**mno*pqr~',
+    ],
+  ])('%s, without reading a record', async (_, state) => {
+    const flow = await startFlow()
+    getDomainClaim.mockClear()
+
+    expectRefused(await callback({ ...flow, state: state as string }))
+    expect(getDomainClaim).not.toHaveBeenCalled()
+  })
+
   it('a state sealed for another purpose', async () => {
     const flow = await startFlow()
     const forged = await seal(
@@ -476,27 +422,6 @@ describe('callback: WORKSHOP_AUTH_ORIGIN unset', () => {
       `https://${TENANT}/workshop/redeem`,
     )
     expect(exchangeCode).toHaveBeenCalledOnce()
-  })
-
-  it('a state older than ten minutes is refused here, not tried as the per-host sign-in', async () => {
-    // The host is one the per-host sign-in admits, so that handler would
-    // answer for itself (the SDK's error page) if the request reached it.
-    getRedirectUriSyncRow.mockImplementation(
-      signInHostsById([signInHost(TENANT)]),
-    )
-    getConferenceForCurrentDomain.mockResolvedValue({
-      conference: { _id: 'conf-1', organization: { _ref: 'org-1' } },
-      error: null,
-    })
-    const now = new Date('2026-10-10T12:00:00Z')
-    vi.useFakeTimers({ toFake: ['Date'], now })
-    const flow = await startFlow(TENANT, TENANT)
-
-    vi.setSystemTime(now.getTime() + 601_000)
-    const response = await callback(flow, { on: TENANT })
-
-    expectRefused(response)
-    expect(await response.text()).toBe('Not Found')
   })
 
   it('a callback on any other host than the one in state is refused', async () => {

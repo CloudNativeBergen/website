@@ -6,6 +6,7 @@ import {
   type ProvenDestination,
 } from '@/lib/domain-verification/destination'
 import { isWorkshopsEnabledForConference } from '@/lib/features/workshops'
+import { WORKSHOP_PORTAL_PATH } from '../sign-in-paths'
 
 export interface CentralSignIn {
   /** `scheme://host[:port]` of the auth host: where WorkOS calls back. */
@@ -16,6 +17,21 @@ export interface CentralSignIn {
 /** A refusal on the auth host is a 404, whatever the reason. */
 export function notFound(): NextResponse {
   return new NextResponse('Not Found', { status: 404 })
+}
+
+/**
+ * To the portal page, by a path nothing in the request chooses. `suffix` is a
+ * fixed query of ours, never the request's.
+ */
+export function toPortal(suffix = ''): NextResponse {
+  return new NextResponse(null, {
+    status: 307,
+    headers: {
+      Location: `${WORKSHOP_PORTAL_PATH}${suffix}`,
+      'Cache-Control': 'no-store',
+      'Referrer-Policy': 'no-referrer',
+    },
+  })
 }
 
 /**
@@ -73,6 +89,46 @@ export async function resolveCentralSignIn(
   if (!(await isWorkshopsEnabledForConference(destination.conference))) {
     return null
   }
+  return {
+    authOrigin: configured === 'unset' ? destination.origin : configured.origin,
+    destination,
+  }
+}
+
+export interface TenantHost {
+  /** `scheme://host[:port]` of the auth host this host signs in through. */
+  authOrigin: string
+  destination: ProvenDestination
+}
+
+/**
+ * MAY THIS REQUEST'S HOST CARRY THE WORKSHOP PORTAL'S SIGN-IN? (#1311, spec §2
+ * and §4.) Asked on the tenant host by the routes that begin and redeem a
+ * sign-in and by every read of the session:
+ *
+ *  - `'auth-host'`: `WORKSHOP_AUTH_ORIGIN` names this very host. It serves no
+ *    conference, so the tenant-host routes answer 404 there. Decided from the
+ *    request alone;
+ *  - `null`: the host may not receive a hand-off (`resolveProvenDestination`),
+ *    or the variable cannot be used;
+ *  - otherwise the host as proven, with the conference that claims it, and the
+ *    auth host it signs in through (itself when the variable is unset).
+ *
+ * ONE LIVE RECORD READ, and none for the first answer. It does not ask whether
+ * the conference has workshops: the caller does, from `destination.conference`.
+ */
+export async function resolveTenantHost(headers: {
+  get(name: string): string | null
+}): Promise<TenantHost | 'auth-host' | null> {
+  const configured = configuredAuthOrigin()
+  if (configured === 'invalid') return null
+  const requestHost = normalizeDomain(headers.get('host') ?? '')
+  if (configured !== 'unset' && requestHost === configured.host) {
+    return 'auth-host'
+  }
+
+  const destination = await resolveProvenDestination(requestHost)
+  if (!destination) return null
   return {
     authOrigin: configured === 'unset' ? destination.origin : configured.origin,
     destination,

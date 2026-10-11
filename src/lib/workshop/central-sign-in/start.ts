@@ -4,29 +4,24 @@ import { NextResponse, type NextRequest } from 'next/server'
 import type { z } from 'zod'
 import { workshopCallbackUri } from '../sign-in-paths'
 import { notFound, resolveCentralSignIn } from './decision'
-import { seal } from './seal'
+import { seal, unseal } from './seal'
 import {
   START_TTL_SECONDS,
   startCookie,
   startCookieSchema,
+  startRequestSchema,
   startStateSchema,
 } from './start-seals'
 import { workshopWorkOS } from './workos'
 
-/** Base64url SHA-256: what the tenant host sends of its browser value. */
-const CHALLENGE = /^[A-Za-z0-9_-]{43}$/
-
-function isScreen(value: string | null): value is 'sign-in' | 'sign-up' {
-  return value === 'sign-in' || value === 'sign-up'
-}
-
 /**
  * START A WORKSHOP SIGN-IN ON THE AUTH HOST (#1311, spec §3 step 2), for the
- * tenant host named in the query, with the hash of that host's browser value
- * and the screen to show.
+ * tenant host that asked: its sealed request names the host, the hash of that
+ * host's browser value and the screen to show.
  *
- * THE DECISION COMES FIRST (`resolveCentralSignIn`). Only then is anything
- * built: a PKCE pair, the authorize URL with THIS host's callback as its
+ * WITHOUT A REQUEST A TENANT HOST SEALED, NOTHING IS READ and nothing starts.
+ * THEN THE DECISION (`resolveCentralSignIn`). Only then is anything built: a
+ * PKCE pair, the authorize URL with THIS host's callback as its
  * `redirect_uri`, and two seals that share a nonce:
  *
  *  - `state` carries the host, the conference that claims it and the hash. The
@@ -39,14 +34,15 @@ function isScreen(value: string | null): value is 'sign-in' | 'sign-up' {
 export async function startCentralSignIn(
   request: NextRequest,
 ): Promise<NextResponse> {
-  const params = request.nextUrl.searchParams
-  const challenge = params.get('challenge')
-  const screen = params.get('screen')
-  if (!challenge || !CHALLENGE.test(challenge) || !isScreen(screen)) {
-    return notFound()
-  }
+  const sent = await unseal(
+    'start-request',
+    request.nextUrl.searchParams.get('request'),
+    startRequestSchema,
+  )
+  if (!sent) return notFound()
+  const { challenge, screen } = sent
 
-  const signIn = await resolveCentralSignIn(request.headers, params.get('host'))
+  const signIn = await resolveCentralSignIn(request.headers, sent.host)
   if (!signIn) return notFound()
   const { authOrigin, destination } = signIn
 

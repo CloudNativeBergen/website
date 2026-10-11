@@ -16,6 +16,8 @@ import type { z } from 'zod'
  * must differ in every environment.
  */
 export type SealPurpose =
+  /** What the tenant host asks the auth host to start. */
+  | 'start-request'
   /** The OAuth `state` the auth host sends to WorkOS and gets back. */
   | 'auth-state'
   /** The auth host's cookie that binds a callback to the browser that started. */

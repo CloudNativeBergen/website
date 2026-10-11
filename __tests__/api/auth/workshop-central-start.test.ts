@@ -2,14 +2,16 @@
  * @vitest-environment node
  *
  * `GET /api/auth/workshop/start`: the auth host starts a workshop sign-in for
- * a tenant host (#1313, spec §3 step 2).
+ * a tenant host (#1313, spec §3 step 2), on that host's sealed request (#1314).
  *
  * REAL: the route, the destination policy, the seal (`jose`, alias defeated)
  * and `@workos-inc/node`, which builds the authorize URL and the PKCE pair.
  * SUPPLIED: the host's record with its conference (`getDomainClaim`) and the
  * workshop feature gate.
  *
- * Every refusal is `start()` with ONE condition changed.
+ * Every refusal is `start()` with ONE condition changed. `start()` seals the
+ * request as a tenant host would, so the auth host's own checks of what is
+ * inside it can be reached.
  */
 import '../../helpers/workosEnv'
 import { createHash } from 'node:crypto'
@@ -44,7 +46,7 @@ vi.mock('@/lib/features/workshops', () => ({
 }))
 
 import { GET } from '@/app/api/auth/workshop/start/route'
-import { unseal } from '@/lib/workshop/central-sign-in/seal'
+import { seal, unseal } from '@/lib/workshop/central-sign-in/seal'
 import { workshopWorkOS } from '@/lib/workshop/central-sign-in/workos'
 
 const AUTH = 'auth.example.org'
@@ -67,18 +69,40 @@ interface Start {
   host?: string | null
   challenge?: string | null
   screen?: string | null
+  /** The `request` parameter as sent, in place of one sealed from the above. */
+  request?: string | null
+  /** Clear query parameters, as the route took them before it wanted a seal. */
+  query?: Record<string, string>
 }
 
-function start({
+/** What a tenant host seals: these fields, valid for a minute. */
+function sealedRequest(fields: Record<string, string | null>) {
+  return seal(
+    'start-request',
+    Object.fromEntries(
+      Object.entries(fields).filter(([, value]) => value !== null),
+    ),
+    60,
+  )
+}
+
+async function start({
   on = AUTH,
   host = TENANT,
   challenge = CHALLENGE,
   screen = 'sign-in',
+  request,
+  query,
 }: Start = {}) {
   const url = new URL(`https://${on}/api/auth/workshop/start`)
-  if (host !== null) url.searchParams.set('host', host)
-  if (challenge !== null) url.searchParams.set('challenge', challenge)
-  if (screen !== null) url.searchParams.set('screen', screen)
+  const sealed =
+    request === undefined
+      ? await sealedRequest({ host, challenge, screen })
+      : request
+  if (sealed !== null) url.searchParams.set('request', sealed)
+  for (const [name, value] of Object.entries(query ?? {})) {
+    url.searchParams.set(name, value)
+  }
   return GET(new NextRequest(url, { headers: new Headers({ host: on }) }))
 }
 
@@ -315,6 +339,65 @@ describe('start: refused with 404, and no authorize URL is built', () => {
     ['unknown', 'reset-password'],
   ])('a screen that is %s', async (_, screen) => {
     await expectRefused(await start({ screen }))
+  })
+})
+
+describe('start: only on a request a tenant host sealed', () => {
+  it('no request at all: refused, without reading a record', async () => {
+    await expectRefused(await start({ request: null }))
+    expect(getDomainClaim).not.toHaveBeenCalled()
+  })
+
+  it('the host, the hash and the screen as clear parameters: refused, without reading a record', async () => {
+    await expectRefused(
+      await start({
+        request: null,
+        query: { host: TENANT, challenge: CHALLENGE, screen: 'sign-in' },
+      }),
+    )
+    expect(getDomainClaim).not.toHaveBeenCalled()
+  })
+
+  it('a request sealed for another purpose: refused, without reading a record', async () => {
+    const asState = await seal(
+      'auth-state',
+      { host: TENANT, challenge: CHALLENGE, screen: 'sign-in' },
+      60,
+    )
+
+    await expectRefused(await start({ request: asState }))
+    expect(getDomainClaim).not.toHaveBeenCalled()
+  })
+
+  it('a request that was changed on the way: refused', async () => {
+    const sealed = await sealedRequest({
+      host: TENANT,
+      challenge: CHALLENGE,
+      screen: 'sign-in',
+    })
+    // One character of the ciphertext, the fourth of a compact JWE's five parts.
+    const parts = sealed.split('.')
+    parts[3] = (parts[3][0] === 'A' ? 'B' : 'A') + parts[3].slice(1)
+    const changed = parts.join('.')
+
+    await expectRefused(await start({ request: changed }))
+  })
+
+  it('a request is good for 60 seconds and no longer', async () => {
+    vi.useFakeTimers({ now: new Date('2026-10-12T10:00:00Z') })
+    const sealed = await sealedRequest({
+      host: TENANT,
+      challenge: CHALLENGE,
+      screen: 'sign-in',
+    })
+
+    vi.setSystemTime(new Date('2026-10-12T10:00:59Z'))
+    expect((await start({ request: sealed })).status).toBe(307)
+
+    vi.clearAllMocks()
+    vi.setSystemTime(new Date('2026-10-12T10:01:01Z'))
+    await expectRefused(await start({ request: sealed }))
+    expect(getDomainClaim).not.toHaveBeenCalled()
   })
 })
 

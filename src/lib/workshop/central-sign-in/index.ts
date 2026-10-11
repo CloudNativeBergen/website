@@ -3,5 +3,6 @@
  * the sign-in, takes the callback from WorkOS and hands the result to the
  * tenant host. See `docs/WORKSHOP_CENTRAL_SIGN_IN_SPEC.md`.
  */
+export { beginWorkshopSignIn } from './tenant-start'
 export { startCentralSignIn } from './start'
 export { finishCentralSignIn } from './callback'
