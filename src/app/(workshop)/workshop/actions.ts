@@ -14,12 +14,14 @@ import {
  * host, which ends the WorkOS login and sends it back to the front page here.
  * With no session there is no login to end, and it goes to the front page.
  *
- * Nothing is read and WorkOS is not called on this host.
+ * Nothing is read and WorkOS is not called on this host. The portal page is
+ * REPLACED in the browser's history, so "back" after signing out does not
+ * return to it.
  */
 export async function signOutOfWorkshop(): Promise<void> {
   const store = await cookies()
   const cookie = sessionCookie()
   const sealed = store.get(cookie.name)?.value
   clearCookie(store, cookie)
-  redirect(await workshopSignOutTarget(await headers(), sealed))
+  redirect(await workshopSignOutTarget(await headers(), sealed), 'replace')
 }
