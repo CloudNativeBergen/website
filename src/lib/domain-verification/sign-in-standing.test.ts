@@ -1,6 +1,6 @@
 /** The organizer standing uses the real central sign-in proof policy. */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { verifiedHost } from '../../../__tests__/helpers/workshopSignIn'
+import { verifiedHost } from '../../../__tests__/helpers/domainClaims'
 import { workshopSignInStanding } from './sign-in-standing'
 
 const now = new Date()

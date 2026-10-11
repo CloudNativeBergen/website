@@ -169,8 +169,6 @@ export async function listAllowlistCandidates(): Promise<
  * Leaving the record absent fails closed — unrouted under enforcement, never
  * allowlisted — and the mutations reject such a payload outright, so this is
  * defence in depth rather than the only line.
- *
- * Resolves `true` when it WROTE the record, `false` when it left things alone.
  */
 export async function ensureDomainVerification(
   hostname: string,
@@ -181,7 +179,7 @@ export async function ensureDomainVerification(
     allocatePlatformHost?: boolean
     now?: Date
   } = {},
-): Promise<boolean> {
+): Promise<void> {
   const host = normalizeDomain(hostname)
   const _id = domainVerificationId(host)
   const inPlatformZone = isPlatformZoneHost(host)
@@ -207,7 +205,7 @@ export async function ensureDomainVerification(
     // NO IMPLICIT ALLOCATION. Write nothing at all: a record here would either
     // grant the standing outright or promise the tenant a DNS challenge they
     // cannot answer.
-    return false
+    return
   }
 
   const method: DomainVerificationMethod = platformOwned
@@ -245,7 +243,7 @@ export async function ensureDomainVerification(
       ...grandfatherFields,
       ...platformFields,
     })
-    return true
+    return
   }
 
   const sameHolder = existing.conferenceId === conferenceId
@@ -268,9 +266,8 @@ export async function ensureDomainVerification(
         })
         .unset(['graceUntil', 'firstFailureAt', 'lastError'])
         .commit()
-      return true
     }
-    return false
+    return
   }
 
   // Different holder, or the same holder re-claiming a released hostname:
@@ -304,7 +301,6 @@ export async function ensureDomainVerification(
             ],
     )
     .commit()
-  return true
 }
 
 /**
@@ -314,22 +310,19 @@ export async function ensureDomainVerification(
  *
  * Guarded on the holder: a hostname some OTHER conference has since claimed is
  * left alone, so a late/duplicated release can never knock out the new holder.
- *
- * Resolves `true` when it revoked the record, `false` when it left it alone.
  */
 export async function revokeDomainVerification(
   hostname: string,
   conferenceId: string,
-): Promise<boolean> {
+): Promise<void> {
   const _id = domainVerificationId(normalizeDomain(hostname))
   const existing = await clientReadUncached.fetch<RawRecord | null>(
     // groq-global: hostnames are a GLOBAL namespace — one record per hostname, addressed by deterministic id.
     `*[_type == "domainVerification" && _id == $id][0] ${PROJECTION}`,
     { id: _id },
   )
-  if (!existing || existing.conferenceId !== conferenceId) return false
+  if (!existing || existing.conferenceId !== conferenceId) return
   await clientWrite.patch(_id).set({ status: 'revoked' }).commit()
-  return true
 }
 
 /**

@@ -4,7 +4,7 @@
  * reads are supplied; the standing and its wording are real.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { verifiedHost } from '../../../__tests__/helpers/workshopSignIn'
+import { verifiedHost } from '../../../__tests__/helpers/domainClaims'
 import type { DomainVerificationRecord } from '@/lib/domain-verification/types'
 import type { SystemCheck } from './types'
 

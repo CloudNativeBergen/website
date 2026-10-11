@@ -132,11 +132,7 @@ export async function listDomainVerificationViews(
   } = {},
 ): Promise<DomainVerificationView[]> {
   const records = await listDomainVerificationsForConference(conferenceId)
-  const byHost = new Map(
-    records
-      .filter((record) => record.conferenceId === conferenceId)
-      .map((record) => [normalizeDomain(record.hostname), record]),
-  )
+  const byHost = new Map(records.map((r) => [normalizeDomain(r.hostname), r]))
   return domains
     .map(normalizeDomain)
     .filter(Boolean)

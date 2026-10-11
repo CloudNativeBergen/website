@@ -11,8 +11,8 @@ import type { DomainVerificationRecord } from './types'
  */
 
 const records = new Map<string, DomainVerificationRecord>()
-const ensureDomainVerification = vi.fn(async () => true)
-const revokeDomainVerification = vi.fn(async () => true)
+const ensureDomainVerification = vi.fn(async () => {})
+const revokeDomainVerification = vi.fn(async () => {})
 
 vi.mock('./sanity', () => ({
   ensureDomainVerification,

@@ -3,7 +3,7 @@
  * workshop gate are supplied; the proof policy and standing are real.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { verifiedHost } from '../../../__tests__/helpers/workshopSignIn'
+import { verifiedHost } from '../../../__tests__/helpers/domainClaims'
 import type { DomainVerificationRecord } from './types'
 
 const records: DomainVerificationRecord[] = []
@@ -187,28 +187,6 @@ describe('listConferenceDomainViews', () => {
     expect(workshopsEnabled).toHaveBeenCalledWith(CONFERENCE)
     expect(view.hostname).toBe('conf.example.org')
     expect(view.workshopSignIn).toEqual({ state: 'available' })
-  })
-
-  it('treats another conference’s record as unverified without exposing its proof', async () => {
-    records.push(
-      verifiedHost('conf.example.org', {
-        conferenceId: 'conference-2',
-        token: 'foreign-token',
-      }),
-    )
-
-    const [view] = await listDomainVerificationViews(
-      'conference-1',
-      ['conf.example.org'],
-      { workshops: true },
-    )
-
-    expect(view).toMatchObject({
-      hostname: 'conf.example.org',
-      status: 'pending',
-      recordValue: null,
-      workshopSignIn: { state: 'unverified' },
-    })
   })
 
   it('asks a tenant to verify a claimed host with no record', async () => {

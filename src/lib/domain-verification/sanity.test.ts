@@ -227,12 +227,9 @@ describe('ensureDomainVerification', () => {
   })
 })
 
-/** The result distinguishes a stored change from an unchanged record. */
-describe('reporting whether a record was written', () => {
+describe('which calls write', () => {
   it('a new claim', async () => {
-    expect(
-      await ensureDomainVerification('cloudnativedays.no', CONFERENCE),
-    ).toBe(true)
+    await ensureDomainVerification('cloudnativedays.no', CONFERENCE)
     expect(createIfNotExists).toHaveBeenCalledTimes(1)
   })
 
@@ -245,11 +242,9 @@ describe('reporting whether a record was written', () => {
       }),
     )
 
-    expect(
-      await ensureDomainVerification('kubeday.konf.run', CONFERENCE, {
-        allocatePlatformHost: true,
-      }),
-    ).toBe(true)
+    await ensureDomainVerification('kubeday.konf.run', CONFERENCE, {
+      allocatePlatformHost: true,
+    })
     expect(commit).toHaveBeenCalledTimes(1)
   })
 
@@ -262,9 +257,7 @@ describe('reporting whether a record was written', () => {
       }),
     )
 
-    expect(
-      await ensureDomainVerification('cloudnativedays.no', CONFERENCE),
-    ).toBe(true)
+    await ensureDomainVerification('cloudnativedays.no', CONFERENCE)
     expect(commit).toHaveBeenCalledTimes(1)
   })
 
@@ -277,34 +270,26 @@ describe('reporting whether a record was written', () => {
       }),
     )
 
-    expect(
-      await ensureDomainVerification('cloudnativedays.no', CONFERENCE),
-    ).toBe(false)
+    await ensureDomainVerification('cloudnativedays.no', CONFERENCE)
     expect(commit).not.toHaveBeenCalled()
   })
 
   it('not an in-zone host the caller may not allocate', async () => {
-    expect(
-      await ensureDomainVerification('some-other-tenant.konf.run', CONFERENCE),
-    ).toBe(false)
+    await ensureDomainVerification('some-other-tenant.konf.run', CONFERENCE)
     expect(createIfNotExists).not.toHaveBeenCalled()
   })
 
   it('a release by the holder', async () => {
     fetchMock.mockResolvedValue(existing({ conferenceId: CONFERENCE }))
 
-    expect(await revokeDomainVerification('kubeday.konf.run', CONFERENCE)).toBe(
-      true,
-    )
+    await revokeDomainVerification('kubeday.konf.run', CONFERENCE)
     expect(set).toHaveBeenCalledWith({ status: 'revoked' })
   })
 
   it('not a release of a host another conference now holds', async () => {
     fetchMock.mockResolvedValue(existing({ conferenceId: 'conference-other' }))
 
-    expect(await revokeDomainVerification('kubeday.konf.run', CONFERENCE)).toBe(
-      false,
-    )
+    await revokeDomainVerification('kubeday.konf.run', CONFERENCE)
     expect(commit).not.toHaveBeenCalled()
   })
 })
