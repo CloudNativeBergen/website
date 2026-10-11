@@ -117,7 +117,9 @@ These surfaces tell people apart by a lowercased address, with or without trimmi
 `canonicalEmail`, so a padded address is one person on every page.
 
 On a conference where the speaker type grants workshops, built-in list included, each of these
-rises by the speakers who gave no workshop answer.
+rises by the speakers the override left out: those who gave no workshop answer and those who
+answered no. The numbers count people, so a speaker already counted through another ticket adds
+nothing.
 
 ## 6. Cancel
 
@@ -142,9 +144,9 @@ earliest waitlisted sign-ups and emails them, so a person who backed out can be 
 - **Refusals stay**: no portal link, registration closed, the ticket provider or the email sender
   unavailable, and at most one send an hour per conference. As today, a press confirmed to have
   reached nobody does not use up the hour; one whose sends went unanswered keeps it.
-- **Wording.** The email says that the ticket includes workshops and that the recipient has no
-  seat yet, a statement about the ticket that stays true for someone who signs up between the
-  press and the read. The instructions email has three registration states today (before the
+- **Wording.** The email says that the ticket includes workshops and asks conditionally: "if you
+  haven't picked your workshops yet". Someone can sign up between the press and the read, so it
+  never states that the recipient has no seat. The instructions email has three registration states today (before the
   window, open, closed). The reminder uses the first two: before the window it says when sign-up
   opens, as today; while it is open it says when sign-up closes, which the email does not say
   today. It is never sent after the window, because the send is refused then.
