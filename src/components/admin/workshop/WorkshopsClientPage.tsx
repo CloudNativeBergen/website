@@ -72,7 +72,6 @@ export function WorkshopsClientPage({
   resendDisabledReason,
 }: WorkshopsClientPageProps) {
   const queryClient = useQueryClient()
-  const utils = api.useUtils()
   const { showNotification } = useNotification()
   const [announceModal, setAnnounceModal] = useState<AnnounceModalState>({
     isOpen: false,

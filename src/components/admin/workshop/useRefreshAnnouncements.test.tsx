@@ -7,7 +7,13 @@
  * clients, with only `fetch` supplied.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { act, cleanup, render, waitFor } from '@testing-library/react'
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useState, type ReactNode } from 'react'
 import { api, getTRPCClient } from '@/lib/trpc/client'
@@ -67,15 +73,13 @@ function Providers({ children }: { children: ReactNode }) {
   )
 }
 
-let refresh: (workshopId: string) => void
-
 /** Both reads mounted, as an organizer with both pages in one cache has them. */
 function BothReads() {
   api.workshop.announcements.useQuery({ workshopId: 'ws-1' })
   api.workshop.announcements.useQuery({ workshopId: 'ws-2' })
   api.workshop.announcementsByWorkshop.useQuery()
-  refresh = useRefreshAnnouncements()
-  return null
+  const refresh = useRefreshAnnouncements()
+  return <button onClick={() => refresh('ws-1')}>wrote to ws-1</button>
 }
 
 const names = () => requested.map((request) => request.procedure).sort()
@@ -90,7 +94,7 @@ describe('useRefreshAnnouncements', () => {
     await waitFor(() => expect(requested).toHaveLength(3))
     requested.length = 0
 
-    act(() => refresh('ws-1'))
+    fireEvent.click(screen.getByRole('button', { name: 'wrote to ws-1' }))
 
     await waitFor(() => expect(requested).toHaveLength(2))
     expect(names()).toEqual([
