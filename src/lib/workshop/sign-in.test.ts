@@ -99,14 +99,6 @@ describe('workshopPortalUrl', () => {
     )
   })
 
-  it('does not depend on WORKOS_COOKIE_DOMAIN', async () => {
-    vi.stubEnv('WORKOS_COOKIE_DOMAIN', 'example.org')
-
-    await expect(workshopPortalUrl(conference)).resolves.toBe(
-      'https://conf.example.org/workshop',
-    )
-  })
-
   it('is null when the main host cannot sign in, even if another can', async () => {
     getDomainClaim.mockImplementation(
       claimsById(provenClaim('other.example.org')),

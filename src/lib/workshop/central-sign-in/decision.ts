@@ -80,7 +80,7 @@ export function toPortal(suffix = ''): NextResponse {
  * `'invalid'`: the value cannot be used (not a bare origin of a hostname, or
  * plain HTTP outside development).
  */
-function authOrigin(): URL | 'unset' | 'invalid' {
+export function authOrigin(): URL | 'unset' | 'invalid' {
   const raw = process.env.WORKSHOP_AUTH_ORIGIN?.trim()
   if (!raw) return 'unset'
   const url = URL.parse(raw)

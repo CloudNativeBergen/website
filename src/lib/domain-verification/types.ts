@@ -1,6 +1,5 @@
 /** Shared shapes for domain ownership verification (#683). */
 
-import type { WorkshopConference } from '@/lib/features/workshops'
 import type { ConferenceTenant } from '@/lib/features/platform-default'
 import type { ConferenceTicketingBinding } from '@/lib/tickets/provider'
 
@@ -94,37 +93,6 @@ export type DomainVerificationPatch = Partial<
     | 'lastError'
   >
 >
-
-/**
- * Where a host's WorkOS redirect URI stands (#1297).
- *
- * - `registered` — this system created it; `id` is WorkOS's id for it, and the
- *   only thing a delete is ever addressed to.
- * - `external` — the URI exists in WorkOS and this system holds no id for it.
- *   It is never deleted from here.
- */
-export type RedirectUriStatus = 'registered' | 'external'
-
-/** The redirect-URI fields of a `domainVerification` document. */
-export interface RedirectUriState {
-  status: RedirectUriStatus | null
-  id: string | null
-  /** The last failure, cleared by the next success. */
-  error: string | null
-}
-
-/** One host as the redirect-URI reconcile reads it. */
-export interface RedirectUriSyncRow {
-  record: DomainVerificationRecord
-  /** The document revision this row was read at; every write is conditional on it. */
-  rev: string
-  redirectUri: RedirectUriState
-  /**
-   * The claiming conference's owner, ticketing vendor and claimed domains;
-   * `null` when it is gone.
-   */
-  conference: (WorkshopConference & { domains?: string[] | null }) | null
-}
 
 /**
  * The conference that claims a host, as the destination check reads it WITH

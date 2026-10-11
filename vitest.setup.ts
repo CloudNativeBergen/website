@@ -14,10 +14,8 @@ process.env.INVITATION_TOKEN_SECRET ??= 'test-invitation-token-secret'
 // need one stub it explicitly with `vi.stubEnv`.
 //
 // WorkOS configuration never comes from the developer's shell or a `.env`
-// file in tests either. The AuthKit SDK captures these at import and several
-// change outcomes loudly (`WORKOS_COOKIE_DOMAIN`, `WORKOS_COOKIE_NAME`) or
-// quietly (`WORKOS_CLAIM_TOKEN` makes it POST to WorkOS for real). Suites that
-// run the SDK set what they need through `__tests__/helpers/workosEnv.ts`.
+// file in tests either. Suites set client credentials and the sealing key
+// through `__tests__/helpers/workosEnv.ts`.
 for (const name of Object.keys(process.env)) {
   if (
     name.startsWith('TENANT_') ||

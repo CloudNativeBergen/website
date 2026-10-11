@@ -5,13 +5,12 @@ import { BackgroundImage } from '@/components/BackgroundImage'
 
 /**
  * The workshop portal on a host that cannot sign in yet (#1298): a tenant with
- * workshops whose host is unverified, not yet registered with WorkOS, or
- * refused by it.
+ * workshops whose host cannot receive a sign-in hand-off.
  *
  * Once registration has closed it says that instead: "not available yet,
  * check back later" would send the attendee back for nothing.
  *
- * SAYS NOTHING ABOUT WHY. No host, verification state or WorkOS error reaches
+ * SAYS NOTHING ABOUT WHY. No host or verification state reaches
  * this view; the organizer sees the reason in `/admin/settings`. The attendee
  * gets one thing to do: write to the organizer.
  */

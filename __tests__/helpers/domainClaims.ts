@@ -20,25 +20,8 @@ export function provenClaim(
   record: Partial<DomainVerificationRecord> = {},
   conference: Partial<NonNullable<DomainClaim['conference']>> = {},
 ): DomainClaim {
-  const yesterday = new Date(Date.now() - 86_400_000).toISOString()
   return {
-    record: {
-      _id: `domainVerification.${hostname}`,
-      hostname,
-      conferenceId: CLAIMING_CONFERENCE_ID,
-      token: 'tok',
-      status: 'verified',
-      method: 'dns-txt',
-      graceUntil: null,
-      verifiedAt: yesterday,
-      lastSuccessAt: yesterday,
-      lastCheckedAt: yesterday,
-      firstFailureAt: null,
-      consecutiveFailures: 0,
-      consecutiveSoftFailures: 0,
-      lastError: null,
-      ...record,
-    },
+    record: verifiedHost(hostname, record),
     conference: {
       _id: CLAIMING_CONFERENCE_ID,
       organization: { _ref: 'org-1' },
@@ -46,6 +29,31 @@ export function provenClaim(
       domains: [hostname],
       ...conference,
     },
+  }
+}
+
+/** The record of {@link provenClaim} on its own: DNS proof that resolved yesterday. */
+export function verifiedHost(
+  hostname: string,
+  overrides: Partial<DomainVerificationRecord> = {},
+): DomainVerificationRecord {
+  const yesterday = new Date(Date.now() - 86_400_000).toISOString()
+  return {
+    _id: `domainVerification.${hostname}`,
+    hostname,
+    conferenceId: CLAIMING_CONFERENCE_ID,
+    token: 'tok',
+    status: 'verified',
+    method: 'dns-txt',
+    graceUntil: null,
+    verifiedAt: yesterday,
+    lastSuccessAt: yesterday,
+    lastCheckedAt: yesterday,
+    firstFailureAt: null,
+    consecutiveFailures: 0,
+    consecutiveSoftFailures: 0,
+    lastError: null,
+    ...overrides,
   }
 }
 

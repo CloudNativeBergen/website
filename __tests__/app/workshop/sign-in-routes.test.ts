@@ -168,9 +168,7 @@ describe('sign-in on a proven tenant host', () => {
     expect(getDomainClaim).toHaveBeenCalledOnce()
   })
 
-  it('WORKOS_COOKIE_DOMAIN adds no Domain to the cookie', async () => {
-    vi.stubEnv('WORKOS_COOKIE_DOMAIN', 'example.org')
-
+  it('keeps the sign-in cookie scoped to its host', async () => {
     const response = await begin()
 
     expect(response.status).toBe(307)
