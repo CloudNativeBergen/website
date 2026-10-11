@@ -18,7 +18,7 @@ import { BADGE_GENERATOR_VERSION } from '@/lib/badge/version'
 import { listDomainVerificationViews } from '@/lib/domain-verification'
 import { isWorkshopsEnabledForConference } from '@/lib/features/workshops'
 import { workshopSignInLabel } from '@/lib/domain-verification/sign-in-labels'
-import { normalizeDomain } from '@/lib/conference/domains'
+import { domainServesHost } from '@/lib/conference/domains'
 import { authOrigin } from '@/lib/workshop/central-sign-in/decision'
 import { conferenceSenders } from '@/lib/email/from'
 import { describeSenderPolicy } from '@/lib/email/sender-policy'
@@ -163,13 +163,14 @@ function workshopAuthOriginCheck(
   }
   // The sign-in decision refuses the auth host as a tenant host
   // (`resolveTenantHost`): a conference served on it has no portal there.
-  if ((domains ?? []).some((d) => normalizeDomain(d) === configured.host)) {
+  // Served as the routing serves: by name, or by a wildcard that covers it.
+  if ((domains ?? []).some((d) => domainServesHost(d, configured.host))) {
     return {
       ...meta,
       status: 'error',
       value: configured.origin,
       detail:
-        'This is one of this conference’s own domains. The sign-in host serves no conference, so the workshop portal is not available on it. Use a host of its own.',
+        'This conference’s own domains serve this host. The sign-in host serves no conference, so the workshop portal is not available on it. Use a host no conference claims, by name or by wildcard.',
     }
   }
   return {

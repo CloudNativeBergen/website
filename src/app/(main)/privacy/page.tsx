@@ -9,7 +9,12 @@ import {
   resolveLegalConfig,
   resolveSubprocessorDisclosure,
 } from '@/lib/legal'
-import { SharedWorkshopLoginNotice, SubprocessorList } from '@/components/legal'
+import {
+  SharedWorkshopLoginNotice,
+  SubprocessorList,
+  WorkshopSessionCookieItem,
+  WorkshopSignInCookieNote,
+} from '@/components/legal'
 import { AnalyticsChoice } from '@/components/analytics'
 import { resolveMetadataBrand } from '@/lib/seo/brand'
 import { ErrorDisplay } from '@/components/admin'
@@ -423,31 +428,13 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                             <li>• Capacity and waitlist management</li>
                             {/*
                               The portal's session is the platform's own cookie
-                              (#1311): what it holds and how long it lasts come
-                              from `src/lib/workshop/central-sign-in/session.ts`,
-                              and `__tests__/app/legal-subprocessor-disclosure.test.tsx`
-                              pins this wording to that module. Gated like the
-                              identifier above: no WorkOS, no sign-in cookie.
+                              (#1311). Gated like the identifier above: this
+                              line names WorkOS.
                             */}
                             {usesWorkOS ? (
-                              <li>
-                                • A sign-in cookie on this site, kept for 7 days
-                                from the moment you sign in, holding your WorkOS
-                                User ID, email address, whether WorkOS reports
-                                that address as verified, your name, the WorkOS
-                                session ID, and the site and conference it was
-                                issued for. Short-lived cookies also exist on
-                                this site
-                                {signInHost ? (
-                                  <>
-                                    {' '}
-                                    and on the platform&apos;s sign-in host (
-                                    {signInHost})
-                                  </>
-                                ) : null}{' '}
-                                while you sign in or sign out; they expire
-                                within ten minutes.
-                              </li>
+                              <WorkshopSessionCookieItem
+                                signInHost={signInHost}
+                              />
                             ) : null}
                           </ul>
                         </div>
@@ -2478,26 +2465,11 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                         ? ' Our analytics are aggregated and, unless you accept the cookie above, anonymous.'
                         : ' Our analytics are cookie-less and aggregated.'}
                     </p>
-                    {usesWorkOS ? (
-                      <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-                        <strong>Workshop sign-in:</strong> When you sign in to
-                        the workshop portal, this site sets one sign-in cookie
-                        of its own, kept for 7 days, holding your WorkOS User
-                        ID, email address, whether it is verified, your name,
-                        the WorkOS session ID, and the site and conference it
-                        was issued for. While a sign-in or sign-out is in
-                        progress, short-lived cookies exist on this site
-                        {signInHost ? (
-                          <>
-                            {' '}
-                            and on the platform&apos;s sign-in host (
-                            {signInHost})
-                          </>
-                        ) : null}
-                        ; they expire within ten minutes, and sooner when the
-                        step completes.
-                      </p>
-                    ) : null}
+                    {/*
+                      NOT gated on `usesWorkOS`: the cookie can outlive a
+                      switch-off of workshops by up to its 7 days.
+                    */}
+                    <WorkshopSignInCookieNote signInHost={signInHost} />
                     <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
                       <strong>localStorage:</strong> We use your browser’s
                       localStorage to save personal bookmarks on your device.

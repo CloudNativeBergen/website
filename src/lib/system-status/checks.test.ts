@@ -127,7 +127,31 @@ describe('collectStaticChecks — workshop auth origin', () => {
 
     expect(check.status).toBe('error')
     expect(check.value).toBe('https://auth.example.org')
-    expect(check.detail).toContain('one of this conference’s own domains')
+    expect(check.detail).toContain(
+      'This conference’s own domains serve this host',
+    )
+  })
+
+  it('is an error when a wildcard the conference claims covers the origin', () => {
+    vi.stubEnv('WORKSHOP_AUTH_ORIGIN', 'https://auth.example.org')
+    // A wildcard over another zone does not serve it.
+    expect(
+      byId(
+        collectStaticChecks({ ...CONFERENCE, domains: ['*.example.com'] }),
+        'auth.workshopAuthOrigin',
+      ).status,
+    ).toBe('ok')
+
+    const check = byId(
+      collectStaticChecks({ ...CONFERENCE, domains: ['*.example.org'] }),
+      'auth.workshopAuthOrigin',
+    )
+
+    expect(check.status).toBe('error')
+    expect(check.value).toBe('https://auth.example.org')
+    expect(check.detail).toContain(
+      'This conference’s own domains serve this host',
+    )
   })
 
   it('reports unset as the normal setup in development', () => {

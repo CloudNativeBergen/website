@@ -352,15 +352,30 @@ describe('the workshop login is shared across conferences (#1299)', () => {
 })
 
 describe('the workshop portal’s own sign-in cookie (#1316)', () => {
-  /** The plain words /privacy uses for each field the session seals. */
-  const DISCLOSED: Record<keyof WorkshopSession, RegExp> = {
-    userId: /WorkOS User ID/,
-    email: /email address/,
-    emailVerified: /whether (?:WorkOS reports that address as|it is) verified/,
-    name: /your name/,
-    sessionId: /WorkOS session ID/,
-    host: /the site and conference it was issued for/,
-    conferenceId: /site and conference it was issued for/,
+  /**
+   * The plain words /privacy uses for each field the session seals, in each of
+   * the two places. The data list names WorkOS; the cookies section is shown
+   * to every tenant and names no processor.
+   */
+  const DISCLOSED: Record<string, Record<keyof WorkshopSession, RegExp>> = {
+    'the data list': {
+      userId: /your WorkOS User ID/,
+      email: /email address/,
+      emailVerified: /whether WorkOS reports that address as verified/,
+      name: /your name/,
+      sessionId: /the WorkOS session ID/,
+      host: /the site and conference it was issued for/,
+      conferenceId: /site and conference it was issued for/,
+    },
+    'the cookies section': {
+      userId: /the ID of your sign-in account/,
+      email: /your email address/,
+      emailVerified: /whether it is verified/,
+      name: /your name/,
+      sessionId: /the ID of the sign-in session/,
+      host: /the site and conference it was issued for/,
+      conferenceId: /site and conference it was issued for/,
+    },
   }
   const days = SESSION_TTL_SECONDS / 86_400
 
@@ -374,6 +389,20 @@ describe('the workshop portal’s own sign-in cookie (#1316)', () => {
     }
   }
 
+  /** A tenant whose organization has no workshop sign-in. */
+  function withoutWorkshops() {
+    world({
+      conference: conference({
+        organization: { _ref: OTHER_ORG, _type: 'reference' },
+      }),
+      organization: organization({
+        _id: OTHER_ORG,
+        name: 'Acme Events',
+        plan: 'community',
+      }),
+    })
+  }
+
   it('tells a workshop participant how long it lasts and every field it holds, in both places', async () => {
     world()
 
@@ -383,7 +412,7 @@ describe('the workshop portal’s own sign-in cookie (#1316)', () => {
       expect(passage, where).toContain(`kept for ${days} days`)
       for (const field of Object.keys(sessionSchema.shape)) {
         expect(passage, `${where} names ${field}`).toMatch(
-          DISCLOSED[field as keyof WorkshopSession],
+          DISCLOSED[where][field as keyof WorkshopSession],
         )
       }
     }
@@ -434,27 +463,28 @@ describe('the workshop portal’s own sign-in cookie (#1316)', () => {
     expect(found['the cookies section']).toContain('on this site; they expire')
   })
 
-  it('says nothing about it to a tenant that has no workshop sign-in', async () => {
-    world({
-      conference: conference({
-        organization: { _ref: OTHER_ORG, _type: 'reference' },
-      }),
-      organization: organization({
-        _id: OTHER_ORG,
-        name: 'Acme Events',
-        plan: 'community',
-      }),
-    })
+  it('describes the cookie to a tenant without workshop sign-in too, naming no processor', async () => {
+    // A session cookie can outlive a switch-off of workshops by its lifetime,
+    // so the cookies section does not follow the tenant's present entitlement.
+    withoutWorkshops()
 
     const html = await renderPrivacy()
 
     // The real policy rendered, with this tenant's own vendor on it.
     expect(html).toContain(CHECKIN)
-    expect(passages(html)).toEqual({
-      'the data list': undefined,
-      'the cookies section': undefined,
-    })
-    expect(html).not.toContain('sign-in cookie')
+    const found = passages(html)
+    expect(found['the cookies section']).toContain(`kept for ${days} days`)
+    for (const field of Object.keys(sessionSchema.shape)) {
+      expect(found['the cookies section'], field).toMatch(
+        DISCLOSED['the cookies section'][field as keyof WorkshopSession],
+      )
+    }
+    expect(found['the cookies section']).toContain(
+      'If workshop registration is switched off for the event while you are signed in, the cookie stays in your browser until it expires or you clear this site&#x27;s cookies.',
+    )
+    // What names WorkOS stays with the tenants that use it.
+    expect(found['the data list']).toBeUndefined()
+    expect(html).not.toContain('WorkOS')
   })
 })
 
