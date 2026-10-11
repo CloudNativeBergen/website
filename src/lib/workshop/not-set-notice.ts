@@ -85,11 +85,15 @@ export function ticketTypeNotSetNotifications(params: {
 }): OnceNotificationInput[] {
   const { conferenceId, organizerIds } = params
   const typeName = params.typeName.trim()
-  const opening = 'Set workshop access for “'
-  const title = `${opening}${truncateToGraphemeBoundary(
-    typeName,
-    TITLE_MAX - opening.length - 1,
-  )}”`
+  // The name comes first: the bell cuts a title off at the end of its row, and
+  // the name is the part an organizer cannot do without.
+  const ending = '” needs a workshop decision'
+  const room = TITLE_MAX - ending.length - 1
+  const title = `“${
+    typeName.length > room
+      ? `${truncateToGraphemeBoundary(typeName, room - 1)}…`
+      : typeName
+  }${ending}`
 
   return [...new Set(organizerIds)].filter(Boolean).map((organizerId) => ({
     id: noticeId(conferenceId, typeName, organizerId),
@@ -98,7 +102,7 @@ export function ticketTypeNotSetNotifications(params: {
     notificationType: 'workshop_ticket_type_not_set',
     title,
     message:
-      'Its holders can’t sign up for workshops until you choose whether it grants workshop access.',
+      'Choose whether this ticket type grants workshop access. Until then its holders can’t sign up.',
     link: '/admin/workshops',
   }))
 }

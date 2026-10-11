@@ -88,9 +88,9 @@ describe('handleTicketTypeNotSetNotification', () => {
         _type: 'notification',
         conference: { _type: 'reference', _ref: 'conf-a' },
         notificationType: 'workshop_ticket_type_not_set',
-        title: 'Set workshop access for “Early Bird”',
+        title: '“Early Bird” needs a workshop decision',
         message:
-          'Its holders can’t sign up for workshops until you choose whether it grants workshop access.',
+          'Choose whether this ticket type grants workshop access. Until then its holders can’t sign up.',
         link: '/admin/workshops',
       })
       // Weak, or the organizer could not be erased while it exists (#851).
@@ -155,10 +155,10 @@ describe('handleTicketTypeNotSetNotification', () => {
     await handleTicketTypeNotSetNotification(event('Late Bird'))
 
     expect(notifications().map((doc) => doc.title)).toEqual([
-      'Set workshop access for “Early Bird”',
-      'Set workshop access for “Early Bird”',
-      'Set workshop access for “Late Bird”',
-      'Set workshop access for “Late Bird”',
+      '“Early Bird” needs a workshop decision',
+      '“Early Bird” needs a workshop decision',
+      '“Late Bird” needs a workshop decision',
+      '“Late Bird” needs a workshop decision',
     ])
   })
 

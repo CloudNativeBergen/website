@@ -51,9 +51,9 @@ const ticketTypeNotSet = (
 ) => ({
   id,
   type: 'workshop_ticket_type_not_set',
-  title: `Set workshop access for “${typeName}”`,
+  title: `“${typeName}” needs a workshop decision`,
   message:
-    'Its holders can’t sign up for workshops until you choose whether it grants workshop access.',
+    'Choose whether this ticket type grants workshop access. Until then its holders can’t sign up.',
   link: '/admin/workshops',
   readAt,
   createdAt,
@@ -184,7 +184,7 @@ export const TicketTypeNotSet: Story = {
   // Room for the open panel, which hangs below and to the left of the bell.
   decorators: [
     (Story) => (
-      <div className="flex min-h-[26rem] w-[26rem] max-w-full justify-end">
+      <div className="flex min-h-[30rem] w-[26rem] max-w-full items-start justify-end">
         <Story />
       </div>
     ),
@@ -196,17 +196,19 @@ export const TicketTypeNotSet: Story = {
     )
 
     const row = await canvas.findByRole('link', {
-      name: /Set workshop access for “Early Bird”/,
+      name: /“Early Bird” needs a workshop decision/,
     })
     await expect(row).toHaveAttribute('href', '/admin/workshops')
     await expect(row).toHaveTextContent(
-      'Its holders can’t sign up for workshops until you choose whether it grants workshop access.',
+      'Choose whether this ticket type grants workshop access. Until then its holders can’t sign up.',
     )
   },
 }
 
 export const TicketTypeNotSetDark: Story = {
   ...TicketTypeNotSet,
+  // Named again so the test runner sees it: it reads `play` off the source.
+  play: TicketTypeNotSet.play,
   parameters: {
     dark: true,
     msw: { handlers: makeHandlers(2, ticketTypeNotSetItems) },

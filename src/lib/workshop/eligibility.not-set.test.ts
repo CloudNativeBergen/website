@@ -167,14 +167,14 @@ describe('a refusal for a not-set type', () => {
         recipient: 'sp-anna',
         conference: 'conf-a',
         type: 'workshop_ticket_type_not_set',
-        title: 'Set workshop access for “Early Bird”',
+        title: '“Early Bird” needs a workshop decision',
         link: '/admin/workshops',
       },
       {
         recipient: 'sp-arne',
         conference: 'conf-a',
         type: 'workshop_ticket_type_not_set',
-        title: 'Set workshop access for “Early Bird”',
+        title: '“Early Bird” needs a workshop decision',
         link: '/admin/workshops',
       },
     ])
@@ -212,10 +212,10 @@ describe('a refusal for a not-set type', () => {
     await afterResponse()
 
     expect(notifications().map((doc) => doc.title)).toEqual([
-      'Set workshop access for “Early Bird”',
-      'Set workshop access for “Early Bird”',
-      'Set workshop access for “Late Bird”',
-      'Set workshop access for “Late Bird”',
+      '“Early Bird” needs a workshop decision',
+      '“Early Bird” needs a workshop decision',
+      '“Late Bird” needs a workshop decision',
+      '“Late Bird” needs a workshop decision',
     ])
   })
 

@@ -98,9 +98,9 @@ describe('ticketTypeNotSetNotifications', () => {
         recipientId: 'org-1',
         conferenceId: 'conf-a',
         notificationType: 'workshop_ticket_type_not_set',
-        title: 'Set workshop access for “Early Bird”',
+        title: '“Early Bird” needs a workshop decision',
         message:
-          'Its holders can’t sign up for workshops until you choose whether it grants workshop access.',
+          'Choose whether this ticket type grants workshop access. Until then its holders can’t sign up.',
         link: '/admin/workshops',
       },
       {
@@ -108,9 +108,9 @@ describe('ticketTypeNotSetNotifications', () => {
         recipientId: 'org-2',
         conferenceId: 'conf-a',
         notificationType: 'workshop_ticket_type_not_set',
-        title: 'Set workshop access for “Early Bird”',
+        title: '“Early Bird” needs a workshop decision',
         message:
-          'Its holders can’t sign up for workshops until you choose whether it grants workshop access.',
+          'Choose whether this ticket type grants workshop access. Until then its holders can’t sign up.',
         link: '/admin/workshops',
       },
     ])
@@ -155,7 +155,7 @@ describe('ticketTypeNotSetNotifications', () => {
 
     // `notification.title` is `Rule.max(200)` in the schema.
     expect(item.title.length).toBeLessThanOrEqual(200)
-    expect(item.title.startsWith('Set workshop access for “xxx')).toBe(true)
+    expect(item.title).toBe(`“${'x'.repeat(171)}…” needs a workshop decision`)
   })
 
   it('drops a duplicated or empty organizer id', () => {
