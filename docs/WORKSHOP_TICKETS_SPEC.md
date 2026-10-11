@@ -102,7 +102,8 @@ press sends cannot be computed two ways.
   people by WorkOS id across confirmed and waitlisted sign-ups; the new numbers count people by
   email.
 - **Flagged opens a list**: name, email and workshops, with the remove action the page already
-  has (the "Delete participant" button and its "Delete signup" confirmation). People an organizer added by hand are in it like anyone else; a
+  has (the "Delete participant" button and its "Delete signup" confirmation) and "Move to
+  waitlist" (§6). People an organizer added by hand are in it like anyone else; a
   sign-up does not record how it was made.
 - **Nothing is cancelled automatically.** A sign-up whose owner no longer holds a workshop ticket
   (the type was unmarked, the ticket refunded or changed) stays, and its owner is flagged.
@@ -140,9 +141,11 @@ earliest waitlisted sign-ups and emails them, so a person who backed out can be 
 
 - **An attendee's cancel deletes the sign-up.** The ownership and tenancy checks before it stay.
 - No `cancelled` status is added.
-- `workshop.admin.batchCancelSignups` also sets `waitlist`. No component calls it, so organizers
-  have no such action today and nothing is relabelled. This work leaves the procedure as it is
-  (§9).
+- **Organizers get "Move to waitlist".** `workshop.admin.batchCancelSignups` also sets `waitlist`,
+  and no component calls it, so organizers have no such action today. The sign-up list on
+  `/admin/workshops` offers "Move to Confirmed" on a waitlisted sign-up; it gains "Move to
+  waitlist" on a confirmed one, through that procedure. The procedure keeps its behaviour. Nothing
+  an organizer sees calls it cancel.
 
 ## 7. The reminder
 
@@ -191,8 +194,8 @@ A new notification tells organizers that a ticket type has no decision and links
 - **Sign-ups cancelled before §6 ships** stay on the waitlist; they cannot be told from people
   waiting, and a capacity increase can still confirm them.
 - **`workshop.admin.batchCancelSignups` keeps a name that says cancel and a behaviour that
-  waitlists.** No production code in this repository calls it; two tenancy tests exercise it. Whether it is removed or renamed is open; a
-  caller outside the repository was not ruled out.
+  waitlists.** Only the label an organizer sees changes; a caller outside the repository was not
+  ruled out, so the procedure is not renamed.
 - **Organizer-added sign-ups are flagged** when their email holds no workshop ticket. This is by
   decision: the flagged number does not separate deliberate additions.
 - **A rename at the provider** still locks holders out until an organizer marks the new name. §3
@@ -206,7 +209,7 @@ A new notification tells organizers that a ticket type has no decision and links
 
 ## 10. Slices
 
-1. #1331: an attendee's cancel deletes the sign-up (§6).
+1. #1331: an attendee's cancel deletes the sign-up; organizers get "Move to waitlist" (§6).
 2. #1332: the list under `/admin/workshops`, the badge and the banner, and the rule's answer for an entry
    with no workshop answer (§2, §3).
 3. #1333: the statistics, the flagged list and the one definition (§4, §5).
