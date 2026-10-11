@@ -51,6 +51,14 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
+    // CI runs in UTC. Pinned here so a run on a developer's machine judges
+    // the same thing: a test of a 14-day window failed only in zones where
+    // that window crossed a daylight-saving change.
+    env: { TZ: 'UTC' },
+    // The default 5 s is a cliff for this suite under coverage on a shared
+    // runner (a tree-scanning test with no timeout of its own went over it).
+    // A hang still fails; tests that need longer say so themselves.
+    testTimeout: 15_000,
     include: ['**/__tests__/**/*.test.ts?(x)', '**/?(*.)+(spec|test).ts?(x)'],
     exclude: [
       'node_modules',

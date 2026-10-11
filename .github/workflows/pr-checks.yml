@@ -369,8 +369,10 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # `next build` downloads seven Google Fonts, and one failed download
+      # fails the build. The wrapper builds again for that failure only.
       - name: Build application
-        run: pnpm run build
+        run: pnpm tsx scripts/ci-build.ts
         env:
           # CI environment variables (dummy values for build verification).
           # These MUST match the Auth.js v5 names the code actually reads
@@ -437,8 +439,10 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # `next build` downloads seven Google Fonts, and one failed download
+      # fails the build. The wrapper builds again for that failure only.
       - name: Build application
-        run: pnpm run build
+        run: pnpm tsx scripts/ci-build.ts
         env:
           # Same placeholder env as the Build job — a `next build` must compile
           # with these dummy Auth.js v5 secrets (no real backend is contacted).
