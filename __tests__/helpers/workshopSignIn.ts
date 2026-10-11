@@ -86,3 +86,24 @@ export function isPortalRedirect(location: string | null): boolean {
   const url = new URL(location)
   return url.pathname === '/workshop' && url.search === '' && url.hash === ''
 }
+
+/** An unsigned JWT-shaped access token carrying the claims the SDK reads. */
+export function accessToken(claims: Record<string, unknown>): string {
+  const part = (value: unknown) =>
+    Buffer.from(JSON.stringify(value)).toString('base64url')
+  return `${part({ alg: 'RS256', typ: 'JWT' })}.${part(claims)}.signature`
+}
+
+/** Where a thrown `redirect()` points, read the way Next reads it. */
+export async function redirectTarget(
+  run: () => Promise<unknown>,
+): Promise<string> {
+  try {
+    await run()
+  } catch (error) {
+    const digest = (error as { digest?: string }).digest ?? ''
+    if (digest.startsWith('NEXT_REDIRECT')) return digest.split(';')[2]
+    throw error
+  }
+  throw new Error('expected a redirect')
+}

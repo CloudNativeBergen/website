@@ -9,7 +9,7 @@ import {
   resolveLegalConfig,
   resolveSubprocessorDisclosure,
 } from '@/lib/legal'
-import { SubprocessorList } from '@/components/legal'
+import { SharedWorkshopLoginNotice, SubprocessorList } from '@/components/legal'
 import { AnalyticsChoice } from '@/components/analytics'
 import { resolveMetadataBrand } from '@/lib/seo/brand'
 import { ErrorDisplay } from '@/components/admin'
@@ -117,7 +117,7 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
     )
   }
 
-  const lastUpdated = 'October 2, 2026'
+  const lastUpdated = 'October 10, 2026'
   const legal = await resolveLegalConfig(conference)
   const contactEmail = legal.contactEmail
   // EMPTY when no legal entity could be resolved. `legal.controllerResolved`
@@ -421,6 +421,12 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                           </ul>
                         </div>
                       </div>
+                      {/*
+                        The workshop login lives in ONE WorkOS environment for
+                        every tenant (#1293), so it is not this event's alone.
+                        Gated like the identifier above.
+                      */}
+                      {usesWorkOS ? <SharedWorkshopLoginNotice /> : null}
                     </div>
 
                     {/* Communication Data */}
@@ -2087,11 +2093,17 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                                 WorkOS Authentication Data
                                 <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                                   (User ID, email, name, authentication
-                                  sessions)
+                                  sessions; one login for every conference on
+                                  this platform)
                                 </div>
                               </td>
                               <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
                                 Not deleted automatically
+                                <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                  Removing your registrations at one conference
+                                  does not delete this login or your
+                                  registrations at other conferences
+                                </div>
                               </td>
                               <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
                                 <span className="font-medium text-blue-600 dark:text-blue-400">
