@@ -1,7 +1,6 @@
 import 'server-only'
 import { NextResponse, type NextRequest } from 'next/server'
 import { z } from 'zod'
-import { normalizeDomain } from '@/lib/conference/domains'
 import {
   WORKSHOP_AUTH_SIGNED_OUT_PATH,
   WORKSHOP_AUTH_SIGN_OUT_PATH,
@@ -15,15 +14,15 @@ import {
   resolveAuthHostDestination,
 } from './decision'
 import { seal, unseal } from './seal'
-import { sessionSchema } from './session'
+import { sessionOfThisHost } from './session'
 import { workshopWorkOS } from './workos'
 
 /**
  * SIGN-OUT of the workshop portal (#1315, spec §7): the tenant host ends its
  * own session, the auth host ends the WorkOS login, and the browser comes back
- * to the tenant host's front page. WorkOS is told one session ID and one fixed
- * return address; which tenant host to go back to waits in a cookie on the
- * auth host, so nothing about the tenant passes through WorkOS.
+ * to the tenant host's front page. WorkOS is sent one session ID and one fixed
+ * return address, and no referrer; which tenant host to go back to waits in a
+ * cookie on the auth host.
  */
 
 /** How long the browser has to carry a sign-out request to the auth host. */
@@ -47,7 +46,7 @@ const signOutCookie = () => hostCookie('workshop-sign-out')
 
 /**
  * WHERE "SIGN OUT" ON A TENANT HOST SENDS THE BROWSER, for the session cookie
- * it arrived with (`sealed`). The caller clears that cookie either way.
+ * it arrived with (`sealed`). Clearing that cookie is the caller's.
  *
  * With a session of this host: the auth host's sign-out route, with ONE sealed
  * request naming this host and the WorkOS session, valid for a minute. With
@@ -60,9 +59,8 @@ export async function workshopSignOutTarget(
   headers: { get(name: string): string | null },
   sealed: string | null | undefined,
 ): Promise<string> {
-  const session = await unseal('session', sealed, sessionSchema)
-  const requestHost = normalizeDomain(headers.get('host') ?? '')
-  if (!session || session.host !== requestHost) return '/'
+  const session = await sessionOfThisHost(headers, sealed)
+  if (!session) return '/'
   const configured = configuredAuthOrigin()
   if (configured === 'invalid') return '/'
 
@@ -81,6 +79,11 @@ export async function workshopSignOutTarget(
 /**
  * END THE WORKOS LOGIN, ON THE AUTH HOST, for the tenant host that asked.
  *
+ * A BROWSER'S NAVIGATION ONLY. Where a host is its own auth host the sign-out
+ * action redirects within one host, and Next then fetches the target itself
+ * (`RSC: 1`) and follows where it leads, before the browser comes. That fetch
+ * gets a 404 here and ends nothing.
+ *
  * WITHOUT A REQUEST A TENANT HOST SEALED, NOTHING IS READ and WorkOS is not
  * reached. THEN THE DECISION (`resolveAuthHostDestination`): the request is on
  * the auth host and the host it names may be returned to. A refusal is a 404.
@@ -92,20 +95,20 @@ export async function workshopSignOutTarget(
 export async function startCentralSignOut(
   request: NextRequest,
 ): Promise<NextResponse> {
+  if (request.headers.has('rsc')) return notFound()
+
+  const refused = (reason: 'no-request' | 'host-refused') => {
+    logRefusal('sign-out', reason)
+    return notFound()
+  }
   const sent = await unseal(
     'sign-out-request',
     request.nextUrl.searchParams.get('request'),
     signOutRequestSchema,
   )
-  if (!sent) {
-    logRefusal('sign-out', 'no-request')
-    return notFound()
-  }
+  if (!sent) return refused('no-request')
   const signOut = await resolveAuthHostDestination(request.headers, sent.host)
-  if (!signOut) {
-    logRefusal('sign-out', 'host-refused')
-    return notFound()
-  }
+  if (!signOut) return refused('host-refused')
   const { authOrigin, destination } = signOut
 
   const response = NextResponse.redirect(
@@ -113,7 +116,13 @@ export async function startCentralSignOut(
       sessionId: sent.sessionId,
       returnTo: `${authOrigin}${WORKSHOP_AUTH_SIGNED_OUT_PATH}`,
     }),
-    { headers: { 'Cache-Control': 'no-store' } },
+    // No referrer: WorkOS is not told which tenant host the browser came from.
+    {
+      headers: {
+        'Cache-Control': 'no-store',
+        'Referrer-Policy': 'no-referrer',
+      },
+    },
   )
   const cookie = signOutCookie()
   response.cookies.set(

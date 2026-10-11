@@ -19,10 +19,7 @@ import {
 export async function signOutOfWorkshop(): Promise<void> {
   const store = await cookies()
   const cookie = sessionCookie()
-  const target = await workshopSignOutTarget(
-    await headers(),
-    store.get(cookie.name)?.value,
-  )
+  const sealed = store.get(cookie.name)?.value
   clearCookie(store, cookie)
-  redirect(target)
+  redirect(await workshopSignOutTarget(await headers(), sealed))
 }

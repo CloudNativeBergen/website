@@ -320,7 +320,27 @@ describe('the auth host: ending the WorkOS login', () => {
       return_to: RETURN_ADDRESS,
     })
     expect(response.headers.get('cache-control')).toBe('no-store')
+    expect(response.headers.get('referrer-policy')).toBe('no-referrer')
     expect(console.warn).not.toHaveBeenCalled()
+  })
+
+  it('answers 404 to Next’s own fetch of a same-host redirect, and ends nothing', async () => {
+    const target = await signedInThenOut()
+    // The browser's navigation to the same address is carried on.
+    expect((await signOutRoute(get(target, AUTH))).status).toBe(307)
+    vi.clearAllMocks()
+
+    const response = await signOutRoute(
+      new NextRequest(target, {
+        headers: new Headers({ host: AUTH, RSC: '1' }),
+      }),
+    )
+
+    expect(response.status).toBe(404)
+    expect(response.headers.get('location')).toBeNull()
+    expect(response.headers.getSetCookie()).toEqual([])
+    expect(buildLogoutUrl).not.toHaveBeenCalled()
+    expect(getDomainClaim).not.toHaveBeenCalled()
   })
 
   it('keeps the host in one host-only cookie with the __Host- prefix, for five minutes', async () => {
@@ -448,6 +468,19 @@ describe('the auth host: ending the WorkOS login', () => {
     expectNotSignedOutAtWorkOS(response, 'host-refused')
   })
 
+  it('refuses a lookalike even when the read answers with the proven host’s record', async () => {
+    getDomainClaim.mockResolvedValue(provenClaim(TENANT))
+
+    const response = await arriveToSignOut({
+      request: await resealed({ host: `evil-${TENANT}` }),
+    })
+
+    expectNotSignedOutAtWorkOS(response, 'host-refused')
+    expect(getDomainClaim).toHaveBeenCalledExactlyOnceWith(
+      `domainVerification.evil-${TENANT}`,
+    )
+  })
+
   it.each<[string, DomainClaim | null]>([
     ['has no record', null],
     [
@@ -479,10 +512,18 @@ describe('the auth host: ending the WorkOS login', () => {
 
   it('refuses when the record cannot be read', async () => {
     const target = await signedInThenOut()
-    getDomainClaim.mockRejectedValue(new Error('sanity is down'))
+    const down = new Error('sanity is down')
+    getDomainClaim.mockRejectedValue(down)
 
     const response = await signOutRoute(get(target, AUTH))
 
+    expect(console.warn).toHaveBeenCalledExactlyOnceWith(
+      '[workshop] sign-out refused: host-refused',
+    )
+    expect(console.error).toHaveBeenCalledExactlyOnceWith(
+      '[domain-verification] destination read failed; refusing the host',
+      down,
+    )
     expect(response.status).toBe(404)
     expect(response.headers.getSetCookie()).toEqual([])
     expect(buildLogoutUrl).not.toHaveBeenCalled()
@@ -494,7 +535,14 @@ describe('the auth host: ending the WorkOS login', () => {
 
     const response = await signOutRoute(get(target, AUTH))
 
+    expect(console.warn).toHaveBeenCalledExactlyOnceWith(
+      '[workshop] sign-out refused: host-refused',
+    )
+    expect(console.error).toHaveBeenCalledExactlyOnceWith(
+      '[workshop] WORKSHOP_AUTH_ORIGIN is not a bare https origin of a hostname; workshop sign-in is refused on every host.',
+    )
     expect(response.status).toBe(404)
+    expect(response.headers.getSetCookie()).toEqual([])
     expect(buildLogoutUrl).not.toHaveBeenCalled()
     expect(getDomainClaim).not.toHaveBeenCalled()
   })
@@ -668,6 +716,17 @@ describe('the auth host: the return from WorkOS', () => {
     const response = await comeBack(await returnCookie(host))
 
     await expectPlainPage(response, 'host-refused')
+  })
+
+  it('shows the plain page for a lookalike even when the read answers with the proven host’s record', async () => {
+    getDomainClaim.mockResolvedValue(provenClaim(TENANT))
+
+    const response = await comeBack(await returnCookie(`evil-${TENANT}`))
+
+    await expectPlainPage(response, 'host-refused')
+    expect(getDomainClaim).toHaveBeenCalledExactlyOnceWith(
+      `domainVerification.evil-${TENANT}`,
+    )
   })
 
   it.each<[string, DomainClaim | null]>([

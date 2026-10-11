@@ -40,7 +40,8 @@ export function logRefusal(
   ...[step, reason]:
     | [step: 'callback', reason: CallbackRefusal]
     | [step: 'redeem', reason: RedeemRefusal]
-    | [step: 'sign-out' | 'signed-out', reason: SignOutRefusal]
+    | [step: 'sign-out', reason: 'no-request' | 'host-refused']
+    | [step: 'signed-out', reason: 'no-cookie' | 'host-refused']
 ): void {
   console.warn(`[workshop] ${step} refused: ${reason}`)
 }
@@ -57,9 +58,6 @@ export type RedeemRefusal =
   | 'host-refused'
   | 'conference-changed'
   | 'no-workshops'
-
-/** Why a sign-out is not carried on, or returns to no host. */
-export type SignOutRefusal = 'no-request' | 'no-cookie' | 'host-refused'
 
 /**
  * To the portal page, by a path nothing in the request chooses. `suffix` is a

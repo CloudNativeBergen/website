@@ -106,7 +106,8 @@ function fromHere() {
 async function pressSignOut(): Promise<string> {
   const cookie = await signIn(TENANT, AUTH)
   beginRequest(new Headers({ host: TENANT }))
-  presentCookie(...(cookie.split('=') as [string, string]))
+  const at = cookie.indexOf('=')
+  presentCookie(cookie.slice(0, at), cookie.slice(at + 1))
   fromHere()
   const { url } = await signOutOfWorkshop().then(
     () => ({ url: 'no redirect' }),
