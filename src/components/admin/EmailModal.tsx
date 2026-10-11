@@ -115,6 +115,23 @@ export function EmailModal({
   const lastAutoSaveRef = useRef<{ subject: string; message: string } | null>(
     null,
   )
+  const enableAutoSaveTimerRef =
+    useRef<ReturnType<typeof setTimeout>>(undefined)
+
+  /**
+   * Turn auto-save on once the fields have settled. ONE pending timer at a
+   * time, cleared when the modal unmounts: left running it sets state on a
+   * component that is gone.
+   */
+  const enableAutoSaveAfter = useCallback((ms: number) => {
+    clearTimeout(enableAutoSaveTimerRef.current)
+    enableAutoSaveTimerRef.current = setTimeout(() => {
+      isInitializingRef.current = false
+      setAutoSaveEnabled(true)
+    }, ms)
+  }, [])
+
+  useEffect(() => () => clearTimeout(enableAutoSaveTimerRef.current), [])
 
   const storage = useEmailModalStorage({
     storageKey: storageKey || 'email-modal-default',
@@ -175,12 +192,10 @@ export function EmailModal({
         initializedKeysRef.current.add(currentStorageKey)
       }
 
-      setTimeout(() => {
-        isInitializingRef.current = false
-        setAutoSaveEnabled(true)
-      }, 500)
+      enableAutoSaveAfter(500)
     }
   }, [
+    enableAutoSaveAfter,
     isOpen,
     storage.isLoading,
     storage.hasStoredData,
@@ -339,10 +354,7 @@ export function EmailModal({
         title: 'Draft cleared',
         message: 'Saved draft has been removed.',
       })
-      setTimeout(() => {
-        isInitializingRef.current = false
-        setAutoSaveEnabled(true)
-      }, 100)
+      enableAutoSaveAfter(100)
     }
   }
 

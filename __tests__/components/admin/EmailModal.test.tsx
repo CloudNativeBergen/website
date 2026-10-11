@@ -109,3 +109,23 @@ describe('EmailModal with an empty body', () => {
     expect(button).toBeDisabled()
   })
 })
+
+describe('EmailModal leaves nothing running when it goes away', () => {
+  it('clears the timer that turns auto-save on, if it is still pending at unmount', async () => {
+    // It used to fire half a second later, on a component that was gone; after
+    // the test environment was torn down it failed the whole run.
+    const set = vi.spyOn(globalThis, 'setTimeout')
+    const clear = vi.spyOn(globalThis, 'clearTimeout')
+    renderModal()
+    await screen.findByRole('button', { name: /Send reminder/ })
+    const armed = set.mock.calls.findIndex(([, delay]) => delay === 500)
+    expect(armed, 'the modal armed its 500 ms timer').toBeGreaterThanOrEqual(0)
+    const timer = set.mock.results[armed].value
+
+    cleanup()
+
+    expect(clear).toHaveBeenCalledWith(timer)
+    set.mockRestore()
+    clear.mockRestore()
+  })
+})
