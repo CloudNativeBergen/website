@@ -57,18 +57,34 @@ function build(): Promise<{ exitCode: number; output: string }> {
   })
 }
 
-async function main(): Promise<void> {
+/**
+ * Build until an attempt settles it. Answers the exit code to end with: 0, or
+ * the failed build's own. `build` and `wait` are passed in so the loop can be
+ * run without a build and without waiting.
+ */
+export async function runBuilds(
+  build: () => Promise<{ exitCode: number; output: string }>,
+  wait: (ms: number) => Promise<void>,
+): Promise<number> {
   for (let attempt = 1; ; attempt++) {
     const { exitCode, output } = await build()
     const next = afterAttempt(attempt, exitCode, output)
-    if (next === 'done') return
-    if (next === 'fail') process.exit(exitCode)
+    if (next === 'done') return 0
+    if (next === 'fail') return exitCode
     // `::warning::` shows on the run's summary, so a retried build is visible.
     console.log(
       `::warning::Build attempt ${attempt} of ${MAX_ATTEMPTS} could not fetch a Google Font; building again.`,
     )
-    await new Promise((wait) => setTimeout(wait, attempt * 15_000))
+    await wait(attempt * 15_000)
   }
+}
+
+async function main(): Promise<void> {
+  // `exitCode`, not `exit()`: the build's output is still draining.
+  process.exitCode = await runBuilds(
+    build,
+    (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+  )
 }
 
 if (
