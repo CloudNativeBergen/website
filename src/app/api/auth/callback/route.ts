@@ -1,10 +1,17 @@
 import { handleAuth } from '@workos-inc/authkit-nextjs'
 import { NextResponse, type NextRequest } from 'next/server'
+import { finishCentralSignIn } from '@/lib/workshop/central-sign-in'
 import { resolveWorkshopSignInForRequest } from '@/lib/workshop/sign-in-request'
 
 /**
- * Where WorkOS sends the workshop attendee back with an authorization code
- * (#1296). Every verified host has this same path as its own redirect URI.
+ * Where WorkOS sends the workshop attendee back with an authorization code.
+ *
+ * TWO SIGN-INS SHARE THIS PATH while the central sign-in is being built
+ * (#1311). A `state` shaped like the auth host's seal is finished, or
+ * refused, by `finishCentralSignIn`: it keeps no session and hands off to the
+ * tenant host (#1313). Any other `state` is the per-host sign-in below
+ * (#1296), where every verified host has this path as its own redirect URI.
+ * The tenant-host slice (#1314) removes it.
  *
  * THE DECISION COMES FIRST (`resolveWorkshopSignInForRequest`): the host is on
  * the allowlist, exactly as in the proxy, AND its tenant has workshops, exactly
@@ -21,6 +28,9 @@ import { resolveWorkshopSignInForRequest } from '@/lib/workshop/sign-in-request'
  * fallback path is configured here.
  */
 export async function GET(request: NextRequest) {
+  const central = await finishCentralSignIn(request)
+  if (central) return central
+
   const signIn = await resolveWorkshopSignInForRequest(request.headers)
   if (!signIn) {
     return new NextResponse('Not Found', { status: 404 })

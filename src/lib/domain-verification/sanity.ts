@@ -14,6 +14,8 @@ import { domainVerificationId, generateVerificationToken } from './challenge'
 import { isPlatformZoneHost } from './platform'
 import { GRANDFATHER_GRACE_DAYS } from './policy'
 import type {
+  ClaimingConference,
+  DomainClaim,
   DomainVerificationMethod,
   DomainVerificationPatch,
   DomainVerificationRecord,
@@ -360,6 +362,26 @@ const REDIRECT_URI_FIELDS = {
   id: 'redirectUriId',
   error: 'redirectUriError',
 } as const satisfies Record<keyof RedirectUriState, string>
+
+/**
+ * One host's record TOGETHER WITH the conference it points at, in one read:
+ * what the destination check (`./destination`) decides from. Whatever its
+ * standing; the check applies the policy.
+ */
+export async function getDomainClaim(id: string): Promise<DomainClaim | null> {
+  const raw = await clientReadUncached.fetch<
+    (RawRecord & { conference?: ClaimingConference | null }) | null
+  >(
+    // groq-global: one record by deterministic id, for a host that was shape-checked and is passed as a parameter (hostnames are a global namespace); the conference is the one that record points at.
+    `*[_type == "domainVerification" && _id == $id][0] {${FIELDS},
+      "conference": conference->{ _id, organization, ticketingProvider, domains }
+    }`,
+    { id },
+  )
+  if (!raw) return null
+  const { conference, ...record } = raw
+  return { record: hydrate(record), conference: conference ?? null }
+}
 
 type RawSyncRow = RawRecord & {
   _rev: string
