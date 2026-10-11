@@ -328,9 +328,7 @@ describe('workshop.announcementsByWorkshop — the portal’s one read', () => {
 
     expect(result).toEqual({ success: true, data: BY_WORKSHOP })
     // The conference comes from the request's domain; the caller names none.
-    expect(getAnnouncementsByWorkshopMock.mock.calls).toEqual([
-      [CONFERENCE_ID, 50],
-    ])
+    expect(getAnnouncementsByWorkshopMock.mock.calls).toEqual([[CONFERENCE_ID]])
     expect(getAnnouncementsMock).not.toHaveBeenCalled()
   })
 
@@ -343,9 +341,7 @@ describe('workshop.announcementsByWorkshop — the portal’s one read', () => {
       ) => Promise<unknown>
     )({ conferenceId: 'conf-other', workshopId: 'ws-9' })
 
-    expect(getAnnouncementsByWorkshopMock.mock.calls).toEqual([
-      [CONFERENCE_ID, 50],
-    ])
+    expect(getAnnouncementsByWorkshopMock.mock.calls).toEqual([[CONFERENCE_ID]])
   })
 
   it('reads nothing when the request resolves to no conference', async () => {

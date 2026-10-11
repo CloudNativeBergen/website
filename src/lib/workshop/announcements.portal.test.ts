@@ -58,8 +58,13 @@ function announcement(
   }
 }
 
-function workshop(id: string, conference = 'conf-1', status = 'confirmed') {
-  return { _id: id, _type: 'talk', status, conference: ref(conference) }
+function workshop(
+  id: string,
+  conference = 'conf-1',
+  status = 'confirmed',
+  format = 'workshop_120',
+) {
+  return { _id: id, _type: 'talk', status, format, conference: ref(conference) }
 }
 
 beforeEach(() => {
@@ -69,6 +74,8 @@ beforeEach(() => {
     workshop('ws-1'),
     workshop('ws-2'),
     workshop('ws-9', 'conf-2'),
+    // A confirmed workshop with nothing to say: it gets no entry at all.
+    workshop('ws-quiet'),
     announcement('a1', 'ws-1', '2026-10-01T10:00:00Z'),
     announcement('a2', 'ws-1', '2026-10-03T10:00:00Z'),
     announcement('a3', 'ws-1', '2026-10-02T10:00:00Z'),
@@ -88,7 +95,7 @@ beforeEach(() => {
 
 describe('getAnnouncementsByWorkshop', () => {
   it('groups the conference’s announcements by workshop, newest first, with the author’s name', async () => {
-    expect(await getAnnouncementsByWorkshop('conf-1', 50)).toEqual({
+    expect(await getAnnouncementsByWorkshop('conf-1')).toEqual({
       'ws-1': [
         {
           _id: 'a2',
@@ -121,38 +128,71 @@ describe('getAnnouncementsByWorkshop', () => {
   })
 
   it('reads once, whatever the number of workshops, and through the CDN host', async () => {
-    await getAnnouncementsByWorkshop('conf-1', 50)
+    await getAnnouncementsByWorkshop('conf-1')
 
     expect(h.reads.map((read) => read.client)).toEqual(['cdn'])
   })
 
   it('returns nothing of another conference, not even for a workshop id they share', async () => {
-    const mine = await getAnnouncementsByWorkshop('conf-1', 50)
+    const mine = await getAnnouncementsByWorkshop('conf-1')
     const ids = Object.values(mine).flatMap((list) => list.map((a) => a._id))
 
     expect(ids.sort()).toEqual(['a1', 'a2', 'a3', 'b1'])
-    expect(await getAnnouncementsByWorkshop('conf-2', 50)).toEqual({
+    // conf-2's own workshop, and NOT its announcement that names a workshop
+    // of conf-1: that workshop is not conf-2's.
+    expect(await getAnnouncementsByWorkshop('conf-2')).toEqual({
       'ws-9': [expect.objectContaining({ _id: 'x1' })],
-      'ws-1': [expect.objectContaining({ _id: 'x2' })],
     })
   })
 
-  it('keeps the newest `limit` of each workshop', async () => {
-    expect(await getAnnouncementsByWorkshop('conf-1', 2)).toEqual({
-      'ws-1': [
-        expect.objectContaining({ _id: 'a2' }),
-        expect.objectContaining({ _id: 'a3' }),
-      ],
-      'ws-2': [expect.objectContaining({ _id: 'b1' })],
-    })
+  it('keeps each workshop’s own newest 50, however many another workshop has', async () => {
+    h.dataset.push(workshop('ws-busy'))
+    for (let i = 0; i < 60; i++) {
+      h.dataset.push(
+        announcement(
+          `busy-${String(i).padStart(2, '0')}`,
+          'ws-busy',
+          new Date(Date.UTC(2026, 10, 1, 0, 0, i)).toISOString(),
+        ),
+      )
+    }
+
+    const mine = await getAnnouncementsByWorkshop('conf-1')
+
+    // The busy one: its 50 newest, newest first; the 10 oldest are left out.
+    expect(mine['ws-busy'].map((a) => a._id)).toEqual(
+      Array.from({ length: 50 }, (_, i) => `busy-${59 - i}`),
+    )
+    // The others, all older than every one of those, are untouched.
+    expect(mine['ws-1'].map((a) => a._id)).toEqual(['a2', 'a3', 'a1'])
+    expect(mine['ws-2'].map((a) => a._id)).toEqual(['b1'])
+  })
+
+  it('leaves out an announcement of this conference that names another conference’s workshop', async () => {
+    h.dataset.push(announcement('stray', 'ws-9', '2026-10-06T10:00:00Z'))
+
+    const mine = await getAnnouncementsByWorkshop('conf-1')
+
+    expect(Object.keys(mine).sort()).toEqual(['ws-1', 'ws-2'])
+  })
+
+  it('leaves out a confirmed talk that is not a workshop', async () => {
+    h.dataset.push(
+      workshop('talk-1', 'conf-1', 'confirmed', 'presentation_25'),
+      announcement('t1', 'talk-1', '2026-10-06T10:00:00Z'),
+    )
+
+    const mine = await getAnnouncementsByWorkshop('conf-1')
+
+    expect(Object.keys(mine).sort()).toEqual(['ws-1', 'ws-2'])
   })
 
   it('is empty for a conference with no announcements', async () => {
-    expect(await getAnnouncementsByWorkshop('conf-none', 50)).toEqual({})
+    expect(await getAnnouncementsByWorkshop('conf-none')).toEqual({})
   })
 
   it('refuses to read without a conference: never every tenant’s', async () => {
-    await expect(getAnnouncementsByWorkshop('', 50)).rejects.toThrow(
+    await expect(getAnnouncementsByWorkshop('')).rejects.toThrow(
       /empty tenant scope/,
     )
     expect(h.reads).toEqual([])
@@ -166,30 +206,11 @@ describe('getAnnouncementsByWorkshop', () => {
         announcement('c1', 'ws-3', '2026-10-06T10:00:00Z'),
       )
 
-      const mine = await getAnnouncementsByWorkshop('conf-1', 50)
+      const mine = await getAnnouncementsByWorkshop('conf-1')
 
       expect(Object.keys(mine).sort()).toEqual(['ws-1', 'ws-2'])
     },
   )
-
-  it('returns at most 500 for the conference, dropping its oldest first', async () => {
-    h.dataset.push(workshop('ws-busy'))
-    for (let i = 0; i < 500; i++) {
-      h.dataset.push(
-        announcement(
-          `busy-${i}`,
-          'ws-busy',
-          new Date(Date.UTC(2026, 10, 1, 0, 0, i)).toISOString(),
-        ),
-      )
-    }
-
-    const mine = await getAnnouncementsByWorkshop('conf-1', 1000)
-
-    // All 500 newer ones, and none of the four older ones of ws-1 and ws-2.
-    expect(mine['ws-busy']).toHaveLength(500)
-    expect(Object.keys(mine)).toEqual(['ws-busy'])
-  })
 
   it.each(['constructor', '__proto__', 'toString'])(
     'keeps a workshop whose id is %s apart from what every object has',
@@ -199,7 +220,7 @@ describe('getAnnouncementsByWorkshop', () => {
         announcement('odd-1', id, '2026-10-06T10:00:00Z'),
       )
 
-      const mine = await getAnnouncementsByWorkshop('conf-1', 50)
+      const mine = await getAnnouncementsByWorkshop('conf-1')
 
       expect(Object.hasOwn(mine, id)).toBe(true)
       expect(mine[id]).toEqual([expect.objectContaining({ _id: 'odd-1' })])
@@ -216,7 +237,7 @@ describe('getAnnouncementsByWorkshop', () => {
       createdAt: '2026-10-06T10:00:00Z',
     })
 
-    const mine = await getAnnouncementsByWorkshop('conf-1', 50)
+    const mine = await getAnnouncementsByWorkshop('conf-1')
 
     expect(Object.keys(mine).sort()).toEqual(['ws-1', 'ws-2'])
   })

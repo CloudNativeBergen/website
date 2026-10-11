@@ -180,19 +180,16 @@ export async function getWorkshopAnnouncements(
   return announcements ?? []
 }
 
-/** The most announcements one conference's portal read returns in all. */
-const PORTAL_ANNOUNCEMENTS_CAP = 500
+/** How many announcements the portal shows under one workshop, newest first. */
+const PORTAL_ANNOUNCEMENTS_PER_WORKSHOP = 50
 
 /**
  * The announcements of every CONFIRMED workshop of one conference, in ONE
  * read: what the attendee portal shows under each workshop card. Keyed by
- * workshop id, newest first, at most `limitPerWorkshop` each. A workshop that
- * is not confirmed has no card on the portal, so its announcements are left
- * out here.
- *
- * The cap is on the whole conference, applied before the per-workshop limit:
- * past it, the oldest announcements of the conference drop out first, whichever
- * workshop they belong to.
+ * workshop id; each workshop keeps its own newest
+ * {@link PORTAL_ANNOUNCEMENTS_PER_WORKSHOP}, whatever the others have. A
+ * workshop that is not confirmed has no card on the portal and is left out,
+ * as is one with nothing to say.
  *
  * One request for the page instead of one per card, and through the CDN host:
  * an announcement may reach the portal some seconds after it is posted, which
@@ -201,32 +198,36 @@ const PORTAL_ANNOUNCEMENTS_CAP = 500
  */
 export async function getAnnouncementsByWorkshop(
   conferenceId: string,
-  limitPerWorkshop: number,
 ): Promise<Record<string, WorkshopAnnouncementView[]>> {
-  const rows = await scopedFetch<
-    Array<WorkshopAnnouncementView & { workshopId: string | null }>
+  const workshops = await scopedFetch<
+    Array<{ _id: string; announcements: WorkshopAnnouncementView[] }>
   >(
     clientReadCached,
     { conferenceId },
-    `*[_type == "workshopAnnouncement" && workshop->status == "confirmed"] | order(createdAt desc)[0...${PORTAL_ANNOUNCEMENTS_CAP}]{
+    // The root (the conference's confirmed workshops) is scoped by
+    // `scopedFetch`; the announcements under each are held to the same
+    // conference by hand, since only the root is rewritten.
+    `*[_type == "talk" && status == "confirmed" && format in $formats]{
       _id,
-      body,
-      createdAt,
-      "authorName": author->name,
-      "workshopId": workshop._ref
-    }`,
+      "announcements": *[
+        _type == "workshopAnnouncement" &&
+        conference._ref == $conferenceId &&
+        workshop._ref == ^._id
+      ] | order(createdAt desc)[0...${PORTAL_ANNOUNCEMENTS_PER_WORKSHOP}]{
+        _id,
+        body,
+        createdAt,
+        "authorName": author->name
+      }
+    }[count(announcements) > 0]`,
+    { formats: WORKSHOP_FORMATS },
   )
 
-  // A Map, not an object: a workshop id is data, and must not meet a key the
-  // object already has.
-  const byWorkshop = new Map<string, WorkshopAnnouncementView[]>()
-  for (const { workshopId, ...announcement } of rows ?? []) {
-    if (!workshopId) continue
-    const list = byWorkshop.get(workshopId) ?? []
-    if (list.length < limitPerWorkshop) list.push(announcement)
-    byWorkshop.set(workshopId, list)
-  }
-  return Object.fromEntries(byWorkshop)
+  // `fromEntries` defines each id as the object's OWN key: a workshop id is
+  // data, and must not meet a key every object already has.
+  return Object.fromEntries(
+    (workshops ?? []).map(({ _id, announcements }) => [_id, announcements]),
+  )
 }
 
 /** Upper bound on simultaneous announcement emails in flight. */

@@ -200,9 +200,6 @@ const workshopAdminProcedure = adminProcedure.use(async ({ next }) => {
   return next()
 })
 
-/** How many announcements the portal shows under one workshop, newest first. */
-const PORTAL_ANNOUNCEMENTS_PER_WORKSHOP = 50
-
 export const workshopRouter = router({
   list: publicProcedure.input(workshopListInputSchema).query(async () => {
     try {
@@ -264,10 +261,7 @@ export const workshopRouter = router({
     try {
       return {
         success: true,
-        data: await getAnnouncementsByWorkshop(
-          conferenceId,
-          PORTAL_ANNOUNCEMENTS_PER_WORKSHOP,
-        ),
+        data: await getAnnouncementsByWorkshop(conferenceId),
       }
     } catch (error) {
       throw new TRPCError({
