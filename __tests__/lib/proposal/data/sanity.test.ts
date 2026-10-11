@@ -1,5 +1,6 @@
 const {
   mockFetch,
+  mockCdnFetch,
   mockWriteFetch,
   mockTransaction,
   mockTxDelete,
@@ -17,6 +18,7 @@ const {
   mockTxDelete.mockReturnValue(transaction)
   const mockTransaction = vi.fn(() => transaction)
   const mockFetch = vi.fn()
+  const mockCdnFetch = vi.fn()
   const mockWriteFetch = vi.fn()
 
   const mockPatchCommit = vi.fn().mockResolvedValue({ _id: 'proposal-1' })
@@ -39,6 +41,7 @@ const {
 
   return {
     mockFetch,
+    mockCdnFetch,
     mockWriteFetch,
     mockTransaction,
     mockTxDelete,
@@ -64,6 +67,10 @@ vi.mock('next-sanity', () => ({
 vi.mock('@/lib/sanity/client', () => ({
   clientReadUncached: {
     fetch: mockFetch,
+  },
+  // The CDN host. Its own mock, so a test can tell which host a read billed.
+  clientReadCached: {
+    fetch: mockCdnFetch,
   },
   clientWrite: {
     transaction: mockTransaction,
@@ -511,26 +518,32 @@ describe('schedule resolution — official documents only', () => {
       },
     ]
 
-    mockFetch.mockImplementation((query: string) => {
-      if (query.includes('_type == "schedule"')) {
-        const officialOnly = query.includes('status == "official"')
-        return Promise.resolve(
-          officialOnly
-            ? scheduleDocs.filter(
-                (doc) => !doc.status || doc.status === 'official',
-              )
-            : scheduleDocs,
-        )
-      }
-      return Promise.resolve([
-        { _id: 'workshop-1', title: 'A Workshop', format: 'workshop_120' },
-      ])
+    mockCdnFetch.mockImplementation((query: string) => {
+      const officialOnly = query.includes('status == "official"')
+      return Promise.resolve(
+        officialOnly
+          ? scheduleDocs.filter(
+              (doc) => !doc.status || doc.status === 'official',
+            )
+          : scheduleDocs,
+      )
     })
+    mockFetch.mockResolvedValue([
+      { _id: 'workshop-1', title: 'A Workshop', format: 'workshop_120' },
+    ])
 
     const { workshops } = await getWorkshops({
       conferenceId: 'conf-1',
       includeScheduleInfo: true,
     })
+
+    // WHICH HOST EACH READ BILLS: the workshops with their capacity and
+    // signups are read live; the schedule lookup goes through the CDN host.
+    expect(mockFetch).toHaveBeenCalledOnce()
+    expect(mockFetch.mock.calls[0][0]).not.toContain('_type == "schedule"')
+    expect(mockCdnFetch).toHaveBeenCalledOnce()
+    expect(mockCdnFetch.mock.calls[0][0]).toContain('_type == "schedule"')
+    expect(mockCdnFetch.mock.calls[0][1]).toEqual({ conferenceId: 'conf-1' })
 
     const workshop = workshops[0] as unknown as {
       room?: string

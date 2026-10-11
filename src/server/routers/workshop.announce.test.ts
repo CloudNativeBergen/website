@@ -36,6 +36,7 @@ const getWorkshopForAnnouncementMock = vi.fn()
 const getConfirmedRecipientsMock = vi.fn()
 const createAnnouncementMock = vi.fn()
 const getAnnouncementsMock = vi.fn()
+const getAnnouncementsByWorkshopMock = vi.fn()
 const fanOutMock = vi.fn()
 const getAnnouncementForAuthzMock = vi.fn()
 const updateAnnouncementBodyMock = vi.fn()
@@ -52,6 +53,8 @@ vi.mock('@/lib/workshop/announcements', async (importOriginal) => {
     createWorkshopAnnouncement: (...a: unknown[]) =>
       createAnnouncementMock(...a),
     getWorkshopAnnouncements: (...a: unknown[]) => getAnnouncementsMock(...a),
+    getAnnouncementsByWorkshop: (...a: unknown[]) =>
+      getAnnouncementsByWorkshopMock(...a),
     getWorkshopAnnouncementForAuthz: (...a: unknown[]) =>
       getAnnouncementForAuthzMock(...a),
     updateWorkshopAnnouncementBody: (...a: unknown[]) =>
@@ -309,6 +312,52 @@ describe('workshop.announcements — public query bounds', () => {
     await expect(
       makeCaller(null).announcements({ workshopId: 'ws-1', limit: 51 }),
     ).rejects.toBeTruthy()
+  })
+})
+
+describe('workshop.announcementsByWorkshop — the portal’s one read', () => {
+  const BY_WORKSHOP = {
+    'ws-1': [{ _id: 'a1', body: 'hi', createdAt: 'x', authorName: 'Owner' }],
+    'ws-2': [],
+  }
+
+  it('answers every workshop’s announcements for the conference of the request', async () => {
+    getAnnouncementsByWorkshopMock.mockResolvedValue(BY_WORKSHOP)
+
+    const result = await makeCaller(null).announcementsByWorkshop()
+
+    expect(result).toEqual({ success: true, data: BY_WORKSHOP })
+    // The conference comes from the request's domain; the caller names none.
+    expect(getAnnouncementsByWorkshopMock.mock.calls).toEqual([
+      [CONFERENCE_ID, 50],
+    ])
+    expect(getAnnouncementsMock).not.toHaveBeenCalled()
+  })
+
+  it('takes no conference or workshop from the client', async () => {
+    getAnnouncementsByWorkshopMock.mockResolvedValue({})
+
+    await (
+      makeCaller(null).announcementsByWorkshop as unknown as (
+        input: unknown,
+      ) => Promise<unknown>
+    )({ conferenceId: 'conf-other', workshopId: 'ws-9' })
+
+    expect(getAnnouncementsByWorkshopMock.mock.calls).toEqual([
+      [CONFERENCE_ID, 50],
+    ])
+  })
+
+  it('reads nothing when the request resolves to no conference', async () => {
+    getConferenceMock.mockResolvedValueOnce({
+      conference: {},
+      error: new Error('no conference'),
+    })
+
+    await expect(
+      makeCaller(null).announcementsByWorkshop(),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    expect(getAnnouncementsByWorkshopMock).not.toHaveBeenCalled()
   })
 })
 

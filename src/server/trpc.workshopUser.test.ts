@@ -19,6 +19,8 @@
  * is supplied; the real decision runs.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { readFileSync, readdirSync } from 'node:fs'
+import { join } from 'node:path'
 import { NextRequest } from 'next/server'
 import type { RedirectUriSyncRow } from '@/lib/domain-verification/types'
 import {
@@ -323,16 +325,18 @@ describe('/api/trpc — the route lets the context write response headers', () =
 /**
  * THE READ BUDGET. The `wos-session` cookie is host-wide and lives for 400
  * days, so it rides on EVERY tRPC request from a browser that once signed in to
- * the portal — an organizer's whole admin session included. Only the
- * `workshop.*` procedures consume the attendee identity, so only a request that
- * names one may spend a sign-in standing read (and an AuthKit session check) on it.
+ * the portal — an organizer's whole admin session included. Only three
+ * procedures consume the attendee identity, so only a request that names one
+ * of them may spend a sign-in standing read (and an AuthKit session check) on
+ * it. The portal's public lists (workshops, announcements) are not among them.
  */
-describe('createTRPCContext — only workshop procedures resolve the attendee', () => {
+describe('createTRPCContext — only the attendee procedures resolve the attendee', () => {
   it.each([
-    ['a single workshop procedure', 'workshop.getMySignups'],
-    ['a batch that includes one', 'conference.getCurrent,workshop.list'],
-    ['a batch of several', 'workshop.list,workshop.getMySignups'],
-    ['a nested workshop procedure', 'workshop.admin.getAllSignups'],
+    ['the attendee’s own signups', 'workshop.getMySignups'],
+    ['a signup', 'workshop.signup'],
+    ['a cancellation', 'workshop.cancelSignup'],
+    ['the portal’s first batch', 'workshop.list,workshop.getMySignups'],
+    ['a batch that ends with one', 'conference.getCurrent,workshop.signup'],
     ['a percent-encoded batch', 'conference.getCurrent%2Cworkshop.signup'],
   ])('resolves it for %s', async (_label, procedures) => {
     const ctx = await createTRPCContext({
@@ -345,8 +349,20 @@ describe('createTRPCContext — only workshop procedures resolve the attendee', 
   it.each([
     ['an unrelated procedure', 'sponsor.crm.list'],
     ['an unrelated batch', 'notification.list,conference.getCurrent'],
-    ['a router that merely starts with the same letters', 'workshopping.list'],
-    ['a procedure that merely mentions it', 'admin.workshop.list'],
+    ['the workshop list', 'workshop.list'],
+    ['the portal’s announcements', 'workshop.announcementsByWorkshop'],
+    ['one workshop’s announcements', 'workshop.announcements'],
+    [
+      'a batch of public workshop reads',
+      'workshop.list,workshop.getAvailability',
+    ],
+    ['the organizer’s workshop procedures', 'workshop.admin.getAllSignups'],
+    ['a procedure whose name only starts like one', 'workshop.signupStats'],
+    ['a procedure whose name only ends like one', 'admin.workshop.signup'],
+    [
+      'a router that merely starts with the same letters',
+      'workshopping.signup',
+    ],
     ['an empty path', ''],
   ])(
     'spends nothing on %s — no sign-in standing read, no AuthKit call',
@@ -363,26 +379,73 @@ describe('createTRPCContext — only workshop procedures resolve the attendee', 
 })
 
 /**
- * The prefilter above is only sound while the attendee procedures live under
- * the `workshop` key of the app router. If that router is ever mounted
- * elsewhere, every attendee would be refused at the API (fail closed, but
- * silently). A NEW consumer of `ctx.workosUser` outside `workshop.*` is not
- * caught here; it would see `null` and refuse.
+ * The prefilter above names the attendee procedures one by one. A procedure
+ * that starts reading `ctx.workosUser` without being named there would see
+ * `null` and refuse every attendee (fail closed, but silently), so the list
+ * is held to the source: every reader, and nothing else.
  */
 describe('the prefilter’s premise', () => {
-  it('holds: every attendee procedure is named `workshop.*`', async () => {
+  const ROUTERS = join(process.cwd(), 'src/server/routers')
+  const READS_THE_ATTENDEE =
+    /requireWorkshopAttendee\(|requireWorkshopUser\(|ctx\.workosUser/
+
+  /** The top-level procedures of the workshop router that read the attendee. */
+  function attendeeProcedures(): string[] {
+    const source = readFileSync(join(ROUTERS, 'workshop.ts'), 'utf8')
+    const body = source.slice(
+      source.indexOf('export const workshopRouter = router({'),
+    )
+    // A top-level key of the router: two spaces of indentation (Prettier's).
+    const keys = [...body.matchAll(/^ {2}(\w+): /gm)]
+    return keys
+      .filter((key, i) =>
+        READS_THE_ATTENDEE.test(
+          body.slice(key.index, keys[i + 1]?.index ?? body.length),
+        ),
+      )
+      .map((key) => `workshop.${key[1]}`)
+  }
+
+  it('holds: the procedures that read the attendee are exactly the three it names', () => {
+    expect(attendeeProcedures().sort()).toEqual([
+      'workshop.cancelSignup',
+      'workshop.getMySignups',
+      'workshop.signup',
+    ])
+  })
+
+  it('holds: the scan sees the router (control)', () => {
+    const source = readFileSync(join(ROUTERS, 'workshop.ts'), 'utf8')
+    // The names the scan must be able to tell apart are all really there.
+    for (const name of ['list', 'announcementsByWorkshop', 'signup', 'admin']) {
+      expect(source).toMatch(new RegExp(`^ {2}${name}: `, 'm'))
+    }
+  })
+
+  it('holds: no other router reads the attendee', () => {
+    const others = readdirSync(ROUTERS, { recursive: true })
+      .map(String)
+      .filter((file) => /\.tsx?$/.test(file) && !/\.test\./.test(file))
+      .filter((file) => file !== 'workshop.ts')
+      .filter((file) =>
+        /workosUser/.test(readFileSync(join(ROUTERS, file), 'utf8')),
+      )
+
+    expect(others).toEqual([])
+  })
+
+  it('holds: each of them resolves the attendee, as mounted in the app router', async () => {
     // The full router graph asserts on its mail configuration at import.
     vi.stubEnv('RESEND_API_KEY', 're_test_key')
     const { appRouter } = await import('./_app')
 
-    // The three that consume `ctx.workosUser` (see routers/workshop.ts).
-    expect(Object.keys(appRouter._def.procedures)).toEqual(
-      expect.arrayContaining([
-        'workshop.signup',
-        'workshop.cancelSignup',
-        'workshop.getMySignups',
-      ]),
-    )
+    for (const procedure of attendeeProcedures()) {
+      expect(Object.keys(appRouter._def.procedures)).toContain(procedure)
+      const ctx = await createTRPCContext({
+        req: request('wos-session=sealed', { procedures: procedure }),
+      })
+      expect(ctx.workosUser).toMatchObject({ id: 'user_01' })
+    }
     // Importing every router takes seconds on a loaded machine.
   }, 30_000)
 })

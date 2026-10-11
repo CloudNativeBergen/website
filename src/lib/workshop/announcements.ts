@@ -202,7 +202,7 @@ export async function getAnnouncementsByWorkshop(
   >(
     clientReadCached,
     { conferenceId },
-    groq`*[_type == "workshopAnnouncement"] | order(createdAt desc)[0...${PORTAL_ANNOUNCEMENTS_CAP}]{
+    `*[_type == "workshopAnnouncement"] | order(createdAt desc)[0...${PORTAL_ANNOUNCEMENTS_CAP}]{
       _id,
       body,
       createdAt,
