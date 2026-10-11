@@ -46,8 +46,8 @@ vi.mock('@/lib/features/workshops', () => ({
 
 vi.mock('next/headers', () => import('../../helpers/nextHeadersJar'))
 vi.mock('next/navigation', () => ({
-  redirect: (url: string) => {
-    throw Object.assign(new Error('NEXT_REDIRECT'), { url })
+  redirect: (url: string, type?: string) => {
+    throw Object.assign(new Error('NEXT_REDIRECT'), { url, type })
   },
 }))
 
@@ -107,9 +107,11 @@ async function pressSignOut(
   }
   const thrown = await signOutOfWorkshop().then(
     () => null,
-    (error: { url?: string }) => error,
+    (error: { url?: string; type?: string }) => error,
   )
   expect(thrown?.url).toBeTypeOf('string')
+  // The portal page leaves the history: "back" does not return to it.
+  expect(thrown?.type).toBe('replace')
   return thrown!.url!
 }
 

@@ -54,8 +54,8 @@ vi.mock('@/lib/features/workshops', () => ({
 }))
 vi.mock('next/headers', () => import('../../helpers/nextHeadersJar'))
 vi.mock('next/navigation', () => ({
-  redirect: (url: string) => {
-    throw Object.assign(new Error('NEXT_REDIRECT'), { url })
+  redirect: (url: string, type?: string) => {
+    throw Object.assign(new Error('NEXT_REDIRECT'), { url, type })
   },
 }))
 

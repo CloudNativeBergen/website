@@ -16,6 +16,7 @@
 import '../../helpers/workosEnv'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { NextRequest } from 'next/server'
+import { GenericServerException } from '@workos-inc/node'
 import { z } from 'zod'
 import type { DomainClaim } from '@/lib/domain-verification/types'
 import {
@@ -373,13 +374,47 @@ describe('callback: refused with 404, and the code is never exchanged', () => {
 })
 
 describe('callback: WorkOS does not answer as expected', () => {
-  it('answers 404 with no hand-off when the exchange fails', async () => {
-    exchangeCode.mockRejectedValue(new Error('invalid_grant'))
+  it('answers 404 with no hand-off when the exchange fails, and logs what failed', async () => {
+    exchangeCode.mockRejectedValue(new TypeError('fetch failed'))
 
     const response = await callback(await startFlow())
 
     expect(response.status).toBe(404)
     expect(response.headers.get('location')).toBeNull()
+    expect(console.error).toHaveBeenCalledExactlyOnceWith(
+      '[workshop] the code exchange failed; nothing handed off',
+      { name: 'TypeError', message: 'fetch failed' },
+    )
+  })
+
+  it('logs WorkOS’s refusal by its codes, never its message or its body', async () => {
+    // The SDK's own exception, as it builds one from WorkOS's answer.
+    exchangeCode.mockRejectedValue(
+      new GenericServerException(
+        403,
+        'Email ownership must be verified: ada@example.com',
+        {
+          code: 'email_verification_required',
+          email: 'ada@example.com',
+          pending_authentication_token: 'pending_token_value',
+        },
+        'req_01',
+      ),
+    )
+
+    const response = await callback(await startFlow())
+
+    expect(response.status).toBe(404)
+    expect(console.error).toHaveBeenCalledExactlyOnceWith(
+      '[workshop] the code exchange failed; nothing handed off',
+      {
+        name: 'GenericServerException',
+        code: 'email_verification_required',
+        error: undefined,
+        status: 403,
+        requestID: 'req_01',
+      },
+    )
   })
 
   it('answers 404 with no hand-off when the access token names no session', async () => {
