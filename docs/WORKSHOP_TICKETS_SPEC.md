@@ -195,12 +195,12 @@ A new notification tells organizers that a ticket type has no decision and links
 
 ## 10. Slices
 
-1. An attendee's cancel deletes the sign-up (§6).
-2. The list under `/admin/workshops`, the badge and the banner, and the rule's answer for an entry
+1. #1331: an attendee's cancel deletes the sign-up (§6).
+2. #1332: the list under `/admin/workshops`, the badge and the banner, and the rule's answer for an entry
    with no workshop answer (§2, §3).
-3. The statistics, the flagged list and the one definition (§4, §5).
-4. The reminder (§7).
-5. The notification for not-set types (§8).
+3. #1333: the statistics, the flagged list and the one definition (§4, §5).
+4. #1334: the reminder (§7).
+5. #1335: the notification for not-set types (§8).
 
 Slices 1, 2 and 5 are independent. Slice 3 follows 1, so "waitlist only" means what it says, and
 slice 4 follows 3, whose join it sends from.
