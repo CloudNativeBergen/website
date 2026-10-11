@@ -27,6 +27,12 @@ Error: Turbopack build failed with 1 errors:
 Error: Module not found: Can't resolve '@/lib/workshop/missing'
 `
 
+/** A font the build cannot find in the repository: not a download, not retried. */
+const LOCAL_FONT_MISSING = `
+> Build error occurred
+Error: Module not found: Can't resolve './fonts/google/Inter.woff2'
+`
+
 describe('isFontFetchFailure', () => {
   it('recognises a Google Font that could not be downloaded', () => {
     expect(isFontFetchFailure(FONT_FETCH_FAILED)).toBe(true)
@@ -35,6 +41,7 @@ describe('isFontFetchFailure', () => {
   it('does not take any other build failure for one', () => {
     expect(isFontFetchFailure(TYPE_ERROR)).toBe(false)
     expect(isFontFetchFailure(MODULE_NOT_FOUND)).toBe(false)
+    expect(isFontFetchFailure(LOCAL_FONT_MISSING)).toBe(false)
     expect(isFontFetchFailure('')).toBe(false)
   })
 })
@@ -56,5 +63,6 @@ describe('afterAttempt', () => {
   it('never builds again after a real failure', () => {
     expect(afterAttempt(1, 1, TYPE_ERROR)).toBe('fail')
     expect(afterAttempt(1, 1, MODULE_NOT_FOUND)).toBe('fail')
+    expect(afterAttempt(1, 1, LOCAL_FONT_MISSING)).toBe('fail')
   })
 })
