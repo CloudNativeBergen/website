@@ -682,8 +682,7 @@ neither calls WorkOS.
 The login behind it is not per host: a WorkOS account is one account for every conference
 on the platform, and `/privacy` says so to workshop participants. Organizers only see
 the workshop registrations of their own organization's conferences: the organizer
-procedures are `adminProcedure` (org-scoped, `src/lib/authz/organizer.ts`) and every
-signup read in `src/lib/workshop/sanity.ts` filters on `conference._ref`.
+procedures are `adminProcedure`, which is org-scoped (`src/lib/authz/organizer.ts`).
 
 ### Sign-out
 

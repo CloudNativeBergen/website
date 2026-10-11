@@ -104,8 +104,9 @@ are both gone.
   between is refused.
 - It holds what the session needs: WorkOS user ID, email, whether WorkOS reports the email verified,
   name, and the WorkOS session ID.
-- It is not single use. Inside its lifetime the same browser could redeem it twice; no other browser
-  can, because no other host and no script can set or read the step 1 cookie.
+- It is not single use: nothing remembers a redeemed token. A completed redeem clears the step 1
+  cookie, so the same browser redeems it again only before that; no other browser can, because no
+  other host and no script can set or read that cookie.
 
 ## 6. The session on the tenant host
 
