@@ -69,9 +69,18 @@ counts as not set in §3, §4 and §8.
   the built-in list that applies, so an empty list is not read as a closed gate.
 - `/admin/tickets/types` keeps a read-only badge per card ("Grants workshop access", "No workshop
   access", "Not set") that links to the section. It no longer edits.
+- **A conference without the workshops feature keeps the control where it is.** `/admin/workshops`
+  answers 404 for it, while `/admin/tickets/types` shows the control whatever the feature says. For
+  such a conference the ticket-types page stays editable and shows no link.
 - **A banner above the statistics** names each not-set type and each orphaned entry. An orphaned
   entry has a remove action. Once the statistics exist (§4) the banner also says how many people
   hold each not-set type and are refused.
+- **Losing the last granting type is the same cliff in the other direction.** The built-in list
+  applies whenever no entry grants workshops, whatever the entries that say no. Unmarking the last
+  granting type, or removing an orphaned entry that is the last one, therefore brings the built-in
+  list back. The control asks for no confirmation once a type is marked. After this work any save
+  or removal that leaves no granting type asks first and names the types the built-in list will
+  grant.
 
 ## 4. Statistics
 
