@@ -23,7 +23,11 @@ import '../../helpers/workosEnv'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { NextRequest } from 'next/server'
 import { provenClaim } from '../../helpers/domainClaims'
-import { beginRequest, writtenCookies } from '../../helpers/nextHeadersJar'
+import {
+  beginRequest,
+  presentCookie,
+  writtenCookies,
+} from '../../helpers/nextHeadersJar'
 
 vi.mock('jose', async () => (await import('../../helpers/realJose')).realJose())
 
@@ -59,6 +63,8 @@ import { GET as signInRoute } from '@/app/(workshop)/workshop/sign-in/route'
 import { GET as signUpRoute } from '@/app/(workshop)/workshop/sign-up/route'
 import { GET as redeemRoute } from '@/app/(workshop)/workshop/redeem/route'
 import { GET as startRoute } from '@/app/api/auth/workshop/start/route'
+import { GET as signOutRoute } from '@/app/api/auth/workshop/sign-out/route'
+import { GET as signedOutRoute } from '@/app/api/auth/workshop/signed-out/route'
 import { signOutOfWorkshop } from '@/app/(workshop)/workshop/actions'
 import { workshopWorkOS } from '@/lib/workshop/central-sign-in/workos'
 import middleware from '@/proxy'
@@ -91,6 +97,24 @@ function fromHere() {
   h.read.mockClear()
   network.mockClear()
   exchangeCode.mockClear()
+}
+
+/**
+ * Sign in on the tenant host and press "Sign Out" there, counting from the
+ * press. Answers the auth host's sign-out address the browser is sent to.
+ */
+async function pressSignOut(): Promise<string> {
+  const cookie = await signIn(TENANT, AUTH)
+  beginRequest(new Headers({ host: TENANT }))
+  const at = cookie.indexOf('=')
+  presentCookie(cookie.slice(0, at), cookie.slice(at + 1))
+  fromHere()
+  const { url } = await signOutOfWorkshop().then(
+    () => ({ url: 'no redirect' }),
+    (thrown: { url: string }) => thrown,
+  )
+  expect(url).toContain(`https://${AUTH}/api/auth/workshop/sign-out?request=`)
+  return url
 }
 
 /** One read of this host's record, by id, and nothing else from Sanity. */
@@ -189,12 +213,8 @@ describe('a request on a tenant host that needs no decision: no read at all', ()
     expectNoWorkOS()
   })
 
-  it('signing out', async () => {
-    const cookie = await signIn(TENANT, AUTH)
-    beginRequest(new Headers({ host: TENANT, cookie }))
-    fromHere()
-
-    await expect(signOutOfWorkshop()).rejects.toMatchObject({ url: '/' })
+  it('signing out, which sends the browser to the auth host', async () => {
+    await pressSignOut()
 
     expect(writtenCookies()).toEqual([
       '__Host-workshop-session=; Path=/; Max-Age=0; Secure; HttpOnly; SameSite=lax',
@@ -265,6 +285,47 @@ describe('a request on the auth host: one record read, for the tenant host', () 
     expectOneRecordRead(TENANT)
     expect(exchangeCode).toHaveBeenCalledOnce()
     expect(network).not.toHaveBeenCalled()
+  })
+})
+
+describe('a sign-out on the auth host: one record read per step, for the tenant host', () => {
+  it('GET /api/auth/workshop/sign-out, which builds the logout address without a call', async () => {
+    const target = await pressSignOut()
+
+    const response = await signOutRoute(get(target, AUTH))
+
+    expect(response.headers.get('location')).toContain(
+      'https://api.workos.com/user_management/sessions/logout?',
+    )
+    expectOneRecordRead(TENANT)
+    expectNoWorkOS()
+  })
+
+  it('GET /api/auth/workshop/signed-out', async () => {
+    const sent = await signOutRoute(get(await pressSignOut(), AUTH))
+    fromHere()
+
+    const response = await signedOutRoute(
+      get(
+        `https://${AUTH}/api/auth/workshop/signed-out`,
+        AUTH,
+        sent.headers.getSetCookie()[0].split(';')[0],
+      ),
+    )
+
+    expect(response.headers.get('location')).toBe(`https://${TENANT}/`)
+    expectOneRecordRead(TENANT)
+    expectNoWorkOS()
+  })
+
+  it('GET /api/auth/workshop/signed-out with no cookie: no read', async () => {
+    const response = await signedOutRoute(
+      get(`https://${AUTH}/api/auth/workshop/signed-out`, AUTH),
+    )
+
+    expect(response.status).toBe(200)
+    expect(h.read).not.toHaveBeenCalled()
+    expectNoWorkOS()
   })
 })
 
