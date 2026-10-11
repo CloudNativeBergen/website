@@ -36,7 +36,8 @@ Unchanged:
   accepts only its own host as the destination. This is local development and a single-domain
   installation. System status reports the variable.
 - WorkOS holds exactly two addresses for the application, added by hand once per environment: the
-  redirect URI `<auth origin>/api/auth/callback` and one sign-out redirect on the auth host.
+  redirect URI `<auth origin>/api/auth/callback` and one sign-out redirect on the auth host,
+  `<auth origin>/api/auth/workshop/signed-out` (`src/lib/workshop/sign-in-paths.ts`).
 - With the variable set, the auth-host routes answer 404 on every other host, and the tenant-host
   routes answer 404 on the auth host. A tenant host exchanges no code.
 - **`WORKOS_COOKIE_PASSWORD` now seals identity** (§5, §6): whoever holds it can issue a session. It
@@ -60,8 +61,9 @@ Unchanged:
 3. **Auth host, callback.** It verifies state and the cookie from step 2. It then checks again that
    the host passes §4, that the conference claiming it is still the one in state, and that this
    conference still has workshops. Only then does it exchange the code. It stores **no session and no
-   WorkOS token**: the SDK's `handleAuth` always saves a session cookie on the callback host, so the
-   callback does not use it. It redirects to the tenant host's redeem route with a hand-off token.
+   WorkOS token**: the AuthKit SDK's `handleAuth` always saves a session cookie on the callback host, so
+   the callback does not use it, and the auth host talks to WorkOS through the plain `@workos-inc/node`
+   client. It redirects to the tenant host's redeem route with a hand-off token.
 4. **Tenant host, redeem.** It accepts the token only when all of these hold: it unseals, it has not
    expired, it names this host and the conference this host resolves to, and the cookie from step 1
    hashes to the value inside it. It checks §4 and that the conference has workshops once more, sets
@@ -107,8 +109,8 @@ are both gone.
 
 - Our own sealed cookie: `__Host-` prefix, HttpOnly, `Secure`, `SameSite=Lax`, `Path=/`. The prefix
   makes the browser refuse a `Domain`, so no sibling host under a shared suffix can set or replace
-  it, and `WORKOS_COOKIE_DOMAIN` has nothing to widen. Plain-HTTP local development may drop the
-  prefix where a browser will not store it.
+  it, and `WORKOS_COOKIE_DOMAIN` has nothing to widen. With `NODE_ENV=development` the prefix and
+  `Secure` are dropped, because a browser may not store a `Secure` cookie over plain HTTP.
 - It holds the fields of §5 plus the host and the conference it was issued for, and its expiry.
 - **Fixed 7 days from sign-in, no renewal.** The expiry inside the seal decides, not the cookie's
   own lifetime.
@@ -147,7 +149,7 @@ records, none with a `redirectUri*` value), so there is nothing to migrate.
   "Workshop sign-in" line on the domain card and the system-status row keep two outcomes: available,
   or domain not verified.
 - The `WORKOS_COOKIE_DOMAIN` guard and its status row, once nothing sets a cookie it could widen.
-- `@workos-inc/authkit-nextjs`, if the auth host ends up using only `@workos-inc/node`.
+- `@workos-inc/authkit-nextjs`: the auth host uses only `@workos-inc/node`.
 
 The emailed portal link (the ticket-sold webhook and the resend action) follows the new decision
 through `workshopPortalUrl`. `AUTH.md` and `DOMAIN_VERIFICATION.md` are rewritten to match, and so is

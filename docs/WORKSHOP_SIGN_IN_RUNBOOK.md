@@ -2,8 +2,10 @@
 
 How the attendee workshop portal (`/workshop`) gets sign-in on a host, and what
 to check when it does not. The design is in
-[AUTH.md](AUTH.md#workos-authkit-workshops). The rules for hosts are in
-[DOMAIN_VERIFICATION.md](DOMAIN_VERIFICATION.md#workos-redirect-uris-workshop-sign-in).
+[AUTH.md](AUTH.md#workos-authkit-workshops) and the design record in
+[WORKSHOP_CENTRAL_SIGN_IN_SPEC.md](WORKSHOP_CENTRAL_SIGN_IN_SPEC.md). The rule
+for hosts is in
+[DOMAIN_VERIFICATION.md](DOMAIN_VERIFICATION.md#workshop-sign-in-which-hosts-receive-a-hand-off).
 
 ## What has to be true
 
@@ -11,23 +13,25 @@ Attendees can sign in on a host when all of these hold:
 
 1. **The conference has workshops.** The organization's plan includes them and
    its ticketing can read tickets for this conference, or an operator has
-   switched them on with a feature override.
-2. **The platform controls the host.** It is either a host the platform
-   allocated (for example `<name>.konf.run`), or a verified domain of a
-   conference owned by the platform organization (`PLATFORM_ORG_ID`).
-3. **WorkOS has the host's callback**, `https://<host>/api/auth/callback`, as a
-   redirect URI. The application registers it; nobody adds it by hand.
-4. **`WORKOS_COOKIE_DOMAIN` is not set** in the deployment.
+   switched them on with a feature override
+   (`isWorkshopsEnabledForConference`).
+2. **The host's domain is verified.** It is a host the platform provided (for
+   example `<name>.konf.run`), or a domain of the organizer's own whose TXT
+   proof has resolved. A domain admitted without proof when verification
+   shipped (grandfathered) is not enough, even inside its grace period.
+3. **The deployment has its sign-in host set up**, once per environment (see
+   "Operator: one-time setup" below). Nothing is registered at WorkOS per
+   conference host.
 
-A tenant's own domain does not carry the portal: every tenant shares one WorkOS
-client, so a sign-in callback may only be on a host that the platform itself
-serves and whose DNS the platform controls (#1306).
+Attendees sign in on the conference's host through the platform's one sign-in
+host (`WORKSHOP_AUTH_ORIGIN`, `https://auth.konf.app` in production), which is
+the only address WorkOS calls back to. A tenant host is never a WorkOS
+callback: the WorkOS environment is shared by every tenant, so its registered
+addresses stay on a host the platform operates.
 
-Local development is the one exception to 2 and 3. With
-`NODE_ENV=development`, `localhost` needs no verification record and the
-application registers nothing for it: it signs in on
-`http://localhost:<port>/api/auth/callback`, which is added by hand to a WorkOS
-staging environment. See [AUTH.md](AUTH.md#workos-workshops-only).
+Local development is the exception to 2: with `NODE_ENV=development`,
+`localhost` carries the portal without a verification record. See
+[AUTH.md](AUTH.md#workos-workshops-only).
 
 The conference's **first domain** decides the most. Ticket emails link to the
 portal on it, and another host of the conference that cannot sign in sends
@@ -37,32 +41,29 @@ attendees there when the first domain can.
 
 Everything is on **Admin → Settings**, in the domain verification card. Each
 domain has a "Workshop sign-in" line, shown when the conference has workshops.
+It has two outcomes: **available**, or **domain not verified**.
 
 ### A host the platform provided
 
-Nothing to do. The line reads **available** shortly after the host is
-allocated or workshops are switched on, normally by the next daily check
-(05:00 UTC). A plan changed from the control panel can take one check more.
+Nothing to do. The line reads **available** as soon as the host is allocated
+and the conference has workshops. The organization document is cached here, so
+a plan changed from the control panel can take a while to show.
 
 ### A domain of your own
-
-This works for conferences of the platform organization only.
 
 1. Add the domain to the conference's domains.
 2. Publish the TXT record the card shows at your DNS provider. Its name is
    `_konf-challenge.<domain>` and its value starts with
    `konf-domain-verification=`.
-3. Press **Check now**. The line goes from **domain not verified** to
-   **registration pending** and then to **available**. Registration follows
-   the check by itself, at the latest with the next daily check.
+3. Press **Check now**. When the check finds the record, the domain reads
+   **Verified** and the line goes from **domain not verified** to
+   **available**. There is nothing further to wait for.
 4. Make it the first domain if attendees should be sent there.
 
-For every other organization the line reads **not offered on this host**, and
-publishing the record does not change that. Use the host the platform provided.
-While your own domain is the first one, ticket emails go out without the portal
-link and "Resend sign-up instructions" stays disabled. Attendees can still sign
-up at `https://<platform host>/workshop` if you send them that address
-yourself.
+While your own domain is the first one and not yet verified, ticket emails go
+out without the portal link and "Resend sign-up instructions" stays disabled.
+Attendees can still sign up at the portal on any other verified host of the
+conference if you send them that address yourself.
 
 ### After the line turns available
 
@@ -82,9 +83,13 @@ reason is never shown to them.
 
 ## Operator: a host cannot sign in
 
-Start at **Admin → Settings → System status** on the affected conference. There
-is one row per host, named `Workshop sign-in: <host>`. The domain card shows the
-same wording.
+Start at **Admin → Settings → System status** on the affected conference. Three
+things there matter:
+
+- the row `WORKSHOP_AUTH_ORIGIN`, for the deployment;
+- the row `WORKOS_CLIENT_ID`, for the deployment;
+- one row per host, named `Workshop sign-in: <host>`. The domain card shows the
+  same wording.
 
 That page is open only to organizers of the conference's organization. A
 platform operator who is not one of them cannot open it. Without that access,
@@ -92,21 +97,21 @@ read the host's record from a checkout of this repository, with a Sanity CLI
 login that can read the dataset (a read; it writes nothing):
 
 ```
-npx sanity documents query '*[_type == "domainVerification" && hostname == "<host>"][0]{hostname, "conference": conference._ref, status, method, graceUntil, lastSuccessAt, lastError, redirectUriStatus, redirectUriError}'
+npx sanity documents query '*[_type == "domainVerification" && hostname == "<host>"][0]{hostname, "conference": conference._ref, status, method, graceUntil, lastSuccessAt, lastError}'
 ```
 
 The row is built from this record, but the record is not the row. The row also
-depends on who owns the conference, on the platform's current domain suffix and
-on today's date, so do not derive the row from the fields. Read them for what
-they say, and ask an organizer of that organization for the row itself. The
-fields are defined in `sanity/schemaTypes/domainVerification.ts`:
+depends on the platform's current domain suffix and on today's date, so do not
+derive the row from the fields. Read them for what they say, and ask an
+organizer of that organization for the row itself. The fields are defined in
+`sanity/schemaTypes/domainVerification.ts`:
 
 - `conference` is the conference currently claiming the hostname. A record
   held by another conference says nothing about this one.
 - `status` is the state the verification policy keeps for the claim: `pending`
-  (never proven), `verified`, `failing` (a check found no proof) or
-  `revoked` (the claim was released). It is not the result of the latest
-  check: a verified domain can stay `verified` through failed lookups.
+  (never proven), `verified`, `failing` (a check found no proof) or `revoked`
+  (the claim was released). It is not the result of the latest check: a
+  verified domain can stay `verified` through failed lookups.
 - `lastSuccessAt` is when the claim was last counted as proven. For a
   `dns-txt` record that is a DNS check that found the TXT record. A
   `grandfathered` or `platform-owned` record gets it without any lookup, and
@@ -117,91 +122,100 @@ fields are defined in `sanity/schemaTypes/domainVerification.ts`:
   `pending`), `grandfathered` (a claim from before verification existed,
   trusted only until `graceUntil`) or `platform-owned` (a subdomain the
   platform allocated).
-- `redirectUriStatus` is where the host's callback stands in WorkOS as the
-  application recorded it: `registered` (created by the application, which
-  holds its id), `external` (present in WorkOS, and the application holds no
-  id for it), or empty (the application holds none). `redirectUriError` is why the last attempt to
-  register or remove it failed; the next success clears it.
 
 The error `Query returned no results` means the host has no record. A CLI
 that is not signed in is reported to answer the same way instead of naming the
 missing login (see `AGENTS.md`), so check the login before concluding that.
-The record does not show `WORKOS_COOKIE_DOMAIN` or whether the conference has
-workshops; check those in the deployment and on the organization.
+The record does not show whether the conference has workshops or how the
+deployment is configured; check those on the organization and in system
+status.
 
-| The row says                   | It means                                                                                                                           | What to do                                                                                                                                                                 |
-| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| (no row)                       | The conference does not have workshops, or has no host to report: no domain, or only wildcard and development entries.             | Check the organization's plan and feature overrides, that its ticketing is connected for this conference, and the conference's domains.                                    |
-| **unknown** (one row, no host) | The standing could not be read. The detail is the error.                                                                           | Reload. If it stays, look at the Sanity read errors in the logs.                                                                                                           |
-| **domain not verified**        | No verification record, or its proof has not resolved, has gone stale or is only grandfathered.                                    | `dig +short TXT _konf-challenge.<host>` must return the value on the domain card. Then press **Check now**.                                                                |
-| **not offered on this host**   | The host is not platform-allocated and its conference is not owned by `PLATFORM_ORG_ID`.                                           | Nothing to fix for a tenant's own domain: point the tenant at its platform host. For a conference of the platform organization, check `PLATFORM_ORG_ID` in the deployment. |
-| **registration pending**       | The host is verified and the reconcile has not registered it yet.                                                                  | See "The reconcile did not run" below.                                                                                                                                     |
-| **registration failed**        | The last attempt to register the callback failed. The detail is the recorded error: WorkOS's answer, or a failure to reach WorkOS. | It is retried with every daily check. Check that `WORKOS_API_KEY` belongs to the environment of `WORKOS_CLIENT_ID`, and the Redirects page in the WorkOS dashboard.        |
-| **switched off on every host** | `WORKOS_COOKIE_DOMAIN` is set in the deployment.                                                                                   | Unset it and redeploy. No host can sign in while it is set.                                                                                                                |
-| **available**                  | The application will start a sign-in on this host.                                                                                 | See "The row says available" below.                                                                                                                                        |
+Every refusal on the sign-in host and at redeem leaves one line in the
+deployment's log, `[workshop] <step> refused: <reason>`, where the step is
+`callback`, `redeem`, `sign-out` or `signed-out`. The start route on the
+sign-in host answers 404 without a log line. The attendee is never told the
+reason.
 
-### The reconcile did not run
+| Symptom                                                           | What to look at                                                                                                                                                                                                                                                                                                                                      | What to do                                                                                                                                                                                              |
+| ----------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| No `Workshop sign-in` row                                         | The conference does not have workshops, or has no host to report: no domain, or only wildcard and development entries.                                                                                                                                                                                                                               | Check the organization's plan and feature overrides, that its ticketing is connected for this conference, and the conference's domains.                                                                 |
+| One row, **unknown**, no host                                     | The hosts could not be read. The detail is the error.                                                                                                                                                                                                                                                                                                | Reload. If it stays, look at the Sanity read errors in the logs.                                                                                                                                        |
+| **domain not verified**                                           | No verification record, the proof has not resolved, it has gone stale, or the record is only grandfathered. For a platform host: the record is `platform-owned` but the host is not under the deployment's `PLATFORM_DOMAIN_SUFFIX`.                                                                                                                 | `dig +short TXT _konf-challenge.<host>` must return the value on the domain card. Then press **Check now**. For a platform host, check `PLATFORM_DOMAIN_SUFFIX` in the deployment.                      |
+| **available**, but attendees see "not available yet" on that host | `WORKSHOP_AUTH_ORIGIN` reads **invalid**: every host is refused and that row says so.                                                                                                                                                                                                                                                                | Set it to a bare `https` origin and redeploy. The per-host rows do not reflect this variable; the `WORKSHOP_AUTH_ORIGIN` row does.                                                                      |
+| `WORKSHOP_AUTH_ORIGIN` reads **not set** with a warning           | Every host signs attendees in on itself, so each one needs its own two addresses at WorkOS. Right only for a single-domain installation.                                                                                                                                                                                                             | Set it to the platform's sign-in host and register that host's two addresses (below), or register each host's own `https://<host>/api/auth/callback` and `https://<host>/api/auth/workshop/signed-out`. |
+| Starting a sign-in or a sign-out answers with a server error      | `WORKOS_COOKIE_PASSWORD` is unset or shorter than 32 characters: nothing can be sealed or unsealed. The portal page fails the same way for a browser that carries a session cookie.                                                                                                                                                                  | Set it for the environment and redeploy.                                                                                                                                                                |
+| WorkOS shows an error about the redirect URI                      | WorkOS does not have `<auth origin>/api/auth/callback` as a redirect URI, or `WORKSHOP_AUTH_ORIGIN` names a host other than the one registered.                                                                                                                                                                                                      | Register that exact address in the WorkOS dashboard for the environment of `WORKOS_CLIENT_ID`.                                                                                                          |
+| The sign-in host answers 404 when a sign-in starts                | The request is not on the host `WORKSHOP_AUTH_ORIGIN` names (DNS or the hosting provider sends it elsewhere), the host asked for is not verified, or its conference has no workshops. Nothing is logged for this step.                                                                                                                               | Check that the sign-in host is served by this deployment, and the host's row.                                                                                                                           |
+| WorkOS sends the browser back and the sign-in host answers 404    | The log line `callback refused: <reason>`. `no-cookie`: more than 10 minutes passed, or the browser is not the one that started. `host-refused` / `conference-changed`: the host stopped being verified or changed hands meanwhile.                                                                                                                  | `the code exchange failed` in the log means `WORKOS_API_KEY` is not the key of the environment of `WORKOS_CLIENT_ID`. Otherwise have the attendee start again on the conference's host.                 |
+| The attendee lands on `/workshop` with "Sign-in did not complete" | The log line `redeem refused: <reason>`. `no-hand-off`: more than 60 seconds passed, or the sign-in host and the conference's host do not share `WORKOS_COOKIE_PASSWORD` (a preview deployment handing off from, or to, production). `no-cookie`: a sign-in started in a second tab replaced the first tab's cookie, or more than 10 minutes passed. | One value of `WORKOS_COOKIE_PASSWORD` per environment, and a preview rehearses with a sign-in host of its own. Otherwise have the attendee start again, in one tab.                                     |
+| Sign-out ends on a WorkOS page, not on the conference site        | WorkOS does not have `<auth origin>/api/auth/workshop/signed-out` as a sign-out redirect.                                                                                                                                                                                                                                                            | Register that exact address in the WorkOS dashboard. It is one address for every host.                                                                                                                  |
+| Sign-out ends on a plain "You are signed out" page                | The log line `signed-out refused: <reason>`. `no-cookie`: more than 5 minutes passed at WorkOS, or the browser dropped the sign-in host's cookie. `host-refused`: the host stopped being verified meanwhile.                                                                                                                                         | Nothing to fix: the attendee is signed out. Have them open the conference site again.                                                                                                                   |
+| Every attendee is signed out at once                              | `WORKOS_COOKIE_PASSWORD` was changed.                                                                                                                                                                                                                                                                                                                | Expected. Sessions are not migrated; attendees sign in again.                                                                                                                                           |
+| The attendee signs in and is told they have no access             | Not a sign-in fault. Access is decided from the conference's tickets: the email the ticket is registered under has to be the one signed in with, and WorkOS has to report it as verified (`src/lib/workshop/access.ts`).                                                                                                                             | Check the ticket's email and that the WorkOS login's email is verified.                                                                                                                                 |
+| Signed in on one host, signed out on another                      | By design. The session belongs to one host and lasts 7 days. The WorkOS login itself is one account across every conference on the platform.                                                                                                                                                                                                         | Nothing.                                                                                                                                                                                                |
 
-The reconcile registers and removes redirect URIs. It runs only on the
-production deployment (`VERCEL_ENV=production`) and only with `WORKOS_API_KEY`
-set. It runs after a domain is claimed, released or allocated, after a
-**Check now** that changed the domain's standing, after a plan or feature
-override change, and at the end of the daily check (cron
-`/api/cron/domain-verification`, 05:00 UTC).
+### Operator: one-time setup per environment
 
-- Look for that cron in the deployment's logs, and for lines starting with
-  `[workshop]`.
-- To run the daily check now:
-  `curl -H "Authorization: Bearer $CRON_SECRET" https://<production host>/api/cron/domain-verification`.
-  It is the same job as the scheduled one: it re-checks every claimed domain
-  and sends organizers the same alerts.
-- Previews and local development never run the reconcile. They read the
-  production dataset, so they show the registrations production made and add
-  none.
-- Run the daily check on the production host only. The check itself is not
-  limited to production, and from any deployment it writes to the production
-  dataset and alerts organizers.
+1. In the WorkOS dashboard, create or pick the environment and note its client
+   ID and API key (`WORKOS_CLIENT_ID`, `WORKOS_API_KEY`).
+2. Choose the sign-in host. It is a hostname this deployment serves and that
+   serves no conference; in production it is `https://auth.konf.app`. Set
+   `WORKSHOP_AUTH_ORIGIN` to that bare `https` origin.
+3. Register the two addresses at WorkOS, by hand, once:
+   - redirect URI: `<auth origin>/api/auth/callback`;
+   - sign-out redirect: `<auth origin>/api/auth/workshop/signed-out`.
+4. Set `WORKOS_COOKIE_PASSWORD`: at least 32 characters, a value of this
+   environment's own. It seals identity, so whoever holds it can issue a
+   session. The production value must not be available to preview deployments.
+   Changing it signs everyone out.
+5. Confirm system status: `WORKSHOP_AUTH_ORIGIN` shows the origin,
+   `WORKOS_CLIENT_ID` is set.
 
-### The row says available
-
-| Symptom                                                    | Check                                                                                                                                                                                                                    |
-| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| WorkOS shows an error about the redirect URI               | The URI was removed in the WorkOS dashboard. The reconcile lists WorkOS on every run and creates a wanted URI that is missing, so the next run puts it back.                                                             |
-| The sign-in or the callback answers with a server error    | `WORKOS_CLIENT_ID`, `WORKOS_API_KEY` and `WORKOS_COOKIE_PASSWORD` (at least 32 characters) must be set for the production environment.                                                                                   |
-| Sign-out ends on a WorkOS page, not on the conference site | Add `https://<host>/` as a Sign-out redirect in the WorkOS dashboard. This is done by hand for each host; the reconcile only manages redirect URIs.                                                                      |
-| The attendee signs in and is told they have no access      | Not a sign-in fault. Access is decided from the conference's tickets: the email the ticket is registered under has to be the one signed in with, and WorkOS has to report it as verified (`src/lib/workshop/access.ts`). |
-| Signed in on one host, signed out on another               | By design. The session cookie belongs to one host. The WorkOS login itself is one account across every conference on the platform.                                                                                       |
+A preview deployment that rehearses sign-in needs hostnames of its own, the
+staging keys and a sealing key of its own, and the rehearsal host needs a
+proven record in the production dataset, which previews read. Revoke that
+record when the rehearsal ends: while it stands, production would hand off to
+it.
 
 ### Environment
 
-| Variable                                                 | State                                                                                                                                  |
-| -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| `WORKOS_CLIENT_ID`, `WORKOS_API_KEY`                     | set, both from the same WorkOS environment                                                                                             |
-| `WORKOS_COOKIE_PASSWORD`                                 | set, at least 32 characters                                                                                                            |
-| `WORKOS_COOKIE_DOMAIN`                                   | **not set**                                                                                                                            |
-| `WORKOS_REDIRECT_URI`, `NEXT_PUBLIC_WORKOS_REDIRECT_URI` | not needed; remove them and redeploy (#1299). See [AUTH.md](AUTH.md#workos-workshops-only) for what the SDK still does with the second |
-| `PLATFORM_ORG_ID`                                        | the platform organization's Sanity `_id`                                                                                               |
-| `CRON_SECRET`                                            | set, or the daily check answers 500 and stops                                                                                          |
+| Variable                                                 | State                                                                                        |
+| -------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `WORKOS_CLIENT_ID`, `WORKOS_API_KEY`                     | set, both from the same WorkOS environment                                                   |
+| `WORKOS_COOKIE_PASSWORD`                                 | set, at least 32 characters, different in every environment, production's never in a preview |
+| `WORKSHOP_AUTH_ORIGIN`                                   | the sign-in host as a bare `https` origin; unset only on a single-domain installation        |
+| `WORKOS_REDIRECT_URI`, `NEXT_PUBLIC_WORKOS_REDIRECT_URI` | not needed; remove them and redeploy                                                         |
+| `PLATFORM_DOMAIN_SUFFIX`                                 | the platform zone, so a `platform-owned` record counts as proven                             |
+| `CRON_SECRET`                                            | set, or the daily domain check answers 500 and stops                                         |
 
-System status reports `WORKOS_CLIENT_ID` and `WORKOS_COOKIE_DOMAIN`. It does not
-report the API key or the cookie password; check those in the hosting provider.
+System status reports `WORKSHOP_AUTH_ORIGIN` and `WORKOS_CLIENT_ID`. It does not
+report the API key or the sealing key; check those in the hosting provider.
 
-To see what WorkOS's redirect-URI API answers without touching production data,
-run `pnpm tsx scripts/probe-workos-redirect-uris.ts` with a staging key.
+The daily domain check (cron `/api/cron/domain-verification`, 05:00 UTC)
+re-checks every claimed domain and alerts organizers; it does not touch WorkOS.
+To run it now:
+`curl -H "Authorization: Bearer $CRON_SECRET" https://<production host>/api/cron/domain-verification`.
+Run it on the production host only: from any deployment it writes to the
+production dataset and alerts organizers.
 
 ## Known gaps
 
-- A host whose record is no longer verified, or that its conference no longer
-  claims, is refused sign-in from that moment, before any reconcile. Its
-  callback stays registered in WorkOS until one runs. A host that stays
-  verified and claimed but stops being platform-controlled (its conference
-  changes owner, for example) keeps its sign-in until a reconcile clears its
-  registration, at the latest with the daily check (#1306). Only a URI the
-  application created is deleted from WorkOS; one it merely found there stays.
-- A tenant whose first domain is its own has no emailed portal link (#1306).
-- Sign-out redirects are registered by hand.
-- Nothing expires by itself. A redirect URI stays until a reconcile runs and
-  removes it.
-- The row and the record say what the application recorded, not what WorkOS
-  holds now. A URI deleted by hand in WorkOS reads **available** until the
-  next reconcile puts it back.
+From the design record (spec §9) and the code:
+
+- Signing out on one host does not end a session the same attendee holds on
+  another conference's host. It lasts until its 7 days are over.
+- A login deleted or an email changed at WorkOS takes effect on a conference's
+  host only when its session ends. Ticket access is not affected: it is decided
+  each time the page or a signup procedure runs.
+- The hand-off token is not single use. Inside its 60 seconds the same browser
+  could redeem it twice; no other browser can.
+- A verified host receives the hand-off for itself, whoever serves it. Whether
+  the sign-in host asks the visitor to confirm before handing off to a host the
+  platform did not allocate is an open decision (#1311).
+- The per-host rows and the domain card say where the host's record stands.
+  They do not reflect `WORKSHOP_AUTH_ORIGIN`; its own row does.
+- The start route on the sign-in host logs nothing when it refuses.
+- Not verified: whether a second sign-in within the WorkOS login's lifetime is
+  silent or shows the form again, and whether WorkOS accepts a sign-out return
+  address with a query string (nothing here depends on it: the host travels in
+  a cookie on the sign-in host).
