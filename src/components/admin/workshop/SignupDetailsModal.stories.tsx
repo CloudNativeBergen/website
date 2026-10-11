@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
-import { expect, fn, userEvent, within } from 'storybook/test'
+import { expect, fn, userEvent, waitFor, within } from 'storybook/test'
 import { withPortalTheme } from '@/lib/storybook'
 import { SignupDetailsModal } from './SignupDetailsModal'
 import { WorkshopSignupStatus } from '@/lib/workshop/types'
@@ -139,7 +139,8 @@ export const ConfirmedMobile: Story = {
     const buttons = actions(canvasElement, 'Move to waitlist')
     await expect(buttons).toHaveLength(3)
     for (const button of buttons) {
-      await expect(button).toBeVisible()
+      // `waitFor`: the modal fades in, and a fading element is not visible yet.
+      await waitFor(() => expect(button).toBeVisible())
       // A finger-sized target, like the delete button beside it.
       await expect(
         button.getBoundingClientRect().height,
@@ -191,9 +192,11 @@ export const MoveToWaitlistQuestion: Story = {
       'Move Alice Johnson to the waitlist for Getting Started with Kubernetes?',
     )
     await expect(question).toHaveTextContent('get no email')
-    await expect(
-      within(question).getByRole('button', { name: 'Keep confirmed' }),
-    ).toBeVisible()
+    const keep = within(question).getByRole('button', {
+      name: 'Keep confirmed',
+    })
+    // `waitFor`: the question fades in, and a fading element is not visible yet.
+    await waitFor(() => expect(keep).toBeVisible())
     await expect(args.onMoveToWaitlist).not.toHaveBeenCalled()
     const root = canvasElement.ownerDocument.documentElement
     await expect(root.scrollWidth).toBeLessThanOrEqual(root.clientWidth)
