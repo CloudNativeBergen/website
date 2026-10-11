@@ -55,7 +55,9 @@ export function buildWorkshopTicketList(
 ): WorkshopTicketList {
   const roles = ticketTypeRoles ?? []
   const granting = new Set(
-    roles.filter((r) => r.grantsWorkshop === true).map((r) => typeKey(r.typeName)),
+    roles
+      .filter((r) => r.grantsWorkshop === true)
+      .map((r) => typeKey(r.typeName)),
   )
   const lastGranting = (name: string) =>
     granting.size === 1 && granting.has(typeKey(name))

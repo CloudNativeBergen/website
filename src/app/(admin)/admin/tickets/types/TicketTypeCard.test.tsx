@@ -85,3 +85,65 @@ describe('availability', () => {
     expect(screen.queryByText('Not reported')).not.toBeInTheDocument()
   })
 })
+
+/**
+ * WHERE WORKSHOP ACCESS IS EDITED (#1332). A conference with workshops edits
+ * the list under /admin/workshops, so the card only shows the answer and links
+ * there. A conference without workshops has no such page (it answers 404), so
+ * its card keeps the control and must not link to it.
+ */
+describe('workshop access', () => {
+  const HREF = '/admin/workshops#workshop-tickets'
+  const writers = () =>
+    screen.queryAllByRole('button', { name: /workshop access/i })
+
+  it.each([
+    ['granted', true, 'Grants workshop access'],
+    ['denied', true, 'No workshop access'],
+    ['unclassified', true, 'Not set'],
+    ['granted', false, 'Grants workshop access (built-in list)'],
+    ['denied', false, 'No workshop access (built-in list)'],
+  ] as const)(
+    'shows %s (configured: %s) as a badge that links to the section, with no control',
+    (access, configured, label) => {
+      render(
+        <TicketTypeCard
+          ticket={paidTicket}
+          publicFreeTicketIds={[]}
+          workshopConfigured={configured}
+          workshopList={{ href: HREF, access }}
+        />,
+      )
+
+      const link = screen.getByRole('link', {
+        name: `${label} Change under Workshops`,
+      })
+      expect(link).toHaveAttribute('href', HREF)
+      // Nothing on the card writes workshop access any more.
+      expect(writers()).toHaveLength(0)
+    },
+  )
+
+  it('keeps the control, and links nowhere, on a conference without workshops', () => {
+    render(
+      <TicketTypeCard
+        ticket={paidTicket}
+        publicFreeTicketIds={[]}
+        workshopConfigured
+        declaredGrantsWorkshop
+      />,
+    )
+
+    expect(
+      writers().map((button) => button.getAttribute('aria-label')),
+    ).toEqual([
+      'Grants workshop access — "Conference Pass"',
+      'No workshop access — "Conference Pass"',
+    ])
+    expect(
+      screen
+        .queryAllByRole('link')
+        .filter((a) => a.getAttribute('href')?.includes('/admin/workshops')),
+    ).toHaveLength(0)
+  })
+})

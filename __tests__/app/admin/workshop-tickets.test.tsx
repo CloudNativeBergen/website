@@ -1,0 +1,552 @@
+/**
+ * @vitest-environment jsdom
+ *
+ * THE WORKSHOP-TICKET LIST, FROM THE PAGE TO THE PORTAL (#1332).
+ *
+ * One path, with our own code real at every step:
+ *
+ *   the section as /admin/workshops loads it (`LoadedWorkshopTickets`: the
+ *   provider's ticket types, the stored answers read live)
+ *     -> an organizer's click
+ *     -> `tickets.admin.setWorkshopAccess`, called with what the click sent
+ *     -> a real `@sanity/client` patch applied by Sanity's `@sanity/mutator`
+ *     -> the portal's gate (`checkWorkshopEligibility`, real `workshopAccessOf`)
+ *        reading that conference back.
+ *
+ * Mocked: the Sanity transport (an in-memory dataset behind real patches and
+ * real GROQ), the ticketing provider's HTTP client, the organization read, and
+ * the tRPC transport (the hook hands its input to the real procedure). So an
+ * assertion here is on what the portal decides and what is stored, and none of
+ * it can pass on a mock's say-so.
+ */
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from '@testing-library/react'
+
+const h = vi.hoisted(() => ({
+  dataset: [] as Record<string, unknown>[],
+  commits: 0,
+  /** The provider's ticket types, or an error to throw. */
+  types: [] as string[] | Error,
+  tickets: [] as { category: string; crm: { email: string } }[],
+  /** Saves the page has sent, so a test can wait for them. */
+  saves: [] as Promise<unknown>[],
+  save: null as null | ((input: unknown) => Promise<unknown>),
+}))
+
+vi.mock('@/lib/sanity/client', async () => {
+  const { createClient } = await import('@sanity/client')
+  const { parse, evaluate } = await import('groq-js')
+  const { createRequire: req } = await import('node:module')
+  const { Mutation } = req(req(import.meta.url).resolve('sanity/package.json'))(
+    '@sanity/mutator',
+  ) as {
+    Mutation: new (o: { mutations: unknown[] }) => {
+      apply: (d: unknown) => Record<string, unknown> | null
+    }
+  }
+  const client = createClient({
+    projectId: 'test',
+    dataset: 'test',
+    apiVersion: '2024-01-01',
+    useCdn: false,
+  })
+  const fetch = async (query: string, params: Record<string, unknown> = {}) =>
+    (await evaluate(parse(query), { dataset: h.dataset, params })).get()
+
+  return {
+    clientRead: { fetch },
+    clientReadCached: { fetch },
+    clientReadUncached: { fetch },
+    clientWrite: {
+      fetch,
+      patch: (id: string) => {
+        const patch = client.patch(id)
+        patch.commit = (async () => {
+          const index = h.dataset.findIndex((d) => d._id === id)
+          if (index === -1) throw new Error(`no such document: ${id}`)
+          h.commits += 1
+          const next = new Mutation({
+            mutations: [{ patch: patch.serialize() }],
+          }).apply(structuredClone(h.dataset[index]))
+          if (next) h.dataset[index] = { ...next, _rev: `rev-${h.commits}` }
+          return { _id: id }
+        }) as typeof patch.commit
+        return patch
+      },
+    },
+  }
+})
+
+vi.mock('@/lib/tickets/provider/checkin', () => ({
+  CheckinProvider: class {
+    readonly name = 'Checkin.no'
+    static canCallApi() {
+      return true
+    }
+    isConfigured() {
+      return true
+    }
+    fetchEventTickets = async () => h.tickets
+    fetchPublicTicketTypes = async () => {
+      if (h.types instanceof Error) throw h.types
+      return {
+        event: { id: 1, name: 'Event', currencies: ['NOK'] },
+        // Out of order on purpose: the page sorts by position.
+        tickets: h.types
+          .map((name, index) => ({ id: index, name, position: index }))
+          .reverse(),
+      }
+    }
+  },
+}))
+
+vi.mock('@/lib/organization/sanity', () => ({
+  getOrganizationById: async () => ({
+    _id: 'org-A',
+    name: 'Tenant A',
+    slug: 'tenant-a',
+    plan: 'pro',
+  }),
+  getOrganizationRefForCurrentConference: () => null,
+}))
+vi.mock('@/lib/conference/sanity', () => ({
+  getConferenceForCurrentDomain: async () => ({
+    conference: CONFERENCE,
+    domain: 'a.test',
+    error: null,
+  }),
+}))
+vi.mock('@/lib/auth', () => ({
+  getAuthSession: vi.fn().mockResolvedValue(null),
+}))
+vi.mock('@/lib/events/registry', () => ({}))
+vi.mock('@/lib/tickets/summary', () => ({ buildTicketSummary: vi.fn() }))
+vi.mock('@/lib/email/from', () => ({
+  platformFallbackContact: () => 'help@a.test',
+}))
+vi.mock('next/cache', () => ({
+  revalidateTag: vi.fn(),
+  cacheLife: vi.fn(),
+  cacheTag: vi.fn(),
+}))
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ refresh: vi.fn() }),
+}))
+vi.mock('@/components/admin/NotificationProvider', () => ({
+  useNotification: () => ({ showNotification: vi.fn() }),
+}))
+// THE TRANSPORT ONLY: the hook's `mutate` calls the real procedure.
+vi.mock('@/lib/trpc/client', () => ({
+  api: {
+    tickets: {
+      admin: {
+        setWorkshopAccess: {
+          useMutation: () => ({
+            mutate: (input: unknown) => {
+              h.saves.push(h.save!(input))
+            },
+            isPending: false,
+          }),
+        },
+      },
+    },
+  },
+}))
+
+import { initTRPC } from '@trpc/server'
+import type { Conference } from '@/lib/conference/types'
+import type { Context } from '@/server/trpc'
+import { ticketsRouter } from '@/server/routers/tickets'
+import { __resetRedeemedCache } from '@/lib/tickets/speakerStatus'
+import { checkWorkshopEligibility } from '@/lib/workshop/eligibility'
+import { stubOwnTicketingSecret } from '../../helpers/ticketingSecrets'
+import { LoadedWorkshopTickets } from '@/components/admin/workshop/tickets/WorkshopTickets'
+
+const ORG_A = 'org-A'
+const CONF_A = 'conf-A'
+const CONFERENCE = {
+  _id: CONF_A,
+  organization: { _ref: ORG_A, _type: 'reference' },
+  checkinEventId: 4242,
+  checkinCustomerId: 7,
+} as unknown as Conference
+
+const SPEAKER = 'Speaker ticket'
+const TWO_DAY = 'Workshop + Conference (2 days)'
+
+type Role = { typeName: string; admits?: boolean; grantsWorkshop?: boolean }
+
+function seed(roles: Role[] | undefined, types: string[] | Error) {
+  h.commits = 0
+  h.saves = []
+  h.types = types
+  h.dataset = [
+    {
+      _id: CONF_A,
+      _type: 'conference',
+      _rev: 'rev-0',
+      ...(roles && {
+        ticketTypeRoles: roles.map((role, i) => ({ _key: `k${i}`, ...role })),
+      }),
+    },
+  ]
+}
+
+/** `ticketTypeRoles` as Sanity holds it now, without the generated keys. */
+const stored = () =>
+  ((h.dataset[0].ticketTypeRoles ?? []) as (Role & { _key: string })[]).map(
+    ({ _key, ...role }) => {
+      void _key
+      return role
+    },
+  )
+
+/** Render the section the way /admin/workshops loads it. */
+async function openSection() {
+  cleanup()
+  render(await LoadedWorkshopTickets({ conference: CONFERENCE }))
+}
+
+/** Every save the page sent has reached Sanity (or been refused). */
+async function saved() {
+  await act(async () => {
+    await Promise.allSettled(h.saves)
+  })
+}
+
+const row = (typeName: string) =>
+  within(screen.getByText(typeName, { selector: 'span' }).closest('li')!)
+
+/** The answer shown for each listed type, in page order. */
+const answers = () =>
+  screen
+    .getAllByRole('listitem')
+    .filter((li) => within(li).queryAllByRole('button').length === 2)
+    .map((li) => [
+      li.querySelector('span')!.textContent,
+      li.querySelector('span.rounded-full')!.textContent,
+    ])
+
+/** The portal's decision for the one holder of one ticket type. */
+async function gate(category: string) {
+  __resetRedeemedCache()
+  h.tickets = [{ category, crm: { email: 'ada@x.test' } }]
+  return checkWorkshopEligibility({
+    userEmail: 'ada@x.test',
+    conference: CONFERENCE,
+    contactEmail: 'help@a.test',
+  })
+}
+
+beforeEach(() => {
+  vi.stubEnv('PLATFORM_ORG_ID', 'org-platform')
+  stubOwnTicketingSecret(ORG_A)
+  vi.spyOn(console, 'error').mockImplementation(() => {})
+
+  const speaker = {
+    _id: 'sp-admin',
+    name: 'Admin',
+    isOrganizer: true,
+    organizerOrgIds: [ORG_A],
+  }
+  const user = { email: 'a@example.com', name: 'Admin', picture: '' }
+  const caller = initTRPC
+    .context<Context>()
+    .create()
+    .createCallerFactory(ticketsRouter)({
+    req: { headers: new Headers(), url: 'http://localhost:3000' },
+    session: {
+      expires: new Date(Date.now() + 86_400_000).toISOString(),
+      user,
+      speaker,
+    },
+    speaker,
+    user,
+    workosUser: null,
+    ipAddress: '127.0.0.1',
+  } as unknown as Context)
+  h.save = (input) =>
+    caller.admin.setWorkshopAccess(
+      input as Parameters<typeof caller.admin.setWorkshopAccess>[0],
+    )
+})
+
+afterEach(() => {
+  cleanup()
+  vi.unstubAllEnvs()
+  vi.restoreAllMocks()
+})
+
+describe('a save from the section changes what the portal decides', () => {
+  it('admits a holder of a type once it is marked there', async () => {
+    seed(
+      [{ typeName: 'Two-day pass', grantsWorkshop: true }],
+      ['Two-day pass', 'Workshop 2026'],
+    )
+    const before = await gate('Workshop 2026')
+    expect(before.isEligible).toBe(false)
+    expect(before.reason).toContain('has not been set up for workshop access')
+
+    await openSection()
+    expect(answers()).toEqual([
+      ['Two-day pass', 'Grants workshop access'],
+      ['Workshop 2026', 'Not set'],
+    ])
+    fireEvent.click(
+      row('Workshop 2026').getByRole('button', {
+        name: /^Grants workshop access/,
+      }),
+    )
+    await saved()
+
+    expect((await gate('Workshop 2026')).isEligible).toBe(true)
+    // And the page, loaded again, shows the answer the portal now gives.
+    await openSection()
+    expect(answers()).toEqual([
+      ['Two-day pass', 'Grants workshop access'],
+      ['Workshop 2026', 'Grants workshop access'],
+    ])
+  })
+
+  it('refuses a holder with the upgrade text once their type is answered no', async () => {
+    seed(
+      [
+        { typeName: 'Two-day pass', grantsWorkshop: true },
+        { typeName: 'Day pass', grantsWorkshop: true },
+      ],
+      ['Two-day pass', 'Day pass'],
+    )
+    expect((await gate('Day pass')).isEligible).toBe(true)
+
+    await openSection()
+    fireEvent.click(
+      row('Day pass').getByRole('button', { name: /^No workshop access/ }),
+    )
+    await saved()
+
+    const after = await gate('Day pass')
+    expect(after.isEligible).toBe(false)
+    expect(after.reason).toBe(
+      'No valid workshop ticket found. Please upgrade your ticket to include workshop access, or contact us at help@a.test if you believe this is an error.',
+    )
+  })
+})
+
+/**
+ * THE RULE AGREES WITH THE PAGE. On a conference that has marked a type, an
+ * entry that only answers the seating question is not a workshop answer: the
+ * page shows "Not set" and the holder reads the text that names the missing
+ * decision, where an explicit no shows "No workshop access" and the other text.
+ */
+describe('a type whose entry carries only a seating answer', () => {
+  it('shows as not set, and its holder is told the decision is missing', async () => {
+    seed(
+      [
+        { typeName: 'Two-day pass', grantsWorkshop: true },
+        { typeName: 'Student', admits: true },
+        { typeName: 'Day pass', admits: true, grantsWorkshop: false },
+      ],
+      ['Two-day pass', 'Student', 'Day pass'],
+    )
+
+    await openSection()
+    expect(answers()).toEqual([
+      ['Two-day pass', 'Grants workshop access'],
+      ['Student', 'Not set'],
+      ['Day pass', 'No workshop access'],
+    ])
+    expect(screen.getByRole('status')).toHaveTextContent(
+      '“Student” is not set. Its holders cannot sign up for workshops until you choose an answer below.',
+    )
+
+    expect((await gate('Student')).reason).toBe(
+      'Your ticket type “Student” has not been set up for workshop access yet. This is a configuration gap on our side, not a problem with your ticket — please contact us at help@a.test so an organizer can mark which ticket types include workshop access.',
+    )
+    expect((await gate('Day pass')).reason).toBe(
+      'No valid workshop ticket found. Please upgrade your ticket to include workshop access, or contact us at help@a.test if you believe this is an error.',
+    )
+  })
+})
+
+describe('marking the first type', () => {
+  const TYPES = ['Early Bird', SPEAKER, TWO_DAY]
+  const markFirst = async () => {
+    seed(undefined, TYPES)
+    await openSection()
+    expect(answers()).toEqual([
+      ['Early Bird', 'No workshop access (built-in list)'],
+      [SPEAKER, 'Grants workshop access (built-in list)'],
+      [TWO_DAY, 'Grants workshop access (built-in list)'],
+    ])
+    fireEvent.click(
+      row('Early Bird').getByRole('button', {
+        name: /^Grants workshop access/,
+      }),
+    )
+    // The confirmation, before anything is written.
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'This is the first ticket type marked at this conference.',
+    )
+    expect(h.commits).toBe(0)
+  }
+
+  it('keeps every previously granted type granted when they are carried over', async () => {
+    await markFirst()
+    fireEvent.click(screen.getByRole('button', { name: /^Mark this type/ }))
+    await saved()
+
+    expect(h.commits).toBe(1)
+    await openSection()
+    expect(answers()).toEqual([
+      ['Early Bird', 'Grants workshop access'],
+      [SPEAKER, 'Grants workshop access'],
+      [TWO_DAY, 'Grants workshop access'],
+    ])
+    expect((await gate(TWO_DAY)).isEligible).toBe(true)
+    expect((await gate(SPEAKER)).isEligible).toBe(true)
+  })
+
+  it('leaves them not set when the organizer declines the carry-over', async () => {
+    await markFirst()
+    fireEvent.click(screen.getByRole('button', { name: /^Only this type/ }))
+    await saved()
+
+    await openSection()
+    expect(answers()).toEqual([
+      ['Early Bird', 'Grants workshop access'],
+      [SPEAKER, 'Not set'],
+      [TWO_DAY, 'Not set'],
+    ])
+    const refused = await gate(TWO_DAY)
+    expect(refused.isEligible).toBe(false)
+    expect(refused.reason).toContain('has not been set up for workshop access')
+  })
+})
+
+describe('losing the last granting type', () => {
+  it('asks, writes nothing on cancel, and brings the built-in list back on confirm', async () => {
+    seed(
+      [{ typeName: 'Early Bird', admits: true, grantsWorkshop: true }],
+      ['Early Bird', SPEAKER],
+    )
+    expect((await gate(SPEAKER)).isEligible).toBe(false)
+
+    await openSection()
+    const no = () =>
+      fireEvent.click(
+        row('Early Bird').getByRole('button', { name: /^No workshop access/ }),
+      )
+    no()
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      `It grants workshop access to “${SPEAKER}”, and to no other ticket type.`,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    await saved()
+    expect(h.commits).toBe(0)
+    expect(stored()).toEqual([
+      { typeName: 'Early Bird', admits: true, grantsWorkshop: true },
+    ])
+
+    no()
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Save and use the built-in list' }),
+    )
+    await saved()
+
+    expect(stored()).toEqual([
+      { typeName: 'Early Bird', admits: true, grantsWorkshop: false },
+    ])
+    // The built-in list decides again, exactly as the question said.
+    expect((await gate(SPEAKER)).isEligible).toBe(true)
+    expect((await gate('Early Bird')).isEligible).toBe(false)
+    await openSection()
+    expect(screen.getByText('This list is not configured yet.')).toBeVisible()
+  })
+
+  it('asks before removing an orphaned entry that is the last one, and keeps its seating answer', async () => {
+    seed(
+      [
+        { typeName: 'Workshop 2025', admits: false, grantsWorkshop: true },
+        { typeName: 'Workshop 2026', grantsWorkshop: false },
+      ],
+      ['Workshop 2026', SPEAKER],
+    )
+
+    await openSection()
+    const remove = () =>
+      fireEvent.click(
+        screen.getByRole('button', {
+          name: 'Remove the entry for "Workshop 2025"',
+        }),
+      )
+    remove()
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      `It grants workshop access to “${SPEAKER}”, and to no other ticket type.`,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    await saved()
+    expect(h.commits).toBe(0)
+
+    remove()
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Remove and use the built-in list' }),
+    )
+    await saved()
+
+    expect(stored()).toEqual([
+      { typeName: 'Workshop 2026', grantsWorkshop: false },
+      { typeName: 'Workshop 2025', admits: false },
+    ])
+    expect((await gate(SPEAKER)).isEligible).toBe(true)
+  })
+
+  it('removes an orphaned entry without asking while another type grants', async () => {
+    seed(
+      [
+        { typeName: 'Two-day pass', grantsWorkshop: true },
+        { typeName: 'Workshop 2025', admits: true, grantsWorkshop: true },
+      ],
+      ['Two-day pass'],
+    )
+
+    await openSection()
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Remove the entry for "Workshop 2025"',
+      }),
+    )
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    await saved()
+
+    expect(stored()).toEqual([
+      { typeName: 'Two-day pass', grantsWorkshop: true },
+      { typeName: 'Workshop 2025', admits: true },
+    ])
+    await openSection()
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
+  })
+})
+
+describe('a provider that cannot be read', () => {
+  it('says so, offers no switch, and never lists the stored answers as orphaned', async () => {
+    seed(
+      [{ typeName: 'Two-day pass', grantsWorkshop: true }],
+      new Error('checkin down'),
+    )
+
+    await openSection()
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'The ticket types could not be read from Checkin.no.',
+    )
+    expect(screen.queryAllByRole('button')).toHaveLength(0)
+    expect(screen.queryByText(/Two-day pass/)).not.toBeInTheDocument()
+  })
+})

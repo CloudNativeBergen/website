@@ -1,7 +1,10 @@
 /**
  * @vitest-environment jsdom
  *
- * DECLARING WORKSHOP ACCESS, on the card that shows the ticket type.
+ * MARKING WORKSHOP ACCESS for one ticket type. The control moved from the
+ * ticket-type card to the "Workshop tickets" section of /admin/workshops
+ * (#1332); a conference without the workshops feature still gets it on the
+ * card, which is the layout these cases render.
  *
  * `grantsWorkshop` is ACCESS CONTROL: it decides who may open /workshop and who
  * is emailed the sign-in instructions. And it has a cliff — the FIRST type
@@ -52,7 +55,7 @@ beforeEach(() => {
 })
 afterEach(cleanup)
 
-describe('a conference still on the historical list', () => {
+describe('a conference still on the built-in list', () => {
   const onBridge = {
     typeName: SPEAKER,
     workshopConfigured: false,
@@ -63,7 +66,7 @@ describe('a conference still on the historical list', () => {
   it('names the types that would lose access, before any click', () => {
     render(<WorkshopAccessControl {...onBridge} />)
 
-    expect(screen.getByText('Historical list')).toBeInTheDocument()
+    expect(screen.getByText('Built-in list')).toBeInTheDocument()
     const warning = screen.getByText(/also grants access to/)
     expect(warning).toHaveTextContent(TWO_DAY)
     expect(warning).toHaveTextContent(UPGRADE)
@@ -79,9 +82,9 @@ describe('a conference still on the historical list', () => {
 
     expect(h.mutate).not.toHaveBeenCalled()
     expect(
-      screen.getByText(/first workshop declaration at this conference/),
+      screen.getByText(/first ticket type marked at this conference/),
     ).toBeInTheDocument()
-    expect(screen.getByText(/will stop unless declared/)).toHaveTextContent(
+    expect(screen.getByText(/will stop unless marked/)).toHaveTextContent(
       TWO_DAY,
     )
   })
@@ -92,7 +95,7 @@ describe('a conference still on the historical list', () => {
     fireEvent.click(
       screen.getByRole('button', { name: /^Grants workshop access/ }),
     )
-    fireEvent.click(screen.getByRole('button', { name: /^Declare this type/ }))
+    fireEvent.click(screen.getByRole('button', { name: /^Mark this type/ }))
 
     expect(h.mutate).toHaveBeenCalledTimes(1)
     expect(h.mutate).toHaveBeenCalledWith({
@@ -130,7 +133,7 @@ describe('a conference still on the historical list', () => {
 
     expect(h.mutate).not.toHaveBeenCalled()
     expect(
-      screen.queryByText(/first workshop declaration/),
+      screen.queryByText(/first ticket type marked/),
     ).not.toBeInTheDocument()
   })
 
@@ -186,7 +189,7 @@ describe('a conference that has declared workshop access', () => {
       />,
     )
 
-    expect(screen.queryByText(/historical list/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/built-in list/i)).not.toBeInTheDocument()
     fireEvent.click(
       screen.getByRole('button', { name: /^Grants workshop access/ }),
     )
@@ -221,7 +224,7 @@ describe('a conference that has declared workshop access', () => {
         bridgeGrantedOtherTypes={[SPEAKER]}
       />,
     )
-    expect(screen.getByText('Historical list')).toBeInTheDocument()
+    expect(screen.getByText('Built-in list')).toBeInTheDocument()
 
     // Another card saved, carrying this one; the refreshed page says so.
     rerender(
@@ -232,7 +235,7 @@ describe('a conference that has declared workshop access', () => {
       />,
     )
 
-    expect(screen.getByText('Declared')).toBeInTheDocument()
+    expect(screen.getByText('Set')).toBeInTheDocument()
     expect(
       screen.getByRole('button', { name: /^Grants workshop access/ }),
     ).toHaveAttribute('aria-pressed', 'true')
@@ -262,6 +265,105 @@ describe('a conference that has declared workshop access', () => {
     expect(
       screen.getByRole('button', { name: /^No workshop access/ }),
     ).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  /**
+   * THE CLIFF IN THE OTHER DIRECTION (#1332). The built-in list decides
+   * whenever nothing is marked, so a no for the last granting type changes who
+   * gets in for every type at once. The server names which type that is and
+   * which types the built-in list grants.
+   */
+  describe('the last type that grants', () => {
+    const last = {
+      typeName: TWO_DAY,
+      workshopConfigured: true,
+      declaredGrantsWorkshop: true,
+      lastGranting: true,
+      builtInGranted: [SPEAKER, TWO_DAY],
+    }
+    const no = () =>
+      fireEvent.click(
+        screen.getByRole('button', { name: /^No workshop access/ }),
+      )
+
+    it('asks before unmarking it, naming what the built-in list will grant', () => {
+      render(<WorkshopAccessControl {...last} />)
+
+      no()
+
+      expect(h.mutate).not.toHaveBeenCalled()
+      const question = screen.getByRole('alert')
+      expect(question).toHaveTextContent(
+        'This leaves no ticket type that grants workshop access.',
+      )
+      expect(question).toHaveTextContent(
+        `The built-in list will decide again. It grants workshop access to “${SPEAKER}” and “${TWO_DAY}”, and to no other ticket type.`,
+      )
+    })
+
+    it('says nobody gets in when the built-in list matches none of the types', () => {
+      render(<WorkshopAccessControl {...last} builtInGranted={[]} />)
+
+      no()
+
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        'It matches none of this conference’s ticket types, so nobody will be able to sign up for workshops.',
+      )
+    })
+
+    it('writes nothing when the organizer cancels', () => {
+      render(<WorkshopAccessControl {...last} />)
+
+      no()
+      fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+
+      expect(h.mutate).not.toHaveBeenCalled()
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+      // The answer on screen is still the stored one.
+      expect(
+        screen.getByRole('button', { name: /^Grants workshop access/ }),
+      ).toHaveAttribute('aria-pressed', 'true')
+    })
+
+    it('saves with the confirmation the server requires', () => {
+      render(<WorkshopAccessControl {...last} />)
+
+      no()
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Save and use the built-in list' }),
+      )
+
+      expect(h.mutate).toHaveBeenCalledTimes(1)
+      expect(h.mutate.mock.calls[0][0]).toStrictEqual({
+        updates: [{ typeName: TWO_DAY, grantsWorkshop: false }],
+        allowBuiltInList: true,
+      })
+    })
+
+    it('asks nothing when another type still grants', () => {
+      render(<WorkshopAccessControl {...last} lastGranting={false} />)
+
+      no()
+
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+      // And the save does not carry a confirmation nobody gave.
+      expect(h.mutate.mock.calls[0][0]).toStrictEqual({
+        updates: [{ typeName: TWO_DAY, grantsWorkshop: false }],
+      })
+    })
+
+    it('asks nothing when marking the last granting type again', () => {
+      render(<WorkshopAccessControl {...last} />)
+
+      fireEvent.click(
+        screen.getByRole('button', { name: /^Grants workshop access/ }),
+      )
+
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+      expect(h.mutate.mock.calls[0][0]).toStrictEqual({
+        updates: [{ typeName: TWO_DAY, grantsWorkshop: true }],
+      })
+    })
   })
 
   it('is reversible without Studio', () => {

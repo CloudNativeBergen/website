@@ -15,7 +15,9 @@ import { EmptyState } from '@/components/EmptyState'
 import { buildClassificationContext } from '@/lib/tickets/classificationContext'
 import { proposalFor } from '@/lib/tickets/discovery'
 import { typeKey } from '@/lib/tickets/classification'
-import { workshopAccessOf } from '@/lib/workshop/eligibility'
+import { isWorkshopsEnabledForConference } from '@/lib/features/workshops'
+import { buildWorkshopTicketList } from '@/lib/workshop/ticket-list'
+import { WORKSHOP_TICKETS_HREF } from '@/components/admin/workshop/tickets'
 import type { EventTicket } from '@/lib/tickets/types'
 
 export default async function TicketTypesAdminPage() {
@@ -101,20 +103,17 @@ export default async function TicketTypesAdminPage() {
       (role) => typeKey(role.typeName) === typeKey(name),
     )
 
-  // THE WORKSHOP CLIFF, resolved server-side so the legacy list of type names
-  // never reaches the browser. A conference is configured as soon as ONE type
-  // declares access; until then `workshopAccessOf` answers from that list, and
-  // the first declaration anywhere switches it off for every type at once —
-  // which is precisely what `WorkshopAccessControl` has to warn about, by name.
-  const roles = classification.ticketTypeRoles
-  const workshopConfigured = (roles ?? []).some(
-    (role) => role.grantsWorkshop === true,
+  // WORKSHOP ACCESS, resolved server-side so the legacy list of type names
+  // never reaches the browser: each type's answer by the rule the portal runs,
+  // and the two cliffs `WorkshopAccessControl` has to warn about by name.
+  const workshopList = buildWorkshopTicketList(
+    tickets.map((ticket) => ticket.name),
+    classification.ticketTypeRoles,
   )
-  const bridgeGranted = workshopConfigured
-    ? []
-    : tickets
-        .map((t) => t.name)
-        .filter((name) => workshopAccessOf(name, roles) === 'granted')
+  // WHERE IT IS EDITED (#1332). A conference with workshops edits the list
+  // under /admin/workshops, and the cards here show the answer and link there.
+  // Without the feature that page answers 404, so the cards keep the control.
+  const editedUnderWorkshops = await isWorkshopsEnabledForConference(conference)
 
   return (
     <div className="space-y-6">
@@ -127,7 +126,7 @@ export default async function TicketTypesAdminPage() {
       />
 
       <div className="space-y-4">
-        {tickets.map((ticket) => (
+        {tickets.map((ticket, index) => (
           <TicketTypeCard
             key={ticket.id}
             ticket={ticket}
@@ -137,14 +136,29 @@ export default async function TicketTypesAdminPage() {
               ticket.name,
               classification.ticketTypeProposals,
             )}
-            declaredGrantsWorkshop={declaredRole(ticket.name)?.grantsWorkshop}
-            workshopConfigured={workshopConfigured}
-            bridgeGrantsThisType={bridgeGranted.some(
-              (name) => typeKey(name) === typeKey(ticket.name),
-            )}
-            bridgeGrantedOtherTypes={bridgeGranted.filter(
-              (name) => typeKey(name) !== typeKey(ticket.name),
-            )}
+            declaredGrantsWorkshop={workshopList.types[index].stored}
+            workshopConfigured={workshopList.configured}
+            bridgeGrantsThisType={
+              !workshopList.configured &&
+              workshopList.types[index].access === 'granted'
+            }
+            bridgeGrantedOtherTypes={
+              workshopList.configured
+                ? []
+                : workshopList.builtInGranted.filter(
+                    (name) => typeKey(name) !== typeKey(ticket.name),
+                  )
+            }
+            lastGranting={workshopList.types[index].lastGranting}
+            builtInGranted={workshopList.builtInGranted}
+            workshopList={
+              editedUnderWorkshops
+                ? {
+                    href: WORKSHOP_TICKETS_HREF,
+                    access: workshopList.types[index].access,
+                  }
+                : undefined
+            }
           />
         ))}
 

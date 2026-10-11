@@ -67,7 +67,13 @@ describe('a conference that has marked a type', () => {
 
   it('gives each provider type the answer the rule gives its holders', () => {
     const list = buildWorkshopTicketList(
-      ['  WORKSHOP DAG', 'Conference only', 'Seating only', 'New type', SPEAKER],
+      [
+        '  WORKSHOP DAG',
+        'Conference only',
+        'Seating only',
+        'New type',
+        SPEAKER,
+      ],
       roles,
     )
 
@@ -102,7 +108,11 @@ describe('a conference that has marked a type', () => {
     const list = buildWorkshopTicketList(['Workshop dag'], roles)
 
     expect(list.orphaned).toEqual([
-      { typeName: 'Conference only', grantsWorkshop: false, lastGranting: false },
+      {
+        typeName: 'Conference only',
+        grantsWorkshop: false,
+        lastGranting: false,
+      },
       { typeName: 'Workshop 2025', grantsWorkshop: true, lastGranting: false },
     ])
   })

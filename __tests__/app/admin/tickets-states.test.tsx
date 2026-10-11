@@ -52,6 +52,10 @@ vi.mock('@/lib/sanity/client', () => ({
 vi.mock('@/lib/tickets/provider/checkin', () => ({
   CheckinProvider: class {
     readonly name = 'Checkin.no'
+    // The workshops gate asks this of the class, without constructing one.
+    static canCallApi(c: { apiKey?: string; apiSecret?: string }) {
+      return !!(c.apiKey && c.apiSecret)
+    }
     isConfigured() {
       return true
     }
@@ -63,6 +67,9 @@ vi.mock('@/lib/tickets/provider/checkin', () => ({
 vi.mock('@/lib/tickets/provider/tito', () => ({
   TitoProvider: class {
     readonly name = 'Tito'
+    static canCallApi(c: { apiKey?: string }) {
+      return !!c.apiKey
+    }
     isConfigured() {
       return true
     }
@@ -110,7 +117,7 @@ vi.mock('@/app/(admin)/admin/tickets/types/TicketTypeRoleControl', () => ({
 // whether this conference still runs on the legacy list in
 // `@/lib/workshop/eligibility`, and which types that list currently lets into
 // the workshops. Those are the types an organizer strands by declaring one.
-vi.mock('@/app/(admin)/admin/tickets/types/WorkshopAccessControl', () => ({
+vi.mock('@/components/admin/workshop/tickets/WorkshopAccessControl', () => ({
   WorkshopAccessControl: ({
     typeName,
     workshopConfigured,
@@ -488,6 +495,87 @@ describe('the platform organization with a bound Checkin event', () => {
     expect(markup).toContain(
       'workshop-access-Speaker ticket|configured:true|grants:false|others:|',
     )
+  })
+
+  /**
+   * WHERE WORKSHOP ACCESS IS EDITED (#1332), decided by the page from the real
+   * workshops gate. The platform org above has no plan, so it has no workshops
+   * and no /admin/workshops: every case before this one renders the control.
+   * On the `pro` plan the same conference has workshops, the list is edited
+   * under /admin/workshops, and the card shows the rule's answer and links
+   * there instead.
+   */
+  describe('/admin/tickets/types and where workshop access is edited', () => {
+    const base = {
+      description: null,
+      price: [],
+      available: null,
+      requiresInvitation: false,
+      visibleStartsAt: null,
+      visibleEndsAt: null,
+      type: 'regular',
+    }
+    const SECTION = 'href="/admin/workshops#workshop-tickets"'
+
+    beforeEach(() => {
+      stubConference(PLATFORM_ORG_ID, {
+        ...CHECKIN_BINDING,
+        ticketTypeRoles: [
+          { typeName: 'Two-day pass', grantsWorkshop: true },
+          { typeName: 'Day pass', admits: true, grantsWorkshop: false },
+          { typeName: 'Student', admits: true },
+        ],
+      } as never)
+      h.fetchPublicTicketTypes.mockResolvedValue({
+        event: { id: 1, name: 'Event', currencies: ['NOK'] },
+        tickets: [
+          { ...base, id: 1, name: 'Two-day pass', position: 1 },
+          { ...base, id: 2, name: 'Day pass', position: 2 },
+          { ...base, id: 3, name: 'Student', position: 3 },
+        ],
+      })
+    })
+
+    it('with workshops: shows the three answers as links to the section, and no control', async () => {
+      mockGetOrganizationById.mockResolvedValue({
+        _id: PLATFORM_ORG_ID,
+        name: 'Platform',
+        slug: 'platform-org',
+        plan: 'pro',
+      })
+
+      const markup = await html(TicketTypesAdminPage)
+
+      // One link per card, each carrying that type's answer by the rule: a
+      // seating-only entry ("Student") is not set.
+      const links = [
+        ...markup.matchAll(/<a [^>]*href="([^"]*)"[^>]*>(.*?)<\/a>/g),
+      ]
+        .filter(([, href]) => href.startsWith('/admin/workshops'))
+        .map(([, href, body]) => [href, body.replace(/<[^>]+>/g, '')])
+      expect(links).toEqual([
+        [
+          '/admin/workshops#workshop-tickets',
+          'Grants workshop access Change under Workshops',
+        ],
+        [
+          '/admin/workshops#workshop-tickets',
+          'No workshop access Change under Workshops',
+        ],
+        ['/admin/workshops#workshop-tickets', 'Not set Change under Workshops'],
+      ])
+      expect(markup).not.toContain('workshop-access-')
+    })
+
+    it('without workshops: keeps the control on every card, and links nowhere', async () => {
+      const markup = await html(TicketTypesAdminPage)
+
+      expect(markup).toContain('workshop-access-Two-day pass|configured:true')
+      expect(markup).toContain('workshop-access-Day pass|configured:true')
+      expect(markup).toContain('workshop-access-Student|configured:true')
+      expect(markup).not.toContain('/admin/workshops')
+      expect(markup).not.toContain(SECTION)
+    })
   })
 
   /**
