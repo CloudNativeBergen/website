@@ -20,6 +20,14 @@ export function workshopCallbackUri(origin: string): string {
 /** Where a tenant host sends the browser to start a sign-in: on the auth host. */
 export const WORKSHOP_AUTH_START_PATH = '/api/auth/workshop/start'
 
+/**
+ * Where a tenant host sends the browser to end the WorkOS login (#1315), and
+ * where WorkOS sends it back: both on the auth host. The second is the ONE
+ * sign-out redirect registered with WorkOS, as `<auth origin><path>`.
+ */
+export const WORKSHOP_AUTH_SIGN_OUT_PATH = '/api/auth/workshop/sign-out'
+export const WORKSHOP_AUTH_SIGNED_OUT_PATH = '/api/auth/workshop/signed-out'
+
 /** The tenant host's entry points that begin a sign-in or a sign-up. */
 export const WORKSHOP_SIGN_IN_PATH = '/workshop/sign-in'
 export const WORKSHOP_SIGN_UP_PATH = '/workshop/sign-up'

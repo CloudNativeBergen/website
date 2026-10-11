@@ -26,6 +26,10 @@ export type SealPurpose =
   | 'handoff'
   /** The tenant host's own session. */
   | 'session'
+  /** What the tenant host asks the auth host to end. */
+  | 'sign-out-request'
+  /** The auth host's cookie that names where a sign-out returns to. */
+  | 'sign-out-return'
 
 const MIN_PASSWORD_LENGTH = 32
 
