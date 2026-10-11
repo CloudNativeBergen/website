@@ -417,7 +417,8 @@ const LEGACY_WORKSHOP_CATEGORIES = [
  *
  *  - `granted`      — this type grants it.
  *  - `denied`       — this type does not. The holder needs a different ticket.
- *  - `unclassified` — nobody at this conference has said either way. The
+ *  - `unclassified` — nobody at this conference has said either way: the type
+ *                     has no entry, or an entry with no workshop answer. The
  *                     holder may well be entitled; an ORGANIZER has to answer.
  *                     Only reachable on a conference that HAS declared roles,
  *                     so it can never be handed to an attendee of a conference
@@ -461,7 +462,11 @@ export function workshopAccessOf(
       : 'denied'
   }
 
-  const role = roles.find((r) => typeKey(r.typeName) === key)
-  if (!role) return 'unclassified'
-  return role.grantsWorkshop === true ? 'granted' : 'denied'
+  // AN ENTRY IS NOT AN ANSWER. An entry may exist only to say whether the type
+  // seats a human (`admits`); it then says nothing about workshops, and its
+  // holder is in the same place as one whose type has no entry at all: nobody
+  // decided. Only an explicit `false` is a no.
+  const answer = roles.find((r) => typeKey(r.typeName) === key)?.grantsWorkshop
+  if (answer === true) return 'granted'
+  return answer === false ? 'denied' : 'unclassified'
 }
