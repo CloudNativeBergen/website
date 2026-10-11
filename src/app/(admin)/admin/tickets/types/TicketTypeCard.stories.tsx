@@ -189,12 +189,14 @@ export const RoleProposedMobileDark: Story = {
 }
 
 /**
- * THE WORKSHOP CLIFF, on a conference that has never declared anything.
+ * THE WORKSHOP CLIFF, on a conference that has never marked anything. Only a
+ * conference WITHOUT the workshops feature shows the control here; one with it
+ * edits the list under /admin/workshops (see `WorkshopBadge` below).
  *
- * Access still comes from the historical list of type names, and the first
- * declaration anywhere switches that list off for every type at once. The card
- * has to say which types grant access TODAY before a click can revoke them, and
- * the confirm has to offer carrying them over as the first option.
+ * Access still comes from the built-in list of type names, and the first mark
+ * anywhere switches that list off for every type at once. The card has to say
+ * which types grant access TODAY before a click can revoke them, and the
+ * confirm has to offer carrying them over as the first option.
  */
 export const WorkshopOnBridge: Story = {
   args: {
@@ -218,13 +220,13 @@ export const WorkshopOnBridge: Story = {
       canvas.getByRole('button', { name: /^Grants workshop access/ }),
     )
     await expect(
-      canvas.getByText(/first workshop declaration at this conference/),
+      canvas.getByText(/first ticket type marked at this conference/),
     ).toBeVisible()
     // The carry-over is the FIRST option offered, the lossy one is second.
     const options = canvas.getAllByRole('button', {
-      name: /Declare this type and keep|Only this type/,
+      name: /Mark this type and keep|Only this type/,
     })
-    await expect(options[0]).toHaveTextContent('Declare this type and keep')
+    await expect(options[0]).toHaveTextContent('Mark this type and keep')
   },
 }
 
@@ -245,9 +247,75 @@ export const WorkshopOnBridgeMobileDark: Story = {
   play: WorkshopOnBridge.play,
 }
 
-/** DECLARED: the bridge is behind this conference, and every type is settled. */
+/** MARKED: the built-in list is behind this conference, and this type is settled. */
 export const WorkshopDeclared: Story = {
   args: { workshopConfigured: true, declaredGrantsWorkshop: true },
+}
+
+const SECTION = '/admin/workshops#workshop-tickets'
+
+/**
+ * A CONFERENCE WITH WORKSHOPS (#1332): the list is edited under
+ * /admin/workshops, so the card shows the answer and links there. Nothing on
+ * the card writes workshop access.
+ */
+export const WorkshopBadge: Story = {
+  args: {
+    workshopConfigured: true,
+    workshopList: { href: SECTION, access: 'granted' },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(
+      canvas.getByRole('link', {
+        name: 'Grants workshop access Change under Workshops',
+      }),
+    ).toHaveAttribute('href', SECTION)
+    await expect(
+      canvas.queryByRole('button', { name: /workshop access/i }),
+    ).not.toBeInTheDocument()
+  },
+}
+
+export const WorkshopBadgeNoAccess: Story = {
+  args: {
+    workshopConfigured: true,
+    workshopList: { href: SECTION, access: 'denied' },
+  },
+}
+
+/** Nobody answered for this type: its holders are refused until someone does. */
+export const WorkshopBadgeNotSet: Story = {
+  args: {
+    workshopConfigured: true,
+    workshopList: { href: SECTION, access: 'unclassified' },
+  },
+}
+
+/** Nothing is marked yet: the answer is the built-in list's, and says so. */
+export const WorkshopBadgeBuiltInList: Story = {
+  args: {
+    workshopConfigured: false,
+    workshopList: { href: SECTION, access: 'granted' },
+  },
+}
+
+export const WorkshopBadgeMobileDark: Story = {
+  args: WorkshopBadgeBuiltInList.args,
+  parameters: {
+    viewport: { defaultViewport: 'phone' },
+    theme: 'dark',
+    backgrounds: { default: 'dark' },
+  },
+  play: async ({ canvasElement }) => {
+    const link = within(canvasElement).getByRole('link', {
+      name: /Change under Workshops/,
+    })
+    // The badge and the link text stay inside the card at phone width.
+    await expect(link.getBoundingClientRect().right).toBeLessThanOrEqual(
+      canvasElement.getBoundingClientRect().right,
+    )
+  },
 }
 
 export const MobileDark: Story = {
