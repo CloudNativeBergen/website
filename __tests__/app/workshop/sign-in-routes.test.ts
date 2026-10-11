@@ -193,6 +193,13 @@ describe('sign-in: nothing is begun', () => {
     },
   )
 
+  it('the auth host in another case is still the auth host', async () => {
+    const response = await begin('AUTH.Example.org')
+
+    expect(response.status).toBe(404)
+    expect(getDomainClaim).not.toHaveBeenCalled()
+  })
+
   it('a host that is not proven goes to the portal page, which says sign-in is unavailable', async () => {
     getDomainClaim.mockResolvedValue(null)
 

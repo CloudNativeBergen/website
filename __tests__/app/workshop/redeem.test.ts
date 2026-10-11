@@ -273,6 +273,13 @@ describe('redeem: a hand-off for this host, in the browser that began', () => {
     ).toMatchObject({ host: TENANT, userId: 'user_01' })
   })
 
+  it('reads the Host header in any case', async () => {
+    const response = await redeem(await handOff(), { on: 'Conf.Example.ORG' })
+
+    expect(response.headers.get('location')).toBe('/workshop')
+    expect(sessionOf(response)).toBeDefined()
+  })
+
   it('a host the platform allocated signs in', async () => {
     const response = await redeem(await handOff(ALLOCATED), { on: ALLOCATED })
 

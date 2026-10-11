@@ -552,8 +552,11 @@ describe('workshop portal — signed-in attendee', () => {
       expect(await isSignedOut()).toBe(true)
     })
 
-    it('with a session issued while another conference claimed the host', async () => {
-      await signedInAs(ADA, { conferenceId: 'conf-2' })
+    it('with a session for this conference once another conference claims the host', async () => {
+      // The live record says conf-2; the session, and the page's cached
+      // routing, still say conf-1. Only the live read can tell.
+      proven(HOST, 'conf-2')
+      await signedInAs(ADA)
 
       expect(await isSignedOut()).toBe(true)
     })

@@ -46,7 +46,7 @@ vi.mock('@/lib/features/workshops', () => ({
     isWorkshopsEnabledForConference(c),
 }))
 
-import { unseal } from '@/lib/workshop/central-sign-in/seal'
+import { seal, unseal } from '@/lib/workshop/central-sign-in/seal'
 import { workshopWorkOS } from '@/lib/workshop/central-sign-in/workos'
 import { handOff, signIn } from '../../__tests__/helpers/workshopFlow'
 import { createTRPCContext } from './trpc'
@@ -159,6 +159,14 @@ describe('createTRPCContext: the attendee is who signed in', () => {
     expect(exchangeCode).not.toHaveBeenCalled()
   })
 
+  it('reads the Host header in any case, as the page does', async () => {
+    const ctx = await createTRPCContext({
+      req: request(await signedIn(), { host: 'Conf.Example.ORG' }),
+    })
+
+    expect(ctx.workosUser).toMatchObject({ id: 'user_01' })
+  })
+
   it('takes the host from the Host header: not x-forwarded-host, not the URL', async () => {
     const cookie = await signedIn()
     const headers = new Headers({
@@ -264,10 +272,26 @@ describe('createTRPCContext: no attendee', () => {
   })
 
   it('on the auth host, which serves no conference, without reading a record', async () => {
-    const cookie = await signedIn()
+    // Even with a session that names the auth host. No route issues one, but
+    // the host is refused from the request alone, whatever the seal says.
+    const forAuthHost = await seal(
+      'session',
+      {
+        userId: 'user_01',
+        email: 'ada@example.com',
+        emailVerified: true,
+        name: 'Ada Lovelace',
+        sessionId: 'session_01',
+        host: AUTH,
+        conferenceId: 'conference-1',
+      },
+      WEEK,
+    )
+    // Were the auth host a proven tenant host, that session would sign in.
+    getDomainClaim.mockImplementation(claimsById(provenClaim(AUTH)))
 
     const ctx = await createTRPCContext({
-      req: request(cookie, { host: AUTH }),
+      req: request(`${SESSION_COOKIE}=${forAuthHost}`, { host: AUTH }),
     })
 
     expect(ctx.workosUser).toBeNull()
