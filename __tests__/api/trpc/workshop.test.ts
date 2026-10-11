@@ -306,6 +306,27 @@ describe('workshop.signup identity binding', () => {
     })
   })
 
+  it('refuses a session issued for another conference than the one this request resolves to', async () => {
+    // A host that changed hands: the live record (and so the session) says one
+    // conference while the cached routing still serves another.
+    const caller = createWorkshopCaller({
+      id: 'workos-real',
+      email: 'real@example.com',
+      conferenceId: 'conf-2',
+    })
+
+    await expect(caller.workshop.signup(baseSignupInput)).rejects.toMatchObject(
+      { code: 'UNAUTHORIZED' },
+    )
+    await expect(
+      caller.workshop.cancelSignup({ signupId: 'signup-1' } as never),
+    ).rejects.toMatchObject({ code: 'UNAUTHORIZED' })
+    expect(createSignupMock).not.toHaveBeenCalled()
+    // Before the ticket check and before any signup is read.
+    expect(ticketing.fetchEventTickets).not.toHaveBeenCalled()
+    expect(getSignupsMock).not.toHaveBeenCalled()
+  })
+
   it('binds the signup to the DOMAIN conference, ignoring a smuggled conference ref', async () => {
     const caller = createWorkshopCaller({
       id: 'workos-real',

@@ -558,6 +558,15 @@ describe('workshop portal — signed-in attendee', () => {
       expect(await isSignedOut()).toBe(true)
     })
 
+    it('with a session for the conference that claims the host now, while the page still serves another', async () => {
+      // The host changed hands: the live record says conf-2, and so does the
+      // session; the routing cache still resolves this request to conf-1.
+      proven(HOST, 'conf-2')
+      await signedInAs(ADA, { conferenceId: 'conf-2' })
+
+      expect(await isSignedOut()).toBe(true)
+    })
+
     it('with a hand-off token presented as a session', async () => {
       presentCookie(
         SESSION_COOKIE,
@@ -885,9 +894,13 @@ describe('workshop portal — a refused secondary host', () => {
     expect(recordReads()).toBe(1)
   })
 
-  it('never redirects to the host the attendee is already on', async () => {
-    // The main host as an unproven record: it cannot sign in, in any spelling
-    // the browser may send.
+  it('never redirects from the main host to itself', async () => {
+    // The main host is proven, so the link to it exists; an unusable
+    // WORKSHOP_AUTH_ORIGIN still refuses a sign-in on every host. Following
+    // the link from the main host would loop, in any spelling of it.
+    mainCanSignIn()
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.stubEnv('WORKSHOP_AUTH_ORIGIN', 'http://auth.example.org')
     for (const host of [
       'main.example.org',
       'Main.Example.ORG',

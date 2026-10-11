@@ -79,15 +79,14 @@ export default async function WorkshopPage({
   if (!portal.available) {
     // A SECONDARY host that cannot sign in, while the main host can: send the
     // attendee to the working portal (the same link the email carries). Never
-    // to the host they are already on — that would loop. On the main host
-    // itself nothing more is read: it was just decided that it cannot sign in.
+    // from the main host to itself: that would loop wherever the two answers
+    // differ (an unusable `WORKSHOP_AUTH_ORIGIN` refuses every host here, and
+    // the link does not ask). Nothing more is read on the main host either.
     const requestHost = workshopRequestHost(requestHeaders)
     const mainHost = workshopMainHost(conference)
     if (mainHost && !isSameHost(`https://${mainHost}`, requestHost)) {
-      const portal = await workshopPortalUrl(conference)
-      if (portal && !isSameHost(portal, requestHost)) {
-        redirect(portal)
-      }
+      const mainPortal = await workshopPortalUrl(conference)
+      if (mainPortal) redirect(mainPortal)
     }
     const registrationEnd = conference.workshopRegistrationEnd
     return (
@@ -101,7 +100,11 @@ export default async function WorkshopPage({
     )
   }
 
-  const user = portal.session
+  // The session is for the conference that claims this host, read live.
+  // `conference` comes through a cache, so right after a host changes hands
+  // the two can differ: then nobody is signed in to the one shown here.
+  const user =
+    portal.session?.conferenceId === conference._id ? portal.session : null
   if (!user) {
     // A refused redeem lands here with one fixed marker, whatever refused it.
     const { [WORKSHOP_SIGN_IN_INCOMPLETE.param]: marker } = await searchParams

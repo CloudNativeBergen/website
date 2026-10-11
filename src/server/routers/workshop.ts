@@ -107,6 +107,15 @@ async function requireWorkshopAttendee(ctx: Context) {
   if (error || !conference?._id) {
     throw new TRPCError({ code: 'NOT_FOUND', message: 'Conference not found' })
   }
+  // The session is for one conference: the one that claims this host, read
+  // live. `conference` is resolved through a cache, so right after a host
+  // changes hands the two can differ. Then nobody is signed in to this one.
+  if (actor.conferenceId !== conference._id) {
+    throw new TRPCError({
+      code: 'UNAUTHORIZED',
+      message: 'You must be signed in to manage workshop signups',
+    })
+  }
 
   const access = await decideWorkshopPortalAccess({ conference, user: actor })
   if (!access.allowed) {

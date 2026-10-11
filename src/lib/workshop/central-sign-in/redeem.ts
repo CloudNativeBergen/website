@@ -43,8 +43,9 @@ import { challengeOf, signInCookie } from './start-seals'
  * cookie is touched. The token is in
  * the URL, so every answer is `no-store` and sends no referrer.
  *
- * NOT SINGLE USE (spec §5): inside its minute the same browser could redeem a
- * token twice. No other browser can.
+ * NOT SINGLE USE BY ANY RECORD (spec §5): nothing remembers a redeemed token.
+ * Only the browser that began can redeem it, and a redeem clears the cookie
+ * that makes it that browser.
  */
 export async function redeemWorkshopHandOff(
   request: NextRequest,

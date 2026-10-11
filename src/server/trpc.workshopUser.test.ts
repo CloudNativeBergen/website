@@ -134,6 +134,7 @@ describe('createTRPCContext: the attendee is who signed in', () => {
       email: 'ada@example.com',
       emailVerified: true,
       name: 'Ada Lovelace',
+      conferenceId: 'conference-1',
     })
   })
 
@@ -224,11 +225,14 @@ describe('createTRPCContext: no attendee', () => {
         .workosUser,
     ).toMatchObject({ id: 'user_01' })
 
+    getDomainClaim.mockClear()
     const ctx = await createTRPCContext({
       req: request(cookie, { host: OTHER }),
     })
 
     expect(ctx.workosUser).toBeNull()
+    // Decided from the request alone: that host's record is not read.
+    expect(getDomainClaim).not.toHaveBeenCalled()
   })
 
   it('when the host is now claimed by another conference', async () => {

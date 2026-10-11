@@ -1,5 +1,6 @@
 import 'server-only'
 import { z } from 'zod'
+import { normalizeDomain } from '@/lib/conference/domains'
 import { hostCookie } from './cookies'
 import { resolveTenantHost, type SignInHost } from './decision'
 import { unseal } from './seal'
@@ -78,15 +79,17 @@ export async function readWorkshopPortal(
 
 /**
  * Who is signed in on this request's host, or `null`: the rule of
- * {@link readWorkshopPortal}, seal first. A request that carries no session
- * of ours reads nothing, so this can sit in front of unrelated traffic.
+ * {@link readWorkshopPortal}, with what the request alone decides first. A
+ * request that carries no session of ours for this host reads nothing, so
+ * this can sit in front of unrelated traffic.
  */
 export async function readWorkshopSession(
   headers: { get(name: string): string | null },
   sealed: string | null | undefined,
 ): Promise<WorkshopSession | null> {
   const session = await unseal('session', sealed, sessionSchema)
-  if (!session) return null
+  const requestHost = normalizeDomain(headers.get('host') ?? '')
+  if (!session || session.host !== requestHost) return null
   const tenant = await resolveTenantHost(headers)
   return tenant && isSessionFor(session, tenant) ? session : null
 }

@@ -29,6 +29,12 @@ export interface WorkshopUserIdentity {
    */
   emailVerified: boolean
   name: string | null
+  /**
+   * The conference the session was issued for, which claimed the host when
+   * this request was read. A procedure compares it with the conference it
+   * resolved for the request, which may come from a cache.
+   */
+  conferenceId: string
 }
 
 /**
@@ -59,6 +65,7 @@ async function resolveWorkshopUser(
     email: session.email,
     emailVerified: session.emailVerified,
     name: session.name,
+    conferenceId: session.conferenceId,
   }
 }
 
