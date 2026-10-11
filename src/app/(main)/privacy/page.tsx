@@ -54,6 +54,7 @@ import { conferenceTag, organizationTag } from '@/lib/cache/tags'
 import { headers } from 'next/headers'
 import type { Metadata } from 'next'
 import { canonicalAlternates } from '@/lib/seo/canonical'
+import { authOrigin } from '@/lib/workshop/central-sign-in/decision'
 
 export async function generateMetadata(): Promise<Metadata> {
   const brand = await resolveMetadataBrand()
@@ -133,6 +134,11 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
   // `@/lib/legal/subprocessors` for the two rules.
   const subprocessors = await resolveSubprocessorDisclosure(conference)
   const usesWorkOS = discloses(subprocessors, 'workos')
+  // Where the sign-in's own short-lived cookies are set besides this site:
+  // the host `WORKSHOP_AUTH_ORIGIN` names. Unset, there is no other host.
+  const configuredAuthOrigin = authOrigin()
+  const signInHost =
+    typeof configuredAuthOrigin === 'object' ? configuredAuthOrigin.host : null
   const overseasProcessors = internationalTransferProcessors(subprocessors)
   // The analytics wording follows the organization's cutover (#1008, #1034):
   // PostHog is anonymous by default with ONE optional cookie, so the old
@@ -431,8 +437,15 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                                 that address as verified, your name, the WorkOS
                                 session ID, and the site and conference it was
                                 issued for. Short-lived cookies also exist on
-                                this site and on the platform&apos;s sign-in
-                                host while you sign in or sign out; they expire
+                                this site
+                                {signInHost ? (
+                                  <>
+                                    {' '}
+                                    and on the platform&apos;s sign-in host (
+                                    {signInHost})
+                                  </>
+                                ) : null}{' '}
+                                while you sign in or sign out; they expire
                                 within ten minutes.
                               </li>
                             ) : null}
@@ -2473,9 +2486,16 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                         ID, email address, whether it is verified, your name,
                         the WorkOS session ID, and the site and conference it
                         was issued for. While a sign-in or sign-out is in
-                        progress, short-lived cookies exist on this site and on
-                        the platform&apos;s sign-in host; they expire within ten
-                        minutes, and sooner when the step completes.
+                        progress, short-lived cookies exist on this site
+                        {signInHost ? (
+                          <>
+                            {' '}
+                            and on the platform&apos;s sign-in host (
+                            {signInHost})
+                          </>
+                        ) : null}
+                        ; they expire within ten minutes, and sooner when the
+                        step completes.
                       </p>
                     ) : null}
                     <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">

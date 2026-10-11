@@ -91,7 +91,7 @@ One small shared module answers this, and it is the only place the rule lives:
 - the record names the host, and its conference **still claims** it;
 - `localhost` qualifies only with `NODE_ENV=development`.
 
-It reads the record live and fails closed on a read error, as `resolveWorkshopSignInHost` does today.
+It reads the record live and fails closed on a read error, as the sign-in decision did before this work.
 The rule that a host must be platform-controlled, and the requirement that WorkOS holds its callback,
 are both gone.
 
@@ -114,7 +114,7 @@ are both gone.
   makes the browser refuse a `Domain`, so no sibling host under a shared suffix can set or replace
   it, and `WORKOS_COOKIE_DOMAIN` has nothing to widen. With `NODE_ENV=development` the prefix and
   `Secure` are dropped, because a browser may not store a `Secure` cookie over plain HTTP.
-- It holds the fields of §5 plus the host and the conference it was issued for, and its expiry.
+- It holds what the hand-off token holds (§5), without the hash, and its expiry.
 - **Fixed 7 days from sign-in, no renewal.** The expiry inside the seal decides, not the cookie's
   own lifetime.
 - Every read checks: it unseals as a session, it has not expired, the host is the request's host, the
@@ -163,6 +163,9 @@ through `workshopPortalUrl`. `AUTH.md` and `DOMAIN_VERIFICATION.md` are rewritte
 
 - Signing out on one host does not end a session the same attendee holds on another conference's
   host. It lasts until its 7 days are over.
+- Sign-out removes the session cookie from the browser that signs out. The sealed value is not
+  revoked and stays valid until its 7 days are over. With no session left (the cookie ran out),
+  signing out ends nothing at WorkOS.
 - A login deleted or an email changed at WorkOS takes effect on a tenant host only when its session
   ends. Ticket access is decided each time the page or a signup procedure runs, against the tickets as
   they are now but with the email and verified flag sealed at sign-in: a change to the tickets is seen
@@ -180,8 +183,9 @@ through `workshopPortalUrl`. `AUTH.md` and `DOMAIN_VERIFICATION.md` are rewritte
    sign-out in a real browser.
 2. **HTTPS rehearsal.** A preview deployment with two real hostnames, the staging keys and a sealing
    key of its own, so `Secure` cookies and cross-site redirects are exercised before the merge. The
-   rehearsal hostname needs a proven record in the production dataset, which previews read. That
-   record is revoked when the rehearsal ends: while it stands, production would hand off to it.
+   rehearsal hostname needs a proven record in the dataset the preview reads
+   (`NEXT_PUBLIC_SANITY_DATASET`). Where that is the production dataset, the record is revoked when
+   the rehearsal ends: while it stands, production would hand off to it.
 3. **Tests.** Every guard is sabotage-proven, with the real sealing library and the real SDK where
    one is claimed to behave some way.
 4. **Production.** One sign-in and sign-out on `2026.cloudnativedays.no` after the merge. Workshop

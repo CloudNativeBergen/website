@@ -408,6 +408,32 @@ describe('the workshop portal’s own sign-in cookie (#1316)', () => {
     }
   })
 
+  it('names the sign-in host as the other place the short-lived cookies are set', async () => {
+    vi.stubEnv('WORKSHOP_AUTH_ORIGIN', 'https://auth.example.org')
+    world()
+
+    const found = passages(await renderPrivacy())
+
+    expect(found['the data list']).toContain(
+      'on this site and on the platform&#x27;s sign-in host (auth.example.org) while you sign in or sign out',
+    )
+    expect(found['the cookies section']).toContain(
+      'on this site and on the platform&#x27;s sign-in host (auth.example.org); they expire',
+    )
+  })
+
+  it('names no other host where every host signs attendees in on itself', async () => {
+    vi.stubEnv('WORKSHOP_AUTH_ORIGIN', '')
+    world()
+
+    const found = passages(await renderPrivacy())
+
+    expect(found['the data list']).toContain(
+      'on this site while you sign in or sign out',
+    )
+    expect(found['the cookies section']).toContain('on this site; they expire')
+  })
+
   it('says nothing about it to a tenant that has no workshop sign-in', async () => {
     world({
       conference: conference({

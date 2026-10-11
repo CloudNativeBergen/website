@@ -724,7 +724,8 @@ anyone in and does not read as a merely refused seal.
 
 `hostCookie` (`central-sign-in/cookies.ts`) drops the `__Host-` prefix and the `Secure`
 flag when `NODE_ENV` is `development`, because a browser may not store a `Secure` cookie
-over plain HTTP. `NODE_ENV` is `production` in every deployed build, previews included.
+over plain HTTP. `NODE_ENV` is `production` in every deployed build, previews included, unless a deployment
+overrides it; it must not.
 
 Operations are in [WORKSHOP_SIGN_IN_RUNBOOK.md](WORKSHOP_SIGN_IN_RUNBOOK.md).
 
@@ -763,7 +764,7 @@ Only needed when a tenant on the deployment has workshops.
 removed where they are still set: the redirect URI is passed to the SDK explicitly
 (`workshopCallbackUri`), and nothing in this repository reads either variable. The test
 setup (`vitest.setup.ts`) deletes every `WORKOS_*` and `NEXT_PUBLIC_WORKOS_*` variable
-from the test environment; suites set the three above through
+from the test environment; suites set the three `WORKOS_*` values through
 `__tests__/helpers/workosEnv.ts`.
 
 Local development (`NODE_ENV=development`): `localhost` carries the portal without a
@@ -837,6 +838,7 @@ verified here.
 - **Workshop sign-in**: `WORKOS_COOKIE_PASSWORD` seals every token and cookie of the
   workshop sign-in, the session included, so holding it is holding the ability to issue a
   session. It differs per environment, is kept out of previews in its production value,
-  and rotating it signs every workshop attendee out. No WorkOS token is stored anywhere;
+  and rotating it signs every workshop attendee out. No WorkOS access or refresh token is stored anywhere (the session keeps the WorkOS session ID,
+  which names the login to end at sign-out);
   the hand-off token travels in a URL once, under `no-store` and `no-referrer`, and lives
   60 seconds.
