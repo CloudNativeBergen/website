@@ -301,6 +301,77 @@ describe('removing a stored workshop answer', () => {
 })
 
 /**
+ * A NAME WITH A CONTROL CHARACTER IN IT. The name reaches a patch PATH, escaped
+ * with `JSON.stringify`, and Sanity's path parser reads the character after a
+ * backslash literally: `"Speake\r ticket"` is written `Speake\\r ticket` and
+ * read back as `Speaker ticket`. So the unset removed an entry the guard had
+ * not counted (it compared the name as sent), and the last grant went with no
+ * confirmation. Such a name is refused before anything is read.
+ */
+describe('a ticket type name with a control character', () => {
+  const GRANT = [
+    {
+      _key: 'a',
+      typeName: 'Speaker ticket',
+      admits: true,
+      grantsWorkshop: true,
+    },
+  ]
+
+  it('cannot remove the last grant behind the confirmation', async () => {
+    seed(GRANT)
+
+    await expect(
+      tickets().admin.setWorkshopAccess({
+        updates: [{ typeName: 'Speake\r ticket', grantsWorkshop: false }],
+      }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+
+    expect(stored()).toEqual([
+      { typeName: 'Speaker ticket', admits: true, grantsWorkshop: true },
+    ])
+    expect(h.commits).toBe(0)
+  })
+
+  it.each(['\n', '\t', '\r', '\u0001', '\u007f', '\ud800'])(
+    'is refused by both saves (%j)',
+    async (character) => {
+      seed(GRANT)
+      const typeName = `Work${character}shop`
+
+      await expect(
+        tickets().admin.setWorkshopAccess({
+          updates: [{ typeName, grantsWorkshop: true }],
+        }),
+      ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+      await expect(
+        tickets().admin.setTicketTypeRole({ typeName, admits: false }),
+      ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+
+      expect(h.commits).toBe(0)
+    },
+  )
+
+  it('still takes a name with quotes, brackets, a backslash and other scripts', async () => {
+    seed(GRANT)
+    const typeName = 'Ærlig "pass" [2 dager] \\ 工作坊'
+
+    await tickets().admin.setWorkshopAccess({
+      updates: [{ typeName, grantsWorkshop: false }],
+    })
+    await tickets().admin.setWorkshopAccess({
+      updates: [{ typeName, grantsWorkshop: true }],
+    })
+
+    // Replaced, not duplicated: the path matched the entry it had written.
+    expect(stored()).toEqual([
+      { typeName: 'Speaker ticket', admits: true, grantsWorkshop: true },
+      { typeName, grantsWorkshop: true },
+    ])
+  })
+})
+
+/**
  * A SEATING ANSWER NEVER CHANGES WORKSHOP ACCESS.
  *
  * The seating save used to replace the type's whole entry, and every other

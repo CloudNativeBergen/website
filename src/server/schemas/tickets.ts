@@ -107,6 +107,28 @@ export const ToggleTargetTrackingSchema = z.object({
 })
 
 /**
+ * A provider ticket-type name as a save accepts it.
+ *
+ * NO CONTROL CHARACTERS AND NO LONE SURROGATES. The name is interpolated into
+ * a Sanity patch PATH, escaped with `JSON.stringify`, and Sanity's path parser
+ * does not read escapes the way JSON does: it takes the character after a
+ * backslash literally. `JSON.stringify` writes a tab as `\t` and a lone
+ * surrogate as `\ud800`, so `"Speake\r ticket"` reached the path as
+ * `Speake\\r ticket` and matched the stored `Speaker ticket`: an entry the
+ * save had not counted was removed. A quote and a backslash survive that
+ * round trip (the character after the backslash IS the character), so only
+ * the characters JSON writes as a LETTER are refused.
+ */
+const ticketTypeName = z
+  .string()
+  .trim()
+  .min(1)
+  .max(200)
+  .regex(/^[^\u0000-\u001f\u007f\ud800-\udfff]*$/u, {
+    message: 'A ticket type name cannot contain control characters.',
+  })
+
+/**
  * One conference's declaration for one provider ticket-type name — the
  * organizer's half of `@/lib/tickets/classification`.
  *
@@ -115,7 +137,7 @@ export const ToggleTargetTrackingSchema = z.object({
  * into a Sanity patch path (escaped) by the mutation that stores it.
  */
 export const SetTicketTypeRoleSchema = z.object({
-  typeName: z.string().trim().min(1).max(200),
+  typeName: ticketTypeName,
   admits: z.boolean(),
 })
 
@@ -136,7 +158,7 @@ export const SetWorkshopAccessSchema = z.object({
   updates: z
     .array(
       z.object({
-        typeName: z.string().trim().min(1).max(200),
+        typeName: ticketTypeName,
         // `null` REMOVES the stored answer, for an entry whose ticket type the
         // provider no longer lists. The entry stays when it also carries a
         // seating answer (`admits`), and goes when this was all it held.
