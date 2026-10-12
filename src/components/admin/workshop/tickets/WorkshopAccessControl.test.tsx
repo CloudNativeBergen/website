@@ -878,3 +878,131 @@ describe('another type that holds a stored No', () => {
     )
   })
 })
+
+/**
+ * A QUESTION IS ONLY AS TRUE AS THE FACTS IT WAS ASKED ON. Another row's save
+ * refreshes the page under an open question. The answer the question holds
+ * (grant, or No) then means something else: a No asked as "this leaves no
+ * type set to grant access" would re-render as "this No won't block the type
+ * yet" once another type grants, and saving it WOULD block the type. So an
+ * open question closes when what it was asked on changes, and nothing is
+ * saved without a fresh click.
+ */
+describe('a question open while the page changes under it', () => {
+  const lastGrant = {
+    typeName: TWO_DAY,
+    configured: true,
+    stored: true,
+    lastGranting: true,
+    builtInGranted: [SPEAKER],
+  }
+  const no = () =>
+    fireEvent.click(screen.getByRole('button', { name: /^No workshop access/ }))
+
+  it('closes the last-grant question when another type starts granting', () => {
+    const { rerender } = render(<WorkshopAccessControl {...props(lastGrant)} />)
+    no()
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'This leaves no ticket type set to grant access.',
+    )
+    const confirm = screen.getByRole('button', {
+      name: 'Save and use the built-in list',
+    })
+    confirm.focus()
+
+    // Another row granted a type and the page refreshed.
+    rerender(
+      <WorkshopAccessControl
+        {...props({ ...lastGrant, lastGranting: false })}
+      />,
+    )
+
+    // No question at all: not this one, and not a different one in its place.
+    expect(screen.queryAllByRole('alert')).toEqual([])
+    expect(
+      screen.getAllByRole('button').map((button) => button.textContent),
+    ).toEqual(['Grants workshop access', 'No workshop access'])
+    expect(h.mutate).not.toHaveBeenCalled()
+    // Focus was in the question; it goes back to the button that asked.
+    expect(
+      screen.getByRole('button', { name: /^No workshop access/ }),
+    ).toHaveFocus()
+
+    // A fresh click is decided on the new facts: another type grants, so the
+    // No is saved straight away, with no confirmation nobody gave.
+    no()
+    expect(h.mutate.mock.calls).toEqual([
+      [{ updates: [{ typeName: TWO_DAY, grantsWorkshop: false }] }],
+    ])
+  })
+
+  it('closes a question asked while nothing granted when another type starts granting', () => {
+    const onBuiltInList = {
+      typeName: SPEAKER,
+      configured: false,
+      builtInGrantsThis: true,
+      others: [TWO_DAY],
+    }
+    const { rerender } = render(
+      <WorkshopAccessControl {...props(onBuiltInList)} />,
+    )
+    no()
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      `This No won’t block “${SPEAKER}” yet.`,
+    )
+
+    // Another row set a type to grant access, carrying this one over.
+    rerender(
+      <WorkshopAccessControl
+        {...props({ typeName: SPEAKER, configured: true, stored: true })}
+      />,
+    )
+
+    expect(screen.queryAllByRole('alert')).toEqual([])
+    expect(h.mutate).not.toHaveBeenCalled()
+  })
+
+  it('closes the first-grant question when another row makes the first grant', () => {
+    const { rerender } = render(
+      <WorkshopAccessControl
+        {...props({
+          typeName: 'Early Bird',
+          configured: false,
+          others: [TWO_DAY],
+        })}
+      />,
+    )
+    fireEvent.click(
+      screen.getByRole('button', { name: /^Grants workshop access/ }),
+    )
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'This is the first ticket type set to grant access.',
+    )
+
+    rerender(
+      <WorkshopAccessControl
+        {...props({ typeName: 'Early Bird', configured: true })}
+      />,
+    )
+
+    expect(screen.queryAllByRole('alert')).toEqual([])
+    expect(h.mutate).not.toHaveBeenCalled()
+  })
+
+  it('stays open through a refresh that changes nothing it was asked on', () => {
+    const { rerender } = render(<WorkshopAccessControl {...props(lastGrant)} />)
+    no()
+    const confirm = () =>
+      screen.getByRole('button', { name: 'Save and use the built-in list' })
+    confirm().focus()
+
+    // The same facts in new objects, as every refresh delivers them.
+    rerender(<WorkshopAccessControl {...props(lastGrant)} />)
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'This leaves no ticket type set to grant access.',
+    )
+    // And the organizer's place in it is kept: focus is not pulled away.
+    expect(confirm()).toHaveFocus()
+  })
+})

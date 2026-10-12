@@ -359,6 +359,29 @@ describe('an entry no ticket type matches', () => {
       ).toHaveFocus()
     })
 
+    it('closes the question when another type starts granting under it', () => {
+      const { rerender } = section(['Workshop 2026', SPEAKER], last)
+      remove()
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        'This leaves no ticket type set to grant access.',
+      )
+
+      // Another row granted "Workshop 2026" and the page refreshed: removing
+      // the orphan no longer brings the built-in list back.
+      rerender(
+        <WorkshopTicketsSection
+          list={buildWorkshopTicketList(
+            ['Workshop 2026', SPEAKER],
+            [last[0], { typeName: 'Workshop 2026', grantsWorkshop: true }],
+          )}
+          providerLabel="Checkin.no"
+        />,
+      )
+
+      expect(screen.queryAllByRole('alert')).toEqual([])
+      expect(h.mutate).not.toHaveBeenCalled()
+    })
+
     it('removes it with the confirmation the server requires', () => {
       section(['Workshop 2026', SPEAKER], last)
 

@@ -1,6 +1,6 @@
 'use client'
 
-import { useId, useRef, useState } from 'react'
+import { useCallback, useId, useRef, useState } from 'react'
 import { StatusBadge } from '@/components/StatusBadge'
 import type { WorkshopTicketType } from '@/lib/workshop/ticket-list'
 import { BuiltInListConfirm } from './BuiltInListConfirm'
@@ -92,8 +92,30 @@ export function WorkshopAccessControl({
       : ''
 
   const [answer, setAnswer] = useState(type.stored)
-  /** The pending answer while a cliff is being confirmed. */
-  const [confirming, setConfirming] = useState<boolean | null>(null)
+  /**
+   * The open question: the pending answer, and the facts it was asked on.
+   *
+   * A QUESTION IS ONLY AS TRUE AS THOSE FACTS. Another row's save refreshes
+   * the page under an open question, and the pending answer then means
+   * something else: a No asked as "this leaves no type set to grant access"
+   * would re-render as "this No won't block the type yet" once another type
+   * grants, and saving it would block the type. So a question is shown only
+   * while everything it was chosen from still holds; when any of it changes
+   * the question closes, and the next click is decided afresh.
+   */
+  const facts = JSON.stringify([
+    configured,
+    lastGranting,
+    type.builtInGrants,
+    others,
+    setToNo,
+    builtInGranted,
+  ])
+  const [asked, setAsked] = useState<{ grants: boolean; facts: string } | null>(
+    null,
+  )
+  if (asked && asked.facts !== facts) setAsked(null)
+  const confirming = asked && asked.facts === facts ? asked.grants : null
   /** The last stored answer this control has adopted, so a CHANGE can be spotted. */
   const [synced, setSynced] = useState(type.stored)
   /** Ties the row to its answer, so the group reads "Student, Not set". */
@@ -145,9 +167,7 @@ export function WorkshopAccessControl({
   }
 
   const write = (grants: boolean, carryOthers: boolean) => {
-    // The question (if one was open) closes: back to the button that asked.
-    if (confirming !== null) opener.current?.focus()
-    setConfirming(null)
+    setAsked(null)
     setAnswer(grants)
 
     const carried = carryOthers ? others.length : 0
@@ -187,16 +207,29 @@ export function WorkshopAccessControl({
     if (busy) return
     if (needsConfirm(grants)) {
       opener.current = button
-      setConfirming(grants)
+      setAsked({ grants, facts })
       return
     }
     write(grants, false)
   }
 
-  const cancel = () => {
-    setConfirming(null)
-    opener.current?.focus()
-  }
+  const cancel = () => setAsked(null)
+
+  /**
+   * WHEREVER A QUESTION GOES, focus does not fall to the top of the page. It
+   * closes on a confirm, on a cancel, and when the page changes under it; in
+   * each case, if focus was inside it, focus returns to the button that asked.
+   * A ref cleanup: it runs when the question leaves, while it is still in the
+   * document, so it can still tell where focus was.
+   */
+  const returnFocus = useCallback((question: HTMLDivElement | null) => {
+    if (!question) return
+    return () => {
+      if (question.contains(document.activeElement)) opener.current?.focus()
+    }
+    // One function for the life of the control: a new one each render would
+    // run the cleanup on every render and pull focus out of an open question.
+  }, [])
 
   const buttons = (
     <>
@@ -287,6 +320,8 @@ export function WorkshopAccessControl({
       </div>
     )
 
+  const question = confirmation && <div ref={returnFocus}>{confirmation}</div>
+
   if (row) {
     return (
       <div
@@ -315,7 +350,7 @@ export function WorkshopAccessControl({
           </div>
           <div className="flex w-full flex-wrap gap-2 sm:w-auto">{buttons}</div>
         </div>
-        {confirmation}
+        {question}
       </div>
     )
   }
@@ -383,7 +418,7 @@ export function WorkshopAccessControl({
 
       <div className="mt-2 flex flex-wrap gap-2">{buttons}</div>
 
-      {confirmation}
+      {question}
 
       {/* THE CONSEQUENCE, said before the click rather than after it. */}
       <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">

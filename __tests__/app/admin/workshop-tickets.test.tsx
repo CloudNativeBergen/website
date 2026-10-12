@@ -43,6 +43,8 @@ const h = vi.hoisted(() => ({
   /** Thrown while the ticketing provider is being resolved, when set. */
   resolveError: null as Error | null,
   refresh: vi.fn(),
+  /** Make the live read of `ticketTypeRoles` fail, and only that read. */
+  rolesReadFails: false,
 }))
 
 vi.mock('@/lib/sanity/client', async () => {
@@ -64,11 +66,18 @@ vi.mock('@/lib/sanity/client', async () => {
   })
   const fetch = async (query: string, params: Record<string, unknown> = {}) =>
     (await evaluate(parse(query), { dataset: h.dataset, params })).get()
+  /** The uncached client: the one the live roles read goes through. */
+  const fetchUncached: typeof fetch = async (query, params) => {
+    if (h.rolesReadFails && query.includes('{ ticketTypeRoles }')) {
+      throw new Error('sanity down')
+    }
+    return fetch(query, params)
+  }
 
   return {
     clientRead: { fetch },
     clientReadCached: { fetch },
-    clientReadUncached: { fetch },
+    clientReadUncached: { fetch: fetchUncached },
     clientWrite: {
       fetch,
       patch: (id: string) => {
@@ -195,6 +204,7 @@ type Role = { typeName: string; admits?: boolean; grantsWorkshop?: boolean }
 
 function seed(roles: Role[] | undefined, types: string[] | Error) {
   h.commits = 0
+  h.rolesReadFails = false
   h.resolveError = null
   h.org = { _id: ORG_A, name: 'Tenant A', slug: 'tenant-a', plan: 'pro' }
   h.saves = []
@@ -856,6 +866,71 @@ describe('a failure while the section loads', () => {
     await expect(
       LoadedWorkshopTickets({ conference: CONFERENCE }),
     ).rejects.toBe(signal)
+  })
+})
+
+/**
+ * AN EDITOR MUST NOT START FROM ANSWERS THAT MAY BE OLD. The portal's gate
+ * falls back to the cached conference when the live roles read fails: a
+ * possibly old answer beats locking every attendee out. For the organizer's
+ * list that fallback is wrong. It would show switches over answers that may
+ * no longer be the stored ones, and every question the section asks (the
+ * first grant, the last grant) would be asked on them.
+ */
+describe('a live roles read that fails', () => {
+  const CACHED = {
+    ...CONFERENCE,
+    ticketTypeRoles: [{ typeName: 'Two-day pass', grantsWorkshop: true }],
+  } as unknown as Conference
+
+  it('shows the could-not-load state and no switch, not the cached answers', async () => {
+    seed(
+      [{ typeName: 'Two-day pass', grantsWorkshop: false }],
+      ['Two-day pass', 'Day pass'],
+    )
+    h.rolesReadFails = true
+
+    await openSection(CACHED)
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'This list could not be loaded.The list cannot be shown or changed right now. Who can sign up has not changed. Reload the page to try again.',
+    )
+    expect(screen.queryAllByRole('button')).toEqual([])
+    expect(screen.queryAllByRole('group')).toEqual([])
+  })
+
+  it('leaves the gate deciding from the cached answers, as before', async () => {
+    seed(
+      [{ typeName: 'Two-day pass', grantsWorkshop: false }],
+      ['Two-day pass'],
+    )
+    h.rolesReadFails = true
+    __resetRedeemedCache()
+    h.tickets = [{ category: 'Two-day pass', crm: { email: 'ada@x.test' } }]
+
+    const decided = await checkWorkshopEligibility({
+      userEmail: 'ada@x.test',
+      conference: CACHED,
+      contactEmail: 'help@a.test',
+    })
+
+    // The cached copy says this type grants; the stored one (unreadable right
+    // now) says no. The gate keeps admitting.
+    expect(decided.isEligible).toBe(true)
+  })
+
+  it('shows the list again once the read works', async () => {
+    seed(
+      [{ typeName: 'Two-day pass', grantsWorkshop: false }],
+      ['Two-day pass'],
+    )
+
+    await openSection(CACHED)
+
+    // From the stored answer, never the cached one.
+    expect(answers()).toEqual([
+      ['Two-day pass', 'No workshop access (built-in list)'],
+    ])
   })
 })
 

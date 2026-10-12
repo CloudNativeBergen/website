@@ -6,7 +6,7 @@ import {
   ticketingProviderLabel,
 } from '@/lib/tickets/admin-access'
 import { conferenceProviderType } from '@/lib/tickets/provider'
-import { liveTicketTypeRoles } from '@/lib/workshop/eligibility'
+import { liveTicketTypeRolesOrThrow } from '@/lib/workshop/eligibility'
 import { buildWorkshopTicketList } from '@/lib/workshop/ticket-list'
 import { WorkshopTicketsNotReady } from './WorkshopTicketsNotReady'
 import {
@@ -106,11 +106,13 @@ async function loadWorkshopTickets(conference: Conference) {
     return <WorkshopTicketsSection list={null} providerLabel={providerLabel} />
   }
 
-  // LIVE, as the portal reads them (`liveTicketTypeRoles`): the page shows the
-  // answers the gate is deciding from right now, including a Studio edit the
-  // cached conference has not seen, and the refresh after a save shows that
-  // save.
-  const roles = await liveTicketTypeRoles(conference)
+  // LIVE, as the portal reads them: the page shows the answers the gate is
+  // deciding from right now, including a Studio edit the cached conference has
+  // not seen, and the refresh after a save shows that save. And STRICT, as the
+  // portal's read is not: the gate falls back to the cached answers when this
+  // read fails, an editor must not. A failure here throws, and the section
+  // says it could not be loaded.
+  const roles = await liveTicketTypeRolesOrThrow(conference)
 
   return (
     <WorkshopTicketsSection

@@ -54,16 +54,7 @@ export async function liveTicketTypeRoles(conference: {
   if (!conference._id) return conference.ticketTypeRoles
 
   try {
-    const live = await clientReadUncached.fetch<{
-      ticketTypeRoles?: TicketTypeRole[] | null
-    } | null>(
-      // groq-global-scoped: keyed on the id of the conference the caller already
-      // resolved from the request domain — it reads no document the caller was
-      // not already holding.
-      `*[_id == $conferenceId][0]{ ticketTypeRoles }`,
-      { conferenceId: conference._id },
-      { cache: 'no-store' },
-    )
+    const live = await readLiveTicketTypeRoles(conference._id)
     // No document (deleted, or a draft-only id): nothing fresher to say.
     if (!live) return conference.ticketTypeRoles
     return live.ticketTypeRoles
@@ -71,6 +62,42 @@ export async function liveTicketTypeRoles(conference: {
     console.error('Workshop gate: live ticketTypeRoles read failed:', error)
     return conference.ticketTypeRoles
   }
+}
+
+/**
+ * The same live read, for an EDITOR: the stored answers, or a throw.
+ *
+ * The gate above prefers a cached answer to none, because a possibly old
+ * answer beats locking every attendee out during a Sanity blip. An organizer
+ * editing the list must not get that fallback: switches over answers that may
+ * no longer be the stored ones, and questions (the first grant, the last
+ * grant) asked on them. So this one never falls back. The caller shows that
+ * the list could not be loaded.
+ */
+export async function liveTicketTypeRolesOrThrow(conference: {
+  _id?: string
+}): Promise<readonly TicketTypeRole[] | null | undefined> {
+  const live = conference._id
+    ? await readLiveTicketTypeRoles(conference._id)
+    : null
+  if (!live) {
+    throw new Error('Workshop tickets: the conference could not be read live')
+  }
+  return live.ticketTypeRoles
+}
+
+/** The live document's field; `null` when no such document. Throws on a failed read. */
+function readLiveTicketTypeRoles(conferenceId: string) {
+  return clientReadUncached.fetch<{
+    ticketTypeRoles?: TicketTypeRole[] | null
+  } | null>(
+    // groq-global-scoped: keyed on the id of the conference the caller already
+    // resolved from the request domain — it reads no document the caller was
+    // not already holding.
+    `*[_id == $conferenceId][0]{ ticketTypeRoles }`,
+    { conferenceId },
+    { cache: 'no-store' },
+  )
 }
 
 export interface WorkshopEligibilityResult {

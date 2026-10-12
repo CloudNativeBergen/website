@@ -213,7 +213,14 @@ function OrphanedEntry({
   builtInGranted: readonly string[]
   providerLabel: string
 }) {
-  const [confirming, setConfirming] = useState(false)
+  // The question is about losing the last grant. If another row's save makes
+  // that untrue (or changes what the built-in list would grant), it closes: a
+  // question stays on screen only while what it says still holds.
+  const facts = JSON.stringify([entry.lastGranting, builtInGranted])
+  const [askedOn, setAskedOn] = useState<string | null>(null)
+  if (askedOn !== null && askedOn !== facts) setAskedOn(null)
+  const confirming = askedOn === facts
+  const setConfirming = (open: boolean) => setAskedOn(open ? facts : null)
   /** Focus returns here when the question closes. */
   const button = useRef<HTMLButtonElement>(null)
   const { busy, save } = useSaveWorkshopAccess({
