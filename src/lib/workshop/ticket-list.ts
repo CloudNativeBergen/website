@@ -54,7 +54,39 @@ export interface OrphanedWorkshopEntry {
   lastGranting: boolean
 }
 
+/**
+ * Which workshop answers a list was built from, as a short token.
+ *
+ * The page hands it back with every save, and the save is refused when the
+ * stored answers no longer give the same token: every question the page asks
+ * (the first grant, the last grant, a No that blocks nothing yet) is true only
+ * of the answers it rendered from. It covers exactly what the rule reads, in
+ * the order it reads it: each entry's folded name and its workshop answer. So
+ * a seating answer saved in between does not make a page stale, and a workshop
+ * answer does. Not a secret and not a checksum against tampering: the caller
+ * is an organizer who may save anyway.
+ */
+export function workshopAnswersVersion(
+  ticketTypeRoles?:
+    readonly Pick<TicketTypeRole, 'typeName' | 'grantsWorkshop'>[] | null,
+): string {
+  const answers = JSON.stringify(
+    (ticketTypeRoles ?? []).map((role) => [
+      typeKey(role.typeName),
+      role.grantsWorkshop ?? null,
+    ]),
+  )
+  // FNV-1a: small, and the same in the browser's Storybook as on the server.
+  let hash = 0x811c9dc5
+  for (let i = 0; i < answers.length; i++) {
+    hash = Math.imul(hash ^ answers.charCodeAt(i), 0x01000193)
+  }
+  return `${answers.length.toString(36)}-${(hash >>> 0).toString(36)}`
+}
+
 export interface WorkshopTicketList {
+  /** {@link workshopAnswersVersion} of the answers this list was built from. */
+  version: string
   /** Has any entry marked a type as granting? Otherwise the built-in list decides. */
   configured: boolean
   types: WorkshopTicketType[]
@@ -110,6 +142,7 @@ export function buildWorkshopTicketList(
         )
 
   return {
+    version: workshopAnswersVersion(roles),
     configured,
     types: typeNames.map((typeName) => {
       const key = typeKey(typeName)

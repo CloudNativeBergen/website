@@ -163,6 +163,7 @@ export function WorkshopTicketsSection({
                   entry={entry}
                   builtInGranted={list.builtInGranted}
                   providerLabel={providerLabel}
+                  basedOn={list.version}
                 />
               ))}
             </ul>
@@ -190,6 +191,7 @@ export function WorkshopTicketsSection({
               configured={list.configured}
               builtInGranted={list.builtInGranted}
               row
+              basedOn={list.version}
             />
           </li>
         ))}
@@ -208,10 +210,12 @@ function OrphanedEntry({
   entry,
   builtInGranted,
   providerLabel,
+  basedOn,
 }: {
   entry: OrphanedWorkshopEntry
   builtInGranted: readonly string[]
   providerLabel: string
+  basedOn: string
 }) {
   // The question is about losing the last grant. If another row's save makes
   // that untrue (or changes what the built-in list would grant), it closes: a
@@ -224,6 +228,7 @@ function OrphanedEntry({
   /** Focus returns here when the question closes. */
   const button = useRef<HTMLButtonElement>(null)
   const { busy, save } = useSaveWorkshopAccess({
+    basedOn,
     failed: {
       title: 'Could not remove',
       message: 'Failed to remove the entry.',

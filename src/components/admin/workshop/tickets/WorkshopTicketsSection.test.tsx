@@ -19,7 +19,10 @@ import {
   screen,
   within,
 } from '@testing-library/react'
-import { buildWorkshopTicketList } from '@/lib/workshop/ticket-list'
+import {
+  buildWorkshopTicketList,
+  workshopAnswersVersion,
+} from '@/lib/workshop/ticket-list'
 import { WorkshopTicketsSection } from './WorkshopTicketsSection'
 
 const h = vi.hoisted(() => ({
@@ -59,6 +62,13 @@ const section = (
       providerLabel="Checkin.no"
     />,
   )
+
+/**
+ * Every save says which answers the page was showing, so the server can refuse
+ * one made from a page that is no longer what is stored.
+ */
+const basedOn = (roles: Parameters<typeof buildWorkshopTicketList>[1] = []) =>
+  workshopAnswersVersion(roles)
 
 /** The row of one ticket type: a group named after it. */
 const row = (typeName: string) =>
@@ -131,6 +141,7 @@ describe('a list nobody has configured', () => {
             { typeName: SPEAKER, grantsWorkshop: true },
             { typeName: TWO_DAY, grantsWorkshop: true },
           ],
+          basedOn: basedOn(),
         },
       ],
     ])
@@ -149,7 +160,12 @@ describe('a list nobody has configured', () => {
     )
 
     expect(h.mutate.mock.calls).toEqual([
-      [{ updates: [{ typeName: 'Early Bird', grantsWorkshop: true }] }],
+      [
+        {
+          updates: [{ typeName: 'Early Bird', grantsWorkshop: true }],
+          basedOn: basedOn(),
+        },
+      ],
     ])
   })
 })
@@ -235,7 +251,12 @@ describe('a configured list', () => {
 
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
     expect(h.mutate.mock.calls).toEqual([
-      [{ updates: [{ typeName: 'Two-day pass', grantsWorkshop: false }] }],
+      [
+        {
+          updates: [{ typeName: 'Two-day pass', grantsWorkshop: false }],
+          basedOn: basedOn(roles),
+        },
+      ],
     ])
   })
 
@@ -285,7 +306,12 @@ describe('an entry no ticket type matches', () => {
 
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
     expect(h.mutate.mock.calls).toEqual([
-      [{ updates: [{ typeName: 'Workshop 2025', grantsWorkshop: null }] }],
+      [
+        {
+          updates: [{ typeName: 'Workshop 2025', grantsWorkshop: null }],
+          basedOn: basedOn(roles),
+        },
+      ],
     ])
   })
 
@@ -397,6 +423,7 @@ describe('an entry no ticket type matches', () => {
           {
             updates: [{ typeName: 'Workshop 2025', grantsWorkshop: null }],
             allowBuiltInList: true,
+            basedOn: basedOn(last),
           },
         ],
       ])

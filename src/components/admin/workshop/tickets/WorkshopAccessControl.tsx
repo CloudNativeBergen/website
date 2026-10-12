@@ -65,6 +65,11 @@ export interface WorkshopAccessControlProps {
    * section carries the explanation.
    */
   row?: boolean
+  /**
+   * The version of the list this type comes from, sent with a save so a stale
+   * page is refused. Given by the section; not by the ticket-type cards.
+   */
+  basedOn?: string
 }
 
 export function WorkshopAccessControl({
@@ -72,6 +77,7 @@ export function WorkshopAccessControl({
   configured,
   builtInGranted,
   row = false,
+  basedOn,
 }: WorkshopAccessControlProps) {
   const {
     typeName,
@@ -124,6 +130,7 @@ export function WorkshopAccessControl({
   const opener = useRef<HTMLButtonElement | null>(null)
 
   const { busy, pending, save } = useSaveWorkshopAccess({
+    basedOn,
     failed: {
       title: 'Could not save',
       message: 'Failed to save workshop access.',

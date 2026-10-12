@@ -179,4 +179,11 @@ export const SetWorkshopAccessSchema = z.object({
    * such a save is refused (see `setWorkshopAccess`).
    */
   allowBuiltInList: z.boolean().optional(),
+  /**
+   * The version of the workshop answers the page was showing
+   * (`workshopAnswersVersion`). When given, the save is refused if the stored
+   * answers are no longer those: the page's questions were asked on them.
+   * Optional so a page loaded before this field existed can still save.
+   */
+  basedOn: z.string().max(64).optional(),
 })

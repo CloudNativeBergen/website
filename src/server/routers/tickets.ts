@@ -28,6 +28,7 @@ import {
 import { clientWrite } from '@/lib/sanity/client'
 import { generateKey } from '@/lib/sanity/helpers'
 import { marksWorkshopAccess, typeKey } from '@/lib/tickets/classification'
+import { workshopAnswersVersion } from '@/lib/workshop/ticket-list'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import {
   fetchEventTicketCandidates,
@@ -385,6 +386,8 @@ async function setTicketTypeRoles(
          * written.
          */
         allowBuiltInList: boolean
+        /** `workshopAnswersVersion` of the answers the page was showing. */
+        basedOn?: string
       },
 ) {
   // PRESERVE THE FIELD THIS CALL IS NOT CHANGING. The seating write sets one
@@ -485,6 +488,21 @@ async function setTicketTypeRoles(
         lastError = error
         continue
       }
+    }
+
+    // THE PAGE'S QUESTIONS WERE ASKED ON THE ANSWERS IT SHOWED. If the stored
+    // ones are different now, the same click does something else: a No that
+    // "blocks nothing yet" blocks at once when a type was set to grant access
+    // in another tab, and a carry-over writes over a No saved since. Refused
+    // here, against the read the patch is conditioned on, before any write.
+    if (
+      write.basedOn !== undefined &&
+      write.basedOn !== workshopAnswersVersion(roles)
+    ) {
+      throw new TRPCError({
+        code: 'CONFLICT',
+        message: 'This list changed since you opened it. Nothing was saved.',
+      })
     }
 
     // Each update's whole entry, carrying the seating answer the seating rule
@@ -946,6 +964,7 @@ export const ticketsRouter = router({
         const result = await setTicketTypeRoles(conferenceId, {
           workshop: input.updates,
           allowBuiltInList: input.allowBuiltInList === true,
+          basedOn: input.basedOn,
         })
 
         revalidateTag('admin:tickets', 'default')

@@ -113,6 +113,7 @@ import {
   workshopAccessOf,
 } from '@/lib/workshop/eligibility'
 import { marksWorkshopAccess } from '@/lib/tickets/classification'
+import { workshopAnswersVersion } from '@/lib/workshop/ticket-list'
 import { ticketsRouter } from './tickets'
 
 const ORG_A = 'org-A'
@@ -297,6 +298,101 @@ describe('removing a stored workshop answer', () => {
     expect(stored()).toEqual([
       { typeName: 'Two-day pass', grantsWorkshop: true },
     ])
+  })
+})
+
+/**
+ * WHAT A SAVE WAS BASED ON. The page sends the version of the workshop answers
+ * it rendered from; the save is refused when they are no longer the stored
+ * ones, before anything is written.
+ */
+describe('a save that says which answers it was based on', () => {
+  const ROLES = [
+    { _key: 'a', typeName: 'Two-day pass', grantsWorkshop: true },
+    { _key: 'b', typeName: 'Day pass', admits: true },
+  ]
+  const version = () =>
+    workshopAnswersVersion(
+      h.dataset.find((d) => d._id === CONF_A)!.ticketTypeRoles as Role[],
+    )
+
+  it('is written when they are still the stored ones', async () => {
+    seed(ROLES)
+
+    await tickets().admin.setWorkshopAccess({
+      updates: [{ typeName: 'Day pass', grantsWorkshop: true }],
+      basedOn: version(),
+    })
+
+    expect(h.commits).toBe(1)
+  })
+
+  it('is refused, and writes nothing, when a workshop answer changed since', async () => {
+    seed(ROLES)
+    const stale = version()
+    await tickets().admin.setWorkshopAccess({
+      updates: [{ typeName: 'Day pass', grantsWorkshop: true }],
+    })
+
+    await expect(
+      tickets().admin.setWorkshopAccess({
+        updates: [{ typeName: 'Two-day pass', grantsWorkshop: false }],
+        basedOn: stale,
+      }),
+    ).rejects.toMatchObject({
+      code: 'CONFLICT',
+      message: 'This list changed since you opened it. Nothing was saved.',
+    })
+
+    expect(h.commits).toBe(1)
+    expect(stored()).toEqual([
+      { typeName: 'Two-day pass', grantsWorkshop: true },
+      { typeName: 'Day pass', admits: true, grantsWorkshop: true },
+    ])
+  })
+
+  it('is not disturbed by a seating answer saved in between', async () => {
+    seed(ROLES)
+    const before = version()
+
+    await tickets().admin.setTicketTypeRole({
+      typeName: 'Two-day pass',
+      admits: false,
+    })
+
+    // The workshop answers are the same ones, so the page is not stale.
+    expect(version()).toBe(before)
+    await tickets().admin.setWorkshopAccess({
+      updates: [{ typeName: 'Day pass', grantsWorkshop: true }],
+      basedOn: before,
+    })
+    expect(h.commits).toBe(2)
+  })
+
+  it('tells apart every change that changes what the rule reads', () => {
+    const v = (roles: Omit<Role, '_key'>[]) => workshopAnswersVersion(roles)
+    const base = [
+      { typeName: 'A', grantsWorkshop: true },
+      { typeName: 'B', grantsWorkshop: false },
+    ]
+
+    const versions = [
+      v(base),
+      v([base[0], { typeName: 'B', grantsWorkshop: true }]),
+      v([base[0], { typeName: 'B' }]),
+      v([base[0]]),
+      // Order matters: the rule reads the first entry for a name.
+      v([base[1], base[0]]),
+      v([{ typeName: 'C', grantsWorkshop: true }, base[1]]),
+    ]
+    expect(new Set(versions).size).toBe(versions.length)
+    // Spelling and the seating answer do not.
+    expect(
+      v([
+        { typeName: ' a ', admits: false, grantsWorkshop: true },
+        { typeName: 'b', grantsWorkshop: false },
+      ]),
+    ).toBe(v(base))
   })
 })
 

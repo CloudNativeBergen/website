@@ -45,6 +45,7 @@ const h = vi.hoisted(() => ({
   refresh: vi.fn(),
   /** Make the live read of `ticketTypeRoles` fail, and only that read. */
   rolesReadFails: false,
+  notify: vi.fn(),
 }))
 
 vi.mock('@/lib/sanity/client', async () => {
@@ -155,7 +156,7 @@ vi.mock('next/navigation', async (importOriginal) => ({
   useRouter: () => ({ refresh: h.refresh }),
 }))
 vi.mock('@/components/admin/NotificationProvider', () => ({
-  useNotification: () => ({ showNotification: vi.fn() }),
+  useNotification: () => ({ showNotification: h.notify }),
 }))
 // THE TRANSPORT ONLY: the hook's `mutate` calls the real procedure.
 vi.mock('@/lib/trpc/client', () => ({
@@ -163,9 +164,26 @@ vi.mock('@/lib/trpc/client', () => ({
     tickets: {
       admin: {
         setWorkshopAccess: {
-          useMutation: () => ({
+          useMutation: (options: {
+            onSuccess?: () => void
+            onError?: (error: {
+              message: string
+              data: { code: string }
+            }) => void
+          }) => ({
             mutate: (input: unknown) => {
-              h.saves.push(h.save!(input))
+              // The answer comes back the way the client hands it to the hook:
+              // success, or an error carrying the server's code.
+              h.saves.push(
+                h.save!(input).then(
+                  () => options.onSuccess?.(),
+                  (error: { message: string; code: string }) =>
+                    options.onError?.({
+                      message: error.message,
+                      data: { code: error.code },
+                    }),
+                ),
+              )
             },
             isPending: false,
           }),
@@ -204,6 +222,8 @@ type Role = { typeName: string; admits?: boolean; grantsWorkshop?: boolean }
 
 function seed(roles: Role[] | undefined, types: string[] | Error) {
   h.commits = 0
+  h.notify.mockClear()
+  h.refresh.mockClear()
   h.rolesReadFails = false
   h.resolveError = null
   h.org = { _id: ORG_A, name: 'Tenant A', slug: 'tenant-a', plan: 'pro' }
@@ -866,6 +886,125 @@ describe('a failure while the section loads', () => {
     await expect(
       LoadedWorkshopTickets({ conference: CONFERENCE }),
     ).rejects.toBe(signal)
+  })
+})
+
+/**
+ * A PAGE THAT IS NO LONGER WHAT IS STORED. Every question the section asks is
+ * true of the list it rendered from. If the stored answers have changed since
+ * (another tab, another organizer, Studio), the same click does something
+ * else: "Save the No, block nothing yet" blocks at once when a type was set to
+ * grant access in the meantime. So a save says which answers it was based on,
+ * and the server refuses it when they are no longer the stored ones. Asserted
+ * on what the portal decides after the refused save: the same as before it.
+ */
+describe('a save from a page that is no longer what is stored', () => {
+  const TYPES = ['Early Bird', 'Day pass', SPEAKER, TWO_DAY]
+  /** Another tab: a save based on the answers stored right now. */
+  const elsewhere = (input: object) => h.save!(input)
+  const refused = () => {
+    expect(h.notify.mock.calls.at(-1)).toEqual([
+      {
+        type: 'error',
+        title: 'This list changed since you opened it',
+        message:
+          'Nothing was saved. The list has been reloaded: check it and try again.',
+      },
+    ])
+    // ...and the page reloads itself, so the next click is asked afresh.
+    expect(h.refresh).toHaveBeenCalledTimes(1)
+  }
+
+  it('refuses "Save the No, block nothing yet" once a type grants access elsewhere', async () => {
+    seed(undefined, TYPES)
+    await openSection() // nothing is set to grant access
+    await elsewhere({
+      updates: [
+        { typeName: 'Early Bird', grantsWorkshop: true },
+        { typeName: SPEAKER, grantsWorkshop: true },
+        { typeName: TWO_DAY, grantsWorkshop: true },
+      ],
+    })
+    const before = stored()
+    expect((await gate(SPEAKER)).isEligible).toBe(true)
+
+    fireEvent.click(
+      row(SPEAKER).getByRole('button', { name: /^No workshop access/ }),
+    )
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Save the No, block nothing yet' }),
+    )
+    await saved()
+
+    // The button promised to block nothing, and nothing is blocked.
+    expect((await gate(SPEAKER)).isEligible).toBe(true)
+    expect(stored()).toEqual(before)
+    expect(h.commits).toBe(1)
+    refused()
+  })
+
+  it('refuses a carry-over that would overwrite a No saved elsewhere', async () => {
+    seed(undefined, TYPES)
+    await openSection()
+    await elsewhere({
+      updates: [{ typeName: TWO_DAY, grantsWorkshop: false }],
+    })
+
+    fireEvent.click(
+      row('Early Bird').getByRole('button', {
+        name: /^Grants workshop access/,
+      }),
+    )
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: `Grant “Early Bird”, keep “${SPEAKER}” and “${TWO_DAY}”`,
+      }),
+    )
+    await saved()
+
+    expect(stored()).toEqual([{ typeName: TWO_DAY, grantsWorkshop: false }])
+    refused()
+  })
+
+  it('refuses a first grant the page took for an ordinary one', async () => {
+    seed([{ typeName: 'Early Bird', grantsWorkshop: true }], TYPES)
+    await openSection() // "Early Bird" grants, so a grant here asks nothing
+    await elsewhere({
+      updates: [{ typeName: 'Early Bird', grantsWorkshop: false }],
+      allowBuiltInList: true,
+    })
+    // The built-in list decides again.
+    expect((await gate(SPEAKER)).isEligible).toBe(true)
+
+    fireEvent.click(
+      row('Day pass').getByRole('button', { name: /^Grants workshop access/ }),
+    )
+    expect(screen.queryAllByRole('alert')).toEqual([])
+    await saved()
+
+    // Saved, it would have switched the built-in list off with no question.
+    expect((await gate(SPEAKER)).isEligible).toBe(true)
+    expect(stored()).toEqual([
+      { typeName: 'Early Bird', grantsWorkshop: false },
+    ])
+    refused()
+  })
+
+  it('takes the same click once the page is what is stored again', async () => {
+    seed([{ typeName: 'Early Bird', grantsWorkshop: true }], TYPES)
+    await openSection()
+    await elsewhere({
+      updates: [{ typeName: SPEAKER, grantsWorkshop: true }],
+    })
+
+    await openSection() // the reload
+    fireEvent.click(
+      row('Day pass').getByRole('button', { name: /^Grants workshop access/ }),
+    )
+    await saved()
+
+    expect((await gate('Day pass')).isEligible).toBe(true)
+    expect(h.notify.mock.calls.at(-1)![0].type).toBe('success')
   })
 })
 

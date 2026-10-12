@@ -712,6 +712,53 @@ describe('while a save is on its way', () => {
     expect(h.mutate).not.toHaveBeenCalled()
   })
 
+  /**
+   * THE PAGE WAS STALE. The server refuses a save based on answers that are
+   * no longer the stored ones (and one that would lose the last grant
+   * unasked, which only a stale page sends). The organizer is told the list
+   * changed, and the page reloads itself.
+   */
+  it.each(['CONFLICT', 'PRECONDITION_FAILED'])(
+    'says the list changed and reloads it when the server answers %s',
+    (code) => {
+      render(<WorkshopAccessControl {...row} basedOn="v1" />)
+
+      fireEvent.click(
+        screen.getByRole('button', { name: /^Grants workshop access/ }),
+      )
+      // The save said which answers the page was showing.
+      expect(h.mutate.mock.calls).toEqual([
+        [
+          {
+            updates: [{ typeName: UPGRADE, grantsWorkshop: true }],
+            basedOn: 'v1',
+          },
+        ],
+      ])
+      act(() =>
+        h.options.onError!(
+          Object.assign(new Error('refused'), { data: { code } }),
+        ),
+      )
+
+      expect(h.notify.mock.calls).toEqual([
+        [
+          {
+            type: 'error',
+            title: 'This list changed since you opened it',
+            message:
+              'Nothing was saved. The list has been reloaded: check it and try again.',
+          },
+        ],
+      ])
+      expect(h.refresh).toHaveBeenCalledTimes(1)
+      // The optimistic answer is taken back.
+      expect(
+        screen.getByRole('button', { name: /^No workshop access/ }),
+      ).toHaveAttribute('aria-pressed', 'true')
+    },
+  )
+
   it('puts the stored answer back when the save is refused', () => {
     render(<WorkshopAccessControl {...row} />)
 

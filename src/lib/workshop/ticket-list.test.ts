@@ -138,6 +138,7 @@ describe('a conference that has marked nothing', () => {
     const list = buildWorkshopTicketList([], undefined)
 
     expect(list).toEqual({
+      version: expect.any(String),
       configured: false,
       types: [],
       builtInGranted: [],
@@ -160,6 +161,7 @@ describe('a conference that has marked nothing', () => {
     )
 
     expect(list).toEqual({
+      version: expect.any(String),
       configured: true,
       types: [],
       builtInGranted: [],
