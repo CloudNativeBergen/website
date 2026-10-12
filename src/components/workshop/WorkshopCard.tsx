@@ -6,6 +6,7 @@ import { PortableText } from '@portabletext/react'
 import { portableTextComponents } from '@/lib/portabletext/components'
 import { Button } from '@/components/Button'
 import { ModalShell } from '@/components/ModalShell'
+import { TAP_GUARD_MS, useOpenedLongEnough } from '@/hooks/useOpenedLongEnough'
 import type {
   ProposalWithWorkshopData,
   WorkshopSignupExisting,
@@ -46,6 +47,11 @@ interface WorkshopCardProps {
   isSignedUp?: boolean
   isFull?: boolean
   isLoading?: boolean
+  /**
+   * Registration has closed: a cancelled sign-up cannot be made again. The
+   * question before a cancel says so.
+   */
+  registrationClosed?: boolean
   hasTimeConflict?: boolean
   conflictingWorkshopTitle?: string
   /**
@@ -64,6 +70,7 @@ export default function WorkshopCard({
   isSignedUp = false,
   isFull = false,
   isLoading: externalLoading = false,
+  registrationClosed = false,
   hasTimeConflict = false,
   conflictingWorkshopTitle,
   announcements,
@@ -71,6 +78,14 @@ export default function WorkshopCard({
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showSignupModal, setShowSignupModal] = useState(false)
+  const [showCancelQuestion, setShowCancelQuestion] = useState(false)
+  // The question's confirm button carries the label of the button that opened
+  // it, and on a phone can appear under the same thumb: the second tap of a
+  // double tap must not answer it.
+  const cancelQuestionRead = useOpenedLongEnough(
+    showCancelQuestion,
+    TAP_GUARD_MS,
+  )
   const [experienceLevel, setExperienceLevel] = useState<ExperienceLevel>(
     'intermediate' as ExperienceLevel,
   )
@@ -269,9 +284,57 @@ export default function WorkshopCard({
     </ModalShell>
   )
 
+  // A cancel DELETES the sign-up (#1331) and nobody can restore it, so it asks
+  // first: what is given up, and whether there is a way back. While
+  // registration is open it promises nothing about a seat still being there.
+  const cancelQuestion = (
+    <ModalShell
+      isOpen={showCancelQuestion}
+      onClose={() => setShowCancelQuestion(false)}
+      size="md"
+      title={isOnWaitlist ? 'Leave the waitlist?' : 'Cancel your registration?'}
+    >
+      <div className="space-y-4">
+        <p className="text-sm text-gray-700 dark:text-gray-300">
+          {isOnWaitlist
+            ? `You give up your place in line for ${workshop.title}.`
+            : `You give up your seat in ${workshop.title}.`}{' '}
+          {registrationClosed
+            ? `Registration has closed, so you will not be able to ${isOnWaitlist ? 'join' : 'register'} again.`
+            : isOnWaitlist
+              ? 'You can join again while registration is open, but you lose the place you have now.'
+              : 'You can register again while registration is open, but the seat may be taken by then.'}
+        </p>
+        <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:justify-end">
+          <Button
+            type="button"
+            onClick={() => setShowCancelQuestion(false)}
+            variant="outline"
+            className="min-h-11"
+          >
+            {isOnWaitlist ? 'Stay on Waitlist' : 'Keep My Seat'}
+          </Button>
+          <Button
+            type="button"
+            aria-disabled={!cancelQuestionRead || undefined}
+            onClick={() => {
+              if (!cancelQuestionRead) return
+              setShowCancelQuestion(false)
+              void handleCancel()
+            }}
+            className="min-h-11"
+          >
+            {isOnWaitlist ? 'Leave Waitlist' : 'Cancel Registration'}
+          </Button>
+        </div>
+      </div>
+    </ModalShell>
+  )
+
   return (
     <>
       {modalContent}
+      {cancelQuestion}
 
       <div className="rounded-xl bg-white p-6 shadow-sm transition-all hover:shadow-md dark:bg-gray-800 dark:hover:shadow-lg">
         <div className="mb-4 flex flex-wrap items-start justify-between gap-4">
@@ -549,7 +612,7 @@ export default function WorkshopCard({
               </div>
               {onCancel && (
                 <Button
-                  onClick={handleCancel}
+                  onClick={() => setShowCancelQuestion(true)}
                   disabled={isLoading || externalLoading}
                   variant="outline"
                   className="w-full"

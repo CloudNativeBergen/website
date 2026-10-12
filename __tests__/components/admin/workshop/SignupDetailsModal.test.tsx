@@ -11,7 +11,7 @@ import {
   within,
 } from '@testing-library/react'
 import { SignupDetailsModal } from '@/components/admin/workshop/SignupDetailsModal'
-import { TAP_GUARD_MS } from '@/components/admin/ConfirmationModal'
+import { TAP_GUARD_MS } from '@/hooks/useOpenedLongEnough'
 import {
   WorkshopSignupStatus,
   type WorkshopSignupExisting,

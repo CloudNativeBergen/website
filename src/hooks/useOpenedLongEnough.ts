@@ -1,5 +1,8 @@
 import { useEffect, useState } from 'react'
 
+/** How long a question that guards against a second tap ignores its confirm button. */
+export const TAP_GUARD_MS = 400
+
 /**
  * `false` from the moment `isOpen` turns true until `ms` have passed, then
  * `true`; `false` again as soon as it closes.

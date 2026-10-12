@@ -326,6 +326,7 @@ export default function WorkshopList({
                   isLoading={
                     !!userSignup && cancelledSignupIds.includes(userSignup._id)
                   }
+                  registrationClosed={!!registrationClosed}
                   announcements={
                     <WorkshopAnnouncementsSection workshopId={workshop._id} />
                   }

@@ -15,7 +15,14 @@
  * Against the real tRPC client and query client, with only `fetch` supplied.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useState, type ReactNode } from 'react'
 import { api, getTRPCClient } from '@/lib/trpc/client'
@@ -162,14 +169,35 @@ function renderPortal() {
 }
 
 /**
- * Now, and from now on at every change to the page: if a cancel button is
- * there and enabled, press it. An impatient attendee, at the first instant the
+ * The attendee cancels their registration: the card's button, then the
+ * question it asks, answered once the question accepts an answer (it ignores
+ * its confirm button for a moment after it opens).
+ */
+async function cancelTheRegistration() {
+  fireEvent.click(
+    await screen.findByRole('button', { name: 'Cancel Registration' }),
+  )
+  const confirm = within(
+    await screen.findByRole('dialog', { name: 'Cancel your registration?' }),
+  ).getByRole('button', { name: 'Cancel Registration' })
+  await waitFor(() => expect(confirm).not.toHaveAttribute('aria-disabled'))
+  fireEvent.click(confirm)
+}
+
+/**
+ * Now, and from now on at every change to the page: if a CARD's cancel button
+ * is there and enabled, press it. An impatient attendee, at the first instant the
  * page lets them. Returns how often that happened.
  */
 function pressCancelWheneverItIsEnabled() {
   let pressed = 0
   const press = () => {
-    for (const button of screen.queryAllByRole('button', { name: CANCEL })) {
+    for (const button of screen.queryAllByRole('button', {
+      name: CANCEL,
+      hidden: true,
+    })) {
+      // The card's button, not the question's: the question closes itself.
+      if (button.closest('[role="dialog"]')) continue
       if (!(button as HTMLButtonElement).disabled) {
         pressed += 1
         fireEvent.click(button)
@@ -199,9 +227,7 @@ describe('cancelling a workshop seat in the portal', () => {
     server.failRereads = true
     renderPortal()
 
-    fireEvent.click(
-      await screen.findByRole('button', { name: 'Cancel Registration' }),
-    )
+    await cancelTheRegistration()
 
     // The failed read has been drawn, which is later than the cancel's answer:
     // the card is no longer busy with the cancel itself.
@@ -209,7 +235,12 @@ describe('cancelling a workshop seat in the portal', () => {
       /could not load your workshop registrations/i,
     )
     expect(server.cancels).toBe(1)
-    const button = screen.getByRole('button', { name: 'Cancel Registration' })
+    // The card's own button. (The answered question may still be in the
+    // document while it closes, with a button of the same name.)
+    const [button, ...others] = screen
+      .getAllByRole('button', { name: 'Cancel Registration', hidden: true })
+      .filter((candidate) => !candidate.closest('[role="dialog"]'))
+    expect(others).toEqual([])
     expect(button).toBeDisabled()
 
     fireEvent.click(button)
@@ -224,9 +255,7 @@ describe('cancelling a workshop seat in the portal', () => {
     let release = () => {}
     server.hold = new Promise<void>((resolve) => (release = resolve))
     renderPortal()
-    fireEvent.click(
-      await screen.findByRole('button', { name: 'Cancel Registration' }),
-    )
+    await cancelTheRegistration()
     await screen.findByText('Successfully cancelled workshop signup')
     const stop = pressCancelWheneverItIsEnabled()
 

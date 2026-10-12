@@ -266,6 +266,28 @@ const cancelHandlersFor = (workshops: unknown[], before: unknown[]) => [
 ]
 
 /**
+ * The attendee's cancel asks first. Press the card's button, then answer the
+ * question once it accepts an answer (it ignores its confirm button for a
+ * moment after it opens, against a second tap).
+ */
+const cancelThroughTheQuestion = async (
+  canvasElement: HTMLElement,
+  button: string,
+  question: string,
+) => {
+  await userEvent.click(
+    await within(canvasElement).findByRole('button', { name: button }),
+  )
+  const confirm = within(
+    await within(canvasElement.ownerDocument.body).findByRole('dialog', {
+      name: question,
+    }),
+  ).getByRole('button', { name: button })
+  await waitFor(() => expect(confirm).not.toHaveAttribute('aria-disabled'))
+  await userEvent.click(confirm)
+}
+
+/**
  * The story ran at PHONE width, and nothing is wider than the page. The test
  * runner resizes the page from `defaultViewport`; at its default 1280 this
  * fails.
@@ -301,8 +323,10 @@ export const AfterCancel: Story = {
       await canvas.findByRole('heading', { name: 'Your Workshops' }),
     ).toBeVisible()
 
-    await userEvent.click(
-      await canvas.findByRole('button', { name: 'Cancel Registration' }),
+    await cancelThroughTheQuestion(
+      canvasElement,
+      'Cancel Registration',
+      'Cancel your registration?',
     )
 
     await canvas.findByText('Successfully cancelled workshop signup')
@@ -365,8 +389,10 @@ export const AfterLeavingWaitlist: Story = {
       await canvas.findByText(/on the waitlist for this workshop/i),
     ).toBeVisible()
 
-    await userEvent.click(
-      await canvas.findByRole('button', { name: 'Leave Waitlist' }),
+    await cancelThroughTheQuestion(
+      canvasElement,
+      'Leave Waitlist',
+      'Leave the waitlist?',
     )
 
     await waitFor(() =>

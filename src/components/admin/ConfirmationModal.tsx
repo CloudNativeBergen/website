@@ -5,10 +5,7 @@ import { DialogTitle } from '@headlessui/react'
 import { ExclamationTriangleIcon } from '@heroicons/react/24/outline'
 import { Button } from '@/components/Button'
 import { ModalShell } from '@/components/ModalShell'
-import { useOpenedLongEnough } from '@/hooks/useOpenedLongEnough'
-
-/** How long a question with `guardSecondTap` ignores its confirm button. */
-export const TAP_GUARD_MS = 400
+import { TAP_GUARD_MS, useOpenedLongEnough } from '@/hooks/useOpenedLongEnough'
 
 interface ConfirmationModalProps {
   isOpen: boolean
