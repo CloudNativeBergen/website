@@ -162,26 +162,30 @@ function renderPortal() {
 }
 
 /**
- * From now on, at every change to the page: if a cancel button is there and
- * enabled, press it. An impatient attendee, at the first instant the page lets
- * them. Returns how often that happened.
+ * Now, and from now on at every change to the page: if a cancel button is
+ * there and enabled, press it. An impatient attendee, at the first instant the
+ * page lets them. Returns how often that happened.
  */
 function pressCancelWheneverItIsEnabled() {
   let pressed = 0
-  const observer = new MutationObserver(() => {
+  const press = () => {
     for (const button of screen.queryAllByRole('button', { name: CANCEL })) {
       if (!(button as HTMLButtonElement).disabled) {
         pressed += 1
         fireEvent.click(button)
       }
     }
-  })
+  }
+  const observer = new MutationObserver(press)
   observer.observe(document.body, {
     subtree: true,
     childList: true,
     attributes: true,
     characterData: true,
   })
+  // "Now" matters: a button that is already enabled changes nothing on the
+  // page, so no change would ever report it.
+  press()
   return () => {
     observer.disconnect()
     return pressed
