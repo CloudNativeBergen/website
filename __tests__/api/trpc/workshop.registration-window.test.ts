@@ -270,7 +270,11 @@ describe('workshop.signup and the registration window, as it was before #1345', 
     })
   })
 
-  it('with an end that lies before a start still ahead, refuses as not open yet', async () => {
+  // CHANGED FROM TODAY (#1345, review round 1): this combination used to be
+  // refused as "opens on …", because the start was compared first. A passed
+  // end now wins, as the portal page, its list and the resend action always
+  // said. No save through the admin stores it; Sanity Studio can.
+  it('with an end that lies before a start still ahead, refuses as closed', async () => {
     h.times = {
       workshopRegistrationStart: LONG_AFTER,
       workshopRegistrationEnd: LONG_BEFORE,
@@ -278,7 +282,7 @@ describe('workshop.signup and the registration window, as it was before #1345', 
     expect(await attempt()).toEqual({
       refused: {
         code: 'PRECONDITION_FAILED',
-        message: expect.stringMatching(/^Workshop registration opens on /),
+        message: 'Workshop registration has closed',
       },
     })
   })
