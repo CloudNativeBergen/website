@@ -16,11 +16,15 @@
 import '../../helpers/workosEnv'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { stubPlatformTicketingAccount } from '../../helpers/ticketingSecrets'
-import { createWorkshopCaller } from '../../helpers/trpc'
+import { createAdminCaller, createWorkshopCaller } from '../../helpers/trpc'
 
 const h = vi.hoisted(() => ({
   /** The registration times of the conference this request resolves to. */
   times: {} as Record<string, string | null | undefined>,
+  /** The conference document as stored, for the organizer's save. */
+  stored: { _id: 'conf-1', _type: 'conference' } as Record<string, unknown>,
+  /** Every write issued, in order: `patch:<id>`. */
+  writes: [] as string[],
 }))
 
 vi.mock('next/cache', () => ({ revalidateTag: vi.fn() }))
@@ -48,11 +52,46 @@ vi.mock('@/lib/organization/sanity', () => ({
   getOrganizationRefForCurrentConference: vi.fn(async () => 'org-test'),
 }))
 
-vi.mock('@/lib/sanity/client', () => ({
-  // The live conference document (ticket-type roles): none, so the built-in
-  // list decides who holds a workshop ticket.
-  clientReadUncached: { fetch: async () => null },
-}))
+vi.mock('@/lib/sanity/client', async () => {
+  const { createClient } = await import('@sanity/client')
+  const { createRequire: req } = await import('node:module')
+  const { Mutation } = req(req(import.meta.url).resolve('sanity/package.json'))(
+    '@sanity/mutator',
+  ) as {
+    Mutation: new (o: { mutations: unknown[] }) => {
+      apply: (d: unknown) => Record<string, unknown> | null
+    }
+  }
+  const client = createClient({
+    projectId: 'test',
+    dataset: 'test',
+    apiVersion: '2024-01-01',
+    useCdn: false,
+  })
+
+  return {
+    // The live conference document (ticket-type roles): none, so the built-in
+    // list decides who holds a workshop ticket.
+    clientReadUncached: { fetch: async () => null },
+    clientWrite: {
+      // A REAL patch: built by the real `@sanity/client`, serialised, and
+      // applied to the stored document by Sanity's own `@sanity/mutator`.
+      patch: (id: string) => {
+        const patch = client.patch(id)
+        patch.commit = (async () => {
+          h.writes.push(`patch:${id}`)
+          if (id !== h.stored._id) throw new Error(`no such document: ${id}`)
+          const next = new Mutation({
+            mutations: [{ patch: patch.serialize() }],
+          }).apply(structuredClone(h.stored))
+          if (next) h.stored = next
+          return {}
+        }) as typeof patch.commit
+        return patch
+      },
+    },
+  }
+})
 
 const ticketing = vi.hoisted(() => ({
   fetchEventTickets: vi.fn(),
@@ -147,6 +186,8 @@ beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'], now: new Date(NOW) })
   __resetRedeemedCache()
   h.times = {}
+  h.stored = { _id: 'conf-1', _type: 'conference', title: 'CNDN' }
+  h.writes = []
   ticketing.fetchEventTickets.mockResolvedValue([
     {
       id: 1,
@@ -270,5 +311,180 @@ describe('workshop.signup before the official opening (#1345)', () => {
           'Workshop registration opens on Monday, June 15, 2026 at 12:30 AM',
       },
     })
+  })
+})
+
+/**
+ * THE ORGANIZER'S SAVE (#1345, spec §3). A refused save is asserted on the
+ * refusal and on the stored document being what it was, with no write issued;
+ * an accepted one on the stored values.
+ */
+describe('workshop.admin.updateRegistrationTimes and the sponsor start time', () => {
+  const SPONSOR = '2026-06-01T06:00:00.000Z'
+  const OFFICIAL = '2026-06-15T06:30:00.000Z'
+  const END = '2026-07-01T07:00:00.000Z'
+
+  /** What is stored before every save below: a valid set of three times. */
+  const BEFORE = {
+    _id: 'conf-1',
+    _type: 'conference',
+    title: 'CNDN',
+    workshopRegistrationSponsorStart: '2026-05-02T06:00:00.000Z',
+    workshopRegistrationStart: '2026-05-10T06:00:00.000Z',
+    workshopRegistrationEnd: '2026-05-20T06:00:00.000Z',
+  }
+
+  beforeEach(() => {
+    h.stored = structuredClone(BEFORE)
+  })
+
+  type Save = Parameters<
+    ReturnType<
+      typeof createAdminCaller
+    >['workshop']['admin']['updateRegistrationTimes']
+  >[0]
+
+  /** The outcome of one save, as a value. */
+  async function save(input: Save) {
+    try {
+      await createAdminCaller().workshop.admin.updateRegistrationTimes(input)
+    } catch (error) {
+      const { code, message } = error as { code: string; message: string }
+      return { refused: { code, message }, writes: h.writes, stored: h.stored }
+    }
+    return { writes: h.writes, stored: h.stored }
+  }
+
+  const refusedWith = (message: string) => ({
+    refused: { code: 'BAD_REQUEST', message },
+    writes: [],
+    stored: BEFORE,
+  })
+
+  const NOT_EARLIER =
+    'Sponsor early access must start before registration opens for everyone'
+  const NO_OFFICIAL_OPENING =
+    'Sponsor early access needs a time when registration opens for everyone'
+
+  it('stores a sponsor start time that is earlier than the official opening', async () => {
+    expect(
+      await save({
+        sponsorStartDate: SPONSOR,
+        startDate: OFFICIAL,
+        endDate: END,
+      }),
+    ).toEqual({
+      writes: ['patch:conf-1'],
+      stored: {
+        ...BEFORE,
+        workshopRegistrationSponsorStart: SPONSOR,
+        workshopRegistrationStart: OFFICIAL,
+        workshopRegistrationEnd: END,
+      },
+    })
+  })
+
+  it('stores a sponsor start time given in another offset as the same instant', async () => {
+    const { stored } = await save({
+      sponsorStartDate: '2026-06-01T08:00:00+02:00',
+      startDate: OFFICIAL,
+      endDate: null,
+    })
+    expect(stored).toMatchObject({
+      workshopRegistrationSponsorStart: SPONSOR,
+      workshopRegistrationStart: OFFICIAL,
+      workshopRegistrationEnd: null,
+    })
+  })
+
+  it('clears the sponsor start time and keeps the other two', async () => {
+    expect(
+      await save({ sponsorStartDate: null, startDate: OFFICIAL, endDate: END }),
+    ).toEqual({
+      writes: ['patch:conf-1'],
+      stored: {
+        ...BEFORE,
+        workshopRegistrationSponsorStart: null,
+        workshopRegistrationStart: OFFICIAL,
+        workshopRegistrationEnd: END,
+      },
+    })
+  })
+
+  it('refuses a sponsor start time equal to the official opening', async () => {
+    expect(
+      await save({
+        sponsorStartDate: OFFICIAL,
+        startDate: OFFICIAL,
+        endDate: END,
+      }),
+    ).toEqual(refusedWith(NOT_EARLIER))
+  })
+
+  it('refuses a sponsor start time equal to the official opening in another spelling of the instant', async () => {
+    expect(
+      await save({
+        sponsorStartDate: '2026-06-15T08:30:00+02:00',
+        startDate: OFFICIAL,
+        endDate: END,
+      }),
+    ).toEqual(refusedWith(NOT_EARLIER))
+  })
+
+  it('refuses a sponsor start time later than the official opening', async () => {
+    expect(
+      await save({
+        sponsorStartDate: '2026-06-15T06:30:01.000Z',
+        startDate: OFFICIAL,
+        endDate: END,
+      }),
+    ).toEqual(refusedWith(NOT_EARLIER))
+  })
+
+  it('refuses moving the official opening to before the sponsor start time', async () => {
+    expect(
+      await save({
+        sponsorStartDate: BEFORE.workshopRegistrationSponsorStart,
+        startDate: '2026-05-01T06:00:00.000Z',
+        endDate: BEFORE.workshopRegistrationEnd,
+      }),
+    ).toEqual(refusedWith(NOT_EARLIER))
+  })
+
+  it('refuses a sponsor start time with no official opening', async () => {
+    h.stored = { _id: 'conf-1', _type: 'conference', title: 'CNDN' }
+    expect(
+      await save({ sponsorStartDate: SPONSOR, startDate: null, endDate: null }),
+    ).toEqual({
+      ...refusedWith(NO_OFFICIAL_OPENING),
+      stored: { _id: 'conf-1', _type: 'conference', title: 'CNDN' },
+    })
+  })
+
+  it('refuses clearing the official opening while a sponsor start time is set', async () => {
+    expect(
+      await save({
+        sponsorStartDate: BEFORE.workshopRegistrationSponsorStart,
+        startDate: null,
+        endDate: BEFORE.workshopRegistrationEnd,
+      }),
+    ).toEqual(refusedWith(NO_OFFICIAL_OPENING))
+  })
+
+  it('refuses a save that does not say what the sponsor start time is', async () => {
+    // A page loaded before this change knows two times. Accepting its save
+    // would let it move or clear the official opening unchecked.
+    const outcome = await save({ startDate: null, endDate: null } as Save)
+    expect(outcome).toMatchObject({
+      refused: { code: 'BAD_REQUEST' },
+      writes: [],
+      stored: BEFORE,
+    })
+  })
+
+  it('still refuses an end that is not after the start', async () => {
+    expect(
+      await save({ sponsorStartDate: null, startDate: END, endDate: OFFICIAL }),
+    ).toEqual(refusedWith('End date must be after start date'))
   })
 })

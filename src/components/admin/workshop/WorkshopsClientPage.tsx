@@ -59,6 +59,7 @@ interface AnnounceModalState {
 interface WorkshopsClientPageProps {
   conferenceId: string
   initialWorkshops: ProposalWithWorkshopData[]
+  workshopRegistrationSponsorStart?: string
   workshopRegistrationStart?: string
   workshopRegistrationEnd?: string
   /** Why the resend action is unavailable, or null when it can be used. */
@@ -70,6 +71,7 @@ interface WorkshopsClientPageProps {
 export function WorkshopsClientPage({
   conferenceId,
   initialWorkshops,
+  workshopRegistrationSponsorStart,
   workshopRegistrationStart,
   workshopRegistrationEnd,
   resendDisabledReason,
@@ -354,6 +356,7 @@ export function WorkshopsClientPage({
       {ticketsSection}
 
       <WorkshopRegistrationSettings
+        workshopRegistrationSponsorStart={workshopRegistrationSponsorStart}
         workshopRegistrationStart={workshopRegistrationStart}
         workshopRegistrationEnd={workshopRegistrationEnd}
       />

@@ -52,7 +52,10 @@ import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { isWorkshopsEnabledForConference } from '@/lib/features/workshops'
 import { decideWorkshopPortalAccess } from '@/lib/workshop/access'
 import { WorkshopSignupStatus } from '@/lib/workshop/types'
-import { workshopRegistrationWindow } from '@/lib/workshop/registration-window'
+import {
+  sponsorStartTimeProblem,
+  workshopRegistrationWindow,
+} from '@/lib/workshop/registration-window'
 import {
   isOrganizerForCurrentOrg,
   type OrganizerSpeaker,
@@ -1246,6 +1249,10 @@ export const workshopRouter = router({
     updateRegistrationTimes: workshopAdminProcedure
       .input(
         z.object({
+          // REQUIRED, like the other two: a save always says all three, so
+          // the rule below is checked on what will be stored and never on a
+          // stored value this request has not seen.
+          sponsorStartDate: z.string().nullable(),
           startDate: z.string().nullable(),
           endDate: z.string().nullable(),
         }),
@@ -1253,7 +1260,7 @@ export const workshopRouter = router({
       .mutation(async ({ input }) => {
         try {
           const conferenceId = await resolveConferenceId()
-          const { startDate, endDate } = input
+          const { sponsorStartDate, startDate, endDate } = input
 
           // Validate dates
           if (
@@ -1267,9 +1274,26 @@ export const workshopRouter = router({
             })
           }
 
+          // A sponsor start time needs an official opening and must be
+          // earlier than it (#1345): the rule the `conference` schema
+          // validates with.
+          const sponsorStartProblem = sponsorStartTimeProblem({
+            workshopRegistrationSponsorStart: sponsorStartDate,
+            workshopRegistrationStart: startDate,
+          })
+          if (sponsorStartProblem) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: sponsorStartProblem,
+            })
+          }
+
           await clientWrite
             .patch(conferenceId)
             .set({
+              workshopRegistrationSponsorStart: sponsorStartDate
+                ? new Date(sponsorStartDate).toISOString()
+                : null,
               workshopRegistrationStart: startDate
                 ? new Date(startDate).toISOString()
                 : null,

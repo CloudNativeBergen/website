@@ -62,6 +62,29 @@ function earlyAccessStart(times: WorkshopRegistrationTimes): number | null {
 }
 
 /**
+ * THE SAVE RULE (spec §3): why these times cannot be stored together, or null
+ * when they can. A sponsor start time needs an official opening, and must be
+ * earlier than it. `workshop.admin.updateRegistrationTimes` refuses with this
+ * and the `conference` schema validates with it, so a time edited in Sanity
+ * Studio is checked by the same rule.
+ *
+ * It is the early-access window turned around: a sponsor start time that is
+ * set must make one.
+ */
+export function sponsorStartTimeProblem(
+  times: Pick<
+    WorkshopRegistrationTimes,
+    'workshopRegistrationSponsorStart' | 'workshopRegistrationStart'
+  >,
+): string | null {
+  if (!times.workshopRegistrationSponsorStart) return null
+  if (earlyAccessStart(times) !== null) return null
+  return instant(times.workshopRegistrationStart) === null
+    ? 'Sponsor early access needs a time when registration opens for everyone'
+    : 'Sponsor early access must start before registration opens for everyone'
+}
+
+/**
  * Whether sign-up is open for a caller, at `now` (the table in spec §3).
  *
  * An unset start is open from the beginning and an unset end never closes.

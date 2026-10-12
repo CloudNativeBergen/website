@@ -49,7 +49,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'The workshop registration window card on /admin/workshops: a read-only card showing the open/close instants and the derived status, with a pencil opening a ModalShell form that patches the window via the workshop.admin router. A half-set window surfaces as "Partially configured" with a note mirroring the enforcement semantics (each bound is checked independently by the signup path).',
+          'The workshop registration window card on /admin/workshops: a read-only card showing the sponsor start, open and close instants and the derived status, with a pencil opening a ModalShell form that patches the window via the workshop.admin router. A half-set window surfaces as "Partially configured" with a note mirroring the enforcement semantics (each bound is checked independently by the signup path).',
       },
     },
   },
@@ -96,6 +96,32 @@ export const Closed: Story = {
   args: {
     workshopRegistrationStart: '2026-03-01T07:00:00.000Z',
     workshopRegistrationEnd: '2026-04-01T07:00:00.000Z',
+  },
+}
+
+/**
+ * All three times, with the clock inside the early-access window: sponsors'
+ * people are signing up, everyone else waits for the official opening.
+ */
+export const EarlyAccessOpen: Story = {
+  args: {
+    workshopRegistrationSponsorStart: '2026-04-10T07:00:00.000Z',
+    workshopRegistrationStart: '2026-05-01T07:00:00.000Z',
+    workshopRegistrationEnd: '2026-06-01T07:00:00.000Z',
+  },
+}
+
+export const EarlyAccessOpenDark: Story = {
+  args: EarlyAccessOpen.args,
+  parameters: { theme: 'dark' },
+}
+
+/** Before the sponsor start time: nobody can sign up yet. */
+export const ScheduledWithSponsorStart: Story = {
+  args: {
+    workshopRegistrationSponsorStart: '2026-04-20T07:00:00.000Z',
+    workshopRegistrationStart: '2026-05-01T07:00:00.000Z',
+    workshopRegistrationEnd: '2026-06-01T07:00:00.000Z',
   },
 }
 

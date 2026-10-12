@@ -12,6 +12,7 @@ import { AdminButton } from '@/components/admin/AdminButton'
 import { StatusBadge } from '@/components/StatusBadge'
 import { api } from '@/lib/trpc/client'
 import { useNotification } from './NotificationProvider'
+import { workshopRegistrationWindow } from '@/lib/workshop/registration-window'
 import {
   formatDateTimeSafe,
   instantToOsloLocalInput,
@@ -19,12 +20,14 @@ import {
 } from '@/lib/time'
 
 interface WorkshopRegistrationSettingsProps {
+  /** The sponsor start time: when sign-up opens for people with early access. */
+  workshopRegistrationSponsorStart?: string
   workshopRegistrationStart?: string
   workshopRegistrationEnd?: string
 }
 
 /**
- * Workshop registration window (open/close datetimes). This is the one settings
+ * Workshop registration window (sponsor start, open and close datetimes). This is the one settings
  * island that can't fold into the generic {@link EditConferenceCard} fieldset
  * table because it is patched through the dedicated `workshop.admin` router
  * rather than a `conference.*` mutation. So it keeps its own mutation but adopts
@@ -33,6 +36,7 @@ interface WorkshopRegistrationSettingsProps {
  * after a successful save.
  */
 export function WorkshopRegistrationSettings({
+  workshopRegistrationSponsorStart,
   workshopRegistrationStart,
   workshopRegistrationEnd,
 }: WorkshopRegistrationSettingsProps) {
@@ -51,6 +55,9 @@ export function WorkshopRegistrationSettings({
 
   const [isOpen, setIsOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [sponsorStartDate, setSponsorStartDate] = useState(
+    toLocalInput(workshopRegistrationSponsorStart),
+  )
   const [startDate, setStartDate] = useState(
     toLocalInput(workshopRegistrationStart),
   )
@@ -82,6 +89,7 @@ export function WorkshopRegistrationSettings({
     })
 
   const openModal = () => {
+    setSponsorStartDate(toLocalInput(workshopRegistrationSponsorStart))
     setStartDate(toLocalInput(workshopRegistrationStart))
     setEndDate(toLocalInput(workshopRegistrationEnd))
     setError(null)
@@ -100,6 +108,7 @@ export function WorkshopRegistrationSettings({
     // values degrade to unset rather than throwing.
     const toIso = (v: string) => osloLocalInputToIso(v)
     updateRegistrationTimes.mutate({
+      sponsorStartDate: toIso(sponsorStartDate),
       startDate: toIso(startDate),
       endDate: toIso(endDate),
     })
@@ -114,46 +123,61 @@ export function WorkshopRegistrationSettings({
 
   const getRegistrationStatus = (): {
     label: string
-    color: 'gray' | 'yellow' | 'red' | 'green'
+    color: 'gray' | 'yellow' | 'red' | 'green' | 'blue'
     note?: string
   } => {
-    const now = new Date()
-    const start = workshopRegistrationStart
-      ? new Date(workshopRegistrationStart)
-      : null
-    const end = workshopRegistrationEnd
-      ? new Date(workshopRegistrationEnd)
-      : null
-
-    if (start && end) {
-      if (now < start) return { label: 'Not yet open', color: 'yellow' }
-      if (now > end) return { label: 'Closed', color: 'red' }
-      return { label: 'Currently open', color: 'green' }
+    if (!workshopRegistrationStart && !workshopRegistrationEnd) {
+      return { label: 'Not configured', color: 'gray' }
     }
 
-    if (!start && !end) {
-      return { label: 'Not configured', color: 'gray' }
+    // THE ONE WINDOW RULE (#1345), asked as a person WITH early access: that
+    // is the answer that tells the early-access window apart, so an organizer
+    // is not told "Not yet open" while sponsors' people are signing up.
+    const registration = workshopRegistrationWindow(
+      {
+        workshopRegistrationSponsorStart,
+        workshopRegistrationStart,
+        workshopRegistrationEnd,
+      },
+      { now: new Date(), earlyAccess: true },
+    )
+    const earlyAccessOpen = registration.status === 'open' && registration.early
+
+    if (workshopRegistrationStart && workshopRegistrationEnd) {
+      if (registration.status === 'not-open-yet') {
+        return { label: 'Not yet open', color: 'yellow' }
+      }
+      if (registration.status === 'closed') {
+        return { label: 'Closed', color: 'red' }
+      }
+      return earlyAccessOpen
+        ? { label: 'Open for early access', color: 'blue' }
+        : { label: 'Currently open', color: 'green' }
     }
 
     // Partial window. Enforcement (the workshop signup mutation and the public
     // workshop list) checks each bound independently — a missing bound is
     // simply not enforced — so a half-set window still gates signups and must
     // not read as "Not configured".
-    if (start) {
+    if (workshopRegistrationStart) {
+      const opens = formatDateTimeSafe(workshopRegistrationStart)
+      const neverCloses = 'No close date is set, so once open they never close.'
       return {
         label: 'Partially configured',
         color: 'yellow',
         note:
-          now < start
-            ? `Signups open ${formatDateTimeSafe(workshopRegistrationStart!)}. No close date is set, so once open they never close.`
-            : 'Signups are open. No close date is set, so they never close.',
+          registration.status === 'not-open-yet'
+            ? `Signups open ${opens}. ${neverCloses}`
+            : earlyAccessOpen
+              ? `Early access is open. Signups open for everyone ${opens}. ${neverCloses}`
+              : 'Signups are open. No close date is set, so they never close.',
       }
     }
     return {
       label: 'Partially configured',
       color: 'yellow',
       note:
-        now > end!
+        registration.status === 'closed'
           ? `Signups closed ${formatDateTimeSafe(workshopRegistrationEnd!)}. No open date is set, so they were open until then.`
           : `Signups are open now (no open date is set) and close ${formatDateTimeSafe(workshopRegistrationEnd!)}.`,
     }
@@ -181,6 +205,15 @@ export function WorkshopRegistrationSettings({
       </div>
 
       <div className="space-y-3">
+        <div className="flex justify-between gap-4 border-b border-gray-200 py-2 dark:border-gray-700">
+          <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
+            Sponsor Early Access Opens
+          </span>
+          <span className="text-right text-sm text-gray-900 dark:text-white">
+            {formatDateTime(workshopRegistrationSponsorStart)}
+          </span>
+        </div>
+
         <div className="flex justify-between border-b border-gray-200 py-2 dark:border-gray-700">
           <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
             Registration Opens
@@ -218,7 +251,7 @@ export function WorkshopRegistrationSettings({
         onClose={closeModal}
         size="lg"
         title="Edit Workshop Registration"
-        subtitle="When workshop sign-ups open and close"
+        subtitle="When workshop sign-ups open, for sponsors and for everyone, and when they close"
         icon={<PencilSquareIcon className="h-5 w-5" />}
       >
         <form
@@ -237,6 +270,30 @@ export function WorkshopRegistrationSettings({
               {error}
             </p>
           ) : null}
+
+          <div>
+            <label
+              htmlFor="workshop-reg-sponsor-start"
+              className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300"
+            >
+              Sponsor Early Access Opens (Europe/Oslo)
+            </label>
+            <input
+              id="workshop-reg-sponsor-start"
+              type="datetime-local"
+              value={sponsorStartDate}
+              onChange={(e) => setSponsorStartDate(e.target.value)}
+              aria-describedby="workshop-reg-sponsor-start-help"
+              className="block min-h-[44px] w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm transition-colors focus:border-brand-cloud-blue focus:ring-1 focus:ring-brand-cloud-blue focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+            />
+            <p
+              id="workshop-reg-sponsor-start-help"
+              className="mt-1 text-sm text-gray-500 dark:text-gray-400"
+            >
+              Optional. When people with a sponsor&apos;s early-access link can
+              sign up. Must be earlier than Registration Opens.
+            </p>
+          </div>
 
           <div>
             <label
