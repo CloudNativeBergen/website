@@ -214,20 +214,20 @@ export function WorkshopRegistrationSettings({
           </span>
         </div>
 
-        <div className="flex justify-between border-b border-gray-200 py-2 dark:border-gray-700">
+        <div className="flex justify-between gap-4 border-b border-gray-200 py-2 dark:border-gray-700">
           <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
             Registration Opens
           </span>
-          <span className="text-sm text-gray-900 dark:text-white">
+          <span className="text-right text-sm text-gray-900 dark:text-white">
             {formatDateTime(workshopRegistrationStart)}
           </span>
         </div>
 
-        <div className="flex justify-between border-b border-gray-200 py-2 dark:border-gray-700">
+        <div className="flex justify-between gap-4 border-b border-gray-200 py-2 dark:border-gray-700">
           <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
             Registration Closes
           </span>
-          <span className="text-sm text-gray-900 dark:text-white">
+          <span className="text-right text-sm text-gray-900 dark:text-white">
             {formatDateTime(workshopRegistrationEnd)}
           </span>
         </div>
@@ -251,7 +251,7 @@ export function WorkshopRegistrationSettings({
         onClose={closeModal}
         size="lg"
         title="Edit Workshop Registration"
-        subtitle="When workshop sign-ups open, for sponsors and for everyone, and when they close"
+        subtitle="When workshop sign-ups open and close"
         icon={<PencilSquareIcon className="h-5 w-5" />}
       >
         <form
