@@ -60,3 +60,37 @@ export function WorkshopSignInCookieNote({ signInHost }: Props) {
     </p>
   )
 }
+
+/**
+ * The sponsor an early sign-up records (#1346), in the list of workshop
+ * participant data. It names no processor, so it is shown to every tenant.
+ */
+export function WorkshopEarlyAccessSponsorItem() {
+  return (
+    <li>
+      • If you sign up through a sponsor&apos;s early-access link before sign-up
+      opens for everyone: which sponsor&apos;s link you used. This usually says
+      who you work for.
+    </li>
+  )
+}
+
+/**
+ * The early-access cookie (#1346) in the page's cookies section, for EVERY
+ * tenant, as the sign-in cookie is: it stays in the browser until it expires,
+ * whatever the tenant's entitlement is by then. What it holds and when it
+ * expires come from `src/lib/workshop/early-access/open.ts`.
+ */
+export function WorkshopEarlyAccessCookieNote() {
+  return (
+    <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+      <strong>Workshop early access:</strong> If you open a sponsor&apos;s
+      early-access link to this event&apos;s workshop portal, this site sets one
+      cookie that holds the code of that link and nothing else. It is set only
+      by opening such a link, and it is how the portal knows you may sign up
+      before sign-up opens for everyone. It expires when workshop sign-up opens
+      for everyone, as that time stood when you opened the link. Signing out
+      does not remove it; clearing this site&apos;s cookies does.
+    </p>
+  )
+}

@@ -12,6 +12,8 @@ import {
 import {
   SharedWorkshopLoginNotice,
   SubprocessorList,
+  WorkshopEarlyAccessCookieNote,
+  WorkshopEarlyAccessSponsorItem,
   WorkshopSessionCookieItem,
   WorkshopSignInCookieNote,
 } from '@/components/legal'
@@ -123,7 +125,7 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
     )
   }
 
-  const lastUpdated = 'October 12, 2026'
+  const lastUpdated = 'October 13, 2026'
   const legal = await resolveLegalConfig(conference)
   const contactEmail = legal.contactEmail
   // EMPTY when no legal entity could be resolved. `legal.controllerResolved`
@@ -401,6 +403,7 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                               • Operating system preference (Windows, macOS,
                               Linux)
                             </li>
+                            <WorkshopEarlyAccessSponsorItem />
                             {/*
                               Named only when WorkOS is actually in this
                               tenant's chain (#690) — the identifier does not
@@ -2472,6 +2475,7 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                       switch-off of workshops by up to its 7 days.
                     */}
                     <WorkshopSignInCookieNote signInHost={signInHost} />
+                    <WorkshopEarlyAccessCookieNote />
                     <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
                       <strong>localStorage:</strong> We use your browser’s
                       localStorage to save personal bookmarks on your device.

@@ -249,6 +249,11 @@ export interface SponsorForConferenceExpanded {
   registrationToken?: string
   registrationComplete?: boolean
   registrationCompletedAt?: string
+  /**
+   * Whether the sponsor has a workshop early-access link (#1346). The token
+   * itself is not read with the record: its address is asked for when needed.
+   */
+  hasWorkshopEarlyAccessLink?: boolean
   nextFollowUpAt?: string
   outreachCount?: number
   lastActivity?: {

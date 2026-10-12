@@ -135,6 +135,7 @@ const SPONSOR_FOR_CONFERENCE_FIELDS = `
   registrationToken,
   registrationComplete,
   registrationCompletedAt,
+  "hasWorkshopEarlyAccessLink": defined(workshopEarlyAccessToken),
   nextFollowUpAt,
   outreachCount,
   "lastActivity": *[_type == "sponsorActivity" && sponsorForConference._ref == ^._id] | order(createdAt desc)[0]{
