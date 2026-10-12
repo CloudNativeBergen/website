@@ -54,6 +54,8 @@ Unchanged:
   time that is not earlier than the official opening, or a sponsor start time with no official
   opening. The only check the procedure makes on the order of the times today is that the end is
   after the start.
+- **The schema carries the same rule as validation**, so a time edited in Sanity Studio is checked
+  too. A combination that breaks the rule anyway is no early-access window (§2).
 - **With no sponsor start time, links grant nothing.** They can still be created, copied and
   opened. They cannot be sent (§8).
 
@@ -104,15 +106,21 @@ up:
 - **Only a sponsor with a won deal can be given a link**, the rule the registration send applies
   today. The rule is checked when a link is created or sent. A link that exists keeps working if
   the deal later leaves that state: only revoking ends it.
+- **Create and revoke are organizer actions on this conference's sponsor.** Each checks that the
+  sponsor belongs to the conference the request is for (`requireDocumentInCurrentConference`, as
+  the Send action does) before it reads or writes anything about that sponsor.
 - **Revoking removes the stored token.** The link and every cookie set from it stop being live.
   Sign-ups already made through it stay, with their sponsor still recorded (§6). Creating or
-  sending again stores a new token, so the old address never works again.
-- **Only the published document counts.** The server's authenticated Sanity clients see Studio
-  drafts as well as published documents, so a draft made while a token was stored would keep
-  matching after a revoke. Every read that looks a link up excludes drafts and release copies, the
-  pair other readers in the repository exclude. A revoke also removes the token from every
-  unpublished copy of the sponsor that exists, a draft or a release copy, so publishing one cannot
-  bring the link back.
+  sending again stores a new token, so the old address never works again. A sign-up that had already passed the
+  lookup of §6 when the revoke landed goes through: it counts as one already made.
+- **Only the published document counts, and its unpublished copies are kept in step.** The
+  server's authenticated Sanity clients see Studio drafts as well as published documents, so a
+  draft made while a token was stored would keep matching after a revoke. Every read that looks a
+  link up excludes drafts and release copies. Create writes the token to every unpublished copy of
+  the sponsor that exists, and revoke removes it from every one, so publishing a copy can neither
+  drop a live link nor bring a revoked one back. Release copies are visible only to a raw read at
+  Sanity API version 2025-02-19 or later; finding and changing them follows what the speaker
+  erasure does (`src/lib/speaker/erasure-assets.ts`).
 - **Every read that looks a link up carries the conference**, so a token of one conference never
   resolves on another conference's host.
 
@@ -139,8 +147,9 @@ A new route under `/workshop` takes the token from its path.
 - **Every answer of the route is uncached and sends no referrer**, as the sign-in routes' forward
   to the portal is (`toPortal` in `src/lib/workshop/central-sign-in/decision.ts`), so the token
   does not travel on to another site.
-- **The route makes no live Sanity read per request.** Anyone can call it with any token. It
-  resolves tokens through the cached read of §7.
+- **The route makes no read that depends on the token.** Anyone can call it with any token.
+  Deciding whether the host can sign in is a live read, the one the portal page makes on every
+  view. Beyond it, the route resolves tokens through the cached read of §7.
 - **The cookie is why this works at all.** Sign-in sends the browser to the portal page and
   carries nothing from the address it started at (`src/lib/workshop/central-sign-in/redeem.ts`), so
   a token in the address would be lost by a person who is not yet signed in.
@@ -166,7 +175,8 @@ the duplicate check and capacity.
 - **The sign-up records the sponsor** in a new field on `workshopSignup`, a reference to the
   `sponsorForConference`. It is written only for an early sign-up (§2). A sign-up made after the
   official opening records nothing, cookie or not. The reference is weak, so a sponsor can still be
-  removed from the conference.
+  removed from the conference. The write itself stores it as weak (`_weak: true` on the stored
+  reference): marking the schema field weak governs Studio writes only.
 - **A full workshop puts the person on the waitlist**, as it does for everyone. Early sign-ups are
   older, and `workshop.admin.updateCapacity` confirms the oldest waitlisted sign-ups first, so
   sponsor people are ahead of the public for a seat that is added later. This is by decision.
@@ -197,10 +207,16 @@ There is no early-access page. The portal page and its list render from the wind
   notice of §5.
 - **One cached read per conference serves the page and the route**: the conference's live links,
   each with its sponsor's name. It is not keyed by what the cookie holds, so a made-up value costs
-  nothing. Creating and revoking a link expire it at once, so the next view shows the new answer.
-  `revalidateTag(tag, 'default')`, the call used across the repository, can keep serving the old
-  answer while the new one loads; this read needs `{ expire: 0 }`, which makes the next request
-  wait for it.
+  nothing.
+  - It stays on the server. The browser is sent the sponsor's name for the person's own link and
+    nothing else, never the list.
+  - It is filled from Sanity's origin, not its CDN (`clientReadUncached`, as the short-link
+    resolver in `src/lib/marketing/short-link.ts` does). Expiring a tag does not reach the CDN, and
+    a refill through it could pin the old answer.
+  - Creating and revoking a link expire it at once, and so does every path that removes a sponsor
+    from a conference, so the next view shows the new answer. `revalidateTag(tag, 'default')`, the
+    call used across the repository, can keep serving the old answer while the new one loads; this
+    read needs `{ expire: 0 }`, which makes the next request wait for it.
 - **A cookie whose link was revoked is treated as no cookie.** The person sees the portal as
   everyone does, with no notice. The notice appears only on opening a link.
 - **With a link opened and no sponsor start time set**, the person sees the portal as everyone
