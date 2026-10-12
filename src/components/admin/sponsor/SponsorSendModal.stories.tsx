@@ -368,10 +368,10 @@ export const DiscountCodes: Story = {
       }),
     ).toBeChecked()
     await expect(
-      within(codes).getByRole('checkbox', {
-        name: 'GLOBEX-VIP (linked to Globex Corporation)',
+      within(codes).queryByRole('checkbox', {
+        name: /GLOBEX-VIP/,
       }),
-    ).toBeDisabled()
+    ).not.toBeInTheDocument()
     await userEvent.click(
       within(codes).getByRole('checkbox', { name: 'ACMECLOUD-WORKSHOP' }),
     )

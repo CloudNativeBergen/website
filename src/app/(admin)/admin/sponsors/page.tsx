@@ -3,6 +3,7 @@ import { ErrorDisplay, AdminPageHeader } from '@/components/admin'
 import { SponsorDashboardMetrics } from '@/components/admin/sponsor/SponsorDashboardMetrics'
 import { SponsorActionItems } from '@/components/admin/sponsor/SponsorActionItems'
 import { SponsorActivityTimeline } from '@/components/admin/sponsor/SponsorActivityTimeline'
+import { SponsorDashboardBroadcastAction } from '@/components/admin/sponsor/SponsorDashboardBroadcastAction'
 import Link from 'next/link'
 import {
   RectangleStackIcon,
@@ -43,6 +44,7 @@ export default async function AdminSponsors() {
         title="Sponsor Management"
         description="Manage sponsorships, track revenue, and monitor pipeline health for"
         contextHighlight={conference.title}
+        actions={<SponsorDashboardBroadcastAction conference={conference} />}
       />
 
       <SponsorDashboardMetrics />

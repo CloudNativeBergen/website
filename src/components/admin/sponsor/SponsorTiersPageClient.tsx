@@ -14,6 +14,7 @@ import {
   ChartBarIcon,
   CurrencyDollarIcon,
   DocumentTextIcon,
+  EnvelopeIcon,
 } from '@heroicons/react/24/outline'
 import { TicketIcon } from '@heroicons/react/24/outline'
 import Link from 'next/link'
@@ -58,6 +59,14 @@ export function SponsorTiersPageClient({
           description="Configure sponsorship tiers and manage sponsor assignments for"
           contextHighlight={conference.title}
           backLink={{ href: '/admin/sponsors', label: 'Back to Dashboard' }}
+          actionItems={[
+            {
+              label: `Send Broadcast (${recipientCount})`,
+              icon: <EnvelopeIcon className="h-4 w-4" />,
+              onClick: () => setIsBroadcastModalOpen(true),
+              disabled: recipientCount === 0,
+            },
+          ]}
         />
 
         <div className="mt-8">
