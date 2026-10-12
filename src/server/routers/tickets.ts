@@ -35,6 +35,7 @@ import {
   searchTicketCandidates,
   joinSpeakerTicketStatus,
 } from '@/lib/tickets/speakerStatus'
+import { discoverTicketQuestions } from '@/lib/tickets/questions'
 import { fetchSpeakerTicketInputs } from '@/lib/speaker/ticketInputs'
 import { buildTicketSummary, exportParticipants } from '@/lib/tickets/summary'
 import {
@@ -641,7 +642,12 @@ export const ticketsRouter = router({
       }
 
       const redeemed = await fetchRedeemedSpeakerEmails(conference)
-      return { statuses: joinSpeakerTicketStatus(inputs, redeemed, conference) }
+      const candidates = await fetchEventTicketCandidates(conference)
+      const questions = candidates ? discoverTicketQuestions(candidates) : []
+      return {
+        statuses: joinSpeakerTicketStatus(inputs, redeemed, conference),
+        questions,
+      }
     }),
 
     /**

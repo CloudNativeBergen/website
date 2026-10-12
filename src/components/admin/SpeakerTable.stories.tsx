@@ -49,19 +49,16 @@ const mockSpeakers: SpeakerWithProposals[] = [
     _rev: '1',
     _createdAt: '2024-01-01T00:00:00Z',
     _updatedAt: '2024-01-01T00:00:00Z',
-    name: 'Alice Johnson',
-    email: 'alice@example.com',
-    slug: 'alice-johnson',
-    title: 'Senior Platform Engineer at Google',
-    flags: [Flags.localSpeaker],
-    links: [
-      'https://linkedin.com/in/alicejohnson',
-      'https://bsky.app/profile/alice.dev',
-    ],
+    name: 'Aakansha Priya',
+    email: 'aakanshapriya2000@gmail.com',
+    slug: 'aakansha-priya',
+    title: 'Solution Architect @Dash0',
+    flags: [],
+    links: [],
     proposals: [
       mockProposal(
         'talk-1',
-        'Building Scalable Microservices with Kubernetes',
+        'OpenTelemetry in Practice',
         Status.confirmed,
       ),
     ],
@@ -71,20 +68,14 @@ const mockSpeakers: SpeakerWithProposals[] = [
     _rev: '1',
     _createdAt: '2024-01-01T00:00:00Z',
     _updatedAt: '2024-01-01T00:00:00Z',
-    name: 'Bob Smith',
-    email: 'bob@example.com',
-    slug: 'bob-smith',
-    title: 'DevOps Lead at Microsoft',
-    flags: [Flags.firstTimeSpeaker, Flags.diverseSpeaker],
-    links: ['https://linkedin.com/in/bobsmith'],
+    name: 'Abdel SGHIOUAR',
+    email: 'abdel@abdels.me',
+    slug: 'abdel-sghiouar',
+    title: 'Senior Cloud Dev Advocate @Google Cloud',
+    flags: [Flags.localSpeaker],
+    links: [],
     proposals: [
-      mockProposal('talk-2', 'GitOps for the Enterprise', Status.accepted),
-      mockProposal(
-        'talk-3',
-        'Advanced CI/CD Patterns',
-        Status.submitted,
-        Format.lightning_10,
-      ),
+      mockProposal('talk-2', 'Building Scalable Microservices', Status.confirmed),
     ],
   },
   {
@@ -92,18 +83,17 @@ const mockSpeakers: SpeakerWithProposals[] = [
     _rev: '1',
     _createdAt: '2024-01-01T00:00:00Z',
     _updatedAt: '2024-01-01T00:00:00Z',
-    name: 'Carol Williams',
-    email: 'carol@cloudprovider.io',
-    slug: 'carol-williams',
-    title: 'Principal Solutions Architect, AWS',
-    flags: [Flags.requiresTravelFunding],
-    links: ['https://bsky.app/profile/carol.codes'],
+    name: 'Abhinav Dubey',
+    email: 'abhinavdubey616@gmail.com',
+    slug: 'abhinav-dubey',
+    title: 'Solutions Architect at Lucidity',
+    flags: [],
+    links: [],
     proposals: [
       mockProposal(
-        'talk-4',
-        'Hands-on Kubernetes Workshop',
-        Status.confirmed,
-        Format.workshop_120,
+        'talk-3',
+        'Cost Optimization on Kubernetes',
+        Status.accepted,
       ),
     ],
   },
@@ -112,16 +102,35 @@ const mockSpeakers: SpeakerWithProposals[] = [
     _rev: '1',
     _createdAt: '2024-01-01T00:00:00Z',
     _updatedAt: '2024-01-01T00:00:00Z',
-    name: 'David Chen',
-    email: 'david@startup.io',
-    slug: 'david-chen',
-    title: 'CTO at CloudStartup',
+    name: 'Adriana Villela',
+    email: 'indycomp0t1@gmail.com',
+    slug: 'adriana-villela',
+    title: 'Principal Developer Advocate at Dynatrace',
+    flags: [Flags.diverseSpeaker],
+    links: [],
+    proposals: [
+      mockProposal(
+        'talk-4',
+        'Observability Pipelines',
+        Status.confirmed,
+      ),
+    ],
+  },
+  {
+    _id: 'speaker-5',
+    _rev: '1',
+    _createdAt: '2024-01-01T00:00:00Z',
+    _updatedAt: '2024-01-01T00:00:00Z',
+    name: 'Andrés Valero',
+    email: 'valero.aj@gmail.com',
+    slug: 'andres-valero',
+    title: 'Principal Technology Advocate',
     flags: [],
     links: [],
     proposals: [
       mockProposal(
         'talk-5',
-        'From Zero to Production: A Startup Journey',
+        'Cloud Native Networking',
         Status.accepted,
       ),
     ],
@@ -189,50 +198,10 @@ export const SingleSpeaker: Story = {
 
 export const ManySpeakers: Story = {
   args: {
-    speakers: [
-      ...mockSpeakers,
-      {
-        _id: 'speaker-5',
-        _rev: '1',
-        _createdAt: '2024-01-01T00:00:00Z',
-        _updatedAt: '2024-01-01T00:00:00Z',
-        name: 'Eva Martinez',
-        email: 'eva@tech.com',
-        slug: 'eva-martinez',
-        title: 'Staff Engineer at Netflix',
-        flags: [Flags.localSpeaker, Flags.diverseSpeaker],
-        links: ['https://linkedin.com/in/evamartinez'],
-        proposals: [
-          mockProposal('talk-6', 'Observability at Scale', Status.confirmed),
-        ],
-      },
-      {
-        _id: 'speaker-6',
-        _rev: '1',
-        _createdAt: '2024-01-01T00:00:00Z',
-        _updatedAt: '2024-01-01T00:00:00Z',
-        name: 'Frank Thompson',
-        email: 'frank@consultancy.com',
-        slug: 'frank-thompson',
-        title: 'Independent Consultant',
-        flags: [Flags.firstTimeSpeaker, Flags.requiresTravelFunding],
-        links: [],
-        proposals: [
-          mockProposal('talk-7', 'Service Mesh Deep Dive', Status.accepted),
-        ],
-      },
-    ],
+    speakers: mockSpeakers,
     currentConferenceId: 'conf-2025',
     onEditSpeaker: fn(),
     onPreviewSpeaker: fn(),
-  },
-  parameters: {
-    docs: {
-      description: {
-        story:
-          'Table with many speakers showing various flags and proposal statuses.',
-      },
-    },
   },
 }
 
@@ -253,12 +222,6 @@ export const Mobile: Story = {
       },
       defaultViewport: 'mobile360',
     },
-    docs: {
-      description: {
-        story:
-          'Below `md`, the wide speaker table collapses into a stacked card layout — no horizontal scroll on a phone. Each card shows the speaker name, title, indicators, email, and talks with status badges, plus the action menu.',
-      },
-    },
   },
 }
 
@@ -269,26 +232,71 @@ export const WithoutConferenceFilter: Story = {
     onEditSpeaker: fn(),
     onPreviewSpeaker: fn(),
   },
-  parameters: {
-    docs: {
-      description: {
-        story:
-          'Without a currentConferenceId, all proposals from all conferences are shown.',
-      },
-    },
-  },
 }
 
-/** All four ticket states side by side — the column and the mobile card. */
+/** Realistic ticket status mirroring Checkin production screenshot */
 const ticketStatuses = {
-  'speaker-1': { speakerId: 'speaker-1', state: 'redeemed' as const },
+  'speaker-1': {
+    speakerId: 'speaker-1',
+    state: 'invited' as const,
+    invitedAt: '2026-10-12T08:00:00Z',
+  },
   'speaker-2': {
     speakerId: 'speaker-2',
-    state: 'invited' as const,
-    invitedAt: '2026-03-01T09:00:00Z',
+    state: 'redeemed' as const,
+    fields: [
+      { key: 'work_title', value: 'Senior Cloudy Developer Advocate' },
+      { key: 'company', value: 'Google Cloud' },
+    ],
+    additionals: [
+      { name: 'Consent to Media Publication', value: '1' },
+      {
+        name: 'Will you attend the speaker dinner? - Yes, I will attend',
+        value: '1',
+      },
+      {
+        name: 'Will you attend the conference party? - Yes, I will attend',
+        value: '1',
+      },
+      {
+        name: 'Will you attend the Monday workshops? - Yes',
+        value: '1',
+      },
+    ],
   },
-  'speaker-3': { speakerId: 'speaker-3', state: 'not-invited' as const },
-  'speaker-4': { speakerId: 'speaker-4', state: 'unknown' as const },
+  'speaker-3': {
+    speakerId: 'speaker-3',
+    state: 'invited' as const,
+    invitedAt: '2026-10-12T08:00:00Z',
+  },
+  'speaker-4': {
+    speakerId: 'speaker-4',
+    state: 'redeemed' as const,
+    fields: [
+      { key: 'work_title', value: 'Principal Developer Advocate' },
+      { key: 'company', value: 'Dynatrace' },
+    ],
+    additionals: [
+      { name: 'Consent to Media Publication', value: '1' },
+      {
+        name: 'Will you attend the speaker dinner? - Yes, I will attend',
+        value: '1',
+      },
+      {
+        name: 'Will you attend the conference party? - Yes, I will attend',
+        value: '1',
+      },
+      {
+        name: 'Will you attend the Monday workshops? - No',
+        value: '1',
+      },
+    ],
+  },
+  'speaker-5': {
+    speakerId: 'speaker-5',
+    state: 'invited' as const,
+    invitedAt: '2026-10-12T08:00:00Z',
+  },
 }
 
 export const TicketStatus: Story = {
@@ -393,7 +401,37 @@ export const TicketStatusLoading: Story = {
     // The filter panel is portalled out of the canvas root (it has to escape
     // the table's `overflow-hidden`), so query the document for its options.
     await userEvent.click(
-      await within(document.body).findByText('Ticket not claimed'),
+      await within(document.body).findByText('Ticket not claimed (chase list)'),
     )
   },
 }
+
+export const TicketQuestionsUnrolled: Story = {
+  args: {
+    ...TicketStatus.args,
+  },
+  play: async ({ canvas, userEvent }) => {
+    // Open Columns dropdown and toggle Monday workshops and Speaker dinner
+    const columnsBtn = await canvas.findByRole('button', { name: /columns/i })
+    await userEvent.click(columnsBtn)
+    const workshopCol = await within(document.body).findByText('Monday workshops')
+    await userEvent.click(workshopCol)
+    const dinnerCol = await within(document.body).findByText('Speaker dinner')
+    await userEvent.click(dinnerCol)
+    // Close dropdown to inspect table
+    await userEvent.click(columnsBtn)
+  },
+}
+
+export const TicketFiltersOpen: Story = {
+  args: {
+    ...TicketStatus.args,
+  },
+  play: async ({ canvas, userEvent }) => {
+    // Open Filters dropdown to inspect dynamic question filters
+    const filtersBtn = await canvas.findByRole('button', { name: /filters/i })
+    await userEvent.click(filtersBtn)
+  },
+}
+
+
