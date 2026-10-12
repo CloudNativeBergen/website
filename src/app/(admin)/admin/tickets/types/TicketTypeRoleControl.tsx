@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { api } from '@/lib/trpc/client'
 import { useNotification } from '@/components/admin/NotificationProvider'
+import { isUnconfirmedSave } from '@/lib/tickets/unconfirmed-save'
 import { StatusBadge } from '@/components/StatusBadge'
 import type { TicketTypeProposal } from '@/lib/tickets/discovery'
 
@@ -57,6 +58,19 @@ export function TicketTypeRoleControl({
     },
     onError: (error) => {
       setDeclared(declaredAdmits)
+      // The server could not confirm its write, or never answered: the role
+      // may have been stored. Say so, not "Could not save", and reload the
+      // page's data so the card shows what is stored.
+      if (isUnconfirmedSave(error)) {
+        router.refresh()
+        showNotification({
+          type: 'warning',
+          title: 'This change may or may not have been saved',
+          message:
+            'The save could not be confirmed. Check this ticket type before trying again.',
+        })
+        return
+      }
       showNotification({
         type: 'error',
         title: 'Could not save',

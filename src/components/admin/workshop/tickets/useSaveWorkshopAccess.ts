@@ -4,6 +4,7 @@ import { useRef, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { api } from '@/lib/trpc/client'
 import { useNotification } from '@/components/admin/NotificationProvider'
+import { isUnconfirmedSave } from '@/lib/tickets/unconfirmed-save'
 
 /**
  * The server's two ways of saying the page was stale: the stored answers are
@@ -67,6 +68,21 @@ export function useSaveWorkshopAccess({
           title: 'This list changed since you opened it',
           message:
             'Nothing was saved. The list has been reloaded: check it and try again.',
+        })
+        return
+      }
+      // NOBODY KNOWS WHETHER IT WAS SAVED: the server could not confirm its
+      // write, or never answered. Neither "saved" nor "nothing was saved" is
+      // known to be true, and the raw transport text ("Failed to fetch") says
+      // nothing an organizer can act on. The list reloads, so what is stored
+      // is what is shown.
+      if (isUnconfirmedSave(error)) {
+        startRefresh(() => router.refresh())
+        showNotification({
+          type: 'warning',
+          title: 'This change may or may not have been saved',
+          message:
+            'The save could not be confirmed. Check the list before trying again.',
         })
         return
       }

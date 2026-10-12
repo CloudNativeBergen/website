@@ -766,7 +766,7 @@ describe('while a save is on its way', () => {
     },
   )
 
-  it('puts the stored answer back when the save is refused', () => {
+  it('puts the stored answer back when the server refuses the save', () => {
     render(<WorkshopAccessControl {...row} />)
 
     fireEvent.click(
@@ -775,15 +775,64 @@ describe('while a save is on its way', () => {
     expect(
       screen.getByRole('button', { name: /^Grants workshop access/ }),
     ).toHaveAttribute('aria-pressed', 'true')
-    act(() => h.options.onError!(new Error('Reload the page.')))
+    // An answer from the server that says no: nothing was written.
+    act(() =>
+      h.options.onError!(
+        Object.assign(new Error('You may not edit this conference.'), {
+          data: { code: 'FORBIDDEN' },
+        }),
+      ),
+    )
 
     expect(
       screen.getByRole('button', { name: /^No workshop access/ }),
     ).toHaveAttribute('aria-pressed', 'true')
     expect(h.notify.mock.calls).toEqual([
-      [{ type: 'error', title: 'Could not save', message: 'Reload the page.' }],
+      [
+        {
+          type: 'error',
+          title: 'Could not save',
+          message: 'You may not edit this conference.',
+        },
+      ],
     ])
     expect(h.refresh).not.toHaveBeenCalled()
+  })
+
+  /**
+   * NOBODY KNOWS WHETHER IT WAS SAVED. The server could not confirm its write
+   * (`BAD_GATEWAY`), or the request got no answer at all. The change may have
+   * been stored, so the page must not say "Nothing was saved", must not say
+   * "Could not save", and must not print the transport's own words. It says
+   * the outcome is unknown and reloads the list.
+   */
+  it.each([
+    [
+      'the server could not confirm its write',
+      Object.assign(new Error('The save could not be confirmed.'), {
+        data: { code: 'BAD_GATEWAY' },
+      }),
+    ],
+    ['the request got no answer', new TypeError('Failed to fetch')],
+  ])('says the outcome is unknown, and reloads, when %s', (_when, error) => {
+    render(<WorkshopAccessControl {...row} basedOn="v1" />)
+
+    fireEvent.click(
+      screen.getByRole('button', { name: /^Grants workshop access/ }),
+    )
+    act(() => h.options.onError!(error))
+
+    expect(h.notify.mock.calls).toEqual([
+      [
+        {
+          type: 'warning',
+          title: 'This change may or may not have been saved',
+          message:
+            'The save could not be confirmed. Check the list before trying again.',
+        },
+      ],
+    ])
+    expect(h.refresh).toHaveBeenCalledTimes(1)
   })
 })
 

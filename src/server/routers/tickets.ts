@@ -28,6 +28,7 @@ import {
 import { clientWrite } from '@/lib/sanity/client'
 import { generateKey } from '@/lib/sanity/helpers'
 import { marksWorkshopAccess, typeKey } from '@/lib/tickets/classification'
+import { UNCONFIRMED_SAVE } from '@/lib/tickets/unconfirmed-save'
 import { workshopAnswersVersion } from '@/lib/workshop/ticket-list'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import {
@@ -403,11 +404,15 @@ async function setTicketTypeRoles(
   // applies only to the document revision it was computed from. The seating
   // write is conditioned too: it addresses the entry the read found.
   //
-  // RETRY ONCE, then surface a CONFLICT. The operation is idempotent and the
-  // re-read picks up the winner's answers, so one retry absorbs the ordinary
-  // case (an organizer and a Studio edit in the same second) without an
-  // unbounded loop; a document under sustained churn tells the organizer to
-  // reload rather than quietly writing a guess.
+  // RETRY ONCE, AFTER A REVISION CONFLICT ONLY, then surface a CONFLICT. A
+  // conflict means the patch did not apply, so the re-read picks up the
+  // winner's answers and every guard runs again on them; one retry absorbs the
+  // ordinary case (an organizer and a Studio edit in the same second) without
+  // an unbounded loop, and a document under sustained churn tells the
+  // organizer to reload rather than quietly writing a guess. ANY OTHER commit
+  // failure is not retried: the patch may have applied, and a second pass
+  // would read back its own write and call it somebody else's (see
+  // `retryableOrThrow`).
   let lastError: unknown
   const updates = 'workshop' in write ? write.workshop : []
   const wantedKeys = new Set(updates.map((u) => typeKey(u.typeName)))
@@ -485,7 +490,7 @@ async function setTicketTypeRoles(
       try {
         return await patch.commit()
       } catch (error) {
-        lastError = error
+        lastError = retryableOrThrow(error)
         continue
       }
     }
@@ -576,15 +581,53 @@ async function setTicketTypeRoles(
       }
       return await patch.commit()
     } catch (error) {
-      lastError = error
+      lastError = retryableOrThrow(error)
     }
   }
 
+  // Reached only after TWO revision conflicts: neither patch applied.
   console.error('setTicketTypeRoles: conditional patch lost twice:', lastError)
   throw new TRPCError({
     code: 'CONFLICT',
     message:
       'This ticket type changed while you were saving it. Reload the page and try again.',
+  })
+}
+
+/**
+ * A Sanity `ifRevisionId` mismatch: someone else wrote first, and OUR PATCH
+ * DID NOT APPLY. Matches the 409 status and the message form, in the shape of
+ * `src/lib/schedule/sanity.ts` and `src/lib/social/sanity.ts`, so a conflict
+ * is never mistaken for a transport failure.
+ */
+function isRevisionConflict(error: unknown): boolean {
+  const statusCode = (error as { statusCode?: number } | null)?.statusCode
+  if (statusCode === 409) return true
+  const message = error instanceof Error ? error.message.toLowerCase() : ''
+  return message.includes('revision') && message.includes('mismatch')
+}
+
+/**
+ * What `setTicketTypeRoles` does with a failed commit: hand a revision
+ * conflict back to be retried, and throw for everything else.
+ *
+ * EVERYTHING ELSE MAY HAVE BEEN STORED. A timeout, a dropped connection or a
+ * 5xx says nothing about whether Sanity applied the patch. Retrying used to be
+ * harmless, because the write is idempotent. It stopped being harmless when a
+ * save began to say which answers it was based on: the second pass re-read the
+ * roles this very save had just stored, found they were not the page's, and
+ * answered "This list changed since you opened it. Nothing was saved." So the
+ * server does not retry and does not guess: it says the save could not be
+ * confirmed, with a code of its own, and the page reloads the list.
+ */
+function retryableOrThrow(error: unknown): unknown {
+  if (isRevisionConflict(error)) return error
+  console.error('setTicketTypeRoles: commit failed, outcome unknown:', error)
+  throw new TRPCError({
+    code: UNCONFIRMED_SAVE,
+    message:
+      'The save could not be confirmed. It may or may not have been stored. Reload the page and check before trying again.',
+    cause: error,
   })
 }
 

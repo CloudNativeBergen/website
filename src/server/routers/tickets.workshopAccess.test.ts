@@ -18,6 +18,18 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const h = vi.hoisted(() => ({
   dataset: [] as Record<string, unknown>[],
   commits: 0,
+  /** Commits ATTEMPTED, landed or not. */
+  attempts: 0,
+  /**
+   * Runs once, between the procedure's read and its commit: another writer
+   * getting in first. It changes the dataset however it likes.
+   */
+  beforeCommit: null as null | (() => void),
+  /**
+   * Thrown by the next commit AFTER the patch has been applied: the write
+   * landed and the answer was lost on the way back.
+   */
+  failAfterApplying: null as null | Error,
   tickets: [] as { category: string; crm: { email: string } }[],
 }))
 
@@ -48,6 +60,10 @@ vi.mock('@/lib/sanity/client', async () => {
       patch: (id: string) => {
         const patch = client.patch(id)
         patch.commit = (async () => {
+          h.attempts += 1
+          const interleaved = h.beforeCommit
+          h.beforeCommit = null
+          interleaved?.()
           const index = h.dataset.findIndex((d) => d._id === id)
           if (index === -1) throw new Error(`no such document: ${id}`)
           const serialized = patch.serialize() as { ifRevisionID?: string }
@@ -65,6 +81,9 @@ vi.mock('@/lib/sanity/client', async () => {
             mutations: [{ patch: serialized }],
           }).apply(structuredClone(h.dataset[index]))
           if (next) h.dataset[index] = { ...next, _rev: `rev-${h.commits}` }
+          const lost = h.failAfterApplying
+          h.failAfterApplying = null
+          if (lost) throw lost
           return { _id: id }
         }) as typeof patch.commit
         return patch
@@ -158,6 +177,9 @@ type Role = {
 
 function seed(roles: Role[] | undefined) {
   h.commits = 0
+  h.attempts = 0
+  h.beforeCommit = null
+  h.failAfterApplying = null
   h.dataset = [
     { _id: ORG_A, _type: 'organization', name: 'A' },
     {
@@ -297,6 +319,185 @@ describe('removing a stored workshop answer', () => {
 
     expect(stored()).toEqual([
       { typeName: 'Two-day pass', grantsWorkshop: true },
+    ])
+  })
+})
+
+/**
+ * A COMMIT THAT FAILS DOES NOT SAY WHY. Two different things come back as an
+ * error from `patch.commit()`:
+ *
+ *  - a REVISION CONFLICT (409): the document moved between the read and the
+ *    write, and Sanity did NOT apply the patch. Reading again and deciding
+ *    again is right, and "nothing was saved" is true if that decides no.
+ *  - ANYTHING ELSE (a timeout, a dropped connection, a 5xx): the patch may
+ *    have been applied and the answer lost on the way back. Retrying then
+ *    re-reads the roles this very save just stored, finds they are not the
+ *    ones the page was showing (`basedOn`), and answers "This list changed
+ *    since you opened it. Nothing was saved." It was saved.
+ *
+ * So only a definite conflict is retried. Anything else is answered at once
+ * with a code of its own, and the answer claims neither outcome.
+ */
+describe('a commit that fails', () => {
+  const ROLES = [
+    { _key: 'a', typeName: 'Two-day pass', grantsWorkshop: true },
+    { _key: 'b', typeName: 'Day pass', admits: true },
+  ]
+  const conference = () =>
+    h.dataset.find((d) => d._id === CONF_A) as Record<string, unknown>
+  const version = () =>
+    workshopAnswersVersion(conference().ticketTypeRoles as Role[])
+  /** Another writer, between this save's read and its commit. */
+  const meanwhile = (change: (doc: Record<string, unknown>) => void) => {
+    h.beforeCommit = () => {
+      change(conference())
+      conference()._rev = 'rev-other'
+    }
+  }
+  const UNCONFIRMED = {
+    code: 'BAD_GATEWAY',
+    message:
+      'The save could not be confirmed. It may or may not have been stored. Reload the page and check before trying again.',
+  }
+
+  it('is not retried, and claims neither outcome, when the write may have landed', async () => {
+    seed(ROLES)
+    h.failAfterApplying = new Error('socket hang up')
+
+    const save = tickets().admin.setWorkshopAccess({
+      updates: [{ typeName: 'Day pass', grantsWorkshop: true }],
+      basedOn: version(),
+    })
+
+    // Not "This list changed since you opened it. Nothing was saved."
+    await expect(save).rejects.toMatchObject(UNCONFIRMED)
+    // One attempt: a second would have read back its own write.
+    expect(h.attempts).toBe(1)
+    // And the write did land.
+    expect(stored()).toEqual([
+      { typeName: 'Two-day pass', grantsWorkshop: true },
+      { typeName: 'Day pass', admits: true, grantsWorkshop: true },
+    ])
+  })
+
+  it('is retried after a revision conflict, and then refused when the answers changed', async () => {
+    seed(ROLES)
+    const basedOn = version()
+    meanwhile((doc) => {
+      doc.ticketTypeRoles = [
+        { _key: 'a', typeName: 'Two-day pass', grantsWorkshop: false },
+        { _key: 'b', typeName: 'Day pass', admits: true },
+      ]
+    })
+
+    await expect(
+      tickets().admin.setWorkshopAccess({
+        updates: [{ typeName: 'Day pass', grantsWorkshop: true }],
+        basedOn,
+      }),
+    ).rejects.toMatchObject({
+      code: 'CONFLICT',
+      message: 'This list changed since you opened it. Nothing was saved.',
+    })
+
+    // The one commit that was tried did not apply; the second pass read the
+    // other writer's answers and refused before writing. Nothing of ours is
+    // stored, exactly as the answer says.
+    expect(h.attempts).toBe(1)
+    expect(h.commits).toBe(0)
+    expect(stored()).toEqual([
+      { typeName: 'Two-day pass', grantsWorkshop: false },
+      { typeName: 'Day pass', admits: true },
+    ])
+  })
+
+  it('is retried after a revision conflict, and lands once, when only another field moved', async () => {
+    seed(ROLES)
+    const basedOn = version()
+    meanwhile((doc) => {
+      doc.title = 'Renamed in Studio'
+    })
+
+    await tickets().admin.setWorkshopAccess({
+      updates: [{ typeName: 'Day pass', grantsWorkshop: true }],
+      basedOn,
+    })
+
+    expect(h.attempts).toBe(2)
+    expect(h.commits).toBe(1)
+    expect(conference().title).toBe('Renamed in Studio')
+    expect(stored()).toEqual([
+      { typeName: 'Two-day pass', grantsWorkshop: true },
+      { typeName: 'Day pass', admits: true, grantsWorkshop: true },
+    ])
+  })
+
+  it('says the type changed while saving after two revision conflicts in a row', async () => {
+    seed(ROLES)
+    // Somebody keeps getting in first.
+    meanwhile((doc) => {
+      doc.title = 'First'
+      h.beforeCommit = () => {
+        doc.title = 'Second'
+        conference()._rev = 'rev-other-2'
+      }
+    })
+
+    await expect(
+      tickets().admin.setWorkshopAccess({
+        updates: [{ typeName: 'Day pass', grantsWorkshop: true }],
+      }),
+    ).rejects.toMatchObject({
+      code: 'CONFLICT',
+      message:
+        'This ticket type changed while you were saving it. Reload the page and try again.',
+    })
+
+    // Neither attempt applied, so "changed while you were saving" is all that
+    // happened to it.
+    expect(h.attempts).toBe(2)
+    expect(h.commits).toBe(0)
+    expect(stored()).toEqual([
+      { typeName: 'Two-day pass', grantsWorkshop: true },
+      { typeName: 'Day pass', admits: true },
+    ])
+  })
+
+  it('is not retried for the seating answer either', async () => {
+    seed(ROLES)
+    h.failAfterApplying = new Error('fetch failed')
+
+    await expect(
+      tickets().admin.setTicketTypeRole({
+        typeName: 'Day pass',
+        admits: false,
+      }),
+    ).rejects.toMatchObject(UNCONFIRMED)
+
+    expect(h.attempts).toBe(1)
+    expect(stored()).toEqual([
+      { typeName: 'Two-day pass', grantsWorkshop: true },
+      { typeName: 'Day pass', admits: false },
+    ])
+  })
+
+  it('retries the seating answer after a revision conflict', async () => {
+    seed(ROLES)
+    meanwhile((doc) => {
+      doc.title = 'Renamed in Studio'
+    })
+
+    await tickets().admin.setTicketTypeRole({
+      typeName: 'Day pass',
+      admits: false,
+    })
+
+    expect(h.attempts).toBe(2)
+    expect(h.commits).toBe(1)
+    expect(stored()).toEqual([
+      { typeName: 'Two-day pass', grantsWorkshop: true },
+      { typeName: 'Day pass', admits: false },
     ])
   })
 })
