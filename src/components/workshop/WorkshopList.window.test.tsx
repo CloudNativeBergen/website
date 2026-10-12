@@ -111,6 +111,7 @@ function Providers({ children }: { children: ReactNode }) {
 
 /** The sections the list shows for these registration times, once it has drawn the attendee's own. */
 async function sectionsWith(times: {
+  workshopRegistrationSponsorStart?: string
   workshopRegistrationStart?: string
   workshopRegistrationEnd?: string
 }) {
@@ -176,6 +177,16 @@ describe('the workshop list and the registration window', () => {
       await sectionsWith({
         workshopRegistrationStart: LONG_BEFORE,
         workshopRegistrationEnd: A_SECOND_BEFORE,
+      }),
+    ).toEqual(NOT_FOR_SIGN_UP)
+  })
+
+  it('inside the early-access window, shows only the attendee’s own: nobody has early access yet (#1345)', async () => {
+    expect(
+      await sectionsWith({
+        workshopRegistrationSponsorStart: LONG_BEFORE,
+        workshopRegistrationStart: A_SECOND_AFTER,
+        workshopRegistrationEnd: LONG_AFTER,
       }),
     ).toEqual(NOT_FOR_SIGN_UP)
   })

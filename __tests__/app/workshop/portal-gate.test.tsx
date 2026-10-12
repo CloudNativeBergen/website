@@ -1058,4 +1058,30 @@ describe('workshop portal: the registration window', () => {
       workshopRegistrationEnd: LONG_AFTER,
     })
   })
+
+  it('hands the list the sponsor start time with the other two (#1345)', async () => {
+    const portal = await portalWith({
+      workshopRegistrationSponsorStart: '2026-04-20T07:00:00.000Z',
+      workshopRegistrationStart: LONG_BEFORE,
+      workshopRegistrationEnd: LONG_AFTER,
+    })
+    expect(portal.list).toMatchObject({
+      workshopRegistrationSponsorStart: '2026-04-20T07:00:00.000Z',
+      workshopRegistrationStart: LONG_BEFORE,
+      workshopRegistrationEnd: LONG_AFTER,
+    })
+  })
+
+  it('names the official opening inside the early-access window: nobody has early access yet (#1345)', async () => {
+    const portal = await portalWith({
+      workshopRegistrationSponsorStart: LONG_BEFORE,
+      workshopRegistrationStart: A_SECOND_AFTER,
+      workshopRegistrationEnd: LONG_AFTER,
+    })
+    expect(portal.heading).toBe('Workshop Signup')
+    expect(portal.banners).toEqual([NOT_YET_OPEN])
+    expect(portal.text).toContain(
+      'Registration will open on Wednesday, June 10, 2026 at 2:00 PM',
+    )
+  })
 })
