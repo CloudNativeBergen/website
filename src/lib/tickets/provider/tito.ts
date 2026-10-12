@@ -208,6 +208,46 @@ export class TitoProvider implements TicketingProvider {
     return (await response.json()) as T
   }
 
+  /**
+   * EVERY PAGE of one of Tito's list endpoints, or a throw.
+   *
+   * Tito's Admin API pages every endpoint that enumerates objects (100 to a
+   * page unless asked otherwise) and names the next page in `meta.next_page`.
+   * This follows that cursor to the end, with a hard cap so a pathological
+   * response can never loop forever.
+   *
+   * NEVER A PARTIAL LIST. A truncated ticket list would corrupt eligibility
+   * checks and order groupings; a truncated release list would make the ticket
+   * types that were not read look like they do not exist, and the
+   * workshop-ticket list offers to remove the stored answer of a type that
+   * does not exist. A page that fails, and a cursor that does not end, both
+   * throw. A real event needing more than the cap should raise it deliberately.
+   */
+  private async getEveryPage<T>(
+    accountSlug: string,
+    eventSlug: string,
+    resource: 'tickets' | 'releases',
+  ): Promise<T[]> {
+    const PAGE_CAP = 100
+    const items: T[] = []
+    let page: number | undefined = 1
+    for (let guard = 0; page; guard++) {
+      if (guard >= PAGE_CAP) {
+        throw new Error(
+          `Tito ${resource === 'tickets' ? 'ticket' : 'release'} pagination exceeded ${PAGE_CAP} pages for ${accountSlug}/${eventSlug} — refusing to return partial data`,
+        )
+      }
+      const data: Partial<Record<typeof resource, T[]>> & {
+        meta?: TitoMeta
+      } = await this.get(
+        `/${accountSlug}/${eventSlug}/${resource}?page[number]=${page}`,
+      )
+      items.push(...(data[resource] ?? []))
+      page = data.meta?.next_page ?? undefined
+    }
+    return items
+  }
+
   // ── Tickets & orders ──────────────────────────────────────────────
 
   async fetchEventTickets(
@@ -220,30 +260,16 @@ export class TitoProvider implements TicketingProvider {
     }
 
     const tickets: EventTicket[] = []
-    let page: number | undefined = 1
-    // Follow Tito's cursor (`meta.next_page`) with a hard page cap so a
-    // pathological response can never loop forever.
-    const PAGE_CAP = 100
-    for (let guard = 0; page; guard++) {
-      if (guard >= PAGE_CAP) {
-        // Never silently return a truncated attendee list: partial data would
-        // corrupt eligibility checks and order groupings downstream. A real
-        // event needing >100 pages should raise the cap deliberately.
-        throw new Error(
-          `Tito ticket pagination exceeded ${PAGE_CAP} pages for ${accountSlug}/${eventSlug} — refusing to return partial data`,
-        )
-      }
-      const data: { tickets?: TitoTicket[]; meta?: TitoMeta } = await this.get(
-        `/${accountSlug}/${eventSlug}/tickets?page[number]=${page}`,
-      )
-      for (const t of data.tickets ?? []) {
-        // A VOID ticket is nobody's ticket. Tito's list leaves them out unless
-        // asked, but that is its default, not ours to rely on: this list
-        // decides who holds workshop access and who is mailed about it.
-        if (t.state === 'void') continue
-        tickets.push(this.mapTicket(t))
-      }
-      page = data.meta?.next_page ?? undefined
+    for (const t of await this.getEveryPage<TitoTicket>(
+      accountSlug,
+      eventSlug,
+      'tickets',
+    )) {
+      // A VOID ticket is nobody's ticket. Tito's list leaves them out unless
+      // asked, but that is its default, not ours to rely on: this list
+      // decides who holds workshop access and who is mailed about it.
+      if (t.state === 'void') continue
+      tickets.push(this.mapTicket(t))
     }
     if (options?.rawAmounts) return tickets
     return toPerTicketAmounts(tickets, this.amountBasis)
@@ -316,13 +342,12 @@ export class TitoProvider implements TicketingProvider {
     }
     const { accountSlug, eventSlug } = encodedSlugs(titoRef(event))
 
-    const [eventData, releaseData] = await Promise.all([
+    const [eventData, releases] = await Promise.all([
       this.get<{ event?: TitoEvent } & TitoEvent>(
         `/${accountSlug}/${eventSlug}`,
       ),
-      this.get<{ releases?: TitoRelease[] }>(
-        `/${accountSlug}/${eventSlug}/releases`,
-      ),
+      // Every page: a ticket type on a later page is a ticket type.
+      this.getEveryPage<TitoRelease>(accountSlug, eventSlug, 'releases'),
     ])
 
     const ev: TitoEvent = eventData.event ?? eventData
@@ -338,9 +363,8 @@ export class TitoProvider implements TicketingProvider {
       currencies: ev.currency ? [ev.currency] : [],
     }
 
-    const tickets = (releaseData.releases ?? []).map((r, i) =>
-      this.mapRelease(r, i),
-    )
+    // The index (the fallback `position`) runs across the whole list.
+    const tickets = releases.map((r, i) => this.mapRelease(r, i))
     return { event: info, tickets }
   }
 

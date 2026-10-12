@@ -24,10 +24,13 @@ import {
   ToggleTargetTrackingSchema,
   SetTicketTypeRoleSchema,
   SetWorkshopAccessSchema,
+  isPatchPathSafeName,
 } from '../schemas/tickets'
 import { clientWrite } from '@/lib/sanity/client'
 import { generateKey } from '@/lib/sanity/helpers'
-import { typeKey } from '@/lib/tickets/classification'
+import { marksWorkshopAccess, typeKey } from '@/lib/tickets/classification'
+import { UNCONFIRMED_SAVE } from '@/lib/tickets/unconfirmed-save'
+import { workshopAnswersVersion } from '@/lib/workshop/ticket-list'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import {
   fetchEventTicketCandidates,
@@ -321,11 +324,22 @@ async function updateTicketTargets(
 }
 
 /**
- * Declare what one or more ticket types ARE, on `conference.ticketTypeRoles`:
- * whether each seats a human (`admits`) and whether it grants workshop access
- * (`grantsWorkshop`). A field left `undefined` in an update is CARRIED FORWARD
- * from the document, never dropped — the two fields are written by two separate
- * controls and each must survive the other being saved.
+ * Declare what ticket types ARE, on `conference.ticketTypeRoles`: whether one
+ * seats a human (`admits`), or whether one or more grant workshop access
+ * (`grantsWorkshop`). The two answers are written by two separate controls and
+ * each must survive the other being saved.
+ *
+ * THE SEATING ANSWER IS SET IN PLACE, on the entry `classifyTicket` reads (the
+ * first one whose name matches, addressed by its position under the revision
+ * condition), and nothing else in the list is touched. It
+ * used to replace the type's whole entry and every other spelling of its name,
+ * which made a seating toggle able to change workshop access: Studio can hold
+ * one type under several spellings, the rule reads only the first, and
+ * rebuilding the entry either carried an answer the rule was not reading into
+ * the entry it reads, or dropped the conference's only grant. A write that
+ * never names `grantsWorkshop` cannot do either.
+ *
+ * Everything below is about the WORKSHOP answers.
  *
  * ONE PATCH FOR THE WHOLE BATCH, because the carry-over offered by the workshop
  * control (`WorkshopAccessControl`) is only safe if it is all-or-nothing: the
@@ -359,47 +373,61 @@ async function updateTicketTargets(
  */
 async function setTicketTypeRoles(
   conferenceId: string,
-  updates: ReadonlyArray<{
-    typeName: string
-    admits?: boolean
-    grantsWorkshop?: boolean
-  }>,
+  write:
+    | { seating: { typeName: string; admits: boolean } }
+    | {
+        workshop: ReadonlyArray<{
+          typeName: string
+          /** `null` removes the stored answer. */
+          grantsWorkshop: boolean | null
+        }>
+        /**
+         * The organizer confirmed a write that takes the LAST granting entry
+         * away. Without it such a write is refused, from the same read the
+         * patch is conditioned on, so it holds for the revision that is
+         * written.
+         */
+        allowBuiltInList: boolean
+        /** `workshopAnswersVersion` of the answers the page was showing. */
+        basedOn?: string
+      },
 ) {
-  // PRESERVE THE FIELD THIS CALL IS NOT CHANGING. Each write replaces a whole
-  // entry, so a bare `{ typeName, admits }` would silently drop the
-  // workshop-access flag (`@/lib/workshop/eligibility`) every time an organizer
-  // flipped the unrelated seats-an-attendee toggle — revoking /workshop for
-  // everyone holding that type — and the mirror image is just as bad: the
-  // workshop control must not fabricate a seating declaration.
+  // PRESERVE THE FIELD THIS CALL IS NOT CHANGING. The seating write sets one
+  // field and cannot touch the other. The workshop write replaces a whole
+  // entry, so it carries the seating answer forward (a bare
+  // `{ typeName, grantsWorkshop }` would drop it) and never fabricates one.
   //
   // REVISION-CONDITIONED, because preserving a field by reading it is a
   // read-modify-write no matter how narrow the read is: a Studio edit landing
-  // between the read and the patch would be overwritten by the stale value,
-  // silently revoking or restoring workshop access. The patch shape is atomic
-  // for OTHER entries; it does nothing for the field it is carrying forward.
-  // `ifRevisionId` makes the read binding — the patch applies only to the
-  // document revision it was computed from.
+  // between the read and the patch would be overwritten by the stale value.
+  // The patch shape is atomic for OTHER entries; it does nothing for the field
+  // it is carrying forward. `ifRevisionId` makes the read binding — the patch
+  // applies only to the document revision it was computed from. The seating
+  // write is conditioned too: it addresses the entry the read found.
   //
-  // RETRY ONCE, then surface a CONFLICT. The operation is idempotent and the
-  // re-read picks up the winner's `grantsWorkshop`, so one retry absorbs the
+  // RETRY ONCE, AFTER A REVISION CONFLICT ONLY, then surface a CONFLICT. A
+  // conflict means the patch did not apply, so the re-read picks up the
+  // winner's answers and every guard runs again on them; one retry absorbs the
   // ordinary case (an organizer and a Studio edit in the same second) without
-  // an unbounded loop; a document under sustained churn tells the organizer to
-  // reload rather than quietly writing a guess.
+  // an unbounded loop, and a document under sustained churn tells the
+  // organizer to reload rather than quietly writing a guess. ANY OTHER commit
+  // failure is not retried: the patch may have applied, and a second pass
+  // would read back its own write and call it somebody else's (see
+  // `retryableOrThrow`).
   let lastError: unknown
+  const updates = 'workshop' in write ? write.workshop : []
   const wantedKeys = new Set(updates.map((u) => typeKey(u.typeName)))
+  type StoredRole = {
+    typeName: string
+    admits?: boolean
+    grantsWorkshop?: boolean
+  }
   for (let attempt = 0; attempt < 2; attempt++) {
-    let existing: {
-      _rev?: string
-      roles?: { typeName: string; admits?: boolean; grantsWorkshop?: boolean }[]
-    } | null
+    let existing: { _rev?: string; roles?: StoredRole[] } | null
     try {
       existing = await clientWrite.fetch<{
         _rev?: string
-        roles?: {
-          typeName: string
-          admits?: boolean
-          grantsWorkshop?: boolean
-        }[]
+        roles?: StoredRole[]
       } | null>(
         // groq-global-scoped: `conferenceId` is `resolveConferenceId()`'s —
         // derived from the request domain and already matched against the
@@ -436,10 +464,52 @@ async function setTicketTypeRoles(
       })
     }
 
-    const priorOf = (typeName: string) =>
-      existing.roles?.find(
-        (role) => typeKey(role.typeName) === typeKey(typeName),
-      )
+    const roles = existing.roles ?? []
+    // The FIRST entry for a name: the one `classifyTicket` and
+    // `workshopAccessOf` read.
+    const indexOf = (typeName: string) =>
+      roles.findIndex((role) => typeKey(role.typeName) === typeKey(typeName))
+
+    if ('seating' in write) {
+      const { typeName, admits } = write.seating
+      const index = indexOf(typeName)
+      const patch = clientWrite.patch(conferenceId).ifRevisionId(existing._rev)
+      if (index === -1) {
+        // Nobody has said anything about this type: an entry that answers the
+        // seating question and no other.
+        patch
+          .setIfMissing({ ticketTypeRoles: [] })
+          .insert('after', 'ticketTypeRoles[-1]', [
+            { _key: generateKey('role'), typeName, admits },
+          ])
+      } else {
+        // BY POSITION, not by `_key`: two entries can share a key, and a path
+        // by key would then set both. The revision condition makes the
+        // position exact: it is the position in the array this read saw.
+        patch.set({ [`ticketTypeRoles[${index}].admits`]: admits })
+      }
+      try {
+        return await patch.commit()
+      } catch (error) {
+        lastError = retryableOrThrow(error)
+        continue
+      }
+    }
+
+    // THE PAGE'S QUESTIONS WERE ASKED ON THE ANSWERS IT SHOWED. If the stored
+    // ones are different now, the same click does something else: a No that
+    // "blocks nothing yet" blocks at once when a type was set to grant access
+    // in another tab, and a carry-over writes over a No saved since. Refused
+    // here, against the read the patch is conditioned on, before any write.
+    if (
+      write.basedOn !== undefined &&
+      write.basedOn !== workshopAnswersVersion(roles)
+    ) {
+      throw new TRPCError({
+        code: 'CONFLICT',
+        message: 'This list changed since you opened it. Nothing was saved.',
+      })
+    }
 
     // Every spelling that has to go: the one being written, plus every stored
     // entry that `typeKey` calls the same type. Without the stored spellings a
@@ -447,13 +517,77 @@ async function setTicketTypeRoles(
     // `classifyTicket` / `workshopAccessOf` read whichever comes first — the
     // organizer's toggle appears to save while the old answer keeps applying.
     const unsetNames = new Set(updates.map((u) => u.typeName))
-    for (const role of existing.roles ?? []) {
+    for (const role of roles) {
       if (typeof role.typeName !== 'string') continue
       if (wantedKeys.has(typeKey(role.typeName))) unsetNames.add(role.typeName)
     }
 
+    // A STORED SPELLING THE PATH CANNOT CARRY. The schema refuses a control
+    // character in a name that is sent; a stored name can still hold one at
+    // its ends (a tab pasted in Studio), where `typeKey` trims it away and
+    // the name folds to the type being saved. Its unset path would not match
+    // it (`isPatchPathSafeName`), so the old entry would stay, ahead of the
+    // new one, and go on being the answer the rule reads — after everything
+    // below had counted it gone. Refused here, before any of that is decided
+    // and before anything is written.
+    const unaddressable = [...unsetNames].find(
+      (name) => !isPatchPathSafeName(name),
+    )
+    if (unaddressable !== undefined) {
+      const sent = updates.find(
+        (u) => typeKey(u.typeName) === typeKey(unaddressable),
+      )
+      throw new TRPCError({
+        // Not one of the codes that mean "the page was stale": nothing about
+        // the page is out of date, and the organizer has to read this message.
+        code: 'UNPROCESSABLE_CONTENT',
+        message: `The stored name of “${sent?.typeName ?? unaddressable.trim()}” contains an invisible character (such as a tab or a line break), so its answer cannot be changed here. Correct the name in Studio, then try again.`,
+      })
+    }
+
+    // Each update's whole entry, carrying the seating answer the seating rule
+    // reads. Absent stays ABSENT: defaulting either field would turn a
+    // question nobody answered into a declaration — the count would then
+    // report itself as blessed by a human who never saw it.
+    const entries = updates.map((u) => {
+      const admits = roles[indexOf(u.typeName)]?.admits
+      return {
+        typeName: u.typeName,
+        ...(typeof admits === 'boolean' && { admits }),
+        ...(typeof u.grantsWorkshop === 'boolean' && {
+          grantsWorkshop: u.grantsWorkshop,
+        }),
+      }
+    })
+
+    // THE CLIFF IN THE OTHER DIRECTION. The built-in list decides whenever no
+    // entry grants, so taking the last granting entry away changes who gets in
+    // for every type at once. The page asks before it sends such a save, but
+    // its view can be stale (two organizers each unmarking one of two granting
+    // types), so the question is settled here, against the document itself.
+    if (
+      !write.allowBuiltInList &&
+      marksWorkshopAccess(roles) &&
+      !marksWorkshopAccess([
+        ...entries,
+        ...roles.filter((role) => !wantedKeys.has(typeKey(role.typeName))),
+      ])
+    ) {
+      throw new TRPCError({
+        code: 'PRECONDITION_FAILED',
+        message:
+          'This would leave no ticket type granting workshop access, and the built-in list would decide again. Reload the page and confirm the change.',
+      })
+    }
+
+    // An entry left with NO answer is not written back: a removed workshop
+    // answer on an entry that held nothing else removes the entry.
+    const kept = entries.filter(
+      (entry) => 'admits' in entry || 'grantsWorkshop' in entry,
+    )
+
     try {
-      return await clientWrite
+      const patch = clientWrite
         .patch(conferenceId)
         .ifRevisionId(existing._rev)
         .setIfMissing({ ticketTypeRoles: [] })
@@ -462,36 +596,95 @@ async function setTicketTypeRoles(
             (name) => `ticketTypeRoles[typeName == ${JSON.stringify(name)}]`,
           ),
         )
-        .insert(
+      if (kept.length > 0) {
+        patch.insert(
           'after',
           'ticketTypeRoles[-1]',
-          updates.map((u) => {
-            const prior = priorOf(u.typeName)
-            const admits = u.admits ?? prior?.admits
-            const grantsWorkshop = u.grantsWorkshop ?? prior?.grantsWorkshop
-            return {
-              _key: generateKey('role'),
-              typeName: u.typeName,
-              // Absent stays ABSENT. Defaulting either field would turn a
-              // question nobody answered into a declaration — the count would
-              // then report itself as blessed by a human who never saw it.
-              ...(typeof admits === 'boolean' && { admits }),
-              ...(typeof grantsWorkshop === 'boolean' && { grantsWorkshop }),
-            }
-          }),
+          kept.map((entry) => ({ _key: generateKey('role'), ...entry })),
         )
-        .commit()
+      }
+      return await patch.commit()
     } catch (error) {
-      lastError = error
+      lastError = retryableOrThrow(error)
     }
   }
 
+  // Reached only after TWO revision conflicts: neither patch applied.
   console.error('setTicketTypeRoles: conditional patch lost twice:', lastError)
   throw new TRPCError({
     code: 'CONFLICT',
     message:
       'This ticket type changed while you were saving it. Reload the page and try again.',
   })
+}
+
+/**
+ * A Sanity `ifRevisionId` mismatch: someone else wrote first, and OUR PATCH
+ * DID NOT APPLY. Matches the 409 status and the message form, in the shape of
+ * `src/lib/schedule/sanity.ts` and `src/lib/social/sanity.ts`, so a conflict
+ * is never mistaken for a transport failure.
+ */
+function isRevisionConflict(error: unknown): boolean {
+  const statusCode = (error as { statusCode?: number } | null)?.statusCode
+  if (statusCode === 409) return true
+  const message = error instanceof Error ? error.message.toLowerCase() : ''
+  return message.includes('revision') && message.includes('mismatch')
+}
+
+/**
+ * What `setTicketTypeRoles` does with a failed commit: hand a revision
+ * conflict back to be retried, and throw for everything else.
+ *
+ * EVERYTHING ELSE MAY HAVE BEEN STORED. A timeout, a dropped connection or a
+ * 5xx says nothing about whether Sanity applied the patch. Retrying used to be
+ * harmless, because the write is idempotent. It stopped being harmless when a
+ * save began to say which answers it was based on: the second pass re-read the
+ * roles this very save had just stored, found they were not the page's, and
+ * answered "This list changed since you opened it. Nothing was saved." So the
+ * server does not retry and does not guess: it says the save could not be
+ * confirmed, with a code of its own, and the page reloads the list.
+ */
+function retryableOrThrow(error: unknown): unknown {
+  if (isRevisionConflict(error)) return error
+  console.error('setTicketTypeRoles: commit failed, outcome unknown:', error)
+  throw new TRPCError({
+    code: UNCONFIRMED_SAVE,
+    message:
+      'The save could not be confirmed. It may or may not have been stored. Reload the page and check before trying again.',
+    cause: error,
+  })
+}
+
+/**
+ * A roles save, and the cache that has to follow it.
+ *
+ * `ticketTypeRoles` lives on the CONFERENCE document, which the cached
+ * conference read serves through its `...` spread — so the counts that depend
+ * on it, and the cards of `/admin/tickets/types`, keep serving the old roles
+ * until this tag is busted. (The /workshop gate and the workshop-ticket list
+ * re-read the field live.)
+ *
+ * BUSTED WHEN THE WRITE LANDED, AND WHEN IT MAY HAVE. After a save that could
+ * not be confirmed the organizer is told to check, and the page reloads: it
+ * must not reload the answer from before a write that did land. A save that
+ * was refused wrote nothing, and busts nothing.
+ */
+async function saveTicketTypeRoles(
+  conferenceId: string,
+  write: Parameters<typeof setTicketTypeRoles>[1],
+) {
+  const bust = () => {
+    revalidateTag('admin:tickets', 'default')
+    revalidateTag(conferenceTag(conferenceId), 'default')
+  }
+  try {
+    const result = await setTicketTypeRoles(conferenceId, write)
+    bust()
+    return result
+  } catch (error) {
+    if (error instanceof TRPCError && error.code === UNCONFIRMED_SAVE) bust()
+    throw error
+  }
 }
 
 async function getTicketSettings(conferenceId: string) {
@@ -828,17 +1021,9 @@ export const ticketsRouter = router({
       .input(SetTicketTypeRoleSchema)
       .mutation(async ({ input }) => {
         const conferenceId = await resolveConferenceId()
-        const result = await setTicketTypeRoles(conferenceId, [
-          { typeName: input.typeName, admits: input.admits },
-        ])
-
-        revalidateTag('admin:tickets', 'default')
-        // `ticketTypeRoles` lives on the CONFERENCE document, which the cached
-        // conference read serves through its `...` spread — so the counts that
-        // depend on it keep serving the old role until this tag is busted.
-        revalidateTag(conferenceTag(conferenceId), 'default')
-
-        return result
+        return saveTicketTypeRoles(conferenceId, {
+          seating: { typeName: input.typeName, admits: input.admits },
+        })
       }),
 
     /**
@@ -852,6 +1037,12 @@ export const ticketsRouter = router({
      * types over in the same action, and that offer is only honest if the
      * whole set lands together — one patch, one revision, all or nothing.
      *
+     * `grantsWorkshop: null` REMOVES a stored answer (an entry whose ticket
+     * type the provider no longer lists), keeping the entry when it also
+     * carries `admits`. A save that leaves no granting type hands the decision
+     * back to the legacy list, and is refused unless `allowBuiltInList` says
+     * the organizer was asked.
+     *
      * `admits` is never touched here (and never invented): the seating question
      * belongs to `setTicketTypeRole`, and the entry carries whatever it already
      * said. TENANCY is its neighbour's, unchanged — the conference comes from
@@ -861,15 +1052,11 @@ export const ticketsRouter = router({
       .input(SetWorkshopAccessSchema)
       .mutation(async ({ input }) => {
         const conferenceId = await resolveConferenceId()
-        const result = await setTicketTypeRoles(conferenceId, input.updates)
-
-        revalidateTag('admin:tickets', 'default')
-        // The /workshop gate re-reads this field live, but the cached
-        // conference read (and the counts hanging off it) still serves the old
-        // roles until this tag is busted.
-        revalidateTag(conferenceTag(conferenceId), 'default')
-
-        return result
+        return saveTicketTypeRoles(conferenceId, {
+          workshop: input.updates,
+          allowBuiltInList: input.allowBuiltInList === true,
+          basedOn: input.basedOn,
+        })
       }),
 
     getTicketTypes: ticketingAdminProcedure.query(async () => {

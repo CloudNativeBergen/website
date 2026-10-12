@@ -3,7 +3,8 @@ import { http, HttpResponse } from 'msw'
 import { ThemeProvider } from 'next-themes'
 import { expect, userEvent, within } from 'storybook/test'
 import { NotificationProvider } from '@/components/admin/NotificationProvider'
-import { TicketTypeCard } from './TicketTypeCard'
+import { buildWorkshopTicketList } from '@/lib/workshop/ticket-list'
+import { TicketTypeCard, type TicketTypeWorkshopAccess } from './TicketTypeCard'
 import type { PublicTicketType } from '@/lib/tickets/provider/types'
 
 const paidTicket: PublicTicketType = {
@@ -39,6 +40,23 @@ const freeTicket: PublicTicketType = {
   position: 2,
 }
 
+/**
+ * The control's props for one ticket type, built the way the page builds them:
+ * from the provider's type names and the stored answers.
+ */
+function control(
+  typeName: string,
+  otherTypes: string[] = [],
+  roles: Parameters<typeof buildWorkshopTicketList>[1] = [],
+): TicketTypeWorkshopAccess {
+  const list = buildWorkshopTicketList([typeName, ...otherTypes], roles)
+  return {
+    type: list.types[0],
+    configured: list.configured,
+    builtInGranted: list.builtInGranted,
+  }
+}
+
 const meta = {
   title: 'Systems/Tickets/Admin/TicketTypeCard',
   component: TicketTypeCard,
@@ -64,7 +82,11 @@ const meta = {
       },
     },
   },
-  args: { ticket: paidTicket, publicFreeTicketIds: [] },
+  args: {
+    ticket: paidTicket,
+    publicFreeTicketIds: [],
+    workshopAccess: control(paidTicket.name),
+  },
   decorators: [
     (Story, ctx) => {
       const dark = ctx.parameters.theme === 'dark'
@@ -94,7 +116,11 @@ export const Default: Story = {}
 
 /** A free type: the #860 public opt-in appears on the bottom row. */
 export const PublicFreeType: Story = {
-  args: { ticket: freeTicket, publicFreeTicketIds: [4822] },
+  args: {
+    ticket: freeTicket,
+    publicFreeTicketIds: [4822],
+    workshopAccess: control(freeTicket.name),
+  },
 }
 
 /**
@@ -143,6 +169,7 @@ export const RoleProposed: Story = {
       name: 'Sponsor discount (workshop upgrade)',
       description: null,
     },
+    workshopAccess: control('Sponsor discount (workshop upgrade)'),
     roleProposal: {
       typeName: 'Sponsor discount (workshop upgrade)',
       admits: false,
@@ -189,21 +216,21 @@ export const RoleProposedMobileDark: Story = {
 }
 
 /**
- * THE WORKSHOP CLIFF, on a conference that has never declared anything.
+ * THE WORKSHOP CLIFF, on a conference that has never marked anything. Only a
+ * conference WITHOUT the workshops feature shows the control here; one with it
+ * edits the list under /admin/workshops (see `WorkshopBadge` below).
  *
- * Access still comes from the historical list of type names, and the first
- * declaration anywhere switches that list off for every type at once. The card
- * has to say which types grant access TODAY before a click can revoke them, and
- * the confirm has to offer carrying them over as the first option.
+ * Access still comes from the built-in list of type names, and the first mark
+ * anywhere switches that list off for every type at once. The card has to say
+ * which types grant access TODAY before a click can revoke them, and the
+ * confirm has to offer carrying them over as the first option.
  */
 export const WorkshopOnBridge: Story = {
   args: {
-    workshopConfigured: false,
-    bridgeGrantsThisType: false,
-    bridgeGrantedOtherTypes: [
+    workshopAccess: control(paidTicket.name, [
       'Workshop + Conference (2 days)',
       'Speaker ticket',
-    ],
+    ]),
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
@@ -218,13 +245,13 @@ export const WorkshopOnBridge: Story = {
       canvas.getByRole('button', { name: /^Grants workshop access/ }),
     )
     await expect(
-      canvas.getByText(/first workshop declaration at this conference/),
+      canvas.getByText(/first ticket type set to grant access/),
     ).toBeVisible()
     // The carry-over is the FIRST option offered, the lossy one is second.
     const options = canvas.getAllByRole('button', {
-      name: /Declare this type and keep|Only this type/,
+      name: /^Grant “Conference Pass”/,
     })
-    await expect(options[0]).toHaveTextContent('Declare this type and keep')
+    await expect(options[0]).toHaveTextContent('Grant “Conference Pass”, keep')
   },
 }
 
@@ -245,9 +272,97 @@ export const WorkshopOnBridgeMobileDark: Story = {
   play: WorkshopOnBridge.play,
 }
 
-/** DECLARED: the bridge is behind this conference, and every type is settled. */
+/** MARKED: the built-in list is behind this conference, and this type is settled. */
 export const WorkshopDeclared: Story = {
-  args: { workshopConfigured: true, declaredGrantsWorkshop: true },
+  args: {
+    workshopAccess: control(
+      paidTicket.name,
+      [],
+      [{ typeName: paidTicket.name, grantsWorkshop: true }],
+    ),
+  },
+}
+
+const SECTION = '/admin/workshops#workshop-tickets'
+
+/**
+ * A CONFERENCE WITH WORKSHOPS (#1332): the list is edited under
+ * /admin/workshops, so the card shows the answer and links there. Nothing on
+ * the card writes workshop access.
+ */
+export const WorkshopBadge: Story = {
+  args: {
+    workshopAccess: {
+      sectionHref: SECTION,
+      access: 'granted',
+      configured: true,
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(
+      canvas.getByRole('link', {
+        name: 'Grants workshop access Change under Workshops',
+      }),
+    ).toHaveAttribute('href', SECTION)
+    await expect(
+      canvas.queryByRole('button', { name: /workshop access/i }),
+    ).not.toBeInTheDocument()
+  },
+}
+
+export const WorkshopBadgeNoAccess: Story = {
+  args: {
+    workshopAccess: {
+      sectionHref: SECTION,
+      access: 'denied',
+      configured: true,
+    },
+  },
+}
+
+/** Nobody answered for this type: its holders are refused until someone does. */
+export const WorkshopBadgeNotSet: Story = {
+  args: {
+    workshopAccess: {
+      sectionHref: SECTION,
+      access: 'unclassified',
+      configured: true,
+    },
+  },
+}
+
+/** Nothing is marked yet: the answer is the built-in list's, and says so. */
+export const WorkshopBadgeBuiltInList: Story = {
+  args: {
+    workshopAccess: {
+      sectionHref: SECTION,
+      access: 'granted',
+      configured: false,
+    },
+  },
+}
+
+export const WorkshopBadgeMobileDark: Story = {
+  args: WorkshopBadgeBuiltInList.args,
+  parameters: {
+    viewport: { defaultViewport: 'phone' },
+    theme: 'dark',
+    backgrounds: { default: 'dark' },
+  },
+  play: async ({ canvasElement }) => {
+    const link = within(canvasElement).getByRole('link', {
+      name: /Change under Workshops/,
+    })
+    // At phone width (the runner's default is 1280, where nothing wraps)...
+    await expect(
+      canvasElement.ownerDocument.documentElement.clientWidth,
+    ).toBeLessThan(640)
+    // ...the badge and the link text stay inside the card.
+    await expect(link.getBoundingClientRect().right).toBeLessThanOrEqual(
+      canvasElement.getBoundingClientRect().right,
+    )
+  },
 }
 
 export const MobileDark: Story = {
@@ -256,5 +371,9 @@ export const MobileDark: Story = {
     theme: 'dark',
     backgrounds: { default: 'dark' },
   },
-  args: { ticket: freeTicket, publicFreeTicketIds: [4822] },
+  args: {
+    ticket: freeTicket,
+    publicFreeTicketIds: [4822],
+    workshopAccess: control(freeTicket.name),
+  },
 }

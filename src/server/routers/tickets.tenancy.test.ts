@@ -842,42 +842,50 @@ describe('setTicketTypeRole declares one ticket type’s role', () => {
     vi.mocked(clientWrite.fetch).mockResolvedValue({ _rev: 'rev-1' } as never)
   })
 
-  it('writes THIS type’s entry and leaves the others alone', async () => {
+  it('adds THIS type’s entry and leaves the others alone', async () => {
     await tickets().admin.setTicketTypeRole({
       typeName: UPGRADE,
       admits: false,
     })
 
     expect(clientWrite.patch).toHaveBeenCalledWith(CONF_A)
-    // Only this type's entry is removed — by an ESCAPED literal, since the name
-    // lands in a patch PATH rather than a parameter.
-    expect(patch.unset).toHaveBeenCalledWith([
-      `ticketTypeRoles[typeName == "Sponsor discount (workshop upgrade)"]`,
-    ])
-    // ...and the replacement is APPENDED. Never `set({ ticketTypeRoles: [...] })`:
-    // replacing the whole list would let two organizers confirming two different
-    // types in the same minute clobber each other.
-    expect(patch.setIfMissing).toHaveBeenCalledWith({ ticketTypeRoles: [] })
-    expect(patch.insert).toHaveBeenCalledWith('after', 'ticketTypeRoles[-1]', [
-      expect.objectContaining({ typeName: UPGRADE, admits: false }),
-    ])
+    // Nothing is removed and nothing is replaced: the type had no entry, so
+    // one is APPENDED. Never `set({ ticketTypeRoles: [...] })`: replacing the
+    // whole list would let two organizers confirming two different types in
+    // the same minute clobber each other.
+    expect(patch.unset).not.toHaveBeenCalled()
     expect(patch.set).not.toHaveBeenCalled()
+    expect(patch.setIfMissing).toHaveBeenCalledWith({ ticketTypeRoles: [] })
+    expect(patch.insert).toHaveBeenCalledTimes(1)
+    const [position, path, [entry]] = patch.insert.mock.calls[0]
+    expect([position, path]).toEqual(['after', 'ticketTypeRoles[-1]'])
+    // The seating answer and nothing else: no workshop answer is invented.
     // Sanity rejects an array item with no `_key`, and a missing one corrupts
     // array addressing rather than erroring where it was written.
-    expect(patch.insert.mock.calls[0][2][0]._key).toEqual(expect.any(String))
+    expect(entry).toEqual({
+      _key: expect.any(String),
+      typeName: UPGRADE,
+      admits: false,
+    })
     expect(patch.commit).toHaveBeenCalled()
   })
 
   /**
-   * `grantsWorkshop` is ACCESS CONTROL (`@/lib/workshop/eligibility`), and this
-   * write replaces the whole entry. Dropping the flag while toggling the
-   * unrelated `admits` would revoke /workshop for everyone holding that type,
-   * silently, from a control that says nothing about workshops.
+   * `grantsWorkshop` is ACCESS CONTROL (`@/lib/workshop/eligibility`). The
+   * seating write used to replace the whole entry and carry the flag across,
+   * which made it able to change workshop access (#1332). It now sets ONE
+   * field on the entry that is already there, so the flag is never read into
+   * a write and never written. What that leaves stored, and what the rule then
+   * answers, is asserted against real patches in
+   * `tickets.workshopAccess.test.ts`.
    */
-  it('PRESERVES the workshop-access flag it is not being asked to change', async () => {
+  it('sets only the seating answer on an entry that already exists', async () => {
     vi.mocked(clientWrite.fetch).mockResolvedValueOnce({
       _rev: 'rev-1',
-      roles: [{ typeName: UPGRADE, grantsWorkshop: true }],
+      roles: [
+        { _key: 'k0', typeName: 'Day pass', grantsWorkshop: false },
+        { _key: 'k1', typeName: UPGRADE, grantsWorkshop: true },
+      ],
     } as never)
 
     await tickets().admin.setTicketTypeRole({
@@ -885,8 +893,32 @@ describe('setTicketTypeRole declares one ticket type’s role', () => {
       admits: false,
     })
 
-    expect(patch.insert).toHaveBeenCalledWith('after', 'ticketTypeRoles[-1]', [
-      expect.objectContaining({ admits: false, grantsWorkshop: true }),
+    // By POSITION, under the revision condition: a key can be shared by two
+    // entries, and a path by key would then set both.
+    expect(patch.ifRevisionId).toHaveBeenCalledWith('rev-1')
+    expect(patch.set.mock.calls).toEqual([
+      [{ 'ticketTypeRoles[1].admits': false }],
+    ])
+    expect(patch.unset).not.toHaveBeenCalled()
+    expect(patch.insert).not.toHaveBeenCalled()
+  })
+
+  /** Names are folded the way the rules fold them, and the FIRST match is the entry. */
+  it('addresses the first entry whose name matches, whatever its spelling', async () => {
+    vi.mocked(clientWrite.fetch).mockResolvedValueOnce({
+      _rev: 'rev-4',
+      roles: [
+        { typeName: 'Day pass' },
+        { typeName: ' sponsor discount (workshop upgrade)' },
+        { typeName: UPGRADE, admits: false },
+      ],
+    } as never)
+
+    await tickets().admin.setTicketTypeRole({ typeName: UPGRADE, admits: true })
+
+    expect(patch.ifRevisionId).toHaveBeenCalledWith('rev-4')
+    expect(patch.set.mock.calls).toEqual([
+      [{ 'ticketTypeRoles[1].admits': true }],
     ])
   })
 
@@ -912,10 +944,10 @@ describe('setTicketTypeRole declares one ticket type’s role', () => {
     expect(patch.ifRevisionId).toHaveBeenCalledWith('rev-7')
   })
 
-  it('does NOT write a stale flag when the document moves under it', async () => {
-    // The read sees `grantsWorkshop: true`; Studio then turns it OFF and the
-    // conditional commit loses. The retry must re-read and carry the WINNER's
-    // value forward — never re-assert the stale `true`.
+  it('addresses the entry the SECOND read found when the document moves under it', async () => {
+    // Between the read and the commit Studio inserts an entry ahead of this
+    // type's and turns its workshop flag OFF. The conditional commit loses;
+    // the retry must re-read, and must still write nothing but `admits`.
     vi.mocked(clientWrite.fetch)
       .mockResolvedValueOnce({
         _rev: 'rev-1',
@@ -923,7 +955,10 @@ describe('setTicketTypeRole declares one ticket type’s role', () => {
       } as never)
       .mockResolvedValueOnce({
         _rev: 'rev-2',
-        roles: [{ typeName: UPGRADE, grantsWorkshop: false }],
+        roles: [
+          { typeName: 'Day pass' },
+          { typeName: UPGRADE, grantsWorkshop: false },
+        ],
       } as never)
     patch.commit
       .mockRejectedValueOnce(
@@ -938,8 +973,11 @@ describe('setTicketTypeRole declares one ticket type’s role', () => {
 
     expect(patch.ifRevisionId).toHaveBeenNthCalledWith(1, 'rev-1')
     expect(patch.ifRevisionId).toHaveBeenNthCalledWith(2, 'rev-2')
-    const written = patch.insert.mock.calls.at(-1)![2][0]
-    expect(written).toMatchObject({ admits: false, grantsWorkshop: false })
+    expect(patch.set.mock.calls).toEqual([
+      [{ 'ticketTypeRoles[0].admits': false }],
+      [{ 'ticketTypeRoles[1].admits': false }],
+    ])
+    expect(patch.insert).not.toHaveBeenCalled()
   })
 
   it('surfaces a CONFLICT rather than guessing when it loses twice', async () => {
@@ -973,15 +1011,15 @@ describe('setTicketTypeRole declares one ticket type’s role', () => {
     ])
   })
 
-  it('escapes a type name that would otherwise widen the unset filter', async () => {
+  it('puts a new type’s name in a value, never in a patch path', async () => {
     await tickets().admin.setTicketTypeRole({
       typeName: 'Odd" or true]//',
       admits: false,
     })
 
-    expect(patch.unset).toHaveBeenCalledWith([
-      'ticketTypeRoles[typeName == "Odd\\" or true]//"]',
-    ])
+    expect(patch.unset).not.toHaveBeenCalled()
+    expect(patch.set).not.toHaveBeenCalled()
+    expect(patch.insert.mock.calls[0][2][0].typeName).toBe('Odd" or true]//')
   })
 
   /**
@@ -1160,6 +1198,16 @@ describe('setTicketTypeRole declares one ticket type’s role', () => {
         admits: false,
         grantsWorkshop: true,
       })
+    })
+
+    it('escapes a type name that would otherwise widen the unset filter', async () => {
+      await tickets().admin.setWorkshopAccess({
+        updates: [{ typeName: 'Odd" or true]//', grantsWorkshop: true }],
+      })
+
+      expect(patch.unset).toHaveBeenCalledWith([
+        'ticketTypeRoles[typeName == "Odd\\" or true]//"]',
+      ])
     })
 
     it('refuses a batch that names the same type twice', async () => {

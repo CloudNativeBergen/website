@@ -322,6 +322,40 @@ describe('workshopAccessOf — the one rule', () => {
     expect(workshopAccessOf('', roles)).toBe('denied')
     expect(workshopAccessOf(null, roles)).toBe('denied')
   })
+
+  /**
+   * AN ENTRY IS NOT AN ANSWER (#1332). An entry can exist only to say whether
+   * the type seats a human (`admits`). On a conference that has marked a type,
+   * that entry says nothing about workshops, so the rule must say what the
+   * control shows for it: not set. It used to answer `denied`, and the holder
+   * was told to upgrade a ticket nobody had decided about.
+   */
+  it('an entry with no workshop answer is unclassified, not denied', () => {
+    const roles = [
+      { typeName: DECLARED, admits: true, grantsWorkshop: true },
+      { typeName: 'Seating only', admits: true },
+      { typeName: ORDINARY, admits: true, grantsWorkshop: false },
+    ]
+
+    expect(workshopAccessOf('Seating only', roles)).toBe('unclassified')
+    // Matched like every other name.
+    expect(workshopAccessOf('  SEATING ONLY ', roles)).toBe('unclassified')
+    // An explicit no is still a no.
+    expect(workshopAccessOf(ORDINARY, roles)).toBe('denied')
+    expect(workshopAccessOf(DECLARED, roles)).toBe('granted')
+  })
+
+  it('BRIDGE: an entry with no workshop answer changes nothing while no type is marked', () => {
+    // Only a marked type takes a conference off the built-in list, so a
+    // seating-only entry must not surface `unclassified` here.
+    const roles = [
+      { typeName: ORDINARY, admits: true },
+      { typeName: LEGACY, admits: true },
+    ]
+
+    expect(workshopAccessOf(ORDINARY, roles)).toBe('denied')
+    expect(workshopAccessOf(LEGACY, roles)).toBe('granted')
+  })
 })
 
 describe('checkWorkshopEligibility — what the attendee is told', () => {
@@ -330,7 +364,7 @@ describe('checkWorkshopEligibility — what the attendee is told', () => {
     category: string,
     ticketTypeRoles?: {
       typeName: string
-      admits: boolean
+      admits?: boolean
       grantsWorkshop?: boolean
     }[],
   ) {
@@ -384,6 +418,30 @@ describe('checkWorkshopEligibility — what the attendee is told', () => {
     expect(result.reason).toContain('Workshop 2026')
     expect(result.reason).toContain('an organizer')
     expect(result.reason).not.toContain('upgrade your ticket')
+  })
+
+  /**
+   * THE REFUSAL TEXT FOLLOWS THE RULE (#1332): the gate runs the real
+   * `workshopAccessOf`, so this is the answer an attendee reads.
+   */
+  it('tells a holder of a type with a seating-only entry that the decision is missing', async () => {
+    const result = await gate('Seating only', [
+      ...DECLARING,
+      { typeName: 'Seating only', admits: true },
+    ])
+
+    expect(result.isEligible).toBe(false)
+    expect(result.reason).toBe(
+      'Your ticket type “Seating only” has not been set up for workshop access yet. This is a configuration gap on our side, not a problem with your ticket — please contact us at help@x.test so an organizer can mark which ticket types include workshop access.',
+    )
+  })
+
+  it('still tells a holder of a type answered no to upgrade', async () => {
+    const result = await gate(ORDINARY, DECLARING)
+
+    expect(result.reason).toBe(
+      'No valid workshop ticket found. Please upgrade your ticket to include workshop access, or contact us at help@x.test if you believe this is an error.',
+    )
   })
 
   it('BRIDGE: an undeclared conference still admits the legacy type', async () => {

@@ -21,18 +21,29 @@
  * argument is the thing that reaches the conference document.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen, cleanup, fireEvent } from '@testing-library/react'
+import { act, render, screen, cleanup, fireEvent } from '@testing-library/react'
 import type { TicketTypeProposal } from '@/lib/tickets/discovery'
 import { TicketTypeRoleControl } from './TicketTypeRoleControl'
 
-const h = vi.hoisted(() => ({ mutate: vi.fn(), refresh: vi.fn() }))
+const h = vi.hoisted(() => ({
+  mutate: vi.fn(),
+  refresh: vi.fn(),
+  notify: vi.fn(),
+  /** The hook's own callbacks, so a case can answer the save it sent. */
+  options: {} as {
+    onError?: (error: { message: string; data?: { code?: string } }) => void
+  },
+}))
 
 vi.mock('@/lib/trpc/client', () => ({
   api: {
     tickets: {
       admin: {
         setTicketTypeRole: {
-          useMutation: () => ({ mutate: h.mutate, isPending: false }),
+          useMutation: (options: typeof h.options) => {
+            h.options = options
+            return { mutate: h.mutate, isPending: false }
+          },
         },
       },
     },
@@ -42,7 +53,7 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ refresh: h.refresh }),
 }))
 vi.mock('@/components/admin/NotificationProvider', () => ({
-  useNotification: () => ({ showNotification: vi.fn() }),
+  useNotification: () => ({ showNotification: h.notify }),
 }))
 
 const UPGRADE = 'Sponsor discount (workshop upgrade)'
@@ -205,4 +216,114 @@ it('says what saving changes', () => {
   expect(
     screen.getByText(/changes the participant count and seats-used figure/),
   ).toBeInTheDocument()
+})
+
+/**
+ * A SAVE NOBODY CAN CONFIRM. The server answers `BAD_GATEWAY` when its write
+ * to Sanity failed in a way that does not say whether it was stored, and a
+ * request can also get no answer at all. Either way the role MAY have been
+ * saved, so the card must not say "Could not save" (or print "Failed to
+ * fetch"): it says the outcome is unknown and reloads what is stored.
+ */
+describe('a save whose outcome is unknown', () => {
+  const save = () => {
+    render(<TicketTypeRoleControl typeName={UPGRADE} />)
+    fireEvent.click(screen.getByRole('button', { name: /^Add-on/ }))
+    expect(h.mutate).toHaveBeenCalledTimes(1)
+  }
+  const UNKNOWN = {
+    type: 'warning',
+    title: 'This change may or may not have been saved',
+    message:
+      'The save could not be confirmed. Reload the page and check this ticket type before trying again.',
+  }
+
+  it('says so, and reloads, when the server could not confirm its write', () => {
+    save()
+
+    act(() =>
+      h.options.onError!({
+        message: 'The save could not be confirmed.',
+        data: { code: 'BAD_GATEWAY' },
+      }),
+    )
+
+    expect(h.notify.mock.calls).toEqual([[UNKNOWN]])
+    expect(h.refresh).toHaveBeenCalledTimes(1)
+  })
+
+  /**
+   * NO ANSWER: the connection is likely down, and a refresh that fails falls
+   * back to a browser navigation, which lands on the offline page and takes
+   * the warning with it. Nothing is refreshed; the message says to reload.
+   */
+  it('says so, and does NOT reload, when the request got no answer', () => {
+    save()
+
+    act(() => h.options.onError!({ message: 'Failed to fetch' }))
+
+    expect(h.notify.mock.calls).toEqual([[UNKNOWN]])
+    expect(h.refresh).not.toHaveBeenCalled()
+  })
+
+  /**
+   * "CHECK THIS TICKET TYPE" HAS TO SHOW WHAT IS STORED. On an error the card
+   * puts back the answer it had, and it used to keep that for good: its state
+   * was only ever read from the prop at mount. So after a save that DID land,
+   * the reload brought the new answer and the card went on showing the old
+   * one, and the organizer who was told to check concluded nothing was saved.
+   */
+  it('shows the stored answer the reload brings back', () => {
+    const { rerender } = render(<TicketTypeRoleControl typeName={UPGRADE} />)
+    const addOn = () => screen.getByRole('button', { name: /^Add-on/ })
+    fireEvent.click(addOn())
+    act(() => h.options.onError!({ message: 'Failed to fetch' }))
+    // Back to what the card knew: nothing declared.
+    expect(addOn()).toHaveAttribute('aria-pressed', 'false')
+    expect(screen.getByText('Not set')).toBeInTheDocument()
+
+    // The write had landed, and the reloaded page says so.
+    rerender(
+      <TicketTypeRoleControl typeName={UPGRADE} declaredAdmits={false} />,
+    )
+
+    expect(addOn()).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByText('Declared')).toBeInTheDocument()
+  })
+
+  it('shows the old answer still, when the reload says the write did not land', () => {
+    const { rerender } = render(
+      <TicketTypeRoleControl typeName={UPGRADE} declaredAdmits />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: /^Add-on/ }))
+    act(() => h.options.onError!({ message: 'Failed to fetch' }))
+
+    rerender(<TicketTypeRoleControl typeName={UPGRADE} declaredAdmits />)
+
+    expect(
+      screen.getByRole('button', { name: /^Seats an attendee/ }),
+    ).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('still says the save failed when the server refused it', () => {
+    save()
+
+    act(() =>
+      h.options.onError!({
+        message: 'Reload the page and try again.',
+        data: { code: 'CONFLICT' },
+      }),
+    )
+
+    expect(h.notify.mock.calls).toEqual([
+      [
+        {
+          type: 'error',
+          title: 'Could not save',
+          message: 'Reload the page and try again.',
+        },
+      ],
+    ])
+    expect(h.refresh).not.toHaveBeenCalled()
+  })
 })

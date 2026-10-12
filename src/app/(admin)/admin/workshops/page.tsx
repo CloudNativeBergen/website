@@ -6,6 +6,7 @@ import { getWorkshopsByConference } from '@/lib/workshop/sanity'
 import { isWorkshopsEnabledForConference } from '@/lib/features/workshops'
 import { workshopMainHost } from '@/lib/workshop/sign-in'
 import { resendPortal } from '@/lib/workshop/resend-instructions'
+import { WorkshopTickets } from '@/components/admin/workshop/tickets'
 
 export default async function WorkshopAdminPage() {
   const { conference, error: conferenceError } =
@@ -49,6 +50,7 @@ export default async function WorkshopAdminPage() {
       }
       workshopRegistrationEnd={conference.workshopRegistrationEnd ?? undefined}
       resendDisabledReason={resendDisabledReason}
+      ticketsSection={<WorkshopTickets conference={conference} />}
     />
   )
 }

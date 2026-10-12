@@ -417,13 +417,29 @@ const LEGACY_WORKSHOP_CATEGORIES = [
  *
  *  - `granted`      — this type grants it.
  *  - `denied`       — this type does not. The holder needs a different ticket.
- *  - `unclassified` — nobody at this conference has said either way. The
+ *  - `unclassified` — nobody at this conference has said either way: the type
+ *                     has no entry, or an entry with no workshop answer. The
  *                     holder may well be entitled; an ORGANIZER has to answer.
  *                     Only reachable on a conference that HAS declared roles,
  *                     so it can never be handed to an attendee of a conference
  *                     still running on the bridge above.
  */
 export type WorkshopAccess = 'granted' | 'denied' | 'unclassified'
+
+/**
+ * Has this conference marked ANY ticket type as granting workshop access?
+ *
+ * The one switch between the two halves of the rule below: marked, and the
+ * marked set is the whole answer; not marked, and the built-in list decides.
+ * Only an explicit `true` counts, so a lone `false` (or a Studio default) can
+ * never take a conference off the built-in list. Whoever needs to know which
+ * half applies, now or after a save, asks here.
+ */
+export function marksWorkshopAccess(
+  ticketTypeRoles?: readonly Pick<TicketTypeRole, 'grantsWorkshop'>[] | null,
+): boolean {
+  return (ticketTypeRoles ?? []).some((role) => role.grantsWorkshop === true)
+}
 
 /**
  * THE ONE RULE. The `/workshop` gate and the ticket-sold webhook both call
@@ -450,9 +466,8 @@ export function workshopAccessOf(
   if (!key) return 'denied'
 
   const roles = ticketTypeRoles ?? []
-  const declaresWorkshop = roles.some((r) => r.grantsWorkshop === true)
 
-  if (!declaresWorkshop) {
+  if (!marksWorkshopAccess(roles)) {
     // Unconfigured: today's behaviour, exactly. No `unclassified` from here —
     // an attendee of a bridge conference who simply lacks a workshop ticket
     // must not be told about our configuration.
@@ -461,7 +476,11 @@ export function workshopAccessOf(
       : 'denied'
   }
 
-  const role = roles.find((r) => typeKey(r.typeName) === key)
-  if (!role) return 'unclassified'
-  return role.grantsWorkshop === true ? 'granted' : 'denied'
+  // AN ENTRY IS NOT AN ANSWER. An entry may exist only to say whether the type
+  // seats a human (`admits`); it then says nothing about workshops, and its
+  // holder is in the same place as one whose type has no entry at all: nobody
+  // decided. Only an explicit `false` is a no.
+  const answer = roles.find((r) => typeKey(r.typeName) === key)?.grantsWorkshop
+  if (answer === true) return 'granted'
+  return answer === false ? 'denied' : 'unclassified'
 }

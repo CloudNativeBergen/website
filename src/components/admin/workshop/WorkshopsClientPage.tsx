@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, type ReactNode } from 'react'
 import { AcademicCapIcon } from '@heroicons/react/24/outline'
 import {
   AdminPageHeader,
@@ -62,6 +62,8 @@ interface WorkshopsClientPageProps {
   workshopRegistrationEnd?: string
   /** Why the resend action is unavailable, or null when it can be used. */
   resendDisabledReason: string | null
+  /** The "Workshop tickets" section (#1332), rendered by the server page. */
+  ticketsSection?: ReactNode
 }
 
 export function WorkshopsClientPage({
@@ -70,6 +72,7 @@ export function WorkshopsClientPage({
   workshopRegistrationStart,
   workshopRegistrationEnd,
   resendDisabledReason,
+  ticketsSection,
 }: WorkshopsClientPageProps) {
   const queryClient = useQueryClient()
   const { showNotification } = useNotification()
@@ -366,6 +369,8 @@ export function WorkshopsClientPage({
           <ResendInstructionsButton disabledReason={resendDisabledReason} />
         </div>
       </AdminPageHeader>
+
+      {ticketsSection}
 
       <WorkshopRegistrationSettings
         workshopRegistrationStart={workshopRegistrationStart}

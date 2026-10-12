@@ -107,6 +107,36 @@ export const ToggleTargetTrackingSchema = z.object({
 })
 
 /**
+ * Can this ticket-type name be carried in a Sanity patch PATH?
+ *
+ * NO CONTROL CHARACTERS AND NO LONE SURROGATES. A save removes an entry by a
+ * path built from its name, escaped with `JSON.stringify`, and Sanity's path
+ * parser does not read escapes the way JSON does: it takes the character after
+ * a backslash literally. `JSON.stringify` writes a tab as `\t` and a lone
+ * surrogate as `\ud800`, so `"Speake\r ticket"` reached the path as
+ * `Speake\\r ticket` and matched the stored `Speaker ticket`: an entry the
+ * save had not counted was removed. A quote and a backslash survive that
+ * round trip (the character after the backslash IS the character), so only
+ * the characters JSON writes as a LETTER fail.
+ *
+ * THE ONE RULE, for a name that is SENT (the schema below) and for a name
+ * that is already STORED and has to be addressed (`setTicketTypeRoles`).
+ */
+export function isPatchPathSafeName(name: string): boolean {
+  return !/[\u0000-\u001f\u007f\ud800-\udfff]/u.test(name)
+}
+
+/** A provider ticket-type name as a save accepts it. */
+const ticketTypeName = z
+  .string()
+  .trim()
+  .min(1)
+  .max(200)
+  .refine(isPatchPathSafeName, {
+    message: 'A ticket type name cannot contain control characters.',
+  })
+
+/**
  * One conference's declaration for one provider ticket-type name — the
  * organizer's half of `@/lib/tickets/classification`.
  *
@@ -115,7 +145,7 @@ export const ToggleTargetTrackingSchema = z.object({
  * into a Sanity patch path (escaped) by the mutation that stores it.
  */
 export const SetTicketTypeRoleSchema = z.object({
-  typeName: z.string().trim().min(1).max(200),
+  typeName: ticketTypeName,
   admits: z.boolean(),
 })
 
@@ -136,8 +166,11 @@ export const SetWorkshopAccessSchema = z.object({
   updates: z
     .array(
       z.object({
-        typeName: z.string().trim().min(1).max(200),
-        grantsWorkshop: z.boolean(),
+        typeName: ticketTypeName,
+        // `null` REMOVES the stored answer, for an entry whose ticket type the
+        // provider no longer lists. The entry stays when it also carries a
+        // seating answer (`admits`), and goes when this was all it held.
+        grantsWorkshop: z.boolean().nullable(),
       }),
     )
     .min(1)
@@ -148,4 +181,17 @@ export const SetWorkshopAccessSchema = z.object({
         updates.length,
       { message: 'Each ticket type may appear only once.' },
     ),
+  /**
+   * The organizer confirmed a save that leaves NO type granting workshop
+   * access, which hands the decision back to the built-in list. Without it
+   * such a save is refused (see `setWorkshopAccess`).
+   */
+  allowBuiltInList: z.boolean().optional(),
+  /**
+   * The version of the workshop answers the page was showing
+   * (`workshopAnswersVersion`). When given, the save is refused if the stored
+   * answers are no longer those: the page's questions were asked on them.
+   * Optional so a page loaded before this field existed can still save.
+   */
+  basedOn: z.string().max(64).optional(),
 })

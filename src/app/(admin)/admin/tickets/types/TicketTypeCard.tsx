@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { TicketIcon } from '@heroicons/react/24/outline'
 import { formatDateTimeSafe } from '@/lib/time'
 import {
@@ -13,7 +14,14 @@ import {
   type BadgeColor,
 } from '@/components/StatusBadge'
 import { TicketTypeRoleControl } from './TicketTypeRoleControl'
-import { WorkshopAccessControl } from './WorkshopAccessControl'
+// By file, not through the barrel: the barrel also exports the section's
+// server loader, and this card renders in Storybook.
+import { WorkshopAccessBadge } from '@/components/admin/workshop/tickets/WorkshopAccessBadge'
+import {
+  WorkshopAccessControl,
+  type WorkshopAccessControlProps,
+} from '@/components/admin/workshop/tickets/WorkshopAccessControl'
+import type { WorkshopAccess } from '@/lib/tickets/classification'
 import type { TicketTypeProposal } from '@/lib/tickets/discovery'
 
 function StatusBadge({
@@ -39,6 +47,19 @@ function formatDate(dateStr: string | null): string {
 }
 
 /**
+ * Workshop access on a ticket-type card: WHERE it is edited decides what the
+ * card needs.
+ *
+ * A conference WITH the workshops feature edits the list in the "Workshop
+ * tickets" section of /admin/workshops (#1332), so the card shows the rule's
+ * answer for this type and links there. One WITHOUT it has no such page (it
+ * answers 404), so the card keeps the control and links nowhere.
+ */
+export type TicketTypeWorkshopAccess =
+  | { sectionHref: string; access: WorkshopAccess; configured: boolean }
+  | Omit<WorkshopAccessControlProps, 'row'>
+
+/**
  * One ticket type on /admin/tickets/types: name, status, pricing, availability,
  * the visibility window and — for public free types — the #860 opt-in.
  *
@@ -50,10 +71,7 @@ export function TicketTypeCard({
   publicFreeTicketIds,
   declaredAdmits,
   roleProposal,
-  declaredGrantsWorkshop,
-  workshopConfigured = false,
-  bridgeGrantsThisType = false,
-  bridgeGrantedOtherTypes = [],
+  workshopAccess,
 }: {
   ticket: PublicTicketType
   publicFreeTicketIds: number[]
@@ -61,14 +79,7 @@ export function TicketTypeCard({
   declaredAdmits?: boolean
   /** What `@/lib/tickets/discovery` proposed for it, if anything. */
   roleProposal?: TicketTypeProposal
-  /** `grantsWorkshop` for this type, when a human declared one. */
-  declaredGrantsWorkshop?: boolean
-  /** Has ANY type at this conference declared workshop access? */
-  workshopConfigured?: boolean
-  /** On the bridge: does the historical list grant THIS type access? */
-  bridgeGrantsThisType?: boolean
-  /** On the bridge: the other types it grants — see {@link WorkshopAccessControl}. */
-  bridgeGrantedOtherTypes?: readonly string[]
+  workshopAccess: TicketTypeWorkshopAccess
 }) {
   const status = getTicketSaleStatus(ticket)
   const currency = ticket.price[0]?.key?.toUpperCase() || 'NOK'
@@ -213,15 +224,27 @@ export function TicketTypeCard({
       />
 
       {/* Does this type let its holder into the workshops? Access control, not
-          a count — and until some type declares it, the answer comes from a
+          a count — and until some type is marked, the answer comes from a
           hardcoded list of another conference's type names. */}
-      <WorkshopAccessControl
-        typeName={ticket.name}
-        declaredGrantsWorkshop={declaredGrantsWorkshop}
-        workshopConfigured={workshopConfigured}
-        bridgeGrantsThisType={bridgeGrantsThisType}
-        bridgeGrantedOtherTypes={bridgeGrantedOtherTypes}
-      />
+      {'sectionHref' in workshopAccess ? (
+        <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-gray-100 pt-3 dark:border-gray-800">
+          <span className="text-xs font-medium tracking-wide text-gray-500 uppercase dark:text-gray-400">
+            Workshop access
+          </span>
+          <Link
+            href={workshopAccess.sectionHref}
+            className="inline-flex min-h-11 flex-wrap items-center gap-2 rounded-md text-sm text-blue-700 hover:underline dark:text-blue-300"
+          >
+            <WorkshopAccessBadge
+              access={workshopAccess.access}
+              configured={workshopAccess.configured}
+            />{' '}
+            Change under Workshops
+          </Link>
+        </div>
+      ) : (
+        <WorkshopAccessControl {...workshopAccess} />
+      )}
     </div>
   )
 }
