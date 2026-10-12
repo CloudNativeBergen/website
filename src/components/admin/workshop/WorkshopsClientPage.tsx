@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { useRouter } from 'next/navigation'
 import { AcademicCapIcon } from '@heroicons/react/24/outline'
 import {
   AdminPageHeader,
@@ -27,6 +26,7 @@ import type { WorkshopAnnouncementView } from '@/lib/workshop/announcements'
 import { useRefreshAnnouncements } from './useRefreshAnnouncements'
 import { useSignupActions } from './useSignupActions'
 import { useQueryClient } from '@tanstack/react-query'
+import { useRouter } from 'next/navigation'
 import { EmptyState } from '@/components/EmptyState'
 
 interface SignupModalState {
