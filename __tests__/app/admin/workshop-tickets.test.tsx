@@ -325,6 +325,7 @@ beforeEach(() => {
 })
 
 afterEach(async () => {
+  vi.unstubAllGlobals()
   // A case that fails mid-way can leave a save in flight. Let it land in ITS
   // dataset, so it cannot write into the next case's.
   await Promise.allSettled(h.saves)
@@ -1077,6 +1078,86 @@ describe('a live roles read that fails', () => {
     expect(answers()).toEqual([
       ['Two-day pass', 'No workshop access (built-in list)'],
     ])
+  })
+})
+
+/**
+ * A TITO EVENT WITH MORE RELEASES THAN ONE PAGE HOLDS. Tito pages its lists
+ * (100 to a page). The section calls a stored answer orphaned when no listed
+ * type carries its name, and offers to remove it; with only the first page
+ * read, a valid answer for a type on a later page looked orphaned. The REAL
+ * Tito adapter runs here, against a stubbed HTTP `fetch`.
+ */
+describe('a Tito event whose ticket types span two pages', () => {
+  const TITO = {
+    _id: CONF_A,
+    organization: { _ref: ORG_A, _type: 'reference' },
+    ticketingProvider: 'tito',
+    titoAccountSlug: 'acme',
+    titoEventSlug: '2026',
+  } as unknown as Conference
+  const ROLES = [
+    { typeName: 'Early Bird', grantsWorkshop: false },
+    // Its release is on the second page.
+    { typeName: 'Workshop day', grantsWorkshop: true },
+  ]
+  const answer = (body: unknown) =>
+    new Response(JSON.stringify(body), { status: 200 })
+
+  it('lists a type from the second page as a type, and calls no answer orphaned', async () => {
+    seed(ROLES, [])
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) =>
+        !url.includes('/releases')
+          ? answer({ event: {} })
+          : url.endsWith('page[number]=1')
+            ? answer({
+                releases: [{ id: 1, title: 'Early Bird' }],
+                meta: { next_page: 2 },
+              })
+            : answer({
+                releases: [{ id: 2, title: 'Workshop day' }],
+                meta: { next_page: null },
+              }),
+      ),
+    )
+
+    await openSection(TITO)
+
+    expect(answers()).toEqual([
+      ['Early Bird', 'No workshop access'],
+      ['Workshop day', 'Grants workshop access'],
+    ])
+    // Nothing to remove: every stored answer belongs to a listed type.
+    expect(
+      screen.queryAllByRole('region', { name: 'Needs a decision' }),
+    ).toEqual([])
+    expect(screen.queryAllByRole('button', { name: /^Remove/ })).toEqual([])
+  })
+
+  it('shows the could-not-read state, with no switch and no removal, when the pages never end', async () => {
+    seed(ROLES, [])
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) =>
+        url.includes('/releases')
+          ? answer({
+              releases: [{ id: 1, title: 'Early Bird' }],
+              meta: { next_page: 2 },
+            })
+          : answer({ event: {} }),
+      ),
+    )
+
+    await openSection(TITO)
+
+    // A partial list is never shown as the list.
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'The ticket types could not be read from Tito.The list cannot be shown or changed right now. Reload the page to try again.',
+    )
+    expect(screen.queryAllByRole('button')).toEqual([])
+    expect(screen.queryAllByRole('group')).toEqual([])
   })
 })
 
