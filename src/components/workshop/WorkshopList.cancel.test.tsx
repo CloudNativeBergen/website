@@ -156,13 +156,14 @@ function Providers({ children }: { children: ReactNode }) {
 
 const CANCEL = /^(Cancel Registration|Cancelling\.\.\.)$/
 
-function renderPortal() {
+function renderPortal(registrationEnd?: string) {
   render(
     <Providers>
       <WorkshopList
         userWorkOSId="workos-1"
         userEmail="attendee@example.com"
         userName="Attendee One"
+        workshopRegistrationEnd={registrationEnd}
       />
     </Providers>,
   )
@@ -269,5 +270,38 @@ describe('cancelling a workshop seat in the portal', () => {
     expect(stop()).toBe(0)
     expect(server.cancels).toBe(1)
     expect(screen.queryByText('Signup not found')).not.toBeInTheDocument()
+  })
+
+  it('asks first, and says there is no signing up again once registration has closed', async () => {
+    renderPortal('2020-01-01T00:00:00Z')
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Cancel Registration' }),
+    )
+
+    expect(
+      await screen.findByRole('dialog', { name: 'Cancel your registration?' }),
+    ).toHaveTextContent(
+      'Registration has closed, so you will not be able to register again.',
+    )
+    // Asked, not done.
+    expect(server.cancels).toBe(0)
+  })
+
+  it('makes no such claim while registration is open', async () => {
+    renderPortal('2999-01-01T00:00:00Z')
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Cancel Registration' }),
+    )
+
+    const question = await screen.findByRole('dialog', {
+      name: 'Cancel your registration?',
+    })
+    expect(question).toHaveTextContent(
+      'You can register again while registration is open, but the seat may be taken by then.',
+    )
+    expect(question).not.toHaveTextContent('Registration has closed')
+    expect(server.cancels).toBe(0)
   })
 })
