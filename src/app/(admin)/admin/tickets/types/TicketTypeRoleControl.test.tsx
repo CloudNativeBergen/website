@@ -238,22 +238,32 @@ describe('a save whose outcome is unknown', () => {
       'The save could not be confirmed. Reload the page and check this ticket type before trying again.',
   }
 
-  it.each([
-    [
-      'the server could not confirm its write',
-      {
-        message: 'The save could not be confirmed.',
-        data: { code: 'BAD_GATEWAY' },
-      },
-    ],
-    ['the request got no answer', { message: 'Failed to fetch' }],
-  ])('says so, and reloads, when %s', (_when, error) => {
+  it('says so, and reloads, when the server could not confirm its write', () => {
     save()
 
-    act(() => h.options.onError!(error))
+    act(() =>
+      h.options.onError!({
+        message: 'The save could not be confirmed.',
+        data: { code: 'BAD_GATEWAY' },
+      }),
+    )
 
     expect(h.notify.mock.calls).toEqual([[UNKNOWN]])
     expect(h.refresh).toHaveBeenCalledTimes(1)
+  })
+
+  /**
+   * NO ANSWER: the connection is likely down, and a refresh that fails falls
+   * back to a browser navigation, which lands on the offline page and takes
+   * the warning with it. Nothing is refreshed; the message says to reload.
+   */
+  it('says so, and does NOT reload, when the request got no answer', () => {
+    save()
+
+    act(() => h.options.onError!({ message: 'Failed to fetch' }))
+
+    expect(h.notify.mock.calls).toEqual([[UNKNOWN]])
+    expect(h.refresh).not.toHaveBeenCalled()
   })
 
   /**

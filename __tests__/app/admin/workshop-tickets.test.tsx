@@ -1017,6 +1017,70 @@ describe('a save from a page that is no longer what is stored', () => {
 })
 
 /**
+ * A STORED NAME WITH AN INVISIBLE CHARACTER AT ITS END (a tab pasted in
+ * Studio). The rules trim it, so it is this type's entry and the row shows its
+ * answer; but the save cannot address it, and used to leave it in force behind
+ * a new entry. The save is refused, and the organizer reads why: not "this
+ * list changed", which is not what happened.
+ */
+describe('a type whose stored name the save cannot address', () => {
+  const seeded = [
+    { typeName: `${SPEAKER}\t`, grantsWorkshop: true },
+    { typeName: TWO_DAY, grantsWorkshop: true },
+  ]
+  const MESSAGE = `The stored name of “${SPEAKER}” contains an invisible character (such as a tab or a line break), so its answer cannot be changed here. Correct the name in Studio, then try again.`
+
+  it("refuses the row's No with its own reason, and the portal goes on admitting", async () => {
+    seed(seeded, [SPEAKER, TWO_DAY])
+    await openSection()
+    expect(answers()).toEqual([
+      [SPEAKER, 'Grants workshop access'],
+      [TWO_DAY, 'Grants workshop access'],
+    ])
+
+    fireEvent.click(
+      row(SPEAKER).getByRole('button', { name: /^No workshop access/ }),
+    )
+    await saved()
+
+    expect(h.notify.mock.calls).toEqual([
+      [{ type: 'error', title: 'Could not save', message: MESSAGE }],
+    ])
+    // Not treated as a stale page: nothing reloads.
+    expect(h.refresh).not.toHaveBeenCalled()
+    expect(h.commits).toBe(0)
+    expect(stored()).toEqual(seeded)
+    expect((await gate(SPEAKER)).isEligible).toBe(true)
+  })
+
+  it('refuses the removal of an orphaned entry stored that way, with the same reason', async () => {
+    const orphan = [
+      { typeName: 'Workshop 2025\n', grantsWorkshop: true },
+      { typeName: TWO_DAY, grantsWorkshop: true },
+    ]
+    seed(orphan, [TWO_DAY])
+    await openSection()
+
+    fireEvent.click(screen.getByRole('button', { name: /^Remove the entry/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Remove it' }))
+    await saved()
+
+    expect(h.notify.mock.calls).toEqual([
+      [
+        {
+          type: 'error',
+          title: 'Could not remove',
+          message:
+            'The stored name of “Workshop 2025” contains an invisible character (such as a tab or a line break), so its answer cannot be changed here. Correct the name in Studio, then try again.',
+        },
+      ],
+    ])
+    expect(h.commits).toBe(0)
+    expect(stored()).toEqual(orphan)
+  })
+})
+
+/**
  * AN EDITOR MUST NOT START FROM ANSWERS THAT MAY BE OLD. The portal's gate
  * falls back to the cached conference when the live roles read fails: a
  * possibly old answer beats locking every attendee out. For the organizer's

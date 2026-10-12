@@ -722,6 +722,144 @@ describe('a ticket type name with a control character', () => {
 })
 
 /**
+ * A STORED NAME THE PATCH CANNOT ADDRESS. The schema refuses a control
+ * character in a name that is SENT. A name that is already STORED can carry
+ * one at its ends (a tab or a line break pasted in Studio): the rules trim it
+ * away, so `"Speaker ticket\t"` is the type "Speaker ticket". The workshop
+ * save removes every stored spelling of a type by a path built from that
+ * spelling, and Sanity's path parser reads the escaped tab as the letter `t`.
+ * The unset missed the entry, the new answer was appended after it, and the
+ * rule kept reading the old one first: the toggle said saved and the old
+ * answer went on applying. The last-grant guard had counted the entry as gone.
+ * Such a save is refused before anything is decided or written.
+ */
+describe('a stored name the patch cannot address', () => {
+  const TAB = 'Speaker ticket\t'
+  const roles = () =>
+    (h.dataset.find((d) => d._id === CONF_A)!.ticketTypeRoles ?? []) as Role[]
+  const REFUSED = {
+    code: 'UNPROCESSABLE_CONTENT',
+    message:
+      'The stored name of “Speaker ticket” contains an invisible character (such as a tab or a line break), so its answer cannot be changed here. Correct the name in Studio, then try again.',
+  }
+
+  it('refuses a No that would have left the old grant in force', async () => {
+    const seeded = [
+      { _key: 'a', typeName: TAB, grantsWorkshop: true },
+      { _key: 'b', typeName: 'Two-day pass', grantsWorkshop: true },
+    ]
+    seed(seeded)
+    expect(workshopAccessOf('Speaker ticket', roles())).toBe('granted')
+
+    await expect(
+      tickets().admin.setWorkshopAccess({
+        updates: [{ typeName: 'Speaker ticket', grantsWorkshop: false }],
+      }),
+    ).rejects.toMatchObject(REFUSED)
+
+    // Nothing was tried, nothing is stored, and the rule answers as before:
+    // no second entry sits behind the first pretending to be the answer.
+    expect(h.attempts).toBe(0)
+    expect(roles()).toEqual(seeded)
+    expect(workshopAccessOf('Speaker ticket', roles())).toBe('granted')
+  })
+
+  it.each([
+    ['a trailing tab', 'Speaker ticket\t'],
+    ['a trailing line break', 'Speaker ticket\n'],
+    ['a leading carriage return', '\rSpeaker ticket'],
+  ])('refuses for %s', async (_what, typeName) => {
+    seed([
+      { _key: 'a', typeName, grantsWorkshop: true },
+      { _key: 'b', typeName: 'Two-day pass', grantsWorkshop: true },
+    ])
+
+    await expect(
+      tickets().admin.setWorkshopAccess({
+        updates: [{ typeName: 'Speaker ticket', grantsWorkshop: false }],
+      }),
+    ).rejects.toMatchObject(REFUSED)
+    expect(h.attempts).toBe(0)
+  })
+
+  /**
+   * BEFORE THE LAST-GRANT GUARD, which would otherwise decide on an entry it
+   * believes is being removed: with the confirmation it approved a save that
+   * left the grant in place, without it it refused with the wrong reason.
+   */
+  it.each([
+    ['with the confirmation', true],
+    ['without it', false],
+  ])(
+    'refuses the last grant the same way, %s',
+    async (_how, allowBuiltInList) => {
+      const seeded = [{ _key: 'a', typeName: TAB, grantsWorkshop: true }]
+      seed(seeded)
+
+      await expect(
+        tickets().admin.setWorkshopAccess({
+          updates: [{ typeName: 'Speaker ticket', grantsWorkshop: false }],
+          allowBuiltInList,
+        }),
+      ).rejects.toMatchObject(REFUSED)
+
+      expect(h.attempts).toBe(0)
+      expect(roles()).toEqual(seeded)
+    },
+  )
+
+  it('refuses the removal of such an entry too', async () => {
+    const seeded = [
+      { _key: 'a', typeName: TAB, grantsWorkshop: true },
+      { _key: 'b', typeName: 'Two-day pass', grantsWorkshop: true },
+    ]
+    seed(seeded)
+
+    await expect(
+      tickets().admin.setWorkshopAccess({
+        // What the page sends for an orphaned entry: its stored name, which
+        // the schema trims.
+        updates: [{ typeName: TAB, grantsWorkshop: null }],
+      }),
+    ).rejects.toMatchObject(REFUSED)
+
+    expect(h.attempts).toBe(0)
+    expect(roles()).toEqual(seeded)
+  })
+
+  it('still saves an answer for another type', async () => {
+    seed([
+      { _key: 'a', typeName: TAB, grantsWorkshop: true },
+      { _key: 'b', typeName: 'Day pass', admits: true },
+    ])
+
+    await tickets().admin.setWorkshopAccess({
+      updates: [{ typeName: 'Day pass', grantsWorkshop: true }],
+    })
+
+    expect(roles().map(({ _key, ...role }) => (void _key, role))).toEqual([
+      { typeName: TAB, grantsWorkshop: true },
+      { typeName: 'Day pass', admits: true, grantsWorkshop: true },
+    ])
+  })
+
+  /** The seating save addresses its entry by position, not by name. */
+  it('does not stop the seating answer, which is set in place', async () => {
+    seed([{ _key: 'a', typeName: TAB, grantsWorkshop: true }])
+
+    await tickets().admin.setTicketTypeRole({
+      typeName: 'Speaker ticket',
+      admits: false,
+    })
+
+    expect(roles()).toEqual([
+      { _key: 'a', typeName: TAB, admits: false, grantsWorkshop: true },
+    ])
+    expect(h.commits).toBe(1)
+  })
+})
+
+/**
  * A SEATING ANSWER NEVER CHANGES WORKSHOP ACCESS.
  *
  * The seating save used to replace the type's whole entry, and every other

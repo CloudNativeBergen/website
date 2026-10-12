@@ -24,6 +24,7 @@ import {
   ToggleTargetTrackingSchema,
   SetTicketTypeRoleSchema,
   SetWorkshopAccessSchema,
+  isPatchPathSafeName,
 } from '../schemas/tickets'
 import { clientWrite } from '@/lib/sanity/client'
 import { generateKey } from '@/lib/sanity/helpers'
@@ -510,6 +511,40 @@ async function setTicketTypeRoles(
       })
     }
 
+    // Every spelling that has to go: the one being written, plus every stored
+    // entry that `typeKey` calls the same type. Without the stored spellings a
+    // case variant survives the unset, the insert appends a second entry, and
+    // `classifyTicket` / `workshopAccessOf` read whichever comes first — the
+    // organizer's toggle appears to save while the old answer keeps applying.
+    const unsetNames = new Set(updates.map((u) => u.typeName))
+    for (const role of roles) {
+      if (typeof role.typeName !== 'string') continue
+      if (wantedKeys.has(typeKey(role.typeName))) unsetNames.add(role.typeName)
+    }
+
+    // A STORED SPELLING THE PATH CANNOT CARRY. The schema refuses a control
+    // character in a name that is sent; a stored name can still hold one at
+    // its ends (a tab pasted in Studio), where `typeKey` trims it away and
+    // the name folds to the type being saved. Its unset path would not match
+    // it (`isPatchPathSafeName`), so the old entry would stay, ahead of the
+    // new one, and go on being the answer the rule reads — after everything
+    // below had counted it gone. Refused here, before any of that is decided
+    // and before anything is written.
+    const unaddressable = [...unsetNames].find(
+      (name) => !isPatchPathSafeName(name),
+    )
+    if (unaddressable !== undefined) {
+      const sent = updates.find(
+        (u) => typeKey(u.typeName) === typeKey(unaddressable),
+      )
+      throw new TRPCError({
+        // Not one of the codes that mean "the page was stale": nothing about
+        // the page is out of date, and the organizer has to read this message.
+        code: 'UNPROCESSABLE_CONTENT',
+        message: `The stored name of “${sent?.typeName ?? unaddressable.trim()}” contains an invisible character (such as a tab or a line break), so its answer cannot be changed here. Correct the name in Studio, then try again.`,
+      })
+    }
+
     // Each update's whole entry, carrying the seating answer the seating rule
     // reads. Absent stays ABSENT: defaulting either field would turn a
     // question nobody answered into a declaration — the count would then
@@ -543,17 +578,6 @@ async function setTicketTypeRoles(
         message:
           'This would leave no ticket type granting workshop access, and the built-in list would decide again. Reload the page and confirm the change.',
       })
-    }
-
-    // Every spelling that has to go: the one being written, plus every stored
-    // entry that `typeKey` calls the same type. Without the stored spellings a
-    // case variant survives the unset, the insert appends a second entry, and
-    // `classifyTicket` / `workshopAccessOf` read whichever comes first — the
-    // organizer's toggle appears to save while the old answer keeps applying.
-    const unsetNames = new Set(updates.map((u) => u.typeName))
-    for (const role of roles) {
-      if (typeof role.typeName !== 'string') continue
-      if (wantedKeys.has(typeKey(role.typeName))) unsetNames.add(role.typeName)
     }
 
     // An entry left with NO answer is not written back: a removed workshop

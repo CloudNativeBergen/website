@@ -107,24 +107,32 @@ export const ToggleTargetTrackingSchema = z.object({
 })
 
 /**
- * A provider ticket-type name as a save accepts it.
+ * Can this ticket-type name be carried in a Sanity patch PATH?
  *
- * NO CONTROL CHARACTERS AND NO LONE SURROGATES. The name is interpolated into
- * a Sanity patch PATH, escaped with `JSON.stringify`, and Sanity's path parser
- * does not read escapes the way JSON does: it takes the character after a
- * backslash literally. `JSON.stringify` writes a tab as `\t` and a lone
+ * NO CONTROL CHARACTERS AND NO LONE SURROGATES. A save removes an entry by a
+ * path built from its name, escaped with `JSON.stringify`, and Sanity's path
+ * parser does not read escapes the way JSON does: it takes the character after
+ * a backslash literally. `JSON.stringify` writes a tab as `\t` and a lone
  * surrogate as `\ud800`, so `"Speake\r ticket"` reached the path as
  * `Speake\\r ticket` and matched the stored `Speaker ticket`: an entry the
  * save had not counted was removed. A quote and a backslash survive that
  * round trip (the character after the backslash IS the character), so only
- * the characters JSON writes as a LETTER are refused.
+ * the characters JSON writes as a LETTER fail.
+ *
+ * THE ONE RULE, for a name that is SENT (the schema below) and for a name
+ * that is already STORED and has to be addressed (`setTicketTypeRoles`).
  */
+export function isPatchPathSafeName(name: string): boolean {
+  return !/[\u0000-\u001f\u007f\ud800-\udfff]/u.test(name)
+}
+
+/** A provider ticket-type name as a save accepts it. */
 const ticketTypeName = z
   .string()
   .trim()
   .min(1)
   .max(200)
-  .regex(/^[^\u0000-\u001f\u007f\ud800-\udfff]*$/u, {
+  .refine(isPatchPathSafeName, {
     message: 'A ticket type name cannot contain control characters.',
   })
 

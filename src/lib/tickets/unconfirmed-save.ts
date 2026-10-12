@@ -16,11 +16,23 @@
  */
 export const UNCONFIRMED_SAVE = 'BAD_GATEWAY' as const
 
-/** Is this client-side mutation error one that leaves the outcome unknown? */
-export function isUnconfirmedSave(error: {
+/**
+ * Does this client-side mutation error leave the outcome unknown, and how?
+ *
+ *  - `'unconfirmed'`: the server answered, and says it could not confirm its
+ *    write. The server is reachable, so the page can reload what is stored.
+ *  - `'no-answer'`: no code, so no answer from the server at all (the request
+ *    or its response was lost). The connection is likely down. DO NOT refresh
+ *    the page data then: in Next 16 an RSC fetch that fails falls back to a
+ *    browser navigation, and the service worker answers a failed navigation
+ *    with the offline page, which would replace the page and the warning with
+ *    it. The organizer is told to reload once they can.
+ *  - `null`: the server answered with something else; the outcome is known.
+ */
+export function unknownOutcome(error: {
   data?: { code?: string } | null
-}): boolean {
+}): 'unconfirmed' | 'no-answer' | null {
   const code = error.data?.code
-  // No code: no answer from the server (the request or its response was lost).
-  return code === undefined || code === UNCONFIRMED_SAVE
+  if (code === undefined) return 'no-answer'
+  return code === UNCONFIRMED_SAVE ? 'unconfirmed' : null
 }

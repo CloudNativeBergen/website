@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { api } from '@/lib/trpc/client'
 import { useNotification } from '@/components/admin/NotificationProvider'
-import { isUnconfirmedSave } from '@/lib/tickets/unconfirmed-save'
+import { unknownOutcome } from '@/lib/tickets/unconfirmed-save'
 import { StatusBadge } from '@/components/StatusBadge'
 import type { TicketTypeProposal } from '@/lib/tickets/discovery'
 
@@ -59,13 +59,16 @@ export function TicketTypeRoleControl({
     onError: (error) => {
       setDeclared(declaredAdmits)
       // The server could not confirm its write, or never answered: the role
-      // may have been stored. Say so, not "Could not save", and reload the
-      // page's data. The card adopts a stored answer that comes back changed
-      // (below). This page reads the conference through a cache, which the
-      // server busts for an unconfirmed save too, but the first reload can
-      // still be served the old copy: hence "reload the page" in the message.
-      if (isUnconfirmedSave(error)) {
-        router.refresh()
+      // may have been stored. Say so, not "Could not save". When the server
+      // answered, reload the page's data; the card adopts a stored answer that
+      // comes back changed (below). This page reads the conference through a
+      // cache, which the server busts for an unconfirmed save too, but the
+      // first reload can still be served the old copy: hence "reload the
+      // page" in the message. With NO answer the connection is likely down,
+      // and a refresh would navigate to the offline page (`unknownOutcome`).
+      const unknown = unknownOutcome(error)
+      if (unknown) {
+        if (unknown === 'unconfirmed') router.refresh()
         showNotification({
           type: 'warning',
           title: 'This change may or may not have been saved',

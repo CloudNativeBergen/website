@@ -803,24 +803,22 @@ describe('while a save is on its way', () => {
    * NOBODY KNOWS WHETHER IT WAS SAVED. The server could not confirm its write
    * (`BAD_GATEWAY`), or the request got no answer at all. The change may have
    * been stored, so the page must not say "Nothing was saved", must not say
-   * "Could not save", and must not print the transport's own words. It says
-   * the outcome is unknown and reloads the list.
+   * "Could not save", and must not print the transport's own words.
    */
-  it.each([
-    [
-      'the server could not confirm its write',
-      Object.assign(new Error('The save could not be confirmed.'), {
-        data: { code: 'BAD_GATEWAY' },
-      }),
-    ],
-    ['the request got no answer', new TypeError('Failed to fetch')],
-  ])('says the outcome is unknown, and reloads, when %s', (_when, error) => {
+  const unknownOutcomeOf = (error: Error) => {
     render(<WorkshopAccessControl {...row} basedOn="v1" />)
-
     fireEvent.click(
       screen.getByRole('button', { name: /^Grants workshop access/ }),
     )
     act(() => h.options.onError!(error))
+  }
+
+  it('says the outcome is unknown, and reloads the list, when the server could not confirm its write', () => {
+    unknownOutcomeOf(
+      Object.assign(new Error('The save could not be confirmed.'), {
+        data: { code: 'BAD_GATEWAY' },
+      }),
+    )
 
     expect(h.notify.mock.calls).toEqual([
       [
@@ -832,7 +830,57 @@ describe('while a save is on its way', () => {
         },
       ],
     ])
+    // The server answered, so it can be asked what is stored.
     expect(h.refresh).toHaveBeenCalledTimes(1)
+  })
+
+  /**
+   * NO ANSWER AT ALL: the connection is likely down. A refresh would fail the
+   * same way, and in Next 16 a failed refresh falls back to a browser
+   * navigation, which the service worker answers with the offline page: the
+   * list and this warning would both be gone. So nothing is refreshed, and
+   * the organizer is told to reload.
+   */
+  it('says the outcome is unknown, and does NOT reload, when the request got no answer', () => {
+    unknownOutcomeOf(new TypeError('Failed to fetch'))
+
+    expect(h.notify.mock.calls).toEqual([
+      [
+        {
+          type: 'warning',
+          title: 'This change may or may not have been saved',
+          message:
+            'The save could not be confirmed. Reload the page and check the list before trying again.',
+        },
+      ],
+    ])
+    expect(h.refresh).not.toHaveBeenCalled()
+    // The row is back on the answer it knew, and can be used.
+    expect(
+      screen.getByRole('button', { name: /^No workshop access/ }),
+    ).toHaveAttribute('aria-pressed', 'true')
+    expect(
+      screen.getAllByRole('button').map((b) => b.getAttribute('aria-disabled')),
+    ).toEqual(['false', 'false'])
+  })
+
+  /**
+   * A REFUSAL WITH ITS OWN REASON reaches the organizer as itself: not as a
+   * stale page, and not as an unknown outcome.
+   */
+  it("shows the server's own message when a stored name cannot be changed here", () => {
+    const message =
+      'The stored name of “Speaker ticket” contains an invisible character (such as a tab or a line break), so its answer cannot be changed here. Correct the name in Studio, then try again.'
+    unknownOutcomeOf(
+      Object.assign(new Error(message), {
+        data: { code: 'UNPROCESSABLE_CONTENT' },
+      }),
+    )
+
+    expect(h.notify.mock.calls).toEqual([
+      [{ type: 'error', title: 'Could not save', message }],
+    ])
+    expect(h.refresh).not.toHaveBeenCalled()
   })
 })
 
