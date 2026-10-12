@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useMemo } from 'react'
+import { useRouter } from 'next/navigation'
 import { AcademicCapIcon } from '@heroicons/react/24/outline'
 import {
   AdminPageHeader,
@@ -128,19 +129,28 @@ export function WorkshopsClientPage({
       enabled: !!conferenceId,
     })
 
-  // Confirm, move to waitlist, delete. The lists are read again after every
-  // attempt, also a refused one: the sign-up may be gone (see the hook).
-  const signupActions = useSignupActions(() => {
+  const router = useRouter()
+
+  // Everything this page shows about sign-ups, read again. One function for
+  // every action that changes them.
+  const readSignupsAgain = () => {
     refetchSignups()
-    refetchWorkshopSignups()
+    if (signupModal.workshopId && signupModal.status) refetchWorkshopSignups()
     refetchStats()
-  })
+    // The cards' confirmed and waitlist counts are the SERVER's
+    // (`initialWorkshops`, the workshop's own counts). The list above is one
+    // page of 100 and cannot stand in for them, so the server render is asked
+    // for again; it reads those counts live, with nothing cached in between.
+    router.refresh()
+  }
+
+  // Confirm, move to waitlist, delete. Everything is read again after every
+  // attempt, also a refused one: the sign-up may be gone (see the hook).
+  const signupActions = useSignupActions(readSignupsAgain)
 
   const manualSignupMutation = api.workshop.admin.manualSignup.useMutation({
     onSuccess: () => {
-      refetchSignups()
-      refetchWorkshopSignups()
-      refetchStats()
+      readSignupsAgain()
       setAddParticipantModal({
         isOpen: false,
         workshopId: '',
@@ -154,8 +164,7 @@ export function WorkshopsClientPage({
       queryClient.invalidateQueries({
         queryKey: [['workshop', 'list']],
       })
-      refetchSignups()
-      refetchStats()
+      readSignupsAgain()
 
       if (result.promotedCount && result.promotedCount > 0) {
         alert(`✅ ${result.message}`)
